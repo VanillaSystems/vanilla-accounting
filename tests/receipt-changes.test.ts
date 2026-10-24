@@ -108,7 +108,7 @@ test('the AI sidebar\'s receipt changes take the same table: a filed receipt\'s 
   setReceiptKind(books, { kind: 'receiptKind', id: 'rc', as: 'statement' });
   const rc = books.receipts.find((r) => r.id === 'rc')!;
   assert.deepEqual([rc.description, rc.date, rc.kind, rc.kindBy], ['Kontoauszug Mai', '2026-05-31', 'statement', 'human']);
-  assert.throws(() => setReceipt(books, 'rc', { amount: 1, currency: 'CHF' }), /Betrag, Währung, MWST-Angaben und Datei/);
+  assert.throws(() => setReceipt(books, 'rc', { amount: 1, currency: 'CHF' }), /Betrag, Währung, Steuerangaben und Datei/);
   assert.throws(() => setReceiptKind(books, { kind: 'receiptKind', id: 'rc', as: 'noise' }), /Zuordnungen zu Transaktionen in geschlossenen Perioden/);
   assert.ok(books.mappings.some((m) => m.receiptId === 'rc' && m.transactionRef === 'C1'), 'the filed link stays');
 });

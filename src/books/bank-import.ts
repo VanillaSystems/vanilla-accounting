@@ -97,7 +97,7 @@ export function withinBooks(transactions: BankTransaction[], config: Index['conf
   return { kept: transactions.filter((t) => t.date >= opens), before: opens };
 }
 
-// ─── Bank statements from PDF filenames (src/intake/statement-facts.ts statementPdf) ────────
+// ─── Bank statements from PDF filenames (src/books/statement-facts.ts statementPdf) ────────
 
 type Read = Extract<StatementFile, { status: 'read' }>;
 

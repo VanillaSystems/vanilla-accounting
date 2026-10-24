@@ -264,7 +264,7 @@ export interface DocumentsData {
   other: Record<'newsletter' | 'terms' | 'price-list' | 'tracking' | 'no-receipt', string[]>;
   /** The title of a bank statement: the drop reads such a PDF as a statement, not as a receipt. */
   statement: string[];
-  /** The balance lines of a statement («Saldovortrag», «Closing balance»): with its title, IBAN and period, a statement among the receipts (src/intake/statement-facts.ts). */
+  /** The balance lines of a statement («Saldovortrag», «Closing balance»): with its title, IBAN and period, a statement among the receipts (src/books/statement-facts.ts). */
   balance: string[];
 }
 

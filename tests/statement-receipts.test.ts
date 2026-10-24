@@ -1,5 +1,5 @@
 /**
- * A bank statement among the receipts (issue #151, src/intake/statement-facts.ts): told from its
+ * A bank statement among the receipts (issue #151, src/books/statement-facts.ts): told from its
  * text and its file name by code, dated on the period's last day, placed at the manifest's
  * account by IBAN or by the bank's name; an invoice that mentions a statement stays one.
  */
