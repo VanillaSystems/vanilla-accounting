@@ -94,10 +94,10 @@ interface FoundFile {
  * Wraps any PNG/JPG/HEIC images in a directory into PDFs, then removes the originals so they aren't
  * picked up as duplicates by scanPdfs. Returns each conversion by the names before and after.
  */
-async function convertImagesToPdf(dir: string, log: (line: string) => void): Promise<Array<{ from: string; to: string }>> {
+async function convertImagesToPdf(dir: string, log: (line: string) => void, theirs?: ReadonlySet<string>): Promise<Array<{ from: string; to: string }>> {
   const done: Array<{ from: string; to: string }> = [];
   if (!existsSync(dir)) return done;
-  for (const f of readdirSync(dir).filter(isImageFile)) {
+  for (const f of readdirSync(dir).filter((f) => isImageFile(f) && !theirs?.has(stemOf(f)))) {
     const imgPath = join(dir, f);
     const pdfPath = imgPath.replace(/\.[^.]+$/, '.pdf');
     if (existsSync(pdfPath)) {
@@ -188,7 +188,8 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
   const unmatched = unmatchedOf(bank);
   if (unmatched.length) return { notes: [{ code: 'unmatched', files: unmatched }], stop: true };
   // A photo's row in the drop dialog follows the PDF it became: the file has a new name and the id of its new bytes (r8k-9).
-  for (const c of await convertImagesToPdf(ws.paths.inbox, log)) arrived?.renamed(c.from, { inbox: c.to, id: idOf(join(ws.paths.inbox, c.to)) });
+  // A photo of a run waiting behind this one is left to that run, which renames its own row (r4c-7).
+  for (const c of await convertImagesToPdf(ws.paths.inbox, log, later?.())) arrived?.renamed(c.from, { inbox: c.to, id: idOf(join(ws.paths.inbox, c.to)) });
 
   // Archived receipts first, then staged (for cross-folder duplicate detection)
   const archivedFiles = archivedPdfs(ws);

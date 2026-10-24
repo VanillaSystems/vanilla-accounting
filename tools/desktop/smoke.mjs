@@ -115,12 +115,33 @@ const drop = (page, files) => page.evaluate((files) => {
   for (const f of files) dt.items.add(new File([Uint8Array.from(atob(f.b64), (c) => c.charCodeAt(0))], f.name, { type: f.type, lastModified: Date.now() }));
   for (const type of ['dragenter', 'dragover', 'drop']) window.dispatchEvent(new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true }));
 }, files.map((f) => ({ ...f, b64: f.bytes.toString('base64') })));
-/** The drop dialog's «Hinzufügen», then its «Schliessen» once the files are in. */
-async function addDropped(page) {
-  await page.waitForFunction(() => [...document.querySelectorAll('.btn.primary')].some((b) => /^Hinzufügen/.test(b.textContent) && !b.disabled), { timeout: 20000 });
-  await clickText(page, '.btn.primary', 'Hinzufügen');
-  await page.waitForFunction(() => [...document.querySelectorAll('.btn.primary')].some((b) => b.textContent.trim() === 'Schliessen'), { timeout: 30000 });
-  await clickText(page, '.btn.primary', 'Schliessen');
+/**
+ * The add-files dialog takes each dropped file at once: wait until every one has its row there,
+ * answer «verschieden» for the files in `distinct` (asked «schon da?»), wait until the dialog has
+ * come to rest («Hinzugefügt», the bar at 100 %), then close it with «Schliessen».
+ * Returns the rows as the dialog showed them at rest.
+ */
+async function takeDropped(page, names, { shot: shotName, distinct = [] } = {}) {
+  const row = (name) => `[data-testid=drop-dialog] [data-testid=drop-row][data-file="${name}"]`;
+  await page.waitForFunction((names) => {
+    const files = [...document.querySelectorAll('[data-testid=drop-dialog] [data-testid=drop-row]')].map((r) => r.dataset.file);
+    return names.every((n) => files.includes(n));
+  }, { timeout: 30000 }, names);
+  if (shotName) await shot(page, shotName);
+  for (const name of distinct) {
+    await page.waitForSelector(`${row(name)} [data-testid=drop-twin-distinct]`, { timeout: 30000 });
+    await page.click(`${row(name)} [data-testid=drop-twin-distinct]`);
+    await page.waitForSelector(`${row(name)}[data-state]:not([data-state=duplicate])`, { timeout: 30000 });
+  }
+  await page.waitForFunction(() => {
+    const dialog = document.querySelector('[data-testid=drop-dialog]');
+    return dialog?.dataset.working === 'false' && dialog.querySelector('[role=progressbar]')?.getAttribute('aria-valuenow') === '100'
+      && dialog.querySelector('[data-testid=drop-close]')?.textContent.trim() === 'Schliessen';
+  }, { timeout: 180000 });
+  const rows = await page.$$eval('[data-testid=drop-dialog] [data-testid=drop-row]', (rs) => rs.map((r) => ({ file: r.dataset.file, state: r.dataset.state })));
+  await page.click('[data-testid=drop-close]');
+  await page.waitForSelector('[data-testid=drop-dialog]', { hidden: true, timeout: 5000 });
+  return rows;
 }
 /** The inbox processing's runs started since `since` have come to rest (the workflow receipt-intake). */
 async function intakeDone(page, since) {
@@ -282,10 +303,9 @@ await drop(page, [
   { name: 'foto.png', type: 'image/png', bytes: readFileSync('desktop/icon.png') },
   { name: 'IMG_0001.HEIC', type: '', bytes: readFileSync(join(heicDir, 'IMG_0001.HEIC')) },
 ]);
-await shot(page, '04f-drop-dialog');
-await addDropped(page);
-await sleep(1500);
-await shot(page, '04f-dropped-running');
+const dropRows = await takeDropped(page, ['beleg.pdf', 'foto.png', 'IMG_0001.HEIC'], { shot: '04f-drop-dialog', distinct: ['beleg.pdf'] });
+check('the add-files dialog takes the photos at once and the PDF (a copy of a demo receipt, «schon da?») on «verschieden», and comes to rest with each read', dropRows.length === 3 && dropRows.every((r) => r.state === 'read' || r.state === 'matched'),
+  dropRows.map((r) => `${r.file} ${r.state}`).join(', '));
 const job = await intakeDone(page, since);
 await sleep(1000);
 await shot(page, '04g-dropped-read');
@@ -308,7 +328,10 @@ await page.goto(`${base}/bank`);
 await settle(page, 'h1');
 const sinceCamt = new Date().toISOString();
 await drop(page, [{ name: `camt053-smoke-${day}.xml`, type: 'text/xml', bytes: Buffer.from(camt) }]);
-await sleep(1500);
+await page.waitForFunction((day) => location.pathname.startsWith('/bank/') && location.pathname.includes(day), { timeout: 30000 }, day).catch(() => undefined);
+await settle(page, 'h1');
+const shownStatement = await page.evaluate(() => ({ path: location.pathname, dialog: !!document.querySelector('[data-testid=drop-dialog]'), title: [...document.querySelectorAll('h1')].map((h) => h.textContent).join(' | ') }));
+check('Bank reads the dropped camt.053 itself (no add-files dialog) and opens the new statement', shownStatement.path.startsWith('/bank/') && shownStatement.path.includes(day) && !shownStatement.dialog, `${shownStatement.path}: ${shownStatement.title}`);
 await intakeDone(page, sinceCamt);
 await shot(page, '04h-camt-imported');
 const tx = (await api(page, '/books.json')).json.transactions?.find((t) => JSON.stringify(t).includes('SMOKE-PAY-1'));
@@ -319,9 +342,15 @@ await page.goto(`${base}/invoices/${number}`);
 await settle(page, 'h1');
 await shot(page, '04i-invoice-paid');
 
-// 5. New books from the File menu's "Neue Buchhaltung…" (/start?new), then back to the demo through the File menu.
+// 5. New books from the File menu's "Neue Buchhaltung…" (/start?new), set up through the form («Ohne KI einrichten»),
+// then back to the demo through the File menu.
+const aiAsked = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/desktop/ai', { timeout: 20000 });
 await page.goto(`${base}/start?new`);
+const aiAvailable = (await (await aiAsked).json()).available;
 await settle(page, '.st-form');
+check('Neue Buchhaltung offers the setup conversation when claude answers', aiAvailable && await page.$('[data-act=setup-next]'), `available ${aiAvailable}`);
+await page.click('[data-act=by-hand]');
+await settle(page, '.st-form input[name=name]');
 const root = mkdtempSync(join(tmpdir(), 'vanilla-smoke-books-'));
 const fill = async (name, value) => {
   const ok = await page.evaluate((name, value) => {

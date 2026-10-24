@@ -7,7 +7,7 @@
 import './support/jurisdiction.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadBooks, moduleActor } from '../src/books/store.js';
@@ -29,4 +29,18 @@ test('the reading of a run leaves the files of the run waiting behind it in the 
   assert.ok(read.includes('mine.pdf'), 'its own file is read');
   assert.ok(!read.includes('theirs.pdf'), 'the waiting run\'s file is not');
   assert.ok(existsSync(join(ws.paths.inbox, 'theirs.pdf')), 'and stays in the inbox for it');
+});
+
+test('a photo of the run waiting behind stays a photo for that run, which converts it and renames its own row', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lanes-'));
+  cpSync(DEMO_ROOT, dir, { recursive: true });
+  const ws = workspaceAt(dir);
+  mkdirSync(ws.paths.inbox, { recursive: true });
+  copyFileSync('desktop/icon.png', join(ws.paths.inbox, 'mine.png'));
+  copyFileSync('desktop/icon.png', join(ws.paths.inbox, 'theirs.png'));
+  const renamed: string[] = [];
+  const arrived = { renamed: (inbox: string) => { renamed.push(inbox); }, refused: () => {} };
+  await runIntake({ ws, books: storePort(ws, moduleActor('intake')), steps: [['read', (ctx) => readStep({ ...ctx, later: () => new Set(['theirs']), arrived })]] });
+  assert.deepEqual(renamed, ['mine.png'], 'only its own photo is converted and renamed');
+  assert.ok(existsSync(join(ws.paths.inbox, 'theirs.png')) && !existsSync(join(ws.paths.inbox, 'theirs.pdf')), 'the waiting run\'s photo stays in the inbox as it came');
 });
