@@ -9,7 +9,7 @@ import { EventEmitter } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { PassThrough } from 'node:stream';
-import { dictated, dictationError, dictationLang, fieldAt, follow, onDevice, recognizer, webHeard } from '../src/app/assistant/dictation.js';
+import { dictated, dictationError, dictationLang, carried, fieldAt, follow, onDevice, recognizer, webHeard } from '../src/app/assistant/dictation.js';
 import { dictate, isLang, parseEvent } from '../src/desktop/dictation.js';
 import type { DesktopBridge, DictationEvent } from '../src/types/desktop.js';
 import type { Field } from '../src/app/assistant/dictation.js';
@@ -105,6 +105,16 @@ test('a selection replaced by dictation still is, also after typing elsewhere; s
   const guess = session(caretAt('Notiz: '));
   guess.heard(said('', 'Gute'));
   assert.equal(guess.heard(said('', '')), 'Notiz: ', 'a guess the recognizer takes back leaves the field as it was');
+});
+
+test('the person\'s caret stays where they type while an update rewrites the dictated words', () => {
+  const was = follow(dictated(caretAt('Buch ', ' auf 6510'), said('', 'die')).field, 'Bitte Buch die auf 6510');
+  assert.ok(was);
+  const now = dictated(was, said('die Swisscom')).field;
+  assert.equal(now.text, 'Bitte Buch die Swisscom auf 6510');
+  assert.equal(carried(was, now, 'Bitte'.length), 'Bitte'.length, 'a caret before the dictated words must not jump');
+  assert.equal(carried(was, now, was.text.length), now.text.length, 'a caret behind them moves with them');
+  assert.equal(carried(was, now, was.start + 1), now.end, 'a caret inside them goes behind them');
 });
 
 test('in the browser, final results are settled and interim ones the guess after them', () => {

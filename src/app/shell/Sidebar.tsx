@@ -9,12 +9,13 @@
  * Änderungen.
  */
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { language, t } from '../i18n/index.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import { ICONS } from '../areas/icons.js';
 import { search } from '../assistant/attach.js';
-import { dictated, dictationLang, fieldAt, follow, recognizer, type DictationError, type Dictated } from '../assistant/dictation.js';
+import { dictated, dictationLang, carried, fieldAt, follow, recognizer, type DictationError, type Dictated } from '../assistant/dictation.js';
 import { Picker, automationCandidates } from '../assistant/Picker.js';
 import { Recording } from '../assistant/Recording.js';
 import { isBookChange, type ContextRef, type EntrySet, type HeldChanges, type HeldLine, type InvoicingSet, type MadeChange, type Turn } from '../../types/assistant.js';
@@ -377,9 +378,6 @@ export function Sidebar({ page, books, onGo }: Props) {
   const [measured, setMeasured] = useState(false);
   /** The dictation whose words still go into the field; a sent message lets go of it. */
   const dictation = useRef(0);
-  /** The field's text as of the latest keystroke, for a dictation update that arrives before the next render. */
-  const typedText = useRef(text);
-  typedText.current = text;
   const plus = useRef<HTMLButtonElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const ghost = useRef<HTMLDivElement>(null);
@@ -424,7 +422,8 @@ export function Sidebar({ page, books, onGo }: Props) {
     const stop = ear.start(dictationLang(language()), {
       heard: (heard) => {
         if (id !== dictation.current) return;
-        const typed = follow(field, typedText.current);
+        const el = area.current;
+        const typed = follow(field, el?.value ?? field.text);
         if (!typed) {
           dictation.current++;
           setPartial(undefined);
@@ -432,11 +431,15 @@ export function Sidebar({ page, books, onGo }: Props) {
           return;
         }
         const d = dictated(typed, heard);
+        const selection = el && document.activeElement === el ? [el.selectionStart, el.selectionEnd] : undefined;
         field = d.field;
         caret = d.caret;
-        typedText.current = d.field.text;
-        setText(d.field.text);
-        setPartial(d.partial.end > d.partial.start ? d.partial : undefined);
+        // Rendered at once, so a keystroke after it types into these words, not into the field before them.
+        flushSync(() => {
+          setText(d.field.text);
+          setPartial(d.partial.end > d.partial.start ? d.partial : undefined);
+        });
+        if (el && selection) el.setSelectionRange(carried(typed, d.field, selection[0]), carried(typed, d.field, selection[1]));
       },
       level: (level) => { setMeasured(true); mic.current?.style.setProperty('--level', String(level)); },
       preparing: (loading) => { setPreparing(loading); if (!loading) setRecordingSince(Date.now()); },
@@ -555,7 +558,7 @@ export function Sidebar({ page, books, onGo }: Props) {
                 ref={area} rows={3} value={text} placeholder={t(setup ? 'onboarding.placeholder' : 'assistant.placeholder')} aria-label={t('assistant.message')}
                 className={partial ? 'dictating' : undefined}
                 onScroll={(e) => { if (ghost.current) ghost.current.scrollTop = e.currentTarget.scrollTop; }}
-                onChange={(e) => { typedText.current = e.target.value; setText(e.target.value); setPartial(undefined); setPick(0); }}
+                onChange={(e) => { setText(e.target.value); setPartial(undefined); setPick(0); }}
                 onPaste={(e) => { const files = [...e.clipboardData.files]; if (files.length) { e.preventDefault(); attachFiles(files); } }}
                 onKeyDown={(e) => {
                   if (offered.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); setPick((pick + (e.key === 'ArrowDown' ? 1 : offered.length - 1)) % offered.length); return; }

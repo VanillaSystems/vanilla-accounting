@@ -170,3 +170,13 @@ export function follow(field: Field, now: string): Field | undefined {
   if (same >= field.end) return { ...field, text: now };
   return undefined;
 }
+
+/**
+ * Where a position of the field (the person's caret) lands when an update rewrites the dictated
+ * words: before them it stays, behind them it moves with them, inside them it goes behind them.
+ */
+export function carried(was: Field, now: Field, at: number): number {
+  if (at < was.start) return at;
+  if (at >= was.end) return at + now.text.length - was.text.length;
+  return now.end;
+}
