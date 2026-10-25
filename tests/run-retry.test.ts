@@ -7,14 +7,14 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { archiveReceipt } from '../src/books/archive.js';
 import { loadBooks, moduleActor, PERSON, receiptFile, saveBooks, StaleBooksError, update, type Books } from '../src/books/store.js';
 import { runIntake, storePort, type StepRun } from '../src/intake/pipeline.js';
 import type { JournalEntry } from '../src/types/index.js';
 import type { Workspace } from '../src/workspace/workspace.js';
-import { tempWorkspace, writeIndex } from './support/workspace.js';
+import { booksOnDisk, tempWorkspace, writeIndex } from './support/workspace.js';
 
 const FIXTURE = join(process.cwd(), 'tests/fixtures/period-lock-index.json');
 const RUN = moduleActor('intake');
@@ -116,4 +116,15 @@ test('an archive retried after a stale save moves the file once, under the name 
   assert.equal(readFileSync(receiptFile(ws, books, r), 'utf8'), '%PDF staged');
   assert.equal(existsSync(join(ws.paths.inbox, 'scan.pdf')), false);
   assert.equal(books.receipts.find((x) => x.id === 'ro')!.remarks, 'other');
+});
+
+test('a receipt\'s file that cannot be moved leaves the books unwritten', () => {
+  const ws = workspace();
+  staged(ws);
+  const books = loadBooks(ws);
+  update(books, RUN, (b) => { archiveReceipt(ws, b, b.receipts.find((r) => r.id === 'rs')!, 'archived.pdf'); });
+  rmSync(join(ws.paths.inbox, 'scan.pdf'));
+  const was = booksOnDisk(ws);
+  assert.throws(() => saveBooks(ws, books), /ENOENT/);
+  assert.deepEqual(booksOnDisk(ws), was);
 });

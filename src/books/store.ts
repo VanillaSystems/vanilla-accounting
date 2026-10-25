@@ -237,28 +237,37 @@ export function saveBooks(ws: Workspace, books: Books): void {
     const stale = changed.filter((rel) => readIfThere(join(ws.paths.root, rel)) !== before.files.get(rel));
     if (readIfThere(ws.paths.ledger) !== before.ledger) stale.push(relative(ws.paths.root, ws.paths.ledger));
     if (stale.length) throw new StaleBooksError(stale);
-    for (const rel of changed) {
-      const text = files.get(rel);
-      if (text === undefined) rmSync(join(ws.paths.root, rel), { force: true });
-      else writeAtomic(join(ws.paths.root, rel), text);
+    // The files a change moves go first and come back when a write fails: a record never names a file that is not where it says.
+    const moved: Array<[string, string]> = [];
+    try {
+      for (const [from, to] of moves.get(books) ?? []) {
+        mkdirSync(dirname(to), { recursive: true });
+        renameSync(from, to);
+        moved.push([from, to]);
+      }
+      for (const rel of changed) {
+        const text = files.get(rel);
+        if (text === undefined) rmSync(join(ws.paths.root, rel), { force: true });
+        else writeAtomic(join(ws.paths.root, rel), text);
+      }
+      if (before.ledger !== ledger) writeAtomic(ws.paths.ledger, ledger);
+    } catch (e) {
+      for (const [from, to] of moved.reverse()) renameSync(to, from);
+      throw e;
     }
-    if (before.ledger !== ledger) writeAtomic(ws.paths.ledger, ledger);
   } finally {
     unlock();
   }
-  onDisk.set(books, { files, ledger });
-  for (const [from, to] of moves.get(books) ?? []) {
-    mkdirSync(dirname(to), { recursive: true });
-    renameSync(from, to);
-  }
   moves.delete(books);
+  onDisk.set(books, { files, ledger });
   placeFiles(ws, books);
 }
 
 /**
- * Moves the file `from` to `to` once saveBooks wrote `books`: a save refused (a stale save, a
- * closed period) leaves the file where the books on disk say it is, so the change can run again
- * on books loaded afresh. The targets pending for `books` are `pendingMoves`.
+ * Moves the file `from` to `to` with the save that writes `books`, and only then: a save refused
+ * (a stale save, a closed period) leaves the file where the books on disk say it is, so the change
+ * can run again on books loaded afresh, and a move that fails writes nothing. The targets pending
+ * for `books` are `pendingMoves`.
  */
 export function moveOnSave(books: Books, from: string, to: string): void {
   if (!moves.has(books)) moves.set(books, new Map());
