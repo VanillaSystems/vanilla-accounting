@@ -9,20 +9,21 @@ import { EventEmitter } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { PassThrough } from 'node:stream';
-import { dictated, dictationError, dictationLang, onDevice, recognizer, webHeard } from '../src/app/assistant/dictation.js';
+import { dictated, dictationError, dictationLang, fieldAt, follow, onDevice, recognizer, webHeard } from '../src/app/assistant/dictation.js';
 import { dictate, isLang, parseEvent } from '../src/desktop/dictation.js';
 import type { DesktopBridge, DictationEvent } from '../src/types/desktop.js';
+import type { Field } from '../src/app/assistant/dictation.js';
 import { messages } from '../src/app/i18n/locales/de.js';
 import { elapsed } from '../src/app/assistant/Recording.js';
 
 const said = (text: string, partial = '') => ({ text, partial });
 /** The field with the caret between `before` and `after`. */
-const caretAt = (before: string, after = '') => ({ text: before + after, start: before.length, end: before.length });
-const value = (before: string, heard: { text: string; partial: string }, after = '') => dictated(caretAt(before, after), heard).value;
+const caretAt = (before: string, after = '') => fieldAt(before + after, before.length, before.length);
+const value = (before: string, heard: { text: string; partial: string }, after = '') => dictated(caretAt(before, after), heard).field.text;
 /** The field's provisional words, as the person sees them paler. */
 const provisional = (before: string, heard: { text: string; partial: string }, after = '') => {
   const d = dictated(caretAt(before, after), heard);
-  return d.value.slice(d.partial.start, d.partial.end);
+  return d.field.text.slice(d.partial.start, d.partial.end);
 };
 
 test('what was heard follows what was typed, one space between, never glued or doubled', () => {
@@ -41,10 +42,10 @@ test('what was heard goes where the caret was: the typed text after it stays aft
 });
 
 test('a selection is replaced by what was heard, and kept while nothing was heard', () => {
-  const selected = { text: 'Buch die Migros auf 6510', start: 9, end: 15 };
-  assert.equal(dictated(selected, said('Swisscom')).value, 'Buch die Swisscom auf 6510');
-  assert.equal(dictated(selected, said('')).value, 'Buch die Migros auf 6510', 'silence must not delete the selected words');
-  assert.equal(dictated(selected, said('  ', ' ')).value, 'Buch die Migros auf 6510');
+  const selected = fieldAt('Buch die Migros auf 6510', 9, 15);
+  assert.equal(dictated(selected, said('Swisscom')).field.text, 'Buch die Swisscom auf 6510');
+  assert.equal(dictated(selected, said('')).field.text, 'Buch die Migros auf 6510', 'silence must not delete the selected words');
+  assert.equal(dictated(selected, said('  ', ' ')).field.text, 'Buch die Migros auf 6510');
 });
 
 test('the words still being spoken show as provisional; settled words never twice, the guess replaced', () => {
@@ -56,6 +57,54 @@ test('the words still being spoken show as provisional; settled words never twic
   assert.equal(provisional('', said('Guten Tag, ich möchte eine Rechnung buchen.')), '', 'settled words are no longer pale');
   assert.equal(provisional('Notiz:', said('Guten ', ' Tag'), ' Ende'), ' Tag', 'a space at the seam is not counted twice');
   assert.equal(value('Notiz:', said('Guten ', ' Tag'), ' Ende'), 'Notiz: Guten Tag Ende');
+});
+
+/**
+ * The composer between recognizer updates: the person may type, leaving the field at `now`, before
+ * the next snapshot arrives. Each update gives the field after it, or undefined once dictation let go.
+ */
+function session(start: Field) {
+  let field: Field | undefined = start;
+  return {
+    heard(h: { text: string; partial: string }, now = field?.text ?? '') {
+      const typed = field && follow(field, now);
+      field = typed && dictated(typed, h).field;
+      return field?.text;
+    },
+  };
+}
+
+test('typing before the dictated words between two updates is kept; the next words go where the dictation is', () => {
+  const s = session(caretAt('Buch ', 'auf 6510'));
+  assert.equal(s.heard(said('', 'die')), 'Buch die auf 6510');
+  assert.equal(s.heard(said('die Swisscom'), 'Bitte: Buch die auf 6510'), 'Bitte: Buch die Swisscom auf 6510', 'the typed «Bitte:» must survive the next update');
+});
+
+test('typing after the dictated words between two updates is kept after them', () => {
+  const s = session(caretAt(''));
+  assert.equal(s.heard(said('', 'Guten')), 'Guten');
+  assert.equal(s.heard(said('Guten Tag'), 'Guten, danke'), 'Guten Tag, danke', 'the typed «, danke» must survive the next update');
+  assert.equal(s.heard(said('Guten Tag', ' ich'), 'Guten Tag, danke!'), 'Guten Tag ich, danke!', 'a second edit after a second update is kept too');
+});
+
+test('a change to the dictated words themselves stays as the person made it: dictation lets go', () => {
+  const s = session(caretAt('Buch ', 'auf 6510'));
+  assert.equal(s.heard(said('', 'die Swisscon')), 'Buch die Swisscon auf 6510');
+  assert.equal(s.heard(said('die Swisscom immer'), 'Buch die Swisscom auf 6510'), undefined, 'the person corrected a dictated word: the update must not overwrite it');
+  assert.equal(follow(fieldAt('Buch die auf', 5, 8), 'Buch dXe auf'), undefined);
+  assert.equal(follow(fieldAt('Buch die auf', 5, 8), 'Buch auf'), undefined, 'deleting the dictated words is the person\'s change too');
+});
+
+test('a selection replaced by dictation still is, also after typing elsewhere; silence keeps it and the typing', () => {
+  const s = session(fieldAt('Buch die Migros auf 6510', 9, 15));
+  assert.equal(s.heard(said('', 'Swiss')), 'Buch die Swiss auf 6510');
+  assert.equal(s.heard(said('Swisscom'), 'Bitte buch die Swiss auf 6510'), 'Bitte buch die Swisscom auf 6510');
+  const quiet = session(fieldAt('Buch die Migros auf 6510', 9, 15));
+  assert.equal(quiet.heard(said('')), 'Buch die Migros auf 6510', 'silence must not delete the selection');
+  assert.equal(quiet.heard(said(' ', ''), 'Buch die Migros auf 6510 sofort'), 'Buch die Migros auf 6510 sofort', 'silence must leave typing as it is');
+  const guess = session(caretAt('Notiz: '));
+  guess.heard(said('', 'Gute'));
+  assert.equal(guess.heard(said('', '')), 'Notiz: ', 'a guess the recognizer takes back leaves the field as it was');
 });
 
 test('in the browser, final results are settled and interim ones the guess after them', () => {

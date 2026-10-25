@@ -14,7 +14,7 @@ import { fmt, formatDate } from '../lib/utils.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import { ICONS } from '../areas/icons.js';
 import { search } from '../assistant/attach.js';
-import { dictated, dictationLang, recognizer, type DictationError, type Dictated } from '../assistant/dictation.js';
+import { dictated, dictationLang, fieldAt, follow, recognizer, type DictationError, type Dictated } from '../assistant/dictation.js';
 import { Picker, automationCandidates } from '../assistant/Picker.js';
 import { Recording } from '../assistant/Recording.js';
 import { isBookChange, type ContextRef, type EntrySet, type HeldChanges, type HeldLine, type InvoicingSet, type MadeChange, type Turn } from '../../types/assistant.js';
@@ -377,6 +377,9 @@ export function Sidebar({ page, books, onGo }: Props) {
   const [measured, setMeasured] = useState(false);
   /** The dictation whose words still go into the field; a sent message lets go of it. */
   const dictation = useRef(0);
+  /** The field's text as of the latest keystroke, for a dictation update that arrives before the next render. */
+  const typedText = useRef(text);
+  typedText.current = text;
   const plus = useRef<HTMLButtonElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const ghost = useRef<HTMLDivElement>(null);
@@ -413,7 +416,7 @@ export function Sidebar({ page, books, onGo }: Props) {
   const listen = () => {
     if (!ear) return;
     if (listening) { listening(); return; }
-    const field = { text, start: area.current?.selectionStart ?? text.length, end: area.current?.selectionEnd ?? text.length };
+    let field = fieldAt(text, area.current?.selectionStart ?? text.length, area.current?.selectionEnd ?? text.length);
     const id = ++dictation.current;
     let caret = field.end;
     setHeardError(undefined);
@@ -421,9 +424,18 @@ export function Sidebar({ page, books, onGo }: Props) {
     const stop = ear.start(dictationLang(language()), {
       heard: (heard) => {
         if (id !== dictation.current) return;
-        const d = dictated(field, heard);
+        const typed = follow(field, typedText.current);
+        if (!typed) {
+          dictation.current++;
+          setPartial(undefined);
+          stop();
+          return;
+        }
+        const d = dictated(typed, heard);
+        field = d.field;
         caret = d.caret;
-        setText(d.value);
+        typedText.current = d.field.text;
+        setText(d.field.text);
         setPartial(d.partial.end > d.partial.start ? d.partial : undefined);
       },
       level: (level) => { setMeasured(true); mic.current?.style.setProperty('--level', String(level)); },
@@ -543,7 +555,7 @@ export function Sidebar({ page, books, onGo }: Props) {
                 ref={area} rows={3} value={text} placeholder={t(setup ? 'onboarding.placeholder' : 'assistant.placeholder')} aria-label={t('assistant.message')}
                 className={partial ? 'dictating' : undefined}
                 onScroll={(e) => { if (ghost.current) ghost.current.scrollTop = e.currentTarget.scrollTop; }}
-                onChange={(e) => { setText(e.target.value); setPartial(undefined); setPick(0); }}
+                onChange={(e) => { typedText.current = e.target.value; setText(e.target.value); setPartial(undefined); setPick(0); }}
                 onPaste={(e) => { const files = [...e.clipboardData.files]; if (files.length) { e.preventDefault(); attachFiles(files); } }}
                 onKeyDown={(e) => {
                   if (offered.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); setPick((pick + (e.key === 'ArrowDown' ? 1 : offered.length - 1)) % offered.length); return; }

@@ -110,11 +110,18 @@ export function recognizer(bridge: DesktopBridge | undefined = desktop): Recogni
 /** The language the recognizer listens in: Swiss German, French and Italian; English as in the US. */
 export const dictationLang = (language: string): string => (language === 'en' ? 'en-US' : `${language}-CH`);
 
-/** The field while dictating: its text, where the provisional words sit in it, and the caret after what was heard. */
-export interface Dictated { value: string; partial: { start: number; end: number }; caret: number }
+/**
+ * The message field as dictation sees it: its text, the part dictation writes over (the selection
+ * when it started, the caret where start is end; afterwards the words it wrote), and what that part
+ * held when dictation started, put back while nothing is heard.
+ */
+export interface Field { text: string; start: number; end: number; kept: string }
 
-/** The message field when dictation started: its text and the selection (the caret where start is end). */
-export interface Field { text: string; start: number; end: number }
+/** The field when dictation starts, with its selection. */
+export const fieldAt = (text: string, start: number, end: number): Field => ({ text, start, end, kept: text.slice(start, end) });
+
+/** The field while dictating, where the provisional words sit in it, and the caret after what was heard. */
+export interface Dictated { field: Field; partial: { start: number; end: number }; caret: number }
 
 /**
  * What was heard put where the caret was, in place of a selection: the typed text before and after
@@ -127,9 +134,39 @@ export function dictated(field: Field, heard: Heard): Dictated {
   const squash = (s: string) => s.replace(/\s+/g, ' ').trimStart();
   const said = squash(heard.text + heard.partial).trimEnd();
   const settled = Math.min(squash(heard.text).trimEnd().length, said.length);
-  if (!said) return { value: field.text, partial: { start: field.end, end: field.end }, caret: field.end };
+  if (!said) {
+    const end = before.length + field.kept.length;
+    return { field: { ...field, text: before + field.kept + after, end }, partial: { start: end, end }, caret: end };
+  }
   const lead = before && !/\s$/.test(before) ? `${before} ` : before;
-  const tail = after && !/^\s/.test(after) ? ` ${after}` : after;
+  const tail = after && !/^[\s,.;:!?)]/.test(after) ? ` ${after}` : after;
   const start = lead.length;
-  return { value: lead + said + tail, partial: { start: start + settled, end: start + said.length }, caret: start + said.length };
+  const text = lead + said + tail;
+  return {
+    field: { ...field, text, start: before.length, end: text.length - after.length },
+    partial: { start: start + settled, end: start + said.length },
+    caret: start + said.length,
+  };
+}
+
+/**
+ * The field after the person typed in it while dictating (`now`): typing before the dictated words
+ * moves them, typing after them leaves them; the next words heard replace only them. A change to the
+ * dictated words themselves gives undefined: they stay as the person left them, and dictation lets go.
+ */
+export function follow(field: Field, now: string): Field | undefined {
+  const was = field.text;
+  if (now === was) return field;
+  const shorter = Math.min(was.length, now.length);
+  let same = 0;
+  while (same < shorter && was[same] === now[same]) same++;
+  let tail = 0;
+  while (tail < shorter - same && was[was.length - 1 - tail] === now[now.length - 1 - tail]) tail++;
+  const changedEnd = was.length - tail;
+  if (changedEnd <= field.start) {
+    const moved = now.length - was.length;
+    return { ...field, text: now, start: field.start + moved, end: field.end + moved };
+  }
+  if (same >= field.end) return { ...field, text: now };
+  return undefined;
 }
