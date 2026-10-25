@@ -2,6 +2,7 @@
 import type { ProviderId } from './provider.js';
 import type { Capability, StepId, Tier } from './steps.js';
 import type { StepChoice } from './settings.js';
+import type { TierChoice } from './providers/codex-models.js';
 import type { TerminalCli } from '../platform/terminal.js';
 
 export interface AiProviderView {
@@ -14,6 +15,12 @@ export interface AiProviderView {
   models: Array<{ id: string; can: readonly Capability[] }>;
   /** The provider's model list could not be read; its shipped models are offered. */
   listError?: string;
+  /**
+   * Codex (issue #180): the model each tier takes from the models the signed-in account offers,
+   * and when that list was read (absent: not yet, the tiers take the app's first choices).
+   */
+  tiers?: Record<Tier, TierChoice>;
+  checkedAt?: string;
 }
 
 export interface AiStepView {

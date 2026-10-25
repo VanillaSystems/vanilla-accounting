@@ -17,6 +17,8 @@ import { CliCard } from '../../ai/CliCard.js';
 import { testLine, WithoutCli } from '../../ai/KeyBlock.js';
 import { useAiSetup, type AiSetup } from '../../ai/useAiSetup.js';
 import '../../ai/ai-setup.css';
+import { TIERS } from '../../../llm/steps.js';
+import { formatDate } from '../../lib/utils.js';
 
 const fits = (step: AiStepView, can: readonly string[]) => step.needs.every((n) => can.includes(n));
 const usable = (p: AiProviderView) => p.state === 'ready' || p.state === 'set';
@@ -122,7 +124,9 @@ function Programs({ setup, ai, canEdit, apply }: { setup: AiSetup; ai: AiView; c
       <div className="aiclis wide">
         {TERMINAL_CLIS.map((cli) => cards[cli] ? (
           <CliCard key={cli} cli={cli} state={cards[cli]!} opens={view.opens}
-            actions={canEdit ? { install: () => void setup.install(cli), signIn: () => void setup.signIn(cli), again: () => setup.again(cli) } : undefined} />
+            actions={canEdit ? { install: () => void setup.install(cli), signIn: () => void setup.signIn(cli), again: () => setup.again(cli) } : undefined}>
+            {cli === 'codex' && 'version' in cards[cli]! ? <CodexTiers view={ai} canEdit={canEdit} recheck={() => apply(api.recheckCodexModels, t('ai.codex.rechecked'))} /> : null}
+          </CliCard>
         ) : null)}
       </div>
       {setup.error ? <p className="warnline">{setup.error}</p> : null}
@@ -181,5 +185,23 @@ function ProviderRow({ p, view, canEdit, test, onKey }: { p: AiProviderView; vie
         {p.listError ? <small className="warnline">{t('ai.listError', { detail: p.listError })}</small> : null}
       </dd>
     </>
+  );
+}
+
+/** In the Codex card (issue #180): the model each tier takes from the ChatGPT account's list, a tier that borrows another's said so, and «Nochmals prüfen». */
+function CodexTiers({ view, canEdit, recheck }: { view: AiView; canEdit: boolean; recheck: () => Promise<void> }) {
+  const { tiers, checkedAt } = view.providers.find((p) => p.id === 'codex-cli') ?? {};
+  if (!tiers) return null;
+  return (
+    <div className="aitiers">
+      <b>{t('ai.codex.tiers')}</b>
+      {TIERS.map((tier) => {
+        const c = tiers[tier];
+        const name = t(`ai.tier.${tier}`);
+        return <span key={tier} className="aitier">{c.from ? t('ai.codex.borrowed', { tier: name, model: c.model, from: t(`ai.tier.${c.from}`) }) : t('ai.codex.tier', { tier: name, model: c.model })}</span>;
+      })}
+      <small className="m">{checkedAt ? t('ai.codex.checked', { date: formatDate(checkedAt.slice(0, 10)) }) : t('ai.codex.unchecked')}</small>
+      {canEdit ? <span className="ruleacts"><button type="button" className="linkbtn" onClick={() => void recheck()}>{t('ai.codex.recheck')}</button></span> : null}
+    </div>
   );
 }
