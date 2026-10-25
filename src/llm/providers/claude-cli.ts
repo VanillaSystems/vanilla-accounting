@@ -13,21 +13,23 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { AiRefused, CallFailed, isPlanLimit, NO_USAGE, type Call, type Provider } from '../provider.js';
+import type { StepId } from '../steps.js';
+import { claudeBin, knownPath, probeCli } from '../../platform/ai-cli.js';
 
-/** No `claude` CLI to run: model features say what to install, everything else works without them. */
+/** No `claude` CLI to run: the step that needed it (when known) says so with the way to set an AI up; everything else works without it. */
 export class NoClaudeError extends Error {
-  constructor() {
-    super('Für Belege lesen und Buchungsvorschläge braucht die App Claude Code: von claude.com/claude-code installieren und einmal im Terminal mit "claude" anmelden.');
+  constructor(readonly step?: StepId) {
+    super(`${step ? `${step}: ` : ''}Dafür braucht die App eine KI, und auf diesem Mac ist keine eingerichtet (Firma › KI).`);
   }
 }
 
 /**
- * The CLI: CLAUDE_BIN when set (the desktop app finds it through the login shell, src/platform/login-path.ts),
- * else `claude` on the PATH. Its own folder joins the PATH, so an npm-installed claude finds its node.
+ * The CLI as a look finds it now (src/platform/ai-cli.ts claudeBin: CLAUDE_BIN when set, else the
+ * PATH or ~/.local/bin). Its own folder joins the PATH, so an npm-installed claude finds its node.
  */
 export function claudeCommand(): { bin: string; env: NodeJS.ProcessEnv } {
-  const bin = process.env.CLAUDE_BIN;
-  if (!bin) return { bin: 'claude', env: process.env };
+  const bin = claudeBin();
+  if (bin === 'claude') return { bin, env: process.env };
   return { bin, env: { ...process.env, PATH: [dirname(bin), process.env.PATH].filter(Boolean).join(delimiter) } };
 }
 
@@ -104,14 +106,8 @@ export const claudeCli: Provider = {
     });
   },
 
-  /** A working `claude` CLI answers here (CLAUDE_BIN, else on PATH) and exits 0 for `--version`. */
-  ready(timeoutMs = 15_000) {
-    return new Promise((done) => {
-      const { bin, env } = claudeCommand();
-      const child = spawn(bin, ['--version'], { cwd: cwd(), env, stdio: ['ignore', 'ignore', 'ignore'] });
-      const timer = setTimeout(() => { child.kill('SIGKILL'); done(false); }, timeoutMs);
-      child.on('error', () => { clearTimeout(timer); done(false); });
-      child.on('close', (code) => { clearTimeout(timer); done(code === 0); });
-    });
+  /** The `claude` CLI answers here: found, answering `--version`, and signed in as `claude auth status` says (src/platform/ai-cli.ts). */
+  async ready(timeoutMs = 15_000) {
+    return (await probeCli('claude', { path: knownPath() }, timeoutMs)).found === 'signedIn';
   },
 };

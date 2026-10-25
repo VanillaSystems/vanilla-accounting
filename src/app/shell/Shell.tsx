@@ -71,7 +71,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const [loc, go] = useLocationState();
   const [theme, setTheme, dark] = useTheme();
   const [zoom, zoomStep] = useZoom();
-  const { toast, note, dismiss: dismissToast, undo, node: toastNode } = useToast();
+  const { toast, note, dismiss: dismissToast, undo, node: toastNode } = useToast(() => go({ route: { area: 'company', section: 'ai' }, query: {} }));
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [dockKeys, setDockKeys] = useState(false);
   const [legend, setLegend] = usePersistedFlag('legend', true);

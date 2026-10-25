@@ -64,7 +64,10 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
   /** What the words said of the firm, short of a whole one: the firm's card starts with it. */
   const [firmHint, setFirmHint] = useState<{ n: number; firm: Partial<Firm> }>({ n: 0, firm: {} });
 
+  /** Typed words need an AI; without one the buttons and fields carry the conversation (docs/0.4.0/ai-setup.md). */
+  const [aiAnswers, setAiAnswers] = useState(true);
   useEffect(() => { void api.desktop.setup(root).then(setView, (e) => setError(errorText(e))); }, [root]);
+  useEffect(() => { void api.desktop.ai().then((r) => setAiAnswers(r.available), () => setAiAnswers(false)); }, []);
   const steps = view ? draftSteps(view.draft) : [];
   useEffect(() => { end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }, [steps.length, turns]);
 
@@ -137,11 +140,11 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
         <form className="obtalk" onSubmit={(e) => { e.preventDefault(); void talk(); }}>
           <div className={busy ? 'obtalkbox busy' : 'obtalkbox'}>
             <textarea
-              name="talk" rows={2} maxLength={MAX_TALK} value={text} placeholder={t('onboarding.talk.placeholder')} aria-label={t('onboarding.talk.label')}
+              name="talk" rows={2} maxLength={MAX_TALK} value={text} disabled={!aiAnswers} placeholder={t(aiAnswers ? 'onboarding.talk.placeholder' : 'aiSetup.talkWaits')} aria-label={t('onboarding.talk.label')}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void talk(); } }}
             />
-            <button type="submit" className="aisend" data-act="setup-talk" aria-label={t('assistant.send')} disabled={busy || !text.trim()}>{ICONS.arrowUp}</button>
+            <button type="submit" className="aisend" data-act="setup-talk" aria-label={t('assistant.send')} disabled={busy || !aiAnswers || !text.trim()}>{ICONS.arrowUp}</button>
           </div>
         </form>
       )}

@@ -14,7 +14,8 @@ let bin = '';
 
 before(async () => {
   bin = mkdtempSync(join(tmpdir(), 'api-errors-'));
-  writeFileSync(join(bin, 'claude'), '#!/bin/sh\ncat >/dev/null\necho "model down" >&2\nexit 1\n');
+  // Installed and signed in, but the call fails: an unexpected failure, not «no AI here» (which answers 503).
+  writeFileSync(join(bin, 'claude'), '#!/bin/sh\ncase "$1" in --version) echo 2.1.0; exit 0;; auth) echo \'{"loggedIn":true}\'; exit 0;; esac\ncat >/dev/null\necho "model down" >&2\nexit 1\n');
   chmodSync(join(bin, 'claude'), 0o755);
   api = await startApi('tests/fixtures/classify-index.json', { PATH: `${bin}:${process.env.PATH}` });
   mkdirSync(join(api.root, 'transactional-data/2026/receipts'), { recursive: true });

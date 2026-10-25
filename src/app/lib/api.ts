@@ -1,4 +1,5 @@
 import type { TerminalCli, TerminalView } from '../../platform/terminal.js';
+import type { AiSetupView, KeySaved, Probation, SetupKey } from '../../platform/ai-setup.js';
 import type { StatementProblem } from '../../types/api-error.js';
 import type { MoneyRole } from '../../workspace/banks.js';
 import type { AiView } from '../../llm/view.js';
@@ -82,6 +83,9 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
 }
 
 /** Every call throws an ApiError when the response is not ok. */
+/** The window event of a refusal for want of an AI; its detail is the error line's text. */
+export const NO_AI_EVENT = 'vanilla:no-ai';
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await apiFetch(path, body === undefined ? { method } : {
     method,
@@ -90,6 +94,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   });
   if (!res.ok) {
     const err = (await res.json().catch(() => null)) as ApiErrorBody | null;
+    // A step that needed an AI where none answers: the shell shows the error line with «KI einrichten» (src/app/shell/Toast.tsx).
+    if (err && (err.code === 'noClaude' || (err.code === 'aiRefused' && err.params.reason !== 'limit')) && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(NO_AI_EVENT, { detail: errorText(new ApiError(err)) }));
     throw new ApiError(err?.error ? err : { error: `HTTP ${res.status}` });
   }
   return res.json() as Promise<T>;
@@ -186,7 +192,7 @@ export function errorText(e: unknown): string {
     case 'ledgerAccountTaken': return t('error.ledgerAccountTaken', b.params);
     case 'attachment': return t(`error.attachment.${b.params.reason}`, { name: b.params.name, mb: 'mb' in b.params ? b.params.mb : 0, limit: ATTACHMENT_MAX_MB });
     case 'noBrowser': return t('error.noBrowser');
-    case 'noClaude': return t('error.noClaude');
+    case 'noClaude': return b.params?.step && isStepId(b.params.step) ? t('error.noAi', { what: t(`ai.step.${b.params.step}`) }) : t('error.noAi.any');
     case 'aiRefused': return aiRefusedText(b.params);
     case 'terminalNotMac': return t('error.terminalNotMac');
     case 'terminalNoCli': return t('error.terminalNoCli');
@@ -506,6 +512,15 @@ export const api = {
   ai: () => request<AiView>('GET', '/api/ai'),
   setAiStep: (step: StepId, choice: { provider: ProviderId; model: string } | { provider: null }) => request<AiView>('PUT', `/api/ai/steps/${step}`, choice),
   setAiKey: (provider: ProviderId, key: string | null) => request<AiView>('PUT', `/api/ai/keys/${provider}`, { key }),
+  /** This Mac's AI, also before any books exist (src/server/ai-setup.ts). */
+  aiSetup: {
+    view: () => request<AiSetupView>('GET', '/api/ai/setup'),
+    install: (cli: TerminalCli, language: string) => request<{ ok: true }>('POST', `/api/ai/setup/${cli}/install`, { language }),
+    signIn: (cli: TerminalCli, language: string) => request<{ ok: true }>('POST', `/api/ai/setup/${cli}/login`, { language }),
+    test: (cli: TerminalCli) => request<Probation>('POST', `/api/ai/setup/${cli}/test`),
+    key: (provider: SetupKey, key: string | null) => request<KeySaved>('PUT', `/api/ai/setup/keys/${provider}`, { key }),
+    choose: (choice: { noAi?: boolean; askOther?: boolean }) => request<AiSetupView>('PUT', '/api/ai/setup/choice', choice),
+  },
   terminal: () => request<TerminalView>('GET', '/api/terminal'),
   recheckCodexModels: () => request<AiView>('POST', '/api/ai/codex/models'),
   setAiCli: (change: { cli?: TerminalCli | null; askOther?: boolean }) => request<AiView>('PUT', '/api/ai/cli', change),

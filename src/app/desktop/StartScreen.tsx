@@ -1,9 +1,11 @@
 /**
  * The desktop app's first screen (ADR 0009): open existing books, set up new ones, or look at a copy
- * of the demo. Shown at /start and whenever no books are open. New books are set up in the setup
- * conversation (#139: NewBooks, then DraftConversation); the form with the questions of `npm run init`
- * (src/workspace/setup.ts, checked again by src/workspace/create.ts) is the way by hand, and the only
- * one while no AI answers on this computer. Both end in the same createWorkspace.
+ * of the demo. Shown at /start and whenever no books are open. A fresh install (no books open, none
+ * known) opens straight into «Einrichtung» (docs/0.4.0/ai-setup.md, design B): the AI first
+ * (src/app/ai/FirstRun.tsx), then the folder, then the setup conversation (#139, DraftConversation),
+ * with buttons and fields also without an AI. The form with the questions of `npm run init`
+ * (src/workspace/setup.ts, checked again by src/workspace/create.ts) stays as «Ohne KI einrichten».
+ * Both end in the same createWorkspace.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { BANKS, parseIban } from '../../workspace/banks.js';
@@ -13,7 +15,7 @@ import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
 import { ApiError, api, errorText } from '../lib/api.js';
 import { START_PATH, desktop, setupPath } from './bridge.js';
-import { NewBooks, freeName } from './NewBooks.js';
+import { FirstRun, freeName } from '../ai/FirstRun.js';
 import { DraftConversation } from '../onboarding/DraftConversation.js';
 import './start.css';
 
@@ -58,13 +60,13 @@ export function useStartScreen(): boolean | undefined {
 
 const answerList = (a: Partial<Answers>, key: QuestionKey): string[] => ([] as string[]).concat(a[key] ?? []);
 
-/** What the start screen shows: the choices, the new books' folder, the setup conversation in a folder, or the form (`noAi`: shown because no AI answers). */
-type Mode = { kind: 'home' } | { kind: 'new' } | { kind: 'setup'; root: string } | { kind: 'form'; noAi: boolean };
+/** What the start screen shows: the choices, «Einrichtung» from the AI to the folder, the setup conversation in a folder, or the form. */
+type Mode = { kind: 'home' } | { kind: 'first' } | { kind: 'setup'; root: string } | { kind: 'form' };
 
 const modeOfUrl = (): Mode => {
   const q = new URLSearchParams(location.search);
   const root = q.get('setup');
-  return root ? { kind: 'setup', root } : q.has('new') ? { kind: 'new' } : { kind: 'home' };
+  return root ? { kind: 'setup', root } : q.has('new') ? { kind: 'first' } : { kind: 'home' };
 };
 
 export function StartScreen({ language, onLanguage }: { language: string; onLanguage(code: string): void }) {
@@ -75,21 +77,20 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
   /** Books refused for their layout before 0.4.0: the folder the app offers to move into the current one. */
   const [upgradable, setUpgradable] = useState<string>();
 
-  useEffect(() => { void api.desktop.info().then(setInfo, (e) => setError(errorText(e))); }, [mode.kind]);
+  useEffect(() => {
+    void api.desktop.info().then((i) => {
+      setInfo(i);
+      // A fresh install: no books open and none known.
+      if (mode.kind === 'home' && !i.open && !i.recent.length && !location.search) setMode({ kind: 'first' });
+    }, (e) => setError(errorText(e)));
+  }, [mode.kind]);
   const setMode = (next: Mode) => {
     setError('');
     history.replaceState(null, '', next.kind === 'setup' ? setupPath(next.root) : START_PATH);
     setModeState(next);
   };
-  /** «Neue Buchhaltung anlegen»: the conversation when an AI answers on this computer, else the form with the reason. */
-  const startNew = async () => {
-    setBusy(true);
-    const ai = await api.desktop.ai().then((r) => r.available, () => false);
-    setBusy(false);
-    setMode(ai ? { kind: 'new' } : { kind: 'form', noAi: true });
-  };
-  // Opened from the menu (/start?new): the same check as the button.
-  useEffect(() => { if (mode.kind === 'new' && new URLSearchParams(location.search).has('new')) void startNew(); }, []);
+  /** «Neue Buchhaltung anlegen» (also the menu's /start?new): «Einrichtung», the AI first, then the folder. */
+  const startNew = () => setMode({ kind: 'first' });
   useEffect(() => { document.title = 'Vanilla Accounting'; }, []);
 
   const run = async (open: () => Promise<KnownBooks>) => {
@@ -121,9 +122,9 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
         </span>
       </header>
       {mode.kind === 'setup' ? <DraftConversation root={mode.root} onLeave={() => setMode({ kind: 'home' })} />
-        : mode.kind === 'new' ? <NewBooks info={info} language={language} onCancel={() => setMode({ kind: 'home' })} onSetup={(root) => setMode({ kind: 'setup', root })} onForm={() => setMode({ kind: 'form', noAi: false })} />
+        : mode.kind === 'first' ? <FirstRun info={info} onLeave={() => setMode({ kind: 'home' })} onSetup={(root) => setMode({ kind: 'setup', root })} onForm={() => setMode({ kind: 'form' })} />
         : mode.kind === 'form'
-        ? <CreateForm info={info} busy={busy} error={error} notice={mode.noAi ? t('desktop.flow.noAi') : undefined} onCancel={() => setMode({ kind: 'home' })} onCreate={(setup) => run(() => api.desktop.create(setup))} />
+        ? <CreateForm info={info} busy={busy} error={error} onCancel={() => setMode({ kind: 'home' })} onCreate={(setup) => run(() => api.desktop.create(setup))} />
         : (
           <div className="st-main">
             <h1>Vanilla Accounting</h1>
@@ -132,7 +133,7 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
               <button type="button" className="st-choice" data-act="open" disabled={busy} onClick={() => void chooseAndOpen()}>
                 <b>{t('desktop.open')}</b><span>{t('desktop.openHint')}</span>
               </button>
-              <button type="button" className="st-choice" data-act="new" disabled={busy} onClick={() => void startNew()}>
+              <button type="button" className="st-choice" data-act="new" disabled={busy} onClick={startNew}>
                 <b>{t('desktop.new')}</b><span>{t('desktop.newHint')}</span>
               </button>
               <button type="button" className="st-choice" data-act="demo" disabled={busy} onClick={() => void run(api.desktop.demo)}>
@@ -165,8 +166,8 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
   );
 }
 
-function CreateForm({ info, busy, error, notice, onCancel, onCreate }: {
-  info: DesktopInfo | null; busy: boolean; error: string; notice?: string; onCancel(): void;
+function CreateForm({ info, busy, error, onCancel, onCreate }: {
+  info: DesktopInfo | null; busy: boolean; error: string; onCancel(): void;
   onCreate(setup: Parameters<typeof api.desktop.create>[0]): void;
 }) {
   const [f, setF] = useState<Form>(() => ({
@@ -237,7 +238,6 @@ function CreateForm({ info, busy, error, notice, onCancel, onCreate }: {
     <div className="st-main st-create">
       <h1>{t('desktop.new')}</h1>
       <p className="st-sub">{t('desktop.newIntro')}</p>
-      {notice && <p className="st-noai" role="status">{notice}</p>}
       <form className="st-form" noValidate onSubmit={(e) => { e.preventDefault(); submit(); }}>
         <section>
           <h2>{t('desktop.preset')}</h2>

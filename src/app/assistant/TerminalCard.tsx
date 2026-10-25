@@ -6,13 +6,7 @@
 import { useEffect, useState } from 'react';
 import { t } from '../i18n/index.js';
 import { api, errorText } from '../lib/api.js';
-import { chooseCli, copyCommand, type TerminalCli, type TerminalView } from '../../platform/terminal.js';
-
-/** The vendors' own installation pages. */
-const INSTALL: Record<TerminalCli, string> = {
-  claude: 'https://code.claude.com/docs/en/setup',
-  codex: 'https://developers.openai.com/codex/cli',
-};
+import { AI_CLIS, chooseCli, copyCommand, type TerminalCli, type TerminalView } from '../../platform/terminal.js';
 
 const nameOf = (cli: TerminalCli) => t(`terminal.cli.${cli}`);
 
@@ -62,7 +56,7 @@ export function TerminalCard({ request }: { request: string }) {
           <span>{t('terminal.install.lead')}</span>
           <ul>
             {(['claude', 'codex'] as const).map((cli) => (
-              <li key={cli}><a href={INSTALL[cli]} target="_blank" rel="noopener noreferrer">{t('terminal.install.link', { cli: nameOf(cli) })}</a></li>
+              <li key={cli}><a href={AI_CLIS[cli].guide} target="_blank" rel="noopener noreferrer">{t('terminal.install.link', { cli: nameOf(cli) })}</a></li>
             ))}
           </ul>
           <span className="m">{t('terminal.install.after')}</span>
