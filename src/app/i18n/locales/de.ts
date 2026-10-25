@@ -2830,6 +2830,7 @@ export const messages = {
   'assistant.folderOver': 'Aus {folder} gingen die ersten {max} Dateien an die KI, {n} weitere nicht.',
   'assistant.dictation.start': 'Diktieren',
   'assistant.dictation.stop': 'Diktieren beenden',
+  'assistant.dictation.recording': 'Aufnahme läuft',
   'assistant.dictation.online': 'Hört zu · erkannt vom Online-Dienst deines Browsers',
   'assistant.dictation.denied': 'Kein Zugriff aufs Mikrofon. Erlaube es in den Einstellungen deines Browsers für diese Seite.',
   'assistant.dictation.unreachable': 'Die Spracherkennung deines Browsers ist gerade nicht erreichbar.',
