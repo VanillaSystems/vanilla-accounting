@@ -391,7 +391,7 @@ export async function changesView(ws: Ws): Promise<ChangesView> {
   const repository = !!(await repositoryAt(ws.paths.repository));
   const [draft, outside, books, log] = [draftChanges(ws), await outsideChanges(ws), await booksChange(ws), await history(ws)];
   const rev = createHash('sha256').update(JSON.stringify([draft, outside, books, log[0]?.oid])).digest('hex').slice(0, 16);
-  return { rev, repository, draft, outside, books, history: log, sync: { remote: false, ahead: 0 } };
+  return { rev, repository, draft, outside, books, history: log, sync: { remote: false, ahead: 0, git: false } };
 }
 
 /** One save: its message and the files it changed against its parent. */

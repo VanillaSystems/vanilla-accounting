@@ -14,6 +14,7 @@
  * its own end state. Steps 4 to 6 run in a new process, so they run the code just pulled.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
+import { requireGit } from '../platform/git-program.js';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -29,7 +30,7 @@ interface Step { name: string; run(): Outcome | Promise<Outcome> }
 const done = (note?: string): Outcome => ({ ok: true, note });
 const failed = (problem: string, fix: string): Outcome => ({ ok: false, problem, fix });
 
-const git = (...args: string[]) => execFileSync('git', ['-C', APP_ROOT, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+const git = (...args: string[]) => execFileSync(requireGit(), ['-C', APP_ROOT, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 const tryGit = (...args: string[]): { ok: true; out: string } | { ok: false; err: string } => {
   try { return { ok: true, out: git(...args) }; } catch (e) { return { ok: false, err: String((e as { stderr?: string }).stderr || (e as Error).message).trim() }; }
 };
