@@ -7,7 +7,7 @@
  */
 import express, { type Request, type Response } from 'express';
 import { languageOf, textsIn } from '../app/i18n/texts-in.js';
-import { modelReady } from '../llm/ask.js';
+import { modelReady, sidebarAgent } from '../llm/ask.js';
 import { keepKey, KeyNotKept } from '../llm/key-store.js';
 import { isRateLimitSignal } from '../llm/adaptive-pool.js';
 import { claudeCli } from '../llm/providers/claude-cli.js';
@@ -33,6 +33,7 @@ export async function setupView(): Promise<AiSetupView> {
     noAi: settings.noAi === true,
     askOther: settings.askOther === true,
     ...(settings.cli ? { preferred: settings.cli } : {}),
+    sidebar: sidebarAgent().provider.id === 'codex-cli' ? 'codex' : 'claude',
     opens: process.platform === 'darwin',
     available: await modelReady(8000),
   };

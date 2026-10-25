@@ -2,10 +2,15 @@
 // Stands in for the `codex` CLI that src/llm/providers/codex-cli.ts runs (tests/codex-provider.test.ts).
 // `codex login status` exits $CODEX_STUB_STATUS (0: signed in). `codex exec` reads the prompt on
 // stdin and prints JSONL events as codex-cli 0.163 does; $CODEX_STUB_MODE picks the run:
-// answer (default: $CODEX_STUB_ANSWER or {"stub":"codex"}), limit, signedOut, act (starts a command
-// and waits to be killed). $CODEX_STUB_ARGS: each call's arguments, the prompt and the instructions
-// file's text, one JSON line per call.
-import { appendFileSync, readFileSync } from 'node:fs';
+// answer (default: $CODEX_STUB_ANSWER or {"stub":"codex"}), limit, signedOut, act (starts a command, or
+// the item $CODEX_STUB_ITEM, and waits to be killed; in the KI column after an answer with the changes block). $CODEX_STUB_ARGS: each call's arguments, the prompt and the instructions
+// file's text, the cwd and CODEX_HOME, one JSON line per call.
+// A message of the KI column (src/assistant/codex.ts: `-c mcp_servers.vanilla.url=…`) calls the
+// app's tools over MCP as listed in the file $CODEX_STUB_TOOLS ([{ tool, arguments }]), each as an
+// mcp_tool_call item with the server's result, then answers «Stub-Codex auf «<last line>».» with the
+// vanilla-changes block of the file $CODEX_STUB_CHANGES when it exists. `exec resume <id>` keeps <id>.
+import { randomUUID } from 'node:crypto';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
 if (args[0] === '--version') {
@@ -20,12 +25,16 @@ if (args[0] === 'login' && args[1] === 'status') {
 const prompt = readFileSync(0, 'utf8');
 const file = args.find((a) => a.startsWith('model_instructions_file='))?.slice('model_instructions_file='.length);
 const instructions = file ? readFileSync(JSON.parse(file), 'utf8') : undefined;
-if (process.env.CODEX_STUB_ARGS) appendFileSync(process.env.CODEX_STUB_ARGS, JSON.stringify({ args, prompt, instructions, cwd: process.cwd() }) + '\n');
+if (process.env.CODEX_STUB_ARGS) appendFileSync(process.env.CODEX_STUB_ARGS, JSON.stringify({ args, prompt, instructions, cwd: process.cwd(), home: process.env.CODEX_HOME }) + '\n');
 
 const line = (o) => process.stdout.write(JSON.stringify(o) + '\n');
-line({ type: 'thread.started', thread_id: '0199a213-81c0-7800-8aa1-bbab2a035a53' });
+const mcp = args.find((a) => a.startsWith('mcp_servers.vanilla.url='))?.slice('mcp_servers.vanilla.url='.length);
+const resumed = args[1] === 'resume' ? args.at(-2) : undefined;
+line({ type: 'thread.started', thread_id: resumed ?? (mcp ? randomUUID() : '0199a213-81c0-7800-8aa1-bbab2a035a53') });
 line({ type: 'turn.started' });
-const mode = process.env.CODEX_STUB_MODE ?? 'answer';
+// $CODEX_STUB_CONTROL: a file with { mode, item } that overrides both, for a stub a server runs (its env is fixed).
+const control = process.env.CODEX_STUB_CONTROL && existsSync(process.env.CODEX_STUB_CONTROL) ? JSON.parse(readFileSync(process.env.CODEX_STUB_CONTROL, 'utf8')) : {};
+const mode = control.mode ?? process.env.CODEX_STUB_MODE ?? 'answer';
 if (mode === 'limit') {
   line({ type: 'error', message: "You've hit your usage limit. Upgrade to Pro or try again at 6:00 PM." });
   line({ type: 'turn.failed', error: { message: "You've hit your usage limit. Upgrade to Pro or try again at 6:00 PM." } });
@@ -36,8 +45,33 @@ if (mode === 'signedOut') {
   process.exit(1);
 }
 if (mode === 'act') {
-  line({ type: 'item.started', item: { id: 'item_1', type: 'command_execution', command: 'bash -lc ls ~', status: 'in_progress' } });
+  // A KI column answer that names changes and then acts on its own: the app must end it and apply nothing.
+  if (mcp && process.env.CODEX_STUB_CHANGES && existsSync(process.env.CODEX_STUB_CHANGES)) {
+    line({ type: 'item.completed', item: { id: 'item_0', type: 'agent_message', text: `Erledigt.\n\n\`\`\`vanilla-changes\n${readFileSync(process.env.CODEX_STUB_CHANGES, 'utf8')}\n\`\`\`` } });
+  }
+  line({ type: 'item.started', item: control.item ?? (process.env.CODEX_STUB_ITEM ? JSON.parse(process.env.CODEX_STUB_ITEM) : undefined) ?? { id: 'item_1', type: 'command_execution', command: 'bash -lc ls ~', status: 'in_progress' } });
   setTimeout(() => process.exit(0), 30_000);
+} else if (mcp) {
+  const url = JSON.parse(mcp);
+  let id = 0;
+  const rpc = async (method, params) => {
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method, params }) });
+    return (await res.json()).result;
+  };
+  await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'codex-stub', version: '0' } });
+  const listed = (await rpc('tools/list', {})).tools.map((t) => t.name);
+  const calls = process.env.CODEX_STUB_TOOLS && existsSync(process.env.CODEX_STUB_TOOLS) ? JSON.parse(readFileSync(process.env.CODEX_STUB_TOOLS, 'utf8')) : [];
+  for (const [i, c] of calls.entries()) {
+    const item = { id: `item_t${i}`, type: 'mcp_tool_call', server: 'vanilla', tool: c.tool, arguments: c.arguments };
+    line({ type: 'item.started', item: { ...item, status: 'in_progress' } });
+    const result = await rpc('tools/call', { name: c.tool, arguments: c.arguments });
+    line({ type: 'item.completed', item: { ...item, status: result.isError ? 'failed' : 'completed', result, error: null } });
+  }
+  const file = process.env.CODEX_STUB_CHANGES;
+  const changes = file && existsSync(file) ? `\n\n\`\`\`vanilla-changes\n${readFileSync(file, 'utf8')}\n\`\`\`` : '';
+  const asked = prompt.trim().split('\n').at(-1) ?? '';
+  line({ type: 'item.completed', item: { id: 'item_a', type: 'agent_message', text: `Stub-Codex auf «${asked.trim()}». Werkzeuge: ${listed.join(', ')}. ${resumed ? 'Das Gespräch geht weiter.' : 'Ein neues Gespräch.'}${changes}` } });
+  line({ type: 'turn.completed', usage: { input_tokens: 40, cached_input_tokens: 10, output_tokens: 9 } });
 } else {
   line({ type: 'item.completed', item: { id: 'item_0', type: 'reasoning', text: 'thinking' } });
   line({ type: 'item.completed', item: { id: 'item_1', type: 'agent_message', text: `${process.env.CODEX_STUB_ANSWER ?? '{"stub":"codex"}'}\n` } });

@@ -34,7 +34,7 @@ import { TEXTS } from '../invoices/texts.js';
 import type { AssistantEvent, AssistantSend } from '../types/assistant.js';
 
 /** The packaged app's files Claude reads (AGENTS.md, workflows/) lie beside its archive, unpacked (electron-builder asarUnpack). */
-const APP_FILES = APP_ROOT.replace(/app\.asar(?=$|\/)/, 'app.asar.unpacked');
+export const APP_FILES = APP_ROOT.replace(/app\.asar(?=$|\/)/, 'app.asar.unpacked');
 
 const LANGUAGES: Record<string, string> = { de: 'German', fr: 'French', it: 'Italian', en: 'English' };
 

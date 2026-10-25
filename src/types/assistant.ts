@@ -227,13 +227,15 @@ export type Turn =
     terminal?: string;
   };
 
-/** data/assistant/<id>.json: one conversation, its Claude session continued by every message. */
+/** data/assistant/<id>.json: one conversation, its session continued by every message. */
 export interface Conversation {
   id: string;
   title: string;
   at: string;
   purpose?: Purpose;
   session?: string;
+  /** Whose session `session` is: Claude Code's (when absent) or Codex's. */
+  agent?: 'claude-cli' | 'codex-cli';
   turns: Turn[];
 }
 

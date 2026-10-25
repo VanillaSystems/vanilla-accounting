@@ -64,7 +64,6 @@ export function CliCard({ cli, state, opens, compact, actions }: { cli: Terminal
       {state.kind !== 'ready' && state.kind !== 'testing' ? (
         <p className="aiplan">{t(`aiSetup.plan.${cli}`)} <a className="linkbtn" href={facts.plans} target="_blank" rel="noopener noreferrer">{t('aiSetup.plans', { vendor })}{ICONS.external}</a></p>
       ) : null}
-      {facts.readsPdf ? null : <small className="m">{t('ai.cli.noPdf')}</small>}
       {facts.precondition ? <small className="m">{t(`aiSetup.precondition.${facts.precondition}`)}</small> : null}
       {state.kind === 'missing' ? (
         <>

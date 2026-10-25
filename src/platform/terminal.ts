@@ -26,8 +26,6 @@ export interface CliFacts {
   status: readonly string[];
   login: readonly string[];
   tested: boolean;
-  /** It reads a PDF (Codex takes images only, so the steps that read a receipt go elsewhere). */
-  readsPdf: boolean;
   /** What the CLI asks macOS for beyond itself, said on its card: Codex 0.164 starts Apple's developer-tools install on `codex exec` (measured on a fresh Mac, 25.10.2026). */
   precondition?: 'devTools';
 }
@@ -36,12 +34,12 @@ export const AI_CLIS: Record<TerminalCli, CliFacts> = {
   claude: {
     program: 'claude', vendor: 'Anthropic', install: 'curl -fsSL https://claude.ai/install.sh | bash',
     guide: 'https://code.claude.com/docs/en/setup', plans: 'https://claude.com/pricing',
-    status: ['auth', 'status'], login: ['auth', 'login'], tested: true, readsPdf: true,
+    status: ['auth', 'status'], login: ['auth', 'login'], tested: true,
   },
   codex: {
     program: 'codex', vendor: 'OpenAI', install: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh',
     guide: 'https://developers.openai.com/codex/cli', plans: 'https://chatgpt.com/pricing',
-    status: ['login', 'status'], login: ['login'], tested: false, readsPdf: false, precondition: 'devTools',
+    status: ['login', 'status'], login: ['login'], tested: false, precondition: 'devTools',
   },
 };
 

@@ -16,6 +16,7 @@ import { probationOf, scriptTexts } from '../src/server/ai-setup.js';
 import { desktopServer, listen, portOf } from '../src/desktop/server.js';
 import { forgetCli, forgetKey } from '../src/llm/providers/index.js';
 import { modelReady, resolveStep } from '../src/llm/ask.js';
+import { writeCli } from '../src/llm/settings.js';
 import { providerStub, type ProviderStub } from './support/provider-stub.js';
 import { DEMO_ROOT } from './support/workspace.js';
 
@@ -192,7 +193,9 @@ test('no code path opens a CLI\'s login: no credential file, no Keychain entry o
     return [/\.credentials\.json/, /\.codex\/auth/, /Claude Code-credentials/, /homedir\(\),\s*['"`]\.(claude|codex)['"`]/, /['"`]~?\/?\.(claude|codex)\//]
       .filter((re) => re.test(text)).map((re) => `${f} ${re}`);
   });
-  assert.deepEqual(found, []);
+  // The app's CODEX_HOME links the person's ~/.codex/auth.json and never opens it (#181).
+  const linksOnly = 'llm/providers/codex-home.ts /homedir\\(\\),\\s*[\'"`]\\.(claude|codex)[\'"`]/';
+  assert.deepEqual(found.filter((f) => f !== linksOnly), []);
 });
 
 // #175: a Mac with only an API key, through the desktop server as the app runs it.
@@ -254,6 +257,22 @@ test('#175: a key refused by the provider is not kept; a key accepted is kept, t
   assert.equal((await resolveStep('classify')).provider.id, 'anthropic');
   assert.equal((await resolveStep('setup-conversation')).provider.id, 'anthropic', 'the setup conversation runs on the key');
   assert.equal((await resolveStep('sidebar')).provider.id, 'claude-cli', 'the KI column needs Claude Code');
+});
+
+test('the view names the CLI the KI column runs on, as the column\'s agent is chosen (#181): the column shows that one\'s card', async () => {
+  const stubBin = join(REPO, 'tests/support/stub-bin');
+  try {
+    assert.equal((await call('GET', '/api/ai/setup')).json.sidebar, 'claude', 'nothing found: Claude Code, whose card says what to install');
+    process.env.CODEX_BIN = join(stubBin, 'codex');
+    assert.equal((await call('GET', '/api/ai/setup')).json.sidebar, 'codex', 'only Codex here');
+    process.env.CLAUDE_BIN = join(stubBin, 'claude');
+    assert.equal((await call('GET', '/api/ai/setup')).json.sidebar, 'claude', 'both, nothing chosen: Claude Code');
+    writeCli({ cli: 'codex' });
+    assert.equal((await call('GET', '/api/ai/setup')).json.sidebar, 'codex', 'both, Codex chosen');
+  } finally {
+    delete process.env.CODEX_BIN;
+    writeCli({ cli: null });
+  }
 });
 
 test('«Ohne KI weitermachen» is kept on this Mac, and taken back', async () => {

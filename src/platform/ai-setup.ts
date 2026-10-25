@@ -152,6 +152,8 @@ export interface AiSetupView {
   askOther: boolean;
   /** The CLI the app asks (and «Im Terminal» opens) when two are ready. */
   preferred?: TerminalCli;
+  /** The CLI the KI column runs on now (src/llm/ask.ts sidebarAgent): the preferred one when found, else the one found. */
+  sidebar: TerminalCli;
   /** macOS: the app opens Terminal; elsewhere the command is copied. */
   opens: boolean;
   /** An AI answers the app's steps now (the rule of src/llm/ask.ts modelReady, #175). */
