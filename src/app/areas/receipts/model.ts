@@ -10,6 +10,8 @@ import type { ReceiptFilter } from '../../shell/route.js';
 import { baseCurrency, documents } from '../../../engines/index.js';
 import { duplicatesIn, type Twin } from '../../../intake/duplicates.js';
 import { documentKind } from '../../../intake/document-kind.js';
+import { accountOfStatement, statementFacts, type StatementFacts } from '../../../books/statement-facts.js';
+import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { isManualRef } from '../../../books/refs.js';
 import type { OtherWhy, SupportingWhy } from '../../../core/modules/schema.js';
 
@@ -53,7 +55,12 @@ export interface ReceiptView {
   locked: boolean;
   /** Another receipt it seems to repeat (asked: «ist dasselbe» or «verschieden»), or the invoice it accompanies. */
   twin?: Twin;
+  /** A bank statement's period and account, as its text and file name tell them (#151). */
+  statement?: StatementFacts;
 }
+
+/** A money account of the manifest, as far as a statement is placed at one. */
+export type Account = Pick<LedgerBankAccount, 'bank' | 'currency' | 'account' | 'iban'>;
 
 export interface Ledger {
   views: ReceiptView[];
@@ -103,12 +110,19 @@ export function ledgerOf(books: Index, openFrom: string): Ledger {
       || (r.amount === 0 && !(r.vatSummary ?? []).some((g) => g.vat > 0) && links.length === 0);
     const paid = links.flatMap((ref) => txByRef.get(ref)?.date ?? []);
     const twin = twins.get(r.id);
-    return { r, date, day: date || r.indexedAt.slice(0, 10) || undefined, vendor, desc, links, paid, none, ...(none ? { noneWhy: noneWhyOf(r) } : {}), locked: links.some(refClosed), ...(twin ? { twin } : {}) };
+    const statement = r.kind === 'statement' ? statementFacts(r, documents()) : undefined;
+    return { r, date, day: date || r.indexedAt.slice(0, 10) || undefined, vendor, desc, links, paid, none, ...(none ? { noneWhy: noneWhyOf(r) } : {}), locked: links.some(refClosed), ...(twin ? { twin } : {}), ...(statement ? { statement } : {}) };
   });
   return { views, byId: new Map(views.map((v) => [v.r.id, v])), txByRef, entriesByRef, receiptsByRef, closedThrough, openFrom };
 }
 
 export const isOpen = (v: ReceiptView) => v.links.length === 0;
+
+/**
+ * What a locked receipt refuses (#151): a link or a delete, which would change a filed return.
+ * Its date, words and kind still change; its amount, VAT and file stay (the server holds them).
+ */
+export const lockedRefuses = (act: 'link' | 'edit' | 'del' | 'mark' | 'notreceipt') => act === 'link' || act === 'del';
 
 /** Receipts that may repeat another and wait for «Ist dasselbe» or «Verschieden» (Belege and Aufgaben, r5h-34). */
 export const openTwins = (l: Ledger): ReceiptView[] =>
@@ -141,11 +155,15 @@ function haystack(v: ReceiptView): string {
 export interface Visible {
   rows: ReceiptView[];
   counts: Counts;
-  /** Files of the period that are no receipt (statements live with the bank). */
+  /** Files of the period that are no receipt, but for the statements Kontoauszüge shows at their account. */
   hidden: ReceiptView[];
 }
 
-export function visible(l: Ledger, period: Period, filter: ReceiptFilter | undefined, q: string | undefined): Visible {
+/** A statement Kontoauszüge shows at its account and month: its account is told and its last day known. */
+export const placedStatement = (v: ReceiptView, accounts: readonly Account[]) =>
+  !!v.statement?.to && !!accountOfStatement(v.statement, v.r, accounts);
+
+export function visible(l: Ledger, period: Period, filter: ReceiptFilter | undefined, q: string | undefined, accounts: readonly Account[] = []): Visible {
   // A period shows its own receipts and those of its payments; the working period also what from
   // before it still needs you, and every open receipt without a date, whenever it was read.
   const working = period.from <= l.openFrom && l.openFrom <= period.to;
@@ -164,7 +182,7 @@ export function visible(l: Ledger, period: Period, filter: ReceiptFilter | undef
   return {
     rows: receipts.filter(by).filter(match),
     counts,
-    hidden: pool.filter((v) => v.none && v.r.kind !== 'statement').filter(match),
+    hidden: pool.filter((v) => v.none && !placedStatement(v, accounts)).filter(match),
   };
 }
 

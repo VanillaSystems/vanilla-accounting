@@ -281,7 +281,7 @@ test('an invoice draft for a customer, or for a new one; the undo drops it (and 
   assert.equal(s.invoices().customers.find((c) => c.name === 'Familie Keller')!.deleted, true, 'the customer added with it goes too');
 
   const filedReceipt = demo.receipts.find((r) => demo.mappings.some((m) => m.receiptId === r.id && demo.transactions.find((x) => x.ref === m.transactionRef)!.date <= closedThrough))!;
-  const none = await s.answer([{ kind: 'invoiceDraft', customer: customer.id, draft: { lines } }, { kind: 'receipt', id: filedReceipt.id, set: { description: 'x' } }]);
+  const none = await s.answer([{ kind: 'invoiceDraft', customer: customer.id, draft: { lines } }, { kind: 'receipt', id: filedReceipt.id, set: { amount: 1, currency: 'CHF' } }]);
   assert.equal(none.refusal?.code, 'periodClosed');
   assert.equal(drafts().length, n, 'the draft of a refused answer is taken back');
 

@@ -10,6 +10,7 @@ import { RECEIPT_FILTERS, type ReceiptFilter, type RouteOf } from '../../shell/r
 import { ListHead } from '../../shell/ListHead.js';
 import { moveKey } from '../../shell/keyboard.js';
 import { useFx } from '../../hooks/use-fx.js';
+import { useWorkspace } from '../../hooks/use-workspace.js';
 import { periodName, monthName } from '../../lib/period-label.js';
 import { fmt, formatAmount, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
@@ -46,7 +47,8 @@ function List(props: Props) {
   const { rates } = useFx();
   const l = ledgerFor(books);
   const toChf = useMemo(() => chfOf(rates), [rates]);
-  const { rows, counts, hidden } = useMemo(() => visible(l, period, query.filter, query.q), [l, period, query.filter, query.q]);
+  const accounts = useWorkspace()?.bankAccounts;
+  const { rows, counts, hidden } = useMemo(() => visible(l, period, query.filter, query.q, accounts ?? []), [l, period, query.filter, query.q, accounts]);
   const suggestions = useMemo(() => {
     const out = new Map<string, Candidate>();
     for (const v of rows) { const c = suggestion(v, l, toChf); if (c) out.set(v.r.id, c); }
@@ -200,17 +202,13 @@ function Row({ v, sel, same, canEdit, onSelect, onAct }: { v: ReceiptView; sel: 
       <span className="a mono">{r.amount != null && <>{(r.currency ?? baseCurrency()) !== baseCurrency() && <span className="c">{r.currency}</span>}{fmt(r.amount)}</>}</span>
       <span className="acts">
         {v.none ? (
-          edit && <button type="button" title={t('receipts.isReceipt')} aria-label={t('receipts.isReceipt')} onClick={act(() => onAct('mark'))}>{I.check}</button>
+          canEdit && <button type="button" title={t('receipts.isReceipt')} aria-label={t('receipts.isReceipt')} onClick={act(() => onAct('mark'))}>{I.check}</button>
         ) : (
           <>
             <button type="button" title={t('receipts.previewKey')} aria-label={t('receipts.preview')} onClick={act(() => setUi({ overlay: 'quick' }))}>{I.eye}</button>
-            {edit && (
-              <>
-                <button type="button" title={t('receipts.linkKey')} aria-label={t('receipts.link')} onClick={act(() => onAct('link'))}>{I.link}</button>
-                <button type="button" title={t('receipts.editKey')} aria-label={t('receipts.edit')} onClick={act(() => onAct('edit'))}>{I.edit}</button>
-                <button type="button" className="del" title={t('receipts.deleteKey')} aria-label={t('receipts.delete')} onClick={act(() => onAct('del'))}>{I.trash}</button>
-              </>
-            )}
+            {edit && <button type="button" title={t('receipts.linkKey')} aria-label={t('receipts.link')} onClick={act(() => onAct('link'))}>{I.link}</button>}
+            {canEdit && <button type="button" title={t('receipts.editKey')} aria-label={t('receipts.edit')} onClick={act(() => onAct('edit'))}>{I.edit}</button>}
+            {edit && <button type="button" className="del" title={t('receipts.deleteKey')} aria-label={t('receipts.delete')} onClick={act(() => onAct('del'))}>{I.trash}</button>}
           </>
         )}
       </span>

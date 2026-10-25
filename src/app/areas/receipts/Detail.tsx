@@ -129,7 +129,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       {!v.none && (
         <div className="facts">
           {v.date ? <span title={t('receipts.factDate')}>{formatDate(v.date)}</span>
-            : <button type="button" className="miss" disabled={!edit} title={t('receipts.addDate')} onClick={() => runAct(props, 'edit')}>{t('receipts.dateMissing')}</button>}
+            : <button type="button" className="miss" disabled={!canEdit} title={t('receipts.addDate')} onClick={() => runAct(props, 'edit')}>{t('receipts.dateMissing')}</button>}
           {r.amount != null ? <span title={t('receipts.factAmount')}>{cur} {fmt(r.amount)}</span>
             : <button type="button" className="miss" disabled={!edit} title={t('receipts.addAmount')} onClick={() => runAct(props, 'edit')}>{t('receipts.amountMissing')}</button>}
           {vat.length
@@ -153,7 +153,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       {!v.locked && !v.links.some((ref) => l.txByRef.has(ref)) && r.filedPayment && <FiledPaymentNotice {...props} payment={r.filedPayment} open={open ? periodName(open) : ''} receipt={r.id} corrected={v.links.length > 0} />}
       <TwinNotice {...props} />
       {v.none
-        ? <div className="notice">{v.noneWhy ? t('receipts.noneNoticeWhy', { why: t(`receipts.why.${v.noneWhy}`) }) : t('receipts.noneNotice')} {edit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t('receipts.isReceipt')}</a>}</div>
+        ? <div className="notice">{v.noneWhy ? t('receipts.noneNoticeWhy', { why: t(`receipts.why.${v.noneWhy}`) }) : t('receipts.noneNotice')} {canEdit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t('receipts.isReceipt')}</a>}</div>
         : v.twin?.relation === 'duplicate' && !v.links.length ? null : <div className="status"><Status {...props} /></div>}
 
       <div className="body">
@@ -309,7 +309,9 @@ const CURRENCIES = ['CHF', 'EUR', 'USD', 'GBP'];
 const parseAmount = (s: string) => { const n = Number(s.replace(/['’\s]/g, '').replace(',', '.')); return Number.isFinite(n) ? n : null; };
 
 function Angaben(props: Props & { v: ReceiptView; edit: boolean }) {
-  const { v, nav, edit } = props;
+  const { v, nav, edit, canEdit } = props;
+  // A receipt of a filed period keeps its amount, VAT and file; its date and words may still change.
+  const frozen = v.locked ? t('receipts.frozenField') : undefined;
   const { r } = v;
   const s = useUi();
   const form = useRef<HTMLFormElement>(null);
@@ -341,7 +343,7 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean }) {
 
   // Every field is saved on its own: one that is wrong is reported, the others still save.
   function save() {
-    if (!edit || !form.current) return;
+    if (!canEdit || !form.current) return;
     const f = Object.fromEntries(new FormData(form.current)) as Record<string, string>;
     const date = f.date.trim() ? parseSwissDate(f.date) : null;
     const dateWrong = !!f.date.trim() && !date;
@@ -370,7 +372,7 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean }) {
   }
 
   return (
-    <Sec k="angaben" val={edit ? t('receipts.editable') : t('receipts.readOnly')}>
+    <Sec k="angaben" val={edit ? t('receipts.editable') : canEdit ? t('receipts.partlyEditable') : t('receipts.readOnly')}>
       <form
         ref={form}
         className="form"
@@ -379,18 +381,18 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean }) {
         onBlur={save}
         onKeyDown={(e) => { if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA') { e.preventDefault(); save(); } }}
       >
-        <label>{t('receipts.field.filename')}<input className="mono" name="filename" defaultValue={r.filename} readOnly={!edit} style={{ fontSize: 12 }} /></label>
-        <label>{t('receipts.field.date')}<input className="mono" name="date" defaultValue={r.date ? formatDate(r.date) : ''} placeholder={t('receipts.datePlaceholder')} readOnly={!edit} /></label>
+        <label>{t('receipts.field.filename')}<input className="mono" name="filename" defaultValue={r.filename} readOnly={!edit} title={frozen} style={{ fontSize: 12 }} /></label>
+        <label>{t('receipts.field.date')}<input className="mono" name="date" defaultValue={r.date ? formatDate(r.date) : ''} placeholder={t('receipts.datePlaceholder')} readOnly={!canEdit} /></label>
         {r.dateSource === 'captured' && <div className="fhint">{t('receipts.dateCaptured')}</div>}
         <div className="two">
-          <label>{t('receipts.field.currency')}<select name="currency" defaultValue={r.currency || baseCurrency()} disabled={!edit}>{currencies.map((c) => <option key={c}>{c}</option>)}</select></label>
-          <label>{t('receipts.field.amount')}<input className="mono" name="amount" defaultValue={r.amount == null ? '' : fmt(r.amount)} readOnly={!edit} style={{ textAlign: 'right' }} /></label>
+          <label>{t('receipts.field.currency')}<select name="currency" defaultValue={r.currency || baseCurrency()} disabled={!edit} title={frozen}>{currencies.map((c) => <option key={c}>{c}</option>)}</select></label>
+          <label>{t('receipts.field.amount')}<input className="mono" name="amount" defaultValue={r.amount == null ? '' : fmt(r.amount)} readOnly={!edit} title={frozen} style={{ textAlign: 'right' }} /></label>
         </div>
-        {withoutInputTax() !== 'none' ? <VatFields v={v} nav={nav} edit={edit} /> : null}
-        <label>{t('receipts.field.description')}<input name="description" defaultValue={r.description ?? ''} readOnly={!edit} /></label>
-        <label>{t('receipts.field.remarks')}<textarea name="remarks" defaultValue={r.remarks ?? ''} readOnly={!edit} placeholder={t('receipts.remarksPlaceholder')} /></label>
+        {withoutInputTax() !== 'none' ? <VatFields v={v} nav={nav} edit={edit} title={frozen} /> : null}
+        <label>{t('receipts.field.description')}<input name="description" defaultValue={r.description ?? ''} readOnly={!canEdit} /></label>
+        <label>{t('receipts.field.remarks')}<textarea name="remarks" defaultValue={r.remarks ?? ''} readOnly={!canEdit} placeholder={t('receipts.remarksPlaceholder')} /></label>
         <div className="err" role="alert">{err}</div>
-        {edit && <div className="fhint">{t('receipts.saveHint')}</div>}
+        {canEdit && <div className="fhint">{t('receipts.saveHint')}</div>}
       </form>
     </Sec>
   );
@@ -409,7 +411,7 @@ function runsOf(r: Receipt, books: Props['books'], view: ReturnType<typeof useAu
 }
 
 function Datei(props: Props & { v: ReceiptView; edit: boolean }) {
-  const { v, nav, edit, books } = props;
+  const { v, nav, edit, canEdit, books } = props;
   const { r } = v;
   const { view } = useAutomation();
   const runs = runsOf(r, books, view);
@@ -427,15 +429,15 @@ function Datei(props: Props & { v: ReceiptView; edit: boolean }) {
         <dt>{t('receipts.sha')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{r.id}…</dd>
       </dl>
       <div className="ocr" aria-label={t('receipts.text')}>{r.extractedText.slice(0, 1500) || t('receipts.noText')}</div>
-      {edit && (
+      {canEdit && (
         <div className="dangers">
           {v.none
             ? <button type="button" onClick={() => runAct(props, 'mark')}>{t('receipts.isReceipt')}</button>
             : <>
-                <button type="button" title={t('receipts.readAgainTip')} onClick={() => readAgain(nav, v)}>{t('receipts.readAgain')}</button>
+                {edit && <button type="button" title={t('receipts.readAgainTip')} onClick={() => readAgain(nav, v)}>{t('receipts.readAgain')}</button>}
                 <button type="button" onClick={() => runAct(props, 'notreceipt')}>{t('receipts.notReceipt')}</button>
               </>}
-          <button type="button" className="del" onClick={() => runAct(props, 'del')}>{t('common.delete')}</button>
+          {edit && <button type="button" className="del" onClick={() => runAct(props, 'del')}>{t('common.delete')}</button>}
         </div>
       )}
     </Sec>

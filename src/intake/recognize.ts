@@ -9,7 +9,8 @@ import type { DropRow } from '../types/drop.js';
 import type { DocumentsData, OtherWhy } from '../core/modules/schema.js';
 import { STATEMENT_FILES } from '../providers/statement-files.js';
 import { documents } from '../engines/index.js';
-import { documentKind, namesStatement } from './document-kind.js';
+import { documentKind } from './document-kind.js';
+import { namesStatement } from '../core/modules/words.js';
 import { pdfRuns, textOf } from '../parsers/pdf-text.js';
 
 /** What the file is, and a PDF's text of its first pages (for the duplicate check; never stored in the row). */

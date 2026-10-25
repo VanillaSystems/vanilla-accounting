@@ -40,9 +40,20 @@ function entryOf(books: Books, id: string): JournalEntry {
   return e;
 }
 
+/**
+ * What a link to a payment of a closed period freezes on a receipt: what the filed return took
+ * from it, and its file. Its date, text and kind are in no return and under no seal
+ * (src/books/seal.ts hashes entries, payments and links), so they may still change (#151).
+ */
+const FROZEN = new Set(['amount', 'currency', 'vat', 'vatBy', 'filename']);
+
+export function assertReceiptFieldsOpen(books: Books, id: string, fields: readonly string[]): void {
+  if (fields.some((f) => FROZEN.has(f))) assertOpen(books, receiptDates(books, id), 'editReceipt');
+}
+
 export function setReceipt(books: Books, id: string, set: ReceiptSet): BookChange {
   const r = receiptOf(books, id);
-  assertOpen(books, receiptDates(books, id), 'editReceipt');
+  assertReceiptFieldsOpen(books, id, Object.keys(set));
   const before: ReceiptSet = {};
   if ('date' in set) { before.date = r.date ?? null; r.date = set.date || undefined; delete r.dateSource; }
   if ('amount' in set) { before.amount = r.amount ?? null; before.currency = r.currency; r.amount = set.amount ?? undefined; }
@@ -67,7 +78,6 @@ const SET_ASIDE = new Set<Receipt['kind']>(['duplicate', 'noise']);
  */
 export function setReceiptKind(books: Books, c: Extract<BookChange, { kind: 'receiptKind' }>): BookChange {
   const r = receiptOf(books, c.id);
-  assertOpen(books, receiptDates(books, c.id), 'editReceipt');
   const before: Extract<BookChange, { kind: 'receiptKind' }> = { kind: 'receiptKind', id: c.id, as: r.kind ?? null, by: r.kindBy ?? null, rule: r.kindRule ?? null };
   const by = c.by === undefined ? (c.as ? 'human' : null) : c.by;
   if (c.as) r.kind = c.as; else delete r.kind;

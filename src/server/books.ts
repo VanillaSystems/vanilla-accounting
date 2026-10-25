@@ -94,7 +94,7 @@ export const CLOSED: Record<ClosedReason, string> = {
   deleteTransaction: 'Transaktionen in geschlossenen Perioden können nicht gelöscht werden.',
   newTransaction: 'Neue Transaktionen müssen in der offenen Periode liegen. Ein Beleg aus der eingereichten Periode wird als Korrektur gebucht: «Privat oder bar bezahlt» datiert die Zahlung auf den ersten offenen Tag.',
   mapping: 'Zuordnungen zu Transaktionen in geschlossenen Perioden können nicht geändert werden.',
-  editReceipt: 'Belege mit Zuordnung zu Transaktionen in geschlossenen Perioden können nicht geändert werden.',
+  editReceipt: 'Betrag, Währung, Steuerangaben und Datei eines Belegs mit Zuordnung zu Transaktionen in geschlossenen Perioden ändern sich nicht mehr.',
   deleteReceipt: 'Belege mit Zuordnung zu Transaktionen in geschlossenen Perioden können nicht gelöscht werden.',
   editEntry: 'Korrekturen als neue Buchung in der offenen Periode erfassen.',
   deleteEntry: 'Buchungen in geschlossenen Perioden können nicht gelöscht werden.',

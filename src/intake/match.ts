@@ -266,7 +266,8 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     const sure = answer.confidence >= MAPPING_THRESHOLD && (answer.matchedTransactionRefs?.length ?? 0) > 0;
     let linked: string[] = [];
     let twin: string | undefined;
-    const dated = dateOf(answer.date, receipt);
+    // A bank statement keeps its period's last day (#151), whatever day the model read off it.
+    const dated = receipt.kind === 'statement' && receipt.date ? { date: receipt.date } : dateOf(answer.date, receipt);
     const target = archive(receipt, datedName(normalizeFilename(answer.suggestedFilename), dated.date), (r, index) => {
       Object.assign(r, { date: dated.date, description: answer.description, amount: creditSigned({ amount: answer.amount, vatSummary: r.vatSummary }), currency: answer.currency, ...(answer.title ? { title: answer.title } : {}), ...(answer.payout ? { payout: answer.payout } : {}), ...(answer.order ? { order: answer.order } : {}) });
       if (dated.dateSource) r.dateSource = dated.dateSource;

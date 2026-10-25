@@ -29,6 +29,7 @@ import { fileReceipts, paymentContext } from '../invoices/service.js';
 import { stemOf, type Ask, type IntakeNote, type StepRun } from './pipeline.js';
 import { putInQuarantine } from './quarantine.js';
 import { documentKind } from './document-kind.js';
+import { statementFacts } from '../books/statement-facts.js';
 import { documents } from '../engines/index.js';
 
 // ─── The PDF's own text, fallback to the model's vision for OCR ─────────────
@@ -167,9 +168,11 @@ interface Extracted { text: string; method: Receipt['extractionMethod']; fileSiz
  * What a fresh receipt's text says it is (src/intake/document-kind.ts): an order confirmation or a
  * delivery note is kept beside its invoice, never paid on its own. That a text is no receipt at all
  * decides only for what the model read (a photo): a PDF's own text was judged at the drop already,
- * where the person can say «doch ein Beleg».
+ * where the person can say «doch ein Beleg». A bank statement (#151) is dated on its period's last day.
  */
-function kindOfText(fresh: Extracted): Pick<Receipt, 'kind' | 'kindBy' | 'kindRule'> {
+function kindOfText(fresh: Extracted, filename: string, originalFilename: string): Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'date'> {
+  const statement = statementFacts({ extractedText: fresh.text, filename, originalFilename }, documents());
+  if (statement) return { kind: 'statement', kindBy: 'rule', kindRule: 'document:statement', ...(statement.to ? { date: statement.to } : {}) };
   const v = documentKind(fresh.text, documents());
   if (v.is === 'supporting') return { kind: 'supporting', kindBy: 'rule', kindRule: `document:${v.why}` };
   if (v.is === 'other' && fresh.method === 'claude-vision') return { kind: 'noise', kindBy: 'rule', kindRule: `document:${v.why}` };
@@ -260,22 +263,24 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
       if (!fresh) return existing ? [{ ...existing, filename, location, remarks: existing.remarks ?? detectVatProofIssue(existing.extractedText) }] : [];
       // Without a model nothing else reads the date and the total; what the text states plainly is taken.
       const plain = ask ? {} : textFacts(fresh.text);
+      const originalFilename = existing?.originalFilename ?? filename;
+      const { date: periodEnd, ...kind }: Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'date'> = existing?.kind ? {} : kindOfText(fresh, filename, originalFilename);
       return [{
         id,
         filename,
-        originalFilename: existing?.originalFilename ?? filename,
+        originalFilename,
         extractedText: fresh.text,
         extractionMethod: fresh.method,
         fileSize: fresh.fileSize,
         indexedAt: existing?.indexedAt ?? new Date().toISOString(),
         location,
-        date: existing?.date ?? plain.date,
+        date: existing?.date ?? periodEnd ?? plain.date,
         description: existing?.description,
         amount: existing?.amount ?? plain.amount,
         currency: existing?.currency ?? plain.currency,
         needsVisionReview: fresh.text.length === 0 || undefined,
         remarks: existing?.remarks ?? detectVatProofIssue(fresh.text),
-        ...(existing?.kind ? {} : kindOfText(fresh)),
+        ...kind,
       } as Receipt];
     });
     // The books keep their order, new receipts after them: a second run writes the same file.

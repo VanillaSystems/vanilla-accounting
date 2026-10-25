@@ -1,5 +1,5 @@
 {
-  "schema": 4,
+  "schema": 5,
   "config": {
     "closedThrough": "2026-03-31",
     "openingBalances": {

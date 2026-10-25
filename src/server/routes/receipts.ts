@@ -5,7 +5,7 @@ import { RECEIPT_KINDS, type Receipt, type ReceiptKind, type ReceiptPatch } from
 import { deletionsOf, dropFromTrash, readTrashed, trashedFile, trashReceipt, type Trashed } from '../../books/receipt-trash.js';
 import { entriesWithoutTheirReceipts, removeReceipt } from '../../accounting/classify-force.js';
 import { parseVatFacts } from '../../accounting/vat-facts.js';
-import { privatePayment, setReceipt, unbookedPayments } from '../edits.js';
+import { assertReceiptFieldsOpen, privatePayment, setReceipt, unbookedPayments } from '../edits.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import type { PrivatePart } from '../../types/assistant.js';
 import { bookAgain } from './automation.js';
@@ -215,7 +215,7 @@ router.patch('/api/receipts/:id', async (req, res) => {
     receipt = updateBooksWithEffects((books) => {
       const idx = books.receipts.findIndex((r) => r.id === id);
       if (idx === -1) throw new RequestError(404, 'Receipt not found');
-      assertOpen(books, receiptDates(books, id), 'editReceipt');
+      assertReceiptFieldsOpen(books, id, Object.keys(patch));
 
       const was = books.receipts[idx];
       if (patch.filename !== undefined) undoRename = renameReceiptFile(receiptPath(books, was), patch.filename);

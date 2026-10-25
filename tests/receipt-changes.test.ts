@@ -6,16 +6,16 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { initRepository } from '../src/workspace/git.js';
 import { APP_FOLDER, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { changesView, receiptChanges } from '../src/saving/changes.js';
-import { loadBooks, moduleActor, periodLock, receiptFile, saveBooks, update, PERSON } from '../src/books/store.js';
+import { loadBooks, moduleActor, periodLock, receiptFile, saveBooks, update, PERSON, type Books } from '../src/books/store.js';
 import { removeReceipt } from '../src/accounting/classify-force.js';
 import { deletionsOf, trashReceipt } from '../src/books/receipt-trash.js';
-import { addEntry, link, privatePayment, setReceipt, unlink } from '../src/server/edits.js';
+import { addEntry, link, privatePayment, setReceipt, setReceiptKind, unlink } from '../src/server/edits.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import type { Receipt } from '../src/types/index.js';
 import { DEMO_ROOT } from './support/workspace.js';
@@ -100,4 +100,15 @@ test('a deletion, a link by hand, an unlink, an edit and a private outlay wait i
   saveBooks(ws, undo);
   assert.deepEqual((await receiptChanges(ws)).map((c) => c.kind), ['deleted']);
   assert.deepEqual(deletionsOf(ws, gone.id), [deletion]);
+});
+
+test('the AI sidebar\'s receipt changes take the same table: a filed receipt\'s date, text and kind change; its amount, and a kind that drops its filed link, do not', () => {
+  const books = JSON.parse(readFileSync('tests/fixtures/period-lock-index.json', 'utf8')) as Books;
+  setReceipt(books, 'rc', { description: 'Kontoauszug Mai', date: '2026-05-31' });
+  setReceiptKind(books, { kind: 'receiptKind', id: 'rc', as: 'statement' });
+  const rc = books.receipts.find((r) => r.id === 'rc')!;
+  assert.deepEqual([rc.description, rc.date, rc.kind, rc.kindBy], ['Kontoauszug Mai', '2026-05-31', 'statement', 'human']);
+  assert.throws(() => setReceipt(books, 'rc', { amount: 1, currency: 'CHF' }), /Betrag, Währung, Steuerangaben und Datei/);
+  assert.throws(() => setReceiptKind(books, { kind: 'receiptKind', id: 'rc', as: 'noise' }), /Zuordnungen zu Transaktionen in geschlossenen Perioden/);
+  assert.ok(books.mappings.some((m) => m.receiptId === 'rc' && m.transactionRef === 'C1'), 'the filed link stays');
 });
