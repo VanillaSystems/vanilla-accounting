@@ -24,7 +24,7 @@ export interface DesktopBridge {
 }
 
 /** Why the Mac's recognizer stopped early (src/desktop/dictation.swift). */
-export type DictationProblem = 'micDenied' | 'speechDenied' | 'noOnDevice' | 'notInstalled' | 'failed';
+export type DictationProblem = 'micDenied' | 'speechDenied' | 'noOnDevice' | 'notInstalled' | 'noSound' | 'failed';
 
 /**
  * What the recognizer reports, in order: `preparing` while it loads the language's model (once),

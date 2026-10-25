@@ -58,36 +58,72 @@ func microphoneAllowed() async -> Bool {
   }
 }
 
-/// The microphone's buffers, converted to `format`, until stopped.
+/// The microphone's buffers as one channel, converted to `format` (at the device's rate when nil),
+/// until stopped. An audio interface hands over many channels (a Focusrite Vocaster One: ten, the
+/// voice on the fifth, the computer's playback on others), and AVAudioConverter turns such a
+/// discrete layout into silence, also with `downmix`. So each buffer gives its loudest channel.
 final class Microphone {
   let engine = AVAudioEngine()
+  nonisolated(unsafe) private var sounded = false
+  private var started = Date.distantFuture
+
+  /// The microphone gave only digital silence for longer than a click and its second click.
+  var silent: Bool { !sounded && Date().timeIntervalSince(started) > 1 }
 
   func start(as format: AVAudioFormat?, _ deliver: @escaping (AVAudioPCMBuffer) -> Void) throws {
     let input = engine.inputNode
     let native = input.outputFormat(forBus: 0)
-    let converter = format.flatMap { $0 == native ? nil : AVAudioConverter(from: native, to: $0) }
-    input.installTap(onBus: 0, bufferSize: 4096, format: native) { buffer, _ in
-      guard let converter, let format else { return deliver(buffer) }
-      let capacity = AVAudioFrameCount(Double(buffer.frameLength) * format.sampleRate / native.sampleRate) + 1
-      guard let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else { return }
+    let mono = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: native.sampleRate, channels: 1, interleaved: false)!
+    let target = format ?? mono
+    let converter = target == mono ? nil : AVAudioConverter(from: mono, to: target)
+    input.installTap(onBus: 0, bufferSize: 4096, format: native) { [self] buffer, _ in
+      guard let one = loudestChannel(of: buffer, as: mono) else { return }
+      guard let converter else { return hand(one, deliver) }
+      let capacity = AVAudioFrameCount(Double(one.frameLength) * target.sampleRate / mono.sampleRate) + 1
+      guard let out = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return }
       var given = false
       var error: NSError?
       converter.convert(to: out, error: &error) { _, status in
         if given { status.pointee = .noDataNow; return nil }
         given = true
         status.pointee = .haveData
-        return buffer
+        return one
       }
-      if error == nil, out.frameLength > 0 { deliver(out) }
+      if error == nil, out.frameLength > 0 { hand(out, deliver) }
     }
     engine.prepare()
     try engine.start()
+    started = Date()
+  }
+
+  private func hand(_ buffer: AVAudioPCMBuffer, _ deliver: (AVAudioPCMBuffer) -> Void) {
+    if !sounded, hasSound(buffer) { sounded = true }
+    deliver(buffer)
   }
 
   func stop() {
     engine.inputNode.removeTap(onBus: 0)
     engine.stop()
   }
+}
+
+/// The channel of `buffer` with the most energy, as a buffer of `mono`.
+func loudestChannel(of buffer: AVAudioPCMBuffer, as mono: AVAudioFormat) -> AVAudioPCMBuffer? {
+  guard let channels = buffer.floatChannelData, let one = AVAudioPCMBuffer(pcmFormat: mono, frameCapacity: buffer.frameLength) else { return nil }
+  let frames = Int(buffer.frameLength)
+  let energy = (0..<Int(buffer.format.channelCount)).map { c in (0..<frames).reduce(Float(0)) { $0 + channels[c][$1] * channels[c][$1] } }
+  let loudest = energy.indices.max { energy[$0] < energy[$1] } ?? 0
+  one.floatChannelData![0].update(from: channels[loudest], count: frames)
+  one.frameLength = buffer.frameLength
+  return one
+}
+
+/// Whether a buffer holds anything but zeros: a working microphone's noise is enough.
+func hasSound(_ buffer: AVAudioPCMBuffer) -> Bool {
+  let frames = Int(buffer.frameLength)
+  if let f = buffer.floatChannelData { return (0..<frames).contains { f[0][$0] != 0 } }
+  if let i = buffer.int16ChannelData { return (0..<frames).contains { i[0][$0] != 0 } }
+  return true
 }
 
 @available(macOS 26.0, *)
@@ -130,6 +166,7 @@ func analyze() async {
       mic.stop()
       feed.finish()
       try await analyzer.finalizeAndFinishThroughEndOfInput()
+      if mic.silent { end("noSound") }
     }
     try await results.value
   } catch {
@@ -183,6 +220,7 @@ func recognize() async {
         await stopRequested()
         mic.stop()
         (request as? SFSpeechAudioBufferRecognitionRequest)?.endAudio()
+        if mic.silent { task.cancel(); return finish("noSound") }
         DispatchQueue.global().asyncAfter(deadline: .now() + 3) { task.finish(); finish(nil) }
       }
     }
