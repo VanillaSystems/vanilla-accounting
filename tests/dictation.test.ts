@@ -12,6 +12,7 @@ import { PassThrough } from 'node:stream';
 import { dictationError, dictationLang, onDevice, recognizer, withHeard } from '../src/app/assistant/dictation.js';
 import { dictate, isLang, parseEvent } from '../src/desktop/dictation.js';
 import type { DesktopBridge, DictationEvent } from '../src/types/desktop.js';
+import { messages } from '../src/app/i18n/locales/de.js';
 
 test('what was heard follows what was typed, one space between, never glued or doubled', () => {
   assert.equal(withHeard('', ' buch das  auf Telefon '), 'buch das auf Telefon');
@@ -108,6 +109,11 @@ test('the app reads the recognizer\'s lines, ignores what is no event, and repor
   h.close(0);
   await tick();
   assert.deepEqual(h.events, [{ kind: 'listening' }, { kind: 'heard', text: 'comptabilise' }, { kind: 'ended', error: 'noOnDevice' }]);
+});
+
+test('a microphone that gave only silence ends with its own cause and line, not as a silent end or as failed', () => {
+  assert.deepEqual(parseEvent('{"kind":"ended","error":"noSound"}'), { kind: 'ended', error: 'noSound' });
+  assert.match(messages['assistant.dictation.noSound'], /Mikrofon/);
 });
 
 test('a recognizer that crashes ends as failed; an unknown cause is read as failed', async () => {

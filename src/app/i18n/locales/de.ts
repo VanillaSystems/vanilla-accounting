@@ -2838,6 +2838,7 @@ export const messages = {
   'assistant.dictation.speechDenied': 'Keine Erlaubnis für die Spracherkennung. Erlaube sie in Systemeinstellungen › Datenschutz & Sicherheit › Spracherkennung für Vanilla Accounting.',
   'assistant.dictation.noOnDevice': 'Dieser Mac kann diese Sprache nicht selbst erkennen, und ins Internet schickt die App deine Stimme nicht. Ab macOS 26 geht es von selbst; davor schalte in Systemeinstellungen › Tastatur das Diktat ein, mit dieser Sprache.',
   'assistant.dictation.notInstalled': 'Die Spracherkennung für diese Sprache liess sich nicht auf diesen Mac laden. Sie kommt einmal von Apple; versuch es mit Internet nochmals.',
+  'assistant.dictation.noSound': 'Vom Mikrofon kam kein Ton. Prüf in Systemeinstellungen › Ton › Eingang, welches Mikrofon gewählt ist und ob es stumm ist.',
   'assistant.askAbout': 'Mit KI …',
   'assistant.empty': 'Sag in deinen Worten, was du willst: «Dieser Beleg ist von Farbmix, 28.6.2026, 1243.55 mit MWST», «Verknüpf ihn mit der Zahlung vom 3. Juli», «Warum ist diese Buchung so?». Die KI macht es gleich; jede Änderung lässt sich zurücknehmen.',
   'assistant.placeholder': 'Was soll die KI tun? (+ für einen Verweis, @ für einen Ablauf oder Lauf)',
