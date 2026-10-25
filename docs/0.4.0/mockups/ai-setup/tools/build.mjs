@@ -62,12 +62,12 @@ const SPIN = '<span class="aispin" aria-hidden="true"></span>';
 const CLI = {
   claude: {
     name: 'Claude Code', vendor: 'Anthropic', plan: 'Claude Pro', plans: 'https://claude.com/pricing', guide: 'https://code.claude.com/docs/en/setup',
-    native: 'curl -fsSL https://claude.ai/install.sh | bash', brew: 'brew install --cask claude-code', npm: 'npm install -g @anthropic-ai/claude-code',
+    native: 'curl -fsSL https://claude.ai/install.sh | bash',
     login: 'claude auth login', status: 'claude auth status', version: '2.1.211', bin: '~/.local/bin/claude', account: 'Claude-Konto', site: 'claude.ai',
   },
   codex: {
     name: 'Codex', vendor: 'OpenAI', plan: 'ChatGPT Plus', plans: 'https://chatgpt.com/pricing', guide: 'https://developers.openai.com/codex/cli',
-    native: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh', brew: 'brew install --cask codex', npm: 'npm install -g @openai/codex',
+    native: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh',
     login: 'codex login', status: 'codex login status', version: '0.164.0', bin: '~/.local/bin/codex', account: 'ChatGPT-Konto', site: 'chatgpt.com',
   },
 };
@@ -76,9 +76,8 @@ const cmd = (text) => `<div class="aicmd"><code>${text}</code><button type="butt
 
 /**
  * One CLI as the setup shows it. state: missing | installing | signedOut | signingIn | ready | planTooSmall | timeout | optional
- * env: { brew, node } what this Mac has, for the other ways in.
  */
-function cliCard(id, state, env = {}, { compact = false, extra = '', actions = true } = {}) {
+function cliCard(id, state, { compact = false, extra = '', actions = true } = {}) {
   const c = CLI[id];
   const pill = {
     missing: ['nicht installiert', ''], optional: ['nicht installiert', ''], installing: [`${SPIN}wird installiert`, 'now'],
@@ -87,12 +86,10 @@ function cliCard(id, state, env = {}, { compact = false, extra = '', actions = t
   }[state];
   let body = '';
   if (state === 'missing') {
-    const others = [env.brew ? `<li><span class="rk">Homebrew</span>${cmd(c.brew)}<small>Homebrew hält ${c.name} nicht von selbst aktuell.</small></li>` : '',
-      env.node ? `<li><span class="rk">npm (Node ${env.node})</span>${cmd(c.npm)}</li>` : ''].join('');
-    body = `<p class="m">Der offizielle Installer von ${c.vendor}. Er braucht weder Homebrew noch Node.</p>
+    body = `<p class="m">Der offizielle Installer von ${c.vendor}.</p>
       ${cmd(c.native)}
       <span class="ruleacts"><button type="button" class="btn ${id === 'claude' ? 'primary' : ''}">${TERM}Im Terminal installieren</button><a class="linkbtn" href="${c.guide}" target="_blank" rel="noopener">Anleitung von ${c.vendor} ${OUT}</a></span>
-      ${others ? `<details class="aiways"><summary>Andere Wege auf diesem Mac</summary><ul>${others}</ul></details>` : ''}`;
+`;
   } else if (state === 'optional') {
     body = `<p class="m">Ein zweites Programm brauchst du nicht. Mit beiden kann die App das andere fragen, wenn eins nicht antwortet.</p>
       <span class="ruleacts"><button type="button" class="btn">${TERM}Im Terminal installieren</button></span>`;
@@ -117,7 +114,7 @@ function cliCard(id, state, env = {}, { compact = false, extra = '', actions = t
       <span class="ruleacts"><a class="btn ghost" href="${c.plans}" target="_blank" rel="noopener">Abos bei ${c.vendor} ${OUT}</a><button type="button" class="btn ghost">${TERM}Mit anderem Konto anmelden</button><button type="button" class="linkbtn">Nochmals prüfen</button></span>`;
   } else if (state === 'timeout') {
     body = `<p class="warnline">${WARN}Seit 15 Minuten kein ${c.name} gefunden.</p>
-      <p class="m">Gesucht in <code>~/.local/bin</code>, <code>/opt/homebrew/bin</code>, <code>/usr/local/bin</code> und im PATH deiner Shell. Zeigt das Terminal einen Fehler, hilft die Anleitung von ${c.vendor} weiter.</p>
+      <p class="m">Gesucht in <code>~/.local/bin</code> und im PATH deiner Shell. Zeigt das Terminal einen Fehler, hilft die Anleitung von ${c.vendor} weiter.</p>
       <span class="ruleacts"><button type="button" class="btn ghost">Nochmals prüfen</button><button type="button" class="btn ghost">${TERM}Terminal wieder öffnen</button><a class="linkbtn" href="${c.guide}" target="_blank" rel="noopener">Anleitung von ${c.vendor} ${OUT}</a></span>`;
   }
   // In the conversation the answers below the card are the buttons; the card only states.
@@ -129,8 +126,6 @@ function cliCard(id, state, env = {}, { compact = false, extra = '', actions = t
   </div>`;
 }
 
-/** What the app found on this Mac, as a fact. */
-const macLine = (env) => `<p class="aimac">Auf diesem Mac: macOS 15.6 · ${env.brew ? `Homebrew ${env.brew}` : 'kein Homebrew'} · ${env.node ? `Node ${env.node}` : 'kein Node'}.${env.brew || env.node ? '' : ' Beide Installer brauchen nichts davon.'}</p>`;
 
 /** A Terminal window over the app: the official command, waiting for Enter. */
 function terminal(lines, title = 'Terminal · zsh') {
@@ -147,17 +142,47 @@ Opening browser to sign in…
 <span class="tdim">Browser did not open? Press c to copy the URL.</span>
 <span class="tcur"> </span>`);
 
+// ---------- Erweitert: mit API-Schlüssel (the advanced path) ----------
+const KEYS = {
+  anthropic: { name: 'Anthropic', page: 'https://platform.claude.com/settings/keys', model: 'Claude Haiku' },
+  openai: { name: 'OpenAI', page: 'https://platform.openai.com/api-keys', model: 'GPT-6 Luna' },
+};
+const KEY_COST = 'Der Anbieter rechnet jeden Aufruf ab, auf deine Rechnung; wie viel, hängt davon ab, wie viele Belege die App liest. Empfohlen bleibt ein Abo: Claude Pro oder ChatGPT Plus, etwa 20 USD im Monat, ohne Rechnung pro Aufruf.';
+const KEY_LIMITS = '<p class="aiadvno"><b>Ohne Claude Code oder Codex geht nicht:</b> die KI-Spalte (sie braucht Claude Code) und «Im Terminal» (braucht eins der beiden Programme). Alles andere geht mit dem Schlüssel: Belege lesen, MWST auf dem Beleg, Beleg zur Zahlung, buchen, aus Korrekturen lernen, die Einrichtung im Gespräch.</p>';
+const MASKED = 'sk-ant-api03-••••••••••••••••••••••••••••••••';
+
+/**
+ * The folded block under the subscription cards. state: folded | open | checked | refused.
+ * The check is the app's own (keyed.ts check: the provider's model list, which costs nothing);
+ * the test call after it is the one of decision 2.
+ */
+function keyBlock(state, { provider = 'anthropic' } = {}) {
+  const k = KEYS[provider];
+  const seg = `<span class="seg2" role="radiogroup" aria-label="Anbieter">${Object.entries(KEYS).map(([id, x]) => `<button type="button" role="radio" aria-checked="${id === provider}" class="${id === provider ? 'on' : ''}">${x.name}</button>`).join('')}</span>`;
+  const field = state === 'checked'
+    ? `<p class="okline">${CHECK}${k.name} hat den Schlüssel angenommen; er liegt im Schlüsselbund dieses Macs. Ein Probelauf mit ${k.model} hat geantwortet.</p>
+       <span class="aikey"><span class="mono">${MASKED}</span><button type="button" class="btn ghost">Entfernen</button></span>`
+    : `<form class="aikey${state === 'refused' ? ' bad' : ''}"><input type="password" autocomplete="off" placeholder="API-Schlüssel von ${k.name} einfügen" value="${state === 'refused' ? MASKED : ''}"><button type="button" class="btn${state === 'open' ? '' : ' primary'}" ${state === 'open' ? 'disabled' : ''}>Prüfen und speichern</button></form>
+       ${state === 'refused' ? `<p class="warnline">${WARN}Der Anbieter lehnt diesen Schlüssel ab: nichts gespeichert.</p>` : ''}`;
+  return `<details class="aiadv"${state === 'folded' ? '' : ' open'}><summary>Erweitert: mit API-Schlüssel</summary><div class="aiadvin">
+    <p class="m">Statt eines Abos geht auch ein API-Schlüssel von Anthropic oder OpenAI. ${KEY_COST}</p>
+    ${seg}
+    ${field}
+    <small class="m">Der Schlüssel liegt im Schlüsselbund dieses Macs, nie in der Buchhaltung. <a class="linkbtn" href="${k.page}" target="_blank" rel="noopener">Schlüssel bei ${k.name} erstellen ${OUT}</a></small>
+    ${KEY_LIMITS}
+  </div></details>`;
+}
+
 // ================= Design A: «KI einrichten» before the start screen =================
 const START_MAIN = BODY.start.slice(BODY.start.indexOf('<div class="st-main">'), BODY.start.lastIndexOf('</div></div></div>'));
 
-function designA(file, title, { claude, codex, env = {}, ready = false, overlay = '', note = '' }) {
+function designA(file, title, { claude, codex, ready = false, overlay = '', note = '' }) {
   const main = `<div class="st-main aisetup">
     <ol class="aisteps2"><li class="now">KI</li><li>Buchhaltung</li></ol>
     <h1>KI einrichten</h1>
     <p class="st-sub">Vanilla Accounting liest Belege und schlägt Buchungen vor. Dafür fragt es ein KI-Programm auf deinem Mac, mit deinem eigenen Abo. Du brauchst eins von beiden; du installierst es selbst, die App merkt es von allein.</p>
-    <div class="aiclis">${cliCard('claude', claude, env)}${cliCard('codex', codex, env)}</div>
+    <div class="aiclis">${cliCard('claude', claude)}${cliCard('codex', codex)}</div>
     ${note}
-    ${macLine(env)}
     <div class="st-foot aifoot">
       <button type="button" class="linkbtn st-byhand">Ohne KI weitermachen</button>
       <button type="button" class="btn primary" ${ready ? '' : 'disabled'}>${ready ? 'Weiter zur Buchhaltung' : 'Weiter'}</button>
@@ -166,15 +191,12 @@ function designA(file, title, { claude, codex, env = {}, ready = false, overlay 
   page(file, 'start', swap(BODY.start, START_MAIN, main) + overlay, title);
 }
 
-const NONE = {};
-const BREW = { brew: '4.6', node: '24' };
-designA('a1-nichts.html', 'A1 · nichts installiert', { claude: 'missing', codex: 'missing', env: NONE });
-designA('a1b-homebrew.html', 'A1b · mit Homebrew und Node', { claude: 'missing', codex: 'missing', env: BREW });
-designA('a2-installiert.html', 'A2 · wird installiert', { claude: 'installing', codex: 'missing', env: NONE, overlay: TERM_INSTALL(CLI.claude) });
-designA('a3-nicht-angemeldet.html', 'A3 · nicht angemeldet', { claude: 'signedOut', codex: 'missing', env: NONE });
-designA('a4-anmeldung.html', 'A4 · Anmeldung läuft', { claude: 'signingIn', codex: 'missing', env: NONE, overlay: TERM_LOGIN(CLI.claude) });
-designA('a5-bereit.html', 'A5 · bereit', { claude: 'ready', codex: 'optional', env: NONE, ready: true });
-designA('a6-fehler.html', 'A6 · Fehler', { claude: 'planTooSmall', codex: 'timeout', env: NONE });
+designA('a1-nichts.html', 'A1 · nichts installiert', { claude: 'missing', codex: 'missing' });
+designA('a2-installiert.html', 'A2 · wird installiert', { claude: 'installing', codex: 'missing', overlay: TERM_INSTALL(CLI.claude) });
+designA('a3-nicht-angemeldet.html', 'A3 · nicht angemeldet', { claude: 'signedOut', codex: 'missing' });
+designA('a4-anmeldung.html', 'A4 · Anmeldung läuft', { claude: 'signingIn', codex: 'missing', overlay: TERM_LOGIN(CLI.claude) });
+designA('a5-bereit.html', 'A5 · bereit', { claude: 'ready', codex: 'optional', ready: true });
+designA('a6-fehler.html', 'A6 · Fehler', { claude: 'planTooSmall', codex: 'timeout' });
 
 // A7: «Ohne KI weitermachen» and A8: after the setup: the start screen states the AI as a fact.
 function startWith(file, title, line, newHint) {
@@ -196,7 +218,7 @@ const ans = (label, small = '', primary = false) => `<button type="button" class
 
 const HELLO = ai(`<p>Hallo! Ich richte mit dir Vanilla Accounting ein. Zuerst die KI: Belege lesen und Buchungen vorschlagen mache ich mit einem KI-Programm auf deinem Mac, über dein eigenes Abo. Eins davon reicht.</p>`);
 /** The status card inside the conversation: both CLIs in rows, the facts of this Mac below. */
-const obCard = (claude, codex, env = NONE) => ind(`<div class="obcard aiobcard">${cliCard('claude', claude, env, { compact: true, actions: false })}${cliCard('codex', codex, env, { compact: true, actions: false })}${macLine(env)}</div>`);
+const obCard = (claude, codex) => ind(`<div class="obcard aiobcard">${cliCard('claude', claude, { compact: true, actions: false })}${cliCard('codex', codex, { compact: true, actions: false })}</div>`);
 const FIRST_ANSWERS = answers(ans('Claude Code installieren', 'Anthropic · ab Claude Pro', true), ans('Codex installieren', 'OpenAI · ab ChatGPT Plus'), ans('Ohne KI weiter', 'nur Knöpfe und Felder'));
 
 function designB(file, title, turns, { firm = false, talk = 'wait', overlay = '' } = {}) {
@@ -212,8 +234,12 @@ function designB(file, title, turns, { firm = false, talk = 'wait', overlay = ''
   page(file, 'setup', b + overlay, title);
 }
 
-designB('b1-nichts.html', 'B1 · nichts installiert', HELLO + obCard('missing', 'missing') + FIRST_ANSWERS);
-designB('b1b-homebrew.html', 'B1b · mit Homebrew und Node', HELLO + obCard('missing', 'missing', BREW) + FIRST_ANSWERS);
+designB('b1-nichts.html', 'B1 · nichts installiert', HELLO + obCard('missing', 'missing') + ind(keyBlock('folded')) + FIRST_ANSWERS);
+designB('b8-schluessel.html', 'B8 · Erweitert: API-Schlüssel', HELLO + obCard('missing', 'missing') + ind(keyBlock('open')) + FIRST_ANSWERS);
+designB('b9-schluessel-geprueft.html', 'B9 · Schlüssel geprüft', HELLO + ind(keyBlock('checked'))
+  + ai(`<p class="okline">${CHECK}Mit dem Schlüssel von Anthropic geht es. Die App fragt Anthropic für alle Schritte; die KI-Spalte bleibt ohne Claude Code aus.</p><p>In welchen Ordner kommt deine Buchhaltung?</p><p class="obfolder mono">/Users/anna/Buchhaltung/Buchhaltung 2026</p>`)
+  + answers(ans('Dieser Ordner passt', '', true), ans('Anderen Ordner wählen'), ans('Ich habe schon eine Buchhaltung', 'öffnen')), { talk: 'ready' });
+designB('b10-schluessel-abgelehnt.html', 'B10 · Schlüssel abgelehnt', HELLO + obCard('missing', 'missing') + ind(keyBlock('refused')) + FIRST_ANSWERS);
 const ASKED = HELLO + me('Claude Code installieren');
 designB('b2-installiert.html', 'B2 · wird installiert', ASKED
   + ai('<p>Ich habe das Terminal geöffnet, mit dem Befehl von Anthropic. Drück dort Enter. Wenn es fertig ist, merke ich es von selbst.</p>')
@@ -237,17 +263,26 @@ designB('b7-ohne-ki.html', 'B7 · ohne KI', HELLO + obCard('missing', 'missing')
 const OLD_PROVIDERS = '<h3>Anbieter</h3><dl class="kv2 wide"><dt>Claude-Abo (Claude Code)</dt><dd class="">bereit</dd>';
 const OLD_INTRO = 'Welche KI die App für ihre Schritte fragt, auf diesem Computer. Ohne Einstellung fragt sie Claude über dein Claude-Abo (Claude Code). Die Wahl gilt nur hier, nicht für andere, die dieselbe Buchhaltung öffnen.';
 
-function company(file, title, claude, codex, chooser) {
+function company(file, title, claude, codex, chooser, keys) {
   let b = swap(BODY.company, OLD_INTRO, 'Welche KI die App auf diesem Mac fragt. Die Wahl gilt nur hier, nicht für andere, die dieselbe Buchhaltung öffnen.');
   b = swap(b, OLD_PROVIDERS, `<h3>KI-Programme auf diesem Mac</h3>
     <p class="m">Über dein eigenes Abo: ${CLI.claude.plan} für Claude Code oder ${CLI.codex.plan} für Codex, je etwa 20 USD im Monat. Die App startet das Programm und sieht dein Login nie.</p>
     <div class="aiclis wide">${cliCard('claude', claude)}${cliCard('codex', codex)}</div>
     ${chooser}
-    <h3>API-Schlüssel</h3><dl class="kv2 wide">`);
+    <details class="aiadv"${keys ? ' open' : ''}><summary>Erweitert: mit API-Schlüssel</summary><div class="aiadvin"><p class="m">Statt eines Abos oder dazu. ${KEY_COST} Ohne Claude Code oder Codex stellt die App alle Schritte auf den Schlüssel; mit einem Abo nur die Schritte, die du unten auf ihn stellst.</p><dl class="kv2 wide">`);
+  b = swap(b, '</dl><h3>Modell pro Schritt</h3>', `</dl><small class="m">Der Schlüssel liegt im Schlüsselbund dieses Macs, nie in der Buchhaltung.</small>${KEY_LIMITS}</div></details><h3>Modell pro Schritt</h3>`);
+  if (keys) b = keys(b);
   b = b.replaceAll('Claude-Abo (Claude Code)', 'Claude Code');
   page(file, 'company', b, title);
 }
 company('l1-firma-ki.html', 'Firma › KI', 'ready', 'optional', '<dl class="kv2 wide aichoose"><dt>Die App fragt</dt><dd>Claude Code</dd></dl>');
+const keyRow = (provider, inner) => (b) => swap(b, `<dt>${KEYS[provider].name} (API-Schlüssel)</dt><dd><span class="m">kein Schlüssel</span><small>Kostet pro Aufruf, auf deine Rechnung beim Anbieter.</small></dd>`,
+  `<dt>${KEYS[provider].name} (API-Schlüssel)</dt><dd>${inner}<small>Kostet pro Aufruf, auf deine Rechnung beim Anbieter. <a class="linkbtn" href="${KEYS[provider].page}" target="_blank" rel="noopener">Schlüssel erstellen ${OUT}</a></small></dd>`);
+const emptyKey = (provider) => `<form class="aikey"><input type="password" autocomplete="off" placeholder="API-Schlüssel einfügen"><button type="button" class="btn" disabled>Prüfen und speichern</button></form>`;
+company('l6-firma-schluessel.html', 'Firma › KI · API-Schlüssel', 'missing', 'missing', '', (b) => keyRow('openai', emptyKey('openai'))(keyRow('anthropic',
+  `<span class="aikey"><span class="mono">${MASKED}</span><button type="button" class="btn ghost">Entfernen</button></span><small class="okline">${CHECK}geprüft: Anthropic hat ihn angenommen, Probelauf mit Claude Haiku hat geantwortet</small>`)(b)));
+company('l7-firma-schluessel-abgelehnt.html', 'Firma › KI · Schlüssel abgelehnt', 'ready', 'optional', '<dl class="kv2 wide aichoose"><dt>Die App fragt</dt><dd>Claude Code</dd></dl>', (b) => keyRow('anthropic', emptyKey('anthropic'))(keyRow('openai',
+  `<form class="aikey bad"><input type="password" autocomplete="off" value="sk-proj-••••••••••••••••••••••••"><button type="button" class="btn primary">Prüfen und speichern</button></form><small class="warnline">${WARN}Der Anbieter lehnt diesen Schlüssel ab: nichts gespeichert.</small>`)(b)));
 company('l5-zweites-programm.html', 'Firma › KI · beide', 'ready', 'ready', `<dl class="kv2 wide aichoose"><dt>Die App fragt</dt><dd><span class="seg2" role="radiogroup"><button type="button" role="radio" aria-checked="true" class="on">Claude Code</button><button type="button" role="radio" aria-checked="false">Codex</button></span><small>Pro Schritt änderbar, unten. Im Terminal öffnet dasselbe.</small></dd><dt>Ist es nicht erreichbar</dt><dd><label class="aicheck"><input type="checkbox" checked> das andere fragen</label><small>Zum Beispiel wenn die Nutzungsgrenze des Abos erreicht ist.</small></dd></dl>`);
 
 const AIEMPTY = BODY.journal.slice(BODY.journal.indexOf('<p class="m aiempty">'), BODY.journal.indexOf('</p>', BODY.journal.indexOf('<p class="m aiempty">')) + 4);
@@ -259,7 +294,7 @@ function sidebar(file, title, turns, placeholder, disabled) {
 }
 sidebar('l2-seitenleiste-ohne-ki.html', 'KI-Spalte ohne KI', `<div class="aisidecard">
   <p><b>Keine KI auf diesem Mac.</b> Die KI-Spalte fragt Claude Code oder Codex, über dein eigenes Abo. Alles andere geht ohne: buchen, Belege von Hand, MWST.</p>
-  ${cliCard('claude', 'missing', NONE, { compact: true })}${cliCard('codex', 'missing', NONE, { compact: true })}
+  ${cliCard('claude', 'missing', { compact: true })}${cliCard('codex', 'missing', { compact: true })}
 </div>`, 'Die KI-Spalte braucht Claude Code oder Codex.', true);
 sidebar('l3-seitenleiste-grenze.html', 'KI-Spalte · Grenze erreicht', `<div class="msg me">Lies den Beleg von Post CH und prüf die MWST.</div>
   <div class="msg ai">${BOT}<div><p class="warnline">${WARN}Claude Code meldet: Nutzungsgrenze deines Abos erreicht, wieder ab 18:00.</p><p class="m">Codex ist auf diesem Mac angemeldet.</p>
