@@ -4,7 +4,7 @@
  */
 import type { Response } from 'express';
 import type { Index, Receipt } from '../types/index.js';
-import { ClosedPeriodError, loadBooks, periodLock, receiptFile, saveBooks, StaleBooksError, update, PERSON, type Books } from '../books/store.js';
+import { ClosedPeriodError, loadBooks, periodLock, receiptFile, saveBooks, StaleBooksError, update, updateSaved, PERSON, type Books } from '../books/store.js';
 import type { ApiRefusal, ClosedReason } from '../types/api-error.js';
 import { locateWorkspace, openWorkspace, openWorkspaceAt } from '../workspace/workspace.js';
 import { demoCopy } from '../workspace/demo-copy.js';
@@ -58,16 +58,7 @@ type Sync<T> = T extends PromiseLike<unknown> ? never : T;
  * `fn` also writes elsewhere (a file, the invoice book) uses updateBooksWithEffects.
  */
 export function updateBooks<T>(fn: (books: Books) => Sync<T>): T {
-  for (let again = false; ; again = true) {
-    const books = readBooks();
-    const result = update(books, PERSON, fn);
-    try {
-      saveBooks(WS, books);
-      return result;
-    } catch (e) {
-      if (again || !(e instanceof StaleBooksError)) throw e;
-    }
-  }
+  return updateSaved(WS, PERSON, fn, readBooks);
 }
 
 /** updateBooks for an `fn` that writes outside the books too: never run twice, a stale save is refused (409 booksChanged). */

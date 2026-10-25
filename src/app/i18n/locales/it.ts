@@ -1778,6 +1778,7 @@ export default {
     'company.vatForm': 'modulo 0550',
     'company.vatMethodEffective': 'metodo effettivo',
     'company.vatBasis': 'Rendiconto secondo',
+    'company.vatBasisSince': 'dal {year}',
     'company.vatReceived': 'controprestazioni ricevute',
     'company.vatAgreed': 'controprestazioni convenute',
     'company.vatPeriod': 'Periodo',

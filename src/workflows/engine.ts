@@ -7,7 +7,7 @@
  * twice. Events a finished run emits start the workflows that listen; schedules start theirs.
  */
 import { createHash, randomBytes } from 'node:crypto';
-import { emptyBooks, hasBooks, loadBooks, periodLock, saveBooks, update, type Actor, type Books } from '../books/store.js';
+import { emptyBooks, hasBooks, loadBooks, periodLock, update, updateSaved, type Actor, type Books } from '../books/store.js';
 import { stemOf, type BooksPort } from '../intake/pipeline.js';
 import type { AskOptions } from '../llm/ask.js';
 import { refusalOf, refuse, type Refused } from '../types/refusal.js';
@@ -325,20 +325,19 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
         return;
       }
       if (before) { record.effects.push({ effect: 'ledger.book', key, applied: false, wrote: {} }); return; }
-      const books = loadBooks(ws);
       const ref = run.item.kind === 'transaction' ? run.item.id : undefined;
-      // A person's answer books what they accepted: bookings the app guessed meanwhile (a later run, wishes3-7)
-      // give way to it. A person's own booking never does, nor one of the person's rules: a rule that booked
-      // the payment since the question was asked (its report came, r7h-21) answered it better than the proposal.
-      const had = ref ? books.journalEntries.filter((e) => e.transactionRef === ref) : [];
-      const replaced = had.length && had.every((e) => e.origin !== 'manual' && !e.rule && !periodLock(books).isClosed(e.date)) ? had.map((e) => e.id) : [];
-      const applied = update(books, actor, (b) => {
+      let replaced: string[] = [];
+      const applied = updateSaved(ws, actor, (b) => {
+        // A person's answer books what they accepted: bookings the app guessed meanwhile (a later run, wishes3-7)
+        // give way to it. A person's own booking never does, nor one of the person's rules: a rule that booked
+        // the payment since the question was asked (its report came, r7h-21) answered it better than the proposal.
+        const had = ref ? b.journalEntries.filter((e) => e.transactionRef === ref) : [];
+        replaced = had.length && had.every((e) => e.origin !== 'manual' && !e.rule && !periodLock(b).isClosed(e.date)) ? had.map((e) => e.id) : [];
         if (had.length && !replaced.length) return false;
         b.journalEntries = b.journalEntries.filter((e) => !replaced.includes(e.id));
         b.journalEntries.push(...stamped);
         return true;
       });
-      if (applied) saveBooks(ws, books);
       const rec: EffectRecord = { effect: 'ledger.book', key, applied, wrote: applied ? { entries: stamped.map((e) => e.id) } : {}, ...(applied && replaced.length ? { replaced } : {}) };
       record.effects.push(rec);
     };
@@ -361,16 +360,21 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     return {
       read: () => (live ? load() : (copy ??= load())),
       update(fn) {
-        const books = live ? load() : (copy ??= structuredClone(load()));
-        const had = { entries: new Set(books.journalEntries.map((e) => e.id)), mappings: new Set(books.mappings.map(link)), receipts: new Set(books.receipts.map((r) => r.id)) };
-        const out = update(books, actor, (b) => {
+        // Run once more on books loaded afresh after a stale save (updateSaved): only the attempt saved counts as written.
+        let added = { entries: [] as string[], mappings: [] as string[], receipts: [] as string[] };
+        const stamping = (b: Books) => {
+          const had = { entries: new Set(b.journalEntries.map((e) => e.id)), mappings: new Set(b.mappings.map(link)), receipts: new Set(b.receipts.map((r) => r.id)) };
           const r = fn(b);
-          for (const e of b.journalEntries) if (!had.entries.has(e.id)) { e.run = run.id; wrote.entries.push(e.id); }
-          for (const m of b.mappings) if (!had.mappings.has(link(m))) { m.run = run.id; wrote.mappings.push(link(m)); }
-          for (const x of b.receipts) if (!had.receipts.has(x.id)) { x.run = run.id; wrote.receipts.push(x.id); }
+          added = { entries: [], mappings: [], receipts: [] };
+          for (const e of b.journalEntries) if (!had.entries.has(e.id)) { e.run = run.id; added.entries.push(e.id); }
+          for (const m of b.mappings) if (!had.mappings.has(link(m))) { m.run = run.id; added.mappings.push(link(m)); }
+          for (const x of b.receipts) if (!had.receipts.has(x.id)) { x.run = run.id; added.receipts.push(x.id); }
           return r;
-        });
-        if (live) saveBooks(ws, books);
+        };
+        const out = live ? updateSaved(ws, actor, stamping, load) : update((copy ??= structuredClone(load())), actor, stamping);
+        wrote.entries.push(...added.entries);
+        wrote.mappings.push(...added.mappings);
+        wrote.receipts.push(...added.receipts);
         return out;
       },
     };

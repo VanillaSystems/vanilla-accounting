@@ -41,10 +41,16 @@ export interface NetRate {
 
 export type NetRates = readonly [NetRate] | readonly [NetRate, NetRate];
 
+/**
+ * `reportingSince`: the first year the firm reports on its basis, when it switched while the books
+ * were kept here (the Firma page writes it with the switch). Absent: the basis holds since before the
+ * books' first year. A document of an earlier year paid now belongs to that year's return on the
+ * agreed basis, but is an open item of the switch when it lies before this year (MWSTV Art. 106).
+ */
 export type VatSetup =
   | { registered: false }
-  | { registered: true; method: 'effective'; reporting: VatBasis; period: VatPeriod }
-  | { registered: true; method: 'net-rate'; reporting: VatBasis; period: VatPeriod; rates: NetRates };
+  | { registered: true; method: 'effective'; reporting: VatBasis; period: VatPeriod; reportingSince?: number }
+  | { registered: true; method: 'net-rate'; reporting: VatBasis; period: VatPeriod; rates: NetRates; reportingSince?: number };
 
 export type RegisteredVat = Extract<VatSetup, { registered: true }>;
 
@@ -103,11 +109,14 @@ export function parseVatSetup(raw: unknown, fail: VatSetupFail): VatSetup {
   if (!VAT_BASES.includes(reporting as VatBasis)) fail(`company.vat.reporting must be one of ${VAT_BASES.join(', ')}`);
   const period = vat.period ?? 'quarterly';
   if (!VAT_PERIODS.includes(period as VatPeriod)) fail(`company.vat.period must be one of ${VAT_PERIODS.join(', ')}`);
+  const since = vat.reportingSince;
+  if (since !== undefined && !(Number.isInteger(since) && (since as number) >= 1995 && (since as number) <= 2999)) fail('company.vat.reportingSince must be a year, as 2027');
+  const held = since === undefined ? {} : { reportingSince: since as number };
   if (method === 'effective') {
     if (vat.rates !== undefined) fail('company.vat.rates belongs to the net tax rate method only');
-    return { registered: true, method: 'effective', reporting: reporting as VatBasis, period: period as VatPeriod };
+    return { registered: true, method: 'effective', reporting: reporting as VatBasis, period: period as VatPeriod, ...held };
   }
-  return { registered: true, method: 'net-rate', reporting: reporting as VatBasis, period: period as VatPeriod, rates: parseNetRates(vat.rates, fail) };
+  return { registered: true, method: 'net-rate', reporting: reporting as VatBasis, period: period as VatPeriod, rates: parseNetRates(vat.rates, fail), ...held };
 }
 
 export function parseNetRates(raw: unknown, fail: VatSetupFail): NetRates {
@@ -130,8 +139,12 @@ export function parseNetRates(raw: unknown, fail: VatSetupFail): NetRates {
 export function vatSetupYaml(setup: VatSetup): Record<string, unknown> {
   if (!setup.registered) return { registered: false };
   const base = { registered: true, method: setup.method, reporting: setup.reporting, period: setup.period };
-  return setup.method === 'net-rate' ? { ...base, rates: setup.rates.map((r) => ({ ...r })) } : base;
+  const since = setup.reportingSince === undefined ? {} : { reportingSince: setup.reportingSince };
+  return setup.method === 'net-rate' ? { ...base, rates: setup.rates.map((r) => ({ ...r })), ...since } : { ...base, ...since };
 }
+
+/** The year the firm's basis began, when it began while the books were kept here (VatSetup.reportingSince). */
+export const basisSinceOf = (setup: VatSetup): number | undefined => (setup.registered ? setup.reportingSince : undefined);
 
 /**
  * Whether two setups differ in a way the method rule covers: registration, method, basis, period

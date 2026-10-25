@@ -74,12 +74,13 @@ const SET_ASIDE = new Set<Receipt['kind']>(['duplicate', 'noise']);
 /**
  * A receipt's kind as a person sets it («ist dasselbe», Belege' kind): a duplicate or noise loses
  * its links, so it never pays a second time nor claims its input tax twice (the payments are
- * booked again, src/server/routes/assistant.ts). The undo puts the kind and the links back.
+ * booked again, src/server/routes/assistant.ts). A person's «ordinary receipt» (no kind) keeps
+ * kindBy 'human', so no rule types it again. The undo puts the kind and the links back.
  */
 export function setReceiptKind(books: Books, c: Extract<BookChange, { kind: 'receiptKind' }>): BookChange {
   const r = receiptOf(books, c.id);
   const before: Extract<BookChange, { kind: 'receiptKind' }> = { kind: 'receiptKind', id: c.id, as: r.kind ?? null, by: r.kindBy ?? null, rule: r.kindRule ?? null };
-  const by = c.by === undefined ? (c.as ? 'human' : null) : c.by;
+  const by = c.by === undefined ? 'human' : c.by;
   if (c.as) r.kind = c.as; else delete r.kind;
   if (by) r.kindBy = by; else delete r.kindBy;
   if (c.rule) r.kindRule = c.rule; else delete r.kindRule;

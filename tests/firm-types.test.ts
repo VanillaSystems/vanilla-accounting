@@ -80,6 +80,10 @@ test('the manifest writes the setup back as one explicit block, and the method r
   assert.equal(changesMethod(EFFECTIVE_QUARTERLY, agreed), true, 'the basis holds for a whole tax period (MWSTG Art. 39 Abs. 3)');
   assert.deepEqual(parseVatSetup({ method: 'effective', reporting: 'agreed' }, fail), agreed);
   assert.deepEqual(vatSetupYaml(agreed), { registered: true, method: 'effective', reporting: 'agreed', period: 'quarterly' });
+  assert.deepEqual(parseVatSetup({ method: 'effective', reporting: 'agreed', reportingSince: 2027 }, fail), { ...agreed, reportingSince: 2027 }, 'the year the basis began (#143)');
+  assert.deepEqual(vatSetupYaml({ ...agreed, reportingSince: 2027 }), { registered: true, method: 'effective', reporting: 'agreed', period: 'quarterly', reportingSince: 2027 });
+  assert.equal(changesMethod(agreed, { ...agreed, reportingSince: 2027 }), false, 'the year is no change of method');
+  assert.throws(() => parseVatSetup({ method: 'effective', reporting: 'agreed', reportingSince: '2027' }, fail), /reportingSince must be a year/);
 
 });
 

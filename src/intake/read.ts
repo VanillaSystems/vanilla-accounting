@@ -264,7 +264,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
       // Without a model nothing else reads the date and the total; what the text states plainly is taken.
       const plain = ask ? {} : textFacts(fresh.text);
       const originalFilename = existing?.originalFilename ?? filename;
-      const { date: periodEnd, ...kind }: Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'date'> = existing?.kind ? {} : kindOfText(fresh, filename, originalFilename);
+      const { date: periodEnd, ...kind }: Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'date'> = existing?.kind || existing?.kindBy ? {} : kindOfText(fresh, filename, originalFilename);
       return [{
         id,
         filename,

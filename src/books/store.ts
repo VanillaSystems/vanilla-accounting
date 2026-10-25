@@ -16,6 +16,7 @@ import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, climb, schemaOf } from '../workspace/sc
 import type { ClosedReason } from '../types/api-error.js';
 import { checkSeals, closedPart, type SealReport } from './seal.js';
 import { parseBookedBy } from './booked-by.js';
+import { typeStatements } from './statement-facts.js';
 import { BOOK_FILES, PARTS, fromJsonl, isClosedYear, keyOf, placement, splitByYear, statementFile, toJsonl, type InClosedYear, type Part } from './years.js';
 
 export type Books = Index & { journalEntries: JournalEntry[]; config: AccountingConfig };
@@ -50,6 +51,8 @@ export class StaleBooksError extends Error {
 interface Snapshot { files: Map<string, string>; ledger: string | undefined }
 const onDisk = new WeakMap<Books, Snapshot>();
 const seals = new WeakMap<Books, SealReport>();
+/** Files a change moves, from → to: moved by the save that writes the change, never by a refused one (moveOnSave). */
+const moves = new WeakMap<Books, Map<string, string>>();
 const homes = new WeakMap<Books, WorkspacePaths>();
 const warned = new Set<string>();
 
@@ -71,7 +74,8 @@ function readFiles(paths: WorkspacePaths): Map<string, string> {
 
 /**
  * The books at the current schema (older ones are migrated in memory, a newer one is refused),
- * with every seal checked. A broken seal is printed once per process, and saveBooks refuses them.
+ * with every seal checked, and the bank statements among an open year's receipts typed (#151;
+ * receipts are under no seal). A broken seal is printed once per process, and saveBooks refuses them.
  * Files of open years that lie in another year than their record says move there (placeFiles).
  */
 export function loadBooks(ws: Workspace): Books {
@@ -86,11 +90,16 @@ export function loadBooks(ws: Workspace): Books {
   const head = JSON.parse(ledgerText) as Record<string, unknown>;
   const files = readFiles(ws.paths);
   const raw: Record<string, unknown> = { schema: head.schema, config: head.config ?? {}, journalEntries: [], receipts: [], transactions: [], mappings: [], bankStatements: [] };
+  const closedThrough = (head.config as AccountingConfig | undefined)?.closedThrough;
   for (const year of yearsOf(ws.paths)) {
     for (const part of PARTS) {
       const rel = fileOf(year, part);
       const text = files.get(rel);
-      if (text !== undefined) raw[part] = [...((raw[part] as unknown[] | undefined) ?? []), ...fromJsonl(text, rel)];
+      if (text === undefined) continue;
+      const records = fromJsonl(text, rel);
+      // A closed year's files never change (saveBooks), so its receipts stay as they were read.
+      const typed = part === 'receipts' && !isClosedYear(year, closedThrough) ? typeStatements(records as Receipt[]) : records;
+      raw[part] = [...((raw[part] as unknown[] | undefined) ?? []), ...typed];
     }
   }
   const current = climb<Record<string, unknown>>(raw, schemaOf(raw.schema, ledger), BOOKS_SCHEMA, BOOKS_MIGRATIONS, ledger, (d) => structuredClone(d));
@@ -235,17 +244,62 @@ export function saveBooks(ws: Workspace, books: Books): void {
     const stale = changed.filter((rel) => readIfThere(join(ws.paths.root, rel)) !== before.files.get(rel));
     if (readIfThere(ws.paths.ledger) !== before.ledger) stale.push(relative(ws.paths.root, ws.paths.ledger));
     if (stale.length) throw new StaleBooksError(stale);
-    for (const rel of changed) {
-      const text = files.get(rel);
-      if (text === undefined) rmSync(join(ws.paths.root, rel), { force: true });
-      else writeAtomic(join(ws.paths.root, rel), text);
+    // The files a change moves go first and come back when a write fails: a record never names a file that is not where it says.
+    const moved: Array<[string, string]> = [];
+    try {
+      for (const [from, to] of moves.get(books) ?? []) {
+        mkdirSync(dirname(to), { recursive: true });
+        renameSync(from, to);
+        moved.push([from, to]);
+      }
+      for (const rel of changed) {
+        const text = files.get(rel);
+        if (text === undefined) rmSync(join(ws.paths.root, rel), { force: true });
+        else writeAtomic(join(ws.paths.root, rel), text);
+      }
+      if (before.ledger !== ledger) writeAtomic(ws.paths.ledger, ledger);
+    } catch (e) {
+      for (const [from, to] of moved.reverse()) renameSync(to, from);
+      throw e;
     }
-    if (before.ledger !== ledger) writeAtomic(ws.paths.ledger, ledger);
   } finally {
     unlock();
   }
+  moves.delete(books);
   onDisk.set(books, { files, ledger });
   placeFiles(ws, books);
+}
+
+/**
+ * Moves the file `from` to `to` with the save that writes `books`, and only then: a save refused
+ * (a stale save, a closed period) leaves the file where the books on disk say it is, so the change
+ * can run again on books loaded afresh, and a move that fails writes nothing. The targets pending
+ * for `books` are `pendingMoves`.
+ */
+export function moveOnSave(books: Books, from: string, to: string): void {
+  if (!moves.has(books)) moves.set(books, new Map());
+  moves.get(books)!.set(from, to);
+}
+
+export const pendingMoves = (books: Books): string[] => [...(moves.get(books)?.values() ?? [])];
+
+/**
+ * Loads the books, runs `fn` on them through the write door as `actor` and saves them. When another
+ * process saved the books in between (StaleBooksError, #123), `fn` runs once more on books loaded
+ * afresh, so it sees that process's edits and decides again (#132); a second stale save throws.
+ * So `fn` changes nothing but its `books`, and a file it moves goes through moveOnSave.
+ */
+export function updateSaved<T>(ws: Workspace, actor: Actor, fn: (books: Books) => T, load: () => Books = () => loadBooks(ws)): T {
+  for (let again = false; ; again = true) {
+    const books = load();
+    const result = update(books, actor, fn);
+    try {
+      saveBooks(ws, books);
+      return result;
+    } catch (e) {
+      if (again || !(e instanceof StaleBooksError)) throw e;
+    }
+  }
 }
 
 /**

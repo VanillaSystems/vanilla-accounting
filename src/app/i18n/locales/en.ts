@@ -1778,6 +1778,7 @@ export default {
     'company.vatForm': 'form 0550',
     'company.vatMethodEffective': 'effective method',
     'company.vatBasis': 'Reporting on',
+    'company.vatBasisSince': 'since {year}',
     'company.vatReceived': 'payments received',
     'company.vatAgreed': 'agreed consideration (invoices)',
     'company.vatPeriod': 'Period',
