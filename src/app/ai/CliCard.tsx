@@ -65,7 +65,6 @@ export function CliCard({ cli, state, opens, compact, actions, children }: { cli
       {state.kind !== 'ready' && state.kind !== 'testing' ? (
         <p className="aiplan">{t(`aiSetup.plan.${cli}`)} <a className="linkbtn" href={facts.plans} target="_blank" rel="noopener noreferrer">{t('aiSetup.plans', { vendor })}{ICONS.external}</a></p>
       ) : null}
-      {facts.precondition ? <small className="m">{t(`aiSetup.precondition.${facts.precondition}`)}</small> : null}
       {state.kind === 'missing' ? (
         <>
           <p className="m">{t('aiSetup.installer', { vendor })}</p>
@@ -99,7 +98,7 @@ export function CliCard({ cli, state, opens, compact, actions, children }: { cli
       ) : state.kind === 'ready' ? (
         <>
           <Facts state={state} />
-          {actions && facts.tested ? <span className="ruleacts"><button type="button" className="linkbtn" onClick={actions.again}>{t('aiSetup.again')}</button></span> : null}
+          {actions ? <span className="ruleacts"><button type="button" className="linkbtn" onClick={actions.again}>{t('aiSetup.again')}</button></span> : null}
         </>
       ) : state.kind === 'refused' ? (
         <>

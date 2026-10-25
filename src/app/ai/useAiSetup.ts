@@ -5,12 +5,10 @@
  * Nothing polls otherwise. A card that reaches a sign-in makes its one test call.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { POLL_MS, cardOf, nextCard, waits, type AiSetupView, type CardEvent, type CardState, type KeySaved, type SetupKey } from '../../platform/ai-setup.js';
-import { AI_CLIS, type TerminalCli } from '../../platform/terminal.js';
+import { POLL_MS, stepCards, waits, type AiSetupView, type CardEvent, type CardState, type Cards, type KeySaved, type SetupKey } from '../../platform/ai-setup.js';
+import type { TerminalCli } from '../../platform/terminal.js';
 import { language } from '../i18n/index.js';
 import { api, errorText } from '../lib/api.js';
-
-export type Cards = Partial<Record<TerminalCli, CardState>>;
 
 export interface AiSetup {
   view?: AiSetupView;
@@ -29,12 +27,7 @@ export function useAiSetup(): AiSetup {
   const [error, setError] = useState<string>();
   const testing = useRef(new Set<TerminalCli>());
 
-  const step = useCallback((cli: TerminalCli, event: CardEvent) => setCards((c) => {
-    const tested = AI_CLIS[cli].tested;
-    const was = c[cli];
-    const now = was ? nextCard(was, event, tested) : event.kind === 'probed' ? cardOf(event.probe, tested) : undefined;
-    return now ? { ...c, [cli]: now } : c;
-  }), []);
+  const step = useCallback((cli: TerminalCli, event: CardEvent) => setCards((c) => stepCards(c, cli, event)), []);
 
   /** One look at a time: a look takes longer than the 2 s between polls, and an older answer must not overwrite a newer one. */
   const looking = useRef(false);
