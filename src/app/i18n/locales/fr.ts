@@ -2834,6 +2834,7 @@ export default {
     'assistant.folderOver': 'De {folder}, les {max} premiers fichiers sont allés à l’IA, {n} autres non.',
     'assistant.dictation.start': 'Dicter',
     'assistant.dictation.stop': 'Arrêter la dictée',
+    'assistant.dictation.recording': 'Enregistrement en cours',
     'assistant.dictation.online': 'À l’écoute · reconnu par le service en ligne de ton navigateur',
     'assistant.dictation.denied': 'Pas d’accès au micro. Autorise-le pour cette page dans les réglages de ton navigateur.',
     'assistant.dictation.unreachable': 'La reconnaissance vocale de ton navigateur est injoignable pour le moment.',

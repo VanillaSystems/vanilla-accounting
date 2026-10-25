@@ -1,18 +1,18 @@
 /* The mockup's design tokens (planning/ui-mockup): light, and dark under [data-theme="dark"]. */
 :root {
   --bg: #ffffff; --ink: #0b1220; --ink-2: #4a5263; --muted: #6e7685; --faint: #a3a9b5; --date: #98a0ad; --line: #e7eaf0; --line-2: #d3d8e1;
-  --accent: #0067b1; --accent-soft: #e8f1f9; --on-accent: #fff; --hover: #f4f6f9;
+  --accent: #0067b1; --accent-soft: #e8f1f9; --on-accent: #fff; --on-fill: #fff; --hover: #f4f6f9;
   --glass: rgba(255,255,255,.72); --glass-line: rgba(11,18,32,.08); --shadow: 0 10px 40px -10px rgba(11,18,32,.25);
   --warn: #9a5b00; --warn-soft: #fdf3e1; --pos: #1a7f4b; --pos-soft: #e8f5ee; --neg: #b42318;
-  --paper-bg: #ffffff; --desk: #f4f6f9; --ai: #6d4fc2;
+  --paper-bg: #ffffff; --desk: #f4f6f9; --ai: #6d4fc2; --rec: #d92d20; --on-rec: #fff;
   --dim: rgba(11,18,32,.16);
 }
 [data-theme="dark"] {
   --bg: #0a0a0a; --ink: #ededed; --ink-2: #b0b0b0; --muted: #8f8f8f; --faint: #5a5a5a; --date: #6b6b6b; --line: #1f1f1f; --line-2: #2e2e2e;
-  --accent: #ededed; --accent-soft: #1a1a1a; --on-accent: #0a0a0a; --hover: #131313;
+  --accent: #ededed; --accent-soft: #1a1a1a; --on-accent: #0a0a0a; --on-fill: #0a0a0a; --hover: #131313;
   --glass: rgba(24,24,24,.72); --glass-line: rgba(255,255,255,.08); --shadow: 0 10px 40px -10px rgba(0,0,0,.8);
   --warn: #e8b04b; --warn-soft: #2c2112; --pos: #5cc790; --pos-soft: #14281d; --neg: #f2877d;
-  --paper-bg: #f2f2f2; --desk: #111; --ai: #b9a6f2;
+  --paper-bg: #f2f2f2; --desk: #111; --ai: #b9a6f2; --rec: #e5484d; --on-rec: #fff;
   --dim: rgba(0,0,0,.45);
 }
 :root { color-scheme: light; --sb: #d3d8e1; --sb-h: #a3a9b5; }
