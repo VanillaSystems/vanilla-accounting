@@ -1,6 +1,6 @@
 /**
  * The AI sidebar's conversations, kept on this computer (data/assistant/<id>.json, outside git):
- * one Claude session each, continued by every message. Sending appends the person's turn and the
+ * one session each (Claude Code's or Codex's), continued by every message. Sending appends the person's turn and the
  * AI's, which fills as the answer streams and is stored when it ends.
  */
 import { randomUUID } from 'node:crypto';
@@ -10,7 +10,9 @@ import type { Workspace } from '../workspace/workspace.js';
 import type { ApiRefusal } from '../types/api-error.js';
 import type { AssistantEvent, AssistantSend, Change, Conversation, ConversationSummary, HeldChanges, MadeChange, Turn } from '../types/assistant.js';
 import { ChangesError, changesIn, terminalRequest, withoutChanges } from './changes.js';
-import { assistantPrompt, callClaude } from './claude.js';
+import { assistantPrompt, callClaude, type AssistantCall } from './claude.js';
+import { callCodex } from './codex.js';
+import { sidebarAgent } from '../llm/ask.js';
 import { contextText } from './context.js';
 import { attachmentsNote, keepAttachments } from './attachments.js';
 import type { Attachment } from '../types/attachment.js';
@@ -84,8 +86,8 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
   onEvent({ type: 'conversation', id: c.id });
   const prompt = assistantPrompt(send.text, contextText(ws, send.context), [...(last?.role === 'ai' && last.refused ? [refusedNote(last.refused)] : []), ...(last?.role === 'ai' && last.held ? [heldNote(last.held.status)] : []), waiting, ...(attachments.length ? [attachmentsNote(attachments, paths)] : [])]);
   let done: AssistantEvent | undefined;
-  await callClaude({
-    ws, send, map, session: c.session, prompt, signal,
+  await callAgent(c, {
+    ws, send, map, prompt, signal,
     onEvent: (e) => {
       if (e.type === 'session') c.session = e.session;
       if (e.type === 'text') ai.text += e.text;
@@ -139,6 +141,18 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
   storeConversation(ws, c);
 }
 
+/**
+ * The KI column's agent on this computer sends the message: Claude Code or Codex (Firma › KI). A
+ * session continues only with the agent it was started with; after a switch the next message starts a new one.
+ */
+function callAgent(c: Conversation, call: Omit<AssistantCall, 'session'>): Promise<void> {
+  const { provider, model } = sidebarAgent();
+  const agent = provider.id === 'codex-cli' ? 'codex-cli' : 'claude-cli';
+  if ((c.agent ?? 'claude-cli') !== agent) c.session = undefined;
+  c.agent = agent;
+  return agent === 'codex-cli' ? callCodex({ ...call, session: c.session }, model) : callClaude({ ...call, session: c.session });
+}
+
 /** What the next message tells the model about the changes of its last answer the app held for the person (HeldChanges). */
 export const heldNote = (status: HeldChanges['status']): string => ({
   held: 'The app did not make the changes of your previous answer: they rebook more than one booking fix, so the app shows them to the person as a proposal, booking by booking, and makes them only when the person presses «Übernehmen». The person has not decided yet; nothing of them is in the books.',
@@ -184,8 +198,8 @@ export const refusedNote = (why: string): string =>
 async function saidAgain(ws: Workspace, send: AssistantSend, map: string, c: Conversation, said: string, why: string, signal: AbortSignal): Promise<string> {
   let text = '';
   let ok = false;
-  await callClaude({
-    ws, send, map, session: c.session, signal,
+  await callAgent(c, {
+    ws, send, map, signal,
     prompt: [
       refusedNote(why),
       'The person will not see your answer as it was: it said things were done that were not. Write the answer they read in its place: the same answer, with only what it said about those changes corrected, plainly: that they are not done and why, in their words (no field names, no codes), and what they can do (give what is missing, or where in the app they do it). Keep every other part as it was, word for word: what you checked, found, explained or answered does not depend on them. No vanilla-changes block, no tools.',

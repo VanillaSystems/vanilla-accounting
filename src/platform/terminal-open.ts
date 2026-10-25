@@ -18,9 +18,9 @@ export const terminalPath = (): Promise<string> => (pathOnce ??= loginPath().the
 export type FoundCli = CliState & { bin?: string };
 
 /** `codex login status`: exit 0 signed in, another exit code not; no answer (it did not start, or hung) is not known. */
-export function codexSignedIn(bin: string, path: string, timeoutMs = 10_000): Promise<boolean | undefined> {
+export function codexSignedIn(bin: string, env: NodeJS.ProcessEnv, timeoutMs = 10_000): Promise<boolean | undefined> {
   return new Promise((done) => {
-    execFile(bin, ['login', 'status'], { cwd: tmpdir(), timeout: timeoutMs, env: { ...process.env, PATH: path } }, (err) => {
+    execFile(bin, ['login', 'status'], { cwd: tmpdir(), timeout: timeoutMs, env }, (err) => {
       if (!err) return done(true);
       const code = (err as NodeJS.ErrnoException & { code?: unknown; killed?: boolean }).code;
       done(typeof code === 'number' && !(err as { killed?: boolean }).killed ? false : undefined);
@@ -57,7 +57,10 @@ export interface Detect {
   codexStatus?: (bin: string, path: string) => Promise<boolean | undefined>;
 }
 
-export async function detectClis({ path, ledger, claudeBin, codexStatus = codexSignedIn }: Detect): Promise<FoundCli[]> {
+/** The terminal starts the person's own codex, so its sign-in is asked in their own CODEX_HOME. */
+const ownCodexSignedIn = (bin: string, path: string) => codexSignedIn(bin, { ...process.env, PATH: path });
+
+export async function detectClis({ path, ledger, claudeBin, codexStatus = ownCodexSignedIn }: Detect): Promise<FoundCli[]> {
   return Promise.all(TERMINAL_CLIS.map(async (cli): Promise<FoundCli> => {
     const own = cli === 'claude' && claudeBin ? programOn(dirname(claudeBin), basename(claudeBin)) : undefined;
     const bin = own ?? programOn(path, CLI_PROGRAM[cli]);

@@ -132,7 +132,6 @@ function ProviderRow({ p, view, canEdit, onKey }: { p: AiProviderView; view: AiV
         <dt>{name}</dt>
         <dd className={p.state === 'ready' ? '' : 'warnline'}>
           {t(state)}
-          {p.id === 'codex-cli' ? <small>{t('ai.cli.noPdf')}</small> : null}
         </dd>
       </>
     );
