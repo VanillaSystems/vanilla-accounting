@@ -64,11 +64,13 @@ func microphoneAllowed() async -> Bool {
 /// discrete layout into silence, also with `downmix`. So each buffer gives its loudest channel.
 final class Microphone {
   let engine = AVAudioEngine()
-  nonisolated(unsafe) private var sounded = false
+  /// Set on the audio thread, read on the stop's.
+  private let lock = NSLock()
+  private var sounded = false
   private var started = Date.distantFuture
 
   /// The microphone gave only digital silence for longer than a click and its second click.
-  var silent: Bool { !sounded && Date().timeIntervalSince(started) > 1 }
+  var silent: Bool { lock.withLock { !sounded } && Date().timeIntervalSince(started) > 1 }
 
   func start(as format: AVAudioFormat?, _ deliver: @escaping (AVAudioPCMBuffer) -> Void) throws {
     let input = engine.inputNode
@@ -97,7 +99,7 @@ final class Microphone {
   }
 
   private func hand(_ buffer: AVAudioPCMBuffer, _ deliver: (AVAudioPCMBuffer) -> Void) {
-    if !sounded, hasSound(buffer) { sounded = true }
+    if !lock.withLock({ sounded }), hasSound(buffer) { lock.withLock { sounded = true } }
     deliver(buffer)
   }
 
