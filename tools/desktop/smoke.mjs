@@ -160,16 +160,16 @@ const fused = wire[FuseV1Options.RunAsNode] === 48 && wire[FuseV1Options.EnableN
   && wire[FuseV1Options.EnableEmbeddedAsarIntegrityValidation] === 49 && wire[FuseV1Options.EnableCookieEncryption] === 48;
 check('the build is fused: no RunAsNode, NODE_OPTIONS or --inspect; app.asar only, its integrity checked; no cookie encryption (no keychain prompt at start)', fused, JSON.stringify(wire));
 
-// 1. First start: the start screen, nothing opened.
+// 1. First start: «Einrichtung» (docs/0.4.0/ai-setup.md), nothing opened; the claude stub is signed in, so the AI is ready and the books' choices follow.
 const first = await launch(9333, stubShell);
 let { page } = first;
 const { base } = first;
-await settle(page, '.st-choices');
+await settle(page, '[data-answer=demo]');
 // German, as a Swiss user would pick it: the page remembers it and the native menu follows.
 await clickText(page, '.st-top .seg2 button', 'DE');
 await sleep(500);
 await shot(page, '01-start');
-check('first start shows the start screen', await page.$('[data-act=demo]'));
+check('a fresh install opens «Einrichtung», the AI ready, then the books\' choices', await page.$('[data-ready=claude]') && await page.$('[data-answer=create]'));
 check('the window is dragged by its top edge (no title bar on the Mac)', await page.evaluate(() => {
   const bar = document.querySelector('.dragbar');
   return !!bar && getComputedStyle(bar).getPropertyValue('-webkit-app-region') === 'drag' && bar.getBoundingClientRect().height >= 28;
@@ -182,7 +182,7 @@ check('the app keeps its state in the given user data folder', existsSync(join(u
 check('PATH of the app process is /usr/bin:/bin', execFileSync('ps', ['eww', '-o', 'command=', String(first.child.pid)], { encoding: 'utf8' }).includes('PATH=/usr/bin:/bin'));
 
 // 2. Demo ansehen.
-await Promise.all([page.waitForNavigation(), page.click('[data-act=demo]')]);
+await Promise.all([page.waitForNavigation(), page.click('[data-answer=demo]')]);
 await settle(page, 'nav.activity');
 await shot(page, '02-demo');
 check('nothing covers the title bar zone with no-drag in the books (the window moves by its top edge)', (await blocking(page)).length === 0, JSON.stringify(await blocking(page)));
@@ -344,11 +344,11 @@ await shot(page, '04i-invoice-paid');
 
 // 5. New books from the File menu's "Neue Buchhaltung…" (/start?new), set up through the form («Ohne KI einrichten»),
 // then back to the demo through the File menu.
-const aiAsked = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/desktop/ai', { timeout: 20000 });
+const aiAsked = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/ai/setup', { timeout: 20000 });
 await page.goto(`${base}/start?new`);
 const aiAvailable = (await (await aiAsked).json()).available;
-await settle(page, '.st-form');
-check('Neue Buchhaltung offers the setup conversation when claude answers', aiAvailable && await page.$('[data-act=setup-next]'), `available ${aiAvailable}`);
+await settle(page, '[data-act=by-hand]');
+check('Neue Buchhaltung opens «Einrichtung» with «Neue Buchhaltung erstellen» when claude answers', aiAvailable && await page.$('[data-answer=create]'), `available ${aiAvailable}`);
 await page.click('[data-act=by-hand]');
 await settle(page, '.st-form input[name=name]');
 const root = mkdtempSync(join(tmpdir(), 'vanilla-smoke-books-'));

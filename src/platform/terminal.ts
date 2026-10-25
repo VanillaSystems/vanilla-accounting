@@ -10,8 +10,40 @@ export const TERMINAL_CLIS = ['claude', 'codex'] as const;
 export type TerminalCli = (typeof TERMINAL_CLIS)[number];
 export const isTerminalCli = (v: unknown): v is TerminalCli => TERMINAL_CLIS.includes(v as TerminalCli);
 
-/** The program each CLI is started as. */
-export const CLI_PROGRAM: Record<TerminalCli, string> = { claude: 'claude', codex: 'codex' };
+/**
+ * The one table of facts about each CLI (docs/0.4.0/ai-setup.md, «Installers» and «Plans», checked
+ * 25.10.2026): the program, its vendor's official native installer (needs only curl and a shell,
+ * which macOS has: no Homebrew, no npm), the vendor's guide and plans page, the commands that say
+ * whether it is signed in and that sign in. `tested`: the app makes its test call with it (a CLI
+ * the app's steps ask; Codex only once it is a provider, #121).
+ */
+export interface CliFacts {
+  program: string;
+  vendor: string;
+  install: string;
+  guide: string;
+  plans: string;
+  status: readonly string[];
+  login: readonly string[];
+  tested: boolean;
+  /** It reads a PDF (Codex takes images only, so the steps that read a receipt go elsewhere). */
+  readsPdf: boolean;
+  /** What the CLI asks macOS for beyond itself, said on its card: Codex 0.164 starts Apple's developer-tools install on `codex exec` (measured on a fresh Mac, 25.10.2026). */
+  precondition?: 'devTools';
+}
+
+export const AI_CLIS: Record<TerminalCli, CliFacts> = {
+  claude: {
+    program: 'claude', vendor: 'Anthropic', install: 'curl -fsSL https://claude.ai/install.sh | bash',
+    guide: 'https://code.claude.com/docs/en/setup', plans: 'https://claude.com/pricing',
+    status: ['auth', 'status'], login: ['auth', 'login'], tested: true, readsPdf: true,
+  },
+  codex: {
+    program: 'codex', vendor: 'OpenAI', install: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh',
+    guide: 'https://developers.openai.com/codex/cli', plans: 'https://chatgpt.com/pricing',
+    status: ['login', 'status'], login: ['login'], tested: false, readsPdf: false, precondition: 'devTools',
+  },
+};
 
 /**
  * One CLI as this computer has it. `signedIn` undefined: not known (Claude before the app's own
@@ -57,7 +89,7 @@ export const REQUEST_MAX = 20_000;
 /** The command a person copies into their own terminal: into the books folder, the CLI started with the request as its first prompt. */
 export function copyCommand(folder: string, cli: TerminalCli, request: string): string {
   const r = request.trim().slice(0, REQUEST_MAX);
-  return `cd ${shellQuote(folder)} && ${CLI_PROGRAM[cli]}${r ? ` ${shellQuote(r)}` : ''}`;
+  return `cd ${shellQuote(folder)} && ${AI_CLIS[cli].program}${r ? ` ${shellQuote(r)}` : ''}`;
 }
 
 /**

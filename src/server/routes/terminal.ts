@@ -4,19 +4,16 @@
  * computer (src/server/api.ts); the open takes a JSON body, which a page of another site cannot
  * send without the browser asking first.
  */
-import { join } from 'node:path';
 import { Router } from 'express';
 import { WS, patchBody, RequestError } from '../books.js';
 import { readSettings } from '../../llm/settings.js';
 import { chooseCli, isTerminalCli, type TerminalView } from '../../platform/terminal.js';
-import { detectClis, openInTerminal, stateOf, terminalPath } from '../../platform/terminal-open.js';
+import { detectClis, openInTerminal, stateOf } from '../../platform/terminal-open.js';
 import { ensureTerminalAgents } from '../../workspace/terminal-agents.js';
 
 export const router = Router();
 
-async function found() {
-  return detectClis({ path: await terminalPath(), ledger: join(WS.paths.data, 'llm-ledger.jsonl'), claudeBin: process.env.CLAUDE_BIN });
-}
+const found = () => detectClis();
 
 async function view(): Promise<TerminalView> {
   const preferred = readSettings().cli;

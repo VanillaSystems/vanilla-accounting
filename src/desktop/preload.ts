@@ -7,6 +7,7 @@ import type { DesktopBridge, DictationEvent, MenuCommand, SmokeBridge } from '..
 
 const bridge: DesktopBridge = {
   chooseFolder: (title) => ipcRenderer.invoke('desktop:chooseFolder', title),
+  chooseNewFolder: (choice) => ipcRenderer.invoke('desktop:chooseNewFolder', choice),
   onMenu(listener) {
     const handler = (_e: IpcRendererEvent, command: MenuCommand) => listener(command);
     ipcRenderer.on('desktop:menu', handler);

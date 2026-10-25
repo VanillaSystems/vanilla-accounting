@@ -1,7 +1,9 @@
 /**
  * Which provider and model serve a step (issue #48): the person's setting for this machine when
  * its provider is there and its model meets the step's needs, else the first subscription whose
- * model for the step's tier meets them. A key is never the default: it costs money per call.
+ * model for the step's tier meets them. A key is the default only where no subscription answers
+ * on this Mac (#175): src/llm/providers/index.ts then puts it first, and it serves every step it
+ * can; a step only a CLI can do (the KI column) still goes to the CLI.
  */
 import { AiRefused, type Provider } from './provider.js';
 import type { AiSettings } from './settings.js';
@@ -25,7 +27,8 @@ export function resolve(step: StepId, settings: AiSettings, providers: readonly 
     const model = chosen.model ?? provider.defaults[tier];
     if (fits(step, provider, model)) return { provider, model, source: 'setting' };
   }
-  const fallback = providers.find((p) => p.billing === 'subscription' && fits(step, p, p.defaults[tier]));
+  const keyFirst = providers[0].billing === 'key';
+  const fallback = providers.find((p) => (keyFirst || p.billing === 'subscription') && fits(step, p, p.defaults[tier]));
   if (fallback) return { provider: fallback, model: fallback.defaults[tier], source: 'default' };
   const [first] = providers;
   return { provider: first, model: first.defaults[tier], source: 'unserved' };

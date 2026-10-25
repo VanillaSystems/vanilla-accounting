@@ -1,12 +1,12 @@
 /**
  * The providers this computer can use now: the subscriptions first (the `claude` and `codex` CLIs
  * found here, the one Firma › KI chose first, Claude Code when none is chosen or none is found),
- * then each provider whose API key is kept in the secret store. A key is read from the store, never
- * from the workspace, and is held in memory only for a minute.
+ * then each provider whose API key is kept in the secret store; where no subscription answers on
+ * this Mac, a key that writes text comes first (#175). A key is read from the store, never from the
+ * workspace, and is held in memory only for a minute.
  */
 import { secrets, type AiKeyName } from '../../secrets/secrets.js';
-import { basename, dirname } from 'node:path';
-import { programOn } from '../../platform/login-path.js';
+import { knownPath, locate } from '../../platform/ai-cli.js';
 import type { TerminalCli } from '../../platform/terminal.js';
 import type { Provider } from '../provider.js';
 import { readSettings } from '../settings.js';
@@ -58,10 +58,8 @@ export async function keyedStates(): Promise<KeyedState[]> {
   }));
 }
 
-const claudeFound = (): boolean => {
-  const named = process.env.CLAUDE_BIN;
-  return Boolean(named ? programOn(dirname(named), basename(named)) : programOn(process.env.PATH ?? '', 'claude'));
-};
+/** Claude Code as a look finds it now: CLAUDE_BIN, the PATH or ~/.local/bin (src/platform/ai-cli.ts), no restart needed. */
+const claudeFound = (): boolean => locate('claude', { path: knownPath() }) !== undefined;
 
 /** Each CLI the app asks as a subscription, and whether its program is on this computer. */
 export const SUBSCRIPTIONS: Record<TerminalCli, { provider: Provider; found: () => boolean }> = {
@@ -76,8 +74,33 @@ export function subscriptions(preferred: TerminalCli | undefined): [Provider, ..
   return found.length ? [found[0], ...found.slice(1)] : [claudeCli];
 }
 
-/** The subscriptions first: the resolver falls back to them, and never from them to a key that costs money. */
+const CLI_TTL = 3000;
+let cliSeen: { found: string; at: number; answers: boolean } | undefined;
+
+/** Whether a subscription answers here (found and signed in); asked again after a few seconds, or after forgetCli(). */
+async function subscriptionAnswers(subs: readonly Provider[]): Promise<boolean> {
+  const found = [...subs.map((p) => p.id), process.env.CLAUDE_BIN, process.env.CODEX_BIN, knownPath()].join('|');
+  if (cliSeen && cliSeen.found === found && Date.now() - cliSeen.at < CLI_TTL) return cliSeen.answers;
+  const answers = (await Promise.all(subs.map((p) => p.ready(8000).catch(() => false)))).some(Boolean);
+  cliSeen = { found, at: Date.now(), answers };
+  return answers;
+}
+
+/** After the setup looked or changed something: the next call asks the CLIs again. */
+export const forgetCli = (): void => { cliSeen = undefined; };
+
+/** A key whose provider writes text (Anthropic, OpenAI), not one that answers typed questions only (Jev). */
+const writes = (p: Provider) => p.models.some((m) => m.can.includes('json'));
+
+/**
+ * The subscriptions first: the resolver falls back to them, and never from them to a key that
+ * costs money. Where no subscription answers on this Mac and a key's provider writes text, that
+ * key comes first and serves every step it can (#175); whether one answers is asked only then.
+ */
 export async function usableProviders(): Promise<[Provider, ...Provider[]]> {
   const keyed = (await keyedStates()).flatMap((s) => (s.provider ? [s.provider] : []));
-  return [...subscriptions(readSettings().cli), ...keyed];
+  const subs = subscriptions(readSettings().cli);
+  const general = keyed.filter(writes);
+  if (general.length && !(await subscriptionAnswers(subs))) return [general[0], ...general.slice(1), ...subs, ...keyed.filter((p) => !writes(p))];
+  return [...subs, ...keyed];
 }

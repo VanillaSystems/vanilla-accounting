@@ -10,6 +10,11 @@ export type MenuCommand = 'zoomIn' | 'zoomOut' | 'zoomReset';
 export interface DesktopBridge {
   /** The folder the person picks in the system's dialog; null when cancelled. */
   chooseFolder(title: string): Promise<string | null>;
+  /**
+   * Where new books go, in the system's save panel: `name` prefilled in the Documents folder, «Neuer
+   * Ordner» at hand, the button saying `button`. The path of the folder to create; null when cancelled.
+   */
+  chooseNewFolder(choice: { title: string; name: string; button: string }): Promise<string | null>;
   /** Calls `listener` for each menu command; returns the unsubscribe. */
   onMenu(listener: (command: MenuCommand) => void): () => void;
   /** The UI's language, so the native menu speaks it too. */

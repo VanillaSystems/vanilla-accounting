@@ -12,8 +12,8 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { openWorkspace } from '../workspace/workspace.js';
-import { CallFailed, NO_USAGE, type Provider, type ProviderId, type Usage } from './provider.js';
-import { claudeCli } from './providers/claude-cli.js';
+import { AiRefused, CallFailed, NO_USAGE, type Provider, type ProviderId, type Usage } from './provider.js';
+import { claudeCli, NoClaudeError } from './providers/claude-cli.js';
 import { usableProviders } from './providers/index.js';
 import { defaultFor, otherSubscription, resolve, unserved, type Resolved } from './resolve.js';
 import { readSettings } from './settings.js';
@@ -65,8 +65,16 @@ export const resolveStep = async (step: StepId): Promise<Resolved> => resolve(st
 /** The AI sidebar's model: only the Claude CLI runs it (it is an agent with a session and tools). */
 export const sidebarModel = (): string => resolve('sidebar', readSettings(), [claudeCli]).model;
 
-/** Resolves with the model's text answer; rejects with the provider's reason. */
+/** Resolves with the model's text answer; rejects with the provider's reason (NoClaudeError names the step). */
 export async function ask(prompt: string, opts: AskOptions): Promise<string> {
+  try {
+    return await askResolved(prompt, opts);
+  } catch (e) {
+    throw e instanceof NoClaudeError ? new NoClaudeError(opts.step) : e;
+  }
+}
+
+async function askResolved(prompt: string, opts: AskOptions): Promise<string> {
   const providers = await usableProviders();
   const settings = readSettings();
   const chosen = resolve(opts.step, settings, providers);
@@ -74,8 +82,14 @@ export async function ask(prompt: string, opts: AskOptions): Promise<string> {
   try {
     return await askOne(prompt, opts, chosen.provider, chosen.model);
   } catch (e) {
+    // Claude Code there but not signed in fails like any call: said as «no AI here», which the error line offers to set up.
+    if (chosen.provider === claudeCli && !(e instanceof NoClaudeError) && !(e instanceof AiRefused) && !(await claudeCli.ready(8000))) throw new NoClaudeError(opts.step);
     // The person chose the key: when the default cannot answer either, its reason is the one to see.
-    const next = chosen.provider.billing === 'key' ? defaultFor(opts.step, providers) : otherSubscription(e, opts.step, chosen.provider, settings, providers);
+    // A key that fails asks a subscription, never another key: where a key is the default (#175), the subscriptions alone decide.
+    const subs = providers.filter((p) => p.billing === 'subscription');
+    const next = chosen.provider.billing === 'key'
+      ? (subs.length ? defaultFor(opts.step, [subs[0], ...subs.slice(1)]) : undefined)
+      : otherSubscription(e, opts.step, chosen.provider, settings, providers);
     if (!next || next.source === 'unserved') throw e;
     return askOne(prompt, opts, next.provider, next.model).catch(() => { throw e; });
   }

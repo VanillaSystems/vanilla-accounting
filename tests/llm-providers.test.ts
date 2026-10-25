@@ -9,14 +9,15 @@ import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ask, ledgerPath, modelReady, resolveStep, type LedgerRow } from '../src/llm/ask.js';
-import { forgetKey, keyedStates } from '../src/llm/providers/index.js';
-import { NoClaudeError } from '../src/llm/providers/claude-cli.js';
+import { forgetCli, forgetKey, keyedStates } from '../src/llm/providers/index.js';
+import { STEP_IDS } from '../src/llm/steps.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { providerStub, type ProviderStub } from './support/provider-stub.js';
 
 const ANTHROPIC_KEY = 'test-key-anthropic-0001';
 const OPENAI_KEY = 'test-key-openai-0002';
 const STUB_CLI = join(process.cwd(), 'tests/support/stub-bin/claude');
+let STUB_SIGNED_OUT = '';
 let dir: string;
 let stub: ProviderStub;
 
@@ -40,12 +41,15 @@ before(async () => {
   process.env.VANILLA_OPENAI_URL = stub.url;
   writeFileSync(join(dir, 'scan.pdf'), '%PDF-1.4 stub');
   writeFileSync(join(dir, 'photo.png'), 'png stub');
+  STUB_SIGNED_OUT = join(dir, 'signed-out-claude');
+  writeFileSync(STUB_SIGNED_OUT, `#!/bin/sh\nCLAUDE_STUB_SIGNED_OUT=1 exec ${JSON.stringify(STUB_CLI)} "$@"\n`, { mode: 0o755 });
 });
 after(() => stub.stop());
 beforeEach(() => {
   stub.seen.length = 0;
   stub.reply.clear();
   process.env.CLAUDE_BIN = STUB_CLI;
+  forgetCli();
   keys({ 'ai:anthropic': ANTHROPIC_KEY, 'ai:openai': OPENAI_KEY });
   choose({});
 });
@@ -100,8 +104,11 @@ test('a key that fails asks the Claude subscription instead; the ledger shows bo
 });
 
 test('a failing subscription never asks a key that costs money', async () => {
-  process.env.CLAUDE_BIN = join(dir, 'no-such-claude');
-  await assert.rejects(ask('{}', { step: 'classify' }), NoClaudeError);
+  // Installed and signed in, but every call fails (a limit, an outage): the CLI stays the default.
+  const failing = join(dir, 'failing-claude');
+  writeFileSync(failing, `#!/bin/sh\ncase "$1" in --version) echo 2.1.0; exit 0;; auth) echo '{"loggedIn":true}'; exit 0;; esac\ncat >/dev/null; echo 'usage limit reached' >&2; exit 1\n`, { mode: 0o755 });
+  process.env.CLAUDE_BIN = failing;
+  await assert.rejects(ask('{}', { step: 'classify' }), /usage limit reached/);
   assert.equal(stub.seen.filter((s) => s.method === 'POST').length, 0, 'the keys are there, and nothing was sent to them');
 });
 
@@ -133,9 +140,32 @@ test('no API model serves the sidebar: it needs Claude Code\'s tools and session
   assert.equal((await resolveStep('sidebar')).provider.id, 'claude-cli');
 });
 
-test('with no claude CLI the app can still ask when a step uses a key', async () => {
-  process.env.CLAUDE_BIN = join(dir, 'no-such-claude');
-  assert.equal(await modelReady(), false, 'every step on the missing CLI');
-  choose({ classify: { provider: 'anthropic', model: 'claude-sonnet-5-5' } });
-  assert.equal(await modelReady(), true);
+test('#175: with no claude CLI a saved key serves every step but the KI column, unasked for each step', async () => {
+  for (const missing of [join(dir, 'no-such-claude'), STUB_SIGNED_OUT]) {
+    process.env.CLAUDE_BIN = missing;
+    forgetCli();
+    assert.equal(await modelReady(), true, `${missing}: the key answers`);
+    for (const step of STEP_IDS) {
+      const r = await resolveStep(step);
+      assert.equal(r.provider.id, step === 'sidebar' ? 'claude-cli' : 'anthropic', `${missing}: ${step}`);
+    }
+  }
+  assert.equal(await ask('{}', { step: 'classify' }), '{"stub":"anthropic"}');
+  assert.equal(calls('/v1/messages').at(-1)!.body.model, 'claude-sonnet-5-5', 'the key\'s model for the step\'s tier');
+
+  keys({ 'ai:openai': OPENAI_KEY });
+  forgetCli();
+  assert.equal((await resolveStep('receipt-vat')).provider.id, 'openai', 'only OpenAI: OpenAI serves');
+  keys({});
+  forgetCli();
+  assert.equal(await modelReady(), false, 'no CLI and no key: no AI');
+  assert.equal((await resolveStep('classify')).provider.id, 'claude-cli');
+});
+
+test('#175: with Claude Code signed in, a key serves only the steps set to it', async () => {
+  forgetCli();
+  assert.equal((await resolveStep('classify')).provider.id, 'claude-cli');
+  choose({ classify: { provider: 'anthropic', model: 'claude-haiku-5-5' } });
+  assert.equal((await resolveStep('classify')).provider.id, 'anthropic');
+  assert.equal((await resolveStep('receipt-vision')).provider.id, 'claude-cli');
 });

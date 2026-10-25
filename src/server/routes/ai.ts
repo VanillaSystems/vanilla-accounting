@@ -4,9 +4,9 @@
  */
 import { Router } from 'express';
 import { resolve } from '../../llm/resolve.js';
-import { forgetKey, keyedStates, keyName, subscriptions } from '../../llm/providers/index.js';
+import { keyedStates, keyName, subscriptions } from '../../llm/providers/index.js';
+import { keepKey, KeyNotKept } from '../../llm/key-store.js';
 import { claudeCli } from '../../llm/providers/claude-cli.js';
-import { HttpRefused } from '../../llm/providers/http.js';
 import { KEYED, type KeyedId } from '../../llm/providers/keyed.js';
 import { PROVIDERS, readSettings, writeChoice, writeCli } from '../../llm/settings.js';
 import { codexCli, codexStatus } from '../../llm/providers/codex-cli.js';
@@ -90,20 +90,13 @@ router.put('/api/ai/keys/:provider', async (req, res) => {
   if (!isKeyed(id)) throw new RequestError(404, `Kein Anbieter ${id}.`);
   const key = patchBody(req.body, ['key']).key;
   if (key !== null && (typeof key !== 'string' || !key.trim())) throw new RequestError(400, 'key: ein Schlüssel, oder null zum Entfernen.');
-  if (!secrets.inApp()) throw new RequestError(409, `Der Schlüssel gehört nach ${secrets.where(keyName(id))}.`, { code: 'aiKeyWhere', params: { where: secrets.where(keyName(id)) } });
-  if (typeof key === 'string') {
-    try {
-      await KEYED.find((s) => s.id === id)!.check(key.trim());
-    } catch (e) {
-      if (e instanceof HttpRefused && (e.status === 401 || e.status === 403)) throw new RequestError(400, 'Der Anbieter lehnt den Schlüssel ab.', { code: 'aiKeyRefused' });
-      // Not reachable now: the key is kept, the view says the list failed.
-    }
-  }
   try {
-    await secrets.set(keyName(id), typeof key === 'string' ? key.trim() : null);
+    await keepKey(id, typeof key === 'string' ? key.trim() : null);
   } catch (e) {
-    throw new RequestError(503, `Der Passwortspeicher ist nicht erreichbar: ${(e as Error).message}`, { code: 'secretStore' });
+    if (!(e instanceof KeyNotKept)) throw e;
+    throw e.reason === 'where' ? new RequestError(409, e.message, { code: 'aiKeyWhere', params: { where: e.where! } })
+      : e.reason === 'refused' ? new RequestError(400, e.message, { code: 'aiKeyRefused' })
+      : new RequestError(503, e.message, { code: 'secretStore' });
   }
-  forgetKey(id);
   res.json(await view());
 });

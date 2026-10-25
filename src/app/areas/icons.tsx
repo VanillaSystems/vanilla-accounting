@@ -25,6 +25,8 @@ export const ICONS = {
   terminal: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="m7.5 9.5 3 2.5-3 2.5M13 15h4" /></svg>,
   mic: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>,
   check: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>,
+  external: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" /></svg>,
+  warn: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 2.5 20h19L12 3.5zM12 10v4.5M12 17.2v.3" /></svg>,
   left: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>,
   right: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>,
   panelClose: <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h13M10 6l6 6-6 6" /><path d="M20.5 4.5v15" /></svg>,

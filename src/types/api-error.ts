@@ -93,7 +93,8 @@ export type ApiRefusal =
   /** The account invoices are paid to must keep an IBAN (it is printed on them). */
   | { code: 'payToNeedsIban'; params: { bank: string; currency: string } }
   | { code: 'noBrowser' }
-  | { code: 'noClaude' }
+  /** A step that needs an AI, on a Mac where none answers (the step when known: the error line names it and offers «KI einrichten»). */
+  | { code: 'noClaude'; params: { step?: string } }
   /** A subscription CLI that did not answer (src/llm/provider.ts AiRefusal): not installed, signed out, its limit, or no program here serves the step. */
   | { code: 'aiRefused'; params: AiRefusal }
   /** Firma › KI (src/server/routes/ai.ts): a model that cannot serve the step, a key the provider refuses, a key that belongs into .env here. */

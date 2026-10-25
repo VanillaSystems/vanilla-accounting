@@ -317,7 +317,7 @@ export function callClaude(call: AssistantCall): Promise<void> {
     });
     child.stderr.on('data', (d) => (err += d));
     child.on('error', (e: NodeJS.ErrnoException) => {
-      if (!ended) emit({ type: 'error', message: e.code === 'ENOENT' ? new NoClaudeError().message : e.message });
+      if (!ended) emit({ type: 'error', message: e.code === 'ENOENT' ? new NoClaudeError('sidebar').message : e.message });
     });
     child.on('close', (code) => {
       call.signal.removeEventListener('abort', kill);

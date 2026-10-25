@@ -14,17 +14,17 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, dirname, extname, join } from 'node:path';
 import { programOn } from '../../platform/login-path.js';
-import { codexSignedIn } from '../../platform/terminal-open.js';
+import { knownPath, locate, probeCli } from '../../platform/ai-cli.js';
 import { AiRefused, CallFailed, isPlanLimit, NO_USAGE, type Call, type Provider, type Usage } from '../provider.js';
 
 /**
- * The CLI: CODEX_BIN when set (the desktop app finds it through the login shell), else `codex` on
- * the PATH; its folder joins the PATH, so an npm-installed codex finds its node. A test run finds
- * only CODEX_BIN, never the developer's own codex, which would spend their subscription.
+ * The CLI: CODEX_BIN when set, else as a look finds it now (src/platform/ai-cli.ts: the PATH, the
+ * login shell's, ~/.local/bin); its folder joins the PATH, so an npm-installed codex finds its node.
+ * A test run finds only CODEX_BIN, never the developer's own codex, which would spend their subscription.
  */
 export function codexCommand(): { bin: string; env: NodeJS.ProcessEnv } | undefined {
   const named = process.env.CODEX_BIN;
-  const bin = named ? programOn(dirname(named), basename(named)) : process.env.NODE_TEST_CONTEXT ? undefined : programOn(process.env.PATH ?? '', 'codex');
+  const bin = named ? programOn(dirname(named), basename(named)) : process.env.NODE_TEST_CONTEXT ? undefined : locate('codex', { path: knownPath() });
   if (!bin) return undefined;
   return { bin, env: { ...process.env, PATH: [dirname(bin), process.env.PATH].filter(Boolean).join(delimiter) } };
 }
@@ -144,5 +144,6 @@ export const codexCli: Provider = {
 /** `codex login status`: true signed in, false signed out, undefined not installed or no answer. */
 export function codexStatus(timeoutMs = 15_000): Promise<boolean | undefined> {
   const command = codexCommand();
-  return command ? codexSignedIn(command.bin, command.env.PATH ?? '', timeoutMs) : Promise.resolve(undefined);
+  if (!command) return Promise.resolve(undefined);
+  return probeCli('codex', { path: dirname(command.bin) }, timeoutMs).then((p) => (p.found === 'signedIn' ? true : p.found === 'signedOut' ? false : undefined));
 }

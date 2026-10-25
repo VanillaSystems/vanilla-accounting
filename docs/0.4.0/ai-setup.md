@@ -1,6 +1,6 @@
 # AI setup on a fresh install
 
-**Status: designed and decided 25.10.2026, not built yet.** Mockups:
+**Status: designed and decided 25.10.2026; built in the PR that closes #175** (see «As built» at the end). Mockups:
 [mockups/ai-setup/index.html](mockups/ai-setup/index.html). Related: #121 (Codex as a provider),
 #139 and #145 (the setup conversation), #146 (Im Terminal), #175 (a Mac with only an API key).
 
@@ -256,3 +256,12 @@ Rough scope, to size the work. The mockups change no app code.
 - Tests: detection with a fake `claude` and `codex` on a temporary PATH (installed, signed out,
   signed in, not answering); a key-only Mac resolving every step but `sidebar` to the key; and
   that no code path opens a CLI's credential file.
+
+## As built
+
+- The CLI facts are `AI_CLIS` in src/platform/terminal.ts; detection, the Terminal scripts and the sign-in status are src/platform/ai-cli.ts; the card's state machine and the view are src/platform/ai-setup.ts; the routes are src/server/ai-setup.ts under `/api/ai/setup` (the desktop server answers them before any books exist, the books API under `npm start`); the UI is src/app/ai/.
+- The card's states: `missing`, `installing`, `silent` (found, does not answer `--version`), `signedOut`, `signingIn`, `testing`, `ready`, `refused` (the test call was refused: plan, limit or another reason), `notFound` (15 minutes of waiting).
+- A look tries the PATH (the process's, then the login shell's) before `~/.local/bin`, so a developer's or a test's own `claude` on the PATH wins over the one the native installer wrote.
+- Whether Claude Code answers (`claudeCli.ready`, and with it `modelReady`) is now found, answering and signed in, not only found.
+- #121 (Codex as a provider) was merged while this was built. Firma › KI shows both cards, «Die App fragt» and «das andere fragen» (#121's `cli` and `askOther`). The first run still offers Claude Code alone (`FIRST_RUN_CLIS`): `codex exec` asks for Apple's developer tools on a Mac without them, so the owner decides when Codex joins it. The KI column names Claude Code (it needs an agent); the error line says «eine KI».
+- #175 in #121's structure: where no subscription answers (found and signed in), a key that writes text comes first and serves every step it can; a key that fails asks a subscription, never another key.

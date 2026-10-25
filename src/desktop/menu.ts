@@ -4,24 +4,10 @@
  * the key still reaches the page.
  */
 import type { MenuItemConstructorOptions } from 'electron';
-import { formatIn } from '../app/i18n/core.js';
-import type { Key, Locale } from '../app/i18n/types.js';
-import de from '../app/i18n/locales/de.js';
-import en from '../app/i18n/locales/en.js';
-import fr from '../app/i18n/locales/fr.js';
-import it from '../app/i18n/locales/it.js';
+import { languageOf, textsIn } from '../app/i18n/texts-in.js';
 import type { KnownBooks, MenuCommand } from '../types/desktop.js';
 
-const LOCALES: Record<string, Locale> = { de, en, fr, it };
-
-/** The language of `code` (de-CH, fr, …), German when the app has none for it. */
-export const languageOf = (code: string | undefined): string => {
-  const base = code?.toLowerCase().split(/[-_]/)[0] ?? '';
-  return base in LOCALES ? base : 'de';
-};
-
-export const textsIn = (language: string) => (key: Key, values: Record<string, string> = {}): string =>
-  formatIn({ code: language, messages: LOCALES[language].messages }, key, values);
+export { languageOf, textsIn };
 
 export interface MenuActions {
   openBooks(): void;

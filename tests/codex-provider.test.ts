@@ -12,8 +12,7 @@ import { join } from 'node:path';
 import { ask, ledgerPath, modelReady, resolveStep, type LedgerRow } from '../src/llm/ask.js';
 import { judge } from '../src/llm/judge.js';
 import { AiRefused, CallFailed } from '../src/llm/provider.js';
-import { forgetKey, subscriptions } from '../src/llm/providers/index.js';
-import { NoClaudeError } from '../src/llm/providers/claude-cli.js';
+import { forgetCli, forgetKey, subscriptions } from '../src/llm/providers/index.js';
 import { codexCli } from '../src/llm/providers/codex-cli.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { providerStub, type ProviderStub } from './support/provider-stub.js';
@@ -159,13 +158,11 @@ test('a test run never finds the developer\'s own codex on the PATH', () => {
   }
 });
 
-test('with only a key, the key serves the step set to it; nothing else asks it on its own', async () => {
+test('with only a key and no CLI here, the key serves every step but the KI column, unasked for each step (#175)', async () => {
   process.env.CLAUDE_BIN = join(dir, 'no-such-claude');
   process.env.CODEX_BIN = join(dir, 'no-such-codex');
+  forgetCli();
   keys({ 'ai:openai': 'test-key-openai-0009' });
-  await assert.rejects(ask('{}', { step: 'classify' }), NoClaudeError);
-  assert.equal(stub.seen.filter((s) => s.method === 'POST').length, 0);
-  settings({ steps: { classify: { provider: 'openai', model: 'gpt-6.1-sol' } } });
   assert.equal(await ask('{}', { step: 'classify' }), '{"stub":"openai"}');
   assert.equal(await modelReady(), true);
 });

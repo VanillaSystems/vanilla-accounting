@@ -12,7 +12,7 @@ import { request as httpRequest, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { desktopServer } from '../src/desktop/server.js';
-import { claudeOn } from '../src/platform/login-path.js';
+import { programOn } from '../src/platform/login-path.js';
 import { sealedStore } from '../src/secrets/sealed-store.js';
 import { envSecrets, useSecretStore } from '../src/secrets/secrets.js';
 import { ask, modelReady } from '../src/llm/ask.js';
@@ -121,8 +121,8 @@ test('claude: found on the login PATH as a program, not as a name; without it, a
   const bin = mkdtempSync(join(tmpdir(), 'bin-'));
   writeFileSync(join(bin, 'claude'), '#!/bin/sh\n');
   chmodSync(join(bin, 'claude'), 0o755);
-  assert.equal(claudeOn(`/nonexistent:${bin}:/usr/bin`), join(bin, 'claude'));
-  assert.equal(claudeOn('/nonexistent:relative/bin'), undefined);
+  assert.equal(programOn(`/nonexistent:${bin}:/usr/bin`, 'claude'), join(bin, 'claude'));
+  assert.equal(programOn('/nonexistent:relative/bin', 'claude'), undefined);
 
   // As the app runs: PATH /usr/bin:/bin, the CLI known only by CLAUDE_BIN, its node in its own folder.
   const path = process.env.PATH;
