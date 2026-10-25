@@ -38,7 +38,8 @@ function everyFile(root: string): string[] {
 
 test('without any key the view offers the Claude subscription and every step its default', async () => {
   const v = await view();
-  assert.deepEqual(v.providers.map((p) => [p.id, p.billing, p.state]), [['claude-cli', 'subscription', 'missing'], ['anthropic', 'key', 'unset'], ['openai', 'key', 'unset'], ['jev', 'key', 'unset']]);
+  assert.deepEqual(v.providers.map((p) => [p.id, p.billing, p.state]), [['claude-cli', 'subscription', 'missing'], ['codex-cli', 'subscription', 'missing'], ['anthropic', 'key', 'unset'], ['openai', 'key', 'unset'], ['jev', 'key', 'unset']]);
+  assert.equal(v.askOther, false, 'asking the other CLI by itself is off unless set');
   assert.deepEqual(v.steps.find((s) => s.id === 'classify')!.resolved, { provider: 'claude-cli', model: 'sonnet', source: 'default' });
   assert.equal(v.keysInApp, true, 'the secrets file stands for the keychain');
 });
@@ -92,4 +93,27 @@ test('a Jev key is checked with one synthetic question; Jev serves the typed ste
   const ok = await api.send('PUT', '/api/ai/steps/mail-triage', { provider: 'jev', model: 'jev-latest' });
   const step = (ok.json as unknown as AiView).steps.find((s) => s.id === 'mail-triage')!;
   assert.deepEqual([step.resolved.provider, step.confident], ['jev', 0.8]);
+});
+
+test('with Codex signed in, «Die App fragt» chooses it for the steps and the terminal, and the other is asked only when set', async (t) => {
+  const own = mkdtempSync(join(tmpdir(), 'ai-settings-codex-'));
+  const codex = await startApi('tests/fixtures/classify-index.json', {
+    VANILLA_SECRETS_FILE: join(own, 'secrets.json'), VANILLA_AI_SETTINGS: join(own, 'ai.json'), CODEX_BIN: join(process.cwd(), 'tests/support/stub-bin/codex'),
+  });
+  t.after(() => codex.stop());
+  const before = (await codex.send('GET', '/api/ai')).json as unknown as AiView;
+  assert.deepEqual(before.providers.slice(0, 2).map((p) => [p.id, p.state]), [['claude-cli', 'missing'], ['codex-cli', 'ready']]);
+  assert.equal(before.steps.find((s) => s.id === 'classify')!.standard.provider, 'claude-cli', 'Claude Code first while nothing is chosen');
+  const chosen = await codex.send('PUT', '/api/ai/cli', { cli: 'codex' });
+  assert.equal(chosen.status, 200, String(chosen.json.error));
+  const v = chosen.json as unknown as AiView;
+  assert.equal(v.cli, 'codex');
+  assert.deepEqual(v.steps.find((s) => s.id === 'classify')!.standard, { provider: 'codex-cli', model: 'gpt-6.1-sol' });
+  assert.deepEqual(v.steps.find((s) => s.id === 'receipt-vision')!.standard, { provider: 'claude-cli', model: 'sonnet' }, 'Codex reads no PDF');
+  assert.equal((await codex.send('GET', '/api/terminal')).json.preferred, 'codex', 'the terminal opens the same one');
+  assert.equal(((await codex.send('PUT', '/api/ai/cli', { askOther: true })).json as unknown as AiView).askOther, true);
+  assert.deepEqual(JSON.parse(readFileSync(join(own, 'ai.json'), 'utf8')), { steps: {}, cli: 'codex', askOther: true });
+  assert.equal((await codex.send('PUT', '/api/ai/cli', { cli: 'gemini' })).status, 400);
+  const back = (await codex.send('PUT', '/api/ai/cli', { cli: null, askOther: false })).json as unknown as AiView;
+  assert.deepEqual([back.cli, back.askOther], [undefined, false]);
 });

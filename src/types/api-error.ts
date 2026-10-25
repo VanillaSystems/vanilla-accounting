@@ -9,6 +9,7 @@ import type { ReportRefusal } from '../reports/spec.js';
 import type { AttachmentRefusal } from './attachment.js';
 import type { MacMailProblem } from './mac-mail.js';
 import type { TagRefusal } from '../books/tags.js';
+import type { AiRefusal } from './ai-refusal.js';
 
 /**
  * The JSON body of every refused API request. `error` is the German text the CLI, the tests and
@@ -93,6 +94,8 @@ export type ApiRefusal =
   | { code: 'payToNeedsIban'; params: { bank: string; currency: string } }
   | { code: 'noBrowser' }
   | { code: 'noClaude' }
+  /** A subscription CLI that did not answer (src/llm/provider.ts AiRefusal): not installed, signed out, its limit, or no program here serves the step. */
+  | { code: 'aiRefused'; params: AiRefusal }
   /** Firma › KI (src/server/routes/ai.ts): a model that cannot serve the step, a key the provider refuses, a key that belongs into .env here. */
   | { code: 'aiModelUnfit'; params: { model: string } }
   | { code: 'aiKeyRefused' }

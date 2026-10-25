@@ -2,8 +2,8 @@ import type { TerminalCli, TerminalView } from '../../platform/terminal.js';
 import type { StatementProblem } from '../../types/api-error.js';
 import type { MoneyRole } from '../../workspace/banks.js';
 import type { AiView } from '../../llm/view.js';
-import type { ProviderId } from '../../llm/provider.js';
-import type { StepId } from '../../llm/steps.js';
+import type { AiRefusal, ProviderId } from '../../llm/provider.js';
+import { isStepId, type StepId } from '../../llm/steps.js';
 import type { BankTransaction, InboxFile, Index, StatementImport, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
 import type { StatementRemoved } from '../../server/routes/statements.js';
 import type { PaymentReleased } from '../../invoices/payments.js';
@@ -109,6 +109,12 @@ function statementProblemText(p: StatementProblem): string {
   }
 }
 
+function aiRefusedText(r: AiRefusal): string {
+  if (r.reason === 'unserved') return t('error.ai.unserved', { step: isStepId(r.step) ? t(`ai.step.${r.step}`) : r.step });
+  const cli = t(`terminal.cli.${r.cli}`);
+  return r.reason === 'limit' ? t('error.ai.limit', { cli, said: r.said }) : t(`error.ai.${r.reason}`, { cli });
+}
+
 export function errorText(e: unknown): string {
   if (!(e instanceof ApiError)) return e instanceof Error ? e.message : String(e);
   const b = e.body;
@@ -180,6 +186,7 @@ export function errorText(e: unknown): string {
     case 'attachment': return t(`error.attachment.${b.params.reason}`, { name: b.params.name, mb: 'mb' in b.params ? b.params.mb : 0, limit: ATTACHMENT_MAX_MB });
     case 'noBrowser': return t('error.noBrowser');
     case 'noClaude': return t('error.noClaude');
+    case 'aiRefused': return aiRefusedText(b.params);
     case 'terminalNotMac': return t('error.terminalNotMac');
     case 'terminalNoCli': return t('error.terminalNoCli');
     case 'aiModelUnfit': return t('error.aiModelUnfit', b.params);
@@ -499,7 +506,7 @@ export const api = {
   setAiStep: (step: StepId, choice: { provider: ProviderId; model: string } | { provider: null }) => request<AiView>('PUT', `/api/ai/steps/${step}`, choice),
   setAiKey: (provider: ProviderId, key: string | null) => request<AiView>('PUT', `/api/ai/keys/${provider}`, { key }),
   terminal: () => request<TerminalView>('GET', '/api/terminal'),
-  setTerminal: (preferred: TerminalCli | null) => request<TerminalView>('PUT', '/api/terminal', { preferred }),
+  setAiCli: (change: { cli?: TerminalCli | null; askOther?: boolean }) => request<AiView>('PUT', '/api/ai/cli', change),
   openTerminal: (text: string, cli?: TerminalCli) => request<{ cli: TerminalCli }>('POST', '/api/terminal/open', { request: text, ...(cli ? { cli } : {}) }),
   cancelInvoice: (id: string, input: { date: string; reason: string; notify: boolean; to?: string; email?: MailMessage }) =>
     request<{ invoice: Issued; sent?: SentDocument }>('POST', `/api/invoices/${id}/cancel`, input),

@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { buildBatchClassifyPrompt, parseBatchClassifyResult, type ClassifyEntry, type ClassifyPromptContext, type PayoutKind } from '../llm/prompts.js';
 import { resolveStep, type AskOptions } from '../llm/ask.js';
 import { NoClaudeError } from '../llm/providers/claude-cli.js';
+import { AiRefused } from '../llm/provider.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import { ownerAccount } from '../accounting/bank-accounts.js';
 import { bankAccountFor } from '../workspace/money-accounts.js';
@@ -787,7 +788,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         outcome.classified.push(tx.ref);
       }
     } catch (e) {
-      if (e instanceof NoClaudeError) throw e;
+      if (e instanceof NoClaudeError || (e instanceof AiRefused && e.refusal.reason !== 'limit')) throw e;
       log(`  [Batch ${batchNum}/${batches.length}]  error: ${e}`);
       for (const tx of batch) if (!outcome.classified.includes(tx.ref)) fail(tx, String(e));
     }

@@ -285,7 +285,8 @@ test('end to end: the sidebar offers the terminal, the button starts the CLI in 
   assert.equal(existsSync(join(api.root, 'pwned')), false);
   assert.ok(readFileSync(join(api.root, 'AGENTS.md'), 'utf8').includes(SECTION_START), 'the instructions are written before the CLI starts');
 
-  assert.equal((await api.send('PUT', '/api/terminal', { preferred: 'codex' })).json.preferred, 'codex');
+  assert.equal((await api.send('PUT', '/api/ai/cli', { cli: 'codex' })).json.cli, 'codex');
+  assert.equal((await api.send('GET', '/api/terminal')).json.preferred, 'codex');
   assert.deepEqual((await api.send('POST', '/api/terminal/open', { request: 'Hallo' })).json, { cli: 'codex' }, 'chosen in Firma › KI');
   assert.deepEqual((await api.send('POST', '/api/terminal/open', { request: 'Hallo', cli: 'claude' })).json, { cli: 'claude' }, '«oder mit Claude Code»');
   assert.equal((await api.send('POST', '/api/terminal/open', {})).status, 400, 'no request, no terminal');

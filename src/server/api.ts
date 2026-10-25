@@ -34,6 +34,7 @@ import { router as mail } from './routes/mail.js';
 import { router as ai } from './routes/ai.js';
 import { router as terminal } from './routes/terminal.js';
 import { NoClaudeError } from '../llm/providers/claude-cli.js';
+import { AiRefused } from '../llm/provider.js';
 import { NETWORK_PATHS, fromThisComputer, phoneGate } from './phone.js';
 
 export const app = express();
@@ -86,6 +87,7 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   } else if (err instanceof PaymentError) res.status(409).json({ error: err.message });
   else if (err instanceof MailError) res.status(MAIL_STATUS[err.code]).json({ error: err.message, mailRefusal: err.code, ...(err.detail ? { detail: err.detail } : {}) } satisfies ApiErrorBody);
   else if (err instanceof NoClaudeError) res.status(503).json({ error: err.message, code: 'noClaude' } satisfies ApiErrorBody);
+  else if (err instanceof AiRefused) res.status(503).json({ error: err.message, code: 'aiRefused', params: err.refusal } satisfies ApiErrorBody);
   else if (err instanceof NoBrowserError) res.status(503).json({ error: err.message, invoiceRefusal: 'noBrowser' } satisfies InvoiceErrorBody);
   else {
     console.error(err);

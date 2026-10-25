@@ -4,8 +4,9 @@
  * Read tool; an API: the file inline).
  */
 import type { Capability, Tier } from './steps.js';
+import type { AiRefusal } from '../types/ai-refusal.js';
 
-export type ProviderId = 'claude-cli' | 'anthropic' | 'openai' | 'jev';
+export type ProviderId = 'claude-cli' | 'codex-cli' | 'anthropic' | 'openai' | 'jev';
 
 export interface ModelEntry {
   /** The id the provider takes (`sonnet` for the CLI). */
@@ -58,6 +59,17 @@ export class CallFailed extends Error {
     super(message);
   }
 }
+
+export type { AiRefusal };
+
+export class AiRefused extends CallFailed {
+  constructor(readonly refusal: AiRefusal, message: string, usage: Usage = NO_USAGE) {
+    super(message, usage);
+  }
+}
+
+/** A subscription's plan limit, in the words Claude Code and Codex print it. */
+export const isPlanLimit = (said: string): boolean => /usage limit|hit your (usage )?limit|limit reached|limit will reset/i.test(said);
 
 export interface Provider {
   id: ProviderId;

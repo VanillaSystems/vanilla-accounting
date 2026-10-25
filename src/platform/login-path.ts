@@ -28,11 +28,6 @@ export function programOn(path: string, name: string): string | undefined {
 
 export const claudeOn = (path: string): string | undefined => programOn(path, 'claude');
 
-export async function findClaude(shell?: string): Promise<string | undefined> {
-  const path = await loginPath(shell);
-  return path ? claudeOn(path) : undefined;
-}
-
 function executable(path: string): boolean {
   try { accessSync(path, constants.X_OK); return true; } catch { return false; }
 }

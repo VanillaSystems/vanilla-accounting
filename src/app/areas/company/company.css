@@ -59,6 +59,7 @@
 .ai small.warnline { margin: 4px 0 0; color: var(--warn); }
 .aikey { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .aikey input { min-width: 0; width: 260px; max-width: 100%; }
+.ai .aiother { display: flex; gap: 6px; align-items: baseline; margin-top: 6px; }
 .ftab.aisteps .fh, .ftab.aisteps .fr { grid-template-columns: minmax(140px, 1fr) minmax(0, 1.4fr); }
 .ftab.aisteps select { width: 100%; max-width: 360px; }
 
