@@ -26,8 +26,6 @@ export function programOn(path: string, name: string): string | undefined {
   return path.split(':').filter(isAbsolute).map((dir) => join(dir, name)).find(executable);
 }
 
-export const claudeOn = (path: string): string | undefined => programOn(path, 'claude');
-
 function executable(path: string): boolean {
   try { accessSync(path, constants.X_OK); return true; } catch { return false; }
 }

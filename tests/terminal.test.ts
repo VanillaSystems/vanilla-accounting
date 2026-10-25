@@ -12,7 +12,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chooseCli, copyCommand, shellQuote, type CliState } from '../src/platform/terminal.js';
-import { claudeSignedIn, detectClis, openInTerminal } from '../src/platform/terminal-open.js';
+import { openInTerminal } from '../src/platform/terminal-open.js';
 import { REPOSITORY_SECTION, SECTION_END, SECTION_START, TERMINAL_SECTION, ensureTerminalAgents, repositoryAgents, withAgentsImport, withRepositorySection, withSection } from '../src/workspace/terminal-agents.js';
 import { createWorkspace } from '../src/workspace/create.js';
 import { changesIn, terminalRequest, withoutChanges } from '../src/assistant/changes.js';
@@ -79,30 +79,6 @@ test('Terminal runs a script that reads the request from its file: the CLI gets 
     assert.equal(existsSync(script), false, 'the script and the request file are removed');
     assert.equal(existsSync(join(folder, 'pwned')), false);
   }
-});
-
-test('detection: a CLI is a program on the login PATH; Codex says itself whether it is signed in, Claude by the app\'s own last call', async () => {
-  const empty = temp('term-path-');
-  const ledger = join(temp('term-ledger-'), 'llm-ledger.jsonl');
-  const env = process.env.CODEX_STUB_STATUS;
-  try {
-    process.env.CODEX_STUB_STATUS = '0';
-    let found = await detectClis({ path: `/nonexistent:${BIN}`, ledger });
-    assert.deepEqual(found.map(({ bin: _, ...s }) => s), [{ cli: 'claude', installed: true, signedIn: undefined }, { cli: 'codex', installed: true, signedIn: true }]);
-    assert.equal(found[1].bin, join(BIN, 'codex'));
-    process.env.CODEX_STUB_STATUS = '1';
-    found = await detectClis({ path: BIN, ledger });
-    assert.equal(found[1].installed && found[1].signedIn, false, '`codex login status` exits 1: not signed in');
-  } finally {
-    if (env === undefined) delete process.env.CODEX_STUB_STATUS; else process.env.CODEX_STUB_STATUS = env;
-  }
-  assert.deepEqual(await detectClis({ path: empty, ledger }), [{ cli: 'claude', installed: false }, { cli: 'codex', installed: false }]);
-  assert.equal((await detectClis({ path: empty, ledger, claudeBin: join(BIN, 'claude') }))[0].installed, true, 'the desktop app\'s claude (CLAUDE_BIN) counts');
-
-  writeFileSync(ledger, [{ provider: 'claude-cli', ok: true }, { provider: 'jev', ok: false }].map((r) => JSON.stringify(r)).join('\n') + '\n');
-  assert.equal(claudeSignedIn(ledger), true);
-  writeFileSync(ledger, `${JSON.stringify({ provider: 'claude-cli', ok: false })}\n`, { flag: 'a' });
-  assert.equal(claudeSignedIn(ledger), undefined, 'a failed call proves nothing about the sign-in');
 });
 
 test('the terminal AI\'s AGENTS.md: written whole, added to the company\'s own file, renewed between its markers, the company\'s lines kept', () => {

@@ -9,6 +9,7 @@
  * Änderungen.
  */
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useColumnNoAi } from '../ai/ColumnNoAi.js';
 import { flushSync } from 'react-dom';
 import { language, t } from '../i18n/index.js';
 import { fmt, formatDate } from '../lib/utils.js';
@@ -362,6 +363,7 @@ function SentFile({ a, conversation }: { a: Attachment; conversation: string | u
 }
 
 export function Sidebar({ page, books, onGo }: Props) {
+  const columnNoAi = useColumnNoAi();
   const s = useAssistant();
   const [text, setText] = useState('');
   const [pick, setPick] = useState(0);
@@ -494,6 +496,8 @@ export function Sidebar({ page, books, onGo }: Props) {
     </Fragment>
   ));
 
+  // In the setup conversation the buttons carry on without an AI: only the words wait for one.
+  const noAi = setup && columnNoAi ? { card: null, placeholder: t('aiSetup.talkWaits') } : columnNoAi;
   return (
     <aside className={setup ? 'aside setup' : 'aside'} aria-label={t(setup ? 'onboarding.title' : 'assistant.title')}>
       <header className="aihead">
@@ -522,7 +526,8 @@ export function Sidebar({ page, books, onGo }: Props) {
         </div>
       ) : (
         <div className="aiturns">
-          {s.turns.length === 0 ? <p className="m aiempty">{t('assistant.empty')}</p> : null}
+          {noAi?.card}
+          {s.turns.length === 0 && !noAi ? <p className="m aiempty">{t('assistant.empty')}</p> : null}
           {setup ? <SetupConversation turns={s.turns} turn={turnView} onGo={onGo} /> : s.turns.map(turnView)}
           {s.error ? <p className="warnline">{s.error}</p> : null}
           <div ref={end} />
@@ -555,7 +560,7 @@ export function Sidebar({ page, books, onGo }: Props) {
             {heardError ? <div className="warnline aifileerror" role="alert">{t(`assistant.dictation.${heardError}`)}</div> : null}
             <div className="aifield">
               <textarea
-                ref={area} rows={3} value={text} placeholder={t(setup ? 'onboarding.placeholder' : 'assistant.placeholder')} aria-label={t('assistant.message')}
+                ref={area} rows={3} value={text} disabled={!!noAi} placeholder={noAi?.placeholder ?? t(setup ? 'onboarding.placeholder' : 'assistant.placeholder')} aria-label={t('assistant.message')}
                 className={partial ? 'dictating' : undefined}
                 onScroll={(e) => { if (ghost.current) ghost.current.scrollTop = e.currentTarget.scrollTop; }}
                 onChange={(e) => { setText(e.target.value); setPartial(undefined); setPick(0); }}
@@ -589,7 +594,7 @@ export function Sidebar({ page, books, onGo }: Props) {
               {setup ? null : <TerminalButton request={() => handover(text, s.turns, t('terminal.handover.context'))} />}
               {s.sending
                 ? <button type="button" className="aisend" aria-label={t('assistant.stop')} onClick={stopAnswer}>{ICONS.stop}</button>
-                : <button type="button" className="aisend" aria-label={t('assistant.send')} aria-disabled={empty} onClick={send}>{ICONS.arrowUp}</button>}
+                : <button type="button" className="aisend" aria-label={t('assistant.send')} aria-disabled={empty || !!noAi} onClick={noAi ? undefined : send}>{ICONS.arrowUp}</button>}
             </div>
           </div>
         </div>

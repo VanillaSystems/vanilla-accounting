@@ -26,6 +26,8 @@ export interface AiSettings {
   cli?: TerminalCli;
   /** When the CLI asked cannot answer (its limit, signed out, gone), ask the other one by itself; off unless set. */
   askOther?: true;
+  /** «Ohne KI weitermachen»: the first run does not ask again on this Mac (docs/0.4.0/ai-setup.md, decision 6). */
+  noAi?: true;
 }
 
 export const PROVIDERS: readonly ProviderId[] = ['claude-cli', 'codex-cli', 'anthropic', 'openai', 'jev'];
@@ -46,9 +48,9 @@ export function parseSettings(raw: unknown): AiSettings {
     }
   }
   // Before #121 the choice was the terminal's alone, kept as `terminal`.
-  const top = raw as { cli?: unknown; terminal?: unknown; askOther?: unknown } | null;
+  const top = raw as { cli?: unknown; terminal?: unknown; askOther?: unknown; noAi?: unknown } | null;
   const cli = top?.cli ?? top?.terminal;
-  return { steps, ...(isTerminalCli(cli) ? { cli } : {}), ...(top?.askOther === true ? { askOther: true as const } : {}) };
+  return { steps, ...(isTerminalCli(cli) ? { cli } : {}), ...(top?.askOther === true ? { askOther: true as const } : {}), ...(top?.noAi === true ? { noAi: true as const } : {}) };
 }
 
 export function readSettings(): AiSettings {
@@ -74,6 +76,12 @@ export function writeCli(change: { cli?: TerminalCli | null; askOther?: boolean 
   const nextCli = change.cli === undefined ? cli : change.cli ?? undefined;
   const nextOther = change.askOther === undefined ? askOther : change.askOther || undefined;
   return write({ ...rest, ...(nextCli ? { cli: nextCli } : {}), ...(nextOther ? { askOther: true } : {}) });
+}
+
+/** «Ohne KI weitermachen» kept on this Mac (true) or taken back (false). */
+export function writeNoAi(on: boolean): AiSettings {
+  const { noAi: _was, ...rest } = readSettings();
+  return write(on ? { ...rest, noAi: true } : rest);
 }
 
 function write(next: AiSettings): AiSettings {

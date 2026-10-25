@@ -24,6 +24,7 @@ import { upgradeWorkspace } from '../workspace/upgrade.js';
 import { ensureTerminalAgents } from '../workspace/terminal-agents.js';
 import type { ApiErrorBody } from '../types/api-error.js';
 import type { AiAvailability, DesktopInfo, KnownBooks, PhoneInfo } from '../types/desktop.js';
+import { aiSetup } from '../server/ai-setup.js';
 import { qrSvg } from './qr.js';
 import { opened, readState, writeState, type PhonePairing } from './state.js';
 
@@ -50,11 +51,10 @@ export interface DesktopServerOptions {
   ask?: Ask;
 }
 
-/** The claude CLI or a provider with its key: the first that answers. */
+/** Whether the app's steps can ask an AI here: the same rule as src/llm/ask.ts modelReady (#175). */
 async function anyProviderReady(): Promise<boolean> {
-  const { usableProviders } = await import('../llm/providers/index.js');
-  for (const p of await usableProviders()) if (await p.ready(8000).catch(() => false)) return true;
-  return false;
+  const { modelReady } = await import('../llm/ask.js');
+  return modelReady(8000).catch(() => false);
 }
 
 export interface DesktopServer {
@@ -222,6 +222,8 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     res.status(403).json({ error: 'Nur von diesem Computer aus erreichbar.', code: 'localOnly' } satisfies ApiErrorBody);
   });
   app.use('/api/desktop', express.json());
+  // This Mac's AI (docs/0.4.0/ai-setup.md): before any books exist, and the same while books are open.
+  app.use(aiSetup);
   app.get('/api/desktop', (_req, res) => { res.json(info()); });
   app.post('/api/desktop/open', async (req, res) => {
     const root = (req.body as { root?: unknown }).root;

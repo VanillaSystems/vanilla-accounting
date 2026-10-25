@@ -1,26 +1,33 @@
 /**
- * Firma › KI (issue #48): which AI the app asks for each step, on this computer. The providers
- * that are there (the Claude subscription through Claude Code, the ChatGPT subscription through
- * Codex, an API key kept in the keychain), which of the two CLIs the app asks (issue #121), and a
- * model per step; a step's list holds only the models that can do what it needs.
+ * Firma › KI (issue #48, docs/0.4.0/ai-setup.md): which AI the app asks on this computer. The AI
+ * programs on this Mac as cards (src/app/ai/CliCard.tsx), which install and sign in from here;
+ * the API keys folded under «Erweitert: mit API-Schlüssel»; and a model per step, whose list holds
+ * only the models that can do what it needs.
  */
-import { Fragment, useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { t } from '../../i18n/index.js';
 import { api, errorText } from '../../lib/api.js';
 import type { AiProviderView, AiStepView, AiView } from '../../../llm/view.js';
 import type { ProviderId } from '../../../llm/provider.js';
 import type { Nav } from '../index.js';
-import { chooseCli, type TerminalCli, type TerminalView } from '../../../platform/terminal.js';
+import { TERMINAL_CLIS, type TerminalCli } from '../../../platform/terminal.js';
+import type { Probation, SetupKey } from '../../../platform/ai-setup.js';
+import { isSetupKey } from '../../../platform/ai-setup.js';
+import { CliCard } from '../../ai/CliCard.js';
+import { testLine, WithoutCli } from '../../ai/KeyBlock.js';
+import { useAiSetup, type AiSetup } from '../../ai/useAiSetup.js';
+import '../../ai/ai-setup.css';
 
 const fits = (step: AiStepView, can: readonly string[]) => step.needs.every((n) => can.includes(n));
 const usable = (p: AiProviderView) => p.state === 'ready' || p.state === 'set';
 const pick = (provider: ProviderId, model: string) => `${provider} ${model}`;
 const label = (r: { provider: ProviderId; model: string }) => t('ai.modelOf', { provider: t(`ai.provider.${r.provider}`), model: r.model });
-const CLI_OF: Partial<Record<ProviderId, TerminalCli>> = { 'claude-cli': 'claude', 'codex-cli': 'codex' };
 
 export function AiSection({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
   const [view, setView] = useState<AiView>();
-  useEffect(() => { api.ai().then(setView, (e) => nav.toast(errorText(e))); }, []);
+  const setup = useAiSetup();
+  const [tests, setTests] = useState<Partial<Record<SetupKey, Probation>>>({});
+  useEffect(() => { api.ai().then(setView, (e) => nav.toast(errorText(e))); }, [setup.view?.available, setup.view?.keys.map((k) => k.set).join()]);
   if (!view) return <p className="m">{t('changes.loading')}</p>;
 
   const apply = async (call: () => Promise<AiView>, done: string) => {
@@ -42,13 +49,25 @@ export function AiSection({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
   return (
     <div className="ai">
       <p>{t('ai.intro')}</p>
-      <h3>{t('ai.providers')}</h3>
-      <dl className="kv2 wide">
-        {view.providers.map((p) => (
-          <ProviderRow key={p.id} p={p} view={view} canEdit={canEdit} onKey={(key) => apply(() => api.setAiKey(p.id, key), t(key ? 'ai.keySaved' : 'ai.keyRemoved', { provider: t(`ai.provider.${p.id}`) }))} />
-        ))}
-        <CliChoice view={view} canEdit={canEdit} apply={apply} />
-      </dl>
+      <Programs setup={setup} ai={view} canEdit={canEdit} apply={apply} />
+      <details className="aiadv" open={view.providers.some((p) => p.state === 'set') || undefined}>
+        <summary>{t('aiSetup.key.summary')}</summary>
+        <div className="aiadvin">
+          <p className="m">{t('aiSetup.key.firmaIntro')}</p>
+          <dl className="kv2 wide">
+            {view.providers.filter((p) => p.billing === 'key').map((p) => (
+              <ProviderRow
+                key={p.id} p={p} view={view} canEdit={canEdit} test={isSetupKey(p.id) ? tests[p.id] : undefined}
+                onKey={(key) => (isSetupKey(p.id)
+                  ? setup.saveKey(p.id, key).then((saved) => { setTests((x) => ({ ...x, [p.id]: saved.test })); return api.ai(); }).then(setView, (e) => nav.toast(errorText(e)))
+                  : apply(() => api.setAiKey(p.id, key), t(key ? 'ai.keySaved' : 'ai.keyRemoved', { provider: t(`ai.provider.${p.id}`) })))}
+              />
+            ))}
+          </dl>
+          <small className="m">{t('aiSetup.key.where')}</small>
+          <WithoutCli />
+        </div>
+      </details>
       <h3>{t('ai.steps')}</h3>
       <div className="ftab aisteps" role="table" aria-label={t('ai.steps')}>
         <div className="fh" role="row"><span>{t('ai.step')}</span><span>{t('ai.model')}</span></div>
@@ -82,41 +101,54 @@ export function AiSection({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
         })}
       </div>
       <p className="m src-note">{t('ai.fallback')}</p>
-      <TerminalSection nav={nav} />
     </div>
   );
 }
 
-/** «Im Terminal öffnen» (issue #146): which of Claude Code and Codex this computer has, and the one the button starts when both are there. */
-function TerminalSection({ nav }: { nav: Nav }) {
-  const [view, setView] = useState<TerminalView>();
-  useEffect(() => { api.terminal().then(setView, (e) => nav.toast(errorText(e))); }, []);
+/**
+ * «KI-Programme auf diesem Mac»: one card per CLI, installing and signing in from here. With two
+ * installed, «Die App fragt» (issue #121): the one the steps and «Im Terminal» ask, and whether to
+ * ask the other when it cannot answer (decision 4, off by default).
+ */
+function Programs({ setup, ai, canEdit, apply }: { setup: AiSetup; ai: AiView; canEdit: boolean; apply: (call: () => Promise<AiView>, done: string) => Promise<void> }) {
+  const { view, cards } = setup;
   if (!view) return null;
-  const installed = view.clis.filter((c) => c.installed).map((c) => c.cli);
-  const chosen = chooseCli(view.clis, view.preferred);
+  const installed = TERMINAL_CLIS.filter((cli) => { const card = cards[cli]; return !!card && card.kind !== 'silent' && 'bin' in card && !!card.bin; });
+  const ready = TERMINAL_CLIS.filter((cli) => cards[cli]?.kind === 'ready');
   return (
     <>
-      <h3>{t('ai.terminal.title')}</h3>
-      <p className="m">{t('ai.terminal.intro')}</p>
-      <dl className="kv2 wide">
-        {view.clis.map((c) => (
-          <Fragment key={c.cli}>
-            <dt>{t(`terminal.cli.${c.cli}`)}</dt>
-            <dd>{t(!c.installed ? 'ai.terminal.missing' : c.signedIn === false ? 'ai.terminal.signedOut' : 'ai.terminal.installed')}</dd>
-          </Fragment>
-        ))}
-        {installed.length > 1 && chosen.kind === 'open' ? (
-          <>
-            <dt>{t('ai.terminal.opensWith')}</dt>
-            <dd>{t(`terminal.cli.${chosen.cli}`)}</dd>
-          </>
-        ) : null}
-      </dl>
+      <h3>{t('aiSetup.firma.title')}</h3>
+      <p className="m">{t('aiSetup.firma.plans')}</p>
+      <div className="aiclis wide">
+        {TERMINAL_CLIS.map((cli) => cards[cli] ? (
+          <CliCard key={cli} cli={cli} state={cards[cli]!} opens={view.opens}
+            actions={canEdit ? { install: () => void setup.install(cli), signIn: () => void setup.signIn(cli), again: () => setup.again(cli) } : undefined} />
+        ) : null)}
+      </div>
+      {setup.error ? <p className="warnline">{setup.error}</p> : null}
+      {installed.length > 1 ? (
+        <dl className="kv2 wide aichoose">
+          <dt>{t('ai.cli.asks')}</dt>
+          <dd>
+            <select aria-label={t('ai.cli.asks')} value={ai.cli ?? 'claude'} disabled={!canEdit}
+              onChange={(e) => void apply(() => api.setAiCli({ cli: e.target.value as TerminalCli }), t('ai.cli.saved', { cli: t(`terminal.cli.${e.target.value as TerminalCli}`) }))}>
+              {installed.map((cli) => <option key={cli} value={cli}>{t(`terminal.cli.${cli}`)}</option>)}
+            </select>
+            <label className="aicheck">
+              <input type="checkbox" checked={ai.askOther} disabled={!canEdit}
+                onChange={(e) => void apply(() => api.setAiCli({ askOther: e.target.checked }), t(e.target.checked ? 'ai.cli.askOtherOn' : 'ai.cli.askOtherOff'))} />
+              {t('ai.cli.askOther')}
+            </label>
+            <small>{t('aiSetup.firma.askOtherHint')}</small>
+          </dd>
+        </dl>
+      ) : null}
+      {view.noAi && !ready.length ? <p className="m">{t('aiSetup.firma.noAiKept')} <button type="button" className="linkbtn" onClick={() => void setup.choose({ noAi: false })}>{t('aiSetup.firma.noAiUndo')}</button></p> : null}
     </>
   );
 }
 
-function ProviderRow({ p, view, canEdit, onKey }: { p: AiProviderView; view: AiView; canEdit: boolean; onKey: (key: string | null) => Promise<void> }) {
+function ProviderRow({ p, view, canEdit, test, onKey }: { p: AiProviderView; view: AiView; canEdit: boolean; test?: Probation; onKey: (key: string | null) => Promise<void> }) {
   const [key, setKey] = useState('');
   const name = t(`ai.provider.${p.id}`);
   const save = async (e: FormEvent) => {
@@ -125,17 +157,6 @@ function ProviderRow({ p, view, canEdit, onKey }: { p: AiProviderView; view: AiV
     await onKey(key);
     setKey('');
   };
-  if (p.billing === 'subscription') {
-    const state = p.state === 'ready' ? 'ai.cli.ready' : p.state === 'signedOut' ? 'ai.cli.signedOut' : p.id === 'codex-cli' ? 'ai.cli.codexMissing' : 'ai.cli.missing';
-    return (
-      <>
-        <dt>{name}</dt>
-        <dd className={p.state === 'ready' ? '' : 'warnline'}>
-          {t(state)}
-        </dd>
-      </>
-    );
-  }
   return (
     <>
       <dt>{name}</dt>
@@ -154,32 +175,10 @@ function ProviderRow({ p, view, canEdit, onKey }: { p: AiProviderView; view: AiV
             </form>
           ) : <span className="m">{t('ai.key.unset')}</span>
         ) : <span className="m">{t('ai.key.where', { where: view.keysWhere[p.id] ?? '' })}</span>}
+        {isSetupKey(p.id) ? testLine(p.id, test) : null}
         <small>{t('ai.key.costs')}</small>
         {p.id === 'jev' ? <small>{t('ai.typedOnly')}</small> : null}
         {p.listError ? <small className="warnline">{t('ai.listError', { detail: p.listError })}</small> : null}
-      </dd>
-    </>
-  );
-}
-
-/** «Die App fragt» (issue #121): with Claude Code and Codex both on this Mac, the one the steps and «Im Terminal» ask, and whether to ask the other when it cannot answer. */
-function CliChoice({ view, canEdit, apply }: { view: AiView; canEdit: boolean; apply: (call: () => Promise<AiView>, done: string) => Promise<void> }) {
-  const here = view.providers.filter((p) => p.billing === 'subscription' && p.state !== 'missing').flatMap((p) => CLI_OF[p.id] ?? []);
-  if (here.length < 2) return null;
-  const chosen = view.cli ?? 'claude';
-  return (
-    <>
-      <dt>{t('ai.cli.asks')}</dt>
-      <dd>
-        <select aria-label={t('ai.cli.asks')} value={chosen} disabled={!canEdit}
-          onChange={(e) => void apply(() => api.setAiCli({ cli: e.target.value as TerminalCli }), t('ai.cli.saved', { cli: t(`terminal.cli.${e.target.value as TerminalCli}`) }))}>
-          {here.map((cli) => <option key={cli} value={cli}>{t(`terminal.cli.${cli}`)}</option>)}
-        </select>
-        <label className="m aiother">
-          <input type="checkbox" checked={view.askOther} disabled={!canEdit}
-            onChange={(e) => void apply(() => api.setAiCli({ askOther: e.target.checked }), t(e.target.checked ? 'ai.cli.askOtherOn' : 'ai.cli.askOtherOff'))} />
-          {t('ai.cli.askOther')}
-        </label>
       </dd>
     </>
   );

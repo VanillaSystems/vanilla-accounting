@@ -17,7 +17,7 @@ import { useSecretStore } from '../secrets/secrets.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import type { KnownBooks, MenuCommand } from '../types/desktop.js';
 import { setupPath } from '../app/desktop/bridge.js';
-import { claudeOn, loginPath, programOn } from '../platform/login-path.js';
+import { freshLoginPath } from '../platform/ai-cli.js';
 import { sameOrigin, saveFile } from './save-file.js';
 import { dictate, isLang } from './dictation.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
@@ -50,13 +50,8 @@ async function start(): Promise<void> {
   const stateFile = join(app.getPath('userData'), 'desktop.json');
   const { homepage } = appPackage();
   usePrintPages(electronPage);
-  // Claude Code and Codex as the person's terminal finds them; the app's steps run them (src/llm/providers).
-  const claudeFound = loginPath().then((path) => {
-    const claude = path && claudeOn(path);
-    const codex = path && programOn(path, 'codex');
-    if (claude) process.env.CLAUDE_BIN = claude;
-    if (codex) process.env.CODEX_BIN = codex;
-  });
+  // The login shell's PATH for a CLI installed elsewhere than ~/.local/bin; every later look asks it again (src/platform/ai-cli.ts).
+  const pathKnown = freshLoginPath();
   let language = languageOf(app.getLocale());
   let win: BrowserWindow | undefined;
   await offerApplicationsFolder(textsIn(language));
@@ -144,8 +139,7 @@ async function start(): Promise<void> {
   const last = readState(stateFile).recent[0];
   const first = last ? await server.open(last).catch(() => undefined) : undefined;
   refreshMenu();
-  // The inbox's runs check for claude once, so it must be known before the first one starts.
-  await claudeFound;
+  await pathKnown;
   server.startBackground();
   void server.phone.resume().then((p) => { if (p.error) console.error(`phone: ${p.error}`); });
   show(pathOf(first));

@@ -13,6 +13,10 @@ import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
+if (args[0] === '--version') {
+  process.stdout.write('codex-cli 0.163.0\n');
+  process.exit(0);
+}
 if (args[0] === 'login' && args[1] === 'status') {
   process.stdout.write('Logged in using ChatGPT\n');
   process.exit(Number(process.env.CODEX_STUB_STATUS ?? 0));

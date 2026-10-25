@@ -12,12 +12,12 @@
  * images, drawn when Codex is asked (src/parsers/pdf-pages.ts), with the PDF's own text. The KI
  * column runs on Codex with the app's own tools (src/assistant/codex.ts).
  */
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, dirname, extname, join } from 'node:path';
 import { programOn } from '../../platform/login-path.js';
-import { codexSignedIn } from '../../platform/terminal-open.js';
+import { knownPath, locate } from '../../platform/ai-cli.js';
 import { pdfPages } from '../../parsers/pdf-pages.js';
 import { pdfText } from '../../parsers/pdf-text.js';
 import { openWorkspace } from '../../workspace/workspace.js';
@@ -25,13 +25,13 @@ import { AiRefused, CallFailed, isPlanLimit, NO_USAGE, type Call, type Provider,
 import { codexHome } from './codex-home.js';
 
 /**
- * The CLI: CODEX_BIN when set (the desktop app finds it through the login shell), else `codex` on
- * the PATH; its folder joins the PATH, so an npm-installed codex finds its node. A test run finds
- * only CODEX_BIN, never the developer's own codex, which would spend their subscription.
+ * The CLI: CODEX_BIN when set, else as a look finds it now (src/platform/ai-cli.ts: the PATH, the
+ * login shell's, ~/.local/bin); its folder joins the PATH, so an npm-installed codex finds its node.
+ * A test run finds only CODEX_BIN, never the developer's own codex, which would spend their subscription.
  */
 export function codexCommand(): { bin: string; env: NodeJS.ProcessEnv } | undefined {
   const named = process.env.CODEX_BIN;
-  const bin = named ? programOn(dirname(named), basename(named)) : process.env.NODE_TEST_CONTEXT ? undefined : programOn(process.env.PATH ?? '', 'codex');
+  const bin = named ? programOn(dirname(named), basename(named)) : process.env.NODE_TEST_CONTEXT ? undefined : locate('codex', { path: knownPath() });
   if (!bin) return undefined;
   return { bin, env: { ...process.env, PATH: [dirname(bin), process.env.PATH].filter(Boolean).join(delimiter) } };
 }
@@ -235,6 +235,17 @@ export const codexCli: Provider = {
     return (await codexStatus(timeoutMs)) === true;
   },
 };
+
+/** `codex login status`: exit 0 signed in, another exit code not; no answer (it did not start, or hung) is not known. */
+function codexSignedIn(bin: string, env: NodeJS.ProcessEnv, timeoutMs: number): Promise<boolean | undefined> {
+  return new Promise((done) => {
+    execFile(bin, ['login', 'status'], { cwd: tmpdir(), timeout: timeoutMs, env }, (err) => {
+      if (!err) return done(true);
+      const e = err as NodeJS.ErrnoException & { code?: unknown; killed?: boolean };
+      done(typeof e.code === 'number' && !e.killed ? false : undefined);
+    });
+  });
+}
 
 /** `codex login status` in the app's CODEX_HOME: true signed in, false signed out, undefined not installed or no answer. */
 export function codexStatus(timeoutMs = 15_000): Promise<boolean | undefined> {
