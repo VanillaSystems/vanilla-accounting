@@ -27,13 +27,21 @@ export interface DesktopBridge {
 export type DictationProblem = 'micDenied' | 'speechDenied' | 'noOnDevice' | 'notInstalled' | 'noSound' | 'failed';
 
 /**
+ * Everything heard so far: `text` is settled and only grows; `partial` follows it and is the
+ * recognizer's guess at the words still being spoken, replaced by the next one.
+ */
+export interface Heard { text: string; partial: string }
+
+/**
  * What the recognizer reports, in order: `preparing` while it loads the language's model (once),
- * `listening`, `heard` with everything heard so far each time it grows, and one `ended`.
+ * `listening`, then `level` (the microphone's loudness, 0 to 1, about 20 a second) and `heard`
+ * (each time what was heard changes), and one `ended`.
  */
 export type DictationEvent =
   | { kind: 'preparing' }
   | { kind: 'listening' }
-  | { kind: 'heard'; text: string }
+  | { kind: 'level'; level: number }
+  | ({ kind: 'heard' } & Heard)
   | { kind: 'ended'; error?: DictationProblem };
 
 /**

@@ -25,17 +25,21 @@ export const SESSION = (api: Pick<ApiServer, 'fetch'>) => {
     return json as DropSession;
   };
   const runOf = async (id: string) => (await (await api.fetch(`/api/automation/runs/${id}`)).json()) as RunDetail;
+  /** Whether a run of the inbox is running or queued. */
+  const working = async () => {
+    const v = (await (await api.fetch('/api/automation')).json()) as { runs: Array<{ status: string }> };
+    return v.runs.some((r) => r.status === 'running' || r.status === 'queued');
+  };
   /** Until no run of the inbox works any more. */
   const rest = async () => {
     for (let i = 0; i < 200; i++) {
-      const v = (await (await api.fetch('/api/automation')).json()) as { runs: Array<{ status: string }> };
-      if (!v.runs.some((r) => r.status === 'running' || r.status === 'queued')) return;
+      if (!(await working())) return;
       await new Promise((r) => setTimeout(r, 50));
     }
     throw new Error('the inbox run did not come to rest');
   };
   const books = async () => (await (await api.fetch('/books.json')).json()) as { receipts: Array<{ id: string; filename: string }>; transactions: Array<{ ref: string }> };
-  return { post, runOf, rest, books };
+  return { post, runOf, working, rest, books };
 };
 
 const STUB = join(process.cwd(), 'tests/support/stub-bin');

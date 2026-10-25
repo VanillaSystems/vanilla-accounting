@@ -314,7 +314,8 @@ test('«Rückgängig» of a delete while the run of the delete still asks the mo
     rmSync(gate);
     rmSync(`${gate}.started`, { force: true });
     assert.equal((await api.send('DELETE', `/api/receipts/${rc.id}`)).status, 200);
-    for (let i = 0; i < 200 && !existsSync(`${gate}.started`); i++) await new Promise((r) => setTimeout(r, 25));
+    // Until the run asks the model or ends without asking: on a loaded machine starting the stub takes seconds (#122).
+    while (!existsSync(`${gate}.started`) && await session.working()) await new Promise((r) => setTimeout(r, 25));
     assert.ok(existsSync(`${gate}.started`), 'the run asks the model once how it would book the payment');
     const back = await api.send('POST', `/api/receipts/${rc.id}/restore`);
     assert.equal(back.status, 200, back.json.error as string);

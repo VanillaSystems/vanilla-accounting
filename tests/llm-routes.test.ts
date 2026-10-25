@@ -53,15 +53,19 @@ const ledger = (): LedgerRow[] => {
 };
 const openGate = () => writeFileSync(gate, '');
 
-async function modelCalled(): Promise<void> {
-  for (let i = 0; i < 500 && !existsSync(`${gate}.started`); i++) await new Promise((r) => setTimeout(r, 20));
+/** Until the stubbed model is called, or `pending` answers without calling it: on a loaded machine starting the stub takes seconds (#122). */
+async function modelCalled(pending: Promise<unknown>): Promise<void> {
+  let answered = false;
+  const done = () => { answered = true; };
+  pending.then(done, done);
+  while (!existsSync(`${gate}.started`) && !answered) await new Promise((r) => setTimeout(r, 20));
   assert.ok(existsSync(`${gate}.started`), 'the stubbed model was called');
 }
 
 /** Sends `method path`, edits the receipt's remarks while the model call is pending, then lets it answer. */
 async function editWhileModelThinks(method: string, path: string, remarks: string) {
   const pending = api.send(method, path, method === 'POST' && path.startsWith('/api/vision') ? { receiptId: 'rw' } : undefined);
-  await modelCalled();
+  await modelCalled(pending);
   const edit = await api.send('PATCH', '/api/receipts/rw', { remarks });
   assert.equal(edit.status, 200, String(edit.json.error));
   openGate();

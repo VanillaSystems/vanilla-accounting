@@ -14,10 +14,12 @@ export const isLang = (lang: unknown): lang is string => typeof lang === 'string
 
 /** One line of the recognizer's stdout; undefined for anything else it may print. */
 export function parseEvent(line: string): DictationEvent | undefined {
-  let o: { kind?: unknown; text?: unknown; error?: unknown };
+  let o: { kind?: unknown; text?: unknown; partial?: unknown; level?: unknown; error?: unknown };
   try { o = JSON.parse(line); } catch { return undefined; }
+  if (o === null || typeof o !== 'object') return undefined;
   if (o.kind === 'preparing' || o.kind === 'listening') return { kind: o.kind };
-  if (o.kind === 'heard' && typeof o.text === 'string') return { kind: 'heard', text: o.text };
+  if (o.kind === 'level' && typeof o.level === 'number' && Number.isFinite(o.level)) return { kind: 'level', level: Math.min(Math.max(o.level, 0), 1) };
+  if (o.kind === 'heard' && typeof o.text === 'string' && typeof o.partial === 'string') return { kind: 'heard', text: o.text, partial: o.partial };
   if (o.kind === 'ended') {
     if (o.error === undefined) return { kind: 'ended' };
     return { kind: 'ended', error: PROBLEMS.includes(o.error as DictationProblem) ? o.error as DictationProblem : 'failed' };

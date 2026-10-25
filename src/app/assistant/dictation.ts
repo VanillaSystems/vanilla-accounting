@@ -6,22 +6,31 @@
  * Firefox has none: no button.
  */
 import { desktop } from '../desktop/bridge.js';
-import type { DesktopBridge, DictationProblem } from '../../types/desktop.js';
+import type { DesktopBridge, DictationProblem, Heard } from '../../types/desktop.js';
+
+export type { Heard };
 
 /** Why listening stopped early; a pause or a stop by the person is no error. */
 export type DictationError = 'denied' | 'unreachable' | DictationProblem;
 
+export interface Listeners {
+  /** Everything heard so far, each time it changes. */
+  heard(heard: Heard): void;
+  ended(error?: DictationError): void;
+  /** True while the recognizer first loads the language onto this computer. */
+  preparing?(loading: boolean): void;
+  /** The microphone's loudness, 0 to 1, while listening; only where the recognizer measures it. */
+  level?(level: number): void;
+}
+
 export interface Recognizer {
   /** The voice leaves this computer to be recognized. */
   online: boolean;
-  /**
-   * Starts listening; `heard` gets everything heard so far, each time it grows; `preparing` is true
-   * while the recognizer first loads the language onto this computer. Returns the stop.
-   */
-  start(lang: string, heard: (text: string) => void, ended: (error?: DictationError) => void, preparing?: (loading: boolean) => void): () => void;
+  /** Starts listening in `lang`; returns the stop. */
+  start(lang: string, on: Listeners): () => void;
 }
 
-interface SpeechResults { length: number; [i: number]: { 0: { transcript: string } } }
+interface SpeechResults { length: number; [i: number]: { isFinal: boolean; 0: { transcript: string } } }
 interface WebSpeech {
   lang: string;
   continuous: boolean;
@@ -41,21 +50,30 @@ export function dictationError(code: string): DictationError | undefined {
   return 'failed';
 }
 
+/** The Web Speech API's results: the final ones settled, the interim ones after them still a guess. */
+export function webHeard(results: SpeechResults): Heard {
+  const all = Array.from({ length: results.length }, (_, i) => results[i]);
+  const words = (final: boolean) => all.filter((r) => r.isFinal === final).map((r) => r[0].transcript.trim()).filter(Boolean).join(' ');
+  const text = words(true);
+  const partial = words(false);
+  return { text, partial: text && partial ? ` ${partial}` : partial };
+}
+
 function browser(): Recognizer | undefined {
   const w = window as unknown as { SpeechRecognition?: new () => WebSpeech; webkitSpeechRecognition?: new () => WebSpeech };
   const Speech = w.SpeechRecognition ?? w.webkitSpeechRecognition;
   if (!Speech) return undefined;
   return {
     online: true,
-    start(lang, heard, ended) {
+    start(lang, on) {
       const r = new Speech();
       r.lang = lang;
       r.continuous = true;
       r.interimResults = true;
       let error: DictationError | undefined;
-      r.onresult = (e) => heard(Array.from({ length: e.results.length }, (_, i) => e.results[i][0].transcript).join(' '));
+      r.onresult = (e) => on.heard(webHeard(e.results));
       r.onerror = (e) => { error = dictationError(e.error); };
-      r.onend = () => ended(error);
+      r.onend = () => on.ended(error);
       r.start();
       return () => r.stop();
     },
@@ -69,13 +87,14 @@ function browser(): Recognizer | undefined {
 export function onDevice(bridge: Required<Pick<DesktopBridge, 'dictate'>>, win: Pick<Window, 'addEventListener' | 'removeEventListener'> = window): Recognizer {
   return {
     online: false,
-    start(lang, heard, ended, preparing) {
+    start(lang, on) {
       const blur = () => stop();
       const stop = bridge.dictate(lang, (e) => {
-        if (e.kind === 'preparing') preparing?.(true);
-        else if (e.kind === 'listening') { preparing?.(false); win.addEventListener('blur', blur); }
-        else if (e.kind === 'heard') heard(e.text);
-        else { preparing?.(false); win.removeEventListener('blur', blur); ended(e.error); }
+        if (e.kind === 'preparing') on.preparing?.(true);
+        else if (e.kind === 'listening') { on.preparing?.(false); win.addEventListener('blur', blur); }
+        else if (e.kind === 'level') on.level?.(e.level);
+        else if (e.kind === 'heard') on.heard({ text: e.text, partial: e.partial });
+        else { on.preparing?.(false); win.removeEventListener('blur', blur); on.ended(e.error); }
       });
       return stop;
     },
@@ -91,9 +110,73 @@ export function recognizer(bridge: DesktopBridge | undefined = desktop): Recogni
 /** The language the recognizer listens in: Swiss German, French and Italian; English as in the US. */
 export const dictationLang = (language: string): string => (language === 'en' ? 'en-US' : `${language}-CH`);
 
-/** The field's text while dictating: what was typed before, then what was heard, one space between. */
-export function withHeard(before: string, heard: string): string {
-  const said = heard.replace(/\s+/g, ' ').trim();
-  if (!said) return before;
-  return before && !/\s$/.test(before) ? `${before} ${said}` : `${before}${said}`;
+/**
+ * The message field as dictation sees it: its text, the part dictation writes over (the selection
+ * when it started, the caret where start is end; afterwards the words it wrote), and what that part
+ * held when dictation started, put back while nothing is heard.
+ */
+export interface Field { text: string; start: number; end: number; kept: string }
+
+/** The field when dictation starts, with its selection. */
+export const fieldAt = (text: string, start: number, end: number): Field => ({ text, start, end, kept: text.slice(start, end) });
+
+/** The field while dictating, where the provisional words sit in it, and the caret after what was heard. */
+export interface Dictated { field: Field; partial: { start: number; end: number }; caret: number }
+
+/**
+ * What was heard put where the caret was, in place of a selection: the typed text before and after
+ * it kept, one space between words, never glued or doubled; the partial words marked, so the field
+ * can show them as provisional until the recognizer settles them. Nothing heard leaves the field as it was.
+ */
+export function dictated(field: Field, heard: Heard): Dictated {
+  const before = field.text.slice(0, field.start);
+  const after = field.text.slice(field.end);
+  const squash = (s: string) => s.replace(/\s+/g, ' ').trimStart();
+  const said = squash(heard.text + heard.partial).trimEnd();
+  const settled = Math.min(squash(heard.text).trimEnd().length, said.length);
+  if (!said) {
+    const end = before.length + field.kept.length;
+    return { field: { ...field, text: before + field.kept + after, end }, partial: { start: end, end }, caret: end };
+  }
+  const lead = before && !/\s$/.test(before) ? `${before} ` : before;
+  const tail = after && !/^[\s,.;:!?)]/.test(after) ? ` ${after}` : after;
+  const start = lead.length;
+  const text = lead + said + tail;
+  return {
+    field: { ...field, text, start: before.length, end: text.length - after.length },
+    partial: { start: start + settled, end: start + said.length },
+    caret: start + said.length,
+  };
+}
+
+/**
+ * The field after the person typed in it while dictating (`now`): typing before the dictated words
+ * moves them, typing after them leaves them; the next words heard replace only them. A change to the
+ * dictated words themselves gives undefined: they stay as the person left them, and dictation lets go.
+ */
+export function follow(field: Field, now: string): Field | undefined {
+  const was = field.text;
+  if (now === was) return field;
+  const shorter = Math.min(was.length, now.length);
+  let same = 0;
+  while (same < shorter && was[same] === now[same]) same++;
+  let tail = 0;
+  while (tail < shorter - same && was[was.length - 1 - tail] === now[now.length - 1 - tail]) tail++;
+  const changedEnd = was.length - tail;
+  if (changedEnd <= field.start) {
+    const moved = now.length - was.length;
+    return { ...field, text: now, start: field.start + moved, end: field.end + moved };
+  }
+  if (same >= field.end) return { ...field, text: now };
+  return undefined;
+}
+
+/**
+ * Where a position of the field (the person's caret) lands when an update rewrites the dictated
+ * words: before them it stays, behind them it moves with them, inside them it goes behind them.
+ */
+export function carried(was: Field, now: Field, at: number): number {
+  if (at < was.start) return at;
+  if (at >= was.end) return at + now.text.length - was.text.length;
+  return now.end;
 }
