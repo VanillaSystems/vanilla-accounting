@@ -11,7 +11,8 @@ import { request as httpRequest, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { desktopServer, listen, portOf } from '../src/desktop/server.js';
-import { lanAddresses, tokenMatches } from '../src/server/phone.js';
+import { tokenMatches } from '../src/server/phone.js';
+import { fromNetwork, lan, type NetworkInit } from './support/from-network.js';
 import { readState } from '../src/desktop/state.js';
 
 process.env.VANILLA_RUNS_DIR = mkdtempSync(join(tmpdir(), 'phone-runs-'));
@@ -29,13 +30,12 @@ await desktop.openDemo();
 const inbox = (await import('../src/server/books.js')).WS.paths.inbox;
 after(async () => { await desktop.phone.set(false); server.close(); });
 
-// Another device as the server sees it: this machine's LAN address is not loopback.
-const lan = lanAddresses()[0];
 const PDF = '%PDF-1.4 phone';
 
 const local = (path: string, init?: RequestInit) => fetch(`http://127.0.0.1:${port}${path}`, init);
-const fromPhone = (phonePort: number, path: string, init: RequestInit = {}, token?: string) =>
-  fetch(`http://${lan ?? '127.0.0.1'}:${phonePort}${path}`, { ...init, headers: { ...(init.headers as Record<string, string>), ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+// Another device as the server sees it: this machine's LAN address is not loopback.
+const fromPhone = (phonePort: number, path: string, init: NetworkInit = {}, token?: string) =>
+  fromNetwork(phonePort, path, { ...init, headers: { ...init.headers, ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
 const upload = { method: 'POST', headers: { 'Content-Type': 'application/pdf', 'X-Captured-At': '2026-10-16T08:12:00' }, body: PDF };
 const inboxFiles = () => (existsSync(inbox) ? readdirSync(inbox) : []);
 

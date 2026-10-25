@@ -23,11 +23,12 @@ const server = HOST ? app.listen(PORT, HOST, listening) : app.listen(PORT, liste
 
 function listening() {
   const { port } = server.address() as AddressInfo;
+  // The first load logs the books' dangling references (#126), before any request comes, and
+  // before the port is named: whoever waits for that line may write the books at once (#122).
+  if (hasBooks(WS)) readBooks();
   console.log(`\nAPI server running on port ${port}`);
   if (READONLY) console.log('🔒 READ-ONLY mode — all writes are blocked');
   if (bundledDemo(locateWorkspace())) console.log(`Demo: working on a copy in ${WS.paths.repository} (npm run demo:reset starts it afresh)`);
-  // The first load logs the books' dangling references (#126), before any request comes.
-  if (hasBooks(WS)) readBooks();
 
   // Every IPv4 address, so the phone can be pointed at the right one.
   const token = phoneToken();

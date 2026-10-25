@@ -34,9 +34,11 @@ const builtPort = await listening(builtServer);
 built.allowHost(`127.0.0.1:${builtPort}`);
 after(() => { server.close(); vite.close(); builtServer.close(); });
 
-// node:http, since fetch does not let a request name another Host.
+// node:http, since fetch does not let a request name another Host. A connection of its own: a reused
+// one is closed by the server's keep-alive timer when the event loop stalls past it (openDemo on a
+// loaded machine), before the request already sent on it is read, and the request fails with ECONNRESET (#122).
 const get = (path: string, host = `127.0.0.1:${port}`, to = port) => new Promise<{ status: number; text: string }>((resolve, reject) => {
-  request({ host: '127.0.0.1', port: to, path, headers: { host } }, (res) => {
+  request({ host: '127.0.0.1', port: to, path, headers: { host, connection: 'close' }, agent: false }, (res) => {
     let text = '';
     res.setEncoding('utf8').on('data', (d) => { text += d; }).on('end', () => resolve({ status: res.statusCode!, text }));
   }).on('error', reject).end();
