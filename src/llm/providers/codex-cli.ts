@@ -10,9 +10,10 @@
  * the model still start anything but an answer (a command, an edit, a search, a sub-agent), the
  * run is ended and fails (`runCodex`). Codex takes images but no PDF: a PDF's first pages go as
  * images, drawn when Codex is asked (src/parsers/pdf-pages.ts), with the PDF's own text. The KI
- * column runs on Codex with the app's own tools (src/assistant/codex.ts).
+ * column runs on Codex with the app's own tools (src/assistant/codex.ts). The model of each tier
+ * is one the signed-in account offers (codex-models.ts, issue #180).
  */
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, delimiter, dirname, extname, join } from 'node:path';
@@ -23,6 +24,8 @@ import { pdfText } from '../../parsers/pdf-text.js';
 import { openWorkspace } from '../../workspace/workspace.js';
 import { AiRefused, CallFailed, isPlanLimit, NO_USAGE, type Call, type Provider, type Usage } from '../provider.js';
 import { codexHome } from './codex-home.js';
+import { TIERS } from '../steps.js';
+import { markRefused, parseCatalog, PREFERENCE, readCatalog, signInStamp, stale, tierModels, tierOf, usable, writeCatalog, type CodexCatalog, type CodexModel } from './codex-models.js';
 
 /**
  * The CLI: CODEX_BIN when set (the desktop app finds it through the login shell), else `codex` on
@@ -157,8 +160,12 @@ export const usageOf = (u: NonNullable<CodexEvent['usage']>): Usage => {
   return { input: (u.input_tokens ?? 0) - cached, cacheCreate: 0, cacheRead: cached, output: u.output_tokens ?? 0, turns: 1 };
 };
 
-export const refusalOf = (said: string, message: string, usage: Usage): CallFailed =>
+/** The account does not offer the model (codex-cli 0.163 passes the API's `"code":"model_not_found"` through). */
+export const isModelRefused = (said: string): boolean => /model_not_found|model is not supported/i.test(said);
+
+export const refusalOf = (said: string, message: string, usage: Usage, model?: string): CallFailed =>
   isPlanLimit(said) ? new AiRefused({ reason: 'limit', cli: 'codex', said }, message, usage)
+  : model && isModelRefused(said) ? new AiRefused({ reason: 'modelRefused', cli: 'codex', model }, message, usage)
   : /not logged in|not signed in|please (log|sign) ?in|codex login|unauthori[sz]ed|\b401\b/i.test(said) ? new AiRefused({ reason: 'signedOut', cli: 'codex' }, message, usage)
   : new CallFailed(message, usage);
 
@@ -186,47 +193,39 @@ async function pdfForCodex(pdf: string): Promise<{ images: string[]; note: strin
   };
 }
 
+const CAN_IMAGE = ['text', 'json', 'typed', 'image', 'pdf', 'agent'] as const;
+const CAN_TEXT = ['text', 'json', 'typed', 'agent'] as const;
+const UNREAD = [...new Set(TIERS.flatMap((t) => PREFERENCE[t]))].map((slug) => ({ slug, image: true }));
+
+/** The models a step may name: the account's, once read; before that, the table's. */
+const offered = () => usable(readCatalog()) ?? UNREAD;
+
 export const codexCli: Provider = {
   id: 'codex-cli',
   billing: 'subscription',
-  models: ['gpt-6-luna', 'gpt-6.1-sol', 'gpt-6-astra'].map((id) => ({ id, can: ['text', 'json', 'typed', 'image', 'pdf', 'agent'] as const })),
-  defaults: { fast: 'gpt-6-luna', standard: 'gpt-6.1-sol', strong: 'gpt-6-astra' },
+  get models() {
+    return offered().map((m) => ({ id: m.slug, can: m.image ? CAN_IMAGE : CAN_TEXT }));
+  },
+  get defaults() {
+    const chosen = tierModels(usable(readCatalog())?.map((m) => m.slug));
+    return { fast: chosen.fast.model, standard: chosen.standard.model, strong: chosen.strong.model };
+  },
 
-  /** The prompt goes on stdin; the answer is the last agent message of the JSONL events, the usage that of the finished turn. */
+  /**
+   * A model the account does not offer (`model_not_found`) reads the account's list again, keeps
+   * the model out, and asks once more with the model its tier takes now; the answer names that model.
+   */
   async ask(call) {
-    const command = codexCommand();
-    if (!command) throw missing();
-    const unread = call.attachments.find((p) => !IMAGES.has(extname(p).toLowerCase()) && !isPdf(p));
-    if (unread) throw new CallFailed(`Codex liest keine ${extname(unread) || 'Datei'}, nur Bilder und PDF: ${basename(unread)}`, NO_USAGE);
-    const read = await Promise.all(call.attachments.map(async (p) => (isPdf(p) ? pdfForCodex(p) : { images: [p], note: '' })));
-    const images = read.flatMap((r) => r.images);
-    const notes = read.flatMap((r) => (r.note ? [r.note] : []));
-    const dir = mkdtempSync(join(tmpdir(), 'vanilla-codex-call-'));
-    const instructions = join(dir, 'instructions.md');
-    writeFileSync(instructions, call.system, { mode: 0o600 });
-    let usage: Usage = NO_USAGE;
-    let answer: string | undefined;
-    // A turn that failed says why; an `error` event alone may be a notice the run recovers from («Reconnecting…»).
-    let failed: string | undefined;
-    let notice: string | undefined;
     try {
-      const exit = await runCodex({
-        bin: command.bin, args: codexArgs(call, instructions, images), env: codexEnv(command), cwd: cwd(),
-        prompt: [call.prompt, ...notes].join('\n\n'), timeoutMs: call.timeoutMs,
-        onEvent(e) {
-          if (e.type === 'item.completed' && e.item?.type === 'agent_message') answer = e.item.text ?? '';
-          else if (e.type === 'turn.completed') usage = usageOf(e.usage ?? {});
-          else if (e.type === 'turn.failed') failed = e.error?.message ?? 'turn failed';
-          else if (e.type === 'error') notice = e.message ?? notice;
-        },
-      }).catch((e: NodeJS.ErrnoException) => { throw e.code === 'ENOENT' ? missing() : e; });
-      if (exit.acted) throw new CallFailed(`codex wanted to act (${exit.acted}); the app's steps only answer`, usage);
-      if (exit.timedOut) throw new CallFailed(`codex timed out after ${call.timeoutMs} ms`, usage);
-      if (exit.code === 0 && answer !== undefined && !failed) return { text: answer.trim(), usage };
-      const said = (failed ?? notice ?? (exit.stderr.trim() || 'no answer')).slice(0, 300);
-      throw refusalOf(said, `codex exited ${exit.code}: ${said}`, usage);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
+      return await askCodex(call);
+    } catch (e) {
+      const tier = tierOf(call.model);
+      if (!(e instanceof AiRefused) || e.refusal.reason !== 'modelRefused' || !tier) throw e;
+      await refreshCodexModels({ force: true });
+      markRefused(call.model);
+      const next = codexCli.defaults[tier];
+      if (next === call.model) throw e;
+      return { ...(await askCodex({ ...call, model: next })), model: next };
     }
   },
 
@@ -235,6 +234,79 @@ export const codexCli: Provider = {
     return (await codexStatus(timeoutMs)) === true;
   },
 };
+
+/** The prompt goes on stdin; the answer is the last agent message of the JSONL events, the usage that of the finished turn. */
+async function askCodex(call: Call): Promise<{ text: string; usage: Usage }> {
+  const command = codexCommand();
+  if (!command) throw missing();
+  const unread = call.attachments.find((p) => !IMAGES.has(extname(p).toLowerCase()) && !isPdf(p));
+  if (unread) throw new CallFailed(`Codex liest keine ${extname(unread) || 'Datei'}, nur Bilder und PDF: ${basename(unread)}`, NO_USAGE);
+  const read = await Promise.all(call.attachments.map(async (p) => (isPdf(p) ? pdfForCodex(p) : { images: [p], note: '' })));
+  const images = read.flatMap((r) => r.images);
+  const notes = read.flatMap((r) => (r.note ? [r.note] : []));
+  const dir = mkdtempSync(join(tmpdir(), 'vanilla-codex-call-'));
+  const instructions = join(dir, 'instructions.md');
+  writeFileSync(instructions, call.system, { mode: 0o600 });
+  let usage: Usage = NO_USAGE;
+  let answer: string | undefined;
+  // A turn that failed says why; an `error` event alone may be a notice the run recovers from («Reconnecting…»).
+  let failed: string | undefined;
+  let notice: string | undefined;
+  try {
+    const exit = await runCodex({
+      bin: command.bin, args: codexArgs(call, instructions, images), env: codexEnv(command), cwd: cwd(),
+      prompt: [call.prompt, ...notes].join('\n\n'), timeoutMs: call.timeoutMs,
+      onEvent(e) {
+        if (e.type === 'item.completed' && e.item?.type === 'agent_message') answer = e.item.text ?? '';
+        else if (e.type === 'turn.completed') usage = usageOf(e.usage ?? {});
+        else if (e.type === 'turn.failed') failed = e.error?.message ?? 'turn failed';
+        else if (e.type === 'error') notice = e.message ?? notice;
+      },
+    }).catch((e: NodeJS.ErrnoException) => { throw e.code === 'ENOENT' ? missing() : e; });
+    if (exit.acted) throw new CallFailed(`codex wanted to act (${exit.acted}); the app's steps only answer`, usage);
+    if (exit.timedOut) throw new CallFailed(`codex timed out after ${call.timeoutMs} ms`, usage);
+    if (exit.code === 0 && answer !== undefined && !failed) return { text: answer.trim(), usage };
+    const said = failed ?? notice ?? (exit.stderr.trim() || 'no answer');
+    if (isModelRefused(said)) throw refusalOf(said, `Das ChatGPT-Konto bietet das Modell ${call.model} in Codex nicht an.`, usage, call.model);
+    throw refusalOf(said.slice(0, 300), `codex exited ${exit.code}: ${said.slice(0, 300)}`, usage);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+let reading: Promise<CodexCatalog | undefined> | undefined;
+/** When Codex last could not give the list (signed out, no answer): asked again after five minutes, or at once when forced. */
+let failedAt = 0;
+const RETRY = 5 * 60_000;
+
+/**
+ * The models the signed-in account offers, read with `codex debug models` in the app's CODEX_HOME
+ * when the kept list is stale (or `force`: «Nochmals prüfen», a refused model). Signed out, Codex
+ * prints its bundled list as if it were the account's, so only a signed-in Codex is asked; the kept
+ * list stays when Codex cannot be asked.
+ */
+export function refreshCodexModels({ force = false, timeoutMs = 30_000 } = {}): Promise<CodexCatalog | undefined> {
+  const kept = readCatalog();
+  if (!force && (!stale(kept) || Date.now() - failedAt < RETRY)) return Promise.resolve(kept);
+  return (reading ??= readModels(kept, timeoutMs).finally(() => { reading = undefined; }));
+}
+
+async function readModels(kept: CodexCatalog | undefined, timeoutMs: number): Promise<CodexCatalog | undefined> {
+  failedAt = Date.now();
+  const command = codexCommand();
+  if (!command || (await codexStatus(timeoutMs)) !== true) return kept;
+  const out = await new Promise<string | undefined>((done) => {
+    execFile(command.bin, ['debug', 'models'], { cwd: cwd(), env: codexEnv(command), timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 }, (err, stdout) => done(err ? undefined : stdout));
+  });
+  let models: CodexModel[] | undefined;
+  try { models = out ? parseCatalog(out) : undefined; } catch { models = undefined; }
+  if (!models?.length) return kept;
+  const signIn = signInStamp();
+  const catalog: CodexCatalog = { at: new Date().toISOString(), signIn, models, refused: kept?.signIn === signIn ? kept.refused : [] };
+  writeCatalog(catalog);
+  failedAt = 0;
+  return catalog;
+}
 
 /** `codex login status` in the app's CODEX_HOME: true signed in, false signed out, undefined not installed or no answer. */
 export function codexStatus(timeoutMs = 15_000): Promise<boolean | undefined> {

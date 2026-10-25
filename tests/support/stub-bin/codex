@@ -17,6 +17,16 @@ if (args[0] === 'login' && args[1] === 'status') {
   process.stdout.write('Logged in using ChatGPT\n');
   process.exit(Number(process.env.CODEX_STUB_STATUS ?? 0));
 }
+// `codex debug models` prints the file $CODEX_STUB_MODELS (codex-cli 0.163's catalog JSON), else the
+// bundled catalog of codex-cli 0.163; each run appends its CODEX_HOME as one line to $CODEX_STUB_DEBUG.
+if (args[0] === 'debug' && args[1] === 'models') {
+  if (process.env.CODEX_STUB_DEBUG) appendFileSync(process.env.CODEX_STUB_DEBUG, JSON.stringify({ home: process.env.CODEX_HOME }) + '\n');
+  const listed = [['gpt-6-astra', 'list', 2], ['gpt-6.1-sol', 'list', 1], ['gpt-6-sol', 'list', 3], ['gpt-6-luna', 'list', 4], ['gpt-5.6-sol', 'list', 5],
+    ['gpt-5.6-terra', 'list', 8], ['gpt-5.6-luna', 'list', 9], ['gpt-daybreak-blue-latest', 'hide', 11], ['gpt-5.5', 'list', 13], ['codex-auto-review', 'hide', 43]];
+  process.stdout.write(process.env.CODEX_STUB_MODELS ? readFileSync(process.env.CODEX_STUB_MODELS, 'utf8')
+    : JSON.stringify({ models: listed.map(([slug, visibility, priority]) => ({ slug, visibility, priority, input_modalities: ['text', 'image'] })) }));
+  process.exit(0);
+}
 
 const prompt = readFileSync(0, 'utf8');
 const file = args.find((a) => a.startsWith('model_instructions_file='))?.slice('model_instructions_file='.length);
@@ -34,6 +44,14 @@ const mode = control.mode ?? process.env.CODEX_STUB_MODE ?? 'answer';
 if (mode === 'limit') {
   line({ type: 'error', message: "You've hit your usage limit. Upgrade to Pro or try again at 6:00 PM." });
   line({ type: 'turn.failed', error: { message: "You've hit your usage limit. Upgrade to Pro or try again at 6:00 PM." } });
+  process.exit(1);
+}
+// $CODEX_STUB_REFUSE: models the account refuses, comma-separated, as codex-cli 0.163 passes the API's refusal through.
+const model = args[args.indexOf('--model') + 1];
+if ((process.env.CODEX_STUB_REFUSE ?? '').split(',').includes(model)) {
+  const said = JSON.stringify({ type: 'error', status: 400, error: { type: 'invalid_request_error', message: `The '${model}' model is not supported when using Codex with a ChatGPT account.`, code: 'model_not_found' } });
+  line({ type: 'error', message: said });
+  line({ type: 'turn.failed', error: { message: said } });
   process.exit(1);
 }
 if (mode === 'signedOut') {

@@ -5,7 +5,7 @@
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startApi, type ApiServer } from './support/api-server.js';
@@ -117,4 +117,27 @@ test('with Codex signed in, «Die App fragt» chooses it for the steps and the t
   assert.equal((await codex.send('PUT', '/api/ai/cli', { cli: 'gemini' })).status, 400);
   const back = (await codex.send('PUT', '/api/ai/cli', { cli: null, askOther: false })).json as unknown as AiView;
   assert.deepEqual([back.cli, back.askOther], [undefined, false]);
+});
+
+test('Codex: each tier\'s model from the account\'s list, a borrowed one said so, and «Nochmals prüfen» reads the list again', async (t) => {
+  const own = mkdtempSync(join(tmpdir(), 'ai-settings-tiers-'));
+  const models = join(own, 'models.json');
+  const listed = (slugs: string[]) => writeFileSync(models, JSON.stringify({ models: slugs.map((slug, priority) => ({ slug, visibility: 'list', priority, input_modalities: ['text', 'image'] })) }));
+  listed(['gpt-6-luna', 'gpt-5.6-terra', 'gpt-5.6-luna']);
+  mkdirSync(join(own, 'person-codex'));
+  writeFileSync(join(own, 'person-codex', 'auth.json'), '{}');
+  const codex = await startApi('tests/fixtures/classify-index.json', {
+    VANILLA_SECRETS_FILE: join(own, 'secrets.json'), VANILLA_AI_SETTINGS: join(own, 'ai.json'), CODEX_BIN: join(process.cwd(), 'tests/support/stub-bin/codex'),
+    CODEX_HOME: join(own, 'person-codex'), VANILLA_CODEX_HOME: join(own, 'app', 'codex-home'), CODEX_STUB_MODELS: models,
+  });
+  t.after(() => codex.stop());
+  const shown = ((await codex.send('GET', '/api/ai')).json as unknown as AiView).providers.find((p) => p.id === 'codex-cli')!;
+  assert.deepEqual(shown.tiers, { fast: { model: 'gpt-6-luna' }, standard: { model: 'gpt-5.6-terra' }, strong: { model: 'gpt-5.6-terra', from: 'standard' } });
+  assert.ok(shown.checkedAt, 'when the list was read');
+  assert.deepEqual(shown.models.map((m) => m.id), ['gpt-6-luna', 'gpt-5.6-terra', 'gpt-5.6-luna'], 'a step\'s own choice offers the account\'s models');
+  listed(['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-luna']);
+  const kept = ((await codex.send('GET', '/api/ai')).json as unknown as AiView).providers.find((p) => p.id === 'codex-cli')!;
+  assert.equal(kept.tiers?.strong.model, 'gpt-5.6-terra', 'the kept list, until checked again');
+  const again = ((await codex.send('POST', '/api/ai/codex/models')).json as unknown as AiView).providers.find((p) => p.id === 'codex-cli')!;
+  assert.deepEqual(again.tiers, { fast: { model: 'gpt-6-luna' }, standard: { model: 'gpt-6.1-sol' }, strong: { model: 'gpt-6-astra' } });
 });

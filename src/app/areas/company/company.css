@@ -60,6 +60,8 @@
 .aikey { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .aikey input { min-width: 0; width: 260px; max-width: 100%; }
 .ai .aiother { display: flex; gap: 6px; align-items: baseline; margin-top: 6px; }
+.ai .aitier { display: block; }
+.ai .aitiers .ruleacts { display: block; margin-top: 6px; }
 .ftab.aisteps .fh, .ftab.aisteps .fr { grid-template-columns: minmax(140px, 1fr) minmax(0, 1.4fr); }
 .ftab.aisteps select { width: 100%; max-width: 360px; }
 

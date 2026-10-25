@@ -77,7 +77,8 @@ export interface Provider {
   billing: 'subscription' | 'key';
   models: readonly ModelEntry[];
   defaults: Record<Tier, string>;
-  ask(call: Call): Promise<{ text: string; usage: Usage }>;
+  /** `model`: the model that answered, when the provider asked another than the call named (Codex after `model_not_found`). */
+  ask(call: Call): Promise<{ text: string; usage: Usage; model?: string }>;
   /** A model made for typed questions answers them itself; any other answers through a prompt (judge.ts). */
   judge?(call: JudgeCall): Promise<{ verdict: Verdict; usage: Usage }>;
   /** Whether the provider answers here at all. */

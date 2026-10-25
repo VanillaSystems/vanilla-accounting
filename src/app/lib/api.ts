@@ -111,6 +111,7 @@ function statementProblemText(p: StatementProblem): string {
 
 function aiRefusedText(r: AiRefusal): string {
   if (r.reason === 'unserved') return t('error.ai.unserved', { step: isStepId(r.step) ? t(`ai.step.${r.step}`) : r.step });
+  if (r.reason === 'modelRefused') return t('error.ai.modelRefused', { model: r.model });
   const cli = t(`terminal.cli.${r.cli}`);
   return r.reason === 'limit' ? t('error.ai.limit', { cli, said: r.said }) : t(`error.ai.${r.reason}`, { cli });
 }
@@ -506,6 +507,7 @@ export const api = {
   setAiStep: (step: StepId, choice: { provider: ProviderId; model: string } | { provider: null }) => request<AiView>('PUT', `/api/ai/steps/${step}`, choice),
   setAiKey: (provider: ProviderId, key: string | null) => request<AiView>('PUT', `/api/ai/keys/${provider}`, { key }),
   terminal: () => request<TerminalView>('GET', '/api/terminal'),
+  recheckCodexModels: () => request<AiView>('POST', '/api/ai/codex/models'),
   setAiCli: (change: { cli?: TerminalCli | null; askOther?: boolean }) => request<AiView>('PUT', '/api/ai/cli', change),
   openTerminal: (text: string, cli?: TerminalCli) => request<{ cli: TerminalCli }>('POST', '/api/terminal/open', { request: text, ...(cli ? { cli } : {}) }),
   cancelInvoice: (id: string, input: { date: string; reason: string; notify: boolean; to?: string; email?: MailMessage }) =>

@@ -11,7 +11,7 @@ import type { TerminalCli } from '../../platform/terminal.js';
 import type { Provider } from '../provider.js';
 import { readSettings } from '../settings.js';
 import { claudeCli } from './claude-cli.js';
-import { codexCli, codexCommand } from './codex-cli.js';
+import { codexCli, codexCommand, refreshCodexModels } from './codex-cli.js';
 import { catalogOf, KEYED, keyedProvider, type KeyedId, type KeyedSpec } from './keyed.js';
 
 const KEY_TTL = 60_000;
@@ -78,6 +78,8 @@ export function subscriptions(preferred: TerminalCli | undefined): [Provider, ..
 
 /** The subscriptions first: the resolver falls back to them, and never from them to a key that costs money. */
 export async function usableProviders(): Promise<[Provider, ...Provider[]]> {
+  // Codex's model per tier is the account's (issue #180): read again when the kept list is stale.
+  if (SUBSCRIPTIONS.codex.found()) await refreshCodexModels().catch(() => undefined);
   const keyed = (await keyedStates()).flatMap((s) => (s.provider ? [s.provider] : []));
   return [...subscriptions(readSettings().cli), ...keyed];
 }
