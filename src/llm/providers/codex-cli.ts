@@ -239,5 +239,10 @@ export const codexCli: Provider = {
 /** `codex login status` in the app's CODEX_HOME: true signed in, false signed out, undefined not installed or no answer. */
 export function codexStatus(timeoutMs = 15_000): Promise<boolean | undefined> {
   const command = codexCommand();
-  return command ? codexSignedIn(command.bin, codexEnv(command), timeoutMs) : Promise.resolve(undefined);
+  if (!command) return Promise.resolve(undefined);
+  try {
+    return codexSignedIn(command.bin, codexEnv(command), timeoutMs);
+  } catch {
+    return Promise.resolve(undefined);
+  }
 }

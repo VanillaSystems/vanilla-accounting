@@ -6,7 +6,7 @@
  */
 import { test, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { ask, ledgerPath, modelReady, resolveStep, type LedgerRow } from '../src/llm/ask.js';
@@ -109,6 +109,15 @@ test('Codex runs in the app\'s own CODEX_HOME: signed in through a link to the p
   assert.ok(!existsSync(join(home!, 'AGENTS.md')), 'an AGENTS.md put there is gone before the next run');
   assert.equal(await codexCli.ready(), true);
   assert.equal(seen().length, 2, '`codex login status` asks in the same home (the stub logs exec calls only)');
+  const app = process.env.VANILLA_CODEX_HOME;
+  process.env.VANILLA_CODEX_HOME = join(dir, 'linked-codex-home');
+  symlinkSync(join(dir, 'person-codex'), process.env.VANILLA_CODEX_HOME);
+  try {
+    await assert.rejects(ask('{}', { step: 'classify' }), /gehört nicht diesem Benutzer/, 'a folder that is a link elsewhere is never used');
+    assert.equal(seen().length, 2, 'Codex is not started');
+  } finally {
+    process.env.VANILLA_CODEX_HOME = app;
+  }
 });
 
 test('an image goes as --image; another file never reaches Codex', async () => {
