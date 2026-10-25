@@ -251,6 +251,7 @@ function SyncLine({ view, nav }: { view: ChangesView; nav: Nav }) {
   const [busy, go] = useCommand(nav);
   const last = view.history[0] ? <span className="m">{t('changes.lastSaved', { when: sayWhen(view.history[0].at) })}</span> : null;
   if (!view.sync.remote) return <p className="chsync"><span className="wfpill muted">{t('changes.noRemote')}</span>{last}</p>;
+  if (!view.sync.git) return <p className="chsync"><span className="wfpill muted">{t('changes.noGit')}</span>{last}</p>;
   return (
     <p className="chsync">
       {view.sync.ahead ? <span className="wfpill warn">{t('changes.notSynced', { n: view.sync.ahead })}</span> : <><span className="wfpill st-done">{t('changes.synced')}</span>{last}</>}
@@ -390,6 +391,7 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
   const stale = p.saves.filter((s) => p.stale.includes(s.id));
   const moved = [...stale.flatMap((s) => s.files.map((f) => f.path)), ...p.uncovered];
   const ready = p.saves.filter((s) => !s.held);
+  const canSync = view.sync.remote && view.sync.git;
   const send = async () => { if (!text.trim()) return; if ((await go({ kind: 'talk', text }))?.ok) setText(''); };
   return (
     <div className="detail-in chpage">
@@ -430,8 +432,8 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
       </div>
       <div className="chsave">
         {thinking ? <span className="wfpill st-running">{t('changes.preparing')}</span> : null}
-        <button type="button" className={`btn${view.sync.remote ? '' : ' primary'}`} disabled={!!busy || !p.ready || !ready.length} onClick={() => void go({ kind: 'save' })}>{t('changes.save')}</button>
-        {view.sync.remote ? <button type="button" className="btn primary" disabled={!!busy || !p.ready || !ready.length} onClick={() => void go({ kind: 'save', sync: true })}>{t('changes.saveSync')}</button> : null}
+        <button type="button" className={`btn${canSync ? '' : ' primary'}`} disabled={!!busy || !p.ready || !ready.length} onClick={() => void go({ kind: 'save' })}>{t('changes.save')}</button>
+        {canSync ? <button type="button" className="btn primary" disabled={!!busy || !p.ready || !ready.length} onClick={() => void go({ kind: 'save', sync: true })}>{t('changes.saveSync')}</button> : null}
         {!p.ready ? <span className="m">{t('changes.firstRefresh')}</span> : p.saves.length > ready.length ? <span className="m">{t('changes.heldNote', { n: p.saves.length - ready.length })}</span> : null}
         <button type="button" className="linkbtn" disabled={!!busy} onClick={() => void go({ kind: 'discard' })}>{t('changes.discard')}</button>
       </div>

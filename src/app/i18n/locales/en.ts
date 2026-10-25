@@ -2801,6 +2801,7 @@ export default {
     'changes.synced': 'in sync',
     'changes.notSynced': { one: '{n} not synced', other: '{n} not synced' },
     'changes.noRemote': 'on this computer only',
+    'changes.noGit': 'on this computer only: syncing needs the git program',
     'changes.undo': 'Undo',
     'changes.undoDraft': 'The files as they were go into the draft; you save them like any change.',
     'changes.undoReverse': 'Books the reversal of each entry of this run. Not possible in a closed period.',

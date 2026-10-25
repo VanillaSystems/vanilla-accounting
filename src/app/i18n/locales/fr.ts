@@ -2801,6 +2801,7 @@ export default {
     'changes.synced': 'synchronisé',
     'changes.notSynced': { one: '{n} non synchronisé', other: '{n} non synchronisés' },
     'changes.noRemote': 'sur cet ordinateur seulement',
+    'changes.noGit': 'sur cet ordinateur seulement : la synchronisation demande le programme git',
     'changes.undo': 'Annuler',
     'changes.undoDraft': 'Les fichiers d’avant vont dans le brouillon ; tu les enregistres comme toute modification.',
     'changes.undoReverse': 'Passe l’écriture inverse de chaque écriture de ce traitement. Impossible dans une période clôturée.',

@@ -18,7 +18,7 @@ import { draftDir, saveDetail } from '../src/saving/changes.js';
 import { recordsPaths } from '../src/saving/changes.js';
 import { commitExactly } from '../src/workspace/git.js';
 import { relative } from 'node:path';
-import { openSaving, type Ask } from '../src/saving/saving.js';
+import { openSaving, syncNow, syncState, type Ask } from '../src/saving/saving.js';
 import { loadBooks, saveBooks, update, moduleActor } from '../src/books/store.js';
 import { DEMO_ROOT } from './support/workspace.js';
 
@@ -185,13 +185,13 @@ test('sync pushes what was saved; two diverged lines are refused as two versions
   git('remote', 'add', 'origin', remote);
   git('push', '--quiet', '-u', 'origin', branch);
   const saving = openSaving(ws, fakeModel());
-  assert.deepEqual((await saving.view()).sync, { remote: true, ahead: 0 });
+  assert.deepEqual((await saving.view()).sync, { remote: true, ahead: 0, git: true });
   changeBoth(ws);
   await saving.command({ kind: 'prepare' });
   await saving.command({ kind: 'save' });
-  assert.deepEqual((await saving.view()).sync, { remote: true, ahead: 2 });
+  assert.deepEqual((await saving.view()).sync, { remote: true, ahead: 2, git: true });
   assert.deepEqual(await saving.command({ kind: 'sync' }), { ok: true });
-  assert.deepEqual((await saving.view()).sync, { remote: true, ahead: 0 });
+  assert.deepEqual((await saving.view()).sync, { remote: true, ahead: 0, git: true });
 
   const other = mkdtempSync(join(tmpdir(), 'saving-other-'));
   execFileSync('git', ['clone', '--quiet', remote, other]);
@@ -205,4 +205,31 @@ test('sync pushes what was saved; two diverged lines are refused as two versions
   const r = await saving.command({ kind: 'sync' });
   assert.equal(r.ok ? '' : r.refusal, 'two-versions');
   assert.equal(existsSync(join(repo, 'elsewhere.txt')), false, 'nothing merged, nothing rewritten');
+});
+
+test('without a git program the view and Synchronisieren run none: the state says what is missing', async () => {
+  const { ws, git } = await company();
+  const remote = mkdtempSync(join(tmpdir(), 'saving-remote-'));
+  execFileSync('git', ['init', '--bare', '--quiet', remote]);
+  git('remote', 'add', 'origin', remote);
+  git('push', '--quiet', '-u', 'origin', git('rev-parse', '--abbrev-ref', 'HEAD'));
+  writeFileSync(join(ws.paths.root, 'later.txt'), 'x');
+  git('add', '.');
+  git('commit', '--quiet', '-m', 'Later');
+  // A git on the PATH that only leaves a trace: on a Mac without developer tools /usr/bin/git opens the install dialog.
+  const bin = mkdtempSync(join(tmpdir(), 'saving-bin-'));
+  const trace = join(bin, 'ran');
+  writeFileSync(join(bin, 'git'), `#!/bin/sh\necho "$@" >> '${trace}'\nexit 1\n`, { mode: 0o755 });
+  const path = process.env.PATH;
+  process.env.PATH = `${bin}:${path}`;
+  try {
+    const none = () => undefined;
+    assert.deepEqual(await syncState(ws, none), { remote: true, ahead: 1, git: false });
+    const r = await syncNow(ws, none);
+    assert.equal(r.ok ? '' : r.refusal, 'no-git');
+  } finally {
+    process.env.PATH = path;
+  }
+  assert.equal(existsSync(trace), false, 'no git program ran');
+  assert.equal(execFileSync('git', ['-C', remote, 'rev-list', '--count', '--all'], { encoding: 'utf8' }).trim(), '1', 'nothing pushed');
 });

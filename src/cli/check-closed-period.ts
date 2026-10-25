@@ -12,6 +12,7 @@
  * Exit code 2 on any violation, so it can gate a commit.
  */
 import { execFileSync } from 'node:child_process';
+import { requireGit } from '../platform/git-program.js';
 import { loadBooks } from '../books/store.js';
 import { BOOK_FILES, fromJsonl } from '../books/years.js';
 import { openWorkspace } from '../workspace/workspace.js';
@@ -31,7 +32,7 @@ type Index = {
  * ref before ADR 0013 the books.json of the repository's root (or, older still, public/receipts-index.json).
  */
 function loadBaseline(gitRef: string): Index {
-  const git = (...args: string[]) => execFileSync('git', args, { cwd: ws.paths.root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+  const git = (...args: string[]) => execFileSync(requireGit(), args, { cwd: ws.paths.root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
   const show = (path: string) => git('show', `${gitRef}:${path}`);
   const prefix = git('rev-parse', '--show-prefix').trim();
   try {

@@ -183,6 +183,8 @@ export interface SyncState {
   remote: boolean;
   /** Saves not yet synced. */
   ahead: number;
+  /** A git program is installed to sync with (src/platform/git-program.ts). */
+  git: boolean;
 }
 
 export type SavingCommand =
@@ -194,7 +196,7 @@ export type SavingCommand =
   | { kind: 'discard' }
   | { kind: 'undo'; oid: string };
 
-export type SavingRefusal = 'no-repository' | 'nothing' | 'no-proposal' | 'stale' | 'not-customizing' | 'no-remote' | 'two-versions' | 'cannot-undo' | 'closed' | 'model' | 'rules';
+export type SavingRefusal = 'no-repository' | 'nothing' | 'no-proposal' | 'stale' | 'not-customizing' | 'no-remote' | 'no-git' | 'two-versions' | 'cannot-undo' | 'closed' | 'model' | 'rules';
 
 export type SavingResult = { ok: true; reply?: string; saved?: number; reversed?: number; plain?: true } | { ok: false; refusal: SavingRefusal; message: string };
 

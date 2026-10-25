@@ -2798,6 +2798,7 @@ export const messages = {
   'changes.synced': 'synchron',
   'changes.notSynced': { one: '{n} nicht synchronisiert', other: '{n} nicht synchronisiert' },
   'changes.noRemote': 'nur auf diesem Computer',
+  'changes.noGit': 'nur auf diesem Computer: Synchronisieren braucht das Programm git',
   'changes.undo': 'Rückgängig',
   'changes.undoDraft': 'Die Dateien von vorher kommen in den Entwurf; du speicherst sie wie jede Änderung.',
   'changes.undoReverse': 'Bucht für jede Buchung dieses Laufs die Gegenbuchung. In einer geschlossenen Periode geht das nicht.',

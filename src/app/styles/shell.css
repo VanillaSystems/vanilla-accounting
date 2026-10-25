@@ -91,6 +91,8 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .btn:disabled { opacity: .45; cursor: default; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .btn.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
+/* On a filled button an icon takes the button's text colour: its own tint (the AI's violet on the accent) has no contrast there. */
+:is(.btn.primary, .btn.danger, .chip.primary, .aiact.primary, .btn2.primary, .addbtn, .aisend) :is(svg.i, svg.bot) { color: inherit; stroke: currentColor; }
 .btn.ghost { border-color: var(--line); background: transparent; color: var(--ink-2); }
 .btn.ghost:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
 .btn .k { font: 500 11px "Geist Mono"; opacity: .75; }
@@ -246,13 +248,11 @@ main { margin-left: var(--abw); }
 .pp .day { padding: 1px 0; } .pp .day.in, .pp .day.l, .pp .day.r { background: var(--accent-soft); } .pp .day.l { border-radius: 8px 0 0 8px; } .pp .day.r { border-radius: 0 8px 8px 0; }
 .pp .day button { width: 32px; height: 30px; border-radius: 7px; font: 12.5px "Geist Mono"; color: var(--ink-2); } .pp .day button:hover { background: var(--hover); }
 .pp .day.fut button { color: var(--faint); } .pp .day.tod button { text-decoration: underline; text-underline-offset: 4px; }
-.pp .day.edge button { background: var(--accent); color: #fff; font-weight: 600; }
-[data-theme="dark"] .pp .day.edge button { background: var(--ink); color: var(--bg); }
+.pp .day.edge button { background: var(--accent); color: var(--on-accent); font-weight: 600; }
 .pp .ft { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); }
 .pp .ft .lab { margin-right: auto; color: var(--muted); font-size: 12.5px; display: inline-flex; gap: 6px; align-items: center; } .pp .ft .lab svg { width: 12px; height: 12px; }
 .pp .btn2 { height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line-2); color: var(--ink); } .pp .btn2:hover { background: var(--hover); }
-.pp .btn2.primary { background: var(--accent); border-color: var(--accent); color: #fff; } .pp .btn2.primary:disabled { opacity: .4; }
-[data-theme="dark"] .pp .btn2.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.pp .btn2.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); } .pp .btn2.primary:disabled { opacity: .4; }
 .group { width: 100%; text-align: left; cursor: pointer; border-radius: 6px; padding: 4px 6px; margin-left: -6px; margin-right: -6px; width: calc(100% + 12px); }
 .group:hover { color: var(--muted); background: var(--hover); }
 .group { position: relative; } .group > span:first-child { display: inline-flex; align-items: center; }

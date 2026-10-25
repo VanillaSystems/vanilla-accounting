@@ -14,7 +14,7 @@
 .ivacts { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
 .ivacts .dl.inline { margin-left: auto; }
 .btn.danger { color: var(--warn); }
-.btn.primary.danger { background: var(--warn); border-color: var(--warn); color: #fff; }
+.btn.primary.danger { background: var(--warn); border-color: var(--warn); color: var(--on-fill); }
 .status .ivmissing, .status .ivpay { margin-top: 8px; }
 .status .ivpay { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
 .linked .m { color: var(--muted); font-size: 12px; }
