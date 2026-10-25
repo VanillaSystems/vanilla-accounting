@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chooseCli, copyCommand, shellQuote, type CliState } from '../src/platform/terminal.js';
 import { claudeSignedIn, detectClis, openInTerminal } from '../src/platform/terminal-open.js';
-import { SECTION_END, SECTION_START, TERMINAL_SECTION, ensureTerminalAgents, withAgentsImport, withSection } from '../src/workspace/terminal-agents.js';
+import { REPOSITORY_SECTION, SECTION_END, SECTION_START, TERMINAL_SECTION, ensureTerminalAgents, repositoryAgents, withAgentsImport, withRepositorySection, withSection } from '../src/workspace/terminal-agents.js';
 import { createWorkspace } from '../src/workspace/create.js';
 import { changesIn, terminalRequest, withoutChanges } from '../src/assistant/changes.js';
 import { proposalId } from '../src/assistant/terminal-drafts.js';
@@ -123,10 +123,10 @@ test('the terminal AI\'s AGENTS.md: written whole, added to the company\'s own f
 
   const root = temp('term-agents-');
   writeFileSync(join(root, 'CLAUDE.md'), 'Our Claude notes.\n');
-  assert.deepEqual(ensureTerminalAgents({ root }), ['AGENTS.md', 'CLAUDE.md', 'output/.gitignore']);
+  assert.deepEqual(ensureTerminalAgents({ root, repository: root }), ['AGENTS.md', 'CLAUDE.md', 'output/.gitignore']);
   assert.equal(readFileSync(join(root, 'CLAUDE.md'), 'utf8'), 'Our Claude notes.\n\n@AGENTS.md\n');
   assert.equal(readFileSync(join(root, 'output/.gitignore'), 'utf8'), '*\n', 'what the terminal AI makes is not committed');
-  assert.deepEqual(ensureTerminalAgents({ root }), [], 'a second run writes nothing');
+  assert.deepEqual(ensureTerminalAgents({ root, repository: root }), [], 'a second run writes nothing');
 });
 
 test('a new workspace has the terminal AI\'s files in vanilla-accounting/, beside the repository\'s own AGENTS.md', async () => {
@@ -139,8 +139,77 @@ test('a new workspace has the terminal AI\'s files in vanilla-accounting/, besid
   assert.equal(readFileSync(join(root, 'vanilla-accounting/AGENTS.md'), 'utf8'), TERMINAL_SECTION);
   assert.equal(readFileSync(join(root, 'vanilla-accounting/CLAUDE.md'), 'utf8'), '@AGENTS.md\n');
   assert.equal(readFileSync(join(root, 'vanilla-accounting/output/.gitignore'), 'utf8'), '*\n');
-  assert.doesNotMatch(readFileSync(join(root, 'AGENTS.md'), 'utf8'), /vanilla-accounting:start/, 'the repository\'s file is its own');
+  const repository = readFileSync(join(root, 'AGENTS.md'), 'utf8');
+  assert.equal(repository, repositoryAgents('Muster Beratung'));
+  assert.doesNotMatch(repository, /cd .*npm|app\.asar|\.app\//, 'no command into the app\'s folder: in the Mac app it is inside the bundle (issue #149)');
+  assert.match(repository, /read `vanilla-accounting\/AGENTS\.md`/, 'the books\' rules are in the app\'s section there');
   assert.deepEqual(ensureTerminalAgents(workspaceAt(root).paths), [], 'an update finds them in place');
+});
+
+/** The repository's AGENTS.md as setup wrote it until issue #149, `app` the app's path from the repository. */
+const legacyRepository = (app: string, notes = '- (add what an agent should know about this company)\n') => `# Muster GmbH: the company's repository (private)
+
+This repository holds the company's data, not the code. Each app has its own folder; the books of
+Vanilla Accounting are in \`vanilla-accounting/\`: \`belege.workspace.yaml\` (who the company is, how
+it works, which ledger account each bank books on), \`knowledge/\` (suppliers, customers,
+authorities, rules), \`mail.yaml\`, \`master-data/accounts.json\` (chart of accounts), \`ledger.json\`,
+and per fiscal year \`transactional-data/<year>/\` (\`books/\`, \`receipts/\`, \`bank-statements/\`,
+\`filings/\`). Files no app reads (notes, scripts, reference documents) go to \`own/\`;
+\`npm run doctor\` names every other file.
+
+The app is at \`${app}\`. Its \`.env\` sets \`VANILLA_WORKSPACE\` to this folder, so every
+command run there works on these books:
+
+    cd ${app} && npm start          # UI on http://localhost:5173
+    cd ${app} && npm run doctor     # is everything set up?
+
+Read the app's rules first: ${app}/AGENTS.md (golden rule 1: a filed quarter never changes;
+corrections are booked in the open quarter with \`corrects:\` and declared on a form 0535).
+
+What goes where:
+- Code, generic process rules, public vendor facts: the app.
+- Anything naming this company's accounts, amounts, customers, suppliers or the owner's
+  decisions: here (knowledge/, this file).
+
+Company notes:
+${notes}`;
+
+test('the repository\'s AGENTS.md of an existing workspace: the app\'s old text corrected with the company\'s notes kept, a file the company wrote left alone (issue #149)', () => {
+  const bundle = '../../../Applications/Vanilla Accounting.app/Contents/Resources/app.asar';
+  const notes = '- Owner answers in English.\n- Fiscal year = calendar year.\n\nMore of our own lines.\n';
+  const corrected = withRepositorySection(legacyRepository(bundle, notes));
+  assert.ok(corrected, 'the app\'s own text is recognised');
+  assert.equal(corrected, `# Muster GmbH: the company's repository (private)\n\n${REPOSITORY_SECTION}\nCompany notes:\n${notes}`);
+  assert.doesNotMatch(corrected, /npm start\b.*#|app\.asar/);
+  assert.equal(withRepositorySection(corrected), corrected, 'renewed between its markers, idempotent');
+  assert.equal(withRepositorySection(legacyRepository('../vanilla-accounting-app')), repositoryAgents('Muster GmbH'), 'a developer checkout\'s path too');
+
+  const old03 = `# Muster GmbH: books (private workspace)
+
+This folder holds the books, not the code. It is a Vanilla Accounting workspace: \`belege.workspace.yaml\`
+(who the company is, how it works, which ledger account each bank books on), \`accounts.json\`
+(chart of accounts), \`books.json\`, \`receipts/\`, \`bank-statements/\`, \`filings/\`, plus the
+company's own knowledge: \`knowledge/\` (suppliers, customers, authorities, rules), \`mail.yaml\`.
+${legacyRepository(bundle).slice(legacyRepository(bundle).indexOf('\nThe app is at'))}`;
+  assert.equal(withRepositorySection(old03), repositoryAgents('Muster GmbH'), 'the text of 0.3, moved to the repository by the layout migration');
+
+  const edited = legacyRepository(bundle).replace('decisions: here (knowledge/, this file).', 'decisions: here, and in our wiki.');
+  assert.equal(withRepositorySection(edited), undefined, 'a person\'s edit of the app\'s part: the file is theirs now');
+  assert.equal(withRepositorySection('# Muster GmbH\n\nOur own rules: cd ../app && npm start\n'), undefined, 'a file the company wrote');
+  const stale = `# Muster GmbH\n\n${SECTION_START}\nold words\n${SECTION_END}\n\nOur notes.\n`;
+  assert.equal(withRepositorySection(stale), `# Muster GmbH\n\n${REPOSITORY_SECTION.trimEnd()}\n\nOur notes.\n`);
+
+  const repo = temp('term-repo-');
+  const root = join(repo, 'vanilla-accounting');
+  mkdirSync(root);
+  assert.deepEqual(ensureTerminalAgents({ root, repository: repo }), ['vanilla-accounting/AGENTS.md', 'vanilla-accounting/CLAUDE.md', 'vanilla-accounting/output/.gitignore']);
+  assert.equal(existsSync(join(repo, 'AGENTS.md')), false, 'a repository without its own AGENTS.md gets none');
+  writeFileSync(join(repo, 'AGENTS.md'), legacyRepository(bundle, notes));
+  assert.deepEqual(ensureTerminalAgents({ root, repository: repo }), ['AGENTS.md'], 'opening the app or npm run update corrects it');
+  assert.equal(readFileSync(join(repo, 'AGENTS.md'), 'utf8'), corrected);
+  writeFileSync(join(repo, 'AGENTS.md'), edited);
+  assert.deepEqual(ensureTerminalAgents({ root, repository: repo }), []);
+  assert.equal(readFileSync(join(repo, 'AGENTS.md'), 'utf8'), edited, 'never overwritten');
 });
 
 test('the sidebar\'s offer: a vanilla-terminal block is the request, never shown as text, beside the changes block', () => {

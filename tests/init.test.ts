@@ -114,7 +114,7 @@ test('init without a terminal: the workspace opens, doctor passes, a rerun chang
   for (const d of [year.receipts, ws.paths.inbox, year.filings, join(year.statements, 'UBS'), join(year.statements, 'Wise'), ...['suppliers', 'customers', 'authorities', 'rules'].map((k) => join(ws.paths.root, 'knowledge', k))]) {
     assert.ok(existsSync(d), d);
   }
-  assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /AGENTS\.md \(golden rule 1/);
+  assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /read `vanilla-accounting\/AGENTS\.md`/);
   assert.equal(readFileSync(envFile, 'utf8'), `VANILLA_WORKSPACE=${dir}\n`);
   const log = spawnSync('git', ['log', '--oneline'], { cwd: dir, encoding: 'utf8' }).stdout.trim().split('\n');
   assert.equal(log.length, 1, 'one first commit');
