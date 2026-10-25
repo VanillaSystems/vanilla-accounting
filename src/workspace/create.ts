@@ -12,7 +12,7 @@ import { PRESET_NAMES, QUESTIONS, firstMissing, firstUnsupported, optionOf, vatS
 import { parseNetRates, type NetRate, type VatSetup } from './vat-setup.js';
 import { parseUid } from './uid.js';
 import { initRepository } from './git.js';
-import { APP_ROOT, appFolderIn, appLanguages, workspaceAt } from './workspace.js';
+import { appFolderIn, appLanguages, workspaceAt } from './workspace.js';
 
 /**
  * Why a setup was refused. `unsupported`: an answer the engine does not support yet (the
@@ -161,7 +161,7 @@ export async function createWorkspace(req: SetupRequest): Promise<Created> {
     name, uid: parsed.uid, owner, ...(business ? { business } : {}), ...(language !== 'de' ? { language } : {}),
     preset, answers, vat, banks, ...(exportTo ? { exportTo } : {}),
   };
-  const applied = applyPlan(root, planWorkspace(input, loadChart(), root, APP_ROOT));
+  const applied = applyPlan(root, planWorkspace(input, loadChart()));
   workspaceAt(root);
   return { root, existed: false, ...applied, git: await firstCommit(root) };
 }

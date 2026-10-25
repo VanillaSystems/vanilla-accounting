@@ -4,14 +4,14 @@
  * so a run that stopped halfway has none and the next run fills in the rest.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join } from 'node:path';
 import { stringify } from 'yaml';
 import { bankKind, roleBefore, type Iban } from './banks.js';
 import { chartFor, type Chart, type WorkspaceAccount } from './chart.js';
 import { VAT_QUESTIONS, goodsOf, profileOf, type Preset, type SupportedAnswers } from './setup.js';
 import { vatSetupYaml, type VatSetup } from './vat-setup.js';
 import { BOOKS_SCHEMA, WORKSPACE_SCHEMA } from './schema.js';
-import { OUTPUT_DIR, withAgentsImport, withSection } from './terminal-agents.js';
+import { OUTPUT_DIR, repositoryAgents, withAgentsImport, withSection } from './terminal-agents.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, type LedgerBankAccount, type Uid, type WorkspaceProfile } from './workspace.js';
 import { loadJurisdiction } from '../core/modules/load.js';
 
@@ -203,48 +203,17 @@ const KNOWLEDGE_TEMPLATES: [string, string][] = [
 `],
 ];
 
-function agentsMd(input: InitInput, appRel: string): string {
-  return `# ${input.name}: the company's repository (private)
-
-This repository holds the company's data, not the code. Each app has its own folder; the books of
-Vanilla Accounting are in \`vanilla-accounting/\`: \`belege.workspace.yaml\` (who the company is, how
-it works, which ledger account each bank books on), \`knowledge/\` (suppliers, customers,
-authorities, rules), \`mail.yaml\`, \`master-data/accounts.json\` (chart of accounts), \`ledger.json\`,
-and per fiscal year \`transactional-data/<year>/\` (\`books/\`, \`receipts/\`, \`bank-statements/\`,
-\`filings/\`). Files no app reads (notes, scripts, reference documents) go to \`own/\`;
-\`npm run doctor\` names every other file.
-
-The app is at \`${appRel}\`. Its \`.env\` sets \`VANILLA_WORKSPACE\` to this folder, so every
-command run there works on these books:
-
-    cd ${appRel} && npm start          # UI on http://localhost:5173
-    cd ${appRel} && npm run doctor     # is everything set up?
-
-Read the app's rules first: ${appRel}/AGENTS.md (golden rule 1: a filed quarter never changes;
-corrections are booked in the open quarter with \`corrects:\` and declared on a form 0535).
-
-What goes where:
-- Code, generic process rules, public vendor facts: the app.
-- Anything naming this company's accounts, amounts, customers, suppliers or the owner's
-  decisions: here (knowledge/, this file).
-
-Company notes:
-- (add what an agent should know about this company)
-`;
-}
-
 /**
- * The company's repository at `root` (ADR 0013): its agent files at the root, the books in
+ * The company's repository (ADR 0013): its agent files at the root, the books in
  * vanilla-accounting/ with the folders of the fiscal year `year`.
  */
-export function planWorkspace(input: InitInput, chart: Chart, root: string, appRoot: string, year = new Date().toISOString().slice(0, 4)): Plan {
+export function planWorkspace(input: InitInput, chart: Chart, year = new Date().toISOString().slice(0, 4)): Plan {
   const bankAccounts = bankAccountsOf(input);
   const accounts = accountsOf(input, chart);
   const app = (p: string) => `${APP_FOLDER}/${p}`;
   const yearDir = (p: string) => app(`transactional-data/${year}/${p}`);
   const statementDirs = [...new Set(bankAccounts.filter((b) => b.statements).map((b) => yearDir(`bank-statements/${b.bank}`)))];
   const kept = [yearDir('receipts'), yearDir('filings'), ...statementDirs];
-  const appRel = relative(root, appRoot) || '.';
   return {
     dirs: [...kept, app('beleg-import'), app('data')],
     files: [
@@ -256,7 +225,7 @@ export function planWorkspace(input: InitInput, chart: Chart, root: string, appR
       [app('AGENTS.md'), withSection(undefined)],
       [app('CLAUDE.md'), withAgentsImport(undefined)],
       [app(`${OUTPUT_DIR}/.gitignore`), '*\n'],
-      ['AGENTS.md', agentsMd(input, appRel)],
+      ['AGENTS.md', repositoryAgents(input.name)],
       ['CLAUDE.md', '@AGENTS.md\n'],
       ['.gitignore', GITIGNORE],
       ['.gitattributes', GITATTRIBUTES],
