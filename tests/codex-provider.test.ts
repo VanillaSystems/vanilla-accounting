@@ -6,7 +6,7 @@
  */
 import { test, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, cpSync, existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ask, ledgerPath, modelReady, resolveStep, type LedgerRow } from '../src/llm/ask.js';
@@ -23,7 +23,7 @@ let dir: string;
 let calls: string;
 let stub: ProviderStub;
 
-interface Seen { args: string[]; prompt: string; instructions?: string; cwd: string }
+interface Seen { args: string[]; prompt: string; instructions?: string; cwd: string; home?: string }
 const seen = (): Seen[] => (existsSync(calls) ? readFileSync(calls, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
 const ledger = (): LedgerRow[] => readFileSync(ledgerPath(), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
 const settings = (s: object) => writeFileSync(join(dir, 'ai.json'), JSON.stringify({ steps: {}, ...s }));
@@ -50,6 +50,12 @@ before(async () => {
   process.env.CODEX_STUB_ARGS = calls;
   writeFileSync(join(dir, 'photo.png'), 'png stub');
   writeFileSync(join(dir, 'scan.pdf'), '%PDF-1.4 stub');
+  // The person's own CODEX_HOME: their sign-in and their own instructions for every run, which no app call may carry.
+  process.env.CODEX_HOME = join(dir, 'person-codex');
+  mkdirSync(process.env.CODEX_HOME);
+  writeFileSync(join(process.env.CODEX_HOME, 'auth.json'), '{"stub":"sign-in"}');
+  writeFileSync(join(process.env.CODEX_HOME, 'AGENTS.md'), 'CANARY: the person\'s own instructions');
+  process.env.VANILLA_CODEX_HOME = join(dir, 'app-codex');
   // A claude whose plan limit is reached, as Claude Code prints it.
   writeFileSync(join(dir, 'claude-limit'), `#!/bin/sh\n[ "$1" = --version ] && exit 0\ncat >/dev/null\necho '{"type":"result","is_error":true,"result":"You\\u0027ve hit your limit · resets 6pm (Europe/Zurich)"}'\nexit 1\n`);
   chmodSync(join(dir, 'claude-limit'), 0o755);
@@ -78,13 +84,29 @@ test('a call only answers: read-only, no shell, web, apps, config, rules or AGEN
   assert.equal(flag(call.args, '--model'), 'gpt-6.1-sol');
   assert.equal(realpathSync(flag(call.args, '--cd')), realpathSync(call.cwd), 'runs where it says it runs');
   assert.ok(!existsSync(join(call.cwd, 'AGENTS.md')), 'an empty folder');
-  for (const c of ['approval_policy="never"', 'features.shell_tool=false', 'features.apps=false', 'web_search="disabled"', 'project_doc_max_bytes=0', 'history.persistence="none"', 'features.plugins=false']) {
+  for (const c of ['approval_policy="never"', 'features.shell_tool=false', 'features.unified_exec=false', 'features.apps=false', 'features.view_image=false', 'features.multi_agent=false',
+    'features.browser_use=false', 'features.computer_use=false', 'web_search="disabled"', 'project_doc_max_bytes=0', 'history.persistence="none"', 'features.plugins=false', 'skills.include_instructions=false']) {
     assert.ok(configs(call.args).includes(c), c);
   }
   assert.ok(!call.args.includes('--image'), 'no attachment, no image');
   assert.ok(!call.args.some((a) => /dangerously|workspace-write|full-access|approve-for-me/.test(a)));
   const row = ledger().at(-1)!;
   assert.deepEqual([row.step, row.provider, row.model, row.ok, row.input, row.cacheRead, row.output, row.turns], ['booking.guide.yaml#classify', 'codex-cli', 'gpt-6.1-sol', true, 15, 5, 7, 1]);
+});
+
+test('Codex runs in the app\'s own CODEX_HOME: signed in through a link to the person\'s sign-in, without their AGENTS.md', async () => {
+  onlyCodex();
+  await ask('{}', { step: 'classify' });
+  const { home } = seen()[0];
+  assert.equal(home, process.env.VANILLA_CODEX_HOME);
+  assert.ok(lstatSync(join(home!, 'auth.json')).isSymbolicLink(), 'the sign-in is linked, not copied');
+  assert.equal(readlinkSync(join(home!, 'auth.json')), join(process.env.CODEX_HOME!, 'auth.json'));
+  assert.deepEqual(readdirSync(home!), ['auth.json'], 'nothing else of the person\'s: no AGENTS.md, no config, no skills');
+  writeFileSync(join(home!, 'AGENTS.md'), 'CANARY');
+  await ask('{}', { step: 'classify' });
+  assert.ok(!existsSync(join(home!, 'AGENTS.md')), 'an AGENTS.md put there is gone before the next run');
+  assert.equal(await codexCli.ready(), true);
+  assert.equal(seen().length, 2, '`codex login status` asks in the same home (the stub logs exec calls only)');
 });
 
 test('an image goes as --image; a PDF never reaches Codex', async () => {
@@ -122,6 +144,18 @@ test('a run that starts a command is ended at once and fails', async () => {
   await assert.rejects(codexCli.ask({ prompt: 'x', system: 'S', model: 'gpt-6-luna', attachments: [], timeoutMs: 20_000 }),
     (e: unknown) => e instanceof CallFailed && !(e instanceof AiRefused) && /wanted to act \(command_execution\)/.test(e.message));
   assert.ok(Date.now() - started < 10_000, 'killed, not waited for');
+});
+
+test('any item but an answer ends the run: an edit, a search, a sub-agent, a tool', async () => {
+  process.env.CODEX_STUB_MODE = 'act';
+  try {
+    for (const item of [{ type: 'file_change', changes: [{ path: '/tmp/x', kind: 'add' }] }, { type: 'web_search', query: 'x' }, { type: 'collab_tool_call', tool: 'spawn_agent' }, { type: 'mcp_tool_call', server: 'vanilla', tool: 'Write' }, { type: 'something_new' }]) {
+      process.env.CODEX_STUB_ITEM = JSON.stringify({ id: 'item_1', ...item });
+      await assert.rejects(codexCli.ask({ prompt: 'x', system: 'S', model: 'gpt-6-luna', attachments: [], timeoutMs: 20_000 }), new RegExp(`wanted to act \\(${item.type}`), item.type);
+    }
+  } finally {
+    delete process.env.CODEX_STUB_ITEM;
+  }
 });
 
 test('signed in is what `codex login status` says, and nothing else', async () => {
