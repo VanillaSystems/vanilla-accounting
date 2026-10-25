@@ -8,7 +8,7 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AskOptions } from '../llm/ask.js';
-import { emptyBooks, hasBooks, loadBooks, saveBooks, update, type Actor, type Books } from '../books/store.js';
+import { emptyBooks, hasBooks, loadBooks, updateSaved, type Actor, type Books } from '../books/store.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { holdWords, type HeldPayout } from '../booking/payout-orders.js';
 import { wordsIn } from '../export/texts.js';
@@ -73,6 +73,8 @@ export interface IntakeStatus {
  * The books as a step sees them. `update` loads, changes and saves in one synchronous call inside
  * the write door (src/books/store.ts update), so a filed quarter never changes and an edit made while a model was thinking is
  * not saved over: a step asks the model on what it `read`, then applies the answer in `update`.
+ * When another process saved in between, `update` runs its `fn` once more on books loaded afresh
+ * (updateSaved, #132): `fn` decides from the books it is given and changes nothing else.
  */
 export interface BooksPort {
   read(): Books;
@@ -119,12 +121,7 @@ export function storePort(ws: Workspace, actor: Actor): BooksPort {
   const load = () => (hasBooks(ws) ? loadBooks(ws) : emptyBooks());
   return {
     read: load,
-    update(fn) {
-      const books = load();
-      const out = update(books, actor, fn);
-      saveBooks(ws, books);
-      return out;
-    },
+    update: (fn) => updateSaved(ws, actor, fn, load),
   };
 }
 
