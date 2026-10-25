@@ -2801,6 +2801,7 @@ export default {
     'changes.synced': 'sincronizzato',
     'changes.notSynced': { one: '{n} non sincronizzato', other: '{n} non sincronizzati' },
     'changes.noRemote': 'solo su questo computer',
+    'changes.noGit': 'solo su questo computer: la sincronizzazione richiede il programma git',
     'changes.undo': 'Annulla',
     'changes.undoDraft': 'I file di prima vanno nella bozza; li salvi come ogni modifica.',
     'changes.undoReverse': 'Registra lo storno di ogni registrazione di questa esecuzione. Non possibile in un periodo chiuso.',

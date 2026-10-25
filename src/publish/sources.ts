@@ -1,5 +1,6 @@
 /** The disk side of the leak guard: which files a tree has, their text, and the workspace's secrets. */
 import { execFileSync } from 'node:child_process';
+import { requireGit } from '../platform/git-program.js';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { parse as parseEnv } from 'dotenv';
@@ -19,7 +20,7 @@ export const loadAllowlist = (): Allowlist => parseAllowlist(readFileSync(join(A
  */
 export function filesOf(dir: string): string[] {
   if (existsSync(join(dir, '.git'))) {
-    const out = execFileSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: dir, maxBuffer: 1 << 28 });
+    const out = execFileSync(requireGit(), ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: dir, maxBuffer: 1 << 28 });
     return [...new Set(out.toString('utf8').split('\0').filter(Boolean))]
       .filter((p) => existsSync(join(dir, p)) && statSync(join(dir, p)).isFile()).sort();
   }

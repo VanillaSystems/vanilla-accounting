@@ -8,6 +8,7 @@
  * `--workspace <dir>` checks that folder instead of the one VANILLA_WORKSPACE names.
  */
 import { execFileSync } from 'node:child_process';
+import { gitProgram } from '../platform/git-program.js';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,7 +43,7 @@ function toolChecks(): Result[] {
   const results = [
     major >= 22 ? ok(`Node.js ${process.versions.node}`) : fail(`Node.js ${process.versions.node} is too old`, 'Install Node.js 22 or newer (nodejs.org, or brew install node).'),
     // PDFs, photos and the workspace's git history are read and written by the app itself (ADR 0006).
-    run('git', ['--version']) !== undefined ? ok('git found (npm run update, npm run check-closed)') : warn('git not found', 'the books work without it; npm run update and npm run check-closed need it'),
+    gitProgram() ? ok('git found (npm run update, npm run check-closed)') : warn('git not found', 'the books work without it; npm run update and npm run check-closed need it'),
   ];
   const version = run('claude', ['--version']);
   if (version === undefined) {

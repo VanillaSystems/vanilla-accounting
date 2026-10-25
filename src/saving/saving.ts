@@ -17,6 +17,7 @@ import git from 'isomorphic-git';
 import { loadBooks, PERSON, saveBooks, update, ClosedPeriodError, type Books } from '../books/store.js';
 import type { JournalEntry } from '../types/index.js';
 import { commitExactly, repositoryAt } from '../workspace/git.js';
+import { gitProgram } from '../platform/git-program.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { holdsRules } from '../booking/rule-book.js';
 import { ruleDiff, rulesRefusal, withPreview } from './rules.js';
@@ -284,18 +285,43 @@ export function reverseRun(books: Books, runId: string): number {
   return own.length;
 }
 
-const gitBin = (repo: string, ...a: string[]) => run('git', ['-C', repo, ...a], { timeout: 120_000 });
+/** The commit the branch at HEAD tracks (branch.<name>.remote and .merge). */
+async function upstreamOf(repo: string): Promise<string | undefined> {
+  const branch = await git.currentBranch({ fs, dir: repo });
+  if (!branch) return undefined;
+  const remote = (await git.getConfig({ fs, dir: repo, path: `branch.${branch}.remote` })) as string | undefined;
+  const merge = (await git.getConfig({ fs, dir: repo, path: `branch.${branch}.merge` })) as string | undefined;
+  if (!remote || !merge) return undefined;
+  const ref = remote === '.' ? merge : `refs/remotes/${remote}/${merge.replace(/^refs\/heads\//, '')}`;
+  return git.resolveRef({ fs, dir: repo, ref }).catch(() => undefined);
+}
 
-/** Whether the repository has an upstream, and how many commits it has not synced. Without the git program: no remote. */
-export async function syncState(ws: Ws): Promise<SyncState> {
-  const repo = await repositoryAt(ws.paths.repository);
-  if (!repo) return { remote: false, ahead: 0 };
-  try {
-    const { stdout } = await gitBin(repo, 'rev-list', '--count', '@{upstream}..HEAD');
-    return { remote: true, ahead: Number(stdout.trim()) || 0 };
-  } catch {
-    return { remote: false, ahead: 0 };
+/** The commits of HEAD the upstream lacks, walked back from HEAD to where the two lines meet. */
+async function aheadOf(repo: string, upstream: string): Promise<number> {
+  const head = await git.resolveRef({ fs, dir: repo, ref: 'HEAD' });
+  const seen = new Set((await git.findMergeBase({ fs, dir: repo, oids: [head, upstream] })) as string[]);
+  const todo = [head];
+  let n = 0;
+  for (let oid = todo.pop(); oid; oid = todo.pop()) {
+    if (seen.has(oid)) continue;
+    seen.add(oid);
+    n++;
+    todo.push(...(await git.readCommit({ fs, dir: repo, oid })).commit.parent);
   }
+  return n;
+}
+
+/**
+ * Whether the repository has an upstream, how many commits it has not synced, and whether a git
+ * program is installed to sync them. Read through isomorphic-git: the Änderungen view asks every
+ * ten seconds, and on a Mac without developer tools each run of /usr/bin/git opens the dialog
+ * that offers to install them.
+ */
+export async function syncState(ws: Ws, program = gitProgram): Promise<SyncState> {
+  const repo = await repositoryAt(ws.paths.repository);
+  const upstream = repo ? await upstreamOf(repo) : undefined;
+  if (!repo || !upstream) return { remote: false, ahead: 0, git: !!program() };
+  return { remote: true, ahead: await aheadOf(repo, upstream), git: !!program() };
 }
 
 /**
@@ -303,15 +329,18 @@ export async function syncState(ws: Ws): Promise<SyncState> {
  * only when it fast-forwards, then push. Two diverged lines are refused as two versions; history
  * is never rewritten.
  */
-export async function syncNow(ws: Ws): Promise<SavingResult> {
+export async function syncNow(ws: Ws, program = gitProgram): Promise<SavingResult> {
   const repo = await repositoryAt(ws.paths.repository);
   if (!repo) return refuse('no-repository', 'Der Workspace ist kein Git-Repository.');
-  if (!(await syncState(ws)).remote) return refuse('no-remote', 'Kein Ort zum Synchronisieren eingerichtet.');
+  if (!(await syncState(ws, program)).remote) return refuse('no-remote', 'Kein Ort zum Synchronisieren eingerichtet.');
+  const bin = program();
+  if (!bin) return refuse('no-git', 'Synchronisieren braucht das Programm git, das auf diesem Computer fehlt. Gespeichert ist alles hier.');
+  const gitBin = (...a: string[]) => run(bin, ['-C', repo, ...a], { timeout: 120_000 });
   try {
-    await gitBin(repo, 'pull', '--ff-only', '--quiet');
+    await gitBin('pull', '--ff-only', '--quiet');
   } catch (e) {
     return refuse('two-versions', `Zwei Versionen: hier und dort wurde gespeichert. ${e instanceof Error ? e.message.split('\n').slice(-2).join(' ') : ''}`.trim());
   }
-  await gitBin(repo, 'push', '--quiet');
+  await gitBin('push', '--quiet');
   return { ok: true };
 }
