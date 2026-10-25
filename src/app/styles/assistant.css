@@ -55,8 +55,15 @@ main { width: calc(100% - var(--abw) - var(--aiw)); }
 .aichips:empty { display: none; }
 .aichip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 2px 4px 2px 9px; border-radius: 999px; font-size: 11.5px; background: color-mix(in srgb, var(--ai) 14%, transparent); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .aichip button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px; line-height: 1; padding: 0 3px; }
-.aicompose textarea { resize: none; min-height: 56px; padding: 2px 4px; border: 0; outline: none; background: none; color: var(--ink); font: inherit; font-size: 13px; line-height: 1.5; }
+.aifield { position: relative; display: flex; flex-direction: column; }
+.aicompose textarea, .aighost { padding: 2px 4px; border: 0; font: inherit; font-size: 13px; line-height: 1.5; }
+.aicompose textarea { resize: none; min-height: 56px; outline: none; background: none; color: var(--ink); }
 .aicompose textarea::placeholder { color: var(--faint); }
+/* While dictating, the words the recognizer may still change are paler: a textarea cannot colour a
+   part of its text, so a copy over it shows the text and the field keeps only its caret. */
+.aicompose textarea.dictating { color: transparent; caret-color: var(--ink); }
+.aighost { position: absolute; inset: 0; overflow: hidden; pointer-events: none; color: var(--ink); white-space: pre-wrap; overflow-wrap: break-word; }
+.aighost span { color: var(--faint); }
 .aibar { display: flex; align-items: center; gap: 8px; }
 .aibar .aiplus { margin-right: auto; }
 /* The microphone (src/app/assistant/dictation.ts): accent while it listens. */
@@ -66,6 +73,12 @@ main { width: calc(100% - var(--abw) - var(--aiw)); }
 .aimic.on { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); animation: aimic 1.6s ease-in-out infinite; }
 .aimic:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 @keyframes aimic { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent); } }
+/* Where the recognizer measures the microphone (the Mac app), a ring grows with the voice
+   (--level, 0 to 1, set by src/app/shell/Sidebar.tsx) instead of pulsing; without motion it only darkens. */
+.aimic.on.level { animation: none; box-shadow: 0 0 0 calc(1px + var(--level, 0) * 6px) color-mix(in srgb, var(--accent) 24%, transparent); transition: box-shadow 60ms linear; }
+@media (prefers-reduced-motion: reduce) {
+  .aimic.on.level { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) calc(6% + var(--level, 0) * 40%), transparent); }
+}
 /* «Im Terminal weitermachen» (src/app/assistant/TerminalButton.tsx): the mic's size and look; what it did shows above the field. */
 .aiterm:disabled { opacity: .5; cursor: default; }
 .aitermpop { position: absolute; left: 14px; right: 14px; bottom: calc(100% - 6px); z-index: 2; display: flex; flex-direction: column; gap: 6px; max-height: min(420px, 60vh); overflow: auto; padding: 10px 12px; border-radius: 12px; background: var(--glass); border: 1px solid var(--glass-line); box-shadow: var(--shadow); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); font-size: 12.5px; }

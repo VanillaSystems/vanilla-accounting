@@ -8,13 +8,13 @@
  * for «Übernehmen»; an export shows its file to download; changes to how the app works wait in
  * Änderungen.
  */
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { language, t } from '../i18n/index.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import { ICONS } from '../areas/icons.js';
 import { search } from '../assistant/attach.js';
-import { dictationLang, recognizer, withHeard, type DictationError } from '../assistant/dictation.js';
+import { dictated, dictationLang, recognizer, type DictationError, type Dictated } from '../assistant/dictation.js';
 import { Picker, automationCandidates } from '../assistant/Picker.js';
 import { isBookChange, type ContextRef, type EntrySet, type HeldChanges, type HeldLine, type InvoicingSet, type MadeChange, type Turn } from '../../types/assistant.js';
 import { ApiError, apiFetch, errorText } from '../lib/api.js';
@@ -368,12 +368,26 @@ export function Sidebar({ page, books, onGo }: Props) {
   const [listening, setListening] = useState<(() => void) | null>(null);
   const [heardError, setHeardError] = useState<DictationError>();
   const [preparing, setPreparing] = useState(false);
+  /** The words of `text` the recognizer may still change, shown as provisional. */
+  const [partial, setPartial] = useState<Dictated['partial']>();
+  /** The recognizer measures the microphone: the button follows the voice instead of pulsing. */
+  const [measured, setMeasured] = useState(false);
+  /** The dictation whose words still go into the field; a sent message lets go of it. */
+  const dictation = useRef(0);
   const plus = useRef<HTMLButtonElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
+  const ghost = useRef<HTMLDivElement>(null);
+  const mic = useRef<HTMLButtonElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { if (s.open) area.current?.focus(); }, [s.open, s.conversation]);
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [s.turns]);
+  useLayoutEffect(() => {
+    const field = area.current;
+    if (!field || !partial) return;
+    if (partial.end === text.length) field.scrollTop = field.scrollHeight;
+    if (ghost.current) ghost.current.scrollTop = field.scrollTop;
+  }, [text, partial]);
   useEffect(() => () => listening?.(), [listening]);
   useEffect(() => { if (!s.open) listening?.(); }, [s.open, listening]);
   useEffect(() => { void openSetupOnFirstStart(); }, []);
@@ -386,6 +400,8 @@ export function Sidebar({ page, books, onGo }: Props) {
   const waiting = uploading(s);
   const send = () => {
     if (s.sending || waiting || !text.trim()) return;
+    dictation.current++;
+    setPartial(undefined);
     listening?.();
     // In the setup, typed words that name one of the open question's answers answer it as a click would: no AI call.
     if (!(setup && !s.files.length && answerTyped(text))) void sendMessage(text, page);
@@ -394,9 +410,32 @@ export function Sidebar({ page, books, onGo }: Props) {
   const listen = () => {
     if (!ear) return;
     if (listening) { listening(); return; }
-    const before = text;
+    const field = area.current;
+    const before = text.slice(0, field?.selectionStart ?? text.length);
+    const after = text.slice(field?.selectionEnd ?? text.length);
+    const id = ++dictation.current;
+    let caret = before.length;
     setHeardError(undefined);
-    const stop = ear.start(dictationLang(language()), (heard) => setText(withHeard(before, heard)), (error) => { setListening(null); setHeardError(error); area.current?.focus(); }, setPreparing);
+    const stop = ear.start(dictationLang(language()), {
+      heard: (heard) => {
+        if (id !== dictation.current) return;
+        const d = dictated(before, heard, after);
+        caret = d.caret;
+        setText(d.value);
+        setPartial(d.partial.end > d.partial.start ? d.partial : undefined);
+      },
+      level: (level) => { setMeasured(true); mic.current?.style.setProperty('--level', String(level)); },
+      preparing: setPreparing,
+      ended: (error) => {
+        setListening(null);
+        setHeardError(error);
+        setPartial(undefined);
+        setMeasured(false);
+        mic.current?.style.removeProperty('--level');
+        area.current?.focus();
+        if (id === dictation.current) area.current?.setSelectionRange(caret, caret);
+      },
+    });
     setListening(() => stop);
   };
   const empty = !text.trim() || waiting;
@@ -497,16 +536,25 @@ export function Sidebar({ page, books, onGo }: Props) {
             </div>
             {s.fileError ? <div className="warnline aifileerror" role="alert">{s.fileError}</div> : null}
             {heardError ? <div className="warnline aifileerror" role="alert">{t(`assistant.dictation.${heardError}`)}</div> : null}
-            <textarea
-              ref={area} rows={3} value={text} placeholder={t(setup ? 'onboarding.placeholder' : 'assistant.placeholder')} aria-label={t('assistant.message')}
-              onChange={(e) => { setText(e.target.value); setPick(0); }}
-              onPaste={(e) => { const files = [...e.clipboardData.files]; if (files.length) { e.preventDefault(); attachFiles(files); } }}
-              onKeyDown={(e) => {
-                if (offered.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); setPick((pick + (e.key === 'ArrowDown' ? 1 : offered.length - 1)) % offered.length); return; }
-                if (offered.length && (e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); choose(offered[pick]); return; }
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-              }}
-            />
+            <div className="aifield">
+              <textarea
+                ref={area} rows={3} value={text} placeholder={t(setup ? 'onboarding.placeholder' : 'assistant.placeholder')} aria-label={t('assistant.message')}
+                className={partial ? 'dictating' : undefined}
+                onScroll={(e) => { if (ghost.current) ghost.current.scrollTop = e.currentTarget.scrollTop; }}
+                onChange={(e) => { setText(e.target.value); setPartial(undefined); setPick(0); }}
+                onPaste={(e) => { const files = [...e.clipboardData.files]; if (files.length) { e.preventDefault(); attachFiles(files); } }}
+                onKeyDown={(e) => {
+                  if (offered.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); setPick((pick + (e.key === 'ArrowDown' ? 1 : offered.length - 1)) % offered.length); return; }
+                  if (offered.length && (e.key === 'Enter' || e.key === 'Tab')) { e.preventDefault(); choose(offered[pick]); return; }
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+                }}
+              />
+              {partial ? (
+                <div className="aighost" ref={ghost} aria-hidden="true">
+                  {text.slice(0, partial.start)}<span>{text.slice(partial.start, partial.end)}</span>{text.slice(partial.end)}
+                </div>
+              ) : null}
+            </div>
             <div className="aibar">
               <button
                 type="button" className="aiplus" aria-label={t('assistant.mention')} aria-haspopup="dialog" aria-expanded={picking}
@@ -515,7 +563,7 @@ export function Sidebar({ page, books, onGo }: Props) {
               {listening && (preparing || ear?.online) ? <small className="aiheard" aria-live="polite">{t(preparing ? 'assistant.dictation.preparing' : 'assistant.dictation.online')}</small> : null}
               {ear ? (
                 <button
-                  type="button" className={`aimic${listening ? ' on' : ''}`} aria-pressed={!!listening} data-testid="dictate"
+                  ref={mic} type="button" className={`aimic${listening ? ' on' : ''}${listening && measured ? ' level' : ''}`} aria-pressed={!!listening} data-testid="dictate"
                   aria-label={t(listening ? 'assistant.dictation.stop' : 'assistant.dictation.start')}
                   onClick={listen}
                 >{ICONS.mic}</button>
