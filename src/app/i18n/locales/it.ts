@@ -4346,7 +4346,7 @@ export default {
     'ai.step.saving': 'Proporre salvataggi',
     'ai.step.tutti': 'Acquisti Tutti',
     'ai.step.sidebar': 'Barra laterale IA',
-    'ai.needs.agent': 'solo con Claude Code',
+    'ai.needs.agent': 'Claude Code o Codex',
     'ai.needs.pdf': 'legge PDF',
     'ai.cli.ready': 'pronto',
     'ai.cli.missing': 'non trovato: installarlo da claude.com/claude-code e accedere una volta nel Terminale con «claude»',

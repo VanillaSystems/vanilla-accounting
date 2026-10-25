@@ -9,7 +9,8 @@
  * approval, keeping no session, with every tool Codex can switch off switched off (`CLOSED`). Should
  * the model still start anything but an answer (a command, an edit, a search, a sub-agent), the
  * run is ended and fails (`runCodex`). Codex takes images but no PDF: a PDF's first pages go as
- * images, drawn when Codex is asked (src/parsers/pdf-pages.ts), with the PDF's own text.
+ * images, drawn when Codex is asked (src/parsers/pdf-pages.ts), with the PDF's own text. The KI
+ * column runs on Codex with the app's own tools (src/assistant/codex.ts).
  */
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -63,6 +64,7 @@ export const CLOSED: readonly string[] = [
   '-c', 'skills.include_instructions=false',
   '-c', 'skills.bundled.enabled=false',
   '-c', 'include_collaboration_mode_instructions=false',
+  '-c', 'include_apps_instructions=false',
 ];
 
 let emptyCwd: string | undefined;
@@ -187,7 +189,7 @@ async function pdfForCodex(pdf: string): Promise<{ images: string[]; note: strin
 export const codexCli: Provider = {
   id: 'codex-cli',
   billing: 'subscription',
-  models: ['gpt-6-luna', 'gpt-6.1-sol', 'gpt-6-astra'].map((id) => ({ id, can: ['text', 'json', 'typed', 'image', 'pdf'] as const })),
+  models: ['gpt-6-luna', 'gpt-6.1-sol', 'gpt-6-astra'].map((id) => ({ id, can: ['text', 'json', 'typed', 'image', 'pdf', 'agent'] as const })),
   defaults: { fast: 'gpt-6-luna', standard: 'gpt-6.1-sol', strong: 'gpt-6-astra' },
 
   /** The prompt goes on stdin; the answer is the last agent message of the JSONL events, the usage that of the finished turn. */

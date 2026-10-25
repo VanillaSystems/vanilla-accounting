@@ -4343,7 +4343,7 @@ export const messages = {
   'ai.step.saving': 'Speicherstände vorschlagen',
   'ai.step.tutti': 'Tutti-Käufe',
   'ai.step.sidebar': 'KI-Seitenleiste',
-  'ai.needs.agent': 'nur mit Claude Code',
+  'ai.needs.agent': 'Claude Code oder Codex',
   'ai.needs.pdf': 'liest PDF',
   'ai.cli.ready': 'bereit',
   'ai.cli.missing': 'nicht gefunden: von claude.com/claude-code installieren und einmal im Terminal mit «claude» anmelden',

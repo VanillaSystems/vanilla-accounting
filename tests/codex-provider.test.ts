@@ -206,7 +206,7 @@ test('routing: Claude Code first with both, Codex when chosen or alone, Claude C
   assert.deepEqual(subscriptions('codex').map((p) => p.id), ['codex-cli', 'claude-cli']);
   settings({ cli: 'codex' });
   assert.deepEqual([(await resolveStep('classify')).provider.id, (await resolveStep('receipt-vision')).provider.id], ['codex-cli', 'codex-cli'], 'Codex reads PDFs too');
-  assert.equal((await resolveStep('sidebar')).provider.id, 'claude-cli', 'the KI column needs Claude Code');
+  assert.equal((await resolveStep('sidebar')).provider.id, 'codex-cli', 'the KI column runs on the CLI chosen first, Codex too');
   onlyCodex();
   settings({});
   assert.equal((await resolveStep('mail-triage')).provider.id, 'codex-cli');
