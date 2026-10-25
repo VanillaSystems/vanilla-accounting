@@ -212,11 +212,11 @@ export function Strip(props: AreaProps) {
       <span className="go">{t(way === 'off' ? 'inflow.go.switchOn' : way === 'on' ? 'inflow.go.open' : way === 'browser' ? 'inflow.go.how' : 'inflow.go.pair')}</span>
     </>
   );
-  const dots = chips.map((c) => <span key={c.id} className={`sd${c.warn ? ' warn' : ''}`} title={c.label} />);
+  const dots = chips.map((c) => <span key={c.id} className={`sd${c.warn ? ' warn' : ''}`} data-tip={c.label} />);
   return (
     <section className={`ways3s${open ? ' open' : ''}`} aria-label={t('inflow.title')} data-testid="inflow-strip">
       <div className="segs">
-        <button type="button" className="seg dz" title={t('inflow.dropRow')} onClick={() => intakeAdd.run(props)}>
+        <button type="button" className="seg dz" data-tip={t('inflow.dropRow')} onClick={() => intakeAdd.run(props)}>
           {W.down}<span className="stx"><b>{t('inflow.drop')}</b><small>{t('inflow.dropRow')}</small></span>
         </button>
         {way === 'on'
@@ -230,7 +230,7 @@ export function Strip(props: AreaProps) {
           </button>
           {none
             ? <button type="button" className="aiact fetchbtn" data-testid="inflow-setup" onClick={askSetup}><BotIcon />{t('inflow.setUp')}</button>
-            : <button type="button" className="aiact fetchbtn" data-testid="inflow-fetch" disabled={run.kind === 'running'} title={t('inflow.fetchTip')} onClick={() => void fetchNow()}>{t('inflow.fetch')}</button>}
+            : <button type="button" className="aiact fetchbtn" data-testid="inflow-fetch" disabled={run.kind === 'running'} data-tip={t('inflow.fetchTip')} onClick={() => void fetchNow()}>{t('inflow.fetch')}</button>}
         </div>
       </div>
       {reading ? <div className="sline"><span className="spin small" />{t('inflow.reading', { n: reading })}</div>

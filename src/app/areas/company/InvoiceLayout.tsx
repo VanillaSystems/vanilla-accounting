@@ -90,8 +90,7 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
           <div className="lkr"><span>{t('invoiceLayout.accent')}</span>
             <span className="sw">
               {[...ACCENTS.map(([c, name]) => [c, t(`invoiceLayout.colour.${name}`)]), ...(ACCENTS.some(([c]) => c === layout.accent) ? [] : [[layout.accent, layout.accent]])].map(([c, name]) => (
-                <button key={c} type="button" className={`swc${layout.accent === c ? ' on' : ''}`} style={{ ['--c' as string]: c }} disabled={!canEdit}
-                  title={name} aria-label={name} aria-pressed={layout.accent === c} onClick={() => setLayout('accent', c)} />
+                <button key={c} type="button" className={`swc${layout.accent === c ? ' on' : ''}`} style={{ ['--c' as string]: c }} disabled={!canEdit} aria-label={name} aria-pressed={layout.accent === c} onClick={() => setLayout('accent', c)} />
               ))}
             </span>
           </div>

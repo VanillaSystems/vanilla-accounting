@@ -89,7 +89,7 @@ function Toggles({ step }: { step: SetupStep }) {
           {say(c.label)}{c.sub ? <small>{say(c.sub)}</small> : null}
         </button>
       ))}
-      <button type="button" className="btn" disabled={busy || !kinds.length} title={kinds.length ? undefined : t('onboarding.sellsCard.none')} data-act="sells-next" onClick={() => void keepSells(kinds)}>{t('onboarding.sellsCard.next')}</button>
+      <button type="button" className="btn" disabled={busy || !kinds.length} data-tip={kinds.length ? undefined : t('onboarding.sellsCard.none')} data-act="sells-next" onClick={() => void keepSells(kinds)}>{t('onboarding.sellsCard.next')}</button>
     </div>
   );
 }

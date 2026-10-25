@@ -137,7 +137,7 @@ function List({ route, nav, books }: Props) {
                 const on = w.triggers.filter((tr) => !tr.off);
                 return row({ area: 'automation', view: 'workflow', workflow: w.id, tab: 'graph' }, (
                   <>
-                    <span className="t"><span className={`ahdot ${st.dot}`} title={t(`automation.home.dot.${st.dot}` as 'automation.home.dot.ok')} />{label(w)}{hasAi(w, view!.workflows) ? <span title={t('automation.ai')}><BotIcon /></span> : null}</span>
+                    <span className="t"><span className={`ahdot ${st.dot}`} data-tip={t(`automation.home.dot.${st.dot}` as 'automation.home.dot.ok')} />{label(w)}{hasAi(w, view!.workflows) ? <span data-tip={t('automation.ai')}><BotIcon /></span> : null}</span>
                     <span className="a">
                       {st.dot === 'off' ? <span className="wfpill muted">{t('automation.home.missing', { n: st.missing })}</span>
                         : st.dot === 'run' ? <span className="wfpill st-running">{st.at ? t('automation.home.runningAt', { step: stepLabel(w, st.at) }) : t('automation.status.running')}</span>
@@ -185,7 +185,7 @@ function WorkflowPage({ w, view, route, nav }: { w: WorkflowDecl; view: Automati
   return (
     <div className="detail-in wfpage" key={w.id}>
       <div className="head">
-        <h2 className="who">{hasAi(w, view.workflows) ? <span title={t('automation.ai')}><BotIcon /></span> : null}{label(w)}<small>{phaseLabel(w.phase)} · {tx(w.cadence)} · {forLabel(w.for)}</small></h2>
+        <h2 className="who">{hasAi(w, view.workflows) ? <span data-tip={t('automation.ai')}><BotIcon /></span> : null}{label(w)}<small>{phaseLabel(w.phase)} · {tx(w.cadence)} · {forLabel(w.for)}</small></h2>
         <AskAi context={{ kind: 'workflow', id: w.id, label: label(w) }} />
       </div>
       <p className="lead">{tx(w.desc)}</p>

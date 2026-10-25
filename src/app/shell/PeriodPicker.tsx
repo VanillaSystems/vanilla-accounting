@@ -161,7 +161,7 @@ function Item({ children, on, sub, filed, onClick }: { children: React.ReactNode
   return (
     <button type="button" className={`pi${on ? ' on' : ''}`} onClick={onClick} aria-current={on || undefined}>
       <span>{children}</span>
-      {filed && <span title={t('period.filed')}>{ICONS.lock}</span>}
+      {filed && <span data-tip={t('period.filed')}>{ICONS.lock}</span>}
       {sub && <span className="chev">›</span>}
     </button>
   );
@@ -189,7 +189,7 @@ function DateInput({ label, value, onDate, inputRef }: { label: string; value: I
       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
       aria-label={label}
       aria-invalid={invalid}
-      title={invalid ? t('period.invalidDate') : label}
+      data-tip={invalid ? t('period.invalidDate') : label}
       placeholder={t('period.dateFormat')}
       style={invalid ? { borderColor: 'var(--neg)' } : undefined}
     />

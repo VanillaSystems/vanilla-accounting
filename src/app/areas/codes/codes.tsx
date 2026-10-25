@@ -72,7 +72,7 @@ function List(props: Props) {
             const shut = s.collapsed.has(g.family);
             return (
               <Fragment key={g.family}>
-                <button type="button" className={`group${shut ? ' shut' : ''}`} aria-expanded={!shut} title={shut ? t('receipts.expand') : t('receipts.collapse')} onClick={() => toggleFamily(g.family)}>
+                <button type="button" className={`group${shut ? ' shut' : ''}`} aria-expanded={!shut} data-tip={shut ? t('receipts.expand') : t('receipts.collapse')} onClick={() => toggleFamily(g.family)}>
                   <span>{I.gch}{g.family} · {t(`vatCodes.family.${g.family}`)}</span><span className="mono">{g.rows.length}</span>
                 </button>
                 {!shut && g.rows.map((r) => {

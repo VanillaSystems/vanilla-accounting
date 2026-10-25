@@ -74,7 +74,7 @@ function Ziffer({ v, filed, n, amount, nav, period }: Props & { v: VatReturn; fi
       <div className="facts">
         {r && (
           <>
-            <span title={t(turnover ? 'vat.turnoverGrossTip' : 'vat.acquisitionNetTip')}>{t(turnover ? 'vat.factTurnover' : 'vat.factAcquisition', { amount: fmt(supply ? r.base + r.tax : r.base) })}</span>
+            <span data-tip={t(turnover ? 'vat.turnoverGrossTip' : 'vat.acquisitionNetTip')}>{t(turnover ? 'vat.factTurnover' : 'vat.factAcquisition', { amount: fmt(supply ? r.base + r.tax : r.base) })}</span>
             <span>{t('vat.factRate', { rate: r.row.rate })}</span>
             <span>{t('vat.factTax', { amount: fmt(r.tax) })}</span>
           </>

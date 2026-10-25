@@ -84,7 +84,7 @@ export function QueuePage({ view, nav }: { view: AutomationView; nav: Nav }) {
             <span className="pos mono">{i + 1}</span>
             <span className="qi"><span className="mono">{itemOf(r, wf(r.workflow))}</span>{chip(r)}</span>
             <span className="m qwhy">{r.reason ? t(`automation.queuedBecause.${r.reason}` as 'automation.queuedBecause.slot') : t('automation.queuedNext')}</span>
-            <button type="button" className="x" title={t('automation.queueRemove')} aria-label={t('automation.queueRemove')} onClick={(e) => { e.stopPropagation(); void automationCommand({ kind: 'discard', run: r.id, reason: t('automation.queueRemoved') }); }}>×</button>
+            <button type="button" className="x" aria-label={t('automation.queueRemove')} onClick={(e) => { e.stopPropagation(); void automationCommand({ kind: 'discard', run: r.id, reason: t('automation.queueRemoved') }); }}>×</button>
           </div>
         )) : <p className="m">{t('automation.queueNone')}</p>}
       </section>

@@ -33,7 +33,7 @@ function List({ route, query, books, nav, canEdit }: Props) {
     <>
       <h1>
         {t('area.close')}
-        <button type="button" className="ytag mono" title={t('close.chooseYear')} data-testid="period-picker" onClick={(e) => ui.openPeriod(e.currentTarget)}>{year}</button>
+        <button type="button" className="ytag mono" data-tip={t('close.chooseYear')} data-testid="period-picker" onClick={(e) => ui.openPeriod(e.currentTarget)}>{year}</button>
       </h1>
       <div className="counts"><span>{yearOver ? t('close.yearOver') : t('close.yearRuns', { year })}</span>{yearOver && (books.config?.closedThrough ?? '') < `${year}-12-31` ? <WorkflowButtons kind="year" id={String(year)} nav={nav} canEdit={canEdit} /> : null}</div>
       <div className="rows" role="listbox" aria-label={t('close.steps')}>

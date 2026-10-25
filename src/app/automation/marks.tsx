@@ -86,7 +86,7 @@ export function WorkflowButtons({ kind, id, facts = [], nav, canEdit }: { kind: 
           );
         }
         return (
-          <button key={workflow.id} type="button" className="btn" disabled={!canEdit} title={ai ? t('automation.ai') : undefined}
+          <button key={workflow.id} type="button" className="btn" disabled={!canEdit} data-tip={ai ? t('automation.ai') : undefined}
             onClick={() => void start(workflow)}>
             {ai ? <BotIcon /> : null}{textIn(label, language())}
           </button>

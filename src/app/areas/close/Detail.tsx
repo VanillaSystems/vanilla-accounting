@@ -413,7 +413,7 @@ function Close({ d, nav, canEdit }: StepProps) {
               <span className="r mono">{r.currency} {fmt(r.native)}</span>
               {r.status === 'no-rate' ? <span className="r m" style={{ gridColumn: 'span 4' }}>{t('yearClose.fxNoRate')}</span> : (
                 <>
-                  <span className="r mono" title={r.rate.source}>{r.rate.rate}</span>
+                  <span className="r mono" data-tip={r.rate.source}>{r.rate.rate}</span>
                   <span className="r mono">{fmt(r.targetChf)}</span>
                   <span className="r mono">{fmt(r.bookChf)}</span>
                   <span className={`r mono${r.status === 'booked' ? ' pos' : ''}`}>{fmt(r.difference)}{r.status === 'booked' ? ` ${t('yearClose.fxBooked')}` : ''}</span>

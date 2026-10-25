@@ -148,7 +148,7 @@ function List(props: Props) {
             let prev: string | undefined;
             return (
               <Fragment key={g.key}>
-                <button type="button" className={`group${shut ? ' shut' : ''}`} aria-expanded={!shut} title={shut ? t('receipts.expand') : t('receipts.collapse')} onClick={() => toggleGroup(g.key)}>
+                <button type="button" className={`group${shut ? ' shut' : ''}`} aria-expanded={!shut} data-tip={shut ? t('receipts.expand') : t('receipts.collapse')} onClick={() => toggleGroup(g.key)}>
                   <span>{I.gch}{groupLabel(g.key)}</span><span className="mono">{g.rows.length}</span>
                 </button>
                 {!shut && g.rows.map((v) => { const same = !!v.date && v.date === prev; prev = v.date; return row(v, same); })}
@@ -202,13 +202,13 @@ function Row({ v, sel, same, canEdit, onSelect, onAct }: { v: ReceiptView; sel: 
       <span className="a mono">{r.amount != null && <>{(r.currency ?? baseCurrency()) !== baseCurrency() && <span className="c">{r.currency}</span>}{fmt(r.amount)}</>}</span>
       <span className="acts">
         {v.none ? (
-          canEdit && <button type="button" title={t('receipts.isReceipt')} aria-label={t('receipts.isReceipt')} onClick={act(() => onAct('mark'))}>{I.check}</button>
+          canEdit && <button type="button" aria-label={t('receipts.isReceipt')} onClick={act(() => onAct('mark'))}>{I.check}</button>
         ) : (
           <>
-            <button type="button" title={t('receipts.previewKey')} aria-label={t('receipts.preview')} onClick={act(() => setUi({ overlay: 'quick' }))}>{I.eye}</button>
-            {edit && <button type="button" title={t('receipts.linkKey')} aria-label={t('receipts.link')} onClick={act(() => onAct('link'))}>{I.link}</button>}
-            {canEdit && <button type="button" title={t('receipts.editKey')} aria-label={t('receipts.edit')} onClick={act(() => onAct('edit'))}>{I.edit}</button>}
-            {edit && <button type="button" className="del" title={t('receipts.deleteKey')} aria-label={t('receipts.delete')} onClick={act(() => onAct('del'))}>{I.trash}</button>}
+            <button type="button" data-tip={t('receipts.previewKey')} aria-label={t('receipts.preview')} onClick={act(() => setUi({ overlay: 'quick' }))}>{I.eye}</button>
+            {edit && <button type="button" data-tip={t('receipts.linkKey')} aria-label={t('receipts.link')} onClick={act(() => onAct('link'))}>{I.link}</button>}
+            {canEdit && <button type="button" data-tip={t('receipts.editKey')} aria-label={t('receipts.edit')} onClick={act(() => onAct('edit'))}>{I.edit}</button>}
+            {edit && <button type="button" className="del" data-tip={t('receipts.deleteKey')} aria-label={t('receipts.delete')} onClick={act(() => onAct('del'))}>{I.trash}</button>}
           </>
         )}
       </span>
@@ -268,7 +268,7 @@ function Quarantine({ nav, canEdit }: { nav: AreaProps['nav']; canEdit: boolean 
 function RunInbox() {
   const running = useIntakeRunning();
   return (
-    <button type="button" className="runinbox" data-testid="run-inbox" disabled={running} title={t('intake.runTip')} onClick={() => void startIntake()}>
+    <button type="button" className="runinbox" data-testid="run-inbox" disabled={running} data-tip={t('intake.runTip')} onClick={() => void startIntake()}>
       {I.spark}{running ? t('intake.running') : t('intake.run')}
     </button>
   );
@@ -277,7 +277,7 @@ function RunInbox() {
 function PendingRow({ file, sel, onSelect }: { file: InboxFile; sel: boolean; onSelect(id: string): void }) {
   if (file.failed) {
     return (
-      <div className={`row reading failed${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={file.id} title={file.failed.error} onClick={() => onSelect(file.id)}>
+      <div className={`row reading failed${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={file.id} data-tip={file.failed.error} onClick={() => onSelect(file.id)}>
         <span className="d mono" />
         <span className="t">{file.filename} <span style={{ fontSize: 12, marginLeft: 6 }}>{t('receipts.readFailed')}</span></span>
         <span className="a mono" />
@@ -285,7 +285,7 @@ function PendingRow({ file, sel, onSelect }: { file: InboxFile; sel: boolean; on
     );
   }
   return (
-    <div className={`row reading${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={file.id} title={t('receipts.readingTip')} onClick={() => onSelect(file.id)}>
+    <div className={`row reading${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={file.id} data-tip={t('receipts.readingTip')} onClick={() => onSelect(file.id)}>
       <span className="d mono"><span className="shimmer" style={{ width: 70 }} /></span>
       <span className="t"><span className="shimmer" style={{ width: 150 }} /> <span style={{ fontSize: 12, marginLeft: 6 }}>{t('receipts.reading')}</span></span>
       <span className="a mono" />

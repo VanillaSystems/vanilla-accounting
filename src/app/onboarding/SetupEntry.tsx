@@ -14,7 +14,7 @@ export function SetupEntry() {
   const n = SETUP_TOPICS.filter((k) => view.states[k] === 'done').length;
   return (
     <div className="obentry">
-      <button type="button" className="aiact" title={going ? t('onboarding.progress', { n, of: SETUP_TOPICS.length }) : undefined} onClick={() => void openSetup()}>
+      <button type="button" className="aiact" data-tip={going ? t('onboarding.progress', { n, of: SETUP_TOPICS.length }) : undefined} onClick={() => void openSetup()}>
         <BotIcon />{t(going ? 'onboarding.entry.continue' : 'onboarding.entry.start')}{going ? <small className="mono">{n}/{SETUP_TOPICS.length}</small> : null}
       </button>
     </div>

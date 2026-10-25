@@ -252,7 +252,7 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
           {missing ? <small className="dwhy">{missing}</small> : x.kind === 'refused' ? <small className="dwhy">{reasonText(x.reason)}</small> : null}
           <span className="dacts">
             {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id }, receipt.date)}>{t('drop.openReceipt')}</button> : null}
-            <button type="button" className="linkbtn" disabled={running || busy} title={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</button>
+            <button type="button" className="linkbtn" disabled={running || busy} data-tip={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</button>
           </span>
         </div>
         {receipt ? (

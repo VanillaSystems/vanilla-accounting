@@ -116,7 +116,7 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
       <header className="st-top">
         <span className="seg2" role="radiogroup" aria-label={t('desktop.language')}>
           {LOCALES.map((l) => (
-            <button key={l.code} type="button" role="radio" aria-checked={l.code === language} className={l.code === language ? 'on' : ''} title={l.name} onClick={() => onLanguage(l.code)}>{l.code.toUpperCase()}</button>
+            <button key={l.code} type="button" role="radio" aria-checked={l.code === language} className={l.code === language ? 'on' : ''} data-tip={l.name} onClick={() => onLanguage(l.code)}>{l.code.toUpperCase()}</button>
           ))}
         </span>
       </header>
@@ -151,7 +151,7 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
               <section className="st-recent">
                 <h2>{t('desktop.recent')}</h2>
                 {info.recent.map((b) => (
-                  <button key={b.root} type="button" className="st-book" title={b.root} disabled={busy || (!b.name && !b.problem && !b.setup)} onClick={() => void run(() => api.desktop.open(b.root))}>
+                  <button key={b.root} type="button" className="st-book" data-tip={b.root} disabled={busy || (!b.name && !b.problem && !b.setup)} onClick={() => void run(() => api.desktop.open(b.root))}>
                     <b>{b.demo ? t('desktop.demoName') : b.name ?? t(b.setup ? 'desktop.flow.unnamed' : b.problem ? 'desktop.unreadable' : 'desktop.missing')}</b>{b.setup ? <span className="st-badge">{t('desktop.flow.inProgress')}</span> : null}<span className="mono">{b.root}</span>
                     {b.problem && <small className="st-problem">{b.problem}</small>}
                   </button>
@@ -322,7 +322,7 @@ function CreateForm({ info, busy, error, notice, onCancel, onCreate }: {
               <label className="cf"><span>{t('desktop.currency')}</span><input className="mono" maxLength={3} value={b.currency} onChange={(e) => setBank(i, { currency: e.target.value.toUpperCase() })} /></label>
               <label className="cf"><span>{t('desktop.ledgerAccount')}</span><input className="mono" value={b.account} placeholder={t('desktop.automatic')} onChange={(e) => setBank(i, { account: e.target.value })} /></label>
               <label className={`cf${checked && errors.banks[i] && errors.bankField[i] === 'iban' ? ' err' : ''}`}><span>{t('desktop.iban')}</span><input className="mono" value={b.iban} placeholder={t('desktop.optional')} onChange={(e) => setBank(i, { iban: e.target.value })} /></label>
-              <button type="button" className="btn ghost" aria-label={t('desktop.removeBank')} title={t('desktop.removeBank')} disabled={f.banks.length === 1} onClick={() => set('banks', f.banks.filter((_, j) => j !== i))}>×</button>
+              <button type="button" className="btn ghost" aria-label={t('desktop.removeBank')} disabled={f.banks.length === 1} onClick={() => set('banks', f.banks.filter((_, j) => j !== i))}>×</button>
               {checked && errors.banks[i] && <em className="st-bankerr">{errors.banks[i]}</em>}
             </div>
           ))}

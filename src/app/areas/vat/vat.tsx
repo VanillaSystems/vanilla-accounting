@@ -184,7 +184,7 @@ function ZifferRow({ v, n, filed, sel, onSelect }: { v: VatReturn; n: string; fi
       <span className="t">{zifferLabel(v, n)}</span>
       <span className="a mono">
         {r ? <><span className="tv">{fmt(r.row.kind === 'supply' ? r.base + r.tax : r.base)}</span>{fmt(r.tax)}</> : fmt(formAmount(v, n))}
-        {was != null && <span className="was" title={t('vat.filedValue', { amount: fmt(was) })}><span className="dot" aria-hidden="true" /></span>}
+        {was != null && <span className="was" data-tip={t('vat.filedValue', { amount: fmt(was) })}><span className="dot" aria-hidden="true" /></span>}
       </span>
     </div>
   );

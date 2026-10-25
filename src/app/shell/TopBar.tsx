@@ -27,16 +27,16 @@ export function TopBar(p: Props & { hold?: boolean }) {
       {p.company && <span className="chip" tabIndex={0}><b style={{ fontWeight: 600 }}>{p.company}</b></span>}
       <span className="sep" />
       <button type="button" className="chip" onClick={used(p.onSearch)}>⌕ {t('shell.search')} <span className="k">⌘K</span></button>
-      {p.period && <button type="button" className="chip mono" title={t('period.choose')} onClick={(e) => { dispatchBar('top', { kind: 'used' }); p.onPeriod(e.currentTarget); }}>{p.period} ▾</button>}
+      {p.period && <button type="button" className="chip mono" data-tip={t('period.choose')} onClick={(e) => { dispatchBar('top', { kind: 'used' }); p.onPeriod(e.currentTarget); }}>{p.period} ▾</button>}
       <span className="sep" />
       <span className="zoom" role="group" aria-label={t('shell.zoom')}>
-        <button type="button" className="chip" title={t('shell.zoomOut')} aria-label={t('shell.zoomOut')} disabled={p.zoom <= ZOOM_STEPS[0]} onClick={() => p.onZoom(-1)}>−</button>
-        <button type="button" className="chip mono zval" title={t('shell.zoomReset')} aria-label={t('shell.zoomReset')} onClick={() => p.onZoom(0)}>{Math.round(p.zoom * 100)} %</button>
-        <button type="button" className="chip" title={t('shell.zoomIn')} aria-label={t('shell.zoomIn')} disabled={p.zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1]} onClick={() => p.onZoom(1)}>+</button>
+        <button type="button" className="chip" aria-label={t('shell.zoomOut')} disabled={p.zoom <= ZOOM_STEPS[0]} onClick={() => p.onZoom(-1)}>−</button>
+        <button type="button" className="chip mono zval" data-tip={t('shell.zoomReset')} aria-label={t('shell.zoomReset')} onClick={() => p.onZoom(0)}>{Math.round(p.zoom * 100)} %</button>
+        <button type="button" className="chip" aria-label={t('shell.zoomIn')} disabled={p.zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1]} onClick={() => p.onZoom(1)}>+</button>
       </span>
       <span className="sep" />
-      <button type="button" className="chip" title={t('export.chipTip')} aria-label={t('export.dialog')} onClick={used(p.onExport)}>{ICONS.download}</button>
-      <button type="button" className="chip" title={t('shell.theme')} aria-label={t('shell.theme')} onClick={p.onTheme}>◐</button>
+      <button type="button" className="chip" data-tip={t('export.chipTip')} aria-label={t('export.dialog')} onClick={used(p.onExport)}>{ICONS.download}</button>
+      <button type="button" className="chip" aria-label={t('shell.theme')} onClick={p.onTheme}>◐</button>
       <button type="button" className="chip" aria-label={t('app.language')} aria-haspopup="menu" onClick={(e) => p.onLanguage(e.currentTarget)}>{p.language.toUpperCase()}</button>
     </Fold>
   );

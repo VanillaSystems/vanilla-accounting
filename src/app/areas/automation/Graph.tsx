@@ -77,7 +77,7 @@ export function Graph({ workflow, selected, path, at, onSelect }: {
           return n.id === END ? (
             <div key={n.id} className={cls} style={{ left: p.x, top: p.y + H / 2 - 14 }}>{label(n)}</div>
           ) : (
-            <button key={n.id} type="button" className={cls} style={{ left: p.x, top: p.y, width: W, height: H }} onClick={() => onSelect?.(n.id)} title={notBuilt ? t('automation.step.notBuilt') : undefined}>
+            <button key={n.id} type="button" className={cls} style={{ left: p.x, top: p.y, width: W, height: H }} onClick={() => onSelect?.(n.id)} data-tip={notBuilt ? t('automation.step.notBuilt') : undefined}>
               <span className="kind">{n.kind === 'agent' ? <BotIcon /> : null}{t(`automation.kind.${n.kind}` as 'automation.kind.step')}</span>
               <span className="lbl">{label(n)}</span>
             </button>

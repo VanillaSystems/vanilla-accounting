@@ -30,10 +30,10 @@ export function Detail({ route, period, nav, ...props }: Props) {
         <div className="amount"><small>CHF</small>{fmt(l.closing)}</div>
       </div>
       <div className="facts">
-        <span title={t('reports.balanceOn', { date: formatDate(period.from) })}>{t('reports.factOpening', { amount: fmt(l.opening) })}</span>
+        <span data-tip={t('reports.balanceOn', { date: formatDate(period.from) })}>{t('reports.factOpening', { amount: fmt(l.opening) })}</span>
         <span>{t('reports.factDebit', { amount: fmt(l.debit) })}</span>
         <span>{t('reports.factCredit', { amount: fmt(l.credit) })}</span>
-        <span title={t('reports.balanceOn', { date: formatDate(period.to) })}>{t('reports.factClosing', { amount: fmt(l.closing) })}</span>
+        <span data-tip={t('reports.balanceOn', { date: formatDate(period.to) })}>{t('reports.factClosing', { amount: fmt(l.closing) })}</span>
         <span>{t('common.entryCount', { n: l.rows.length })}</span>
       </div>
       <DownloadMenu account={account} label={none ? t('reports.noAccount') : `${account} ${names[account] ?? ''}`.trim()} period={period} toast={nav.toast} />
@@ -48,7 +48,7 @@ export function Detail({ route, period, nav, ...props }: Props) {
             <>
               <span className="mono d">{formatDate(r.date)}</span>
               <span className="tt">{r.description || r.entryId}</span>
-              <span className="mono oc" title={r.other ? names[r.other] : t('reports.noAccount')}>{r.other || '·'}</span>
+              <span className="mono oc" data-tip={r.other ? names[r.other] : t('reports.noAccount')}>{r.other || '·'}</span>
               <span className="r mono">{r.debit != null ? fmt(r.debit) : ''}</span>
               <span className="r mono">{r.credit != null ? fmt(r.credit) : ''}</span>
               <span className="r mono">{fmt(r.balance)}</span>

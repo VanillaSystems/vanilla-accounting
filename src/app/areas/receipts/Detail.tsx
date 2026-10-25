@@ -128,20 +128,20 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       </div>
       {!v.none && (
         <div className="facts">
-          {v.date ? <span title={t('receipts.factDate')}>{formatDate(v.date)}</span>
-            : <button type="button" className="miss" disabled={!canEdit} title={t('receipts.addDate')} onClick={() => runAct(props, 'edit')}>{t('receipts.dateMissing')}</button>}
-          {r.amount != null ? <span title={t('receipts.factAmount')}>{cur} {fmt(r.amount)}</span>
-            : <button type="button" className="miss" disabled={!edit} title={t('receipts.addAmount')} onClick={() => runAct(props, 'edit')}>{t('receipts.amountMissing')}</button>}
+          {v.date ? <span data-tip={t('receipts.factDate')}>{formatDate(v.date)}</span>
+            : <button type="button" className="miss" disabled={!canEdit} data-tip={t('receipts.addDate')} onClick={() => runAct(props, 'edit')}>{t('receipts.dateMissing')}</button>}
+          {r.amount != null ? <span data-tip={t('receipts.factAmount')}>{cur} {fmt(r.amount)}</span>
+            : <button type="button" className="miss" disabled={!edit} data-tip={t('receipts.addAmount')} onClick={() => runAct(props, 'edit')}>{t('receipts.amountMissing')}</button>}
           {vat.length
-            ? vat.map((g) => <span key={g.ratePercent} title={t('receipts.factVat', { rate: g.ratePercent, tax: fmt(g.vat) })}>{t('receipts.vatLine', { rate: g.ratePercent, tax: fmt(g.vat) })}</span>)
-            : vatChipOf(r.hasSwissVat, withoutInputTax()) === 'unread' ? <span className="nov" title={t('receipts.vatUnreadTip')}>{t('receipts.vatUnread')}</span>
-            : vatChipOf(r.hasSwissVat, withoutInputTax()) === 'none' ? <span className="nov" title={t('receipts.noVatTip')}>{t('receipts.noVat')}</span>
+            ? vat.map((g) => <span key={g.ratePercent} data-tip={t('receipts.factVat', { rate: g.ratePercent, tax: fmt(g.vat) })}>{t('receipts.vatLine', { rate: g.ratePercent, tax: fmt(g.vat) })}</span>)
+            : vatChipOf(r.hasSwissVat, withoutInputTax()) === 'unread' ? <span className="nov" data-tip={t('receipts.vatUnreadTip')}>{t('receipts.vatUnread')}</span>
+            : vatChipOf(r.hasSwissVat, withoutInputTax()) === 'none' ? <span className="nov" data-tip={t('receipts.noVatTip')}>{t('receipts.noVat')}</span>
             : null}
           {r.vatBy === 'human' && <ByHand />}
-          {misfit !== undefined && <span className="misfit" data-testid="vat-misfit" title={t('receipts.vatMisfitTip', { gross: `${cur} ${fmt(misfit)}`, amount: `${cur} ${fmt(r.amount!)}` })}>{t('receipts.vatMisfit')}</span>}
+          {misfit !== undefined && <span className="misfit" data-testid="vat-misfit" data-tip={t('receipts.vatMisfitTip', { gross: `${cur} ${fmt(misfit)}`, amount: `${cur} ${fmt(r.amount!)}` })}>{t('receipts.vatMisfit')}</span>}
           {vat.length > 0 && (r.vatId
-            ? <span title={t('receipts.uidTip', { uid: r.vatId })}><span className="ok">✓</span> {t('receipts.uid')} <span className="mono">{r.vatId}</span></span>
-            : <span className="nov" title={t('receipts.noUidTip')}>{t('receipts.uidMissing')}</span>)}
+            ? <span data-tip={t('receipts.uidTip', { uid: r.vatId })}><span className="ok">✓</span> {t('receipts.uid')} <span className="mono">{r.vatId}</span></span>
+            : <span className="nov" data-tip={t('receipts.noUidTip')}>{t('receipts.uidMissing')}</span>)}
         </div>
       )}
       {v.locked && (
@@ -161,7 +161,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
           <QuestionsOn key={`q-${r.id}`} on={{ kind: 'receipt', id: r.id }} also={props.books.mappings.filter((m) => m.receiptId === r.id).map((m) => ({ kind: 'payment' as const, id: m.transactionRef }))} nav={nav} canEdit={props.canEdit} books={props.books} />
           <div className="paper real" role="button" tabIndex={0} aria-label={t('receipts.previewLarge')} onClick={() => setUi({ overlay: 'quick' })}>
             <Paper key={src} src={src} />
-            <a className="dl float" href={src} download={r.filename} title={t('receipts.downloadTitle', { file: r.filename })} onClick={(e) => e.stopPropagation()}>{I.dl}<span>{t('receipts.download')}</span></a>
+            <a className="dl float" href={src} download={r.filename} data-tip={t('receipts.downloadTitle', { file: r.filename })} onClick={(e) => e.stopPropagation()}>{I.dl}<span>{t('receipts.download')}</span></a>
           </div>
         </div>
         <aside className="margin" aria-label={t('receipts.details')}>
@@ -210,13 +210,13 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
     return (
       <>
         <span className="linked">{I.check}
-          <button type="button" className="golink" data-testid="go-payment" title={t('receipts.openPayment')} onClick={() => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date))}>
+          <button type="button" className="golink" data-testid="go-payment" data-tip={t('receipts.openPayment')} onClick={() => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date))}>
             {t('receipts.payment')} <span className="mono">{formatDate(tx.date)}</span> · {bankOf(tx)} · <span className="mono">{amountOf(tx)}</span>{more} <span className="arr">{t('receipts.toStatement')}</span>
           </button>
         </span>
-        {entry && <button type="button" className="golink jl" data-testid="go-entry" title={t('receipts.openEntry')} onClick={() => nav.go(at({ area: 'journal', id: entry.id }, entry.date))}>{t('receipts.entry')}</button>}
+        {entry && <button type="button" className="golink jl" data-testid="go-entry" data-tip={t('receipts.openEntry')} onClick={() => nav.go(at({ area: 'journal', id: entry.id }, entry.date))}>{t('receipts.entry')}</button>}
         {canEdit && !v.locked && (ownPrivate(l, tx)
-          ? <button type="button" className="quiet" title={t('receipts.undoPrivateTip')} onClick={() => undoPrivate(nav, v, tx, txLine(tx))}>{t('receipts.undoPrivate')}</button>
+          ? <button type="button" className="quiet" data-tip={t('receipts.undoPrivateTip')} onClick={() => undoPrivate(nav, v, tx, txLine(tx))}>{t('receipts.undoPrivate')}</button>
           : <button type="button" className="quiet" onClick={() => unlinkPayment(nav, v, tx.ref, txLine(tx))}>{t('receipts.unlink')}</button>)}
         {tx.businessPart && <span className="fitnote note" data-testid="business-part">{t('receipts.businessPartNotice', { what: tx.businessPart.what || t('receipts.privatePartUnnamed'), amount: `${tx.currency} ${fmt(Math.abs(tx.amount))}`, total: `${v.r.currency || baseCurrency()} ${fmt(Math.abs(v.r.amount ?? 0))}` })}</span>}
         {fit?.kind === 'off' && <span className="fitnote warn" data-testid="fit-off">{t('receipts.fitOffNotice', { amount: `${fit.currency} ${fmt(Math.abs(fit.diff))}` })}</span>}
@@ -284,12 +284,12 @@ function Payments(props: Props & { v: ReceiptView; l: Ledger; edit: boolean }) {
         const book = edit && !v.locked && tx.amount && !(l.entriesByRef.get(ref) ?? []).length;
         return (
           <Fragment key={ref}>
-          <div className="tx go" title={t('receipts.openPayment')} onClick={() => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date))}>
+          <div className="tx go" data-tip={t('receipts.openPayment')} onClick={() => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date))}>
             <span className="d">{formatDate(tx.date)} · {bankOf(tx)}</span>
             <span className="am">{amountOf(tx)}</span>
             <span className="tt">{tx.description}</span>
             {edit && (ownPrivate(l, tx)
-              ? <button type="button" className="un" title={t('receipts.undoPrivateTip')} onClick={(e) => { e.stopPropagation(); undoPrivate(nav, v, tx, txLine(tx)); }}>{t('receipts.undoPrivate')}</button>
+              ? <button type="button" className="un" data-tip={t('receipts.undoPrivateTip')} onClick={(e) => { e.stopPropagation(); undoPrivate(nav, v, tx, txLine(tx)); }}>{t('receipts.undoPrivate')}</button>
               : <button type="button" className="un" onClick={(e) => { e.stopPropagation(); unlinkPayment(nav, v, ref, txLine(tx)); }}>{t('receipts.unlinkCap')}</button>)}
           </div>
           {book ? <PaymentBooking books={props.books} nav={nav} payment={ref} narrow /> : null}
@@ -381,12 +381,12 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean }) {
         onBlur={save}
         onKeyDown={(e) => { if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA') { e.preventDefault(); save(); } }}
       >
-        <label>{t('receipts.field.filename')}<input className="mono" name="filename" defaultValue={r.filename} readOnly={!edit} title={frozen} style={{ fontSize: 12 }} /></label>
+        <label>{t('receipts.field.filename')}<input className="mono" name="filename" defaultValue={r.filename} readOnly={!edit} data-tip={frozen} style={{ fontSize: 12 }} /></label>
         <label>{t('receipts.field.date')}<input className="mono" name="date" defaultValue={r.date ? formatDate(r.date) : ''} placeholder={t('receipts.datePlaceholder')} readOnly={!canEdit} /></label>
         {r.dateSource === 'captured' && <div className="fhint">{t('receipts.dateCaptured')}</div>}
         <div className="two">
-          <label>{t('receipts.field.currency')}<select name="currency" defaultValue={r.currency || baseCurrency()} disabled={!edit} title={frozen}>{currencies.map((c) => <option key={c}>{c}</option>)}</select></label>
-          <label>{t('receipts.field.amount')}<input className="mono" name="amount" defaultValue={r.amount == null ? '' : fmt(r.amount)} readOnly={!edit} title={frozen} style={{ textAlign: 'right' }} /></label>
+          <label>{t('receipts.field.currency')}<select name="currency" defaultValue={r.currency || baseCurrency()} disabled={!edit} data-tip={frozen}>{currencies.map((c) => <option key={c}>{c}</option>)}</select></label>
+          <label>{t('receipts.field.amount')}<input className="mono" name="amount" defaultValue={r.amount == null ? '' : fmt(r.amount)} readOnly={!edit} data-tip={frozen} style={{ textAlign: 'right' }} /></label>
         </div>
         {withoutInputTax() !== 'none' ? <VatFields v={v} nav={nav} edit={edit} title={frozen} /> : null}
         <label>{t('receipts.field.description')}<input name="description" defaultValue={r.description ?? ''} readOnly={!canEdit} /></label>
@@ -424,7 +424,7 @@ function Datei(props: Props & { v: ReceiptView; edit: boolean }) {
           const w = view?.workflows.find((y) => y.id === x.workflow);
           return <button key={x.id} type="button" className="linkbtn" style={{ display: 'block', textAlign: 'left', padding: 0 }} onClick={() => nav.go({ route: { area: 'automation', view: 'run', run: x.id }, query: {} })}>{w ? textIn(w.label, language()) : x.workflow} · {formatDate(x.startedAt.slice(0, 10))} {new Date(x.startedAt).toTimeString().slice(0, 5)} →</button>;
         })}</dd></> : null}
-        <dt>{t('receipts.file')}</dt><dd className="mono" style={{ fontSize: 11.5 }} title={r.filename}>{r.filename}</dd>
+        <dt>{t('receipts.file')}</dt><dd className="mono" style={{ fontSize: 11.5 }} data-tip={r.filename}>{r.filename}</dd>
         <dt>{t('receipts.size')}</dt><dd className="mono">{kb}</dd>
         <dt>{t('receipts.sha')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{r.id}…</dd>
       </dl>
@@ -434,7 +434,7 @@ function Datei(props: Props & { v: ReceiptView; edit: boolean }) {
           {v.none
             ? <button type="button" onClick={() => runAct(props, 'mark')}>{t('receipts.isReceipt')}</button>
             : <>
-                {edit && <button type="button" title={t('receipts.readAgainTip')} onClick={() => readAgain(nav, v)}>{t('receipts.readAgain')}</button>}
+                {edit && <button type="button" data-tip={t('receipts.readAgainTip')} onClick={() => readAgain(nav, v)}>{t('receipts.readAgain')}</button>}
                 <button type="button" onClick={() => runAct(props, 'notreceipt')}>{t('receipts.notReceipt')}</button>
               </>}
           {edit && <button type="button" className="del" onClick={() => runAct(props, 'del')}>{t('common.delete')}</button>}

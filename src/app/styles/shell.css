@@ -208,10 +208,11 @@ main { margin-left: var(--abw); }
 .k { position: relative; display: inline-flex; vertical-align: middle; margin-left: 6px; gap: 2px; align-items: center; }
 .k .cap { font: 500 10.5px "Geist Mono"; min-width: 16px; height: 17px; padding: 0 4px; display: inline-grid; place-items: center; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; color: var(--muted); background: var(--bg); }
 .search .k { border: 0; padding: 0; margin-left: 0; } .legend .k { margin-left: 0; }
-[data-tip] { cursor: help; }
-[data-tip]:hover::after { content: attr(data-tip); position: absolute; right: 0; top: calc(100% + 8px); width: max-content; max-width: 260px; white-space: pre-line; text-align: left;
-  font: 400 12px/1.45 "Instrument Sans"; color: var(--bg); background: var(--ink); padding: 8px 10px; border-radius: 8px; z-index: 50; box-shadow: 0 8px 24px -8px rgba(0,0,0,.3); pointer-events: none; }
-.legend [data-tip]:hover::after { top: auto; bottom: calc(100% + 8px); }
+.k[data-tip] { cursor: help; }
+/* The one tooltip (HoverTip.tsx): an element's data-tip, or an icon control's aria-label. */
+.hovertip { position: fixed; z-index: 200; width: max-content; max-width: 280px; white-space: pre-line; text-align: left; padding: 6px 9px; border-radius: 7px;
+  font: 400 12px/1.4 "Instrument Sans"; color: var(--bg); background: var(--ink); box-shadow: var(--shadow); pointer-events: none; animation: hovertip .1s ease-out; }
+@keyframes hovertip { from { opacity: 0; } }
 .legend { pointer-events: auto; }
 .legend .item { display: inline-flex; gap: 5px; align-items: center; margin-left: 12px; }
 .zoom { display: inline-flex; align-items: center; gap: 0; }

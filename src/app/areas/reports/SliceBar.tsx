@@ -22,7 +22,7 @@ export function SliceBar({ dimensions, slice, entries, onChange }: { dimensions:
       {chips.map(({ d, v, dim }) => (
         <span key={`${d}:${v}`} className="rchip" data-tag={`${d}:${v}`}>
           {dim?.label ?? d}: {v ? valueLabel(dim, v) : t('tags.without')}
-          <button type="button" aria-label={t('reports.slice.remove')} title={t('reports.slice.remove')} onClick={() => onChange(withoutValue(slice, d, v))}>×</button>
+          <button type="button" aria-label={t('reports.slice.remove')} onClick={() => onChange(withoutValue(slice, d, v))}>×</button>
         </span>
       ))}
       <label>

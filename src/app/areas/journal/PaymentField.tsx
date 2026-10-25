@@ -26,7 +26,7 @@ export function PaymentField({ books, picked, amount, onPick }: { books: Index; 
       <div className="payf picked" data-testid="payment-field" data-ref={picked.ref}>
         <span className="lbl">{t('journal.payment.label')}</span>
         <span className="mono">{line(picked)}</span>
-        <button type="button" className="rm" title={t('journal.payment.drop')} aria-label={t('journal.payment.drop')} onClick={() => onPick(undefined)}>×</button>
+        <button type="button" className="rm" aria-label={t('journal.payment.drop')} onClick={() => onPick(undefined)}>×</button>
       </div>
     );
   }

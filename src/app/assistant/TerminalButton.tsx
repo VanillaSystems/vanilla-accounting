@@ -42,7 +42,7 @@ export function TerminalButton({ request }: { request(): string }) {
     <>
       <button
         ref={button} type="button" className="aimic aiterm" data-testid="terminal-composer" disabled={busy}
-        aria-label={t('terminal.title')} title={t('terminal.title')} onClick={() => void go()}
+        aria-label={t('terminal.title')} onClick={() => void go()}
       >{ICONS.terminal}</button>
       {shown ? (
         <div ref={box} className="aitermpop" role="status" onKeyDown={(e) => { if (e.key === 'Escape') setShown(undefined); }}>

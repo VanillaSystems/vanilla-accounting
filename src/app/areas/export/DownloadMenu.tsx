@@ -63,7 +63,7 @@ export function DownloadMenu({ account, label, period, toast }: Props) {
 
   return (
     <div className="ldl">
-      <button type="button" className="dl inline" data-dlpop aria-haspopup="menu" aria-expanded={!!anchor} title={t('export.downloadTip')} onClick={(e) => setAnchor(e.currentTarget.getBoundingClientRect())}>
+      <button type="button" className="dl inline" data-dlpop aria-haspopup="menu" aria-expanded={!!anchor} data-tip={t('export.downloadTip')} onClick={(e) => setAnchor(e.currentTarget.getBoundingClientRect())}>
         {ICONS.download}<span>{t('export.download')}</span>
       </button>
       {anchor && (

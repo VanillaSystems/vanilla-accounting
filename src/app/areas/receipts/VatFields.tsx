@@ -58,7 +58,7 @@ const key = (f: Pick<Receipt, 'hasSwissVat' | 'vatSummary' | 'vatId'>) =>
   JSON.stringify([f.hasSwissVat, (f.vatSummary ?? []).map((g) => [g.ratePercent, g.vat]).sort((a, b) => a[0] - b[0]), f.vatId ?? '']);
 
 export function ByHand() {
-  return <span className="byhand" title={t('receipts.byHandTip')}>{t('receipts.byHand')}</span>;
+  return <span className="byhand" data-tip={t('receipts.byHandTip')}>{t('receipts.byHand')}</span>;
 }
 
 export function VatFields({ v, nav, edit, title }: { v: ReceiptView; nav: Nav; edit: boolean; title?: string }) {
@@ -111,7 +111,7 @@ export function VatFields({ v, nav, edit, title }: { v: ReceiptView; nav: Nav; e
   const onEnter = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); commit(d); } };
 
   return (
-    <div className="vatf" ref={box} role="group" aria-label={t('receipts.field.vat')} title={title}>
+    <div className="vatf" ref={box} role="group" aria-label={t('receipts.field.vat')} data-tip={title}>
       <div className="lbl">{t('receipts.field.vat')}{r.vatBy === 'human' && <ByHand />}</div>
       <span className="seg2" role="radiogroup" aria-label={t('receipts.field.vat')} onKeyDown={onRadioKey}>
         {([false, true] as const).map((on) => (
@@ -129,7 +129,7 @@ export function VatFields({ v, nav, edit, title }: { v: ReceiptView; nav: Nav; e
           <input className="mono" aria-label={t('receipts.vatAmount')} value={l.vat} readOnly={!edit} style={{ textAlign: 'right' }}
             onChange={(e) => setD(line(i, { vat: e.target.value, guess: false }))} onBlur={() => commit(d)} onKeyDown={onEnter} />
           {edit && d.lines.length > 1
-            ? <button type="button" className="rm" title={t('receipts.vatRemoveRate')} aria-label={t('receipts.vatRemoveRate')} onClick={() => commit({ ...d, lines: d.lines.filter((_, j) => j !== i) })}>×</button>
+            ? <button type="button" className="rm" aria-label={t('receipts.vatRemoveRate')} onClick={() => commit({ ...d, lines: d.lines.filter((_, j) => j !== i) })}>×</button>
             : <span />}
         </div>
       ))}

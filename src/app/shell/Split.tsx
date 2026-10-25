@@ -60,7 +60,6 @@ export function Split({ list, width, onWidth }: { list: RefObject<HTMLElement>; 
       aria-orientation="vertical"
       aria-label={t('shell.split')}
       aria-valuenow={Math.round(width ?? left)}
-      title={t('shell.split')}
       tabIndex={0}
       style={{ left }}
       onPointerDown={onPointerDown}

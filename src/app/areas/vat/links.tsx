@@ -16,7 +16,7 @@ export function Go({ to, nav, className, title, vat, children }: { to: Location;
     e.preventDefault();
     nav.go(to);
   };
-  return <a href={hrefOf(to)} className={className} title={title} data-vat={vat} onClick={follow}>{children}</a>;
+  return <a href={hrefOf(to)} className={className} data-tip={title} data-vat={vat} onClick={follow}>{children}</a>;
 }
 
 /** An entry, in the current period when it holds the entry's date (urls.md rule 1). */

@@ -176,7 +176,7 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
             {firmCodes().length ? (
               <label className="pbv">{t('journal.byHand.vatLabel')}
                 <input className="mono" name={`vatCode-${key}`} defaultValue={init.vat} list="vat-codes" placeholder={t('journal.vatPlaceholder')} />
-                <span className="acn" data-testid="vat-name" title={vat?.code ? codeText(vat.code) : undefined}>
+                <span className="acn" data-testid="vat-name" data-tip={vat?.code ? codeText(vat.code) : undefined}>
                   {vat?.code ? `${vat.fromRate !== undefined ? `${t('journal.byHand.vatIs', { code: vat.code })} · ` : ''}${codeText(vat.code)}` : vat === null ? '' : t('journal.byHand.noVat')}
                 </span>
               </label>
@@ -185,7 +185,7 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
             <label className="pba">{t('journal.amountIn', { currency: draft.currency })}<input className="mono" name={`amount-${key}`} defaultValue={fmt(init.amount)} style={{ textAlign: 'right' }} /></label>
             <label className="pbt">{t('journal.field.description')}<input name={`description-${key}`} defaultValue={init.description} /></label>
             {dimensions.length ? <div className="pbg"><TagFields dimensions={dimensions} entries={books.journalEntries ?? []} suffix={`-${key}`} /></div> : null}
-            {rows.length > 1 ? <button type="button" className="rm" title={t('journal.byHand.removeLine')} aria-label={t('journal.byHand.removeLine')} onClick={() => setRows(rows.filter((r) => r.key !== key))}>×</button> : null}
+            {rows.length > 1 ? <button type="button" className="rm" aria-label={t('journal.byHand.removeLine')} onClick={() => setRows(rows.filter((r) => r.key !== key))}>×</button> : null}
           </div>
         );
       })}
@@ -197,7 +197,7 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
       ) : null}
       <VatCodeList />
       <div className="pbf">
-        <button type="button" className="addlink" title={t('journal.byHand.addLineTip')} onClick={addLine}>+ {t('journal.byHand.addLine')}</button>
+        <button type="button" className="addlink" data-tip={t('journal.byHand.addLineTip')} onClick={addLine}>+ {t('journal.byHand.addLine')}</button>
         <span className={rest ? 'wn' : 'ok'} data-testid="payment-booking-rest">
           {rest > 0 ? t('journal.byHand.rest', { currency: draft.currency, amount: fmt(rest) })
             : rest < 0 ? t('journal.byHand.over', { currency: draft.currency, amount: fmt(-rest) })
