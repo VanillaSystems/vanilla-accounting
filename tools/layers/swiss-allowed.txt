@@ -109,3 +109,4 @@ src/workspace/scaffold.ts
 src/workspace/setup.ts
 src/workspace/uid.ts
 src/workspace/workspace.ts
+src/workspace/terminal-agents.ts

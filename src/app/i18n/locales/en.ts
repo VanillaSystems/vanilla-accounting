@@ -2841,6 +2841,7 @@ export default {
     'assistant.dictation.speechDenied': 'No permission for speech recognition. Allow it in System Settings › Privacy & Security › Speech Recognition for Vanilla Accounting.',
     'assistant.dictation.noOnDevice': 'This Mac can’t recognize this language on its own, and the app doesn’t send your voice to the internet. From macOS 26 on it just works; before that, turn on Dictation with this language in System Settings › Keyboard.',
     'assistant.dictation.notInstalled': 'Speech recognition for this language couldn’t be loaded onto this Mac. It comes from Apple once; try again with an internet connection.',
+    'assistant.dictation.noSound': 'No sound came from the microphone. In System Settings › Sound › Input, check which microphone is selected and that it isn’t muted.',
     'assistant.askAbout': 'With AI …',
     'assistant.empty': 'Say what you want in your own words: «This receipt is from Farbmix, 28.6.2026, 1243.55 with VAT», «Link it to the payment of 3 July», «Why is this booking like this?». The AI does it at once; every change can be taken back.',
     'assistant.placeholder': 'What should the AI do? (+ for a reference, @ for a workflow or run)',

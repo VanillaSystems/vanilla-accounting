@@ -1,8 +1,8 @@
 /**
  * The instructions for an AI with full shell rights in the books folder (issue #146): Claude Code
  * or Codex, opened by «Im Terminal öffnen» in vanilla-accounting/. Both read AGENTS.md there
- * (Claude Code through CLAUDE.md's @AGENTS.md), besides the company's own files at the
- * repository's root, which stay untouched.
+ * (Claude Code through CLAUDE.md's @AGENTS.md), besides the repository's own AGENTS.md, whose
+ * app part is marked the same way (REPOSITORY_SECTION, issue #149).
  *
  * The app's part is one marked section of vanilla-accounting/AGENTS.md: written whole when the file
  * is missing, added at the end of a file the company wrote itself, and replaced on each update
@@ -11,7 +11,7 @@
  * AGENTS.md and follows no reference, so a rule in another file could go unread.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import type { WorkspacePaths } from './workspace.js';
 
 /** Where the terminal AI writes what it makes (reports, merged PDFs, converted files): ignored by git, so the books' history stays the books'. */
@@ -103,13 +103,105 @@ say that it is your own computation and that the app's figure is the one that co
 ${SECTION_END}
 `;
 
+/** `current` with `section` between its markers; undefined when it has none. */
+function replaceSection(current: string, section: string): string | undefined {
+  const start = current.indexOf(SECTION_START);
+  const end = current.indexOf(SECTION_END, start);
+  return start >= 0 && end > start ? current.slice(0, start) + section.trimEnd() + current.slice(end + SECTION_END.length) : undefined;
+}
+
 /** The file with the app's section as it is now: the whole file when there was none, the section replaced or added at the end otherwise. */
 export function withSection(current: string | undefined): string {
   if (current === undefined || !current.trim()) return TERMINAL_SECTION;
-  const start = current.indexOf(SECTION_START);
-  const end = current.indexOf(SECTION_END, start);
-  if (start >= 0 && end > start) return current.slice(0, start) + TERMINAL_SECTION.trimEnd() + current.slice(end + SECTION_END.length);
-  return `${current.trimEnd()}\n\n${TERMINAL_SECTION}`;
+  return replaceSection(current, TERMINAL_SECTION) ?? `${current.trimEnd()}\n\n${TERMINAL_SECTION}`;
+}
+
+/**
+ * The app's part of the company repository's own AGENTS.md (issue #149). It names no path of the
+ * app: the books are kept with the packed Mac app or with a developer checkout, and a command
+ * that fits one does not exist in the other. The books' rules are in vanilla-accounting/AGENTS.md.
+ */
+export const REPOSITORY_SECTION = `${SECTION_START}
+This repository holds the company's data, not the code. Each app has its own folder; the books of
+Vanilla Accounting are in \`vanilla-accounting/\`: \`belege.workspace.yaml\` (who the company is, how
+it works, which ledger account each bank books on), \`knowledge/\` (suppliers, customers,
+authorities, rules), \`master-data/accounts.json\` (chart of accounts), \`ledger.json\`, and per
+fiscal year \`transactional-data/<year>/\` (\`books/\`, \`receipts/\`, \`bank-statements/\`,
+\`filings/\`). Files no app reads (notes, scripts, reference documents) go to \`own/\`.
+
+The books are kept with the app Vanilla Accounting, never by editing these files: in the Mac app
+(it opens this folder), or in a developer checkout of the app whose \`.env\` sets
+\`VANILLA_WORKSPACE\` to this folder (\`npm start\` and \`npm run doctor\` run there, not here).
+
+Before you work on the books, read \`vanilla-accounting/AGENTS.md\`: what you may read and write,
+how to propose a change to the books, and why a filed period never changes.
+
+What goes where:
+- Code, generic process rules, public vendor facts: the app.
+- Anything naming this company's accounts, amounts, customers, suppliers or the owner's
+  decisions: here (\`vanilla-accounting/knowledge/\`, the notes below).
+${SECTION_END}
+`;
+
+const NOTES_HEADING = 'Company notes:';
+
+/** The repository's AGENTS.md of a new company. */
+export function repositoryAgents(name: string): string {
+  return `# ${name}: the company's repository (private)\n\n${REPOSITORY_SECTION}\n${NOTES_HEADING}\n- (add what an agent should know about this company)\n`;
+}
+
+/**
+ * The texts setup wrote up to the company's notes (0.3, then 0.4.0 until issue #149), with
+ * \`{name}\` for the company and \`{app}\` for the app's path: \`cd {app} && npm start\` pointed into
+ * the Mac app's bundle.
+ */
+const LEGACY_TEXTS = [`# {name}: books (private workspace)
+
+This folder holds the books, not the code. It is a Vanilla Accounting workspace: \`belege.workspace.yaml\`
+(who the company is, how it works, which ledger account each bank books on), \`accounts.json\`
+(chart of accounts), \`books.json\`, \`receipts/\`, \`bank-statements/\`, \`filings/\`, plus the
+company's own knowledge: \`knowledge/\` (suppliers, customers, authorities, rules), \`mail.yaml\`.
+`, `# {name}: the company's repository (private)
+
+This repository holds the company's data, not the code. Each app has its own folder; the books of
+Vanilla Accounting are in \`vanilla-accounting/\`: \`belege.workspace.yaml\` (who the company is, how
+it works, which ledger account each bank books on), \`knowledge/\` (suppliers, customers,
+authorities, rules), \`mail.yaml\`, \`master-data/accounts.json\` (chart of accounts), \`ledger.json\`,
+and per fiscal year \`transactional-data/<year>/\` (\`books/\`, \`receipts/\`, \`bank-statements/\`,
+\`filings/\`). Files no app reads (notes, scripts, reference documents) go to \`own/\`;
+\`npm run doctor\` names every other file.
+`].map((head) => `${head}
+The app is at \`{app}\`. Its \`.env\` sets \`VANILLA_WORKSPACE\` to this folder, so every
+command run there works on these books:
+
+    cd {app} && npm start          # UI on http://localhost:5173
+    cd {app} && npm run doctor     # is everything set up?
+
+Read the app's rules first: {app}/AGENTS.md (golden rule 1: a filed quarter never changes;
+corrections are booked in the open quarter with \`corrects:\` and declared on a form 0535).
+
+What goes where:
+- Code, generic process rules, public vendor facts: the app.
+- Anything naming this company's accounts, amounts, customers, suppliers or the owner's
+  decisions: here (knowledge/, this file).
+
+${NOTES_HEADING}`);
+const LEGACY_REPOSITORY = LEGACY_TEXTS.map((text) => {
+  const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^${escaped.replace('\\{name\\}', '(.*)').replace('\\{app\\}', '(.+)').replaceAll('\\{app\\}', '\\2')}`);
+});
+
+/**
+ * The repository's AGENTS.md as this version writes the app's part: renewed between its markers,
+ * or, when it is a text setup wrote earlier with only its notes changed, that text replaced and the
+ * notes kept. Any other file is the company's own and stays as it is (undefined: no change).
+ */
+export function withRepositorySection(current: string): string | undefined {
+  const renewed = replaceSection(current, REPOSITORY_SECTION);
+  if (renewed !== undefined) return renewed;
+  const legacy = LEGACY_REPOSITORY.map((pattern) => pattern.exec(current)).find((found) => found);
+  if (!legacy) return undefined;
+  return `# ${legacy[1]}: the company's repository (private)\n\n${REPOSITORY_SECTION}\n${current.slice(legacy[0].length - NOTES_HEADING.length)}`;
 }
 
 /** CLAUDE.md that loads AGENTS.md: as it was when it does already, with the line added when not. */
@@ -121,21 +213,23 @@ export function withAgentsImport(current: string | undefined): string {
 
 /**
  * The terminal AI's files in the books folder, as this version writes them: AGENTS.md with the
- * app's section, CLAUDE.md loading it, output/ ignored by git. Idempotent; returns the files written.
+ * app's section, CLAUDE.md loading it, output/ ignored by git; and the app's part of the
+ * repository's AGENTS.md (withRepositorySection). Idempotent; returns the files written, relative
+ * to the repository.
  */
-export function ensureTerminalAgents(paths: Pick<WorkspacePaths, 'root'>): string[] {
+export function ensureTerminalAgents(paths: Pick<WorkspacePaths, 'root' | 'repository'>): string[] {
   const written: string[] = [];
-  const put = (name: string, next: (current: string | undefined) => string) => {
-    const file = join(paths.root, name);
+  const put = (file: string, next: (current: string | undefined) => string | undefined) => {
     const current = existsSync(file) ? readFileSync(file, 'utf8') : undefined;
     const text = next(current);
-    if (text === current) return;
-    mkdirSync(join(file, '..'), { recursive: true });
+    if (text === undefined || text === current) return;
+    mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, text);
-    written.push(name);
+    written.push(relative(paths.repository, file));
   };
-  put('AGENTS.md', withSection);
-  put('CLAUDE.md', withAgentsImport);
-  put(`${OUTPUT_DIR}/.gitignore`, (current) => current ?? '*\n');
+  put(join(paths.root, 'AGENTS.md'), withSection);
+  put(join(paths.root, 'CLAUDE.md'), withAgentsImport);
+  put(join(paths.root, OUTPUT_DIR, '.gitignore'), (current) => current ?? '*\n');
+  if (paths.repository !== paths.root) put(join(paths.repository, 'AGENTS.md'), (current) => current && withRepositorySection(current));
   return written;
 }

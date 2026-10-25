@@ -2841,6 +2841,7 @@ export default {
     'assistant.dictation.speechDenied': 'Nessun permesso per il riconoscimento vocale. Consentilo in Impostazioni di Sistema › Privacy e sicurezza › Riconoscimento vocale per Vanilla Accounting.',
     'assistant.dictation.noOnDevice': 'Questo Mac non sa riconoscere da solo questa lingua, e l’app non invia la tua voce su Internet. Da macOS 26 funziona da sé; prima, attiva la dettatura in Impostazioni di Sistema › Tastiera, con questa lingua.',
     'assistant.dictation.notInstalled': 'Non è stato possibile caricare su questo Mac il riconoscimento vocale per questa lingua. Arriva una volta da Apple; riprova con Internet.',
+    'assistant.dictation.noSound': 'Dal microfono non è arrivato alcun suono. In Impostazioni di Sistema › Suono › Ingresso, controlla quale microfono è scelto e che non sia disattivato.',
     'assistant.askAbout': 'Con l’IA …',
     'assistant.empty': 'Di’ con parole tue cosa vuoi: «Questo giustificativo è di Farbmix, 28.6.2026, 1243.55 con IVA», «Collegalo al pagamento del 3 luglio», «Perché questa registrazione è così?». L’IA lo fa subito; ogni modifica si può annullare.',
     'assistant.placeholder': 'Cosa deve fare l’IA? (+ per un riferimento, @ per un processo o un’esecuzione)',

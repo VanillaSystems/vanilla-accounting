@@ -7,7 +7,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import type { DictationEvent, DictationProblem } from '../types/desktop.js';
 
-const PROBLEMS: readonly DictationProblem[] = ['micDenied', 'speechDenied', 'noOnDevice', 'notInstalled', 'failed'];
+const PROBLEMS: readonly DictationProblem[] = ['micDenied', 'speechDenied', 'noOnDevice', 'notInstalled', 'noSound', 'failed'];
 
 /** A language tag the recognizer takes (de-CH, en-US); anything else from the page is refused. */
 export const isLang = (lang: unknown): lang is string => typeof lang === 'string' && /^[a-z]{2}-[A-Z]{2}$/.test(lang);

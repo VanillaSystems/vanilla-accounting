@@ -115,7 +115,7 @@ const afterPull: Step[] = [
     },
   },
   {
-    name: 'Instructions for an AI in the terminal (vanilla-accounting/AGENTS.md)',
+    name: 'Instructions for an AI in the terminal (AGENTS.md)',
     run() {
       const ws = openWorkspace();
       const written = ensureTerminalAgents(ws.paths);

@@ -101,7 +101,7 @@ test('the setup questions skip the method, basis and period of a firm that is no
   assert.throws(() => checkAnswers({ ...registered, vatMethod: 'effective' }, [{ rate: 4.5 }]), /net tax rate method only/);
   assert.throws(() => checkAnswers({ ...registered, period: undefined } as unknown as Answers), (e: Error) => e instanceof SetupError && e.refusal.reason === 'missing');
 
-  const plan = planWorkspace({ name: 'Salon Beispiel', uid: 'CHE-153.004.184' as Uid, owner: 'Bella Beispiel', preset: 'freelancer', answers: checkAnswers(freelancer as Answers).answers, vat: NOT_REGISTERED, banks: [{ bank: 'UBS', currency: 'CHF', account: '1020' }] }, loadChart(), '/tmp/x', APP_ROOT);
+  const plan = planWorkspace({ name: 'Salon Beispiel', uid: 'CHE-153.004.184' as Uid, owner: 'Bella Beispiel', preset: 'freelancer', answers: checkAnswers(freelancer as Answers).answers, vat: NOT_REGISTERED, banks: [{ bank: 'UBS', currency: 'CHF', account: '1020' }] }, loadChart());
   const yaml = plan.files.find(([p]) => p.endsWith('belege.workspace.yaml'))![1];
   assert.match(yaml, /vat:\n\s+registered: false\n/);
   assert.doesNotMatch(yaml, /vatMethod|basis|period|method:/);

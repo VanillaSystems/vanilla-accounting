@@ -8,7 +8,7 @@ and the providers.
 
 | Layer | Files | With Swiss specifics |
 |---|---:|---:|
-| core | 64 | 22 |
+| core | 64 | 23 |
 | engine | 4 | 1 |
 | provider | 13 | 11 |
 | split | 102 | 26 |
@@ -82,8 +82,9 @@ Layers are assigned by path prefix, most specific first:
 | `src/workspace/manifest.ts` | CHF 3, QR-bill 7 |
 | `src/workspace/migrate.ts` | ESTV 1 |
 | `src/workspace/reads.ts` | ESTV 1 |
-| `src/workspace/scaffold.ts` | MWST 1, ESTV 1, form 0535 1 |
+| `src/workspace/scaffold.ts` | MWST 1, ESTV 1 |
 | `src/workspace/setup.ts` | CHF 1, MWST 4, ESTV 2, camt.053 1 |
+| `src/workspace/terminal-agents.ts` | form 0535 1 |
 | `src/workspace/uid.ts` | MWST 2 |
 | `src/workspace/workspace.ts` | ESTV 1 |
 
