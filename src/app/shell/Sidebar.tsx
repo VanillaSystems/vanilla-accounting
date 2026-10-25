@@ -312,7 +312,7 @@ function AnswerText({ text }: { text: string }) {
 
 function Chip({ r, onRemove }: { r: ContextRef; onRemove(): void }) {
   return (
-    <span className="aichip" title={`${t(`assistant.kind.${r.kind}` as 'assistant.kind.entry')} ${r.id}`}>
+    <span className="aichip" data-tip={`${t(`assistant.kind.${r.kind}` as 'assistant.kind.entry')} ${r.id}`}>
       {r.label}
       <button type="button" aria-label={t('assistant.removeContext', { label: r.label })} onClick={onRemove}>×</button>
     </span>
@@ -322,7 +322,7 @@ function Chip({ r, onRemove }: { r: ContextRef; onRemove(): void }) {
 /** A file the composer carries: its thumbnail or kind, its name, × to take it off; dimmed while it uploads. */
 function FileChip({ f }: { f: ComposerFile }) {
   return (
-    <span className={`aichip aifile${f.attachment ? '' : ' uploading'}`} title={f.attachment ? f.name : t('assistant.uploading', { name: f.name })} data-testid="attachment-chip">
+    <span className={`aichip aifile${f.attachment ? '' : ' uploading'}`} data-tip={f.attachment ? f.name : t('assistant.uploading', { name: f.name })} data-testid="attachment-chip">
       {f.preview ? <img src={f.preview} alt="" /> : <span className="aifilekind">{ATTACHMENT_TYPES[f.type]}</span>}
       {f.name}
       <button type="button" aria-label={t('assistant.removeContext', { label: f.name })} onClick={() => removeFile(f.key)}>×</button>
@@ -349,7 +349,7 @@ function SentFile({ a, conversation }: { a: Attachment; conversation: string | u
   };
   return (
     <span className="aisent" data-testid="sent-attachment">
-      <a className="aichip aifile" href={url || undefined} target="_blank" rel="noreferrer" title={a.name}>
+      <a className="aichip aifile" href={url || undefined} target="_blank" rel="noreferrer" data-tip={a.name}>
         {url && showsAsImage(a.type) ? <img src={url} alt="" /> : <span className="aifilekind">{ATTACHMENT_TYPES[a.type]}</span>}
         {a.name}
       </a>
@@ -444,11 +444,11 @@ export function Sidebar({ page, books, onGo }: Props) {
         {setup ? <SetupTitle /> : <b><BotIcon /> {t('assistant.title')}</b>}
         <span className="aiacts">
           <button
-            type="button" className="aiact" aria-pressed={s.listing} title={t(s.listing ? 'assistant.backToConversation' : 'assistant.pastConversations')}
+            type="button" className="aiact" aria-pressed={s.listing} data-tip={t(s.listing ? 'assistant.backToConversation' : 'assistant.pastConversations')}
             onClick={() => (s.listing ? hideConversations() : void showConversations())}
           >{ICONS.clock}{t('assistant.conversations')}</button>
           <button type="button" className="aiact" disabled={s.sending} onClick={newConversation}>{ICONS.plus}{t('assistant.new')}</button>
-          <button type="button" className="aiact icon" aria-label={t('assistant.close')} title={`${t('assistant.close')} · ⌘J`} onClick={closeAssistant}>×</button>
+          <button type="button" className="aiact icon" aria-label={t('assistant.close')} data-tip={`${t('assistant.close')} · ⌘J`} onClick={closeAssistant}>×</button>
         </span>
       </header>
       {setup && !s.listing ? <SetupRail onGo={onGo} /> : null}
@@ -509,21 +509,21 @@ export function Sidebar({ page, books, onGo }: Props) {
             />
             <div className="aibar">
               <button
-                type="button" className="aiplus" aria-label={t('assistant.mention')} title={t('assistant.mention')} aria-haspopup="dialog" aria-expanded={picking}
+                type="button" className="aiplus" aria-label={t('assistant.mention')} aria-haspopup="dialog" aria-expanded={picking}
                 ref={plus} onClick={() => setPicking(!picking)}
               >{ICONS.plus}</button>
               {listening && (preparing || ear?.online) ? <small className="aiheard" aria-live="polite">{t(preparing ? 'assistant.dictation.preparing' : 'assistant.dictation.online')}</small> : null}
               {ear ? (
                 <button
                   type="button" className={`aimic${listening ? ' on' : ''}`} aria-pressed={!!listening} data-testid="dictate"
-                  aria-label={t(listening ? 'assistant.dictation.stop' : 'assistant.dictation.start')} title={t(listening ? 'assistant.dictation.stop' : 'assistant.dictation.start')}
+                  aria-label={t(listening ? 'assistant.dictation.stop' : 'assistant.dictation.start')}
                   onClick={listen}
                 >{ICONS.mic}</button>
               ) : null}
               {setup ? null : <TerminalButton request={() => handover(text, s.turns, t('terminal.handover.context'))} />}
               {s.sending
-                ? <button type="button" className="aisend" aria-label={t('assistant.stop')} title={t('assistant.stop')} onClick={stopAnswer}>{ICONS.stop}</button>
-                : <button type="button" className="aisend" aria-label={t('assistant.send')} title={t('assistant.send')} aria-disabled={empty} onClick={send}>{ICONS.arrowUp}</button>}
+                ? <button type="button" className="aisend" aria-label={t('assistant.stop')} onClick={stopAnswer}>{ICONS.stop}</button>
+                : <button type="button" className="aisend" aria-label={t('assistant.send')} aria-disabled={empty} onClick={send}>{ICONS.arrowUp}</button>}
             </div>
           </div>
         </div>

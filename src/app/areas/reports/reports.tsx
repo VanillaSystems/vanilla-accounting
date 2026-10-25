@@ -121,7 +121,7 @@ function List(props: Props) {
       <ListHead period={period} books={props.books} canEdit={canEdit} />
       <Tabs route={route} nav={nav}>
         <span className="rnote">{switched && q ? `→ ${t(REPORT_LABEL[switched])}` : view.asOf ? t('balance.asOf', { date: formatDate(view.asOf) }) : ''}</span>
-        <button type="button" className={`rall${all ? ' on' : ''}`} aria-pressed={all} title={all ? t('reports.onlyWithAmountTip') : t('reports.allAccountsTip')} onClick={toggleAll}>
+        <button type="button" className={`rall${all ? ' on' : ''}`} aria-pressed={all} data-tip={all ? t('reports.onlyWithAmountTip') : t('reports.allAccountsTip')} onClick={toggleAll}>
           {all ? t('reports.allAccounts') : t('reports.onlyWithAmount')}
         </button>
       </Tabs>
@@ -175,7 +175,7 @@ function List(props: Props) {
       ))}
       <div className={`rows rep${sb ? ' sbal' : ''}${cols ? ' cols' : ''}`} role="listbox" aria-label={t('reports.accounts')} data-columns={cols?.values.length} style={cols ? ({ '--cols': cols.values.length } as CSSProperties) : undefined}>
         {sb && <div className="group sbh"><span>{t('col.account')}</span><span /><span className="r">{t('reports.opening')}</span><span className="r">{t('reports.debit')}</span><span className="r">{t('reports.credit')}</span><span className="r">{t('reports.balance')}</span></div>}
-        {cols && by && <div className="group sbh" data-testid="slice-head"><span>{t('col.account')}</span><span>{by.label}</span>{cols.values.map((v) => <span key={v} className="r" title={v}>{v ? valueLabel(by, v) : t('tags.without')}</span>)}<span className="r">{t('common.total')}</span></div>}
+        {cols && by && <div className="group sbh" data-testid="slice-head"><span>{t('col.account')}</span><span>{by.label}</span>{cols.values.map((v) => <span key={v} className="r" data-tip={v}>{v ? valueLabel(by, v) : t('tags.without')}</span>)}<span className="r">{t('common.total')}</span></div>}
         {view.blocks.map((b, i) => {
           if (b.kind === 'head') return <div key={i} className="rhead">{t(b.title === 'assets' ? 'balance.assets' : 'balance.liabilities')}</div>;
           if (b.kind === 'sum') return <div key={i} className={`rsum${b.strong ? ' strong' : ''}`}><span>{t(SUM_LABEL[b.title])}</span>{cols?.sum(b.title).map((x, j) => <span key={j} className="mono f">{fmt(x)}</span>)}<span className="mono">{fmt(b.value)}</span></div>;

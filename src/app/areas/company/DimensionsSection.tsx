@@ -68,7 +68,7 @@ function DimensionCard({ d, entries, canEdit, onSave, onRemove }: { d: Dimension
         <span className="mono m">{d.id}</span>
         <span className="m">{t('common.entryCount', { n: used })}</span>
         {canEdit && (used
-          ? <span className="m" title={t('dimensions.inUse', { n: used })}>{t('dimensions.cannotRemove')}</span>
+          ? <span className="m" data-tip={t('dimensions.inUse', { n: used })}>{t('dimensions.cannotRemove')}</span>
           : <button type="button" className="golink" onClick={onRemove}>{t('dimensions.remove')}</button>)}
       </div>
       <div className="dimvals">

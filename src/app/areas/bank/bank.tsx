@@ -117,13 +117,13 @@ function List(props: Props) {
         <div className="counts stc">
           <span>{t('bank.nStatements', { n: files })}</span>
           {missing > 0 && <span className="warn" data-testid="missing-count">{I.dot}{t('bank.nMissing', { n: missing })}</span>}
-          {without > 0 && <span data-testid="without-count" title={t('bank.withoutTip')}>{t('bank.nWithout', { n: without })}</span>}
+          {without > 0 && <span data-testid="without-count" data-tip={t('bank.withoutTip')}>{t('bank.nWithout', { n: without })}</span>}
           {gaps > 0 && <span className="warn" data-testid="gap-count">{I.dot}{t('bank.nGaps', { n: gaps })}</span>}
           {bad > 0
             ? <span className="warn">{I.dot}{t('bank.nDiffer', { n: bad })}</span>
-            : files > 0 && !gaps && !strays.length && <span className="ok" title={t('bank.balancesOkTip')}>{I.check}{t('bank.balancesOk')}</span>}
+            : files > 0 && !gaps && !strays.length && <span className="ok" data-tip={t('bank.balancesOkTip')}>{I.check}{t('bank.balancesOk')}</span>}
           {unbooked.length > 0 && (
-            <button type="button" className="warn golink" data-testid="unbooked-count" title={t('bank.unbookedTip')} onClick={() => nav.go(at({ area: 'bank', payment: unbooked[0].ref }, unbooked[0].date, query.period))}>
+            <button type="button" className="warn golink" data-testid="unbooked-count" data-tip={t('bank.unbookedTip')} onClick={() => nav.go(at({ area: 'bank', payment: unbooked[0].ref }, unbooked[0].date, query.period))}>
               {I.dot}{t('bank.nUnbooked', { n: unbooked.length })}
             </button>
           )}
@@ -178,7 +178,7 @@ function List(props: Props) {
             const shut = s.collapsed.has(g.key);
             return (
               <Fragment key={g.key}>
-                <button type="button" className={`group${shut ? ' shut' : ''}`} aria-expanded={!shut} title={shut ? t('receipts.expand') : t('receipts.collapse')} onClick={() => toggleGroup(g.key)}>
+                <button type="button" className={`group${shut ? ' shut' : ''}`} aria-expanded={!shut} data-tip={shut ? t('receipts.expand') : t('receipts.collapse')} onClick={() => toggleGroup(g.key)}>
                   <span>{I.gch}{g.label}</span><span className="mono">{g.side}</span>
                 </button>
                 {!shut && g.rows.map((r, i) => (

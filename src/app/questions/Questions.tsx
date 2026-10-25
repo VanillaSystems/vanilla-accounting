@@ -71,7 +71,7 @@ async function run(nav: Nav, p: Promise<unknown>, done?: string): Promise<boolea
 export function IAm() {
   const { me, people } = useQuestions();
   return (
-    <label className="qme" title={t('questions.iAmTip')}>
+    <label className="qme" data-tip={t('questions.iAmTip')}>
       <span>{t('questions.iAm')}</span>
       <input list="q-people" defaultValue={me} key={me} aria-label={t('questions.iAm')} onBlur={(e) => { if (e.currentTarget.value.trim() && e.currentTarget.value !== me) setMe(e.currentTarget.value); }}
         onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
@@ -179,7 +179,7 @@ export function QuestionCard({ q, nav, canEdit, books, showItem }: { q: Question
           {canEdit && q.status === 'answered' ? (
             <div className="qacts">
               {mine || q.origin === 'assistant' ? <button type="button" className="btn" onClick={() => void run(nav, closeQuestion(q.id, 'done'))}>{t('questions.done')}</button> : null}
-              {q.answer.acted && !('refused' in q.answer.acted) && undoable(q, books) ? <button type="button" className="btn ghost" title={t('questions.undoTip')} onClick={() => void run(nav, undoAnswer(q.id), t('questions.undone'))}>{t('questions.undo')}</button> : null}
+              {q.answer.acted && !('refused' in q.answer.acted) && undoable(q, books) ? <button type="button" className="btn ghost" data-tip={t('questions.undoTip')} onClick={() => void run(nav, undoAnswer(q.id), t('questions.undone'))}>{t('questions.undo')}</button> : null}
             </div>
           ) : null}
         </>
@@ -231,7 +231,7 @@ export function QuestionsOn({ on, also = [], nav, canEdit, books }: { on: Questi
       {gone.map((q) => <p key={q.id} className="qnote" data-testid="question-gone">{t(`questions.gone.${q.closed!.why!}` as 'questions.gone.closed')}</p>)}
       {here.map((q) => <QuestionCard key={q.id} q={q} nav={nav} canEdit={canEdit} books={books} showItem={q.on.kind !== on.kind || q.on.id !== on.id} />)}
       {canEdit ? (asking ? <AskForm on={on} nav={nav} onDone={() => setAsking(false)} /> : (
-        <button type="button" className="golink qaskbtn" title={t('questions.askTip')} onClick={() => setAsking(true)}>{t('questions.ask')}</button>
+        <button type="button" className="golink qaskbtn" data-tip={t('questions.askTip')} onClick={() => setAsking(true)}>{t('questions.ask')}</button>
       )) : null}
     </div>
   );

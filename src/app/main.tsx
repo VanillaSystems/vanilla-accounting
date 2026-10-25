@@ -19,6 +19,7 @@ import { Shell } from './shell/Shell.js';
 import { useLanguage } from './shell/prefs.js';
 import { desktop, noTitleBar } from './desktop/bridge.js';
 import { StartScreen, useStartScreen } from './desktop/StartScreen.js';
+import { HoverTip } from './shell/HoverTip.js';
 
 if (noTitleBar) {
   document.documentElement.classList.add('no-titlebar');
@@ -35,9 +36,14 @@ function Root() {
   const [language, setLanguage] = useLanguage(start === false);
   useEffect(() => { desktop?.setLanguage(language); }, [language]);
   if (start === undefined) return null;
-  return start
-    ? <StartScreen key={language} language={language} onLanguage={setLanguage} />
-    : <Shell key={language} language={language} onLanguage={setLanguage} />;
+  return (
+    <>
+      {start
+        ? <StartScreen key={language} language={language} onLanguage={setLanguage} />
+        : <Shell key={language} language={language} onLanguage={setLanguage} />}
+      <HoverTip />
+    </>
+  );
 }
 
 createRoot(document.getElementById('root')!).render(

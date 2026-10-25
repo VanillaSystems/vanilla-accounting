@@ -57,7 +57,7 @@ export function NewBooks({ info, language, onCancel, onSetup, onForm }: {
           <div className="cf s4"><span>{t('desktop.flow.language')}</span>
             <span className="seg2" role="radiogroup" aria-label={t('desktop.flow.language')}>
               {LOCALES.map((l) => (
-                <button key={l.code} type="button" role="radio" aria-checked={lang === l.code} className={lang === l.code ? 'on' : ''} title={l.name} onClick={() => setLang(l.code)}>{l.code.toUpperCase()}</button>
+                <button key={l.code} type="button" role="radio" aria-checked={lang === l.code} className={lang === l.code ? 'on' : ''} data-tip={l.name} onClick={() => setLang(l.code)}>{l.code.toUpperCase()}</button>
               ))}
             </span>
           </div>

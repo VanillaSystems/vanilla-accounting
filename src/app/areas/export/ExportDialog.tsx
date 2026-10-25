@@ -155,7 +155,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
             {periods.map((p) => (
               <button key={p} type="button" role="radio" aria-checked={p === c.period} className={p === c.period ? 'on' : ''} onClick={() => change({ period: p })}>{periodName(periodOf(p))}</button>
             ))}
-            <button type="button" className="xcal" aria-haspopup="dialog" title={t('export.customPeriodTip')} onClick={(e) => setPicker(e.currentTarget.getBoundingClientRect())}>
+            <button type="button" className="xcal" aria-haspopup="dialog" data-tip={t('export.customPeriodTip')} onClick={(e) => setPicker(e.currentTarget.getBoundingClientRect())}>
               {ICONS.calendar}<span>{t('export.customPeriod')}</span>
             </button>
           </div>
@@ -174,7 +174,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
                 <button type="button" onClick={() => setC(ownConfig(p))}>
                   <b>{p.name}</b><span>{t('export.ownMeta', { period: periodName(periodOf(p.period)), n: Object.keys(p.items).length })}</span>
                 </button>
-                <button type="button" className="del" title={t('export.deletePreset')} aria-label={t('export.deletePresetNamed', { name: p.name })} onClick={() => remove(i)}>×</button>
+                <button type="button" className="del" data-tip={t('export.deletePreset')} aria-label={t('export.deletePresetNamed', { name: p.name })} onClick={() => remove(i)}>×</button>
               </div>
             ))}
           </nav>
@@ -201,7 +201,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
                             className={f.includes(x) ? 'on' : ''}
                             aria-pressed={f.includes(x)}
                             disabled={!n}
-                            title={x === 'banana' ? t('export.bananaTip') : t(`export.fmt.${x}` as 'export.title')}
+                            data-tip={x === 'banana' ? t('export.bananaTip') : t(`export.fmt.${x}` as 'export.title')}
                             onClick={() => setFormats(i.id, f.includes(x) ? f.filter((y) => y !== x) : [...f, x])}
                           >{t(`export.fmt.${x}` as 'export.title')}</button>
                         )) : <span className="orig">{t('export.originals')}</span>}

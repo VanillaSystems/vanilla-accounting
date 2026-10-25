@@ -13,7 +13,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 ## Driving conventions
 
 - Navigate by URL (the paths of docs/urls.md, e.g. `/journal/<id>?period=$OPEN_Q`; old `/<lang>/<period>/<tab>?receipt=&tx=` links redirect there) to reach a state, then act through the UI.
-- Prefer the `data-*` handles the feature files name (`data-id`, `data-testid`, `data-act`, `data-partner`, …), ARIA roles and names from `$B snapshot -i`, `title=` attributes, and placeholders over positions.
+- Prefer the `data-*` handles the feature files name (`data-id`, `data-testid`, `data-act`, `data-partner`, …), ARIA roles and names from `$B snapshot -i`, `data-tip` attributes (tooltips), and placeholders over positions.
 - Choose fixture records from the sandbox index with `jq` at run time. IDs change when data is reclassified, so never hard-code one from an old run.
 - One mutation per proof. Run `$S diff` right after it, so the diff shows only that mutation.
 

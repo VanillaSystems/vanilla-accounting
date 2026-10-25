@@ -49,7 +49,7 @@ function MarkSign({ mark }: { mark: Mark }) {
     void el.offsetWidth;
     el.classList.add('flash');
   };
-  return <a className="kwmark" href={`#${lineId(mark.row)}`} title={t('partners.notes.markTip', { line: mark.line })} data-mark={mark.row.id} onClick={go}>{t('partners.notes.mark')}</a>;
+  return <a className="kwmark" href={`#${lineId(mark.row)}`} data-tip={t('partners.notes.markTip', { line: mark.line })} data-mark={mark.row.id} onClick={go}>{t('partners.notes.mark')}</a>;
 }
 
 /**

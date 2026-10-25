@@ -51,7 +51,7 @@ function hardcodedTexts(file: string): string[] {
     else if (ts.isBinaryExpression(e) && [ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(e.operatorToken.kind)) { leaves(e.left); leaves(e.right); }
     else if (ts.isParenthesizedExpression(e)) leaves(e.expression);
   };
-  const shown = (attr: ts.JsxAttribute) => ['title', 'placeholder', 'aria-label', 'alt', 'label'].includes(attr.name.getText());
+  const shown = (attr: ts.JsxAttribute) => ['title', 'data-tip', 'placeholder', 'aria-label', 'alt', 'label'].includes(attr.name.getText());
   const visit = (node: ts.Node) => {
     if (ts.isJsxText(node)) report(node, node.text);
     if (ts.isJsxAttribute(node) && shown(node) && node.initializer) {

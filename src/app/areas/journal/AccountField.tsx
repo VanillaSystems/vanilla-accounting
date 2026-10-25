@@ -55,7 +55,7 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick }: { 
         aria-expanded={open}
         aria-controls={listId}
         aria-autocomplete="list"
-        title={name0}
+        data-tip={name0}
         onFocus={(e) => { if (!readOnly) { setOpen(true); setActive(0); e.currentTarget.select(); } }}
         onChange={(e) => { setValue(e.target.value.trim()); setActive(0); setOpen(true); }}
         onBlur={() => setOpen(false)}

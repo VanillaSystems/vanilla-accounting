@@ -73,17 +73,17 @@ function List(props: Props) {
           {JOURNAL_ORIGINS.some((o) => origins[o] > 0) && (
             <span className="origins" role="group" aria-label={t('journal.originFilter')}>
               {JOURNAL_ORIGINS.filter((o) => origins[o] > 0 || s.origin === o).map((o) => (
-                <button key={o} type="button" aria-pressed={s.origin === o} className={s.origin === o ? 'on' : ''} data-origin={o} title={t('journal.originFilterTip', { who: t(`journal.origin.${o}`) })}
+                <button key={o} type="button" aria-pressed={s.origin === o} className={s.origin === o ? 'on' : ''} data-origin={o} data-tip={t('journal.originFilterTip', { who: t(`journal.origin.${o}`) })}
                   onClick={() => setUi({ origin: s.origin === o ? undefined : o })}><span className="n">{origins[o]}</span>{t(`journal.origin.${o}`)}</button>
               ))}
             </span>
           )}
           {query.vat && (
-            <button type="button" className="vchip" data-testid="vat-filter" title={t('journal.vatFilterOff')} onClick={() => nav.setQuery({ vat: undefined })}>
+            <button type="button" className="vchip" data-testid="vat-filter" data-tip={t('journal.vatFilterOff')} onClick={() => nav.setQuery({ vat: undefined })}>
               {t('journal.field.vatCode')} <b className="mono">{query.vat === NO_VAT ? t('journal.without') : query.vat}</b> ×
             </button>
           )}
-          <button type="button" className="vhbtn" title={t('codes.histogramTitle')} aria-label={t('codes.histogramTitle')} onClick={() => setCodesUi({ histogram: true })}>{BARS}</button>
+          <button type="button" className="vhbtn" aria-label={t('codes.histogramTitle')} onClick={() => setCodesUi({ histogram: true })}>{BARS}</button>
           <label className="search">
             {ICONS.search}
             <span className="sr">{t('journal.searchLabel')}</span>
@@ -113,7 +113,7 @@ function List(props: Props) {
             let prev: EntryView | undefined;
             return (
               <Fragment key={m}>
-                <button type="button" className={`group${shut ? ' shut' : ''}`} aria-expanded={!shut} title={shut ? t('receipts.expand') : t('receipts.collapse')} onClick={() => toggleMonth(m)}>
+                <button type="button" className={`group${shut ? ' shut' : ''}`} aria-expanded={!shut} data-tip={shut ? t('receipts.expand') : t('receipts.collapse')} onClick={() => toggleMonth(m)}>
                   <span className="gl">{I.gch}{monthName(`${m}-01`)}</span>
                   <span className="cap" aria-hidden="true">{shut ? '' : t('journal.field.accountDebit')}</span>
                   <span className="cap" aria-hidden="true">{shut ? '' : t('journal.field.accountCredit')}</span>
@@ -141,8 +141,8 @@ function Row({ v, prev, sel, acName, onSelect }: { v: EntryView; prev?: EntryVie
   const side = (n: string, which: 'dr' | 'cr') => {
     const label = which === 'dr' ? t('journal.field.accountDebit') : t('journal.field.accountCredit');
     return n
-      ? <span className={`mono ${which}`} title={`${label} ${n} ${acName[n] ?? ''}`}>{n}</span>
-      : <span className={`mono ${which} none`} title={t('journal.noCounterSide', { side: label })}>·</span>;
+      ? <span className={`mono ${which}`} data-tip={`${label} ${n} ${acName[n] ?? ''}`}>{n}</span>
+      : <span className={`mono ${which} none`} data-tip={t('journal.noCounterSide', { side: label })}>·</span>;
   };
   return (
     <div className={`row${sel ? ' sel' : ''}${cont ? ' cont' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={e.id} onClick={() => onSelect(e.id)}>
@@ -151,8 +151,8 @@ function Row({ v, prev, sel, acName, onSelect }: { v: EntryView; prev?: EntryVie
       {side(e.accountDebit, 'dr')}
       {side(e.accountCredit, 'cr')}
       {e.vatCode
-        ? <span className={`mono vc${e.vatCode.startsWith('-') ? ' rev' : ''}`} data-vat={e.vatCode} aria-label={t('journal.vatLabel', { code: e.vatCode, text: codeText(e.vatCode) })} title={v.evidence && evidenceText(e, v.evidence)}>{v.evidence && I.dot}{e.vatCode}</span>
-        : <span className="mono vc none" title={t('journal.noVat')}>·</span>}
+        ? <span className={`mono vc${e.vatCode.startsWith('-') ? ' rev' : ''}`} data-vat={e.vatCode} aria-label={t('journal.vatLabel', { code: e.vatCode, text: codeText(e.vatCode) })} data-tip={v.evidence && evidenceText(e, v.evidence)}>{v.evidence && I.dot}{e.vatCode}</span>
+        : <span className="mono vc none" data-tip={t('journal.noVat')}>·</span>}
       <span className="mono cu">{e.exchangeCurrency && e.exchangeCurrency !== baseCurrency() ? e.exchangeCurrency : ''}</span>
       <span className="a mono">{fmt(e.amount)}</span>
     </div>

@@ -112,11 +112,11 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
       </div>
       {c && (
         <div className="facts">
-          <span title={t('bank.openTip')}>{t('bank.open', { amount: c.open == null ? '?' : fmt(c.open) })}</span>
-          <span title={t('bank.incTip')}>+ {fmt(c.inc)}</span>
-          <span title={t('bank.outTip')}>− {fmt(c.out)}</span>
-          <span title={t('bank.closeTip')}>{t('bank.close', { amount: c.close == null ? '?' : fmt(c.close) })}</span>
-          <span title={t('bank.bookTip')} className={c.bookDiff ? 'nov' : undefined}>{t('bank.book', { amount: fmt(c.book) })}</span>
+          <span data-tip={t('bank.openTip')}>{t('bank.open', { amount: c.open == null ? '?' : fmt(c.open) })}</span>
+          <span data-tip={t('bank.incTip')}>+ {fmt(c.inc)}</span>
+          <span data-tip={t('bank.outTip')}>− {fmt(c.out)}</span>
+          <span data-tip={t('bank.closeTip')}>{t('bank.close', { amount: c.close == null ? '?' : fmt(c.close) })}</span>
+          <span data-tip={t('bank.bookTip')} className={c.bookDiff ? 'nov' : undefined}>{t('bank.book', { amount: fmt(c.book) })}</span>
         </div>
       )}
       <div className="status">
@@ -153,7 +153,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
               {tx && !closed ? <WorkflowButtons kind="transaction" id={tx.ref} facts={[b.unbooked(tx) ? 'unbooked' : 'booked']} nav={nav} canEdit={canEdit} /> : null}
               {tx ? <AskAi context={{ kind: 'payment', id: tx.ref, label: tx.description ?? tx.ref }} /> : null}
               {src && <span className="pgno">{page}</span>}
-              {file && <a className="dl inline" href={file} download={s.file!.filename} title={t('bank.downloadTitle', { file: s.file!.filename })}>{I.dl}<span>{t('receipts.download')}</span></a>}
+              {file && <a className="dl inline" href={file} download={s.file!.filename} data-tip={t('bank.downloadTitle', { file: s.file!.filename })}>{I.dl}<span>{t('receipts.download')}</span></a>}
             </div>
           )}
           {tx && canEdit && !closed && tx.amount && b.unbooked(tx) ? <PaymentBooking key={tx.ref} books={props.books} nav={nav} payment={tx.ref} /> : null}
@@ -193,8 +193,8 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
                   return (
                     <button key={p.ref} type="button" className={`pay${on ? ' on' : ''}${hit ? '' : ' dim'}`} role="option" aria-selected={on} data-pay={p.ref} onClick={() => choose(on ? undefined : p.ref)}>
                       <span className="d">{p.date.slice(8)}.{p.date.slice(5, 7)}.</span>
-                      <span className="t">{b.needsReceipt(p) && I.dot}{payText(p).name}{b.unbooked(p) && <span className="nb" title={t('bank.notBooked')}>{t('bank.unbookedMark')}</span>}
-                        {madeByHand(p) && <span className="hm" data-testid="by-hand" title={t(byStatement(p) ? 'bank.byHandConfirmedTip' : 'bank.byHandTip')}>{t(byStatement(p) ? 'bank.byHandConfirmed' : 'bank.byHand')}</span>}</span>
+                      <span className="t">{b.needsReceipt(p) && I.dot}{payText(p).name}{b.unbooked(p) && <span className="nb" data-tip={t('bank.notBooked')}>{t('bank.unbookedMark')}</span>}
+                        {madeByHand(p) && <span className="hm" data-testid="by-hand" data-tip={t(byStatement(p) ? 'bank.byHandConfirmedTip' : 'bank.byHandTip')}>{t(byStatement(p) ? 'bank.byHandConfirmed' : 'bank.byHand')}</span>}</span>
                       <span className="a"><Amount tx={p} /></span>
                     </button>
                   );
@@ -206,10 +206,10 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
           {s.file && (
             <Sec k="datei" label={t('bank.sec.datei')} val="">
               <dl className="kv">
-                <dt>{t('bank.statement')}</dt><dd className="mono" style={{ fontSize: 11.5 }} title={s.file.filename}>{s.file.filename}</dd>
+                <dt>{t('bank.statement')}</dt><dd className="mono" style={{ fontSize: 11.5 }} data-tip={s.file.filename}>{s.file.filename}</dd>
                 <dt>{t('bank.account')}</dt><dd className="mono">{s.account.account}</dd>
               </dl>
-              {canEdit && !closed ? <button type="button" className="linkbtn" data-testid="remove-statement" title={t('bank.removeStatementTip')} onClick={() => void removeStatement(nav, s)}>{t('bank.removeStatement')}</button> : null}
+              {canEdit && !closed ? <button type="button" className="linkbtn" data-testid="remove-statement" data-tip={t('bank.removeStatementTip')} onClick={() => void removeStatement(nav, s)}>{t('bank.removeStatement')}</button> : null}
             </Sec>
           )}
         </aside>
@@ -238,30 +238,30 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
       <b className="mono">{formatDate(tx.date)}</b> {payText(tx).name}{payText(tx).note && <small> {payText(tx).note}</small>} <span className="mono"><Amount tx={tx} /></span>
       {fee && <> · {t('bank.fee', { amount: fmt(Math.abs(fee.amount)) })}</>}
       {receipts.length > 0 ? (
-        <> · <button type="button" className="golink" data-testid="go-receipt" title={t('bank.openReceipt')} onClick={() => nav.go(at({ area: 'receipts', id: receipts[0] }, first?.date ?? tx.date))}>
+        <> · <button type="button" className="golink" data-testid="go-receipt" data-tip={t('bank.openReceipt')} onClick={() => nav.go(at({ area: 'receipts', id: receipts[0] }, first?.date ?? tx.date))}>
           {t('bank.receipt', { name: first?.name ?? receipts[0] })}{receipts.length > 1 && ` +${receipts.length - 1}`}
         </button></>
       ) : tx.inputTaxProof ? (
         <> · <span data-testid="input-tax-proof">{t('bank.inputTaxProof', { text: tx.inputTaxProof.text })}</span></>
       ) : saleWithoutVat ? (
         <> · <span className="wn" data-testid="sale-without-vat">{t('bank.saleNoVat')}</span>{edit && <>
-          {' '}<button type="button" className="golink" title={t('bank.uploadInvoiceTip')} onClick={() => intakeAdd.run(props)}>{t('bank.uploadInvoice')}</button>
-          {' · '}<button type="button" className="golink" title={t('bank.noVatTip')} onClick={() => setNoReceipt(nav, tx, true)}>{t('bank.noVat')}</button>
+          {' '}<button type="button" className="golink" data-tip={t('bank.uploadInvoiceTip')} onClick={() => intakeAdd.run(props)}>{t('bank.uploadInvoice')}</button>
+          {' · '}<button type="button" className="golink" data-tip={t('bank.noVatTip')} onClick={() => setNoReceipt(nav, tx, true)}>{t('bank.noVat')}</button>
         </>}</>
       ) : b.needsReceipt(tx) ? (
         <> · <span className="wn">{t('bank.noReceipt')}</span>{edit && <> <button type="button" className="golink" onClick={() => setNoReceipt(nav, tx, true)}>{t('bank.noReceiptNeeded')}</button></>}</>
       ) : tx.noReceiptNeeded ? (
-        <> · {t('bank.noReceiptNotNeeded')}{edit && <> <button type="button" className="golink" title={t('bank.resetTip')} onClick={() => setNoReceipt(nav, tx, false)}>{t('bank.reset')}</button></>}</>
+        <> · {t('bank.noReceiptNotNeeded')}{edit && <> <button type="button" className="golink" data-tip={t('bank.resetTip')} onClick={() => setNoReceipt(nav, tx, false)}>{t('bank.reset')}</button></>}</>
       ) : null}
       {entry ? (
-        <> · <button type="button" className="golink" data-testid="go-entry" title={t('bank.openEntry')} onClick={() => nav.go(at({ area: 'journal', id: entry.id }, entry.date))}>
+        <> · <button type="button" className="golink" data-testid="go-entry" data-tip={t('bank.openEntry')} onClick={() => nav.go(at({ area: 'journal', id: entry.id }, entry.date))}>
           {t('bank.entries', { lines })}
         </button></>
       ) : tx.amount ? <> · <NotBooked tx={tx} linked={linkedOf(props.books.receipts.filter((r) => receipts.includes(r.id) && r.kind !== 'duplicate'))} /></> : null}
       {edit ? <ReceiptSetOffer {...props} tx={tx} /> : null}
       <Note key={tx.ref} tx={tx} nav={nav} edit={edit} />
       {edit && tx.direction === 'CRDT' ? <LinkInvoice key={`li-${tx.ref}`} tx={tx} nav={nav} /> : null}
-      {' '}<button type="button" className="x" title={t('bank.clear')} aria-label={t('bank.clear')} onClick={onClear}>×</button>
+      {' '}<button type="button" className="x" aria-label={t('bank.clear')} onClick={onClear}>×</button>
       <Parts tx={tx} />
     </>
   );
@@ -280,8 +280,8 @@ function ReceiptSetOffer({ books, b, tx, nav }: Props & { b: Bank; tx: BankTrans
     const names = s.receipts.map((id) => b.receiptOf(id)?.name ?? id).join(', ');
     const vars = { n: s.receipts.length, sum: `${s.currency} ${fmt(s.sum)}`, paid: `${s.currency} ${fmt(s.paid)}` };
     return (
-      <span key={s.receipts.join()}> · <span className="m" data-testid="receipt-set" title={names}>{t(s.exact ? 'bank.receiptSet.exact' : 'bank.receiptSet.close', vars)}{offers.length > 1 ? ` (${names})` : ''}</span>
-        {' '}<button type="button" className="golink" data-act="link-receipt-set" title={names} onClick={() => void linkReceiptSet(nav, s)}>{t('bank.receiptSet.link')}</button></span>
+      <span key={s.receipts.join()}> · <span className="m" data-testid="receipt-set" data-tip={names}>{t(s.exact ? 'bank.receiptSet.exact' : 'bank.receiptSet.close', vars)}{offers.length > 1 ? ` (${names})` : ''}</span>
+        {' '}<button type="button" className="golink" data-act="link-receipt-set" data-tip={names} onClick={() => void linkReceiptSet(nav, s)}>{t('bank.receiptSet.link')}</button></span>
     );
   });
 }
@@ -312,13 +312,13 @@ function Note({ tx, nav, edit }: { tx: BankTransaction; nav: Props['nav']; edit:
   const cancelled = useRef(false);
   if (editing) {
     const done = (text: string) => { setEditing(false); if (!cancelled.current) void setNote(nav, tx, text.trim()); };
-    return <> · <input className="note" autoFocus defaultValue={tx.remarks ?? ''} aria-label={t('bank.remarks')} title={t('bank.noteTip')}
+    return <> · <input className="note" autoFocus defaultValue={tx.remarks ?? ''} aria-label={t('bank.remarks')} data-tip={t('bank.noteTip')}
       onFocus={() => { cancelled.current = false; }}
       onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { cancelled.current = true; setEditing(false); } }}
       onBlur={(e) => done(e.currentTarget.value)} /></>;
   }
-  if (!edit) return tx.remarks ? <> · <span title={t('bank.remarks')}>{tx.remarks}</span></> : null;
-  return <> · <button type="button" className={tx.remarks ? 'golink' : 'golink addnote'} data-testid="payment-note" title={t('bank.noteTip')} onClick={() => setEditing(true)}>{tx.remarks || t('bank.addNote')}</button></>;
+  if (!edit) return tx.remarks ? <> · <span data-tip={t('bank.remarks')}>{tx.remarks}</span></> : null;
+  return <> · <button type="button" className={tx.remarks ? 'golink' : 'golink addnote'} data-testid="payment-note" data-tip={t('bank.noteTip')} onClick={() => setEditing(true)}>{tx.remarks || t('bank.addNote')}</button></>;
 }
 
 function Sec({ k, label, val, children }: { k: Section; label: string; val: ReactNode; children: ReactNode }) {
@@ -349,7 +349,7 @@ function Rates({ b, pays }: { b: Bank; pays: BankTransaction[] }) {
         {uses.map((u) => (
           <div key={`${u.currency}|${u.date}|${u.rate}`} style={{ display: 'contents' }}>
             <dt className="mono">{formatDate(u.date)}</dt>
-            <dd className="mono" title={checkText(u.entries[0].conversion)}>
+            <dd className="mono" data-tip={checkText(u.entries[0].conversion)}>
               {u.check.kind !== 'estv' && I.dot}{u.currency} {u.rate ?? '—'} <small>· {t('bank.nEntries', { n: u.entries.length })}</small>
             </dd>
           </div>

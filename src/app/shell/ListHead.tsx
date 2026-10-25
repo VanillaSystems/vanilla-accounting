@@ -16,12 +16,12 @@ export function ListHead({ period, books, canEdit, children, title, noPeriod }: 
       <h1>
         {title ?? area.label()}
         {!area.periodless && !noPeriod && (
-          <button type="button" className="period" aria-haspopup="dialog" title={t('period.choose')} data-testid="period-picker" onClick={(e) => ui.openPeriod(e.currentTarget)}>
+          <button type="button" className="period" aria-haspopup="dialog" data-tip={t('period.choose')} data-testid="period-picker" onClick={(e) => ui.openPeriod(e.currentTarget)}>
             {periodName(period)}{filed && ICONS.lock}{ICONS.down}
           </button>
         )}
         {area.add && canEdit && (
-          <button type="button" className="addbtn" data-add title={t('shell.addKey', { title: area.add.title(ui.route) })} onClick={ui.add}>
+          <button type="button" className="addbtn" data-add data-tip={t('shell.addKey', { title: area.add.title(ui.route) })} onClick={ui.add}>
             {ICONS.plus}<span>{area.add.label(ui.route)}</span><span className="kb">N</span>
           </button>
         )}

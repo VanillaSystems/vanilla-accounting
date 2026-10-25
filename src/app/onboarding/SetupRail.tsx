@@ -40,7 +40,7 @@ export function SetupRail({ onGo }: { onGo(route: Route): void }) {
           return (
             <button
               key={k} type="button" className={`${states[k]}${k === next ? ' next' : ''}`} disabled={!hand}
-              title={[`${label(k)}: ${t(`onboarding.state.${states[k]}`)}`, hand ? t('onboarding.byHand', { place: place(k) }) : t('onboarding.noHand')].join(' · ')}
+              data-tip={[`${label(k)}: ${t(`onboarding.state.${states[k]}`)}`, hand ? t('onboarding.byHand', { place: place(k) }) : t('onboarding.noHand')].join(' · ')}
               onClick={() => { if (hand) onGo(hand); }}
             ><span className="dot" />{label(k)}</button>
           );

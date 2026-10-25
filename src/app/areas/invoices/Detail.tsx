@@ -106,9 +106,9 @@ function InvoiceDetail(props: DetailProps) {
       </div>
       <div className="facts">
         <span>{inv.status === 'issued' ? (inv.kind === 'credit-note' ? t('invoices.creditNo', { number: inv.number }) : t('invoices.no', { number: inv.number })) : t('invoices.draftNoNumber')}</span>
-        <span title={t('invoices.dateTip')}>{formatDate(inv.date)}</span>
-        {inv.status === 'issued' && inv.kind === 'invoice' && <span title={t('invoices.dueTip')}>{t('invoices.due', { date: formatDate(inv.dueDate) })}</span>}
-        {inv.status === 'issued' && inv.kind === 'invoice' && <span title={t('invoices.referenceTip')}>{prettyReference(inv.reference)}</span>}
+        <span data-tip={t('invoices.dateTip')}>{formatDate(inv.date)}</span>
+        {inv.status === 'issued' && inv.kind === 'invoice' && <span data-tip={t('invoices.dueTip')}>{t('invoices.due', { date: formatDate(inv.dueDate) })}</span>}
+        {inv.status === 'issued' && inv.kind === 'invoice' && <span data-tip={t('invoices.referenceTip')}>{prettyReference(inv.reference)}</span>}
         <span>{t0.vat || inv.lines.some((l) => l.vatRate > 0) ? t('invoices.vatAmount', { amount: fmt(t0.vat) }) : t('invoices.vatZero')}</span>
       </div>
       <Status {...props} state={state} reminder={!!reminder} />
@@ -218,7 +218,7 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
         <div key={p.transactionRef} className="notice ivpay" data-testid="linked-payment">
           <span>{t(inv.kind === 'credit-note' ? 'invoices.linkedRefund' : 'invoices.linkedPayment', { date: formatDate(p.date), amount: `${inv.currency} ${fmt(p.amount)}` })}</span>
           <button type="button" className="golink" onClick={() => nav.go(at({ area: 'bank', payment: p.transactionRef }, p.date))}>{p.transactionRef}</button>
-          <button type="button" className="btn ghost" title={t('invoices.releasePaymentTip')} onClick={() => void releasePayment(nav, inv, p.transactionRef)}>{t('invoices.releasePayment')}</button>
+          <button type="button" className="btn ghost" data-tip={t('invoices.releasePaymentTip')} onClick={() => void releasePayment(nav, inv, p.transactionRef)}>{t('invoices.releasePayment')}</button>
         </div>
       ))}
       {proposals.map((p) => (
@@ -276,7 +276,7 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
   const { d, ws, inv, state, reminderLevel, nav, canEdit } = props;
   const s = useUi();
   const dl = inv.status === 'issued'
-    ? <a className="dl inline" href={issuedPdfUrl(inv.number)} download={`${inv.number}.pdf`} title={t('invoices.downloadTip')}>{I.dl}<span>{t('invoices.download')}</span></a>
+    ? <a className="dl inline" href={issuedPdfUrl(inv.number)} download={`${inv.number}.pdf`} data-tip={t('invoices.downloadTip')}>{I.dl}<span>{t('invoices.download')}</span></a>
     : null;
   if (!canEdit) return <div className="ivacts">{dl}</div>;
   const preview = <button type="button" className="btn ghost" data-act="preview" aria-pressed={s.preview} onClick={() => setUi({ preview: !s.preview })}>{s.preview ? t('invoices.edit') : t('invoices.preview')}</button>;
@@ -316,8 +316,8 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
     );
   }
   const sentOnce = d.sent.some((x) => x.invoiceId === inv.id && (x.kind === 'invoice' || x.kind === 'credit-note'));
-  const sendBtn = <button type="button" className={`btn ${sentOnce || state === 'overdue' ? 'ghost' : 'primary'}`} data-act="send" title={t('invoices.sendTip')} onClick={() => setUi({ dialog: { kind: 'send' } })}>{sentOnce ? t('invoices.resend') : t('invoices.send')}</button>;
-  const copy = <button type="button" className="btn ghost" data-act="copy" title={t('invoices.copyTip')} onClick={() => void copyAsDraft(nav, inv)}>{t('invoices.copy')}</button>;
+  const sendBtn = <button type="button" className={`btn ${sentOnce || state === 'overdue' ? 'ghost' : 'primary'}`} data-act="send" data-tip={t('invoices.sendTip')} onClick={() => setUi({ dialog: { kind: 'send' } })}>{sentOnce ? t('invoices.resend') : t('invoices.send')}</button>;
+  const copy = <button type="button" className="btn ghost" data-act="copy" data-tip={t('invoices.copyTip')} onClick={() => void copyAsDraft(nav, inv)}>{t('invoices.copy')}</button>;
   const credit = <button type="button" className="btn ghost" data-act="credit" onClick={() => setUi({ dialog: { kind: 'credit' } })}>{t('invoices.credit')}</button>;
   const cancel = <button type="button" className="btn ghost danger" data-act="cancel" onClick={() => setUi({ dialog: { kind: 'cancel' } })}>{t('invoices.cancel')}</button>;
   const next = state === 'open' || state === 'overdue' ? reminderDraft(inv, d.invoices, localToday()).level : 0;
@@ -348,7 +348,7 @@ function DraftSec({ d, ws, inv, nav, canEdit }: DetailProps & { inv: Draft }) {
         </div>
         <div className="lkr"><span>{t('invoices.currency')}</span>
           <span className="seg2" role="radiogroup" aria-label={t('invoices.currency')}>
-            {(['CHF', 'EUR'] as const).map((c) => <button key={c} type="button" role="radio" aria-checked={inv.currency === c} className={inv.currency === c ? 'on' : ''} disabled={!canEdit || !ws.invoicing?.payTo[c]} title={ws.invoicing?.payTo[c] ? undefined : t('invoices.currencyNeedsPayTo', { currency: c })} onClick={() => void saveDraft(nav, inv, { currency: c })}>{c}</button>)}
+            {(['CHF', 'EUR'] as const).map((c) => <button key={c} type="button" role="radio" aria-checked={inv.currency === c} className={inv.currency === c ? 'on' : ''} disabled={!canEdit || !ws.invoicing?.payTo[c]} data-tip={ws.invoicing?.payTo[c] ? undefined : t('invoices.currencyNeedsPayTo', { currency: c })} onClick={() => void saveDraft(nav, inv, { currency: c })}>{c}</button>)}
           </span>
         </div>
       </div>
@@ -502,7 +502,7 @@ function SentDetail({ d, route, nav }: Props & { d: InvoiceList }) {
         <span>{t(`invoices.docKind.${doc.kind}`)}</span>
         <span>{t('invoices.sentAt', { date: formatDate(doc.sentAt.slice(0, 10)), time: new Date(doc.sentAt).toTimeString().slice(0, 5) })}</span>
         <span>{doc.to === 'download' ? t('invoices.toDownload') : t('invoices.to', { to: doc.to })}</span>
-        <span className="mono" title={t('invoices.shaTip')}>{t('invoices.sha', { sha: doc.sha256.slice(0, 12) })}</span>
+        <span className="mono" data-tip={t('invoices.shaTip')}>{t('invoices.sha', { sha: doc.sha256.slice(0, 12) })}</span>
       </div>
       <div className="ivacts">
         {inv && <button type="button" className="btn ghost" onClick={() => nav.go(invoiceAt(inv))}>{t('invoices.toInvoice', { number: routeId(inv) })}</button>}

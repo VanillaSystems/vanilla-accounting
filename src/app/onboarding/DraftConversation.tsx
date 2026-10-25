@@ -119,7 +119,7 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
           <span className="obface"><BotIcon /></span>
           <span><b>{t('onboarding.title')}</b><small>{t('onboarding.who')}</small></span>
         </span>
-        <button type="button" className="linkbtn" data-act="setup-later" title={t('onboarding.draft.laterHint')} onClick={onLeave}>{t('onboarding.draft.later')}</button>
+        <button type="button" className="linkbtn" data-act="setup-later" data-tip={t('onboarding.draft.laterHint')} onClick={onLeave}>{t('onboarding.draft.later')}</button>
       </header>
       <div className="obflowturns">
         <Ai><p>{t('onboarding.draft.hello')}</p><p className="obfolder mono">{root}</p></Ai>
@@ -141,7 +141,7 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void talk(); } }}
             />
-            <button type="submit" className="aisend" data-act="setup-talk" aria-label={t('assistant.send')} title={t('assistant.send')} disabled={busy || !text.trim()}>{ICONS.arrowUp}</button>
+            <button type="submit" className="aisend" data-act="setup-talk" aria-label={t('assistant.send')} disabled={busy || !text.trim()}>{ICONS.arrowUp}</button>
           </div>
         </form>
       )}
@@ -322,7 +322,7 @@ function BanksCard({ initial, currency, busy, send }: { initial?: BankSpec[]; cu
           <label><span>{t('desktop.bank')}</span><input name={`bank${i + 1}`} list="ob-banks" value={r.bank} onChange={(e) => set(i, 'bank', e.target.value)} /></label>
           <label><span>{t('desktop.currency')}</span><input className="mono" maxLength={3} value={r.currency} onChange={(e) => set(i, 'currency', e.target.value.toUpperCase())} /></label>
           <label><span>{t('desktop.iban')}</span><input name={`iban${i + 1}`} className="mono" value={r.iban} placeholder={t('desktop.optional')} onChange={(e) => set(i, 'iban', e.target.value)} /></label>
-          <button type="button" className="btn ghost" aria-label={t('desktop.removeBank')} title={t('desktop.removeBank')} disabled={rows.length === 1} onClick={() => setRows((x) => x.filter((_, j) => j !== i))}>×</button>
+          <button type="button" className="btn ghost" aria-label={t('desktop.removeBank')} disabled={rows.length === 1} onClick={() => setRows((x) => x.filter((_, j) => j !== i))}>×</button>
         </div>
       ))}
       <div className="actions">

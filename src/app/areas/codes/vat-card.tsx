@@ -194,8 +194,8 @@ function Histogram(p: AreaProps) {
             const none = x.code === NO_VAT;
             const text = none ? t('codes.noVat') : codeText(x.code);
             return (
-              <div key={x.code} className={`o hr${i === at ? ' on' : ''}`} role="option" aria-selected={i === at} title={none ? t('codes.noVatTip') : text} data-code={x.code} onMouseMove={() => i !== at && setIdx(i)} onClick={() => showOnly(p, x.code)}>
-                <span className="mono code">{none ? '·' : <button type="button" className="clink" title={t('codes.explainCode', { code: x.code })} onClick={(e) => { e.stopPropagation(); close(); explain(p, x.code); }}>{x.code}</button>}</span>
+              <div key={x.code} className={`o hr${i === at ? ' on' : ''}`} role="option" aria-selected={i === at} data-tip={none ? t('codes.noVatTip') : text} data-code={x.code} onMouseMove={() => i !== at && setIdx(i)} onClick={() => showOnly(p, x.code)}>
+                <span className="mono code">{none ? '·' : <button type="button" className="clink" data-tip={t('codes.explainCode', { code: x.code })} onClick={(e) => { e.stopPropagation(); close(); explain(p, x.code); }}>{x.code}</button>}</span>
                 <span className="bar"><i style={{ width: `${(size(x) / max * 100).toFixed(1)}%` }} /><em>{text}</em></span>
                 <span className="mono num">{x.n}</span>
                 <span className="mono num">{fmt(x.chf)}</span>

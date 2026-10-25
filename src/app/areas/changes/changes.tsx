@@ -317,7 +317,7 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
                           <button type="button" className="golink" onClick={() => nav.go(h.deleted ? at({ area: 'bank', payment: h.ref }, h.date) : at({ area: 'journal', id: h.id }, h.date))}>
                             <span className="chwho">{h.ai ? <BotIcon /> : PERSON}</span>{h.text} · {h.deleted ? t('changes.handDeleted') : t(h.answer ? 'changes.answerBooked' : h.ai ? (h.saved ? 'changes.aiChanged' : 'changes.aiBooked') : h.saved ? 'changes.handChanged' : 'changes.handBooked', { when: sayWhen(h.at) })}
                           </button>
-                          <button type="button" className="quiet2" title={t(h.deleted ? 'changes.handRestoreTip' : h.answer ? 'changes.answerUndoTip' : h.saved ? 'changes.handUndoTip' : 'changes.handRemoveTip')} onClick={() => void restoreSaved(h.id, nav)}>{t('changes.handUndo')}</button>
+                          <button type="button" className="quiet2" data-tip={t(h.deleted ? 'changes.handRestoreTip' : h.answer ? 'changes.answerUndoTip' : h.saved ? 'changes.handUndoTip' : 'changes.handRemoveTip')} onClick={() => void restoreSaved(h.id, nav)}>{t('changes.handUndo')}</button>
                         </div>
                       ))}
                     </div>
@@ -333,7 +333,7 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
                             <span className="chwho">{PERSON}</span>{c.text} · {recordText(c)}
                           </button>
                           {'undo' in c
-                            ? <button type="button" className="quiet2" title={t(`changes.record.undoTip.${c.undo.kind}`)} onClick={() => void undoRecordChange(c, nav)}>{t('changes.handUndo')}</button>
+                            ? <button type="button" className="quiet2" data-tip={t(`changes.record.undoTip.${c.undo.kind}`)} onClick={() => void undoRecordChange(c, nav)}>{t('changes.handUndo')}</button>
                             : <span className="m">{t(`changes.record.blocked.${c.blocked}`)}</span>}
                         </div>
                       ))}
@@ -351,7 +351,7 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
                           </button>
                           {c.kind === 'privateOutlay' && c.blocked
                             ? <span className="m">{t('changes.outlayBlocked')}</span>
-                            : <button type="button" className="quiet2" title={receiptUndoTip(c)} onClick={() => void undoReceiptChange(c, nav)}>{t('changes.handUndo')}</button>}
+                            : <button type="button" className="quiet2" data-tip={receiptUndoTip(c)} onClick={() => void undoReceiptChange(c, nav)}>{t('changes.handUndo')}</button>}
                         </div>
                       ))}
                     </div>

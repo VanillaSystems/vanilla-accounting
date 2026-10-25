@@ -157,7 +157,7 @@ export function ReceiptDueTasks({ items, nav, canEdit }: { items: readonly Waiti
           <p>{t('receiptDue.lead')}</p>
           <span className="wfactions">
             <button type="button" className="btn ghost" data-testid="receipt-due-find" onClick={() => nav.go(at({ area: 'bank', payment: item.tx.ref }, item.tx.date))}>{t('receiptDue.find')}</button>
-            {canEdit ? <button type="button" className="btn ghost" data-testid="receipt-due-proof" title={t('receiptDue.otherProofTip')} onClick={() => nav.go(at({ area: 'bank', payment: item.tx.ref }, item.tx.date))}>{t('receiptDue.otherProof')}</button> : null}
+            {canEdit ? <button type="button" className="btn ghost" data-testid="receipt-due-proof" data-tip={t('receiptDue.otherProofTip')} onClick={() => nav.go(at({ area: 'bank', payment: item.tx.ref }, item.tx.date))}>{t('receiptDue.otherProof')}</button> : null}
             {canEdit ? <button type="button" className="btn" data-testid="receipt-due-book" onClick={() => void bookWithoutInputTax(nav, item.tx)}>{t('receiptDue.withoutInputTax')}</button> : null}
           </span>
         </div>

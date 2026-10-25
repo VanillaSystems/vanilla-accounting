@@ -398,7 +398,7 @@ function Banks({ ws, books, nav, canEdit }: Props & { ws: CompanyInfo }) {
                 <span className="mono">{b.account}</span>
                 <input aria-label={t('company.field.label')} value={f[k].label} onChange={(e) => setF({ ...f, [k]: { ...f[k], label: e.target.value } })} />
                 <input aria-label={t('company.iban')} className="mono" value={f[k].iban} disabled={!TAKES_IBAN.includes(b.role)} onChange={(e) => setF({ ...f, [k]: { ...f[k], iban: e.target.value } })} />
-                <span className="r m">{b.bank} {b.currency}{b.role !== 'owner' && <> <button type="button" className="linkbtn" data-testid="remove-bank" data-bank={b.account} title={t('company.removeBankTip')} onClick={() => void remove(b).then((ok) => { if (ok) setEdit(false); })}>{t('company.removeBank')}</button></>}</span>
+                <span className="r m">{b.bank} {b.currency}{b.role !== 'owner' && <> <button type="button" className="linkbtn" data-testid="remove-bank" data-bank={b.account} data-tip={t('company.removeBankTip')} onClick={() => void remove(b).then((ok) => { if (ok) setEdit(false); })}>{t('company.removeBank')}</button></>}</span>
               </div>
             ) : (
               <div key={k} className="fr go" role="link" tabIndex={0} data-bank={b.account} onClick={goBank} onKeyDown={(e) => { if (e.key === 'Enter') goBank(); }}>
@@ -407,7 +407,7 @@ function Banks({ ws, books, nav, canEdit }: Props & { ws: CompanyInfo }) {
                 <span className="mono m">{b.iban ? prettyIban(b.iban) : '–'}</span>
                 <span className="r mono">{bal
                   ? <>{b.currency} {fmt(bal.amount)} <span className="m">{formatDate(bal.date)}</span></>
-                  : <span title={t('company.unreconciledTip')} data-testid="unreconciled">{b.currency} {fmt(moved(b))} <span className="m">{t('company.unreconciled')}</span></span>}</span>
+                  : <span data-tip={t('company.unreconciledTip')} data-testid="unreconciled">{b.currency} {fmt(moved(b))} <span className="m">{t('company.unreconciled')}</span></span>}</span>
               </div>
             );
           })}
@@ -550,7 +550,7 @@ function Periods({ ws, books, nav }: Props & { ws: CompanyInfo }) {
                   {seal?.status === 'intact' && (
                     <>
                       <span className="m">{ICONS.lock}{t('company.sealedOn', { date: formatDate(seal.sealedAt) })}</span>
-                      <span className="mono sha" title={t('company.sealTip', { date: formatDate(seal.through) })}>{seal.sha256.slice(0, 16)}…</span>
+                      <span className="mono sha" data-tip={t('company.sealTip', { date: formatDate(seal.through) })}>{seal.sha256.slice(0, 16)}…</span>
                       <span className="m">{t('company.sealRecords', { entries: seal.records.entries, transactions: seal.records.transactions })}</span>
                     </>
                   )}
@@ -643,7 +643,7 @@ function Opening({ books, nav, canEdit }: Props) {
             {rows.map(([a, v]) => (
               <div key={a} className="fr" data-account={a}>
                 <button type="button" className="mono clink" onClick={() => open(a)}>{a}</button><span>{names[a] ?? a}{a === equity ? <span className="m"> · {t('company.openingPlug')}</span> : null}</span>
-                <span>{typing && a !== equity ? <button type="button" className="quiet2" title={t('company.openingRemove', { account: a })} aria-label={t('company.openingRemove', { account: a })} onClick={() => void put(a, null, v)}>×</button> : null}</span>
+                <span>{typing && a !== equity ? <button type="button" className="quiet2" aria-label={t('company.openingRemove', { account: a })} onClick={() => void put(a, null, v)}>×</button> : null}</span>
                 <span className="r mono">{fmt(v)}</span>
               </div>
             ))}

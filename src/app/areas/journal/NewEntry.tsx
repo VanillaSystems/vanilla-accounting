@@ -193,7 +193,7 @@ export function NewEntry(props: Props) {
         <form key={round} ref={form} className="form" autoComplete="off" onKeyDown={onKeyDown} onInput={() => { followPrivate(); redraw((n) => n + 1); setSure(false); if (err === t('journal.movesBankAgain')) setErr(''); }} onSubmit={(e) => { e.preventDefault(); book(); }}>
           {!filed && <PaymentField books={books} picked={tx} amount={d.amount} onPick={pickPayment} />}
           <div className="two">
-            <label>{t('journal.field.date')}<input className="mono" name="date" defaultValue={formatDate(d.date ?? localToday())} readOnly={!!tx} title={tx ? t('journal.payment.dateIs') : undefined} autoFocus={!round} /></label>
+            <label>{t('journal.field.date')}<input className="mono" name="date" defaultValue={formatDate(d.date ?? localToday())} readOnly={!!tx} data-tip={tx ? t('journal.payment.dateIs') : undefined} autoFocus={!round} /></label>
             <label>{t('journal.amountIn', { currency: tx?.currency ?? fx?.currency ?? baseCurrency() })}<input className="mono" name="amount" defaultValue={d.amount ? fmt(d.amount) : ''} style={{ textAlign: 'right' }} autoFocus={!!round} />
               {fx && now.amount ? <span className="m" data-testid="fx-line">{t('journal.fxLine', { chf: fmt(chfAmount({ amount: now.amount, exchangeCurrency: fx.currency, exchangeRate: fx.rate } as JournalEntry)), rate: String(fx.rate) })}</span> : null}
             </label>

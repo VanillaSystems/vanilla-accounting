@@ -34,7 +34,7 @@ export function Corner({ onGo, onAssistant }: { onGo(route: Route): void; onAssi
   // The AI's button is always there, at the top right as in the mockup; the status beside it only when something runs or waits.
   // Open, the sidebar's title carries the robot, so the button shows the arrow that closes the column.
   const toggle = t(aiOpen ? 'assistant.closePanel' : 'assistant.openPanel');
-  const ai = <button type="button" className="cornerbtn aibtn" title={`${toggle} · ⌘J`} aria-label={toggle} aria-expanded={aiOpen} onClick={onAssistant}>{aiOpen ? ICONS.panelClose : <BotIcon />}</button>;
+  const ai = <button type="button" className="cornerbtn aibtn" data-tip={`${toggle} · ⌘J`} aria-label={toggle} aria-expanded={aiOpen} onClick={onAssistant}>{aiOpen ? ICONS.panelClose : <BotIcon />}</button>;
   if (!view) return <div className="corner">{ai}</div>;
   const tasks = corner(view);
   // A question waiting for the viewer counts as a task: the corner shows it while nothing runs.

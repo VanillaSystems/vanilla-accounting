@@ -107,7 +107,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
         <h2 className="who">{v.title}<small>{v.sub}</small></h2>
         <div className="amount">
           <small>{cur}</small>{fmt(e.amount)}
-          {fx && <span className="fx" title={checkText(fx)}>{t('journal.fxLine', { chf: fmt(fx.chf), rate: String(fx.rate ?? '—') })}</span>}
+          {fx && <span className="fx" data-tip={checkText(fx)}>{t('journal.fxLine', { chf: fmt(fx.chf), rate: String(fx.rate ?? '—') })}</span>}
         </div>
       </div>
 
@@ -116,7 +116,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
         <div role="row"><span className="k">{t('journal.field.accountCredit')}</span><span className="mono n">{e.accountCredit || '–'}</span><span className="nm">{acName[e.accountCredit] ?? (e.accountCredit ? '' : t('journal.noCounter'))}</span></div>
         {(e.vatCode || firmCodes().length > 0) && <div role="row">
           <span className="k">{t('journal.field.vatCode')}</span>
-          <span className="mono n">{e.vatCode ? <button type="button" className="vlink" data-vat={e.vatCode} title={t('codes.explainCode', { code: e.vatCode })} onClick={() => explain(props, e.vatCode!)}>{e.vatCode}</button> : '–'}</span>
+          <span className="mono n">{e.vatCode ? <button type="button" className="vlink" data-vat={e.vatCode} data-tip={t('codes.explainCode', { code: e.vatCode })} onClick={() => explain(props, e.vatCode!)}>{e.vatCode}</button> : '–'}</span>
           <span className="nm">
             {e.vatCode
               ? <>{found?.negative && <span className="m">{t('journal.reversed')} · </span>}{codeText(e.vatCode)}{!!tax && found?.entry.amountIs !== 'tax' && <span className="mono m"> · {t('journal.vatIncluded', { tax: fmt(Math.abs(tax)) })}</span>}</>
@@ -140,10 +140,10 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
 
       <div className="status jst">
         {tx
-          ? <span className="linked">{I.check}<button type="button" className="golink" data-testid="go-payment" title={t('journal.openPaymentKey')} onClick={() => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date))}>{t('journal.payment')} <span className="mono">{formatDate(tx.date)}</span> · {bankOf(tx)} · <span className="mono">{amountOf(tx)}</span> <span className="arr">{t('journal.toStatement')}</span></button></span>
+          ? <span className="linked">{I.check}<button type="button" className="golink" data-testid="go-payment" data-tip={t('journal.openPaymentKey')} onClick={() => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date))}>{t('journal.payment')} <span className="mono">{formatDate(tx.date)}</span> · {bankOf(tx)} · <span className="mono">{amountOf(tx)}</span> <span className="arr">{t('journal.toStatement')}</span></button></span>
           : <span className="notice" style={{ margin: 0 }}>{e.corrects ? t('journal.correctionNoPayment', { date: formatDate(e.date), quarter: filedName(e.corrects) }) : t('journal.manualNoPayment')}</span>}
         {v.receipts.length > 0
-          ? <span className="linked">{I.check}{t('journal.receipt')} {v.receipts.map((r, i) => { const [who, what] = splitReceipt(r); return <span key={r.id}>{i > 0 && ' · '}<button type="button" className="golink" data-testid="go-receipt" title={t('journal.openReceiptKey')} onClick={() => nav.go(at({ area: 'receipts', id: r.id }, r.date))}>{who}{what && <span className="m"> {what}</span>}</button></span>; })}</span>
+          ? <span className="linked">{I.check}{t('journal.receipt')} {v.receipts.map((r, i) => { const [who, what] = splitReceipt(r); return <span key={r.id}>{i > 0 && ' · '}<button type="button" className="golink" data-testid="go-receipt" data-tip={t('journal.openReceiptKey')} onClick={() => nav.go(at({ area: 'receipts', id: r.id }, r.date))}>{who}{what && <span className="m"> {what}</span>}</button></span>; })}</span>
           : v.missing && <span className="notice warn" style={{ margin: 0 }}>{I.dot}{t('journal.noReceipt')}</span>}
         {edit && !tx && !v.receipts.length && <LinkReceipt key={`lr-${e.transactionRef}`} {...props} entries={[e, ...siblings.map((x) => x.e)]} />}
       </div>
@@ -170,7 +170,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
           {receipt ? (
             <div className="paper real" role="button" tabIndex={0} aria-label={t('journal.openReceipt')} onClick={() => nav.go(at({ area: 'receipts', id: receipt.id }, receipt.date))}>
               <Paper key={receipt.id} src={sources.receipt(receipt.id)} />
-              <a className="dl float" href={sources.receipt(receipt.id)} download={receipt.filename} title={t('receipts.downloadTitle', { file: receipt.filename })} onClick={(ev) => ev.stopPropagation()}>{I.dl}<span>{t('receipts.download')}</span></a>
+              <a className="dl float" href={sources.receipt(receipt.id)} download={receipt.filename} data-tip={t('receipts.downloadTitle', { file: receipt.filename })} onClick={(ev) => ev.stopPropagation()}>{I.dl}<span>{t('receipts.download')}</span></a>
             </div>
           ) : tx ? (
             <Excerpt {...props} tx={tx} />
@@ -210,7 +210,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
             <AskAi context={{ kind: 'entry', id: e.id, label: e.description ?? e.id }} />
             {edit && (
               <div className="dangers">
-                {tx && <button type="button" title={t('journal.reclassifyTip')} onClick={() => (hers.length ? setAsking(true) : rebook(false))}>{t('journal.reclassify')}</button>}
+                {tx && <button type="button" data-tip={t('journal.reclassifyTip')} onClick={() => (hers.length ? setAsking(true) : rebook(false))}>{t('journal.reclassify')}</button>}
                 <button type="button" className="del" onClick={() => runAct(props, 'del')}>{t('common.delete')}</button>
               </div>
             )}
@@ -268,11 +268,11 @@ function EntryActions(props: Props & { v: EntryView; j: Journal }) {
   const newYear = newYearAfter(e.date);
   return (
     <div className="jacts" data-testid="entry-actions">
-      {!v.locked && <button type="button" className="quiet2" title={t('journal.reverseTip')} onClick={() => runAct(props, 'reverse')}>{t('journal.reverse')}</button>}
-      <button type="button" className="quiet2" title={t('journal.copyTip')} onClick={() => runAct(props, 'copy')}>{t('journal.copy')}</button>
+      {!v.locked && <button type="button" className="quiet2" data-tip={t('journal.reverseTip')} onClick={() => runAct(props, 'reverse')}>{t('journal.reverse')}</button>}
+      <button type="button" className="quiet2" data-tip={t('journal.copyTip')} onClick={() => runAct(props, 'copy')}>{t('journal.copy')}</button>
       {accrual && (back
         ? <button type="button" className="golink" data-testid="reversed" onClick={() => nav.select({ area: 'journal', id: back.id })}>{t('journal.reversedOn', { date: formatDate(back.date) })}</button>
-        : <button type="button" className="quiet2" data-testid="reverse-new-year" title={t('journal.reverseNewYearTip')} onClick={() => runAct(props, 'reverseNewYear')}>{t('journal.reverseNewYear', { date: formatDate(newYear) })}</button>)}
+        : <button type="button" className="quiet2" data-testid="reverse-new-year" data-tip={t('journal.reverseNewYearTip')} onClick={() => runAct(props, 'reverseNewYear')}>{t('journal.reverseNewYear', { date: formatDate(newYear) })}</button>)}
     </div>
   );
 }
@@ -444,14 +444,14 @@ function Excerpt({ books, nav, tx }: Props & { tx: BankTransaction }) {
   const s = b.statementOf(tx);
   const src = s?.file && !isCamt(s.file) && sources.statement(s.file.bank, s.file.filename);
   const toStatement = () => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date));
-  const link = <button type="button" title={t('journal.openPaymentKey')} onClick={toStatement}>{t('journal.statementOf', { month: monthName(tx.date) })}</button>;
+  const link = <button type="button" data-tip={t('journal.openPaymentKey')} onClick={toStatement}>{t('journal.statementOf', { month: monthName(tx.date) })}</button>;
   if (!src) return <div className="src">{t('journal.noReceiptSource')} {link}</div>;
   return (
     <>
       <div className="src">
         {t('journal.excerptFrom')} {link}
         <span className="pgno">{page}</span>
-        <a className="dl inline" href={src} download={s.file!.filename} title={t('bank.downloadTitle', { file: s.file!.filename })}>{I.dl}<span>{t('receipts.download')}</span></a>
+        <a className="dl inline" href={src} download={s.file!.filename} data-tip={t('bank.downloadTitle', { file: s.file!.filename })}>{I.dl}<span>{t('receipts.download')}</span></a>
       </div>
       <div className="paper real stmt excerpt" role="button" tabIndex={0} aria-label={t('journal.openPaymentKey')} onClick={toStatement}>
         <StatementPaper src={src} mark={{ tx, fee: b.feeOf(tx.ref), wise: s.account.statements === 'wise' }} excerpt onPage={setPage} />
