@@ -266,9 +266,14 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     const sure = answer.confidence >= MAPPING_THRESHOLD && (answer.matchedTransactionRefs?.length ?? 0) > 0;
     let linked: string[] = [];
     let twin: string | undefined;
+    let filed: string[] = [];
     // A bank statement keeps its period's last day (#151), whatever day the model read off it.
     const dated = receipt.kind === 'statement' && receipt.date ? { date: receipt.date } : dateOf(answer.date, receipt);
+    // The change runs once more on books loaded afresh after a stale save (src/books/store.ts updateSaved): what it finds starts empty.
     const target = archive(receipt, datedName(normalizeFilename(answer.suggestedFilename), dated.date), (r, index) => {
+      linked = [];
+      twin = undefined;
+      filed = [];
       Object.assign(r, { date: dated.date, description: answer.description, amount: creditSigned({ amount: answer.amount, vatSummary: r.vatSummary }), currency: answer.currency, ...(answer.title ? { title: answer.title } : {}), ...(answer.payout ? { payout: answer.payout } : {}), ...(answer.order ? { order: answer.order } : {}) });
       if (dated.dateSource) r.dateSource = dated.dateSource;
       // Only an invoice is paid by a payment; a copy of one (by its facts, now read) waits for a person in Belege.
@@ -277,11 +282,10 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
       if (behind) { twin = index.receipts.find((x) => x.id === behind)?.filename; return; }
       // Periodensperre: never attach a mapping to a transaction inside a closed period.
       const lock = periodLock(index);
-      const filed: string[] = [];
       linked = answer.matchedTransactionRefs.filter((ref) => {
         const tx = index.transactions.find((t) => t.ref === ref);
         if (tx && !lock.isClosed(tx.date)) return true;
-        if (tx) { log(`  ⚠ skipped mapping to ${ref}: transaction is in the closed period (≤ ${lock.closedThrough})`); skippedClosed++; filed.push(ref); }
+        if (tx) { log(`  ⚠ skipped mapping to ${ref}: transaction is in the closed period (≤ ${lock.closedThrough})`); filed.push(ref); }
         return false;
       });
       // Its only payment is filed: the receipt names it, so the person sees where its tax goes (a correction in the open quarter).
@@ -290,6 +294,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
         if (!index.mappings.some((m) => m.transactionRef === transactionRef && m.receiptId === receipt.id)) index.mappings.push({ transactionRef, receiptId: receipt.id });
       }
     });
+    skippedClosed += filed.length;
     const pct = `(${((answer.confidence ?? 0) * 100).toFixed(0)}%)`;
     if (!target) line('is not staged in beleg-import/ any more, skipping');
     else if (twin) { unlinked++; line(`→ ${target}  possibly the same as ${twin}: not linked, Belege asks`); }

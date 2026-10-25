@@ -50,6 +50,8 @@ export class StaleBooksError extends Error {
 interface Snapshot { files: Map<string, string>; ledger: string | undefined }
 const onDisk = new WeakMap<Books, Snapshot>();
 const seals = new WeakMap<Books, SealReport>();
+/** Files a change moves, from → to: moved by the save that writes the change, never by a refused one (moveOnSave). */
+const moves = new WeakMap<Books, Map<string, string>>();
 const homes = new WeakMap<Books, WorkspacePaths>();
 const warned = new Set<string>();
 
@@ -245,7 +247,43 @@ export function saveBooks(ws: Workspace, books: Books): void {
     unlock();
   }
   onDisk.set(books, { files, ledger });
+  for (const [from, to] of moves.get(books) ?? []) {
+    mkdirSync(dirname(to), { recursive: true });
+    renameSync(from, to);
+  }
+  moves.delete(books);
   placeFiles(ws, books);
+}
+
+/**
+ * Moves the file `from` to `to` once saveBooks wrote `books`: a save refused (a stale save, a
+ * closed period) leaves the file where the books on disk say it is, so the change can run again
+ * on books loaded afresh. The targets pending for `books` are `pendingMoves`.
+ */
+export function moveOnSave(books: Books, from: string, to: string): void {
+  if (!moves.has(books)) moves.set(books, new Map());
+  moves.get(books)!.set(from, to);
+}
+
+export const pendingMoves = (books: Books): string[] => [...(moves.get(books)?.values() ?? [])];
+
+/**
+ * Loads the books, runs `fn` on them through the write door as `actor` and saves them. When another
+ * process saved the books in between (StaleBooksError, #123), `fn` runs once more on books loaded
+ * afresh, so it sees that process's edits and decides again (#132); a second stale save throws.
+ * So `fn` changes nothing but its `books`, and a file it moves goes through moveOnSave.
+ */
+export function updateSaved<T>(ws: Workspace, actor: Actor, fn: (books: Books) => T, load: () => Books = () => loadBooks(ws)): T {
+  for (let again = false; ; again = true) {
+    const books = load();
+    const result = update(books, actor, fn);
+    try {
+      saveBooks(ws, books);
+      return result;
+    } catch (e) {
+      if (again || !(e instanceof StaleBooksError)) throw e;
+    }
+  }
 }
 
 /**
