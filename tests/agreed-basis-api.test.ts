@@ -44,3 +44,20 @@ test('agreed basis: issuing books the invoice on its date against the receivable
   assert.equal(cancelled.status, 200, String(cancelled.json.error));
   assert.deepEqual(rows(`RE-${issued.json.number}-storno`), [['2026-09-02', '3300', '1100', 1081, '-V81']]);
 });
+
+test('a switch of the basis under Firma › MWST records the year it begins; a later save of the form keeps it (#143)', async () => {
+  const fresh = await startApi('tests/fixtures/fresh-books-index.json');
+  try {
+    const manifest = () => readFileSync(fresh.ws.paths.manifest, 'utf8');
+    const agreed = { registered: true, method: 'effective', reporting: 'agreed', period: 'quarterly' };
+    const year = new Date().getFullYear();
+    const res = await fresh.send('PATCH', '/api/workspace', { vat: agreed });
+    assert.equal(res.status, 200, String(res.json.error));
+    assert.match(manifest(), new RegExp(`reporting: agreed, period: quarterly, reportingSince: ${year}`), 'the year the agreed basis began');
+    const again = await fresh.send('PATCH', '/api/workspace', { vat: { ...agreed, period: 'half-yearly' } });
+    assert.equal(again.status, 200, String(again.json.error));
+    assert.match(manifest(), new RegExp(`period: half-yearly, reportingSince: ${year}`), 'the form sends no year: the one in the manifest stays');
+  } finally {
+    await fresh.stop();
+  }
+});

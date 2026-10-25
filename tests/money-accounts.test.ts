@@ -46,7 +46,7 @@ test('manifest 1 → 2: each account gets the role it had, the comments stay, an
   assert.equal(twice.toString(), once.toString(), 'a role a manifest names is never replaced');
   // A change from the Firma page writes the old manifest at the current schema, its comment and one-line style kept.
   const { text } = patchManifestText(OLD_MANIFEST, {}, 'belege.workspace.yaml');
-  assert.match(text, /^# kept by hand\nschema: 2\n/);
+  assert.match(text, new RegExp(`^# kept by hand\nschema: ${WORKSPACE_SCHEMA}\n`));
   assert.match(text, /- \{ bank: manual, currency: CHF, account: "2451", label: Kontokorrent Anna, role: owner \}/);
   assert.equal(patchManifestText(text, {}, 'belege.workspace.yaml').text, text, 'idempotent: the written manifest changes no further');
 });
@@ -75,7 +75,7 @@ test('the owner\'s account in several currencies (manual CHF, EUR, USD on one le
   cpSync(DEMO_ROOTS[0], join(repo, APP_FOLDER), { recursive: true, filter: (src) => !relative(DEMO_ROOTS[0], src).startsWith('data') });
   const manifest = join(repo, APP_FOLDER, 'belege.workspace.yaml');
   const demo = readFileSync(manifest, 'utf8');
-  writeFileSync(manifest, demo.replace(/^schema: 2\n/m, '').replace(/, role: \w+ \}/g, ' }').replace(/  - \{ bank: manual.*\n/, OWNER_CURRENCIES.map((c) => `  - { bank: manual, currency: ${c}, account: "2451", label: Kontokorrent Anna Muster }\n`).join('')));
+  writeFileSync(manifest, demo.replace(/^schema: \d+\n/m, '').replace(/, role: \w+ \}/g, ' }').replace(/  - \{ bank: manual.*\n/, OWNER_CURRENCIES.map((c) => `  - { bank: manual, currency: ${c}, account: "2451", label: Kontokorrent Anna Muster }\n`).join('')));
   const ws = workspaceAt(repo);
   assert.deepEqual(ws.bankAccounts.filter((a) => a.role === 'owner').map((a) => a.currency), OWNER_CURRENCIES);
   assert.ok(loadBooks(ws).journalEntries.length > 0, 'the books of a workspace whose owner pays in three currencies open');
