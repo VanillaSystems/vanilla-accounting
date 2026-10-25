@@ -13,7 +13,7 @@
  */
 import type { JournalEntry, Receipt } from '../types/index.js';
 import type { PeriodLock } from '../books/store.js';
-import { agreedBasis, baseCurrency, vat, yearEnd } from '../engines/index.js';
+import { agreedBasis, baseCurrency, basisSince, vat, yearEnd } from '../engines/index.js';
 import { isVatAmountCode } from './validate.js';
 import { roundCHF, toRappen, fromRappen } from './rappen.js';
 import { addDays, filingKeyOf, type FilingLength } from './periods.js';
@@ -48,6 +48,18 @@ export function openDay(lock: Pick<PeriodLock, 'isClosed' | 'lockedThrough' | 'b
   if (lock.isClosed(date)) return addDays(lock.lockedThrough!, 1);
   if (lock.beforeBooks(date)) return lock.opens!;
   return date;
+}
+
+/**
+ * Where the VAT of a document of a day the books no longer take is declared on the agreed basis:
+ * in the correction return of its own filing period (golden rule 1), the firm reported
+ * on this basis then (MWSTG Art. 40 Abs. 1); or, `switch`, after the switch, as an open item of it,
+ * when the document lies before the books or before the year the basis began (MWSTV Art. 106 Abs. 1).
+ */
+export function lockedTaxPoint(lock: Pick<PeriodLock, 'beforeBooks'>, date: string, length: FilingLength): { corrects: string } | 'switch' {
+  const since = basisSince();
+  if (lock.beforeBooks(date) || (since !== undefined && Number(date.slice(0, 4)) < since)) return 'switch';
+  return { corrects: filingKeyOf(date, length) };
 }
 
 /** One line of a settlement: the bank against the open item, or the exchange difference left on the open item. */
@@ -113,16 +125,16 @@ type Payment = { ref: string; date: string; currency: string; description?: stri
  * MWSTG Art. 41), and booked against its open item. Only a purchase line may move after the payment:
  * a prepayment's tax arises when it is received (Art. 40 Abs. 1 lit. c); the payment settles each open item on its own
  * date. A document of a filed period of the books' open year leaves the line on the payment's date,
- * declared in that period's correction return (golden rule 1); one of an earlier year leaves it
- * on the payment's date as it is (the switch to the agreed basis, MWSTV Art. 106 Abs. 1: open items
- * at the switch count in the first period after it). Lines on the payout clearing account (dated
- * by their order already), with `corrects`, or without a document date stay as they are.
+ * declared in that period's correction return (golden rule 1), and so does one of a closed earlier
+ * year the firm reported on this basis; one before the books or before the year the basis began
+ * leaves it on the payment's date as it is (lockedTaxPoint: the switch, MWSTV Art. 106 Abs. 1).
+ * Lines on the payout clearing account (dated by their order already), with `corrects`, or without
+ * a document date stay as they are.
  */
 export function atTaxPoint(tx: Payment, entries: readonly JournalEntry[], ctx: TaxPointContext): JournalEntry[] {
   if (!agreedBasis()) return [...entries];
   const dates = ctx.documents.filter((d) => d.kind !== 'duplicate' && d.date).map((d) => d.date!).sort();
   if (!dates.length) return [...entries];
-  const openYear = openDay(ctx.lock, tx.date).slice(0, 4);
   const groups = new Map<string, { booked: number; amount: number; template: JournalEntry }>();
   const out = entries.map((e): JournalEntry => {
     const side = sideOf(e.vatCode);
@@ -138,7 +150,8 @@ export function atTaxPoint(tx: Payment, entries: readonly JournalEntry[], ctx: T
     // received (Art. 40 Abs. 1 lit. c), a change when it is paid (Art. 41); a document of a later year is a prepayment or a misread date.
     if (date > tx.date && (side === 'sale' || change || date.slice(0, 4) !== tx.date.slice(0, 4))) return e;
     if (ctx.lock.isClosed(date) || ctx.lock.beforeBooks(date)) {
-      return !ctx.lock.beforeBooks(date) && date.slice(0, 4) === openYear ? { ...e, corrects: filingKeyOf(date, ctx.length) } : e;
+      const point = lockedTaxPoint(ctx.lock, date, ctx.length);
+      return point === 'switch' ? e : { ...e, corrects: point.corrects };
     }
     const account = side === 'sale' ? ctx.accounts.receivable : ctx.accounts.payable;
     const foreign = !!e.exchangeCurrency && e.exchangeCurrency !== baseCurrency();

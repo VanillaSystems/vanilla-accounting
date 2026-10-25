@@ -29,6 +29,10 @@ const ISO = String.raw`(20\d{2})-(\d{2})-(\d{2})`;
 const BETWEEN = String.raw`\s*(?:[-–—−]|bis|to|au|al|a)\s*`;
 const PERIOD_DMY = new RegExp(`(?<!\\d)${DMY}${BETWEEN}${DMY}(?!\\d)`);
 const PERIOD_ISO = new RegExp(`(?<!\\d)${ISO}${BETWEEN}${ISO}(?!\\d)`);
+/** A day as a statement prints it: «31.03.2026», «2026-03-31», «31 March 2026», «31. März 2026». */
+const DAY = String.raw`(?:\d{1,2}\.\d{1,2}\.20\d{2}|20\d{2}-\d{2}-\d{2}|\d{1,2}\.?[ \t]+\p{L}{3,}\.?[ \t]+20\d{2})`;
+/** A currency account's balance heading, a line that starts with the currency's code and its day: «USD on 31 March 2026», «EUR per 31.03.2026». */
+const BALANCE_AT = new RegExp(String.raw`^[ \t]*[A-Z]{3}[ \t]+(?:on|am|per|au|al)[ \t]+${DAY}`, 'mu');
 
 const iso = (y: string, m: string | number, d: string | number) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 /** A day the calendar has: «31.02.2026» is none. */
@@ -65,12 +69,35 @@ export function statementFacts(r: Named, words: DocumentsData): StatementFacts |
   const text = r.extractedText ?? '';
   if (!namesStatement(text, words)) return undefined;
   const iban = IBAN.exec(text)?.[0].replace(/\s/g, '');
-  const balance = words.balance.length > 0 && wordsRe(words.balance).test(text);
+  const balance = (words.balance.length > 0 && wordsRe(words.balance).test(text)) || BALANCE_AT.test(text);
   const inText = statementPeriod(text);
   const inName = statementPdf(r.filename) ?? (r.originalFilename ? statementPdf(r.originalFilename) : null);
   const period = inText ?? (inName ? { from: inName.fromDate, to: inName.toDate } : undefined);
   if (Number(!!iban) + Number(!!period) + Number(balance) < 2) return undefined;
   return { ...period, ...(iban ? { iban } : {}), ...(inName?.currency ? { currency: inName.currency } : {}) };
+}
+
+let documentWords: DocumentsData | undefined;
+/** The open jurisdiction's document words, handed over with it (src/engines/index.ts setJurisdiction): the books read no engine. */
+export function useDocumentWords(words: DocumentsData): void {
+  documentWords = words;
+}
+
+/**
+ * The receipts with each one nobody typed (no kind, and no person who cleared one) that reads as
+ * a statement typed as one, dated on its period's last day unless it has a date of its own (a day
+ * read off the phone's capture is none). Without the jurisdiction's words they stay as they are.
+ * Pure: loadBooks runs it on every load, so a rule learnt later reaches receipts already read.
+ */
+export function typeStatements(receipts: readonly Receipt[], words = documentWords): Receipt[] {
+  if (!words) return [...receipts];
+  return receipts.map((r) => {
+    const facts = r.kind || r.kindBy ? undefined : statementFacts(r, words);
+    if (!facts) return r;
+    const { dateSource, ...undated } = r;
+    const dated = facts.to && (!r.date || dateSource === 'captured') ? { ...undated, date: facts.to } : r;
+    return { ...dated, kind: 'statement', kindBy: 'rule', kindRule: 'document:statement' };
+  });
 }
 
 type Account = Pick<LedgerBankAccount, 'bank' | 'currency' | 'account' | 'iban'>;

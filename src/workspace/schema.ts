@@ -14,9 +14,6 @@
  */
 import { isMap, isSeq, type Document } from 'yaml';
 import { roleBefore } from './banks.js';
-import { statementFacts } from '../books/statement-facts.js';
-import type { DocumentsData } from '../core/modules/schema.js';
-import type { Receipt } from '../types/index.js';
 
 /**
  * 2: the books split by fiscal year (ADR 0013); the move itself is the layout migration (src/workspace/layout.ts).
@@ -32,18 +29,16 @@ import type { Receipt } from '../types/index.js';
  * is harmless, but the number makes npm run update write the result.
  */
 export const BOOKS_SCHEMA = 5;
-/** 2: every money account names its `role` (#88). */
-export const WORKSPACE_SCHEMA = 2;
+/**
+ * 2: every money account names its `role` (#88).
+ * 3: `company.vat.reportingSince`, the year the basis began (#143). An app of schema 2 would read
+ * past it and declare a document of an earlier agreed year on its payment's date, so it must refuse.
+ */
+export const WORKSPACE_SCHEMA = 3;
 export const INVOICES_SCHEMA = 1;
 
 /** Step n: schema n → n + 1. */
 export type Ladder<T> = Readonly<Record<number, (doc: T) => T>>;
-
-let documentWords: DocumentsData | undefined;
-/** The open jurisdiction's document words for books step 4, handed over with the jurisdiction (src/engines/index.ts setJurisdiction): the core reads no engine. */
-export function useDocumentWords(words: DocumentsData): void {
-  documentWords = words;
-}
 
 export const BOOKS_MIGRATIONS: Ladder<Record<string, unknown>> = {
   // The records stay as they are; only where they lie changed.
@@ -53,25 +48,9 @@ export const BOOKS_MIGRATIONS: Ladder<Record<string, unknown>> = {
   2: (doc) => doc,
   // No record has tags before; the number makes an older app refuse the books.
   3: (doc) => doc,
-  // A receipt nobody typed that reads as a bank statement becomes one, dated on its period's last
-  // day unless it has a date of its own (a day read off its name is none). The words are the
-  // jurisdiction's: every workspace open loads it (tests: tests/support/jurisdiction.js); without
-  // one the books stay as they are.
-  4: (doc) => {
-    const words = documentWords;
-    const receipts = doc.receipts as Receipt[] | undefined;
-    if (!words || !receipts) return doc;
-    return {
-      ...doc,
-      receipts: receipts.map((r) => {
-        const facts = r.kind ? undefined : statementFacts(r, words);
-        if (!facts) return r;
-        const { dateSource, ...undated } = r;
-        const dated = facts.to && (!r.date || dateSource === 'captured') ? { ...undated, date: facts.to } : r;
-        return { ...dated, kind: 'statement', kindBy: 'rule', kindRule: 'document:statement' };
-      }),
-    };
-  },
+  // Bank statements among the receipts are typed on every load (src/books/store.ts loadBooks,
+  // typeStatements), at any schema; the number says the books may hold typed statements.
+  4: (doc) => doc,
 };
 /** On the YAML document, so the comments of the manifest survive the step. */
 export const MANIFEST_MIGRATIONS: Ladder<Document> = {
@@ -82,6 +61,8 @@ export const MANIFEST_MIGRATIONS: Ladder<Document> = {
     for (const item of seq.items) if (isMap(item) && !item.has('role')) item.set('role', roleBefore(String(item.get('bank'))));
     return doc;
   },
+  // No manifest has the year yet: absent means the basis holds since before the books.
+  2: (doc) => doc,
 };
 
 /** The manifest document named at the current schema: its `schema:` set where it stands (its comments with it), else added as the first key. */

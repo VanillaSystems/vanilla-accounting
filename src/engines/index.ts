@@ -5,9 +5,9 @@
  * figures from the same data for the same kind of firm.
  */
 import type { Jurisdiction } from '../core/modules/schema.js';
-import { EFFECTIVE_QUARTERLY, filingLengthOf, methodOf, onAgreedBasis, type VatBasis, type VatMethod, type VatSetup } from '../workspace/vat-setup.js';
+import { EFFECTIVE_QUARTERLY, basisSinceOf, filingLengthOf, methodOf, onAgreedBasis, type VatBasis, type VatMethod, type VatSetup } from '../workspace/vat-setup.js';
 import { chartEngine, type ChartEngine } from './chart.js';
-import { useDocumentWords } from '../workspace/schema.js';
+import { useDocumentWords } from '../books/statement-facts.js';
 import { returnEngine, type ReturnEngine } from './return.js';
 
 let current: { source: Jurisdiction; setup?: VatSetup; vat: ReturnEngine; chart: ChartEngine } | undefined;
@@ -34,6 +34,9 @@ export const vatSetup = (): VatSetup => loaded().setup ?? EFFECTIVE_QUARTERLY;
 
 /** Whether the firm reports on the agreed consideration (src/accounting/tax-point.ts): its VAT arises with the invoice, not the payment. */
 export const agreedBasis = (): boolean => onAgreedBasis(vatSetup());
+
+/** The year the firm's basis began while the books were kept here; undefined when it holds since before them (VatSetup.reportingSince). */
+export const basisSince = (): number | undefined => basisSinceOf(vatSetup());
 
 /** The method the firm's return is written in; a firm that is not registered has none to write. */
 export function filingMethod(): VatMethod {

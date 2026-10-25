@@ -13,7 +13,7 @@ import { setJurisdiction, vat } from '../src/engines/index.js';
 import { APP_ROOT } from '../src/workspace/workspace.js';
 import { EFFECTIVE_QUARTERLY, type VatSetup } from '../src/workspace/vat-setup.js';
 import { bookInvoiceEvents, eventRef, eventsMissing } from '../src/invoices/events.js';
-import { bookPayment, confirmPayment, matchPayments, PaymentError, type PaymentContext } from '../src/invoices/payments.js';
+import { bookPayment, confirmPayment, matchPayments, PaymentError, releasePayment, type PaymentContext } from '../src/invoices/payments.js';
 import { cancel, creditNoteDraft, issue, totals } from '../src/invoices/rules.js';
 import { DEFAULT_LAYOUT, type Customer, type Draft, type InvoiceBook, type Issued } from '../src/invoices/model.js';
 import { atTaxPoint, openDay, settlementLines, type TaxPointContext } from '../src/accounting/tax-point.js';
@@ -123,7 +123,9 @@ test('agreed basis: a payment\'s coded line takes its document\'s date and the o
   ], 'the bill of September: its input tax in Q3, the payment of October settles the payable');
   assert.equal(figures(atTaxPoint(pay, [line({})], point('2026-06-30', ['2026-09-28'])), '2026-Q3')['405'], 8.1);
   assert.deepEqual(rows(atTaxPoint(pay, [line({})], point('2026-09-30', ['2026-09-28']))), [['2026-10-05', '6500', '1021', 108.1, 'I81', '2026-Q3']], 'Q3 is filed: the input tax goes into its correction (form 0535)');
+  setJurisdiction(ch, { ...AGREED, reportingSince: 2026 });
   assert.deepEqual(rows(atTaxPoint(pay, [line({})], point('2025-12-31', ['2025-12-20']))), [['2026-10-05', '6500', '1021', 108.1, 'I81', '']], 'a bill of the year before the switch: deducted when paid (MWSTV Art. 106 Abs. 1 lit. b)');
+  setJurisdiction(ch, AGREED);
   assert.deepEqual(rows(atTaxPoint(pay, [line({ vatCode: undefined, accountDebit: '2850' })], point('2026-06-30', ['2026-09-28']))), [['2026-10-05', '2850', '1021', 108.1, '', '']], 'a line without a code keeps the payment\'s date');
   assert.deepEqual(rows(atTaxPoint(pay, [line({})], point('2026-06-30', ['2026-10-05']))), [['2026-10-05', '6500', '1021', 108.1, 'I81', '']], 'bill and payment on one day: nothing to settle');
   assert.deepEqual(rows(atTaxPoint(pay, [line({})], point('2026-06-30', ['2027-01-04']))), [['2026-10-05', '6500', '1021', 108.1, 'I81', '']], 'a document of a later year never moves a line out of its payment\'s year');
@@ -148,7 +150,7 @@ test('agreed basis: a payment\'s coded line takes its document\'s date and the o
 });
 
 test('the switch: open invoices of the year before count in the first open period; a document with its event is settled on either basis', () => {
-  setJurisdiction(ch, AGREED);
+  setJurisdiction(ch, { ...AGREED, reportingSince: 2026 });
   const book: InvoiceBook = { schema: 1, customers: [customer], invoices: [], sent: [] };
   const old = issued(book, draft('o1', '2025-12-10', 1000));
   old.payments.push({ transactionRef: 'p0', date: '2025-12-20', amount: 500, by: 'reference' });
@@ -284,7 +286,7 @@ test('an invoice\'s event takes off only what its payments booked as revenue: an
   const b = books('2026-06-30', [tx('p1', '2026-09-10', 1081, 'CRDT')]);
   b.journalEntries.push({ id: 'hand', transactionRef: 'p1', date: '2026-09-10', accountDebit: '1021', accountCredit: '1100', amount: 1081, description: 'Zahlung Bistro', origin: 'manual' });
   confirmPayment(b, book, inv.id, 'p1', ctx);
-  assert.deepEqual(bookInvoiceEvents(b, book, ctx).booked, [{ number: inv.number, kind: 'issue', date: '2026-08-20' }]);
+  assert.deepEqual(b.journalEntries.filter((e) => e.transactionRef === eventRef(inv, 'issue')).map((e) => [e.date, e.amount, e.vatCode]), [['2026-08-20', 1081, 'V81']], 'the confirmation books the missing event');
   assert.deepEqual(figures(b.journalEntries, '2026-Q3'), Q3_SALE, 'the revenue declared once, not left out');
   assert.equal(balance(b.journalEntries, '1100'), 0);
 
@@ -343,4 +345,119 @@ test('an invoice whose event could not be booked (no rate of its day) is named b
   assert.deepEqual(eventsMissing(b, book, '2026-09-30'), [], 'booked once the rate is there');
   setJurisdiction(ch, EFFECTIVE_QUARTERLY);
   assert.deepEqual(eventsMissing(books('2026-06-30'), book, '2026-09-30'), [], 'the cash basis books no events');
+});
+
+// Issue #144: a customer's prepayment on an app invoice dated after it.
+
+test('a prepayment confirmed on an invoice dated after it declares its part when it was received; the event keeps the rest (MWSTG Art. 40 Abs. 1 lit. c)', () => {
+  setJurisdiction(ch, AGREED);
+  const book: InvoiceBook = { schema: 1, customers: [customer], invoices: [], sent: [] };
+  const inv = issued(book, draft('i1', '2026-10-20', 1000));
+  const b = books('2026-06-30', [tx('p1', '2026-09-28', 500, 'CRDT'), tx('p2', '2026-11-05', 581, 'CRDT')]);
+  bookInvoiceEvents(b, book, ctx);
+  const of = (ref: string) => b.journalEntries.filter((e) => e.transactionRef === ref).map((e) => [e.date, e.accountDebit, e.accountCredit, e.amount, e.vatCode ?? '']);
+  assert.deepEqual(of(eventRef(inv, 'issue')), [['2026-10-20', '1100', '3200', 1081, 'V81']]);
+
+  confirmPayment(b, book, inv.id, 'p1', ctx);
+  assert.deepEqual(of('p1'), [['2026-09-28', '1021', '3200', 500, 'V81']], 'the prepayment\'s revenue on the day it was received');
+  assert.deepEqual(of(eventRef(inv, 'issue')), [['2026-10-20', '1100', '3200', 581, 'V81']], 'the invoice\'s event for the rest: 1081 less 500');
+  // By hand: 500 × 8.1 / 108.1 = 37.47 in Q3; 581 × 8.1 / 108.1 = 43.53 in Q4; together the invoice's 81.00.
+  assert.deepEqual(figures(b.journalEntries, '2026-Q3'), { 200: 500, 299: 500, 303: 500, 399: 37.47, 500: 37.47 });
+  assert.deepEqual(figures(b.journalEntries, '2026-Q4'), { 200: 581, 299: 581, 303: 581, 399: 43.53, 500: 43.53 });
+
+  confirmPayment(b, book, inv.id, 'p2', ctx);
+  assert.deepEqual(of('p2'), [['2026-11-05', '1021', '1100', 581, '']], 'the rest settles the receivable');
+  assert.equal(balance(b.journalEntries, '1100'), 0);
+  assert.deepEqual(figures(b.journalEntries, '2026-Q4'), { 200: 581, 299: 581, 303: 581, 399: 43.53, 500: 43.53 }, 'declared once');
+
+  // «Lösen» of the prepayment: its revenue goes, the event is the whole invoice again.
+  releasePayment(b, book, inv.id, 'p1', ctx);
+  assert.deepEqual(of(eventRef(inv, 'issue')), [['2026-10-20', '1100', '3200', 1081, 'V81']]);
+  assert.deepEqual(figures(b.journalEntries, '2026-Q3'), {});
+  assert.deepEqual(figures(b.journalEntries, '2026-Q4'), { 200: 1081, 299: 1081, 303: 1081, 399: 81, 500: 81 });
+  setJurisdiction(ch, EFFECTIVE_QUARTERLY);
+});
+
+test('a prepayment of the whole invoice, matched by its reference before the invoice date: the revenue on the payment, no event left', () => {
+  setJurisdiction(ch, AGREED);
+  const book: InvoiceBook = { schema: 1, customers: [customer], invoices: [], sent: [] };
+  const inv = issued(book, draft('i1', '2026-10-20', 1000));
+  const b = books('2026-06-30', [tx('p1', '2026-09-28', 1081, 'CRDT', { reference: inv.reference })]);
+  bookInvoiceEvents(b, book, ctx);
+  const paid = matchPayments(b, book, ctx);
+  assert.deepEqual(paid.paid.map((p) => [p.transactionRef, p.booked]), [['p1', true]]);
+  assert.deepEqual(b.journalEntries.map((e) => [e.transactionRef, e.date, e.accountDebit, e.accountCredit, e.amount, e.vatCode ?? '']), [['p1', '2026-09-28', '1021', '3200', 1081, 'V81']]);
+  assert.deepEqual(figures(b.journalEntries, '2026-Q3'), Q3_SALE);
+  assert.deepEqual(figures(b.journalEntries, '2026-Q4'), {});
+  assert.deepEqual(bookInvoiceEvents(b, book, ctx).booked, [], 'nothing left for the event');
+  assert.deepEqual(eventsMissing(b, book, '2026-12-31'), []);
+  setJurisdiction(ch, EFFECTIVE_QUARTERLY);
+});
+
+test('a prepayment a person booked with revenue is kept when confirmed: the event keeps the rest, nothing is refused', () => {
+  setJurisdiction(ch, AGREED);
+  const book: InvoiceBook = { schema: 1, customers: [customer], invoices: [], sent: [] };
+  const inv = issued(book, draft('i1', '2026-10-20', 1000));
+  const b = books('2026-06-30', [tx('p1', '2026-09-28', 500, 'CRDT')]);
+  bookInvoiceEvents(b, book, ctx);
+  b.journalEntries.push({ id: 'hand', transactionRef: 'p1', date: '2026-09-28', accountDebit: '1021', accountCredit: '3200', amount: 500, vatCode: 'V81', description: 'Anzahlung Bistro', origin: 'manual' });
+  const out = confirmPayment(b, book, inv.id, 'p1', ctx);
+  assert.deepEqual(out.paid.map((p) => [p.number, p.booked]), [[inv.number, false]]);
+  assert.deepEqual(b.journalEntries.filter((e) => e.transactionRef === eventRef(inv, 'issue')).map((e) => [e.date, e.amount]), [['2026-10-20', 581]]);
+  assert.equal(figures(b.journalEntries, '2026-Q3')['200'], 500);
+  assert.equal(figures(b.journalEntries, '2026-Q4')['200'], 581);
+  setJurisdiction(ch, EFFECTIVE_QUARTERLY);
+});
+
+// Issue #143: a document of a closed earlier year the firm reported on the agreed basis.
+
+test('a bill or a sale of a closed earlier agreed year, paid now, goes into that period\'s correction; before the year the basis began it is an open item of the switch', () => {
+  setJurisdiction(ch, AGREED);
+  const pay = { ref: 'b1', date: '2027-02-15', currency: 'CHF' };
+  const bill: JournalEntry = { id: 'e1', transactionRef: 'b1', date: '2027-02-15', accountDebit: '6500', accountCredit: '1021', amount: 108.1, vatCode: 'I81', description: 'Swisscom', origin: 'classify' };
+  const sale: JournalEntry = { ...bill, accountDebit: '1021', accountCredit: '3200', amount: 1081, vatCode: 'V81', description: 'Beratung Dezember' };
+
+  const out = atTaxPoint(pay, [bill, sale], point('2026-12-31', ['2026-12-10']));
+  assert.deepEqual(tpRows(out), [
+    ['2027-02-15', '6500', '1021', 108.1, 'I81', '2026-Q4'],
+    ['2027-02-15', '1021', '3200', 1081, 'V81', '2026-Q4'],
+  ], 'the bill\'s input tax and the sale\'s tax belonged to Q4 2026 (MWSTG Art. 40 Abs. 1)');
+  // By hand: the sale 1081 at 8.1 %, tax 81; the bill's input tax 8.10; 72.90 to pay.
+  assert.deepEqual(figures(out, '2026-Q4'), { 200: 1081, 299: 1081, 303: 1081, 399: 81, 405: 8.1, 479: 8.1, 500: 72.9 });
+  assert.deepEqual(figures(out, '2027-Q1'), {}, 'nothing in the open quarter');
+
+  setJurisdiction(ch, { ...AGREED, reportingSince: 2027 });
+  assert.deepEqual(tpRows(atTaxPoint(pay, [bill, sale], point('2026-12-31', ['2026-12-10']))), [
+    ['2027-02-15', '6500', '1021', 108.1, 'I81', ''],
+    ['2027-02-15', '1021', '3200', 1081, 'V81', ''],
+  ], 'the agreed basis began in 2027: an open item of the switch, when paid (MWSTV Art. 106 Abs. 1)');
+  setJurisdiction(ch, EFFECTIVE_QUARTERLY);
+});
+
+test('an app invoice of a closed earlier agreed year without its event is booked whole into that period\'s correction; its credit note counts when booked (MWSTG Art. 41)', () => {
+  setJurisdiction(ch, AGREED);
+  const book: InvoiceBook = { schema: 1, customers: [customer], invoices: [], sent: [] };
+  const older = issued(book, draft('i0', '2026-11-10', 1000));
+  const b = books('2026-09-30');
+  bookInvoiceEvents(b, book, ctx);
+  const inv = issued(book, draft('i1', '2026-12-10', 1000));
+  const cn = issued(book, { ...creditNoteDraft(older, { amount: 540.5, reason: 'Kulanz', settlement: 'refund' }, envelope('c1'), '2026-12-20'), sender } as Draft);
+  b.config.closedThrough = '2026-12-31';
+  const out = bookInvoiceEvents(b, book, ctx);
+  assert.deepEqual(out.booked, [{ number: inv.number, kind: 'issue', date: '2027-01-01' }, { number: cn.number, kind: 'issue', date: '2027-01-01' }]);
+  const of = (ref: string) => b.journalEntries.filter((e) => e.transactionRef === ref).map((e) => [e.date, e.accountDebit, e.accountCredit, e.amount, e.vatCode ?? '', e.corrects ?? '']);
+  assert.deepEqual(of(eventRef(inv, 'issue')), [['2027-01-01', '1100', '3200', 1081, 'V81', '2026-Q4']], 'the whole invoice into the 0535 of Q4 2026');
+  assert.deepEqual(of(eventRef(cn, 'issue')), [['2027-01-01', '3200', '1100', 540.5, '-V81', '']], 'the credit note in the open quarter, whole');
+  // Q4 2026 corrected by hand: INV0 1081 (filed with its event) and INV1 1081, tax 162; Q1 2027: the credit note takes back 540.50, 40.50 of tax.
+  assert.deepEqual(figures(b.journalEntries, '2026-Q4'), { 200: 2162, 299: 2162, 303: 2162, 399: 162, 500: 162 });
+  assert.deepEqual(figures(b.journalEntries, '2027-Q1'), { 200: -540.5, 299: -540.5, 303: -540.5, 399: -40.5, 510: 40.5 });
+
+  // The agreed basis began in 2027: the invoice of December is an open item of the switch, in Q1 for what was open.
+  setJurisdiction(ch, { ...AGREED, reportingSince: 2027 });
+  const b2 = books('2026-12-31');
+  const book2: InvoiceBook = { schema: 1, customers: [customer], invoices: [], sent: [] };
+  issued(book2, draft('i1', '2026-12-10', 1000));
+  bookInvoiceEvents(b2, book2, ctx);
+  assert.deepEqual(b2.journalEntries.map((e) => [e.date, e.amount, e.vatCode, e.corrects ?? '']), [['2027-01-01', 1081, 'V81', '']]);
+  setJurisdiction(ch, EFFECTIVE_QUARTERLY);
 });

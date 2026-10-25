@@ -227,12 +227,13 @@ router.delete('/api/invoices/:id/payments/:ref', async (req, res) => {
   if (!ctx) throw new RequestError(400, 'belege.workspace.yaml hat keinen invoicing-Block.');
   const ref = req.params.ref;
   let unbooked = false;
-  const out = updateBooksWithEffects((books): PaymentReleased => {
+  const out = updateBooksWithEffects((books): Omit<PaymentReleased, 'files'> => {
     assertOpen(books, books.transactions.filter((t) => t.ref === ref).map((t) => t.date), 'mapping');
     const invoices = loadInvoices(WS);
     const inv = liveInvoices(invoices).find((i) => i.id === req.params.id);
     const restore = inv?.status === 'issued' ? takeReplaced(WS, ref, ctx.receiptId(ctx.pdfOf(inv))) : undefined;
-    const result = releasePayment(books, invoices, req.params.id, ref, ctx, restore);
+    const { files, ...result } = releasePayment(books, invoices, req.params.id, ref, ctx, restore);
+    fileReceipts(WS, books, files);
     saveInvoices(WS, invoices);
     unbooked = !books.journalEntries.some((e) => e.transactionRef === ref);
     return result;

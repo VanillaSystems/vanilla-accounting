@@ -16,6 +16,7 @@ import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, climb, schemaOf } from '../workspace/sc
 import type { ClosedReason } from '../types/api-error.js';
 import { checkSeals, closedPart, type SealReport } from './seal.js';
 import { parseBookedBy } from './booked-by.js';
+import { typeStatements } from './statement-facts.js';
 import { BOOK_FILES, PARTS, fromJsonl, isClosedYear, keyOf, placement, splitByYear, statementFile, toJsonl, type InClosedYear, type Part } from './years.js';
 
 export type Books = Index & { journalEntries: JournalEntry[]; config: AccountingConfig };
@@ -73,7 +74,8 @@ function readFiles(paths: WorkspacePaths): Map<string, string> {
 
 /**
  * The books at the current schema (older ones are migrated in memory, a newer one is refused),
- * with every seal checked. A broken seal is printed once per process, and saveBooks refuses them.
+ * with every seal checked, and the bank statements among an open year's receipts typed (#151;
+ * receipts are under no seal). A broken seal is printed once per process, and saveBooks refuses them.
  * Files of open years that lie in another year than their record says move there (placeFiles).
  */
 export function loadBooks(ws: Workspace): Books {
@@ -88,11 +90,16 @@ export function loadBooks(ws: Workspace): Books {
   const head = JSON.parse(ledgerText) as Record<string, unknown>;
   const files = readFiles(ws.paths);
   const raw: Record<string, unknown> = { schema: head.schema, config: head.config ?? {}, journalEntries: [], receipts: [], transactions: [], mappings: [], bankStatements: [] };
+  const closedThrough = (head.config as AccountingConfig | undefined)?.closedThrough;
   for (const year of yearsOf(ws.paths)) {
     for (const part of PARTS) {
       const rel = fileOf(year, part);
       const text = files.get(rel);
-      if (text !== undefined) raw[part] = [...((raw[part] as unknown[] | undefined) ?? []), ...fromJsonl(text, rel)];
+      if (text === undefined) continue;
+      const records = fromJsonl(text, rel);
+      // A closed year's files never change (saveBooks), so its receipts stay as they were read.
+      const typed = part === 'receipts' && !isClosedYear(year, closedThrough) ? typeStatements(records as Receipt[]) : records;
+      raw[part] = [...((raw[part] as unknown[] | undefined) ?? []), ...typed];
     }
   }
   const current = climb<Record<string, unknown>>(raw, schemaOf(raw.schema, ledger), BOOKS_SCHEMA, BOOKS_MIGRATIONS, ledger, (d) => structuredClone(d));

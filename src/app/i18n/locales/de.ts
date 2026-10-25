@@ -1775,6 +1775,7 @@ export const messages = {
   'company.vatForm': 'Formular 0550',
   'company.vatMethodEffective': 'effektive Methode',
   'company.vatBasis': 'Abrechnung nach',
+  'company.vatBasisSince': 'seit {year}',
   'company.vatReceived': 'vereinnahmten Entgelten',
   'company.vatAgreed': 'vereinbarten Entgelten',
   'company.vatPeriod': 'Periode',

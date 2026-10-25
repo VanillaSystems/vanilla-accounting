@@ -56,7 +56,7 @@ export interface Receipt {
   /** A person set the VAT facts (by hand or through the AI sidebar): the VAT step never overwrites them. */
   vatBy?: 'human';
   kind?: ReceiptKind;
-  /** Who set the kind: a rule (named in kindRule) or a person. A person's kind is never overwritten. */
+  /** Who set the kind: a rule (named in kindRule) or a person. A person's kind is never overwritten; 'human' without a kind is a person's «ordinary receipt», never typed again. */
   kindBy?: 'rule' | 'human';
   kindRule?: string;
   /** The workflow run that took it up (src/workflows/engine.ts): the receipt's page links to it. */
