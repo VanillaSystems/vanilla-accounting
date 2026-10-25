@@ -4475,7 +4475,7 @@ export default {
     'aiSetup.say.browser': 'Nel Terminale parte l’accesso e si apre il browser. Accedi lì; io aspetto qui.',
     'aiSetup.say.ready': '{cli} è pronto: connesso con {plan}, una prova ha risposto.',
     'aiSetup.answer.switch': 'Meglio {cli}',
-    'aiSetup.say.switchInstall': 'Va bene, allora {cli}. L’installatore ufficiale di {vendor} si apre nel Terminale.',
+    'aiSetup.say.switchInstall': 'Va bene, allora {cli}. «Installa {cli}» apre l’installatore ufficiale di {vendor} nel Terminale.',
     'aiSetup.say.alreadyOut': '{cli} è già su questo Mac (versione {version}). Ora accedi con il tuo account nel browser. Non vedo mai la tua password né le tue credenziali.',
     'aiSetup.say.alreadyIn': '{cli} è già su questo Mac (versione {version}) e connesso. Faccio una breve prova.',
     'aiSetup.say.readyNoPlan': '{cli} è pronto: connesso, una prova ha risposto.',

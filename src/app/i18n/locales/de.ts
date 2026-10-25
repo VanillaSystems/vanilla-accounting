@@ -4472,7 +4472,7 @@ export const messages = {
   'aiSetup.say.browser': 'Im Terminal startet die Anmeldung und öffnet den Browser. Melde dich dort an; ich warte hier.',
   'aiSetup.say.ready': '{cli} ist bereit: angemeldet mit {plan}, ein Probelauf hat geantwortet.',
   'aiSetup.answer.switch': 'Doch lieber {cli}',
-  'aiSetup.say.switchInstall': 'Gut, dann {cli}. Der offizielle Installer von {vendor} öffnet sich im Terminal.',
+  'aiSetup.say.switchInstall': 'Gut, dann {cli}. Mit «{cli} installieren» öffnet sich der offizielle Installer von {vendor} im Terminal.',
   'aiSetup.say.alreadyOut': '{cli} ist schon auf diesem Mac (Version {version}). Jetzt meldest du dich an, mit deinem Konto im Browser. Dein Passwort und dein Login sehe ich nie.',
   'aiSetup.say.alreadyIn': '{cli} ist schon auf diesem Mac (Version {version}) und angemeldet. Ich mache einen kurzen Probelauf.',
   'aiSetup.say.readyNoPlan': '{cli} ist bereit: angemeldet, ein Probelauf hat geantwortet.',

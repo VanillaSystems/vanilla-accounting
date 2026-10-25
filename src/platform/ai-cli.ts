@@ -187,14 +187,15 @@ function signIn(cli: TerminalCli, bin: string, t: Pick<ScriptTexts, 'done' | 'si
  * fails. Installed, Enter signs in with the CLI's own login in the same window.
  */
 export function installScript(cli: TerminalCli, scriptDir: string, t: ScriptTexts): string {
-  const { install, program } = AI_CLIS[cli];
+  const { install, program, installEnv = {} } = AI_CLIS[cli];
+  const env = Object.entries(installEnv).map(([k, v]) => `${k}=${shellQuote(v)}; export ${k}; `).join('');
   return [
     ...head(scriptDir, t, install),
     `ask ${shellQuote(t.prompt)} || exit 0`,
     'log=$(mktemp "${TMPDIR:-/tmp}/vanilla-install.XXXXXX")',
     'echo',
     `say ${shellQuote(t.working)}`,
-    `if ! ( ${install} ) >"$log" 2>&1; then bad ${shellQuote(t.failed)}; tail -n 5 "$log" | while IFS= read -r line; do dim "$line"; done; say ${shellQuote(t.back)}; echo; exit 1; fi`,
+    `if ! ( ${env}${install} ) >"$log" 2>&1; then bad ${shellQuote(t.failed)}; tail -n 5 "$log" | while IFS= read -r line; do dim "$line"; done; say ${shellQuote(t.back)}; echo; exit 1; fi`,
     'rm -f "$log"',
     'PATH="$HOME/.local/bin:$PATH"; export PATH',
     `ok ${shellQuote(t.installed)}`,

@@ -264,7 +264,8 @@ test('the Codex installer\'s screen, in the person\'s language: OpenAI\'s comman
   const fake = temp('ai-fake-');
   const home = temp('ai-home-');
   const out = join(temp('ai-out-'), 'run');
-  script(fake, 'curl', `echo "mkdir -p \\$HOME/.local/bin; cp ${join(REPO, 'tests/support/terminal-bin/codex')} \\$HOME/.local/bin/codex"`);
+  // The stand-in installer records whether it may ask anything, as OpenAI's reads CODEX_NON_INTERACTIVE.
+  script(fake, 'curl', `echo "mkdir -p \\$HOME/.local/bin; cp ${join(REPO, 'tests/support/terminal-bin/codex')} \\$HOME/.local/bin/codex; echo \\$CODEX_NON_INTERACTIVE > ${out}.quiet"`);
   const dir = temp('ai-script-');
   writeFileSync(join(dir, 'i.command'), installScript('codex', dir, scriptTexts('fr', 'codex')));
   const said = await runScript(join(dir, 'i.command'), '\n\n', { PATH: `${fake}:/usr/bin:/bin`, HOME: home, TERMINAL_STUB_OUT: out, NO_COLOR: '1' });
@@ -273,6 +274,8 @@ test('the Codex installer\'s screen, in the person\'s language: OpenAI\'s comman
   }
   assert.equal(existsSync(join(home, '.local', 'bin', 'codex')), true, 'installed where OpenAI\'s installer writes');
   assert.equal(readFileSync(`${out}.arg`, 'utf8'), 'login', 'the second Enter runs `codex login`');
+  assert.equal(readFileSync(`${out}.quiet`, 'utf8').trim(), '1', 'OpenAI\'s installer runs with CODEX_NON_INTERACTIVE=1: no English «Start Codex now?» of its own');
+  assert.equal(said.includes('CODEX_NON_INTERACTIVE'), false, 'the command shown is the vendor\'s, as on its page');
 });
 
 test('the sign-in screen runs the CLI\'s own login; the words are printed as words', async () => {

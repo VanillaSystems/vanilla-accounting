@@ -26,6 +26,12 @@ export interface CliFacts {
   login: readonly string[];
   /** The vendor's name of the smallest plan with the CLI. */
   minPlan: string;
+  /**
+   * Variables the installer runs with, so it asks nothing of its own: the app's Terminal screen
+   * asks the sign-in in the person's language. OpenAI's installer otherwise asks «Start Codex
+   * now? [y/N]» on the terminal, in English (seen in a fresh macOS VM, 25.10.2026).
+   */
+  installEnv?: Readonly<Record<string, string>>;
 }
 
 export const AI_CLIS: Record<TerminalCli, CliFacts> = {
@@ -38,6 +44,7 @@ export const AI_CLIS: Record<TerminalCli, CliFacts> = {
     program: 'codex', vendor: 'OpenAI', install: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh',
     guide: 'https://developers.openai.com/codex/cli', plans: 'https://chatgpt.com/pricing',
     status: ['login', 'status'], login: ['login'], minPlan: 'ChatGPT Plus',
+    installEnv: { CODEX_NON_INTERACTIVE: '1' },
   },
 };
 

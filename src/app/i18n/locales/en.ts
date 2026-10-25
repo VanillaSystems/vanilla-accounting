@@ -4475,7 +4475,7 @@ export default {
     'aiSetup.say.browser': 'In Terminal the sign-in starts and opens the browser. Sign in there; I wait here.',
     'aiSetup.say.ready': '{cli} is ready: signed in with {plan}, a test call answered.',
     'aiSetup.answer.switch': 'Rather {cli}',
-    'aiSetup.say.switchInstall': 'Fine, {cli} then. The official installer by {vendor} opens in Terminal.',
+    'aiSetup.say.switchInstall': 'Fine, {cli} then. “Install {cli}” opens the official installer by {vendor} in Terminal.',
     'aiSetup.say.alreadyOut': '{cli} is already on this Mac (version {version}). Now you sign in with your account in the browser. I never see your password or your login.',
     'aiSetup.say.alreadyIn': '{cli} is already on this Mac (version {version}) and signed in. I’m making a short test call.',
     'aiSetup.say.readyNoPlan': '{cli} is ready: signed in, a test call answered.',
