@@ -7,8 +7,10 @@
 //                                             VANILLA_DICTATION_FILE=a does the same for the whole app;
 //                                             VANILLA_DICTATION_LEGACY=1 takes the path before macOS 26)
 //
-// stdout: one JSON object per line, {"kind":"preparing"|"listening"|"heard"|"ended", "text"?, "error"?}
-// (DictationEvent in src/types/desktop.ts). macOS 26 and later recognize with SpeechAnalyzer,
+// stdout: one JSON object per line (DictationEvent in src/types/desktop.ts): "preparing", "listening",
+// "level" {level: 0..1, about 20 a second while the microphone is open}, "heard" {text, partial}
+// (`text` is settled and only grows, `partial` follows it and may still change), one "ended" {error?}.
+// macOS 26 and later recognize with SpeechAnalyzer,
 // which never sends audio away and loads a language's model from Apple once. Older macOS use
 // SFSpeechRecognizer, only where the language's model is on the Mac (requiresOnDeviceRecognition).
 import AVFoundation
@@ -17,17 +19,17 @@ import Foundation
 
 setvbuf(stdout, nil, _IOLBF, 0)
 
-func emit(_ kind: String, text: String? = nil, error: String? = nil) {
-  var o: [String: String] = ["kind": kind]
-  if let text { o["text"] = text }
-  if let error { o["error"] = error }
-  let data = try! JSONSerialization.data(withJSONObject: o)
-  FileHandle.standardOutput.write(data)
-  FileHandle.standardOutput.write("\n".data(using: .utf8)!)
+/// The audio thread's levels and the recognizer's words are written at the same time: one line at a time.
+let lines = NSLock()
+
+func emit(_ kind: String, _ fields: [String: Any] = [:]) {
+  var data = try! JSONSerialization.data(withJSONObject: fields.merging(["kind": kind]) { _, k in k })
+  data.append(0x0A)
+  lines.withLock { FileHandle.standardOutput.write(data) }
 }
 
 func end(_ error: String? = nil) -> Never {
-  emit("ended", error: error)
+  emit("ended", error.map { ["error": $0] } ?? [:])
   exit(0)
 }
 
@@ -80,6 +82,7 @@ final class Microphone {
     let converter = target == mono ? nil : AVAudioConverter(from: mono, to: target)
     input.installTap(onBus: 0, bufferSize: 4096, format: native) { [self] buffer, _ in
       guard let one = loudestChannel(of: buffer, as: mono) else { return }
+      report(levels(of: one))
       guard let converter else { return hand(one, deliver) }
       let capacity = AVAudioFrameCount(Double(one.frameLength) * target.sampleRate / mono.sampleRate) + 1
       guard let out = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return }
@@ -96,6 +99,16 @@ final class Microphone {
     engine.prepare()
     try engine.start()
     started = Date()
+  }
+
+  /// A tap's buffer holds a tenth of a second or more: its slices are told one after the other, so
+  /// the button moves about twenty times a second, as the voice did.
+  private let levelQueue = DispatchQueue(label: "level")
+  private func report(_ levels: [Int]) {
+    for (i, level) in levels.enumerated() {
+      let exact = NSDecimalNumber(mantissa: UInt64(level), exponent: -2, isNegative: false)
+      levelQueue.asyncAfter(deadline: .now() + levelSlice * Double(i)) { emit("level", ["level": exact]) }
+    }
   }
 
   private func hand(_ buffer: AVAudioPCMBuffer, _ deliver: (AVAudioPCMBuffer) -> Void) {
@@ -120,6 +133,22 @@ func loudestChannel(of buffer: AVAudioPCMBuffer, as mono: AVAudioFormat) -> AVAu
   return one
 }
 
+let levelSlice = 0.05
+
+/// The loudness of each 50 ms of a mono buffer in percent: 0 at -50 dBFS and below, 100 at -10 dBFS
+/// and above, so a voice near the microphone fills most of it and the room's noise hardly moves it.
+func levels(of buffer: AVAudioPCMBuffer) -> [Int] {
+  guard let f = buffer.floatChannelData?[0] else { return [] }
+  let frames = Int(buffer.frameLength)
+  let slice = max(1, Int(buffer.format.sampleRate * levelSlice))
+  return stride(from: 0, to: frames, by: slice).map { start in
+    let n = min(slice, frames - start)
+    let rms = sqrt((start..<start + n).reduce(Float(0)) { $0 + f[$1] * f[$1] } / Float(n))
+    let db = 20 * log10(Double(max(rms, 1e-9)))
+    return Int((min(max((db + 50) / 40, 0), 1) * 100).rounded())
+  }
+}
+
 /// Whether a buffer holds anything but zeros: a working microphone's noise is enough.
 func hasSound(_ buffer: AVAudioPCMBuffer) -> Bool {
   let frames = Int(buffer.frameLength)
@@ -131,7 +160,7 @@ func hasSound(_ buffer: AVAudioPCMBuffer) -> Bool {
 @available(macOS 26.0, *)
 func analyze() async {
   guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: lang)) else { end("noOnDevice") }
-  let transcriber = SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [.volatileResults], attributeOptions: [])
+  let transcriber = SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [.volatileResults, .fastResults], attributeOptions: [])
   do {
     if let install = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
       emit("preparing")
@@ -141,13 +170,14 @@ func analyze() async {
     end("notInstalled")
   }
 
+  // Without .fastResults the volatile results come only once the speech has ended, so nothing would
+  // show while the person speaks.
   var finished = ""
-  var volatile = ""
   let results = Task {
     for try await result in transcriber.results {
       let text = String(result.text.characters)
-      if result.isFinal { finished += text; volatile = "" } else { volatile = text }
-      emit("heard", text: finished + volatile)
+      if result.isFinal { finished += text }
+      emit("heard", ["text": finished, "partial": result.isFinal ? "" : text])
     }
   }
 
@@ -204,7 +234,8 @@ func recognize() async {
     let finish: (String?) -> Void = { e in if !resumed { resumed = true; done.resume(returning: e) } }
     nonisolated(unsafe) let task = recognizer.recognitionTask(with: request) { result, error in
       if let result {
-        emit("heard", text: result.bestTranscription.formattedString)
+        let text = result.bestTranscription.formattedString
+        emit("heard", ["text": result.isFinal ? text : "", "partial": result.isFinal ? "" : text])
         if result.isFinal { finish(nil) }
       } else if let error {
         // 1110: nothing was said; a pause is no error.
