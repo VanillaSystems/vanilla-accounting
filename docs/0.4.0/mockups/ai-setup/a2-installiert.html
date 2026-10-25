@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="de" data-theme="light" class="no-titlebar"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A2 · wird installiert</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="ai-setup.css">
+<script>try { var t = new URLSearchParams(location.search).get('theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body><div class="dragbar" aria-hidden="true"></div>
+    
+    <div id="root"><div class="st"><header class="st-top"><span class="seg2" role="radiogroup" aria-label="Sprache"><button type="button" role="radio" aria-checked="true" class="on" data-tip="Deutsch">DE</button><button type="button" role="radio" aria-checked="false" class="" data-tip="Français">FR</button><button type="button" role="radio" aria-checked="false" class="" data-tip="Italiano">IT</button><button type="button" role="radio" aria-checked="false" class="" data-tip="English">EN</button></span></header><div class="st-main aisetup">
+    <ol class="aisteps2"><li class="now">KI</li><li>Buchhaltung</li></ol>
+    <h1>KI einrichten</h1>
+    <p class="st-sub">Vanilla Accounting liest Belege und schlägt Buchungen vor. Dafür fragt es ein KI-Programm auf deinem Mac, mit deinem eigenen Abo. Du brauchst eins von beiden; du installierst es selbst, die App merkt es von allein.</p>
+    <div class="aiclis"><div class="aicli" data-cli="claude" data-state="installing">
+    <div class="aiclihd"><b>Claude Code</b><span class="aivendor">von Anthropic</span><span class="aipill now"><span class="aispin" aria-hidden="true"></span>wird installiert</span></div>
+    <p class="aiplan">Mit Claude Pro oder höher, etwa 20 USD im Monat. <a class="linkbtn" href="https://claude.com/pricing" target="_blank" rel="noopener">Abos bei Anthropic <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"></path><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg></a></p>
+    <p class="m">Das Terminal ist offen, mit dem Befehl von Anthropic. Drück dort Enter.</p>
+      <div class="aicmd"><code>curl -fsSL https://claude.ai/install.sh | bash</code><button type="button" class="linkbtn">Kopieren</button></div>
+      <p class="aiwait"><span class="aispin" aria-hidden="true"></span>Warte auf Claude Code. Die App schaut alle 2 Sekunden nach, ein Neustart ist nicht nötig.</p>
+      <span class="ruleacts"><button type="button" class="btn ghost">Terminal wieder zeigen</button><button type="button" class="linkbtn">Abbrechen</button></span>
+  </div><div class="aicli" data-cli="codex" data-state="missing">
+    <div class="aiclihd"><b>Codex</b><span class="aivendor">von OpenAI</span><span class="aipill ">nicht installiert</span></div>
+    <p class="aiplan">Mit ChatGPT Plus oder höher, etwa 20 USD im Monat. <a class="linkbtn" href="https://chatgpt.com/pricing" target="_blank" rel="noopener">Abos bei OpenAI <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"></path><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg></a></p>
+    <p class="m">Der offizielle Installer von OpenAI. Er braucht weder Homebrew noch Node.</p>
+      <div class="aicmd"><code>curl -fsSL https://chatgpt.com/codex/install.sh | sh</code><button type="button" class="linkbtn">Kopieren</button></div>
+      <span class="ruleacts"><button type="button" class="btn "><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><path d="m7.5 9.5 3 2.5-3 2.5M13 15h4"></path></svg>Im Terminal installieren</button><a class="linkbtn" href="https://developers.openai.com/codex/cli" target="_blank" rel="noopener">Anleitung von OpenAI <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"></path><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg></a></span>
+      
+  </div></div>
+    
+    <p class="aimac">Auf diesem Mac: macOS 15.6 · kein Homebrew · kein Node. Beide Installer brauchen nichts davon.</p>
+    <div class="st-foot aifoot">
+      <button type="button" class="linkbtn st-byhand">Ohne KI weitermachen</button>
+      <button type="button" class="btn primary" disabled>Weiter</button>
+    </div>
+  </div></div></div></div>
+    
+  
+
+<div class="termwin" aria-label="Terminal (macOS)"><div class="termbar"><i></i><i></i><i></i><span>Terminal · zsh</span></div><pre><span class="tdim">Vanilla Accounting installiert Claude Code mit dem Befehl von Anthropic:</span>
+
+  <b>curl -fsSL https://claude.ai/install.sh | bash</b>
+
+<span class="tdim">Enter: starten · Ctrl-C: abbrechen</span>
+<span class="tcur"> </span></pre></div></body></html>
