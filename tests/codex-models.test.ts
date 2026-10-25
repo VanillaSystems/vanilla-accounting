@@ -148,4 +148,11 @@ test('the kept list is read again on a new sign-in, not before; signed out, Code
   await resolveStep('classify');
   assert.equal(debugCount(), 2, 'signed out, Codex prints its bundled list as if it were the account\'s: not asked');
   assert.equal(codexCli.defaults.standard, 'gpt-5.6-terra', 'the kept list stays');
+  await resolveStep('classify');
+  assert.equal(debugCount(), 2, 'the same sign-in within five minutes: not asked again');
+  delete process.env.CODEX_STUB_STATUS;
+  signInAgain();
+  await resolveStep('classify');
+  assert.equal(debugCount(), 3, 'signed in anew right after: read at once, not after five minutes');
+  assert.equal(codexCli.defaults.standard, 'gpt-6.1-sol');
 });

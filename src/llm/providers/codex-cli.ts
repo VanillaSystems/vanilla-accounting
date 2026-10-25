@@ -275,8 +275,8 @@ async function askCodex(call: Call): Promise<{ text: string; usage: Usage }> {
 }
 
 let reading: Promise<CodexCatalog | undefined> | undefined;
-/** When Codex last could not give the list (signed out, no answer): asked again after five minutes, or at once when forced. */
-let failedAt = 0;
+/** When Codex last could not give the list (signed out, no answer), and on which sign-in: asked again after five minutes, at once when forced or signed in anew. */
+let lastFailure = { at: 0, signIn: 0 };
 const RETRY = 5 * 60_000;
 
 /**
@@ -287,12 +287,13 @@ const RETRY = 5 * 60_000;
  */
 export function refreshCodexModels({ force = false, timeoutMs = 30_000 } = {}): Promise<CodexCatalog | undefined> {
   const kept = readCatalog();
-  if (!force && (!stale(kept) || Date.now() - failedAt < RETRY)) return Promise.resolve(kept);
+  const waiting = Date.now() - lastFailure.at < RETRY && lastFailure.signIn === signInStamp();
+  if (!force && (!stale(kept) || waiting)) return Promise.resolve(kept);
   return (reading ??= readModels(kept, timeoutMs).finally(() => { reading = undefined; }));
 }
 
 async function readModels(kept: CodexCatalog | undefined, timeoutMs: number): Promise<CodexCatalog | undefined> {
-  failedAt = Date.now();
+  lastFailure = { at: Date.now(), signIn: signInStamp() };
   const command = codexCommand();
   if (!command || (await codexStatus(timeoutMs)) !== true) return kept;
   const out = await new Promise<string | undefined>((done) => {
@@ -304,7 +305,7 @@ async function readModels(kept: CodexCatalog | undefined, timeoutMs: number): Pr
   const signIn = signInStamp();
   const catalog: CodexCatalog = { at: new Date().toISOString(), signIn, models, refused: kept?.signIn === signIn ? kept.refused : [] };
   writeCatalog(catalog);
-  failedAt = 0;
+  lastFailure = { at: 0, signIn: 0 };
   return catalog;
 }
 
