@@ -9,7 +9,8 @@ import { keepKey, KeyNotKept } from '../../llm/key-store.js';
 import { claudeCli } from '../../llm/providers/claude-cli.js';
 import { KEYED, type KeyedId } from '../../llm/providers/keyed.js';
 import { PROVIDERS, readSettings, writeChoice, writeCli } from '../../llm/settings.js';
-import { codexCli, codexStatus } from '../../llm/providers/codex-cli.js';
+import { codexCli, codexStatus, refreshCodexModels } from '../../llm/providers/codex-cli.js';
+import { tierModels, usable as codexUsable } from '../../llm/providers/codex-models.js';
 import { isTerminalCli } from '../../platform/terminal.js';
 import { confidentOf, isStepId, meets, STEP_IDS, STEPS } from '../../llm/steps.js';
 import type { Provider, ProviderId } from '../../llm/provider.js';
@@ -19,15 +20,19 @@ import { patchBody, RequestError } from '../books.js';
 
 export const router = Router();
 
-async function view(): Promise<AiView> {
+async function view({ recheck = false } = {}): Promise<AiView> {
+  const [claudeReady, codexSignedIn] = await Promise.all([claudeCli.ready(), codexStatus()]);
+  const catalog = codexSignedIn ? await refreshCodexModels({ force: recheck }) : undefined;
   const states = await keyedStates();
   const settings = readSettings();
   const usable: [Provider, ...Provider[]] = [...subscriptions(settings.cli), ...states.flatMap((s) => (s.provider ? [s.provider] : []))];
   const models = (p: Provider) => p.models.map((m) => ({ id: m.id, can: m.can }));
-  const [claudeReady, codexSignedIn] = await Promise.all([claudeCli.ready(), codexStatus()]);
   const providers: AiProviderView[] = [
     { id: 'claude-cli', billing: 'subscription', state: claudeReady ? 'ready' : 'missing', models: models(claudeCli) },
-    { id: 'codex-cli', billing: 'subscription', state: codexSignedIn ? 'ready' : codexSignedIn === false ? 'signedOut' : 'missing', models: models(codexCli) },
+    {
+      id: 'codex-cli', billing: 'subscription', state: codexSignedIn ? 'ready' : codexSignedIn === false ? 'signedOut' : 'missing', models: models(codexCli),
+      ...(codexSignedIn ? { tiers: tierModels(codexUsable(catalog)?.map((m) => m.slug)), ...(catalog ? { checkedAt: catalog.at } : {}) } : {}),
+    },
     ...states.map((s): AiProviderView => ({
       id: s.spec.id, billing: 'key', state: s.provider ? 'set' : 'unset',
       models: s.provider ? models(s.provider) : [],
@@ -52,6 +57,11 @@ async function view(): Promise<AiView> {
 
 router.get('/api/ai', async (_req, res) => {
   res.json(await view());
+});
+
+/** «Nochmals prüfen»: Codex's models are read again from the signed-in account. */
+router.post('/api/ai/codex/models', async (_req, res) => {
+  res.json(await view({ recheck: true }));
 });
 
 /** «Die App fragt»: the CLI the steps ask first and «Im Terminal» starts (null: Claude Code), and whether to ask the other when it cannot answer. */

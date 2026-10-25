@@ -106,9 +106,11 @@ async function askOne(prompt: string, opts: AskOptions, provider: Provider, mode
   const started = Date.now();
   const row = (ok: boolean, usage: Usage) => record({ at: new Date().toISOString(), step, provider: provider.id, model, ok, ms: Date.now() - started, ...usage }, opts.ledger);
   try {
-    const { text, usage } = await provider.ask({
+    const answer = await provider.ask({
       prompt, model, system: opts.system ?? DEFAULT_SYSTEM, attachments: opts.attachments ?? [], timeoutMs: opts.timeoutMs ?? 360_000,
     });
+    const { text, usage } = answer;
+    model = answer.model ?? model;
     row(true, usage);
     opts.answered?.({ provider: provider.id, model });
     return text;

@@ -4,7 +4,7 @@
  * KI column; `actions` puts the buttons into the card (in the conversation the answers below it
  * are the buttons). The vendor's command is on the card, so copying it works the same as Terminal.
  */
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { planName, type CardState } from '../../platform/ai-setup.js';
 import { AI_CLIS, type TerminalCli } from '../../platform/terminal.js';
 import { t } from '../i18n/index.js';
@@ -53,7 +53,8 @@ const Facts = ({ state }: { state: Extract<CardState, { version: string }> }) =>
   </dl>
 );
 
-export function CliCard({ cli, state, opens, compact, actions }: { cli: TerminalCli; state: CardState; opens: boolean; compact?: boolean; actions?: CardActions }) {
+/** `children`: what a place adds at the card's foot (Firma › KI: Codex's model per tier). */
+export function CliCard({ cli, state, opens, compact, actions, children }: { cli: TerminalCli; state: CardState; opens: boolean; compact?: boolean; actions?: CardActions; children?: ReactNode }) {
   const facts = AI_CLIS[cli];
   const vendor = facts.vendor;
   const guide = <a className="linkbtn" href={facts.guide} target="_blank" rel="noopener noreferrer">{t('aiSetup.guide', { vendor })}{ICONS.external}</a>;
@@ -117,6 +118,7 @@ export function CliCard({ cli, state, opens, compact, actions }: { cli: Terminal
           {actions ? <span className="ruleacts"><button type="button" className="btn" onClick={actions.again}>{t('aiSetup.again')}</button>{guide}</span> : null}
         </>
       )}
+      {children}
     </div>
   );
 }

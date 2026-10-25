@@ -14,6 +14,8 @@ export type Capability = 'text' | 'json' | 'pdf' | 'image' | 'agent' | 'typed';
 /** How much model a step needs; each provider names its model per tier. */
 export type Tier = 'fast' | 'standard' | 'strong';
 
+export const TIERS: readonly Tier[] = ['fast', 'standard', 'strong'];
+
 export interface Step {
   /** The ledger's name of the step (data/llm-ledger.jsonl), the guide section it serves. */
   ledger: string;
