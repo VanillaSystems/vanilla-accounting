@@ -11,6 +11,7 @@ import { modelReady, sidebarAgent } from '../llm/ask.js';
 import { keepKey, KeyNotKept } from '../llm/key-store.js';
 import { isRateLimitSignal } from '../llm/adaptive-pool.js';
 import { claudeCli } from '../llm/providers/claude-cli.js';
+import { codexCli } from '../llm/providers/codex-cli.js';
 import { forgetCli, keyOf } from '../llm/providers/index.js';
 import { KEYED, keyedProvider } from '../llm/providers/keyed.js';
 import { readSettings, writeCli, writeNoAi } from '../llm/settings.js';
@@ -41,7 +42,7 @@ export async function setupView(): Promise<AiSetupView> {
 
 /** What a refused test call says: a used-up limit, a plan without the CLI, or something else, in the CLI's words. */
 export function probationOf(said: string): Probation {
-  const text = said.replace(/^claude exited \S+: /, '').trim();
+  const text = said.replace(/^(claude|codex) exited \S+: /, '').trim();
   if (isRateLimitSignal(text)) return { ok: false, why: 'limit', said: text };
   if (/subscription|plan\b|upgrade|not (available|included)|credit balance|billing/i.test(text)) return { ok: false, why: 'plan', said: text };
   return { ok: false, why: 'other', said: text };
@@ -113,10 +114,14 @@ aiSetup.post('/api/ai/setup/:cli/login', async (req, res) => {
   res.json({ ok: true });
 });
 
+/** The provider each CLI's test call runs through: the one the app's steps ask. */
+const PROVIDER_OF: Record<TerminalCli, Provider> = { claude: claudeCli, codex: codexCli };
+
 aiSetup.post('/api/ai/setup/:cli/test', async (req, res) => {
   const { cli } = req.params;
-  if (!isTerminalCli(cli) || !AI_CLIS[cli].tested) return refuse(res, 404, { error: `Kein Probelauf für ${cli}.` });
-  res.json(await testCall(claudeCli, claudeCli.defaults.fast));
+  if (!isTerminalCli(cli)) return refuse(res, 404, { error: `Kein Programm ${cli}.` });
+  const provider = PROVIDER_OF[cli];
+  res.json(await testCall(provider, provider.defaults.fast));
 });
 
 /** A key checked by the provider, kept in this Mac's keychain store, then one test call with it; null removes it. */

@@ -55,15 +55,15 @@ export const claudeBin = (): string => pinned('claude') ?? locate('claude', { pa
 /** The process's PATH and the login shell's as the last look found it. */
 export const knownPath = (): string => [process.env.PATH, lastLogin].filter(Boolean).join(':');
 
-interface Ran { code: number | null; stdout: string; timedOut: boolean }
+interface Ran { code: number | null; stdout: string; stderr: string; timedOut: boolean }
 
 /** Runs a CLI briefly from an empty folder, its own folder on the PATH (an npm-installed CLI finds its node). */
 function runCli(bin: string, args: readonly string[], timeoutMs: number): Promise<Ran> {
   const env = { ...process.env, PATH: [dirname(bin), process.env.PATH, lastLogin].filter(Boolean).join(delimiter) };
   return new Promise((done) => {
-    const child = execFile(bin, args, { cwd: tmpdir(), env, timeout: timeoutMs, encoding: 'utf8' }, (err, stdout) => {
+    const child = execFile(bin, args, { cwd: tmpdir(), env, timeout: timeoutMs, encoding: 'utf8' }, (err, stdout, stderr) => {
       const e = err as (NodeJS.ErrnoException & { code?: unknown; killed?: boolean }) | null;
-      done({ code: !e ? 0 : typeof e.code === 'number' ? e.code : null, stdout: stdout ?? '', timedOut: !!e?.killed });
+      done({ code: !e ? 0 : typeof e.code === 'number' ? e.code : null, stdout: stdout ?? '', stderr: stderr ?? '', timedOut: !!e?.killed });
     });
     // Nothing to read: a CLI that reads its input gets its end at once instead of waiting for the timeout.
     child.stdin?.on('error', () => undefined);
@@ -89,6 +89,18 @@ export function parseClaudeStatus(stdout: string, code: number | null): { logged
   };
 }
 
+/**
+ * `codex login status` (exit 0 signed in) prints «Logged in using ChatGPT» or «Logged in using an
+ * API key - sk-…» on stderr. It names no plan, so a ChatGPT sign-in is kept as the plan «ChatGPT»
+ * and an API key as the method; the key's masked digits are dropped.
+ */
+export function parseCodexStatus(said: string, code: number | null): { loggedIn: boolean; method?: string; plan?: string } {
+  if (code !== 0) return { loggedIn: false };
+  if (/ChatGPT/.test(said)) return { loggedIn: true, method: 'chatgpt', plan: 'ChatGPT' };
+  if (/API key/i.test(said)) return { loggedIn: true, method: 'api-key' };
+  return { loggedIn: true };
+}
+
 /** One look at one CLI: found, answering, signed in. `timeoutMs` for each command it runs. */
 export async function probeCli(cli: TerminalCli, look: Look = {}, timeoutMs = 10_000): Promise<CliProbe> {
   const bin = locate(cli, look);
@@ -98,11 +110,8 @@ export async function probeCli(cli: TerminalCli, look: Look = {}, timeoutMs = 10
   const version = versionOf(v.stdout);
   const s = await runCli(bin, AI_CLIS[cli].status, timeoutMs);
   if (s.timedOut || s.code === null) return { found: 'signedOut', bin, version };
-  if (cli === 'claude') {
-    const { loggedIn, method, plan } = parseClaudeStatus(s.stdout, s.code);
-    return loggedIn ? { found: 'signedIn', bin, version, ...(method ? { method } : {}), ...(plan ? { plan } : {}) } : { found: 'signedOut', bin, version };
-  }
-  return s.code === 0 ? { found: 'signedIn', bin, version } : { found: 'signedOut', bin, version };
+  const { loggedIn, method, plan } = cli === 'claude' ? parseClaudeStatus(s.stdout, s.code) : parseCodexStatus(`${s.stdout}\n${s.stderr}`, s.code);
+  return loggedIn ? { found: 'signedIn', bin, version, ...(method ? { method } : {}), ...(plan ? { plan } : {}) } : { found: 'signedOut', bin, version };
 }
 
 /** Every CLI, looked for with the login shell's PATH as it is now. */

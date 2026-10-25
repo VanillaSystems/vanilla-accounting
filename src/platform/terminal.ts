@@ -14,8 +14,7 @@ export const isTerminalCli = (v: unknown): v is TerminalCli => TERMINAL_CLIS.inc
  * The one table of facts about each CLI (docs/0.4.0/ai-setup.md, «Installers» and «Plans», checked
  * 25.10.2026): the program, its vendor's official native installer (needs only curl and a shell,
  * which macOS has: no Homebrew, no npm), the vendor's guide and plans page, the commands that say
- * whether it is signed in and that sign in. `tested`: the app makes its test call with it (a CLI
- * the app's steps ask; Codex only once it is a provider, #121).
+ * whether it is signed in and that sign in, and the smallest plan that includes the CLI.
  */
 export interface CliFacts {
   program: string;
@@ -25,21 +24,20 @@ export interface CliFacts {
   plans: string;
   status: readonly string[];
   login: readonly string[];
-  tested: boolean;
-  /** What the CLI asks macOS for beyond itself, said on its card: Codex 0.164 starts Apple's developer-tools install on `codex exec` (measured on a fresh Mac, 25.10.2026). */
-  precondition?: 'devTools';
+  /** The vendor's name of the smallest plan with the CLI. */
+  minPlan: string;
 }
 
 export const AI_CLIS: Record<TerminalCli, CliFacts> = {
   claude: {
     program: 'claude', vendor: 'Anthropic', install: 'curl -fsSL https://claude.ai/install.sh | bash',
     guide: 'https://code.claude.com/docs/en/setup', plans: 'https://claude.com/pricing',
-    status: ['auth', 'status'], login: ['auth', 'login'], tested: true,
+    status: ['auth', 'status'], login: ['auth', 'login'], minPlan: 'Claude Pro',
   },
   codex: {
     program: 'codex', vendor: 'OpenAI', install: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh',
     guide: 'https://developers.openai.com/codex/cli', plans: 'https://chatgpt.com/pricing',
-    status: ['login', 'status'], login: ['login'], tested: false, precondition: 'devTools',
+    status: ['login', 'status'], login: ['login'], minPlan: 'ChatGPT Plus',
   },
 };
 

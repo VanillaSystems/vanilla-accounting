@@ -7,12 +7,12 @@
 import type { TerminalCli } from './terminal.js';
 
 /**
- * The CLIs the first run offers. Codex became a provider with #121 (merged 25.10.2026), but stays
- * out of the first run for now: on a Mac without Apple's developer tools `codex exec` asks to
- * install them (measured on a fresh Mac), which is no first impression; the owner decides when it
- * joins (decision 7). Firma › KI shows its card.
+ * The CLIs the first run offers, both cards side by side (decision 7: Codex joined once #121 made
+ * it a provider). A check in a fresh macOS VM on 25.10.2026 showed that the app's own `codex exec`
+ * (src/llm/providers/codex-cli.ts, plugins off) raises no developer-tools dialog on a Mac without
+ * Apple's Command Line Tools.
  */
-export const FIRST_RUN_CLIS: readonly TerminalCli[] = ['claude'];
+export const FIRST_RUN_CLIS: readonly TerminalCli[] = ['claude', 'codex'];
 
 /** While a card waits, the app looks this often (decision 8)… */
 export const POLL_MS = 2000;
@@ -63,10 +63,10 @@ export type CardEvent =
   | { kind: 'again'; at: number };
 
 /** The card's first state, from the first look. */
-export const cardOf = (probe: CliProbe, tested: boolean): CardState => settle({ kind: 'missing', looked: [] }, probe, tested);
+export const cardOf = (probe: CliProbe): CardState => settle({ kind: 'missing', looked: [] }, probe);
 
-/** What a look shows, wherever the card stood: signed in starts the test call (or is ready, for a CLI the app does not test). */
-function settle(was: CardState, probe: CliProbe, tested: boolean): CardState {
+/** What a look shows, wherever the card stood: signed in starts the test call. */
+function settle(was: CardState, probe: CliProbe): CardState {
   switch (probe.found) {
     case 'none': return { kind: 'missing', looked: probe.looked };
     case 'silent': return { kind: 'silent', bin: probe.bin };
@@ -75,7 +75,7 @@ function settle(was: CardState, probe: CliProbe, tested: boolean): CardState {
       const { bin, version, plan } = probe;
       // A card that already tested keeps its answer; a fresh sign-in is tested once.
       if (was.kind === 'ready' || was.kind === 'refused' || was.kind === 'testing') return { ...was, bin, version, ...(plan ? { plan } : {}) };
-      return tested ? { kind: 'testing', bin, version, ...(plan ? { plan } : {}) } : { kind: 'ready', bin, version, ...(plan ? { plan } : {}) };
+      return { kind: 'testing', bin, version, ...(plan ? { plan } : {}) };
     }
   }
 }
@@ -85,7 +85,7 @@ function settle(was: CardState, probe: CliProbe, tested: boolean): CardState {
  * (the program for an install, the sign-in for a sign-in) or WAIT_MS have passed; every other card
  * follows what the look shows.
  */
-export function nextCard(state: CardState, event: CardEvent, tested: boolean): CardState {
+export function nextCard(state: CardState, event: CardEvent): CardState {
   switch (event.kind) {
     case 'install': return { kind: 'installing', since: event.at, looked: 'looked' in state ? state.looked : [] };
     case 'signIn': {
@@ -98,7 +98,7 @@ export function nextCard(state: CardState, event: CardEvent, tested: boolean): C
         ? { kind: 'ready', bin: state.bin, version: state.version, ...(state.plan ? { plan: state.plan } : {}), ms: event.result.ms }
         : { kind: 'refused', bin: state.bin, version: state.version, ...(state.plan ? { plan: state.plan } : {}), why: event.result.why, said: event.result.said };
     case 'again':
-      if (state.kind === 'ready' || state.kind === 'refused') return tested ? { kind: 'testing', bin: state.bin, version: state.version, ...(state.plan ? { plan: state.plan } : {}) } : state;
+      if (state.kind === 'ready' || state.kind === 'refused') return { kind: 'testing', bin: state.bin, version: state.version, ...(state.plan ? { plan: state.plan } : {}) };
       if (state.kind === 'notFound') {
         return state.waited === 'install' || !state.bin || !state.version
           ? { kind: 'installing', since: event.at, looked: state.looked }
@@ -108,19 +108,29 @@ export function nextCard(state: CardState, event: CardEvent, tested: boolean): C
     case 'probed': {
       const { probe, at } = event;
       if (state.kind === 'installing') {
-        if (probe.found === 'signedOut' || probe.found === 'signedIn') return settle(state, probe, tested);
+        if (probe.found === 'signedOut' || probe.found === 'signedIn') return settle(state, probe);
         const looked = probe.found === 'none' ? probe.looked : [probe.bin];
         return at - state.since >= WAIT_MS ? { kind: 'notFound', waited: 'install', looked } : { ...state, looked };
       }
       if (state.kind === 'signingIn') {
         if (probe.found === 'signedOut') return at - state.since >= WAIT_MS ? { kind: 'notFound', waited: 'signIn', looked: [state.bin], bin: state.bin, version: state.version } : state;
-        return settle(state, probe, tested);
+        return settle(state, probe);
       }
       // «nicht gefunden» stays while the look shows the same nothing; anything new is shown.
       if (state.kind === 'notFound' && (state.waited === 'install' ? probe.found === 'none' || probe.found === 'silent' : probe.found === 'signedOut')) return state;
-      return settle(state, probe, tested);
+      return settle(state, probe);
     }
   }
+}
+
+/** One card per CLI. Each CLI's events move only its own card. */
+export type Cards = Partial<Record<TerminalCli, CardState>>;
+
+/** `event` for `cli`: its card moves (or appears with its first look); every other card stays as it was. */
+export function stepCards(cards: Cards, cli: TerminalCli, event: CardEvent): Cards {
+  const was = cards[cli];
+  const now = was ? nextCard(was, event) : event.kind === 'probed' ? cardOf(event.probe) : undefined;
+  return now ? { ...cards, [cli]: now } : cards;
 }
 
 /** A card that waits for the person in Terminal: the app looks every POLL_MS. */
