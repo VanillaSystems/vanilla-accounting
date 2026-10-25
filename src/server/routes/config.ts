@@ -18,7 +18,7 @@ import type { JournalEntry } from '../../types/index.js';
 import { assertPlaced } from '../edits.js';
 import { account, setCustomerTerms } from '../workspace-edits.js';
 import type { Address } from '../../invoices/model.js';
-import { changesMethod, parseVatSetup, type VatSetup } from '../../workspace/vat-setup.js';
+import { basisSinceOf, changesMethod, parseVatSetup, type VatSetup } from '../../workspace/vat-setup.js';
 import { booksOpenPeriod, localToday } from '../../accounting/periods.js';
 import { filing } from '../../engines/index.js';
 import { readDimensions, usesOf, type Dimension } from '../../books/tags.js';
@@ -225,14 +225,19 @@ function sellsPatch(raw: unknown): SalesKind[] {
 function vatPatch(raw: unknown): VatSetup {
   // A refusal the form can meet (an activity code, a rate) carries its code, so the page says it in the person's words (r7f-30).
   const next = parseVatSetup(raw, (msg, refusal) => { throw new RequestError(400, msg, refusal ? { code: 'vatSetup', params: refusal } : undefined); });
-  if (!changesMethod(WS.company.vat, next)) return next;
+  const was = WS.company.vat;
+  // The form sends no year: the one the manifest holds stays, a switch of the basis sets it.
+  const since = (year: number | undefined): VatSetup => (next.registered && next.reportingSince === undefined && year !== undefined ? { ...next, reportingSince: year } : next);
+  if (!changesMethod(was, next)) return since(basisSinceOf(was));
   const books = readBooks();
   const year = booksOpenPeriod(books, localToday(), filing().length).from.slice(0, 4);
   const entries = (books.journalEntries ?? []).filter((e) => e.date.startsWith(year)).length;
   if (entries) {
     throw new RequestError(400, `Die MWST-Einstellung gilt für das ganze Jahr: ${year} hat schon ${entries} Buchungen. Der Wechsel ist auf den 1.1.${Number(year) + 1} möglich, nach dem Jahresabschluss.`, { code: 'vatMethodHeld', params: { year, entries } });
   }
-  return next;
+  // A new basis holds from the open year: a document of an earlier year is an open item of the switch (MWSTV Art. 106), one of a later year belongs to its own return.
+  const switched = next.registered && (!was.registered || was.reporting !== next.reporting);
+  return since(switched ? Number(year) : basisSinceOf(was));
 }
 
 /**

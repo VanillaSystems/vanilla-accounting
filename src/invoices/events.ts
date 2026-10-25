@@ -7,14 +7,15 @@
  * the receivable only (src/invoices/payments.ts bookPayment), whatever the basis is by then, so a
  * switch back to the cash basis never taxes it twice (MWSTV Art. 106 Abs. 2).
  *
- * An event of a day the books no longer take (a filed period, or a document issued before the firm
- * switched to the agreed basis) is booked on the first day they take, for what was still open on
- * the locked line: the switch's open items count in the first period after it (MWSTV Art. 106 Abs. 1).
+ * An event of a day the books no longer take is booked on the first day they take (eventPlan): for
+ * what was still open on the locked line when the document is an open item of the switch to the
+ * agreed basis (MWSTV Art. 106 Abs. 1); whole, an invoice into its period's correction return, when
+ * the firm reported on this basis then.
  */
 import type { BankTransaction, JournalEntry, Mapping, Receipt } from '../types/index.js';
 import { periodLock, type Books } from '../books/store.js';
-import { agreedBasis, baseCurrency, vat } from '../engines/index.js';
-import { openDay, sideOf } from '../accounting/tax-point.js';
+import { agreedBasis, baseCurrency, filing, vat } from '../engines/index.js';
+import { lockedTaxPoint, openDay, sideOf } from '../accounting/tax-point.js';
 import { reversalOf } from '../accounting/reversal.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import type { Invoice, InvoiceBook, Issued } from './model.js';
@@ -48,16 +49,29 @@ function refundDueOn(cn: Issued, invoices: readonly Invoice[], date: string): nu
   return fromRappen(Math.max(0, back - refunded));
 }
 
+/** When a document's event is booked, for how much, and the period whose correction return declares it. */
+interface EventPlan { day: string; amount: number; corrects?: string }
+
 /**
- * What a document's event books: on a day the books take, its whole amount less what its payments
- * booked as revenue themselves (cash style before the event existed, or a person's booking with a
- * sale code); an allocation whose booking only settles the receivable took no revenue and takes
- * none off. On a locked day, what was still open on the locked line.
+ * A document's event on a day the books take: its whole amount less what its payments booked as
+ * revenue themselves (cash style before the event existed, a prepayment, or a person's booking with
+ * a sale code); an allocation whose booking only settles the receivable took no revenue and takes
+ * none off. On a locked day, by where its tax belongs (lockedTaxPoint): an open item of the switch
+ * books what was still open on the locked line on the first open day; a document of a period the
+ * firm reported on this basis books the same as on its own day, an invoice into that period's
+ * correction return (golden rule 1), a credit note on the first open day, when it is booked (MWSTG Art. 41).
  */
-function eventAmount(books: Books, inv: Issued, invoices: readonly Invoice[], lock: ReturnType<typeof periodLock>, day: string): number {
-  if (day !== inv.date) return inv.kind === 'credit-note' ? refundDueOn(inv, invoices, lock.lockedThrough ?? inv.date) : openOn(inv, invoices, lock.lockedThrough ?? inv.date);
+function eventPlan(books: Books, inv: Issued, invoices: readonly Invoice[], lock: ReturnType<typeof periodLock>): EventPlan {
+  const day = openDay(lock, inv.date);
   const revenue = new Set(books.journalEntries.filter((e) => sideOf(e.vatCode) === 'sale').map((e) => e.transactionRef));
-  return fromRappen(gross(inv) - inv.payments.filter((p) => revenue.has(p.transactionRef)).reduce((s, p) => s + toRappen(p.amount), 0));
+  const whole = fromRappen(gross(inv) - inv.payments.filter((p) => revenue.has(p.transactionRef)).reduce((s, p) => s + toRappen(p.amount), 0));
+  if (day === inv.date) return { day, amount: whole };
+  const point = lockedTaxPoint(lock, inv.date, filing().length);
+  if (point === 'switch') {
+    const line = lock.lockedThrough ?? inv.date;
+    return { day, amount: inv.kind === 'credit-note' ? refundDueOn(inv, invoices, line) : openOn(inv, invoices, line) };
+  }
+  return { day, amount: whole, ...(inv.kind === 'invoice' ? { corrects: point.corrects } : {}) };
 }
 
 /**
@@ -71,7 +85,7 @@ export function eventsMissing(books: Books, book: InvoiceBook, through: string):
   const invoices = liveInvoices(book);
   const refs = new Set(books.journalEntries.map((e) => e.transactionRef));
   return invoices.flatMap((inv) => (inv.status === 'issued' && !inv.cancelled && inv.date <= through && !refs.has(eventRef(inv, 'issue'))
-    && eventAmount(books, inv, invoices, lock, openDay(lock, inv.date)) > 0 ? [inv.number] : []));
+    && eventPlan(books, inv, invoices, lock).amount > 0 ? [inv.number] : []));
 }
 
 /**
@@ -88,10 +102,10 @@ export function bookInvoiceEvents(books: Books, book: InvoiceBook, ctx: PaymentC
     if (inv.status !== 'issued') continue;
     const issueRef = eventRef(inv, 'issue');
     if (!refs.has(issueRef) && !inv.cancelled) {
-      const day = openDay(lock, inv.date);
-      const amount = eventAmount(books, inv, invoices, lock, day);
+      const { day, amount, corrects } = eventPlan(books, inv, invoices, lock);
       if (amount <= 0) continue;
-      const rate = inv.currency === baseCurrency() ? undefined : ctx.fx.daily(inv.currency, day);
+      // A foreign document converts at the rate of its tax point (MWSTV Art. 45): its own day when it corrects its period.
+      const rate = inv.currency === baseCurrency() ? undefined : ctx.fx.daily(inv.currency, corrects ? inv.date : day);
       if (inv.currency !== baseCurrency() && rate === undefined) { out.skipped.push({ number: inv.number, reason: 'rate' }); continue; }
       const receipt = invoiceReceipt(books, inv, ctx, out, { date: day });
       const credit = inv.kind === 'credit-note';
@@ -106,6 +120,7 @@ export function bookInvoiceEvents(books: Books, book: InvoiceBook, ctx: PaymentC
         ...(l.vatCode ? { vatCode: credit ? vat().codes.negativePrefix + l.vatCode : l.vatCode } : {}),
         description: text,
         ...(rate !== undefined ? { exchangeCurrency: inv.currency, exchangeRate: rate } : {}),
+        ...(corrects ? { corrects } : {}),
         origin: 'invoice',
         receipts: [receipt],
       }));

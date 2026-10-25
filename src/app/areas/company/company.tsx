@@ -237,6 +237,12 @@ interface RateRow { rate: string; label: string; activityId: string }
 interface VatForm { registered: boolean; method: VatMethod; basis: VatBasis; period: VatPeriod; rates: [RateRow, RateRow] }
 
 /** The form's setup, or null while a rate is missing or no percent. */
+/** Whether the form's setup differs from the firm's: the year the basis began is the API's to keep or set, the form has none. */
+function changesSetup(next: VatSetup, v: VatSetup): boolean {
+  const { reportingSince: _since, ...was } = v as VatSetup & { reportingSince?: number };
+  return JSON.stringify(next) !== JSON.stringify(was);
+}
+
 function setupOf(f: VatForm): VatSetup | null {
   if (!f.registered) return { registered: false };
   if (f.method === 'effective') return { registered: true, method: 'effective', reporting: f.basis, period: f.period };
@@ -270,7 +276,7 @@ function Vat({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
   async function save(e: FormEvent) {
     e.preventDefault();
     if (!next) return;
-    if (JSON.stringify(next) === JSON.stringify(v)) { setEdit(false); return; }
+    if (!changesSetup(next, v)) { setEdit(false); return; }
     try {
       await api.patchWorkspace({ vat: next });
     } catch (ex) {
@@ -300,7 +306,7 @@ function Vat({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
                 ))}
               </Kv>
             )}
-            <Kv k={t('company.vatBasis')}>{t(v.reporting === 'agreed' ? 'company.vatAgreed' : 'company.vatReceived')}</Kv>
+            <Kv k={t('company.vatBasis')} note={v.reportingSince ? t('company.vatBasisSince', { year: String(v.reportingSince) }) : undefined}>{t(v.reporting === 'agreed' ? 'company.vatAgreed' : 'company.vatReceived')}</Kv>
             <Kv k={t('company.vatPeriod')} note={t(half ? 'company.vatDueHalf' : 'company.vatDue')}>{t(half ? 'company.vatHalfYearly' : 'company.vatQuarterly')}</Kv>
             <Kv k={t('company.vatNumber')}><span className="mono">{t('company.vatSuffix', { uid: ws.company.uid })}</span></Kv>
             <Kv k={t('company.filed')}>{ws.filed.length ? ws.filed.map((q) => <span key={q} className="mono" style={{ display: 'block' }}>{q}</span>) : <span className="m">{t('company.noneFiled')}</span>}</Kv>

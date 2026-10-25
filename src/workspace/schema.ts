@@ -29,8 +29,12 @@ import { roleBefore } from './banks.js';
  * is harmless, but the number makes npm run update write the result.
  */
 export const BOOKS_SCHEMA = 5;
-/** 2: every money account names its `role` (#88). */
-export const WORKSPACE_SCHEMA = 2;
+/**
+ * 2: every money account names its `role` (#88).
+ * 3: `company.vat.reportingSince`, the year the basis began (#143). An app of schema 2 would read
+ * past it and declare a document of an earlier agreed year on its payment's date, so it must refuse.
+ */
+export const WORKSPACE_SCHEMA = 3;
 export const INVOICES_SCHEMA = 1;
 
 /** Step n: schema n → n + 1. */
@@ -57,6 +61,8 @@ export const MANIFEST_MIGRATIONS: Ladder<Document> = {
     for (const item of seq.items) if (isMap(item) && !item.has('role')) item.set('role', roleBefore(String(item.get('bank'))));
     return doc;
   },
+  // No manifest has the year yet: absent means the basis holds since before the books.
+  2: (doc) => doc,
 };
 
 /** The manifest document named at the current schema: its `schema:` set where it stands (its comments with it), else added as the first key. */

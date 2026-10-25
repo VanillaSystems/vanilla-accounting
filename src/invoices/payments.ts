@@ -26,7 +26,7 @@ import { idSource } from './store.js';
 import { agreedBasis, baseCurrency, vat } from '../engines/index.js';
 import { settlementLines, sideOf, type OpenItemAccounts } from '../accounting/tax-point.js';
 import { roundCHF } from '../accounting/rappen.js';
-import { invoiceReceipt } from './events.js';
+import { bookInvoiceEvents, invoiceReceipt } from './events.js';
 import { eventRef, hasEvent } from '../books/refs.js';
 
 export interface PaymentContext {
@@ -148,6 +148,7 @@ export function matchPayments(books: Books, book: InvoiceBook, ctx: PaymentConte
       if (!known || toBook) out.paid.push({ transactionRef: tx.ref, number: inv.number, amount: a.amount, fee: a.fee ?? 0, booked: toBook });
     }
   }
+  rebookEvents(books, book, ctx, out);
   return out;
 }
 
@@ -169,9 +170,12 @@ function replace(book: InvoiceBook, inv: Issued): void {
  * minus codes (the revenue and its VAT go down by what was paid back). A document whose event the
  * books carry (src/invoices/events.ts, the agreed basis) declared its VAT on its own date: the
  * payment only settles the receivable, at the payment's rate, the exchange difference to the
- * Kursdifferenzen account. A paid reminder fee is revenue without VAT either way.
+ * Kursdifferenzen account; a prepayment before the invoice's date books its revenue itself, and the
+ * event comes off to be booked again for the rest (prepaidEvent). A paid reminder fee is revenue
+ * without VAT either way.
  */
 export function bookPayment(books: Books, tx: BankTransaction, inv: Issued, a: PaymentAllocation, ctx: PaymentContext, out: Pick<PaymentOutcome, 'files'>): JournalEntry[] {
+  dropEvent(books, prepaidEvent(books, tx, inv));
   const bank = bankAccountFor(tx, ctx.bankAccounts);
   const rate = tx.currency === baseCurrency() ? undefined : ctx.fx.daily(tx.currency, tx.date);
   if (tx.currency !== baseCurrency() && rate === undefined) throw new Error(`Kein ESTV-Kurs ${tx.currency} für ${tx.date}: npm run fetch-rates`);
@@ -197,6 +201,30 @@ export function bookPayment(books: Books, tx: BankTransaction, inv: Issued, a: P
   books.journalEntries.push(...entries);
   attachInvoice(books, tx, inv, ctx, out);
   return entries;
+}
+
+/**
+ * The entries of an invoice's event that `tx` prepaid: a payment before the invoice's date, on the
+ * agreed basis, while the event lies in an open period. The tax on a prepayment arises when it is
+ * received (MWSTG Art. 40 Abs. 1 lit. c), so the event comes off, the payment books its part with
+ * the sale codes on its own date, and the event is booked again for the rest (bookInvoiceEvents
+ * takes off what the payments booked as revenue).
+ */
+function prepaidEvent(books: Books, tx: Pick<BankTransaction, 'date'>, inv: Issued): JournalEntry[] {
+  if (!agreedBasis() || inv.kind !== 'invoice' || tx.date >= inv.date) return [];
+  const ref = eventRef(inv, 'issue');
+  const lock = periodLock(books);
+  const event = books.journalEntries.filter((e) => e.transactionRef === ref);
+  return event.some((e) => lock.isClosed(e.date)) ? [] : event;
+}
+
+function dropEvent(books: Books, event: readonly JournalEntry[]): void {
+  if (event.length) books.journalEntries = books.journalEntries.filter((e) => !event.includes(e));
+}
+
+/** The events the books lack after a payment changed what they book (a prepayment, «Lösen»), booked again: the PDFs to file go to `out`. */
+function rebookEvents(books: Books, book: InvoiceBook, ctx: PaymentContext, out: Pick<PaymentOutcome, 'files'>): void {
+  if (agreedBasis()) out.files.push(...bookInvoiceEvents(books, book, ctx).files);
 }
 
 /** What the receivable holds in the books' currency for `amount` of the document: at its event's rate (MWSTV Art. 45), the amount itself in the books' currency. */
@@ -299,7 +327,9 @@ export function confirmPayment(books: Books, book: InvoiceBook, invoiceId: strin
   if (inv.payments.some((p) => p.transactionRef === tx.ref)) throw new PaymentError(`Die Zahlung ist ${what} schon zugeordnet.`);
   const keep = books.journalEntries.some((e) => e.transactionRef === tx.ref && e.origin !== 'classify');
   // A document with its event carries its revenue on the receivable already: a kept booking of the payment with a sale code would count it twice.
-  const event = books.journalEntries.find((e) => e.transactionRef === eventRef(inv, 'issue'));
+  // Not so for a prepayment: its revenue is the payment's, the event is booked again for the rest.
+  const prepaid = prepaidEvent(books, tx, inv);
+  const event = prepaid.length ? undefined : books.journalEntries.find((e) => e.transactionRef === eventRef(inv, 'issue'));
   if (keep && event && books.journalEntries.some((e) => e.transactionRef === tx.ref && sideOf(e.vatCode) === 'sale')) {
     throw new PaymentError(`${what} ist am ${event.date} mit Umsatz und MWST auf ${ctx.openItems.receivable} gebucht (${event.transactionRef}), die Zahlung ist mit Umsatz gebucht: zugeordnet zählte der Umsatz doppelt. Die Buchung der Zahlung auf ${ctx.openItems.receivable} ändern oder löschen, dann zuordnen.`);
   }
@@ -307,18 +337,24 @@ export function confirmPayment(books: Books, book: InvoiceBook, invoiceId: strin
   if (split.surplus > 0) throw new PaymentError(`Die Zahlung ist ${tx.currency} ${split.surplus.toFixed(2)} höher als offen.`);
   const a: PaymentAllocation = { transactionRef: tx.ref, date: tx.date, amount: split.amount, ...(split.fee ? { fee: split.fee } : {}), by: 'confirmed' };
   replace(book, withPayment(inv, a));
+  dropEvent(books, prepaid);
   if (keep) attachInvoice(books, tx, inv, ctx, out);
   else {
     out.replaced = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
     books.journalEntries = books.journalEntries.filter((e) => e.transactionRef !== tx.ref);
     bookPayment(books, tx, inv, a, ctx, out);
   }
+  rebookEvents(books, book, ctx, out);
   out.paid.push({ transactionRef: tx.ref, number: inv.number, amount: a.amount, fee: a.fee ?? 0, booked: !keep });
   return out;
 }
 
 /** What «Lösen» did: the allocation that left the document, the entries the link had booked, and what is booked in their place. */
-export interface PaymentReleased { allocation: PaymentAllocation; removed: JournalEntry[]; restored: JournalEntry[] }
+export interface PaymentReleased {
+  allocation: PaymentAllocation; removed: JournalEntry[]; restored: JournalEntry[];
+  /** The invoice PDFs an event booked again needs as receipts (a prepayment released). */
+  files: PaymentOutcome['files'];
+}
 
 /**
  * «Lösen» (r10c-3): the payment leaves the document, so it is open (or owes its refund) again; the
@@ -326,18 +362,22 @@ export interface PaymentReleased { allocation: PaymentAllocation; removed: Journ
  * go; `restore` (what the link replaced, src/server/link-history.ts) is booked again. A booking a
  * person made stays, as the link had kept it.
  */
-export function releasePayment(books: Books, book: InvoiceBook, invoiceId: string, transactionRef: string, ctx: Pick<PaymentContext, 'pdfOf' | 'receiptId'>, restore: readonly JournalEntry[] = []): PaymentReleased {
+export function releasePayment(books: Books, book: InvoiceBook, invoiceId: string, transactionRef: string, ctx: PaymentContext, restore: readonly JournalEntry[] = []): PaymentReleased {
   const inv = liveInvoices(book).find((i): i is Issued => i.id === invoiceId && i.status === 'issued');
   const allocation = inv?.payments.find((p) => p.transactionRef === transactionRef);
   if (!inv || !allocation) throw new PaymentError('Die Zahlung ist dieser Rechnung nicht zugeordnet.');
   replace(book, withoutPayment(inv, transactionRef));
   const removed = books.journalEntries.filter((e) => e.transactionRef === transactionRef && e.origin === 'invoice');
   books.journalEntries = books.journalEntries.filter((e) => !removed.includes(e));
+  // A prepayment's revenue leaves with it: the event, booked for the rest, is booked again for what is now the invoice's.
+  if (removed.some((e) => sideOf(e.vatCode) === 'sale')) dropEvent(books, prepaidEvent(books, allocation, inv));
   const receipt = ctx.receiptId(ctx.pdfOf(inv));
   books.mappings = books.mappings.filter((m) => !(m.transactionRef === transactionRef && m.receiptId === receipt));
   const restored = books.journalEntries.some((e) => e.transactionRef === transactionRef) ? [] : restore.filter((e) => !books.journalEntries.some((x) => x.id === e.id));
   books.journalEntries.push(...restored);
-  return { allocation, removed, restored };
+  const files: PaymentOutcome['files'] = [];
+  rebookEvents(books, book, ctx, { files });
+  return { allocation, removed, restored, files };
 }
 
 export class PaymentError extends Error {}

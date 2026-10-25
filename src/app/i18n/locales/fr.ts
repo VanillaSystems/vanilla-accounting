@@ -1778,6 +1778,7 @@ export default {
     'company.vatForm': 'formulaire 0550',
     'company.vatMethodEffective': 'méthode effective',
     'company.vatBasis': 'Décompte selon',
+    'company.vatBasisSince': 'depuis {year}',
     'company.vatReceived': 'contre-prestations reçues',
     'company.vatAgreed': 'contre-prestations convenues',
     'company.vatPeriod': 'Période',

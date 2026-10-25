@@ -10,7 +10,7 @@ import { modelReady } from '../../llm/ask.js';
 import { archiveReceipt } from '../../books/archive.js';
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
 import { liveInvoices } from '../../invoices/rules.js';
-import { paymentContext } from '../../invoices/service.js';
+import { fileReceipts, paymentContext } from '../../invoices/service.js';
 import { releasePayment } from '../../invoices/payments.js';
 
 export const router = Router();
@@ -85,7 +85,7 @@ function releaseFromInvoice(books: Books, payment: string, receipt: string): voi
   const invoices = loadInvoices(WS);
   const inv = liveInvoices(invoices).find((i) => i.status === 'issued' && i.payments.some((p) => p.transactionRef === payment) && ctx.receiptId(ctx.pdfOf(i)) === receipt);
   if (!inv) return;
-  releasePayment(books, invoices, inv.id, payment, ctx);
+  fileReceipts(WS, books, releasePayment(books, invoices, inv.id, payment, ctx).files);
   saveInvoices(WS, invoices);
 }
 
