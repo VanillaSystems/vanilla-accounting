@@ -2833,6 +2833,7 @@ export default {
     'assistant.folderOver': 'Da {folder} i primi {max} file sono andati all’IA, altri {n} no.',
     'assistant.dictation.start': 'Detta',
     'assistant.dictation.stop': 'Ferma la dettatura',
+    'assistant.dictation.recording': 'Registrazione in corso',
     'assistant.dictation.online': 'In ascolto · riconosciuto dal servizio online del tuo browser',
     'assistant.dictation.denied': 'Nessun accesso al microfono. Consentilo per questa pagina nelle impostazioni del browser.',
     'assistant.dictation.unreachable': 'Il riconoscimento vocale del tuo browser non è raggiungibile al momento.',

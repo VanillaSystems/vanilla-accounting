@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="de" data-theme="light" class="no-titlebar"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B2 · wird installiert</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="ai-setup.css">
+<script>try { var t = new URLSearchParams(location.search).get('theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}</script>
+</head>
+<body><div class="dragbar" aria-hidden="true"></div>
+    
+    <div id="root"><div class="st"><header class="st-top"><span class="seg2" role="radiogroup" aria-label="Sprache"><button type="button" role="radio" aria-checked="true" class="on" data-tip="Deutsch">DE</button><button type="button" role="radio" aria-checked="false" class="" data-tip="Français">FR</button><button type="button" role="radio" aria-checked="false" class="" data-tip="Italiano">IT</button><button type="button" role="radio" aria-checked="false" class="" data-tip="English">EN</button></span></header><div class="obflow" aria-label="Einrichtung"><header class="obflowhd"><span class="obwho"><span class="obface"><svg class="i bot" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8V4H8"></path><rect x="4" y="8" width="16" height="12" rx="2"></rect><path d="M2 14h2M20 14h2M15 13v2M9 13v2"></path></svg></span><span><b>Einrichtung</b><small>Fachperson für Vanilla Accounting · richtet die App und deine Buchhaltung mit dir ein</small></span></span><button type="button" class="linkbtn" data-act="setup-later" data-tip="Was du beantwortet hast, bleibt im Ordner.">Später weitermachen</button></header><div class="obflowturns"><div class="msg ai obsay"><svg class="i bot" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8V4H8"></path><rect x="4" y="8" width="16" height="12" rx="2"></rect><path d="M2 14h2M20 14h2M15 13v2M9 13v2"></path></svg><div><p>Hallo! Ich richte mit dir Vanilla Accounting ein. Zuerst die KI: Belege lesen und Buchungen vorschlagen mache ich mit einem KI-Programm auf deinem Mac, über dein eigenes Abo. Eins davon reicht.</p></div></div><div class="obme"><button type="button" class="linkbtn">Ändern</button><div class="msg me">Claude Code installieren</div></div><div class="msg ai obsay"><svg class="i bot" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8V4H8"></path><rect x="4" y="8" width="16" height="12" rx="2"></rect><path d="M2 14h2M20 14h2M15 13v2M9 13v2"></path></svg><div><p>Ich habe das Terminal geöffnet, mit dem Befehl von Anthropic. Drück dort Enter. Wenn es fertig ist, merke ich es von selbst.</p></div></div><div class="obind"><div class="obcard aiobcard"><div class="aicli compact" data-cli="claude" data-state="installing">
+    <div class="aiclihd"><b>Claude Code</b><span class="aivendor">von Anthropic</span><span class="aipill now"><span class="aispin" aria-hidden="true"></span>wird installiert</span></div>
+    <p class="aiplan">Mit Claude Pro oder höher, etwa 20 USD im Monat. <a class="linkbtn" href="https://claude.com/pricing" target="_blank" rel="noopener">Abos bei Anthropic <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"></path><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg></a></p>
+    <p class="m">Das Terminal ist offen, mit dem Befehl von Anthropic. Drück dort Enter.</p>
+      <div class="aicmd"><code>curl -fsSL https://claude.ai/install.sh | bash</code><button type="button" class="linkbtn">Kopieren</button></div>
+      <p class="aiwait"><span class="aispin" aria-hidden="true"></span>Warte auf Claude Code. Die App schaut alle 2 Sekunden nach, ein Neustart ist nicht nötig.</p>
+      
+  </div><div class="aicli compact" data-cli="codex" data-state="missing">
+    <div class="aiclihd"><b>Codex</b><span class="aivendor">von OpenAI</span><span class="aipill ">nicht installiert</span></div>
+    <p class="aiplan">Mit ChatGPT Plus oder höher, etwa 20 USD im Monat. <a class="linkbtn" href="https://chatgpt.com/pricing" target="_blank" rel="noopener">Abos bei OpenAI <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"></path><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg></a></p>
+    <p class="m">Der offizielle Installer von OpenAI.</p>
+      <div class="aicmd"><code>curl -fsSL https://chatgpt.com/codex/install.sh | sh</code><button type="button" class="linkbtn">Kopieren</button></div>
+      
+  </div></div></div><div class="obend"></div></div><form class="obtalk"><div class="obtalkbox"><textarea name="talk" rows="2" maxlength="4000" placeholder="Schreiben geht, sobald eine KI bereit ist. Die Knöpfe gehen immer." disabled="" aria-label="Nachricht an die Einrichtung"></textarea><button type="submit" class="aisend" data-act="setup-talk" aria-label="Senden" disabled=""><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button></div></form></div></div></div>
+    
+  
+
+<div class="termwin" aria-label="Terminal (macOS)"><div class="termbar"><i></i><i></i><i></i><span>Terminal · zsh</span></div><pre><span class="tdim">Vanilla Accounting installiert Claude Code mit dem Befehl von Anthropic:</span>
+
+  <b>curl -fsSL https://claude.ai/install.sh | bash</b>
+
+<span class="tdim">Enter: starten · Ctrl-C: abbrechen</span>
+<span class="tcur"> </span></pre></div></body></html>

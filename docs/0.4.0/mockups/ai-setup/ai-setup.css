@@ -1,0 +1,106 @@
+/* The new parts of the AI-setup mockups. Only the app's tokens (src/app/styles/tokens.css); everything
+   else on the pages is the app's own CSS from the capture (app.css). */
+
+.st-main.aisetup { max-width: 920px; }
+.aisteps2 { list-style: none; display: flex; gap: 6px; margin: 0 0 18px; padding: 0; counter-reset: s; }
+.aisteps2 li { counter-increment: s; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--faint); font-size: 12px; }
+.aisteps2 li::before { content: counter(s); font: 600 11px "Geist Mono", ui-monospace, monospace; }
+.aisteps2 li.now { color: var(--ink); border-color: var(--accent); }
+
+.aiclis { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 22px 0 12px; align-items: start; }
+.aiclis.wide { max-width: 900px; margin: 10px 0 16px; }
+.aicli { border: 1px solid var(--line); border-radius: 12px; background: var(--bg); padding: 14px 16px; display: grid; gap: 9px; font-size: 13px; color: var(--ink); min-width: 0; }
+.aicli[data-state="ready"] { border-color: color-mix(in srgb, var(--pos) 40%, var(--line)); }
+.aicli[data-state="installing"], .aicli[data-state="signingIn"], .aicli[data-state="signedOut"] { border-color: var(--accent); }
+.aiclihd { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.aiclihd b { font: 700 15px "Hanken Grotesk", system-ui, sans-serif; }
+.aivendor { color: var(--muted); font-size: 12px; margin-right: auto; }
+.aipill { display: inline-flex; align-items: center; gap: 5px; height: 21px; padding: 0 8px; border-radius: 999px; background: var(--hover); color: var(--ink-2); font-size: 11.5px; white-space: nowrap; }
+.aipill .i { width: 12px; height: 12px; }
+.aipill.now { background: var(--accent-soft); color: var(--accent); }
+.aipill.ok { background: var(--pos-soft); color: var(--pos); }
+.aipill.warn { background: var(--warn-soft); color: var(--warn); }
+.aiplan { margin: 0; color: var(--muted); font-size: 12.5px; }
+.aiplan .linkbtn, .aicli .linkbtn { font-size: 12.5px; display: inline-flex; align-items: center; gap: 3px; text-decoration: none; }
+.aicli .linkbtn .i, .aiplan .i { width: 11px; height: 11px; }
+.aicli p { margin: 0; }
+.aicli .m { color: var(--ink-2); }
+.aicli small.m { color: var(--muted); font-size: 12px; }
+.aicli .warnline { margin: 0; align-items: flex-start; }
+.aicli .warnline .i { width: 14px; height: 14px; flex: none; margin-top: 2px; }
+.aicli code, .aitoday code, .aiwait code { font: 400 12px "Geist Mono", ui-monospace, monospace; }
+.aicmd { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; background: var(--hover); border: 1px solid var(--line); min-width: 0; }
+.aicmd code { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--ink); }
+.aicmd .linkbtn { flex: none; font-size: 12px; }
+.aicli a.btn { text-decoration: none; color: var(--ink-2); }
+.aicli .ruleacts { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.aicli .btn .i { width: 15px; height: 15px; }
+.aiwait { display: flex; align-items: center; gap: 8px; color: var(--accent); font-size: 12.5px; margin: 0; }
+.aispin { width: 12px; height: 12px; flex: none; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--accent); animation: aispin .9s linear infinite; display: inline-block; }
+@keyframes aispin { to { transform: rotate(360deg); } }
+.aifacts { display: grid; grid-template-columns: 90px 1fr; gap: 3px 10px; margin: 0; font-size: 12.5px; }
+.aifacts dt { color: var(--muted); }
+.aifacts dd { margin: 0; color: var(--ink-2); }
+.aifoot { margin-top: 18px; display: flex; align-items: center; gap: 10px; }
+.aifoot .st-byhand { margin-right: auto; }
+
+.aistate { display: flex; align-items: center; gap: 8px; margin: 18px 2px 0; color: var(--muted); font-size: 12.5px; }
+.aistate.ok { color: var(--ink-2); }
+.aistate.ok .i { width: 14px; height: 14px; stroke: var(--pos); }
+
+/* The Terminal window over the app: a picture of macOS Terminal, not part of the app. */
+.termwin { position: fixed; right: 36px; bottom: 36px; width: 600px; z-index: 90; border-radius: 10px; overflow: hidden; background: var(--ink); color: var(--bg); box-shadow: var(--shadow), 0 30px 70px -20px color-mix(in srgb, var(--ink) 55%, transparent); border: 1px solid var(--line-2); }
+.termbar { display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; background: color-mix(in srgb, var(--ink) 85%, var(--bg)); font-size: 12px; color: color-mix(in srgb, var(--bg) 70%, transparent); }
+.termbar i { width: 11px; height: 11px; border-radius: 50%; background: color-mix(in srgb, var(--bg) 35%, transparent); }
+.termbar span { margin: 0 auto; padding-right: 50px; }
+.termwin pre { margin: 0; padding: 14px 16px 18px; font: 400 12.5px/1.55 "Geist Mono", ui-monospace, monospace; white-space: pre-wrap; }
+.termwin .tdim { color: color-mix(in srgb, var(--bg) 60%, transparent); }
+.termwin .tcur { display: inline-block; width: 8px; background: var(--bg); animation: obpulse 1.1s step-end infinite; }
+@keyframes obpulse { 50% { opacity: 0; } }
+
+/* Design B: the same card in the conversation, the two programs one under the other. */
+.aiobcard { gap: 10px; }
+.aicli.compact { padding: 10px 12px; gap: 7px; border-radius: 10px; }
+.aicli.compact .aiclihd b { font-size: 14px; }
+.obflow .aiwait { margin-top: 6px; }
+.obflow .okline, .obflow .warnline { margin: 0 0 6px; }
+
+/* Firma › KI */
+.aichoose { margin-bottom: 18px; }
+.aichoose small { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
+.aicheck { display: inline-flex; align-items: center; gap: 6px; }
+
+/* The AI column without an AI, and the error line */
+.aisidecard { display: grid; gap: 10px; font-size: 13px; color: var(--ink-2); }
+.aisidecard p { margin: 0; }
+.aside .msg.ai .warnline { margin: 0 0 6px; align-items: flex-start; }
+.aside .msg.ai .warnline .i { flex: none; width: 14px; height: 14px; margin-top: 2px; }
+.aside .msg.ai .qacts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.aierrline { display: grid; gap: 8px; margin: 14px 0; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--line)); background: var(--warn-soft); border-radius: 10px; }
+.aierrline .warnline { margin: 0; align-items: flex-start; }
+.aierrline .warnline .i { flex: none; width: 14px; height: 14px; margin-top: 2px; }
+.aierrline .ruleacts { display: flex; gap: 10px; align-items: center; }
+.aitoday { margin: 4px 0 0; color: var(--muted); font-size: 11.5px; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent); }
+.aitoday .rk { text-decoration: none; display: inline-block; }
+
+/* Erweitert: mit API-Schlüssel. Folded under the subscription cards; the subscription stays the way the page leads. */
+.aiadv { border: 1px solid var(--line); border-radius: 12px; background: var(--bg); font-size: 13px; color: var(--ink-2); }
+.aiadv > summary { cursor: pointer; padding: 10px 14px; color: var(--muted); font-size: 12.5px; list-style-position: inside; }
+.aiadv[open] > summary { border-bottom: 1px solid var(--line); color: var(--ink-2); }
+.aiadvin { display: grid; gap: 10px; padding: 12px 14px 14px; }
+.aiadvin p { margin: 0; }
+.aiadvin .seg2 { justify-self: start; }
+.aiadvin .okline, .aiadvin .warnline { margin: 0; align-items: flex-start; }
+.aiadvin .okline .i, .aiadvin .warnline .i { flex: none; width: 14px; height: 14px; margin-top: 2px; }
+.aiadvin small.m { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.aiadv .linkbtn { font-size: 12px; display: inline-flex; align-items: center; gap: 3px; }
+.aiadv .linkbtn .i { width: 11px; height: 11px; }
+.aiadvno { color: var(--muted); font-size: 12px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.aiadvno b { color: var(--ink-2); font-weight: 600; }
+.aiadv .aikey { display: flex; gap: 8px; align-items: center; }
+.aiadv .aikey input { flex: 1; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); color: var(--ink); font: 400 12.5px "Geist Mono", ui-monospace, monospace; }
+.aiadv .aikey.bad input { border-color: var(--warn); }
+.aiadv .aikey .mono { font-size: 12.5px; color: var(--ink-2); }
+.aiadv dd small.okline, .aiadv dd small.warnline { margin: 4px 0 0; font-size: 12px; }
+.docbody .aiadv { max-width: 900px; margin: 4px 0 18px; }
+.obind .aiadv { margin-top: 0; }
