@@ -19,11 +19,16 @@ export interface StepChoice {
 
 export interface AiSettings {
   steps: Partial<Record<StepId, StepChoice>>;
-  /** «Im Terminal öffnen» with both CLIs installed: this one, the other offered (issue #146). */
-  terminal?: TerminalCli;
+  /**
+   * «Die App fragt» with both CLIs installed (issue #121): the app's steps ask this one first, and
+   * «Im Terminal öffnen» starts it, the other offered (issue #146). Absent: Claude Code.
+   */
+  cli?: TerminalCli;
+  /** When the CLI asked cannot answer (its limit, signed out, gone), ask the other one by itself; off unless set. */
+  askOther?: true;
 }
 
-export const PROVIDERS: readonly ProviderId[] = ['claude-cli', 'anthropic', 'openai', 'jev'];
+export const PROVIDERS: readonly ProviderId[] = ['claude-cli', 'codex-cli', 'anthropic', 'openai', 'jev'];
 const isProvider = (p: unknown): p is ProviderId => PROVIDERS.includes(p as ProviderId);
 
 export const settingsPath = (): string | undefined =>
@@ -40,8 +45,10 @@ export function parseSettings(raw: unknown): AiSettings {
       steps[step] = { provider: choice.provider, ...(typeof choice.model === 'string' && choice.model ? { model: choice.model } : {}) };
     }
   }
-  const terminal = (raw as { terminal?: unknown } | null)?.terminal;
-  return { steps, ...(isTerminalCli(terminal) ? { terminal } : {}) };
+  // Before #121 the choice was the terminal's alone, kept as `terminal`.
+  const top = raw as { cli?: unknown; terminal?: unknown; askOther?: unknown } | null;
+  const cli = top?.cli ?? top?.terminal;
+  return { steps, ...(isTerminalCli(cli) ? { cli } : {}), ...(top?.askOther === true ? { askOther: true as const } : {}) };
 }
 
 export function readSettings(): AiSettings {
@@ -61,10 +68,12 @@ export function writeChoice(step: StepId, choice: StepChoice | null): AiSettings
   return write(next);
 }
 
-/** The terminal CLI chosen, or none (null): Claude then, when both are installed. */
-export function writeTerminal(cli: TerminalCli | null): AiSettings {
-  const { terminal: _was, ...next } = readSettings();
-  return write(cli ? { ...next, terminal: cli } : next);
+/** «Die App fragt»: the CLI chosen, or none (null: Claude Code then), and whether to ask the other when it cannot answer. */
+export function writeCli(change: { cli?: TerminalCli | null; askOther?: boolean }): AiSettings {
+  const { cli, askOther, ...rest } = readSettings();
+  const nextCli = change.cli === undefined ? cli : change.cli ?? undefined;
+  const nextOther = change.askOther === undefined ? askOther : change.askOther || undefined;
+  return write({ ...rest, ...(nextCli ? { cli: nextCli } : {}), ...(nextOther ? { askOther: true } : {}) });
 }
 
 function write(next: AiSettings): AiSettings {

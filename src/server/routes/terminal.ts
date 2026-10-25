@@ -7,7 +7,7 @@
 import { join } from 'node:path';
 import { Router } from 'express';
 import { WS, patchBody, RequestError } from '../books.js';
-import { readSettings, writeTerminal } from '../../llm/settings.js';
+import { readSettings } from '../../llm/settings.js';
 import { chooseCli, isTerminalCli, type TerminalView } from '../../platform/terminal.js';
 import { detectClis, openInTerminal, stateOf, terminalPath } from '../../platform/terminal-open.js';
 import { ensureTerminalAgents } from '../../workspace/terminal-agents.js';
@@ -19,19 +19,11 @@ async function found() {
 }
 
 async function view(): Promise<TerminalView> {
-  const preferred = readSettings().terminal;
+  const preferred = readSettings().cli;
   return { clis: (await found()).map(stateOf), ...(preferred ? { preferred } : {}), opens: process.platform === 'darwin', folder: WS.paths.root };
 }
 
 router.get('/api/terminal', async (_req, res) => {
-  res.json(await view());
-});
-
-/** Firma › KI: the CLI «Im Terminal öffnen» starts when both are installed; null gives it back to Claude. */
-router.put('/api/terminal', async (req, res) => {
-  const { preferred } = patchBody(req.body, ['preferred']);
-  if (preferred !== null && !isTerminalCli(preferred)) throw new RequestError(400, 'preferred: claude, codex oder null.');
-  writeTerminal(preferred);
   res.json(await view());
 });
 
@@ -41,7 +33,7 @@ router.post('/api/terminal/open', async (req, res) => {
   if (cli !== undefined && !isTerminalCli(cli)) throw new RequestError(400, 'cli: claude oder codex.');
   if (process.platform !== 'darwin') throw new RequestError(409, 'Das Terminal öffnet die App nur auf dem Mac: kopier den Befehl.', { code: 'terminalNotMac' });
   const clis = await found();
-  const plan = chooseCli(clis.map(stateOf), cli ?? readSettings().terminal);
+  const plan = chooseCli(clis.map(stateOf), cli ?? readSettings().cli);
   const chosen = plan.kind === 'open' ? clis.find((c) => c.cli === (cli ?? plan.cli)) : undefined;
   if (!chosen?.bin) throw new RequestError(409, 'Weder Claude Code noch Codex ist auf diesem Mac installiert.', { code: 'terminalNoCli' });
   // The terminal AI reads its rules there before anything else: written now, as this version writes them.

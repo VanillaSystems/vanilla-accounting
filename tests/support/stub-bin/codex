@@ -1,0 +1,41 @@
+#!/usr/bin/env node
+// Stands in for the `codex` CLI that src/llm/providers/codex-cli.ts runs (tests/codex-provider.test.ts).
+// `codex login status` exits $CODEX_STUB_STATUS (0: signed in). `codex exec` reads the prompt on
+// stdin and prints JSONL events as codex-cli 0.163 does; $CODEX_STUB_MODE picks the run:
+// answer (default: $CODEX_STUB_ANSWER or {"stub":"codex"}), limit, signedOut, act (starts a command
+// and waits to be killed). $CODEX_STUB_ARGS: each call's arguments, the prompt and the instructions
+// file's text, one JSON line per call.
+import { appendFileSync, readFileSync } from 'node:fs';
+
+const args = process.argv.slice(2);
+if (args[0] === 'login' && args[1] === 'status') {
+  process.stdout.write('Logged in using ChatGPT\n');
+  process.exit(Number(process.env.CODEX_STUB_STATUS ?? 0));
+}
+
+const prompt = readFileSync(0, 'utf8');
+const file = args.find((a) => a.startsWith('model_instructions_file='))?.slice('model_instructions_file='.length);
+const instructions = file ? readFileSync(JSON.parse(file), 'utf8') : undefined;
+if (process.env.CODEX_STUB_ARGS) appendFileSync(process.env.CODEX_STUB_ARGS, JSON.stringify({ args, prompt, instructions, cwd: process.cwd() }) + '\n');
+
+const line = (o) => process.stdout.write(JSON.stringify(o) + '\n');
+line({ type: 'thread.started', thread_id: '0199a213-81c0-7800-8aa1-bbab2a035a53' });
+line({ type: 'turn.started' });
+const mode = process.env.CODEX_STUB_MODE ?? 'answer';
+if (mode === 'limit') {
+  line({ type: 'error', message: "You've hit your usage limit. Upgrade to Pro or try again at 6:00 PM." });
+  line({ type: 'turn.failed', error: { message: "You've hit your usage limit. Upgrade to Pro or try again at 6:00 PM." } });
+  process.exit(1);
+}
+if (mode === 'signedOut') {
+  line({ type: 'error', message: 'unexpected status 401 Unauthorized: Not logged in' });
+  process.exit(1);
+}
+if (mode === 'act') {
+  line({ type: 'item.started', item: { id: 'item_1', type: 'command_execution', command: 'bash -lc ls ~', status: 'in_progress' } });
+  setTimeout(() => process.exit(0), 30_000);
+} else {
+  line({ type: 'item.completed', item: { id: 'item_0', type: 'reasoning', text: 'thinking' } });
+  line({ type: 'item.completed', item: { id: 'item_1', type: 'agent_message', text: `${process.env.CODEX_STUB_ANSWER ?? '{"stub":"codex"}'}\n` } });
+  line({ type: 'turn.completed', usage: { input_tokens: 20, cached_input_tokens: 5, output_tokens: 7, reasoning_output_tokens: 3 } });
+}

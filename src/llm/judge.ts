@@ -8,7 +8,7 @@
 import { CallFailed, NO_USAGE, type JudgeCall, type Provider, type Question, type Usage, type Verdict } from './provider.js';
 import { usableProviders } from './providers/index.js';
 import { record } from './ask.js';
-import { resolve } from './resolve.js';
+import { defaultFor, otherSubscription, resolve, unserved } from './resolve.js';
 import { readSettings } from './settings.js';
 import { confidentOf, STEPS, type StepId } from './steps.js';
 
@@ -67,11 +67,25 @@ async function judgeOne(step: StepId, provider: Provider, model: string, call: O
 
 export async function judge(state: JudgeCall['state'], question: Question, opts: JudgeOptions): Promise<Judged> {
   const providers = await usableProviders();
-  const [fallback] = providers;
-  const chosen = resolve(opts.step, readSettings(), providers);
+  const settings = readSettings();
+  const standard = defaultFor(opts.step, providers);
+  const chosen = resolve(opts.step, settings, providers);
+  if (chosen.source === 'unserved') throw unserved(opts.step);
   const call = { state, question, images: opts.images ?? [], timeoutMs: opts.timeoutMs ?? 120_000 };
-  const byDefault = async () => ({ ...(await judgeOne(opts.step, fallback, fallback.defaults[STEPS[opts.step].tier], call)), provider: fallback.id, model: fallback.defaults[STEPS[opts.step].tier] });
-  if (chosen.provider === fallback) return { ...(await judgeOne(opts.step, fallback, chosen.model, call)), provider: fallback.id, model: chosen.model };
+  const fallback = standard.provider;
+  const byDefault = async () => {
+    if (standard.source === 'unserved') throw unserved(opts.step);
+    return { ...(await judgeOne(opts.step, fallback, standard.model, call)), provider: fallback.id, model: standard.model };
+  };
+  if (chosen.provider === fallback) {
+    try {
+      return { ...(await judgeOne(opts.step, fallback, chosen.model, call)), provider: fallback.id, model: chosen.model };
+    } catch (e) {
+      const other = otherSubscription(e, opts.step, fallback, settings, providers);
+      if (!other) throw e;
+      return { ...(await judgeOne(opts.step, other.provider, other.model, call).catch(() => { throw e; })), provider: other.provider.id, model: other.model };
+    }
+  }
   let verdict: Verdict;
   try {
     verdict = await judgeOne(opts.step, chosen.provider, chosen.model, call);

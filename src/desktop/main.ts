@@ -17,7 +17,7 @@ import { useSecretStore } from '../secrets/secrets.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import type { KnownBooks, MenuCommand } from '../types/desktop.js';
 import { setupPath } from '../app/desktop/bridge.js';
-import { findClaude } from '../platform/login-path.js';
+import { claudeOn, loginPath, programOn } from '../platform/login-path.js';
 import { sameOrigin, saveFile } from './save-file.js';
 import { dictate, isLang } from './dictation.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
@@ -50,7 +50,13 @@ async function start(): Promise<void> {
   const stateFile = join(app.getPath('userData'), 'desktop.json');
   const { homepage } = appPackage();
   usePrintPages(electronPage);
-  const claudeFound = findClaude().then((bin) => { if (bin) process.env.CLAUDE_BIN = bin; });
+  // Claude Code and Codex as the person's terminal finds them; the app's steps run them (src/llm/providers).
+  const claudeFound = loginPath().then((path) => {
+    const claude = path && claudeOn(path);
+    const codex = path && programOn(path, 'codex');
+    if (claude) process.env.CLAUDE_BIN = claude;
+    if (codex) process.env.CODEX_BIN = codex;
+  });
   let language = languageOf(app.getLocale());
   let win: BrowserWindow | undefined;
   await offerApplicationsFolder(textsIn(language));

@@ -4,11 +4,13 @@
  */
 import { Router } from 'express';
 import { resolve } from '../../llm/resolve.js';
+import { forgetKey, keyedStates, keyName, subscriptions } from '../../llm/providers/index.js';
 import { claudeCli } from '../../llm/providers/claude-cli.js';
-import { forgetKey, keyedStates, keyName } from '../../llm/providers/index.js';
 import { HttpRefused } from '../../llm/providers/http.js';
 import { KEYED, type KeyedId } from '../../llm/providers/keyed.js';
-import { PROVIDERS, readSettings, writeChoice } from '../../llm/settings.js';
+import { PROVIDERS, readSettings, writeChoice, writeCli } from '../../llm/settings.js';
+import { codexCli, codexStatus } from '../../llm/providers/codex-cli.js';
+import { isTerminalCli } from '../../platform/terminal.js';
 import { confidentOf, isStepId, meets, STEP_IDS, STEPS } from '../../llm/steps.js';
 import type { Provider, ProviderId } from '../../llm/provider.js';
 import { secrets } from '../../secrets/secrets.js';
@@ -19,12 +21,13 @@ export const router = Router();
 
 async function view(): Promise<AiView> {
   const states = await keyedStates();
-  const cliReady = await claudeCli.ready();
-  const usable: [Provider, ...Provider[]] = [claudeCli, ...states.flatMap((s) => (s.provider ? [s.provider] : []))];
   const settings = readSettings();
+  const usable: [Provider, ...Provider[]] = [...subscriptions(settings.cli), ...states.flatMap((s) => (s.provider ? [s.provider] : []))];
   const models = (p: Provider) => p.models.map((m) => ({ id: m.id, can: m.can }));
+  const [claudeReady, codexSignedIn] = await Promise.all([claudeCli.ready(), codexStatus()]);
   const providers: AiProviderView[] = [
-    { id: 'claude-cli', billing: 'subscription', state: cliReady ? 'ready' : 'missing', models: models(claudeCli) },
+    { id: 'claude-cli', billing: 'subscription', state: claudeReady ? 'ready' : 'missing', models: models(claudeCli) },
+    { id: 'codex-cli', billing: 'subscription', state: codexSignedIn ? 'ready' : codexSignedIn === false ? 'signedOut' : 'missing', models: models(codexCli) },
     ...states.map((s): AiProviderView => ({
       id: s.spec.id, billing: 'key', state: s.provider ? 'set' : 'unset',
       models: s.provider ? models(s.provider) : [],
@@ -37,13 +40,26 @@ async function view(): Promise<AiView> {
     const choice = settings.steps[id];
     return {
       id, tier: STEPS[id].tier, needs: STEPS[id].needs, ...(confidentOf(id) !== undefined ? { confident: confidentOf(id) } : {}), ...(choice ? { choice } : {}),
-      resolved: { provider: r.provider.id, model: r.model, source: r.source }, standard: { provider: d.provider.id, model: d.model },
+      resolved: { provider: r.provider.id, model: r.model, source: r.source },
+      standard: { provider: d.provider.id, model: d.model, ...(d.source === 'unserved' ? { unserved: true as const } : {}) },
     };
   });
-  return { providers, steps, keysInApp: secrets.inApp(), keysWhere: Object.fromEntries(KEYED.map((s) => [s.id, secrets.where(keyName(s.id))])) };
+  return {
+    providers, steps, keysInApp: secrets.inApp(), keysWhere: Object.fromEntries(KEYED.map((s) => [s.id, secrets.where(keyName(s.id))])),
+    ...(settings.cli ? { cli: settings.cli } : {}), askOther: settings.askOther === true,
+  };
 }
 
 router.get('/api/ai', async (_req, res) => {
+  res.json(await view());
+});
+
+/** «Die App fragt»: the CLI the steps ask first and «Im Terminal» starts (null: Claude Code), and whether to ask the other when it cannot answer. */
+router.put('/api/ai/cli', async (req, res) => {
+  const { cli, askOther } = patchBody(req.body, ['cli', 'askOther']);
+  if (cli !== undefined && cli !== null && !isTerminalCli(cli)) throw new RequestError(400, 'cli: claude, codex oder null.');
+  if (askOther !== undefined && typeof askOther !== 'boolean') throw new RequestError(400, 'askOther: true oder false.');
+  writeCli({ ...(cli !== undefined ? { cli } : {}), ...(askOther !== undefined ? { askOther } : {}) });
   res.json(await view());
 });
 

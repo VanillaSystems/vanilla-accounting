@@ -1,11 +1,17 @@
 /**
- * The providers this computer can use now: the Claude subscription (the `claude` CLI, the default,
- * always first) and each provider whose API key is kept in the secret store. A key is read from the
- * store, never from the workspace, and is held in memory only for a minute.
+ * The providers this computer can use now: the subscriptions first (the `claude` and `codex` CLIs
+ * found here, the one Firma › KI chose first, Claude Code when none is chosen or none is found),
+ * then each provider whose API key is kept in the secret store. A key is read from the store, never
+ * from the workspace, and is held in memory only for a minute.
  */
 import { secrets, type AiKeyName } from '../../secrets/secrets.js';
+import { basename, dirname } from 'node:path';
+import { programOn } from '../../platform/login-path.js';
+import type { TerminalCli } from '../../platform/terminal.js';
 import type { Provider } from '../provider.js';
+import { readSettings } from '../settings.js';
 import { claudeCli } from './claude-cli.js';
+import { codexCli, codexCommand } from './codex-cli.js';
 import { catalogOf, KEYED, keyedProvider, type KeyedId, type KeyedSpec } from './keyed.js';
 
 const KEY_TTL = 60_000;
@@ -52,8 +58,26 @@ export async function keyedStates(): Promise<KeyedState[]> {
   }));
 }
 
-/** The default first: the resolver falls back to it, and never from it to a key that costs money. */
+const claudeFound = (): boolean => {
+  const named = process.env.CLAUDE_BIN;
+  return Boolean(named ? programOn(dirname(named), basename(named)) : programOn(process.env.PATH ?? '', 'claude'));
+};
+
+/** Each CLI the app asks as a subscription, and whether its program is on this computer. */
+export const SUBSCRIPTIONS: Record<TerminalCli, { provider: Provider; found: () => boolean }> = {
+  claude: { provider: claudeCli, found: claudeFound },
+  codex: { provider: codexCli, found: () => codexCommand() !== undefined },
+};
+
+/** The CLIs found here, `preferred` first, else Claude Code first; none found: Claude Code, whose call then says what to install. */
+export function subscriptions(preferred: TerminalCli | undefined): [Provider, ...Provider[]] {
+  const order: TerminalCli[] = preferred === 'codex' ? ['codex', 'claude'] : ['claude', 'codex'];
+  const found = order.filter((cli) => SUBSCRIPTIONS[cli].found()).map((cli) => SUBSCRIPTIONS[cli].provider);
+  return found.length ? [found[0], ...found.slice(1)] : [claudeCli];
+}
+
+/** The subscriptions first: the resolver falls back to them, and never from them to a key that costs money. */
 export async function usableProviders(): Promise<[Provider, ...Provider[]]> {
   const keyed = (await keyedStates()).flatMap((s) => (s.provider ? [s.provider] : []));
-  return [claudeCli, ...keyed];
+  return [...subscriptions(readSettings().cli), ...keyed];
 }

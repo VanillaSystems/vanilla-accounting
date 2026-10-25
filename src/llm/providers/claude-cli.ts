@@ -12,7 +12,7 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
-import { CallFailed, NO_USAGE, type Call, type Provider } from '../provider.js';
+import { AiRefused, CallFailed, isPlanLimit, NO_USAGE, type Call, type Provider } from '../provider.js';
 
 /** No `claude` CLI to run: model features say what to install, everything else works without them. */
 export class NoClaudeError extends Error {
@@ -93,8 +93,10 @@ export const claudeCli: Provider = {
           input: u.input_tokens ?? 0, cacheCreate: u.cache_creation_input_tokens ?? 0,
           cacheRead: u.cache_read_input_tokens ?? 0, output: u.output_tokens ?? 0, turns: parsed?.num_turns ?? 0,
         };
-        if (code === 0 && parsed && !parsed.is_error) done({ text: (parsed.result ?? '').trim(), usage });
-        else fail(new CallFailed(`claude exited ${code}: ${(parsed?.result ?? (err || out)).slice(0, 300)}`, usage));
+        if (code === 0 && parsed && !parsed.is_error) return done({ text: (parsed.result ?? '').trim(), usage });
+        const said = (parsed?.result ?? (err || out)).slice(0, 300);
+        const message = `claude exited ${code}: ${said}`;
+        fail(isPlanLimit(said) ? new AiRefused({ reason: 'limit', cli: 'claude', said: said.trim() }, message, usage) : new CallFailed(message, usage));
       });
       child.stdin.on('error', () => { /* the child's 'error' or 'close' settles the call, with the reason */ });
       child.stdin.write(call.prompt);

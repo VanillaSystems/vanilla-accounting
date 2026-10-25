@@ -1,7 +1,8 @@
 /**
  * Firma › KI (issue #48): which AI the app asks for each step, on this computer. The providers
- * that are there (the Claude subscription through Claude Code, an API key kept in the keychain),
- * and a model per step; a step's list holds only the models that can do what it needs.
+ * that are there (the Claude subscription through Claude Code, the ChatGPT subscription through
+ * Codex, an API key kept in the keychain), which of the two CLIs the app asks (issue #121), and a
+ * model per step; a step's list holds only the models that can do what it needs.
  */
 import { Fragment, useEffect, useState, type FormEvent } from 'react';
 import { t } from '../../i18n/index.js';
@@ -15,6 +16,7 @@ const fits = (step: AiStepView, can: readonly string[]) => step.needs.every((n) 
 const usable = (p: AiProviderView) => p.state === 'ready' || p.state === 'set';
 const pick = (provider: ProviderId, model: string) => `${provider} ${model}`;
 const label = (r: { provider: ProviderId; model: string }) => t('ai.modelOf', { provider: t(`ai.provider.${r.provider}`), model: r.model });
+const CLI_OF: Partial<Record<ProviderId, TerminalCli>> = { 'claude-cli': 'claude', 'codex-cli': 'codex' };
 
 export function AiSection({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
   const [view, setView] = useState<AiView>();
@@ -45,6 +47,7 @@ export function AiSection({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
         {view.providers.map((p) => (
           <ProviderRow key={p.id} p={p} view={view} canEdit={canEdit} onKey={(key) => apply(() => api.setAiKey(p.id, key), t(key ? 'ai.keySaved' : 'ai.keyRemoved', { provider: t(`ai.provider.${p.id}`) }))} />
         ))}
+        <CliChoice view={view} canEdit={canEdit} apply={apply} />
       </dl>
       <h3>{t('ai.steps')}</h3>
       <div className="ftab aisteps" role="table" aria-label={t('ai.steps')}>
@@ -62,7 +65,7 @@ export function AiSection({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
               </span>
               <span>
                 <select aria-label={t(`ai.step.${s.id}`)} value={unavailable ? '' : value} disabled={!canEdit} onChange={(e) => void choose(s, e.target.value)}>
-                  <option value="">{t('ai.standard', { model: label(s.standard) })}</option>
+                  <option value="">{s.standard.unserved ? t('ai.standard.none') : t('ai.standard', { model: label(s.standard) })}</option>
                   {view.providers.filter(usable).map((p) => {
                     const models = p.models.filter((m) => fits(s, m.can));
                     return models.length ? (
@@ -79,21 +82,18 @@ export function AiSection({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
         })}
       </div>
       <p className="m src-note">{t('ai.fallback')}</p>
-      <TerminalSection nav={nav} canEdit={canEdit} />
+      <TerminalSection nav={nav} />
     </div>
   );
 }
 
 /** «Im Terminal öffnen» (issue #146): which of Claude Code and Codex this computer has, and the one the button starts when both are there. */
-function TerminalSection({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
+function TerminalSection({ nav }: { nav: Nav }) {
   const [view, setView] = useState<TerminalView>();
   useEffect(() => { api.terminal().then(setView, (e) => nav.toast(errorText(e))); }, []);
   if (!view) return null;
   const installed = view.clis.filter((c) => c.installed).map((c) => c.cli);
   const chosen = chooseCli(view.clis, view.preferred);
-  const prefer = async (cli: TerminalCli) => {
-    try { setView(await api.setTerminal(cli)); nav.toast(t('ai.terminal.saved', { cli: t(`terminal.cli.${cli}`) })); } catch (e) { nav.toast(errorText(e)); }
-  };
   return (
     <>
       <h3>{t('ai.terminal.title')}</h3>
@@ -108,11 +108,7 @@ function TerminalSection({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
         {installed.length > 1 && chosen.kind === 'open' ? (
           <>
             <dt>{t('ai.terminal.opensWith')}</dt>
-            <dd>
-              <select aria-label={t('ai.terminal.opensWith')} value={chosen.cli} disabled={!canEdit} onChange={(e) => void prefer(e.target.value as TerminalCli)}>
-                {installed.map((cli) => <option key={cli} value={cli}>{t(`terminal.cli.${cli}`)}</option>)}
-              </select>
-            </dd>
+            <dd>{t(`terminal.cli.${chosen.cli}`)}</dd>
           </>
         ) : null}
       </dl>
@@ -130,7 +126,16 @@ function ProviderRow({ p, view, canEdit, onKey }: { p: AiProviderView; view: AiV
     setKey('');
   };
   if (p.billing === 'subscription') {
-    return <><dt>{name}</dt><dd className={p.state === 'missing' ? 'warnline' : ''}>{t(p.state === 'ready' ? 'ai.cli.ready' : 'ai.cli.missing')}</dd></>;
+    const state = p.state === 'ready' ? 'ai.cli.ready' : p.state === 'signedOut' ? 'ai.cli.signedOut' : p.id === 'codex-cli' ? 'ai.cli.codexMissing' : 'ai.cli.missing';
+    return (
+      <>
+        <dt>{name}</dt>
+        <dd className={p.state === 'ready' ? '' : 'warnline'}>
+          {t(state)}
+          {p.id === 'codex-cli' ? <small>{t('ai.cli.noPdf')}</small> : null}
+        </dd>
+      </>
+    );
   }
   return (
     <>
@@ -153,6 +158,29 @@ function ProviderRow({ p, view, canEdit, onKey }: { p: AiProviderView; view: AiV
         <small>{t('ai.key.costs')}</small>
         {p.id === 'jev' ? <small>{t('ai.typedOnly')}</small> : null}
         {p.listError ? <small className="warnline">{t('ai.listError', { detail: p.listError })}</small> : null}
+      </dd>
+    </>
+  );
+}
+
+/** «Die App fragt» (issue #121): with Claude Code and Codex both on this Mac, the one the steps and «Im Terminal» ask, and whether to ask the other when it cannot answer. */
+function CliChoice({ view, canEdit, apply }: { view: AiView; canEdit: boolean; apply: (call: () => Promise<AiView>, done: string) => Promise<void> }) {
+  const here = view.providers.filter((p) => p.billing === 'subscription' && p.state !== 'missing').flatMap((p) => CLI_OF[p.id] ?? []);
+  if (here.length < 2) return null;
+  const chosen = view.cli ?? 'claude';
+  return (
+    <>
+      <dt>{t('ai.cli.asks')}</dt>
+      <dd>
+        <select aria-label={t('ai.cli.asks')} value={chosen} disabled={!canEdit}
+          onChange={(e) => void apply(() => api.setAiCli({ cli: e.target.value as TerminalCli }), t('ai.cli.saved', { cli: t(`terminal.cli.${e.target.value as TerminalCli}`) }))}>
+          {here.map((cli) => <option key={cli} value={cli}>{t(`terminal.cli.${cli}`)}</option>)}
+        </select>
+        <label className="m aiother">
+          <input type="checkbox" checked={view.askOther} disabled={!canEdit}
+            onChange={(e) => void apply(() => api.setAiCli({ askOther: e.target.checked }), t(e.target.checked ? 'ai.cli.askOtherOn' : 'ai.cli.askOtherOff'))} />
+          {t('ai.cli.askOther')}
+        </label>
       </dd>
     </>
   );
