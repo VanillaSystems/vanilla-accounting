@@ -2832,6 +2832,7 @@ export default {
     'assistant.folderOver': 'From {folder} the first {max} files went to the AI, {n} more did not.',
     'assistant.dictation.start': 'Dictate',
     'assistant.dictation.stop': 'Stop dictating',
+    'assistant.dictation.recording': 'Recording',
     'assistant.dictation.online': 'Listening · recognized by your browser’s online service',
     'assistant.dictation.denied': 'No access to the microphone. Allow it for this page in your browser’s settings.',
     'assistant.dictation.unreachable': 'Your browser’s speech recognition can’t be reached right now.',

@@ -13,12 +13,15 @@ import { dictated, dictationError, dictationLang, onDevice, recognizer, webHeard
 import { dictate, isLang, parseEvent } from '../src/desktop/dictation.js';
 import type { DesktopBridge, DictationEvent } from '../src/types/desktop.js';
 import { messages } from '../src/app/i18n/locales/de.js';
+import { elapsed } from '../src/app/assistant/Recording.js';
 
 const said = (text: string, partial = '') => ({ text, partial });
-const value = (before: string, heard: { text: string; partial: string }, after = '') => dictated(before, heard, after).value;
+/** The field with the caret between `before` and `after`. */
+const caretAt = (before: string, after = '') => ({ text: before + after, start: before.length, end: before.length });
+const value = (before: string, heard: { text: string; partial: string }, after = '') => dictated(caretAt(before, after), heard).value;
 /** The field's provisional words, as the person sees them paler. */
 const provisional = (before: string, heard: { text: string; partial: string }, after = '') => {
-  const d = dictated(before, heard, after);
+  const d = dictated(caretAt(before, after), heard);
   return d.value.slice(d.partial.start, d.partial.end);
 };
 
@@ -33,8 +36,15 @@ test('what was heard goes where the caret was: the typed text after it stays aft
   assert.equal(value('Buch ', said('die Swisscom'), 'auf 6510'), 'Buch die Swisscom auf 6510', 'glued to the text after the caret');
   assert.equal(value('Buch', said('die Swisscom'), ' auf 6510'), 'Buch die Swisscom auf 6510', 'a second space before the text after');
   assert.equal(value('Buch ', said(''), 'auf 6510'), 'Buch auf 6510', 'nothing heard yet leaves the text as it was');
-  const d = dictated('Buch', said('die Swisscom'), ' auf 6510');
+  const d = dictated(caretAt('Buch', ' auf 6510'), said('die Swisscom'));
   assert.equal(d.caret, 'Buch die Swisscom'.length, 'after dictating, the caret follows what was heard, not the end');
+});
+
+test('a selection is replaced by what was heard, and kept while nothing was heard', () => {
+  const selected = { text: 'Buch die Migros auf 6510', start: 9, end: 15 };
+  assert.equal(dictated(selected, said('Swisscom')).value, 'Buch die Swisscom auf 6510');
+  assert.equal(dictated(selected, said('')).value, 'Buch die Migros auf 6510', 'silence must not delete the selected words');
+  assert.equal(dictated(selected, said('  ', ' ')).value, 'Buch die Migros auf 6510');
 });
 
 test('the words still being spoken show as provisional; settled words never twice, the guess replaced', () => {
@@ -201,4 +211,8 @@ test('the packed app asks with German usage texts, carries the recognizer, and m
   assert.match(config.mac.extendInfo.NSSpeechRecognitionUsageDescription, /Mac/);
   assert.deepEqual(config.mac.extraFiles, [{ from: 'out/desktop/vanilla-dictation', to: 'MacOS/vanilla-dictation' }]);
   assert.match(readFileSync('desktop/entitlements.mac.plist', 'utf8'), /<key>com\.apple\.security\.device\.audio-input<\/key>\s*<true\/>/);
+});
+
+test('the recording\'s clock reads minutes and two-digit seconds', () => {
+  assert.deepEqual([0, 7, 59, 60, 90, 724].map(elapsed), ['0:00', '0:07', '0:59', '1:00', '1:30', '12:04']);
 });

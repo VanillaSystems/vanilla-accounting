@@ -16,6 +16,7 @@ import { ICONS } from '../areas/icons.js';
 import { search } from '../assistant/attach.js';
 import { dictated, dictationLang, recognizer, type DictationError, type Dictated } from '../assistant/dictation.js';
 import { Picker, automationCandidates } from '../assistant/Picker.js';
+import { Recording } from '../assistant/Recording.js';
 import { isBookChange, type ContextRef, type EntrySet, type HeldChanges, type HeldLine, type InvoicingSet, type MadeChange, type Turn } from '../../types/assistant.js';
 import { ApiError, apiFetch, errorText } from '../lib/api.js';
 import type { Index } from '../../types/index.js';
@@ -368,6 +369,8 @@ export function Sidebar({ page, books, onGo }: Props) {
   const [listening, setListening] = useState<(() => void) | null>(null);
   const [heardError, setHeardError] = useState<DictationError>();
   const [preparing, setPreparing] = useState(false);
+  /** When the microphone began recording, once the language is loaded. */
+  const [recordingSince, setRecordingSince] = useState(0);
   /** The words of `text` the recognizer may still change, shown as provisional. */
   const [partial, setPartial] = useState<Dictated['partial']>();
   /** The recognizer measures the microphone: the button follows the voice instead of pulsing. */
@@ -410,22 +413,21 @@ export function Sidebar({ page, books, onGo }: Props) {
   const listen = () => {
     if (!ear) return;
     if (listening) { listening(); return; }
-    const field = area.current;
-    const before = text.slice(0, field?.selectionStart ?? text.length);
-    const after = text.slice(field?.selectionEnd ?? text.length);
+    const field = { text, start: area.current?.selectionStart ?? text.length, end: area.current?.selectionEnd ?? text.length };
     const id = ++dictation.current;
-    let caret = before.length;
+    let caret = field.end;
     setHeardError(undefined);
+    setRecordingSince(Date.now());
     const stop = ear.start(dictationLang(language()), {
       heard: (heard) => {
         if (id !== dictation.current) return;
-        const d = dictated(before, heard, after);
+        const d = dictated(field, heard);
         caret = d.caret;
         setText(d.value);
         setPartial(d.partial.end > d.partial.start ? d.partial : undefined);
       },
       level: (level) => { setMeasured(true); mic.current?.style.setProperty('--level', String(level)); },
-      preparing: setPreparing,
+      preparing: (loading) => { setPreparing(loading); if (!loading) setRecordingSince(Date.now()); },
       ended: (error) => {
         setListening(null);
         setHeardError(error);
@@ -528,7 +530,7 @@ export function Sidebar({ page, books, onGo }: Props) {
             ref={picker} type="file" multiple hidden accept={Object.entries(ATTACHMENT_TYPES).flatMap(([type, ext]) => [type, `.${ext}`]).join(',')} data-testid="attach-input"
             onChange={(e) => { attachFiles([...(e.target.files ?? [])]); e.target.value = ''; area.current?.focus(); }}
           />
-          <div className={s.sending ? 'aibox busy' : 'aibox'} data-testid="composer">
+          <div className={s.sending ? 'aibox busy' : listening && !preparing ? 'aibox recording' : 'aibox'} data-testid="composer">
             <div className="aichips">
               {page && !s.pageOff ? <Chip r={page} onRemove={() => removeContext('page')} /> : null}
               {s.extra.map((r) => <Chip key={r.kind + r.id} r={r} onRemove={() => removeContext(r)} />)}
@@ -560,13 +562,14 @@ export function Sidebar({ page, books, onGo }: Props) {
                 type="button" className="aiplus" aria-label={t('assistant.mention')} aria-haspopup="dialog" aria-expanded={picking}
                 ref={plus} onClick={() => setPicking(!picking)}
               >{ICONS.plus}</button>
-              {listening && (preparing || ear?.online) ? <small className="aiheard" aria-live="polite">{t(preparing ? 'assistant.dictation.preparing' : 'assistant.dictation.online')}</small> : null}
+              {listening && preparing ? <small className="aiheard" aria-live="polite">{t('assistant.dictation.preparing')}</small> : null}
+              {listening && !preparing ? <Recording since={recordingSince} label={t(ear?.online ? 'assistant.dictation.online' : 'assistant.dictation.recording')} /> : null}
               {ear ? (
                 <button
                   ref={mic} type="button" className={`aimic${listening ? ' on' : ''}${listening && measured ? ' level' : ''}`} aria-pressed={!!listening} data-testid="dictate"
                   aria-label={t(listening ? 'assistant.dictation.stop' : 'assistant.dictation.start')}
                   onClick={listen}
-                >{ICONS.mic}</button>
+                >{listening ? ICONS.stop : ICONS.mic}</button>
               ) : null}
               {setup ? null : <TerminalButton request={() => handover(text, s.turns, t('terminal.handover.context'))} />}
               {s.sending

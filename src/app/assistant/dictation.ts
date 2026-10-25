@@ -113,16 +113,21 @@ export const dictationLang = (language: string): string => (language === 'en' ? 
 /** The field while dictating: its text, where the provisional words sit in it, and the caret after what was heard. */
 export interface Dictated { value: string; partial: { start: number; end: number }; caret: number }
 
+/** The message field when dictation started: its text and the selection (the caret where start is end). */
+export interface Field { text: string; start: number; end: number }
+
 /**
- * What was heard put where the caret was: the typed text before and after it kept, one space
- * between words, never glued or doubled; the partial words marked, so the field can show them as
- * provisional until the recognizer settles them.
+ * What was heard put where the caret was, in place of a selection: the typed text before and after
+ * it kept, one space between words, never glued or doubled; the partial words marked, so the field
+ * can show them as provisional until the recognizer settles them. Nothing heard leaves the field as it was.
  */
-export function dictated(before: string, heard: Heard, after: string): Dictated {
+export function dictated(field: Field, heard: Heard): Dictated {
+  const before = field.text.slice(0, field.start);
+  const after = field.text.slice(field.end);
   const squash = (s: string) => s.replace(/\s+/g, ' ').trimStart();
   const said = squash(heard.text + heard.partial).trimEnd();
   const settled = Math.min(squash(heard.text).trimEnd().length, said.length);
-  if (!said) return { value: before + after, partial: { start: before.length, end: before.length }, caret: before.length };
+  if (!said) return { value: field.text, partial: { start: field.end, end: field.end }, caret: field.end };
   const lead = before && !/\s$/.test(before) ? `${before} ` : before;
   const tail = after && !/^\s/.test(after) ? ` ${after}` : after;
   const start = lead.length;
