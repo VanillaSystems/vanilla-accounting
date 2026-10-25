@@ -64,14 +64,14 @@ function parseReceiptPatch(body: unknown): ReceiptPatch {
   return patch;
 }
 
-/** The receipt with the patch applied: null removes a field, a kind is a person's. The VAT facts go through setReceipt. */
+/** The receipt with the patch applied: null removes a field, a kind (or none) is a person's. The VAT facts go through setReceipt. */
 function patched(receipt: Receipt, { date, amount, kind, vat: _vat, vatBy: _vatBy, ...rest }: ReceiptPatch): Receipt {
   const out: Receipt = { ...receipt, ...rest };
   if (date !== undefined) out.date = date ?? undefined;
   if (amount !== undefined) out.amount = amount ?? undefined;
   if (kind !== undefined) {
     out.kind = kind ?? undefined;
-    out.kindBy = kind ? 'human' : undefined;
+    out.kindBy = 'human';
     out.kindRule = undefined;
   }
   return out;

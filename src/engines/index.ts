@@ -7,7 +7,7 @@
 import type { Jurisdiction } from '../core/modules/schema.js';
 import { EFFECTIVE_QUARTERLY, filingLengthOf, methodOf, onAgreedBasis, type VatBasis, type VatMethod, type VatSetup } from '../workspace/vat-setup.js';
 import { chartEngine, type ChartEngine } from './chart.js';
-import { useDocumentWords } from '../workspace/schema.js';
+import { useDocumentWords } from '../books/statement-facts.js';
 import { returnEngine, type ReturnEngine } from './return.js';
 
 let current: { source: Jurisdiction; setup?: VatSetup; vat: ReturnEngine; chart: ChartEngine } | undefined;

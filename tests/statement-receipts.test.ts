@@ -7,9 +7,12 @@ import './support/jurisdiction.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { documents } from '../src/engines/index.js';
-import { accountOfStatement, statementFacts, statementPdf, statementPeriod } from '../src/books/statement-facts.js';
+import { accountOfStatement, statementFacts, statementPdf, statementPeriod, typeStatements } from '../src/books/statement-facts.js';
 import { parseIban } from '../src/workspace/banks.js';
-import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, climb } from '../src/workspace/schema.js';
+import { ClosedPeriodError, loadBooks, PERSON, saveBooks, update } from '../src/books/store.js';
+import { applyChange } from '../src/server/edits.js';
+import type { Receipt } from '../src/types/index.js';
+import { booksOnDisk, tempWorkspace, writeIndex } from './support/workspace.js';
 
 const words = documents();
 const doc = (lines: string[], filename = 'scan.pdf', originalFilename = filename) => ({ extractedText: lines.join('\n'), filename, originalFilename });
@@ -59,6 +62,22 @@ test('an invoice with a service period, the payee\'s IBAN and a Saldo line is no
   assert.equal(statementFacts(doc(['Statement of work', 'Project Alpha', 'Phase 1: 2026-02-01 to 2026-02-28']), words), undefined, 'a bare «Statement» with one sign is none');
 });
 
+// A currency account's statement with no IBAN (an account number instead), its period's days
+// written out with a timezone after each, and its balance under «USD on <day>» (issue #164).
+const USD_STATEMENT = ['Example Payments Ltd.', '1 Sample Street', 'London', '', 'USD statement', '1 March 2026 [GMT+02:00] - 31 March 2026 [GMT+02:00]', 'Generated on: 14 April 2026', '',
+  'Account Holder', 'Muster Kaffee GmbH', 'Musterstrasse 1', '', 'USD on 31 March 2026 [GMT+02:00]', 'Description', '', '0.00 USD', 'Incoming', '', 'Outgoing', '', 'Amount'];
+
+test('a currency account\'s statement without an IBAN is told by its «USD on <day>» balance heading and the period of its name', () => {
+  const facts = statementFacts(doc(USD_STATEMENT, 'statement_12345678_USD_2026-03-01_2026-03-31.pdf'), words);
+  assert.deepEqual(facts, { from: '2026-03-01', to: '2026-03-31', currency: 'USD' });
+  assert.equal(accountOfStatement(facts!, doc(USD_STATEMENT), ACCOUNTS), undefined, 'no bank named in its head: it stays under Belege, typed');
+  assert.equal(statementFacts(doc(USD_STATEMENT, 'scan.pdf'), words), undefined, 'the heading alone, with no period read and no IBAN, is one sign');
+  assert.ok(statementFacts(doc(['EUR statement', 'EUR per 31.03.2026', 'Saldo 10.00'], 'statement_1_EUR_2026-03-01_2026-03-31.pdf'), words), 'a numeric day after the code counts too');
+  const invoice = ['Example Cloud Ltd.', 'Invoice 2026-031', 'Statement of charges', 'USD on 31 March 2026', 'Total 49.00 USD'];
+  assert.equal(statementFacts(doc(invoice, 'statement_1_USD_2026-03-01_2026-03-31.pdf'), words), undefined, 'an invoice that names a statement after its title stays an invoice');
+  assert.equal(statementFacts(doc(['Statement of work', 'usd on 31 March 2026', 'Phase 1']), words), undefined, 'a currency code is upper case, and one sign is too little');
+});
+
 test('statementPeriod reads a dash, «bis» or «to» between two days, in either order; statementPdf reads both file names', () => {
   assert.deepEqual(statementPeriod('Auszug 1.2.2026 bis 28.2.2026'), { from: '2026-02-01', to: '2026-02-28' });
   assert.deepEqual(statementPeriod('Period 2026-02-28 to 2026-02-01'), { from: '2026-02-01', to: '2026-02-28' });
@@ -71,28 +90,73 @@ test('statementPeriod reads a dash, «bis» or «to» between two days, in eithe
   assert.equal(statementPeriod('01.04.2026 - 31.04.2026'), undefined);
 });
 
-test('books 4 → 5: a receipt nobody typed that reads as a statement is typed and dated; a person\'s kind, an own date and an invoice stay; the step runs twice to the same result', () => {
+test('typeStatements: a receipt nobody typed that reads as a statement is typed and dated; a person\'s kind, a person\'s «ordinary receipt», an own date and an invoice stay; twice gives the same', () => {
   const invoice = { id: 'inv', filename: 'r.pdf', date: '2026-02-03', extractedText: 'Swisscom AG\nRechnung 4711\nTotal CHF 89.00\nMWST 8.1%' };
-  const books = {
-    schema: 4, config: { closedThrough: '2026-03-31' },
-    receipts: [
-      { id: 'a', ...doc(KONTOAUSZUG, 'Kontoauszug.pdf') },
-      { id: 'b', ...doc(KONTOAUSZUG, 'b.pdf'), kind: 'invoice', kindBy: 'human' },
-      { id: 'c', ...doc(KONTOAUSZUG, 'c.pdf'), date: '2026-03-02' },
-      { id: 'd', ...doc(KONTOAUSZUG, '20260305-d.pdf'), date: '2026-03-05', dateSource: 'captured' },
-      invoice,
-    ],
-  };
-  const clone = (d: Record<string, unknown>) => structuredClone(d);
-  const once = climb<Record<string, unknown>>(books, 4, BOOKS_SCHEMA, BOOKS_MIGRATIONS, 'ledger.json', clone);
-  const twice = climb<Record<string, unknown>>(once, 4, BOOKS_SCHEMA, BOOKS_MIGRATIONS, 'ledger.json', clone);
-  const [a, b, c, d, e] = once.receipts as Array<Record<string, unknown>>;
+  const receipts = [
+    { id: 'a', ...doc(KONTOAUSZUG, 'Kontoauszug.pdf') },
+    { id: 'b', ...doc(KONTOAUSZUG, 'b.pdf'), kind: 'invoice', kindBy: 'human' },
+    { id: 'c', ...doc(KONTOAUSZUG, 'c.pdf'), date: '2026-03-02' },
+    { id: 'd', ...doc(KONTOAUSZUG, '20260305-d.pdf'), date: '2026-03-05', dateSource: 'captured' },
+    { id: 'e', ...doc(KONTOAUSZUG, 'e.pdf'), kindBy: 'human' },
+    invoice,
+  ] as unknown as Receipt[];
+  const once = typeStatements(receipts, words);
   const typed = { kind: 'statement', kindBy: 'rule', kindRule: 'document:statement' };
-  assert.deepEqual(a, { ...books.receipts[0], ...typed, date: '2026-02-28' });
-  assert.deepEqual(b, books.receipts[1], 'a kind a person gave stays');
-  assert.deepEqual(c, { ...books.receipts[2], ...typed }, 'its own date stays');
-  assert.deepEqual(d, { id: 'd', ...doc(KONTOAUSZUG, '20260305-d.pdf'), ...typed, date: '2026-02-28' }, 'a day read off the name gives way to the period');
-  assert.deepEqual(e, invoice);
-  assert.deepEqual(twice, once);
-  assert.equal('kind' in books.receipts[0], false, 'the books handed in are not changed');
+  assert.deepEqual(once[0], { ...receipts[0], ...typed, date: '2026-02-28' });
+  assert.deepEqual(once[1], receipts[1], 'a kind a person gave stays');
+  assert.deepEqual(once[2], { ...receipts[2], ...typed }, 'its own date stays');
+  assert.deepEqual(once[3], { id: 'd', ...doc(KONTOAUSZUG, '20260305-d.pdf'), ...typed, date: '2026-02-28' }, 'a day read off the capture gives way to the period');
+  assert.deepEqual(once[4], receipts[4], 'a person made it an ordinary receipt again: no rule types it');
+  assert.deepEqual(once[5], invoice);
+  assert.deepEqual(typeStatements(once, words), once);
+  assert.equal('kind' in receipts[0], false, 'the receipts handed in are not changed');
+});
+
+test('books already at schema 5 type their statements on load, a filed quarter\'s too, links kept; a closed year\'s receipts stay as read', () => {
+  const at = (id: string, lines: string[], filename: string, more: Partial<Receipt> = {}) =>
+    ({ id, ...doc(lines, filename), extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-04-14T00:00:00Z', location: 'archived', ...more });
+  const ws = tempWorkspace('statement-load-');
+  writeIndex(ws, {
+    config: { closedThrough: '2026-06-30' },
+    receipts: [
+      at('usd', USD_STATEMENT, 'statement_12345678_USD_2026-03-01_2026-03-31.pdf'),
+      at('old', KONTOAUSZUG, 'Kontoauszug 01.12.2025 - 31.12.2025.pdf', { date: '2025-12-31' }),
+    ],
+    transactions: [{ ref: 'T1', date: '2026-03-12', amount: -20, currency: 'USD', description: 'Card payment', account: '1024' }],
+    mappings: [{ receiptId: 'usd', transactionRef: 'T1' }],
+    bankStatements: [],
+  } as never);
+  const before = booksOnDisk(ws);
+  const books = loadBooks(ws);
+  const usd = books.receipts.find((r) => r.id === 'usd')!;
+  assert.deepEqual([usd.kind, usd.date], ['statement', '2026-03-31'], 'typed and dated though its quarter is filed');
+  assert.equal(books.receipts.find((r) => r.id === 'old')!.kind, undefined, 'a closed year\'s file never changes');
+  assert.deepEqual(books.mappings, [{ receiptId: 'usd', transactionRef: 'T1' }]);
+  saveBooks(ws, books);
+  const after = booksOnDisk(ws);
+  assert.deepEqual(Object.keys(after).filter((f) => after[f] !== before[f]), ['2026/receipts.jsonl'], 'only the open year\'s receipts are written');
+  assert.equal(loadBooks(ws).receipts.find((r) => r.id === 'usd')!.kind, 'statement');
+});
+
+test('a filed quarter\'s statement linked to a filed payment takes «statement» and a date by hand or by the AI, links kept; «noise» would take its link and is refused; «ordinary receipt» stays a person\'s', () => {
+  const ws = tempWorkspace('statement-kind-');
+  writeIndex(ws, {
+    config: { closedThrough: '2026-06-30' },
+    receipts: [{ id: 'st', ...doc(['Scan'], 'scan.pdf'), extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-04-14T00:00:00Z', location: 'archived' }],
+    transactions: [{ ref: 'T1', date: '2026-03-12', amount: -20, currency: 'USD', description: 'Card payment', account: '1024' }],
+    mappings: [{ receiptId: 'st', transactionRef: 'T1' }],
+    bankStatements: [],
+  } as never);
+  const books = loadBooks(ws);
+  assert.throws(() => update(books, PERSON, (b) => applyChange(b, { kind: 'receiptKind', id: 'st', as: 'noise' })), ClosedPeriodError);
+  update(books, PERSON, (b) => {
+    applyChange(b, { kind: 'receiptKind', id: 'st', as: 'statement' }, { kind: 'assistant', conversation: 'c1' });
+    applyChange(b, { kind: 'receipt', id: 'st', set: { date: '2026-03-31' } }, { kind: 'assistant', conversation: 'c1' });
+  });
+  const st = books.receipts[0];
+  assert.deepEqual([st.kind, st.kindBy, st.date], ['statement', 'human', '2026-03-31']);
+  assert.deepEqual(books.mappings, [{ receiptId: 'st', transactionRef: 'T1' }]);
+  update(books, PERSON, (b) => applyChange(b, { kind: 'receiptKind', id: 'st', as: null }));
+  assert.deepEqual([books.receipts[0].kind, books.receipts[0].kindBy], [undefined, 'human'], 'no rule types it again');
+  saveBooks(ws, books);
 });
