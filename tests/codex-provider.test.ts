@@ -1,14 +1,14 @@
 /**
  * The Codex CLI as a provider (issue #121), run against tests/support/stub-bin/codex: what a call
  * hands the program (only answers: no shell, no web, no config, read-only, the step's own
- * instructions), how its JSONL is read, its refusals as the app's, and which subscription serves a
+ * instructions), how a PDF reaches it, how its JSONL is read, its refusals as the app's, and which subscription serves a
  * step with only Codex, with both, and with only a key.
  */
 import { test, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { ask, ledgerPath, modelReady, resolveStep, type LedgerRow } from '../src/llm/ask.js';
 import { judge } from '../src/llm/judge.js';
 import { AiRefused, CallFailed } from '../src/llm/provider.js';
@@ -17,6 +17,7 @@ import { NoClaudeError } from '../src/llm/providers/claude-cli.js';
 import { codexCli } from '../src/llm/providers/codex-cli.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { providerStub, type ProviderStub } from './support/provider-stub.js';
+import { textPdf } from './support/pdf.js';
 
 const STUB_BIN = join(process.cwd(), 'tests/support/stub-bin');
 let dir: string;
@@ -49,7 +50,8 @@ before(async () => {
   process.env.VANILLA_OPENAI_URL = stub.url;
   process.env.CODEX_STUB_ARGS = calls;
   writeFileSync(join(dir, 'photo.png'), 'png stub');
-  writeFileSync(join(dir, 'scan.pdf'), '%PDF-1.4 stub');
+  writeFileSync(join(dir, 'six.pdf'), textPdf(6));
+  writeFileSync(join(dir, 'notes.txt'), 'text');
   // The person's own CODEX_HOME: their sign-in and their own instructions for every run, which no app call may carry.
   process.env.CODEX_HOME = join(dir, 'person-codex');
   mkdirSync(process.env.CODEX_HOME);
@@ -109,20 +111,53 @@ test('Codex runs in the app\'s own CODEX_HOME: signed in through a link to the p
   assert.equal(seen().length, 2, '`codex login status` asks in the same home (the stub logs exec calls only)');
 });
 
-test('an image goes as --image; a PDF never reaches Codex', async () => {
+test('an image goes as --image; another file never reaches Codex', async () => {
   const sent = await codexCli.ask({ prompt: 'Was zeigt das Bild?', system: 'S', model: 'gpt-6-luna', attachments: [join(dir, 'photo.png')], timeoutMs: 10_000 });
   assert.equal(sent.text, '{"stub":"codex"}');
   assert.equal(flag(seen()[0].args, '--image'), join(dir, 'photo.png'));
-  await assert.rejects(codexCli.ask({ prompt: 'x', system: 'S', model: 'gpt-6-luna', attachments: [join(dir, 'scan.pdf')], timeoutMs: 10_000 }), /Codex liest keine \.pdf/);
+  await assert.rejects(codexCli.ask({ prompt: 'x', system: 'S', model: 'gpt-6-luna', attachments: [join(dir, 'notes.txt')], timeoutMs: 10_000 }), /Codex liest keine \.txt/);
   assert.equal(seen().length, 1, 'refused before the program starts');
 });
 
-test('with only Codex, a step that reads a PDF says no program here can do it, and asks nobody', async () => {
+test('a PDF reaches Codex as its first four pages drawn as PNG, with its own text and which pages it sees; drawn once, the PDF untouched', async () => {
   onlyCodex();
-  assert.equal((await resolveStep('receipt-vision')).source, 'unserved');
-  await assert.rejects(ask('Lies den Beleg', { step: 'receipt-vision', attachments: [join(dir, 'scan.pdf')] }),
-    (e: unknown) => e instanceof AiRefused && e.refusal.reason === 'unserved' && e.refusal.step === 'receipt-vision');
-  assert.equal(seen().length, 0);
+  const pdf = join(dir, 'six.pdf');
+  const before = readFileSync(pdf);
+  assert.equal((await resolveStep('receipt-vision')).provider.id, 'codex-cli', 'with only Codex, the step that reads a PDF is served');
+  assert.equal(await ask('Lies den Beleg', { step: 'receipt-vision', attachments: [pdf] }), '{"stub":"codex"}');
+  const [call] = seen();
+  const images = call.args.flatMap((a, i) => (call.args[i - 1] === '--image' ? [a] : []));
+  assert.equal(images.length, 4, 'a page cap: four of six pages');
+  const cache = join(dirname(ledgerPath()), 'pdf-pages');
+  for (const [i, img] of images.entries()) {
+    assert.ok(img.startsWith(cache + '/'), 'kept in the books\' data/ cache');
+    assert.ok(img.endsWith(`/p${i + 1}.png`));
+    assert.deepEqual([...readFileSync(img).subarray(1, 4)].map((b) => String.fromCharCode(b)).join(''), 'PNG');
+  }
+  assert.match(call.prompt, /^Lies den Beleg\n\n/);
+  assert.match(call.prompt, /six\.pdf' is a PDF; pages 1-4 of 6 \(the others are not attached\) are attached to this message as images, in order/);
+  assert.match(call.prompt, /Seite 1\fSeite 2\fSeite 3\fSeite 4\fSeite 5\fSeite 6/, 'the PDF\'s own text, all pages');
+  const drawn = statSync(images[0]).mtimeMs;
+  await ask('Lies den Beleg', { step: 'receipt-match', attachments: [pdf] });
+  assert.deepEqual(seen()[1].args.filter((a, i) => seen()[1].args[i - 1] === '--image'), images, 'the same pages again');
+  assert.equal(statSync(images[0]).mtimeMs, drawn, 'from the cache, not drawn again');
+  assert.deepEqual(readFileSync(pdf), before, 'the original is only read');
+});
+
+test('Claude Code still gets the PDF itself, and nothing is drawn for it', async () => {
+  const pdf = join(dir, 'six.pdf');
+  const args = join(dir, 'claude-args.jsonl');
+  process.env.CLAUDE_STUB_ARGS = args;
+  const cache = join(dirname(ledgerPath()), 'pdf-pages');
+  const drawn = existsSync(cache) ? readdirSync(cache).length : 0;
+  try {
+    await ask(`Lies ${pdf}`, { step: 'receipt-vision', attachments: [pdf] });
+  } finally {
+    delete process.env.CLAUDE_STUB_ARGS;
+  }
+  assert.equal(seen().length, 0, 'Codex is not asked');
+  assert.ok(readFileSync(args, 'utf8').includes(dir), 'Claude Code reads the PDF\'s folder');
+  assert.equal(existsSync(cache) ? readdirSync(cache).length : 0, drawn, 'no page drawn for Claude Code');
 });
 
 test('the plan limit, signed out and a missing program come back as the app\'s refusals, with what Codex said', async () => {
@@ -170,7 +205,7 @@ test('routing: Claude Code first with both, Codex when chosen or alone, Claude C
   assert.deepEqual(subscriptions(undefined).map((p) => p.id), ['claude-cli', 'codex-cli']);
   assert.deepEqual(subscriptions('codex').map((p) => p.id), ['codex-cli', 'claude-cli']);
   settings({ cli: 'codex' });
-  assert.deepEqual([(await resolveStep('classify')).provider.id, (await resolveStep('receipt-vision')).provider.id], ['codex-cli', 'claude-cli'], 'a PDF step goes to the one that reads PDFs');
+  assert.deepEqual([(await resolveStep('classify')).provider.id, (await resolveStep('receipt-vision')).provider.id], ['codex-cli', 'codex-cli'], 'Codex reads PDFs too');
   assert.equal((await resolveStep('sidebar')).provider.id, 'claude-cli', 'the KI column needs Claude Code');
   onlyCodex();
   settings({});

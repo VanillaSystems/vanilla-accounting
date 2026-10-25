@@ -109,7 +109,7 @@ test('with Codex signed in, «Die App fragt» chooses it for the steps and the t
   const v = chosen.json as unknown as AiView;
   assert.equal(v.cli, 'codex');
   assert.deepEqual(v.steps.find((s) => s.id === 'classify')!.standard, { provider: 'codex-cli', model: 'gpt-6.1-sol' });
-  assert.deepEqual(v.steps.find((s) => s.id === 'receipt-vision')!.standard, { provider: 'claude-cli', model: 'sonnet' }, 'Codex reads no PDF');
+  assert.deepEqual(v.steps.find((s) => s.id === 'receipt-vision')!.standard, { provider: 'codex-cli', model: 'gpt-6.1-sol' }, 'Codex reads a PDF as its pages drawn');
   assert.equal((await codex.send('GET', '/api/terminal')).json.preferred, 'codex', 'the terminal opens the same one');
   assert.equal(((await codex.send('PUT', '/api/ai/cli', { askOther: true })).json as unknown as AiView).askOther, true);
   assert.deepEqual(JSON.parse(readFileSync(join(own, 'ai.json'), 'utf8')), { steps: {}, cli: 'codex', askOther: true });

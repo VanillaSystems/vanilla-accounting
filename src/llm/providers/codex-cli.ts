@@ -8,7 +8,8 @@
  * in place of Codex's (`model_instructions_file`), in the read-only sandbox, never asking for
  * approval, keeping no session, with every tool Codex can switch off switched off (`CLOSED`). Should
  * the model still start anything but an answer (a command, an edit, a search, a sub-agent), the
- * run is ended and fails (`runCodex`). Codex takes images (`--image`) but no PDF, so it serves no step that reads a receipt.
+ * run is ended and fails (`runCodex`). Codex takes images but no PDF: a PDF's first pages go as
+ * images, drawn when Codex is asked (src/parsers/pdf-pages.ts), with the PDF's own text.
  */
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -16,6 +17,9 @@ import { tmpdir } from 'node:os';
 import { basename, delimiter, dirname, extname, join } from 'node:path';
 import { programOn } from '../../platform/login-path.js';
 import { codexSignedIn } from '../../platform/terminal-open.js';
+import { pdfPages } from '../../parsers/pdf-pages.js';
+import { pdfText } from '../../parsers/pdf-text.js';
+import { openWorkspace } from '../../workspace/workspace.js';
 import { AiRefused, CallFailed, isPlanLimit, NO_USAGE, type Call, type Provider, type Usage } from '../provider.js';
 import { codexHome } from './codex-home.js';
 
@@ -35,6 +39,7 @@ export function codexCommand(): { bin: string; env: NodeJS.ProcessEnv } | undefi
 export const codexEnv = (command: { env: NodeJS.ProcessEnv }): NodeJS.ProcessEnv => ({ ...command.env, CODEX_HOME: codexHome() });
 
 const IMAGES = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
+const isPdf = (p: string) => extname(p).toLowerCase() === '.pdf';
 
 /** Codex's tools that act or reach out, each off (codex-cli 0.163 feature names). */
 const TOOLS_OFF = [
@@ -157,18 +162,43 @@ export const refusalOf = (said: string, message: string, usage: Usage): CallFail
 
 export const missing = (): AiRefused => new AiRefused({ reason: 'missing', cli: 'codex' }, 'Codex ist auf diesem Mac nicht installiert.');
 
+/** Where drawn PDF pages are kept: the books' data/ (outside git), else the temp folder before books exist. */
+function pagesCache(): string {
+  try { return join(openWorkspace().paths.data, 'pdf-pages'); } catch { return join(tmpdir(), 'vanilla-pdf-pages'); }
+}
+
+/**
+ * A PDF for Codex: its first pages as images, and what the prompt says about them, with the PDF's
+ * own text (empty for a scan), so the model knows which pages it sees and what the rest holds.
+ */
+async function pdfForCodex(pdf: string): Promise<{ images: string[]; note: string }> {
+  const { total, pages } = await pdfPages(pdf, pagesCache());
+  const seen = pages.length === total ? `all ${total} page${total === 1 ? '' : 's'}` : `pages 1-${pages.length} of ${total} (the others are not attached)`;
+  const text = (await pdfText(pdf).catch(() => '')).trim().slice(0, 20_000);
+  return {
+    images: pages.map((p) => p.file),
+    note: [
+      `The file '${pdf}' is a PDF; ${seen} are attached to this message as images, in order.`,
+      text ? `The PDF's own text layer, for all its pages:\n<<<\n${text}\n>>>` : 'The PDF has no text layer (a scan): read it from the images.',
+    ].join('\n'),
+  };
+}
+
 export const codexCli: Provider = {
   id: 'codex-cli',
   billing: 'subscription',
-  models: ['gpt-6-luna', 'gpt-6.1-sol', 'gpt-6-astra'].map((id) => ({ id, can: ['text', 'json', 'typed', 'image'] as const })),
+  models: ['gpt-6-luna', 'gpt-6.1-sol', 'gpt-6-astra'].map((id) => ({ id, can: ['text', 'json', 'typed', 'image', 'pdf'] as const })),
   defaults: { fast: 'gpt-6-luna', standard: 'gpt-6.1-sol', strong: 'gpt-6-astra' },
 
   /** The prompt goes on stdin; the answer is the last agent message of the JSONL events, the usage that of the finished turn. */
   async ask(call) {
     const command = codexCommand();
     if (!command) throw missing();
-    const unread = call.attachments.find((p) => !IMAGES.has(extname(p).toLowerCase()));
-    if (unread) throw new CallFailed(`Codex liest keine ${extname(unread) || 'Datei'}, nur Bilder: ${basename(unread)}`, NO_USAGE);
+    const unread = call.attachments.find((p) => !IMAGES.has(extname(p).toLowerCase()) && !isPdf(p));
+    if (unread) throw new CallFailed(`Codex liest keine ${extname(unread) || 'Datei'}, nur Bilder und PDF: ${basename(unread)}`, NO_USAGE);
+    const read = await Promise.all(call.attachments.map(async (p) => (isPdf(p) ? pdfForCodex(p) : { images: [p], note: '' })));
+    const images = read.flatMap((r) => r.images);
+    const notes = read.flatMap((r) => (r.note ? [r.note] : []));
     const dir = mkdtempSync(join(tmpdir(), 'vanilla-codex-call-'));
     const instructions = join(dir, 'instructions.md');
     writeFileSync(instructions, call.system, { mode: 0o600 });
@@ -179,8 +209,8 @@ export const codexCli: Provider = {
     let notice: string | undefined;
     try {
       const exit = await runCodex({
-        bin: command.bin, args: codexArgs(call, instructions, call.attachments), env: codexEnv(command), cwd: cwd(),
-        prompt: call.prompt, timeoutMs: call.timeoutMs,
+        bin: command.bin, args: codexArgs(call, instructions, images), env: codexEnv(command), cwd: cwd(),
+        prompt: [call.prompt, ...notes].join('\n\n'), timeoutMs: call.timeoutMs,
         onEvent(e) {
           if (e.type === 'item.completed' && e.item?.type === 'agent_message') answer = e.item.text ?? '';
           else if (e.type === 'turn.completed') usage = usageOf(e.usage ?? {});
