@@ -13,7 +13,7 @@
 button.chk:hover { background: var(--hover); }
 .chk .ic { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font: 600 12px "Geist Mono"; color: var(--faint); border: 1.5px solid var(--line-2); }
 .chk .ic .i { width: 12px; height: 12px; }
-.chk.st-ok .ic { background: var(--pos); border-color: var(--pos); color: #fff; }
+.chk.st-ok .ic { background: var(--pos); border-color: var(--pos); color: var(--on-fill); }
 .chk.st-warn .ic { border-color: var(--warn); color: var(--warn); }
 .chk.st-open .ic { border-color: var(--ink-2); color: var(--ink-2); }
 .chk .cx b { display: block; font-weight: 500; font-size: 13.5px; }

@@ -17,7 +17,6 @@
 .firstrun .linkbtn, .ways3s .linkbtn, .inflowdlg .linkbtn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; text-decoration: none; }
 :is(.firstrun, .ways3s, .inflowdlg) .aiact.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 :is(.firstrun, .ways3s, .inflowdlg) .aiact.primary:hover { background: var(--accent); filter: brightness(1.08); }
-:is(.firstrun, .ways3s, .inflowdlg) .aiact.primary :is(svg.i, .bot) { color: var(--on-accent); stroke: var(--on-accent); }
 :is(.firstrun, .ways3s, .inflowdlg) .aiact.primary:disabled { background: var(--bg); border-color: var(--line-2); color: var(--faint); filter: none; }
 .banknote { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: var(--hover); font-size: 12.5px; color: var(--ink-2); }
 .banknote svg.i { width: 15px; height: 15px; margin-top: 2px; color: var(--ink-2); }
