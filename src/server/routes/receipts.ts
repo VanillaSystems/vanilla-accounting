@@ -73,6 +73,7 @@ function patched(receipt: Receipt, { date, amount, kind, vat: _vat, vatBy: _vatB
     out.kind = kind ?? undefined;
     out.kindBy = 'human';
     out.kindRule = undefined;
+    out.kindWhy = undefined;
   }
   return out;
 }

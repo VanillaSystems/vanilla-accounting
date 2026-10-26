@@ -29,6 +29,8 @@ export const STEPS = {
   'receipt-vision': { ledger: 'receipt-intake.guide.yaml#vision', tier: 'standard', needs: ['text', 'pdf'] },
   // Haiku read the VAT facts of 100 receipts as well as Sonnet (facts-only run, #64: 85 % code exact for both) at about 1/18 of the cost.
   'receipt-vat': { ledger: 'receipt-intake.guide.yaml#vat_facts', tier: 'fast', needs: ['json'] },
+  // An unclear document with little of an invoice (issue #186): receipt, supporting or no receipt, with a reason.
+  'receipt-kind': { ledger: 'receipt-intake.guide.yaml#kind', tier: 'fast', needs: ['json'] },
   'receipt-titles': { ledger: 'receipt-intake.guide.yaml#titles', tier: 'fast', needs: ['json'] },
   'receipt-match': { ledger: 'evidence.guide.yaml#ai', tier: 'standard', needs: ['json', 'pdf'] },
   classify: { ledger: 'booking.guide.yaml#classify', tier: 'standard', needs: ['json'] },

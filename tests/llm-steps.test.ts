@@ -36,6 +36,7 @@ test('with no setting every step asks its shipped default and ledgers the name i
     'receipt-vision': ['sonnet', 'receipt-intake.guide.yaml#vision'],
     // Haiku since #48 step 2: it read the VAT facts of 100 receipts as well as Sonnet (#64).
     'receipt-vat': ['haiku', 'receipt-intake.guide.yaml#vat_facts'],
+    'receipt-kind': ['haiku', 'receipt-intake.guide.yaml#kind'],
     'receipt-titles': ['haiku', 'receipt-intake.guide.yaml#titles'],
     'receipt-match': ['sonnet', 'evidence.guide.yaml#ai'],
     classify: ['sonnet', 'booking.guide.yaml#classify'],

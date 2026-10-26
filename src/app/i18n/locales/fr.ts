@@ -4329,6 +4329,7 @@ export default {
     'ai.step.receipt-vision': 'Lire un justificatif (scan)',
     'ai.step.receipt-vat': 'TVA sur le justificatif',
     'ai.step.receipt-titles': 'Titres des justificatifs',
+    'ai.step.receipt-kind': "Nature d’un document incertain",
     'ai.step.receipt-match': 'Trouver le paiement d’un justificatif',
     'ai.step.classify': 'Comptabiliser un paiement',
     'ai.step.learn-rule': 'Apprendre d’une correction',

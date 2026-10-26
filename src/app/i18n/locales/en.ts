@@ -4329,6 +4329,7 @@ export default {
     'ai.step.receipt-vision': 'Read a receipt (scan)',
     'ai.step.receipt-vat': 'VAT on the receipt',
     'ai.step.receipt-titles': 'Receipt titles',
+    'ai.step.receipt-kind': "What an unclear document is",
     'ai.step.receipt-match': 'Find a receipt’s payment',
     'ai.step.classify': 'Book a payment',
     'ai.step.learn-rule': 'Learn from a correction',

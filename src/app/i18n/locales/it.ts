@@ -4329,6 +4329,7 @@ export default {
     'ai.step.receipt-vision': 'Leggere un giustificativo (scansione)',
     'ai.step.receipt-vat': 'IVA sul giustificativo',
     'ai.step.receipt-titles': 'Titoli dei giustificativi',
+    'ai.step.receipt-kind': "Natura di un documento incerto",
     'ai.step.receipt-match': 'Trovare il pagamento di un giustificativo',
     'ai.step.classify': 'Registrare un pagamento',
     'ai.step.learn-rule': 'Imparare da una correzione',

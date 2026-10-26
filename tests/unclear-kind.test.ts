@@ -1,0 +1,115 @@
+/**
+ * Issue #186: a document whose words decide nothing and that shows almost nothing of an invoice (a
+ * carrier's sales brochure) is asked of the model once. «No receipt» sets it aside as noise with
+ * the model's reason; nothing is deleted. Without a model, or when the model fails, it is taken as
+ * a receipt, as before. A person's kind is never asked about.
+ */
+import './support/jurisdiction.js';
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { readStep } from '../src/intake/read.js';
+import { runIntake, storePort, type Ask } from '../src/intake/pipeline.js';
+import { loadBooks, moduleActor } from '../src/books/store.js';
+import { documents } from '../src/engines/index.js';
+import { receiptScore } from '../src/intake/document-kind.js';
+import { asksModel, kindByOf, parseModelKind } from '../src/intake/unclear.js';
+import { textPdf } from './support/text-pdf.js';
+import { tempWorkspace, writeIndex } from './support/workspace.js';
+
+const BROCHURE = ['Paketblitz Express', 'Ihr Partner fuer den Versand ins Ausland', 'Neu fuer KMU: Zollabwicklung aus einer Hand',
+  'Wir holen Ihre Sendungen direkt in Ihrem Betrieb ab und bringen sie in ueber 200 Laender.', 'Sprechen Sie mit unserem Team ueber Ihre Moeglichkeiten.'];
+const INVOICE = ['Farbmix AG', 'Rechnung FM-79010', 'Datum: 28.09.2026', 'Total CHF 1537.22', 'MWST 8.1% CHF 115.01', 'Zahlbar innert 30 Tagen', 'IBAN CH93 0076 2011 6238 5295 7'];
+
+async function inboxWith(lines: string[], name = 'Paketblitz.pdf') {
+  const ws = tempWorkspace('unclear-');
+  mkdirSync(ws.paths.inbox, { recursive: true });
+  const bytes = await textPdf(lines);
+  writeFileSync(join(ws.paths.inbox, name), bytes);
+  return { ws, id: createHash('sha256').update(bytes).digest('hex').substring(0, 16), path: join(ws.paths.inbox, name) };
+}
+
+const run = (ws: ReturnType<typeof tempWorkspace>, ask?: Ask) =>
+  runIntake({ ws, books: storePort(ws, moduleActor('intake')), steps: [['read', readStep]], ...(ask ? { ask } : {}) });
+
+/** A model that answers the kind question with `answer` and records which steps it was asked for. */
+function model(answer: string | Error) {
+  const steps: string[] = [];
+  const ask: Ask = async (_prompt, opts) => {
+    steps.push(opts.step);
+    if (opts.step !== 'receipt-kind') throw new Error(`unexpected step ${opts.step}`);
+    if (answer instanceof Error) throw answer;
+    return answer;
+  };
+  return { ask, steps };
+}
+
+test('a brochure scores 0 and is asked about; an invoice and an empty text are not', () => {
+  const W = documents();
+  assert.equal(receiptScore(BROCHURE.join('\n'), W), 0);
+  assert.equal(asksModel(BROCHURE.join('\n'), W), true);
+  assert.equal(asksModel(INVOICE.join('\n'), W), false);
+  assert.equal(asksModel('   ', W), false);
+});
+
+test('the answer is read strictly: an unknown verdict is no verdict, the reason is one short line', () => {
+  assert.deepEqual(parseModelKind('Sure: {"is": "none", "why": "Verkaufsbroschüre\n eines Paketdienstes"}'), { is: 'none', why: 'Verkaufsbroschüre eines Paketdienstes' });
+  assert.equal(parseModelKind('{"is": "maybe"}'), undefined);
+  assert.equal(parseModelKind('no json'), undefined);
+});
+
+test('a model «no receipt» on an unclear document sets it aside as noise with its reason, and keeps the file', async () => {
+  const { ws, id, path } = await inboxWith(BROCHURE);
+  const m = model('{"is": "none", "why": "Verkaufsbroschüre eines Paketdienstes"}');
+  const job = await run(ws, m.ask);
+  assert.equal(job.steps[0].state, 'done', JSON.stringify(job.steps[0].notes));
+  assert.deepEqual(m.steps, ['receipt-kind'], 'asked once');
+  const r = loadBooks(ws).receipts.find((x) => x.id === id)!;
+  assert.deepEqual([r.kind, r.kindBy, r.kindRule, r.kindWhy], ['noise', 'rule', 'model:no-receipt', 'Verkaufsbroschüre eines Paketdienstes']);
+  assert.equal(kindByOf(r), 'model');
+  assert.ok(existsSync(path), 'nothing is deleted');
+});
+
+test('a model «supporting» keeps it beside an invoice; a model «receipt» leaves it a receipt', async () => {
+  const a = await inboxWith(BROCHURE);
+  await run(a.ws, model('{"is": "supporting", "why": "Lieferschein"}').ask);
+  const ra = loadBooks(a.ws).receipts.find((x) => x.id === a.id)!;
+  assert.deepEqual([ra.kind, ra.kindRule, ra.kindWhy], ['supporting', 'model:supporting', 'Lieferschein']);
+  const b = await inboxWith(BROCHURE);
+  await run(b.ws, model('{"is": "receipt", "why": "Quittung"}').ask);
+  const rb = loadBooks(b.ws).receipts.find((x) => x.id === b.id)!;
+  assert.deepEqual([rb.kind, rb.kindBy, rb.kindRule, rb.kindWhy], [undefined, undefined, undefined, undefined]);
+});
+
+test('a score-0 document without a model stays a receipt, as today', async () => {
+  const { ws, id } = await inboxWith(BROCHURE);
+  await run(ws);
+  const r = loadBooks(ws).receipts.find((x) => x.id === id)!;
+  assert.deepEqual([r.kind, r.kindBy, r.kindRule], [undefined, undefined, undefined]);
+});
+
+test('a model that fails leaves the document a receipt, and the step goes on', async () => {
+  const { ws, id } = await inboxWith(BROCHURE);
+  const job = await run(ws, model(new Error('rate limited')).ask);
+  assert.equal(job.steps[0].state, 'done');
+  assert.equal(loadBooks(ws).receipts.find((x) => x.id === id)!.kind, undefined);
+});
+
+test('a clear invoice costs no call', async () => {
+  const { ws } = await inboxWith(INVOICE, 'Farbmix.pdf');
+  const m = model('{"is": "none", "why": "x"}');
+  await run(ws, m.ask);
+  assert.deepEqual(m.steps, []);
+});
+
+test('a person\'s kind is never asked about, even before the file was read', async () => {
+  const { ws, id } = await inboxWith(BROCHURE);
+  writeIndex(ws, { receipts: [{ id, filename: 'Paketblitz.pdf', originalFilename: 'Paketblitz.pdf', extractedText: '', extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-10-20T00:00:00.000Z', location: 'staged', kindBy: 'human' }] });
+  const m = model('{"is": "none", "why": "x"}');
+  await run(ws, m.ask);
+  assert.deepEqual(m.steps, []);
+  const r = loadBooks(ws).receipts.find((x) => x.id === id)!;
+  assert.deepEqual([r.kind, r.kindBy], [undefined, 'human']);
+});

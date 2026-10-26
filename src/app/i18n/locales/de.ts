@@ -4326,6 +4326,7 @@ export const messages = {
   'ai.step.receipt-vision': 'Beleg lesen (Scan)',
   'ai.step.receipt-vat': 'MWST auf dem Beleg',
   'ai.step.receipt-titles': 'Titel der Belege',
+  'ai.step.receipt-kind': "Was ein unklares Dokument ist",
   'ai.step.receipt-match': 'Beleg zur Zahlung finden',
   'ai.step.classify': 'Zahlung buchen',
   'ai.step.learn-rule': 'Aus einer Korrektur lernen',
