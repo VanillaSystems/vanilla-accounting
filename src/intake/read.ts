@@ -169,8 +169,8 @@ interface Extracted { text: string; method: Receipt['extractionMethod']; fileSiz
  * What a fresh receipt's text says it is (src/intake/document-kind.ts): an order confirmation or a
  * delivery note is kept beside its invoice, never paid on its own. That a text is no receipt at all
  * decides only for what the model read (a photo): a PDF's own text was judged at the drop already,
- * where the person can say «doch ein Beleg». What the words leave unclear, the model's verdict
- * decides when there is one (src/intake/unclear.ts). A bank statement (#151) is dated on its period's last day.
+ * where the person can say «doch ein Beleg». What the words leave unclear, the model's «no receipt»
+ * sets aside when there is one (src/intake/unclear.ts). A bank statement (#151) is dated on its period's last day.
  */
 function kindOfText(fresh: Extracted, filename: string, originalFilename: string, model?: ModelKind): Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'kindWhy' | 'date'> {
   const statement = statementFacts({ extractedText: fresh.text, filename, originalFilename }, documents());

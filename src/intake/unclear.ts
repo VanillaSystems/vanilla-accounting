@@ -1,10 +1,13 @@
 /**
  * A document whose words decide nothing (src/intake/document-kind.ts: `unclear`) and that shows
- * almost nothing of an invoice is asked of the model once (issue #186): a receipt, a document kept
- * beside an invoice, or no receipt, with a one-line reason. Words alone cannot tell a sales
- * brochure from a poor scan of a real invoice: both score 0. Without a model it stays as it was,
- * taken as a receipt. The answer only types the receipt; nothing is deleted, and a person's kind
- * is never asked about again (read.ts asks only for a receipt read for the first time).
+ * almost nothing of an invoice is asked of the model once (issue #186): a receipt or no receipt,
+ * with a one-line reason. Words alone cannot tell a sales brochure from a poor scan of a real
+ * invoice: both score 0. The model may only set a document aside: «no receipt» makes it noise; any
+ * other answer leaves it untyped, as without a model. It never types a document `supporting`: on
+ * the private books it called customs clearance decisions and order confirmations with Swiss VAT
+ * «supporting», which would drop their input tax (isPurchaseDocument, src/accounting/evidence-check.ts).
+ * Nothing is deleted, and a person's kind is never asked about (read.ts asks only for a receipt read
+ * for the first time).
  */
 import type { DocumentsData } from '../core/modules/schema.js';
 import type { Receipt } from '../types/index.js';
@@ -19,10 +22,10 @@ const LITTLE = 1;
  */
 export const MODEL_TEXT = 3000;
 
-/** The kindRule of a kind the model gave: `model:no-receipt` or `model:supporting`. */
+/** The kindRule of a kind the model gave: `model:no-receipt`. */
 export const MODEL_RULE = 'model:';
 
-export type ModelKind = { is: 'receipt' | 'supporting' | 'none'; why: string };
+export type ModelKind = { is: 'receipt' | 'none'; why: string };
 
 /** Whether the model is asked about a text: its words decide nothing and it shows at most one sign of an invoice. */
 export function asksModel(text: string, words: DocumentsData): boolean {
@@ -34,8 +37,7 @@ export function asksModel(text: string, words: DocumentsData): boolean {
 export function unclearPrompt(text: string, filename: string): string {
   return `You sort documents that reached a Swiss small company's bookkeeping inbox (a mailbox, a scan, a drop).
 Decide what this one is:
-- "receipt": an invoice, a bill, a till receipt, a credit note, a contract or statement that asks for or confirms a payment. A poor scan or short OCR of one is still a receipt.
-- "supporting": kept beside an invoice but never paid on its own: an order confirmation, a delivery note, a shipping or customs paper, a return label.
+- "receipt": anything that belongs to a payment or a tax: an invoice, a bill, a till or postal receipt, a credit note, an order confirmation, a customs clearance decision, a delivery note, a contract or statement. A poor scan or short OCR of one is still a receipt.
 - "none": no receipt at all: a brochure, a newsletter, a product sheet, a price list, terms, marketing, a report.
 When in doubt, answer "receipt": a real receipt set aside is worse than a brochure kept.
 
@@ -43,13 +45,13 @@ File name: ${filename}
 Text (start):
 ${text.slice(0, MODEL_TEXT)}
 
-Return ONLY a JSON object: {"is": "receipt" | "supporting" | "none", "why": "<one short line in the document's language: what it is>"}`;
+Return ONLY a JSON object: {"is": "receipt" | "none", "why": "<one short line in the document's language: what it is>"}`;
 }
 
 export function parseModelKind(raw: string): ModelKind | undefined {
   try {
     const json = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1).replace(/[\r\n]+/g, ' ')) as { is?: unknown; why?: unknown };
-    if (json.is !== 'receipt' && json.is !== 'supporting' && json.is !== 'none') return undefined;
+    if (json.is !== 'receipt' && json.is !== 'none') return undefined;
     const why = typeof json.why === 'string' ? json.why.replace(/\s+/g, ' ').trim() : '';
     return { is: json.is, why };
   } catch {
@@ -62,15 +64,10 @@ export async function askKind(ask: Ask, text: string, filename: string): Promise
   return parseModelKind(await ask(unclearPrompt(text, filename), { step: 'receipt-kind', timeoutMs: 60_000 }));
 }
 
-/** The receipt's kind from the model's verdict: no receipt is noise, a companion is supporting, a receipt stays untyped. */
+/** The receipt's kind from the model's verdict: no receipt is noise with the reason; a receipt stays untyped. */
 export function kindOfModel(v: ModelKind): Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'kindWhy'> {
-  if (v.is === 'receipt') return {};
-  return {
-    kind: v.is === 'none' ? 'noise' : 'supporting',
-    kindBy: 'rule',
-    kindRule: `${MODEL_RULE}${v.is === 'none' ? 'no-receipt' : 'supporting'}`,
-    ...(v.why ? { kindWhy: v.why } : {}),
-  };
+  if (v.is !== 'none') return {};
+  return { kind: 'noise', kindBy: 'rule', kindRule: `${MODEL_RULE}no-receipt`, ...(v.why ? { kindWhy: v.why } : {}) };
 }
 
 /** Who set a receipt's kind, for the list of what was set aside: a person, the model, or the words of a rule. */

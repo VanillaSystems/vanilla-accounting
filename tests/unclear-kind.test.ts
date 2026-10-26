@@ -21,6 +21,7 @@ import { tempWorkspace, writeIndex } from './support/workspace.js';
 
 const BROCHURE = ['Paketblitz Express', 'Ihr Partner fuer den Versand ins Ausland', 'Neu fuer KMU: Zollabwicklung aus einer Hand',
   'Wir holen Ihre Sendungen direkt in Ihrem Betrieb ab und bringen sie in ueber 200 Laender.', 'Sprechen Sie mit unserem Team ueber Ihre Moeglichkeiten.'];
+const CUSTOMS = ['Bundesamt fuer Zoll und Grenzsicherheit BAZG', 'Veranlagungsverfuegung', 'Zollanmeldung 26CHWI000012345', 'Versender: Shenzhen Parts Ltd', 'Empfaenger: Muster AG, Zuerich'];
 const INVOICE = ['Farbmix AG', 'Rechnung FM-79010', 'Datum: 28.09.2026', 'Total CHF 1537.22', 'MWST 8.1% CHF 115.01', 'Zahlbar innert 30 Tagen'];
 
 async function inboxWith(lines: string[], name = 'Paketblitz.pdf') {
@@ -72,15 +73,19 @@ test('a model «no receipt» on an unclear document sets it aside as noise with 
   assert.ok(existsSync(path), 'nothing is deleted');
 });
 
-test('a model «supporting» keeps it beside an invoice; a model «receipt» leaves it a receipt', async () => {
-  const a = await inboxWith(BROCHURE);
-  await run(a.ws, model('{"is": "supporting", "why": "Lieferschein"}').ask);
-  const ra = loadBooks(a.ws).receipts.find((x) => x.id === a.id)!;
-  assert.deepEqual([ra.kind, ra.kindRule, ra.kindWhy], ['supporting', 'model:supporting', 'Lieferschein']);
-  const b = await inboxWith(BROCHURE);
-  await run(b.ws, model('{"is": "receipt", "why": "Quittung"}').ask);
-  const rb = loadBooks(b.ws).receipts.find((x) => x.id === b.id)!;
-  assert.deepEqual([rb.kind, rb.kindBy, rb.kindRule, rb.kindWhy], [undefined, undefined, undefined, undefined]);
+test('the model only sets aside: a customs decision it calls «supporting» or «receipt» stays a receipt, untyped', async () => {
+  // On the private books the model called customs clearance decisions «supporting»: typed so, they would lose their import VAT.
+  assert.equal(asksModel(CUSTOMS.join('\n'), documents()), true, 'an unclear document the model is asked about');
+  for (const answer of ['{"is": "supporting", "why": "Zollveranlagung"}', '{"is": "receipt", "why": "Zollveranlagung"}']) {
+    const { ws, id } = await inboxWith(CUSTOMS, 'Zoll.pdf');
+    const m = model(answer);
+    await run(ws, m.ask);
+    assert.deepEqual(m.steps, ['receipt-kind'], answer);
+    const r = loadBooks(ws).receipts.find((x) => x.id === id)!;
+    assert.deepEqual([r.kind, r.kindBy, r.kindRule, r.kindWhy], [undefined, undefined, undefined, undefined], answer);
+  }
+  assert.equal(parseModelKind('{"is": "supporting", "why": "Lieferschein"}'), undefined, '«supporting» is no answer of this step');
+  assert.doesNotMatch(unclearPrompt(CUSTOMS.join('\n'), 'Zoll.pdf'), /"supporting"/);
 });
 
 test('a score-0 document without a model stays a receipt, as today', async () => {
