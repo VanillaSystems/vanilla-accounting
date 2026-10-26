@@ -9,9 +9,12 @@
  * The import VAT is booked as a cost without input tax: the carrier's invoice is no proof of it.
  * The customs office's assessment that names the firm as importer is (pv-import-vat-evv): with it
  * the tax is deducted by a one-legged line of the import VAT account's tax-amount code, off that
- * account, into the input tax on material and goods. An assessment that comes after the
+ * account, into the input tax on material and goods. Import VAT paid to the customs office itself
+ * has the assessment as its receipt (linkDirectAssessments). An assessment that comes after the
  * payment was booked brings its deduction then (importVatDeductions): on the payment's day while
  * its quarter is open, else in the open period as a correction of the filed one (golden rule 1).
+ * Each assessment proves one import VAT line, once: copies (the same assessment number) count as
+ * one, and a deduction a person removed or changed is never booked again.
  * Pure and browser-safe; the words and accounts are the jurisdiction's data, no carrier is named.
  */
 import { CUSTOMS_POSITIONS, type CustomsPosition, type DocumentsData } from '../core/modules/schema.js';
@@ -23,7 +26,7 @@ import { codeForRate } from '../accounting/vat-codes.js';
 import { normalRate } from '../accounting/sales-without-vat.js';
 import { baseCurrency, vat } from '../engines/index.js';
 import type { ClassifyEntry } from '../llm/prompts.js';
-import type { BankTransaction, JournalEntry, Mapping, Receipt } from '../types/index.js';
+import type { BankTransaction, BookedBy, JournalEntry, Mapping, Receipt } from '../types/index.js';
 
 export type CustomsWords = DocumentsData['customs'];
 
@@ -36,14 +39,23 @@ export const CURRENCY_SLACK = 0.05;
 /** How many days an assessment no one linked may lie from the invoice whose import VAT it proves. */
 export const ASSESSMENT_DAYS = 120;
 
+/**
+ * Who books the split and its deductions: code, under the input-tax check older builds know, so a
+ * sealed quarter that holds such a booking reads the same in every build (seals hash `by`).
+ */
+export const CUSTOMS_BY: BookedBy = { kind: 'code', check: 'purchaseVat' };
+
+/** The rule a link the app makes to a customs assessment names (Mapping.rule). */
+export const ASSESSMENT_LINK = 'customs-assessment';
+
 /** One position of a customs invoice: its gross as the invoice states it, and the carrier's rate on it. */
 export interface PositionLine { position: CustomsPosition; gross: number; rate?: number }
 
-/** A customs invoice as read: its positions add up to its total, in its currency. */
-export interface CustomsInvoice { receipt: string; file: string; date?: string; currency: string; total: number; lines: PositionLine[] }
+/** A customs invoice as read: its positions add up to its total, in its currency; the assessment numbers it names. */
+export interface CustomsInvoice { receipt: string; file: string; date?: string; currency: string; total: number; lines: PositionLine[]; numbers: string[] }
 
-/** The customs office's assessment of import VAT for the firm: the tax it states, in the books' currency. */
-export interface Assessment { receipt: string; file: string; date?: string; amount: number }
+/** The customs office's assessment of import VAT for the firm: the tax it states, in the books' currency, and its number. */
+export interface Assessment { receipt: string; file: string; date?: string; amount: number; number?: string }
 
 /** Why a payment's customs invoices are not split in code: the model books it, its reason says why. */
 export type CustomsHold =
@@ -61,7 +73,7 @@ export type CustomsHold =
   | { why: 'account'; account: string };
 
 export interface CustomsSplit {
-  /** One line per position and rate of each invoice, then one deduction per assessment that proves an import VAT line. */
+  /** One line per position and rate of each invoice (each import VAT line apart), then one deduction per assessment that proves an import VAT line. */
   lines: ClassifyEntry[];
   /** The deduction lines among `lines`: their amount is in the books' currency, whatever the payment's. */
   deductions: ReadonlySet<ClassifyEntry>;
@@ -71,6 +83,8 @@ export interface CustomsSplit {
   currency: string;
   /** The assessments deducted. */
   assessments: Assessment[];
+  /** Paid to the customs office itself: the assessments are the payment's receipts. */
+  direct: boolean;
 }
 
 const positionRes = new WeakMap<CustomsWords, Array<{ position: CustomsPosition; re: RegExp }>>();
@@ -91,10 +105,16 @@ export function positionOf(text: string, words: CustomsWords): CustomsPosition |
   return found.sort((a, b) => b.length - a.length)[0]?.position;
 }
 
+/** The assessment numbers a text names (an invoice cites its shipment's, a payment's reference its own), without their version suffix. */
+export function assessmentNumbers(text: string, words: CustomsWords): string[] {
+  return [...new Set([...text.matchAll(new RegExp(words.assessment.number, 'g'))].map((m) => m[0].toUpperCase()))];
+}
+
 /**
  * A receipt read as a customs invoice: undefined when it is none (no line charges duty or import
  * VAT, or its lines were not read), a hold when one of its lines names no position or the lines do
- * not add up to its total. Lines of nothing (0.00) are left out; positions are summed per rate.
+ * not add up to its total. Lines of nothing (0.00) are left out. Fees and freight are summed per
+ * rate; each import VAT line stays apart, for an invoice of several shipments has one assessment each.
  */
 export function readCustomsInvoice(r: Receipt, words: CustomsWords): { invoice: CustomsInvoice } | { hold: CustomsHold } | undefined {
   const items = (r.lineItems ?? []).filter((l) => toRappen(l.gross) !== 0);
@@ -105,13 +125,13 @@ export function readCustomsInvoice(r: Receipt, words: CustomsWords): { invoice: 
   const lines: PositionLine[] = [];
   for (const { l, position } of named) {
     const rate = position === 'fees' || position === 'freight' ? l.ratePercent : undefined;
-    const same = lines.find((x) => x.position === position && x.rate === rate);
+    const same = position === 'importVat' ? undefined : lines.find((x) => x.position === position && x.rate === rate);
     if (same) same.gross = fromRappen(toRappen(same.gross) + toRappen(l.gross));
     else lines.push({ position: position!, gross: l.gross, ...(rate !== undefined ? { rate } : {}) });
   }
   const sum = lines.reduce((s, x) => s + toRappen(x.gross), 0);
   if (r.amount !== undefined && toRappen(r.amount) !== sum) return { hold: { why: 'sum', file: r.filename, lines: fromRappen(sum), total: r.amount } };
-  return { invoice: { receipt: r.id, file: r.filename, ...(r.date ? { date: r.date } : {}), currency: r.currency ?? baseCurrency(), total: fromRappen(sum), lines } };
+  return { invoice: { receipt: r.id, file: r.filename, ...(r.date ? { date: r.date } : {}), currency: r.currency ?? baseCurrency(), total: fromRappen(sum), lines, numbers: assessmentNumbers(r.extractedText ?? '', words) } };
 }
 
 const MONEY = /(\d{1,3}(?:['’]\d{3})+|\d+)[.,](\d{2})(?!\d)/;
@@ -120,8 +140,8 @@ const UID = /CHE[-\s.]?(\d{3})[.\s]?(\d{3})[.\s]?(\d{3})/g;
 /**
  * A receipt read as the customs office's assessment of import VAT for the firm whose UID is `uid`:
  * its title, the total of the tax after its label, and the firm's UID as importer, anywhere in the
- * text (a courier may put the assessment's pages behind its invoice). Undefined otherwise: an
- * assessment without the firm's UID proves nothing for the firm.
+ * text (a courier may put the assessment's pages behind its invoice), with its number when it shows
+ * one. Undefined otherwise: an assessment without the firm's UID proves nothing for the firm.
  */
 export function readAssessment(r: Pick<Receipt, 'id' | 'filename' | 'date' | 'extractedText'>, words: CustomsWords, uid: string | undefined): Assessment | undefined {
   const text = r.extractedText ?? '';
@@ -132,8 +152,16 @@ export function readAssessment(r: Pick<Receipt, 'id' | 'filename' | 'date' | 'ex
   const money = label && MONEY.exec(text.slice(label.index + label[0].length, label.index + label[0].length + 80));
   if (!money) return undefined;
   const amount = Number(`${money[1].replace(/['’]/g, '')}.${money[2]}`);
-  return amount > 0 ? { receipt: r.id, file: r.filename, ...(r.date ? { date: r.date } : {}), amount } : undefined;
+  const [number] = assessmentNumbers(text, words);
+  return amount > 0 ? { receipt: r.id, file: r.filename, ...(r.date ? { date: r.date } : {}), amount, ...(number ? { number } : {}) } : undefined;
 }
+
+/** Whether `a` proves an import VAT line of `invoice`: the same tax, and its number among those the invoice names, when the invoice names any. */
+export const proves = (a: Assessment, line: { amount: number; invoice: Pick<CustomsInvoice, 'numbers'> }): boolean =>
+  toRappen(a.amount) === toRappen(line.amount) && (!a.number || !line.invoice.numbers.length || line.invoice.numbers.includes(a.number));
+
+/** The assessments, a copy of one (the same number) left out: copies prove one line between them. */
+const distinct = <A extends Assessment>(list: readonly A[]): A[] => list.filter((a, i) => !a.number || list.findIndex((b) => b.number === a.number) === i);
 
 /** Shares of `total` cents in proportion to `weights`, adding up to it exactly (the largest remainders get the odd cent). */
 function shares(total: number, weights: readonly number[]): number[] {
@@ -170,40 +198,41 @@ export interface SplitContext {
 }
 
 /**
- * Each assessment with the import VAT line it proves: the line of the same amount, each line and
- * each assessment once, in order. An assessment whose amount no line has proves none.
+ * Each assessment with the import VAT line it proves (proves), each line and each assessment once,
+ * in order; copies of one assessment count once. An assessment that proves no line proves none.
  */
-export function pairAssessments<L extends { amount: number }, A extends { amount: number }>(lines: readonly L[], assessments: readonly A[]): Array<{ line: L; assessment: A }> {
+export function pairAssessments<L extends { amount: number; invoice: Pick<CustomsInvoice, 'numbers'> }, A extends Assessment>(lines: readonly L[], assessments: readonly A[]): Array<{ line: L; assessment: A }> {
   const free = [...lines];
-  return assessments.flatMap((assessment) => {
-    const at = free.findIndex((l) => toRappen(l.amount) === toRappen(assessment.amount));
+  return distinct(assessments).flatMap((assessment) => {
+    const at = free.findIndex((l) => proves(assessment, l));
     return at < 0 ? [] : [{ line: free.splice(at, 1)[0], assessment }];
   });
 }
 
 /**
- * The payment `tx` split by the customs invoices linked to it (`documents`), or undefined when none
- * of them is one or the money came in. A hold when the invoices do not book it in code.
+ * The payment `tx` split by the customs invoices linked to it (`documents`), or by the assessments
+ * alone when it paid the customs office itself; undefined when neither is linked or the money came
+ * in. A hold when the invoices do not book it in code.
  */
 export function customsSplit(tx: Pick<BankTransaction, 'amount' | 'currency' | 'direction'>, documents: readonly Receipt[], ctx: SplitContext): CustomsSplit | { hold: CustomsHold } | undefined {
   if (tx.direction !== 'DBIT') return undefined;
   const invoices: CustomsInvoice[] = [];
   const others: Receipt[] = [];
-  const assessments = documents.map((r) => readAssessment(r, ctx.words, ctx.uid)).filter((a): a is Assessment => !!a);
+  const assessments = distinct(documents.map((r) => readAssessment(r, ctx.words, ctx.uid)).filter((a): a is Assessment => !!a));
   for (const r of documents.filter(isPurchaseDocument)) {
     const read = readCustomsInvoice(r, ctx.words);
     if (read && 'hold' in read) return read;
     if (read) invoices.push(read.invoice);
     else if (!assessments.some((a) => a.receipt === r.id)) others.push(r);
   }
-  if (!invoices.length) return undefined;
+  const paid = toRappen(Math.abs(tx.amount));
+  if (!invoices.length) return others.length ? undefined : directSplit(tx, paid, assessments, ctx);
   if (others.length) return { hold: { why: 'other', file: others[0].filename } };
   const missing = invoices.flatMap((i) => i.lines).map((l) => ctx.words.positions[l.position].account).find((a) => !ctx.chart.has(a));
   if (missing) return { hold: { why: 'account', account: missing } };
 
   const currency = invoices[0].currency;
   const total = invoices.reduce((s, i) => s + toRappen(i.total), 0);
-  const paid = toRappen(Math.abs(tx.amount));
   if (invoices.some((i) => i.currency !== currency)) return { hold: { why: 'paid', invoices: fromRappen(total), paid: fromRappen(paid), currency: tx.currency } };
   if (currency === tx.currency && total !== paid) return { hold: { why: 'paid', invoices: fromRappen(total), paid: fromRappen(paid), currency } };
   if (currency !== tx.currency) {
@@ -213,9 +242,9 @@ export function customsSplit(tx: Pick<BankTransaction, 'amount' | 'currency' | '
     }
   }
   // The payment's own amount, in proportion to what each position states.
-  const flat = invoices.flatMap((i) => i.lines);
-  const amounts = currency === tx.currency ? flat.map((l) => toRappen(l.gross)) : shares(paid, flat.map((l) => toRappen(l.gross)));
-  const lines: ClassifyEntry[] = flat.map((l, k) => {
+  const flat = invoices.flatMap((invoice) => invoice.lines.map((line) => ({ line, invoice })));
+  const amounts = currency === tx.currency ? flat.map(({ line }) => toRappen(line.gross)) : shares(paid, flat.map(({ line }) => toRappen(line.gross)));
+  const lines: ClassifyEntry[] = flat.map(({ line: l }, k) => {
     const charged = l.rate !== undefined && l.rate > 0 && vat().isDomesticRate(l.rate);
     return {
       accountDebit: ctx.words.positions[l.position].account, accountCredit: '', amount: fromRappen(amounts[k]),
@@ -223,16 +252,23 @@ export function customsSplit(tx: Pick<BankTransaction, 'amount' | 'currency' | '
       description: `${ctx.name}, ${ctx.texts.position(l.position)}`,
     };
   });
-  const importVat = flat.filter((l) => l.position === 'importVat').map((l) => ({ amount: l.gross }));
-  const proven = ctx.inputTax ? pairAssessments(importVat, assessments) : [];
-  const deductions = new Set(proven.map(({ assessment }) => deductionLine(assessment, ctx.words, `${ctx.name}, ${ctx.texts.deduction(assessment)}`)).filter((l): l is ClassifyEntry => !!l));
+  const importVat = flat.filter(({ line }) => line.position === 'importVat').map(({ line, invoice }) => ({ amount: line.gross, invoice }));
+  return withDeductions(lines, importVat, ctx.inputTax ? pairAssessments(importVat, assessments).map((p) => p.assessment) : [], currency, false, ctx);
+}
+
+/** Import VAT paid to the customs office itself: one import VAT line per assessment, which add up to the payment in the books' currency. */
+function directSplit(tx: Pick<BankTransaction, 'currency'>, paid: number, assessments: readonly Assessment[], ctx: SplitContext): CustomsSplit | undefined {
+  if (!assessments.length || tx.currency !== baseCurrency() || assessments.reduce((s, a) => s + toRappen(a.amount), 0) !== paid) return undefined;
+  if (!ctx.chart.has(ctx.words.positions.importVat.account)) return undefined;
+  const lines: ClassifyEntry[] = assessments.map((a) => ({ accountDebit: ctx.words.positions.importVat.account, accountCredit: '', amount: a.amount, vat: 'none', description: `${ctx.name}, ${ctx.texts.position('importVat')}` }));
+  return withDeductions(lines, assessments.map((a) => ({ amount: a.amount })), ctx.inputTax ? [...assessments] : [], baseCurrency(), true, ctx);
+}
+
+function withDeductions(lines: ClassifyEntry[], importVat: ReadonlyArray<{ amount: number }>, proven: Assessment[], currency: string, direct: boolean, ctx: SplitContext): CustomsSplit {
+  const deductions = new Set(proven.map((a) => deductionLine(a, ctx.words, `${ctx.name}, ${ctx.texts.deduction(a)}`)).filter((l): l is ClassifyEntry => !!l));
   const vatTotal = importVat.reduce((s, l) => s + toRappen(l.amount), 0);
-  const deducted = proven.reduce((s, p) => s + toRappen(p.assessment.amount), 0);
-  return {
-    lines: [...lines, ...deductions], deductions, currency,
-    importVat: fromRappen(vatTotal), unproven: fromRappen(vatTotal - deducted),
-    assessments: proven.map((p) => p.assessment),
-  };
+  const deducted = proven.reduce((s, a) => s + toRappen(a.amount), 0);
+  return { lines: [...lines, ...deductions], deductions, currency, importVat: fromRappen(vatTotal), unproven: fromRappen(vatTotal - deducted), assessments: proven, direct };
 }
 
 /**
@@ -251,7 +287,10 @@ function deductionLine(a: Assessment, words: CustomsWords, description: string):
   return code ? { accountDebit: '', accountCredit: account, amount: a.amount, vatCode: code, description } : undefined;
 }
 
-/** What the pass over the books needs: the split's words and firm, the books' lock, and how a new entry is made. */
+/** The books the passes read and write. */
+export interface CustomsBooks { transactions: readonly BankTransaction[]; journalEntries: JournalEntry[]; mappings: Mapping[]; receipts: Receipt[] }
+
+/** What the passes over the books need: the words and the firm, the books' lock, and how a new entry is made. */
 export interface DeductionContext {
   words: CustomsWords;
   uid?: string;
@@ -261,73 +300,125 @@ export interface DeductionContext {
   firstOpenDay: string;
   length: FilingLength;
   newId: () => string;
+  /** The next free ref of a booking without a payment, in `date`'s year, in the books as they stand. */
+  manualRef: (date: string) => string;
   texts: CustomsTexts;
+}
+
+/**
+ * The assessments the passes may still use: read for the firm, not a copy or noise, not one a
+ * person typed as something else, and not one a deduction was ever booked from (importVatDeduction,
+ * also on a copy of it): a deduction a person removed or changed is hers.
+ */
+function usable(books: CustomsBooks, ctx: Pick<DeductionContext, 'words' | 'uid'>): Array<{ r: Receipt; a: Assessment }> {
+  const read = books.receipts
+    .filter((r) => r.kind !== 'duplicate' && r.kind !== 'noise' && !(r.kindBy === 'human' && r.kind !== 'supporting'))
+    .map((r) => ({ r, a: readAssessment(r, ctx.words, ctx.uid) }))
+    .filter((x): x is { r: Receipt; a: Assessment } => !!x.a);
+  const used = new Set(read.filter(({ r }) => r.importVatDeduction).map(({ a }) => a.number ?? a.receipt));
+  return read.filter(({ r, a }) => !r.importVatDeduction && !used.has(a.number ?? a.receipt));
+}
+
+/** Records on each assessment the deduction booked from it, by whomever: the passes never book from it again. */
+function markDeducted(books: CustomsBooks, account: string, code: string): void {
+  for (const e of books.journalEntries) {
+    if (e.vatCode !== code || e.accountCredit !== account || e.accountDebit) continue;
+    for (const r of books.receipts) if (!r.importVatDeduction && e.receipts?.includes(r.id) && r.extractedText) r.importVatDeduction = e.id;
+  }
 }
 
 const DAY = 864e5;
 
 /**
- * The deductions assessments bring to import VAT the app split off a payment before them: every
- * payment whose booking has an import VAT line the split made (by customsSplit) gets, for each
- * import VAT position of its linked invoices that an assessment proves and no line deducts yet, the
- * one-legged line of the tax. The assessment is linked to the payment, points at it as its filed
- * payment, or stands alone and has that position's amount, dated within ASSESSMENT_DAYS of its
- * invoice, with no other position of that amount. While the payment's period is open the line
- * takes its day; once filed it is booked on the open period's first day (or the assessment's, when
- * later) as a correction of the filed period, with the filed entry's id in its description. Also
- * returns the assessments that stood alone, with the payment they now belong to. Idempotent.
+ * Import VAT paid to the customs office itself: an open payment out in the books' currency with
+ * nothing linked, whose text names an assessment's number and whose amount is that assessment's
+ * tax, gets the assessment linked as its receipt, by code, when no other payment fits it. The booking
+ * step then books it as import VAT with the deduction (customsSplit). Returns how many.
  */
-export function importVatDeductions(books: { journalEntries: readonly JournalEntry[]; mappings: readonly Mapping[]; receipts: readonly Receipt[] }, ctx: DeductionContext): { entries: JournalEntry[]; found: Array<{ receipt: string; payment: string }> } {
-  if (!ctx.inputTax) return { entries: [], found: [] };
+export function linkDirectAssessments(books: CustomsBooks, ctx: Pick<DeductionContext, 'words' | 'uid' | 'isClosed'>): number {
+  const linked = new Set(books.mappings.map((m) => m.receiptId));
+  const busy = new Set([...books.mappings.map((m) => m.transactionRef), ...books.journalEntries.map((e) => e.transactionRef)]);
+  const free = usable(books, ctx).filter(({ r, a }) => !linked.has(r.id) && !r.filedPayment && a.number);
+  const payments = books.transactions.filter((t) => t.direction === 'DBIT' && t.currency === baseCurrency() && !ctx.isClosed(t.date) && !busy.has(t.ref));
+  const fits = (t: BankTransaction, a: Assessment) => toRappen(Math.abs(t.amount)) === toRappen(a.amount)
+    && assessmentNumbers([t.description, t.reference, ...(t.parts ?? []).map((p) => p.reference)].filter(Boolean).join(' ').replace(/\s+/g, ''), ctx.words).includes(a.number!);
+  let made = 0;
+  for (const { r, a } of distinct(free.map((x) => ({ ...x.a, r }))).map((x) => ({ r: x.r, a: x }))) {
+    const hits = payments.filter((t) => fits(t, a));
+    if (hits.length !== 1 || free.some((o) => o.r !== r && o.a.number !== a.number && fits(hits[0], o.a))) continue;
+    books.mappings.push({ transactionRef: hits[0].ref, receiptId: r.id, by: 'rule', rule: ASSESSMENT_LINK });
+    busy.add(hits[0].ref);
+    made++;
+  }
+  return made;
+}
+
+/**
+ * The deductions assessments bring to import VAT the app booked before them, booked into `books`:
+ * a payment whose app booking (not a person's) has an import VAT line gets, for each import VAT line
+ * of its linked customs invoices that no deduction covers yet, the one-legged line of the tax, from
+ * an assessment no one linked yet that proves it. The assessment points at the payment as its filed
+ * payment, or stands alone, proving that line alone within ASSESSMENT_DAYS of its invoice. While the
+ * payment's period is open the line takes its day and the assessment is linked to the payment;
+ * once filed it is booked on the open period's first day (or the assessment's, when later) as a
+ * correction of the filed period, a booking of its own without a payment that names the filed entry
+ * and holds the assessment, which points at the filed payment (golden rule 1). An assessment linked
+ * to an open payment is the split's (customsSplit books it with the payment). Idempotent. Returns how many.
+ */
+export function importVatDeductions(books: CustomsBooks, ctx: DeductionContext): number {
   const account = ctx.words.positions.importVat.account;
   const code = deductionCode(account);
-  if (!code) return { entries: [], found: [] };
+  if (!ctx.inputTax || !code) return 0;
+  markDeducted(books, account, code);
   const byId = new Map(books.receipts.map((r) => [r.id, r]));
-  const linkedTo = new Map<string, string[]>();
-  for (const m of books.mappings) linkedTo.set(m.receiptId, [...(linkedTo.get(m.receiptId) ?? []), m.transactionRef]);
-  const split = books.journalEntries.filter((e) => e.by?.kind === 'code' && e.by.check === 'customsSplit' && e.accountDebit === account && e.accountCredit !== '');
-  const payments = [...new Set(split.map((e) => e.transactionRef))];
-  const lines = payments.flatMap((payment) => books.mappings
-    .filter((m) => m.transactionRef === payment)
-    .map((m) => byId.get(m.receiptId))
-    .flatMap((r) => {
+  const linked = new Set(books.mappings.map((m) => m.receiptId));
+  const isDeduction = (e: JournalEntry) => e.vatCode === code && e.accountCredit === account && !e.accountDebit;
+  const lines = books.transactions.flatMap((t) => {
+    const original = books.journalEntries.find((e) => e.transactionRef === t.ref && e.origin === 'classify' && e.accountDebit === account && !!e.accountCredit && e.by?.kind !== 'person' && e.by?.kind !== 'assistant');
+    if (!original) return [];
+    return books.mappings.filter((m) => m.transactionRef === t.ref).map((m) => byId.get(m.receiptId)).flatMap((r) => {
       const read = r && isPurchaseDocument(r) ? readCustomsInvoice(r, ctx.words) : undefined;
-      return read && 'invoice' in read ? read.invoice.lines.filter((l) => l.position === 'importVat').map((l) => ({ payment, invoice: read.invoice, amount: l.gross })) : [];
-    }));
-  const assessments = books.receipts
-    .filter((r) => r.kind !== 'duplicate')
-    .map((r) => ({ r, a: readAssessment(r, ctx.words, ctx.uid) }))
-    .filter((x): x is { r: Receipt; a: Assessment } => !!x.a);
-  const deductions = books.journalEntries.filter((e) => e.vatCode === code && e.accountCredit === account && !e.accountDebit);
-  const deducted = new Set(deductions.flatMap((e) => e.receipts ?? []));
-  // An import VAT line counts as deducted once its payment has a deduction of its amount, whichever assessment brought it (a second copy brings none).
+      return read && 'invoice' in read ? read.invoice.lines.filter((l) => l.position === 'importVat').map((l) => ({ payment: t.ref, original, invoice: read.invoice, amount: l.gross })) : [];
+    });
+  });
+  // A line counts as deducted once a deduction of its amount stands for its payment: on it, or as a correction holding an assessment that points at it.
+  const done = books.journalEntries.filter(isDeduction).map((e) => ({ e, payments: [e.transactionRef, ...(e.receipts ?? []).map((id) => byId.get(id)?.filedPayment).filter((p): p is string => !!p)] }));
   const open = lines.filter((l) => {
-    const at = deductions.findIndex((e) => e.transactionRef === l.payment && toRappen(e.amount) === toRappen(l.amount));
-    if (at >= 0) deductions.splice(at, 1);
+    const at = done.findIndex((d) => d.payments.includes(l.payment) && toRappen(d.e.amount) === toRappen(l.amount));
+    if (at >= 0) done.splice(at, 1);
     return at < 0;
   });
-  const entries: JournalEntry[] = [];
-  const found: Array<{ receipt: string; payment: string }> = [];
-  for (const { r, a } of assessments) {
-    if (deducted.has(a.receipt)) continue;
-    const pointed = [...(linkedTo.get(r.id) ?? []), ...(r.filedPayment ? [r.filedPayment] : [])];
+  let booked = 0;
+  for (const { r, a } of usable(books, ctx).filter(({ r }) => !linked.has(r.id))) {
     const near = (l: (typeof lines)[number]) => !a.date || !l.invoice.date || Math.abs(Date.parse(a.date) - Date.parse(l.invoice.date)) <= ASSESSMENT_DAYS * DAY;
-    const candidates = open.filter((l) => toRappen(l.amount) === toRappen(a.amount) && (pointed.length ? pointed.includes(l.payment) : near(l)));
+    const candidates = open.filter((l) => proves(a, l) && (r.filedPayment ? l.payment === r.filedPayment : near(l)));
     if (candidates.length !== 1) continue;
     const [line] = candidates;
-    const original = split.find((e) => e.transactionRef === line.payment);
-    if (!original) continue;
     open.splice(open.indexOf(line), 1);
-    if (!pointed.length) found.push({ receipt: r.id, payment: line.payment });
+    const { original } = line;
     const filed = ctx.isClosed(original.date);
-    const date = filed ? [ctx.firstOpenDay, a.date ?? ''].sort().at(-1)! : original.date;
-    const period = filed ? filingKeyOf(original.date, ctx.length) : undefined;
-    entries.push({
-      id: ctx.newId(), transactionRef: line.payment, date, accountDebit: '', accountCredit: account, amount: a.amount, vatCode: code,
-      description: period ? ctx.texts.correction(a, original, period) : `${(original.description ?? '').split(',')[0]}, ${ctx.texts.deduction(a)}`,
-      origin: 'classify', receipts: [a.receipt, line.invoice.receipt].sort(), ...(period ? { corrects: period } : {}),
-      reason: ctx.texts.reason(a), by: { kind: 'code', check: 'customsSplit' },
-    });
+    const entry: JournalEntry = filed
+      ? ((date) => ({
+        id: ctx.newId(), transactionRef: ctx.manualRef(date), date, accountDebit: '', accountCredit: account, amount: a.amount, vatCode: code,
+        description: ctx.texts.correction(a, original, filingKeyOf(original.date, ctx.length)), origin: 'classify', receipts: [a.receipt],
+        corrects: filingKeyOf(original.date, ctx.length), reason: ctx.texts.reason(a), by: CUSTOMS_BY,
+      }))([ctx.firstOpenDay, a.date ?? ''].sort().at(-1)!)
+      : {
+        id: ctx.newId(), transactionRef: line.payment, date: original.date, accountDebit: '', accountCredit: account, amount: a.amount, vatCode: code,
+        description: `${(original.description ?? '').split(',')[0]}, ${ctx.texts.deduction(a)}`, origin: 'classify',
+        receipts: [...new Set([...books.mappings.filter((m) => m.transactionRef === line.payment).map((m) => m.receiptId), a.receipt])].sort(),
+        reason: ctx.texts.reason(a), by: CUSTOMS_BY,
+      };
+    if (filed) r.filedPayment = line.payment;
+    else {
+      // The payment's bookings saw this receipt now: a later run does not book it again for it.
+      for (const e of books.journalEntries) if (e.transactionRef === line.payment && e.origin === 'classify' && e.receipts && !e.corrects) e.receipts = [...e.receipts, a.receipt].sort();
+    }
+    books.journalEntries.push(entry);
+    books.mappings.push({ transactionRef: entry.transactionRef, receiptId: r.id, by: 'rule', rule: ASSESSMENT_LINK });
+    r.importVatDeduction = entry.id;
+    linked.add(r.id);
+    booked++;
   }
-  return { entries, found };
+  return booked;
 }
