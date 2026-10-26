@@ -8,7 +8,8 @@
  */
 import { useState, useSyncExternalStore } from 'react';
 import { api, errorText } from '../lib/api.js';
-import { language, t } from '../i18n/index.js';
+import { language, t, tWith } from '../i18n/index.js';
+import { addEach, dropStart, failedLine } from './drop-upload.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { useAutomation } from '../automation/store.js';
 import { textIn } from '../../workflows/model.js';
@@ -21,7 +22,8 @@ import { chfOf, suggestion } from '../areas/receipts/model.js';
 import { ledgerFor } from '../areas/receipts/view.js';
 import { useFx } from '../hooks/use-fx.js';
 
-interface State { open: boolean; session?: DropSession; adding: number; error?: string }
+/** `note`: what a drop left out, a limit it hit named (a limit is never hit silently). */
+interface State { open: boolean; session?: DropSession; adding: number; note?: string; error?: string }
 let state: State = { open: false, adding: 0 };
 const listeners = new Set<() => void>();
 const set = (patch: Partial<State>) => { state = { ...state, ...patch }; for (const l of listeners) l(); };
@@ -29,25 +31,33 @@ const useDrop = () => useSyncExternalStore((l) => { listeners.add(l); return () 
 
 export const dropOpen = (): boolean => state.open;
 
-/** Opens the dialog (or uses the open one) and adds the files to its list. */
-export async function dropFiles(files: File[]): Promise<void> {
-  set({ open: true, error: undefined });
+/** Opens the dialog (or uses the open one) and adds the files to its list; `note` says what the drop left out. */
+export async function dropFiles(files: File[], note?: string): Promise<void> {
+  set(dropStart(note));
+  let session: DropSession;
   try {
-    let session = state.session ?? await api.dropOpen();
-    set({ session, adding: state.adding + files.length });
-    for (const f of files) {
-      session = await api.dropAdd(session.id, f);
-      set({ session, adding: Math.max(0, state.adding - 1) });
-    }
+    session = state.session ?? await api.dropOpen();
   } catch (e) {
-    set({ error: errorText(e), adding: 0 });
+    set({ error: errorText(e) });
+    return;
   }
+  set({ session, adding: state.adding + files.length });
+  const add = async (f: File) => {
+    try {
+      return await api.dropAdd(session.id, f);
+    } finally {
+      set({ adding: Math.max(0, state.adding - 1) });
+    }
+  };
+  const failed = await addEach(files, add, (next) => set({ session: next }));
+  const line = failedLine(failed, errorText);
+  if (line) set({ error: tWith(line.key, line.vars) });
 }
 
 export function closeDrop(): void {
   const s = state.session;
   if (s) void api.dropClose(s.id).catch(() => undefined);
-  set({ open: false, session: undefined, adding: 0, error: undefined });
+  set({ open: false, session: undefined, adding: 0, note: undefined, error: undefined });
 }
 
 type Tab = 'all' | 'statements' | 'receipts' | 'unclear' | 'out';
@@ -312,6 +322,7 @@ export function DropDialog({ onGo, books, refresh }: { onGo(loc: Location): void
             ? <Taken key={r.key} r={r} session={s.session!} books={books} go={go} refresh={refresh} />
             : <Waiting key={r.key} r={r} session={s.session!} go={go} />)) : <p className="m">{rows.length ? t('drop.emptyTab') : t('drop.empty')}</p>}
         </div>
+        {s.note ? <p className="warnline" data-testid="drop-note">{s.note}</p> : null}
         {s.error ? <p className="warnline">{s.error}</p> : null}
         {waits ? <p className="m">{t('drop.waitsHint')}</p> : null}
         {rows.some((r) => (r.state === 'duplicate' && r.reason === 'possible-duplicate') || r.state === 'locked' || r.state === 'unclear') ? <p className="m" data-testid="close-hint">{t('drop.closeHint')}</p> : null}
