@@ -513,6 +513,10 @@ ${(text || "(no text)").slice(0, 8000)}
 6. lineItems (optional, best-effort): only include when the receipt itemizes purchases AND the
    items fall under different rates or clearly different expense categories. Each:
    { "description": "...", "gross": 12.90, "ratePercent": 8.1 }. Omit entirely for simple receipts.
+   A courier's or forwarder's customs invoice (Zollrechnung) is always itemized: one line per charge
+   as printed (import VAT, customs duty, each fee, freight), its printed name as the description,
+   the amount it adds to the total as gross, the rate of the carrier's own VAT on it as ratePercent
+   (0 where none; the import VAT line takes 0, it is the tax itself).
 
 Return ONLY a valid JSON object, no commentary:
 {

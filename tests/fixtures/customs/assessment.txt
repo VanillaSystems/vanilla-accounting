@@ -1,0 +1,26 @@
+Schweizerische Eidgenossenschaft
+Confédération suisse
+Confederazione Svizzera
+Bundesamt für Zoll und Grenzsicherheit BAZG
+
+Import
+Definitiv
+
+VERANLAGUNGSVERFÜGUNG MWST
+Annahmedatum: 08.05.2026
+Ausstellungsdatum: 09.05.2026
+26CHEI000000004711.1
+
+Versender: Beispiel Optik GmbH, Leipzig, DE
+Importeur:
+MUSTER OPTIK AG
+Sped-Nr./TIN/UID: CHE123456789
+MWST-Nr.: CHE123456789 MWST
+Spediteur: Muster Kurier AG
+
+Gesamtbetrag MWST [CHF]:
+
+57.55
+
+Bemessungsgrundlage MWST: 710.50
+Ansatz [%]: 8.1

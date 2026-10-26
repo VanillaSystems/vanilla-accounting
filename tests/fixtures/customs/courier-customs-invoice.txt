@@ -1,0 +1,20 @@
+Muster Kurier AG
+Frachtstrasse 1
+4000 Basel
+MWST-Nr.: CHE-999.888.777 MWST
+
+Zollrechnung
+
+Rechnungsnummer: ZR-2026-0815
+Rechnungsdatum: 12.05.2026
+Sendung: 1Z-4711 aus DE, Versender: Beispiel Optik GmbH, Leipzig
+Zollanmeldungsnummer: 26CHEI000000004711
+Importeur: Muster Optik AG, CHE-123.456.789 MWST
+
+Position                                   MWST    Betrag CHF
+Einfuhrsteuer (MWST bei der Einfuhr)       0.0 %        57.55
+Zoll                                       0.0 %         6.45
+Vorlageprovision                           0.0 %         3.50
+
+Total CHF                                               67.50
+Zahlbar innert 10 Tagen

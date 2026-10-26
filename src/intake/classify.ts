@@ -9,7 +9,7 @@
  */
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { entriesForceMayRemove, entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
-import { BATCH_SIZE, CONCURRENCY, classifyTransactions, loadClassifyContext, type ClassifyContext } from '../booking/classify.js';
+import { BATCH_SIZE, CONCURRENCY, bookImportVatDeductions, classifyTransactions, loadClassifyContext, type ClassifyContext } from '../booking/classify.js';
 import { onlySettles, receiptKnowledge, receiptWaitOf, settlementAccount } from '../booking/receipt-wait.js';
 import { bankAccountFor } from '../workspace/money-accounts.js';
 import { loadKnowledge } from '../knowledge/layers.js';
@@ -110,6 +110,9 @@ export function classifyStep({ force = false } = {}): StepRun {
     const bankOf = new Map(scratch.transactions.map((tx) => [tx.ref, bankAccountFor(tx, context.bankAccounts)]));
     const keeps = (ref: string) => !probe.has(ref) || onlySettles(scratch.journalEntries.filter((je) => je.transactionRef === ref), bankOf.get(ref) ?? '', settles);
     const done = (notes: IntakeNote[]) => {
+      // A customs assessment that came after its import VAT was booked brings the deduction (issue #197).
+      const deducted = bookImportVatDeductions(structuredClone(books.read()), context) ? books.update((index) => bookImportVatDeductions(index, context)) : 0;
+      if (deducted) log(`Customs   : ${deducted} import VAT deduction(s) booked from customs assessments.`);
       // A probe the model gave no answer for (it failed) waits unjudged, and the next run asks again.
       const decided = new Set([...waiting].filter((ref) => judged.has(ref)));
       for (const ref of probe) {

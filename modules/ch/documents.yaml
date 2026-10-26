@@ -14,6 +14,8 @@ supporting:
   # A reminder of an invoice: its number links it to the invoice, it never is a second one to pay.
   reminder: [Zahlungserinnerung, Mahnung, Erste Mahnung, Zweite Mahnung, Letzte Mahnung, Payment reminder, Reminder, Overdue notice, Rappel, Rappel de paiement, Sommation, Sollecito, Sollecito di pagamento, Promemoria di pagamento]
   delivery-note: [Lieferschein, Delivery note, Packing slip, Bulletin de livraison, Bon de livraison, Bolla di consegna, Documento di trasporto]
+  # The customs office's assessment: proof beside the carrier's invoice that the carrier is paid for, never paid on its own (customs.assessment below).
+  customs-assessment: [Veranlagungsverfügung MWST, Veranlagungsverfügung Zoll, Décision de taxation TVA, Décision de taxation douane, Decisione d'imposizione IVA, Decisione d'imposizione dazio, Assessment decision VAT]
 
 # Newsletter words count anywhere (they stand in the footer); the others where a document names
 # what it is, in its first lines.
@@ -31,3 +33,32 @@ statement: [Kontoauszug, Bankauszug, Account statement, Bank statement, Statemen
 # The balance lines of a statement (src/books/statement-facts.ts): with the title, an IBAN and a
 # period they tell a statement among the receipts from an invoice that only mentions one.
 balance: [Saldovortrag, Anfangssaldo, Schlusssaldo, Eröffnungssaldo, Endsaldo, Saldo, Opening balance, Closing balance, Balance brought forward, Balance, Solde initial, Solde final, Solde, Saldo iniziale, Saldo finale]
+
+# A courier's or forwarder's customs invoice (src/booking/customs-invoice.ts): each of its read lines
+# (Receipt.lineItems) is one position by its words, and the position lands on its account of the
+# chart (accounts.yaml), processes/booking.guide.yaml#shape shp-zollrechnung. A line takes the
+# position of its longest word; a line that names duty and import VAT both, or no position, leaves
+# the invoice to the model. The carrier's own Swiss VAT on freight and fees follows the line's rate.
+# Import VAT the carrier advanced is deductible only with the customs office's assessment (below),
+# never on the carrier's invoice (MWSTG Art. 28 Abs. 1 lit. c, ESTV MWST-Info 09).
+customs:
+  positions:
+    importVat:
+      account: "4030"
+      words: [Einfuhrsteuer, Einfuhr-MWST, Einfuhr-Mehrwertsteuer, Import-MWST, Einfuhrumsatzsteuer, EUSt, MWST bei der Einfuhr, Import VAT, Import tax, TVA à l'importation, TVA import, Impôt sur les importations, IVA all'importazione, IVA importazione, Imposta sull'importazione]
+    duty:
+      account: "4020"
+      words: [Zoll, Zölle, Zollabgabe, Zollabgaben, Einfuhrzoll, Zollbetrag, Customs duty, Customs duties, Import duty, Duty, Duties, Droits de douane, Droit de douane, Douane, Dazio, Dazi, Dazi doganali]
+    fees:
+      account: "4040"
+      words: [Vorlageprovision, Vorlageprovisionsgebühr, Vorlagegebühr, Vorlagekosten, Auslagenprovision, Aufwendungspauschale, Verzollung, Verzollungsgebühr, Verzollungskosten, Verzollungsspesen, Zollabfertigung, Abfertigungsgebühr, Kontoabwicklungsgebühr, Zusatzleistungen, Bearbeitungsgebühr, Gebühr, Gebühren, Disbursement fee, Advancement fee, Clearance fee, Customs clearance, Handling fee, Fee, Fees, Frais d'avance de fonds, Frais de dédouanement, Dédouanement, Frais de gestion, Frais, Spese di sdoganamento, Sdoganamento, Spese per prepagamento, Spese]
+    freight:
+      account: "6280"
+      words: [Fracht, Frachtkosten, Transport, Transportkosten, Versand, Versandkosten, Porto, Freight, Shipping, Carriage, Fret, Frais de port, Frais de transport, Expédition, Trasporto, Spese di trasporto, Spedizione, Nolo]
+  # The BAZG's assessment of import VAT (Veranlagungsverfügung MWST): its title, and the label of its
+  # total. It proves the deduction when it names the firm's UID. The German words are the BAZG's
+  # document; the French, Italian and English ones are its names in those languages, not yet seen
+  # on a document.
+  assessment:
+    title: [Veranlagungsverfügung MWST, Décision de taxation TVA, Decisione d'imposizione IVA, Assessment decision VAT]
+    total: [Gesamtbetrag MWST, Montant total TVA, Importo totale IVA, Total amount VAT]

@@ -96,8 +96,14 @@ steps:
         source: AGENTS.md § Special cases
       - id: shp-zollrechnung
         when: a courier's Zollrechnung (customs invoice)
-        then: needs_split into Zölle (4020), ausl. MWST (4030), Zahlungsabwicklungsspesen / Vorlageprovision (4040)
-        why: three different things on one invoice (FedEx, DHL, Post all issue them)
+        then: >
+          needs_split into Einfuhrsteuer (4030), Zölle (4020), Vorlageprovision / Verzollungsspesen (4040) and
+          freight (6280). In code (src/booking/customs-invoice.ts): each read line of the invoice is a position by
+          its words (modules/ch documents.yaml customs), freight and fees with the carrier's Swiss VAT where the
+          line shows it, duty and import VAT without; the lines must add up to the invoice and the invoices to the
+          payment (another currency: the payment shared in proportion, within 5 % of the day's rate), else the
+          model books it and its reason says why. A company rule for the business books before it
+        why: three different things on one invoice (FedEx, DHL, Post all issue them); issue #197
         source: docs/runbooks/receipt-collection.md § FedEx, § DHL Express
       - id: shp-one
         when: otherwise
@@ -191,7 +197,7 @@ steps:
         source: AGENTS.md § VAT code rules
       - id: pv-import-vat-evv
         when: a courier bill passes on Swiss IMPORT VAT for goods imported for the company, and the BAZG Veranlagungsverfügung MWST (eVV) names the company as importer
-        then: "book the import VAT on 4030 without code, then a single-leg entry -/4030 with M81-2 for the eVV's MWST amount → Ziffer 400 (MWSTG Art. 28 Abs. 1 lit. c). File the eVV PDF and link it to the payment. Without the eVV: M0, and get it (how: processes/authorities/bazg.yaml#evv-download)"
+        then: "book the import VAT on 4030 without input tax (M0), then a single-leg entry -/4030 with M81-2 for the eVV's MWST amount → Ziffer 400 (MWSTG Art. 28 Abs. 1 lit. c). File the eVV PDF and link it to the payment. Without the eVV: M0, and get it (how: processes/authorities/bazg.yaml#evv-download). In code (src/booking/customs-invoice.ts): an eVV that names the firm's UID and whose total equals an import VAT line of the payment's customs invoice brings the M81-2 line: linked to the payment, pointed at it, or alone within 120 days of the invoice with no other line of its amount; once the payment's quarter is filed, as a correction in the open period with corrects"
         why: "the courier bill is not proof of import VAT; the eVV is (UPS bill page 3 says so)"
         source: owner decision 2026-10-08
       - id: pv-bezugsteuer
