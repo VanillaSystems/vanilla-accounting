@@ -37,6 +37,13 @@ test('page: every file of the folder and its subfolders goes to the drop window,
   assert.deepEqual(said(d, PAGE_TAKES), [], 'nothing left out, nothing said');
 });
 
+test('page: an empty file in a subfolder stays behind and is said; the files around it go (#194)', async () => {
+  const empty = { name: 'leer.pdf', isFile: true, isDirectory: false, file: (ok: (f: File) => void) => ok(new File([], 'leer.pdf')) } as Node;
+  const d = await droppedFiles([dir('Q3', [file('a.pdf'), dir('Juli', [file('b.pdf'), empty, file('c.pdf')])])], [], PAGE_TAKES);
+  assert.deepEqual(d.files.map((f) => f.name), ['a.pdf', 'b.pdf', 'c.pdf']);
+  assert.deepEqual(said(d, PAGE_TAKES), ['Q3: 1 leere Datei nicht übernommen.']);
+});
+
 test('page: a folder beside loose files brings both; files alone go as the browser gave them', async () => {
   const d = await droppedFiles([file('loose.pdf', 'application/pdf'), dir('Juli', [file('c.pdf')])], [], PAGE_TAKES);
   assert.deepEqual(d.files.map((f) => f.name), ['loose.pdf', 'c.pdf']);

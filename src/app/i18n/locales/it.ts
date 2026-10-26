@@ -3218,6 +3218,8 @@ export default {
     'drop.toRuns': 'Vedi nelle esecuzioni →',
     'drop.moreHint': 'Trascina altri file qui: si aggiungono.',
     'drop.folderOver': { one: 'Da {folder} sono stati aggiunti {max} file, {n} altro no: al massimo {max} per deposito. Trascina qui la cartella in più parti.', other: 'Da {folder} sono stati aggiunti {max} file, altri {n} no: al massimo {max} per deposito. Trascina qui la cartella in più parti.' },
+    'drop.folderEmpty': { one: '{folder}: {n} file vuoto non ripreso.', other: '{folder}: {n} file vuoti non ripresi.' },
+    'drop.failed': { one: '{n} file non caricato: {list}', other: '{n} file non caricati: {list}' },
     'runs.latest': 'Ultime esecuzioni',
     'runs.line.poorScan': 'scansione troppo scarsa: attende «Rileggi (IA)», fuori dalle esecuzioni fino ad allora',
     'runs.out.poorScan': { one: '{n} giustificativo scansionato male', other: '{n} giustificativi scansionati male' },

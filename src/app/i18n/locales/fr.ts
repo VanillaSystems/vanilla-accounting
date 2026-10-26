@@ -3218,6 +3218,8 @@ export default {
     'drop.toRuns': 'Voir dans les exécutions →',
     'drop.moreHint': 'Glisse d’autres fichiers ici : ils s’ajoutent.',
     'drop.folderOver': { one: 'De {folder}, {max} fichiers ont été ajoutés, {n} autre non : au plus {max} par dépôt. Glisse le dossier ici en plusieurs parties.', other: 'De {folder}, {max} fichiers ont été ajoutés, {n} autres non : au plus {max} par dépôt. Glisse le dossier ici en plusieurs parties.' },
+    'drop.folderEmpty': { one: '{folder} : {n} fichier vide non repris.', other: '{folder} : {n} fichiers vides non repris.' },
+    'drop.failed': { one: '{n} fichier non envoyé : {list}', other: '{n} fichiers non envoyés : {list}' },
     'runs.latest': 'Dernières exécutions',
     'runs.line.poorScan': 'trop mal numérisée : attend «Relire (IA)», hors des exécutions d’ici là',
     'runs.out.poorScan': { one: '{n} pièce trop mal numérisée', other: '{n} pièces trop mal numérisées' },

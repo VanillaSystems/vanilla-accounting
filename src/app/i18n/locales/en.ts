@@ -3218,6 +3218,8 @@ export default {
     'drop.toRuns': 'See it in the runs →',
     'drop.moreHint': 'Drop more files here: they join the list.',
     'drop.folderOver': { one: 'From {folder} {max} files were added, {n} more were not: at most {max} per drop. Drop the folder here in smaller parts.', other: 'From {folder} {max} files were added, {n} more were not: at most {max} per drop. Drop the folder here in smaller parts.' },
+    'drop.folderEmpty': { one: '{folder}: {n} empty file not taken.', other: '{folder}: {n} empty files not taken.' },
+    'drop.failed': { one: '{n} file not uploaded: {list}', other: '{n} files not uploaded: {list}' },
     'runs.latest': 'Latest runs',
     'runs.line.poorScan': 'too poorly scanned: waits for «Read again (AI)», out of the runs until then',
     'runs.out.poorScan': { one: '{n} receipt too poorly scanned', other: '{n} receipts too poorly scanned' },

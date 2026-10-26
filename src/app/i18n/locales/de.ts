@@ -3215,6 +3215,8 @@ export const messages = {
   'drop.toRuns': 'In den Läufen ansehen →',
   'drop.moreHint': 'Weitere Dateien hierher ziehen: sie kommen dazu.',
   'drop.folderOver': { one: 'Aus {folder} kamen {max} Dateien dazu, {n} weitere nicht: höchstens {max} pro Ablage. Den Ordner in kleineren Teilen hierher ziehen.', other: 'Aus {folder} kamen {max} Dateien dazu, {n} weitere nicht: höchstens {max} pro Ablage. Den Ordner in kleineren Teilen hierher ziehen.' },
+  'drop.folderEmpty': { one: '{folder}: {n} leere Datei nicht übernommen.', other: '{folder}: {n} leere Dateien nicht übernommen.' },
+  'drop.failed': { one: '{n} Datei nicht hochgeladen: {list}', other: '{n} Dateien nicht hochgeladen: {list}' },
   'runs.latest': 'Letzte Läufe',
   'runs.line.poorScan': 'zu schlecht gescannt: wartet auf «Neu lesen (KI)», kommt bis dahin nicht wieder',
   'runs.out.poorScan': { one: '{n} Beleg zu schlecht gescannt', other: '{n} Belege zu schlecht gescannt' },

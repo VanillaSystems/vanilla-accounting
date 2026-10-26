@@ -3,7 +3,7 @@
  * The browser hands a folder over as an entry to walk (webkitGetAsEntry), never as a file (#188).
  * Hidden files are left out. Each target says which files it takes and how many: the AI sidebar
  * only PDFs and images, at most 50, so a dropped home folder does not upload a thousand files; the
- * page every file, at most 2000, since the drop window sorts and refuses them itself.
+ * page every file but an empty one, at most 2000, since the drop window sorts and refuses them itself.
  */
 import { attachmentType } from '../../types/attachment.js';
 import type { Key } from '../i18n/types.js';
@@ -14,7 +14,8 @@ import type { Key } from '../i18n/types.js';
  */
 export interface Take { take(f: File): boolean; max: number; words: { skipped?: Key; over: Key } }
 export const CHAT_TAKES: Take = { take: (f) => !!attachmentType(f), max: 50, words: { skipped: 'assistant.folderSkipped', over: 'assistant.folderOver' } };
-export const PAGE_TAKES: Take = { take: () => true, max: 2000, words: { over: 'drop.folderOver' } };
+/** The page takes every file but an empty one, which the server refuses (#194): that one is counted and said. */
+export const PAGE_TAKES: Take = { take: (f) => f.size > 0, max: 2000, words: { skipped: 'drop.folderEmpty', over: 'drop.folderOver' } };
 
 interface Entry { name: string; isFile: boolean; isDirectory: boolean }
 interface FileEntry extends Entry { file(ok: (f: File) => void, fail: (e: unknown) => void): void }

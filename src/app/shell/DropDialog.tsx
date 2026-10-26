@@ -8,7 +8,8 @@
  */
 import { useState, useSyncExternalStore } from 'react';
 import { api, errorText } from '../lib/api.js';
-import { language, t } from '../i18n/index.js';
+import { language, t, tWith } from '../i18n/index.js';
+import { addEach, dropStart, failedLine } from './drop-upload.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { useAutomation } from '../automation/store.js';
 import { textIn } from '../../workflows/model.js';
@@ -32,17 +33,25 @@ export const dropOpen = (): boolean => state.open;
 
 /** Opens the dialog (or uses the open one) and adds the files to its list; `note` says what the drop left out. */
 export async function dropFiles(files: File[], note?: string): Promise<void> {
-  set({ open: true, error: undefined, ...(note ? { note } : {}) });
+  set(dropStart(note));
+  let session: DropSession;
   try {
-    let session = state.session ?? await api.dropOpen();
-    set({ session, adding: state.adding + files.length });
-    for (const f of files) {
-      session = await api.dropAdd(session.id, f);
-      set({ session, adding: Math.max(0, state.adding - 1) });
-    }
+    session = state.session ?? await api.dropOpen();
   } catch (e) {
-    set({ error: errorText(e), adding: 0 });
+    set({ error: errorText(e) });
+    return;
   }
+  set({ session, adding: state.adding + files.length });
+  const add = async (f: File) => {
+    try {
+      return await api.dropAdd(session.id, f);
+    } finally {
+      set({ adding: Math.max(0, state.adding - 1) });
+    }
+  };
+  const failed = await addEach(files, add, (next) => set({ session: next }));
+  const line = failedLine(failed, errorText);
+  if (line) set({ error: tWith(line.key, line.vars) });
 }
 
 export function closeDrop(): void {
