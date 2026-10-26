@@ -22,8 +22,8 @@ import { senderAllowed } from './reach.js';
 const AT_LEAST = 3;
 const SHARE = 0.8;
 
-/** Kinds that set a file aside: it is no receipt the books count. */
-const ASIDE = new Set<Receipt['kind']>(['noise', 'duplicate', 'supporting', 'statement']);
+/** Kinds that set a file aside: a skip loses nothing the books keep. A document kept beside an invoice counts as kept. */
+const ASIDE = new Set<Receipt['kind']>(['noise', 'duplicate']);
 
 /** A mailbox's reach and the key of source.yaml it stands under: an IMAP server's or the Mail app's on this Mac. */
 export function mailReachOf(decl: Pick<SourceDecl, 'reach'>): { key: 'mail' | 'mac-mail'; reach: MailReach | MacMailReach } | undefined {
