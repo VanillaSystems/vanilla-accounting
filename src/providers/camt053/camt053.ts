@@ -165,6 +165,9 @@ export function transactionsOf(statement: CamtStatement, account: { bank: string
     const counterpartyIban = String(sideAccount?.Id?.IBAN ?? '').replace(/\s+/g, '').toUpperCase();
     // Kept even when the text repeats it («Belastung Marco Rossi»): routing and rules read this field.
     const counterparty = named;
+    // The amount as instructed, in the currency the payment was made in (ISO 20022 InstdAmt), when that is not the account's: receipts in that currency match it to the Rappen (#187).
+    const instructed = single?.AmtDtls?.InstdAmt?.Amt ?? entry.AmtDtls?.InstdAmt?.Amt;
+    const original = instructed !== undefined ? getAmt(instructed) : undefined;
     const wiseId = account.statements === 'wise' ? String(entry.BkTxCd?.Prtry?.Cd ?? '').trim() : '';
 
     return {
@@ -179,6 +182,7 @@ export function transactionsOf(statement: CamtStatement, account: { bank: string
       ...(reference !== undefined && String(reference).trim() ? { reference: String(reference).trim() } : {}),
       ...(counterparty ? { counterparty } : {}),
       ...(counterpartyIban ? { counterpartyIban } : {}),
+      ...(original && original.currency !== currency && Number.isFinite(original.amount) ? { original: { amount: Math.abs(original.amount), currency: original.currency } } : {}),
       ...(wiseId && wiseId !== ref ? { bankTxId: wiseId } : {}),
       ...(account.statements === 'wise' && description.startsWith('Wise Charges for: CARD-') ? { type: 'wise-fee' as const } : {}),
     };

@@ -33,6 +33,8 @@ export const STEPS = {
   'receipt-kind': { ledger: 'receipt-intake.guide.yaml#kind', tier: 'fast', needs: ['json'] },
   'receipt-titles': { ledger: 'receipt-intake.guide.yaml#titles', tier: 'fast', needs: ['json'] },
   'receipt-match': { ledger: 'evidence.guide.yaml#ai', tier: 'standard', needs: ['json', 'pdf'] },
+  // The matching chain (#187): short facts of ~20 pairs per call, checked or chosen; no file is read.
+  'receipt-pair': { ledger: 'evidence.guide.yaml#pair', tier: 'fast', needs: ['json'] },
   classify: { ledger: 'booking.guide.yaml#classify', tier: 'standard', needs: ['json'] },
   // Haiku proposed as well as Sonnet in the learning-loop eval (#7 M2c), at a fraction of the cost.
   'learn-rule': { ledger: 'learn.correction', tier: 'fast', needs: ['json'] },

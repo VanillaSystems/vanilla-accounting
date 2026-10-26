@@ -1,17 +1,21 @@
 /**
  * Step 3 of the inbox processing (`npm run match`): every staged receipt (location: 'staged').
  * - needsVisionReview: moved to receipts/ under its own name, archived, no model call
- * - otherwise: the model (src/llm/ask.ts) names it and finds its payment; the file is renamed
- *   into receipts/ and linked when the model is at least 80 % sure
- * Code links what it can without the model, before and after: a receipt by amount and number
- * (linkByCode), an order to its payout (order-links.ts), several receipts that add up to one
- * payment (receipt-sets.ts).
+ * - code first (#187): a receipt whose payment the chain pairs clearly by the facts code reads off
+ *   it is archived under its day and title (the fast model's, batched), with code's date and total,
+ *   and linked (or pointed at its filed payment) without a match prompt
+ * - otherwise: the model (src/llm/ask.ts) names it and finds its payment among the code's short
+ *   list, or the 20 payments ranked here; the file is renamed into receipts/ and linked when the
+ *   model is at least 80 % sure
+ * The matching chain (pair-chain.ts) runs before and after, over every receipt nothing is linked
+ * to and every payment without one, whichever came first; code also links an order to its payout
+ * (order-links.ts) and several receipts that add up to one payment (receipt-sets.ts).
  * A link to a payment of a filed quarter is never made (golden rule 1).
  */
 import { existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { buildMatchPrompt, parseMatchResult, type MatchResult } from '../llm/prompts.js';
-import type { BankTransaction, Receipt } from '../types/index.js';
+import type { BankTransaction, Receipt, ReceiptTitle } from '../types/index.js';
 import { periodLock, type Books } from '../books/store.js';
 import { archiveReceipt } from '../books/archive.js';
 import type { IntakeNote, StepRun } from './pipeline.js';
@@ -21,6 +25,10 @@ import { twinFinder } from './duplicates.js';
 import { capturedDay } from './captured.js';
 import { isIsoDate } from '../accounting/periods.js';
 import { numbersIn, squash } from '../accounting/document-numbers.js';
+import { nameWords, pairMapping, takenPayments } from './pairing.js';
+import { legOf } from '../workspace/money-accounts.js';
+import { titlesFor } from './titles.js';
+import { estvToChf, noReceiptFor, runPairChain } from './pair-chain.js';
 import { linkOrdersToPayouts } from './order-links.js';
 import { linkReceiptSets } from './receipt-sets.js';
 import { creditSigned } from '../accounting/credit-signed.js';
@@ -75,47 +83,11 @@ const datedName = (name: string, date: string | undefined) =>
   name.replace(/^0{8}(?=[-_.])/, date ? date.replace(/-/g, '') : '').replace(/^[-_]+/, '') || 'receipt.pdf';
 
 /** What a receipt says before the model reads it: its date and total as stored, from the file name, the VAT block or the text. */
-function factsOf(r: Receipt): { date?: string; amount?: number; currency?: string } {
+export function factsOf(r: Receipt): { date?: string; amount?: number; currency?: string } {
   const text = textFacts(r.extractedText ?? '');
   const groups = r.vatSummary ?? [];
   const gross = groups.length && groups.every((g) => g.gross != null) ? groups.reduce((sum, g) => sum + g.gross!, 0) : undefined;
   return { date: r.date || guessDate(r.filename) || text.date, amount: r.amount ?? gross ?? text.amount, currency: r.currency ?? text.currency };
-}
-
-/** Words of a payment's text that name who was paid, not what the bank calls the booking. */
-export const BANK_WORDS = new Set(['zahlung', 'gutschrift', 'belastung', 'lastschrift', 'einkauf', 'karte', 'debit', 'kredit', 'transfer', 'payment', 'rechnung', 'auftrag', 'dauerauftrag', 'ebanking', 'twint', 'mastercard', 'visa', 'august', 'september', 'oktober', 'november', 'dezember', 'januar', 'februar', 'april', 'juni', 'juli']);
-export const nameWords = (tx: BankTransaction) => [...new Set([tx.description, tx.counterparty ?? '', ...(tx.parts ?? []).flatMap((p) => [p.counterparty, p.reference ?? ''])].join(' ').toLowerCase().match(/\p{L}{4,}/gu) ?? [])].filter((w) => !BANK_WORDS.has(w));
-
-
-/**
- * What code links without the model (MISSION: a payment that matches a receipt by amount and
- * number): an archived receipt nothing is linked to, and a payment without a receipt, the same
- * amount to the Rappen in the same currency, money out for an invoice and in for a credit note,
- * and one of the receipt's numbers («GS-1207») in the payment's text. Only a pair that is unique
- * both ways counts. An open pair is linked; a payment of a filed quarter is never linked (golden
- * rule 1): the receipt names it as its `filedPayment`, so it shows where its tax goes (corner-33).
- * Returns what it did.
- */
-export function linkByCode(index: Books): Array<{ receipt: string; payment: string; filed?: true }> {
-  const lock = periodLock(index);
-  const linked = new Set(index.mappings.flatMap((m) => [m.receiptId, m.transactionRef]));
-  const cents = (n: number) => Math.round(Math.abs(n) * 100);
-  const unlinked = index.receipts.filter((r) => r.location === 'archived' && !linked.has(r.id) && (!r.kind || r.kind === 'invoice')
-    && r.amount !== undefined && r.amount !== 0);
-  const payments = index.transactions.filter((t) => !linked.has(t.ref) && t.amount !== 0 && t.type !== 'wise-fee');
-  const fits = (r: Receipt, t: BankTransaction) => {
-    const numbers = numbersIn(r.extractedText ?? '');
-    const paid = squash([t.description, t.reference ?? '', t.remarks ?? '', ...(t.parts ?? []).map((p) => p.reference ?? '')].join(' '));
-    return (r.currency ?? baseCurrency()) === t.currency && cents(r.amount!) === cents(t.amount)
-      && (r.amount! < 0) === (t.direction === 'CRDT') && numbers.some((n) => paid.includes(n));
-  };
-  const pairs = unlinked.flatMap((r) => payments.filter((t) => fits(r, t)).map((t) => ({ r, t })));
-  const once = pairs.filter(({ r, t }) => pairs.filter((p) => p.r === r).length === 1 && pairs.filter((p) => p.t === t).length === 1);
-  const open = once.filter(({ r, t }) => !lock.isClosed(t.date) && !(r.date && lock.isClosed(r.date)));
-  const filed = once.filter(({ r, t }) => lock.isClosed(t.date) && r.filedPayment !== t.ref);
-  for (const { r, t } of open) index.mappings.push({ transactionRef: t.ref, receiptId: r.id });
-  for (const { r, t } of filed) r.filedPayment = t.ref;
-  return [...open.map(({ r, t }) => ({ receipt: r.id, payment: t.ref })), ...filed.map(({ r, t }) => ({ receipt: r.id, payment: t.ref, filed: true as const }))];
 }
 
 /**
@@ -181,25 +153,45 @@ export function candidates(receipt: Receipt, all: readonly BankTransaction[], li
     .slice(0, CANDIDATES).map((x) => (x.filed ? { ...x.tx, filed: true as const } : x.tx));
 }
 
+/**
+ * A staged receipt as the matching chain sees it before any model read it (#187): the date, total
+ * and currency code reads off it (factsOf), signed as a credit note's when its VAT says so. None
+ * without a day and an amount: then only the model can read it.
+ */
+export function provisional(r: Receipt): Receipt | undefined {
+  const f = factsOf(r);
+  if (!f.date || !isIsoDate(f.date) || !f.amount) return undefined;
+  return { ...r, location: 'archived', date: f.date, amount: creditSigned({ amount: f.amount, vatSummary: r.vatSummary }), currency: f.currency ?? baseCurrency() };
+}
+
+/** The name of a receipt code linked: its day, then its title («Coop Pronto Benzin»), else the name it came with. */
+export function codeName(date: string, title: ReceiptTitle | undefined, came: string): string {
+  const slug = (title ? `${title.vendor} ${title.what}` : came.replace(/\.[^.]*$/, '').replace(/^\d{8}[-_]?/, ''))
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'beleg';
+  return `${date.replace(/-/g, '')}-${slug}.pdf`;
+}
+
 export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const IMPORT_DIR = ws.paths.inbox;
-  const byCode = () => {
-    for (const l of books.update(linkByCode)) log(l.filed ? `pays the filed payment ${l.payment} by amount and number: receipt ${l.receipt}, not linked` : `linked by amount and number: receipt ${l.receipt} → ${l.payment}`);
+  const toChf = estvToChf();
+  const first = books.read();
+  const staged = first.receipts.filter((r) => r.location === 'staged');
+  const visionNeeded = staged.filter((r) => r.needsVisionReview);
+  const toRead = staged.filter((r) => !r.needsVisionReview);
+  // Code first (#187): the staged receipts take part in the chain with the facts code reads off them.
+  const early = toRead.flatMap((r) => provisional(r) ?? []);
+  const byCode = async (stagedNow: readonly Receipt[] = []) => {
+    const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt: noReceiptFor(ws) });
     for (const l of books.update(linkOrdersToPayouts)) log(`linked the order to the payout it names: receipt ${l.receipt} → ${l.payment}`);
     for (const s of books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, (d) => !lock.isClosed(d)); })) log(`linked ${s.receipts.length} receipts that add up to the payment: ${s.receipts.join(', ')} → ${s.payment}`);
+    return chain;
   };
-  byCode();
-  const snapshot = books.read();
-  const staged = snapshot.receipts.filter((r) => r.location === 'staged');
+  const chain = await byCode(early);
   if (staged.length === 0) {
     log('No staged receipts to process. Drop PDFs into beleg-import/ and run `npm run extract` first.');
     return { notes: [] };
   }
-  const visionNeeded = staged.filter((r) => r.needsVisionReview);
-  const toProcess = staged.filter((r) => !r.needsVisionReview);
   const order = staged.map((r) => r.id);
-  const taken = new Set(snapshot.mappings.map((m) => m.transactionRef));
-  const lock = periodLock(snapshot);
   const total = staged.length;
   let completed = 0;
   progress(0, total);
@@ -223,11 +215,52 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     log(target ? `  moved (needsVisionReview): ${receipt.filename} → ${target}` : `  warn: ${receipt.filename} is not staged in beleg-import/ any more, skipping`);
   }
 
+  // ── The receipts the chain paired: archived, named and linked without their model match ──
+  const pairedByCode = new Set<string>();
+  if (chain.staged.length) {
+    const facts = new Map(early.map((r) => [r.id, r]));
+    const titles = ask ? await titlesFor(ask, chain.staged.map((l) => facts.get(l.receipt)!), log) : new Map<string, ReceiptTitle>();
+    for (const l of chain.staged) {
+      const receipt = toRead.find((r) => r.id === l.receipt)!;
+      const p = facts.get(l.receipt)!;
+      const title = titles.get(l.receipt);
+      const out: { result: 'linked' | 'filed' | 'twin' | 'taken' } = { result: 'taken' };
+      const target = archive(receipt, codeName(p.date!, title, receipt.originalFilename ?? receipt.filename), (r, index) => {
+        out.result = 'taken';
+        Object.assign(r, { date: p.date, amount: p.amount, currency: p.currency, ...(title ? { title, description: `${title.vendor} ${title.what}`.trim() } : {}) });
+        if (waitsBehind(index, r, order)) { out.result = 'twin'; return; }
+        const t = index.transactions.find((x) => x.ref === l.payment);
+        if (!t || takenPayments(index).has(t.ref) || r.notPaidBy?.includes(t.ref)) return;
+        if (periodLock(index).isClosed(t.date)) { r.filedPayment = t.ref; out.result = 'filed'; return; }
+        index.mappings.push(pairMapping(l.by, t.ref, r.id, l.signals));
+        out.result = 'linked';
+      });
+      if (!target) continue;
+      pairedByCode.add(l.receipt);
+      progress(++completed, total);
+      log(`  ${receipt.filename} → ${target}  ${out.result === 'linked' ? `linked ${l.by === 'checked' ? 'by code, checked by the model' : 'by code'}: ${l.payment}` : out.result === 'filed' ? `pays the filed payment ${l.payment}: not linked` : out.result === 'twin' ? 'possibly a copy of another receipt: not linked, Belege asks' : `${l.payment} was linked meanwhile: not linked`}  (no model match)`);
+    }
+  }
+  const toProcess = toRead.filter((r) => !pairedByCode.has(r.id));
   if (toProcess.length === 0) {
-    log('\nNo receipts to match.');
+    log('\nNo receipts left for the model.');
     return { notes: [] };
   }
   if (!ask) return { notes: [{ code: 'noModel', waiting: toProcess.length }] };
+  // The model is shown the code's short list where there is one, else the payments the intake ranks.
+  const snapshot = books.read();
+  const taken = takenPayments(snapshot);
+  const lock = periodLock(snapshot);
+  const noReceipt = noReceiptFor(ws);
+  const exempt = noReceipt(snapshot);
+  // The payments the model may be shown: none that has no receipt of its own (marked, own transfer, booked onto the owner…).
+  const shown = snapshot.transactions.filter((t) => !t.noReceiptNeeded && !exempt(t));
+  const shortList = new Map(chain.left.filter((l) => l.candidates.length && l.total === l.candidates.length).map((l) => [l.receipt, l.candidates]));
+  const shownFor = (receipt: Receipt): Candidate[] => {
+    const list = shortList.get(receipt.id)?.flatMap((c) => { const t = shown.find((x) => legOf(x) === c.leg); return t && !taken.has(t.ref) ? [c.filed ? { ...t, filed: true as const } : t] : []; });
+    const apart = new Set(receipt.notPaidBy ?? []);
+    return list?.length ? list : candidates(receipt, shown.filter((t) => !apart.has(t.ref)), taken, lock.isClosed);
+  };
 
   log(`\nProcessing ${toProcess.length} staged receipt(s) (concurrency: ${CONCURRENCY})...\n`);
   completed = 0;
@@ -246,7 +279,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     }
     const useVision = (receipt.extractedText?.length ?? 0) < 200;
     // absolute: the lean call runs from an empty directory
-    const prompt = buildMatchPrompt(receipt.extractedText, candidates(receipt, snapshot.transactions, taken, lock.isClosed), useVision ? srcPath : undefined);
+    const prompt = buildMatchPrompt(receipt.extractedText, shownFor(receipt), useVision ? srcPath : undefined);
     let result: MatchResult | null;
     try {
       result = parseMatchResult(await ask!(prompt, { step: 'receipt-match', timeoutMs: 120_000, attachments: useVision ? [srcPath] : undefined }));
@@ -282,16 +315,25 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
       if (behind) { twin = index.receipts.find((x) => x.id === behind)?.filename; return; }
       // Periodensperre: never attach a mapping to a transaction inside a closed period.
       const lock = periodLock(index);
+      const held = takenPayments(index);
+      const grouped = GROUPED_VENDOR_PATTERN.test(r.extractedText ?? '');
+      const without = noReceipt(index);
       linked = answer.matchedTransactionRefs.filter((ref) => {
         const tx = index.transactions.find((t) => t.ref === ref);
+        // A payment without a receipt of its own takes none, whatever the model says.
+        if (tx && (tx.noReceiptNeeded || without(tx) || r.notPaidBy?.includes(ref))) { log(`  ⚠ skipped ${ref}: it needs no receipt, or a person took it apart from this receipt`); return false; }
+        // A payment another receipt took meanwhile (another of this run's receipts, read from the same snapshot) stays with it, unless the vendor groups several receipts into one payment.
+        if (tx && held.has(ref) && !grouped && !index.mappings.some((m) => m.transactionRef === ref && m.receiptId === r.id)) { log(`  ⚠ skipped ${ref}: another receipt holds it; this one waits for a person`); return false; }
         if (tx && !lock.isClosed(tx.date)) return true;
         if (tx) { log(`  ⚠ skipped mapping to ${ref}: transaction is in the closed period (≤ ${lock.closedThrough})`); filed.push(ref); }
         return false;
       });
       // Its only payment is filed: the receipt names it, so the person sees where its tax goes (a correction in the open quarter).
-      if (!linked.length && filed.length) r.filedPayment = filed[0];
+      // Never a filed payment another receipt holds (its tax would be corrected twice), nor one a person took apart from this one.
+      const pointed = filed.find((ref) => !held.has(ref) && !r.notPaidBy?.includes(ref));
+      if (!linked.length && pointed) r.filedPayment = pointed;
       for (const transactionRef of linked) {
-        if (!index.mappings.some((m) => m.transactionRef === transactionRef && m.receiptId === receipt.id)) index.mappings.push({ transactionRef, receiptId: receipt.id });
+        if (!index.mappings.some((m) => m.transactionRef === transactionRef && m.receiptId === receipt.id)) index.mappings.push({ transactionRef, receiptId: receipt.id, by: 'llm' });
       }
     });
     skippedClosed += filed.length;
@@ -308,11 +350,11 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     while (running >= CONCURRENCY) await new Promise<void>((resolve) => queue.push(resolve));
     running++;
     try { await processReceipt(receipt); } finally { running--; queue.shift()?.(); }
-    progress(visionNeeded.length + completed, total);
+    progress(visionNeeded.length + pairedByCode.size + completed, total);
   }));
 
   // The receipts just read: what code finds for them the model was not sure of.
-  byCode();
+  await byCode();
   log(`\nDone.`);
   log(`  Matched & linked : ${matched}`);
   log(`  Moved (unlinked) : ${unlinked}`);

@@ -39,6 +39,7 @@ test('with no setting every step asks its shipped default and ledgers the name i
     'receipt-kind': ['haiku', 'receipt-intake.guide.yaml#kind'],
     'receipt-titles': ['haiku', 'receipt-intake.guide.yaml#titles'],
     'receipt-match': ['sonnet', 'evidence.guide.yaml#ai'],
+    'receipt-pair': ['haiku', 'evidence.guide.yaml#pair'],
     classify: ['sonnet', 'booking.guide.yaml#classify'],
     'learn-rule': ['haiku', 'learn.correction'],
     saving: ['sonnet', 'saving'],

@@ -73,6 +73,16 @@ export function parseTitle(x: unknown): { vendor: string; what: string } | undef
   return v && w && v.length <= 40 && w.length <= 40 ? { vendor: v, what: w } : undefined;
 }
 
+/** What the match prompt shows of a payment: what tells it apart, one line each, no bookkeeping state (#187: about half the prompt's tokens were indentation and fields the model never needs). */
+function shownPayment(t: BankTransaction & { filed?: true }): Record<string, unknown> {
+  return {
+    ref: t.ref, date: t.date, amount: t.amount, currency: t.currency, direction: t.direction, description: t.description,
+    ...(t.counterparty ? { counterparty: t.counterparty } : {}), ...(t.reference ? { reference: t.reference } : {}),
+    ...(t.parts?.length ? { parts: t.parts.map((p) => ({ amount: p.amount, currency: p.currency, counterparty: p.counterparty, ...(p.reference ? { reference: p.reference } : {}) })) } : {}),
+    ...(t.filed ? { filed: true } : {}),
+  };
+}
+
 export function buildMatchPrompt(
   extractedText: string,
   transactions: BankTransaction[],
@@ -87,7 +97,7 @@ export function buildMatchPrompt(
 ${receiptSection}
 
 ## Bank Statement Transactions (the payments without a receipt most likely to fit, best first)
-${JSON.stringify(transactions, null, 2)}
+${transactions.map((t) => JSON.stringify(shownPayment(t))).join('\n')}
 
 ## Instructions
 Match the receipt to the most likely bank transaction(s). Priority order:

@@ -26,7 +26,7 @@ import { offSide, type BookingLine } from '../accounting/manual-booking.js';
 import { isVatAmountCode } from '../accounting/validate.js';
 import { assertOpen, receiptDates, refDates, RequestError } from './books.js';
 import { outsideStatements } from '../accounting/placed-account.js';
-import { nameWords } from '../intake/match.js';
+import { nameWords } from '../intake/pairing.js';
 
 function receiptOf(books: Books, id: string): Receipt {
   const r = books.receipts.find((x) => x.id === id);
@@ -104,7 +104,7 @@ export function unbookedPayments(books: Books, receipts: readonly string[]): str
   return books.transactions.filter((t) => refs.has(t.ref) && !booked.has(t.ref) && !lock.isClosed(t.date)).map((t) => t.ref);
 }
 
-/** Two payments go to the same payee: the same IBAN, or a word that names who was paid in both (src/intake/match.ts nameWords). */
+/** Two payments go to the same payee: the same IBAN, or a word that names who was paid in both (src/intake/pairing.ts nameWords). */
 const samePayee = (a: BankTransaction, b: BankTransaction): boolean =>
   (!!a.counterpartyIban && a.counterpartyIban === b.counterpartyIban) || nameWords(a).some((w) => nameWords(b).includes(w));
 
@@ -174,6 +174,7 @@ export function link(books: Books, receipt: string, payment: string): BookChange
   if (books.mappings.some((m) => m.transactionRef === payment && m.receiptId === receipt)) return undefined;
   // A link by hand (or by the AI sidebar on the person's wish) says so: Änderungen lists it (r8k-7).
   books.mappings.push({ transactionRef: payment, receiptId: receipt, by: 'human' });
+  apart(books, receipt, payment, false);
   carried(books, payment);
   return { kind: 'unlink', receipt, payment };
 }
@@ -300,10 +301,24 @@ function deletePayment(books: Books, c: Extract<BookChange, { kind: 'deletePayme
   return { kind: 'privatePayment', receipt: c.receipt, ...part, ...(tx.replaced?.length && { replace: tx.replaced[0].transactionRef }) };
 }
 
+/**
+ * A person took a receipt and a payment apart (`on`), or put them together again: the matching
+ * chain never pairs a pair taken apart again (Receipt.notPaidBy, src/intake/pairing.ts), and no
+ * doubt of the model stands against a pair a person linked.
+ */
+export function apart(books: Books, receipt: string, payment: string, on: boolean): void {
+  const r = books.receipts.find((x) => x.id === receipt);
+  if (!r) return;
+  const rest = (r.notPaidBy ?? []).filter((p) => p !== payment);
+  const list = on ? [...rest, payment] : rest;
+  if (list.length) r.notPaidBy = list; else delete r.notPaidBy;
+}
+
 export function unlink(books: Books, receipt: string, payment: string): BookChange | undefined {
   assertOpen(books, refDates(books, payment), 'mapping');
   const had = books.mappings.length;
   books.mappings = books.mappings.filter((m) => !(m.transactionRef === payment && m.receiptId === receipt));
+  if (books.mappings.length < had) apart(books, receipt, payment, true);
   carried(books, payment);
   return books.mappings.length < had ? { kind: 'link', receipt, payment } : undefined;
 }

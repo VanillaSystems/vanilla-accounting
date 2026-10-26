@@ -128,7 +128,8 @@ export function receiptSetsToLink(books: Books, isOpen: (date: string) => boolea
   const fits = all.filter(({ fit }) => fit.exact.length);
   const claims = new Map<string, number>();
   for (const { fit } of fits) for (const id of new Set(fit.exact.flat().map((r) => r.id))) claims.set(id, (claims.get(id) ?? 0) + 1);
-  return fits.filter(({ fit }) => fit.exact.length === 1 && !fit.untried.size && fit.exact[0].every((r) => claims.get(r.id) === 1 && !untried.has(r.id)))
+  // A set with a receipt a person took apart from the payment (Receipt.notPaidBy) is never linked again.
+  return fits.filter(({ tx, fit }) => fit.exact.length === 1 && !fit.untried.size && fit.exact[0].every((r) => claims.get(r.id) === 1 && !untried.has(r.id) && !r.notPaidBy?.includes(tx.ref)))
     .map(({ tx, fit }) => asSet(tx, fit.exact[0], fit, sumOf(fit.exact[0]), true));
 }
 

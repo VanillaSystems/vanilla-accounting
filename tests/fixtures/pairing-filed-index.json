@@ -1,0 +1,23 @@
+{
+  "receipts": [
+    { "id": "ra", "filename": "late-a.pdf", "originalFilename": "late-a.pdf", "extractedText": "Beleg Juni", "extractionMethod": "pdftotext", "fileSize": 1, "indexedAt": "2026-08-01T00:00:00Z", "location": "archived", "date": "2026-06-08", "amount": 50, "currency": "CHF", "filedPayment": "F1" },
+    { "id": "rb", "filename": "paid-b.pdf", "originalFilename": "paid-b.pdf", "extractedText": "Beleg August", "extractionMethod": "pdftotext", "fileSize": 1, "indexedAt": "2026-08-11T00:00:00Z", "location": "archived", "date": "2026-08-09", "amount": 50, "currency": "CHF" },
+    { "id": "rc", "filename": "late-c.pdf", "originalFilename": "late-c.pdf", "extractedText": "Beleg Juni korrigiert", "extractionMethod": "pdftotext", "fileSize": 1, "indexedAt": "2026-08-02T00:00:00Z", "location": "archived", "date": "2026-06-11", "amount": 50, "currency": "CHF", "filedPayment": "F2" }
+  ],
+  "transactions": [
+    { "ref": "F1", "bank": "Raiffeisen", "date": "2026-06-10", "amount": 50, "currency": "CHF", "direction": "DBIT", "description": "Bank Juni 1" },
+    { "ref": "F2", "bank": "Raiffeisen", "date": "2026-06-12", "amount": 50, "currency": "CHF", "direction": "DBIT", "description": "Bank Juni 2" },
+    { "ref": "F3", "bank": "Raiffeisen", "date": "2026-06-14", "amount": 50, "currency": "CHF", "direction": "DBIT", "description": "Bank Juni 3" },
+    { "ref": "O1", "bank": "Raiffeisen", "date": "2026-08-10", "amount": 50, "currency": "CHF", "direction": "DBIT", "description": "Bank August" }
+  ],
+  "mappings": [
+    { "transactionRef": "O1", "receiptId": "rb", "by": "human" },
+    { "transactionRef": "M2026-001", "receiptId": "rc", "by": "human" }
+  ],
+  "bankStatements": [],
+  "journalEntries": [
+    { "id": "jo", "transactionRef": "O1", "date": "2026-08-10", "accountDebit": "6500", "accountCredit": "1021", "amount": 50, "vatCode": "I81" },
+    { "id": "jm", "transactionRef": "M2026-001", "date": "2026-08-01", "accountDebit": "", "accountCredit": "6500", "amount": 3.75, "vatCode": "I81", "corrects": "2026-Q2", "origin": "manual", "description": "Korrektur Vorsteuer F2" }
+  ],
+  "config": { "closedThrough": "2026-06-30" }
+}

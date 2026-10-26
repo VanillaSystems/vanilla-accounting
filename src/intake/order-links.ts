@@ -4,7 +4,7 @@
  * up to what the bank received, less the refunds deducted from it. A payment in the open period
  * that is the one money-in of that sum and currency within PAYOUT_DAYS of the named date gets
  * every one of those documents linked; anything less certain links nothing, so a payout never
- * holds orders worth more or less than it paid.
+ * holds orders worth more or less than it paid. A payout a person took an order apart from is left to her.
  */
 import type { Books } from '../books/store.js';
 import { periodLock } from '../books/store.js';
@@ -33,6 +33,8 @@ export function linkOrdersToPayouts(index: Books): Array<{ receipt: string; paym
       && onPayout(payout, t.date) && t.type !== 'wise-fee');
     if (fits.length !== 1 || lock.isClosed(fits[0].date)) continue;
     const [tx] = fits;
+    // A person took one of these orders apart from the payout (Receipt.notPaidBy): the payout is hers, none is linked again.
+    if (index.receipts.some((r) => payout.receipts.has(r.id) && r.notPaidBy?.includes(tx.ref))) continue;
     for (const receipt of payout.receipts) {
       if (index.mappings.some((m) => m.transactionRef === tx.ref && m.receiptId === receipt)) continue;
       index.mappings.push({ transactionRef: tx.ref, receiptId: receipt, by: 'rule', rule: ORDER_LINK_RULE });
