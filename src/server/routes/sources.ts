@@ -6,6 +6,7 @@
  *   GET  /api/sources/mail-host     ?address=: MailHost, the provider and IMAP server the domain's MX records suggest
  *   POST /api/sources/:id/approve   switches the version on (outside the workspace): it runs live from now on
  *   POST /api/sources/:id/skip      { sender, version }: a mailbox skips that sender's mail from now on
+ *   GET  /api/sources/skip-offer    ?receipt=: { offer: ReceiptSkipOffer | null }, the skip a person's «kein Beleg» on that file offers
  *   POST /api/sources/mail          { address, host, account?, label?, password? }: a new mailbox source
  *   PUT  /api/sources/:id/secret    { password | null }: its mailbox password, into the secret store
  *   POST /api/sources/:id/check     MailCheck: the login tried (or the Mail app asked), and what it would read
@@ -16,7 +17,7 @@ import { WS } from '../books.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
 import { approveSource, sources } from '../../platform/sources/index.js';
 import { RequestError } from '../books.js';
-import { secretKey, type SourcePreview, type MailCheck, type SourceDecl, type SourceRow, type SourcesView } from '../../platform/sources/model.js';
+import { secretKey, type ReceiptSkipOffer, type SourcePreview, type MailCheck, type SourceDecl, type SourceRow, type SourcesView } from '../../platform/sources/model.js';
 import { mailSecret, secrets } from '../../secrets/secrets.js';
 import { mailInputProblem, mailSourceSlot, previewMailbox, writeMailSource, type MailSourceInput } from '../../platform/sources/mail-setup.js';
 import { mailBackend, mailFailure, type MailBackend } from '../../platform/sources/mail-channel.js';
@@ -26,7 +27,7 @@ import { NoChromeError } from '../../platform/sources/web-driver.js';
 import { sessionOf, signInUrl } from '../../platform/sources/web-channel.js';
 import { openSession } from '../../platform/browser/chrome.js';
 import { readLedger } from '../../platform/sources/ledger.js';
-import { addSkip, skipOffers } from '../../platform/sources/skip.js';
+import { addSkip, mailReachOf, receiptSkipOffer, skipOffers } from '../../platform/sources/skip.js';
 import { reachDiff } from '../../platform/sources/reach.js';
 import { readBooks } from '../books.js';
 import { resolveMx } from 'node:dns/promises';
@@ -41,10 +42,19 @@ router.get('/api/sources', async (_req, res) => {
     const decl = verdict.kind === 'invalid' ? undefined : verdict.decl;
     const channels = (['mail', 'api'] as const).filter((c) => decl?.reach[c]);
     const present = await Promise.all(channels.map(async (c) => !!(await secrets.get(secretKey(decl!.id, c)))));
-    const offers = decl?.reach.mail ? skipOffers(readLedger(WS, decl.id), readBooks().receipts, decl.reach.mail) : [];
+    const mail = decl && mailReachOf(decl);
+    const offers = mail ? skipOffers(readLedger(WS, decl.id), readBooks().receipts, mail.reach) : [];
     rows.push({ verdict, secrets: channels.map((channel, i) => ({ channel, present: present[i] })), ...(offers.length ? { skipOffers: offers } : {}) });
   }
   res.json({ rows, secretsInApp: secrets.inApp(), secretsWhere: secrets.where(mailSecret('<id>')), runsHere: sourcesRunHere() } satisfies SourcesView);
+});
+
+/** «Immer so?» under a person's «kein Beleg» (#186): the mailbox that brought the file and its sender, with what a skip would no longer bring. Reads only. */
+router.get('/api/sources/skip-offer', (req, res) => {
+  const receipt = readBooks().receipts.find((r) => r.id === String(req.query.receipt ?? ''));
+  if (!receipt) throw new RequestError(404, 'Diesen Beleg gibt es nicht.');
+  const mailboxes = sources(WS, APP_ROOT).flatMap((v) => (v.kind !== 'invalid' && mailReachOf(v.decl) ? [{ decl: v.decl, lines: readLedger(WS, v.decl.id) }] : []));
+  res.json({ offer: receiptSkipOffer(receipt, mailboxes, readBooks().receipts) ?? null } satisfies { offer: ReceiptSkipOffer | null });
 });
 
 /** Where an address's mail lives (Belege › «Weg hinzufügen»): the provider and IMAP server, from the domain or its MX records. Reads DNS, writes nothing. */
@@ -207,10 +217,11 @@ router.post('/api/sources/:id/approve', (req, res) => {
 router.post('/api/sources/:id/skip', (req, res) => {
   const { sender, version } = (req.body ?? {}) as { sender?: string; version?: string };
   const before = sources(WS, APP_ROOT).find((x) => x.kind !== 'invalid' && x.decl.id === req.params.id);
-  if (!before || before.kind === 'invalid' || !before.decl.reach.mail || before.decl.origin !== 'company') throw new RequestError(404, `Die Mailbox ${req.params.id} gibt es nicht, oder sie hat Fehler.`);
+  const mail = before && before.kind !== 'invalid' ? mailReachOf(before.decl) : undefined;
+  if (!before || before.kind === 'invalid' || !mail || before.decl.origin !== 'company') throw new RequestError(404, `Die Mailbox ${req.params.id} gibt es nicht, oder sie hat Fehler.`);
   if (before.decl.version !== version) throw new RequestError(409, 'Die Quelle hat sich seit dem Anzeigen geändert: neu laden und noch einmal prüfen.');
   if (typeof sender !== 'string') throw new RequestError(400, 'sender fehlt.');
-  try { addSkip(WS, before.decl.id, sender); } catch (e) { throw new RequestError(400, (e as Error).message); }
+  try { addSkip(WS, before.decl.id, sender, mail.key); } catch (e) { throw new RequestError(400, (e as Error).message); }
   const after = sources(WS, APP_ROOT).find((x) => x.kind !== 'invalid' && x.decl.id === req.params.id);
   if (!after || after.kind === 'invalid') throw new RequestError(500, 'Die Quelle lädt nach dem Ändern nicht mehr.');
   const diff = reachDiff(before.decl.reach, after.decl.reach);

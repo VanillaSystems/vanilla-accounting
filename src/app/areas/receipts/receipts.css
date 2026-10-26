@@ -165,3 +165,10 @@
 
 /* What was set aside (#186): one lead line above the files that are no receipt. */
 .hidden-lead { font-size: 12.5px; margin: 8px 0; color: var(--muted); }
+
+/* «Immer so?» under a person's «kein Beleg» (#186): skip the sender, shown on a card before it is kept. */
+.skipask { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+.skipcard { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); font-size: 13px; }
+.skipcard b { font-weight: 600; }
+.skipcard .warnline { margin: 0; }
+.skipacts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }

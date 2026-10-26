@@ -44,7 +44,7 @@ import type { AutomationCommand, AutomationView, CommandResult, RunDetail } from
 import type { Conversation, ConversationSummary, MadeChange, PrivatePart, Turn } from '../../types/assistant.js';
 import { ATTACHMENT_MAX_MB, type Attachment } from '../../types/attachment.js';
 import type { DropAction, DropSession, QuarantinedFile } from '../../types/drop.js';
-import type { MailCheck, SourcePreview, SourcesView } from '../../platform/sources/model.js';
+import type { MailCheck, ReceiptSkipOffer, SourcePreview, SourcesView } from '../../platform/sources/model.js';
 import type { MailHost } from '../../platform/sources/mail-host.js';
 import type { DraftCommand, DraftView, KeepResult, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
 import type { ShareOffer } from '../../saving/share-rule.js';
@@ -374,6 +374,7 @@ export const api = {
   quarantine: () => request<QuarantinedFile[]>('GET', '/api/quarantine'),
   takeFromQuarantine: (file: string) => request<{ ok: true; file: string; run?: string }>('POST', `/api/quarantine/${encodeURIComponent(file)}/take`),
   skipSender: (id: string, sender: string, version: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/skip`, { sender, version }),
+  receiptSkipOffer: (receipt: string) => request<{ offer: ReceiptSkipOffer | null }>('GET', `/api/sources/skip-offer?receipt=${encodeURIComponent(receipt)}`),
   approveSource: (id: string, version: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/approve`, { version }),
   runReport: (spec: unknown, period?: string) => request<{ result: ReportResult }>('POST', '/api/reports/run', { spec, period }).then((r) => r.result),
   savedReports: () => request<{ reports: SavedReport[] }>('GET', '/api/reports/saved').then((r) => r.reports),

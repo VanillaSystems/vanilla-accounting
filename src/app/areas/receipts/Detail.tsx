@@ -29,6 +29,7 @@ import { LinkDialog } from './LinkDialog.js';
 import { ByHand, VatFields } from './VatFields.js';
 import { TwinNotice } from './TwinNotice.js';
 import { Paper } from './Paper.js';
+import { SkipOffer } from './SkipOffer.js';
 import { I } from './icons.js';
 import { baseCurrency, chargesVat, filing, withoutInputTax } from '../../../engines/index.js';
 
@@ -155,6 +156,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       {v.none
         ? <div className="notice">{v.noneWhy ? t('receipts.noneNoticeWhy', { why: noneText(v) }) : t('receipts.noneNotice')} {canEdit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t('receipts.isReceipt')}</a>}</div>
         : v.twin?.relation === 'duplicate' && !v.links.length ? null : <div className="status"><Status {...props} /></div>}
+      {canEdit && r.kind === 'noise' && r.kindBy === 'human' && <SkipOffer receipt={r.id} nav={nav} />}
 
       <div className="body">
         <div className="desk">

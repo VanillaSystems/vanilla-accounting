@@ -69,6 +69,20 @@ export interface ReachDiff { added: Array<{ channel: Channel; what: string }>; r
 /** A sender (its address) whose `n` attachments were no receipt: offered to be skipped (src/platform/sources/skip.ts). */
 export interface SkipOffer { sender: string; n: number }
 
+/**
+ * «Immer so?» under a person's «kein Beleg» on a file a mailbox brought (#186): skip its sender.
+ * `delivered` counts the files the mailbox brought from it; `receipts` are those the books hold as
+ * receipts, which a skip would no longer bring.
+ */
+export interface ReceiptSkipOffer {
+  source: string;
+  label: Text;
+  version: string;
+  sender: string;
+  delivered: number;
+  receipts: Array<{ id: string; filename: string; date?: string }>;
+}
+
 /** A source as the Quellen page shows it: its verdict, whether each channel's secret is there (never its value), the senders it could skip. */
 export interface SourceRow { verdict: SourceVerdict; secrets: Array<{ channel: 'mail' | 'api'; present: boolean }>; skipOffers?: SkipOffer[] }
 
