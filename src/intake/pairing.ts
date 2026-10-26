@@ -17,6 +17,7 @@ import { creditSigned } from '../accounting/credit-signed.js';
 import { baseCurrency, documents } from '../engines/index.js';
 import { HEAD, wordsRe } from '../core/modules/words.js';
 import { legOf } from '../workspace/money-accounts.js';
+import { assessmentNumbers, namesAssessment } from '../booking/customs-invoice.js';
 
 /** Which payments are candidates at all. */
 export const BOUNDS = {
@@ -180,9 +181,15 @@ const ORIGINAL: ReadonlyArray<{ re: RegExp; amount: number; currency: number }> 
 /** The number an amount writes: the last separator before two digits is the decimal point, every other one groups thousands. */
 const amountIn = (text: string): number => Number(text.replace(/[.,](\d{2})$/, 'D$1').replace(/[,'’ .]/g, '').replace('D', '.'));
 
-/** The receipts the chain looks for a payment for: read, kept, an invoice or a sales record with an amount and a date, nothing linked, not pointed at a filed payment, and no payout report or order page (their own links, order-links.ts and the model). */
+/**
+ * The receipts the chain looks for a payment for: read, kept, an invoice or a sales record with an
+ * amount and a date, nothing linked, not pointed at a filed payment, and no payout report or order
+ * page (their own links, order-links.ts and the model). A customs assessment, a document beside the
+ * courier's invoice, is one too: import VAT paid to the customs office itself has it as its receipt
+ * (fitOf holds it to a payment that names its number).
+ */
 export function pairableReceipt(r: Receipt, linked: ReadonlySet<string>): boolean {
-  return r.location === 'archived' && !linked.has(r.id) && !r.filedPayment && (!r.kind || r.kind === 'invoice' || r.kind === 'sales-record')
+  return r.location === 'archived' && !linked.has(r.id) && !r.filedPayment && (!r.kind || r.kind === 'invoice' || r.kind === 'sales-record' || (r.kind === 'supporting' && namesAssessment(r, documents().customs)))
     && !!r.amount && !!r.date && !r.payout && !r.order;
 }
 
@@ -245,7 +252,10 @@ export function fitOf(r: Receipt, tx: BankTransaction, toChf: ToChf, isClosed: (
     amount = off <= WEIGHTS.amount.nearShare ? 'near' : 'within';
   }
   const text = squash([tx.description, tx.reference ?? '', tx.remarks ?? '', ...(tx.parts ?? []).map((p) => p.reference ?? '')].join(' '));
-  const number = numbersIn(r.extractedText ?? '').some((n) => text.includes(n));
+  // A customs assessment pays nothing of its own, unless the payment names its number: then it went to the customs office for it.
+  const assessment = r.kind === 'supporting' ? assessmentNumbers(r.extractedText ?? '', documents().customs) : undefined;
+  if (assessment && !assessment.some((n) => text.includes(n))) return undefined;
+  const number = !!assessment || numbersIn(r.extractedText ?? '').some((n) => text.includes(n));
   const vendor = [r.title?.vendor ?? '', r.description ?? '', r.filename].join(' ').toLowerCase();
   const words = nameWords(tx).filter((w) => vendor.includes(w)).length;
   const score = WEIGHTS.amount[amount === 'original' ? 'same' : amount] + dayPoints(days)

@@ -9,6 +9,7 @@
  * first; the original image is deleted. iCloud placeholders and files that are no PDF yet are skipped. A
  * file in beleg-import/ with the SHA-256 of a receipt or of another inbox file is removed, with a note.
  */
+import { assessmentFacts } from '../booking/customs-invoice.js';
 import { closeSync, openSync, readSync, readdirSync, readFileSync, statSync, existsSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, basename, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -172,11 +173,12 @@ interface Extracted { text: string; method: Receipt['extractionMethod']; fileSiz
  * where the person can say «doch ein Beleg». What the words leave unclear, the model's «no receipt»
  * sets aside when there is one (src/intake/unclear.ts). A bank statement (#151) is dated on its period's last day.
  */
-function kindOfText(fresh: Extracted, filename: string, originalFilename: string, model?: ModelKind): Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'kindWhy' | 'date'> {
+function kindOfText(fresh: Extracted, filename: string, originalFilename: string, model?: ModelKind): Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'kindWhy' | 'date' | 'amount' | 'currency'> {
   const statement = statementFacts({ extractedText: fresh.text, filename, originalFilename }, documents());
   if (statement) return { kind: 'statement', kindBy: 'rule', kindRule: 'document:statement', ...(statement.to ? { date: statement.to } : {}) };
   const v = documentKind(fresh.text, documents());
-  if (v.is === 'supporting') return { kind: 'supporting', kindBy: 'rule', kindRule: `document:${v.why}` };
+  // A customs assessment keeps its tax and day: a payment to the customs office is paired with it by them (#197).
+  if (v.is === 'supporting') return { kind: 'supporting', kindBy: 'rule', kindRule: `document:${v.why}`, ...(v.why === 'customs-assessment' ? assessmentFacts(fresh.text, documents().customs) : {}) };
   if (v.is === 'other' && fresh.method === 'claude-vision') return { kind: 'noise', kindBy: 'rule', kindRule: `document:${v.why}` };
   return v.is === 'unclear' && model ? kindOfModel(model) : {};
 }

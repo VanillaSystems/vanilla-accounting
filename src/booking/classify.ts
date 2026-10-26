@@ -45,7 +45,8 @@ import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
 import { holdWords, payoutByOrders, type OrderHold } from './payout-orders.js';
 import { splitByReceipts } from './receipt-lines.js';
-import { customsSplit, importVatDeductions, type Assessment, type CustomsHold, type CustomsTexts } from './customs-invoice.js';
+import { CUSTOMS_BY, customsSplit, importVatDeductions, type Assessment, type CustomsHold, type CustomsTexts } from './customs-invoice.js';
+import { nextManualRef } from '../books/next-ref.js';
 import { payoutSales, salesDefaults } from '../workspace/sells.js';
 import { loadChart, type ChartAccount } from '../workspace/chart.js';
 
@@ -532,13 +533,13 @@ export function customsEntries(books: Books, tx: BankTransaction, context: Class
   const bankAccount = bankAccountFor(tx, context.bankAccounts);
   const lock = periodLock(books);
   const receiptDate = mapped.map((r) => r.date).filter((d): d is string => !!d).sort()[0];
-  const said = [de.t('rules.say.customsSplit')];
+  const said = [split.direct ? de.t('rules.say.customsDirect') : de.t('rules.say.customsSplit')];
   if (split.importVat > 0 && !withoutInputTax()) {
     if (split.unproven > 0) said.push(de.t('rules.say.customsUnproven', { amount: chf(split.unproven), currency: split.currency }));
     for (const a of split.assessments) said.push(texts.reason(a));
   }
   const lines = withDerivedCodes(split.lines, tx.direction, bankAccount);
-  const entries = entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by: { kind: 'code', check: 'customsSplit' }, reason: said.join('; '), corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) });
+  const entries = entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by: CUSTOMS_BY, reason: said.join('; '), corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) });
   // A deduction is the assessment's tax in the books' currency, whatever the payment was made in.
   return { entries: entries.map((e, k) => {
     if (!split.deductions.has(split.lines[k])) return e;
@@ -548,9 +549,8 @@ export function customsEntries(books: Books, tx: BankTransaction, context: Class
 }
 
 /**
- * The deductions customs assessments bring to import VAT split off payments before them
- * (importVatDeductions), booked into `books`: an assessment no one linked is linked to its payment
- * (or, when that payment is filed, points at it as its filed payment, golden rule 1). Returns how many.
+ * The deductions customs assessments bring to import VAT booked before them (importVatDeductions),
+ * booked into `books`. Returns how many.
  */
 export function bookImportVatDeductions(books: Books, context: Pick<ClassifyContext, 'companyUid'>): number {
   const words = documents().customs;
@@ -558,24 +558,10 @@ export function bookImportVatDeductions(books: Books, context: Pick<ClassifyCont
   const lock = periodLock(books);
   const through = lock.lockedThrough;
   const firstOpenDay = through ? new Date(Date.parse(`${through}T00:00:00Z`) + 864e5).toISOString().slice(0, 10) : '';
-  const { entries, found } = importVatDeductions(books, {
+  return importVatDeductions(books, {
     words, uid: context.companyUid, inputTax: !withoutInputTax(), isClosed: (d) => lock.isClosed(d), firstOpenDay,
-    length: filing().length, newId: () => randomBytes(8).toString('hex'), texts: customsTexts(),
+    length: filing().length, newId: () => randomBytes(8).toString('hex'), manualRef: (date) => nextManualRef(books, date.slice(0, 4)), texts: customsTexts(),
   });
-  for (const { receipt, payment } of found) {
-    const tx = books.transactions.find((t) => t.ref === payment);
-    const r = books.receipts.find((x) => x.id === receipt);
-    if (!tx || !r) continue;
-    if (lock.isClosed(tx.date)) { r.filedPayment = payment; continue; }
-    books.mappings.push({ transactionRef: payment, receiptId: receipt, by: 'rule', rule: 'customs-assessment' });
-    // The payment's bookings saw this receipt now: a later run does not book it again for it (entriesWithoutTheirReceipts).
-    for (const e of books.journalEntries) if (e.transactionRef === payment && e.origin === 'classify' && e.receipts && !e.corrects) e.receipts = [...e.receipts, receipt].sort();
-  }
-  for (const e of entries) {
-    if (!lock.isClosed(e.date) && !e.corrects) e.receipts = [...new Set([...books.mappings.filter((m) => m.transactionRef === e.transactionRef).map((m) => m.receiptId), ...(e.receipts ?? [])])].sort();
-  }
-  books.journalEntries.push(...entries);
-  return entries.length;
 }
 
 /** The entries a rule's booking makes for `tx` (ruleBookingLines), the bank on the other side, stamped with the rule. */

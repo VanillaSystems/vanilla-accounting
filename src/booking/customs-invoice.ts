@@ -10,7 +10,7 @@
  * The customs office's assessment that names the firm as importer is (pv-import-vat-evv): with it
  * the tax is deducted by a one-legged line of the import VAT account's tax-amount code, off that
  * account, into the input tax on material and goods. Import VAT paid to the customs office itself
- * has the assessment as its receipt (linkDirectAssessments). An assessment that comes after the
+ * has the assessment as its receipt (the matching links it, src/intake/pairing.ts). An assessment that comes after the
  * payment was booked brings its deduction then (importVatDeductions): on the payment's day while
  * its quarter is open, else in the open period as a correction of the filed one (golden rule 1).
  * Each assessment proves one import VAT line, once: copies (the same assessment number) count as
@@ -19,6 +19,7 @@
  */
 import { CUSTOMS_POSITIONS, type CustomsPosition, type DocumentsData } from '../core/modules/schema.js';
 import { wordsRe } from '../core/modules/words.js';
+import { textFacts } from '../parsers/receipt-text.js';
 import { isPurchaseDocument } from '../accounting/evidence-check.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import { filingKeyOf, type FilingLength } from '../accounting/periods.js';
@@ -154,6 +155,18 @@ export function readAssessment(r: Pick<Receipt, 'id' | 'filename' | 'date' | 'ex
   const amount = Number(`${money[1].replace(/['’]/g, '')}.${money[2]}`);
   const [number] = assessmentNumbers(text, words);
   return amount > 0 ? { receipt: r.id, file: r.filename, ...(r.date ? { date: r.date } : {}), amount, ...(number ? { number } : {}) } : undefined;
+}
+
+/**
+ * The tax and the day an assessment's text states, read when it arrives: a document beside an
+ * invoice gets no facts from the match step, but the matching pairs an assessment with a payment
+ * to the customs office by them (src/intake/pairing.ts). In the books' currency.
+ */
+export function assessmentFacts(text: string, words: CustomsWords): Pick<Receipt, 'amount' | 'currency' | 'date'> {
+  const label = wordsRe(words.assessment.total).exec(text);
+  const money = label && MONEY.exec(text.slice(label.index + label[0].length, label.index + label[0].length + 80));
+  const date = textFacts(text).date;
+  return { ...(money ? { amount: Number(`${money[1].replace(/['’]/g, '')}.${money[2]}`), currency: baseCurrency() } : {}), ...(date ? { date } : {}) };
 }
 
 /** Whether `a` proves an import VAT line of `invoice`: the same tax, and its number among those the invoice names, when the invoice names any. */
@@ -330,27 +343,12 @@ function markDeducted(books: CustomsBooks, account: string, code: string): void 
 const DAY = 864e5;
 
 /**
- * Import VAT paid to the customs office itself: an open payment out in the books' currency with
- * nothing linked, whose text names an assessment's number and whose amount is that assessment's
- * tax, gets the assessment linked as its receipt, by code, when no other payment fits it. The booking
- * step then books it as import VAT with the deduction (customsSplit). Returns how many.
+ * Whether a document reads as a customs assessment by its words (its title and the label of its
+ * total), whoever it names: what the matching takes as a receipt of a payment to the customs office.
  */
-export function linkDirectAssessments(books: CustomsBooks, ctx: Pick<DeductionContext, 'words' | 'uid' | 'isClosed'>): number {
-  const linked = new Set(books.mappings.map((m) => m.receiptId));
-  const busy = new Set([...books.mappings.map((m) => m.transactionRef), ...books.journalEntries.map((e) => e.transactionRef)]);
-  const free = usable(books, ctx).filter(({ r, a }) => !linked.has(r.id) && !r.filedPayment && a.number);
-  const payments = books.transactions.filter((t) => t.direction === 'DBIT' && t.currency === baseCurrency() && !ctx.isClosed(t.date) && !busy.has(t.ref));
-  const fits = (t: BankTransaction, a: Assessment) => toRappen(Math.abs(t.amount)) === toRappen(a.amount)
-    && assessmentNumbers([t.description, t.reference, ...(t.parts ?? []).map((p) => p.reference)].filter(Boolean).join(' ').replace(/\s+/g, ''), ctx.words).includes(a.number!);
-  let made = 0;
-  for (const { r, a } of distinct(free.map((x) => ({ ...x.a, r }))).map((x) => ({ r: x.r, a: x }))) {
-    const hits = payments.filter((t) => fits(t, a));
-    if (hits.length !== 1 || free.some((o) => o.r !== r && o.a.number !== a.number && fits(hits[0], o.a))) continue;
-    books.mappings.push({ transactionRef: hits[0].ref, receiptId: r.id, by: 'rule', rule: ASSESSMENT_LINK });
-    busy.add(hits[0].ref);
-    made++;
-  }
-  return made;
+export function namesAssessment(r: Pick<Receipt, 'extractedText'>, words: CustomsWords): boolean {
+  const text = r.extractedText ?? '';
+  return wordsRe(words.assessment.title).test(text) && wordsRe(words.assessment.total).test(text);
 }
 
 /**

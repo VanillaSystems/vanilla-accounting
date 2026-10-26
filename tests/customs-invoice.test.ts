@@ -13,14 +13,17 @@ import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bookImportVatDeductions, classifyTransactions, loadClassifyContext } from '../src/booking/classify.js';
-import { customsSplit, positionOf, readAssessment, type SplitContext } from '../src/booking/customs-invoice.js';
+import { assessmentFacts, customsSplit, positionOf, readAssessment, type SplitContext } from '../src/booking/customs-invoice.js';
 import { documentKind } from '../src/intake/document-kind.js';
+import { parseBookedBy } from '../src/books/booked-by.js';
+import { ledgerOf } from '../src/app/areas/receipts/model.js';
+import { fitOf, pairableReceipt } from '../src/intake/pairing.js';
 import { classifyStep } from '../src/intake/classify.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import { documents } from '../src/engines/index.js';
 import { loadChart } from '../src/workspace/chart.js';
 import type { Books } from '../src/books/store.js';
-import type { BankTransaction, JournalEntry, Receipt, ReceiptLine } from '../src/types/index.js';
+import type { BankTransaction, Index, JournalEntry, Receipt, ReceiptLine } from '../src/types/index.js';
 import { APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import './support/jurisdiction.js';
@@ -78,7 +81,8 @@ test('a customs invoice is booked by its positions in code: import VAT, duty and
   assert.deepEqual([out.classified, out.failed], [['P-1'], []]);
   assert.deepEqual(lines(books), [['4030', '1021', 57.55, 'M0'], ['4020', '1021', 6.45, 'M0'], ['4040', '1021', 3.5, 'M0']]);
   const [first] = books.journalEntries;
-  assert.deepEqual(first.by, { kind: 'code', check: 'customsSplit' });
+  assert.deepEqual(first.by, { kind: 'code', check: 'purchaseVat' });
+  assert.deepEqual(parseBookedBy(first.by), first.by, 'the books keep who booked it');
   assert.match(first.reason ?? '', /Einfuhrsteuer CHF 57\.55 ohne Vorsteuerabzug/);
   assert.match(first.reason ?? '', /Veranlagungsverfügung/);
   assert.match(first.description ?? '', /Einfuhrsteuer$/);
@@ -144,7 +148,7 @@ test('with the assessment linked, the import VAT is deducted at once: a one-legg
 test('an assessment proves nothing for another firm, nor one whose amount no import VAT line has', () => {
   const words = documents().customs;
   assert.equal(readAssessment(assessment(), words, 'CHE-111.222.333'), undefined, 'another importer');
-  assert.deepEqual(readAssessment(assessment(), words, 'CHE-123.456.789'), { receipt: 'evv1', file: assessment().filename, date: '2026-05-09', amount: 57.55 });
+  assert.deepEqual(readAssessment(assessment(), words, 'CHE-123.456.789'), { receipt: 'evv1', file: assessment().filename, date: '2026-05-09', amount: 57.55, number: '26CHEI000000004711' });
   const invoiceText = readAssessment(invoice({ extractedText: `${INVOICE_TEXT}\nEinfuhrsteuer gemäss Veranlagungsverfügung MWST` }), words, 'CHE-123.456.789');
   assert.equal(invoiceText, undefined, 'a courier invoice that names the assessment is none: it states no total of the assessment');
   const other = customsSplit(PAYMENT, [invoice(), assessment({ extractedText: ASSESSMENT_TEXT.replace('57.55', '41.20') })], splitContext());
@@ -177,11 +181,14 @@ test('an assessment that comes after the quarter was filed: the deduction is a c
   assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)), 1);
   const correction = books.journalEntries.at(-1)!;
   const original = books.journalEntries.find((e) => e.accountDebit === '4030')!;
-  assert.deepEqual([correction.date, correction.corrects, correction.vatCode, correction.amount, correction.transactionRef], ['2026-07-20', '2026-Q2', 'M81-2', 57.55, 'P-1']);
+  assert.deepEqual([correction.date, correction.corrects, correction.vatCode, correction.amount], ['2026-07-20', '2026-Q2', 'M81-2', 57.55]);
+  assert.match(correction.transactionRef, /^M2026-\d{3}$/, 'a booking of its own without a payment, as a correction by hand is');
   assert.match(correction.description ?? '', new RegExp(`Korrektur zu Buchung ${original.id} \\(2026-Q2\\)`));
   assert.deepEqual(books.journalEntries.slice(0, filed.length), filed, 'the filed bookings stay as filed');
   assert.equal(books.receipts.find((r) => r.id === 'evv1')?.filedPayment, 'P-1', 'no link into the filed quarter: the assessment points at its payment');
-  assert.ok(!books.mappings.some((m) => m.receiptId === 'evv1'));
+  assert.deepEqual(books.mappings.filter((m) => m.receiptId === 'evv1').map((m) => m.transactionRef), [correction.transactionRef], 'linked to its correction, never to the filed payment');
+  const view = ledgerOf(books as unknown as Index, '2026-07-01').views.find((v) => v.r.id === 'evv1')!;
+  assert.ok(view.links.length > 0 && !view.links.includes('P-1'), 'its page shows the correction made, and offers none to make (Detail.tsx FiledPaymentNotice corrected)');
   assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)), 0, 'idempotent');
 });
 
@@ -224,6 +231,91 @@ test('the customs office\'s assessment is a document beside the courier\'s invoi
   assert.equal(documentKind(INVOICE_TEXT, documents()).is, 'receipt');
   const chart = new Set(loadChart().accounts.map((a) => a.number));
   for (const [position, { account }] of Object.entries(documents().customs.positions)) assert.ok(chart.has(account), `${position}: ${account}`);
+});
+
+/** The checks a build before #197 keeps when it reads `by` (src/books/booked-by.ts): a sealed quarter hashes `by`, so nothing else may stand there. */
+const CHECKS_BEFORE = ['saleCode', 'payoutReport', 'payoutOrders', 'creditNote', 'acquisitionTax', 'purchaseVat'];
+
+test('every booking of the split and the deductions names a check older builds keep: a sealed quarter reads the same in every build', async () => {
+  const ws = company();
+  const books = booksOf([invoice()]);
+  await classifyTransactions(books, [PAYMENT], { fx, context: loadClassifyContext(ws), ask: noModel });
+  books.config.closedThrough = '2026-06-30';
+  books.receipts.push(assessment({ date: '2026-07-20' }));
+  bookImportVatDeductions(books, loadClassifyContext(ws));
+  assert.equal(books.journalEntries.length, 4);
+  for (const e of books.journalEntries) assert.ok(e.by?.kind === 'code' && CHECKS_BEFORE.includes(e.by.check), `${e.description}: ${JSON.stringify(e.by)}`);
+});
+
+test('a person\'s word stands: a deduction she removed or changed is not booked again, and an assessment she typed as something else is not used', async () => {
+  const ws = company();
+  const setUp = async () => {
+    const books = booksOf([invoice()]);
+    await classifyTransactions(books, [PAYMENT], { fx, context: loadClassifyContext(ws), ask: noModel });
+    books.receipts.push(assessment());
+    assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)), 1);
+    return books;
+  };
+  const removed = await setUp();
+  removed.journalEntries = removed.journalEntries.filter((e) => e.vatCode !== 'M81-2');
+  removed.mappings = removed.mappings.filter((m) => m.receiptId !== 'evv1');
+  assert.equal(bookImportVatDeductions(removed, loadClassifyContext(ws)), 0, 'removed with its link: not booked again');
+
+  const changed = await setUp();
+  const d = changed.journalEntries.find((e) => e.vatCode === 'M81-2')!;
+  Object.assign(d, { vatCode: 'M0', by: { kind: 'person', at: '2026-10-27T00:00:00Z' } });
+  assert.equal(bookImportVatDeductions(changed, loadClassifyContext(ws)), 0, 'changed by her: not booked beside it');
+
+  const typed = booksOf([invoice()]);
+  await classifyTransactions(typed, [PAYMENT], { fx, context: loadClassifyContext(ws), ask: noModel });
+  typed.receipts.push(assessment({ kind: 'invoice', kindBy: 'human' }));
+  assert.equal(bookImportVatDeductions(typed, loadClassifyContext(ws)), 0, 'a person typed it as an invoice: it proves nothing by code');
+});
+
+test('one invoice of two shipments: each import VAT line is deducted by its own assessment', async () => {
+  const text = `${INVOICE_TEXT}\nZweite Sendung: Zollanmeldungsnummer 26CHEI000000004712`;
+  const lineItems: ReceiptLine[] = [
+    { description: 'Einfuhrsteuer Sendung 1', gross: 30, ratePercent: 0 },
+    { description: 'Einfuhrsteuer Sendung 2', gross: 20, ratePercent: 0 },
+    { description: 'Vorlageprovision', gross: 7, ratePercent: 0 },
+  ];
+  const tx = { ...PAYMENT, amount: 57 };
+  const books = booksOf([invoice({ amount: 57, lineItems, extractedText: text })], undefined, { tx });
+  const ws = company();
+  await classifyTransactions(books, [tx], { fx, context: loadClassifyContext(ws), ask: noModel });
+  books.receipts.push(
+    assessment({ id: 'evvA', extractedText: ASSESSMENT_TEXT.replace('57.55', '30.00') }),
+    assessment({ id: 'evvB', extractedText: ASSESSMENT_TEXT.replace('57.55', '20.00').replaceAll('26CHEI000000004711', '26CHEI000000004712') }),
+  );
+  assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)), 2);
+  assert.deepEqual(lines(books).filter((l) => l[3] === 'M81-2').map((l) => l[2]).sort(), [20, 30]);
+});
+
+test('a copy of one assessment proves no other shipment: the number decides, and copies count once', () => {
+  const words = documents().customs;
+  const other = invoice({ id: 'inv2', extractedText: INVOICE_TEXT.replaceAll('26CHEI000000004711', '26CHEI000000009999') });
+  const split = customsSplit(PAYMENT, [other, assessment(), assessment({ id: 'evv1-copy' })], splitContext());
+  assert.ok(split && 'lines' in split);
+  assert.deepEqual(split.assessments, [], 'the invoice names another assessment: same tax, other shipment');
+  const own = customsSplit(PAYMENT, [invoice(), assessment(), assessment({ id: 'evv1-copy' })], splitContext());
+  assert.ok(own && 'lines' in own);
+  assert.equal(own.deductions.size, 1, 'two copies of one assessment deduct once');
+  assert.equal(readAssessment(assessment(), words, 'CHE-123.456.789')?.number, '26CHEI000000004711');
+});
+
+test('import VAT paid to the customs office itself: the assessment is the payment\'s receipt, found by its number and amount, booked as import VAT with the deduction', async () => {
+  const toCustoms: BankTransaction = { ref: 'Z-1', bank: 'Raiffeisen', date: '2026-05-20', amount: 57.55, currency: 'CHF', direction: 'DBIT', description: 'BAZG Einfuhrabgaben', reference: '26CHEI000000004711' };
+  const evv = assessment();
+  assert.deepEqual(assessmentFacts(ASSESSMENT_TEXT, documents().customs).amount, 57.55, 'read at its arrival: its tax, for the matching');
+  assert.ok(assessmentFacts(ASSESSMENT_TEXT, documents().customs).date?.startsWith('2026-05-0'));
+  assert.ok(pairableReceipt(evv, new Set()), 'an assessment is a candidate receipt');
+  const fit = fitOf(evv, toCustoms, () => undefined, () => false);
+  assert.ok(fit?.number, 'the payment names its number');
+  assert.equal(fitOf(evv, { ...toCustoms, reference: undefined }, () => undefined, () => false), undefined, 'a payment that names no assessment is never its');
+  const books = booksOf([evv], undefined, { tx: toCustoms });
+  await classifyTransactions(books, [toCustoms], { fx, context: loadClassifyContext(company()), ask: noModel });
+  assert.deepEqual(lines(books, 'Z-1'), [['4030', '1021', 57.55, 'M0'], ['', '4030', 57.55, 'M81-2']]);
+  assert.match(books.journalEntries[0].reason ?? '', /direkt an den Zoll/);
 });
 
 function splitContext(o: Partial<SplitContext> = {}): SplitContext {
