@@ -185,6 +185,8 @@ export default {
     'error.bookedSince.person': 'by hand',
     'error.bookedSince.app': 'by the app (a run or a rule)',
     'error.receiptPaid': 'The receipt is paid already: payment {payment} is linked to it. A private outlay on top would book the expense and its input tax twice. If that payment does not belong to this receipt, unlink it first.',
+    'error.pointerLinked': "The receipt is linked to payment {payment}: its input tax is booked there. Pointed at a filed payment too, it would count twice. If it does belong to the filed payment, unlink it first.",
+    'error.correctionBooked': "The correction {entry} already books this receipt’s input tax for the filed payment. Delete the correction in Buchungen first, then remove the pointer.",
     'error.yearClose': 'The year-end close computes the exchange difference: run it again instead of editing the entry.',
     'error.paymentDate': 'An entry of a payment carries the payment’s date ({date}): VAT is reported on payments received, so it belongs to the payment’s period.',
     'error.paymentDateAgreed': 'An entry of a payment carries the payment’s date ({date}): only a line on the receivables or payables carries its document’s date, as VAT is reported on the agreed consideration.',

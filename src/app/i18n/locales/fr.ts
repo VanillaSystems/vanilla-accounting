@@ -185,6 +185,8 @@ export default {
     'error.bookedSince.person': 'à la main',
     'error.bookedSince.app': 'par l’app (une exécution ou une règle)',
     'error.receiptPaid': 'La pièce est déjà payée : le paiement {payment} lui est lié. Une dépense privée en plus comptabiliserait la charge et son impôt préalable deux fois. Si ce paiement n’appartient pas à cette pièce, délie-le d’abord.',
+    'error.pointerLinked': "Le justificatif est lié au paiement {payment} : son impôt préalable y est comptabilisé. Renvoyé aussi à un paiement déclaré, il compterait deux fois. S’il appartient au paiement déclaré, délie-le d’abord.",
+    'error.correctionBooked': "La correction {entry} comptabilise déjà l’impôt préalable de ce justificatif pour le paiement déclaré. Supprime d’abord la correction dans Écritures, puis le renvoi.",
     'error.yearClose': 'La différence de change est calculée par la clôture annuelle: relancez-la au lieu de modifier l’écriture.',
     'error.paymentDate': 'L’écriture d’un paiement porte la date du paiement ({date}) : la TVA est décomptée selon les contre-prestations reçues, elle appartient à la période du paiement.',
     'error.paymentDateAgreed': 'L’écriture d’un paiement porte la date du paiement ({date}) : seule une ligne sur les débiteurs ou les créanciers porte la date de sa pièce, car la TVA est décomptée selon les contre-prestations convenues.',

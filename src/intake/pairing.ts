@@ -153,16 +153,30 @@ const cents = (n: number) => Math.round(Math.abs(n) * 100);
  */
 export function originalOf(tx: BankTransaction): { amount: number; currency: string } | undefined {
   if (tx.original) return tx.original;
-  const m = tx.description.match(new RegExp(`(?<![\\w.,'’])(${AMOUNT})\\s+([A-Z]{3})\\b|\\b([A-Z]{3})\\s+(${AMOUNT})(?![\\d.,'’])`));
-  if (!m) return undefined;
-  const amount = amountIn(m[1] ?? m[4]);
-  return Number.isFinite(amount) ? { amount: Math.abs(amount), currency: m[2] ?? m[3] } : undefined;
+  const hits = ORIGINAL.flatMap(({ re, amount, currency }) => { const m = re.exec(tx.description); return m ? [{ at: m.index, amount: m[amount], currency: m[currency] }] : []; });
+  const first = hits.sort((a, b) => a.at - b.at)[0];
+  if (!first) return undefined;
+  const amount = amountIn(first.amount);
+  return Number.isFinite(amount) ? { amount: Math.abs(amount), currency: first.currency } : undefined;
 }
 
-/** An amount with two decimals, its thousands grouped by «,», «'», «’» or a space, or not grouped («1,234.56», «1'234.56», «1 234,56», «1234.56»). */
-const AMOUNT = "-?\\d{1,3}(?:[,'’ ]\\d{3})+[.,]\\d{2}|-?\\d+[.,]\\d{2}";
+/**
+ * An amount with two decimals as banks write it: thousands grouped by «,» with a decimal point, by
+ * «'» or «’», by «.» with a decimal comma, or not grouped («1,234.56», «1'234.56», «1.234,56»,
+ * «1234.56»). A space groups thousands only right after «of» or the currency code («of 1 234.56
+ * EUR», «EUR 1 234.56»): elsewhere «Order 12 345.00 USD» would read as 12,345.
+ */
+const GROUPED = String.raw`-?\d{1,3}(?:,\d{3})+\.\d{2}|-?\d{1,3}(?:['’]\d{3})+[.,]\d{2}|-?\d{1,3}(?:\.\d{3})+,\d{2}|-?\d+[.,]\d{2}`;
+const SPACED = String.raw`-?\d{1,3}(?: \d{3})+[.,]\d{2}`;
+const END = String.raw`(?![\d.,'’])`;
+const ORIGINAL: ReadonlyArray<{ re: RegExp; amount: number; currency: number }> = [
+  { re: new RegExp(String.raw`(?<=\bof )(${SPACED})\s+([A-Z]{3})\b`), amount: 1, currency: 2 },
+  { re: new RegExp(String.raw`\b([A-Z]{3}) (${SPACED})${END}`), amount: 2, currency: 1 },
+  { re: new RegExp(String.raw`(?<![\w.,'’])(?<!\d )(${GROUPED})\s+([A-Z]{3})\b`), amount: 1, currency: 2 },
+  { re: new RegExp(String.raw`\b([A-Z]{3})\s+(${GROUPED})${END}`), amount: 2, currency: 1 },
+];
 
-/** The number an AMOUNT writes: the last separator before two digits is the decimal point, every other one groups thousands. */
+/** The number an amount writes: the last separator before two digits is the decimal point, every other one groups thousands. */
 const amountIn = (text: string): number => Number(text.replace(/[.,](\d{2})$/, 'D$1').replace(/[,'’ .]/g, '').replace('D', '.'));
 
 /** The receipts the chain looks for a payment for: read, kept, an invoice or a sales record with an amount and a date, nothing linked, not pointed at a filed payment, and no payout report or order page (their own links, order-links.ts and the model). */

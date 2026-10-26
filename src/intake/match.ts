@@ -26,6 +26,7 @@ import { capturedDay } from './captured.js';
 import { isIsoDate } from '../accounting/periods.js';
 import { numbersIn, squash } from '../accounting/document-numbers.js';
 import { nameWords, pairMapping, takenPayments } from './pairing.js';
+import { legOf } from '../workspace/money-accounts.js';
 import { titlesFor } from './titles.js';
 import { estvToChf, noReceiptFor, runPairChain } from './pair-chain.js';
 import { linkOrdersToPayouts } from './order-links.js';
@@ -248,12 +249,16 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   if (!ask) return { notes: [{ code: 'noModel', waiting: toProcess.length }] };
   // The model is shown the code's short list where there is one, else the payments the intake ranks.
   const snapshot = books.read();
-  const taken = new Set(snapshot.mappings.map((m) => m.transactionRef));
+  const taken = takenPayments(snapshot);
   const lock = periodLock(snapshot);
+  const noReceipt = noReceiptFor(ws);
+  const exempt = noReceipt(snapshot);
+  // The payments the model may be shown: none that has no receipt of its own (marked, own transfer, booked onto the owner…).
+  const shown = snapshot.transactions.filter((t) => !t.noReceiptNeeded && !exempt(t));
   const shortList = new Map(chain.left.filter((l) => l.candidates.length && l.total === l.candidates.length).map((l) => [l.receipt, l.candidates]));
   const shownFor = (receipt: Receipt): Candidate[] => {
-    const list = shortList.get(receipt.id)?.flatMap((c) => { const t = snapshot.transactions.find((x) => x.ref === c.payment); return t && !taken.has(t.ref) ? [c.filed ? { ...t, filed: true as const } : t] : []; });
-    return list?.length ? list : candidates(receipt, snapshot.transactions, taken, lock.isClosed);
+    const list = shortList.get(receipt.id)?.flatMap((c) => { const t = shown.find((x) => legOf(x) === c.leg); return t && !taken.has(t.ref) ? [c.filed ? { ...t, filed: true as const } : t] : []; });
+    return list?.length ? list : candidates(receipt, shown, taken, lock.isClosed);
   };
 
   log(`\nProcessing ${toProcess.length} staged receipt(s) (concurrency: ${CONCURRENCY})...\n`);
@@ -309,14 +314,20 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
       if (behind) { twin = index.receipts.find((x) => x.id === behind)?.filename; return; }
       // Periodensperre: never attach a mapping to a transaction inside a closed period.
       const lock = periodLock(index);
+      const held = takenPayments(index);
+      const without = noReceipt(index);
       linked = answer.matchedTransactionRefs.filter((ref) => {
         const tx = index.transactions.find((t) => t.ref === ref);
+        // A payment without a receipt of its own takes none, whatever the model says.
+        if (tx && (tx.noReceiptNeeded || without(tx) || r.notPaidBy?.includes(ref))) { log(`  ⚠ skipped ${ref}: it needs no receipt, or a person took it apart from this receipt`); return false; }
         if (tx && !lock.isClosed(tx.date)) return true;
         if (tx) { log(`  ⚠ skipped mapping to ${ref}: transaction is in the closed period (≤ ${lock.closedThrough})`); filed.push(ref); }
         return false;
       });
       // Its only payment is filed: the receipt names it, so the person sees where its tax goes (a correction in the open quarter).
-      if (!linked.length && filed.length) r.filedPayment = filed[0];
+      // Never a filed payment another receipt holds (its tax would be corrected twice), nor one a person took apart from this one.
+      const pointed = filed.find((ref) => !held.has(ref) && !r.notPaidBy?.includes(ref));
+      if (!linked.length && pointed) r.filedPayment = pointed;
       for (const transactionRef of linked) {
         if (!index.mappings.some((m) => m.transactionRef === transactionRef && m.receiptId === receipt.id)) index.mappings.push({ transactionRef, receiptId: receipt.id, by: 'llm' });
       }

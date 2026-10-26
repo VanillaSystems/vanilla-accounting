@@ -89,3 +89,39 @@ test('a receipt whose payment is taken goes to the model\'s match as before', as
   await runIntake({ ws, books: storePort(ws, moduleActor('intake')), ask: m.ask, steps: [['read', readStep], ['match', matchStep]] });
   assert.ok(m.steps.includes('receipt-match'), m.steps.join(' '));
 });
+
+/** A model whose match names `ref` for every receipt, sure of it, and keeps the prompts it was shown. */
+function sure(ref: string): { ask: Ask; prompts: string[] } {
+  const prompts: string[] = [];
+  const ask: Ask = async (prompt, opts) => {
+    if (opts.step !== 'receipt-match') return model().ask(prompt, opts);
+    prompts.push(prompt);
+    return JSON.stringify({ suggestedFilename: '20260512-post-ch.pdf', date: '2026-05-12', description: 'Post CH', amount: 208.7, currency: 'CHF', matchedTransactionRefs: [ref], confidence: 0.95 });
+  };
+  return { ask, prompts };
+}
+
+test('the model\'s match neither sees nor links a payment that needs no receipt', async () => {
+  const ws = dropped();
+  const books = loadBooks(ws);
+  update(books, moduleActor('test'), (b) => { b.transactions.find((t) => t.ref === PAYMENT)!.noReceiptNeeded = true; });
+  saveBooks(ws, books);
+  const m = sure(PAYMENT);
+  await runIntake({ ws, books: storePort(ws, moduleActor('intake')), ask: m.ask, steps: [['read', readStep], ['match', matchStep]] });
+  assert.ok(m.prompts.length && !m.prompts[0].includes(`"ref":"${PAYMENT}"`), 'not among the payments shown');
+  assert.deepEqual(loadBooks(ws).mappings.filter((x) => x.transactionRef === PAYMENT), [], 'not linked, whatever the model says');
+});
+
+test('the model\'s match never points a receipt at a filed payment another receipt points at: its tax is corrected once', async () => {
+  const ws = dropped();
+  // Q2 filed: the payment of the Post invoice lies in a filed quarter now.
+  const ledger = join(ws.paths.root, 'ledger.json');
+  writeFileSync(ledger, readFileSync(ledger, 'utf8').replace('"closedThrough": "2026-03-31"', '"closedThrough": "2026-06-30"'));
+  const books = loadBooks(ws);
+  update(books, moduleActor('test'), (b) => { b.receipts.find((r) => r.id === 'a1b05ebfe049b2ca')!.filedPayment = PAYMENT; });
+  saveBooks(ws, books);
+  assert.equal(loadBooks(ws).config.closedThrough, '2026-06-30');
+  await runIntake({ ws, books: storePort(ws, moduleActor('intake')), ask: sure(PAYMENT).ask, steps: [['read', readStep], ['match', matchStep]] });
+  const r = loadBooks(ws).receipts.find((x) => x.originalFilename === 'scan-post.pdf')!;
+  assert.equal(r.filedPayment, undefined);
+});

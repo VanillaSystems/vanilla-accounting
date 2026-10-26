@@ -185,6 +185,8 @@ export default {
     'error.bookedSince.person': 'a mano',
     'error.bookedSince.app': 'dall’app (un’esecuzione o una regola)',
     'error.receiptPaid': 'Il giustificativo è già pagato: il pagamento {payment} è collegato ad esso. Una spesa privata in più registrerebbe il costo e la sua imposta precedente due volte. Se quel pagamento non appartiene a questo giustificativo, scollegalo prima.',
+    'error.pointerLinked': "Il giustificativo è collegato al pagamento {payment}: la sua imposta precedente è registrata lì. Rinviato anche a un pagamento dichiarato, conterebbe due volte. Se appartiene al pagamento dichiarato, scollegalo prima.",
+    'error.correctionBooked': "La correzione {entry} registra già l’imposta precedente di questo giustificativo per il pagamento dichiarato. Elimina prima la correzione nelle Registrazioni, poi il rinvio.",
     'error.yearClose': 'La differenza di cambio è calcolata dalla chiusura annuale: rilanciarla invece di modificare la registrazione.',
     'error.paymentDate': 'La registrazione di un pagamento porta la data del pagamento ({date}): l’IVA è conteggiata secondo le controprestazioni ricevute, appartiene al periodo del pagamento.',
     'error.paymentDateAgreed': 'La registrazione di un pagamento porta la data del pagamento ({date}): solo una riga sui debitori o sui creditori porta la data del suo giustificativo, perché l’IVA è conteggiata secondo le controprestazioni convenute.',

@@ -93,7 +93,7 @@ function FiledPaymentNotice({ l, nav, books, canEdit, payment, open, receipt, co
       {ICONS.lock}<span>{noInputTax ? t(`receipts.filedPaymentNoInputTax.${noInputTax}`, said) : t(corrected ? 'receipts.filedPaymentCorrected' : 'receipts.filedPaymentNotice', said)}</span>
       <a href="#" onClick={(e) => { e.preventDefault(); nav.go(go); }}>{t('receipts.filedPaymentOpen')}</a>
       {canEdit && entry && open && !noInputTax && !corrected && <a href="#" data-testid="filed-correct" onClick={(e) => { e.preventDefault(); correctFiled(nav, books, l, payment, receipt); }}>{t('receipts.correctIn', { period: open })}</a>}
-      {canEdit && <button type="button" className="quiet" data-testid="filed-unpoint" data-tip={t('pair.unpointTip')} onClick={() => void unpointFiled(nav, receipt, payment, `${formatDate(tx.date)} ${amountOf(tx)}`)}>{t('pair.unlink')}</button>}
+      {canEdit && !corrected && <button type="button" className="quiet" data-testid="filed-unpoint" data-tip={t('pair.unpointTip')} onClick={() => void unpointFiled(nav, receipt, payment, `${formatDate(tx.date)} ${amountOf(tx)}`)}>{t('pair.unlink')}</button>}
     </div>
   );
 }

@@ -182,6 +182,8 @@ export const messages = {
   'error.bookedSince.person': 'von Hand',
   'error.bookedSince.app': 'von der App (ein Lauf oder eine Regel)',
   'error.receiptPaid': 'Der Beleg ist schon bezahlt: die Zahlung {payment} ist mit ihm verknüpft. Eine private Auslage dazu würde den Aufwand und die Vorsteuer doppelt buchen. Gehört die Zahlung nicht zu diesem Beleg, zuerst ihre Verknüpfung lösen.',
+  'error.pointerLinked': "Der Beleg ist mit der Zahlung {payment} verknüpft: dort steht seine Vorsteuer. Auf eine eingereichte Zahlung verwiesen, zählte sie doppelt. Gehört er doch zur eingereichten Zahlung, zuerst die Verknüpfung lösen.",
+  'error.correctionBooked': "Die Korrektur {entry} bucht die Vorsteuer dieses Belegs für die eingereichte Zahlung schon. Zuerst die Korrektur in Buchungen löschen, dann den Verweis lösen.",
   'error.yearClose': 'Die Kursdifferenz berechnet der Jahresabschluss: ihn neu laufen lassen, statt die Buchung zu ändern.',
   'error.paymentDate': 'Die Buchung einer Zahlung trägt das Datum der Zahlung ({date}): die MWST wird nach vereinnahmtem Entgelt abgerechnet, sie gehört in die Periode der Zahlung.',
   'error.paymentDateAgreed': 'Die Buchung einer Zahlung trägt das Datum der Zahlung ({date}): nur eine Zeile auf Debitoren oder Kreditoren trägt das Datum ihres Belegs, denn die MWST wird nach vereinbartem Entgelt abgerechnet.',

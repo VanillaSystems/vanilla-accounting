@@ -71,8 +71,11 @@ router.post('/api/receipts/:id/filed-payment', (req, res) => {
     const r = books.receipts.find((x) => x.id === id);
     if (!r) throw new RequestError(404, 'Receipt not found', { code: 'gone', params: { what: 'receipt' } });
     assertOpen(books, receiptDates(books, id), 'mapping');
+    // A correction booked for the filed payment with this receipt counts its input tax already: the correction goes first.
+    const correction = books.mappings.filter((m) => m.receiptId === id).flatMap((m) => books.journalEntries.filter((e) => e.transactionRef === m.transactionRef && e.corrects))[0];
     if (payment === null) {
       const was = r.filedPayment;
+      if (was && correction) throw new RequestError(409, `Die Korrektur ${correction.id} bucht die Vorsteuer dieses Belegs schon: zuerst sie löschen.`, { code: 'correctionBooked', params: { receipt: id, entry: correction.id } });
       if (was) { delete r.filedPayment; apart(books, id, was, true); }
       return { ok: true, filedPayment: null, was: was ?? null };
     }
@@ -80,6 +83,10 @@ router.post('/api/receipts/:id/filed-payment', (req, res) => {
     if (!t) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
     if (!periodLock(books).isClosed(t.date)) throw new RequestError(400, 'Only a payment of a filed period is pointed at; link an open one.');
     if (r.filedPayment !== payment && takenPayments(books).has(payment)) throw new RequestError(409, 'Another receipt holds this payment.');
+    // A receipt a bank payment pays meanwhile: its input tax is booked there; pointing it at a filed payment too would count it twice.
+    const paid = books.mappings.find((m) => m.receiptId === id && books.transactions.some((x) => x.ref === m.transactionRef));
+    if (paid) throw new RequestError(409, `Der Beleg ist mit der Zahlung ${paid.transactionRef} verknüpft: er zahlt keine eingereichte Zahlung mehr.`, { code: 'pointerLinked', params: { receipt: id, payment: paid.transactionRef } });
+    if (r.filedPayment && r.filedPayment !== payment) apart(books, id, r.filedPayment, true);
     r.filedPayment = payment;
     apart(books, id, payment, false);
     return { ok: true, filedPayment: payment };
