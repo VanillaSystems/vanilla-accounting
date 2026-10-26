@@ -27,6 +27,7 @@ import { loadKnowledge } from '../knowledge/layers.js';
 import { APP_ROOT, openWorkspace } from '../workspace/workspace.js';
 import { documents, filing } from '../engines/index.js';
 import { duplicatesIn } from '../intake/duplicates.js';
+import { MODEL_RULE } from '../intake/unclear.js';
 
 const ws = openWorkspace();
 const BEFORE_DAYS = 45; // invoice dated up to 45 days before the payment
@@ -208,7 +209,11 @@ function main() {
   if (!apply) { console.log('\nDRY RUN — nothing written. Pass --apply to link the "+" lines.'); return; }
   update(index, PERSON, (books) => {
     for (const l of links) books.mappings.push({ transactionRef: l.tx.ref, receiptId: l.receipt.id, by: 'rule', rule: l.rule });
-    for (const k of kinded) Object.assign(k.receipt, { kind: k.kind, kindBy: 'rule', kindRule: k.rule });
+    for (const k of kinded) {
+      Object.assign(k.receipt, { kind: k.kind, kindBy: 'rule', kindRule: k.rule });
+      // The model's reason goes with the model's kind (src/intake/unclear.ts).
+      if (!k.rule.startsWith(MODEL_RULE)) delete k.receipt.kindWhy;
+    }
   });
   saveBooks(ws, index);
   console.log(`\n✓ linked ${links.length} receipt(s), typed ${kinded.length}`);

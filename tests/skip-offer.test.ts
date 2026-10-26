@@ -58,6 +58,23 @@ test('a file renamed in the books is still found by the start of its SHA-256', (
   assert.equal(receiptSkipOffer(renamed, [{ decl: decl(), lines: LINES }], BOOKS)?.sender, 'sales@carrier.example');
 });
 
+test('a file name two senders share never names the wrong sender: the bytes decide, a shared name alone offers nothing', () => {
+  const lines = [
+    got('1111111111111111', 'Rechnung.pdf', 'news@carrier.example'),
+    got('2222222222222222', 'Rechnung.pdf', 'billing@supplier.example'),
+    got('3333333333333333', 'Rechnung.pdf', 'news@carrier.example'),
+  ];
+  const brochure = receipt('1111111111111111', { originalFilename: 'Rechnung.pdf', kind: 'noise', kindBy: 'human' });
+  const invoice = receipt('2222222222222222', { originalFilename: 'Rechnung.pdf' });
+  const offer = receiptSkipOffer(brochure, [{ decl: decl(), lines }], [brochure, invoice]);
+  assert.deepEqual([offer?.sender, offer?.delivered, offer?.receipts], ['news@carrier.example', 2, []], 'the supplier\'s invoice of the same name is not counted as the carrier\'s');
+  const photo = receipt('9999999999999999', { originalFilename: 'Rechnung.pdf', kind: 'noise', kindBy: 'human' });
+  assert.equal(receiptSkipOffer(photo, [{ decl: decl(), lines }], [photo, invoice]), undefined, 'no bytes match and two senders sent that name: no offer');
+  const alone = [got('4444444444444444', 'Broschuere.pdf', 'news@carrier.example')];
+  const scan = receipt('8888888888888888', { originalFilename: 'Broschuere.pdf', kind: 'noise', kindBy: 'human' });
+  assert.equal(receiptSkipOffer(scan, [{ decl: decl(), lines: alone }], [])?.sender, 'news@carrier.example', 'a name one sender alone sent still counts');
+});
+
 test('keeping the skip writes the sender into the mailbox\'s reach, of an IMAP mailbox or the Mail app, comments and all', () => {
   const root = mkdtempSync(join(tmpdir(), 'skip-offer-'));
   const write = (id: string, text: string) => { mkdirSync(join(root, 'sources', id), { recursive: true }); writeFileSync(join(root, 'sources', id, 'source.yaml'), text); };

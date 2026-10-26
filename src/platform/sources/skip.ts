@@ -34,8 +34,20 @@ export function mailReachOf(decl: Pick<SourceDecl, 'reach'>): { key: 'mail' | 'm
 
 type DocumentLine = Extract<LedgerLine, { got: { kind: 'document' } }>;
 const isDocument = (l: LedgerLine): l is DocumentLine => 'got' in l && l.got.kind === 'document' && !l.got.duplicateOf;
-/** A delivered file is the receipt read from it: the receipt's id is the start of the file's SHA-256, its first name the file's. */
-const delivered = (l: DocumentLine, r: Pick<Receipt, 'id' | 'originalFilename'>) => l.got.sha256.startsWith(r.id) || (!!l.got.file && l.got.file === r.originalFilename);
+const senderOf = (l: DocumentLine) => l.got.from?.toLowerCase();
+
+/**
+ * Who sent the file a receipt was read from: the line whose SHA-256 starts with the receipt's id.
+ * Only when no line has those bytes (a photo turned into a PDF) does the file's name count, and
+ * only if one sender alone sent a file of that name: «Rechnung.pdf» from two senders names neither,
+ * so a skip never hits a supplier that happened to name its invoice alike.
+ */
+function senderOfReceipt(lines: readonly DocumentLine[], r: Pick<Receipt, 'id' | 'originalFilename'>): string | undefined {
+  const bySha = lines.filter((l) => l.got.sha256.startsWith(r.id));
+  const matched = bySha.length ? bySha : lines.filter((l) => !!l.got.file && l.got.file === r.originalFilename);
+  const senders = new Set(matched.map(senderOf));
+  return senders.size === 1 ? [...senders][0] : undefined;
+}
 
 /**
  * The skip a person's «kein Beleg» on `receipt` offers: the company mailbox that delivered it and
@@ -51,10 +63,11 @@ export function receiptSkipOffer(
   for (const { decl, lines } of mailboxes) {
     const mail = mailReachOf(decl);
     if (decl.origin !== 'company' || !mail) continue;
-    const from = lines.filter(isDocument).find((l) => l.got.from && delivered(l, receipt))?.got.from?.toLowerCase();
+    const documents = lines.filter(isDocument);
+    const from = senderOfReceipt(documents, receipt);
     if (!from || !senderAllowed(mail.reach, from)) continue;
-    const theirs = lines.filter(isDocument).filter((l) => l.got.from?.toLowerCase() === from);
-    const taken = receipts.filter((r) => r.id !== receipt.id && !ASIDE.has(r.kind) && theirs.some((l) => delivered(l, r)));
+    const theirs = documents.filter((l) => senderOf(l) === from);
+    const taken = receipts.filter((r) => r.id !== receipt.id && !ASIDE.has(r.kind) && senderOfReceipt(documents, r) === from);
     return {
       source: decl.id,
       label: decl.label,
