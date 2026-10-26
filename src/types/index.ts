@@ -72,8 +72,18 @@ export interface Receipt {
    * is made (golden rule 1); the receipt says so, and its tax is a correction in the open quarter.
    */
   filedPayment?: string;
+  /** Payments a person took this receipt apart from (src/server/edits.ts unlink): the matching chain never pairs them again (src/intake/pairing.ts). A person's link clears its payment. */
+  notPaidBy?: string[];
+  /** Payments the model was shown for this receipt by the matching chain and did not take (src/intake/pair-chain.ts): not asked about again on the next run; «Zahlung suchen» asks again. */
+  pairDoubted?: string[];
   /** A payout report's figures, read once at the match step: the booking step splits every payout it is linked to by them, in code (r10f-29). */
   payout?: PayoutFacts;
+  /**
+   * A customs assessment: the deduction of import VAT once booked from it (its entry's id), by code or
+   * by a person (src/booking/customs-invoice.ts). Code never books another from it or its copies, so a
+   * deduction a person removed or changed stays as she left it.
+   */
+  importVatDeduction?: string;
   /** An order document's facts (a shop's order page), read once at the match step: the booking step books a payout per order by them (src/booking/payout-orders.ts). */
   order?: OrderFacts;
 }
@@ -401,6 +411,12 @@ export interface BankTransaction {
    * keeps exactly what it was filed with, parts or none.
    */
   parts?: BankTransactionPart[];
+  /**
+   * The amount in the currency the payment was made in, when the bank names one besides the
+   * account's (camt053 InstdAmt): a receipt in that currency matches it to the Rappen (src/intake/pairing.ts
+   * originalOf, which also reads it from the text, «Card transaction of 12.40 USD»). Only on rows imported since #187.
+   */
+  original?: { amount: number; currency: string };
   /**
    * The payment reference the payer gave (QR / creditor reference, invoice number, remittance
    * text), from camt053 or, for Wise transfers, the monthly statement PDF. Matched against

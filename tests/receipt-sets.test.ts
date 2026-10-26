@@ -175,3 +175,10 @@ test('with the wait for receipts (#29): the payment waits until the set is linke
     assert.equal(after.transactions.find((t) => t.ref === 'W-1')!.waitsForReceipt, undefined, 'it waits no more');
   } finally { await api.stop(); }
 });
+
+test('a set a person took apart from the payment is never linked again (Receipt.notPaidBy, #187)', () => {
+  const rs = [receipt(30), receipt(45.5, { notPaidBy: ['P1'] }), receipt(11.9)];
+  const books = booksOf([pay(87.4)], rs);
+  assert.deepEqual(linkReceiptSets(books, open), []);
+  assert.deepEqual(books.mappings, []);
+});

@@ -722,7 +722,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
     <div className="detail-in wfpage">
       <div className="head"><h2 className="who">{t('automation.tasks')}</h2></div>
       <ThresholdTasks nav={nav} passed={threshold} />
-      <ReceiptDueTasks items={receiptDue} nav={nav} canEdit={canEdit} />
+      <ReceiptDueTasks items={receiptDue} nav={nav} canEdit={canEdit} books={books} />
       {tasks.length ? (
         <div className="wftasks">
           {tasks.map((task) => {

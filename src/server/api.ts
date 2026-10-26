@@ -7,6 +7,7 @@ import { router as scan } from './routes/scan.js';
 import { router as receipts } from './routes/receipts.js';
 import { router as transactions } from './routes/transactions.js';
 import { router as mappings } from './routes/mappings.js';
+import { router as pairing } from './routes/pairing.js';
 import { router as journal } from './routes/journal.js';
 import { router as config } from './routes/config.js';
 import { router as yearClose } from './routes/year-close.js';
@@ -75,7 +76,7 @@ app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, questions, reports);
+app.use(files, scan, receipts, transactions, mappings, pairing, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, questions, reports);
 app.use(knowledge);
 app.use(onboarding);
 

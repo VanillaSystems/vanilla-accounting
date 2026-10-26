@@ -222,3 +222,15 @@ button.qcard:hover { background: var(--hover); }
 .form.inline { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); align-items: end; max-width: 760px; padding: 12px 14px; margin: 6px 0 10px; border: 1px solid var(--line); border-radius: 12px; }
 .form.inline .wide { grid-column: 1 / -1; }
 .form.inline .acts { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; }
+
+/* «Zahlung suchen» / «Beleg suchen» (#187): the button in a line, its outcome below it, and who made a link. */
+.notice:has(.findpair), .wfactions:has(.findpair) { flex-wrap: wrap; }
+.findpair { flex-basis: 100%; display: grid; gap: 4px; margin-top: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); font-size: 12.5px; color: var(--ink-2); }
+.findpair.compact { margin-top: 4px; }
+.findpair-ok { color: var(--pos); }
+.findpair-note, .madeby { color: var(--muted); font-size: 12px; }
+.findpair-list { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 4px; }
+.findpair-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; }
+.findpair-list .golink { text-align: left; overflow-wrap: anywhere; }
+.findpair-score { font: 500 11.5px "Geist Mono", monospace; color: var(--muted); }
+.findpair-go[disabled] { opacity: .6; cursor: progress; }

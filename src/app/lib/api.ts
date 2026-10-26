@@ -1,3 +1,4 @@
+import type { Found } from '../../intake/pairing.js';
 import type { TerminalCli, TerminalView } from '../../platform/terminal.js';
 import type { AiSetupView, KeySaved, Probation, SetupKey } from '../../platform/ai-setup.js';
 import type { StatementProblem } from '../../types/api-error.js';
@@ -136,6 +137,8 @@ export function errorText(e: unknown): string {
     case 'hasEntries': return t('error.hasEntries');
     case 'bookedSince': return t('error.bookedSince', { payment: b.params.payment, n: b.params.entries, by: t(`error.bookedSince.${b.params.by}`) });
     case 'receiptPaid': return t('error.receiptPaid', { payment: b.params.payment });
+    case 'pointerLinked': return t('error.pointerLinked', { payment: b.params.payment });
+    case 'correctionBooked': return t('error.correctionBooked', { entry: b.params.entry });
     case 'secondPayment': return t('error.secondPayment', { payment: b.params.payment });
     case 'paidPrivately': return t('error.paidPrivately', { payment: b.params.payment });
     case 'partAmount': return t('error.partAmount', { total: `${b.params.currency} ${fmt(b.params.total)}` });
@@ -327,6 +330,10 @@ export const api = {
   /** `again`: the payments booked again by a run; `kept`: a booked payment whose booking stays because no model is there to rebook it (r8f-41). */
   addMapping: (link: Link) => request<Linked>('POST', '/api/mapping/add', link),
   removeMapping: (link: Link) => request<Linked>('POST', '/api/mapping/remove', link),
+  /** «Zahlung suchen» / «Beleg suchen» (#187): the matching chain for one receipt or one payment. */
+  findPayment: (receipt: string) => request<Found>('POST', `/api/receipts/${encodeURIComponent(receipt)}/find-payment`),
+  setFiledPayment: (receipt: string, payment: string | null) => request<{ ok: true }>('POST', `/api/receipts/${encodeURIComponent(receipt)}/filed-payment`, { payment }),
+  findReceipt: (payment: string) => request<Found>('POST', `/api/transactions/${encodeURIComponent(payment)}/find-receipt`),
 
   patchJournalEntry: (id: string, patch: JournalEntryPatch) =>
     request<Ok>('PATCH', `/api/journal-entries/${encodeURIComponent(id)}`, patch),

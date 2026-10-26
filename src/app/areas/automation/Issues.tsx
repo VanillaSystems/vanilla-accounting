@@ -3,6 +3,7 @@
  * return is filed, under «Abrechnung prüfen» (r4c-38), and the bookings that contradict their
  * receipts with their one click (r4c-31). Each issue links to where it is settled; none blocks.
  */
+import { FindPair } from '../receipts/FindPair.js';
 import { t } from '../../i18n/index.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { useQuestions } from '../../questions/store.js';
@@ -140,7 +141,7 @@ export function ThresholdTasks({ nav, passed }: { nav: Nav; passed: ReturnType<t
  * documents that show the VAT (#134); «Ohne Vorsteuer buchen» books it at once with the zero code. An
  * Eigenbeleg (#8) is not built yet.
  */
-export function ReceiptDueTasks({ items, nav, canEdit }: { items: readonly WaitingPayment[]; nav: Nav; canEdit: boolean }) {
+export function ReceiptDueTasks({ items, nav, canEdit, books }: { items: readonly WaitingPayment[]; nav: Nav; canEdit: boolean; books: Index }) {
   // The rate answers given here, each with its «Immer so?» while the page stays open: the payment itself is booked and leaves the list.
   const [answered, setAnswered] = useState<Array<{ offer: UnreadOffer; rate: number }>>([]);
   if (!items.length && !answered.length) return null;
@@ -157,6 +158,7 @@ export function ReceiptDueTasks({ items, nav, canEdit }: { items: readonly Waiti
           <p>{t('receiptDue.lead')}</p>
           <span className="wfactions">
             <button type="button" className="btn ghost" data-testid="receipt-due-find" onClick={() => nav.go(at({ area: 'bank', payment: item.tx.ref }, item.tx.date))}>{t('receiptDue.find')}</button>
+            {canEdit ? <FindPair key={`find-${item.tx.ref}`} on={{ payment: item.tx.ref }} books={books} nav={nav} /> : null}
             {canEdit ? <button type="button" className="btn ghost" data-testid="receipt-due-proof" data-tip={t('receiptDue.otherProofTip')} onClick={() => nav.go(at({ area: 'bank', payment: item.tx.ref }, item.tx.date))}>{t('receiptDue.otherProof')}</button> : null}
             {canEdit ? <button type="button" className="btn" data-testid="receipt-due-book" onClick={() => void bookWithoutInputTax(nav, item.tx)}>{t('receiptDue.withoutInputTax')}</button> : null}
           </span>

@@ -11,10 +11,10 @@ and the providers.
 | core | 65 | 23 |
 | engine | 4 | 1 |
 | provider | 13 | 11 |
-| split | 104 | 26 |
+| split | 105 | 26 |
 | infrastructure | 67 | 4 |
 | workflow | 24 | 0 |
-| view | 289 | 56 |
+| view | 291 | 56 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -74,7 +74,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/core/modules/check.ts` | Ziffer 9 |
 | `src/core/modules/schema.ts` | MWST 1, eCH-0217 1 |
 | `src/types/api-error.ts` | camt.053 2 |
-| `src/types/index.ts` | CHF 2, MWST 4, ESTV 3, Ziffer 2, form 0535 2, camt.053 5 |
+| `src/types/index.ts` | CHF 2, MWST 4, ESTV 3, Ziffer 2, form 0535 2, camt.053 6, Rappen 1 |
 | `src/workspace/bank-statements.ts` | camt.053 7 |
 | `src/workspace/banks.ts` | camt.053 7 |
 | `src/workspace/checks.ts` | CHF 1, camt.053 1 |
@@ -101,7 +101,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/export/bundle.ts` | CHF 3, MWST 1 |
 | `src/export/tables.ts` | CHF 3, MWST 1 |
 | `src/providers/banana/banana.ts` | CHF 2 |
-| `src/providers/camt053/camt053.ts` | CHF 5, camt.053 6 |
+| `src/providers/camt053/camt053.ts` | CHF 5, camt.053 6, Rappen 1 |
 | `src/providers/camt053/recognize.ts` | camt.053 2 |
 | `src/providers/camt053/statement-balances.ts` | CHF 1, camt.053 3 |
 | `src/providers/ech0217/xml.ts` | MWST 5, ESTV 1, Ziffer 2, eCH-0217 38, Rappen 1 |
@@ -126,7 +126,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/accounting/year-close.ts` | CHF 12, MWST 2, ESTV 3, Ziffer 1, form 0535 3, camt.053 1, Rappen 1 |
 | `src/booking/classify.ts` | ESTV 1, Rappen 1 |
 | `src/collect/tutti.ts` | CHF 8, MWST 1 |
-| `src/intake/match.ts` | CHF 1, Rappen 1 |
+| `src/intake/match.ts` | CHF 1 |
 | `src/intake/read.ts` | camt.053 4 |
 | `src/intake/vat.ts` | MWST 3 |
 | `src/invoices/fonts.ts` | QR-bill 1 |
@@ -187,8 +187,8 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 43, MWST 288, ESTV 40, Ziffer 52, form 0535 1, UID 1, camt.053 16, QR-bill 1 |
-| `src/app/i18n/locales/en.ts` | CHF 43, MWST 5, ESTV 26, form 0535 1, UID 1, camt.053 16, QR-bill 4 |
+| `src/app/i18n/locales/de.ts` | CHF 43, MWST 287, ESTV 40, Ziffer 52, form 0535 1, UID 1, camt.053 16, QR-bill 1 |
+| `src/app/i18n/locales/en.ts` | CHF 43, MWST 4, ESTV 26, form 0535 1, UID 1, camt.053 16, QR-bill 4 |
 | `src/app/i18n/locales/fr.ts` | CHF 43, MWST 1, form 0535 1, UID 1, camt.053 16, QR-bill 1 |
 | `src/app/i18n/locales/it.ts` | CHF 43, MWST 1, form 0535 1, UID 1, camt.053 16, QR-bill 1 |
 | `src/app/lib/api.ts` | camt.053 1 |

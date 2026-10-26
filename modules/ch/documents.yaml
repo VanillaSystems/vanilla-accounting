@@ -34,6 +34,10 @@ statement: [Kontoauszug, Bankauszug, Account statement, Bank statement, Statemen
 # period they tell a statement among the receipts from an invoice that only mentions one.
 balance: [Saldovortrag, Anfangssaldo, Schlusssaldo, Eröffnungssaldo, Endsaldo, Saldo, Opening balance, Closing balance, Balance brought forward, Balance, Solde initial, Solde final, Solde, Saldo iniziale, Saldo finale]
 
+# The title of a credit note in its first lines (src/intake/pairing.ts paysIn): money comes back for
+# it, so the matching looks for it among the money that came in.
+credit: [Gutschrift, Gutschriftsanzeige, Credit note, Credit memo, Note de crédit, Nota di credito]
+
 # A courier's or forwarder's customs invoice (src/booking/customs-invoice.ts): each of its read lines
 # (Receipt.lineItems) is one position by its words, and the position lands on its account of the
 # chart (accounts.yaml), processes/booking.guide.yaml#shape shp-zollrechnung. A line takes the
@@ -62,3 +66,7 @@ customs:
   assessment:
     title: [Veranlagungsverfügung MWST, Décision de taxation TVA, Decisione d'imposizione IVA, Assessment decision VAT]
     total: [Gesamtbetrag MWST, Montant total TVA, Importo totale IVA, Total amount VAT]
+    # Its number (the customs declaration's, such as 26CHEI000000004711), without the version suffix:
+    # the courier's invoice cites it, two documents of one number are copies, and a payment to the
+    # customs office names it in its text.
+    number: '\d{2}CH[A-Z]{2,4}\d{10,14}'

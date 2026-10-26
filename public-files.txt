@@ -32,6 +32,7 @@ demo-coiffeur/**
 demo-schreinerei/**
 tools/demo/**
 tools/cases/**
+tools/eval/**
 tools/vat-codes/**
 tools/layers/**
 modules/**

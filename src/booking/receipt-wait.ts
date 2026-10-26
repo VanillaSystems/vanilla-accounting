@@ -30,6 +30,7 @@ import type { FxResolver } from '../accounting/fx-rates.js';
 import { isSeparateFee } from './separate-fee.js';
 import { businessVat } from './purchase-vat.js';
 import { linkedOf, type Linked } from '../accounting/receipt-due.js';
+import { bankAccountFor } from '../workspace/money-accounts.js';
 
 export const RECEIPT_STEP = 'evidence.guide.yaml#rules';
 
@@ -185,4 +186,24 @@ export function receiptWaitOf(books: Books, tx: BankTransaction, context: Classi
     settles: settlementAccount(context),
     inputTax: withoutInputTax() === undefined,
   });
+}
+
+/** Why a payment has no receipt of its own: the matching chain never pairs one (#187). Money in, a rule that asks first and a firm without input tax still take a receipt. */
+const NONE_OF_ITS_OWN: ReadonlySet<NoWait> = new Set<NoWait>(['marked', 'zero', 'separateFee', 'ownTransfer', 'settlement', 'business', 'wording']);
+
+/**
+ * The payments that have no receipt of their own, by the same decision as the wait for one
+ * (receiptWait), and a payment already booked onto the owner's account or another money account
+ * only (an outlay paid back, a transfer, issue #90): what the matching chain never pairs. A booking
+ * onto a debt is no sign: on the agreed basis an invoice's payment settles the payables.
+ */
+export function noReceiptOfItsOwn(books: Books, context: ClassifyContext, known: ReceiptKnowledge, fx: FxResolver): (tx: BankTransaction) => boolean {
+  const settles = (account: string) => account === context.ownerAccount || !!context.moneyAccounts?.has(account);
+  return (tx) => {
+    const w = receiptWaitOf(books, tx, context, known, fx);
+    if (!w.wait && NONE_OF_ITS_OWN.has(w.why)) return true;
+    const entries = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
+    if (!entries.length) return false;
+    try { return onlySettles(entries, bankAccountFor(tx, context.bankAccounts), settles); } catch { return false; }
+  };
 }

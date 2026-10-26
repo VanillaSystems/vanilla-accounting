@@ -41,6 +41,10 @@ export type ApiRefusal =
   | { code: 'bookedSince'; params: { payment: string; entries: number; by: 'person' | 'app' } }
   /** «Privat oder bar bezahlt» on a receipt a payment already pays (src/server/edits.ts privatePayment). */
   | { code: 'receiptPaid'; params: { receipt: string; payment: string } }
+  /** A late receipt pointed again at a filed payment while a bank payment pays it (src/server/routes/pairing.ts, #187): its input tax would count twice. */
+  | { code: 'pointerLinked'; params: { receipt: string; payment: string } }
+  /** «Lösen» of a filed pointer while a correction entry books the receipt's input tax for that payment (#187): the correction is deleted first. */
+  | { code: 'correctionBooked'; params: { receipt: string; entry: string } }
   /** «Privat oder bar bezahlt» for a part: the part must be above 0 and at most the receipt's total (src/server/edits.ts privatePayment). */
   | { code: 'partAmount'; params: { total: number; currency: string } }
   /** A part of a receipt that shows several Swiss VAT rates names the rate line it falls under (`rates`: the receipt's). */

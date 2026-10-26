@@ -265,12 +265,15 @@ export interface DocumentsData {
   /** A courier's customs invoice: its positions by their words and accounts, and the customs office's assessment that proves import VAT (src/booking/customs-invoice.ts). */
   customs: {
     positions: Record<CustomsPosition, { account: string; words: string[] }>;
-    assessment: { title: string[]; total: string[] };
+    /** `number`: the pattern (a regular expression's source) of the assessment's number. */
+    assessment: { title: string[]; total: string[]; number: string };
   };
   /** The title of a bank statement: the drop reads such a PDF as a statement, not as a receipt. */
   statement: string[];
   /** The balance lines of a statement («Saldovortrag», «Closing balance»): with its title, IBAN and period, a statement among the receipts (src/books/statement-facts.ts). */
   balance: string[];
+  /** The title of a credit note («Gutschrift», «Credit note»): money comes back for it, so it is matched to money in (src/intake/pairing.ts paysIn). */
+  credit?: string[];
 }
 
 /** What a line of a customs invoice charges: the import VAT the carrier advanced, customs duty, the carrier's fees, freight. */
