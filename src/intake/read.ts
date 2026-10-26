@@ -29,6 +29,7 @@ import { fileReceipts, paymentContext } from '../invoices/service.js';
 import { stemOf, type Ask, type IntakeNote, type StepRun } from './pipeline.js';
 import { putInQuarantine } from './quarantine.js';
 import { documentKind } from './document-kind.js';
+import { askKind, asksModel, kindOfModel, MODEL_TEXT, type ModelKind } from './unclear.js';
 import { statementFacts } from '../books/statement-facts.js';
 import { documents } from '../engines/index.js';
 
@@ -168,15 +169,16 @@ interface Extracted { text: string; method: Receipt['extractionMethod']; fileSiz
  * What a fresh receipt's text says it is (src/intake/document-kind.ts): an order confirmation or a
  * delivery note is kept beside its invoice, never paid on its own. That a text is no receipt at all
  * decides only for what the model read (a photo): a PDF's own text was judged at the drop already,
- * where the person can say «doch ein Beleg». A bank statement (#151) is dated on its period's last day.
+ * where the person can say «doch ein Beleg». What the words leave unclear, the model's «no receipt»
+ * sets aside when there is one (src/intake/unclear.ts). A bank statement (#151) is dated on its period's last day.
  */
-function kindOfText(fresh: Extracted, filename: string, originalFilename: string): Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'date'> {
+function kindOfText(fresh: Extracted, filename: string, originalFilename: string, model?: ModelKind): Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'kindWhy' | 'date'> {
   const statement = statementFacts({ extractedText: fresh.text, filename, originalFilename }, documents());
   if (statement) return { kind: 'statement', kindBy: 'rule', kindRule: 'document:statement', ...(statement.to ? { date: statement.to } : {}) };
   const v = documentKind(fresh.text, documents());
   if (v.is === 'supporting') return { kind: 'supporting', kindBy: 'rule', kindRule: `document:${v.why}` };
   if (v.is === 'other' && fresh.method === 'claude-vision') return { kind: 'noise', kindBy: 'rule', kindRule: `document:${v.why}` };
-  return {};
+  return v.is === 'unclear' && model ? kindOfModel(model) : {};
 }
 
 // ─── The step ────────────────────────────────────────────────────────────────
@@ -245,6 +247,21 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
     log(`  [${extracted.size}/${toExtract.length}] ${f.filename} → ${out.method}, ${out.text.length} chars${detectVatProofIssue(out.text) ? '  ⚠ VAT proof missing' : ''}`);
   })));
 
+  // A new receipt whose words decide nothing and that shows almost nothing of an invoice is asked of the model once (#186).
+  const modelKinds = new Map<string, ModelKind>();
+  const unclear = ask ? toExtract.filter((f) => !known.get(f.id)?.kind && !known.get(f.id)?.kindBy && asksModel(extracted.get(f.id)?.text ?? '', documents())) : [];
+  await Promise.all(unclear.map((f) => pool(async () => {
+    try {
+      const v = await askKind(ask!, extracted.get(f.id)!.text, f.filename);
+      if (v) modelKinds.set(f.id, v);
+      const length = extracted.get(f.id)!.text.length;
+      const cut = length > MODEL_TEXT ? `, from the first ${MODEL_TEXT} of ${length} characters` : '';
+      log(`  ${f.filename}: ${v ? `${v.is}${v.why ? ` (${v.why})` : ''}` : 'no verdict in the answer'}${cut}`);
+    } catch (e: any) {
+      log(`  ${f.filename}: what it is stays unclear, the model failed: ${e.message?.substring(0, 100)}`);
+    }
+  })));
+
   const wiseRefs = await readWiseReferences(ws, (msg) => log(`  warn: ${msg}`));
   const statementFiles = readStatementFiles(ws);
   const invoices = loadInvoices(ws);
@@ -264,7 +281,10 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
       // Without a model nothing else reads the date and the total; what the text states plainly is taken.
       const plain = ask ? {} : textFacts(fresh.text);
       const originalFilename = existing?.originalFilename ?? filename;
-      const { date: periodEnd, ...kind }: Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'date'> = existing?.kind || existing?.kindBy ? {} : kindOfText(fresh, filename, originalFilename);
+      // A kind given before the text was read (a person's, above all) stays as it is.
+      const { date: periodEnd, ...kind }: Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'kindWhy' | 'date'> = existing?.kind || existing?.kindBy
+        ? { kind: existing.kind, kindBy: existing.kindBy, kindRule: existing.kindRule, kindWhy: existing.kindWhy }
+        : kindOfText(fresh, filename, originalFilename, modelKinds.get(id));
       return [{
         id,
         filename,

@@ -18,7 +18,7 @@ import { ICONS } from '../icons.js';
 import type { Area, AreaProps, LegendItem } from '../index.js';
 import { badgeCount, chfOf, groups, isOpen, suggestion, visible, type Candidate, type GroupKey, type ReceiptView } from './model.js';
 import { pollInbox, setUi, toggleGroup, ui, useUi } from './state.js';
-import { at, ledgerFor, listed } from './view.js';
+import { at, ledgerFor, listed, noneText } from './view.js';
 import { Kbd, accept, runAct, type Act } from './commands.js';
 import { intakeAdd } from './intake.js';
 import { startIntake, useIntakeRunning } from '../../automation/intake.js';
@@ -172,9 +172,12 @@ function List(props: Props) {
             <button type="button" data-testid="toggle-hidden" onClick={() => setUi({ showHidden: !s.showHidden })}>{s.showHidden ? t('receipts.hideAgain') : t('receipts.show')}</button>
           </div>
           {s.showHidden && (
-            <div className="rows" role="listbox" aria-label={t('receipts.notReceipts')} style={{ marginTop: 8 }}>
+            <>
+            <p className="m hidden-lead" data-testid="hidden-lead">{t('receipts.hiddenLead')}</p>
+            <div className="rows" role="listbox" aria-label={t('receipts.notReceipts')}>
               {hidden.map((v) => row(v, false))}
             </div>
+            </>
           )}
         </>
       )}
@@ -198,7 +201,7 @@ function Row({ v, sel, same, canEdit, onSelect, onAct }: { v: ReceiptView; sel: 
       onClick={() => onSelect(r.id)}
     >
       <span className="d mono">{same ? <span className="sr">{formatDate(v.date)}</span> : v.date ? <><span className="dl">{formatDate(v.date)}</span><span className="ds">{formatDate(v.date).slice(0, 6)}</span></> : <span className="d none">{t('receipts.noDate')}</span>}</span>
-      <span className="t">{isOpen(v) && !v.locked && !v.none && I.dot}{v.vendor}{v.desc && <small> {v.desc}</small>}{v.noneWhy && <small className="nonewhy" data-testid="none-why"> · {t(`receipts.why.${v.noneWhy}`)}</small>}</span>
+      <span className="t">{isOpen(v) && !v.locked && !v.none && I.dot}{v.vendor}{v.desc && <small> {v.desc}</small>}{v.none && <small className="nonewhy" data-testid="none-why" data-by={v.noneBy} data-tip={noneText(v)}> · {noneText(v)}</small>}</span>
       <span className="a mono">{r.amount != null && <>{(r.currency ?? baseCurrency()) !== baseCurrency() && <span className="c">{r.currency}</span>}{fmt(r.amount)}</>}</span>
       <span className="acts">
         {v.none ? (

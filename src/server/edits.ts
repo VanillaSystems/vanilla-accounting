@@ -79,11 +79,12 @@ const SET_ASIDE = new Set<Receipt['kind']>(['duplicate', 'noise']);
  */
 export function setReceiptKind(books: Books, c: Extract<BookChange, { kind: 'receiptKind' }>): BookChange {
   const r = receiptOf(books, c.id);
-  const before: Extract<BookChange, { kind: 'receiptKind' }> = { kind: 'receiptKind', id: c.id, as: r.kind ?? null, by: r.kindBy ?? null, rule: r.kindRule ?? null };
+  const before: Extract<BookChange, { kind: 'receiptKind' }> = { kind: 'receiptKind', id: c.id, as: r.kind ?? null, by: r.kindBy ?? null, rule: r.kindRule ?? null, why: r.kindWhy ?? null };
   const by = c.by === undefined ? 'human' : c.by;
   if (c.as) r.kind = c.as; else delete r.kind;
   if (by) r.kindBy = by; else delete r.kindBy;
   if (c.rule) r.kindRule = c.rule; else delete r.kindRule;
+  if (c.why) r.kindWhy = c.why; else delete r.kindWhy;
   if (c.as && SET_ASIDE.has(c.as)) {
     const links = books.mappings.filter((m) => m.receiptId === c.id).map((m) => m.transactionRef);
     for (const ref of links) assertOpen(books, refDates(books, ref), 'mapping');

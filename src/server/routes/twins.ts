@@ -35,6 +35,7 @@ router.post('/api/receipts/:id/twin', async (req, res) => {
     assertOpen(books, receiptDates(books, id), 'editReceipt');
     Object.assign(receipt, { kind: 'duplicate', kindBy: 'human' });
     delete receipt.kindRule;
+    delete receipt.kindWhy;
     const refs = books.mappings.filter((m) => m.receiptId === id).map((m) => m.transactionRef);
     books.mappings = books.mappings.filter((m) => m.receiptId !== id);
     return { again: unbookPayments(books, refs, 'links'), receipt };

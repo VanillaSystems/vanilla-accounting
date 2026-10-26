@@ -59,6 +59,8 @@ export interface Receipt {
   /** Who set the kind: a rule (named in kindRule) or a person. A person's kind is never overwritten; 'human' without a kind is a person's «ordinary receipt», never typed again. */
   kindBy?: 'rule' | 'human';
   kindRule?: string;
+  /** The model's one-line reason for the kind it gave (kindRule `model:…`, src/intake/unclear.ts). */
+  kindWhy?: string;
   /** The workflow run that took it up (src/workflows/engine.ts): the receipt's page links to it. */
   run?: string;
   /** What a list shows: the vendor as people say it and what it is in 1–3 words (src/intake/titles.ts). */
