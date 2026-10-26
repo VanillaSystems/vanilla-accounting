@@ -1080,6 +1080,7 @@ export const messages = {
   'receipts.notReceipt': 'Kein Beleg',
   'receipts.notReceiptDone': 'Ausgeblendet · {file} ist kein Beleg',
   'receipts.notReceipts': 'Keine Belege',
+  'receipts.noneBy.modelSaw': "die KI las nur die ersten {n} von {of} Zeichen",
   'receipts.skip.ask': "Immer so? Anhänge von {sender} künftig nicht mehr abholen.",
   'receipts.skip.show': "Zeigen, was sich ändert",
   'receipts.skip.title': "{source}: Mails von {sender} überspringen",

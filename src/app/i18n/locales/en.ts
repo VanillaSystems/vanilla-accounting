@@ -1083,6 +1083,7 @@ export default {
     'receipts.notReceipt': 'Not a receipt',
     'receipts.notReceiptDone': 'Hidden · {file} is not a receipt',
     'receipts.notReceipts': 'Not receipts',
+    'receipts.noneBy.modelSaw': "the AI read only the first {n} of {of} characters",
     'receipts.skip.ask': "Always so? Stop collecting attachments from {sender}.",
     'receipts.skip.show': "Show what changes",
     'receipts.skip.title': "{source}: skip mail from {sender}",

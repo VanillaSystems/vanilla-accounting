@@ -1083,6 +1083,7 @@ export default {
     'receipts.notReceipt': 'Pas un justificatif',
     'receipts.notReceiptDone': 'Masqué · {file} n’est pas un justificatif',
     'receipts.notReceipts': 'Pas des justificatifs',
+    'receipts.noneBy.modelSaw': "l’IA n’a lu que les {n} premiers caractères sur {of}",
     'receipts.skip.ask': "Toujours ainsi ? Ne plus relever les pièces jointes de {sender}.",
     'receipts.skip.show': "Voir ce qui change",
     'receipts.skip.title': "{source} : ignorer les e-mails de {sender}",

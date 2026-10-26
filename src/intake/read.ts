@@ -29,7 +29,7 @@ import { fileReceipts, paymentContext } from '../invoices/service.js';
 import { stemOf, type Ask, type IntakeNote, type StepRun } from './pipeline.js';
 import { putInQuarantine } from './quarantine.js';
 import { documentKind } from './document-kind.js';
-import { askKind, asksModel, kindOfModel, type ModelKind } from './unclear.js';
+import { askKind, asksModel, kindOfModel, MODEL_TEXT, type ModelKind } from './unclear.js';
 import { statementFacts } from '../books/statement-facts.js';
 import { documents } from '../engines/index.js';
 
@@ -254,7 +254,9 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
     try {
       const v = await askKind(ask!, extracted.get(f.id)!.text, f.filename);
       if (v) modelKinds.set(f.id, v);
-      log(`  ${f.filename}: ${v ? `${v.is}${v.why ? ` (${v.why})` : ''}` : 'no verdict in the answer'}`);
+      const length = extracted.get(f.id)!.text.length;
+      const cut = length > MODEL_TEXT ? `, from the first ${MODEL_TEXT} of ${length} characters` : '';
+      log(`  ${f.filename}: ${v ? `${v.is}${v.why ? ` (${v.why})` : ''}` : 'no verdict in the answer'}${cut}`);
     } catch (e: any) {
       log(`  ${f.filename}: what it is stays unclear, the model failed: ${e.message?.substring(0, 100)}`);
     }

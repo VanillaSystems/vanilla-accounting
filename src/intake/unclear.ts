@@ -13,9 +13,11 @@ import { documentKind } from './document-kind.js';
 
 /** Invoice evidence up to which an unclear document is asked about (receiptScore: a total alone is 1). */
 const LITTLE = 1;
-/** What the model sees of the text: enough for a brochure's first page, little enough for the fast tier. */
-const TEXT = 3000;
-const WHY = 160;
+/**
+ * What the model sees of the text: enough for a brochure's first page, little enough for the fast
+ * tier. A longer text is cut here, and the receipt's page says so with this number (#186).
+ */
+export const MODEL_TEXT = 3000;
 
 /** The kindRule of a kind the model gave: `model:no-receipt` or `model:supporting`. */
 export const MODEL_RULE = 'model:';
@@ -39,7 +41,7 @@ When in doubt, answer "receipt": a real receipt set aside is worse than a brochu
 
 File name: ${filename}
 Text (start):
-${text.slice(0, TEXT)}
+${text.slice(0, MODEL_TEXT)}
 
 Return ONLY a JSON object: {"is": "receipt" | "supporting" | "none", "why": "<one short line in the document's language: what it is>"}`;
 }
@@ -48,7 +50,7 @@ export function parseModelKind(raw: string): ModelKind | undefined {
   try {
     const json = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1).replace(/[\r\n]+/g, ' ')) as { is?: unknown; why?: unknown };
     if (json.is !== 'receipt' && json.is !== 'supporting' && json.is !== 'none') return undefined;
-    const why = typeof json.why === 'string' ? json.why.replace(/\s+/g, ' ').trim().slice(0, WHY) : '';
+    const why = typeof json.why === 'string' ? json.why.replace(/\s+/g, ' ').trim() : '';
     return { is: json.is, why };
   } catch {
     return undefined;
@@ -78,3 +80,7 @@ export function kindByOf(r: Pick<Receipt, 'kindBy' | 'kindRule'>): KindBy {
   if (r.kindBy === 'human') return 'person';
   return r.kindRule?.startsWith(MODEL_RULE) ? 'model' : 'rule';
 }
+
+/** The length of a text the model judged from its first MODEL_TEXT characters only; undefined when it saw it whole. */
+export const modelCut = (r: Pick<Receipt, 'kindBy' | 'kindRule' | 'extractedText'>): number | undefined =>
+  kindByOf(r) === 'model' && r.extractedText.length > MODEL_TEXT ? r.extractedText.length : undefined;

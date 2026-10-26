@@ -15,13 +15,13 @@ import { runIntake, storePort, type Ask } from '../src/intake/pipeline.js';
 import { loadBooks, moduleActor } from '../src/books/store.js';
 import { documents } from '../src/engines/index.js';
 import { receiptScore } from '../src/intake/document-kind.js';
-import { asksModel, kindByOf, parseModelKind } from '../src/intake/unclear.js';
+import { asksModel, kindByOf, MODEL_TEXT, modelCut, parseModelKind, unclearPrompt } from '../src/intake/unclear.js';
 import { textPdf } from './support/text-pdf.js';
 import { tempWorkspace, writeIndex } from './support/workspace.js';
 
 const BROCHURE = ['Paketblitz Express', 'Ihr Partner fuer den Versand ins Ausland', 'Neu fuer KMU: Zollabwicklung aus einer Hand',
   'Wir holen Ihre Sendungen direkt in Ihrem Betrieb ab und bringen sie in ueber 200 Laender.', 'Sprechen Sie mit unserem Team ueber Ihre Moeglichkeiten.'];
-const INVOICE = ['Farbmix AG', 'Rechnung FM-79010', 'Datum: 28.09.2026', 'Total CHF 1537.22', 'MWST 8.1% CHF 115.01', 'Zahlbar innert 30 Tagen', 'IBAN CH93 0076 2011 6238 5295 7'];
+const INVOICE = ['Farbmix AG', 'Rechnung FM-79010', 'Datum: 28.09.2026', 'Total CHF 1537.22', 'MWST 8.1% CHF 115.01', 'Zahlbar innert 30 Tagen'];
 
 async function inboxWith(lines: string[], name = 'Paketblitz.pdf') {
   const ws = tempWorkspace('unclear-');
@@ -112,4 +112,16 @@ test('a person\'s kind is never asked about, even before the file was read', asy
   assert.deepEqual(m.steps, []);
   const r = loadBooks(ws).receipts.find((x) => x.id === id)!;
   assert.deepEqual([r.kind, r.kindBy], [undefined, 'human']);
+});
+
+test('the model sees the first MODEL_TEXT characters; a verdict on a longer text says how much it read, and the reason is never cut', () => {
+  const long = `${BROCHURE.join('\n')}\n${'Weitere Informationen. '.repeat(400)}`;
+  const prompt = unclearPrompt(long, 'Paketblitz.pdf');
+  assert.ok(prompt.includes(long.slice(0, MODEL_TEXT)) && !prompt.includes(long.slice(0, MODEL_TEXT + 1)), 'cut at the limit');
+  const byModel = { kindBy: 'rule' as const, kindRule: 'model:no-receipt' };
+  assert.equal(modelCut({ ...byModel, extractedText: long }), long.length, 'the page names the limit and the whole length');
+  assert.equal(modelCut({ ...byModel, extractedText: BROCHURE.join('\n') }), undefined, 'seen whole: nothing to say');
+  assert.equal(modelCut({ kindBy: 'human', extractedText: long }), undefined, 'a person read it');
+  const why = 'Verkaufsbroschüre '.repeat(20).trim();
+  assert.equal(parseModelKind(JSON.stringify({ is: 'none', why }))?.why, why);
 });

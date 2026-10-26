@@ -1083,6 +1083,7 @@ export default {
     'receipts.notReceipt': 'Non è un giustificativo',
     'receipts.notReceiptDone': 'Nascosto · {file} non è un giustificativo',
     'receipts.notReceipts': 'Non giustificativi',
+    'receipts.noneBy.modelSaw': "l’IA ha letto solo i primi {n} caratteri su {of}",
     'receipts.skip.ask': "Sempre così? Non prelevare più gli allegati di {sender}.",
     'receipts.skip.show': "Mostra cosa cambia",
     'receipts.skip.title': "{source}: saltare le e-mail di {sender}",
