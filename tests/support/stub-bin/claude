@@ -3,7 +3,7 @@
 // no model call. A classify prompt gets one entry on 6570 per transaction, I81 when its section
 // carries Swiss VAT facts, or the answer $CLAUDE_STUB_CLASSIFY (JSON keyed by ref) gives its ref. A VAT facts prompt gets STUB_VAT (no Swiss VAT). The vision prompt that
 // reads a scan's text gets STUB_OCR_TEXT; any other prompt (a match, also one that reads the file)
-// answers STUB_ANSWER (JSON), or $CLAUDE_STUB_ANSWER when set. `--version` and `auth status` answer at once.
+// answers STUB_ANSWER (JSON), or $CLAUDE_STUB_ANSWER when set; the question what an unclear document is, $CLAUDE_STUB_KIND when set. `--version` and `auth status` answer at once.
 // $CLAUDE_STUB_TEXT: what an answer says first. $CLAUDE_STUB_PROMPTS: each prompt is appended there; $CLAUDE_STUB_ARGS: each call's arguments.
 // A message of the AI sidebar (--output-format stream-json) streams a stub answer to its last line as
 // Claude Code does: the session, the text in pieces and the result; --resume keeps its session.
@@ -78,5 +78,6 @@ if (process.argv.includes('stream-json')) {
 const result = prompt.includes('## Chart of Accounts') ? classify()
   : prompt.includes('Extract ONLY the VAT (MWST) facts') ? JSON.stringify(STUB_VAT)
   : prompt.includes('Extrahiere den vollständigen Text') ? STUB_OCR_TEXT
+  : prompt.includes('Decide what this one is:') && process.env.CLAUDE_STUB_KIND ? process.env.CLAUDE_STUB_KIND
   : process.env.CLAUDE_STUB_ANSWER ?? JSON.stringify(STUB_ANSWER);
 process.stdout.write(JSON.stringify({ result, is_error: false, usage: { input_tokens: 7, output_tokens: 3 }, num_turns: 1 }));
