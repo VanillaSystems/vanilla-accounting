@@ -209,6 +209,10 @@ test('the match step links the orders to the one payout they add up to, within d
   assert.deepEqual(linkOrdersToPayouts(books), [], 'run again: nothing new');
   assert.equal(books.mappings.length, 5);
 
+  const apart = booksOf(ORDERS, []);
+  apart.receipts.find((r) => r.id === 'o1002')!.notPaidBy = ['PAY-1'];
+  assert.deepEqual(linkOrdersToPayouts(apart).filter((l) => l.payment === 'PAY-1'), [], 'a payout a person took an order apart from is hers (#187)');
+
   const missing = booksOf({ o1001: ORDERS.o1001, o1003: ORDERS.o1003 }, []);
   assert.deepEqual(linkOrdersToPayouts(missing), [], 'orders that do not add up to a payout are linked to none: never more than the payout');
 

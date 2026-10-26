@@ -21,8 +21,8 @@ const GS: Receipt = {
 const refund: BankTransaction = { ref: 'RB-30', bank: 'Raiffeisen', date: '2026-10-08', amount: 408.6, currency: 'CHF', direction: 'CRDT', description: 'Gutschrift Farbmix AG Gutschrift GS-1207 zu FM-78230' };
 const toChf = (a: number) => a;
 const port = (b: Books) => ({ read: () => b, update: <T>(fn: (x: Books) => T) => fn(b) });
-const linkByCode = async (b: Books) => (await runPairChain(port(b), { toChf })).linked.map(({ by: _by, ...l }) => l);
-const PAIR = { by: 'rule', rule: 'pair' };
+const linkByCode = async (b: Books) => (await runPairChain(port(b), { toChf })).linked.map(({ by: _by, signals: _signals, ...l }) => l);
+const PAIR = { by: 'rule', rule: 'pair:amount+day+name+number' };
 const books = (over: Partial<Books> = {}): Books => ({
   receipts: [structuredClone(GS)], transactions: [structuredClone(refund)], mappings: [], bankStatements: [], journalEntries: [], config: { closedThrough: '2026-09-30' }, ...over,
 });

@@ -330,6 +330,7 @@ export const api = {
   removeMapping: (link: Link) => request<Linked>('POST', '/api/mapping/remove', link),
   /** «Zahlung suchen» / «Beleg suchen» (#187): the matching chain for one receipt or one payment. */
   findPayment: (receipt: string) => request<Found>('POST', `/api/receipts/${encodeURIComponent(receipt)}/find-payment`),
+  setFiledPayment: (receipt: string, payment: string | null) => request<{ ok: true }>('POST', `/api/receipts/${encodeURIComponent(receipt)}/filed-payment`, { payment }),
   findReceipt: (payment: string) => request<Found>('POST', `/api/transactions/${encodeURIComponent(payment)}/find-receipt`),
 
   patchJournalEntry: (id: string, patch: JournalEntryPatch) =>

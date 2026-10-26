@@ -6,7 +6,7 @@
  */
 import { useState } from 'react';
 import type { BankTransaction, Index, Mapping, Receipt } from '../../../types/index.js';
-import { BOUNDS, WEIGHTS, makerOf, type Found, type LinkMaker } from '../../../intake/pairing.js';
+import { BOUNDS, WEIGHTS, makerOf, signalsOf, type Found, type LinkMaker, type Signal } from '../../../intake/pairing.js';
 import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import { fmt, formatDate } from '../../lib/utils.js';
@@ -16,11 +16,15 @@ import { amountOf, at, bankOf, txLine } from './view.js';
 
 type On = { receipt: string } | { payment: string };
 
-/** Who made a link, said plainly: the code, the code checked by the model, the model, a person. */
-export const madeBy = (m: Pick<Mapping, 'by' | 'rule'>): string | undefined => {
-  const k: LinkMaker = makerOf(m);
-  return k === 'unknown' ? undefined : t(`pair.by.${k}`);
-};
+/** Who made a link, said plainly, and for code what matched: the code, the code checked by the model, the model, a person. */
+export const madeBy = (m: Pick<Mapping, 'by' | 'rule'>): string | undefined => byText(makerOf(m), signalsOf(m));
+
+function byText(k: LinkMaker, signals: readonly Signal[]): string | undefined {
+  if (k === 'unknown') return undefined;
+  if (k !== 'code' && k !== 'checked') return t(`pair.by.${k}`);
+  if (!signals.length) return t(k === 'code' ? 'pair.by.codeBare' : 'pair.by.checkedBare');
+  return t(`pair.by.${k}`, { signals: signals.map((x) => t(`pair.signal.${x}`)).join(', ') });
+}
 
 const paymentText = (tx: BankTransaction) => `${formatDate(tx.date)} · ${bankOf(tx)} · ${amountOf(tx)} · ${tx.description}`;
 const receiptText = (r: Receipt) => `${r.title?.vendor ?? r.description ?? r.filename} · ${r.date ? formatDate(r.date) : '—'} · ${r.currency || baseCurrency()} ${fmt(Math.abs(r.amount ?? 0))}`;
@@ -72,7 +76,7 @@ export function FindPair({ on, books, nav, compact }: { on: On; books: Index; na
     return (
       <div className={cls} data-testid="find-result" data-outcome={state.outcome} role="status">
         <span className={state.outcome === 'linked' ? 'findpair-ok' : ''}>{t(state.outcome === 'filed' ? 'pair.filed' : forReceipt ? 'pair.linked.payment' : 'pair.linked.receipt', { what })}</span>
-        <span className="findpair-note">{t(`pair.by.${state.by}`)}</span>
+        <span className="findpair-note">{byText(state.by, state.signals)}</span>
         {state.outcome === 'linked' ? <button type="button" className="golink" onClick={() => { api.removeMapping({ receiptId: state.receipt, transactionRef: state.payment }).then(() => { setState('idle'); nav.refresh(); }, (e) => nav.toast(errorText(e))); }}>{t('pair.unlink')}</button> : null}
       </div>
     );

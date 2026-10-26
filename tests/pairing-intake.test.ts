@@ -64,7 +64,7 @@ test('a receipt code pairs clearly skips the model\'s match: checked in a batch,
   const books = loadBooks(ws);
   const r = books.receipts.find((x) => x.originalFilename === 'scan-post.pdf')!;
   assert.equal(r.location, 'archived');
-  assert.deepEqual(books.mappings.filter((x) => x.receiptId === r.id), [{ transactionRef: PAYMENT, receiptId: r.id, by: 'llm', rule: 'pair-checked' }]);
+  assert.deepEqual(books.mappings.filter((x) => x.receiptId === r.id), [{ transactionRef: PAYMENT, receiptId: r.id, by: 'llm', rule: 'pair-checked:amount+day+name' }]);
   assert.equal(m.steps.includes('receipt-match'), false, 'no per-receipt match prompt');
   assert.ok(m.steps.includes('receipt-pair#check') && m.steps.includes('receipt-titles'));
   assert.deepEqual(r.title, { vendor: 'Post CH', what: 'Pakete Mai' });
@@ -77,7 +77,7 @@ test('without a model the receipt code pairs clearly is archived and linked by c
   const books = loadBooks(ws);
   const r = books.receipts.find((x) => x.originalFilename === 'scan-post.pdf')!;
   assert.equal(r.location, 'archived');
-  assert.deepEqual(books.mappings.filter((x) => x.receiptId === r.id), [{ transactionRef: PAYMENT, receiptId: r.id, by: 'rule', rule: 'pair' }]);
+  assert.deepEqual(books.mappings.filter((x) => x.receiptId === r.id), [{ transactionRef: PAYMENT, receiptId: r.id, by: 'rule', rule: 'pair:amount+day+name' }]);
 });
 
 test('a receipt whose payment is taken goes to the model\'s match as before', async () => {

@@ -24,7 +24,7 @@ import { amountOf, at, bankOf, dayText, ledgerFor, listed, noneText, txLine } fr
 import { Kbd, accept, runAct } from './commands.js';
 import { correctionPeriodName } from '../journal/commands.js';
 import { QuestionsOn } from '../../questions/Questions.js';
-import { correctFiled, deleteReceipt, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
+import { correctFiled, deleteReceipt, unpointFiled, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
 import { LinkDialog } from './LinkDialog.js';
 import { FindPair, madeBy } from './FindPair.js';
 import { ByHand, VatFields } from './VatFields.js';
@@ -93,6 +93,7 @@ function FiledPaymentNotice({ l, nav, books, canEdit, payment, open, receipt, co
       {ICONS.lock}<span>{noInputTax ? t(`receipts.filedPaymentNoInputTax.${noInputTax}`, said) : t(corrected ? 'receipts.filedPaymentCorrected' : 'receipts.filedPaymentNotice', said)}</span>
       <a href="#" onClick={(e) => { e.preventDefault(); nav.go(go); }}>{t('receipts.filedPaymentOpen')}</a>
       {canEdit && entry && open && !noInputTax && !corrected && <a href="#" data-testid="filed-correct" onClick={(e) => { e.preventDefault(); correctFiled(nav, books, l, payment, receipt); }}>{t('receipts.correctIn', { period: open })}</a>}
+      {canEdit && <button type="button" className="quiet" data-testid="filed-unpoint" data-tip={t('pair.unpointTip')} onClick={() => void unpointFiled(nav, receipt, payment, `${formatDate(tx.date)} ${amountOf(tx)}`)}>{t('pair.unlink')}</button>}
     </div>
   );
 }

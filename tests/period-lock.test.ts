@@ -71,6 +71,7 @@ const refused: Array<Call & { status: number }> = [
   { method: 'POST', path: '/api/mapping/remove', body: { receiptId: 'rc', transactionRef: 'C1' }, status: 403 },
   // «Zahlung suchen» on a receipt a filed payment holds (#187).
   { method: 'POST', path: '/api/receipts/rc/find-payment', status: 403 },
+  { method: 'POST', path: '/api/receipts/rc/filed-payment', body: { payment: null }, status: 403 },
   { method: 'PATCH', path: '/api/journal-entries/jc', body: { description: 'neu' }, status: 403 },
   { method: 'PATCH', path: '/api/journal-entries/jo', body: { date: '2026-06-15' }, status: 403 },
   { method: 'PATCH', path: '/api/journal-entries/jc', body: { amount: 5 }, status: 403 },
@@ -164,6 +165,11 @@ const allowed: Array<Call & { check: (index: Index) => boolean }> = [
   // «Beleg suchen» on a filed payment: allowed, it never links (a receipt that pays it is pointed at it, #187).
   { method: 'POST', path: '/api/transactions/CI/find-receipt',
     check: (i) => !i.mappings.some((m) => m.transactionRef === 'CI') },
+  // A late receipt pointed at a filed payment by the person, and the pointer taken away again: receipts are not sealed (#187).
+  { method: 'POST', path: '/api/receipts/ro/filed-payment', body: { payment: 'CI' },
+    check: (i) => i.receipts.find((r) => r.id === 'ro')?.filedPayment === 'CI' && !i.mappings.some((m) => m.transactionRef === 'CI') },
+  { method: 'POST', path: '/api/receipts/ro/filed-payment', body: { payment: null },
+    check: (i) => { const r = i.receipts.find((x) => x.id === 'ro'); return !!r && !r.filedPayment && !!r.notPaidBy?.includes('CI'); } },
   // «Zahlung suchen» on the receipt just taken apart from O1: the person's unlink stands (Receipt.notPaidBy), nothing is linked again.
   { method: 'POST', path: '/api/receipts/ro/find-payment',
     check: (i) => !i.mappings.some((m) => m.receiptId === 'ro') && !!i.receipts.find((r) => r.id === 'ro')?.notPaidBy?.includes('O1') },

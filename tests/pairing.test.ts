@@ -6,8 +6,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './support/jurisdiction.js';
-import { CLEAR, SHORT_LIST, makerOf, originalOf, paysIn, searchPairs, stagesOf } from '../src/intake/pairing.js';
-import { CHECK_BATCH, runPairChain } from '../src/intake/pair-chain.js';
+import { CLEAR, SHORT_LIST, makerOf, originalOf, paysIn, searchPairs, signalsOf, stagesOf } from '../src/intake/pairing.js';
+import { CHECK_BATCH, noReceiptFor, runPairChain } from '../src/intake/pair-chain.js';
+import { workspaceAt } from '../src/workspace/workspace.js';
+import { DEMO_ROOT } from './support/workspace.js';
 import type { Books } from '../src/books/store.js';
 import type { Ask } from '../src/intake/pipeline.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
@@ -29,8 +31,9 @@ test('a receipt and the only payment of its amount near its day, naming its vend
   const b = books([receipt('r')], [payment('p')]);
   assert.deepEqual(stages(b).map((s) => s.kind), ['clear']);
   const run = await runPairChain(port(b), { toChf });
-  assert.deepEqual(run.linked, [{ receipt: 'r', payment: 'p', by: 'code' }]);
-  assert.deepEqual(b.mappings, [{ transactionRef: 'p', receiptId: 'r', by: 'rule', rule: 'pair' }]);
+  assert.deepEqual(run.linked, [{ receipt: 'r', payment: 'p', by: 'code', signals: ['amount', 'day', 'name'] }]);
+  assert.deepEqual(b.mappings, [{ transactionRef: 'p', receiptId: 'r', by: 'rule', rule: 'pair:amount+day+name' }]);
+  assert.deepEqual(signalsOf(b.mappings[0]), ['amount', 'day', 'name'], 'the link says what matched');
   assert.equal(makerOf(b.mappings[0]), 'code');
 });
 
@@ -74,7 +77,7 @@ test('a pair a person took apart is never a candidate again', async () => {
 
 test('a payment of a filed quarter is never linked: the receipt is pointed at it', async () => {
   const b = books([receipt('r', { date: '2026-06-20' })], [payment('p', { date: '2026-06-22' })]);
-  assert.deepEqual((await runPairChain(port(b), { toChf })).linked, [{ receipt: 'r', payment: 'p', by: 'code', filed: true }]);
+  assert.deepEqual((await runPairChain(port(b), { toChf })).linked, [{ receipt: 'r', payment: 'p', by: 'code', signals: ['amount', 'day', 'name'], filed: true }]);
   assert.deepEqual(b.mappings, []);
   assert.equal(b.receipts[0].filedPayment, 'p');
 });
@@ -99,7 +102,7 @@ test('the model checks the clear pairs in batches of 20: every pair is asked, a 
   const run = await runPairChain(port(b), { toChf, ask: m.ask });
   assert.deepEqual(m.calls, ['check', 'check']);
   assert.equal(run.linked.length, n);
-  assert.ok(b.mappings.every((x) => x.by === 'llm' && x.rule === 'pair-checked' && makerOf(x) === 'checked'));
+  assert.ok(b.mappings.every((x) => x.by === 'llm' && x.rule?.startsWith('pair-checked:') && makerOf(x) === 'checked'));
 });
 
 test('a doubted pair is not linked, kept as the model\'s doubt, and not asked about again; «Zahlung suchen» asks again', async () => {
@@ -132,7 +135,7 @@ test('a model that fails: the clear pairs are linked by code, the short lists wa
 });
 
 test('«Beleg suchen» links only its own payment', async () => {
-  const b = books([receipt('r', { title: undefined }), receipt('s', { title: undefined, amount: 7 })], [payment('p', { description: 'x' }), payment('q', { description: 'x' }), payment('t', { amount: 7, description: 'x' })]);
+  const b = books([receipt('r', { title: undefined }), receipt('s', { title: { vendor: 'Kiosk Muster', what: '' }, amount: 7 })], [payment('p', { description: 'x' }), payment('q', { description: 'x' }), payment('t', { amount: 7, description: 'Kiosk Muster' })]);
   const run = await runPairChain(port(b), { toChf, only: { payment: 't' } });
   assert.deepEqual(run.linked.map((l) => l.payment), ['t']);
   assert.ok(!b.mappings.some((m) => m.receiptId === 'r'));
@@ -144,4 +147,69 @@ test('more candidates than a short list: the person sees the best five and how m
   assert.equal(s.kind, 'person');
   assert.equal(s.kind === 'person' && s.candidates.length, SHORT_LIST);
   assert.equal(s.kind === 'person' && s.total, SHORT_LIST + 3);
+});
+
+test('a payment that needs no receipt is never a candidate: marked so, or what the firm\'s decision says (own transfer, booked onto the owner)', () => {
+  const marked = books([receipt('r')], [payment('p', { noReceiptNeeded: true })]);
+  assert.deepEqual(searchPairs(marked, toChf, () => false).byReceipt.get('r'), []);
+  const exempt = books([receipt('r')], [payment('p')]);
+  assert.deepEqual(searchPairs(exempt, toChf, () => false, (t) => t.ref === 'p').byReceipt.get('r'), []);
+});
+
+test('the firm\'s decision: an own transfer and a payment a person booked onto the owner\'s account have no receipt of their own', () => {
+  const ws = workspaceAt(DEMO_ROOT);
+  const own = payment('own', { counterpartyIban: 'CH65 8080 8000 0000 0000 1' });
+  const owner = payment('owner');
+  const plain = payment('plain');
+  const b = books([], [own, owner, plain], { journalEntries: [{ id: 'je', transactionRef: 'owner', date: '2026-08-12', accountDebit: '2451', accountCredit: '1021', amount: 42.5, description: 'Privat' }] });
+  const none = noReceiptFor(ws)(b);
+  assert.deepEqual([none(own), none(owner), none(plain)], [true, true, false]);
+});
+
+test('without a model an amount and a day alone are no proof: the pair waits for the person; the model\'s check may confirm it', async () => {
+  const lone = () => books([receipt('r', { title: undefined, filename: 'scan.pdf' })], [payment('p', { description: 'Einkauf' })]);
+  const b = lone();
+  const run = await runPairChain(port(b), { toChf });
+  assert.deepEqual([run.linked, run.left.map((l) => l.candidates.map((c) => c.payment))], [[], [['p']]]);
+  const checked = lone();
+  assert.deepEqual((await runPairChain(port(checked), { toChf, ask: stub(() => true).ask })).linked.map((l) => l.by), ['checked']);
+});
+
+test('a filed payment a receipt points at is taken: a second receipt is not pointed at it, so its tax is corrected once', async () => {
+  const b = books([receipt('a', { date: '2026-06-20', filedPayment: 'p' }), receipt('b', { date: '2026-06-21' })], [payment('p', { date: '2026-06-22' })]);
+  assert.deepEqual((await runPairChain(port(b), { toChf })).linked, []);
+  assert.equal(b.receipts[1].filedPayment, undefined);
+});
+
+test('an answer the chain cannot read is no doubt: nothing is kept, the clear pair is linked by code, and the next run asks again', async () => {
+  const b = books([receipt('r')], [payment('p')]);
+  const garbage: Ask = async () => 'Sorry, I cannot help with that.';
+  const run = await runPairChain(port(b), { toChf, ask: garbage });
+  assert.deepEqual([run.linked.map((l) => l.by), b.receipts[0].pairDoubted, !!run.modelFailed], [['code'], undefined, true]);
+  const two = books([receipt('r'), receipt('s', { amount: 9, title: { vendor: 'Kiosk Muster', what: '' } })], [payment('p'), payment('q', { amount: 9, description: 'Kiosk Muster' })]);
+  const partial: Ask = async () => JSON.stringify([{ i: 0, fits: false, why: 'other shop' }]);
+  const r2 = await runPairChain(port(two), { toChf, ask: partial });
+  assert.deepEqual(r2.linked.map((l) => [l.receipt, l.by]), [['s', 'code']], 'the item the answer left out is linked by code');
+  assert.deepEqual(two.receipts.map((r) => r.pairDoubted), [['p'], undefined], 'only the explicit «does not fit» is a doubt');
+  const short = books([receipt('r', { title: undefined })], [payment('p', { description: 'Einkauf' }), payment('q', { description: 'Einkauf' })]);
+  await runPairChain(port(short), { toChf, ask: garbage });
+  assert.equal(short.receipts[0].pairDoubted, undefined, 'an unreadable choice keeps no doubt either');
+});
+
+test('a card charge split over two currencies (one ref, two legs): the model is shown the leg that fits', async () => {
+  const eur = payment('W', { bank: 'Wise', currency: 'EUR', amount: 30, description: 'Card transaction of 30.00 EUR issued by Papeterie Meier' });
+  const chf = payment('W', { bank: 'Wise', currency: 'CHF', amount: 5, description: 'Card transaction of 30.00 EUR issued by Papeterie Meier' });
+  const b = books([receipt('r', { currency: 'EUR', amount: 30 })], [eur, chf]);
+  const prompts: string[] = [];
+  const ask: Ask = async (prompt, opts) => { prompts.push(prompt); return stub(() => true).ask(prompt, opts); };
+  await runPairChain(port(b), { toChf, ask });
+  assert.match(prompts[0], /"amount":30,"currency":"EUR"/);
+  assert.deepEqual(b.mappings.map((m) => m.transactionRef), ['W']);
+});
+
+test('the original amount the bank names in thousands: «1,234.56», «1\'234.56», «1 234.56», never only «234.56»', () => {
+  for (const text of ['Card transaction of 1,234.56 EUR issued by X', 'Card transaction of 1\'234.56 EUR issued by X', 'Card transaction of 1 234.56 EUR issued by X', 'EUR 1,234.56 Kartenzahlung']) {
+    assert.deepEqual(originalOf(payment('w', { currency: 'CHF', description: text })), { amount: 1234.56, currency: 'EUR' }, text);
+  }
+  assert.deepEqual(originalOf(payment('w', { currency: 'CHF', description: 'Card transaction of 12.40 USD' })), { amount: 12.4, currency: 'USD' });
 });

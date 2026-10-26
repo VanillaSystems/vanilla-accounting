@@ -4,7 +4,7 @@
  * extract` and the statement upload (POST /api/statements) both read the folder through here and
  * merge with mergeIndex, so a statement imported from the UI lands exactly as extract would put it.
  */
-import { madeByHand } from '../workspace/money-accounts.js';
+import { legOf, madeByHand } from '../workspace/money-accounts.js';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { assignUniqueRefs, statementSpan, transactionsOf } from '../providers/camt053/camt053.js';
@@ -191,12 +191,6 @@ function keptFields(t: BankTransaction): Partial<BankTransaction> {
   );
 }
 
-/**
- * What names one bank transaction across re-reads. A Wise card charge split over two currencies is
- * two transactions with one ref (assignUniqueRefs keeps it shared: one payment), so a transaction
- * is matched to its previous self by ref and currency, never by the ref alone (#23).
- */
-export const legOf = (t: BankTransaction) => `${t.ref} ${t.currency}`;
 
 /** How many days a statement row may lie from the day of a movement made by hand: a receipt's day and the bank's booking day. */
 export const MATCH_DAYS = 7;

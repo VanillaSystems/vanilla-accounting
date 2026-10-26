@@ -306,7 +306,7 @@ function deletePayment(books: Books, c: Extract<BookChange, { kind: 'deletePayme
  * chain never pairs a pair taken apart again (Receipt.notPaidBy, src/intake/pairing.ts), and no
  * doubt of the model stands against a pair a person linked.
  */
-function apart(books: Books, receipt: string, payment: string, on: boolean): void {
+export function apart(books: Books, receipt: string, payment: string, on: boolean): void {
   const r = books.receipts.find((x) => x.id === receipt);
   if (!r) return;
   const rest = (r.notPaidBy ?? []).filter((p) => p !== payment);

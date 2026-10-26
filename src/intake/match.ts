@@ -25,9 +25,9 @@ import { twinFinder } from './duplicates.js';
 import { capturedDay } from './captured.js';
 import { isIsoDate } from '../accounting/periods.js';
 import { numbersIn, squash } from '../accounting/document-numbers.js';
-import { nameWords, pairMapping } from './pairing.js';
+import { nameWords, pairMapping, takenPayments } from './pairing.js';
 import { titlesFor } from './titles.js';
-import { estvToChf, runPairChain } from './pair-chain.js';
+import { estvToChf, noReceiptFor, runPairChain } from './pair-chain.js';
 import { linkOrdersToPayouts } from './order-links.js';
 import { linkReceiptSets } from './receipt-sets.js';
 import { creditSigned } from '../accounting/credit-signed.js';
@@ -180,7 +180,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   // Code first (#187): the staged receipts take part in the chain with the facts code reads off them.
   const early = toRead.flatMap((r) => provisional(r) ?? []);
   const byCode = async (stagedNow: readonly Receipt[] = []) => {
-    const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow });
+    const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt: noReceiptFor(ws) });
     for (const l of books.update(linkOrdersToPayouts)) log(`linked the order to the payout it names: receipt ${l.receipt} → ${l.payment}`);
     for (const s of books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, (d) => !lock.isClosed(d)); })) log(`linked ${s.receipts.length} receipts that add up to the payment: ${s.receipts.join(', ')} → ${s.payment}`);
     return chain;
@@ -229,9 +229,9 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
         Object.assign(r, { date: p.date, amount: p.amount, currency: p.currency, ...(title ? { title, description: `${title.vendor} ${title.what}`.trim() } : {}) });
         if (waitsBehind(index, r, order)) { out.result = 'twin'; return; }
         const t = index.transactions.find((x) => x.ref === l.payment);
-        if (!t || index.mappings.some((m) => m.transactionRef === t.ref) || r.notPaidBy?.includes(t.ref)) return;
+        if (!t || takenPayments(index).has(t.ref) || r.notPaidBy?.includes(t.ref)) return;
         if (periodLock(index).isClosed(t.date)) { r.filedPayment = t.ref; out.result = 'filed'; return; }
-        index.mappings.push(pairMapping(l.by, t.ref, r.id));
+        index.mappings.push(pairMapping(l.by, t.ref, r.id, l.signals));
         out.result = 'linked';
       });
       if (!target) continue;

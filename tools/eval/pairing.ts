@@ -15,7 +15,7 @@
 import { pathToFileURL } from 'node:url';
 import { loadBooks, type Books } from '../../src/books/store.js';
 import { openWorkspace } from '../../src/workspace/workspace.js';
-import { runPairChain, estvToChf, CHECK_BATCH, CHOOSE_BATCH, type ChainResult } from '../../src/intake/pair-chain.js';
+import { runPairChain, estvToChf, noReceiptFor, CHECK_BATCH, CHOOSE_BATCH, type ChainResult } from '../../src/intake/pair-chain.js';
 import { candidates, provisional } from '../../src/intake/match.js';
 import { titlesPrompt } from '../../src/intake/titles.js';
 import { buildMatchPrompt } from '../../src/llm/prompts.js';
@@ -71,7 +71,7 @@ function tally(result: ChainResult, truth: readonly Mapping[], books: Books): Ta
   for (const l of result.linked) {
     const k = pairs.has(`${l.receipt}|${l.payment}`) ? 'right' : linkedAnyway.has(l.receipt) || linkedAnyway.has(l.payment) ? 'wrong' : 'new';
     if (k === 'right') t.linkedRight++; else if (k === 'wrong') t.linkedWrong++; else t.linkedNew++;
-    const m = (t.byMaker[l.by] ??= { right: 0, wrong: 0 });
+    const m = (t.byMaker[`${l.by}${l.signals.includes('name') || l.signals.includes('number') ? '' : ' (amount and day only)'}`] ??= { right: 0, wrong: 0 });
     if (k === 'right') m.right++; else if (k === 'wrong') m.wrong++;
   }
   const once = (list: readonly Mapping[], key: 'receiptId' | 'transactionRef') => { const n = new Map<string, number>(); for (const m of books.mappings) n.set(m[key], (n.get(m[key]) ?? 0) + 1); return list.filter((m) => n.get(m[key]) === 1); };
@@ -100,9 +100,10 @@ export async function main(): Promise<void> {
   const pairs = new Set(truth.map((m) => `${m.receiptId}|${m.transactionRef}`));
   const oneToOne = truth.filter((m) => books.mappings.filter((x) => x.receiptId === m.receiptId).length === 1 && books.mappings.filter((x) => x.transactionRef === m.transactionRef).length === 1).length;
 
-  const code = await runPairChain(memoryPort(structuredClone(blind)), { toChf });
+  const noReceipt = noReceiptFor(ws);
+  const code = await runPairChain(memoryPort(structuredClone(blind)), { toChf, noReceipt });
   const o = oracle(pairs, blind);
-  const withModel = await runPairChain(memoryPort(structuredClone(blind)), { toChf, ask: o.ask });
+  const withModel = await runPairChain(memoryPort(structuredClone(blind)), { toChf, ask: o.ask, noReceipt });
 
   // Before: the intake's match prompt of each receipt of the window (candidates as the intake ranks them), which the chain does not replace.
   const linked = new Set(blind.mappings.map((m) => m.transactionRef));
@@ -122,7 +123,9 @@ export async function main(): Promise<void> {
       const list = search.byReceipt.get(l.receipt) ?? [];
       const right = truth.find((m) => m.receiptId === l.receipt);
       const show = (c?: PairCandidate) => (c ? `${c.score}pt ${c.amount} ${c.days}d words ${c.words}${c.number ? ' number' : ''}` : 'none');
-      console.log(`wrong: chose ${show(list.find((c) => c.payment === l.payment))}; the books' payment ${right ? show(list.find((c) => c.payment === right.transactionRef)) ?? 'not a candidate' : 'none'}; ${list.length} candidates; the payment's own receipts in the books: ${truth.filter((m) => m.transactionRef === l.payment).map((m) => { const a = blind.receipts.find((r) => r.id === m.receiptId); const b = blind.receipts.find((r) => r.id === l.receipt); return a && b ? (a.amount === b.amount && a.date === b.date ? 'same amount and day' : a.amount === b.amount ? 'same amount' : 'other amount') : '?'; }).join(', ')}`);
+      const rt = right && blind.transactions.find((x) => x.ref === right.transactionRef);
+      const why = rt ? `${rt.noReceiptNeeded ? 'marked ' : ''}${noReceipt(blind)(rt) ? 'no receipt of its own (' + blind.journalEntries.filter((e) => e.transactionRef === rt.ref).map((e) => `${e.accountDebit}/${e.accountCredit}`).join(' ') + ')' : ''}` : '';
+      console.log(`wrong: ${why} chose ${show(list.find((c) => c.payment === l.payment))}; the books' payment ${right ? show(list.find((c) => c.payment === right.transactionRef)) ?? 'not a candidate' : 'none'}; ${list.length} candidates; the payment's own receipts in the books: ${truth.filter((m) => m.transactionRef === l.payment).map((m) => { const a = blind.receipts.find((r) => r.id === m.receiptId); const b = blind.receipts.find((r) => r.id === l.receipt); return a && b ? (a.amount === b.amount && a.date === b.date ? 'same amount and day' : a.amount === b.amount ? 'same amount' : 'other amount') : '?'; }).join(', ')}`);
     }
   }
   if (process.argv.includes('--detail')) {
@@ -147,7 +150,7 @@ export async function main(): Promise<void> {
   console.log(`precision (links the books know): code ${precision(tc)}, code + oracle ${precision(tm)}; recall of one-to-one links: code ${(tc.oneToOneRight / Math.max(1, oneToOne)).toFixed(3)}, code + oracle ${(tm.oneToOneRight / Math.max(1, oneToOne)).toFixed(3)}`);
   console.log(`model stages: ${o.usage.calls} calls (batches of ${CHECK_BATCH} checks, ${CHOOSE_BATCH} choices), ${withModel.checked} pairs checked, ${withModel.chosen} short lists; ~${Math.round(o.usage.promptChars / 4)} prompt and ~${Math.round(o.usage.answerChars / 4)} answer tokens (estimated, 4 characters each)`);
   console.log(`intake match prompts before #187 of the window's ${inWindow.length} receipts (read facts): ~${Math.round(intakeChars / 4)} prompt tokens (estimated; standard tier)`);
-  await intake(blind, truth, toChf);
+  await intake(blind, truth, toChf, noReceipt);
 }
 
 /**
@@ -158,7 +161,7 @@ export async function main(): Promise<void> {
  * code's short list where there is one. Tokens estimated at 4 characters each; a file attached to
  * a match prompt (a scan with little text) is not counted on either side.
  */
-async function intake(blind: Books, truth: readonly Mapping[], toChf: ReturnType<typeof estvToChf>): Promise<void> {
+async function intake(blind: Books, truth: readonly Mapping[], toChf: ReturnType<typeof estvToChf>, noReceipt: ReturnType<typeof noReceiptFor>): Promise<void> {
   const ids = new Set(truth.map((m) => m.receiptId));
   const books = structuredClone(blind);
   for (const r of books.receipts) {
@@ -171,7 +174,7 @@ async function intake(blind: Books, truth: readonly Mapping[], toChf: ReturnType
   const view: Books = { ...books, receipts: [...books.receipts.filter((r) => r.location !== 'staged'), ...early] };
   const pairs = new Set(truth.map((m) => `${m.receiptId}|${m.transactionRef}`));
   const o = oracle(pairs, view);
-  const chain = await runPairChain(memoryPort(books), { toChf, ask: o.ask, staged: early });
+  const chain = await runPairChain(memoryPort(books), { toChf, ask: o.ask, staged: early, noReceipt });
   const linked = new Set(books.mappings.map((m) => m.transactionRef));
   const matchChars = (r: typeof staged[number], shown = candidates(r, books.transactions, linked)) => buildMatchPrompt(r.extractedText, shown).length;
   // Before #187 the prompt listed the 20 candidates as indented JSON with every field.

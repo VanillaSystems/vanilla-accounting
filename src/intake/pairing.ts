@@ -16,6 +16,7 @@ import { numbersIn, squash } from '../accounting/document-numbers.js';
 import { creditSigned } from '../accounting/credit-signed.js';
 import { baseCurrency, documents } from '../engines/index.js';
 import { HEAD, wordsRe } from '../core/modules/words.js';
+import { legOf } from '../workspace/money-accounts.js';
 
 /** Which payments are candidates at all. */
 export const BOUNDS = {
@@ -52,15 +53,37 @@ export const SHORT_LIST = 5;
 /** Who made a link, as the receipt shows it (Mapping.by and Mapping.rule). */
 export type LinkMaker = 'code' | 'checked' | 'model' | 'person' | 'unknown';
 
-/** The rules of the chain's links: a clear pair code linked alone, or one the model confirmed, or the model's choice from a short list. */
+/**
+ * The rules of the chain's links: a clear pair code linked alone, or one the model confirmed, or
+ * the model's choice from a short list. The rule names what matched after a colon
+ * («pair:amount+day+name»), so the receipt says what code saw (signalsOf).
+ */
 export const PAIR_RULE = { code: 'pair', checked: 'pair-checked', model: 'pair-choice' } as const;
+
+/** What matched in a pair: the amount (in one currency, the bank's original amount, or across currencies), the day, the vendor's name, a document number. */
+export const SIGNALS = ['amount', 'original', 'currency', 'day', 'name', 'number'] as const;
+export type Signal = (typeof SIGNALS)[number];
+
+const ruleOf = (rule: string | undefined) => rule?.split(':')[0];
 
 export function makerOf(m: Pick<Mapping, 'by' | 'rule'>): LinkMaker {
   if (m.by === 'human') return 'person';
-  if (m.rule === PAIR_RULE.checked) return 'checked';
+  if (ruleOf(m.rule) === PAIR_RULE.checked) return 'checked';
   if (m.by === 'llm') return 'model';
   if (m.by === 'rule') return 'code';
   return 'unknown';
+}
+
+/** What matched in a link the chain made, from its rule; none for any other link. */
+export function signalsOf(m: Pick<Mapping, 'rule'>): Signal[] {
+  const [rule, list] = (m.rule ?? '').split(':');
+  if (!Object.values(PAIR_RULE).includes(rule as never) || !list) return [];
+  return list.split('+').filter((x): x is Signal => (SIGNALS as readonly string[]).includes(x));
+}
+
+/** What matched in a candidate. */
+export function signalsOfCandidate(c: PairCandidate): Signal[] {
+  return [c.amount === 'same' ? 'amount' : c.amount === 'original' ? 'original' : 'currency', ...(dayPoints(c.days) > 0 ? ['day' as const] : []), ...(c.words > 0 ? ['name' as const] : []), ...(c.number ? ['number' as const] : [])];
 }
 
 /** Who of the chain made a link: code alone, code checked by the model, the model from a short list. */
@@ -73,15 +96,14 @@ export type Maker = 'code' | 'checked' | 'model';
  * `total`; else nothing within the bounds. `model`: a model took part.
  */
 export type Found =
-  | { outcome: 'linked' | 'filed'; receipt: string; payment: string; by: Maker; model: boolean }
+  | { outcome: 'linked' | 'filed'; receipt: string; payment: string; by: Maker; signals: Signal[]; model: boolean }
   | { outcome: 'candidates'; candidates: Array<{ receipt: string; payment: string; score: number; filed: boolean }>; total: number; model: boolean }
   | { outcome: 'none'; model: boolean };
 
-/** The link a stage of the chain makes. */
-export function pairMapping(maker: Maker, transactionRef: string, receiptId: string): Mapping {
-  return maker === 'code'
-    ? { transactionRef, receiptId, by: 'rule', rule: PAIR_RULE.code }
-    : { transactionRef, receiptId, by: 'llm', rule: PAIR_RULE[maker] };
+/** The link a stage of the chain makes, naming what matched. */
+export function pairMapping(maker: Maker, transactionRef: string, receiptId: string, signals: readonly Signal[]): Mapping {
+  const rule = signals.length ? `${PAIR_RULE[maker]}:${signals.join('+')}` : PAIR_RULE[maker];
+  return { transactionRef, receiptId, by: maker === 'code' ? 'rule' : 'llm', rule };
 }
 
 /** An amount in the books' currency on a day: the official daily rate (src/accounting/fx-rates.ts), undefined without one. */
@@ -90,7 +112,10 @@ export type ToChf = (amount: number, currency: string, date: string) => number |
 /** One receipt and one payment that may belong together, with what speaks for it. */
 export interface PairCandidate {
   receipt: string;
+  /** The payment's ref: what a link names. */
   payment: string;
+  /** The payment's leg (legOf): a card charge split over two currencies is two transactions with one ref. */
+  leg: string;
   /** The payment lies in a filed quarter: the receipt is pointed at it (Receipt.filedPayment), never linked. */
   filed: boolean;
   /** WEIGHTS summed. */
@@ -108,7 +133,7 @@ export interface PairCandidate {
 export interface PairSearch {
   /** Every pairable receipt, with its candidates, best first. */
   byReceipt: Map<string, PairCandidate[]>;
-  /** Every pairable payment, with its candidate receipts, best first. */
+  /** Every pairable payment by its ref (its legs together), with its candidate receipts, best first. */
   byPayment: Map<string, PairCandidate[]>;
 }
 
@@ -128,11 +153,17 @@ const cents = (n: number) => Math.round(Math.abs(n) * 100);
  */
 export function originalOf(tx: BankTransaction): { amount: number; currency: string } | undefined {
   if (tx.original) return tx.original;
-  const m = tx.description.match(/(?<![\w.])(-?\d+(?:[.,]\d{2}))\s+([A-Z]{3})\b|\b([A-Z]{3})\s+(-?\d+(?:[.,]\d{2}))(?![\d.])/);
+  const m = tx.description.match(new RegExp(`(?<![\\w.,'’])(${AMOUNT})\\s+([A-Z]{3})\\b|\\b([A-Z]{3})\\s+(${AMOUNT})(?![\\d.,'’])`));
   if (!m) return undefined;
-  const amount = Number((m[1] ?? m[4]).replace(',', '.'));
+  const amount = amountIn(m[1] ?? m[4]);
   return Number.isFinite(amount) ? { amount: Math.abs(amount), currency: m[2] ?? m[3] } : undefined;
 }
+
+/** An amount with two decimals, its thousands grouped by «,», «'», «’» or a space, or not grouped («1,234.56», «1'234.56», «1 234,56», «1234.56»). */
+const AMOUNT = "-?\\d{1,3}(?:[,'’ ]\\d{3})+[.,]\\d{2}|-?\\d+[.,]\\d{2}";
+
+/** The number an AMOUNT writes: the last separator before two digits is the decimal point, every other one groups thousands. */
+const amountIn = (text: string): number => Number(text.replace(/[.,](\d{2})$/, 'D$1').replace(/[,'’ .]/g, '').replace('D', '.'));
 
 /** The receipts the chain looks for a payment for: read, kept, an invoice or a sales record with an amount and a date, nothing linked, not pointed at a filed payment, and no payout report or order page (their own links, order-links.ts and the model). */
 export function pairableReceipt(r: Receipt, linked: ReadonlySet<string>): boolean {
@@ -140,10 +171,19 @@ export function pairableReceipt(r: Receipt, linked: ReadonlySet<string>): boolea
     && !!r.amount && !!r.date && !r.payout && !r.order;
 }
 
-/** The payments the chain looks for a receipt for: money moved, no receipt linked, no bank fee. */
-export function pairablePayment(t: BankTransaction, linked: ReadonlySet<string>): boolean {
-  return t.amount !== 0 && t.type !== 'wise-fee' && !linked.has(t.ref);
+/**
+ * The payments the chain looks for a receipt for: money moved, no receipt linked or pointed at it
+ * (`taken`), and not one that has no receipt of its own: marked as needing none, or what
+ * `noReceipt` says (src/booking/receipt-wait.ts noReceiptOfItsOwn: an own transfer, a booking that
+ * only settles, a fee row, a business or wording a rule exempts).
+ */
+export function pairablePayment(t: BankTransaction, taken: ReadonlySet<string>, noReceipt?: (t: BankTransaction) => boolean): boolean {
+  return t.amount !== 0 && t.type !== 'wise-fee' && !t.noReceiptNeeded && !taken.has(t.ref) && !noReceipt?.(t);
 }
+
+/** The payments a receipt holds: linked, or, for a filed payment, pointed at (Receipt.filedPayment, which the next correction counts). */
+export const takenPayments = (books: Pick<Books, 'mappings' | 'receipts'>): Set<string> =>
+  new Set([...books.mappings.map((m) => m.transactionRef), ...books.receipts.flatMap((r) => (r.filedPayment ? [r.filedPayment] : []))]);
 
 /**
  * Money comes in for this receipt: a sales record, or a credit note, which says so by its total
@@ -195,7 +235,7 @@ export function fitOf(r: Receipt, tx: BankTransaction, toChf: ToChf, isClosed: (
   const words = nameWords(tx).filter((w) => vendor.includes(w)).length;
   const score = WEIGHTS.amount[amount === 'original' ? 'same' : amount] + dayPoints(days)
     + (words >= 2 ? WEIGHTS.name.more : words === 1 ? WEIGHTS.name.one : 0) + (number ? WEIGHTS.number : 0);
-  return { receipt: r.id, payment: tx.ref, filed: isClosed(tx.date), score, amount, number, words, days };
+  return { receipt: r.id, payment: tx.ref, leg: legOf(tx), filed: isClosed(tx.date), score, amount, number, words, days };
 }
 
 /** Best first: the score, then the nearer day. */
@@ -206,22 +246,24 @@ const rank = (a: PairCandidate, b: PairCandidate) => b.score - a.score || Math.a
  * apart (Receipt.notPaidBy) is never a candidate again. A filed payment is a candidate too: its
  * receipt is pointed at it, never linked (golden rule 1).
  */
-export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string) => boolean): PairSearch {
+export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string) => boolean, noReceipt?: (t: BankTransaction) => boolean): PairSearch {
   const linkedReceipts = new Set(books.mappings.map((m) => m.receiptId));
-  const linkedPayments = new Set(books.mappings.map((m) => m.transactionRef));
-  const payments = books.transactions.filter((t) => pairablePayment(t, linkedPayments));
+  const taken = takenPayments(books);
+  const payments = books.transactions.filter((t) => pairablePayment(t, taken, noReceipt));
   const byReceipt = new Map<string, PairCandidate[]>();
   const byPayment = new Map<string, PairCandidate[]>(payments.map((t) => [t.ref, []]));
   for (const r of books.receipts) {
     if (!pairableReceipt(r, linkedReceipts)) continue;
     const apart = new Set(r.notPaidBy ?? []);
-    const mine: PairCandidate[] = [];
+    // One candidate per payment: of a charge split over two currencies, the leg that fits best.
+    const best = new Map<string, PairCandidate>();
     for (const t of payments) {
       const c = apart.has(t.ref) ? undefined : fitOf(r, t, toChf, isClosed);
-      if (!c) continue;
-      mine.push(c);
-      byPayment.get(t.ref)!.push(c);
+      const had = c && best.get(c.payment);
+      if (c && (!had || rank(c, had) < 0)) best.set(c.payment, c);
     }
+    const mine = [...best.values()];
+    for (const c of mine) byPayment.get(c.payment)!.push(c);
     byReceipt.set(r.id, mine);
   }
   for (const list of [...byReceipt.values(), ...byPayment.values()]) list.sort(rank);

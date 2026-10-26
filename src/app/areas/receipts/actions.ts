@@ -30,6 +30,10 @@ async function run(nav: Nav, call: () => Promise<unknown>, message: string | (()
 
 const pair = (receiptId: string, transactionRef: string) => ({ receiptId, transactionRef });
 
+/** A late receipt pointed at the wrong filed payment (#187): the pointer goes, and the pair is never paired again; the toast puts it back. */
+export const unpointFiled = (nav: Nav, receipt: string, payment: string, what: string) =>
+  run(nav, () => api.setFiledPayment(receipt, null), t('pair.unpointed', { what }), () => api.setFiledPayment(receipt, payment));
+
 /**
  * A link whose payment is off the receipt's amount says so in its toast. `second`: the person
  * confirmed a second payment for the receipt (r8h-21). Without a model the payment's booking stays

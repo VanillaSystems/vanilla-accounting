@@ -51,3 +51,10 @@ export const ownerOf = (accounts: readonly LedgerBankAccount[]): LedgerBankAccou
 
 /** The accounts at a bank or a payment provider: what an invoice is paid to. */
 export const banksOf = (accounts: readonly LedgerBankAccount[]): LedgerBankAccount[] => accounts.filter((a) => a.role === 'bank');
+
+/**
+ * What names one bank transaction across re-reads. A Wise card charge split over two currencies is
+ * two transactions with one ref (assignUniqueRefs keeps it shared: one payment), so a transaction
+ * is matched to its previous self by ref and currency, never by the ref alone (#23).
+ */
+export const legOf = (t: Pick<BankTransaction, 'ref' | 'currency'>): string => `${t.ref} ${t.currency}`;
