@@ -162,3 +162,6 @@
   .ways3s .seg.auto .segmain { flex-basis: 100%; border-radius: 10px 10px 0 0; }
   .ways3s .seg.auto .fetchbtn { margin-left: 36px; }
 }
+
+/* What was set aside (#186): one lead line above the files that are no receipt. */
+.hidden-lead { font-size: 12.5px; margin: 8px 0; color: var(--muted); }

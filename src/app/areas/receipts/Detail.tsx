@@ -20,7 +20,7 @@ import { ICONS } from '../icons.js';
 import type { AreaProps } from '../index.js';
 import { chfOf, linkFit, vatMisfit, type Ledger, type ReceiptView, vatChipOf } from './model.js';
 import { setUi, useUi, type Section } from './state.js';
-import { amountOf, at, bankOf, dayText, ledgerFor, listed, txLine } from './view.js';
+import { amountOf, at, bankOf, dayText, ledgerFor, listed, noneText, txLine } from './view.js';
 import { Kbd, accept, runAct } from './commands.js';
 import { correctionPeriodName } from '../journal/commands.js';
 import { QuestionsOn } from '../../questions/Questions.js';
@@ -153,7 +153,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       {!v.locked && !v.links.some((ref) => l.txByRef.has(ref)) && r.filedPayment && <FiledPaymentNotice {...props} payment={r.filedPayment} open={open ? periodName(open) : ''} receipt={r.id} corrected={v.links.length > 0} />}
       <TwinNotice {...props} />
       {v.none
-        ? <div className="notice">{v.noneWhy ? t('receipts.noneNoticeWhy', { why: t(`receipts.why.${v.noneWhy}`) }) : t('receipts.noneNotice')} {canEdit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t('receipts.isReceipt')}</a>}</div>
+        ? <div className="notice">{v.noneWhy ? t('receipts.noneNoticeWhy', { why: noneText(v) }) : t('receipts.noneNotice')} {canEdit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t('receipts.isReceipt')}</a>}</div>
         : v.twin?.relation === 'duplicate' && !v.links.length ? null : <div className="status"><Status {...props} /></div>}
 
       <div className="body">

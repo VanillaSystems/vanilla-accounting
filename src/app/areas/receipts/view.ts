@@ -6,7 +6,7 @@ import { localToday, booksOpenPeriod, parsePeriod, periodContaining, type Period
 import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import type { Location, Route } from '../../shell/route.js';
-import { ledgerOf, type AmountFit, type Candidate, type Ledger } from './model.js';
+import { ledgerOf, type AmountFit, type Candidate, type Ledger, type ReceiptView } from './model.js';
 import { baseCurrency, filing } from '../../../engines/index.js';
 
 let memo: { books: Index; ledger: Ledger } | undefined;
@@ -45,3 +45,14 @@ export const fitText = (fit: AmountFit | undefined) =>
   fit?.kind === 'off' ? t('receipts.whyOff', { amount: `${fit.currency} ${fmt(Math.abs(fit.diff))}` })
     : fit?.kind === 'skonto' ? t('receipts.whySkonto', { percent: fit.percent })
       : '';
+
+/**
+ * Why a file is no receipt, and who said so (#186): the model's own reason, a person's mark, or
+ * what the app's rules read («laut Text kein Beleg»).
+ */
+export function noneText(v: ReceiptView): string {
+  if (v.noneBy === 'model') return v.r.kindWhy ? t('receipts.noneBy.modelWhy', { why: v.r.kindWhy }) : t('receipts.noneBy.model');
+  if (v.noneBy === 'person' && v.r.kind === 'noise') return t('receipts.noneBy.person');
+  const why = v.noneWhy ? t(`receipts.why.${v.noneWhy}`) : '';
+  return v.noneBy === 'person' ? `${why} · ${t('receipts.noneBy.personShort')}` : why;
+}

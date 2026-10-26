@@ -14,6 +14,7 @@ import { accountOfStatement, statementFacts, type StatementFacts } from '../../.
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { isManualRef } from '../../../books/refs.js';
 import type { OtherWhy, SupportingWhy } from '../../../core/modules/schema.js';
+import { kindByOf, type KindBy } from '../../../intake/unclear.js';
 
 /** Why a file in Belege is no receipt: what its words say it is, or its kind, or that it holds no amount. */
 export type NoneWhy = SupportingWhy | OtherWhy | 'supporting' | 'duplicate' | 'statement' | 'empty';
@@ -51,6 +52,8 @@ export interface ReceiptView {
   none: boolean;
   /** Why it needs no payment, when `none` (shown with it, r5h-28). */
   noneWhy?: NoneWhy;
+  /** Who set it aside, when `none`: a person, the model (its reason in `r.kindWhy`), or the app's rules (#186). */
+  noneBy?: KindBy;
   /** Linked to a payment or entry of a filed quarter: it never changes again (golden rule 1). */
   locked: boolean;
   /** Another receipt it seems to repeat (asked: «ist dasselbe» or «verschieden»), or the invoice it accompanies. */
@@ -111,7 +114,7 @@ export function ledgerOf(books: Index, openFrom: string): Ledger {
     const paid = links.flatMap((ref) => txByRef.get(ref)?.date ?? []);
     const twin = twins.get(r.id);
     const statement = r.kind === 'statement' ? statementFacts(r, documents()) : undefined;
-    return { r, date, day: date || r.indexedAt.slice(0, 10) || undefined, vendor, desc, links, paid, none, ...(none ? { noneWhy: noneWhyOf(r) } : {}), locked: links.some(refClosed), ...(twin ? { twin } : {}), ...(statement ? { statement } : {}) };
+    return { r, date, day: date || r.indexedAt.slice(0, 10) || undefined, vendor, desc, links, paid, none, ...(none ? { noneWhy: noneWhyOf(r), noneBy: kindByOf(r) } : {}), locked: links.some(refClosed), ...(twin ? { twin } : {}), ...(statement ? { statement } : {}) };
   });
   return { views, byId: new Map(views.map((v) => [v.r.id, v])), txByRef, entriesByRef, receiptsByRef, closedThrough, openFrom };
 }
@@ -149,7 +152,7 @@ const FILTERS: Record<ReceiptFilter, (v: ReceiptView) => boolean> = {
 /** The text a search looks in: title, description, file, note, date, amount, VAT number. */
 function haystack(v: ReceiptView): string {
   const { r } = v;
-  return [v.vendor, v.desc, r.description, r.filename, r.remarks, v.date, v.date && v.date.split('-').reverse().join('.'), r.amount?.toFixed(2), r.vatId].join(' ').toLowerCase();
+  return [v.vendor, v.desc, r.description, r.filename, r.remarks, r.kindWhy, v.date, v.date && v.date.split('-').reverse().join('.'), r.amount?.toFixed(2), r.vatId].join(' ').toLowerCase();
 }
 
 export interface Visible {
