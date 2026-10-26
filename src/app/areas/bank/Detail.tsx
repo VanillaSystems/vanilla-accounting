@@ -23,6 +23,7 @@ import { bankFor, setUi, useUi, type Section } from './state.js';
 import { importStatements, linkReceiptSet, pickStatements, removeStatement, setNote, setNoReceipt } from './actions.js';
 import { proposalsFor } from '../../../intake/receipt-sets.js';
 import { at } from '../receipts/view.js';
+import { FindPair, madeBy } from '../receipts/FindPair.js';
 import { StatementPaper, type Mark } from './StatementPaper.js';
 import { Parts } from './Parts.js';
 import { baseCurrency } from '../../../engines/index.js';
@@ -240,7 +241,7 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
       {receipts.length > 0 ? (
         <> · <button type="button" className="golink" data-testid="go-receipt" data-tip={t('bank.openReceipt')} onClick={() => nav.go(at({ area: 'receipts', id: receipts[0] }, first?.date ?? tx.date))}>
           {t('bank.receipt', { name: first?.name ?? receipts[0] })}{receipts.length > 1 && ` +${receipts.length - 1}`}
-        </button></>
+        </button>{receipts.length === 1 && madeByOf(props.books, receipts[0], tx.ref) ? <small className="madeby" data-testid="made-by"> {madeByOf(props.books, receipts[0], tx.ref)}</small> : null}</>
       ) : tx.inputTaxProof ? (
         <> · <span data-testid="input-tax-proof">{t('bank.inputTaxProof', { text: tx.inputTaxProof.text })}</span></>
       ) : saleWithoutVat ? (
@@ -249,7 +250,7 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
           {' · '}<button type="button" className="golink" data-tip={t('bank.noVatTip')} onClick={() => setNoReceipt(nav, tx, true)}>{t('bank.noVat')}</button>
         </>}</>
       ) : b.needsReceipt(tx) ? (
-        <> · <span className="wn">{t('bank.noReceipt')}</span>{edit && <> <button type="button" className="golink" onClick={() => setNoReceipt(nav, tx, true)}>{t('bank.noReceiptNeeded')}</button></>}</>
+        <> · <span className="wn">{t('bank.noReceipt')}</span>{edit && <> <button type="button" className="golink" onClick={() => setNoReceipt(nav, tx, true)}>{t('bank.noReceiptNeeded')}</button> · <FindPair key={tx.ref} on={{ payment: tx.ref }} books={props.books} nav={nav} compact /></>}</>
       ) : tx.noReceiptNeeded ? (
         <> · {t('bank.noReceiptNotNeeded')}{edit && <> <button type="button" className="golink" data-tip={t('bank.resetTip')} onClick={() => setNoReceipt(nav, tx, false)}>{t('bank.reset')}</button></>}</>
       ) : null}
@@ -266,6 +267,12 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
     </>
   );
 }
+
+/** Who made the link of a receipt and a payment, said plainly (#187). */
+const madeByOf = (books: Props['books'], receipt: string, payment: string): string | undefined => {
+  const m = books.mappings.find((x) => x.receiptId === receipt && x.transactionRef === payment);
+  return m && madeBy(m);
+};
 
 /** At most this many sets are offered on one payment. */
 const SETS_SHOWN = 3;

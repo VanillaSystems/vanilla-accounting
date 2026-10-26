@@ -229,3 +229,10 @@ test('r9k-10: the statement\'s days are the bank\'s own (FrToDt) when it names t
   assert.deepEqual([without.from, without.to], ['2026-10-11', '2026-10-16'], 'without FrToDt the opening balance of the 10th is the close of the 10th: the statement starts on the 11th');
   assert.deepEqual(recognizeCamt(Buffer.from(stmt('')))!.facts, { iban: 'CH6580808000000000001', from: '2026-10-11', to: '2026-10-11', entries: 1 });
 });
+
+test('an instructed amount in another currency (InstdAmt) is kept as the payment\'s original amount; in the account\'s own currency it is not (#187)', () => {
+  const entry = (ccy: string) => ntry(`<Ntry><Amt Ccy="CHF">46.20</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-08-12</Dt></BookgDt><AcctSvcrRef>FX-${ccy}</AcctSvcrRef>
+<NtryDtls><TxDtls><AmtDtls><InstdAmt><Amt Ccy="${ccy}">49.00</Amt></InstdAmt></AmtDtls><RmtInf><Ustrd>Beispiel GmbH Rechnung 4711</Ustrd></RmtInf></TxDtls></NtryDtls></Ntry>`);
+  assert.deepEqual(parse(entry('EUR'))[0].original, { amount: 49, currency: 'EUR' });
+  assert.equal(parse(entry('CHF'))[0].original, undefined);
+});

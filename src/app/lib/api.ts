@@ -1,3 +1,4 @@
+import type { Found } from '../../intake/pairing.js';
 import type { TerminalCli, TerminalView } from '../../platform/terminal.js';
 import type { AiSetupView, KeySaved, Probation, SetupKey } from '../../platform/ai-setup.js';
 import type { StatementProblem } from '../../types/api-error.js';
@@ -327,6 +328,9 @@ export const api = {
   /** `again`: the payments booked again by a run; `kept`: a booked payment whose booking stays because no model is there to rebook it (r8f-41). */
   addMapping: (link: Link) => request<Linked>('POST', '/api/mapping/add', link),
   removeMapping: (link: Link) => request<Linked>('POST', '/api/mapping/remove', link),
+  /** «Zahlung suchen» / «Beleg suchen» (#187): the matching chain for one receipt or one payment. */
+  findPayment: (receipt: string) => request<Found>('POST', `/api/receipts/${encodeURIComponent(receipt)}/find-payment`),
+  findReceipt: (payment: string) => request<Found>('POST', `/api/transactions/${encodeURIComponent(payment)}/find-receipt`),
 
   patchJournalEntry: (id: string, patch: JournalEntryPatch) =>
     request<Ok>('PATCH', `/api/journal-entries/${encodeURIComponent(id)}`, patch),

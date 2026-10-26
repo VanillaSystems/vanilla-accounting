@@ -3,9 +3,9 @@
  * - needsVisionReview: moved to receipts/ under its own name, archived, no model call
  * - otherwise: the model (src/llm/ask.ts) names it and finds its payment; the file is renamed
  *   into receipts/ and linked when the model is at least 80 % sure
- * Code links what it can without the model, before and after: a receipt by amount and number
- * (linkByCode), an order to its payout (order-links.ts), several receipts that add up to one
- * payment (receipt-sets.ts).
+ * The matching chain (pair-chain.ts) runs before and after, over every receipt nothing is linked
+ * to and every payment without one, whichever came first; code also links an order to its payout
+ * (order-links.ts) and several receipts that add up to one payment (receipt-sets.ts).
  * A link to a payment of a filed quarter is never made (golden rule 1).
  */
 import { existsSync } from 'node:fs';
@@ -21,6 +21,8 @@ import { twinFinder } from './duplicates.js';
 import { capturedDay } from './captured.js';
 import { isIsoDate } from '../accounting/periods.js';
 import { numbersIn, squash } from '../accounting/document-numbers.js';
+import { nameWords } from './pairing.js';
+import { estvToChf, runPairChain } from './pair-chain.js';
 import { linkOrdersToPayouts } from './order-links.js';
 import { linkReceiptSets } from './receipt-sets.js';
 import { creditSigned } from '../accounting/credit-signed.js';
@@ -80,42 +82,6 @@ function factsOf(r: Receipt): { date?: string; amount?: number; currency?: strin
   const groups = r.vatSummary ?? [];
   const gross = groups.length && groups.every((g) => g.gross != null) ? groups.reduce((sum, g) => sum + g.gross!, 0) : undefined;
   return { date: r.date || guessDate(r.filename) || text.date, amount: r.amount ?? gross ?? text.amount, currency: r.currency ?? text.currency };
-}
-
-/** Words of a payment's text that name who was paid, not what the bank calls the booking. */
-export const BANK_WORDS = new Set(['zahlung', 'gutschrift', 'belastung', 'lastschrift', 'einkauf', 'karte', 'debit', 'kredit', 'transfer', 'payment', 'rechnung', 'auftrag', 'dauerauftrag', 'ebanking', 'twint', 'mastercard', 'visa', 'august', 'september', 'oktober', 'november', 'dezember', 'januar', 'februar', 'april', 'juni', 'juli']);
-export const nameWords = (tx: BankTransaction) => [...new Set([tx.description, tx.counterparty ?? '', ...(tx.parts ?? []).flatMap((p) => [p.counterparty, p.reference ?? ''])].join(' ').toLowerCase().match(/\p{L}{4,}/gu) ?? [])].filter((w) => !BANK_WORDS.has(w));
-
-
-/**
- * What code links without the model (MISSION: a payment that matches a receipt by amount and
- * number): an archived receipt nothing is linked to, and a payment without a receipt, the same
- * amount to the Rappen in the same currency, money out for an invoice and in for a credit note,
- * and one of the receipt's numbers («GS-1207») in the payment's text. Only a pair that is unique
- * both ways counts. An open pair is linked; a payment of a filed quarter is never linked (golden
- * rule 1): the receipt names it as its `filedPayment`, so it shows where its tax goes (corner-33).
- * Returns what it did.
- */
-export function linkByCode(index: Books): Array<{ receipt: string; payment: string; filed?: true }> {
-  const lock = periodLock(index);
-  const linked = new Set(index.mappings.flatMap((m) => [m.receiptId, m.transactionRef]));
-  const cents = (n: number) => Math.round(Math.abs(n) * 100);
-  const unlinked = index.receipts.filter((r) => r.location === 'archived' && !linked.has(r.id) && (!r.kind || r.kind === 'invoice')
-    && r.amount !== undefined && r.amount !== 0);
-  const payments = index.transactions.filter((t) => !linked.has(t.ref) && t.amount !== 0 && t.type !== 'wise-fee');
-  const fits = (r: Receipt, t: BankTransaction) => {
-    const numbers = numbersIn(r.extractedText ?? '');
-    const paid = squash([t.description, t.reference ?? '', t.remarks ?? '', ...(t.parts ?? []).map((p) => p.reference ?? '')].join(' '));
-    return (r.currency ?? baseCurrency()) === t.currency && cents(r.amount!) === cents(t.amount)
-      && (r.amount! < 0) === (t.direction === 'CRDT') && numbers.some((n) => paid.includes(n));
-  };
-  const pairs = unlinked.flatMap((r) => payments.filter((t) => fits(r, t)).map((t) => ({ r, t })));
-  const once = pairs.filter(({ r, t }) => pairs.filter((p) => p.r === r).length === 1 && pairs.filter((p) => p.t === t).length === 1);
-  const open = once.filter(({ r, t }) => !lock.isClosed(t.date) && !(r.date && lock.isClosed(r.date)));
-  const filed = once.filter(({ r, t }) => lock.isClosed(t.date) && r.filedPayment !== t.ref);
-  for (const { r, t } of open) index.mappings.push({ transactionRef: t.ref, receiptId: r.id });
-  for (const { r, t } of filed) r.filedPayment = t.ref;
-  return [...open.map(({ r, t }) => ({ receipt: r.id, payment: t.ref })), ...filed.map(({ r, t }) => ({ receipt: r.id, payment: t.ref, filed: true as const }))];
 }
 
 /**
@@ -183,12 +149,13 @@ export function candidates(receipt: Receipt, all: readonly BankTransaction[], li
 
 export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const IMPORT_DIR = ws.paths.inbox;
-  const byCode = () => {
-    for (const l of books.update(linkByCode)) log(l.filed ? `pays the filed payment ${l.payment} by amount and number: receipt ${l.receipt}, not linked` : `linked by amount and number: receipt ${l.receipt} → ${l.payment}`);
+  const toChf = estvToChf();
+  const byCode = async () => {
+    await runPairChain(books, { ask, toChf, log });
     for (const l of books.update(linkOrdersToPayouts)) log(`linked the order to the payout it names: receipt ${l.receipt} → ${l.payment}`);
     for (const s of books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, (d) => !lock.isClosed(d)); })) log(`linked ${s.receipts.length} receipts that add up to the payment: ${s.receipts.join(', ')} → ${s.payment}`);
   };
-  byCode();
+  await byCode();
   const snapshot = books.read();
   const staged = snapshot.receipts.filter((r) => r.location === 'staged');
   if (staged.length === 0) {
@@ -291,7 +258,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
       // Its only payment is filed: the receipt names it, so the person sees where its tax goes (a correction in the open quarter).
       if (!linked.length && filed.length) r.filedPayment = filed[0];
       for (const transactionRef of linked) {
-        if (!index.mappings.some((m) => m.transactionRef === transactionRef && m.receiptId === receipt.id)) index.mappings.push({ transactionRef, receiptId: receipt.id });
+        if (!index.mappings.some((m) => m.transactionRef === transactionRef && m.receiptId === receipt.id)) index.mappings.push({ transactionRef, receiptId: receipt.id, by: 'llm' });
       }
     });
     skippedClosed += filed.length;
@@ -312,7 +279,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   }));
 
   // The receipts just read: what code finds for them the model was not sure of.
-  byCode();
+  await byCode();
   log(`\nDone.`);
   log(`  Matched & linked : ${matched}`);
   log(`  Moved (unlinked) : ${unlinked}`);

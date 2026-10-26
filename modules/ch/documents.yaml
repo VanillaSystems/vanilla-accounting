@@ -31,3 +31,7 @@ statement: [Kontoauszug, Bankauszug, Account statement, Bank statement, Statemen
 # The balance lines of a statement (src/books/statement-facts.ts): with the title, an IBAN and a
 # period they tell a statement among the receipts from an invoice that only mentions one.
 balance: [Saldovortrag, Anfangssaldo, Schlusssaldo, Eröffnungssaldo, Endsaldo, Saldo, Opening balance, Closing balance, Balance brought forward, Balance, Solde initial, Solde final, Solde, Saldo iniziale, Saldo finale]
+
+# The title of a credit note in its first lines (src/intake/pairing.ts paysIn): money comes back for
+# it, so the matching looks for it among the money that came in.
+credit: [Gutschrift, Gutschriftsanzeige, Credit note, Credit memo, Note de crédit, Nota di credito]

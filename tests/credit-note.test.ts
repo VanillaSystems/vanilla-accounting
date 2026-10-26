@@ -6,7 +6,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './support/jurisdiction.js';
-import { linkByCode, matchStep } from '../src/intake/match.js';
+import { matchStep } from '../src/intake/match.js';
+import { runPairChain } from '../src/intake/pair-chain.js';
 import { creditSigned } from '../src/accounting/credit-signed.js';
 import type { Books } from '../src/books/store.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
@@ -18,6 +19,10 @@ const GS: Receipt = {
   vatSummary: [{ ratePercent: 8.1, net: -378, vat: -30.6, gross: -408.6 }],
 } as Receipt;
 const refund: BankTransaction = { ref: 'RB-30', bank: 'Raiffeisen', date: '2026-10-08', amount: 408.6, currency: 'CHF', direction: 'CRDT', description: 'Gutschrift Farbmix AG Gutschrift GS-1207 zu FM-78230' };
+const toChf = (a: number) => a;
+const port = (b: Books) => ({ read: () => b, update: <T>(fn: (x: Books) => T) => fn(b) });
+const linkByCode = async (b: Books) => (await runPairChain(port(b), { toChf })).linked.map(({ by: _by, ...l }) => l);
+const PAIR = { by: 'rule', rule: 'pair' };
 const books = (over: Partial<Books> = {}): Books => ({
   receipts: [structuredClone(GS)], transactions: [structuredClone(refund)], mappings: [], bankStatements: [], journalEntries: [], config: { closedThrough: '2026-09-30' }, ...over,
 });
@@ -29,33 +34,36 @@ test('a credit note read with a positive total is stored negative; an invoice ke
   assert.equal(creditSigned({ amount: 50, vatSummary: [] }), 50, 'no VAT facts: nothing to say');
 });
 
-test('the refund is linked to the credit note by amount, direction and number', () => {
+test('the refund is linked to the credit note by amount, direction and day, without a model', async () => {
   const b = books();
-  assert.deepEqual(linkByCode(b), [{ receipt: 'gs', payment: 'RB-30' }]);
-  assert.deepEqual(b.mappings, [{ transactionRef: 'RB-30', receiptId: 'gs' }]);
-  assert.deepEqual(linkByCode(b), [], 'linked once');
+  assert.deepEqual(await linkByCode(b), [{ receipt: 'gs', payment: 'RB-30' }]);
+  assert.deepEqual(b.mappings, [{ transactionRef: 'RB-30', receiptId: 'gs', ...PAIR }]);
+  assert.deepEqual(await linkByCode(b), [], 'linked once');
 });
 
-test('no link without the number, against the direction, at another amount, or twice the same', () => {
-  const none = (over: Partial<Books>) => assert.deepEqual(linkByCode(books(over)), []);
-  none({ transactions: [{ ...refund, description: 'Gutschrift Farbmix AG' }] });
-  none({ transactions: [{ ...refund, direction: 'DBIT' }] });
-  none({ transactions: [{ ...refund, amount: 408.5 }] });
-  none({ transactions: [refund, { ...refund, ref: 'RB-31' }] });
-  none({ receipts: [{ ...GS, location: 'staged' }] });
+test('no link against the direction, at another amount, with two payments alike, or for a staged receipt', async () => {
+  const none = async (over: Partial<Books>) => assert.deepEqual(await linkByCode(books(over)), []);
+  await none({ transactions: [{ ...refund, direction: 'DBIT' }] });
+  await none({ transactions: [{ ...refund, amount: 408.5 }] });
+  await none({ transactions: [{ ...refund, description: 'Gutschrift' }, { ...refund, ref: 'RB-31', description: 'Gutschrift' }] });
+  await none({ receipts: [{ ...GS, location: 'staged' }] });
 });
 
-test('a payment of a filed quarter is never linked: the receipt names it as the filed payment it pays (corner-33)', () => {
+test('of two payments alike, the one whose text carries the receipt\'s number is linked', async () => {
+  const b = books({ transactions: [structuredClone(refund), { ...refund, ref: 'RB-31', description: 'Gutschrift Farbmix AG' }] });
+  assert.deepEqual(await linkByCode(b), [{ receipt: 'gs', payment: 'RB-30' }]);
+});
+
+test('a payment of a filed quarter is never linked: the receipt names it as the filed payment it pays (corner-33)', async () => {
   const b = books({ transactions: [{ ...refund, date: '2026-09-28' }], receipts: [{ ...structuredClone(GS), date: '2026-09-25' }] });
-  assert.deepEqual(linkByCode(b), [{ receipt: 'gs', payment: 'RB-30', filed: true }]);
+  assert.deepEqual(await linkByCode(b), [{ receipt: 'gs', payment: 'RB-30', filed: true }]);
   assert.deepEqual(b.mappings, []);
   assert.equal(b.receipts[0].filedPayment, 'RB-30');
-  assert.deepEqual(linkByCode(b), [], 'said once');
+  assert.deepEqual(await linkByCode(b), [], 'said once');
 });
 
 test('the inbox run links it without the model, before anything else', async () => {
   const b = books();
-  const port = { read: () => b, update: <T>(fn: (x: Books) => T) => fn(b) };
-  await matchStep({ ws: { paths: { inbox: '/nowhere' } } as Workspace, books: port, progress: () => {}, log: () => {} });
-  assert.deepEqual(b.mappings, [{ transactionRef: 'RB-30', receiptId: 'gs' }]);
+  await matchStep({ ws: { paths: { inbox: '/nowhere' } } as Workspace, books: port(b), progress: () => {}, log: () => {} });
+  assert.deepEqual(b.mappings, [{ transactionRef: 'RB-30', receiptId: 'gs', ...PAIR }]);
 });

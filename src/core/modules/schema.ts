@@ -266,6 +266,8 @@ export interface DocumentsData {
   statement: string[];
   /** The balance lines of a statement («Saldovortrag», «Closing balance»): with its title, IBAN and period, a statement among the receipts (src/books/statement-facts.ts). */
   balance: string[];
+  /** The title of a credit note («Gutschrift», «Credit note»): money comes back for it, so it is matched to money in (src/intake/pairing.ts paysIn). */
+  credit?: string[];
 }
 
 /** A document kept beside an invoice, and a document that is no receipt, by what its words say. */

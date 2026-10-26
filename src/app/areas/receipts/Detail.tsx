@@ -26,6 +26,7 @@ import { correctionPeriodName } from '../journal/commands.js';
 import { QuestionsOn } from '../../questions/Questions.js';
 import { correctFiled, deleteReceipt, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
 import { LinkDialog } from './LinkDialog.js';
+import { FindPair, madeBy } from './FindPair.js';
 import { ByHand, VatFields } from './VatFields.js';
 import { TwinNotice } from './TwinNotice.js';
 import { Paper } from './Paper.js';
@@ -197,6 +198,8 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
     const tx = l.txByRef.get(ref);
     const more = v.links.length > 1 && <span className="mono"> +{v.links.length - 1}</span>;
     const entry = (l.entriesByRef.get(ref) ?? [])[0];
+    const link = props.books.mappings.find((m) => m.receiptId === v.r.id && m.transactionRef === ref);
+    const by = link && madeBy(link);
     if (!tx) {
       return (
         <>
@@ -216,6 +219,7 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
             {t('receipts.payment')} <span className="mono">{formatDate(tx.date)}</span> · {bankOf(tx)} · <span className="mono">{amountOf(tx)}</span>{more} <span className="arr">{t('receipts.toStatement')}</span>
           </button>
         </span>
+        {by && <span className="madeby" data-testid="made-by">{by}</span>}
         {entry && <button type="button" className="golink jl" data-testid="go-entry" data-tip={t('receipts.openEntry')} onClick={() => nav.go(at({ area: 'journal', id: entry.id }, entry.date))}>{t('receipts.entry')}</button>}
         {canEdit && !v.locked && (ownPrivate(l, tx)
           ? <button type="button" className="quiet" data-tip={t('receipts.undoPrivateTip')} onClick={() => undoPrivate(nav, v, tx, txLine(tx))}>{t('receipts.undoPrivate')}</button>
@@ -246,6 +250,7 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
     <span className="notice warn" style={{ margin: 0 }}>
       {I.dot}{t('receipts.noPayment')}
       {canEdit && <> <button type="button" style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => runAct(props, 'link')}>{t('receipts.linkVerb')}</button> <Kbd keys={['L']} tip={t('receipts.keyLinkTip')} /></>}
+      {canEdit && <> · <FindPair key={v.r.id} on={{ receipt: v.r.id }} books={props.books} nav={nav} /></>}
     </span>
   );
 }
