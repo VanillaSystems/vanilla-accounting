@@ -82,6 +82,7 @@ router.post('/api/receipts/:id/filed-payment', (req, res) => {
     const t = books.transactions.find((x) => x.ref === payment);
     if (!t) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
     if (!periodLock(books).isClosed(t.date)) throw new RequestError(400, 'Only a payment of a filed period is pointed at; link an open one.');
+    if (r.filedPayment && r.filedPayment !== payment && correction) throw new RequestError(409, `Die Korrektur ${correction.id} bucht die Vorsteuer dieses Belegs schon: zuerst sie löschen.`, { code: 'correctionBooked', params: { receipt: id, entry: correction.id } });
     if (r.filedPayment !== payment && takenPayments(books).has(payment)) throw new RequestError(409, 'Another receipt holds this payment.');
     // A receipt a bank payment pays meanwhile: its input tax is booked there; pointing it at a filed payment too would count it twice.
     const paid = books.mappings.find((m) => m.receiptId === id && books.transactions.some((x) => x.ref === m.transactionRef));

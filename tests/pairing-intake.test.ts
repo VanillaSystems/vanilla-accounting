@@ -9,7 +9,7 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadBooks, moduleActor, saveBooks, update } from '../src/books/store.js';
-import { runIntake, storePort, type Ask } from '../src/intake/pipeline.js';
+import { runIntake, storePort, type Ask, type StepRun } from '../src/intake/pipeline.js';
 import { readStep } from '../src/intake/read.js';
 import { matchStep } from '../src/intake/match.js';
 import { workspaceAt, findFile } from '../src/workspace/workspace.js';
@@ -90,6 +90,22 @@ test('a receipt whose payment is taken goes to the model\'s match as before', as
   assert.ok(m.steps.includes('receipt-match'), m.steps.join(' '));
 });
 
+/** The demo copy with a second receipt, the Post invoice of June, back in the inbox too, its link gone. */
+function droppedTwo(): ReturnType<typeof workspaceAt> {
+  const ws = dropped();
+  const books = loadBooks(ws);
+  const r = books.receipts.find((x) => x.id === 'a1b05ebfe049b2ca')!;
+  const file = findFile(ws.paths, 'receipts', r.filename)!;
+  writeFileSync(join(ws.paths.inbox, 'scan-post-juni.pdf'), readFileSync(file));
+  rmSync(file);
+  update(books, moduleActor('test'), (b) => {
+    b.receipts = b.receipts.filter((x) => x.id !== r.id);
+    b.mappings = b.mappings.filter((m) => m.receiptId !== r.id);
+  });
+  saveBooks(ws, books);
+  return ws;
+}
+
 /** A model whose match names `ref` for every receipt, sure of it, and keeps the prompts it was shown. */
 function sure(ref: string): { ask: Ask; prompts: string[] } {
   const prompts: string[] = [];
@@ -124,4 +140,29 @@ test('the model\'s match never points a receipt at a filed payment another recei
   await runIntake({ ws, books: storePort(ws, moduleActor('intake')), ask: sure(PAYMENT).ask, steps: [['read', readStep], ['match', matchStep]] });
   const r = loadBooks(ws).receipts.find((x) => x.originalFilename === 'scan-post.pdf')!;
   assert.equal(r.filedPayment, undefined);
+});
+
+test('two receipts of one run the model names the same payment for: the first links it, the second waits for a person', async () => {
+  const ws = droppedTwo();
+  const books = loadBooks(ws);
+  // Code pairs neither: the payment's amount and text fit no receipt, the June payment needs none.
+  update(books, moduleActor('test'), (b) => {
+    Object.assign(b.transactions.find((t) => t.ref === PAYMENT)!, { amount: 999, description: 'Zahlung' });
+    b.transactions.find((t) => t.ref === '90000000038')!.noReceiptNeeded = true;
+  });
+  saveBooks(ws, books);
+  await runIntake({ ws, books: storePort(ws, moduleActor('intake')), ask: sure(PAYMENT).ask, steps: [['read', readStep], ['match', matchStep]] });
+  assert.equal(loadBooks(ws).mappings.filter((m) => m.transactionRef === PAYMENT).length, 1);
+});
+
+test('the model\'s match is not shown a payment a person took apart from the receipt', async () => {
+  const ws = dropped();
+  const m = sure(PAYMENT);
+  const apart: StepRun = async ({ books }) => {
+    books.update((b) => { for (const r of b.receipts) if (r.originalFilename === 'scan-post.pdf') r.notPaidBy = [PAYMENT]; });
+    return { notes: [] };
+  };
+  await runIntake({ ws, books: storePort(ws, moduleActor('intake')), ask: m.ask, steps: [['read', readStep], ['vat', apart], ['match', matchStep]] });
+  assert.ok(m.prompts.length && !m.prompts[0].includes(`"ref":"${PAYMENT}"`), 'not among the payments shown');
+  assert.deepEqual(loadBooks(ws).mappings.filter((x) => x.transactionRef === PAYMENT), []);
 });

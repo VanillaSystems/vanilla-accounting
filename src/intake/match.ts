@@ -258,7 +258,8 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const shortList = new Map(chain.left.filter((l) => l.candidates.length && l.total === l.candidates.length).map((l) => [l.receipt, l.candidates]));
   const shownFor = (receipt: Receipt): Candidate[] => {
     const list = shortList.get(receipt.id)?.flatMap((c) => { const t = shown.find((x) => legOf(x) === c.leg); return t && !taken.has(t.ref) ? [c.filed ? { ...t, filed: true as const } : t] : []; });
-    return list?.length ? list : candidates(receipt, shown, taken, lock.isClosed);
+    const apart = new Set(receipt.notPaidBy ?? []);
+    return list?.length ? list : candidates(receipt, shown.filter((t) => !apart.has(t.ref)), taken, lock.isClosed);
   };
 
   log(`\nProcessing ${toProcess.length} staged receipt(s) (concurrency: ${CONCURRENCY})...\n`);
@@ -315,11 +316,14 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
       // Periodensperre: never attach a mapping to a transaction inside a closed period.
       const lock = periodLock(index);
       const held = takenPayments(index);
+      const grouped = GROUPED_VENDOR_PATTERN.test(r.extractedText ?? '');
       const without = noReceipt(index);
       linked = answer.matchedTransactionRefs.filter((ref) => {
         const tx = index.transactions.find((t) => t.ref === ref);
         // A payment without a receipt of its own takes none, whatever the model says.
         if (tx && (tx.noReceiptNeeded || without(tx) || r.notPaidBy?.includes(ref))) { log(`  ⚠ skipped ${ref}: it needs no receipt, or a person took it apart from this receipt`); return false; }
+        // A payment another receipt took meanwhile (another of this run's receipts, read from the same snapshot) stays with it, unless the vendor groups several receipts into one payment.
+        if (tx && held.has(ref) && !grouped && !index.mappings.some((m) => m.transactionRef === ref && m.receiptId === r.id)) { log(`  ⚠ skipped ${ref}: another receipt holds it; this one waits for a person`); return false; }
         if (tx && !lock.isClosed(tx.date)) return true;
         if (tx) { log(`  ⚠ skipped mapping to ${ref}: transaction is in the closed period (≤ ${lock.closedThrough})`); filed.push(ref); }
         return false;

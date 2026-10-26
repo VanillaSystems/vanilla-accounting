@@ -166,13 +166,14 @@ export function originalOf(tx: BankTransaction): { amount: number; currency: str
  * «1234.56»). A space groups thousands only right after «of» or the currency code («of 1 234.56
  * EUR», «EUR 1 234.56»): elsewhere «Order 12 345.00 USD» would read as 12,345.
  */
-const GROUPED = String.raw`-?\d{1,3}(?:,\d{3})+\.\d{2}|-?\d{1,3}(?:['’]\d{3})+[.,]\d{2}|-?\d{1,3}(?:\.\d{3})+,\d{2}|-?\d+[.,]\d{2}`;
+// A plain amount with exactly three digits before its decimals right after a number and a space is the tail of a space-grouped one («12 345.00»): not read.
+const GROUPED = String.raw`-?\d{1,3}(?:,\d{3})+\.\d{2}|-?\d{1,3}(?:['’]\d{3})+[.,]\d{2}|-?\d{1,3}(?:\.\d{3})+,\d{2}|(?<!\d )-?\d{3}[.,]\d{2}|-?(?:\d{1,2}|\d{4,})[.,]\d{2}`;
 const SPACED = String.raw`-?\d{1,3}(?: \d{3})+[.,]\d{2}`;
 const END = String.raw`(?![\d.,'’])`;
 const ORIGINAL: ReadonlyArray<{ re: RegExp; amount: number; currency: number }> = [
   { re: new RegExp(String.raw`(?<=\bof )(${SPACED})\s+([A-Z]{3})\b`), amount: 1, currency: 2 },
   { re: new RegExp(String.raw`\b([A-Z]{3}) (${SPACED})${END}`), amount: 2, currency: 1 },
-  { re: new RegExp(String.raw`(?<![\w.,'’])(?<!\d )(${GROUPED})\s+([A-Z]{3})\b`), amount: 1, currency: 2 },
+  { re: new RegExp(String.raw`(?<![\w.,'’])(${GROUPED})\s+([A-Z]{3})\b`), amount: 1, currency: 2 },
   { re: new RegExp(String.raw`\b([A-Z]{3})\s+(${GROUPED})${END}`), amount: 2, currency: 1 },
 ];
 

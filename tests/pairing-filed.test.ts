@@ -41,3 +41,11 @@ test('a pointer whose correction is booked stays: the correction is deleted firs
   assert.equal((json.params as { entry: string }).entry, 'jm');
   assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'nothing changed');
 });
+
+test('a pointer whose correction is booked is not moved to another filed payment either', async () => {
+  const before = JSON.stringify(booksOnDisk(api.ws));
+  const { status, json } = await api.send('POST', '/api/receipts/rc/filed-payment', { payment: 'F1' });
+  assert.equal(status, 409);
+  assert.equal(json.code, 'correctionBooked');
+  assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'nothing changed');
+});

@@ -216,4 +216,7 @@ test('the original amount the bank names in thousands: «1,234.56», «1\'234.56
     assert.deepEqual(originalOf(payment('w', { currency: 'CHF', description: text })), { amount: 1234.56, currency: 'EUR' }, text);
   }
   assert.equal(originalOf(payment('w', { currency: 'CHF', description: 'Order 12 345.00 USD' })), undefined, 'a space groups only after «of» or the currency: no 12,345, no 345');
+  for (const text of ['Kauf 31.03.2026 12.40 USD Amazon', 'Karte XXXX1234 12.40 USD', 'Qty 2 12.40 USD']) {
+    assert.deepEqual(originalOf(payment('w', { currency: 'CHF', description: text })), { amount: 12.4, currency: 'USD' }, text);
+  }
 });
