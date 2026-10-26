@@ -33,6 +33,8 @@ const SURE = 0.8;
 export interface ChainResult {
   linked: Array<{ receipt: string; payment: string; by: Maker; filed?: true }>;
   left: Array<{ receipt: string; candidates: PairCandidate[]; total: number }>;
+  /** The clear pairs of `staged` receipts, for the caller to archive, name and link (filed: point at) in its own change. */
+  staged: Array<{ receipt: string; payment: string; by: Maker; filed?: true }>;
   /** Model calls made, and the pairs and receipts they were asked about. */
   calls: number;
   checked: number;
@@ -47,6 +49,13 @@ export interface ChainOptions {
   log?: (line: string) => void;
   /** «Zahlung suchen» on one receipt or «Beleg suchen» on one payment: only its pairs, asked again even when the model doubted them before. */
   only?: { receipt: string } | { payment: string };
+  /**
+   * Receipts still in the inbox, with the facts code read off them (date, amount, currency) and
+   * `location: 'archived'` so the search takes them: their clear pairs come back in `staged`,
+   * unwritten; their short lists go to the intake's own model match, which names them anyway, so
+   * the chain asks no choice for them.
+   */
+  staged?: readonly Receipt[];
 }
 
 /** Amounts in the books' currency at the official daily rate of the day (the flat rate only where no daily rate is known: fine for a candidate's proximity, never for booking). */
@@ -60,7 +69,8 @@ export function estvToChf(fx: FxResolver = loadFxResolver()): ToChf {
 
 /** The short facts of a receipt the model sees: vendor, day, amount, currency, its numbers. */
 function receiptFacts(r: Receipt): Record<string, unknown> {
-  return { vendor: r.title?.vendor ?? r.description ?? r.filename, what: r.title?.what, date: r.date, amount: r.amount, currency: r.currency || baseCurrency(), numbers: numbersIn(r.extractedText ?? '').slice(0, 4) };
+  const named = r.title?.vendor ?? r.description;
+  return { vendor: named ?? r.filename, ...(named ? {} : { text: (r.extractedText ?? '').replace(/\s+/g, ' ').slice(0, 160) }), what: r.title?.what, date: r.date, amount: r.amount, currency: r.currency || baseCurrency(), numbers: numbersIn(r.extractedText ?? '').slice(0, 4) };
 }
 
 /** The short facts of a payment the model sees: its text, day, amount, currency and way. */
@@ -115,14 +125,16 @@ const chunks = <T>(list: readonly T[], size: number): T[][] => Array.from({ leng
  */
 export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise<ChainResult> {
   const log = opts.log ?? (() => {});
-  const books = port.read();
+  const stored = port.read();
+  const stagedIds = new Set((opts.staged ?? []).map((r) => r.id));
+  const books = stagedIds.size ? { ...stored, receipts: [...stored.receipts.filter((r) => !stagedIds.has(r.id)), ...opts.staged!] } : stored;
   const lock = periodLock(books);
   const search = searchPairs(books, opts.toChf, lock.isClosed);
   const stages = stagesOf(search, opts.only);
   const receipt = new Map(books.receipts.map((r) => [r.id, r]));
   const payment = new Map(books.transactions.map((t) => [t.ref, t]));
   const doubted = (c: PairCandidate) => !opts.only && !!receipt.get(c.receipt)?.pairDoubted?.includes(c.payment);
-  const result: ChainResult = { linked: [], left: [], calls: 0, checked: 0, chosen: 0 };
+  const result: ChainResult = { linked: [], left: [], staged: [], calls: 0, checked: 0, chosen: 0 };
   const links: Array<{ c: PairCandidate; by: Maker }> = [];
   const doubts: PairCandidate[] = [];
   const toPerson = (s: Extract<PairStage, { kind: 'short' | 'person' }>) => result.left.push({ receipt: s.receipt, candidates: s.candidates, total: s.kind === 'person' ? s.total : s.candidates.length });
@@ -155,7 +167,8 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
       if (verdict.get(i) === true) { links.push({ c, by: 'checked' }); return; }
       doubts.push(c);
       const rest = (search.byReceipt.get(c.receipt) ?? []).filter((x) => x !== c && !doubted(x));
-      if (rest.length) choose.push({ receipt: c.receipt, candidates: rest });
+      if (rest.length && !stagedIds.has(c.receipt)) choose.push({ receipt: c.receipt, candidates: rest });
+      else if (rest.length) result.left.push({ receipt: c.receipt, candidates: rest, total: rest.length });
       else result.left.push({ receipt: c.receipt, candidates: [c], total: 1 });
     });
   }
@@ -163,7 +176,7 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
   // Stage 3: the model chooses from each short list; without one, the short lists are the person's.
   for (const s of shortLists) {
     const open = s.candidates.filter((c) => !doubted(c));
-    if (open.length && ask && !result.modelFailed) choose.push({ receipt: s.receipt, candidates: open });
+    if (open.length && ask && !result.modelFailed && !stagedIds.has(s.receipt)) choose.push({ receipt: s.receipt, candidates: open });
     else toPerson(s);
   }
   for (const batch of chunks(choose, CHOOSE_BATCH)) {
@@ -182,11 +195,17 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
 
   // «Beleg suchen» links only its own payment: what the model chose for its candidate receipts elsewhere waits for their own run.
   const only = opts.only;
-  const mine = only && 'payment' in only ? links.filter((l) => l.c.payment === only.payment) : links;
-  result.linked = port.update((index: Books) => applyLinks(index, mine, doubts));
-  const cut = result.left.filter((l) => l.total > l.candidates.length);
+  const asked = only && 'payment' in only ? links.filter((l) => l.c.payment === only.payment) : links;
+  // A payment two receipts were linked to in this run goes to neither: the person decides.
+  const times = new Map<string, number>();
+  for (const { c } of asked) times.set(c.payment, (times.get(c.payment) ?? 0) + 1);
+  const mine = asked.filter((l) => times.get(l.c.payment) === 1);
+  result.staged = mine.filter((l) => stagedIds.has(l.c.receipt)).map(({ c, by }) => ({ receipt: c.receipt, payment: c.payment, by, ...(c.filed ? { filed: true as const } : {}) }));
+  result.linked = port.update((index: Books) => applyLinks(index, mine.filter((l) => !stagedIds.has(l.c.receipt)), doubts));
+  const leftStored = result.left.filter((l) => !stagedIds.has(l.receipt));
+  const cut = leftStored.filter((l) => l.total > l.candidates.length);
   if (cut.length) log(`${cut.length} receipt(s) have more than ${SHORT_LIST} candidate payments: only the best ${SHORT_LIST} of each are offered to the person`);
-  if (result.left.length) log(`${result.left.length} receipt(s) left for the person, with the code's candidates`);
+  if (leftStored.length) log(`${leftStored.length} receipt(s) left for the person, with the code's candidates`);
   for (const l of result.linked) {
     const how = l.by === 'code' ? 'by code' : l.by === 'checked' ? 'by code, checked by the model' : 'by the model from the short list';
     log(l.filed ? `pays the filed payment ${l.payment} (${how}): receipt ${l.receipt}, not linked` : `linked ${how}: receipt ${l.receipt} → ${l.payment}`);
@@ -196,20 +215,18 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
 
 /**
  * Writes the chain's links on the books as they are now: a pair whose receipt or payment is no
- * longer free, or a payment two receipts chose, is left out. A filed payment's receipt names it
+ * longer free is left out. A filed payment's receipt names it
  * (filedPayment) instead of a link. The model's doubts are kept on the receipt.
  */
 function applyLinks(index: Books, links: ReadonlyArray<{ c: PairCandidate; by: Maker }>, doubts: readonly PairCandidate[]): ChainResult['linked'] {
   const lock = periodLock(index);
   const linkedReceipts = new Set(index.mappings.map((m) => m.receiptId));
   const linkedPayments = new Set(index.mappings.map((m) => m.transactionRef));
-  const chosen = new Map<string, number>();
-  for (const { c } of links) chosen.set(c.payment, (chosen.get(c.payment) ?? 0) + 1);
   const done: ChainResult['linked'] = [];
   for (const { c, by } of links) {
     const r = index.receipts.find((x) => x.id === c.receipt);
     const t = index.transactions.find((x) => x.ref === c.payment);
-    if (!r || !t || chosen.get(c.payment)! > 1 || !pairableReceipt(r, linkedReceipts) || !pairablePayment(t, linkedPayments) || r.notPaidBy?.includes(t.ref)) continue;
+    if (!r || !t || !pairableReceipt(r, linkedReceipts) || !pairablePayment(t, linkedPayments) || r.notPaidBy?.includes(t.ref)) continue;
     if (lock.isClosed(t.date)) {
       r.filedPayment = t.ref;
       done.push({ receipt: r.id, payment: t.ref, by, filed: true });

@@ -16,7 +16,8 @@ import { pathToFileURL } from 'node:url';
 import { loadBooks, type Books } from '../../src/books/store.js';
 import { openWorkspace } from '../../src/workspace/workspace.js';
 import { runPairChain, estvToChf, CHECK_BATCH, CHOOSE_BATCH, type ChainResult } from '../../src/intake/pair-chain.js';
-import { candidates } from '../../src/intake/match.js';
+import { candidates, provisional } from '../../src/intake/match.js';
+import { titlesPrompt } from '../../src/intake/titles.js';
 import { buildMatchPrompt } from '../../src/llm/prompts.js';
 import type { Ask, BooksPort } from '../../src/intake/pipeline.js';
 import type { Mapping } from '../../src/types/index.js';
@@ -106,7 +107,7 @@ export async function main(): Promise<void> {
   // Before: the intake's match prompt of each receipt of the window (candidates as the intake ranks them), which the chain does not replace.
   const linked = new Set(blind.mappings.map((m) => m.transactionRef));
   const inWindow = blind.receipts.filter((r) => truth.some((m) => m.receiptId === r.id));
-  const intakeChars = inWindow.reduce((sum, r) => sum + buildMatchPrompt(r.extractedText, candidates(r, blind.transactions, linked)).length, 0);
+  const intakeChars = inWindow.reduce((sum, r) => sum + buildMatchPrompt(r.extractedText, []).length + JSON.stringify(candidates(r, blind.transactions, linked), null, 2).length, 0);
 
   const line = (name: string, r: ChainResult, t: Tally) => console.log(`${name.padEnd(18)} linked ${String(r.linked.length).padStart(4)}  right ${String(t.linkedRight).padStart(4)}  wrong ${String(t.linkedWrong).padStart(3)}  new ${String(t.linkedNew).padStart(3)}  | of ${oneToOne} one-to-one: left with the right candidate ${t.leftWithRight}, left without ${t.leftWithout}, not searched ${t.notSearched}  | ${Object.entries(t.byMaker).map(([k, v]) => `${k} ${v.right}/${v.right + v.wrong}`).join(', ')}`);
   console.log(`window ${from} – ${to}: ${truth.length} links taken away, ${oneToOne} of them one receipt to one payment`);
@@ -145,7 +146,48 @@ export async function main(): Promise<void> {
   const precision = (t: Tally) => (t.linkedRight + t.linkedWrong ? (t.linkedRight / (t.linkedRight + t.linkedWrong)).toFixed(3) : '-');
   console.log(`precision (links the books know): code ${precision(tc)}, code + oracle ${precision(tm)}; recall of one-to-one links: code ${(tc.oneToOneRight / Math.max(1, oneToOne)).toFixed(3)}, code + oracle ${(tm.oneToOneRight / Math.max(1, oneToOne)).toFixed(3)}`);
   console.log(`model stages: ${o.usage.calls} calls (batches of ${CHECK_BATCH} checks, ${CHOOSE_BATCH} choices), ${withModel.checked} pairs checked, ${withModel.chosen} short lists; ~${Math.round(o.usage.promptChars / 4)} prompt and ~${Math.round(o.usage.answerChars / 4)} answer tokens (estimated, 4 characters each)`);
-  console.log(`intake match prompts of the window's ${inWindow.length} receipts: ~${Math.round(intakeChars / 4)} prompt tokens (estimated; standard tier, with a file where the text is short)`);
+  console.log(`intake match prompts before #187 of the window's ${inWindow.length} receipts (read facts): ~${Math.round(intakeChars / 4)} prompt tokens (estimated; standard tier)`);
+  await intake(blind, truth, toChf);
+}
+
+/**
+ * The inbox as it was when the window's receipts came in: each one staged, with only what the read
+ * and VAT steps leave (its text, its VAT block, its kind), none of the facts the model's match
+ * writes. Before #187 each one cost a match prompt; now code pairs what it can first (with the
+ * oracle checking), names those on the fast tier, and only the rest get a match prompt, with the
+ * code's short list where there is one. Tokens estimated at 4 characters each; a file attached to
+ * a match prompt (a scan with little text) is not counted on either side.
+ */
+async function intake(blind: Books, truth: readonly Mapping[], toChf: ReturnType<typeof estvToChf>): Promise<void> {
+  const ids = new Set(truth.map((m) => m.receiptId));
+  const books = structuredClone(blind);
+  for (const r of books.receipts) {
+    if (!ids.has(r.id) || r.location !== 'archived' || r.needsVisionReview) continue;
+    r.location = 'staged';
+    for (const k of ['date', 'dateSource', 'amount', 'currency', 'title', 'description', 'payout', 'order'] as const) delete r[k];
+  }
+  const staged = books.receipts.filter((r) => r.location === 'staged');
+  const early = staged.flatMap((r) => provisional(r) ?? []);
+  const view: Books = { ...books, receipts: [...books.receipts.filter((r) => r.location !== 'staged'), ...early] };
+  const pairs = new Set(truth.map((m) => `${m.receiptId}|${m.transactionRef}`));
+  const o = oracle(pairs, view);
+  const chain = await runPairChain(memoryPort(books), { toChf, ask: o.ask, staged: early });
+  const linked = new Set(books.mappings.map((m) => m.transactionRef));
+  const matchChars = (r: typeof staged[number], shown = candidates(r, books.transactions, linked)) => buildMatchPrompt(r.extractedText, shown).length;
+  // Before #187 the prompt listed the 20 candidates as indented JSON with every field.
+  const before = staged.reduce((sum, r) => sum + buildMatchPrompt(r.extractedText, []).length + JSON.stringify(candidates(r, books.transactions, linked), null, 2).length, 0);
+  const paired = new Set(chain.staged.map((l) => l.receipt));
+  const short = new Map(chain.left.filter((l) => l.candidates.length && l.total === l.candidates.length).map((l) => [l.receipt, l.candidates]));
+  const rest = staged.filter((r) => !paired.has(r.id));
+  const restChars = rest.reduce((sum, r) => {
+    const list = short.get(r.id)?.flatMap((c) => books.transactions.filter((t) => t.ref === c.payment));
+    return sum + matchChars(r, list?.length ? list : undefined);
+  }, 0);
+  const titleChars = paired.size ? titlesPrompt(early.filter((r) => paired.has(r.id))).length : 0;
+  const right = chain.staged.filter((l) => pairs.has(`${l.receipt}|${l.payment}`)).length;
+  console.log(`intake: ${staged.length} receipts staged, ${early.length} with a day and an amount code reads; code paired ${paired.size} before the model (right ${right}, wrong ${paired.size - right}), ${rest.length} go to the match prompt (${[...short.keys()].filter((id) => !paired.has(id)).length} with the code's short list)`);
+  const k = (chars: number) => Math.round(chars / 4);
+  console.log(`intake tokens (estimated): before ~${k(before)} match prompt (standard tier); after ~${k(restChars)} match prompt (standard) + ~${k(o.usage.promptChars + titleChars)} checks and titles (fast, ${o.usage.calls} check/choice calls + ${paired.size ? Math.ceil(paired.size / 100) : 0} title calls); standard-tier prompt tokens saved ~${k(before - restChars)} (${Math.round((100 * (before - restChars)) / Math.max(1, before))} %)`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) await main();
