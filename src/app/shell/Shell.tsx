@@ -11,7 +11,7 @@ import type { Index } from '../../types/index.js';
 import { useApiStatus } from '../hooks/use-api-status.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { FxProvider } from '../hooks/use-fx.js';
-import { LOCALES, t } from '../i18n/index.js';
+import { LOCALES, t, tWith } from '../i18n/index.js';
 import { periodName } from '../lib/period-label.js';
 import { formatDate } from '../lib/utils.js';
 import { ICONS } from '../areas/icons.js';
@@ -38,7 +38,7 @@ import { Corner } from './Corner.js';
 import { Sidebar } from './Sidebar.js';
 import { pageContext } from '../assistant/context.js';
 import { attachDropped, onBooksChanged, syncSidebarWidth, toggleAssistant, useAssistant } from '../assistant/store.js';
-import { droppedFiles } from '../assistant/folder-drop.js';
+import { CHAT_TAKES, PAGE_TAKES, droppedFiles, leftOut } from '../lib/folder-drop.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import { ShellUiContext, type ShellUi } from './ui.js';
 import { filing } from '../../engines/index.js';
@@ -188,8 +188,16 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const listRef = useRef<HTMLElement>(null);
   const [listWidth, setListWidth] = useListWidth(loc.route.area);
 
-  // The drop dialog takes every drop; the Bank area keeps its own, where the open account places a statement.
-  useDrop(canEdit, setDropping, (files, target, entries) => (target === 'chat' ? void droppedFiles(entries, files).then(attachDropped) : area.drop && !dropOpen() ? area.drop.run(files, propsRef.current) : void dropFiles(files)));
+  // The drop dialog takes every drop, a folder's files with its subfolders' (#188); the Bank area keeps its own, where the open account places a statement.
+  useDrop(canEdit, setDropping, (files, target, entries) => {
+    if (target === 'chat') return void droppedFiles(entries, files, CHAT_TAKES).then(attachDropped);
+    void droppedFiles(entries, files, PAGE_TAKES).then((d) => {
+      const note = leftOut(d, PAGE_TAKES).map((x) => tWith(x.key, x.vars)).join(' ');
+      if (!area.drop || dropOpen()) return void dropFiles(d.files, note);
+      if (note) toast(note);
+      area.drop.run(d.files, propsRef.current);
+    });
+  });
 
   const search = useCallback((q: string): PaletteGroup[] => {
     const p = propsRef.current;

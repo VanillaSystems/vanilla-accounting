@@ -7,14 +7,14 @@
  */
 import { useSyncExternalStore } from 'react';
 import { ApiError, api, apiFetch, errorText } from '../lib/api.js';
-import { language, t } from '../i18n/index.js';
+import { language, t, tWith } from '../i18n/index.js';
 import { store as remember, stored } from '../shell/storage.js';
 import { reloadWorkspace } from '../hooks/use-workspace.js';
 import { reloadInvoices } from '../areas/invoices/data.js';
 import type { AssistantEvent, ContextRef, ConversationSummary, MadeChange, Purpose, Turn } from '../../types/assistant.js';
 import { KEPT_CONVERSATION, KEPT_PURPOSE, afterSend, askAboutThread, messageOf, newThread, startThread, type Thread } from './thread.js';
 import { attachmentRefusal, attachmentType, showsAsImage, type Attachment, type AttachmentType } from '../../types/attachment.js';
-import { MAX_FOLDER_FILES, type Dropped } from './folder-drop.js';
+import { CHAT_TAKES, leftOut, type Dropped } from '../lib/folder-drop.js';
 
 /** 400 px, less on a small window, so the page keeps room for its list and its detail. */
 export const SIDEBAR_WIDTH = 'min(400px, 34vw)';
@@ -113,12 +113,11 @@ export function attachFiles(files: File[], open = false): void {
   }
 }
 
-/** A drop with folders in it (src/app/assistant/folder-drop.ts): their files attached, and one line for what stayed behind. */
+/** A drop with folders in it (src/app/lib/folder-drop.ts): their files attached, and one line for what stayed behind. */
 export function attachDropped(d: Dropped): void {
   attachFiles(d.files, true);
-  if (!d.folders.length || (!d.skipped && !d.over)) return;
-  const folder = d.folders.join(', ');
-  set({ fileError: [d.skipped ? t('assistant.folderSkipped', { folder, n: d.skipped }) : '', d.over ? t('assistant.folderOver', { folder, max: MAX_FOLDER_FILES, n: d.over }) : ''].filter(Boolean).join(' ') });
+  const note = leftOut(d, CHAT_TAKES).map((x) => tWith(x.key, x.vars)).join(' ');
+  if (note) set({ fileError: note });
 }
 
 export function removeFile(key: string): void {
