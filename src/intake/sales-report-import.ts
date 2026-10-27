@@ -242,6 +242,8 @@ export function importSalesReport(ws: Workspace, bytes: Buffer, name: string, op
   const read = readReport(text, hit.kind, p.provider);
   if ('missing' in read) return { ok: false, message: de.t('salesReport.columns', { file: name, columns: read.missing.join(', ') }) };
   if (!read.rows.length) return { ok: false, message: de.t('salesReport.empty', { file: name }) };
+  const into = p.provider.account;
+  if (into && !ws.bankAccounts.some((a) => a.account === into)) return { ok: false, message: de.t('salesReport.noBank', { account: into, file: homeOf('workspace', p.role, p.id) }) };
   const accounts = chartNames(chartOf(ws));
   const missing = lacking(ws, p, hit.kind, accounts);
   if (missing && 'account' in missing) return { ok: false, message: de.t('salesReport.noAccount', { account: missing.account, file: homeOf('workspace', p.role, p.id) }) };

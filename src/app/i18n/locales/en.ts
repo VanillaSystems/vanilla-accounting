@@ -3561,6 +3561,7 @@ export default {
     'salesReport.columns': '{file}: the columns {columns} are missing; the provider\'s file names them under provider.reports.',
     'salesReport.empty': '{file} has no rows.',
     'salesReport.noAccount': 'The account {account} of {file} is not in the chart: nothing was booked.',
+    'salesReport.noBank': 'The account {account} of {file} (provider.account) is not one of the firm\'s bank accounts: nothing was booked.',
     'salesReport.ask.clearing': 'Which account holds the sales of {provider} until {provider} pays them out (clearing account)?',
     'salesReport.ask.revenue': 'Which revenue account do the sales of {provider} go on?',
     'salesReport.ask.fees': 'Which account and VAT code do the fees of {provider} go on?',

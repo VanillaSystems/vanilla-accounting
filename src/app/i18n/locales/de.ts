@@ -3558,6 +3558,7 @@ export const messages = {
   'salesReport.columns': '{file}: die Spalten {columns} fehlen; die Datei des Anbieters nennt sie unter provider.reports.',
   'salesReport.empty': '{file} hat keine Zeilen.',
   'salesReport.noAccount': 'Das Konto {account} aus {file} gibt es im Kontenplan nicht: nichts gebucht.',
+  'salesReport.noBank': 'Das Konto {account} aus {file} (provider.account) ist keines der Bankkonten der Firma: nichts gebucht.',
   'salesReport.ask.clearing': 'Auf welchem Konto stehen die Verkäufe von {provider}, bis {provider} sie auszahlt (Durchlaufkonto)?',
   'salesReport.ask.revenue': 'Auf welches Ertragskonto gehen die Verkäufe von {provider}?',
   'salesReport.ask.fees': 'Auf welches Konto und mit welchem Steuercode gehen die Gebühren von {provider}?',

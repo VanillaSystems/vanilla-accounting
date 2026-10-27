@@ -48,22 +48,27 @@ export function providerOfMoneyIn(tx: Pick<BankTransaction, 'date' | 'direction'
     return cp && isProvider(cp) ? cp : undefined;
   }
   const refs = referenceOf(tx);
-  const named = refs.length ? counterparties.filter(isProvider).filter((c) => paidBy(tx.counterparty, c) && c.match.tx.some((word) => refs.some((r) => beginsWith(r, word)))) : [];
+  const named = refs.length ? counterparties.filter(isProvider).filter((c) => paidBy(tx, c) && c.match.tx.some((word) => refs.some((r) => beginsWith(r, word)))) : [];
   return named.length === 1 ? named[0] : undefined;
 }
 
 /**
- * Whether the bank's payer may pay the provider's payouts: none named, or one of the payment
- * processors its file lists (`provider.processors`). A customer's own transfer with the reference
- * «Shopify Bestellung 1001» names the customer, so it is no payout.
+ * Whether the payer may pay the provider's payouts: none named, or one of the payment processors its
+ * file lists (`provider.processors`), each as a whole word. The payer is the bank's counterparty, or,
+ * when the bank sets none (Wise's PDF statements), the name in the description («Received money from
+ * Hans Muster with reference Shopify Bestellung 1001»). A customer's own transfer names the customer,
+ * so it is no payout.
  */
-function paidBy(payer: string | undefined, p: Provider): boolean {
-  const name = payer?.trim().toLowerCase();
+function paidBy(tx: Pick<BankTransaction, 'description' | 'counterparty'>, p: Provider): boolean {
+  const name = (tx.counterparty?.trim() || /^Received money from (.+?)(?: with reference .*)?$/i.exec(tx.description.trim())?.[1]?.trim() || '').toLowerCase();
   if (!name) return true;
   return (p.provider.processors ?? []).some((w) => {
     const word = w.trim().toLowerCase();
-    const at = name.indexOf(word);
-    return !!word && at >= 0 && !/[\p{L}\d]/u.test(name.charAt(at - 1)) && !/[\p{L}\d]/u.test(name.charAt(at + word.length));
+    if (!word) return false;
+    for (let at = name.indexOf(word); at >= 0; at = name.indexOf(word, at + 1)) {
+      if (!/[\p{L}\d]/u.test(name.charAt(at - 1)) && !/[\p{L}\d]/u.test(name.charAt(at + word.length))) return true;
+    }
+    return false;
   });
 }
 

@@ -3561,6 +3561,7 @@ export default {
     'salesReport.columns': '{file} : les colonnes {columns} manquent ; le fichier du prestataire les nomme sous provider.reports.',
     'salesReport.empty': '{file} n’a aucune ligne.',
     'salesReport.noAccount': 'Le compte {account} de {file} n’existe pas dans le plan comptable : rien n’a été comptabilisé.',
+    'salesReport.noBank': 'Le compte {account} de {file} (provider.account) n’est pas un des comptes bancaires de la firme : rien n’a été comptabilisé.',
     'salesReport.ask.clearing': 'Sur quel compte figurent les ventes de {provider} jusqu’à ce que {provider} les verse (compte de passage) ?',
     'salesReport.ask.revenue': 'Sur quel compte de produits vont les ventes de {provider} ?',
     'salesReport.ask.fees': 'Sur quel compte et avec quel code TVA vont les frais de {provider} ?',

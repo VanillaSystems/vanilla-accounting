@@ -3561,6 +3561,7 @@ export default {
     'salesReport.columns': '{file}: mancano le colonne {columns}; il file del fornitore le nomina sotto provider.reports.',
     'salesReport.empty': '{file} non ha righe.',
     'salesReport.noAccount': 'Il conto {account} di {file} non esiste nel piano dei conti: nulla registrato.',
+    'salesReport.noBank': 'Il conto {account} di {file} (provider.account) non è uno dei conti bancari della ditta: nulla registrato.',
     'salesReport.ask.clearing': 'Su quale conto stanno le vendite di {provider} finché {provider} le versa (conto di transito)?',
     'salesReport.ask.revenue': 'Su quale conto di ricavo vanno le vendite di {provider}?',
     'salesReport.ask.fees': 'Su quale conto e con quale codice IVA vanno le commissioni di {provider}?',

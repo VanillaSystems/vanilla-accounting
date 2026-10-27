@@ -848,6 +848,24 @@ test('N3. a credit recognised by its reference alone is the provider\'s payout o
   assert.match((parseProvider({ processors: [''] }) as { problem: string }).problem, /provider\.processors must name/);
 });
 
+test('N3b. with no counterparty (Wise PDF statements) the payer is read from the description: a customer is no payout, Stripe is; every occurrence of the processor word is checked', () => {
+  const ws = shop();
+  const cps = loadClassifyContext(ws).counterparties ?? [];
+  const wise = (ref: string, description: string) => payout(ref, { date: '2026-11-04', counterparty: undefined, description });
+  assert.equal(providerOfPayment(wise('H1', 'Received money from Hans Muster with reference Shopify Bestellung 1001'), [], cps), undefined, 'a customer\'s transfer');
+  assert.equal(providerOfPayment(wise('H2', 'Received money from Stripe Payments UK Ltd with reference Shopify 98765'), [], cps)?.id, 'shopify', 'Stripe');
+  assert.equal(providerOfPayment(wise('H3', 'Received money from Stripeline / Stripe Payments with reference Shopify 98765'), [], cps)?.id, 'shopify', 'the second occurrence is the whole word');
+  assert.equal(providerOfPayment(wise('H4', 'Received money from Stripeline Ltd with reference Shopify 98765'), [], cps), undefined, 'no whole-word occurrence');
+});
+
+test('N3c. a provider.account that is none of the firm\'s bank accounts refuses the report with a message, never switches the unseen-payout check off', () => {
+  const ws = shop(`${FILE()}  account: "9999"\n`);
+  const r = importSalesReport(ws, Buffer.from([head, row('2001', '2026-11-02', '108.10', '8.10')].join('\n')), 'o.csv');
+  assert.ok(!r.ok);
+  assert.match(r.message, /9999.*provider\.account.*keines der Bankkonten/);
+  assert.deepEqual(reportRefs(loadBooks(ws).journalEntries), [], 'nothing booked');
+});
+
 test('N1 / N2. an entry counts as an order\'s own booking only when it names that order alone with its amount, net of its reversals; one naming two orders holds both, never books the second again', () => {
   const read = salesOf([head, row('2001', '2026-11-02', '108.10', '8.10'), row('2002', '2026-11-10', '54.05', '4.05'), row('2003', '2026-11-25', '20.00', '1.50')].join('\n'));
   const ctx = (entries: JournalEntry[]) => ctxOf({ since: '2026-11-01', from: '2026-10-25', legacy: { entries } });
