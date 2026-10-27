@@ -116,48 +116,27 @@ test('a rule\'s rate code needs a purchase document showing Swiss VAT: a deliver
   assert.equal(code([]), 'I0', 'no receipt');
 });
 
-test('a Stripe payout books its 1093 entries on the order date and adds the payout leg', () => {
-  const payout = tx({ ref: 'P', direction: 'CRDT', amount: 95, currency: 'EUR', bank: 'Wise' });
-  const llm: ClassifyEntry[] = [
-    { accountDebit: '1093', accountCredit: '3200', amount: 100, vatCode: 'V81', description: 'Shopify, Umsatz' },
-    { accountDebit: '6580', accountCredit: '1093', amount: 5, vatCode: '', description: 'Stripe, Gebühr' },
-  ];
-  const entries = entriesFor(payout, llm, { fx, receiptDate: '2026-08-02', receipts: [], bankAccount: '1023', lock, by: { kind: 'model', model: 'sonnet' } });
-  assert.deepEqual(
-    entries.map((e) => [e.date, e.accountDebit, e.accountCredit, e.amount, e.description]),
-    [
-      ['2026-08-02', '1093', '3200', 100, 'Shopify, Umsatz'],
-      ['2026-08-02', '6580', '1093', 5, 'Stripe, Gebühr'],
-      ['2026-08-14', '1023', '1093', 95, 'Stripe, Auszahlung'],
-    ],
-  );
-  assert.ok(entries.every((e) => e.exchangeRate === EUR_2026_08_14));
-});
-
 test('no entry is ever dated in a closed period', () => {
   const payout = tx({ ref: 'P', direction: 'CRDT', amount: 95, date: '2026-07-03' });
   const llm: ClassifyEntry[] = [{ accountDebit: '1093', accountCredit: '3200', amount: 95, vatCode: 'V81', description: 'Shopify, Umsatz' }];
-  const entries = entriesFor(payout, llm, { fx, receiptDate: '2026-06-28', receipts: [], bankAccount: '1021', lock, by: { kind: 'model', model: 'sonnet' } });
-  assert.deepEqual(entries.map((e) => e.date), ['2026-07-03', '2026-07-03']);
+  const entries = entriesFor(payout, llm, { fx, receipts: [], bankAccount: '1021', lock, by: { kind: 'model', model: 'sonnet' } });
+  assert.deepEqual(entries.map((e) => e.date), ['2026-07-03'], 'every entry carries the payment\'s day');
   assert.throws(
-    () => entriesFor(tx({ ref: 'C', date: '2026-06-30' }), [expense(5)], { fx, receiptDate: undefined, receipts: [], bankAccount: '1021', lock, by: { kind: 'model', model: 'sonnet' } }),
+    () => entriesFor(tx({ ref: 'C', date: '2026-06-30' }), [expense(5)], { fx, receipts: [], bankAccount: '1021', lock, by: { kind: 'model', model: 'sonnet' } }),
     ClosedPeriodError,
   );
 });
 
-test('an order dated before the books begin books on the payment date: no entry and no year folder before them (#39)', async () => {
+test('a receipt dated before the books begin books on the payment date: no entry and no year folder before them (#39)', async () => {
   const b = books([tx({ ref: 'P', bank: 'Raiffeisen', direction: 'CRDT', amount: 95, date: '2027-01-02' })], [{ id: 'order', ref: 'P', date: '2026-12-27' }]);
   b.config = {};
-  const { ask } = stubAsk(() => [{ accountDebit: '1093', accountCredit: '3200', amount: 95, vatCode: 'V81', description: 'Shopify, Umsatz' }]);
+  const { ask } = stubAsk(() => [{ accountDebit: '', accountCredit: '3200', amount: 95, vatCode: 'V81', description: 'Kunde, Umsatz' }]);
   await classifyTransactions(b, b.transactions, { ask, fx, context });
-  assert.deepEqual(b.journalEntries.map((e) => e.date), ['2027-01-02', '2027-01-02'], 'the books begin with the first payment\'s year');
+  assert.deepEqual(b.journalEntries.map((e) => e.date), ['2027-01-02'], 'the books begin with the first payment\'s year');
   const ws = tempWorkspace('books-begin-');
   saveBooks(ws, b);
   assert.deepEqual(yearsOf(ws.paths), ['2027']);
 
-  const opened = periodLock({ config: { openingBalances: { 2027: { 1020: 100 } } } });
-  const [sale] = entriesFor(tx({ ref: 'Q', direction: 'CRDT', amount: 95, date: '2027-01-02' }), [{ accountDebit: '1093', accountCredit: '3200', amount: 95, vatCode: 'V81', description: 'Shopify, Umsatz' }], { fx, receiptDate: '2026-12-27', receipts: [], bankAccount: '1021', lock: opened, by: { kind: 'model', model: 'sonnet' } });
-  assert.equal(sale.date, '2027-01-02', 'the opening balances name the first year');
 });
 
 test('the bank side the model leaves empty is the transaction\'s account, manual ones on 2451', async () => {

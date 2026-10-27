@@ -7,6 +7,7 @@
 import { byStatement, madeByHand } from '../../../workspace/money-accounts.js';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { BankTransaction } from '../../../types/index.js';
+import type { PayoutWaitView } from '../../../types/drop.js';
 import { ratesUsed } from '../../../accounting/fx-conversion.js';
 import type { RouteOf } from '../../shell/route.js';
 import { api, sources } from '../../lib/api.js';
@@ -259,7 +260,7 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
         <> · <button type="button" className="golink" data-testid="go-entry" data-tip={t('bank.openEntry')} onClick={() => nav.go(at({ area: 'journal', id: entry.id }, entry.date))}>
           {t('bank.entries', { lines })}
         </button></>
-      ) : tx.amount ? <> · <NotBooked tx={tx} linked={linkedOf(props.books.receipts.filter((r) => receipts.includes(r.id) && r.kind !== 'duplicate'))} /></> : null}
+      ) : tx.amount ? <> · <NotBooked tx={tx} linked={linkedOf(props.books.receipts.filter((r) => receipts.includes(r.id) && r.kind !== 'duplicate'))} />{edit && tx.direction === 'CRDT' ? <PayoutWait key={`pw-${tx.ref}`} books={props.books} tx={tx} /> : null}</> : null}
       {edit ? <ReceiptSetOffer key={`rs-${tx.ref}`} {...props} tx={tx} /> : null}
       {edit && receipts.length > 1 ? <GroupedOffer key={`go-${tx.ref}`} payment={tx.ref} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
       <Note key={tx.ref} tx={tx} nav={nav} edit={edit} />
@@ -392,6 +393,22 @@ function Quick({ src, file, mark }: { src: string; file: string; mark?: Mark }) 
       <div className="paper real stmt" style={{ width: '70vw', maxWidth: 'none' }}><StatementPaper src={src} mark={mark} onPage={setPage} scroller={(el) => el.closest('.quick')} /></div>
     </div>
   );
+}
+
+/**
+ * A provider's payout the app does not book says why on the payment itself (#203): the company's
+ * file lacks the clearing account or the cut-over day, or the payout lies before the cut-over day
+ * beside sales a report booked already. The server knows the business files (GET /api/transactions/:ref/payout-wait).
+ */
+function PayoutWait({ books, tx }: { books: Props['books']; tx: BankTransaction }) {
+  const [wait, setWait] = useState<PayoutWaitView | null>(null);
+  useEffect(() => {
+    let live = true;
+    api.payoutWait(tx.ref).then((x) => { if (live) setWait(x.wait); }, () => { if (live) setWait(null); });
+    return () => { live = false; };
+  }, [books, tx.ref]);
+  if (!wait) return null;
+  return <> · <span className="wn" data-testid="payout-wait">{t(`bank.payoutWait.${wait.why}`, { provider: wait.provider, file: wait.file, since: wait.since ? formatDate(wait.since) : '' })}</span></>;
 }
 
 /** A payment without a booking: one that waits for its receipt says so as a fact, with its return's due day once it is the person's (issue #29); one whose receipt could not be read says that (issue #57). */

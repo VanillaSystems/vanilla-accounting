@@ -103,14 +103,14 @@ test('a rule takes a rate and reads an old code with the letter its account take
   const vat = (then: Record<string, unknown>) => {
     const r = parseRule({ id: 'r', then }, facts, true);
     if (!r.ok) return `refused ${r.refusal.code}`;
-    return r.rule.then.kind === 'book' ? [r.rule.then.booking.vat, r.rule.then.booking.fees?.vat].filter((v) => v !== undefined) : [];
+    return r.rule.then.kind === 'book' ? [r.rule.then.booking.vat] : [];
   };
   assert.deepEqual(vat({ account: '6510', vat: 81 }), ['I81'], 'a rate as the code\'s suffix');
   assert.deepEqual(vat({ account: '4400', vat: '8.1' }), ['M81'], 'a rate in percent');
   assert.deepEqual(vat({ account: '4400', vat: 'I81' }), ['M81'], 'an old code: the letter is the account\'s');
   assert.deepEqual(vat({ account: '6510', vat: 'I81' }), ['I81']);
   assert.deepEqual(vat({ account: '6570', vat: 0 }), ['I0']);
-  assert.deepEqual(vat({ account: '3400', vat: 81, fees: { account: '6840', vat: 0 } }), ['V81', 'I0'], 'a payout: the sales and the fees each on their account');
+  assert.deepEqual(vat({ account: '3400', vat: 81, fees: { account: '6840', vat: 0 } }), 'refused fees', 'a payout\'s split is the provider\'s clearing account now (#203)');
   assert.deepEqual(vat({ account: '6510', vat: 'B81-1' }), ['B81-1'], 'a code facts cannot be read off a rate stays as written');
   assert.deepEqual(vat({ account: '6510', vat: 'none' }), [null]);
   assert.equal(vat({ account: '6510', vat: 19 }), 'refused vat', 'no rate of the jurisdiction');

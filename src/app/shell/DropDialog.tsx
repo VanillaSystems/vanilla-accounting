@@ -74,7 +74,7 @@ const groupIban = (iban: string) => iban.replace(/(.{4})/g, '$1 ').trim();
 /** What a waiting row says about its file, the parts apart: its kind (when known), how it was recognized, the ZIP it came out of, the statement's account and period. */
 function metaOf(r: DropRow): string {
   return [
-    r.kind && t(`drop.kind.${r.kind}` as 'drop.kind.receipt'),
+    r.provider ? t(`drop.report.${r.provider.kind}`, { provider: r.provider.name }) : r.kind && t(`drop.kind.${r.kind}` as 'drop.kind.receipt'),
     r.how && t(`drop.how.${r.how}` as 'drop.how.structure'),
     r.from && t('drop.from', { name: r.from }),
     r.facts?.iban,
@@ -127,6 +127,71 @@ function ChooseAccount({ r, session, go }: { r: DropRow; session: DropSession; g
   );
 }
 
+/**
+ * A provider's report whose company file lacks an account (#203): the row asks for it once, with the
+ * fee code where the fees are missing and the cut-over day with the clearing account (the first day
+ * of the open period proposed); the answer is kept in that file and the report is taken.
+ */
+function ProviderAccount({ r, session }: { r: DropRow; session: DropSession }) {
+  const ask = r.askProvider!;
+  const [account, setAccount] = useState('');
+  const [vat, setVat] = useState('');
+  const [since, setSince] = useState(ask.since ?? '');
+  const needsAccount = ask.missing !== 'since';
+  const ready = (!needsAccount || !!account.trim()) && (ask.missing !== 'fees' || !!vat.trim()) && (ask.since === undefined || !!since);
+  return (
+    <>
+      <small>{t(`drop.provider.${ask.missing}`, { provider: ask.name, file: ask.file })}{ask.missing === 'clearing' && ask.since !== undefined ? ` ${t('drop.provider.since', { provider: ask.name, file: ask.file })}` : ''}</small>
+      <form className="dpw" data-testid="drop-provider" onSubmit={(e) => { e.preventDefault(); if (ready) void act(session, r, { kind: 'provider', ...(needsAccount ? { account: account.trim() } : {}), ...(ask.missing === 'fees' ? { vat: vat.trim() } : {}), ...(ask.since !== undefined ? { since } : {}) }); }}>
+        {needsAccount ? <input value={account} onChange={(e) => setAccount(e.target.value)} placeholder={t('drop.provider.account')} aria-label={t('drop.provider.account')} inputMode="numeric" /> : null}
+        {ask.missing === 'fees' ? <input value={vat} onChange={(e) => setVat(e.target.value)} placeholder={t('drop.provider.vat')} aria-label={t('drop.provider.vat')} /> : null}
+        {ask.since !== undefined ? <input type="date" value={since} onChange={(e) => setSince(e.target.value)} aria-label={t('drop.provider.sinceLabel')} data-tip={t('drop.provider.sinceLabel')} /> : null}
+        <button type="submit" className="btn" disabled={!ready}>{t('drop.provider.keep')}</button>
+      </form>
+    </>
+  );
+}
+
+/**
+ * A provider's report held because no payout of the provider is recognised among the bank's payments
+ * of its days (src/types/drop.ts PayoutUnseen): why, and what was looked at; «Trotzdem übernehmen»
+ * books it (the clearing check is the safety net); the payout's name belongs into the provider's file
+ * under match.tx, which the partner's page opens.
+ */
+function PayoutUnseenRow({ r, session, go }: { r: DropRow; session: DropSession; go(route: Route): void }) {
+  const u = r.payoutUnseen!;
+  return (
+    <>
+      <small>{t('drop.unseen.why', { provider: u.name, through: formatDate(u.through), since: formatDate(u.since), banks: u.banks.join(', ') || '–' })}</small>
+      <small>{t('drop.unseen.hint', { provider: u.name, file: u.file })}</small>
+      <span className="dacts">
+        <button type="button" className="linkbtn" data-testid="drop-anyway" onClick={() => void act(session, r, { kind: 'anyway' })}>{t('drop.unseen.anyway')}</button>
+        <button type="button" className="linkbtn" onClick={() => go({ area: 'partners', id: u.provider })}>{t('drop.unseen.open', { provider: u.name })}</button>
+      </span>
+    </>
+  );
+}
+
+/** What a taken report booked and left, in one line (src/types/drop.ts ReportSummary). */
+function reportLine(s: NonNullable<DropRow['report']>): string {
+  const held = s.held.map((h) => t(`drop.held.${h.why}`, { order: h.order })).join(', ');
+  return [
+    s.from && s.to && `${formatDate(s.from)} – ${formatDate(s.to)}`,
+    s.kind === 'sales' ? t('drop.booked.sales', { orders: s.orders, refunds: s.refunds }) : t('drop.booked.fees', { n: s.fees }),
+    s.known ? t('drop.booked.known', { n: s.known }) : '',
+    s.filed ? t('drop.booked.filed', { n: s.filed }) : '',
+    s.before ? t('drop.booked.before', { n: s.before }) : '',
+    s.beforeSince ? t('drop.booked.beforeSince', {
+      n: s.beforeSince, reach: formatDate(s.reach), since: formatDate(s.since), provider: s.name, days: s.payoutDays, file: s.home,
+      orders: s.beforeSinceRows.map((o) => (s.kind === 'sales' ? `#${o}` : o)).join(', '), more: s.beforeSinceMore ? t('drop.booked.more', { n: s.beforeSinceMore }) : '',
+    }) : '',
+    s.other ? t('drop.booked.other', { n: s.other, ways: s.ways.join(', '), more: s.waysMore ? t('drop.booked.more', { n: s.waysMore }) : '' }) : '',
+    s.unread ? t('drop.booked.unread', { n: s.unread }) : '',
+    held ? t('drop.booked.held', { n: s.held.length + s.heldMore, orders: held, more: s.heldMore ? t('drop.booked.more', { n: s.heldMore }) : '' }) : '',
+    s.proofs ? t('drop.booked.proofs', { n: s.proofs }) : '',
+  ].filter(Boolean).join(' · ');
+}
+
 /** A row with an open question, or one not taken: what it is and its small action. */
 function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(route: Route): void }) {
   const [password, setPassword] = useState('');
@@ -140,7 +205,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
       </div>
       <div className="dgo">
         <span className={`dchip c-${r.state}`}>{chip}</span>
-        {r.chooseAccount ? <ChooseAccount r={r} session={session} go={go} /> : r.unknownAccount ? (
+        {r.askProvider ? <ProviderAccount key={r.askProvider.missing} r={r} session={session} /> : r.payoutUnseen ? <PayoutUnseenRow r={r} session={session} go={go} /> : r.chooseAccount ? <ChooseAccount r={r} session={session} go={go} /> : r.unknownAccount ? (
           <>
             <small>{t(r.unknownAccount.owner ? 'drop.unknownAccountOf' : r.unknownAccount.bankName ? 'drop.unknownAccountAt' : 'drop.unknownAccount', { iban: groupIban(r.unknownAccount.iban), currency: r.unknownAccount.currency, bank: r.unknownAccount.bankName ?? '', owner: r.unknownAccount.owner ?? '' })}</small>
             <button type="button" className="linkbtn" onClick={() => { setBankDraft(r.unknownAccount!); go({ area: 'company', section: 'banks' }); }}>{t('drop.firmAccount')}</button>
@@ -169,7 +234,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
 }
 
 /** Where one taken file is, read from the books and its run: still in its step, read, matched, waiting for a person, or set aside by the run with the reason. */
-type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'statement' } | { kind: 'refused'; reason: string };
+type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string };
 
 const isWorking = (run?: { status: string }) => !!run && (run.status === 'queued' || run.status === 'running');
 
@@ -189,6 +254,7 @@ function fileState(r: DropRow, books: Index, view: View): FileState {
   // Its run is not in the last poll yet: it has only just started.
   if (r.run && !run) return working;
   if (r.statement) return isWorking(run) ? working : { kind: 'statement' };
+  if (r.report) return { kind: 'report' };
   const arrival = run?.arrived?.find((x) => x.file === r.name);
   if (arrival?.kind === 'refused') return { kind: 'refused', reason: arrival.reason };
   const id = receiptIdOf(r, view);
@@ -242,7 +308,7 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
   const [busy, setBusy] = useState(false);
   const x = fileState(r, books, view);
   const receipt = books.receipts.find((y) => y.id === receiptIdOf(r, view));
-  const facts = receipt && (receipt.date || receipt.amount !== undefined)
+  const facts = !r.report && receipt && (receipt.date || receipt.amount !== undefined)
     ? [receipt.date && formatDate(receipt.date), receipt.amount !== undefined && `${receipt.currency ?? ''} ${fmt(receipt.amount)}`.trim()].filter(Boolean).join(' · ') : '';
   const running = view?.runs.find((y) => y.id === r.run)?.status === 'running';
   const lacks = x.kind === 'waits' && receipt ? [!receipt.date && t('drop.p.date'), receipt.amount === undefined && t('drop.p.amount')].filter(Boolean).join(', ') : '';
@@ -256,7 +322,7 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
   return (
     <>
       <div className={`droprow s-taken${shown ? ' open' : ''}`} data-testid="drop-row" data-file={r.name} data-state={x.kind}>
-        <div className="dn"><b className="mono">{r.name}</b><small>{r.statement ? [r.facts?.from && r.facts.to && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to)}`, t('drop.entries', { n: r.statement.refs.length })].filter(Boolean).join(' · ') : receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}{r.twin?.relation === 'companion' ? ` · ${t('drop.twin.companion', { name: r.twin.name })}` : r.document ? ` · ${t(`drop.doc.${r.document}` as 'drop.doc.newsletter')}` : ''}</small></div>
+        <div className="dn"><b className="mono">{r.name}</b><small>{r.report ? `${t(`drop.report.${r.report.kind}`, { provider: r.report.name })} · ${reportLine(r.report)}` : r.statement ? [r.facts?.from && r.facts.to && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to)}`, t('drop.entries', { n: r.statement.refs.length })].filter(Boolean).join(' · ') : receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}{r.twin?.relation === 'companion' ? ` · ${t('drop.twin.companion', { name: r.twin.name })}` : r.document ? ` · ${t(`drop.doc.${r.document}` as 'drop.doc.newsletter')}` : ''}</small></div>
         <div className="dgo">
           <span className={`dchip p-${x.kind}`}>{x.kind === 'working' ? (x.step ?? t('drop.p.working')) : t(`drop.p.${x.kind}` as 'drop.p.read')}</span>
           {missing ? <small className="dwhy">{missing}</small> : x.kind === 'refused' ? <small className="dwhy">{reasonText(x.reason)}</small> : null}

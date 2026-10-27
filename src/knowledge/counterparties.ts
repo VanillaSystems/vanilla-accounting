@@ -12,6 +12,7 @@
 
 import { RECEIPT_KINDS, type BankTransaction, type Receipt, type ReceiptKind } from '../types/index.js';
 import { HEAD, wordsRe } from '../core/modules/words.js';
+import { parseProvider, type ProviderFacts } from './provider.js';
 
 /** Strongest first. The order is the routing precedence. */
 export const TIERS = ['uid', 'iban', 'domain', 'tx', 'file'] as const;
@@ -76,6 +77,11 @@ export interface Counterparty {
   steps: Record<string, unknown>;
   /** The files it was merged from: vendor facts (app layer) and the company's binding (workspace layer). */
   origin: { vendor?: string; binding?: string };
+  /**
+   * It is a payment provider (a shop platform, a card terminal): its payouts settle its clearing
+   * account, and its sales report books the sales onto it (src/booking/providers.ts, #203).
+   */
+  provider?: ProviderFacts;
 }
 
 export type Routing =
@@ -221,6 +227,7 @@ export type RawCounterparty = {
   match?: Partial<Record<Tier, string[]>>; steps?: Record<string, unknown>;
   documents?: { id?: string; kind?: string; text?: string[] }[];
   facts?: Partial<Fact>[];
+  provider?: unknown;
 };
 
 /** Validate one counterparty after its layers are merged. Throws naming the file and the fix. */
@@ -255,9 +262,12 @@ export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['
     for (const k of ['id', 'fact', 'source'] as const) if (!f[k]) fail(`facts[${i}] needs ${k}`);
     return f as Fact;
   });
+  const parsed = raw.provider === undefined ? undefined : parseProvider(raw.provider);
+  if (parsed && 'problem' in parsed) throw new Error(`${origin.binding ?? origin.vendor}: ${parsed.problem}`);
+  const provider = parsed?.provider;
   return {
     id: stem, name: raw.name!, role, roles: roles as Role[], match, grouped: raw.grouped === true, ...(sharedUid.length ? { sharedUid } : {}), ...(raw.grouped !== undefined ? { groupedSaid: true as const } : {}), documents, facts,
-    accounts: raw.accounts, steps: raw.steps ?? {}, origin,
+    accounts: raw.accounts, steps: raw.steps ?? {}, origin, ...(provider ? { provider } : {}),
   };
 }
 

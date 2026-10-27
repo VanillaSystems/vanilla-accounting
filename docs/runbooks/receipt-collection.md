@@ -458,8 +458,10 @@ unbekannt"), which carry no country or tax breakdown — so every revenue entry 
 back **V0**, and the Swiss output tax of the Swiss orders is then **not** recognised. Understating output tax is
 an error against the authority, so after every `classify` run: cross-check the order pages' `Taxes`
 lines against the V-codes actually booked, and reallocate the Swiss portion to V81. The EU-VAT
-orders stay V0. With the order pages linked, the booking step does this per order in code
-(src/booking/payout-orders.ts).
+orders stay V0. Since #203 the payout is booked bank / clearing account, and the order export
+(Shopify Admin › Bestellungen › Exportieren, CSV) dropped into the app books each order onto the
+clearing account with its own code, by its delivery country (src/booking/sales-report.ts); the order
+pages stay filed as proof of the delivery and are linked to their sale.
 
 **Each order page also carries the payout linkage**, which is how per-order fees are derived:
 

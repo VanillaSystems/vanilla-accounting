@@ -153,8 +153,15 @@ steps:
         then: a_sale, on the sale's revenue account, with the original sale's code inverted (-V81, -V0)
         why: a reduced consideration reduces the tax owed, in the quarter the money goes back
         source: MWSTG Art. 41 Abs. 1; AGENTS.md § Special cases (-V81)
+      - id: sid-provider-payout
+        when: CRDT from a payment provider whose business file has a `provider:` section (a shop platform, a card terminal)
+        then: >
+          a settlement, not a sale: code books it bank / the provider's clearing account without VAT
+          (src/booking/classify.ts providerPayout); its sales come onto that account from the provider's report
+          (sv-provider-report). Until the company's file names the clearing account it is booked as any money in; dropping the report asks for the account
+        source: decision 2026-10-27, owner
       - id: sid-sale
-        when: CRDT from a sales platform's payout or another customer payment
+        when: CRDT from a sales platform's payout the app does not know as a provider's, or another customer payment
         then: a_sale
         source: definition
     precedents: []
@@ -245,19 +252,18 @@ steps:
           deducted again in Ziffer 220, net 0. Where the seller pays that tax abroad (an import VAT invoice of the
           courier, an IOSS return), that payment is its own expense entry without Swiss input tax
         source: booking.flow.yaml sale_vat expect; issue #74
-      - id: sv-payout-orders
-        when: a payment provider's payout with the order documents it holds linked (each names the payout by date and amount)
+      - id: sv-provider-report
+        when: a payment provider's sales report (its order export, a CSV) or fee report is dropped
         then: >
-          in code (src/booking/payout-orders.ts), by the payout rule's accounts (its `fees`) or the firm's payout answer:
-          each order's gross on the sales account, delivered in the VAT territory at the firm's sale code, abroad at
-          V0 whatever foreign tax line it shows (named in the reason); a refund deducted from the payout with the
-          code's minus; what the provider kept as its fees. The lines add up to the payout. Orders that do not add
-          up to it, or an order whose tax line disagrees with its delivery (sv-order-tax: a domestic delivery
-          without the Swiss tax, Swiss tax on an export), book nothing: the payout waits for the person, as
-          without its documents. The
-          match step links the documents to the one payout they add up to (src/intake/order-links.ts)
-        why: one payout mixes domestic orders and exports, which no single code fits (issue #26)
-        source: decision 2026-10-22, owner
+          in code (src/booking/sales-report.ts), by the columns the provider's file names: each order's gross onto the
+          provider's clearing account against the revenue account, delivered in the VAT territory at the firm's sale
+          code, abroad at V0 whatever foreign tax it shows; a refund with the code's minus; each fee against the same
+          account at the company's fee code. The tax point is the day the provider collected the payment (cash basis),
+          the order's day on the agreed basis. An order of a filed period is not booked (a correction is the
+          person's); a domestic order whose tax column shows no tax or another rate waits for the person
+          (sv-order-tax). The order documents go with their sale, never with the payout
+        why: a payout is a settlement of what the provider holds; the VAT is decided per order, and the clearing account must return to what the provider holds unpaid
+        source: decision 2026-10-27, owner
       - id: sv-no-invoice
         when: a customer payment with no invoice or order linked
         then: >
@@ -266,17 +272,19 @@ steps:
           a foreign currency or a foreign IBAN → V0. Never V0 for want of a paper. The owner confirms it once (the
           app's question under Aufgaben); her answer or her correction books that payment only. A rule for the
           payer only by her «Immer so?» under the answer, and only when the payer's other payments are booked
-          the same way: a mixed payer (a payment provider's payouts with domestic and export orders) gets none,
-          it is split per order (sv-payout-orders)
+          the same way: a mixed payer gets none. A payment provider's payout is no customer payment: its sales come
+          from its report (sv-provider-report)
         why: "the output tax is owed on a domestic supply whether or not an invoice exists (MWSTG Art. 18); «no receipt, zero code» is the input-tax rule"
         source: decision 2026-10-23, owner
       - id: sv-card-terminal
-        when: a payout of a card terminal or payment provider (SumUp, Payrexx, Worldline, TWINT)
+        when: a payout report of a card terminal or payment provider (SumUp, Payrexx, Worldline, TWINT)
         then: >
-          the card sales at the company's own place of business are domestic sales: the GROSS sales on the revenue
-          account with V81 (another rate only when the report shows it), a refund with -V81, the provider's fees as
-          their own row on the bank-fee account with I0 (payment processing is exempt, Art. 21: no Bezugsteuer).
-          Without the payout report: the whole payout with V81 until the report is linked
+          the card sales at the company's own place of business are domestic sales: the GROSS sales with V81
+          (another rate only when the report shows it), a refund with -V81, the provider's fees on their own
+          account with I0 (payment processing is exempt, Art. 21: no Bezugsteuer). A provider the company's
+          knowledge names gets them onto its clearing account in code (src/intake/sales-report-import.ts
+          bookPayoutReports); a payout of one it does not name is booked from its report by the model, the
+          whole payout with V81 without one
         why: the payout report rarely shows MWST, yet the sales were made in Switzerland
         source: proposed 2026-10-16 by Claude — confirm or replace
       - id: sv-place-abroad

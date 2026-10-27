@@ -8,8 +8,9 @@
  *   list, or the 20 payments ranked here; the file is renamed into receipts/ and linked when the
  *   model is at least 80 % sure
  * The matching chain (pair-chain.ts) runs before and after, over every receipt nothing is linked
- * to and every payment without one, whichever came first; code also links an order to its payout
- * (order-links.ts) and several receipts that add up to one payment (receipt-sets.ts).
+ * to and every payment without one, whichever came first; code also links an order document to its
+ * sale booked from the provider's sales report (src/booking/sales-report.ts, never to the payout:
+ * a payout has no receipt of its own, #203) and several receipts that add up to one payment (receipt-sets.ts).
  * A link to a payment of a filed quarter is never made (golden rule 1).
  */
 import { existsSync } from 'node:fs';
@@ -29,10 +30,11 @@ import { nameWords, pairMapping, takenPayments } from './pairing.js';
 import { legOf } from '../workspace/money-accounts.js';
 import { titlesFor } from './titles.js';
 import { estvToChf, noReceiptFor, runPairChain } from './pair-chain.js';
-import { linkOrdersToPayouts } from './order-links.js';
+import { linkOrdersToSales } from '../booking/sales-report.js';
 import { linkReceiptSets, linkSplitLegs, MAX_RUN, MAX_TRIED } from './receipt-sets.js';
 import { batchPayers, NO_BATCH_PAYERS, type BatchPayers } from './batch-payers.js';
 import { loadKnowledge } from '../knowledge/layers.js';
+import { providersOf } from './sales-report-import.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { creditSigned } from '../accounting/credit-signed.js';
 
@@ -190,9 +192,11 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const early = toRead.flatMap((r) => provisional(r) ?? []);
   const payers = batchPayersOf(ws);
   const byCode = async (stagedNow: readonly Receipt[] = []) => {
-    const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt: noReceiptFor(ws) });
-    for (const l of books.update(linkOrdersToPayouts)) log(`linked the order to the payout it names: receipt ${l.receipt} → ${l.payment}`);
-    const found = books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, { isOpen: (d) => !lock.isClosed(d), payers, toChf, buyerUid: ws.company?.uid }); });
+    const noReceipt = noReceiptFor(ws);
+    const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt });
+    const providers = providersOf(ws);
+    for (const l of books.update((index) => linkOrdersToSales(index, (d) => !periodLock(index).isClosed(d), providers))) log(`linked the order document to its sale: receipt ${l.receipt} → ${l.sale}`);
+    const found = books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, { isOpen: (d) => !lock.isClosed(d), payers, toChf, buyerUid: ws.company?.uid, noReceipt: noReceipt(index) }); });
     for (const s of found.sets) log(`linked ${s.receipts.length} receipts that add up to the payment${s.basis === 'original' ? ' in the amount its bank names' : s.basis === 'rate' ? ' at the official daily rate' : ''}${s.run ? ' (the batch payer\'s open receipts in date order)' : ''}: ${s.receipts.join(', ')} → ${s.legs.join(', ')}`);
     const runs = found.cuts.filter((c) => c.limit === 'run');
     const combos = found.cuts.filter((c) => c.limit === 'combinations');

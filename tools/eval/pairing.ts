@@ -14,7 +14,8 @@
  *
  * Multi-receipt payments (#190): after the code-alone chain, the match step's set search (with the
  * batch payers of the business files) and the legs of split card charges run too, and the payments
- * the books link several receipts to are counted as found in full, in part, wrong or missed.
+ * the books link several receipts to are counted as found in full, in part, wrong or missed. A payment
+ * provider's payout is out of matching (#203): it is left out of the counts and named on its own line.
  */
 import { pathToFileURL } from 'node:url';
 import { loadBooks, type Books } from '../../src/books/store.js';
@@ -31,6 +32,10 @@ import { documents } from '../../src/engines/index.js';
 import { linkReceiptSets, linkSplitLegs } from '../../src/intake/receipt-sets.js';
 import { chargesOf } from '../../src/intake/charges.js';
 import { batchPayersOf } from '../../src/intake/match.js';
+import { providerOfPayment } from '../../src/booking/providers.js';
+import { loadKnowledge } from '../../src/knowledge/layers.js';
+import { APP_ROOT } from '../../src/workspace/workspace.js';
+import type { BankTransaction } from '../../src/types/index.js';
 
 const arg = (name: string): string | undefined => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : undefined; };
 
@@ -162,10 +167,11 @@ export async function main(): Promise<void> {
   const isOpen = () => true;
   linkReceiptSets(afterCode, { isOpen, payers: batchPayersOf(ws), toChf, buyerUid: ws.company.uid });
   linkSplitLegs(afterCode, isOpen, toChf);
-  const multi = multiTally(afterCode, truth, books, toChf);
+  const counterparties = loadKnowledge(APP_ROOT, ws.paths.root).counterparties;
+  const multi = multiTally(afterCode, truth, books, toChf, (t) => !!providerOfPayment(t, [], counterparties));
   const say = (t: MultiTally) => `${t.payments} in the window; code alone found ${t.full} in full, ${t.part} in part, ${t.wrong} with a document the books do not have there, missed ${t.missed}`;
   console.log(`multi-receipt payments (two documents or more, or one on every leg of a card charge split across balances; documents counted, copies once): ${say(multi.out)}`);
-  console.log(`  of them money in with order documents (payouts): ${say(multi.payouts)}`);
+  console.log(`  left out: ${multi.payouts.payments} payout(s) of a payment provider with documents linked in the books (out of matching since #203: their documents prove the sales, not the payout)`);
   console.log(`model stages: ${o.usage.calls} calls (batches of ${CHECK_BATCH} checks, ${CHOOSE_BATCH} choices), ${withModel.checked} pairs checked, ${withModel.chosen} short lists; ~${Math.round(o.usage.promptChars / 4)} prompt and ~${Math.round(o.usage.answerChars / 4)} answer tokens (estimated, 4 characters each)`);
   console.log(`intake match prompts before #187 of the window's ${inWindow.length} receipts (read facts): ~${Math.round(intakeChars / 4)} prompt tokens (estimated; standard tier)`);
   await intake(blind, truth, toChf, noReceipt);
@@ -181,9 +187,9 @@ interface MultiTally { payments: number; full: number; part: number; wrong: numb
  * its one movement is no multi-receipt payment, nor one whose first movement is a Wise fee row.
  * Whether code's links after the chain and the set search hold exactly the books' documents (in
  * full), some of them (in part), one the books link elsewhere or not at all (wrong), or none
- * (missed). Money in whose documents are orders (Receipt.order, a payout's) is counted apart.
+ * (missed). A payment provider's payout (`payout`) is counted apart: it is out of matching (#203).
  */
-function multiTally(after: Books, truth: readonly Mapping[], books: Books, toChf: ToChf): { out: MultiTally; payouts: MultiTally } {
+function multiTally(after: Books, truth: readonly Mapping[], books: Books, toChf: ToChf, payout: (t: BankTransaction) => boolean): { out: MultiTally; payouts: MultiTally } {
   const charges = chargesOf(books.transactions, toChf);
   const receipt = new Map(books.receipts.map((r) => [r.id, r]));
   const invoice = (id: string) => { const r = receipt.get(id); return !!r && (!r.kind || r.kind === 'invoice'); };
@@ -210,7 +216,7 @@ function multiTally(after: Books, truth: readonly Mapping[], books: Books, toChf
     const want = new Set([...receipts].filter(invoice).map(doc));
     const have = new Set([...got].filter(invoice).map(doc));
     if (want.size < 2 && charge.refs.length < 2) continue;
-    const t = first.direction === 'CRDT' && [...receipts].some((id) => receipt.get(id)?.order) ? payouts : out;
+    const t = charge.legs.some(payout) ? payouts : out;
     t.payments++;
     const right = [...have].filter((id) => want.has(id)).length;
     if (have.size > right) t.wrong++;

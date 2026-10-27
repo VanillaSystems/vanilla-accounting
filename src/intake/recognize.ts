@@ -1,7 +1,7 @@
 /**
  * Recognizing a dropped file cheaply, before anything enters the books (docs/0.4.0/intake.md,
  * ADR 0008 §2): by its structure first (the bytes of a PDF, an image or a ZIP, the namespace of a
- * bank statement), then by hints (words of the first pages, the name; what the words say a document
+ * bank statement, the columns of a payment provider's report), then by hints (words of the first pages, the name; what the words say a document
  * is, src/intake/document-kind.ts). No model: what stays unclear is asked in the row, and the
  * workflow reads it properly later.
  */
@@ -14,7 +14,10 @@ import { namesStatement } from '../core/modules/words.js';
 import { pdfRuns, textOf } from '../parsers/pdf-text.js';
 
 /** What the file is, and a PDF's text of its first pages (for the duplicate check; never stored in the row). */
-type Recognized = Pick<DropRow, 'kind' | 'how' | 'facts' | 'state' | 'reason' | 'document'> & { text?: string };
+type Recognized = Pick<DropRow, 'kind' | 'how' | 'facts' | 'state' | 'reason' | 'document' | 'provider'> & { text?: string };
+
+/** Whose sales or fee report a CSV is, by the columns the providers' business files name (src/intake/sales-report-import.ts recognizeCsv). */
+export type ReportOf = (bytes: Buffer) => { provider: string; name: string; kind: 'sales' | 'fees' } | undefined;
 
 const starts = (b: Buffer, ...bytes: number[]) => bytes.every((x, i) => b[i] === x);
 const head = (b: Buffer, n = 4096) => b.subarray(0, n).toString('latin1');
@@ -34,7 +37,7 @@ export async function firstPages(bytes: Buffer): Promise<string | undefined> {
 
 const IBAN = /\b(CH|LI|DE|AT|GB|BE|NL|FR|IT)\d{2}(?:\s?[A-Z0-9]{4}){3,7}(?:\s?[A-Z0-9]{1,3})?\b/;
 
-export async function recognize(bytes: Buffer, name: string, words?: DocumentsData): Promise<Recognized> {
+export async function recognize(bytes: Buffer, name: string, words?: DocumentsData, reportOf?: ReportOf): Promise<Recognized> {
   const lower = name.toLowerCase();
   if (starts(bytes, 0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c) || starts(bytes, 0x52, 0x61, 0x72, 0x21) || /\.(7z|rar)$/.test(lower)) {
     return { state: 'refused', reason: 'as-zip' };
@@ -62,6 +65,9 @@ export async function recognize(bytes: Buffer, name: string, words?: DocumentsDa
   const statement = STATEMENT_FILES.map((r) => r(bytes)).find(Boolean);
   if (statement) return { kind: 'camt', how: 'structure', state: 'take', facts: statement.facts };
   if (/^\s*(<\?xml|<Document)/.test(head(bytes))) return { state: 'refused', reason: 'not-statement' };
+  // A payment provider's sales or fee report, by its columns (#203): booked onto the provider's clearing account.
+  const report = reportOf?.(bytes);
+  if (report) return { kind: 'sales-report', how: 'structure', state: 'take', provider: { id: report.provider, name: report.name, kind: report.kind } };
   if (/\.csv$/.test(lower) || /^[^\n]*(buchung|valuta|booking|date)[^\n]*[;,\t][^\n]*(saldo|betrag|belastung|gutschrift|amount|balance)/i.test(head(bytes, 1024))) {
     return { state: 'refused', reason: 'bank-csv' };
   }

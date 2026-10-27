@@ -11,6 +11,8 @@ import { join } from 'node:path';
 import { entriesForceMayRemove } from '../src/accounting/classify-force.js';
 import { loadBooks, periodLock, saveBooks, update, PERSON } from '../src/books/store.js';
 import { classifyStep } from '../src/intake/classify.js';
+import { loadClassifyContext, mappedReceipts } from '../src/booking/classify.js';
+import { providerOfPayment } from '../src/booking/providers.js';
 import { runIntake, storePort, type Ask } from '../src/intake/pipeline.js';
 import { moduleActor } from '../src/books/store.js';
 import type { JournalEntry } from '../src/types/index.js';
@@ -41,7 +43,10 @@ function prepared(): { ws: Workspace; ask: Ask; refs: string[] } {
       entries: (answers.get(ref) ?? []).map((e) => ({ accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount, vatCode: e.vatCode, description: e.description })),
     }])));
   };
-  return { ws, ask, refs: [...answers.keys()] };
+  // A shop's payout waits for the person while its file names no clearing account (#203, tests/payment-providers.test.ts): no run books it.
+  const counterparties = loadClassifyContext(ws).counterparties ?? [];
+  const payout = (ref: string) => { const tx = books.transactions.find((t) => t.ref === ref); return !!tx && !!providerOfPayment(tx, mappedReceipts(books, tx), counterparties); };
+  return { ws, ask, refs: [...answers.keys()].filter((ref) => !payout(ref)) };
 }
 
 const comparable = (entries: JournalEntry[]) => entries.map(({ id: _, run: __, ...e }) => JSON.stringify(e)).sort();

@@ -5,14 +5,14 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildBatchClassifyPrompt, parseBatchClassifyResult, type ClassifyEntry, type ClassifyPromptContext, type PayoutKind } from '../llm/prompts.js';
+import { buildBatchClassifyPrompt, parseBatchClassifyResult, type ClassifyEntry, type ClassifyPromptContext } from '../llm/prompts.js';
 import { resolveStep, type AskOptions } from '../llm/ask.js';
 import { NoClaudeError } from '../llm/providers/claude-cli.js';
 import { AiRefused } from '../llm/provider.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import { ownerAccount } from '../accounting/bank-accounts.js';
 import { bankAccountFor } from '../workspace/money-accounts.js';
-import { SHOPIFY_ACCOUNT, paymentSides } from '../accounting/payment-entries.js';
+import { paymentSides } from '../accounting/payment-entries.js';
 import { atTaxPoint, openItemAccounts } from '../accounting/tax-point.js';
 import { isVatAmountCode } from '../accounting/validate.js';
 import { periodLock, type Books, type PeriodLock } from '../books/store.js';
@@ -23,19 +23,18 @@ import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from 
 import { APP_ROOT, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
 import { sharedReceipts, inputTaxOverReceipts } from './shared-receipts.js';
 import { chargesOf } from '../intake/charges.js';
-import { agreedBasis, baseCurrency, chart, documents, filing, invoicing, setup, vat, withoutInputTax } from '../engines/index.js';
+import { agreedBasis, baseCurrency, documents, filing, setup, vat, withoutInputTax } from '../engines/index.js';
 import { paymentProposals, type PaymentProposal } from '../invoices/payments.js';
 import { loadInvoices } from '../invoices/store.js';
 import type { InvoiceBook } from '../invoices/model.js';
-import { roundCHF, toRappen } from '../accounting/rappen.js';
 import { correctsFor } from '../accounting/correction.js';
 import { EFFECTIVE_QUARTERLY, type VatSetup } from '../workspace/vat-setup.js';
-import { normalRate, saleCodeOf, saleCodeReason, saleVatCode } from '../accounting/sales-without-vat.js';
+import { saleCodeOf, saleCodeReason } from '../accounting/sales-without-vat.js';
 import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { creditNoteCodeOf } from '../accounting/credit-note-code.js';
 import { acquisitionCodeOf, acquisitionReason, readSupplier, type AcquisitionDocument } from '../accounting/acquisition-tax.js';
 import { codeSignFor } from '../accounting/code-sign.js';
-import { loadKnowledge } from '../knowledge/layers.js';
+import { homeOf, loadKnowledge } from '../knowledge/layers.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
 import { payerNames } from '../knowledge/payer.js';
 import { partsOf, partText } from '../accounting/manual-booking.js';
@@ -45,11 +44,11 @@ import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
 import { businessVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
 import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
-import { holdWords, payoutByOrders, type OrderHold } from './payout-orders.js';
+import { payoutWaitOf, providerOfPayment, type PayoutWait, type Provider } from './providers.js';
 import { splitByReceipts } from './receipt-lines.js';
 import { CUSTOMS_BY, customsSplit, importVatDeductions, type Assessment, type CustomsHold, type CustomsTexts } from './customs-invoice.js';
 import { nextManualRef } from '../books/next-ref.js';
-import { payoutSales, salesDefaults } from '../workspace/sells.js';
+import { salesDefaults } from '../workspace/sells.js';
 import { loadChart, type ChartAccount } from '../workspace/chart.js';
 
 export const BATCH_SIZE = 10;
@@ -58,8 +57,6 @@ const CALL_TIMEOUT_MS = 360_000;
 
 export interface EntryContext {
   fx: FxResolver;
-  /** The earliest date of the receipts mapped to the transaction (a Shopify order date). */
-  receiptDate: string | undefined;
   /** The receipts mapped to the transaction, which the model saw: stamped on the entries. */
   receipts: string[];
   bankAccount: string;
@@ -93,28 +90,24 @@ export function moneyAccounts(bankAccounts: readonly LedgerBankAccount[], accoun
  * The journal entries for one transaction from the model's answer. The side the model left empty
  * is the transaction's bank account (a Skonto line the bank received back is the bank's debit on a
  * payment out), except on a VAT-amount code (M81-2), whose code is its other leg; whether the bank
- * really was the missing side, paymentRefusal decides. A foreign entry carries the ESTV daily sell
- * rate of the payment date (ADR 0001). Entries on 1093 take the order date, unless that lies
- * in a closed period or before the books begin (#39): then the payment date, because nothing new
- * is ever dated there.
+ * really was the missing side, paymentRefusal decides. Every entry carries the payment's date; a
+ * foreign one the ESTV daily sell rate of that day (ADR 0001).
  */
-export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { fx, receiptDate, receipts, bankAccount, lock, reason, by, money, corrects, acquisition }: EntryContext): JournalEntry[] {
+export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { fx, receipts, bankAccount, lock, reason, by, money, corrects, acquisition }: EntryContext): JournalEntry[] {
   lock.assertOpen(tx.date, `${tx.ref} wird nicht neu gebucht.`);
   const fxStamp = tx.currency === baseCurrency()
     ? {}
     : { exchangeCurrency: tx.currency, exchangeRate: fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1 };
-  const orderDate = receiptDate && !lock.isClosed(receiptDate) && !lock.beforeBooks(receiptDate) ? receiptDate : tx.date;
   const entry = (e: Omit<JournalEntry, 'id' | 'transactionRef' | 'origin'>, decided?: { reason: string; by: BookedBy }): JournalEntry =>
     ({ id: randomBytes(8).toString('hex'), transactionRef: tx.ref, ...e, ...fxStamp, origin: 'classify', receipts: [...receipts].sort(), ...(corrects && { corrects }), ...(decided ?? { ...(reason && { reason }), by }) });
 
-  const entries = llmEntries.map((e) => {
+  return llmEntries.map((e) => {
     const { accountDebit, accountCredit } = sidesOf(e, tx.direction, bankAccount, isVatAmountCode(e.vatCode));
-    const onShopify = accountDebit === SHOPIFY_ACCOUNT || accountCredit === SHOPIFY_ACCOUNT;
     const transfer = !!money?.has(accountDebit) && money.has(accountCredit);
     const acquired = acquisition && !transfer ? acquisitionCodeOf({ ...e, accountDebit, accountCredit }, acquisition.documents, acquisition.setup) : undefined;
     return entry({
       ...(acquisition && readSupplier(e)),
-      date: onShopify ? orderDate : tx.date,
+      date: tx.date,
       accountDebit,
       accountCredit,
       amount: e.amount,
@@ -122,17 +115,6 @@ export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { f
       description: e.description || tx.description,
     }, acquired && { reason: acquisitionReason(acquired), by: { kind: 'code', check: 'acquisitionTax' } });
   });
-  const onShopify = entries.some((e) => e.accountDebit === SHOPIFY_ACCOUNT || e.accountCredit === SHOPIFY_ACCOUNT);
-  if (onShopify && tx.direction === 'CRDT') {
-    entries.push(entry({
-      date: tx.date,
-      accountDebit: bankAccount,
-      accountCredit: SHOPIFY_ACCOUNT,
-      amount: tx.amount,
-      description: 'Stripe, Auszahlung',
-    }));
-  }
-  return entries;
 }
 
 const day = (iso: string) => iso.split('-').reverse().join('.');
@@ -197,29 +179,12 @@ export interface ClassifyContext extends ClassifyPromptContext {
   vat?: VatSetup;
   /** The accounts that hold money (moneyAccounts): a transfer between two carries no VAT code. */
   moneyAccounts?: ReadonlySet<string>;
-  /** The firm's own payout split (payoutDefault) for a payout report no rule names the provider of. */
-  payout?: RuleBooking;
   /** What the app's business files state about input tax (src/booking/purchase-vat.ts): code decides it on the model's lines. */
   purchaseVat?: BusinessVat;
   /** The issued invoices, on the agreed basis: a customer payment that could pay an open one is not booked as revenue (openInvoiceOf). */
   invoices?: InvoiceBook;
   /** The firm's UID: a customs assessment proves import VAT for the firm it names as importer (src/booking/customs-invoice.ts). */
   companyUid?: string;
-}
-
-/**
- * The payout booking of a firm that answered «Auszahlungen eines Zahlungsanbieters: ja» at setup
- * (modules/ch/setup.yaml answers.payouts), for a payout report no rule names the provider of
- * (r10f-29): the gross sales on the revenue account of what the firm sells at its sale code, the
- * fees on the account the answer added at its code where the form takes one, both from the chart.
- */
-export function payoutDefault(ws: Pick<Workspace, 'profile'>, chart: readonly string[]): RuleBooking | undefined {
-  if (ws.profile?.payouts !== 'yes') return undefined;
-  const { fees } = setup().answers.payouts;
-  const has = new Set(chart);
-  const account = payoutSales(ws.profile.sells, setup().sells, setup().answers.payouts.sales.otherwise);
-  if (!has.has(account) || !has.has(fees.account)) return undefined;
-  return { account, vat: saleVatCode('saleDomestic'), fees: { account: fees.account, vat: formTakes(fees.vat) ? fees.vat : '' } };
 }
 
 /** At most this many casebook examples in one call: the best of each transaction first. */
@@ -298,7 +263,6 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     vat: ws.company.vat,
     ...(ws.profile?.sells.length ? { sells: salesDefaults(ws.profile.sells, setup().sells) } : {}),
     moneyAccounts: moneyAccounts(ws.bankAccounts, loadChart().accounts),
-    ...((p) => (p ? { payout: p } : {}))(payoutDefault(ws, [...chartNames(chartOfAccounts).keys()])),
     ...(agreedBasis() ? { invoices: loadInvoices(ws) } : {}),
     companyUid: ws.company.uid,
   };
@@ -389,102 +353,6 @@ export function ruleBookingLines(tx: BankTransaction, booking: RuleBooking, docu
   return [{ ...whole, amount: (total - own) / 100 }, { account: owner, amount: own / 100 }];
 }
 
-/** A line of a payout report as read: its sides (an empty one is the bank), its amount with the sign the reader wrote, its words, and its role when the reader named it. */
-export interface PayoutRead { accountDebit: string; accountCredit: string; amount: number; description: string; kind?: PayoutKind }
-
-/** The reader's own words for a provider's fee, in the report's languages: the fallback when a line names no role and sits on revenue. */
-const FEE_WORDS = /geb[üu]hr|\bfee|frais|commission|provision|kommission|spesen|\bcosti\b/i;
-
-/**
- * A payout rule (RuleBooking.fees) applied to the model's reading of the payout report, normalised
- * in code so that the same report gives the same booking whatever sides and sign the reading wrote
- * (r8h-20): each line's role is the one it names (`kind`), else its structure: a minus flips the
- * sides, money into the bank is a sale, money out of it a refund when it sits on revenue and does
- * not read as a fee, else the provider's fee. A sale lands on the rule's account with its code,
- * a refund there with the code's minus, a fee on fees.account with fees.vat; amounts are positive,
- * never negative revenue. The figures stay the reading's. Undefined: a line off the bank with no
- * role, which no payout has.
- */
-export function payoutLines(entries: readonly PayoutRead[], bankAccount: string, booking: RuleBooking, fees: NonNullable<RuleBooking['fees']>, isRevenue: (account: string) => boolean): ClassifyEntry[] | undefined {
-  const sale = ruleVatCode(booking.vat, { direction: 'CRDT' }, true) ?? '';
-  const refund = ruleVatCode(booking.vat, { direction: 'DBIT' }, true) ?? '';
-  const out: ClassifyEntry[] = [];
-  for (const e of entries) {
-    let debit = e.accountDebit || (e.accountCredit ? bankAccount : '');
-    let credit = e.accountCredit || (e.accountDebit ? bankAccount : '');
-    if (e.amount < 0) [debit, credit] = [credit, debit];
-    const kind: PayoutKind | undefined = e.kind
-      ?? (debit === bankAccount ? 'sale' : credit === bankAccount ? (isRevenue(debit) && !FEE_WORDS.test(e.description) ? 'refund' : 'fee') : undefined);
-    if (!kind) return undefined;
-    const amount = Math.abs(e.amount);
-    out.push(kind === 'sale' ? { accountDebit: bankAccount, accountCredit: booking.account, amount, vatCode: sale, description: e.description }
-      : kind === 'refund' ? { accountDebit: booking.account, accountCredit: bankAccount, amount, vatCode: refund, description: e.description }
-        : { accountDebit: fees.account, accountCredit: bankAccount, amount, vatCode: fees.vat, description: e.description });
-  }
-  return out;
-}
-
-/**
- * A payout booked from its report's figures, in code (r10f-29): the report linked to `tx`
- * (Receipt.payout, read once at the match step) covers every payout it is linked to; when those
- * add up to what it paid out, each payout's sales are its own amount, and the last one (by date)
- * carries the report's refunds and fees on top, so the sales of all of them add up to the report's.
- * Undefined when no linked report has figures or the payouts do not add up: the model reads it.
- */
-export function payoutFromReport(books: Books, tx: BankTransaction, booking: RuleBooking & { fees: NonNullable<RuleBooking['fees']> }, context: ClassifyContext, fx: FxResolver, by: BookedBy, reason: string): JournalEntry[] | undefined {
-  const mapped = mappedReceipts(books, tx);
-  const report = mapped.find((r) => r.payout);
-  if (!report?.payout) return undefined;
-  const facts = report.payout;
-  const refs = new Set(books.mappings.filter((m) => m.receiptId === report.id).map((m) => m.transactionRef));
-  const payouts = books.transactions.filter((t) => refs.has(t.ref) && t.direction === 'CRDT' && t.currency === tx.currency).sort((a, b) => a.date.localeCompare(b.date) || a.ref.localeCompare(b.ref));
-  if (!payouts.length || toRappen(payouts.reduce((s, t) => s + Math.abs(t.amount), 0)) !== toRappen(facts.paidOut)) return undefined;
-  const last = payouts[payouts.length - 1].ref === tx.ref;
-  const name = merchantOf(tx.description);
-  const read: PayoutRead[] = [
-    { accountDebit: '', accountCredit: '', amount: last ? roundCHF(Math.abs(tx.amount) + facts.refunds + facts.fees) : Math.abs(tx.amount), description: name, kind: 'sale' },
-    ...(last && facts.refunds > 0 ? [{ accountDebit: '', accountCredit: '', amount: facts.refunds, description: `${name}, Rückerstattungen`, kind: 'refund' as const }] : []),
-    ...(last && facts.fees > 0 ? [{ accountDebit: '', accountCredit: '', amount: facts.fees, description: `${name}, Gebühren`, kind: 'fee' as const }] : []),
-  ];
-  const bankAccount = bankAccountFor(tx, context.bankAccounts);
-  const lines = payoutLines(read, bankAccount, booking, booking.fees, (a) => chart().typeOf(a) === 'revenue')!;
-  const money = (n: number) => n.toFixed(2);
-  const said = wordsIn('de').t('rules.say.payoutReport', { file: report.filename, sales: money(facts.sales), refunds: money(facts.refunds), fees: money(facts.fees), paidOut: money(facts.paidOut), n: payouts.length });
-  const lock = periodLock(books);
-  const receiptDate = mapped.map((r) => r.date).filter((d): d is string => !!d).sort()[0];
-  return entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by, reason: `${reason}${said}`, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) });
-}
-
-/**
- * A payout booked per order from the order documents linked to it (src/booking/payout-orders.ts):
- * the payout rule's (or the firm's) sales account at its code for a domestic delivery, the export
- * code for one abroad, the fees on its fee account. Undefined when no linked document names a
- * share of `tx`; an OrderHold when they do but the person must decide.
- */
-export function payoutFromOrders(books: Books, tx: BankTransaction, booking: RuleBooking & { fees: NonNullable<RuleBooking['fees']> }, context: ClassifyContext, fx: FxResolver, by: BookedBy, reason: string): JournalEntry[] | OrderHold | undefined {
-  const mapped = mappedReceipts(books, tx);
-  const orders = mapped.flatMap((r) => (r.order ? [r.order] : []));
-  if (tx.direction !== 'CRDT' || !orders.length) return undefined;
-  const refund = (code: string) => ruleVatCode(code, { direction: 'DBIT' }, true)!;
-  const domestic = booking.vat ? { sale: booking.vat, refund: refund(booking.vat), rate: normalRate() } : undefined;
-  const abroad = saleVatCode('saleAbroad');
-  const bankAccount = bankAccountFor(tx, context.bankAccounts);
-  const split = payoutByOrders(tx, orders, { bank: bankAccount, sales: booking.account, fees: booking.fees },
-    { territory: invoicing().territory, domestic, ...(domestic && abroad ? { abroad: { sale: abroad, refund: refund(abroad) } } : {}) }, merchantOf(tx.description));
-  if (!split || 'hold' in split) return split?.hold;
-  const de = wordsIn('de');
-  const foreign = split.foreign.length ? `; ${de.t('rules.say.ordersForeignTax', { orders: split.foreign.map((f) => `#${f.order} ${f.country} ${f.rate} %`).join(', ') })}` : '';
-  const said = `${de.t('rules.say.payoutOrders', { orders: split.orders, refunds: split.refunds.toFixed(2), fees: split.fees.toFixed(2) })}${foreign}`;
-  const lock = periodLock(books);
-  return entriesFor(tx, split.lines, { fx, receiptDate: undefined, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by, reason: `${reason}${said}`, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) });
-}
-
-/** Why a payout's orders book nothing, as its question says it (booking texts stay German). */
-function orderHoldWords(hold: OrderHold): string {
-  const { key, vars } = holdWords(hold);
-  return wordsIn('de').t(key, vars);
-}
-
 const chf = (n: number) => n.toFixed(2);
 
 /** A courier invoice's booking texts, in the books' language (German, docs/i18n.md). */
@@ -534,14 +402,13 @@ export function customsEntries(books: Books, tx: BankTransaction, context: Class
   if ('hold' in split) return { note: de.t('rules.say.customsHold', { why: customsHoldWords(split.hold) }) };
   const bankAccount = bankAccountFor(tx, context.bankAccounts);
   const lock = periodLock(books);
-  const receiptDate = mapped.map((r) => r.date).filter((d): d is string => !!d).sort()[0];
   const said = [split.direct ? de.t('rules.say.customsDirect') : de.t('rules.say.customsSplit')];
   if (split.importVat > 0 && !withoutInputTax()) {
     if (split.unproven > 0) said.push(de.t('rules.say.customsUnproven', { amount: chf(split.unproven), currency: split.currency }));
     for (const a of split.assessments) said.push(texts.reason(a));
   }
   const lines = withDerivedCodes(split.lines, tx.direction, bankAccount);
-  const entries = entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by: CUSTOMS_BY, reason: said.join('; '), corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) });
+  const entries = entriesFor(tx, lines, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by: CUSTOMS_BY, reason: said.join('; '), corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) });
   // A deduction is the assessment's tax in the books' currency, whatever the payment was made in.
   const booked = entries.map((e, k) => {
     if (!split.deductions.has(split.lines[k])) return e;
@@ -570,6 +437,29 @@ export function bookImportVatDeductions(books: Books, context: Pick<ClassifyCont
   });
 }
 
+/** Why a provider's payout waits for the person (PayoutWait), in the books' language: what the run's note and the payment say. */
+export function payoutWaitReason(w: PayoutWait): string {
+  const key = w.why === 'clearing' ? 'salesReport.noClearing' : w.why === 'since' ? 'salesReport.noSince' : 'salesReport.gapPayout';
+  return wordsIn('de').t(key, { provider: w.provider.name, file: homeOf('workspace', w.provider.role, w.provider.id), since: w.provider.provider.since ?? '', account: w.provider.provider.clearing ?? '' });
+}
+
+/**
+ * A payment provider's payout, booked in code (#203): bank / its clearing account, without VAT, on
+ * the payment's day. The sales and the fees are on the clearing account already, from the provider's
+ * reports (src/booking/sales-report.ts). Refused, and so left for the person, when the clearing
+ * account is not in the chart. Call it only for a provider whose company file names its clearing account.
+ */
+export function providerPayout(books: Books, tx: BankTransaction, provider: Provider, context: ClassifyContext, fx: FxResolver): JournalEntry[] | { reason: string; refusal: ClassifyRefusal } {
+  const clearing = provider.provider.clearing!;
+  const bankAccount = bankAccountFor(tx, context.bankAccounts);
+  const lock = periodLock(books);
+  const entries = entriesFor(tx, [{ accountDebit: bankAccount, accountCredit: clearing, amount: tx.amount, description: wordsIn('de').t('salesReport.payoutText', { provider: provider.name }) }], {
+    fx, receipts: [], bankAccount, lock, money: context.moneyAccounts,
+    by: { kind: 'code', check: 'payoutReport' }, reason: wordsIn('de').t('salesReport.payoutReason', { provider: provider.name, account: clearing }),
+  });
+  return paymentRefusal(tx, entries, bankAccount, new Set(chartNames(context.chartOfAccounts).keys())) ?? entries;
+}
+
 /** The entries a rule's booking makes for `tx` (ruleBookingLines), the bank on the other side, stamped with the rule. */
 export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRule, booking: RuleBooking, context: ClassifyContext, fx: FxResolver): JournalEntry[] {
   const mapped = mappedReceipts(books, tx);
@@ -579,14 +469,11 @@ export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRul
   const entries: ClassifyEntry[] = lines.map((l) => ({
     accountDebit: out ? l.account : '', accountCredit: out ? '' : l.account, amount: l.amount, vatCode: l.vat ?? '', description: merchantOf(tx.description),
   }));
-  const receiptDate = mapped.map((r) => r.date).filter((d): d is string => !!d).sort()[0];
   const code = lines[0].vat;
   // The rule names a rate, the payment got the zero code: the reason says why, never the rule's rate alone.
   const zero = booking.vat && code && code.replace(/^-/, '') !== booking.vat ? `; ${wordsIn('de').t('rules.say.zeroCode', { code })}` : '';
-  // A payout rule without its report: these lines are the proposal the person may take (the whole payout as sales); a report linked later books it again.
-  const noReport = booking.fees ? `; ${wordsIn('de').t('rules.say.noPayoutReport')}` : '';
   const lock = periodLock(books);
-  return entriesFor(tx, entries, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: `Regel: ${ruleLine(placed, { ...context, payers: payerNames([tx]) })}${zero}${noReport}`, by: { kind: 'rule', rule: placed.rule.id }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) })
+  return entriesFor(tx, entries, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: `Regel: ${ruleLine(placed, { ...context, payers: payerNames([tx]) })}${zero}`, by: { kind: 'rule', rule: placed.rule.id }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) })
     .map((e) => stampRule(e, placed.rule.id, booking));
 }
 
@@ -595,8 +482,7 @@ export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRul
  * of its own to the rules (its payer, its amount, its reference as the text), and a rule that books
  * books that part's line. Undefined when no part is decided. `whole`: every part was, so the lines
  * add up to the payment; else the payment is booked in part and the rest is the person's (a run
- * never books over a payment booked in part, src/workflows/actions.ts). A rule that asks, or books
- * a payout's fees, decides no part.
+ * never books over a payment booked in part, src/workflows/actions.ts). A rule that asks decides no part.
  */
 function partRuleEntries(books: Books, tx: BankTransaction, context: ClassifyContext, fx: FxResolver): { entries: JournalEntry[]; whole: boolean; rest?: BankTransaction } | undefined {
   const parts = context.rules?.length ? partsOf(tx) : undefined;
@@ -608,7 +494,7 @@ function partRuleEntries(books: Books, tx: BankTransaction, context: ClassifyCon
     const rate = tx.currency === baseCurrency() ? 1 : fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1;
     const placed = ruleFor(context.rules!, { tx: part, counterparty: routing.kind === 'known' ? routing.counterparty : undefined, bankAccount: bankAccountFor(tx, context.bankAccounts), amount: part.amount * rate });
     const then = placed?.rule.then;
-    return placed && then?.kind === 'book' && !then.booking.fees ? ruleEntries(books, part, placed, then.booking, context, fx) : undefined;
+    return placed && then?.kind === 'book' ? ruleEntries(books, part, placed, then.booking, context, fx) : undefined;
   });
   const entries = decided.flatMap((e) => e ?? []);
   if (!entries.length) return undefined;
@@ -714,8 +600,6 @@ export interface ClassifyOutcome {
   unasked: string[];
   /** Collective payments booked in part, one line per part a rule decided; the rest is the person's (r10h-14). Also in `classified`. */
   partly: string[];
-  /** Payouts their order documents hold (also in `asked` or `failed`), each with why: the run's note names every one. */
-  held: Array<{ ref: string; hold: OrderHold }>;
 }
 
 /**
@@ -735,7 +619,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     accounts: items, bankAccount: bankAccountFor(tx, context.bankAccounts), lock, rateOn: (c, d) => fx.daily(c, d),
     documents: mappedReceipts(books, tx), length: filing().length, newId: () => randomBytes(8).toString('hex'),
   });
-  const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [], partly: [], held: [] };
+  const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [], partly: [] };
   // The legs of a card charge split across balances share its receipts: each books its share, the input tax of all of them never more than the receipts show (#190).
   const charges = chargesOf(books.transactions, (amount, currency, date) => { if (currency === baseCurrency()) return amount; const rate = fx.daily(currency, date) ?? fx.flat(currency); return rate === undefined ? undefined : amount * rate; });
   const legsOf = (tx: BankTransaction) => charges.of(tx).refs;
@@ -743,11 +627,29 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   const toModel: BankTransaction[] = [];
   /** Asked payments whose rule proposes nothing: the model proposes, the entries go to `asked`. */
   const proposing = new Map<string, ClassifyOutcome['asked'][number]>();
-  /** Payouts a rule books from the model's reading of their report (RuleBooking.fees). */
-  const payouts = new Map<string, { placed: PlacedRule; booking: RuleBooking; fees: NonNullable<RuleBooking['fees']> }>();
   /** Why a payment's customs invoices were not split in code: the model's reason says it. */
   const customsNotes = new Map<string, string>();
   for (const tx of txs) {
+    // A payment provider's payout settles its clearing account, in code, whatever a rule or the model would say (#203).
+    // Until the company's file names the clearing account and the cut-over day (the first sales report asks for both), the payout waits
+    // for the person: neither a rule nor the model knows its sales, its exports or its fees, so none guesses them from the payout.
+    // A payout before the cut-over day is no provider's payout here (providerOfPayment): it is booked like any other payment,
+    // unless a sales report booked sales dated before it onto the clearing account already (PayoutWait 'gap'): then it waits too.
+    const waits = payoutWaitOf(tx, mappedReceipts(books, tx), context.counterparties ?? [], books.journalEntries);
+    if (waits) {
+      log(`  ${tx.ref}  payout of ${waits.provider.name}: waits for the person (${waits.why})`);
+      outcome.failed.push({ ref: tx.ref, reason: payoutWaitReason(waits) });
+      continue;
+    }
+    const provider = providerOfPayment(tx, mappedReceipts(books, tx), context.counterparties ?? []);
+    const booked = provider ? providerPayout(books, tx, provider, context, fx) : undefined;
+    if (provider && booked) {
+      if ('refusal' in booked) { log(`  ${tx.ref}  payout of ${provider.name}: refused: ${booked.reason}`); outcome.failed.push({ ref: tx.ref, ...booked }); continue; }
+      books.journalEntries.push(...booked);
+      log(`  ${tx.ref}  → payout of ${provider.name}, from its clearing account`);
+      outcome.classified.push(tx.ref);
+      continue;
+    }
     const paid = invoicePaid.get(tx.ref);
     if (paid) {
       log(`  ${tx.ref}  could pay invoice ${paid.number}: waits for the person to confirm it there`);
@@ -760,29 +662,6 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     }
     const placed = ruleOfPayment(books, tx, context, fx);
     const then = placed?.rule.then;
-    // A payout whose report's figures are read (Receipt.payout) is booked from them in code, by the rule naming the provider, else by the firm's own split (r10f-29).
-    const split = then?.kind === 'book' && then.booking.fees ? then.booking : !placed && context.payout?.fees ? context.payout : undefined;
-    if (split?.fees) {
-      const by: BookedBy = placed ? { kind: 'rule', rule: placed.rule.id } : { kind: 'code', check: 'payoutReport' };
-      const reason = placed ? `Regel: ${ruleLine(placed, { ...context, payers: payerNames([tx]) })}; ` : '';
-      const byOrders = payoutFromOrders(books, tx, { ...split, fees: split.fees }, context, fx, placed ? by : { kind: 'code', check: 'payoutOrders' }, reason);
-      const read = Array.isArray(byOrders) ? byOrders : payoutFromReport(books, tx, { ...split, fees: split.fees }, context, fx, by, reason);
-      if (read) {
-        books.journalEntries.push(...atPoint(tx, placed ? read.map((e) => stampRule(e, placed.rule.id, split)) : read));
-        log(`  ${tx.ref}  → ${read === byOrders ? 'orders' : 'payout report'}${placed ? ` (rule ${placed.rule.id})` : ''}`);
-        outcome.classified.push(tx.ref);
-        continue;
-      }
-      if (byOrders && !Array.isArray(byOrders)) {
-        // Its order documents do not book it, and no model may guess past them: under a rule the payout waits as its question, the whole payout as sales to take over; else it is the person's to book.
-        log(`  ${tx.ref}  waits for its orders${placed ? ` (rule ${placed.rule.id})` : ''}`);
-        const why = wordsIn('de').t('rules.say.ordersAsk', { why: orderHoldWords(byOrders) });
-        outcome.held.push({ ref: tx.ref, hold: byOrders });
-        if (placed) outcome.asked.push({ ref: tx.ref, rule: placed.rule.id, question: why, entries: atPoint(tx, ruleEntries(books, tx, placed, split, context, fx)) });
-        else outcome.failed.push({ ref: tx.ref, reason: why });
-        continue;
-      }
-    }
     const byParts = placed ? undefined : partRuleEntries(books, tx, context, fx);
     if (byParts) {
       books.journalEntries.push(...atPoint(tx, byParts.entries));
@@ -806,18 +685,6 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
       if (customs) customsNotes.set(tx.ref, customs.note);
     }
     if (!placed || !then) { toModel.push(tx); continue; }
-    if (then.kind === 'book' && then.booking.fees && mappedReceipts(books, tx).length) {
-      // The payout report's figures need reading: the model reads them, the rule books them.
-      payouts.set(tx.ref, { placed, booking: then.booking, fees: then.booking.fees });
-      toModel.push(tx);
-      continue;
-    }
-    if (then.kind === 'book' && then.booking.fees) {
-      // No report to read the gross sales and the fees from: the payout waits for the person (r4c-21, r5h-12), with the whole payout as sales to take over.
-      log(`  ${tx.ref}  waits for its payout report (rule ${placed.rule.id})`);
-      outcome.asked.push({ ref: tx.ref, rule: placed.rule.id, question: wordsIn('de').t('rules.say.payoutAsk'), entries: atPoint(tx, ruleEntries(books, tx, placed, then.booking, context, fx)) });
-      continue;
-    }
     if (then.kind === 'book') {
       books.journalEntries.push(...atPoint(tx, ruleEntries(books, tx, placed, then.booking, context, fx)));
       log(`  ${tx.ref}  → rule ${placed.rule.id}`);
@@ -860,21 +727,11 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
           continue;
         }
         const mapped = mappedReceipts(books, tx);
-        const receiptDate = mapped.map((r) => r.date).filter((d): d is string => !!d).sort()[0];
         const bankAccount = bankAccountFor(tx, context.bankAccounts);
         const said = result[tx.ref].reason;
         const reason = typeof said === 'string' && said.trim() ? said.trim().slice(0, 300) : undefined;
-        const payout = payouts.get(tx.ref);
-        const normalised = payout && payoutLines(llmEntries, bankAccount, payout.booking, payout.fees, (a) => chart().typeOf(a) === 'revenue');
-        const read = payout && normalised && entriesFor(tx, normalised, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by: { kind: 'rule', rule: payout.placed.rule.id }, reason: `Regel: ${ruleLine(payout.placed, { ...context, payers: payerNames([tx]) })}; ${wordsIn('de').t('rules.say.payoutRead')}`, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) })
-          .map((e) => stampRule(e, payout.placed.rule.id, payout.booking));
-        if (payout && !read) {
-          log(`  [Batch ${batchNum}]  ${tx.ref}  refused: the reading of the payout report is no payout`);
-          fail(tx, `Claudes Lesung des Auszahlungsberichts passt nicht zur Regel ${payout.placed.rule.id}: nichts gebucht.`);
-          continue;
-        }
         const derived = withDerivedCodes(llmEntries, tx.direction, bankAccount);
-        const separate = read ? undefined : separateFeeOf(tx, books.transactions);
+        const separate = separateFeeOf(tx, books.transactions);
         const fee = separate && withoutSeparateFee(tx, separate, derived, { booked: books.journalEntries, answered: result[separate.ref]?.entries });
         if (fee && 'refused' in fee) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${fee.refused.reason}`);
@@ -883,8 +740,8 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         }
         const lines = splitByReceipts(tx, fee?.lines ?? derived, mapped);
         const noted = [reason, fee?.note, customsNotes.get(tx.ref)].filter(Boolean).join(' ') || undefined;
-        const entries = read ?? withPurchaseVat(tx, withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), mapped, context.purchaseVat, context.counterparties);
-        const twice = read ? undefined : inputTaxOverReceipts(books, tx, legsOf(tx), entries, (c, d) => fx.daily(c, d));
+        const entries = withPurchaseVat(tx, withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), mapped, context.purchaseVat, context.counterparties);
+        const twice = inputTaxOverReceipts(books, tx, legsOf(tx), entries, (c, d) => fx.daily(c, d));
         if (twice) {
           const others = twice.others.map((t) => t.ref).join(', ');
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: input tax ${twice.booked} with ${others} above the receipt's VAT ${twice.shown}`);

@@ -45,5 +45,28 @@ owner's Kontokorrent.
 - `src/accounting/validate.ts` allows one blank leg **only** for `-2` codes (`isVatAmountCode`),
   and skips the M/I/V account-class warnings for them (a single-leg correction pairs the code with
   the account being corrected, not the code family's "expected" account class).
-- `src/llm/prompts.ts` rule **9b** teaches the classifier this pattern. Rule 9's "fill both legs"
-  requirement is about Shopify *sales* rows and does **not** apply here.
+- `src/llm/prompts.ts` rule **9b** teaches the classifier this pattern.
+
+## Payment providers — payout over the clearing account (#203)
+
+A payment provider's payout (Shopify Payments, a card terminal) is a settlement, not a sale. With
+`provider.clearing` and the cut-over day `provider.since` in the company's file of the provider
+(processes/README.md «A payment provider»), code books, for what is dated on or after `since`:
+
+| Entry            | Soll       | Haben       | Code                                   | From                     |
+|------------------|------------|-------------|----------------------------------------|--------------------------|
+| each order       | clearing   | revenue     | V81 delivered in CH/LI, V0 abroad      | the provider's sales CSV |
+| each refund      | revenue    | clearing    | the sale's code with the minus (-V81)  | the provider's sales CSV |
+| each fee         | fee account| clearing    | `provider.fees.vat` (I0 without a bill)| the provider's fee CSV   |
+| the payout       | bank       | clearing    | none                                   | the bank statement       |
+
+The clearing account comes back to what the provider holds unpaid; the quarter's review shows it.
+What is dated before `since` stays as it was booked; nothing is booked again. The sales report
+also books the orders, refunds and fees of the payout days before `since` that the books do not
+carry yet (paid out after `since`, from the clearing account): one the clearing account carries
+already, or that a payout before `since` booked as sales may have paid, waits for the person.
+A payout before `since` that arrives after the report booked such sales waits for the person too,
+never booked as sales. A payout that names the provider only in its reference («… Stripe Payments
+UK Ltd with reference Shopify …») is the provider's; when none is recognised, the report asks how
+the payout appears and books nothing until answered.
+The monthly Vorsteuer correction above stays as it is.

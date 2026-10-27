@@ -174,6 +174,109 @@ that file has an `apply:` of its own), and a company's executable booking rule
 books before any of this. `npm run check-processes` checks every `apply:` and
 refuses each form in the other layer.
 
+## A payment provider
+
+A shop platform or a card terminal collects the company's sales and pays them
+out less its fees. Its business file says so with a `provider:` section
+(src/knowledge/provider.ts), and code takes it from there (#203):
+
+```yaml
+# processes/suppliers/shopify.yaml: the app layer, true for every company
+provider:
+  reports:
+    sales: { order: Name, date: Paid at, shipTo: Shipping Country, gross: Total, tax: Taxes, refunded: Refunded Amount, gateway: Payment Method }
+    fees: { date: Transaction Date, fee: Fee, order: Order }
+  gateways: [ "Shopify Payments" ]
+  processors: [ "stripe" ]
+  payoutDays: 7
+# knowledge/suppliers/shopify.yaml: the company layer, its chart
+provider:
+  clearing: "1093"
+  since: 2026-10-01
+  revenue: "3200"
+  fees: { account: "6580", vat: I0 }
+  account: "1020"   # optional: the bank account it pays into
+```
+
+- `since` is the company's cut-over day. From it on the provider's payouts,
+  sales, refunds and fees go over the clearing account; whatever is dated before
+  it stays exactly as it was booked, and is booked like any other payment if it
+  is not booked yet. The app never books an existing entry again to switch a
+  provider over. The drop asks for it with the clearing account, proposing the
+  first day of the open period; it must lie in the open period.
+- Its payout from `since` on is a settlement, not a sale: code books it bank /
+  `clearing` without VAT. Until the company's file names `clearing` and `since`
+  it waits for the person; neither a rule nor the model books it. It needs no
+  receipt and is never matched to one (no receipt set, no pair, no model match,
+  no order link). A payout is the provider's by its `match` like any payment,
+  or, when the payer is no business of the books, by a `match.tx` word that
+  begins its reference («Received money from Stripe Payments UK Ltd with
+  reference Shopify …»), and then only when the bank names no payer or one of
+  the app file's `processors` (Shopify's: `stripe`): a customer's own transfer
+  «Shopify Bestellung 1001» is no payout. When the bank's payments of a report's
+  days (from its first order the provider collected, plus `payoutDays`) are in
+  the books and none is recognised as its payout, the report books nothing and
+  its drop row says why and which accounts it looked at; «Trotzdem übernehmen»
+  books it (the clearing check shows a difference if a payout was booked as
+  sales), and the payout's name belongs into the company's `match.tx` by hand.
+  With `account: "<ledger account>"` the company's file names the bank account
+  the provider pays into, the only one that check then looks at. A payout before `since` within `payoutDays` of it, beside sales a
+  report booked before its day, waits for the person: booked as sales they would
+  count twice. The payment says why it waits.
+- Its report (the CSV it exports) is recognised in the drop by the columns of
+  `reports`: each a header or a list of headers. Code books each order onto the
+  clearing account with its code (delivered in the VAT territory: the sale code
+  at the rate its tax column shows, normal or reduced; abroad: V0; a refund with
+  the minus, on its own day `refundedAt`) and each fee at `fees.vat`, in a
+  foreign currency at the ESTV daily sell rate of the tax point. With
+  `gateways`, only the orders whose `gateway` column names one of them are the
+  provider's; the others (PayPal, bank transfer, a gift card, a test gateway)
+  are counted, never booked onto the clearing account. A domestic order without
+  tax or at no rate the firm books, Swiss VAT on an export, and a refund without
+  its own day wait for the person. An order of a filed period is not booked; its
+  refund paid in the open period is.
+- The report reaches back to `since` less the payout days (`payoutDays`, the
+  company's file may set its own): a sale collected then may be paid out after
+  `since`, from the clearing account, so the report books it, dated by its own
+  tax point, when that day is open and on or after the books' start (on the
+  agreed basis the order's day dates it; the reach goes by the day collected). Before
+  `since` it books only what no payout before `since` can have paid the old way:
+  a row waits when the clearing account carries it already (the old way, per
+  order: by its ref or its day and amount) or when a payout of the provider
+  dated before `since` and after the row's day is not booked bank / clearing
+  account (booked as sales, or not booked yet). An order, refund or fee dated
+  earlier is counted and named («vor dem …»), never booked; the drop row says
+  that a longer `payoutDays` reaches further. So the clearing check comes
+  out even after the cut-over.
+- What the books carry from elsewhere holds what it may be, so nothing counts
+  twice: a sale on the clearing account no report booked (an
+  older booking per order such as `SHOPIFY-<n>`, a person's own) that names an
+  order by its ref or text with the order's amount books it (known, never held
+  again); with another amount, or matched by day and amount only, it holds the
+  order; one on or after `since` that names
+  none holds every order up to its day; a payout of the provider booked otherwise than from the
+  clearing account (as sales, by a person) on or after `since` holds every
+  order, refund and fee up to its day. Held rows wait for the person, named in the drop row and kept on
+  the report's receipt (`report.held`, the latest taking's, at most 200 named).
+  «Rückgängig» takes only the report's own entries and links.
+- One source of sales per provider: a provider with `reports.sales` takes none
+  from a payout report (a card terminal's PDF), whose sales book only with its
+  payout booked from the clearing account.
+- The accounts are one company's chart: only the company's file names them,
+  and the drop asks for a missing one once and keeps the answer there.
+  `revenue` falls back to the account of what the firm sells. `payoutDays` and
+  `gateways` may be said in the company's file too: its payout days win, its
+  gateways are added.
+- Order documents prove the delivery: code links them to their order's sale,
+  never to the payout.
+- At a period's close, the review shows the clearing account's balance, its
+  month ends, and what the provider paid out within `payoutDays` after the end:
+  that holds sales after the end too, so it is the most the balance may be; a
+  balance above it, or below zero, is a difference. A clearing account in a
+  foreign currency carries exchange differences until the year end revalues it.
+  The clearing account must be a balance-sheet account (an asset or a
+  liability) that no other provider's file names.
+
 ## The contract
 
 `npm run check-processes` enforces rules 1–3 and the graph's wiring, and prints

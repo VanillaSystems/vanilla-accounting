@@ -18,6 +18,7 @@ import type { FxResolver } from '../accounting/fx-rates.js';
 import { periodLock, type Books } from '../books/store.js';
 import type { JournalEntry } from '../types/index.js';
 import { askSalesWithoutVat, closeSaleQuestionsHeld } from './sale-questions.js';
+import { bookPayoutReports } from './sales-report-import.js';
 import type { Workspace } from '../workspace/workspace.js';
 import type { BooksPort, IntakeNote, StepRun } from './pipeline.js';
 
@@ -115,6 +116,9 @@ export function classifyStep({ force = false } = {}): StepRun {
       const would = bookImportVatDeductions(structuredClone(books.read()), context);
       const deducted = would.booked + would.marked ? books.update((index) => bookImportVatDeductions(index, context)).booked : 0;
       if (deducted) log(`Customs   : ${deducted} import VAT deduction(s) booked from customs assessments.`);
+      // A provider's payout report read at the match step books its sales and fees onto the provider's clearing account (#203).
+      const reports = books.update((index) => bookPayoutReports(ws, index, fx));
+      if (reports) log(`Reports   : ${reports} payout report(s) of a payment provider booked onto its clearing account.`);
       // A probe the model gave no answer for (it failed) waits unjudged, and the next run asks again.
       const decided = new Set([...waiting].filter((ref) => judged.has(ref)));
       for (const ref of probe) {
@@ -146,7 +150,7 @@ export function classifyStep({ force = false } = {}): StepRun {
     };
     scratch.journalEntries.forEach((je) => applied.add(je));
     const todoRefs = new Set(todo.map((tx) => tx.ref));
-    const { classified, failed, asked, unasked, held: heldPayouts } = await classifyTransactions(scratch, todo, {
+    const { classified, failed, asked, unasked } = await classifyTransactions(scratch, todo, {
       ask,
       proposeAsked: false,
       fx,
@@ -170,17 +174,10 @@ export function classifyStep({ force = false } = {}): StepRun {
     if (booked.length) release?.(booked);
     // A payment a rule holds has its question under Aufgaben; the app's own VAT question about it would ask twice (r7h-27).
     closeSaleQuestionsHeld(ws, asked.map((a) => a.ref), scratch.config.closedThrough);
-    // A payout its orders hold is named in its own note with its reason, not counted as failed or asked by a rule.
-    const byOrders = new Set(heldPayouts.map((h) => h.ref));
-    const failedElse = failed.filter((f) => !byOrders.has(f.ref));
-    const askedElse = asked.filter((a) => !byOrders.has(a.ref));
-    const tx = new Map(todo.map((t) => [t.ref, t]));
-    const payouts = heldPayouts.flatMap((h) => { const t = tx.get(h.ref); return t ? [{ date: t.date, amount: t.amount, currency: t.currency, hold: h.hold }] : []; });
     const notes: IntakeNote[] = [
       ...(unasked.length ? [{ code: 'noModel' as const, waiting: unasked.length }] : []),
-      ...(failedElse.length ? [{ code: 'failed' as const, count: failedElse.length, detail: failedElse[0].reason.slice(0, 300) }] : []),
-      ...(payouts.length ? [{ code: 'payoutsHeld' as const, payouts }] : []),
-      ...(askedElse.length ? [{ code: 'asked' as const, count: askedElse.length }] : []),
+      ...(failed.length ? [{ code: 'failed' as const, count: failed.length, detail: failed[0].reason.slice(0, 300) }] : []),
+      ...(asked.length ? [{ code: 'asked' as const, count: asked.length }] : []),
     ];
     return done(notes);
   };

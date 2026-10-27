@@ -18,11 +18,10 @@
  * counterparty text as a key, src/knowledge/payer.ts: what an answered question keeps), text (a
  * pattern over the payment's text), direction (in, out), amount ({ over, under }, in the books'
  * currency) and account (the bank account that paid); all must hold. `then.private` (a percent)
- * books that share on the owner's account without VAT and the rest as the rule says. `then.fees`
- * ({ account, vat }) books a card terminal's or payment provider's payout as what it is: the gross
- * sales on `account` with `vat` and the provider's fees on fees.account with fees.vat, the figures
- * read from the payout report linked to it (src/booking/classify.ts payoutLines). A rule whose `when` and
- * `then` are sentences is a note for
+ * books that share on the owner's account without VAT and the rest as the rule says. A payment
+ * provider's payout takes no rule: code books it from the provider's clearing account, and the sales
+ * come from its sales report (src/booking/providers.ts, #203); `then.fees`, which split a payout into
+ * sales and fees before, is refused. A rule whose `when` and `then` are sentences is a note for
  * the AI and people: it loads and shows, but nothing carries it out, so a new one is refused when
  * it is kept (src/saving/rules.ts).
  */
@@ -49,11 +48,9 @@ export interface RuleWhen {
  * A booking a rule makes or proposes; `vat` null: no VAT code (a private share, a transfer).
  * `private`: this percent of the payment is the owner's, on the owner's account without VAT; the
  * rest goes on `account` with `vat` («das Natel ist zur Hälfte privat»: private 50).
- * `fees`: the payment is a payout of sales less a provider's fees («bei SumUp immer so»): the sales
- * on `account` with `vat`, the fees on fees.account with fees.vat, as the payout report states them.
  * `tags`: the reporting dimensions every line it books carries ({ projekt: "alpha" }, #127).
  */
-export interface RuleBooking { account: string; vat: string | null; private?: number; fees?: { account: string; vat: string }; tags?: Tags }
+export interface RuleBooking { account: string; vat: string | null; private?: number; tags?: Tags }
 
 export type RuleThen =
   | { kind: 'book'; booking: RuleBooking }
@@ -109,6 +106,8 @@ export function parseRule(raw: Record<string, unknown>, facts: RuleFacts, inBusi
   const t = raw.then as Record<string, unknown>;
   for (const k of Object.keys(w)) if (!WHEN_KEYS.has(k)) return no({ code: 'field', params: { field: `when.${k}` } });
   for (const k of Object.keys(t)) if (!THEN_KEYS.has(k)) return no({ code: 'field', params: { field: `then.${k}` } });
+  // A payout's split into sales and fees is the provider's clearing account now (#203): the rule that said it is refused, saying where it went.
+  if (t.fees !== undefined) return no({ code: 'fees' });
 
   const when: RuleWhen = {};
   if (w.counterparty !== undefined) {
@@ -180,19 +179,6 @@ export function parseRule(raw: Record<string, unknown>, facts: RuleFacts, inBusi
     const share = typeof t.private === 'number' ? t.private : Number(String(t.private).replace(/\s*%$/, ''));
     if (!booking || !Number.isFinite(share) || share <= 0 || share >= 100) return no({ code: 'share', params: { share: String(t.private) } });
     booking.private = share;
-  }
-  if (t.fees !== undefined) {
-    // A payout's split: the sales and the fees of one payout, never with a private share, never only proposed.
-    if (!booking || booking.private || t.ask !== undefined || !isMap(t.fees)) return no({ code: 'fees' });
-    const v = text(t.fees.vat);
-    const refused = code(v);
-    if (refused) return no(refused);
-    const account = text(t.fees.account);
-    if (!account || !facts.account(account)) return no({ code: 'account', params: { account: String(t.fees.account ?? '') } });
-    if (!chart().isPlaced(account)) return no({ code: 'unplaced', params: { account, classes: chart().placedClasses } });
-    const vat = onAccount(v!, account);
-    if ('refusal' in vat) return no(vat.refusal);
-    booking.fees = { account, vat: vat.code };
   }
   if (t.tags !== undefined) {
     // Tags ride on the booking the rule makes or proposes: without one there is nothing to carry them.
@@ -290,7 +276,6 @@ export interface RuleWordVars {
   'rules.say.book': { account: string; vat: string };
   'rules.say.bookNoVat': { account: string };
   'rules.say.private': { percent: string };
-  'rules.say.fees': { account: string; vat: string };
   'rules.say.ask': { question: string };
   'rules.say.tags': { tags: string };
   'rules.say.askWith': { question: string; booking: string };
@@ -320,7 +305,6 @@ const accountWords = (n: string, names: RuleNames) => { const name = names.accou
 export function bookingWords(b: RuleBooking, names: RuleNames, w: RuleWords): string {
   const main = b.vat ? w('rules.say.book', { account: accountWords(b.account, names), vat: b.vat }) : w('rules.say.bookNoVat', { account: accountWords(b.account, names) });
   const tags = b.tags ? w('rules.say.tags', { tags: Object.entries(b.tags).map(([d, v]) => names.tag?.(d, v) ?? `${d}: ${v}`).join(', ') }) : '';
-  if (b.fees) return `${main}${w('rules.say.fees', { account: accountWords(b.fees.account, names), vat: b.fees.vat })}${tags}`;
   return `${b.private ? `${main}${w('rules.say.private', { percent: String(b.private) })}` : main}${tags}`;
 }
 

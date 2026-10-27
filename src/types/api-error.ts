@@ -160,6 +160,12 @@ export type ApiRefusal =
   | { code: 'unknownVatCode'; params: { code: string } }
   /** A code the firm's form does not take (src/accounting/vat-codes.ts formTakes): none on a firm not registered, no input-tax code on the net tax rate method. */
   | { code: 'codeNotTaken'; params: { code: string; method: 'none' | 'net-rate' } }
+  /** A payment provider's clearing account that is no balance-sheet account (src/intake/sales-report-import.ts setProviderAccount). */
+  | { code: 'clearingNotBalance'; params: { account: string } }
+  /** A provider's cut-over day outside the open period: `from` is its first day. */
+  | { code: 'sinceNotOpen'; params: { since: string; from: string } }
+  /** A clearing account another provider's file names already (`other`: its name): each provider's check needs its own. */
+  | { code: 'clearingTaken'; params: { account: string; other: string } }
   /** A rule made by hand in Firma › Regeln that the app cannot carry out (src/booking/rules.ts parseRule). */
   | { code: 'rule'; params: { refusal: RuleRefusal } }
   | { code: 'noDescription' }
