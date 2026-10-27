@@ -28,6 +28,8 @@ export interface CamtStatement {
   currency: string;
   /** Acct/Svcr/FinInstnId/Nm: the bank that keeps the account, as it names itself. */
   bankName?: string;
+  /** Acct/Svcr/FinInstnId/BICFI (BIC in older versions): the bank's identifier code. */
+  bic?: string;
   /** Acct/Ownr/Nm: the account holder, as the bank names them. */
   ownerName?: string;
   /** Stmt/FrToDt: the days the bank says the statement covers (r9k-10); absent when the bank leaves it out. */
@@ -60,11 +62,18 @@ export function readCamt(xml: string): { message: CamtMessage; statements: CamtS
       ...(node.Acct?.Id?.IBAN ? { iban: String(node.Acct.Id.IBAN) } : {}),
       currency: String(node.Acct?.Ccy ?? node.Ntry?.[0]?.Amt?.['@_Ccy'] ?? node.Bal?.[0]?.Amt?.['@_Ccy'] ?? 'CHF'),
       ...(node.Acct?.Svcr?.FinInstnId?.Nm ? { bankName: String(node.Acct.Svcr.FinInstnId.Nm).trim() } : {}),
+      ...(bicOf(node.Acct?.Svcr?.FinInstnId) ? { bic: bicOf(node.Acct?.Svcr?.FinInstnId) } : {}),
       ...(node.Acct?.Ownr?.Nm ? { ownerName: String(node.Acct.Ownr.Nm).trim() } : {}),
       ...(periodOf(node.FrToDt) ? { period: periodOf(node.FrToDt) } : {}),
       node,
     })),
   };
+}
+
+/** The servicer's BIC, when it is shaped as one (8 or 11 letters and digits). */
+function bicOf(fin: Node | undefined): string | undefined {
+  const bic = String(fin?.BICFI ?? fin?.BIC ?? '').replace(/\s+/g, '').toUpperCase();
+  return /^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/.test(bic) ? bic : undefined;
 }
 
 /** Stmt/FrToDt as two days, when both are there and in order. */

@@ -10,11 +10,12 @@ import { useState, useSyncExternalStore } from 'react';
 import { api, errorText } from '../lib/api.js';
 import { language, t, tWith } from '../i18n/index.js';
 import { addEach, dropStart, failedLine } from './drop-upload.js';
+import { needsYou, tabOf, type DropTab } from './drop-tabs.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { useAutomation } from '../automation/store.js';
 import { textIn } from '../../workflows/model.js';
 import type { Index } from '../../types/index.js';
-import type { DropRow, DropSession } from '../../types/drop.js';
+import type { CamtDetails, DropRow, DropSession } from '../../types/drop.js';
 import type { Location, Route } from './route.js';
 import { at } from '../areas/receipts/view.js';
 import { setBankDraft } from '../areas/company/bank-draft.js';
@@ -60,12 +61,6 @@ export function closeDrop(): void {
   set({ open: false, session: undefined, adding: 0, note: undefined, error: undefined });
 }
 
-type Tab = 'all' | 'statements' | 'receipts' | 'unclear' | 'out';
-const tabOf = (r: DropRow): Tab => (r.state === 'duplicate' || r.state === 'quarantine' || r.state === 'refused' || r.state === 'undone' ? 'out'
-  : r.state === 'locked' || r.state === 'unclear' || !r.kind ? 'unclear'
-  : r.kind === 'camt' || r.kind === 'statement-pdf' ? 'statements' : 'receipts');
-const needsYou = (r: DropRow) => r.state === 'locked' || r.state === 'unclear';
-
 const act = (session: DropSession, r: DropRow, action: Parameters<typeof api.dropRow>[2]) =>
   api.dropRow(session.id, r.key, action).then((next) => set({ session: next }), (e) => set({ error: errorText(e) }));
 
@@ -93,6 +88,9 @@ function metaOf(r: DropRow): string {
  */
 function ChooseAccount({ r, session, go }: { r: DropRow; session: DropSession; go(route: Route): void }) {
   const choice = r.chooseAccount!;
+  const proposed = choice.accounts.find((a) => a.account === choice.proposed);
+  // The proposal (the account whose bank the file names, #208) comes first; the person still clicks it.
+  const accounts = proposed ? [proposed, ...choice.accounts.filter((a) => a !== proposed)] : choice.accounts;
   const [keep, setKeep] = useState(true);
   const [busy, setBusy] = useState(false);
   const pick = async (a: (typeof choice.accounts)[number]) => {
@@ -112,10 +110,13 @@ function ChooseAccount({ r, session, go }: { r: DropRow; session: DropSession; g
     <>
       <small>{choice.iban ? t('drop.whichAccountIban', { currency: choice.currency, iban: groupIban(choice.iban) }) : t('drop.whichAccount', { currency: choice.currency })}</small>
       <span className="dacts dchoose">
-        {choice.accounts.map((a) => (
-          <button key={a.account} type="button" className="btn" disabled={busy} onClick={() => void pick(a)}>{a.label} <span className="mono">{a.account}</span></button>
+        {accounts.map((a) => (
+          <button key={a.account} type="button" className={a === proposed ? 'btn primary' : 'btn'} data-testid={a === proposed ? 'drop-proposed' : undefined} disabled={busy} onClick={() => void pick(a)}>
+            {a === proposed ? <span className="dprop">{t('drop.proposal')}</span> : null}{a.label} <span className="mono">{a.account}</span>
+          </button>
         ))}
       </span>
+      {proposed ? <small>{t('drop.proposalWhy', { label: proposed.label })}</small> : null}
       {choice.iban ? <label className="dkeep"><input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} /> {t('drop.keepIban')}</label> : null}
       {r.unknownAccount ? (
         <span className="dacts">
@@ -192,44 +193,99 @@ function reportLine(s: NonNullable<DropRow['report']>): string {
   ].filter(Boolean).join(' · ');
 }
 
+/** A balance as the bank states it: amount and day. */
+const balanceText = (currency: string, b: { date: string; amount: number }) => t('drop.c.balance', { currency, amount: fmt(b.amount), date: formatDate(b.date) });
+
+/**
+ * What a camt.053 asking for its account says about itself (#208), folded under its row: enough to
+ * tell several dropped files apart. The movements are previewed, the first few, the rest counted.
+ */
+function CamtFacts({ d, r }: { d: CamtDetails; r: DropRow }) {
+  const bank = [d.bankName, d.bic].filter(Boolean).join(' · ');
+  const period = [d.period && t('drop.c.stated', { from: formatDate(d.period.from), to: formatDate(d.period.to) }), d.booked && t('drop.c.booked', { first: formatDate(d.booked.first), last: formatDate(d.booked.last) })].filter(Boolean);
+  return (
+    <dl className="ddet" data-testid="drop-camt-details">
+      <dt>{t('drop.c.bank')}</dt><dd>{bank || '–'}</dd>
+      <dt>{t('drop.c.account')}</dt><dd>{[d.iban && groupIban(d.iban), d.currency].filter(Boolean).join(' · ')}</dd>
+      {d.owner ? <><dt>{t('drop.c.owner')}</dt><dd>{d.owner}</dd></> : null}
+      <dt>{t('drop.c.period')}</dt><dd>{period.length ? period.map((x) => <span key={x}>{x}</span>) : '–'}</dd>
+      <dt>{t('drop.c.movements')}</dt><dd>{d.movements}</dd>
+      {d.opening ? <><dt>{t('drop.c.opening')}</dt><dd>{balanceText(d.currency, d.opening)}</dd></> : null}
+      {d.closing ? <><dt>{t('drop.c.closing')}</dt><dd>{balanceText(d.currency, d.closing)}</dd></> : null}
+      <dt>{t('drop.c.file')}</dt><dd className="mono">{r.from ? `${r.from} › ${r.name}` : r.name}</dd>
+      {d.preview.length ? (
+        <>
+          <dt>{t('drop.c.preview')}</dt>
+          <dd className="dmoves">
+            {d.preview.map((m, i) => (
+              <span key={i} className="dmove">
+                <span className="mono">{formatDate(m.date)}</span>
+                <span className={`mono ${m.amount < 0 ? 'neg' : ''}`}>{fmt(m.amount)}</span>
+                <span>{[m.counterparty, m.text].filter(Boolean).join(' · ') || '–'}</span>
+              </span>
+            ))}
+            {d.more ? <span className="m">{t('drop.c.more', { n: d.more, shown: d.preview.length })}</span> : null}
+          </dd>
+        </>
+      ) : null}
+    </dl>
+  );
+}
+
 /** A row with an open question, or one not taken: what it is and its small action. */
 function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(route: Route): void }) {
   const [password, setPassword] = useState('');
+  const [open, setOpen] = useState(false);
   const asked = r.state === 'duplicate' && r.reason === 'possible-duplicate';
-  const chip = r.state === 'take' ? t('drop.taking') : asked ? t('drop.state.possible') : t(`drop.state.${r.state}` as 'drop.state.duplicate');
+  const chip = r.state === 'take' ? t('drop.taking') : asked ? t('drop.state.possible') : r.readAs ? t('drop.state.read') : t(`drop.state.${r.state}` as 'drop.state.duplicate');
+  const details = r.state === 'asks' ? r.details : undefined;
   return (
-    <div className={`droprow s-${r.state}`} data-testid="drop-row" data-file={r.name} data-state={r.state}>
-      <div className="dn">
-        <b className="mono">{r.name}</b>
-        <small>{metaOf(r)}</small>
+    <>
+      <div className={`droprow s-${r.state}${details && open ? ' open' : ''}`} data-testid="drop-row" data-file={r.name} data-state={r.state}>
+        <div className="dn">
+          <b className="mono" title={r.name}>{r.name}</b>
+          <small>{metaOf(r)}</small>
+          {details ? (
+            <button type="button" className="linkbtn dfold" aria-expanded={open} aria-label={t('drop.c.toggleOf', { name: r.name })} data-testid="drop-details" onClick={() => setOpen(!open)}>
+              {t('drop.c.toggle')}
+              <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+            </button>
+          ) : null}
+        </div>
+        <div className="dgo">
+          <span className={`dchip c-${r.state}`}>{chip}</span>
+          {r.askProvider ? <ProviderAccount key={r.askProvider.missing} r={r} session={session} /> : r.payoutUnseen ? <PayoutUnseenRow r={r} session={session} go={go} /> : r.chooseAccount ? <ChooseAccount r={r} session={session} go={go} /> : r.unknownAccount ? (
+            <>
+              <small>{t(r.unknownAccount.owner ? 'drop.unknownAccountOf' : r.unknownAccount.bankName ? 'drop.unknownAccountAt' : 'drop.unknownAccount', { iban: groupIban(r.unknownAccount.iban), currency: r.unknownAccount.currency, bank: r.unknownAccount.bankName ?? '', owner: r.unknownAccount.owner ?? '' })}</small>
+              <button type="button" className="linkbtn" onClick={() => { setBankDraft(r.unknownAccount!); go({ area: 'company', section: 'banks' }); }}>{t('drop.firmAccount')}</button>
+              <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'private' })}>{t('drop.privateAccount')}</button>
+            </>
+          ) : r.readAs ? (
+            <>
+              <small>{t('drop.readAs', { file: r.readAs.file })}</small>
+              {r.readAs.ref ? <button type="button" className="linkbtn" data-testid="drop-open-statement" onClick={() => go({ area: 'bank', payment: r.readAs!.ref })}>{t('drop.openStatement')}</button> : null}
+            </>
+          ) : r.message ? <small>{r.message}</small> : r.reason ? <small>{t(`drop.reason.${r.reason}` as 'drop.reason.duplicate')}</small> : null}
+          {asked ? (
+            <span className="dacts">
+              <button type="button" className="linkbtn" data-testid="drop-twin-same" onClick={() => void act(session, r, { kind: 'twin', answer: 'same' })}>{t('drop.twin.same')}</button>
+              <button type="button" className="linkbtn" data-testid="drop-twin-distinct" onClick={() => void act(session, r, { kind: 'twin', answer: 'distinct' })}>{t('drop.twin.distinct')}</button>
+            </span>
+          ) : r.kind === 'statement-pdf' && r.reason === 'not-imported' && !r.chooseAccount && !r.unknownAccount
+            ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'as', as: 'receipt' })}>{t('drop.isReceipt')}</button>
+          : (r.state === 'duplicate' || r.state === 'quarantine') && r.kind !== 'camt' && r.kind !== 'statement-pdf' && r.reason !== 'unreadable'
+            ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'take' })}>{r.state === 'quarantine' && r.reason === 'not-receipt' ? t('drop.isReceipt') : t('drop.takeAnyway')}</button> : null}
+          {r.state === 'locked' ? (
+            <form className="dpw" onSubmit={(e) => { e.preventDefault(); if (password) void act(session, r, { kind: 'unlock', password }).then(() => setPassword('')); }}>
+              <input type="password" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('drop.password')} aria-label={t('drop.password')} />
+              <button type="submit" className="btn" disabled={!password}>{t('drop.unlock')}</button>
+            </form>
+          ) : null}
+        </div>
+        {r.state === 'take' || r.state === 'undone' ? <span /> : <button type="button" className="dx" aria-label={t('drop.remove', { name: r.name })} onClick={() => void act(session, r, { kind: 'remove' })}>×</button>}
       </div>
-      <div className="dgo">
-        <span className={`dchip c-${r.state}`}>{chip}</span>
-        {r.askProvider ? <ProviderAccount key={r.askProvider.missing} r={r} session={session} /> : r.payoutUnseen ? <PayoutUnseenRow r={r} session={session} go={go} /> : r.chooseAccount ? <ChooseAccount r={r} session={session} go={go} /> : r.unknownAccount ? (
-          <>
-            <small>{t(r.unknownAccount.owner ? 'drop.unknownAccountOf' : r.unknownAccount.bankName ? 'drop.unknownAccountAt' : 'drop.unknownAccount', { iban: groupIban(r.unknownAccount.iban), currency: r.unknownAccount.currency, bank: r.unknownAccount.bankName ?? '', owner: r.unknownAccount.owner ?? '' })}</small>
-            <button type="button" className="linkbtn" onClick={() => { setBankDraft(r.unknownAccount!); go({ area: 'company', section: 'banks' }); }}>{t('drop.firmAccount')}</button>
-            <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'private' })}>{t('drop.privateAccount')}</button>
-          </>
-        ) : r.message ? <small>{r.message}</small> : r.reason ? <small>{t(`drop.reason.${r.reason}` as 'drop.reason.duplicate')}</small> : null}
-        {asked ? (
-          <span className="dacts">
-            <button type="button" className="linkbtn" data-testid="drop-twin-same" onClick={() => void act(session, r, { kind: 'twin', answer: 'same' })}>{t('drop.twin.same')}</button>
-            <button type="button" className="linkbtn" data-testid="drop-twin-distinct" onClick={() => void act(session, r, { kind: 'twin', answer: 'distinct' })}>{t('drop.twin.distinct')}</button>
-          </span>
-        ) : r.kind === 'statement-pdf' && r.reason === 'not-imported' && !r.chooseAccount && !r.unknownAccount
-          ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'as', as: 'receipt' })}>{t('drop.isReceipt')}</button>
-        : (r.state === 'duplicate' || r.state === 'quarantine') && r.kind !== 'camt' && r.kind !== 'statement-pdf' && r.reason !== 'unreadable'
-          ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'take' })}>{r.state === 'quarantine' && r.reason === 'not-receipt' ? t('drop.isReceipt') : t('drop.takeAnyway')}</button> : null}
-        {r.state === 'locked' ? (
-          <form className="dpw" onSubmit={(e) => { e.preventDefault(); if (password) void act(session, r, { kind: 'unlock', password }).then(() => setPassword('')); }}>
-            <input type="password" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('drop.password')} aria-label={t('drop.password')} />
-            <button type="submit" className="btn" disabled={!password}>{t('drop.unlock')}</button>
-          </form>
-        ) : null}
-      </div>
-      {r.state === 'take' || r.state === 'undone' ? <span /> : <button type="button" className="dx" aria-label={t('drop.remove', { name: r.name })} onClick={() => void act(session, r, { kind: 'remove' })}>×</button>}
-    </div>
+      {details && open ? <CamtFacts d={details} r={r} /> : null}
+    </>
   );
 }
 
@@ -345,10 +401,10 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
 export function DropDialog({ onGo, books, refresh }: { onGo(loc: Location): void; books: Index; refresh(): void }) {
   const s = useDrop();
   const { view } = useAutomation();
-  const [tab, setTab] = useState<Tab>('all');
+  const [tab, setTab] = useState<DropTab>('all');
   if (!s.open) return null;
   const rows = s.session?.rows ?? [];
-  const tabs: Tab[] = ['all', 'statements', 'receipts', ...(rows.some((r) => tabOf(r) === 'unclear') ? ['unclear' as const] : []), 'out'];
+  const tabs: DropTab[] = ['all', 'statements', 'receipts', ...(rows.some((r) => tabOf(r) === 'unclear') ? ['unclear' as const] : []), 'out'];
   const shown = tab === 'all' ? rows : rows.filter((r) => tabOf(r) === tab);
   const taken = rows.filter((r) => r.state === 'taken');
   const states = taken.map((r) => fileState(r, books, view));

@@ -19,10 +19,11 @@ export type DropHow = 'structure' | 'hint';
 /**
  * Where a file stands: to be taken (a moment, while it is written), taken (into the inbox, or read
  * as a bank statement), taken back («Rückgängig»), not taken as a duplicate, quarantined (not a
- * receipt), refused (not stored at all), waiting for a password, or waiting for the person to say
- * what it is.
+ * receipt), refused (not stored at all), waiting for a password, waiting for the person to say
+ * what it is, or a statement asking its question (which account it is of, or whether an account the
+ * books lack is the firm's or private: `chooseAccount`, `unknownAccount`), kept until answered.
  */
-export type DropState = 'take' | 'taken' | 'undone' | 'duplicate' | 'quarantine' | 'refused' | 'locked' | 'unclear';
+export type DropState = 'take' | 'taken' | 'undone' | 'duplicate' | 'quarantine' | 'refused' | 'locked' | 'unclear' | 'asks';
 
 export interface DropRow {
   /** The row's own key in the session. */
@@ -46,6 +47,10 @@ export interface DropRow {
   unknownAccount?: UnknownAccount;
   /** A statement several accounts of its currency could take (none names an IBAN): the UI asks which (#25). */
   chooseAccount?: AccountChoice;
+  /** A camt.053 that asks for its account: what the file says about itself (#208). */
+  details?: CamtDetails;
+  /** A statement read in already (`statement-read`): its file under bank-statements/ and its first payment, which opens it. */
+  readAs?: { file: string; ref?: string };
   /** The bank account (ledger number) the person said the statement is of. */
   account?: string;
   /** Taken: the run that takes it up. */
@@ -77,6 +82,31 @@ export interface DropRow {
 }
 
 export interface StatementFacts { iban?: string; from?: string; to?: string; entries?: number }
+
+/**
+ * What a camt.053 says about itself, shown folded under a row that asks for its account (#208), so
+ * the person can tell several dropped files apart: the bank as it names itself (or its BIC), the
+ * account's currency, IBAN and owner, the period the bank states and the days it booked, the
+ * number of movements, the opening and closing balance with their days, and the first movements
+ * (`preview`, at most CAMT_PREVIEW of src/providers/camt053/details.ts; `more` says how many are not shown).
+ */
+export interface CamtDetails {
+  bankName?: string;
+  bic?: string;
+  currency: string;
+  iban?: string;
+  owner?: string;
+  period?: { from: string; to: string };
+  booked?: { first: string; last: string };
+  movements: number;
+  opening?: { date: string; amount: number };
+  closing?: { date: string; amount: number };
+  preview: CamtMovement[];
+  more: number;
+}
+
+/** One movement of a statement's preview: signed (money out negative), in the account's currency. */
+export interface CamtMovement { date: string; amount: number; counterparty?: string; text?: string }
 
 /** Why a provider's payout waits for the person, as its line in Kontoauszüge says it (GET /api/transactions/:ref/payout-wait, src/booking/providers.ts PayoutWait). */
 export interface PayoutWaitView { why: 'clearing' | 'since' | 'gap'; provider: string; file: string; since?: string }
@@ -127,6 +157,8 @@ export type DropReason =
   | 'as-zip' | 'as-pdf' | 'bank-csv' | 'office' | 'not-statement' | 'damaged' | 'too-deep' | 'too-big' | 'wrong-password' | 'not-imported'
   /** A PDF header on bytes no PDF reader opens (damaged, cut short): quarantine, nothing will ever read it (r8k-9). */
   | 'unreadable'
+  /** A statement whose file is read in already (`readAs`): its movements are in the books. */
+  | 'statement-read'
   /** A statement of an account the owner said is private: set aside, not read into the books. */
   | 'private'
   /** A provider's report its file cannot book yet: the row asks for the missing account (`askProvider`). */

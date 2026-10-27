@@ -15,7 +15,8 @@ import { statementPdf } from '../../books/statement-facts.js';
 import { compactIban, readBankStatements } from '../../workspace/bank-statements.js';
 import { periodLock } from '../../books/store.js';
 import { openYear } from '../../books/years.js';
-import { assignUniqueRefs, readCamt, transactionsOf } from '../../providers/camt053/camt053.js';
+import { assignUniqueRefs, readCamt, transactionsOf, type CamtStatement } from '../../providers/camt053/camt053.js';
+import { proposedAccount } from '../../accounting/statement-bank.js';
 import { refDates } from '../books.js';
 import { parseStatementBalances } from '../../providers/camt053/statement-balances.js';
 import { extractStatementBalances } from '../../providers/statement-pdf/statement-pdf-balances.js';
@@ -71,6 +72,18 @@ function wordsOf(p: StatementProblem): string {
 const refusedAccount = (p: StatementProblem, unknown?: UnknownAccount, bankName?: string, owner?: string): RequestError =>
   new RequestError(400, wordsOf(p), { code: 'statement', params: { reason: 'account', detail: wordsOf(p), problem: p, ...(unknown ? { unknown: { ...unknown, ...(bankName ? { bankName } : {}), ...(owner ? { owner } : {}) } } : {}) } });
 
+/**
+ * A camt.053 asking which account it is of names the one whose bank it names, when exactly one
+ * does (#208): by the IBANs the manifest and the folder's statements already show under each label.
+ */
+function withProposal(p: StatementProblem, statement: CamtStatement): StatementProblem {
+  if (p.kind !== 'whichAccount') return p;
+  const read = readBankStatements(WS).flatMap((f) => (f.status === 'read' && f.statement.iban ? [{ bank: f.account.bank, iban: f.statement.iban }] : []));
+  const known = (bank: string) => [...WS.bankAccounts.filter((a) => a.bank === bank && a.iban).map((a) => a.iban!), ...read.filter((x) => x.bank === bank).map((x) => x.iban)];
+  const proposed = proposedAccount(p, statement, known);
+  return proposed ? { ...p, proposed } : p;
+}
+
 function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Placed {
   let camt: ReturnType<typeof readCamt>;
   try { camt = readCamt(body.toString('utf8')); } catch { return refuse(400, 'Keine camt.053-Datei.', 'notCamt'); }
@@ -87,7 +100,7 @@ function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Pl
     const known = !!named && WS.bankAccounts.some((a) => a.iban === named && a.currency === statement.currency);
     const chosen = hint?.statements && !known && hint.currency === statement.currency && (!hint.iban || !named || hint.iban === named) ? { ...hint, statements: hint.statements } : undefined;
     const match = chosen ? { account: chosen } : accountForStatement(WS.bankAccounts, { iban: statement.iban, currency: statement.currency, folder: hint?.bank ?? '' });
-    if ('problem' in match) throw refusedAccount(match.refusal, match.unknown, statement.bankName, statement.ownerName);
+    if ('problem' in match) throw refusedAccount(withProposal(match.refusal, statement), match.unknown, statement.bankName, statement.ownerName);
     const found = match.account;
     if (account && account.bank !== found.bank) return refuse(400, 'Die Datei hält Auszüge zweier Banken.', 'account');
     account = found;
@@ -204,7 +217,7 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
   if (existsSync(path)) {
     const same = readFileSync(path).equals(body);
     throw new RequestError(409, same ? `${placed.filename} ist schon eingelesen.` : `Datei ${placed.filename} existiert bereits.`,
-      same ? { code: 'statement', params: { reason: 'duplicate', detail: placed.filename } } : { code: 'fileExists', params: { filename: placed.filename } });
+      same ? { code: 'statement', params: { reason: 'duplicate', detail: mine } } : { code: 'fileExists', params: { filename: placed.filename } });
   }
   mkdirSync(dir, { recursive: true });
   writeFileSync(path, body);
