@@ -99,6 +99,11 @@ test('the drop row of a camt.053 asking for its account carries its details and 
     s = await post(`/api/drop/${s.id}/rows/${one.key}`, { kind: 'account', account: '1020' });
     const taken = s.rows.find((r) => r.key === one.key)!;
     assert.deepEqual([taken.state, taken.details, taken.chooseAccount], ['taken', undefined, undefined], 'the person confirmed: read in, the question gone');
+    // Kontoauszüge › Dateien asks the file read in for its own words, and the day it was read in.
+    const own = await (await api.fetch(`/api/statements/${taken.statement!.file.split('/').map(encodeURIComponent).join('/')}/details`)).json() as { details?: { bankName?: string; owner?: string; movements: number; preview: unknown[] }; importedAt?: string };
+    assert.deepEqual([own.details?.bankName, own.details?.owner, own.details?.movements, own.details?.preview], ['Raiffeisenbank Beispiel', 'Muster Coiffeur', 7, []]);
+    assert.match(own.importedAt ?? '', /^\d{4}-\d{2}-\d{2}$/);
+    assert.equal((await api.fetch('/api/statements/Raiffeisen/none.xml/details')).status, 404);
     await rest();
   } finally {
     await api.stop();

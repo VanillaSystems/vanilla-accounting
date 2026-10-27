@@ -15,7 +15,8 @@ import { fmt, formatDate } from '../lib/utils.js';
 import { useAutomation } from '../automation/store.js';
 import { textIn } from '../../workflows/model.js';
 import type { Index } from '../../types/index.js';
-import type { DropRow, DropSession, StatementDetails } from '../../types/drop.js';
+import type { DropRow, DropSession } from '../../types/drop.js';
+import { FileDetails } from './FileDetails.js';
 import type { Location, Route } from './route.js';
 import { at } from '../areas/receipts/view.js';
 import { setBankDraft } from '../areas/company/bank-draft.js';
@@ -193,45 +194,6 @@ function reportLine(s: NonNullable<DropRow['report']>): string {
   ].filter(Boolean).join(' · ');
 }
 
-/** A balance as the bank states it: amount and day. */
-const balanceText = (currency: string, b: { date: string; amount: number }) => t('drop.c.balance', { currency, amount: fmt(b.amount), date: formatDate(b.date) });
-
-/**
- * What a statement file asking for its account says about itself (#208), folded under its row: enough to
- * tell several dropped files apart. The movements are previewed, the first few, the rest counted.
- */
-function FileDetails({ d, r }: { d: StatementDetails; r: DropRow }) {
-  const bank = [d.bankName, d.bic].filter(Boolean).join(' · ');
-  const period = [d.period && t('drop.c.stated', { from: formatDate(d.period.from), to: formatDate(d.period.to) }), d.booked && t('drop.c.booked', { first: formatDate(d.booked.first), last: formatDate(d.booked.last) })].filter(Boolean);
-  return (
-    <dl className="ddet" data-testid="drop-camt-details">
-      <dt>{t('drop.c.bank')}</dt><dd>{bank || '–'}</dd>
-      <dt>{t('drop.c.account')}</dt><dd>{[d.iban && groupIban(d.iban), d.currency].filter(Boolean).join(' · ')}</dd>
-      {d.owner ? <><dt>{t('drop.c.owner')}</dt><dd>{d.owner}</dd></> : null}
-      <dt>{t('drop.c.period')}</dt><dd>{period.length ? period.map((x) => <span key={x}>{x}</span>) : '–'}</dd>
-      <dt>{t('drop.c.movements')}</dt><dd>{d.movements}</dd>
-      {d.opening ? <><dt>{t('drop.c.opening')}</dt><dd>{balanceText(d.currency, d.opening)}</dd></> : null}
-      {d.closing ? <><dt>{t('drop.c.closing')}</dt><dd>{balanceText(d.currency, d.closing)}</dd></> : null}
-      <dt>{t('drop.c.file')}</dt><dd className="mono">{r.from ? `${r.from} › ${r.name}` : r.name}</dd>
-      {d.preview.length ? (
-        <>
-          <dt>{t('drop.c.preview')}</dt>
-          <dd className="dmoves">
-            {d.preview.map((m, i) => (
-              <span key={i} className="dmove">
-                <span className="mono">{formatDate(m.date)}</span>
-                <span className={`mono ${m.amount < 0 ? 'neg' : ''}`}>{fmt(m.amount)}</span>
-                <span>{[m.counterparty, m.text].filter(Boolean).join(' · ') || '–'}</span>
-              </span>
-            ))}
-            {d.more ? <span className="m">{t('drop.c.more', { n: d.more, shown: d.preview.length })}</span> : null}
-          </dd>
-        </>
-      ) : null}
-    </dl>
-  );
-}
-
 /** A row with an open question, or one not taken: what it is and its small action. */
 function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(route: Route): void }) {
   const [password, setPassword] = useState('');
@@ -284,7 +246,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
         </div>
         {r.state === 'take' || r.state === 'undone' ? <span /> : <button type="button" className="dx" aria-label={t('drop.remove', { name: r.name })} onClick={() => void act(session, r, { kind: 'remove' })}>×</button>}
       </div>
-      {details && open ? <FileDetails d={details} r={r} /> : null}
+      {details && open ? <FileDetails d={details} name={r.from ? `${r.from} › ${r.name}` : r.name} /> : null}
     </>
   );
 }

@@ -150,9 +150,11 @@ main { width: calc(100% - var(--abw) - var(--aiw)); }
 .droprow .dfold[aria-expanded="true"] svg { transform: rotate(180deg); }
 .ddet .dmoves { flex-direction: column; flex-wrap: nowrap; gap: 3px; }
 .ddet .dmove { display: grid; grid-template-columns: 76px 84px minmax(0, 1fr); gap: 10px; }
-.ddet .dmove .mono { font-family: "Geist Mono"; font-size: 11.5px; }
+.ddet .dmove .mono { font-size: 11.5px; }
 .ddet .dmove .mono + .mono { text-align: right; }
 .ddet .dmove .neg { color: var(--neg); }
+a.dmove { color: inherit; text-decoration: none; border-radius: 4px; }
+a.dmove:hover, a.dmove:focus-visible { background: var(--hover); outline: none; }
 .ddet .dmove span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dpw { display: flex; gap: 6px; }
 .dpw input { width: 150px; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
@@ -173,7 +175,7 @@ main { width: calc(100% - var(--abw) - var(--aiw)); }
 .ddet { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 5px 14px; margin: 0; padding: 2px 4px 12px; border-bottom: 1px solid var(--line); font-size: 12px; }
 .ddet dt { color: var(--muted); }
 .ddet dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 3px 14px; color: var(--ink-2); }
-.ddet dd.mono { font-family: "Geist Mono"; font-size: 11.5px; overflow-wrap: anywhere; }
+.ddet dd.mono { font-size: 11.5px; overflow-wrap: anywhere; }
 .ddet .linkbtn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; text-align: left; }
 .droprow .dacts { display: inline-flex; gap: 12px; }
 .droprow .dacts .linkbtn:disabled { color: var(--faint); cursor: default; }

@@ -27,6 +27,7 @@ import { at } from '../receipts/view.js';
 import { FindPair, madeBy } from '../receipts/FindPair.js';
 import { StatementPaper, type Mark } from './StatementPaper.js';
 import { Parts } from './Parts.js';
+import { FileDetail } from './FileDetail.js';
 import { baseCurrency } from '../../../engines/index.js';
 import { localToday } from '../../../accounting/periods.js';
 import { linkedOf, receiptState, type Linked } from '../../../accounting/receipt-due.js';
@@ -52,6 +53,10 @@ export const statementName = (s: Statement) =>
 export function Detail(props: Props) {
   const ws = useWorkspace();
   const b = bankFor(props.books, ws?.bankAccounts);
+  if (props.route.file) {
+    const f = b.fileByKey(props.route.file);
+    return f ? <FileDetail key={f.key} f={f} nav={props.nav} /> : <div className="detail-empty"><div>{!ws ? '' : t('bank.fileGone', { key: props.route.file })}</div></div>;
+  }
   const s = props.route.statement ? b.byKey(props.route.statement) : undefined;
   if (!s) return <div className="detail-empty"><div>{!ws ? '' : props.route.statement ? t('bank.statementGone', { key: props.route.statement }) : t('bank.noneChosen')}</div></div>;
   return <StatementDetail key={s.key} {...props} b={b} s={s} />;

@@ -6,7 +6,7 @@
  * inside a filed quarter is refused before anything is written.
  */
 import express, { Router } from 'express';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 import { accountForStatement, type StatementProblem } from '../../accounting/bank-accounts.js';
 import { legOf, madeByHand } from '../../workspace/money-accounts.js';
@@ -17,6 +17,7 @@ import { periodLock } from '../../books/store.js';
 import { openYear } from '../../books/years.js';
 import { assignUniqueRefs, readCamt, transactionsOf, type CamtStatement } from '../../providers/camt053/camt053.js';
 import { proposedAccount } from '../../accounting/statement-bank.js';
+import { statementDetails } from '../../providers/statement-files.js';
 import { refDates } from '../books.js';
 import { parseStatementBalances } from '../../providers/camt053/statement-balances.js';
 import { extractStatementBalances } from '../../providers/statement-pdf/statement-pdf-balances.js';
@@ -330,6 +331,19 @@ export function removeStatement(file: string, refs?: readonly string[]): Stateme
 
 /** What a removal took with the statement's payments: the undo puts them back once the file is read again (r10h-3). */
 export interface StatementRemoved { ok: true; removed: { entries: JournalEntry[]; mappings: Mapping[] } }
+
+/**
+ * What a statement file read in says about itself (Kontoauszüge › Dateien, #208): its own words
+ * (the bank, BIC, owner, the balances as stated) and the day it was read in (the file's time).
+ */
+router.get('/api/statements/:bank/:filename/details', (req, res) => {
+  const file = `${req.params.bank}/${basename(req.params.filename)}`;
+  const path = findFile(WS.paths, 'statements', file);
+  if (!path) throw new RequestError(404, `Den Auszug ${file} gibt es nicht.`, { code: 'gone', params: { what: 'file' } });
+  const details = statementDetails(readFileSync(path), basename(path));
+  const importedAt = statSync(path).mtime.toISOString().slice(0, 10);
+  res.json({ ...(details ? { details: { ...details, preview: [], more: 0 } } : {}), importedAt });
+});
 
 router.delete('/api/statements/:bank/:filename', (req, res) => {
   res.json(removeStatement(`${req.params.bank}/${basename(req.params.filename)}`));
