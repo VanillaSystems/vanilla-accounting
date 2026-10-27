@@ -6,7 +6,11 @@
  *
  *   each order      clearing / revenue   gross, the domestic sale code for a delivery into the VAT
  *                                        territory, the export code for one abroad
- *   each refund     revenue / clearing   its amount, the sale's code with the minus
+ *                   clearing / revenue   an export whose tax column shows a foreign VAT (EU OSS):
+ *                   clearing / foreign   the net at the export code, the tax onto the company's
+ *                                        account for foreign tax without a code (#206)
+ *   each refund     revenue / clearing   its amount, the sale's code with the minus (an export with
+ *                                        foreign VAT split as its sale: the tax share off the account)
  *   each fee        fees / clearing      the provider's fee, the company's fee code
  *
  * The payout itself is booked bank / clearing without VAT (src/booking/classify.ts), so the clearing
@@ -27,8 +31,10 @@
  * a payout before `since` booked otherwise (as sales) is dated after it and so may have paid it. A domestic order is
  * booked at the rate its tax column shows (the normal one, a reduced one the firm's form takes); one
  * without tax, or at no rate the firm books, is a new case for the person, never a sale without
- * output tax (processes/suppliers/shopify.yaml sv-delivery-decides); a foreign tax on an export is no
- * reason to hold it (sv-eu-vat), Swiss VAT shown on one is (it is owed as shown). An order the
+ * output tax (processes/suppliers/shopify.yaml sv-delivery-decides); a foreign tax on an export goes
+ * onto the company's account for it (`provider.foreignTax`), the net is the export; without that
+ * account the order waits (`foreignTax`), never booked gross at the export code (#206). Swiss VAT
+ * shown on an export holds it (it is owed as shown). An order the
  * provider did not collect (its `gateway` none of the provider's `gateways`) is counted, never booked
  * onto the clearing account. A refund without its own day waits for the person: it is never dated on
  * the order's day. What the books carry already from elsewhere holds
@@ -215,6 +221,8 @@ export interface ReportContext {
   clearing: string;
   revenue: string;
   fees?: { account: string; vat?: string };
+  /** The company's account for a foreign VAT an export order shows (ProviderFacts.foreignTax); absent: such an order waits. */
+  foreignTax?: string;
   /** The report's receipt: every entry names it. */
   receipt: string;
   /** The books' currency; another one converts at `rate`, the official daily sell rate of the entry's day (ADR 0001). */
@@ -261,17 +269,20 @@ export interface ReportContext {
 export interface ReportTexts {
   sale(order: string, country: string | undefined): string;
   refund(order: string): string;
+  /** The line of an export's foreign tax (its sale's or its refund's). */
+  foreignTax(order: string, country: string | undefined): string;
   fee(key: string): string;
-  reason(kind: 'domestic' | 'abroad' | 'none' | 'refund' | 'fee', country: string | undefined): string;
+  reason(kind: 'domestic' | 'abroad' | 'foreignTax' | 'none' | 'refund' | 'fee', country: string | undefined): string;
 }
 
 /**
  * Why an order (or a fee) is not booked by code: its tax column disagrees with its delivery (`noTax`,
- * `rate`, Swiss VAT on an export `abroadTax`), no country, its figures in the books differ, no rate of
+ * `rate`, Swiss VAT on an export `abroadTax`), a foreign VAT on an export without the company's
+ * account for it (`foreignTax`), no country, its figures in the books differ, no rate of
  * its day, a refund without a day of its own (`refundDate`), or the clearing account carries a sale
  * from elsewhere that may be it (`legacy`).
  */
-export interface ReportHold { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'legacy' }
+export interface ReportHold { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'legacy' }
 
 /** What a report booked and left: counts, the orders held with why, and the rows dated in a filed period or before the books. */
 export interface ReportOutcome {
@@ -349,17 +360,18 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
       origin: 'classify', receipts: [ctx.receipt], reason, by: { kind: 'code', check: 'payoutReport' },
     };
   };
-  /** An entry the books carry under `ref`: the same amount is known, another one is changed. */
-  const known = (ref: string, amount: number): 'same' | 'changed' | undefined => {
+  /** The entries the books carry under `ref`: the same lines (their amounts, one each) are known, other ones changed. */
+  const known = (ref: string, amounts: readonly number[]): 'same' | 'changed' | undefined => {
     const had = byRef.get(ref);
     if (!had) return undefined;
-    return had.some((e) => toRappen(e.amount) === toRappen(amount)) ? 'same' : 'changed';
+    const key = (xs: readonly number[]) => xs.map(toRappen).sort((a, b) => a - b).join(',');
+    return key(had.map((e) => e.amount)) === key(amounts) ? 'same' : 'changed';
   };
   const same = (ref: string) => { out.known++; out.knownRefs.push(ref); };
   const push = (ref: string, e: JournalEntry) => {
     out.entries.push(e);
     if (!out.links.some((m) => m.transactionRef === ref)) out.links.push({ transactionRef: ref, receiptId: ctx.receipt, by: 'rule', rule: REPORT_LINK_RULE });
-    byRef.set(ref, [e]);
+    (byRef.get(ref) ?? byRef.set(ref, []).get(ref)!).push(e);
   };
 
   if (read.kind === 'fees') {
@@ -369,7 +381,7 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
       const key = f.order ?? f.date;
       // One order's fees in two currencies are two fees, each with its own ref.
       const ref = feeRef(ctx.provider.id, f.currency && f.currency !== ctx.base ? `${key}-${f.currency}` : key);
-      const k = known(ref, f.fee);
+      const k = known(ref, [f.fee]);
       if (k === 'same') { same(ref); continue; }
       if (k === 'changed') { out.held.push({ order: key, why: 'changed' }); continue; }
       const where = dated(f.date);
@@ -384,9 +396,13 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
   }
 
   const taxDay = (o: SaleRow) => (ctx.agreed ? o.ordered ?? o.date : o.date);
-  // What the books carry is matched by the day the provider collected the order: the day a payout pays it from.
-  const orderLegacy = legacyRows(read.rows.filter((o) => collectedBy(o, ctx.gateways)).map((o) => ({ key: o.order, day: o.date, amount: o.gross })), ctx.legacy, ctx.since, (e) => e.accountCredit === ctx.clearing);
   const rates: SaleCode[] = ctx.codes ? [{ code: ctx.codes.domestic, rate: ctx.codes.rate }, ...(ctx.codes.reduced ?? [])] : [];
+  /** The foreign VAT an export shows (its tax column above zero at no Swiss rate): it is no revenue of the export (#206); else 0. */
+  const foreignTaxOf = (o: SaleRow): number => (ctx.codes && o.shipTo && !ctx.territory.includes(o.shipTo) && o.tax !== undefined && o.tax > 0 && !rates.some((r) => showsRate(o.gross, o.tax!, r.rate)) ? o.tax : 0);
+  /** What an order puts on the revenue account: its gross less a foreign VAT. */
+  const netOf = (o: SaleRow): number => fromRappen(toRappen(o.gross) - toRappen(foreignTaxOf(o)));
+  // What the books carry is matched by the day the provider collected the order: the day a payout pays it from; its revenue, as a sale onto the clearing account from elsewhere books it.
+  const orderLegacy = legacyRows(read.rows.filter((o) => collectedBy(o, ctx.gateways)).map((o) => ({ key: o.order, day: o.date, amount: netOf(o) })), ctx.legacy, ctx.since, (e) => e.accountCredit === ctx.clearing);
   for (const o of read.rows) {
     // Its refund goes with it: an order the provider did not collect is refunded otherwise too.
     if (!collectedBy(o, ctx.gateways)) {
@@ -410,12 +426,19 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
       } else {
         // Swiss VAT shown on an export is owed as shown (Art. 27 MWSTG): the person decides, never V0 over it.
         if (o.tax !== undefined && o.tax > 0 && rates.some((r) => showsRate(o.gross, o.tax!, r.rate))) { out.held.push({ order: o.order, why: 'abroadTax' }); continue; }
+        // A foreign VAT (EU OSS) is owed abroad, no export turnover: without the company's account for it the order waits, never gross at V0.
+        if (foreignTaxOf(o) > 0) {
+          if (toRappen(o.tax!) >= toRappen(o.gross)) { out.held.push({ order: o.order, why: 'rate' }); continue; }
+          if (!ctx.foreignTax) { out.held.push({ order: o.order, why: 'foreignTax' }); continue; }
+        }
         code = ctx.codes.abroad;
         kind = 'abroad';
       }
     }
+    const tax = foreignTaxOf(o);
+    const net = netOf(o);
     const sale = saleRef(ctx.provider.id, o.order);
-    const k = known(sale, o.gross);
+    const k = known(sale, tax ? [net, tax] : [o.gross]);
     if (k === 'changed') { out.held.push({ order: o.order, why: 'changed' }); continue; }
     if (k === 'same') same(sale);
     else {
@@ -423,16 +446,20 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
       // A sale of a filed period is the person's to correct; its refund paid in the open period is still booked below.
       if (where) count(where, o.order);
       else {
-        if (carried(orderLegacy({ key: o.order, day: o.date, amount: o.gross }), o.order)) continue;
-        const e = make(sale, day, o.currency, { accountDebit: ctx.clearing, accountCredit: ctx.revenue, amount: o.gross, vatCode: code, description: ctx.texts.sale(o.order, o.shipTo) }, ctx.texts.reason(kind, o.shipTo));
+        if (carried(orderLegacy({ key: o.order, day: o.date, amount: net }), o.order)) continue;
+        const e = make(sale, day, o.currency, { accountDebit: ctx.clearing, accountCredit: ctx.revenue, amount: net, vatCode: code, description: ctx.texts.sale(o.order, o.shipTo) }, ctx.texts.reason(kind, o.shipTo));
         if (e === 'noRate') { out.held.push({ order: o.order, why: 'noRate' }); continue; }
         push(sale, e);
+        if (tax) push(sale, make(sale, day, o.currency, { accountDebit: ctx.clearing, accountCredit: ctx.foreignTax!, amount: tax, description: ctx.texts.foreignTax(o.order, o.shipTo) }, ctx.texts.reason('foreignTax', o.shipTo)) as JournalEntry);
         out.orders++;
       }
     }
     if (o.refunded > 0) {
       const ref = refundRef(ctx.provider.id, o.order);
-      const kr = known(ref, o.refunded);
+      // An export's refund gives back its foreign VAT in the sale's share, to the cent; the rest is the export's.
+      const backTax = tax ? Math.min(toRappen(o.refunded), Math.round((toRappen(o.refunded) * toRappen(tax)) / toRappen(o.gross))) : 0;
+      const backNet = fromRappen(toRappen(o.refunded) - backTax);
+      const kr = known(ref, [backNet, ...(backTax ? [fromRappen(backTax)] : [])].filter((x) => x !== 0));
       if (kr === 'same') { same(ref); continue; }
       if (kr === 'changed') { out.held.push({ order: o.order, why: 'changed' }); continue; }
       // A refund is the day the money went back: without that day, or one before the sale, it waits, never on the order's day.
@@ -442,9 +469,10 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
       if (where) { count(where, o.order); continue; }
       // Held whenever its order is carried, also by an entry that books the order's sale: that entry books no refund.
       if (orderLegacy({ key: o.order, day: when, amount: o.refunded })) { out.held.push({ order: o.order, why: 'legacy' }); continue; }
-      const e = make(ref, when, o.currency, { accountDebit: ctx.revenue, accountCredit: ctx.clearing, amount: o.refunded, vatCode: code ? `${ctx.codes!.negative}${code}` : undefined, description: ctx.texts.refund(o.order) }, ctx.texts.reason('refund', o.shipTo));
+      const e = make(ref, when, o.currency, { accountDebit: ctx.revenue, accountCredit: ctx.clearing, amount: backNet, vatCode: code ? `${ctx.codes!.negative}${code}` : undefined, description: ctx.texts.refund(o.order) }, ctx.texts.reason('refund', o.shipTo));
       if (e === 'noRate') { out.held.push({ order: o.order, why: 'noRate' }); continue; }
-      push(ref, e);
+      if (backNet !== 0) push(ref, e);
+      if (backTax) push(ref, make(ref, when, o.currency, { accountDebit: ctx.foreignTax!, accountCredit: ctx.clearing, amount: fromRappen(backTax), description: ctx.texts.foreignTax(o.order, o.shipTo) }, ctx.texts.reason('foreignTax', o.shipTo)) as JournalEntry);
       out.refunds++;
     }
   }

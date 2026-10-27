@@ -88,7 +88,7 @@ const ctxOf = (over: Partial<ReportContext> = {}): ReportContext => ({
   rate: (c, d) => fx.daily(c, d), codes: { domestic: 'V81', rate: 8.1, reduced: [{ code: 'V26', rate: 2.6 }], abroad: 'V0', negative: '-' }, territory: ['CH', 'LI'], agreed: false,
   gateways: SHOPIFY.provider.gateways, since: '2026-07-01', from: '2026-07-01',
   isClosed: (d) => d <= '2026-06-30', beforeBooks: () => false, newId: (() => { let i = 0; return () => `e${++i}`; })(),
-  texts: { sale: (o, c) => `Shopify, Bestellung #${o}, ${c}`, refund: (o) => `Shopify, Rückerstattung #${o}`, fee: (k) => `Shopify, Gebühren ${k}`, reason: (k) => k },
+  texts: { sale: (o, c) => `Shopify, Bestellung #${o}, ${c}`, refund: (o) => `Shopify, Rückerstattung #${o}`, foreignTax: (o, c) => `Shopify, ausländische MWST #${o}, ${c}`, fee: (k) => `Shopify, Gebühren ${k}`, reason: (k) => k },
   ...over,
 });
 
@@ -275,17 +275,112 @@ test('5. a refund on its own day: booked when the provider\'s file names the col
   assert.deepEqual(out.held, [{ order: '1007', why: 'refundDate' }], 'a refund dated before its sale waits');
 });
 
-test('10. a domestic order at the reduced rate its tax shows books the reduced code; a mixed basket waits; Swiss VAT on an export waits, a foreign tax does not', () => {
+test('10. a domestic order at the reduced rate its tax shows books the reduced code; a mixed basket waits; Swiss VAT on an export waits; a foreign tax goes onto its own account', () => {
   const csv = [head,
     row('3001', '2026-07-03', '102.60', '2.60'),
     row('3002', '2026-07-03', '110.70', '5.30'),
     row('3003', '2026-07-03', '108.10', '8.10', 'DE'),
     row('3004', '2026-07-03', '119.00', '19.00', 'DE'),
   ].join('\n');
-  const out = bookReport({ journalEntries: [] }, salesOf(csv), ctxOf());
-  assert.deepEqual(lines(out.entries), [['SR-shopify-3001', '2026-07-03', '1093', '3200', 102.6, 'V26'], ['SR-shopify-3004', '2026-07-03', '1093', '3200', 119, 'V0']]);
+  const out = bookReport({ journalEntries: [] }, salesOf(csv), ctxOf({ foreignTax: '2201' }));
+  assert.deepEqual(lines(out.entries), [
+    ['SR-shopify-3001', '2026-07-03', '1093', '3200', 102.6, 'V26'],
+    ['SR-shopify-3004', '2026-07-03', '1093', '3200', 100, 'V0'],
+    ['SR-shopify-3004', '2026-07-03', '1093', '2201', 19, ''],
+  ]);
   assert.deepEqual(out.held, [{ order: '3002', why: 'rate' }, { order: '3003', why: 'abroadTax' }]);
-  assert.deepEqual(bookReport({ journalEntries: [] }, salesOf(csv), ctxOf({ codes: { domestic: 'V81', rate: 8.1, abroad: 'V0', negative: '-' } })).held.map((h) => h.order), ['3001', '3002', '3003'], 'a firm whose form takes no reduced code holds it');
+  assert.deepEqual(bookReport({ journalEntries: [] }, salesOf(csv), ctxOf({ codes: { domestic: 'V81', rate: 8.1, abroad: 'V0', negative: '-' }, foreignTax: '2201' })).held.map((h) => h.order), ['3001', '3002', '3003'], 'a firm whose form takes no reduced code holds it');
+});
+
+// ─── Foreign VAT on an export (#206) ─────────────────────────────────────────
+
+/** Exports with a refund column of their own day: Germany 19 %, France 20 %, a Swiss rate abroad, no tax, Switzerland. */
+const EXPORTS_FACTS = { ...SHOPIFY.provider, reports: { sales: { ...SHOPIFY.provider.reports.sales, refundedAt: ['Refunded at'] } } };
+const exportRow = (order: string, total: string, tax: string, country: string, refunded = '0.00', refundedAt = '') => `#${order},2026-07-10 10:00:00 +0200,CHF,${tax},${total},${country},${refunded},2026-07-10 09:00:00 +0200,Shopify Payments,${refundedAt}`;
+const EXPORTS = [`${head},Refunded at`,
+  exportRow('4001', '119.00', '19.00', 'DE'),
+  exportRow('4002', '240.00', '40.00', 'FR', '30.00', '2026-07-20 08:00:00 +0200'),
+  exportRow('4003', '108.10', '8.10', 'AT'),
+  exportRow('4004', '75.00', '0.00', 'US'),
+  exportRow('4005', '64.00', '', 'JP'),
+  exportRow('4006', '54.05', '4.05', 'CH'),
+].join('\n');
+const exportsOf = () => salesOf(EXPORTS, EXPORTS_FACTS);
+
+test('#206 an export with a foreign VAT: the net at the export code onto revenue, the tax onto the company\'s account without a code; a refund split in the sale\'s share, the minus on the net', () => {
+  const out = bookReport({ journalEntries: [] }, exportsOf(), ctxOf({ foreignTax: '2201' }));
+  assert.deepEqual(lines(out.entries), [
+    ['SR-shopify-4001', '2026-07-10', '1093', '3200', 100, 'V0'],
+    ['SR-shopify-4001', '2026-07-10', '1093', '2201', 19, ''],
+    ['SR-shopify-4002', '2026-07-10', '1093', '3200', 200, 'V0'],
+    ['SR-shopify-4002', '2026-07-10', '1093', '2201', 40, ''],
+    // 30.00 × 40 / 240 = 5.00 back off the foreign tax, 25.00 off the export.
+    ['SR-shopify-4002-refund', '2026-07-20', '3200', '1093', 25, '-V0'],
+    ['SR-shopify-4002-refund', '2026-07-20', '2201', '1093', 5, ''],
+    ['SR-shopify-4004', '2026-07-10', '1093', '3200', 75, 'V0'],
+    ['SR-shopify-4005', '2026-07-10', '1093', '3200', 64, 'V0'],
+    ['SR-shopify-4006', '2026-07-10', '1093', '3200', 54.05, 'V81'],
+  ]);
+  assert.deepEqual(out.held, [{ order: '4003', why: 'abroadTax' }], 'Swiss VAT on an export still waits as it did');
+  assert.deepEqual([out.orders, out.refunds], [5, 1]);
+  assert.equal(out.links.filter((m) => m.transactionRef === 'SR-shopify-4001').length, 1, 'one link per sale, however many lines');
+  // The clearing account takes the whole gross less the refund: what the provider pays out.
+  assert.equal(balanceOf(out.entries, '1093', '2026-07-01'), 119 + 240 - 30 + 75 + 64 + 54.05);
+  assert.equal(balanceOf(out.entries, '2201', '2026-07-01'), -(19 + 40 - 5), 'the foreign tax owed abroad, none of it revenue');
+});
+
+test('#206 a refund of an export with a foreign VAT is split to the cent, the rest on the export', () => {
+  const csv = [`${head},Refunded at`, exportRow('4101', '119.00', '19.00', 'DE', '30.00', '2026-07-21 08:00:00 +0200')].join('\n');
+  const out = bookReport({ journalEntries: [] }, salesOf(csv, EXPORTS_FACTS), ctxOf({ foreignTax: '2201' }));
+  // 30.00 × 19 / 119 = 4.789… → 4.79; 30.00 − 4.79 = 25.21.
+  assert.deepEqual(lines(out.entries.filter((e) => e.transactionRef.endsWith('-refund'))), [
+    ['SR-shopify-4101-refund', '2026-07-21', '3200', '1093', 25.21, '-V0'],
+    ['SR-shopify-4101-refund', '2026-07-21', '2201', '1093', 4.79, ''],
+  ]);
+});
+
+test('#206 without the company\'s account for foreign tax an export with a foreign VAT waits, its refund with it; never booked gross at the export code', () => {
+  const out = bookReport({ journalEntries: [] }, exportsOf(), ctxOf());
+  assert.deepEqual(out.held, [{ order: '4001', why: 'foreignTax' }, { order: '4002', why: 'foreignTax' }, { order: '4003', why: 'abroadTax' }]);
+  assert.ok(!out.entries.some((e) => /SR-shopify-400[123]/.test(e.transactionRef)), 'nothing of them booked');
+  assert.deepEqual(lines(out.entries.filter((e) => /400[45]/.test(e.transactionRef))), [
+    ['SR-shopify-4004', '2026-07-10', '1093', '3200', 75, 'V0'],
+    ['SR-shopify-4005', '2026-07-10', '1093', '3200', 64, 'V0'],
+  ], 'an export without tax, or without a tax column, stays V0 on the gross');
+});
+
+test('#206 a report dropped again books each export once; one whose figures changed waits as changed; an export booked gross at V0 before waits too', () => {
+  const ctx = () => ctxOf({ foreignTax: '2201' });
+  const first = bookReport({ journalEntries: [] }, exportsOf(), ctx());
+  const again = bookReport({ journalEntries: first.entries }, exportsOf(), ctx());
+  assert.deepEqual(again.entries, [], 'read twice, nothing booked again');
+  assert.deepEqual(again.knownRefs, ['SR-shopify-4001', 'SR-shopify-4002', 'SR-shopify-4002-refund', 'SR-shopify-4004', 'SR-shopify-4005', 'SR-shopify-4006']);
+  assert.deepEqual(again.held, [{ order: '4003', why: 'abroadTax' }]);
+  const edited = EXPORTS.replace('#4001,2026-07-10 10:00:00 +0200,CHF,19.00,119.00', '#4001,2026-07-10 10:00:00 +0200,CHF,20.00,120.00');
+  const changed = bookReport({ journalEntries: first.entries }, salesOf(edited, EXPORTS_FACTS), ctx());
+  assert.deepEqual(changed.held.filter((h) => h.order === '4001'), [{ order: '4001', why: 'changed' }]);
+  assert.ok(!changed.entries.some((e) => e.transactionRef === 'SR-shopify-4001'));
+  const gross = [E('old', 'SR-shopify-4001', '2026-07-10', '1093', '3200', 119, 'V0')];
+  assert.deepEqual(bookReport({ journalEntries: gross }, exportsOf(), ctx()).held.filter((h) => h.order === '4001'), [{ order: '4001', why: 'changed' }], 'the gross the app booked before this fix is named, never booked over');
+});
+
+test('#206 the company\'s file names the account for foreign tax; the app\'s file may not; a dropped report books with it and refuses an account the chart lacks', () => {
+  assert.equal((parseProvider({ foreignTax: '2201' }) as { provider: { foreignTax?: string } }).provider.foreignTax, '2201');
+  assert.match((parseProvider({ foreignTax: '' }) as { problem: string }).problem, /provider\.foreignTax must be an account number/);
+  assert.match((mergeProvider({ foreignTax: '2201' }, undefined, true) as { problem: string }).problem, /one company's chart/);
+  const csv = Buffer.from([head, row('4201', '2026-12-03', '119.00', '19.00', 'DE')].join('\n'));
+  const ws = shop(`${FILE()}  foreignTax: "2201"\n`);
+  const done = importSalesReport(ws, csv, 'orders_export.csv');
+  assert.ok(done.ok && done.summary.orders === 1);
+  assert.deepEqual(lines(loadBooks(ws).journalEntries.filter((e) => e.transactionRef === 'SR-shopify-4201')).sort((x, y) => String(x[3]).localeCompare(String(y[3]))), [
+    ['SR-shopify-4201', '2026-12-03', '1093', '2201', 19, ''],
+    ['SR-shopify-4201', '2026-12-03', '1093', '3200', 100, 'V0'],
+  ]);
+  const without = shop();
+  assert.ok(importSalesReport(without, csv, 'orders_export.csv').ok);
+  assert.deepEqual(heldOf(without), [{ order: '4201', why: 'foreignTax' }], 'kept on the report\'s receipt with why');
+  const unknown = importSalesReport(shop(`${FILE()}  foreignTax: "2299"\n`), csv, 'orders_export.csv');
+  assert.ok(!unknown.ok && /2299/.test(unknown.message));
 });
 
 test('10. a dropped report books the reduced rate with the firm\'s own reduced sale code', () => {

@@ -195,6 +195,7 @@ provider:
   since: 2026-10-01
   revenue: "3200"
   fees: { account: "6580", vat: I0 }
+  foreignTax: "2201"   # optional: where a foreign VAT on an export goes (EU OSS)
   account: "1020"   # optional: the bank account it pays into
 ```
 
@@ -233,7 +234,12 @@ provider:
   provider's; the others (PayPal, bank transfer, a gift card, a test gateway)
   are counted, never booked onto the clearing account. A domestic order without
   tax or at no rate the firm books, Swiss VAT on an export, and a refund without
-  its own day wait for the person. An order of a filed period is not booked; its
+  its own day wait for the person. An export whose tax column shows a foreign
+  VAT (EU OSS, 19 % to Germany) books two lines: the net (gross less the tax) at
+  V0 onto revenue, the tax onto the company's `foreignTax` account without a
+  code; its refund the same reversed, the tax in the sale's share to the cent.
+  Without `foreignTax` such an order waits («Konto dafür fehlt»), never booked
+  gross at V0 (#206). An order of a filed period is not booked; its
   refund paid in the open period is.
 - The report reaches back to `since` less the payout days (`payoutDays`, the
   company's file may set its own): a sale collected then may be paid out after

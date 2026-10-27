@@ -243,7 +243,9 @@ steps:
           Delivered abroad → export (V0; V0-E where the invoicing exemptions say so) with the country as the
           recorded reason, whatever foreign tax line the order shows (EU or UK VAT the platform charged the
           buyer): that tax is kept as a fact and named in the booking's reason, never a reason to hold. The whole
-          gross the buyer paid is the export's consideration, foreign tax included. Swiss tax on a delivery
+          gross the buyer paid is the export's consideration, foreign tax included; except a payment provider's
+          sales report, which books a foreign VAT the order shows onto the company's account for it and the net
+          as the export (sv-provider-report, issue #206). Swiss tax on a delivery
           abroad → new_case (tax invoiced is owed, Art. 27 Abs. 2)
         why: >
           an export of goods is exempt with the right to deduct (MWSTG Art. 23 Abs. 1 and 2 Ziff. 1); a foreign
@@ -257,7 +259,10 @@ steps:
         then: >
           in code (src/booking/sales-report.ts), by the columns the provider's file names: each order's gross onto the
           provider's clearing account against the revenue account, delivered in the VAT territory at the firm's sale
-          code, abroad at V0 whatever foreign tax it shows; a refund with the code's minus; each fee against the same
+          code, abroad at V0; an export whose tax column shows a foreign VAT (EU OSS) as two lines, the net at V0 onto
+          revenue and the tax onto the company's account for it (provider.foreignTax) without a code, waiting for the
+          person while the company's file names none (#206); a refund with the code's minus (an export's foreign tax
+          back in the sale's share); each fee against the same
           account at the company's fee code. The tax point is the day the provider collected the payment (cash basis),
           the order's day on the agreed basis. An order of a filed period is not booked (a correction is the
           person's); a domestic order whose tax column shows no tax or another rate waits for the person
