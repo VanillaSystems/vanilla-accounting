@@ -1,5 +1,5 @@
 import type { Found } from '../../intake/pairing.js';
-import type { TerminalCli, TerminalView } from '../../platform/terminal.js';
+import type { TerminalApp, TerminalCli, TerminalView } from '../../platform/terminal.js';
 import type { AiSetupView, KeySaved, Probation, SetupKey } from '../../platform/ai-setup.js';
 import type { StatementProblem } from '../../types/api-error.js';
 import type { MoneyRole } from '../../workspace/banks.js';
@@ -203,6 +203,7 @@ export function errorText(e: unknown): string {
     case 'aiRefused': return aiRefusedText(b.params);
     case 'terminalNotMac': return t('error.terminalNotMac');
     case 'terminalNoCli': return t('error.terminalNoCli');
+    case 'terminalAppMissing': return t('error.terminalAppMissing');
     case 'aiModelUnfit': return t('error.aiModelUnfit', b.params);
     case 'aiKeyRefused': return t('error.aiKeyRefused');
     case 'aiKeyWhere': return t('error.aiKeyWhere', b.params);
@@ -545,7 +546,10 @@ export const api = {
   terminal: () => request<TerminalView>('GET', '/api/terminal'),
   recheckCodexModels: () => request<AiView>('POST', '/api/ai/codex/models'),
   setAiCli: (change: { cli?: TerminalCli | null; askOther?: boolean }) => request<AiView>('PUT', '/api/ai/cli', change),
-  openTerminal: (text: string, cli?: TerminalCli) => request<{ cli: TerminalCli }>('POST', '/api/terminal/open', { request: text, ...(cli ? { cli } : {}) }),
+  setTerminalApp: (app: TerminalApp | null) => request<TerminalView>('PUT', '/api/terminal/app', { app }),
+  /** An empty `text`: the CLI starts with no prompt (issue #210). */
+  openTerminal: (text: string, choice: { cli?: TerminalCli; app?: TerminalApp } = {}) =>
+    request<{ cli: TerminalCli; app: TerminalApp }>('POST', '/api/terminal/open', { ...(text.trim() ? { request: text } : {}), ...choice }),
   cancelInvoice: (id: string, input: { date: string; reason: string; notify: boolean; to?: string; email?: MailMessage }) =>
     request<{ invoice: Issued; sent?: SentDocument }>('POST', `/api/invoices/${id}/cancel`, input),
   creditNote: (id: string, input: CreditInput) => request<Draft>('POST', `/api/invoices/${id}/credit-note`, input),

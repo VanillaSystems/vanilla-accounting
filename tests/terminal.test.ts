@@ -11,8 +11,9 @@ import { execFileSync, execFile } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chooseCli, copyCommand, shellQuote, type CliState } from '../src/platform/terminal.js';
-import { openInTerminal } from '../src/platform/terminal-open.js';
+import { TERMINAL_APPS, TERMINAL_APP_FACTS, chooseCli, chooseTerminalApp, copyCommand, launchScript, openArgs, shellQuote, type CliState, type TerminalApp } from '../src/platform/terminal.js';
+import { detectTerminalApps, openInTerminal } from '../src/platform/terminal-open.js';
+import { parseSettings, readSettings, writeCli, writeTerminalApp } from '../src/llm/settings.js';
 import { REPOSITORY_SECTION, SECTION_END, SECTION_START, TERMINAL_SECTION, ensureTerminalAgents, repositoryAgents, withAgentsImport, withRepositorySection, withSection } from '../src/workspace/terminal-agents.js';
 import { createWorkspace } from '../src/workspace/create.js';
 import { changesIn, terminalRequest, withoutChanges } from '../src/assistant/changes.js';
@@ -68,7 +69,7 @@ test('Terminal runs a script that reads the request from its file: the CLI gets 
   const out = join(temp('term-out-'), 'run');
   for (const request of NASTY) {
     const opened: string[][] = [];
-    const script = await openInTerminal(folder, join(BIN, 'claude'), request, (command, args, done) => {
+    const script = await openInTerminal({ folder, bin: join(BIN, 'claude'), request }, (command, args, done) => {
       opened.push([command, ...args]);
       execFile('/bin/sh', [args[2]], { env: { PATH: '/usr/bin:/bin', TERMINAL_STUB_OUT: out } }, (err) => done(err));
     });
@@ -78,6 +79,83 @@ test('Terminal runs a script that reads the request from its file: the CLI gets 
     assert.equal(realpathSync(readFileSync(`${out}.cwd`, 'utf8')), realpathSync(folder));
     assert.equal(existsSync(script), false, 'the script and the request file are removed');
     assert.equal(existsSync(join(folder, 'pwned')), false);
+  }
+});
+
+/** Runs `open`'s arguments as tests/support/terminal-bin/opener does, never a real terminal app. */
+const stubOpen = (opened: string[][], env: Record<string, string>) => (command: string, args: string[], done: (err: Error | null) => void) => {
+  opened.push([command, ...args]);
+  execFile(join(BIN, 'opener'), args, { env: { PATH: '/usr/bin:/bin', ...env } }, (err) => done(err));
+};
+
+test('an empty chat starts the CLI with no prompt: no request file, no argument, in the books folder (issue #210)', async () => {
+  const folder = join(temp('term-empty-'), `Firma's "Bücher"`);
+  mkdirSync(folder);
+  const out = join(temp('term-out-'), 'run');
+  for (const request of [undefined, '', '  \n ']) {
+    const opened: string[][] = [];
+    const script = await openInTerminal({ folder, bin: join(BIN, 'claude'), ...(request !== undefined ? { request } : {}) }, stubOpen(opened, { TERMINAL_STUB_OUT: out }));
+    assert.deepEqual(opened, [['open', '-a', 'Terminal', script]]);
+    assert.equal(readFileSync(`${out}.argc`, 'utf8'), '0', 'the CLI gets no prompt');
+    assert.equal(realpathSync(readFileSync(`${out}.cwd`, 'utf8')), realpathSync(folder));
+    assert.equal(existsSync(script), false);
+  }
+  const dir = temp('term-script-');
+  const bare = launchScript(folder, '/bin/claude', dir);
+  assert.doesNotMatch(bare, /request/, 'nothing read, nothing handed on');
+  assert.match(bare, /^exec '\/bin\/claude'$/m);
+  assert.match(launchScript(folder, '/bin/claude', dir, join(dir, 'request.txt')), /exec '\/bin\/claude' "\$request"/, 'with a request: as before');
+});
+
+test('each terminal app runs the script its own way, never by AppleScript; the CLI arrives with the request in the books folder', async () => {
+  assert.deepEqual(openArgs('terminal', '/s.command'), ['-a', 'Terminal', '/s.command']);
+  assert.deepEqual(openArgs('iterm', '/s.command'), ['-a', 'iTerm', '/s.command']);
+  assert.deepEqual(openArgs('warp', '/s.command'), ['-a', 'Warp', '/s.command']);
+  assert.deepEqual(openArgs('ghostty', '/s.command'), ['-na', 'Ghostty', '--args', '-e', '/s.command']);
+  const folder = join(temp('term-apps-'), 'Bücher & Co');
+  mkdirSync(folder);
+  const out = join(temp('term-out-'), 'run');
+  for (const app of TERMINAL_APPS) {
+    const opened: string[][] = [];
+    const script = await openInTerminal({ folder, bin: join(BIN, 'codex'), request: NASTY[0], app }, stubOpen(opened, { TERMINAL_STUB_OUT: out }));
+    assert.deepEqual(opened, [['open', ...openArgs(app, script)]], app);
+    assert.equal(readFileSync(`${out}.app`, 'utf8'), TERMINAL_APP_FACTS[app].bundle);
+    assert.deepEqual([readFileSync(`${out}.cli`, 'utf8'), readFileSync(`${out}.arg`, 'utf8'), readFileSync(`${out}.argc`, 'utf8')], ['codex', NASTY[0], '1'], app);
+    assert.equal(realpathSync(readFileSync(`${out}.cwd`, 'utf8')), realpathSync(folder));
+    assert.equal(existsSync(join(folder, 'pwned')), false);
+  }
+});
+
+test('which terminal app: one installed opens it without a question; several ask until one is chosen; a chosen one gone asks again', () => {
+  assert.deepEqual(chooseTerminalApp(['terminal'], undefined), { kind: 'open', app: 'terminal' }, 'Terminal alone: no question');
+  assert.deepEqual(chooseTerminalApp(['terminal'], 'iterm'), { kind: 'open', app: 'terminal' }, 'iTerm2 removed since: Terminal, no question');
+  assert.deepEqual(chooseTerminalApp(['terminal', 'iterm'], undefined), { kind: 'ask', apps: ['terminal', 'iterm'] });
+  assert.deepEqual(chooseTerminalApp(['terminal', 'iterm'], 'iterm'), { kind: 'open', app: 'iterm' });
+  assert.deepEqual(chooseTerminalApp(['terminal', 'iterm', 'ghostty'], 'warp'), { kind: 'ask', apps: ['terminal', 'iterm', 'ghostty'] });
+
+  const system = temp('term-apps-sys-');
+  const own = temp('term-apps-own-');
+  assert.deepEqual(detectTerminalApps([system, own]), ['terminal'], 'Terminal is part of macOS');
+  mkdirSync(join(own, 'Ghostty.app'));
+  mkdirSync(join(system, 'iTerm.app'));
+  mkdirSync(join(system, 'Warp')); // not an app bundle
+  assert.deepEqual(detectTerminalApps([system, own]), ['terminal', 'iterm', 'ghostty'], 'in the table\'s order, from any of the folders');
+});
+
+test('the terminal app is kept per machine beside the CLI choice, never in the workspace', () => {
+  assert.deepEqual(parseSettings({ steps: {}, cli: 'codex', terminalApp: 'iterm' }), { steps: {}, cli: 'codex', terminalApp: 'iterm' });
+  assert.deepEqual(parseSettings({ steps: {}, terminalApp: 'xterm' }), { steps: {} }, 'an app the table does not know is left out');
+  const file = join(temp('term-settings-'), 'ai.json');
+  const before = process.env.VANILLA_AI_SETTINGS;
+  process.env.VANILLA_AI_SETTINGS = file;
+  try {
+    writeCli({ cli: 'codex' });
+    assert.equal(writeTerminalApp('ghostty').terminalApp, 'ghostty');
+    writeCli({ askOther: true });
+    assert.deepEqual(readSettings(), { steps: {}, cli: 'codex', askOther: true, terminalApp: 'ghostty' }, 'the CLI choice and the app\'s live side by side');
+    assert.deepEqual(writeTerminalApp(null), { steps: {}, cli: 'codex', askOther: true });
+  } finally {
+    if (before === undefined) delete process.env.VANILLA_AI_SETTINGS; else process.env.VANILLA_AI_SETTINGS = before;
   }
 });
 
@@ -235,7 +313,7 @@ test('end to end: the sidebar offers the terminal, the button starts the CLI in 
   const api = await startApi('demo/vanilla-accounting', {
     PATH: `${join(REPO, 'tests/support/stub-bin')}:${process.env.PATH}`, CLAUDE_BIN: '', CLAUDE_STUB_TEXT: said,
     SHELL: join(BIN, 'shell'), TERMINAL_STUB_PATH: `${BIN}:/usr/bin:/bin`, VANILLA_TERMINAL_OPENER: join(BIN, 'opener'), TERMINAL_STUB_OUT: out,
-    CODEX_STUB_STATUS: '1', VANILLA_AI_SETTINGS: join(log, 'ai.json'),
+    CODEX_STUB_STATUS: '1', VANILLA_AI_SETTINGS: join(log, 'ai.json'), VANILLA_APPLICATIONS: join(log, 'Applications'),
   });
   cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
   t.after(async () => { await api.stop(); rmSync(log, { recursive: true, force: true }); });
@@ -252,10 +330,12 @@ test('end to end: the sidebar offers the terminal, the button starts the CLI in 
   const view = (await api.send('GET', '/api/terminal')).json;
   assert.deepEqual(view.clis, [{ cli: 'claude', installed: true, signedIn: true }, { cli: 'codex', installed: true, signedIn: false }], 'Claude answered the sidebar just now; Codex said it is signed out');
   assert.equal(realpathSync(String(view.folder)), realpathSync(api.root));
+  assert.deepEqual([view.apps, view.app], [['terminal'], undefined], 'Terminal alone: nothing to ask');
 
   rmSync(join(api.root, 'AGENTS.md'), { force: true });
   const opened = await api.send('POST', '/api/terminal/open', { request });
-  assert.deepEqual([opened.status, opened.json], [200, { cli: 'claude' }]);
+  assert.deepEqual([opened.status, opened.json], [200, { cli: 'claude', app: 'terminal' }]);
+  assert.equal(readFileSync(`${out}.app`, 'utf8'), 'Terminal');
   assert.deepEqual([readFileSync(`${out}.cli`, 'utf8'), readFileSync(`${out}.arg`, 'utf8'), readFileSync(`${out}.argc`, 'utf8')], ['claude', request, '1']);
   assert.equal(realpathSync(readFileSync(`${out}.cwd`, 'utf8')), realpathSync(api.root), 'in the books folder');
   assert.equal(existsSync(join(api.root, 'pwned')), false);
@@ -263,9 +343,31 @@ test('end to end: the sidebar offers the terminal, the button starts the CLI in 
 
   assert.equal((await api.send('PUT', '/api/ai/cli', { cli: 'codex' })).json.cli, 'codex');
   assert.equal((await api.send('GET', '/api/terminal')).json.preferred, 'codex');
-  assert.deepEqual((await api.send('POST', '/api/terminal/open', { request: 'Hallo' })).json, { cli: 'codex' }, 'chosen in Firma › KI');
-  assert.deepEqual((await api.send('POST', '/api/terminal/open', { request: 'Hallo', cli: 'claude' })).json, { cli: 'claude' }, '«oder mit Claude Code»');
-  assert.equal((await api.send('POST', '/api/terminal/open', {})).status, 400, 'no request, no terminal');
+  assert.deepEqual((await api.send('POST', '/api/terminal/open', { request: 'Hallo' })).json, { cli: 'codex', app: 'terminal' }, 'chosen in Firma › KI');
+  assert.deepEqual((await api.send('POST', '/api/terminal/open', { request: 'Hallo', cli: 'claude' })).json, { cli: 'claude', app: 'terminal' }, '«oder mit Claude Code»');
+
+  // An empty chat (issue #210): the CLI starts with no prompt, nothing the person did not write is sent.
+  assert.deepEqual((await api.send('POST', '/api/terminal/open', { cli: 'claude' })).json, { cli: 'claude', app: 'terminal' });
+  assert.deepEqual([readFileSync(`${out}.cli`, 'utf8'), readFileSync(`${out}.argc`, 'utf8')], ['claude', '0'], 'no request: no prompt');
+  assert.equal((await api.send('POST', '/api/terminal/open', { request: 42 })).status, 400);
+
+  // A second terminal app: the UI asks; the choice is kept on this Mac and used.
+  mkdirSync(join(log, 'Applications/iTerm.app'), { recursive: true });
+  const two = (await api.send('GET', '/api/terminal')).json;
+  assert.deepEqual([two.apps, two.app], [['terminal', 'iterm'], undefined]);
+  assert.deepEqual(chooseTerminalApp(two.apps as TerminalApp[], undefined), { kind: 'ask', apps: ['terminal', 'iterm'] }, 'the button asks');
+  assert.deepEqual((await api.send('POST', '/api/terminal/open', { request: 'Hallo', app: 'iterm' })).json, { cli: 'codex', app: 'iterm' }, 'picked without «merken»');
+  assert.equal(readFileSync(`${out}.app`, 'utf8'), 'iTerm');
+  assert.equal((await api.send('GET', '/api/terminal')).json.app, undefined, 'not kept');
+  assert.equal((await api.send('PUT', '/api/terminal/app', { app: 'iterm' })).json.app, 'iterm', '«merken»');
+  assert.equal(JSON.parse(readFileSync(join(log, 'ai.json'), 'utf8')).terminalApp, 'iterm', 'in the machine\'s settings, beside the CLI');
+  assert.deepEqual((await api.send('POST', '/api/terminal/open', { request: 'Hallo' })).json, { cli: 'codex', app: 'iterm' }, 'the kept one opens');
+  assert.equal(readFileSync(`${out}.app`, 'utf8'), 'iTerm');
+  const missing = await api.send('PUT', '/api/terminal/app', { app: 'ghostty' });
+  assert.deepEqual([missing.status, missing.json.code], [409, 'terminalAppMissing']);
+  assert.equal((await api.send('POST', '/api/terminal/open', { request: 'Hallo', app: 'warp' })).status, 409);
+  assert.equal((await api.send('PUT', '/api/terminal/app', { app: 'xterm' })).status, 400);
+  assert.equal((await api.send('PUT', '/api/terminal/app', { app: null })).json.app, undefined, '«Beim nächsten Mal fragen»');
 
   // A proposal the terminal AI wrote: held, booking by booking, until «Übernehmen».
   const books = () => api.send('GET', '/books.json').then((r) => r.json as unknown as Index);

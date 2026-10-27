@@ -9,7 +9,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { ProviderId } from './provider.js';
 import { isStepId, type StepId } from './steps.js';
-import { isTerminalCli, type TerminalCli } from '../platform/terminal.js';
+import { isTerminalApp, isTerminalCli, type TerminalApp, type TerminalCli } from '../platform/terminal.js';
 
 export interface StepChoice {
   provider: ProviderId;
@@ -26,6 +26,8 @@ export interface AiSettings {
   cli?: TerminalCli;
   /** When the CLI asked cannot answer (its limit, signed out, gone), ask the other one by itself; off unless set. */
   askOther?: true;
+  /** The terminal app «Im Terminal» opens (issue #210), kept per machine as `cli` is; absent: not chosen yet. */
+  terminalApp?: TerminalApp;
   /** «Ohne KI weitermachen»: the first run does not ask again on this Mac (docs/0.4.0/ai-setup.md, decision 6). */
   noAi?: true;
 }
@@ -48,9 +50,12 @@ export function parseSettings(raw: unknown): AiSettings {
     }
   }
   // Before #121 the choice was the terminal's alone, kept as `terminal`.
-  const top = raw as { cli?: unknown; terminal?: unknown; askOther?: unknown; noAi?: unknown } | null;
+  const top = raw as { cli?: unknown; terminal?: unknown; askOther?: unknown; terminalApp?: unknown; noAi?: unknown } | null;
   const cli = top?.cli ?? top?.terminal;
-  return { steps, ...(isTerminalCli(cli) ? { cli } : {}), ...(top?.askOther === true ? { askOther: true as const } : {}), ...(top?.noAi === true ? { noAi: true as const } : {}) };
+  return {
+    steps, ...(isTerminalCli(cli) ? { cli } : {}), ...(top?.askOther === true ? { askOther: true as const } : {}),
+    ...(isTerminalApp(top?.terminalApp) ? { terminalApp: top.terminalApp } : {}), ...(top?.noAi === true ? { noAi: true as const } : {}),
+  };
 }
 
 export function readSettings(): AiSettings {
@@ -76,6 +81,12 @@ export function writeCli(change: { cli?: TerminalCli | null; askOther?: boolean 
   const nextCli = change.cli === undefined ? cli : change.cli ?? undefined;
   const nextOther = change.askOther === undefined ? askOther : change.askOther || undefined;
   return write({ ...rest, ...(nextCli ? { cli: nextCli } : {}), ...(nextOther ? { askOther: true } : {}) });
+}
+
+/** The terminal app «Im Terminal» opens on this Mac, or none (null: asked again when several are installed). */
+export function writeTerminalApp(app: TerminalApp | null): AiSettings {
+  const { terminalApp: _was, ...rest } = readSettings();
+  return write(app ? { ...rest, terminalApp: app } : rest);
 }
 
 /** «Ohne KI weitermachen» kept on this Mac (true) or taken back (false). */
