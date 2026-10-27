@@ -42,12 +42,16 @@ provider:
       refunded: Refunded Amount
       currency: Currency
       gateway: Payment Method
-    # Shopify Admin › Finanzen › Shopify Payments › Transaktionen exportieren (CSV): one row per charge with the fee kept.
+    # Shopify Admin › Finanzen › Shopify Payments › Transaktionen exportieren (CSV): one row per transaction (a charge,
+    # a refund, …) with the fee kept. Its rows name the orders Shopify collected (a test-mode order has none), and its
+    # Refund rows the day each refund went back: the order export has no refund date (#214).
     fees:
       date: Transaction Date
       fee: Fee
       order: Order
       currency: Currency
+      type: Type
+      amount: Amount
   # The orders Shopify Payments collected: only they are paid out through Shopify. PayPal, manual
   # payment (bank transfer, cash on delivery), a gift card and the test gateway (Bogus) are not, and
   # are never booked onto the clearing account; the row counts them.
