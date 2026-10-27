@@ -6,7 +6,11 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { QuarantinedFile } from '../../../types/drop.js';
 import { api, errorText } from '../../lib/api.js';
 import type { InboxFile } from '../../../types/index.js';
-import { RECEIPT_FILTERS, type ReceiptFilter, type RouteOf } from '../../shell/route.js';
+import type { RouteOf } from '../../shell/route.js';
+import { knownChips, type Chip } from '../../shell/chips.js';
+import { ChipEmpty, ChipFilter, chipWords } from '../../shell/ChipFilter.js';
+import { usePartnerIndex } from '../partners/data.js';
+import { receiptFields } from './filter.js';
 import { ListHead } from '../../shell/ListHead.js';
 import { moveKey } from '../../shell/keyboard.js';
 import { useFx } from '../../hooks/use-fx.js';
@@ -16,7 +20,7 @@ import { fmt, formatAmount, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import { ICONS } from '../icons.js';
 import type { Area, AreaProps, LegendItem } from '../index.js';
-import { badgeCount, chfOf, groups, isOpen, suggestion, visible, type Candidate, type GroupKey, type ReceiptView } from './model.js';
+import { COUNTED, badgeCount, chfOf, groups, isOpen, statesOf, suggestion, visible, type Candidate, type GroupKey, type ReceiptView } from './model.js';
 import { pollInbox, setUi, toggleGroup, ui, useUi } from './state.js';
 import { at, ledgerFor, listed, noneText } from './view.js';
 import { Kbd, accept, runAct, type Act } from './commands.js';
@@ -32,7 +36,7 @@ import { baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'receipts'>>;
 
-const FILTER_LABEL = { zugeordnet: 'receipts.filterLinked', offen: 'receipts.filterOpen', ohneDatum: 'receipts.filterNoDate' } as const;
+const COUNT_LABEL = { linked: 'receipts.filterLinked', open: 'receipts.filterOpen', noDate: 'receipts.filterNoDate' } as const;
 
 
 /** No receipt in the books and none on its way: the page shows the ways in instead of a list. */
@@ -48,14 +52,22 @@ function List(props: Props) {
   const l = ledgerFor(books);
   const toChf = useMemo(() => chfOf(rates), [rates]);
   const accounts = useWorkspace()?.bankAccounts;
-  const { rows, counts, hidden } = useMemo(() => visible(l, period, query.filter, query.q, accounts ?? []), [l, period, query.filter, query.q, accounts]);
+  const partners = usePartnerIndex();
+  const fields = useMemo(() => receiptFields(l, partners, chipWords), [l, partners]);
+  const chips = useMemo(() => knownChips(query.chips ?? [], fields), [query.chips, fields]);
+  const setChips = (next: Chip[]) => nav.setQuery({ chips: next.length ? next : undefined });
+  const states = statesOf(chips);
+  const { rows, counts, hidden, candidates, pool } = useMemo(() => visible(l, period, chips, query.q, accounts ?? [], fields), [l, period, chips, query.q, accounts, fields]);
   const suggestions = useMemo(() => {
     const out = new Map<string, Candidate>();
     for (const v of rows) { const c = suggestion(v, l, toChf); if (c) out.set(v.r.id, c); }
     return out;
   }, [rows, l, toChf]);
-  const { groups: gs, later } = groups(rows, l, query.filter, (v) => suggestions.has(v.r.id));
-  const pending = period.to >= l.openFrom && !query.filter && !query.q ? s.inbox.filter((f) => !l.byId.has(f.id)) : [];
+  const { groups: gs, later } = groups(rows, l, states.has('noDate'), (v) => suggestions.has(v.r.id));
+  const pending = period.to >= l.openFrom && !chips.length && !query.q ? s.inbox.filter((f) => !l.byId.has(f.id)) : [];
+  /** A count is a shortcut to the one state chip it names; «alle» takes the state chips away. */
+  const onlyState = states.size === 1 ? [...states][0] : undefined;
+  const countTo = (state?: string) => setChips([...chips.filter((c) => c.field !== 'state'), ...(state ? [{ field: 'state', value: state }] : [])]);
   const filed = !!l.closedThrough && period.kind !== 'all' && period.to <= l.closedThrough;
   const firstRun = canEdit && noReceiptsYet(books, s.inbox);
 
@@ -90,51 +102,41 @@ function List(props: Props) {
     <div className="page">
       <ListHead period={period} books={books} canEdit={canEdit}>
         <div className="counts" role="tablist" aria-label={t('receipts.filters')}>
-          {counts.alle > 0 ? (
+          {counts.all > 0 ? (
             <>
-              <button type="button" role="tab" aria-selected={!query.filter} className={query.filter ? '' : 'on'} onClick={() => nav.setQuery({ filter: undefined })}>
-                <span className="n">{counts.alle}</span>{t('receipts.filterAll')}
+              <button type="button" role="tab" aria-selected={!states.size} className={states.size ? '' : 'on'} onClick={() => countTo()}>
+                <span className="n">{counts.all}</span>{t('receipts.filterAll')}
               </button>
-              {RECEIPT_FILTERS.filter((f) => counts[f] > 0 || query.filter === f).map((f: ReceiptFilter) => (
-                <button key={f} type="button" role="tab" aria-selected={query.filter === f} className={query.filter === f ? 'on' : ''} data-filter={f} onClick={() => nav.setQuery({ filter: f })}>
-                  <span className="n">{counts[f]}</span>{t(FILTER_LABEL[f])}
+              {COUNTED.filter((f) => counts[f] > 0 || onlyState === f).map((f) => (
+                <button key={f} type="button" role="tab" aria-selected={onlyState === f} className={onlyState === f ? 'on' : ''} data-filter={f} onClick={() => countTo(f)}>
+                  <span className="n">{counts[f]}</span>{t(COUNT_LABEL[f])}
                 </button>
               ))}
             </>
           ) : <span>{filed ? t('receipts.filedReadOnly') : t('receipts.stillEmpty')}</span>}
           {canEdit && <RunInbox />}
-          <label className="search">
-            {ICONS.search}
-            <span className="sr">{t('receipts.searchLabel')}</span>
-            <input
-              type="search"
-              placeholder={t('shell.search')}
-              value={query.q ?? ''}
-              className={query.q ? 'has' : ''}
-              autoComplete="off"
-              onChange={(e) => nav.setQuery({ q: e.target.value || undefined })}
-              onKeyDown={(e) => { if (e.key === 'Escape') nav.setQuery({ q: undefined }); }}
-            />
-            <Kbd keys={['/']} tip={t('receipts.searchTip')} />
-          </label>
         </div>
+        <ChipFilter fields={fields} rows={pool} chips={chips} onChips={setChips} q={query.q} onQ={(q) => nav.setQuery({ q })}
+          searchLabel={t('receipts.searchLabel')} searchKey={<Kbd keys={['/']} tip={t('receipts.searchTip')} />} />
       </ListHead>
 
       {canEdit && !firstRun && <Strip {...props} />}
-      {firstRun ? <FirstRun {...props} /> : counts.alle === 0 && hidden.length === 0 && pending.length === 0 ? (
+      {firstRun ? <FirstRun {...props} /> : counts.all === 0 && hidden.length === 0 && pending.length === 0 ? (
         <div className="empty">
           <h2>{t('receipts.emptyTitle', { period: periodName(period) })}</h2>
           <p>{t('receipts.emptyText')}</p>
         </div>
       ) : rows.length === 0 && pending.length === 0 ? (
-        query.q ? (
-          <div className="empty"><h2>{t('receipts.nothingFound')}</h2><p>{t('receipts.nothingFoundText', { q: query.q })}</p></div>
-        ) : (
-          <div className="empty">
-            <h2>{query.filter === 'offen' || query.filter === 'ohneDatum' ? t('receipts.allLinked') : t('receipts.none')}</h2>
-            <p>{t('receipts.allLinkedText')}</p>
-          </div>
-        )
+        states.size === 1 && states.has('quarantine') ? null
+          : chips.length && candidates.length ? <ChipEmpty fields={fields} rows={candidates} chips={chips} onChips={setChips} />
+          : query.q ? (
+            <div className="empty"><h2>{t('receipts.nothingFound')}</h2><p>{t('receipts.nothingFoundText', { q: query.q })}</p></div>
+          ) : (
+            <div className="empty">
+              <h2>{t('receipts.none')}</h2>
+              <p>{t('receipts.allLinkedText')}</p>
+            </div>
+          )
       ) : (
         <div className="rows" role="listbox" aria-label={t('area.receipts')}>
           {pending.length > 0 && (
@@ -181,7 +183,7 @@ function List(props: Props) {
           )}
         </>
       )}
-      <Quarantine nav={nav} canEdit={canEdit} />
+      <Quarantine nav={nav} canEdit={canEdit} asked={states.has('quarantine')} />
       <InflowDialogs {...props} />
     </div>
   );
@@ -223,12 +225,14 @@ function Row({ v, sel, same, canEdit, onSelect, onAct }: { v: ReceiptView; sel: 
  * data/quarantine/: what came in and is no receipt by its words, each with its reason; «Ist ein
  * Beleg» puts it into the inbox, whose run reads it (src/server/routes/quarantine.ts).
  */
-function Quarantine({ nav, canEdit }: { nav: AreaProps['nav']; canEdit: boolean }) {
-  const [files, setFiles] = useState<QuarantinedFile[]>([]);
-  const [open, setOpen] = useState(false);
+function Quarantine({ nav, canEdit, asked }: { nav: AreaProps['nav']; canEdit: boolean; asked: boolean }) {
+  const [files, setFiles] = useState<QuarantinedFile[] | undefined>();
+  const [shown, setOpen] = useState(false);
   const load = () => { api.quarantine().then(setFiles, () => setFiles([])); };
   useEffect(load, []);
-  if (!files.length) return null;
+  // The state chip «Quarantäne» opens the list, and says when it is empty (#211).
+  const open = shown || asked;
+  if (!files?.length) return asked && files ? <div className="empty"><h2>{t('chips.quarantineEmpty')}</h2></div> : null;
   const why = (q: QuarantinedFile) => [
     q.reason.kind === 'held' ? t('receipts.quarantineHeld') : q.reason.kind === 'unreadable' ? t('receipts.quarantineUnreadable') : t(`receipts.why.${q.reason.why ?? 'no-receipt'}`),
     q.reason.kind === 'not-receipt' && q.reason.from ? t('receipts.quarantineFrom', { from: q.reason.from }) : '',
@@ -244,7 +248,7 @@ function Quarantine({ nav, canEdit }: { nav: AreaProps['nav']; canEdit: boolean 
   return (
     <div className="quarantine" data-testid="quarantine">
       <div className="hidden-note">
-        {t('receipts.quarantineNote', { n: files.length })} · <button type="button" onClick={() => setOpen(!open)}>{open ? t('receipts.hideAgain') : t('receipts.show')}</button>
+        {t('receipts.quarantineNote', { n: files.length })} · <button type="button" onClick={() => setOpen(!shown)}>{open ? t('receipts.hideAgain') : t('receipts.show')}</button>
       </div>
       {open && (
         <>

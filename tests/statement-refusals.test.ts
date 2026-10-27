@@ -71,7 +71,7 @@ test('two CHF accounts without IBAN: the camt.053 asks which one instead of refu
     let s = await post('/api/drop');
     s = await post(`/api/drop/${s.id}/files?name=zkb.xml`, Buffer.from(file));
     const row = s.rows[0];
-    assert.deepEqual([row.state, row.chooseAccount?.accounts.map((a) => a.account)], ['refused', ['1020', '1022']], 'the row asks which account');
+    assert.deepEqual([row.state, row.chooseAccount?.accounts.map((a) => a.account)], ['asks', ['1020', '1022']], 'the row asks which account');
     await assert.rejects(post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'account', account: '1021' }), /400/, 'only an account it offered');
     s = await post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'account', account: '1022' });
     assert.deepEqual([s.rows[0].state, s.rows[0].chooseAccount, s.rows[0].statement?.file], ['taken', undefined, 'ZKB/zkb.xml']);

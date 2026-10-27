@@ -42,9 +42,11 @@ import type { Answer, Choice, Question, QuestionsView, QuestionTarget } from '..
 
 /** Built by `npm run build:audit` (vite --mode audit): reads the export's files, never an API. */
 import type { AutomationCommand, AutomationView, CommandResult, RunDetail } from '../../workflows/model.js';
+import type { RunLogLine } from '../../workflows/runlog.js';
+import type { HistoryObject, ObjectHistory } from '../../workflows/history.js';
 import type { Conversation, ConversationSummary, MadeChange, PrivatePart, Turn } from '../../types/assistant.js';
 import { ATTACHMENT_MAX_MB, type Attachment } from '../../types/attachment.js';
-import type { DropAction, DropSession, PayoutWaitView, QuarantinedFile } from '../../types/drop.js';
+import type { DropAction, DropSession, PayoutWaitView, QuarantinedFile, StatementDetails } from '../../types/drop.js';
 import type { MailCheck, ReceiptSkipOffer, SourcePreview, SourcesView } from '../../platform/sources/model.js';
 import type { MailHost } from '../../platform/sources/mail-host.js';
 import type { DraftCommand, DraftView, KeepResult, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
@@ -356,6 +358,10 @@ export const api = {
   yearClose: (year: string) => request<YearCloseView>('GET', `/api/year-close/${year}`),
   automation: (since?: string) => request<AutomationView | { unchanged: true }>('GET', `/api/automation${since ? `?since=${encodeURIComponent(since)}` : ''}`),
   automationRun: (id: string) => request<RunDetail>('GET', `/api/automation/runs/${encodeURIComponent(id)}`),
+  /** A run's lines in the run log, for a run whose details the run store no longer holds. */
+  runLog: (id: string) => request<{ lines: RunLogLine[]; stored: boolean }>('GET', `/api/automation/runs/${encodeURIComponent(id)}/log`),
+  /** «Verlauf» (#215): the runs that worked on a receipt, a payment or an entry, newest first; `all` lifts the cap. */
+  history: (kind: HistoryObject['kind'], id: string, all = false) => request<ObjectHistory>('GET', `/api/history/${kind}/${encodeURIComponent(id)}${all ? '?all=1' : ''}`),
   questions: () => request<QuestionsView>('GET', '/api/questions'),
   ask: (q: { on: QuestionTarget; by: string; text: string; choices: Choice[]; to?: string }) => request<Question>('POST', '/api/questions', q),
   answerQuestion: (id: string, by: string, answer: Answer) => request<Question>('POST', `/api/questions/${id}/answer`, { by, ...answer }),
@@ -465,6 +471,8 @@ export const api = {
   setOpeningBalance: (year: string, account: string, amount: number | null) =>
     request<Ok>('PUT', `/api/opening-balances/${year}/${encodeURIComponent(account)}`, { amount }),
 
+  /** What a statement file read in says about itself, and the day it was read in (#208). */
+  statementFileDetails: (file: string) => request<{ details?: StatementDetails; importedAt?: string }>('GET', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/details`),
   /** A statement taken back out of the books (`file`: `<bank>/<filename>` as the import named it): the drop dialog's undo, from the page (r9k-3). */
   deleteStatement: (file: string) => request<StatementRemoved>('DELETE', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}`),
   /** The undo of a removal, after the file is read again: its bookings and links back as they were (r10h-3). */

@@ -18,7 +18,7 @@ import type { Area, AreaProps, LegendItem, PaletteItem } from '../index.js';
 import { I } from '../receipts/icons.js';
 import { Kbd } from '../receipts/commands.js';
 import { at } from '../receipts/view.js';
-import { badgeCount, matches, payHaystack, payText, signed, troubled, type Bank, type Check, type Statement } from './model.js';
+import { badgeCount, matches, payHaystack, payText, signed, troubled, type Bank, type Check, type Statement, type StatementFile } from './model.js';
 import { bankFor, listed, setUi, toggleGroup, ui, useUi } from './state.js';
 import { importStatements, statementAdd } from './actions.js';
 import { Detail, statementName } from './Detail.js';
@@ -49,6 +49,13 @@ function rowsOf(b: Bank, books: Index, period: Period, q: string | undefined): R
   });
 }
 
+/** The statement files of the period, each whole (#208): those whose name, account or movements the search finds. */
+function fileRowsOf(b: Bank, books: Index, period: Period, q: string | undefined): StatementFile[] {
+  const words = receiptWords(books);
+  return b.files(period.from, period.to).filter((f) => !q || matches(`${f.account.label} ${f.file.filename}`.toLowerCase(), q)
+    || f.payments.some((p) => matches(payHaystack(p, words.get(p.ref) ?? ''), q)));
+}
+
 function List(props: Props) {
   const { route, query, period, books, nav, canEdit } = props;
   const s = useUi();
@@ -56,6 +63,9 @@ function List(props: Props) {
   const b = bankFor(books, ws?.bankAccounts);
   const rows = useMemo(() => rowsOf(b, books, period, query.q), [b, books, period, query.q]);
   const byMonth = s.groupBy === 'monat';
+  const byFile = s.groupBy === 'datei';
+  const fileRows = useMemo(() => (byFile ? fileRowsOf(b, books, period, query.q) : []), [byFile, b, books, period, query.q]);
+  const fileGroups = b.accounts.map((a) => ({ key: `bankf:${a.account}`, label: a.label, files: fileRows.filter((f) => f.account === a) })).filter((g) => g.files.length);
   const groups = byMonth
     ? [...rows.reduce((m, r) => m.set(r.s.to.slice(0, 7), [...(m.get(r.s.to.slice(0, 7)) ?? []), r]), new Map<string, Row[]>())]
         .sort((x, y) => y[0].localeCompare(x[0]))
@@ -65,7 +75,8 @@ function List(props: Props) {
         const last = rs.find((r) => r.c?.close != null);
         return { key: `bank:${a.account}`, label: a.label, rows: rs, side: last ? `${a.currency} ${fmt(last.c!.close!)}` : '' };
       }).filter((g) => g.rows.length);
-  const keys = groups.filter((g) => !s.collapsed.has(g.key)).flatMap((g) => g.rows.map((r) => r.s.key));
+  const keys = byFile ? fileGroups.filter((g) => !s.collapsed.has(g.key)).flatMap((g) => g.files.map((f) => f.key))
+    : groups.filter((g) => !s.collapsed.has(g.key)).flatMap((g) => g.rows.map((r) => r.s.key));
   listed.keys = keys;
 
   const files = rows.filter((r) => r.s.file).length;
@@ -84,8 +95,19 @@ function List(props: Props) {
   const seen = useRef<string>();
   useEffect(() => {
     if (!ws) return;
-    const here = JSON.stringify([route, query.period?.token]);
+    // A file's link shows the files; a statement's or payment's link the statements.
+    if (route.file && !byFile) { setUi({ groupBy: 'datei' }); return; }
+    if ((route.statement || route.payment) && byFile) { setUi({ groupBy: 'konto' }); return; }
+    const here = JSON.stringify([route, query.period?.token, byFile]);
     if (seen.current === here) return;
+    if (route.file) {
+      const f = b.fileByKey(route.file);
+      if (!f) { setNotice(t('bank.fileGone', { key: route.file })); return; }
+      seen.current = here;
+      setNotice('');
+      if (!query.period && (f.file.toDate < period.from || f.file.fromDate > period.to)) nav.go(at(route, f.file.fromDate));
+      return;
+    }
     if (route.payment && !route.statement) {
       const tx = b.txByRef.get(route.payment);
       const st = tx && b.statementOf(tx);
@@ -105,11 +127,14 @@ function List(props: Props) {
     }
     seen.current = here;
     setNotice('');
-    if (keys[0]) nav.select({ area: 'bank', statement: keys[0] });
-  }, [ws, JSON.stringify(route), query.period?.token, keys[0], b]);
+    if (keys[0]) nav.select(byFile ? { area: 'bank', file: keys[0] } : { area: 'bank', statement: keys[0] });
+  }, [ws, JSON.stringify(route), query.period?.token, keys[0], b, byFile]);
 
-  const select = (key: string) => nav.select({ area: 'bank', statement: key });
-  useSelectionFollowsRows(route.statement, keys, select);
+  const select = (key: string) => nav.select(byFile ? { area: 'bank', file: key } : { area: 'bank', statement: key });
+  // A file's link to another period keeps its file while the period follows it.
+  const linked = route.file ? b.fileByKey(route.file) : undefined;
+  const elsewhere = !!linked && (linked.file.toDate < period.from || linked.file.fromDate > period.to);
+  useSelectionFollowsRows(byFile ? route.file : route.statement, keys, select, elsewhere);
 
   return (
     <div className="page">
@@ -128,9 +153,13 @@ function List(props: Props) {
             </button>
           )}
           <span className="seg gb" role="tablist" aria-label={t('bank.groupBy')}>
-            {(['konto', 'monat'] as const).map((g) => (
-              <button key={g} type="button" role="tab" aria-selected={s.groupBy === g} className={s.groupBy === g ? 'on' : ''} data-bg={g} onClick={() => setUi({ groupBy: g })}>
-                {t(g === 'konto' ? 'bank.byAccount' : 'bank.byMonth')}
+            {(['konto', 'monat', 'datei'] as const).map((g) => (
+              <button key={g} type="button" role="tab" aria-selected={s.groupBy === g} className={s.groupBy === g ? 'on' : ''} data-bg={g} onClick={() => {
+                // Into or out of the files the selection goes: a statement is no file, a file no statement.
+                if ((g === 'datei') !== byFile) nav.select({ area: 'bank' });
+                setUi({ groupBy: g });
+              }}>
+                {t(g === 'konto' ? 'bank.byAccount' : g === 'monat' ? 'bank.byMonth' : 'bank.byFile')}
               </button>
             ))}
           </span>
@@ -162,7 +191,23 @@ function List(props: Props) {
         </div>
       )}
 
-      {!ws ? null : rows.length === 0 ? (
+      {!ws ? null : byFile ? (fileGroups.length === 0 ? (
+        <div className="empty"><h2>{query.q ? t('bank.nothingFound') : t('bank.filesEmpty', { period: periodName(period) })}</h2></div>
+      ) : (
+        <div className="rows" role="listbox" aria-label={t('area.bank')}>
+          {fileGroups.map((g) => {
+            const shut = s.collapsed.has(g.key);
+            return (
+              <Fragment key={g.key}>
+                <button type="button" className={`group${shut ? ' shut' : ''}`} aria-expanded={!shut} data-tip={shut ? t('receipts.expand') : t('receipts.collapse')} onClick={() => toggleGroup(g.key)}>
+                  <span>{I.gch}{g.label}</span><span className="mono">{g.files.length}</span>
+                </button>
+                {!shut && g.files.map((f) => <FileRow key={f.key} f={f} sel={f.key === route.file} onSelect={select} />)}
+              </Fragment>
+            );
+          })}
+        </div>
+      )) : rows.length === 0 ? (
         <div className="empty">
           <h2>{query.q ? t('bank.nothingFound') : t('bank.emptyTitle', { period: periodName(period) })}</h2>
           <p>{t('bank.emptyText')}</p>
@@ -201,6 +246,17 @@ function StatementRow({ r, byMonth, same, sel, searching, bad, onSelect }: { r: 
       <span className="d mono">{same ? <span className="sr">{formatDate(s.to)}</span> : <><span className="dl">{formatDate(s.to)}</span><span className="ds">{formatDate(s.to).slice(0, 6)}</span></>}</span>
       <span className="t">{bad && I.dot}{byMonth ? s.account.label : statementName(s)} <small>{sub}{r.open > 0 && <> · <span className="wn">{t('bank.nWithoutReceipt', { n: r.open })}</span></>}</small></span>
       <span className="a mono">{r.c?.close != null ? fmt(r.c.close) : ''}</span>
+    </div>
+  );
+}
+
+/** One statement file whole: its last day, its name and days, how many movements it holds, its closing balance. */
+function FileRow({ f, sel, onSelect }: { f: StatementFile; sel: boolean; onSelect(key: string): void }) {
+  return (
+    <div className={`row${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-file={f.key} onClick={() => onSelect(f.key)}>
+      <span className="d mono"><span className="dl">{formatDate(f.file.toDate)}</span><span className="ds">{formatDate(f.file.toDate).slice(0, 6)}</span></span>
+      <span className="t">{f.file.filename} <small>{formatDate(f.file.fromDate)} – {formatDate(f.file.toDate)} · {t('bank.nPayments', { n: f.payments.length })}</small></span>
+      <span className="a mono">{f.closing ? fmt(f.closing.amount) : ''}</span>
     </div>
   );
 }
@@ -250,6 +306,8 @@ export const bank: Area<RouteOf<'bank'>> = {
     const b = bankFor(books);
     const tx = r.payment ? b.txByRef.get(r.payment) : undefined;
     if (tx) return payText(tx).name;
+    const f = r.file ? b.fileByKey(r.file) : undefined;
+    if (f) return `${f.file.filename} · ${f.account.label}`;
     const s = r.statement ? b.byKey(r.statement) : undefined;
     return s && `${statementName(s)} · ${s.account.label}`;
   },
@@ -261,9 +319,11 @@ export const bank: Area<RouteOf<'bank'>> = {
     }
     const d = moveKey(e);
     if (d) {
-      const i = p.route.statement ? listed.keys.indexOf(p.route.statement) : -1;
+      const byFile = ui().groupBy === 'datei';
+      const here = byFile ? p.route.file : p.route.statement;
+      const i = here ? listed.keys.indexOf(here) : -1;
       const next = listed.keys[Math.min(listed.keys.length - 1, Math.max(0, i + d))];
-      if (next) p.nav.select({ area: 'bank', statement: next });
+      if (next) p.nav.select(byFile ? { area: 'bank', file: next } : { area: 'bank', statement: next });
       return true;
     }
     if (e.metaKey || e.ctrlKey || e.altKey) return false;

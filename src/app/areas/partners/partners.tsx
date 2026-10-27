@@ -23,13 +23,12 @@ import { entryAt } from '../vat/links.js';
 import { invoiceAt } from '../invoices/actions.js';
 import { useInvoices } from '../invoices/data.js';
 import { countOf, FILTERS, linkedOf, partnerRules, passes, type PartnerFilter } from './model.js';
-import { once, useFetched } from './data.js';
+import { once, readPartners, useFetched } from './data.js';
 import { ChangedNotePrompt, DetailGroup, DetailsBlock, Go, linesOf, NoteRulePanel, NotesBlock, SelfBlock } from './page.js';
 import { noteMarks } from '../../../knowledge/note-rules.js';
 
 type Props = AreaProps<RouteOf<'partners'>>;
 
-const readPartners = once('partners', api.partners);
 export const readRules = once('rules', api.rules);
 
 /** The list's filter, kept while the app runs; the rows as last shown, in ↑↓ order, for the keys and ⌘K. */

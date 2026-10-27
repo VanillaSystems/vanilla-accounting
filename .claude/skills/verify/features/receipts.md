@@ -12,8 +12,18 @@ and Datei. The order and the ranking are pure functions in `model.ts` (tests/rec
 
 - `rc-list`: rows `.list .row[data-id="<receipt id>"]` (selected: `.row.sel`), group headers
   `.list button.group` (click collapses; kept per viewer), counts `.counts [role=tab]` with
-  `data-filter="zugeordnet|offen|ohneDatum"` (absent = alle). The filter and the search are in the
-  URL: `/receipts/<id>?filter=offen&q=coop`. ↑↓ or j/k move, the dock badge counts `Braucht dich`.
+  `data-filter="linked|open|noDate"` (absent = alle): each count sets the one state chip it names.
+  The chips and the search are in the URL: `/receipts/<id>?f=state_open&q=coop` (an old
+  `?filter=offen` redirects). ↑↓ or j/k move, the dock badge counts `Braucht dich`.
+- `rc-chips` (#211, shared with `je-list`): `[data-testid=chipbar]` under the counts holds the chips
+  `.fchip[data-field][data-value]` (× is `.fchip .x`; chips of one field are joined by `.or`, OR;
+  different fields AND), `[data-testid=filter-button]` opens `[data-testid=filter-menu]` (fields
+  `button[data-field]`, then values `button[data-value]` with their counts, or a typed amount or
+  date and `Hinzufügen`), and the search; typed text offers values as `.fsuggest button`. Nothing
+  left: `[data-testid=chip-empty]` names the fields that exclude everything, each removal with its
+  count (`button[data-field]`), and `Alle Filter entfernen`. Fields: Geschäftspartner (the open
+  year's partners), Zustand, Monat, Ab, Bis, Betrag über/unter/genau, Währung, MWST-Satz, Art,
+  Zahlung verknüpft, Text enthält (focuses the search).
   With no id in the link the first row is selected.
 - `rc-search`: `.list .search input` (`/` focuses it, Esc clears). It looks in description, vendor,
   file name, note, VAT number, date (ISO or TT.MM.JJJJ) and amount.

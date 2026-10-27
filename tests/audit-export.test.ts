@@ -107,6 +107,55 @@ test('a non-empty folder that holds no export is refused, not emptied', async ()
   assert.equal(readFileSync(join(other, 'keep.txt'), 'utf8'), 'mine');
 });
 
+/**
+ * #211: at the narrowest list width (Split.tsx's MIN, 340 px) the list column is never wider than its
+ * track: its heading's counts, chips, «Filter» menu and search wrap, so scrollWidth equals clientWidth.
+ */
+test('the list column never widens past its track at the narrowest width, with chips and the filter menu open', { skip: findBrowser() ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 300_000 }, async () => {
+  const { default: puppeteer } = await import('puppeteer-core');
+  const browser = await puppeteer.launch({ executablePath: findBrowser(), headless: true, args: ['--no-first-run', '--lang=en-US'] });
+  const pause = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+  try {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1000, height: 800 });
+    await page.goto(`${base}#/receipts`, { waitUntil: 'networkidle0' });
+    const wide: string[] = [];
+    for (const language of ['de', 'fr', 'en']) {
+      await page.evaluate((lang) => { localStorage.setItem('language', lang); localStorage.setItem('lw.receipts', '340'); localStorage.setItem('lw.journal', '340'); }, language);
+      for (const at of ['receipts', 'receipts?f=state_open&f=month_2026-09&f=over_100&q=x', 'journal', 'journal?f=account_1020&f=account_6000&f=who_classify']) {
+        await page.goto(`${base}#/${at}`, { waitUntil: 'networkidle0' });
+        await page.reload({ waitUntil: 'networkidle0' });
+        await pause(300);
+        const measure = async (what: string) => {
+          // scrollWidth misses a child that overflows inside a scrolling box of its own, so every element's right edge is measured too
+          // (text a box of its own clips, a title's ellipsis, is no overflow; the clipping box is measured itself).
+          const m = await page.evaluate(() => {
+            const l = document.querySelector('.list')!;
+            const edge = l.getBoundingClientRect().left + l.clientLeft + l.clientWidth;
+            const past = [...l.querySelectorAll('*')].filter((e) => {
+              const r = e.getBoundingClientRect();
+              if (!(r.width > 0 && r.right > edge + 0.5)) return false;
+              for (let p = e.parentElement; p && p !== l; p = p.parentElement) if (getComputedStyle(p).overflowX !== 'visible') return false;
+              return true;
+            })
+              .slice(0, 3).map((e) => `${e.tagName.toLowerCase()}.${(e.getAttribute('class') ?? '').split(' ')[0]}`);
+            return { scroll: l.scrollWidth, client: l.clientWidth, width: l.getBoundingClientRect().width, past };
+          });
+          assert.ok(m.width <= 341, `${language} ${at}: the list is at its narrowest (${m.width} px)`);
+          if (m.scroll !== m.client) wide.push(`${language} ${at}${what}: scrollWidth ${m.scroll} ≠ clientWidth ${m.client}`);
+          if (m.past.length) wide.push(`${language} ${at}${what}: past the column's edge: ${m.past.join(', ')}`);
+        };
+        await measure('');
+        await page.click('[data-testid=filter-button]');
+        await measure(' (filter menu open)');
+      }
+    }
+    assert.deepEqual(wide, []);
+  } finally {
+    await browser.close();
+  }
+});
+
 const AREAS = ['receipts', 'bank', 'journal', 'vat', 'vat/codes', 'reports/income', 'reports/balance', 'reports/custom', 'close', 'company/profile',
   'company/rules', 'company/sources', 'company/mail', 'invoices', 'automation', 'automation/runs', 'changes', 'partners', 'knowledge', 'receipts'];
 const browserPath = findBrowser();
