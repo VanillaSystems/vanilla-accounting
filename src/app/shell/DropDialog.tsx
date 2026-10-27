@@ -161,7 +161,7 @@ function reportLine(s: NonNullable<DropRow['report']>): string {
     s.known ? t('drop.booked.known', { n: s.known }) : '',
     s.filed ? t('drop.booked.filed', { n: s.filed }) : '',
     s.before ? t('drop.booked.before', { n: s.before }) : '',
-    s.beforeSince ? t('drop.booked.beforeSince', { n: s.beforeSince, since: formatDate(s.since) }) : '',
+    s.beforeSince ? t('drop.booked.beforeSince', { n: s.beforeSince, reach: formatDate(s.reach), since: formatDate(s.since) }) : '',
     s.other ? t('drop.booked.other', { n: s.other, ways: s.ways.join(', '), more: s.waysMore ? t('drop.booked.more', { n: s.waysMore }) : '' }) : '',
     s.unread ? t('drop.booked.unread', { n: s.unread }) : '',
     held ? t('drop.booked.held', { n: s.held.length + s.heldMore, orders: held, more: s.heldMore ? t('drop.booked.more', { n: s.heldMore }) : '' }) : '',

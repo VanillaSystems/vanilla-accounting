@@ -86,7 +86,7 @@ const lines = (es: readonly JournalEntry[]) => es.map((e) => [e.transactionRef, 
 const ctxOf = (over: Partial<ReportContext> = {}): ReportContext => ({
   provider: { id: 'shopify', name: 'Shopify' }, clearing: '1093', revenue: '3200', fees: { account: '6840', vat: 'I0' }, receipt: 'rep', base: 'CHF',
   rate: (c, d) => fx.daily(c, d), codes: { domestic: 'V81', rate: 8.1, reduced: [{ code: 'V26', rate: 2.6 }], abroad: 'V0', negative: '-' }, territory: ['CH', 'LI'], agreed: false,
-  gateways: SHOPIFY.provider.gateways, since: '2026-07-01',
+  gateways: SHOPIFY.provider.gateways, since: '2026-07-01', from: '2026-07-01',
   isClosed: (d) => d <= '2026-06-30', beforeBooks: () => false, newId: (() => { let i = 0; return () => `e${++i}`; })(),
   texts: { sale: (o, c) => `Shopify, Bestellung #${o}, ${c}`, refund: (o) => `Shopify, Rückerstattung #${o}`, fee: (k) => `Shopify, Gebühren ${k}`, reason: (k) => k },
   ...over,
@@ -342,15 +342,15 @@ test('4. an order page is linked to its sale, never to the payout; an order name
 
 // ─── The drop: recognised, filed, booked, asked once ─────────────────────────
 
-test('a dropped sales report is filed as a receipt and books the orders from the cut-over day on; earlier ones are counted, and a payout before the day stays as it was booked', () => {
+test('a dropped sales report is filed as a receipt and books the orders from the cut-over day on; one a payout before the day may have paid waits, older ones are counted, and that payout stays as it was booked', () => {
   const ws = shop();
   const old = payout('OLD', { date: '2026-10-29', amount: 54.05 });
   seed(ws, [old], [asSales(old, 'old')]);
   assert.deepEqual(recognizeCsv(ws, Buffer.from(NOVEMBER)), { provider: 'shopify', name: 'Shopify', kind: 'sales' });
-  const csv = `${NOVEMBER}\n${row('1999', '2026-10-28', '54.05', '4.05')}`;
+  const csv = `${NOVEMBER}\n${row('1999', '2026-10-28', '54.05', '4.05')}\n${row('1990', '2026-10-20', '54.05', '4.05')}`;
   const done = importSalesReport(ws, Buffer.from(csv), 'orders_export.csv');
   assert.ok(done.ok);
-  assert.deepEqual([done.summary.orders, done.summary.beforeSince, done.summary.since, done.summary.other, done.summary.held], [3, 1, '2026-11-01', 3, []], '#1999 of 28.10. was paid in the payout of 29.10., booked as sales: never booked again');
+  assert.deepEqual([done.summary.orders, done.summary.beforeSince, done.summary.since, done.summary.other, done.summary.reach, done.summary.held], [3, 1, '2026-11-01', 3, '2026-10-25', [{ order: '1999', why: 'legacy' }]], '#1999 of 28.10. may be in the payout of 29.10., booked as sales: it waits, never booked twice; #1990 lies before 1.11. less 7 payout days');
   const after = loadBooks(ws);
   assert.deepEqual(lines(after.journalEntries.filter((e) => e.transactionRef.startsWith('SR-'))).sort(), [
     ['SR-shopify-2001', '2026-11-02', '1093', '3200', 108.1, 'V81'],
@@ -360,8 +360,96 @@ test('a dropped sales report is filed as a receipt and books the orders from the
   assert.deepEqual(lines(after.journalEntries.filter((e) => e.transactionRef === 'OLD')), [['OLD', '2026-10-29', '1021', '3200', 54.05, 'V81']], 'untouched');
   const receipt = after.receipts.find((r) => r.report);
   assert.ok(receipt && existsSync(join(ws.paths.root, 'transactional-data', '2026', 'receipts', receipt.filename)), 'the CSV is filed in its year');
-  assert.equal(receipt?.report?.held, undefined, 'nothing waits');
+  assert.deepEqual(receipt?.report?.held, [{ order: '1999', why: 'legacy' }], 'kept for the person');
   assert.equal(importSalesReport(ws, Buffer.from(csv), 'orders_export.csv').ok && loadBooks(ws).journalEntries.length, after.journalEntries.length, 'dropped again, nothing twice');
+});
+
+// ─── The cut-over: sales collected before the day and paid out after it ──────
+
+/** The SR- entries of the books, per ref: a double count shows as two. */
+const reportRefs = (es: readonly JournalEntry[]) => es.filter((e) => e.transactionRef.startsWith('SR-')).map((e) => e.transactionRef).sort();
+
+test('cut-over a. the old way per order on the clearing account up to the day: an order of since−2 paid out on since+3 is booked once by the report; the old ones are not booked again', () => {
+  const ws = shop();
+  const p0 = payout('P0', { date: '2026-10-29', amount: 30 });
+  const p1 = payout('P1', { date: '2026-11-04', amount: 94.05 });
+  seed(ws, [p0, p1], [
+    E('o1', 'SHOPIFY-1995', '2026-10-26', '1093', '3200', 30, 'V81'), E('o2', 'SHOPIFY-1996', '2026-10-28', '1093', '3200', 40, 'V81'),
+    E('p0', 'P0', '2026-10-29', '1021', '1093', 30), E('p1', 'P1', '2026-11-04', '1021', '1093', 94.05),
+  ]);
+  const done = importSalesReport(ws, Buffer.from([head, row('1995', '2026-10-26', '30.00', '2.25'), row('1996', '2026-10-28', '40.00', '3.00'), row('1997', '2026-10-30', '54.05', '4.05'), row('2001', '2026-11-02', '108.10', '8.10')].join('\n')), 'o.csv');
+  assert.ok(done.ok);
+  assert.deepEqual([done.summary.orders, done.summary.beforeSince, done.summary.held], [2, 0, [{ order: '1995', why: 'legacy' }, { order: '1996', why: 'legacy' }]]);
+  const es = loadBooks(ws).journalEntries;
+  assert.deepEqual(reportRefs(es), ['SR-shopify-1997', 'SR-shopify-2001'], '#1997 once, the old orders not again');
+  assert.equal(revenueOf(es, '2026-10-25'), 232.15, 'every sale once: no double count, no lost sale');
+  assert.equal(balanceOf(es, '1093', '2026-10-25'), 108.1, 'the clearing account holds only #2001, not paid out yet');
+  assert.deepEqual(lines(es.filter((e) => e.transactionRef === 'SR-shopify-1997')), [['SR-shopify-1997', '2026-10-30', '1093', '3200', 54.05, 'V81']], 'dated by its own tax point, before the cut-over day');
+});
+
+test('cut-over b. a payout booked as sales the old way on since−1 holds the orders before its day; an order of since−1 paid out on since+2 is booked', () => {
+  const ws = shop();
+  const old = payout('PG', { date: '2026-10-31', amount: 110 });
+  const next = payout('PN', { date: '2026-11-02', amount: 20 });
+  seed(ws, [old, next], [asSales(old, 'pg'), E('pn', 'PN', '2026-11-02', '1021', '1093', 20)]);
+  const done = importSalesReport(ws, Buffer.from([head, row('1981', '2026-10-27', '50.00', '3.75'), row('1982', '2026-10-30', '60.00', '4.50'), row('1983', '2026-10-31', '20.00', '1.50')].join('\n')), 'o.csv');
+  assert.ok(done.ok);
+  assert.deepEqual([done.summary.orders, done.summary.held], [1, [{ order: '1981', why: 'legacy' }, { order: '1982', why: 'legacy' }]]);
+  const es = loadBooks(ws).journalEntries;
+  assert.deepEqual(reportRefs(es), ['SR-shopify-1983']);
+  assert.equal(revenueOf(es, '2026-10-25'), 110 + 20, 'the old payout\'s 110 as booked, #1983 once');
+  assert.equal(balanceOf(es, '1093', '2026-10-25'), 0, 'the first payout after the day comes out even');
+  assert.deepEqual(lines(es.filter((e) => e.transactionRef === 'PG')), [['PG', '2026-10-31', '1021', '3200', 110, 'V81']], 'never booked again');
+
+  // A payout of those days not booked yet may still be booked as sales: what it may pay waits too.
+  const open = shop();
+  seed(open, [old, next], [E('pn', 'PN', '2026-11-02', '1021', '1093', 20)]);
+  const waits = importSalesReport(open, Buffer.from([head, row('1982', '2026-10-30', '60.00', '4.50'), row('1983', '2026-10-31', '20.00', '1.50')].join('\n')), 'o.csv');
+  assert.ok(waits.ok);
+  assert.deepEqual([waits.summary.orders, waits.summary.held], [1, [{ order: '1982', why: 'legacy' }]]);
+});
+
+test('cut-over c. an order more than the payout days before the day is counted, never booked; the company\'s payout days reach further', () => {
+  const csv = [head, row('1970', '2026-10-22', '54.05', '4.05'), row('2001', '2026-11-02', '108.10', '8.10')].join('\n');
+  const ws = shop();
+  const done = importSalesReport(ws, Buffer.from(csv), 'o.csv');
+  assert.ok(done.ok);
+  assert.deepEqual([done.summary.orders, done.summary.beforeSince, done.summary.reach], [1, 1, '2026-10-25']);
+  assert.deepEqual(reportRefs(loadBooks(ws).journalEntries), ['SR-shopify-2001']);
+  const longer = shop(`${FILE()}  payoutDays: 14\n`);
+  const reached = importSalesReport(longer, Buffer.from(csv), 'o.csv');
+  assert.ok(reached.ok);
+  assert.deepEqual([reached.summary.orders, reached.summary.beforeSince, reached.summary.reach], [2, 0, '2026-10-18']);
+});
+
+test('cut-over d. a row of a filed period before the day is never booked, whatever the payout days; a refund of the open period is', () => {
+  const csv = [head, row('1960', '2026-06-28', '54.05', '4.05'), row('1961', '2026-07-01', '20.00', '1.50')].join('\n');
+  const read = salesOf(csv);
+  read.rows[0].refunded = 10;
+  read.rows[0].refundedAt = '2026-07-04';
+  const out = bookReport({ journalEntries: [] }, read, ctxOf({ since: '2026-07-03', from: '2026-06-26' }));
+  assert.equal(out.filed, 1);
+  assert.deepEqual(lines(out.entries), [
+    ['SR-shopify-1960-refund', '2026-07-04', '3200', '1093', 10, '-V81'],
+    ['SR-shopify-1961', '2026-07-01', '1093', '3200', 20, 'V81'],
+  ]);
+});
+
+test('cut-over e. the clearing check right after the first payout from the clearing account: even, never below zero', () => {
+  const ws = shop();
+  const old = payout('PG', { date: '2026-10-30', amount: 50 });
+  const first = payout('PN', { date: '2026-11-03', amount: 128.1 });
+  const later = { ...payout('X', { date: '2026-11-12', amount: 5 }), direction: 'DBIT' as const };
+  seed(ws, [old, first, later], [asSales(old, 'pg'), E('pn', 'PN', '2026-11-03', '1021', '1093', 128.1)]);
+  const done = importSalesReport(ws, Buffer.from([head, row('1981', '2026-10-28', '50.00', '3.75'), row('1983', '2026-10-31', '20.00', '1.50'), row('2001', '2026-11-02', '108.10', '8.10')].join('\n')), 'o.csv');
+  assert.ok(done.ok);
+  assert.deepEqual([done.summary.orders, done.summary.held], [2, [{ order: '1981', why: 'legacy' }]]);
+  const p = providersOf(ws).find((x) => x.id === 'shopify')!;
+  const books = loadBooks(ws);
+  const right = clearingCheck(p, books, '2026-11-03')!;
+  assert.deepEqual([right.balance, right.below], [0, undefined], 'the payout of 3.11. pays #1983 and #2001, both on the account');
+  const day = clearingCheck(p, books, '2026-10-31')!;
+  assert.deepEqual([day.balance, day.below, day.paidAfter], [20, undefined, 128.1], 'on the eve: #1983 waits for its payout, within what was paid after');
 });
 
 test('A. an older per-order sale on the clearing account (SHOPIFY-<n>) holds its order: booked once, waiting named on the receipt', () => {

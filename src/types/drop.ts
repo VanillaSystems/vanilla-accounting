@@ -87,14 +87,15 @@ export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax'
 /**
  * What a report booked (src/intake/sales-report-import.ts): orders, refunds and fees booked; `known`
  * already in the books; `filed` and `before`: rows dated in a filed period or before the books, not
- * booked (a correction is the person's); `beforeSince`: rows dated before the provider's cut-over day
- * `since`, booked the way they were and never by the report; `other`: orders the provider did not collect (paid otherwise:
+ * booked (a correction is the person's); `beforeSince`: rows dated before `reach` (the provider's
+ * cut-over day `since` less its payout days: no payout from the clearing account can have paid them),
+ * booked the way they were and never by the report; `other`: orders the provider did not collect (paid otherwise:
  * PayPal, bank transfer, a gift card, a test), not booked, with how they were paid (`ways`, the first
  * ones, `waysMore` the rest); `held`: orders the person decides (the first ones, `heldMore` the rest);
  * `unread`: rows code could not read; `proofs`: order documents linked to their sale.
  */
 export interface ReportSummary {
-  provider: string; name: string; kind: 'sales' | 'fees'; from: string; to: string; file: string; since: string;
+  provider: string; name: string; kind: 'sales' | 'fees'; from: string; to: string; file: string; since: string; reach: string;
   orders: number; refunds: number; fees: number; known: number; filed: number; before: number; beforeSince: number;
   other: number; ways: string[]; waysMore: number;
   held: ReportHeld[]; heldMore: number; unread: number; proofs: number;

@@ -17,16 +17,19 @@
  * (SR-<provider>-<order>), so a report read twice, or two that overlap, book each order once; an
  * order the books carry with other figures is named, never booked again. Nothing is booked into a
  * filed period or before the books begin: such orders are counted, a correction is the person's
- * (golden rule 1); a refund of such an order dated in the open period is booked. Nothing dated before
- * the company's cut-over day (`provider.since`) is booked either: until then the provider's sales
- * were booked the way they were, and they stay so; such rows are counted. A domestic order is
+ * (golden rule 1); a refund of such an order dated in the open period is booked. From the company's
+ * cut-over day (`provider.since`) on the provider's payouts settle the clearing account, and the
+ * first of them pay sales collected up to its payout days before it: so the report books every row
+ * from `since` less the payout days on that the books do not carry yet; earlier rows are counted. A
+ * row before `since` waits when the clearing account carries it already (the old way, per order) or
+ * a payout before `since` booked otherwise (as sales) is dated after it and so may have paid it. A domestic order is
  * booked at the rate its tax column shows (the normal one, a reduced one the firm's form takes); one
  * without tax, or at no rate the firm books, is a new case for the person, never a sale without
  * output tax (processes/suppliers/shopify.yaml sv-delivery-decides); a foreign tax on an export is no
  * reason to hold it (sv-eu-vat), Swiss VAT shown on one is (it is owed as shown). An order the
  * provider did not collect (its `gateway` none of the provider's `gateways`) is counted, never booked
  * onto the clearing account. A refund without its own day waits for the person: it is never dated on
- * the order's day. What the books carry already from elsewhere on or after the cut-over day holds
+ * the order's day. What the books carry already from elsewhere holds
  * what it may be (`ReportContext.legacy`): a sale on the clearing account that names an order (an
  * older booking per order, a person's own) holds that order; one that names none, and a payout of
  * the provider booked otherwise than from the clearing account (as sales), hold every order, refund
@@ -221,17 +224,26 @@ export interface ReportContext {
   territory: readonly string[];
   /** The gateway column's values whose orders the provider collected (ProviderFacts.gateways); absent: every order. */
   gateways?: readonly string[];
-  /** The company's cut-over day (ProviderFacts.since): rows dated before it are counted, never booked. */
+  /** The company's cut-over day (ProviderFacts.since): from it on the provider's payouts settle the clearing account. */
   since: string;
   /**
-   * What the books carry already from elsewhere, on or after `since` in the open period. `entries`:
-   * entries on the clearing account no report booked, of the report's kind (a sale onto it for a
-   * sales report, a fee off it for a fee report): a row one of them names (by its ref, or by its day
-   * and amount) waits, and one that names none holds every row up to its day. `through`: the last day
-   * of a payout of the provider booked otherwise than from the clearing account (it may hold every
-   * sale, refund and fee up to its day): those wait too.
+   * The first day a row is booked: `since` less the provider's payout days, since a sale collected
+   * that late may be paid out after the cut-over day, from the clearing account. Rows dated before it
+   * are counted (`beforeSince`), never booked.
    */
-  legacy?: { entries: readonly JournalEntry[]; through?: string };
+  from: string;
+  /**
+   * What the books carry already from elsewhere. `entries`: entries on the clearing account no report
+   * booked, of the report's kind (a sale onto it for a sales report, a fee off it for a fee report): a
+   * row one of them names (by its ref, or by its day and amount) waits; one dated on or after `since`
+   * that names none holds every row up to its day. `through`: the last day of a payout of the provider
+   * on or after `since` booked otherwise than from the clearing account (it may hold every sale,
+   * refund and fee up to its day): those wait too. `paidBefore`: the days of the provider's payouts
+   * from `from` to before `since` not booked bank / clearing account (the old way, as sales, or not
+   * booked yet): a row dated before `since` and before one of them may have been paid by it, so it
+   * waits.
+   */
+  legacy?: { entries: readonly JournalEntry[]; through?: string; paidBefore?: readonly string[] };
   /** The agreed basis: the order's day is the tax point. */
   agreed: boolean;
   isClosed: (date: string) => boolean;
@@ -296,7 +308,7 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
   const out: ReportOutcome = { orders: 0, refunds: 0, fees: 0, known: 0, knownRefs: [], filed: 0, before: 0, beforeSince: 0, other: 0, ways: [], held: [], entries: [], links: [] };
   const byRef = new Map<string, JournalEntry[]>();
   for (const e of books.journalEntries) if (isReportRef(e.transactionRef)) (byRef.get(e.transactionRef) ?? byRef.set(e.transactionRef, []).get(e.transactionRef)!).push(e);
-  const dated = (date: string): 'filed' | 'before' | 'beforeSince' | undefined => (ctx.beforeBooks(date) ? 'before' : ctx.isClosed(date) ? 'filed' : date < ctx.since ? 'beforeSince' : undefined);
+  const dated = (date: string): 'filed' | 'before' | 'beforeSince' | undefined => (ctx.beforeBooks(date) ? 'before' : ctx.isClosed(date) ? 'filed' : date < ctx.from ? 'beforeSince' : undefined);
   const make = (ref: string, date: string, currency: string | undefined, line: Pick<JournalEntry, 'accountDebit' | 'accountCredit' | 'amount' | 'description'> & { vatCode?: string }, reason: string): JournalEntry | 'noRate' => {
     const foreign = currency && currency !== ctx.base ? currency : undefined;
     const rate = foreign ? ctx.rate(foreign, date) : undefined;
@@ -322,7 +334,7 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
   };
 
   if (read.kind === 'fees') {
-    const feeLegacy = legacyRows(read.rows.map((f) => ({ key: f.order ?? f.date, day: f.date, amount: f.fee })), ctx.legacy);
+    const feeLegacy = legacyRows(read.rows.map((f) => ({ key: f.order ?? f.date, day: f.date, amount: f.fee })), ctx.legacy, ctx.since);
     for (const f of read.rows) {
       if (!ctx.fees) break;
       const key = f.order ?? f.date;
@@ -344,7 +356,7 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
 
   const collects = ctx.gateways?.length ? new Set(ctx.gateways.map(gatewayKey)) : undefined;
   const taxDay = (o: SaleRow) => (ctx.agreed ? o.ordered ?? o.date : o.date);
-  const orderLegacy = legacyRows(read.rows.map((o) => ({ key: o.order, day: taxDay(o), amount: o.gross })), ctx.legacy);
+  const orderLegacy = legacyRows(read.rows.map((o) => ({ key: o.order, day: taxDay(o), amount: o.gross })), ctx.legacy, ctx.since);
   const isLegacy = (o: SaleRow) => orderLegacy({ key: o.order, day: taxDay(o), amount: o.gross });
   const rates: SaleCode[] = ctx.codes ? [{ code: ctx.codes.domestic, rate: ctx.codes.rate }, ...(ctx.codes.reduced ?? [])] : [];
   for (const o of read.rows) {
@@ -426,10 +438,13 @@ interface LegacyRow { key: string; day: string; amount: number }
 /**
  * Which rows of a report the books may carry already from elsewhere (ReportContext.legacy): an entry
  * whose ref ends in the row's order, else one of the row's day and amount, holds that row; an entry
- * that names no row of the report holds every row up to its day, as a payout booked otherwise does
- * up to `through`.
+ * on or after `since` that names no row of the report holds every row up to its day, as a payout
+ * booked otherwise does up to `through`. One before `since` names its row only: the old way booked
+ * each sale onto the clearing account and paid it from there, so another sale of those days is not
+ * on it yet. A row dated before `since` waits when a payout before `since` not booked from the
+ * clearing account is dated after it (`paidBefore`): a payout pays what was collected before its day.
  */
-function legacyRows(rows: readonly LegacyRow[], legacy: ReportContext['legacy']): (row: LegacyRow) => boolean {
+function legacyRows(rows: readonly LegacyRow[], legacy: ReportContext['legacy'], since: string): (row: LegacyRow) => boolean {
   if (!legacy) return () => false;
   const named = new Set<string>();
   let through = legacy.through ?? '';
@@ -437,9 +452,10 @@ function legacyRows(rows: readonly LegacyRow[], legacy: ReportContext['legacy'])
     const r = rows.find((x) => namesOrder(e.transactionRef, x.key))
       ?? rows.find((x) => !named.has(x.key) && x.day === e.date && toRappen(x.amount) === toRappen(e.amount));
     if (r) named.add(r.key);
-    else if (e.date > through) through = e.date;
+    else if (e.date >= since && e.date > through) through = e.date;
   }
-  return (row) => named.has(row.key) || row.day <= through;
+  const paid = legacy.paidBefore ?? [];
+  return (row) => named.has(row.key) || row.day <= through || (row.day < since && paid.some((d) => d > row.day));
 }
 
 // ─── Export proof: order documents to their sale ─────────────────────────────

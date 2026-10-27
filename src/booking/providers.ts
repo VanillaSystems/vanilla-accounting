@@ -32,17 +32,26 @@ export const PAYOUT_DAYS = 7;
 export const settlesOn = (p: Provider, date: string): boolean => !p.provider.since || date >= p.provider.since;
 
 /**
- * The provider whose payout `tx` is: money in that routes to a business with a `provider:` section,
- * dated on or after its cut-over day (settlesOn). A payout before that day is a payment like any
- * other and stays as it was booked. Money out to the same business (its subscription, a bill) is a
- * purchase like any other.
+ * The provider whose payout `tx` is, whatever its day: money in that routes to a business with a
+ * `provider:` section. Money out to the same business (its subscription, a bill) is a purchase like
+ * any other.
  */
-export function providerOfPayment(tx: Pick<BankTransaction, 'date' | 'direction' | 'description' | 'counterparty' | 'counterpartyIban' | 'amount'>, linked: readonly Receipt[], counterparties: readonly Counterparty[]): Provider | undefined {
+export function providerOfMoneyIn(tx: Pick<BankTransaction, 'date' | 'direction' | 'description' | 'counterparty' | 'counterpartyIban' | 'amount'>, linked: readonly Receipt[], counterparties: readonly Counterparty[]): Provider | undefined {
   if (tx.direction !== 'CRDT' || tx.amount === 0) return undefined;
   const routing = identify(signalsOfTransaction(tx as BankTransaction, [...linked]), counterparties);
   if (routing.kind !== 'known') return undefined;
   const cp = counterparties.find((c) => c.id === routing.counterparty);
-  return cp && isProvider(cp) && settlesOn(cp, tx.date) ? cp : undefined;
+  return cp && isProvider(cp) ? cp : undefined;
+}
+
+/**
+ * The provider whose payout `tx` is as a settlement (providerOfMoneyIn), dated on or after its
+ * cut-over day (settlesOn). A payout before that day is a payment like any other and stays as it
+ * was booked.
+ */
+export function providerOfPayment(tx: Pick<BankTransaction, 'date' | 'direction' | 'description' | 'counterparty' | 'counterpartyIban' | 'amount'>, linked: readonly Receipt[], counterparties: readonly Counterparty[]): Provider | undefined {
+  const cp = providerOfMoneyIn(tx, linked, counterparties);
+  return cp && settlesOn(cp, tx.date) ? cp : undefined;
 }
 
 /** The ids of the businesses that are payment providers. */
@@ -68,7 +77,7 @@ export interface MonthEnd { date: string; balance: number }
  * sales it collected after it, so `paidAfter` is the most the balance may be: a balance above it is a
  * difference, found per order and corrected in the open period. A balance below zero is one too,
  * whatever was paid after: the provider paid out more than the books have sales for (a sale not
- * booked, such as one collected before the cut-over day and paid after it). `currency`: the clearing account's
+ * booked yet, such as one of a report not dropped). `currency`: the clearing account's
  * entries are in a foreign currency, valued at each day's rate, so its balance carries exchange
  * differences until the year end revalues it. A fact, no reminder.
  */

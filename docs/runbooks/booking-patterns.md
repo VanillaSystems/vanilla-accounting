@@ -61,5 +61,8 @@ A payment provider's payout (Shopify Payments, a card terminal) is a settlement,
 | the payout       | bank       | clearing    | none                                   | the bank statement       |
 
 The clearing account comes back to what the provider holds unpaid; the quarter's review shows it.
-What is dated before `since` stays as it was booked; nothing is booked again.
+What is dated before `since` stays as it was booked; nothing is booked again. The sales report
+also books the orders, refunds and fees of the payout days before `since` that the books do not
+carry yet (paid out after `since`, from the clearing account): one the clearing account carries
+already, or that a payout before `since` booked as sales may have paid, waits for the person.
 The monthly Vorsteuer correction above stays as it is.

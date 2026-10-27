@@ -218,21 +218,27 @@ provider:
   are counted, never booked onto the clearing account. A domestic order without
   tax or at no rate the firm books, Swiss VAT on an export, and a refund without
   its own day wait for the person. An order of a filed period is not booked; its
-  refund paid in the open period is. An order, refund or fee dated before
-  `since` is counted («vor dem Umstellungstag»), never booked.
-- What the books carry from elsewhere on or after `since` holds what it may be,
-  so nothing counts twice: a sale on the clearing account no report booked (an
+  refund paid in the open period is.
+- The report reaches back to `since` less the payout days (`payoutDays`, the
+  company's file may set its own): a sale collected then may be paid out after
+  `since`, from the clearing account, so the report books it, dated by its own
+  tax point, when that day is open and on or after the books' start. Before
+  `since` it books only what no payout before `since` can have paid the old way:
+  a row waits when the clearing account carries it already (the old way, per
+  order: by its ref or its day and amount) or when a payout of the provider
+  dated before `since` and after the row's day is not booked bank / clearing
+  account (booked as sales, or not booked yet). An order, refund or fee dated
+  earlier is counted («vor dem …»), never booked. So the clearing check comes
+  out even after the cut-over.
+- What the books carry from elsewhere holds what it may be, so nothing counts
+  twice: a sale on the clearing account no report booked (an
   older booking per order such as `SHOPIFY-<n>`, a person's own) holds the order
-  its ref or its day and amount name, and one that names none holds every order
-  up to its day; a payout of the provider booked otherwise than from the
-  clearing account (as sales, by a person) holds every order, refund and fee up
-  to its day. Held rows wait for the person, named in the drop row and kept on
+  its ref or its day and amount name, and one on or after `since` that names
+  none holds every order up to its day; a payout of the provider booked otherwise than from the
+  clearing account (as sales, by a person) on or after `since` holds every
+  order, refund and fee up to its day. Held rows wait for the person, named in the drop row and kept on
   the report's receipt (`report.held`, the latest taking's, at most 200 named).
   «Rückgängig» takes only the report's own entries and links.
-- The provider's balance on the cut-over day (sales collected before `since`
-  and paid out after it) is no row the app books: the first payouts after
-  `since` take the clearing account below zero by it, and the clearing check
-  names that as a difference for the person to book.
 - One source of sales per provider: a provider with `reports.sales` takes none
   from a payout report (a card terminal's PDF), whose sales book only with its
   payout booked from the clearing account.

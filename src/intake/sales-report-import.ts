@@ -2,11 +2,12 @@
  * A payment provider's sales or fee report taken in (#203): recognised by its columns
  * (src/booking/sales-report.ts recognizeReport, by the providers' business files), filed as a
  * receipt of its year (a sales record), and booked onto the provider's clearing account at once,
- * as a module of the app through the write door: never into a filed period, never before the
- * company's cut-over day (`provider.since`), never over a person's booking. No existing entry is ever
- * booked again: what is dated before the cut-over day stays as it was booked, and a sale the clearing
- * account carries from elsewhere holds the orders it may be (ReportContext.legacy), so no sale counts
- * twice. What the report cannot book is kept on its receipt (`report.held`) for the person.
+ * as a module of the app through the write door: never into a filed period, never earlier than the
+ * company's cut-over day (`provider.since`) less the provider's payout days (a sale collected then is
+ * paid out after the cut-over day, from the clearing account), never over a person's booking. No
+ * existing entry is ever booked again: what is dated before the cut-over day stays as it was booked,
+ * and a sale the clearing account carries from elsewhere, or a payout booked as sales, holds the
+ * orders it may be (ReportContext.legacy), so no sale counts twice and none is lost. What the report cannot book is kept on its receipt (`report.held`) for the person.
  * «Rückgängig» takes the report's own entries and links back (removeSalesReport). What the company's
  * file of the provider lacks (its clearing account with the cut-over day, its revenue account, its
  * fee account) is asked once, in the drop row (setProviderAccount), and kept in that file.
@@ -18,7 +19,7 @@ import { parseDocument } from 'yaml';
 import { loadBooks, moduleActor, periodLock, receiptFile, receiptHome, updateSaved, type Books } from '../books/store.js';
 import { loadClassifyContext, chartOf, mappedReceipts, type ClassifyContext } from '../booking/classify.js';
 import { chartNames } from '../booking/rule-book.js';
-import { fromClearing, isProvider, payoutDaysOf, providerOfPayment, type Provider } from '../booking/providers.js';
+import { fromClearing, isProvider, payoutDaysOf, providerOfMoneyIn, providerOfPayment, type Provider } from '../booking/providers.js';
 import { bookReport, isReportRef, linkOrdersToSales, readReport, recognizeReport, reportFacts, REPORT_LINK_RULE, saleRef, type ReadReport, type ReportContext, type ReportOutcome, type ReportTexts } from '../booking/sales-report.js';
 import { loadKnowledge, homeOf } from '../knowledge/layers.js';
 import { silentUids } from '../knowledge/counterparties.js';
@@ -129,34 +130,46 @@ function payoutsOf(books: Books, p: Provider, context: ClassifyContext): Array<{
 }
 
 /**
- * What the books carry already from elsewhere for a report of `kind` (ReportContext.legacy), on or
- * after the provider's cut-over day in the open period: the entries on its clearing account that no
- * report booked (for a sales report a sale onto it, from its revenue account or with a sale code; for
- * a fee report a fee off it onto its fee account), and the last day of a payout of the provider booked
- * otherwise than from the clearing account (as sales, by a person): it may hold every row up to then.
+ * What the books carry already from elsewhere for a report of `kind` (ReportContext.legacy): the
+ * entries on its clearing account that no report booked (for a sales report a sale onto it, from its
+ * revenue account or with a sale code; for a fee report a fee off it onto its fee account), those
+ * before the cut-over day only to name the rows they are; the last day of a payout of the provider on
+ * or after the cut-over day booked otherwise than from the clearing account (as sales, by a person):
+ * it may hold every row up to then; and the days of its payouts between `from` and the cut-over day
+ * not booked bank / clearing account (as sales the old way, or not yet booked): each may have paid
+ * the rows before it.
  */
-function legacyOf(books: Books, p: Provider, kind: 'sales' | 'fees', revenue: string, context: ClassifyContext): NonNullable<ReportContext['legacy']> {
+function legacyOf(books: Books, p: Provider, kind: 'sales' | 'fees', revenue: string, from: string, context: ClassifyContext): NonNullable<ReportContext['legacy']> {
   const lock = periodLock(books);
   const clearing = p.provider.clearing!;
   const since = p.provider.since!;
-  const open = (e: JournalEntry) => !isReportRef(e.transactionRef) && e.date >= since && !lock.isClosed(e.date);
-  const entries = books.journalEntries.filter((e) => open(e) && (kind === 'sales'
+  const carried = (e: JournalEntry) => !isReportRef(e.transactionRef) && (e.date < since || !lock.isClosed(e.date));
+  const entries = books.journalEntries.filter((e) => carried(e) && (kind === 'sales'
     ? e.accountDebit === clearing && (e.accountCredit === revenue || sideOf(e.vatCode) === 'sale')
     : e.accountCredit === clearing && e.accountDebit === p.provider.fees?.account));
+  const otherwise = (booked: readonly JournalEntry[]) => !fromClearing(booked, clearing);
   const through = payoutsOf(books, p, context)
-    .filter(({ tx, entries: booked }) => booked.length && !fromClearing(booked, clearing) && !lock.isClosed(tx.date))
+    .filter(({ tx, entries: booked }) => booked.length && otherwise(booked) && !lock.isClosed(tx.date))
     .map(({ tx }) => tx.date).sort().at(-1);
-  return { entries, ...(through ? { through } : {}) };
+  const paidBefore = books.transactions
+    .filter((tx) => tx.date >= from && tx.date < since && providerOfMoneyIn(tx, mappedReceipts(books, tx), context.counterparties ?? [])?.id === p.id
+      && otherwise(books.journalEntries.filter((e) => e.transactionRef === tx.ref)))
+    .map((tx) => tx.date).sort();
+  return { entries, ...(through ? { through } : {}), ...(paidBefore.length ? { paidBefore } : {}) };
 }
+
+/** The first day a report of `p` books: its cut-over day less its payout days (a sale collected then may be paid out after the cut-over day). */
+const reachOf = (p: Provider): string => addDays(p.provider.since!, -payoutDaysOf(p));
 
 /** The context of a report's booking for provider `p`: its accounts, the firm's codes and basis, the official daily sell rates (ADR 0001), the lock. */
 function reportContext(ws: Workspace, books: Books, p: Provider, kind: 'sales' | 'fees', receipt: string, texts: ReportTexts, fx: FxResolver, context: ClassifyContext): ReportContext {
   const lock = periodLock(books);
   const codes = saleCodes();
   const revenue = revenueOf(ws, p) ?? '';
+  const from = reachOf(p);
   return {
-    provider: { id: p.id, name: p.name }, clearing: p.provider.clearing!, revenue, since: p.provider.since!,
-    legacy: legacyOf(books, p, kind, revenue, context),
+    provider: { id: p.id, name: p.name }, clearing: p.provider.clearing!, revenue, since: p.provider.since!, from,
+    legacy: legacyOf(books, p, kind, revenue, from, context),
     ...(p.provider.fees ? { fees: { account: p.provider.fees.account, ...(formTakes(p.provider.fees.vat) ? { vat: p.provider.fees.vat } : {}) } } : {}),
     receipt, base: baseCurrency(), rate: (c, d) => fx.daily(c, d), ...(codes ? { codes } : {}), territory: invoicing().territory,
     ...(p.provider.gateways?.length ? { gateways: p.provider.gateways } : {}),
@@ -245,7 +258,7 @@ function saleCodes(): ReportContext['codes'] {
 function summaryOf(p: Provider, kind: 'sales' | 'fees', facts: ReturnType<typeof reportFacts>, read: ReadReport, r: { out: ReportOutcome; proofs: number; filename: string }): ReportSummary {
   const held = r.out.held;
   return {
-    provider: p.id, name: p.name, kind, from: facts.from, to: facts.to, file: r.filename, since: p.provider.since!,
+    provider: p.id, name: p.name, kind, from: facts.from, to: facts.to, file: r.filename, since: p.provider.since!, reach: reachOf(p),
     orders: r.out.orders, refunds: r.out.refunds, fees: r.out.fees, known: r.out.known, filed: r.out.filed, before: r.out.before, beforeSince: r.out.beforeSince,
     other: r.out.other, ways: r.out.ways.slice(0, WAYS_NAMED), waysMore: Math.max(0, r.out.ways.length - WAYS_NAMED),
     held: held.slice(0, HELD_NAMED), heldMore: Math.max(0, held.length - HELD_NAMED), unread: read.unread.length, proofs: r.proofs,
