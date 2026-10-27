@@ -33,6 +33,8 @@ import { InflowDialogs } from './InflowDialogs.js';
 import './receipts.css';
 import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
 import { baseCurrency } from '../../../engines/index.js';
+import { Pick } from '../../selection/Pick.js';
+import { clickRow, useSelection, useShown } from '../../selection/store.js';
 
 type Props = AreaProps<RouteOf<'receipts'>>;
 
@@ -79,6 +81,9 @@ function List(props: Props) {
   ];
   listed.ids = ids;
   listed.suggestions = suggestions;
+  const picked = useSelection('receipt');
+  useShown('receipt', ids.filter((id) => l.byId.has(id)));
+  const pickedIds = new Set(picked?.ids);
 
   useEffect(() => { pollInbox(nav.refresh); }, [nav]);
 
@@ -95,7 +100,8 @@ function List(props: Props) {
   const select = (id: string) => nav.select({ area: 'receipts', id });
   useSelectionFollowsRows(route.id, ids, select);
   const row = (v: ReceiptView, same: boolean) => (
-    <Row key={v.r.id} v={v} sel={v.r.id === route.id} same={same} canEdit={canEdit} onSelect={select} onAct={(a) => runAct(props, a, v.r.id)} />
+    <Row key={v.r.id} v={v} sel={!picked && v.r.id === route.id} picked={pickedIds.has(v.r.id)} same={same} canEdit={canEdit} onSelect={select}
+      onClick={(e) => clickRow(e, 'receipt', v.r.id, route.id, select, nav.toast)} toast={nav.toast} onAct={(a) => runAct(props, a, v.r.id)} />
   );
 
   return (
@@ -138,7 +144,7 @@ function List(props: Props) {
             </div>
           )
       ) : (
-        <div className="rows" role="listbox" aria-label={t('area.receipts')}>
+        <div className={`rows${picked ? ' picking' : ''}`} role="listbox" aria-multiselectable="true" aria-label={t('area.receipts')}>
           {pending.length > 0 && (
             <>
               <div className="group"><span>{t('receipts.groupNeed')}</span><span className="mono">{pending.length}</span></div>
@@ -176,7 +182,7 @@ function List(props: Props) {
           {s.showHidden && (
             <>
             <p className="m hidden-lead" data-testid="hidden-lead">{t('receipts.hiddenLead')}</p>
-            <div className="rows" role="listbox" aria-label={t('receipts.notReceipts')}>
+            <div className={`rows${picked ? ' picking' : ''}`} role="listbox" aria-multiselectable="true" aria-label={t('receipts.notReceipts')}>
               {hidden.map((v) => row(v, false))}
             </div>
             </>
@@ -189,19 +195,20 @@ function List(props: Props) {
   );
 }
 
-function Row({ v, sel, same, canEdit, onSelect, onAct }: { v: ReceiptView; sel: boolean; same: boolean; canEdit: boolean; onSelect(id: string): void; onAct(a: Act): void }) {
+function Row({ v, sel, picked, same, canEdit, onSelect, onClick, toast, onAct }: { v: ReceiptView; sel: boolean; picked: boolean; same: boolean; canEdit: boolean; onSelect(id: string): void; onClick(e: React.MouseEvent): void; toast(msg: string): void; onAct(a: Act): void }) {
   const { r } = v;
   const act = (run: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); onSelect(r.id); run(); };
   const edit = canEdit && !v.locked;
   return (
     <div
-      className={`row${sel ? ' sel' : ''}${v.none ? ' nonreceipt' : ''}`}
+      className={`row${sel ? ' sel' : ''}${picked ? ' picked' : ''}${v.none ? ' nonreceipt' : ''}`}
       role="option"
-      aria-selected={sel}
+      aria-selected={sel || picked}
       tabIndex={sel ? 0 : -1}
       data-id={r.id}
-      onClick={() => onSelect(r.id)}
+      onClick={onClick}
     >
+      <Pick kind="receipt" id={r.id} on={picked} label={v.vendor || r.filename} toast={toast} />
       <span className="d mono">{same ? <span className="sr">{formatDate(v.date)}</span> : v.date ? <><span className="dl">{formatDate(v.date)}</span><span className="ds">{formatDate(v.date).slice(0, 6)}</span></> : <span className="d none">{t('receipts.noDate')}</span>}</span>
       <span className="t">{isOpen(v) && !v.locked && !v.none && I.dot}{v.vendor}{v.desc && <small> {v.desc}</small>}{v.none && <small className="nonewhy" data-testid="none-why" data-by={v.noneBy} data-tip={noneText(v)}> · {noneText(v)}</small>}</span>
       <span className="a mono">{r.amount != null && <>{(r.currency ?? baseCurrency()) !== baseCurrency() && <span className="c">{r.currency}</span>}{fmt(r.amount)}</>}</span>
@@ -313,6 +320,7 @@ const legend = (): LegendItem[] => [
   [['D'], t('receipts.keyDownload'), t('receipts.keyDownloadTip')],
   [['E'], t('receipts.keyEdit'), t('receipts.keyEditTip')],
   [['L'], t('receipts.keyLink'), t('receipts.keyLinkTip')],
+  [['⌘', '⇧'], t('keys.pick'), t('keys.pickTip')],
   [['/'], t('keys.search'), t('receipts.searchTip')],
   [['⌘', 'K'], t('keys.all'), t('keys.allTip')],
 ];
@@ -320,6 +328,7 @@ const legend = (): LegendItem[] => [
 export const receipts: Area<RouteOf<'receipts'>> = {
   id: 'receipts',
   periodRows: true,
+  selects: 'receipt',
   label: () => t('area.receipts'),
   dock: { key: 'b', icon: ICONS.receipts, tip: () => t('area.receipts.tip'), badge: (books) => badgeCount(ledgerFor(books)) },
   List,

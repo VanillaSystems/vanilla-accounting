@@ -22,6 +22,7 @@ import { changes } from './changes/changes.js';
 import { partners } from './partners/partners.js';
 import { knowledge } from './knowledge/knowledge.js';
 import { ICONS } from './icons.js';
+import type { SelectKind } from '../selection/model.js';
 
 export interface Nav {
   /** To another place: a new history entry when the area changes, else the current one replaced (urls.md rule 4). */
@@ -85,6 +86,8 @@ export interface Area<R extends Route = Route> {
   periodless?: boolean;
   /** Its rows belong to a period: another period opens the new list at its first row instead of keeping the object. */
   periodRows?: boolean;
+  /** Its list picks several rows of this kind at once (#216): ⌘-click, ⇧-click, ⌘A, Esc. */
+  selects?: SelectKind;
 }
 
 type Registry = { [A in AreaId]: Area<RouteOf<A>> };

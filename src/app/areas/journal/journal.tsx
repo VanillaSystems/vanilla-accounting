@@ -32,6 +32,8 @@ import { NewEntry } from './NewEntry.js';
 import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
 import './journal.css';
 import { baseCurrency } from '../../../engines/index.js';
+import { Pick } from '../../selection/Pick.js';
+import { clickRow, useSelection, useShown } from '../../selection/store.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
@@ -55,6 +57,9 @@ function List(props: Props) {
   const months = byMonth(rows);
   const ids = months.filter(([m]) => !s.collapsed.has(m)).flatMap(([, xs]) => xs.map((v) => v.e.id));
   listed.ids = ids;
+  const picked = useSelection('entry');
+  useShown('entry', ids);
+  const pickedIds = new Set(picked?.ids);
 
   // Nothing selected: the first row. A link to an entry elsewhere opens its period, month and filter (urls.md rule 1).
   const seen = useRef<string>();
@@ -109,7 +114,7 @@ function List(props: Props) {
           {!query.q && !query.vat && !chips.length && canEdit && <p>{t('journal.emptyText')}</p>}
         </div>
       ) : (
-        <div className="rows je" role="listbox" aria-label={t('area.journal')}>
+        <div className={`rows je${picked ? ' picking' : ''}`} role="listbox" aria-multiselectable="true" aria-label={t('area.journal')}>
           {months.map(([m, xs]) => {
             const shut = s.collapsed.has(m);
             let prev: EntryView | undefined;
@@ -122,7 +127,7 @@ function List(props: Props) {
                   <span className="cap vh" aria-hidden="true">{shut ? '' : t('journal.field.vatCode')}</span>
                   <span className="mono n">{xs.length}</span>
                 </button>
-                {!shut && xs.map((v) => { const row = <Row key={v.e.id} v={v} prev={prev} sel={v.e.id === route.id} acName={acName} onSelect={select} />; prev = v; return row; })}
+                {!shut && xs.map((v) => { const row = <Row key={v.e.id} v={v} prev={prev} sel={!picked && v.e.id === route.id} picked={pickedIds.has(v.e.id)} acName={acName} toast={nav.toast} onClick={(e) => clickRow(e, 'entry', v.e.id, route.id, select, nav.toast)} />; prev = v; return row; })}
               </Fragment>
             );
           })}
@@ -136,7 +141,7 @@ function List(props: Props) {
 
 const BARS = <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h6" /></svg>;
 
-function Row({ v, prev, sel, acName, onSelect }: { v: EntryView; prev?: EntryView; sel: boolean; acName: Record<string, string>; onSelect(id: string): void }) {
+function Row({ v, prev, sel, picked, acName, toast, onClick }: { v: EntryView; prev?: EntryView; sel: boolean; picked: boolean; acName: Record<string, string>; toast(msg: string): void; onClick(e: React.MouseEvent): void }) {
   const { e } = v;
   const same = prev?.e.date === e.date;
   const cont = prev?.e.transactionRef === e.transactionRef;
@@ -147,7 +152,8 @@ function Row({ v, prev, sel, acName, onSelect }: { v: EntryView; prev?: EntryVie
       : <span className={`mono ${which} none`} data-tip={t('journal.noCounterSide', { side: label })}>·</span>;
   };
   return (
-    <div className={`row${sel ? ' sel' : ''}${cont ? ' cont' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={e.id} onClick={() => onSelect(e.id)}>
+    <div className={`row${sel ? ' sel' : ''}${picked ? ' picked' : ''}${cont ? ' cont' : ''}`} role="option" aria-selected={sel || picked} tabIndex={sel ? 0 : -1} data-id={e.id} onClick={onClick}>
+      <Pick kind="entry" id={e.id} on={picked} label={v.title} toast={toast} />
       <span className="d mono">{same ? <span className="sr">{formatDate(e.date)}</span> : formatDate(e.date)}</span>
       <span className="t">{v.missing && I.dot}{v.title}{v.sub && <small> {v.sub}</small>}</span>
       {side(e.accountDebit, 'dr')}
@@ -167,6 +173,7 @@ const legend = (): LegendItem[] => [
   [['⇧', '↵'], t('journal.keyPayment'), t('journal.keyPaymentTip')],
   [['E'], t('journal.keyEdit'), t('journal.keyEditTip')],
   [['D'], t('journal.keyDownload'), t('journal.keyDownloadTip')],
+  [['⌘', '⇧'], t('keys.pick'), t('keys.pickTip')],
   [['/'], t('keys.search'), t('journal.searchTip')],
   [['⌘', 'K'], t('keys.all'), t('keys.allTip')],
 ];
@@ -174,6 +181,7 @@ const legend = (): LegendItem[] => [
 export const journal: Area<RouteOf<'journal'>> = {
   id: 'journal',
   periodRows: true,
+  selects: 'entry',
   label: () => t('area.journal'),
   dock: { key: 'u', icon: ICONS.journal, tip: () => t('area.journal.tip') },
   List,

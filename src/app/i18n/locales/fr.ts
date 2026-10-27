@@ -4800,5 +4800,10 @@ export default {
     'chips.receipt.yes': 'lié',
     'chips.receipt.no': 'aucun',
     'chips.receipt.missing': 'manquant (requis)',
+    'selection.limit': 'Au plus {max} à la fois : {n} non sélectionnés.',
+    'selection.pick': 'Sélectionner {what}',
+    'selection.unpick': 'Désélectionner {what}',
+    'keys.pick': 'Sélectionner',
+    'keys.pickTip': '⌘-clic ajoute ou retire une ligne, ⇧-clic une plage, ⌘A toutes celles affichées, Échap aucune.',
   },
 } satisfies Locale;

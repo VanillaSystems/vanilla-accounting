@@ -4800,5 +4800,10 @@ export default {
     'chips.receipt.yes': 'linked',
     'chips.receipt.no': 'none',
     'chips.receipt.missing': 'missing (needs one)',
+    'selection.limit': 'At most {max} at once: {n} not selected.',
+    'selection.pick': 'Select {what}',
+    'selection.unpick': 'Deselect {what}',
+    'keys.pick': 'Select',
+    'keys.pickTip': '⌘-click adds or removes a row, ⇧-click a range, ⌘A all shown, Esc none.',
   },
 } satisfies Locale;

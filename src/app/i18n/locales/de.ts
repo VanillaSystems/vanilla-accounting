@@ -4797,6 +4797,11 @@ export const messages = {
   'chips.receipt.yes': 'verknüpft',
   'chips.receipt.no': 'keiner',
   'chips.receipt.missing': 'fehlt (braucht einen)',
+  'selection.limit': 'Höchstens {max} auf einmal: {n} nicht ausgewählt.',
+  'selection.pick': '{what} auswählen',
+  'selection.unpick': '{what} nicht mehr auswählen',
+  'keys.pick': 'Auswählen',
+  'keys.pickTip': '⌘-Klick nimmt eine Zeile dazu oder weg, ⇧-Klick einen Bereich, ⌘A alle gezeigten, Esc keine.',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

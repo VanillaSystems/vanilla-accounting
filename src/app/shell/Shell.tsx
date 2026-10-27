@@ -42,6 +42,7 @@ import { CHAT_TAKES, PAGE_TAKES, droppedFiles, leftOut } from '../lib/folder-dro
 import { BotIcon } from '../areas/automation/Graph.js';
 import { ShellUiContext, type ShellUi } from './ui.js';
 import { filing } from '../../engines/index.js';
+import { clearSelection, selectAll, selectionNow } from '../selection/store.js';
 
 type Overlay =
   | { kind: 'palette' }
@@ -173,8 +174,13 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
     exportOpen: () => openExport(),
     assistant: toggleAssistant,
     toggleNav,
+    selectAll: () => !!area.selects && selectAll(area.selects, toast),
+    unselect: () => { if (!selectionNow()) return false; clearSelection(); focusSelectedRow(); return true; },
+    actions: () => false,
   });
   useLayoutEffect(syncSidebarWidth, []);
+  // A selection belongs to its list: another area starts with none (#216).
+  useEffect(clearSelection, [loc.route.area]);
 
   // urls.md rule 6: the tab names the object.
   useEffect(() => {
