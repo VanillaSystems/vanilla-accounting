@@ -6,16 +6,21 @@
  * matching such legs are one unit: a receipt (or a set) pays the charge, and is linked to every
  * leg, as a person links them. Each leg is then booked on its own: its share, in its currency.
  *
- * Legs are one charge when the bank says so (one ref, or one bank id across balances), or when
- * everything about them is the same but the balance: the day, the money's way, the original amount
- * and its currency, and the merchant, each balance once, and no leg in the charge's own currency
- * that already paid all of it. Anything less certain stays a movement of its own. Pure and
- * browser-safe.
+ * Legs are one charge when the bank says so (one ref), or when everything about them is the same
+ * but the balance: the day, the money's way, the original amount and its currency, and the
+ * merchant, each balance once, no two bank ids, and their amounts, each at the official daily rate
+ * of the day, add up to the original amount within SPLIT_BAND while each alone lies clearly
+ * below it. Two whole charges of one amount at one shop on one day from two balances each come to
+ * the whole amount: two charges, never one. Without the daily rates nothing is merged. Anything less
+ * certain stays a movement of its own. Pure and browser-safe.
  */
 import type { BankTransaction } from '../types/index.js';
 import { merchantOf } from '../knowledge/counterparties.js';
 import { madeByHand } from '../workspace/money-accounts.js';
-import { originalOf } from './pairing.js';
+import { originalOf, type ToChf } from './pairing.js';
+
+/** The legs of a split charge, each at the official daily rate, add up to its original amount within this share (a bank's rate is not the official one); each leg alone stays below the original by more than it. */
+export const SPLIT_BAND = 0.03;
 
 export interface Charge {
   /** Its movements, by ref: one, or the legs of a charge split across balances. A shared ref is listed once. */
@@ -36,7 +41,7 @@ const cents = (n: number) => Math.round(Math.abs(n) * 100);
 const merchant = (tx: BankTransaction) => (tx.counterparty?.trim() || merchantOf(tx.description)).toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 
 /** Whether movements of different refs are the legs of one charge, by everything but the balance (see the module's comment). */
-function oneCharge(legs: readonly BankTransaction[]): boolean {
+function oneCharge(legs: readonly BankTransaction[], toChf: ToChf): boolean {
   const original = originalOf(legs[0])!;
   const currencies = new Set(legs.map((t) => t.currency));
   if (currencies.size !== legs.length || currencies.size < 2) return false;
@@ -44,12 +49,19 @@ function oneCharge(legs: readonly BankTransaction[]): boolean {
   if (legs.some((t) => t.currency === original.currency && cents(t.amount) >= cents(original.amount))) return false;
   // Two different bank ids are two charges, whatever else they share.
   const ids = new Set(legs.flatMap((t) => (t.bankTxId ? [t.bankTxId] : [])));
-  return ids.size <= 1;
+  if (ids.size > 1) return false;
+  // Parts of one amount: together the original, each alone clearly less (two whole charges come to twice it, each to all of it).
+  const whole = toChf(original.amount, original.currency, legs[0].date);
+  const parts = legs.map((t) => toChf(Math.abs(t.amount), t.currency, t.date));
+  if (whole === undefined || !whole || parts.some((p) => p === undefined)) return false;
+  const sum = (parts as number[]).reduce((s, p) => s + p, 0);
+  return Math.abs(sum - whole) <= whole * SPLIT_BAND && (parts as number[]).every((p) => p < whole * (1 - SPLIT_BAND));
 }
 
 const splittable = (t: BankTransaction) => t.amount !== 0 && t.type !== 'wise-fee' && !madeByHand(t);
 
-export function chargesOf(transactions: readonly BankTransaction[]): Charges {
+/** The charges of `transactions`. `toChf`: the official daily rates; without them only a ref the bank shares makes legs one charge. */
+export function chargesOf(transactions: readonly BankTransaction[], toChf?: ToChf): Charges {
   const byRef = new Map<string, BankTransaction[]>();
   for (const t of transactions) byRef.set(t.ref, [...(byRef.get(t.ref) ?? []), t]);
   // The candidates for a split: one movement per ref (a ref the bank shares is a split already), with an original amount.
@@ -65,7 +77,7 @@ export function chargesOf(transactions: readonly BankTransaction[]): Charges {
   const charge = new Map<string, Charge>();
   const splits: Charge[] = [];
   for (const legs of buckets.values()) {
-    if (legs.length < 2 || !oneCharge(legs)) continue;
+    if (!toChf || legs.length < 2 || !oneCharge(legs, toChf)) continue;
     const sorted = [...legs].sort((a, b) => a.ref.localeCompare(b.ref));
     const c: Charge = { refs: sorted.map((t) => t.ref), legs: sorted, original: originalOf(sorted[0]) };
     splits.push(c);

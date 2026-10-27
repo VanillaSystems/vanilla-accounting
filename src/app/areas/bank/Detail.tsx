@@ -5,11 +5,11 @@
  * its statement shows where to add it.
  */
 import { byStatement, madeByHand } from '../../../workspace/money-accounts.js';
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { BankTransaction } from '../../../types/index.js';
 import { ratesUsed } from '../../../accounting/fx-conversion.js';
 import type { RouteOf } from '../../shell/route.js';
-import { sources } from '../../lib/api.js';
+import { api, sources } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { monthName } from '../../lib/period-label.js';
 import { useFx } from '../../hooks/use-fx.js';
@@ -21,7 +21,7 @@ import { I } from '../receipts/icons.js';
 import { isCamt, matches, payHaystack, payText, signed, type Bank, type Statement } from './model.js';
 import { bankFor, setUi, useUi, type Section } from './state.js';
 import { importStatements, linkReceiptSet, pickStatements, removeStatement, setNote, setNoReceipt } from './actions.js';
-import { proposalsFor } from '../../../intake/receipt-sets.js';
+import type { ReceiptSet, SetCut } from '../../../intake/receipt-sets.js';
 import { at } from '../receipts/view.js';
 import { FindPair, madeBy } from '../receipts/FindPair.js';
 import { StatementPaper, type Mark } from './StatementPaper.js';
@@ -284,7 +284,14 @@ const SETS_SHOWN = 3;
  * one click. Several sets that fit are each offered with their receipts named, so the person picks.
  */
 function ReceiptSetOffer({ books, b, tx, nav }: Props & { b: Bank; tx: BankTransaction }) {
-  const { sets: offers, cut } = useMemo(() => proposalsFor(books, tx, (d) => !b.closedThrough || d > b.closedThrough), [books, tx, b.closedThrough]);
+  // The server proposes: it knows the batch payers of the business files and the official daily rates (GET /api/transactions/:ref/receipt-sets).
+  const [found, setFound] = useState<{ sets: ReceiptSet[]; cut?: SetCut }>({ sets: [] });
+  useEffect(() => {
+    let live = true;
+    api.receiptSets(tx.ref).then((x) => { if (live) setFound(x); }, () => { if (live) setFound({ sets: [] }); });
+    return () => { live = false; };
+  }, [books, tx.ref]);
+  const { sets: offers, cut } = found;
   // Where code stopped looking is said, never cut silently: the person may find a set among the others.
   const told = cut ? <span key="cut"> · <span className="m" data-testid="receipt-set-cut">{t(cut.limit === 'run' ? 'bank.receiptSet.cutRun' : 'bank.receiptSet.cut', { near: cut.near, tried: cut.tried })}</span></span> : null;
   const more = offers.length > SETS_SHOWN ? <span key="more"> · <span className="m">{t('bank.receiptSet.more', { shown: SETS_SHOWN, n: offers.length })}</span></span> : null;

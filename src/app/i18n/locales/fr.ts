@@ -421,6 +421,7 @@ export default {
     'journal.byHand.booked': '{n} lignes comptabilisées sur {ref}',
     'error.classifyAccount': 'La réponse de Claude contenait une écriture sans compte («{description}») : rien n’a été comptabilisé, le paiement reste tel quel.',
     'error.classifySeparateFee': 'La réponse de Claude a dans le paiement une ligne de {amount}, autant que les frais que la banque débite à part ({fee}) : rien n’a été comptabilisé, le paiement reste tel quel.',
+    'error.classifyInputTaxShared': 'L’impôt préalable de ce paiement ferait avec {payments} {booked}, alors que le justificatif ne montre que {shown} de TVA : rien n’a été comptabilisé. Chaque paiement du débit de carte ne porte que sa part de la TVA ; comptabilise-le à la main.',
     'error.classifyOpenInvoice': 'Le paiement pourrait régler la facture {number} de {customer}, dont le chiffre d’affaires est déjà comptabilisé avec la facture : rien n’a été comptabilisé. Confirme le paiement sous Factures › {number}, ou comptabilise-le à la main.',
     'error.classifyUnknownAccount': 'La réponse de Claude comptabilisait sur le compte {account} («{description}»), absent du plan comptable : rien n’a été comptabilisé, le paiement reste tel quel. Créez le compte (Firma › Kontenplan) ou comptabilisez à la main.',
     'error.classifyUnknownVatCode': 'La réponse de Claude comptabilisait avec le code TVA {code} («{description}»), que l’app ne connaît pas : rien n’a été comptabilisé, le paiement reste tel quel. Reclassez ou comptabilisez à la main.',

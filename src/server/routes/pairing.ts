@@ -3,7 +3,8 @@
  * (#187): the matching chain for that one record, as the person (PERSON), its outcome in the reply.
  * Without a model the code's clear pair is linked and the rest are candidates to pick. A payment
  * of a filed quarter is never linked: its receipt is pointed at it (filedPayment, golden rule 1);
- * a receipt whose payment is filed is refused (403).
+ * a receipt whose payment is filed is refused (403). GET …/receipt-sets: the sets of receipts that
+ * add up to a payment, for the person to link (nothing is written).
  */
 import { Router } from 'express';
 import { assertOpen, readBooks, receiptDates, RequestError, updateBooks, WS } from '../books.js';
@@ -15,6 +16,8 @@ import { closeAsksWithoutRule } from '../../workflows/held.js';
 import { askIfReady } from '../../intake/run.js';
 import { estvToChf, noReceiptFor, runPairChain, type ChainResult, type Found } from '../../intake/pair-chain.js';
 import type { BooksPort } from '../../intake/pipeline.js';
+import { proposalsFor } from '../../intake/receipt-sets.js';
+import { batchPayersOf } from '../../intake/match.js';
 
 export const router = Router();
 
@@ -48,6 +51,19 @@ router.post('/api/receipts/:id/find-payment', async (req, res) => {
   // A receipt a filed payment holds is part of the filed quarter.
   assertOpen(books, receiptDates(books, id), 'mapping');
   res.json(await find({ receipt: id }));
+});
+
+/**
+ * The receipts that add up to a payment, or nearly, for its line in Kontoauszüge (#27, #190): every
+ * set code finds, exact ones first, and where code stopped looking. With the workspace's batch
+ * payers and the official daily rates, as the match step searches.
+ */
+router.get('/api/transactions/:ref/receipt-sets', (req, res) => {
+  const books = readBooks();
+  const tx = books.transactions.find((t) => t.ref === req.params.ref);
+  if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
+  const lock = periodLock(books);
+  res.json(proposalsFor(books, tx, { isOpen: (d) => !lock.isClosed(d), payers: batchPayersOf(WS), toChf: estvToChf() }));
 });
 
 router.post('/api/transactions/:ref/find-receipt', async (req, res) => {

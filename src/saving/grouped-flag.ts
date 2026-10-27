@@ -11,9 +11,12 @@ import { dirname, join } from 'node:path';
 import { parseDocument } from 'yaml';
 import { loadBooks, periodLock, type Books } from '../books/store.js';
 import { loadClassifyContext, mappedReceipts, type ClassifyContext } from '../booking/classify.js';
-import { identify, signalsOfTransaction } from '../knowledge/counterparties.js';
 import { homeOf } from '../knowledge/layers.js';
 import { chargesOf } from '../intake/charges.js';
+import { businessOfPayment } from '../intake/batch-payers.js';
+import { duplicatesIn } from '../intake/duplicates.js';
+import { estvToChf } from '../intake/pair-chain.js';
+import { documents } from '../engines/index.js';
 import type { BankTransaction } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { draftDir } from './changes.js';
@@ -31,36 +34,37 @@ export interface GroupedOffer {
   path: string;
 }
 
-/** The receipts a person linked to a charge (each of its movements), as one set. */
-function byPerson(books: Books, refs: readonly string[]): Set<string> {
-  return new Set(books.mappings.filter((m) => m.by === 'human' && refs.includes(m.transactionRef)).map((m) => m.receiptId));
+/** How many documents a person linked to a charge (each of its movements): two copies of one invoice count once (src/intake/duplicates.ts). */
+function byPerson(books: Books, refs: readonly string[]): number {
+  const ids = new Set(books.mappings.filter((m) => m.by === 'human' && refs.includes(m.transactionRef)).map((m) => m.receiptId));
+  const receipts = books.receipts.filter((r) => ids.has(r.id) && r.kind !== 'duplicate');
+  return receipts.length < 2 ? receipts.length : receipts.length - duplicatesIn(receipts, ids, documents()).size;
 }
 
 /**
- * The offer for payment `ref`: a person linked two receipts or more to it, its business (by its
- * file's match) is no batch payer yet, and a person did the same on another of its payments, so
- * LEARN_AFTER payments in all. None for a payment of a filed quarter.
+ * The offer for payment `ref`: a person linked two documents or more to it (a copy counted once),
+ * its business (businessOfPayment, as the batch payers recognise it) has no file that says
+ * `grouped` either way, and a person did the same on another of its payments, so LEARN_AFTER
+ * payments in all. None for a payment of a filed quarter.
  */
 export function groupedOffer(ws: Workspace, books: Books, ref: string, context: ClassifyContext = loadClassifyContext(ws)): GroupedOffer | undefined {
   const tx = books.transactions.find((t) => t.ref === ref);
   if (!tx || periodLock(books).isClosed(tx.date)) return undefined;
-  const charges = chargesOf(books.transactions);
-  const businessOf = (t: BankTransaction) => {
-    const routing = identify(signalsOfTransaction(t, mappedReceipts(books, t)), context.counterparties ?? []);
-    return routing.kind === 'known' ? routing.counterparty : undefined;
-  };
+  const charges = chargesOf(books.transactions, estvToChf());
+  const businessOf = (t: BankTransaction) => businessOfPayment(t, mappedReceipts(books, t), context.counterparties ?? []);
   const mine = charges.of(tx);
-  if (byPerson(books, mine.refs).size < 2) return undefined;
+  if (byPerson(books, mine.refs) < 2) return undefined;
   const id = businessOf(tx);
   const cp = id ? context.counterparties?.find((c) => c.id === id) : undefined;
-  if (!cp || cp.grouped) return undefined;
+  // A file that says `grouped` at all, true or false, has said it: nothing to offer.
+  if (!cp || cp.grouped || cp.groupedSaid) return undefined;
   const seen = new Set<string>();
   let payments = 0;
   for (const t of books.transactions) {
     const charge = charges.of(t);
     if (seen.has(charge.refs[0])) continue;
     seen.add(charge.refs[0]);
-    if (byPerson(books, charge.refs).size >= 2 && businessOf(t) === cp.id) payments++;
+    if (byPerson(books, charge.refs) >= 2 && businessOf(t) === cp.id) payments++;
   }
   return payments >= LEARN_AFTER ? { ref, business: { id: cp.id, name: cp.name }, payments, path: homeOf('workspace', cp.role, cp.id) } : undefined;
 }

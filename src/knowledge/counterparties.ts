@@ -11,6 +11,7 @@
  */
 
 import { RECEIPT_KINDS, type BankTransaction, type Receipt, type ReceiptKind } from '../types/index.js';
+import { HEAD, wordsRe } from '../core/modules/words.js';
 
 /** Strongest first. The order is the routing precedence. */
 export const TIERS = ['uid', 'iban', 'domain', 'tx', 'file'] as const;
@@ -58,6 +59,8 @@ export interface Counterparty {
   match: Matchers;
   /** Several receipts settle in one charge: match as a sum, split one entry per invoice. */
   grouped: boolean;
+  /** A file of it says `grouped` at all, true or false: the app offers no «Immer so?» to say it again (#190). */
+  groupedSaid?: true;
   /** When present, the only accounts an entry for this counterparty may use. */
   accounts?: string[];
   documents: DocumentType[];
@@ -85,6 +88,8 @@ export interface Signals {
   domains: string[];
   names: string[];
   filenames: string[];
+  /** A receipt's text where it names who wrote it (its first and last lines): a `tx` signal counts in it as a whole word only (signalsOfReceiptRead). */
+  texts?: string[];
 }
 
 const ibanOf = (iban: string) => iban.replace(/\s+/g, '').toUpperCase();
@@ -120,6 +125,24 @@ export function signalsOfReceipt(r: Receipt): Signals {
   return { uids: uidsIn(r), ibans: [], domains: [], names: [], filenames: [r.filename] };
 }
 
+// An address of the sender: an e-mail's domain or a web address, as invoices print them.
+const DOMAIN_RE = /(?:[\w.+-]+@|https?:\/\/|www\.)((?:[a-z0-9-]+\.)+[a-z]{2,})/gi;
+
+/**
+ * What a receipt says of who wrote it, read off it (#190): its UIDs and filename, as
+ * signalsOfReceipt, and the domains of the addresses and the vendor name in the lines where a
+ * document names its sender (its first and last HEAD characters, never the middle, where a shop
+ * names the courier it ships with). A `tx` signal counts in that text as a whole word only, the
+ * vendor of its title as a payment's name. Used where a receipt alone must say whose it is (a
+ * batch payer's receipts, src/intake/batch-payers.ts).
+ */
+export function signalsOfReceiptRead(r: Receipt): Signals {
+  const text = r.extractedText ?? '';
+  const ends = text.length > 2 * HEAD ? `${text.slice(0, HEAD)}\n${text.slice(-HEAD)}` : text;
+  const domains = [...new Set([...ends.matchAll(DOMAIN_RE)].map((m) => m[1].toLowerCase().replace(/^www\./, '')))];
+  return { ...signalsOfReceipt(r), domains, names: r.title?.vendor ? [r.title.vendor] : [], texts: [text.slice(0, HEAD)] };
+}
+
 export function signalsOfTransaction(tx: BankTransaction, linked: Receipt[]): Signals {
   return {
     uids: linked.flatMap(uidsIn),
@@ -130,13 +153,16 @@ export function signalsOfTransaction(tx: BankTransaction, linked: Receipt[]): Si
   };
 }
 
+const wordRes = new Map<string, RegExp>();
+const wholeWord = (t: string): RegExp => { let re = wordRes.get(t); if (!re) wordRes.set(t, (re = wordsRe([t]))); return re; };
+
 /** Which counterparties a tier claims for these signals. */
 export function claims(cp: Counterparty, tier: Tier, s: Signals): string | undefined {
   switch (tier) {
     case 'uid': return cp.match.uid.find((u) => s.uids.includes(u));
     case 'iban': return cp.match.iban.find((i) => s.ibans.includes(ibanOf(i)));
     case 'domain': return cp.match.domain.find((d) => s.domains.some((x) => x === d || x.endsWith(`.${d}`)));
-    case 'tx': return cp.match.tx.find((t) => s.names.some((n) => n.toLowerCase().includes(t.toLowerCase())));
+    case 'tx': return cp.match.tx.find((t) => s.names.some((n) => n.toLowerCase().includes(t.toLowerCase())) || !!s.texts?.some((x) => wholeWord(t).test(x)));
     case 'file': return cp.match.file.find((re) => s.filenames.some((f) => re.test(f)))?.source;
   }
 }
@@ -188,7 +214,7 @@ export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['
     return f as Fact;
   });
   return {
-    id: stem, name: raw.name!, role, roles: roles as Role[], match, grouped: raw.grouped === true, documents, facts,
+    id: stem, name: raw.name!, role, roles: roles as Role[], match, grouped: raw.grouped === true, ...(raw.grouped !== undefined ? { groupedSaid: true as const } : {}), documents, facts,
     accounts: raw.accounts, steps: raw.steps ?? {}, origin,
   };
 }

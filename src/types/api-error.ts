@@ -187,7 +187,8 @@ export type ClassifyRefusal =
   | { code: 'classifyUnknownVatCode'; params: { code: string; description: string } }
   | { code: 'classifyBalance'; params: { date: string; currency: string; paid: number; booked: number } }
   | { code: 'classifySeparateFee'; params: { fee: string; currency: string; amount: number } }
-  | { code: 'classifyOpenInvoice'; params: { number: string; customer: string } };
+  | { code: 'classifyOpenInvoice'; params: { number: string; customer: string } }
+  | { code: 'classifyInputTaxShared'; params: { payments: string; currency: string; booked: number; shown: number } };
 
 /**
  * Why a statement upload (POST /api/statements) was refused: not XML or PDF, an XML that is no

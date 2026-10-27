@@ -2,8 +2,9 @@
  * #27: several receipts that add up exactly to one payment (to the centime, its currency, one
  * vendor, near its date) are linked by code (src/intake/receipt-sets.ts) and booked one line per
  * receipt, each with its own VAT code (src/booking/receipt-lines.ts, the receipt rules per line in
- * src/booking/purchase-vat.ts). A sum off by a centime, or two sets that fit, is a proposal, never a
- * link. Synthetic receipts and payments, no real vendor.
+ * src/booking/purchase-vat.ts). A sum off by more than a centime per receipt, or two sets that fit,
+ * is a proposal, never a link (#190: within a centime per receipt, the only such set is linked).
+ * Synthetic receipts and payments, no real vendor.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -54,11 +55,11 @@ test('the inbox run\'s match step links such a set without the model', async () 
   assert.ok(lines.some((l) => /3 receipts that add up to the payment/.test(l)), lines.join('\n'));
 });
 
-test('off by a centime: no link, the set is a proposal that names its sum and the payment', () => {
+test('off by more than a centime per receipt: no link, the set is a proposal that names its sum and the payment', () => {
   const rs = [receipt(30), receipt(45.5), receipt(11.9)];
-  const books = booksOf([pay(87.41)], rs);
+  const books = booksOf([pay(87.44)], rs);
   assert.deepEqual(receiptSetsToLink(books, open).sets, []);
-  assert.deepEqual(proposalsFor(books, books.transactions[0], open).sets.map((s) => [s.receipts, s.sum, s.paid, s.exact]), [[rs.map((r) => r.id).sort(), 87.4, 87.41, false]]);
+  assert.deepEqual(proposalsFor(books, books.transactions[0], open).sets.map((s) => [s.receipts, s.sum, s.paid, s.exact]), [[rs.map((r) => r.id).sort(), 87.4, 87.44, false]]);
 });
 
 test('foreign currency: receipts in the payment\'s currency are linked; the same figures against a payment in another currency link and propose nothing', () => {

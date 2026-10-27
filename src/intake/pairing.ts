@@ -18,6 +18,7 @@ import { baseCurrency, documents } from '../engines/index.js';
 import { HEAD, wordsRe } from '../core/modules/words.js';
 import { legOf } from '../workspace/money-accounts.js';
 import { chargesOf } from './charges.js';
+import { duplicatesIn } from './duplicates.js';
 import { assessmentNumbers, namesAssessment } from '../booking/customs-invoice.js';
 
 /** Which payments are candidates at all. */
@@ -277,13 +278,16 @@ const rank = (a: PairCandidate, b: PairCandidate) => b.score - a.score || Math.a
 export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string) => boolean, noReceipt?: (t: BankTransaction) => boolean): PairSearch {
   const linkedReceipts = new Set(books.mappings.map((m) => m.receiptId));
   const taken = takenPayments(books);
-  const charges = chargesOf(books.transactions);
+  const charges = chargesOf(books.transactions, toChf);
   // A charge split across balances is pairable while none of its legs holds a receipt (one that does: linkSplitLegs completes the others).
   const payments = books.transactions.filter((t) => charges.of(t).refs.every((ref) => ref === t.ref ? pairablePayment(t, taken, noReceipt) : !taken.has(ref)));
   const byReceipt = new Map<string, PairCandidate[]>();
   const byPayment = new Map<string, PairCandidate[]>(payments.map((t) => [charges.of(t).refs[0], []]));
-  for (const r of books.receipts) {
-    if (!pairableReceipt(r, linkedReceipts)) continue;
+  const pairable = books.receipts.filter((r) => pairableReceipt(r, linkedReceipts));
+  // Of two documents of one invoice (duplicatesIn), the copy is no candidate: it would compete with its original for one payment, or pair beside the one linked already (#190). It stays for Belege's copy question.
+  const twins = pairable.length ? duplicatesIn([...pairable, ...books.receipts.filter((r) => linkedReceipts.has(r.id))], linkedReceipts, documents()) : new Map();
+  for (const r of pairable) {
+    if (twins.get(r.id)?.relation === 'duplicate') continue;
     const apart = new Set(r.notPaidBy ?? []);
     // One candidate per charge: of a charge split over two currencies, the leg that fits best.
     const best = new Map<string, PairCandidate>();

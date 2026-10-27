@@ -418,6 +418,7 @@ export const messages = {
   'journal.byHand.booked': '{n} Zeilen gebucht auf {ref}',
   'error.classifyAccount': 'Claudes Antwort hatte eine Buchung ohne Konto («{description}»): nichts gebucht, die Zahlung bleibt, wie sie war.',
   'error.classifySeparateFee': 'Claudes Antwort hat in der Zahlung eine Zeile über {amount}, so viel wie die Gebühr, die die Bank separat belastet ({fee}): nichts gebucht, die Zahlung bleibt, wie sie war.',
+  'error.classifyInputTaxShared': 'Die Vorsteuer dieser Zahlung ergäbe mit {payments} zusammen {booked}, der Beleg weist nur {shown} MWST aus: nichts gebucht. Jede Zahlung der Kartenbelastung trägt nur ihren Teil der MWST; buche sie von Hand.',
   'error.classifyOpenInvoice': 'Die Zahlung könnte Rechnung {number} von {customer} bezahlen, deren Umsatz mit der Rechnung schon gebucht ist: nichts gebucht. Bestätige die Zahlung unter Rechnungen › {number}, oder buche sie von Hand.',
   'error.classifyUnknownAccount': 'Claudes Antwort buchte auf Konto {account} («{description}»), das der Kontenplan nicht hat: nichts gebucht, die Zahlung bleibt, wie sie war. Konto anlegen (Firma › Kontenplan) oder von Hand buchen.',
   'error.classifyUnknownVatCode': 'Claudes Antwort buchte mit dem Steuercode {code} («{description}»), den die App nicht kennt: nichts gebucht, die Zahlung bleibt, wie sie war. Neu klassifizieren oder von Hand buchen.',

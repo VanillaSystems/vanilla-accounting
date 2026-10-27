@@ -1,9 +1,12 @@
-# Not matched by UID: CHE-447.613.666 is Alibaba's and is also printed on
-# alibaba.com receipts.
+# Matched by UID too: CHE-447.613.666 (Alibaba.com Singapore E-Commerce, the
+# marketplace operator) is printed on every AliExpress Tax Invoice, whose text
+# need not name AliExpress. The same UID is on alibaba.com receipts: a company
+# that buys there sees them routed here (npm run check-processes names them).
 
 id: aliexpress
 name: AliExpress
 match:
+  uid: [ "CHE-447.613.666" ]
   tx: [ "aliexpress" ]
   file: [ '^\d{8}-aliexpress-', '_payment\.pdf$' ]
 grouped: true

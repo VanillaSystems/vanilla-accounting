@@ -121,11 +121,11 @@ export type Candidate = BankTransaction & { filed?: true };
  * payment of a filed quarter is shown, marked `filed`, only when its number or amount fits and
  * after the open ones of the same fit: a late receipt is pointed at it, never linked (golden rule 1, corner-33).
  */
-export function candidates(receipt: Receipt, all: readonly BankTransaction[], linked: ReadonlySet<string> = new Set(), isClosed: (date: string) => boolean = () => false, payers: BatchPayers = NO_BATCH_PAYERS): Candidate[] {
+export function candidates(receipt: Receipt, all: readonly BankTransaction[], linked: ReadonlySet<string> = new Set(), isClosed: (date: string) => boolean = () => false, payers: BatchPayers = NO_BATCH_PAYERS, receiptsOf: (tx: BankTransaction) => readonly Receipt[] = () => []): Candidate[] {
   const text = receipt.extractedText ?? '';
   const grouped = payers.ofReceipt(receipt);
   const usable = all.filter((tx) => tx.amount !== 0 && tx.type !== 'wise-fee');
-  const ofVendor = grouped ? usable.filter((tx) => payers.ofPayment(tx) === grouped) : [];
+  const ofVendor = grouped ? usable.filter((tx) => payers.ofPayment(tx, receiptsOf(tx)) === grouped) : [];
   const pool = ofVendor.length ? ofVendor : usable.filter((tx) => !linked.has(tx.ref));
   const { date, amount, currency } = factsOf(receipt);
   const want = amount ? Math.abs(toCHF(amount, currency || baseCurrency())) : undefined;
@@ -193,12 +193,12 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt: noReceiptFor(ws) });
     for (const l of books.update(linkOrdersToPayouts)) log(`linked the order to the payout it names: receipt ${l.receipt} → ${l.payment}`);
     const found = books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, { isOpen: (d) => !lock.isClosed(d), payers, toChf }); });
-    for (const s of found.sets) log(`linked ${s.receipts.length} receipts that add up to the payment${s.basis === 'original' ? ' in the amount its bank names' : s.basis === 'rate' ? ' at the official daily rate' : ''}${s.run ? ' (the batch payer\'s open receipts in date order)' : ''}: ${s.receipts.join(', ')} → ${s.legs.join(', ')}`);
+    for (const s of found.sets) log(`linked ${s.receipts.length} receipts that add up to the payment${s.basis === 'original' ? ' in the amount its bank names' : s.basis === 'rate' ? ' at the official daily rate' : ''}${s.rounding ? ` within a centime per receipt (${s.sum.toFixed(2)} for ${s.paid.toFixed(2)} ${s.currency}: each order rounded)` : ''}${s.run ? ' (the batch payer\'s open receipts in date order)' : ''}: ${s.receipts.join(', ')} → ${s.legs.join(', ')}`);
     const runs = found.cuts.filter((c) => c.limit === 'run');
     const combos = found.cuts.filter((c) => c.limit === 'combinations');
     if (combos.length) log(`${combos.length} payment(s) have more receipts of one vendor near them than code combines (at most ${MAX_TRIED}, the nearest; up to ${Math.max(...combos.map((c) => c.near))} there): a set among those is only proposed, never linked`);
     if (runs.length) log(`${runs.length} payment(s) of a batch payer have more open receipts than code tries in date order (at most ${MAX_RUN}, the oldest; up to ${Math.max(...runs.map((c) => c.near))} there): they are left to a person`);
-    for (const l of books.update((index) => { const lock = periodLock(index); return linkSplitLegs(index, (d) => !lock.isClosed(d)); })) log(`linked the receipts of a card charge split across balances to its other legs: ${l.receipts.join(', ')} → ${l.legs.join(', ')}`);
+    for (const l of books.update((index) => { const lock = periodLock(index); return linkSplitLegs(index, (d) => !lock.isClosed(d), toChf); })) log(`linked the receipts of a card charge split across balances to its other legs: ${l.receipts.join(', ')} → ${l.legs.join(', ')}`);
     return chain;
   };
   const chain = await byCode(early);
@@ -277,7 +277,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const shownFor = (receipt: Receipt): Candidate[] => {
     const list = shortList.get(receipt.id)?.flatMap((c) => { const t = shown.find((x) => legOf(x) === c.leg); return t && !taken.has(t.ref) ? [c.filed ? { ...t, filed: true as const } : t] : []; });
     const apart = new Set(receipt.notPaidBy ?? []);
-    return list?.length ? list : candidates(receipt, shown.filter((t) => !apart.has(t.ref)), taken, lock.isClosed, payers);
+    return list?.length ? list : candidates(receipt, shown.filter((t) => !apart.has(t.ref)), taken, lock.isClosed, payers, (t) => snapshot.mappings.flatMap((m) => (m.transactionRef === t.ref ? snapshot.receipts.filter((r) => r.id === m.receiptId) : [])));
   };
 
   log(`\nProcessing ${toProcess.length} staged receipt(s) (concurrency: ${CONCURRENCY})...\n`);

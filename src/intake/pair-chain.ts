@@ -153,7 +153,7 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
   const search = searchPairs(books, opts.toChf, lock.isClosed, opts.noReceipt?.(books));
   // «Beleg suchen» on a leg of a split charge searches for the charge, which its first movement names.
   const onlyTx = opts.only && 'payment' in opts.only ? books.transactions.find((t) => t.ref === (opts.only as { payment: string }).payment) : undefined;
-  const only = onlyTx ? { payment: chargesOf(books.transactions).of(onlyTx).refs[0] } : opts.only;
+  const only = onlyTx ? { payment: chargesOf(books.transactions, opts.toChf).of(onlyTx).refs[0] } : opts.only;
   const stages = stagesOf(search, only);
   const receipt = new Map(books.receipts.map((r) => [r.id, r]));
   const payment = new Map(books.transactions.map((t) => [legOf(t), t]));
