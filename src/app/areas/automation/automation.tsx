@@ -34,6 +34,7 @@ import { outcomeText, periodText, readsInWords } from './words.js';
 import type { PeriodReturn, PreparedXml, SealOutput } from '../../../workflows/filing.js';
 import type { ClearingCheck } from '../../../booking/providers.js';
 import { commandRefusalText, refusalText } from '../../automation/refusal.js';
+import { RunFromLog } from '../../history/RunHistory.js';
 import { baseCurrency, chargesVat, filing, vat } from '../../../engines/index.js';
 import { QuestionTasks } from '../../questions/Questions.js';
 import { useQuestions } from '../../questions/store.js';
@@ -566,7 +567,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
   // «Verwerfen» asks first: the run ends with no further step, and after «Eingereicht» that is a decision (r8f-44).
   const [discarding, setDiscarding] = useState(false);
   useEffect(() => setDiscarding(false), [id]);
-  if (error) return <div className="detail-empty"><div>{error}</div></div>;
+  if (error) return <RunFromLog id={id} error={error} books={books} nav={nav} />;
   if (!data) return <div className="detail-empty"><div>{t('automation.empty')}</div></div>;
   const w = view.workflows.find((x) => x.id === data.workflow);
   const act = (cmd: AutomationCommand) => () => { void automationCommand(cmd).then((r) => { if (!r.ok) nav.toast(commandRefusalText(r)); else if (cmd.kind === 'replay' && r.run) nav.go({ route: { area: 'automation', view: 'run', run: r.run }, query: {} }); }); };

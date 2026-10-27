@@ -4,11 +4,13 @@
  *
  *   GET  /api/automation?since=<rev>   the view, or { unchanged: true } when nothing moved
  *   GET  /api/automation/runs/:id      one run with its step records
+ *   GET  /api/automation/runs/:id/log  one run's run-log lines (its details may be gone from the run store)
+ *   GET  /api/history/:kind/:id?all=1  the runs that worked on a receipt, payment or entry (#215)
  *   POST /api/automation               an AutomationCommand → CommandResult
  */
 import { createHash } from 'node:crypto';
 import { Router } from 'express';
-import { RequestError, WS } from '../books.js';
+import { readBooks, RequestError, WS } from '../books.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
 import { askIfReady } from '../../intake/run.js';
 import { lockIntake } from '../../intake/pipeline.js';
@@ -27,6 +29,8 @@ import { basename } from 'node:path';
 import { inboxFiles } from './scan.js';
 import type { JournalEntry } from '../../types/index.js';
 import type { RunWrote } from '../../saving/model.js';
+import { readLog } from '../../workflows/runlog.js';
+import { HISTORY_KINDS, HISTORY_LIMIT, historyOf, linesOfRun, type HistoryTarget } from '../../workflows/history.js';
 
 export const router = Router();
 
@@ -109,6 +113,21 @@ router.get('/api/automation/runs/:id', (req, res) => {
   if (!run) throw new RequestError(404, `Lauf ${req.params.id} gibt es nicht.`);
   const detail: RunDetail = { ...summaryOf(run, loadWorkflows(APP_ROOT, WS.paths.root).workflows.find((w) => w.id === run.workflow)), steps: run.steps, startedBy: run.startedBy };
   res.json(detail);
+});
+
+router.get('/api/automation/runs/:id/log', (req, res) => {
+  res.json({ lines: linesOfRun(readLog(WS), req.params.id), stored: !!engine().run(req.params.id) });
+});
+
+/** Read only: the run log and, for a payment, which entries book it. */
+router.get('/api/history/:kind/:id', (req, res) => {
+  const { kind, id } = req.params;
+  if (!(HISTORY_KINDS as readonly string[]).includes(kind)) throw new RequestError(400, `${kind}: receipt, payment oder entry.`);
+  const target: HistoryTarget = kind === 'payment'
+    ? { kind, id, entries: readBooks().journalEntries.filter((e) => e.transactionRef === id).map((e) => e.id) }
+    : { kind: kind as 'receipt' | 'entry', id };
+  const e = engine();
+  res.json(historyOf(readLog(WS), target, (run) => !!e.run(run), req.query.all ? Infinity : HISTORY_LIMIT));
 });
 
 /** A period's XML for the tax authority's import, as the filing workflow wrote it: to download and upload there. */
