@@ -19,10 +19,11 @@ export type DropHow = 'structure' | 'hint';
 /**
  * Where a file stands: to be taken (a moment, while it is written), taken (into the inbox, or read
  * as a bank statement), taken back («Rückgängig»), not taken as a duplicate, quarantined (not a
- * receipt), refused (not stored at all), waiting for a password, or waiting for the person to say
- * what it is.
+ * receipt), refused (not stored at all), waiting for a password, waiting for the person to say
+ * what it is, or a statement asking its question (which account it is of, or whether an account the
+ * books lack is the firm's or private: `chooseAccount`, `unknownAccount`), kept until answered.
  */
-export type DropState = 'take' | 'taken' | 'undone' | 'duplicate' | 'quarantine' | 'refused' | 'locked' | 'unclear';
+export type DropState = 'take' | 'taken' | 'undone' | 'duplicate' | 'quarantine' | 'refused' | 'locked' | 'unclear' | 'asks';
 
 export interface DropRow {
   /** The row's own key in the session. */
@@ -46,6 +47,10 @@ export interface DropRow {
   unknownAccount?: UnknownAccount;
   /** A statement several accounts of its currency could take (none names an IBAN): the UI asks which (#25). */
   chooseAccount?: AccountChoice;
+  /** A statement file that asks for its account: what the file says about itself (#208). */
+  details?: StatementDetails;
+  /** A statement read in already (`statement-read`): its file under bank-statements/ and its first payment, which opens it. */
+  readAs?: { file: string; ref?: string };
   /** The bank account (ledger number) the person said the statement is of. */
   account?: string;
   /** Taken: the run that takes it up. */
@@ -78,6 +83,31 @@ export interface DropRow {
 
 export interface StatementFacts { iban?: string; from?: string; to?: string; entries?: number }
 
+/**
+ * What a bank statement file says about itself, shown folded under a row that asks for its account (#208), so
+ * the person can tell several dropped files apart: the bank as it names itself (or its BIC), the
+ * account's currency, IBAN and owner, the period the bank states and the days it booked, the
+ * number of movements, the opening and closing balance with their days, and the first movements
+ * (`preview`, at most STATEMENT_PREVIEW of src/providers/statement-files.ts; `more` says how many are not shown).
+ */
+export interface StatementDetails {
+  bankName?: string;
+  bic?: string;
+  currency: string;
+  iban?: string;
+  owner?: string;
+  period?: { from: string; to: string };
+  booked?: { first: string; last: string };
+  movements: number;
+  opening?: { date: string; amount: number };
+  closing?: { date: string; amount: number };
+  preview: StatementMovement[];
+  more: number;
+}
+
+/** One movement of a statement's preview: signed (money out negative), in the account's currency. */
+export interface StatementMovement { date: string; amount: number; counterparty?: string; text?: string }
+
 /** Why a provider's payout waits for the person, as its line in Kontoauszüge says it (GET /api/transactions/:ref/payout-wait, src/booking/providers.ts PayoutWait). */
 export interface PayoutWaitView { why: 'clearing' | 'since' | 'gap'; provider: string; file: string; since?: string }
 
@@ -99,7 +129,7 @@ export interface ProviderAsk { provider: string; name: string; missing: 'clearin
 export interface PayoutUnseen { provider: string; name: string; since: string; through: string; banks: string[]; file: string; account?: string }
 
 /** Why an order of a report was not booked by code (src/booking/sales-report.ts ReportHold). */
-export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'legacy' }
+export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' }
 
 /**
  * What a report booked (src/intake/sales-report-import.ts): orders, refunds and fees booked; `known`
@@ -110,14 +140,18 @@ export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax'
  * `beforeSinceMore`), with the payout days `reach` was counted by (`payoutDays`) and the company's file
  * that may say more (`home`); `other`: orders the provider did not collect (paid otherwise:
  * PayPal, bank transfer, a gift card, a test), not booked, with how they were paid (`ways`, the first
- * ones, `waysMore` the rest); `held`: orders the person decides (the first ones, `heldMore` the rest);
- * `unread`: rows code could not read; `proofs`: order documents linked to their sale.
+ * ones, `waysMore` the rest); `test`: orders the report's test column flags, not booked; `held`: orders
+ * the person decides (the first ones, `heldMore` the rest);
+ * `unread`: rows code could not read; `proofs`: order documents linked to their sale. A payments
+ * (fee) report takes the provider's sales reports again (#214): `orders` and `refunds` are what that
+ * booked of theirs. `unpaid`: sales the books carry of the provider whose order a payments report
+ * should name and names not; they stay booked, and the app asks the person on each (askUnpaid).
  */
 export interface ReportSummary {
   provider: string; name: string; kind: 'sales' | 'fees'; from: string; to: string; file: string; since: string; reach: string;
   orders: number; refunds: number; fees: number; known: number; filed: number; before: number; beforeSince: number;
   beforeSinceRows: string[]; beforeSinceMore: number; payoutDays: number; home: string;
-  other: number; ways: string[]; waysMore: number;
+  other: number; ways: string[]; waysMore: number; test: number; unpaid: number;
   held: ReportHeld[]; heldMore: number; unread: number; proofs: number;
 }
 
@@ -127,6 +161,8 @@ export type DropReason =
   | 'as-zip' | 'as-pdf' | 'bank-csv' | 'office' | 'not-statement' | 'damaged' | 'too-deep' | 'too-big' | 'wrong-password' | 'not-imported'
   /** A PDF header on bytes no PDF reader opens (damaged, cut short): quarantine, nothing will ever read it (r8k-9). */
   | 'unreadable'
+  /** A statement whose file is read in already (`readAs`): its movements are in the books. */
+  | 'statement-read'
   /** A statement of an account the owner said is private: set aside, not read into the books. */
   | 'private'
   /** A provider's report its file cannot book yet: the row asks for the missing account (`askProvider`). */

@@ -31,6 +31,7 @@ import { ByHand, VatFields } from './VatFields.js';
 import { TwinNotice } from './TwinNotice.js';
 import { Paper } from './Paper.js';
 import { SkipOffer } from './SkipOffer.js';
+import { RunHistory } from '../../history/RunHistory.js';
 import { I } from './icons.js';
 import { useAiOff } from '../../ai/ai-off.js';
 import { baseCurrency, chargesVat, filing, withoutInputTax } from '../../../engines/index.js';
@@ -181,6 +182,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
           {!v.none && <Payments {...props} edit={edit} />}
           {!v.none && <Angaben {...props} edit={edit} />}
           <Datei {...props} edit={edit} />
+          <RunHistory on={{ kind: 'receipt', id: r.id }} books={props.books} nav={nav} period={props.query.period} />
           {r.remarks && !s.open.angaben && <div className="note">{r.remarks}</div>}
         </aside>
       </div>

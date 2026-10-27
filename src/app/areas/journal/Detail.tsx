@@ -35,6 +35,7 @@ import { correctionPeriodName, journalFor, openPeriod, recentlyDeleted, runAct, 
 import { createEntry, linkReceipt, reclassify, saveEntry, type Field } from './actions.js';
 import { undoInput } from '../../../books/entry-input.js';
 import { RunLink } from '../../automation/marks.js';
+import { RunHistory } from '../../history/RunHistory.js';
 import { AskAi } from '../../assistant/AskAi.js';
 import { showConversation } from '../../assistant/store.js';
 import { QuestionsOn } from '../../questions/Questions.js';
@@ -217,6 +218,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
               </div>
             )}
           </Sec>
+          <RunHistory on={{ kind: 'entry', id: e.id }} books={props.books} nav={nav} period={props.query.period} />
         </aside>
       </div>
       {asking && <KeepHers hers={hers} onKeep={() => setAsking(false)} onRebook={() => rebook(true)} />}

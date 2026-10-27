@@ -17,7 +17,12 @@ and other areas render `<VatCards>` to get them.
   receipt, not a fee, not marked as needing none) and `Korrekturen` (entries with `corrects`), a
   search over text, accounts with their names, VAT code, ref, date and amount (`?q=`), and the code
   filter `?vat=<code>` (`?vat=none`: entries without a code) shown as a chip, and the origin filter
-  `.origins button[data-origin=classify|rule|code|manual|assistant|invoice|year-close]`.
+  `.origins button[data-origin=classify|rule|code|manual|assistant|invoice|year-close]`. The counts
+  and origin buttons set chips of the chip filter (`rc-chips` in receipts.md): `ohne Beleg` is
+  `?f=receipt_missing`, `Korrekturen` `?f=corrects_yes`, an origin `?f=who_<origin>`. Fields: Konto
+  (debit or credit), MWST-Satz (the code's rate, or ohne MWST-Code), Geschäftspartner, Monat, Ab,
+  Bis, Betrag über/unter/genau, Währung, Gebucht von, Beleg (verknüpft, keiner, fehlt), Korrektur
+  einer eingereichten Periode, Text enthält (the search).
 - `je-detail` shows the Buchungssatz, the FX line of a foreign entry (`= CHF … · Kurs …`, the ESTV
   check as its tooltip, a warning row when the rate is not the ESTV rate), the payment (→ `/payments/<ref>`),
   the receipts (→ `/receipts/<id>`), `kein Beleg`, and the receipt's paper or a link to the statement.

@@ -378,7 +378,7 @@ test('a camt.053 of an account the books lack names its bank and asks; «Nein, p
     let s = await post('/api/drop');
     s = await post(`/api/drop/${s.id}/files?name=privat.xml`, Buffer.from(camt));
     const row = s.rows[0];
-    assert.equal(row.state, 'refused');
+    assert.equal(row.state, 'asks', 'it waits for the answer, listed among the statements');
     assert.deepEqual(row.unknownAccount, { iban: 'CH4431999123000889012', currency: 'CHF', bankName: 'Raiffeisenbank Wil und Umgebung' });
 
     s = await post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'private' });
