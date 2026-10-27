@@ -91,6 +91,14 @@ test('2b: the legs of one card charge split across balances are one charge; othe
   assert.deepEqual(chargesOf([eurLeg(), chfLeg()]).splits, [], 'without the daily rates nothing is merged');
 });
 
+test('2b: a leg may be almost all of the charge (a balance that held 1.50 EUR); two whole charges add up to twice and stay two', () => {
+  const of = 'Card transaction of 100.00 CHF issued by Marktplatz Beispiel';
+  const dominant = [pay('E', 1.5, { date: '2026-08-10', description: of }), pay('U', 123.24, { currency: 'USD', date: '2026-08-10', description: of })];
+  assert.deepEqual(chargesOf(dominant, toChf).splits.map((c) => c.refs), [['E', 'U']], '1.41 + 98.59 CHF at the daily rate: one charge');
+  const both = 'Card transaction of 19.30 CHF issued by Marktplatz Beispiel';
+  assert.deepEqual(chargesOf([pay('E', 20.6, { date: '2026-08-10', description: both }), pay('U', 24.1, { currency: 'USD', date: '2026-08-10', description: both })], toChf).splits, []);
+});
+
 test('2b: one receipt of the whole charge is linked by the chain to every leg', async () => {
   const r = receipt(156.86);
   const b = booksOf([eurLeg(), chfLeg()], [r]);
@@ -323,10 +331,13 @@ test('a free receipt that repeats one a payment holds joins no set, also when it
   assert.deepEqual(proposalsFor(b, b.transactions[1], open).sets, [], 'the copy is no part of a proposal either');
 });
 
-test('within a centime per receipt: the only such set is linked and said so; beside an exact set, or two of them, nothing rounds', () => {
+test('within a centime per receipt: never linked, even the only such set; proposed with its rounding; an exact set beside it is linked', () => {
   const rs = [receipt(30), receipt(45.5), receipt(11.9)];
   const b = booksOf([chf('P', 87.41)], rs);
-  assert.deepEqual(receiptSetsToLink(b, open).sets.map((s) => [s.receipts, s.sum, s.paid, s.exact, s.rounding]), [[ids(rs), 87.4, 87.41, false, true]]);
+  assert.deepEqual(receiptSetsToLink(b, open).sets, [], 'the only set within reach is still a proposal');
+  assert.deepEqual(proposalsFor(b, b.transactions[0], open).sets.map((s) => [s.receipts, s.sum, s.paid, s.exact, s.rounding]), [[ids(rs), 87.4, 87.41, false, true]]);
+  const run = [receipt(10, { date: day(1) }), receipt(20, { date: day(2) })];
+  assert.deepEqual(receiptSetsToLink(booksOf([chf('R', 30.01, { date: day(5) })], run), { isOpen: open, payers }).sets, [], 'a batch payer\'s run within a centime per receipt: a proposal too');
   const two = booksOf([chf('P', 50.01)], [receipt(20), receipt(30), receipt(25), receipt(25.02)]);
   assert.deepEqual(receiptSetsToLink(two, open).sets, [], '50.00 and 50.02 both round to 50.01');
   const exact = [receipt(20), receipt(30.01)];
@@ -363,13 +374,51 @@ test('the limit is told only on the payment\'s own vendor and only when it held 
   assert.deepEqual(proposalsFor(b, own, open).cut, { near: MAX_TRIED + 1, tried: MAX_TRIED, limit: 'combinations' }, 'its own vendor\'s set, held back by the limit, is told');
 });
 
-test('a batch payer is recognised by what its receipt says: FedEx by its name in the first lines (an inbox filename), AliExpress\'s Tax Invoice by its UID; a shop that names the courier in its middle is not FedEx\'s', () => {
+test('a batch payer is recognised by what its receipt says: without a UID by its name in the first lines or an address\'s domain; with a UID of its own by its title and filename only', () => {
   const app = batchPayersOf(workspaceAt(DEMO_ROOT));
   const bare = (over: Partial<Receipt>) => receipt(30, { filename: 'invoice_4711.pdf', vatId: undefined, title: undefined, ...over });
-  assert.equal(app.ofReceipt(bare({ vatId: 'CHE-111.222.334', extractedText: 'FedEx Express (Schweiz) GmbH\nRechnung 4711\nFracht' })), 'fedex');
-  assert.equal(app.ofReceipt(bare({ extractedText: 'Rechnung\nKontakt: billch@fedex.com' })), 'fedex', 'by the domain of its address');
-  assert.equal(app.ofReceipt(bare({ extractedText: 'Tax Invoice\nMarketplace Operator: Alibaba.com Singapore E-Commerce Private Limited\nCHE-447.613.666 MWST\nTax Rate 8.1%' })), 'aliexpress');
+  assert.equal(app.ofReceipt(bare({ extractedText: 'FedEx Express (Schweiz) GmbH\nRechnung 4711\nFracht' })), 'fedex', 'no UID: by its name in the first lines (an inbox filename)');
+  assert.equal(app.ofReceipt(bare({ extractedText: 'Rechnung\nKontakt: billch@fedex.com' })), 'fedex', 'no UID: by the domain of its address');
+  assert.equal(app.ofReceipt(bare({ vatId: 'CHE-111.222.334', extractedText: 'FedEx Express (Schweiz) GmbH\nRechnung 4711\nFracht' })), undefined, 'a UID no file names: its text routes nothing');
+  assert.equal(app.ofReceipt(bare({ vatId: 'CHE-111.222.334', title: { vendor: 'FedEx Express', what: 'Fracht' }, extractedText: 'FedEx Express (Schweiz) GmbH\nRechnung 4711' })), 'fedex', 'its title names the sender');
+  assert.equal(app.ofReceipt(bare({ vatId: 'CHE-111.222.334', filename: '20260801-fedex-fracht.pdf', extractedText: 'Rechnung 4711' })), 'fedex', 'its archived filename');
   assert.equal(app.ofReceipt(bare({ extractedText: `Beispiel Shop AG Rechnung\n${'Artikel '.repeat(120)}Versand mit FedEx\n${'Zeile '.repeat(150)}` })), undefined);
+});
+
+test('AliExpress names no UID: its Tax Invoice (Alibaba\'s UID) is recognised by its filename or title; an alibaba.com receipt with the same UID is no AliExpress receipt', () => {
+  const app = batchPayersOf(workspaceAt(DEMO_ROOT));
+  assert.doesNotMatch(readFileSync('processes/suppliers/aliexpress.yaml', 'utf8'), /^\s+uid:/m, 'the app file matches no UID');
+  const tax = 'Tax Invoice\nAliExpress order 8123456789\nMarketplace Operator: Alibaba.com Singapore E-Commerce Private Limited\nCHE-447.613.666 MWST\nTax Rate 8.1%';
+  const inv = (over: Partial<Receipt>) => receipt(30, { vatId: 'CHE-447.613.666', title: undefined, extractedText: tax, ...over });
+  assert.equal(app.ofReceipt(inv({ filename: '8123456789_payment.pdf' })), 'aliexpress', 'the Tax Invoice as downloaded');
+  assert.equal(app.ofReceipt(inv({ filename: '20260801-aliexpress-kabel.pdf' })), 'aliexpress', 'archived');
+  assert.equal(app.ofReceipt(inv({ filename: 'invoice.pdf', title: { vendor: 'AliExpress', what: 'Kabel' } })), 'aliexpress', 'by its title');
+  assert.equal(app.ofReceipt(inv({ filename: 'invoice.pdf' })), undefined, 'the word in its text alone does not route a receipt that carries a UID');
+  const alibaba = receipt(500, { filename: 'alibaba-order-4711.pdf', vatId: 'CHE-447.613.666', title: { vendor: 'Alibaba.com', what: 'Muster' }, extractedText: 'Alibaba.com Trade Assurance order 4711\nCHE-447.613.666 MWST' });
+  assert.equal(app.ofReceipt(alibaba), undefined);
+});
+
+test('a shop\'s invoice with a UID of its own is the shop\'s, never FedEx\'s or Amazon\'s, whatever carrier, tracking link or way of payment it names', () => {
+  const app = batchPayersOf(workspaceAt(DEMO_ROOT));
+  const velo = (amount: number, date: string) => receipt(amount, { date, filename: `velo-${amount}.pdf`, vatId: 'CHE-283.746.519', title: { vendor: 'Velo Huber', what: 'Teile' },
+    extractedText: `Velo Huber AG\nBahnhofstrasse 1, 8000 Zürich\nCHE-283.746.519 MWST\nRechnung ${amount}-2026\nVersand: FedEx Express Priority\nArtikel Bremsbeläge` });
+  const fedex = (amount: number, date: string) => receipt(amount, { date, filename: `20260801-fedex-${amount}.pdf`, vatId: undefined, title: { vendor: 'FedEx', what: 'Fracht' }, extractedText: `FedEx Express Rechnung ${amount}99887` });
+  const [v1, v2, v3] = [velo(39, '2026-08-05'), velo(20, '2026-08-06'), velo(44, '2026-08-07')];
+  const [f1, f2] = [fedex(18.4, '2026-08-10'), fedex(61.2, '2026-08-11')];
+  const txs = [chf('VELO', 59, { date: '2026-08-12', description: 'Velo Huber AG' }), chf('VELO2', 44, { date: '2026-09-25', description: 'Velo Huber AG' }), chf('FDX', 62.4, { date: '2026-08-20', description: 'FEDEX EXPRESS SWISS' })];
+  const b = booksOf(txs, [v1, v2, f1, f2, v3]);
+  assert.equal(app.ofReceipt(v1), undefined, 'the shipping line in its first lines does not make it FedEx\'s');
+  const linked = receiptSetsToLink(b, { isOpen: open, payers: app }).sets;
+  assert.ok(!linked.some((s) => s.payment === 'FDX' && s.receipts.some((id) => [v1.id, v2.id, v3.id].includes(id))), 'no shop receipt in a FedEx set');
+  assert.ok(!proposalsFor(b, txs[2], { isOpen: open, payers: app }).sets.some((s) => s.receipts.some((id) => [v1.id, v2.id, v3.id].includes(id))), 'nor in a FedEx proposal');
+  assert.ok(candidates(v1, txs, new Set(), () => false, app).some((t) => t.ref === 'VELO'), 'the model sees the shop\'s payment for it, not only FedEx\'s');
+  assert.equal(app.ofPayment(txs[0], [v1, v2]), undefined, 'the shop\'s payment with its receipts is no FedEx payment');
+
+  const tracking = receipt(30, { vatId: 'CHE-283.746.519', title: { vendor: 'Velo Huber', what: 'Teile' }, filename: 'rechnung-1045.pdf',
+    extractedText: `Velo Huber AG\nRechnung 2026-1045\n${'Artikel x\n'.repeat(150)}Sendungsverfolgung: https://www.fedex.com/fedextrack/?trknbr=123\n` });
+  assert.equal(app.ofReceipt(tracking), undefined, 'a fedex.com tracking link in its footer');
+  const amazonPay = receipt(30, { vatId: 'CHE-987.654.320', title: { vendor: 'Kaffee Rösterei', what: 'Kaffee' }, filename: 'rechnung-77.pdf', extractedText: 'Kaffee Rösterei GmbH\nRechnung 77\nZahlungsart: Amazon Pay\n' });
+  assert.equal(app.ofReceipt(amazonPay), undefined, '«Zahlungsart: Amazon Pay»');
 });
 
 test('a business known only by its UID: its payment is recognised by the receipts linked to it, for the batch payers and the «Immer so?» alike', async () => {
@@ -441,4 +490,11 @@ test('copies in the pairing chain: a copy does not compete with its original, wh
   await runPairChain({ read: () => b, update: (fn) => fn(b) }, { toChf });
   assert.deepEqual(linksOf(b), [`${original.id}>P`]);
   assert.ok(b.receipts.some((x) => x.id === copy.id && x.kind !== 'duplicate'), 'the copy is left as it was, for the copy question');
+});
+
+test('Kontoauszüge: the offered sets belong to the payment shown (keyed by its ref, never the previous payment\'s), a failed fetch is said, a rounding set says so', () => {
+  const src = readFileSync('src/app/areas/bank/Detail.tsx', 'utf8');
+  assert.match(src, /<ReceiptSetOffer key=\{`rs-\$\{tx\.ref\}`\}/);
+  assert.match(src, /t\('bank\.receiptSet\.failed'\)/);
+  assert.match(src, /s\.rounding \? 'bank\.receiptSet\.rounding'/);
 });

@@ -130,17 +130,27 @@ const DOMAIN_RE = /(?:[\w.+-]+@|https?:\/\/|www\.)((?:[a-z0-9-]+\.)+[a-z]{2,})/g
 
 /**
  * What a receipt says of who wrote it, read off it (#190): its UIDs and filename, as
- * signalsOfReceipt, and the domains of the addresses and the vendor name in the lines where a
- * document names its sender (its first and last HEAD characters, never the middle, where a shop
- * names the courier it ships with). A `tx` signal counts in that text as a whole word only, the
- * vendor of its title as a payment's name. Used where a receipt alone must say whose it is (a
- * batch payer's receipts, src/intake/batch-payers.ts).
+ * signalsOfReceipt, and the vendor of its title (the model's reading of the sender) as a payment's
+ * name. A receipt without any UID also offers the domains of the addresses in the lines where a
+ * document names its sender (its first and last HEAD characters) and its first HEAD characters,
+ * where a `tx` signal counts as a whole word only. A receipt that carries a UID of its own is never
+ * routed by that text: a shop's invoice names the courier it ships with («Versand: FedEx
+ * Express»), a tracking link (fedex.com) or the way it was paid («Amazon Pay») in those lines too,
+ * and its UID says it is the shop's. Its UID routes it when a file names it (the uid tier comes
+ * first), else only its title's vendor and its filename do: an AliExpress Tax Invoice prints
+ * Alibaba's UID, which no file names (alibaba.com receipts print it too), and is recognised by its
+ * filename ({orderId}_payment.pdf, archived as <date>-aliexpress-…) or a title naming AliExpress.
+ * Used where a receipt alone must say whose it is (a batch payer's receipts,
+ * src/intake/batch-payers.ts).
  */
 export function signalsOfReceiptRead(r: Receipt): Signals {
+  const own = signalsOfReceipt(r);
+  const names = r.title?.vendor ? [r.title.vendor] : [];
+  if (own.uids.length) return { ...own, names };
   const text = r.extractedText ?? '';
   const ends = text.length > 2 * HEAD ? `${text.slice(0, HEAD)}\n${text.slice(-HEAD)}` : text;
   const domains = [...new Set([...ends.matchAll(DOMAIN_RE)].map((m) => m[1].toLowerCase().replace(/^www\./, '')))];
-  return { ...signalsOfReceipt(r), domains, names: r.title?.vendor ? [r.title.vendor] : [], texts: [text.slice(0, HEAD)] };
+  return { ...own, domains, names, texts: [text.slice(0, HEAD)] };
 }
 
 export function signalsOfTransaction(tx: BankTransaction, linked: Receipt[]): Signals {

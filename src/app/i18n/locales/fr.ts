@@ -1509,6 +1509,8 @@ export default {
     'bank.receiptSet.linked': { one: '{n} justificatif lié au paiement', other: '{n} justificatifs liés au paiement' },
     'bank.receiptSet.cut': 'Ce fournisseur a {near} justificatifs proches du paiement ; seuls les {tried} plus proches ont été additionnés. Liez à la main un choix qui convient parmi les autres.',
     'bank.receiptSet.cutRun': 'Ce payeur groupé a {near} justificatifs ouverts ; seuls les {tried} plus anciens ont été essayés dans l’ordre. Liez les autres à la main.',
+    'bank.receiptSet.rounding': { one: 'Ce justificatif complète le paiement à l’arrondi près : {sum} au lieu de {paid}, au plus un centime par justificatif', other: 'Ces {n} justificatifs vont ensemble à l’arrondi près : {sum} au lieu de {paid}, au plus un centime par justificatif' },
+    'bank.receiptSet.failed': 'Les justificatifs correspondants n’ont pas pu être chargés.',
     'bank.receiptSet.more': '{n} choix conviennent ; les {shown} premiers sont affichés.',
     'bank.noReceiptCleared': "Le paiement a de nouveau besoin d'un justificatif",
     'bank.waitsForReceipt': "attend son justificatif",

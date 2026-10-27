@@ -15,10 +15,11 @@
  * code never takes one of them for a copy of another.
  *
  * Rounding (ROUNDING): a shop that rounds each order to the centime may charge a centime more or
- * less than its documents add up to. When no set adds up exactly, the one set within a centime per
- * receipt (the receipts linked already counted too) of what is due is linked, if it is the only
- * one within that reach; it is said so in the match step's log. Two such sets, or one beside an
- * exact one, are proposals.
+ * less than its documents add up to. A set within a centime per receipt (the receipts linked
+ * already counted too) of what is due is never linked by code, even when it is the only one: it is
+ * a proposal that says it fits but for rounding, and the person links it with one click. Among
+ * random receipts of one vendor a sum within a few centimes of a payment turns up too often to be
+ * proof.
  *
  * A batch payer (`grouped: true` in its business's file, src/intake/batch-payers.ts) pays its open
  * receipts together: for its payments code also tries runs in date order, the oldest open receipt
@@ -48,7 +49,7 @@ const DAYS_AFTER = 7;
 const RUN_DAYS_BEFORE = 92;
 /** A batch payer's run without an original amount meets the payment at the official daily rate within this share below it (a bank's rate is not the official one), never above. */
 export const BAND = 0.015;
-/** A set that is the only fit may differ from what is due by this many centimes per receipt: each order rounded on its own. */
+/** A set may differ from what is due by this many centimes per receipt (each order rounded on its own) and still be proposed as fitting but for rounding; code never links it. */
 export const ROUNDING = 1;
 /** A proposal's sum lies within this share of what is left to pay, or a franc, from it. */
 const CLOSE = 0.02;
@@ -313,8 +314,8 @@ function fitOf(books: Books, ctx: SetContext, charge: Charge, search: SetSearch)
   return fit.found.length || fit.close || fit.untried.size || fit.cut ? fit : undefined;
 }
 
-/** The sets of a fit that compete for its link: the exact ones; only when there is none, those within ROUNDING. */
-const contenders = (fit: Fit): Candidate[] => { const exact = fit.found.filter((c) => c.exact); return exact.length ? exact : fit.found; };
+/** The sets of a fit that compete for its link: the exact ones. A set within ROUNDING is a proposal only. */
+const contenders = (fit: Fit): Candidate[] => fit.found.filter((c) => c.exact);
 
 const asSet = (c: Candidate, charge: Charge): ReceiptSet => ({
   payment: charge.refs[0], legs: charge.refs, receipts: c.set.map((r) => r.id).sort(), sum: (c.linkedCents + c.sum) / 100, paid: c.due.cents / 100,
@@ -345,8 +346,8 @@ export function proposalsFor(books: Books, tx: BankTransaction, search: SetSearc
 }
 
 /**
- * What code links: a charge's set when it is its only set that adds up (or, with none that does,
- * its only set within ROUNDING), whether a free combination or a batch payer's run; every receipt
+ * What code links: a charge's set when it is its only set that adds up (never one within ROUNDING
+ * only), whether a free combination or a batch payer's run; every receipt
  * near it was tried (a batch payer's in its runs), and none of its receipts competes for another
  * charge or lies among the receipts another charge could not try every set of. A set with a receipt
  * a person took apart from one of the charge's movements (Receipt.notPaidBy) is never linked. Every

@@ -260,7 +260,7 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
           {t('bank.entries', { lines })}
         </button></>
       ) : tx.amount ? <> · <NotBooked tx={tx} linked={linkedOf(props.books.receipts.filter((r) => receipts.includes(r.id) && r.kind !== 'duplicate'))} /></> : null}
-      {edit ? <ReceiptSetOffer {...props} tx={tx} /> : null}
+      {edit ? <ReceiptSetOffer key={`rs-${tx.ref}`} {...props} tx={tx} /> : null}
       {edit && receipts.length > 1 ? <GroupedOffer key={`go-${tx.ref}`} payment={tx.ref} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
       <Note key={tx.ref} tx={tx} nav={nav} edit={edit} />
       {edit && tx.direction === 'CRDT' ? <LinkInvoice key={`li-${tx.ref}`} tx={tx} nav={nav} /> : null}
@@ -285,12 +285,15 @@ const SETS_SHOWN = 3;
  */
 function ReceiptSetOffer({ books, b, tx, nav }: Props & { b: Bank; tx: BankTransaction }) {
   // The server proposes: it knows the batch payers of the business files and the official daily rates (GET /api/transactions/:ref/receipt-sets).
+  // Keyed by the payment (key={`rs-${tx.ref}`}): another payment starts empty, never with this one's sets to link.
   const [found, setFound] = useState<{ sets: ReceiptSet[]; cut?: SetCut }>({ sets: [] });
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     let live = true;
-    api.receiptSets(tx.ref).then((x) => { if (live) setFound(x); }, () => { if (live) setFound({ sets: [] }); });
+    api.receiptSets(tx.ref).then((x) => { if (live) { setFound(x); setFailed(false); } }, () => { if (live) { setFound({ sets: [] }); setFailed(true); } });
     return () => { live = false; };
   }, [books, tx.ref]);
+  if (failed) return <> · <span className="m" data-testid="receipt-set-failed">{t('bank.receiptSet.failed')}</span></>;
   const { sets: offers, cut } = found;
   // Where code stopped looking is said, never cut silently: the person may find a set among the others.
   const told = cut ? <span key="cut"> · <span className="m" data-testid="receipt-set-cut">{t(cut.limit === 'run' ? 'bank.receiptSet.cutRun' : 'bank.receiptSet.cut', { near: cut.near, tried: cut.tried })}</span></span> : null;
@@ -299,7 +302,7 @@ function ReceiptSetOffer({ books, b, tx, nav }: Props & { b: Bank; tx: BankTrans
     const names = s.receipts.map((id) => b.receiptOf(id)?.name ?? id).join(', ');
     const vars = { n: s.receipts.length, sum: `${s.currency} ${fmt(s.sum)}`, paid: `${s.currency} ${fmt(s.paid)}` };
     return (
-      <span key={s.receipts.join()}> · <span className="m" data-testid="receipt-set" data-tip={names}>{t(s.exact ? 'bank.receiptSet.exact' : 'bank.receiptSet.close', vars)}{offers.length > 1 ? ` (${names})` : ''}</span>
+      <span key={s.receipts.join()}> · <span className="m" data-testid="receipt-set" data-tip={names}>{t(s.exact ? 'bank.receiptSet.exact' : s.rounding ? 'bank.receiptSet.rounding' : 'bank.receiptSet.close', vars)}{offers.length > 1 ? ` (${names})` : ''}</span>
         {' '}<button type="button" className="golink" data-act="link-receipt-set" data-tip={names} onClick={() => void linkReceiptSet(nav, s)}>{t('bank.receiptSet.link')}</button></span>
     );
   }), more, told];

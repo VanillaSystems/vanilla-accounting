@@ -1506,6 +1506,8 @@ export const messages = {
   'bank.receiptSet.linked': { one: '{n} Beleg mit der Zahlung verknüpft', other: '{n} Belege mit der Zahlung verknüpft' },
   'bank.receiptSet.cut': 'Von diesem Lieferanten liegen {near} Belege nahe der Zahlung; zusammengezählt wurden nur die {tried} nächsten. Eine passende Auswahl unter den übrigen von Hand verknüpfen.',
   'bank.receiptSet.cutRun': 'Dieser Sammelzahler hat {near} offene Belege; der Reihe nach geprüft wurden nur die {tried} ältesten. Die übrigen von Hand verknüpfen.',
+  'bank.receiptSet.rounding': { one: 'Dieser Beleg ergänzt die Zahlung bis auf Rundung: {sum} statt {paid}, höchstens ein Rappen je Beleg', other: 'Diese {n} Belege passen bis auf Rundung: {sum} statt {paid}, höchstens ein Rappen je Beleg' },
+  'bank.receiptSet.failed': 'Passende Belege konnten nicht geladen werden.',
   'bank.receiptSet.more': '{n} Auswahlen passen; gezeigt sind die ersten {shown}.',
   'bank.noReceiptCleared': 'Zahlung braucht wieder einen Beleg',
   'bank.waitsForReceipt': "wartet auf den Beleg",

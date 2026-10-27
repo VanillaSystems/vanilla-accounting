@@ -1509,6 +1509,8 @@ export default {
     'bank.receiptSet.linked': { one: '{n} giustificativo collegato al pagamento', other: '{n} giustificativi collegati al pagamento' },
     'bank.receiptSet.cut': 'Questo fornitore ha {near} giustificativi vicini al pagamento; sono stati sommati solo i {tried} più vicini. Collega a mano una scelta adatta tra gli altri.',
     'bank.receiptSet.cutRun': 'Questo pagatore cumulativo ha {near} giustificativi aperti; sono stati provati in ordine solo i {tried} più vecchi. Collega gli altri a mano.',
+    'bank.receiptSet.rounding': { one: 'Questo giustificativo completa il pagamento salvo arrotondamento: {sum} invece di {paid}, al massimo un centesimo per giustificativo', other: 'Questi {n} giustificativi vanno insieme salvo arrotondamento: {sum} invece di {paid}, al massimo un centesimo per giustificativo' },
+    'bank.receiptSet.failed': 'Non è stato possibile caricare i giustificativi corrispondenti.',
     'bank.receiptSet.more': '{n} scelte corrispondono; sono mostrate le prime {shown}.',
     'bank.noReceiptCleared': 'Il pagamento richiede di nuovo un giustificativo',
     'bank.waitsForReceipt': "attende il giustificativo",

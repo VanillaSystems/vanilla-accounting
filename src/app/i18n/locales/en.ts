@@ -1509,6 +1509,8 @@ export default {
     'bank.receiptSet.linked': { one: '{n} receipt linked to the payment', other: '{n} receipts linked to the payment' },
     'bank.receiptSet.cut': 'This supplier has {near} receipts near the payment; only the {tried} nearest were added up. Link a fitting choice among the others by hand.',
     'bank.receiptSet.cutRun': 'This batch payer has {near} open receipts; only the {tried} oldest were tried in order. Link the others by hand.',
+    'bank.receiptSet.rounding': { one: 'This receipt completes the payment but for rounding: {sum} instead of {paid}, at most a centime per receipt', other: 'These {n} receipts add up but for rounding: {sum} instead of {paid}, at most a centime per receipt' },
+    'bank.receiptSet.failed': 'Fitting receipts could not be loaded.',
     'bank.receiptSet.more': '{n} choices fit; the first {shown} are shown.',
     'bank.noReceiptCleared': 'Payment needs a receipt again',
     'bank.waitsForReceipt': "waits for its receipt",

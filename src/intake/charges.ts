@@ -9,9 +9,9 @@
  * Legs are one charge when the bank says so (one ref), or when everything about them is the same
  * but the balance: the day, the money's way, the original amount and its currency, and the
  * merchant, each balance once, no two bank ids, and their amounts, each at the official daily rate
- * of the day, add up to the original amount within SPLIT_BAND while each alone lies clearly
- * below it. Two whole charges of one amount at one shop on one day from two balances each come to
- * the whole amount: two charges, never one. Without the daily rates nothing is merged. Anything less
+ * of the day, add up to the original amount within SPLIT_BAND. A leg may be almost all of it (a
+ * balance that held 1.50 EUR). Two whole charges of one amount at one shop on one day from two
+ * balances add up to twice the amount: two charges, never one. Without the daily rates nothing is merged. Anything less
  * certain stays a movement of its own. Pure and browser-safe.
  */
 import type { BankTransaction } from '../types/index.js';
@@ -19,7 +19,7 @@ import { merchantOf } from '../knowledge/counterparties.js';
 import { madeByHand } from '../workspace/money-accounts.js';
 import { originalOf, type ToChf } from './pairing.js';
 
-/** The legs of a split charge, each at the official daily rate, add up to its original amount within this share (a bank's rate is not the official one); each leg alone stays below the original by more than it. */
+/** The legs of a split charge, each at the official daily rate, add up to its original amount within this share (a bank's rate is not the official one). */
 export const SPLIT_BAND = 0.03;
 
 export interface Charge {
@@ -55,7 +55,7 @@ function oneCharge(legs: readonly BankTransaction[], toChf: ToChf): boolean {
   const parts = legs.map((t) => toChf(Math.abs(t.amount), t.currency, t.date));
   if (whole === undefined || !whole || parts.some((p) => p === undefined)) return false;
   const sum = (parts as number[]).reduce((s, p) => s + p, 0);
-  return Math.abs(sum - whole) <= whole * SPLIT_BAND && (parts as number[]).every((p) => p < whole * (1 - SPLIT_BAND));
+  return Math.abs(sum - whole) <= whole * SPLIT_BAND;
 }
 
 const splittable = (t: BankTransaction) => t.amount !== 0 && t.type !== 'wise-fee' && !madeByHand(t);
