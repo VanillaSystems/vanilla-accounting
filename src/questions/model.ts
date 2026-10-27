@@ -41,8 +41,13 @@ export function questionChoices(raw: readonly unknown[]): Choice[] | undefined {
   return within(PRIVATE_CHOICES) || within(SALE_CHOICES) ? set as Choice[] : undefined;
 }
 
-/** What a question the app asks by itself is about: `saleVat`, a customer payment without an invoice (src/intake/sale-questions.ts). */
-export type QuestionTopic = 'saleVat';
+/**
+ * What a question the app asks by itself is about: `saleVat`, a customer payment without an invoice
+ * (src/intake/sale-questions.ts); `reportPayment`, a sale a provider's sales report booked whose order
+ * its payments report names no transaction of (src/intake/sales-report-import.ts askUnpaid).
+ */
+export const QUESTION_TOPICS = ['saleVat', 'reportPayment'] as const;
+export type QuestionTopic = (typeof QUESTION_TOPICS)[number];
 
 export type Answer = { choice: Choice } | { text: string };
 
@@ -180,9 +185,10 @@ export function parseLine(raw: unknown): QuestionLine | undefined {
       const origin = (['person', 'assistant', 'booking'] as const).find((o) => o === l.origin) ?? 'person';
       const p = l.proposal as Partial<SaleProposal> | undefined;
       const proposal = p && (SALE_CHOICES as readonly string[]).includes(p.choice as string) && typeof p.why === 'string' ? { choice: p.choice as SaleChoice, why: p.why as SaleProposal['why'] } : undefined;
+      const topic = QUESTION_TOPICS.find((x) => x === l.topic);
       return {
         v: 1, event: 'asked', id: l.id, at: l.at, by: l.by, on: { kind: on.kind, id: on.id }, text: l.text, choices, ...(typeof l.to === 'string' && l.to ? { to: l.to } : {}), origin,
-        ...(l.topic === 'saleVat' ? { topic: 'saleVat' as const } : {}), ...(proposal ? { proposal } : {}),
+        ...(topic ? { topic } : {}), ...(proposal ? { proposal } : {}),
       };
     }
     case 'answered': {

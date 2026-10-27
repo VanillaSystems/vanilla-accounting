@@ -99,7 +99,7 @@ export interface ProviderAsk { provider: string; name: string; missing: 'clearin
 export interface PayoutUnseen { provider: string; name: string; since: string; through: string; banks: string[]; file: string; account?: string }
 
 /** Why an order of a report was not booked by code (src/booking/sales-report.ts ReportHold). */
-export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'noPayment' | 'legacy' }
+export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' }
 
 /**
  * What a report booked (src/intake/sales-report-import.ts): orders, refunds and fees booked; `known`
@@ -114,13 +114,14 @@ export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax'
  * the person decides (the first ones, `heldMore` the rest);
  * `unread`: rows code could not read; `proofs`: order documents linked to their sale. A payments
  * (fee) report takes the provider's sales reports again (#214): `orders` and `refunds` are what that
- * booked of theirs, `withdrawn` the sales it took back (no transaction of the provider for them).
+ * booked of theirs. `unpaid`: sales the books carry of the provider whose order a payments report
+ * should name and names not; they stay booked, and the app asks the person on each (askUnpaid).
  */
 export interface ReportSummary {
   provider: string; name: string; kind: 'sales' | 'fees'; from: string; to: string; file: string; since: string; reach: string;
   orders: number; refunds: number; fees: number; known: number; filed: number; before: number; beforeSince: number;
   beforeSinceRows: string[]; beforeSinceMore: number; payoutDays: number; home: string;
-  other: number; ways: string[]; waysMore: number; test: number; withdrawn: number;
+  other: number; ways: string[]; waysMore: number; test: number; unpaid: number;
   held: ReportHeld[]; heldMore: number; unread: number; proofs: number;
 }
 

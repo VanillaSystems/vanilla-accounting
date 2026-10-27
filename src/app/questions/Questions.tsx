@@ -34,6 +34,8 @@ const asker = (q: Question) => (q.origin === 'assistant' ? t('questions.ai') : q
 
 /** The question in the viewer's language: the app's own question is said from its payment, a person's as written. */
 export function questionText(q: Pick<Question, 'topic' | 'on' | 'text'>, books: Index): string {
+  const entry = q.topic === 'reportPayment' ? books.journalEntries?.find((e) => e.id === q.on.id) : undefined;
+  if (entry) return t('questions.reportPayment.text', { entry: entry.description ?? entry.transactionRef });
   const tx = q.topic === 'saleVat' ? books.transactions.find((x) => x.ref === q.on.id) : undefined;
   return tx ? t('questions.sale.text', { who: tx.counterparty || tx.description, amount: `${tx.currency} ${fmt(tx.amount)}`, date: formatDate(tx.date) }) : q.text;
 }

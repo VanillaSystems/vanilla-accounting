@@ -31,6 +31,7 @@ import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import { parseMatchResult } from '../src/llm/prompts.js';
 import { parseRule } from '../src/booking/rules.js';
 import { loadBooks, saveBooks, type Books } from '../src/books/store.js';
+import { readQuestions } from '../src/questions/store.js';
 import { APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import type { BankTransaction, JournalEntry, Receipt } from '../src/types/index.js';
 import type { DropSession } from '../src/types/drop.js';
@@ -732,7 +733,7 @@ test('#214 a test column flags an order or a transaction: no sale, no fee, no re
   assert.deepEqual([fees.rows.map((r) => r.order), fees.payments?.orders], [['9101'], ['9101']]);
 });
 
-test('#214 sales report and payments report in either order give the same books; dropped again, nothing changes; a test-mode order booked before the payments report is taken back', () => {
+test('#214 sales report and payments report in either order give the same books but for an order no transaction names: booked first, it stays booked and is asked about; dropped again, nothing changes', () => {
   const run = (order: Array<[string, string]>) => {
     const ws = shop(`${FILE()}  foreignTax: "2201"\n`);
     const said = order.map(([csv, name]) => { const r = importSalesReport(ws, Buffer.from(csv), name); assert.ok(r.ok, JSON.stringify(r)); return r.summary; });
@@ -741,15 +742,140 @@ test('#214 sales report and payments report in either order give the same books;
   const shape = (ws: Workspace) => lines(loadBooks(ws).journalEntries.filter((e) => /^S[RF]-/.test(e.transactionRef))).sort();
   const a = run([[REFUNDED, 'o.csv'], [PAYMENTS, 'p.csv']]);
   const b = run([[PAYMENTS, 'p.csv'], [REFUNDED, 'o.csv']]);
-  assert.deepEqual(shape(a.ws), shape(b.ws), 'the order of the drops does not matter');
-  assert.deepEqual(shape(a.ws).filter((l) => String(l[0]).startsWith('SR-')).map((l) => l[0]).sort(), ['SR-shopify-9001', 'SR-shopify-9001-refund', 'SR-shopify-9002', 'SR-shopify-9002', 'SR-shopify-9002-refund', 'SR-shopify-9002-refund', 'SR-shopify-9006']);
-  assert.deepEqual([a.said[0].orders, a.said[1].orders, a.said[1].refunds, a.said[1].withdrawn], [2, 2, 2, 1], 'the sales report alone booked #9005 and #9006; the payments report booked #9001 and #9002 with their refunds and took #9005 back');
-  assert.deepEqual(heldOf(a.ws), heldOf(b.ws));
-  assert.deepEqual(heldOf(a.ws), [{ order: '9003', why: 'refundDate' }, { order: '9004', why: 'refundDate' }, { order: '9005', why: 'noPayment' }]);
+  const no9005 = (ls: ReturnType<typeof shape>) => ls.filter((l) => l[0] !== 'SR-shopify-9005');
+  assert.deepEqual(no9005(shape(a.ws)), shape(b.ws), 'the order of the drops does not matter for every other order');
+  assert.deepEqual(shape(b.ws).filter((l) => String(l[0]).startsWith('SR-')).map((l) => l[0]).sort(), ['SR-shopify-9001', 'SR-shopify-9001-refund', 'SR-shopify-9002', 'SR-shopify-9002', 'SR-shopify-9002-refund', 'SR-shopify-9002-refund', 'SR-shopify-9006']);
+  assert.ok(shape(a.ws).some((l) => l[0] === 'SR-shopify-9005'), 'a sale booked before the payments report is never taken back by code');
+  assert.deepEqual([a.said[0].orders, a.said[1].orders, a.said[1].refunds, a.said[1].unpaid], [2, 2, 2, 1], 'the sales report alone booked #9005 and #9006; the payments report booked #9001 and #9002 with their refunds and names #9005 as unpaid');
+  assert.deepEqual(heldOf(a.ws), [{ order: '9003', why: 'refundDate' }, { order: '9004', why: 'refundDate' }]);
+  assert.deepEqual(heldOf(b.ws), [{ order: '9003', why: 'refundDate' }, { order: '9004', why: 'refundDate' }, { order: '9005', why: 'noPayment' }], 'not booked yet, it waits');
+
+  // The person is asked on the booking itself, once.
+  const sale = loadBooks(a.ws).journalEntries.find((e) => e.transactionRef === 'SR-shopify-9005')!;
+  const asked = () => readQuestions(a.ws).filter((q) => q.topic === 'reportPayment');
+  assert.deepEqual(asked().map((q) => [q.on, q.status, q.origin, q.choices.length]), [[{ kind: 'entry', id: sale.id }, 'open', 'booking', 0]]);
+  assert.match(asked()[0].text, /^Keine Zahlung im Zahlungsbericht: Verkauf zurücknehmen\?/);
+  assert.equal(readQuestions(b.ws).filter((q) => q.topic === 'reportPayment').length, 0, 'nothing booked, nothing to ask');
 
   const before = shape(a.ws);
   for (const [csv, name] of [[REFUNDED, 'o.csv'], [PAYMENTS, 'p.csv'], [REFUNDED, 'o2.csv']] as const) assert.ok(importSalesReport(a.ws, Buffer.from(csv), name).ok);
   assert.deepEqual(shape(a.ws), before, 'dropped again, in any order: the same books');
+  assert.equal(asked().length, 1, 'asked once, never again');
+
+  // The person deletes the booking by hand: the question is withdrawn on the next taking.
+  const books = loadBooks(a.ws);
+  books.journalEntries = books.journalEntries.filter((e) => e.transactionRef !== 'SR-shopify-9005');
+  saveBooks(a.ws, books);
+  assert.ok(importSalesReport(a.ws, Buffer.from(PAYMENTS), 'p.csv').ok);
+  assert.deepEqual(asked().map((q) => q.status), ['closed']);
+});
+
+/** Four paid orders, two refunded: the probes of the review of #221 (invented figures). */
+const PAID = [head,
+  refundRow('9300', '2026-11-02', '54.05', '4.05', '54.05'),
+  refundRow('9301', '2026-11-03', '108.10', '8.10', '0.00'),
+  refundRow('9302', '2026-11-05', '108.10', '8.10', '0.00'),
+  refundRow('9303', '2026-11-07', '54.05', '4.05', '54.05'),
+].join('\n');
+const salesRefs = (ws: Workspace) => [...new Set(loadBooks(ws).journalEntries.filter((e) => e.transactionRef.startsWith('SR-')).map((e) => e.transactionRef))].sort();
+const bothOrders = (sales: string, payments: string, check: (ws: Workspace, first: 'sales' | 'payments') => void) => {
+  for (const first of ['sales', 'payments'] as const) {
+    const ws = shop(`${FILE()}  foreignTax: "2201"\n`);
+    for (const [csv, name] of first === 'sales' ? [[sales, 'o.csv'], [payments, 'p.csv']] : [[payments, 'p.csv'], [sales, 'o.csv']]) assert.ok(importSalesReport(ws, Buffer.from(csv), name).ok);
+    check(ws, first);
+  }
+};
+
+test('#214 a payments export of refunds only covers no day: every paid sale is booked and stays, the refunds on their days', () => {
+  const refundsOnly = ['Transaction Date,Type,Order,Amount,Fee,Net,Currency',
+    '2026-11-04 10:00:00 +0100,refund,#9300,-54.05,0.00,-54.05,CHF',
+    '2026-11-09 10:00:00 +0100,refund,#9303,-54.05,0.00,-54.05,CHF'].join('\n');
+  bothOrders(PAID, refundsOnly, (ws, first) => {
+    assert.deepEqual(salesRefs(ws), ['SR-shopify-9300', 'SR-shopify-9300-refund', 'SR-shopify-9301', 'SR-shopify-9302', 'SR-shopify-9303', 'SR-shopify-9303-refund'], first);
+    assert.deepEqual(heldOf(ws), [], first);
+    assert.equal(readQuestions(ws).length, 0, `${first}: nothing to ask`);
+  });
+});
+
+test('#214 an order on the first or last day of a payments export is never held nor asked about: one payout\'s export, or one cut mid-day, covers that day only partly', () => {
+  const onePayout = ['Transaction Date,Type,Order,Amount,Fee,Net,Currency,Payout ID',
+    '2026-11-03 10:00:00 +0100,charge,#9301,108.10,3.44,104.66,CHF,P1',
+    '2026-11-05 09:00:00 +0100,charge,#9399,10.00,0.50,9.50,CHF,P1'].join('\n');
+  // #9302 of 11-05 went to the next payout, or was paid after the export was cut that morning.
+  bothOrders([head, refundRow('9301', '2026-11-03', '108.10', '8.10', '0.00'), refundRow('9302', '2026-11-05', '108.10', '8.10', '0.00')].join('\n'), onePayout, (ws, first) => {
+    assert.deepEqual(salesRefs(ws), ['SR-shopify-9301', 'SR-shopify-9302'], first);
+    assert.deepEqual(heldOf(ws), [], first);
+    assert.equal(readQuestions(ws).length, 0, first);
+  });
+});
+
+test('#214 refund rows: only the type «refund» is one (a refund_failure is none, nor widens the days); refunds beyond the refunded amount, or a refund the order export says is 0, hold the order', () => {
+  const sales = salesOf([head, refundRow('9401', '2026-11-03', '54.05', '4.05', '54.05')].join('\n'));
+  const failed = ['Transaction Date,Type,Order,Amount,Fee,Net,Currency',
+    '2026-11-03 10:00:00 +0100,charge,#9401,54.05,1.87,52.18,CHF',
+    '2026-11-05 10:00:00 +0100,refund,#9401,-54.05,0.00,-54.05,CHF',
+    '2026-11-06 10:00:00 +0100,refund_failure,#9401,54.05,0.00,54.05,CHF'].join('\n');
+  const out = bookReport({ journalEntries: [] }, sales, ctxOf({ ...NOV, payments: paymentsOf(failed) }));
+  assert.deepEqual(lines(out.entries), [['SR-shopify-9401', '2026-11-03', '1093', '3200', 54.05, 'V81'], ['SR-shopify-9401-refund', '2026-11-05', '3200', '1093', 54.05, '-V81']]);
+  assert.equal(revenueOf(out.entries), 0, 'refunded once, never twice');
+  assert.equal(paymentsOf(failed)!.inside('2026-11-05'), false, 'the charges cover 11-03 only');
+
+  const zero = salesOf([head, refundRow('9501', '2026-11-03', '54.05', '4.05', '0.00')].join('\n'));
+  const refunded = ['Transaction Date,Type,Order,Amount,Fee,Net,Currency',
+    '2026-11-03 10:00:00 +0100,charge,#9501,54.05,1.87,52.18,CHF',
+    '2026-11-05 10:00:00 +0100,refund,#9501,-54.05,0.00,-54.05,CHF'].join('\n');
+  const z = bookReport({ journalEntries: [] }, zero, ctxOf({ ...NOV, payments: paymentsOf(refunded) }));
+  assert.deepEqual([z.entries, z.held], [[], [{ order: '9501', why: 'refundMismatch' }]], 'a refund the order export says is none: the order waits, sale and all');
+  const booked = bookReport({ journalEntries: [] }, zero, ctxOf(NOV)).entries;
+  const later = bookReport({ journalEntries: booked }, zero, ctxOf({ ...NOV, payments: paymentsOf(refunded) }));
+  assert.deepEqual([later.entries, later.held], [[], [{ order: '9501', why: 'refundMismatch' }]], 'booked already: the sale stays, no refund is booked, the order waits');
+
+  const twice = PAYMENTS.replace('2026-11-12 10:00:00 +0100,refund,#9002,-30.00', '2026-11-10 10:00:00 +0100,refund,#9002,-30.00,0.00,-30.00,CHF,P2\n2026-11-12 10:00:00 +0100,refund,#9002,-30.00');
+  const over = bookReport({ journalEntries: [] }, salesOf(REFUNDED), ctxOf({ ...NOV, payments: paymentsOf(twice) }));
+  assert.ok(over.held.some((h) => h.order === '9002' && h.why === 'refundMismatch'), 'two refunds of 30.00 on an order refunded 30.00: held');
+  assert.ok(!over.entries.some((e) => e.transactionRef.startsWith('SR-shopify-9002')));
+});
+
+test('#214 a sale the books carry is never taken back by code: a person\'s link on it, her own entry, a filed one all stay', () => {
+  for (const variant of ['link', 'person', 'filed'] as const) {
+    const ws = shop(`${FILE()}  foreignTax: "2201"\n`);
+    assert.ok(importSalesReport(ws, Buffer.from(REFUNDED), 'o.csv').ok);
+    const b = loadBooks(ws);
+    if (variant === 'link') {
+      b.receipts.push({ id: 'doc', filename: '20261107-x.pdf', originalFilename: 'x.pdf', extractedText: 'x', extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-11-11T00:00:00Z', location: 'archived', date: '2026-11-07', kind: 'invoice' } as Receipt);
+      b.mappings.push({ transactionRef: 'SR-shopify-9005', receiptId: 'doc', by: 'human' });
+    } else if (variant === 'person') b.journalEntries = b.journalEntries.map((e) => (e.transactionRef === 'SR-shopify-9005' ? { ...e, origin: 'manual' as const, by: { kind: 'person' } as JournalEntry['by'] } : e));
+    else b.config.closedThrough = '2026-11-07';
+    saveBooks(ws, b);
+    assert.ok(importSalesReport(ws, Buffer.from(PAYMENTS), 'p.csv').ok);
+    const a = loadBooks(ws);
+    assert.equal(a.journalEntries.filter((e) => e.transactionRef === 'SR-shopify-9005').length, 1, variant);
+    if (variant === 'link') assert.deepEqual(a.mappings.filter((m) => m.transactionRef === 'SR-shopify-9005' && m.by === 'human').length, 1, 'her link stays, never dangling');
+  }
+});
+
+test('#214 «Rückgängig» of a payments export takes the sales reports again: what it held is booked, the app\'s refunds it dated go back, its question is withdrawn; a refund a person linked stays', () => {
+  const idOf = (ws: Workspace, kind: 'sales' | 'fees') => loadBooks(ws).receipts.find((r) => r.report?.kind === kind)!.id;
+
+  // Payments report first: #9005 waits for it. Without it, #9005 is booked; #9001 and #9002 stay booked, their refunds go back and wait for a day.
+  const a = shop(`${FILE()}  foreignTax: "2201"\n`);
+  for (const [csv, name] of [[PAYMENTS, 'p.csv'], [REFUNDED, 'o.csv']]) assert.ok(importSalesReport(a, Buffer.from(csv), name).ok);
+  assert.equal(removeSalesReport(a, idOf(a, 'fees')), true);
+  assert.deepEqual(salesRefs(a), ['SR-shopify-9001', 'SR-shopify-9002', 'SR-shopify-9005', 'SR-shopify-9006']);
+  assert.equal(loadBooks(a).journalEntries.some((e) => e.transactionRef.startsWith('SF-')), false, 'its fees go');
+  assert.deepEqual(heldOf(a), [{ order: '9001', why: 'refundDate' }, { order: '9002', why: 'refundDate' }, { order: '9003', why: 'refundDate' }, { order: '9004', why: 'refundDate' }]);
+
+  // Sales report first: #9005 booked and asked about; «Rückgängig» withdraws the question.
+  const b = shop(`${FILE()}  foreignTax: "2201"\n`);
+  for (const [csv, name] of [[REFUNDED, 'o.csv'], [PAYMENTS, 'p.csv']]) assert.ok(importSalesReport(b, Buffer.from(csv), name).ok);
+  const books = loadBooks(b);
+  books.receipts.push({ id: 'doc', filename: '20261109-gutschrift.pdf', originalFilename: 'g.pdf', extractedText: 'x', extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-11-11T00:00:00Z', location: 'archived', date: '2026-11-09', kind: 'invoice' } as Receipt);
+  books.mappings.push({ transactionRef: 'SR-shopify-9001-refund', receiptId: 'doc', by: 'human' });
+  saveBooks(b, books);
+  assert.equal(readQuestions(b).filter((q) => q.topic === 'reportPayment' && q.status === 'open').length, 1);
+  assert.equal(removeSalesReport(b, idOf(b, 'fees')), true);
+  assert.deepEqual(salesRefs(b), ['SR-shopify-9001', 'SR-shopify-9001-refund', 'SR-shopify-9002', 'SR-shopify-9005', 'SR-shopify-9006'], 'the refund a person linked a receipt to stays');
+  assert.deepEqual(readQuestions(b).filter((q) => q.topic === 'reportPayment').map((q) => q.status), ['closed']);
 });
 
 test('4. «Rückgängig» takes only the report\'s own entries and links: no payout changes; one of two overlapping reports leaves the other\'s sales; a person\'s change of one keeps it all', () => {

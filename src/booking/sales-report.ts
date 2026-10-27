@@ -40,11 +40,14 @@
  * went back: the sales report's own refund day where its file names that column, else the refund rows
  * of the provider's payments exports in the books (#214), each day its own entry, split as its sale. A
  * refund without its day is never dated on the order's day: it waits, and an order not booked yet waits
- * with it, so a refunded order is never booked as a sale alone. An order of a day a payments export
- * covers that no row of it names was never collected (a test-mode order): it waits, and what the report
- * booked of it before, its own entries of the open period, is taken back (`withdrawn`). Each drop of
- * either report takes the sales reports again (src/intake/sales-report-import.ts), so the order of the
- * drops does not matter. What the books carry already from elsewhere holds
+ * with it, so a refunded order is never booked as a sale alone; refunds dated beyond the refunded amount
+ * (or the gross) hold it too. An order not booked yet of a day strictly inside the days a payments
+ * export's charges cover (neither its first nor its last: an export may be cut mid-day, or hold one
+ * payout of several of a day) that no row of it names was never collected (a test-mode order): it
+ * waits. A sale booked already is never taken back by code: such an order is named (`unpaid`) and the
+ * person is asked. Each drop of either report takes the sales reports again
+ * (src/intake/sales-report-import.ts), so a held order is booked once its refund has a day. What the
+ * books carry already from elsewhere holds
  * what it may be (`ReportContext.legacy`): sales on the clearing account that name one order only (an
  * older booking per order, a person's own, less a reversal of it) with its amount in all book it, so
  * the order is known and never held again; with another amount, or naming several orders in one
@@ -150,11 +153,13 @@ export interface FeeRow { order?: string; date: string; fee: number; currency?: 
 /** One refund of a payments export: its order, the day the money went back, how much (positive), its currency. */
 export interface RefundRow { order: string; date: string; amount: number; currency?: string }
 /**
- * What one payments export says beside its fees (#214), when it names each row's order: the days its
- * rows cover (`from` to `to`), the orders a row names (the provider has a transaction for them: a
- * test-mode order has none), and each refund row (its `type` reads «refund») with its day and amount.
+ * What one payments export says beside its fees (#214), when it names each row's order: the first and
+ * last day of its charges (`from` to `to`, its rows that name an order and are no refund of any kind;
+ * none in an export of refunds only), the orders a row names (the provider has a transaction for them:
+ * a test-mode order has none), and each refund row (its `type` is exactly «refund», not «refund_failure»
+ * or the like) with its day and amount.
  */
-export interface PaymentRows { from: string; to: string; orders: string[]; refunds: RefundRow[] }
+export interface PaymentRows { from?: string; to?: string; orders: string[]; refunds: RefundRow[] }
 
 /** A report read: its rows, and the rows code could not read (their line numbers, 1 = the header). */
 export type ReadReport =
@@ -162,15 +167,17 @@ export type ReadReport =
   | { kind: 'fees'; rows: FeeRow[]; unread: number[]; payments?: PaymentRows };
 
 /**
- * The provider's payments exports as one (#214): whether one covers a day, the orders they name, and
- * each order's refunds. Exports that overlap name the same rows: a refund counts as often as the
- * export that names it most often does, so overlapping exports never refund an order twice.
+ * The provider's payments exports as one (#214): whether a day lies strictly inside the days one's
+ * charges cover (`inside`: not its first or last day, which an export cut mid-day or holding one payout
+ * of several may cover only partly), the orders they name, and each order's refunds. Exports that
+ * overlap name the same rows: a refund counts as often as the export that names it most often does, so
+ * overlapping exports never refund an order twice.
  */
-export interface PaymentFacts { covers(day: string): boolean; orders: ReadonlySet<string>; refunds: ReadonlyMap<string, readonly RefundRow[]> }
+export interface PaymentFacts { inside(day: string): boolean; orders: ReadonlySet<string>; refunds: ReadonlyMap<string, readonly RefundRow[]> }
 
 /** The payments exports `of` as one; none when none names its rows' orders. */
 export function paymentFacts(of: ReadonlyArray<PaymentRows | undefined>): PaymentFacts | undefined {
-  const all = of.filter((p): p is PaymentRows => !!p && !!p.from);
+  const all = of.filter((p): p is PaymentRows => !!p);
   if (!all.length) return undefined;
   const most = new Map<string, { row: RefundRow; n: number }>();
   for (const p of all) {
@@ -184,7 +191,7 @@ export function paymentFacts(of: ReadonlyArray<PaymentRows | undefined>): Paymen
   }
   const refunds = new Map<string, RefundRow[]>();
   for (const { row, n } of most.values()) for (let i = 0; i < n; i++) (refunds.get(row.order) ?? refunds.set(row.order, []).get(row.order)!).push(row);
-  return { covers: (day) => all.some((p) => p.from <= day && day <= p.to), orders: new Set(all.flatMap((p) => p.orders)), refunds };
+  return { inside: (day) => all.some((p) => !!p.from && !!p.to && p.from < day && day < p.to), orders: new Set(all.flatMap((p) => p.orders)), refunds };
 }
 
 /**
@@ -242,17 +249,17 @@ export function readReport(text: string, kind: ReportKind, facts: Pick<ProviderF
     const order = cell(row, at.order)?.replace(/^#/, '');
     const currency = cell(row, at.currency)?.toUpperCase();
     let refund = false;
-    if (date && at.order !== undefined) {
-      days.push(date);
-      if (order) {
-        orders.add(order);
-        if (/refund/i.test(cell(row, at.type) ?? '')) {
-          const amount = amountOf(cell(row, at.amount));
-          // A refund whose amount code cannot read is unread: its order's refund then has no day, and its sale waits.
-          if (amount === undefined) { unread.push(k + 2); return; }
-          if (amount !== 0) refunds.push({ order, date, amount: Math.abs(amount), ...(currency && { currency }) });
-          refund = true;
-        }
+    if (date && at.order !== undefined && order) {
+      orders.add(order);
+      const type = norm(cell(row, at.type) ?? '');
+      // The charges' days say which days the export covers: no refund of any kind (a refund_failure, say) widens them.
+      if (!type.includes('refund')) days.push(date);
+      if (type === 'refund') {
+        const amount = amountOf(cell(row, at.amount));
+        // A refund whose amount code cannot read is unread: its order's refund then has no day, and its sale waits.
+        if (amount === undefined) { unread.push(k + 2); return; }
+        if (amount !== 0) refunds.push({ order, date, amount: Math.abs(amount), ...(currency && { currency }) });
+        refund = true;
       }
     }
     const fee = amountOf(cell(row, at.fee));
@@ -264,12 +271,12 @@ export function readReport(text: string, kind: ReportKind, facts: Pick<ProviderF
     if (had) { had.fee = fromRappen(toRappen(had.fee) + toRappen(Math.abs(fee))); if (date > had.date) had.date = date; } else sums.set(key, { date, fee: Math.abs(fee), ...(order && { order }), ...(currency && { currency }) });
   });
   days.sort();
-  return { kind, rows: [...sums.values()], unread, ...(at.order !== undefined && days.length ? { payments: { from: days[0], to: days.at(-1)!, orders: [...orders], refunds } } : {}) };
+  return { kind, rows: [...sums.values()], unread, ...(at.order !== undefined && orders.size ? { payments: { ...(days.length ? { from: days[0], to: days.at(-1)! } : {}), orders: [...orders], refunds } } : {}) };
 }
 
-/** What the receipt of a report keeps of it: whose, which kind, the days it covers and how many orders or fees. */
+/** What the receipt of a report keeps of it: whose, which kind, the days it covers (a payments export's refunds' too) and how many orders or fees. */
 export function reportFacts(provider: string, read: ReadReport): SalesReportFacts {
-  const days = read.rows.map((r) => r.date).sort();
+  const days = [...read.rows.map((r) => r.date), ...(read.kind === 'fees' ? read.payments?.refunds.map((r) => r.date) ?? [] : [])].sort();
   return { provider, kind: read.kind, from: days[0] ?? '', to: days.at(-1) ?? '', rows: read.rows.length };
 }
 
@@ -332,8 +339,9 @@ export interface ReportContext {
   legacy?: { entries: readonly JournalEntry[]; through?: string; paidBefore?: readonly string[] };
   /**
    * The provider's payments exports in the books (#214): a refund is dated by its refund rows; an order
-   * of a day one covers that no row names was never collected (a test-mode order) and waits. Absent:
-   * a refund needs the sales report's own day (`refundedAt`), and every order the gateway names counts as collected.
+   * not booked yet of a day strictly inside one's charges that no row names was never collected (a
+   * test-mode order) and waits. Absent: a refund needs the sales report's own day (`refundedAt`), and
+   * every order the gateway names counts as collected.
    */
   payments?: PaymentFacts;
   /** The agreed basis: the order's day is the tax point. */
@@ -358,11 +366,12 @@ export interface ReportTexts {
  * Why an order (or a fee) is not booked by code: its tax column disagrees with its delivery (`noTax`,
  * `rate`, Swiss VAT on an export `abroadTax`), a foreign VAT on an export without the company's
  * account for it (`foreignTax`), no country, its figures in the books differ, no rate of
- * its day, a refund without a day of its own (`refundDate`: its sale waits with it), no transaction in
- * the payments export that covers its day (`noPayment`: a test-mode order), or the clearing account
+ * its day, a refund without a day of its own (`refundDate`: its sale waits with it), refunds dated beyond
+ * the refunded amount or the gross (`refundMismatch`), no transaction in a payments export whose charges
+ * cover its day on both sides (`noPayment`: a test-mode order, not booked yet), or the clearing account
  * carries a sale from elsewhere that may be it (`legacy`).
  */
-export interface ReportHold { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'noPayment' | 'legacy' }
+export interface ReportHold { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' }
 
 /** What a report booked and left: counts, the orders held with why, and the rows dated in a filed period or before the books. */
 export interface ReportOutcome {
@@ -386,11 +395,16 @@ export interface ReportOutcome {
   test: number;
   held: ReportHold[];
   /**
-   * The refs of sales (and their refunds) the report booked before for an order a payments export now
-   * shows the provider never collected (`noPayment`): the caller takes them back, its own entries of
-   * the open period only (#214).
+   * Orders whose sale the books carry already though a payments export whose charges cover their day on
+   * both sides names no transaction of them (#214): the sale stays as booked, the person is asked.
    */
-  withdrawn: string[];
+  unpaid: string[];
+  /**
+   * The refs of the report's own refunds (the app's, of the open period) that no refund day the sales
+   * report or the payments exports give now matches: a payments export they were dated from is gone.
+   * Only the person's «Rückgängig» of that export takes them back (src/intake/sales-report-import.ts).
+   */
+  stale: string[];
   entries: JournalEntry[];
   links: Mapping[];
 }
@@ -423,7 +437,7 @@ export function collectedBy(o: Pick<SaleRow, 'gateway'>, gateways: readonly stri
  * links inside the write door. Each entry has origin 'classify' and names the check `payoutReport` (a check older builds keep).
  */
 export function bookReport(books: { journalEntries: readonly JournalEntry[] }, read: ReadReport, ctx: ReportContext): ReportOutcome {
-  const out: ReportOutcome = { orders: 0, refunds: 0, fees: 0, known: 0, knownRefs: [], filed: 0, before: 0, beforeSince: 0, beforeSinceRows: [], other: 0, ways: [], test: 0, held: [], withdrawn: [], entries: [], links: [] };
+  const out: ReportOutcome = { orders: 0, refunds: 0, fees: 0, known: 0, knownRefs: [], filed: 0, before: 0, beforeSince: 0, beforeSinceRows: [], other: 0, ways: [], test: 0, held: [], unpaid: [], stale: [], entries: [], links: [] };
   const byRef = new Map<string, JournalEntry[]>();
   for (const e of books.journalEntries) if (isReportRef(e.transactionRef)) (byRef.get(e.transactionRef) ?? byRef.set(e.transactionRef, []).get(e.transactionRef)!).push(e);
   // The tax point decides whether a row lies in a filed period or before the books; the day the provider collected it whether a
@@ -512,18 +526,24 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
    * (`refundedAt`) for the whole refunded amount, else the payments exports' refund rows, summed per
    * day. `undated`: some of it has no day (the rows fall short of the refunded amount, or name another
    * currency), or a day before the sale's: that part waits, and an order not booked yet waits with it.
+   * `exceeds`: the refund rows give back more than the refunded amount (a refund the order export says
+   * is none among them), or the refunded amount is more than the gross: nothing of it is booked.
    */
-  const refundsOf = (o: SaleRow, day: string): { events: Array<{ date: string; amount: number }>; undated: boolean } => {
-    if (o.refundedAt) return o.refunded > 0 ? (o.refundedAt < day ? { events: [], undated: true } : { events: [{ date: o.refundedAt, amount: o.refunded }], undated: false }) : { events: [], undated: false };
+  const refundsOf = (o: SaleRow, day: string): { events: Array<{ date: string; amount: number }>; undated: boolean; exceeds: boolean } => {
+    if (toRappen(o.refunded) > toRappen(o.gross)) return { events: [], undated: false, exceeds: true };
+    if (o.refundedAt) return o.refunded > 0 ? (o.refundedAt < day ? { events: [], undated: true, exceeds: false } : { events: [{ date: o.refundedAt, amount: o.refunded }], undated: false, exceeds: false }) : { events: [], undated: false, exceeds: false };
     const sums = new Map<string, number>();
     let undated = false;
+    let all = 0;
     for (const r of ctx.payments?.refunds.get(o.order) ?? []) {
+      if (!r.currency || !o.currency || r.currency === o.currency) all += toRappen(r.amount);
       if ((r.currency && o.currency && r.currency !== o.currency) || r.date < day) { undated = true; continue; }
       sums.set(r.date, (sums.get(r.date) ?? 0) + toRappen(r.amount));
     }
+    if (all > toRappen(o.refunded)) return { events: [], undated: false, exceeds: true };
     const events = [...sums].sort(([a], [b]) => a.localeCompare(b)).map(([date, rp]) => ({ date, amount: fromRappen(rp) }));
     if (events.reduce((sum, e) => sum + toRappen(e.amount), 0) < toRappen(o.refunded)) undated = true;
-    return { events, undated };
+    return { events, undated, exceeds: false };
   };
   /**
    * The ref of an order's refund on `date`: the plain refund ref for its first one (as the sales report's
@@ -535,13 +555,10 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
     if (had?.length) return had.every((e) => e.date === date) ? plain : `${plain}-${date}`;
     return first && !byRef.has(`${plain}-${date}`) ? plain : `${plain}-${date}`;
   };
-  /** The refs of the report's own entries of an order (its sale and refunds), when all are the app's of the open period: they may be taken back. */
-  const ownOf = (order: string): string[] | undefined => {
-    const sale = saleRef(ctx.provider.id, order);
+  /** The refs of the report's own refunds of an order: each entry under them the app's, of the open period. */
+  const ownRefunds = (order: string): string[] => {
     const plain = refundRef(ctx.provider.id, order);
-    const refs = [...byRef.keys()].filter((r) => r === sale || r === plain || r.startsWith(`${plain}-`));
-    const mine = refs.every((r) => byRef.get(r)!.every((e) => e.origin === 'classify' && e.by?.kind === 'code' && e.by.check === 'payoutReport' && !e.corrects && !ctx.isClosed(e.date)));
-    return refs.length && mine ? refs : undefined;
+    return [...byRef.keys()].filter((r) => (r === plain || r.startsWith(`${plain}-`)) && byRef.get(r)!.every((e) => e.origin === 'classify' && e.by?.kind === 'code' && e.by.check === 'payoutReport' && !e.corrects && !ctx.isClosed(e.date)));
   };
   for (const o of read.rows) {
     // Its refund goes with it: an order the provider did not collect is refunded otherwise too.
@@ -552,13 +569,12 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
       continue;
     }
     if (o.test) { out.test++; continue; }
-    // An order of the provider's gateway that no transaction of a payments export covering its day names: the
-    // gateway collected nothing (a test-mode order). It waits; what the report booked of it before is taken back.
-    if (ctx.payments?.covers(o.date) && !ctx.payments.orders.has(o.order)) {
-      const own = ownOf(o.order);
-      if (own) { out.withdrawn.push(...own); for (const r of own) byRef.delete(r); }
-      out.held.push({ order: o.order, why: 'noPayment' });
-      continue;
+    // An order of the provider's gateway that no transaction names, of a day a payments export's charges cover on
+    // both sides: the gateway collected nothing (a test-mode order). Not booked yet, it waits; a sale booked already
+    // stays as booked (code never takes one back because a row is missing) and the person is asked.
+    if (unpaidRow(o, ctx.payments, ctx.gateways)) {
+      if (!byRef.has(saleRef(ctx.provider.id, o.order))) { out.held.push({ order: o.order, why: 'noPayment' }); continue; }
+      out.unpaid.push(o.order);
     }
     const day = taxDay(o);
     const domestic = !!o.shipTo && ctx.territory.includes(o.shipTo);
@@ -598,6 +614,7 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
       else {
         if (carried(orderLegacy({ key: o.order, day: o.date, amount: net }), o.order)) continue;
         // A refund without its day holds its sale with it: a refunded order is never booked as a sale alone (#214).
+        if (refunds.exceeds) { out.held.push({ order: o.order, why: 'refundMismatch' }); continue; }
         if (refunds.undated) { out.held.push({ order: o.order, why: 'refundDate' }); continue; }
         const e = make(sale, day, o.currency, { accountDebit: ctx.clearing, accountCredit: ctx.revenue, amount: net, vatCode: code, description: ctx.texts.sale(o.order, o.shipTo) }, ctx.texts.reason(kind, o.shipTo));
         if (e === 'noRate') { out.held.push({ order: o.order, why: 'noRate' }); continue; }
@@ -606,10 +623,13 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
         out.orders++;
       }
     }
+    if (refunds.exceeds) { out.held.push({ order: o.order, why: 'refundMismatch' }); continue; }
     // The refunds booked on their days; the first one that cannot be stops the rest, and the order is held once, with why.
+    const refs = refunds.events.map(({ date: when }, i) => refundRefOn(o.order, when, i === 0));
+    out.stale.push(...ownRefunds(o.order).filter((r) => !refs.includes(r)));
     let why: ReportHold['why'] | undefined;
     for (const [i, { date: when, amount }] of refunds.events.entries()) {
-      const ref = refundRefOn(o.order, when, i === 0);
+      const ref = refs[i];
       // An export's refund gives back its foreign VAT in the sale's share, to the cent; the rest is the export's.
       // A refund of a filed sale the books do not carry takes its share off the account too, which then never held that
       // tax: the account comes out uneven by it until the person books the sale's tax (a correction is hers).
@@ -632,6 +652,14 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
     if (why) out.held.push({ order: o.order, why });
   }
   return out;
+}
+
+/**
+ * Whether the provider has no transaction for an order it should have collected (#214): of its gateway,
+ * no test, its day strictly inside the days a payments export's charges cover, and no row names it.
+ */
+export function unpaidRow(o: SaleRow, payments: PaymentFacts | undefined, gateways: readonly string[] | undefined): boolean {
+  return !!payments && collectedBy(o, gateways) && !o.test && payments.inside(o.date) && !payments.orders.has(o.order);
 }
 
 /** Whether a ref ends in an order's name, as `SHOPIFY-1001` or `#1001` names order 1001. */

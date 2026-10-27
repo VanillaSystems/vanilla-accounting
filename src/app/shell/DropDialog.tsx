@@ -179,7 +179,7 @@ function reportLine(s: NonNullable<DropRow['report']>): string {
     s.from && s.to && `${formatDate(s.from)} – ${formatDate(s.to)}`,
     s.kind === 'sales' ? t('drop.booked.sales', { orders: s.orders, refunds: s.refunds }) : t('drop.booked.fees', { n: s.fees }),
     s.kind === 'fees' && (s.orders || s.refunds) ? t('drop.booked.completed', { orders: s.orders, refunds: s.refunds }) : '',
-    s.withdrawn ? t('drop.booked.withdrawn', { n: s.withdrawn }) : '',
+    s.unpaid ? t('drop.booked.unpaid', { n: s.unpaid }) : '',
     s.known ? t('drop.booked.known', { n: s.known }) : '',
     s.filed ? t('drop.booked.filed', { n: s.filed }) : '',
     s.before ? t('drop.booked.before', { n: s.before }) : '',
