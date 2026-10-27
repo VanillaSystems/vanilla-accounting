@@ -54,12 +54,14 @@ export function eventText(r: RunEvent, step: (workflow: string, id: string) => s
 /** What the run wrote, each record a link to its detail; `skip` is the object the list is on. */
 export function Wrote({ wrote, books, nav, period, skip }: { wrote?: RunEvent['wrote']; books: Index; nav: Nav; period?: Period; skip?: HistoryObject }) {
   const entries = (wrote?.entries ?? []).filter((id) => !(skip?.kind === 'entry' && skip.id === id));
-  const receipts = (wrote?.receipts ?? []).filter((id) => !(skip?.kind === 'receipt' && skip.id === id));
   const links = wrote?.mappings ?? [];
+  /** A receipt a link already names (off a receipt's page) is not named twice. */
+  const linked = new Set(skip?.kind === 'receipt' ? [] : links.map((k) => k.slice(k.lastIndexOf(':') + 1)));
+  const receipts = (wrote?.receipts ?? []).filter((id) => !(skip?.kind === 'receipt' && skip.id === id) && !linked.has(id));
   if (!entries.length && !receipts.length && !links.length) return null;
   const gone = (id: string) => <span key={id} className="mono m" data-tip={t('history.gone')}>{id}</span>;
   const entry = (id: string) => {
-    const e = books.journalEntries.find((x) => x.id === id);
+    const e = (books.journalEntries ?? []).find((x) => x.id === id);
     return e ? <Go key={id} to={at({ area: 'journal', id }, e.date, period)} nav={nav}>{formatDate(e.date)} {e.accountDebit || '–'}/{e.accountCredit || '–'} <span className="mono">{fmt(e.amount)}</span></Go> : gone(id);
   };
   const receipt = (id: string) => {
@@ -121,7 +123,7 @@ export function RunFromLog({ id, error, books, nav }: { id: string; error: strin
   return (
     <div className="detail-in wfpage runhist" key={id} data-testid="run-from-log">
       <div className="head"><h2 className="who">{t('history.logOnlyTitle', { workflow: words.workflow(first.workflow) })}<small className="mono">{id}</small></h2></div>
-      <p className="notice" data-testid="history-no-details">{t('history.logOnly')}</p>
+      <p className="hnotice m" data-testid="history-no-details">{t('history.logOnly')}</p>
       <ol className="hruns runlog-lines">
         {got.lines.map((l, i) => {
           const how = eventText(l, words.step);

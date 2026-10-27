@@ -16,3 +16,6 @@
 .hrun .hwrote a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .hrun .hgone { font-size: 11.5px; font-style: italic; }
 .runlog-lines { max-width: 640px; }
+.runhist .linkbtn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; }
+.runhist .linkbtn:hover { text-decoration: underline; text-underline-offset: 3px; }
+.runhist .hnotice { margin: 0 0 14px; font-size: 13px; max-width: 640px; }
