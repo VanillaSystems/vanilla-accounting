@@ -83,6 +83,10 @@ export type ApiRefusal =
   | { code: 'sameAccount'; params: { account: string } }
   /** A code whose sign contradicts the line's direction (src/server/edits.ts assertCodeSign): M81 on a credit note, -V81 on a sale; `expected` is the code the line takes. */
   | { code: 'codeSign'; params: { code: string; expected: string } }
+  /** The AI's tax-amount code (M81-2) on a line with two different accounts: it books the tax alone, one-legged (src/server/edits.ts assertImportVatRule). */
+  | { code: 'taxAmountTwoSided'; params: { code: string; debit: string; credit: string } }
+  /** The AI's input tax on the import VAT account without the customs assessment linked that states it (assertImportVatRule, pv-import-vat-evv). */
+  | { code: 'importVatUnproven'; params: { account: string; amount: number } }
   | { code: 'accountInUse'; params: { account: string; entries: number } }
   /** Re-classify of a payment that holds a person's booking (origin manual), asked without `overwrite`. */
   | { code: 'personsBooking'; params: { entries: number } }
