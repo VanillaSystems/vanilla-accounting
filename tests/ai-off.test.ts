@@ -143,7 +143,7 @@ test('through the API: the chat, Terminal, «Neu lesen», «Neu klassifizieren»
     // Switched back on: the work that waited starts by itself and the model reads the scan.
     const on = await api.send('PUT', '/api/ai/off', { off: false });
     assert.equal(on.json.off, false);
-    assert.equal((await api.send('GET', '/api/status')).json.aiOff, false);
+    assert.equal((await api.send('GET', '/api/status')).json.aiOff, undefined);
     for (let i = 0; i < 200 && !lines(claudeCalls).length; i++) await new Promise((r) => setTimeout(r, 50));
     await api.rest();
     assert.ok(lines(claudeCalls).length > 0, 'the resumed run asked the model');

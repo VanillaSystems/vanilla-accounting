@@ -74,7 +74,7 @@ if (READONLY) {
 }
 
 app.get('/api/status', (_req, res) => {
-  res.json({ ok: true, readonly: READONLY, aiOff: aiOff() } satisfies ApiStatus);
+  res.json({ ok: true, readonly: READONLY, ...(aiOff() ? { aiOff: true } : {}) } satisfies ApiStatus);
 });
 
 app.use(files, scan, receipts, transactions, mappings, pairing, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, questions, reports);

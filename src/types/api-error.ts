@@ -255,7 +255,7 @@ export type ApiErrorBody = ({ error: string } & (ApiRefusal | { code?: undefined
  * The static audit export's status always is readonly and names its snapshot.
  */
 /** `aiOff`: «KI ganz ausschalten» is on on this Mac (src/llm/off.ts), so every place says so instead of asking. */
-export interface ApiStatus { ok: true; readonly: boolean; aiOff?: boolean; snapshot?: AuditSnapshot }
+export interface ApiStatus { ok: true; readonly: boolean; aiOff?: true; snapshot?: AuditSnapshot }
 
 /** GET /api/mail: whether the company's mailbox can send (Firma › E-Mail-Versand). */
 export interface MailStatus {

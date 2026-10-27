@@ -93,7 +93,7 @@ test('each area says the AI is off and offers the way by hand; Firma › KI swit
     await box!.click();
     await page.waitForFunction(() => !(document.querySelector('input[name=ai-off]') as HTMLInputElement).checked);
     await page.waitForFunction(() => !document.querySelector('[data-testid=column-ai-off]'));
-    assert.equal((await api.send('GET', '/api/status')).json.aiOff, false);
+    assert.equal((await api.send('GET', '/api/status')).json.aiOff, undefined);
     assert.equal(JSON.parse(readFileSync(settings, 'utf8')).off, undefined, 'kept on this Mac: the switch is gone from the settings');
   } finally {
     await browser.close();
