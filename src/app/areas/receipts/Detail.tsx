@@ -33,6 +33,8 @@ import { Paper } from './Paper.js';
 import { SkipOffer } from './SkipOffer.js';
 import { RunHistory } from '../../history/RunHistory.js';
 import { I } from './icons.js';
+import { ActionsMenu } from '../../selection/ActionsMenu.js';
+import { receiptActions } from './actions-menu.js';
 import { baseCurrency, chargesVat, filing, withoutInputTax } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'receipts'>>;
@@ -148,6 +150,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
             : <span className="nov" data-tip={t('receipts.noUidTip')}>{t('receipts.uidMissing')}</span>)}
         </div>
       )}
+      <div className="actbar"><ActionsMenu set={receiptActions(props, v, l)} /></div>
       {v.locked && (
         <div className="notice">
           {ICONS.lock}<span>{t(chargesVat() ? 'receipts.lockedNotice' : 'receipts.lockedNoticeClosed', { period: lockedPeriod(v, l) })}</span>

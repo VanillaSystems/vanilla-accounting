@@ -45,3 +45,5 @@
 .batchform { flex-basis: 100%; }
 .batchform .btn.danger { background: var(--neg); border-color: var(--neg); color: var(--on-fill); }
 .seldetail .bar .btn.on { background: var(--accent-soft); }
+.actbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0 2px; }
+.paybar .actions { margin-left: 6px; }

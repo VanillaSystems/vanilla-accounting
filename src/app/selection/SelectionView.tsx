@@ -7,7 +7,10 @@
 import { useState } from 'react';
 import type { Index } from '../../types/index.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
-import { BatchPanel, batchOffers, type BatchId } from './BatchPanel.js';
+import { BatchPanel, batchOffers, type BatchId, type BatchOffer } from './BatchPanel.js';
+import { ActionsMenu, type ActionSet } from './ActionsMenu.js';
+import { likelySelection } from './likely.js';
+import { countsOf } from './rows.js';
 import { baseCurrency } from '../../engines/index.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { t } from '../i18n/index.js';
@@ -39,9 +42,17 @@ export const LISTED = 60;
 
 const TITLE = { receipt: 'selection.receipts', payment: 'selection.payments', entry: 'selection.entries' } as const;
 
+/** The batches as the Aktionen menu lists them: the likely one as the primary button; each opens its form and preview below. */
+function selectionActions(offers: BatchOffer[], likely: string | undefined, open: (id: BatchId) => void): ActionSet {
+  const all = offers.map((o) => ({ id: o.id, label: o.label, run: () => open(o.id) }));
+  const primary = all.find((a) => a.id === likely);
+  return { primary, rest: all.filter((a) => a !== primary) };
+}
+
 export function SelectionView({ kind, rows, books, nav, canEdit }: { kind: SelectKind; rows: SelRow[]; books: Index; nav: Nav; canEdit: boolean }) {
   const [open, setOpen] = useState<BatchId | null>(null);
   const offers = batchOffers(kind, !!useWorkspace()?.dimensions?.length);
+  const likely = likelySelection(kind, countsOf(kind, rows, books));
   const span = spanOf(rows.map((r) => r.date));
   const sum = rows.reduce((s, r) => s + (r.chf ?? 0), 0);
   const closed = rows.filter((r) => r.closed).length;
@@ -64,7 +75,7 @@ export function SelectionView({ kind, rows, books, nav, canEdit }: { kind: Selec
         <span>{t('selection.sumTip', { currency: baseCurrency() })}</span>
       </div>
       <div className="bar">
-        {canEdit && offers.map((o) => <button key={o.id} type="button" className={`btn${open === o.id ? ' on' : ''}`} data-batch-offer={o.id} onClick={() => setOpen(open === o.id ? null : o.id)}>{o.label}</button>)}
+        {canEdit && <ActionsMenu set={selectionActions(offers, likely, setOpen)} />}
         <button type="button" className="btn ghost" data-act="unselect" onClick={() => clearSelection()}>{t('selection.clear')} <Kbd keys={['Esc']} tip={t('selection.clearTip')} /></button>
       </div>
       {canEdit && <BatchPanel kind={kind} rows={rows} books={books} nav={nav} open={open} onOpen={setOpen} />}

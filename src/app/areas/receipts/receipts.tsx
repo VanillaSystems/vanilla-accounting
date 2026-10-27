@@ -326,6 +326,7 @@ const legend = (): LegendItem[] => [
   [['E'], t('receipts.keyEdit'), t('receipts.keyEditTip')],
   [['L'], t('receipts.keyLink'), t('receipts.keyLinkTip')],
   [['⌘', '⇧'], t('keys.pick'), t('keys.pickTip')],
+  [['A'], t('keys.actions'), t('keys.actionsTip')],
   [['/'], t('keys.search'), t('receipts.searchTip')],
   [['⌘', 'K'], t('keys.all'), t('keys.allTip')],
 ];

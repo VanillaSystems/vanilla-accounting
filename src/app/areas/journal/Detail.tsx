@@ -38,6 +38,8 @@ import { createEntry, linkReceipt, reclassify, saveEntry, type Field } from './a
 import { undoInput } from '../../../books/entry-input.js';
 import { RunLink } from '../../automation/marks.js';
 import { RunHistory } from '../../history/RunHistory.js';
+import { ActionsMenu } from '../../selection/ActionsMenu.js';
+import { entryActions } from './actions-menu.js';
 import { AskAi } from '../../assistant/AskAi.js';
 import { showConversation } from '../../assistant/store.js';
 import { QuestionsOn } from '../../questions/Questions.js';
@@ -145,6 +147,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
         </p>
       ))}
 
+      <div className="actbar"><ActionsMenu set={entryActions(props, v)} /></div>
       {canEdit && <EntryActions {...props} />}
 
       <div className="status jst">

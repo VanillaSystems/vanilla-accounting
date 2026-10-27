@@ -56,3 +56,20 @@ export function entryRows(books: Index, ids: readonly string[]): SelRow[] {
     }];
   });
 }
+
+/** What the picked rows want, for the likely batch: receipts without a payment, payments without a booking or a receipt. */
+export function countsOf(kind: 'receipt' | 'payment' | 'entry', rows: readonly SelRow[], books: Index): { n: number; open: number; unbooked: number; noReceipt: number } {
+  const ids = new Set(rows.filter((r) => !r.closed).map((r) => r.id));
+  const n = ids.size;
+  if (kind === 'receipt') {
+    const l = ledgerFor(books);
+    return { n, open: [...ids].filter((id) => { const v = l.byId.get(id); return !!v && !v.none && !v.links.length; }).length, unbooked: 0, noReceipt: 0 };
+  }
+  if (kind === 'payment') {
+    const booked = new Set((books.journalEntries ?? []).map((e) => e.transactionRef));
+    const linked = new Set(books.mappings.map((m) => m.transactionRef));
+    const txs = books.transactions.filter((tx) => ids.has(tx.ref));
+    return { n, open: 0, unbooked: txs.filter((tx) => tx.amount && !booked.has(tx.ref)).length, noReceipt: txs.filter((tx) => tx.direction === 'DBIT' && !tx.noReceiptNeeded && !linked.has(tx.ref)).length };
+  }
+  return { n, open: 0, unbooked: 0, noReceipt: 0 };
+}

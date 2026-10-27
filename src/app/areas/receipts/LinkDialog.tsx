@@ -24,6 +24,7 @@ import { bankOf, dayText, fitText, signed, txLine } from './view.js';
 import { correctFiled, linkPayment } from './actions.js';
 import { PrivateForm } from './PrivateForm.js';
 import { Kbd } from './commands.js';
+import { ui } from './state.js';
 import { withoutInputTax, baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'receipts'>> & { v: ReceiptView; l: Ledger; onClose(): void };
@@ -55,7 +56,7 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
   /** A second payment for a receipt that has one: picked once, linked on the next ↵ or click. */
   const [second, setSecond] = useState<Candidate>();
   /** «Privat oder bar bezahlt» picked: its form replaces the list. */
-  const [privately, setPrivately] = useState(false);
+  const [privately, setPrivately] = useState(() => ui().linkStart === 'private');
   const { best, more } = useMemo(() => candidates(v, l, chfOf(rates), q), [v, l, rates, q]);
   const unpaid = useMemo(() => bookingsWithoutPayment(v, l, q), [v, l, q]);
   const items: Array<Candidate | Unpaid | 'private'> = [...best, ...unpaid, ...more, 'private'];

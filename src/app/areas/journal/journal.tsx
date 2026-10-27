@@ -174,6 +174,7 @@ const legend = (): LegendItem[] => [
   [['E'], t('journal.keyEdit'), t('journal.keyEditTip')],
   [['D'], t('journal.keyDownload'), t('journal.keyDownloadTip')],
   [['⌘', '⇧'], t('keys.pick'), t('keys.pickTip')],
+  [['A'], t('keys.actions'), t('keys.actionsTip')],
   [['/'], t('keys.search'), t('journal.searchTip')],
   [['⌘', 'K'], t('keys.all'), t('keys.allTip')],
 ];

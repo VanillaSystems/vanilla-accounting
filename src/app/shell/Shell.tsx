@@ -43,6 +43,7 @@ import { BotIcon } from '../areas/automation/Graph.js';
 import { ShellUiContext, type ShellUi } from './ui.js';
 import { filing } from '../../engines/index.js';
 import { clearSelection, selectAll, selectionNow } from '../selection/store.js';
+import { actionsNow, openActions } from '../selection/ActionsMenu.js';
 
 type Overlay =
   | { kind: 'palette' }
@@ -176,7 +177,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
     toggleNav,
     selectAll: () => !!area.selects && selectAll(area.selects, toast),
     unselect: () => { if (!selectionNow()) return false; clearSelection(); focusSelectedRow(); return true; },
-    actions: () => false,
+    actions: () => !overlay && openActions(),
   });
   useLayoutEffect(syncSidebarWidth, []);
   // A selection belongs to its list: another area starts with none (#216).
@@ -230,7 +231,9 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
       { label: t('dock.navToggle'), side: '⌘B', run: toggleNav },
     ].filter(hit);
     const areas: PaletteItem[] = DOCK.flat().map((id) => ({ label: AREAS[id].label(), side: `G ${AREAS[id].dock!.key.toUpperCase()}`, run: () => goArea(id) })).filter(hit);
-    return [...objects, [t('shell.actions'), actions], [t('shell.areas'), areas]].filter(([, xs]) => xs.length > 0) as PaletteGroup[];
+    // The Aktionen of what is open or picked (#216), first: the A key's menu, by name.
+    const here: PaletteItem[] = actionsNow().map((a) => ({ label: a.label, side: a.key, run: a.run })).filter(hit);
+    return [[t('actions.palette'), here], ...objects, [t('shell.actions'), actions], [t('shell.areas'), areas]].filter(([, xs]) => xs.length > 0) as PaletteGroup[];
   }, [go, goArea]);
 
   // The filing periods that hold payments: quarters, or half years on a half-yearly setup (r6f-29).

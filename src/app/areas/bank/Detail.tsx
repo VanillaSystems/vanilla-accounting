@@ -45,6 +45,8 @@ import { QuestionsOn } from '../../questions/Questions.js';
 import { bookDiffParts, missingOpenings } from '../../../accounting/opening-balance.js';
 import { GroupedOffer } from '../company/RulesSection.js';
 import { Pick } from '../../selection/Pick.js';
+import { ActionsMenu } from '../../selection/ActionsMenu.js';
+import { paymentActions } from './actions-menu.js';
 import { SelectionView } from '../../selection/SelectionView.js';
 import { paymentRows } from '../../selection/rows.js';
 import { clickRow, useSelection, useShown } from '../../selection/store.js';
@@ -170,6 +172,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
             <div className="src paybar">
               <span><PayBar {...props} tx={tx} closed={closed} onClear={() => choose(undefined)} /></span>
               {tx && !closed ? <WorkflowButtons kind="transaction" id={tx.ref} facts={[b.unbooked(tx) ? 'unbooked' : 'booked']} nav={nav} canEdit={canEdit} /> : null}
+              {tx ? <ActionsMenu set={paymentActions(props as AreaProps, b, tx, closed)} /> : null}
               {tx ? <AskAi context={{ kind: 'payment', id: tx.ref, label: tx.description ?? tx.ref }} /> : null}
               {src && <span className="pgno">{page}</span>}
               {file && <a className="dl inline" href={file} download={s.file!.filename} data-tip={t('bank.downloadTitle', { file: s.file!.filename })}>{I.dl}<span>{t('receipts.download')}</span></a>}
