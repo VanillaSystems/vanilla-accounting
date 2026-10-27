@@ -541,20 +541,24 @@ export function customsEntries(books: Books, tx: BankTransaction, context: Class
   const lines = withDerivedCodes(split.lines, tx.direction, bankAccount);
   const entries = entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by: CUSTOMS_BY, reason: said.join('; '), corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) });
   // A deduction is the assessment's tax in the books' currency, whatever the payment was made in.
-  return { entries: entries.map((e, k) => {
+  const booked = entries.map((e, k) => {
     if (!split.deductions.has(split.lines[k])) return e;
     const { exchangeCurrency: _c, exchangeRate: _r, ...rest } = e;
     return rest;
-  }) };
+  });
+  // Each assessment deducted is used: the passes never book from it again, even once a person takes it off this payment.
+  const deductions = booked.filter((_, k) => split.deductions.has(split.lines[k]));
+  split.assessments.forEach((a, k) => { const r = mapped.find((x) => x.id === a.receipt); if (r && deductions[k]) r.importVatDeduction = deductions[k].id; });
+  return { entries: booked };
 }
 
 /**
  * The deductions customs assessments bring to import VAT booked before them (importVatDeductions),
- * booked into `books`. Returns how many.
+ * booked into `books`, and the assessments marked as used. Save the books when either is more than none.
  */
-export function bookImportVatDeductions(books: Books, context: Pick<ClassifyContext, 'companyUid'>): number {
+export function bookImportVatDeductions(books: Books, context: Pick<ClassifyContext, 'companyUid'>): { booked: number; marked: number } {
   const words = documents().customs;
-  if (!words) return 0;
+  if (!words) return { booked: 0, marked: 0 };
   const lock = periodLock(books);
   const through = lock.lockedThrough;
   const firstOpenDay = through ? new Date(Date.parse(`${through}T00:00:00Z`) + 864e5).toISOString().slice(0, 10) : '';

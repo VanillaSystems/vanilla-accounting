@@ -142,7 +142,7 @@ test('with the assessment linked, the import VAT is deducted at once: a one-legg
   assert.deepEqual(lines(books), [['4030', '1021', 57.55, 'M0'], ['4020', '1021', 6.45, 'M0'], ['4040', '1021', 3.5, 'M0'], ['', '4030', 57.55, 'M81-2']]);
   assert.match(books.journalEntries[0].reason ?? '', /laut Veranlagungsverfügung 20260509-bazg/);
   assert.doesNotMatch(books.journalEntries[0].reason ?? '', /ohne Vorsteuerabzug/);
-  assert.equal(bookImportVatDeductions(books, loadClassifyContext(company())), 0, 'the pass books no second deduction');
+  assert.equal(bookImportVatDeductions(books, loadClassifyContext(company())).booked, 0, 'the pass books no second deduction');
 });
 
 test('an assessment proves nothing for another firm, nor one whose amount no import VAT line has', () => {
@@ -161,14 +161,14 @@ test('an assessment that comes later, while the quarter is open: the next run fi
   const books = booksOf([invoice()]);
   await classifyTransactions(books, [PAYMENT], { fx, context: loadClassifyContext(ws), ask: noModel });
   books.receipts.push(assessment());
-  assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)), 1);
+  assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)).booked, 1);
   const deduction = books.journalEntries.at(-1)!;
   assert.deepEqual([deduction.date, deduction.accountDebit, deduction.accountCredit, deduction.amount, deduction.vatCode, deduction.corrects], [PAYMENT.date, '', '4030', 57.55, 'M81-2', undefined]);
   assert.ok(books.mappings.some((m) => m.receiptId === 'evv1' && m.transactionRef === 'P-1'), 'the assessment is linked to its payment');
   assert.ok(books.journalEntries.filter((e) => e.transactionRef === 'P-1').every((e) => e.receipts?.includes('evv1')), 'the bookings saw it: no rebooking for it');
-  assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)), 0, 'idempotent');
+  assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)).booked, 0, 'idempotent');
   books.receipts.push(assessment({ id: 'evv2', filename: 'copy-of-the-assessment.pdf' }));
-  assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)), 0, 'a second copy of the assessment brings no second deduction');
+  assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)).booked, 0, 'a second copy of the assessment brings no second deduction');
 });
 
 test('an assessment that comes after the quarter was filed: the deduction is a correction in the open period, naming the filed entry, declared on the filed quarter\'s correction return', async () => {
@@ -178,7 +178,7 @@ test('an assessment that comes after the quarter was filed: the deduction is a c
   books.config.closedThrough = '2026-06-30';
   books.receipts.push(assessment({ date: '2026-07-20' }));
   const filed = books.journalEntries.map((e) => ({ ...e }));
-  assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)), 1);
+  assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)).booked, 1);
   const correction = books.journalEntries.at(-1)!;
   const original = books.journalEntries.find((e) => e.accountDebit === '4030')!;
   assert.deepEqual([correction.date, correction.corrects, correction.vatCode, correction.amount], ['2026-07-20', '2026-Q2', 'M81-2', 57.55]);
@@ -189,7 +189,7 @@ test('an assessment that comes after the quarter was filed: the deduction is a c
   assert.deepEqual(books.mappings.filter((m) => m.receiptId === 'evv1').map((m) => m.transactionRef), [correction.transactionRef], 'linked to its correction, never to the filed payment');
   const view = ledgerOf(books as unknown as Index, '2026-07-01').views.find((v) => v.r.id === 'evv1')!;
   assert.ok(view.links.length > 0 && !view.links.includes('P-1'), 'its page shows the correction made, and offers none to make (Detail.tsx FiledPaymentNotice corrected)');
-  assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)), 0, 'idempotent');
+  assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)).booked, 0, 'idempotent');
 });
 
 test('the automation\'s booking step books a late assessment\'s deduction even when no payment is left to book', async () => {
@@ -253,23 +253,23 @@ test('a person\'s word stands: a deduction she removed or changed is not booked 
     const books = booksOf([invoice()]);
     await classifyTransactions(books, [PAYMENT], { fx, context: loadClassifyContext(ws), ask: noModel });
     books.receipts.push(assessment());
-    assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)), 1);
+    assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)).booked, 1);
     return books;
   };
   const removed = await setUp();
   removed.journalEntries = removed.journalEntries.filter((e) => e.vatCode !== 'M81-2');
   removed.mappings = removed.mappings.filter((m) => m.receiptId !== 'evv1');
-  assert.equal(bookImportVatDeductions(removed, loadClassifyContext(ws)), 0, 'removed with its link: not booked again');
+  assert.equal(bookImportVatDeductions(removed, loadClassifyContext(ws)).booked, 0, 'removed with its link: not booked again');
 
   const changed = await setUp();
   const d = changed.journalEntries.find((e) => e.vatCode === 'M81-2')!;
   Object.assign(d, { vatCode: 'M0', by: { kind: 'person', at: '2026-10-27T00:00:00Z' } });
-  assert.equal(bookImportVatDeductions(changed, loadClassifyContext(ws)), 0, 'changed by her: not booked beside it');
+  assert.equal(bookImportVatDeductions(changed, loadClassifyContext(ws)).booked, 0, 'changed by her: not booked beside it');
 
   const typed = booksOf([invoice()]);
   await classifyTransactions(typed, [PAYMENT], { fx, context: loadClassifyContext(ws), ask: noModel });
   typed.receipts.push(assessment({ kind: 'invoice', kindBy: 'human' }));
-  assert.equal(bookImportVatDeductions(typed, loadClassifyContext(ws)), 0, 'a person typed it as an invoice: it proves nothing by code');
+  assert.equal(bookImportVatDeductions(typed, loadClassifyContext(ws)).booked, 0, 'a person typed it as an invoice: it proves nothing by code');
 });
 
 test('one invoice of two shipments: each import VAT line is deducted by its own assessment', async () => {
@@ -287,7 +287,7 @@ test('one invoice of two shipments: each import VAT line is deducted by its own 
     assessment({ id: 'evvA', extractedText: ASSESSMENT_TEXT.replace('57.55', '30.00') }),
     assessment({ id: 'evvB', extractedText: ASSESSMENT_TEXT.replace('57.55', '20.00').replaceAll('26CHEI000000004711', '26CHEI000000004712') }),
   );
-  assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)), 2);
+  assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)).booked, 2);
   assert.deepEqual(lines(books).filter((l) => l[3] === 'M81-2').map((l) => l[2]).sort(), [20, 30]);
 });
 
@@ -316,6 +316,37 @@ test('import VAT paid to the customs office itself: the assessment is the paymen
   await classifyTransactions(books, [toCustoms], { fx, context: loadClassifyContext(company()), ask: noModel });
   assert.deepEqual(lines(books, 'Z-1'), [['4030', '1021', 57.55, 'M0'], ['', '4030', 57.55, 'M81-2']]);
   assert.match(books.journalEntries[0].reason ?? '', /direkt an den Zoll/);
+});
+
+test('a person who takes the assessment off the payment the split deducted it on is not overruled: the mark is kept on the usual run, and no copy deducts elsewhere', async () => {
+  const ws = company();
+  const books = booksOf([invoice(), assessment()]);
+  const port = { read: () => structuredClone(books), update: <T>(fn: (b: Books) => T) => fn(books) };
+  await classifyStep()({ ws, books: port, progress: () => {}, log: () => {} });
+  assert.deepEqual(lines(books).at(-1), ['', '4030', 57.55, 'M81-2'], 'the split deducts with the assessment linked');
+  assert.ok(books.receipts.find((r) => r.id === 'evv1')?.importVatDeduction, 'the run keeps the mark, though it booked nothing more itself');
+  // The person takes the assessment off the payment («Lösen»): the payment is booked again without it.
+  books.mappings = books.mappings.filter((m) => m.receiptId !== 'evv1');
+  books.receipts.find((r) => r.id === 'evv1')!.notPaidBy = ['P-1'];
+  books.journalEntries = [];
+  await classifyStep()({ ws, books: port, progress: () => {}, log: () => {} });
+  assert.deepEqual(lines(books).map((l) => l[3]), ['M0', 'M0', 'M0'], 'no deduction comes back');
+  assert.ok(!books.mappings.some((m) => m.receiptId === 'evv1'), 'and the assessment is not linked back');
+
+  // A copy of the used assessment proves nothing on another courier payment of the same tax.
+  const p2: BankTransaction = { ...PAYMENT, ref: 'P-2', date: '2026-05-25' };
+  books.transactions.push(p2);
+  books.receipts.push(invoice({ id: 'inv2', extractedText: 'Zollrechnung ZR-2026-0900' }), assessment({ id: 'evv1-copy' }));
+  books.mappings.push({ transactionRef: 'P-2', receiptId: 'inv2' });
+  await classifyStep()({ ws, books: port, progress: () => {}, log: () => {} });
+  assert.deepEqual(lines(books, 'P-2').map((l) => l[3]), ['M0', 'M0', 'M0']);
+});
+
+test('an import VAT line that claimed input tax already (the model or a rule booked it at a rate) gets no second deduction from a later assessment', () => {
+  const books = booksOf([invoice()]);
+  books.journalEntries.push({ id: 'm1', transactionRef: 'P-1', date: PAYMENT.date, accountDebit: '4030', accountCredit: '1021', amount: 67.5, vatCode: 'M81', description: 'Muster Kurier AG', origin: 'classify', by: { kind: 'model', model: 'm' }, receipts: ['inv1'] });
+  books.receipts.push(assessment());
+  assert.equal(bookImportVatDeductions(books, loadClassifyContext(company())).booked, 0);
 });
 
 function splitContext(o: Partial<SplitContext> = {}): SplitContext {

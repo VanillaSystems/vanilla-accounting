@@ -111,7 +111,9 @@ export function classifyStep({ force = false } = {}): StepRun {
     const keeps = (ref: string) => !probe.has(ref) || onlySettles(scratch.journalEntries.filter((je) => je.transactionRef === ref), bankOf.get(ref) ?? '', settles);
     const done = (notes: IntakeNote[]) => {
       // A customs assessment that came after its import VAT was booked brings the deduction (issue #197).
-      const deducted = bookImportVatDeductions(structuredClone(books.read()), context) ? books.update((index) => bookImportVatDeductions(index, context)) : 0;
+      // Saved whenever it books or marks an assessment as used: a mark lost would let a deduction a person took back come again.
+      const would = bookImportVatDeductions(structuredClone(books.read()), context);
+      const deducted = would.booked + would.marked ? books.update((index) => bookImportVatDeductions(index, context)).booked : 0;
       if (deducted) log(`Customs   : ${deducted} import VAT deduction(s) booked from customs assessments.`);
       // A probe the model gave no answer for (it failed) waits unjudged, and the next run asks again.
       const decided = new Set([...waiting].filter((ref) => judged.has(ref)));

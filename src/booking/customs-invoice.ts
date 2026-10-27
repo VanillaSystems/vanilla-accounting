@@ -332,12 +332,24 @@ function usable(books: CustomsBooks, ctx: Pick<DeductionContext, 'words' | 'uid'
   return read.filter(({ r, a }) => !r.importVatDeduction && !used.has(a.number ?? a.receipt));
 }
 
-/** Records on each assessment the deduction booked from it, by whomever: the passes never book from it again. */
-function markDeducted(books: CustomsBooks, account: string, code: string): void {
+/**
+ * Records on each assessment the deduction booked from it, by whomever (the split, the pass, a
+ * person): the passes never book from it again. Returns how many it marked.
+ */
+export function markDeducted(books: Pick<CustomsBooks, 'journalEntries' | 'receipts'>, ctx: Pick<DeductionContext, 'words' | 'uid'>): number {
+  const account = ctx.words.positions.importVat.account;
+  const code = deductionCode(account);
+  if (!code) return 0;
+  let marked = 0;
   for (const e of books.journalEntries) {
     if (e.vatCode !== code || e.accountCredit !== account || e.accountDebit) continue;
-    for (const r of books.receipts) if (!r.importVatDeduction && e.receipts?.includes(r.id) && r.extractedText) r.importVatDeduction = e.id;
+    for (const r of books.receipts) {
+      if (r.importVatDeduction || !e.receipts?.includes(r.id) || !readAssessment(r, ctx.words, ctx.uid)) continue;
+      r.importVatDeduction = e.id;
+      marked++;
+    }
   }
+  return marked;
 }
 
 const DAY = 864e5;
@@ -361,18 +373,25 @@ export function namesAssessment(r: Pick<Receipt, 'extractedText'>, words: Custom
  * once filed it is booked on the open period's first day (or the assessment's, when later) as a
  * correction of the filed period, a booking of its own without a payment that names the filed entry
  * and holds the assessment, which points at the filed payment (golden rule 1). An assessment linked
- * to an open payment is the split's (customsSplit books it with the payment). Idempotent. Returns how many.
+ * to an open payment is the split's (customsSplit books it with the payment). A payment whose import
+ * VAT line claims input tax already (a rate code: the model or a rule booked it so) gets none, and a
+ * payment a person took the assessment from (Receipt.notPaidBy) gets none from it. Idempotent.
+ * Returns how many it booked, and how many assessments it marked as used (markDeducted): the
+ * caller saves the books when either is more than none.
  */
-export function importVatDeductions(books: CustomsBooks, ctx: DeductionContext): number {
+export function importVatDeductions(books: CustomsBooks, ctx: DeductionContext): { booked: number; marked: number } {
   const account = ctx.words.positions.importVat.account;
   const code = deductionCode(account);
-  if (!ctx.inputTax || !code) return 0;
-  markDeducted(books, account, code);
+  if (!ctx.inputTax || !code) return { booked: 0, marked: 0 };
+  const marked = markDeducted(books, ctx);
+  // Only a line that claimed no input tax waits for its proof: one booked at a rate claimed it already.
+  const withoutInputTax = (e: JournalEntry) => !e.vatCode || vat().codes.parse(e.vatCode)?.rate === 0;
   const byId = new Map(books.receipts.map((r) => [r.id, r]));
   const linked = new Set(books.mappings.map((m) => m.receiptId));
   const isDeduction = (e: JournalEntry) => e.vatCode === code && e.accountCredit === account && !e.accountDebit;
   const lines = books.transactions.flatMap((t) => {
     const original = books.journalEntries.find((e) => e.transactionRef === t.ref && e.origin === 'classify' && e.accountDebit === account && !!e.accountCredit && e.by?.kind !== 'person' && e.by?.kind !== 'assistant');
+    if (original && !withoutInputTax(original)) return [];
     if (!original) return [];
     return books.mappings.filter((m) => m.transactionRef === t.ref).map((m) => byId.get(m.receiptId)).flatMap((r) => {
       const read = r && isPurchaseDocument(r) ? readCustomsInvoice(r, ctx.words) : undefined;
@@ -389,7 +408,7 @@ export function importVatDeductions(books: CustomsBooks, ctx: DeductionContext):
   let booked = 0;
   for (const { r, a } of usable(books, ctx).filter(({ r }) => !linked.has(r.id))) {
     const near = (l: (typeof lines)[number]) => !a.date || !l.invoice.date || Math.abs(Date.parse(a.date) - Date.parse(l.invoice.date)) <= ASSESSMENT_DAYS * DAY;
-    const candidates = open.filter((l) => proves(a, l) && (r.filedPayment ? l.payment === r.filedPayment : near(l)));
+    const candidates = open.filter((l) => proves(a, l) && !r.notPaidBy?.includes(l.payment) && (r.filedPayment ? l.payment === r.filedPayment : near(l)));
     if (candidates.length !== 1) continue;
     const [line] = candidates;
     open.splice(open.indexOf(line), 1);
@@ -418,5 +437,5 @@ export function importVatDeductions(books: CustomsBooks, ctx: DeductionContext):
     linked.add(r.id);
     booked++;
   }
-  return booked;
+  return { booked, marked };
 }
