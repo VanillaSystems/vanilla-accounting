@@ -10,7 +10,7 @@ import { api, errorText } from '../../lib/api.js';
 import type { AiProviderView, AiStepView, AiView } from '../../../llm/view.js';
 import type { ProviderId } from '../../../llm/provider.js';
 import type { Nav } from '../index.js';
-import { TERMINAL_CLIS, type TerminalCli } from '../../../platform/terminal.js';
+import { TERMINAL_APP_FACTS, TERMINAL_CLIS, isTerminalApp, type TerminalCli, type TerminalView } from '../../../platform/terminal.js';
 import type { Probation, SetupKey } from '../../../platform/ai-setup.js';
 import { isSetupKey } from '../../../platform/ai-setup.js';
 import { CliCard } from '../../ai/CliCard.js';
@@ -52,6 +52,7 @@ export function AiSection({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
     <div className="ai">
       <p>{t('ai.intro')}</p>
       <Programs setup={setup} ai={view} canEdit={canEdit} apply={apply} />
+      <TerminalAppChoice canEdit={canEdit} toast={nav.toast} />
       <details className="aiadv" open={view.providers.some((p) => p.state === 'set') || undefined}>
         <summary>{t('aiSetup.key.summary')}</summary>
         <div className="aiadvin">
@@ -149,6 +150,34 @@ function Programs({ setup, ai, canEdit, apply }: { setup: AiSetup; ai: AiView; c
       ) : null}
       {view.noAi && !ready.length ? <p className="m">{t('aiSetup.firma.noAiKept')} <button type="button" className="linkbtn" onClick={() => void setup.choose({ noAi: false })}>{t('aiSetup.firma.noAiUndo')}</button></p> : null}
     </>
+  );
+}
+
+/**
+ * «Im Terminal öffnen mit» (issue #210): with several terminal apps on this Mac, the one the
+ * sidebar's terminal button opens, as the chat's question kept it; «Beim nächsten Mal fragen» clears it.
+ */
+function TerminalAppChoice({ canEdit, toast }: { canEdit: boolean; toast: (text: string) => void }) {
+  const [view, setView] = useState<TerminalView>();
+  useEffect(() => { api.terminal().then(setView, () => undefined); }, []);
+  if (!view?.opens || view.apps.length < 2) return null;
+  const change = (value: string) => {
+    const app = isTerminalApp(value) ? value : null;
+    api.setTerminalApp(app).then((next) => {
+      setView(next);
+      toast(app ? t('ai.terminalApp.saved', { app: TERMINAL_APP_FACTS[app].name }) : t('ai.terminalApp.askSaved'));
+    }, (e) => toast(errorText(e)));
+  };
+  return (
+    <dl className="kv2 wide aichoose">
+      <dt>{t('ai.terminalApp.label')}</dt>
+      <dd>
+        <select aria-label={t('ai.terminalApp.label')} value={view.app ?? ''} disabled={!canEdit} onChange={(e) => change(e.target.value)}>
+          <option value="">{t('ai.terminalApp.ask')}</option>
+          {view.apps.map((app) => <option key={app} value={app}>{TERMINAL_APP_FACTS[app].name}</option>)}
+        </select>
+      </dd>
+    </dl>
   );
 }
 

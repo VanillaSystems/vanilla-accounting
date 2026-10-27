@@ -56,10 +56,56 @@ export type CliState =
   | { cli: TerminalCli; installed: false }
   | { cli: TerminalCli; installed: true; signedIn: boolean | undefined };
 
-/** GET /api/terminal: the CLIs, the one chosen in Firma › KI, whether this computer opens Terminal, and the books folder. */
+/**
+ * The terminal apps the button opens (issue #210): macOS has no default terminal to read, so the
+ * person chooses among those installed. The one table of them: the app's name for `open -a`, and
+ * how it runs the .command script. `file`: the app opens the script as a document and runs it
+ * (Terminal; iTerm2 declares .command files and executables as its documents). `exec`: a new
+ * instance started with `-e <script>` (Ghostty's documented way on macOS:
+ * `open -na Ghostty.app --args -e …`). No AppleScript, so none of them asks for a permission.
+ */
+export const TERMINAL_APPS = ['terminal', 'iterm', 'ghostty', 'warp'] as const;
+export type TerminalApp = (typeof TERMINAL_APPS)[number];
+export const isTerminalApp = (v: unknown): v is TerminalApp => TERMINAL_APPS.includes(v as TerminalApp);
+
+export interface TerminalAppFacts {
+  /** The product's name, as a person reads it. */
+  name: string;
+  /** The bundle's name in an Applications folder (without .app), which `open -a` takes. */
+  bundle: string;
+  run: 'file' | 'exec';
+}
+
+export const TERMINAL_APP_FACTS: Record<TerminalApp, TerminalAppFacts> = {
+  terminal: { name: 'Terminal', bundle: 'Terminal', run: 'file' },
+  iterm: { name: 'iTerm2', bundle: 'iTerm', run: 'file' },
+  ghostty: { name: 'Ghostty', bundle: 'Ghostty', run: 'exec' },
+  warp: { name: 'Warp', bundle: 'Warp', run: 'file' },
+};
+
+/** The arguments to `open` that let `app` run `script`. */
+export function openArgs(app: TerminalApp, script: string): string[] {
+  const { bundle, run } = TERMINAL_APP_FACTS[app];
+  return run === 'file' ? ['-a', bundle, script] : ['-na', bundle, '--args', '-e', script];
+}
+
+/** Which terminal opens: the one chosen while it is installed, the only one, or a question among those found. */
+export type TerminalAppPlan = { kind: 'open'; app: TerminalApp } | { kind: 'ask'; apps: TerminalApp[] };
+
+export function chooseTerminalApp(installed: readonly TerminalApp[], preferred: TerminalApp | undefined): TerminalAppPlan {
+  if (preferred && installed.includes(preferred)) return { kind: 'open', app: preferred };
+  if (installed.length > 1) return { kind: 'ask', apps: [...installed] };
+  return { kind: 'open', app: installed[0] ?? 'terminal' };
+}
+
+/** GET /api/terminal: the CLIs and the one chosen in Firma › KI, the terminal apps and the one chosen, whether this computer opens a terminal, and the books folder. */
 export interface TerminalView {
   clis: CliState[];
   preferred?: TerminalCli;
+  /** The terminal apps installed on this Mac, Terminal first. */
+  apps: TerminalApp[];
+  /** The terminal app chosen on this Mac; absent: not chosen yet. */
+  app?: TerminalApp;
   /** macOS: the app opens Terminal; elsewhere only the command to copy. */
   opens: boolean;
   folder: string;
@@ -96,18 +142,20 @@ export function copyCommand(folder: string, cli: TerminalCli, request: string): 
 }
 
 /**
- * The .command script Terminal runs: into the books folder, the request read from its file (never
- * part of the script's code), the script's folder removed, the CLI started with the request as one
- * argument. `bin` is the CLI's path as the login shell finds it.
+ * The .command script the terminal runs: into the books folder, the script's folder removed, the
+ * CLI started. With `requestFile`, the request is read from it (never part of the script's code)
+ * and handed to the CLI as one argument; without, the CLI starts with no prompt and the person
+ * types their own (issue #210: neither Claude Code nor Codex has an option to prefill its input).
+ * `bin` is the CLI's path as the login shell finds it.
  */
-export function launchScript(folder: string, bin: string, requestFile: string, scriptDir: string): string {
+export function launchScript(folder: string, bin: string, scriptDir: string, requestFile?: string): string {
   return [
     '#!/bin/sh',
     `cd ${shellQuote(folder)} || exit 1`,
-    `request=$(cat ${shellQuote(requestFile)})`,
+    ...(requestFile ? [`request=$(cat ${shellQuote(requestFile)})`] : []),
     `rm -rf ${shellQuote(scriptDir)}`,
     'clear',
-    `if [ -n "$request" ]; then exec ${shellQuote(bin)} "$request"; else exec ${shellQuote(bin)}; fi`,
+    requestFile ? `if [ -n "$request" ]; then exec ${shellQuote(bin)} "$request"; else exec ${shellQuote(bin)}; fi` : `exec ${shellQuote(bin)}`,
     '',
   ].join('\n');
 }
