@@ -128,7 +128,7 @@ test('a payment to an authority routes to its app file, and each tells its facts
 test('the archived name routes a receipt; the name it came with only when no file pattern matches the archived one', () => {
   const cp = (id: string) => compileCounterparty({ id, name: id, match: { file: [id] } }, { vendor: id }, 'supplier');
   const cps = [cp('coop-pronto'), cp('shopify')];
-  const stale = { id: 'r1', filename: '20260619-coop-pronto-tankquittung.pdf', originalFilename: '20260630-shopify-bill-1.pdf' } as Receipt;
+  const stale = { id: 'r1', filename: '20260102-coop-pronto-benzin.pdf', originalFilename: '20260630-shopify-bill-1.pdf' } as Receipt;
   // check-processes reports a clash when identify says ambiguous on these signals
   assert.deepEqual(identify(signalsOfReceipt(stale), cps), { kind: 'known', counterparty: 'coop-pronto', tier: 'file', signal: 'coop-pronto' });
   assert.equal((identify(signalsOfTransaction({ description: '', counterparty: '' } as BankTransaction, [stale]), cps) as { counterparty: string }).counterparty, 'coop-pronto');
