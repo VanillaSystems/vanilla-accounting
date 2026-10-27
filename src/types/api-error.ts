@@ -19,7 +19,7 @@ import type { AiRefusal } from './ai-refusal.js';
 export const CLOSED_REASONS = [
   'editTransaction', 'deleteTransaction', 'newTransaction', 'mapping',
   'editReceipt', 'deleteReceipt', 'editEntry', 'deleteEntry', 'newStatement', 'newEntry',
-  'openingBalance',
+  'openingBalance', 'discardFile',
 ] as const;
 export type ClosedReason = (typeof CLOSED_REASONS)[number];
 
@@ -87,6 +87,8 @@ export type ApiRefusal =
   /** Re-classify of a payment that holds a person's booking (origin manual), asked without `overwrite`. */
   | { code: 'personsBooking'; params: { entries: number } }
   | { code: 'fileExists'; params: { filename: string } }
+  /** «Löschen» of a file listed as «keine Belege» (#228) that payments, bookings or statements still refer to: their refs, and how many statements. */
+  | { code: 'fileReferenced'; params: { file: string; payments: string[]; entries: string[]; statements: number } }
   /** A restore of a deleted receipt (POST /api/receipts/:id/restore): gone from the trash, deleted again later, or back already. */
   | { code: 'notInTrash' }
   | { code: 'deletedAgain' }
@@ -140,7 +142,7 @@ export type ApiRefusal =
   | { code: 'sourceSecret'; params: { id: string; file: string } }
   | { code: 'sourceAppId'; params: { id: string } }
   /** What a change names is not in the books (any more): a receipt, a booking, a payment, a change by hand since the last save. */
-  | { code: 'gone'; params: { what: 'receipt' | 'entry' | 'payment' | 'handEdit' | 'file' } }
+  | { code: 'gone'; params: { what: 'receipt' | 'entry' | 'payment' | 'handEdit' | 'file' | 'quarantined' } }
   /** Firma › Bankkonten › «Entfernen» (or the undo of an add) while statements, bookings or invoices use the account (r9k-1). */
   | { code: 'bankInUse'; params: { account: string; label: string; statements: number; entries: number; invoices: number } }
   /** Firma › Bankkonten › «Bankkonto hinzufügen» on a ledger account another bank account already has (r10h-2): the one that has it. */

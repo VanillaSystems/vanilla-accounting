@@ -26,6 +26,7 @@ import { Detail } from './Detail.js';
 import { I } from './icons.js';
 import { EmptyTable, FirstRun, Strip } from './InflowStrip.js';
 import { InflowDialogs } from './InflowDialogs.js';
+import { ConfirmDiscard, askDiscard } from './Discard.js';
 import './receipts.css';
 import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
 import { baseCurrency } from '../../../engines/index.js';
@@ -182,6 +183,7 @@ function List(props: Props) {
         </>
       )}
       <Quarantine nav={nav} canEdit={canEdit} />
+      <ConfirmDiscard from="hidden" nav={nav} />
       <InflowDialogs {...props} />
     </div>
   );
@@ -205,7 +207,12 @@ function Row({ v, sel, same, canEdit, onSelect, onAct }: { v: ReceiptView; sel: 
       <span className="a mono">{r.amount != null && <>{(r.currency ?? baseCurrency()) !== baseCurrency() && <span className="c">{r.currency}</span>}{fmt(r.amount)}</>}</span>
       <span className="acts">
         {v.none ? (
-          canEdit && <button type="button" aria-label={t('receipts.isReceipt')} onClick={act(() => onAct('mark'))}>{I.check}</button>
+          canEdit && (
+            <>
+              <button type="button" aria-label={t('receipts.isReceipt')} onClick={act(() => onAct('mark'))}>{I.check}</button>
+              {!v.locked && <button type="button" className="del" data-testid="discard" data-tip={t('receipts.discard')} aria-label={t('receipts.discard')} onClick={act(() => askDiscard({ from: 'hidden', files: [{ id: r.id, file: r.filename }] }))}>{I.trash}</button>}
+            </>
+          )
         ) : (
           <>
             <button type="button" data-tip={t('receipts.previewKey')} aria-label={t('receipts.preview')} onClick={act(() => setUi({ overlay: 'quick' }))}>{I.eye}</button>
@@ -221,7 +228,8 @@ function Row({ v, sel, same, canEdit, onSelect, onAct }: { v: ReceiptView; sel: 
 
 /**
  * data/quarantine/: what came in and is no receipt by its words, each with its reason; «Ist ein
- * Beleg» puts it into the inbox, whose run reads it (src/server/routes/quarantine.ts).
+ * Beleg» puts it into the inbox, whose run reads it, «Löschen» deletes it for good once confirmed
+ * (src/server/routes/quarantine.ts).
  */
 function Quarantine({ nav, canEdit }: { nav: AreaProps['nav']; canEdit: boolean }) {
   const [files, setFiles] = useState<QuarantinedFile[]>([]);
@@ -257,12 +265,19 @@ function Quarantine({ nav, canEdit }: { nav: AreaProps['nav']; canEdit: boolean 
                 <span className="qacts">
                   <a href={`/api/quarantine/${encodeURIComponent(q.file)}`} target="_blank" rel="noreferrer">{t('receipts.quarantineOpen')}</a>
                   {canEdit && <button type="button" className="linkbtn" onClick={() => void take(q.file)}>{t('receipts.quarantineTake')}</button>}
+                  {canEdit && <button type="button" className="linkbtn danger" data-testid="quarantine-delete" onClick={() => askDiscard({ from: 'quarantine', files: [{ id: q.file, file: q.file }] })}>{t('receipts.discard')}</button>}
                 </span>
               </li>
             ))}
           </ul>
+          {canEdit && files.length > 1 && (
+            <button type="button" className="linkbtn danger qall" data-testid="quarantine-delete-all" onClick={() => askDiscard({ from: 'quarantine', all: true, files: files.map((q) => ({ id: q.file, file: q.file })) })}>
+              {t('receipts.discardAll', { n: files.length })}
+            </button>
+          )}
         </>
       )}
+      <ConfirmDiscard from="quarantine" nav={nav} done={load} />
     </div>
   );
 }
@@ -336,8 +351,8 @@ export const receipts: Area<RouteOf<'receipts'>> = {
       if (e.key === ' ' || e.key === 'Escape') setUi({ overlay: null });
       return !e.metaKey && !e.ctrlKey;
     }
-    if (s.overlay === 'delete') {
-      if (e.key === 'Escape') setUi({ overlay: null });
+    if (s.overlay === 'delete' || s.overlay === 'discard') {
+      if (e.key === 'Escape') setUi({ overlay: null, discard: undefined });
       if (e.key === 'Enter') document.querySelector<HTMLButtonElement>('.confirm .danger')?.click();
       return true;
     }

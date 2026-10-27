@@ -10,6 +10,7 @@ import type { ReceiptFilter } from '../../shell/route.js';
 import { baseCurrency, documents } from '../../../engines/index.js';
 import { duplicatesIn, type Twin } from '../../../intake/duplicates.js';
 import { documentKind } from '../../../intake/document-kind.js';
+import { isNoReceipt } from '../../../books/discard.js';
 import { accountOfStatement, statementFacts, type StatementFacts } from '../../../books/statement-facts.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { isManualRef } from '../../../books/refs.js';
@@ -29,9 +30,6 @@ export function noneWhyOf(r: Partial<Pick<Receipt, 'kind' | 'kindRule' | 'extrac
   if (text?.is === 'other') return text.why;
   return r.kind === 'noise' ? 'no-receipt' : 'empty';
 }
-
-/** The kinds of document that are not a receipt of their own. */
-const NON_RECEIPT_KINDS: ReadonlyArray<Receipt['kind']> = ['supporting', 'statement', 'noise', 'duplicate'];
 
 export interface ReceiptView {
   r: Receipt;
@@ -109,8 +107,7 @@ export function ledgerOf(books: Index, openFrom: string): Ledger {
     // "" is no date (an old answer of the model): the receipt is undated and needs you.
     const date = r.date || (fileDate ? `${fileDate[1]}-${fileDate[2]}-${fileDate[3]}` : undefined);
     const [vendor, desc] = r.title ? [r.title.vendor, r.title.what] : splitTitle(r.description || r.filename.replace(/\.pdf$/i, ''));
-    const none = NON_RECEIPT_KINDS.includes(r.kind)
-      || (r.amount === 0 && !(r.vatSummary ?? []).some((g) => g.vat > 0) && links.length === 0);
+    const none = isNoReceipt(r, links.length);
     const paid = links.flatMap((ref) => txByRef.get(ref)?.date ?? []);
     const twin = twins.get(r.id);
     const statement = r.kind === 'statement' ? statementFacts(r, documents()) : undefined;

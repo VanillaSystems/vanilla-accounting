@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { renameSync, existsSync, createReadStream, mkdirSync } from 'node:fs';
+import { renameSync, existsSync, createReadStream, mkdirSync, rmSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { RECEIPT_KINDS, type Receipt, type ReceiptKind, type ReceiptPatch } from '../../types/index.js';
 import { deletionsOf, dropFromTrash, readTrashed, trashedFile, trashReceipt, type Trashed } from '../../books/receipt-trash.js';
@@ -12,6 +12,7 @@ import { bookAgain } from './automation.js';
 import { ask } from '../../llm/ask.js';
 import { buildVisionPrompt } from '../../llm/prompts.js';
 import { findFile } from '../../workspace/workspace.js';
+import { isNoReceipt, referenced, refsOf } from '../../books/discard.js';
 import { WS, receiptPath, assertOpen, receiptDates, refDates, readBooks, updateBooks, updateBooksWithEffects, withBooks, RequestError, patchBody, stringField } from '../books.js';
 
 export const router = Router();
@@ -111,6 +112,46 @@ router.delete('/api/receipts/:id', async (req, res) => {
   const deletion = trashReceipt(WS, trashed, pdfPath);
   if (again.length) await bookAgain(trashed.receipt.filename);
   res.json({ ok: true, deletion });
+});
+
+/** The names a delete of several sends (`key`: ids, files): at least one, each a text. */
+export function namesOf(body: unknown, key: string): string[] {
+  const list = (body as Record<string, unknown> | undefined)?.[key];
+  if (!Array.isArray(list) || !list.length || list.some((x) => typeof x !== 'string' || !x)) throw new RequestError(400, `${key} muss eine Liste von Namen sein.`);
+  return [...new Set(list as string[])];
+}
+
+/**
+ * Files listed as «keine Belege» deleted for good (#228), all or none: each is one, belongs to no
+ * closed period, and nothing in the books refers to it (else the refusal names what does). The
+ * books lose them through the write door first, then their files leave the workspace folder.
+ */
+router.post('/api/receipts/discard', (req, res) => {
+  const ids = namesOf(req.body, 'ids');
+  const paths = updateBooks((books) => {
+    const out = ids.map((id) => {
+      const r = books.receipts.find((x) => x.id === id);
+      if (!r) throw new RequestError(404, 'Diesen Beleg gibt es nicht mehr.', { code: 'gone', params: { what: 'receipt' } });
+      assertOpen(books, [r.date || undefined, ...receiptDates(books, id)], 'discardFile');
+      const refs = refsOf(books, r);
+      if (referenced(refs)) {
+        const what = [...refs.payments.map((p) => `Zahlung ${p}`), ...refs.entries.map((e) => `Buchung ${e}`), ...(refs.statements ? ['ein Kontoauszug'] : [])].join(', ');
+        throw new RequestError(409, `${r.filename} bleibt: ${what} verweist darauf.`, { code: 'fileReferenced', params: { file: r.filename, ...refs } });
+      }
+      if (!isNoReceipt(r, 0)) throw new RequestError(400, `${r.filename} ist ein Beleg: löschen über «Beleg löschen».`);
+      return receiptPath(books, r);
+    });
+    const gone = new Set(ids);
+    books.receipts = books.receipts.filter((r) => !gone.has(r.id));
+    for (const r of books.receipts) {
+      if (!r.distinctFrom?.some((id) => gone.has(id))) continue;
+      const rest = r.distinctFrom.filter((id) => !gone.has(id));
+      if (rest.length) r.distinctFrom = rest; else delete r.distinctFrom;
+    }
+    return out;
+  });
+  for (const path of paths) rmSync(path, { force: true });
+  res.json({ ok: true, deleted: ids.length });
 });
 
 /**
