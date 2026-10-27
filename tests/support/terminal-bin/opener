@@ -1,4 +1,10 @@
 #!/bin/sh
-# Stands in for `open -a Terminal <script>` (VANILLA_TERMINAL_OPENER): runs the .command script as Terminal would.
-[ "$1" = -a ] && [ "$2" = Terminal ] || exit 2
-exec /bin/sh "$3"
+# Stands in for `open` (VANILLA_TERMINAL_OPENER): `-a <App> <script>` or `-na <App> --args -e <script>`
+# (src/platform/terminal.ts openArgs). Writes the app to $TERMINAL_STUB_OUT.app and runs the script as the terminal would.
+case "$1" in
+  -a) app="$2"; script="$3" ;;
+  -na) [ "$3" = --args ] && [ "$4" = -e ] || exit 2; app="$2"; script="$5" ;;
+  *) exit 2 ;;
+esac
+if [ -n "$TERMINAL_STUB_OUT" ]; then printf %s "$app" > "$TERMINAL_STUB_OUT.app"; fi
+exec /bin/sh "$script"
