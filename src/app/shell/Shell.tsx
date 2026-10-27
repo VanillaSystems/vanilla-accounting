@@ -93,6 +93,8 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
       const query: Query = { ...current.current.query, ...patch };
       if (query.period?.token === open.token) delete query.period;
       for (const k of Object.keys(query) as Array<keyof Query>) if (query[k] === undefined) delete query[k];
+      // Two patches in one event (a chip added and the search cleared) both hold: the next one builds on this one.
+      current.current = { ...current.current, query };
       go({ route: current.current.route, query });
     },
     toast,

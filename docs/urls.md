@@ -32,6 +32,7 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | `/bank/<account>-<yyyy-mm>` | one statement, e.g. `/bank/1021-2026-09` |
 | `/bank/<account>-<yyyy-mm-dd>` | a statement of some days, by its first day, when a month has several, e.g. `/bank/1020-2026-10-15` (`_<last day>` added when two start the same day) |
 | `/bank/<statement>/<bank-ref>` | one payment in that statement |
+| `/bank/files/<account>/<file name>` | one statement file read in, whole, with its details and every movement it holds (Kontoauszüge › Datei), e.g. `/bank/files/1021/camt053_2026-09.xml` |
 | `/payments/<bank-ref>` | resolves to the statement of that payment, or to its entry if it was paid privately |
 | `/journal` | Buchungen; `?vat=<code>` filters by VAT code |
 | `/journal/<entry-id>` | one journal entry |
@@ -62,10 +63,10 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | Parameter | Where | Meaning |
 |---|---|---|
 | `period` | every list with periods | `2026`, `2026-Q3`, `2026-09` or `2026-07-01_2026-09-30`; left out when it is the open period |
-| `filter` | receipts | `zugeordnet`, `offen`, `ohneDatum` |
+| `f` | receipts, journal | a filter chip `<field>_<value>`, repeated, one per chip (#211, `src/app/shell/chips.ts`): `?f=partner_fedex&f=partner_amazon&f=over_100`. Chips of different fields all hold (AND), chips of one field are alternatives (OR); a bound (`over`, `under`, `amount`, `from`, `to`) or a yes/no field takes one value. Belege: `partner` (a knowledge file's id), `state` (`linked`, `open`, `noDate`, `needsYou`, `unreadable`, `notReceipt`, `quarantine`), `month` (`2026-08`), `from`, `to` (`2026-08-01`), `over`, `under`, `amount` (a number), `currency`, `rate` (the rate the receipt shows, `8.1`, or `none`), `kind`, `linked` (`yes`, `no`). Buchungen: `account`, `rate` (the code's rate, or `none` without a code), `partner`, the same dates and amounts, `currency`, `who` (`classify`, `rule`, `code`, `manual`, `assistant`, `invoice`, `year-close`, `other`), `receipt` (`yes`, `no`, `missing`), `corrects` (`yes`, `no`). The old `?filter=zugeordnet\|offen\|ohneDatum` of Belege redirects to `f=state_linked\|open\|noDate`. |
 | `status` | invoices | as above |
 | `vat` | journal | VAT code filter |
-| `q` | every list | search text |
+| `q` | every list | search text (also the filter's «Text enthält»: it stays the search, not a chip) |
 
 ## Who builds links
 

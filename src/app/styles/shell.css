@@ -459,3 +459,43 @@ html.phone .activity .it .cnt { position: absolute; top: -6px; right: -10px; min
 .dropchat p { color: var(--muted); margin: 0; font-size: 13px; }
 .dropchat.edge .box { margin: 10px 8px; padding: 8px 0; }
 .dropchat.edge h2 { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 15px; margin: 10px auto 0; }
+
+/* The list column is never wider than its track (#211): no child may widen it, the heading's rows wrap
+   instead (tests/audit-export.test.ts measures scrollWidth == clientWidth at the narrowest list). */
+.list { overflow-x: hidden; }
+.list > *, .lhead, .lhead > *, .chipbar > * { min-width: 0; }
+.counts { flex-wrap: wrap; row-gap: 6px; }
+
+/* A list's filter as chips (src/app/shell/ChipFilter.tsx): the chips, «Filter» with its menu, the search. */
+.lhead .counts:has(+ .chipbar) { margin-bottom: 8px; }
+.chipbar { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 14px; min-height: 26px; color: var(--muted); font-size: 13px; }
+.list .chipbar { margin-bottom: 24px; }
+.chipbar .fchipwrap { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }
+.chipbar .or { font-size: 12px; color: var(--faint); }
+.fchip { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 3px 0 9px; border-radius: 7px; background: var(--accent-soft); color: var(--ink); max-width: 100%; min-width: 0; }
+.fchip .fl { color: var(--muted); white-space: nowrap; }
+.fchip .fl::after { content: ':'; }
+.fchip b { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fchip .x { flex: none; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 5px; color: var(--muted); font-size: 15px; line-height: 1; }
+.fchip .x:hover { background: var(--hover); color: var(--ink); }
+.fbtn { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border: 1px dashed var(--line-2); border-radius: 7px; color: var(--muted); white-space: nowrap; }
+.fbtn:hover, .fbtn.on { color: var(--ink); border-color: var(--accent); }
+.fbtn svg.i { width: 13px; height: 13px; }
+.fclear { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.fclear:hover { color: var(--ink); }
+.fpop { position: absolute; left: 0; top: 100%; z-index: 20; margin-top: 6px; width: min(300px, 100%); max-height: 340px; overflow: auto; padding: 6px; display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); color: var(--ink); }
+.fpop .fhead { margin: 4px 8px 6px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+.fpop button[role^="menuitem"] { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; color: var(--ink); text-align: left; }
+.fpop button[role^="menuitem"]:hover, .fpop button[role^="menuitem"]:focus-visible { background: var(--hover); outline: 0; }
+.fpop button[role^="menuitem"] > span:first-child { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fpop button.on { font-weight: 600; }
+.fpop .n { flex: none; font-size: 12px; color: var(--muted); }
+.fpop svg.i { width: 13px; height: 13px; }
+.fpop .fback { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; padding: 4px 6px; border-radius: 6px; color: var(--muted); font-weight: 600; }
+.fpop .fback:hover { color: var(--ink); }
+.fpop .ftyped { display: flex; gap: 6px; padding: 6px; }
+.fpop .ftyped input { flex: 1; min-width: 0; height: 32px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; }
+.fpop .ftyped input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+.chipempty p { max-width: 42ch; }
+.chipempty .fexits { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 18px; }
+.chipempty .fexits .btn { max-width: 100%; height: auto; min-height: 32px; padding-top: 6px; padding-bottom: 6px; white-space: normal; text-align: left; }

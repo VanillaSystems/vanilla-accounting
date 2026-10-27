@@ -46,6 +46,11 @@
 .aichoose { margin-bottom: 18px; }
 .aichoose small { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; }
 .aicheck { display: inline-flex; align-items: center; gap: 6px; }
+/* «KI ganz ausschalten» (issue #212): the switch, and while it is on, the line that says so. */
+.aioff { display: grid; gap: 4px; margin: 0 0 18px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; }
+.aioff.on { border-color: color-mix(in srgb, var(--warn) 35%, var(--line)); background: var(--warn-soft); }
+.aioff .aicheck { font-weight: 600; }
+.aioff small { color: var(--muted); font-size: 12px; }
 
 /* The AI column without an AI, and the error line */
 .aisidecard { display: grid; gap: 10px; font-size: 13px; color: var(--ink-2); }

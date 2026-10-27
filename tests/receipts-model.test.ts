@@ -10,6 +10,9 @@ import type { BankTransaction, Index, Receipt } from '../src/types/index.js';
 import { parsePeriod } from '../src/accounting/periods.js';
 import { parseIban } from '../src/workspace/banks.js';
 import { badgeCount, candidates, groups, ledgerOf, lockedRefuses, needsYou, suggestion, visible, type ToChf } from '../src/app/areas/receipts/model.js';
+import { receiptFields } from '../src/app/areas/receipts/filter.js';
+import { wordsIn } from '../src/export/texts.js';
+const WORDS = { say: wordsIn('de').t, monthName: (d: string) => d.slice(0, 7) };
 
 const receipt = (id: string, x: Partial<Receipt>): Receipt => ({
   id, filename: `${id}.pdf`, originalFilename: `${id}.pdf`, extractedText: '', extractionMethod: 'pdftotext',
@@ -63,14 +66,30 @@ test('a locked receipt refuses a link and a delete; its date, words and kind sti
 test('a period shows its receipts, counts them per filter, and hides what is no receipt', () => {
   const v = visible(l, q3, undefined, undefined);
   assert.deepEqual(v.rows.map((x) => x.r.id).sort(), ['eur', 'linked', 'paper', 'undated']);
-  assert.deepEqual(v.counts, { alle: 4, zugeordnet: 1, offen: 3, ohneDatum: 1 });
+  assert.deepEqual(v.counts, { all: 4, linked: 1, open: 3, noDate: 1 });
   assert.deepEqual(v.hidden.map((x) => x.r.id), ['brochure']);
-  assert.deepEqual(visible(l, q3, 'offen', 'druckerpapier').rows.map((x) => x.r.id), ['paper']);
+  assert.deepEqual(visible(l, q3, [{ field: 'state', value: 'open' }], 'druckerpapier', [], receiptFields(l, undefined, WORDS)).rows.map((x) => x.r.id), ['paper']);
+});
+
+test('chips (#211): AND across fields, OR within one; a state chip «kein Beleg» lists what is none, any state chip hides the note', () => {
+  const fields = receiptFields(l, undefined, WORDS);
+  const ids = (chips: Array<{ field: string; value: string }>, q?: string) => visible(l, q3, chips, q, [], fields).rows.map((x) => x.r.id).sort();
+  assert.deepEqual(ids([{ field: 'state', value: 'open' }, { field: 'currency', value: 'EUR' }]), ['eur']);
+  assert.deepEqual(ids([{ field: 'currency', value: 'CHF' }, { field: 'currency', value: 'EUR' }, { field: 'over', value: '50' }]), ['eur', 'paper'], 'CHF or EUR, and over 50');
+  assert.deepEqual(ids([{ field: 'month', value: '2026-09' }, { field: 'under', value: '30' }]), ['linked']);
+  assert.deepEqual(ids([{ field: 'amount', value: '58.4' }]), ['paper'], 'exactly');
+  assert.deepEqual(ids([{ field: 'linked', value: 'yes' }]), ['linked']);
+  assert.deepEqual(ids([{ field: 'state', value: 'noDate' }]), ['undated']);
+  const none = visible(l, q3, [{ field: 'state', value: 'notReceipt' }], undefined, [], fields);
+  assert.deepEqual([none.rows.map((x) => x.r.id), none.hidden], [['brochure'], []]);
+  assert.deepEqual(visible(l, q3, [{ field: 'state', value: 'open' }], undefined, [], fields).hidden, [], 'a state chip hides the files that are none');
+  assert.deepEqual(visible(l, q3, [{ field: 'month', value: '2026-09' }], undefined, [], fields).hidden.map((x) => x.r.id), ['brochure'], 'other chips narrow the note too');
+  assert.deepEqual(ids([{ field: 'state', value: 'quarantine' }]), [], 'quarantine is no receipt of the books');
 });
 
 test('what needs you comes first, an open receipt without a date with it, then each month', () => {
   const { rows } = visible(l, q3, undefined, undefined);
-  const g = groups(rows, l, undefined, (x) => x.r.id === 'eur');
+  const g = groups(rows, l, false, (x) => x.r.id === 'eur');
   assert.deepEqual(g.groups.map((x) => [x.key, x.rows.map((r) => r.r.id)]), [
     ['need', ['eur', 'paper', 'undated']],
     ['month:2026-09', ['linked']],
@@ -118,7 +137,7 @@ test('books that never filed: an open receipt dated before the working period ne
   const lf = ledgerOf(fresh, '2026-07-01');
   const v = visible(lf, q3, undefined, undefined);
   assert.deepEqual(v.rows.map((x) => x.r.id).sort(), ['july', 'june']);
-  assert.deepEqual(groups(v.rows, lf, undefined, () => false).groups.map((g) => [g.key, g.rows.map((r) => r.r.id)]), [['need', ['july', 'june']]]);
+  assert.deepEqual(groups(v.rows, lf, false, () => false).groups.map((g) => [g.key, g.rows.map((r) => r.r.id)]), [['need', ['july', 'june']]]);
   assert.equal(badgeCount(lf), 2);
   assert.deepEqual(visible(lf, parsePeriod('2026-Q2', '2026-10-11')!, undefined, undefined).rows.map((x) => x.r.id), ['june'], 'its own quarter still shows it');
 });
@@ -132,7 +151,7 @@ test('a receipt linked to a payment of the period shows there too: a June invoic
   };
   const lp = ledgerOf(paid, '2026-04-01');
   assert.deepEqual(visible(lp, q3, undefined, undefined).rows.map((x) => x.r.id), ['june'], 'paid in Q3, so in Q3; the May one, paid in May, is not');
-  assert.deepEqual(visible(lp, q3, undefined, undefined).counts.zugeordnet, 1);
+  assert.deepEqual(visible(lp, q3, undefined, undefined).counts.linked, 1);
   assert.deepEqual(visible(lp, parsePeriod('2026-Q2', '2026-10-11')!, undefined, undefined).rows.map((x) => x.r.id).sort(), ['june', 'may']);
 });
 

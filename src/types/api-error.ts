@@ -226,8 +226,12 @@ export type StatementProblem =
   | { kind: 'twoAccounts'; currency: string; bank: string; ibans: [first: string, second: string]; iban?: Iban }
   | AccountChoice;
 
-/** `whichAccount`: several accounts of its currency name no IBAN, so any of them could be it; the person picks one (the drop dialog asks, #25). */
-export interface AccountChoice { kind: 'whichAccount'; currency: string; iban?: Iban; accounts: Array<{ account: string; bank: string; label: string }> }
+/**
+ * `whichAccount`: several accounts of its currency name no IBAN, so any of them could be it; the
+ * person picks one (the drop dialog asks, #25). `proposed`: the one of them whose bank the statement file
+ * names (src/accounting/statement-bank.ts, #208), offered first; the person still confirms it.
+ */
+export interface AccountChoice { kind: 'whichAccount'; currency: string; iban?: Iban; accounts: Array<{ account: string; bank: string; label: string }>; proposed?: string }
 
 export type StatementRefusal = 'format' | 'notCamt' | 'account' | 'name' | 'duplicate' | 'filedPayments';
 
@@ -256,7 +260,8 @@ export type ApiErrorBody = ({ error: string } & (ApiRefusal | { code?: undefined
  * GET /api/status: the API runs, and whether it refuses every write (READONLY=1, `npm run start:audit`).
  * The static audit export's status always is readonly and names its snapshot.
  */
-export interface ApiStatus { ok: true; readonly: boolean; snapshot?: AuditSnapshot }
+/** `aiOff`: «KI ganz ausschalten» is on on this Mac (src/llm/off.ts), so every place says so instead of asking. */
+export interface ApiStatus { ok: true; readonly: boolean; aiOff?: true; snapshot?: AuditSnapshot }
 
 /** GET /api/mail: whether the company's mailbox can send (Firma › E-Mail-Versand). */
 export interface MailStatus {

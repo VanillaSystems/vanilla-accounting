@@ -7,8 +7,10 @@ import { test } from 'node:test';
 import './support/jurisdiction.js';
 import assert from 'node:assert/strict';
 import type { BankTransaction, Index, JournalEntry } from '../src/types/index.js';
-import { parsePeriod } from '../src/accounting/periods.js';
-import { firstRowTakesOver, journalOf, rowsOf } from '../src/app/areas/journal/model.js';
+import { parsePeriod, type Period } from '../src/accounting/periods.js';
+import { firstRowTakesOver, journalOf, rowsOf, type Journal } from '../src/app/areas/journal/model.js';
+import { journalFields } from '../src/app/areas/journal/filter.js';
+import { wordsIn } from '../src/export/texts.js';
 import { NO_VAT, codeGroups, splitCodes, vatStats } from '../src/app/areas/codes/model.js';
 
 const tx = (ref: string, date: string, amount: number, x: Partial<BankTransaction> = {}): BankTransaction =>
@@ -34,7 +36,12 @@ const books: Index = {
 };
 const q3 = parsePeriod('2026-Q3', '2026-10-11')!;
 const name = (n: string) => ({ '6580': 'Webshopaufwand' } as Record<string, string>)[n] ?? '';
-const ids = (filter?: 'ohneBeleg' | 'korrekturen', vat?: string, q?: string) => rowsOf(journalOf(books), q3, filter, vat, q, name).rows.map((v) => v.e.id);
+/** The count line's shortcuts and the origin buttons, as the chips they set (#211). */
+const FIELDS = journalFields(name, undefined, { say: wordsIn('de').t, monthName: (d) => d.slice(0, 7) });
+const CHIP = { ohneBeleg: { field: 'receipt', value: 'missing' }, korrekturen: { field: 'corrects', value: 'yes' } } as const;
+const rowsBy = (j: Journal, p: Period, filter?: 'ohneBeleg' | 'korrekturen', vat?: string, q?: string, nm = name, origin?: string) =>
+  rowsOf(j, p, [...(filter ? [CHIP[filter]] : []), ...(origin ? [{ field: 'who', value: origin }] : [])], FIELDS, vat, q, nm);
+const ids = (filter?: 'ohneBeleg' | 'korrekturen', vat?: string, q?: string) => rowsBy(journalOf(books), q3, filter, vat, q, name).rows.map((v) => v.e.id);
 
 test('the period newest first, one payment\'s entries together; the filed quarter stays out', () => {
   assert.deepEqual(ids(), ['fee', 'open-a', 'open-b', 'ok', 'none', 'corr']);
@@ -44,26 +51,43 @@ test('a payment waits for a receipt unless it has one, is a fee or needs none; f
   const j = journalOf(books);
   assert.deepEqual(j.views.filter((v) => v.missing).map((v) => v.e.id), ['open-a', 'open-b']);
   assert.deepEqual(j.views.filter((v) => v.locked).map((v) => v.e.id), ['filed']);
-  assert.deepEqual(rowsOf(j, q3, undefined, undefined, undefined, name).counts, { alle: 6, ohneBeleg: 2, korrekturen: 1 });
+  assert.deepEqual(rowsBy(j, q3, undefined, undefined, undefined, name).counts, { alle: 6, ohneBeleg: 2, korrekturen: 1 });
 });
 
 test('the origin filter lists what Claude booked, what a person did, within the period and with the other filters (treuhaender-43)', () => {
   const by = (origin: Record<string, JournalEntry['origin']>) => ({ ...books, journalEntries: books.journalEntries!.map((e) => (origin[e.id] ? { ...e, origin: origin[e.id] } : e)) });
   const b = by({ ok: 'classify', 'open-a': 'classify', 'open-b': 'manual', none: 'invoice', filed: 'classify' });
   const j = journalOf(b);
-  const r = rowsOf(j, q3, undefined, undefined, undefined, name, 'classify');
+  const r = rowsBy(j, q3, undefined, undefined, undefined, name, 'classify');
   assert.deepEqual(r.rows.map((v) => v.e.id), ['open-a', 'ok'], 'the filed quarter\'s entry is outside the period');
   assert.deepEqual(r.origins, { classify: 2, rule: 0, code: 0, manual: 1, assistant: 0, invoice: 1, 'year-close': 0 });
   // A change the AI sidebar made on a wish is origin manual with by.kind assistant: counted as KI, not as by hand (r6h-29).
   const ai = journalOf(by({ ok: 'classify', 'open-a': 'classify', 'open-b': 'manual', none: 'manual', filed: 'classify' }));
   ai.views.find((v) => v.e.id === 'none')!.e.by = { kind: 'assistant', at: '2026-10-16T08:00:00Z', conversation: 'c1' };
-  assert.deepEqual(rowsOf(ai, q3, undefined, undefined, undefined, name).origins, { classify: 2, rule: 0, code: 0, manual: 1, assistant: 1, invoice: 0, 'year-close': 0 });
-  assert.deepEqual(rowsOf(ai, q3, undefined, undefined, undefined, name, 'assistant').rows.map((v) => v.e.id), ['none']);
-  assert.deepEqual(rowsOf(ai, q3, undefined, undefined, undefined, name, 'manual').rows.map((v) => v.e.id), ['open-b']);
-  assert.deepEqual(rowsOf(j, q3, 'ohneBeleg', undefined, undefined, name, 'classify').rows.map((v) => v.e.id), ['open-a'], 'with «Ohne Beleg»');
+  assert.deepEqual(rowsBy(ai, q3, undefined, undefined, undefined, name).origins, { classify: 2, rule: 0, code: 0, manual: 1, assistant: 1, invoice: 0, 'year-close': 0 });
+  assert.deepEqual(rowsBy(ai, q3, undefined, undefined, undefined, name, 'assistant').rows.map((v) => v.e.id), ['none']);
+  assert.deepEqual(rowsBy(ai, q3, undefined, undefined, undefined, name, 'manual').rows.map((v) => v.e.id), ['open-b']);
+  assert.deepEqual(rowsBy(j, q3, 'ohneBeleg', undefined, undefined, name, 'classify').rows.map((v) => v.e.id), ['open-a'], 'with «Ohne Beleg»');
   const sept = parsePeriod('2026-09-11..2026-09-30', '2026-10-11')!;
-  assert.deepEqual(rowsOf(j, sept, undefined, undefined, undefined, name, 'classify').rows.map((v) => v.e.id), ['open-a'], 'a date range is the period');
-  assert.deepEqual(rowsOf(j, q3, undefined, undefined, undefined, name, 'year-close').rows, []);
+  assert.deepEqual(rowsBy(j, sept, undefined, undefined, undefined, name, 'classify').rows.map((v) => v.e.id), ['open-a'], 'a date range is the period');
+  assert.deepEqual(rowsBy(j, q3, undefined, undefined, undefined, name, 'year-close').rows, []);
+});
+
+test('chips (#211): an account on either side, the code\'s rate, currency, receipt, correction; AND across fields, OR within one', () => {
+  const j = journalOf(books);
+  const by = (...chips: Array<[string, string]>) => rowsOf(j, q3, chips.map(([field, value]) => ({ field, value })), FIELDS, undefined, undefined, name).rows.map((v) => v.e.id).sort();
+  assert.deepEqual(by(['account', '6580']), ['open-b'], 'the debit side');
+  assert.deepEqual(by(['account', '1020']), ['corr', 'fee', 'none', 'ok', 'open-a', 'open-b'], 'the credit side');
+  assert.deepEqual(by(['rate', '0']), ['none']);
+  assert.deepEqual(by(['rate', 'none']), ['fee', 'open-a'], 'without a code');
+  assert.deepEqual(by(['rate', '8.1'], ['over', '50']), ['corr', 'ok'], 'a minus code has its rate too, and over 50');
+  assert.deepEqual(by(['rate', '8.1'], ['rate', '0'], ['under', '50']), ['none', 'open-b'], '8.1 or 0, and under 50');
+  assert.deepEqual(by(['currency', 'EUR']), ['corr']);
+  assert.deepEqual(by(['receipt', 'yes']), ['ok']);
+  assert.deepEqual(by(['receipt', 'missing']), ['open-a', 'open-b']);
+  assert.deepEqual(by(['corrects', 'yes']), ['corr']);
+  assert.deepEqual(by(['month', '2026-08']), ['none']);
+  assert.deepEqual(by(['who', 'other']), ['corr', 'fee', 'none', 'ok', 'open-a', 'open-b'], 'no writer named: imported');
 });
 
 test('filters, the code filter (a minus code is its own, none means without) and the search', () => {
@@ -110,10 +134,10 @@ test('a booking a company rule or the app\'s code decided counts as theirs in th
     { id: 'h1', transactionRef: 'H1', date: '2026-08-04', accountDebit: '6500', accountCredit: '1020', amount: 100, description: 'hers', origin: 'manual', by: by('rule', { rule: 'x' }) },
   ];
   const b: Index = { config: {}, receipts: [], transactions: [], mappings: [], bankStatements: [], journalEntries: entries };
-  const r = rowsOf(journalOf(b), q3, undefined, undefined, undefined, name);
+  const r = rowsBy(journalOf(b), q3, undefined, undefined, undefined, name);
   assert.deepEqual(r.origins, { classify: 1, rule: 1, code: 1, manual: 1, assistant: 0, invoice: 0, 'year-close': 0 });
-  assert.deepEqual(rowsOf(journalOf(b), q3, undefined, undefined, undefined, name, 'rule').rows.map((v) => v.e.id), ['r1']);
-  assert.deepEqual(rowsOf(journalOf(b), q3, undefined, undefined, undefined, name, 'classify').rows.map((v) => v.e.id), ['m1'], 'Claude is only what the model decided');
+  assert.deepEqual(rowsBy(journalOf(b), q3, undefined, undefined, undefined, name, 'rule').rows.map((v) => v.e.id), ['r1']);
+  assert.deepEqual(rowsBy(journalOf(b), q3, undefined, undefined, undefined, name, 'classify').rows.map((v) => v.e.id), ['m1'], 'Claude is only what the model decided');
 });
 
 test('a link that names no entry selects the first row, nothing held or deleted (#62)', () => {

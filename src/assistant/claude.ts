@@ -15,12 +15,12 @@
  * customizing folders, which a person keeps with «Behalten» on a rule's card or saves in Änderungen
  * (docs/0.4.0/saving.md).
  */
-import { spawn } from 'node:child_process';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { record, sidebarModel } from '../llm/ask.js';
-import { claudeCommand, NoClaudeError } from '../llm/providers/claude-cli.js';
+import { NoClaudeError, spawnClaude } from '../llm/providers/claude-cli.js';
 import { STEPS } from '../llm/steps.js';
 import { customizingNames } from '../saving/changes.js';
 import { ownerAccount } from '../accounting/bank-accounts.js';
@@ -292,8 +292,13 @@ export function callClaude(call: AssistantCall): Promise<void> {
   const started = Date.now();
   const root = call.ws.paths.root;
   return new Promise((resolve) => {
-    const { bin, env } = claudeCommand();
-    const child = spawn(bin, assistantArgs(call.send, call.session, call.ws.paths.repository, ownerAccount(call.ws), call.map, call.ws.invoicing?.paymentTermsDays), { cwd: root, env: { ...env, VANILLA_WORKSPACE: root } });
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = spawnClaude(assistantArgs(call.send, call.session, call.ws.paths.repository, ownerAccount(call.ws), call.map, call.ws.invoicing?.paymentTermsDays), { cwd: root, env: { VANILLA_WORKSPACE: root } });
+    } catch (e) {
+      call.onEvent({ type: 'error', message: (e as Error).message });
+      return resolve();
+    }
     let real = root;
     try { real = realpathSync(root); } catch { /* the path as given */ }
     const parse = streamParser([...new Set([root, real])]);

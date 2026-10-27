@@ -24,6 +24,7 @@ import { pdfText } from '../../parsers/pdf-text.js';
 import { openWorkspace } from '../../workspace/workspace.js';
 import { AiRefused, CallFailed, isPlanLimit, NO_USAGE, type Call, type Provider, type Usage } from '../provider.js';
 import { codexHome } from './codex-home.js';
+import { gate } from '../off.js';
 import { TIERS } from '../steps.js';
 import { markRefused, parseCatalog, PREFERENCE, readCatalog, signInStamp, stale, tierModels, tierOf, usable, writeCatalog, type CodexCatalog, type CodexModel } from './codex-models.js';
 
@@ -118,6 +119,7 @@ export interface CodexExit {
 /** Runs codex, hands each JSONL event to `onEvent`, and kills the run at the first item that is neither an answer nor `allowed`. */
 export function runCodex(run: CodexRun): Promise<CodexExit> {
   return new Promise((done, fail) => {
+    gate();
     const child = spawn(run.bin, run.args, { cwd: run.cwd, env: run.env });
     const exit: CodexExit = { code: null, stderr: '' };
     let pending = '';

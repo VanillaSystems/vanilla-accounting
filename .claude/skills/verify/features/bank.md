@@ -11,6 +11,7 @@ rows in tests/period-lock.test.ts).
 
 ## Sub-features
 
+- `bk-files` (#208): the group toggle `[data-bg=datei]` («Datei») lists each XML statement file whole by account (`.row[data-file="<account>/<file name>"]`, closing balance on the right); `/bank/files/<account>/<file name>` selects one (its period follows). The detail `[data-testid=bank-file]` shows `[data-testid=statement-file-details]` (bank and BIC, IBAN, owner, stated period and booked days, movements, balances, file, «Eingelesen am» from `GET /api/statements/<bank>/<file>/details`) and `[data-testid=bank-file-moves]`, every movement a link to `/payments/<ref>`. The demo's frozen books list no XML file until a statement is read in (any import rebuilds the list): drop an invented camt.053 of the demo IBAN first (driven 2026-10-27).
 - `bk-list`: rows `.list .row[data-stmt="<account>-<yyyy-mm>"]` (selected `.row.sel`, missing `.row.missing`), group
   headers `.list button.group` (collapse, kept per viewer), `.counts.stc` with `N Auszüge`, `N fehlt`/`fehlen`, `N weicht ab`/`weichen ab`,
   `[data-testid=gap-count]` (a statement missing between two), the button `[data-testid=unbooked-count]` (`N Zahlungen

@@ -17,6 +17,7 @@ import { claudeCli, NoClaudeError } from './providers/claude-cli.js';
 import { subscriptions, usableProviders } from './providers/index.js';
 import { defaultFor, otherSubscription, resolve, unserved, type Resolved } from './resolve.js';
 import { readSettings } from './settings.js';
+import { aiOff, gate } from './off.js';
 import { STEP_IDS, STEPS, type StepId } from './steps.js';
 
 export interface AskOptions {
@@ -81,6 +82,8 @@ export async function ask(prompt: string, opts: AskOptions): Promise<string> {
 }
 
 async function askResolved(prompt: string, opts: AskOptions): Promise<string> {
+  // Refused before a provider is chosen, so a call the switch stopped leaves no row in the ledger.
+  gate();
   const providers = await usableProviders();
   const settings = readSettings();
   const chosen = resolve(opts.step, settings, providers);
@@ -123,8 +126,10 @@ async function askOne(prompt: string, opts: AskOptions, provider: Provider, mode
 /**
  * Whether a provider some step uses answers here: the `claude` CLI, or a key a step was set to.
  * Steps that need the model skip their model part without it and say so, instead of failing each call.
+ * «KI ganz ausschalten» (src/llm/off.ts) answers no without asking anyone.
  */
 export async function modelReady(timeoutMs?: number): Promise<boolean> {
+  if (aiOff()) return false;
   const providers = await usableProviders();
   const settings = readSettings();
   const used = new Set(STEP_IDS.filter((s) => s !== 'sidebar').map((s) => resolve(s, settings, providers).provider));

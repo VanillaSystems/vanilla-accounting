@@ -16,6 +16,7 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { useFx } from '../../hooks/use-fx.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import { t } from '../../i18n/index.js';
+import { useAiOff } from '../../ai/ai-off.js';
 import { ICONS } from '../icons.js';
 import type { AreaProps } from '../index.js';
 import { Paper } from '../receipts/Paper.js';
@@ -83,6 +84,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
   const { v, j, nav, canEdit } = props;
   const { e, tx } = v;
   const fx = useFx().convert(e);
+  const aiOff = useAiOff();
   const acName = getAccountMap();
   const found = e.vatCode ? lookupVatCode(e.vatCode) : null;
   const tax = vat().vatLine(e)?.tax;
@@ -211,7 +213,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
             <AskAi context={{ kind: 'entry', id: e.id, label: e.description ?? e.id }} />
             {edit && (
               <div className="dangers">
-                {tx && <button type="button" data-tip={t('journal.reclassifyTip')} onClick={() => (hers.length ? setAsking(true) : rebook(false))}>{t('journal.reclassify')}</button>}
+                {tx && <button type="button" data-tip={t(aiOff ? 'journal.reclassifyTipOff' : 'journal.reclassifyTip')} onClick={() => (hers.length ? setAsking(true) : rebook(false))}>{t('journal.reclassify')}</button>}
                 <button type="button" className="del" onClick={() => runAct(props, 'del')}>{t('common.delete')}</button>
               </div>
             )}

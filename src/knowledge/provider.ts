@@ -6,7 +6,7 @@
  *   provider:
  *     reports:
  *       sales: { order: Name, date: Paid at, shipTo: Shipping Country, gross: Total, tax: Taxes, refunded: Refunded Amount, currency: Currency, gateway: Payment Method }
- *       fees: { date: Transaction Date, fee: Fee, currency: Currency, order: Order }
+ *       fees: { date: Transaction Date, fee: Fee, currency: Currency, order: Order, type: Type, amount: Amount }
  *     gateways: [ Shopify Payments ]
  *     processors: [ stripe ]
  *     payoutDays: 7
@@ -21,7 +21,12 @@
  *
  * `reports` name the columns of the provider's own exports, each a header or a list of headers
  * (the first one found counts): `sales`, one row per order (or per line of an order: rows of one
- * order add up), and `fees`, one row per charge with the provider's fee. `gateways`: the values of
+ * order add up), and `fees`, the provider's payments export: one row per transaction (a charge, a
+ * refund, …) with the provider's fee. With its `order` column the payments export says which orders
+ * the provider collected (a row names them) and, with `type` and `amount`, on which day and how much
+ * each refund went back (a `type` that reads «refund»): the sales report dates its refunds from there
+ * (src/booking/sales-report.ts PaymentFacts). `test` in either report: a column that flags a test
+ * (true, yes, 1, test): such a row is no sale, no refund, no fee. `gateways`: the values of
  * the sales report's `gateway` column whose orders the provider collected and pays out (the others,
  * paid by PayPal, by bank transfer, on delivery, with a gift card or through a test gateway, come
  * with their own payment and are never booked onto the clearing account); with `gateways` the column
@@ -39,11 +44,11 @@
 
 import { isIsoDate } from '../accounting/periods.js';
 
-export const SALES_COLUMNS = ['order', 'date', 'ordered', 'shipTo', 'gross', 'tax', 'refunded', 'refundedAt', 'currency', 'gateway'] as const;
+export const SALES_COLUMNS = ['order', 'date', 'ordered', 'shipTo', 'gross', 'tax', 'refunded', 'refundedAt', 'currency', 'gateway', 'test'] as const;
 export type SalesColumn = (typeof SALES_COLUMNS)[number];
 /** Without these a file is no sales report. */
 export const SALES_NEEDS: readonly SalesColumn[] = ['order', 'date', 'gross'];
-export const FEE_COLUMNS = ['date', 'fee', 'currency', 'order'] as const;
+export const FEE_COLUMNS = ['date', 'fee', 'currency', 'order', 'type', 'amount', 'test'] as const;
 export type FeeColumn = (typeof FEE_COLUMNS)[number];
 export const FEE_NEEDS: readonly FeeColumn[] = ['date', 'fee'];
 

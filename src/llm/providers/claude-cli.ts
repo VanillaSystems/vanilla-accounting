@@ -8,13 +8,14 @@
  * would also do it, but it requires an API key, and the app runs on the subscription. See
  * docs/adr/0002-counterparty-knowledge-and-lean-calls.md.
  */
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { AiRefused, CallFailed, isPlanLimit, NO_USAGE, type Call, type Provider } from '../provider.js';
 import type { StepId } from '../steps.js';
 import { claudeBin, knownPath, probeCli } from '../../platform/ai-cli.js';
+import { gate } from '../off.js';
 
 /** No `claude` CLI to run: the step that needed it (when known) says so with the way to set an AI up; everything else works without it. */
 export class NoClaudeError extends Error {
@@ -31,6 +32,13 @@ export function claudeCommand(): { bin: string; env: NodeJS.ProcessEnv } {
   const bin = claudeBin();
   if (bin === 'claude') return { bin, env: process.env };
   return { bin, env: { ...process.env, PATH: [dirname(bin), process.env.PATH].filter(Boolean).join(delimiter) } };
+}
+
+/** Starts `claude` for a model call, the app's steps and the KI column alike: through the gate (src/llm/off.ts) first. */
+export function spawnClaude(args: string[], opts: { cwd: string; env?: NodeJS.ProcessEnv }): ChildProcessWithoutNullStreams {
+  gate();
+  const { bin, env } = claudeCommand();
+  return spawn(bin, args, { cwd: opts.cwd, env: { ...env, ...opts.env } });
 }
 
 let emptyCwd: string | undefined;
@@ -72,8 +80,7 @@ export const claudeCli: Provider = {
    */
   ask(call) {
     return new Promise((done, fail) => {
-      const { bin, env } = claudeCommand();
-      const child = spawn(bin, args(call), { cwd: cwd(), env });
+      const child = spawnClaude(args(call), { cwd: cwd() });
       let out = '';
       let err = '';
       const timer = setTimeout(() => {

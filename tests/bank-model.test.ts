@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { BankTransaction, Index } from '../src/types/index.js';
-import { badgeCount, bankOf, payText, troubled, unbookedPayments, type Account, type Statement } from '../src/app/areas/bank/model.js';
+import { badgeCount, bankOf, fileFacts, payText, troubled, unbookedPayments, type Account, type Statement } from '../src/app/areas/bank/model.js';
 import { parseIban } from '../src/workspace/banks.js';
 import { findLines, type TextItem } from '../src/app/areas/bank/lines.js';
 import './support/jurisdiction.js';
@@ -294,4 +294,24 @@ test('a bank statement filed among the receipts shows at the statements of its a
   assert.equal(badgeCount(b, '2026-07-01', '2026-09-15'), badgeCount(before, '2026-07-01', '2026-09-15'));
   const late = bankOf(books({ receipts: [filed('may', '01.05.2026', '31.05.2026', 'CH65 8080 8000 0000 0000 1')], config: { closedThrough: '2026-06-30' } }), accounts, '2026-09-15');
   assert.deepEqual(ids(late.statements('2026-05-01', '2026-05-31').find((s) => s.account.account === '1021')), ['may'], 'a month before the account\'s first payment gets its row');
+});
+
+test('a statement file is shown whole with the movements it holds, its days and its balances, not split into months (#208)', () => {
+  const b = bankOf(books({
+    transactions: [tx('X1', '2026-07-03', -100), tx('X2', '2026-08-20', 50), tx('X3', '2026-08-04', -30), tx('OTHER', '2026-08-05', -7)],
+    bankStatements: [{ bank: 'Raiffeisen', filename: 'camt-jul-aug.xml', fromDate: '2026-07-01', toDate: '2026-08-31', refs: ['X1', 'X2', 'X3'] }],
+    statementBalances: [
+      { account: '1021', bank: 'Raiffeisen', currency: 'CHF', date: '2026-06-30', amount: 1000, source: 'camt', sourceFile: 'camt-jul-aug.xml' },
+      { account: '1021', bank: 'Raiffeisen', currency: 'CHF', date: '2026-08-31', amount: 920, source: 'camt', sourceFile: 'camt-jul-aug.xml' },
+    ],
+  }), ACCOUNTS, '2026-09-15');
+  const files = b.files('2026-08-01', '2026-08-31');
+  assert.deepEqual(files.map((f) => f.key), ['1021/camt-jul-aug.xml'], 'one file, though the month view splits it in two');
+  const f = b.fileByKey('1021/camt-jul-aug.xml')!;
+  assert.deepEqual(f.payments.map((p) => p.ref), ['X1', 'X3', 'X2'], 'the movements it holds, oldest first; a payment of its days it does not hold is not its');
+  const d = fileFacts(f);
+  assert.deepEqual([d.currency, d.period, d.booked, d.movements, d.opening, d.closing], ['CHF', { from: '2026-07-01', to: '2026-08-31' }, { first: '2026-07-03', last: '2026-08-20' }, 3, { date: '2026-06-30', amount: 1000 }, { date: '2026-08-31', amount: 920 }]);
+  assert.deepEqual(b.files('2026-10-01', '2026-10-31'), [], 'a period it does not reach lists it not');
+  assert.equal(b.fileByKey('1021/none.xml'), undefined);
+  assert.equal(b.files('2026-07-01', '2026-07-31').length, 1, 'a PDF is no file of this view: its month is its page');
 });

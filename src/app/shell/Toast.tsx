@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { t } from '../i18n/index.js';
 import { NO_AI_EVENT } from '../lib/api.js';
+import { useAiOff } from '../ai/ai-off.js';
 
 /** `noAi`: the error line of a step that needed an AI where none answers; it stays until the person answers it. */
 interface Shown { msg: string; undo?: () => void; noAi?: true; n: number }
@@ -9,13 +10,15 @@ interface Shown { msg: string; undo?: () => void; noAi?: true; n: number }
  * One message at a time; with an undo it stays 6 s and ⌘Z or its button takes the action back.
  * The undo outlives the toast: ⌘Z after it has gone still takes the last action back (r8k-7,
  * r8h-25), once, until another message takes its place. A refusal for want of an AI (src/app/lib/api.ts
- * NO_AI_EVENT) shows as the error line with «KI einrichten» (`onSetUp`) and «Von Hand erfassen»,
+ * NO_AI_EVENT) shows as the error line with «KI einrichten» (`onSetUp`; «KI einschalten» when it is
+ * switched off, issue #212) and «Von Hand erfassen»,
  * and stays until one is clicked; the same text toasted by the caller does not replace it.
  */
 export function useToast(onSetUp?: () => void) {
   const [shown, setShown] = useState<Shown | null>(null);
   const [visible, setVisible] = useState(false);
   const n = useRef(0);
+  const aiOff = useAiOff();
 
   const toast = useCallback((msg: string, undo?: () => void) => {
     setShown((was) => (was?.noAi && was.msg === msg ? was : { msg, undo, n: ++n.current }));
@@ -57,7 +60,7 @@ export function useToast(onSetUp?: () => void) {
       {shown && <span>{shown.msg}</span>}
       {shown?.noAi ? (
         <>
-          {onSetUp ? <button type="button" data-act="ai-set-up" onClick={() => { setVisible(false); onSetUp(); }}>{t('aiSetup.line.setUp')}</button> : null}
+          {onSetUp ? <button type="button" data-act="ai-set-up" onClick={() => { setVisible(false); onSetUp(); }}>{t(aiOff ? 'aiOff.line.switchOn' : 'aiSetup.line.setUp')}</button> : null}
           <button type="button" data-act="by-hand" onClick={() => setVisible(false)}>{t('aiSetup.line.byHand')}</button>
         </>
       ) : null}
