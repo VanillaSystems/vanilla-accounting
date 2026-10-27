@@ -1,8 +1,10 @@
 /**
  * «Verlauf» (#215): on a receipt's, a payment's and a journal entry's detail, folded, the runs that
  * worked on the object, newest first (src/workflows/history.ts, read from the run log): the
- * workflow, when, where it stands with its step and reason, and what it wrote, each a link. A run
- * opens its view in Automatisierung; one whose details the run store no longer holds says so.
+ * workflow, when, where it stands with its step and reason, and what it wrote that concerns the
+ * object, each a link; the rest of a batch run is counted, not listed (#233), and a run that wrote
+ * only the object says what it did to it. A run opens its view in Automatisierung, which keeps
+ * everything; one whose details the run store no longer holds says so.
  * A person's own edits are not in it: the books keep who changed an entry, not when (later).
  */
 import { useEffect, useState, type ReactNode } from 'react';
@@ -80,25 +82,45 @@ export function Wrote({ wrote, books, nav, period, skip }: { wrote?: RunEvent['w
   const part = (label: string, items: ReactNode[]) => (items.length ? <span className="hpart"><span className="m">{label}</span> {items.map((x, i) => <span key={i}>{i > 0 ? ', ' : ''}{x}</span>)}</span> : null);
   return (
     <span className="hwrote">
-      {part(t('history.wroteEntries'), entries.map(entry))}
+      {part(t(skip?.kind === 'payment' ? 'history.bookedPayment' : 'history.wroteEntries'), entries.map(entry))}
       {part(t('history.wroteLinks'), links.map(link))}
       {part(t('history.wroteReceipts'), receipts.map(receipt))}
     </span>
   );
 }
 
+/** What a run that wrote the object itself did to it, which the lists below leave out: «hat den Beleg gelesen», «hat die Buchung geschrieben» (a payment's: «hat die Zahlung gebucht:» before its entries). */
+function didText(r: HistoryRun, on: HistoryObject): string {
+  if (on.kind === 'receipt' && r.wrote.receipts.includes(on.id)) return t('history.didReceipt');
+  if (on.kind === 'entry' && r.wrote.entries.includes(on.id)) return t('history.didEntry');
+  return '';
+}
+
+/** «und 23 weitere Belege, 41 Buchungen in diesem Lauf»: the part of a batch run that does not concern the object. */
+function restText({ receipts, entries }: HistoryRun['rest']): string {
+  if (receipts && entries) return t('history.restBoth', { receipts: t('history.restReceipts', { n: receipts }), entries: t('common.entryCount', { n: entries }) });
+  if (receipts) return t('history.rest', { what: t('history.restReceipts', { n: receipts }) });
+  if (entries) return t('history.rest', { what: t('history.restEntries', { n: entries }) });
+  return '';
+}
+
 function Row({ r, books, nav, period, on }: { r: HistoryRun; books: Index; nav: Nav; period?: Period; on: HistoryObject }) {
   const words = useWords();
   const how = eventText(r, words.step);
+  const did = didText(r, on);
+  const rest = restText(r.rest);
+  const runAt = { route: { area: 'automation' as const, view: 'run' as const, run: r.run }, query: {} };
   return (
     <li className="hrun" data-run={r.run}>
       <span className="hhead">
-        <Go to={{ route: { area: 'automation', view: 'run', run: r.run }, query: {} }} nav={nav} className="hwf">{words.workflow(r.workflow)}</Go>
+        <Go to={runAt} nav={nav} className="hwf">{words.workflow(r.workflow)}</Go>
         <span className={`wfpill st-${r.event}`}>{t(`automation.status.${r.event}` as 'automation.status.done')}</span>
         <span className="m mono hwhen">{when(r.at)}</span>
       </span>
       {how ? <span className={r.event === 'stuck' ? 'hhow hwarn' : 'hhow m'}>{how}</span> : null}
+      {did ? <span className="hdid m" data-testid="history-did">{did}</span> : null}
       <Wrote wrote={r.wrote} books={books} nav={nav} period={period} skip={on} />
+      {rest ? <span className="hrest m" data-testid="history-rest">{rest} · <Go to={runAt} nav={nav}>{t('history.openRun')}</Go></span> : null}
       {r.stored ? null : <span className="hgone m" data-testid="history-no-details" data-tip={t('history.noDetailsTip')}>{t('history.noDetails')}</span>}
     </li>
   );
