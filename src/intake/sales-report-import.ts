@@ -14,7 +14,11 @@
  * bank's payments of the report's days are in and none is recognised as the provider's payout
  * (unseenPayout), the report waits in its row, saying why, until the person takes it anyway
  * («Trotzdem übernehmen»; the clearing check is the safety net) or names the payout in the
- * provider's file (`match.tx`) by hand.
+ * provider's file (`match.tx`) by hand. The provider's payments (fee) reports in the books date the
+ * sales reports' refunds and show which orders the provider never collected (#214): each drop of
+ * either kind takes the provider's sales reports again with every payments report in the books
+ * (retakeSales), so the order of the drops does not matter and a held order is booked once its refund
+ * has a day.
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -24,7 +28,7 @@ import { loadBooks, moduleActor, periodLock, receiptFile, receiptHome, updateSav
 import { loadClassifyContext, chartOf, mappedReceipts, type ClassifyContext } from '../booking/classify.js';
 import { chartNames } from '../booking/rule-book.js';
 import { fromClearing, isProvider, payoutDaysOf, providerOfMoneyIn, providerOfPayment, type Provider } from '../booking/providers.js';
-import { bookReport, collectedBy, isReportRef, linkOrdersToSales, readReport, recognizeReport, reportFacts, REPORT_LINK_RULE, saleRef, type ReadReport, type ReportContext, type ReportOutcome, type ReportTexts } from '../booking/sales-report.js';
+import { bookReport, collectedBy, isReportRef, linkOrdersToSales, paymentFacts, readReport, recognizeReport, reportFacts, REPORT_LINK_RULE, saleRef, type PaymentFacts, type ReadReport, type ReportContext, type ReportOutcome, type ReportTexts } from '../booking/sales-report.js';
 import { loadKnowledge, homeOf } from '../knowledge/layers.js';
 import { silentUids } from '../knowledge/counterparties.js';
 import { businessOfReceipt } from './batch-payers.js';
@@ -198,7 +202,7 @@ function unseenPayout(books: Books, p: Provider, read: ReadReport, context: Clas
 const reachOf = (p: Provider): string => addDays(p.provider.since!, -payoutDaysOf(p));
 
 /** The context of a report's booking for provider `p`: its accounts, the firm's codes and basis, the official daily sell rates (ADR 0001), the lock. */
-function reportContext(ws: Workspace, books: Books, p: Provider, kind: 'sales' | 'fees', receipt: string, texts: ReportTexts, fx: FxResolver, context: ClassifyContext): ReportContext {
+function reportContext(ws: Workspace, books: Books, p: Provider, kind: 'sales' | 'fees', receipt: string, texts: ReportTexts, fx: FxResolver, context: ClassifyContext, payments?: PaymentFacts): ReportContext {
   const lock = periodLock(books);
   const codes = saleCodes();
   const revenue = revenueOf(ws, p) ?? '';
@@ -210,6 +214,7 @@ function reportContext(ws: Workspace, books: Books, p: Provider, kind: 'sales' |
     ...(p.provider.fees ? { fees: { account: p.provider.fees.account, ...(formTakes(p.provider.fees.vat) ? { vat: p.provider.fees.vat } : {}) } } : {}),
     receipt, base: baseCurrency(), rate: (c, d) => fx.daily(c, d), ...(codes ? { codes } : {}), territory: invoicing().territory,
     ...(p.provider.gateways?.length ? { gateways: p.provider.gateways } : {}),
+    ...(payments ? { payments } : {}),
     agreed: agreedBasis(), isClosed: (d) => lock.isClosed(d), beforeBooks: (d) => lock.beforeBooks(d), newId: () => randomBytes(8).toString('hex'),
     texts,
   };
@@ -225,6 +230,75 @@ function pushOutcome(books: Books, out: ReportOutcome, receipt: string): void {
   books.journalEntries = books.journalEntries.map((e) => (known.has(e.transactionRef) && appMade(e) && !lock.isClosed(e.date) && !e.receipts?.includes(receipt) ? { ...e, receipts: [...(e.receipts ?? []), receipt].sort() } : e));
   for (const ref of known) link(ref);
 }
+
+/** The reports of provider `p` of `kind` in the books, each with its text as filed; one whose file is gone is left out. */
+function reportsOf(ws: Workspace, books: Books, p: Provider, kind: 'sales' | 'fees'): Array<{ receipt: Receipt; text: string }> {
+  return books.receipts.flatMap((r) => {
+    if (r.report?.provider !== p.id || r.report.kind !== kind || r.kind === 'duplicate') return [];
+    const path = receiptFile(ws, books, r);
+    return existsSync(path) ? [{ receipt: r, text: readFileSync(path, 'utf8') }] : [];
+  });
+}
+
+/** What the provider's payments reports in the books say beside their fees: the days they cover, the orders they name, the refunds (#214). */
+function paymentsOf(ws: Workspace, books: Books, p: Provider): PaymentFacts | undefined {
+  return paymentFacts(reportsOf(ws, books, p, 'fees').map(({ text }) => {
+    const read = readReport(text, 'fees', p.provider);
+    return 'missing' in read || read.kind !== 'fees' ? undefined : read.payments;
+  }));
+}
+
+/**
+ * The report's sales of an order the provider never collected taken back (ReportOutcome.withdrawn):
+ * its own entries of the open period and its links (#214). No other entry is touched.
+ */
+function withdraw(books: Books, refs: readonly string[]): void {
+  if (!refs.length) return;
+  const gone = new Set(refs);
+  const lock = periodLock(books);
+  books.journalEntries = books.journalEntries.filter((e) => !(gone.has(e.transactionRef) && isReportRef(e.transactionRef) && appMade(e) && !lock.isClosed(e.date)));
+  const left = new Set(books.journalEntries.map((e) => e.transactionRef));
+  books.mappings = books.mappings.filter((m) => !(gone.has(m.transactionRef) && !left.has(m.transactionRef) && m.rule === REPORT_LINK_RULE));
+}
+
+/** A sales report's taking: booked with the provider's payments reports, what it takes back taken back, what it holds kept on its receipt (the latest taking's). */
+function takeSales(ws: Workspace, books: Books, p: Provider, receipt: Receipt, read: ReadReport, fx: FxResolver, context: ClassifyContext, payments: PaymentFacts | undefined): ReportOutcome {
+  const out = bookReport(books, read, reportContext(ws, books, p, 'sales', receipt.id, texts(p.name, receipt.filename), fx, context, payments));
+  withdraw(books, out.withdrawn);
+  pushOutcome(books, out, receipt.id);
+  keepHeld(books, receipt.id, out);
+  return out;
+}
+
+/** What a taking could not book stays on its receipt for the person, the latest taking's: a held order booked meanwhile is known now. */
+function keepHeld(books: Books, id: string, out: ReportOutcome): void {
+  const r = books.receipts.find((x) => x.id === id)!;
+  const { held: _held, heldMore: _more, ...said } = r.report!;
+  r.report = { ...said, ...(out.held.length ? { held: out.held.slice(0, HELD_KEPT) } : {}), ...(out.held.length > HELD_KEPT ? { heldMore: out.held.length - HELD_KEPT } : {}) };
+}
+
+/**
+ * Every sales report of provider `p` in the books taken again, with the payments reports in the books
+ * (#214): a refund whose day a payments report brought is booked now with its sale, an order no
+ * transaction names is held (and what the report booked of it taken back). Idempotent: an order booked
+ * already is known. Returns what they booked and took back.
+ */
+function retakeSales(ws: Workspace, books: Books, p: Provider, fx: FxResolver, context: ClassifyContext): { orders: number; refunds: number; withdrawn: number } {
+  const payments = paymentsOf(ws, books, p);
+  const sum = { orders: 0, refunds: 0, withdrawn: 0 };
+  for (const { receipt, text } of reportsOf(ws, books, p, 'sales')) {
+    const read = readReport(text, 'sales', p.provider);
+    if ('missing' in read) continue;
+    const out = takeSales(ws, books, p, receipt, read, fx, context, payments);
+    sum.orders += out.orders;
+    sum.refunds += out.refunds;
+    sum.withdrawn += withdrawnOrders(p, out);
+  }
+  return sum;
+}
+
+/** How many orders' sales a taking took back. */
+const withdrawnOrders = (p: Provider, out: ReportOutcome): number => out.held.filter((h) => h.why === 'noPayment' && out.withdrawn.includes(saleRef(p.id, h.order))).length;
 
 /**
  * Takes in a report file: recognises it, files it as a receipt, books it. A file of no provider, one
@@ -273,15 +347,21 @@ export function importSalesReport(ws: Workspace, bytes: Buffer, name: string, op
       const path = join(receiptHome(ws, books, receipt), filename);
       if (!existsSync(path)) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, bytes); }
     }
-    const out = bookReport(books, read, reportContext(ws, books, p, hit.kind, id, texts(p.name, receipt.filename), fx, context));
-    pushOutcome(books, out, id);
-    // What it could not book stays on its receipt for the person, the latest taking's: a held order booked meanwhile is known now.
-    const r = books.receipts.find((x) => x.id === id)!;
-    const { held: _held, heldMore: _more, ...said } = r.report ?? facts;
-    r.report = { ...said, ...(out.held.length ? { held: out.held.slice(0, HELD_KEPT) } : {}), ...(out.held.length > HELD_KEPT ? { heldMore: out.held.length - HELD_KEPT } : {}) };
+    let out: ReportOutcome;
+    let retaken = { orders: 0, refunds: 0, withdrawn: 0 };
+    if (hit.kind === 'sales') {
+      out = takeSales(ws, books, p, receipt, read, fx, context, paymentsOf(ws, books, p));
+      retaken = { orders: out.orders, refunds: out.refunds, withdrawn: withdrawnOrders(p, out) };
+    } else {
+      out = bookReport(books, read, reportContext(ws, books, p, 'fees', id, texts(p.name, receipt.filename), fx, context));
+      pushOutcome(books, out, id);
+      keepHeld(books, id, out);
+      // The payments report dates the sales reports' refunds and shows the orders never collected: they are taken again.
+      retaken = retakeSales(ws, books, p, fx, context);
+    }
     const lock = periodLock(books);
     const proofs = linkOrdersToSales(books, (d) => !lock.isClosed(d), providers);
-    return { out, proofs: proofs.length, filename: receipt.filename };
+    return { out, retaken, proofs: proofs.length, filename: receipt.filename };
   });
   return { ok: true, summary: summaryOf(p, hit.kind, facts, read, result) };
 }
@@ -299,11 +379,11 @@ function saleCodes(): ReportContext['codes'] {
   return { domestic, rate: normal, ...(reduced.length ? { reduced } : {}), ...(abroad ? { abroad } : {}), negative: vat().codes.negativePrefix };
 }
 
-function summaryOf(p: Provider, kind: 'sales' | 'fees', facts: ReturnType<typeof reportFacts>, read: ReadReport, r: { out: ReportOutcome; proofs: number; filename: string }): ReportSummary {
+function summaryOf(p: Provider, kind: 'sales' | 'fees', facts: ReturnType<typeof reportFacts>, read: ReadReport, r: { out: ReportOutcome; retaken: { orders: number; refunds: number; withdrawn: number }; proofs: number; filename: string }): ReportSummary {
   const held = r.out.held;
   return {
     provider: p.id, name: p.name, kind, from: facts.from, to: facts.to, file: r.filename, since: p.provider.since!, reach: reachOf(p),
-    orders: r.out.orders, refunds: r.out.refunds, fees: r.out.fees, known: r.out.known, filed: r.out.filed, before: r.out.before, beforeSince: r.out.beforeSince,
+    orders: r.retaken.orders, refunds: r.retaken.refunds, test: r.out.test, withdrawn: r.retaken.withdrawn, fees: r.out.fees, known: r.out.known, filed: r.out.filed, before: r.out.before, beforeSince: r.out.beforeSince,
     beforeSinceRows: r.out.beforeSinceRows.slice(0, HELD_NAMED), beforeSinceMore: Math.max(0, r.out.beforeSinceRows.length - HELD_NAMED), payoutDays: payoutDaysOf(p), home: homeOf('workspace', p.role, p.id),
     other: r.out.other, ways: r.out.ways.slice(0, WAYS_NAMED), waysMore: Math.max(0, r.out.ways.length - WAYS_NAMED),
     held: held.slice(0, HELD_NAMED), heldMore: Math.max(0, held.length - HELD_NAMED), unread: read.unread.length, proofs: r.proofs,

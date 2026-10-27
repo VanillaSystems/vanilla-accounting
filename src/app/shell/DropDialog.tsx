@@ -178,6 +178,8 @@ function reportLine(s: NonNullable<DropRow['report']>): string {
   return [
     s.from && s.to && `${formatDate(s.from)} – ${formatDate(s.to)}`,
     s.kind === 'sales' ? t('drop.booked.sales', { orders: s.orders, refunds: s.refunds }) : t('drop.booked.fees', { n: s.fees }),
+    s.kind === 'fees' && (s.orders || s.refunds) ? t('drop.booked.completed', { orders: s.orders, refunds: s.refunds }) : '',
+    s.withdrawn ? t('drop.booked.withdrawn', { n: s.withdrawn }) : '',
     s.known ? t('drop.booked.known', { n: s.known }) : '',
     s.filed ? t('drop.booked.filed', { n: s.filed }) : '',
     s.before ? t('drop.booked.before', { n: s.before }) : '',
@@ -186,6 +188,7 @@ function reportLine(s: NonNullable<DropRow['report']>): string {
       orders: s.beforeSinceRows.map((o) => (s.kind === 'sales' ? `#${o}` : o)).join(', '), more: s.beforeSinceMore ? t('drop.booked.more', { n: s.beforeSinceMore }) : '',
     }) : '',
     s.other ? t('drop.booked.other', { n: s.other, ways: s.ways.join(', '), more: s.waysMore ? t('drop.booked.more', { n: s.waysMore }) : '' }) : '',
+    s.test ? t('drop.booked.test', { n: s.test }) : '',
     s.unread ? t('drop.booked.unread', { n: s.unread }) : '',
     held ? t('drop.booked.held', { n: s.held.length + s.heldMore, orders: held, more: s.heldMore ? t('drop.booked.more', { n: s.heldMore }) : '' }) : '',
     s.proofs ? t('drop.booked.proofs', { n: s.proofs }) : '',

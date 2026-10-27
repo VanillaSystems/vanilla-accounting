@@ -98,7 +98,7 @@ export interface Receipt {
  */
 export interface SalesReportFacts {
   provider: string; kind: 'sales' | 'fees'; from: string; to: string; rows: number;
-  held?: Array<{ order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'legacy' }>;
+  held?: Array<{ order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'noPayment' | 'legacy' }>;
   heldMore?: number;
 }
 

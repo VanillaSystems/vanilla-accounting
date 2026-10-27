@@ -99,7 +99,7 @@ export interface ProviderAsk { provider: string; name: string; missing: 'clearin
 export interface PayoutUnseen { provider: string; name: string; since: string; through: string; banks: string[]; file: string; account?: string }
 
 /** Why an order of a report was not booked by code (src/booking/sales-report.ts ReportHold). */
-export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'legacy' }
+export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'noPayment' | 'legacy' }
 
 /**
  * What a report booked (src/intake/sales-report-import.ts): orders, refunds and fees booked; `known`
@@ -110,14 +110,17 @@ export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax'
  * `beforeSinceMore`), with the payout days `reach` was counted by (`payoutDays`) and the company's file
  * that may say more (`home`); `other`: orders the provider did not collect (paid otherwise:
  * PayPal, bank transfer, a gift card, a test), not booked, with how they were paid (`ways`, the first
- * ones, `waysMore` the rest); `held`: orders the person decides (the first ones, `heldMore` the rest);
- * `unread`: rows code could not read; `proofs`: order documents linked to their sale.
+ * ones, `waysMore` the rest); `test`: orders the report's test column flags, not booked; `held`: orders
+ * the person decides (the first ones, `heldMore` the rest);
+ * `unread`: rows code could not read; `proofs`: order documents linked to their sale. A payments
+ * (fee) report takes the provider's sales reports again (#214): `orders` and `refunds` are what that
+ * booked of theirs, `withdrawn` the sales it took back (no transaction of the provider for them).
  */
 export interface ReportSummary {
   provider: string; name: string; kind: 'sales' | 'fees'; from: string; to: string; file: string; since: string; reach: string;
   orders: number; refunds: number; fees: number; known: number; filed: number; before: number; beforeSince: number;
   beforeSinceRows: string[]; beforeSinceMore: number; payoutDays: number; home: string;
-  other: number; ways: string[]; waysMore: number;
+  other: number; ways: string[]; waysMore: number; test: number; withdrawn: number;
   held: ReportHeld[]; heldMore: number; unread: number; proofs: number;
 }
 
