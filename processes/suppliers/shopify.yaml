@@ -19,7 +19,7 @@
 # company's file names the accounts and its cut-over day (from it on, nothing before it changes):
 # provider: { clearing, since, revenue, fees: { account, vat }, foreignTax }.
 # `foreignTax` is the account for the foreign VAT an export order shows in its Taxes
-# column (EU OSS): the report books the net at V0 onto revenue and the tax onto it
+# column (IOSS, for example): the report books the net at V0 onto revenue and the tax onto it
 # without a code; without it such an order waits for the person (#206).
 
 id: shopify
@@ -121,7 +121,7 @@ steps:
       - id: sv-eu-vat
         when: "the Taxes line names a foreign VAT on a delivery abroad (e.g. DE MwSt 19%, GB VAT 20%)"
         then: >
-          export — V0 on the net (the gross less the foreign tax), the foreign tax onto the company's account for it (provider.foreignTax, a Durchlaufposten the OSS return pays from) without a code; a refund the same reversed, the tax in the sale's share. The sales report does it in code (src/booking/sales-report.ts); without that account the order waits for the person, never booked gross at V0. Shopify Payments collects that tax in the price and pays it out with the order (what it keeps is its fee of a few percent): the shop, not Shopify, owes it abroad. What the shop pays abroad for it (the courier's import VAT on a DDP shipment) is its own expense entry without Swiss input tax.
-        why: "an export is exempt (MWSTG Art. 23); a foreign VAT is not Swiss turnover tax, so it neither holds the order nor makes it taxable in Switzerland"
-        source: MWSTG Art. 23 Abs. 2 Ziff. 1; decision 2026-10-22, owner; issue #206 (the foreign tax off revenue)
+          export — V0 on the net (the gross less the foreign tax). The foreign tax is the shop's own debt to the destination state (IOSS on a consignment into the EU): the sales report books it apart, onto the company's account named by provider.foreignTax (a balance-sheet account the IOSS return is paid from), without a code, and leaves it out of the Swiss return; a refund the same reversed, the tax in the sale's share. Without that account the order waits for the person, never booked gross at V0. Shopify Payments collects that tax in the price and pays it out with the order (what it keeps is its fee of a few percent): the shop, not Shopify, owes it abroad. What the shop pays abroad for it under DDP (the courier's import VAT) is its own expense entry without Swiss input tax.
+        why: "an export is exempt (MWSTG Art. 23); a foreign VAT is not Swiss turnover tax, so it neither holds the order nor makes it taxable in Switzerland. A strict reading of Art. 24 Abs. 1 may count it in Ziffer 200 and deduct it in 220, with no tax effect either way; that is a firm's choice to confirm with its fiduciary, and the app keeps it out of the return (owner decision 2026-10-27, booking.guide.yaml#sale_vat sv-order-tax)"
+        source: MWSTG Art. 23 Abs. 2 Ziff. 1, Art. 24 Abs. 1; decision 2026-10-22, owner; issue #206, owner decision 2026-10-27 (the foreign tax apart, out of the return)
     precedents: []

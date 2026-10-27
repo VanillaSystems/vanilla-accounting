@@ -31,7 +31,7 @@
  * company's chart, so only its own file names them. `since`: the company's cut-over day, from which
  * on the provider's payouts are booked from the clearing account and its reports book the sales and
  * fees; whatever is dated before it stays as it was booked, and the app never books it again.
- * `foreignTax`: the account a foreign VAT an export order shows (EU OSS) goes onto, a pass-through
+ * `foreignTax`: the account a foreign VAT an export order shows (IOSS, for example) goes onto, a pass-through
  * the firm pays abroad from; the net is the export. Without it such an order waits (#206).
  * `account`: the bank account (ledger account) the provider pays into, where the report's check for
  * a payout it does not recognise looks; absent: every account. Pure.
@@ -74,7 +74,7 @@ export interface ProviderFacts {
   revenue?: string;
   /** The company's account and VAT code for the provider's fees. */
   fees?: { account: string; vat: string };
-  /** The company's account for a foreign VAT on an export (EU OSS): the tax goes onto it without a code, the net is the export. */
+  /** The company's account for a foreign VAT on an export (IOSS, for example): the tax goes onto it without a code, the net is the export. */
   foreignTax?: string;
 }
 

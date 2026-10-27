@@ -56,14 +56,14 @@ A payment provider's payout (Shopify Payments, a card terminal) is a settlement,
 | Entry            | Soll       | Haben       | Code                                   | From                     |
 |------------------|------------|-------------|----------------------------------------|--------------------------|
 | each order       | clearing   | revenue     | V81 delivered in CH/LI, V0 abroad      | the provider's sales CSV |
-| an export's foreign VAT (EU OSS) | clearing | `provider.foreignTax` | none; the order's line is the net at V0 | the provider's sales CSV |
+| an export's foreign VAT (IOSS, for example) | clearing | `provider.foreignTax` | none; the order's line is the net at V0 | the provider's sales CSV |
 | each refund      | revenue    | clearing    | the sale's code with the minus (-V81)  | the provider's sales CSV |
 | each fee         | fee account| clearing    | `provider.fees.vat` (I0 without a bill)| the provider's fee CSV   |
 | the payout       | bank       | clearing    | none                                   | the bank statement       |
 
 The clearing account comes back to what the provider holds unpaid; the quarter's review shows it.
 A foreign VAT the order's tax column shows on an export is owed abroad, no export turnover: it goes
-onto the company's `provider.foreignTax` account (a Durchlaufposten the OSS return pays from), the
+onto the company's `provider.foreignTax` account (a balance-sheet account the IOSS return is paid from; the foreign VAT stays out of the Swiss return, owner decision 2026-10-27), the
 net is the export (V0); a refund gives the tax back in the sale's share. Without that account such
 an order waits for the person, never booked gross at V0 (#206).
 What is dated before `since` stays as it was booked; nothing is booked again. The sales report

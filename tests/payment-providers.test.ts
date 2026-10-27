@@ -349,7 +349,7 @@ test('#206 without the company\'s account for foreign tax an export with a forei
   ], 'an export without tax, or without a tax column, stays V0 on the gross');
 });
 
-test('#206 a report dropped again books each export once; one whose figures changed waits as changed; an export booked gross at V0 before waits too', () => {
+test('#206 a report dropped again books each export once; one whose figures changed waits as changed; an export booked gross at V0 before stays as booked', () => {
   const ctx = () => ctxOf({ foreignTax: '2201' });
   const first = bookReport({ journalEntries: [] }, exportsOf(), ctx());
   const again = bookReport({ journalEntries: first.entries }, exportsOf(), ctx());
@@ -361,7 +361,34 @@ test('#206 a report dropped again books each export once; one whose figures chan
   assert.deepEqual(changed.held.filter((h) => h.order === '4001'), [{ order: '4001', why: 'changed' }]);
   assert.ok(!changed.entries.some((e) => e.transactionRef === 'SR-shopify-4001'));
   const gross = [E('old', 'SR-shopify-4001', '2026-07-10', '1093', '3200', 119, 'V0')];
-  assert.deepEqual(bookReport({ journalEntries: gross }, exportsOf(), ctx()).held.filter((h) => h.order === '4001'), [{ order: '4001', why: 'changed' }], 'the gross the app booked before this fix is named, never booked over');
+  const old = bookReport({ journalEntries: gross }, exportsOf(), ctx());
+  assert.deepEqual([old.held.filter((h) => h.order === '4001'), old.entries.filter((e) => e.transactionRef === 'SR-shopify-4001')], [[], []], 'the gross the app booked before this fix is known as booked, never booked again');
+  assert.ok(old.knownRefs.includes('SR-shopify-4001'));
+  assert.deepEqual(bookReport({ journalEntries: gross }, exportsOf(), ctxOf()).held.filter((h) => h.order === '4001'), [], 'known so without the account for foreign tax too');
+});
+
+test('#206 an export booked gross at V0 before, in a filed quarter: known, and its refund paid in the open period is booked as the sale was, gross at -V0', () => {
+  const csv = [`${head},Refunded at`, `#4101,2026-06-10 10:00:00 +0200,CHF,19.00,119.00,DE,30.00,2026-06-10 09:00:00 +0200,Shopify Payments,2026-07-21 08:00:00 +0200`].join('\n');
+  const filed = [E('old', 'SR-shopify-4101', '2026-06-10', '1093', '3200', 119, 'V0')];
+  const out = bookReport({ journalEntries: filed }, salesOf(csv, EXPORTS_FACTS), ctxOf({ foreignTax: '2201' }));
+  assert.deepEqual(out.held, [], 'nothing held: the filed sale is no change to resolve');
+  assert.deepEqual(lines(out.entries), [['SR-shopify-4101-refund', '2026-07-21', '3200', '1093', 30, '-V0']], 'no tax share off an account the sale never credited');
+  assert.deepEqual(bookReport({ journalEntries: [...filed, ...out.entries] }, salesOf(csv, EXPORTS_FACTS), ctxOf({ foreignTax: '2201' })).entries, [], 'dropped again: nothing booked again');
+});
+
+test('#206 an entry from elsewhere that booked an export the old way (its gross at V0, naming no order, on its day) holds it; one naming the order with the net books it', () => {
+  const csv = (day: string) => salesOf([head, row('1975', day, '119.00', '19.00', 'DE')].join('\n'));
+  const ctx = (entries: JournalEntry[]) => ctxOf({ foreignTax: '2201', since: '2026-11-01', from: '2026-10-25', legacy: { entries } });
+  const gross = bookReport({ journalEntries: [] }, csv('2026-10-30'), ctx([E('o', 'OLD-1', '2026-10-30', '1093', '3200', 119, 'V0')]));
+  assert.deepEqual([gross.orders, gross.held, gross.entries], [0, [{ order: '1975', why: 'legacy' }], []], 'never 100 at V0 and 19 booked again beside the gross');
+  const net = bookReport({ journalEntries: [] }, csv('2026-11-03'), ctx([E('o', 'M-1', '2026-11-03', '1093', '3200', 100, 'V0', { description: 'Shopify #1975' })]));
+  assert.deepEqual([net.orders, net.known, net.held, net.entries], [0, 1, [], []], 'a hand booking naming the order with the net is its booking');
+});
+
+test('#206 a domestic sale the books carry beside a person\'s Storno and rebooking of it is known, never held as changed', () => {
+  const es = [E('a', 'SR-shopify-2001', '2026-11-02', '1093', '3200', 108.1, 'V81'), E('b', 'SR-shopify-2001', '2026-11-05', '3200', '1093', 108.1, '-V81', { origin: 'manual' }), E('c', 'SR-shopify-2001', '2026-11-05', '1093', '3200', 108.1, 'V81', { origin: 'manual' })];
+  const out = bookReport({ journalEntries: es }, salesOf([head, row('2001', '2026-11-02', '108.10', '8.10')].join('\n')), ctxOf());
+  assert.deepEqual([out.known, out.held, out.entries], [1, [], []]);
 });
 
 test('#206 the company\'s file names the account for foreign tax; the app\'s file may not; a dropped report books with it and refuses an account the chart lacks', () => {
