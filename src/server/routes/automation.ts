@@ -119,13 +119,17 @@ router.get('/api/automation/runs/:id/log', (req, res) => {
   res.json({ lines: linesOfRun(readLog(WS), req.params.id), stored: !!engine().run(req.params.id) });
 });
 
-/** Read only: the run log and, for a payment, which entries book it. */
+/** Read only: the run log and the books' facts that say what concerns the object (#233). */
 router.get('/api/history/:kind/:id', (req, res) => {
   const { kind, id } = req.params;
   if (!(HISTORY_KINDS as readonly string[]).includes(kind)) throw new RequestError(400, `${kind}: receipt, payment oder entry.`);
+  const books = readBooks();
+  const entriesOf = (refs: Set<string>) => books.journalEntries.filter((e) => e.transactionRef && refs.has(e.transactionRef)).map((e) => e.id);
   const target: HistoryTarget = kind === 'payment'
-    ? { kind, id, entries: readBooks().journalEntries.filter((e) => e.transactionRef === id).map((e) => e.id) }
-    : { kind: kind as 'receipt' | 'entry', id };
+    ? { kind, id, entries: entriesOf(new Set([id])), receipts: books.mappings.filter((m) => m.transactionRef === id).map((m) => m.receiptId) }
+    : kind === 'receipt'
+      ? { kind, id, entries: entriesOf(new Set(books.mappings.filter((m) => m.receiptId === id).map((m) => m.transactionRef))) }
+      : { kind: 'entry', id, payment: books.journalEntries.find((e) => e.id === id)?.transactionRef };
   const e = engine();
   res.json(historyOf(readLog(WS), target, (run) => !!e.run(run), req.query.all ? Infinity : HISTORY_LIMIT));
 });
