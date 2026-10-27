@@ -776,34 +776,99 @@ test('R7a. a payout whose reference begins with the provider\'s word is the prov
   assert.equal(balanceOf(books.journalEntries, '1093'), 0);
 });
 
-test('R7b. the bank\'s payments of the report\'s days are in, no payout of the provider is recognised: the report books nothing and asks how the payout appears; the answer goes into match.tx, then the report books each sale once', () => {
+test('R7b. the bank\'s payments of the report\'s days are in, no payout of the provider is recognised: the report books nothing and says why, naming what was looked at; «Trotzdem übernehmen» books it and the clearing check shows the difference; the payout\'s name in match.tx by hand books each sale once', () => {
   const ws = shop();
   const st = viaStripe('ST2', 'STRIPE 4711', { counterparty: 'Stripe Payments UK Ltd' });
   seed(ws, [st, later('2026-11-10')], [E('st', 'ST2', '2026-11-04', '1021', '3200', 108.1, 'V81', { by: { kind: 'model', model: 'm' } })]);
   const csv = [head, row('2001', '2026-11-02', '108.10', '8.10')].join('\n');
-  const asked = importSalesReport(ws, Buffer.from(csv), 'o.csv');
-  assert.ok(!asked.ok);
-  assert.deepEqual(asked.ask, { provider: 'shopify', name: 'Shopify', missing: 'payout', file: 'knowledge/suppliers/shopify.yaml' });
-  assert.match(asked.message, /Wie heisst die Auszahlung von Shopify auf dem Kontoauszug\?/);
+  const held = importSalesReport(ws, Buffer.from(csv), 'o.csv');
+  assert.ok(!held.ok);
+  assert.equal(held.ask, undefined, 'no question whose answer would be written into the file');
+  assert.deepEqual(held.unseen, { provider: 'shopify', name: 'Shopify', since: '2026-11-01', through: '2026-11-09', banks: ['Raiffeisen CHF'], file: 'knowledge/suppliers/shopify.yaml' });
+  assert.match(held.message, /Keine Auszahlung von Shopify erkannt: die Zahlungen der Bank sind bis 2026-11-09 da \(Raiffeisen CHF\).*match\.tx.*Trotzdem übernehmen/);
   const untouched = loadBooks(ws);
   assert.deepEqual([reportRefs(untouched.journalEntries), untouched.receipts.filter((r) => r.report).length], [[], 0], 'nothing booked, nothing filed');
 
-  assert.deepEqual(setProviderAccount(ws, 'shopify', { payout: 'Twint' }), { ok: false, refusal: { code: 'payoutNameUnseen', params: { name: 'Twint', since: '2026-11-01' } } }, 'a name no credit carries');
-  assert.deepEqual(setProviderAccount(ws, 'shopify', { payout: 'Stripe Payments UK' }), { ok: true });
-  const file = parse(readFileSync(join(ws.paths.root, 'knowledge', 'suppliers', 'shopify.yaml'), 'utf8')) as { match: { tx: string[] } };
-  assert.deepEqual(file.match.tx, ['Stripe Payments UK']);
-  assert.deepEqual(setProviderAccount(ws, 'shopify', { payout: 'stripe payments uk' }), { ok: true });
-  assert.deepEqual((parse(readFileSync(join(ws.paths.root, 'knowledge', 'suppliers', 'shopify.yaml'), 'utf8')) as { match: { tx: string[] } }).match.tx, ['Stripe Payments UK'], 'kept once');
+  const anyway = importSalesReport(ws, Buffer.from(csv), 'o.csv', { anyway: true });
+  assert.ok(anyway.ok && anyway.summary.orders === 1, 'taken anyway');
+  const books = loadBooks(ws);
+  const check = clearingCheck(providersOf(ws).find((p) => p.id === 'shopify')!, books, '2026-11-30', 1)!;
+  assert.equal(check.balance, 108.1, 'the safety net: the clearing account keeps the sale the unseen payout paid, a difference the quarter\'s review shows');
 
-  const taken = importSalesReport(ws, Buffer.from(csv), 'o.csv');
+  // The payout's name put into the company's file by hand: the payout is the provider's, and holds the order it paid.
+  const named = shop(FILE(), 'match:\n  tx: [ "Stripe Payments UK" ]\n');
+  seed(named, [st, later('2026-11-10')], [E('st', 'ST2', '2026-11-04', '1021', '3200', 108.1, 'V81', { by: { kind: 'model', model: 'm' } })]);
+  const taken = importSalesReport(named, Buffer.from(csv), 'o.csv');
   assert.ok(taken.ok);
   assert.deepEqual([taken.summary.orders, taken.summary.held], [0, [{ order: '2001', why: 'legacy' }]], 'the payout booked as sales holds the order it paid');
-  assert.equal(revenueOf(loadBooks(ws).journalEntries), 108.1, 'the sale once');
+  assert.equal(revenueOf(loadBooks(named).journalEntries), 108.1, 'the sale once');
 
-  // Before the statement is in, nothing is asked: the report books as it did.
+  // Before the statement is in, nothing is held: the report books as it did.
   const early = shop();
   const first = importSalesReport(early, Buffer.from(csv), 'o.csv');
   assert.ok(first.ok && first.summary.orders === 1);
+});
+
+test('N7. the unseen-payout check starts at the first order the provider collected: a PayPal order before it expects no payout', () => {
+  const ws = shop();
+  seed(ws, [later('2026-11-09')], []);
+  const csv = [head, row('2004', '2026-11-01', '54.05', '4.05', 'CH', 'PayPal Express Checkout'), row('2001', '2026-11-08', '108.10', '8.10')].join('\n');
+  const done = importSalesReport(ws, Buffer.from(csv), 'o.csv');
+  assert.ok(done.ok, 'the first Shopify Payments order (8.11.) can not have been paid out by 9.11.');
+  assert.deepEqual([done.summary.orders, done.summary.other], [1, 1]);
+  const onlyPaypal = shop();
+  seed(onlyPaypal, [later('2026-11-20')], []);
+  assert.ok(importSalesReport(onlyPaypal, Buffer.from([head, row('2004', '2026-11-01', '54.05', '4.05', 'CH', 'PayPal Express Checkout')].join('\n')), 'o.csv').ok, 'nothing Shopify collected: no payout expected');
+});
+
+test('N8. the company\'s file names the bank account the provider pays into (provider.account): only that account\'s payments count for the unseen-payout check', () => {
+  const wise: BankTransaction = { ref: 'W1', bank: 'Wise', date: '2026-11-12', amount: 80, currency: 'EUR', direction: 'CRDT', description: 'Zahlung', counterparty: 'Kunde GmbH' };
+  const csv = [head, row('2001', '2026-11-02', '108.10', '8.10')].join('\n');
+  const any = shop();
+  seed(any, [wise], []);
+  const held = importSalesReport(any, Buffer.from(csv), 'o.csv');
+  assert.ok(!held.ok);
+  assert.deepEqual([held.unseen?.banks, held.unseen?.account], [['Wise EUR'], undefined], 'any account, named');
+  const into = shop(`${FILE()}  account: "1021"\n`);
+  assert.equal(providersOf(into).find((p) => p.id === 'shopify')?.provider.account, '1021');
+  seed(into, [wise], []);
+  assert.ok(importSalesReport(into, Buffer.from(csv), 'o.csv').ok, 'the Raiffeisen statement of those days is not in yet: nothing to miss');
+  assert.match((mergeProvider({ account: '1021' }, undefined, true) as { problem: string }).problem, /one company's chart/);
+});
+
+test('N3. a credit recognised by its reference alone is the provider\'s payout only when the bank names no payer or a payment processor of the provider\'s file: a customer\'s transfer «Shopify Bestellung 1001» is not', () => {
+  const ws = shop();
+  const cps = loadClassifyContext(ws).counterparties ?? [];
+  assert.deepEqual(SHOPIFY.provider.processors, ['stripe']);
+  const customer = payout('C1', { date: '2026-11-04', counterparty: 'Hans Muster', description: 'Gutschrift Hans Muster', reference: 'Shopify Bestellung 1001' });
+  assert.equal(providerOfPayment(customer, [], cps), undefined, 'a private person\'s transfer');
+  assert.equal(providerOfPayment(payout('C2', { date: '2026-11-04', counterparty: 'Stripe Payments UK Ltd', description: 'Gutschrift', reference: 'Shopify 98765' }), [], cps)?.id, 'shopify', 'Stripe, the processor the file names');
+  assert.equal(providerOfPayment(payout('C3', { date: '2026-11-04', counterparty: '', description: 'Gutschrift', reference: 'Shopify 98765' }), [], cps)?.id, 'shopify', 'no payer named');
+  assert.equal(providerOfPayment(payout('C4', { date: '2026-11-04', counterparty: 'Stripes Muster', description: 'Gutschrift', reference: 'Shopify 98765' }), [], cps), undefined, 'a whole word only');
+  assert.match((parseProvider({ processors: [''] }) as { problem: string }).problem, /provider\.processors must name/);
+});
+
+test('N1 / N2. an entry counts as an order\'s own booking only when it names that order alone with its amount, net of its reversals; one naming two orders holds both, never books the second again', () => {
+  const read = salesOf([head, row('2001', '2026-11-02', '108.10', '8.10'), row('2002', '2026-11-10', '54.05', '4.05'), row('2003', '2026-11-25', '20.00', '1.50')].join('\n'));
+  const ctx = (entries: JournalEntry[]) => ctxOf({ since: '2026-11-01', from: '2026-10-25', legacy: { entries } });
+  const hand = (id: string, date: string, amount: number, description: string, d = '1093', c = '3200') => E(id, `M-${id}`, date, d, c, amount, 'V81', { origin: 'manual', description });
+  const both = bookReport({ journalEntries: [] }, read, ctx([hand('m', '2026-11-10', 162.15, 'Shopify Bestellungen #2001 und #2002')]));
+  assert.deepEqual([both.orders, both.known, both.held], [1, 0, [{ order: '2001', why: 'legacy' }, { order: '2002', why: 'legacy' }]], 'both held, #2003 after its day booked');
+  const sumOnOne = bookReport({ journalEntries: [] }, read, ctx([hand('m', '2026-11-10', 162.15, 'Shopify Bestellung #2002')]));
+  assert.deepEqual([sumOnOne.orders, sumOnOne.known, sumOnOne.held.map((h) => h.order)], [1, 0, ['2001', '2002']], 'another amount: it holds every row up to its day');
+
+  const reversed = bookReport({ journalEntries: [] }, read, ctx([hand('a', '2026-11-02', 108.1, 'Shopify #2001'), hand('b', '2026-11-03', -108.1, 'Storno Shopify #2001')]));
+  assert.deepEqual([reversed.known, reversed.held.map((h) => h.order)], [0, ['2001']], 'a sale and its reversal net nothing: the order is not booked by them, the person decides');
+  const corrected = bookReport({ journalEntries: [] }, read, ctx([hand('a', '2026-11-02', 100, 'Shopify #2001'), hand('b', '2026-11-03', 100, 'Storno Shopify #2001', '3200', '1093'), hand('c', '2026-11-03', 108.1, 'Shopify #2001')]));
+  assert.deepEqual([corrected.known, corrected.held, corrected.orders], [1, [], 2], 'a wrong amount, its Storno with the sides swapped and the right amount: net the order\'s, known');
+
+  // Through the books: the Storno with the sides swapped is among what the clearing account carries.
+  const ws = shop();
+  seed(ws, [], [hand('a', '2026-11-02', 100, 'Shopify #2001'), hand('b', '2026-11-03', 100, 'Storno Shopify #2001', '3200', '1093'), hand('c', '2026-11-03', 108.1, 'Shopify #2001')]);
+  const done = importSalesReport(ws, Buffer.from([head, row('2001', '2026-11-02', '108.10', '8.10')].join('\n')), 'o.csv');
+  assert.ok(done.ok);
+  assert.deepEqual([done.summary.orders, done.summary.known, done.summary.held], [0, 1, []]);
+  assert.equal(revenueOf(loadBooks(ws).journalEntries), 108.1, 'the sale once');
 });
 
 test('R1. a payout before the cut-over day, within its payout days, beside sales a report booked before it: it waits for the person with a reason, never booked as sales; in either order of import each sale counts once', async () => {
@@ -891,7 +956,7 @@ test('5. the rows before the reach are named like the held ones, the first ones 
   assert.deepEqual([done.summary.beforeSince, done.summary.beforeSinceRows.length, done.summary.beforeSinceRows[0], done.summary.beforeSinceMore, done.summary.payoutDays, done.summary.home], [HELD_NAMED + 2, HELD_NAMED, '1900', 2, 7, 'knowledge/suppliers/shopify.yaml']);
 });
 
-test('10. a payout that waits says why on the payment itself (GET /api/transactions/:ref/payout-wait); the drop row asks how the payout appears and books once answered', async () => {
+test('10. a payout that waits says why on the payment itself (GET /api/transactions/:ref/payout-wait); the drop row holds a report whose payout goes unseen, says why, and books it on «Trotzdem übernehmen»', async () => {
   const api = await startApi('demo');
   try {
     cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
@@ -914,20 +979,22 @@ test('10. a payout that waits says why on the payment itself (GET /api/transacti
       const res = await api.fetch(path, { method: 'POST', body: json ? JSON.stringify(body) : body ? new Uint8Array(body as Buffer) : undefined, headers: { 'Content-Type': json ? 'application/json' : 'application/octet-stream' } });
       return { status: res.status, s: (await res.json()) as DropSession & { code?: string } };
     };
-    // PW names Shopify and is recognised: a statement whose only payouts arrive as Stripe's is the case the row asks about.
+    // PW names Shopify and is recognised: a statement whose only payouts arrive as Stripe's is the case the row holds.
     const books = loadBooks(ws);
     books.transactions = books.transactions.filter((t) => t.ref !== 'PW');
     saveBooks(ws, books);
     const { s } = await post('/api/drop');
     const took = await post(`/api/drop/${s.id}/files?name=orders_export.csv`, Buffer.from([head, row('2001', '2026-11-02', '108.10', '8.10')].join('\n')));
     const r = took.s.rows[0];
-    assert.equal(r.askProvider?.missing, 'payout');
-    const unseen = await post(`/api/drop/${s.id}/rows/${r.key}`, { kind: 'provider', payout: 'Twint' });
-    assert.deepEqual([unseen.status, unseen.s.code], [400, 'payoutNameUnseen']);
-    const answered = await post(`/api/drop/${s.id}/rows/${r.key}`, { kind: 'provider', payout: 'Stripe Payments UK' });
-    assert.equal(answered.status, 200);
-    assert.deepEqual([answered.s.rows[0].state, answered.s.rows[0].report?.orders], ['taken', 1], 'the payout not booked yet: the order is booked onto the clearing account, the payout will be from it');
-    assert.match(readFileSync(file, 'utf8'), /Stripe Payments UK/);
+    assert.deepEqual([r.state, r.reason, r.askProvider, r.payoutUnseen?.provider, r.payoutUnseen?.banks], ['unclear', 'payout-unseen', undefined, 'shopify', ['Raiffeisen CHF']]);
+    const wrong = await post(`/api/drop/${s.id}/rows/${r.key}`, { kind: 'provider', account: '1093', since: '2026-11-01' });
+    assert.equal(wrong.status, 400, 'no account is asked');
+    const anyway = await post(`/api/drop/${s.id}/rows/${r.key}`, { kind: 'anyway' });
+    assert.equal(anyway.status, 200);
+    assert.deepEqual([anyway.s.rows[0].state, anyway.s.rows[0].report?.orders, anyway.s.rows[0].payoutUnseen], ['taken', 1, undefined], 'taken anyway: the order is booked onto the clearing account');
+    assert.doesNotMatch(readFileSync(file, 'utf8'), /Stripe/, 'nothing written into the file');
+    const again = await post(`/api/drop/${s.id}/rows/${r.key}`, { kind: 'anyway' });
+    assert.equal(again.status, 400, 'only a held report');
   } finally {
     await api.stop();
   }

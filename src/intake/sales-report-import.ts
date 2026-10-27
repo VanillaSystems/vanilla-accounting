@@ -10,19 +10,21 @@
  * orders it may be (ReportContext.legacy), so no sale counts twice and none is lost. What the report cannot book is kept on its receipt (`report.held`) for the person.
  * «Rückgängig» takes the report's own entries and links back (removeSalesReport). What the company's
  * file of the provider lacks (its clearing account with the cut-over day, its revenue account, its
- * fee account) is asked once, in the drop row (setProviderAccount), and kept in that file; so is how
- * the provider's payout appears on the statement, when the bank's payments of the report's days are
- * in and none is recognised as its payout (unseenPayout): the report books nothing until then.
+ * fee account) is asked once, in the drop row (setProviderAccount), and kept in that file. When the
+ * bank's payments of the report's days are in and none is recognised as the provider's payout
+ * (unseenPayout), the report waits in its row, saying why, until the person takes it anyway
+ * («Trotzdem übernehmen»; the clearing check is the safety net) or names the payout in the
+ * provider's file (`match.tx`) by hand.
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { isScalar, isSeq, parseDocument } from 'yaml';
+import { parseDocument } from 'yaml';
 import { loadBooks, moduleActor, periodLock, receiptFile, receiptHome, updateSaved, type Books } from '../books/store.js';
 import { loadClassifyContext, chartOf, mappedReceipts, type ClassifyContext } from '../booking/classify.js';
 import { chartNames } from '../booking/rule-book.js';
 import { fromClearing, isProvider, payoutDaysOf, providerOfMoneyIn, providerOfPayment, type Provider } from '../booking/providers.js';
-import { bookReport, isReportRef, linkOrdersToSales, readReport, recognizeReport, reportFacts, REPORT_LINK_RULE, saleRef, type ReadReport, type ReportContext, type ReportOutcome, type ReportTexts } from '../booking/sales-report.js';
+import { bookReport, collectedBy, isReportRef, linkOrdersToSales, readReport, recognizeReport, reportFacts, REPORT_LINK_RULE, saleRef, type ReadReport, type ReportContext, type ReportOutcome, type ReportTexts } from '../booking/sales-report.js';
 import { loadKnowledge, homeOf } from '../knowledge/layers.js';
 import { silentUids } from '../knowledge/counterparties.js';
 import { businessOfReceipt } from './batch-payers.js';
@@ -37,7 +39,8 @@ import { payoutSales } from '../workspace/sells.js';
 import { findFile, APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { wordsIn } from '../export/texts.js';
 import type { BankTransaction, JournalEntry, Receipt } from '../types/index.js';
-import { PAYOUT_NAME_MAX, type ProviderAsk, type ReportSummary } from '../types/drop.js';
+import type { PayoutUnseen, ProviderAsk, ReportSummary } from '../types/drop.js';
+import { accountOf } from '../workspace/money-accounts.js';
 
 const ACTOR = moduleActor('sales-report');
 /** At most this much of the file is kept as the receipt's text (its header and first rows): the books never hold a whole export. */
@@ -81,7 +84,7 @@ function texts(name: string, file: string): ReportTexts {
 
 export type ImportResult =
   | { ok: true; summary: ReportSummary }
-  | { ok: false; ask?: ProviderAsk; message: string };
+  | { ok: false; ask?: ProviderAsk; unseen?: PayoutUnseen; message: string };
 
 /** The firm's revenue account for a provider's sales: its file's, else the one of what the firm sells (modules/ch/setup.yaml). */
 function revenueOf(ws: Workspace, p: Provider): string | undefined {
@@ -134,7 +137,7 @@ function payoutsOf(books: Books, p: Provider, context: ClassifyContext): Array<{
 /**
  * What the books carry already from elsewhere for a report of `kind` (ReportContext.legacy): the
  * entries on its clearing account that no report booked (for a sales report a sale onto it, from its
- * revenue account or with a sale code; for a fee report a fee off it onto its fee account), those
+ * revenue account or with a sale code; for a fee report a fee off it onto its fee account; and their reversals), those
  * before the cut-over day only to name the rows they are; the last day of a payout of the provider on
  * or after the cut-over day booked otherwise than from the clearing account (as sales, by a person):
  * it may hold every row up to then; and the days of its payouts between `from` and the cut-over day
@@ -146,9 +149,12 @@ function legacyOf(books: Books, p: Provider, kind: 'sales' | 'fees', revenue: st
   const clearing = p.provider.clearing!;
   const since = p.provider.since!;
   const carried = (e: JournalEntry) => !isReportRef(e.transactionRef) && (e.date < since || !lock.isClosed(e.date));
+  const fees = p.provider.fees?.account;
+  // A sale onto the clearing account and its reversal off it (a Storno with the sides swapped); a fee off it and its reversal.
+  const ofKind = (onto: string, other: string, e: JournalEntry) => (e.accountDebit === onto && e.accountCredit === other) || (e.accountDebit === other && e.accountCredit === onto);
   const entries = books.journalEntries.filter((e) => carried(e) && (kind === 'sales'
-    ? e.accountDebit === clearing && (e.accountCredit === revenue || sideOf(e.vatCode) === 'sale')
-    : e.accountCredit === clearing && e.accountDebit === p.provider.fees?.account));
+    ? ofKind(clearing, revenue, e) || ((e.accountDebit === clearing || e.accountCredit === clearing) && sideOf(e.vatCode) === 'sale')
+    : !!fees && ofKind(fees, clearing, e)));
   const otherwise = (booked: readonly JournalEntry[]) => !fromClearing(booked, clearing);
   const through = payoutsOf(books, p, context)
     .filter(({ tx, entries: booked }) => booked.length && otherwise(booked) && !lock.isClosed(tx.date))
@@ -161,20 +167,29 @@ function legacyOf(books: Books, p: Provider, kind: 'sales' | 'fees', revenue: st
 }
 
 /**
- * Whether the provider's payouts go unseen: the report has rows from the cut-over day on, the books
- * hold the bank's payments through the provider's payout days after the first of them (so its first
- * payout from the clearing account is in), and no payment from the cut-over day on is recognised as
- * the provider's (providerOfPayment). Its payouts then arrive under a name its files do not know
- * (Shopify's as «Stripe Payments UK» without «Shopify» in the reference): a rule or the model would
- * book them as sales while the report books the same sales onto the clearing account. The report
- * books nothing until the person says how the payout appears (ProviderAsk 'payout').
+ * Whether the provider's payouts go unseen: the report has rows the provider collected (its
+ * gateways) from the cut-over day on, the books hold the bank's payments through the provider's
+ * payout days after the first of them (so its first payout from the clearing account is in), and no
+ * payment from the cut-over day on is recognised as the provider's (providerOfPayment). Only the
+ * bank account the provider pays into counts when its file names one (`provider.account`), else
+ * every account. Its payouts then arrive under a name its files do not know (Shopify's as «Stripe
+ * Payments UK» without «Shopify» in the reference): a rule or the model would book them as sales
+ * while the report books the same sales onto the clearing account. The report waits for the person
+ * (PayoutUnseen): what was looked at, and that the payout's name belongs into the provider's file.
  */
-function unseenPayout(books: Books, p: Provider, read: ReadReport, context: ClassifyContext): boolean {
+function unseenPayout(books: Books, p: Provider, read: ReadReport, context: ClassifyContext): PayoutUnseen | undefined {
   const since = p.provider.since!;
-  const first = read.rows.map((r) => r.date).filter((d) => d >= since).sort()[0];
-  const known = books.transactions.map((t) => t.date).sort().at(-1);
-  if (!first || !known || known < addDays(first, payoutDaysOf(p))) return false;
-  return !books.transactions.some((tx) => tx.date >= since && providerOfPayment(tx, mappedReceipts(books, tx), context.counterparties ?? [])?.id === p.id);
+  const rows: ReadonlyArray<{ date: string; gateway?: string }> = read.rows;
+  const first = rows.filter((r) => read.kind === 'fees' || collectedBy(r, p.provider.gateways)).map((r) => r.date).filter((d) => d >= since).sort()[0];
+  const into = p.provider.account;
+  const txs = books.transactions.filter((tx) => !into || accountOf(tx, context.bankAccounts)?.account === into);
+  const known = txs.map((t) => t.date).sort().at(-1);
+  if (!first || !known) return undefined;
+  const through = addDays(first, payoutDaysOf(p));
+  if (known < through) return undefined;
+  if (txs.some((tx) => tx.date >= since && providerOfPayment(tx, mappedReceipts(books, tx), context.counterparties ?? [])?.id === p.id)) return undefined;
+  const banks = [...new Set(txs.filter((t) => t.date >= since).map((t) => `${t.bank} ${t.currency}`))].sort();
+  return { provider: p.id, name: p.name, since, through, banks, file: homeOf('workspace', p.role, p.id), ...(into ? { account: into } : {}) };
 }
 
 /** The first day a report of `p` books: its cut-over day less its payout days (a sale collected then may be paid out after the cut-over day). */
@@ -212,9 +227,12 @@ function pushOutcome(books: Books, out: ReportOutcome, receipt: string): void {
  * Takes in a report file: recognises it, files it as a receipt, books it. A file of no provider, one
  * whose columns the provider's file does not find, or one the company's file cannot book yet (the
  * clearing account, the revenue account or the fee account missing) books nothing; the last says
- * what to ask (`ask`). The orders it holds are kept on its receipt (`report.held`, the latest taking's).
+ * what to ask (`ask`). One whose provider's payouts go unseen books nothing either (`unseen`), unless
+ * the person takes it anyway (`anyway`). The orders it holds are kept on its receipt (`report.held`,
+ * the latest taking's).
  */
-export function importSalesReport(ws: Workspace, bytes: Buffer, name: string, now: Date = new Date()): ImportResult {
+export function importSalesReport(ws: Workspace, bytes: Buffer, name: string, opts: { now?: Date; anyway?: boolean } = {}): ImportResult {
+  const now = opts.now ?? new Date();
   const de = wordsIn('de');
   const providers = providersOf(ws);
   const text = bytes.toString('utf8');
@@ -231,9 +249,8 @@ export function importSalesReport(ws: Workspace, bytes: Buffer, name: string, no
   const facts = reportFacts(p.id, read);
   const id = sha16(bytes);
   const context = loadClassifyContext(ws);
-  if (unseenPayout(loadBooks(ws), p, read, context)) {
-    return { ok: false, ask: { provider: p.id, name: p.name, missing: 'payout', file: homeOf('workspace', p.role, p.id) }, message: de.t('salesReport.ask.payout', { provider: p.name }) };
-  }
+  const unseen = opts.anyway ? undefined : unseenPayout(loadBooks(ws), p, read, context);
+  if (unseen) return { ok: false, unseen, message: de.t('salesReport.unseen', { provider: p.name, since: unseen.since, through: unseen.through, banks: unseen.banks.join(', ') || '–', file: unseen.file }) };
   const fx = loadFxResolver();
   const result = updateSaved(ws, ACTOR, (books) => {
     let receipt = books.receipts.find((r) => r.id === id);
@@ -325,20 +342,18 @@ export type ProviderRefusal =
   | { code: 'unknownVatCode'; params: { code: string } }
   | { code: 'codeNotTaken'; params: { code: string; method: 'none' | 'net-rate' } }
   | { code: 'sinceNotOpen'; params: { since: string; from: string } }
-  | { code: 'clearingTaken'; params: { account: string; other: string } }
-  | { code: 'payoutNameUnseen'; params: { name: string; since: string } };
+  | { code: 'clearingTaken'; params: { account: string; other: string } };
 
 /**
  * The drop row's answer kept in the company's file of the provider (knowledge/<role>/<id>.yaml):
- * its clearing account with the cut-over day, its revenue account or its fee account and code, or
- * how its payout appears on the statement (`payout`, added to `match.tx`), as the person gave them.
+ * its clearing account with the cut-over day, its revenue account or its fee account and code, as the
+ * person gave them.
  * The account must be in the chart, the clearing account a balance-sheet one (an asset or a
  * liability: what the provider holds) that no other provider's file names (each one's clearing
  * check counts only its own), the code one the firm books with, the cut-over day a day of the open
- * period, the payout's name one that a credit from the cut-over day on carries in its counterparty,
- * its text or its reference.
+ * period.
  */
-export function setProviderAccount(ws: Workspace, providerId: string, set: { clearing?: string; since?: string; revenue?: string; fees?: { account: string; vat: string }; payout?: string }): { ok: true } | { ok: false; refusal: ProviderRefusal } {
+export function setProviderAccount(ws: Workspace, providerId: string, set: { clearing?: string; since?: string; revenue?: string; fees?: { account: string; vat: string } }): { ok: true } | { ok: false; refusal: ProviderRefusal } {
   const providers = providersOf(ws);
   const p = providers.find((x) => x.id === providerId);
   if (!p) return { ok: false, refusal: { code: 'unknownAccount', params: { account: providerId } } };
@@ -347,13 +362,6 @@ export function setProviderAccount(ws: Workspace, providerId: string, set: { cle
   if (set.clearing !== undefined && !['asset', 'liability'].includes(chart().typeOf(set.clearing) ?? '')) return { ok: false, refusal: { code: 'clearingNotBalance', params: { account: set.clearing } } };
   const other = set.clearing !== undefined ? providers.find((x) => x.id !== p.id && x.provider.clearing === set.clearing) : undefined;
   if (other) return { ok: false, refusal: { code: 'clearingTaken', params: { account: set.clearing!, other: other.name } } };
-  const payout = set.payout?.trim().slice(0, PAYOUT_NAME_MAX);
-  if (set.payout !== undefined) {
-    const since = p.provider.since ?? firstOpenDay(ws);
-    const said = (payout ?? '').toLowerCase();
-    const seen = !!said && loadBooks(ws).transactions.some((tx) => tx.direction === 'CRDT' && tx.date >= since && [tx.counterparty, tx.description, tx.reference].some((x) => x?.toLowerCase().includes(said)));
-    if (!seen) return { ok: false, refusal: { code: 'payoutNameUnseen', params: { name: payout ?? '', since } } };
-  }
   if (set.since !== undefined) {
     const lock = periodLock(loadBooks(ws));
     if (!isIsoDate(set.since) || lock.isClosed(set.since) || lock.beforeBooks(set.since)) return { ok: false, refusal: { code: 'sinceNotOpen', params: { since: set.since, from: firstOpenDay(ws) } } };
@@ -368,11 +376,6 @@ export function setProviderAccount(ws: Workspace, providerId: string, set: { cle
   if (set.since) doc.setIn(['provider', 'since'], set.since);
   if (set.revenue) doc.setIn(['provider', 'revenue'], set.revenue);
   if (set.fees) doc.setIn(['provider', 'fees'], doc.createNode({ account: set.fees.account, vat: set.fees.vat }));
-  if (payout) {
-    const had = doc.getIn(['match', 'tx']);
-    const list = isSeq(had) ? had.items.map((x) => String(isScalar(x) ? x.value : x)) : [];
-    if (!list.some((x) => x.toLowerCase() === payout.toLowerCase())) doc.setIn(['match', 'tx'], doc.createNode([...list, payout], { flow: true }));
-  }
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, doc.toString({ lineWidth: 0 }));
   return { ok: true };

@@ -14,7 +14,7 @@ import { fmt, formatDate } from '../lib/utils.js';
 import { useAutomation } from '../automation/store.js';
 import { textIn } from '../../workflows/model.js';
 import type { Index } from '../../types/index.js';
-import { PAYOUT_NAME_MAX, type DropRow, type DropSession } from '../../types/drop.js';
+import type { DropRow, DropSession } from '../../types/drop.js';
 import type { Location, Route } from './route.js';
 import { at } from '../areas/receipts/view.js';
 import { setBankDraft } from '../areas/company/bank-draft.js';
@@ -137,20 +137,37 @@ function ProviderAccount({ r, session }: { r: DropRow; session: DropSession }) {
   const [account, setAccount] = useState('');
   const [vat, setVat] = useState('');
   const [since, setSince] = useState(ask.since ?? '');
-  const [payout, setPayout] = useState('');
-  const named = ask.missing === 'payout';
-  const needsAccount = ask.missing !== 'since' && !named;
-  const ready = (!needsAccount || !!account.trim()) && (!named || !!payout.trim()) && (ask.missing !== 'fees' || !!vat.trim()) && (ask.since === undefined || !!since);
+  const needsAccount = ask.missing !== 'since';
+  const ready = (!needsAccount || !!account.trim()) && (ask.missing !== 'fees' || !!vat.trim()) && (ask.since === undefined || !!since);
   return (
     <>
       <small>{t(`drop.provider.${ask.missing}`, { provider: ask.name, file: ask.file })}{ask.missing === 'clearing' && ask.since !== undefined ? ` ${t('drop.provider.since', { provider: ask.name, file: ask.file })}` : ''}</small>
-      <form className="dpw" data-testid="drop-provider" onSubmit={(e) => { e.preventDefault(); if (ready) void act(session, r, { kind: 'provider', ...(needsAccount ? { account: account.trim() } : {}), ...(named ? { payout: payout.trim() } : {}), ...(ask.missing === 'fees' ? { vat: vat.trim() } : {}), ...(ask.since !== undefined ? { since } : {}) }); }}>
+      <form className="dpw" data-testid="drop-provider" onSubmit={(e) => { e.preventDefault(); if (ready) void act(session, r, { kind: 'provider', ...(needsAccount ? { account: account.trim() } : {}), ...(ask.missing === 'fees' ? { vat: vat.trim() } : {}), ...(ask.since !== undefined ? { since } : {}) }); }}>
         {needsAccount ? <input value={account} onChange={(e) => setAccount(e.target.value)} placeholder={t('drop.provider.account')} aria-label={t('drop.provider.account')} inputMode="numeric" /> : null}
-        {named ? <input value={payout} onChange={(e) => setPayout(e.target.value)} placeholder={t('drop.provider.payoutLabel')} aria-label={t('drop.provider.payoutLabel')} maxLength={PAYOUT_NAME_MAX} /> : null}
         {ask.missing === 'fees' ? <input value={vat} onChange={(e) => setVat(e.target.value)} placeholder={t('drop.provider.vat')} aria-label={t('drop.provider.vat')} /> : null}
         {ask.since !== undefined ? <input type="date" value={since} onChange={(e) => setSince(e.target.value)} aria-label={t('drop.provider.sinceLabel')} data-tip={t('drop.provider.sinceLabel')} /> : null}
         <button type="submit" className="btn" disabled={!ready}>{t('drop.provider.keep')}</button>
       </form>
+    </>
+  );
+}
+
+/**
+ * A provider's report held because no payout of the provider is recognised among the bank's payments
+ * of its days (src/types/drop.ts PayoutUnseen): why, and what was looked at; «Trotzdem übernehmen»
+ * books it (the clearing check is the safety net); the payout's name belongs into the provider's file
+ * under match.tx, which the partner's page opens.
+ */
+function PayoutUnseenRow({ r, session, go }: { r: DropRow; session: DropSession; go(route: Route): void }) {
+  const u = r.payoutUnseen!;
+  return (
+    <>
+      <small>{t('drop.unseen.why', { provider: u.name, through: formatDate(u.through), since: formatDate(u.since), banks: u.banks.join(', ') || '–' })}</small>
+      <small>{t('drop.unseen.hint', { provider: u.name, file: u.file })}</small>
+      <span className="dacts">
+        <button type="button" className="linkbtn" data-testid="drop-anyway" onClick={() => void act(session, r, { kind: 'anyway' })}>{t('drop.unseen.anyway')}</button>
+        <button type="button" className="linkbtn" onClick={() => go({ area: 'partners', id: u.provider })}>{t('drop.unseen.open', { provider: u.name })}</button>
+      </span>
     </>
   );
 }
@@ -188,7 +205,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
       </div>
       <div className="dgo">
         <span className={`dchip c-${r.state}`}>{chip}</span>
-        {r.askProvider ? <ProviderAccount key={r.askProvider.missing} r={r} session={session} /> : r.chooseAccount ? <ChooseAccount r={r} session={session} go={go} /> : r.unknownAccount ? (
+        {r.askProvider ? <ProviderAccount key={r.askProvider.missing} r={r} session={session} /> : r.payoutUnseen ? <PayoutUnseenRow r={r} session={session} go={go} /> : r.chooseAccount ? <ChooseAccount r={r} session={session} go={go} /> : r.unknownAccount ? (
           <>
             <small>{t(r.unknownAccount.owner ? 'drop.unknownAccountOf' : r.unknownAccount.bankName ? 'drop.unknownAccountAt' : 'drop.unknownAccount', { iban: groupIban(r.unknownAccount.iban), currency: r.unknownAccount.currency, bank: r.unknownAccount.bankName ?? '', owner: r.unknownAccount.owner ?? '' })}</small>
             <button type="button" className="linkbtn" onClick={() => { setBankDraft(r.unknownAccount!); go({ area: 'company', section: 'banks' }); }}>{t('drop.firmAccount')}</button>

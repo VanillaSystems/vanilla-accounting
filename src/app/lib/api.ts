@@ -225,7 +225,6 @@ export function errorText(e: unknown): string {
     case 'clearingNotBalance': return t('error.clearingNotBalance', b.params);
     case 'sinceNotOpen': return t('error.sinceNotOpen', { since: formatDate(b.params.since), from: formatDate(b.params.from) });
     case 'clearingTaken': return t('error.clearingTaken', b.params);
-    case 'payoutNameUnseen': return t('error.payoutNameUnseen', { name: b.params.name, since: formatDate(b.params.since) });
     case 'rule': { const k = refusalKey(b.params.refusal); return t(k.key, k.vars as never); }
     case 'report': return t('error.report', { why: refusalText(b.params.refusal, (k, v) => t(k, v as never)) });
     case 'noDescription': return t('error.noDescription');

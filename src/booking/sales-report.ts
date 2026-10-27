@@ -32,9 +32,10 @@
  * provider did not collect (its `gateway` none of the provider's `gateways`) is counted, never booked
  * onto the clearing account. A refund without its own day waits for the person: it is never dated on
  * the order's day. What the books carry already from elsewhere holds
- * what it may be (`ReportContext.legacy`): a sale on the clearing account that names an order (an
- * older booking per order, a person's own) with its amount books it, so the order is known and never
- * held again; with another amount it holds that order; one that names none, and a payout of
+ * what it may be (`ReportContext.legacy`): sales on the clearing account that name one order only (an
+ * older booking per order, a person's own, less a reversal of it) with its amount in all book it, so
+ * the order is known and never held again; with another amount, or naming several orders in one
+ * entry, they hold the orders they name and every row up to their day; one that names none, and a payout of
  * the provider booked otherwise than from the clearing account (as sales), hold every order, refund
  * and fee up to their day; so nothing counts twice. Browser-safe apart from the engines' globals.
  */
@@ -237,9 +238,10 @@ export interface ReportContext {
   from: string;
   /**
    * What the books carry already from elsewhere. `entries`: entries on the clearing account no report
-   * booked, of the report's kind (a sale onto it for a sales report, a fee off it for a fee report): a
-   * row one of them names (by its ref, or by its day and amount) waits; one dated on or after `since`
-   * that names none holds every row up to its day. `through`: the last day of a payout of the provider
+   * booked, of the report's kind (a sale onto it for a sales report, a fee off it for a fee report, and
+   * their reversals): the entries naming one row only with its net amount book it (known); a row
+   * another one names (by its ref, its text, or its day and amount) waits; one dated on or after
+   * `since` that books no row of its own holds every row up to its day. `through`: the last day of a payout of the provider
    * on or after `since` booked otherwise than from the clearing account (it may hold every sale,
    * refund and fee up to its day): those wait too. `paidBefore`: the days of the provider's payouts
    * from `from` to before `since` not booked bank / clearing account (the old way, as sales, or not
@@ -306,6 +308,18 @@ function showsRate(gross: number, tax: number, rate: number): boolean {
 const gatewayKey = (g: string): string => g.trim().toLowerCase().replace(/[_\s]+/g, ' ');
 
 /**
+ * Whether the provider collected an order (and pays it out): every way it was paid is one of its
+ * `gateways`; without gateways every order. Paid by PayPal, by bank transfer, on delivery, with a
+ * gift card, through a test gateway, or partly so: not money the provider pays out.
+ */
+export function collectedBy(o: Pick<SaleRow, 'gateway'>, gateways: readonly string[] | undefined): boolean {
+  if (!gateways?.length) return true;
+  const collects = new Set(gateways.map(gatewayKey));
+  const ways = (o.gateway ?? '').split(/\s*[+,]\s*/).map(gatewayKey).filter(Boolean);
+  return ways.length > 0 && ways.every((w) => collects.has(w));
+}
+
+/**
  * The entries of `read` for the books `books`, by `ctx`. Pure: the caller pushes the entries and
  * links inside the write door. Each entry has origin 'classify' and names the check `payoutReport` (a check older builds keep).
  */
@@ -349,7 +363,7 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
   };
 
   if (read.kind === 'fees') {
-    const feeLegacy = legacyRows(read.rows.map((f) => ({ key: f.order ?? f.date, day: f.date, amount: f.fee })), ctx.legacy, ctx.since);
+    const feeLegacy = legacyRows(read.rows.map((f) => ({ key: f.order ?? f.date, day: f.date, amount: f.fee })), ctx.legacy, ctx.since, (e) => e.accountDebit === ctx.clearing);
     for (const f of read.rows) {
       if (!ctx.fees) break;
       const key = f.order ?? f.date;
@@ -369,21 +383,17 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
     return out;
   }
 
-  const collects = ctx.gateways?.length ? new Set(ctx.gateways.map(gatewayKey)) : undefined;
   const taxDay = (o: SaleRow) => (ctx.agreed ? o.ordered ?? o.date : o.date);
   // What the books carry is matched by the day the provider collected the order: the day a payout pays it from.
-  const orderLegacy = legacyRows(read.rows.map((o) => ({ key: o.order, day: o.date, amount: o.gross })), ctx.legacy, ctx.since);
+  const orderLegacy = legacyRows(read.rows.filter((o) => collectedBy(o, ctx.gateways)).map((o) => ({ key: o.order, day: o.date, amount: o.gross })), ctx.legacy, ctx.since, (e) => e.accountCredit === ctx.clearing);
   const rates: SaleCode[] = ctx.codes ? [{ code: ctx.codes.domestic, rate: ctx.codes.rate }, ...(ctx.codes.reduced ?? [])] : [];
   for (const o of read.rows) {
-    if (collects) {
-      // Paid by PayPal, by bank transfer, on delivery, with a gift card, through a test gateway, or partly so: not money the provider pays out.
-      const ways = (o.gateway ?? '').split(/\s*[+,]\s*/).map(gatewayKey).filter(Boolean);
-      if (!ways.length || ways.some((w) => !collects.has(w))) {
-        out.other++;
-        const said = o.gateway ?? '–';
-        if (!out.ways.includes(said)) out.ways.push(said);
-        continue;
-      }
+    // Its refund goes with it: an order the provider did not collect is refunded otherwise too.
+    if (!collectedBy(o, ctx.gateways)) {
+      out.other++;
+      const said = o.gateway ?? '–';
+      if (!out.ways.includes(said)) out.ways.push(said);
+      continue;
     }
     const day = taxDay(o);
     const domestic = !!o.shipTo && ctx.territory.includes(o.shipTo);
@@ -464,26 +474,36 @@ interface LegacyRow { key: string; day: string; amount: number }
 type Legacy = 'booked' | 'held' | undefined;
 
 /**
- * Which rows of a report the books may carry already from elsewhere (ReportContext.legacy): an entry
- * that names the row's order (its ref ends in it, or its text names it) with the row's amount books
- * it (a person's own booking of that order, an older one per order): the row is known, never held
- * again on the next taking; one that names it with another amount, and one of the row's day and
- * amount, hold that row; an entry on or after `since` that names no row of the report holds every
- * row up to its day, as a payout booked otherwise does up to `through`. One before `since` names its
- * row only: the old way booked each sale onto the clearing account and paid it from there, so
- * another sale of those days is not on it yet. A row dated before `since` waits when a payout before
- * `since` not booked from the clearing account is dated after it (`paidBefore`): a payout pays what
- * was collected before its day.
+ * Which rows of a report the books may carry already from elsewhere (ReportContext.legacy). The
+ * entries that name exactly one row's order (their ref ends in it, or their text names it) book that
+ * row when their net amount is the row's (a person's own booking of that order, an older one per
+ * order, less a reversal of it: `reversal` says which entries take back): the row is known, never
+ * held again on the next taking. Every other entry holds: the rows it names (one with another net,
+ * one naming several orders at once, whose sum books none of them alone), else the row of its day
+ * and amount; and one on or after `since` that books no row of its own holds every row up to its
+ * day, as a payout booked otherwise does up to `through`. One before `since` holds only the rows it
+ * names or matches: the old way booked each sale onto the clearing account and paid it from there,
+ * so another sale of those days is not on it yet. A row dated before `since` waits when a payout
+ * before `since` not booked from the clearing account is dated after it (`paidBefore`): a payout
+ * pays what was collected before its day.
  */
-function legacyRows(rows: readonly LegacyRow[], legacy: ReportContext['legacy'], since: string): (row: LegacyRow) => Legacy {
+function legacyRows(rows: readonly LegacyRow[], legacy: ReportContext['legacy'], since: string, reversal: (e: JournalEntry) => boolean): (row: LegacyRow) => Legacy {
   if (!legacy) return () => undefined;
   const booked = new Set<string>();
   const named = new Set<string>();
   let through = legacy.through ?? '';
-  for (const e of legacy.entries) {
-    const byName = rows.find((x) => namesOrder(e.transactionRef, x.key) || textNames(e.description, x.key));
-    if (byName) { (toRappen(byName.amount) === toRappen(e.amount) ? booked : named).add(byName.key); continue; }
-    const r = rows.find((x) => !named.has(x.key) && !booked.has(x.key) && x.day === e.date && toRappen(x.amount) === toRappen(e.amount));
+  const signed = (e: JournalEntry) => (reversal(e) ? -toRappen(e.amount) : toRappen(e.amount));
+  const naming = legacy.entries.map((e) => ({ e, keys: [...new Set(rows.filter((x) => namesOrder(e.transactionRef, x.key) || textNames(e.description, x.key)).map((x) => x.key))] }));
+  const own = new Map<string, JournalEntry[]>();
+  for (const { e, keys } of naming) if (keys.length === 1) (own.get(keys[0]) ?? own.set(keys[0], []).get(keys[0])!).push(e);
+  for (const [key, es] of own) {
+    const row = rows.find((x) => x.key === key)!;
+    if (es.reduce((s, e) => s + signed(e), 0) === toRappen(row.amount)) booked.add(key);
+  }
+  for (const { e, keys } of naming) {
+    if (keys.length === 1 && booked.has(keys[0])) continue;
+    for (const k of keys) named.add(k);
+    const r = keys.length ? undefined : rows.find((x) => !named.has(x.key) && !booked.has(x.key) && x.day === e.date && toRappen(x.amount) === signed(e));
     if (r) named.add(r.key);
     else if (e.date >= since && e.date > through) through = e.date;
   }

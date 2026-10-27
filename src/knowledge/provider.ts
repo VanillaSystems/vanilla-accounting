@@ -8,6 +8,7 @@
  *       sales: { order: Name, date: Paid at, shipTo: Shipping Country, gross: Total, tax: Taxes, refunded: Refunded Amount, currency: Currency, gateway: Payment Method }
  *       fees: { date: Transaction Date, fee: Fee, currency: Currency, order: Order }
  *     gateways: [ Shopify Payments ]
+ *     processors: [ stripe ]
  *     payoutDays: 7
  *   # knowledge/suppliers/<id>.yaml (the company: its chart)
  *   provider:
@@ -15,6 +16,7 @@
  *     since: 2026-10-01
  *     revenue: "3200"
  *     fees: { account: "6580", vat: I0 }
+ *     account: "1020"
  *
  * `reports` name the columns of the provider's own exports, each a header or a list of headers
  * (the first one found counts): `sales`, one row per order (or per line of an order: rows of one
@@ -22,11 +24,14 @@
  * the sales report's `gateway` column whose orders the provider collected and pays out (the others,
  * paid by PayPal, by bank transfer, on delivery, with a gift card or through a test gateway, come
  * with their own payment and are never booked onto the clearing account); with `gateways` the column
- * is needed. `payoutDays`: how many days after a sale it pays it out at most, for the clearing
+ * is needed. `processors`: the payment processors whose name the bank writes as the payer of the
+ * provider's payouts (its reference then names the provider). `payoutDays`: how many days after a sale it pays it out at most, for the clearing
  * check; a company's file may say its own. `clearing`, `revenue` and `fees` are accounts of one
  * company's chart, so only its own file names them. `since`: the company's cut-over day, from which
  * on the provider's payouts are booked from the clearing account and its reports book the sales and
- * fees; whatever is dated before it stays as it was booked, and the app never books it again. Pure.
+ * fees; whatever is dated before it stays as it was booked, and the app never books it again.
+ * `account`: the bank account (ledger account) the provider pays into, where the report's check for
+ * a payout it does not recognise looks; absent: every account. Pure.
  */
 
 import { isIsoDate } from '../accounting/periods.js';
@@ -48,8 +53,16 @@ export interface ProviderFacts {
   reports: { sales?: Columns<SalesColumn>; fees?: Columns<FeeColumn> };
   /** The values of the sales report's `gateway` column that pay into the clearing account; absent: every order does. */
   gateways?: string[];
+  /**
+   * The payment processors that pay the provider's payouts under their own name (Shopify's: Stripe):
+   * a credit from an unknown payer is the provider's payout by its reference only when the bank names
+   * no payer or one of these (src/booking/providers.ts providerOfMoneyIn).
+   */
+  processors?: string[];
   /** At most this many days between a sale and the payout that pays it (the clearing check). */
   payoutDays?: number;
+  /** The bank account (its ledger account) the provider pays into; absent: any. The unseen-payout check looks only there. */
+  account?: string;
   /** The company's clearing account: what the provider collected and has not paid out yet. */
   clearing?: string;
   /** The company's cut-over day (YYYY-MM-DD): payouts, sales, refunds and fees from it on go over the clearing account; before it nothing changes. */
@@ -62,8 +75,8 @@ export interface ProviderFacts {
 
 const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' ? String(v) : undefined);
-const COMPANY_KEYS = ['clearing', 'since', 'revenue', 'fees'] as const;
-const APP_KEYS = ['reports', 'payoutDays', 'gateways'] as const;
+const COMPANY_KEYS = ['clearing', 'since', 'revenue', 'fees', 'account'] as const;
+const APP_KEYS = ['reports', 'payoutDays', 'gateways', 'processors'] as const;
 
 function columnsOf<C extends string>(raw: unknown, names: readonly C[], needs: readonly C[], what: string): { columns: Columns<C> } | { problem: string } {
   if (!isMap(raw)) return { problem: `provider.reports.${what} must be a map of columns: { ${needs.map((n) => `${n}: <header>`).join(', ')} }` };
@@ -104,11 +117,16 @@ export function parseProvider(raw: unknown): { provider: ProviderFacts } | { pro
     if (!out.reports.sales?.gateway) return { problem: 'provider.gateways needs the column reports.sales.gateway, where the sales report names how each order was paid' };
     out.gateways = list as string[];
   }
+  if (raw.processors !== undefined) {
+    const list = (Array.isArray(raw.processors) ? raw.processors : [raw.processors]).map(text);
+    if (!list.length || list.some((x) => !x)) return { problem: 'provider.processors must name the payment processors that pay the provider\'s payouts under their own name, a list of words of the bank\'s payer name' };
+    out.processors = list as string[];
+  }
   if (raw.payoutDays !== undefined) {
     if (typeof raw.payoutDays !== 'number' || !Number.isInteger(raw.payoutDays) || raw.payoutDays < 1 || raw.payoutDays > 90) return { problem: 'provider.payoutDays must be a whole number of days, 1 to 90' };
     out.payoutDays = raw.payoutDays;
   }
-  for (const k of ['clearing', 'revenue'] as const) {
+  for (const k of ['clearing', 'revenue', 'account'] as const) {
     if (raw[k] === undefined) continue;
     const a = text(raw[k]);
     if (!a) return { problem: `provider.${k} must be an account number of the chart` };
@@ -152,5 +170,6 @@ export function mergeProvider(vendor: unknown, binding: unknown, hasVendor: bool
   const reports = { ...vr, ...br };
   const list = (v: unknown): unknown[] => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
   const gateways = [...new Set([...list(vendor.gateways), ...list(binding.gateways)])];
-  return { raw: { ...vendor, ...binding, ...(Object.keys(reports).length ? { reports } : {}), ...(gateways.length ? { gateways } : {}) } };
+  const processors = [...new Set([...list(vendor.processors), ...list(binding.processors)])];
+  return { raw: { ...vendor, ...binding, ...(Object.keys(reports).length ? { reports } : {}), ...(gateways.length ? { gateways } : {}), ...(processors.length ? { processors } : {}) } };
 }

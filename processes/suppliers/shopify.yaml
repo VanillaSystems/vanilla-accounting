@@ -2,12 +2,17 @@
 # Its payouts may arrive as "Received money from Stripe Payments UK Ltd with
 # reference Shopify …": the bank names Stripe, not Shopify. Code takes a payout
 # whose reference begins with a provider's tx word ("shopify") for that provider's
-# when the payer is no business of the books (src/booking/providers.ts
-# providerOfMoneyIn). The app file does not route Stripe here, because a firm that
-# takes Stripe payments of its own would see them booked as Shopify's. When the
-# bank names neither, the first sales report after the statement asks how the
-# payout appears and keeps the answer in the company's file: knowledge/suppliers/shopify.yaml
+# when the payer is no business of the books and the bank names no payer or one of
+# the provider's `processors` (src/booking/providers.ts providerOfMoneyIn): a
+# customer's own transfer «Shopify Bestellung 1001» is no payout. The app file does
+# not route Stripe here, because a firm that takes Stripe payments of its own would
+# see them booked as Shopify's. When the bank names neither and a sales report finds
+# no payout of Shopify among the bank's payments of its days, the report waits in
+# its row («Trotzdem übernehmen» books it); the payout's name belongs into the
+# company's file: knowledge/suppliers/shopify.yaml
 #   match: { tx: [ "Stripe Payments UK" ] }
+# and `provider.account` there names the bank account Shopify pays into, the only
+# one that check then looks at.
 # As a payment provider (#203) its payout settles its clearing account: code books
 # it bank / clearing account without VAT; the sales come from its order export and
 # the fees from its payments export, both CSV (src/booking/sales-report.ts). The
@@ -44,6 +49,8 @@ provider:
   # payment (bank transfer, cash on delivery), a gift card and the test gateway (Bogus) are not, and
   # are never booked onto the clearing account; the row counts them.
   gateways: [ "Shopify Payments" ]
+  # Stripe pays Shopify Payments' payouts under its own name (see the top of this file).
+  processors: [ "stripe" ]
   payoutDays: 7
 
 facts:

@@ -159,18 +159,24 @@ router.post('/api/drop/:id/rows/:key', async (req, res) => {
       const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
       const account = text(a.account);
       const since = text(a.since);
-      const payout = text(a.payout);
-      // The cut-over day comes with the clearing account while the provider's file names none; the payout's name comes alone.
-      const needsAccount = ask?.missing !== 'since' && ask?.missing !== 'payout';
-      if (!ask || (needsAccount && !account) || (ask.missing === 'payout' && !payout) || (ask.missing === 'fees' && !text(a.vat)) || (ask.since !== undefined && !since)) throw new RequestError(400, 'Nur ein Bericht, dessen Konto, Umstellungstag oder Auszahlungsname fehlt, nimmt eines.');
-      const set = ask.missing === 'fees' ? { fees: { account: account!, vat: text(a.vat)! } } : ask.missing === 'since' ? { since } : ask.missing === 'payout' ? { payout } : { [ask.missing]: account, ...(since ? { since } : {}) };
+      // The cut-over day comes with the clearing account while the provider's file names none.
+      const needsAccount = ask?.missing !== 'since';
+      if (!ask || (needsAccount && !account) || (ask.missing === 'fees' && !text(a.vat)) || (ask.since !== undefined && !since)) throw new RequestError(400, 'Nur ein Bericht, dessen Konto oder Umstellungstag fehlt, nimmt eines.');
+      const set = ask.missing === 'fees' ? { fees: { account: account!, vat: text(a.vat)! } } : ask.missing === 'since' ? { since } : { [ask.missing]: account, ...(since ? { since } : {}) };
       const kept = setProviderAccount(WS, ask.provider, set);
-      if (!kept.ok) throw new RequestError(400, `Konto, Steuercode, Umstellungstag oder Name ${[account, a.vat, since, payout].filter(Boolean).join(' / ')} geht so nicht.`, kept.refusal);
+      if (!kept.ok) throw new RequestError(400, `Konto, Steuercode oder Umstellungstag ${[account, a.vat, since].filter(Boolean).join(' / ')} geht so nicht.`, kept.refusal);
       delete row.askProvider;
       delete row.message;
       Object.assign(row, { state: 'take', reason: undefined });
       break;
     }
+    case 'anyway':
+      // No payout of the provider recognised: the person takes the report anyway; the clearing check is the safety net.
+      if (!row.payoutUnseen || settled) throw new RequestError(400, 'Nur ein Bericht, dessen Auszahlung die App nicht erkennt, wird so übernommen.');
+      delete row.payoutUnseen;
+      delete row.message;
+      Object.assign(row, { state: 'take', reason: undefined, anyway: true });
+      break;
     case 'undo':
       if (row.state !== 'taken') throw new RequestError(400, 'Nur eine übernommene Datei lässt sich zurücknehmen.');
       if (undo(row).length) await bookAgain(row.name);
@@ -238,7 +244,7 @@ async function takeWaiting(s: DropSession): Promise<void> {
       // An error refuses this row only: the session is saved, the other rows are taken.
       let done: ReturnType<typeof importSalesReport>;
       try {
-        done = importSalesReport(WS, bytes, row.name);
+        done = importSalesReport(WS, bytes, row.name, { anyway: row.anyway });
       } catch (e) {
         Object.assign(row, { state: 'refused', reason: 'report-failed', message: (e as Error).message });
         continue;
@@ -246,7 +252,8 @@ async function takeWaiting(s: DropSession): Promise<void> {
       if (done.ok) {
         Object.assign(row, { state: 'taken', report: done.summary });
         rmSync(fileOf(s.id, row.key), { force: true });
-      } else Object.assign(row, done.ask ? { state: 'unclear', reason: 'provider-account', askProvider: done.ask, message: done.message } : { state: 'refused', reason: 'not-imported', message: done.message });
+      } else if (done.unseen) Object.assign(row, { state: 'unclear', reason: 'payout-unseen', payoutUnseen: done.unseen, message: done.message });
+      else Object.assign(row, done.ask ? { state: 'unclear', reason: 'provider-account', askProvider: done.ask, message: done.message } : { state: 'refused', reason: 'not-imported', message: done.message });
       continue;
     }
     let arrival: Arrival;

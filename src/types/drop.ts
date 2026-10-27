@@ -62,6 +62,10 @@ export interface DropRow {
   report?: ReportSummary;
   /** A report the company's file of its provider cannot book yet: the account (or fee code) the row asks for, once. */
   askProvider?: ProviderAsk;
+  /** A report held because no payout of its provider is recognised: why, and what was looked at. */
+  payoutUnseen?: PayoutUnseen;
+  /** The person took the report anyway («Trotzdem übernehmen»): the unseen-payout check is skipped. */
+  anyway?: true;
   /** What its text says it is, when it is no plain receipt (src/intake/document-kind.ts): kept beside an invoice, or no receipt at all. */
   document?: SupportingWhy | OtherWhy;
   /**
@@ -74,21 +78,25 @@ export interface DropRow {
 
 export interface StatementFacts { iban?: string; from?: string; to?: string; entries?: number }
 
-/**
- * What the company's file of a provider lacks for its report: its clearing account (with the cut-over
- * day), the cut-over day alone, its revenue account, its fee account and code, or (`payout`) how its
- * payout appears on the bank statement, when the bank's payments of the report's days from the
- * cut-over day on are in the books and none is recognised as the provider's (kept as `match.tx`);
- * `file`: where it is kept; `since`: the cut-over day proposed (the first day of the open period)
- * while the file names none.
- */
 /** Why a provider's payout waits for the person, as its line in Kontoauszüge says it (GET /api/transactions/:ref/payout-wait, src/booking/providers.ts PayoutWait). */
 export interface PayoutWaitView { why: 'clearing' | 'since' | 'gap'; provider: string; file: string; since?: string }
 
-/** At most this many characters of a provider payout's name are kept (ProviderAsk 'payout'): a name, never a statement line. */
-export const PAYOUT_NAME_MAX = 80;
+/**
+ * What the company's file of a provider lacks for its report: its clearing account (with the cut-over
+ * day), the cut-over day alone, its revenue account, or its fee account and code; `file`: where it is
+ * kept; `since`: the cut-over day proposed (the first day of the open period) while the file names none.
+ */
+export interface ProviderAsk { provider: string; name: string; missing: 'clearing' | 'since' | 'revenue' | 'fees'; file: string; since?: string }
 
-export interface ProviderAsk { provider: string; name: string; missing: 'clearing' | 'since' | 'revenue' | 'fees' | 'payout'; file: string; since?: string }
+/**
+ * A report held because no payout of its provider is recognised (src/intake/sales-report-import.ts
+ * unseenPayout): the bank's payments are in through `through` (the first order the provider collected
+ * from the cut-over day `since` on, plus its payout days), on the accounts `banks` (label and
+ * currency; only the one the provider pays into, `account`, when its file names one), and none from
+ * `since` on is its payout. «Trotzdem übernehmen» books it (DropAction 'anyway'); the payout's name
+ * belongs into the provider's file `file` under `match.tx`.
+ */
+export interface PayoutUnseen { provider: string; name: string; since: string; through: string; banks: string[]; file: string; account?: string }
 
 /** Why an order of a report was not booked by code (src/booking/sales-report.ts ReportHold). */
 export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'legacy' }
@@ -124,7 +132,9 @@ export type DropReason =
   /** A provider's report its file cannot book yet: the row asks for the missing account (`askProvider`). */
   | 'provider-account'
   /** Taking a provider's report failed on an error (`message`): nothing of it was booked, the session goes on. */
-  | 'report-failed';
+  | 'report-failed'
+  /** A provider's report held: no payout of the provider is recognised among the bank's payments of its days (`payoutUnseen`). */
+  | 'payout-unseen';
 
 export interface DropSession {
   id: string;
@@ -146,7 +156,9 @@ export type DropAction =
   /** A possible duplicate: «ist dasselbe» (not taken) or «verschieden» (taken, and the pair is not asked again). */
   | { kind: 'twin'; answer: 'same' | 'distinct' }
   /** A report's provider lacks an account (`askProvider`): the person names it, it is kept in the company's file of the provider, and the report is taken. */
-  | { kind: 'provider'; account?: string; vat?: string; since?: string; payout?: string };
+  | { kind: 'provider'; account?: string; vat?: string; since?: string }
+  /** A report held because no payout of its provider is recognised (`payoutUnseen`): «Trotzdem übernehmen» books it. */
+  | { kind: 'anyway' };
 
 /** Why a file is in data/quarantine/: its words say it is no receipt (and which kind, and the mail's sender), a person set it aside, or it is no PDF inside. */
 export type QuarantineReason = { kind: 'not-receipt'; why?: OtherWhy; from?: string } | { kind: 'held' } | { kind: 'unreadable' };

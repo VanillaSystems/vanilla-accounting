@@ -38,7 +38,7 @@ export const settlesOn = (p: Provider, date: string): boolean => !p.provider.sin
  * reference only (Shopify's arrive as «Received money from Stripe Payments UK Ltd with reference
  * Shopify …»): when the payer routes to no business (or to several), the payout is the provider's
  * whose `match.tx` word begins the reference as the bank writes it (referenceOf), when exactly one
- * provider's does. A payer the books know as a business of its own is never overruled by its reference.
+ * provider's does and the bank names no payer or a payment processor of its file (`processors`). A payer the books know as a business of its own is never overruled by its reference.
  */
 export function providerOfMoneyIn(tx: Pick<BankTransaction, 'date' | 'direction' | 'description' | 'counterparty' | 'counterpartyIban' | 'amount' | 'reference'>, linked: readonly Receipt[], counterparties: readonly Counterparty[]): Provider | undefined {
   if (tx.direction !== 'CRDT' || tx.amount === 0) return undefined;
@@ -48,8 +48,23 @@ export function providerOfMoneyIn(tx: Pick<BankTransaction, 'date' | 'direction'
     return cp && isProvider(cp) ? cp : undefined;
   }
   const refs = referenceOf(tx);
-  const named = refs.length ? counterparties.filter(isProvider).filter((c) => c.match.tx.some((word) => refs.some((r) => beginsWith(r, word)))) : [];
+  const named = refs.length ? counterparties.filter(isProvider).filter((c) => paidBy(tx.counterparty, c) && c.match.tx.some((word) => refs.some((r) => beginsWith(r, word)))) : [];
   return named.length === 1 ? named[0] : undefined;
+}
+
+/**
+ * Whether the bank's payer may pay the provider's payouts: none named, or one of the payment
+ * processors its file lists (`provider.processors`). A customer's own transfer with the reference
+ * «Shopify Bestellung 1001» names the customer, so it is no payout.
+ */
+function paidBy(payer: string | undefined, p: Provider): boolean {
+  const name = payer?.trim().toLowerCase();
+  if (!name) return true;
+  return (p.provider.processors ?? []).some((w) => {
+    const word = w.trim().toLowerCase();
+    const at = name.indexOf(word);
+    return !!word && at >= 0 && !/[\p{L}\d]/u.test(name.charAt(at - 1)) && !/[\p{L}\d]/u.test(name.charAt(at + word.length));
+  });
 }
 
 /** The payment's reference as the bank writes it: its remittance field, and the text after «with reference» in its description. */

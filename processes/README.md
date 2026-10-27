@@ -187,6 +187,7 @@ provider:
     sales: { order: Name, date: Paid at, shipTo: Shipping Country, gross: Total, tax: Taxes, refunded: Refunded Amount, gateway: Payment Method }
     fees: { date: Transaction Date, fee: Fee, order: Order }
   gateways: [ "Shopify Payments" ]
+  processors: [ "stripe" ]
   payoutDays: 7
 # knowledge/suppliers/shopify.yaml: the company layer, its chart
 provider:
@@ -194,6 +195,7 @@ provider:
   since: 2026-10-01
   revenue: "3200"
   fees: { account: "6580", vat: I0 }
+  account: "1020"   # optional: the bank account it pays into
 ```
 
 - `since` is the company's cut-over day. From it on the provider's payouts,
@@ -209,10 +211,16 @@ provider:
   no order link). A payout is the provider's by its `match` like any payment,
   or, when the payer is no business of the books, by a `match.tx` word that
   begins its reference («Received money from Stripe Payments UK Ltd with
-  reference Shopify …»). When the bank's payments of a report's days are in the
-  books and none is recognised, the report books nothing and its drop row asks
-  how the payout appears on the statement; the answer goes into the company's
-  `match.tx`. A payout before `since` within `payoutDays` of it, beside sales a
+  reference Shopify …»), and then only when the bank names no payer or one of
+  the app file's `processors` (Shopify's: `stripe`): a customer's own transfer
+  «Shopify Bestellung 1001» is no payout. When the bank's payments of a report's
+  days (from its first order the provider collected, plus `payoutDays`) are in
+  the books and none is recognised as its payout, the report books nothing and
+  its drop row says why and which accounts it looked at; «Trotzdem übernehmen»
+  books it (the clearing check shows a difference if a payout was booked as
+  sales), and the payout's name belongs into the company's `match.tx` by hand.
+  With `account: "<ledger account>"` the company's file names the bank account
+  the provider pays into, the only one that check then looks at. A payout before `since` within `payoutDays` of it, beside sales a
   report booked before its day, waits for the person: booked as sales they would
   count twice. The payment says why it waits.
 - Its report (the CSV it exports) is recognised in the drop by the columns of
