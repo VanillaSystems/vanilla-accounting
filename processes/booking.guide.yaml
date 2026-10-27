@@ -242,22 +242,33 @@ steps:
           the Swiss tax at that rate; a domestic delivery without it, or with another country's tax → new_case.
           Delivered abroad → export (V0; V0-E where the invoicing exemptions say so) with the country as the
           recorded reason, whatever foreign tax line the order shows (EU or UK VAT the platform charged the
-          buyer): that tax is kept as a fact and named in the booking's reason, never a reason to hold. The whole
-          gross the buyer paid is the export's consideration, foreign tax included. Swiss tax on a delivery
-          abroad → new_case (tax invoiced is owed, Art. 27 Abs. 2)
+          buyer): that tax is named in the booking's reason, never a reason to hold. A foreign VAT the order shows
+          is the seller's own debt to the destination state (IOSS on a consignment into the EU), not its
+          turnover: a payment provider's sales report books it apart, onto the company's account named by
+          provider.foreignTax without a code, and the net at the export code (sv-provider-report); the foreign VAT
+          is left out of the Swiss return. Swiss tax on a delivery abroad → new_case (tax invoiced is owed,
+          Art. 27 Abs. 2)
         why: >
           an export of goods is exempt with the right to deduct (MWSTG Art. 23 Abs. 1 and 2 Ziff. 1); a foreign
-          VAT is not Swiss turnover tax and no durchlaufender Posten (Art. 24 Abs. 6 lit. b: it is not paid out in
-          the buyer's name), so it stays in the consideration (Art. 24 Abs. 1), declared in Ziffer 200 and
-          deducted again in Ziffer 220, net 0. Where the seller pays that tax abroad (an import VAT invoice of the
-          courier, an IOSS return), that payment is its own expense entry without Swiss input tax
-        source: booking.flow.yaml sale_vat expect; issue #74
+          VAT is not Swiss turnover tax, so it neither holds the order nor makes it taxable in Switzerland. A strict
+          reading of Art. 24 Abs. 1 (the whole consideration) may count the foreign VAT in Ziffer 200 and deduct it
+          again in Ziffer 220; either way there is no tax effect, since the export is exempt. Which reading a firm
+          follows is its choice, to confirm with its fiduciary; the app follows the first: the foreign VAT apart, out
+          of the return (owner decision 2026-10-27, issue #206). What the seller pays abroad for that tax (an IOSS
+          return) settles the company's account for it; a courier's import VAT invoice on a DDP shipment is its own
+          expense entry without Swiss input tax
+        source: booking.flow.yaml sale_vat expect; issue #74; issue #206, owner decision 2026-10-27
       - id: sv-provider-report
         when: a payment provider's sales report (its order export, a CSV) or fee report is dropped
         then: >
           in code (src/booking/sales-report.ts), by the columns the provider's file names: each order's gross onto the
           provider's clearing account against the revenue account, delivered in the VAT territory at the firm's sale
-          code, abroad at V0 whatever foreign tax it shows; a refund with the code's minus; each fee against the same
+          code, abroad at V0; an export whose tax column shows a foreign VAT (IOSS, for example) as two lines, the net at V0 onto
+          revenue and the tax onto the company's account for it (provider.foreignTax) without a code, waiting for the
+          person while the company's file names none (#206); an export the books carry as one gross line at V0 (booked
+          before #206) stays so, and its refund is booked gross at -V0; a refund with the code's minus (an export's
+          foreign tax back in the sale's share, also for a filed sale the books do not carry, whose tax the account then
+          never held: the sale is the person's to correct); each fee against the same
           account at the company's fee code. The tax point is the day the provider collected the payment (cash basis),
           the order's day on the agreed basis. An order of a filed period is not booked (a correction is the
           person's); a domestic order whose tax column shows no tax or another rate waits for the person
