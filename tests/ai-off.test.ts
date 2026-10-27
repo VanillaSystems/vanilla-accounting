@@ -11,7 +11,7 @@
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DEMO_ROOT } from './support/workspace.js';
@@ -165,4 +165,55 @@ test('the switch is kept per Mac beside the other AI settings, apart from «Ohne
   writeOff(false);
   assert.deepEqual(readSettings(), { steps: {}, cli: 'codex', noAi: true }, 'switching it on again leaves «Ohne KI weitermachen» as it was');
   switchOn(true);
+});
+
+/**
+ * Every file outside the browser UI that starts a program or sends a request, and why it asks no
+ * model. A new one fails here until it is named: as a model transport (which must pass the gate) or
+ * as something that is no model.
+ */
+const TRANSPORTS: Record<string, string> = {
+  'src/llm/providers/claude-cli.ts': 'spawnClaude',
+  'src/llm/providers/codex-cli.ts': 'runCodex',
+  'src/llm/providers/http.ts': 'requestJson',
+  'src/platform/terminal-open.ts': 'openInTerminal',
+};
+const NO_MODEL: Record<string, string> = {
+  'src/cli/browser.ts': 'Playwright trace viewer',
+  'src/cli/check-closed-period.ts': 'git',
+  'src/cli/doctor.ts': 'program versions',
+  'src/cli/fetch-estv-rates.ts': 'the ESTV rates',
+  'src/cli/update.ts': 'git and npm',
+  'src/cli/workflow.ts': "the app's own API",
+  'src/collect/tutti.ts': 'Chrome to PDF, pdftotext',
+  'src/desktop/dictation.ts': "macOS's dictation",
+  'src/desktop/main.ts': "the app's own server",
+  'src/parsers/pdf-pages.ts': 'osascript renders PDF pages',
+  'src/platform/ai-cli.ts': 'the CLI\'s --version and auth status, no model',
+  'src/platform/browser/chrome.ts': 'Chrome for a source',
+  'src/platform/git-program.ts': 'xcode-select',
+  'src/platform/login-path.ts': 'the login shell\'s PATH',
+  'src/platform/sources/api-channel.ts': "a source's API",
+  'src/platform/sources/launcher.ts': "a source's child process",
+  'src/platform/sources/mac-mail.ts': 'Mail.app',
+  'src/platform/sources/web-channel.ts': "a source's web pages",
+  'src/platform/sources/web-driver.ts': "a source's web pages",
+  'src/publish/sources.ts': 'git',
+  'src/secrets/keychain-store.ts': 'the keychain',
+  'src/server/mail-evidence.ts': 'plutil',
+  'src/version.ts': 'git',
+};
+
+test('every file that starts a program or sends a request is a gated model transport or named as no model', () => {
+  const files: string[] = [];
+  const walk = (d: string) => { for (const f of readdirSync(d)) { const p = join(d, f); if (statSync(p).isDirectory()) { if (p !== join('src', 'app')) walk(p); } else if (/\.(ts|tsx|mts|cts)$/.test(f)) files.push(p); } };
+  walk('src');
+  const calls = /\b(spawn|spawnSync|execFile|execFileSync|execSync|fork)\(|(^|[^.\w])fetch\(|new WebSocket\(|https?\.(request|get)\(/m;
+  const found = files.filter((f) => calls.test(readFileSync(f, 'utf8'))).map((f) => f.split('\\').join('/')).sort();
+  assert.deepEqual(found.filter((f) => !(f in TRANSPORTS) && !(f in NO_MODEL)), [], 'name each new file in TRANSPORTS (and gate it) or in NO_MODEL');
+  for (const [file, fn] of Object.entries(TRANSPORTS)) {
+    const src = readFileSync(file, 'utf8');
+    const body = src.slice(src.search(new RegExp(`function ${fn}\\b`)));
+    assert.match(body.slice(0, body.indexOf('\n}\n')), /\bgate\(\)/, `${file}: ${fn} passes the gate`);
+  }
 });

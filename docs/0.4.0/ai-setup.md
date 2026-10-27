@@ -27,7 +27,11 @@ chooses or creates books, and how the same help shows up later.
    native installers need only what macOS has, and the CLIs they install are standalone
    programs. The app offers no Homebrew or npm way and never installs either.
 6. **«Ohne KI weitermachen» is remembered on this Mac.** The first run does not ask again.
-   Firma › KI, the KI column and the error line keep the way back.
+   Firma › KI, the KI column and the error line keep the way back. It is not «KI ganz
+   ausschalten» (Firma › KI, issue #212, `off` in the same settings file): that switch is for a
+   Mac that has an AI and wants the app without it. Every model call passes one gate
+   (src/llm/off.ts), each place says the AI is off and offers its way by hand, and switching it
+   on again starts one inbox run for what waited.
 7. **Codex appears in the first run only after #121 is merged**, never as «kommt». Until then
    the first run shows Claude Code alone, and Firma › KI shows Codex for «Im Terminal».
 8. **Checks every 2 seconds while a card waits; «nicht gefunden» after 15 minutes.**
