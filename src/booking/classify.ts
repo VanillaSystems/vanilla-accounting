@@ -21,7 +21,7 @@ import { isPurchaseDocument } from '../accounting/evidence-check.js';
 import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { APP_ROOT, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
-import { agreedBasis, baseCurrency, chart, filing, invoicing, setup, vat } from '../engines/index.js';
+import { agreedBasis, baseCurrency, chart, documents, filing, invoicing, setup, vat, withoutInputTax } from '../engines/index.js';
 import { paymentProposals, type PaymentProposal } from '../invoices/payments.js';
 import { loadInvoices } from '../invoices/store.js';
 import type { InvoiceBook } from '../invoices/model.js';
@@ -45,6 +45,8 @@ import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
 import { holdWords, payoutByOrders, type OrderHold } from './payout-orders.js';
 import { splitByReceipts } from './receipt-lines.js';
+import { CUSTOMS_BY, customsSplit, importVatDeductions, type Assessment, type CustomsHold, type CustomsTexts } from './customs-invoice.js';
+import { nextManualRef } from '../books/next-ref.js';
 import { payoutSales, salesDefaults } from '../workspace/sells.js';
 import { loadChart, type ChartAccount } from '../workspace/chart.js';
 
@@ -199,6 +201,8 @@ export interface ClassifyContext extends ClassifyPromptContext {
   purchaseVat?: BusinessVat;
   /** The issued invoices, on the agreed basis: a customer payment that could pay an open one is not booked as revenue (openInvoiceOf). */
   invoices?: InvoiceBook;
+  /** The firm's UID: a customs assessment proves import VAT for the firm it names as importer (src/booking/customs-invoice.ts). */
+  companyUid?: string;
 }
 
 /**
@@ -294,6 +298,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     moneyAccounts: moneyAccounts(ws.bankAccounts, loadChart().accounts),
     ...((p) => (p ? { payout: p } : {}))(payoutDefault(ws, [...chartNames(chartOfAccounts).keys()])),
     ...(agreedBasis() ? { invoices: loadInvoices(ws) } : {}),
+    companyUid: ws.company.uid,
   };
 }
 
@@ -478,6 +483,91 @@ function orderHoldWords(hold: OrderHold): string {
   return wordsIn('de').t(key, vars);
 }
 
+const chf = (n: number) => n.toFixed(2);
+
+/** A courier invoice's booking texts, in the books' language (German, docs/i18n.md). */
+export function customsTexts(): CustomsTexts {
+  const de = wordsIn('de');
+  return {
+    position: (p) => de.t(`rules.say.customsPosition.${p}` as const),
+    deduction: (a: Assessment) => de.t('rules.say.customsDeduction', { file: a.file }),
+    reason: (a: Assessment) => de.t('rules.say.customsProven', { amount: chf(a.amount), currency: baseCurrency(), file: a.file }),
+    correction: (a: Assessment, entry: JournalEntry, period: string) => de.t('rules.say.customsCorrection', { id: entry.id, period, file: a.file }),
+  };
+}
+
+/** Why a payment's customs invoices are not split in code, as its booking's reason says it. */
+export function customsHoldWords(hold: CustomsHold): string {
+  const de = wordsIn('de');
+  switch (hold.why) {
+    case 'line': return de.t('rules.say.customsHold.line', { file: hold.file, line: hold.line });
+    case 'sum': return de.t('rules.say.customsHold.sum', { file: hold.file, lines: chf(hold.lines), total: chf(hold.total) });
+    case 'paid': return de.t('rules.say.customsHold.paid', { invoices: chf(hold.invoices), paid: chf(hold.paid), currency: hold.currency });
+    case 'currency': return de.t('rules.say.customsHold.currency', { invoices: chf(hold.invoices), currency: hold.currency, paid: chf(hold.paid), paidCurrency: hold.paidCurrency, slack: String(hold.slack) });
+    case 'other': return de.t('rules.say.customsHold.other', { file: hold.file });
+    case 'account': return de.t('rules.say.customsHold.account', { account: hold.account });
+  }
+}
+
+/**
+ * The payment `tx` booked by the positions of its linked customs invoices (src/booking/customs-invoice.ts),
+ * by code: freight and fees with the carrier's Swiss VAT where the line shows it, duty and import VAT
+ * without, and the deduction of each linked assessment that proves an import VAT line. Undefined when
+ * no customs invoice is linked; a note for the model's reason when they do not book it.
+ */
+export function customsEntries(books: Books, tx: BankTransaction, context: ClassifyContext, fx: FxResolver): { entries: JournalEntry[] } | { note: string } | undefined {
+  const mapped = mappedReceipts(books, tx);
+  const words = documents().customs;
+  if (!words || !mapped.length) return undefined;
+  const base = baseCurrency();
+  const inBase = (c: string) => (c === base ? 1 : fx.daily(c, tx.date) ?? fx.flat(c));
+  const texts = customsTexts();
+  const split = customsSplit(tx, mapped, {
+    words, chart: new Set(chartNames(context.chartOfAccounts).keys()), uid: context.companyUid, inputTax: !withoutInputTax(),
+    convert: (amount, from) => { const a = inBase(from); const b = inBase(tx.currency); return a && b ? (amount * a) / b : undefined; },
+    texts, name: merchantOf(tx.description),
+  });
+  if (!split) return undefined;
+  const de = wordsIn('de');
+  if ('hold' in split) return { note: de.t('rules.say.customsHold', { why: customsHoldWords(split.hold) }) };
+  const bankAccount = bankAccountFor(tx, context.bankAccounts);
+  const lock = periodLock(books);
+  const receiptDate = mapped.map((r) => r.date).filter((d): d is string => !!d).sort()[0];
+  const said = [split.direct ? de.t('rules.say.customsDirect') : de.t('rules.say.customsSplit')];
+  if (split.importVat > 0 && !withoutInputTax()) {
+    if (split.unproven > 0) said.push(de.t('rules.say.customsUnproven', { amount: chf(split.unproven), currency: split.currency }));
+    for (const a of split.assessments) said.push(texts.reason(a));
+  }
+  const lines = withDerivedCodes(split.lines, tx.direction, bankAccount);
+  const entries = entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, money: context.moneyAccounts, by: CUSTOMS_BY, reason: said.join('; '), corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) });
+  // A deduction is the assessment's tax in the books' currency, whatever the payment was made in.
+  const booked = entries.map((e, k) => {
+    if (!split.deductions.has(split.lines[k])) return e;
+    const { exchangeCurrency: _c, exchangeRate: _r, ...rest } = e;
+    return rest;
+  });
+  // Each assessment deducted is used: the passes never book from it again, even once a person takes it off this payment.
+  const deductions = booked.filter((_, k) => split.deductions.has(split.lines[k]));
+  split.assessments.forEach((a, k) => { const r = mapped.find((x) => x.id === a.receipt); if (r && deductions[k]) r.importVatDeduction = deductions[k].id; });
+  return { entries: booked };
+}
+
+/**
+ * The deductions customs assessments bring to import VAT booked before them (importVatDeductions),
+ * booked into `books`, and the assessments marked as used. Save the books when either is more than none.
+ */
+export function bookImportVatDeductions(books: Books, context: Pick<ClassifyContext, 'companyUid'>): { booked: number; marked: number } {
+  const words = documents().customs;
+  if (!words) return { booked: 0, marked: 0 };
+  const lock = periodLock(books);
+  const through = lock.lockedThrough;
+  const firstOpenDay = through ? new Date(Date.parse(`${through}T00:00:00Z`) + 864e5).toISOString().slice(0, 10) : '';
+  return importVatDeductions(books, {
+    words, uid: context.companyUid, inputTax: !withoutInputTax(), isClosed: (d) => lock.isClosed(d), firstOpenDay,
+    length: filing().length, newId: () => randomBytes(8).toString('hex'), manualRef: (date) => nextManualRef(books, date.slice(0, 4)), texts: customsTexts(),
+  });
+}
+
 /** The entries a rule's booking makes for `tx` (ruleBookingLines), the bank on the other side, stamped with the rule. */
 export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRule, booking: RuleBooking, context: ClassifyContext, fx: FxResolver): JournalEntry[] {
   const mapped = mappedReceipts(books, tx);
@@ -649,6 +739,8 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   const proposing = new Map<string, ClassifyOutcome['asked'][number]>();
   /** Payouts a rule books from the model's reading of their report (RuleBooking.fees). */
   const payouts = new Map<string, { placed: PlacedRule; booking: RuleBooking; fees: NonNullable<RuleBooking['fees']> }>();
+  /** Why a payment's customs invoices were not split in code: the model's reason says it. */
+  const customsNotes = new Map<string, string>();
   for (const tx of txs) {
     const paid = invoicePaid.get(tx.ref);
     if (paid) {
@@ -695,6 +787,17 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
       outcome.classified.push(tx.ref);
       if (!byParts.whole) outcome.partly.push(tx.ref);
       continue;
+    }
+    if (!placed) {
+      // A courier's customs invoice is split by its positions in code; one that does not add up goes to the model, told why.
+      const customs = customsEntries(books, tx, context, fx);
+      if (customs && 'entries' in customs) {
+        books.journalEntries.push(...atPoint(tx, customs.entries));
+        log(`  ${tx.ref}  → customs invoice by its positions`);
+        outcome.classified.push(tx.ref);
+        continue;
+      }
+      if (customs) customsNotes.set(tx.ref, customs.note);
     }
     if (!placed || !then) { toModel.push(tx); continue; }
     if (then.kind === 'book' && then.booking.fees && mappedReceipts(books, tx).length) {
@@ -773,7 +876,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
           continue;
         }
         const lines = splitByReceipts(tx, fee?.lines ?? derived, mapped);
-        const noted = fee?.note ? [reason, fee.note].filter(Boolean).join(' ') : reason;
+        const noted = [reason, fee?.note, customsNotes.get(tx.ref)].filter(Boolean).join(' ') || undefined;
         const entries = read ?? withPurchaseVat(tx, withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), mapped, context.purchaseVat, context.counterparties);
         const refused = paymentRefusal(tx, entries, bankAccount, chartAccounts);
         if (refused) {

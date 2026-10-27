@@ -78,6 +78,12 @@ export interface Receipt {
   pairDoubted?: string[];
   /** A payout report's figures, read once at the match step: the booking step splits every payout it is linked to by them, in code (r10f-29). */
   payout?: PayoutFacts;
+  /**
+   * A customs assessment: the deduction of import VAT once booked from it (its entry's id), by code or
+   * by a person (src/booking/customs-invoice.ts). Code never books another from it or its copies, so a
+   * deduction a person removed or changed stays as she left it.
+   */
+  importVatDeduction?: string;
   /** An order document's facts (a shop's order page), read once at the match step: the booking step books a payout per order by them (src/booking/payout-orders.ts). */
   order?: OrderFacts;
 }

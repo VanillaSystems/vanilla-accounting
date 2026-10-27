@@ -133,7 +133,8 @@ type Payment = { ref: string; date: string; currency: string; description?: stri
  */
 export function atTaxPoint(tx: Payment, entries: readonly JournalEntry[], ctx: TaxPointContext): JournalEntry[] {
   if (!agreedBasis()) return [...entries];
-  const dates = ctx.documents.filter((d) => d.kind !== 'duplicate' && d.date).map((d) => d.date!).sort();
+  // A document beside the invoice (a delivery note, a customs assessment) dates no tax point: the invoice does.
+  const dates = ctx.documents.filter((d) => d.kind !== 'duplicate' && d.kind !== 'supporting' && d.date).map((d) => d.date!).sort();
   if (!dates.length) return [...entries];
   const groups = new Map<string, { booked: number; amount: number; template: JournalEntry }>();
   const out = entries.map((e): JournalEntry => {

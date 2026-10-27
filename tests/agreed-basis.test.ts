@@ -129,6 +129,8 @@ test('agreed basis: a payment\'s coded line takes its document\'s date and the o
   assert.deepEqual(rows(atTaxPoint(pay, [line({ vatCode: undefined, accountDebit: '2850' })], point('2026-06-30', ['2026-09-28']))), [['2026-10-05', '2850', '1021', 108.1, '', '']], 'a line without a code keeps the payment\'s date');
   assert.deepEqual(rows(atTaxPoint(pay, [line({})], point('2026-06-30', ['2026-10-05']))), [['2026-10-05', '6500', '1021', 108.1, 'I81', '']], 'bill and payment on one day: nothing to settle');
   assert.deepEqual(rows(atTaxPoint(pay, [line({})], point('2026-06-30', ['2027-01-04']))), [['2026-10-05', '6500', '1021', 108.1, 'I81', '']], 'a document of a later year never moves a line out of its payment\'s year');
+  const beside: TaxPointContext = { ...point('2026-06-30', ['2026-09-28']), documents: [{ date: '2026-09-28', kind: 'invoice' }, { date: '2026-10-01', kind: 'supporting' }] };
+  assert.deepEqual(rows(atTaxPoint(pay, [line({})], beside)), rows(atTaxPoint(pay, [line({})], point('2026-06-30', ['2026-09-28']))), 'a document beside the invoice (a customs assessment linked later) dates no tax point (#197)');
 
   const sale = line({ accountDebit: '1021', accountCredit: '3200', amount: 1081, vatCode: 'V81' });
   assert.deepEqual(rows(atTaxPoint({ ...pay, date: '2026-10-05' }, [sale], point('2026-06-30', ['2026-09-25', '2026-10-01']))), [

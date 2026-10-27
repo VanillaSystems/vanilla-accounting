@@ -35,7 +35,7 @@ import type { DropAction, DropRow, DropSession, QuarantineReason } from '../../t
 
 export const router = Router();
 
-const isSupporting = (why: DropRow['document']) => why === 'order-confirmation' || why === 'delivery-note' || why === 'reminder';
+const isSupporting = (why: DropRow['document']) => why === 'order-confirmation' || why === 'delivery-note' || why === 'reminder' || why === 'customs-assessment';
 
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const dir = (id: string) => join(WS.paths.data, 'drop', id);
