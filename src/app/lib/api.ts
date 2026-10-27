@@ -217,6 +217,11 @@ export function errorText(e: unknown): string {
     case 'notesChanged': return t('partners.notes.changed');
     case 'notesTitle': return t('knowledge.newPage.needsTitle');
     case 'gone': return t(`error.gone.${b.params.what}`);
+    case 'fileReferenced': return t('error.fileReferenced', { file: b.params.file, refs: [
+      ...b.params.payments.map((ref) => t('error.fileReferenced.payment', { ref })),
+      ...b.params.entries.map((ref) => t('error.fileReferenced.entry', { ref })),
+      ...(b.params.statements ? [t('error.fileReferenced.statements', { n: b.params.statements })] : []),
+    ].join(', ') });
     case 'secretStore': return t('error.secretStore');
     case 'invoice': return invoiceRefusalText(b.params.refusal, b.params.missing);
     case 'invoicingNotSetUp': return t('error.invoicingNotSetUp');
@@ -397,6 +402,8 @@ export const api = {
   checkSource: (id: string) => request<MailCheck>('POST', `/api/sources/${encodeURIComponent(id)}/check`),
   quarantine: () => request<QuarantinedFile[]>('GET', '/api/quarantine'),
   takeFromQuarantine: (file: string) => request<{ ok: true; file: string; run?: string }>('POST', `/api/quarantine/${encodeURIComponent(file)}/take`),
+  deleteFromQuarantine: (files: string[]) => request<{ ok: true; deleted: number }>('POST', '/api/quarantine/delete', { files }),
+  discardReceipts: (ids: string[]) => request<{ ok: true; deleted: number }>('POST', '/api/receipts/discard', { ids }),
   skipSender: (id: string, sender: string, version: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/skip`, { sender, version }),
   receiptSkipOffer: (receipt: string) => request<{ offer: ReceiptSkipOffer | null }>('GET', `/api/sources/skip-offer?receipt=${encodeURIComponent(receipt)}`),
   approveSource: (id: string, version: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/approve`, { version }),

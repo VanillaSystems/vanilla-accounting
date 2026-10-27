@@ -10,7 +10,10 @@ import { store, stored } from '../../shell/storage.js';
 import type { GroupKey } from './model.js';
 
 export type Section = 'zahlung' | 'angaben' | 'datei';
-export type Overlay = 'link' | 'quick' | 'delete' | null;
+export type Overlay = 'link' | 'quick' | 'delete' | 'discard' | null;
+
+/** Files «Löschen» deletes for good once confirmed (#228): from the quarantine (by file name) or listed as «keine Belege» (by receipt id). `all`: «Alle in der Quarantäne löschen». */
+export interface Discard { from: 'quarantine' | 'hidden'; files: Array<{ id: string; file: string }>; all?: boolean }
 
 interface State {
   overlay: Overlay;
@@ -21,6 +24,8 @@ interface State {
   inbox: InboxFile[];
   /** A field of Angaben to focus once the form shows. */
   focus?: string;
+  /** What the open «Löschen» confirmation deletes. */
+  discard?: Discard;
 }
 
 function read<T>(key: string, fallback: T): T {
