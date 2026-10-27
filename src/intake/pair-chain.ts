@@ -20,6 +20,7 @@ import { baseCurrency } from '../engines/index.js';
 import { loadFxResolver, type FxResolver } from '../accounting/fx-rates.js';
 import { SHORT_LIST, pairMapping, pairablePayment, pairableReceipt, searchPairs, signalsOfCandidate, stagesOf, takenPayments, type Maker, type PairCandidate, type PairStage, type Signal, type ToChf } from './pairing.js';
 import { legOf } from '../workspace/money-accounts.js';
+import { chargesOf } from './charges.js';
 import { noReceiptOfItsOwn, receiptKnowledge } from '../booking/receipt-wait.js';
 import { loadClassifyContext } from '../booking/classify.js';
 import { loadKnowledge } from '../knowledge/layers.js';
@@ -36,10 +37,11 @@ const SURE = 0.8;
 
 /** What the chain did and left. `left`: the receipts that are the person's, each with the code's candidates (`total` of them before the cut to the short list). */
 export interface ChainResult {
-  linked: Array<{ receipt: string; payment: string; by: Maker; signals: Signal[]; filed?: true }>;
+  /** `legs`: every movement of a card charge split across balances, each linked (src/intake/charges.ts); absent for one movement. */
+  linked: Array<{ receipt: string; payment: string; by: Maker; signals: Signal[]; filed?: true; legs?: string[] }>;
   left: Array<{ receipt: string; candidates: PairCandidate[]; total: number }>;
   /** The clear pairs of `staged` receipts, for the caller to archive, name and link (filed: point at) in its own change. */
-  staged: Array<{ receipt: string; payment: string; by: Maker; signals: Signal[]; filed?: true }>;
+  staged: Array<{ receipt: string; payment: string; by: Maker; signals: Signal[]; filed?: true; legs?: string[] }>;
   /** Model calls made, and the pairs and receipts they were asked about. */
   calls: number;
   checked: number;
@@ -149,7 +151,10 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
   const books = stagedIds.size ? { ...stored, receipts: [...stored.receipts.filter((r) => !stagedIds.has(r.id)), ...opts.staged!] } : stored;
   const lock = periodLock(books);
   const search = searchPairs(books, opts.toChf, lock.isClosed, opts.noReceipt?.(books));
-  const stages = stagesOf(search, opts.only);
+  // «Beleg suchen» on a leg of a split charge searches for the charge, which its first movement names.
+  const onlyTx = opts.only && 'payment' in opts.only ? books.transactions.find((t) => t.ref === (opts.only as { payment: string }).payment) : undefined;
+  const only = onlyTx ? { payment: chargesOf(books.transactions).of(onlyTx).refs[0] } : opts.only;
+  const stages = stagesOf(search, only);
   const receipt = new Map(books.receipts.map((r) => [r.id, r]));
   const payment = new Map(books.transactions.map((t) => [legOf(t), t]));
   const doubted = (c: PairCandidate) => !opts.only && !!receipt.get(c.receipt)?.pairDoubted?.includes(c.payment);
@@ -227,13 +232,12 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
   }
 
   // «Beleg suchen» links only its own payment: what the model chose for its candidate receipts elsewhere waits for their own run.
-  const only = opts.only;
   const asked = only && 'payment' in only ? links.filter((l) => l.c.payment === only.payment) : links;
   // A payment two receipts were linked to in this run goes to neither: the person decides.
   const times = new Map<string, number>();
   for (const { c } of asked) times.set(c.payment, (times.get(c.payment) ?? 0) + 1);
   const mine = asked.filter((l) => times.get(l.c.payment) === 1);
-  result.staged = mine.filter((l) => stagedIds.has(l.c.receipt)).map(({ c, by }) => ({ receipt: c.receipt, payment: c.payment, by, signals: signalsOfCandidate(c), ...(c.filed ? { filed: true as const } : {}) }));
+  result.staged = mine.filter((l) => stagedIds.has(l.c.receipt)).map(({ c, by }) => ({ receipt: c.receipt, payment: c.payment, by, signals: signalsOfCandidate(c), ...(c.filed ? { filed: true as const } : {}), ...legsOf(c) }));
   result.linked = port.update((index: Books) => applyLinks(index, mine.filter((l) => !stagedIds.has(l.c.receipt)), doubts, opts.noReceipt?.(index)));
   const leftStored = result.left.filter((l) => !stagedIds.has(l.receipt));
   const cut = leftStored.filter((l) => l.total > l.candidates.length);
@@ -245,6 +249,9 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
   }
   return result;
 }
+
+/** The legs a link names beside its payment: only for a charge split across balances. */
+const legsOf = (c: PairCandidate): { legs?: string[] } => (c.charge.length > 1 ? { legs: c.charge } : {});
 
 /**
  * Writes the chain's links on the books as they are now: a pair whose receipt or payment is no
@@ -258,18 +265,20 @@ function applyLinks(index: Books, links: ReadonlyArray<{ c: PairCandidate; by: M
   const done: ChainResult['linked'] = [];
   for (const { c, by } of links) {
     const r = index.receipts.find((x) => x.id === c.receipt);
-    const t = index.transactions.find((x) => legOf(x) === c.leg);
-    if (!r || !t || !pairableReceipt(r, linkedReceipts) || !pairablePayment(t, linkedPayments, noReceipt) || r.notPaidBy?.includes(t.ref)) continue;
+    // Every movement of the charge: the leg that fit, and the other legs of a charge split across balances.
+    const legs = c.charge.length > 1 ? c.charge.map((ref) => index.transactions.find((x) => x.ref === ref)) : [index.transactions.find((x) => legOf(x) === c.leg)];
+    const t = legs[0];
+    if (!r || !t || legs.some((x) => !x || !pairablePayment(x, linkedPayments, noReceipt) || r.notPaidBy?.includes(x.ref)) || !pairableReceipt(r, linkedReceipts)) continue;
     const signals = signalsOfCandidate(c);
     linkedReceipts.add(r.id);
-    linkedPayments.add(t.ref);
+    for (const ref of c.charge) linkedPayments.add(ref);
     if (lock.isClosed(t.date)) {
       r.filedPayment = t.ref;
-      done.push({ receipt: r.id, payment: t.ref, by, signals, filed: true });
+      done.push({ receipt: r.id, payment: t.ref, by, signals, filed: true, ...legsOf(c) });
       continue;
     }
-    index.mappings.push(pairMapping(by, t.ref, r.id, signals));
-    done.push({ receipt: r.id, payment: t.ref, by, signals });
+    for (const ref of c.charge) index.mappings.push(pairMapping(by, ref, r.id, signals));
+    done.push({ receipt: r.id, payment: t.ref, by, signals, ...legsOf(c) });
   }
   for (const c of doubts) {
     const r = index.receipts.find((x) => x.id === c.receipt);

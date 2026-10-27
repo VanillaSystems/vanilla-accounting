@@ -47,6 +47,13 @@ test('each field has one owner', () => {
   assert.throws(() => mergeCounterparty(vendor, { ...binding, match: { tx: ['acme'] } }, files, 'supplier'), /match\.tx "acme" is also in processes\/suppliers\/acme\.yaml/);
 });
 
+test('grouped: the vendor\'s fact when its file says it; else the company\'s, learned from its own payments (#190)', () => {
+  const { grouped: _, ...silent } = vendor;
+  assert.equal(mergeCounterparty(silent, { ...binding, grouped: true }, files, 'supplier').grouped, true, 'the company says it');
+  assert.equal(mergeCounterparty(silent, binding, files, 'supplier').grouped, false, 'nobody says it');
+  assert.throws(() => mergeCounterparty(vendor, { ...binding, grouped: true }, files, 'supplier'), /grouped is said in the vendor file processes\/suppliers\/acme\.yaml already/);
+});
+
 /** An app root and a workspace root holding `files` (path → YAML). */
 function layers(files: Record<string, string>): { app: string; ws: string } {
   const root = mkdtempSync(join(tmpdir(), 'vanilla-layers-'));

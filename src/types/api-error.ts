@@ -56,6 +56,8 @@ export type ApiRefusal =
   /** A second bank payment of another payee for a receipt that has one, asked without `confirm` (src/server/edits.ts assertNotSecondPayment, r8h-21). */
   | { code: 'secondPayment'; params: { receipt: string; payment: string } }
   | { code: 'yearClose' }
+  /** «Immer so?» under several receipts linked to one payment (#190): the payment offers no batch payer (fewer such links, no business, or it is one already). */
+  | { code: 'noBatchPayer' }
   /** A booking's tags (#127): not a map, a dimension the workspace does not declare, or a value that is no short text. */
   | TagRefusal
   /** Firma › Dimensionen: a dimension bookings carry a value of is not taken out (`entries`: how many). */

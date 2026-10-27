@@ -58,7 +58,7 @@ lives in two layers, merged once when it is read (`src/knowledge/layers.ts`):
 | App | `processes/<process>.guide.yaml` | rules true for any Swiss company |
 | App | `processes/<role>/<id>.yaml` | facts of one business true for every company: `name`, `match`, `grouped`, documents, `facts`, rules |
 | Company | `knowledge/rules/<process>.guide.yaml` | this company's rules and precedents for a step |
-| Company | `knowledge/<role>/<id>.yaml` | the binding of an app file: `accounts`, company rules, precedents, extra signals; or a whole private business |
+| Company | `knowledge/<role>/<id>.yaml` | the binding of an app file: `accounts`, company rules, precedents, extra signals, `grouped` when the app file does not say it; or a whole private business |
 
 A business has one file per layer, in the same `<role>` folder in both
 (the loader refuses an id in two folders). A file whose name starts with `_`
@@ -67,8 +67,10 @@ never read. A workspace from before this layout (`counterparties/`,
 `policy/`) is refused until `npm run migrate-workspace` has moved it.
 
 Every field has one owner. A company file adds signals, documents and rules
-after the app's; it never redeclares `name` or `grouped` and never replaces a
-rule. The lint keeps the app layer generic: no `accounts`, no precedents, a
+after the app's; it never redeclares `name` and never replaces a rule. It says
+`grouped: true` only for a business whose app file does not say `grouped`: the
+company learned from its own payments that the business is paid for several
+receipts at once (the «Immer so?» after two such links, issue #190). The lint keeps the app layer generic: no `accounts`, no precedents, a
 source that names a law, a document or a dated decision, no bank ref, date,
 long number or amount to the cent, and no name of a private supplier.
 

@@ -16,6 +16,7 @@ import type { PreviewPayment, RulePreview } from '../../../booking/rule-preview.
 import type { DraftView, RulesView } from '../../../saving/rules.js';
 import type { NoteOffer, NoteReason } from '../../../knowledge/note-rules.js';
 import type { ShareOffer } from '../../../saving/share-rule.js';
+import type { GroupedOffer as GroupedOfferView } from '../../../saving/grouped-flag.js';
 import type { CorrectionOffer as CorrectionOfferView } from '../../../saving/correction-rule.js';
 import type { Nav } from '../index.js';
 import { lineOf, namesOf, refusalKey, ruleLines } from './rules-model.js';
@@ -302,6 +303,7 @@ export function RuleDraft({ path, nav, onRules, onDone, title }: { path: string;
             <br /><span className="rk">{t('rules.draft.becomes')}</span> <b>{say(r)}</b>
           </li>
         ))}
+        {d.grouped !== undefined && business ? <li key="grouped" data-testid="draft-grouped"><span className="rk">{t(d.grouped ? 'rules.draft.added' : 'rules.draft.removed')}</span> <b>{t('rules.grouped.line', { name: names.business(business) ?? business })}</b></li> : null}
         {d.removed.map((r) => (
           <li key={`r${r.step}${r.id}`}>
             <span className="rk">{t('rules.draft.removed')}</span> <b>{say(r)}</b>
@@ -380,6 +382,38 @@ function ShareOfferCard({ offer, onRules }: { offer: ShareOffer; onRules?(): voi
       <span>{t('rules.share.ask', { who, percent: String(offer.percent), account: offer.booking.account })}</span>
       {error ? <span className="warnline">{error}</span> : null}
       <span className="ruleacts"><button type="button" className="btn" disabled={busy} onClick={draft}>{t('rules.share.draft')}</button></span>
+    </div>
+  );
+}
+
+/**
+ * «Immer so?» under several receipts a person linked to one payment, the second time (#190): the
+ * business as a batch payer, drafted on the click and then shown on its card. Nothing while the
+ * payment offers none.
+ */
+export function GroupedOffer({ payment, onRules }: { payment: string; onRules?(): void }) {
+  const [offer, setOffer] = useState<GroupedOfferView | null>(null);
+  const [path, setPath] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    let live = true;
+    const load = () => { api.groupedOffer(payment).then((x) => { if (live) setOffer(x.offer); }, () => { if (live) setOffer(null); }); };
+    load();
+    const off = onBooksChanged(load);
+    return () => { live = false; off(); };
+  }, [payment]);
+  if (path) return <RuleDraft path={path} onRules={onRules} />;
+  if (!offer) return null;
+  const draft = () => {
+    setBusy(true);
+    api.draftGrouped(offer.ref).then((r) => setPath(r.path), (e) => setError(errorText(e))).finally(() => setBusy(false));
+  };
+  return (
+    <div className="ruledraft" data-grouped={offer.ref}>
+      <span>{t('rules.grouped.ask', { name: offer.business.name, n: offer.payments })}</span>
+      {error ? <span className="warnline">{error}</span> : null}
+      <span className="ruleacts"><button type="button" className="btn" disabled={busy} data-testid="grouped-draft" onClick={draft}>{t('rules.grouped.draft')}</button></span>
     </div>
   );
 }

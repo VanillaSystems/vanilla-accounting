@@ -17,6 +17,7 @@ import { creditSigned } from '../accounting/credit-signed.js';
 import { baseCurrency, documents } from '../engines/index.js';
 import { HEAD, wordsRe } from '../core/modules/words.js';
 import { legOf } from '../workspace/money-accounts.js';
+import { chargesOf } from './charges.js';
 import { assessmentNumbers, namesAssessment } from '../booking/customs-invoice.js';
 
 /** Which payments are candidates at all. */
@@ -117,6 +118,8 @@ export interface PairCandidate {
   payment: string;
   /** The payment's leg (legOf): a card charge split over two currencies is two transactions with one ref. */
   leg: string;
+  /** Every movement of its charge by ref, `payment` first: more than one for a card charge split across balances with a ref per leg (src/intake/charges.ts), each of which the link names. */
+  charge: string[];
   /** The payment lies in a filed quarter: the receipt is pointed at it (Receipt.filedPayment), never linked. */
   filed: boolean;
   /** WEIGHTS summed. */
@@ -260,7 +263,7 @@ export function fitOf(r: Receipt, tx: BankTransaction, toChf: ToChf, isClosed: (
   const words = nameWords(tx).filter((w) => vendor.includes(w)).length;
   const score = WEIGHTS.amount[amount === 'original' ? 'same' : amount] + dayPoints(days)
     + (words >= 2 ? WEIGHTS.name.more : words === 1 ? WEIGHTS.name.one : 0) + (number ? WEIGHTS.number : 0);
-  return { receipt: r.id, payment: tx.ref, leg: legOf(tx), filed: isClosed(tx.date), score, amount, number, words, days };
+  return { receipt: r.id, payment: tx.ref, leg: legOf(tx), charge: [tx.ref], filed: isClosed(tx.date), score, amount, number, words, days };
 }
 
 /** Best first: the score, then the nearer day. */
@@ -274,16 +277,22 @@ const rank = (a: PairCandidate, b: PairCandidate) => b.score - a.score || Math.a
 export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string) => boolean, noReceipt?: (t: BankTransaction) => boolean): PairSearch {
   const linkedReceipts = new Set(books.mappings.map((m) => m.receiptId));
   const taken = takenPayments(books);
-  const payments = books.transactions.filter((t) => pairablePayment(t, taken, noReceipt));
+  const charges = chargesOf(books.transactions);
+  // A charge split across balances is pairable while none of its legs holds a receipt (one that does: linkSplitLegs completes the others).
+  const payments = books.transactions.filter((t) => charges.of(t).refs.every((ref) => ref === t.ref ? pairablePayment(t, taken, noReceipt) : !taken.has(ref)));
   const byReceipt = new Map<string, PairCandidate[]>();
-  const byPayment = new Map<string, PairCandidate[]>(payments.map((t) => [t.ref, []]));
+  const byPayment = new Map<string, PairCandidate[]>(payments.map((t) => [charges.of(t).refs[0], []]));
   for (const r of books.receipts) {
     if (!pairableReceipt(r, linkedReceipts)) continue;
     const apart = new Set(r.notPaidBy ?? []);
-    // One candidate per payment: of a charge split over two currencies, the leg that fits best.
+    // One candidate per charge: of a charge split over two currencies, the leg that fits best.
     const best = new Map<string, PairCandidate>();
     for (const t of payments) {
-      const c = apart.has(t.ref) ? undefined : fitOf(r, t, toChf, isClosed);
+      const charge = charges.of(t);
+      const split = charge.refs.length > 1;
+      const fit = charge.refs.some((ref) => apart.has(ref)) ? undefined : fitOf(r, t, toChf, isClosed);
+      // A split charge is paid by what its original amount names, never by what one leg moved.
+      const c = fit && (!split || fit.amount === 'original') ? { ...fit, payment: charge.refs[0], charge: charge.refs } : undefined;
       const had = c && best.get(c.payment);
       if (c && (!had || rank(c, had) < 0)) best.set(c.payment, c);
     }

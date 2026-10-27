@@ -11,6 +11,10 @@
  * with an oracle in the model's place, which answers every check and choice as the books do: the
  * best the model stages can do, and what their prompts cost (tokens estimated at 4 characters
  * each). «Before» is the intake's own match prompt for the same receipts, which stays.
+ *
+ * Multi-receipt payments (#190): after the code-alone chain, the match step's set search (with the
+ * batch payers of the business files) and the legs of split card charges run too, and the payments
+ * the books link several receipts to are counted as found in full, in part, wrong or missed.
  */
 import { pathToFileURL } from 'node:url';
 import { loadBooks, type Books } from '../../src/books/store.js';
@@ -22,6 +26,9 @@ import { buildMatchPrompt } from '../../src/llm/prompts.js';
 import type { Ask, BooksPort } from '../../src/intake/pipeline.js';
 import type { Mapping } from '../../src/types/index.js';
 import { paysIn, searchPairs, type PairCandidate } from '../../src/intake/pairing.js';
+import { linkReceiptSets, linkSplitLegs } from '../../src/intake/receipt-sets.js';
+import { chargesOf } from '../../src/intake/charges.js';
+import { batchPayersOf } from '../../src/intake/match.js';
 
 const arg = (name: string): string | undefined => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : undefined; };
 
@@ -101,7 +108,8 @@ export async function main(): Promise<void> {
   const oneToOne = truth.filter((m) => books.mappings.filter((x) => x.receiptId === m.receiptId).length === 1 && books.mappings.filter((x) => x.transactionRef === m.transactionRef).length === 1).length;
 
   const noReceipt = noReceiptFor(ws);
-  const code = await runPairChain(memoryPort(structuredClone(blind)), { toChf, noReceipt });
+  const afterCode = structuredClone(blind);
+  const code = await runPairChain(memoryPort(afterCode), { toChf, noReceipt });
   const o = oracle(pairs, blind);
   const withModel = await runPairChain(memoryPort(structuredClone(blind)), { toChf, ask: o.ask, noReceipt });
 
@@ -148,9 +156,47 @@ export async function main(): Promise<void> {
   }
   const precision = (t: Tally) => (t.linkedRight + t.linkedWrong ? (t.linkedRight / (t.linkedRight + t.linkedWrong)).toFixed(3) : '-');
   console.log(`precision (links the books know): code ${precision(tc)}, code + oracle ${precision(tm)}; recall of one-to-one links: code ${(tc.oneToOneRight / Math.max(1, oneToOne)).toFixed(3)}, code + oracle ${(tm.oneToOneRight / Math.max(1, oneToOne)).toFixed(3)}`);
+  // The match step's code after the chain: receipt sets (with the batch payers of the business files) and the legs of split card charges (#190).
+  const isOpen = () => true;
+  linkReceiptSets(afterCode, { isOpen, payers: batchPayersOf(ws), toChf });
+  linkSplitLegs(afterCode, isOpen);
+  const multi = multiTally(afterCode, truth, books);
+  console.log(`multi-receipt payments (several receipts, or a card charge split across balances): ${multi.payments} in the window; code alone found ${multi.full} in full, ${multi.part} in part, ${multi.wrong} with a receipt the books do not have there, missed ${multi.missed}`);
   console.log(`model stages: ${o.usage.calls} calls (batches of ${CHECK_BATCH} checks, ${CHOOSE_BATCH} choices), ${withModel.checked} pairs checked, ${withModel.chosen} short lists; ~${Math.round(o.usage.promptChars / 4)} prompt and ~${Math.round(o.usage.answerChars / 4)} answer tokens (estimated, 4 characters each)`);
   console.log(`intake match prompts before #187 of the window's ${inWindow.length} receipts (read facts): ~${Math.round(intakeChars / 4)} prompt tokens (estimated; standard tier)`);
   await intake(blind, truth, toChf, noReceipt);
+}
+
+/**
+ * The payments of the window that hold several receipts in the books, or one receipt on several legs
+ * of a split card charge, each counted once per charge: whether code's links after the chain and the
+ * set search hold exactly the books' receipts (in full), some of them (in part), one the books link
+ * elsewhere or not at all (wrong), or none (missed).
+ */
+function multiTally(after: Books, truth: readonly Mapping[], books: Books): { payments: number; full: number; part: number; wrong: number; missed: number } {
+  const charges = chargesOf(books.transactions);
+  const byCharge = new Map<string, { refs: string[]; receipts: Set<string> }>();
+  for (const m of truth) {
+    const tx = books.transactions.find((t) => t.ref === m.transactionRef);
+    if (!tx) continue;
+    const c = charges.of(tx);
+    const k = c.refs[0];
+    const e = byCharge.get(k) ?? { refs: c.refs, receipts: new Set<string>() };
+    e.receipts.add(m.receiptId);
+    byCharge.set(k, e);
+  }
+  const t = { payments: 0, full: 0, part: 0, wrong: 0, missed: 0 };
+  for (const { refs, receipts } of byCharge.values()) {
+    if (receipts.size < 2 && refs.length < 2) continue;
+    t.payments++;
+    const got = new Set(after.mappings.filter((m) => refs.includes(m.transactionRef)).map((m) => m.receiptId));
+    const right = [...got].filter((id) => receipts.has(id)).length;
+    if (got.size > right) t.wrong++;
+    else if (right === receipts.size && refs.every((ref) => after.mappings.some((m) => m.transactionRef === ref))) t.full++;
+    else if (right > 0) t.part++;
+    else t.missed++;
+  }
+  return t;
 }
 
 /**

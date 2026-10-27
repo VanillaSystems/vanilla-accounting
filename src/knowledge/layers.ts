@@ -74,7 +74,8 @@ export function mergeSection(app: Section | undefined, workspace: Section | unde
 
 /**
  * Pure. Same id in both layers = one counterparty.
- * - name, grouped: the vendor's (a binding of a vendor may not redeclare them).
+ * - name: the vendor's (a binding of a vendor may not redeclare it).
+ * - grouped: the vendor's when its file says it; else the binding's (a company learns that a business pays several receipts at once, #190).
  * - accounts: the binding's only (the app layer cannot know a chart of accounts).
  * - match, documents: union, vendor first; one signal or document id has one owner.
  * - steps: per address, vendor rules first, then the binding's.
@@ -91,9 +92,9 @@ export function mergeCounterparty(
   if (vendor?.accounts) fail(files.vendor, `accounts are one company's chart — move them to ${homeOf('workspace', role, vendor.id!)}`);
   if (!vendor) return compileCounterparty(binding!, files, role);
   if (!binding) return compileCounterparty(vendor, files, role);
-  for (const k of ['name', 'grouped'] as const) {
-    if (binding[k] !== undefined) fail(files.binding, `${k} belongs to the vendor file ${files.vendor} — delete it here`);
-  }
+  if (binding.name !== undefined) fail(files.binding, `name belongs to the vendor file ${files.vendor} — delete it here`);
+  // Whether it pays several receipts in one payment: the vendor's fact when its file says so; else the company may have learned it from its own links (#190).
+  if (binding.grouped !== undefined && vendor.grouped !== undefined) fail(files.binding, `grouped is said in the vendor file ${files.vendor} already — delete it here`);
   const match: Partial<Record<(typeof TIERS)[number], string[]>> = {};
   for (const t of TIERS) {
     const sigs = [...(vendor.match?.[t] ?? []), ...(binding.match?.[t] ?? [])];
@@ -112,7 +113,7 @@ export function mergeCounterparty(
     steps[ref] = mergeSection(vendor.steps?.[ref] as Section | undefined, section as Section);
   }
   return compileCounterparty({
-    id: vendor.id, name: vendor.name, grouped: vendor.grouped, accounts: binding.accounts,
+    id: vendor.id, name: vendor.name, grouped: vendor.grouped ?? binding.grouped, accounts: binding.accounts,
     roles: [...new Set([...(vendor.roles ?? []), ...(binding.roles ?? [])])], match, documents, facts, steps,
   }, files, role);
 }
