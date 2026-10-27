@@ -93,7 +93,10 @@ export interface Signals {
   ibans: string[];
   domains: string[];
   names: string[];
+  /** The archived names: the receipt's name as the app or the person last gave it, so they decide. */
   filenames: string[];
+  /** The names the receipts came with, a fallback: they route only when no business's file pattern matches an archived name (a stale original must not outvote the archived name). */
+  originalFilenames?: string[];
   /** A receipt's text where it names who wrote it (its first and last lines): a `tx` signal counts in it as a whole word only (signalsOfReceiptRead). */
   texts?: string[];
 }
@@ -127,12 +130,12 @@ export function uidsIn(receipt: Pick<Receipt, 'vatId' | 'extractedText'>): strin
   return [...found];
 }
 
-/** A receipt's filenames: the archived one and the one it came with (a model suggested the first; a shop or a mailbox gave the second, e.g. `{orderId}_payment.pdf`). */
-const filenamesOf = (r: Pick<Receipt, 'filename' | 'originalFilename'>): string[] =>
-  r.originalFilename && r.originalFilename !== r.filename ? [r.filename, r.originalFilename] : [r.filename];
+/** The names a receipt came with (a shop or a mailbox gave them, e.g. `{orderId}_payment.pdf`), when they differ from the archived one. */
+const originalsOf = (r: Pick<Receipt, 'filename' | 'originalFilename'>): string[] =>
+  r.originalFilename && r.originalFilename !== r.filename ? [r.originalFilename] : [];
 
 export function signalsOfReceipt(r: Receipt): Signals {
-  return { uids: uidsIn(r), ibans: [], domains: [], names: [], filenames: filenamesOf(r) };
+  return { uids: uidsIn(r), ibans: [], domains: [], names: [], filenames: [r.filename], originalFilenames: originalsOf(r) };
 }
 
 const digitsOf = (uid: string) => uid.replace(/\D/g, '');
@@ -178,7 +181,8 @@ export function signalsOfTransaction(tx: BankTransaction, linked: Receipt[]): Si
     ibans: tx.counterpartyIban ? [ibanOf(tx.counterpartyIban)] : [],
     domains: [],
     names: [tx.counterparty, merchantOf(tx.description)].filter((n): n is string => !!n?.trim()),
-    filenames: linked.flatMap(filenamesOf),
+    filenames: linked.map((r) => r.filename),
+    originalFilenames: linked.flatMap(originalsOf),
   };
 }
 
@@ -192,14 +196,18 @@ export function claims(cp: Counterparty, tier: Tier, s: Signals): string | undef
     case 'iban': return cp.match.iban.find((i) => s.ibans.includes(ibanOf(i)));
     case 'domain': return cp.match.domain.find((d) => s.domains.some((x) => x === d || x.endsWith(`.${d}`)));
     case 'tx': return cp.match.tx.find((t) => s.names.some((n) => n.toLowerCase().includes(t.toLowerCase())) || !!s.texts?.some((x) => wholeWord(t).test(x)));
-    case 'file': return cp.match.file.find((re) => s.filenames.some((f) => re.test(f)))?.source;
+    case 'file': return cp.match.file.find((re) => s.filenames.some((f) => re.test(f)))?.source
+      ?? cp.match.file.find((re) => s.originalFilenames?.some((f) => re.test(f)))?.source;
   }
 }
 
 export function identify(s: Signals, counterparties: readonly Counterparty[]): Routing {
   for (const tier of TIERS) {
+    // The archived name decides; the original name is asked only when no file pattern matches an archived one.
+    const byArchived = tier === 'file' && counterparties.some((cp) => claims(cp, tier, { ...s, originalFilenames: [] }));
+    const seen = byArchived ? { ...s, originalFilenames: [] } : s;
     const hits = counterparties.flatMap((cp) => {
-      const signal = claims(cp, tier, s);
+      const signal = claims(cp, tier, seen);
       return signal ? [{ id: cp.id, signal }] : [];
     });
     if (hits.length === 1) return { kind: 'known', counterparty: hits[0].id, tier, signal: hits[0].signal };

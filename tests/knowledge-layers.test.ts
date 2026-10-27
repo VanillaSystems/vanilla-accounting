@@ -8,7 +8,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { mergeCounterparty, companySpecific, loadKnowledge } from '../src/knowledge/layers.js';
-import { identify } from '../src/knowledge/counterparties.js';
+import { compileCounterparty, identify, signalsOfReceipt, signalsOfTransaction } from '../src/knowledge/counterparties.js';
+import type { BankTransaction, Receipt } from '../src/types/index.js';
 import { APP_ROOT } from '../src/workspace/workspace.js';
 import { DEMO_ROOT } from './support/workspace.js';
 
@@ -122,4 +123,15 @@ test('a payment to an authority routes to its app file, and each tells its facts
     assert.equal(cp.role, 'authority', id);
     assert.ok(cp.facts.length > 0 && cp.facts.every((f) => f.source), `${id} has sourced facts`);
   }
+});
+
+test('the archived name routes a receipt; the name it came with only when no file pattern matches the archived one', () => {
+  const cp = (id: string) => compileCounterparty({ id, name: id, match: { file: [id] } }, { vendor: id }, 'supplier');
+  const cps = [cp('coop-pronto'), cp('shopify')];
+  const stale = { id: 'r1', filename: '20260619-coop-pronto-tankquittung.pdf', originalFilename: '20260630-shopify-bill-1.pdf' } as Receipt;
+  // check-processes reports a clash when identify says ambiguous on these signals
+  assert.deepEqual(identify(signalsOfReceipt(stale), cps), { kind: 'known', counterparty: 'coop-pronto', tier: 'file', signal: 'coop-pronto' });
+  assert.equal((identify(signalsOfTransaction({ description: '', counterparty: '' } as BankTransaction, [stale]), cps) as { counterparty: string }).counterparty, 'coop-pronto');
+  const renamed = { id: 'r2', filename: '20260620-store.pdf', originalFilename: '20260630-shopify-bill-2.pdf' } as Receipt;
+  assert.equal((identify(signalsOfReceipt(renamed), cps) as { counterparty: string }).counterparty, 'shopify');
 });
