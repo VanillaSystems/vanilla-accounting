@@ -28,6 +28,12 @@ export interface AiSettings {
   askOther?: true;
   /** «Ohne KI weitermachen»: the first run does not ask again on this Mac (docs/0.4.0/ai-setup.md, decision 6). */
   noAi?: true;
+  /**
+   * «KI ganz ausschalten» (issue #212): no model is called on this Mac, whatever is installed or
+   * kept (src/llm/off.ts). Not `noAi`, which only quiets the first run's question for someone who
+   * has no AI; this one is for someone who has one and wants the app without it.
+   */
+  off?: true;
 }
 
 export const PROVIDERS: readonly ProviderId[] = ['claude-cli', 'codex-cli', 'anthropic', 'openai', 'jev'];
@@ -48,9 +54,12 @@ export function parseSettings(raw: unknown): AiSettings {
     }
   }
   // Before #121 the choice was the terminal's alone, kept as `terminal`.
-  const top = raw as { cli?: unknown; terminal?: unknown; askOther?: unknown; noAi?: unknown } | null;
+  const top = raw as { cli?: unknown; terminal?: unknown; askOther?: unknown; noAi?: unknown; off?: unknown } | null;
   const cli = top?.cli ?? top?.terminal;
-  return { steps, ...(isTerminalCli(cli) ? { cli } : {}), ...(top?.askOther === true ? { askOther: true as const } : {}), ...(top?.noAi === true ? { noAi: true as const } : {}) };
+  return {
+    steps, ...(isTerminalCli(cli) ? { cli } : {}), ...(top?.askOther === true ? { askOther: true as const } : {}),
+    ...(top?.noAi === true ? { noAi: true as const } : {}), ...(top?.off === true ? { off: true as const } : {}),
+  };
 }
 
 export function readSettings(): AiSettings {
@@ -82,6 +91,12 @@ export function writeCli(change: { cli?: TerminalCli | null; askOther?: boolean 
 export function writeNoAi(on: boolean): AiSettings {
   const { noAi: _was, ...rest } = readSettings();
   return write(on ? { ...rest, noAi: true } : rest);
+}
+
+/** «KI ganz ausschalten» on this Mac (true) or off again (false). */
+export function writeOff(on: boolean): AiSettings {
+  const { off: _was, ...rest } = readSettings();
+  return write(on ? { ...rest, off: true } : rest);
 }
 
 function write(next: AiSettings): AiSettings {

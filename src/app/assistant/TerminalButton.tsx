@@ -3,7 +3,7 @@
  * one click opens Claude Code or Codex in the books folder by the same way as the card under an
  * answer (POST /api/terminal/open), with what src/assistant/handover.ts hands over. With neither
  * CLI installed it shows the card's install guide. Only where the app opens Terminal (the API
- * answers and says `opens`): not in the static export, not off the Mac.
+ * answers and says `opens`): not in the static export, not off the Mac, not with the AI switched off.
  */
 import { useEffect, useRef, useState } from 'react';
 import { t } from '../i18n/index.js';
@@ -11,6 +11,7 @@ import { api, errorText } from '../lib/api.js';
 import { ICONS } from '../areas/icons.js';
 import { chooseCli, type TerminalCli, type TerminalView } from '../../platform/terminal.js';
 import { TerminalCard } from './TerminalCard.js';
+import { useAiOff } from '../ai/ai-off.js';
 
 type Shown = { kind: 'install'; request: string } | { kind: 'opened'; cli: TerminalCli } | { kind: 'error'; text: string };
 
@@ -20,6 +21,7 @@ export function TerminalButton({ request }: { request(): string }) {
   const [shown, setShown] = useState<Shown>();
   const box = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
+  const aiOff = useAiOff();
   useEffect(() => { api.terminal().then(setView, () => undefined); }, []);
   useEffect(() => {
     if (!shown) return;
@@ -27,7 +29,8 @@ export function TerminalButton({ request }: { request(): string }) {
     document.addEventListener('mousedown', away);
     return () => document.removeEventListener('mousedown', away);
   }, [shown]);
-  if (!view?.opens) return null;
+  // With the AI switched off (issue #212) Terminal's AI is not started either.
+  if (!view?.opens || aiOff) return null;
 
   const go = async () => {
     const text = request() || t('terminal.handover.empty');

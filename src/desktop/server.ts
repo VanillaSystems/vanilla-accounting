@@ -238,7 +238,9 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   });
   // The setup conversation before the books exist (src/onboarding/draft.ts, #139).
   app.get('/api/desktop/ai', async (_req, res) => {
-    res.json({ available: await (opts.aiAvailable ?? anyProviderReady)() } satisfies AiAvailability);
+    const { aiOff } = await import('../llm/off.js');
+    const off = aiOff();
+    res.json({ available: !off && await (opts.aiAvailable ?? anyProviderReady)(), ...(off ? { off } : {}) } satisfies AiAvailability);
   });
   const rootOf = (raw: unknown): string => {
     if (typeof raw !== 'string' || !raw.trim()) throw new SetupError('A folder for the books is needed.', { reason: 'required', field: 'root' });

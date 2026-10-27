@@ -33,6 +33,7 @@ import type { PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
 import type { AiAvailability, DesktopInfo, KnownBooks, PhoneInfo } from '../../types/desktop.js';
+import { setAiOff } from '../ai/ai-off.js';
 import type { DraftPatch as SetupPatch, SetupBegun, SetupDraftView } from '../../onboarding/draft.js';
 import type { SetupTalked } from '../../onboarding/draft-talk.js';
 import type { SetupRefusal, SetupRequest } from '../../workspace/create.js';
@@ -98,6 +99,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   if (!res.ok) {
     const err = (await res.json().catch(() => null)) as ApiErrorBody | null;
     // A step that needed an AI where none answers: the shell shows the error line with «KI einrichten» (src/app/shell/Toast.tsx).
+    if (err?.code === 'aiRefused' && err.params.reason === 'off') setAiOff(true);
     if (err && (err.code === 'noClaude' || (err.code === 'aiRefused' && err.params.reason !== 'limit')) && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(NO_AI_EVENT, { detail: errorText(new ApiError(err)) }));
     throw new ApiError(err?.error ? err : { error: `HTTP ${res.status}` });
   }
@@ -119,6 +121,7 @@ function statementProblemText(p: StatementProblem): string {
 }
 
 function aiRefusedText(r: AiRefusal): string {
+  if (r.reason === 'off') return t('error.ai.off');
   if (r.reason === 'unserved') return t('error.ai.unserved', { step: isStepId(r.step) ? t(`ai.step.${r.step}`) : r.step });
   if (r.reason === 'modelRefused') return t('error.ai.modelRefused', { model: r.model });
   const cli = t(`terminal.cli.${r.cli}`);
@@ -544,6 +547,8 @@ export const api = {
   },
   terminal: () => request<TerminalView>('GET', '/api/terminal'),
   recheckCodexModels: () => request<AiView>('POST', '/api/ai/codex/models'),
+  /** «KI ganz ausschalten» (issue #212), kept on this Mac. */
+  setAiOff: (off: boolean) => request<AiView>('PUT', '/api/ai/off', { off }),
   setAiCli: (change: { cli?: TerminalCli | null; askOther?: boolean }) => request<AiView>('PUT', '/api/ai/cli', change),
   openTerminal: (text: string, cli?: TerminalCli) => request<{ cli: TerminalCli }>('POST', '/api/terminal/open', { request: text, ...(cli ? { cli } : {}) }),
   cancelInvoice: (id: string, input: { date: string; reason: string; notify: boolean; to?: string; email?: MailMessage }) =>

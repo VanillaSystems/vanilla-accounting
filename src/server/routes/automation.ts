@@ -156,6 +156,17 @@ export async function bookAgain(file: string): Promise<void> {
   if (!r.ok && r.refusal !== 'not-runnable') console.error(`${INTAKE}: ${r.refusal} ${r.detail ?? ''}`);
 }
 
+/**
+ * «KI ganz ausschalten» switched off again (issue #212): what waited for the model comes now. One
+ * inbox run reads the receipts left unread and books the payments left for the model, and files
+ * the inbox already tried are tried again.
+ */
+export async function resumeAfterAi(): Promise<void> {
+  attempted.clear();
+  const r = await engine().start(INTAKE, { kind: 'company', id: 'inbox' }, { kind: 'manual' }, 'live');
+  if (!r.ok && r.refusal !== 'not-runnable') console.error(`${INTAKE}: ${r.refusal} ${r.detail ?? ''}`);
+}
+
 export const BOOKING = 'booking';
 
 /**

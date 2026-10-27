@@ -4,6 +4,7 @@
  * and the stored runs (GET /api/automation); nothing here is a list of its own.
  */
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { aiIsOff } from '../../ai/ai-off.js';
 import { api, errorText } from '../../lib/api.js';
 import './automation.css';
 import { AskAi } from '../../assistant/AskAi.js';
@@ -514,7 +515,7 @@ function XmlFile({ x }: { x: PreparedXml }) {
 /** A note of an inbox step (src/intake/pipeline.ts IntakeNote): why it did less than it had to do. */
 function noteText(n: IntakeNote): string {
   switch (n.code) {
-    case 'noModel': return t('automation.note.noModel', { n: n.waiting });
+    case 'noModel': return t(aiIsOff() ? 'automation.note.aiOff' : 'automation.note.noModel', { n: n.waiting });
     case 'failed': return t('automation.note.failed', { n: n.count, detail: n.detail });
     case 'unmatched': return t('automation.note.unmatched', { n: n.files.length, files: n.files.join(', ') });
     case 'filedKept': return t('automation.note.filedKept', { n: n.count });

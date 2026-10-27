@@ -7,6 +7,7 @@
 import { Router } from 'express';
 import { WS, patchBody, RequestError } from '../books.js';
 import { readSettings } from '../../llm/settings.js';
+import { gate } from '../../llm/off.js';
 import { chooseCli, isTerminalCli, type TerminalView } from '../../platform/terminal.js';
 import { detectClis, openInTerminal, stateOf } from '../../platform/terminal-open.js';
 import { ensureTerminalAgents } from '../../workspace/terminal-agents.js';
@@ -25,6 +26,7 @@ router.get('/api/terminal', async (_req, res) => {
 });
 
 router.post('/api/terminal/open', async (req, res) => {
+  gate();
   const { request, cli } = patchBody(req.body, ['request', 'cli']);
   if (typeof request !== 'string' || !request.trim()) throw new RequestError(400, 'request: der Auftrag fürs Terminal.');
   if (cli !== undefined && !isTerminalCli(cli)) throw new RequestError(400, 'cli: claude oder codex.');

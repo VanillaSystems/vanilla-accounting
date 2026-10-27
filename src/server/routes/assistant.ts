@@ -23,6 +23,7 @@ import { learnFromCorrection, undoAnswer } from '../questions.js';
 import { heldRows, holdReasons, withoutProof } from '../../assistant/held.js';
 import { takeInProposals } from '../../assistant/terminal-drafts.js';
 import { appMap } from '../app-map.js';
+import { gate } from '../../llm/off.js';
 import { automationView, bookAgain, engine } from './automation.js';
 import { openWork } from '../open-work.js';
 import { askedBy } from '../../workflows/held.js';
@@ -131,6 +132,7 @@ router.get('/api/assistant/:id/attachments/:att', (req, res) => {
 
 router.post('/api/assistant', async (req, res) => {
   const send = sendOf(req.body);
+  gate();
   let attachments;
   try { attachments = findAttachments(WS, send.attachments ?? [], send.conversation); } catch (e) { throw asRequest(e); }
   const emit = ndjson(res);
