@@ -77,6 +77,7 @@ function texts(name: string, file: string): ReportTexts {
   return {
     sale: (order, country) => de.t('salesReport.saleText', { provider: name, order, country: country ?? '–' }),
     refund: (order) => de.t('salesReport.refundText', { provider: name, order }),
+    foreignTax: (order, country) => de.t('salesReport.foreignTaxText', { provider: name, order, country: country ?? '–' }),
     fee: (key) => de.t('salesReport.feeText', { provider: name, key }),
     reason: (kind, country) => de.t(`salesReport.reason.${kind}`, { file, country: country ?? '–' }),
   };
@@ -108,6 +109,7 @@ function lacking(ws: Workspace, p: Provider, kind: 'sales' | 'fees', chart: Read
     const revenue = revenueOf(ws, p);
     if (!revenue) return ask('revenue');
     if (!chart.has(revenue)) return { account: revenue };
+    if (p.provider.foreignTax && !chart.has(p.provider.foreignTax)) return { account: p.provider.foreignTax };
   } else {
     if (!p.provider.fees) return ask('fees');
     if (!chart.has(p.provider.fees.account)) return { account: p.provider.fees.account };
@@ -204,6 +206,7 @@ function reportContext(ws: Workspace, books: Books, p: Provider, kind: 'sales' |
   return {
     provider: { id: p.id, name: p.name }, clearing: p.provider.clearing!, revenue, since: p.provider.since!, from,
     legacy: legacyOf(books, p, kind, revenue, from, context),
+    ...(p.provider.foreignTax ? { foreignTax: p.provider.foreignTax } : {}),
     ...(p.provider.fees ? { fees: { account: p.provider.fees.account, ...(formTakes(p.provider.fees.vat) ? { vat: p.provider.fees.vat } : {}) } } : {}),
     receipt, base: baseCurrency(), rate: (c, d) => fx.daily(c, d), ...(codes ? { codes } : {}), territory: invoicing().territory,
     ...(p.provider.gateways?.length ? { gateways: p.provider.gateways } : {}),
@@ -432,6 +435,8 @@ export function bookPayoutReports(ws: Workspace, books: Books, fx: FxResolver = 
     const said: ReportTexts = {
       sale: () => de.t('salesReport.payoutSales', { provider: p.name, file: r.filename }),
       refund: () => de.t('salesReport.payoutRefunds', { provider: p.name, file: r.filename }),
+      // A payout report's sales are domestic (the territory's first country): it books no foreign tax.
+      foreignTax: () => de.t('salesReport.payoutSales', { provider: p.name, file: r.filename }),
       fee: () => de.t('salesReport.payoutFees', { provider: p.name, file: r.filename }),
       reason: (kind) => de.t(`salesReport.reason.${kind}`, { file: r.filename, country: '' }),
     };
