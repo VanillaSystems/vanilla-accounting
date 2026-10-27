@@ -34,6 +34,7 @@ import { linkOrdersToSales } from '../booking/sales-report.js';
 import { linkReceiptSets, linkSplitLegs, MAX_RUN, MAX_TRIED } from './receipt-sets.js';
 import { batchPayers, NO_BATCH_PAYERS, type BatchPayers } from './batch-payers.js';
 import { loadKnowledge } from '../knowledge/layers.js';
+import { providersOf } from './sales-report-import.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { creditSigned } from '../accounting/credit-signed.js';
 
@@ -193,7 +194,8 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const byCode = async (stagedNow: readonly Receipt[] = []) => {
     const noReceipt = noReceiptFor(ws);
     const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt });
-    for (const l of books.update((index) => linkOrdersToSales(index, (d) => !periodLock(index).isClosed(d)))) log(`linked the order document to its sale: receipt ${l.receipt} → ${l.sale}`);
+    const providers = providersOf(ws);
+    for (const l of books.update((index) => linkOrdersToSales(index, (d) => !periodLock(index).isClosed(d), providers))) log(`linked the order document to its sale: receipt ${l.receipt} → ${l.sale}`);
     const found = books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, { isOpen: (d) => !lock.isClosed(d), payers, toChf, buyerUid: ws.company?.uid, noReceipt: noReceipt(index) }); });
     for (const s of found.sets) log(`linked ${s.receipts.length} receipts that add up to the payment${s.basis === 'original' ? ' in the amount its bank names' : s.basis === 'rate' ? ' at the official daily rate' : ''}${s.run ? ' (the batch payer\'s open receipts in date order)' : ''}: ${s.receipts.join(', ')} → ${s.legs.join(', ')}`);
     const runs = found.cuts.filter((c) => c.limit === 'run');

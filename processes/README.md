@@ -184,8 +184,9 @@ out less its fees. Its business file says so with a `provider:` section
 # processes/suppliers/shopify.yaml: the app layer, true for every company
 provider:
   reports:
-    sales: { order: Name, date: Paid at, shipTo: Shipping Country, gross: Total, tax: Taxes, refunded: Refunded Amount }
+    sales: { order: Name, date: Paid at, shipTo: Shipping Country, gross: Total, tax: Taxes, refunded: Refunded Amount, gateway: Payment Method }
     fees: { date: Transaction Date, fee: Fee, order: Order }
+  gateways: [ "Shopify Payments" ]
   payoutDays: 7
 # knowledge/suppliers/shopify.yaml: the company layer, its chart
 provider:
@@ -195,22 +196,42 @@ provider:
 ```
 
 - Its payout is a settlement, not a sale: code books it bank / `clearing`
-  without VAT (until the company's file names `clearing`, as any money in). It
-  needs no receipt and is never matched to one (no receipt set, no pair, no
-  model match, no order link).
+  without VAT. Until the company's file names `clearing` it waits for the
+  person; neither a rule nor the model books it. It needs no receipt and is
+  never matched to one (no receipt set, no pair, no model match, no order link).
 - Its report (the CSV it exports) is recognised in the drop by the columns of
   `reports`: each a header or a list of headers. Code books each order onto the
-  clearing account with its code (delivered in the VAT territory: the sale code;
-  abroad: V0; a refund with the minus) and each fee at `fees.vat`. A domestic
-  order whose tax column shows no tax waits for the person. An order of a filed
-  period is not booked.
+  clearing account with its code (delivered in the VAT territory: the sale code
+  at the rate its tax column shows, normal or reduced; abroad: V0; a refund with
+  the minus, on its own day `refundedAt`) and each fee at `fees.vat`, in a
+  foreign currency at the ESTV daily sell rate of the tax point. With
+  `gateways`, only the orders whose `gateway` column names one of them are the
+  provider's; the others (PayPal, bank transfer, a gift card, a test gateway)
+  are counted, never booked onto the clearing account. A domestic order without
+  tax or at no rate the firm books, Swiss VAT on an export, and a refund without
+  its own day wait for the person. An order of a filed period is not booked; its
+  refund paid in the open period is.
+- A payout booked as sales before the report is booked again from the clearing
+  account only when every order it can pay is booked from a report: the
+  `payoutDays` before it lie in the reports' days and in the open period, and
+  the app made its booking. Every other such payout stays, and what it may hold
+  waits for the person, so nothing counts twice. «Rückgängig» gives it its
+  booking back.
+- One source of sales per provider: a provider with `reports.sales` takes none
+  from a payout report (a card terminal's PDF), whose sales book only with its
+  payout booked from the clearing account.
 - The accounts are one company's chart: only the company's file names them,
   and the drop asks for a missing one once and keeps the answer there.
-  `revenue` falls back to the account of what the firm sells.
+  `revenue` falls back to the account of what the firm sells. `payoutDays` and
+  `gateways` may be said in the company's file too: its payout days win, its
+  gateways are added.
 - Order documents prove the delivery: code links them to their order's sale,
   never to the payout.
 - At a period's close, the review shows the clearing account's balance, its
-  month ends, and what the provider paid out within `payoutDays` after the end.
+  month ends, and what the provider paid out within `payoutDays` after the end:
+  that holds sales after the end too, so it is the most the balance may be. A
+  clearing account in a foreign currency carries exchange differences until the
+  year end revalues it.
 
 ## The contract
 

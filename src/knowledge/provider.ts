@@ -5,8 +5,9 @@
  *   # processes/suppliers/<id>.yaml (the app layer: true for every company)
  *   provider:
  *     reports:
- *       sales: { order: Name, date: Paid at, shipTo: Shipping Country, gross: Total, tax: Taxes, refunded: Refunded Amount, currency: Currency }
+ *       sales: { order: Name, date: Paid at, shipTo: Shipping Country, gross: Total, tax: Taxes, refunded: Refunded Amount, currency: Currency, gateway: Payment Method }
  *       fees: { date: Transaction Date, fee: Fee, currency: Currency, order: Order }
+ *     gateways: [ Shopify Payments ]
  *     payoutDays: 7
  *   # knowledge/suppliers/<id>.yaml (the company: its chart)
  *   provider:
@@ -16,12 +17,16 @@
  *
  * `reports` name the columns of the provider's own exports, each a header or a list of headers
  * (the first one found counts): `sales`, one row per order (or per line of an order: rows of one
- * order add up), and `fees`, one row per charge with the provider's fee. `payoutDays`: how many
- * days after a sale it pays it out at most, for the clearing check. `clearing`, `revenue` and
- * `fees` are accounts of one company's chart, so only its own file names them. Pure.
+ * order add up), and `fees`, one row per charge with the provider's fee. `gateways`: the values of
+ * the sales report's `gateway` column whose orders the provider collected and pays out (the others,
+ * paid by PayPal, by bank transfer, on delivery, with a gift card or through a test gateway, come
+ * with their own payment and are never booked onto the clearing account); with `gateways` the column
+ * is needed. `payoutDays`: how many days after a sale it pays it out at most, for the clearing
+ * check and the payouts a report books again; a company's file may say its own. `clearing`,
+ * `revenue` and `fees` are accounts of one company's chart, so only its own file names them. Pure.
  */
 
-export const SALES_COLUMNS = ['order', 'date', 'ordered', 'shipTo', 'gross', 'tax', 'refunded', 'refundedAt', 'currency'] as const;
+export const SALES_COLUMNS = ['order', 'date', 'ordered', 'shipTo', 'gross', 'tax', 'refunded', 'refundedAt', 'currency', 'gateway'] as const;
 export type SalesColumn = (typeof SALES_COLUMNS)[number];
 /** Without these a file is no sales report. */
 export const SALES_NEEDS: readonly SalesColumn[] = ['order', 'date', 'gross'];
@@ -36,6 +41,8 @@ export type Columns<C extends string> = Partial<Record<C, Headers>>;
 
 export interface ProviderFacts {
   reports: { sales?: Columns<SalesColumn>; fees?: Columns<FeeColumn> };
+  /** The values of the sales report's `gateway` column that pay into the clearing account; absent: every order does. */
+  gateways?: string[];
   /** At most this many days between a sale and the payout that pays it (the clearing check). */
   payoutDays?: number;
   /** The company's clearing account: what the provider collected and has not paid out yet. */
@@ -49,7 +56,7 @@ export interface ProviderFacts {
 const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' ? String(v) : undefined);
 const COMPANY_KEYS = ['clearing', 'revenue', 'fees'] as const;
-const APP_KEYS = ['reports', 'payoutDays'] as const;
+const APP_KEYS = ['reports', 'payoutDays', 'gateways'] as const;
 
 function columnsOf<C extends string>(raw: unknown, names: readonly C[], needs: readonly C[], what: string): { columns: Columns<C> } | { problem: string } {
   if (!isMap(raw)) return { problem: `provider.reports.${what} must be a map of columns: { ${needs.map((n) => `${n}: <header>`).join(', ')} }` };
@@ -84,6 +91,12 @@ export function parseProvider(raw: unknown): { provider: ProviderFacts } | { pro
       out.reports.fees = c.columns;
     }
   }
+  if (raw.gateways !== undefined) {
+    const list = (Array.isArray(raw.gateways) ? raw.gateways : [raw.gateways]).map(text);
+    if (!list.length || list.some((g) => !g)) return { problem: 'provider.gateways must name the payment methods the provider pays out, a list of the gateway column\'s values' };
+    if (!out.reports.sales?.gateway) return { problem: 'provider.gateways needs the column reports.sales.gateway, where the sales report names how each order was paid' };
+    out.gateways = list as string[];
+  }
   if (raw.payoutDays !== undefined) {
     if (typeof raw.payoutDays !== 'number' || !Number.isInteger(raw.payoutDays) || raw.payoutDays < 1 || raw.payoutDays > 90) return { problem: 'provider.payoutDays must be a whole number of days, 1 to 90' };
     out.payoutDays = raw.payoutDays;
@@ -105,7 +118,8 @@ export function parseProvider(raw: unknown): { provider: ProviderFacts } | { pro
 
 /**
  * The provider sections of the app's file (`vendor`) and the company's (`binding`) as one: the
- * reports and payout days are the app's (a company's file may say what the app's does not), the
+ * reports are the app's (a company's file may add a report the app's does not name), the gateways
+ * of both, the payout days the company's where it says them (its provider may pay slower), the
  * accounts the company's only. `hasVendor`: the business has an app file at all; without one the
  * company's file is the whole business and may say everything.
  */
@@ -122,7 +136,8 @@ export function mergeProvider(vendor: unknown, binding: unknown, hasVendor: bool
   const br = isMap(binding.reports) ? binding.reports : {};
   const twice = Object.keys(br).find((k) => vr[k] !== undefined);
   if (twice) return { problem: `provider.reports.${twice} is said in the app's file already — delete it here`, layer: 'binding' };
-  if (binding.payoutDays !== undefined && vendor.payoutDays !== undefined) return { problem: 'provider.payoutDays is said in the app\'s file already — delete it here', layer: 'binding' };
   const reports = { ...vr, ...br };
-  return { raw: { ...vendor, ...binding, ...(Object.keys(reports).length ? { reports } : {}) } };
+  const list = (v: unknown): unknown[] => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
+  const gateways = [...new Set([...list(vendor.gateways), ...list(binding.gateways)])];
+  return { raw: { ...vendor, ...binding, ...(Object.keys(reports).length ? { reports } : {}), ...(gateways.length ? { gateways } : {}) } };
 }

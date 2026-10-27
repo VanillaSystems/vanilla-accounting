@@ -268,10 +268,11 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
       rate as its "vatRate". Keep the same expense account for all split rows unless the items
       clearly belong to different accounts. The split rows must sum to the receipt total.
 8. For Wise fees (description starts with "Wise Charges"): use account 6940 (Bankspesen), "vat": "none".
-9. A payout of a payment provider the company's knowledge names as one (a shop platform, a card terminal) never
-   reaches you: the app books it from the provider's clearing account, and the sales from the provider's report.
-9a. A payout of a card terminal or payment provider the app does not know as one (SumUp, Payrexx, Worldline, Stripe
-   Terminal, TWINT): the payout is the card sales at the company's own place of business minus the provider's fees.
+9. A payout of a payment provider the company's knowledge names as one (a shop platform such as Shopify, a card
+   terminal) never reaches you: the app books it from the provider's clearing account and the sales from the
+   provider's report, or holds it for the person while no clearing account is set.
+9a. Only for a payout of a card terminal or payment provider the app does not know as one (SumUp, Payrexx, Worldline,
+   Stripe Terminal, TWINT; never one rule 9 names): the payout is the card sales at the company's own place of business minus the provider's fees.
    Its payout report rarely shows MWST, yet the sales are domestic sales: book the GROSS sales on the revenue account
    "charged" at 8.1 (the normal rate; another rate only when the report shows it), a refund in the report the same,
    and the fees as their own row on the bank-fee account with "vat": "none" (payment processing is exempt: no input

@@ -150,13 +150,14 @@ function ProviderAccount({ r, session }: { r: DropRow; session: DropSession }) {
 
 /** What a taken report booked and left, in one line (src/types/drop.ts ReportSummary). */
 function reportLine(s: NonNullable<DropRow['report']>): string {
-  const held = s.held.map((h) => t(`drop.held.${h.why}`, { order: h.order })).join(', ');
+  const held = s.held.map((h) => (h.why === 'payout' ? t('drop.held.payout', { order: h.order, date: formatDate(h.date) }) : t(`drop.held.${h.why}`, { order: h.order }))).join(', ');
   return [
     s.from && s.to && `${formatDate(s.from)} – ${formatDate(s.to)}`,
     s.kind === 'sales' ? t('drop.booked.sales', { orders: s.orders, refunds: s.refunds }) : t('drop.booked.fees', { n: s.fees }),
     s.known ? t('drop.booked.known', { n: s.known }) : '',
     s.filed ? t('drop.booked.filed', { n: s.filed }) : '',
     s.before ? t('drop.booked.before', { n: s.before }) : '',
+    s.other ? t('drop.booked.other', { n: s.other, ways: s.ways.join(', '), more: s.waysMore ? t('drop.booked.more', { n: s.waysMore }) : '' }) : '',
     s.unread ? t('drop.booked.unread', { n: s.unread }) : '',
     held ? t('drop.booked.held', { n: s.held.length + s.heldMore, orders: held, more: s.heldMore ? t('drop.booked.more', { n: s.heldMore }) : '' }) : '',
     s.proofs ? t('drop.booked.proofs', { n: s.proofs }) : '',

@@ -230,7 +230,14 @@ async function takeWaiting(s: DropSession): Promise<void> {
     const bytes = readFileSync(fileOf(s.id, row.key));
     if (row.kind === 'sales-report') {
       // A provider's report is booked here, by code, as a statement is read: it needs no run of the inbox (#203).
-      const done = importSalesReport(WS, bytes, row.name);
+      // An error refuses this row only: the session is saved, the other rows are taken.
+      let done: ReturnType<typeof importSalesReport>;
+      try {
+        done = importSalesReport(WS, bytes, row.name);
+      } catch (e) {
+        Object.assign(row, { state: 'refused', reason: 'report-failed', message: (e as Error).message });
+        continue;
+      }
       if (done.ok) {
         Object.assign(row, { state: 'taken', report: done.summary });
         rmSync(fileOf(s.id, row.key), { force: true });

@@ -11,6 +11,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadBooks, saveBooks, update, PERSON, moduleActor, type Books } from '../src/books/store.js';
 import { classifyStep } from '../src/intake/classify.js';
+import { loadClassifyContext, mappedReceipts } from '../src/booking/classify.js';
+import { providerOfPayment } from '../src/booking/providers.js';
+import type { BankTransaction } from '../src/types/index.js';
 import { runIntake, storePort, type Ask } from '../src/intake/pipeline.js';
 import { workspaceAt } from '../src/workspace/workspace.js';
 import type { AssistantEvent } from '../src/types/assistant.js';
@@ -106,7 +109,10 @@ function demoWithHers() {
     const group = books.journalEntries.filter((e) => e.transactionRef === ref);
     return group.length > 0 && group.every((e) => (e.origin ?? 'classify') === 'classify');
   };
-  const [hers, theirs] = books.transactions.filter((t) => t.date > (books.config.closedThrough ?? '') && onlyClassify(t.ref));
+  // A shop's payout waits for the person while its file names no clearing account (#203): no batch run books it.
+  const counterparties = loadClassifyContext(ws).counterparties ?? [];
+  const payout = (t: BankTransaction) => !!providerOfPayment(t, mappedReceipts(books, t), counterparties);
+  const [hers, theirs] = books.transactions.filter((t) => t.date > (books.config.closedThrough ?? '') && onlyClassify(t.ref) && !payout(t));
   update(books, PERSON, (b) => {
     for (const x of b.journalEntries.filter((y) => y.transactionRef === hers.ref || y.transactionRef === theirs.ref)) Object.assign(x, { origin: 'classify', receipts: ['not-linked'] });
     const mine = b.journalEntries.find((x) => x.transactionRef === hers.ref)!;

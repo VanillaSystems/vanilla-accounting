@@ -34,7 +34,7 @@ import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { creditNoteCodeOf } from '../accounting/credit-note-code.js';
 import { acquisitionCodeOf, acquisitionReason, readSupplier, type AcquisitionDocument } from '../accounting/acquisition-tax.js';
 import { codeSignFor } from '../accounting/code-sign.js';
-import { loadKnowledge } from '../knowledge/layers.js';
+import { homeOf, loadKnowledge } from '../knowledge/layers.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
 import { payerNames } from '../knowledge/payer.js';
 import { partsOf, partText } from '../accounting/manual-booking.js';
@@ -625,9 +625,15 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   const customsNotes = new Map<string, string>();
   for (const tx of txs) {
     // A payment provider's payout settles its clearing account, in code, whatever a rule or the model would say (#203).
-    // Until the company's file names the clearing account (the first sales report asks for it), the payout is booked as before.
+    // Until the company's file names the clearing account (the first sales report asks for it), the payout waits for the person:
+    // neither a rule nor the model knows its sales, its exports or its fees, so none guesses them from the payout.
     const provider = providerOfPayment(tx, mappedReceipts(books, tx), context.counterparties ?? []);
-    const booked = provider?.provider.clearing ? providerPayout(books, tx, provider, context, fx) : undefined;
+    if (provider && !provider.provider.clearing) {
+      log(`  ${tx.ref}  payout of ${provider.name}: no clearing account in its file, waits for the person`);
+      outcome.failed.push({ ref: tx.ref, reason: wordsIn('de').t('salesReport.noClearing', { provider: provider.name, file: homeOf('workspace', provider.role, provider.id) }) });
+      continue;
+    }
+    const booked = provider ? providerPayout(books, tx, provider, context, fx) : undefined;
     if (provider && booked) {
       if ('refusal' in booked) { log(`  ${tx.ref}  payout of ${provider.name}: refused: ${booked.reason}`); outcome.failed.push({ ref: tx.ref, ...booked }); continue; }
       books.journalEntries.push(...booked);

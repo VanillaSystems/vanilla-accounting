@@ -1,6 +1,10 @@
-# Shopify is both a supplier (app and payment fees) and the sales platform:
-# its payouts arrive as "Received money from Stripe Payments UK Ltd with
-# reference Shopify …", so the Stripe payout merchant routes here.
+# Shopify is both a supplier (app and payment fees) and the sales platform.
+# Its payouts may arrive as "Received money from Stripe Payments UK Ltd with
+# reference Shopify …": the bank names Stripe, not Shopify. The app file does
+# not route Stripe here, because a firm that takes Stripe payments of its own
+# would see them booked as Shopify's. A company whose only Stripe payouts are
+# Shopify's says so in its own file: knowledge/suppliers/shopify.yaml
+#   match: { tx: [ "stripe payments uk" ] }
 # As a payment provider (#203) its payout settles its clearing account: code books
 # it bank / clearing account without VAT; the sales come from its order export and
 # the fees from its payments export, both CSV (src/booking/sales-report.ts). The
@@ -9,7 +13,7 @@
 id: shopify
 name: Shopify
 match:
-  tx: [ "shopify", "stripe payments uk" ]
+  tx: [ "shopify" ]
   uid: [ "CHE-153.004.184" ]
   file: [ '^\d{8}[-_]shopify' ]
 
@@ -25,12 +29,17 @@ provider:
       tax: Taxes
       refunded: Refunded Amount
       currency: Currency
+      gateway: Payment Method
     # Shopify Admin › Finanzen › Shopify Payments › Transaktionen exportieren (CSV): one row per charge with the fee kept.
     fees:
       date: Transaction Date
       fee: Fee
       order: Order
       currency: Currency
+  # The orders Shopify Payments collected: only they are paid out through Shopify. PayPal, manual
+  # payment (bank transfer, cash on delivery), a gift card and the test gateway (Bogus) are not, and
+  # are never booked onto the clearing account; the row counts them.
+  gateways: [ "Shopify Payments" ]
   payoutDays: 7
 
 facts:

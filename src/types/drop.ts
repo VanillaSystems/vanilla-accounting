@@ -77,19 +77,24 @@ export interface StatementFacts { iban?: string; from?: string; to?: string; ent
 /** What the company's file of a provider lacks for its report: its clearing account, its revenue account, or its fee account and code; `file`: where it is kept. */
 export interface ProviderAsk { provider: string; name: string; missing: 'clearing' | 'revenue' | 'fees'; file: string }
 
-/** Why an order of a report was not booked by code (src/booking/sales-report.ts ReportHold). */
-export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'country' | 'changed' | 'noRate' }
+/** Why an order of a report was not booked by code (src/booking/sales-report.ts ReportHold); `date`: the day of the payout booked otherwise that may hold it. */
+export type ReportHeld =
+  | { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'country' | 'changed' | 'noRate' | 'refundDate' }
+  | { order: string; why: 'payout'; date: string };
 
 /**
  * What a report booked (src/intake/sales-report-import.ts): orders, refunds and fees booked; `known`
  * already in the books; `filed` and `before`: rows dated in a filed period or before the books, not
- * booked (a correction is the person's); `held`: orders the person decides (the first ones, `heldMore`
- * the rest); `unread`: rows code could not read; `proofs`: order documents linked to their sale;
- * `rebooked`: the provider's payouts booked again from the clearing account.
+ * booked (a correction is the person's); `other`: orders the provider did not collect (paid otherwise:
+ * PayPal, bank transfer, a gift card, a test), not booked, with how they were paid (`ways`, the first
+ * ones, `waysMore` the rest); `held`: orders the person decides (the first ones, `heldMore` the rest);
+ * `unread`: rows code could not read; `proofs`: order documents linked to their sale; `rebooked`: the
+ * provider's payouts booked again from the clearing account.
  */
 export interface ReportSummary {
   provider: string; name: string; kind: 'sales' | 'fees'; from: string; to: string; file: string;
   orders: number; refunds: number; fees: number; known: number; filed: number; before: number;
+  other: number; ways: string[]; waysMore: number;
   held: ReportHeld[]; heldMore: number; unread: number; proofs: number; rebooked: number;
 }
 
@@ -102,7 +107,9 @@ export type DropReason =
   /** A statement of an account the owner said is private: set aside, not read into the books. */
   | 'private'
   /** A provider's report its file cannot book yet: the row asks for the missing account (`askProvider`). */
-  | 'provider-account';
+  | 'provider-account'
+  /** Taking a provider's report failed on an error (`message`): nothing of it was booked, the session goes on. */
+  | 'report-failed';
 
 export interface DropSession {
   id: string;

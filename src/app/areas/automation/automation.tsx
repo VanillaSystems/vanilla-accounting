@@ -473,16 +473,19 @@ function ClearingFacts({ checks }: { checks: ClearingCheck[] }) {
     <>
       {checks.map((c) => {
         const until = addDays(c.through, c.payoutDays);
-        const diff = c.unpaid === undefined ? undefined : Math.round((c.balance - c.unpaid) * 100) / 100;
+        // What was paid out after the end holds sales made after it too: it is the most the balance may be.
+        const diff = c.paidAfter === undefined ? undefined : Math.round((c.balance - c.paidAfter) * 100) / 100;
+        const key = diff === undefined ? undefined : diff > 0 ? 'automation.clearing.above' : diff === 0 ? 'automation.clearing.even' : 'automation.clearing.within';
         return (
           <div key={c.provider} className="wfreturn" data-testid="clearing-check">
             <b>{t('automation.clearing.title', { provider: c.name, account: c.account, date: formatDate(c.through), amount: `${cur} ${fmt(c.balance)}` })}</b>
             <dl>
               {c.months.map((m) => <Fragment key={m.date}><dt>{formatDate(m.date)}</dt><dd className="mono">{fmt(m.balance)}</dd></Fragment>)}
             </dl>
-            <span className="m">{c.unpaid === undefined
+            <span className="m">{c.paidAfter === undefined || !key
               ? t('automation.clearing.unknown', { until: formatDate(until), known: c.known ? formatDate(c.known) : '–' })
-              : t(diff === 0 ? 'automation.clearing.even' : 'automation.clearing.diff', { until: formatDate(until), paid: `${cur} ${fmt(c.unpaid)}`, diff: `${cur} ${fmt(diff ?? 0)}` })}</span>
+              : t(key, { until: formatDate(until), date: formatDate(c.through), paid: `${cur} ${fmt(c.paidAfter)}`, diff: `${cur} ${fmt(Math.abs(diff ?? 0))}` })}</span>
+            {c.currency ? <span className="m">{t('automation.clearing.currency', { currency: c.currency })}</span> : null}
           </div>
         );
       })}
