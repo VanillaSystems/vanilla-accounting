@@ -7,7 +7,7 @@ Card transaction of 31.50 CHF issued by Paketdienst Ch PAKET.EXAMPLE/CH
 28 August 2026 | Card ending in 1234 | Anna Muster | Transaction: CARD-7100000007
 Wise Charges for: CARD-7100000007 -0.14 2,518.73
 28 August 2026 | Card ending in 1234 | Anna Muster | Transaction: FEE-CARD-7100000007ref:00000000-0000-4000-8000-000000000001 2 / 5
-Received money from Stripe Payments UK Ltd with reference Shopify A1B2C3 210.40 2,518.87
+Received money from Stripe Example Ltd with reference Shopify A1B2C3 210.40 2,518.87
 28 August 2026 | Transaction: TRANSFER-8100000004 | Reference: Shopify A1B2C3
 Card transaction of 120.00 CHF issued by Paketdienst Ch PAKET.EXAMPLE/CH
 (fee: 0.55 EUR)
@@ -21,11 +21,11 @@ EUR)
 27 August 2026 | Card ending in 1234 | Anna Muster | Transaction: CARD-7100000005
 Wise Charges for: CARD-7100000005 -0.09 2,456.47
 27 August 2026 | Card ending in 1234 | Anna Muster | Transaction: FEE-CARD-7100000005
-Received money from Stripe Payments UK Ltd with reference Shopify D4E5F6 35.00 2,456.56
+Received money from Stripe Example Ltd with reference Shopify D4E5F6 35.00 2,456.56
 27 August 2026 | Transaction: TRANSFER-8100000003 | Reference: Shopify D4E5F6
 Sent money to Gruenkaffee Muster AG -80.00 2,421.56
 25 August 2026 | Transaction: TRANSFER-8100000002 | Reference: Invoice 1000000001 Ref.: 2000000001-1
 Card transaction of 60.00 CHF issued by Tankstelle Muster Gmbh Musterdorf 64.70 2,501.56
 24 August 2026 | Card ending in 1234 | Anna Muster | Transaction: CARD-7100000004
-Received money from Stripe Payments UK Ltd with reference Shopify G7H8J9 150.00 2,436.86
+Received money from Stripe Example Ltd with reference Shopify G7H8J9 150.00 2,436.86
 24 August 2026 | Transaction: TRANSFER-8100000001 | Reference: Shopify G7H8J9

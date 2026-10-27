@@ -3101,7 +3101,7 @@ export default {
     'drop.provider.since': 'From which day do the payouts of {provider} go over the clearing account? What lies before stays as it is booked. The app keeps it in {file}.',
     'drop.provider.sinceLabel': 'Cut-over day',
     'drop.unseen.why': 'No payout of {provider} recognised: the bank\'s payments are in through {through} ({banks}), but the app recognises no credit from {since} on as a payout of {provider}. So nothing of the report is booked.',
-    'drop.unseen.hint': 'If the payout appears under another name (such as «Stripe Payments UK»), that name belongs in the file of {provider} under match.tx: {file}. If {provider} pays into one account, provider.account there names it; the app then looks only there.',
+    'drop.unseen.hint': 'If the payout appears under another name (such as the payment processor’s name as the bank shows it), that name belongs in the file of {provider} under match.tx: {file}. If {provider} pays into one account, provider.account there names it; the app then looks only there.',
     'drop.unseen.anyway': 'Take it anyway',
     'drop.unseen.open': 'Open {provider}',
     'drop.provider.account': 'Account',
