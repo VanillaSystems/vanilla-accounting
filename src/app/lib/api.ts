@@ -44,7 +44,7 @@ import type { Answer, Choice, Question, QuestionsView, QuestionTarget } from '..
 import type { AutomationCommand, AutomationView, CommandResult, RunDetail } from '../../workflows/model.js';
 import type { Conversation, ConversationSummary, MadeChange, PrivatePart, Turn } from '../../types/assistant.js';
 import { ATTACHMENT_MAX_MB, type Attachment } from '../../types/attachment.js';
-import type { DropAction, DropSession, QuarantinedFile } from '../../types/drop.js';
+import type { DropAction, DropSession, PayoutWaitView, QuarantinedFile } from '../../types/drop.js';
 import type { MailCheck, ReceiptSkipOffer, SourcePreview, SourcesView } from '../../platform/sources/model.js';
 import type { MailHost } from '../../platform/sources/mail-host.js';
 import type { DraftCommand, DraftView, KeepResult, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
@@ -224,6 +224,8 @@ export function errorText(e: unknown): string {
     case 'codeNotTaken': return t(b.params.method === 'none' ? 'error.codeNotTaken.none' : 'error.codeNotTaken.netRate', { code: b.params.code });
     case 'clearingNotBalance': return t('error.clearingNotBalance', b.params);
     case 'sinceNotOpen': return t('error.sinceNotOpen', { since: formatDate(b.params.since), from: formatDate(b.params.from) });
+    case 'clearingTaken': return t('error.clearingTaken', b.params);
+    case 'payoutNameUnseen': return t('error.payoutNameUnseen', { name: b.params.name, since: formatDate(b.params.since) });
     case 'rule': { const k = refusalKey(b.params.refusal); return t(k.key, k.vars as never); }
     case 'report': return t('error.report', { why: refusalText(b.params.refusal, (k, v) => t(k, v as never)) });
     case 'noDescription': return t('error.noDescription');
@@ -409,6 +411,8 @@ export const api = {
   draftShare: (ref: string) => request<{ path: string }>('POST', '/api/rules/share', { ref }),
   /** Receipts that add up to a payment, or nearly, and where code stopped looking (#27, #190). */
   receiptSets: (ref: string) => request<{ sets: ReceiptSet[]; cut?: SetCut }>('GET', `/api/transactions/${encodeURIComponent(ref)}/receipt-sets`),
+  /** Why a provider's payout waits for the person, or null (#203). */
+  payoutWait: (ref: string) => request<{ wait: PayoutWaitView | null }>('GET', `/api/transactions/${encodeURIComponent(ref)}/payout-wait`),
   groupedOffer: (ref: string) => request<{ offer: GroupedOffer | null }>('GET', `/api/rules/grouped?ref=${encodeURIComponent(ref)}`),
   draftGrouped: (ref: string) => request<{ path: string }>('POST', '/api/rules/grouped', { ref }),
   unreadOffer: (ref: string) => request<{ offer: UnreadOffer | null }>('GET', `/api/rules/unread?ref=${encodeURIComponent(ref)}`),

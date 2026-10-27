@@ -206,7 +206,15 @@ provider:
   `clearing` without VAT. Until the company's file names `clearing` and `since`
   it waits for the person; neither a rule nor the model books it. It needs no
   receipt and is never matched to one (no receipt set, no pair, no model match,
-  no order link).
+  no order link). A payout is the provider's by its `match` like any payment,
+  or, when the payer is no business of the books, by a `match.tx` word that
+  begins its reference («Received money from Stripe Payments UK Ltd with
+  reference Shopify …»). When the bank's payments of a report's days are in the
+  books and none is recognised, the report books nothing and its drop row asks
+  how the payout appears on the statement; the answer goes into the company's
+  `match.tx`. A payout before `since` within `payoutDays` of it, beside sales a
+  report booked before its day, waits for the person: booked as sales they would
+  count twice. The payment says why it waits.
 - Its report (the CSV it exports) is recognised in the drop by the columns of
   `reports`: each a header or a list of headers. Code books each order onto the
   clearing account with its code (delivered in the VAT territory: the sale code
@@ -222,18 +230,22 @@ provider:
 - The report reaches back to `since` less the payout days (`payoutDays`, the
   company's file may set its own): a sale collected then may be paid out after
   `since`, from the clearing account, so the report books it, dated by its own
-  tax point, when that day is open and on or after the books' start. Before
+  tax point, when that day is open and on or after the books' start (on the
+  agreed basis the order's day dates it; the reach goes by the day collected). Before
   `since` it books only what no payout before `since` can have paid the old way:
   a row waits when the clearing account carries it already (the old way, per
   order: by its ref or its day and amount) or when a payout of the provider
   dated before `since` and after the row's day is not booked bank / clearing
   account (booked as sales, or not booked yet). An order, refund or fee dated
-  earlier is counted («vor dem …»), never booked. So the clearing check comes
+  earlier is counted and named («vor dem …»), never booked; the drop row says
+  that a longer `payoutDays` reaches further. So the clearing check comes
   out even after the cut-over.
 - What the books carry from elsewhere holds what it may be, so nothing counts
   twice: a sale on the clearing account no report booked (an
-  older booking per order such as `SHOPIFY-<n>`, a person's own) holds the order
-  its ref or its day and amount name, and one on or after `since` that names
+  older booking per order such as `SHOPIFY-<n>`, a person's own) that names an
+  order by its ref or text with the order's amount books it (known, never held
+  again); with another amount, or matched by day and amount only, it holds the
+  order; one on or after `since` that names
   none holds every order up to its day; a payout of the provider booked otherwise than from the
   clearing account (as sales, by a person) on or after `since` holds every
   order, refund and fee up to its day. Held rows wait for the person, named in the drop row and kept on
@@ -255,7 +267,7 @@ provider:
   balance above it, or below zero, is a difference. A clearing account in a
   foreign currency carries exchange differences until the year end revalues it.
   The clearing account must be a balance-sheet account (an asset or a
-  liability).
+  liability) that no other provider's file names.
 
 ## The contract
 

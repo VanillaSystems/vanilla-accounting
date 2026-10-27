@@ -13,6 +13,10 @@ import { accountName, setAccountName } from '../../workspace/accounts-write.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { isIsoDate } from '../../accounting/periods.js';
 import type { BookingLine } from '../../accounting/manual-booking.js';
+import { payoutWaitOf } from '../../booking/providers.js';
+import { loadClassifyContext, mappedReceipts } from '../../booking/classify.js';
+import { homeOf } from '../../knowledge/layers.js';
+import type { PayoutWaitView } from '../../types/drop.js';
 
 export const router = Router();
 
@@ -115,6 +119,20 @@ router.post('/api/transactions/manual', (req, res) => {
     books.transactions.push({ ref, bank: account.bank, source: 'manual', date: b.date, amount: Math.abs(b.amount), currency: b.currency ?? account.currency, direction: b.direction, description: b.description });
     return { ok: true, ref };
   });
+});
+
+/**
+ * Why a provider's payout waits for the person (src/booking/providers.ts PayoutWait), for the
+ * payment's line in Kontoauszüge: the run's note is not where a person looks for a payment.
+ * `wait: null` for any other payment, and for a payout booked meanwhile.
+ */
+router.get('/api/transactions/:ref/payout-wait', (req, res) => {
+  const books = readBooks();
+  const tx = books.transactions.find((t) => t.ref === req.params.ref);
+  if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
+  const w = books.journalEntries.some((e) => e.transactionRef === tx.ref) ? undefined : payoutWaitOf(tx, mappedReceipts(books, tx), loadClassifyContext(WS).counterparties ?? [], books.journalEntries);
+  const wait: PayoutWaitView | null = w ? { why: w.why, provider: w.provider.name, file: homeOf('workspace', w.provider.role, w.provider.id), ...(w.provider.provider.since ? { since: w.provider.provider.since } : {}) } : null;
+  res.json({ wait });
 });
 
 router.patch('/api/transactions/:ref', (req, res) => {

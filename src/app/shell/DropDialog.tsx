@@ -14,7 +14,7 @@ import { fmt, formatDate } from '../lib/utils.js';
 import { useAutomation } from '../automation/store.js';
 import { textIn } from '../../workflows/model.js';
 import type { Index } from '../../types/index.js';
-import type { DropRow, DropSession } from '../../types/drop.js';
+import { PAYOUT_NAME_MAX, type DropRow, type DropSession } from '../../types/drop.js';
 import type { Location, Route } from './route.js';
 import { at } from '../areas/receipts/view.js';
 import { setBankDraft } from '../areas/company/bank-draft.js';
@@ -137,13 +137,16 @@ function ProviderAccount({ r, session }: { r: DropRow; session: DropSession }) {
   const [account, setAccount] = useState('');
   const [vat, setVat] = useState('');
   const [since, setSince] = useState(ask.since ?? '');
-  const needsAccount = ask.missing !== 'since';
-  const ready = (!needsAccount || !!account.trim()) && (ask.missing !== 'fees' || !!vat.trim()) && (ask.since === undefined || !!since);
+  const [payout, setPayout] = useState('');
+  const named = ask.missing === 'payout';
+  const needsAccount = ask.missing !== 'since' && !named;
+  const ready = (!needsAccount || !!account.trim()) && (!named || !!payout.trim()) && (ask.missing !== 'fees' || !!vat.trim()) && (ask.since === undefined || !!since);
   return (
     <>
       <small>{t(`drop.provider.${ask.missing}`, { provider: ask.name, file: ask.file })}{ask.missing === 'clearing' && ask.since !== undefined ? ` ${t('drop.provider.since', { provider: ask.name, file: ask.file })}` : ''}</small>
-      <form className="dpw" data-testid="drop-provider" onSubmit={(e) => { e.preventDefault(); if (ready) void act(session, r, { kind: 'provider', ...(needsAccount ? { account: account.trim() } : {}), ...(ask.missing === 'fees' ? { vat: vat.trim() } : {}), ...(ask.since !== undefined ? { since } : {}) }); }}>
+      <form className="dpw" data-testid="drop-provider" onSubmit={(e) => { e.preventDefault(); if (ready) void act(session, r, { kind: 'provider', ...(needsAccount ? { account: account.trim() } : {}), ...(named ? { payout: payout.trim() } : {}), ...(ask.missing === 'fees' ? { vat: vat.trim() } : {}), ...(ask.since !== undefined ? { since } : {}) }); }}>
         {needsAccount ? <input value={account} onChange={(e) => setAccount(e.target.value)} placeholder={t('drop.provider.account')} aria-label={t('drop.provider.account')} inputMode="numeric" /> : null}
+        {named ? <input value={payout} onChange={(e) => setPayout(e.target.value)} placeholder={t('drop.provider.payoutLabel')} aria-label={t('drop.provider.payoutLabel')} maxLength={PAYOUT_NAME_MAX} /> : null}
         {ask.missing === 'fees' ? <input value={vat} onChange={(e) => setVat(e.target.value)} placeholder={t('drop.provider.vat')} aria-label={t('drop.provider.vat')} /> : null}
         {ask.since !== undefined ? <input type="date" value={since} onChange={(e) => setSince(e.target.value)} aria-label={t('drop.provider.sinceLabel')} data-tip={t('drop.provider.sinceLabel')} /> : null}
         <button type="submit" className="btn" disabled={!ready}>{t('drop.provider.keep')}</button>
@@ -161,7 +164,10 @@ function reportLine(s: NonNullable<DropRow['report']>): string {
     s.known ? t('drop.booked.known', { n: s.known }) : '',
     s.filed ? t('drop.booked.filed', { n: s.filed }) : '',
     s.before ? t('drop.booked.before', { n: s.before }) : '',
-    s.beforeSince ? t('drop.booked.beforeSince', { n: s.beforeSince, reach: formatDate(s.reach), since: formatDate(s.since) }) : '',
+    s.beforeSince ? t('drop.booked.beforeSince', {
+      n: s.beforeSince, reach: formatDate(s.reach), since: formatDate(s.since), provider: s.name, days: s.payoutDays, file: s.home,
+      orders: s.beforeSinceRows.map((o) => (s.kind === 'sales' ? `#${o}` : o)).join(', '), more: s.beforeSinceMore ? t('drop.booked.more', { n: s.beforeSinceMore }) : '',
+    }) : '',
     s.other ? t('drop.booked.other', { n: s.other, ways: s.ways.join(', '), more: s.waysMore ? t('drop.booked.more', { n: s.waysMore }) : '' }) : '',
     s.unread ? t('drop.booked.unread', { n: s.unread }) : '',
     held ? t('drop.booked.held', { n: s.held.length + s.heldMore, orders: held, more: s.heldMore ? t('drop.booked.more', { n: s.heldMore }) : '' }) : '',

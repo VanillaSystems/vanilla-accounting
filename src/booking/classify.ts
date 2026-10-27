@@ -44,7 +44,7 @@ import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
 import { businessVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
 import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
-import { providerOfPayment, type Provider } from './providers.js';
+import { payoutWaitOf, providerOfPayment, type PayoutWait, type Provider } from './providers.js';
 import { splitByReceipts } from './receipt-lines.js';
 import { CUSTOMS_BY, customsSplit, importVatDeductions, type Assessment, type CustomsHold, type CustomsTexts } from './customs-invoice.js';
 import { nextManualRef } from '../books/next-ref.js';
@@ -437,6 +437,12 @@ export function bookImportVatDeductions(books: Books, context: Pick<ClassifyCont
   });
 }
 
+/** Why a provider's payout waits for the person (PayoutWait), in the books' language: what the run's note and the payment say. */
+export function payoutWaitReason(w: PayoutWait): string {
+  const key = w.why === 'clearing' ? 'salesReport.noClearing' : w.why === 'since' ? 'salesReport.noSince' : 'salesReport.gapPayout';
+  return wordsIn('de').t(key, { provider: w.provider.name, file: homeOf('workspace', w.provider.role, w.provider.id), since: w.provider.provider.since ?? '', account: w.provider.provider.clearing ?? '' });
+}
+
 /**
  * A payment provider's payout, booked in code (#203): bank / its clearing account, without VAT, on
  * the payment's day. The sales and the fees are on the clearing account already, from the provider's
@@ -627,13 +633,15 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     // A payment provider's payout settles its clearing account, in code, whatever a rule or the model would say (#203).
     // Until the company's file names the clearing account and the cut-over day (the first sales report asks for both), the payout waits
     // for the person: neither a rule nor the model knows its sales, its exports or its fees, so none guesses them from the payout.
-    // A payout before the cut-over day is no provider's payout here (providerOfPayment): it is booked like any other payment.
-    const provider = providerOfPayment(tx, mappedReceipts(books, tx), context.counterparties ?? []);
-    if (provider && (!provider.provider.clearing || !provider.provider.since)) {
-      log(`  ${tx.ref}  payout of ${provider.name}: no clearing account or cut-over day in its file, waits for the person`);
-      outcome.failed.push({ ref: tx.ref, reason: wordsIn('de').t(provider.provider.clearing ? 'salesReport.noSince' : 'salesReport.noClearing', { provider: provider.name, file: homeOf('workspace', provider.role, provider.id) }) });
+    // A payout before the cut-over day is no provider's payout here (providerOfPayment): it is booked like any other payment,
+    // unless a sales report booked sales dated before it onto the clearing account already (PayoutWait 'gap'): then it waits too.
+    const waits = payoutWaitOf(tx, mappedReceipts(books, tx), context.counterparties ?? [], books.journalEntries);
+    if (waits) {
+      log(`  ${tx.ref}  payout of ${waits.provider.name}: waits for the person (${waits.why})`);
+      outcome.failed.push({ ref: tx.ref, reason: payoutWaitReason(waits) });
       continue;
     }
+    const provider = providerOfPayment(tx, mappedReceipts(books, tx), context.counterparties ?? []);
     const booked = provider ? providerPayout(books, tx, provider, context, fx) : undefined;
     if (provider && booked) {
       if ('refusal' in booked) { log(`  ${tx.ref}  payout of ${provider.name}: refused: ${booked.reason}`); outcome.failed.push({ ref: tx.ref, ...booked }); continue; }

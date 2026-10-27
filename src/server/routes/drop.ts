@@ -159,11 +159,13 @@ router.post('/api/drop/:id/rows/:key', async (req, res) => {
       const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
       const account = text(a.account);
       const since = text(a.since);
-      // The cut-over day comes with the clearing account while the provider's file names none.
-      if (!ask || (ask.missing !== 'since' && !account) || (ask.missing === 'fees' && !text(a.vat)) || (ask.since !== undefined && !since)) throw new RequestError(400, 'Nur ein Bericht, dessen Konto oder Umstellungstag fehlt, nimmt eines.');
-      const set = ask.missing === 'fees' ? { fees: { account: account!, vat: text(a.vat)! } } : ask.missing === 'since' ? { since } : { [ask.missing]: account, ...(since ? { since } : {}) };
+      const payout = text(a.payout);
+      // The cut-over day comes with the clearing account while the provider's file names none; the payout's name comes alone.
+      const needsAccount = ask?.missing !== 'since' && ask?.missing !== 'payout';
+      if (!ask || (needsAccount && !account) || (ask.missing === 'payout' && !payout) || (ask.missing === 'fees' && !text(a.vat)) || (ask.since !== undefined && !since)) throw new RequestError(400, 'Nur ein Bericht, dessen Konto, Umstellungstag oder Auszahlungsname fehlt, nimmt eines.');
+      const set = ask.missing === 'fees' ? { fees: { account: account!, vat: text(a.vat)! } } : ask.missing === 'since' ? { since } : ask.missing === 'payout' ? { payout } : { [ask.missing]: account, ...(since ? { since } : {}) };
       const kept = setProviderAccount(WS, ask.provider, set);
-      if (!kept.ok) throw new RequestError(400, `Konto, Steuercode oder Umstellungstag ${[account, a.vat, since].filter(Boolean).join(' / ')} geht so nicht.`, kept.refusal);
+      if (!kept.ok) throw new RequestError(400, `Konto, Steuercode, Umstellungstag oder Name ${[account, a.vat, since, payout].filter(Boolean).join(' / ')} geht so nicht.`, kept.refusal);
       delete row.askProvider;
       delete row.message;
       Object.assign(row, { state: 'take', reason: undefined });

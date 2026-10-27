@@ -34,14 +34,35 @@ export const settlesOn = (p: Provider, date: string): boolean => !p.provider.sin
 /**
  * The provider whose payout `tx` is, whatever its day: money in that routes to a business with a
  * `provider:` section. Money out to the same business (its subscription, a bill) is a purchase like
- * any other.
+ * any other. A payout another company makes for the provider may name the provider in its
+ * reference only (Shopify's arrive as «Received money from Stripe Payments UK Ltd with reference
+ * Shopify …»): when the payer routes to no business (or to several), the payout is the provider's
+ * whose `match.tx` word begins the reference as the bank writes it (referenceOf), when exactly one
+ * provider's does. A payer the books know as a business of its own is never overruled by its reference.
  */
-export function providerOfMoneyIn(tx: Pick<BankTransaction, 'date' | 'direction' | 'description' | 'counterparty' | 'counterpartyIban' | 'amount'>, linked: readonly Receipt[], counterparties: readonly Counterparty[]): Provider | undefined {
+export function providerOfMoneyIn(tx: Pick<BankTransaction, 'date' | 'direction' | 'description' | 'counterparty' | 'counterpartyIban' | 'amount' | 'reference'>, linked: readonly Receipt[], counterparties: readonly Counterparty[]): Provider | undefined {
   if (tx.direction !== 'CRDT' || tx.amount === 0) return undefined;
   const routing = identify(signalsOfTransaction(tx as BankTransaction, [...linked]), counterparties);
-  if (routing.kind !== 'known') return undefined;
-  const cp = counterparties.find((c) => c.id === routing.counterparty);
-  return cp && isProvider(cp) ? cp : undefined;
+  if (routing.kind === 'known') {
+    const cp = counterparties.find((c) => c.id === routing.counterparty);
+    return cp && isProvider(cp) ? cp : undefined;
+  }
+  const refs = referenceOf(tx);
+  const named = refs.length ? counterparties.filter(isProvider).filter((c) => c.match.tx.some((word) => refs.some((r) => beginsWith(r, word)))) : [];
+  return named.length === 1 ? named[0] : undefined;
+}
+
+/** The payment's reference as the bank writes it: its remittance field, and the text after «with reference» in its description. */
+export function referenceOf(tx: Pick<BankTransaction, 'description' | 'reference'>): string[] {
+  const inText = / with reference (.+)$/i.exec(tx.description.trim())?.[1];
+  return [tx.reference, inText].filter((r): r is string => !!r?.trim()).map((r) => r.trim());
+}
+
+/** Whether `text` begins with `word` as a whole word, in any case. */
+function beginsWith(text: string, word: string): boolean {
+  const w = word.trim().toLowerCase();
+  const t = text.replace(/^[^\p{L}\d]+/u, '').toLowerCase();
+  return !!w && t.startsWith(w) && !/[\p{L}\d]/u.test(t.charAt(w.length));
 }
 
 /**
@@ -49,9 +70,31 @@ export function providerOfMoneyIn(tx: Pick<BankTransaction, 'date' | 'direction'
  * cut-over day (settlesOn). A payout before that day is a payment like any other and stays as it
  * was booked.
  */
-export function providerOfPayment(tx: Pick<BankTransaction, 'date' | 'direction' | 'description' | 'counterparty' | 'counterpartyIban' | 'amount'>, linked: readonly Receipt[], counterparties: readonly Counterparty[]): Provider | undefined {
+export function providerOfPayment(tx: Pick<BankTransaction, 'date' | 'direction' | 'description' | 'counterparty' | 'counterpartyIban' | 'amount' | 'reference'>, linked: readonly Receipt[], counterparties: readonly Counterparty[]): Provider | undefined {
   const cp = providerOfMoneyIn(tx, linked, counterparties);
   return cp && settlesOn(cp, tx.date) ? cp : undefined;
+}
+
+/**
+ * Why a provider's payout waits for the person instead of being booked: the company's file names no
+ * clearing account (`clearing`) or no cut-over day (`since`) yet, so neither a rule nor the model
+ * may guess its sales; or (`gap`) it is dated before the cut-over day, within the provider's payout
+ * days of it, and a sales report has booked the provider's sales dated before it onto the clearing
+ * account already: it may pay those, so booked as sales by a rule or the model they would count
+ * twice, and booked from the clearing account it may take sales the report counted but never booked
+ * (older than its reach). Only the person can tell; nothing books it meanwhile.
+ */
+export type PayoutWait = { why: 'clearing' | 'since' | 'gap'; provider: Provider };
+
+/** Whether money in is a provider's payout that waits for the person (PayoutWait), and why. */
+export function payoutWaitOf(tx: Pick<BankTransaction, 'date' | 'direction' | 'description' | 'counterparty' | 'counterpartyIban' | 'amount' | 'reference'>, linked: readonly Receipt[], counterparties: readonly Counterparty[], entries: readonly JournalEntry[]): PayoutWait | undefined {
+  const provider = providerOfMoneyIn(tx, linked, counterparties);
+  if (!provider) return undefined;
+  const { clearing, since } = provider.provider;
+  if (settlesOn(provider, tx.date)) return !clearing ? { why: 'clearing', provider } : !since ? { why: 'since', provider } : undefined;
+  if (!clearing || !since || tx.date < addDays(since, -payoutDaysOf(provider))) return undefined;
+  const prefix = `SR-${provider.id}-`;
+  return entries.some((e) => e.transactionRef.startsWith(prefix) && e.accountDebit === clearing && e.date < tx.date) ? { why: 'gap', provider } : undefined;
 }
 
 /** The ids of the businesses that are payment providers. */

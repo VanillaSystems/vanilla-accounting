@@ -65,4 +65,8 @@ What is dated before `since` stays as it was booked; nothing is booked again. Th
 also books the orders, refunds and fees of the payout days before `since` that the books do not
 carry yet (paid out after `since`, from the clearing account): one the clearing account carries
 already, or that a payout before `since` booked as sales may have paid, waits for the person.
+A payout before `since` that arrives after the report booked such sales waits for the person too,
+never booked as sales. A payout that names the provider only in its reference («… Stripe Payments
+UK Ltd with reference Shopify …») is the provider's; when none is recognised, the report asks how
+the payout appears and books nothing until answered.
 The monthly Vorsteuer correction above stays as it is.

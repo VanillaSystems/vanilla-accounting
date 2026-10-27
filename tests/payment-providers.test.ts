@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import { parse } from 'yaml';
 import { classifyTransactions, loadClassifyContext } from '../src/booking/classify.js';
 import { receiptKnowledge, receiptWait, noReceiptOfItsOwn, settlementAccount } from '../src/booking/receipt-wait.js';
-import { clearingCheck, monthEnds, providerOfPayment, type Provider } from '../src/booking/providers.js';
+import { clearingCheck, monthEnds, payoutWaitOf, providerOfPayment, type Provider } from '../src/booking/providers.js';
 import { amountOf, bookReport, csvRows, dayOf, linkOrdersToSales, readReport, recognizeReport, type ReportContext } from '../src/booking/sales-report.js';
 import { mergeProvider, parseProvider } from '../src/knowledge/provider.js';
 import { loadKnowledge } from '../src/knowledge/layers.js';
@@ -379,7 +379,7 @@ test('cut-over a. the old way per order on the clearing account up to the day: a
   ]);
   const done = importSalesReport(ws, Buffer.from([head, row('1995', '2026-10-26', '30.00', '2.25'), row('1996', '2026-10-28', '40.00', '3.00'), row('1997', '2026-10-30', '54.05', '4.05'), row('2001', '2026-11-02', '108.10', '8.10')].join('\n')), 'o.csv');
   assert.ok(done.ok);
-  assert.deepEqual([done.summary.orders, done.summary.beforeSince, done.summary.held], [2, 0, [{ order: '1995', why: 'legacy' }, { order: '1996', why: 'legacy' }]]);
+  assert.deepEqual([done.summary.orders, done.summary.known, done.summary.beforeSince, done.summary.held], [2, 2, 0, []], 'the old entries name their orders: known, not held');
   const es = loadBooks(ws).journalEntries;
   assert.deepEqual(reportRefs(es), ['SR-shopify-1997', 'SR-shopify-2001'], '#1997 once, the old orders not again');
   assert.equal(revenueOf(es, '2026-10-25'), 232.15, 'every sale once: no double count, no lost sale');
@@ -452,18 +452,26 @@ test('cut-over e. the clearing check right after the first payout from the clear
   assert.deepEqual([day.balance, day.below, day.paidAfter], [20, undefined, 128.1], 'on the eve: #1983 waits for its payout, within what was paid after');
 });
 
-test('A. an older per-order sale on the clearing account (SHOPIFY-<n>) holds its order: booked once, waiting named on the receipt', () => {
+test('A. an older per-order sale on the clearing account (SHOPIFY-<n>) books its order: known, never booked again nor held; one with another amount holds it, named on the receipt', () => {
   const ws = shop();
   const p = payout('PB', { date: '2026-11-18', amount: 54.05 });
   seed(ws, [p], [E('s1', 'SHOPIFY-2002', '2026-11-10', '1093', '3200', 54.05, 'V81', { origin: undefined }), E('pb', 'PB', '2026-11-18', '1021', '1093', 54.05)]);
   const before = revenueOf(loadBooks(ws).journalEntries);
-  const done = importSalesReport(ws, Buffer.from([head, row('2002', '2026-11-10', '54.05', '4.05'), row('2010', '2026-11-25', '20.00', '1.50')].join('\n')), 'o.csv');
+  const csv = [head, row('2002', '2026-11-10', '54.05', '4.05'), row('2010', '2026-11-25', '20.00', '1.50')].join('\n');
+  const done = importSalesReport(ws, Buffer.from(csv), 'o.csv');
   assert.ok(done.ok);
-  assert.deepEqual(done.summary.held, [{ order: '2002', why: 'legacy' }]);
+  assert.deepEqual([done.summary.orders, done.summary.known, done.summary.held], [1, 1, []]);
   const es = loadBooks(ws).journalEntries;
   assert.equal(revenueOf(es), before + 20, '#2002 counted once (its old entry), #2010 booked: no double count, no lost sale');
   assert.equal(balanceOf(es, '1093'), 20, 'the clearing account holds only what is unpaid');
-  assert.deepEqual(heldOf(ws), [{ order: '2002', why: 'legacy' }], 'kept on the receipt for the person');
+  assert.deepEqual(heldOf(ws), [], 'nothing for the person');
+
+  const other = shop();
+  seed(other, [p], [E('s1', 'SHOPIFY-2002', '2026-11-10', '1093', '3200', 50, 'V81', { origin: undefined }), E('pb', 'PB', '2026-11-18', '1021', '1093', 54.05)]);
+  const differs = importSalesReport(other, Buffer.from(csv), 'o.csv');
+  assert.ok(differs.ok);
+  assert.deepEqual([differs.summary.orders, differs.summary.held], [1, [{ order: '2002', why: 'legacy' }]], 'the person decides');
+  assert.deepEqual(heldOf(other), [{ order: '2002', why: 'legacy' }], 'kept on the receipt for the person');
 });
 
 test('B. older sales on the clearing account that name no order hold every order up to their day; later orders are booked', () => {
@@ -736,4 +744,201 @@ test('9. the clearing check: the balance at the quarter\'s end, its month ends, 
   // 5: a sale collected before the cut-over day and paid after it: the payout takes the account below zero, a difference whatever was paid after.
   const short = clearingCheck(p, { ...books, journalEntries: [...books.journalEntries, e('p0', '2026-09-20', '1021', '1093', 150, 'P1')] }, '2026-09-30', 3)!;
   assert.deepEqual([short.balance, short.below], [-30, true]);
+});
+
+// ─── Third review ────────────────────────────────────────────────────────────
+
+/** A payout Stripe makes for Shopify, as Wise writes it: the bank names Stripe, the reference Shopify. */
+const viaStripe = (ref: string, reference: string, over: Partial<BankTransaction> = {}): BankTransaction =>
+  payout(ref, { date: '2026-11-04', amount: 108.1, description: `Received money from Stripe Payments UK Ltd with reference ${reference}`, counterparty: undefined, ...over });
+/** A model that books every payment it is asked about as gross sales: what rule 9a does with a payout it does not know. */
+const asSalesModel = (amount: number) => async (prompt: string) => JSON.stringify(Object.fromEntries([...prompt.matchAll(/### Transaction \d+: (\S+)/g)].map((m) => [m[1], { entries: [{ accountDebit: '', accountCredit: '3200', amount, vat: 'charged', vatRate: 8.1, description: 'Shopify payout' }], reason: 'rule 9a' }])));
+/** A payment out on a later day: the bank's payments of the days before it are in the books. */
+const later = (date: string): BankTransaction => ({ ...payout(`X-${date}`, { date, amount: 5, description: 'Kartenzahlung Bäckerei', counterparty: 'Bäckerei' }), direction: 'DBIT' });
+
+test('R7a. a payout whose reference begins with the provider\'s word is the provider\'s, though the bank names another payer: booked bank / clearing account, its order once; a plain Stripe payout is not Shopify\'s', async () => {
+  const ws = shop();
+  const counterparties = loadClassifyContext(ws).counterparties ?? [];
+  assert.equal(providerOfPayment(viaStripe('ST1', 'Shopify 98765'), [], counterparties)?.id, 'shopify', 'with reference Shopify …');
+  assert.equal(providerOfPayment(viaStripe('ST1', 'Shopify 98765', { description: 'Gutschrift Stripe Payments UK Ltd', reference: 'SHOPIFY* 98765' }), [], counterparties)?.id, 'shopify', 'the remittance field');
+  assert.equal(providerOfPayment(viaStripe('ST2', 'STRIPE 4711', { counterparty: 'Stripe Payments UK Ltd' }), [], counterparties), undefined, 'a plain Stripe payout');
+  assert.equal(providerOfPayment(viaStripe('ST3', 'Shopifyish 1'), [], counterparties), undefined, 'a whole word only');
+
+  const done = importSalesReport(ws, Buffer.from([head, row('2001', '2026-11-02', '108.10', '8.10')].join('\n')), 'o.csv');
+  assert.ok(done.ok && done.summary.orders === 1);
+  const books = loadBooks(ws);
+  const st = viaStripe('ST1', 'Shopify 98765');
+  books.transactions.push(st);
+  const out = await classifyTransactions(books, [st], { fx, context: loadClassifyContext(ws), ask: asSalesModel(108.1) } as Parameters<typeof classifyTransactions>[2]);
+  assert.deepEqual(out.classified, ['ST1']);
+  assert.deepEqual(lines(books.journalEntries.filter((e) => e.transactionRef === 'ST1')), [['ST1', '2026-11-04', '1021', '1093', 108.1, '']], 'from the clearing account, never as sales');
+  assert.equal(revenueOf(books.journalEntries), 108.1, 'the sale once');
+  assert.equal(balanceOf(books.journalEntries, '1093'), 0);
+});
+
+test('R7b. the bank\'s payments of the report\'s days are in, no payout of the provider is recognised: the report books nothing and asks how the payout appears; the answer goes into match.tx, then the report books each sale once', () => {
+  const ws = shop();
+  const st = viaStripe('ST2', 'STRIPE 4711', { counterparty: 'Stripe Payments UK Ltd' });
+  seed(ws, [st, later('2026-11-10')], [E('st', 'ST2', '2026-11-04', '1021', '3200', 108.1, 'V81', { by: { kind: 'model', model: 'm' } })]);
+  const csv = [head, row('2001', '2026-11-02', '108.10', '8.10')].join('\n');
+  const asked = importSalesReport(ws, Buffer.from(csv), 'o.csv');
+  assert.ok(!asked.ok);
+  assert.deepEqual(asked.ask, { provider: 'shopify', name: 'Shopify', missing: 'payout', file: 'knowledge/suppliers/shopify.yaml' });
+  assert.match(asked.message, /Wie heisst die Auszahlung von Shopify auf dem Kontoauszug\?/);
+  const untouched = loadBooks(ws);
+  assert.deepEqual([reportRefs(untouched.journalEntries), untouched.receipts.filter((r) => r.report).length], [[], 0], 'nothing booked, nothing filed');
+
+  assert.deepEqual(setProviderAccount(ws, 'shopify', { payout: 'Twint' }), { ok: false, refusal: { code: 'payoutNameUnseen', params: { name: 'Twint', since: '2026-11-01' } } }, 'a name no credit carries');
+  assert.deepEqual(setProviderAccount(ws, 'shopify', { payout: 'Stripe Payments UK' }), { ok: true });
+  const file = parse(readFileSync(join(ws.paths.root, 'knowledge', 'suppliers', 'shopify.yaml'), 'utf8')) as { match: { tx: string[] } };
+  assert.deepEqual(file.match.tx, ['Stripe Payments UK']);
+  assert.deepEqual(setProviderAccount(ws, 'shopify', { payout: 'stripe payments uk' }), { ok: true });
+  assert.deepEqual((parse(readFileSync(join(ws.paths.root, 'knowledge', 'suppliers', 'shopify.yaml'), 'utf8')) as { match: { tx: string[] } }).match.tx, ['Stripe Payments UK'], 'kept once');
+
+  const taken = importSalesReport(ws, Buffer.from(csv), 'o.csv');
+  assert.ok(taken.ok);
+  assert.deepEqual([taken.summary.orders, taken.summary.held], [0, [{ order: '2001', why: 'legacy' }]], 'the payout booked as sales holds the order it paid');
+  assert.equal(revenueOf(loadBooks(ws).journalEntries), 108.1, 'the sale once');
+
+  // Before the statement is in, nothing is asked: the report books as it did.
+  const early = shop();
+  const first = importSalesReport(early, Buffer.from(csv), 'o.csv');
+  assert.ok(first.ok && first.summary.orders === 1);
+});
+
+test('R1. a payout before the cut-over day, within its payout days, beside sales a report booked before it: it waits for the person with a reason, never booked as sales; in either order of import each sale counts once', async () => {
+  const csv = [head, row('1982', '2026-10-30', '60.00', '4.50'), row('2001', '2026-11-02', '108.10', '8.10')].join('\n');
+  const pg = payout('PG', { date: '2026-10-31', amount: 60 });
+  const pn = payout('PN', { date: '2026-11-04', amount: 108.1 });
+
+  // The report first, then the statement.
+  const ws = shop();
+  const done = importSalesReport(ws, Buffer.from(csv), 'o.csv');
+  assert.ok(done.ok && done.summary.orders === 2, 'no payout before the day in the books yet: both booked');
+  const books = loadBooks(ws);
+  books.transactions.push(pg, pn);
+  const counterparties = loadClassifyContext(ws).counterparties ?? [];
+  assert.equal(payoutWaitOf(pg, [], counterparties, books.journalEntries)?.why, 'gap');
+  assert.equal(payoutWaitOf(pn, [], counterparties, books.journalEntries), undefined, 'a payout from the day on is booked from the clearing account');
+  assert.equal(payoutWaitOf(payout('PE', { date: '2026-10-20', amount: 60 }), [], counterparties, books.journalEntries), undefined, 'one before the payout days is a payment like any other');
+  const out = await classifyTransactions(books, [pg, pn], { fx, context: loadClassifyContext(ws), ask: asSalesModel(60) } as Parameters<typeof classifyTransactions>[2]);
+  assert.deepEqual(out.classified, ['PN']);
+  assert.equal(out.failed[0]?.ref, 'PG');
+  assert.match(out.failed[0].reason, /vor dem Umstellungstag 2026-11-01.*Durchlaufkonto 1093 gebucht, nichts gebucht/);
+  assert.equal(books.journalEntries.filter((e) => e.transactionRef === 'PG').length, 0, 'not booked as sales');
+  assert.equal(revenueOf(books.journalEntries, '2026-10-25'), 168.1, 'each sale once');
+
+  // The statement first (the payout before the day booked as sales by the model), then the report.
+  const other = shop();
+  const first = loadBooks(other);
+  first.transactions.push(pg, pn);
+  const out2 = await classifyTransactions(first, [pg, pn], { fx, context: loadClassifyContext(other), ask: asSalesModel(60) } as Parameters<typeof classifyTransactions>[2]);
+  assert.deepEqual(out2.classified.sort(), ['PG', 'PN']);
+  saveBooks(other, first);
+  const then = importSalesReport(other, Buffer.from(csv), 'o.csv');
+  assert.ok(then.ok);
+  assert.deepEqual([then.summary.orders, then.summary.held], [1, [{ order: '1982', why: 'legacy' }]], '#1982 is in the payout booked as sales');
+  const es = loadBooks(other).journalEntries;
+  assert.equal(revenueOf(es, '2026-10-25'), 168.1, 'each sale once');
+  assert.equal(balanceOf(es, '1093', '2026-10-25'), 0, 'the clearing account comes out even');
+});
+
+test('R2. on the agreed basis the day the provider collected an order decides the reach and what the books carry; the entry is dated by the order\'s day, and counted as filed when that day is closed', () => {
+  const agreed = (order: string, created: string, paid: string, total = '54.05', tax = '4.05') => `#${order},${paid} 10:00:00 +0100,CHF,${tax},${total},CH,0.00,${created} 09:00:00 +0100,Shopify Payments`;
+  const ctx = (over: Partial<ReportContext> = {}) => ctxOf({ agreed: true, since: '2026-11-01', from: '2026-10-25', ...over });
+  const read = salesOf([head, agreed('1975', '2026-10-15', '2026-10-30'), agreed('1976', '2026-10-18', '2026-10-22'), agreed('1977', '2026-06-28', '2026-10-30', '20.00', '1.50')].join('\n'));
+  const out = bookReport({ journalEntries: [] }, read, ctx());
+  assert.deepEqual([out.orders, out.beforeSince, out.beforeSinceRows, out.filed], [1, 1, ['1976'], 1], '#1975 collected in the reach is booked, #1976 collected before it counted, #1977 ordered in a filed quarter counted as filed');
+  assert.deepEqual(lines(out.entries), [['SR-shopify-1975', '2026-10-15', '1093', '3200', 54.05, 'V81']], 'dated by its tax point, the order\'s day');
+  const carried = bookReport({ journalEntries: [] }, salesOf([head, agreed('1975', '2026-10-15', '2026-10-30')].join('\n')), ctx({ legacy: { entries: [E('o', 'OLD-1', '2026-10-30', '1093', '3200', 54.05, 'V81')] } }));
+  assert.deepEqual([carried.orders, carried.held], [0, [{ order: '1975', why: 'legacy' }]], 'an old entry of the day it was collected holds it');
+});
+
+test('R5 / 7. a person\'s own entry that names the order books it: the order is known, never held again on the next taking; one matched only by day and amount holds it', () => {
+  const csv = [head, row('1982', '2026-10-30', '60.00', '4.50')].join('\n');
+  const pg = payout('PG', { date: '2026-10-31', amount: 60 });
+  const hers = (description?: string) => E('m', 'M-0001', '2026-10-30', '1093', '3200', 60, 'V81', { origin: 'manual', by: { kind: 'person' } as JournalEntry['by'], ...(description ? { description } : {}) });
+  const ws = shop();
+  seed(ws, [pg], [E('pg', 'PG', '2026-10-31', '1021', '1093', 60), hers('Shopify Bestellung #1982')]);
+  for (const k of [1, 2]) {
+    const done = importSalesReport(ws, Buffer.from(csv), 'o.csv');
+    assert.ok(done.ok);
+    assert.deepEqual([done.summary.orders, done.summary.known, done.summary.held], [0, 1, []], `taking ${k}: known, not held`);
+  }
+  assert.deepEqual(heldOf(ws), []);
+  assert.equal(revenueOf(loadBooks(ws).journalEntries, '2026-10-25'), 60, 'her sale once');
+
+  const unnamed = shop();
+  seed(unnamed, [pg], [E('pg', 'PG', '2026-10-31', '1021', '1093', 60), hers('Shopify Umsatz')]);
+  const held = importSalesReport(unnamed, Buffer.from(csv), 'o.csv');
+  assert.ok(held.ok);
+  assert.deepEqual([held.summary.orders, held.summary.held], [0, [{ order: '1982', why: 'legacy' }]], 'a day and an amount may be another order: the person decides');
+});
+
+test('R6 / 8. a clearing account another provider\'s file names already is refused: each provider\'s check counts only its own', () => {
+  const ws = shop('  revenue: "3200"\n');
+  writeFileSync(join(ws.paths.root, 'knowledge', 'suppliers', 'sumup.yaml'), 'id: sumup\nname: SumUp\nmatch:\n  tx: [ "sumup" ]\nprovider:\n  clearing: "1093"\n  since: 2026-11-01\n  revenue: "3200"\n');
+  assert.deepEqual(setProviderAccount(ws, 'shopify', { clearing: '1093', since: '2026-11-01' }), { ok: false, refusal: { code: 'clearingTaken', params: { account: '1093', other: 'SumUp' } } });
+  assert.deepEqual(setProviderAccount(ws, 'sumup', { clearing: '1093' }), { ok: true }, 'its own account again');
+  assert.deepEqual(setProviderAccount(ws, 'shopify', { clearing: '1094', since: '2026-11-01' }), { ok: true });
+});
+
+test('5. the rows before the reach are named like the held ones, the first ones and a count of the rest, with the payout days and the file that may say more', () => {
+  const ws = shop();
+  const early = Array.from({ length: HELD_NAMED + 2 }, (_, i) => row(String(1900 + i), '2026-10-20', '54.05', '4.05'));
+  const done = importSalesReport(ws, Buffer.from([head, ...early, row('2001', '2026-11-02', '108.10', '8.10')].join('\n')), 'o.csv');
+  assert.ok(done.ok);
+  assert.deepEqual([done.summary.beforeSince, done.summary.beforeSinceRows.length, done.summary.beforeSinceRows[0], done.summary.beforeSinceMore, done.summary.payoutDays, done.summary.home], [HELD_NAMED + 2, HELD_NAMED, '1900', 2, 7, 'knowledge/suppliers/shopify.yaml']);
+});
+
+test('10. a payout that waits says why on the payment itself (GET /api/transactions/:ref/payout-wait); the drop row asks how the payout appears and books once answered', async () => {
+  const api = await startApi('demo');
+  try {
+    cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
+    const file = join(api.root, 'knowledge', 'suppliers', 'shopify.yaml');
+    writeFileSync(file, 'id: shopify\nprovider:\n  revenue: "3200"\n');
+    const accounts = join(api.root, 'master-data', 'accounts.json');
+    writeFileSync(accounts, JSON.stringify([...JSON.parse(readFileSync(accounts, 'utf8')), { number: '1093', name: 'Durchlaufkonto Shopify' }], null, 2));
+    const ws = workspaceAt(api.root);
+    seed(ws, [payout('PW', { date: '2026-11-03', amount: 50 }), viaStripe('ST2', 'STRIPE 4711', { counterparty: 'Stripe Payments UK Ltd' }), later('2026-11-10')], []);
+    const wait = async (ref: string) => ((await (await api.fetch(`/api/transactions/${ref}/payout-wait`)).json()) as { wait: unknown }).wait;
+    assert.deepEqual(await wait('PW'), { why: 'clearing', provider: 'Shopify', file: 'knowledge/suppliers/shopify.yaml' });
+    assert.equal(await wait('ST2'), null, 'no provider\'s payout');
+    writeFileSync(file, 'id: shopify\nprovider:\n  clearing: "1093"\n  revenue: "3200"\n');
+    assert.deepEqual(await wait('PW'), { why: 'since', provider: 'Shopify', file: 'knowledge/suppliers/shopify.yaml' });
+    writeFileSync(file, 'id: shopify\nprovider:\n  clearing: "1093"\n  since: 2026-11-01\n  revenue: "3200"\n');
+    assert.equal(await wait('PW'), null, 'booked from the clearing account by the next run');
+
+    const post = async (path: string, body?: Buffer | object): Promise<{ status: number; s: DropSession & { code?: string } }> => {
+      const json = body && !Buffer.isBuffer(body);
+      const res = await api.fetch(path, { method: 'POST', body: json ? JSON.stringify(body) : body ? new Uint8Array(body as Buffer) : undefined, headers: { 'Content-Type': json ? 'application/json' : 'application/octet-stream' } });
+      return { status: res.status, s: (await res.json()) as DropSession & { code?: string } };
+    };
+    // PW names Shopify and is recognised: a statement whose only payouts arrive as Stripe's is the case the row asks about.
+    const books = loadBooks(ws);
+    books.transactions = books.transactions.filter((t) => t.ref !== 'PW');
+    saveBooks(ws, books);
+    const { s } = await post('/api/drop');
+    const took = await post(`/api/drop/${s.id}/files?name=orders_export.csv`, Buffer.from([head, row('2001', '2026-11-02', '108.10', '8.10')].join('\n')));
+    const r = took.s.rows[0];
+    assert.equal(r.askProvider?.missing, 'payout');
+    const unseen = await post(`/api/drop/${s.id}/rows/${r.key}`, { kind: 'provider', payout: 'Twint' });
+    assert.deepEqual([unseen.status, unseen.s.code], [400, 'payoutNameUnseen']);
+    const answered = await post(`/api/drop/${s.id}/rows/${r.key}`, { kind: 'provider', payout: 'Stripe Payments UK' });
+    assert.equal(answered.status, 200);
+    assert.deepEqual([answered.s.rows[0].state, answered.s.rows[0].report?.orders], ['taken', 1], 'the payout not booked yet: the order is booked onto the clearing account, the payout will be from it');
+    assert.match(readFileSync(file, 'utf8'), /Stripe Payments UK/);
+  } finally {
+    await api.stop();
+  }
+});
+
+test('R8 (a follow-up): money Shopify takes from the bank is no payout: it waits for a receipt like any payment out, and is never booked from the clearing account', async () => {
+  const ws = shop();
+  const neg = { ...payout('NEG', { date: '2026-11-06', amount: 25, description: 'Belastung Shopify Payments' }), direction: 'DBIT' as const };
+  const books = loadBooks(ws);
+  books.transactions.push(neg);
+  const context = loadClassifyContext(ws);
+  assert.equal(providerOfPayment(neg, [], context.counterparties ?? []), undefined);
+  assert.equal(receiptWait(neg, { linked: 'none', business: 'shopify' }, { free: new Set(), wordings: [], assumesUnread: new Set(), ownIbans: new Set(), settles: settlementAccount(context), inputTax: true }).wait, true);
 });

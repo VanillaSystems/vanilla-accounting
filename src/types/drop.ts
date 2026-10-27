@@ -76,10 +76,19 @@ export interface StatementFacts { iban?: string; from?: string; to?: string; ent
 
 /**
  * What the company's file of a provider lacks for its report: its clearing account (with the cut-over
- * day), the cut-over day alone, its revenue account, or its fee account and code; `file`: where it is
- * kept; `since`: the cut-over day proposed (the first day of the open period) while the file names none.
+ * day), the cut-over day alone, its revenue account, its fee account and code, or (`payout`) how its
+ * payout appears on the bank statement, when the bank's payments of the report's days from the
+ * cut-over day on are in the books and none is recognised as the provider's (kept as `match.tx`);
+ * `file`: where it is kept; `since`: the cut-over day proposed (the first day of the open period)
+ * while the file names none.
  */
-export interface ProviderAsk { provider: string; name: string; missing: 'clearing' | 'since' | 'revenue' | 'fees'; file: string; since?: string }
+/** Why a provider's payout waits for the person, as its line in Kontoauszüge says it (GET /api/transactions/:ref/payout-wait, src/booking/providers.ts PayoutWait). */
+export interface PayoutWaitView { why: 'clearing' | 'since' | 'gap'; provider: string; file: string; since?: string }
+
+/** At most this many characters of a provider payout's name are kept (ProviderAsk 'payout'): a name, never a statement line. */
+export const PAYOUT_NAME_MAX = 80;
+
+export interface ProviderAsk { provider: string; name: string; missing: 'clearing' | 'since' | 'revenue' | 'fees' | 'payout'; file: string; since?: string }
 
 /** Why an order of a report was not booked by code (src/booking/sales-report.ts ReportHold). */
 export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'legacy' }
@@ -89,7 +98,9 @@ export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax'
  * already in the books; `filed` and `before`: rows dated in a filed period or before the books, not
  * booked (a correction is the person's); `beforeSince`: rows dated before `reach` (the provider's
  * cut-over day `since` less its payout days: no payout from the clearing account can have paid them),
- * booked the way they were and never by the report; `other`: orders the provider did not collect (paid otherwise:
+ * booked the way they were and never by the report, the first ones named (`beforeSinceRows`, the rest
+ * `beforeSinceMore`), with the payout days `reach` was counted by (`payoutDays`) and the company's file
+ * that may say more (`home`); `other`: orders the provider did not collect (paid otherwise:
  * PayPal, bank transfer, a gift card, a test), not booked, with how they were paid (`ways`, the first
  * ones, `waysMore` the rest); `held`: orders the person decides (the first ones, `heldMore` the rest);
  * `unread`: rows code could not read; `proofs`: order documents linked to their sale.
@@ -97,6 +108,7 @@ export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax'
 export interface ReportSummary {
   provider: string; name: string; kind: 'sales' | 'fees'; from: string; to: string; file: string; since: string; reach: string;
   orders: number; refunds: number; fees: number; known: number; filed: number; before: number; beforeSince: number;
+  beforeSinceRows: string[]; beforeSinceMore: number; payoutDays: number; home: string;
   other: number; ways: string[]; waysMore: number;
   held: ReportHeld[]; heldMore: number; unread: number; proofs: number;
 }
@@ -134,7 +146,7 @@ export type DropAction =
   /** A possible duplicate: «ist dasselbe» (not taken) or «verschieden» (taken, and the pair is not asked again). */
   | { kind: 'twin'; answer: 'same' | 'distinct' }
   /** A report's provider lacks an account (`askProvider`): the person names it, it is kept in the company's file of the provider, and the report is taken. */
-  | { kind: 'provider'; account?: string; vat?: string; since?: string };
+  | { kind: 'provider'; account?: string; vat?: string; since?: string; payout?: string };
 
 /** Why a file is in data/quarantine/: its words say it is no receipt (and which kind, and the mail's sender), a person set it aside, or it is no PDF inside. */
 export type QuarantineReason = { kind: 'not-receipt'; why?: OtherWhy; from?: string } | { kind: 'held' } | { kind: 'unreadable' };

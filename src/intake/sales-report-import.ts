@@ -10,12 +10,14 @@
  * orders it may be (ReportContext.legacy), so no sale counts twice and none is lost. What the report cannot book is kept on its receipt (`report.held`) for the person.
  * «Rückgängig» takes the report's own entries and links back (removeSalesReport). What the company's
  * file of the provider lacks (its clearing account with the cut-over day, its revenue account, its
- * fee account) is asked once, in the drop row (setProviderAccount), and kept in that file.
+ * fee account) is asked once, in the drop row (setProviderAccount), and kept in that file; so is how
+ * the provider's payout appears on the statement, when the bank's payments of the report's days are
+ * in and none is recognised as its payout (unseenPayout): the report books nothing until then.
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { parseDocument } from 'yaml';
+import { isScalar, isSeq, parseDocument } from 'yaml';
 import { loadBooks, moduleActor, periodLock, receiptFile, receiptHome, updateSaved, type Books } from '../books/store.js';
 import { loadClassifyContext, chartOf, mappedReceipts, type ClassifyContext } from '../booking/classify.js';
 import { chartNames } from '../booking/rule-book.js';
@@ -35,7 +37,7 @@ import { payoutSales } from '../workspace/sells.js';
 import { findFile, APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { wordsIn } from '../export/texts.js';
 import type { BankTransaction, JournalEntry, Receipt } from '../types/index.js';
-import type { ProviderAsk, ReportSummary } from '../types/drop.js';
+import { PAYOUT_NAME_MAX, type ProviderAsk, type ReportSummary } from '../types/drop.js';
 
 const ACTOR = moduleActor('sales-report');
 /** At most this much of the file is kept as the receipt's text (its header and first rows): the books never hold a whole export. */
@@ -158,6 +160,23 @@ function legacyOf(books: Books, p: Provider, kind: 'sales' | 'fees', revenue: st
   return { entries, ...(through ? { through } : {}), ...(paidBefore.length ? { paidBefore } : {}) };
 }
 
+/**
+ * Whether the provider's payouts go unseen: the report has rows from the cut-over day on, the books
+ * hold the bank's payments through the provider's payout days after the first of them (so its first
+ * payout from the clearing account is in), and no payment from the cut-over day on is recognised as
+ * the provider's (providerOfPayment). Its payouts then arrive under a name its files do not know
+ * (Shopify's as «Stripe Payments UK» without «Shopify» in the reference): a rule or the model would
+ * book them as sales while the report books the same sales onto the clearing account. The report
+ * books nothing until the person says how the payout appears (ProviderAsk 'payout').
+ */
+function unseenPayout(books: Books, p: Provider, read: ReadReport, context: ClassifyContext): boolean {
+  const since = p.provider.since!;
+  const first = read.rows.map((r) => r.date).filter((d) => d >= since).sort()[0];
+  const known = books.transactions.map((t) => t.date).sort().at(-1);
+  if (!first || !known || known < addDays(first, payoutDaysOf(p))) return false;
+  return !books.transactions.some((tx) => tx.date >= since && providerOfPayment(tx, mappedReceipts(books, tx), context.counterparties ?? [])?.id === p.id);
+}
+
 /** The first day a report of `p` books: its cut-over day less its payout days (a sale collected then may be paid out after the cut-over day). */
 const reachOf = (p: Provider): string => addDays(p.provider.since!, -payoutDaysOf(p));
 
@@ -212,6 +231,9 @@ export function importSalesReport(ws: Workspace, bytes: Buffer, name: string, no
   const facts = reportFacts(p.id, read);
   const id = sha16(bytes);
   const context = loadClassifyContext(ws);
+  if (unseenPayout(loadBooks(ws), p, read, context)) {
+    return { ok: false, ask: { provider: p.id, name: p.name, missing: 'payout', file: homeOf('workspace', p.role, p.id) }, message: de.t('salesReport.ask.payout', { provider: p.name }) };
+  }
   const fx = loadFxResolver();
   const result = updateSaved(ws, ACTOR, (books) => {
     let receipt = books.receipts.find((r) => r.id === id);
@@ -260,6 +282,7 @@ function summaryOf(p: Provider, kind: 'sales' | 'fees', facts: ReturnType<typeof
   return {
     provider: p.id, name: p.name, kind, from: facts.from, to: facts.to, file: r.filename, since: p.provider.since!, reach: reachOf(p),
     orders: r.out.orders, refunds: r.out.refunds, fees: r.out.fees, known: r.out.known, filed: r.out.filed, before: r.out.before, beforeSince: r.out.beforeSince,
+    beforeSinceRows: r.out.beforeSinceRows.slice(0, HELD_NAMED), beforeSinceMore: Math.max(0, r.out.beforeSinceRows.length - HELD_NAMED), payoutDays: payoutDaysOf(p), home: homeOf('workspace', p.role, p.id),
     other: r.out.other, ways: r.out.ways.slice(0, WAYS_NAMED), waysMore: Math.max(0, r.out.ways.length - WAYS_NAMED),
     held: held.slice(0, HELD_NAMED), heldMore: Math.max(0, held.length - HELD_NAMED), unread: read.unread.length, proofs: r.proofs,
   };
@@ -301,21 +324,36 @@ export type ProviderRefusal =
   | { code: 'clearingNotBalance'; params: { account: string } }
   | { code: 'unknownVatCode'; params: { code: string } }
   | { code: 'codeNotTaken'; params: { code: string; method: 'none' | 'net-rate' } }
-  | { code: 'sinceNotOpen'; params: { since: string; from: string } };
+  | { code: 'sinceNotOpen'; params: { since: string; from: string } }
+  | { code: 'clearingTaken'; params: { account: string; other: string } }
+  | { code: 'payoutNameUnseen'; params: { name: string; since: string } };
 
 /**
  * The drop row's answer kept in the company's file of the provider (knowledge/<role>/<id>.yaml):
- * its clearing account with the cut-over day, its revenue account or its fee account and code, as
- * the person gave them. The account must be in the chart, the clearing account a balance-sheet one
- * (an asset or a liability: what the provider holds), the code one the firm books with, the
- * cut-over day a day of the open period.
+ * its clearing account with the cut-over day, its revenue account or its fee account and code, or
+ * how its payout appears on the statement (`payout`, added to `match.tx`), as the person gave them.
+ * The account must be in the chart, the clearing account a balance-sheet one (an asset or a
+ * liability: what the provider holds) that no other provider's file names (each one's clearing
+ * check counts only its own), the code one the firm books with, the cut-over day a day of the open
+ * period, the payout's name one that a credit from the cut-over day on carries in its counterparty,
+ * its text or its reference.
  */
-export function setProviderAccount(ws: Workspace, providerId: string, set: { clearing?: string; since?: string; revenue?: string; fees?: { account: string; vat: string } }): { ok: true } | { ok: false; refusal: ProviderRefusal } {
-  const p = providersOf(ws).find((x) => x.id === providerId);
+export function setProviderAccount(ws: Workspace, providerId: string, set: { clearing?: string; since?: string; revenue?: string; fees?: { account: string; vat: string }; payout?: string }): { ok: true } | { ok: false; refusal: ProviderRefusal } {
+  const providers = providersOf(ws);
+  const p = providers.find((x) => x.id === providerId);
   if (!p) return { ok: false, refusal: { code: 'unknownAccount', params: { account: providerId } } };
   const accounts = chartNames(chartOf(ws));
   for (const a of [set.clearing, set.revenue, set.fees?.account]) if (a !== undefined && !accounts.has(a)) return { ok: false, refusal: { code: 'unknownAccount', params: { account: a } } };
   if (set.clearing !== undefined && !['asset', 'liability'].includes(chart().typeOf(set.clearing) ?? '')) return { ok: false, refusal: { code: 'clearingNotBalance', params: { account: set.clearing } } };
+  const other = set.clearing !== undefined ? providers.find((x) => x.id !== p.id && x.provider.clearing === set.clearing) : undefined;
+  if (other) return { ok: false, refusal: { code: 'clearingTaken', params: { account: set.clearing!, other: other.name } } };
+  const payout = set.payout?.trim().slice(0, PAYOUT_NAME_MAX);
+  if (set.payout !== undefined) {
+    const since = p.provider.since ?? firstOpenDay(ws);
+    const said = (payout ?? '').toLowerCase();
+    const seen = !!said && loadBooks(ws).transactions.some((tx) => tx.direction === 'CRDT' && tx.date >= since && [tx.counterparty, tx.description, tx.reference].some((x) => x?.toLowerCase().includes(said)));
+    if (!seen) return { ok: false, refusal: { code: 'payoutNameUnseen', params: { name: payout ?? '', since } } };
+  }
   if (set.since !== undefined) {
     const lock = periodLock(loadBooks(ws));
     if (!isIsoDate(set.since) || lock.isClosed(set.since) || lock.beforeBooks(set.since)) return { ok: false, refusal: { code: 'sinceNotOpen', params: { since: set.since, from: firstOpenDay(ws) } } };
@@ -330,6 +368,11 @@ export function setProviderAccount(ws: Workspace, providerId: string, set: { cle
   if (set.since) doc.setIn(['provider', 'since'], set.since);
   if (set.revenue) doc.setIn(['provider', 'revenue'], set.revenue);
   if (set.fees) doc.setIn(['provider', 'fees'], doc.createNode({ account: set.fees.account, vat: set.fees.vat }));
+  if (payout) {
+    const had = doc.getIn(['match', 'tx']);
+    const list = isSeq(had) ? had.items.map((x) => String(isScalar(x) ? x.value : x)) : [];
+    if (!list.some((x) => x.toLowerCase() === payout.toLowerCase())) doc.setIn(['match', 'tx'], doc.createNode([...list, payout], { flow: true }));
+  }
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, doc.toString({ lineWidth: 0 }));
   return { ok: true };

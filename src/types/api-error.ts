@@ -164,6 +164,10 @@ export type ApiRefusal =
   | { code: 'clearingNotBalance'; params: { account: string } }
   /** A provider's cut-over day outside the open period: `from` is its first day. */
   | { code: 'sinceNotOpen'; params: { since: string; from: string } }
+  /** A clearing account another provider's file names already (`other`: its name): each provider's check needs its own. */
+  | { code: 'clearingTaken'; params: { account: string; other: string } }
+  /** A name for a provider's payout that no credit from its cut-over day on carries: it would recognise none. */
+  | { code: 'payoutNameUnseen'; params: { name: string; since: string } }
   /** A rule made by hand in Firma › Regeln that the app cannot carry out (src/booking/rules.ts parseRule). */
   | { code: 'rule'; params: { refusal: RuleRefusal } }
   | { code: 'noDescription' }
