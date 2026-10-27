@@ -77,7 +77,7 @@ export function mergeSection(app: Section | undefined, workspace: Section | unde
  * - name: the vendor's (a binding of a vendor may not redeclare it).
  * - grouped: the vendor's when its file says it; else the binding's (a company learns that a business pays several receipts at once, #190).
  * - accounts: the binding's only (the app layer cannot know a chart of accounts).
- * - match, documents: union, vendor first; one signal or document id has one owner.
+ * - match, documents: union, vendor first; one signal or document id has one owner. sharedUid: union.
  * - steps: per address, vendor rules first, then the binding's.
  * A binding with no vendor is a private counterparty and carries name and match itself.
  */
@@ -114,6 +114,7 @@ export function mergeCounterparty(
   }
   return compileCounterparty({
     id: vendor.id, name: vendor.name, grouped: vendor.grouped ?? binding.grouped, accounts: binding.accounts,
+    sharedUid: [...new Set([...(vendor.sharedUid ?? []), ...(binding.sharedUid ?? [])])],
     roles: [...new Set([...(vendor.roles ?? []), ...(binding.roles ?? [])])], match, documents, facts, steps,
   }, files, role);
 }

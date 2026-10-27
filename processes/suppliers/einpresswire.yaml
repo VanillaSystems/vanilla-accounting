@@ -3,5 +3,5 @@ name: EIN Presswire (Newsmatics Inc.)
 match:
   tx: [ "einpresswire" ]
   domain: [ "einpresswire.com", "einnews.com" ]
-  file: [ '^\d{8}-ein-?presswire-' ]
+  file: [ '^\d{8}[-_]ein-?presswire(?:[-_.]|$)' ]
 grouped: false

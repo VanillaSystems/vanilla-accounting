@@ -7,7 +7,7 @@
  * domain, tx, file), the same routing as everywhere (src/knowledge/counterparties.ts identify).
  * Pure and browser-safe.
  */
-import { identify, signalsOfReceiptRead, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
+import { identify, signalsOfReceiptRead, signalsOfTransaction, silentUids, type Counterparty } from '../knowledge/counterparties.js';
 import type { BankTransaction, Receipt } from '../types/index.js';
 
 export interface BatchPayers {
@@ -19,9 +19,13 @@ export interface BatchPayers {
 
 export const NO_BATCH_PAYERS: BatchPayers = { ofReceipt: () => undefined, ofPayment: () => undefined };
 
-/** The business a receipt is of, by what it says of its sender (signalsOfReceiptRead): its UID, the addresses and name in its first and last lines, its filename. */
-export function businessOfReceipt(r: Receipt, counterparties: readonly Counterparty[]): string | undefined {
-  const routing = identify(signalsOfReceiptRead(r), counterparties);
+/**
+ * The business a receipt is of, by what it says of its sender (signalsOfReceiptRead): its UID, the
+ * addresses and name in its first and last lines, its filenames. `buyerUid`: the company's own
+ * (company.uid), which says nothing of who wrote a receipt.
+ */
+export function businessOfReceipt(r: Receipt, counterparties: readonly Counterparty[], buyerUid?: string, silent = silentUids(counterparties, buyerUid)): string | undefined {
+  const routing = identify(signalsOfReceiptRead(r, silent), counterparties);
   return routing.kind === 'known' ? routing.counterparty : undefined;
 }
 
@@ -31,20 +35,22 @@ export function businessOfReceipt(r: Receipt, counterparties: readonly Counterpa
  * its linked receipts are of (a business known by its UID alone, whose name the bank does not
  * print). The batch payers and the «Immer so?» that flags one both ask this.
  */
-export function businessOfPayment(tx: BankTransaction, linked: readonly Receipt[], counterparties: readonly Counterparty[]): string | undefined {
+export function businessOfPayment(tx: BankTransaction, linked: readonly Receipt[], counterparties: readonly Counterparty[], buyerUid?: string, silent = silentUids(counterparties, buyerUid)): string | undefined {
   const routing = identify(signalsOfTransaction(tx, [...linked]), counterparties);
   if (routing.kind === 'known') return routing.counterparty;
   if (routing.kind === 'ambiguous' || !linked.length) return undefined;
-  const of = new Set(linked.map((r) => businessOfReceipt(r, counterparties)));
+  const of = new Set(linked.map((r) => businessOfReceipt(r, counterparties, buyerUid, silent)));
   return of.size === 1 ? [...of][0] : undefined;
 }
 
-export function batchPayers(counterparties: readonly Counterparty[]): BatchPayers {
+/** The batch payers among `counterparties`; `buyerUid`: the company's own UID (company.uid). */
+export function batchPayers(counterparties: readonly Counterparty[], buyerUid?: string): BatchPayers {
   const flagged = new Set(counterparties.filter((c) => c.grouped).map((c) => c.id));
   if (!flagged.size) return NO_BATCH_PAYERS;
   const only = (id: string | undefined) => (id && flagged.has(id) ? id : undefined);
+  const silent = silentUids(counterparties, buyerUid);
   return {
-    ofReceipt: (r) => only(businessOfReceipt(r, counterparties)),
-    ofPayment: (tx, linked = []) => only(businessOfPayment(tx, linked, counterparties)),
+    ofReceipt: (r) => only(businessOfReceipt(r, counterparties, buyerUid, silent)),
+    ofPayment: (tx, linked = []) => only(businessOfPayment(tx, linked, counterparties, buyerUid, silent)),
   };
 }

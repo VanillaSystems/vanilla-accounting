@@ -171,9 +171,9 @@ export function codeName(date: string, title: ReceiptTitle | undefined, came: st
 }
 
 /** The workspace's batch payers, from its business files in both layers; none when its knowledge does not load (a test's bare workspace). */
-export function batchPayersOf(ws: Pick<Workspace, 'paths'>): BatchPayers {
+export function batchPayersOf(ws: Pick<Workspace, 'paths' | 'company'>): BatchPayers {
   try {
-    return batchPayers(loadKnowledge(APP_ROOT, ws.paths.root).counterparties);
+    return batchPayers(loadKnowledge(APP_ROOT, ws.paths.root).counterparties, ws.company?.uid);
   } catch {
     return NO_BATCH_PAYERS;
   }
@@ -192,7 +192,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const byCode = async (stagedNow: readonly Receipt[] = []) => {
     const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt: noReceiptFor(ws) });
     for (const l of books.update(linkOrdersToPayouts)) log(`linked the order to the payout it names: receipt ${l.receipt} → ${l.payment}`);
-    const found = books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, { isOpen: (d) => !lock.isClosed(d), payers, toChf }); });
+    const found = books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, { isOpen: (d) => !lock.isClosed(d), payers, toChf, buyerUid: ws.company?.uid }); });
     for (const s of found.sets) log(`linked ${s.receipts.length} receipts that add up to the payment${s.basis === 'original' ? ' in the amount its bank names' : s.basis === 'rate' ? ' at the official daily rate' : ''}${s.run ? ' (the batch payer\'s open receipts in date order)' : ''}: ${s.receipts.join(', ')} → ${s.legs.join(', ')}`);
     const runs = found.cuts.filter((c) => c.limit === 'run');
     const combos = found.cuts.filter((c) => c.limit === 'combinations');

@@ -3,7 +3,7 @@ name: Amazon
 match:
   tx: [ "amazon", "amzn" ]
   uid: [ "CHE-269.567.571" ]
-  file: [ '^\d{8}-amazon-' ]
+  file: [ '^\d{8}[-_]amazon(?:[-_.]|$)' ]
 grouped: true
 
 steps:

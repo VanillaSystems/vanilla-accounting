@@ -25,6 +25,7 @@ export interface MatchResult {
 /** How a receipt's short title is written (the mockup's titles: the vendor, then 1–3 words). */
 export const TITLE_RULES = `two parts, in German.
 - "v": the vendor as people say it: brand only, no legal form (AG, GmbH, s.r.o., e.K.), no address, no numbers. E.g. "Coop Pronto", "FedEx", "Shopify", "AliExpress", "Google Cloud", "Die Post", "Wise". For the company's own sales (shop orders and payouts, own invoices) use "Verkauf".
+- The vendor is who issued the document, as its head names it: never a carrier, payment method or bank the document only mentions ("Versand: FedEx", "Zahlungsart: Amazon Pay").
 - "w": what it is, 1 to 3 German words, the essence only. No amounts, no dates, no invoice numbers, no VAT info, no parentheses. E.g. "Benzin", "Zoll", "Fracht", "Monatsabo", "Autowäsche", "Leere Datei" (a blank capture). For a sale the order number, e.g. "#1132". For a bank statement the month and currency, e.g. "Kontoauszug USD Feb".`;
 
 /** A model's {v, w}, kept only when both are short text. */

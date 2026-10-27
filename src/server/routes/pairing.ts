@@ -63,7 +63,7 @@ router.get('/api/transactions/:ref/receipt-sets', (req, res) => {
   const tx = books.transactions.find((t) => t.ref === req.params.ref);
   if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   const lock = periodLock(books);
-  res.json(proposalsFor(books, tx, { isOpen: (d) => !lock.isClosed(d), payers: batchPayersOf(WS), toChf: estvToChf() }));
+  res.json(proposalsFor(books, tx, { isOpen: (d) => !lock.isClosed(d), payers: batchPayersOf(WS), toChf: estvToChf(), buyerUid: WS.company.uid }));
 });
 
 router.post('/api/transactions/:ref/find-receipt', async (req, res) => {

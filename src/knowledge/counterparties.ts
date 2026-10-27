@@ -59,6 +59,12 @@ export interface Counterparty {
   match: Matchers;
   /** Several receipts settle in one charge: match as a sum, split one entry per invoice. */
   grouped: boolean;
+  /**
+   * UIDs it prints that do not say a document is its own, because others print them too (a
+   * courier's, on the customs office's assessments of its shipments): never a routing signal; a
+   * receipt that carries only such UIDs (and the buyer's) is read by its text (signalsOfReceiptRead).
+   */
+  sharedUid?: string[];
   /** A file of it says `grouped` at all, true or false: the app offers no «Immer so?» to say it again (#190). */
   groupedSaid?: true;
   /** When present, the only accounts an entry for this counterparty may use. */
@@ -121,36 +127,49 @@ export function uidsIn(receipt: Pick<Receipt, 'vatId' | 'extractedText'>): strin
   return [...found];
 }
 
+/** A receipt's filenames: the archived one and the one it came with (a model suggested the first; a shop or a mailbox gave the second, e.g. `{orderId}_payment.pdf`). */
+const filenamesOf = (r: Pick<Receipt, 'filename' | 'originalFilename'>): string[] =>
+  r.originalFilename && r.originalFilename !== r.filename ? [r.filename, r.originalFilename] : [r.filename];
+
 export function signalsOfReceipt(r: Receipt): Signals {
-  return { uids: uidsIn(r), ibans: [], domains: [], names: [], filenames: [r.filename] };
+  return { uids: uidsIn(r), ibans: [], domains: [], names: [], filenames: filenamesOf(r) };
+}
+
+const digitsOf = (uid: string) => uid.replace(/\D/g, '');
+
+/** The UIDs that say nothing of who wrote a receipt: the buyer's own (company.uid) and those a business's file names as shared (Counterparty.sharedUid), as digits. */
+export function silentUids(counterparties: readonly Counterparty[], buyerUid?: string): Set<string> {
+  return new Set([...(buyerUid ? [buyerUid] : []), ...counterparties.flatMap((c) => c.sharedUid ?? [])].map(digitsOf).filter(Boolean));
 }
 
 // An address of the sender: an e-mail's domain or a web address, as invoices print them.
 const DOMAIN_RE = /(?:[\w.+-]+@|https?:\/\/|www\.)((?:[a-z0-9-]+\.)+[a-z]{2,})/gi;
 
 /**
- * What a receipt says of who wrote it, read off it (#190): its UIDs and filename, as
- * signalsOfReceipt, and the vendor of its title (the model's reading of the sender) as a payment's
- * name. A receipt without any UID also offers the domains of the addresses in the lines where a
+ * What a receipt says of who wrote it, read off it (#190): its UIDs and filenames, as
+ * signalsOfReceipt, and the vendor of its title (the model's reading of the sender), where a `tx`
+ * signal counts as a whole word only. A receipt without a UID of its own also offers the domains of the addresses in the lines where a
  * document names its sender (its first and last HEAD characters) and its first HEAD characters,
  * where a `tx` signal counts as a whole word only. A receipt that carries a UID of its own is never
  * routed by that text: a shop's invoice names the courier it ships with («Versand: FedEx
  * Express»), a tracking link (fedex.com) or the way it was paid («Amazon Pay») in those lines too,
- * and its UID says it is the shop's. Its UID routes it when a file names it (the uid tier comes
+ * and its UID says it is the shop's. A UID in `silent` is not its own: the buyer's (many receipts
+ * print only the buyer's UID), or one a file names as shared (FedEx's, which the customs office's
+ * assessments print too). Its UID routes it when a file names it (the uid tier comes
  * first), else only its title's vendor and its filename do: an AliExpress Tax Invoice prints
  * Alibaba's UID, which no file names (alibaba.com receipts print it too), and is recognised by its
  * filename ({orderId}_payment.pdf, archived as <date>-aliexpress-…) or a title naming AliExpress.
  * Used where a receipt alone must say whose it is (a batch payer's receipts,
  * src/intake/batch-payers.ts).
  */
-export function signalsOfReceiptRead(r: Receipt): Signals {
+export function signalsOfReceiptRead(r: Receipt, silent: ReadonlySet<string> = new Set()): Signals {
   const own = signalsOfReceipt(r);
-  const names = r.title?.vendor ? [r.title.vendor] : [];
-  if (own.uids.length) return { ...own, names };
+  const title = r.title?.vendor ? [r.title.vendor] : [];
+  if (own.uids.some((u) => !silent.has(digitsOf(u)))) return { ...own, texts: title };
   const text = r.extractedText ?? '';
   const ends = text.length > 2 * HEAD ? `${text.slice(0, HEAD)}\n${text.slice(-HEAD)}` : text;
   const domains = [...new Set([...ends.matchAll(DOMAIN_RE)].map((m) => m[1].toLowerCase().replace(/^www\./, '')))];
-  return { ...own, domains, names, texts: [text.slice(0, HEAD)] };
+  return { ...own, domains, texts: [...title, text.slice(0, HEAD)] };
 }
 
 export function signalsOfTransaction(tx: BankTransaction, linked: Receipt[]): Signals {
@@ -159,7 +178,7 @@ export function signalsOfTransaction(tx: BankTransaction, linked: Receipt[]): Si
     ibans: tx.counterpartyIban ? [ibanOf(tx.counterpartyIban)] : [],
     domains: [],
     names: [tx.counterparty, merchantOf(tx.description)].filter((n): n is string => !!n?.trim()),
-    filenames: linked.map((r) => r.filename),
+    filenames: linked.flatMap(filenamesOf),
   };
 }
 
@@ -190,7 +209,7 @@ export function identify(s: Signals, counterparties: readonly Counterparty[]): R
 }
 
 export type RawCounterparty = {
-  id?: string; name?: string; grouped?: boolean; accounts?: string[]; roles?: string[];
+  id?: string; name?: string; grouped?: boolean; sharedUid?: string[]; accounts?: string[]; roles?: string[];
   match?: Partial<Record<Tier, string[]>>; steps?: Record<string, unknown>;
   documents?: { id?: string; kind?: string; text?: string[] }[];
   facts?: Partial<Fact>[];
@@ -213,6 +232,11 @@ export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['
     file: (m.file ?? []).map((p) => new RegExp(p, 'i')),
   };
   if (TIERS.every((t) => match[t].length === 0)) fail('match needs at least one signal');
+  const sharedUid = raw.sharedUid ?? [];
+  for (const u of sharedUid) {
+    if (!/^CHE-\d{3}\.\d{3}\.\d{3}$/.test(u)) fail(`sharedUid "${u}" must look like CHE-###.###.###`);
+    if (match.uid.includes(u)) fail(`sharedUid "${u}" is in match.uid too — a shared UID identifies nobody; keep it in one of them`);
+  }
   const documents = (raw.documents ?? []).map((d, i) => {
     if (!d.id) fail(`documents[${i}] needs an id`);
     if (!d.kind || !(RECEIPT_KINDS as readonly string[]).includes(d.kind)) fail(`documents ${d.id}: kind must be one of ${RECEIPT_KINDS.join(', ')}`);
@@ -224,7 +248,7 @@ export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['
     return f as Fact;
   });
   return {
-    id: stem, name: raw.name!, role, roles: roles as Role[], match, grouped: raw.grouped === true, ...(raw.grouped !== undefined ? { groupedSaid: true as const } : {}), documents, facts,
+    id: stem, name: raw.name!, role, roles: roles as Role[], match, grouped: raw.grouped === true, ...(sharedUid.length ? { sharedUid } : {}), ...(raw.grouped !== undefined ? { groupedSaid: true as const } : {}), documents, facts,
     accounts: raw.accounts, steps: raw.steps ?? {}, origin,
   };
 }

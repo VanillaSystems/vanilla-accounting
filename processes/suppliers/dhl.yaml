@@ -3,7 +3,7 @@ name: DHL Express
 match:
   tx: [ "dhl express" ]
   uid: [ "CHE-116.304.564", "CHE-105.901.000" ]
-  file: [ '^\d{8}-dhl-' ]
+  file: [ '^\d{8}[-_]dhl(?:[-_.]|$)' ]
 
 steps:
   receipt-collection.guide.yaml#triage:

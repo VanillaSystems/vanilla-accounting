@@ -51,7 +51,7 @@ export function groupedOffer(ws: Workspace, books: Books, ref: string, context: 
   const tx = books.transactions.find((t) => t.ref === ref);
   if (!tx || periodLock(books).isClosed(tx.date)) return undefined;
   const charges = chargesOf(books.transactions, estvToChf());
-  const businessOf = (t: BankTransaction) => businessOfPayment(t, mappedReceipts(books, t), context.counterparties ?? []);
+  const businessOf = (t: BankTransaction) => businessOfPayment(t, mappedReceipts(books, t), context.counterparties ?? [], ws.company.uid);
   const mine = charges.of(tx);
   if (byPerson(books, mine.refs) < 2) return undefined;
   const id = businessOf(tx);

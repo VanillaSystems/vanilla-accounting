@@ -3,7 +3,7 @@ name: DataForSEO (via FastSpring)
 match:
   tx: [ "dataforseo" ]
   domain: [ "dataforseo.com" ]
-  file: [ '^\d{8}-dataforseo-' ]
+  file: [ '^\d{8}[-_]dataforseo(?:[-_.]|$)' ]
 grouped: false
 
 steps:

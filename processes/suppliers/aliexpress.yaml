@@ -1,6 +1,8 @@
 # Not matched by UID: CHE-447.613.666 is Alibaba's and is also printed on
-# alibaba.com receipts. A Tax Invoice is recognised by its filename
-# ({orderId}_payment.pdf, archived as <date>-aliexpress-…) or a title naming
+# alibaba.com receipts. A Tax Invoice is recognised by its filename, the
+# archived one or the one it came with ({orderId}_payment.pdf, kept as
+# originalFilename when it is archived as <date>-alibaba-<store>.pdf or
+# <date>-aliexpress-…), or a title naming
 # AliExpress; its text is not read for the name, as it carries a UID
 # (signalsOfReceiptRead, src/knowledge/counterparties.ts).
 
@@ -8,7 +10,7 @@ id: aliexpress
 name: AliExpress
 match:
   tx: [ "aliexpress" ]
-  file: [ '^\d{8}-aliexpress-', '_payment\.pdf$' ]
+  file: [ '^\d{8}[-_]aliexpress(?:[-_.]|$)', '_payment\.pdf$' ]
 grouped: true
 
 steps:

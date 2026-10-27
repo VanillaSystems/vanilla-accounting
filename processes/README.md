@@ -38,7 +38,9 @@ Every process has two files, and every business with particulars has one:
   `roles:` (e.g. `roles: [customer]`); it still has one file. The app's files
   are in `processes/<role>/`, the company's part in `knowledge/<role>/` (see the
   two layers below). A file covers how to recognise the business (`match:`),
-  whether it bundles invoices into one payment (`grouped:`), which accounts it
+  whether it bundles invoices into one payment (`grouped:`), a UID it prints
+  that others print too and that therefore names nobody (`sharedUid:`, e.g. a
+  courier's, also on the customs office's assessments), which accounts it
   books to (`accounts:`), and its rules for each step it touches. Each step's
   rules sit under the step's exact address:
   `steps: { "booking.guide.yaml#classify": { rules: [...] } }`. An authority's

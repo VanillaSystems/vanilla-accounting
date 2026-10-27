@@ -498,3 +498,73 @@ test('Kontoauszüge: the offered sets belong to the payment shown (keyed by its 
   assert.match(src, /t\('bank\.receiptSet\.failed'\)/);
   assert.match(src, /s\.rounding \? 'bank\.receiptSet\.rounding'/);
 });
+
+// ─── Third review round ─────────────────────────────────────────────────────
+
+const FEDEX_UID = 'CHE-105.998.554';
+const fedexInvoice = (amount: number, over: Partial<Receipt> = {}) => receipt(amount, { vatId: FEDEX_UID, title: undefined,
+  extractedText: `FedEx Express Swiss Post GmbH\nRechnung ${amount}4711\n${FEDEX_UID} MWST\nKunde: Beispiel AG, CHE-123.456.789 MWST\nFracht`, ...over });
+
+test('a FedEx invoice printing FedEx\'s shared UID and the buyer\'s is FedEx\'s: staged with an underscore name, with a generic name, archived without a trailing dash, archived under a name the model chose', () => {
+  const ws = workspaceAt(DEMO_ROOT);
+  const app = batchPayersOf(ws);
+  assert.match(readFileSync('processes/suppliers/fedex.yaml', 'utf8'), /sharedUid: \[ "CHE-105\.998\.554" \]/, 'the shared UID stands in the app file, not in code');
+  assert.equal(app.ofReceipt(fedexInvoice(30, { location: 'staged', filename: '20260618_fedex_4711_copy.pdf', extractedText: 'Rechnung 4711' })), 'fedex', 'staged, underscore name');
+  assert.equal(app.ofReceipt(fedexInvoice(30, { location: 'staged', filename: 'receipt-2026-05-09T10-12-00.pdf' })), 'fedex', 'a generic name: read by its text, its UIDs being shared and the buyer\'s');
+  assert.equal(app.ofReceipt(fedexInvoice(30, { filename: '20260618-fedex.pdf', extractedText: 'Rechnung 4711' })), 'fedex', 'archived without a trailing dash');
+  assert.equal(app.ofReceipt(fedexInvoice(30, { filename: '20260618-fracht-4711.pdf', originalFilename: '20260618_fedex_4711_copy.pdf', extractedText: 'Rechnung 4711' })), 'fedex', 'by the name it came with');
+  const staged = fedexInvoice(30, { location: 'staged', filename: 'receipt-2026-05-09T10-12-00.pdf' });
+  const txs = [chf('SHOP', 30, { description: 'Velo Huber AG' }), chf('FDX', 95, { description: 'FEDEX EXPRESS SWISS' })];
+  assert.deepEqual(candidates(staged, txs, new Set(), () => false, app).map((t) => t.ref), ['FDX'], 'the model is shown FedEx\'s payments for it');
+});
+
+test('a BAZG assessment of a FedEx shipment joins no FedEx set: it names the BAZG too, and an assessment is no invoice', () => {
+  const app = batchPayersOf(workspaceAt(DEMO_ROOT));
+  const evv = (over: Partial<Receipt> = {}) => receipt(25, { kind: 'supporting', vatId: undefined, title: undefined, filename: 'evv-26CH0001.pdf',
+    extractedText: `Bundesamt für Zoll und Grenzsicherheit BAZG\nVeranlagungsverfügung MWST\nAnmelder: FedEx Express Swiss Post GmbH ${FEDEX_UID}\nImporteur: Beispiel AG CHE-123.456.789`, ...over });
+  assert.notEqual(app.ofReceipt(evv()), 'fedex');
+  const [f1, f2] = [fedexInvoice(30, { date: day(1), filename: '20260711-fedex-fracht.pdf' }), fedexInvoice(40, { date: day(2), filename: '20260712-fedex-zoll.pdf' })];
+  for (const a of [evv({ date: day(1) }), evv({ date: day(1), extractedText: `Veranlagungsverfügung MWST\nFedEx Express Swiss Post GmbH ${FEDEX_UID}` })]) {
+    const b = booksOf([chf('FDX', 95, { date: day(5), description: 'FEDEX EXPRESS SWISS' })], [f1, f2, a]);
+    assert.ok(!receiptSetsToLink(b, { isOpen: open, payers: app }).sets.some((s) => s.receipts.includes(a.id)), 'not linked in a set');
+    assert.ok(!proposalsFor(b, b.transactions[0], { isOpen: open, payers: app }).sets.some((s) => s.receipts.includes(a.id)), 'nor proposed in one');
+  }
+  assert.throws(() => compileCounterparty({ id: 'x', name: 'X', sharedUid: [UID], match: { uid: [UID] } }, { vendor: 'processes/suppliers/x.yaml' }, 'supplier'), /sharedUid .* match\.uid/);
+});
+
+test('an AliExpress Tax Invoice archived under a store name keeps its batch payer by the name it came with ({orderId}_payment.pdf)', () => {
+  const app = batchPayersOf(workspaceAt(DEMO_ROOT));
+  const tax = (amount: number, order: string, date: string) => receipt(amount, { date, vatId: 'CHE-447.613.666', title: undefined, filename: `${date.replace(/-/g, '')}-alibaba-kabelshop.pdf`, originalFilename: `${order}_payment.pdf`,
+    extractedText: `Tax Invoice\nAlibaba.com Singapore E-Commerce Private Limited\nCHE-447.613.666 MWST\nOrder ${order}` });
+  const rs = [tax(12.3, '8123456781', day(1)), tax(7.7, '8123456782', day(2))];
+  assert.equal(app.ofReceipt(rs[0]), 'aliexpress');
+  const b = booksOf([chf('ALI', 20, { date: day(5), description: 'ALIEXPRESS.COM' })], rs);
+  assert.deepEqual(receiptSetsToLink(b, { isOpen: open, payers: app }).sets.map((s) => s.receipts), [ids(rs)]);
+});
+
+test('a set far off the payment is close, never rounding: 30 + 40 for 70.60', () => {
+  const rs = [receipt(30), receipt(40)];
+  const b = booksOf([chf('P', 70.6)], rs);
+  assert.deepEqual(proposalsFor(b, b.transactions[0], open).sets.map((s) => [s.receipts, s.exact, s.rounding]), [[ids(rs), false, undefined]]);
+});
+
+test('the buyer\'s own UID says nothing of who wrote a receipt: it neither stops reading its text nor makes one vendor of many shops', () => {
+  const ws = workspaceAt(DEMO_ROOT);
+  const app = batchPayersOf(ws);
+  const buyerOnly = receipt(30, { vatId: undefined, title: undefined, filename: 'scan-1.pdf', extractedText: `FedEx Express Swiss Post GmbH\nRechnung 4711\nKunde: Beispiel AG ${ws.company.uid} MWST` });
+  assert.equal(app.ofReceipt(buyerOnly), 'fedex');
+  assert.equal(app.ofReceipt({ ...buyerOnly, extractedText: `${buyerOnly.extractedText}\nCHE-283.746.519 MWST` }), undefined, 'a UID of the issuer\'s own: its text routes nothing');
+  const misread = (amount: number, vendor: string) => receipt(amount, { vatId: ws.company.uid, title: { vendor, what: 'Einkauf' }, extractedText: `${vendor} Quittung ${amount}` });
+  const b = booksOf([chf('P', 70, { description: 'Kartenzahlung' })], [misread(30, 'Garage Muster'), misread(40, 'Papeterie Muster')]);
+  assert.equal(receiptSetsToLink(b, open).sets.length, 1, 'keyed by the buyer\'s UID (the defect): one vendor across shops');
+  assert.deepEqual(receiptSetsToLink(b, { isOpen: open, buyerUid: ws.company.uid }).sets, [], 'two shops, no set');
+  assert.deepEqual(proposalsFor(b, b.transactions[0], { isOpen: open, buyerUid: ws.company.uid }).sets, []);
+});
+
+test('the title\'s vendor routes as a whole word, and the titles prompt says the vendor is the issuer, not a carrier or payment method it mentions', () => {
+  const app = batchPayersOf(workspaceAt(DEMO_ROOT));
+  const titled = (vendor: string) => receipt(30, { vatId: 'CHE-283.746.519', title: { vendor, what: 'Teile' }, filename: 'r.pdf', extractedText: 'Rechnung' });
+  assert.equal(app.ofReceipt(titled('FedEx Express')), 'fedex');
+  assert.equal(app.ofReceipt(titled('Fedexo Kurier')), undefined, 'a part of a word is no name');
+  assert.match(readFileSync('src/llm/prompts.ts', 'utf8'), /The vendor is who issued the document, as its head names it: never a carrier, payment method or bank/);
+});

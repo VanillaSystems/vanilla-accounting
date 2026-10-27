@@ -74,6 +74,8 @@ export interface SetSearch {
   isOpen: (date: string) => boolean;
   payers?: BatchPayers;
   toChf?: ToChf;
+  /** The company's own UID (company.uid): a receipt whose VAT number is it is keyed by its title's vendor (vendorOf). */
+  buyerUid?: string;
 }
 
 type Books = Pick<Index, 'receipts' | 'transactions' | 'mappings'>;
@@ -85,9 +87,14 @@ const owedCents = (r: Receipt): number => cents(creditSigned(r) ?? 0);
 
 const sign = (tx: BankTransaction) => (tx.direction === 'DBIT' ? 1 : -1);
 
-/** Who issued the receipt, as one key: its VAT number, else the vendor of its title. None: the receipt joins no set. */
-function vendorOf(r: Receipt): string | undefined {
-  return r.vatId?.replace(/[^0-9]/g, '') || r.title?.vendor?.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '') || undefined;
+/**
+ * Who issued the receipt, as one key: its VAT number, else the vendor of its title. None: the
+ * receipt joins no set. A VAT number that is the buyer's own (`buyer`, digits of company.uid) is a
+ * misreading and no key: receipts of many shops would form one vendor.
+ */
+function vendorOf(r: Receipt, buyer: string): string | undefined {
+  const uid = r.vatId?.replace(/[^0-9]/g, '');
+  return (uid && uid !== buyer ? uid : undefined) || r.title?.vendor?.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '') || undefined;
 }
 
 const currencyOf = (r: Receipt) => r.currency ?? baseCurrency();
@@ -159,10 +166,11 @@ function firstFrom(items: ReadonlyArray<{ day: number }>, day: number): number {
   return lo;
 }
 
-function contextOf(books: Books, payers: BatchPayers, toChf: ToChf | undefined): SetContext {
+function contextOf(books: Books, payers: BatchPayers, toChf: ToChf | undefined, buyerUid: string | undefined): SetContext {
+  const buyer = buyerUid?.replace(/[^0-9]/g, '') ?? '';
   const keys = new Map<string, string | undefined>();
   const keyOf = (r: Receipt) => {
-    if (!keys.has(r.id)) { const business = payers.ofReceipt(r); keys.set(r.id, business ? `@${business}` : vendorOf(r)); }
+    if (!keys.has(r.id)) { const business = payers.ofReceipt(r); keys.set(r.id, business ? `@${business}` : vendorOf(r, buyer)); }
     return keys.get(r.id);
   };
   const held = new Set(books.mappings.map((m) => m.receiptId));
@@ -194,8 +202,10 @@ function contextOf(books: Books, payers: BatchPayers, toChf: ToChf | undefined):
  * batch payer's run at the rate: within BAND below); else it is within ROUNDING of it. `partial`:
  * found among only some of a vendor's receipts (the nearest MAX_TRIED of a batch payer's, its
  * oldest MAX_RUN open ones): a set among the others may fit too, so code does not link it.
+ * `close`: the nearest set that neither adds up nor rounds to it (Fit.close): shown as close, never
+ * as rounding.
  */
-interface Candidate { set: Receipt[]; sum: number; off: number; due: Due; linkedCents: number; run: boolean; exact: boolean; partial?: true }
+interface Candidate { set: Receipt[]; sum: number; off: number; due: Due; linkedCents: number; run: boolean; exact: boolean; partial?: true; close?: true }
 
 /**
  * What fits one charge: the sets that add up or round to it, and the closest set that does not
@@ -275,7 +285,7 @@ function fitOf(books: Books, ctx: SetContext, charge: Charge, search: SetSearch)
           const sum = sums[mask];
           const off = Math.abs(sum - need);
           if (off <= reach(size + linked.length)) { fit.found.push(take(setOf(tried, mask), sum, false, off === 0, over)); back ||= over; }
-          else if (off <= tolerance && size + linked.length >= 2 && (!fit.close || off < Math.abs(fit.close.off))) fit.close = take(setOf(tried, mask), sum, false, false, false);
+          else if (off <= tolerance && size + linked.length >= 2 && (!fit.close || off < Math.abs(fit.close.off))) fit.close = { ...take(setOf(tried, mask), sum, false, false, false), close: true };
         }
         if (back && mine) fit.cut ??= { near: near.length, tried: MAX_TRIED, limit: 'combinations' };
       }
@@ -319,26 +329,26 @@ const contenders = (fit: Fit): Candidate[] => fit.found.filter((c) => c.exact);
 
 const asSet = (c: Candidate, charge: Charge): ReceiptSet => ({
   payment: charge.refs[0], legs: charge.refs, receipts: c.set.map((r) => r.id).sort(), sum: (c.linkedCents + c.sum) / 100, paid: c.due.cents / 100,
-  currency: c.due.currency, basis: c.due.basis, exact: c.exact, ...(!c.exact && c.off !== 0 && c.due.basis !== 'rate' ? { rounding: true as const } : {}), ...(c.run ? { run: true as const } : {}),
+  currency: c.due.currency, basis: c.due.basis, exact: c.exact, ...(!c.exact && !c.close && c.off !== 0 && c.due.basis !== 'rate' ? { rounding: true as const } : {}), ...(c.run ? { run: true as const } : {}),
 });
 
 const searchOf = (s: SetSearch | ((date: string) => boolean)): SetSearch => (typeof s === 'function' ? { isOpen: s } : s);
 
 /** The context of the books as they are, kept while they stay the same object with the same lists (the UI's books, a bench's): proposals for one payment after another read it once. */
-const contexts = new WeakMap<object, { lists: unknown[]; payers: BatchPayers; toChf?: ToChf; ctx: SetContext }>();
-function contextFor(books: Books, payers: BatchPayers, toChf: ToChf | undefined): SetContext {
+const contexts = new WeakMap<object, { lists: unknown[]; payers: BatchPayers; toChf?: ToChf; buyerUid?: string; ctx: SetContext }>();
+function contextFor(books: Books, payers: BatchPayers, toChf: ToChf | undefined, buyerUid: string | undefined): SetContext {
   const lists = [books.receipts, books.receipts.length, books.mappings, books.mappings.length, books.transactions, books.transactions.length];
   const kept = contexts.get(books);
-  if (kept && kept.payers === payers && kept.toChf === toChf && kept.lists.every((x, i) => x === lists[i])) return kept.ctx;
-  const ctx = contextOf(books, payers, toChf);
-  contexts.set(books, { lists, payers, toChf, ctx });
+  if (kept && kept.payers === payers && kept.toChf === toChf && kept.buyerUid === buyerUid && kept.lists.every((x, i) => x === lists[i])) return kept.ctx;
+  const ctx = contextOf(books, payers, toChf, buyerUid);
+  contexts.set(books, { lists, payers, toChf, buyerUid, ctx });
   return ctx;
 }
 
 /** What code offers for one payment, for its line in Kontoauszüge: every set that fits it, exact ones first, and where code stopped looking (named to the person). */
 export function proposalsFor(books: Books, tx: BankTransaction, search: SetSearch | ((date: string) => boolean)): { sets: ReceiptSet[]; cut?: SetCut } {
   const s = searchOf(search);
-  const ctx = contextFor(books, s.payers ?? NO_BATCH_PAYERS, s.toChf);
+  const ctx = contextFor(books, s.payers ?? NO_BATCH_PAYERS, s.toChf, s.buyerUid);
   const fit = fitOf(books, ctx, ctx.charges.of(tx), s);
   if (!fit) return { sets: [] };
   const ranked = [...fit.found.filter((c) => c.exact), ...fit.found.filter((c) => !c.exact), ...(fit.close ? [fit.close] : [])];
@@ -355,7 +365,7 @@ export function proposalsFor(books: Books, tx: BankTransaction, search: SetSearc
  */
 export function receiptSetsToLink(books: Books, search: SetSearch | ((date: string) => boolean)): { sets: ReceiptSet[]; cuts: SetCut[] } {
   const s = searchOf(search);
-  const ctx = contextOf(books, s.payers ?? NO_BATCH_PAYERS, s.toChf);
+  const ctx = contextOf(books, s.payers ?? NO_BATCH_PAYERS, s.toChf, s.buyerUid);
   const seen = new Set<string>();
   const all: Fit[] = [];
   for (const tx of books.transactions) {
