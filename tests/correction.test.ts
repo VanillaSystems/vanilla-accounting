@@ -218,7 +218,7 @@ test('r8k-10: a private outlay for a receipt dated in a filed quarter corrects t
   assert.equal(correctsFor(byBank, [kiosk], lock.isClosed, 'quarter'), undefined, 'a March invoice paid by bank in July is a July booking, no correction');
   assert.equal(correctsFor(outlay, [{ id: 'j', date: '2026-07-01' } as Receipt], lock.isClosed, 'quarter'), undefined, 'a receipt of the open period corrects nothing');
   const fx = { daily: () => undefined, flat: () => undefined } as unknown as Parameters<typeof entriesFor>[2]['fx'];
-  const [e] = entriesFor(outlay, [{ accountDebit: '6500', accountCredit: '', amount: 12.5, vatCode: 'I0', description: 'Kiosk' }], { fx, receiptDate: '2026-06-20', receipts: ['k'], bankAccount: '2451', lock, by: { kind: 'model', model: 'stub' }, corrects: '2026-Q2' });
+  const [e] = entriesFor(outlay, [{ accountDebit: '6500', accountCredit: '', amount: 12.5, vatCode: 'I0', description: 'Kiosk' }], { fx, receipts: ['k'], bankAccount: '2451', lock, by: { kind: 'model', model: 'stub' }, corrects: '2026-Q2' });
   assert.deepEqual([e.date, e.corrects, e.accountCredit], ['2026-07-01', '2026-Q2', '2451'], 'the classifier stamps the correction too');
 });
 

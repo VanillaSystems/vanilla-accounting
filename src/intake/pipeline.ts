@@ -10,8 +10,6 @@ import { join } from 'node:path';
 import type { AskOptions } from '../llm/ask.js';
 import { emptyBooks, hasBooks, loadBooks, updateSaved, type Actor, type Books } from '../books/store.js';
 import type { Workspace } from '../workspace/workspace.js';
-import { holdWords, type HeldPayout } from '../booking/payout-orders.js';
-import { wordsIn } from '../export/texts.js';
 
 export const INTAKE_STEPS = ['read', 'vat', 'match', 'classify'] as const;
 export type IntakeStepId = (typeof INTAKE_STEPS)[number];
@@ -32,8 +30,6 @@ export type IntakeNote =
   | { code: 'sameBytes'; files: Array<{ file: string; of: string }> }
   /** Payments a company rule holds for the person (src/booking/rules.ts): not booked, each a question in Automatisierung. */
   | { code: 'asked'; count: number }
-  /** Payouts their order documents hold (src/booking/payout-orders.ts), each with its own reason. */
-  | { code: 'payoutsHeld'; payouts: HeldPayout[] }
   /** Customer payments without an invoice booked without VAT: each a question to the owner (src/intake/sale-questions.ts). */
   | { code: 'saleAsked'; count: number }
   /** Payments that need a receipt and have none yet (src/booking/receipt-wait.ts): not booked, booked once it is linked. */
@@ -208,7 +204,6 @@ export function noteLines(notes: IntakeNote[]): string[] {
       case 'saleAsked': return `? ${n.count} customer payment(s) without an invoice wait for the owner: with VAT, abroad, or no sale?`;
       case 'waitingReceipt': return `${n.count} payment(s) wait for their receipt: booked once it is linked`;
       case 'receiptUnread': return `? ${n.count} payment(s) have a receipt whose VAT could not be read: each waits for the person under Aufgaben`;
-      case 'payoutsHeld': return `? ${n.payouts.length} payout(s) wait for the person, their orders do not book them:\n${n.payouts.map((p) => { const w = holdWords(p.hold); return `  ${p.date} ${p.currency} ${p.amount.toFixed(2)}: ${wordsIn('en').t(w.key, w.vars)}`; }).join('\n')}`;
       case 'error': return `⛔ ${n.detail}`;
     }
   });

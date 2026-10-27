@@ -5,7 +5,8 @@
  * still none came, the person is asked (src/accounting/receipt-due.ts). A payment that needs no
  * receipt is booked at once.
  *
- * What needs no receipt is decided here in code, for any bank and any business: money coming in,
+ * What needs no receipt is decided here in code, for any bank and any business: a payment
+ * provider's payout (a settlement of its clearing account, never matched to a receipt, #203), money coming in,
  * a fee the bank debits as a movement of its own, a transfer between the firm's own accounts, a
  * payment a person marked as needing none, a firm that claims no input tax, and a business whose
  * file says so as `apply: { receipt: none }` on a rule of evidence.guide.yaml#rules (in the app's
@@ -31,6 +32,7 @@ import { isSeparateFee } from './separate-fee.js';
 import { businessVat } from './purchase-vat.js';
 import { linkedOf, type Linked } from '../accounting/receipt-due.js';
 import { bankAccountFor } from '../workspace/money-accounts.js';
+import { providerOfPayment } from './providers.js';
 
 export const RECEIPT_STEP = 'evidence.guide.yaml#rules';
 
@@ -44,6 +46,8 @@ export type NoWait =
   | 'marked'
   /** Nothing moved. */
   | 'zero'
+  /** A payment provider's payout (src/booking/providers.ts): a settlement of its clearing account; its order documents prove the sales, not the payout (#203). */
+  | 'provider'
   /** Money in claims no input tax; a customer payment without an invoice has its own question. */
   | 'incoming'
   /** The bank's own fee row of another payment: the statement is the evidence. */
@@ -73,6 +77,8 @@ export interface WaitFacts {
   ruleAccount?: string;
   /** A company rule says to ask the person about it first. */
   ruleAsks?: boolean;
+  /** It is a payment provider's payout (providerOfPayment). */
+  payout?: boolean;
 }
 
 /** What the decision reads of the firm. */
@@ -96,6 +102,7 @@ export function receiptWait(tx: BankTransaction, facts: WaitFacts, ctx: WaitCont
   if (facts.linked === 'read') return book('receipt');
   if (tx.noReceiptNeeded) return book('marked');
   if (tx.amount === 0) return book('zero');
+  if (facts.payout) return book('provider');
   if (tx.direction === 'CRDT') return book('incoming');
   if (isSeparateFee(tx)) return book('separateFee');
   if (tx.counterpartyIban && ctx.ownIbans.has(ibanOf(tx.counterpartyIban))) return book('ownTransfer');
@@ -180,7 +187,8 @@ export function receiptWaitOf(books: Books, tx: BankTransaction, context: Classi
   const routing = identify(signalsOfTransaction(tx, linked), context.counterparties ?? []);
   const then = ruleOfPayment(books, tx, context, fx)?.rule.then;
   const ruleAccount = then?.kind === 'book' ? then.booking.account : then?.booking?.account;
-  return receiptWait(tx, { linked: linkedOf(linked), ...(routing.kind === 'known' && { business: routing.counterparty }), ...(ruleAccount && { ruleAccount }), ...(then?.kind === 'ask' && { ruleAsks: true }) }, {
+  const payout = !!providerOfPayment(tx, linked, context.counterparties ?? []);
+  return receiptWait(tx, { linked: linkedOf(linked), ...(routing.kind === 'known' && { business: routing.counterparty }), ...(ruleAccount && { ruleAccount }), ...(then?.kind === 'ask' && { ruleAsks: true }), ...(payout && { payout }) }, {
     ...known,
     ownIbans: new Set(context.bankAccounts.flatMap((a) => (a.iban ? [ibanOf(a.iban)] : []))),
     settles: settlementAccount(context),
@@ -188,8 +196,8 @@ export function receiptWaitOf(books: Books, tx: BankTransaction, context: Classi
   });
 }
 
-/** Why a payment has no receipt of its own: the matching chain never pairs one (#187). Money in, a rule that asks first and a firm without input tax still take a receipt. */
-const NONE_OF_ITS_OWN: ReadonlySet<NoWait> = new Set<NoWait>(['marked', 'zero', 'separateFee', 'ownTransfer', 'settlement', 'business', 'wording']);
+/** Why a payment has no receipt of its own: the matching chain never pairs one (#187), nor the model's match. Money in, a rule that asks first and a firm without input tax still take a receipt; a provider's payout never does (#203). */
+const NONE_OF_ITS_OWN: ReadonlySet<NoWait> = new Set<NoWait>(['marked', 'zero', 'provider', 'separateFee', 'ownTransfer', 'settlement', 'business', 'wording']);
 
 /**
  * The payments that have no receipt of their own, by the same decision as the wait for one

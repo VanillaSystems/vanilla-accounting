@@ -8,9 +8,7 @@ import { bankAccountFor } from '../workspace/money-accounts.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import type { Books } from '../books/store.js';
 import type { BankTransaction } from '../types/index.js';
-import { mappedReceipts, paymentFacts, payoutLines, ruleBookingLines, type ClassifyContext, type RuleLine } from './classify.js';
-import { chart } from '../engines/index.js';
-import { wordsIn } from '../export/texts.js';
+import { mappedReceipts, paymentFacts, ruleBookingLines, type ClassifyContext, type RuleLine } from './classify.js';
 import type { RuleRow } from './rule-book.js';
 import { holds, loneWords, ruleFor, type PlacedRule, type RuleBooking } from './rules.js';
 import { nationalCodes, overrideOf, supplierFacts, type NationalOverride, type SideLine } from './national-vat.js';
@@ -133,18 +131,10 @@ export function bookedNow(books: Books, tx: BankTransaction, bank: string, decid
   });
 }
 
-/**
- * What a rule's booking books for `tx`. A payout rule with its report linked keeps the figures the
- * payment is booked with today and puts them on its accounts and codes (payoutLines); without a
- * report, or not booked yet, the lines are the proposal: the whole payout on its account.
- */
+/** What a rule's booking books for `tx`: its lines, the bank on the other side. */
 function wouldEntries(books: Books, tx: BankTransaction, booking: RuleBooking, context: ClassifyContext): SideLine[] {
   const mapped = mappedReceipts(books, tx);
   const bank = bankAccountFor(tx, context.bankAccounts);
-  const today = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
-  const read = today.map((e) => ({ accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount, description: e.description ?? '' }));
-  const split = booking.fees && mapped.length && today.length ? payoutLines(read, bank, booking, booking.fees, (a) => chart().typeOf(a) === 'revenue') : undefined;
-  if (split) return split.map((e) => ({ accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount, ...(e.vatCode ? { vatCode: e.vatCode } : {}) }));
   return ruleBookingLines(tx, booking, mapped, context.ownerAccount).map((l) => ({
     accountDebit: tx.direction === 'DBIT' ? l.account : bank,
     accountCredit: tx.direction === 'DBIT' ? bank : l.account,
@@ -201,17 +191,14 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
       return {
         ref: tx.ref, date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction,
         text: [tx.description, tx.counterparty && !tx.description.includes(tx.counterparty) ? tx.counterparty : ''].filter(Boolean).join(' · '),
-        would: t.kind === 'ask' ? { kind: 'ask', question: t.question, lines }
-          // A payout rule without the payout report asks, the whole payout its proposal (r4c-21).
-          : t.booking.fees && !mappedReceipts(books, tx).length ? { kind: 'ask', question: wordsIn('de').t('rules.say.payoutAsk'), lines }
-            : { kind: 'book', lines },
+        would: t.kind === 'ask' ? { kind: 'ask', question: t.question, lines } : { kind: 'book', lines },
         now,
         ...(JSON.stringify(decided) !== JSON.stringify(now) ? { beforeAi: decided } : {}),
         ...(deciderRow && ruleKey(deciderRow) !== key ? { decidedBy: deciderRow.id } : {}),
       };
     };
     // The accounts the rule books on: a booking on any other, as decided before the AI moved it, is a decision it would overrule.
-    const own = new Set(t.kind === 'book' ? [t.booking.account, ...(t.booking.private && context.ownerAccount ? [context.ownerAccount] : []), ...(t.booking.fees ? [t.booking.fees.account] : [])] : []);
+    const own = new Set(t.kind === 'book' ? [t.booking.account, ...(t.booking.private && context.ownerAccount ? [context.ownerAccount] : [])] : []);
     const others: string[] = [];
     const elsewhere: BankTransaction[] = [];
     let otherwise = 0;
@@ -238,10 +225,9 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
         const agrees = decided.length > 0 && sameLines(decided, wouldBook(books, tx, t.booking, context));
         if (agrees) same++;
         else if (decided.length && !byItself) { otherwise++; differs.push(tx); }
-        // Only where it books: another rule deciding first, or a payout waiting for its report, books nothing by this one.
+        // Only where it books: another rule deciding first books nothing by this one.
         const decider = ruleFor(placed, p);
-        const asked = t.booking.fees && !mappedReceipts(books, tx).length;
-        if (!asked && decider && ruleKey(pool[placed.indexOf(decider)].row) === key) {
+        if (decider && ruleKey(pool[placed.indexOf(decider)].row) === key) {
           const { kinds, national } = departures(books, tx, t.booking, context);
           for (const kind of kinds) {
             const o = against.get(kind) ?? { count: 0, payments: [] };

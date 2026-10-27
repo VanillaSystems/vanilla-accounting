@@ -76,6 +76,8 @@ export interface SetSearch {
   toChf?: ToChf;
   /** The company's own UID (company.uid): a receipt whose VAT number is it is keyed by its title's vendor (vendorOf). */
   buyerUid?: string;
+  /** The payments without a receipt of their own (src/booking/receipt-wait.ts noReceiptOfItsOwn: a provider's payout, an own transfer…): no set is linked to them. */
+  noReceipt?: (t: BankTransaction) => boolean;
 }
 
 type Books = Pick<Index, 'receipts' | 'transactions' | 'mappings'>;
@@ -226,10 +228,10 @@ const reach = (n: number) => n * ROUNDING;
  * receipt), or one whose linked receipts are in no such currency or owe it all.
  */
 function fitOf(books: Books, ctx: SetContext, charge: Charge, search: SetSearch): Fit | undefined {
-  const { isOpen, payers = NO_BATCH_PAYERS, toChf } = search;
+  const { isOpen, payers = NO_BATCH_PAYERS, toChf, noReceipt } = search;
   const { keyOf } = ctx;
   const [first] = charge.legs;
-  if (charge.legs.some((t) => t.amount === 0 || t.type === 'wise-fee' || madeByHand(t) || !isOpen(t.date))) return undefined;
+  if (charge.legs.some((t) => t.amount === 0 || t.type === 'wise-fee' || madeByHand(t) || !isOpen(t.date) || noReceipt?.(t))) return undefined;
   const held = charge.refs.flatMap((ref) => ctx.linksOf.get(ref) ?? []);
   const linkedIds = new Set(held.map((m) => m.receiptId));
   const linkedAll = [...linkedIds].map((id) => ctx.byId.get(id));

@@ -11,7 +11,7 @@ import type { OtherWhy, SupportingWhy } from '../core/modules/schema.js';
 import type { TwinWhy } from './index.js';
 
 /** What a file is. Unset while nobody knows (the row asks). */
-export type DropKind = 'receipt' | 'photo' | 'camt' | 'statement-pdf' | 'zip';
+export type DropKind = 'receipt' | 'photo' | 'camt' | 'statement-pdf' | 'zip' | 'sales-report';
 
 /** How it was recognized: by its structure (bytes, a namespace), or by a hint (a word, the name). */
 export type DropHow = 'structure' | 'hint';
@@ -56,6 +56,12 @@ export interface DropRow {
   quarantined?: string;
   /** A statement: its file under bank-statements/ and the payments it added. */
   statement?: { file: string; refs: string[] };
+  /** A payment provider's sales or fee report (a CSV its file's columns recognise, #203): whose, and which kind. */
+  provider?: { id: string; name: string; kind: 'sales' | 'fees' };
+  /** A report taken: what it booked onto the provider's clearing account and what it left. */
+  report?: ReportSummary;
+  /** A report the company's file of its provider cannot book yet: the account (or fee code) the row asks for, once. */
+  askProvider?: ProviderAsk;
   /** What its text says it is, when it is no plain receipt (src/intake/document-kind.ts): kept beside an invoice, or no receipt at all. */
   document?: SupportingWhy | OtherWhy;
   /**
@@ -68,6 +74,25 @@ export interface DropRow {
 
 export interface StatementFacts { iban?: string; from?: string; to?: string; entries?: number }
 
+/** What the company's file of a provider lacks for its report: its clearing account, its revenue account, or its fee account and code; `file`: where it is kept. */
+export interface ProviderAsk { provider: string; name: string; missing: 'clearing' | 'revenue' | 'fees'; file: string }
+
+/** Why an order of a report was not booked by code (src/booking/sales-report.ts ReportHold). */
+export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'country' | 'changed' | 'noRate' }
+
+/**
+ * What a report booked (src/intake/sales-report-import.ts): orders, refunds and fees booked; `known`
+ * already in the books; `filed` and `before`: rows dated in a filed period or before the books, not
+ * booked (a correction is the person's); `held`: orders the person decides (the first ones, `heldMore`
+ * the rest); `unread`: rows code could not read; `proofs`: order documents linked to their sale;
+ * `rebooked`: the provider's payouts booked again from the clearing account.
+ */
+export interface ReportSummary {
+  provider: string; name: string; kind: 'sales' | 'fees'; from: string; to: string; file: string;
+  orders: number; refunds: number; fees: number; known: number; filed: number; before: number;
+  held: ReportHeld[]; heldMore: number; unread: number; proofs: number; rebooked: number;
+}
+
 /** `duplicate`: the same bytes; `possible-duplicate`: the same facts, asked; `same`: the person said it is the same; `not-receipt`: its words say so (`document` says what it is). */
 export type DropReason =
   | 'duplicate' | 'possible-duplicate' | 'same' | 'not-receipt' | 'held' | 'pdf-password'
@@ -75,7 +100,9 @@ export type DropReason =
   /** A PDF header on bytes no PDF reader opens (damaged, cut short): quarantine, nothing will ever read it (r8k-9). */
   | 'unreadable'
   /** A statement of an account the owner said is private: set aside, not read into the books. */
-  | 'private';
+  | 'private'
+  /** A provider's report its file cannot book yet: the row asks for the missing account (`askProvider`). */
+  | 'provider-account';
 
 export interface DropSession {
   id: string;
@@ -95,7 +122,9 @@ export type DropAction =
   /** A statement of one of the accounts it offered (`chooseAccount`): read into that one. */
   | { kind: 'account'; account: string }
   /** A possible duplicate: «ist dasselbe» (not taken) or «verschieden» (taken, and the pair is not asked again). */
-  | { kind: 'twin'; answer: 'same' | 'distinct' };
+  | { kind: 'twin'; answer: 'same' | 'distinct' }
+  /** A report's provider lacks an account (`askProvider`): the person names it, it is kept in the company's file of the provider, and the report is taken. */
+  | { kind: 'provider'; account: string; vat?: string };
 
 /** Why a file is in data/quarantine/: its words say it is no receipt (and which kind, and the mail's sender), a person set it aside, or it is no PDF inside. */
 export type QuarantineReason = { kind: 'not-receipt'; why?: OtherWhy; from?: string } | { kind: 'held' } | { kind: 'unreadable' };

@@ -1,6 +1,10 @@
 # Shopify is both a supplier (app and payment fees) and the sales platform:
 # its payouts arrive as "Received money from Stripe Payments UK Ltd with
 # reference Shopify …", so the Stripe payout merchant routes here.
+# As a payment provider (#203) its payout settles its clearing account: code books
+# it bank / clearing account without VAT; the sales come from its order export and
+# the fees from its payments export, both CSV (src/booking/sales-report.ts). The
+# company's file names the accounts: provider: { clearing, revenue, fees: { account, vat } }.
 
 id: shopify
 name: Shopify
@@ -9,15 +13,34 @@ match:
   uid: [ "CHE-153.004.184" ]
   file: [ '^\d{8}[-_]shopify' ]
 
+provider:
+  reports:
+    # Shopify Admin › Bestellungen › Exportieren (CSV): one row per line of an order, the order's figures on its first.
+    sales:
+      order: Name
+      date: Paid at
+      ordered: Created at
+      shipTo: Shipping Country
+      gross: Total
+      tax: Taxes
+      refunded: Refunded Amount
+      currency: Currency
+    # Shopify Admin › Finanzen › Shopify Payments › Transaktionen exportieren (CSV): one row per charge with the fee kept.
+    fees:
+      date: Transaction Date
+      fee: Fee
+      order: Order
+      currency: Currency
+  payoutDays: 7
+
 facts:
-  - id: order-page-payout
+  - id: payout-settles
     fact: >
-      An order page names the payout each order went into by the payout's date and the amount added
-      ("€<amount> EUR was added to your <Mon d, yyyy> payout"), and a refund by the amount deducted
-      ("€<amount> EUR refund was deducted from your <Mon d, yyyy> payout"), in the store's payout currency.
-      The payout reaches the bank within days of that date, as what its orders add less what is deducted.
-      The match step reads these as the order's facts; code links the pages to their payout
-      (src/intake/order-links.ts) and books it per order (src/booking/payout-orders.ts)
+      A Shopify Payments payout pays out what Shopify collected for the shop's orders, less its fees and the
+      refunds it deducted, within days. It is a settlement of what Shopify holds for the shop, not a sale: code
+      books it bank / the company's clearing account, and the order export books each order's sale onto that
+      account (src/booking/sales-report.ts). An order page names its order by number: code links it to that
+      order's sale as proof of the delivery, never to the payout
     source: docs/runbooks/receipt-collection.md § Shopify order pages
 
 steps:
@@ -42,8 +65,8 @@ steps:
     rules:
       - id: ev-shopify-order
         when: a sales-record order page
-        then: link it to the payout it names ("was added to your <date> payout"); code does, when the orders add up to the payout (shopify#order-page-payout)
-        source: docs/runbooks/receipt-collection.md § Shopify order pages
+        then: proof of the order's delivery country; code links it to the order's sale booked from the order export, never to the payout (shopify#payout-settles)
+        source: decision 2026-10-27, owner
     precedents: []
 
   booking.guide.yaml#purchase_vat:
@@ -51,7 +74,7 @@ steps:
       - id: pv-shopify-fees
         when: Webshop Gebühren
         then: >
-          the fee entries stay at the payout; the month's Vorsteuer is one single-leg entry — empty Soll / C 6580 / M81-2, amount = fees × 8.1 / 108.1
+          the fees come onto the clearing account from the payments export at the company's fee code (provider.fees: I0 while no bill shows Shopify's Swiss VAT); the month's Vorsteuer is one single-leg entry — empty Soll / C 6580 / M81-2, amount = fees × 8.1 / 108.1
         why: the proof is the monthly Shopify bill, not the payout
         apply: { inputTax: none, direction: in }
         source: docs/runbooks/booking-patterns.md § Shopify

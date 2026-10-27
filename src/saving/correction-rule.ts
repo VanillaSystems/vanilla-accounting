@@ -54,7 +54,7 @@ export function correctionOffer(ws: Workspace, books: Books, ref: string, contex
   const placed = ruleOfPayment(books, tx, context, loadFxResolver());
   if (!placed || placed.rule.then.kind !== 'book') return undefined;
   const booking = placed.rule.then.booking;
-  if (booking.fees || booking.private) return undefined;
+  if (booking.private) return undefined;
   const bank = bankAccountFor(tx, context.bankAccounts);
   // A correction entry moves the money between the rule's account and another: that other one is what the rule should book now.
   const other = (a: string) => a !== bank && a !== booking.account;

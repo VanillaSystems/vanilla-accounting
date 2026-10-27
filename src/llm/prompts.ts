@@ -168,9 +168,6 @@ export function buildVisionPrompt(absPdfPath: string): string {
     'gefolgt von einer Leerzeile, dann der vollständige Text. Kein weiterer Kommentar.';
 }
 
-/** A line's role in a payout report (rule 9a): the code books it on the rule's accounts whatever sides and sign the model wrote (src/booking/classify.ts payoutLines). */
-export type PayoutKind = 'sale' | 'refund' | 'fee';
-
 export interface ClassifyEntry {
   accountDebit: string;
   accountCredit: string;
@@ -188,8 +185,6 @@ export interface ClassifyEntry {
   /** Rule 9b: the amount is the VAT itself. */
   amountIs?: 'tax';
   description: string;
-  /** Only for a payout report's lines. */
-  kind?: PayoutKind;
   /** On a purchase line with a receipt (rule 7h): what it buys; on a sale without Swiss VAT (rule 7g): what it sells. */
   supply?: Supply;
   /** On a purchase line with a receipt (rule 7h): the supplier's country as the receipt gives its seat, ISO 3166 alpha-2 ("IE", "CH"). */
@@ -273,22 +268,19 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
       rate as its "vatRate". Keep the same expense account for all split rows unless the items
       clearly belong to different accounts. The split rows must sum to the receipt total.
 8. For Wise fees (description starts with "Wise Charges"): use account 6940 (Bankspesen), "vat": "none".
-9. For Shopify/Stripe sales (Webshop orders): ALWAYS produce exactly 2 journal entry rows. Specify BOTH accountDebit AND accountCredit (do NOT leave one empty):
-   a) Revenue: accountDebit "1093" / accountCredit the chart's revenue account for goods sold (KMU "3200" Handelserlöse) — full order amount. "charged" at 8.1 for Swiss customers, "none" with "supply": "goods" for exports.
-   b) Shopify fees: accountDebit "6580" / accountCredit "1093" — the fee amount (= order amount minus Stripe payout, as shown on the Shopify receipt)
-   The system will automatically add a third entry for the Stripe payout (D=bank C=1093) — do NOT add it yourself.
-9a. Card-terminal and payment-provider payouts (SumUp, Payrexx, Worldline, Stripe Terminal, TWINT): the payout is
-   the card sales at the company's own place of business minus the provider's fees. Its payout report rarely shows MWST,
-   yet the sales are domestic sales: book the GROSS sales on the revenue account "charged" at 8.1 (the normal rate;
-   another rate only when the report shows it), a refund in the report the same, and the fees as their own row on
-   the bank-fee account with "vat": "none" (payment processing is exempt: no input tax, no Bezugsteuer). The rows
-   sum to the payout. Give every row of a payout report its role, "kind": "sale", "refund" or "fee", and its amount
-   as a positive number; the role decides the accounts and codes, so a fee is never written as a negative sale.
-   Without the report: the whole payout on the revenue account, "charged" at 8.1.
+9. A payout of a payment provider the company's knowledge names as one (a shop platform, a card terminal) never
+   reaches you: the app books it from the provider's clearing account, and the sales from the provider's report.
+9a. A payout of a card terminal or payment provider the app does not know as one (SumUp, Payrexx, Worldline, Stripe
+   Terminal, TWINT): the payout is the card sales at the company's own place of business minus the provider's fees.
+   Its payout report rarely shows MWST, yet the sales are domestic sales: book the GROSS sales on the revenue account
+   "charged" at 8.1 (the normal rate; another rate only when the report shows it), a refund in the report the same,
+   and the fees as their own row on the bank-fee account with "vat": "none" (payment processing is exempt: no input
+   tax, no Bezugsteuer). The rows sum to the payout, every amount positive. Without the report: the whole payout on
+   the revenue account, "charged" at 8.1.
 9b. Shopify MONTHLY VAT correction (Vorsteuer on transaction fees) — a SEPARATE booking, not a sales order.
    The monthly Shopify billing statement ("Payments Invoice") shows the 8.1% Swiss MWST on the fees that the
    per-order payouts hide. Book ONLY the VAT as a SINGLE-LEG correction — this is the ONE case where a leg is
-   intentionally left empty (rule 9's "both legs" requirement is about sales rows, not this):
+   intentionally left empty:
      - accountDebit: "" (EMPTY) — the app books this leg to the MWST account
      - accountCredit: "6580"
      - amount: the VAT amount only (= gross fees × 8.1 / 108.1)

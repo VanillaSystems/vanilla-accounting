@@ -22,6 +22,7 @@ import { findFile } from '../../workspace/workspace.js';
 import { INTAKE, bookAgain, engine, handedOver } from './automation.js';
 import { removeReceipt } from '../../accounting/classify-force.js';
 import { importStatement, removeStatement } from './statements.js';
+import { importSalesReport, recognizeCsv, removeSalesReport, setProviderAccount } from '../../intake/sales-report-import.js';
 
 import type { Arrival } from '../../workflows/model.js';
 import { recognize } from '../../intake/recognize.js';
@@ -61,7 +62,7 @@ function known(): Set<string> {
 async function add(s: DropSession, name: string, bytes: Buffer, from?: string, password?: string): Promise<void> {
   const id = sha16(bytes);
   const seen = new Set([...known(), ...s.rows.filter((r) => r.state !== 'refused' && r.state !== 'undone').map((r) => r.id)]);
-  const { text, ...r } = await recognize(bytes, name);
+  const { text, ...r } = await recognize(bytes, name, undefined, (b) => recognizeCsv(WS, b));
   const row: DropRow = { key: randomUUID().slice(0, 8), id, name, size: bytes.length, ...(from ? { from } : {}), ...r };
   if (row.kind === 'zip') {
     const out = await unzip(bytes, password);
@@ -153,6 +154,18 @@ router.post('/api/drop/:id/rows/:key', async (req, res) => {
       delete row.message;
       Object.assign(row, { account: a.account, state: 'take', reason: undefined });
       break;
+    case 'provider': {
+      const ask = row.askProvider;
+      if (!ask || typeof a.account !== 'string' || !a.account.trim() || (ask.missing === 'fees' && (typeof a.vat !== 'string' || !a.vat.trim()))) throw new RequestError(400, 'Nur ein Bericht, dessen Konto fehlt, nimmt ein Konto.');
+      const account = a.account.trim();
+      const set = ask.missing === 'fees' ? { fees: { account, vat: a.vat!.trim() } } : { [ask.missing]: account };
+      const kept = setProviderAccount(WS, ask.provider, set);
+      if (!kept.ok) throw new RequestError(400, `Konto oder Steuercode ${ask.missing === 'fees' ? `${account} / ${a.vat}` : account} gibt es so nicht.`, kept.refusal);
+      delete row.askProvider;
+      delete row.message;
+      Object.assign(row, { state: 'take', reason: undefined });
+      break;
+    }
     case 'undo':
       if (row.state !== 'taken') throw new RequestError(400, 'Nur eine übernommene Datei lässt sich zurücknehmen.');
       if (undo(row).length) await bookAgain(row.name);
@@ -215,6 +228,15 @@ async function takeWaiting(s: DropSession): Promise<void> {
     }
     if (row.state !== 'take') continue;
     const bytes = readFileSync(fileOf(s.id, row.key));
+    if (row.kind === 'sales-report') {
+      // A provider's report is booked here, by code, as a statement is read: it needs no run of the inbox (#203).
+      const done = importSalesReport(WS, bytes, row.name);
+      if (done.ok) {
+        Object.assign(row, { state: 'taken', report: done.summary });
+        rmSync(fileOf(s.id, row.key), { force: true });
+      } else Object.assign(row, done.ask ? { state: 'unclear', reason: 'provider-account', askProvider: done.ask, message: done.message } : { state: 'refused', reason: 'not-imported', message: done.message });
+      continue;
+    }
     let arrival: Arrival;
     if (row.kind === 'camt' || row.kind === 'statement-pdf') {
       const had = new Set(readBooks().transactions.map((t) => t.ref));
@@ -261,7 +283,10 @@ function undo(row: DropRow): string[] {
   let again: string[] = [];
   const run = row.run ? engine().run(row.run) : undefined;
   if (run && run.state.status === 'running') throw new RequestError(409, 'Der Lauf arbeitet gerade daran. Gleich noch einmal.');
-  if (row.statement) {
+  if (row.report) {
+    // A report's bookings go with its receipt; one a person changed, or of a filed period, keeps it (removeSalesReport).
+    if (!removeSalesReport(WS, row.id)) throw new RequestError(409, 'Eine Buchung dieses Berichts ist eingereicht oder von Hand geändert: er bleibt. Die Buchungen von Hand korrigieren.');
+  } else if (row.statement) {
     // The same convergent undo as the statement page's «Auszug entfernen» (r9k-3); a file already gone (removed there) leaves nothing to do.
     if (findFile(WS.paths, 'statements', row.statement.file)) removeStatement(row.statement.file, row.statement.refs);
   } else {

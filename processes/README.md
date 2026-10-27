@@ -174,6 +174,44 @@ that file has an `apply:` of its own), and a company's executable booking rule
 books before any of this. `npm run check-processes` checks every `apply:` and
 refuses each form in the other layer.
 
+## A payment provider
+
+A shop platform or a card terminal collects the company's sales and pays them
+out less its fees. Its business file says so with a `provider:` section
+(src/knowledge/provider.ts), and code takes it from there (#203):
+
+```yaml
+# processes/suppliers/shopify.yaml: the app layer, true for every company
+provider:
+  reports:
+    sales: { order: Name, date: Paid at, shipTo: Shipping Country, gross: Total, tax: Taxes, refunded: Refunded Amount }
+    fees: { date: Transaction Date, fee: Fee, order: Order }
+  payoutDays: 7
+# knowledge/suppliers/shopify.yaml: the company layer, its chart
+provider:
+  clearing: "1093"
+  revenue: "3200"
+  fees: { account: "6580", vat: I0 }
+```
+
+- Its payout is a settlement, not a sale: code books it bank / `clearing`
+  without VAT (until the company's file names `clearing`, as any money in). It
+  needs no receipt and is never matched to one (no receipt set, no pair, no
+  model match, no order link).
+- Its report (the CSV it exports) is recognised in the drop by the columns of
+  `reports`: each a header or a list of headers. Code books each order onto the
+  clearing account with its code (delivered in the VAT territory: the sale code;
+  abroad: V0; a refund with the minus) and each fee at `fees.vat`. A domestic
+  order whose tax column shows no tax waits for the person. An order of a filed
+  period is not booked.
+- The accounts are one company's chart: only the company's file names them,
+  and the drop asks for a missing one once and keeps the answer there.
+  `revenue` falls back to the account of what the firm sells.
+- Order documents prove the delivery: code links them to their order's sale,
+  never to the payout.
+- At a period's close, the review shows the clearing account's balance, its
+  month ends, and what the provider paid out within `payoutDays` after the end.
+
 ## The contract
 
 `npm run check-processes` enforces rules 1–3 and the graph's wiring, and prints

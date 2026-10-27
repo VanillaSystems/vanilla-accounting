@@ -17,7 +17,6 @@ import { parseManifest } from '../src/workspace/manifest.js';
 import { patchManifestText } from '../src/workspace/manifest-write.js';
 import { checkAnswers, SetupError } from '../src/workspace/create.js';
 import { buildBatchClassifyPrompt } from '../src/llm/prompts.js';
-import { payoutDefault } from '../src/booking/classify.js';
 import { setupThread, topicStates, type SetupStep } from '../src/onboarding/conversation.js';
 import { emptyProgress, withAnswer, type Answer, type QuestionId, type SetupProgress } from '../src/onboarding/model.js';
 import type { SetupFacts } from '../src/onboarding/facts.js';
@@ -64,8 +63,7 @@ ${profile}
 test('an old manifest reads unchanged: services, goods (traded, as a webshop) and both, with the same payout account as before', () => {
   const read = (sells: string) => parseManifest(MANIFEST(`  sells: ${sells}`), 'm.yaml').profile!;
   assert.deepEqual(['services', 'goods', 'both'].map((s) => read(s).sells), [['services'], ['traded'], ['traded', 'services']]);
-  const chart = ['3200', '3400', '6580'];
-  assert.deepEqual(['services', 'goods', 'both'].map((s) => payoutDefault({ profile: read(s) }, chart)?.account), ['3400', '3200', '3400'], 'goods → 3200, otherwise 3400, as payouts.sales said');
+  assert.deepEqual(['services', 'goods', 'both'].map((s) => payoutSales(read(s).sells, setup().sells, setup().answers.payouts.sales.otherwise)), ['3400', '3200', '3400'], 'goods → 3200, otherwise 3400, as payouts.sales said');
 });
 
 test('the manifest keeps the answer as before plus which goods; written and read back it is the same combination', () => {

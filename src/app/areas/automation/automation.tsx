@@ -9,7 +9,7 @@ import './automation.css';
 import { AskAi } from '../../assistant/AskAi.js';
 import { AUTOMATION_TABS, type Route, type RouteOf } from '../../shell/route.js';
 import { moveKey } from '../../shell/keyboard.js';
-import { isKey, language, t, tData, tWith } from '../../i18n/index.js';
+import { isKey, language, t, tData } from '../../i18n/index.js';
 import { Go } from '../vat/links.js';
 import { automationCommand, automationNow, setSchedule, useAutomation, useRun } from '../../automation/store.js';
 import { fillTask, hasAi, openCount, PHASES, processMap, stepOf, textIn, type AutomationCommand, type AutomationView, type CaseCheck, type RunDetail, type RunSummary, type StepDecl, type StepRecord, type Task, type Text, type Trigger, type WorkflowDecl } from '../../../workflows/model.js';
@@ -22,7 +22,6 @@ import { workflowState } from '../../automation/home.js';
 import { QueuePage } from './Queue.js';
 import type { Index, JournalEntry } from '../../../types/index.js';
 import type { IntakeNote } from '../../../intake/pipeline.js';
-import { holdWords } from '../../../booking/payout-orders.js';
 import type { Made as MadeThing, Took } from '../../../workflows/summary.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { sources } from '../../lib/api.js';
@@ -33,6 +32,7 @@ import { Parts } from '../bank/Parts.js';
 import { approvalWithheld, fileName, returnSummary } from './filing-summary.js';
 import { outcomeText, periodText, readsInWords } from './words.js';
 import type { PeriodReturn, PreparedXml, SealOutput } from '../../../workflows/filing.js';
+import type { ClearingCheck } from '../../../booking/providers.js';
 import { commandRefusalText, refusalText } from '../../automation/refusal.js';
 import { baseCurrency, chargesVat, filing, vat } from '../../../engines/index.js';
 import { QuestionTasks } from '../../questions/Questions.js';
@@ -45,7 +45,7 @@ import { openTwins } from '../receipts/model.js';
 import { ledgerFor } from '../receipts/view.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import { journalOf, unsettledAtFiling } from '../journal/model.js';
-import { localToday, parsePeriod } from '../../../accounting/periods.js';
+import { addDays, localToday, parsePeriod } from '../../../accounting/periods.js';
 import { waitingForReceipt } from '../../../accounting/receipt-due.js';
 import { periodName } from '../../lib/period-label.js';
 
@@ -462,6 +462,34 @@ function ReturnFacts({ ret }: { ret: PeriodReturn }) {
   );
 }
 
+/**
+ * Each payment provider's clearing account at the period's end (#203): its balance, its month ends
+ * before, and what the provider paid out after the end within its payout days, which is what it held
+ * then; the difference is found per order. A fact, never a reminder.
+ */
+function ClearingFacts({ checks }: { checks: ClearingCheck[] }) {
+  const cur = baseCurrency();
+  return (
+    <>
+      {checks.map((c) => {
+        const until = addDays(c.through, c.payoutDays);
+        const diff = c.unpaid === undefined ? undefined : Math.round((c.balance - c.unpaid) * 100) / 100;
+        return (
+          <div key={c.provider} className="wfreturn" data-testid="clearing-check">
+            <b>{t('automation.clearing.title', { provider: c.name, account: c.account, date: formatDate(c.through), amount: `${cur} ${fmt(c.balance)}` })}</b>
+            <dl>
+              {c.months.map((m) => <Fragment key={m.date}><dt>{formatDate(m.date)}</dt><dd className="mono">{fmt(m.balance)}</dd></Fragment>)}
+            </dl>
+            <span className="m">{c.unpaid === undefined
+              ? t('automation.clearing.unknown', { until: formatDate(until), known: c.known ? formatDate(c.known) : '–' })
+              : t(diff === 0 ? 'automation.clearing.even' : 'automation.clearing.diff', { until: formatDate(until), paid: `${cur} ${fmt(c.unpaid)}`, diff: `${cur} ${fmt(diff ?? 0)}` })}</span>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 /** What the seal step did: the seal's file, or that the year close seals the year's last period. */
 function SealLine({ seal }: { seal: SealOutput }) {
   return <p className="m">{'yearClose' in seal ? t('automation.seal.yearClose') : t('automation.seal.written', { file: fileName(seal.file) })}</p>;
@@ -492,10 +520,6 @@ function noteText(n: IntakeNote): string {
     case 'saleAsked': return t('automation.note.saleAsked', { n: n.count });
     case 'waitingReceipt': return t('automation.note.waitingReceipt', { n: n.count });
     case 'receiptUnread': return t('automation.note.receiptUnread', { n: n.count });
-    case 'payoutsHeld': return t('automation.note.payoutsHeld', { n: n.payouts.length, payouts: n.payouts.map((p) => {
-      const w = holdWords(p.hold);
-      return t('automation.note.payoutHeld', { date: formatDate(p.date), amount: `${p.currency} ${fmt(p.amount)}`, why: tWith(w.key, w.vars) });
-    }).join('; ') });
     case 'error': return n.detail;
   }
 }
@@ -670,6 +694,7 @@ function ReturnIssues({ ret, books, nav, canEdit }: { ret: PeriodReturn; books: 
   return (
     <>
       {ret.reviewedBefore ? <p className="warnline" data-testid="reviewed-before">{t('automation.reviewedBefore', { was: money(ret.reviewedBefore.payable, baseCurrency()), now: money(ret.payable, baseCurrency()) })}</p> : null}
+      {ret.clearing?.length ? <ClearingFacts checks={ret.clearing} /> : null}
       {p ? <PeriodIssues books={books} nav={nav} from={p.from} to={p.to} period={periodName(p)} canEdit={canEdit} /> : null}
     </>
   );

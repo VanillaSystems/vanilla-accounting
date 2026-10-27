@@ -30,6 +30,8 @@ import { ech0217Xml } from '../providers/ech0217/xml.js';
 import type { QuarterKey } from '../types/index.js';
 import { refuse } from '../types/refusal.js';
 import { yearPaths, type Workspace } from '../workspace/workspace.js';
+import { clearingCheck, type ClearingCheck } from '../booking/providers.js';
+import { providersOf } from '../intake/sales-report-import.js';
 import type { Action } from './actions.js';
 import type { Run } from './model.js';
 
@@ -38,7 +40,7 @@ import type { Run } from './model.js';
  * credit). `reviewedBefore`: the books changed after a review, so these are today's figures and
  * that is what the earlier review showed.
  */
-export interface PeriodReturn { period: string; from: string; to: string; figures: Record<string, number>; payable: number; reviewedBefore?: { payable: number } }
+export interface PeriodReturn { period: string; from: string; to: string; figures: Record<string, number>; payable: number; reviewedBefore?: { payable: number }; clearing?: ClearingCheck[] }
 
 const periodOf = (input: Record<string, unknown>): QuarterKey => {
   const key = String(input.period ?? (input.return as PeriodReturn | undefined)?.period ?? '');
@@ -137,6 +139,9 @@ export const FILING_ACTIONS: Record<string, Action> = {
       // «Zurück» from the filing task, or a review the books outgrew: the approval is taken back and the period is free again.
       if (run?.mode === 'live') { rmSync(preparedXml(ws, key), { force: true }); hold(ws, books, key, false); }
       const ret = returnOf(books, key);
+      // Each payment provider's clearing account at the period's end, its month ends before, and what the provider held unpaid then (#203): a fact beside the figures.
+      const clearing = providersOf(ws).flatMap((p) => clearingCheck(p, books, ret.to) ?? []);
+      if (clearing.length) ret.clearing = clearing;
       const earlier = input.return as PeriodReturn | undefined;
       if (earlier && !sameFigures(earlier, ret)) ret.reviewedBefore = { payable: earlier.payable };
       return { outcome: 'ok', output: { return: ret } };

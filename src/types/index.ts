@@ -84,9 +84,14 @@ export interface Receipt {
    * deduction a person removed or changed stays as she left it.
    */
   importVatDeduction?: string;
-  /** An order document's facts (a shop's order page), read once at the match step: the booking step books a payout per order by them (src/booking/payout-orders.ts). */
+  /** An order document's facts (a shop's order page), read once at the match step: code links it to its order's sale booked from the provider's sales report, as proof of the delivery (src/booking/sales-report.ts linkOrdersToSales). */
   order?: OrderFacts;
+  /** A payment provider's sales or fee report (a CSV), booked onto its clearing account when it was dropped (src/booking/sales-report.ts, #203). */
+  report?: SalesReportFacts;
 }
+
+/** What a sales or fee report's receipt keeps of it: the provider's business id, the kind, the days its rows cover, how many orders or fees it holds. */
+export interface SalesReportFacts { provider: string; kind: 'sales' | 'fees'; from: string; to: string; rows: number }
 
 /** What a card terminal's or payment provider's report states, all positive: sales − refunds − fees = paidOut. */
 export interface PayoutFacts { sales: number; refunds: number; fees: number; paidOut: number }
@@ -94,7 +99,7 @@ export interface PayoutFacts { sales: number; refunds: number; fees: number; pai
 /** A part of an order in one payout, named by the payout's date as the order document gives it; positive. */
 export interface PayoutShare { date: string; amount: number }
 
-/** What an order document states about one order, every amount positive and in the currency of the payouts it names. */
+/** What an order document states about one order, every amount positive and in the currency of the payouts it names; its number links it to the order's sale (#203). */
 export interface OrderFacts {
   number: string;
   date: string;
@@ -246,7 +251,15 @@ export interface JournalEntry {
 /** What a purchase line buys, as the model reads it (rule 7h): code decides Bezugsteuer from it (src/accounting/acquisition-tax.ts). `exempt`: a service exempt from VAT, such as payment processing, banking or insurance. */
 export type Supply = 'goods' | 'service' | 'exempt';
 
-/** The app's checks that set a booking's code themselves: a sale's VAT code (src/accounting/sales-without-vat.ts saleCodeOf), a payout report's lines, a payout's lines per order (src/booking/payout-orders.ts), a credit note's from the invoice it names (src/accounting/credit-note-code.ts), Bezugsteuer on a service from abroad (src/accounting/acquisition-tax.ts), a purchase's input tax from its receipt and the app's business files (src/booking/purchase-vat.ts). */
+/**
+ * The app's checks that set a booking's code themselves: a sale's VAT code (src/accounting/sales-without-vat.ts saleCodeOf), a payment
+ * provider's report and payout (`payoutReport`: its sales and fees onto its clearing account, src/booking/sales-report.ts, and the payout from
+ * there to the bank, src/booking/classify.ts providerPayout, #203; before, a payout split by its report), a payout's lines per order
+ * (`payoutOrders`, before #203: books keep them), a credit note's from the invoice it names (src/accounting/credit-note-code.ts), Bezugsteuer
+ * on a service from abroad (src/accounting/acquisition-tax.ts), a purchase's input tax from its receipt and the app's business files
+ * (src/booking/purchase-vat.ts). A sealed quarter hashes `by`, and an older build drops a check it does not know, so a new check is a
+ * change of the books' format: the list only grows with a new schema.
+ */
 export const CODE_CHECKS = ['saleCode', 'payoutReport', 'payoutOrders', 'creditNote', 'acquisitionTax', 'purchaseVat'] as const;
 export type CodeCheck = typeof CODE_CHECKS[number];
 
