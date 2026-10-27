@@ -21,6 +21,8 @@ const CANONICAL = [
   '/bank',
   '/bank/1021-2026-09',
   '/bank/1021-2026-09/ZKB-4711~2',
+  '/bank/files/1021/camt053_2026-09.xml',
+  '/bank/files/1021/Auszug%20September.xml',
   '/payments/ZKB-4711',
   '/journal',
   '/journal/M2026-001',
@@ -84,6 +86,7 @@ test('the routes the paths name', () => {
   assert.deepEqual(route('/receipts/3f2a9c01b7d4e5f6'), { area: 'receipts', id: '3f2a9c01b7d4e5f6' });
   assert.deepEqual(route('/bank/1021-2026-09/ZKB-4711~2'), { area: 'bank', statement: '1021-2026-09', payment: 'ZKB-4711~2' });
   assert.deepEqual(route('/payments/ZKB-4711'), { area: 'bank', payment: 'ZKB-4711' });
+  assert.deepEqual(route('/bank/files/1021/camt053_2026-09.xml'), { area: 'bank', file: '1021/camt053_2026-09.xml' }, 'a statement file whole (#208)');
   assert.deepEqual(route('/vat/405'), { area: 'vat', ziffer: '405' });
   assert.deepEqual(route('/vat/codes/I81'), { area: 'codes', code: 'I81' });
   assert.deepEqual(route('/reports/balance/1021'), { area: 'reports', report: 'balance', account: '1021' });
