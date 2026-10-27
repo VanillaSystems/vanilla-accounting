@@ -4,7 +4,10 @@
  * the actions for all of them, and each row with its link and a × that takes it out. Selecting
  * never moves the layout: the detail column only shows something else.
  */
-import type { ReactNode } from 'react';
+import { useState } from 'react';
+import type { Index } from '../../types/index.js';
+import { useWorkspace } from '../hooks/use-workspace.js';
+import { BatchPanel, batchOffers, type BatchId } from './BatchPanel.js';
 import { baseCurrency } from '../../engines/index.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { t } from '../i18n/index.js';
@@ -36,7 +39,9 @@ export const LISTED = 60;
 
 const TITLE = { receipt: 'selection.receipts', payment: 'selection.payments', entry: 'selection.entries' } as const;
 
-export function SelectionView({ kind, rows, nav, children }: { kind: SelectKind; rows: SelRow[]; nav: Nav; children?: ReactNode }) {
+export function SelectionView({ kind, rows, books, nav, canEdit }: { kind: SelectKind; rows: SelRow[]; books: Index; nav: Nav; canEdit: boolean }) {
+  const [open, setOpen] = useState<BatchId | null>(null);
+  const offers = batchOffers(kind, !!useWorkspace()?.dimensions?.length);
   const span = spanOf(rows.map((r) => r.date));
   const sum = rows.reduce((s, r) => s + (r.chf ?? 0), 0);
   const closed = rows.filter((r) => r.closed).length;
@@ -59,9 +64,10 @@ export function SelectionView({ kind, rows, nav, children }: { kind: SelectKind;
         <span>{t('selection.sumTip', { currency: baseCurrency() })}</span>
       </div>
       <div className="bar">
-        {children}
+        {canEdit && offers.map((o) => <button key={o.id} type="button" className={`btn${open === o.id ? ' on' : ''}`} data-batch-offer={o.id} onClick={() => setOpen(open === o.id ? null : o.id)}>{o.label}</button>)}
         <button type="button" className="btn ghost" data-act="unselect" onClick={() => clearSelection()}>{t('selection.clear')} <Kbd keys={['Esc']} tip={t('selection.clearTip')} /></button>
       </div>
+      {canEdit && <BatchPanel kind={kind} rows={rows} books={books} nav={nav} open={open} onOpen={setOpen} />}
       <ul className="selrows">
         {rows.slice(0, LISTED).map((r) => (
           <li key={r.id} className={r.closed ? 'left' : undefined} data-row={r.id}>

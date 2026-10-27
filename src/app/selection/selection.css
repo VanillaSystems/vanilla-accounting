@@ -42,3 +42,6 @@
 .menu.actmenu { min-width: 240px; }
 .menu.actmenu button[aria-disabled="true"] { color: var(--faint); cursor: default; }
 .menu.actmenu .why { display: block; color: var(--muted); font-size: 11.5px; }
+.batchform { flex-basis: 100%; }
+.batchform .btn.danger { background: var(--neg); border-color: var(--neg); color: var(--on-fill); }
+.seldetail .bar .btn.on { background: var(--accent-soft); }

@@ -56,6 +56,13 @@ export type ApiRefusal =
   /** A second bank payment of another payee for a receipt that has one, asked without `confirm` (src/server/edits.ts assertNotSecondPayment, r8h-21). */
   | { code: 'secondPayment'; params: { receipt: string; payment: string } }
   | { code: 'yearClose' }
+  /** A batch (#216, src/server/batch.ts) left this object out: it is so already, it is not on the account the batch moves from, it is booked, or it has no receipt for the input tax asked. */
+  | { code: 'batchUnchanged' }
+  | { code: 'batchNotOn'; params: { account: string } }
+  | { code: 'batchBooked' }
+  | { code: 'batchNoReceipt' }
+  /** More objects than one batch takes (src/types/batch.ts BATCH_MAX). */
+  | { code: 'batchLimit'; params: { max: number; n: number } }
   /** «Immer so?» under several receipts linked to one payment (#190): the payment offers no batch payer (fewer such links, no business, or it is one already). */
   | { code: 'noBatchPayer' }
   /** A booking's tags (#127): not a map, a dimension the workspace does not declare, or a value that is no short text. */

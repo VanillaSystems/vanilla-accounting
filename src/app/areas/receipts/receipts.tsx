@@ -314,7 +314,7 @@ function ReceiptsDetail(props: Props) {
   const { inbox } = useUi();
   const picked = useSelection('receipt');
   const { rates } = useFx();
-  if (picked) return <SelectionView kind="receipt" rows={receiptRows(props.books, picked.ids, rates)} nav={props.nav} />;
+  if (picked) return <SelectionView kind="receipt" rows={receiptRows(props.books, picked.ids, rates)} books={props.books} nav={props.nav} canEdit={props.canEdit} />;
   return props.canEdit && !props.route.id && noReceiptsYet(props.books, inbox) ? <EmptyTable /> : <Detail {...props} />;
 }
 

@@ -58,6 +58,7 @@ import type { SaleRuleOffer } from '../../saving/sale-rule.js';
 import type { CorrectionOffer } from '../../saving/correction-rule.js';
 import type { LearnOffer, LearnProposal } from '../../saving/learn-rule.js';
 import type { HandRule, HandStart } from '../../saving/hand-rule.js';
+import type { BatchAnswer, BatchRequest, BatchUndo } from '../../types/batch.js';
 import type { NoteRuleCommand } from '../../saving/note-rule.js';
 import { refusalKey } from '../areas/company/rules-model.js';
 import { refusalText } from '../../reports/words.js';
@@ -149,6 +150,11 @@ export function errorText(e: unknown): string {
     case 'partRate': return t('error.partRate', { rates: b.params.rates.map((r) => `${r} %`).join(', ') });
     case 'bookedByHand': return t('error.bookedByHand', { entry: b.params.entry, date: formatDate(b.params.date), amount: `${b.params.currency} ${fmt(b.params.amount)}` });
     case 'yearClose': return t('error.yearClose');
+    case 'batchUnchanged': return t('error.batchUnchanged');
+    case 'batchNotOn': return t('error.batchNotOn', { account: b.params.account });
+    case 'batchBooked': return t('error.batchBooked');
+    case 'batchNoReceipt': return t('error.batchNoReceipt');
+    case 'batchLimit': return t('selection.limit', { max: b.params.max, n: b.params.n - b.params.max });
     case 'noBatchPayer': return t('error.noBatchPayer');
     case 'tagShape': return t('error.tagShape');
     case 'tagDimension': return t('error.tagDimension', b.params);
@@ -431,6 +437,9 @@ export const api = {
   /** «Ins Wissen übernehmen?» under a corrected booking no rule made, and the AI's checked draft for it. */
   learnOffer: (ref: string) => request<{ offer: LearnOffer | null }>('GET', `/api/rules/learn?ref=${encodeURIComponent(ref)}`),
   proposeLearned: (ref: string) => request<LearnProposal>('POST', '/api/rules/learn', { ref }),
+  /** Several objects at once (#216): done, or with `preview` only shown; what changed, what was left out, and the undo. */
+  batch: (body: BatchRequest) => request<BatchAnswer>('POST', '/api/batch', body),
+  undoBatch: (undo: BatchUndo[]) => request<{ ok: true }>('POST', '/api/batch/undo', { undo }),
   handStart: (payment: string) => request<{ start: HandStart | null }>('GET', `/api/rules/hand?payment=${encodeURIComponent(payment)}`),
   draftHand: (rule: HandRule) => request<{ path: string }>('POST', '/api/rules/hand', rule),
   /** «Als Regel vorschlagen» on a sentence of a partner's notes, or «Regel anpassen» after it changed: the rule drafted for its card. */

@@ -244,9 +244,9 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
 }
 
 /** The picked payments in place of the paper (#216): the list beside it stays, so more can be picked. */
-function PickedPayments({ books, nav, ids }: Props & { ids: readonly string[] }) {
+function PickedPayments({ books, nav, canEdit, ids }: Props & { ids: readonly string[] }) {
   const { rates } = useFx();
-  return <SelectionView kind="payment" rows={paymentRows(books, ids, rates)} nav={nav} />;
+  return <SelectionView kind="payment" rows={paymentRows(books, ids, rates)} books={books} nav={nav} canEdit={canEdit} />;
 }
 
 /** The chosen payment in one line: its receipt, its entry, what is missing; a hint while none is chosen. */

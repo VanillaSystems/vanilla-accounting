@@ -56,7 +56,7 @@ type Props = AreaProps<RouteOf<'journal'>>;
 
 export function Detail(props: Props) {
   const picked = useSelection('entry');
-  return picked ? <SelectionView kind="entry" rows={entryRows(props.books, picked.ids)} nav={props.nav} /> : <OneEntry {...props} />;
+  return picked ? <SelectionView kind="entry" rows={entryRows(props.books, picked.ids)} books={props.books} nav={props.nav} canEdit={props.canEdit} /> : <OneEntry {...props} />;
 }
 
 function OneEntry(props: Props) {
