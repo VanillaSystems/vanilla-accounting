@@ -1,0 +1,28 @@
+Muster Express AG
+RECHNUNG MWST / VERZOLLUNGSKOSTEN
+
+Rechnungsnummer: MX1234567
+Rechnungsdatum: 12-05-26
+
+| Leistungsart | Total Kosten | MWST | MWST Code | Total (inkl. MWST) |
+|---|---|---|---|---|
+| Einfuhrzoll / droits de douane / dazi e oneri | 0.00 | | Z | |
+| MwSt / TVA / IVA | 7.20 | | Z | 7.20 |
+| Sonstige Abgaben / autres frais / altre spese | 0.00 | | Z | |
+| Kosten Zusatzleistungen | 21.00 | 1.68 | | 22.68 |
+| **Total** | 28.20 | 1.68 | | 29.88 |
+
+MWST im Detail
+| Code | MWST Bezeichnung | Prozent | Total steuerpflichtig | MWST |
+|---|---|---|---|---|
+| E | 8.1% VAT | 8.1% | 21.00 | 1.68 |
+| Z | MWST / Einfuhrzoll und Zusatzleistungen | 0.0% | 7.20 | 0.00 |
+
+Unter dem Link https://e-dec-web.ezv.admin.ch/edecZugangscodeGui können Sie die elektronische Veranlagungsverfügung herunterladen. Sie benötigen dazu die auf der Rechnung (Seite 2) erwähnte Deklarationsnummer und den Zugangscode.
+
+Seite 2
+
+| AWB No | Deklarationsnummer | Import-datum | EVV Code | Zollgebühr Beschreibung | Zoll-/MWST-gebühr | Code |
+|---|---|---|---|---|---|---|
+| 1234567890 | 26CHX4711000815 | 08/05/26 | Ab3+Xy9Kq2Lm | Einfuhrzoll / droits de douane / dazi e oneri | 0.00 | Z |
+| | | | | MwSt / TVA / IVA | 7.20 | Z |

@@ -13,7 +13,9 @@ import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bookImportVatDeductions, classifyTransactions, loadClassifyContext } from '../src/booking/classify.js';
-import { assessmentFacts, customsSplit, positionOf, readAssessment, type SplitContext } from '../src/booking/customs-invoice.js';
+import { assessmentAccess, assessmentFacts, customsSplit, missingAssessments, positionOf, readAssessment, type SplitContext } from '../src/booking/customs-invoice.js';
+import { applyAnswer } from '../src/server/edits.js';
+import type { RequestError } from '../src/server/books.js';
 import { documentKind } from '../src/intake/document-kind.js';
 import { parseBookedBy } from '../src/books/booked-by.js';
 import { ledgerOf } from '../src/app/areas/receipts/model.js';
@@ -347,6 +349,80 @@ test('an import VAT line that claimed input tax already (the model or a rule boo
   books.journalEntries.push({ id: 'm1', transactionRef: 'P-1', date: PAYMENT.date, accountDebit: '4030', accountCredit: '1021', amount: 67.5, vatCode: 'M81', description: 'Muster Kurier AG', origin: 'classify', by: { kind: 'model', model: 'm' }, receipts: ['inv1'] });
   books.receipts.push(assessment());
   assert.equal(bookImportVatDeductions(books, loadClassifyContext(company())).booked, 0);
+});
+
+/**
+ * Issue #227: a courier's invoice that prints the import VAT as «MwSt / TVA / IVA» at code Z (0 %),
+ * duty as a line of 0.00, and its extra services (one of them a printed invoice, named by no
+ * position) at 8.1 %. Invented, of the shape seen in a replay.
+ */
+const Z_TEXT = fixture('courier-vat-line-invoice.txt');
+const Z_LINES: ReceiptLine[] = [
+  { description: 'Einfuhrzoll / droits de douane / dazi e oneri', gross: 0, ratePercent: 0 },
+  { description: 'MwSt / TVA / IVA', gross: 7.2, ratePercent: 0 },
+  { description: 'Sonstige Abgaben / autres frais / altre spese', gross: 0, ratePercent: 0 },
+  { description: 'Kontoabwicklungsgebühr / frais de gestion de compte', gross: 16.2, ratePercent: 8.1 },
+  { description: 'Vorlagegebühr / Frais d\'avance de fonds', gross: 4.32, ratePercent: 8.1 },
+  { description: 'GEDRUCKTE RECHNUNG / FACTURE IMPRIMÉE / FATTURA CARTACEA', gross: 2.16, ratePercent: 8.1 },
+];
+const Z_PAYMENT: BankTransaction = { ...PAYMENT, ref: 'P-Z', amount: 29.88, description: 'Muster Express AG' };
+const zInvoice = (o: Partial<Receipt> = {}) => invoice({ id: 'invz', filename: '20260512-muster-express-rechnung-mx1234567.pdf', extractedText: Z_TEXT, amount: 29.88, hasSwissVat: true, lineItems: Z_LINES, ...o });
+const zAssessment = () => assessment({ id: 'evvz', extractedText: ASSESSMENT_TEXT.replace('57.55', '7.20').replace('26CHEI000000004711', '26CHX4711000815'), amount: 7.2 });
+
+test('#227: «MwSt / TVA / IVA» at 0 % on an invoice that prints duty at 0.00 is the import VAT; an unnamed line at 8.1 % is the carrier\'s fee; split in code without asking the model', async () => {
+  const books = booksOf([zInvoice()], undefined, { tx: Z_PAYMENT });
+  const out = await classifyTransactions(books, [Z_PAYMENT], { fx, context: loadClassifyContext(company()), ask: noModel });
+  assert.deepEqual(out.classified, ['P-Z']);
+  assert.deepEqual(lines(books, 'P-Z'), [['4030', '1021', 7.2, 'M0'], ['4040', '1021', 22.68, 'M81']]);
+  assert.match(books.journalEntries[0].reason ?? '', /Einfuhrsteuer CHF 7\.20 ohne Vorsteuerabzug/);
+});
+
+test('#227: a tax line alone is no customs invoice, and a tax line at a rate (the carrier\'s own VAT as a line) holds the split', () => {
+  const words = documents().customs;
+  const plain = invoice({ lineItems: [{ description: 'Beratung', gross: 100, ratePercent: 8.1 }, { description: 'MwSt', gross: 8.1, ratePercent: 0 }], amount: 108.1 });
+  assert.equal(customsSplit({ ...PAYMENT, amount: 108.1 }, [plain], splitContext()), undefined, 'no line names duty or import VAT: the model\'s');
+  const own = zInvoice({ lineItems: [...Z_LINES.slice(0, 4), { description: 'MWST', gross: 1.68, ratePercent: 8.1 }] });
+  const split = customsSplit(Z_PAYMENT, [own], splitContext());
+  assert.deepEqual(split && 'hold' in split && split.hold, { why: 'line', file: own.filename, line: 'MWST' });
+  assert.equal(positionOf('MwSt / TVA / IVA', words), undefined, 'the words alone name no position: only on a customs invoice at no rate');
+});
+
+test('#227: «Veranlagungsverfügung fehlt» lists the import VAT without its assessment, with the declaration number, access code and link the invoice names; the deduction settles it', async () => {
+  const words = documents().customs;
+  assert.deepEqual(assessmentAccess(Z_TEXT, words), { numbers: ['26CHX4711000815'], code: 'Ab3+Xy9Kq2Lm', url: 'https://e-dec-web.ezv.admin.ch/edecZugangscodeGui' });
+  assert.deepEqual(assessmentAccess('Zugangscode: K7p-22xQ\nDeklarationsnummer 26CHEI000000004711', words).code, 'K7p-22xQ', 'or after its label in a sentence');
+  const ws = company();
+  const books = booksOf([zInvoice()], undefined, { tx: Z_PAYMENT });
+  assert.deepEqual(missingAssessments(books, words, true), [], 'an unbooked payment is a task of its own');
+  await classifyTransactions(books, [Z_PAYMENT], { fx, context: loadClassifyContext(ws), ask: noModel });
+  const [missing] = missingAssessments(books, words, true);
+  assert.deepEqual([missing.payment, missing.receipt, missing.amount, missing.access.code], ['P-Z', 'invz', 7.2, 'Ab3+Xy9Kq2Lm']);
+  assert.deepEqual(missingAssessments(books, words, false), [], 'a firm without input tax deducts none');
+  books.receipts.push(zAssessment());
+  assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)).booked, 1, 'the assessment that comes brings the deduction');
+  assert.deepEqual(lines(books, 'P-Z').at(-1), ['', '4030', 7.2, 'M81-2']);
+  assert.deepEqual(missingAssessments(books, words, true), []);
+});
+
+test('#227: the assistant books import VAT by the same rule: no tax-amount code against the bank, no input tax on import VAT without the assessment, the one-sided deduction with it', async () => {
+  const ws = company();
+  const ctx = { bankAccounts: ws.bankAccounts, chart: new Set<string>(), earlier: [], conversation: 'c', uid: 'CHE-123.456.789' };
+  const booked = async () => {
+    const books = booksOf([zInvoice()], undefined, { tx: Z_PAYMENT });
+    await classifyTransactions(books, [Z_PAYMENT], { fx, context: loadClassifyContext(ws), ask: noModel });
+    return books;
+  };
+  const refusal = (code: string) => (e: unknown) => (e as RequestError).refusal?.code === code;
+  let books = await booked();
+  const vatLine = books.journalEntries.find((e) => e.accountDebit === '4030')!;
+  assert.throws(() => applyAnswer(books, [{ kind: 'entry', id: vatLine.id, set: { vatCode: 'M81-2' } }], ctx), refusal('taxAmountTwoSided'), 'the import VAT as cost and input tax at once');
+  assert.throws(() => applyAnswer(books, [{ kind: 'entry', id: vatLine.id, set: { vatCode: 'M81' } }], ctx), refusal('importVatUnproven'), 'a rate on the import VAT account');
+  const deduction = { transactionRef: 'P-Z', date: Z_PAYMENT.date, accountDebit: '', accountCredit: '4030', amount: 7.2, vatCode: 'M81-2', description: 'Vorsteuer Einfuhrsteuer' };
+  assert.throws(() => applyAnswer(books, [{ kind: 'newEntry', entry: deduction }], ctx), refusal('importVatUnproven'), 'the courier\'s invoice is no proof');
+  books = await booked();
+  books.receipts.push(zAssessment());
+  applyAnswer(books, [{ kind: 'link', receipt: 'evvz', payment: 'P-Z' }, { kind: 'newEntry', entry: deduction }], ctx);
+  assert.deepEqual(lines(books, 'P-Z').at(-1), ['', '4030', 7.2, 'M81-2'], 'with the assessment linked the deduction stands');
 });
 
 function splitContext(o: Partial<SplitContext> = {}): SplitContext {

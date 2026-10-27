@@ -195,6 +195,8 @@ export function errorText(e: unknown): string {
     case 'unknownAccount': return t('error.unknownAccount', b.params);
     case 'oneSided': return t('error.oneSided', b.params);
     case 'codeSign': return t(b.params.expected.startsWith('-') ? 'error.codeSign.back' : 'error.codeSign.out', b.params);
+    case 'taxAmountTwoSided': return t('error.taxAmountTwoSided', b.params);
+    case 'importVatUnproven': return t('error.importVatUnproven', { account: b.params.account, amount: b.params.amount.toFixed(2) });
     case 'accountInUse': return t('error.accountInUse', { account: b.params.account, n: b.params.entries });
     case 'bankInUse': return t('error.bankInUse', { label: b.params.label, account: b.params.account, uses: [
       b.params.statements && t('error.bankInUse.statements', { n: b.params.statements }),
