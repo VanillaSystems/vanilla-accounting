@@ -59,6 +59,12 @@ customs:
     freight:
       account: "6280"
       words: [Fracht, Frachtkosten, Transport, Transportkosten, Versand, Versandkosten, Porto, Freight, Shipping, Carriage, Fret, Frais de port, Frais de transport, Expédition, Trasporto, Spese di trasporto, Spedizione, Nolo]
+  # A line that names only the tax («MWST», «MwSt / TVA / IVA») at no rate of its own: on an invoice
+  # whose other lines name duty or import VAT (also lines of 0.00), it is the import VAT the carrier
+  # advanced. The carrier's own VAT is charged at a rate on its services, never a line at 0 %.
+  # A line that names no position but carries the carrier's Swiss rate (a printed invoice, an extra
+  # service) is the carrier's own service: fees. Duty and import VAT never carry Swiss VAT.
+  tax: [MWST, MwSt, Mehrwertsteuer, TVA, Taxe sur la valeur ajoutée, IVA, Imposta sul valore aggiunto, VAT, Value added tax]
   # The BAZG's assessment of import VAT (Veranlagungsverfügung MWST): its title, and the label of its
   # total. It proves the deduction when it names the firm's UID. The German words are the BAZG's
   # document; the French, Italian and English ones are its names in those languages, not yet seen
@@ -69,4 +75,8 @@ customs:
     # Its number (the customs declaration's, such as 26CHEI000000004711), without the version suffix:
     # the courier's invoice cites it, two documents of one number are copies, and a payment to the
     # customs office names it in its text.
-    number: '\d{2}CH[A-Z]{2,4}\d{10,14}'
+    number: '\d{2}CH[A-Z]{1,4}\d{10,14}'
+    # Where a courier's invoice says how to fetch the assessment: the label of the access code that
+    # comes with the declaration number (in a sentence «Zugangscode: …» or a table's column), and the
+    # link beside it (processes/authorities/bazg.yaml#evv-download). Shown on the task «Veranlagungsverfügung fehlt».
+    access: [Zugangscode, EVV Code, EVV-Code, eVV-Code, Code d'accès, Codice d'accesso, Access code]

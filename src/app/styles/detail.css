@@ -183,6 +183,8 @@
 .confirm p { margin: 0 0 4px; color: var(--muted); font-size: 13px; }
 .confirm .file { font: 12px "Geist Mono"; color: var(--ink-2); margin: 10px 0 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .confirm .acts { display: flex; justify-content: flex-end; gap: 8px; }
+.confirm .files { list-style: none; margin: 10px 0 16px; padding: 0; max-height: 40vh; overflow: auto; font: 12px "Geist Mono"; color: var(--ink-2); }
+.confirm .files li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 0; }
 .confirm .btn.danger { background: var(--neg); border-color: var(--neg); color: var(--on-fill); }
 
 /* Pages of text (Abschluss, Firma): a lead, key/value rows, quarter cards, small tables, inline forms */
