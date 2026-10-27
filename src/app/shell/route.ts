@@ -5,15 +5,13 @@
  */
 import { localToday, parsePeriod, type IsoDate, type Period } from '../../accounting/periods.js';
 import { KNOWLEDGE_PAGES, type KnowledgePage } from '../../knowledge/topics.js';
+import { chipToken, parseChip, type Chip } from './chips.js';
 
 export const REPORTS = ['income', 'balance', 'trial'] as const;
 export type Report = typeof REPORTS[number];
 
 export const COMPANY_SECTIONS = ['profile', 'vat', 'banks', 'invoice-layout', 'mail', 'sources', 'rules', 'accounts', 'dimensions', 'periods', 'opening', 'display', 'ai', 'phone'] as const;
 export type CompanySection = typeof COMPANY_SECTIONS[number];
-
-export const RECEIPT_FILTERS = ['zugeordnet', 'offen', 'ohneDatum'] as const;
-export type ReceiptFilter = typeof RECEIPT_FILTERS[number];
 
 /** The tabs of a workflow in Automatisierung; `graph` is the default and leaves no segment. */
 export const AUTOMATION_TABS = ['graph', 'triggers', 'runs', 'files'] as const;
@@ -81,7 +79,8 @@ export interface Query {
   /** Absent: the open period. */
   period?: Period;
   q?: string;
-  filter?: ReceiptFilter;
+  /** A list's filter chips (src/app/shell/chips.ts), `?f=<field>_<value>`, repeated, in their order. */
+  chips?: Chip[];
   status?: InvoiceStatus;
   vat?: string;
   /** /invoices/new?customer=<id>: the customer of the draft to write. */
@@ -109,11 +108,11 @@ export function formatLocation({ route, query }: Location): string {
   const path = `/${segmentsOf(route).filter((s): s is string => !!s).map(encodeURIComponent).join('/')}`;
   const qs = new URLSearchParams();
   if (query.period) qs.set('period', query.period.token.replace('..', '_'));
-  if (query.filter) qs.set('filter', query.filter);
   if (query.status) qs.set('status', query.status);
   if (query.vat) qs.set('vat', query.vat);
   if (query.customer) qs.set('customer', query.customer);
   if (query.payment) qs.set('payment', query.payment);
+  for (const c of query.chips ?? []) qs.append('f', chipToken(c));
   if (query.q) qs.set('q', query.q);
   const s = qs.toString();
   return s ? `${path}?${s}` : path;
@@ -186,12 +185,13 @@ function automationRoute(b?: string, c?: string, d?: string): Route {
 
 function queryOf(params: URLSearchParams, today: IsoDate): Query {
   const get = (k: string) => params.get(k) || undefined;
-  const filter = LEGACY_FILTER[get('filter') ?? ''] ?? get('filter');
+  const legacy = LEGACY_FILTER[get('filter') ?? ''];
+  const chips = [...(legacy ? [legacy] : []), ...params.getAll('f').flatMap((f) => parseChip(f) ?? [])];
   const status = get('status');
   return defined({
     period: periodOf(get('period'), today),
     q: get('q'),
-    filter: isOneOf(RECEIPT_FILTERS, filter) ? filter : undefined,
+    chips: chips.length ? chips : undefined,
     status: isOneOf(INVOICE_STATUSES, status) ? status : undefined,
     vat: get('vat'),
     customer: get('customer'),
@@ -204,7 +204,12 @@ function periodOf(token: string | undefined, today: IsoDate): Period | undefined
   return token ? parsePeriod(token.replace('_', '..'), today) ?? undefined : undefined;
 }
 
-const LEGACY_FILTER: Record<string, ReceiptFilter> = { linked: 'zugeordnet', unlinked: 'offen' };
+/** Belege's old count tabs (`?filter=`), now chips of its state field. */
+const LEGACY_FILTER: Record<string, Chip> = {
+  zugeordnet: { field: 'state', value: 'linked' }, linked: { field: 'state', value: 'linked' },
+  offen: { field: 'state', value: 'open' }, unlinked: { field: 'state', value: 'open' },
+  ohneDatum: { field: 'state', value: 'noDate' },
+};
 
 /** The tabs of /<lang>/<period>/<tab>?receipt=&tx=&je=&account=&ziffer=&view=&code= links. */
 const LEGACY_TABS: Record<string, (p: (k: string) => string | undefined) => Route> = {
