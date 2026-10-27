@@ -8,7 +8,8 @@
 # As a payment provider (#203) its payout settles its clearing account: code books
 # it bank / clearing account without VAT; the sales come from its order export and
 # the fees from its payments export, both CSV (src/booking/sales-report.ts). The
-# company's file names the accounts: provider: { clearing, revenue, fees: { account, vat } }.
+# company's file names the accounts and its cut-over day (from it on, nothing before it changes):
+# provider: { clearing, since, revenue, fees: { account, vat } }.
 
 id: shopify
 name: Shopify

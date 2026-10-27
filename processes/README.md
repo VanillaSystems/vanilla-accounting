@@ -191,14 +191,22 @@ provider:
 # knowledge/suppliers/shopify.yaml: the company layer, its chart
 provider:
   clearing: "1093"
+  since: 2026-10-01
   revenue: "3200"
   fees: { account: "6580", vat: I0 }
 ```
 
-- Its payout is a settlement, not a sale: code books it bank / `clearing`
-  without VAT. Until the company's file names `clearing` it waits for the
-  person; neither a rule nor the model books it. It needs no receipt and is
-  never matched to one (no receipt set, no pair, no model match, no order link).
+- `since` is the company's cut-over day. From it on the provider's payouts,
+  sales, refunds and fees go over the clearing account; whatever is dated before
+  it stays exactly as it was booked, and is booked like any other payment if it
+  is not booked yet. The app never books an existing entry again to switch a
+  provider over. The drop asks for it with the clearing account, proposing the
+  first day of the open period; it must lie in the open period.
+- Its payout from `since` on is a settlement, not a sale: code books it bank /
+  `clearing` without VAT. Until the company's file names `clearing` and `since`
+  it waits for the person; neither a rule nor the model books it. It needs no
+  receipt and is never matched to one (no receipt set, no pair, no model match,
+  no order link).
 - Its report (the CSV it exports) is recognised in the drop by the columns of
   `reports`: each a header or a list of headers. Code books each order onto the
   clearing account with its code (delivered in the VAT territory: the sale code
@@ -210,13 +218,21 @@ provider:
   are counted, never booked onto the clearing account. A domestic order without
   tax or at no rate the firm books, Swiss VAT on an export, and a refund without
   its own day wait for the person. An order of a filed period is not booked; its
-  refund paid in the open period is.
-- A payout booked as sales before the report is booked again from the clearing
-  account only when every order it can pay is booked from a report: the
-  `payoutDays` before it lie in the reports' days and in the open period, and
-  the app made its booking. Every other such payout stays, and what it may hold
-  waits for the person, so nothing counts twice. «Rückgängig» gives it its
-  booking back.
+  refund paid in the open period is. An order, refund or fee dated before
+  `since` is counted («vor dem Umstellungstag»), never booked.
+- What the books carry from elsewhere on or after `since` holds what it may be,
+  so nothing counts twice: a sale on the clearing account no report booked (an
+  older booking per order such as `SHOPIFY-<n>`, a person's own) holds the order
+  its ref or its day and amount name, and one that names none holds every order
+  up to its day; a payout of the provider booked otherwise than from the
+  clearing account (as sales, by a person) holds every order, refund and fee up
+  to its day. Held rows wait for the person, named in the drop row and kept on
+  the report's receipt (`report.held`, the latest taking's, at most 200 named).
+  «Rückgängig» takes only the report's own entries and links.
+- The provider's balance on the cut-over day (sales collected before `since`
+  and paid out after it) is no row the app books: the first payouts after
+  `since` take the clearing account below zero by it, and the clearing check
+  names that as a difference for the person to book.
 - One source of sales per provider: a provider with `reports.sales` takes none
   from a payout report (a card terminal's PDF), whose sales book only with its
   payout booked from the clearing account.
@@ -229,9 +245,11 @@ provider:
   never to the payout.
 - At a period's close, the review shows the clearing account's balance, its
   month ends, and what the provider paid out within `payoutDays` after the end:
-  that holds sales after the end too, so it is the most the balance may be. A
-  clearing account in a foreign currency carries exchange differences until the
-  year end revalues it.
+  that holds sales after the end too, so it is the most the balance may be; a
+  balance above it, or below zero, is a difference. A clearing account in a
+  foreign currency carries exchange differences until the year end revalues it.
+  The clearing account must be a balance-sheet account (an asset or a
+  liability).
 
 ## The contract
 

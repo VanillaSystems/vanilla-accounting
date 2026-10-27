@@ -12,6 +12,7 @@
  *   # knowledge/suppliers/<id>.yaml (the company: its chart)
  *   provider:
  *     clearing: "1093"
+ *     since: 2026-10-01
  *     revenue: "3200"
  *     fees: { account: "6580", vat: I0 }
  *
@@ -22,9 +23,13 @@
  * paid by PayPal, by bank transfer, on delivery, with a gift card or through a test gateway, come
  * with their own payment and are never booked onto the clearing account); with `gateways` the column
  * is needed. `payoutDays`: how many days after a sale it pays it out at most, for the clearing
- * check and the payouts a report books again; a company's file may say its own. `clearing`,
- * `revenue` and `fees` are accounts of one company's chart, so only its own file names them. Pure.
+ * check; a company's file may say its own. `clearing`, `revenue` and `fees` are accounts of one
+ * company's chart, so only its own file names them. `since`: the company's cut-over day, from which
+ * on the provider's payouts are booked from the clearing account and its reports book the sales and
+ * fees; whatever is dated before it stays as it was booked, and the app never books it again. Pure.
  */
+
+import { isIsoDate } from '../accounting/periods.js';
 
 export const SALES_COLUMNS = ['order', 'date', 'ordered', 'shipTo', 'gross', 'tax', 'refunded', 'refundedAt', 'currency', 'gateway'] as const;
 export type SalesColumn = (typeof SALES_COLUMNS)[number];
@@ -47,6 +52,8 @@ export interface ProviderFacts {
   payoutDays?: number;
   /** The company's clearing account: what the provider collected and has not paid out yet. */
   clearing?: string;
+  /** The company's cut-over day (YYYY-MM-DD): payouts, sales, refunds and fees from it on go over the clearing account; before it nothing changes. */
+  since?: string;
   /** The company's revenue account for the provider's sales; absent: the firm's own for what it sells. */
   revenue?: string;
   /** The company's account and VAT code for the provider's fees. */
@@ -55,7 +62,7 @@ export interface ProviderFacts {
 
 const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' ? String(v) : undefined);
-const COMPANY_KEYS = ['clearing', 'revenue', 'fees'] as const;
+const COMPANY_KEYS = ['clearing', 'since', 'revenue', 'fees'] as const;
 const APP_KEYS = ['reports', 'payoutDays', 'gateways'] as const;
 
 function columnsOf<C extends string>(raw: unknown, names: readonly C[], needs: readonly C[], what: string): { columns: Columns<C> } | { problem: string } {
@@ -74,7 +81,7 @@ function columnsOf<C extends string>(raw: unknown, names: readonly C[], needs: r
 
 /** The `provider:` section of a merged business file, or what is wrong with it. */
 export function parseProvider(raw: unknown): { provider: ProviderFacts } | { problem: string } {
-  if (!isMap(raw)) return { problem: 'provider must be a map: { reports, payoutDays } in the app\'s file, { clearing, revenue, fees } in the company\'s' };
+  if (!isMap(raw)) return { problem: 'provider must be a map: { reports, payoutDays } in the app\'s file, { clearing, since, revenue, fees } in the company\'s' };
   for (const k of Object.keys(raw)) if (![...APP_KEYS, ...COMPANY_KEYS].includes(k as never)) return { problem: `provider.${k} is unknown — use ${[...APP_KEYS, ...COMPANY_KEYS].join(', ')}` };
   const out: ProviderFacts = { reports: {} };
   if (raw.reports !== undefined) {
@@ -106,6 +113,12 @@ export function parseProvider(raw: unknown): { provider: ProviderFacts } | { pro
     const a = text(raw[k]);
     if (!a) return { problem: `provider.${k} must be an account number of the chart` };
     out[k] = a;
+  }
+  if (raw.since !== undefined) {
+    // YAML reads an unquoted 2026-10-01 as a date.
+    const day = raw.since instanceof Date && !Number.isNaN(raw.since.getTime()) ? raw.since.toISOString().slice(0, 10) : text(raw.since);
+    if (!day || !isIsoDate(day)) return { problem: 'provider.since must be a day, YYYY-MM-DD: from it on the payouts go over the clearing account' };
+    out.since = day;
   }
   if (raw.fees !== undefined) {
     const account = isMap(raw.fees) ? text(raw.fees.account) : undefined;

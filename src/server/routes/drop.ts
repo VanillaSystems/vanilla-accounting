@@ -156,11 +156,14 @@ router.post('/api/drop/:id/rows/:key', async (req, res) => {
       break;
     case 'provider': {
       const ask = row.askProvider;
-      if (!ask || typeof a.account !== 'string' || !a.account.trim() || (ask.missing === 'fees' && (typeof a.vat !== 'string' || !a.vat.trim()))) throw new RequestError(400, 'Nur ein Bericht, dessen Konto fehlt, nimmt ein Konto.');
-      const account = a.account.trim();
-      const set = ask.missing === 'fees' ? { fees: { account, vat: a.vat!.trim() } } : { [ask.missing]: account };
+      const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+      const account = text(a.account);
+      const since = text(a.since);
+      // The cut-over day comes with the clearing account while the provider's file names none.
+      if (!ask || (ask.missing !== 'since' && !account) || (ask.missing === 'fees' && !text(a.vat)) || (ask.since !== undefined && !since)) throw new RequestError(400, 'Nur ein Bericht, dessen Konto oder Umstellungstag fehlt, nimmt eines.');
+      const set = ask.missing === 'fees' ? { fees: { account: account!, vat: text(a.vat)! } } : ask.missing === 'since' ? { since } : { [ask.missing]: account, ...(since ? { since } : {}) };
       const kept = setProviderAccount(WS, ask.provider, set);
-      if (!kept.ok) throw new RequestError(400, `Konto oder Steuercode ${ask.missing === 'fees' ? `${account} / ${a.vat}` : account} gibt es so nicht.`, kept.refusal);
+      if (!kept.ok) throw new RequestError(400, `Konto, Steuercode oder Umstellungstag ${[account, a.vat, since].filter(Boolean).join(' / ')} geht so nicht.`, kept.refusal);
       delete row.askProvider;
       delete row.message;
       Object.assign(row, { state: 'take', reason: undefined });

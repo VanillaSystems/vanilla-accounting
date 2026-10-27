@@ -222,6 +222,8 @@ export function errorText(e: unknown): string {
     case 'sameAccount': return t('error.sameAccount', b.params);
     case 'unknownVatCode': return t('error.unknownVatCode', b.params);
     case 'codeNotTaken': return t(b.params.method === 'none' ? 'error.codeNotTaken.none' : 'error.codeNotTaken.netRate', { code: b.params.code });
+    case 'clearingNotBalance': return t('error.clearingNotBalance', b.params);
+    case 'sinceNotOpen': return t('error.sinceNotOpen', { since: formatDate(b.params.since), from: formatDate(b.params.from) });
     case 'rule': { const k = refusalKey(b.params.refusal); return t(k.key, k.vars as never); }
     case 'report': return t('error.report', { why: refusalText(b.params.refusal, (k, v) => t(k, v as never)) });
     case 'noDescription': return t('error.noDescription');

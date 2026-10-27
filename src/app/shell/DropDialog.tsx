@@ -129,19 +129,23 @@ function ChooseAccount({ r, session, go }: { r: DropRow; session: DropSession; g
 
 /**
  * A provider's report whose company file lacks an account (#203): the row asks for it once, with the
- * fee code where the fees are missing; the answer is kept in that file and the report is taken.
+ * fee code where the fees are missing and the cut-over day with the clearing account (the first day
+ * of the open period proposed); the answer is kept in that file and the report is taken.
  */
 function ProviderAccount({ r, session }: { r: DropRow; session: DropSession }) {
   const ask = r.askProvider!;
   const [account, setAccount] = useState('');
   const [vat, setVat] = useState('');
-  const ready = !!account.trim() && (ask.missing !== 'fees' || !!vat.trim());
+  const [since, setSince] = useState(ask.since ?? '');
+  const needsAccount = ask.missing !== 'since';
+  const ready = (!needsAccount || !!account.trim()) && (ask.missing !== 'fees' || !!vat.trim()) && (ask.since === undefined || !!since);
   return (
     <>
-      <small>{t(`drop.provider.${ask.missing}`, { provider: ask.name, file: ask.file })}</small>
-      <form className="dpw" data-testid="drop-provider" onSubmit={(e) => { e.preventDefault(); if (ready) void act(session, r, { kind: 'provider', account: account.trim(), ...(ask.missing === 'fees' ? { vat: vat.trim() } : {}) }); }}>
-        <input value={account} onChange={(e) => setAccount(e.target.value)} placeholder={t('drop.provider.account')} aria-label={t('drop.provider.account')} inputMode="numeric" />
+      <small>{t(`drop.provider.${ask.missing}`, { provider: ask.name, file: ask.file })}{ask.missing === 'clearing' && ask.since !== undefined ? ` ${t('drop.provider.since', { provider: ask.name, file: ask.file })}` : ''}</small>
+      <form className="dpw" data-testid="drop-provider" onSubmit={(e) => { e.preventDefault(); if (ready) void act(session, r, { kind: 'provider', ...(needsAccount ? { account: account.trim() } : {}), ...(ask.missing === 'fees' ? { vat: vat.trim() } : {}), ...(ask.since !== undefined ? { since } : {}) }); }}>
+        {needsAccount ? <input value={account} onChange={(e) => setAccount(e.target.value)} placeholder={t('drop.provider.account')} aria-label={t('drop.provider.account')} inputMode="numeric" /> : null}
         {ask.missing === 'fees' ? <input value={vat} onChange={(e) => setVat(e.target.value)} placeholder={t('drop.provider.vat')} aria-label={t('drop.provider.vat')} /> : null}
+        {ask.since !== undefined ? <input type="date" value={since} onChange={(e) => setSince(e.target.value)} aria-label={t('drop.provider.sinceLabel')} data-tip={t('drop.provider.sinceLabel')} /> : null}
         <button type="submit" className="btn" disabled={!ready}>{t('drop.provider.keep')}</button>
       </form>
     </>
@@ -150,18 +154,18 @@ function ProviderAccount({ r, session }: { r: DropRow; session: DropSession }) {
 
 /** What a taken report booked and left, in one line (src/types/drop.ts ReportSummary). */
 function reportLine(s: NonNullable<DropRow['report']>): string {
-  const held = s.held.map((h) => (h.why === 'payout' ? t('drop.held.payout', { order: h.order, date: formatDate(h.date) }) : t(`drop.held.${h.why}`, { order: h.order }))).join(', ');
+  const held = s.held.map((h) => t(`drop.held.${h.why}`, { order: h.order })).join(', ');
   return [
     s.from && s.to && `${formatDate(s.from)} – ${formatDate(s.to)}`,
     s.kind === 'sales' ? t('drop.booked.sales', { orders: s.orders, refunds: s.refunds }) : t('drop.booked.fees', { n: s.fees }),
     s.known ? t('drop.booked.known', { n: s.known }) : '',
     s.filed ? t('drop.booked.filed', { n: s.filed }) : '',
     s.before ? t('drop.booked.before', { n: s.before }) : '',
+    s.beforeSince ? t('drop.booked.beforeSince', { n: s.beforeSince, since: formatDate(s.since) }) : '',
     s.other ? t('drop.booked.other', { n: s.other, ways: s.ways.join(', '), more: s.waysMore ? t('drop.booked.more', { n: s.waysMore }) : '' }) : '',
     s.unread ? t('drop.booked.unread', { n: s.unread }) : '',
     held ? t('drop.booked.held', { n: s.held.length + s.heldMore, orders: held, more: s.heldMore ? t('drop.booked.more', { n: s.heldMore }) : '' }) : '',
     s.proofs ? t('drop.booked.proofs', { n: s.proofs }) : '',
-    s.rebooked ? t('drop.booked.rebooked', { n: s.rebooked }) : '',
   ].filter(Boolean).join(' · ');
 }
 

@@ -7,6 +7,10 @@
  * its own code (src/booking/sales-report.ts); the fees from its fee report. A payout needs no receipt
  * and is never matched to one: its order documents are proof of the sales, not of the payout.
  *
+ * The company's file says from which day on (`provider.since`, the cut-over day): a payout dated
+ * before it is no settlement to the app, it stays as it was booked and is booked like any other
+ * payment; the app never books an existing entry again to switch a provider over.
+ *
  * Which business is a provider is said in its file (`provider:`, src/knowledge/provider.ts), never by
  * a name in code (ADR 0015). Pure.
  */
@@ -24,16 +28,21 @@ export const isProvider = (c: Counterparty): c is Provider => !!c.provider;
 /** The days a provider pays a sale out within when its file does not say. */
 export const PAYOUT_DAYS = 7;
 
+/** Whether the company's file has the provider go over its clearing account on `date`: on or after its cut-over day, or while it names none yet (then its payouts wait for one). */
+export const settlesOn = (p: Provider, date: string): boolean => !p.provider.since || date >= p.provider.since;
+
 /**
- * The provider whose payout `tx` is: money in that routes to a business with a `provider:` section.
- * Money out to the same business (its subscription, a bill) is a purchase like any other.
+ * The provider whose payout `tx` is: money in that routes to a business with a `provider:` section,
+ * dated on or after its cut-over day (settlesOn). A payout before that day is a payment like any
+ * other and stays as it was booked. Money out to the same business (its subscription, a bill) is a
+ * purchase like any other.
  */
-export function providerOfPayment(tx: Pick<BankTransaction, 'direction' | 'description' | 'counterparty' | 'counterpartyIban' | 'amount'>, linked: readonly Receipt[], counterparties: readonly Counterparty[]): Provider | undefined {
+export function providerOfPayment(tx: Pick<BankTransaction, 'date' | 'direction' | 'description' | 'counterparty' | 'counterpartyIban' | 'amount'>, linked: readonly Receipt[], counterparties: readonly Counterparty[]): Provider | undefined {
   if (tx.direction !== 'CRDT' || tx.amount === 0) return undefined;
   const routing = identify(signalsOfTransaction(tx as BankTransaction, [...linked]), counterparties);
   if (routing.kind !== 'known') return undefined;
   const cp = counterparties.find((c) => c.id === routing.counterparty);
-  return cp && isProvider(cp) ? cp : undefined;
+  return cp && isProvider(cp) && settlesOn(cp, tx.date) ? cp : undefined;
 }
 
 /** The ids of the businesses that are payment providers. */
@@ -42,27 +51,9 @@ export const providerIds = (counterparties: readonly Counterparty[]): Set<string
 /** The days a provider pays a sale out within: the company's file, else the app's, else PAYOUT_DAYS. */
 export const payoutDaysOf = (p: Provider): number => p.provider.payoutDays ?? PAYOUT_DAYS;
 
-/** How a payout is booked: bank / its clearing account in one line (`clearing`), not yet (`none`), or otherwise (as sales, by a person, …). */
-export function payoutBooking(entries: readonly JournalEntry[], clearing: string): 'clearing' | 'none' | 'otherwise' {
-  if (!entries.length) return 'none';
-  return entries.length === 1 && entries[0].accountCredit === clearing && !entries[0].vatCode ? 'clearing' : 'otherwise';
-}
-
-/** A span of days, both ends included. */
-export interface Span { from: string; to: string }
-
-/** The spans as few as they go: overlapping and adjacent ones joined, in order. */
-export function joinSpans(spans: readonly Span[]): Span[] {
-  const out: Span[] = [];
-  for (const s of [...spans].filter((x) => x.from && x.to).sort((a, b) => a.from.localeCompare(b.from))) {
-    const last = out.at(-1);
-    if (last && s.from <= addDays(last.to, 1)) { if (s.to > last.to) last.to = s.to; } else out.push({ ...s });
-  }
-  return out;
-}
-
-/** Whether the joined spans hold every day from `from` to `to`. */
-export const covers = (joined: readonly Span[], from: string, to: string): boolean => joined.some((s) => s.from <= from && to <= s.to);
+/** Whether a payout is booked bank / its clearing account in one line without VAT. */
+export const fromClearing = (entries: readonly JournalEntry[], clearing: string): boolean =>
+  entries.length === 1 && entries[0].accountCredit === clearing && !entries[0].vatCode;
 
 // ─── The clearing check ──────────────────────────────────────────────────────
 
@@ -75,7 +66,9 @@ export interface MonthEnd { date: string; balance: number }
  * payout days (`paidAfter`, absent while the bank's payments of those days are not in the books yet:
  * `known` says through when they are). Those payouts hold what the provider held at the end and the
  * sales it collected after it, so `paidAfter` is the most the balance may be: a balance above it is a
- * difference, found per order and corrected in the open period. `currency`: the clearing account's
+ * difference, found per order and corrected in the open period. A balance below zero is one too,
+ * whatever was paid after: the provider paid out more than the books have sales for (a sale not
+ * booked, such as one collected before the cut-over day and paid after it). `currency`: the clearing account's
  * entries are in a foreign currency, valued at each day's rate, so its balance carries exchange
  * differences until the year end revalues it. A fact, no reminder.
  */
@@ -93,6 +86,8 @@ export interface ClearingCheck {
   payoutDays: number;
   /** The last day the books hold payments of the clearing's bank; before through + payoutDays, `unpaid` is not known yet. */
   known?: string;
+  /** The balance is below zero: the provider paid out more than the account holds sales for, a difference whatever was paid after. */
+  below?: true;
 }
 
 /** The last day of each of the `n` months up to and including the month of `through`, oldest first; `through` itself for its own month. */
@@ -135,11 +130,12 @@ export function clearingCheck(p: Provider, books: { journalEntries: readonly Jou
   const banks = new Set(books.journalEntries.filter((e) => e.accountCredit === account && txByRef.has(e.transactionRef)).map((e) => txByRef.get(e.transactionRef)!.bank));
   const known = books.transactions.filter((t) => banks.has(t.bank)).map((t) => t.date).sort().at(-1);
   const paidAfter = known && known >= until ? fromRappen(payoutEntries.reduce((s, e) => s + toRappen(chfAmount(e)), 0)) : undefined;
+  const balance = balanceAt(books.journalEntries, account, through, opening);
   const currency = books.journalEntries.find((e) => e.exchangeCurrency && e.date <= through && (e.accountDebit === account || e.accountCredit === account))?.exchangeCurrency;
   return {
     provider: p.id, name: p.name, account, through,
-    balance: balanceAt(books.journalEntries, account, through, opening),
+    balance,
     months: monthEnds(through, months).map((date) => ({ date, balance: balanceAt(books.journalEntries, account, date, opening) })),
-    ...(paidAfter !== undefined ? { paidAfter } : {}), payoutDays, ...(known ? { known } : {}), ...(currency ? { currency } : {}),
+    ...(balance < 0 ? { below: true as const } : {}), ...(paidAfter !== undefined ? { paidAfter } : {}), payoutDays, ...(known ? { known } : {}), ...(currency ? { currency } : {}),
   };
 }

@@ -92,11 +92,15 @@ export interface Receipt {
 
 /**
  * What a sales or fee report's receipt keeps of it: the provider's business id, the kind, the days its
- * rows cover, how many orders or fees it holds; `rebooked`: the provider's payouts its taking booked
- * again from the clearing account, each with the ids of the entries it made and the entries it
- * replaced, so «Rückgängig» puts those back (src/intake/sales-report-import.ts removeSalesReport).
+ * rows cover, how many orders or fees it holds; `held`: the orders (or fees) its latest taking could
+ * not book, each with why, for the person to work through on the receipt (at most HELD_KEPT,
+ * src/intake/sales-report-import.ts; `heldMore` the rest).
  */
-export interface SalesReportFacts { provider: string; kind: 'sales' | 'fees'; from: string; to: string; rows: number; rebooked?: Array<{ ref: string; made: string[]; was: JournalEntry[] }> }
+export interface SalesReportFacts {
+  provider: string; kind: 'sales' | 'fees'; from: string; to: string; rows: number;
+  held?: Array<{ order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'legacy' }>;
+  heldMore?: number;
+}
 
 /** What a card terminal's or payment provider's report states, all positive: sales − refunds − fees = paidOut. */
 export interface PayoutFacts { sales: number; refunds: number; fees: number; paidOut: number }

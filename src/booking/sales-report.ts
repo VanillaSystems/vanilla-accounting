@@ -17,18 +17,22 @@
  * (SR-<provider>-<order>), so a report read twice, or two that overlap, book each order once; an
  * order the books carry with other figures is named, never booked again. Nothing is booked into a
  * filed period or before the books begin: such orders are counted, a correction is the person's
- * (golden rule 1); a refund of such an order dated in the open period is booked. A domestic order is
+ * (golden rule 1); a refund of such an order dated in the open period is booked. Nothing dated before
+ * the company's cut-over day (`provider.since`) is booked either: until then the provider's sales
+ * were booked the way they were, and they stay so; such rows are counted. A domestic order is
  * booked at the rate its tax column shows (the normal one, a reduced one the firm's form takes); one
  * without tax, or at no rate the firm books, is a new case for the person, never a sale without
  * output tax (processes/suppliers/shopify.yaml sv-delivery-decides); a foreign tax on an export is no
  * reason to hold it (sv-eu-vat), Swiss VAT shown on one is (it is owed as shown). An order the
  * provider did not collect (its `gateway` none of the provider's `gateways`) is counted, never booked
  * onto the clearing account. A refund without its own day waits for the person: it is never dated on
- * the order's day. An order, refund or fee that a payout booked otherwise may hold already (a payout
- * the app booked as sales before #203 and does not book again, src/intake/sales-report-import.ts)
- * waits too, so nothing counts twice. Browser-safe apart from the engines' globals.
+ * the order's day. What the books carry already from elsewhere on or after the cut-over day holds
+ * what it may be (`ReportContext.legacy`): a sale on the clearing account that names an order (an
+ * older booking per order, a person's own) holds that order; one that names none, and a payout of
+ * the provider booked otherwise than from the clearing account (as sales), hold every order, refund
+ * and fee up to their day; so nothing counts twice. Browser-safe apart from the engines' globals.
  */
-import type { BankTransaction, JournalEntry, Mapping, Receipt, SalesReportFacts } from '../types/index.js';
+import type { JournalEntry, Mapping, Receipt, SalesReportFacts } from '../types/index.js';
 import type { Columns, FeeColumn, ProviderFacts, ReportKind, SalesColumn } from '../knowledge/provider.js';
 import { FEE_NEEDS, SALES_NEEDS } from '../knowledge/provider.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
@@ -217,12 +221,17 @@ export interface ReportContext {
   territory: readonly string[];
   /** The gateway column's values whose orders the provider collected (ProviderFacts.gateways); absent: every order. */
   gateways?: readonly string[];
+  /** The company's cut-over day (ProviderFacts.since): rows dated before it are counted, never booked. */
+  since: string;
   /**
-   * The day of a payout of the provider that is booked otherwise than from the clearing account and
-   * stays so, which may hold what the provider collected, paid back or charged on `date`: then that
-   * waits for the person, so it never counts twice. Absent: no such payout.
+   * What the books carry already from elsewhere, on or after `since` in the open period. `entries`:
+   * entries on the clearing account no report booked, of the report's kind (a sale onto it for a
+   * sales report, a fee off it for a fee report): a row one of them names (by its ref, or by its day
+   * and amount) waits, and one that names none holds every row up to its day. `through`: the last day
+   * of a payout of the provider booked otherwise than from the clearing account (it may hold every
+   * sale, refund and fee up to its day): those wait too.
    */
-  paidOtherwise?: (date: string) => string | undefined;
+  legacy?: { entries: readonly JournalEntry[]; through?: string };
   /** The agreed basis: the order's day is the tax point. */
   agreed: boolean;
   isClosed: (date: string) => boolean;
@@ -242,12 +251,10 @@ export interface ReportTexts {
 /**
  * Why an order (or a fee) is not booked by code: its tax column disagrees with its delivery (`noTax`,
  * `rate`, Swiss VAT on an export `abroadTax`), no country, its figures in the books differ, no rate of
- * its day, a refund without a day of its own (`refundDate`), or a payout booked otherwise may hold it
- * (`payout`, `date` that payout's day).
+ * its day, a refund without a day of its own (`refundDate`), or the clearing account carries a sale
+ * from elsewhere that may be it (`legacy`).
  */
-export type ReportHold =
-  | { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'country' | 'changed' | 'noRate' | 'refundDate' }
-  | { order: string; why: 'payout'; date: string };
+export interface ReportHold { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'legacy' }
 
 /** What a report booked and left: counts, the orders held with why, and the rows dated in a filed period or before the books. */
 export interface ReportOutcome {
@@ -260,6 +267,8 @@ export interface ReportOutcome {
   knownRefs: string[];
   filed: number;
   before: number;
+  /** Rows dated before the company's cut-over day: booked the way they were, never by the report. */
+  beforeSince: number;
   /** Orders the provider did not collect (their gateway none of its gateways), and those gateways as the report writes them. */
   other: number;
   ways: string[];
@@ -284,10 +293,10 @@ const gatewayKey = (g: string): string => g.trim().toLowerCase().replace(/[_\s]+
  * links inside the write door. Each entry has origin 'classify' and names the check `payoutReport` (a check older builds keep).
  */
 export function bookReport(books: { journalEntries: readonly JournalEntry[] }, read: ReadReport, ctx: ReportContext): ReportOutcome {
-  const out: ReportOutcome = { orders: 0, refunds: 0, fees: 0, known: 0, knownRefs: [], filed: 0, before: 0, other: 0, ways: [], held: [], entries: [], links: [] };
+  const out: ReportOutcome = { orders: 0, refunds: 0, fees: 0, known: 0, knownRefs: [], filed: 0, before: 0, beforeSince: 0, other: 0, ways: [], held: [], entries: [], links: [] };
   const byRef = new Map<string, JournalEntry[]>();
   for (const e of books.journalEntries) if (isReportRef(e.transactionRef)) (byRef.get(e.transactionRef) ?? byRef.set(e.transactionRef, []).get(e.transactionRef)!).push(e);
-  const dated = (date: string): 'filed' | 'before' | undefined => (ctx.beforeBooks(date) ? 'before' : ctx.isClosed(date) ? 'filed' : undefined);
+  const dated = (date: string): 'filed' | 'before' | 'beforeSince' | undefined => (ctx.beforeBooks(date) ? 'before' : ctx.isClosed(date) ? 'filed' : date < ctx.since ? 'beforeSince' : undefined);
   const make = (ref: string, date: string, currency: string | undefined, line: Pick<JournalEntry, 'accountDebit' | 'accountCredit' | 'amount' | 'description'> & { vatCode?: string }, reason: string): JournalEntry | 'noRate' => {
     const foreign = currency && currency !== ctx.base ? currency : undefined;
     const rate = foreign ? ctx.rate(foreign, date) : undefined;
@@ -311,14 +320,9 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
     if (!out.links.some((m) => m.transactionRef === ref)) out.links.push({ transactionRef: ref, receiptId: ctx.receipt, by: 'rule', rule: REPORT_LINK_RULE });
     byRef.set(ref, [e]);
   };
-  /** A payout booked otherwise that may hold what moved on `date`: its day, and the row waits. */
-  const heldBy = (order: string, date: string): boolean => {
-    const payout = ctx.paidOtherwise?.(date);
-    if (payout) out.held.push({ order, why: 'payout', date: payout });
-    return !!payout;
-  };
 
   if (read.kind === 'fees') {
+    const feeLegacy = legacyRows(read.rows.map((f) => ({ key: f.order ?? f.date, day: f.date, amount: f.fee })), ctx.legacy);
     for (const f of read.rows) {
       if (!ctx.fees) break;
       const key = f.order ?? f.date;
@@ -329,7 +333,7 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
       if (k === 'changed') { out.held.push({ order: key, why: 'changed' }); continue; }
       const where = dated(f.date);
       if (where) { out[where]++; continue; }
-      if (heldBy(key, f.date)) continue;
+      if (feeLegacy({ key, day: f.date, amount: f.fee })) { out.held.push({ order: key, why: 'legacy' }); continue; }
       const e = make(ref, f.date, f.currency, { accountDebit: ctx.fees.account, accountCredit: ctx.clearing, amount: f.fee, vatCode: ctx.fees.vat, description: ctx.texts.fee(key) }, ctx.texts.reason('fee', undefined));
       if (e === 'noRate') { out.held.push({ order: key, why: 'noRate' }); continue; }
       push(ref, e);
@@ -339,6 +343,9 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
   }
 
   const collects = ctx.gateways?.length ? new Set(ctx.gateways.map(gatewayKey)) : undefined;
+  const taxDay = (o: SaleRow) => (ctx.agreed ? o.ordered ?? o.date : o.date);
+  const orderLegacy = legacyRows(read.rows.map((o) => ({ key: o.order, day: taxDay(o), amount: o.gross })), ctx.legacy);
+  const isLegacy = (o: SaleRow) => orderLegacy({ key: o.order, day: taxDay(o), amount: o.gross });
   const rates: SaleCode[] = ctx.codes ? [{ code: ctx.codes.domestic, rate: ctx.codes.rate }, ...(ctx.codes.reduced ?? [])] : [];
   for (const o of read.rows) {
     if (collects) {
@@ -351,7 +358,7 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
         continue;
       }
     }
-    const day = ctx.agreed ? o.ordered ?? o.date : o.date;
+    const day = taxDay(o);
     const domestic = !!o.shipTo && ctx.territory.includes(o.shipTo);
     let code: string | undefined;
     let kind: 'domestic' | 'abroad' | 'none' = 'none';
@@ -379,7 +386,7 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
       // A sale of a filed period is the person's to correct; its refund paid in the open period is still booked below.
       if (where) out[where]++;
       else {
-        if (heldBy(o.order, o.date)) continue;
+        if (isLegacy(o)) { out.held.push({ order: o.order, why: 'legacy' }); continue; }
         const e = make(sale, day, o.currency, { accountDebit: ctx.clearing, accountCredit: ctx.revenue, amount: o.gross, vatCode: code, description: ctx.texts.sale(o.order, o.shipTo) }, ctx.texts.reason(kind, o.shipTo));
         if (e === 'noRate') { out.held.push({ order: o.order, why: 'noRate' }); continue; }
         push(sale, e);
@@ -396,7 +403,7 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
       if (!when || when < day) { out.held.push({ order: o.order, why: 'refundDate' }); continue; }
       const where = dated(when);
       if (where) { out[where]++; continue; }
-      if (heldBy(o.order, when)) continue;
+      if (orderLegacy({ key: o.order, day: when, amount: o.refunded })) { out.held.push({ order: o.order, why: 'legacy' }); continue; }
       const e = make(ref, when, o.currency, { accountDebit: ctx.revenue, accountCredit: ctx.clearing, amount: o.refunded, vatCode: code ? `${ctx.codes!.negative}${code}` : undefined, description: ctx.texts.refund(o.order) }, ctx.texts.reason('refund', o.shipTo));
       if (e === 'noRate') { out.held.push({ order: o.order, why: 'noRate' }); continue; }
       push(ref, e);
@@ -404,6 +411,35 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[] }, r
     }
   }
   return out;
+}
+
+/** Whether a ref ends in an order's name, as `SHOPIFY-1001` or `#1001` names order 1001. */
+function namesOrder(ref: string, order: string): boolean {
+  if (!ref.endsWith(order)) return false;
+  const before = ref.charAt(ref.length - order.length - 1);
+  return !before || !/[0-9A-Za-z]/.test(before);
+}
+
+/** A row of a report as the legacy check sees it: its order (or fee key), its day, its amount. */
+interface LegacyRow { key: string; day: string; amount: number }
+
+/**
+ * Which rows of a report the books may carry already from elsewhere (ReportContext.legacy): an entry
+ * whose ref ends in the row's order, else one of the row's day and amount, holds that row; an entry
+ * that names no row of the report holds every row up to its day, as a payout booked otherwise does
+ * up to `through`.
+ */
+function legacyRows(rows: readonly LegacyRow[], legacy: ReportContext['legacy']): (row: LegacyRow) => boolean {
+  if (!legacy) return () => false;
+  const named = new Set<string>();
+  let through = legacy.through ?? '';
+  for (const e of legacy.entries) {
+    const r = rows.find((x) => namesOrder(e.transactionRef, x.key))
+      ?? rows.find((x) => !named.has(x.key) && x.day === e.date && toRappen(x.amount) === toRappen(e.amount));
+    if (r) named.add(r.key);
+    else if (e.date > through) through = e.date;
+  }
+  return (row) => named.has(row.key) || row.day <= through;
 }
 
 // ─── Export proof: order documents to their sale ─────────────────────────────

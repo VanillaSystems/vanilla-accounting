@@ -74,28 +74,30 @@ export interface DropRow {
 
 export interface StatementFacts { iban?: string; from?: string; to?: string; entries?: number }
 
-/** What the company's file of a provider lacks for its report: its clearing account, its revenue account, or its fee account and code; `file`: where it is kept. */
-export interface ProviderAsk { provider: string; name: string; missing: 'clearing' | 'revenue' | 'fees'; file: string }
+/**
+ * What the company's file of a provider lacks for its report: its clearing account (with the cut-over
+ * day), the cut-over day alone, its revenue account, or its fee account and code; `file`: where it is
+ * kept; `since`: the cut-over day proposed (the first day of the open period) while the file names none.
+ */
+export interface ProviderAsk { provider: string; name: string; missing: 'clearing' | 'since' | 'revenue' | 'fees'; file: string; since?: string }
 
-/** Why an order of a report was not booked by code (src/booking/sales-report.ts ReportHold); `date`: the day of the payout booked otherwise that may hold it. */
-export type ReportHeld =
-  | { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'country' | 'changed' | 'noRate' | 'refundDate' }
-  | { order: string; why: 'payout'; date: string };
+/** Why an order of a report was not booked by code (src/booking/sales-report.ts ReportHold). */
+export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'legacy' }
 
 /**
  * What a report booked (src/intake/sales-report-import.ts): orders, refunds and fees booked; `known`
  * already in the books; `filed` and `before`: rows dated in a filed period or before the books, not
- * booked (a correction is the person's); `other`: orders the provider did not collect (paid otherwise:
+ * booked (a correction is the person's); `beforeSince`: rows dated before the provider's cut-over day
+ * `since`, booked the way they were and never by the report; `other`: orders the provider did not collect (paid otherwise:
  * PayPal, bank transfer, a gift card, a test), not booked, with how they were paid (`ways`, the first
  * ones, `waysMore` the rest); `held`: orders the person decides (the first ones, `heldMore` the rest);
- * `unread`: rows code could not read; `proofs`: order documents linked to their sale; `rebooked`: the
- * provider's payouts booked again from the clearing account.
+ * `unread`: rows code could not read; `proofs`: order documents linked to their sale.
  */
 export interface ReportSummary {
-  provider: string; name: string; kind: 'sales' | 'fees'; from: string; to: string; file: string;
-  orders: number; refunds: number; fees: number; known: number; filed: number; before: number;
+  provider: string; name: string; kind: 'sales' | 'fees'; from: string; to: string; file: string; since: string;
+  orders: number; refunds: number; fees: number; known: number; filed: number; before: number; beforeSince: number;
   other: number; ways: string[]; waysMore: number;
-  held: ReportHeld[]; heldMore: number; unread: number; proofs: number; rebooked: number;
+  held: ReportHeld[]; heldMore: number; unread: number; proofs: number;
 }
 
 /** `duplicate`: the same bytes; `possible-duplicate`: the same facts, asked; `same`: the person said it is the same; `not-receipt`: its words say so (`document` says what it is). */
@@ -131,7 +133,7 @@ export type DropAction =
   /** A possible duplicate: «ist dasselbe» (not taken) or «verschieden» (taken, and the pair is not asked again). */
   | { kind: 'twin'; answer: 'same' | 'distinct' }
   /** A report's provider lacks an account (`askProvider`): the person names it, it is kept in the company's file of the provider, and the report is taken. */
-  | { kind: 'provider'; account: string; vat?: string };
+  | { kind: 'provider'; account?: string; vat?: string; since?: string };
 
 /** Why a file is in data/quarantine/: its words say it is no receipt (and which kind, and the mail's sender), a person set it aside, or it is no PDF inside. */
 export type QuarantineReason = { kind: 'not-receipt'; why?: OtherWhy; from?: string } | { kind: 'held' } | { kind: 'unreadable' };
