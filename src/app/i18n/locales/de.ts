@@ -4802,6 +4802,15 @@ export const messages = {
   'selection.unpick': '{what} nicht mehr auswählen',
   'keys.pick': 'Auswählen',
   'keys.pickTip': '⌘-Klick nimmt eine Zeile dazu oder weg, ⇧-Klick einen Bereich, ⌘A alle gezeigten, Esc keine.',
+  'selection.receipts': { one: '{n} Beleg ausgewählt', other: '{n} Belege ausgewählt' },
+  'selection.payments': { one: '{n} Zahlung ausgewählt', other: '{n} Zahlungen ausgewählt' },
+  'selection.entries': { one: '{n} Buchung ausgewählt', other: '{n} Buchungen ausgewählt' },
+  'selection.noDates': 'ohne Datum',
+  'selection.closed': { one: '{n} in einer eingereichten Periode: eine Sammelaktion lässt sie aus', other: '{n} in einer eingereichten Periode: eine Sammelaktion lässt sie aus' },
+  'selection.sumTip': 'Summe in {currency}, Fremdwährungen zum ESTV-Kurs ihres Tages',
+  'selection.clear': 'Auswahl aufheben',
+  'selection.clearTip': 'Esc hebt die Auswahl auf.',
+  'selection.more': { one: '… und {n} weitere: hier stehen die ersten {shown}.', other: '… und {n} weitere: hier stehen die ersten {shown}.' },
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

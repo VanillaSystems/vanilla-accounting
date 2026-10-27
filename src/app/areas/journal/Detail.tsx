@@ -3,6 +3,9 @@
  * each account's name and the VAT code explained, its payment and receipt, the receipt itself, and
  * in the margin the other entries of the same payment, the entry's form and where it came from.
  */
+import { useSelection } from '../../selection/store.js';
+import { SelectionView } from '../../selection/SelectionView.js';
+import { entryRows } from '../../selection/rows.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { localToday, parsePeriod, periodContaining } from '../../../accounting/periods.js';
 import { firmCodes, lookupVatCode, parseRate, vatCodeOf } from '../../../accounting/vat-codes.js';
@@ -52,6 +55,11 @@ import { sameTags, valueLabel } from '../../../books/tags.js';
 type Props = AreaProps<RouteOf<'journal'>>;
 
 export function Detail(props: Props) {
+  const picked = useSelection('entry');
+  return picked ? <SelectionView kind="entry" rows={entryRows(props.books, picked.ids)} nav={props.nav} /> : <OneEntry {...props} />;
+}
+
+function OneEntry(props: Props) {
   const { route, books } = props;
   const j = journalFor(books);
   const v = route.id ? j.byId.get(route.id) : undefined;

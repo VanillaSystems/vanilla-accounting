@@ -45,6 +45,8 @@ import { QuestionsOn } from '../../questions/Questions.js';
 import { bookDiffParts, missingOpenings } from '../../../accounting/opening-balance.js';
 import { GroupedOffer } from '../company/RulesSection.js';
 import { Pick } from '../../selection/Pick.js';
+import { SelectionView } from '../../selection/SelectionView.js';
+import { paymentRows } from '../../selection/rows.js';
 import { clickRow, useSelection, useShown } from '../../selection/store.js';
 
 type Props = AreaProps<RouteOf<'bank'>>;
@@ -163,6 +165,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
 
       <div className="body">
         <div className="desk">
+          {picked ? <PickedPayments {...props} ids={picked.ids} /> : <>
           {(file || tx) && (
             <div className="src paybar">
               <span><PayBar {...props} tx={tx} closed={closed} onClear={() => choose(undefined)} /></span>
@@ -194,6 +197,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
               ) : null}
             </>
           )}
+          </>}
         </div>
         <aside className="margin" aria-label={t('receipts.details')}>
           {pays.length > 0 && (
@@ -237,6 +241,12 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
       {ui.overlay === 'quick' && src && <Quick src={src} file={s.file!.filename} mark={mark} />}
     </div>
   );
+}
+
+/** The picked payments in place of the paper (#216): the list beside it stays, so more can be picked. */
+function PickedPayments({ books, nav, ids }: Props & { ids: readonly string[] }) {
+  const { rates } = useFx();
+  return <SelectionView kind="payment" rows={paymentRows(books, ids, rates)} nav={nav} />;
 }
 
 /** The chosen payment in one line: its receipt, its entry, what is missing; a hint while none is chosen. */

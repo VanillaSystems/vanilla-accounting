@@ -34,6 +34,8 @@ import './receipts.css';
 import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
 import { baseCurrency } from '../../../engines/index.js';
 import { Pick } from '../../selection/Pick.js';
+import { SelectionView } from '../../selection/SelectionView.js';
+import { receiptRows } from '../../selection/rows.js';
 import { clickRow, useSelection, useShown } from '../../selection/store.js';
 
 type Props = AreaProps<RouteOf<'receipts'>>;
@@ -310,6 +312,9 @@ function PendingRow({ file, sel, onSelect }: { file: InboxFile; sel: boolean; on
 /** The receipt beside the list; while there is none at all, the empty table of the ways in. */
 function ReceiptsDetail(props: Props) {
   const { inbox } = useUi();
+  const picked = useSelection('receipt');
+  const { rates } = useFx();
+  if (picked) return <SelectionView kind="receipt" rows={receiptRows(props.books, picked.ids, rates)} nav={props.nav} />;
   return props.canEdit && !props.route.id && noReceiptsYet(props.books, inbox) ? <EmptyTable /> : <Detail {...props} />;
 }
 
