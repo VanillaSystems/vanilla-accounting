@@ -66,8 +66,10 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
 
   /** Typed words need an AI; without one the buttons and fields carry the conversation (docs/0.4.0/ai-setup.md). */
   const [aiAnswers, setAiAnswers] = useState(true);
+  /** «KI ganz ausschalten» on this Mac (issue #212): the words wait for it to be on again. */
+  const [aiOff, setAiOff] = useState(false);
   useEffect(() => { void api.desktop.setup(root).then(setView, (e) => setError(errorText(e))); }, [root]);
-  useEffect(() => { void api.desktop.ai().then((r) => setAiAnswers(r.available), () => setAiAnswers(false)); }, []);
+  useEffect(() => { void api.desktop.ai().then((r) => { setAiAnswers(r.available); setAiOff(r.off === true); }, () => setAiAnswers(false)); }, []);
   const steps = view ? draftSteps(view.draft) : [];
   useEffect(() => { end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }, [steps.length, turns]);
 
@@ -140,7 +142,7 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
         <form className="obtalk" onSubmit={(e) => { e.preventDefault(); void talk(); }}>
           <div className={busy ? 'obtalkbox busy' : 'obtalkbox'}>
             <textarea
-              name="talk" rows={2} maxLength={MAX_TALK} value={text} disabled={!aiAnswers} placeholder={t(aiAnswers ? 'onboarding.talk.placeholder' : 'aiSetup.talkWaits')} aria-label={t('onboarding.talk.label')}
+              name="talk" rows={2} maxLength={MAX_TALK} value={text} disabled={!aiAnswers} placeholder={t(aiAnswers ? 'onboarding.talk.placeholder' : aiOff ? 'aiOff.talk' : 'aiSetup.talkWaits')} aria-label={t('onboarding.talk.label')}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void talk(); } }}
             />

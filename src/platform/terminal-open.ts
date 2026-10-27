@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { probeAll } from './ai-cli.js';
 import type { CliProbe } from './ai-setup.js';
 import { REQUEST_MAX, TERMINAL_APPS, TERMINAL_APP_FACTS, launchScript, openArgs, type CliState, type TerminalApp, type TerminalCli } from './terminal.js';
+import { gate } from '../llm/off.js';
 
 /** A CLI found, with the path the terminal starts it by. */
 export type FoundCli = CliState & { bin?: string };
@@ -66,6 +67,8 @@ export interface Opening {
  * request goes into a file beside the script, which reads and removes it (launchScript).
  */
 export function openInTerminal({ folder, bin, request, app = 'terminal' }: Opening, start: Run = run): Promise<string> {
+  // Starts Claude Code or Codex, a model: through the gate of «KI ganz ausschalten» (src/llm/off.ts) first.
+  gate();
   const text = request?.trim().slice(0, REQUEST_MAX);
   return openScript((dir) => {
     if (!text) return launchScript(folder, bin, dir);
