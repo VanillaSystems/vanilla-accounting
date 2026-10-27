@@ -1,5 +1,5 @@
 # Shopify is both a supplier (app and payment fees) and the sales platform.
-# Its payouts may arrive as "Received money from Stripe Payments UK Ltd with
+# Its payouts may arrive as "Received money from Stripe … with
 # reference Shopify …": the bank names Stripe, not Shopify. Code takes a payout
 # whose reference begins with a provider's tx word ("shopify") for that provider's
 # when the payer is no business of the books and the bank names no payer or one of
@@ -10,7 +10,7 @@
 # no payout of Shopify among the bank's payments of its days, the report waits in
 # its row («Trotzdem übernehmen» books it); the payout's name belongs into the
 # company's file: knowledge/suppliers/shopify.yaml
-#   match: { tx: [ "Stripe Payments UK" ] }
+#   match: { tx: [ "<the payer's name as the bank shows it>" ] }
 # and `provider.account` there names the bank account Shopify pays into, the only
 # one that check then looks at.
 # As a payment provider (#203) its payout settles its clearing account: code books

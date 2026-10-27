@@ -3098,7 +3098,7 @@ export const messages = {
   'drop.provider.since': 'Ab welchem Tag gehen die Auszahlungen von {provider} über das Durchlaufkonto? Was davor liegt, bleibt, wie es gebucht ist. Die App merkt es sich in {file}.',
   'drop.provider.sinceLabel': 'Umstellungstag',
   'drop.unseen.why': 'Keine Auszahlung von {provider} erkannt: die Zahlungen der Bank sind bis {through} da ({banks}), aber keine Gutschrift ab dem {since} erkennt die App als Auszahlung von {provider}. Darum ist aus dem Bericht nichts gebucht.',
-  'drop.unseen.hint': 'Erscheint die Auszahlung unter einem anderen Namen (etwa «Stripe Payments UK»), gehört dieser Name in die Datei von {provider} unter match.tx: {file}. Zahlt {provider} auf ein bestimmtes Konto, nennt provider.account dort sein Konto; dann sieht die App nur dort nach.',
+  'drop.unseen.hint': 'Erscheint die Auszahlung unter einem anderen Namen (etwa unter dem Namen des Zahlungsdienstes, wie ihn die Bank schreibt), gehört dieser Name in die Datei von {provider} unter match.tx: {file}. Zahlt {provider} auf ein bestimmtes Konto, nennt provider.account dort sein Konto; dann sieht die App nur dort nach.',
   'drop.unseen.anyway': 'Trotzdem übernehmen',
   'drop.unseen.open': '{provider} öffnen',
   'drop.provider.account': 'Konto',

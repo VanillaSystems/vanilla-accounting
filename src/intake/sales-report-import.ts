@@ -174,8 +174,8 @@ function legacyOf(books: Books, p: Provider, kind: 'sales' | 'fees', revenue: st
  * payout days after the first of them (so its first payout from the clearing account is in), and no
  * payment from the cut-over day on is recognised as the provider's (providerOfPayment). Only the
  * bank account the provider pays into counts when its file names one (`provider.account`), else
- * every account. Its payouts then arrive under a name its files do not know (Shopify's as «Stripe
- * Payments UK» without «Shopify» in the reference): a rule or the model would book them as sales
+ * every account. Its payouts then arrive under a name its files do not know (Shopify's under the payment
+ * processor's name as the bank shows it, without «Shopify» in the reference): a rule or the model would book them as sales
  * while the report books the same sales onto the clearing account. The report waits for the person
  * (PayoutUnseen): what was looked at, and that the payout's name belongs into the provider's file.
  */

@@ -163,9 +163,9 @@ test('a provider\'s payout needs no receipt and has none of its own; money out t
 });
 
 test('10. a plain Stripe payout is not taken for Shopify\'s; a company whose Stripe payouts are Shopify\'s says so in its own file', () => {
-  const stripe = payout('ST', { description: 'Received money from Stripe Payments UK Ltd with reference STRIPE 4711', counterparty: undefined });
+  const stripe = payout('ST', { description: 'Received money from Stripe Example Ltd with reference STRIPE 4711', counterparty: undefined });
   assert.equal(providerOfPayment(stripe, [], loadClassifyContext(shop(FILE('2026-07-01'))).counterparties ?? []), undefined);
-  const says = shop(FILE('2026-07-01'), 'match:\n  tx: [ "stripe payments uk" ]\n');
+  const says = shop(FILE('2026-07-01'), 'match:\n  tx: [ "stripe example" ]\n');
   assert.equal(providerOfPayment(stripe, [], loadClassifyContext(says).counterparties ?? [])?.id, 'shopify');
 });
 
@@ -845,7 +845,7 @@ test('9. the clearing check: the balance at the quarter\'s end, its month ends, 
 
 /** A payout Stripe makes for Shopify, as Wise writes it: the bank names Stripe, the reference Shopify. */
 const viaStripe = (ref: string, reference: string, over: Partial<BankTransaction> = {}): BankTransaction =>
-  payout(ref, { date: '2026-11-04', amount: 108.1, description: `Received money from Stripe Payments UK Ltd with reference ${reference}`, counterparty: undefined, ...over });
+  payout(ref, { date: '2026-11-04', amount: 108.1, description: `Received money from Stripe Example Ltd with reference ${reference}`, counterparty: undefined, ...over });
 /** A model that books every payment it is asked about as gross sales: what rule 9a does with a payout it does not know. */
 const asSalesModel = (amount: number) => async (prompt: string) => JSON.stringify(Object.fromEntries([...prompt.matchAll(/### Transaction \d+: (\S+)/g)].map((m) => [m[1], { entries: [{ accountDebit: '', accountCredit: '3200', amount, vat: 'charged', vatRate: 8.1, description: 'Shopify payout' }], reason: 'rule 9a' }])));
 /** A payment out on a later day: the bank's payments of the days before it are in the books. */
@@ -855,8 +855,8 @@ test('R7a. a payout whose reference begins with the provider\'s word is the prov
   const ws = shop();
   const counterparties = loadClassifyContext(ws).counterparties ?? [];
   assert.equal(providerOfPayment(viaStripe('ST1', 'Shopify 98765'), [], counterparties)?.id, 'shopify', 'with reference Shopify …');
-  assert.equal(providerOfPayment(viaStripe('ST1', 'Shopify 98765', { description: 'Gutschrift Stripe Payments UK Ltd', reference: 'SHOPIFY* 98765' }), [], counterparties)?.id, 'shopify', 'the remittance field');
-  assert.equal(providerOfPayment(viaStripe('ST2', 'STRIPE 4711', { counterparty: 'Stripe Payments UK Ltd' }), [], counterparties), undefined, 'a plain Stripe payout');
+  assert.equal(providerOfPayment(viaStripe('ST1', 'Shopify 98765', { description: 'Gutschrift Stripe Example Ltd', reference: 'SHOPIFY* 98765' }), [], counterparties)?.id, 'shopify', 'the remittance field');
+  assert.equal(providerOfPayment(viaStripe('ST2', 'STRIPE 4711', { counterparty: 'Stripe Example Ltd' }), [], counterparties), undefined, 'a plain Stripe payout');
   assert.equal(providerOfPayment(viaStripe('ST3', 'Shopifyish 1'), [], counterparties), undefined, 'a whole word only');
 
   const done = importSalesReport(ws, Buffer.from([head, row('2001', '2026-11-02', '108.10', '8.10')].join('\n')), 'o.csv');
@@ -873,7 +873,7 @@ test('R7a. a payout whose reference begins with the provider\'s word is the prov
 
 test('R7b. the bank\'s payments of the report\'s days are in, no payout of the provider is recognised: the report books nothing and says why, naming what was looked at; «Trotzdem übernehmen» books it and the clearing check shows the difference; the payout\'s name in match.tx by hand books each sale once', () => {
   const ws = shop();
-  const st = viaStripe('ST2', 'STRIPE 4711', { counterparty: 'Stripe Payments UK Ltd' });
+  const st = viaStripe('ST2', 'STRIPE 4711', { counterparty: 'Stripe Example Ltd' });
   seed(ws, [st, later('2026-11-10')], [E('st', 'ST2', '2026-11-04', '1021', '3200', 108.1, 'V81', { by: { kind: 'model', model: 'm' } })]);
   const csv = [head, row('2001', '2026-11-02', '108.10', '8.10')].join('\n');
   const held = importSalesReport(ws, Buffer.from(csv), 'o.csv');
@@ -891,7 +891,7 @@ test('R7b. the bank\'s payments of the report\'s days are in, no payout of the p
   assert.equal(check.balance, 108.1, 'the safety net: the clearing account keeps the sale the unseen payout paid, a difference the quarter\'s review shows');
 
   // The payout's name put into the company's file by hand: the payout is the provider's, and holds the order it paid.
-  const named = shop(FILE(), 'match:\n  tx: [ "Stripe Payments UK" ]\n');
+  const named = shop(FILE(), 'match:\n  tx: [ "Stripe Example" ]\n');
   seed(named, [st, later('2026-11-10')], [E('st', 'ST2', '2026-11-04', '1021', '3200', 108.1, 'V81', { by: { kind: 'model', model: 'm' } })]);
   const taken = importSalesReport(named, Buffer.from(csv), 'o.csv');
   assert.ok(taken.ok);
@@ -937,7 +937,7 @@ test('N3. a credit recognised by its reference alone is the provider\'s payout o
   assert.deepEqual(SHOPIFY.provider.processors, ['stripe']);
   const customer = payout('C1', { date: '2026-11-04', counterparty: 'Hans Muster', description: 'Gutschrift Hans Muster', reference: 'Shopify Bestellung 1001' });
   assert.equal(providerOfPayment(customer, [], cps), undefined, 'a private person\'s transfer');
-  assert.equal(providerOfPayment(payout('C2', { date: '2026-11-04', counterparty: 'Stripe Payments UK Ltd', description: 'Gutschrift', reference: 'Shopify 98765' }), [], cps)?.id, 'shopify', 'Stripe, the processor the file names');
+  assert.equal(providerOfPayment(payout('C2', { date: '2026-11-04', counterparty: 'Stripe Example Ltd', description: 'Gutschrift', reference: 'Shopify 98765' }), [], cps)?.id, 'shopify', 'Stripe, the processor the file names');
   assert.equal(providerOfPayment(payout('C3', { date: '2026-11-04', counterparty: '', description: 'Gutschrift', reference: 'Shopify 98765' }), [], cps)?.id, 'shopify', 'no payer named');
   assert.equal(providerOfPayment(payout('C4', { date: '2026-11-04', counterparty: 'Stripes Muster', description: 'Gutschrift', reference: 'Shopify 98765' }), [], cps), undefined, 'a whole word only');
   assert.match((parseProvider({ processors: [''] }) as { problem: string }).problem, /provider\.processors must name/);
@@ -948,7 +948,7 @@ test('N3b. with no counterparty (Wise PDF statements) the payer is read from the
   const cps = loadClassifyContext(ws).counterparties ?? [];
   const wise = (ref: string, description: string) => payout(ref, { date: '2026-11-04', counterparty: undefined, description });
   assert.equal(providerOfPayment(wise('H1', 'Received money from Hans Muster with reference Shopify Bestellung 1001'), [], cps), undefined, 'a customer\'s transfer');
-  assert.equal(providerOfPayment(wise('H2', 'Received money from Stripe Payments UK Ltd with reference Shopify 98765'), [], cps)?.id, 'shopify', 'Stripe');
+  assert.equal(providerOfPayment(wise('H2', 'Received money from Stripe Example Ltd with reference Shopify 98765'), [], cps)?.id, 'shopify', 'Stripe');
   assert.equal(providerOfPayment(wise('H3', 'Received money from Stripeline / Stripe Payments with reference Shopify 98765'), [], cps)?.id, 'shopify', 'the second occurrence is the whole word');
   assert.equal(providerOfPayment(wise('H4', 'Received money from Stripeline Ltd with reference Shopify 98765'), [], cps), undefined, 'no whole-word occurrence');
 });
@@ -1078,7 +1078,7 @@ test('10. a payout that waits says why on the payment itself (GET /api/transacti
     const accounts = join(api.root, 'master-data', 'accounts.json');
     writeFileSync(accounts, JSON.stringify([...JSON.parse(readFileSync(accounts, 'utf8')), { number: '1093', name: 'Durchlaufkonto Shopify' }], null, 2));
     const ws = workspaceAt(api.root);
-    seed(ws, [payout('PW', { date: '2026-11-03', amount: 50 }), viaStripe('ST2', 'STRIPE 4711', { counterparty: 'Stripe Payments UK Ltd' }), later('2026-11-10')], []);
+    seed(ws, [payout('PW', { date: '2026-11-03', amount: 50 }), viaStripe('ST2', 'STRIPE 4711', { counterparty: 'Stripe Example Ltd' }), later('2026-11-10')], []);
     const wait = async (ref: string) => ((await (await api.fetch(`/api/transactions/${ref}/payout-wait`)).json()) as { wait: unknown }).wait;
     assert.deepEqual(await wait('PW'), { why: 'clearing', provider: 'Shopify', file: 'knowledge/suppliers/shopify.yaml' });
     assert.equal(await wait('ST2'), null, 'no provider\'s payout');

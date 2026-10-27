@@ -211,7 +211,7 @@ provider:
   receipt and is never matched to one (no receipt set, no pair, no model match,
   no order link). A payout is the provider's by its `match` like any payment,
   or, when the payer is no business of the books, by a `match.tx` word that
-  begins its reference («Received money from Stripe Payments UK Ltd with
+  begins its reference («Received money from Stripe … with
   reference Shopify …»), and then only when the bank names no payer or one of
   the app file's `processors` (Shopify's: `stripe`): a customer's own transfer
   «Shopify Bestellung 1001» is no payout. When the bank's payments of a report's
