@@ -47,8 +47,8 @@ export interface DropRow {
   unknownAccount?: UnknownAccount;
   /** A statement several accounts of its currency could take (none names an IBAN): the UI asks which (#25). */
   chooseAccount?: AccountChoice;
-  /** A camt.053 that asks for its account: what the file says about itself (#208). */
-  details?: CamtDetails;
+  /** A statement file that asks for its account: what the file says about itself (#208). */
+  details?: StatementDetails;
   /** A statement read in already (`statement-read`): its file under bank-statements/ and its first payment, which opens it. */
   readAs?: { file: string; ref?: string };
   /** The bank account (ledger number) the person said the statement is of. */
@@ -84,13 +84,13 @@ export interface DropRow {
 export interface StatementFacts { iban?: string; from?: string; to?: string; entries?: number }
 
 /**
- * What a camt.053 says about itself, shown folded under a row that asks for its account (#208), so
+ * What a bank statement file says about itself, shown folded under a row that asks for its account (#208), so
  * the person can tell several dropped files apart: the bank as it names itself (or its BIC), the
  * account's currency, IBAN and owner, the period the bank states and the days it booked, the
  * number of movements, the opening and closing balance with their days, and the first movements
- * (`preview`, at most CAMT_PREVIEW of src/providers/camt053/details.ts; `more` says how many are not shown).
+ * (`preview`, at most STATEMENT_PREVIEW of src/providers/statement-files.ts; `more` says how many are not shown).
  */
-export interface CamtDetails {
+export interface StatementDetails {
   bankName?: string;
   bic?: string;
   currency: string;
@@ -101,12 +101,12 @@ export interface CamtDetails {
   movements: number;
   opening?: { date: string; amount: number };
   closing?: { date: string; amount: number };
-  preview: CamtMovement[];
+  preview: StatementMovement[];
   more: number;
 }
 
 /** One movement of a statement's preview: signed (money out negative), in the account's currency. */
-export interface CamtMovement { date: string; amount: number; counterparty?: string; text?: string }
+export interface StatementMovement { date: string; amount: number; counterparty?: string; text?: string }
 
 /** Why a provider's payout waits for the person, as its line in Kontoauszüge says it (GET /api/transactions/:ref/payout-wait, src/booking/providers.ts PayoutWait). */
 export interface PayoutWaitView { why: 'clearing' | 'since' | 'gap'; provider: string; file: string; since?: string }

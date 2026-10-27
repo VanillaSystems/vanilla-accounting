@@ -1,6 +1,6 @@
 /**
  * Which of the accounts a statement could be of has the bank the statement names (#208): when a
- * camt.053 asks for its account (`whichAccount`), the one account whose `bank:` the file names is
+ * bank statement file asks for its account (`whichAccount`), the one account whose `bank:` the file names is
  * proposed, and the person still confirms it. The bank is read generically, for any bank: the
  * servicer's name holding the label, the BIC's institution code, and the IBAN's bank code compared
  * with the IBANs already known under that label. No proposal when none or several match.

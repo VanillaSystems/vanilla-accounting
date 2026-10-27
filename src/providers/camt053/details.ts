@@ -2,21 +2,18 @@
  * What a camt.053 says about itself, for the drop row that asks for its account (#208): read by
  * the same parser that reads it into the books, before it is tied to any ledger account.
  */
-import type { CamtDetails, CamtMovement } from '../../types/drop.js';
+import type { StatementDetails, StatementMovement } from '../../types/drop.js';
 import { readCamt, transactionsOf } from './camt053.js';
 import { parseStatementBalances } from './statement-balances.js';
 
-/** How many movements a row's details show; the rest are counted («… und N weitere»). */
-export const CAMT_PREVIEW = 5;
-
 /** The file's details, undefined when it is no camt.053 with a statement. Several statements in one file are summed up. */
-export function camtDetails(xml: string, filename: string): CamtDetails | undefined {
+export function camtDetails(xml: string, filename: string, preview: number): StatementDetails | undefined {
   let camt: ReturnType<typeof readCamt>;
   try { camt = readCamt(xml); } catch { return undefined; }
   const [first] = camt.statements;
   if (!first) return undefined;
   const pick = <K extends 'bankName' | 'bic' | 'iban' | 'ownerName'>(k: K) => camt.statements.find((s) => s[k])?.[k];
-  const moves: CamtMovement[] = camt.statements.flatMap((s) => transactionsOf(s, { bank: '', statements: 'camt053' }).map((t) => ({
+  const moves: StatementMovement[] = camt.statements.flatMap((s) => transactionsOf(s, { bank: '', statements: 'camt053' }).map((t) => ({
     date: t.date,
     amount: t.direction === 'DBIT' ? -Math.abs(t.amount) : Math.abs(t.amount),
     ...(t.counterparty ? { counterparty: t.counterparty } : {}),
@@ -40,7 +37,7 @@ export function camtDetails(xml: string, filename: string): CamtDetails | undefi
     movements: moves.length,
     ...(opening ? { opening: { date: opening.date, amount: opening.amount } } : {}),
     ...(closing ? { closing: { date: closing.date, amount: closing.amount } } : {}),
-    preview: moves.slice(0, CAMT_PREVIEW),
-    more: Math.max(0, moves.length - CAMT_PREVIEW),
+    preview: moves.slice(0, preview),
+    more: Math.max(0, moves.length - preview),
   };
 }

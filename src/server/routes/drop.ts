@@ -22,7 +22,7 @@ import { findFile } from '../../workspace/workspace.js';
 import { INTAKE, bookAgain, engine, handedOver } from './automation.js';
 import { removeReceipt } from '../../accounting/classify-force.js';
 import { importStatement, removeStatement } from './statements.js';
-import { camtDetails } from '../../providers/camt053/details.js';
+import { statementDetails } from '../../providers/statement-files.js';
 import { importSalesReport, recognizeCsv, removeSalesReport, setProviderAccount } from '../../intake/sales-report-import.js';
 
 import type { Arrival } from '../../workflows/model.js';
@@ -298,7 +298,7 @@ async function takeWaiting(s: DropSession): Promise<void> {
         const choose = problem?.kind === 'whichAccount' ? problem : undefined;
         // A statement asking which account it is of, or whether an unknown one is the firm's, waits for that answer with its file (#208).
         const asks = !!(unknown || choose);
-        const details = asks && row.kind === 'camt' ? camtDetails(bytes.toString('utf8'), row.name) : undefined;
+        const details = asks ? statementDetails(bytes, row.name) : undefined;
         Object.assign(row, { state: asks ? 'asks' : 'refused', reason: 'not-imported', message: (e as Error).message, ...(unknown ? { unknownAccount: unknown } : {}), ...(choose ? { chooseAccount: choose } : {}), ...(details ? { details } : {}) });
         continue;
       }

@@ -15,7 +15,7 @@ import { fmt, formatDate } from '../lib/utils.js';
 import { useAutomation } from '../automation/store.js';
 import { textIn } from '../../workflows/model.js';
 import type { Index } from '../../types/index.js';
-import type { CamtDetails, DropRow, DropSession } from '../../types/drop.js';
+import type { DropRow, DropSession, StatementDetails } from '../../types/drop.js';
 import type { Location, Route } from './route.js';
 import { at } from '../areas/receipts/view.js';
 import { setBankDraft } from '../areas/company/bank-draft.js';
@@ -197,10 +197,10 @@ function reportLine(s: NonNullable<DropRow['report']>): string {
 const balanceText = (currency: string, b: { date: string; amount: number }) => t('drop.c.balance', { currency, amount: fmt(b.amount), date: formatDate(b.date) });
 
 /**
- * What a camt.053 asking for its account says about itself (#208), folded under its row: enough to
+ * What a statement file asking for its account says about itself (#208), folded under its row: enough to
  * tell several dropped files apart. The movements are previewed, the first few, the rest counted.
  */
-function CamtFacts({ d, r }: { d: CamtDetails; r: DropRow }) {
+function FileDetails({ d, r }: { d: StatementDetails; r: DropRow }) {
   const bank = [d.bankName, d.bic].filter(Boolean).join(' · ');
   const period = [d.period && t('drop.c.stated', { from: formatDate(d.period.from), to: formatDate(d.period.to) }), d.booked && t('drop.c.booked', { first: formatDate(d.booked.first), last: formatDate(d.booked.last) })].filter(Boolean);
   return (
@@ -243,7 +243,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
     <>
       <div className={`droprow s-${r.state}${details && open ? ' open' : ''}`} data-testid="drop-row" data-file={r.name} data-state={r.state}>
         <div className="dn">
-          <b className="mono" title={r.name}>{r.name}</b>
+          <b className="mono">{r.name}</b>
           <small>{metaOf(r)}</small>
           {details ? (
             <button type="button" className="linkbtn dfold" aria-expanded={open} aria-label={t('drop.c.toggleOf', { name: r.name })} data-testid="drop-details" onClick={() => setOpen(!open)}>
@@ -284,7 +284,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
         </div>
         {r.state === 'take' || r.state === 'undone' ? <span /> : <button type="button" className="dx" aria-label={t('drop.remove', { name: r.name })} onClick={() => void act(session, r, { kind: 'remove' })}>×</button>}
       </div>
-      {details && open ? <CamtFacts d={details} r={r} /> : null}
+      {details && open ? <FileDetails d={details} r={r} /> : null}
     </>
   );
 }

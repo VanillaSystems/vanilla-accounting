@@ -224,7 +224,7 @@ export type StatementProblem =
 
 /**
  * `whichAccount`: several accounts of its currency name no IBAN, so any of them could be it; the
- * person picks one (the drop dialog asks, #25). `proposed`: the one of them whose bank the camt.053
+ * person picks one (the drop dialog asks, #25). `proposed`: the one of them whose bank the statement file
  * names (src/accounting/statement-bank.ts, #208), offered first; the person still confirms it.
  */
 export interface AccountChoice { kind: 'whichAccount'; currency: string; iban?: Iban; accounts: Array<{ account: string; bank: string; label: string }>; proposed?: string }

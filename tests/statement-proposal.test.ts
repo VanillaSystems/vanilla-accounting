@@ -13,7 +13,8 @@ import { startApi } from './support/api-server.js';
 import { testIban } from './support/iban.js';
 import { textPdf } from './support/text-pdf.js';
 import { APP_FOLDER, APP_ROOT } from '../src/workspace/workspace.js';
-import { CAMT_PREVIEW, camtDetails } from '../src/providers/camt053/details.js';
+import { camtDetails } from '../src/providers/camt053/details.js';
+import { STATEMENT_PREVIEW } from '../src/providers/statement-files.js';
 import { bankCodeOf, proposedAccount } from '../src/accounting/statement-bank.js';
 import { needsYou, tabOf } from '../src/app/shell/drop-tabs.js';
 import type { AccountChoice } from '../src/types/api-error.js';
@@ -40,17 +41,17 @@ const SEVEN: Array<[string, number, string]> = [
 ];
 
 test('a camt.053\'s details: bank and BIC, currency, IBAN, owner, the stated period and the booked days, movements, balances, and the first movements with the rest counted', () => {
-  const d = camtDetails(camt(AT_80808, { name: 'Raiffeisenbank Beispiel', bic: 'RAIFCH22XXX' }, SEVEN), 'okt.xml')!;
+  const d = camtDetails(camt(AT_80808, { name: 'Raiffeisenbank Beispiel', bic: 'RAIFCH22XXX' }, SEVEN), 'okt.xml', STATEMENT_PREVIEW)!;
   assert.deepEqual([d.bankName, d.bic, d.currency, d.iban, d.owner], ['Raiffeisenbank Beispiel', 'RAIFCH22XXX', 'CHF', AT_80808, 'Muster Coiffeur']);
   assert.deepEqual(d.period, { from: '2026-10-01', to: '2026-10-31' }, 'the period as the bank states it');
   assert.deepEqual(d.booked, { first: '2026-10-03', last: '2026-10-28' }, 'and the days it booked');
   assert.equal(d.movements, 7);
   assert.deepEqual([d.opening, d.closing], [{ date: '2026-10-01', amount: 1000 }, { date: '2026-10-31', amount: 1323.6 }]);
-  assert.equal(d.preview.length, CAMT_PREVIEW);
-  assert.equal(d.more, 7 - CAMT_PREVIEW, 'the movements not shown are counted');
+  assert.equal(d.preview.length, STATEMENT_PREVIEW);
+  assert.equal(d.more, 7 - STATEMENT_PREVIEW, 'the movements not shown are counted');
   assert.deepEqual(d.preview[0], { date: '2026-10-03', amount: 250, counterparty: 'Kundin Muster', text: 'Rechnung 2' }, 'in date order, money in positive');
   assert.equal(d.preview[1].amount, -40, 'money out negative');
-  assert.equal(camtDetails('<x/>', 'x.xml'), undefined, 'no camt.053, no details');
+  assert.equal(camtDetails('<x/>', 'x.xml', STATEMENT_PREVIEW), undefined, 'no camt.053, no details');
 });
 
 const CHOICE: AccountChoice = { kind: 'whichAccount', currency: 'CHF', accounts: [{ account: '1020', bank: 'Raiffeisen', label: 'Bank Raiffeisen' }, { account: '1022', bank: 'ZKB', label: 'ZKB Geschäftskonto' }] };
