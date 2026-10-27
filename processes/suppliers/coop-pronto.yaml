@@ -9,7 +9,7 @@ name: Coop Pronto
 match:
   tx: [ "coop pronto" ]
   uid: [ "CHE-312.150.257" ]
-  file: [ '^\d{8}-coop-pronto' ]
+  file: [ '^\d{8}[-_]coop-pronto' ]
 
 facts:
   - id: coop-pronto-vat

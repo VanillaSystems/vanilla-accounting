@@ -21,6 +21,8 @@ import { isPurchaseDocument } from '../accounting/evidence-check.js';
 import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { APP_ROOT, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
+import { sharedReceipts, inputTaxOverReceipts } from './shared-receipts.js';
+import { chargesOf } from '../intake/charges.js';
 import { agreedBasis, baseCurrency, chart, documents, filing, invoicing, setup, vat, withoutInputTax } from '../engines/index.js';
 import { paymentProposals, type PaymentProposal } from '../invoices/payments.js';
 import { loadInvoices } from '../invoices/store.js';
@@ -618,8 +620,8 @@ function partRuleEntries(books: Books, tx: BankTransaction, context: ClassifyCon
 
 type PromptInput = Parameters<typeof buildBatchClassifyPrompt>[0][number];
 
-/** What the prompt says about one transaction: the transaction and its receipts, with their VAT facts. */
-export function classifyInput(books: Books, tx: BankTransaction): PromptInput {
+/** What the prompt says about one transaction: the transaction and its receipts, with their VAT facts; `legs`: the refs of its card charge (src/intake/charges.ts), whose other legs that hold its receipts it names. */
+export function classifyInput(books: Books, tx: BankTransaction, legs: readonly string[] = [tx.ref]): PromptInput {
   const receipts = mappedReceipts(books, tx)
     .filter((r) => r.extractedText && r.extractedText.length > 10)
     .map((r) => ({
@@ -634,8 +636,9 @@ export function classifyInput(books: Books, tx: BankTransaction): PromptInput {
       lineItems: r.lineItems,
     }));
   const fee = separateFeeOf(tx, books.transactions);
+  const shared = sharedReceipts(books, tx, legs);
   return {
-    tx: { ref: tx.ref, date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction, description: tx.description, bank: tx.bank, ...(tx.counterparty ? { counterparty: tx.counterparty } : {}), ...(fee ? { separateFee: { ref: fee.ref, amount: fee.amount, currency: fee.currency } } : {}), ...(tx.businessPart ? { businessPart: { ...(tx.businessPart.what && { what: tx.businessPart.what }) } } : {}) },
+    tx: { ref: tx.ref, date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction, description: tx.description, bank: tx.bank, ...(tx.counterparty ? { counterparty: tx.counterparty } : {}), ...(fee ? { separateFee: { ref: fee.ref, amount: fee.amount, currency: fee.currency } } : {}), ...(tx.businessPart ? { businessPart: { ...(tx.businessPart.what && { what: tx.businessPart.what }) } } : {}), ...(shared ? { sharedWith: shared.others.map((t) => ({ ref: t.ref, amount: t.amount, currency: t.currency })) } : {}) },
     receipts,
   };
 }
@@ -733,6 +736,9 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     documents: mappedReceipts(books, tx), length: filing().length, newId: () => randomBytes(8).toString('hex'),
   });
   const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [], partly: [], held: [] };
+  // The legs of a card charge split across balances share its receipts: each books its share, the input tax of all of them never more than the receipts show (#190).
+  const charges = chargesOf(books.transactions, (amount, currency, date) => { if (currency === baseCurrency()) return amount; const rate = fx.daily(currency, date) ?? fx.flat(currency); return rate === undefined ? undefined : amount * rate; });
+  const legsOf = (tx: BankTransaction) => charges.of(tx).refs;
   const invoicePaid = openInvoicesPaid(books, context);
   const toModel: BankTransaction[] = [];
   /** Asked payments whose rule proposes nothing: the model proposes, the entries go to `asked`. */
@@ -836,7 +842,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     const fail = (tx: BankTransaction, reason: string) => { if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, reason }); };
     try {
       const examples = casebook.length ? casesForBatch(books, batch, casebook) : [];
-      const prompt = buildBatchClassifyPrompt(batch.map((tx) => classifyInput(books, tx)), context, examples);
+      const prompt = buildBatchClassifyPrompt(batch.map((tx) => classifyInput(books, tx, legsOf(tx))), context, examples);
       let model: string | undefined;
       const raw = await ask(prompt, { step: 'classify', timeoutMs: CALL_TIMEOUT_MS, answered: (by) => { model = by.model; } });
       model ??= (await resolveStep('classify')).model;
@@ -878,6 +884,13 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         const lines = splitByReceipts(tx, fee?.lines ?? derived, mapped);
         const noted = [reason, fee?.note, customsNotes.get(tx.ref)].filter(Boolean).join(' ') || undefined;
         const entries = read ?? withPurchaseVat(tx, withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receiptDate, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), mapped, context.purchaseVat, context.counterparties);
+        const twice = read ? undefined : inputTaxOverReceipts(books, tx, legsOf(tx), entries, (c, d) => fx.daily(c, d));
+        if (twice) {
+          const others = twice.others.map((t) => t.ref).join(', ');
+          log(`  [Batch ${batchNum}]  ${tx.ref}  refused: input tax ${twice.booked} with ${others} above the receipt's VAT ${twice.shown}`);
+          if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, reason: `Die Vorsteuer dieser Zahlung ergäbe mit ${others} zusammen ${baseCurrency()} ${twice.booked.toFixed(2)}, der Beleg weist nur ${baseCurrency()} ${twice.shown.toFixed(2)} MWST aus: nichts gebucht. Jede Zahlung trägt nur ihren Teil der MWST; von Hand buchen.`, refusal: { code: 'classifyInputTaxShared', params: { payments: others, currency: baseCurrency(), booked: twice.booked, shown: twice.shown } } });
+          continue;
+        }
         const refused = paymentRefusal(tx, entries, bankAccount, chartAccounts);
         if (refused) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${refused.reason}`);

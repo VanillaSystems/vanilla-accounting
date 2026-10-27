@@ -7,7 +7,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './support/jurisdiction.js';
-import { candidates } from '../src/intake/match.js';
+import { batchPayersOf, candidates } from '../src/intake/match.js';
+import { workspaceAt } from '../src/workspace/workspace.js';
+import { DEMO_ROOT } from './support/workspace.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
 
 const tx = (ref: string, date: string, amount: number, description: string): BankTransaction =>
@@ -65,8 +67,8 @@ test('a late receipt sees the filed payment it fits, marked filed, after an open
   assert.equal(both[0].filed, undefined);
 });
 
-test('a grouped vendor\'s payment stays a candidate with receipts on it, its amount aside', () => {
+test('a batch payer\'s payment (its business file says grouped, recognised by its match) stays a candidate with receipts on it, its amount aside', () => {
   const books = [...BOOKS, tx('AMZ-1', '2026-10-03', 312.4, 'AMAZON MKTPLACE'), tx('AMZ-2', '2026-08-03', 80, 'AMAZON MKTPLACE')];
-  const item = receipt('amazon.pdf', 'Amazon.de Rechnung\nBestelldatum 02.10.2026\nGesamt EUR 41.90', { date: '2026-10-02' });
-  assert.deepEqual(refs(candidates(item, books, new Set(['AMZ-1']))), ['AMZ-1', 'AMZ-2']);
+  const item = receipt('amazon.pdf', 'Amazon.de Rechnung\nUSt-ID CHE-269.567.571 MWST\nBestelldatum 02.10.2026\nGesamt EUR 41.90', { date: '2026-10-02' });
+  assert.deepEqual(refs(candidates(item, books, new Set(['AMZ-1']), () => false, batchPayersOf(workspaceAt(DEMO_ROOT)))), ['AMZ-1', 'AMZ-2']);
 });

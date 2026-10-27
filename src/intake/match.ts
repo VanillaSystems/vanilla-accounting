@@ -30,16 +30,15 @@ import { legOf } from '../workspace/money-accounts.js';
 import { titlesFor } from './titles.js';
 import { estvToChf, noReceiptFor, runPairChain } from './pair-chain.js';
 import { linkOrdersToPayouts } from './order-links.js';
-import { linkReceiptSets } from './receipt-sets.js';
+import { linkReceiptSets, linkSplitLegs, MAX_RUN, MAX_TRIED } from './receipt-sets.js';
+import { batchPayers, NO_BATCH_PAYERS, type BatchPayers } from './batch-payers.js';
+import { loadKnowledge } from '../knowledge/layers.js';
+import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { creditSigned } from '../accounting/credit-signed.js';
 
 const MAPPING_THRESHOLD = 0.8;
 const CONCURRENCY = 10;
 
-// Amazon/AliExpress/FedEx group multiple separate purchases (each its own receipt) into a
-// single bank transaction — a receipt's amount is often only a fraction of the transaction
-// total, so the amount must not rank the transaction out for these vendors (AGENTS.md).
-const GROUPED_VENDOR_PATTERN = /amazon|aliexpress|fedex/i;
 
 function toCHF(amount: number, currency: string): number {
   const rates: Record<string, number> = {
@@ -116,17 +115,17 @@ export type Candidate = BankTransaction & { filed?: true };
 /**
  * The payments the model is shown for one receipt, at most 20, best first: the payments without a
  * receipt yet, ranked by an invoice number of the receipt in the payment's text, the amount, the
- * vendor's name and the date; newest first where nothing tells them apart. A grouped vendor's
- * payment (Amazon, AliExpress, FedEx) stays a candidate with receipts on it, and its amount does
- * not count. A payment of a filed quarter is shown, marked `filed`, only when its number or amount
- * fits and after the open ones of the same fit: a late receipt is pointed at it, never linked
- * (golden rule 1, corner-33).
+ * vendor's name and the date; newest first where nothing tells them apart. A batch payer's
+ * payment (its business's file says `grouped: true`, src/intake/batch-payers.ts) stays a candidate
+ * with receipts on it, and its amount does not count: a receipt is often only a part of it. A
+ * payment of a filed quarter is shown, marked `filed`, only when its number or amount fits and
+ * after the open ones of the same fit: a late receipt is pointed at it, never linked (golden rule 1, corner-33).
  */
-export function candidates(receipt: Receipt, all: readonly BankTransaction[], linked: ReadonlySet<string> = new Set(), isClosed: (date: string) => boolean = () => false): Candidate[] {
+export function candidates(receipt: Receipt, all: readonly BankTransaction[], linked: ReadonlySet<string> = new Set(), isClosed: (date: string) => boolean = () => false, payers: BatchPayers = NO_BATCH_PAYERS, receiptsOf: (tx: BankTransaction) => readonly Receipt[] = () => []): Candidate[] {
   const text = receipt.extractedText ?? '';
-  const grouped = text.match(GROUPED_VENDOR_PATTERN)?.[0].toLowerCase();
+  const grouped = payers.ofReceipt(receipt);
   const usable = all.filter((tx) => tx.amount !== 0 && tx.type !== 'wise-fee');
-  const ofVendor = grouped ? usable.filter((tx) => (tx.description || '').toLowerCase().includes(grouped)) : [];
+  const ofVendor = grouped ? usable.filter((tx) => payers.ofPayment(tx, receiptsOf(tx)) === grouped) : [];
   const pool = ofVendor.length ? ofVendor : usable.filter((tx) => !linked.has(tx.ref));
   const { date, amount, currency } = factsOf(receipt);
   const want = amount ? Math.abs(toCHF(amount, currency || baseCurrency())) : undefined;
@@ -171,6 +170,15 @@ export function codeName(date: string, title: ReceiptTitle | undefined, came: st
   return `${date.replace(/-/g, '')}-${slug}.pdf`;
 }
 
+/** The workspace's batch payers, from its business files in both layers; none when its knowledge does not load (a test's bare workspace). */
+export function batchPayersOf(ws: Pick<Workspace, 'paths' | 'company'>): BatchPayers {
+  try {
+    return batchPayers(loadKnowledge(APP_ROOT, ws.paths.root).counterparties, ws.company?.uid);
+  } catch {
+    return NO_BATCH_PAYERS;
+  }
+}
+
 export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const IMPORT_DIR = ws.paths.inbox;
   const toChf = estvToChf();
@@ -180,10 +188,17 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const toRead = staged.filter((r) => !r.needsVisionReview);
   // Code first (#187): the staged receipts take part in the chain with the facts code reads off them.
   const early = toRead.flatMap((r) => provisional(r) ?? []);
+  const payers = batchPayersOf(ws);
   const byCode = async (stagedNow: readonly Receipt[] = []) => {
     const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt: noReceiptFor(ws) });
     for (const l of books.update(linkOrdersToPayouts)) log(`linked the order to the payout it names: receipt ${l.receipt} → ${l.payment}`);
-    for (const s of books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, (d) => !lock.isClosed(d)); })) log(`linked ${s.receipts.length} receipts that add up to the payment: ${s.receipts.join(', ')} → ${s.payment}`);
+    const found = books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, { isOpen: (d) => !lock.isClosed(d), payers, toChf, buyerUid: ws.company?.uid }); });
+    for (const s of found.sets) log(`linked ${s.receipts.length} receipts that add up to the payment${s.basis === 'original' ? ' in the amount its bank names' : s.basis === 'rate' ? ' at the official daily rate' : ''}${s.run ? ' (the batch payer\'s open receipts in date order)' : ''}: ${s.receipts.join(', ')} → ${s.legs.join(', ')}`);
+    const runs = found.cuts.filter((c) => c.limit === 'run');
+    const combos = found.cuts.filter((c) => c.limit === 'combinations');
+    if (combos.length) log(`${combos.length} payment(s) have more receipts of one vendor near them than code combines (at most ${MAX_TRIED}, the nearest; up to ${Math.max(...combos.map((c) => c.near))} there): a set among those is only proposed, never linked`);
+    if (runs.length) log(`${runs.length} payment(s) of a batch payer have more open receipts than code tries in date order (at most ${MAX_RUN}, the oldest; up to ${Math.max(...runs.map((c) => c.near))} there): they are left to a person`);
+    for (const l of books.update((index) => { const lock = periodLock(index); return linkSplitLegs(index, (d) => !lock.isClosed(d), toChf); })) log(`linked the receipts of a card charge split across balances to its other legs: ${l.receipts.join(', ')} → ${l.legs.join(', ')}`);
     return chain;
   };
   const chain = await byCode(early);
@@ -229,10 +244,13 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
         out.result = 'taken';
         Object.assign(r, { date: p.date, amount: p.amount, currency: p.currency, ...(title ? { title, description: `${title.vendor} ${title.what}`.trim() } : {}) });
         if (waitsBehind(index, r, order)) { out.result = 'twin'; return; }
+        // Every movement of the charge: one, or each leg of a charge split across balances.
+        const refs = l.legs ?? [l.payment];
         const t = index.transactions.find((x) => x.ref === l.payment);
-        if (!t || takenPayments(index).has(t.ref) || r.notPaidBy?.includes(t.ref)) return;
+        const taken = takenPayments(index);
+        if (!t || refs.some((ref) => taken.has(ref) || r.notPaidBy?.includes(ref))) return;
         if (periodLock(index).isClosed(t.date)) { r.filedPayment = t.ref; out.result = 'filed'; return; }
-        index.mappings.push(pairMapping(l.by, t.ref, r.id, l.signals));
+        for (const ref of refs) index.mappings.push(pairMapping(l.by, ref, r.id, l.signals));
         out.result = 'linked';
       });
       if (!target) continue;
@@ -259,7 +277,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const shownFor = (receipt: Receipt): Candidate[] => {
     const list = shortList.get(receipt.id)?.flatMap((c) => { const t = shown.find((x) => legOf(x) === c.leg); return t && !taken.has(t.ref) ? [c.filed ? { ...t, filed: true as const } : t] : []; });
     const apart = new Set(receipt.notPaidBy ?? []);
-    return list?.length ? list : candidates(receipt, shown.filter((t) => !apart.has(t.ref)), taken, lock.isClosed);
+    return list?.length ? list : candidates(receipt, shown.filter((t) => !apart.has(t.ref)), taken, lock.isClosed, payers, (t) => snapshot.mappings.flatMap((m) => (m.transactionRef === t.ref ? snapshot.receipts.filter((r) => r.id === m.receiptId) : [])));
   };
 
   log(`\nProcessing ${toProcess.length} staged receipt(s) (concurrency: ${CONCURRENCY})...\n`);
@@ -316,7 +334,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
       // Periodensperre: never attach a mapping to a transaction inside a closed period.
       const lock = periodLock(index);
       const held = takenPayments(index);
-      const grouped = GROUPED_VENDOR_PATTERN.test(r.extractedText ?? '');
+      const grouped = !!payers.ofReceipt(r);
       const without = noReceipt(index);
       linked = answer.matchedTransactionRefs.filter((ref) => {
         const tx = index.transactions.find((t) => t.ref === ref);

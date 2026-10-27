@@ -5,11 +5,11 @@
  * its statement shows where to add it.
  */
 import { byStatement, madeByHand } from '../../../workspace/money-accounts.js';
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { BankTransaction } from '../../../types/index.js';
 import { ratesUsed } from '../../../accounting/fx-conversion.js';
 import type { RouteOf } from '../../shell/route.js';
-import { sources } from '../../lib/api.js';
+import { api, sources } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { monthName } from '../../lib/period-label.js';
 import { useFx } from '../../hooks/use-fx.js';
@@ -21,7 +21,7 @@ import { I } from '../receipts/icons.js';
 import { isCamt, matches, payHaystack, payText, signed, type Bank, type Statement } from './model.js';
 import { bankFor, setUi, useUi, type Section } from './state.js';
 import { importStatements, linkReceiptSet, pickStatements, removeStatement, setNote, setNoReceipt } from './actions.js';
-import { proposalsFor } from '../../../intake/receipt-sets.js';
+import type { ReceiptSet, SetCut } from '../../../intake/receipt-sets.js';
 import { at } from '../receipts/view.js';
 import { FindPair, madeBy } from '../receipts/FindPair.js';
 import { StatementPaper, type Mark } from './StatementPaper.js';
@@ -40,6 +40,7 @@ import { confirmPayment } from '../invoices/actions.js';
 import { openAmount } from '../../../invoices/rules.js';
 import { QuestionsOn } from '../../questions/Questions.js';
 import { bookDiffParts, missingOpenings } from '../../../accounting/opening-balance.js';
+import { GroupedOffer } from '../company/RulesSection.js';
 
 type Props = AreaProps<RouteOf<'bank'>>;
 
@@ -259,7 +260,8 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
           {t('bank.entries', { lines })}
         </button></>
       ) : tx.amount ? <> · <NotBooked tx={tx} linked={linkedOf(props.books.receipts.filter((r) => receipts.includes(r.id) && r.kind !== 'duplicate'))} /></> : null}
-      {edit ? <ReceiptSetOffer {...props} tx={tx} /> : null}
+      {edit ? <ReceiptSetOffer key={`rs-${tx.ref}`} {...props} tx={tx} /> : null}
+      {edit && receipts.length > 1 ? <GroupedOffer key={`go-${tx.ref}`} payment={tx.ref} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
       <Note key={tx.ref} tx={tx} nav={nav} edit={edit} />
       {edit && tx.direction === 'CRDT' ? <LinkInvoice key={`li-${tx.ref}`} tx={tx} nav={nav} /> : null}
       {' '}<button type="button" className="x" aria-label={t('bank.clear')} onClick={onClear}>×</button>
@@ -282,15 +284,28 @@ const SETS_SHOWN = 3;
  * one click. Several sets that fit are each offered with their receipts named, so the person picks.
  */
 function ReceiptSetOffer({ books, b, tx, nav }: Props & { b: Bank; tx: BankTransaction }) {
-  const offers = useMemo(() => proposalsFor(books, tx, (d) => !b.closedThrough || d > b.closedThrough), [books, tx, b.closedThrough]);
-  return offers.slice(0, SETS_SHOWN).map((s) => {
+  // The server proposes: it knows the batch payers of the business files and the official daily rates (GET /api/transactions/:ref/receipt-sets).
+  // Keyed by the payment (key={`rs-${tx.ref}`}): another payment starts empty, never with this one's sets to link.
+  const [found, setFound] = useState<{ sets: ReceiptSet[]; cut?: SetCut }>({ sets: [] });
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    api.receiptSets(tx.ref).then((x) => { if (live) { setFound(x); setFailed(false); } }, () => { if (live) { setFound({ sets: [] }); setFailed(true); } });
+    return () => { live = false; };
+  }, [books, tx.ref]);
+  if (failed) return <> · <span className="m" data-testid="receipt-set-failed">{t('bank.receiptSet.failed')}</span></>;
+  const { sets: offers, cut } = found;
+  // Where code stopped looking is said, never cut silently: the person may find a set among the others.
+  const told = cut ? <span key="cut"> · <span className="m" data-testid="receipt-set-cut">{t(cut.limit === 'run' ? 'bank.receiptSet.cutRun' : 'bank.receiptSet.cut', { near: cut.near, tried: cut.tried })}</span></span> : null;
+  const more = offers.length > SETS_SHOWN ? <span key="more"> · <span className="m">{t('bank.receiptSet.more', { shown: SETS_SHOWN, n: offers.length })}</span></span> : null;
+  return [...offers.slice(0, SETS_SHOWN).map((s) => {
     const names = s.receipts.map((id) => b.receiptOf(id)?.name ?? id).join(', ');
     const vars = { n: s.receipts.length, sum: `${s.currency} ${fmt(s.sum)}`, paid: `${s.currency} ${fmt(s.paid)}` };
     return (
-      <span key={s.receipts.join()}> · <span className="m" data-testid="receipt-set" data-tip={names}>{t(s.exact ? 'bank.receiptSet.exact' : 'bank.receiptSet.close', vars)}{offers.length > 1 ? ` (${names})` : ''}</span>
+      <span key={s.receipts.join()}> · <span className="m" data-testid="receipt-set" data-tip={names}>{t(s.exact ? 'bank.receiptSet.exact' : s.rounding ? 'bank.receiptSet.rounding' : 'bank.receiptSet.close', vars)}{offers.length > 1 ? ` (${names})` : ''}</span>
         {' '}<button type="button" className="golink" data-act="link-receipt-set" data-tip={names} onClick={() => void linkReceiptSet(nav, s)}>{t('bank.receiptSet.link')}</button></span>
     );
-  });
+  }), more, told];
 }
 
 /** An incoming payment linked to one of the open invoices of its currency, from the payment's side (r9c-3): the named invoice first. */

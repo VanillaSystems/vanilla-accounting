@@ -7,6 +7,8 @@
  *   POST /api/rules/draft             { kind: keep, path, basis, confirm? } saves exactly that draft; { kind: discard, path }
  *   GET  /api/rules/share?ref=        the rule with a private share a split payment offers («Immer so?»), or null
  *   POST /api/rules/share             { ref }: that rule drafted into its file; the answer names the file for its card
+ *   GET  /api/rules/grouped?ref=      the batch payer a person's links of several receipts to a payment offer («Immer so?», #190), or null
+ *   POST /api/rules/grouped           { ref }: `grouped: true` drafted into the business's company file; the answer names the file for its card
  *   GET  /api/rules/unread?ref=       a payment whose receipt could not be read: its business and the rate its receipts showed most often (issue #57), or null
  *   POST /api/rules/unread            { ref, rate }: «Immer so?» — the company's rule for that business's unread receipts drafted into its file (waits in Änderungen)
  *   POST /api/rules/sale              { question }: «Immer so?» under an answer to a sale question: the payer rule drafted for its card, or the payer is mixed
@@ -32,6 +34,7 @@ import { baseCurrency } from '../../engines/index.js';
 import { discardDraft, draftRules, keepDraft, ruleCommand, ruleFactsOf, type DraftCommand, type DraftView, type RuleCommand, type RulesView } from '../../saving/rules.js';
 import { loadWorkflows } from '../../workflows/load.js';
 import { draftShareRule, shareOffer } from '../../saving/share-rule.js';
+import { draftGroupedFlag, groupedOffer } from '../../saving/grouped-flag.js';
 import { draftUnreadRule, unreadOffer } from '../../saving/unread-rule.js';
 import { draftSaleRule } from '../../saving/sale-rule.js';
 import { correctionOffer, draftCorrectionRule } from '../../saving/correction-rule.js';
@@ -156,6 +159,18 @@ router.post('/api/rules/share', (req, res) => {
   if (typeof ref !== 'string') throw new RequestError(400, 'ref erwartet.');
   const path = draftShareRule(WS, ref);
   if (!path) throw new RequestError(404, 'Diese Zahlung ist nicht in einen privaten und einen geschäftlichen Teil aufgeteilt.');
+  res.json({ path });
+});
+
+router.get('/api/rules/grouped', (req, res) => {
+  res.json({ offer: groupedOffer(WS, loadBooks(WS), String(req.query.ref ?? '')) ?? null });
+});
+
+router.post('/api/rules/grouped', (req, res) => {
+  const ref = (req.body as { ref?: unknown })?.ref;
+  if (typeof ref !== 'string') throw new RequestError(400, 'ref erwartet.');
+  const path = draftGroupedFlag(WS, ref);
+  if (!path) throw new RequestError(404, 'Diese Zahlung macht keinen Geschäftspartner zum Sammelzahler.', { code: 'noBatchPayer' });
   res.json({ path });
 });
 

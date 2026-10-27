@@ -56,6 +56,8 @@ export type ApiRefusal =
   /** A second bank payment of another payee for a receipt that has one, asked without `confirm` (src/server/edits.ts assertNotSecondPayment, r8h-21). */
   | { code: 'secondPayment'; params: { receipt: string; payment: string } }
   | { code: 'yearClose' }
+  /** «Immer so?» under several receipts linked to one payment (#190): the payment offers no batch payer (fewer such links, no business, or it is one already). */
+  | { code: 'noBatchPayer' }
   /** A booking's tags (#127): not a map, a dimension the workspace does not declare, or a value that is no short text. */
   | TagRefusal
   /** Firma › Dimensionen: a dimension bookings carry a value of is not taken out (`entries`: how many). */
@@ -185,7 +187,8 @@ export type ClassifyRefusal =
   | { code: 'classifyUnknownVatCode'; params: { code: string; description: string } }
   | { code: 'classifyBalance'; params: { date: string; currency: string; paid: number; booked: number } }
   | { code: 'classifySeparateFee'; params: { fee: string; currency: string; amount: number } }
-  | { code: 'classifyOpenInvoice'; params: { number: string; customer: string } };
+  | { code: 'classifyOpenInvoice'; params: { number: string; customer: string } }
+  | { code: 'classifyInputTaxShared'; params: { payments: string; currency: string; booked: number; shown: number } };
 
 /**
  * Why a statement upload (POST /api/statements) was refused: not XML or PDF, an XML that is no

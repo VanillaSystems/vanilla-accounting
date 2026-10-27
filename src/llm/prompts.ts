@@ -25,6 +25,7 @@ export interface MatchResult {
 /** How a receipt's short title is written (the mockup's titles: the vendor, then 1–3 words). */
 export const TITLE_RULES = `two parts, in German.
 - "v": the vendor as people say it: brand only, no legal form (AG, GmbH, s.r.o., e.K.), no address, no numbers. E.g. "Coop Pronto", "FedEx", "Shopify", "AliExpress", "Google Cloud", "Die Post", "Wise". For the company's own sales (shop orders and payouts, own invoices) use "Verkauf".
+- The vendor is who issued the document, as its head names it: never a carrier, payment method or bank the document only mentions ("Versand: FedEx", "Zahlungsart: Amazon Pay").
 - "w": what it is, 1 to 3 German words, the essence only. No amounts, no dates, no invoice numbers, no VAT info, no parentheses. E.g. "Benzin", "Zoll", "Fracht", "Monatsabo", "Autowäsche", "Leere Datei" (a blank capture). For a sale the order number, e.g. "#1132". For a bank statement the month and currency, e.g. "Kontoauszug USD Feb".`;
 
 /** A model's {v, w}, kept only when both are short text. */
@@ -214,6 +215,8 @@ interface TxInput {
   separateFee?: { ref: string; amount: number; currency: string };
   /** An owner's payment of a business part of its receipt (BankTransaction.businessPart): the amount is that part, the rest is private. */
   businessPart?: { what?: string };
+  /** The other legs of its card charge split across balances that hold the same receipts (src/booking/shared-receipts.ts): this payment books only its share. */
+  sharedWith?: Array<{ ref: string; amount: number; currency: string }>;
 }
 
 const CLASSIFY_INSTRUCTIONS = `## Instructions
@@ -395,6 +398,12 @@ function businessPartLine(tx: TxInput, receipt: ReceiptInput | undefined): strin
   return `Business part: only ${tx.amount} ${tx.currency}${of} was for the business${what}; the owner paid the rest privately and it is not booked. Book exactly this amount, in one entry, with the VAT facts the receipt shows for that part.`;
 }
 
+/** What the model is told of a leg of a card charge split across balances: the receipt also pays the other legs, so this one books only its share and its share of the VAT. */
+function sharedLine(tx: TxInput): string {
+  const others = tx.sharedWith!.map((o) => `${o.ref} (${Math.abs(o.amount)} ${o.currency})`).join(', ');
+  return `Shared receipt: the receipt below also pays ${others}, the other part${tx.sharedWith!.length > 1 ? 's' : ''} of one card charge. Book only this payment's ${Math.abs(tx.amount)} ${tx.currency} as its share, with the receipt's VAT facts in proportion: the input tax of all these payments together never exceeds the VAT the receipt shows.`;
+}
+
 export function buildBatchClassifyPrompt(
   transactions: Array<{ tx: TxInput; receipts: ReceiptInput[] }>,
   { companyName, chartOfAccounts, historicEntries, vat: setup, sells }: ClassifyPromptContext,
@@ -418,7 +427,7 @@ export function buildBatchClassifyPrompt(
     }
     return `### Transaction ${i + 1}: ${tx.ref}
   Date: ${tx.date} | Amount: ${tx.amount} ${tx.currency} | Direction: ${tx.direction} | Bank: ${tx.bank}
-  Bank description: ${tx.description}${tx.counterparty ? `\n  Counterparty: ${tx.counterparty}` : ''}${tx.separateFee ? `\n  Fee: ${tx.separateFee.amount} ${tx.separateFee.currency}, debited separately as ${tx.separateFee.ref} and booked there. The amount above is without it: book no fee line here.` : ''}${tx.businessPart ? `\n  ${businessPartLine(tx, receipts[0])}` : ''}
+  Bank description: ${tx.description}${tx.counterparty ? `\n  Counterparty: ${tx.counterparty}` : ''}${tx.separateFee ? `\n  Fee: ${tx.separateFee.amount} ${tx.separateFee.currency}, debited separately as ${tx.separateFee.ref} and booked there. The amount above is without it: book no fee line here.` : ''}${tx.businessPart ? `\n  ${businessPartLine(tx, receipts[0])}` : ''}${tx.sharedWith?.length ? `\n  ${sharedLine(tx)}` : ''}
 ${receiptPart}`;
   }).join('\n\n');
 

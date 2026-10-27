@@ -47,8 +47,10 @@ export interface RuleDiff {
   /** Each changed rule as it stands now, in the order of `changed`: the card says what it was. */
   before: RuleRow[];
   removed: RuleRow[];
-  /** Parts of the file other than its rules changed (a business's name or how it is recognised). */
+  /** Parts of the file other than its rules and `grouped` changed (a business's name or how it is recognised). */
   others: boolean;
+  /** A business's file says anew whether it pays several receipts in one payment (`grouped`, #190): the value it would have. */
+  grouped?: boolean;
   /** Added or changed rules the app cannot carry out: keeping refuses them. */
   refused: RuleRow[];
   /** Added or changed rules that rest on single words alone (loneWords): keeping them asks for confirmation. */
@@ -61,12 +63,16 @@ export interface RuleDiff {
   broken?: string;
 }
 
-/** The file's body with every rule list emptied: what is not a rule. */
+/** The file's body with every rule list emptied and without its `grouped`: what the card does not show line by line. */
 function withoutRules(text: string): string {
-  const body = (parse(text) ?? {}) as { steps?: Record<string, { rules?: unknown[] }> };
+  const body = (parse(text) ?? {}) as { steps?: Record<string, { rules?: unknown[] }>; grouped?: unknown };
   for (const s of Object.values(body.steps ?? {})) if (s && typeof s === 'object') delete s.rules;
+  delete body.grouped;
   return JSON.stringify(body);
 }
+
+/** Whether a business's file says it pays several receipts in one payment. */
+const groupedIn = (text: string): boolean => ((parse(text) ?? {}) as { grouped?: unknown }).grouped === true;
 
 /** The workspace's businesses with `text` at `path` (a copy of knowledge/ with the file in it), or why they would not load. */
 function knowledgeWith(ws: Ws, path: string, text: string): { counterparties: Counterparty[] } | { error: string } {
@@ -99,11 +105,15 @@ export function ruleDiff(ws: Ws, path: string, before: string, after: string): R
   const was = changed.map((r) => b.find((x) => key(x) === key(r))!);
   const wide = [...added, ...changed].filter((r) => r.kind === 'rule' && loneWords(placedOf(r)).length > 0);
   let others = false;
+  let grouped: boolean | undefined;
   if (!broken) {
-    try { others = withoutRules(before) !== withoutRules(after); } catch (e) { broken = (e as Error).message; }
+    try {
+      others = withoutRules(before) !== withoutRules(after);
+      if (business && groupedIn(before) !== groupedIn(after)) grouped = groupedIn(after);
+    } catch (e) { broken = (e as Error).message; }
   }
   if (!broken && after) { const k = knowledgeWith(ws, path, after); if ('error' in k) broken = k.error; }
-  return { path, added, changed, before: was, removed, others, refused: [...added, ...changed].filter((r) => r.kind !== 'rule'), wide, spread: [], overrides: [], ...(broken ? { broken } : {}) };
+  return { path, added, changed, before: was, removed, others, ...(grouped !== undefined ? { grouped } : {}), refused: [...added, ...changed].filter((r) => r.kind !== 'rule'), wide, spread: [], overrides: [], ...(broken ? { broken } : {}) };
 }
 
 const placedOf = (r: RuleRow) => ({ rule: r.rule as BookingRule, ...(r.business ? { business: r.business } : {}) });
@@ -128,7 +138,7 @@ export function rulesRefusal(diffs: RuleDiff[], confirmed = false): string | und
 export interface DraftRules extends RuleDiff {
   /** The draft's content hash: «Behalten» keeps exactly what was shown. */
   basis: string;
-  /** One click keeps it: the file loads, every rule in it is one the app carries out, and a rule changes. */
+  /** One click keeps it: the file loads, every rule in it is one the app carries out, and a rule (or `grouped`) changes. */
   keepable: boolean;
   /** Keeping it needs the person's confirmation (`wide`, `spread` or `overrides` is not empty): the button says «Trotzdem behalten». */
   confirm: boolean;
@@ -151,7 +161,7 @@ export function draftRules(ws: Workspace, path: string): DraftRules | undefined 
   const after = read(draft);
   const { diff: d, preview } = withPreview(ws, ruleDiff(ws, path, read(join(ws.paths.root, path)), after), after);
   const offers = offersOf(ws, d, preview, after);
-  const keepable = !d.broken && !d.refused.length && (d.added.length + d.changed.length + d.removed.length > 0) && !notOffered(offers).length;
+  const keepable = !d.broken && !d.refused.length && (d.added.length + d.changed.length + d.removed.length > 0 || d.grouped !== undefined) && !notOffered(offers).length;
   return { ...d, basis: hashOf(after), keepable, confirm: keepable && (d.wide.length > 0 || d.spread.length > 0 || d.overrides.length > 0 || rebooking(offers).length > 0), preview, offers };
 }
 
@@ -203,6 +213,7 @@ function subjectOf(ws: Workspace, d: RuleDiff): string {
     ...d.added.map((r) => `Neue Regel: ${say(r)}`),
     ...d.changed.map((r) => `Regel geändert: ${say(r)}`),
     ...d.removed.map((r) => `Regel entfernt: ${r.rule ? say(r) : r.id}`),
+    ...(d.grouped === undefined ? [] : [`${d.grouped ? 'Sammelzahler' : 'Kein Sammelzahler mehr'}: ${basename(d.path, '.yaml')}`]),
   ];
   return (parts.join('; ') || `Regeln: ${d.path}`).slice(0, 200);
 }

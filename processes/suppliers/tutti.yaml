@@ -1,4 +1,4 @@
 id: tutti
 name: tutti.ch (private sellers)
 match:
-  file: [ '^\d{8}-tutti-' ]
+  file: [ '^\d{8}[-_]tutti(?:[-_.]|$)' ]

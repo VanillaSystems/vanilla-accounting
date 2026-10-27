@@ -7,7 +7,7 @@ name: Shopify
 match:
   tx: [ "shopify", "stripe payments uk" ]
   uid: [ "CHE-153.004.184" ]
-  file: [ '^\d{8}-shopify' ]
+  file: [ '^\d{8}[-_]shopify' ]
 
 facts:
   - id: order-page-payout

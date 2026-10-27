@@ -80,12 +80,13 @@ function same(a: Prepared, b: Prepared, df: Map<string, number>, companion: bool
   const x = a.r.amount, y = b.r.amount;
   // The same text with other facts read off it is no copy: what was read wins.
   if (a.text.length > 40 && a.text === b.text && (x === undefined || y === undefined || near(x, y))) return { why: 'same-text', score: 3 };
-  const sharedRare = [...a.ids].some((t) => b.ids.has(t) && (df.get(t) ?? 0) <= RARE);
+  // Asked only once the cheaper facts leave the pair open.
+  const sharedRare = () => [...a.ids].some((t) => b.ids.has(t) && (df.get(t) ?? 0) <= RARE);
   const apart = a.r.date && b.r.date ? Math.abs(day(a.r.date) - day(b.r.date)) : undefined;
   if (companion) {
     // A number only these documents carry ties them whenever they are dated and whatever they
     // total: a reminder comes weeks later, often with a fee on top.
-    if (sharedRare) return { why: 'same-number', score: 2 };
+    if (sharedRare()) return { why: 'same-number', score: 2 };
     // An order confirmation comes before its invoice, a delivery note with it; one carries no total.
     if (apart !== undefined && apart > COMPANION_DAYS) return undefined;
     if (x !== undefined && y !== undefined && !near(x, y)) return undefined;
@@ -95,11 +96,11 @@ function same(a: Prepared, b: Prepared, df: Map<string, number>, companion: bool
   // Each labels its own number and neither carries the other's: two documents.
   const differ = a.numbers.size > 0 && b.numbers.size > 0 && ![...a.numbers].some((n) => b.ids.has(n) || b.numbers.has(n)) && ![...b.numbers].some((n) => a.ids.has(n));
   if (differ) return undefined;
-  if (x === undefined || y === undefined) return sharedRare && [...a.numbers].some((n) => b.numbers.has(n)) ? { why: 'same-number', score: 2 } : undefined;
+  if (x === undefined || y === undefined) return sharedRare() && [...a.numbers].some((n) => b.numbers.has(n)) ? { why: 'same-number', score: 2 } : undefined;
   if (!near(x, y) || Math.abs(x) < 0.005) return undefined;
   if (a.r.currency && b.r.currency && a.r.currency !== b.r.currency) return undefined;
   if (apart === undefined || apart > DAYS) return undefined;
-  if (sharedRare) return { why: 'same-number', score: 2 };
+  if (sharedRare()) return { why: 'same-number', score: 2 };
   // Each carries a number no other receipt has: two documents of one kind (two postage receipts of a day).
   const ownNumber = (p: Prepared) => [...p.ids].some((t) => df.get(t) === 1);
   if (ownNumber(a) && ownNumber(b) || apart > 1) return undefined;
@@ -122,11 +123,12 @@ export function twinFinder(receipts: readonly Comparable[], words: DocumentsData
     return { r, text, words: wordSet(text), ids: identifiers(r.extractedText ?? ''), numbers: labelledNumbers(r.extractedText ?? '', words), vatId: r.vatId ?? textFacts(r.extractedText ?? '').vatId };
   };
   const all = receipts.filter((r) => !outOfPlay(r)).map((r) => ({ p: prep(r), supporting: supporting(r) }));
+  const prepared = new Map(all.map(({ p }) => [p.r, p]));
   const df = new Map<string, number>();
   for (const { p } of all) for (const t of p.ids) df.set(t, (df.get(t) ?? 0) + 1);
   return {
     find(r) {
-      const me = prep(r);
+      const me = prepared.get(r) ?? prep(r);
       const mine = supporting(r);
       const counts = all.some(({ p }) => p.r.id === r.id) ? df : new Map([...df, ...[...me.ids].map((t) => [t, (df.get(t) ?? 0) + 1] as const)]);
       let best: (Twin & { score: number }) | undefined;

@@ -3,5 +3,5 @@ name: VistaPrint
 match:
   tx: [ "vistaprint" ]
   domain: [ "vistaprint.ch", "t.vistaprint.ch" ]
-  file: [ '^\d{8}-vistaprint-' ]
+  file: [ '^\d{8}[-_]vistaprint(?:[-_.]|$)' ]
 grouped: false

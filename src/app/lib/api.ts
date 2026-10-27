@@ -49,6 +49,8 @@ import type { MailCheck, ReceiptSkipOffer, SourcePreview, SourcesView } from '..
 import type { MailHost } from '../../platform/sources/mail-host.js';
 import type { DraftCommand, DraftView, KeepResult, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
 import type { ShareOffer } from '../../saving/share-rule.js';
+import type { GroupedOffer } from '../../saving/grouped-flag.js';
+import type { ReceiptSet, SetCut } from '../../intake/receipt-sets.js';
 import type { UnreadOffer } from '../../saving/unread-rule.js';
 import type { SaleRuleOffer } from '../../saving/sale-rule.js';
 import type { CorrectionOffer } from '../../saving/correction-rule.js';
@@ -145,6 +147,7 @@ export function errorText(e: unknown): string {
     case 'partRate': return t('error.partRate', { rates: b.params.rates.map((r) => `${r} %`).join(', ') });
     case 'bookedByHand': return t('error.bookedByHand', { entry: b.params.entry, date: formatDate(b.params.date), amount: `${b.params.currency} ${fmt(b.params.amount)}` });
     case 'yearClose': return t('error.yearClose');
+    case 'noBatchPayer': return t('error.noBatchPayer');
     case 'tagShape': return t('error.tagShape');
     case 'tagDimension': return t('error.tagDimension', b.params);
     case 'tagValue': return t('error.tagValue', b.params);
@@ -163,6 +166,7 @@ export function errorText(e: unknown): string {
     }
     case 'classifySeparateFee': return t('error.classifySeparateFee', { fee: b.params.fee, amount: `${b.params.currency} ${fmt(b.params.amount)}` });
     case 'classifyOpenInvoice': return t('error.classifyOpenInvoice', b.params);
+    case 'classifyInputTaxShared': return t('error.classifyInputTaxShared', { payments: b.params.payments, booked: `${b.params.currency} ${fmt(b.params.booked)}`, shown: `${b.params.currency} ${fmt(b.params.shown)}` });
     case 'personsBooking': return t('error.personsBooking', { n: b.params.entries });
     case 'fileExists': return t('error.fileExists', b.params);
     case 'notInTrash': return t('error.notInTrash');
@@ -401,6 +405,10 @@ export const api = {
   draftCommand: (c: DraftCommand) => request<KeepResult | { ok: boolean }>('POST', '/api/rules/draft', c),
   shareOffer: (ref: string) => request<{ offer: ShareOffer | null }>('GET', `/api/rules/share?ref=${encodeURIComponent(ref)}`),
   draftShare: (ref: string) => request<{ path: string }>('POST', '/api/rules/share', { ref }),
+  /** Receipts that add up to a payment, or nearly, and where code stopped looking (#27, #190). */
+  receiptSets: (ref: string) => request<{ sets: ReceiptSet[]; cut?: SetCut }>('GET', `/api/transactions/${encodeURIComponent(ref)}/receipt-sets`),
+  groupedOffer: (ref: string) => request<{ offer: GroupedOffer | null }>('GET', `/api/rules/grouped?ref=${encodeURIComponent(ref)}`),
+  draftGrouped: (ref: string) => request<{ path: string }>('POST', '/api/rules/grouped', { ref }),
   unreadOffer: (ref: string) => request<{ offer: UnreadOffer | null }>('GET', `/api/rules/unread?ref=${encodeURIComponent(ref)}`),
   draftUnread: (ref: string, rate: number) => request<{ path: string }>('POST', '/api/rules/unread', { ref, rate }),
   /** «Immer so?» under an answer to a sale question (#38): the payer rule drafted for its card, or why none. */

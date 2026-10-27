@@ -35,7 +35,8 @@ export async function setNoReceipt(nav: Nav, tx: BankTransaction, on: boolean, u
  * on the way takes back those made before it. The toast's undo takes every link back.
  */
 export async function linkReceiptSet(nav: Nav, s: ReceiptSet, undoing = false): Promise<void> {
-  const pairs = s.receipts.map((receiptId) => ({ receiptId, transactionRef: s.payment }));
+  // Every movement of the charge: a card charge split across balances is linked on each leg (#190).
+  const pairs = s.legs.flatMap((transactionRef) => s.receipts.map((receiptId) => ({ receiptId, transactionRef })));
   const done: typeof pairs = [];
   try {
     for (const p of pairs) { await (undoing ? api.removeMapping(p) : api.addMapping(p)); done.push(p); }
