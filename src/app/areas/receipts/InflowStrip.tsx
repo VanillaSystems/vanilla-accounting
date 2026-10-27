@@ -17,7 +17,6 @@ import { BotIcon } from '../automation/Graph.js';
 import { ICONS } from '../icons.js';
 import { Go } from '../vat/links.js';
 import { statementAdd } from '../bank/actions.js';
-import { setUi as setJournalUi } from '../journal/state.js';
 import type { Location } from '../../shell/route.js';
 import type { AreaProps } from '../index.js';
 import type { SourcesView } from '../../../platform/sources/model.js';
@@ -197,11 +196,12 @@ export function Strip(props: AreaProps) {
   async function phoneOn() {
     try { await switchPhone(true); nav.toast(t('inflow.phoneSwitchedOn')); } catch (e) { nav.toast(errorText(e)); }
   }
+  // Buchungen with the chip «Beleg: fehlt» (#211): the payments of the period still waiting for theirs.
+  const missingAt: Location = { route: { area: 'journal' }, query: { period: props.query.period, chips: [{ field: 'receipt', value: 'missing' }] } };
   function missing(e: MouseEvent) {
     if (e.metaKey || e.ctrlKey || e.button !== 0) return;
     e.preventDefault();
-    setJournalUi({ filter: 'ohneBeleg' });
-    nav.go({ route: { area: 'journal' }, query: { period: props.query.period } });
+    nav.go(missingAt);
   }
 
   const line = PHONE_LINE[way];
@@ -251,7 +251,7 @@ export function Strip(props: AreaProps) {
             <div className="cover">
               <span>{t('inflow.coverage', { covered: cover.covered, total: cover.total })}</span>
               <span className="bar"><i style={{ width: `${Math.round((100 * cover.covered) / cover.total)}%` }} /></span>
-              {cover.total > cover.covered ? <a className="linkbtn" href={hrefOf({ route: { area: 'journal' }, query: { period: props.query.period } })} onClick={missing}>{t('inflow.missing', { n: cover.total - cover.covered })}</a> : null}
+              {cover.total > cover.covered ? <a className="linkbtn" href={hrefOf(missingAt)} onClick={missing}>{t('inflow.missing', { n: cover.total - cover.covered })}</a> : null}
             </div>
           ) : null}
           <div className="links">

@@ -13,6 +13,7 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { hasVat } from '../codes/model.js';
 import { baseCurrency, chart, vat } from '../../../engines/index.js';
 import { isManualRef } from '../../../books/refs.js';
+import { applyChips, type Chip, type Field } from '../../shell/chips.js';
 
 export interface EntryView {
   e: JournalEntry;
@@ -144,25 +145,26 @@ export type JournalOrigin = typeof JOURNAL_ORIGINS[number];
  * A change the AI sidebar made is origin manual (a person's decision) and `by` the assistant: it counts as KI, not as by
  * hand (r6h-29). A booking of origin classify that a rule or the app's code decided is theirs, not Claude's (r9n-32).
  */
-const whoOf = (e: JournalEntry): string | undefined =>
+export const whoOf = (e: JournalEntry): string | undefined =>
   (e.by?.kind === 'assistant' ? 'assistant' : e.by?.kind === 'rule' || e.by?.kind === 'code' ? (e.origin === 'manual' ? 'manual' : e.by.kind) : e.origin);
 
 export interface Rows { rows: EntryView[]; counts: Counts; origins: Record<JournalOrigin, number> }
 
-/** The period's entries, newest first, those of one payment together; counts before the code filter, the origin and the search. */
-export function rowsOf(j: Journal, period: Period, filter: JournalFilter | undefined, vat: string | undefined, q: string | undefined, accountName: (n: string) => string, origin?: JournalOrigin): Rows {
+/**
+ * The period's entries, newest first, those of one payment together; counts before the code filter,
+ * the chips and the search. `candidates`: what the chips choose from (the code filter and the search applied).
+ */
+export function rowsOf(j: Journal, period: Period, chips: readonly Chip[] | undefined, fields: readonly Field<EntryView>[], vat: string | undefined, q: string | undefined, accountName: (n: string) => string): Rows & { pool: EntryView[]; candidates: EntryView[] } {
   const pool = j.views.filter((v) => v.e.date >= period.from && v.e.date <= period.to);
   const counts: Counts = { alle: pool.length, ohneBeleg: pool.filter(FILTERS.ohneBeleg).length, korrekturen: pool.filter(FILTERS.korrekturen).length };
   const origins = Object.fromEntries(JOURNAL_ORIGINS.map((o) => [o, pool.filter((v) => whoOf(v.e) === o).length])) as Record<JournalOrigin, number>;
   const words = (q ?? '').toLowerCase().split(/\s+/).filter(Boolean);
   const coded = vat ? hasVat(vat) : () => true;
-  const rows = pool
-    .filter((v) => !filter || FILTERS[filter](v))
-    .filter((v) => !origin || whoOf(v.e) === origin)
+  const candidates = pool
     .filter((v) => coded(v.e))
     .filter((v) => { if (!words.length) return true; const h = haystack(v, accountName); return words.every((w) => h.includes(w)); })
     .sort((a, b) => b.e.date.localeCompare(a.e.date) || a.e.transactionRef.localeCompare(b.e.transactionRef));
-  return { rows, counts, origins };
+  return { rows: applyChips(candidates, chips ?? [], fields), counts, origins, pool, candidates };
 }
 
 /** The rows by month, newest first: ['2026-09', [...]]. */
