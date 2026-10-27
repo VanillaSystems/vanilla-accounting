@@ -22,6 +22,7 @@ import { findFile } from '../../workspace/workspace.js';
 import { INTAKE, bookAgain, engine, handedOver } from './automation.js';
 import { removeReceipt } from '../../accounting/classify-force.js';
 import { importStatement, removeStatement } from './statements.js';
+import { statementDetails } from '../../providers/statement-files.js';
 import { importSalesReport, recognizeCsv, removeSalesReport, setProviderAccount } from '../../intake/sales-report-import.js';
 
 import type { Arrival } from '../../workflows/model.js';
@@ -100,6 +101,23 @@ function twinOf(s: DropSession, row: DropRow, text: string): DropRow['twin'] {
   return { ...twin, name };
 }
 
+/** Each session's requests in turn, by its id: the previous one's end, kept until the queue is empty. */
+const queues = new Map<string, Promise<unknown>>();
+
+/**
+ * One session's requests one after another (#208). Each loads the session file, changes it while
+ * it reads files into the books (which awaits), and saves it: two at once would each save their own
+ * copy and lose the other's change, so a statement answered while the drop's next file was still
+ * coming in fell back to asking, and the second answer found it read in already.
+ */
+function inSession<T>(id: string, work: () => Promise<T>): Promise<T> {
+  const run = (queues.get(id) ?? Promise.resolve()).then(work);
+  const end = run.then(() => undefined, () => undefined);
+  queues.set(id, end);
+  void end.then(() => { if (queues.get(id) === end) queues.delete(id); });
+  return run;
+}
+
 router.post('/api/drop', (_req, res) => {
   const s: DropSession = { id: randomUUID(), rows: [] };
   mkdirSync(join(dir(s.id), 'files'), { recursive: true });
@@ -107,7 +125,7 @@ router.post('/api/drop', (_req, res) => {
   res.json(s);
 });
 
-router.post('/api/drop/:id/files', express.raw({ type: () => true, limit: '200mb' }), async (req, res) => {
+router.post('/api/drop/:id/files', express.raw({ type: () => true, limit: '200mb' }), (req, res) => inSession(req.params.id, async () => {
   const s = load(req.params.id);
   const body = req.body as unknown;
   if (!Buffer.isBuffer(body) || !body.length) throw new RequestError(400, 'Keine Datei erhalten.');
@@ -116,9 +134,9 @@ router.post('/api/drop/:id/files', express.raw({ type: () => true, limit: '200mb
   await takeWaiting(s);
   save(s);
   res.json(s);
-});
+}));
 
-router.post('/api/drop/:id/rows/:key', async (req, res) => {
+router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, async () => {
   const s = load(req.params.id);
   const row = s.rows.find((r) => r.key === req.params.key);
   if (!row) throw new RequestError(404, 'Diese Zeile gibt es nicht.');
@@ -131,15 +149,15 @@ router.post('/api/drop/:id/rows/:key', async (req, res) => {
       rmSync(fileOf(s.id, row.key), { force: true });
       break;
     case 'take':
-      if (settled || row.state === 'refused' || row.state === 'locked') throw new RequestError(400, 'Diese Datei lässt sich so nicht übernehmen.');
+      if (settled || row.state === 'refused' || row.state === 'asks' || row.state === 'locked') throw new RequestError(400, 'Diese Datei lässt sich so nicht übernehmen.');
       unquarantine(row);
       Object.assign(row, { state: 'take', reason: undefined });
       break;
     case 'as': {
       // A PDF its words took for a statement that no account read in may still be a receipt: the person says so (#25).
       const notStatement = row.kind === 'statement-pdf' && row.reason === 'not-imported' && a.as === 'receipt';
-      if (settled || (row.state === 'refused' && !notStatement) || row.state === 'locked') throw new RequestError(400, 'Diese Datei lässt sich so nicht übernehmen.');
-      if (notStatement) { delete row.message; delete row.unknownAccount; delete row.chooseAccount; }
+      if (settled || ((row.state === 'refused' || row.state === 'asks') && !notStatement) || row.state === 'locked') throw new RequestError(400, 'Diese Datei lässt sich so nicht übernehmen.');
+      if (notStatement) { delete row.message; delete row.unknownAccount; delete row.chooseAccount; delete row.details; }
       if (a.as === 'receipt') unquarantine(row);
       Object.assign(row, a.as === 'quarantine' ? { state: 'quarantine', reason: 'held' } : { kind: 'receipt', state: 'take', reason: undefined });
       break;
@@ -151,6 +169,7 @@ router.post('/api/drop/:id/rows/:key', async (req, res) => {
       if (!row.chooseAccount?.accounts.some((x) => x.account === a.account) || !existsSync(fileOf(s.id, row.key))) throw new RequestError(400, 'Nur eines der angebotenen Konten nimmt diesen Auszug.');
       delete row.chooseAccount;
       delete row.unknownAccount;
+      delete row.details;
       delete row.message;
       Object.assign(row, { account: a.account, state: 'take', reason: undefined });
       break;
@@ -211,15 +230,16 @@ router.post('/api/drop/:id/rows/:key', async (req, res) => {
   await takeWaiting(s);
   save(s);
   res.json(s);
-});
+}));
 
 /** «Nein, privat» on a statement of an account the books lack: it stays out of the books, its copy in the session goes. */
 function setAsidePrivate(s: DropSession, row: DropRow): void {
   if (!row.unknownAccount) throw new RequestError(400, 'Nur ein Auszug eines unbekannten Kontos wird als privat beiseitegelegt.');
   delete row.unknownAccount;
   delete row.chooseAccount;
+  delete row.details;
   delete row.message;
-  row.reason = 'private';
+  Object.assign(row, { state: 'refused', reason: 'private' });
   rmSync(fileOf(s.id, row.key), { force: true });
 }
 
@@ -267,7 +287,19 @@ async function takeWaiting(s: DropSession): Promise<void> {
         const refusal = e instanceof RequestError ? e.refusal : undefined;
         const unknown = refusal?.code === 'statement' ? refusal.params.unknown : undefined;
         const problem = refusal?.code === 'statement' ? refusal.params.problem : undefined;
-        Object.assign(row, { state: 'refused', reason: 'not-imported', message: (e as Error).message, ...(unknown ? { unknownAccount: unknown } : {}), ...(problem?.kind === 'whichAccount' ? { chooseAccount: problem } : {}) });
+        const read = refusal?.code === 'statement' && refusal.params.reason === 'duplicate' ? refusal.params.detail : undefined;
+        if (read) {
+          // Read in already (by an earlier drop or upload): not a failure, the statement is in the books; the row links to it.
+          const ref = readBooks().bankStatements?.find((b) => `${b.bank}/${b.filename}` === read)?.refs?.[0];
+          for (const k of ['chooseAccount', 'unknownAccount', 'details', 'message'] as const) delete row[k];
+          Object.assign(row, { state: 'duplicate', reason: 'statement-read', readAs: { file: read, ...(ref ? { ref } : {}) } });
+          continue;
+        }
+        const choose = problem?.kind === 'whichAccount' ? problem : undefined;
+        // A statement asking which account it is of, or whether an unknown one is the firm's, waits for that answer with its file (#208).
+        const asks = !!(unknown || choose);
+        const details = asks ? statementDetails(bytes, row.name) : undefined;
+        Object.assign(row, { state: asks ? 'asks' : 'refused', reason: 'not-imported', message: (e as Error).message, ...(unknown ? { unknownAccount: unknown } : {}), ...(choose ? { chooseAccount: choose } : {}), ...(details ? { details } : {}) });
         continue;
       }
     } else {
@@ -334,7 +366,7 @@ function undo(row: DropRow): string[] {
  * question. A ZIP still waiting for its password, and a file nobody said what it is, wait in
  * quarantine, where Belege lists them with «Ist ein Beleg». A copy by its bytes is there already.
  */
-router.delete('/api/drop/:id', async (req, res) => {
+router.delete('/api/drop/:id', (req, res) => inSession(req.params.id, async () => {
   const s = load(req.params.id);
   for (const row of s.rows) {
     if (row.state === 'duplicate' && row.reason === 'possible-duplicate') Object.assign(row, { state: 'take', reason: undefined });
@@ -343,4 +375,4 @@ router.delete('/api/drop/:id', async (req, res) => {
   await takeWaiting(s);
   rmSync(dir(req.params.id), { recursive: true, force: true });
   res.json({ ok: true });
-});
+}));

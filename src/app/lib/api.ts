@@ -46,7 +46,7 @@ import type { RunLogLine } from '../../workflows/runlog.js';
 import type { HistoryObject, ObjectHistory } from '../../workflows/history.js';
 import type { Conversation, ConversationSummary, MadeChange, PrivatePart, Turn } from '../../types/assistant.js';
 import { ATTACHMENT_MAX_MB, type Attachment } from '../../types/attachment.js';
-import type { DropAction, DropSession, PayoutWaitView, QuarantinedFile } from '../../types/drop.js';
+import type { DropAction, DropSession, PayoutWaitView, QuarantinedFile, StatementDetails } from '../../types/drop.js';
 import type { MailCheck, ReceiptSkipOffer, SourcePreview, SourcesView } from '../../platform/sources/model.js';
 import type { MailHost } from '../../platform/sources/mail-host.js';
 import type { DraftCommand, DraftView, KeepResult, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
@@ -471,6 +471,8 @@ export const api = {
   setOpeningBalance: (year: string, account: string, amount: number | null) =>
     request<Ok>('PUT', `/api/opening-balances/${year}/${encodeURIComponent(account)}`, { amount }),
 
+  /** What a statement file read in says about itself, and the day it was read in (#208). */
+  statementFileDetails: (file: string) => request<{ details?: StatementDetails; importedAt?: string }>('GET', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/details`),
   /** A statement taken back out of the books (`file`: `<bank>/<filename>` as the import named it): the drop dialog's undo, from the page (r9k-3). */
   deleteStatement: (file: string) => request<StatementRemoved>('DELETE', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}`),
   /** The undo of a removal, after the file is read again: its bookings and links back as they were (r10h-3). */

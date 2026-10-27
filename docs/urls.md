@@ -32,6 +32,7 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | `/bank/<account>-<yyyy-mm>` | one statement, e.g. `/bank/1021-2026-09` |
 | `/bank/<account>-<yyyy-mm-dd>` | a statement of some days, by its first day, when a month has several, e.g. `/bank/1020-2026-10-15` (`_<last day>` added when two start the same day) |
 | `/bank/<statement>/<bank-ref>` | one payment in that statement |
+| `/bank/files/<account>/<file name>` | one statement file read in, whole, with its details and every movement it holds (Kontoauszüge › Datei), e.g. `/bank/files/1021/camt053_2026-09.xml` |
 | `/payments/<bank-ref>` | resolves to the statement of that payment, or to its entry if it was paid privately |
 | `/journal` | Buchungen; `?vat=<code>` filters by VAT code |
 | `/journal/<entry-id>` | one journal entry |

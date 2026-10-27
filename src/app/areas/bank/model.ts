@@ -6,6 +6,7 @@
  * the list, the keys, the dock badge and the tests read the same statements.
  */
 import type { BankStatement, BankTransaction, Index, JournalEntry } from '../../../types/index.js';
+import type { StatementDetails } from '../../../types/drop.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { addDays, type IsoDate } from '../../../accounting/periods.js';
 import { bookBalanceNative, nativeOpening } from '../../../accounting/reconcile-bank.js';
@@ -42,6 +43,41 @@ export interface Statement {
   missing?: true;
   /** Statements among the receipts of this account whose days overlap this one's. */
   receipts?: StatementReceipt[];
+}
+
+/**
+ * One statement file of an account's bank as it was read in (Kontoauszüge › Dateien, #208): the
+ * file whole, not split into months, with the movements it holds and the balances it states.
+ * `key`: `<account>/<file name>`, its id in a link (docs/urls.md).
+ */
+export interface StatementFile {
+  key: string;
+  account: Account;
+  file: BankStatement;
+  /** The movements the file holds (`refs`), oldest first; a file of books from before refs: the payments of its days. */
+  payments: BankTransaction[];
+  /** The bank's balances the day before its first day and on its last day, as the books keep them. */
+  opening?: { date: IsoDate; amount: number };
+  closing?: { date: IsoDate; amount: number };
+}
+
+/** The key of a statement file in a link. */
+export const fileKeyOf = (account: string, filename: string) => `${account}/${filename}`;
+
+/** What a statement file says about itself as the books know it (src/app/shell/FileDetails.tsx); the file's own words (bank, owner) come from the API. */
+export function fileFacts(f: StatementFile): StatementDetails {
+  const days = f.payments.map((t) => t.date).filter(Boolean).sort();
+  return {
+    currency: f.file.currency ?? f.account.currency,
+    ...(f.account.iban ? { iban: f.account.iban } : {}),
+    period: { from: f.file.fromDate, to: f.file.toDate },
+    ...(days.length ? { booked: { first: days[0], last: days.at(-1)! } } : {}),
+    movements: f.payments.length,
+    ...(f.opening ? { opening: f.opening } : {}),
+    ...(f.closing ? { closing: f.closing } : {}),
+    preview: [],
+    more: 0,
+  };
 }
 
 export interface Check {
@@ -142,6 +178,10 @@ export interface Bank {
   closedThrough?: string;
   /** Statements and missing months of every account overlapping [from, to], newest last day first. */
   statements(from: IsoDate, to: IsoDate): Statement[];
+  /** The XML statement files read in whose days overlap [from, to], each whole (#208), by account in the manifest's order, newest first. */
+  files(from: IsoDate, to: IsoDate): StatementFile[];
+  /** A statement file by its key (`<account>/<file name>`). */
+  fileByKey(key: string): StatementFile | undefined;
   /** Any statement by key, missing ones of the account's months included. */
   byKey(key: string): Statement | undefined;
   /** The statement a payment is on; none for a private one. */
@@ -288,6 +328,24 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
     return c;
   }
 
+  /** Each XML statement file whole, with the movements it holds and the balances it states (#208). */
+  const wholeFiles: StatementFile[] = books.bankStatements.filter(isCamt).flatMap((f): StatementFile[] => {
+    const a = accountOf(f.bank, f.currency ?? baseCurrency());
+    if (!a) return [];
+    const whole: Statement = { key: '', account: a, from: f.fromDate, to: f.toDate, file: f };
+    // Its own balances, else the bank's of the same day from another file (a PDF's balance of a day wins over the XML's).
+    const kept = (books.statementBalances ?? []).filter((x) => x.account === a.account);
+    const own = kept.filter((x) => x.sourceFile === f.filename).sort((x, y) => x.date.localeCompare(y.date));
+    const opening = own.find((x) => x.date < f.toDate) ?? kept.find((x) => x.date === addDays(f.fromDate, -1));
+    const closing = own.find((x) => x.date === f.toDate) ?? kept.find((x) => x.date === f.toDate);
+    return [{
+      key: fileKeyOf(a.account, f.filename), account: a, file: f,
+      payments: held(whole).sort((x, y) => x.date.localeCompare(y.date) || x.ref.localeCompare(y.ref)),
+      ...(opening ? { opening: { date: opening.date, amount: opening.amount } } : {}),
+      ...(closing ? { closing: { date: closing.date, amount: closing.amount } } : {}),
+    }];
+  });
+
   // Newest last day first; of two ending the same day, the one that started later (it holds the later balance, r10c-2).
   const desc = (x: Statement, y: Statement) => y.to.localeCompare(x.to) || y.from.localeCompare(x.from) || banked.indexOf(x.account) - banked.indexOf(y.account);
 
@@ -295,6 +353,9 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
     accounts: banked,
     closedThrough: books.config?.closedThrough,
     statements: (from, to) => banked.flatMap((a) => forAccount(a, from, to)).sort(desc),
+    files: (from, to) => wholeFiles.filter((f) => f.file.toDate >= from && f.file.fromDate <= to)
+      .sort((x, y) => banked.indexOf(x.account) - banked.indexOf(y.account) || y.file.toDate.localeCompare(x.file.toDate) || y.file.fromDate.localeCompare(x.file.fromDate)),
+    fileByKey: (key) => wholeFiles.find((f) => f.key === key),
     byKey(key) {
       const k = parseStatementKey(key);
       const a = k && banked.find((x) => x.account === k.account);
