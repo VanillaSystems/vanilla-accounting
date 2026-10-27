@@ -35,7 +35,7 @@ export const settlesOn = (p: Provider, date: string): boolean => !p.provider.sin
  * The provider whose payout `tx` is, whatever its day: money in that routes to a business with a
  * `provider:` section. Money out to the same business (its subscription, a bill) is a purchase like
  * any other. A payout another company makes for the provider may name the provider in its
- * reference only (Shopify's arrive as «Received money from Stripe Payments UK Ltd with reference
+ * reference only (Shopify's arrive as «Received money from Stripe … with reference
  * Shopify …»): when the payer routes to no business (or to several), the payout is the provider's
  * whose `match.tx` word begins the reference as the bank writes it (referenceOf), when exactly one
  * provider's does and the bank names no payer or a payment processor of its file (`processors`). A payer the books know as a business of its own is never overruled by its reference.

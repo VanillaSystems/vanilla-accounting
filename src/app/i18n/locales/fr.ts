@@ -3101,7 +3101,7 @@ export default {
     'drop.provider.since': 'À partir de quel jour les versements de {provider} passent-ils par le compte de passage ? Ce qui précède reste tel que comptabilisé. L’app le note dans {file}.',
     'drop.provider.sinceLabel': 'Jour de passage',
     'drop.unseen.why': 'Aucun versement de {provider} reconnu : les paiements de la banque sont là jusqu’au {through} ({banks}), mais l’app ne reconnaît aucun crédit depuis le {since} comme versement de {provider}. Rien du rapport n’est donc comptabilisé.',
-    'drop.unseen.hint': 'Si le versement apparaît sous un autre nom (p. ex. «Stripe Payments UK»), ce nom va dans le fichier de {provider} sous match.tx : {file}. Si {provider} verse sur un compte précis, provider.account y nomme ce compte ; l’app ne regarde alors que là.',
+    'drop.unseen.hint': 'Si le versement apparaît sous un autre nom (p. ex. le nom du prestataire de paiement tel que la banque l’affiche), ce nom va dans le fichier de {provider} sous match.tx : {file}. Si {provider} verse sur un compte précis, provider.account y nomme ce compte ; l’app ne regarde alors que là.',
     'drop.unseen.anyway': 'Reprendre quand même',
     'drop.unseen.open': 'Ouvrir {provider}',
     'drop.provider.account': 'Compte',
