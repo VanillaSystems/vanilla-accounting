@@ -28,6 +28,7 @@ import { FindPair, madeBy } from '../receipts/FindPair.js';
 import { StatementPaper, type Mark } from './StatementPaper.js';
 import { Parts } from './Parts.js';
 import { FileDetail } from './FileDetail.js';
+import { RunHistory } from '../../history/RunHistory.js';
 import { baseCurrency } from '../../../engines/index.js';
 import { localToday } from '../../../accounting/periods.js';
 import { linkedOf, receiptState, type Linked } from '../../../accounting/receipt-due.js';
@@ -166,6 +167,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
           )}
           {tx && canEdit && !closed && tx.amount && b.unbooked(tx) ? <PaymentBooking key={tx.ref} books={props.books} nav={nav} payment={tx.ref} /> : null}
           {tx ? <QuestionsOn key={`q-${tx.ref}`} on={{ kind: 'payment', id: tx.ref }} also={[...b.receiptsOf(tx.ref).map((id) => ({ kind: 'receipt' as const, id })), ...b.entriesOf(tx.ref).map((e) => ({ kind: 'entry' as const, id: e.id }))]} nav={nav} canEdit={canEdit} books={props.books} /> : null}
+          {tx ? <RunHistory key={`h-${tx.ref}`} on={{ kind: 'payment', id: tx.ref }} books={props.books} nav={nav} period={query.period} /> : null}
           {src ? (
             <div className="paper real stmt" role="button" tabIndex={0} aria-label={t('bank.openLarge')} onClick={() => setUi({ overlay: 'quick' })}>
               <StatementPaper src={src} mark={mark} onPage={setPage} scroller={(el) => el.closest('.detail')} />
