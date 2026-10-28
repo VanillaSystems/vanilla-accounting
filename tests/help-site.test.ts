@@ -5,8 +5,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSite, HELP_DIR, VERSION } from '../tools/help/build.js';
 import { markdown } from '../tools/help/markdown.js';
-import { vatCodes } from '../src/accounting/vat-codes.js';
+import { vatCodeName, vatCodes } from '../src/accounting/vat-codes.js';
 import { loadCases } from '../src/knowledge/cases.js';
+import { formatIn } from '../src/app/i18n/core.js';
+import type { Key } from '../src/app/i18n/types.js';
+import de from '../src/app/i18n/locales/de.js';
 import { PAGE_TAKES } from '../src/app/lib/folder-drop.js';
 
 const site = await buildSite();
@@ -28,6 +31,16 @@ test('every page names the version of the app it describes', () => {
 test('the VAT-code page has a row for every code of the catalogue', () => {
   const html = site.get('de/mwst-codes.html')!;
   for (const c of vatCodes()) assert.match(html, new RegExp(`<tr id="code-[a-z0-9-]+"><td><code>${c.code.replace(/[-]/g, '\\-')}</code>`), c.code);
+});
+
+test('the VAT-code page and a case name a code as the app does', () => {
+  const text = (key: string, vars: Record<string, string | number>) => formatIn({ code: 'de', messages: de.messages }, key as Key, vars);
+  const escaped = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const page = site.get('de/mwst-codes.html')!;
+  for (const c of vatCodes()) assert.ok(page.includes(`<td>${escaped(vatCodeName(c.code, text)!)}</td>`), c.code);
+  const k = loadCases().find((x) => x.id === 'import-vat-evv')!;
+  const body = site.get('de/fall-zollrechnung.html')!;
+  for (const l of k.lines) if (l.vatCode) assert.ok(body.includes(`</a> ${escaped(vatCodeName(l.vatCode, text)!)}</td>`), l.vatCode);
 });
 
 test('a case page books the lines of its casebook case', () => {

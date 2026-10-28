@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { Index } from '../../types/index.js';
 import type { BatchAction, BatchAnswer } from '../../types/batch.js';
-import { firmCodes } from '../../accounting/vat-codes.js';
+import { VatCodeField } from '../areas/codes/VatCodeField.js';
 import { aiIsOff } from '../ai/ai-off.js';
 import { api, errorText } from '../lib/api.js';
 import { t } from '../i18n/index.js';
@@ -122,7 +122,7 @@ function ServerBatch({ which, kind, books, ids, nav, name, onClose }: { which: E
   const fields = which === 'book' ? (
     <>
       <AccountField name="account" label={t('batch.field.account')} defaultValue="" />
-      <label>{t('batch.field.vat')}<input name="vat" list="batch-vat" className="mono" placeholder={t('batch.field.vatHint')} /></label>
+      <VatCodeField name="vat" label={t('batch.field.vat')} placeholder={t('batch.field.vatHint')} />
     </>
   ) : which === 'account' ? (
     <>
@@ -130,7 +130,7 @@ function ServerBatch({ which, kind, books, ids, nav, name, onClose }: { which: E
       <AccountField name="to" label={t('batch.field.to')} defaultValue="" />
     </>
   ) : which === 'vatCode' ? (
-    <label>{t('batch.field.vat')}<input name="vat" list="batch-vat" className="mono" placeholder={t('batch.field.vatNone')} /></label>
+    <VatCodeField name="vat" label={t('batch.field.vat')} placeholder={t('batch.field.vatNone')} />
   ) : which === 'tag' ? (
     <>
       <label>{t('batch.field.dimension')}<select name="dimension">{dimensions.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}</select></label>
@@ -144,7 +144,6 @@ function ServerBatch({ which, kind, books, ids, nav, name, onClose }: { which: E
       {fields && (
         <form className="fields" onSubmit={onPreview} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
           {fields}
-          <datalist id="batch-vat">{firmCodes().map((c) => <option key={c.code} value={c.code}>{c.bananaText ?? ''}</option>)}</datalist>
           <button type="submit" className="btn">{t('batch.preview')}</button>
         </form>
       )}

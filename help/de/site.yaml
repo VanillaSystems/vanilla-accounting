@@ -11,6 +11,7 @@ sections:
 words:
   version: "Diese Seite beschreibt Vanilla Accounting {version}."
   contents: Inhalt
+  codes.name: Name
   codes.rate: Satz
   codes.amount: Der Betrag
   case.receipt: Der Beleg
@@ -27,10 +28,6 @@ words:
   case.ziffern: Was sich in der MWST-Abrechnung ändert
   case.payable: Mehr an die ESTV
   case.refund: Weniger an die ESTV
-  code.gross: MWST inbegriffen
-  code.net: MWST kommt dazu
-  code.tax: nur die Steuer
-  code.negative: "Rückerstattung oder Storno:"
   case.noReceipt: Es gibt keinen Beleg.
   case.noPayment: Keine Zahlung, eine Buchung ohne Bankbewegung.
   case.in: Eingang

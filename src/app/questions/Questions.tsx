@@ -21,6 +21,7 @@ import { baseCurrency, chart, invoicing } from '../../engines/index.js';
 import { answerQuestion, askQuestion, closeQuestion, setMe, undoAnswer, useQuestions } from './store.js';
 import { RuleDraft } from '../areas/company/RulesSection.js';
 import type { SaleRuleOffer } from '../../saving/sale-rule.js';
+import { codeLabel } from '../areas/codes/names.js';
 
 /** The domestic sale at the normal rate; on the net tax rate method the firm's code and approved rate, which the answer books. */
 function saleDomesticText(): string {
@@ -42,7 +43,7 @@ export function questionText(q: Pick<Question, 'topic' | 'on' | 'text'>, books: 
 
 /** How the app's question's payment is booked while it waits: the code on its revenue, so the owner sees what her answer changes. */
 function bookedNow(q: Question, books: Index): string {
-  const codes = [...new Set((books.journalEntries ?? []).filter((e) => e.transactionRef === q.on.id && chart().typeOf(e.accountCredit) === 'revenue').map((e) => e.vatCode || t('journal.noVat')))];
+  const codes = [...new Set((books.journalEntries ?? []).filter((e) => e.transactionRef === q.on.id && chart().typeOf(e.accountCredit) === 'revenue').map((e) => (e.vatCode ? codeLabel(e.vatCode) : t('journal.noVat'))))];
   return codes.length ? t('questions.sale.bookedNow', { code: codes.join(', ') }) : '';
 }
 
@@ -115,7 +116,7 @@ function Acted({ q, owner }: { q: Question; owner: string }) {
   if ('refused' in a) return <p className="qnote warn">{notActedText(a)}</p>;
   if ('vatCode' in a) {
     const sale = [
-      a.marked ? (a.booked.length && a.account ? t('questions.sale.notSale', { n: a.booked.length, account: owner.startsWith(`${a.account} `) ? owner : a.account }) : t('questions.sale.marked')) : a.correction ? t('questions.sale.corrected', { code: a.vatCode || t('journal.noVat') }) : t('questions.sale.booked', { n: a.booked.length, code: a.vatCode || '–' }),
+      a.marked ? (a.booked.length && a.account ? t('questions.sale.notSale', { n: a.booked.length, account: owner.startsWith(`${a.account} `) ? owner : a.account }) : t('questions.sale.marked')) : a.correction ? t('questions.sale.corrected', { code: a.vatCode ? codeLabel(a.vatCode) : t('journal.noVat') }) : t('questions.sale.booked', { n: a.booked.length, code: a.vatCode ? codeLabel(a.vatCode) : '–' }),
       ...(a.rule ? [t('questions.sale.rule')] : []),
       ...(a.also?.length ? [t('questions.sale.also', { n: a.also.length })] : []),
     ];

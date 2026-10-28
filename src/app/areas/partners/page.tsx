@@ -13,6 +13,8 @@ import type { RuleBooking, RuleWords } from '../../../booking/rules.js';
 import type { RuleRow } from '../../../booking/rule-book.js';
 import type { RulesView } from '../../../saving/rules.js';
 import { codeForRate, firmCodes } from '../../../accounting/vat-codes.js';
+import { VatCodeField } from '../codes/VatCodeField.js';
+import { codeLabel } from '../codes/names.js';
 import { guessBooking, marksAfter, plain, type ChangedNote } from '../../../knowledge/note-rules.js';
 import { openAssistant, sendMessage } from '../../assistant/store.js';
 import { ruleLines, type RuleLine } from '../company/rules-model.js';
@@ -26,7 +28,7 @@ const words = ((key: string, vars: Record<string, string>) => (t as (k: string, 
 const money = (n: number) => fmt(n).replace(/\.00$/, '');
 
 /** Every rule of the company in plain words, as Firma › Regeln shows them. */
-export const linesOf = (view: RulesView): RuleLine[] => ruleLines(view, words, money);
+export const linesOf = (view: RulesView): RuleLine[] => ruleLines(view, words, money, codeLabel);
 
 export const CHEV = <svg className="i chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>;
 
@@ -254,12 +256,7 @@ export function NoteRulePanel({ partner, name, notes, sentence, view, nav, onClo
       <label>{t('rules.hand.account')}<input className="mono" list="note-rule-accounts" value={account} onChange={(e) => setAccount(e.target.value)} autoFocus /></label>
       <datalist id="note-rule-accounts">{Object.entries(view.names.accounts).map(([n, label]) => <option key={n} value={n}>{label}</option>)}</datalist>
       {codes.length ? (
-        <label>{t('rules.hand.vat')}
-          <select value={vat} onChange={(e) => setVat(e.target.value)}>
-            <option value="">{t('rules.hand.noVat')}</option>
-            {codes.map((c) => <option key={c.code} value={c.code}>{c.code}{c.bananaText ? ` · ${c.bananaText}` : ''}</option>)}
-          </select>
-        </label>
+        <VatCodeField name="vat" label={t('rules.hand.vat')} defaultValue={vat} placeholder={t('rules.hand.noVat')} onValue={setVat} />
       ) : null}
       <label>{t('partners.noteRule.private')}<input className="mono" inputMode="decimal" value={share} onChange={(e) => setShare(e.target.value)} /></label>
       {error ? <span className="warnline wide">{error}</span> : null}
