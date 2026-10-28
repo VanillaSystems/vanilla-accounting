@@ -1086,6 +1086,9 @@ export default {
     'pair.linkedToast': "Lié : {what}",
     'pair.scoreTip': "Points pour montant, date, nom et numéro de document (au plus {max})",
     'receipts.noPaymentFits': 'Aucun paiement ouvert ne correspond à «{q}».',
+    'receipts.bestHidden': { one: '{n} paiement correspondant masqué par le filtre.', other: '{n} paiements correspondants masqués par le filtre.' },
+    'receipts.noPaymentInFilter': 'Aucun paiement ne correspond à ces filtres.',
+    'receipts.accountKeyTip': 'Activer ou retirer ce compte comme filtre',
     'receipts.noPaymentLinked': 'Aucun paiement lié.',
     'receipts.noText': '(aucun texte reconnu)',
     'receipts.noUidTip': 'Aucun numéro TVA reconnu. Il doit figurer sur le justificatif pour déduire l’impôt préalable.',
@@ -4863,5 +4866,8 @@ export default {
     'chips.receipt.yes': 'lié',
     'chips.receipt.no': 'aucun',
     'chips.receipt.missing': 'manquant (requis)',
+    'chips.field.way': 'Sens',
+    'chips.way.out': 'sortie',
+    'chips.way.in': 'entrée',
   },
 } satisfies Locale;

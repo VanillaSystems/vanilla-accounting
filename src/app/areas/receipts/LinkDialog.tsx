@@ -9,9 +9,12 @@
  * ↵ on it opens its correction in the open quarter and links nothing (corner-33). Below the
  * best payments, the bookings without a payment of the open period of the receipt's amount (a
  * search finds the others: a depreciation, an accrual, #89) take the receipt as a payment does.
+ * Under the search, a chip filter (#232, link-filter.ts): ⌥1…9 toggles the money accounts in the
+ * order shown, «Passt am besten» is ranked within the filter and a line says when the filter hides
+ * a best fit; the account chips stay chosen for the next receipt in this tab.
  */
 import { ownerOf } from '../../../workspace/money-accounts.js';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { RouteOf } from '../../shell/route.js';
 import { useFx } from '../../hooks/use-fx.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
@@ -19,7 +22,11 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps } from '../index.js';
 import type { BankTransaction } from '../../../types/index.js';
-import { bookingsWithoutPayment, candidates, chfOf, linkKey, type Candidate, type Ledger, type ReceiptView, type Unpaid } from './model.js';
+import type { LedgerBankAccount } from '../../../workspace/workspace.js';
+import { bookingsWithoutPayment, candidates, chfOf, linkable, linkKey, type Candidate, type Ledger, type ReceiptView, type Unpaid } from './model.js';
+import { ACCOUNT, accountName, accountValue, hiddenBest, linkFields, rememberAccounts, rememberedAccounts, rowOfTx, rowOfUnpaid, toggleAccount } from './link-filter.js';
+import { ChipFilter, chipWords } from '../../shell/ChipFilter.js';
+import { chipTest, knownChips, type Chip } from '../../shell/chips.js';
 import { bankOf, dayText, fitText, signed, txLine } from './view.js';
 import { correctFiled, linkPayment } from './actions.js';
 import { PrivateForm } from './PrivateForm.js';
@@ -27,6 +34,8 @@ import { Kbd } from './commands.js';
 import { withoutInputTax, baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'receipts'>> & { v: ReceiptView; l: Ledger; onClose(): void };
+
+const NO_ACCOUNTS: LedgerBankAccount[] = [];
 
 /** A booking without a payment in a toast: its day, text and amount. */
 const bookingLine = (u: Unpaid) => `${formatDate(u.date)} · ${u.description} · ${fmt(u.amount)}`;
@@ -48,7 +57,11 @@ const noCorrection = (c: Candidate): boolean => !!c.filed && !!withoutInputTax()
 export function LinkDialog({ v, l, nav, books, onClose }: Props) {
   const { r } = v;
   const { rates } = useFx();
-  const owner = ownerOf(useWorkspace()?.bankAccounts ?? [])?.account;
+  const accounts = useWorkspace()?.bankAccounts ?? NO_ACCOUNTS;
+  const owner = ownerOf(accounts)?.account;
+  const fields = useMemo(() => linkFields(accounts, l, chipWords), [accounts, l]);
+  const [chips, setChipsNow] = useState<Chip[]>(() => knownChips(rememberedAccounts(), fields));
+  const search = useRef<HTMLInputElement>(null);
   const [q, setQ] = useState('');
   /** undefined: nothing picked yet; ↓ or ↵ picks the first row. */
   const [idx, setIdx] = useState<number | undefined>();
@@ -56,8 +69,15 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
   const [second, setSecond] = useState<Candidate>();
   /** «Privat oder bar bezahlt» picked: its form replaces the list. */
   const [privately, setPrivately] = useState(false);
-  const { best, more } = useMemo(() => candidates(v, l, chfOf(rates), q), [v, l, rates, q]);
-  const unpaid = useMemo(() => bookingsWithoutPayment(v, l, q), [v, l, q]);
+  const pass = useMemo(() => chipTest(chips, fields), [chips, fields]);
+  const { best, more } = useMemo(() => candidates(v, l, chfOf(rates), q, chips.length ? (tx) => pass(rowOfTx(tx)) : undefined), [v, l, rates, q, chips.length, pass]);
+  const unpaid = useMemo(() => bookingsWithoutPayment(v, l, q, chips.length ? (u) => pass(rowOfUnpaid(u)) : undefined), [v, l, q, chips.length, pass]);
+  /** The best fits without the filter that it hides: said above the list. */
+  const hidden = useMemo(() => (chips.length && !q ? hiddenBest(v, l, chfOf(rates), pass) : 0), [v, l, rates, q, chips.length, pass]);
+  const rows = useMemo(() => [...l.txByRef.values()].filter((tx) => linkable(v, tx)).map(rowOfTx), [v, l]);
+  function setChips(next: Chip[]) {
+    setChipsNow(next); rememberAccounts(next); setIdx(undefined); setSecond(undefined);
+  }
   const items: Array<Candidate | Unpaid | 'private'> = [...best, ...unpaid, ...more, 'private'];
   const at = idx === undefined ? -1 : Math.min(idx, items.length - 1);
   const paid = v.links.map((ref) => l.txByRef.get(ref)).filter((tx): tx is BankTransaction => !!tx);
@@ -71,6 +91,15 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
     if (paid.length && second !== item) { setSecond(item); return; }
     onClose();
     linkPayment(nav, v, item.tx.ref, txLine(item.tx), item.fit, paid.length > 0);
+  }
+
+  /** ⌥1…9 (by the key's place: ⌥1 types «¡» on a Mac) toggles a money account's chip, wherever the focus is in the dialog. */
+  function onAccountKey(e: React.KeyboardEvent) {
+    const n = e.altKey && !e.metaKey && !e.ctrlKey ? /^Digit([1-9])$/.exec(e.code)?.[1] : undefined;
+    const next = n ? toggleAccount(chips, accounts, Number(n)) : undefined;
+    if (!next) return;
+    e.preventDefault();
+    setChips(next);
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
@@ -116,7 +145,7 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
   return (
     <>
       <div className="scrim" style={{ background: 'color-mix(in srgb, var(--bg) 40%, transparent)' }} onClick={onClose} />
-      <div className="palette linkdlg" role="dialog" aria-label={t('receipts.linkPayment')}>
+      <div className="palette linkdlg" role="dialog" aria-label={t('receipts.linkPayment')} onKeyDown={onAccountKey}>
         <div className="ctx">
           <div><span className="lbl">{t('receipts.linkPayment')}</span><b>{v.vendor}</b> <span className="m">{v.desc}</span></div>
           <div className="mono">{v.date ? formatDate(v.date) : t('receipts.noDate')} · <b>{r.currency || baseCurrency()} {r.amount != null ? fmt(r.amount) : '—'}</b></div>
@@ -127,7 +156,29 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
           </p>
         )}
         {privately ? <PrivateForm v={v} nav={nav} onBack={() => setPrivately(false)} onDone={onClose} /> : <>
-        <input autoFocus value={q} placeholder={t('receipts.linkSearch')} aria-label={t('receipts.linkSearch')} autoComplete="off" onChange={(e) => { setQ(e.target.value); setIdx(undefined); setSecond(undefined); }} onKeyDown={onKeyDown} />
+        <input ref={search} autoFocus value={q} placeholder={t('receipts.linkSearch')} aria-label={t('receipts.linkSearch')} autoComplete="off" onChange={(e) => { setQ(e.target.value); setIdx(undefined); setSecond(undefined); }} onKeyDown={onKeyDown} />
+        <div className="linkfilter">
+          <ChipFilter fields={fields} rows={rows} chips={chips} onChips={(next) => { setChips(next); search.current?.focus(); }} />
+          {accounts.length > 1 && (
+            <div className="acctkeys" role="group" aria-label={t('chips.field.account')}>
+              {accounts.slice(0, 9).map((a, i) => {
+                const on = chips.some((c) => c.field === ACCOUNT && c.value === accountValue(a));
+                return (
+                  <button key={accountValue(a)} type="button" className={on ? 'on' : ''} aria-pressed={on} data-account={accountValue(a)} data-tip={t('receipts.accountKeyTip')}
+                    onClick={() => { setChips(toggleAccount(chips, accounts, i + 1)!); search.current?.focus(); }}>
+                    <span className="cap">⌥{i + 1}</span>{accountName(a)}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        {hidden > 0 && (
+          <p className="hiddenbest" data-testid="best-hidden">
+            {t('receipts.bestHidden', { n: hidden })}
+            <button type="button" className="golink" onClick={() => { setChips([]); search.current?.focus(); }}>{t('chips.clearAll')}</button>
+          </p>
+        )}
         <div className="res" role="listbox">
           {best.length > 0 && <div className="gh">{t('receipts.bestFit')}</div>}
           {best.map(row)}
@@ -135,7 +186,7 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
           {unpaid.map(booking)}
           {more.length > 0 && <div className="gh">{q ? t('receipts.hits') : t('receipts.morePayments')}</div>}
           {more.map(row)}
-          {!best.length && !more.length && <div className="none">{q ? t('receipts.noPaymentFits', { q }) : t('receipts.noOpenPayment')}</div>}
+          {!best.length && !more.length && <div className="none">{q ? t('receipts.noPaymentFits', { q }) : chips.length ? t('receipts.noPaymentInFilter') : t('receipts.noOpenPayment')}</div>}
           <div className="gh">{t('receipts.withoutBank')}</div>
           <div className={`o tx2${privateAt === at ? ' on' : ''}`} role="option" aria-selected={privateAt === at} data-ref="private" onMouseMove={() => pick(privateAt)} onClick={() => choose('private')}>
             <span className="d mono">{owner}</span>

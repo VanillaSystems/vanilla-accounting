@@ -1086,6 +1086,9 @@ export default {
     'pair.linkedToast': "Linked: {what}",
     'pair.scoreTip': "Points for amount, date, name and document number (at most {max})",
     'receipts.noPaymentFits': 'No open payment matches “{q}”.',
+    'receipts.bestHidden': { one: '{n} matching payment hidden by the filter.', other: '{n} matching payments hidden by the filter.' },
+    'receipts.noPaymentInFilter': 'No payment matches these filters.',
+    'receipts.accountKeyTip': 'Turn this account filter on or off',
     'receipts.noPaymentLinked': 'No payment linked.',
     'receipts.noText': '(no text recognized)',
     'receipts.noUidTip': 'No VAT number found. It must be on the receipt to deduct input tax.',
@@ -4863,5 +4866,8 @@ export default {
     'chips.receipt.yes': 'linked',
     'chips.receipt.no': 'none',
     'chips.receipt.missing': 'missing (needs one)',
+    'chips.field.way': 'Direction',
+    'chips.way.out': 'outgoing',
+    'chips.way.in': 'incoming',
   },
 } satisfies Locale;

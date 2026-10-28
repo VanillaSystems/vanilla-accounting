@@ -1086,6 +1086,9 @@ export default {
     'pair.linkedToast': "Collegato: {what}",
     'pair.scoreTip': "Punti per importo, data, nome e numero del documento (al massimo {max})",
     'receipts.noPaymentFits': 'Nessun pagamento aperto corrisponde a «{q}».',
+    'receipts.bestHidden': { one: '{n} pagamento corrispondente nascosto dal filtro.', other: '{n} pagamenti corrispondenti nascosti dal filtro.' },
+    'receipts.noPaymentInFilter': 'Nessun pagamento corrisponde a questi filtri.',
+    'receipts.accountKeyTip': 'Attiva o togli questo conto come filtro',
     'receipts.noPaymentLinked': 'Nessun pagamento collegato.',
     'receipts.noText': '(nessun testo riconosciuto)',
     'receipts.noUidTip': 'Nessun numero IVA riconosciuto. Deve figurare sul giustificativo per dedurre l’imposta precedente.',
@@ -4863,5 +4866,8 @@ export default {
     'chips.receipt.yes': 'collegato',
     'chips.receipt.no': 'nessuno',
     'chips.receipt.missing': 'mancante (necessario)',
+    'chips.field.way': 'Direzione',
+    'chips.way.out': 'uscita',
+    'chips.way.in': 'entrata',
   },
 } satisfies Locale;

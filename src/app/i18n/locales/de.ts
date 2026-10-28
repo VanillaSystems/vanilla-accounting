@@ -1083,6 +1083,9 @@ export const messages = {
   'pair.linkedToast': "Verknüpft: {what}",
   'pair.scoreTip': "Punkte für Betrag, Datum, Name und Belegnummer (höchstens {max})",
   'receipts.noPaymentFits': 'Keine offene Zahlung passt zu «{q}».',
+  'receipts.bestHidden': { one: '{n} passende Zahlung ausgeblendet durch den Filter.', other: '{n} passende Zahlungen ausgeblendet durch den Filter.' },
+  'receipts.noPaymentInFilter': 'Keine Zahlung passt zu diesen Filtern.',
+  'receipts.accountKeyTip': 'Konto als Filter ein oder aus',
   'receipts.noPaymentLinked': 'Keine Zahlung verknüpft.',
   'receipts.noText': '(kein Text erkannt)',
   'receipts.noUidTip': 'Keine MWST-Nummer erkannt. Für den Vorsteuerabzug muss sie auf dem Beleg stehen.',
@@ -4860,6 +4863,9 @@ export const messages = {
   'chips.receipt.yes': 'verknüpft',
   'chips.receipt.no': 'keiner',
   'chips.receipt.missing': 'fehlt (braucht einen)',
+  'chips.field.way': 'Richtung',
+  'chips.way.out': 'Ausgang',
+  'chips.way.in': 'Eingang',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;
