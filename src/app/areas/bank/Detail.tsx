@@ -9,7 +9,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { BankTransaction } from '../../../types/index.js';
 import type { PayoutWaitView } from '../../../types/drop.js';
 import { ratesUsed } from '../../../accounting/fx-conversion.js';
-import { twinQuestions } from '../../../books/twins.js';
+import { bookedInFiled, twinQuestions } from '../../../books/twins.js';
 import type { RouteOf } from '../../shell/route.js';
 import { api, sources } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
@@ -468,6 +468,7 @@ function PayoutWait({ books, tx }: { books: Props['books']; tx: BankTransaction 
 function NotBooked({ tx, linked }: { tx: BankTransaction; linked: Linked }) {
   const { view } = useAutomation();
   const run: Processing | undefined = tx.waitsForPerson ? undefined : bookingRun(view?.runs ?? []);
+  if (bookedInFiled(tx)) return <span className="m" data-testid="filed-twin">{t('bank.filedTwin')}</span>;
   // The inbox's run is open and books it (#218): what it does, not yet what the person should do.
   if (run) return <span className="m" data-testid="booking-now">{run.kind === 'running' ? processingText(run, view) : t('bank.bookingNow', { what: processingText(run, view) })}</span>;
   const wait = receiptState(tx, linked, false, localToday());

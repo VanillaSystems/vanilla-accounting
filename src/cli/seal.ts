@@ -17,6 +17,7 @@
  * says the year-end entries are booked already.
  */
 import { closeThrough, loadBooks, saveBooks } from '../books/store.js';
+import { Refused } from '../types/refusal.js';
 import { asQuarter, checkSeals, closesTheYear, periodKeyOf, writeSeal } from '../books/seal.js';
 import { addDays, derivePeriod } from '../accounting/periods.js';
 import { openWorkspace } from '../workspace/workspace.js';
@@ -43,7 +44,13 @@ if (args.includes('--close') && (!closedThrough || closedThrough < end)) {
     console.error(`${quarter} closes with the year: npm run year:close -- ${quarter.slice(0, 4)} books the Kursdifferenz and the other year-end entries on 31.12. first, then closes and seals it (docs/year-end.md).\nClosing it now leaves nothing to date 31.12. Add --force if the year-end entries are booked already.`);
     process.exit(1);
   }
-  closeThrough(books, end);
+  try {
+    closeThrough(books, end);
+  } catch (e) {
+    if (!(e instanceof Refused)) throw e;
+    console.error(`${e.message}. Nothing closed or sealed.`);
+    process.exit(1);
+  }
   saveBooks(ws, books);
   console.log(`Closed: config.closedThrough ${closedThrough ?? '(not set)'} → ${end}. Nothing dated on or before it can change any more.`);
 }

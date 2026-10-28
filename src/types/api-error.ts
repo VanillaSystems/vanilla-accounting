@@ -57,6 +57,8 @@ export type ApiRefusal =
   | { code: 'bookedByHand'; params: { entry: string; date: string; amount: number; currency: string; replaceable: boolean } }
   /** «Ist das dieselbe Zahlung?» answered yes where the amounts differ (#254): a person's entry on the movement read from the PDF books the PDF's amount; she changes it first. */
   | { code: 'twinBookedByHand'; params: { entry: string; read: number; bank: number; currency: string } }
+  /** «Automatisch buchen» on a bank movement «Ist das dieselbe Zahlung?» holds (#254): `read`, the movement read from a PDF that asks, and its day. */
+  | { code: 'twinHeld'; params: { read: string; date: string } }
   /** A second bank payment of another payee for a receipt that has one, asked without `confirm` (src/server/edits.ts assertNotSecondPayment, r8h-21). */
   | { code: 'secondPayment'; params: { receipt: string; payment: string } }
   | { code: 'yearClose' }

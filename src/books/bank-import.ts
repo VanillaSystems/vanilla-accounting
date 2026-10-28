@@ -190,6 +190,9 @@ export interface Unmatched { file: string; bank: string; currency: string; date:
 /** A read movement the structured file holds a few days off: it takes the bank's day `to` (#254). */
 export interface Realigned extends Unmatched { to: string }
 
+/** A bank movement of the open period that is a read movement of a filed day a few days off (#254): booked there, so the import books nothing (`of`: the read movement's ref). */
+export interface FiledTwin extends Omit<Unmatched, 'file'> { of: string }
+
 /** What the books say of a read movement (alignReads): whether they hold it, and whether a person booked it by hand. */
 export interface HeldReads { holds: (line: Unmatched) => boolean; byPerson: (line: Unmatched) => boolean }
 
@@ -207,15 +210,19 @@ export interface HeldReads { holds: (line: Unmatched) => boolean; byPerson: (lin
  *   file (`files`) and is named in `unmatched`: the books keep it as a movement of its own until the
  *   person answers (src/books/twins.ts twinQuestions offers the bank's movements it may be), so it is
  *   neither lost nor counted twice.
+ * - one of a filed day the structured file holds a few days later, in the open period, for the same
+ *   amount (a PDF line of 30.09., the bank's 01.10.) stays as filed; the bank's movement is named in
+ *   `filed`: it was booked in the filed quarter, so nothing books it again.
  * A movement dated on a day `isClosed` says is filed is never changed, nor one the books do not hold.
  * Pure: `xmlOf` gives a read file's text, and `files` holds each read file's new text.
  */
-export function alignReads(statementFiles: readonly StatementFile[], structured: string, isClosed: (date: string) => boolean, xmlOf: (file: string) => string, books: HeldReads = { holds: () => true, byPerson: () => false }): { files: Map<string, string>; unmatched: Unmatched[]; realigned: Realigned[] } {
+export function alignReads(statementFiles: readonly StatementFile[], structured: string, isClosed: (date: string) => boolean, xmlOf: (file: string) => string, books: HeldReads = { holds: () => true, byPerson: () => false }): { files: Map<string, string>; unmatched: Unmatched[]; realigned: Realigned[]; filed: FiledTwin[] } {
   const read = statementFiles.filter((f): f is Read => f.status === 'read');
   const own = read.filter((f) => f.file === structured && sourceOf(f.statement) !== 'pdf');
   const files = new Map<string, string>();
   const unmatched: Unmatched[] = [];
   const realigned: Realigned[] = [];
+  const filed: FiledTwin[] = [];
   for (const number of new Set(own.map((f) => f.account.account))) {
     const mine = own.filter((f) => f.account.account === number);
     const account = mine[0].account;
@@ -230,7 +237,7 @@ export function alignReads(statementFiles: readonly StatementFile[], structured:
         .filter(({ line }) => line.date >= span.from && line.date <= span.to);
       const exact = pairUp(lines.map((l) => l.line), pool, (l, t) => (sameMovement(l) === sameMovement(t) ? -fit(l, t) : undefined));
       for (const j of [...exact.values()].sort((a, b) => b - a)) pool.splice(j, 1);
-      loose.push(...lines.filter((l, k) => !exact.has(k) && !isClosed(l.line.date)));
+      loose.push(...lines.filter((_, k) => !exact.has(k)));
     }
     // The same amount a few days off: the payee first (its IBAN, its name, the text), then the closest day.
     const free = pool.filter((t) => !isClosed(t.date));
@@ -240,6 +247,10 @@ export function alignReads(statementFiles: readonly StatementFile[], structured:
     for (const [k, l] of loose.entries()) {
       const u: Unmatched = { file: l.file, bank: l.line.bank, currency: l.line.currency, date: l.line.date, direction: l.line.direction, amount: l.line.amount, ref: l.line.ref };
       const t = near.has(k) ? free[near.get(k)!] : undefined;
+      if (isClosed(l.line.date)) {
+        if (t) filed.push({ bank: t.bank, currency: t.currency, date: t.date, direction: t.direction, amount: t.amount, ref: t.ref, of: l.line.ref });
+        continue;
+      }
       if (t && !books.byPerson(u)) {
         set(l.file, l.index, t.date);
         realigned.push({ ...u, to: t.date });
@@ -260,7 +271,7 @@ export function alignReads(statementFiles: readonly StatementFile[], structured:
       }));
     }
   }
-  return { files, unmatched, realigned };
+  return { files, unmatched, realigned, filed };
 }
 
 /**
@@ -293,7 +304,8 @@ export function followBankDays(books: Books, moves: ReadonlyMap<string, { from: 
   update(books, moduleActor('bank-import'), (b) => {
     const days = new Map(b.transactions.map((t) => [t.ref, t.date]));
     for (const e of b.journalEntries) {
-      const m = moves.get(e.transactionRef) ?? moves.get(e.transactionRef.split('~')[0]);
+      // An entry on a ref no payment has any more is its leg's from before unique refs; one on a payment's own ref is that payment's alone.
+      const m = moves.get(days.has(e.transactionRef) ? e.transactionRef : e.transactionRef.split('~')[0]);
       if (m && e.origin !== 'manual') entryToDay(e, m.from, m.to, days, rateOf);
     }
   });

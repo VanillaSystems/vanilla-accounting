@@ -18,7 +18,8 @@
 import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { addDays, derivePeriod, isFilingKey, localToday } from '../accounting/periods.js';
-import { closeThrough, loadBooks, saveBooks, type Books } from '../books/store.js';
+import { closeThrough, loadBooks, periodLock, saveBooks, type Books } from '../books/store.js';
+import { twinsOpen, twinsOpenThrough } from '../books/twins.js';
 import { closesTheYear, periodKeyOf, writeSeal } from '../books/seal.js';
 import { filing, filingBasis, filingMethod, ratesWithoutActivityId, vat } from '../engines/index.js';
 import { closeGoneSaleQuestions } from '../intake/sale-questions.js';
@@ -159,6 +160,9 @@ export const FILING_ACTIONS: Record<string, Action> = {
       // The owner's open VAT questions about the period's payments are hers to answer first: no return is filed over them (r8h-24).
       const open = openSaleQuestionsIn(readQuestions(ws), books, ret.from, ret.to);
       if (open.length) throw refuse('questionsOpen', { period: key, n: String(open.length) }, `${key}: ${open.length} VAT question(s) about its payments are open; answer them before the return is written`);
+      // A movement read from a PDF that may be a bank movement of these days waits for «Ist das dieselbe Zahlung?» (#254): its answer may change the figures.
+      const twins = twinsOpenThrough(books, ret.to, periodLock(books).isClosed);
+      if (twins.length) throw twinsOpen(ret.to, twins);
       // On the agreed basis an invoice whose event is not booked (no rate of its day yet) would be missing from the return.
       const unbooked = eventsMissing(books, loadInvoices(ws), ret.to);
       if (unbooked.length) throw refuse('invoiceEventsMissing', { period: key, invoices: unbooked.join(', ') }, `${key}: the VAT of invoice(s) ${unbooked.join(', ')} is not booked yet (no official rate of its day); the return would leave it out`);

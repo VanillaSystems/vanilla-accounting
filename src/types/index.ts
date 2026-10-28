@@ -504,8 +504,11 @@ export interface BankTransaction {
    * The payment waits for a person (r10h-5): its booking was deleted on purpose, by hand or on a
    * wish in the KI sidebar, so no run books it again. The mark goes with the next booking on it,
    * by hand or asked for with «Automatisch buchen» (src/server/edits.ts bookedAgain).
+   * `filedTwin` (#254): a bank movement that is a movement read from a statement PDF of a filed
+   * period, booked there: the person answered «Ja, dieselbe», or the import paired it by day and
+   * amount. No run books it, and the year counts it as booked; a person may still book it by hand.
    */
-  waitsForPerson?: { since: string; why: 'bookingDeleted' };
+  waitsForPerson?: { since: string; why: 'bookingDeleted' | 'filedTwin' };
   /**
    * A movement read from a statement PDF on days the account's camt.053 or bank CSV (`by`, its file)
    * covers, which holds no movement of its day and amount (#254): the import took it out of the read

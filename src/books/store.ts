@@ -17,6 +17,7 @@ import type { ClosedReason } from '../types/api-error.js';
 import { checkSeals, closedPart, type SealReport } from './seal.js';
 import { parseBookedBy } from './booked-by.js';
 import { documentWordsInUse, typeStatements } from './statement-facts.js';
+import { twinsOpen, twinsOpenThrough } from './twins.js';
 import { BOOK_FILES, PARTS, fromJsonl, isClosedYear, keyOf, placement, splitByYear, statementFile, toJsonl, type InClosedYear, type Part } from './years.js';
 
 export type Books = Index & { journalEntries: JournalEntry[]; config: AccountingConfig };
@@ -394,9 +395,12 @@ export interface PeriodLock {
  * Closes the books through `end` (the filing's seal step, `npm run seal -- <q> --close`, the year
  * close): closedThrough moves there, which the write door never does. A statement PDF's question of a
  * day now filed is closed with its PDF kept as the statement (#254): nothing can be read into a filed
- * period, so it could never be answered.
+ * period, so it could never be answered. An open «Ist das dieselbe Zahlung?» with a movement on those
+ * days refuses the close (`twinsOpen`): its answer may change their entries.
  */
-export function closeThrough(books: Pick<Books, 'config' | 'statementAsks'>, end: string): void {
+export function closeThrough(books: Pick<Books, 'config' | 'statementAsks' | 'transactions' | 'journalEntries'>, end: string): void {
+  const open = twinsOpenThrough(books, end, periodLock(books).isClosed);
+  if (open.length) throw twinsOpen(end, open);
   books.config.closedThrough = end;
   if (!books.statementAsks) return;
   books.statementAsks = books.statementAsks.filter((a) => a.date > end);

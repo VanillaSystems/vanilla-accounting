@@ -30,7 +30,8 @@ import { loadInvoices } from '../invoices/store.js';
 import { liveInvoices, openOn, paymentsNamingOpen } from '../invoices/rules.js';
 import { hasEvent } from './refs.js';
 import { workspaceChecks } from '../workspace/checks.js';
-import { closeThrough, loadBooks, moduleActor, PERSON, saveBooks, sealsOf, update, type Books } from './store.js';
+import { closeThrough, loadBooks, moduleActor, periodLock, PERSON, saveBooks, sealsOf, update, type Books } from './store.js';
+import { twinsOpen, twinsOpenThrough } from './twins.js';
 import { writeSeal } from './seal.js';
 import { nextManualRef } from './next-ref.js';
 
@@ -365,6 +366,8 @@ export async function closeYear(ws: Workspace, year: string, rates: EstvRates = 
   if (close.blockers.length) throw new YearCloseRefused({ code: 'yearItemsOpen', params: { year, n: String(close.blockers.length) } }, `${year} cannot close yet: ${close.blockers.length} item(s) open.`);
   const end = `${year}-12-31`;
   if (!books.config.closedThrough || books.config.closedThrough < end) {
+    const twins = twinsOpenThrough(books, end, periodLock(books).isClosed);
+    if (twins.length) throw new YearCloseRefused(twinsOpen(end, twins).why, `${year} cannot close yet: ${twins.length} movement(s) read from a statement PDF wait for «Ist das dieselbe Zahlung?».`);
     closeThrough(books, end);
     saveBooks(ws, books);
   }

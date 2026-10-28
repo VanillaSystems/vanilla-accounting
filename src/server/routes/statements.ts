@@ -12,13 +12,13 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import { basename, dirname, join, relative } from 'node:path';
 import { accountForStatement, type StatementProblem } from '../../accounting/bank-accounts.js';
 import { legOf, madeByHand } from '../../workspace/money-accounts.js';
-import { alignReads, heldWithout, mergeIndex, readStatementFiles, readTransactions, readWiseReferences, sourceOf, structuredSpans, transactionsOfFiles, withCamtBalances, withinBooks, entryToDay, followBankDays, type HeldReads, type RateOf, type Unmatched } from '../../books/bank-import.js';
+import { alignReads, heldWithout, mergeIndex, readStatementFiles, readTransactions, readWiseReferences, sourceOf, structuredSpans, transactionsOfFiles, withCamtBalances, withinBooks, followBankDays, type FiledTwin, type HeldReads, type RateOf, type Unmatched } from '../../books/bank-import.js';
 import { statementPdf } from '../../books/statement-facts.js';
 import { compactIban, readBankStatements } from '../../workspace/bank-statements.js';
 import { periodLock, type Books } from '../../books/store.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { rateDateOf } from '../../accounting/fx-conversion.js';
-import { twinQuestions, type TwinOption } from '../../books/twins.js';
+import { twinQuestions } from '../../books/twins.js';
 import { openYear } from '../../books/years.js';
 import { assignUniqueRefs, readCamt, transactionsOf, type CamtStatement } from '../../providers/camt053/camt053.js';
 import { proposedAccount } from '../../accounting/statement-bank.js';
@@ -30,6 +30,7 @@ import { loadInvoices, saveInvoices } from '../../invoices/store.js';
 import { placeByText } from '../../intake/statement-read.js';
 import { firstPages } from '../../intake/recognize.js';
 import { matchPayments } from '../../invoices/payments.js';
+import { sameAs, TwinBookedByHand } from '../twin-answer.js';
 import { bookInvoiceEvents } from '../../invoices/events.js';
 import { fileReceipts, paymentContext } from '../../invoices/service.js';
 import type { StatementRefusal, UnknownAccount } from '../../types/api-error.js';
@@ -187,6 +188,21 @@ function keepUnmatched(books: Books, unmatched: readonly Unmatched[], by: string
     if (!t) continue;
     t.source = 'manual';
     t.unmatched = { since, by };
+  }
+}
+
+/**
+ * The bank's movements of the open period that are read movements of a filed day (#254, alignReads
+ * `filed`): booked in the filed quarter, so they are marked so (bookedInFiled) and no run books them.
+ * One the books have booked already keeps its booking.
+ */
+function markFiledTwins(books: Books, filed: readonly FiledTwin[]): void {
+  const booked = new Set(books.journalEntries.map((e) => e.transactionRef));
+  const since = new Date().toISOString();
+  for (const f of filed) {
+    const t = books.transactions.find((x) => !madeByHand(x) && x.bank === f.bank && x.currency === f.currency && x.date === f.date && x.direction === f.direction
+      && Math.abs(x.amount) === Math.abs(f.amount) && x.ref.split('~')[0] === f.ref.split('~')[0]);
+    if (t && !booked.has(t.ref) && !t.waitsForPerson) t.waitsForPerson = { since, why: 'filedTwin' };
   }
 }
 
@@ -348,6 +364,7 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
       const known = merged.index.transactions.filter((t) => pos.has(t.ref)).sort((a, b) => pos.get(a.ref)! - pos.get(b.ref)!);
       Object.assign(books, merged.index, { transactions: [...known, ...merged.index.transactions.filter((t) => !pos.has(t.ref))] });
       followBankDays(books, moves, estvRate());
+      if (aligned?.filed.length) markFiledTwins(books, aligned.filed);
       if (balances) books.statementBalances = mergeBalances(books.statementBalances, balances);
       const unmatched = books.transactions.filter((t) => t.unmatched?.by === mine).length;
       const closedAsks = asked - (books.statementAsks ?? []).length;
@@ -517,65 +534,33 @@ function estvRate(): RateOf {
   return (e, days) => fx.daily(e.exchangeCurrency!, rateDateOf(e, days));
 }
 
-/** A ref the books give `from`'s entry or link, given to `to`: the same ref, or a part of it (`ref~…`). */
-const refOnto = (ref: string, from: string, to: string) => (ref === from ? to : ref.startsWith(`${from}~`) ? `${to}${ref.slice(from.length)}` : undefined);
-const centsOf = (ts: readonly BankTransaction[]) => ts.reduce((n, t) => n + Math.round((t.direction === 'DBIT' ? -t.amount : t.amount) * 100), 0);
-
-/**
- * «Ist das dieselbe Zahlung?» answered yes (#254): the read movements of `o` are the bank's movements
- * of `o`. The receipt links go to the bank's movements. The same amount on one bank movement: the
- * entries follow too, an entry dated on the read day taking the bank's day and a foreign one the
- * rate of that day (ADR 0001). Amounts that differ (a fee, a rounding, a split): the app's entries go
- * and the run books the bank's movements afresh; a person's entry refuses the answer until she changes
- * it. The read movements leave the books.
- */
-function sameAs(books: Books, o: TwinOption): void {
-  const read = books.transactions.filter((t) => o.pdf.includes(t.ref));
-  const bank = o.bank.map((ref) => books.transactions.find((t) => t.ref === ref)!);
-  assertOpen(books, [...read, ...bank].map((t) => t.date), 'editTransaction');
-  const onto = (ref: string, to: string) => read.map((t) => refOnto(ref, t.ref, to)).find((x) => x !== undefined);
-  const ofRead = (ref: string) => onto(ref, '') !== undefined;
-  const entries = books.journalEntries.filter((e) => ofRead(e.transactionRef));
-  const whole = bank.length === 1 && centsOf(read) === centsOf(bank);
-  const byHand = entries.find((e) => e.origin === 'manual');
-  if (!whole && byHand) {
-    const params = { entry: byHand.id, read: centsOf(read) / 100, bank: centsOf(bank) / 100, currency: bank[0].currency };
-    throw new RequestError(409, `Die Buchung ${byHand.id} von Hand bucht ${params.read.toFixed(2)} ${params.currency}; die Bank buchte ${params.bank.toFixed(2)}. Erst die Buchung ändern oder löschen.`, { code: 'twinBookedByHand', params });
-  }
-  if (whole) {
-    const to = bank[0];
-    const rateOf = estvRate();
-    const days = new Map(books.transactions.map((t) => [t.ref, t.date]));
-    for (const e of entries) {
-      const from = read.find((t) => refOnto(e.transactionRef, t.ref, '') !== undefined)!;
-      e.transactionRef = onto(e.transactionRef, to.ref)!;
-      entryToDay(e, from.date, to.date, days, rateOf);
-    }
-  } else {
-    books.journalEntries = books.journalEntries.filter((e) => !entries.includes(e));
-  }
-  const links = books.mappings.filter((m) => ofRead(m.transactionRef));
-  const has = (receiptId: string, transactionRef: string) => books.mappings.some((m) => m.receiptId === receiptId && m.transactionRef === transactionRef);
-  books.mappings = books.mappings.filter((m) => !links.includes(m));
-  for (const m of links) for (const t of bank) if (!has(m.receiptId, t.ref)) books.mappings.push({ ...m, transactionRef: t.ref });
-  books.transactions = books.transactions.filter((t) => !o.pdf.includes(t.ref));
-}
-
 /**
  * «Ja, dieselbe» on a movement read from a PDF that the bank's file did not take (#254): `bank`, the
- * refs of one option src/books/twins.ts twinQuestions offers for it. «Nein» is «Behalten» (…/kept).
+ * refs of one option src/books/twins.ts twinQuestions offers for it (src/server/twin-answer.ts sameAs).
+ * «Nein» is «Behalten» (…/kept); for a read movement of a filed period, which stays as filed, the
+ * person books the bank's movement by hand instead.
  */
 router.post('/api/transactions/:ref/same', (req, res) => {
   const bank = (req.body as { bank?: unknown } | undefined)?.bank;
   if (!Array.isArray(bank) || !bank.length || !bank.every((r) => typeof r === 'string')) throw new RequestError(400, 'bank: die Refs der Bewegungen der Bank.');
+  const ctx = paymentContext(WS);
+  const book = ctx ? loadInvoices(WS) : undefined;
   withBooks(res, (books) => {
-    const t = books.transactions.find((x) => x.ref === req.params.ref);
-    if (t) assertOpen(books, [t.date], 'editTransaction');
     const booked = new Set(books.journalEntries.map((e) => e.transactionRef));
     const option = twinQuestions(books.transactions, booked, periodLock(books).isClosed).get(req.params.ref)
       ?.find((o) => o.bank.length === bank.length && o.bank.every((r) => bank.includes(r)));
+    const t = books.transactions.find((x) => x.ref === req.params.ref);
+    if (!option && t) assertOpen(books, [t.date], 'editTransaction');
     if (!option) throw new RequestError(404, 'Diese Bewegung wartet auf keine Antwort.', { code: 'gone', params: { what: 'payment' } });
-    sameAs(books, option);
+    // A filed read movement stays as it was filed: only the bank's movements change.
+    assertOpen(books, books.transactions.filter((t) => option.bank.includes(t.ref) || (!option.filed && option.pdf.includes(t.ref))).map((t) => t.date), 'editTransaction');
+    try {
+      const files = sameAs(books, option, estvRate(), book && ctx ? { book, ctx } : undefined);
+      if (book) { fileReceipts(WS, books, files); saveInvoices(WS, book); }
+    } catch (e) {
+      if (e instanceof TwinBookedByHand) throw new RequestError(409, e.message, { code: 'twinBookedByHand', params: e.params });
+      throw e;
+    }
     return { ok: true };
   });
 });

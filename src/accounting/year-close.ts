@@ -25,6 +25,7 @@ import { formTakes } from './vat-codes.js';
 import { ownerAccountNumber } from './bank-accounts.js';
 import { chart, filing, setup, vat, vatSetup, baseCurrency, yearEnd as yearEndData } from '../engines/index.js';
 import type { TaxCodeInfo } from '../engines/tax-codes.js';
+import { bookedInFiled } from '../books/twins.js';
 import type { ReturnFigures } from '../engines/return.js';
 
 export type Books = Pick<Index, 'transactions' | 'bankStatements' | 'statementBalances'> & {
@@ -659,9 +660,9 @@ function preconditions(input: YearCloseInput): Check[] {
 
   const gaps = statementGaps(input);
 
-  // Booked means the lines add up to the payment (r9k-2); a leg's booking may sit on its base ref (books from before unique legs).
+  // Booked means the lines add up to the payment (r9k-2); a leg's booking may sit on its base ref (books from before unique legs). A bank movement booked in a filed quarter as its PDF's movement (#254) is booked.
   const state = bookedStates(books, input.bankAccounts);
-  const unbookedRefs = books.transactions.filter((t) => inYear(year)(t.date) && state(t.ref) !== 'booked' && state(t.ref.split('~')[0]) !== 'booked').map((t) => t.ref);
+  const unbookedRefs = books.transactions.filter((t) => inYear(year)(t.date) && !bookedInFiled(t) && state(t.ref) !== 'booked' && state(t.ref.split('~')[0]) !== 'booked').map((t) => t.ref);
   const unbooked: Problem[] = unbookedRefs.length ? [{ code: 'unbooked', count: unbookedRefs.length, refs: unbookedRefs.slice(0, 8) }] : [];
 
   // A bank account whose ledger account the chart lacks, in the person's words (r9k-1): the chart's numbers against the manifest's accounts.

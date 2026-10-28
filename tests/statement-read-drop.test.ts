@@ -342,6 +342,59 @@ test('a payment the PDF printed a few Rappen off the bank\'s: the bank\'s moveme
   }
 });
 
+test('a read movement of a filed day and the bank\'s of the open period: the same amount a few days later is booked in the filed quarter already; one a few Rappen off is held, «Automatisch buchen» refused, and «Ja, dieselbe» books nothing; the filed side never changes', async () => {
+  const { pdf, truth } = await inventedStatement(DEMO_OCTOBER);
+  // The PDF printed the Coop purchase on 3 October at 86.35 and the rent on 8 October; the bank booked 86.40 on the 9th and the rent on the 14th.
+  const { pages: _, ...whole } = truth;
+  const read: ReadStatement = {
+    ...whole, closing: { ...truth.closing, amount: Math.round((truth.closing.amount + 0.05) * 100) / 100 },
+    movements: truth.movements.map((m, i) => (i === 2 ? { ...m, date: '2026-10-03', amount: -86.35 } : i === 3 ? { ...m, date: '2026-10-08' } : m)),
+  };
+  const api = await demo(read, { camt: false });
+  try {
+    const { post, rest } = SESSION(api);
+    let s = await post('/api/drop');
+    s = await post(`/api/drop/${s.id}/files?name=oktober.pdf`, pdf);
+    s = await post(`/api/drop/${s.id}/rows/${s.rows[0].key}`, { kind: 'read', statement: read, import: true });
+    assert.equal(s.rows[0].state, 'taken');
+    await rest();
+    // A question its period closed over (books from before the close waited for it): the Coop line taken out of the read file and marked as the import does, then the days through 8 October filed.
+    const xml = join(api.root, FOLDER, OCTOBER_XML);
+    writeFileSync(xml, readFileSync(xml, 'utf8').replace(/<Ntry>(?:(?!<\/Ntry>)[\s\S])*Coop[\s\S]*?<\/Ntry>\n?/, ''));
+    const lines = join(api.root, 'transactional-data/2026/books/transactions.jsonl');
+    const records = readFileSync(lines, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as BankTransaction);
+    const coop = records.find((t) => t.bank === 'Raiffeisen' && t.date === '2026-10-03' && t.amount === 86.35)!;
+    Object.assign(coop, { source: 'manual', unmatched: { since: '2026-10-28', by: 'Raiffeisen/bank-oktober.xml' } });
+    writeFileSync(lines, `${records.map((t) => JSON.stringify(t)).join('\n')}\n`);
+    const ledger = join(api.root, 'ledger.json');
+    const config = JSON.parse(readFileSync(ledger, 'utf8'));
+    writeFileSync(ledger, JSON.stringify({ ...config, config: { ...config.config, closedThrough: '2026-10-08' } }, null, 2));
+    const filed = (await full(api)).transactions.filter((t) => t.bank === 'Raiffeisen' && t.date >= '2026-10-01' && t.date <= '2026-10-08');
+
+    const r = await upload(api, 'bank-oktober.xml', bankExport(truth));
+    assert.equal(r.status, 200, await r.clone().text());
+    await rest();
+    const after = await full(api);
+    assert.deepEqual(after.transactions.filter((t) => t.bank === 'Raiffeisen' && t.date >= '2026-10-01' && t.date <= '2026-10-08'), filed, 'nothing of the filed days changed');
+    const bankRent = after.transactions.find((t) => t.ref === 'BANKREF-4')!;
+    assert.deepEqual([bankRent.date, bankRent.waitsForPerson?.why], ['2026-10-14', 'filedTwin'], 'the rent the PDF printed on the filed 8 October is booked there already');
+    assert.equal(after.journalEntries.some((e) => e.transactionRef === 'BANKREF-4' || e.transactionRef === 'BANKREF-3'), false, 'neither is booked a second time');
+
+    const auto = await api.send('POST', '/api/journal-entries/classify/BANKREF-3', {});
+    assert.deepEqual([auto.status, auto.json.code, (auto.json.params as { read?: string } | undefined)?.read], [409, 'twinHeld', coop.ref], '«Automatisch buchen» points to the open question');
+    const same = await api.send('POST', `/api/transactions/${encodeURIComponent(coop.ref)}/same`, { bank: ['BANKREF-3'] });
+    assert.equal(same.status, 200, JSON.stringify(same.json));
+    await rest();
+    const answered = await full(api);
+    assert.equal(answered.transactions.find((t) => t.ref === 'BANKREF-3')?.waitsForPerson?.why, 'filedTwin', '«Ja, dieselbe: nicht nochmals buchen»');
+    assert.deepEqual(answered.transactions.filter((t) => t.bank === 'Raiffeisen' && t.date >= '2026-10-01' && t.date <= '2026-10-08'), filed, 'the filed read movement stays as filed');
+    assert.equal(answered.journalEntries.some((e) => e.transactionRef === 'BANKREF-3'), false, 'nothing booked');
+  } finally {
+    await SESSION(api).rest().catch(() => {});
+    await api.stop();
+  }
+});
+
 test('«Bewegungen aus dem PDF einlesen» on a PDF kept as the statement: read, corrected, read in beside it, and taken back with the PDF kept; on days the camt.053 covers only the payments the books hold', async () => {
   const { pdf, truth } = await inventedStatement(DEMO_OCTOBER);
   const api = await demo(truth);

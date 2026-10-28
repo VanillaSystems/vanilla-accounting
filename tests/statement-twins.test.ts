@@ -14,8 +14,10 @@ import assert from 'node:assert/strict';
 import { toStatementXml } from '../src/providers/statement-read/camt-writer.js';
 import { readCamt } from '../src/providers/camt053/camt053.js';
 import { alignReads, followBankDays, transactionsOfFiles } from '../src/books/bank-import.js';
-import { heldByTwins, twinQuestions } from '../src/books/twins.js';
-import { closeThrough, type Books } from '../src/books/store.js';
+import { bookedInFiled, heldByTwins, twinQuestions } from '../src/books/twins.js';
+import { sameAs } from '../src/server/twin-answer.js';
+import { closeThrough, periodLock, PERSON, update, type Books } from '../src/books/store.js';
+import { Refused } from '../src/types/refusal.js';
 import { workspaceAt } from '../src/workspace/workspace.js';
 import { ACTIONS } from '../src/workflows/actions.js';
 import type { StatementFile } from '../src/workspace/bank-statements.js';
@@ -65,8 +67,8 @@ test('a read movement the bank holds otherwise is a question, and the bank\'s mo
   const transactions = [
     tx('P-fee', '2026-10-10', -49.80, pdf), tx('B-fee', '2026-10-10', -49.85),
     tx('P-in', '2026-10-11', 1200, pdf), tx('B-in', '2026-10-13', 1199.5),
-    tx('P-a', '2026-10-20', -30, pdf), tx('P-b', '2026-10-20', -20, pdf), tx('B-sum', '2026-10-20', -50),
-    tx('P-wise', '2026-10-15', -100, pdf), tx('B-60', '2026-10-15', -60), tx('B-40', '2026-10-15', -40),
+    tx('P-a', '2026-10-20', -30, { ...pdf, counterparty: 'Alpha AG' }), tx('P-b', '2026-10-20', -20, { ...pdf, counterparty: 'Alpha AG' }), tx('B-sum', '2026-10-20', -50, { counterparty: 'Alpha AG' }),
+    tx('P-wise', '2026-10-15', -100, { ...pdf, counterparty: 'Shop Beispiel' }), tx('B-60', '2026-10-15', -60, { counterparty: 'Shop Beispiel' }), tx('B-40', '2026-10-15', -40, { counterparty: 'Shop Beispiel' }),
     tx('B-far', '2026-10-25', -49.80), tx('B-booked', '2026-10-10', -49.80),
   ];
   const questions = twinQuestions(transactions, new Set(['B-booked']), () => false);
@@ -109,9 +111,88 @@ test('the app\'s entries follow a payment the bank dated otherwise, a foreign on
 
 test('closing a period closes the statement questions of its days: a filed day can never be read in', () => {
   const ask = (file: string, date: string) => ({ file, account: '1021', date, since: '2026-10-01', read: {} } as StatementAsk);
-  const books = { config: {}, statementAsks: [ask('a.pdf', '2026-09-30'), ask('b.pdf', '2026-10-31')] } as unknown as Books;
+  const books = { config: {}, transactions: [], journalEntries: [], statementAsks: [ask('a.pdf', '2026-09-30'), ask('b.pdf', '2026-10-31')] } as unknown as Books;
   closeThrough(books, '2026-09-30');
   assert.deepEqual([books.config.closedThrough, books.statementAsks?.map((a) => a.file)], ['2026-09-30', ['b.pdf']]);
   closeThrough(books, '2026-12-31');
   assert.equal(books.statementAsks, undefined);
+});
+
+const move = (ref: string, date: string, amount: number, o: Partial<BankTransaction> = {}): BankTransaction =>
+  ({ ref, bank: 'Musterbank', currency: 'CHF', date, direction: amount < 0 ? 'DBIT' : 'CRDT', amount: Math.abs(amount), description: 'Zahlung', ...o } as BankTransaction);
+const readMark = { source: 'manual' as const, unmatched: { since: '2026-10-28', by: 'Musterbank/bank.xml' } };
+const twinBooks = (closedThrough: string, transactions: BankTransaction[], journalEntries: Partial<JournalEntry>[] = []) =>
+  ({ config: { closedThrough }, receipts: [], bankStatements: [], mappings: [], transactions, journalEntries } as unknown as Books);
+
+test('closing a period waits for «Ist das dieselbe Zahlung?» on its days: refused as twinsOpen, nothing closed; answered, it closes', () => {
+  const ask = { file: 'a.pdf', account: '1021', date: '2026-09-30', since: '2026-10-01', read: {} } as StatementAsk;
+  const books = twinBooks('2026-06-30', [move('P', '2026-09-28', -50, { ...readMark, counterparty: 'Alpha AG' }), move('B', '2026-10-02', -50.2, { counterparty: 'Alpha AG' })]);
+  books.statementAsks = [ask];
+  assert.throws(() => closeThrough(books, '2026-09-30'), (e: unknown) => e instanceof Refused && e.why.code === 'twinsOpen' && e.why.params.payments === 'P' && e.why.params.through === '2026-09-30');
+  assert.deepEqual([books.config.closedThrough, books.statementAsks?.length], ['2026-06-30', 1], 'nothing closed, the statement question kept');
+  closeThrough(books, '2026-08-31');
+  assert.equal(books.config.closedThrough, '2026-08-31', 'a period before the question\'s days closes');
+  delete books.transactions[0].unmatched;
+  closeThrough(books, '2026-09-30');
+  assert.equal(books.config.closedThrough, '2026-09-30', '«Nein, eine eigene Zahlung» answered: the close goes');
+});
+
+test('a read movement of a filed day keeps its question: its bank twin stays held, and «Ja, dieselbe» marks it as booked in the filed quarter, nothing filed touched', () => {
+  const books = twinBooks('2026-09-30', [move('P', '2026-09-29', -120, { ...readMark, counterparty: 'Alpha AG' }), move('B', '2026-10-01', -120.3, { counterparty: 'Alpha AG' })],
+    [{ id: 'e-filed', transactionRef: 'P', date: '2026-09-29', accountDebit: '6000', accountCredit: '1021', amount: 120, origin: 'classify' }]);
+  books.mappings = [{ receiptId: 'r1', transactionRef: 'P' } as Books['mappings'][number]];
+  const isClosed = periodLock(books).isClosed;
+  const [option] = twinQuestions(books.transactions, new Set(['P']), isClosed).get('P') ?? [];
+  assert.deepEqual(option, { pdf: ['P'], bank: ['B'], filed: true }, 'asked although its day is filed');
+  assert.ok(heldByTwins(books, isClosed).has('B'), 'no run books the bank\'s movement');
+  const filed = structuredClone({ t: books.transactions[0], e: books.journalEntries, m: books.mappings });
+  update(books, PERSON, (b) => sameAs(b, option, () => undefined));
+  assert.ok(bookedInFiled(books.transactions.find((t) => t.ref === 'B')!), 'marked as booked in the filed quarter');
+  assert.deepEqual({ t: books.transactions[0], e: books.journalEntries, m: books.mappings }, filed, 'the filed read movement, its entry and link stay as filed; nothing booked');
+  assert.equal(twinQuestions(books.transactions, new Set(['P']), isClosed).size, 0, 'answered: no question left');
+  assert.ok(heldByTwins(books, isClosed).has('B'), 'and still no run books it');
+});
+
+test('a read line asks only about the bank movements that may be it: its payee first, else the closest alone; sums only of its payee; never another IBAN; no cut at a number of lines', () => {
+  const transactions = [
+    move('P-party', '2026-10-10', -50, { ...readMark, counterparty: 'Alpha AG' }),
+    move('B-alpha', '2026-10-11', -50.2, { counterparty: 'Alpha AG' }), move('B-beta', '2026-10-10', -50.1, { counterparty: 'Beta GmbH' }), move('B-none', '2026-10-10', -49.9),
+    move('P-none', '2026-11-10', -80, readMark), move('B-near', '2026-11-11', -80.3, { counterparty: 'Gamma AG' }), move('B-far', '2026-11-13', -80.1, { counterparty: 'Delta AG' }),
+    move('P-iban', '2026-11-20', -70, { ...readMark, counterpartyIban: 'CH6580808000000000001' }), move('B-iban', '2026-11-20', -70.1, { counterpartyIban: 'CH4431999123000889012' }),
+    move('P-sum', '2026-12-10', -100, { ...readMark, counterparty: 'Epsilon AG' }),
+    ...Array.from({ length: 20 }, (_, i) => move(`B-e${i}`, '2026-12-10', -(i === 15 ? 37.5 : i === 17 ? 62.5 : 1 + i), { counterparty: 'Epsilon AG' })),
+    move('B-z70', '2026-12-10', -70, { counterparty: 'Zeta AG' }), move('B-z30', '2026-12-10', -30, { counterparty: 'Zeta AG' }),
+  ];
+  const q = twinQuestions(transactions, new Set(), () => false);
+  assert.deepEqual(q.get('P-party')?.map((o) => o.bank), [['B-alpha']], 'the same payee a day off, not the other payees of the same day');
+  assert.deepEqual(q.get('P-none')?.map((o) => o.bank), [['B-near']], 'no payee named: only the closest');
+  assert.equal(q.has('P-iban'), false, 'another IBAN is another payee');
+  assert.deepEqual(q.get('P-sum')?.map((o) => o.bank), [['B-e15', 'B-e17']], 'two lines of its payee, the 16th and 18th of the day; never the other payee\'s 70 + 30');
+});
+
+test('a PDF line of a filed day and the bank\'s same payment a few days later in the open period: the read line stays as filed, the bank\'s is named as booked there', () => {
+  const read = readFile([{ date: '2026-04-09', amount: -70, counterparty: 'Gamma AG' }]);
+  const bank = bankFile([{ date: '2026-04-12', amount: -70, counterparty: 'Gamma AG' }]);
+  const out = alignReads([read, bank], 'Musterbank/bank.xml', (d) => d <= '2026-04-10', () => { throw new Error('a filed read file is not rewritten'); });
+  assert.deepEqual(out.filed.map((f) => [f.date, f.amount, f.of]), [['2026-04-12', 70, 'read-r#1']]);
+  assert.deepEqual([out.files.size, out.unmatched, out.realigned], [0, [], []], 'the filed line is neither moved nor taken out');
+});
+
+test('the app\'s entries follow the payment whose day moved by its own ref: another payment of the same base ref keeps its day', () => {
+  const leg = 'R1~2026-09-12-DBIT-5.00CHF';
+  const books = twinBooks('2026-06-30', [move('R1', '2026-09-14', -10), move(leg, '2026-09-12', -5)],
+    [{ id: 'mine', transactionRef: 'R1', date: '2026-09-12', origin: 'classify' }, { id: 'other', transactionRef: leg, date: '2026-09-12', origin: 'classify' }]);
+  followBankDays(books, new Map([['R1', { from: '2026-09-12', to: '2026-09-14' }]]), () => undefined);
+  assert.deepEqual(books.journalEntries.map((e) => [e.id, e.date]), [['mine', '2026-09-14'], ['other', '2026-09-12']]);
+});
+
+test('«Ja, dieselbe» on a Sammelzahlung read in parts: each part\'s entries and links go to the bank\'s movement itself, none onto a ref the books lack', () => {
+  const books = twinBooks('2026-06-30', [
+    move('P-a', '2026-10-20', -30, { ...readMark, counterparty: 'Alpha AG' }), move('P-b', '2026-10-20', -20, { ...readMark, counterparty: 'Alpha AG' }), move('B-sum', '2026-10-20', -50, { counterparty: 'Alpha AG' }),
+  ], [{ id: 'a', transactionRef: 'P-a~1', date: '2026-10-20', origin: 'classify' }, { id: 'b', transactionRef: 'P-b~1', date: '2026-10-20', origin: 'classify' }]);
+  books.mappings = [{ receiptId: 'r-a', transactionRef: 'P-a~1' }, { receiptId: 'r-b', transactionRef: 'P-b~1' }] as Books['mappings'];
+  const option = twinQuestions(books.transactions, new Set(), () => false).get('P-a')!.find((o) => o.pdf.length === 2)!;
+  sameAs(books, option, () => undefined);
+  assert.deepEqual(books.journalEntries.map((e) => [e.id, e.transactionRef]), [['a', 'B-sum'], ['b', 'B-sum']]);
+  assert.deepEqual(books.mappings.map((m) => [m.receiptId, m.transactionRef]), [['r-a', 'B-sum'], ['r-b', 'B-sum']]);
 });
