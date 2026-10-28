@@ -31,8 +31,13 @@ import { roleBefore } from './banks.js';
  * names the date, amount or description she set, so finishing the read never writes over them;
  * emptied once the receipt is filed. An app of schema 5 would read the receipt and overwrite her
  * values, so it must refuse these books.
+ * 7: statement PDFs keep their open question in the books (#254): `statementAsks` (asks.jsonl of a
+ * year), a PDF whose movements wait for «Einlesen» or «Als Auszug behalten»; and
+ * `BankTransaction.unmatched`, a movement read from a PDF that the account's camt.053 or CSV does
+ * not hold, kept as a movement of its own until the person keeps or removes it. An app of schema 6
+ * would drop the questions on its next save and show the mark nowhere, so it must refuse these books.
  */
-export const BOOKS_SCHEMA = 6;
+export const BOOKS_SCHEMA = 7;
 /**
  * 2: every money account names its `role` (#88).
  * 3: `company.vat.reportingSince`, the year the basis began (#143). An app of schema 2 would read
@@ -57,6 +62,8 @@ export const BOOKS_MIGRATIONS: Ladder<Record<string, unknown>> = {
   4: (doc) => doc,
   // No receipt has `handSet` before; the number makes an older app refuse the books.
   5: (doc) => doc,
+  // No books hold a statement's question or an unmatched movement before; the number makes an older app refuse them.
+  6: (doc) => doc,
 };
 /** On the YAML document, so the comments of the manifest survive the step. */
 export const MANIFEST_MIGRATIONS: Ladder<Document> = {

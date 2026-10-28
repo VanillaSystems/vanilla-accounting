@@ -2,14 +2,15 @@
  * Which fiscal year each record and file of the books lies in (ADR 0013). Pure: the store
  * (src/books/store.ts) writes and moves by these rules.
  *
- * - An entry, a transaction, a balance: the year of its date. A mapping: its transaction's.
+ * - An entry, a transaction, a balance: the year of its date. A mapping: its transaction's. A
+ *   statement's open question (#254): the year of the statement's last day.
  * - A receipt: the year of the first entry that books it (the payment date, since tax is reported
  *   on received payments), else of its own date. A statement: the year of its last day.
  * - A closed year takes nothing new: a receipt or statement whose year is closed, and which does
  *   not lie there already, goes to the earliest open year. A year before the first year of the
  *   books (the earliest year of config.openingBalances) counts as closed: its books were kept elsewhere.
  */
-import type { AccountingConfig, BankStatement, Index, JournalEntry, Receipt, StatementClosingBalance } from '../types/index.js';
+import type { AccountingConfig, BankStatement, Index, JournalEntry, Receipt, StatementAsk, StatementClosingBalance } from '../types/index.js';
 import { canonical } from './seal.js';
 
 /** The parts of a year's books/ folder, by the key of the books that holds them. */
@@ -20,11 +21,12 @@ export const BOOK_FILES = {
   receipts: 'receipts.jsonl',
   bankStatements: 'statements.jsonl',
   statementBalances: 'balances.jsonl',
+  statementAsks: 'asks.jsonl',
 } as const;
 export type Part = keyof typeof BOOK_FILES;
 export const PARTS = Object.keys(BOOK_FILES) as Part[];
 
-export type Records = Pick<Index, 'transactions' | 'mappings' | 'receipts' | 'bankStatements' | 'statementBalances'> & { journalEntries: JournalEntry[] };
+export type Records = Pick<Index, 'transactions' | 'mappings' | 'receipts' | 'bankStatements' | 'statementBalances' | 'statementAsks'> & { journalEntries: JournalEntry[] };
 type RecordOf<P extends Part> = NonNullable<Records[P]>[number];
 
 /** The id a record is sorted and found by within its part. */
@@ -35,6 +37,7 @@ export const keyOf: { [P in Part]: (r: RecordOf<P>) => string } = {
   receipts: (r) => r.id,
   bankStatements: (s) => statementFile(s),
   statementBalances: (b) => `${b.account} ${b.date} ${canonical(b)}`,
+  statementAsks: (a) => a.file,
 };
 
 /** A statement's file below bank-statements/ of its year. */
@@ -101,6 +104,7 @@ export function placement(books: Records, bounds: Bounds, inClosed: InClosedYear
     receipts: receipt,
     bankStatements: statement,
     statementBalances: (b: StatementClosingBalance) => fileYear('statementBalances', keyOf.statementBalances(b), b.date),
+    statementAsks: (a: StatementAsk) => fileYear('statementAsks', a.file, a.date),
   };
   return { year, receipt, statement };
 }

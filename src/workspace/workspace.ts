@@ -143,7 +143,7 @@ export interface WorkspacePaths {
 export interface YearPaths {
   year: string;
   root: string;
-  /** entries.jsonl, transactions.jsonl, mappings.jsonl, receipts.jsonl, statements.jsonl, balances.jsonl (src/books/store.ts). */
+  /** entries.jsonl, transactions.jsonl, mappings.jsonl, receipts.jsonl, statements.jsonl, balances.jsonl, asks.jsonl (src/books/store.ts). */
   books: string;
   receipts: string;
   /** bank-statements/<bank>/ */

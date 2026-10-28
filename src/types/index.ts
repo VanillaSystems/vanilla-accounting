@@ -1,4 +1,5 @@
 import type { Tags } from '../books/tags.js';
+import type { StatementRead } from './statement-read.js';
 
 // One row of a receipt's printed MWST summary block (grouped by rate).
 // This is the receipt-intrinsic VAT evidence — the source of truth for the
@@ -159,6 +160,25 @@ export interface Mapping {
   rule?: string;
   /** The workflow run that made the link. */
   run?: string;
+}
+
+/**
+ * A statement PDF kept under bank-statements/ whose movements wait for the person's answer (#254): of
+ * an account no camt.053 or bank CSV feeds, read in the drop dialog or by «Bewegungen aus dem PDF
+ * einlesen». «Einlesen» writes the table as a camt.053 beside the PDF; «Als Auszug behalten», or the
+ * account's first camt.053 or CSV, closes it with the PDF kept as the statement alone. The table as
+ * last read or corrected travels with it, so an answer after a restart needs no second read.
+ */
+export interface StatementAsk {
+  /** The PDF below bank-statements/ of its year: `<bank>/<file name>`. */
+  file: string;
+  /** The ledger account it is the statement of. */
+  account: string;
+  /** The statement's last day: the year whose books keep the question. */
+  date: string;
+  /** The day it was asked. */
+  since: string;
+  read: StatementRead;
 }
 
 export interface BankStatement {
@@ -385,6 +405,8 @@ export interface Index {
   config?: AccountingConfig;
   // Populated by `npm run extract-balances` (parses monthly statement PDFs).
   statementBalances?: StatementClosingBalance[];
+  /** Statement PDFs whose movements wait for the person's answer (#254). */
+  statementAsks?: StatementAsk[];
 }
 
 export interface BankTransactionPart {
@@ -480,6 +502,13 @@ export interface BankTransaction {
    * by hand or asked for with «Automatisch buchen» (src/server/edits.ts bookedAgain).
    */
   waitsForPerson?: { since: string; why: 'bookingDeleted' };
+  /**
+   * A movement read from a statement PDF on days the account's camt.053 or bank CSV (`by`, its file)
+   * covers, which holds no movement of its day and amount (#254): the import took it out of the read
+   * statement and kept it as a movement of its own (`source: 'manual'`), so it is neither lost nor
+   * counted twice. The person keeps it (the mark goes) or removes it with its bookings.
+   */
+  unmatched?: { since: string; by: string };
   /**
    * The payment needs a receipt and has none yet, so the inbox run does not book it (issue #29):
    * no provisional booking, it is booked once a receipt is linked. The run sets the mark and takes
