@@ -1,0 +1,127 @@
+/**
+ * Statements without camt.053 (#217): the balance check (it adds up, a misread digit fails on its
+ * page, a carry-over that does not match), the model's answer and the person's table parsed into one
+ * shape, the camt.053 written from it read back exactly as a bank's export, the dedupe against a
+ * bank export's movements in either order, and a bank CSV read by its columns. Invented statements only.
+ */
+import './support/jurisdiction.js';
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { checkStatement, parseReadStatement } from '../src/books/statement-check.js';
+import { parseStatementRead } from '../src/llm/prompts.js';
+import { toStatementXml } from '../src/providers/statement-read/camt-writer.js';
+import { readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
+import { heldLines, transactionsOfFiles, refsByFile } from '../src/books/bank-import.js';
+import { csvStatement, csvTable, dayOf, guessColumns, MAX_CSV_ROWS } from '../src/providers/statement-read/csv.js';
+import { camtDetails } from '../src/providers/camt053/details.js';
+import type { StatementFile } from '../src/workspace/bank-statements.js';
+import type { ReadStatement } from '../src/types/statement-read.js';
+import { DEMO_OCTOBER, inventedStatement } from './support/statement-pdf.js';
+
+const account = { account: '1021', bank: 'Musterbank', currency: 'CHF', label: 'Musterbank', statements: 'camt053' as const, role: 'bank' as const };
+
+test('the check: opening and movements make the closing balance, each page its carry-over; a misread digit fails on its page, to the cent', async () => {
+  const { truth } = await inventedStatement(DEMO_OCTOBER);
+  assert.equal(truth.pages?.length, 2);
+  assert.deepEqual(checkStatement(truth), { ok: true, gaps: [] });
+  // 1'204.00 read as 1'240.00 on page 1: the page and the whole statement are 36.00 off.
+  const misread = { ...truth, movements: truth.movements.map((m, i) => (i === 0 ? { ...m, amount: -1240 } : m)) };
+  assert.deepEqual(checkStatement(misread).gaps, [
+    { where: 'page', page: 1, expected: truth.pages![0].carriedOut, found: truth.pages![0].carriedOut! - 36, gap: 36 },
+    { where: 'total', expected: truth.closing.amount, found: truth.closing.amount - 36, gap: 36 },
+  ]);
+  // A carry-over misread: page 2 brings in what page 1 did not carry out.
+  const carried = { ...truth, pages: truth.pages!.map((p) => (p.page === 2 ? { ...p, carriedIn: p.carriedIn! + 0.1, carriedOut: p.carriedOut! + 0.1 } : p)) };
+  assert.deepEqual(checkStatement(carried).gaps.map((g) => [g.where, g.page, g.gap]), [['carry', 2, 0.1]]);
+  assert.equal(checkStatement({ ...truth, closing: { ...truth.closing, amount: truth.closing.amount + 0.01 } }).gaps[0].gap, 0.01, 'one cent is a gap');
+});
+
+test('the model\'s answer and the person\'s table: amounts as printed, wholly empty lines dropped, a line without its day or amount refused, «not a statement» said', () => {
+  const answer = '```json\n' + JSON.stringify({
+    iban: 'CH65 8080 8000 0000 0000 1', currency: 'chf', opening: { date: '2026-10-01', amount: "88'252.44" }, closing: { date: '2026-10-31', amount: '89 000,00' },
+    movements: [{ date: '2026-10-02', amount: '-1\'204.00', text: 'Zahlung', page: 1 }, { date: '', amount: '', text: '' }, { date: '2026-10-05', amount: '1204.00-' }],
+  }) + '\n```';
+  const s = parseStatementRead(answer) as ReadStatement;
+  assert.deepEqual([s.iban, s.currency, s.opening.amount, s.closing.amount], ['CH6580808000000000001', 'CHF', 88252.44, 89000]);
+  assert.deepEqual(s.movements.map((m) => m.amount), [-1204, -1204]);
+  assert.equal(parseStatementRead('{"notStatement": true}'), 'notStatement');
+  assert.equal(parseStatementRead('kein JSON'), undefined);
+  assert.equal(parseReadStatement({ currency: 'CHF', opening: { date: '2026-10-01', amount: 0 }, closing: { date: '2026-10-31', amount: 0 }, movements: [{ date: '2026-10-02', text: 'ohne Betrag' }] }), undefined, 'a misread line is never dropped silently');
+  assert.equal(parseReadStatement({ currency: 'CHF', opening: { date: '2026-02-30', amount: 0 }, closing: { date: '2026-10-31', amount: 0 }, movements: [] }), undefined, 'no such day');
+});
+
+test('the camt.053 written from a read statement is read back as a bank\'s export: account, balances, period, each movement\'s fields; refs stable per statement', async () => {
+  const { truth } = await inventedStatement(DEMO_OCTOBER);
+  const xml = toStatementXml(truth, { id: 'read-abc', source: 'okt.pdf', by: 'model', at: '2026-11-01T08:00:00' });
+  const { message, statements: [st] } = readCamt(xml);
+  assert.equal(message, 'camt.053');
+  assert.deepEqual([st.id, st.iban, st.currency, st.bankName, st.ownerName, st.period, st.read], ['read-abc', truth.iban, 'CHF', truth.bankName, truth.owner, truth.period, { from: 'okt.pdf', by: 'model' }]);
+  const txs = transactionsOf(st, account);
+  // A bank's export of the first movement, as the banks write it: the same transaction, field for field, but its ref.
+  const bank = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt><Stmt><Id>S1</Id><Acct><Id><IBAN>${truth.iban}</IBAN></Id><Ccy>CHF</Ccy></Acct>
+    <Ntry><Amt Ccy="CHF">1204.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-10-02</Dt></BookgDt><ValDt><Dt>2026-10-02</Dt></ValDt><AcctSvcrRef>B-1</AcctSvcrRef>
+    <NtryDtls><TxDtls><RltdPties><Cdtr><Nm>Gruenkaffee Muster AG</Nm></Cdtr></RltdPties><RmtInf><Ustrd>Zahlung Rechnung 2026-1187</Ustrd><Strd><CdtrRefInf><Ref>210000000003139471430009017</Ref></CdtrRefInf></Strd></RmtInf></TxDtls></NtryDtls></Ntry></Stmt></BkToCstmrStmt></Document>`;
+  const [fromBank] = transactionsOf(readCamt(bank).statements[0], account);
+  assert.deepEqual({ ...txs[0], ref: 'B-1' }, fromBank);
+  assert.deepEqual(txs.map((t) => t.ref), truth.movements.map((_, i) => `read-abc#${i + 1}`));
+  assert.deepEqual(txs.map((t) => (t.direction === 'DBIT' ? -t.amount : t.amount)), truth.movements.map((m) => m.amount));
+  assert.equal(txs.at(-1)!.description, 'Kontoführungsgebühr');
+  // Its balances and days, as the details of a bank's export show them.
+  const d = camtDetails(xml, 'okt.xml', 3)!;
+  assert.deepEqual([d.read, d.opening, d.closing, d.movements], [{ from: 'okt.pdf', by: 'model' }, truth.opening, truth.closing, truth.movements.length]);
+  // A line the books hold carries the ref they hold, so the bank's export and this one are one payment.
+  assert.equal(transactionsOf(readCamt(toStatementXml(truth, { id: 'read-abc', source: 'okt.pdf', by: 'model', refs: new Map([[0, 'B-1']]) })).statements[0], account)[0].ref, 'B-1');
+});
+
+const fileOf = (file: string, xml: string): Extract<StatementFile, { status: 'read' }> => {
+  const [statement] = readCamt(xml).statements;
+  return { status: 'read', file, statement, account, by: 'iban' };
+};
+
+test('dedupe: a read statement\'s movements a bank export holds are one payment, in either order; the export\'s fields win, a reference only the read names fills its gap', async () => {
+  const { truth } = await inventedStatement(DEMO_OCTOBER);
+  const bankXml = toStatementXml({ ...truth, movements: truth.movements.slice(0, 3).map(({ reference: _, text: __, ...m }) => m) }, { id: 'S-bank', source: 'x', by: 'model' })
+    .replace(/<AddtlStmtInf>.*<\/AddtlStmtInf>/, '').replace(/read-x|S-bank#/g, 'BANK-');
+  const bank = fileOf('Musterbank/bank.xml', bankXml);
+  assert.equal(bank.statement.read, undefined, 'a bank export carries no read mark');
+  // Read first (its refs are in the books), the bank's export later: one payment each, under the read's ref.
+  const read = fileOf('Musterbank/okt.xml', toStatementXml(truth, { id: 'read-1', source: 'okt.pdf', by: 'model' }));
+  const both = transactionsOfFiles([bank, read]);
+  assert.equal(both.length, truth.movements.length, 'nothing doubled');
+  assert.deepEqual(both.slice(0, 3).map((t) => t.ref), ['read-1#1', 'read-1#2', 'read-1#3']);
+  assert.equal(both[0].reference, '210000000003139471430009017', 'the read\'s reference fills the export\'s gap');
+  assert.deepEqual(transactionsOfFiles([read, bank]).map((t) => t.ref), both.map((t) => t.ref), 'whatever the files\' order');
+  const refs = refsByFile([bank, read]);
+  assert.deepEqual(refs.get('Musterbank/bank.xml'), ['read-1#1', 'read-1#2', 'read-1#3'], 'the export lists the payments it holds by the books\' refs');
+  // The export first: the read's lines it holds are found (heldLines) and written with the export's refs.
+  const held = heldLines(truth.movements, transactionsOfFiles([bank]), account);
+  assert.deepEqual([...held.keys()], [0, 1, 2]);
+  const later = fileOf('Musterbank/okt.xml', toStatementXml(truth, { id: 'read-2', source: 'okt.pdf', by: 'model', refs: new Map([...held].map(([i, t]) => [i, t.ref])) }));
+  const merged = transactionsOfFiles([bank, later]);
+  assert.equal(merged.length, truth.movements.length);
+  assert.deepEqual(merged.slice(0, 3).map((t) => t.ref), transactionsOfFiles([bank]).map((t) => t.ref), 'the export\'s refs stay');
+});
+
+test('a bank CSV: header found below the bank\'s preamble, columns guessed from its words, debit and credit, newest first turned round, opening and closing from the balance column', () => {
+  const csv = [
+    'Konto;CH65 8080 8000 0000 0000 1', 'Zeitraum;01.10.2026 - 31.10.2026', '',
+    'Buchungsdatum;Valuta;Buchungstext;Belastung;Gutschrift;Saldo',
+    '20.10.2026;20.10.2026;"Gutschrift Bistro Exempel; RE-2026-044";;1\'950.00;90\'842.04',
+    '05.10.2026;05.10.2026;Gutschrift Café Beispiel;;2\'380.50;88\'892.04',
+    '02.10.2026;02.10.2026;Zahlung Gruenkaffee Muster AG;1\'204.00;;86\'511.54',
+    'Total;;;1\'204.00;4\'330.50;',
+  ].join('\r\n');
+  const table = csvTable(Buffer.from(csv, 'latin1'))!;
+  assert.deepEqual(table.header, ['Buchungsdatum', 'Valuta', 'Buchungstext', 'Belastung', 'Gutschrift', 'Saldo']);
+  const columns = guessColumns(table.header)!;
+  assert.deepEqual(columns, { valueDate: 1, date: 0, debit: 3, credit: 4, balance: 5, text: 2 });
+  const s = csvStatement(table, columns, { currency: 'CHF', iban: 'CH6580808000000000001' }) as ReadStatement;
+  assert.deepEqual(s.movements.map((m) => [m.date, m.amount]), [['2026-10-02', -1204], ['2026-10-05', 2380.5], ['2026-10-20', 1950]]);
+  assert.equal(s.movements[2].text, 'Gutschrift Bistro Exempel; RE-2026-044', 'a quoted separator stays in its cell');
+  assert.deepEqual([s.opening, s.closing], [{ date: '2026-10-02', amount: 87715.54 }, { date: '2026-10-20', amount: 90842.04 }]);
+  assert.ok(checkStatement(s).ok);
+  assert.deepEqual(csvStatement({ header: table.header, rows: [['02.10.2026', '', 'x', '', '', '']] }, columns, { currency: 'CHF' }), { kind: 'amount', row: 1 });
+  const many = { header: table.header, rows: Array.from({ length: MAX_CSV_ROWS + 1 }, () => table.rows[0]) };
+  assert.deepEqual(csvStatement(many, columns, { currency: 'CHF' }), { kind: 'tooMany', rows: MAX_CSV_ROWS + 1, limit: MAX_CSV_ROWS }, 'the limit names itself');
+  assert.deepEqual([dayOf('31.12.26'), dayOf('2026-02-30'), dayOf('Total')], ['2026-12-31', undefined, undefined]);
+});

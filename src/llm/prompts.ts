@@ -5,6 +5,8 @@ import type { SalesDefaults } from "../workspace/sells.js";
 import type { SalesKind } from "../workspace/setup.js";
 import type { VatLineFacts } from "../accounting/vat-codes.js";
 import { formatCase, type BookingCase } from "../knowledge/cases.js";
+import { parseReadStatement } from "../books/statement-check.js";
+import type { ReadStatement } from "../types/statement-read.js";
 
 export interface MatchResult {
   suggestedFilename: string;
@@ -487,6 +489,50 @@ export function parseBatchClassifyResult(raw: string): BatchClassifyResult | nul
 //
 // Reads ONLY the VAT facts off a receipt — the printed MWST summary block,
 // the CHE- UID, and (best-effort) itemized lines. It deliberately does NOT
+
+/**
+ * A bank statement without camt.053 (#217), read off its file: the PDF, scan or photo is attached;
+ * a digital PDF's own text comes along (it holds the digits as printed). The answer is the shape
+ * code checks (src/books/statement-check.ts): code, not the model, decides whether it adds up.
+ */
+export function buildStatementReadPrompt(absPath: string, text?: string): string {
+  return `Use the Read tool to read the file '${absPath}': a bank or card account statement. Read it into JSON, exactly as printed. Do not compute, round, complete or correct anything: code checks the figures afterwards.
+
+${text?.trim() ? `The file's own text, page by page (form feeds between pages), for the digits as printed:\n<<<\n${text.slice(0, 60_000)}\n>>>\n\n` : ''}Return ONLY one JSON object, no commentary:
+{
+  "iban": "the account's IBAN without spaces, or omit",
+  "currency": "the account's ISO currency, e.g. CHF",
+  "bankName": "the bank as it names itself, or omit",
+  "owner": "the account holder as printed, or omit",
+  "period": { "from": "YYYY-MM-DD", "to": "YYYY-MM-DD" },
+  "opening": { "date": "YYYY-MM-DD (the period's first day)", "amount": the balance brought forward before the first movement },
+  "closing": { "date": "YYYY-MM-DD (the period's last day)", "amount": the closing balance after the last movement },
+  "pages": [ { "page": 1, "carriedIn": the balance carried in at the top of the page if printed, "carriedOut": the balance carried to the next page at its foot if printed } ],
+  "movements": [ { "date": "YYYY-MM-DD (booking date)", "valueDate": "YYYY-MM-DD or omit", "amount": signed number, "counterparty": "who paid or was paid, or omit", "text": "the booking text as printed", "reference": "a payment reference (QR, SCOR, invoice number) if printed, or omit", "page": the page it is printed on } ]
+}
+
+Rules:
+- Every movement row of every page, in the printed order, once. A booking with detail lines (a collective payment) is one movement with its total; detail lines are no movements.
+- "amount": money into the account positive, money out (debit, Belastung, Lastschrift) negative. A balance in the account's favour is positive, an overdraft negative.
+- Balances, totals and carry-over lines (Saldo, Übertrag, Total, Report) are no movements; put them into opening, closing and pages.
+- Numbers as plain JSON numbers with a dot: 1'234.50 becomes 1234.5. Dates as YYYY-MM-DD.
+- Omit "pages" when the statement prints no carry-overs. Omit a field you cannot read; never guess one.
+- If the file is no account statement, return {"notStatement": true}.`;
+}
+
+/** The model's statement, or `notStatement` when it said the file is none; undefined when the answer is no statement code can take. */
+export function parseStatementRead(raw: string): ReadStatement | 'notStatement' | undefined {
+  const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    try { parsed = match ? JSON.parse(match[0]) : undefined; } catch { parsed = undefined; }
+  }
+  if ((parsed as { notStatement?: unknown } | undefined)?.notStatement === true) return 'notStatement';
+  return parseReadStatement(parsed);
+}
 // assign accounting codes (I/M/V) or decide refunds — that is classify's job.
 // This is where the "the receipt is the source of truth" rule is grounded.
 

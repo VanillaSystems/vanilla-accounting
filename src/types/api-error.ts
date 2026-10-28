@@ -92,6 +92,13 @@ export type ApiRefusal =
   | { code: 'deletedAgain' }
   | { code: 'alreadyBack' }
   | { code: 'statement'; params: StatementParams }
+  /**
+   * A statement read without camt.053 (#217) the drop row does not import: a line without a day or
+   * an amount, figures that do not add up (`gap` on `page`, or the whole statement), a CSV row with a
+   * day but no amount, more CSV rows than read (`rows`, `limit`), no row at all, columns that are no
+   * column of the CSV, or an account that takes no statements.
+   */
+  | { code: 'statementRead'; params: StatementReadParams }
   /** A bank account's IBAN typed in Firma › Bankkonten or the invoicing setup fails the length or check-digit test. */
   | { code: 'iban'; params: { bank: string; detail: string } }
   /** Firma › Firma: the company UID typed has a wrong shape or check digit (r9c-5). */
@@ -270,3 +277,5 @@ export interface MailStatus {
   /** The desktop app: the password is saved in Firma › E-Mail-Versand into the keychain store. */
   inApp: boolean;
 }
+
+export interface StatementReadParams { why: 'line' | 'gap' | 'csvRow' | 'csvRows' | 'csvEmpty' | 'columns' | 'account'; row?: number; rows?: number; limit?: number; gap?: number; page?: number; currency?: string }

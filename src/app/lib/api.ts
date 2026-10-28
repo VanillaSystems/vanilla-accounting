@@ -171,6 +171,11 @@ export function errorText(e: unknown): string {
     case 'classifyInputTaxShared': return t('error.classifyInputTaxShared', { payments: b.params.payments, booked: `${b.params.currency} ${fmt(b.params.booked)}`, shown: `${b.params.currency} ${fmt(b.params.shown)}` });
     case 'personsBooking': return t('error.personsBooking', { n: b.params.entries });
     case 'fileExists': return t('error.fileExists', b.params);
+    case 'statementRead': {
+      const p = b.params;
+      if (p.why === 'gap') return t('error.statementRead.gap', { gap: `${p.currency ?? ''} ${fmt(p.gap ?? 0)}`.trim(), page: p.page ? t('error.statementRead.onPage', { page: p.page }) : '' });
+      return t(`error.statementRead.${p.why}`, { row: p.row ?? '', rows: p.rows ?? '', limit: p.limit ?? '' });
+    }
     case 'notInTrash': return t('error.notInTrash');
     case 'deletedAgain': return t('error.deletedAgain');
     case 'alreadyBack': return t('error.alreadyBack');

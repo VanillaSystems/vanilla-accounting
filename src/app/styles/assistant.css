@@ -177,6 +177,41 @@ a.dmove:hover, a.dmove:focus-visible { background: var(--hover); outline: none; 
 .ddet dd { margin: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 3px 14px; color: var(--ink-2); }
 .ddet dd.mono { font-size: 11.5px; overflow-wrap: anywhere; }
 .ddet .linkbtn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; text-align: left; }
+/* A statement read without camt.053 (#217): its table under the row, each line correctable, the check below it. */
+.dread { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 4px 4px 12px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.dread-hd { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dread-hd small, .dread small { color: var(--muted); font-size: 11.5px; }
+.dchip.r-model { background: color-mix(in srgb, var(--ai) 14%, transparent); color: var(--ai); }
+.dchip.r-hand, .dchip.r-csv { background: var(--hover); color: var(--ink-2); }
+.dread input, .dread select { height: 26px; padding: 0 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; font-size: 12px; min-width: 0; }
+.dread input.amt { text-align: right; font-variant-numeric: tabular-nums; width: 96px; }
+.dread input.ccy { width: 52px; text-transform: uppercase; }
+.dread input.iban { width: 230px; }
+.dread-facts { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.dread-facts label, .dcsv-map label, .dread-pages label { display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 11px; }
+.dread-facts label span { display: flex; gap: 4px; }
+.dread-scroll { max-height: 280px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.dread-t { width: 100%; border-collapse: collapse; }
+.dread-t th { position: sticky; top: 0; background: var(--bg); color: var(--muted); font-weight: 500; font-size: 11px; text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.dread-t td { padding: 2px 4px; border-bottom: 1px solid var(--line); color: var(--ink-2); white-space: nowrap; }
+.dread-t th.amt, .dread-t td.amt { text-align: right; }
+.dread-t td input { width: 100%; }
+.dread-t td input[type="date"] { width: 124px; }
+.dread-t td.pg { color: var(--muted); text-align: center; }
+.dread-t tr.known td { background: var(--hover); }
+.dread-t .dknown { color: var(--muted); font-size: 11px; }
+.dread-t .dx { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 14px; }
+.dread .linkbtn { align-self: flex-start; border: 0; padding: 0; background: none; color: var(--accent); font: inherit; font-size: 11.5px; cursor: pointer; }
+.dread-pages { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 14px; }
+.dread-pages label { flex-direction: row; align-items: center; gap: 4px; }
+.dread-check { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 8px; font-size: 12px; }
+.dread-check.ok { background: var(--pos-soft); color: var(--pos); }
+.dread-check.gap { background: var(--warn-soft); color: var(--warn); }
+.dread-check .m { color: var(--muted); }
+.dread-acts { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.dread-acts .m { flex: 1; }
+.dcsv-map { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.dcsv-map select { max-width: 160px; }
 .droprow .dacts { display: inline-flex; gap: 12px; }
 .droprow .dacts .linkbtn:disabled { color: var(--faint); cursor: default; }
 .droprow.s-undone { opacity: .55; }

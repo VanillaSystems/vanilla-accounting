@@ -7,8 +7,8 @@
  *     enough for the vision match, Swiss UID(s), VAT indicator, VAT-proof trap, grouped vendor,
  *     foreign hint, the document type a knowledge file assigns, the casebook keywords that hit,
  *     and the Shopify order page's figures)
- *   bank-statements/Wise, bank-statements/Raiffeisen: the Wise transfer references (-raw) and
- *     the closing balance (-layout)
+ *
+ * Statement PDFs are no longer read by text parsers: the model reads them (#217).
  *
  *   npx tsx tools/pdf-text/compare.ts <out-dir> <workspace>...
  *
@@ -25,8 +25,6 @@ import { documentTypeOf, uidsIn, type Counterparty } from '../../src/knowledge/c
 import { loadKnowledge } from '../../src/knowledge/layers.js';
 import { pdfText, type TextMode } from '../../src/parsers/pdf-text.js';
 import { detectVatProofIssue, hasSwissUid, hasVatIndicator } from '../../src/parsers/receipt-text.js';
-import { closingBalance } from '../../src/providers/statement-pdf/statement-pdf-balances.js';
-import { wiseReferences } from '../../src/providers/wise-pdf/wise-statement-pdf.js';
 import { APP_ROOT } from '../../src/workspace/workspace.js';
 
 const execFileAsync = promisify(execFile);
@@ -59,11 +57,6 @@ function receiptVerdicts(file: string, text: string, counterparties: readonly Co
   };
 }
 
-function statementBank(file: string): 'Raiffeisen' | 'Wise' | null {
-  const dir = basename(join(file, '..'));
-  return /raiffeisen/i.test(dir) ? 'Raiffeisen' : /wise/i.test(dir) ? 'Wise' : null;
-}
-
 function pdfsUnder(dir: string): string[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir).sort().flatMap((f) => {
@@ -73,7 +66,7 @@ function pdfsUnder(dir: string): string[] {
 }
 
 /** The folders of a workspace whose PDFs the app reads. */
-const FOLDERS = ['receipts', 'beleg-import', 'bank-statements', 'invoices'];
+const FOLDERS = ['receipts', 'beleg-import', 'invoices'];
 
 interface FileResult { file: string; old: Verdicts; new: Verdicts; differs: string[] }
 
@@ -83,16 +76,8 @@ async function compareWorkspace(root: string): Promise<{ results: FileResult[]; 
   const results: FileResult[] = [];
   const failures: string[] = [];
   for (const file of FOLDERS.flatMap((f) => pdfsUnder(join(root, f)))) {
-    const bank = statementBank(file);
     try {
       const verdicts = async (read: (mode: TextMode) => Promise<string>): Promise<Verdicts> => {
-        if (bank) {
-          const currency = basename(file).match(/_(EUR|USD|CHF)_/)?.[1] ?? 'CHF';
-          return {
-            wiseRefs: [...wiseReferences(await read('raw'))],
-            closing: closingBalance(await read('layout'), bank, currency),
-          };
-        }
         return receiptVerdicts(file, await read('reading'), counterparties, keywords);
       };
       const [oldV, newV] = await Promise.all([verdicts((m) => poppler(file, m)), verdicts((m) => pdfText(file, m))]);

@@ -3,6 +3,27 @@
 process: bank-import
 
 steps:
+  read:
+    goal: Read a statement that comes without camt.053 (a PDF, a scan, a photo, a bank's CSV) into its movements and balances, checked to the cent.
+    rules:
+      - id: bnk-read-as-printed
+        when: the AI reads a statement PDF, scan or photo
+        then: every movement once, as printed (money out negative), the balances and carry-overs apart; it computes nothing, code checks opening + movements = closing and each page's carry-over
+        source: docs/0.4.0/intake.md
+      - id: bnk-read-gap
+        when: the check shows a gap
+        then: nothing is imported; the person corrects the line the gap's page points to (often a misread digit) until it adds up
+        source: docs/0.4.0/intake.md
+      - id: bnk-read-known
+        when: a line is a payment the books hold already (same account, day, direction, amount)
+        then: it is not added again; its camt.053 and the read statement are one payment
+        source: docs/0.4.0/intake.md
+      - id: bnk-read-csv
+        when: a bank's CSV is dropped
+        then: the person names its columns once; the mapping is kept per account in knowledge/bank-csv.yaml and reads the next CSV of that header
+        source: docs/0.4.0/intake.md
+    precedents: []
+
   relink:
     goal: Re-attach journal entries and mappings whose transaction ref changed on re-import.
     rules:

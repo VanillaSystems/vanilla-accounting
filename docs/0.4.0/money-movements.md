@@ -68,7 +68,6 @@ The list under «Steps» is the earlier, finer proposal; where it differs, this 
 - The confirmation's balance is a `StatementClosingBalance` with `source: pdf`, whose `sourceFile`
   is `year-end/<account>-<date>.<ext>` under `transactional-data/<year>/filings/`. A statement
   covering the day is the proof before it, and the app refuses a hand balance where one exists.
-  `npm run extract-balances` keeps these balances.
 - The cash count is `cashCounts` in the year's close record (`filings/year-close.json`), not in
   the books.
 - «Every month has its statement» holds only for an account with at least one imported

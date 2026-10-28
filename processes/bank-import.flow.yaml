@@ -67,14 +67,14 @@ steps:
     duration: 1h
 
   - id: import_balances
-    name: Read the month-end closing balances off the PDFs
+    name: Read a statement without camt.053 into its movements and balances
+    with: { guide: bank-import.guide.yaml#read }
     produces: statementBalances
     icon: file-search
-    uses: npm:extract-balances
-    note: Raiffeisen Saldo, Wise closing line
+    note: the drop dialog; the AI reads the PDF, code checks it adds up, the person imports it
     needs: [download_pdf]
     phase: import
-    duration: 30s
+    duration: 2m
 
   - id: reconcile
     name: Compare ledger to bank, per account, in its own currency

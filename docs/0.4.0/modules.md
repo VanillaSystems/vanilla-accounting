@@ -15,7 +15,7 @@ vanilla-accounting/                     THE APP (upstream)
 ├── src/engines/         upstream only  tax-codes · return · statements · year-end ·
 │                                        invoice-rules · setup · text
 ├── src/providers/       replaceable    by id: ech-0217 · swiss-qr-bill · estv-daily-sell ·
-│                        by id          uid-check · camt053 · wise-pdf · imap · banana-export
+│                        by id          uid-check · camt053 · statement-read · imap · banana-export
 ├── modules/
 │   └── ch/              jurisdiction   tax-codes.yaml · rates.yaml · return.yaml · chart.yaml ·
 │                        (one slot)     statements.yaml · periods.yaml · year-end.yaml ·
