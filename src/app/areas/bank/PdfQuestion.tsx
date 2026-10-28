@@ -17,6 +17,7 @@ import type { Nav } from '../index.js';
 import { at } from '../receipts/view.js';
 import { fileKey, payText, signed, type Statement } from './model.js';
 import { forgetPages } from './StatementPaper.js';
+import { startIntake } from '../../automation/intake.js';
 
 /** The file of a statement's PDF in the books: `<bank>/<file name>`; none for a bank export or a month without a file. */
 export const pdfOf = (s: Statement): string | undefined => (s.file && /\.pdf$/i.test(s.file.filename) ? `${s.file.bank}/${s.file.filename}` : undefined);
@@ -51,6 +52,7 @@ export function PdfQuestion({ ask, nav, edit }: { ask: StatementAsk; nav: Nav; e
         await api.correctStatementRead(ask.file, a.statement);
       } else {
         const done = await api.importStatementRead(ask.file, a.statement);
+        void startIntake();
         forgetPages();
         nav.toast(t('bank.imported', { n: done.added }), () => void api.unreadStatement(done.file).then(() => { forgetPages(); nav.refresh(); }, (e) => nav.toast(errorText(e))));
         nav.refresh();

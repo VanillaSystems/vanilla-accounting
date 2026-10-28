@@ -166,8 +166,11 @@ function assertNoFiledPayments(): void {
 }
 
 /** The books' open payment a read statement's movement is: its account, day, direction, amount and ref. */
-const unmatchedIn = (books: Books, u: Unmatched): BankTransaction | undefined => books.transactions.find((x) => !madeByHand(x) && !periodLock(books).isClosed(x.date)
-  && x.bank === u.bank && x.currency === u.currency && x.date === u.date && x.direction === u.direction && Math.abs(x.amount) === Math.abs(u.amount) && x.ref.split('~')[0] === u.ref.split('~')[0]);
+function unmatchedIn(books: Books, u: Unmatched): BankTransaction | undefined {
+  const lock = periodLock(books);
+  return books.transactions.find((x) => !madeByHand(x) && !lock.isClosed(x.date)
+    && x.bank === u.bank && x.currency === u.currency && x.date === u.date && x.direction === u.direction && Math.abs(x.amount) === Math.abs(u.amount) && x.ref.split('~')[0] === u.ref.split('~')[0]);
+}
 
 /**
  * The movements read from PDFs that a structured file does not hold (#254, src/books/bank-import.ts

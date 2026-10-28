@@ -224,9 +224,10 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
       if (row.asked) {
         // A PDF kept with its question in the books (#254): the books' question is corrected or answered.
         if (!a.import) { row.read = correctAsk(row.asked.file, a.statement).read; break; }
+        const had = new Set(readBooks().transactions.map((t) => t.ref));
         const done = await importAsk(row.asked.file, a.statement, (body, name, account) => importStatement(body, name, account));
-        const had = new Set(row.statement?.refs ?? []);
-        settleAsked(s, row, { file: done.file, refs: readBooks().transactions.filter((t) => !had.has(t.ref) && t.date >= (done.from ?? done.to) && t.date <= done.to && t.bank === done.bank && t.currency === done.currency).map((t) => t.ref) });
+        settleAsked(s, row, { file: done.file, refs: readBooks().transactions.filter((t) => !had.has(t.ref)).map((t) => t.ref) });
+        await handToRun(row, done);
         break;
       }
       const statement = parseReadStatement(a.statement);
@@ -445,11 +446,16 @@ async function intoBooks(row: DropRow, body: Buffer, name: string, account: stri
     Object.assign(row, { state: asks ? 'asks' : 'refused', reason: 'not-imported', message: (e as Error).message, ...(unknown ? { unknownAccount: unknown } : {}), ...(choose ? { chooseAccount: choose } : {}), ...(details ? { details } : {}) });
     return undefined;
   }
-  const { month: _month, ...arrived } = done;
   row.statement = { file: done.file, refs: readBooks().transactions.filter((t) => !had.has(t.ref)).map((t) => t.ref) };
+  await handToRun(row, done);
+  return done;
+}
+
+/** A statement read in, handed to the inbox's run, which books its payments. */
+async function handToRun(row: DropRow, done: StatementImport): Promise<void> {
+  const { month: _month, ...arrived } = done;
   const started = await engine().start(INTAKE, { kind: 'company', id: 'inbox' }, { kind: 'outside', file: row.name }, 'live', [{ kind: 'statement', ...arrived }]);
   if (started.ok && started.run) row.run = started.run;
-  return done;
 }
 
 /** The ISO 20022 statement a confirmed table is imported as: its lines the books hold carry their refs, so they are not added twice. */
