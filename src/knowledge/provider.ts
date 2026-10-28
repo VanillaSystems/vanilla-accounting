@@ -28,7 +28,7 @@
  * (src/booking/sales-report.ts PaymentFacts); its rows whose `type` reads «charge» are the order's
  * charges, each on its day. `outstanding` in the sales report: the part of an order's total not
  * charged yet (an order edited after checkout): the sale is the total less it, its tax in the same
- * share (#231). `test` in either report: a column that flags a test
+ * share (#231); below zero (charged a cent beyond the total) the sale is more (#239). `test` in either report: a column that flags a test
  * (true, yes, 1, test): such a row is no sale, no refund, no fee. `gateways`: the values of
  * the sales report's `gateway` column whose orders the provider collected and pays out (the others,
  * paid by PayPal, by bank transfer, on delivery, with a gift card or through a test gateway, come
