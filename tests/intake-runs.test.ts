@@ -36,7 +36,7 @@ function comparable(b: Books): unknown {
 }
 
 async function byRun(ws: Workspace): Promise<Run> {
-  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT });
   const r = await engine.start('receipt-intake', { kind: 'company', id: 'inbox' }, { kind: 'manual' });
   assert.ok(r.ok, JSON.stringify(r));
   await engine.idle();
@@ -61,7 +61,7 @@ test('a run that crashed between two steps resumes at its step and writes nothin
   const books = JSON.stringify(loadBooks(ws));
   const crashed: Run = { ...done, state: { status: 'running', at: 'match', since: done.startedAt }, steps: done.steps.slice(0, 2) };
   saveRun(ws, crashed);
-  const after = openEngine(ws, { appRoot: APP_ROOT });
+  const after = openEngine(() => ws, { appRoot: APP_ROOT });
   await after.idle();
   const resumed = after.run(done.id)!;
   assert.deepEqual([resumed.state.status, resumed.steps.map((s) => s.step)], ['done', ['read', 'facts', 'match', 'book']]);

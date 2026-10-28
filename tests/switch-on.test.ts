@@ -79,7 +79,7 @@ test('a changed company part runs only dry until a person switches it on, outsid
   assert.equal(sw.isApproved(thinker()), true);
   writeFileSync(join(ws.paths.root, 'knowledge', 'rules', 'house.guide.yaml'), 'rules: [one, two]\n');
   assert.deepEqual(sw.pending(thinker())?.files, ['knowledge/rules/house.guide.yaml'], 'only what changed since it was switched on');
-  const engine = openEngine(ws, { appRoot, isApproved: sw.isApproved, approve: sw.approve });
+  const engine = openEngine(() => ws, { appRoot, isApproved: sw.isApproved, approve: sw.approve });
   const item = { kind: 'transaction' as const, id: 'T1' };
   assert.deepEqual(await engine.command({ kind: 'start', workflow: 'thinker', item }), { ok: false, refusal: 'not-approved', detail: thinker().version });
   assert.equal((await engine.command({ kind: 'start', workflow: 'thinker', item, mode: 'dry' })).ok, true, 'a dry run is allowed');
@@ -119,7 +119,7 @@ test('a case is the same when the dry run takes the same steps and would book th
 test('a check runs the latest case of each item dry, on the version as it is now', async () => {
   const ws = books('switch-check-');
   const appRoot = app();
-  const engine = openEngine(ws, { appRoot });
+  const engine = openEngine(() => ws, { appRoot });
   assert.deepEqual(await engine.command({ kind: 'check', workflow: 'thinker' }), { ok: false, refusal: 'no-cases' });
   for (const id of ['A', 'B', 'A']) await engine.command({ kind: 'start', workflow: 'thinker', item: { kind: 'transaction', id } });
   await engine.idle();
@@ -137,7 +137,7 @@ test('a check sees the books as they were before its case, so a booked case can 
   const t = all.transactions.find((x) => x.date > all.config.closedThrough!)!;
   update(all, PERSON, (b) => { b.journalEntries = b.journalEntries.filter((e) => e.transactionRef !== t.ref); });
   saveBooks(ws, all);
-  const engine = openEngine(ws, { appRoot });
+  const engine = openEngine(() => ws, { appRoot });
   await engine.command({ kind: 'start', workflow: 'booker', item: { kind: 'transaction', id: t.ref } });
   await engine.idle();
   const original = engine.runs().find((r) => r.workflow === 'booker')!;

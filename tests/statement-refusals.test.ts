@@ -58,6 +58,9 @@ test('two CHF accounts without IBAN: the camt.053 asks which one instead of refu
   const api = await startApi('tests/fixtures/fresh-books-index.json', {}, { manifestOf: COIFFEUR });
   const { SESSION } = await import('./support/inbox-run.js');
   try {
+    // The runs' engine opens before the account is added, as it does whenever the server looked at its runs first:
+    // the run that reads the statement in must still know the new account (#246).
+    await api.fetch('/api/automation');
     const added = await api.send('PATCH', '/api/workspace', { addBank: { bank: 'ZKB', currency: 'CHF', account: '1022', label: 'ZKB Geschäftskonto' } });
     assert.equal(added.status, 200, JSON.stringify(added.json));
     const file = camt('S-ZKB', OTHER, [['2026-10-03', -40, '55000000001']], 'Zürcher Kantonalbank');

@@ -159,7 +159,7 @@ test('a conversation with a purpose stays on it: the AI is told not to bring up 
 
 test('the hourly check that finds no source due is no run: not kept, not listed; one a person starts is', async () => {
   const ws = fresh();
-  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT });
   await engine.tick(new Date('2026-10-19T20:00:00'));
   await engine.idle();
   assert.deepEqual(engine.runs().filter((r) => r.workflow === 'collection').map((r) => r.id), [], '«Letzter Lauf» must not show an hourly check that fetched nothing');

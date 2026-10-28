@@ -170,7 +170,7 @@ const STATEMENT = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:t
 test('an ask rule turns the next matching payment into a task «Frag: …», not a booking; one click on «accept» books the proposal, stamped with the rule', async () => {
   const ws = company();
   writeFileSync(join(ws.paths.root, 'transactional-data/2026/bank-statements/Raiffeisen/oktober.xml'), STATEMENT);
-  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT });
   const started = await engine.start('receipt-intake', { kind: 'company', id: 'inbox' }, { kind: 'manual' });
   assert.ok(started.ok, JSON.stringify(started));
   await engine.idle();
@@ -269,7 +269,7 @@ test('a private share that is no percent is refused', () => {
 async function heldWithdrawal() {
   const ws = company();
   writeFileSync(join(ws.paths.root, 'transactional-data/2026/bank-statements/Raiffeisen/oktober.xml'), STATEMENT);
-  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT });
   await engine.start('receipt-intake', { kind: 'company', id: 'inbox' }, { kind: 'manual' });
   await engine.idle();
   const ask = engine.runs().find((r) => r.workflow === 'ask' && askedBy(r) === 'cash-ask')!;

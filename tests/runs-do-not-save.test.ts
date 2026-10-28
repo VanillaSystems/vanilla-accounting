@@ -52,7 +52,7 @@ function app(): string {
 }
 
 async function engineFor(ws: Workspace) {
-  const engine = openEngine(ws, { appRoot: app() });
+  const engine = openEngine(() => ws, { appRoot: app() });
   return { engine, settle: () => engine.idle() };
 }
 
