@@ -3,6 +3,7 @@
  * return is filed, under «Abrechnung prüfen» (r4c-38), and the bookings that contradict their
  * receipts with their one click (r4c-31). Each issue links to where it is settled; none blocks.
  */
+import { orderPagesNow } from '../../lib/order-pages.js';
 import { FindPair } from '../receipts/FindPair.js';
 import { t } from '../../i18n/index.js';
 import { fmt, formatDate } from '../../lib/utils.js';
@@ -69,7 +70,7 @@ function EvidenceFix({ e, check, nav }: { e: JournalEntry; check: EvidenceCheck;
 /** «Noch offen in {period}»: under the return to review. An open VAT question withholds «Freigegeben» (r8h-24); the rest does not block the filing. */
 export function PeriodIssues({ books, nav, from, to, period, canEdit }: { books: Index; nav: Nav; from: string; to: string; period: string; canEdit: boolean }) {
   const { questions } = useQuestions();
-  const issues = periodIssues(books, questions, from, to, useWorkspace()?.bankAccounts ?? []);
+  const issues = periodIssues(books, questions, from, to, useWorkspace()?.bankAccounts ?? [], orderPagesNow());
   if (!issues.length) return <p className="m" data-testid="period-issues-none">{t('issues.none', { period })}</p>;
   return (
     <section className="wfissues" data-testid="period-issues">

@@ -78,6 +78,8 @@ export interface SetSearch {
   buyerUid?: string;
   /** The payments without a receipt of their own (src/booking/receipt-wait.ts noReceiptOfItsOwn: a provider's payout, an own transfer…): no set is linked to them. */
   noReceipt?: (t: BankTransaction) => boolean;
+  /** The receipts without a payment of their own (src/booking/order-pages.ts: an order page of the provider way): in no set. */
+  noPayment?: (r: Receipt) => boolean;
 }
 
 type Books = Pick<Index, 'receipts' | 'transactions' | 'mappings'>;
@@ -168,7 +170,7 @@ function firstFrom(items: ReadonlyArray<{ day: number }>, day: number): number {
   return lo;
 }
 
-function contextOf(books: Books, payers: BatchPayers, toChf: ToChf | undefined, buyerUid: string | undefined): SetContext {
+function contextOf(books: Books, payers: BatchPayers, toChf: ToChf | undefined, buyerUid: string | undefined, noPayment?: (r: Receipt) => boolean): SetContext {
   const buyer = buyerUid?.replace(/[^0-9]/g, '') ?? '';
   const keys = new Map<string, string | undefined>();
   const keyOf = (r: Receipt) => {
@@ -177,7 +179,7 @@ function contextOf(books: Books, payers: BatchPayers, toChf: ToChf | undefined, 
   };
   const held = new Set(books.mappings.map((m) => m.receiptId));
   const invoices = books.receipts.filter((r) => r.location === 'archived' && (!r.kind || r.kind === 'invoice') && !!r.amount && !!r.date
-    && !r.filedPayment && !r.payout && !r.order && !!keyOf(r));
+    && !r.filedPayment && !r.payout && !r.order && !noPayment?.(r) && !!keyOf(r));
   // Copies within a vendor, over the receipts payments hold and the free ones together: a free copy of either is dropped (2e).
   const byVendor = new Map<string, Receipt[]>();
   for (const r of invoices) { const k = keyOf(r)!; const group = byVendor.get(k); if (group) group.push(r); else byVendor.set(k, [r]); }
@@ -337,20 +339,20 @@ const asSet = (c: Candidate, charge: Charge): ReceiptSet => ({
 const searchOf = (s: SetSearch | ((date: string) => boolean)): SetSearch => (typeof s === 'function' ? { isOpen: s } : s);
 
 /** The context of the books as they are, kept while they stay the same object with the same lists (the UI's books, a bench's): proposals for one payment after another read it once. */
-const contexts = new WeakMap<object, { lists: unknown[]; payers: BatchPayers; toChf?: ToChf; buyerUid?: string; ctx: SetContext }>();
-function contextFor(books: Books, payers: BatchPayers, toChf: ToChf | undefined, buyerUid: string | undefined): SetContext {
+const contexts = new WeakMap<object, { lists: unknown[]; payers: BatchPayers; toChf?: ToChf; buyerUid?: string; noPayment?: (r: Receipt) => boolean; ctx: SetContext }>();
+function contextFor(books: Books, payers: BatchPayers, toChf: ToChf | undefined, buyerUid: string | undefined, noPayment?: (r: Receipt) => boolean): SetContext {
   const lists = [books.receipts, books.receipts.length, books.mappings, books.mappings.length, books.transactions, books.transactions.length];
   const kept = contexts.get(books);
-  if (kept && kept.payers === payers && kept.toChf === toChf && kept.buyerUid === buyerUid && kept.lists.every((x, i) => x === lists[i])) return kept.ctx;
-  const ctx = contextOf(books, payers, toChf, buyerUid);
-  contexts.set(books, { lists, payers, toChf, buyerUid, ctx });
+  if (kept && kept.payers === payers && kept.toChf === toChf && kept.buyerUid === buyerUid && kept.noPayment === noPayment && kept.lists.every((x, i) => x === lists[i])) return kept.ctx;
+  const ctx = contextOf(books, payers, toChf, buyerUid, noPayment);
+  contexts.set(books, { lists, payers, toChf, buyerUid, noPayment, ctx });
   return ctx;
 }
 
 /** What code offers for one payment, for its line in Kontoauszüge: every set that fits it, exact ones first, and where code stopped looking (named to the person). */
 export function proposalsFor(books: Books, tx: BankTransaction, search: SetSearch | ((date: string) => boolean)): { sets: ReceiptSet[]; cut?: SetCut } {
   const s = searchOf(search);
-  const ctx = contextFor(books, s.payers ?? NO_BATCH_PAYERS, s.toChf, s.buyerUid);
+  const ctx = contextFor(books, s.payers ?? NO_BATCH_PAYERS, s.toChf, s.buyerUid, s.noPayment);
   const fit = fitOf(books, ctx, ctx.charges.of(tx), s);
   if (!fit) return { sets: [] };
   const ranked = [...fit.found.filter((c) => c.exact), ...fit.found.filter((c) => !c.exact), ...(fit.close ? [fit.close] : [])];
@@ -367,7 +369,7 @@ export function proposalsFor(books: Books, tx: BankTransaction, search: SetSearc
  */
 export function receiptSetsToLink(books: Books, search: SetSearch | ((date: string) => boolean)): { sets: ReceiptSet[]; cuts: SetCut[] } {
   const s = searchOf(search);
-  const ctx = contextOf(books, s.payers ?? NO_BATCH_PAYERS, s.toChf, s.buyerUid);
+  const ctx = contextOf(books, s.payers ?? NO_BATCH_PAYERS, s.toChf, s.buyerUid, s.noPayment);
   const seen = new Set<string>();
   const all: Fit[] = [];
   for (const tx of books.transactions) {

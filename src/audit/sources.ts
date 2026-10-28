@@ -13,6 +13,8 @@ export interface Sources {
   filedReturns(year: string): string;
   /** The ESTV daily sell rates (reference/estv-daily-rates-*.json) the UI checks each foreign entry against. */
   fxRates(): string;
+  /** The order pages of the provider way by receipt id (src/workspace/reads.ts orderPagesIn, #253): the business files decide them, which the UI does not read. */
+  orderPages(): string;
   receipt(id: string): string;
   statement(bank: string, filename: string): string;
 }
@@ -25,6 +27,7 @@ export const API_SOURCES: Sources = {
   workspace: () => '/api/workspace',
   filedReturns: (year) => `/api/vat/filed?year=${year}`,
   fxRates: () => '/api/fx-rates',
+  orderPages: () => '/api/receipts/order-pages',
   receipt: (id) => `/api/receipts/${id}`,
   statement: (bank, filename) => `/bank-statements/${bank}/${encodeURIComponent(filename)}`,
 };
@@ -38,6 +41,7 @@ export const EXPORT_FILES: Sources = {
   workspace: () => 'data/workspace.json',
   filedReturns: (year) => `data/vat-filed-${year}.json`,
   fxRates: () => 'data/fx-rates.json',
+  orderPages: () => 'data/order-pages.json',
   receipt: (id) => `receipts/${id}.pdf`,
   statement: (bank, filename) => `bank-statements/${bank}/${filename}`,
 };
@@ -53,6 +57,7 @@ export const EXPORT_SOURCES: Sources = {
   workspace: () => encodePath(EXPORT_FILES.workspace()),
   filedReturns: (year) => encodePath(EXPORT_FILES.filedReturns(year)),
   fxRates: () => encodePath(EXPORT_FILES.fxRates()),
+  orderPages: () => encodePath(EXPORT_FILES.orderPages()),
   receipt: (id) => encodePath(EXPORT_FILES.receipt(id)),
   statement: (bank, filename) => encodePath(EXPORT_FILES.statement(bank, filename)),
 };

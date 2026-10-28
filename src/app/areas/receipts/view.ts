@@ -12,14 +12,17 @@ import { MODEL_TEXT, modelCut } from '../../../intake/unclear.js';
 import { automationNow } from '../../automation/store.js';
 import { processingOf } from '../../../workflows/processing.js';
 import type { RunSummary } from '../../../workflows/model.js';
+import type { OrderPage } from '../../../booking/order-pages.js';
+import { orderPagesNow } from '../../lib/order-pages.js';
 
-let memo: { books: Index; runs: RunSummary[] | undefined; ledger: Ledger } | undefined;
+let memo: { books: Index; runs: RunSummary[] | undefined; pages: ReadonlyMap<string, OrderPage>; ledger: Ledger } | undefined;
 
 /** The ledger of these books, computed once per load and once per change of the runs (what they still work on, #218). */
 export function ledgerFor(books: Index): Ledger {
   const runs = automationNow()?.runs;
-  if (memo?.books !== books || memo.runs !== runs) {
-    memo = { books, runs, ledger: ledgerOf(books, booksOpenPeriod(books, localToday(), filing().length).from, processingOf(runs ?? [], books.receipts)) };
+  const pages = orderPagesNow();
+  if (memo?.books !== books || memo.runs !== runs || memo.pages !== pages) {
+    memo = { books, runs, pages, ledger: ledgerOf(books, booksOpenPeriod(books, localToday(), filing().length).from, processingOf(runs ?? [], books.receipts), pages) };
   }
   return memo.ledger;
 }

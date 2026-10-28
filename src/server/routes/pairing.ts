@@ -14,7 +14,7 @@ import { takenPayments } from '../../intake/pairing.js';
 import { bookAgain, engine } from './automation.js';
 import { closeAsksWithoutRule } from '../../workflows/held.js';
 import { askIfReady } from '../../intake/run.js';
-import { estvToChf, noReceiptFor, runPairChain, type ChainResult, type Found } from '../../intake/pair-chain.js';
+import { estvToChf, noPaymentFor, noReceiptFor, runPairChain, type ChainResult, type Found } from '../../intake/pair-chain.js';
 import type { BooksPort } from '../../intake/pipeline.js';
 import { proposalsFor } from '../../intake/receipt-sets.js';
 import { batchPayersOf } from '../../intake/match.js';
@@ -25,7 +25,7 @@ const port: BooksPort = { read: readBooks, update: updateBooks };
 
 async function find(only: { receipt: string } | { payment: string }): Promise<Found> {
   const ask = await askIfReady();
-  const result: ChainResult = await runPairChain(port, { ask, toChf: estvToChf(), only, noReceipt: noReceiptFor(WS) });
+  const result: ChainResult = await runPairChain(port, { ask, toChf: estvToChf(), only, noReceipt: noReceiptFor(WS), noPayment: noPaymentFor(WS) });
   const model = result.calls > 0 && !result.modelFailed;
   const link = result.linked.find((l) => ('receipt' in only ? l.receipt === only.receipt : l.payment === only.payment));
   if (link) {
@@ -63,7 +63,7 @@ router.get('/api/transactions/:ref/receipt-sets', (req, res) => {
   const tx = books.transactions.find((t) => t.ref === req.params.ref);
   if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   const lock = periodLock(books);
-  res.json(proposalsFor(books, tx, { isOpen: (d) => !lock.isClosed(d), payers: batchPayersOf(WS), toChf: estvToChf(), buyerUid: WS.company.uid }));
+  res.json(proposalsFor(books, tx, { isOpen: (d) => !lock.isClosed(d), payers: batchPayersOf(WS), toChf: estvToChf(), buyerUid: WS.company.uid, noPayment: noPaymentFor(WS)(books) }));
 });
 
 router.post('/api/transactions/:ref/find-receipt', async (req, res) => {
