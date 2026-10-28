@@ -82,6 +82,9 @@ test('among a year of other receipts, a copy is found up to 7 days apart and a c
   const companions = twinFinder([...year, r('inv', FM78230, { date: '2026-07-30', amount: 2410.8, currency: 'CHF' })], W);
   assert.equal(companions.find(r('ab', ORDER, { date: '2026-06-29', kind: 'supporting' }))?.of, 'inv', '31 days before');
   assert.equal(companions.find(r('ab', ORDER, { date: '2026-06-28', kind: 'supporting' })), undefined, '32 days before');
+  assert.equal(companions.find(r('ab', ORDER, { kind: 'supporting' }))?.of, 'inv', 'no day: in reach of its invoice');
+  const dateless = twinFinder([...year, r('inv', FM78230, { amount: 2410.8, currency: 'CHF' })], W);
+  assert.equal(dateless.find(r('ab', ORDER, { date: '2026-07-24', kind: 'supporting' }))?.of, 'inv', 'an invoice without a day: in reach of its order');
 });
 
 test('an order confirmation is the companion of its invoice, not a copy; of a pair the copy is the one without a link', () => {

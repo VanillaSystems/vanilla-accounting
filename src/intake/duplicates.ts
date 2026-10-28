@@ -76,7 +76,7 @@ interface Prepared {
 const wordSet = (t: string) => new Set(t.split(/[^\p{L}\d]+/u).filter((w) => w.length > 2));
 const both = (a: Set<string>, b: Set<string>) => { let n = 0; for (const w of a) if (b.has(w)) n++; return n; };
 /** Of the words either has, the share both have. */
-const jaccard = (a: Set<string>, b: Set<string>) => (a.size && b.size ? both(a, b) / (a.size + b.size - both(a, b)) : 0);
+const jaccard = (a: Set<string>, b: Set<string>) => { if (!a.size || !b.size) return 0; const n = both(a, b); return n / (a.size + b.size - n); };
 /** Of the words the shorter text has, the share the other has too: an order confirmation is a part of its invoice. */
 const overlap = (a: Set<string>, b: Set<string>) => (a.size && b.size ? both(a, b) / Math.min(a.size, b.size) : 0);
 
@@ -133,31 +133,38 @@ function within(list: ReadonlyArray<{ day: number; i: number }>, at: number, day
 /**
  * Of `all`, every entry `same` could pair with a receipt, in `all`'s order (which decides between
  * equal matches): the same text, a rare number in common, a day within COMPANION_DAYS of a
- * document of the other kind or within ALIKE_DAYS of one of its own kind, and every entry without
- * a day it can compare. The rest `same` refuses whatever else they carry, so a search over a year
- * of receipts looks at the few near each one instead of all of them.
+ * document of the other kind (any day when one of them has none) or within ALIKE_DAYS of one of its
+ * own kind. The rest `same` refuses whatever else they carry, so a search over a year of receipts
+ * looks at the few near each one instead of all of them.
  */
 function candidatePool(all: readonly Entry[]): (me: Prepared, mine: boolean, counts: Map<string, number>) => number[] {
   const byText = new Map<string, number[]>();
   const byId = new Map<string, number[]>();
-  const dated = { supporting: [] as Array<{ day: number; i: number }>, plain: [] as Array<{ day: number; i: number }> };
-  const undated: number[] = [];
+  const kind = () => ({ dated: [] as Array<{ day: number; i: number }>, dateless: [] as number[] });
+  const of = { supporting: kind(), plain: kind() };
+  // A date Date.parse cannot read is apart from none and near to all: such a receipt is everyone's candidate.
+  const unreadable: number[] = [];
   const add = (index: Map<string, number[]>, key: string, i: number) => { const list = index.get(key); if (list) list.push(i); else index.set(key, [i]); };
   all.forEach(({ p, supporting }, i) => {
     if (p.text.length > 40) add(byText, p.text, i);
     for (const t of p.ids) add(byId, t, i);
-    if (p.day === undefined || !Number.isFinite(p.day)) undated.push(i);
-    else (supporting ? dated.supporting : dated.plain).push({ day: p.day, i });
+    const own = supporting ? of.supporting : of.plain;
+    if (p.day === undefined) own.dateless.push(i);
+    else if (Number.isNaN(p.day)) unreadable.push(i);
+    else own.dated.push({ day: p.day, i });
   });
-  for (const list of [dated.supporting, dated.plain]) list.sort((a, b) => a.day - b.day);
+  for (const k of [of.supporting, of.plain]) k.dated.sort((a, b) => a.day - b.day);
   const everyone = all.map((_, i) => i);
   return (me, mine, counts) => {
-    if (me.day === undefined || !Number.isFinite(me.day)) return everyone;
-    const found = new Set<number>(undated);
+    if (me.day !== undefined && Number.isNaN(me.day)) return everyone;
+    const found = new Set<number>(unreadable);
     for (const i of byText.get(me.text) ?? []) found.add(i);
     for (const t of me.ids) if ((counts.get(t) ?? 0) <= RARE) for (const i of byId.get(t) ?? []) found.add(i);
-    for (const i of within(mine ? dated.plain : dated.supporting, me.day, COMPANION_DAYS)) found.add(i);
-    if (!mine) for (const i of within(dated.plain, me.day, ALIKE_DAYS)) found.add(i);
+    // A companion without a day on either side is still in reach; a copy without one only by its text or number.
+    const other = mine ? of.plain : of.supporting;
+    for (const i of other.dateless) found.add(i);
+    for (const i of me.day === undefined ? other.dated.map((d) => d.i) : within(other.dated, me.day, COMPANION_DAYS)) found.add(i);
+    if (!mine && me.day !== undefined) for (const i of within(of.plain.dated, me.day, ALIKE_DAYS)) found.add(i);
     return [...found].sort((a, b) => a - b);
   };
 }
@@ -167,16 +174,36 @@ export interface TwinFinder {
   find(r: Comparable): Twin | undefined;
 }
 
+/** What `same` reads off a receipt's text: the same for the same text and words, whatever receipt carries it. */
+type TextRead = Pick<Prepared, 'text' | 'words' | 'ids' | 'numbers' | 'vatId'>;
+/**
+ * The texts the last finder read: the next finder, over the same books a moment later, reads only
+ * the texts that are new. Only the last finder's are kept, so the books' receipts bound what is held.
+ */
+let lastRead: { words: DocumentsData; texts: Map<string, TextRead> } | undefined;
+
 /**
  * A finder over `receipts`. `supporting(r)` says a receipt is a document beside an invoice (its
  * kind, or what its text says it is): a pair with one is a companion, not a duplicate.
  */
 export function twinFinder(receipts: readonly Comparable[], words: DocumentsData, supporting: (r: Comparable) => boolean = (r) => r.kind === 'supporting'): TwinFinder {
+  const before = lastRead?.words === words ? lastRead.texts : undefined;
+  const texts = new Map<string, TextRead>();
+  const read = (raw: string): TextRead => {
+    let t = texts.get(raw) ?? before?.get(raw);
+    if (!t) {
+      const text = norm(raw);
+      t = { text, words: wordSet(text), ids: identifiers(raw), numbers: labelledNumbers(raw, words), vatId: vatIdIn(raw) };
+    }
+    texts.set(raw, t);
+    return t;
+  };
   const prep = (r: Comparable): Prepared => {
-    const text = norm(r.extractedText ?? '');
-    return { r, text, words: wordSet(text), ids: identifiers(r.extractedText ?? ''), numbers: labelledNumbers(r.extractedText ?? '', words), vatId: r.vatId ?? vatIdIn(r.extractedText ?? ''), day: r.date ? day(r.date) : undefined };
+    const t = read(r.extractedText ?? '');
+    return { r, ...t, vatId: r.vatId ?? t.vatId, day: r.date ? day(r.date) : undefined };
   };
   const all = receipts.filter((r) => !outOfPlay(r)).map((r) => ({ p: prep(r), supporting: supporting(r) }));
+  lastRead = { words, texts };
   const prepared = new Map(all.map(({ p }) => [p.r, p]));
   const ids = new Set(all.map(({ p }) => p.r.id));
   const df = new Map<string, number>();
