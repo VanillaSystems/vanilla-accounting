@@ -66,10 +66,11 @@ for (const [name, body] of Object.entries({
 
 function update() {
   // Without NODE_TEST_CONTEXT: under it, the nested node --test of test:books would skip every file and pass.
+  // Without a tsx cache: the copy lies in a new folder each run, so what it compiled would never be read again.
   const { NODE_TEST_CONTEXT: _, ...env } = process.env;
   const r = spawnSync(process.execPath, ['--import', 'tsx', 'src/cli/update.ts'], {
     cwd: app, encoding: 'utf8',
-    env: { ...env, VANILLA_WORKSPACE: ws, PATH: `${bin}:${process.env.PATH}`, NODE_OPTIONS: '' },
+    env: { ...env, VANILLA_WORKSPACE: ws, PATH: `${bin}:${process.env.PATH}`, NODE_OPTIONS: '', TSX_DISABLE_CACHE: '1' },
   });
   return { status: r.status, out: r.stdout + r.stderr };
 }
