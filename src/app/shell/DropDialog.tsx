@@ -255,7 +255,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
         {r.state === 'take' || r.state === 'undone' ? <span /> : <button type="button" className="dx" aria-label={t('drop.remove', { name: r.name })} onClick={() => void act(session, r, { kind: 'remove' })}>×</button>}
       </div>
       {details && open ? <FileDetails d={details} name={r.from ? `${r.from} › ${r.name}` : r.name} /> : null}
-      {table ? <StatementRead key={`${r.read!.by}-${r.read!.statement.movements.length}-${r.read!.statement.closing.amount}`} r={r} act={(a) => act(session, r, a)} /> : null}
+      {table ? <StatementRead key={`${r.read!.by}-${r.read!.statement.movements.length}-${r.read!.statement.closing.amount}`} r={r} act={(a) => act(session, r, a)} go={go} /> : null}
       {columns ? <CsvColumnsForm r={r} act={(a) => act(session, r, a)} /> : null}
     </>
   );

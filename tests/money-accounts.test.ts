@@ -184,7 +184,7 @@ const open = () => false;
 
 const index = (transactions: BankTransaction[], closedThrough?: string): Index =>
   ({ receipts: [], transactions, mappings: [], bankStatements: [], journalEntries: [], config: closedThrough ? { closedThrough } : {} }) as Index;
-const scan = (rows: BankTransaction[]): Scan => ({ receipts: [], bankTransactions: rows, bankStatements: [], camtBalances: [] });
+const scan = (rows: BankTransaction[]): Scan => ({ receipts: [], bankTransactions: rows, wiseRefs: new Map(), bankStatements: [], camtBalances: [] });
 
 test('a row confirms the hand movement of its account, direction and amount within the days; the closest day wins', () => {
   const rows = [tx({ ref: 'R1', date: '2026-08-12', description: 'Belastung Papeterie Muster' })];

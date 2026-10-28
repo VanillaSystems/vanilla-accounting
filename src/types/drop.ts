@@ -64,6 +64,8 @@ export interface DropRow {
   account?: string;
   /** The person said «Einlesen» on a statement read without a bank export: it is imported as written. */
   confirmed?: true;
+  /** The person said «Als Monatsauszug behalten» on a statement PDF: kept as the month's statement (`month`, when its name does not say), its movements not imported. */
+  keep?: { month: string };
   /** Taken: the run that takes it up. */
   run?: string;
   /** A receipt: the name it got in the inbox. */
@@ -220,7 +222,9 @@ export type DropAction =
   /** A bank's CSV (`csv`): its columns and its account; the mapping is kept for the account's next CSV. */
   | { kind: 'csv'; columns: CsvColumns; account: string }
   /** A receipt, photo or scan that is a bank statement: read as one (#217). */
-  | { kind: 'statement' };
+  | { kind: 'statement' }
+  /** A statement PDF whose table waits (`read`): kept as the month's statement instead, its movements not imported; `statement`: the table as shown, for its days. */
+  | { kind: 'keep'; statement?: ReadStatement };
 
 /** Why a file is in data/quarantine/: its words say it is no receipt (and which kind, and the mail's sender), a person set it aside, or it is no PDF inside. */
 export type QuarantineReason = { kind: 'not-receipt'; why?: OtherWhy; from?: string } | { kind: 'held' } | { kind: 'unreadable' };

@@ -246,12 +246,13 @@ export type StatementProblem =
  */
 export interface AccountChoice { kind: 'whichAccount'; currency: string; iban?: Iban; accounts: Array<{ account: string; bank: string; label: string }>; proposed?: string }
 
-export type StatementRefusal = 'format' | 'notCamt' | 'account' | 'name' | 'duplicate' | 'filedPayments';
+export type StatementRefusal = 'format' | 'notCamt' | 'account' | 'name' | 'duplicate' | 'filedPayments' | 'read';
 
 /**
  * Why a statement was refused (nothing written). `account`: it lands on no bank account, `problem`
  * says why in detail and `unknown` names the account the UI offers to add. `filedPayments`: it
- * holds payments dated in a filed period that the books lack (`closed`).
+ * holds payments dated in a filed period that the books lack (`closed`). `read`: a statement PDF no
+ * bank export covers, which the drop dialog reads (#217); the upload hands it there.
  */
 export interface StatementParams {
   reason: StatementRefusal;
@@ -287,4 +288,4 @@ export interface MailStatus {
   inApp: boolean;
 }
 
-export interface StatementReadParams { why: 'line' | 'gap' | 'csvRow' | 'csvRows' | 'csvEmpty' | 'columns' | 'account'; row?: number; rows?: number; limit?: number; gap?: number; page?: number; currency?: string }
+export interface StatementReadParams { why: 'line' | 'gap' | 'csvRow' | 'csvRows' | 'csvEmpty' | 'columns' | 'account' | 'covered'; row?: number; rows?: number; limit?: number; gap?: number; page?: number; currency?: string; file?: string }

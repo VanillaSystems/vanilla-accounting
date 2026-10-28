@@ -13,6 +13,12 @@ export interface ReadMovement {
   counterparty?: string;
   text?: string;
   reference?: string;
+  /**
+   * The amount in the currency the payment was made in, when the statement prints one besides the
+   * account's (a card charge in USD on an account in another currency): positive. Written as the ISO 20022 InstdAmt, so
+   * a receipt in that currency matches it as it matches a bank export's (#187).
+   */
+  original?: { amount: number; currency: string };
   /** The page it is printed on, where the statement has several. */
   page?: number;
 }
@@ -61,6 +67,12 @@ export interface StatementRead {
   /** The lines the books hold already (by day and amount), from an ISO 20022 statement or an earlier statement: not added again. */
   known: { date: string; amount: number }[];
   why?: HandWhy;
+  /**
+   * A bank export in the books covers days of this statement's account (`file`, from `from` to `to`):
+   * its movements are not imported, whatever lines match, since a value date or a day misread would
+   * double a payment. A PDF is kept as the month's statement instead («Als Monatsauszug behalten»).
+   */
+  covered?: { file: string; from: string; to: string };
   /** The file's pages, and the most the model reads (`why: 'pages'`). */
   pages?: number;
   limit?: number;

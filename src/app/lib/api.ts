@@ -178,6 +178,7 @@ export function errorText(e: unknown): string {
     case 'statementRead': {
       const p = b.params;
       if (p.why === 'gap') return t('error.statementRead.gap', { gap: `${p.currency ?? ''} ${fmt(p.gap ?? 0)}`.trim(), page: p.page ? t('error.statementRead.onPage', { page: p.page }) : '' });
+      if (p.why === 'covered') return t('error.statementRead.covered', { file: (p.file ?? '').split('/').pop() ?? '' });
       return t(`error.statementRead.${p.why}`, { row: p.row ?? '', rows: p.rows ?? '', limit: p.limit ?? '' });
     }
     case 'notInTrash': return t('error.notInTrash');
@@ -498,9 +499,12 @@ export const api = {
   /** The undo of a removal, after the file is read again: its bookings and links back as they were (r10h-3). */
   restoreStatementBookings: (removed: StatementRemoved['removed']) => request<Ok>('POST', '/api/statements/bookings', removed),
 
-  /** A camt.053 or statement PDF into bank-statements/, read into the books; `into` names the missing month it is for. */
-  importStatement: async (file: Blob, name: string, into?: { account: string; month: string }) => {
-    const qs = new URLSearchParams({ name, ...into });
+  /**
+   * A camt.053 or statement PDF into bank-statements/, read into the books; `into` names the missing month it is for.
+   * A PDF no camt.053 covers is refused (`read`): the drop dialog reads it (#217); `keep` keeps it as the month's statement.
+   */
+  importStatement: async (file: Blob, name: string, into?: { account: string; month: string }, keep?: boolean) => {
+    const qs = new URLSearchParams({ name, ...into, ...(keep ? { keep: '1' } : {}) });
     const res = await apiFetch(`/api/statements?${qs}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
     if (!res.ok) throw new ApiError(((await res.json().catch(() => null)) as ApiErrorBody | null) ?? { error: `HTTP ${res.status}` });
     return (await res.json()) as StatementImport;

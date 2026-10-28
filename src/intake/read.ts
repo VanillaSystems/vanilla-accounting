@@ -21,7 +21,7 @@ import { detectVatProofIssue, textFacts } from '../parsers/receipt-text.js';
 import { buildVisionPrompt } from '../llm/prompts.js';
 import type { Receipt } from '../types/index.js';
 import { filesOfPart, type Workspace } from '../workspace/workspace.js';
-import { mergeIndex, readStatementFiles, readTransactions, withinBooks } from '../books/bank-import.js';
+import { mergeIndex, readStatementFiles, readTransactions, readWiseReferences, withinBooks } from '../books/bank-import.js';
 import type { BankFiles } from '../books/bank-import.js';
 import { loadInvoices, saveInvoices } from '../invoices/store.js';
 import { matchPayments, type PaymentOutcome } from '../invoices/payments.js';
@@ -264,6 +264,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
     }
   })));
 
+  const wiseRefs = await readWiseReferences(ws, (msg) => log(`  warn: ${msg}`));
   const statementFiles = readStatementFiles(ws);
   const invoices = loadInvoices(ws);
   const payments = paymentContext(ws);
@@ -311,7 +312,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
     if (kept.length < now.transactions.length) {
       log(`  skipped ${now.transactions.length - kept.length} bank transaction(s) dated before ${before}, when the books open (config.openingBalances)`);
     }
-    const merged = mergeIndex(index, { receipts, bankTransactions: assignUniqueRefs(kept), bankStatements: statementFiles.statements, camtBalances: statementFiles.balances });
+    const merged = mergeIndex(index, { receipts, bankTransactions: assignUniqueRefs(kept), wiseRefs, bankStatements: statementFiles.statements, camtBalances: statementFiles.balances });
     Object.assign(index, merged.index);
     // On the agreed basis each issued document's VAT event comes before its payment, which then only settles the receivable (src/invoices/events.ts).
     const events = payments ? bookInvoiceEvents(index, invoices, payments) : undefined;

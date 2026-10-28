@@ -47,6 +47,15 @@ export function amountOf(v: unknown): number | undefined {
 const words = (v: unknown, max = 300) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined);
 const round = (n: number) => Math.round(n * 100) / 100;
 
+/** A movement's amount in another currency than the account's, as printed beside it; none in the account's own. */
+function originalOf(v: unknown, account: string): { amount: number; currency: string } | undefined {
+  const o = v as Record<string, unknown> | null;
+  if (!o || typeof o !== 'object' || typeof o.currency !== 'string') return undefined;
+  const currency = o.currency.trim().toUpperCase();
+  const amount = amountOf(o.amount);
+  return /^[A-Z]{3}$/.test(currency) && currency !== account && amount !== undefined && amount !== 0 ? { amount: round(Math.abs(amount)), currency } : undefined;
+}
+
 /**
  * A statement from outside the code (the model's answer, the person's corrected table) in its
  * shape, or undefined when it is none: a currency, the opening and closing balance with their days,
@@ -73,9 +82,11 @@ export function parseReadStatement(x: unknown): ReadStatement | undefined {
     if (!isDay(m.date) || amount === undefined) return undefined;
     const page = typeof m.page === 'number' && Number.isInteger(m.page) && m.page > 0 ? m.page : undefined;
     const counterparty = words(m.counterparty, 140), said = words(m.text), reference = words(m.reference, 140);
+    const original = originalOf(m.original, currency);
     movements.push({
       date: m.date, ...(isDay(m.valueDate) ? { valueDate: m.valueDate } : {}), amount: round(amount),
-      ...(counterparty ? { counterparty } : {}), ...(said ? { text: said } : {}), ...(reference ? { reference } : {}), ...(page ? { page } : {}),
+      ...(counterparty ? { counterparty } : {}), ...(said ? { text: said } : {}), ...(reference ? { reference } : {}),
+      ...(original ? { original } : {}), ...(page ? { page } : {}),
     });
   }
   const pages = Array.isArray(o.pages) ? (o.pages as (Record<string, unknown> | null)[]).flatMap((p) => {

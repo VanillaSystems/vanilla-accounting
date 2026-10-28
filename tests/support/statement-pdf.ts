@@ -18,6 +18,8 @@ export interface Invented {
   movements: { date: string; amount: number; counterparty?: string; text: string; reference?: string }[];
   /** Movements per page; the last page takes the rest. */
   perPage?: number;
+  /** A scan whose text gives no IBAN (the account number only on a logo, say): only the read gives it. */
+  noIban?: boolean;
 }
 
 const swiss = (n: number) => {
@@ -44,7 +46,7 @@ export async function inventedStatement(s: Invented): Promise<{ pdf: Buffer; tru
     const row = (cells: [string, number][], f = font) => { for (const [text, x] of cells) line(text, x, f); y -= 16; };
     line(s.bank, 50, bold, 13); y -= 20;
     line(`Kontoauszug ${dmy(s.from)} - ${dmy(s.to)}`, 50, bold, 12); y -= 18;
-    line(`IBAN ${s.iban.replace(/(.{4})/g, '$1 ').trim()}   Konto in ${s.currency}`); y -= 14;
+    line(s.noIban ? `Konto in ${s.currency}` : `IBAN ${s.iban.replace(/(.{4})/g, '$1 ').trim()}   Konto in ${s.currency}`); y -= 14;
     line(`Kontoinhaber: ${s.owner}`); y -= 14;
     line(`Seite ${p + 1} von ${chunks.length}`, 470); y -= 24;
     row([['Datum', 50], ['Text', 120], ['Belastung', 390], ['Gutschrift', 470]], bold);

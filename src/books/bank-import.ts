@@ -1,15 +1,17 @@
 /**
  * The bank side of the books, read from bank-statements/: the transactions of every camt.053
- * (a bank's export, or one the app wrote from a statement read without camt.053, #217) and the
- * monthly statement PDFs. `npm run extract` and the statement upload (POST /api/statements) both
- * read the folder through here and merge with mergeIndex, so a statement imported from the UI lands
- * exactly as extract would put it.
+ * (a bank's export, or one the app wrote from a statement read without camt.053, #217), the monthly
+ * statement PDFs, and the Wise transfer references only those PDFs keep. `npm run extract` and the
+ * statement upload (POST /api/statements) both read the folder through here and merge with
+ * mergeIndex, so a statement imported from the UI lands exactly as extract would put it.
  */
 import { legOf, madeByHand } from '../workspace/money-accounts.js';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { assignUniqueRefs, statementSpan, transactionsOf } from '../providers/camt053/camt053.js';
+import { pdfText } from '../parsers/pdf-text.js';
 import { statementPdf } from './statement-facts.js';
+import { wiseReferences } from '../providers/wise-pdf/wise-statement-pdf.js';
 import type { BankStatement, BankTransaction, Index, Mapping, Receipt, StatementClosingBalance } from '../types/index.js';
 import { readBankStatements, type StatementFile } from '../workspace/bank-statements.js';
 import { partDirs, type Workspace } from '../workspace/workspace.js';
@@ -36,8 +38,8 @@ export function readTransactions(ws: Ws): BankFiles {
  * begins where the last ended, a year-to-date export repeats every month. A payment read from an
  * earlier file (same account, bank reference, date, direction, amount and currency) is not read
  * again from a later one, so it keeps its ref and its bookings; a reference or counterparty only
- * the later file names fills the gap (Wise's PDF names a transfer's reference its camt.053 drops).
- * Within one file nothing is dropped: two entries of one export are two bookings.
+ * a statement read without camt.053 names fills the export's gap. Within one file nothing is
+ * dropped: two entries of one export are two bookings.
  *
  * A statement the app wrote from a PDF, scan, table or CSV (#217) has no bank reference: its
  * movement is the bank export's payment of the same account, day, direction and amount, one for
@@ -114,10 +116,31 @@ export function refsByFile(files: StatementFile[]): Map<string, string[]> {
   return new Map([...perFile].map(([file, ts]) => [file, [...new Set(ts.map((t) => t.ref))]]));
 }
 
-/** The refs the statement files other than `except` give, as the books hold them: what an undone statement must leave in place. */
-export function refsHeldWithout(ws: Ws, except: string, config: Index['config']): Set<string> {
-  const others = readBankStatements(ws).filter((f) => f.file !== except);
-  return new Set(assignUniqueRefs(withinBooks(transactionsOfFiles(others), config).kept).map((t) => t.ref));
+/**
+ * What an undone statement `except` must leave in place: `held`, the refs the other files give, as
+ * the books hold them; and `moves`, for a statement read without camt.053 (#217), each payment the
+ * books hold under its ref whose movement a bank export holds too (one transaction, transactionsOfFiles):
+ * it stays, under the ref the export gives it alone (its ref now → that transaction).
+ */
+export function heldWithout(ws: Ws, except: string, config: Index['config']): { held: Set<string>; moves: Map<string, BankTransaction> } {
+  const files = readBankStatements(ws);
+  const rest = canonical(files.filter((f) => f.file !== except));
+  const kept = new Set(assignUniqueRefs(withinBooks(rest.out, config).kept));
+  const held = new Set([...kept].map((t) => t.ref));
+  const moves = new Map<string, BankTransaction>();
+  const removed = files.find((f): f is Read => f.file === except && f.status === 'read');
+  if (!removed?.statement.read) return { held, moves };
+  // The same files with `except`: each other file's movements come in the same order, so the i-th is the same movement under the ref the books hold.
+  const all = canonical(files);
+  assignUniqueRefs(withinBooks(all.out, config).kept);
+  for (const [file, now] of rest.perFile) {
+    const before = all.perFile.get(file) ?? [];
+    for (const [i, t] of now.entries()) {
+      const was = before[i]?.ref;
+      if (was !== undefined && was !== t.ref && kept.has(t)) moves.set(was, t);
+    }
+  }
+  return { held, moves };
 }
 
 /**
@@ -172,6 +195,28 @@ export function readStatementFiles(ws: Ws): StatementFiles {
   return { statements: statements.sort((a, b) => a.fromDate.localeCompare(b.fromDate)), balances };
 }
 
+/** A span of days a bank's own export covers for one account. */
+export interface ExportSpan { account: string; from: string; to: string; file: string }
+
+/**
+ * The days each bank export covers, per account: the camt.053 files a bank gave, never one the app
+ * wrote from a statement read without it (#217). A statement read for days one of these covers is
+ * kept as the month's statement, its movements not imported (src/intake/statement-read.ts).
+ */
+export function exportSpans(ws: Ws): ExportSpan[] {
+  const byFile = new Map<string, Read[]>();
+  for (const f of readBankStatements(ws)) if (f.status === 'read' && !f.statement.read) (byFile.get(f.file) ?? byFile.set(f.file, []).get(f.file)!).push(f);
+  const out: ExportSpan[] = [];
+  for (const [file, reads] of byFile) {
+    for (const number of new Set(reads.map((r) => r.account.account))) {
+      const mine = reads.filter((r) => r.account.account === number);
+      const span = statementSpan(mine.map((r) => r.statement), mine[0].account, file.split('/').pop() ?? file);
+      if (span) out.push({ account: number, from: span.from, to: span.to, file });
+    }
+  }
+  return out;
+}
+
 /** The balances read from the camt.053 files now, beside the others (a PDF's): the PDF's balance of a day wins. */
 export function withCamtBalances(others: StatementClosingBalance[] = [], camt: StatementClosingBalance[]): StatementClosingBalance[] | undefined {
   const kept = others.filter((b) => b.source !== 'camt');
@@ -181,6 +226,19 @@ export function withCamtBalances(others: StatementClosingBalance[] = [], camt: S
   return out.length || others.length ? out : undefined;
 }
 
+/** Wise drops transfer references from camt053; its monthly PDFs keep them (Wise transaction id → reference). */
+export async function readWiseReferences(ws: Ws, warn: (msg: string) => void = () => {}): Promise<Map<string, string>> {
+  const refs = new Map<string, string>();
+  for (const bank of new Set(ws.bankAccounts.filter((a) => a.statements === 'wise').map((a) => a.bank))) {
+    for (const dir of partDirs(ws.paths, 'statements').map((d) => join(d, bank)).filter((d) => existsSync(d))) for (const f of readdirSync(dir).filter((x) => x.endsWith('.pdf'))) {
+      try {
+        for (const [id, ref] of wiseReferences(await pdfText(join(dir, f), 'raw'))) refs.set(id, ref);
+      } catch (e) { warn(`${f}: ${e}`); }
+    }
+  }
+  return refs;
+}
+
 // ─── Merge: previous index + what is on disk now → new index ──────────────────
 
 export interface Scan {
@@ -188,6 +246,8 @@ export interface Scan {
   receipts: Receipt[];
   /** Transactions parsed from the camt053 files, refs already unique. */
   bankTransactions: BankTransaction[];
+  /** Wise transaction id → transfer reference, from the monthly statement PDFs of the `wise` accounts. */
+  wiseRefs: Map<string, string>;
   bankStatements: BankStatement[];
   /** The balances the camt.053 files state (readStatementFiles). */
   camtBalances: StatementClosingBalance[];
@@ -195,10 +255,9 @@ export interface Scan {
 
 /**
  * Where each transaction field comes from. A rebuild takes the 'bank' fields from the camt053
- * files and keeps every other field from the previous index: a remark, "no receipt needed",
- * whatever a later step adds. A reference once read stays when the files name none now (Wise's
- * camt.053 drops a transfer's reference that a statement read from its PDF gave). A new
- * BankTransaction field does not compile until it is listed here.
+ * (and the Wise PDFs) and keeps every other field from the previous index: a remark, "no
+ * receipt needed", whatever a later step adds. A new BankTransaction field does not compile
+ * until it is listed here.
  */
 const TRANSACTION_FIELD_SOURCE = {
   ref: 'bank', bank: 'bank', date: 'bank', amount: 'bank', currency: 'bank', direction: 'bank',
@@ -282,7 +341,7 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
   const fromBank = unclaimed.filter((t) => !confirmingLegs.has(legOf(t))).map((t) => {
     const before = previousByLeg.get(legOf(t));
     if (!before) return t;
-    return isClosed(before) ? before : { ...t, ...keptFields(before), ...(!t.reference && before.reference ? { reference: before.reference } : {}) };
+    return isClosed(before) ? before : { ...t, ...keptFields(before) };
   });
   const vanishedClosedTransactions = previous.transactions.filter(
     (t) => !madeByHand(t) && !freshLegs.has(legOf(t)) && isClosed(t),
@@ -298,7 +357,15 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
     return rest;
   });
 
-  const transactions = [...fromBank, ...vanishedClosedTransactions, ...manual];
+  const transactions = [...fromBank, ...vanishedClosedTransactions, ...manual].map((t) => {
+    if (isClosed(t)) return t;
+    const out = { ...t };
+    // Wise drops transfer references from camt053; its monthly PDFs keep them. The map holds
+    // Wise transaction ids only (CARD-…, TRANSFER-…), read from the folders of `wise` accounts.
+    const fromPdf = scan.wiseRefs.get(t.bankTxId ?? t.ref.split('~')[0]);
+    if (fromPdf && !out.reference) out.reference = fromPdf;
+    return out;
+  });
 
   const receiptIds = new Set(scan.receipts.map((r) => r.id));
   const byRef = new Map(transactions.map((t) => [t.ref, t]));

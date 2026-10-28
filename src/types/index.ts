@@ -376,7 +376,7 @@ export interface Index {
   bankStatements: BankStatement[];
   journalEntries?: JournalEntry[];
   config?: AccountingConfig;
-  // The balances each statement states (a camt.053's, or one read without it, #217), and year-end confirmations (#119).
+  // Populated by `npm run extract-balances` (parses monthly statement PDFs).
   statementBalances?: StatementClosingBalance[];
 }
 

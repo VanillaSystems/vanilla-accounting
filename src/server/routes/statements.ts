@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import { basename, dirname, join, relative } from 'node:path';
 import { accountForStatement, type StatementProblem } from '../../accounting/bank-accounts.js';
 import { legOf, madeByHand } from '../../workspace/money-accounts.js';
-import { mergeIndex, readStatementFiles, readTransactions, refsHeldWithout, transactionsOfFiles, withCamtBalances, withinBooks } from '../../books/bank-import.js';
+import { exportSpans, heldWithout, mergeIndex, readStatementFiles, readTransactions, readWiseReferences, transactionsOfFiles, withCamtBalances, withinBooks } from '../../books/bank-import.js';
 import { statementPdf } from '../../books/statement-facts.js';
 import { compactIban, readBankStatements } from '../../workspace/bank-statements.js';
 import { periodLock } from '../../books/store.js';
@@ -22,14 +22,17 @@ import { proposedAccount } from '../../accounting/statement-bank.js';
 import { statementDetails } from '../../providers/statement-files.js';
 import { refDates } from '../books.js';
 import { parseStatementBalances } from '../../providers/camt053/statement-balances.js';
+import { extractStatementBalances } from '../../providers/statement-pdf/statement-pdf-balances.js';
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
+import { coveredByExport } from '../../intake/statement-read.js';
+import { firstPages } from '../../intake/recognize.js';
 import { matchPayments } from '../../invoices/payments.js';
 import { bookInvoiceEvents } from '../../invoices/events.js';
 import { fileReceipts, paymentContext } from '../../invoices/service.js';
 import type { StatementRefusal, UnknownAccount } from '../../types/api-error.js';
 import type { BankTransaction, JournalEntry, Mapping, StatementClosingBalance, StatementImport } from '../../types/index.js';
 import { parseIban } from '../../workspace/banks.js';
-import { findFile, yearPaths, type LedgerBankAccount } from '../../workspace/workspace.js';
+import { findFile, partDirs, yearPaths, type LedgerBankAccount } from '../../workspace/workspace.js';
 import { RequestError, WS, assertOpen, patchBody, readBooks, updateBooks, updateBooksWithEffects, withBooks } from '../books.js';
 import { addEntry } from '../edits.js';
 import { openingLock, withOpening } from '../../accounting/opening-balance.js';
@@ -191,18 +194,32 @@ function placePdf(filename: string, hint?: LedgerBankAccount, month?: string): P
   return { account, filename, first: named.fromDate, last: named.toDate };
 }
 
+/** The new closing balances replace those of the same account and day; the others stay. */
+function mergeBalances(old: StatementClosingBalance[] = [], fresh: StatementClosingBalance[]): StatementClosingBalance[] {
+  const key = (b: StatementClosingBalance) => `${b.account} ${b.date}`;
+  const out = new Map(old.map((b) => [key(b), b]));
+  for (const b of fresh) out.set(key(b), b);
+  return [...out.values()].sort((a, b) => a.date.localeCompare(b.date) || a.account.localeCompare(b.account));
+}
+
 router.post('/api/statements', express.raw({ type: () => true, limit: '50mb' }), async (req, res) => {
   const body = req.body as unknown;
   if (!Buffer.isBuffer(body) || body.length === 0) throw new RequestError(400, 'Keine Datei erhalten.');
   const month = typeof req.query.month === 'string' && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : undefined;
-  res.json(await importStatement(body, String(req.query.name ?? ''), typeof req.query.account === 'string' ? req.query.account : undefined, month));
+  const name = basename(String(req.query.name ?? '')).trim();
+  // A PDF of days no bank export covers is read into its movements in the drop dialog, as a dropped one is (#217); `keep=1` keeps it as the month's statement (the undo of «Auszug entfernen»).
+  if (/\.pdf$/i.test(name) && req.query.keep !== '1' && !coveredByExport(await firstPages(body) ?? '', name, WS.bankAccounts, exportSpans(WS))) {
+    refuse(409, 'Kein camt.053 deckt diesen Auszug ab: er wird im Ablage-Dialog gelesen.', 'read');
+  }
+  res.json(await importStatement(body, name, typeof req.query.account === 'string' ? req.query.account : undefined, month));
 });
 
 /**
  * Reads one statement file (camt.053 or a PDF) into the books: placed by its account and month,
  * refused as a RequestError when it belongs to no account, lies in a closed period or is read
  * already. The Bank area's upload and the drop dialog both take this one way in. `source`: the file
- * a camt.053 the app wrote was read from (#217), kept beside it under the same name.
+ * a camt.053 the app wrote was read from (#217), written beside it under the same stem (refused when
+ * a file of that name is there); the import's failure removes only what it wrote.
  */
 export async function importStatement(body: Buffer, given: string, accountHint?: string, month?: string, source?: { ext: string; bytes: Buffer }): Promise<StatementImport> {
   const name = basename(given).trim();
@@ -222,10 +239,12 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
     throw new RequestError(409, same ? `${placed.filename} ist schon eingelesen.` : `Datei ${placed.filename} existiert bereits.`,
       same ? { code: 'statement', params: { reason: 'duplicate', detail: mine } } : { code: 'fileExists', params: { filename: placed.filename } });
   }
+  // The file a written camt.053 was read from goes beside it under its stem: never over a file of that name, nor taking one up as its own (drop.ts gives the read a free stem).
+  const beside = source && xml ? path.replace(/\.xml$/i, `.${source.ext}`) : undefined;
+  if (beside && existsSync(beside)) throw new RequestError(409, `Datei ${basename(beside)} existiert bereits.`, { code: 'fileExists', params: { filename: basename(beside) } });
   mkdirSync(dir, { recursive: true });
   writeFileSync(path, body);
-  const beside = source && xml ? path.replace(/\.xml$/i, `.${source.ext}`) : undefined;
-  if (beside && source && !existsSync(beside)) writeFileSync(beside, source.bytes);
+  if (beside && source) writeFileSync(beside, source.bytes);
   try {
     const bank = readTransactions(WS);
     const unmatched = bank.files.find((f) => f.status === 'unmatched');
@@ -236,6 +255,8 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
       refuse(409, `Schon eingelesen aus ${other}.`, 'duplicate', other);
     }
 
+    const wiseRefs = await readWiseReferences(WS);
+    const balances = xml ? undefined : (await extractStatementBalances(partDirs(WS.paths, 'statements'), WS.bankAccounts)).balances;
     const invoices = loadInvoices(WS);
     const payments = paymentContext(WS);
     return updateBooksWithEffects((books): StatementImport => {
@@ -248,17 +269,19 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
       const lock = periodLock(books);
       const stay = books.transactions.filter((t) => !madeByHand(t) && !freshLegs.has(legOf(t)) && !lock.isClosed(t.date));
       const files = readStatementFiles(WS);
-      const merged = mergeIndex(books, { receipts: books.receipts, bankTransactions: [...fresh, ...stay], bankStatements: files.statements, camtBalances: files.balances });
+      const merged = mergeIndex(books, { receipts: books.receipts, bankTransactions: [...fresh, ...stay], wiseRefs, bankStatements: files.statements, camtBalances: files.balances });
       // The books keep their order; the new payments come after them.
       const pos = new Map(books.transactions.map((t, i) => [t.ref, i]));
       const known = merged.index.transactions.filter((t) => pos.has(t.ref)).sort((a, b) => pos.get(a.ref)! - pos.get(b.ref)!);
       Object.assign(books, merged.index, { transactions: [...known, ...merged.index.transactions.filter((t) => !pos.has(t.ref))] });
+      if (balances) books.statementBalances = mergeBalances(books.statementBalances, balances);
       // On the agreed basis an issued document's event comes first: its payment then only settles the receivable.
       const events = payments ? bookInvoiceEvents(books, invoices, payments) : undefined;
       if (events) fileReceipts(WS, books, events.files);
       const paid = payments ? matchPayments(books, invoices, payments) : undefined;
       if (paid) { fileReceipts(WS, books, paid.files); saveInvoices(WS, invoices); }
-      const closing = placed.closing;
+      const closing = placed.closing ?? balances?.filter((b) => b.sourceFile === placed.filename && b.account === placed.account.account)
+        .sort((a, b) => a.date.localeCompare(b.date)).map((b) => ({ date: b.date, amount: b.amount })).at(-1);
       return {
         file: `${placed.account.bank}/${placed.filename}`,
         account: placed.account.account,
@@ -286,8 +309,8 @@ const confirmedCount = (n: number) => (n ? { confirmed: n } : {});
 function refsOnlyIn(file: string): string[] {
   const books = readBooks();
   const all = assignUniqueRefs(withinBooks(transactionsOfFiles(readBankStatements(WS).filter((f) => f.status === 'read')), books.config).kept).map((t) => t.ref);
-  const held = refsHeldWithout(WS, file, books.config);
-  return all.filter((ref) => !held.has(ref));
+  const { held, moves } = heldWithout(WS, file, books.config);
+  return all.filter((ref) => !held.has(ref) && !moves.has(ref));
 }
 
 /**
@@ -302,9 +325,11 @@ export function removeStatement(file: string, refs?: readonly string[]): Stateme
   const path = findFile(WS.paths, 'statements', file);
   if (!path) throw new RequestError(404, `Den Auszug ${file} gibt es nicht.`, { code: 'gone', params: { what: 'file' } });
   const books = readBooks();
-  const held = refsHeldWithout(WS, file, books.config);
-  const mine = new Set((refs ?? refsOnlyIn(file)).filter((ref) => !held.has(ref)));
-  assertOpen(books, [...mine].flatMap((ref) => refDates(books, ref)), 'deleteTransaction');
+  const { held, moves } = heldWithout(WS, file, books.config);
+  const mine = new Set((refs ?? refsOnlyIn(file)).filter((ref) => !held.has(ref) && !moves.has(ref)));
+  // A payment of a statement read without camt.053 that a bank export holds too stays, under the export's ref (#217).
+  const moved = [...moves].filter(([was, t]) => books.transactions.some((x) => x.ref === was) && !books.transactions.some((x) => x.ref === t.ref));
+  assertOpen(books, [...mine, ...moved.map(([was]) => was)].flatMap((ref) => refDates(books, ref)), 'deleteTransaction');
   if ((books.journalEntries ?? []).some((e) => mine.has(e.transactionRef) && e.origin === 'manual')) throw new RequestError(409, 'Auf einer dieser Zahlungen steht eine Buchung von Hand. Erst sie löschen.');
   const bytes = readFileSync(path);
   const lock = periodLock(books);
@@ -322,6 +347,16 @@ export function removeStatement(file: string, refs?: readonly string[]): Stateme
       for (const t of b.transactions) if (t.statement !== undefined && mine.has(t.statement) && !lock.isClosed(t.date)) delete t.statement;
       b.journalEntries = b.journalEntries.filter((e) => !mine.has(e.transactionRef));
       b.mappings = b.mappings.filter((m) => !mine.has(m.transactionRef));
+      for (const [was, now] of moved) {
+        const t = b.transactions.find((x) => x.ref === was);
+        if (!t) continue;
+        t.ref = now.ref;
+        if (now.bankTxId) t.bankTxId = now.bankTxId;
+        else delete t.bankTxId;
+        for (const e of b.journalEntries) if (e.transactionRef === was) e.transactionRef = now.ref;
+        for (const m of b.mappings) if (m.transactionRef === was) m.transactionRef = now.ref;
+        for (const x of b.transactions) if (x.statement === was) x.statement = now.ref;
+      }
       const files = readStatementFiles(WS);
       b.bankStatements = files.statements;
       const balances = withCamtBalances(b.statementBalances?.filter((x) => x.sourceFile !== basename(file)), files.balances);

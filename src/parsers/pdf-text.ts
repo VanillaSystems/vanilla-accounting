@@ -6,9 +6,10 @@
  *    reading order, their lines with single spaces, a blank line between blocks, as pdftotext's
  *    default lays a page out. Receipts (src/cli/extract.ts); stored as `extractedText`.
  *  - `raw`: the runs in content-stream order, broken into lines by poppler's rule (a new line
- *    when the baseline moves or the x position goes back).
+ *    when the baseline moves or the x position goes back). Wise statements keep a transfer's
+ *    "Transaction: … | Reference: …" on one line this way (src/parsers/wise-statement-pdf.ts).
  *  - `layout`: the lines top to bottom, the runs padded with spaces to their column, blank lines
- *    for vertical gaps. A statement's columns, handed to the model that reads it (#217).
+ *    for vertical gaps. Statement closing balances (src/parsers/statement-pdf-balances.ts).
  *
  * Pages end with a form feed, as pdftotext prints them.
  */

@@ -42,6 +42,7 @@ function scan(over: Partial<Scan> = {}): Scan {
   return {
     receipts: [receipt('r-closed'), receipt('r-open')],
     bankTransactions: [tx('T-closed', '2026-05-10'), tx('T-open', '2026-08-10')],
+    wiseRefs: new Map(),
     camtBalances: [],
     bankStatements: [],
     ...over,
@@ -82,16 +83,16 @@ test('remarks and noReceiptNeeded set by a person survive the rebuild', () => {
   assert.equal(byRef(merged, 'T-open')?.noReceiptNeeded, true);
 });
 
-test('a reference once read stays in an open period when the files name none now (Wise drops it from its camt.053, #217)', () => {
+test('a Wise transfer reference is filled from the statement PDF in an open period', () => {
   const wise = tx('W-1~a', '2026-08-03', { bank: 'Wise' });
-  const prev = previousIndex({ transactions: [...previousIndex().transactions, { ...wise, reference: 'INV-42' }] });
-  assert.equal(byRef(merge(prev, scan({ bankTransactions: [wise] })), 'W-1~a')?.reference, 'INV-42');
+  const merged = merge(previousIndex(), scan({ bankTransactions: [wise], wiseRefs: new Map([['W-1', 'INV-42']]) }));
+  assert.equal(byRef(merged, 'W-1~a')?.reference, 'INV-42');
 });
 
-test('a reference the files name now wins over the one read before', () => {
+test('a reference the camt053 already has wins over the Wise PDF', () => {
   const wise = tx('W-1', '2026-08-03', { bank: 'Wise', reference: 'from-camt' });
-  const prev = previousIndex({ transactions: [...previousIndex().transactions, { ...wise, reference: 'before' }] });
-  assert.equal(byRef(merge(prev, scan({ bankTransactions: [wise] })), 'W-1')?.reference, 'from-camt');
+  const merged = merge(previousIndex(), scan({ bankTransactions: [wise], wiseRefs: new Map([['W-1', 'from-pdf']]) }));
+  assert.equal(byRef(merged, 'W-1')?.reference, 'from-camt');
 });
 
 test('closed transactions get no batch parts and no reference', () => {
@@ -137,9 +138,9 @@ test('a field another step set on a bank transaction survives the rebuild', () =
   assert.deepEqual(byRef(merged, 'T-open'), stamped);
 });
 
-test('a bank field the bank no longer reports is not carried over; a reference once read is (#217)', () => {
+test('a bank field the bank no longer reports is not carried over', () => {
   const prev = previousIndex({ transactions: [tx('T-closed', '2026-05-10'), tx('T-open', '2026-08-10', { type: 'wise-fee', reference: 'old' })] });
-  assert.deepEqual(byRef(merge(prev, scan()), 'T-open'), tx('T-open', '2026-08-10', { reference: 'old' }));
+  assert.deepEqual(byRef(merge(prev, scan()), 'T-open'), tx('T-open', '2026-08-10'));
 });
 
 // ─── (b) A filed quarter's receipt links are never dropped ───────────────────
@@ -181,7 +182,8 @@ test('merging the same scan twice gives the same index', () => {
   });
   const s = scan({
     receipts: [receipt('r-open')],
-    bankTransactions: [tx('T-closed', '2026-05-10', { parts }), tx('T-open', '2026-08-10', { parts }), tx('W-1~a', '2026-08-03', { bank: 'Wise', reference: 'INV-42' })],
+    bankTransactions: [tx('T-closed', '2026-05-10', { parts }), tx('T-open', '2026-08-10', { parts }), tx('W-1~a', '2026-08-03', { bank: 'Wise' })],
+    wiseRefs: new Map([['W-1', 'INV-42']]),
   });
   const once = mergeIndex(prev, s);
   const twice = mergeIndex(once.index, s);
@@ -231,8 +233,9 @@ test('re-reading a Wise camt053 gives open transactions their Wise id and leaves
   const asFiled = [...read, ...open].map(({ bankTxId: _, ...t }) => t);
   const prev = previousIndex({ transactions: asFiled });
   const sealed = sealOf(prev, '2026-Q2', '2026-07-01').sha256;
-  const merged = merge(prev, scan({ bankTransactions: [...read, ...open] }));
+  const merged = merge(prev, scan({ bankTransactions: [...read, ...open], wiseRefs: new Map([['CARD-7200000001', 'Rechnung 4711']]) }));
   assert.equal(sealOf(merged, '2026-Q2', '2026-07-01').sha256, sealed, 'the seal of the filed quarter holds');
   assert.deepEqual(read.map((t) => byRef(merged, t.ref)?.bankTxId), [undefined, undefined], 'a filed transaction keeps what it was filed with');
   assert.deepEqual(open.map((t) => byRef(merged, t.ref)?.bankTxId), ['CARD-7200000001', 'FEE-CARD-7200000001']);
+  assert.equal(byRef(merged, open[0].ref)?.reference, 'Rechnung 4711', 'the statement PDF\'s reference is found by the Wise id too');
 });

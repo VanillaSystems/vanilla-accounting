@@ -18,6 +18,10 @@ steps:
         when: a line is a payment the books hold already (same account, day, direction, amount)
         then: it is not added again; its camt.053 and the read statement are one payment
         source: docs/0.4.0/intake.md
+      - id: bnk-read-covered
+        when: a bank's camt.053 covers days of the read statement's account
+        then: none of its movements is imported (a value date or a day misread would double a payment); the PDF is kept as the month's statement, its movements and balances are the camt.053's
+        source: docs/0.4.0/intake.md
       - id: bnk-read-csv
         when: a bank's CSV is dropped
         then: the person names its columns once; the mapping is kept per account in knowledge/bank-csv.yaml and reads the next CSV of that header

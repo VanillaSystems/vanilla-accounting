@@ -125,3 +125,44 @@ test('a bank CSV: header found below the bank\'s preamble, columns guessed from 
   assert.deepEqual(csvStatement(many, columns, { currency: 'CHF' }), { kind: 'tooMany', rows: MAX_CSV_ROWS + 1, limit: MAX_CSV_ROWS }, 'the limit names itself');
   assert.deepEqual([dayOf('31.12.26'), dayOf('2026-02-30'), dayOf('Total')], ['2026-12-31', undefined, undefined]);
 });
+
+test('a card charge in another currency: the read keeps the amount as printed, the written camt.053 carries it as InstdAmt, read back as the payment\'s original amount; none in the account\'s own currency', async () => {
+  const { truth } = await inventedStatement(DEMO_OCTOBER);
+  const card = { date: '2026-10-09', amount: -86.4, counterparty: 'Cloud Beispiel Inc.', text: 'Karte 1234 USD 98.50', original: { amount: '-98.50', currency: 'usd' } };
+  const parsed = parseReadStatement({ ...truth, movements: [card, { date: '2026-10-10', amount: -5, original: { amount: 5, currency: 'CHF' } }] })!;
+  assert.deepEqual(parsed.movements.map((m) => m.original), [{ amount: 98.5, currency: 'USD' }, undefined], 'positive, upper case; the account\'s own currency is no original');
+  const [tx] = transactionsOf(readCamt(toStatementXml(parsed, { id: 'read-fx', source: 'okt.pdf', by: 'model' })).statements[0], account);
+  assert.deepEqual([tx.amount, tx.currency, tx.original], [86.4, 'CHF', { amount: 98.5, currency: 'USD' }]);
+});
+
+test('a bank export\'s days: a statement overlapping them on the same account, in part or whole, is covered; another account or other days are not', async () => {
+  const { exportOverlap, coveredByExport, readDays } = await import('../src/intake/statement-read.js');
+  const spans = [{ account: '1021', from: '2026-07-01', to: '2026-09-30', file: 'Raiffeisen/q3.xml' }];
+  assert.equal(exportOverlap(spans, '1021', '2026-09-21', '2026-10-15')?.file, 'Raiffeisen/q3.xml', 'in part');
+  assert.equal(exportOverlap(spans, '1021', '2026-10-01', '2026-10-31'), undefined);
+  assert.equal(exportOverlap(spans, '1022', '2026-09-01', '2026-09-30'), undefined);
+  const { parseIban } = await import('../src/workspace/banks.js');
+  const accounts = [{ ...account, bank: 'Raiffeisen', iban: parseIban('CH6580808000000000001')! }];
+  assert.deepEqual(coveredByExport('Kontoauszug 21.09.2026 - 15.10.2026\nIBAN CH65 8080 8000 0000 0000 1', 'x.pdf', accounts, spans), { account: '1021', month: '2026-10' });
+  assert.equal(coveredByExport('Kontoauszug 21.09.2026 - 15.10.2026', 'x.pdf', accounts, spans), undefined, 'no IBAN in the text: read, then checked again by what the read gives');
+  assert.deepEqual(coveredByExport('', 'Kontoauszug 01.09.2026 - 30.09.2026.pdf', accounts, spans), { account: '1021', month: '2026-09' }, 'a monthly PDF of its bank\'s naming: placed as the upload places it');
+  const wise = { ...account, account: '1023', bank: 'Wise', currency: 'EUR', statements: 'wise' as const };
+  assert.deepEqual(coveredByExport('', 'statement_1_EUR_2026-08-01_2026-08-31.pdf', [...accounts, wise], [{ account: '1023', from: '2026-01-01', to: '2026-09-30', file: 'Wise/x.xml' }]), { account: '1023', month: '2026-08' });
+  const { truth } = await inventedStatement(DEMO_OCTOBER);
+  assert.deepEqual(readDays(truth), { from: '2026-10-01', to: '2026-10-31' });
+});
+
+test('the AI switched off while a statement is read: the hand table says «no AI», not that the read failed', async () => {
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const { readStatementPdf } = await import('../src/intake/statement-read.js');
+  const { AiRefused } = await import('../src/llm/provider.js');
+  const { pdf } = await inventedStatement(DEMO_OCTOBER);
+  const path = join(mkdtempSync(join(tmpdir(), 'read-off-')), 'okt.pdf');
+  writeFileSync(path, pdf);
+  const off = await readStatementPdf(path, async () => { throw new AiRefused({ reason: 'off' }, 'aus'); });
+  assert.deepEqual([off.by, off.why, off.statement.iban], ['hand', 'noAi', DEMO_OCTOBER.iban]);
+  const failed = await readStatementPdf(path, async () => { throw new Error('timeout'); });
+  assert.equal(failed.why, 'failed');
+});

@@ -47,8 +47,10 @@ export function toStatementXml(s: ReadStatement, o: WriteOptions): string {
     const party = m.counterparty ? `<RltdPties><${m.amount < 0 ? 'Cdtr' : 'Dbtr'}><Nm>${esc(m.counterparty)}</Nm></${m.amount < 0 ? 'Cdtr' : 'Dbtr'}></RltdPties>` : '';
     const remittance = m.text || m.reference
       ? `<RmtInf>${m.text ? `<Ustrd>${esc(m.text)}</Ustrd>` : ''}${m.reference ? `<Strd><CdtrRefInf><Ref>${esc(m.reference)}</Ref></CdtrRefInf></Strd>` : ''}</RmtInf>` : '';
+    // The amount in the currency the payment was made in, as a bank export gives it (ISO 20022 InstdAmt, #187).
+    const instructed = m.original ? `<AmtDtls><InstdAmt><Amt Ccy="${esc(m.original.currency)}">${amt(m.original.amount)}</Amt></InstdAmt></AmtDtls>` : '';
     return `<Ntry><Amt Ccy="${ccy}">${amt(m.amount)}</Amt><CdtDbtInd>${side(m.amount)}</CdtDbtInd><Sts><Cd>BOOK</Cd></Sts>`
-      + `<BookgDt><Dt>${m.date}</Dt></BookgDt><ValDt><Dt>${m.valueDate ?? m.date}</Dt></ValDt><AcctSvcrRef>${esc(ref)}</AcctSvcrRef>`
+      + `<BookgDt><Dt>${m.date}</Dt></BookgDt><ValDt><Dt>${m.valueDate ?? m.date}</Dt></ValDt><AcctSvcrRef>${esc(ref)}</AcctSvcrRef>${instructed}`
       + `${party || remittance ? `<NtryDtls><TxDtls>${party}${remittance}</TxDtls></NtryDtls>` : ''}${m.text ? `<AddtlNtryInf>${esc(m.text)}</AddtlNtryInf>` : ''}</Ntry>`;
   });
   const account = `<Acct><Id>${s.iban ? `<IBAN>${esc(s.iban)}</IBAN>` : `<Othr><Id>${esc(o.source)}</Id></Othr>`}</Id><Ccy>${ccy}</Ccy>`

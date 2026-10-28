@@ -91,9 +91,10 @@ Wise EUR (1023), January to September 2026.
 
 ## Gotchas
 
-- The demo's statement PDFs are kept as the months' statements beside their camt.053 (a camt.053 covers their days, so they
-  are not read, #217); the demo's balances were written by the generator. A statement without camt.053 is read in the drop
-  dialog (features/drop.md).
+- The demo's statement PDFs are generated text pages: the closing-balance reader (`npm run extract-balances`,
+  src/providers/statement-pdf/statement-pdf-balances.ts) does not recognise them, so a re-imported demo PDF shows `Ende ?`. The demo's
+  balances were written by the generator. A camt.053 covers their days, so they are kept, not read (#217); an upload of a PDF
+  no camt.053 covers opens the drop dialog, which reads it (features/drop.md).
 - The import is additive: a payment no statement file holds any more stays in the books (extract's rebuild decides). The
   order of the books' transactions is kept; new ones come last.
 - A statement's group label is the manifest's account label (`Bank Raiffeisen`), not a shortened one.

@@ -485,10 +485,7 @@ export function parseBatchClassifyResult(raw: string): BatchClassifyResult | nul
   }
 }
 
-// ─── Receipt-level VAT extraction (extract-vat step) ─────────────────────────
-//
-// Reads ONLY the VAT facts off a receipt — the printed MWST summary block,
-// the CHE- UID, and (best-effort) itemized lines. It deliberately does NOT
+// ─── A bank statement without camt.053 (statement-read step, #217) ────────────
 
 /**
  * A bank statement without camt.053 (#217), read off its file: the PDF, scan or photo is attached;
@@ -508,7 +505,7 @@ ${text?.trim() ? `The file's own text, page by page (form feeds between pages), 
   "opening": { "date": "YYYY-MM-DD (the period's first day)", "amount": the balance brought forward before the first movement },
   "closing": { "date": "YYYY-MM-DD (the period's last day)", "amount": the closing balance after the last movement },
   "pages": [ { "page": 1, "carriedIn": the balance carried in at the top of the page if printed, "carriedOut": the balance carried to the next page at its foot if printed } ],
-  "movements": [ { "date": "YYYY-MM-DD (booking date)", "valueDate": "YYYY-MM-DD or omit", "amount": signed number, "counterparty": "who paid or was paid, or omit", "text": "the booking text as printed", "reference": "a payment reference (QR, SCOR, invoice number) if printed, or omit", "page": the page it is printed on } ]
+  "movements": [ { "date": "YYYY-MM-DD (booking date)", "valueDate": "YYYY-MM-DD or omit", "amount": signed number, "counterparty": "who paid or was paid, or omit", "text": "the booking text as printed", "reference": "a payment reference (QR, SCOR, invoice number) if printed, or omit", "original": { "amount": positive number, "currency": "ISO code" } only when the row also prints the amount in another currency than the account's (a card charge in USD on a CHF account), else omit, "page": the page it is printed on } ]
 }
 
 Rules:
@@ -516,6 +513,7 @@ Rules:
 - "amount": money into the account positive, money out (debit, Belastung, Lastschrift) negative. A balance in the account's favour is positive, an overdraft negative.
 - Balances, totals and carry-over lines (Saldo, Übertrag, Total, Report) are no movements; put them into opening, closing and pages.
 - Numbers as plain JSON numbers with a dot: 1'234.50 becomes 1234.5. Dates as YYYY-MM-DD.
+- "original" is the other currency's amount exactly as the row prints it (e.g. "USD 12.40" beside a CHF debit, or an exchange-rate line under it); never convert one yourself.
 - Omit "pages" when the statement prints no carry-overs. Omit a field you cannot read; never guess one.
 - If the file is no account statement, return {"notStatement": true}.`;
 }
@@ -533,6 +531,11 @@ export function parseStatementRead(raw: string): ReadStatement | 'notStatement' 
   if ((parsed as { notStatement?: unknown } | undefined)?.notStatement === true) return 'notStatement';
   return parseReadStatement(parsed);
 }
+
+// ─── Receipt-level VAT extraction (extract-vat step) ─────────────────────────
+//
+// Reads ONLY the VAT facts off a receipt — the printed MWST summary block,
+// the CHE- UID, and (best-effort) itemized lines. It deliberately does NOT
 // assign accounting codes (I/M/V) or decide refunds — that is classify's job.
 // This is where the "the receipt is the source of truth" rule is grounded.
 
