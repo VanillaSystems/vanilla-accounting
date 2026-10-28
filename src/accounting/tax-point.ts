@@ -17,7 +17,6 @@ import { agreedBasis, baseCurrency, basisSince, vat, yearEnd } from '../engines/
 import { isVatAmountCode } from './validate.js';
 import { roundCHF, toRappen, fromRappen } from './rappen.js';
 import { addDays, filingKeyOf, type FilingLength } from './periods.js';
-import { SHOPIFY_ACCOUNT } from './payment-entries.js';
 
 /** The accounts an open item lives on: what customers owe, what the firm owes suppliers, and where an exchange difference goes. */
 export interface OpenItemAccounts { receivable: string; payable: string; fxDifference: string }
@@ -105,6 +104,8 @@ export interface TaxPointContext {
   accounts: OpenItemAccounts;
   /** The payment's bank account: the side a coded line gives up to the open item. */
   bankAccount: string;
+  /** The providers' clearing accounts (src/booking/providers.ts clearingAccounts): a line on one is dated by its order already. */
+  clearing: ReadonlySet<string>;
   lock: Pick<PeriodLock, 'isClosed' | 'lockedThrough' | 'beforeBooks' | 'opens'>;
   /** The official daily sell rate (ADR 0001) of a foreign line's new date. */
   rateOn: (currency: string, date: string) => number | undefined;
@@ -128,7 +129,7 @@ type Payment = { ref: string; date: string; currency: string; description?: stri
  * declared in that period's correction return (golden rule 1), and so does one of a closed earlier
  * year the firm reported on this basis; one before the books or before the year the basis began
  * leaves it on the payment's date as it is (lockedTaxPoint: the switch, MWSTV Art. 106 Abs. 1).
- * Lines on the payout clearing account (dated by their order already), with `corrects`, or without
+ * Lines on a provider's clearing account (dated by their order already), with `corrects`, or without
  * a document date stay as they are.
  */
 export function atTaxPoint(tx: Payment, entries: readonly JournalEntry[], ctx: TaxPointContext): JournalEntry[] {
@@ -141,7 +142,7 @@ export function atTaxPoint(tx: Payment, entries: readonly JournalEntry[], ctx: T
     const side = sideOf(e.vatCode);
     const bankDebit = e.accountDebit === ctx.bankAccount && e.accountCredit !== ctx.bankAccount;
     const bankCredit = e.accountCredit === ctx.bankAccount && e.accountDebit !== ctx.bankAccount;
-    const onClearing = e.accountDebit === SHOPIFY_ACCOUNT || e.accountCredit === SHOPIFY_ACCOUNT;
+    const onClearing = ctx.clearing.has(e.accountDebit) || ctx.clearing.has(e.accountCredit);
     if (!side || e.corrects || onClearing || (!bankDebit && !bankCredit)) return e;
     // A later change (a minus code: a credit note, a refund) counts when it is booked, by the latest document (Art. 41).
     const change = e.vatCode!.startsWith(vat().codes.negativePrefix);

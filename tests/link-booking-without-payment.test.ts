@@ -102,7 +102,7 @@ test('unlinking from the booking: the receipt is «offen» again and the booking
 
 const DAY = '2026-10-05';
 const receipt = (id: string): Receipt => ({ id, filename: `${id}.pdf`, originalFilename: `${id}.pdf`, extractedText: id, extractionMethod: 'pdftotext', fileSize: 10, indexedAt: `${DAY}T08:00:00Z`, location: 'archived', date: DAY, amount: 80, currency: 'CHF', description: `Beleg ${id}` });
-const ctx = { bankAccounts: [], chart: new Set<string>(), earlier: [], conversation: 'c1' };
+const ctx = { bankAccounts: [], chart: new Set<string>(), earlier: [], conversation: 'c1', clearing: new Set<string>() };
 
 function books(): Books {
   const b = emptyBooks();

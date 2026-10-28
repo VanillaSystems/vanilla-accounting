@@ -215,7 +215,7 @@ export interface JournalEntry {
   corrects?: string;
   /**
    * Who wrote the entry, so `classify --force` can tell its own entries from hand bookings,
-   * corrections and rebook-shopify output. The classifier (src/booking/classify.ts, for
+   * corrections and payouts an earlier tool split per order. The classifier (src/booking/classify.ts, for
    * `npm run classify` and the UI's re-classify) stamps 'classify'; an edit through the API
    * stamps 'manual', and --force keeps such an entry's transaction.
    * Absent means another writer, or an entry booked before the field existed.

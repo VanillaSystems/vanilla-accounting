@@ -169,7 +169,7 @@ test('the AI sidebar\'s change: privatePayment pays the part and links it; its u
   assert.deepEqual(asked, { kind: 'privatePayment', receipt: 'cafe', amount: 17.99, part: 'Kaffee', replace: 'M2026-063' });
   const chf = Math.round(17.99 * fx.daily('EUR', DAY)! * 100) / 100;
   const b = booksWith(cafe(), [byHand(chf)]);
-  const [made] = applyAnswer(b, [asked as Extract<typeof asked, { kind: 'privatePayment' }>], { bankAccounts, chart: new Set(), earlier: [], conversation: 'c1' });
+  const [made] = applyAnswer(b, [asked as Extract<typeof asked, { kind: 'privatePayment' }>], { bankAccounts, chart: new Set(), earlier: [], conversation: 'c1', clearing: new Set<string>() });
   const ref = b.transactions[0].ref;
   assert.deepEqual([b.transactions[0].amount, b.mappings, b.journalEntries.length], [17.99, [{ transactionRef: ref, receiptId: 'cafe' }], 0]);
   assert.equal(made.undo?.kind, 'deletePayment');
@@ -185,7 +185,7 @@ test('#90: the AI cannot link a receipt paid privately to the bank payment that 
   const b = booksWith(cafe());
   b.transactions.push({ ref: 'B1', bank: 'Raiffeisen', date: '2026-08-31', amount: 70.57, currency: 'CHF', direction: 'DBIT', description: 'Spesen Inhaber August' });
   privatePayment(b, 'cafe', { amount: 17.99 }, fx);
-  assert.throws(() => applyAnswer(b, [{ kind: 'link', receipt: 'cafe', payment: 'B1' }], { bankAccounts, chart: new Set(), earlier: [], conversation: 'c1' }),
+  assert.throws(() => applyAnswer(b, [{ kind: 'link', receipt: 'cafe', payment: 'B1' }], { bankAccounts, chart: new Set(), earlier: [], conversation: 'c1', clearing: new Set<string>() }),
     (e: unknown) => e instanceof RequestError && e.refusal?.code === 'paidPrivately');
   assert.equal(b.mappings.length, 1);
 });

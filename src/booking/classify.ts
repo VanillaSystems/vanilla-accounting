@@ -44,7 +44,7 @@ import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
 import { businessVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
 import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
-import { payoutWaitOf, providerOfPayment, type PayoutWait, type Provider } from './providers.js';
+import { clearingAccounts, payoutWaitOf, providerOfPayment, type PayoutWait, type Provider } from './providers.js';
 import { splitByReceipts } from './receipt-lines.js';
 import { CUSTOMS_BY, customsSplit, importVatDeductions, type Assessment, type CustomsHold, type CustomsTexts } from './customs-invoice.js';
 import { nextManualRef } from '../books/next-ref.js';
@@ -614,9 +614,10 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   const casebook = context.casebook && ownHistoryRows(books, context) < OWN_HISTORY_THRESHOLD ? context.casebook : [];
   const chartAccounts = new Set(chartNames(context.chartOfAccounts).keys());
   const items = openItemAccounts([...chartAccounts]);
+  const clearing = clearingAccounts(context.counterparties ?? []);
   // On the agreed basis a coded line takes its document's date and the open item; on the cash basis this changes nothing (src/accounting/tax-point.ts).
   const atPoint = (tx: BankTransaction, entries: JournalEntry[]): JournalEntry[] => atTaxPoint(tx, entries, {
-    accounts: items, bankAccount: bankAccountFor(tx, context.bankAccounts), lock, rateOn: (c, d) => fx.daily(c, d),
+    accounts: items, bankAccount: bankAccountFor(tx, context.bankAccounts), clearing, lock, rateOn: (c, d) => fx.daily(c, d),
     documents: mappedReceipts(books, tx), length: filing().length, newId: () => randomBytes(8).toString('hex'),
   });
   const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [], partly: [] };

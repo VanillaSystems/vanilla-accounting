@@ -1,7 +1,7 @@
 /**
  * What the bookings of a bank payment keep under cash-basis reporting (vat.reporting: received):
- * each carries the payment's date, so its VAT falls into the payment's quarter, except one on the
- * payout clearing account, which takes the order's (src/booking/classify.ts); together they move
+ * each carries the payment's date, so its VAT falls into the payment's quarter, except one on a
+ * provider's clearing account, which takes the order's (src/booking/classify.ts); together they move
  * the bank account by what the bank paid. On the agreed basis a coded line on an open item carries
  * its document's date as well (src/accounting/tax-point.ts). The AI sidebar's changes keep both
  * (src/server/edits.ts applyAnswer).
@@ -11,12 +11,12 @@ import type { LedgerBankAccount } from '../workspace/workspace.js';
 import { accountOf } from '../workspace/money-accounts.js';
 import { fromRappen, toRappen } from './rappen.js';
 
-/** Shopify/Stripe clearing account: revenue and fees on it are dated by the order, and its payout is booked automatically. */
-export const SHOPIFY_ACCOUNT = '1093';
-
-/** The dates a booking may carry: its payment's. None when no payment holds its ref (a manual entry) or it is on the clearing account. */
-export function paymentDates(books: Pick<Index, 'transactions'>, e: Pick<JournalEntry, 'transactionRef' | 'accountDebit' | 'accountCredit'>): string[] {
-  if (e.accountDebit === SHOPIFY_ACCOUNT || e.accountCredit === SHOPIFY_ACCOUNT) return [];
+/**
+ * The dates a booking may carry: its payment's. None when no payment holds its ref (a manual entry) or
+ * it is on a provider's clearing account (`clearing`, src/booking/providers.ts clearingAccounts).
+ */
+export function paymentDates(books: Pick<Index, 'transactions'>, e: Pick<JournalEntry, 'transactionRef' | 'accountDebit' | 'accountCredit'>, clearing: ReadonlySet<string>): string[] {
+  if (clearing.has(e.accountDebit) || clearing.has(e.accountCredit)) return [];
   return [...new Set(books.transactions.filter((t) => t.ref === e.transactionRef).map((t) => t.date))];
 }
 
