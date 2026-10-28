@@ -23,6 +23,18 @@ test('a PNG becomes a one-page PDF whose page is the image', async () => {
   await doc.destroy();
 });
 
+test('a PNG that sips cannot read still becomes a PDF, through pdf-lib (#258)', { skip: !existsSync('/usr/bin/sips') && 'not a Mac' }, async () => {
+  // A wrong checksum of the header chunk: sips refuses the file, pdf-lib does not check it.
+  const odd = Buffer.from(PNG);
+  odd[29] ^= 0xff;
+  const dir = mkdtempSync(join(tmpdir(), 'odd-png-'));
+  writeFileSync(join(dir, 'odd.png'), odd);
+  assert.throws(() => execFileSync('/usr/bin/sips', ['-s', 'format', 'jpeg', join(dir, 'odd.png'), '--out', join(dir, 'out.jpg')], { stdio: 'ignore' }), 'sips refuses it');
+  const doc = await getDocument({ data: await imageToPdf(odd, 'odd.png') }).promise;
+  assert.deepEqual((await doc.getPage(1)).view, [0, 0, 2, 2]);
+  await doc.destroy();
+});
+
 test('a JPEG header that is not a JPEG is refused, not written as a broken PDF', async () => {
   await assert.rejects(() => imageToPdf(PNG, 'photo.jpg'), /JPEG|SOI|marker/i);
 });

@@ -141,7 +141,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/invoices/texts.ts` | MWST 5 |
 | `src/knowledge/cases.ts` | MWST 5, ESTV 4, Ziffer 4, camt.053 1 |
 | `src/knowledge/layers.ts` | CHF 1 |
-| `src/parsers/receipt-text.ts` | CHF 1, MWST 6 |
+| `src/parsers/receipt-text.ts` | CHF 1, MWST 7, UID 1 |
 
 ## infrastructure
 
