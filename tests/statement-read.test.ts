@@ -60,6 +60,8 @@ test('a statement that prints no opening balance but a balance on each row: the 
   const misread = parseReadStatement({ currency: 'EUR', period, closing: { date: '2026-07-31', amount: 1379.6 }, movements: rows.slice(0, 2) })!;
   assert.equal(checkStatement({ ...misread, closing: { date: '2026-07-31', amount: 1397.6 } }).ok, false, 'a closing misread still fails the check');
   assert.equal(parseReadStatement({ currency: 'EUR', period, closing, movements: [rows[0], { ...rows[1], balance: 1397.6 }, rows[2]] }), undefined, 'rows whose balances chain neither way give no opening');
+  const refund = [{ date: '2026-07-21', amount: -59.6, balance: 0 }, { date: '2026-07-21', amount: 59.6, balance: 59.6 }];
+  assert.deepEqual(parseReadStatement({ currency: 'EUR', period, closing: { date: '2026-07-31', amount: 0 }, movements: refund })?.opening, { date: '2026-07-01', amount: 0 }, 'rows that chain both ways run the way that ends at the closing balance');
   assert.equal(parseReadStatement({ currency: 'EUR', period, closing, movements: [rows[0], { date: '2026-07-10', amount: -120.4 }] }), undefined, 'a row without its balance gives none');
   assert.deepEqual(parseReadStatement({ currency: 'EUR', period, closing, movements: [] })?.opening, { date: '2026-07-01', amount: 1370 }, 'a month without a movement opens as it closes');
 });
@@ -179,4 +181,32 @@ test('the AI switched off while a statement is read: the hand table says «no AI
   assert.deepEqual([off.by, off.why, off.statement.iban], ['hand', 'noAi', DEMO_OCTOBER.iban]);
   const failed = await readStatementPdf(path, async () => { throw new Error('timeout'); });
   assert.equal(failed.why, 'failed');
+});
+
+test('a statement PDF kept as its month\'s statement is read once and its read kept beside it (#243): a second run asks nothing, a failed read is not asked again, an imported one is skipped', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const { keptReads, readBeside, readKeptStatements } = await import('../src/intake/statement-read.js');
+  const { workspacePaths } = await import('../src/workspace/workspace.js');
+  const root = mkdtempSync(join(tmpdir(), 'kept-read-'));
+  const dir = join(root, 'transactional-data', '2026', 'bank-statements', 'Musterbank');
+  mkdirSync(dir, { recursive: true });
+  const { pdf, truth } = await inventedStatement(DEMO_OCTOBER);
+  for (const name of ['oktober.pdf', 'november.pdf', 'imported.pdf']) writeFileSync(join(dir, name), pdf);
+  writeFileSync(join(dir, 'imported.xml'), '<Document/>');
+  const ws = { paths: workspacePaths(root), bankAccounts: [account] };
+  const asked: string[] = [];
+  const ask = async (prompt: string) => {
+    asked.push(prompt);
+    if (prompt.includes('november')) throw new Error('timeout');
+    return JSON.stringify(truth);
+  };
+  assert.equal(await readKeptStatements(ws, ask), 2);
+  assert.equal(asked.length, 2, 'the PDF a camt.053 was written from is no kept statement');
+  assert.deepEqual(JSON.parse(readFileSync(readBeside(join(dir, 'november.pdf')), 'utf8')), { why: 'failed' });
+  assert.equal(await readKeptStatements(ws, ask), 0);
+  assert.equal(asked.length, 2, 'a second run asks nothing');
+  assert.deepEqual(keptReads(ws).map((r) => [r.file, r.account.account, r.statement.closing, r.statement.movements.length]), [['oktober.pdf', '1021', truth.closing, truth.movements.length]]);
+  assert.equal(existsSync(readBeside(join(dir, 'imported.pdf'))), false);
 });

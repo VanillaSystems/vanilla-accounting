@@ -1,0 +1,62 @@
+{
+ "statement": {
+  "iban": "CH8180808000000000004",
+  "currency": "CHF",
+  "bankName": "Raiffeisenbank Beispiel",
+  "owner": "Salon Beispiel",
+  "period": {
+   "from": "2026-07-01",
+   "to": "2026-07-31"
+  },
+  "opening": {
+   "date": "2026-07-01",
+   "amount": 7253.85
+  },
+  "closing": {
+   "date": "2026-07-31",
+   "amount": 7217.25
+  },
+  "movements": [
+   {
+    "date": "2026-07-01",
+    "amount": -1450,
+    "text": "Dauerauftrag Miete Salon"
+   },
+   {
+    "date": "2026-07-09",
+    "amount": -511.75,
+    "text": "Zahlung Beispiel Haarkosmetik AG"
+   },
+   {
+    "date": "2026-07-14",
+    "amount": 1561.05,
+    "text": "Bareinzahlung"
+   },
+   {
+    "date": "2026-07-20",
+    "amount": 1072.45,
+    "text": "SumUp Auszahlung"
+   },
+   {
+    "date": "2026-07-20",
+    "amount": -59,
+    "text": "eBill Muster Telecom AG"
+   },
+   {
+    "date": "2026-07-27",
+    "amount": 648.9,
+    "text": "TWINT Gutschrift"
+   },
+   {
+    "date": "2026-07-27",
+    "amount": -2500,
+    "text": "Privatbezug Bella Beispiel"
+   },
+   {
+    "date": "2026-07-31",
+    "amount": 1201.75,
+    "text": "Bareinzahlung"
+   }
+  ]
+ }
+}

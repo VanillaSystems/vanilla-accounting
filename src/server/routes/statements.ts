@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import { basename, dirname, join, relative } from 'node:path';
 import { accountForStatement, type StatementProblem } from '../../accounting/bank-accounts.js';
 import { legOf, madeByHand } from '../../workspace/money-accounts.js';
-import { exportSpans, heldWithout, mergeIndex, readStatementFiles, readTransactions, readWiseReferences, transactionsOfFiles, withCamtBalances, withinBooks } from '../../books/bank-import.js';
+import { exportSpans, heldWithout, mergeIndex, readStatementFiles, readTransactions, transactionsOfFiles, withCamtBalances, withinBooks } from '../../books/bank-import.js';
 import { statementPdf } from '../../books/statement-facts.js';
 import { compactIban, readBankStatements } from '../../workspace/bank-statements.js';
 import { periodLock } from '../../books/store.js';
@@ -22,9 +22,8 @@ import { proposedAccount } from '../../accounting/statement-bank.js';
 import { statementDetails } from '../../providers/statement-files.js';
 import { refDates } from '../books.js';
 import { parseStatementBalances } from '../../providers/camt053/statement-balances.js';
-import { extractStatementBalances } from '../../providers/statement-pdf/statement-pdf-balances.js';
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
-import { coveredByExport } from '../../intake/statement-read.js';
+import { coveredByExport, keptReads, readBeside } from '../../intake/statement-read.js';
 import { firstPages } from '../../intake/recognize.js';
 import { matchPayments } from '../../invoices/payments.js';
 import { bookInvoiceEvents } from '../../invoices/events.js';
@@ -32,7 +31,7 @@ import { fileReceipts, paymentContext } from '../../invoices/service.js';
 import type { StatementRefusal, UnknownAccount } from '../../types/api-error.js';
 import type { BankTransaction, JournalEntry, Mapping, StatementClosingBalance, StatementImport } from '../../types/index.js';
 import { parseIban } from '../../workspace/banks.js';
-import { findFile, partDirs, yearPaths, type LedgerBankAccount } from '../../workspace/workspace.js';
+import { findFile, yearPaths, type LedgerBankAccount } from '../../workspace/workspace.js';
 import { RequestError, WS, assertOpen, patchBody, readBooks, updateBooks, updateBooksWithEffects, withBooks } from '../books.js';
 import { addEntry } from '../edits.js';
 import { openingLock, withOpening } from '../../accounting/opening-balance.js';
@@ -194,14 +193,6 @@ function placePdf(filename: string, hint?: LedgerBankAccount, month?: string): P
   return { account, filename, first: named.fromDate, last: named.toDate };
 }
 
-/** The new closing balances replace those of the same account and day; the others stay. */
-function mergeBalances(old: StatementClosingBalance[] = [], fresh: StatementClosingBalance[]): StatementClosingBalance[] {
-  const key = (b: StatementClosingBalance) => `${b.account} ${b.date}`;
-  const out = new Map(old.map((b) => [key(b), b]));
-  for (const b of fresh) out.set(key(b), b);
-  return [...out.values()].sort((a, b) => a.date.localeCompare(b.date) || a.account.localeCompare(b.account));
-}
-
 router.post('/api/statements', express.raw({ type: () => true, limit: '50mb' }), async (req, res) => {
   const body = req.body as unknown;
   if (!Buffer.isBuffer(body) || body.length === 0) throw new RequestError(400, 'Keine Datei erhalten.');
@@ -255,8 +246,8 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
       refuse(409, `Schon eingelesen aus ${other}.`, 'duplicate', other);
     }
 
-    const wiseRefs = await readWiseReferences(WS);
-    const balances = xml ? undefined : (await extractStatementBalances(partDirs(WS.paths, 'statements'), WS.bankAccounts)).balances;
+    // A kept statement PDF's closing balance, references and original amounts come from its read, once the run has read it (#243).
+    const reads = keptReads(WS);
     const invoices = loadInvoices(WS);
     const payments = paymentContext(WS);
     return updateBooksWithEffects((books): StatementImport => {
@@ -269,18 +260,17 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
       const lock = periodLock(books);
       const stay = books.transactions.filter((t) => !madeByHand(t) && !freshLegs.has(legOf(t)) && !lock.isClosed(t.date));
       const files = readStatementFiles(WS);
-      const merged = mergeIndex(books, { receipts: books.receipts, bankTransactions: [...fresh, ...stay], wiseRefs, bankStatements: files.statements, camtBalances: files.balances });
+      const merged = mergeIndex(books, { receipts: books.receipts, bankTransactions: [...fresh, ...stay], reads, bankStatements: files.statements, camtBalances: files.balances });
       // The books keep their order; the new payments come after them.
       const pos = new Map(books.transactions.map((t, i) => [t.ref, i]));
       const known = merged.index.transactions.filter((t) => pos.has(t.ref)).sort((a, b) => pos.get(a.ref)! - pos.get(b.ref)!);
       Object.assign(books, merged.index, { transactions: [...known, ...merged.index.transactions.filter((t) => !pos.has(t.ref))] });
-      if (balances) books.statementBalances = mergeBalances(books.statementBalances, balances);
       // On the agreed basis an issued document's event comes first: its payment then only settles the receivable.
       const events = payments ? bookInvoiceEvents(books, invoices, payments) : undefined;
       if (events) fileReceipts(WS, books, events.files);
       const paid = payments ? matchPayments(books, invoices, payments) : undefined;
       if (paid) { fileReceipts(WS, books, paid.files); saveInvoices(WS, invoices); }
-      const closing = placed.closing ?? balances?.filter((b) => b.sourceFile === placed.filename && b.account === placed.account.account)
+      const closing = placed.closing ?? books.statementBalances?.filter((b) => b.source === 'pdf' && b.sourceFile === placed.filename && b.account === placed.account.account)
         .sort((a, b) => a.date.localeCompare(b.date)).map((b) => ({ date: b.date, amount: b.amount })).at(-1);
       return {
         file: `${placed.account.bank}/${placed.filename}`,
@@ -337,8 +327,12 @@ export function removeStatement(file: string, refs?: readonly string[]): Stateme
   const from = /\.xml$/i.test(path) ? readCamtSafe(bytes)?.statements.find((x) => x.read)?.read?.from : undefined;
   const beside = from ? join(dirname(path), basename(from)) : undefined;
   const besideBytes = beside && existsSync(beside) && beside !== path ? readFileSync(beside) : undefined;
+  // A kept PDF's read (#243) goes with it.
+  const read = /\.pdf$/i.test(path) ? readBeside(path) : undefined;
+  const readBytes = read && existsSync(read) ? readFileSync(read) : undefined;
   rmSync(path, { force: true });
   if (besideBytes) rmSync(beside!, { force: true });
+  if (readBytes) rmSync(read!, { force: true });
   try {
     return updateBooks((b) => {
       const removed = { entries: b.journalEntries.filter((e) => mine.has(e.transactionRef)), mappings: b.mappings.filter((m) => mine.has(m.transactionRef)) };
@@ -367,6 +361,7 @@ export function removeStatement(file: string, refs?: readonly string[]): Stateme
   } catch (e) {
     writeFileSync(path, bytes);
     if (besideBytes) writeFileSync(beside!, besideBytes);
+    if (readBytes) writeFileSync(read!, readBytes);
     throw e;
   }
 }

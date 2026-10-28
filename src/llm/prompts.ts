@@ -502,7 +502,7 @@ ${text?.trim() ? `The file's own text, page by page (form feeds between pages), 
   "bankName": "the bank as it names itself, or omit",
   "owner": "the account holder as printed, or omit",
   "period": { "from": "YYYY-MM-DD", "to": "YYYY-MM-DD" },
-  "opening": { "date": "YYYY-MM-DD (the period's first day)", "amount": the balance brought forward before the first movement } or omit when the statement prints none,
+  "opening": { "date": "YYYY-MM-DD (the period's first day)", "amount": the balance brought forward before the first movement } or omit when the statement prints none (then give every movement its "balance": a statement that prints no opening balance prints one on each row),
   "closing": { "date": "YYYY-MM-DD (the period's last day)", "amount": the closing balance after the last movement },
   "pages": [ { "page": 1, "carriedIn": the balance carried in at the top of the page if printed, "carriedOut": the balance carried to the next page at its foot if printed } ],
   "movements": [ { "date": "YYYY-MM-DD (booking date)", "valueDate": "YYYY-MM-DD or omit", "amount": signed number, "counterparty": "who paid or was paid, or omit", "text": "the booking text as printed", "reference": "the payment reference the payer gave (QR or creditor reference, invoice number, remittance text) if printed, or omit", "original": { "amount": positive number, "currency": "ISO code" } only when the row also prints the amount in another currency than the account's (a card charge in USD on a CHF account), else omit, "page": the page it is printed on, "balance": the account's balance the row prints after it (a running balance column) or omit } ]
@@ -510,11 +510,11 @@ ${text?.trim() ? `The file's own text, page by page (form feeds between pages), 
 
 Rules:
 - Every movement row of every page, in the printed order (oldest or newest first, as the statement runs), once. A booking with detail lines (a collective payment) is one movement with its total; detail lines are no movements.
-- "amount": money into the account positive, money out (debit, Belastung, Lastschrift) negative. A balance in the account's favour is positive, an overdraft negative.
+- "amount": money into the account positive, money out (debit, Belastung, Lastschrift) negative. The column it is printed in (incoming or outgoing, Gutschrift or Belastung) gives the sign, never a sign in the booking text (a refund's text may print a minus). A balance in the account's favour is positive, an overdraft negative.
 - Balances, totals and carry-over lines (Saldo, Übertrag, Total, Report) are no movements; put them into opening, closing and pages.
 - Numbers as plain JSON numbers with a dot: 1'234.50 becomes 1234.5. Dates as YYYY-MM-DD.
 - "original" is the other currency's amount exactly as the row prints it (e.g. "USD 12.40" beside a CHF debit, or an exchange-rate line under it); never convert one yourself.
-- "reference" is never the bank's own id of the transaction (a transaction id or a card number the bank prints), nor the booking text again.
+- "reference" is never the bank's own id of the transaction (a transaction id, an order number or a card number the bank prints), nor the booking text again.
 - Omit "pages" when the statement prints no carry-overs. Omit a field you cannot read; never guess one.
 - If the file is no account statement, return {"notStatement": true}.`;
 }

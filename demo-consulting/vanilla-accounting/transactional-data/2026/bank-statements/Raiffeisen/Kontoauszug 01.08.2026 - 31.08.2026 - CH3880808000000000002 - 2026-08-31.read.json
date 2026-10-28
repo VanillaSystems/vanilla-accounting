@@ -1,0 +1,57 @@
+{
+ "statement": {
+  "iban": "CH3880808000000000002",
+  "currency": "CHF",
+  "bankName": "Raiffeisenbank Bern-Muster",
+  "owner": "Muster Consulting GmbH",
+  "period": {
+   "from": "2026-08-01",
+   "to": "2026-08-31"
+  },
+  "opening": {
+   "date": "2026-08-01",
+   "amount": 30526
+  },
+  "closing": {
+   "date": "2026-08-31",
+   "amount": 28437.3
+  },
+  "movements": [
+   {
+    "date": "2026-08-03",
+    "amount": -450,
+    "text": "Zahlung Muster Coworking AG"
+   },
+   {
+    "date": "2026-08-07",
+    "amount": -24.6,
+    "text": "Debitkarte SAMPLE LABS INC SEATTLE"
+   },
+   {
+    "date": "2026-08-18",
+    "amount": -97.7,
+    "text": "eBill Muster Telecom AG"
+   },
+   {
+    "date": "2026-08-19",
+    "amount": -24,
+    "text": "Debitkarte PARKHAUS BEISPIEL BERN"
+   },
+   {
+    "date": "2026-08-20",
+    "amount": 6486,
+    "text": "Gutschrift Beispiel Treuhand AG"
+   },
+   {
+    "date": "2026-08-25",
+    "amount": -7812.1,
+    "text": "Lohnzahlung Lukas Beispiel"
+   },
+   {
+    "date": "2026-08-28",
+    "amount": -166.3,
+    "text": "Spesenrückerstattung Lukas Beispiel"
+   }
+  ]
+ }
+}

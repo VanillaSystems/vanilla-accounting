@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { factsOfRead } from '../src/books/statement-read-facts.js';
+import { factsOfRead } from '../src/books/bank-import.js';
 import type { BankTransaction } from '../src/types/index.js';
 import type { ReadStatement } from '../src/types/statement-read.js';
 import { fileParity, summarize } from '../tools/statement-parity/parity.js';
@@ -55,7 +55,7 @@ test('a read that gives what the readers give is at parity; a payment the export
 });
 
 test('a misread reference, a missed one, a wrong closing balance and a misread original each count as a difference', () => {
-  const s = read({ closing: { date: '2026-07-31', amount: 2030.06 } });
+  const s = read({ opening: { date: '2026-07-01', amount: 99.46 }, closing: { date: '2026-07-31', amount: 2030.06 } });
   s.movements[0] = { ...s.movements[0], reference: 'Invoice 2026000128 Ref.: 4400000001-1' };
   s.movements[1] = { date: '2026-07-09', amount: 480.5 };
   s.movements[3] = { date: '2026-07-20', amount: -60, original: { amount: 66.6, currency: 'USD' } };
@@ -70,6 +70,8 @@ test('a line read on another day matches no payment and is counted; without a re
   s.movements[0] = { ...s.movements[0], date: '2026-07-04' };
   const p = fileParity('july.pdf', reader, { statement: s, account }, exported);
   assert.deepEqual([p.unmatchedLines, p.references.readerOnly], [1, 1]);
+  const unchecked = fileParity('july.pdf', reader, { statement: read({ closing: { date: '2026-07-31', amount: 2030.06 } }), account }, exported);
+  assert.equal(unchecked.balance, 'readerOnly', 'a read that does not add up closes no month');
   const none = fileParity('july.pdf', reader, undefined, exported);
   assert.deepEqual([none.balance, none.references.readerOnly], ['readerOnly', 2]);
   const sum = summarize([p, none]);

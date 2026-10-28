@@ -1,0 +1,27 @@
+{
+ "statement": {
+  "iban": "BE29967000000164",
+  "currency": "EUR",
+  "bankName": "Wise Europe SA",
+  "owner": "Muster Kaffee GmbH",
+  "period": {
+   "from": "2026-08-01",
+   "to": "2026-08-31"
+  },
+  "opening": {
+   "date": "2026-08-01",
+   "amount": 1621.5
+  },
+  "closing": {
+   "date": "2026-08-31",
+   "amount": 1582.5
+  },
+  "movements": [
+   {
+    "date": "2026-08-03",
+    "amount": -39,
+    "text": "Card transaction of 39.00 EUR issued by Example Cloud Inc SAN FRANCISCO"
+   }
+  ]
+ }
+}

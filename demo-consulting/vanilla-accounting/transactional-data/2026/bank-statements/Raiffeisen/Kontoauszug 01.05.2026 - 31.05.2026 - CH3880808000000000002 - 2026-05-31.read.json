@@ -1,0 +1,67 @@
+{
+ "statement": {
+  "iban": "CH3880808000000000002",
+  "currency": "CHF",
+  "bankName": "Raiffeisenbank Bern-Muster",
+  "owner": "Muster Consulting GmbH",
+  "period": {
+   "from": "2026-05-01",
+   "to": "2026-05-31"
+  },
+  "opening": {
+   "date": "2026-05-01",
+   "amount": 29350.93
+  },
+  "closing": {
+   "date": "2026-05-31",
+   "amount": 29778.84
+  },
+  "movements": [
+   {
+    "date": "2026-05-01",
+    "amount": -450,
+    "text": "Zahlung Muster Coworking AG"
+   },
+   {
+    "date": "2026-05-07",
+    "amount": -24.6,
+    "text": "Debitkarte SAMPLE LABS INC SEATTLE"
+   },
+   {
+    "date": "2026-05-12",
+    "amount": 4798.88,
+    "text": "Gutschrift Muster Logistik AG"
+   },
+   {
+    "date": "2026-05-18",
+    "amount": -111.85,
+    "text": "eBill Muster Telecom AG"
+   },
+   {
+    "date": "2026-05-20",
+    "amount": 6486,
+    "text": "Gutschrift Beispiel Treuhand AG"
+   },
+   {
+    "date": "2026-05-20",
+    "amount": -1200,
+    "text": "Zahlung Muster Akademie"
+   },
+   {
+    "date": "2026-05-25",
+    "amount": -7812.1,
+    "text": "Lohnzahlung Lukas Beispiel"
+   },
+   {
+    "date": "2026-05-27",
+    "amount": -1062.82,
+    "text": "Zahlung Eidg. Steuerverwaltung ESTV"
+   },
+   {
+    "date": "2026-05-28",
+    "amount": -195.6,
+    "text": "Spesenrückerstattung Lukas Beispiel"
+   }
+  ]
+ }
+}

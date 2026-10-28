@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DropSession } from '../src/types/drop.js';
-import type { BankTransaction, BankStatement } from '../src/types/index.js';
+import type { BankTransaction, BankStatement, StatementClosingBalance } from '../src/types/index.js';
 import type { ReadStatement } from '../src/types/statement-read.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { startApi, type ApiServer } from './support/api-server.js';
@@ -31,7 +31,7 @@ const raw = async (api: ApiServer, path: string, body: object) => {
   const r = await api.fetch(path, { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } });
   return { status: r.status, json: await r.json() as DropSession & { code?: string; params?: Record<string, unknown> } };
 };
-const full = async (api: ApiServer) => (await (await api.fetch('/books.json')).json()) as { transactions: BankTransaction[]; bankStatements: BankStatement[] };
+const full = async (api: ApiServer) => (await (await api.fetch('/books.json')).json()) as { transactions: BankTransaction[]; bankStatements: BankStatement[]; statementBalances?: StatementClosingBalance[] };
 
 test('a PDF statement read by the model: a misread digit fails the check and nothing is imported; the corrected table is imported as a camt.053 beside its PDF; «Rückgängig» takes both out', async () => {
   const { pdf, truth } = await inventedStatement(DEMO_OCTOBER);
@@ -104,9 +104,15 @@ test('a statement PDF whose text shows days a bank camt.053 covers is kept as th
     s = await post(`/api/drop/${s.id}/files?name=september-oktober.pdf`, pdf);
     const [row] = s.rows;
     assert.deepEqual([row.state, row.read, row.statement?.file], ['taken', undefined, 'Raiffeisen/Kontoauszug 01.10.2026 - 31.10.2026.pdf']);
+    assert.equal(existsSync(prompts) && readFileSync(prompts, 'utf8').includes('bank or card account statement'), false, 'the drop does not ask the model to read it');
     await rest();
-    assert.equal(existsSync(prompts) && readFileSync(prompts, 'utf8').includes('bank or card account statement'), false, 'the model was not asked to read it');
-    assert.equal((await full(api)).transactions.length, had, 'no movement imported');
+    // The run reads it once for what the bank export lacks (#243), kept beside it; the demo's statements have their reads already.
+    assert.equal(readFileSync(prompts, 'utf8').split('bank or card account statement').length - 1, 1, 'the run reads the kept PDF, and only it');
+    const kept = join(api.root, 'transactional-data', '2026', 'bank-statements', row.statement!.file.replace(/\.pdf$/, '.read.json'));
+    assert.equal(existsSync(kept), true, 'its read lies beside it');
+    const books = await full(api);
+    assert.equal(books.transactions.length, had, 'no movement imported');
+    assert.deepEqual(books.statementBalances?.filter((b) => b.sourceFile === row.statement!.file.split('/')[1]).map((b) => [b.account, b.date, b.amount]), [['1021', truth.closing.date, truth.closing.amount]], 'its closing balance closes the day it ends');
   } finally {
     await SESSION(api).rest().catch(() => {});
     await api.stop();

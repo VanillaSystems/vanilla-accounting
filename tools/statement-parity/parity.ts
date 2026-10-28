@@ -5,8 +5,7 @@
  * and the original amount in another currency, compared with what the books know already
  * (camt InstdAmt or the description, originalOf).
  */
-import { heldLines } from '../../src/books/bank-import.js';
-import { factsOfRead } from '../../src/books/statement-read-facts.js';
+import { closingOfRead, factsOfRead, heldLines } from '../../src/books/bank-import.js';
 import { originalOf } from '../../src/intake/pairing.js';
 import type { BankTransaction, StatementClosingBalance } from '../../src/types/index.js';
 import type { ReadStatement } from '../../src/types/statement-read.js';
@@ -84,9 +83,11 @@ export function fileParity(file: string, reader: ReaderSide, model: ModelSide | 
   const originals = tallyMaps(known, read, (a, b) => a.currency === b.currency && cents(a.amount) === cents(b.amount), 'original', differences);
 
   const b = reader.balance;
-  const modelBalance = { account: account.account, ...statement.closing };
+  // The books take a read's closing balance only when the read adds up (closingOfRead).
+  const modelBalance = closingOfRead({ file, account, statement });
   let balance: FileParity['balance'];
-  if (!b) balance = 'modelOnly';
+  if (!b) balance = modelBalance ? 'modelOnly' : 'none';
+  else if (!modelBalance) { balance = 'readerOnly'; differences.push('balance missing: the read does not add up'); }
   else if (b.account === modelBalance.account && b.date === modelBalance.date && cents(b.amount) === cents(modelBalance.amount)) balance = 'equal';
   else { balance = 'differ'; differences.push(`balance ${b.account} ${b.date} vs ${modelBalance.account} ${modelBalance.date}${cents(b.amount) === cents(modelBalance.amount) ? '' : ' amount'}`); }
 

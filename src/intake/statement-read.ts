@@ -6,20 +6,20 @@
  * (src/books/statement-check.ts) and marks the lines the books hold already; the drop dialog shows
  * the table and imports it as an ISO 20022 statement (src/providers/statement-read/camt-writer.ts).
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { parse, stringify } from 'yaml';
 import { pdfRuns, textOf } from '../parsers/pdf-text.js';
 import { buildStatementReadPrompt, parseStatementRead } from '../llm/prompts.js';
-import { checkStatement } from '../books/statement-check.js';
-import { heldLines, type ExportSpan } from '../books/bank-import.js';
+import { checkStatement, parseReadStatement } from '../books/statement-check.js';
+import { heldLines, type ExportSpan, type KeptRead } from '../books/bank-import.js';
 import { AiRefused } from '../llm/provider.js';
 import { statementPdf, statementPeriod } from '../books/statement-facts.js';
 import { accountForStatement } from '../accounting/bank-accounts.js';
 import { baseCurrency } from '../engines/index.js';
 import type { BankTransaction } from '../types/index.js';
 import type { CsvColumns, HandWhy, ReadBy, ReadStatement, StatementRead } from '../types/statement-read.js';
-import type { LedgerBankAccount, Workspace } from '../workspace/workspace.js';
+import { partDirs, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
 import type { AskOptions } from '../llm/ask.js';
 
 /** The most pages the model reads of one statement; a longer one is a table to fill (or its CSV), and the row says so with this number. */
@@ -124,6 +124,53 @@ export function asRead(statement: ReadStatement, by: ReadBy, held: Map<number, B
     known: [...held.keys()].map((i) => ({ date: statement.movements[i].date, amount: statement.movements[i].amount })),
     ...extra,
   };
+}
+
+// ─── A statement PDF kept as the month's statement, read for what the export lacks (#243) ───
+
+/** Where the model's read of a kept statement PDF lies: beside it, under its stem. */
+export const readBeside = (pdf: string): string => pdf.replace(/\.pdf$/i, '.read.json');
+
+/** The read kept beside a PDF: the statement, or why the model gave none (then it is not asked again; deleting the file asks again). */
+type Beside = { statement: ReadStatement } | { why: HandWhy };
+
+/** The statement PDFs in the banks' folders that the app wrote no bank statement from (#217): each kept as its month's statement. */
+function keptPdfs(ws: Pick<Workspace, 'paths' | 'bankAccounts'>): { bank: string; file: string; path: string }[] {
+  return [...new Set(ws.bankAccounts.filter((a) => a.statements).map((a) => a.bank))].flatMap((bank) =>
+    partDirs(ws.paths, 'statements').map((d) => join(d, bank)).filter((d) => existsSync(d)).flatMap((dir) =>
+      readdirSync(dir).filter((f) => /\.pdf$/i.test(f) && !existsSync(join(dir, f.replace(/\.pdf$/i, '.xml')))).map((file) => ({ bank, file, path: join(dir, file) }))));
+}
+
+/**
+ * Reads each kept statement PDF that has no read beside it yet, with the model, and keeps the read
+ * beside it: a rebuild of the books then takes its references, original amounts and closing
+ * balance (keptReads) without asking again. Returns how many files it read.
+ */
+export async function readKeptStatements(ws: Pick<Workspace, 'paths' | 'bankAccounts'>, ask: Asker, log: (line: string) => void = () => {}): Promise<number> {
+  let read = 0;
+  for (const { file, path } of keptPdfs(ws).filter((p) => !existsSync(readBeside(p.path)))) {
+    const r = await readStatementPdf(path, ask);
+    if (r.why === 'noAi') break;
+    const beside: Beside = r.by === 'model' ? { statement: r.statement } : { why: r.why ?? 'failed' };
+    writeFileSync(readBeside(path), `${JSON.stringify(beside, null, 1)}\n`);
+    read++;
+    log(`  ${file}: ${r.by === 'model' ? `read, ${r.statement.movements.length} movements${checkStatement(r.statement).ok ? '' : ', does not add up'}` : `not read (${r.why})`}`);
+  }
+  return read;
+}
+
+/** The reads kept beside the statement PDFs, each at its account: by its IBAN, else its bank's folder and its currency. */
+export function keptReads(ws: Pick<Workspace, 'paths' | 'bankAccounts'>): KeptRead[] {
+  return keptPdfs(ws).flatMap(({ bank, file, path }): KeptRead[] => {
+    const at = readBeside(path);
+    if (!existsSync(at)) return [];
+    let beside: Partial<{ statement: unknown }>;
+    try { beside = JSON.parse(readFileSync(at, 'utf8')); } catch { return []; }
+    const statement = parseReadStatement(beside.statement);
+    if (!statement) return [];
+    const match = accountForStatement(ws.bankAccounts, { iban: statement.iban, currency: statement.currency, folder: bank });
+    return 'account' in match ? [{ file, account: match.account, statement }] : [];
+  });
 }
 
 // ─── The column mappings of bank CSVs, kept per account ──────────────────────

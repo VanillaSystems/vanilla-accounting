@@ -1,0 +1,57 @@
+{
+ "statement": {
+  "iban": "CH6580808000000000001",
+  "currency": "CHF",
+  "bankName": "Raiffeisenbank Musterdorf",
+  "owner": "Muster Kaffee GmbH",
+  "period": {
+   "from": "2026-05-01",
+   "to": "2026-05-31"
+  },
+  "opening": {
+   "date": "2026-05-01",
+   "amount": 48409.34
+  },
+  "closing": {
+   "date": "2026-05-31",
+   "amount": 55101.23
+  },
+  "movements": [
+   {
+    "date": "2026-05-04",
+    "amount": -2400,
+    "text": "Dauerauftrag Liegenschaften Muster AG"
+   },
+   {
+    "date": "2026-05-05",
+    "amount": 959.4,
+    "text": "Gutschrift Shopify Payments"
+   },
+   {
+    "date": "2026-05-14",
+    "amount": -83.3,
+    "text": "Debitkarte Coop Pronto Musterdorf"
+   },
+   {
+    "date": "2026-05-20",
+    "amount": -208.7,
+    "text": "Zahlung Post CH AG"
+   },
+   {
+    "date": "2026-05-25",
+    "amount": -2026,
+    "text": "Zahlung Gruenkaffee Muster AG"
+   },
+   {
+    "date": "2026-05-28",
+    "amount": 12531.59,
+    "text": "Gutschrift Muster Payments AG"
+   },
+   {
+    "date": "2026-05-29",
+    "amount": -2081.1,
+    "text": "Zahlung Eidg. Steuerverwaltung ESTV"
+   }
+  ]
+ }
+}

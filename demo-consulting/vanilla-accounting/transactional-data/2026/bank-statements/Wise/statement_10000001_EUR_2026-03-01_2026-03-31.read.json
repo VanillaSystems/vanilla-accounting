@@ -1,0 +1,27 @@
+{
+ "statement": {
+  "iban": "BE38967000000002",
+  "currency": "EUR",
+  "bankName": "Wise Europe SA",
+  "owner": "Muster Consulting GmbH",
+  "period": {
+   "from": "2026-03-01",
+   "to": "2026-03-31"
+  },
+  "opening": {
+   "date": "2026-03-01",
+   "amount": 6235.14
+  },
+  "closing": {
+   "date": "2026-03-31",
+   "amount": 6202.71
+  },
+  "movements": [
+   {
+    "date": "2026-03-10",
+    "amount": -32.43,
+    "text": "Card transaction of 32.43 EUR issued by Beispiel Software BERLIN"
+   }
+  ]
+ }
+}

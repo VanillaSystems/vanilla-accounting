@@ -1,0 +1,67 @@
+{
+ "statement": {
+  "iban": "CH1180808000000000003",
+  "currency": "CHF",
+  "bankName": "Raiffeisenbank Beispiel",
+  "owner": "Schreinerei Beispiel GmbH",
+  "period": {
+   "from": "2026-08-01",
+   "to": "2026-08-31"
+  },
+  "opening": {
+   "date": "2026-08-01",
+   "amount": -7136.8
+  },
+  "closing": {
+   "date": "2026-08-31",
+   "amount": -10053.69
+  },
+  "movements": [
+   {
+    "date": "2026-08-03",
+    "amount": -2300,
+    "text": "Dauerauftrag Miete Werkstatt"
+   },
+   {
+    "date": "2026-08-10",
+    "amount": -2018.8,
+    "text": "Zahlung Beispiel Holzhandel AG"
+   },
+   {
+    "date": "2026-08-11",
+    "amount": -29,
+    "text": "Debitkarte EXAMPLE TOOLS INC PORTLAND"
+   },
+   {
+    "date": "2026-08-14",
+    "amount": -286.2,
+    "text": "Debitkarte GARAGE BEISPIEL AG"
+   },
+   {
+    "date": "2026-08-14",
+    "amount": 6800,
+    "text": "Gutschrift Möbelhaus Beispiel GmbH"
+   },
+   {
+    "date": "2026-08-18",
+    "amount": -86.2,
+    "text": "eBill Muster Telecom AG"
+   },
+   {
+    "date": "2026-08-24",
+    "amount": 2513.65,
+    "text": "Gutschrift Beispiel Immobilien AG"
+   },
+   {
+    "date": "2026-08-25",
+    "amount": -5803.2,
+    "text": "Lohnzahlung Marco Beispiel"
+   },
+   {
+    "date": "2026-08-27",
+    "amount": -1707.14,
+    "text": "Zahlung Eidg. Steuerverwaltung ESTV"
+   }
+  ]
+ }
+}

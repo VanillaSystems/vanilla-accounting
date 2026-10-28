@@ -1,0 +1,52 @@
+{
+ "statement": {
+  "iban": "CH6580808000000000001",
+  "currency": "CHF",
+  "bankName": "Raiffeisenbank Musterdorf",
+  "owner": "Muster Kaffee GmbH",
+  "period": {
+   "from": "2026-09-01",
+   "to": "2026-09-30"
+  },
+  "opening": {
+   "date": "2026-09-01",
+   "amount": 80223.36
+  },
+  "closing": {
+   "date": "2026-09-30",
+   "amount": 88252.44
+  },
+  "movements": [
+   {
+    "date": "2026-09-07",
+    "amount": 904.98,
+    "text": "Gutschrift Shopify Payments"
+   },
+   {
+    "date": "2026-09-14",
+    "amount": -79.25,
+    "text": "Debitkarte Coop Pronto Musterdorf"
+   },
+   {
+    "date": "2026-09-21",
+    "amount": -217.75,
+    "text": "Zahlung Post CH AG"
+   },
+   {
+    "date": "2026-09-28",
+    "amount": 12724.4,
+    "text": "Gutschrift Muster Payments AG"
+   },
+   {
+    "date": "2026-09-30",
+    "amount": -5288.3,
+    "text": "Sammelzahlung"
+   },
+   {
+    "date": "2026-09-30",
+    "amount": -15,
+    "text": "Kontoführungsgebühren"
+   }
+  ]
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "statement": {
+  "iban": "BE29967000000164",
+  "currency": "EUR",
+  "bankName": "Wise Europe SA",
+  "owner": "Muster Kaffee GmbH",
+  "period": {
+   "from": "2026-02-01",
+   "to": "2026-02-28"
+  },
+  "opening": {
+   "date": "2026-02-01",
+   "amount": 3961
+  },
+  "closing": {
+   "date": "2026-02-28",
+   "amount": 2682
+  },
+  "movements": [
+   {
+    "date": "2026-02-03",
+    "amount": -39,
+    "text": "Card transaction of 39.00 EUR issued by Example Cloud Inc SAN FRANCISCO"
+   },
+   {
+    "date": "2026-02-17",
+    "amount": -1240,
+    "text": "Sent money to Torrefazione Esempio S.r.l."
+   }
+  ]
+ }
+}
