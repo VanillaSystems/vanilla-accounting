@@ -21,13 +21,14 @@ export interface RuleLine {
   asked: number;
 }
 
-/** The names a rule's words use, from the view. */
-export function namesOf(view: Pick<RulesView, 'names' | 'currency'>, money: (n: number) => string): RuleNames {
+/** The names a rule's words use, from the view; `vat` names a VAT code (the UI's plain words, codeLabel). */
+export function namesOf(view: Pick<RulesView, 'names' | 'currency'>, money: (n: number) => string, vat?: (code: string) => string): RuleNames {
   return {
     account: (n) => view.names.accounts[n],
     business: (id) => view.names.businesses[id],
     payer: (key) => view.names.payers?.[key],
     money: (n) => `${view.currency} ${money(n)}`,
+    ...(vat && { vat }),
     tag: (d, v) => { const dim = view.names.dimensions?.find((x) => x.id === d); return dim && `${dim.label} «${valueLabel(dim, v)}»`; },
   };
 }
@@ -43,8 +44,8 @@ export function lineOf(row: RuleRow, names: RuleNames, w: RuleWords): string {
 }
 
 /** Every rule of the view, the ones the app carries out first, each group in file order. */
-export function ruleLines(view: RulesView, w: RuleWords, money: (n: number) => string): RuleLine[] {
-  const names = namesOf(view, money);
+export function ruleLines(view: RulesView, w: RuleWords, money: (n: number) => string, vat?: (code: string) => string): RuleLine[] {
+  const names = namesOf(view, money, vat);
   const lines = view.rules.map((r): RuleLine => ({
     key: `${r.file}#${r.step}#${r.id}`, row: r, line: lineOf(r, names, w), acts: r.kind === 'rule', applied: r.applied, asked: r.asked ?? 0, ...(r.last ? { last: r.last } : {}),
   }));

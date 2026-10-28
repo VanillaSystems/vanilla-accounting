@@ -2,6 +2,7 @@
  * One receipt: who and what, the amount, one line of facts, its payment (or the suggestion, or
  * what is missing), the paper, and in the margin Zahlung, Angaben and Datei.
  */
+import type { OrderPage } from '../../../booking/order-pages.js';
 import { byStatement } from '../../../workspace/money-accounts.js';
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PaymentBooking } from '../journal/PaymentBooking.js';
@@ -262,6 +263,24 @@ function StuckNotice({ proc, nav, view }: { proc: Extract<Processing, { kind: 's
   );
 }
 
+/**
+ * An order page of the provider way (#253) needs no payment: its order waits for the provider's order
+ * export, which the export holds back (to its receipt), or is booked from it (to the sale).
+ */
+function OrderPageNotice({ page, l, nav }: { page: OrderPage; l: Ledger; nav: Props['nav'] }) {
+  const words = { provider: page.name, order: page.order };
+  const { state } = page;
+  const report = state.kind === 'held' ? l.byId.get(state.report) : undefined;
+  const sale = state.kind === 'booked' ? l.entriesByRef.get(state.sale)?.[0] : undefined;
+  return (
+    <span className="notice" style={{ margin: 0 }} data-testid="order-page">
+      {I.dot}{t(`receipts.orderPage.${state.kind}`, words)}
+      {report && <> <button type="button" className="golink" onClick={() => nav.go(at({ area: 'receipts', id: report.r.id }, report.date))}>{t('receipts.orderPage.toReport')} <span className="arr">→</span></button></>}
+      {sale && <> <button type="button" className="golink" onClick={() => nav.go(at({ area: 'journal', id: sale.id }, sale.date))}>{t('receipts.orderPage.toSale')} <span className="arr">→</span></button></>}
+    </span>
+  );
+}
+
 function Status(props: Props & { v: ReceiptView; l: Ledger }) {
   const { v, l, nav, canEdit } = props;
   const { rates } = useFx();
@@ -306,6 +325,7 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
   }
   // A receipt of a filed payment: the notice above says where its tax goes, not «Noch keine Zahlung».
   if (v.locked || (v.r.filedPayment && l.txByRef.has(v.r.filedPayment))) return null;
+  if (v.orderPage) return <OrderPageNotice page={v.orderPage} l={l} nav={nav} />;
   if (sug && canEdit) {
     const why = [t('receipts.whySameAmount'), sug.days !== undefined && dayText(sug.days)].filter(Boolean).join(' · ');
     return (
@@ -350,7 +370,7 @@ function Payments(props: Props & { v: ReceiptView; l: Ledger; edit: boolean; wor
   const val = !v.links.length ? '—' : v.links.length === 1 ? (one ? formatDate(one) : '?') : t('receipts.nPayments', { n: v.links.length });
   return (
     <Sec k="zahlung" val={val}>
-      {v.links.length === 0 && <div style={{ color: 'var(--muted)', fontSize: 12.5, padding: '4px 0 2px' }}>{working ? processingText(working) : t('receipts.noPaymentLinked')}</div>}
+      {v.links.length === 0 && <div style={{ color: 'var(--muted)', fontSize: 12.5, padding: '4px 0 2px' }}>{working ? processingText(working) : v.orderPage ? t('receipts.orderPage.none') : t('receipts.noPaymentLinked')}</div>}
       {v.links.map((ref) => {
         const tx = l.txByRef.get(ref);
         if (!tx) {
@@ -379,7 +399,7 @@ function Payments(props: Props & { v: ReceiptView; l: Ledger; edit: boolean; wor
           </Fragment>
         );
       })}
-      {edit && (
+      {edit && !v.orderPage && (
         <button type="button" className="addlink" onClick={() => runAct(props, 'link')}>
           {I.plus}{v.links.length ? t('receipts.morePayment') : t('receipts.linkPayment')} <Kbd keys={['L']} tip={t('receipts.keyLinkTip')} />
         </button>

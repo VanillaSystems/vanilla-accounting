@@ -273,7 +273,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
  * it, #218: «Sucht die Zahlung …», «Wartet (3 vor diesem)»), read, matched, waiting for a person,
  * its run stopped, or set aside by the run with the reason.
  */
-type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'stuck'; run: string } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string };
+type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'orderPage'; provider: string } | { kind: 'stuck'; run: string } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string };
 
 const isWorking = (run?: { status: string }) => !!run && (run.status === 'queued' || run.status === 'running');
 
@@ -308,7 +308,10 @@ function fileState(r: DropRow, books: Index, view: View): FileState {
   const receipt = books.receipts.find((x) => x.id === id);
   // At rest but not in the books the page holds: they are being loaded again, unless the run stopped.
   if (!receipt) return run?.status === 'stuck' ? { kind: 'stuck', run: run.id } : working;
-  return receipt.location === 'archived' ? { kind: 'read' } : { kind: 'waits' };
+  if (receipt.location !== 'archived') return { kind: 'waits' };
+  // An order page of the provider way (#253): the provider's order export brings its order, no payment comes for it.
+  const page = ledgerFor(books).byId.get(id)?.orderPage;
+  return page ? { kind: 'orderPage', provider: page.name } : { kind: 'read' };
 }
 
 /** A reason the run gives as a code has words of its own; any other is shown as the run said it. */
@@ -374,7 +377,7 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
         <div className="dn"><b className="mono">{r.name}</b><small>{r.report ? `${t(`drop.report.${r.report.kind}`, { provider: r.report.name })} · ${reportLine(r.report)}` : r.statement ? [r.read && t(`drop.read.by.${r.read.by}`), r.facts?.from && r.facts.to && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to)}`, keptPdf ? t('drop.kept') : t('drop.entries', { n: r.statement.refs.length })].filter(Boolean).join(' · ') : receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}{r.twin?.relation === 'companion' ? ` · ${t('drop.twin.companion', { name: r.twin.name })}` : r.document ? ` · ${t(`drop.doc.${r.document}` as 'drop.doc.newsletter')}` : ''}</small></div>
         <div className="dgo">
           <span className={`dchip p-${x.kind}`}>{x.kind === 'working' ? (x.step ?? t('drop.p.working')) : t(`drop.p.${x.kind}` as 'drop.p.read')}</span>
-          {missing ? <small className="dwhy">{missing}</small> : x.kind === 'refused' ? <small className="dwhy">{reasonText(x.reason)}</small> : null}
+          {missing ? <small className="dwhy">{missing}</small> : x.kind === 'orderPage' ? <small className="dwhy" data-testid="drop-order-page">{t('drop.p.orderPageWhy', { provider: x.provider })}</small> : x.kind === 'refused' ? <small className="dwhy">{reasonText(x.reason)}</small> : null}
           <span className="dacts">
             {x.kind === 'stuck' ? <button type="button" className="linkbtn" data-testid="drop-stuck-run" onClick={() => go({ area: 'automation', view: 'run', run: x.run })}>{t('processing.toRun')}</button> : null}
             {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id }, receipt.date)}>{t('drop.openReceipt')}</button> : null}

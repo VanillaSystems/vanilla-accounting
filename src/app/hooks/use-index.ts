@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Index } from '../../types/index.js';
 import { setAccounts } from '../lib/accounts.js';
+import { setOrderPages } from '../lib/order-pages.js';
 import { api } from '../lib/api.js';
 import { setJurisdiction } from '../../engines/index.js';
 
@@ -17,8 +18,10 @@ export function useIndex() {
       api.books(),
       api.accounts().catch(() => []),
       api.modules(),
-    ]).then(([json, accounts, modules]) => {
+      api.orderPages().catch(() => ({})),
+    ]).then(([json, accounts, modules, orderPages]) => {
       setAccounts(accounts);
+      setOrderPages(orderPages);
       setJurisdiction(modules.effective, modules.vat);
       setData(json);
       setLoading(false);

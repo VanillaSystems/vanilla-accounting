@@ -17,6 +17,7 @@ import { isManualRef } from '../../../books/refs.js';
 import type { OtherWhy, SupportingWhy } from '../../../core/modules/schema.js';
 import { kindByOf, type KindBy } from '../../../intake/unclear.js';
 import { inProcess, type Processing } from '../../../workflows/processing.js';
+import type { OrderPage } from '../../../booking/order-pages.js';
 
 /** Why a file in Belege is no receipt: what its words say it is, or its kind, or that it holds no amount. */
 export type NoneWhy = SupportingWhy | OtherWhy | 'supporting' | 'duplicate' | 'statement' | 'empty';
@@ -59,6 +60,8 @@ export interface ReceiptView {
   twin?: Twin;
   /** A bank statement's period and account, as its text and file name tell them (#151). */
   statement?: StatementFacts;
+  /** An order page of the provider way (#253): it needs no payment; its order comes from the provider's order export. */
+  orderPage?: OrderPage;
 }
 
 /** A money account of the manifest, as far as a statement is placed at one. */
@@ -86,7 +89,7 @@ export function splitTitle(text: string): [string, string] {
   return m ? [m[1], m[2]] : [text, ''];
 }
 
-export function ledgerOf(books: Index, openFrom: string, processing: ReadonlyMap<string, Processing> = new Map()): Ledger {
+export function ledgerOf(books: Index, openFrom: string, processing: ReadonlyMap<string, Processing> = new Map(), orderPages: ReadonlyMap<string, OrderPage> = new Map()): Ledger {
   const closedThrough = books.config?.closedThrough;
   const isClosed = (d: string | undefined) => !!closedThrough && !!d && d <= closedThrough;
   const txByRef = new Map(books.transactions.map((t) => [t.ref, t]));
@@ -114,7 +117,8 @@ export function ledgerOf(books: Index, openFrom: string, processing: ReadonlyMap
     const paid = links.flatMap((ref) => txByRef.get(ref)?.date ?? []);
     const twin = twins.get(r.id);
     const statement = r.kind === 'statement' ? statementFacts(r, documents()) : undefined;
-    return { r, date, day: date || r.indexedAt.slice(0, 10) || undefined, vendor, desc, links, paid, none, ...(none ? { noneWhy: noneWhyOf(r), noneBy: kindByOf(r) } : {}), locked: links.some(refClosed), ...(twin ? { twin } : {}), ...(statement ? { statement } : {}) };
+    const orderPage = links.length ? undefined : orderPages.get(r.id);
+    return { r, date, day: date || r.indexedAt.slice(0, 10) || undefined, vendor, desc, links, paid, none, ...(none ? { noneWhy: noneWhyOf(r), noneBy: kindByOf(r) } : {}), locked: links.some(refClosed), ...(twin ? { twin } : {}), ...(statement ? { statement } : {}), ...(orderPage ? { orderPage } : {}) };
   });
   return { views, byId: new Map(views.map((v) => [v.r.id, v])), txByRef, entriesByRef, receiptsByRef, closedThrough, openFrom, processing };
 }
@@ -137,10 +141,11 @@ export const working = (v: ReceiptView, l: Pick<Ledger, 'processing'>) => inProc
 /**
  * Still waiting for its payment or its date, and not in a filed quarter: what the dock's badge
  * counts. Books that never filed have no quarter to leave behind: a June invoice paid in July
- * needs you as well. A receipt a run still works on needs nobody yet (#218).
+ * needs you as well. A receipt a run still works on needs nobody yet (#218), nor an order page of
+ * the provider way, whose order the provider's export books (#253).
  */
 export const needsYou = (v: ReceiptView, l: Ledger) =>
-  !v.none && isOpen(v) && !v.locked && !working(v, l) && (!v.date || v.date >= l.openFrom || !l.closedThrough || v.date > l.closedThrough);
+  !v.none && isOpen(v) && !v.orderPage && !v.locked && !working(v, l) && (!v.date || v.date >= l.openFrom || !l.closedThrough || v.date > l.closedThrough);
 
 export const badgeCount = (l: Ledger) => l.views.filter((v) => needsYou(v, l)).length;
 

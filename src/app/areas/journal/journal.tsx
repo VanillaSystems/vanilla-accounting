@@ -21,7 +21,7 @@ import { I } from '../receipts/icons.js';
 import { at } from '../receipts/view.js';
 import { Kbd } from '../receipts/commands.js';
 import { NO_VAT } from '../codes/model.js';
-import { codeText, VatCards } from '../codes/vat-card.js';
+import { codeLabel, codeText } from '../codes/names.js';
 import { codesUi, setCodesUi } from '../codes/state.js';
 import { byMonth, firstRowTakesOver, rowsOf, JOURNAL_FILTERS, JOURNAL_ORIGINS, type EntryView, type JournalFilter } from './model.js';
 import type { JournalOrigin } from './model.js';
@@ -97,7 +97,7 @@ function List(props: Props) {
           )}
           {query.vat && (
             <button type="button" className="vchip" data-testid="vat-filter" data-tip={t('journal.vatFilterOff')} onClick={() => nav.setQuery({ vat: undefined })}>
-              {t('journal.field.vatCode')} <b className="mono">{query.vat === NO_VAT ? t('journal.without') : query.vat}</b> ×
+              {t('journal.field.vatCode')} <b>{query.vat === NO_VAT ? t('journal.without') : codeLabel(query.vat)}</b> ×
             </button>
           )}
           <button type="button" className="vhbtn" aria-label={t('codes.histogramTitle')} onClick={() => setCodesUi({ histogram: true })}>{BARS}</button>
@@ -133,7 +133,6 @@ function List(props: Props) {
           })}
         </div>
       )}
-      <VatCards {...(props as AreaProps)} />
       <NewEntry {...props} />
     </div>
   );
@@ -159,7 +158,7 @@ function Row({ v, prev, sel, picked, acName, toast, onClick }: { v: EntryView; p
       {side(e.accountDebit, 'dr')}
       {side(e.accountCredit, 'cr')}
       {e.vatCode
-        ? <span className={`mono vc${e.vatCode.startsWith('-') ? ' rev' : ''}`} data-vat={e.vatCode} aria-label={t('journal.vatLabel', { code: e.vatCode, text: codeText(e.vatCode) })} data-tip={v.evidence && evidenceText(e, v.evidence)}>{v.evidence && I.dot}{e.vatCode}</span>
+        ? <span className={`vc${e.vatCode.startsWith('-') ? ' rev' : ''}`} data-vat={e.vatCode} aria-label={t('journal.vatLabel', { code: e.vatCode, text: codeText(e.vatCode) })} data-tip={v.evidence && evidenceText(e, v.evidence)}>{v.evidence && I.dot}<span className="vn">{codeText(e.vatCode)}</span><span className="mono vk">{e.vatCode}</span></span>
         : <span className="mono vc none" data-tip={t('journal.noVat')}>·</span>}
       <span className="mono cu">{e.exchangeCurrency && e.exchangeCurrency !== baseCurrency() ? e.exchangeCurrency : ''}</span>
       <span className="a mono">{fmt(e.amount)}</span>

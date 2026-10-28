@@ -50,6 +50,7 @@ import { journalOf, unsettledAtFiling } from '../journal/model.js';
 import { addDays, localToday, parsePeriod } from '../../../accounting/periods.js';
 import { waitingForReceipt } from '../../../accounting/receipt-due.js';
 import { periodName } from '../../lib/period-label.js';
+import { codeLabel } from '../codes/names.js';
 
 type Props = AreaProps<RouteOf<'automation'>>;
 type R = RouteOf<'automation'>;
@@ -406,7 +407,7 @@ function Made({ s, nav }: { s: StepRecord; nav: Nav }) {
             ) : (
               <>
                 <button type="button" className="linkbtn" onClick={go({ area: 'journal', id: x.id })}>{t('automation.made.entry', { debit: x.debit, credit: x.credit })}</button>
-                <small>{[formatDate(x.date), fmt(x.amount), x.vatCode, x.description].filter(Boolean).join(' · ')}</small>
+                <small>{[formatDate(x.date), fmt(x.amount), x.vatCode && codeLabel(x.vatCode), x.description].filter(Boolean).join(' · ')}</small>
               </>
             )}
           </li>
@@ -433,7 +434,7 @@ function Proposal({ entries }: { entries: JournalEntry[] }) {
   return (
     <div className="wfproposal" data-testid="proposal">
       {entries.map((e) => (
-        <b key={e.id}>{t('automation.proposal', { booking: [`${e.accountDebit || '–'} / ${e.accountCredit || '–'}`, `${e.exchangeCurrency ?? baseCurrency()} ${fmt(e.amount)}`, e.vatCode, e.description].filter(Boolean).join(' · ') })}</b>
+        <b key={e.id}>{t('automation.proposal', { booking: [`${e.accountDebit || '–'} / ${e.accountCredit || '–'}`, `${e.exchangeCurrency ?? baseCurrency()} ${fmt(e.amount)}`, e.vatCode && codeLabel(e.vatCode), e.description].filter(Boolean).join(' · ') })}</b>
       ))}
     </div>
   );

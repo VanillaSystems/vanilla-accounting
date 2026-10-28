@@ -24,6 +24,8 @@ import { chargesOf } from './charges.js';
 import { noReceiptOfItsOwn, receiptKnowledge } from '../booking/receipt-wait.js';
 import { loadClassifyContext } from '../booking/classify.js';
 import { loadKnowledge } from '../knowledge/layers.js';
+import { noPaymentOf, orderPagesOf, type OrderPage } from '../booking/order-pages.js';
+import { providersOf } from './sales-report-import.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 
 export type { Found, Maker } from './pairing.js';
@@ -65,6 +67,8 @@ export interface ChainOptions {
   staged?: readonly Receipt[];
   /** The payments without a receipt of their own on these books, beside those marked so (noReceiptFor): never a candidate. */
   noReceipt?: (books: Books) => (t: BankTransaction) => boolean;
+  /** The receipts without a payment of their own on these books (noPaymentFor: an order page of the provider way): never a candidate. */
+  noPayment?: (books: Books) => (r: Receipt) => boolean;
 }
 
 /** The payments of `books` without a receipt of their own, as the wait for a receipt decides it (src/booking/receipt-wait.ts noReceiptOfItsOwn), for the workspace `ws`. */
@@ -77,6 +81,17 @@ export function noReceiptFor(ws: Workspace): (books: Books) => (t: BankTransacti
     return () => () => false;
   }
   return (books) => noReceiptOfItsOwn(books, ...firm);
+}
+
+/** The receipts of `books` without a payment of their own, for the workspace `ws`: an order page of a provider whose order export books its order (src/booking/order-pages.ts, #253). */
+export function noPaymentFor(ws: Pick<Workspace, 'paths'>): (books: Books) => (r: Receipt) => boolean {
+  const providers = providersOf(ws);
+  return (books) => noPaymentOf(books, providers);
+}
+
+/** The order pages of the provider way nothing is linked to yet, by receipt id (src/booking/order-pages.ts, #253): Belege shows where each stands instead of a missing payment. */
+export function orderPagesIn(ws: Pick<Workspace, 'paths'>, books: Parameters<typeof orderPagesOf>[0]): Record<string, OrderPage> {
+  return Object.fromEntries(orderPagesOf(books, providersOf(ws)));
 }
 
 /** Amounts in the books' currency at the official daily rate of the day (the flat rate only where no daily rate is known: fine for a candidate's proximity, never for booking). */
@@ -150,7 +165,7 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
   const stagedIds = new Set((opts.staged ?? []).map((r) => r.id));
   const books = stagedIds.size ? { ...stored, receipts: [...stored.receipts.filter((r) => !stagedIds.has(r.id)), ...opts.staged!] } : stored;
   const lock = periodLock(books);
-  const search = searchPairs(books, opts.toChf, lock.isClosed, opts.noReceipt?.(books));
+  const search = searchPairs(books, opts.toChf, lock.isClosed, opts.noReceipt?.(books), opts.noPayment?.(books));
   // «Beleg suchen» on a leg of a split charge searches for the charge, which its first movement names.
   const onlyTx = opts.only && 'payment' in opts.only ? books.transactions.find((t) => t.ref === (opts.only as { payment: string }).payment) : undefined;
   const only = onlyTx ? { payment: chargesOf(books.transactions, opts.toChf).of(onlyTx).refs[0] } : opts.only;

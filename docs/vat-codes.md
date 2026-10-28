@@ -5,7 +5,8 @@
 Every journal entry carries a VAT code from the code list of Banana Accounting. The code says which boxes of the VAT return the amount goes to and whether the amount includes the tax. The boxes shown here come from the same calculation as the return.
 
 The app shows the same catalogue in German, French, Italian and English: MWST tab, **Codes erklärt**, or a
-click on any code. There each code also lists the entries of the period that use it.
+click on any code. There each code also lists the entries of the period that use it. Wherever the app shows
+or offers a code, it names it in plain words first (the Name column), the code beside it.
 
 ## How to read a code
 
@@ -35,9 +36,9 @@ worked cases are in the [casebook](casebook.md).
 
 **Rules:** `sv-order-tax`, `sv-no-invoice`
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| V0 | Von der Steuer befreite Leistungen, u.a. Exporte (220) | 0% | gross | 200 (turnover), 220 (turnover) | [Webshop order shipped abroad (export, Ziffer 220)](../examples/cases/webshop-export.yaml) |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| V0 | Export of goods, no VAT | Von der Steuer befreite Leistungen, u.a. Exporte (220) | 0% | gross | 200 (turnover), 220 (turnover) | [Webshop order shipped abroad (export, Ziffer 220)](../examples/cases/webshop-export.yaml) |
 
 ### Supply abroad
 
@@ -47,9 +48,9 @@ worked cases are in the [casebook](casebook.md).
 
 **Rules:** `sv-service-abroad`, `sv-place-abroad`
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| V0-E | Leistungen im Ausland (221) | 0% | gross | 200 (turnover), 221 (turnover) | [Consulting fee paid by a client abroad (Ziffer 221)](../examples/cases/consulting-revenue-abroad.yaml) |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| V0-E | Service to a customer abroad, no VAT | Leistungen im Ausland (221) | 0% | gross | 200 (turnover), 221 (turnover) | [Consulting fee paid by a client abroad (Ziffer 221)](../examples/cases/consulting-revenue-abroad.yaml) |
 
 ### Transfer under the notification procedure
 
@@ -57,9 +58,9 @@ worked cases are in the [casebook](casebook.md).
 
 **Not when:** Selling single pieces of equipment outside a business transfer: V81.
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| V0-T | Übertragung im Meldeverfahren (225) | 0% | gross | 200 (turnover), 225 (turnover) |  |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| V0-T | Transfer under the notification procedure, no VAT | Übertragung im Meldeverfahren (225) | 0% | gross | 200 (turnover), 225 (turnover) |  |
 
 ### Supply excluded from tax
 
@@ -67,9 +68,9 @@ worked cases are in the [casebook](casebook.md).
 
 **Not when:** Exports (V0) and supplies abroad (V0-E). Money with nothing in return (donations, dividends): Z0.
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| V0-N | Nicht steuerbare Leistungen (230) | 0% | gross | 200 (turnover), 230 (turnover) |  |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| V0-N | Exempt supply, no VAT | Nicht steuerbare Leistungen (230) | 0% | gross | 200 (turnover), 230 (turnover) |  |
 
 ### Various deductions from turnover
 
@@ -77,9 +78,9 @@ worked cases are in the [casebook](casebook.md).
 
 **Not when:** Exports (V0), supplies abroad (V0-E), excluded supplies (V0-N). When in doubt, ask your fiduciary.
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| V0-D | Diverses (280) | 0% | gross | 200 (turnover), 280 (turnover) |  |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| V0-D | Other deduction from turnover, no VAT | Diverses (280) | 0% | gross | 200 (turnover), 280 (turnover) |  |
 
 ### Opted supply (taxed by choice)
 
@@ -87,10 +88,10 @@ worked cases are in the [casebook](casebook.md).
 
 **Not when:** Ordinary taxable sales: V81. Without the option the supply stays excluded: V0-N.
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| V77-B | Verkauf und Dienstleistungen 7.7% (optiert) | 7.7% standard rate (until 2023) | gross | not declared (Banana: 200, 205, 302) |  |
-| V81-B | Verkauf und Dienstleistungen 8.1% (optiert) | 8.1% standard rate | gross | not declared (Banana: 200, 205, 303) |  |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| V77-B | Sale 7.7 %, taxed by option, rate until 2023 | Verkauf und Dienstleistungen 7.7% (optiert) | 7.7% standard rate (until 2023) | gross | not declared (Banana: 200, 205, 302) |  |
+| V81-B | Sale 8.1 %, taxed by option | Verkauf und Dienstleistungen 8.1% (optiert) | 8.1% standard rate | gross | not declared (Banana: 200, 205, 303) |  |
 
 ### Sale or service in Switzerland with VAT
 
@@ -100,14 +101,14 @@ worked cases are in the [casebook](casebook.md).
 
 **Rules:** `sv-order-tax`, `sv-no-invoice`, `sv-card-terminal`, `sid-sale-refund`
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| V77 | Verkauf und Dienstleistungen 7.7% | 7.7% standard rate (until 2023) | gross | 200 (turnover), 302 (taxable) |  |
-| V81 | Verkauf und Dienstleistungen 8.1% | 8.1% standard rate | gross | 200 (turnover), 303 (taxable) | [Consulting fee paid by a Swiss client (8.1%)](../examples/cases/consulting-revenue-ch.yaml) |
-| V25-N | Verkauf und Dienstleistungen 2.5% | 2.5% reduced rate (until 2023) | gross | 200 (turnover), 312 (taxable) |  |
-| V26 | Verkauf und Dienstleistungen 2.6% | 2.6% reduced rate | gross | 200 (turnover), 313 (taxable) |  |
-| V37 | Verkauf und Dienstleistungen 3.7% | 3.7% accommodation rate (until 2023) | gross | 200 (turnover), 342 (taxable) |  |
-| V38 | Verkauf und Dienstleistungen 3.8% | 3.8% accommodation rate | gross | 200 (turnover), 343 (taxable) |  |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| V77 | Sale 7.7 %, rate until 2023 | Verkauf und Dienstleistungen 7.7% | 7.7% standard rate (until 2023) | gross | 200 (turnover), 302 (taxable) |  |
+| V81 | Sale 8.1 % | Verkauf und Dienstleistungen 8.1% | 8.1% standard rate | gross | 200 (turnover), 303 (taxable) | [Consulting fee paid by a Swiss client (8.1%)](../examples/cases/consulting-revenue-ch.yaml) |
+| V25-N | Sale 2.5 %, rate until 2023 | Verkauf und Dienstleistungen 2.5% | 2.5% reduced rate (until 2023) | gross | 200 (turnover), 312 (taxable) |  |
+| V26 | Sale 2.6 % | Verkauf und Dienstleistungen 2.6% | 2.6% reduced rate | gross | 200 (turnover), 313 (taxable) |  |
+| V37 | Sale 3.7 %, rate until 2023 | Verkauf und Dienstleistungen 3.7% | 3.7% accommodation rate (until 2023) | gross | 200 (turnover), 342 (taxable) |  |
+| V38 | Sale 3.8 % | Verkauf und Dienstleistungen 3.8% | 3.8% accommodation rate | gross | 200 (turnover), 343 (taxable) |  |
 
 ## VS: Discounts on sales
 
@@ -117,14 +118,14 @@ worked cases are in the [casebook](casebook.md).
 
 **Not when:** This app does not declare VS codes. On cash basis the amount actually paid is booked with the sale code; a repayment with the sale code and a minus (-V81).
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| VS77 | Skonto Verkauf und Dienstleistungen 7.7% | 7.7% standard rate (until 2023) | gross | not declared (Banana: 235, 302) |  |
-| VS81 | Skonto Verkauf und Dienstleistungen 8.1% | 8.1% standard rate | gross | not declared (Banana: 235, 303) |  |
-| VS25-N | Skonto Verkauf und Dienstleistungen 2.5% | 2.5% reduced rate (until 2023) | gross | not declared (Banana: 235, 312) |  |
-| VS26 | Skonto Verkauf und Dienstleistungen 2.6% | 2.6% reduced rate | gross | not declared (Banana: 235, 313) |  |
-| VS37 | Skonto Verkauf und Dienstleistungen 3.7% | 3.7% accommodation rate (until 2023) | gross | not declared (Banana: 235, 342) |  |
-| VS38 | Skonto Verkauf und Dienstleistungen 3.8% | 3.8% accommodation rate | gross | not declared (Banana: 235, 343) |  |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| VS77 | Discount on a sale 7.7 %, rate until 2023 | Skonto Verkauf und Dienstleistungen 7.7% | 7.7% standard rate (until 2023) | gross | not declared (Banana: 235, 302) |  |
+| VS81 | Discount on a sale 8.1 % | Skonto Verkauf und Dienstleistungen 8.1% | 8.1% standard rate | gross | not declared (Banana: 235, 303) |  |
+| VS25-N | Discount on a sale 2.5 %, rate until 2023 | Skonto Verkauf und Dienstleistungen 2.5% | 2.5% reduced rate (until 2023) | gross | not declared (Banana: 235, 312) |  |
+| VS26 | Discount on a sale 2.6 % | Skonto Verkauf und Dienstleistungen 2.6% | 2.6% reduced rate | gross | not declared (Banana: 235, 313) |  |
+| VS37 | Discount on a sale 3.7 %, rate until 2023 | Skonto Verkauf und Dienstleistungen 3.7% | 3.7% accommodation rate (until 2023) | gross | not declared (Banana: 235, 342) |  |
+| VS38 | Discount on a sale 3.8 % | Skonto Verkauf und Dienstleistungen 3.8% | 3.8% accommodation rate | gross | not declared (Banana: 235, 343) |  |
 
 ## F: Flat tax rate
 
@@ -134,16 +135,16 @@ worked cases are in the [casebook](casebook.md).
 
 **Not when:** This app files with the effective method and does not declare F codes. Effective method: V codes.
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| F1 | 1. Saldosteuersatz 2024 |  | gross | not declared (Banana: 200, 323) |  |
-| F2 | 2. Saldosteuersatz 2024 |  | gross | not declared (Banana: 200, 333) |  |
-| FS1 | Skonto Verkauf und Dienstleistungen 1. Saldosteuersatz 2024 |  | gross | not declared (Banana: 235, 323) |  |
-| FS2 | Skonto Verkauf und Dienstleistungen 2. Saldosteuersatz 2024 |  | gross | not declared (Banana: 235, 333) |  |
-| F3 | 1. Saldosteuersatz 2018 |  | gross | not declared (Banana: 200, 322) |  |
-| F4 | 2. Saldosteuersatz 2018 |  | gross | not declared (Banana: 200, 332) |  |
-| FS3 | Skonto Verkauf und Dienstleistungen 1. Saldosteuersatz 2018 |  | gross | not declared (Banana: 235, 322) |  |
-| FS4 | Skonto Verkauf und Dienstleistungen 2. Saldosteuersatz 2018 |  | gross | not declared (Banana: 235, 332) |  |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| F1 | Sale at net tax rate 1 | 1. Saldosteuersatz 2024 |  | gross | not declared (Banana: 200, 323) |  |
+| F2 | Sale at net tax rate 2 | 2. Saldosteuersatz 2024 |  | gross | not declared (Banana: 200, 333) |  |
+| FS1 | Discount at net tax rate 1 | Skonto Verkauf und Dienstleistungen 1. Saldosteuersatz 2024 |  | gross | not declared (Banana: 235, 323) |  |
+| FS2 | Discount at net tax rate 2 | Skonto Verkauf und Dienstleistungen 2. Saldosteuersatz 2024 |  | gross | not declared (Banana: 235, 333) |  |
+| F3 | Sale at net tax rate 1 | 1. Saldosteuersatz 2018 |  | gross | not declared (Banana: 200, 322) |  |
+| F4 | Sale at net tax rate 2 | 2. Saldosteuersatz 2018 |  | gross | not declared (Banana: 200, 332) |  |
+| FS3 | Discount at net tax rate 1 | Skonto Verkauf und Dienstleistungen 1. Saldosteuersatz 2018 |  | gross | not declared (Banana: 235, 322) |  |
+| FS4 | Discount at net tax rate 2 | Skonto Verkauf und Dienstleistungen 2. Saldosteuersatz 2018 |  | gross | not declared (Banana: 235, 332) |  |
 
 ## B: Acquisition tax (reverse charge)
 
@@ -155,14 +156,14 @@ worked cases are in the [casebook](casebook.md).
 
 **Rules:** `pv-bezugsteuer`
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| B77 | Bezugsteuer 7.7% (inklusive MwSt/USt) | 7.7% standard rate (until 2023) | gross | 382 (tax), 405 (tax) |  |
-| B77-1 | Bezugsteuer 7.7% (exklusive MwSt/USt) | 7.7% standard rate (until 2023) | net | 382 (tax), 405 (tax) |  |
-| B77-2 | Bezugsteuer 7.7% (MwSt/USt-Betrag) | 7.7% standard rate (until 2023) | the VAT | 382 (tax), 405 (tax) |  |
-| B81 | Bezugsteuer 8.1% (inklusive MwSt/USt) | 8.1% standard rate | gross | 383 (tax), 405 (tax) |  |
-| B81-1 | Bezugsteuer 8.1% (exklusive MwSt/USt) | 8.1% standard rate | net | 383 (tax), 405 (tax) | [Software subscription from abroad without Swiss VAT (Bezugsteuer)](../examples/cases/bezugsteuer-foreign-service.yaml) |
-| B81-2 | Bezugsteuer 8.1% (MwSt/USt-Betrag) | 8.1% standard rate | the VAT | 383 (tax), 405 (tax) |  |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| B77 | Acquisition tax, service from abroad 7.7 % (VAT included), rate until 2023 | Bezugsteuer 7.7% (inklusive MwSt/USt) | 7.7% standard rate (until 2023) | gross | 382 (tax), 405 (tax) |  |
+| B77-1 | Acquisition tax, service from abroad 7.7 % (amount without VAT), rate until 2023 | Bezugsteuer 7.7% (exklusive MwSt/USt) | 7.7% standard rate (until 2023) | net | 382 (tax), 405 (tax) |  |
+| B77-2 | Acquisition tax, service from abroad 7.7 %, the tax alone, rate until 2023 | Bezugsteuer 7.7% (MwSt/USt-Betrag) | 7.7% standard rate (until 2023) | the VAT | 382 (tax), 405 (tax) |  |
+| B81 | Acquisition tax, service from abroad 8.1 % (VAT included) | Bezugsteuer 8.1% (inklusive MwSt/USt) | 8.1% standard rate | gross | 383 (tax), 405 (tax) |  |
+| B81-1 | Acquisition tax, service from abroad 8.1 % (amount without VAT) | Bezugsteuer 8.1% (exklusive MwSt/USt) | 8.1% standard rate | net | 383 (tax), 405 (tax) | [Software subscription from abroad without Swiss VAT (Bezugsteuer)](../examples/cases/bezugsteuer-foreign-service.yaml) |
+| B81-2 | Acquisition tax, service from abroad 8.1 %, the tax alone | Bezugsteuer 8.1% (MwSt/USt-Betrag) | 8.1% standard rate | the VAT | 383 (tax), 405 (tax) |  |
 
 ## M: Input tax on material and services
 
@@ -174,9 +175,9 @@ worked cases are in the [casebook](casebook.md).
 
 **Rules:** `pv-no-receipt`, `pv-che-but-zero`, `pv-otherwise`
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| M0 | Befreite Material- und Dienstleistungsaufwand | 0% | gross | none | [Courier customs bill with import VAT (eVV)](../examples/cases/import-vat-evv.yaml) |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| M0 | Material without VAT | Befreite Material- und Dienstleistungsaufwand | 0% | gross | none | [Courier customs bill with import VAT (eVV)](../examples/cases/import-vat-evv.yaml) |
 
 ### Input tax on material, goods and services
 
@@ -186,18 +187,18 @@ worked cases are in the [casebook](casebook.md).
 
 **Rules:** `pv-charged`, `pv-prefix-from-account`, `pv-import-vat-evv`
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| M77 | Material- und Dienstleistungsaufwand 7.7% (inklusive MwSt/USt) | 7.7% standard rate (until 2023) | gross | 400 (tax) |  |
-| M77-1 | Material- und Dienstleistungsaufwand 7.7% (exklusive MwSt/USt) | 7.7% standard rate (until 2023) | net | 400 (tax) |  |
-| M77-2 | Material- und Dienstleistungsaufwand 7.7% (MwSt/USt-Betrag) | 7.7% standard rate (until 2023) | the VAT | 400 (tax) |  |
-| M81 | Material- und Dienstleistungsaufwand 8.1% (inklusive MwSt/USt) | 8.1% standard rate | gross | 400 (tax) | [Courier customs bill with import VAT (eVV)](../examples/cases/import-vat-evv.yaml) |
-| M81-1 | Material- und Dienstleistungsaufwand 8.1% (exklusive MwSt/USt) | 8.1% standard rate | net | 400 (tax) |  |
-| M81-2 | Material- und Dienstleistungsaufwand 8.1% (MwSt/USt-Betrag) | 8.1% standard rate | the VAT | 400 (tax) | [Monthly input tax on webshop fees (single-leg M81-2)](../examples/cases/webshop-fees-vat.yaml) |
-| M25 | Material- und Dienstleistungsaufwand 2.5% | 2.5% reduced rate (until 2023) | gross | 400 (tax) |  |
-| M26 | Material- und Dienstleistungsaufwand 2.6% | 2.6% reduced rate | gross | 400 (tax) | [Goods for resale at the reduced rate (2.6%)](../examples/cases/reduced-rate-goods.yaml) |
-| M37 | Material- und Dienstleistungsaufwand 3.7% | 3.7% accommodation rate (until 2023) | gross | 400 (tax) |  |
-| M38 | Material- und Dienstleistungsaufwand 3.8% | 3.8% accommodation rate | gross | 400 (tax) |  |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| M77 | Material 7.7 % (VAT included), rate until 2023 | Material- und Dienstleistungsaufwand 7.7% (inklusive MwSt/USt) | 7.7% standard rate (until 2023) | gross | 400 (tax) |  |
+| M77-1 | Material 7.7 % (amount without VAT), rate until 2023 | Material- und Dienstleistungsaufwand 7.7% (exklusive MwSt/USt) | 7.7% standard rate (until 2023) | net | 400 (tax) |  |
+| M77-2 | Material 7.7 %, the tax alone, rate until 2023 | Material- und Dienstleistungsaufwand 7.7% (MwSt/USt-Betrag) | 7.7% standard rate (until 2023) | the VAT | 400 (tax) |  |
+| M81 | Material 8.1 % (VAT included) | Material- und Dienstleistungsaufwand 8.1% (inklusive MwSt/USt) | 8.1% standard rate | gross | 400 (tax) | [Courier customs bill with import VAT (eVV)](../examples/cases/import-vat-evv.yaml) |
+| M81-1 | Material 8.1 % (amount without VAT) | Material- und Dienstleistungsaufwand 8.1% (exklusive MwSt/USt) | 8.1% standard rate | net | 400 (tax) |  |
+| M81-2 | Material 8.1 %, the tax alone | Material- und Dienstleistungsaufwand 8.1% (MwSt/USt-Betrag) | 8.1% standard rate | the VAT | 400 (tax) | [Monthly input tax on webshop fees (single-leg M81-2)](../examples/cases/webshop-fees-vat.yaml) |
+| M25 | Material 2.5 % (VAT included), rate until 2023 | Material- und Dienstleistungsaufwand 2.5% | 2.5% reduced rate (until 2023) | gross | 400 (tax) |  |
+| M26 | Material 2.6 % (VAT included) | Material- und Dienstleistungsaufwand 2.6% | 2.6% reduced rate | gross | 400 (tax) | [Goods for resale at the reduced rate (2.6%)](../examples/cases/reduced-rate-goods.yaml) |
+| M37 | Material 3.7 % (VAT included), rate until 2023 | Material- und Dienstleistungsaufwand 3.7% | 3.7% accommodation rate (until 2023) | gross | 400 (tax) |  |
+| M38 | Material 3.8 % (VAT included) | Material- und Dienstleistungsaufwand 3.8% | 3.8% accommodation rate | gross | 400 (tax) |  |
 
 ## I: Input tax on investments and operating costs
 
@@ -209,9 +210,9 @@ worked cases are in the [casebook](casebook.md).
 
 **Rules:** `pv-no-receipt`, `pv-che-but-zero`, `pv-otherwise`
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| I0 | Befreite Investition und Betriebsaufwand | 0% | gross | none | [Pension fund (BVG) premium](../examples/cases/bvg-premium.yaml) |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| I0 | Expense without VAT | Befreite Investition und Betriebsaufwand | 0% | gross | none | [Pension fund (BVG) premium](../examples/cases/bvg-premium.yaml) |
 
 ### Input tax on investments and other operating costs
 
@@ -221,18 +222,18 @@ worked cases are in the [casebook](casebook.md).
 
 **Rules:** `pv-charged`, `pv-prefix-from-account`
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| I77 | Investition und Betriebsaufwand 7.7% | 7.7% standard rate (until 2023) | gross | 405 (tax) |  |
-| I77-1 | Investition und Betriebsaufwand 7.7% (exklusive MwSt/USt) | 7.7% standard rate (until 2023) | net | 405 (tax) |  |
-| I77-2 | Investition und Betriebsaufwand 7.7% (MwSt/USt-Betrag) | 7.7% standard rate (until 2023) | the VAT | 405 (tax) |  |
-| I81 | Investition und Betriebsaufwand 8.1% | 8.1% standard rate | gross | 405 (tax) | [Business expense with a receipt that shows 8.1% MWST](../examples/cases/expense-swiss-vat.yaml) |
-| I81-1 | Investition und Betriebsaufwand 8.1% (exklusive MwSt/USt) | 8.1% standard rate | net | 405 (tax) |  |
-| I81-2 | Investition und Betriebsaufwand 8.1% (MwSt/USt-Betrag) | 8.1% standard rate | the VAT | 405 (tax) | [Input tax recovered for a filed quarter (single-leg -2 entry)](../examples/cases/vorsteuer-recovered-filed-quarter.yaml) |
-| I25 | Investition und Betriebsaufwand 2.5% | 2.5% reduced rate (until 2023) | gross | 405 (tax) |  |
-| I26 | Investition und Betriebsaufwand 2.6% | 2.6% reduced rate | gross | 405 (tax) | [One receipt with two VAT rates (8.1% and 2.6%)](../examples/cases/mixed-rate-receipt.yaml) |
-| I37 | Investition und Betriebsaufwand 3.7% | 3.7% accommodation rate (until 2023) | gross | 405 (tax) |  |
-| I38 | Investition und Betriebsaufwand 3.8% | 3.8% accommodation rate | gross | 405 (tax) |  |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| I77 | Operating expense 7.7 % (VAT included), rate until 2023 | Investition und Betriebsaufwand 7.7% | 7.7% standard rate (until 2023) | gross | 405 (tax) |  |
+| I77-1 | Operating expense 7.7 % (amount without VAT), rate until 2023 | Investition und Betriebsaufwand 7.7% (exklusive MwSt/USt) | 7.7% standard rate (until 2023) | net | 405 (tax) |  |
+| I77-2 | Operating expense 7.7 %, the tax alone, rate until 2023 | Investition und Betriebsaufwand 7.7% (MwSt/USt-Betrag) | 7.7% standard rate (until 2023) | the VAT | 405 (tax) |  |
+| I81 | Operating expense 8.1 % (VAT included) | Investition und Betriebsaufwand 8.1% | 8.1% standard rate | gross | 405 (tax) | [Business expense with a receipt that shows 8.1% MWST](../examples/cases/expense-swiss-vat.yaml) |
+| I81-1 | Operating expense 8.1 % (amount without VAT) | Investition und Betriebsaufwand 8.1% (exklusive MwSt/USt) | 8.1% standard rate | net | 405 (tax) |  |
+| I81-2 | Operating expense 8.1 %, the tax alone | Investition und Betriebsaufwand 8.1% (MwSt/USt-Betrag) | 8.1% standard rate | the VAT | 405 (tax) | [Input tax recovered for a filed quarter (single-leg -2 entry)](../examples/cases/vorsteuer-recovered-filed-quarter.yaml) |
+| I25 | Operating expense 2.5 % (VAT included), rate until 2023 | Investition und Betriebsaufwand 2.5% | 2.5% reduced rate (until 2023) | gross | 405 (tax) |  |
+| I26 | Operating expense 2.6 % (VAT included) | Investition und Betriebsaufwand 2.6% | 2.6% reduced rate | gross | 405 (tax) | [One receipt with two VAT rates (8.1% and 2.6%)](../examples/cases/mixed-rate-receipt.yaml) |
+| I37 | Operating expense 3.7 % (VAT included), rate until 2023 | Investition und Betriebsaufwand 3.7% | 3.7% accommodation rate (until 2023) | gross | 405 (tax) |  |
+| I38 | Operating expense 3.8 % (VAT included) | Investition und Betriebsaufwand 3.8% | 3.8% accommodation rate | gross | 405 (tax) |  |
 
 ## K: Corrections and reductions
 
@@ -242,10 +243,10 @@ worked cases are in the [casebook](casebook.md).
 
 **Not when:** Ordinary purchases with a VAT receipt: I81 or M81.
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| K77-A | Einlageentsteuerung 7.7% (410) | 7.7% standard rate (until 2023) | gross | 410 (tax) |  |
-| K81-A | Einlageentsteuerung 8.1% (410) | 8.1% standard rate | gross | 410 (tax) |  |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| K77-A | Subsequent input tax deduction 7.7 %, rate until 2023 | Einlageentsteuerung 7.7% (410) | 7.7% standard rate (until 2023) | gross | 410 (tax) |  |
+| K81-A | Subsequent input tax deduction 8.1 % | Einlageentsteuerung 8.1% (410) | 8.1% standard rate | gross | 410 (tax) |  |
 
 ### Input tax correction (private share, own use)
 
@@ -255,10 +256,10 @@ worked cases are in the [casebook](casebook.md).
 
 **Rules:** `eig-entry`
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| K77-B | Vorsteuerkorrekturen 7.7% (415) | 7.7% standard rate (until 2023) | gross | 415 (tax) |  |
-| K81-B | Vorsteuerkorrekturen 8.1% (415) | 8.1% standard rate | gross | 415 (tax) | [Private share of a mixed-use expense (Vorsteuerkorrektur)](../examples/cases/private-share.yaml) |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| K77-B | Input tax correction, private share 7.7 %, rate until 2023 | Vorsteuerkorrekturen 7.7% (415) | 7.7% standard rate (until 2023) | gross | 415 (tax) |  |
+| K81-B | Input tax correction, private share 8.1 % | Vorsteuerkorrekturen 8.1% (415) | 8.1% standard rate | gross | 415 (tax) | [Private share of a mixed-use expense (Vorsteuerkorrektur)](../examples/cases/private-share.yaml) |
 
 ### Input tax reduction
 
@@ -266,10 +267,10 @@ worked cases are in the [casebook](casebook.md).
 
 **Not when:** A private share: K81-B. Donations and dividends do not reduce the input tax.
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| K77-C | Vorsteuerkürzungen 7.7% (420) | 7.7% standard rate (until 2023) | gross | 420 (tax) |  |
-| K81-C | Vorsteuerkürzungen 8.1% (420) | 8.1% standard rate | gross | 420 (tax) |  |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| K77-C | Input tax reduction 7.7 %, rate until 2023 | Vorsteuerkürzungen 7.7% (420) | 7.7% standard rate (until 2023) | gross | 420 (tax) |  |
+| K81-C | Input tax reduction 8.1 % | Vorsteuerkürzungen 8.1% (420) | 8.1% standard rate | gross | 420 (tax) |  |
 
 ### Tax credit on form 1050 or 1055
 
@@ -277,10 +278,10 @@ worked cases are in the [casebook](casebook.md).
 
 **Not when:** This app files with the effective method and does not declare these codes.
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| F1050 | Steueranrechnung gemäss Formular Nr. 1050 |  | the VAT | not declared (Banana: 470) |  |
-| F1055 | Steueranrechnung gemäss Formular Nr. 1055 |  | the VAT | not declared (Banana: 471) |  |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| F1050 | Tax credit, form 1050 | Steueranrechnung gemäss Formular Nr. 1050 |  | the VAT | not declared (Banana: 470) |  |
+| F1055 | Tax credit, form 1055 | Steueranrechnung gemäss Formular Nr. 1055 |  | the VAT | not declared (Banana: 471) |  |
 
 ## Z: Money that is no consideration
 
@@ -290,9 +291,9 @@ worked cases are in the [casebook](casebook.md).
 
 **Not when:** Payment for a supply: a V code. Donations and dividends: Z0.
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| Z0-A | Subventionen, durch Kurvereine eingenommene Tourismusabgaben, Entsorgungs-und Wasserwerkbeiträge (Bst. a-c) |  | gross | not declared (Banana: 900) |  |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| Z0-A | Subsidies and public contributions | Subventionen, durch Kurvereine eingenommene Tourismusabgaben, Entsorgungs-und Wasserwerkbeiträge (Bst. a-c) |  | gross | not declared (Banana: 900) |  |
 
 ### No consideration: donations, dividends, damages
 
@@ -300,6 +301,6 @@ worked cases are in the [casebook](casebook.md).
 
 **Not when:** Paid invoices for a supply: a V code. Loans and contributions of the owner need no VAT code.
 
-| Code | Banana text | Rate | Amount is | Boxes | Example |
-|---|---|---|---|---|---|
-| Z0 | Spenden, Dividenden, Schadenersatz usw. |  | gross | not declared (Banana: 910) |  |
+| Code | Name | Banana text | Rate | Amount is | Boxes | Example |
+|---|---|---|---|---|---|---|
+| Z0 | Donations, dividends, damages | Spenden, Dividenden, Schadenersatz usw. |  | gross | not declared (Banana: 910) |  |

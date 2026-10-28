@@ -188,13 +188,14 @@ const amountIn = (text: string): number => Number(text.replace(/[.,](\d{2})$/, '
 /**
  * The receipts the chain looks for a payment for: read, kept, an invoice or a sales record with an
  * amount and a date, nothing linked, not pointed at a filed payment, and no payout report or order
- * page (their own links, order-links.ts and the model). A customs assessment, a document beside the
+ * page (their own links, order-links.ts and the model), nor an order page of the provider way
+ * (`noPayment`, src/booking/order-pages.ts, #253). A customs assessment, a document beside the
  * courier's invoice, is one too: import VAT paid to the customs office itself has it as its receipt
  * (fitOf holds it to a payment that names its number).
  */
-export function pairableReceipt(r: Receipt, linked: ReadonlySet<string>): boolean {
+export function pairableReceipt(r: Receipt, linked: ReadonlySet<string>, noPayment?: (r: Receipt) => boolean): boolean {
   return r.location === 'archived' && !linked.has(r.id) && !r.filedPayment && (!r.kind || r.kind === 'invoice' || r.kind === 'sales-record' || (r.kind === 'supporting' && namesAssessment(r, documents().customs)))
-    && !!r.amount && !!r.date && !r.payout && !r.order;
+    && !!r.amount && !!r.date && !r.payout && !r.order && !noPayment?.(r);
 }
 
 /**
@@ -275,7 +276,7 @@ const rank = (a: PairCandidate, b: PairCandidate) => b.score - a.score || Math.a
  * apart (Receipt.notPaidBy) is never a candidate again. A filed payment is a candidate too: its
  * receipt is pointed at it, never linked (golden rule 1).
  */
-export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string) => boolean, noReceipt?: (t: BankTransaction) => boolean): PairSearch {
+export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string) => boolean, noReceipt?: (t: BankTransaction) => boolean, noPayment?: (r: Receipt) => boolean): PairSearch {
   const linkedReceipts = new Set(books.mappings.map((m) => m.receiptId));
   const taken = takenPayments(books);
   const charges = chargesOf(books.transactions, toChf);
@@ -283,7 +284,7 @@ export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string)
   const payments = books.transactions.filter((t) => charges.of(t).refs.every((ref) => ref === t.ref ? pairablePayment(t, taken, noReceipt) : !taken.has(ref)));
   const byReceipt = new Map<string, PairCandidate[]>();
   const byPayment = new Map<string, PairCandidate[]>(payments.map((t) => [charges.of(t).refs[0], []]));
-  const pairable = books.receipts.filter((r) => pairableReceipt(r, linkedReceipts));
+  const pairable = books.receipts.filter((r) => pairableReceipt(r, linkedReceipts, noPayment));
   // Of two documents of one invoice (duplicatesIn), the copy is no candidate: it would compete with its original for one payment, or pair beside the one linked already (#190). It stays for Belege's copy question.
   const twins = pairable.length ? duplicatesIn([...pairable, ...books.receipts.filter((r) => linkedReceipts.has(r.id))], linkedReceipts, documents()) : new Map();
   for (const r of pairable) {
