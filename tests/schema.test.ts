@@ -4,12 +4,14 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadBooks, saveBooks } from '../src/books/store.js';
-import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, MANIFEST_MIGRATIONS, WORKSPACE_SCHEMA, climb, type Ladder } from '../src/workspace/schema.js';
+import { loadBooks, saveBooks, sealsOf } from '../src/books/store.js';
+import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, MANIFEST_MIGRATIONS, SchemaTooNewError, WORKSPACE_SCHEMA, climb, type Ladder } from '../src/workspace/schema.js';
+import { upgradeWorkspace } from '../src/workspace/upgrade.js';
 import { workspaceAt } from '../src/workspace/workspace.js';
-import { tempWorkspace, writeIndex } from './support/workspace.js';
+import { DEMO_ROOT, tempWorkspace, writeIndex } from './support/workspace.js';
 
 const FIXTURE = join(process.cwd(), 'tests/fixtures/period-lock-index.json');
 
@@ -66,3 +68,40 @@ test('climb refuses a gap in the ladder and a newer file', () => {
   assert.throws(() => climb({}, 1, 4, ladder, 'books.json', clone), /no migration from schema 3 to 4/);
   assert.throws(() => climb({}, 4, 3, ladder, 'books.json', clone), /schema 4; this version of the app reads up to 3/);
 });
+
+test('books schema 6 (#218): books of schema 5 load and verify their seals, npm run update writes 6 with a backup and no record changed; a receipt\'s handSet survives a save; an app of schema 5 refuses books of 6', async () => {
+  assert.equal(BOOKS_SCHEMA, 6);
+  const dir = mkdtempSync(join(tmpdir(), 'schema-6-'));
+  cpSync(DEMO_ROOT, dir, { recursive: true });
+  const ws = workspaceAt(dir);
+  const ledger = JSON.parse(readFileSync(ws.paths.ledger, 'utf8'));
+  writeFileSync(ws.paths.ledger, JSON.stringify({ ...ledger, schema: 5 }, null, 2) + '\n');
+  const records = () => booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]);
+  const before = records();
+  assert.ok(before.length > 0);
+
+  const loaded = loadBooks(ws);
+  assert.equal(loaded.schema, 6);
+  const seals = sealsOf(loaded).checks;
+  assert.ok(seals.length > 0 && seals.every((c) => c.status !== 'broken'), 'every seal still verifies');
+
+  const { done } = await upgradeWorkspace(ws);
+  const books = done.find((d) => d.file === ws.paths.ledger);
+  assert.deepEqual(books && { from: books.from, to: books.to }, { from: 5, to: 6 });
+  assert.equal(JSON.parse(readFileSync(books!.backup, 'utf8')).schema, 5);
+  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, 6);
+  assert.deepEqual(records(), before, 'no record of the books changed');
+
+  const again = loadBooks(ws);
+  const staged = again.receipts.find((r) => r.date && r.date > (again.config.closedThrough ?? ''))!;
+  staged.handSet = ['amount', 'date'];
+  saveBooks(ws, again);
+  assert.deepEqual(loadBooks(ws).receipts.find((r) => r.id === staged.id)?.handSet, ['amount', 'date']);
+
+  const clone = (d: Record<string, unknown>) => structuredClone(d);
+  assert.throws(() => climb<Record<string, unknown>>({}, 6, 5, BOOKS_MIGRATIONS, 'ledger.json', clone), (e: Error) => e instanceof SchemaTooNewError);
+});
+
+function booksFiles(dir: string): string[] {
+  return readdirSync(dir, { recursive: true, encoding: 'utf8' }).filter((f) => /books\/.*\.jsonl$/.test(f)).map((f) => join(dir, f)).sort();
+}
