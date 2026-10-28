@@ -139,6 +139,8 @@ test('the app\'s Shopify file names its report columns and the gateway it collec
   assert.match((parseProvider({ fees: { account: '6840' } }) as { problem: string }).problem, /provider\.fees must be/);
   assert.match((parseProvider({ clearings: '1093' }) as { problem: string }).problem, /provider\.clearings is unknown/);
   assert.match((parseProvider({ reports: { sales: { order: 'Name', date: 'Paid at', gross: 'Total' } }, gateways: ['x'] }) as { problem: string }).problem, /needs the column reports\.sales\.gateway/);
+  assert.match((parseProvider({ orderPage: '^#\\d+' }) as { problem: string }).problem, /provider\.orderPage must be/, 'a pattern without a group names no order');
+  assert.match((parseProvider({ orderPage: '^#(\\d+' }) as { problem: string }).problem, /provider\.orderPage must be/);
 });
 
 test('8. the company\'s file says its own payout days over the app\'s', () => {
@@ -1746,4 +1748,77 @@ test('#242 through the drop: a filed refund booked on revenue by hand stays off 
   assert.deepEqual(loadBooks(ws).receipts.find((r) => r.id === id)?.report?.filedRefunds, [{ order: '9651', date: '2026-11-09', amount: 20, currency: 'CHF', booked: { entry: 'hand', date: '2026-11-09', ref: 'M-HAND' }, corrects: '2026-Q4' }]);
   assert.deepEqual(updateSaved(ws, PERSON, (books) => bookReportCorrection(ws, books, id, '9651', '2026-11-09')), { ok: false, why: 'notOffered' });
   assert.equal(loadBooks(ws).journalEntries.filter((e) => e.transactionRef.startsWith('SR-shopify-9651-refund')).length, 0);
+});
+
+// ─── A payment is the provider's payout by its own recognition, never by a linked order document (#247) ─
+
+test('#247 a customer\'s bank deposit for an order, booked as a sale with its order page linked, holds nothing; a payment naming an order of another gateway holds nothing; a payout booked from the clearing account beside a correction of a filed period holds nothing; a real payout booked as sales still holds', () => {
+  const csv = [head, row('2001', '2026-11-02', '108.10', '8.10'), row('2002', '2026-11-10', '54.05', '4.05'), row('2010', '2026-11-24', '54.05', '4.05', 'CH', 'Bank Deposit')].join('\n');
+  const page = (order: string, day: string): Receipt => ({ id: `pg${order}`, filename: `${day.replaceAll('-', '')}-shopify-bestellung-${order}.pdf`, originalFilename: 'o.pdf', extractedText: `Shopify Bestellung #${order}`, extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-11-25T00:00:00Z', location: 'archived', date: day, kind: 'sales-record', order: { number: `#${order}`, date: day, currency: 'CHF', gross: 54.05, shipTo: 'CH', payouts: [], refunds: [] } });
+  /** A workspace with Shopify's payout of 9.11. booked from the clearing account (its payouts are seen), these payments and entries, and these order pages linked. */
+  const books = (txs: BankTransaction[], entries: JournalEntry[], links: Array<[string, Receipt]>) => {
+    const ws = shop();
+    const paid = payout('P1', { date: '2026-11-09', amount: 108.1 });
+    seed(ws, [paid, ...txs], [E('p1', 'P1', '2026-11-09', '1021', '1093', 108.1), ...entries]);
+    const b = loadBooks(ws);
+    for (const [ref, r] of links) { b.receipts.push(r); b.mappings.push({ transactionRef: ref, receiptId: r.id, by: 'human' }); }
+    saveBooks(ws, b);
+    return ws;
+  };
+  const take = (ws: Workspace) => { const done = importSalesReport(ws, Buffer.from(csv), 'o.csv'); assert.ok(done.ok, JSON.stringify(done)); return done.summary; };
+
+  // The customer paid order #2010 by bank transfer; the order page (a Shopify file by its name) is its proof.
+  const dep = payout('DEP', { date: '2026-11-25', amount: 54.05, description: 'Gutschrift Hans Muster', counterparty: 'Hans Muster' });
+  const deposit = take(books([dep], [E('dep', 'DEP', '2026-11-25', '1021', '3200', 54.05, 'V81', { origin: 'manual' })], [['DEP', page('2010', '2026-11-24')]]));
+  assert.deepEqual([deposit.orders, deposit.other, deposit.held], [2, 1, []], 'the order page makes no payout: #2001 and #2002 booked, #2010 counted as paid otherwise');
+
+  // The payment's reference names Shopify (so it is recognised as a payout), but its order page names #2010, paid otherwise.
+  const named = payout('REF', { date: '2026-11-25', amount: 54.05, description: 'Gutschrift', counterparty: undefined, reference: 'Shopify Bestellung 2010' });
+  const other = take(books([named], [E('ref', 'REF', '2026-11-25', '1021', '3200', 54.05, 'V81', { origin: 'manual' })], [['REF', page('2010', '2026-11-24')]]));
+  assert.deepEqual([other.orders, other.held], [2, []], 'an order of another gateway holds nothing');
+
+  // A payout booked from the clearing account, with a person's correction of filed Q1 on the same ref.
+  const p2 = payout('P2', { date: '2026-11-20', amount: 54.05 });
+  const corrected = take(books([p2], [E('p2', 'P2', '2026-11-20', '1021', '1093', 54.05), E('k2', 'P2', '2026-11-20', '6840', '1021', 2, undefined, { origin: 'manual', corrects: '2026-Q1', description: 'Korrektur zu e-old' })], []));
+  assert.deepEqual([corrected.orders, corrected.held], [2, []], 'a correction of a filed period on the payout\'s ref makes it no payout booked as sales');
+
+  // A real payout of Shopify booked as sales, with an order page linked, still holds every row up to its day.
+  const ps = payout('PS', { date: '2026-11-21', amount: 54.05 });
+  const sales = take(books([ps], [asSales(ps)], [['PS', page('2002', '2026-11-10')]]));
+  assert.deepEqual([sales.orders, sales.held], [0, [{ order: '2001', why: 'legacy' }, { order: '2002', why: 'legacy' }]], 'never booked twice beside a payout booked as sales');
+});
+
+// ─── An order page read before order facts were read is known by the provider's orderPage (#249) ─
+
+test('#249 an order page without read order facts, linked to a customer\'s bank deposit, holds no rows; one naming an order of another gateway holds nothing either; a payout page stays a payout\'s proof', () => {
+  const csv = [head, row('2001', '2026-11-02', '108.10', '8.10'), row('2002', '2026-11-10', '54.05', '4.05'), row('2010', '2026-11-24', '54.05', '4.05', 'CH', 'Bank Deposit')].join('\n');
+  /** A page as an older version read it: its text and file name, no `order`. */
+  const old = (id: string, day: string, filename: string, text: string): Receipt => ({ id, filename: `${day.replaceAll('-', '')}-${filename}`, originalFilename: 'o.pdf', extractedText: text, extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-11-25T00:00:00Z', location: 'archived', date: day, description: 'Shopify', amount: 54.05, currency: 'CHF' });
+  const take = (tx: BankTransaction, entry: JournalEntry, page: Receipt) => {
+    const ws = shop();
+    seed(ws, [payout('P1', { date: '2026-11-09', amount: 108.1 }), tx], [E('p1', 'P1', '2026-11-09', '1021', '1093', 108.1), entry]);
+    const b = loadBooks(ws);
+    b.receipts.push(page);
+    b.mappings.push({ transactionRef: tx.ref, receiptId: page.id, by: 'human' });
+    saveBooks(ws, b);
+    const done = importSalesReport(ws, Buffer.from(csv), 'o.csv');
+    assert.ok(done.ok, JSON.stringify(done));
+    return done.summary;
+  };
+  const sale = (tx: BankTransaction) => E(`e${tx.ref}`, tx.ref, tx.date, '1021', '3200', tx.amount, 'V81', { origin: 'manual' });
+
+  const dep = payout('DEP', { date: '2026-11-25', amount: 54.05, description: 'Gutschrift Hans Muster', counterparty: 'Hans Muster' });
+  const deposit = take(dep, sale(dep), old('o1', '2026-11-24', 'shopify-order-2010.pdf', '#2010\n\nPaid\n\nFulfilled\n\n#2010-F1\n\nTotal CHF 54.05'));
+  assert.deepEqual([deposit.orders, deposit.other, deposit.held], [2, 1, []], 'the order page is no payout\'s proof: #2001 and #2002 booked');
+
+  const printed = take(dep, sale(dep), old('o2', '2026-11-24', 'shopify-order-2010.pdf', '11/24/26, 9:00 AM\n\nShop · Orders · #2010 · Shopify\n\n#2010\nPaid'));
+  assert.deepEqual([printed.orders, printed.held], [2, []], 'a page printed from the browser, below its two header lines');
+
+  const named = payout('REF', { date: '2026-11-25', amount: 54.05, description: 'Gutschrift', counterparty: undefined, reference: 'Shopify Bestellung 2010' });
+  const other = take(named, sale(named), old('o3', '2026-11-24', 'shopify-order-2010.pdf', '#2010 Cancelled\n\nRefunded'));
+  assert.deepEqual([other.orders, other.held], [2, []], 'a payment whose old order page names an order of another gateway holds nothing');
+
+  const ps = payout('PS', { date: '2026-11-21', amount: 54.05, description: 'Gutschrift', counterparty: 'Hans Muster' });
+  const sales = take(ps, asSales(ps), old('o4', '2026-11-21', 'shopify-payout.pdf', 'Payout details\n\nTotal\n\nCHF 54.05\n\nOrder\n\n#2002\n\nCHF 54.05'));
+  assert.deepEqual([sales.orders, sales.held], [0, [{ order: '2001', why: 'legacy' }, { order: '2002', why: 'legacy' }]], 'a payout page names its orders further down: still the payout\'s proof, never booked twice');
 });

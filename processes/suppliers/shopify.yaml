@@ -61,6 +61,10 @@ provider:
   gateways: [ "Shopify Payments" ]
   # Stripe pays Shopify Payments' payouts under its own name (see the top of this file).
   processors: [ "stripe" ]
+  # An order page as Shopify prints it begins with its order's name on a line of its own («#1001», or
+  # «#1001 Cancelled»), after the browser's two header lines when printed from the browser. A page read
+  # before the app read order facts is known by it: never taken for the payout's proof (#249).
+  orderPage: [ '^\s*(?:.*\n+){0,2}?#(\d+)(?=\s|$)' ]
   payoutDays: 7
 
 facts:
