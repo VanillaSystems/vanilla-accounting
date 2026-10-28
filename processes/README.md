@@ -40,7 +40,12 @@ Every process has two files, and every business with particulars has one:
   two layers below). A file covers how to recognise the business (`match:`),
   whether it bundles invoices into one payment (`grouped:`), a UID it prints
   that others print too and that therefore names nobody (`sharedUid:`, e.g. a
-  courier's, also on the customs office's assessments), which accounts it
+  courier's, also on the customs office's assessments), the documents it
+  issues (`documents:`, recognised by `text` patterns; one that says
+  `proves: vat-correction` is a bill whose input tax is booked once on a
+  single-leg entry without a payment, a `-2` code, such as a platform's monthly
+  bill of the fees it kept: it is never paired with a payment, and Belege names
+  the correction booking it fits, issue #190), which accounts it
   books to (`accounts:`), and its rules for each step it touches. Each step's
   rules sit under the step's exact address:
   `steps: { "booking.guide.yaml#classify": { rules: [...] } }`. An authority's

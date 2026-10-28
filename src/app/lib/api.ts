@@ -70,6 +70,7 @@ import type { PartnerDetail, PartnersView } from '../../knowledge/partners.js';
 import type { Note, NoteCommand, NoteResult, TopicRow } from '../../knowledge/notes.js';
 import type { AppLayerView, GapsView } from '../../knowledge/wissen.js';
 import type { OrderPage } from '../../booking/order-pages.js';
+import type { VatCorrection } from '../../booking/vat-corrections.js';
 
 export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
 
@@ -617,4 +618,5 @@ export const api = {
   filedReturns: (year: string) => request<ReturnFigures[]>('GET', sources.filedReturns(year)),
   fxRates: () => request<EstvRateTable>('GET', sources.fxRates()),
   orderPages: () => request<Record<string, OrderPage>>('GET', sources.orderPages()),
+  vatCorrections: () => request<Record<string, VatCorrection>>('GET', sources.vatCorrections()),
 };

@@ -13,6 +13,7 @@
 import { RECEIPT_KINDS, type BankTransaction, type Receipt, type ReceiptKind } from '../types/index.js';
 import { HEAD, wordsRe } from '../core/modules/words.js';
 import { parseProvider, type ProviderFacts } from './provider.js';
+import { PROVES, type Proves } from '../booking/vat-corrections.js';
 
 /** Strongest first. The order is the routing precedence. */
 export const TIERS = ['uid', 'iban', 'domain', 'tx', 'file'] as const;
@@ -41,6 +42,8 @@ export interface DocumentType {
   id: string;
   kind: ReceiptKind;
   text: RegExp[];
+  /** What such a document proves instead of a payment: `vat-correction`, the input tax of a single-leg correction without a payment (src/booking/vat-corrections.ts, #190). */
+  proves?: Proves;
 }
 
 /** A fact of the law or of an authority's practice (a period, a deadline, a form), with where it is written. */
@@ -225,7 +228,7 @@ export function identify(s: Signals, counterparties: readonly Counterparty[]): R
 export type RawCounterparty = {
   id?: string; name?: string; grouped?: boolean; sharedUid?: string[]; accounts?: string[]; roles?: string[];
   match?: Partial<Record<Tier, string[]>>; steps?: Record<string, unknown>;
-  documents?: { id?: string; kind?: string; text?: string[] }[];
+  documents?: { id?: string; kind?: string; text?: string[]; proves?: string }[];
   facts?: Partial<Fact>[];
   provider?: unknown;
 };
@@ -256,7 +259,8 @@ export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['
     if (!d.id) fail(`documents[${i}] needs an id`);
     if (!d.kind || !(RECEIPT_KINDS as readonly string[]).includes(d.kind)) fail(`documents ${d.id}: kind must be one of ${RECEIPT_KINDS.join(', ')}`);
     if (!d.text?.length) fail(`documents ${d.id}: text needs at least one pattern`);
-    return { id: d.id!, kind: d.kind as ReceiptKind, text: d.text!.map((t) => new RegExp(t, 'i')) };
+    if (d.proves !== undefined && !(PROVES as readonly string[]).includes(d.proves)) fail(`documents ${d.id}: proves must be ${PROVES.join(' or ')}`);
+    return { id: d.id!, kind: d.kind as ReceiptKind, text: d.text!.map((t) => new RegExp(t, 'i')), ...(d.proves ? { proves: d.proves as Proves } : {}) };
   });
   const facts = (raw.facts ?? []).map((f, i) => {
     for (const k of ['id', 'fact', 'source'] as const) if (!f[k]) fail(`facts[${i}] needs ${k}`);

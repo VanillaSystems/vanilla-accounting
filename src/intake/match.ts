@@ -355,8 +355,8 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
       if (dated.dateSource && !byHand.has('date')) r.dateSource = dated.dateSource;
       // Only an invoice is paid by a payment; a copy of one (by its facts, now read) waits for a person in Belege.
       if (!sure || (r.kind && r.kind !== 'invoice' && r.kind !== 'sales-record')) return;
-      // An order page of the provider way goes with its sale from the order export, never with a payment (#253).
-      if (noPayment(index)(r)) { log(`  ${receipt.filename}: an order page whose order the provider's export books: no payment linked`); return; }
+      // An order page of the provider way goes with its sale from the order export (#253), a bill that proves a VAT-only correction with its booking (#190): never with a payment.
+      if (noPayment(index)(r)) { log(`  ${receipt.filename}: an order page the provider's export books, or a bill of a VAT-only correction: no payment linked`); return; }
       const behind = waitsBehind(index, r, order);
       if (behind) { twin = index.receipts.find((x) => x.id === behind)?.filename; return; }
       // Periodensperre: never attach a mapping to a transaction inside a closed period.

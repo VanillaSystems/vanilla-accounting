@@ -26,6 +26,8 @@ import { loadClassifyContext } from '../booking/classify.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { noPaymentOf, orderPagesOf, type OrderPage } from '../booking/order-pages.js';
 import { providersOf } from './sales-report-import.js';
+import { vatCorrectionsOf, type VatCorrection } from '../booking/vat-corrections.js';
+import type { Counterparty } from '../knowledge/counterparties.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 
 export type { Found, Maker } from './pairing.js';
@@ -83,10 +85,33 @@ export function noReceiptFor(ws: Workspace): (books: Books) => (t: BankTransacti
   return (books) => noReceiptOfItsOwn(books, ...firm);
 }
 
-/** The receipts of `books` without a payment of their own, for the workspace `ws`: an order page of a provider whose order export books its order (src/booking/order-pages.ts, #253). */
+/**
+ * The receipts of `books` without a payment of their own, for the workspace `ws`: an order page of a
+ * provider whose order export books its order (src/booking/order-pages.ts, #253), and a bill that
+ * proves a VAT-only correction (src/booking/vat-corrections.ts, #190).
+ */
 export function noPaymentFor(ws: Pick<Workspace, 'paths'>): (books: Books) => (r: Receipt) => boolean {
   const providers = providersOf(ws);
-  return (books) => noPaymentOf(books, providers);
+  const counterparties = counterpartiesOf(ws);
+  return (books) => {
+    const page = noPaymentOf(books, providers);
+    const corrections = vatCorrectionsOf(books, counterparties);
+    return (r) => page(r) || corrections.has(r.id);
+  };
+}
+
+/** The workspace's businesses in both layers; none when its knowledge does not load (a test's bare workspace). */
+function counterpartiesOf(ws: Pick<Workspace, 'paths'>): Counterparty[] {
+  try {
+    return loadKnowledge(APP_ROOT, ws.paths.root).counterparties;
+  } catch {
+    return [];
+  }
+}
+
+/** The bills of `books` that prove a VAT-only correction, by receipt id (src/booking/vat-corrections.ts, #190): Belege says what each is instead of a missing payment. */
+export function vatCorrectionsIn(ws: Pick<Workspace, 'paths'>, books: Parameters<typeof vatCorrectionsOf>[0]): Record<string, VatCorrection> {
+  return Object.fromEntries(vatCorrectionsOf(books, counterpartiesOf(ws)));
 }
 
 /** The order pages of the provider way nothing is linked to yet, by receipt id (src/booking/order-pages.ts, #253): Belege shows where each stands instead of a missing payment. */
