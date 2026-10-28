@@ -82,6 +82,7 @@ let documentWords: DocumentsData | undefined;
 export function useDocumentWords(words: DocumentsData): void {
   documentWords = words;
 }
+export const documentWordsInUse = (): DocumentsData | undefined => documentWords;
 
 /**
  * The receipts with each one nobody typed (no kind, and no person who cleared one) that reads as

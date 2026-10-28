@@ -130,6 +130,24 @@ test('one load moves every misplaced file of every year, and refuses a name in t
   assert.throws(() => loadBooks(dir), DuplicateFileError);
 });
 
+test('every load is the books as their files hold them now: a change never saved stays out of the next load, a file rewritten in place to the same length is read anew (#258)', () => {
+  const dir = root();
+  const first = loadBooks(dir);
+  const receipts = first.receipts.length;
+  first.journalEntries.find((e) => e.id === 'jo')!.description = 'not saved';
+  first.receipts.pop();
+  const second = loadBooks(dir);
+  assert.notEqual(second.journalEntries.find((e) => e.id === 'jo')!.description, 'not saved');
+  assert.equal(second.receipts.length, receipts);
+  second.journalEntries.find((e) => e.id === 'jo')!.amount = 999;
+  assert.notEqual(loadBooks(dir).journalEntries.find((e) => e.id === 'jo')!.amount, 999, 'two loads share nothing');
+
+  const file = join(yearPaths(dir.paths, '2026').books, 'entries.jsonl');
+  const text = readFileSync(file, 'utf8');
+  writeFileSync(file, text.replace('"id":"jo"', '"id":"jx"'));
+  assert.deepEqual(loadBooks(dir).journalEntries.map((e) => e.id).sort(), ['jc', 'jx']);
+});
+
 test('a file name in two year folders is refused, not resolved to the first', () => {
   const dir = root();
   for (const y of ['2025', '2026']) {

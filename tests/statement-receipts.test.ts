@@ -7,7 +7,7 @@ import './support/jurisdiction.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { documents } from '../src/engines/index.js';
-import { accountOfStatement, statementFacts, statementPdf, statementPeriod, typeStatements } from '../src/books/statement-facts.js';
+import { accountOfStatement, statementFacts, statementPdf, statementPeriod, typeStatements, useDocumentWords } from '../src/books/statement-facts.js';
 import { parseIban } from '../src/workspace/banks.js';
 import { ClosedPeriodError, loadBooks, PERSON, saveBooks, update } from '../src/books/store.js';
 import { applyChange } from '../src/server/edits.js';
@@ -136,6 +136,19 @@ test('books already at schema 5 type their statements on load, a filed quarter\'
   const after = booksOnDisk(ws);
   assert.deepEqual(Object.keys(after).filter((f) => after[f] !== before[f]), ['2026/receipts.jsonl'], 'only the open year\'s receipts are written');
   assert.equal(loadBooks(ws).receipts.find((r) => r.id === 'usd')!.kind, 'statement');
+});
+
+test('the same files read under other document words type their receipts by those words (#258: a load of unchanged files reuses its parse)', () => {
+  const ws = tempWorkspace('statement-words-');
+  writeIndex(ws, { receipts: [{ id: 'usd', ...doc(USD_STATEMENT, 'statement_12345678_USD_2026-03-01_2026-03-31.pdf'), extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-04-14T00:00:00Z', location: 'archived' }], transactions: [], mappings: [], bankStatements: [] } as never);
+  assert.equal(loadBooks(ws).receipts[0].kind, 'statement');
+  try {
+    useDocumentWords({ ...words, statement: [] });
+    assert.equal(loadBooks(ws).receipts[0].kind, undefined);
+  } finally {
+    useDocumentWords(words);
+  }
+  assert.equal(loadBooks(ws).receipts[0].kind, 'statement');
 });
 
 test('a filed quarter\'s statement linked to a filed payment takes «statement» and a date by hand or by the AI, links kept; «noise» would take its link and is refused; «ordinary receipt» stays a person\'s', () => {

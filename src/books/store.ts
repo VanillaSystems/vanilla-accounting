@@ -16,7 +16,7 @@ import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, climb, schemaOf } from '../workspace/sc
 import type { ClosedReason } from '../types/api-error.js';
 import { checkSeals, closedPart, type SealReport } from './seal.js';
 import { parseBookedBy } from './booked-by.js';
-import { typeStatements } from './statement-facts.js';
+import { documentWordsInUse, typeStatements } from './statement-facts.js';
 import { BOOK_FILES, PARTS, fromJsonl, isClosedYear, keyOf, placement, splitByYear, statementFile, toJsonl, type InClosedYear, type Part } from './years.js';
 
 export type Books = Index & { journalEntries: JournalEntry[]; config: AccountingConfig };
@@ -73,6 +73,45 @@ function readFiles(paths: WorkspacePaths): Map<string, string> {
 }
 
 /**
+ * The last books parsed, with the texts they were parsed from: the books are a function of
+ * ledger.json, the books' files and the jurisdiction's document words alone, so a load that reads
+ * the same texts again gets a copy instead of parsing them anew (#258).
+ */
+let lastParsed: { ledger: string; files: Map<string, string>; words: unknown; books: Books } | undefined;
+
+const sameTexts = (a: Map<string, string>, b: Map<string, string>) => a.size === b.size && [...a].every(([rel, text]) => b.get(rel) === text);
+
+/** The books `ledgerText` and `files` hold, each call a copy of its own to change. */
+function parsed(ws: Workspace, ledgerText: string, files: Map<string, string>): Books {
+  const words = documentWordsInUse();
+  const last = lastParsed;
+  if (last && last.ledger === ledgerText && last.words === words && sameTexts(last.files, files)) return structuredClone(last.books);
+  const head = JSON.parse(ledgerText) as Record<string, unknown>;
+  const raw: Record<string, unknown> = { schema: head.schema, config: head.config ?? {}, journalEntries: [], receipts: [], transactions: [], mappings: [], bankStatements: [] };
+  const closedThrough = (head.config as AccountingConfig | undefined)?.closedThrough;
+  for (const year of yearsOf(ws.paths)) {
+    for (const part of PARTS) {
+      const rel = fileOf(year, part);
+      const text = files.get(rel);
+      if (text === undefined) continue;
+      const records = fromJsonl(text, rel);
+      // A closed year's files never change (saveBooks), so its receipts stay as they were read.
+      const typed = part === 'receipts' && !isClosedYear(year, closedThrough) ? typeStatements(records as Receipt[]) : records;
+      raw[part] = [...((raw[part] as unknown[] | undefined) ?? []), ...typed];
+    }
+  }
+  const current = climb<Record<string, unknown>>(raw, schemaOf(raw.schema, ws.paths.ledger), BOOKS_SCHEMA, BOOKS_MIGRATIONS, ws.paths.ledger, (d) => structuredClone(d));
+  const books = { ...current, schema: BOOKS_SCHEMA } as unknown as Books;
+  for (const e of books.journalEntries) {
+    if (!('by' in e) || parseBookedBy(e.by)) continue;
+    console.error(`${e.id}: «by» ${JSON.stringify(e.by)} reads as none of its kinds; the entry shows what its origin says.`);
+    delete e.by;
+  }
+  lastParsed = { ledger: ledgerText, files, words, books: structuredClone(books) };
+  return books;
+}
+
+/**
  * The books at the current schema (older ones are migrated in memory, a newer one is refused),
  * with every seal checked, and the bank statements among an open year's receipts typed (#151;
  * receipts are under no seal). A broken seal is printed once per process, and saveBooks refuses them.
@@ -87,28 +126,8 @@ export function loadBooks(ws: Workspace): Books {
     throw new Error(`No ${ledger} found: set up the books with npm run init.`);
   }
   const ledgerText = readFileSync(ledger, 'utf8');
-  const head = JSON.parse(ledgerText) as Record<string, unknown>;
   const files = readFiles(ws.paths);
-  const raw: Record<string, unknown> = { schema: head.schema, config: head.config ?? {}, journalEntries: [], receipts: [], transactions: [], mappings: [], bankStatements: [] };
-  const closedThrough = (head.config as AccountingConfig | undefined)?.closedThrough;
-  for (const year of yearsOf(ws.paths)) {
-    for (const part of PARTS) {
-      const rel = fileOf(year, part);
-      const text = files.get(rel);
-      if (text === undefined) continue;
-      const records = fromJsonl(text, rel);
-      // A closed year's files never change (saveBooks), so its receipts stay as they were read.
-      const typed = part === 'receipts' && !isClosedYear(year, closedThrough) ? typeStatements(records as Receipt[]) : records;
-      raw[part] = [...((raw[part] as unknown[] | undefined) ?? []), ...typed];
-    }
-  }
-  const current = climb<Record<string, unknown>>(raw, schemaOf(raw.schema, ledger), BOOKS_SCHEMA, BOOKS_MIGRATIONS, ledger, (d) => structuredClone(d));
-  const books = { ...current, schema: BOOKS_SCHEMA } as unknown as Books;
-  for (const e of books.journalEntries) {
-    if (!('by' in e) || parseBookedBy(e.by)) continue;
-    console.error(`${e.id}: «by» ${JSON.stringify(e.by)} reads as none of its kinds; the entry shows what its origin says.`);
-    delete e.by;
-  }
+  const books = parsed(ws, ledgerText, files);
   onDisk.set(books, { files, ledger: ledgerText });
   homes.set(books, ws.paths);
   const report = checkSeals(ws, books);
