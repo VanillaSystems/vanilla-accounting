@@ -4896,5 +4896,9 @@ export default {
     'keys.actions': 'Azioni',
     'keys.actionsTip': 'A apre le azioni dell\'elemento mostrato o della selezione.',
     'actions.palette': 'Per l\'elemento mostrato',
+    'assistant.kind.selection': 'Selezione',
+    'assistant.selectionTip': 'Le righe selezionate partono con il messaggio: «fallo con tutte». × lo invia senza.',
+    'assistant.undoAll': { one: 'Annulla {n} modifica', other: 'Annulla tutte le {n} modifiche' },
+    'actions.askSelection': 'Chiedi all\'IA sulla selezione',
   },
 } satisfies Locale;

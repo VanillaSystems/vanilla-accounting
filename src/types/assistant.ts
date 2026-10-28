@@ -25,7 +25,9 @@ export type ContextRef =
   | { kind: 'receipt'; id: string; label: string }
   | { kind: 'run'; id: string; label: string }
   | { kind: 'workflow'; id: string; label: string }
-  | { kind: 'file'; id: string; label: string };
+  | { kind: 'file'; id: string; label: string }
+  /** Rows picked in a list (#216): `id` says which list, `ids` the objects the message is about («mach das mit allen ausgewählten»). */
+  | { kind: 'selection'; id: 'receipt' | 'payment' | 'entry'; ids: string[]; label: string };
 
 /**
  * A receipt's facts as a person sets them; `null` clears a date or an amount, `vat` replaces the

@@ -4893,6 +4893,10 @@ export const messages = {
   'keys.actions': 'Aktionen',
   'keys.actionsTip': 'A öffnet die Aktionen des Gezeigten oder der Auswahl.',
   'actions.palette': 'Für das Gezeigte',
+  'assistant.kind.selection': 'Auswahl',
+  'assistant.selectionTip': 'Die ausgewählten Zeilen gehen mit der Nachricht: «mach das mit allen ausgewählten». × schickt sie ohne.',
+  'assistant.undoAll': { one: '{n} Änderung rückgängig', other: 'Alle {n} Änderungen rückgängig' },
+  'actions.askSelection': 'Die KI zur Auswahl fragen',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

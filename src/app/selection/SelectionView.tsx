@@ -11,6 +11,8 @@ import { BatchPanel, batchOffers, type BatchId, type BatchOffer } from './BatchP
 import { ActionsMenu, type ActionSet } from './ActionsMenu.js';
 import { likelySelection } from './likely.js';
 import { countsOf } from './rows.js';
+import { askAbout } from '../assistant/store.js';
+import { selectionContext } from '../assistant/context.js';
 import { baseCurrency } from '../../engines/index.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { t } from '../i18n/index.js';
@@ -46,7 +48,10 @@ const TITLE = { receipt: 'selection.receipts', payment: 'selection.payments', en
 function selectionActions(offers: BatchOffer[], likely: string | undefined, open: (id: BatchId) => void): ActionSet {
   const all = offers.map((o) => ({ id: o.id, label: o.label, run: () => open(o.id) }));
   const primary = all.find((a) => a.id === likely);
-  return { primary, rest: all.filter((a) => a !== primary) };
+  // The chat with the picked rows as its reference: «mach das mit allen ausgewählten».
+  const sel = selectionNow();
+  const ask = sel ? [{ id: 'ask', label: t('actions.askSelection'), run: () => askAbout(selectionContext(sel)) }] : [];
+  return { primary, rest: [...all.filter((a) => a !== primary), ...ask] };
 }
 
 export function SelectionView({ kind, rows, books, nav, canEdit }: { kind: SelectKind; rows: SelRow[]; books: Index; nav: Nav; canEdit: boolean }) {

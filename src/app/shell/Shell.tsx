@@ -36,13 +36,13 @@ import { useToast } from './Toast.js';
 import { TopBar } from './TopBar.js';
 import { Corner } from './Corner.js';
 import { Sidebar } from './Sidebar.js';
-import { pageContext } from '../assistant/context.js';
-import { attachDropped, onBooksChanged, syncSidebarWidth, toggleAssistant, useAssistant } from '../assistant/store.js';
+import { pageContext, selectionContext } from '../assistant/context.js';
+import { attachDropped, keepPage, onBooksChanged, syncSidebarWidth, toggleAssistant, useAssistant } from '../assistant/store.js';
 import { CHAT_TAKES, PAGE_TAKES, droppedFiles, leftOut } from '../lib/folder-drop.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import { ShellUiContext, type ShellUi } from './ui.js';
 import { filing } from '../../engines/index.js';
-import { clearSelection, selectAll, selectionNow } from '../selection/store.js';
+import { clearSelection, selectAll, selectionNow, useSelection } from '../selection/store.js';
 import { actionsNow, openActions } from '../selection/ActionsMenu.js';
 
 type Overlay =
@@ -182,6 +182,10 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   useLayoutEffect(syncSidebarWidth, []);
   // A selection belongs to its list: another area starts with none (#216).
   useEffect(clearSelection, [loc.route.area]);
+  // The chat carries the picked rows as its chip; a new selection is a new reference, shown again after the chip was taken off.
+  const picked = useSelection();
+  const pickedKey = picked?.ids.join(',');
+  useEffect(() => { if (pickedKey) keepPage(); }, [pickedKey]);
 
   // urls.md rule 6: the tab names the object.
   useEffect(() => {
@@ -293,7 +297,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
         language={language}
         onLanguage={(anchor) => setOverlay({ kind: 'language', anchor: anchor.getBoundingClientRect() })}
       />
-      <Sidebar page={pageContext(loc.route, books)} books={books} onGo={(route) => nav.go({ route, query: {} })} />
+      <Sidebar page={picked ? selectionContext(picked) : pageContext(loc.route, books)} books={books} onGo={(route) => nav.go({ route, query: {} })} />
       <DropDialog books={books} refresh={refresh} onGo={(loc) => nav.go(loc)} />
       <Corner onAssistant={toggleAssistant} onGo={(route) => nav.go({ route, query: {} })} />
       <Dock current={loc.route.area} books={books} keys={dockKeys} wide={navWide} onToggle={toggleNav} nav={nav} canEdit={canEdit} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />

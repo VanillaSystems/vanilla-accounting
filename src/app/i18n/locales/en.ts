@@ -4896,5 +4896,9 @@ export default {
     'keys.actions': 'Actions',
     'keys.actionsTip': 'A opens the actions of what is shown or picked.',
     'actions.palette': 'For what is shown',
+    'assistant.kind.selection': 'Selection',
+    'assistant.selectionTip': 'The picked rows go with the message: «do this with all of them». × sends it without them.',
+    'assistant.undoAll': { one: 'Undo {n} change', other: 'Undo all {n} changes' },
+    'actions.askSelection': 'Ask the AI about the selection',
   },
 } satisfies Locale;

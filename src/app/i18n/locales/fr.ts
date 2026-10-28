@@ -4896,5 +4896,9 @@ export default {
     'keys.actions': 'Actions',
     'keys.actionsTip': 'A ouvre les actions de l\'élément affiché ou de la sélection.',
     'actions.palette': 'Pour l\'élément affiché',
+    'assistant.kind.selection': 'Sélection',
+    'assistant.selectionTip': 'Les lignes sélectionnées partent avec le message : « fais-le pour toutes ». × l\'envoie sans elles.',
+    'assistant.undoAll': { one: 'Annuler {n} modification', other: 'Annuler les {n} modifications' },
+    'actions.askSelection': 'Demander à l\'IA pour la sélection',
   },
 } satisfies Locale;
