@@ -54,3 +54,21 @@ test('the outlay is that person\'s payment of the receipt, linked, on their acco
   const undo = await api.send('DELETE', `/api/transactions/${r.json.ref}`);
   assert.equal(undo.status, 200, 'the undo is the payment deleted, as for the owner\'s');
 });
+
+test('an employee\'s money account: a balance-sheet account in a currency the books know; a collision is refused in words, with a code', async () => {
+  const add = (body: Record<string, string>) => api.send('PATCH', '/api/workspace', { addBank: { role: 'employee', ...body } });
+  const cases: Array<[Record<string, string>, string]> = [
+    [{ bank: 'Raiffeisen', currency: 'CHF', account: '2165', label: 'Raiffeisen' }, 'bankTwice'],
+    [{ bank: 'manual', currency: 'CHF', account: '2166', label: 'manual' }, 'bankNameManual'],
+    [{ bank: 'Bruno', currency: 'XYZ', account: '2167', label: 'Bruno' }, 'unknownCurrency'],
+    [{ bank: 'Cara', currency: 'CHF', account: '6500', label: 'Cara' }, 'moneyAccountSide'],
+  ];
+  for (const [body, code] of cases) {
+    const r = await add(body);
+    assert.equal(r.status, 400, JSON.stringify(body));
+    assert.equal(r.json.code, code, JSON.stringify(body));
+    assert.doesNotMatch(String(r.json.error), /\/|belege\.workspace\.yaml/, 'no file path in the words');
+  }
+  const eur = await add({ bank: 'Dora', currency: 'EUR', account: '2168', label: 'Dora' });
+  assert.equal(eur.status, 200, String(eur.json.error));
+});

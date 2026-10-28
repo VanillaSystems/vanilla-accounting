@@ -40,3 +40,10 @@ test('a selection above the batch limit is refused before the model is asked', a
   const bad = await api.send('POST', '/api/assistant', { text: 'mach das', context: [{ kind: 'selection', id: 'invoice', ids: ['a'], label: 'x' }] });
   assert.equal(bad.status, 400, 'only the lists that pick rows');
 });
+
+test('a selection\'s ids and label are short: a long one is refused before the model is asked', async () => {
+  const long = await api.send('POST', '/api/assistant', { text: 'mach das', context: [{ kind: 'selection', id: 'entry', ids: ['x'.repeat(121)], label: 'x' }] });
+  assert.equal(long.status, 400);
+  const label = await api.send('POST', '/api/assistant', { text: 'mach das', context: [{ kind: 'selection', id: 'entry', ids: ['jo'], label: 'x'.repeat(201) }] });
+  assert.equal(label.status, 400);
+});

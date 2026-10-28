@@ -278,20 +278,13 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
   if (!v.date) {
     return <span className="notice warn" style={{ margin: 0 }}>{I.dot}{t('receipts.noDateWarn')} {canEdit && <button type="button" className="mono" style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => runAct(props, 'edit')}>E</button>}</span>;
   }
-  // Its words say cash or private (#216): the Aktionen offer «Privat bezahlt buchen» first, and no «Noch keine Zahlung».
-  if (readsPaidPrivately(v)) {
-    return (
-      <span className="notice" style={{ margin: 0 }} data-testid="paid-privately">
-        {t('receipts.paidPrivatelyNotice')}
-        {canEdit && <> <button type="button" className="quiet" onClick={() => runAct(props, 'link')}>{t('receipts.paidPrivatelyOther')}</button></>}
-      </span>
-    );
-  }
   return (
     <span className="notice warn" style={{ margin: 0 }}>
       {I.dot}{t('receipts.noPayment')}
       {canEdit && <> <button type="button" style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => runAct(props, 'link')}>{t('receipts.linkVerb')}</button> <Kbd keys={['L']} tip={t('receipts.keyLinkTip')} /></>}
       {canEdit && <> · <FindPair key={v.r.id} on={{ receipt: v.r.id }} books={props.books} nav={nav} /></>}
+      {/* Its words say cash or private (#216): a proposal beside the fact; the receipt is unpaid in the books until it is booked. */}
+      {readsPaidPrivately(v) && <> · <span data-testid="paid-privately">{t('receipts.paidPrivatelyNotice')}</span></>}
     </span>
   );
 }

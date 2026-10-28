@@ -106,9 +106,7 @@ const refused: Array<Call & { status: number }> = [
   { method: 'POST', path: '/api/batch', body: { action: { kind: 'account', from: '6500', to: '6800' }, ids: ['jc'] }, status: 403 },
   { method: 'POST', path: '/api/batch', body: { action: { kind: 'notReceipt' }, ids: ['rc'] }, status: 403 },
   { method: 'POST', path: '/api/batch', body: { action: { kind: 'book', account: '6800', vat: '' }, ids: ['C1'] }, status: 403 },
-  { method: 'POST', path: '/api/batch/undo', body: { undo: [{ kind: 'payment', ref: 'C1', noReceiptNeeded: true }] }, status: 403 },
-  { method: 'POST', path: '/api/batch/undo', body: { undo: [{ kind: 'entry', id: 'jc', set: { vatCode: 'I0', origin: null } }] }, status: 403 },
-  { method: 'POST', path: '/api/batch/undo', body: { undo: [{ kind: 'unbook', ref: 'C1', entries: ['jc'] }] }, status: 403 },
+  // Its undo is the server's own, named by its id: a batch's undo after its period was filed is refused in tests/batch.test.ts.
 ];
 
 test('status: not in audit mode', async () => {

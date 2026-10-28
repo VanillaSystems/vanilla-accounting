@@ -33,3 +33,15 @@ test('a card, an invoice to pay, or no words: not cash', () => {
 test('«privat ausgelegt» wins over the card that paid at the till', () => {
   assert.equal(paidPrivately('Mastercard ****9876\nprivat ausgelegt, bitte erstatten'), true);
 });
+
+test('cash named as a term, a condition, a refusal or a bar\'s line: no statement that it was paid', () => {
+  for (const text of [
+    'Rechnung Nr. 123 · Total CHF 540.00 · Bei Barzahlung 2% Skonto',
+    'Facture 2026-14 · Conditions : payable net comptant · Montant TTC CHF 1080.00',
+    'Fattura 77 · Pagamento in contanti non accettato · IBAN CH12',
+    'Hotel Krone · Bar CHF 18.50 · Zimmer CHF 140.00 · Total CHF 158.50',
+    'Invoice · We do not accept cash payment · Pay by bank transfer',
+    'Barzahlung nicht möglich. Bitte überweisen',
+    'Nicht bar bezahlt: Rechnung folgt',
+  ]) assert.equal(paidPrivately(text), false, text);
+});

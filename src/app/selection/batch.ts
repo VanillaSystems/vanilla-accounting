@@ -68,7 +68,8 @@ export async function runBatch(nav: Nav, action: BatchAction, ids: readonly stri
   nav.refresh();
   const n = doneIds(answer).length;
   const said = [t('batch.done', { n }), answer.left.length ? t('batch.leftOut', { n: answer.left.length }) : ''].filter(Boolean).join(' · ');
-  nav.toast(said, answer.undo.length ? () => { api.undoBatch(answer.undo).then(() => { nav.refresh(); nav.toast(t('batch.undone', { n })); }, (e) => nav.toast(errorText(e))); } : undefined);
+  const batchId = answer.batchId;
+  nav.toast(said, batchId ? () => { api.undoBatch(batchId).then(() => { nav.refresh(); nav.toast(t('batch.undone', { n })); }, (e) => nav.toast(errorText(e))); } : undefined);
   return answer;
 }
 

@@ -49,9 +49,14 @@ export const router = Router();
 const KINDS = new Set<ContextRef['kind']>(['entry', 'payment', 'receipt', 'run', 'workflow', 'file', 'selection']);
 const PICKED = new Set(['receipt', 'payment', 'entry']);
 
-/** A selection (#216) names its list and at most a batch's objects (src/types/batch.ts). */
+/** The longest id and label of a selection: each id goes into the model's prompt. */
+const PICKED_ID_MAX = 120;
+const PICKED_LABEL_MAX = 200;
+
+/** A selection (#216) names its list and at most a batch's objects (src/types/batch.ts), each by a short id. */
 const refOk = (r: ContextRef): boolean => r.kind !== 'selection'
-  || (PICKED.has(r.id) && Array.isArray(r.ids) && r.ids.length > 0 && r.ids.length <= BATCH_MAX && r.ids.every((x) => typeof x === 'string'));
+  || (PICKED.has(r.id) && r.label.length <= PICKED_LABEL_MAX && Array.isArray(r.ids) && r.ids.length > 0 && r.ids.length <= BATCH_MAX
+    && r.ids.every((x) => typeof x === 'string' && x.length > 0 && x.length <= PICKED_ID_MAX));
 
 function sendOf(body: unknown): AssistantSend {
   const b = (body ?? {}) as Record<string, unknown>;
@@ -59,7 +64,7 @@ function sendOf(body: unknown): AssistantSend {
   if (!text.trim()) throw new RequestError(400, 'Leere Nachricht.');
   const context = Array.isArray(b.context) ? b.context : [];
   if (context.length > 12 || !context.every((r): r is ContextRef => !!r && KINDS.has(r.kind) && typeof r.id === 'string' && typeof r.label === 'string' && refOk(r))) {
-    throw new RequestError(400, `context: Verweise mit kind, id und label; eine Auswahl mit höchstens ${BATCH_MAX} ids.`);
+    throw new RequestError(400, `context: Verweise mit kind, id und label; eine Auswahl mit höchstens ${BATCH_MAX} ids zu höchstens ${PICKED_ID_MAX} Zeichen und einem label zu höchstens ${PICKED_LABEL_MAX}.`);
   }
   const attachments = Array.isArray(b.attachments) ? b.attachments : [];
   if (attachments.length > 10 || !attachments.every((a): a is string => typeof a === 'string')) throw new RequestError(400, 'attachments: höchstens 10 Ids.');
