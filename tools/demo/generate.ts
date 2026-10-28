@@ -388,7 +388,7 @@ async function invoicing(demo: Demo, books: Index, tree: Tree, payments: DemoPay
     const full = { ...books, journalEntries: books.journalEntries!, config: books.config! };
     const paid = matchPayments(full, book, {
       bankAccounts: ws.bankAccounts, revenueAccount: ws.invoicing!.revenueAccount, fx, openItems: openItemAccounts([]),
-      pdfOf: (inv) => readPdf(ws, inv.pdf), receiptId: hashId, indexedAt: (tx) => `${tx.date}T18:00:00.000Z`,
+      pdfOf: (inv) => readPdf(ws, inv.pdf), receiptId: hashId, indexedAt: (tx) => `${tx.date}T18:00:00.000Z`, held: () => new Set(),
     });
     const expected = demo.invoicing!.steps.filter((s) => s.do === 'issue' && s.paid).length;
     if (paid.paid.filter((p) => p.booked).length !== expected || paid.questions.length) {

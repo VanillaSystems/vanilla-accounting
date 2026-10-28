@@ -1,5 +1,6 @@
 import type { Tags } from '../books/tags.js';
 import type { StatementRead } from './statement-read.js';
+import type { TwinOption } from '../books/twins.js';
 
 // One row of a receipt's printed MWST summary block (grouped by rate).
 // This is the receipt-intrinsic VAT evidence — the source of truth for the
@@ -411,6 +412,12 @@ export interface Index {
   statementBalances?: StatementClosingBalance[];
   /** Statement PDFs whose movements wait for the person's answer (#254). */
   statementAsks?: StatementAsk[];
+  /**
+   * «Ist das dieselbe Zahlung?» (#254, src/books/twins.ts twinsOf): each movement read from a PDF that
+   * may be a bank movement, with the options. Derived from the books and the statement files when the
+   * app reads them (src/books/bank-import.ts servedBooks), never saved.
+   */
+  twins?: Record<string, TwinOption[]>;
 }
 
 export interface BankTransactionPart {
@@ -505,8 +512,9 @@ export interface BankTransaction {
    * wish in the KI sidebar, so no run books it again. The mark goes with the next booking on it,
    * by hand or asked for with «Automatisch buchen» (src/server/edits.ts bookedAgain).
    * `filedTwin` (#254): a bank movement that is a movement read from a statement PDF of a filed
-   * period, booked there: the person answered «Ja, dieselbe», or the import paired it by day and
-   * amount. No run books it, and the year counts it as booked; a person may still book it by hand.
+   * period, booked there: the person's answer «Ja, dieselbe», which nothing else can tell. No run
+   * books it, the year counts it as booked, and no booking takes the mark (bookedAgain): only her
+   * «Trotzdem buchen» does.
    */
   waitsForPerson?: { since: string; why: 'bookingDeleted' | 'filedTwin' };
   /**

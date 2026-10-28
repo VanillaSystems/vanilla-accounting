@@ -113,3 +113,8 @@ Wise EUR (1023), January to September 2026.
 - Driven on 2026-10-11 (phase 3): list by account and month, payment line on the PDF, preview, links to receipt and entry
   and back, `/payments/<ref>`, missing month and its import through the well, camt.053 drop into the running month,
   closed-quarter refusal, `braucht keinen` and undo, search, ⌘K, dark mode.
+- **«Ist das dieselbe Zahlung?» (#254).** Derived on every read of the books (`twins` in `/books.json`, never saved): a movement read from a PDF
+  near an unbooked bank movement of the same account and payee shows `[data-testid=twin-question]` on both, with `[data-testid=twin-same]` and
+  `[data-testid=twin-other]` (`POST /api/transactions/<ref>/same|kept`). A filed one (booked there) answered yes marks the bank's movement
+  `[data-testid=filed-twin]` «schon im abgerechneten Quartal gebucht, als die am … gelesene Zahlung» with `[data-testid=filed-twin-anyway]`
+  `Trotzdem buchen` (`DELETE /api/transactions/<ref>/filed-twin`); a difference of a few Rappen is booked on it.

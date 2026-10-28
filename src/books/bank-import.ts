@@ -6,7 +6,7 @@
  * mergeIndex, so a statement imported from the UI lands exactly as extract would put it.
  */
 import { legOf, madeByHand } from '../workspace/money-accounts.js';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { assignUniqueRefs, statementSpan, transactionsOf, type CamtStatement } from '../providers/camt053/camt053.js';
 import { pdfText } from '../parsers/pdf-text.js';
@@ -14,9 +14,9 @@ import { statementPdf } from './statement-facts.js';
 import { wiseReferences } from '../providers/wise-pdf/wise-statement-pdf.js';
 import type { BankStatement, BankTransaction, Index, JournalEntry, Mapping, Receipt, StatementClosingBalance } from '../types/index.js';
 import { readBankStatements, type StatementFile } from '../workspace/bank-statements.js';
-import { partDirs, type Workspace } from '../workspace/workspace.js';
+import { filesOfPart, findFile, partDirs, type Workspace } from '../workspace/workspace.js';
 import { booksOpen, moduleActor, periodLock, update, type Books } from './store.js';
-import { MATCH_DAYS, dayGap, fit, pairUp } from './twins.js';
+import { MATCH_DAYS, dayGap, fit, heldByTwins, pairUp, twinsIn, type Twins } from './twins.js';
 
 type Ws = Pick<Workspace, 'paths' | 'bankAccounts'>;
 
@@ -190,9 +190,6 @@ export interface Unmatched { file: string; bank: string; currency: string; date:
 /** A read movement the structured file holds a few days off: it takes the bank's day `to` (#254). */
 export interface Realigned extends Unmatched { to: string }
 
-/** A bank movement of the open period that is a read movement of a filed day a few days off (#254): booked there, so the import books nothing (`of`: the read movement's ref). */
-export interface FiledTwin extends Omit<Unmatched, 'file'> { of: string }
-
 /** What the books say of a read movement (alignReads): whether they hold it, and whether a person booked it by hand. */
 export interface HeldReads { holds: (line: Unmatched) => boolean; byPerson: (line: Unmatched) => boolean }
 
@@ -208,21 +205,20 @@ export interface HeldReads { holds: (line: Unmatched) => boolean; byPerson: (lin
  *   `realigned` names it, so the app's entries move with it;
  * - one it does not hold, a tie, or one that would move while a person's entry is on it leaves its read
  *   file (`files`) and is named in `unmatched`: the books keep it as a movement of its own until the
- *   person answers (src/books/twins.ts twinQuestions offers the bank's movements it may be), so it is
+ *   person answers (src/books/twins.ts twinsOf offers the bank's movements it may be), so it is
  *   neither lost nor counted twice.
- * - one of a filed day the structured file holds a few days later, in the open period, for the same
- *   amount (a PDF line of 30.09., the bank's 01.10.) stays as filed; the bank's movement is named in
- *   `filed`: it was booked in the filed quarter, so nothing books it again.
- * A movement dated on a day `isClosed` says is filed is never changed, nor one the books do not hold.
- * Pure: `xmlOf` gives a read file's text, and `files` holds each read file's new text.
+ * A movement dated on a day `isClosed` says is filed is never changed, nor one the books do not hold:
+ * a filed one the bank's file holds otherwise, or on its days before the file's first (a PDF line of
+ * 30.09., the bank's 01.10.), stays as filed, and src/books/twins.ts twinsOf asks about it, as about
+ * every read movement near a bank movement. Pure: `xmlOf` gives a read file's text, and `files` holds
+ * each read file's new text.
  */
-export function alignReads(statementFiles: readonly StatementFile[], structured: string, isClosed: (date: string) => boolean, xmlOf: (file: string) => string, books: HeldReads = { holds: () => true, byPerson: () => false }): { files: Map<string, string>; unmatched: Unmatched[]; realigned: Realigned[]; filed: FiledTwin[] } {
+export function alignReads(statementFiles: readonly StatementFile[], structured: string, isClosed: (date: string) => boolean, xmlOf: (file: string) => string, books: HeldReads = { holds: () => true, byPerson: () => false }): { files: Map<string, string>; unmatched: Unmatched[]; realigned: Realigned[] } {
   const read = statementFiles.filter((f): f is Read => f.status === 'read');
   const own = read.filter((f) => f.file === structured && sourceOf(f.statement) !== 'pdf');
   const files = new Map<string, string>();
   const unmatched: Unmatched[] = [];
   const realigned: Realigned[] = [];
-  const filed: FiledTwin[] = [];
   for (const number of new Set(own.map((f) => f.account.account))) {
     const mine = own.filter((f) => f.account.account === number);
     const account = mine[0].account;
@@ -237,7 +233,8 @@ export function alignReads(statementFiles: readonly StatementFile[], structured:
         .filter(({ line }) => line.date >= span.from && line.date <= span.to);
       const exact = pairUp(lines.map((l) => l.line), pool, (l, t) => (sameMovement(l) === sameMovement(t) ? -fit(l, t) : undefined));
       for (const j of [...exact.values()].sort((a, b) => b - a)) pool.splice(j, 1);
-      loose.push(...lines.filter((_, k) => !exact.has(k)));
+      // A filed line stays as filed: twinsOf asks about it.
+      loose.push(...lines.filter((l, k) => !exact.has(k) && !isClosed(l.line.date)));
     }
     // The same amount a few days off: the payee first (its IBAN, its name, the text), then the closest day.
     const free = pool.filter((t) => !isClosed(t.date));
@@ -247,10 +244,6 @@ export function alignReads(statementFiles: readonly StatementFile[], structured:
     for (const [k, l] of loose.entries()) {
       const u: Unmatched = { file: l.file, bank: l.line.bank, currency: l.line.currency, date: l.line.date, direction: l.line.direction, amount: l.line.amount, ref: l.line.ref };
       const t = near.has(k) ? free[near.get(k)!] : undefined;
-      if (isClosed(l.line.date)) {
-        if (t) filed.push({ bank: t.bank, currency: t.currency, date: t.date, direction: t.direction, amount: t.amount, ref: t.ref, of: l.line.ref });
-        continue;
-      }
       if (t && !books.byPerson(u)) {
         set(l.file, l.index, t.date);
         realigned.push({ ...u, to: t.date });
@@ -261,17 +254,68 @@ export function alignReads(statementFiles: readonly StatementFile[], structured:
       set(l.file, l.index, null);
       unmatched.push(u);
     }
-    for (const [file, change] of changes) {
-      let index = -1;
-      files.set(file, (files.get(file) ?? xmlOf(file)).replace(/<Ntry>[\s\S]*?<\/Ntry>\n?/g, (entry) => {
-        index++;
-        if (!change.has(index)) return entry;
-        const day = change.get(index);
-        return day === null ? '' : entry.replace(/<BookgDt><Dt>[^<]*<\/Dt><\/BookgDt>/, `<BookgDt><Dt>${day}</Dt></BookgDt>`).replace(/<ValDt><Dt>[^<]*<\/Dt><\/ValDt>/, `<ValDt><Dt>${day}</Dt></ValDt>`);
-      }));
-    }
+    for (const [file, change] of changes) files.set(file, withEntries(files.get(file) ?? xmlOf(file), change));
   }
-  return { files, unmatched, realigned, filed };
+  return { files, unmatched, realigned };
+}
+
+/** A read statement's text with its entries changed by index: one taken out (`null`), or dated on another day. */
+function withEntries(xml: string, change: ReadonlyMap<number, string | null>): string {
+  let index = -1;
+  return xml.replace(/<Ntry>[\s\S]*?<\/Ntry>\n?/g, (entry) => {
+    index++;
+    if (!change.has(index)) return entry;
+    const day = change.get(index);
+    return day === null ? '' : entry.replace(/<BookgDt><Dt>[^<]*<\/Dt><\/BookgDt>/, `<BookgDt><Dt>${day}</Dt></BookgDt>`).replace(/<ValDt><Dt>[^<]*<\/Dt><\/ValDt>/, `<ValDt><Dt>${day}</Dt></ValDt>`);
+  });
+}
+
+/**
+ * The movements only a statement read from a PDF brings (#254): the refs its files give that no bank
+ * export or CSV holds too (refsByFile). src/books/twins.ts twinsOf asks about each that lies near a
+ * bank movement. Read again only when a statement file changed: the inbox run asks once per payment.
+ */
+export function readFromPdfs(ws: Ws): ReadonlySet<string> {
+  const key = [ws.paths.root, JSON.stringify(ws.bankAccounts), ...filesOfPart(ws.paths, 'statements').filter(([n]) => /\.xml$/i.test(n)).map(([n, p]) => { const s = statSync(p); return `${n}:${s.size}:${s.mtimeMs}`; })].join('\n');
+  if (lastPdfReads?.key === key) return lastPdfReads.refs;
+  const files = readBankStatements(ws);
+  const pdf = new Set(files.filter((f) => f.status === 'read' && sourceOf(f.statement) === 'pdf').map((f) => f.file));
+  const refs = refsByFile(files);
+  const structured = new Set([...refs].flatMap(([file, rs]) => (pdf.has(file) ? [] : rs)));
+  lastPdfReads = { key, refs: new Set([...refs].flatMap(([file, rs]) => (pdf.has(file) ? rs.filter((r) => !structured.has(r)) : []))) };
+  return lastPdfReads.refs;
+}
+let lastPdfReads: { key: string; refs: ReadonlySet<string> } | undefined;
+
+type TwinsBooks = Pick<Books, 'config' | 'transactions' | 'journalEntries'>;
+
+/** «Ist das dieselbe Zahlung?» of the books of `ws` (src/books/twins.ts twinsOf): their period lock, the movements only read statements bring. */
+export const twinsOfBooks = (ws: Ws, books: TwinsBooks): Twins => twinsIn(books, periodLock(books).isClosed, readFromPdfs(ws));
+
+/** The books as the app reads them (GET /books.json, the audit export): with their questions «Ist das dieselbe Zahlung?» (Index.twins), derived here, never saved. */
+export function servedBooks(ws: Ws, books: Books): Books {
+  const { questions } = twinsOfBooks(ws, books);
+  return questions.size ? { ...books, twins: Object.fromEntries(questions) } : books;
+}
+
+/** The bank movements of the books of `ws` that no run books (src/books/twins.ts heldByTwins). */
+export const heldOfBooks = (ws: Ws, books: TwinsBooks): Set<string> => heldByTwins(books, periodLock(books).isClosed, readFromPdfs(ws));
+
+/**
+ * «Nein, eine eigene Zahlung» on a movement only a read statement brings (readFromPdfs): it leaves
+ * that file, so the books keep it as a movement of their own (`source: 'manual'`, its ref and bookings
+ * kept) and no question names it again. The read file's new text, or undefined when no file holds it.
+ */
+export function outOfRead(ws: Ws, ref: string): { file: string; xml: string } | undefined {
+  const files = readBankStatements(ws);
+  for (const [file, refs] of refsByFile(files)) {
+    const f = files.find((x): x is Read => x.file === file && x.status === 'read');
+    const index = refs.indexOf(ref);
+    if (!f || sourceOf(f.statement) !== 'pdf' || index < 0) continue;
+    const path = findFile(ws.paths, 'statements', file)!;
+    return { file: path, xml: withEntries(readFileSync(path, 'utf8'), new Map([[index, null]])) };
+  }
+  return undefined;
 }
 
 /**

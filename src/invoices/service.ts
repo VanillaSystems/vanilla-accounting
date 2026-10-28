@@ -27,6 +27,7 @@ import { loadFxResolver } from '../accounting/fx-rates.js';
 import { TEXTS } from './texts.js';
 import { invoiceRates, invoicing } from '../engines/index.js';
 import { openItemAccounts } from '../accounting/tax-point.js';
+import { heldOfBooks } from '../books/bank-import.js';
 import { accountsOf } from '../workspace/reads.js';
 
 export interface Printer {
@@ -426,6 +427,7 @@ export function paymentContext(ws: Workspace): PaymentContext | undefined {
     pdfOf: (inv) => readPdf(ws, inv.pdf),
     receiptId: (pdf) => sha256(pdf).slice(0, 16),
     indexedAt: () => new Date().toISOString(),
+    held: (books) => heldOfBooks(ws, books),
   };
 }
 

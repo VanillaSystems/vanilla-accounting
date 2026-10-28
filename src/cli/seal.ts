@@ -17,6 +17,7 @@
  * says the year-end entries are booked already.
  */
 import { closeThrough, loadBooks, saveBooks } from '../books/store.js';
+import { readFromPdfs } from '../books/bank-import.js';
 import { Refused } from '../types/refusal.js';
 import { asQuarter, checkSeals, closesTheYear, periodKeyOf, writeSeal } from '../books/seal.js';
 import { addDays, derivePeriod } from '../accounting/periods.js';
@@ -45,7 +46,7 @@ if (args.includes('--close') && (!closedThrough || closedThrough < end)) {
     process.exit(1);
   }
   try {
-    closeThrough(books, end);
+    closeThrough(books, end, readFromPdfs(ws));
   } catch (e) {
     if (!(e instanceof Refused)) throw e;
     console.error(`${e.message}. Nothing closed or sealed.`);

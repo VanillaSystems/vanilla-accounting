@@ -15,7 +15,6 @@
  */
 import type { BankTransaction, JournalEntry, Mapping, Receipt } from '../types/index.js';
 import { periodLock, type Books } from '../books/store.js';
-import { heldByTwins } from '../books/twins.js';
 import { bankAccountFor } from '../workspace/money-accounts.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
@@ -42,6 +41,8 @@ export interface PaymentContext {
   receiptId(pdf: Buffer): string;
   /** When the invoice PDF of a payment is indexed as its receipt (ISO): now, on import. */
   indexedAt(at: Pick<BankTransaction, 'date'>): string;
+  /** The bank movements «Ist das dieselbe Zahlung?» holds, or booked in a filed quarter as a movement read from a PDF (#254, src/books/bank-import.ts heldOfBooks): they pay no invoice. */
+  held(books: Books): ReadonlySet<string>;
 }
 
 /** A payment that names an invoice but cannot be booked by rule: a person decides. */
@@ -110,7 +111,7 @@ export function matchPayments(books: Books, book: InvoiceBook, ctx: PaymentConte
   if (issued.length === 0) return out;
   const byRef = new Map(issued.filter((i) => i.kind === 'invoice').map((i) => [i.reference, i]));
   // A bank movement that may be one read from a PDF before waits for «Ist das dieselbe Zahlung?» (#254): it pays nothing twice.
-  const twins = heldByTwins(books, lock.isClosed);
+  const twins = ctx.held(books);
 
   for (const tx of books.transactions) {
     if (twins.has(tx.ref)) continue;

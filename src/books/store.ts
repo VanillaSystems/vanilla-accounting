@@ -17,7 +17,8 @@ import type { ClosedReason } from '../types/api-error.js';
 import { checkSeals, closedPart, type SealReport } from './seal.js';
 import { parseBookedBy } from './booked-by.js';
 import { documentWordsInUse, typeStatements } from './statement-facts.js';
-import { twinsOpen, twinsOpenThrough } from './twins.js';
+import { twinsOpenThrough } from './twins.js';
+import { lockedThrough as lockLine } from './lock-line.js';
 import { BOOK_FILES, PARTS, fromJsonl, isClosedYear, keyOf, placement, splitByYear, statementFile, toJsonl, type InClosedYear, type Part } from './years.js';
 
 export type Books = Index & { journalEntries: JournalEntry[]; config: AccountingConfig };
@@ -396,11 +397,12 @@ export interface PeriodLock {
  * close): closedThrough moves there, which the write door never does. A statement PDF's question of a
  * day now filed is closed with its PDF kept as the statement (#254): nothing can be read into a filed
  * period, so it could never be answered. An open «Ist das dieselbe Zahlung?» with a movement on those
- * days refuses the close (`twinsOpen`): its answer may change their entries.
+ * days refuses the close (`twinsOpen`): its answer may change their entries. `fromPdf`: the movements
+ * only read statements bring (src/books/bank-import.ts readFromPdfs).
  */
-export function closeThrough(books: Pick<Books, 'config' | 'statementAsks' | 'transactions' | 'journalEntries'>, end: string): void {
-  const open = twinsOpenThrough(books, end, periodLock(books).isClosed);
-  if (open.length) throw twinsOpen(end, open);
+export function closeThrough(books: Pick<Books, 'config' | 'statementAsks' | 'transactions' | 'journalEntries'>, end: string, fromPdf: ReadonlySet<string>): void {
+  const open = twinsOpenThrough(books, end, periodLock(books).isClosed, fromPdf);
+  if (open) throw open;
   books.config.closedThrough = end;
   if (!books.statementAsks) return;
   books.statementAsks = books.statementAsks.filter((a) => a.date > end);
@@ -423,7 +425,7 @@ export function periodLock(books: Pick<Index, 'config'> & { transactions?: reado
   const opens = () => (first ??= { day: booksOpen(books) }).day;
   const closedThrough = books.config?.closedThrough;
   const approved = books.config?.approvedReturn;
-  const lockedThrough = approved && (!closedThrough || approved.through > closedThrough) ? approved.through : closedThrough;
+  const lockedThrough = lockLine(books.config);
   const isClosed = (date: string | undefined) => !!lockedThrough && !!date && date <= lockedThrough;
   const heldBy = (date: string | undefined) => (isClosed(date) && !(closedThrough && date! <= closedThrough) ? approved : undefined);
   const closedText = (date: string | undefined) => {

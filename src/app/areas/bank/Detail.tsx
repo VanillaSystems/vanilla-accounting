@@ -9,16 +9,16 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { BankTransaction } from '../../../types/index.js';
 import type { PayoutWaitView } from '../../../types/drop.js';
 import { ratesUsed } from '../../../accounting/fx-conversion.js';
-import { bookedInFiled, twinQuestions } from '../../../books/twins.js';
+import { bookedInFiled, filedTwinOf } from '../../../books/twins.js';
 import type { RouteOf } from '../../shell/route.js';
-import { api, sources } from '../../lib/api.js';
+import { api, errorText, sources } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { monthName } from '../../lib/period-label.js';
 import { useFx } from '../../hooks/use-fx.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import { checkText } from '../../lib/fx-text.js';
 import { t } from '../../i18n/index.js';
-import type { AreaProps } from '../index.js';
+import type { AreaProps, Nav } from '../index.js';
 import { I } from '../receipts/icons.js';
 import { isCamt, matches, payHaystack, payText, signed, type Bank, type Statement } from './model.js';
 import { bankFor, setUi, useUi, type Section } from './state.js';
@@ -136,9 +136,10 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
   // The movements read from PDFs that this bank export or CSV does not hold (#254): it lists them nowhere else.
   const own = s.file ? `${s.file.bank}/${s.file.filename}` : undefined;
   const unmatched = own ? props.books.transactions.filter((t) => t.unmatched?.by === own && t.ref !== tx?.ref) : [];
-  // «Ist das dieselbe Zahlung?»: the bank's movements each of them may be; a bank movement held by one shows its question too.
-  const twins = useMemo(() => twinQuestions(props.books.transactions, new Set((props.books.journalEntries ?? []).map((e) => e.transactionRef)), (d) => !!b.closedThrough && d <= b.closedThrough), [props.books, b.closedThrough]);
-  const heldBy = tx && !tx.unmatched ? props.books.transactions.filter((u) => twins.get(u.ref)?.some((o) => o.bank.includes(tx.ref)) && !unmatched.includes(u)) : [];
+  // «Ist das dieselbe Zahlung?», as the server derives it: the bank's movements each read movement may be; a bank movement held by one shows its question too.
+  const twins = props.books.twins ?? {};
+  const asks = !!tx && (!!tx.unmatched || !!twins[tx.ref]);
+  const heldBy = tx && !asks ? props.books.transactions.filter((u) => twins[u.ref]?.some((o) => o.bank.includes(tx.ref)) && !unmatched.includes(u)) : [];
 
   return (
     <div className="detail-in" data-for={s.key}>
@@ -183,8 +184,8 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
       ))}
       {c?.bookDiff && !c.gap ? <BookDiff {...props} diff={c.bookDiff} s={s} /> : null}
       {ask ? <PdfQuestion key={ask.file} ask={ask} nav={nav} edit={edit} /> : null}
-      {tx?.unmatched ? <UnmatchedNotice key={`u-${tx.ref}`} tx={tx} options={twins.get(tx.ref)} books={props.books} nav={nav} edit={edit} /> : null}
-      {[...unmatched, ...heldBy].map((u) => <UnmatchedNotice key={`u-${u.ref}`} tx={u} options={twins.get(u.ref)} books={props.books} nav={nav} edit={edit} named />)}
+      {tx && asks ? <UnmatchedNotice key={`u-${tx.ref}`} tx={tx} options={twins[tx.ref]} books={props.books} nav={nav} edit={edit} /> : null}
+      {[...unmatched, ...heldBy].map((u) => <UnmatchedNotice key={`u-${u.ref}`} tx={u} options={twins[u.ref]} books={props.books} nav={nav} edit={edit} named />)}
 
       <div className="body">
         <div className="desk">
@@ -309,11 +310,12 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
       ) : tx.noReceiptNeeded ? (
         <> · {t('bank.noReceiptNotNeeded')}{edit && <> <button type="button" className="golink" data-tip={t('bank.resetTip')} onClick={() => setNoReceipt(nav, tx, false)}>{t('bank.reset')}</button></>}</>
       ) : null}
+      {bookedInFiled(tx) ? <> · <FiledTwin tx={tx} books={props.books} nav={nav} edit={edit} closedThrough={b.closedThrough} /></> : null}
       {entry ? (
         <> · <button type="button" className="golink" data-testid="go-entry" data-tip={t('bank.openEntry')} onClick={() => nav.go(at({ area: 'journal', id: entry.id }, entry.date))}>
           {t('bank.entries', { lines })}
         </button></>
-      ) : tx.amount ? <> · <NotBooked tx={tx} linked={linkedOf(props.books.receipts.filter((r) => receipts.includes(r.id) && r.kind !== 'duplicate'))} />{edit && tx.direction === 'CRDT' ? <PayoutWait key={`pw-${tx.ref}`} books={props.books} tx={tx} /> : null}</> : null}
+      ) : tx.amount && !bookedInFiled(tx) ? <> · <NotBooked tx={tx} linked={linkedOf(props.books.receipts.filter((r) => receipts.includes(r.id) && r.kind !== 'duplicate'))} />{edit && tx.direction === 'CRDT' ? <PayoutWait key={`pw-${tx.ref}`} books={props.books} tx={tx} /> : null}</> : null}
       {edit ? <ReceiptSetOffer key={`rs-${tx.ref}`} {...props} tx={tx} /> : null}
       {edit && receipts.length > 1 ? <GroupedOffer key={`go-${tx.ref}`} payment={tx.ref} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
       <Note key={tx.ref} tx={tx} nav={nav} edit={edit} />
@@ -464,11 +466,26 @@ function PayoutWait({ books, tx }: { books: Props['books']; tx: BankTransaction 
   return <> · <span className="wn" data-testid="payout-wait">{t(`bank.payoutWait.${wait.why}`, { provider: wait.provider, file: wait.file, since: wait.since ? formatDate(wait.since) : '' })}</span></>;
 }
 
+/**
+ * A bank movement the person said is a movement read from a PDF of a filed quarter (#254): booked there,
+ * naming that movement. «Trotzdem buchen» is her saying it is a payment of its own; only then is it booked.
+ */
+function FiledTwin({ tx, books, nav, edit, closedThrough }: { tx: BankTransaction; books: Props['books']; nav: Nav; edit: boolean; closedThrough?: string }) {
+  const twin = filedTwinOf(books.transactions, tx, (d) => !!closedThrough && d <= closedThrough);
+  const date = twin ? formatDate(twin.date) : '';
+  const anyway = () => void api.bookFiledTwinAnyway(tx.ref).then(() => nav.refresh(), (e) => nav.toast(errorText(e)));
+  return (
+    <span data-testid="filed-twin">
+      <span className="m">{twin ? t('bank.filedTwinOf', { date }) : t('bank.filedTwin')}</span>
+      {edit ? <>{' '}<button type="button" className="golink" data-testid="filed-twin-anyway" data-tip={t('bank.filedTwinAnywayTip', { date: date || '…' })} onClick={anyway}>{t('bank.filedTwinAnyway')}</button></> : null}
+    </span>
+  );
+}
+
 /** A payment without a booking: one that waits for its receipt says so as a fact, with its return's due day once it is the person's (issue #29); one whose receipt could not be read says that (issue #57). */
 function NotBooked({ tx, linked }: { tx: BankTransaction; linked: Linked }) {
   const { view } = useAutomation();
   const run: Processing | undefined = tx.waitsForPerson ? undefined : bookingRun(view?.runs ?? []);
-  if (bookedInFiled(tx)) return <span className="m" data-testid="filed-twin">{t('bank.filedTwin')}</span>;
   // The inbox's run is open and books it (#218): what it does, not yet what the person should do.
   if (run) return <span className="m" data-testid="booking-now">{run.kind === 'running' ? processingText(run, view) : t('bank.bookingNow', { what: processingText(run, view) })}</span>;
   const wait = receiptState(tx, linked, false, localToday());

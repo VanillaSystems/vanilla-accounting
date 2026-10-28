@@ -86,13 +86,13 @@ export function NoMovements({ s, nav, edit }: { s: Statement; nav: Nav; edit: bo
 }
 
 /**
- * A movement read from a PDF that the account's bank export or CSV does not hold. With `options`, the
- * bank's movements it may be (src/books/twins.ts): «Ist das dieselbe Zahlung?», each answered «Ja,
- * dieselbe», or «Nein, eine eigene Zahlung»; until then those bank movements are not booked. One of a
- * filed period (`filed`) stays as filed: «Ja, dieselbe» marks the bank's movement as booked there, and
- * a payment of its own is booked by hand. Without:
- * «Behalten» or «Entfernen» (with its bookings). `named`: shown where the movement is not the one
- * selected, so it says which it is.
+ * A movement read from a PDF that a bank movement may be, or that the account's bank export or CSV
+ * does not hold. With `options`, the bank's movements it may be (src/books/twins.ts, served as
+ * `twins`): «Ist das dieselbe Zahlung?», each answered «Ja, dieselbe», or «Nein, eine eigene Zahlung»;
+ * until then those bank movements are not booked. One of a filed period (`filed`) stays as filed:
+ * «Ja, dieselbe» marks the bank's movement as booked there, a difference booked on it, and a payment
+ * of its own is booked by hand. Without: «Behalten» or «Entfernen» (with its bookings). `named`:
+ * shown where the movement is not the one selected, so it says which it is.
  */
 export function UnmatchedNotice({ tx, options, books, nav, edit, named }: { tx: BankTransaction; options?: TwinOption[]; books: { transactions: BankTransaction[] }; nav: Nav; edit: boolean; named?: boolean }) {
   const [busy, setBusy] = useState(false);
@@ -108,7 +108,7 @@ export function UnmatchedNotice({ tx, options, books, nav, edit, named }: { tx: 
       <div className="status" data-testid="twin-question">
         <span className="notice warn" style={{ margin: 0 }}>
           {of(options[0].pdf).map((p) => <span key={p.ref}>{line(p)}{' · '}</span>)}
-          {t(filed ? 'bank.twinAskFiled' : 'bank.twinAsk', { file: tx.unmatched!.by.split('/').pop() ?? tx.unmatched!.by })}
+          {t(filed ? 'bank.twinAskFiled' : 'bank.twinAsk')}
           {options.map((o) => (
             <span key={o.bank.join(' ')} className="twin-option">
               {' '}{of(o.bank).map((p, i) => <span key={p.ref}>{i ? ' + ' : ''}{line(p)}</span>)}{' '}
@@ -125,7 +125,7 @@ export function UnmatchedNotice({ tx, options, books, nav, edit, named }: { tx: 
     <div className="status" data-testid="unmatched">
       <span className="notice warn" style={{ margin: 0 }}>
         {named ? <>{line(tx)}{' · '}</> : null}
-        {t('bank.unmatched', { file: tx.unmatched!.by.split('/').pop() ?? tx.unmatched!.by })}{' '}
+        {t('bank.unmatched', { file: tx.unmatched?.by.split('/').pop() ?? '' })}{' '}
         {edit ? (
           <>
             <button type="button" className="linkbtn" disabled={busy} data-testid="unmatched-keep" onClick={() => run(() => api.keepUnmatched(tx.ref))}>{t('bank.unmatchedKeep')}</button>{' '}

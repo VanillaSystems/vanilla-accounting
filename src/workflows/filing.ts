@@ -19,7 +19,8 @@ import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node
 import { dirname, join } from 'node:path';
 import { addDays, derivePeriod, isFilingKey, localToday } from '../accounting/periods.js';
 import { closeThrough, loadBooks, periodLock, saveBooks, type Books } from '../books/store.js';
-import { twinsOpen, twinsOpenThrough } from '../books/twins.js';
+import { twinsOpenThrough } from '../books/twins.js';
+import { readFromPdfs } from '../books/bank-import.js';
 import { closesTheYear, periodKeyOf, writeSeal } from '../books/seal.js';
 import { filing, filingBasis, filingMethod, ratesWithoutActivityId, vat } from '../engines/index.js';
 import { closeGoneSaleQuestions } from '../intake/sale-questions.js';
@@ -161,8 +162,8 @@ export const FILING_ACTIONS: Record<string, Action> = {
       const open = openSaleQuestionsIn(readQuestions(ws), books, ret.from, ret.to);
       if (open.length) throw refuse('questionsOpen', { period: key, n: String(open.length) }, `${key}: ${open.length} VAT question(s) about its payments are open; answer them before the return is written`);
       // A movement read from a PDF that may be a bank movement of these days waits for «Ist das dieselbe Zahlung?» (#254): its answer may change the figures.
-      const twins = twinsOpenThrough(books, ret.to, periodLock(books).isClosed);
-      if (twins.length) throw twinsOpen(ret.to, twins);
+      const twins = twinsOpenThrough(books, ret.to, periodLock(books).isClosed, readFromPdfs(ws));
+      if (twins) throw twins;
       // On the agreed basis an invoice whose event is not booked (no rate of its day yet) would be missing from the return.
       const unbooked = eventsMissing(books, loadInvoices(ws), ret.to);
       if (unbooked.length) throw refuse('invoiceEventsMissing', { period: key, invoices: unbooked.join(', ') }, `${key}: the VAT of invoice(s) ${unbooked.join(', ')} is not booked yet (no official rate of its day); the return would leave it out`);
@@ -205,7 +206,7 @@ export const FILING_ACTIONS: Record<string, Action> = {
         if (next !== key) throw refuse('nextToClose', { through: closed ?? '', next, period: key }, `the books are closed through ${closed}; the next ${ws.filingLength === 'half' ? 'half year' : 'quarter'} to close is ${next}, not ${key}`);
         // Closing moves closedThrough, which the write door never allows: as `npm run seal -- <q> --close` does, after the person filed.
         // The year's last period is left open: the year close books the year-end entries on 31.12., then closes and seals it.
-        if (!lastOfYear) closeThrough(books, end);
+        if (!lastOfYear) closeThrough(books, end, readFromPdfs(ws));
       }
       // Filed: the hold gave way to the close (or, for the year's last period, to the year close).
       if (books.config.approvedReturn?.period === key) delete books.config.approvedReturn;

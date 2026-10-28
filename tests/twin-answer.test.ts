@@ -17,7 +17,7 @@ import { matchPayments, type PaymentContext } from '../src/invoices/payments.js'
 import { issue } from '../src/invoices/rules.js';
 import { DEFAULT_LAYOUT, type Customer, type InvoiceBook, type Issued } from '../src/invoices/model.js';
 import { sameAs } from '../src/server/twin-answer.js';
-import { twinQuestions } from '../src/books/twins.js';
+import { twinsOf } from '../src/books/twins.js';
 import { periodLock, type Books } from '../src/books/store.js';
 import type { BankTransaction } from '../src/types/index.js';
 
@@ -32,7 +32,7 @@ const sender = { name: 'Muster Kaffee GmbH', uid: 'CHE-123.456.789', address: { 
 const ctx: PaymentContext = {
   bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Bank', role: 'bank' }],
   revenueAccount: '3200', openItems: { receivable: '1100', payable: '2000', fxDifference: '6960' }, fx: { daily: () => undefined },
-  pdfOf: (inv) => Buffer.from(`%PDF ${inv.number}`), receiptId: (pdf) => `r_${pdf.toString().slice(5)}`, indexedAt: (at) => `${at.date}T18:00:00Z`,
+  pdfOf: (inv) => Buffer.from(`%PDF ${inv.number}`), receiptId: (pdf) => `r_${pdf.toString().slice(5)}`, indexedAt: (at) => `${at.date}T18:00:00Z`, held: () => new Set(),
 };
 
 /** One invoice of 1000 net at 8.1 % (1081), paid by the read movement `P` before the bank's file came with `B` for `bankAmount`. */
@@ -50,7 +50,7 @@ function paidByRead(setup: VatSetup, bankAmount: number) {
   // The bank's file came: the read movement is a question, the bank's movement held.
   books.transactions[0].unmatched = { since: '2026-10-28', by: 'Raiffeisen/bank.xml' };
   books.transactions.push(tx('B', '2026-10-12', bankAmount));
-  const option = twinQuestions(books.transactions, new Set(books.journalEntries.map((e) => e.transactionRef)), periodLock(books).isClosed).get('P')![0];
+  const option = twinsOf(books.transactions, new Set(books.journalEntries.map((e) => e.transactionRef)), periodLock(books).isClosed, new Set()).questions.get('P')![0];
   assert.deepEqual(option, { pdf: ['P'], bank: ['B'] });
   return { book, books, option };
 }

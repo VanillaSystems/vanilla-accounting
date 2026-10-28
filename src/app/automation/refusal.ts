@@ -17,3 +17,7 @@ export function refusalText(error: string | undefined, why?: Refusal): string {
   const params = Object.fromEntries(Object.entries(why.params).map(([k, v]) => [k, ISO_DATE.test(v) ? formatDate(v) : k === 'n' ? Number(v) : v]));
   return tWith(`runWhy.${why.code}`, params);
 }
+
+/** The payment where a refusal is answered, when it names one: «Ist das dieselbe Zahlung?» is answered at the bank's movement it holds (#254 twinsOpen). */
+export const refusalPayment = (why?: Refusal): { payment: string; date: string } | undefined =>
+  why?.code === 'twinsOpen' && why.params.payment ? { payment: why.params.payment, date: why.params.date ?? '' } : undefined;

@@ -116,6 +116,7 @@ const refused: Array<Call & { status: number }> = [
   { method: 'POST', path: `${MAY_READ}/import`, body: { statement: MAY }, status: 403 },
   { method: 'POST', path: '/api/transactions/C1/kept', status: 403 },
   { method: 'POST', path: '/api/transactions/C1/same', body: { bank: ['C2'] }, status: 403 },
+  { method: 'DELETE', path: '/api/transactions/C1/filed-twin', status: 403 },
   { method: 'DELETE', path: '/api/invoices/in_p/payments/CI', status: 403 },
   // Several objects at once (#216): a batch of filed objects only is refused as their single changes are; its undo too.
   { method: 'POST', path: '/api/batch', body: { action: { kind: 'noReceiptNeeded' }, ids: ['C1'] }, status: 403 },

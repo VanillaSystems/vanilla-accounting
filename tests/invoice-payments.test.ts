@@ -49,7 +49,7 @@ const books = (transactions: BankTransaction[]): Books => ({ receipts: [], trans
 const ctx: PaymentContext = {
   bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Bank', role: 'bank' }, { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR', role: 'bank' }],
   revenueAccount: '3300', openItems: { receivable: '1100', payable: '2000', fxDifference: '6960' }, fx: { daily: (c, d) => (c === 'EUR' && d === '2026-09-02' ? 0.94 : undefined) },
-  pdfOf: () => PDF, receiptId: () => 'r_invoice', indexedAt: (tx) => `${tx.date}T18:00:00Z`,
+  pdfOf: () => PDF, receiptId: () => 'r_invoice', indexedAt: (tx) => `${tx.date}T18:00:00Z`, held: () => new Set(),
 };
 const sum = (xs: Array<{ amount: number }>) => Math.round(xs.reduce((s, x) => s + x.amount, 0) * 100) / 100;
 

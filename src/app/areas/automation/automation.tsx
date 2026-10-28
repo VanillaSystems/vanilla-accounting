@@ -34,7 +34,8 @@ import { approvalWithheld, fileName, returnSummary } from './filing-summary.js';
 import { outcomeText, periodText, readsInWords } from './words.js';
 import type { PeriodReturn, PreparedXml, SealOutput } from '../../../workflows/filing.js';
 import type { ClearingCheck } from '../../../booking/providers.js';
-import { commandRefusalText, refusalText } from '../../automation/refusal.js';
+import { commandRefusalText, refusalPayment, refusalText } from '../../automation/refusal.js';
+import type { Refusal } from '../../../types/refusal.js';
 import { RunFromLog } from '../../history/RunHistory.js';
 import { baseCurrency, chargesVat, filing, vat } from '../../../engines/index.js';
 import { QuestionTasks } from '../../questions/Questions.js';
@@ -96,6 +97,12 @@ function groupsOf(view: AutomationView | undefined): Array<{ key: string; label:
 }
 
 const sameRow = (a: R, b: R) => a.view === b.view && (a.view !== 'workflow' || (b.view === 'workflow' && a.workflow === b.workflow));
+
+/** The way to where a refusal is answered, when it names a payment (refusalPayment). */
+function WhyGo({ why, nav }: { why?: Refusal; nav: Nav }) {
+  const to = refusalPayment(why);
+  return to ? <>{' '}<button type="button" className="golink" data-testid="why-go" onClick={() => nav.go(at({ area: 'bank', payment: to.payment }, to.date))}>{t('automation.answerAtPayment')}</button></> : null;
+}
 
 /** The row a route marks: a run marks its workflow. */
 function selectedRow(route: R, view: AutomationView | undefined): R | undefined {
@@ -586,7 +593,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
         {data.mode !== 'live' ? ` · ${t(data.mode === 'dry' ? 'automation.mode.dry' : 'automation.mode.replay')}` : ''}{data.reason ? ` · ${t(`automation.queuedBecause.${data.reason}` as 'automation.queuedBecause.slot')}` : ''}
       </p>
       <p className="m mono runid">{id}</p>
-      {data.error ? <p className="warnline" data-testid="run-why">{refusalText(data.error, data.why)}</p> : null}
+      {data.error ? <p className="warnline" data-testid="run-why">{refusalText(data.error, data.why)}<WhyGo why={data.why} nav={nav} /></p> : null}
       <div className="wfactions">
         {data.status === 'waiting' ? <button type="button" className="btn" onClick={() => nav.select({ area: 'automation', view: 'tasks', run: id })}>{t('automation.openTask')}</button> : null}
         {data.status === 'stuck' || data.status === 'parked' ? <button type="button" className="btn" onClick={act({ kind: 'resume', run: id })}>{t('automation.resume')}</button> : null}
@@ -619,7 +626,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
                 <div className="box"><small>{t('automation.io.took')}</small><Took s={s} /></div>
                 <div className="box"><small>{t('automation.io.made')}</small><Made s={s} nav={nav} /></div>
               </div>
-              {s.error ? <div className="warnline">{refusalText(s.error, s.why)}</div> : null}
+              {s.error ? <div className="warnline">{refusalText(s.error, s.why)}<WhyGo why={s.why} nav={nav} /></div> : null}
               {((s.output?.notes as IntakeNote[] | undefined) ?? []).map((n, j) => <div key={`n${j}`} className="warnline">{noteText(n)}</div>)}
               {s.effects.filter((e) => e.refused || (!e.applied && e.would !== undefined)).map((e, j) => (
                 <div key={j} className={e.refused ? 'warnline' : 'm'}>{e.refused ? t('automation.refused', { reason: e.refused }) : Array.isArray(e.would) ? t('automation.wouldBook', { n: e.would.length }) : t('automation.skippedEffect')}</div>

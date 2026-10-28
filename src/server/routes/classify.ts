@@ -5,16 +5,17 @@
  * holds a person's booking (origin manual: by hand or by a wish in the AI sidebar) is booked anew
  * only when the body says `overwrite: true`; otherwise 409, and her booking stays. An answer that
  * would book the payment wrong (src/booking/classify.ts paymentRefusal) is refused with 422. A bank
- * movement «Ist das dieselbe Zahlung?» holds (#254) is refused with 409 `twinHeld` until it is answered.
+ * movement «Ist das dieselbe Zahlung?» holds (#254) is refused with 409 `twinHeld` until it is answered, one
+ * booked in a filed quarter as a read movement with 409 `bookedInFiled`.
  */
 import { Router } from 'express';
 import { ask } from '../../llm/ask.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { classifyTransactions, loadClassifyContext } from '../../booking/classify.js';
-import { periodLock, type Books } from '../../books/store.js';
-import { twinHolds } from '../../books/twins.js';
+import type { Books } from '../../books/store.js';
+import { twinsOfBooks } from '../../books/bank-import.js';
 import { WS, assertOpen, readBooks, refDates, updateBooks, RequestError } from '../books.js';
-import { bookedAgain } from '../edits.js';
+import { assertNotBookedInFiled, bookedAgain } from '../edits.js';
 import { learnFromCorrection } from '../questions.js';
 import { askSalesWithoutVat } from '../../intake/sale-questions.js';
 
@@ -24,8 +25,9 @@ function openTransaction(books: Books, txRef: string, overwrite: boolean) {
   const tx = books.transactions.find((t) => t.ref === txRef);
   if (!tx) throw new RequestError(404, 'Transaction not found');
   assertOpen(books, refDates(books, txRef), 'editEntry');
-  // A bank movement that may be one read from a PDF waits for «Ist das dieselbe Zahlung?» (#254): booked now, it may count twice.
-  const read = twinHolds(books, periodLock(books).isClosed).get(txRef);
+  // A bank movement that may be one read from a PDF waits for «Ist das dieselbe Zahlung?» (#254): booked now, it may count twice; one booked in a filed quarter as such is booked.
+  assertNotBookedInFiled(books, tx);
+  const read = twinsOfBooks(WS, books).holds.get(txRef);
   if (read) {
     const of = books.transactions.find((t) => t.ref === read);
     throw new RequestError(409, `Die Zahlung ${txRef} ist vielleicht dieselbe wie ${read}, aus dem PDF gelesen: erst «Ist das dieselbe Zahlung?» beantworten.`, { code: 'twinHeld', params: { read, date: of?.date ?? '' } });

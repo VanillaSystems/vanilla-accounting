@@ -51,7 +51,7 @@ const draft = (id: string, date: string, net: number, over: Partial<Draft> = {})
 const ctx: PaymentContext = {
   bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Bank', role: 'bank' }, { bank: 'Wise', currency: 'EUR', account: '1023', label: 'Wise EUR', role: 'bank' }],
   revenueAccount: '3200', openItems: ITEMS, fx: { daily: (c, d) => (c === 'EUR' ? RATES[d] : undefined) },
-  pdfOf: (inv) => Buffer.from(`%PDF ${inv.number}`), receiptId: (pdf) => `r_${pdf.toString().slice(5)}`, indexedAt: (at) => `${at.date}T18:00:00Z`,
+  pdfOf: (inv) => Buffer.from(`%PDF ${inv.number}`), receiptId: (pdf) => `r_${pdf.toString().slice(5)}`, indexedAt: (at) => `${at.date}T18:00:00Z`, held: () => new Set(),
 };
 const books = (closedThrough: string, transactions: BankTransaction[] = []): Books => ({ receipts: [], transactions, mappings: [], bankStatements: [], journalEntries: [], config: { closedThrough } });
 const tx = (ref: string, date: string, amount: number, direction: 'CRDT' | 'DBIT', over: Partial<BankTransaction> = {}): BankTransaction =>

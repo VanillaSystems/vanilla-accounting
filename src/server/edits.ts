@@ -29,6 +29,7 @@ import { isVatAmountCode } from '../accounting/validate.js';
 import { assertOpen, receiptDates, refDates, RequestError } from './books.js';
 import { outsideStatements } from '../accounting/placed-account.js';
 import { nameWords } from '../intake/pairing.js';
+import { bookedInFiled, filedTwinOf } from '../books/twins.js';
 
 function receiptOf(books: Books, id: string): Receipt {
   const r = books.receipts.find((x) => x.id === id);
@@ -527,11 +528,25 @@ function linkCarried(books: Books, entry: JournalEntry): void {
 
 /**
  * The payment's wait for a person ends (r10h-5): someone booked it, or asked the app to. Called by
- * every path that books a payment; the mark is set by deleteEntry alone.
+ * every path that books a payment; the mark is set by deleteEntry alone. A bank movement booked in a
+ * filed quarter as a movement read from a PDF (bookedInFiled, #254) keeps its mark: only «Trotzdem
+ * buchen» takes it (DELETE /api/transactions/:ref/filed-twin).
  */
 export function bookedAgain(books: Books, ref: string): void {
   const tx = books.transactions.find((t) => t.ref === ref);
-  if (tx?.waitsForPerson) delete tx.waitsForPerson;
+  if (tx?.waitsForPerson?.why === 'bookingDeleted') delete tx.waitsForPerson;
+}
+
+/**
+ * A bank movement booked in a filed quarter as a movement read from a PDF (#254) is booked again only
+ * on purpose: refused with 409 `bookedInFiled`, naming the filed movement it is (filedTwinOf), until
+ * «Trotzdem buchen» (DELETE /api/transactions/:ref/filed-twin) takes the mark.
+ */
+export function assertNotBookedInFiled(books: Books, tx: BankTransaction): void {
+  if (!bookedInFiled(tx)) return;
+  const twin = filedTwinOf(books.transactions, tx, periodLock(books).isClosed);
+  throw new RequestError(409, `Die Zahlung ${tx.ref} ist schon im abgerechneten Quartal gebucht${twin ? `, als die am ${twin.date} aus dem PDF gelesene Zahlung ${twin.ref}` : ''}: nur mit «Trotzdem buchen» nochmals.`,
+    { code: 'bookedInFiled', params: { read: twin?.ref ?? '', date: twin?.date ?? '' } });
 }
 
 /**
@@ -540,11 +555,13 @@ export function bookedAgain(books: Books, ref: string): void {
  * the receipts linked now, so a later run sees nothing new and keeps them. Refused when the
  * payment is booked already or the lines do not add up to what the bank paid. `proof`: the other
  * proof of its input tax the person names instead of a receipt (BankTransaction.inputTaxProof, #134).
+ * A bank movement booked in a filed quarter as a read one (#254) is refused until «Trotzdem buchen».
  */
 export function bookPayment(books: Books, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[], fx: FxResolver, proof?: string): JournalEntry[] {
   const tx = books.transactions.find((t) => t.ref === ref);
   if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   assertOpen(books, refDates(books, ref), 'newEntry');
+  assertNotBookedInFiled(books, tx);
   // A booked payment is not booked twice; one booked in part (r9k-2) takes the lines that complete it.
   if (bookedState(books, ref, accounts) === 'booked') throw new RequestError(409, 'Die Zahlung ist gebucht: zuerst ihre Buchung in Buchungen löschen.', { code: 'hasEntries' });
   if (!lines.length) throw new RequestError(400, 'lines: mindestens eine Zeile.');
@@ -631,7 +648,8 @@ export function deleteEntry(books: Books, id: string): JournalEntry {
   assertOpen(books, [entry.date], 'deleteEntry');
   books.journalEntries = books.journalEntries.filter((je) => je.id !== id);
   const tx = books.transactions.find((t) => t.ref === entry.transactionRef);
-  if (tx) tx.waitsForPerson = { since: new Date().toISOString(), why: 'bookingDeleted' };
+  // One booked in a filed quarter as a read movement (#254) stays so: its difference line gone, it is still booked there.
+  if (tx && !bookedInFiled(tx)) tx.waitsForPerson = { since: new Date().toISOString(), why: 'bookingDeleted' };
   // A booking without a payment takes its links along: no receipt hangs on a booking that is gone. The entry keeps them in `receipts` for its undo.
   else if (isManualRef(entry.transactionRef) && !books.journalEntries.some((je) => je.transactionRef === entry.transactionRef)) {
     books.mappings = books.mappings.filter((m) => m.transactionRef !== entry.transactionRef);

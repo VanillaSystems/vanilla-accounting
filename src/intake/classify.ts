@@ -16,7 +16,7 @@ import { loadKnowledge } from '../knowledge/layers.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import { periodLock, type Books } from '../books/store.js';
-import { heldByTwins } from '../books/twins.js';
+import { heldOfBooks } from '../books/bank-import.js';
 import type { JournalEntry } from '../types/index.js';
 import { askSalesWithoutVat, closeSaleQuestionsHeld } from './sale-questions.js';
 import { bookPayoutReports } from './sales-report-import.js';
@@ -34,10 +34,10 @@ function askSales(ws: Workspace, books: BooksPort, log: (line: string) => void):
  * The open payments without a booking, less those waiting for a person: a booking deleted on purpose
  * (r10h-5), or a bank movement that may be one read from a PDF before (#254 «Ist das dieselbe Zahlung?»).
  */
-const unbooked = (books: Books) => {
+const unbooked = (ws: Workspace, books: Books) => {
   const lock = periodLock(books);
   const booked = new Set(books.journalEntries.map((je) => je.transactionRef));
-  const twins = heldByTwins(books, lock.isClosed);
+  const twins = heldOfBooks(ws, books);
   return books.transactions.filter((tx) => !booked.has(tx.ref) && !lock.isClosed(tx.date) && !tx.waitsForPerson && !twins.has(tx.ref));
 };
 
@@ -46,7 +46,7 @@ function needReceipts(ws: Workspace, books: Books, context: ClassifyContext, fx:
   const known = receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root));
   const need = new Set<string>();
   const unread = new Set<string>();
-  for (const tx of unbooked(books)) {
+  for (const tx of unbooked(ws, books)) {
     const w = receiptWaitOf(books, tx, context, known, fx);
     if (w.wait) (w.unread ? unread : need).add(tx.ref);
   }
@@ -137,7 +137,7 @@ export function classifyStep({ force = false } = {}): StepRun {
       if (unread.size) log(`Unread    : ${unread.size} payment(s) have a receipt whose VAT could not be read: the person is asked.`);
       return { notes: [...notes, ...(waiting.size ? [{ code: 'waitingReceipt' as const, count: waiting.size }] : []), ...(unread.size ? [{ code: 'receiptUnread' as const, count: unread.size }] : []), ...askSales(ws, books, log)] };
     };
-    const todo = unbooked(scratch).filter((tx) => !waiting.has(tx.ref) && !unread.has(tx.ref));
+    const todo = unbooked(ws, scratch).filter((tx) => !waiting.has(tx.ref) && !unread.has(tx.ref));
     if (todo.length === 0) {
       log('All transactions are already classified.');
       return done([]);
@@ -149,7 +149,7 @@ export function classifyStep({ force = false } = {}): StepRun {
       const fresh = scratch.journalEntries.filter((je) => !applied.has(je));
       fresh.forEach((je) => applied.add(je));
       books.update((index) => {
-        const open = new Set(unbooked(index).map((tx) => tx.ref));
+        const open = new Set(unbooked(ws, index).map((tx) => tx.ref));
         index.journalEntries.push(...fresh.filter((je) => open.has(je.transactionRef) && keeps(je.transactionRef)));
       });
     };

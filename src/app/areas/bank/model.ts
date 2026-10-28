@@ -15,6 +15,8 @@ import { bookedStates } from '../../../accounting/payment-entries.js';
 import { splitTitle } from '../receipts/model.js';
 import { baseCurrency, documents } from '../../../engines/index.js';
 import { accountOfStatement, statementFacts } from '../../../books/statement-facts.js';
+import { bookedInFiled } from '../../../books/twins.js';
+import { lockedThrough } from '../../../books/lock-line.js';
 
 export type Account = Pick<LedgerBankAccount, 'bank' | 'currency' | 'account' | 'label' | 'role' | 'statements' | 'iban'>;
 
@@ -155,19 +157,20 @@ const baseRef = (fee: BankTransaction) => fee.ref.replace(/^FEE-/, '');
 /**
  * Whether a payment has an amount and is not booked: no entry, or entries that do not add up to
  * what the bank paid (src/accounting/payment-entries.ts bookedState, r9k-2); a Wise fee folded into
- * a booked payment counts as booked with it. `accounts`: the manifest's bank accounts, which say
+ * a booked payment counts as booked with it, and a bank movement booked in a filed quarter as a read
+ * one (bookedInFiled, #254) is booked. `accounts`: the manifest's bank accounts, which say
  * where a payment's bank side is booked.
  */
 export function isUnbooked(books: Pick<Index, 'transactions' | 'journalEntries'>, accounts: readonly LedgerBankAccount[]): (t: BankTransaction) => boolean {
   const state = bookedStates(books, accounts);
   const booked = (ref: string) => state(ref) === 'booked';
   const refs = new Set(books.transactions.map((t) => t.ref));
-  return (t) => t.amount !== 0 && !booked(t.ref) && !(t.type === 'wise-fee' && refs.has(baseRef(t)) && booked(baseRef(t)));
+  return (t) => t.amount !== 0 && !booked(t.ref) && !bookedInFiled(t) && !(t.type === 'wise-fee' && refs.has(baseRef(t)) && booked(baseRef(t)));
 }
 
 /** The payments of the open period nobody has booked yet, oldest first: Aufgaben lists them (corner-9). */
 export function unbookedPayments(books: Pick<Index, 'transactions' | 'journalEntries' | 'config'>, accounts: readonly LedgerBankAccount[]): BankTransaction[] {
-  const closed = books.config?.closedThrough;
+  const closed = lockedThrough(books.config);
   const unbooked = isUnbooked(books, accounts);
   return books.transactions.filter((t) => (!closed || t.date > closed) && unbooked(t)).sort((x, y) => x.date.localeCompare(y.date) || x.ref.localeCompare(y.ref));
 }
@@ -351,7 +354,7 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
 
   return {
     accounts: banked,
-    closedThrough: books.config?.closedThrough,
+    closedThrough: lockedThrough(books.config),
     statements: (from, to) => banked.flatMap((a) => forAccount(a, from, to)).sort(desc),
     files: (from, to) => wholeFiles.filter((f) => f.file.toDate >= from && f.file.fromDate <= to)
       .sort((x, y) => banked.indexOf(x.account) - banked.indexOf(y.account) || y.file.toDate.localeCompare(x.file.toDate) || y.file.fromDate.localeCompare(x.file.fromDate)),

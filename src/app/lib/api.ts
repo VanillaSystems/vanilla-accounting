@@ -155,6 +155,7 @@ export function errorText(e: unknown): string {
     case 'partAmount': return t('error.partAmount', { total: `${b.params.currency} ${fmt(b.params.total)}` });
     case 'partRate': return t('error.partRate', { rates: b.params.rates.map((r) => `${r} %`).join(', ') });
     case 'twinHeld': return t('error.twinHeld', { date: b.params.date ? formatDate(b.params.date) : b.params.read });
+    case 'bookedInFiled': return b.params.date ? t('error.bookedInFiled', { date: formatDate(b.params.date) }) : t('error.bookedInFiledUnnamed');
     case 'twinBookedByHand': return t('error.twinBookedByHand', { entry: b.params.entry, read: `${b.params.currency} ${fmt(b.params.read)}`, bank: `${b.params.currency} ${fmt(b.params.bank)}` });
     case 'bookedByHand': return t('error.bookedByHand', { entry: b.params.entry, date: formatDate(b.params.date), amount: `${b.params.currency} ${fmt(b.params.amount)}` });
     case 'yearClose': return t('error.yearClose');
@@ -531,6 +532,8 @@ export const api = {
   keepUnmatched: (ref: string) => request<Ok>('POST', `/api/transactions/${encodeURIComponent(ref)}/kept`),
   /** «Ja, dieselbe»: the movement read from a PDF is the bank's movements `bank` (#254). */
   sameTwin: (ref: string, bank: string[]) => request<Ok>('POST', `/api/transactions/${encodeURIComponent(ref)}/same`, { bank }),
+  /** «Trotzdem buchen» on a bank movement booked in a filed quarter as a read one (#254): a payment of its own, booked from then on like any other. */
+  bookFiledTwinAnyway: (ref: string) => request<Ok>('DELETE', `/api/transactions/${encodeURIComponent(ref)}/filed-twin`),
   /** The undo of a removal, after the file is read again: its bookings and links back as they were (r10h-3). */
   restoreStatementBookings: (removed: StatementRemoved['removed']) => request<Ok>('POST', '/api/statements/bookings', removed),
 
