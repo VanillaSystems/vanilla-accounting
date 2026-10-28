@@ -69,3 +69,13 @@
 .vhist .hr .clink { font-size: 12.5px; }
 .src-note { margin-top: 18px !important; font-size: 12px; color: var(--faint) !important; }
 button.vlink { font: inherit; color: inherit; }
+
+/* A code in plain words (issue #224): the name, the code small beside it. */
+.rows.je .vc { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; max-width: 12em; }
+.rows.je .vc .vn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.rows.je .vc .vk { flex: none; font-size: 11px; }
+.acl.vpl { width: max(100%, 320px); max-height: 340px; }
+.vpl li.vg { position: sticky; top: -4px; z-index: 1; padding: 8px 8px 3px; border-radius: 0; background: var(--bg); color: var(--faint); font-size: 11px; font-weight: 500; cursor: default; }
+.vpl li .vn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.vpl li .mono { flex: none; min-width: 0; font-size: 11.5px; color: var(--faint); }
+.vpl li.vr { margin-top: 4px; padding-top: 7px; border-top: 1px solid var(--line); border-radius: 0; font-size: 11.5px; }

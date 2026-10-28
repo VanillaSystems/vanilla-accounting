@@ -10,7 +10,7 @@ import { formDraft, inputTaxWithoutReceipt, restOf, unattachedFor, type BookingD
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { firmCodes, formTakes, parseRate, vatCodeOf } from '../../../accounting/vat-codes.js';
 import { withoutInputTax } from '../../../engines/index.js';
-import { codeText } from '../codes/vat-card.js';
+import { codeLabel, codeText } from '../codes/names.js';
 import { isVatAmountCode } from '../../../accounting/validate.js';
 import { getAccountMap } from '../../lib/accounts.js';
 import { fmt, formatDate } from '../../lib/utils.js';
@@ -18,7 +18,7 @@ import { useWorkspace } from '../../hooks/use-workspace.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
 import { AccountField } from './AccountField.js';
-import { VatCodeList } from './Detail.js';
+import { VatCodeField } from '../codes/VatCodeField.js';
 import { attachEntries, bookPayment } from './actions.js';
 import { useInvoices } from '../invoices/data.js';
 import { Go } from '../vat/links.js';
@@ -74,7 +74,7 @@ function Unattached({ nav, payment, typed, onBooked }: Props & { typed: Unattach
         <div key={u.ref} className="pbor" data-ref={u.ref}>
           <span className="mono">{u.ref}</span>
           <span className="mono">{formatDate(u.entries[0].date)}</span>
-          <span>{u.entries.map((e) => `${e.accountDebit || '–'} / ${e.accountCredit || '–'}${e.vatCode ? ` ${e.vatCode}` : ''} · ${fmt(e.amount)}`).join(' + ')}</span>
+          <span>{u.entries.map((e) => `${e.accountDebit || '–'} / ${e.accountCredit || '–'}${e.vatCode ? ` ${codeLabel(e.vatCode)}` : ''} · ${fmt(e.amount)}`).join(' + ')}</span>
           <span className="m">{u.entries.map((e) => e.description).filter(Boolean).join(' · ')}</span>
           <button type="button" className="btn" onClick={() => void attach(u.ref)}>{t('journal.unattached.attach', { ref: u.ref })}</button>
         </div>
@@ -174,14 +174,17 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
             <AccountField name={`accountDebit-${key}`} label={t('journal.field.accountDebit')} defaultValue={init.accountDebit} onPick={() => redraw((n) => n + 1)} />
             <AccountField name={`accountCredit-${key}`} label={t('journal.field.accountCredit')} defaultValue={init.accountCredit} onPick={() => redraw((n) => n + 1)} />
             {firmCodes().length ? (
-              <label className="pbv">{t('journal.byHand.vatLabel')}
-                <input className="mono" name={`vatCode-${key}`} defaultValue={init.vat} list="vat-codes" placeholder={t('journal.vatPlaceholder')} />
-                <span className="acn" data-testid="vat-name" data-tip={vat?.code ? codeText(vat.code) : undefined}>
-                  {vat?.code ? `${vat.fromRate !== undefined ? `${t('journal.byHand.vatIs', { code: vat.code })} · ` : ''}${codeText(vat.code)}` : vat === null ? '' : t('journal.byHand.noVat')}
-                </span>
-              </label>
+              <VatCodeField
+                className="pbv"
+                name={`vatCode-${key}`}
+                label={t('journal.byHand.vatLabel')}
+                defaultValue={init.vat}
+                placeholder={t('journal.vatPlaceholder')}
+                onPick={() => redraw((n) => n + 1)}
+                hint={vat?.code ? `${vat.fromRate !== undefined ? `${t('journal.byHand.vatIs', { code: vat.code })} · ` : ''}${codeText(vat.code)}` : vat === null ? '' : t('journal.byHand.noVat')}
+              />
             ) : <span className="pbv" />}
-            {zero ? <p className="pbw" data-testid="vat-no-receipt">{t('journal.byHand.noReceiptVat', { code: vat!.code, zero })}</p> : null}
+            {zero ? <p className="pbw" data-testid="vat-no-receipt">{t('journal.byHand.noReceiptVat', { code: codeLabel(vat!.code), zero: codeLabel(zero) })}</p> : null}
             <label className="pba">{t('journal.amountIn', { currency: draft.currency })}<input className="mono" name={`amount-${key}`} defaultValue={fmt(init.amount)} style={{ textAlign: 'right' }} /></label>
             <label className="pbt">{t('journal.field.description')}<input name={`description-${key}`} defaultValue={init.description} /></label>
             {dimensions.length ? <div className="pbg"><TagFields dimensions={dimensions} entries={books.journalEntries ?? []} suffix={`-${key}`} /></div> : null}
@@ -195,7 +198,6 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
           <span className="m">{t('journal.byHand.proofHint')}</span>
         </label>
       ) : null}
-      <VatCodeList />
       <div className="pbf">
         <button type="button" className="addlink" data-tip={t('journal.byHand.addLineTip')} onClick={addLine}>+ {t('journal.byHand.addLine')}</button>
         <span className={rest ? 'wn' : 'ok'} data-testid="payment-booking-rest">

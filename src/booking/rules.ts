@@ -292,6 +292,8 @@ export interface RuleNames {
   money(amount: number): string;
   /** A tag as it reads: «Projekt Alpha» for { projekt: "alpha" }; absent: dimension id and value as written. */
   tag?(dimension: string, value: string): string | undefined;
+  /** A VAT code as it reads: «Operating expense 8.1 % (VAT included) · I81»; absent: the code as written. */
+  vat?(code: string): string;
 }
 
 /** «Bargeldbezug» or «Bancomat»: a pattern of plain words separated by | reads as alternatives; any other pattern as written. */
@@ -303,7 +305,7 @@ function patternWords(p: string, w: RuleWords): string {
 const accountWords = (n: string, names: RuleNames) => { const name = names.account(n); return name ? `${n} ${name}` : n; };
 
 export function bookingWords(b: RuleBooking, names: RuleNames, w: RuleWords): string {
-  const main = b.vat ? w('rules.say.book', { account: accountWords(b.account, names), vat: b.vat }) : w('rules.say.bookNoVat', { account: accountWords(b.account, names) });
+  const main = b.vat ? w('rules.say.book', { account: accountWords(b.account, names), vat: names.vat?.(b.vat) ?? b.vat }) : w('rules.say.bookNoVat', { account: accountWords(b.account, names) });
   const tags = b.tags ? w('rules.say.tags', { tags: Object.entries(b.tags).map(([d, v]) => names.tag?.(d, v) ?? `${d}: ${v}`).join(', ') }) : '';
   return `${b.private ? `${main}${w('rules.say.private', { percent: String(b.private) })}` : main}${tags}`;
 }

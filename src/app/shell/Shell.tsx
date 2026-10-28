@@ -33,6 +33,7 @@ import { nextTheme, useNavWide, usePersistedFlag, useTheme, useZoom, type Theme 
 import { AREA_HOME, type AreaId, type Query } from './route.js';
 import { Split, useListWidth } from './Split.js';
 import { useToast } from './Toast.js';
+import { VatCards } from '../areas/codes/vat-card.js';
 import { TopBar } from './TopBar.js';
 import { Corner } from './Corner.js';
 import { Sidebar } from './Sidebar.js';
@@ -283,6 +284,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
         ) : (
           <main className="full" id="list" data-area={loc.route.area}><List {...props} /></main>
         )}
+        <VatCards {...props} />
       </FxProvider>
 
       <TopBar

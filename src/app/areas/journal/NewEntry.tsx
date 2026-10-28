@@ -20,7 +20,8 @@ import { bookingDraft } from '../../../accounting/manual-booking.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import type { JournalEntryInput } from '../../lib/api.js';
 import { AccountField } from './AccountField.js';
-import { VatCodeList } from './Detail.js';
+import { VatCodeField } from '../codes/VatCodeField.js';
+import { codeLabel } from '../codes/names.js';
 import { listed, setUi, useUi } from './state.js';
 import { accountCorrectionCode, banksMoved, claimCode, correctionKinds, isNetRateSale, type CorrectionKind } from '../../../accounting/correction.js';
 import { correct, isBankAccount, isPrivateAccount, journalFor, receiptRateOf } from './commands.js';
@@ -183,7 +184,7 @@ export function NewEntry(props: Props) {
                 ))}
               </span>
               <p className="m" data-testid="correction-how">{claim
-                ? t('journal.correctionHow.claim', { rate: String(rate), code: claim, tax: taxOf(claim), was: corrected.vatCode ?? '' })
+                ? t('journal.correctionHow.claim', { rate: String(rate), code: codeLabel(claim), tax: taxOf(claim), was: corrected.vatCode ? codeLabel(corrected.vatCode) : '' })
                 : as === 'account' && saleCorrected ? t('journal.correctionHowNetRateSale', { code: corrected.vatCode ?? '', turned: `-${corrected.vatCode ?? ''}` })
                 : as === 'account' && noInputTax ? t(`journal.correctionHowNoInputTax.${noInputTax}`)
                   : t(`journal.correctionHow.${as}`, { account: as === 'vat' ? (d.accountDebit ?? '') : '', code: corrected.vatCode ?? '', side: t(chart().typeOf(corrected.accountCredit) === 'revenue' ? 'journal.correctionSide.revenue' : 'journal.correctionSide.expense') })}</p>
@@ -204,7 +205,7 @@ export function NewEntry(props: Props) {
           </div>
           {firmCodes().length ? (
             <div className="two">
-              <label>{t('journal.field.vatCode')}<input className="mono" name="vatCode" defaultValue={d.vatCode ?? ''} list="vat-codes" /></label>
+              <VatCodeField name="vatCode" label={t('journal.field.vatCode')} defaultValue={d.vatCode ?? ''} placeholder={t('journal.vatPlaceholder')} />
               <span />
             </div>
           ) : null}
@@ -216,15 +217,14 @@ export function NewEntry(props: Props) {
               {t('journal.reverseNewYear', { date: formatDate(newYearAfter(now.date!)) })}
             </label>
           )}
-          <VatCodeList />
           {followCode && saleCorrected && (
             <div className="notice" data-testid="correction-no-sale">
-              {t('journal.correctionNoSale', { account: `${to} ${accounts[to!] ?? ''}`.trim(), amount: fmt(corrected!.amount), tax: taxOf(corrected!.vatCode), code: followCode })}
+              {t('journal.correctionNoSale', { account: `${to} ${accounts[to!] ?? ''}`.trim(), amount: fmt(corrected!.amount), tax: taxOf(corrected!.vatCode), code: followCode ? codeLabel(followCode) : '' })}
             </div>
           )}
           {followCode && !saleCorrected && (
             <div className="notice" data-testid="correction-private">
-              {t('journal.correctionPrivate', { account: `${privateTo} ${accounts[privateTo!] ?? ''}`.trim(), tax: taxOf(corrected!.vatCode), was: corrected!.vatCode ?? '', code: followCode })}
+              {t('journal.correctionPrivate', { account: `${privateTo} ${accounts[privateTo!] ?? ''}`.trim(), tax: taxOf(corrected!.vatCode), was: corrected!.vatCode ? codeLabel(corrected!.vatCode) : '', code: followCode ? codeLabel(followCode) : '' })}
             </div>
           )}
           {privateTo && noInputTax && !saleCorrected && (

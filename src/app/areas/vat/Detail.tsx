@@ -15,7 +15,8 @@ import { t } from '../../i18n/index.js';
 import type { AreaProps, Nav } from '../index.js';
 import { FORM_0535, byCode, correctedPeriod, filedDiff, formAmount, rateOf, sumsOf, type VatReturn } from './model.js';
 import { effectLines, formSections } from './form0535.js';
-import { CodeLink, Go, codeName, entryAt } from './links.js';
+import { CodeLink, Go, entryAt } from './links.js';
+import { codeText } from '../codes/names.js';
 import { correctionDiff, signed, useReturn, zifferLabel } from './view.js';
 import { vat, vatSetup } from '../../../engines/index.js';
 import { methodOf } from '../../../workspace/vat-setup.js';
@@ -115,7 +116,7 @@ function Ziffer({ v, filed, n, amount, nav, period }: Props & { v: VatReturn; fi
             <Fragment key={code}>
               <div className="vc-h">
                 <CodeLink code={code} nav={nav} />
-                <span>{codeName(code)}</span>
+                <span>{codeText(code)}</span>
                 <span className="r mono">{fmt(sum(ls.map((l) => (gross ? l.gross : l.base))))}</span>
                 <span className="r mono">{fmt(sum(ls.map((l) => l.tax)))}</span>
               </div>

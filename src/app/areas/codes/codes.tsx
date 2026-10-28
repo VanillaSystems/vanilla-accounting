@@ -17,13 +17,14 @@ import { I } from '../receipts/icons.js';
 import { Kbd } from '../receipts/commands.js';
 import { codeExplanation, codeGroups, ownNetRate, splitCodes, vatStats, type CodeRow } from './model.js';
 import { codesUi, setCodesUi, toggleFamily, useCodesUi } from './state.js';
-import { amountText, codeText, explainedName, kindName, rateName, rateOf, showOnly, VatCards, words, zifferName } from './vat-card.js';
+import { amountText, rateName, rateOf, showOnly, zifferName } from './vat-card.js';
+import { codeText, kindName, words } from './names.js';
 import { baseCurrency, vat } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'codes'>>;
 
 const kindWhen = (r: CodeRow) => t(`vatCodes.kind.${r.entry.kind}.when`);
-const searchText = (r: CodeRow) => [r.entry.bananaText, kindName(r.entry), kindWhen(r)].join(' ');
+const searchText = (r: CodeRow) => [codeText(r.code), r.entry.bananaText, kindName(r.entry), kindWhen(r)].join(' ');
 
 /** The codes as last shown, in ↑↓ order. */
 const listed: { codes: string[] } = { codes: [] };
@@ -80,7 +81,7 @@ function List(props: Props) {
                   return (
                     <div key={r.code} className={`row code${sel ? ' sel' : ''}${r.n ? '' : ' unused'}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-code={r.code} onClick={() => nav.select({ area: 'codes', code: r.code })}>
                       <span className="d mono">{r.code}</span>
-                      <span className="t">{r.entry.bananaText ?? kindName(r.entry)}</span>
+                      <span className="t">{codeText(r.code)}</span>
                       <span className="a mono">{r.n || ''}</span>
                     </div>
                   );
@@ -90,7 +91,6 @@ function List(props: Props) {
           })}
         </div>
       )}
-      <VatCards {...(props as AreaProps)} />
     </div>
   );
 }
@@ -113,7 +113,7 @@ function Detail(props: Props) {
   return (
     <div className="detail-in doc" data-for={code}>
       <div className="head">
-        <h2 className="who">{explainedName(x)}<small>{e.family} · {t(`vatCodes.family.${e.family}`)}</small></h2>
+        <h2 className="who">{codeText(code)}<small>{x.own ? `${e.family} · ${t(`vatCodes.family.${e.family}`)}` : words(x.name)}</small></h2>
         <div className="amount"><small>{e.rate ? t('journal.field.vatCode') : ''}</small>{code}</div>
       </div>
       <div className="facts">
@@ -190,7 +190,7 @@ export const codes: Area<RouteOf<'codes'>> = {
   legend,
   title: (r) => r.code,
   palette: ({ nav, query }) => firmCodes().map((c) => ({
-    label: `${c.code} · ${codeText(c.code)}`,
+    label: `${codeText(c.code)} · ${c.code}`,
     side: rateOf(c),
     run: () => nav.go({ route: { area: 'codes', code: c.code }, query: { period: query.period } }),
   })),
