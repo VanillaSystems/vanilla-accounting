@@ -14,7 +14,7 @@
  * Which business is a provider is said in its file (`provider:`, src/knowledge/provider.ts), never by
  * a name in code (ADR 0015). Pure.
  */
-import { identify, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
+import { identify, signalsOfReceiptRead, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
 import type { BankTransaction, JournalEntry, Receipt } from '../types/index.js';
 import { chfAmount } from '../accounting/ledger.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
@@ -55,14 +55,42 @@ export function providerOfMoneyIn(tx: Pick<BankTransaction, 'date' | 'direction'
 /**
  * The order an order document of provider `p` names, without #: its read facts (Receipt.order), or, for a
  * page read before those were read, the first group of the provider's `orderPage` over its text (#249).
+ * The pattern counts only on a page that is the provider's: no invoice, payout or report (a supplier's
+ * invoice may begin a line with «#2001» too), and named as `p` among `providers` (identify), or, named
+ * as none of them, typed a sales record whose text no other provider's `orderPage` matches.
  */
-export function orderOf(r: Pick<Receipt, 'order' | 'extractedText'>, p: Provider): string | undefined {
+export function orderOf(r: Receipt, p: Provider, providers: readonly Provider[] = [p]): string | undefined {
   if (r.order) return r.order.number.replace(/^#/, '');
-  for (const re of p.provider.orderPage ?? []) {
-    const number = re.exec(r.extractedText ?? '')?.[1]?.replace(/^#/, '');
-    if (number) return number;
-  }
-  return undefined;
+  if (r.report || r.payout || r.kind === 'invoice') return undefined;
+  const numberOf = (q: Provider) => (q.provider.orderPage ?? []).map((re) => re.exec(r.extractedText ?? '')?.[1]?.replace(/^#/, '')).find((n) => !!n);
+  const number = numberOf(p);
+  if (!number) return undefined;
+  const hit = identify(signalsOfReceiptRead(r), providers);
+  if (hit.kind === 'known') return hit.counterparty === p.id ? number : undefined;
+  return hit.kind === 'unknown' && r.kind === 'sales-record' && providers.every((q) => q.id === p.id || !numberOf(q)) ? number : undefined;
+}
+
+/** Providers whose sales come from their report from a cut-over day on: the provider way (#253). */
+export const reportProviders = (providers: readonly Provider[]): Provider[] => providers.filter((p) => !!p.provider.reports.sales && !!p.provider.since);
+
+/**
+ * The provider and order of `r` as an order page of the provider way (#253), when it is one: no
+ * invoice, payout or report; its order known by orderOf among the report providers, or its read order
+ * facts (Receipt.order) of the one such provider, or of the one its file recognises the page by; dated
+ * on or after that provider's cut-over day. A page no single provider can be named for is none.
+ */
+export function orderPageOf(r: Receipt, providers: readonly Provider[]): { provider: Provider; order: string; date: string } | undefined {
+  const date = r.order?.date ?? r.date;
+  if (!date || r.report || r.payout || r.kind === 'invoice') return undefined;
+  const ways = reportProviders(providers);
+  const routed = (): Provider | undefined => {
+    if (ways.length === 1) return ways[0];
+    const hit = identify(signalsOfReceiptRead(r), ways);
+    return hit.kind === 'known' ? ways.find((p) => p.id === hit.counterparty) : undefined;
+  };
+  const provider = r.order ? routed() : ways.find((p) => !!orderOf(r, p, ways));
+  const order = provider && orderOf(r, provider, ways);
+  return provider && order && date >= provider.provider.since! ? { provider, order, date } : undefined;
 }
 
 /**

@@ -1,0 +1,56 @@
+# The public help pages (issue #226): built from help/ and the app's own sources on every change,
+# and kept as a download of the run. Publishing is written below but switched off: it waits for the
+# owner's decision on the address and on enabling GitHub Pages for the repository.
+name: Help pages
+
+on:
+  pull_request:
+    paths: ['help/**', 'tools/help/**', 'src/**', 'processes/**', 'modules/**', 'examples/cases/**', 'package.json', '.github/workflows/help-pages.yml']
+  push:
+    branches: [main]
+    paths: ['help/**', 'tools/help/**', 'src/**', 'processes/**', 'modules/**', 'examples/cases/**', 'package.json', '.github/workflows/help-pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # No install scripts: the build needs no Electron, browser or native binary.
+      - run: npm ci --ignore-scripts
+      - run: npm run help:build -- dist-help
+      - uses: actions/upload-artifact@v4
+        with:
+          name: help-pages
+          path: dist-help
+          retention-days: 14
+
+  # Off until the owner decides to publish (GitHub Pages enabled, the address chosen).
+  # To switch it on: remove `if: false`, and set Settings › Pages › Source to «GitHub Actions».
+  publish:
+    if: false
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: help-pages
+          path: dist-help
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-help
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -238,7 +238,7 @@ function Row({ v, proc, view, sel, picked, same, canEdit, onSelect, onClick, toa
     >
       <Pick kind="receipt" id={r.id} on={picked} label={v.vendor || r.filename} toast={toast} />
       <span className="d mono">{same ? <span className="sr">{formatDate(v.date)}</span> : v.date ? <><span className="dl">{formatDate(v.date)}</span><span className="ds">{formatDate(v.date).slice(0, 6)}</span></> : <span className="d none">{t('receipts.noDate')}</span>}</span>
-      <span className="t">{inProcess(proc) ? <span className="spin small" aria-hidden="true" /> : isOpen(v) && !v.locked && !v.none && I.dot}{v.vendor}{v.desc && <small> {v.desc}</small>}{inProcess(proc) && <small className="proc" data-testid="row-processing"> · {processingText(proc, view)}</small>}{v.none && <small className="nonewhy" data-testid="none-why" data-by={v.noneBy} data-tip={noneText(v)}> · {noneText(v)}</small>}</span>
+      <span className="t">{inProcess(proc) ? <span className="spin small" aria-hidden="true" /> : isOpen(v) && !v.locked && !v.none && !v.orderPage && I.dot}{v.vendor}{v.desc && <small> {v.desc}</small>}{inProcess(proc) && <small className="proc" data-testid="row-processing"> · {processingText(proc, view)}</small>}{v.none && <small className="nonewhy" data-testid="none-why" data-by={v.noneBy} data-tip={noneText(v)}> · {noneText(v)}</small>}</span>
       <span className="a mono">{r.amount != null && <>{(r.currency ?? baseCurrency()) !== baseCurrency() && <span className="c">{r.currency}</span>}{fmt(r.amount)}</>}</span>
       <span className="acts">
         {v.none ? (
@@ -251,7 +251,7 @@ function Row({ v, proc, view, sel, picked, same, canEdit, onSelect, onClick, toa
         ) : (
           <>
             <button type="button" data-tip={t('receipts.previewKey')} aria-label={t('receipts.preview')} onClick={act(() => setUi({ overlay: 'quick' }))}>{I.eye}</button>
-            {edit && <button type="button" data-tip={t('receipts.linkKey')} aria-label={t('receipts.link')} onClick={act(() => onAct('link'))}>{I.link}</button>}
+            {edit && !v.orderPage && <button type="button" data-tip={t('receipts.linkKey')} aria-label={t('receipts.link')} onClick={act(() => onAct('link'))}>{I.link}</button>}
             {canEdit && <button type="button" data-tip={t('receipts.editKey')} aria-label={t('receipts.edit')} onClick={act(() => onAct('edit'))}>{I.edit}</button>}
             {edit && <button type="button" className="del" data-tip={t('receipts.deleteKey')} aria-label={t('receipts.delete')} onClick={act(() => onAct('del'))}>{I.trash}</button>}
           </>

@@ -63,7 +63,7 @@ export function countsOf(kind: 'receipt' | 'payment' | 'entry', rows: readonly S
   const n = ids.size;
   if (kind === 'receipt') {
     const l = ledgerFor(books);
-    return { n, open: [...ids].filter((id) => { const v = l.byId.get(id); return !!v && !v.none && !v.links.length; }).length, unbooked: 0, noReceipt: 0 };
+    return { n, open: [...ids].filter((id) => { const v = l.byId.get(id); return !!v && !v.none && !v.links.length && !v.orderPage; }).length, unbooked: 0, noReceipt: 0 };
   }
   if (kind === 'payment') {
     const booked = new Set((books.journalEntries ?? []).map((e) => e.transactionRef));

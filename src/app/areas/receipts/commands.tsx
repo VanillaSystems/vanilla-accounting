@@ -21,6 +21,8 @@ export function runAct(p: Props, a: Act, id = p.route.id): void {
   const v = ledgerFor(p.books).byId.get(id);
   if (!v) return;
   if (v.locked && lockedRefuses(a)) { p.nav.toast(t('receipts.lockedToast')); return; }
+  // An order page of the provider way goes with its sale from the order export (#253).
+  if (a === 'link' && v.orderPage) { p.nav.toast(t('receipts.orderPage.none')); return; }
   if (a === 'link') { openSection('zahlung'); setUi({ overlay: 'link', linkStart: undefined }); }
   if (a === 'edit') openSection('angaben', 'date');
   if (a === 'del') setUi({ overlay: 'delete' });
