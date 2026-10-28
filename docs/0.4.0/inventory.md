@@ -8,7 +8,7 @@ and the providers.
 
 | Layer | Files | With Swiss specifics |
 |---|---:|---:|
-| core | 69 | 23 |
+| core | 70 | 23 |
 | engine | 4 | 1 |
 | provider | 16 | 13 |
 | split | 115 | 26 |
@@ -68,7 +68,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/accounting/ledger.ts` | CHF 3 |
 | `src/accounting/rappen.ts` | Rappen 1 |
 | `src/accounting/validate.ts` | MWST 1, Ziffer 1, tax code 11 |
-| `src/books/bank-import.ts` | camt.053 22 |
+| `src/books/bank-import.ts` | ESTV 1, camt.053 23 |
 | `src/books/company.ts` | ESTV 1 |
 | `src/books/year-close.ts` | CHF 2, ESTV 4, camt.053 2 |
 | `src/core/modules/check.ts` | Ziffer 9 |
@@ -211,4 +211,4 @@ Layers are assigned by path prefix, most specific first:
 | `src/cli/year-open.ts` | CHF 2, ESTV 1 |
 | `src/server/routes/config.ts` | MWST 1, ESTV 2 |
 | `src/server/routes/receipts.ts` | CHF 1 |
-| `src/server/routes/statements.ts` | camt.053 20 |
+| `src/server/routes/statements.ts` | ESTV 1, camt.053 20 |

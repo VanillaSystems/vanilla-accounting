@@ -30,7 +30,7 @@ import { loadInvoices } from '../invoices/store.js';
 import { liveInvoices, openOn, paymentsNamingOpen } from '../invoices/rules.js';
 import { hasEvent } from './refs.js';
 import { workspaceChecks } from '../workspace/checks.js';
-import { loadBooks, moduleActor, PERSON, saveBooks, sealsOf, update, type Books } from './store.js';
+import { closeThrough, loadBooks, moduleActor, PERSON, saveBooks, sealsOf, update, type Books } from './store.js';
 import { writeSeal } from './seal.js';
 import { nextManualRef } from './next-ref.js';
 
@@ -365,7 +365,7 @@ export async function closeYear(ws: Workspace, year: string, rates: EstvRates = 
   if (close.blockers.length) throw new YearCloseRefused({ code: 'yearItemsOpen', params: { year, n: String(close.blockers.length) } }, `${year} cannot close yet: ${close.blockers.length} item(s) open.`);
   const end = `${year}-12-31`;
   if (!books.config.closedThrough || books.config.closedThrough < end) {
-    books.config.closedThrough = end;
+    closeThrough(books, end);
     saveBooks(ws, books);
   }
   const q4 = filingKeyOf(end, ws.filingLength) as QuarterKey;

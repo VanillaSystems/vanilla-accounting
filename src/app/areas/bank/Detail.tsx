@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { BankTransaction } from '../../../types/index.js';
 import type { PayoutWaitView } from '../../../types/drop.js';
 import { ratesUsed } from '../../../accounting/fx-conversion.js';
+import { twinQuestions } from '../../../books/twins.js';
 import type { RouteOf } from '../../shell/route.js';
 import { api, sources } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
@@ -135,6 +136,9 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
   // The movements read from PDFs that this bank export or CSV does not hold (#254): it lists them nowhere else.
   const own = s.file ? `${s.file.bank}/${s.file.filename}` : undefined;
   const unmatched = own ? props.books.transactions.filter((t) => t.unmatched?.by === own && t.ref !== tx?.ref) : [];
+  // «Ist das dieselbe Zahlung?»: the bank's movements each of them may be; a bank movement held by one shows its question too.
+  const twins = useMemo(() => twinQuestions(props.books.transactions, new Set((props.books.journalEntries ?? []).map((e) => e.transactionRef)), (d) => !!b.closedThrough && d <= b.closedThrough), [props.books, b.closedThrough]);
+  const heldBy = tx && !tx.unmatched ? props.books.transactions.filter((u) => twins.get(u.ref)?.some((o) => o.bank.includes(tx.ref)) && !unmatched.includes(u)) : [];
 
   return (
     <div className="detail-in" data-for={s.key}>
@@ -179,8 +183,8 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
       ))}
       {c?.bookDiff && !c.gap ? <BookDiff {...props} diff={c.bookDiff} s={s} /> : null}
       {ask ? <PdfQuestion key={ask.file} ask={ask} nav={nav} edit={edit} /> : null}
-      {tx?.unmatched ? <UnmatchedNotice key={`u-${tx.ref}`} tx={tx} nav={nav} edit={edit} /> : null}
-      {unmatched.map((u) => <UnmatchedNotice key={`u-${u.ref}`} tx={u} nav={nav} edit={edit} named />)}
+      {tx?.unmatched ? <UnmatchedNotice key={`u-${tx.ref}`} tx={tx} options={twins.get(tx.ref)} books={props.books} nav={nav} edit={edit} /> : null}
+      {[...unmatched, ...heldBy].map((u) => <UnmatchedNotice key={`u-${u.ref}`} tx={u} options={twins.get(u.ref)} books={props.books} nav={nav} edit={edit} named />)}
 
       <div className="body">
         <div className="desk">

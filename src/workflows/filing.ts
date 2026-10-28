@@ -18,7 +18,7 @@
 import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { addDays, derivePeriod, isFilingKey, localToday } from '../accounting/periods.js';
-import { loadBooks, saveBooks, type Books } from '../books/store.js';
+import { closeThrough, loadBooks, saveBooks, type Books } from '../books/store.js';
 import { closesTheYear, periodKeyOf, writeSeal } from '../books/seal.js';
 import { filing, filingBasis, filingMethod, ratesWithoutActivityId, vat } from '../engines/index.js';
 import { closeGoneSaleQuestions } from '../intake/sale-questions.js';
@@ -201,7 +201,7 @@ export const FILING_ACTIONS: Record<string, Action> = {
         if (next !== key) throw refuse('nextToClose', { through: closed ?? '', next, period: key }, `the books are closed through ${closed}; the next ${ws.filingLength === 'half' ? 'half year' : 'quarter'} to close is ${next}, not ${key}`);
         // Closing moves closedThrough, which the write door never allows: as `npm run seal -- <q> --close` does, after the person filed.
         // The year's last period is left open: the year close books the year-end entries on 31.12., then closes and seals it.
-        if (!lastOfYear) books.config.closedThrough = end;
+        if (!lastOfYear) closeThrough(books, end);
       }
       // Filed: the hold gave way to the close (or, for the year's last period, to the year close).
       if (books.config.approvedReturn?.period === key) delete books.config.approvedReturn;

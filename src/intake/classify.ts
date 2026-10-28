@@ -16,6 +16,7 @@ import { loadKnowledge } from '../knowledge/layers.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import { periodLock, type Books } from '../books/store.js';
+import { heldByTwins } from '../books/twins.js';
 import type { JournalEntry } from '../types/index.js';
 import { askSalesWithoutVat, closeSaleQuestionsHeld } from './sale-questions.js';
 import { bookPayoutReports } from './sales-report-import.js';
@@ -29,11 +30,15 @@ function askSales(ws: Workspace, books: BooksPort, log: (line: string) => void):
   return asked.length ? [{ code: 'saleAsked', count: asked.length }] : [];
 }
 
-/** The open payments without a booking, less those waiting for a person (a booking deleted on purpose, r10h-5). */
+/**
+ * The open payments without a booking, less those waiting for a person: a booking deleted on purpose
+ * (r10h-5), or a bank movement that may be one read from a PDF before (#254 «Ist das dieselbe Zahlung?»).
+ */
 const unbooked = (books: Books) => {
   const lock = periodLock(books);
   const booked = new Set(books.journalEntries.map((je) => je.transactionRef));
-  return books.transactions.filter((tx) => !booked.has(tx.ref) && !lock.isClosed(tx.date) && !tx.waitsForPerson);
+  const twins = heldByTwins(books, lock.isClosed);
+  return books.transactions.filter((tx) => !booked.has(tx.ref) && !lock.isClosed(tx.date) && !tx.waitsForPerson && !twins.has(tx.ref));
 };
 
 /** The open payments that need a receipt and have none, and those whose receipt could not be read (src/booking/receipt-wait.ts). */

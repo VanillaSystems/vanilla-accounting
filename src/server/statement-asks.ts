@@ -12,7 +12,8 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { basename, join } from 'node:path';
 import { RequestError, WS, assertOpen, readBooks, updateBooks } from './books.js';
 import { findFile } from '../workspace/workspace.js';
-import { structuredSpans } from '../books/bank-import.js';
+import { structuredRefs, structuredSpans } from '../books/bank-import.js';
+import { MATCH_DAYS, dayGap, fit, pairUp } from '../books/twins.js';
 import { isBlank, parseReadStatement } from '../books/statement-check.js';
 import { accountOfRead, asRead, coveredDays, coversAll, heldOf, isCovered, readDays, readStatementPdf, MAX_READ_PAGES, type PdfRead } from '../intake/statement-read.js';
 import { toStatementXml } from '../providers/statement-read/camt-writer.js';
@@ -20,7 +21,7 @@ import { ask, modelReady } from '../llm/ask.js';
 import { aiOff } from '../llm/off.js';
 import type { StatementReadParams } from '../types/api-error.js';
 import type { ReadBy, ReadStatement, StatementRead } from '../types/statement-read.js';
-import type { StatementAsk, StatementImport } from '../types/index.js';
+import type { BankTransaction, StatementAsk, StatementImport } from '../types/index.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 
 /** Whether a bank export or bank CSV of the account is in the books: then its statement PDFs ask nothing. */
@@ -36,7 +37,7 @@ export function readView(statement: ReadStatement, by: ReadBy, named: string | u
   const days = readDays(statement);
   const covered = account ? coveredDays(structuredSpans(WS), account.account, days.from, days.to, { csv: by !== 'csv' }) : [];
   const whole = by !== 'csv' && covered.length > 0 && coversAll(covered, days.from, days.to);
-  return asRead(statement, by, heldOf(statement, account, readBooks().transactions), { ...extra, ...(covered.length ? { covered } : {}), ...(whole ? { whole: true as const } : {}) });
+  return asRead(statement, by, heldOfRead(statement, account), { ...extra, ...(covered.length ? { covered } : {}), ...(whole ? { whole: true as const } : {}) });
 }
 
 export const readRefusal = (error: string, params: StatementReadParams) => new RequestError(400, error, { code: 'statementRead', params });
@@ -59,7 +60,7 @@ export function assertImportable(read: StatementRead): void {
  * hold is left out (#254), since that file's movements are the account's there.
  */
 export function readAsXml(read: StatementRead, account: LedgerBankAccount | undefined, o: { id: string; source: string }): string {
-  const held = heldOf(read.statement, account, readBooks().transactions);
+  const held = heldOfRead(read.statement, account);
   const covered = read.by === 'csv' ? [] : read.covered ?? [];
   const keep = read.statement.movements.map((m, i) => held.has(i) || !isCovered(covered, m.date));
   const refs = new Map<number, string>();
@@ -70,8 +71,31 @@ export function readAsXml(read: StatementRead, account: LedgerBankAccount | unde
     if (t) refs.set(n, t.ref.split('~')[0]);
     n++;
   }
-  const statement = { ...read.statement, movements: read.statement.movements.filter((_, i) => keep[i]) };
-  return toStatementXml(statement, { id: o.id, source: o.source, by: read.by, refs });
+  // A line the books hold is written on the day they hold it (a value date at the edge of a bank export's days): the same payment.
+  const movements = read.statement.movements.flatMap((m, i) => (keep[i] ? [held.has(i) ? { ...m, date: held.get(i)!.date } : m] : []));
+  return toStatementXml({ ...read.statement, movements }, { id: o.id, source: o.source, by: read.by, refs });
+}
+
+/**
+ * The lines of a read statement the account's payments in the books are already: the same day and
+ * amount (heldOf); and, on a day no bank export or CSV of the account covers, such a file's payment of
+ * the same amount within MATCH_DAYS days, beyond doubt (pairUp): a value date read at the edge of the
+ * export's days, which would be the payment twice (#254). Line index → that payment.
+ */
+function heldOfRead(statement: ReadStatement, account: LedgerBankAccount | undefined): Map<number, BankTransaction> {
+  const books = readBooks();
+  const held = heldOf(statement, account, books.transactions);
+  if (!account) return held;
+  const spans = structuredSpans(WS).filter((s) => s.account === account.account);
+  if (!spans.length) return held;
+  const structured = structuredRefs(WS);
+  const taken = new Set(held.values());
+  const pool = books.transactions.filter((t) => t.bank === account.bank && t.currency === account.currency && !taken.has(t) && structured.has(t.ref.split('~')[0]));
+  const open = statement.movements.flatMap((m, i) => (held.has(i) || isCovered(spans, m.date) ? [] : [{ i, line: { date: m.date, direction: m.amount < 0 ? 'DBIT' as const : 'CRDT' as const, amount: Math.abs(m.amount), description: m.text ?? '', counterparty: m.counterparty, reference: m.reference } }]));
+  const cents = (x: number) => Math.round(Math.abs(x) * 100);
+  const pairs = pairUp(open.map((o) => o.line), pool, (l, t) => (t.direction === l.direction && cents(t.amount) === cents(l.amount) && dayGap(t.date, l.date) <= MATCH_DAYS ? dayGap(t.date, l.date) - 10 * fit(l, t) : undefined));
+  for (const [k, j] of pairs) held.set(open[k].i, pool[j]);
+  return held;
 }
 
 /** The PDF read now: by the model when one answers here, else the hand form saying why (the AI switched off, or no provider). */
@@ -107,12 +131,14 @@ export function keepAsk(file: string, account: string, date: string, read: State
   });
 }
 
-/** «Als Auszug behalten»: the PDF stays the statement, its movements are not read in; the question goes. */
+/**
+ * «Als Auszug behalten»: the PDF stays the statement, its movements are not read in; the question goes.
+ * Also in a filed period: nothing booked changes, and a question there could never be answered otherwise.
+ */
 export function closeAsk(file: string): void {
   updateBooks((b) => {
     const ask = b.statementAsks?.find((a) => a.file === file);
     if (!ask) return;
-    assertOpen(b, [ask.date], 'newStatement');
     b.statementAsks = b.statementAsks!.filter((a) => a !== ask);
     if (!b.statementAsks.length) delete b.statementAsks;
   });

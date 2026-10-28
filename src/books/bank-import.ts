@@ -12,10 +12,11 @@ import { assignUniqueRefs, statementSpan, transactionsOf, type CamtStatement } f
 import { pdfText } from '../parsers/pdf-text.js';
 import { statementPdf } from './statement-facts.js';
 import { wiseReferences } from '../providers/wise-pdf/wise-statement-pdf.js';
-import type { BankStatement, BankTransaction, Index, Mapping, Receipt, StatementClosingBalance } from '../types/index.js';
+import type { BankStatement, BankTransaction, Index, JournalEntry, Mapping, Receipt, StatementClosingBalance } from '../types/index.js';
 import { readBankStatements, type StatementFile } from '../workspace/bank-statements.js';
 import { partDirs, type Workspace } from '../workspace/workspace.js';
-import { booksOpen, periodLock } from './store.js';
+import { booksOpen, moduleActor, periodLock, update, type Books } from './store.js';
+import { MATCH_DAYS, dayGap, fit, pairUp } from './twins.js';
 
 type Ws = Pick<Workspace, 'paths' | 'bankAccounts'>;
 
@@ -58,19 +59,23 @@ function canonical(files: StatementFile[]): { out: BankTransaction[]; perFile: M
   const byIdentity = new Map<string, { t: BankTransaction; file: string }>();
   // Each structured source's payments no other file had, by movement: a bank's export, then a bank CSV (#254).
   const pools: Record<'export' | 'csv', Map<string, BankTransaction[]>> = { export: new Map(), csv: new Map() };
-  const take = (pool: Map<string, BankTransaction[]>, t: BankTransaction) => pool.get(sameMovement(t))?.shift();
   // A bank's export first, then a bank CSV, then a statement read from a PDF: the structured source's payment carries its references and IBANs.
   const rank = (r: Read) => ({ export: 0, csv: 1, pdf: 2 })[sourceOf(r.statement)];
   for (const f of [...read].sort((a, b) => rank(a) - rank(b))) {
     const mine = perFile.get(f.file) ?? perFile.set(f.file, []).get(f.file)!;
     const source = sourceOf(f.statement);
-    for (const t of transactionsOf(f.statement, f.account)) {
-      const first = byIdentity.get(identity(t));
-      const twin = first && first.file !== f.file ? first.t
-        : source === 'csv' ? take(pools.export, t)
-        : source === 'pdf' ? take(pools.export, t) ?? take(pools.csv, t) : undefined;
+    const ts = transactionsOf(f.statement, f.account);
+    const firsts = ts.map((t) => byIdentity.get(identity(t)));
+    const elsewhere = (i: number) => !!firsts[i] && firsts[i]!.file !== f.file;
+    const twins = new Map<number, BankTransaction>();
+    for (const pool of source === 'csv' ? [pools.export] : source === 'pdf' ? [pools.export, pools.csv] : []) {
+      const left = [...ts.keys()].filter((i) => !elsewhere(i) && !twins.has(i));
+      for (const [k, t] of takeTwins(left.map((i) => ts[i]), pool)) twins.set(left[k], t);
+    }
+    for (const [i, t] of ts.entries()) {
+      const twin = elsewhere(i) ? firsts[i]!.t : twins.get(i);
       if (twin) {
-        if (!first || first.file === f.file) {
+        if (!elsewhere(i)) {
           // The export's payment that a read statement had first: its ref is the one the books hold.
           if (f.account.statements === 'wise' && !twin.bankTxId) twin.bankTxId = twin.ref;
           twin.ref = t.ref;
@@ -87,6 +92,28 @@ function canonical(files: StatementFile[]): { out: BankTransaction[]; perFile: M
     }
   }
   return { out, perFile };
+}
+
+/**
+ * The payments of `pool` that `lines` are, of the same day, direction and amount, each taken once and
+ * out of the pool: the counterparty, its IBAN and the text decide between equal amounts (pairUp). A tie
+ * left in a read file written before #254 asked about it is taken in file order, as then: the import
+ * (alignReads) now keeps every tie out of the read file and asks.
+ */
+function takeTwins(lines: readonly BankTransaction[], pool: Map<string, BankTransaction[]>): Map<number, BankTransaction> {
+  const movements = [...new Set(lines.flatMap((l) => pool.get(sameMovement(l)) ?? []))];
+  const out = new Map<number, BankTransaction>();
+  for (const [i, j] of pairUp(lines, movements, (l, t) => (sameMovement(l) === sameMovement(t) ? -fit(l, t) : undefined))) out.set(i, movements[j]);
+  const taken = new Set(out.values());
+  for (const [i, l] of lines.entries()) {
+    const t = out.has(i) ? undefined : pool.get(sameMovement(l))?.find((x) => !taken.has(x));
+    if (t) { out.set(i, t); taken.add(t); }
+  }
+  for (const t of taken) {
+    const list = pool.get(sameMovement(t))!;
+    list.splice(list.indexOf(t), 1);
+  }
+  return out;
 }
 
 /**
@@ -160,75 +187,116 @@ export function heldWithout(ws: Ws, except: string, config: Index['config']): { 
 /** A movement read from a PDF that a structured file covering its day does not hold (#254): where it is, and what it is. */
 export interface Unmatched { file: string; bank: string; currency: string; date: string; direction: 'CRDT' | 'DBIT'; amount: number; ref: string }
 
+/** A read movement the structured file holds a few days off: it takes the bank's day `to` (#254). */
+export interface Realigned extends Unmatched { to: string }
+
+/** What the books say of a read movement (alignReads): whether they hold it, and whether a person booked it by hand. */
+export interface HeldReads { holds: (line: Unmatched) => boolean; byPerson: (line: Unmatched) => boolean }
+
 /**
  * What the structured file `structured` (a bank's camt.053, or one the app wrote from a bank CSV) makes
  * of the movements read from statement PDFs of its account on the days it covers (#254). The read
  * statement is the books' first word on those days; the structured file is the bank's own:
  * - a read movement of the same day, direction and amount is its payment (transactionsOfFiles makes
- *   them one transaction under the read's ref, so bookings and receipt links stay);
+ *   them one transaction under the read's ref, so bookings and receipt links stay); between equal
+ *   amounts the counterparty, its IBAN and the text decide (pairUp), and a tie is asked;
  * - one the structured file holds within MATCH_DAYS days for the same amount (a value date read for
  *   the booking day) takes the structured file's day in its read file (`files`), and then is the same;
- * - one it does not hold at all leaves its read file (`files`) and is named in `unmatched`: the books
- *   keep it as a movement of its own until the person keeps or removes it, so it is neither lost nor
- *   counted twice.
- * A movement dated on a day `isClosed` says is filed is never changed, nor one `inBooks` says the
- * books do not hold. Pure: `xmlOf` gives a read file's text, and `files` holds each read file's new text.
+ *   `realigned` names it, so the app's entries move with it;
+ * - one it does not hold, a tie, or one that would move while a person's entry is on it leaves its read
+ *   file (`files`) and is named in `unmatched`: the books keep it as a movement of its own until the
+ *   person answers (src/books/twins.ts twinQuestions offers the bank's movements it may be), so it is
+ *   neither lost nor counted twice.
+ * A movement dated on a day `isClosed` says is filed is never changed, nor one the books do not hold.
+ * Pure: `xmlOf` gives a read file's text, and `files` holds each read file's new text.
  */
-export function alignReads(statementFiles: readonly StatementFile[], structured: string, isClosed: (date: string) => boolean, xmlOf: (file: string) => string, inBooks: (line: Unmatched) => boolean = () => true): { files: Map<string, string>; unmatched: Unmatched[] } {
+export function alignReads(statementFiles: readonly StatementFile[], structured: string, isClosed: (date: string) => boolean, xmlOf: (file: string) => string, books: HeldReads = { holds: () => true, byPerson: () => false }): { files: Map<string, string>; unmatched: Unmatched[]; realigned: Realigned[] } {
   const read = statementFiles.filter((f): f is Read => f.status === 'read');
   const own = read.filter((f) => f.file === structured && sourceOf(f.statement) !== 'pdf');
   const files = new Map<string, string>();
   const unmatched: Unmatched[] = [];
+  const realigned: Realigned[] = [];
   for (const number of new Set(own.map((f) => f.account.account))) {
     const mine = own.filter((f) => f.account.account === number);
     const account = mine[0].account;
     const span = statementSpan(mine.map((f) => f.statement), account, structured.split('/').pop() ?? structured);
     if (!span) continue;
     const pool = mine.flatMap((f) => transactionsOf(f.statement, account));
-    const takeExact = (l: BankTransaction) => {
-      const i = pool.findIndex((t) => sameMovement(t) === sameMovement(l));
-      return i >= 0 ? pool.splice(i, 1)[0] : undefined;
-    };
     const loose: Array<{ file: string; index: number; line: BankTransaction }> = [];
     const pdfs = read.filter((f) => f.account.account === number && sourceOf(f.statement) === 'pdf');
+    // File by file, as transactionsOfFiles pairs them: the same day and amount, beyond doubt.
     for (const file of new Set(pdfs.map((f) => f.file))) {
-      const lines = pdfs.filter((f) => f.file === file).flatMap((f) => transactionsOf(f.statement, f.account));
-      for (const [index, line] of lines.entries()) {
-        if (line.date < span.from || line.date > span.to || takeExact(line) || isClosed(line.date)) continue;
-        loose.push({ file, index, line });
-      }
+      const lines = pdfs.filter((f) => f.file === file).flatMap((f) => transactionsOf(f.statement, f.account)).map((line, index) => ({ file, index, line }))
+        .filter(({ line }) => line.date >= span.from && line.date <= span.to);
+      const exact = pairUp(lines.map((l) => l.line), pool, (l, t) => (sameMovement(l) === sameMovement(t) ? -fit(l, t) : undefined));
+      for (const j of [...exact.values()].sort((a, b) => b - a)) pool.splice(j, 1);
+      loose.push(...lines.filter((l, k) => !exact.has(k) && !isClosed(l.line.date)));
     }
-    // The same amount a few days off: the closest pairs first, each movement once.
-    const pairs = loose.flatMap((l) => pool.filter((t) => !isClosed(t.date) && t.direction === l.line.direction && Math.round(Math.abs(t.amount) * 100) === Math.round(Math.abs(l.line.amount) * 100) && dayGap(t.date, l.line.date) <= MATCH_DAYS)
-      .map((t) => ({ l, t, gap: dayGap(t.date, l.line.date) })))
-      .sort((a, b) => a.gap - b.gap || a.l.line.date.localeCompare(b.l.line.date) || a.t.date.localeCompare(b.t.date));
-    const moved = new Map<string, Map<number, string | null>>();
-    const set = (file: string, index: number, day: string | null) => (moved.get(file) ?? moved.set(file, new Map()).get(file)!).set(index, day);
-    const used = new Set<BankTransaction>();
-    for (const { l, t } of pairs) {
-      if (moved.get(l.file)?.has(l.index) || used.has(t)) continue;
-      used.add(t);
-      set(l.file, l.index, t.date);
-    }
-    for (const l of loose) {
-      if (moved.get(l.file)?.has(l.index)) continue;
+    // The same amount a few days off: the payee first (its IBAN, its name, the text), then the closest day.
+    const free = pool.filter((t) => !isClosed(t.date));
+    const near = pairUp(loose.map((l) => l.line), free, (l, t) => (t.direction === l.direction && Math.round(Math.abs(t.amount) * 100) === Math.round(Math.abs(l.amount) * 100) && dayGap(t.date, l.date) <= MATCH_DAYS ? dayGap(t.date, l.date) - 10 * fit(l, t) : undefined));
+    const changes = new Map<string, Map<number, string | null>>();
+    const set = (file: string, index: number, day: string | null) => (changes.get(file) ?? changes.set(file, new Map()).get(file)!).set(index, day);
+    for (const [k, l] of loose.entries()) {
       const u: Unmatched = { file: l.file, bank: l.line.bank, currency: l.line.currency, date: l.line.date, direction: l.line.direction, amount: l.line.amount, ref: l.line.ref };
+      const t = near.has(k) ? free[near.get(k)!] : undefined;
+      if (t && !books.byPerson(u)) {
+        set(l.file, l.index, t.date);
+        realigned.push({ ...u, to: t.date });
+        continue;
+      }
       // Only a movement the books hold leaves its read file: it stays in the books as one of its own.
-      if (!inBooks(u)) continue;
+      if (!books.holds(u)) continue;
       set(l.file, l.index, null);
       unmatched.push(u);
     }
-    for (const [file, changes] of moved) {
+    for (const [file, change] of changes) {
       let index = -1;
       files.set(file, (files.get(file) ?? xmlOf(file)).replace(/<Ntry>[\s\S]*?<\/Ntry>\n?/g, (entry) => {
         index++;
-        if (!changes.has(index)) return entry;
-        const day = changes.get(index);
+        if (!change.has(index)) return entry;
+        const day = change.get(index);
         return day === null ? '' : entry.replace(/<BookgDt><Dt>[^<]*<\/Dt><\/BookgDt>/, `<BookgDt><Dt>${day}</Dt></BookgDt>`).replace(/<ValDt><Dt>[^<]*<\/Dt><\/ValDt>/, `<ValDt><Dt>${day}</Dt></ValDt>`);
       }));
     }
   }
-  return { files, unmatched };
+  return { files, unmatched, realigned };
+}
+
+/**
+ * The rate a foreign entry takes on its day (ADR 0001: the ESTV sell rate of its rate day, given
+ * the payments' days as the books hold them now), or undefined. src/server/routes/statements.ts
+ * builds it from the rate table.
+ */
+export type RateOf = (e: JournalEntry, days: ReadonlyMap<string, string>) => number | undefined;
+
+/**
+ * An entry of a payment whose day moved from `from` to `to` (#254): dated on `from`, it takes `to`, and
+ * a foreign one the rate of that day (`rateOf`). One dated otherwise (a tax point of its own) keeps
+ * its day and rate.
+ */
+export function entryToDay(e: JournalEntry, from: string, to: string, days: ReadonlyMap<string, string>, rateOf: RateOf): void {
+  if (e.date !== from) return;
+  e.date = to;
+  const rate = e.exchangeCurrency ? rateOf(e, days) : undefined;
+  if (rate !== undefined) e.exchangeRate = Math.round(rate * 1e6) / 1e6;
+}
+
+/**
+ * The app's entries of the read movements the bank's file dated otherwise (alignReads `realigned`;
+ * `moves`: by the movement's ref): they follow the bank's day (entryToDay), written as the module
+ * through the write door. A person's entry is never moved (alignReads asks about its movement
+ * instead), and nothing filed moves (alignReads pairs no filed day).
+ */
+export function followBankDays(books: Books, moves: ReadonlyMap<string, { from: string; to: string }>, rateOf: RateOf): void {
+  if (!moves.size) return;
+  update(books, moduleActor('bank-import'), (b) => {
+    const days = new Map(b.transactions.map((t) => [t.ref, t.date]));
+    for (const e of b.journalEntries) {
+      const m = moves.get(e.transactionRef) ?? moves.get(e.transactionRef.split('~')[0]);
+      if (m && e.origin !== 'manual') entryToDay(e, m.from, m.to, days, rateOf);
+    }
+  });
 }
 
 /**
@@ -306,6 +374,13 @@ export function structuredSpans(ws: Ws): StructuredSpan[] {
   return out;
 }
 
+/** The refs (without a `~n` suffix) of the payments a structured source holds: a bank's camt.053, or one the app wrote from a bank CSV (#254). */
+export function structuredRefs(ws: Ws): Set<string> {
+  const files = readBankStatements(ws);
+  const refs = refsByFile(files);
+  return new Set(files.filter((f) => f.status === 'read' && sourceOf(f.statement) !== 'pdf').flatMap((f) => refs.get(f.file) ?? []).map((r) => r.split('~')[0]));
+}
+
 /** The balances read from the camt.053 files now, beside the others (a PDF's): the PDF's balance of a day wins. */
 export function withCamtBalances(others: StatementClosingBalance[] = [], camt: StatementClosingBalance[]): StatementClosingBalance[] | undefined {
   const kept = others.filter((b) => b.source !== 'camt');
@@ -361,10 +436,8 @@ function keptFields(t: BankTransaction): Partial<BankTransaction> {
 }
 
 
-/** How many days a statement row may lie from the day of a movement made by hand: a receipt's day and the bank's booking day. */
-export const MATCH_DAYS = 7;
+export { MATCH_DAYS };
 
-const dayGap = (a: string, b: string) => Math.abs(Date.parse(a) - Date.parse(b)) / 86_400_000;
 const words = (t: Pick<BankTransaction, 'description' | 'counterparty'>) =>
   new Set(`${t.description} ${t.counterparty ?? ''}`.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 3));
 const shares = (a: Set<string>, b: Set<string>) => [...a].some((w) => b.has(w));
@@ -375,11 +448,13 @@ const shares = (a: Set<string>, b: Set<string>) => [...a].some((w) => b.has(w));
  * account (label and currency) in the same direction for the same amount within MATCH_DAYS days;
  * when both name a counterparty, the names share a word. Each row confirms one movement and each
  * movement takes one row: the closest day first, then the pair whose texts share a word. Only open
- * movements without a row yet take part: a filed record keeps every byte. Returns movement ref →
- * the row's ref; the rows it names are no new movements.
+ * movements without a row yet take part: a filed record keeps every byte. A movement read from a PDF
+ * that the bank's file did not take (`unmatched`, #254) is none: its question is the person's
+ * («Ist das dieselbe Zahlung?», src/books/twins.ts). Returns movement ref → the row's ref; the rows
+ * it names are no new movements.
  */
 export function matchStatementRows(rows: readonly BankTransaction[], books: readonly BankTransaction[], isClosed: (date: string) => boolean): Map<string, string> {
-  const open = books.filter((t) => madeByHand(t) && t.statement === undefined && t.amount !== 0 && !isClosed(t.date));
+  const open = books.filter((t) => madeByHand(t) && !t.unmatched && t.statement === undefined && t.amount !== 0 && !isClosed(t.date));
   const pairs: { row: BankTransaction; hand: BankTransaction; gap: number; alike: boolean }[] = [];
   for (const row of rows) {
     if (row.amount === 0 || isClosed(row.date)) continue;

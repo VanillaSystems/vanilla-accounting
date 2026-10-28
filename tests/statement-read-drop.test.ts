@@ -13,12 +13,13 @@
 import './support/jurisdiction.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DropSession } from '../src/types/drop.js';
 import type { BankStatement, BankTransaction, JournalEntry, StatementAsk, StatementImport } from '../src/types/index.js';
 import type { ReadStatement } from '../src/types/statement-read.js';
 import { toStatementXml } from '../src/providers/statement-read/camt-writer.js';
+import { twinQuestions } from '../src/books/twins.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 import { SESSION } from './support/inbox-run.js';
@@ -241,13 +242,17 @@ test('read first, the bank\'s camt.053 of the same days later, then the read sta
   }
 });
 
-test('the first camt.053 after a read: a movement read a few days off takes the bank\'s day, ref kept, booking kept, the bank\'s reference; one the camt.053 lacks is kept as a movement of its own for the person, never counted twice', async () => {
+/** An entry the app booked (as the inbox run writes it), put into the books' file directly. */
+const appEntry = (api: ApiServer, e: Pick<JournalEntry, 'id' | 'transactionRef' | 'date' | 'amount'> & Partial<JournalEntry>) =>
+  appendFileSync(join(api.root, 'transactional-data', e.date.slice(0, 4), 'books', 'entries.jsonl'), `${JSON.stringify({ accountDebit: '6000', accountCredit: '1021', vatCode: 'I0', description: e.id, origin: 'classify', ...e })}\n`);
+
+test('the first camt.053 after a read: a movement read a few days off takes the bank\'s day, ref kept, the app\'s booking moving with it, the bank\'s reference; one a person booked is asked; one the camt.053 lacks is kept as a movement of its own for the person, never counted twice', async () => {
   const { pdf, truth } = await inventedStatement(DEMO_OCTOBER);
   const extra = { date: '2026-10-16', amount: -25, counterparty: 'Kiosk Beispiel', text: 'Bar bezahlt, falsch gelesen' };
-  // The model read the rent on its value date, two days late, and a line the bank does not have.
+  // The model read the rent and the Coop purchase on their value dates, two days late, and a line the bank does not have.
   const read: ReadStatement = {
     ...truth, closing: { ...truth.closing, amount: Math.round((truth.closing.amount - 25) * 100) / 100 },
-    movements: [...truth.movements.map((m, i) => (i === 3 ? { ...m, date: '2026-10-16', reference: undefined } : m)), extra],
+    movements: [...truth.movements.map((m, i) => (i === 3 ? { ...m, date: '2026-10-16', reference: undefined } : i === 2 ? { ...m, date: '2026-10-11' } : m)), extra],
   };
   const api = await demo(read, { camt: false });
   try {
@@ -259,28 +264,78 @@ test('the first camt.053 after a read: a movement read a few days off takes the 
     await rest();
     const before = october(await full(api));
     const rent = before.find((t) => t.date === '2026-10-16' && t.amount === 450)!;
+    const coop = before.find((t) => t.date === '2026-10-11' && t.amount === 86.4)!;
     const kiosk = before.find((t) => t.amount === 25)!;
-    for (const [t, account, text] of [[rent, '6000', 'Miete'], [kiosk, '6500', 'Kiosk']] as const) {
+    appEntry(api, { id: 'app-rent', transactionRef: rent.ref, date: rent.date, amount: 450 });
+    for (const [t, account, text] of [[coop, '4200', 'Coop'], [kiosk, '6500', 'Kiosk']] as const) {
       const b = await api.send('POST', '/api/journal-entries', { date: t.date, accountDebit: account, accountCredit: '1021', amount: t.amount, description: text, transactionRef: t.ref });
       assert.equal(b.status, 200, JSON.stringify(b.json));
     }
     const bank = { ...truth, movements: truth.movements.map((m, i) => (i === 3 ? { ...m, reference: 'Mietvertrag Lager 7' } : m)) };
     const r = await upload(api, 'bank-oktober.xml', bankExport(bank));
     assert.equal(r.status, 200, await r.clone().text());
-    assert.equal((await r.json() as StatementImport).unmatched, 1);
+    assert.equal((await r.json() as StatementImport).unmatched, 2);
     await rest();
     const after = await full(api);
-    assert.equal(october(after).length, truth.movements.length + 1, 'the bank\'s seven, and the one it lacks; nothing twice');
     const moved = october(after).find((t) => t.ref === rent.ref)!;
     assert.deepEqual([moved.date, moved.reference, moved.source], ['2026-10-14', 'Mietvertrag Lager 7', undefined], 'the bank\'s day and reference, the read\'s ref');
-    assert.equal(after.journalEntries.find((e) => e.description === 'Miete')?.transactionRef, rent.ref, 'its booking stays on it');
-    const kept = october(after).find((t) => t.ref === kiosk.ref)!;
+    assert.deepEqual(after.journalEntries.filter((e) => e.id === 'app-rent').map((e) => [e.transactionRef, e.date]), [[rent.ref, '2026-10-14']], 'the app\'s booking stays on it, on the bank\'s day');
+    // The Coop purchase a person booked on the read day is not moved by the app: the person is asked.
+    const asked = october(after).find((t) => t.ref === coop.ref)!;
+    assert.deepEqual([asked.date, asked.unmatched?.by], ['2026-10-11', 'Raiffeisen/bank-oktober.xml']);
+    const booked = new Set(after.journalEntries.map((e) => e.transactionRef));
+    assert.deepEqual(twinQuestions(after.transactions, booked, () => false).get(coop.ref), [{ pdf: [coop.ref], bank: ['BANKREF-3'] }], '«Ist das dieselbe Zahlung?» names the bank\'s movement');
+    assert.equal(booked.has('BANKREF-3'), false, 'the bank\'s movement waits, unbooked');
+    const same = await api.send('POST', `/api/transactions/${encodeURIComponent(coop.ref)}/same`, { bank: ['BANKREF-3'] });
+    assert.equal(same.status, 200, JSON.stringify(same.json));
+    const answered = await full(api);
+    assert.equal(answered.transactions.some((t) => t.ref === coop.ref), false, 'the read movement goes');
+    assert.deepEqual(answered.journalEntries.filter((e) => e.description === 'Coop').map((e) => [e.transactionRef, e.date, e.origin]), [['BANKREF-3', '2026-10-09', 'manual']], 'her booking moves to the bank\'s movement and day, by her answer');
+    assert.equal(october(answered).length, truth.movements.length + 1, 'the bank\'s seven, and the one it lacks; nothing twice');
+    const kept = october(answered).find((t) => t.ref === kiosk.ref)!;
     assert.deepEqual([kept.source, kept.unmatched?.by], ['manual', 'Raiffeisen/bank-oktober.xml'], 'kept as a movement of its own, marked');
-    assert.equal(after.journalEntries.find((e) => e.description === 'Kiosk')?.transactionRef, kiosk.ref, 'its booking stays too');
+    assert.equal(answered.journalEntries.find((e) => e.description === 'Kiosk')?.transactionRef, kiosk.ref, 'its booking stays too');
     assert.equal(readFileSync(join(api.root, FOLDER, OCTOBER_XML), 'utf8').includes('Kiosk Beispiel'), false, 'the read statement no longer holds it');
     const keep = await api.send('POST', `/api/transactions/${encodeURIComponent(kiosk.ref)}/kept`);
     assert.equal(keep.status, 200, JSON.stringify(keep.json));
     assert.equal(october(await full(api)).find((t) => t.ref === kiosk.ref)?.unmatched, undefined, '«Behalten»: the mark goes, the movement stays');
+  } finally {
+    await SESSION(api).rest().catch(() => {});
+    await api.stop();
+  }
+});
+
+test('a payment the PDF printed a few Rappen off the bank\'s: the bank\'s movement waits for «Ist das dieselbe Zahlung?», unbooked; a person\'s booking of the other amount refuses «Ja, dieselbe» until changed; then the bank\'s movement stays alone', async () => {
+  const { pdf, truth } = await inventedStatement(DEMO_OCTOBER);
+  // The Coop purchase read as 86.35; the bank booked 86.40.
+  const { pages: _, ...whole } = truth;
+  const read: ReadStatement = { ...whole, closing: { ...truth.closing, amount: Math.round((truth.closing.amount + 0.05) * 100) / 100 }, movements: truth.movements.map((m, i) => (i === 2 ? { ...m, amount: -86.35 } : m)) };
+  const api = await demo(read, { camt: false });
+  try {
+    const { post, rest } = SESSION(api);
+    let s = await post('/api/drop');
+    s = await post(`/api/drop/${s.id}/files?name=oktober.pdf`, pdf);
+    s = await post(`/api/drop/${s.id}/rows/${s.rows[0].key}`, { kind: 'read', statement: read, import: true });
+    await rest();
+    const coop = october(await full(api)).find((t) => t.amount === 86.35)!;
+    const hers = await api.send('POST', '/api/journal-entries', { date: coop.date, accountDebit: '4200', accountCredit: '1021', amount: 86.35, description: 'Coop', transactionRef: coop.ref });
+    assert.equal(hers.status, 200, JSON.stringify(hers.json));
+    const r = await upload(api, 'bank-oktober.xml', bankExport(truth));
+    assert.equal(r.status, 200, await r.clone().text());
+    assert.equal((await r.json() as StatementImport).unmatched, 1);
+    await rest();
+    const after = await full(api);
+    assert.equal(after.journalEntries.some((e) => e.transactionRef === 'BANKREF-3'), false, 'not booked while asked: the purchase is not counted twice');
+    const asked = await api.send('POST', `/api/transactions/${encodeURIComponent(coop.ref)}/same`, { bank: ['BANKREF-3'] });
+    assert.deepEqual([asked.status, asked.json.code], [409, 'twinBookedByHand'], 'her booking of 86.35 is hers to change first');
+    const entry = after.journalEntries.find((e) => e.description === 'Coop')!;
+    assert.equal((await api.fetch(`/api/journal-entries/${entry.id}`, { method: 'DELETE' })).status, 200);
+    const same = await api.send('POST', `/api/transactions/${encodeURIComponent(coop.ref)}/same`, { bank: ['BANKREF-3'] });
+    assert.equal(same.status, 200, JSON.stringify(same.json));
+    const answered = await full(api);
+    assert.deepEqual(october(answered).map((t) => t.ref).filter((ref) => ref === coop.ref), [], 'the read movement goes');
+    assert.equal(october(answered).length, truth.movements.length);
+    assert.equal(answered.transactions.find((t) => t.ref === 'BANKREF-3')?.amount, 86.4, 'the bank\'s amount stays');
   } finally {
     await SESSION(api).rest().catch(() => {});
     await api.stop();
@@ -425,6 +480,54 @@ test('a bank CSV: its columns are asked once, kept for the account; the next CSV
     const next = s.rows[1];
     assert.deepEqual([next.state, next.reason, next.account, next.read?.statement.movements.length], ['asks', 'check-read', '1021', 1], 'read by the kept columns, for the person to check');
     await rest();
+  } finally {
+    await SESSION(api).rest().catch(() => {});
+    await api.stop();
+  }
+});
+
+test('a line on the edge of the bank export\'s days: read on 1 October, it is the camt.053\'s payment of the last days of September, not a second one', async () => {
+  const { loadBooks } = await import('../src/books/store.js');
+  const { workspaceAt } = await import('../src/workspace/workspace.js');
+  const last = loadBooks(workspaceAt(DEMO_ROOT)).transactions.filter((t) => t.bank === 'Raiffeisen' && t.source !== 'manual' && t.date >= '2026-09-24' && t.date <= '2026-09-30').sort((a, b) => a.date.localeCompare(b.date)).at(-1)!;
+  assert.ok(last, 'the demo has a payment in the last week of September');
+  const { pdf, truth } = await inventedStatement(DEMO_OCTOBER);
+  const edge = { date: '2026-10-01', amount: signed(last), text: last.description };
+  const read: ReadStatement = { ...truth, closing: { ...truth.closing, amount: Math.round((truth.closing.amount + edge.amount) * 100) / 100 }, movements: [edge, ...truth.movements] };
+  const api = await demo(read);
+  try {
+    const kept = await upload(api, 'oktober.pdf', pdf);
+    assert.equal(kept.status, 200, await kept.clone().text());
+    const path = `/api/statements/${(await kept.json() as StatementImport).file.split('/').map(encodeURIComponent).join('/')}/read`;
+    const asked = await api.send('POST', path);
+    assert.equal(asked.status, 200, JSON.stringify(asked.json));
+    assert.deepEqual((asked.json as unknown as StatementAsk).read.known, [{ date: '2026-10-01', amount: edge.amount }], 'shown as a payment the books hold');
+    const had = (await full(api)).transactions.length;
+    const done = await api.send('POST', `${path}/import`, { statement: read });
+    assert.equal(done.status, 200, JSON.stringify(done.json));
+    const books = await full(api);
+    assert.equal(books.transactions.length, had + truth.movements.length, 'October\'s seven are new; the edge line is September\'s payment');
+    assert.equal(books.transactions.filter((t) => t.ref === last.ref).length, 1);
+  } finally {
+    await api.stop();
+  }
+});
+
+test('a statement question of a period filed meanwhile can still be closed as «Als Auszug behalten»; closing the period closes it', async () => {
+  const { pdf, truth } = await inventedStatement(DEMO_OCTOBER);
+  const api = await demo(truth, { camt: false });
+  try {
+    const { post, rest } = SESSION(api);
+    const s = await post(`/api/drop/${(await post('/api/drop')).id}/files?name=oktober.pdf`, pdf);
+    assert.equal(s.rows[0].asked?.file, `Raiffeisen/${OCTOBER_PDF}`);
+    assert.equal((await api.fetch(`/api/drop/${s.id}`, { method: 'DELETE' })).status, 200);
+    await rest();
+    const ledger = join(api.root, 'ledger.json');
+    const config = JSON.parse(readFileSync(ledger, 'utf8'));
+    writeFileSync(ledger, JSON.stringify({ ...config, config: { ...config.config, closedThrough: '2026-10-31' } }, null, 2));
+    const closed = await api.fetch(`/api/statements/Raiffeisen/${encodeURIComponent(OCTOBER_PDF)}/read`, { method: 'DELETE' });
+    assert.equal(closed.status, 200, await closed.clone().text());
+    assert.equal((await full(api)).statementAsks, undefined, 'no question left that nothing could answer');
   } finally {
     await SESSION(api).rest().catch(() => {});
     await api.stop();

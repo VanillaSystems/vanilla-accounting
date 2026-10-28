@@ -15,6 +15,7 @@
  */
 import type { BankTransaction, JournalEntry, Mapping, Receipt } from '../types/index.js';
 import { periodLock, type Books } from '../books/store.js';
+import { heldByTwins } from '../books/twins.js';
 import { bankAccountFor } from '../workspace/money-accounts.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
@@ -108,8 +109,11 @@ export function matchPayments(books: Books, book: InvoiceBook, ctx: PaymentConte
   const issued = liveInvoices(book).filter((i): i is Issued => i.status === 'issued');
   if (issued.length === 0) return out;
   const byRef = new Map(issued.filter((i) => i.kind === 'invoice').map((i) => [i.reference, i]));
+  // A bank movement that may be one read from a PDF before waits for «Ist das dieselbe Zahlung?» (#254): it pays nothing twice.
+  const twins = heldByTwins(books, lock.isClosed);
 
   for (const tx of books.transactions) {
+    if (twins.has(tx.ref)) continue;
     const hits = hitsOf(tx, byRef, book);
     if (!hits.some(Boolean)) continue;
     const ask = (h: Hit, problem: PaymentQuestion['problem']) => out.questions.push({ transactionRef: tx.ref, number: h.inv.number, problem, amount: h.amount });

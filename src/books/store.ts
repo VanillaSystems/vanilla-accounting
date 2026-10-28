@@ -368,6 +368,19 @@ export interface PeriodLock {
 }
 
 /**
+ * Closes the books through `end` (the filing's seal step, `npm run seal -- <q> --close`, the year
+ * close): closedThrough moves there, which the write door never does. A statement PDF's question of a
+ * day now filed is closed with its PDF kept as the statement (#254): nothing can be read into a filed
+ * period, so it could never be answered.
+ */
+export function closeThrough(books: Pick<Books, 'config' | 'statementAsks'>, end: string): void {
+  books.config.closedThrough = end;
+  if (!books.statementAsks) return;
+  books.statementAsks = books.statementAsks.filter((a) => a.date > end);
+  if (!books.statementAsks.length) delete books.statementAsks;
+}
+
+/**
  * The books' first day: 1 January of the first year with opening balances, else of the year of the
  * earliest payment; undefined for books with neither. The year before is the opening balances'
  * (#39): no entry is dated in it and no year folder is made for it.

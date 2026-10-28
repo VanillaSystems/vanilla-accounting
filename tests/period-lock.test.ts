@@ -110,12 +110,12 @@ const refused: Array<Call & { status: number }> = [
   { method: 'PUT', path: '/api/year-close/2025/cash/1000', body: { amount: 100 }, status: 403 },
   { method: 'POST', path: '/api/statements/bookings', body: { entries: [{ id: 'back', transactionRef: 'C1', date: '2026-06-30', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'zurück' }], mappings: [] }, status: 403 },
   { method: 'POST', path: '/api/invoices/in_p/payments', body: { transactionRef: 'CI' }, status: 403 },
-  // A filed statement PDF's question (#254): not read, corrected, read in nor closed; a filed movement's mark not taken away.
+  // A filed statement PDF's question (#254): not read, corrected nor read in (closing it books nothing: see below); a filed movement's mark not taken away, nor its «Ist das dieselbe Zahlung?» answered.
   { method: 'POST', path: MAY_READ, status: 403 },
   { method: 'PUT', path: MAY_READ, body: { statement: MAY }, status: 403 },
   { method: 'POST', path: `${MAY_READ}/import`, body: { statement: MAY }, status: 403 },
-  { method: 'DELETE', path: MAY_READ, status: 403 },
   { method: 'POST', path: '/api/transactions/C1/kept', status: 403 },
+  { method: 'POST', path: '/api/transactions/C1/same', body: { bank: ['C2'] }, status: 403 },
   { method: 'DELETE', path: '/api/invoices/in_p/payments/CI', status: 403 },
   // Several objects at once (#216): a batch of filed objects only is refused as their single changes are; its undo too.
   { method: 'POST', path: '/api/batch', body: { action: { kind: 'noReceiptNeeded' }, ids: ['C1'] }, status: 403 },
@@ -149,6 +149,8 @@ for (const call of refused) {
 }
 
 const allowed: Array<Call & { check: (index: Index) => boolean }> = [
+  // «Als Auszug behalten» on a filed statement PDF's question (#254): it books nothing, and nothing else could ever answer it.
+  { method: 'DELETE', path: MAY_READ, check: (i) => !i.statementAsks?.length },
   // A batch over a filed and an open object (#216): the filed one is left out, the open one changes.
   { method: 'POST', path: '/api/batch', body: { action: { kind: 'noReceiptNeeded' }, ids: ['C1', 'O1'] },
     check: (i) => i.transactions.find((t) => t.ref === 'O1')?.noReceiptNeeded === true && !i.transactions.find((t) => t.ref === 'C1')?.noReceiptNeeded },

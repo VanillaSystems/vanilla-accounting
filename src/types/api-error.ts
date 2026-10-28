@@ -55,6 +55,8 @@ export type ApiRefusal =
   | { code: 'paidPrivately'; params: { receipt: string; payment: string } }
   /** A person's booking without a payment books this receipt already (its amount or the part's, the same day or words): a private payment would book it twice, unless it replaces that booking (`entry`: its ref; `replaceable`: it names the receipt, else it may be another purchase of that day and amount and is deleted by hand). */
   | { code: 'bookedByHand'; params: { entry: string; date: string; amount: number; currency: string; replaceable: boolean } }
+  /** «Ist das dieselbe Zahlung?» answered yes where the amounts differ (#254): a person's entry on the movement read from the PDF books the PDF's amount; she changes it first. */
+  | { code: 'twinBookedByHand'; params: { entry: string; read: number; bank: number; currency: string } }
   /** A second bank payment of another payee for a receipt that has one, asked without `confirm` (src/server/edits.ts assertNotSecondPayment, r8h-21). */
   | { code: 'secondPayment'; params: { receipt: string; payment: string } }
   | { code: 'yearClose' }

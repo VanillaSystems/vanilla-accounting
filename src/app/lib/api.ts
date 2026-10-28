@@ -154,6 +154,7 @@ export function errorText(e: unknown): string {
     case 'paidPrivately': return t('error.paidPrivately', { payment: b.params.payment });
     case 'partAmount': return t('error.partAmount', { total: `${b.params.currency} ${fmt(b.params.total)}` });
     case 'partRate': return t('error.partRate', { rates: b.params.rates.map((r) => `${r} %`).join(', ') });
+    case 'twinBookedByHand': return t('error.twinBookedByHand', { entry: b.params.entry, read: `${b.params.currency} ${fmt(b.params.read)}`, bank: `${b.params.currency} ${fmt(b.params.bank)}` });
     case 'bookedByHand': return t('error.bookedByHand', { entry: b.params.entry, date: formatDate(b.params.date), amount: `${b.params.currency} ${fmt(b.params.amount)}` });
     case 'yearClose': return t('error.yearClose');
     case 'batchUnchanged': return t('error.batchUnchanged');
@@ -527,6 +528,8 @@ export const api = {
   keepStatementPdf: (file: string) => request<Ok>('DELETE', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/read`),
   /** «Behalten» on a movement read from a PDF that the account's camt.053 or CSV does not hold (#254). */
   keepUnmatched: (ref: string) => request<Ok>('POST', `/api/transactions/${encodeURIComponent(ref)}/kept`),
+  /** «Ja, dieselbe»: the movement read from a PDF is the bank's movements `bank` (#254). */
+  sameTwin: (ref: string, bank: string[]) => request<Ok>('POST', `/api/transactions/${encodeURIComponent(ref)}/same`, { bank }),
   /** The undo of a removal, after the file is read again: its bookings and links back as they were (r10h-3). */
   restoreStatementBookings: (removed: StatementRemoved['removed']) => request<Ok>('POST', '/api/statements/bookings', removed),
 
