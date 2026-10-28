@@ -124,7 +124,7 @@ const receiptsWhere = (keep: (r: Books['receipts'][number]) => boolean) => (b: B
   return rs.length ? [{ kind: 'receipts', ids: rs.map((r) => r.id), files: rs.map((r) => r.filename) }] : [];
 };
 /** New payments, and payments booked before a receipt was linked to them (booked again); those an account's reconciliation holds (#254) are named with it, never left out silently. */
-const unbooked = (b: Books): Took[] => {
+export const unbooked = (b: Books): Took[] => {
   const booked = new Set(b.journalEntries.map((e) => e.transactionRef));
   const again = new Set(entriesWithoutTheirReceipts(b.journalEntries, b.mappings, new Set(b.transactions.map((t) => t.ref)), periodLock(b).closedThrough).map((e) => e.transactionRef));
   const open = b.transactions.filter((t) => (!booked.has(t.ref) || again.has(t.ref)) && !periodLock(b).isClosed(t.date) && !t.waitsForPerson);

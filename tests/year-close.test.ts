@@ -542,3 +542,18 @@ test('#119: «every month has its statement» only on an account with an importe
     yearEndData().moneyAccounts = swiss;
   }
 });
+
+test('review (#254): a statement PDF\'s question of the year still open closes with the year, its PDF kept as the statement; the close is not refused by its own save', async () => {
+  const ws = readyToClose();
+  const b = loadBooks(ws);
+  const statement = { currency: 'CHF', period: { from: '2026-11-01', to: '2026-11-30' }, opening: { date: '2026-11-01', amount: 0 }, closing: { date: '2026-11-30', amount: 0 }, movements: [] };
+  b.statementAsks = [{ file: 'Raiffeisen/Kontoauszug 01.11.2026 - 30.11.2026.pdf', account: '1020', date: '2026-11-30', since: '2026-12-01', read: { by: 'hand', statement, check: { ok: true, gaps: [] }, known: [] } }];
+  saveBooks(ws, b);
+  bookRevaluation(ws, '2026', RATES);
+  for (const t of yearEndTemplates()) markTemplate(ws, '2026', t.id, 'na');
+  const result = await closeYear(ws, '2026', RATES, '2027-03-01');
+  assert.equal(result.closedThrough, '2026-12-31');
+  const after = loadBooks(ws);
+  assert.deepEqual([after.config.closedThrough, after.statementAsks], ['2026-12-31', undefined], 'closed, the question with it');
+  assert.ok(sealsOf(after).checks.every((c) => c.status === 'intact'));
+});

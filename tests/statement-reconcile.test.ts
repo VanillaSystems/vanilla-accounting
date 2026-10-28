@@ -263,3 +263,14 @@ test('review: a pair of another direction or currency is refused', () => {
   assert.throws(() => answer(usd, { pairs: [{ read: 'P', bank: 'B' }], own: ['Q'] }), (e: unknown) => e instanceof ReconcileRefused && e.code === 'reconcileMismatch', 'CHF read is not USD at the bank');
   assert.equal(usd.transactions.length, 3, 'nothing changed');
 });
+
+test('review: the run names the payments a reconciliation holds, never «0 gebucht» alone; its result carries them', async () => {
+  const { unbooked } = await import('../src/workflows/actions.js');
+  const { runResult } = await import('../src/workflows/model.js');
+  const waiting: Reconciliation = { account: '1021', from: '2026-10-11', to: '2026-10-13', since: '2026-10-28', covered: [{ from: '2026-10-01', to: '2026-10-31' }], read: ['P-in'], bank: ['B-in'], pairs: [] };
+  const books = { ...booksOf('2026-09-30', [move('P-in', '2026-10-11', -30), move('B-in', '2026-10-13', -30), move('X', '2026-10-20', -5)]), reconciliations: [waiting] } as Books;
+  const took = unbooked(books);
+  assert.deepEqual(took, [{ kind: 'transactions', n: 1 }, { kind: 'held', account: '1021', n: 2, payment: 'P-in', date: '2026-10-11' }]);
+  const res = runResult({ id: 'inbox' } as never, { status: 'done', digest: { entries: 0 }, steps: [{ output: { took } }] } as never);
+  assert.deepEqual(res, { kind: 'done', entries: 0, held: [took[1]] });
+});
