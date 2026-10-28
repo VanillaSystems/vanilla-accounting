@@ -1,7 +1,7 @@
 /**
  * The batch actions of a selection (#216), each with its preview before anything is written:
  * Belege «Kein Beleg», «Zahlung suchen», «Neu lesen (KI)», «Löschen»; Zahlungen «Braucht keinen
- * Beleg», «Buchen …» (account and VAT rate), «Regel daraus»; Buchungen «Konto ändern …», «MWST-Code …»,
+ * Beleg», «Buchen …» (account and VAT rate), «Regel daraus»; Buchungen «Konto ändern …», the VAT code,
  * «Dimension …». A filed object is left out and named; the toast takes the whole batch back.
  */
 import { useEffect, useMemo, useState, type FormEvent } from 'react';

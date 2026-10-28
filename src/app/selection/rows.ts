@@ -1,7 +1,7 @@
 /**
  * The picked rows of each list as the selection shows them (#216): receipts, payments, entries,
- * each with its date, words, amount, its amount in the books' currency (the ESTV rate of its day,
- * as everywhere a foreign amount is shown in CHF) and whether a filed period holds it.
+ * each with its date, words, amount, its amount in the books' currency (the official daily rate of its day,
+ * as everywhere a foreign amount is shown in the books' currency) and whether a filed period holds it.
  */
 import type { Index } from '../../types/index.js';
 import { chfAmount } from '../../accounting/ledger.js';
