@@ -30,7 +30,7 @@ test('the collection pulls every source with a feed due, one run each; a mailbox
   writeFileSync(join(ws.paths.root, 'sources', 'office', 'source.yaml'), 'label: Office\ncode: app:imap\nsettings: { boxes: [{ label: Office, address: office@example.com }] }\nreach:\n  mail: { host: imap.example.com, account: office@example.com, from: ["*"] }\nfeeds:\n  attachments: { output: document, every: daily }\n');
   for (const v of sources(ws, APP_ROOT)) if (v.kind !== 'invalid') approveSource(ws, v.decl);
 
-  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT });
   const r = await engine.start('collection', { kind: 'company', id: 'company' }, { kind: 'manual' });
   assert.ok(r.ok, JSON.stringify(r));
   await engine.idle();

@@ -39,7 +39,7 @@ const noTime = (xml: string) => xml.replace(/<[^>]*generationTime>[^<]*<\/[^>]*g
 test('a filing run: the report\'s figures, the review, the XML of vat-xml, the filing, then closed and sealed as seal --close does', async () => {
   const ws = demo();
   assert.equal(loadBooks(ws).config.closedThrough, '2026-03-31');
-  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT });
   const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
   assert.ok(r.ok, JSON.stringify(r));
   await engine.idle();
@@ -77,7 +77,7 @@ test('a filing run: the report\'s figures, the review, the XML of vat-xml, the f
 
 test('a replay of a filed run recomputes nothing: the period is filed, the run says so, and the filing stays as it was (r5f-19)', async () => {
   const ws = demo();
-  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT });
   const first = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
   await engine.idle();
   for (const outcome of ['approved', 'filed']) { await engine.command({ kind: 'answer', run: first.ok ? first.run! : '', outcome }); await engine.idle(); }
@@ -97,7 +97,7 @@ test('a replay of a filed run recomputes nothing: the period is filed, the run s
 
 test('a dry run of a filing never closes or seals', async () => {
   const ws = demo();
-  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT });
   const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' }, 'dry');
   await engine.idle();
   for (const outcome of ['approved', 'filed']) { await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome }); await engine.idle(); }
@@ -111,7 +111,7 @@ test('a dry run of a filing never closes or seals', async () => {
 
 test('the person\'s tasks carry what they check: the review the return in words, the filing where the XML lies', async () => {
   const ws = demo();
-  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT });
   const w = loadWorkflows(APP_ROOT, ws.paths.root).workflows.find((x) => x.id === 'vat-filing')!;
   const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
   await engine.idle();
@@ -138,7 +138,7 @@ test('the person\'s tasks carry what they check: the review the return in words,
 
 test('a period that has not ended cannot be prepared: the run stops before it computes, says until when the period runs and from when it can be filed, and writes nothing (r6f-33)', async () => {
   const ws = demo();
-  const engine = openEngine(ws, { appRoot: APP_ROOT, now: () => '2026-10-16T08:00:00.000Z' });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT, now: () => '2026-10-16T08:00:00.000Z' });
   const r = await engine.start('vat-filing', { kind: 'period', id: '2026-Q4' }, { kind: 'manual' });
   assert.ok(r.ok, JSON.stringify(r));
   await engine.idle();
@@ -158,7 +158,7 @@ test('a period that has not ended cannot be prepared: the run stops before it co
 
 test('the year\'s last period is filed like any other, but the year close seals it: the run archives the filed XML and ends without closing or sealing (r6f-33)', async () => {
   const ws = demo();
-  const engine = openEngine(ws, { appRoot: APP_ROOT, now: () => '2027-01-10T08:00:00.000Z' });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT, now: () => '2027-01-10T08:00:00.000Z' });
   const file = async (key: string) => {
     const r = await engine.start('vat-filing', { kind: 'period', id: key }, { kind: 'manual' });
     assert.ok(r.ok, JSON.stringify(r));
@@ -190,7 +190,7 @@ const at = (run: { state: { status: string } & { at?: string } }) => [run.state.
 
 test('the books change between the review and «Freigegeben»: no XML of stale figures, the person reviews the figures of today instead (r7h-24)', async () => {
   const ws = demo();
-  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT });
   const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
   await engine.idle();
   const run = () => engine.run(r.ok ? r.run! : '')!;
@@ -217,7 +217,7 @@ test('the books change between the review and «Freigegeben»: no XML of stale f
 
 test('«Freigegeben» holds the period until «Eingereicht» or «Zurück»: nothing dated in it changes, and the refusal names the approval (r7h-24)', async () => {
   const ws = demo();
-  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT });
   const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
   await engine.idle();
   const answer = async (outcome: string) => { await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome }); await engine.idle(); };
@@ -252,7 +252,7 @@ test('«Freigegeben» holds the period until «Eingereicht» or «Zurück»: not
 
 test('«Eingereicht» never seals books that differ from the filed XML: a change that got past the hold stops the run with the figures, nothing closed, and the hold is lifted so the books can be restored, then «Weiter» seals (r7h-24, r8h-26)', async () => {
   const ws = demo();
-  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT });
   const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
   await engine.idle();
   await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome: 'approved' });
@@ -297,7 +297,7 @@ test('«Eingereicht» never seals books that differ from the filed XML: a change
 
 test('«Weiter» after a stuck seal compares every Ziffer, not the payable alone: two changes that cancel in the payable keep the run stuck (r10h-4)', async () => {
   const ws = demo();
-  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT });
   const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
   await engine.idle();
   await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome: 'approved' });
@@ -319,7 +319,7 @@ test('a VAT question open about a payment of the period withholds the filing: th
   const tx = loadBooks(ws).transactions.find((t) => inQ2(t) && t.direction === 'CRDT')!;
   const q = saleQuestionLine(ws, tx, '2026-07-01T09:00:00.000Z');
   appendQuestionLine(ws, q, '2026-03-31');
-  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT });
   const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
   await engine.idle();
   const id = r.ok ? r.run! : '';
@@ -352,7 +352,7 @@ test('a VAT question open about a payment of the period withholds the filing: th
 
 test('a filing run discarded while the period was held frees it (r7h-24)', async () => {
   const ws = demo();
-  const engine = openEngine(ws, { appRoot: APP_ROOT, onRest: (run) => releaseApproval(ws, run) });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT, onRest: (run) => releaseApproval(ws, run) });
   const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
   await engine.idle();
   await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome: 'approved' });
@@ -367,7 +367,7 @@ test('a filing run discarded while the period was held frees it (r7h-24)', async
 
 test('r8f-49: «Zurück» from the filing task recomputes the return, so the review task shows today\'s figures, not the ones approved', async () => {
   const ws = demo();
-  const engine = openEngine(ws, { appRoot: APP_ROOT, onRest: (run) => releaseApproval(ws, run) });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT, onRest: (run) => releaseApproval(ws, run) });
   const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
   await engine.idle();
   const id = r.ok ? r.run! : '';
@@ -391,7 +391,7 @@ test('r8f-49: «Zurück» from the filing task recomputes the return, so the rev
 
 test('golden rule 1: a filing run whose period is filed and drifted is not discarded, the hold stays until it seals; a normal discard is unchanged', async () => {
   const ws = demo();
-  const engine = openEngine(ws, { appRoot: APP_ROOT, keeps: (run) => holdsFiledPeriod(ws, run), onRest: (run) => releaseApproval(ws, run) });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT, keeps: (run) => holdsFiledPeriod(ws, run), onRest: (run) => releaseApproval(ws, run) });
   const r = await engine.start('vat-filing', { kind: 'period', id: Q }, { kind: 'manual' });
   await engine.idle();
   const id = r.ok ? r.run! : '';

@@ -36,7 +36,7 @@ function prepared(): { ws: Workspace; ask: Ask } {
 }
 
 async function runOnce(ws: Workspace, ask: Ask, mode: Run['mode']): Promise<Run> {
-  const engine = openEngine(ws, { appRoot: APP_ROOT, ask: async () => ask });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT, ask: async () => ask });
   const started = await engine.start('booking', { kind: 'transaction', id: 'S-CH' }, { kind: 'manual' }, mode);
   assert.ok(started.ok, JSON.stringify(started));
   await engine.idle();

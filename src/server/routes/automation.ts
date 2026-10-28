@@ -11,7 +11,7 @@
 import { createHash } from 'node:crypto';
 import { Router } from 'express';
 import { readBooks, RequestError, WS } from '../books.js';
-import { APP_ROOT } from '../../workspace/workspace.js';
+import { APP_ROOT, type Workspace } from '../../workspace/workspace.js';
 import { askIfReady } from '../../intake/run.js';
 import { lockIntake } from '../../intake/pipeline.js';
 import { openEngine, type Engine } from '../../workflows/engine.js';
@@ -35,6 +35,12 @@ import { HISTORY_KINDS, HISTORY_LIMIT, historyOf, linesOfRun, type HistoryTarget
 export const router = Router();
 
 const engines = new Map<string, Engine>();
+/** Each workspace as last opened: Firma reopens it after every change to its manifest, and another one may be open by now. */
+const latest = new Map<string, Workspace>();
+const openedAt = (root: string): Workspace => {
+  if (WS.paths.root === root) latest.set(root, WS);
+  return latest.get(root)!;
+};
 let commits: Promise<unknown> = Promise.resolve();
 
 /** Commits run one after another: isomorphic-git takes the index for each. A failed commit is logged, never thrown at a run. */
@@ -50,11 +56,13 @@ export function engine(): Engine {
   if (!e) {
     const sw = openSwitch(ws);
     baseline(ws, loadWorkflows(APP_ROOT, ws.paths.root).workflows);
-    e = openEngine(ws, {
-      appRoot: APP_ROOT, ask: askIfReady, lock: () => lockIntake(ws),
+    const root = ws.paths.root;
+    const now = () => openedAt(root);
+    e = openEngine(now, {
+      appRoot: APP_ROOT, ask: askIfReady, lock: () => lockIntake(now()),
       isApproved: sw.isApproved, approve: sw.approve,
-      keeps: (run) => holdsFiledPeriod(ws, run),
-      onRest: (run) => releaseApproval(ws, run),
+      keeps: (run) => holdsFiledPeriod(now(), run),
+      onRest: (run) => releaseApproval(now(), run),
     });
     engines.set(ws.paths.root, e);
   }

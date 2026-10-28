@@ -27,7 +27,7 @@ const year = { kind: 'year' as const, id: '2026' };
 
 test('a year-close run: revaluation, review, stuck while an entry is open, then closed and opened as the Year-end page does', async () => {
   const ws = readyToClose();
-  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT });
   const r = await engine.start('year-close', year, { kind: 'manual' });
   assert.ok(r.ok, JSON.stringify(r));
   await engine.idle();
@@ -62,7 +62,7 @@ test('a dry run of the year close books, closes and opens nothing', async () => 
   const ws = readyToClose();
   decideAll(ws);
   const before = JSON.stringify(loadBooks(ws));
-  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT });
   const r = await engine.start('year-close', year, { kind: 'manual' }, 'dry');
   await engine.idle();
   await engine.command({ kind: 'answer', run: r.ok ? r.run! : '', outcome: 'approved' });

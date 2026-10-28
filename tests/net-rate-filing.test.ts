@@ -34,7 +34,7 @@ test('without the activity code: the review names it and withholds the approval;
   patchManifest(manifest, { vat: { ...SETUP, rates: [RATE] } });
   const ws = workspaceAt(dir);
   const w = loadWorkflows(APP_ROOT, ws.paths.root).workflows.find((x) => x.id === 'vat-filing')!;
-  const engine = openEngine(ws, { appRoot: APP_ROOT, now: () => '2027-01-10T08:00:00.000Z' });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT, now: () => '2027-01-10T08:00:00.000Z' });
   const r = await engine.start('vat-filing', { kind: 'period', id: '2026-H2' }, { kind: 'manual' });
   assert.ok(r.ok, JSON.stringify(r));
   await engine.idle();
@@ -73,7 +73,7 @@ test('a half year on the net tax rate method is held from «Freigegeben» too: a
   cpSync(SOURCE, dir, { recursive: true });
   patchManifest(join(dir, 'belege.workspace.yaml'), { vat: { ...SETUP, rates: [{ ...RATE, activityId: '41050' }] } });
   const ws = workspaceAt(dir);
-  const engine = openEngine(ws, { appRoot: APP_ROOT, now: () => '2027-01-10T08:00:00.000Z' });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT, now: () => '2027-01-10T08:00:00.000Z' });
   const r = await engine.start('vat-filing', { kind: 'period', id: '2026-H2' }, { kind: 'manual' });
   assert.ok(r.ok, JSON.stringify(r));
   await engine.idle();

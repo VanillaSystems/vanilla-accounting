@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DuplicateFileError, findFile, yearPaths, yearsOf, type Workspace } from '../src/workspace/workspace.js';
 import { BOOKS_SCHEMA } from '../src/workspace/schema.js';
@@ -286,18 +286,38 @@ test('one process saves the same books again and again, and edits to other files
   assert.equal(now.receipts[0].remarks, 'other');
 });
 
-test('a save waits while another live process holds the write lock, and takes over a lock whose process is gone', () => {
+/**
+ * The holder of the write lock: takes it, says so, and lets go only once a saver waits beside it (its file next to the lock),
+ * noting what the lock held then: its own pid, unless the saver took it from a live process. Conditions, not clocks (#246):
+ * a busy machine may start it late or run it slowly.
+ */
+const HOLDER = `const fs = require('fs'), path = require('path');
+const [lock, released] = process.argv.slice(1);
+fs.writeFileSync(lock, String(process.pid));
+process.stdout.write('holding\\n');
+const poll = setInterval(() => {
+  if (!fs.readdirSync(path.dirname(lock)).some((f) => f !== path.basename(lock))) return;
+  fs.writeFileSync(released, fs.readFileSync(lock, 'utf8'));
+  fs.rmSync(lock);
+  clearInterval(poll);
+}, 5);`;
+
+test('a save waits while another live process holds the write lock, and takes over a lock whose process is gone', async () => {
   const dir = root();
   const lock = join(dir.paths.data, 'books.lock');
+  const released = join(dir.paths.root, 'released');
   mkdirSync(dir.paths.data, { recursive: true });
-  const holder = spawn(process.execPath, ['-e', `setTimeout(() => require('fs').rmSync(${JSON.stringify(lock)}, { force: true }), 300)`]);
-  writeFileSync(lock, String(holder.pid));
+  const holder = spawn(process.execPath, ['-e', HOLDER, lock, released], { stdio: ['ignore', 'pipe', 'inherit'] });
   const books = loadBooks(dir);
-  books.journalEntries.push(entry('waited'));
-  const started = Date.now();
-  saveBooks(dir, books);
-  assert.ok(Date.now() - started >= 200, 'waited for the holder');
-  assert.ok(loadBooks(dir).journalEntries.some((e) => e.id === 'waited'));
+  try {
+    await new Promise((ok, no) => { holder.stdout.once('data', ok); holder.once('exit', (code) => no(new Error(`the holder exited with ${code}`))); });
+    books.journalEntries.push(entry('waited'));
+    saveBooks(dir, books);
+    assert.equal(existsSync(released) && readFileSync(released, 'utf8'), String(holder.pid), 'the save waited until the holder let go of its lock');
+    assert.ok(loadBooks(dir).journalEntries.some((e) => e.id === 'waited'));
+  } finally {
+    holder.kill();
+  }
   const gone = spawnSync(process.execPath, ['-e', '0']).pid!;
   writeFileSync(lock, String(gone));
   books.journalEntries.push(entry('took-over'));

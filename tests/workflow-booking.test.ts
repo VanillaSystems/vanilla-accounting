@@ -53,7 +53,7 @@ const comparable = (entries: JournalEntry[]) => entries.map(({ id: _, run: __, .
 
 /** One run of `workflow` on `ref` through the engine, driven to rest. */
 async function runOnce(ws: Workspace, ref: string, ask?: EngineAsk, mode: Run['mode'] = 'live'): Promise<Run> {
-  const engine = openEngine(ws, { appRoot: APP_ROOT, ask: async () => ask });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT, ask: async () => ask });
   const started = await engine.start('booking', { kind: 'transaction', id: ref }, { kind: 'manual' }, mode);
   assert.ok(started.ok, JSON.stringify(started));
   await engine.idle();
@@ -62,7 +62,7 @@ async function runOnce(ws: Workspace, ref: string, ask?: EngineAsk, mode: Run['m
 
 async function replayOf(ws: Workspace, of: Run): Promise<Run> {
   saveRun(ws, of);
-  const engine = openEngine(ws, { appRoot: APP_ROOT });
+  const engine = openEngine(() => ws, { appRoot: APP_ROOT });
   const started = await engine.command({ kind: 'replay', run: of.id });
   assert.ok(started.ok, JSON.stringify(started));
   await engine.idle();

@@ -79,12 +79,16 @@ const short = (v: unknown): string => {
   return ['ref', 'id', 'date', 'amount', 'description'].filter((k) => o[k] !== undefined).map((k) => String(o[k])).join(', ').slice(0, 80) || `{${Object.keys(o).slice(0, 4).join(', ')}}`;
 };
 
-export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
+/**
+ * `workspace` gives the workspace as it is now: a run reads the bank accounts and settings a person changed after the
+ * engine opened, never those of its start (#246).
+ */
+export function openEngine(workspace: () => Workspace, deps: EngineDeps): Engine {
   const now = deps.now ?? (() => new Date().toISOString());
   const limits = deps.limits ?? { ai: 2, other: 4 };
   const isApproved = deps.isApproved ?? ((w: WorkflowDecl) => w.origin === 'app');
-  const runs = new Map(listRuns(ws).map((r) => [r.id, r]));
-  let declared = loadWorkflows(deps.appRoot, ws.paths.root);
+  const runs = new Map(listRuns(workspace()).map((r) => [r.id, r]));
+  let declared = loadWorkflows(deps.appRoot, workspace().paths.root);
   let paused = false;
   let counter = 0;
   const active = new Set<string>();
@@ -103,13 +107,13 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     const next: Run = kept ? { ...run, arrived: kept.arrived, reviewed: kept.reviewed } : run;
     if (!next.arrived) delete next.arrived;
     if (!next.reviewed) delete next.reviewed;
-    runs.set(run.id, next); saveRun(ws, next); counter++;
+    runs.set(run.id, next); saveRun(workspace(), next); counter++;
   };
   const annotate = (id: string, patch: Pick<Run, 'arrived' | 'reviewed'>) => {
     const next: Run = { ...runs.get(id)!, ...patch };
     if (!next.arrived?.length) delete next.arrived;
     if (!next.reviewed) delete next.reviewed;
-    runs.set(id, next); saveRun(ws, next); counter++;
+    runs.set(id, next); saveRun(workspace(), next); counter++;
   };
   const move = (run: Run, next: RunState): Run => { const r = transition(run, next); save(r); return r; };
 
@@ -122,7 +126,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     && ![...runs.values()].some((r) => r.startedBy.kind === 'parent' && r.startedBy.run === run.id);
 
   // Idle checks kept before they were forgotten go now.
-  for (const r of [...runs.values()]) if (idle(r)) { runs.delete(r.id); forgetRun(ws, r.id); }
+  for (const r of [...runs.values()]) if (idle(r)) { runs.delete(r.id); forgetRun(workspace(), r.id); }
   // A run the process left running when it stopped goes back into the queue at its step.
   for (const r of runs.values()) if (r.state.status === 'running') move(r, { status: 'queued', at: r.state.at, since: now() });
 
@@ -131,7 +135,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     if (!['done', 'waiting', 'parked', 'stuck', 'discarded'].includes(run.state.status)) return;
     const line = lineFor(run, run.logged ?? 0, deps.host);
     if (line) {
-      appendLine(ws, line, loadBooks(ws).config.closedThrough);
+      appendLine(workspace(), line, loadBooks(workspace()).config.closedThrough);
       save({ ...run, logged: run.steps.length });
     }
     void deps.onRest?.(runs.get(run.id)!, line);
@@ -153,7 +157,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
 
   function pump(): void {
     if (paused) { notifyIdle(); return; }
-    const books = loadBooks(ws);
+    const books = loadBooks(workspace());
     const busy = { ai: 0, other: 0 };
     const lanes = new Set<string>();
     for (const id of active) {
@@ -203,7 +207,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
     if (run.state.status === 'done' && run.mode === 'live') await emitFrom(run);
     if (run.state.status === 'done' || run.state.status === 'stuck' || run.state.status === 'discarded') await childRested(run);
     // Forgotten only once nothing of the drive reads it any more (pump counts it while active).
-    if (idle(run)) { active.delete(id); runs.delete(id); forgetRun(ws, id); counter++; }
+    if (idle(run)) { active.delete(id); runs.delete(id); forgetRun(workspace(), id); counter++; }
   }
 
   /** One step of a running run, saved before it returns. */
@@ -264,7 +268,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
       return move(done, !target || target.to === 'end' ? { status: 'done', finishedAt: now() } : { status: 'running', at: target.step, since: now() });
     }
     try {
-      const result = await action.run(inputs, effects, { ws, ask, now, run: { id: run.id, mode: run.mode }, later: () => laterFiles(run), arrivals: (change) => annotate(run.id, { arrived: change(runs.get(run.id)?.arrived ?? []) }) });
+      const result = await action.run(inputs, effects, { ws: workspace(), ask, now, run: { id: run.id, mode: run.mode }, later: () => laterFiles(run), arrivals: (change) => annotate(run.id, { arrived: change(runs.get(run.id)?.arrived ?? []) }) });
       record.outcome = result.outcome;
       const output = result.output ?? {};
       const extra = Object.keys(output).filter((k) => !step.emits.includes(k));
@@ -327,7 +331,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
       if (before) { record.effects.push({ effect: 'ledger.book', key, applied: false, wrote: {} }); return; }
       const ref = run.item.kind === 'transaction' ? run.item.id : undefined;
       let replaced: string[] = [];
-      const applied = updateSaved(ws, actor, (b) => {
+      const applied = updateSaved(workspace(), actor, (b) => {
         // A person's answer books what they accepted: bookings the app guessed meanwhile (a later run, wishes3-7)
         // give way to it. A person's own booking never does, nor one of the person's rules: a rule that booked
         // the payment since the question was asked (its report came, r7h-21) answered it better than the proposal.
@@ -352,7 +356,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
    */
   function booksPort(run: Run, actor: Actor, key: string, record: StepRecord): BooksPort {
     const live = run.mode === 'live';
-    const load = () => (run.startedBy.kind === 'check' ? booksFor(run) : hasBooks(ws) ? loadBooks(ws) : emptyBooks());
+    const load = () => (run.startedBy.kind === 'check' ? booksFor(run) : hasBooks(workspace()) ? loadBooks(workspace()) : emptyBooks());
     let copy: Books | undefined;
     const wrote = { entries: [] as string[], mappings: [] as string[], receipts: [] as string[] };
     record.effects.push({ effect: 'books.write', key, applied: live, wrote });
@@ -371,7 +375,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
           for (const x of b.receipts) if (!had.receipts.has(x.id)) { x.run = run.id; added.receipts.push(x.id); }
           return r;
         };
-        const out = live ? updateSaved(ws, actor, stamping, load) : update((copy ??= structuredClone(load())), actor, stamping);
+        const out = live ? updateSaved(workspace(), actor, stamping, load) : update((copy ??= structuredClone(load())), actor, stamping);
         wrote.entries.push(...added.entries);
         wrote.mappings.push(...added.mappings);
         wrote.receipts.push(...added.receipts);
@@ -462,7 +466,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
    * case's run booked and mapped, so the case can go its way again on the waiting version.
    */
   function booksFor(run: Run): Books {
-    const books = loadBooks(ws);
+    const books = loadBooks(workspace());
     if (run.startedBy.kind !== 'check') return books;
     const of = run.startedBy.of;
     return { ...books, journalEntries: books.journalEntries.filter((e) => e.run !== of), mappings: books.mappings.filter((m) => m.run !== of) };
@@ -476,7 +480,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
   }
 
   async function start(id: string, item: ItemRef, by: StartedBy, mode: Run['mode'] = 'live', arrived?: Arrival[]): Promise<CommandResult> {
-    declared = loadWorkflows(deps.appRoot, ws.paths.root);
+    declared = loadWorkflows(deps.appRoot, workspace().paths.root);
     const w = workflow(id);
     if (!w) return { ok: false, refusal: 'not-found', detail: id };
     if (!w.runnable.ok) return { ok: false, refusal: 'not-runnable', detail: w.runnable.missing.map((m) => m.action).join(', ') };
@@ -513,7 +517,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
         const r = runs.get(cmd.run);
         if (!r) return { ok: false, refusal: 'not-found' };
         if (r.state.status !== 'stuck' && r.state.status !== 'parked') return { ok: false, refusal: 'illegal', detail: r.state.status };
-        declared = loadWorkflows(deps.appRoot, ws.paths.root);
+        declared = loadWorkflows(deps.appRoot, workspace().paths.root);
         move(r, { status: 'queued', at: r.state.at, since: now() });
         pump();
         return { ok: true, run: r.id };
@@ -568,7 +572,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
         return { ok: true, run: r.id };
       }
       case 'approve': {
-        declared = loadWorkflows(deps.appRoot, ws.paths.root);
+        declared = loadWorkflows(deps.appRoot, workspace().paths.root);
         const w = workflow(cmd.workflow);
         if (!w) return { ok: false, refusal: 'not-found' };
         deps.approve?.(w);
@@ -580,7 +584,7 @@ export function openEngine(ws: Workspace, deps: EngineDeps): Engine {
   }
 
   async function tick(at = new Date()): Promise<void> {
-    declared = loadWorkflows(deps.appRoot, ws.paths.root);
+    declared = loadWorkflows(deps.appRoot, workspace().paths.root);
     for (const w of declared.workflows) {
       if (!w.runnable.ok || !isApproved(w)) continue;
       for (const t of w.triggers) if (t.kind === 'schedule' && !t.off && cronMatches(t.cron, at)) await create(w, { kind: 'company', id: 'company' }, { kind: 'schedule', cron: t.cron }, 'live');

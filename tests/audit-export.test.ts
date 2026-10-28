@@ -17,12 +17,24 @@ import { APP_ROOT, workspaceAt } from '../src/workspace/workspace.js';
 import { BOOKS_SCHEMA } from '../src/workspace/schema.js';
 import { serveStatic, type StaticServer } from './support/static-server.js';
 import { findBrowser } from '../src/invoices/pdf.js';
+import type { Browser } from 'puppeteer-core';
 import en from '../src/app/i18n/locales/en.js';
 
 const tmp = mkdtempSync(join(tmpdir(), 'audit-export-'));
 const dir = join(tmp, 'host', 'snapshot');
 let server: StaticServer;
 let base: string;
+/**
+ * One browser for the file's walks, each in a context of its own (its own storage, as a fresh profile), closed in `after`:
+ * on a busy machine Chrome took up to 80 s to shut down (#246), which is no part of what a walk checks and so is kept out
+ * of every test's timeout.
+ */
+let launched: Promise<Browser> | undefined;
+const chrome = () => launched ??= import('puppeteer-core').then(({ default: puppeteer }) => {
+  // A Chrome that dies while starting, as one may under memory pressure, is started once more; puppeteer gives each its own fresh profile.
+  const launch = () => puppeteer.launch({ executablePath: findBrowser(), headless: true, timeout: 0, args: ['--no-first-run', '--lang=en-US'] });
+  return launch().catch(launch);
+});
 
 before(async () => {
   await buildAuditExport(workspaceAt(join(APP_ROOT, 'demo')), dir, '2026-10-09T12:00:00.000Z');
@@ -30,6 +42,7 @@ before(async () => {
   base = `${server.url}/snapshot/`;
 });
 after(async () => {
+  await (await launched)?.close();
   await server?.stop();
   rmSync(tmp, { recursive: true, force: true });
 });
@@ -112,11 +125,10 @@ test('a non-empty folder that holds no export is refused, not emptied', async ()
  * track: its heading's counts, chips, «Filter» menu and search wrap, so scrollWidth equals clientWidth.
  */
 test('the list column never widens past its track at the narrowest width, with chips and the filter menu open', { skip: findBrowser() ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 300_000 }, async () => {
-  const { default: puppeteer } = await import('puppeteer-core');
-  const browser = await puppeteer.launch({ executablePath: findBrowser(), headless: true, args: ['--no-first-run', '--lang=en-US'] });
-  const pause = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+  const context = await (await chrome()).createBrowserContext();
+  const page = await context.newPage();
   try {
-    const page = await browser.newPage();
+    page.setDefaultTimeout(0);
     await page.setViewport({ width: 1000, height: 800 });
     await page.goto(`${base}#/receipts`, { waitUntil: 'networkidle0' });
     const wide: string[] = [];
@@ -125,7 +137,7 @@ test('the list column never widens past its track at the narrowest width, with c
       for (const at of ['receipts', 'receipts?f=state_open&f=month_2026-09&f=over_100&q=x', 'journal', 'journal?f=account_1020&f=account_6000&f=who_classify']) {
         await page.goto(`${base}#/${at}`, { waitUntil: 'networkidle0' });
         await page.reload({ waitUntil: 'networkidle0' });
-        await pause(300);
+        await page.evaluate(() => document.fonts.ready.then(() => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)))));
         const measure = async (what: string) => {
           // scrollWidth misses a child that overflows inside a scrolling box of its own, so every element's right edge is measured too
           // (text a box of its own clips, a title's ellipsis, is no overflow; the clipping box is measured itself).
@@ -152,7 +164,7 @@ test('the list column never widens past its track at the narrowest width, with c
     }
     assert.deepEqual(wide, []);
   } finally {
-    await browser.close();
+    await context.close();
   }
 });
 
@@ -160,40 +172,61 @@ const AREAS = ['receipts', 'bank', 'journal', 'vat', 'vat/codes', 'reports/incom
   'company/rules', 'company/sources', 'company/mail', 'invoices', 'automation', 'automation/runs', 'changes', 'partners', 'knowledge', 'receipts'];
 const browserPath = findBrowser();
 
-test('a browser walk over every area asks the host for no /api/, logs no error and leaves the page idle', { skip: browserPath ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 120_000 }, async () => {
-  const { default: puppeteer } = await import('puppeteer-core');
-  const browser = await puppeteer.launch({ executablePath: browserPath, headless: true, args: ['--no-first-run', '--lang=en-US'] });
-  const within = <T>(p: Promise<T>, what: string) => Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(new Error(`${what}: the page did not answer in 5 s`)), 5000))]);
+/**
+ * Conditions, not clocks (#246): an area is measured once its page settled (no request for 300 ms, then an idle moment of
+ * the main thread), so a busy machine only makes the walk slower. The idle wait gives up after 5 s of the page's own time,
+ * leaving an area that never settles to the measurement. The test's timeout is the one wall clock: when it strikes, the
+ * walk says where it stood and how long each step before took.
+ */
+test('a browser walk over every area asks the host for no /api/, logs no error and leaves the page idle', { skip: browserPath ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 300_000 }, async (t) => {
+  let at: string | undefined = 'the browser\'s start';
+  let since = Date.now();
+  const took: string[] = [];
+  const reach = (step: string) => { took.push(`${at} ${Date.now() - since} ms`); at = step; since = Date.now(); };
+  // The signal aborts after every test, passed or not: only a walk still under way says where it stood.
+  t.signal.addEventListener('abort', () => { if (at) t.diagnostic(`the walk stood at ${at} for ${Date.now() - since} ms, after ${took.join(', ')}`); });
+  const context = await (await chrome()).createBrowserContext();
+  reach('a new page');
+  const page = await context.newPage();
   const pause = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
   try {
-    const page = await browser.newPage();
+    page.setDefaultTimeout(0);
     const errors: string[] = [];
     page.on('console', (m) => { if (m.type() === 'error') errors.push(`${m.text()} ${m.location().url ?? ''}`); });
     page.on('pageerror', (e) => errors.push(String(e)));
+    reach('the page\'s metrics');
     const cdp = await page.createCDPSession();
     await cdp.send('Performance.enable');
     const sample = async () => {
-      const { metrics } = await within(cdp.send('Performance.getMetrics'), 'metrics');
+      const { metrics } = await cdp.send('Performance.getMetrics');
       const value = (name: string) => metrics.find((m) => m.name === name)?.value ?? 0;
       return { busy: value('TaskDuration'), at: value('Timestamp') };
     };
+    const settled = async () => {
+      await page.waitForNetworkIdle({ idleTime: 300 });
+      await page.evaluate(() => new Promise((ok) => requestIdleCallback(() => ok(undefined), { timeout: 5000 })));
+    };
     const first = server.requests.length;
+    reach('#/receipts, loading');
     await page.goto(`${base}#/receipts`, { waitUntil: 'networkidle0' });
     const busy: string[] = [];
     for (const area of AREAS) {
-      await within(page.evaluate((hash) => { location.hash = hash; }, `#/${area}`), area);
-      await pause(700);
+      reach(`#/${area}`);
+      await page.evaluate((hash) => { location.hash = hash; }, `#/${area}`);
+      await settled();
+      reach(`#/${area}, measuring`);
       const a = await sample();
       await pause(1000);
       const b = await sample();
       const share = (b.busy - a.busy) / (b.at - a.at);
       if (share > 0.5) busy.push(`${area}: main thread ${Math.round(share * 100)} % busy`);
-      if (area === 'changes') assert.ok((await within(page.evaluate(() => document.body.innerText), area)).includes(en.messages['automation.apiOnly']), 'Änderungen says it needs the server');
+      if (area === 'changes') assert.ok((await page.evaluate(() => document.body.innerText)).includes(en.messages['automation.apiOnly']), 'Änderungen says it needs the server');
     }
     assert.deepEqual(server.requests.slice(first).filter((p) => !p.startsWith('/snapshot/')), [], 'every request is a file of the export');
     assert.deepEqual(busy, [], 'no area keeps the page busy');
     assert.deepEqual(errors, []);
   } finally {
-    await browser.close();
+    at = undefined;
+    await context.close();
   }
 });

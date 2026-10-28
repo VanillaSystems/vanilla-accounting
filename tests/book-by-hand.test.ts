@@ -114,7 +114,7 @@ test('a later inbox run keeps the booking by hand, also after another receipt is
 test('the task «Bewegung von Hand buchen»: «Gebucht» without an entry keeps it waiting; with one it is done', async () => {
   const { ws, ref } = demoUnbooked();
   try {
-    const engine = openEngine(ws, { appRoot: APP_ROOT, ask: async () => undefined });
+    const engine = openEngine(() => ws, { appRoot: APP_ROOT, ask: async () => undefined });
     const started = await engine.start('booking', { kind: 'transaction', id: ref }, { kind: 'manual' }, 'live');
     assert.ok(started.ok, JSON.stringify(started));
     const id = started.ok ? started.run! : '';

@@ -61,7 +61,8 @@ test('a run moves only by legal transitions', () => {
 
 test('a person\'s answer continues a waiting run; an outcome the step does not have is refused', async () => {
   const root = app({ ask: { 'workflow.yaml': wf(['first', 'ask', 'last']), 'first/step.yaml': 'uses: test.ok\noutcomes: { ok: ask }\n', 'ask/step.yaml': 'by: person\ntask: { title: Look }\noutcomes: { yes: last, no: done }\n', 'last/step.yaml': 'uses: test.ok\noutcomes: { ok: done }\n' } });
-  const engine = openEngine(demo(), { appRoot: root });
+  const ws = demo();
+  const engine = openEngine(() => ws, { appRoot: root });
   const r = await engine.start('ask', { kind: 'transaction', id: 't' }, { kind: 'manual' });
   await engine.idle();
   const id = r.ok ? r.run! : '';
@@ -79,7 +80,8 @@ test('two AI steps run at a time; the third waits for an AI slot', async () => {
   const root = app({ think: { 'workflow.yaml': wf(['think']), 'think/step.yaml': 'uses: test.think\noutcomes: { ok: done }\n' } });
   let open!: () => void;
   gate = new Promise((r) => { open = r; });
-  const engine = openEngine(demo(), { appRoot: root });
+  const ws = demo();
+  const engine = openEngine(() => ws, { appRoot: root });
   for (const id of ['a', 'b', 'c']) await engine.start('think', { kind: 'transaction', id }, { kind: 'manual' });
   await new Promise((r) => setTimeout(r, 50));
   const states = engine.runs().map((r) => r.state.status === 'queued' ? `queued:${r.state.reason}` : r.state.status).sort();
@@ -95,7 +97,7 @@ test('what came in rides with a run: a drop while the run is under way gets a ru
   let open!: () => void;
   gate = new Promise((r) => { open = r; });
   const ws = demo();
-  const engine = openEngine(ws, { appRoot: root });
+  const engine = openEngine(() => ws, { appRoot: root });
   const company = { kind: 'company', id: 'inbox' } as const;
   const idOf = (r: { ok: boolean; run?: string }) => (r.ok ? r.run! : '');
   const first = idOf(await engine.start('inbox', company, { kind: 'outside', file: 'a.pdf' }, 'live', [{ kind: 'receipt', file: 'a.pdf', id: 'aaaa000000000000' }]));
@@ -131,7 +133,8 @@ test('a finished run emits its event, and the workflow that listens starts for t
     second: { 'workflow.yaml': wf(['b'], 'triggers:\n  - event: { name: thing.done }\n'), 'b/step.yaml': 'uses: test.ok\noutcomes: { ok: done }\n' },
     off: { 'workflow.yaml': wf(['c'], 'triggers:\n  - event: { name: thing.done, off: true }\n'), 'c/step.yaml': 'uses: test.ok\noutcomes: { ok: done }\n' },
   });
-  const engine = openEngine(demo(), { appRoot: root });
+  const ws = demo();
+  const engine = openEngine(() => ws, { appRoot: root });
   await engine.start('first', { kind: 'transaction', id: 'x' }, { kind: 'manual' });
   await engine.idle();
   const second = engine.runs().find((r) => r.workflow === 'second')!;
@@ -144,7 +147,8 @@ test('a call starts one child run per item and goes on when all of them are done
     parent: { 'workflow.yaml': wf(['list', 'each', 'after']), 'list/step.yaml': 'uses: test.list\nemits: [items]\noutcomes: { ok: each }\n', 'each/step.yaml': 'calls: child\nfor-each: items\nreads: [items]\noutcomes: { done: after }\n', 'after/step.yaml': 'uses: test.ok\noutcomes: { ok: done }\n' },
     child: { 'workflow.yaml': wf(['c']), 'c/step.yaml': 'uses: test.ok\noutcomes: { ok: done }\n' },
   });
-  const engine = openEngine(demo(), { appRoot: root });
+  const ws = demo();
+  const engine = openEngine(() => ws, { appRoot: root });
   const r = await engine.start('parent', { kind: 'transaction', id: 'p' }, { kind: 'manual' });
   await engine.idle();
   const parent = engine.run(r.ok ? r.run! : '')!;
@@ -156,14 +160,14 @@ test('a call starts one child run per item and goes on when all of them are done
 test('a crashed run goes back into the queue at its step and books nothing twice', async () => {
   const ws = demo();
   const root = app({ book: { 'workflow.yaml': wf(['book']), 'book/step.yaml': 'uses: test.book-open\neffects: [ledger.book]\noutcomes: { booked: done }\n' } });
-  const engine = openEngine(ws, { appRoot: root });
+  const engine = openEngine(() => ws, { appRoot: root });
   const r = await engine.start('book', { kind: 'transaction', id: 'y' }, { kind: 'manual' });
   await engine.idle();
   const run = engine.run(r.ok ? r.run! : '')!;
   assert.equal(loadBooks(ws).journalEntries.filter((e) => e.run === run.id).length, 1);
   const crashed: Run = { ...run, state: { status: 'running', at: 'book', since: run.startedAt }, steps: [] };
   saveRun(ws, crashed);
-  const after = openEngine(ws, { appRoot: root });
+  const after = openEngine(() => ws, { appRoot: root });
   await after.idle();
   assert.equal(after.run(run.id)!.state.status, 'done', 'the crashed run was picked up again');
   assert.equal(loadBooks(ws).journalEntries.filter((e) => e.transactionRef === 'y').length, 1, 'and booked nothing twice');
@@ -174,7 +178,7 @@ test('a dry run checks the booking through the write door: a closed period is re
   const root = app({ book: { 'workflow.yaml': wf(['book']), 'book/step.yaml': 'uses: test.book-closed\neffects: [ledger.book]\noutcomes: { booked: done }\n' } });
   assert.ok((loadBooks(ws).config.closedThrough ?? '') >= '2026-01-15', 'the demo has closed the period of the booking');
   const before = booksOnDisk(ws);
-  const engine = openEngine(ws, { appRoot: root });
+  const engine = openEngine(() => ws, { appRoot: root });
   const r = await engine.start('book', { kind: 'transaction', id: 'x' }, { kind: 'manual' }, 'dry');
   await engine.idle();
   const effect = engine.run(r.ok ? r.run! : '')!.steps[0].effects[0];
