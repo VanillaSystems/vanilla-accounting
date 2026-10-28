@@ -37,16 +37,17 @@ const { transactions: exported } = readTransactions(ws);
 const { balances } = await extractStatementBalances(partDirs(ws.paths, 'statements'), ws.bankAccounts);
 const wiseBanks = new Set(ws.bankAccounts.filter((a) => a.statements === 'wise').map((a) => a.bank));
 const resolved = noAsk ? undefined : await resolveStep('statement-read');
-console.log(`${pdfs.length} statement PDFs; model ${resolved ? `${resolved.provider}/${resolved.model}` : 'not asked (cached reads only)'}`);
+console.log(`${pdfs.length} statement PDFs; model ${resolved ? `${resolved.provider.id}/${resolved.model}` : 'not asked (cached reads only)'}`);
 
 async function modelRead(path: string): Promise<{ statement: ReadStatement; by: string } | undefined> {
   const cache = join(readsDir, `${createHash('sha256').update(readFileSync(path)).digest('hex').slice(0, 24)}.json`);
   if (existsSync(cache)) return JSON.parse(readFileSync(cache, 'utf8'));
   if (noAsk) return undefined;
   const started = Date.now();
-  const read = await readStatementPdf(path, (prompt, opts) => ask(prompt, opts));
+  let raw = '';
+  const read = await readStatementPdf(path, async (prompt, opts) => (raw = await ask(prompt, opts)));
   console.log(`  read ${read.by}${read.why ? ` (${read.why})` : ''} in ${Math.round((Date.now() - started) / 1000)} s`);
-  if (read.by !== 'model') return undefined;
+  if (read.by !== 'model') { writeFileSync(cache.replace(/\.json$/, '.failed.txt'), raw); return undefined; }
   writeFileSync(cache, JSON.stringify({ statement: read.statement, by: read.by }));
   return read;
 }
@@ -56,7 +57,8 @@ for (const [name, path] of pdfs) {
   const references = wiseBanks.has(basename(dirname(path))) ? wiseReferences(await pdfText(path, 'raw')) : new Map<string, string>();
   const balance = balances.find((b) => b.sourceFile === basename(path));
   const read = await modelRead(path);
-  const account = read ? accountOfRead(read.statement, ws.bankAccounts) : undefined;
+  // The account by the read's IBAN or currency, else as the folder and name place the PDF (the readers' answer).
+  const account = read ? accountOfRead(read.statement, ws.bankAccounts) ?? ws.bankAccounts.find((a) => a.account === balance?.account) : undefined;
   const result = fileParity(name, { balance, references }, read && account ? { statement: read.statement, account } : undefined, exported);
   results.push({ ...result, adds: read ? checkStatement(read.statement).ok : false });
   console.log(`  ${results.length}/${pdfs.length} balance ${result.balance}, references ${JSON.stringify(result.references)}, originals ${JSON.stringify(result.originals)}`);

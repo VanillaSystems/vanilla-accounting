@@ -6,7 +6,7 @@
  * (camt InstdAmt or the description, originalOf).
  */
 import { heldLines } from '../../src/books/bank-import.js';
-import { factsOfRead, paymentKey } from '../../src/books/statement-read-facts.js';
+import { factsOfRead } from '../../src/books/statement-read-facts.js';
 import { originalOf } from '../../src/intake/pairing.js';
 import type { BankTransaction, StatementClosingBalance } from '../../src/types/index.js';
 import type { ReadStatement } from '../../src/types/statement-read.js';
@@ -26,6 +26,8 @@ export interface FileParity {
   differences: string[];
 }
 
+/** The bank's own transaction id the Wise reader keys by, else the ref before the uniqueness suffix. */
+const paymentKey = (t: Pick<BankTransaction, 'ref' | 'bankTxId'>): string => t.bankTxId ?? t.ref.split('~')[0];
 const empty = (): Tally => ({ equal: 0, differ: 0, readerOnly: 0, modelOnly: 0 });
 const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
 const cents = (n: number) => Math.round(n * 100);
@@ -66,7 +68,8 @@ export function fileParity(file: string, reader: ReaderSide, model: ModelSide | 
   }
   const { statement, account } = model;
   const facts = factsOfRead(statement, account, exported);
-  const modelRefs = new Map([...facts.references].map(([k, v]) => [k, norm(v)]));
+  const byRef = new Map(exported.map((t) => [t.ref, paymentKey(t)]));
+  const modelRefs = new Map([...facts.references].map(([ref, v]) => [byRef.get(ref) ?? ref, norm(v)]));
   const references = tallyMaps(readerRefs, modelRefs, (a, b) => a === b, 'reference', differences);
 
   const mine = exported.filter((t) => t.bank === account.bank && t.currency === account.currency);
@@ -74,14 +77,14 @@ export function fileParity(file: string, reader: ReaderSide, model: ModelSide | 
   const read = new Map<string, { amount: number; currency: string }>();
   for (const [i, t] of heldLines(statement.movements, mine, account)) {
     const k = originalOf(t);
-    if (k) known.set(paymentKey(t), k);
+    if (k && k.currency !== account.currency) known.set(paymentKey(t), k);
     const r = statement.movements[i].original;
     if (r && r.currency !== account.currency) read.set(paymentKey(t), r);
   }
   const originals = tallyMaps(known, read, (a, b) => a.currency === b.currency && cents(a.amount) === cents(b.amount), 'original', differences);
 
   const b = reader.balance;
-  const modelBalance = { account: account.account, date: facts.closing.date, amount: facts.closing.amount };
+  const modelBalance = { account: account.account, ...statement.closing };
   let balance: FileParity['balance'];
   if (!b) balance = 'modelOnly';
   else if (b.account === modelBalance.account && b.date === modelBalance.date && cents(b.amount) === cents(modelBalance.amount)) balance = 'equal';

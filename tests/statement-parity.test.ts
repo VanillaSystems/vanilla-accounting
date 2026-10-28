@@ -82,5 +82,5 @@ test('factsOfRead gives only what the export lacks: no reference over the export
   const facts = factsOfRead(s, account, [...exported, tx('FEE-9000000007', '2026-07-30', -5)]);
   assert.deepEqual([...facts.references], [['TRANSFER-9000000001', 'Invoice 2026000123 Ref.: 4400000001-1'], ['TRANSFER-9000000002', 'Shopify  X1Y2Z3']]);
   assert.deepEqual([...facts.originals], [['CARD-9000000004', { amount: 66, currency: 'USD' }], ['CARD-9000000005', { amount: 16.2, currency: 'GBP' }]]);
-  assert.deepEqual([facts.closing, facts.unmatched], [{ date: '2026-07-31', amount: 2030.6 }, 0]);
+  assert.equal(facts.unmatched, 0);
 });

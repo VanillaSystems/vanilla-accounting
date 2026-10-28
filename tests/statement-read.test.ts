@@ -50,6 +50,20 @@ test('the model\'s answer and the person\'s table: amounts as printed, wholly em
   assert.equal(parseReadStatement({ currency: 'CHF', opening: { date: '2026-02-30', amount: 0 }, closing: { date: '2026-10-31', amount: 0 }, movements: [] }), undefined, 'no such day');
 });
 
+test('a statement that prints no opening balance but a balance on each row: the opening is the balance before its earliest row, oldest or newest first', () => {
+  const rows = [{ date: '2026-07-02', amount: 500, balance: 1500 }, { date: '2026-07-10', amount: -120.4, balance: 1379.6 }, { date: '2026-07-28', amount: -9.6, balance: 1370 }];
+  const period = { from: '2026-07-01', to: '2026-07-31' }, closing = { date: '2026-07-31', amount: 1370 };
+  const oldest = parseReadStatement({ currency: 'EUR', period, closing, movements: rows })!;
+  assert.deepEqual([oldest.opening, checkStatement(oldest).ok, oldest.movements[1].balance], [{ date: '2026-07-01', amount: 1000 }, true, 1379.6]);
+  const newest = parseReadStatement({ currency: 'EUR', closing, movements: [...rows].reverse() })!;
+  assert.deepEqual([newest.opening, checkStatement(newest).ok], [{ date: '2026-07-02', amount: 1000 }, true], 'without a period: the earliest row\'s day');
+  const misread = parseReadStatement({ currency: 'EUR', period, closing: { date: '2026-07-31', amount: 1379.6 }, movements: rows.slice(0, 2) })!;
+  assert.equal(checkStatement({ ...misread, closing: { date: '2026-07-31', amount: 1397.6 } }).ok, false, 'a closing misread still fails the check');
+  assert.equal(parseReadStatement({ currency: 'EUR', period, closing, movements: [rows[0], { ...rows[1], balance: 1397.6 }, rows[2]] }), undefined, 'rows whose balances chain neither way give no opening');
+  assert.equal(parseReadStatement({ currency: 'EUR', period, closing, movements: [rows[0], { date: '2026-07-10', amount: -120.4 }] }), undefined, 'a row without its balance gives none');
+  assert.deepEqual(parseReadStatement({ currency: 'EUR', period, closing, movements: [] })?.opening, { date: '2026-07-01', amount: 1370 }, 'a month without a movement opens as it closes');
+});
+
 test('the camt.053 written from a read statement is read back as a bank\'s export: account, balances, period, each movement\'s fields; refs stable per statement', async () => {
   const { truth } = await inventedStatement(DEMO_OCTOBER);
   const xml = toStatementXml(truth, { id: 'read-abc', source: 'okt.pdf', by: 'model', at: '2026-11-01T08:00:00' });
