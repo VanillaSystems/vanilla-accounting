@@ -19,6 +19,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { BankStatement, BankTransaction, Index, JournalEntry, Mapping, QuarterKey, Receipt, StatementClosingBalance } from '../../src/types/index.js';
 import type { ReadStatement } from '../../src/types/statement-read.js';
+import { pdfHash, type Beside } from '../../src/intake/statement-read.js';
 import { assignUniqueRefs, readCamt, transactionsOf } from '../../src/providers/camt053/camt053.js';
 import { bankKind, roleBefore } from '../../src/workspace/banks.js';
 import { loadFxResolver } from '../../src/accounting/fx-rates.js';
@@ -194,14 +195,16 @@ function statements(demo: Demo, bankId: string, booked: Booked[], tree: Tree): {
       ...month.map((b) => `${dmy(b.payment.date)} | ${b.payment.text} | ${chf(signed(b))} | Ref. ${b.ref}`),
       `Schlusssaldo ${dmy(to)}: ${chf(closing)}`,
     ];
-    tree.set(`${dir}/${file}`, textPdf(lines));
+    const pdf = textPdf(lines);
+    tree.set(`${dir}/${file}`, pdf);
     // What a correct read of the PDF gives, kept beside it as the app keeps the model's (#243): a demo's first run asks no model for it.
     const read: ReadStatement = {
       iban: bank.iban, currency: bank.currency, bankName: bank.institution, owner: company.name, period: { from, to },
       opening: { date: from, amount: before(from) }, closing: { date: to, amount: closing },
       movements: month.map((b) => ({ date: b.payment.date, amount: signed(b), text: b.payment.text })),
     };
-    tree.set(`${dir}/${file.replace(/\.pdf$/, '.read.json')}`, `${JSON.stringify({ statement: read }, null, 1)}\n`);
+    const beside: Beside = { pdf: pdfHash(pdf), statement: read };
+    tree.set(`${dir}/${file.replace(/\.pdf$/, '.read.json')}`, `${JSON.stringify(beside, null, 1)}\n`);
     balances.push({ account: bank.account, bank: bank.bank, currency: bank.currency, date: to, amount: closing, source: 'pdf', sourceFile: file });
     pdfs.push({ bank: bank.bank, filename: file, fromDate: from, toDate: to, ...(bank.bank === 'Wise' ? { currency: bank.currency } : {}) });
   }

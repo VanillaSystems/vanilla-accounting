@@ -204,9 +204,24 @@ test('a statement PDF kept as its month\'s statement is read once and its read k
   };
   assert.equal(await readKeptStatements(ws, ask), 2);
   assert.equal(asked.length, 2, 'the PDF a camt.053 was written from is no kept statement');
-  assert.deepEqual(JSON.parse(readFileSync(readBeside(join(dir, 'november.pdf')), 'utf8')), { why: 'failed' });
+  assert.equal(JSON.parse(readFileSync(readBeside(join(dir, 'november.pdf')), 'utf8')).why, 'failed');
   assert.equal(await readKeptStatements(ws, ask), 0);
   assert.equal(asked.length, 2, 'a second run asks nothing');
   assert.deepEqual(keptReads(ws).map((r) => [r.file, r.account.account, r.statement.closing, r.statement.movements.length]), [['oktober.pdf', '1021', truth.closing, truth.movements.length]]);
   assert.equal(existsSync(readBeside(join(dir, 'imported.pdf'))), false);
+  writeFileSync(join(dir, 'oktober.pdf'), (await inventedStatement({ ...DEMO_OCTOBER, opening: 1 })).pdf);
+  assert.deepEqual(keptReads(ws), [], 'a read is of its file: another PDF put in its place under the name has none');
+  assert.equal(await readKeptStatements(ws, ask), 1);
+  assert.equal(asked.length, 3, 'and is read again');
+});
+
+test('each demo ships the read of every statement PDF it keeps, so its first run asks no model for them (#243)', async () => {
+  const { keptReads } = await import('../src/intake/statement-read.js');
+  const { workspaceAt, filesOfPart } = await import('../src/workspace/workspace.js');
+  for (const name of ['demo', 'demo-consulting', 'demo-coiffeur', 'demo-schreinerei']) {
+    const ws = workspaceAt(name);
+    const pdfs = filesOfPart(ws.paths, 'statements').filter(([file]) => file.endsWith('.pdf'));
+    assert.ok(pdfs.length > 0, `${name} keeps statement PDFs`);
+    assert.equal(keptReads(ws).length, pdfs.length, `${name}: npm run demo:generate writes the reads`);
+  }
 });

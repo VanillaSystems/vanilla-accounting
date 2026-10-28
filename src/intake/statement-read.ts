@@ -6,6 +6,7 @@
  * (src/books/statement-check.ts) and marks the lines the books hold already; the drop dialog shows
  * the table and imports it as an ISO 20022 statement (src/providers/statement-read/camt-writer.ts).
  */
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { parse, stringify } from 'yaml';
@@ -131,8 +132,21 @@ export function asRead(statement: ReadStatement, by: ReadBy, held: Map<number, B
 /** Where the model's read of a kept statement PDF lies: beside it, under its stem. */
 export const readBeside = (pdf: string): string => pdf.replace(/\.pdf$/i, '.read.json');
 
+/** The PDF a read is of, by its bytes: a file put in its place under the same name is read again. */
+export const pdfHash = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex');
+
 /** The read kept beside a PDF: the statement, or why the model gave none (then it is not asked again; deleting the file asks again). */
-type Beside = { statement: ReadStatement } | { why: HandWhy };
+export type Beside = { pdf: string } & ({ statement: ReadStatement } | { why: HandWhy });
+
+/** The read beside the PDF at `path`, when it is of that file. */
+function besideOf(path: string): Partial<{ statement: unknown; why: HandWhy }> | undefined {
+  try {
+    const beside = JSON.parse(readFileSync(readBeside(path), 'utf8')) as { pdf?: unknown; statement?: unknown; why?: HandWhy };
+    return beside.pdf === pdfHash(readFileSync(path)) ? beside : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /** The statement PDFs in the banks' folders that the app wrote no bank statement from (#217): each kept as its month's statement. */
 function keptPdfs(ws: Pick<Workspace, 'paths' | 'bankAccounts'>): { bank: string; file: string; path: string }[] {
@@ -142,16 +156,17 @@ function keptPdfs(ws: Pick<Workspace, 'paths' | 'bankAccounts'>): { bank: string
 }
 
 /**
- * Reads each kept statement PDF that has no read beside it yet, with the model, and keeps the read
- * beside it: a rebuild of the books then takes its references, original amounts and closing
+ * Reads each kept statement PDF that has no read of it beside it yet, with the model, and keeps the
+ * read beside it: a rebuild of the books then takes its references, original amounts and closing
  * balance (keptReads) without asking again. Returns how many files it read.
  */
 export async function readKeptStatements(ws: Pick<Workspace, 'paths' | 'bankAccounts'>, ask: Asker, log: (line: string) => void = () => {}): Promise<number> {
   let read = 0;
-  for (const { file, path } of keptPdfs(ws).filter((p) => !existsSync(readBeside(p.path)))) {
+  for (const { file, path } of keptPdfs(ws).filter((p) => !besideOf(p.path))) {
     const r = await readStatementPdf(path, ask);
     if (r.why === 'noAi') break;
-    const beside: Beside = r.by === 'model' ? { statement: r.statement } : { why: r.why ?? 'failed' };
+    const pdf = pdfHash(readFileSync(path));
+    const beside: Beside = r.by === 'model' ? { pdf, statement: r.statement } : { pdf, why: r.why ?? 'failed' };
     writeFileSync(readBeside(path), `${JSON.stringify(beside, null, 1)}\n`);
     read++;
     log(`  ${file}: ${r.by === 'model' ? `read, ${r.statement.movements.length} movements${checkStatement(r.statement).ok ? '' : ', does not add up'}` : `not read (${r.why})`}`);
@@ -162,11 +177,7 @@ export async function readKeptStatements(ws: Pick<Workspace, 'paths' | 'bankAcco
 /** The reads kept beside the statement PDFs, each at its account: by its IBAN, else its bank's folder and its currency. */
 export function keptReads(ws: Pick<Workspace, 'paths' | 'bankAccounts'>): KeptRead[] {
   return keptPdfs(ws).flatMap(({ bank, file, path }): KeptRead[] => {
-    const at = readBeside(path);
-    if (!existsSync(at)) return [];
-    let beside: Partial<{ statement: unknown }>;
-    try { beside = JSON.parse(readFileSync(at, 'utf8')); } catch { return []; }
-    const statement = parseReadStatement(beside.statement);
+    const statement = parseReadStatement(besideOf(path)?.statement);
     if (!statement) return [];
     const match = accountForStatement(ws.bankAccounts, { iban: statement.iban, currency: statement.currency, folder: bank });
     return 'account' in match ? [{ file, account: match.account, statement }] : [];
