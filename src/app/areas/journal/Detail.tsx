@@ -25,7 +25,9 @@ import type { AreaProps } from '../index.js';
 import { Paper } from '../receipts/Paper.js';
 import { I } from '../receipts/icons.js';
 import { at, bankOf, amountOf } from '../receipts/view.js';
-import { explain, codeText } from '../codes/vat-card.js';
+import { explain } from '../codes/vat-card.js';
+import { codeLabel, codeText } from '../codes/names.js';
+import { VatCodeField } from '../codes/VatCodeField.js';
 import { receiptsFor, whySeen, type EntryView, type Journal, type WhySeen } from './model.js';
 import { bookedByText, changesText, reasonText, type Say } from './by.js';
 
@@ -132,7 +134,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
           <span className="mono n">{e.vatCode ? <button type="button" className="vlink" data-vat={e.vatCode} data-tip={t('codes.explainCode', { code: e.vatCode })} onClick={() => explain(props, e.vatCode!)}>{e.vatCode}</button> : '–'}</span>
           <span className="nm">
             {e.vatCode
-              ? <>{found?.negative && <span className="m">{t('journal.reversed')} · </span>}{codeText(e.vatCode)}{!!tax && found?.entry.amountIs !== 'tax' && <span className="mono m"> · {t('journal.vatIncluded', { tax: fmt(Math.abs(tax)) })}</span>}</>
+              ? <>{codeText(e.vatCode)}{!!tax && found?.entry.amountIs !== 'tax' && <span className="mono m"> · {t('journal.vatIncluded', { tax: fmt(Math.abs(tax)) })}</span>}</>
               : t('journal.noVat')}
           </span>
         </div>}
@@ -197,7 +199,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
             <Sec k="teile" val={t('journal.nEntries', { n: siblings.length + 1 })}>
               {siblings.map((x) => (
                 <div key={x.e.id} className="tx go" onClick={() => nav.select({ area: 'journal', id: x.e.id })}>
-                  <span className="d">{x.e.accountDebit || '–'} / {x.e.accountCredit || '–'} · {x.e.vatCode || t('journal.noVat')}</span>
+                  <span className="d">{x.e.accountDebit || '–'} / {x.e.accountCredit || '–'} · {x.e.vatCode ? codeLabel(x.e.vatCode) : t('journal.noVat')}</span>
                   <span className="am">{fmt(x.e.amount)}</span>
                   <span className="tt">{x.e.description}</span>
                 </div>
@@ -267,8 +269,8 @@ function LinkReceipt({ books, nav, entries }: Props & { entries: JournalEntry[] 
 /** What the booking page and the row say when an entry contradicts its receipts (src/accounting/evidence-check.ts). */
 export function evidenceText(e: JournalEntry, c: EvidenceCheck): string {
   return c.kind === 'receiptShowsVat'
-    ? t('journal.evidence.receiptShowsVat', { rate: String(c.rate), code: e.vatCode ?? '' })
-    : t('journal.evidence.vatWithoutReceipt', { code: e.vatCode ?? '', zero: c.code });
+    ? t('journal.evidence.receiptShowsVat', { rate: String(c.rate), code: e.vatCode ? codeLabel(e.vatCode) : '' })
+    : t('journal.evidence.vatWithoutReceipt', { code: e.vatCode ? codeLabel(e.vatCode) : '', zero: codeLabel(c.code) });
 }
 
 /** The click: the proposed code, and for a receipt that shows VAT the receipts the entry now records as seen. */
@@ -305,7 +307,7 @@ function WhyLine({ w, nav }: { w: WhySeen; nav: Props['nav'] }) {
   );
 }
 
-const satzOf = (x: JournalEntry) => `${x.accountDebit || '–'} / ${x.accountCredit || '–'} · ${x.vatCode || t('journal.noVat')} · ${fmt(x.amount)}`;
+const satzOf = (x: JournalEntry) => `${x.accountDebit || '–'} / ${x.accountCredit || '–'} · ${x.vatCode ? codeLabel(x.vatCode) : t('journal.noVat')} · ${fmt(x.amount)}`;
 
 /**
  * Asked before «Neu klassifizieren» replaces a person's booking (by hand, or by a wish in the AI
@@ -401,7 +403,7 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
     next.vatCode = vatCode.code;
     if (vatCode.fromRate !== undefined) {
       const el = field('vatCode'); if (el) el.value = vatCode.code;
-      setNote(t('journal.vatFromRate', { rate: String(vatCode.fromRate), code: vatCode.code, text: lookupVatCode(vatCode.code)?.entry.bananaText ?? '' }));
+      setNote(t('journal.vatFromRate', { rate: String(vatCode.fromRate), code: vatCode.code, text: codeText(vatCode.code) }));
     }
     const el = field('amount'); if (el) el.value = fmt(next.amount);
     const changed: Field[] = (['accountDebit', 'accountCredit', 'vatCode', 'amount', 'description'] as const).filter((k) => next[k] !== ((k === 'vatCode' || k === 'description' ? e[k] ?? '' : e[k])));
@@ -431,24 +433,18 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
           <AccountField name="accountCredit" label={t('journal.field.accountCredit')} defaultValue={e.accountCredit} readOnly={!edit} onPick={save} />
         </div>
         <div className="two">
-          <label>{t('journal.field.vatCode')}<input className="mono" name="vatCode" defaultValue={e.vatCode ?? ''} readOnly={!edit} list="vat-codes" placeholder={edit ? t('journal.vatPlaceholder') : undefined} /></label>
+          <VatCodeField name="vatCode" label={t('journal.field.vatCode')} defaultValue={e.vatCode ?? ''} readOnly={!edit} placeholder={edit ? t('journal.vatPlaceholder') : undefined} onPick={save} />
           <label>{t('journal.amountIn', { currency: e.exchangeCurrency || baseCurrency() })}<input className="mono" name="amount" defaultValue={fmt(e.amount)} readOnly={!edit} style={{ textAlign: 'right' }} /></label>
         </div>
         <label>{t('journal.field.description')}<input name="description" defaultValue={e.description ?? ''} readOnly={!edit} /></label>
         <TagFields dimensions={dimensions} entries={props.books.journalEntries ?? []} tags={e.tags} readOnly={!edit} onPick={save} />
         {v.locked && dimensions.length > 0 && <div className="fhint" data-testid="tags-locked">{t('tags.locked')}</div>}
-        <VatCodeList />
         <div className="err" role="alert">{err}</div>
         {note && <div className="fhint" data-testid="vat-from-rate">{note}</div>}
         {edit && <div className="fhint">{t('journal.saveHint')}</div>}
       </form>
     </Sec>
   );
-}
-
-/** The codes a VAT field offers as you type: the ones the firm's form takes (none on a firm not registered, no input tax on the net tax rate method). */
-export function VatCodeList() {
-  return <datalist id="vat-codes">{firmCodes().map((c) => <option key={c.code} value={c.code}>{c.bananaText ?? ''}</option>)}</datalist>;
 }
 
 /** No receipt: the strip of the payment's statement that shows it, as in Kontoauszüge. */

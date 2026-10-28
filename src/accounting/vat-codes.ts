@@ -18,6 +18,14 @@ import type { TaxCodeInfo } from '../engines/tax-codes.js';
 export const VAT_CODE_FAMILIES = ['V', 'VS', 'F', 'B', 'M', 'I', 'K', 'Z'] as const;
 export type VatCodeFamily = (typeof VAT_CODE_FAMILIES)[number];
 
+/**
+ * What a person is doing when she picks a code: the groups of the code picker, in its order. A
+ * code's group is its kind's, except an M or I code whose amount is the tax itself (M81-2), which is
+ * how import VAT is booked.
+ */
+export const VAT_CODE_GROUPS = ['material', 'expense', 'sale', 'import', 'abroad', 'correction'] as const;
+export type VatCodeGroup = (typeof VAT_CODE_GROUPS)[number];
+
 interface KindSpec {
   kind: string;
   family: VatCodeFamily;
@@ -25,30 +33,33 @@ interface KindSpec {
   match: RegExp;
   /** Rule ids in processes/*.guide.yaml that choose a code of this kind. */
   rules: readonly string[];
+  /** The code's plain name: the dictionary's vatCodes.plain.<plain>, with {rate} and {n} (vatCodeName). */
+  plain: string | ((code: string) => string);
+  group: VatCodeGroup;
 }
 
 /** Every kind of code, in the order the catalogue lists them. */
 export const VAT_CODE_KINDS = [
-  { kind: 'export', family: 'V', match: /^V0$/, rules: ['sv-order-tax', 'sv-no-invoice'] },
-  { kind: 'abroad', family: 'V', match: /^V0-E$/, rules: ['sv-service-abroad', 'sv-place-abroad'] },
-  { kind: 'notification', family: 'V', match: /^V0-T$/, rules: [] },
-  { kind: 'notTaxable', family: 'V', match: /^V0-N$/, rules: [] },
-  { kind: 'various', family: 'V', match: /^V0-D$/, rules: [] },
-  { kind: 'saleOpted', family: 'V', match: /^V\d+-B$/, rules: [] },
-  { kind: 'sale', family: 'V', match: /^V\d+(-N)?$/, rules: ['sv-order-tax', 'sv-no-invoice', 'sv-card-terminal', 'sid-sale-refund'] },
-  { kind: 'discount', family: 'VS', match: /^VS\d+(-N)?$/, rules: [] },
-  { kind: 'flatRate', family: 'F', match: /^FS?\d$/, rules: [] },
-  { kind: 'acquisition', family: 'B', match: /^B\d+(-[12])?$/, rules: ['pv-bezugsteuer'] },
-  { kind: 'inputNoVat', family: 'M', match: /^M0$/, rules: ['pv-no-receipt', 'pv-che-but-zero', 'pv-otherwise'] },
-  { kind: 'material', family: 'M', match: /^M\d+(-[12])?$/, rules: ['pv-charged', 'pv-prefix-from-account', 'pv-import-vat-evv'] },
-  { kind: 'inputNoVat', family: 'I', match: /^I0$/, rules: ['pv-no-receipt', 'pv-che-but-zero', 'pv-otherwise'] },
-  { kind: 'investment', family: 'I', match: /^I\d+(-[12])?$/, rules: ['pv-charged', 'pv-prefix-from-account'] },
-  { kind: 'depositRelief', family: 'K', match: /^K\d*-A$/, rules: [] },
-  { kind: 'inputCorrection', family: 'K', match: /^K\d*-B$/, rules: ['eig-entry'] },
-  { kind: 'inputReduction', family: 'K', match: /^K\d*-C$/, rules: [] },
-  { kind: 'taxCredit', family: 'K', match: /^F10\d\d$/, rules: [] },
-  { kind: 'subsidies', family: 'Z', match: /^Z0-A$/, rules: [] },
-  { kind: 'nonConsideration', family: 'Z', match: /^Z0$/, rules: [] },
+  { kind: 'export', family: 'V', match: /^V0$/, rules: ['sv-order-tax', 'sv-no-invoice'], plain: 'export', group: 'abroad' },
+  { kind: 'abroad', family: 'V', match: /^V0-E$/, rules: ['sv-service-abroad', 'sv-place-abroad'], plain: 'abroad', group: 'abroad' },
+  { kind: 'notification', family: 'V', match: /^V0-T$/, rules: [], plain: 'notification', group: 'sale' },
+  { kind: 'notTaxable', family: 'V', match: /^V0-N$/, rules: [], plain: 'notTaxable', group: 'sale' },
+  { kind: 'various', family: 'V', match: /^V0-D$/, rules: [], plain: 'various', group: 'sale' },
+  { kind: 'saleOpted', family: 'V', match: /^V\d+-B$/, rules: [], plain: 'saleOpted', group: 'sale' },
+  { kind: 'sale', family: 'V', match: /^V\d+(-N)?$/, rules: ['sv-order-tax', 'sv-no-invoice', 'sv-card-terminal', 'sid-sale-refund'], plain: 'sale', group: 'sale' },
+  { kind: 'discount', family: 'VS', match: /^VS\d+(-N)?$/, rules: [], plain: 'discount', group: 'sale' },
+  { kind: 'flatRate', family: 'F', match: /^FS?\d$/, rules: [], plain: (code: string) => (code.startsWith('FS') ? 'flatRateDiscount' : 'flatRate'), group: 'sale' },
+  { kind: 'acquisition', family: 'B', match: /^B\d+(-[12])?$/, rules: ['pv-bezugsteuer'], plain: 'acquisition', group: 'abroad' },
+  { kind: 'inputNoVat', family: 'M', match: /^M0$/, rules: ['pv-no-receipt', 'pv-che-but-zero', 'pv-otherwise'], plain: 'materialNoVat', group: 'material' },
+  { kind: 'material', family: 'M', match: /^M\d+(-[12])?$/, rules: ['pv-charged', 'pv-prefix-from-account', 'pv-import-vat-evv'], plain: 'material', group: 'material' },
+  { kind: 'inputNoVat', family: 'I', match: /^I0$/, rules: ['pv-no-receipt', 'pv-che-but-zero', 'pv-otherwise'], plain: 'expenseNoVat', group: 'expense' },
+  { kind: 'investment', family: 'I', match: /^I\d+(-[12])?$/, rules: ['pv-charged', 'pv-prefix-from-account'], plain: 'expense', group: 'expense' },
+  { kind: 'depositRelief', family: 'K', match: /^K\d*-A$/, rules: [], plain: 'depositRelief', group: 'correction' },
+  { kind: 'inputCorrection', family: 'K', match: /^K\d*-B$/, rules: ['eig-entry'], plain: 'inputCorrection', group: 'correction' },
+  { kind: 'inputReduction', family: 'K', match: /^K\d*-C$/, rules: [], plain: 'inputReduction', group: 'correction' },
+  { kind: 'taxCredit', family: 'K', match: /^F10\d\d$/, rules: [], plain: 'taxCredit', group: 'correction' },
+  { kind: 'subsidies', family: 'Z', match: /^Z0-A$/, rules: [], plain: 'subsidies', group: 'correction' },
+  { kind: 'nonConsideration', family: 'Z', match: /^Z0$/, rules: [], plain: 'nonConsideration', group: 'correction' },
 ] as const satisfies readonly KindSpec[];
 
 export type VatCodeKind = (typeof VAT_CODE_KINDS)[number]['kind'];
@@ -145,6 +156,37 @@ export function lookupVatCode(code: string): { entry: VatCodeEntry; negative: bo
   vatCodes();
   const entry = catalogue!.byCode.get(unsigned) ?? describe(unsigned);
   return entry ? { entry, negative } : null;
+}
+
+const specOf = (e: VatCodeEntry) => VAT_CODE_KINDS.find((k) => k.kind === e.kind && k.family === e.family)!;
+
+/** The picker's group of a code: its kind's, an M or I code on the tax alone (import VAT, M81-2) in `import`. */
+export const vatCodeGroup = (e: VatCodeEntry): VatCodeGroup =>
+  e.amountIs === 'tax' && (e.family === 'M' || e.family === 'I') ? 'import' : specOf(e).group;
+
+/** A dictionary: the text of `key` with its {placeholders} filled. The UI passes its tWith; docs and help pages a language's messages. */
+export type VatCodeText = (key: string, vars: Record<string, string | number>) => string;
+
+/**
+ * A code in plain words (issue #224), from the dictionary's vatCodes.plain.*: its kind with the rate
+ * («Material 8.1 %»), what the amount is where the rate comes in several amounts («(VAT
+ * included)», «the tax alone»), a rate that ended in 2023, and the minus («Refund: …»).
+ * Undefined for a code the catalogue does not know.
+ */
+export function vatCodeName(code: string, text: VatCodeText): string | undefined {
+  const found = lookupVatCode(code);
+  if (!found) return undefined;
+  const e = found.entry;
+  const { plain } = specOf(e);
+  const flat = /^FS?(\d)$/.exec(e.code);
+  let name = text(`vatCodes.plain.${typeof plain === 'string' ? plain : plain(e.code)}`, {
+    rate: e.rate ?? '',
+    n: flat ? ((Number(flat[1]) - 1) % 2) + 1 : '',
+    form: e.code.replace(/^\D+/, ''),
+  });
+  if (e.rate && (e.amountIs !== 'gross' || vat().codes.taxAmountCode(e.code))) name = text(`vatCodes.plain.amount.${e.amountIs}`, { name });
+  if (e.superseded) name = text('vatCodes.plain.superseded', { name });
+  return found.negative ? text('vatCodes.plain.negative', { name }) : name;
 }
 
 /**

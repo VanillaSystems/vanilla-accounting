@@ -93,7 +93,7 @@ export const VAT_CODE_EXAMPLES: Readonly<Record<string, readonly VatCodeExample[
 
 /** docs/vat-codes.md, from the catalogue and the English texts. */
 export async function renderDocs(): Promise<string> {
-  const { vatCodes, VAT_CODE_FAMILIES, VAT_CODE_KINDS, vatCodeRateName } = await import('../../src/accounting/vat-codes.js');
+  const { vatCodes, VAT_CODE_FAMILIES, VAT_CODE_KINDS, vatCodeName, vatCodeRateName } = await import('../../src/accounting/vat-codes.js');
   (await import('../../src/workspace/workspace.js')).workspaceAt(join(APP_ROOT, 'demo'));
   const VAT_CODES = vatCodes();
   const en = ((await import('../../src/app/i18n/locales/en.js')) as { default: { messages: Messages } }).default.messages;
@@ -122,7 +122,8 @@ export async function renderDocs(): Promise<string> {
     text('vatCodes.intro'),
     '',
     'The app shows the same catalogue in German, French, Italian and English: MWST tab, **Codes erklärt**, or a',
-    'click on any code. There each code also lists the entries of the period that use it.',
+    'click on any code. There each code also lists the entries of the period that use it. Wherever the app shows',
+    'or offers a code, it names it in plain words first (the Name column), the code beside it.',
     '',
     '## How to read a code',
     '',
@@ -154,11 +155,11 @@ export async function renderDocs(): Promise<string> {
         `**When:** ${text(`vatCodes.kind.${k.kind}.when`)}`, '',
         `**Not when:** ${text(`vatCodes.kind.${k.kind}.notWhen`)}`);
       if (k.rules.length) out.push('', `**Rules:** ${k.rules.map((r) => `\`${r}\``).join(', ')}`);
-      out.push('', '| Code | Banana text | Rate | Amount is | Boxes | Example |', '|---|---|---|---|---|---|');
+      out.push('', '| Code | Name | Banana text | Rate | Amount is | Boxes | Example |', '|---|---|---|---|---|---|---|');
       for (const c of codes) {
         const ex = c.examples[0];
         const example = ex ? `[${md(ex.title)}](../examples/cases/${ex.caseId}.yaml)` : '';
-        out.push(`| ${c.code} | ${md(c.bananaText ?? '(not in Banana\'s list)')} | ${rateCell(c)} | ${amountCell(c)} | ${zifferCell(c)} | ${example} |`);
+        out.push(`| ${c.code} | ${md(vatCodeName(c.code, text) ?? '')} | ${md(c.bananaText ?? '(not in Banana\'s list)')} | ${rateCell(c)} | ${amountCell(c)} | ${zifferCell(c)} | ${example} |`);
       }
     }
   }

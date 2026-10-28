@@ -22,6 +22,8 @@ import type { Nav } from '../index.js';
 import { lineOf, namesOf, refusalKey, ruleLines } from './rules-model.js';
 import { emptyForm, handRuleOf, type HandForm } from './hand-rule-model.js';
 import { firmCodes } from '../../../accounting/vat-codes.js';
+import { VatCodeField } from '../codes/VatCodeField.js';
+import { codeLabel } from '../codes/names.js';
 import { onBooksChanged } from '../../assistant/store.js';
 
 const words = ((key: string, vars: Record<string, string>) => (t as (k: string, v: Record<string, string>) => string)(key, vars)) as RuleWords;
@@ -45,7 +47,7 @@ export function RulesSection({ nav, canEdit, payment }: { nav: Nav; canEdit: boo
   useEffect(reload, []);
   if (error) return <p className="warnline">{error}</p>;
   if (!view) return <p className="m">{t('changes.loading')}</p>;
-  const lines = ruleLines(view, words, money);
+  const lines = ruleLines(view, words, money, codeLabel);
 
   const act = async (row: RuleRow, kind: 'off' | 'on' | 'delete') => {
     setBusy(true);
@@ -114,9 +116,11 @@ function HandRuleForm({ view, nav, payment, onKept }: { view: RulesView; nav: Na
   const [path, setPath] = useState<string>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  // The VAT field keeps what is typed; a form started from a payment draws it afresh.
+  const [started, setStarted] = useState(0);
   useEffect(() => {
     if (!payment) return;
-    api.handStart(payment).then((r) => setF(emptyForm(r.start)), () => undefined);
+    api.handStart(payment).then((r) => { setF(emptyForm(r.start)); setStarted((n) => n + 1); }, () => undefined);
   }, [payment]);
   const codes = firmCodes();
   const set = (k: keyof HandForm) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
@@ -166,12 +170,7 @@ function HandRuleForm({ view, nav, payment, onKept }: { view: RulesView; nav: Na
       <label>{t('rules.hand.account')}<input className="mono" list="rule-accounts" value={f.account} onChange={set('account')} /></label>
       <datalist id="rule-accounts">{Object.entries(view.names.accounts).map(([n, name]) => <option key={n} value={n}>{name}</option>)}</datalist>
       {codes.length ? (
-        <label>{t('rules.hand.vat')}
-          <select value={f.vat} onChange={set('vat')}>
-            <option value="">{t('rules.hand.noVat')}</option>
-            {codes.map((c) => <option key={c.code} value={c.code}>{c.code}{c.bananaText ? ` · ${c.bananaText}` : ''}</option>)}
-          </select>
-        </label>
+        <VatCodeField key={started} name="vat" label={t('rules.hand.vat')} defaultValue={f.vat} placeholder={t('rules.hand.noVat')} onValue={(vat) => setF((was) => ({ ...was, vat }))} />
       ) : null}
       {(view.names.dimensions ?? []).map((d) => (
         <label key={d.id} data-dimension={d.id}>{d.label}
@@ -192,7 +191,7 @@ function HandRuleForm({ view, nav, payment, onKept }: { view: RulesView; nav: Na
 type Done = 'kept' | 'removedDone' | 'discarded';
 
 /** A booking line as the card names it: account and name, VAT code, amount. */
-const lineText = (l: RuleLine, names: RuleNames) => [names.account(l.account) ? `${l.account} ${names.account(l.account)}` : l.account, l.vat, fmt(l.amount)].filter(Boolean).join(' · ');
+const lineText = (l: RuleLine, names: RuleNames) => [names.account(l.account) ? `${l.account} ${names.account(l.account)}` : l.account, l.vat && codeLabel(l.vat), fmt(l.amount)].filter(Boolean).join(' · ');
 
 function PaymentLine({ p, names, national }: { p: PreviewPayment; names: RuleNames; national?: RuleLine[] }) {
   const would = p.would.lines.map((l) => lineText(l, names)).join(' + ');
@@ -203,7 +202,7 @@ function PaymentLine({ p, names, national }: { p: PreviewPayment; names: RuleNam
       <b>{p.would.kind === 'ask' ? t('rules.preview.ask', { question: p.would.question }) : would}</b>
       <span className="m">{' · '}{p.decidedBy ? t('rules.preview.otherFirst') : p.now.length ? t('rules.preview.now', { booking: p.now.map((l) => lineText(l, names)).join(' + ') }) : t('rules.preview.unbooked')}</span>
       {p.beforeAi && !p.decidedBy ? <span className="m" data-testid="before-ai">{' · '}{t('rules.preview.beforeAi', { booking: p.beforeAi.map((l) => lineText(l, names)).join(' + ') })}</span> : null}
-      {national ? <span className="m" data-testid="national">{' · '}{t('rules.preview.national', { booking: national.map((l) => l.vat ?? '–').join(' + ') })}</span> : null}
+      {national ? <span className="m" data-testid="national">{' · '}{t('rules.preview.national', { booking: national.map((l) => (l.vat ? codeLabel(l.vat) : '–')).join(' + ') })}</span> : null}
     </li>
   );
 }
@@ -275,7 +274,7 @@ export function RuleDraft({ path, nav, onRules, onDone, title }: { path: string;
     );
   }
   if (!d) return null;
-  const names = namesOf(d, money);
+  const names = namesOf(d, money, codeLabel);
   const say = (r: RuleRow) => lineOf(r, names, words);
   const onlyRemoval = !d.added.length && !d.changed.length && d.removed.length > 0;
   const go = async (kind: 'keep' | 'discard') => {
@@ -444,7 +443,7 @@ export function CorrectionOffer({ payment, onRules }: { payment: string; onRules
   const who = offer.business?.name ?? offer.rule;
   return (
     <div className="ruledraft" data-correction={offer.ref}>
-      <span>{t(offer.to.vat !== offer.from.vat ? 'rules.correction.askVat' : 'rules.correction.ask', { who, from: offer.from.account, to: offer.to.account, vat: offer.to.vat ?? t('journal.noVat') })}</span>
+      <span>{t(offer.to.vat !== offer.from.vat ? 'rules.correction.askVat' : 'rules.correction.ask', { who, from: offer.from.account, to: offer.to.account, vat: offer.to.vat ? codeLabel(offer.to.vat) : t('journal.noVat') })}</span>
       {error ? <span className="warnline">{error}</span> : null}
       <span className="ruleacts"><button type="button" className="btn" disabled={busy} data-testid="correction-draft" onClick={draft}>{t('rules.correction.draft')}</button></span>
     </div>

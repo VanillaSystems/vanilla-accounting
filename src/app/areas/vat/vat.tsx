@@ -26,7 +26,6 @@ import {
 import { correctionDiff, signed, useReturn, zifferLabel, headline } from './view.js';
 import { Go, entryAt } from './links.js';
 import { Detail } from './Detail.js';
-import { VatCards } from '../codes/vat-card.js';
 import type { ReturnFigures } from '../../../engines/return.js';
 import { baseCurrency, chargesVat, filing } from '../../../engines/index.js';
 
@@ -152,7 +151,6 @@ function Return(props: Props) {
         )}
       </div>
       <div className="hidden-note"><button type="button" onClick={toggleAll}>{all ? t('vat.hideEmpty') : t('vat.showAll')}</button></div>
-      <VatCards {...(props as AreaProps)} />
     </div>
   );
 }

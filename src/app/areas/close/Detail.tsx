@@ -25,6 +25,8 @@ import { stepGone, causeText, checkRows, closeBlockers, lastPeriodOf, problemTex
 import { correctionName } from '../../lib/vat-words.js';
 import { Go } from '../vat/links.js';
 import { at } from '../receipts/view.js';
+import { VatCodeField } from '../codes/VatCodeField.js';
+import { codeLabel } from '../codes/names.js';
 
 type Props = AreaProps<RouteOf<'close'>>;
 
@@ -264,7 +266,7 @@ function VatReconciliation({ d }: { d: YearCloseView }) {
   );
 }
 
-const accountsOf = (tp: EntryTemplate) => [tp.accountDebit || '…', tp.accountCredit || '…'].join(' / ') + (tp.vatCode ? `, ${tp.vatCode}` : '');
+const accountsOf = (tp: EntryTemplate) => [tp.accountDebit || '…', tp.accountCredit || '…'].join(' / ') + (tp.vatCode ? `, ${codeLabel(tp.vatCode)}` : '');
 
 function Entries({ d, nav, canEdit }: StepProps) {
   const [open, setOpen] = useState<string | null>(null);
@@ -361,7 +363,7 @@ function EntryForm({ d, tp, nav, onDone }: { d: YearCloseView; tp: EntryTemplate
       <label>{t('yearClose.form.debit')}<input className="mono" list="close-accounts" value={f.accountDebit} onChange={set('accountDebit')} /></label>
       <label>{t('yearClose.form.credit')}<input className="mono" list="close-accounts" value={f.accountCredit} onChange={set('accountCredit')} /></label>
       <label>{t('yearClose.form.amount')}<input className="mono" inputMode="decimal" value={f.amount} onChange={set('amount')} /></label>
-      <label>{t('yearClose.form.vatCode')}<input className="mono" value={f.vatCode} onChange={set('vatCode')} /></label>
+      <VatCodeField name="vatCode" label={t('yearClose.form.vatCode')} defaultValue={f.vatCode} onValue={(vatCode) => setF((was) => ({ ...was, vatCode }))} />
       <label className="wide">{t('yearClose.form.description')}<input value={f.description} onChange={set('description')} /></label>
       <div className="acts">
         <button type="submit" className="btn primary" disabled={!valid}>{t('yearClose.form.save')}</button>

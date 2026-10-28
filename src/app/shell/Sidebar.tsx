@@ -10,6 +10,7 @@
  */
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useColumnNoAi } from '../ai/ColumnNoAi.js';
+import { codeLabel } from '../areas/codes/names.js';
 import { flushSync } from 'react-dom';
 import { language, t } from '../i18n/index.js';
 import { fmt, formatDate } from '../lib/utils.js';
@@ -61,7 +62,7 @@ function entryWhat(set: EntrySet, withText = true): string {
   return [
     set.accountDebit && t('assistant.c.debit', { account: set.accountDebit }),
     set.accountCredit && t('assistant.c.credit', { account: set.accountCredit }),
-    set.vatCode !== undefined && t('assistant.c.code', { code: set.vatCode || '–' }),
+    set.vatCode !== undefined && t('assistant.c.code', { code: set.vatCode ? codeLabel(set.vatCode) : '–' }),
     set.amount !== undefined && fmt(set.amount),
     set.date && formatDate(set.date),
     withText && set.description && `«${set.description}»`,
@@ -228,7 +229,7 @@ function ReportCard({ result, period, onGo }: { result: ReportResult; period?: s
 
 const HELD_FIELDS = ['accountDebit', 'accountCredit', 'vatCode', 'amount'] as const;
 const heldField = (l: HeldLine, k: (typeof HELD_FIELDS)[number]) => (k === 'accountDebit' ? t('assistant.c.debit', { account: l.accountDebit || '–' })
-  : k === 'accountCredit' ? t('assistant.c.credit', { account: l.accountCredit || '–' }) : k === 'vatCode' ? t('assistant.c.code', { code: l.vatCode || '–' }) : fmt(l.amount));
+  : k === 'accountCredit' ? t('assistant.c.credit', { account: l.accountCredit || '–' }) : k === 'vatCode' ? t('assistant.c.code', { code: l.vatCode ? codeLabel(l.vatCode) : '–' }) : fmt(l.amount));
 
 /** A held booking as it is → as it would be: the fields that change, and its amount when that stays. */
 function heldChange(before: HeldLine | undefined, after: HeldLine | undefined): { was: string; now: string; amount?: string } {

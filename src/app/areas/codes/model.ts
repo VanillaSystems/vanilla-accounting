@@ -6,7 +6,7 @@
 import type { JournalEntry } from '../../../types/index.js';
 import type { Period } from '../../../accounting/periods.js';
 import { chfAmount } from '../../../accounting/index.js';
-import { firmCodes, VAT_CODE_FAMILIES, VAT_CODE_KINDS, lookupVatCode, type VatCodeEntry, type VatCodeFamily } from '../../../accounting/vat-codes.js';
+import { firmCodes, VAT_CODE_FAMILIES, VAT_CODE_GROUPS, VAT_CODE_KINDS, lookupVatCode, vatCodeGroup, type VatCodeEntry, type VatCodeFamily, type VatCodeGroup } from '../../../accounting/vat-codes.js';
 import { vat } from '../../../engines/index.js';
 import type { Key } from '../../i18n/types.js';
 
@@ -74,6 +74,29 @@ export function codeGroups(stats: readonly CodeStat[], text: (r: CodeRow) => str
       || unsigned(a.code).localeCompare(unsigned(b.code), 'de', { numeric: true })
       || a.code.length - b.code.length);
   return VAT_CODE_FAMILIES.map((family) => ({ family, rows: rows.filter((r) => r.entry.family === family) })).filter((g) => g.rows.length);
+}
+
+export interface PickOption { code: string; name: string }
+export interface PickGroup { group: VatCodeGroup; options: PickOption[] }
+
+/**
+ * The code picker's list (issue #224): the codes the firm's form takes (firmCodes), grouped by what
+ * the person is doing, in VAT_CODE_GROUPS order; current rates before the ones that ended in 2023,
+ * then the kinds the booking guide chooses (V81) before the rare ones (V81-B), else catalogue order. A
+ * query keeps the codes whose code or plain name (`name`) holds every word of it; one that starts
+ * with «-» lists the minus codes, a refund or reversal.
+ */
+export function pickGroups(q: string, name: (code: string) => string): PickGroup[] {
+  const typed = q.trim().toLowerCase();
+  const minus = typed.startsWith('-');
+  const words = typed.replace(/^-/, '').split(/\s+/).filter(Boolean);
+  const options = firmCodes()
+    .map((entry, i) => { const code = minus ? `-${entry.code}` : entry.code; return { entry, i, code, name: name(code) }; })
+    .filter((o) => { const hay = `${o.code} ${o.name}`.toLowerCase(); return words.every((w) => hay.includes(w)); })
+    .sort((a, b) => Number(a.entry.superseded) - Number(b.entry.superseded) || Number(!a.entry.rules.length) - Number(!b.entry.rules.length) || a.i - b.i);
+  return VAT_CODE_GROUPS
+    .map((group) => ({ group, options: options.filter((o) => vatCodeGroup(o.entry) === group).map(({ code, name }) => ({ code, name })) }))
+    .filter((g) => g.options.length);
 }
 
 /** Codes named in a text (the catalogue's "Nicht wenn"), split out so each can link: ['Kunde im Ausland (', 'V0-E', ')…']. */
