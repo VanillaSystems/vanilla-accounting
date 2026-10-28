@@ -22,6 +22,7 @@ import { SHORT_LIST, pairMapping, pairablePayment, pairableReceipt, searchPairs,
 import { legOf } from '../workspace/money-accounts.js';
 import { chargesOf } from './charges.js';
 import type { Businesses } from './batch-payers.js';
+import { delaysOf } from './delays.js';
 import { noReceiptOfItsOwn, receiptKnowledge } from '../booking/receipt-wait.js';
 import { loadClassifyContext } from '../booking/classify.js';
 import { loadKnowledge } from '../knowledge/layers.js';
@@ -168,7 +169,7 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
   const stagedIds = new Set((opts.staged ?? []).map((r) => r.id));
   const books = stagedIds.size ? { ...stored, receipts: [...stored.receipts.filter((r) => !stagedIds.has(r.id)), ...opts.staged!] } : stored;
   const lock = periodLock(books);
-  const search = searchPairs(books, opts.toChf, lock.isClosed, { noReceipt: opts.noReceipt?.(books), noPayment: opts.noPayment?.(books), businesses: opts.businesses });
+  const search = searchPairs(books, opts.toChf, lock.isClosed, { noReceipt: opts.noReceipt?.(books), noPayment: opts.noPayment?.(books), businesses: opts.businesses, delays: delaysOf(books, opts.businesses) });
   // «Beleg suchen» on a leg of a split charge searches for the charge, which its first movement names.
   const onlyTx = opts.only && 'payment' in opts.only ? books.transactions.find((t) => t.ref === (opts.only as { payment: string }).payment) : undefined;
   const only = onlyTx ? { payment: chargesOf(books.transactions, opts.toChf).of(onlyTx).refs[0] } : opts.only;
