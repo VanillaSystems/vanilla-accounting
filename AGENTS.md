@@ -96,6 +96,10 @@ Shopify billing:
 - Shopify is registered for Swiss MWST and charges 8.1% on their fees (Webshop Gebühren). The per-order payout PDFs do NOT show the MWST — the proof is in Shopify's monthly billing statements (Settings → Billing → Bills in Shopify Admin). These monthly bills must be downloaded and filed as receipts to justify I81 on Webshop Gebühren entries.
 - The monthly Vorsteuer on those fees is booked as a single-leg correction (empty Soll / C 6580 / M81-2), NOT a two-legged entry against 2451. See docs/runbooks/booking-patterns.md.
 
+Running tests:
+- While you work, run only the test files your change touches: `node --import tsx --test tests/foo.test.ts`.
+- Run the full suite (`npm test`) only before you commit or merge. Never start several full suites in parallel: `npm test` takes a machine-wide lock and waits («waiting for another test run (pid N)…») while another run holds it. It runs 3 test files at once at nice 10; `TEST_CONCURRENCY=<n>` overrides the 3.
+
 Tests (golden master):
 - `npm test` runs the golden master (tests/vat-golden.test.ts) on each demo workspace (expected files in tests/golden/demo/ and tests/golden/demo-consulting/): Ziffern per period, Ziffer line assignment, return figures, filed-return parsing, correction-case reconciliation, and the eCH-0217 XML. `npm run test:books` runs the same test on your own workspace's frozen books (`transactional-data/<year>/expected/`, see tests/support/golden.ts), which protects its filed quarters; run it too when you keep real books. Before committing any change under src/accounting, src/cli/vat-*, or the MWST tab logic, `npm test` must be green (and `test:books` where a workspace exists). A failure means the code changed a figure.
 - Only when a figure change is intended: `npm run test:update` (demo) and/or `npm run test:books:update` (company), review the diff, and say why in the commit, and add a CHANGELOG.md entry marked **⚠ figures** (docs/releasing.md).
