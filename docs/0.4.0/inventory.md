@@ -150,7 +150,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/audit/sources.ts` | ESTV 1 |
 | `src/llm/prompts.ts` | CHF 9, MWST 21, camt.053 2, Rappen 1 |
 | `src/publish/leak-guard.ts` | camt.053 1 |
-| `src/reconcile/vat-consistency.ts` | MWST 5 |
+| `src/reconcile/vat-consistency.ts` | MWST 4 |
 
 ## view
 
