@@ -9,6 +9,7 @@
  *       fees: { date: Transaction Date, fee: Fee, currency: Currency, order: Order, type: Type, amount: Amount }
  *     gateways: [ Shopify Payments ]
  *     processors: [ stripe ]
+ *     orderPage: '^#(\d+)'
  *     payoutDays: 7
  *   # knowledge/suppliers/<id>.yaml (the company: its chart)
  *   provider:
@@ -34,7 +35,8 @@
  * paid by PayPal, by bank transfer, on delivery, with a gift card or through a test gateway, come
  * with their own payment and are never booked onto the clearing account); with `gateways` the column
  * is needed. `processors`: the payment processors whose name the bank writes as the payer of the
- * provider's payouts (its reference then names the provider). `payoutDays`: how many days after a sale it pays it out at most, for the clearing
+ * provider's payouts (its reference then names the provider). `orderPage`: patterns over the read text of
+ * the provider's order page, the first group its order number (#249). `payoutDays`: how many days after a sale it pays it out at most, for the clearing
  * check; a company's file may say its own. `clearing`, `revenue` and `fees` are accounts of one
  * company's chart, so only its own file names them. `since`: the company's cut-over day, from which
  * on the provider's payouts are booked from the clearing account and its reports book the sales and
@@ -70,6 +72,12 @@ export interface ProviderFacts {
    * no payer or one of these (src/booking/providers.ts providerOfMoneyIn).
    */
   processors?: string[];
+  /**
+   * An order page of the provider as its read text begins, each a pattern whose first group is the order
+   * number as the sales report's `order` column names it, without #: an order document read before order
+   * facts were read (Receipt.order) is known by it (src/booking/providers.ts orderOf, #249).
+   */
+  orderPage?: RegExp[];
   /** At most this many days between a sale and the payout that pays it (the clearing check). */
   payoutDays?: number;
   /** The bank account (its ledger account) the provider pays into; absent: any. The unseen-payout check looks only there. */
@@ -89,7 +97,7 @@ export interface ProviderFacts {
 const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' ? String(v) : undefined);
 const COMPANY_KEYS = ['clearing', 'since', 'revenue', 'fees', 'foreignTax', 'account'] as const;
-const APP_KEYS = ['reports', 'payoutDays', 'gateways', 'processors'] as const;
+const APP_KEYS = ['reports', 'payoutDays', 'gateways', 'processors', 'orderPage'] as const;
 
 function columnsOf<C extends string>(raw: unknown, names: readonly C[], needs: readonly C[], what: string): { columns: Columns<C> } | { problem: string } {
   if (!isMap(raw)) return { problem: `provider.reports.${what} must be a map of columns: { ${needs.map((n) => `${n}: <header>`).join(', ')} }` };
@@ -134,6 +142,12 @@ export function parseProvider(raw: unknown): { provider: ProviderFacts } | { pro
     const list = (Array.isArray(raw.processors) ? raw.processors : [raw.processors]).map(text);
     if (!list.length || list.some((x) => !x)) return { problem: 'provider.processors must name the payment processors that pay the provider\'s payouts under their own name, a list of words of the bank\'s payer name' };
     out.processors = list as string[];
+  }
+  if (raw.orderPage !== undefined) {
+    const list = (Array.isArray(raw.orderPage) ? raw.orderPage : [raw.orderPage]).map(text);
+    const res = list.map((p) => { try { return p ? new RegExp(p) : undefined; } catch { return undefined; } });
+    if (!res.length || res.some((re) => !re || (new RegExp(`${re.source}|`).exec('')?.length ?? 0) < 2)) return { problem: 'provider.orderPage must be a pattern, or a list, over an order page\'s text whose first group is the order number, e.g. \'^#(\\d+)\'' };
+    out.orderPage = res as RegExp[];
   }
   if (raw.payoutDays !== undefined) {
     if (typeof raw.payoutDays !== 'number' || !Number.isInteger(raw.payoutDays) || raw.payoutDays < 1 || raw.payoutDays > 90) return { problem: 'provider.payoutDays must be a whole number of days, 1 to 90' };
@@ -184,5 +198,6 @@ export function mergeProvider(vendor: unknown, binding: unknown, hasVendor: bool
   const list = (v: unknown): unknown[] => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
   const gateways = [...new Set([...list(vendor.gateways), ...list(binding.gateways)])];
   const processors = [...new Set([...list(vendor.processors), ...list(binding.processors)])];
-  return { raw: { ...vendor, ...binding, ...(Object.keys(reports).length ? { reports } : {}), ...(gateways.length ? { gateways } : {}), ...(processors.length ? { processors } : {}) } };
+  const orderPage = [...new Set([...list(vendor.orderPage), ...list(binding.orderPage)])];
+  return { raw: { ...vendor, ...binding, ...(Object.keys(reports).length ? { reports } : {}), ...(gateways.length ? { gateways } : {}), ...(processors.length ? { processors } : {}), ...(orderPage.length ? { orderPage } : {}) } };
 }

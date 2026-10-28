@@ -53,6 +53,19 @@ export function providerOfMoneyIn(tx: Pick<BankTransaction, 'date' | 'direction'
 }
 
 /**
+ * The order an order document of provider `p` names, without #: its read facts (Receipt.order), or, for a
+ * page read before those were read, the first group of the provider's `orderPage` over its text (#249).
+ */
+export function orderOf(r: Pick<Receipt, 'order' | 'extractedText'>, p: Provider): string | undefined {
+  if (r.order) return r.order.number.replace(/^#/, '');
+  for (const re of p.provider.orderPage ?? []) {
+    const number = re.exec(r.extractedText ?? '')?.[1]?.replace(/^#/, '');
+    if (number) return number;
+  }
+  return undefined;
+}
+
+/**
  * Whether the payer may pay the provider's payouts: none named, or one of the payment processors its
  * file lists (`provider.processors`), each as a whole word. The payer is the bank's counterparty, or,
  * when the bank sets none (Wise's PDF statements), the name in the description («Received money from
