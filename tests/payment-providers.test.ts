@@ -458,7 +458,7 @@ test('a foreign-currency report: each sale at the ESTV daily sell rate of its ta
 test('4. an order page is linked to its sale, never to the payout; an order name with a dash links too', () => {
   const entries = bookReport({ journalEntries: [] }, salesOf([head, row('A-1002', '2026-07-05', '90.00', '0.00', 'DE')].join('\n')), ctxOf()).entries;
   const books = { receipts: [{ id: 'pg', order: { number: '#A-1002', date: '2026-07-05', currency: 'CHF', gross: 90, shipTo: 'DE', payouts: [], refunds: [] } } as unknown as Receipt], mappings: [] as Books['mappings'], journalEntries: entries };
-  const providers = [{ id: 'shopify', provider: { clearing: '1093' } }];
+  const providers = [{ ...SHOPIFY, provider: { ...SHOPIFY.provider, clearing: '1093' } }];
   assert.deepEqual(linkOrdersToSales(books, () => true, providers), [{ receipt: 'pg', sale: 'SR-shopify-A-1002' }]);
   assert.deepEqual(linkOrdersToSales(books, () => true, providers), [], 'once');
 });

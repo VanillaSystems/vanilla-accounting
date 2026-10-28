@@ -8,10 +8,9 @@
  *
  * Derived from the books and the business files on every read, never stored. Pure.
  */
-import { identify, signalsOfReceiptRead } from '../knowledge/counterparties.js';
 import type { JournalEntry, Mapping, Receipt } from '../types/index.js';
 import { isNoReceipt } from '../books/discard.js';
-import { orderOf, type Provider } from './providers.js';
+import { orderPageOf, reportProviders, type Provider } from './providers.js';
 import { saleRef } from './sales-report.js';
 
 /**
@@ -25,28 +24,6 @@ export type OrderPageState = { kind: 'export' } | { kind: 'held'; report: string
 export interface OrderPage { provider: string; name: string; order: string; state: OrderPageState }
 
 type Books = { receipts: readonly Receipt[]; mappings: readonly Mapping[]; journalEntries?: readonly JournalEntry[] };
-
-/** Providers whose sales come from their report from a cut-over day on: the provider way. */
-const reportProviders = (providers: readonly Provider[]): Provider[] => providers.filter((p) => !!p.provider.reports.sales && !!p.provider.since);
-
-/**
- * The provider and order of `r` as an order page of the provider way, when it is one: its text has a
- * provider's `orderPage`, or its read order facts (Receipt.order) belong to the one such provider, or
- * to the one its file recognises the page by; dated on or after that provider's cut-over day.
- */
-function pageOf(r: Receipt, ways: readonly Provider[]): { provider: Provider; order: string; date: string } | undefined {
-  const date = r.order?.date ?? r.date;
-  if (!date) return undefined;
-  const byPattern = ways.find((p) => (p.provider.orderPage ?? []).some((re) => re.test(r.extractedText ?? '')));
-  const routed = (): Provider | undefined => {
-    if (ways.length === 1) return ways[0];
-    const hit = identify(signalsOfReceiptRead(r), ways);
-    return hit.kind === 'known' ? ways.find((p) => p.id === hit.counterparty) : undefined;
-  };
-  const provider = byPattern ?? (r.order ? routed() : undefined);
-  const order = provider && orderOf(r, provider);
-  return provider && order && date >= provider.provider.since! ? { provider, order, date } : undefined;
-}
 
 /**
  * Every order page of the provider way nothing is linked to yet, by receipt id. A page whose order the
@@ -62,7 +39,7 @@ export function orderPagesOf(books: Books, providers: readonly Provider[]): Map<
   const reports = books.receipts.filter((x) => x.report?.kind === 'sales');
   for (const r of books.receipts) {
     if (linked.has(r.id) || r.report || isNoReceipt(r, 0)) continue;
-    const page = pageOf(r, ways);
+    const page = orderPageOf(r, ways);
     if (!page) continue;
     const { provider, order, date } = page;
     const state = stateOf(provider, order, date, refs, reports);

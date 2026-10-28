@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { orderPagesOf } from '../src/booking/order-pages.js';
 import { linkOrdersToSales } from '../src/booking/sales-report.js';
-import type { Provider } from '../src/booking/providers.js';
+import { orderOf, type Provider } from '../src/booking/providers.js';
 import { searchPairs } from '../src/intake/pairing.js';
 import { noPaymentOf } from '../src/booking/order-pages.js';
 import { loadKnowledge } from '../src/knowledge/layers.js';
@@ -29,11 +29,17 @@ import './support/jurisdiction.js';
 const APP = loadKnowledge(APP_ROOT, DEMO_ROOT).counterparties.find((c) => c.id === 'shopify') as Provider;
 const SHOP = { ...APP, provider: { ...APP.provider, clearing: '1093', since: '2026-11-01' } } as Provider;
 
-/** An order page as the read step and an older version left it: its text, no read order facts. */
+/** An order page as the read step and an older version left it: typed a sales record (kind-shopify-order), its text, no read order facts. */
 const page = (id: string, date: string, text: string, over: Partial<Receipt> = {}): Receipt => ({
   id, filename: `${date.replaceAll('-', '')}-verkauf.pdf`, originalFilename: 'o.pdf', extractedText: text, extractionMethod: 'pdftotext',
-  fileSize: 1, indexedAt: `${date}T12:00:00Z`, location: 'archived', date, description: 'Verkauf', amount: 54.05, currency: 'CHF', ...over,
+  fileSize: 1, indexedAt: `${date}T12:00:00Z`, location: 'archived', date, description: 'Verkauf', amount: 54.05, currency: 'CHF', kind: 'sales-record', ...over,
 });
+/** A supplier's invoice whose third line begins with its number, as Shopify's order page begins with its order's. */
+const invoice = (id: string, over: Partial<Receipt> = {}): Receipt =>
+  page(id, '2026-11-05', 'Muster Druck GmbH\nRechnung\n#2001 vom 05.11.2026\nTotal CHF 54.05 inkl. MWST 8.1%', { kind: 'invoice', ...over });
+/** A second shop on the same platform: its own business file with the vendor's orderPage. */
+const SHOP_B = { ...SHOP, id: 'laden-b', name: 'Laden B', match: { ...SHOP.match, tx: ['laden b'], uid: [], file: [] } } as Provider;
+const saleOf = (provider: string, order: string, date: string): JournalEntry => ({ ...sale(order, date), id: `e-${provider}-${order}`, transactionRef: `SR-${provider}-${order}` });
 const sale = (order: string, date: string): JournalEntry => ({ id: `e-${order}`, transactionRef: `SR-shopify-${order}`, date, accountDebit: '1093', accountCredit: '3200', amount: 54.05, vatCode: 'V81', origin: 'classify' });
 const report = (to: string, held: Array<{ order: string; why: 'noTax' }> = []): Receipt =>
   ({ ...page('rep', to, 'Name,Paid at'), kind: 'sales-record', report: { provider: 'shopify', kind: 'sales', from: '2026-11-01', to, rows: 3, ...(held.length ? { held } : {}) } });
@@ -46,7 +52,7 @@ test('an order page from the cut-over day on waits for the order export; one bef
     page('p2', '2026-11-04', 'Bestellung', { order: facts }),
     page('before', '2026-10-20', '#1990\nPaid'),
     page('linked', '2026-11-05', '#2003\nPaid'),
-    page('invoice', '2026-11-05', 'Rechnung 77\nTotal CHF 54.05'),
+    page('invoice', '2026-11-05', 'Rechnung 77\nTotal CHF 54.05', { kind: 'invoice' }),
   ];
   const books = { receipts, mappings: [{ transactionRef: 'X', receiptId: 'linked' }] as Mapping[], journalEntries: [] };
   const pages = orderPagesOf(books, [SHOP]);
@@ -98,7 +104,8 @@ test('the inbox: the model\'s sure match of an order page to a customer\'s depos
   update(books, moduleActor('test'), (b) => { b.transactions.push({ ...deposit, date: '2026-04-15', amount: 123.45, source: 'manual' }); });
   saveBooks(ws, books);
   mkdirSync(ws.paths.inbox, { recursive: true });
-  writeFileSync(join(ws.paths.inbox, 'bestellung.pdf'), await textPdf(['#2001', 'Paid', 'Hans Muster', '15.04.2026', 'Total CHF 123.45']));
+  // Printed from the browser: its two header lines (the time, the admin's title) name Shopify; the page begins after them.
+  writeFileSync(join(ws.paths.inbox, 'bestellung.pdf'), await textPdf(['15.04.26, 12:00', '#2001 · Bestellungen · Muster Laden · Shopify', '#2001', 'Paid', 'Hans Muster', '15.04.2026', 'Total CHF 123.45']));
   const asked: string[] = [];
   const ask: Ask = async (prompt, opts) => {
     asked.push(opts.step);
@@ -115,4 +122,29 @@ test('the inbox: the model\'s sure match of an order page to a customer\'s depos
   assert.equal(r.location, 'archived', asked.join(' '));
   assert.deepEqual(after.mappings.filter((m) => m.receiptId === r.id || m.transactionRef === 'DEP'), [], 'neither code nor the model links it to the deposit');
   assert.deepEqual(orderPagesIn(ws, after)[r.id], { provider: 'shopify', name: 'Shopify', order: '2001', state: { kind: 'export' } });
+});
+
+test('a supplier invoice or a payout page whose line begins with #<digits> is no order page: never linked to the sale of that number, never kept from its payment', () => {
+  const receipts = [
+    invoice('inv'),
+    invoice('untyped', { kind: undefined }),
+    page('payout', '2026-11-05', '#2001\nPayout\nTotal CHF 54.05', { kind: undefined, payout: { sales: 54.05, refunds: 0, fees: 0, paidOut: 54.05 } }),
+  ];
+  const books = { receipts, mappings: [] as Mapping[], journalEntries: [sale('2001', '2026-11-03')] };
+  assert.deepEqual([...orderPagesOf(books, [SHOP]).keys()], [], 'each waits for its own payment');
+  assert.deepEqual(linkOrdersToSales(books, () => true, [SHOP]), []);
+  assert.deepEqual(books.mappings, []);
+  assert.equal(orderOf(invoice('x'), SHOP), undefined, 'the payout\'s legacy check takes no invoice for an order document either');
+  assert.equal(orderOf(page('p', '2026-11-03', '#2001\nPaid'), SHOP), '2001');
+});
+
+test('two shops on the same platform: a page goes to the shop it names, and one no shop is named on is no order page of either', () => {
+  const named = page('b1', '2026-11-03', '#2001\nPaid\nLaden B');
+  const plain = page('p1', '2026-11-03', '#2001\nPaid');
+  const books = { receipts: [named, plain], mappings: [] as Mapping[], journalEntries: [saleOf('shopify', '2001', '2026-11-03')] };
+  const pages = orderPagesOf(books, [SHOP, SHOP_B]);
+  assert.deepEqual([...pages.entries()], [['b1', { provider: 'laden-b', name: 'Laden B', order: '2001', state: { kind: 'export' } }]]);
+  assert.deepEqual(linkOrdersToSales(books, () => true, [SHOP, SHOP_B]), [], 'Laden B\'s page never goes with the other shop\'s sale of the same number');
+  books.journalEntries.push(saleOf('laden-b', '2001', '2026-11-03'));
+  assert.deepEqual(linkOrdersToSales(books, () => true, [SHOP, SHOP_B]), [{ receipt: 'b1', sale: 'SR-laden-b-2001' }]);
 });
