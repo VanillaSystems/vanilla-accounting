@@ -1,8 +1,8 @@
 /**
  * An account's reconciliation confirmed (#254, src/books/reconcile.ts): what the books do with each
  * pair the person confirmed, and with every movement she named a payment of its own. Pure on the
- * books and the invoice book; the route (src/server/routes/statements.ts) checks the period lock first
- * and saves both.
+ * books and the invoice book; the route (src/server/routes/statements.ts) saves the books, then the
+ * invoices. Nothing of a filed day changes here: the write door refuses it.
  */
 import { randomBytes } from 'node:crypto';
 import type { BankTransaction, ReconcilePair, Reconciliation } from '../types/index.js';

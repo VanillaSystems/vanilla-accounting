@@ -34,7 +34,8 @@ import { roleBefore } from './banks.js';
  * 7: statement PDFs keep their open question in the books (#254): `statementAsks` (asks.jsonl of a
  * year), a PDF whose movements wait for «Einlesen» or «Als Auszug behalten»; `reconciliations`
  * (reconcile.jsonl of a year), an account's movements read from PDFs set against its bank export or
- * CSV, waiting for the person or confirmed (src/books/reconcile.ts); and `waitsForPerson.why:
+ * CSV, waiting for the person or confirmed, with the days its bank files cover (`covered`) and the read
+ * movements named payments of their own (`own`) (src/books/reconcile.ts); and `waitsForPerson.why:
  * 'filedTwin'` with the `read` movement, a bank movement booked in a filed quarter as a movement read
  * from a PDF. An app of schema 6 would drop the questions and reconciliations on its next save and show
  * the mark nowhere, so it must refuse these books.
