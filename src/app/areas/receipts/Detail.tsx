@@ -34,6 +34,8 @@ import { Paper } from './Paper.js';
 import { SkipOffer } from './SkipOffer.js';
 import { RunHistory } from '../../history/RunHistory.js';
 import { I } from './icons.js';
+import { ActionsMenu } from '../../selection/ActionsMenu.js';
+import { readsPaidPrivately, receiptActions } from './actions-menu.js';
 import { useAiOff } from '../../ai/ai-off.js';
 import { baseCurrency, chargesVat, filing, withoutInputTax } from '../../../engines/index.js';
 
@@ -151,6 +153,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
             : <span className="nov" data-tip={t('receipts.noUidTip')}>{t('receipts.uidMissing')}</span>)}
         </div>
       )}
+      <div className="actbar"><ActionsMenu set={receiptActions(props, v, l)} /></div>
       {v.locked && (
         <div className="notice">
           {ICONS.lock}<span>{t(chargesVat() ? 'receipts.lockedNotice' : 'receipts.lockedNoticeClosed', { period: lockedPeriod(v, l) })}</span>
@@ -280,6 +283,8 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
       {I.dot}{t('receipts.noPayment')}
       {canEdit && <> <button type="button" style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => runAct(props, 'link')}>{t('receipts.linkVerb')}</button> <Kbd keys={['L']} tip={t('receipts.keyLinkTip')} /></>}
       {canEdit && <> · <FindPair key={v.r.id} on={{ receipt: v.r.id }} books={props.books} nav={nav} /></>}
+      {/* Its words say cash or private (#216): a proposal beside the fact; the receipt is unpaid in the books until it is booked. */}
+      {readsPaidPrivately(v) && <> · <span data-testid="paid-privately">{t('receipts.paidPrivatelyNotice')}</span></>}
     </span>
   );
 }

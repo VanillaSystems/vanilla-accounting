@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { accountsOf, filedReturnsOf } from '../../workspace/reads.js';
 import { WS, RequestError, patchBody, readBooks, reopenWorkspace, stringField } from '../books.js';
 import { readEstvRateTable } from '../../accounting/fx-rates.js';
+import { MANUAL_BANK, MONEY_ROLES, type MoneyRole } from '../../workspace/banks.js';
 import { companyInfo } from '../../books/company.js';
 import { WorkspaceError, WorkspaceRefusal } from '../../workspace/workspace.js';
 import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
@@ -20,7 +21,7 @@ import { account, setCustomerTerms } from '../workspace-edits.js';
 import type { Address } from '../../invoices/model.js';
 import { basisSinceOf, changesMethod, parseVatSetup, type VatSetup } from '../../workspace/vat-setup.js';
 import { booksOpenPeriod, localToday } from '../../accounting/periods.js';
-import { filing } from '../../engines/index.js';
+import { baseCurrency, chart, filing } from '../../engines/index.js';
 import { readDimensions, usesOf, type Dimension } from '../../books/tags.js';
 
 export const router = Router();
@@ -105,14 +106,35 @@ function bankPatch(raw: unknown): BankPatch {
  * uses, every statement would list under both and the balance sheet would show the account twice.
  */
 function newBank(raw: unknown): NewBank {
-  const b = patchBody(raw, ['bank', 'currency', 'account', 'label', 'iban']);
+  const b = patchBody(raw, ['bank', 'currency', 'account', 'label', 'iban', 'role']);
   const account = stringField(b, 'account').trim();
+  // A money account of another kind than a bank's (#216: an employee's, asked once by «Von Mitarbeitenden bezahlt»); never a second owner's.
+  const role = b.role === undefined ? undefined : stringField(b, 'role');
+  if (role !== undefined && (!MONEY_ROLES.includes(role as MoneyRole) || role === 'owner')) throw new RequestError(400, `role: ${MONEY_ROLES.filter((r) => r !== 'owner').join(', ')}.`);
   const taken = WS.bankAccounts.find((a) => a.account === account);
   if (taken) {
     throw new RequestError(400, `Konto ${account} gehört schon zum Bankkonto ${taken.label} (${taken.bank} ${taken.currency}). Jedes Bankkonto braucht ein eigenes Konto im Kontenplan.`,
       { code: 'ledgerAccountTaken', params: { account, bank: taken.bank, currency: taken.currency, label: taken.label } });
   }
-  return { bank: stringField(b, 'bank'), currency: stringField(b, 'currency'), account, label: stringField(b, 'label'), iban: optText(b, 'iban') ?? undefined };
+  const bank = stringField(b, 'bank').trim();
+  const currency = stringField(b, 'currency').trim();
+  // The manifest's own rules, said before it is written: «manual» is the owner's account, and a bank holds each currency once.
+  if (bank === MANUAL_BANK) throw new RequestError(400, `Der Name ${MANUAL_BANK} gehört dem Konto des Inhabers.`, { code: 'bankNameManual', params: { bank } });
+  if (WS.bankAccounts.some((a) => a.bank === bank && a.currency === currency)) throw new RequestError(400, `${bank} ${currency} gibt es schon unter den Geldkonten.`, { code: 'bankTwice', params: { bank, currency } });
+  if (role === 'employee') {
+    // What the firm owes the employee (or advanced her) is a balance-sheet account, in a currency the books know.
+    const side = chart().sideOf(account);
+    if (side !== 'assets' && side !== 'liabilities') throw new RequestError(400, `Konto ${account} ist kein Bilanzkonto: das Konto einer Mitarbeiterin ist eine Schuld oder ein Guthaben der Firma.`, { code: 'moneyAccountSide', params: { account } });
+    if (!knownCurrencies().has(currency)) throw new RequestError(400, `Die Währung ${currency} kennen die Bücher nicht: ${[...knownCurrencies()].join(', ')}.`, { code: 'unknownCurrency', params: { currency, known: [...knownCurrencies()].join(', ') } });
+  }
+  return { bank, currency, account, label: stringField(b, 'label'), iban: optText(b, 'iban') ?? undefined, ...(role ? { role: role as MoneyRole } : {}) };
+}
+
+/** The currencies of the books: the base currency, those of the money accounts and those the official rate table converts. */
+function knownCurrencies(): Set<string> {
+  const table = readEstvRateTable().rates;
+  const rated = Object.values(table).flatMap((day) => Object.keys(day ?? {}).filter((k) => /^[A-Z]{3}$/.test(k)));
+  return new Set([baseCurrency(), ...WS.bankAccounts.map((a) => a.currency), ...rated]);
 }
 
 /**

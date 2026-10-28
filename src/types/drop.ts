@@ -162,7 +162,8 @@ export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax'
  * booked of theirs. `unpaid`: sales the books carry of the provider whose order a payments report
  * should name and names not; they stay booked, and the app asks the person on each (askUnpaid).
  * `corrections`: the sales reports' receipts that offer a refund paid in a filed period as a correction
- * (SalesReportFacts.filedRefunds, #231): the row lists those offers from the books, each with its button.
+ * (SalesReportFacts.filedRefunds, #231): the row lists those offers from the books, each with its button
+ * (one whose sale sits in an old entry naming other orders too, `byHand`, #239: named without it).
  */
 export interface ReportSummary {
   provider: string; name: string; kind: 'sales' | 'fees'; from: string; to: string; file: string; since: string; reach: string;

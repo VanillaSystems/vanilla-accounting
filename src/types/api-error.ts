@@ -58,6 +58,19 @@ export type ApiRefusal =
   /** A second bank payment of another payee for a receipt that has one, asked without `confirm` (src/server/edits.ts assertNotSecondPayment, r8h-21). */
   | { code: 'secondPayment'; params: { receipt: string; payment: string } }
   | { code: 'yearClose' }
+  /** A batch (#216, src/server/batch.ts) left this object out: it is so already, it is not on the account the batch moves from, it is booked, or it has no receipt for the input tax asked. */
+  | { code: 'batchUnchanged' }
+  | { code: 'batchNotOn'; params: { account: string } }
+  | { code: 'batchBooked' }
+  | { code: 'batchNoReceipt' }
+  /** A batch's undo refused: these objects changed since the batch (`ids`: the first five of `n`), or the server no longer keeps it. */
+  | { code: 'batchChangedSince'; params: { n: number; ids: string } }
+  | { code: 'batchUndoGone' }
+  /** «Von Mitarbeitenden bezahlt» (#216): the account named is no employee's money account of the firm, or it holds another currency than the receipt. */
+  | { code: 'notEmployee'; params: { account: string } }
+  | { code: 'employeeCurrency'; params: { label: string; currency: string; receipt: string } }
+  /** More objects than one batch takes (src/types/batch.ts BATCH_MAX). */
+  | { code: 'batchLimit'; params: { max: number; n: number } }
   /** «Immer so?» under several receipts linked to one payment (#190): the payment offers no batch payer (fewer such links, no business, or it is one already). */
   | { code: 'noBatchPayer' }
   /** A booking's tags (#127): not a map, a dimension the workspace does not declare, or a value that is no short text. */
@@ -160,6 +173,12 @@ export type ApiRefusal =
   | { code: 'bankInUse'; params: { account: string; label: string; statements: number; entries: number; invoices: number } }
   /** Firma › Bankkonten › «Bankkonto hinzufügen» on a ledger account another bank account already has (r10h-2): the one that has it. */
   | { code: 'ledgerAccountTaken'; params: { account: string; bank: string; currency: string; label: string } }
+  /** A new money account named «manual» (the owner's), or a bank and currency the firm has already. */
+  | { code: 'bankNameManual'; params: { bank: string } }
+  | { code: 'bankTwice'; params: { bank: string; currency: string } }
+  /** An employee's money account (#216) on an account outside the balance sheet, or in a currency the books do not know (`known`: those they do). */
+  | { code: 'moneyAccountSide'; params: { account: string } }
+  | { code: 'unknownCurrency'; params: { currency: string; known: string } }
   /** The secret store (the Mac's keychain) could not take a password: nothing else was written. */
   | { code: 'secretStore' }
   /** An invoicing refusal met through the AI sidebar (src/server/workspace-edits.ts): which rule, and what is missing. */

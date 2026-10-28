@@ -8,13 +8,13 @@ and the providers.
 
 | Layer | Files | With Swiss specifics |
 |---|---:|---:|
-| core | 68 | 23 |
+| core | 69 | 23 |
 | engine | 4 | 1 |
 | provider | 16 | 13 |
-| split | 113 | 26 |
+| split | 114 | 26 |
 | infrastructure | 69 | 4 |
 | workflow | 25 | 0 |
-| view | 305 | 56 |
+| view | 320 | 56 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -189,8 +189,8 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 43, MWST 304, ESTV 41, Ziffer 52, form 0535 1, UID 1, camt.053 22, QR-bill 1, Rappen 1 |
-| `src/app/i18n/locales/en.ts` | CHF 43, MWST 5, ESTV 27, form 0535 1, UID 1, camt.053 22, QR-bill 4 |
+| `src/app/i18n/locales/de.ts` | CHF 43, MWST 307, ESTV 42, Ziffer 52, form 0535 1, UID 1, camt.053 22, QR-bill 1, Rappen 3 |
+| `src/app/i18n/locales/en.ts` | CHF 43, MWST 5, ESTV 28, form 0535 1, UID 1, camt.053 22, QR-bill 4 |
 | `src/app/i18n/locales/fr.ts` | CHF 43, MWST 1, form 0535 1, UID 1, camt.053 22, QR-bill 1 |
 | `src/app/i18n/locales/it.ts` | CHF 43, MWST 1, form 0535 1, UID 1, camt.053 22, QR-bill 1 |
 | `src/app/lib/api.ts` | camt.053 2 |

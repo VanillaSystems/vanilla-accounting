@@ -226,21 +226,33 @@ router.post('/api/vision/extract', async (req, res) => {
 
 /** The body of «Privat oder bar bezahlt»: all optional; the business part's amount in the receipt's currency, what it was, its VAT rate line, the booking by hand it replaces. */
 function privatePartOf(raw: unknown): PrivatePart {
-  const b = patchBody(raw ?? {}, ['amount', 'part', 'rate', 'replace']);
+  const b = patchBody(raw ?? {}, ['amount', 'part', 'rate', 'replace', 'by']);
   const num = (k: 'amount' | 'rate') => {
     if (b[k] === undefined || b[k] === null) return {};
     if (typeof b[k] !== 'number') throw new RequestError(400, `${k} muss eine Zahl sein.`);
     return { [k]: b[k] as number };
   };
-  const text = (k: 'part' | 'replace') => (typeof b[k] === 'string' && (b[k] as string).trim() ? { [k]: (b[k] as string).trim().slice(0, 80) } : {});
-  return { ...num('amount'), ...num('rate'), ...text('part'), ...text('replace') };
+  const text = (k: 'part' | 'replace' | 'by') => (typeof b[k] === 'string' && (b[k] as string).trim() ? { [k]: (b[k] as string).trim().slice(0, 80) } : {});
+  return { ...num('amount'), ...num('rate'), ...text('part'), ...text('replace'), ...text('by') };
+}
+
+/**
+ * The money account of the employee who paid (#216): the firm's account of that ledger number with
+ * the role `employee` (Firma › Geldkonten; the form asks for it once and keeps it). Its label is
+ * the payment's bank, so the booking goes on that person's account, never on one the app made up.
+ */
+function employeeBank(account: string): { label: string; currency: string } {
+  const a = WS.bankAccounts.find((x) => x.account === account && x.role === 'employee');
+  if (!a) throw new RequestError(400, `Konto ${account} ist kein Konto einer Mitarbeiterin oder eines Mitarbeiters der Firma.`, { code: 'notEmployee', params: { account } });
+  return { label: a.bank, currency: a.currency };
 }
 
 /** «Privat oder bar bezahlt» (src/server/edits.ts privatePayment): the owner's payment of the receipt or of its business part, linked; the inbox run books it. A receipt of a filed period: dated the first open day, `corrects` names the period (r8k-10). */
 router.post('/api/receipts/:id/private-payment', async (req, res) => {
   const { id } = req.params;
   const ask = privatePartOf(req.body);
-  const { made, file } = updateBooks((books) => ({ made: privatePayment(books, id, ask, loadFxResolver()), file: books.receipts.find((r) => r.id === id)!.filename }));
+  const bank = ask.by === undefined ? undefined : employeeBank(ask.by);
+  const { made, file } = updateBooks((books) => ({ made: privatePayment(books, id, ask, loadFxResolver(), bank), file: books.receipts.find((r) => r.id === id)!.filename }));
   await bookAgain(file);
   res.json({ ok: true, ...made });
 });

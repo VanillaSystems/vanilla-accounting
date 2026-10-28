@@ -88,6 +88,7 @@ function texts(name: string, file: string): ReportTexts {
     refund: (order) => de.t('salesReport.refundText', { provider: name, order }),
     foreignTax: (order, country) => de.t('salesReport.foreignTaxText', { provider: name, order, country: country ?? '–' }),
     fee: (key) => de.t('salesReport.feeText', { provider: name, key }),
+    cent: (charged, gross) => de.t('salesReport.reason.cent', { charged: charged.toFixed(2), gross: gross.toFixed(2) }),
     reason: (kind, country) => de.t(`salesReport.reason.${kind}`, { file, country: country ?? '–' }),
   };
 }
@@ -151,9 +152,10 @@ function payoutsOf(books: Books, p: Provider, context: ClassifyContext): Array<{
  * revenue account or with a sale code; for a fee report a fee off it onto its fee account; and their reversals), those
  * before the cut-over day only to name the rows they are; the last day of a payout of the provider on
  * or after the cut-over day booked otherwise than from the clearing account (as sales, by a person):
- * it may hold every row up to then; and the days of its payouts between `from` and the cut-over day
+ * it may hold every row up to then; the days of its payouts between `from` and the cut-over day
  * not booked bank / clearing account (as sales the old way, or not yet booked): each may have paid
- * the rows before it.
+ * the rows before it; and for a sales report the sales booked elsewhere than on the clearing account,
+ * which only name a refund of a filed period whose sale sits in one (#239).
  */
 function legacyOf(books: Books, p: Provider, kind: 'sales' | 'fees', revenue: string, from: string, context: ClassifyContext): NonNullable<ReportContext['legacy']> {
   const lock = periodLock(books);
@@ -174,7 +176,10 @@ function legacyOf(books: Books, p: Provider, kind: 'sales' | 'fees', revenue: st
     .filter((tx) => tx.date >= from && tx.date < since && providerOfMoneyIn(tx, mappedReceipts(books, tx), context.counterparties ?? [])?.id === p.id
       && otherwise(books.journalEntries.filter((e) => e.transactionRef === tx.ref)))
     .map((tx) => tx.date).sort();
-  return { entries, ...(through ? { through } : {}), ...(paidBefore.length ? { paidBefore } : {}) };
+  // Sales booked elsewhere (a payout booked as sales naming its orders): they only name a refund of a filed period (#239).
+  const named = kind === 'sales' ? books.journalEntries.filter((e) => !isReportRef(e.transactionRef) && e.accountDebit !== clearing && e.accountCredit !== clearing
+    && (e.accountCredit === revenue || e.accountDebit === revenue || sideOf(e.vatCode) === 'sale') && !!e.description) : [];
+  return { entries, ...(through ? { through } : {}), ...(paidBefore.length ? { paidBefore } : {}), ...(named.length ? { named } : {}) };
 }
 
 /**

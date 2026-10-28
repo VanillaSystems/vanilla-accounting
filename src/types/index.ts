@@ -96,13 +96,14 @@ export interface Receipt {
  * not book, each with why, for the person to work through on the receipt (at most HELD_KEPT,
  * src/intake/sales-report-import.ts; `heldMore` the rest); `filedRefunds`: refunds paid in a filed period
  * the books never carried, of sales they carry (#231), each with the filing period it corrects (`corrects`),
- * offered to the person as a correction in the open period.
+ * offered to the person as a correction in the open period; `byHand` (#239): its sale sits in an old entry
+ * that names it beside other orders (a payout entry, which may net the refund): named, booked by hand only.
  */
 export interface SalesReportFacts {
   provider: string; kind: 'sales' | 'fees'; from: string; to: string; rows: number;
   held?: Array<{ order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' }>;
   heldMore?: number;
-  filedRefunds?: Array<{ order: string; date: string; amount: number; currency?: string; corrects: string }>;
+  filedRefunds?: Array<{ order: string; date: string; amount: number; currency?: string; corrects: string; byHand?: true }>;
 }
 
 /** What a card terminal's or payment provider's report states, all positive: sales − refunds − fees = paidOut. */
