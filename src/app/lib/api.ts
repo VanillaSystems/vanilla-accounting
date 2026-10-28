@@ -33,6 +33,7 @@ import type { PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
 import type { AiAvailability, DesktopInfo, KnownBooks, PhoneInfo } from '../../types/desktop.js';
+import { setAiOff } from '../ai/ai-off.js';
 import type { DraftPatch as SetupPatch, SetupBegun, SetupDraftView } from '../../onboarding/draft.js';
 import type { SetupTalked } from '../../onboarding/draft-talk.js';
 import type { SetupRefusal, SetupRequest } from '../../workspace/create.js';
@@ -100,6 +101,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   if (!res.ok) {
     const err = (await res.json().catch(() => null)) as ApiErrorBody | null;
     // A step that needed an AI where none answers: the shell shows the error line with «KI einrichten» (src/app/shell/Toast.tsx).
+    if (err?.code === 'aiRefused' && err.params.reason === 'off') setAiOff(true);
     if (err && (err.code === 'noClaude' || (err.code === 'aiRefused' && err.params.reason !== 'limit')) && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(NO_AI_EVENT, { detail: errorText(new ApiError(err)) }));
     throw new ApiError(err?.error ? err : { error: `HTTP ${res.status}` });
   }
@@ -121,6 +123,7 @@ function statementProblemText(p: StatementProblem): string {
 }
 
 function aiRefusedText(r: AiRefusal): string {
+  if (r.reason === 'off') return t('error.ai.off');
   if (r.reason === 'unserved') return t('error.ai.unserved', { step: isStepId(r.step) ? t(`ai.step.${r.step}`) : r.step });
   if (r.reason === 'modelRefused') return t('error.ai.modelRefused', { model: r.model });
   const cli = t(`terminal.cli.${r.cli}`);
@@ -143,6 +146,7 @@ export function errorText(e: unknown): string {
     case 'receiptPaid': return t('error.receiptPaid', { payment: b.params.payment });
     case 'pointerLinked': return t('error.pointerLinked', { payment: b.params.payment });
     case 'correctionBooked': return t('error.correctionBooked', { entry: b.params.entry });
+    case 'reportCorrection': return t(`error.reportCorrection.${b.params.why}`);
     case 'secondPayment': return t('error.secondPayment', { payment: b.params.payment });
     case 'paidPrivately': return t('error.paidPrivately', { payment: b.params.payment });
     case 'partAmount': return t('error.partAmount', { total: `${b.params.currency} ${fmt(b.params.total)}` });
@@ -197,6 +201,8 @@ export function errorText(e: unknown): string {
     case 'unknownAccount': return t('error.unknownAccount', b.params);
     case 'oneSided': return t('error.oneSided', b.params);
     case 'codeSign': return t(b.params.expected.startsWith('-') ? 'error.codeSign.back' : 'error.codeSign.out', b.params);
+    case 'taxAmountTwoSided': return t('error.taxAmountTwoSided', b.params);
+    case 'importVatUnproven': return t('error.importVatUnproven', { account: b.params.account, amount: b.params.amount.toFixed(2) });
     case 'accountInUse': return t('error.accountInUse', { account: b.params.account, n: b.params.entries });
     case 'bankInUse': return t('error.bankInUse', { label: b.params.label, account: b.params.account, uses: [
       b.params.statements && t('error.bankInUse.statements', { n: b.params.statements }),
@@ -219,6 +225,11 @@ export function errorText(e: unknown): string {
     case 'notesChanged': return t('partners.notes.changed');
     case 'notesTitle': return t('knowledge.newPage.needsTitle');
     case 'gone': return t(`error.gone.${b.params.what}`);
+    case 'fileReferenced': return t('error.fileReferenced', { file: b.params.file, refs: [
+      ...b.params.payments.map((ref) => t('error.fileReferenced.payment', { ref })),
+      ...b.params.entries.map((ref) => t('error.fileReferenced.entry', { ref })),
+      ...(b.params.statements ? [t('error.fileReferenced.statements', { n: b.params.statements })] : []),
+    ].join(', ') });
     case 'secretStore': return t('error.secretStore');
     case 'invoice': return invoiceRefusalText(b.params.refusal, b.params.missing);
     case 'invoicingNotSetUp': return t('error.invoicingNotSetUp');
@@ -347,6 +358,8 @@ export const api = {
   removeMapping: (link: Link) => request<Linked>('POST', '/api/mapping/remove', link),
   /** «Zahlung suchen» / «Beleg suchen» (#187): the matching chain for one receipt or one payment. */
   findPayment: (receipt: string) => request<Found>('POST', `/api/receipts/${encodeURIComponent(receipt)}/find-payment`),
+  /** «Als Korrektur buchen» on a refund of a filed period a sales report offers (#231): booked in the open period with `corrects`. */
+  reportCorrection: (receipt: string, order: string, date: string) => request<{ ok: true; entries: JournalEntry[] }>('POST', `/api/receipts/${encodeURIComponent(receipt)}/report-correction`, { order, date }),
   setFiledPayment: (receipt: string, payment: string | null) => request<{ ok: true }>('POST', `/api/receipts/${encodeURIComponent(receipt)}/filed-payment`, { payment }),
   findReceipt: (payment: string) => request<Found>('POST', `/api/transactions/${encodeURIComponent(payment)}/find-receipt`),
 
@@ -399,6 +412,8 @@ export const api = {
   checkSource: (id: string) => request<MailCheck>('POST', `/api/sources/${encodeURIComponent(id)}/check`),
   quarantine: () => request<QuarantinedFile[]>('GET', '/api/quarantine'),
   takeFromQuarantine: (file: string) => request<{ ok: true; file: string; run?: string }>('POST', `/api/quarantine/${encodeURIComponent(file)}/take`),
+  deleteFromQuarantine: (files: string[]) => request<{ ok: true; deleted: number }>('POST', '/api/quarantine/delete', { files }),
+  discardReceipts: (ids: string[]) => request<{ ok: true; deleted: number }>('POST', '/api/receipts/discard', { ids }),
   skipSender: (id: string, sender: string, version: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/skip`, { sender, version }),
   receiptSkipOffer: (receipt: string) => request<{ offer: ReceiptSkipOffer | null }>('GET', `/api/sources/skip-offer?receipt=${encodeURIComponent(receipt)}`),
   approveSource: (id: string, version: string) => request<{ ok: true }>('POST', `/api/sources/${encodeURIComponent(id)}/approve`, { version }),
@@ -558,6 +573,8 @@ export const api = {
   },
   terminal: () => request<TerminalView>('GET', '/api/terminal'),
   recheckCodexModels: () => request<AiView>('POST', '/api/ai/codex/models'),
+  /** «KI ganz ausschalten» (issue #212), kept on this Mac. */
+  setAiOff: (off: boolean) => request<AiView>('PUT', '/api/ai/off', { off }),
   setAiCli: (change: { cli?: TerminalCli | null; askOther?: boolean }) => request<AiView>('PUT', '/api/ai/cli', change),
   setTerminalApp: (app: TerminalApp | null) => request<TerminalView>('PUT', '/api/terminal/app', { app }),
   /** An empty `text`: the CLI starts with no prompt (issue #210). */

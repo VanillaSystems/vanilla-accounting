@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { t } from '../i18n/index.js';
 import { api, errorText } from '../lib/api.js';
+import { useAiOff } from '../ai/ai-off.js';
 import { AI_CLIS, chooseCli, chooseTerminalApp, copyCommand, type TerminalApp, type TerminalCli, type TerminalView } from '../../platform/terminal.js';
 import { TerminalAppAsk, TerminalOpened, keepApp } from './TerminalAppAsk.js';
 
@@ -20,6 +21,7 @@ export function TerminalCard({ request }: { request: string }) {
   const [asking, setAsking] = useState<{ cli: TerminalCli; apps: TerminalApp[] }>();
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<'command' | 'request'>();
+  const aiOff = useAiOff();
   const load = () => { setError(undefined); api.terminal().then(setView, (e) => setError(errorText(e))); };
   useEffect(load, []);
   const copy = (what: 'command' | 'request', text: string) => { void navigator.clipboard?.writeText(text).then(() => setCopied(what), () => undefined); };
@@ -51,7 +53,7 @@ export function TerminalCard({ request }: { request: string }) {
           <button type="button" className="linkbtn" onClick={() => copy('request', request)}>{t(copied === 'request' ? 'terminal.copied' : 'terminal.copyRequest')}</button>
         </div>
       ) : null}
-      {plan?.kind === 'open' ? (
+      {aiOff ? <span className="m" data-testid="terminal-ai-off">{t('terminal.aiOff')}</span> : plan?.kind === 'open' ? (
         <>
           {plan.signIn ? <span className="m" data-testid="terminal-sign-in">{t('terminal.signIn', { cli: nameOf(plan.cli) })}</span> : null}
           {view!.opens ? (

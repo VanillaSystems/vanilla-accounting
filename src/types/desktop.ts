@@ -71,7 +71,8 @@ export interface SmokeBridge {
 export interface KnownBooks { root: string; name?: string; problem?: string; demo: boolean; setup?: true }
 
 /** GET /api/desktop/ai: whether the setup conversation can run; without a provider the form takes its place. */
-export interface AiAvailability { available: boolean }
+/** `off`: «KI ganz ausschalten» is on on this Mac (src/llm/off.ts); `available` is then false. */
+export interface AiAvailability { available: boolean; off?: boolean }
 
 /** GET /api/desktop */
 export interface DesktopInfo {

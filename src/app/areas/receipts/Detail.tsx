@@ -29,10 +29,12 @@ import { LinkDialog } from './LinkDialog.js';
 import { FindPair, madeBy } from './FindPair.js';
 import { ByHand, VatFields } from './VatFields.js';
 import { TwinNotice } from './TwinNotice.js';
+import { ReportCorrections } from './ReportCorrections.js';
 import { Paper } from './Paper.js';
 import { SkipOffer } from './SkipOffer.js';
 import { RunHistory } from '../../history/RunHistory.js';
 import { I } from './icons.js';
+import { useAiOff } from '../../ai/ai-off.js';
 import { baseCurrency, chargesVat, filing, withoutInputTax } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'receipts'>>;
@@ -118,6 +120,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
   const misfit = vatMisfit(r);
   const src = sources.receipt(r.id);
   const open = parsePeriod(l.openFrom.slice(0, 4) + '-Q' + Math.ceil(Number(l.openFrom.slice(5, 7)) / 3), localToday());
+  const aiOff = useAiOff();
 
   return (
     <div className="detail-in" data-for={r.id}>
@@ -155,8 +158,15 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
         </div>
       )}
       {!v.locked && !v.links.some((ref) => l.txByRef.has(ref)) && r.filedPayment && <FiledPaymentNotice {...props} payment={r.filedPayment} open={open ? periodName(open) : ''} receipt={r.id} corrected={v.links.length > 0} />}
+      {aiOff && !v.none && !r.extractedText.trim() && (
+        <div className="notice aioffwait" data-testid="waits-ai-off">
+          {I.dot}<span>{t('receipts.waitsAiOff')}</span>
+          <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'company', section: 'ai' }, query: {} }); }}>{t('aiOff.toFirma')}</a>
+        </div>
+      )}
       <TwinNotice {...props} />
       {r.report?.held?.length ? <ReportHeld report={r.report} /> : null}
+      <ReportCorrections receipt={r.id} books={props.books} canEdit={canEdit} said={(message) => { nav.refresh(); nav.toast(message); }} />
       {v.none
         ? <div className="notice">{v.noneWhy ? t('receipts.noneNoticeWhy', { why: noneText(v) }) : t('receipts.noneNotice')} {canEdit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t('receipts.isReceipt')}</a>}</div>
         : v.twin?.relation === 'duplicate' && !v.links.length ? null : <div className="status"><Status {...props} /></div>}
@@ -442,6 +452,7 @@ function Datei(props: Props & { v: ReceiptView; edit: boolean }) {
   const { view } = useAutomation();
   const runs = runsOf(r, books, view);
   const kb = `${Math.max(1, Math.round(r.fileSize / 1024))} KB`;
+  const aiOff = useAiOff();
   return (
     <Sec k="datei" val={kb}>
       <dl className="kv">
@@ -460,7 +471,7 @@ function Datei(props: Props & { v: ReceiptView; edit: boolean }) {
           {v.none
             ? <button type="button" onClick={() => runAct(props, 'mark')}>{t('receipts.isReceipt')}</button>
             : <>
-                {edit && <button type="button" data-tip={t('receipts.readAgainTip')} onClick={() => readAgain(nav, v)}>{t('receipts.readAgain')}</button>}
+                {edit && <button type="button" disabled={aiOff} data-tip={t(aiOff ? 'receipts.readAgainOff' : 'receipts.readAgainTip')} onClick={() => readAgain(nav, v)}>{t('receipts.readAgain')}</button>}
                 <button type="button" onClick={() => runAct(props, 'notreceipt')}>{t('receipts.notReceipt')}</button>
               </>}
           {edit && <button type="button" className="del" onClick={() => runAct(props, 'del')}>{t('common.delete')}</button>}

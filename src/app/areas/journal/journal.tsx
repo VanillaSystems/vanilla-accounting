@@ -5,6 +5,10 @@
  */
 import { Fragment, useEffect, useMemo, useRef } from 'react';
 import type { RouteOf } from '../../shell/route.js';
+import { knownChips, type Chip } from '../../shell/chips.js';
+import { ChipEmpty, ChipFilter, chipWords } from '../../shell/ChipFilter.js';
+import { usePartnerIndex } from '../partners/data.js';
+import { journalFields } from './filter.js';
 import { ListHead } from '../../shell/ListHead.js';
 import { moveKey } from '../../shell/keyboard.js';
 import { getAccountMap } from '../../lib/accounts.js';
@@ -20,6 +24,7 @@ import { NO_VAT } from '../codes/model.js';
 import { codeText, VatCards } from '../codes/vat-card.js';
 import { codesUi, setCodesUi } from '../codes/state.js';
 import { byMonth, firstRowTakesOver, rowsOf, JOURNAL_FILTERS, JOURNAL_ORIGINS, type EntryView, type JournalFilter } from './model.js';
+import type { JournalOrigin } from './model.js';
 import { listed, setUi, toggleMonth, ui, useUi } from './state.js';
 import { journalFor, newEntryDate, runAct } from './commands.js';
 import { Detail, evidenceText } from './Detail.js';
@@ -31,13 +36,22 @@ import { baseCurrency } from '../../../engines/index.js';
 type Props = AreaProps<RouteOf<'journal'>>;
 
 const FILTER_LABEL = { ohneBeleg: 'journal.filterNoReceipt', korrekturen: 'journal.filterCorrections' } as const;
+/** The count line's shortcuts, each the chip it stands for (#211). */
+const COUNT_CHIP: Record<JournalFilter, Chip> = { ohneBeleg: { field: 'receipt', value: 'missing' }, korrekturen: { field: 'corrects', value: 'yes' } };
+const has = (chips: readonly Chip[], c: Chip) => chips.some((x) => x.field === c.field && x.value === c.value);
 
 function List(props: Props) {
   const { route, query, period, books, nav, canEdit } = props;
   const s = useUi();
   const j = journalFor(books);
   const acName = getAccountMap();
-  const { rows, counts, origins } = useMemo(() => rowsOf(j, period, s.filter, query.vat, query.q, (n) => acName[n] ?? '', s.origin), [j, period, s.filter, query.vat, query.q, acName, s.origin]);
+  const partners = usePartnerIndex();
+  const fields = useMemo(() => journalFields((n) => acName[n] ?? '', partners, chipWords), [acName, partners]);
+  const chips = useMemo(() => knownChips(query.chips ?? [], fields), [query.chips, fields]);
+  const setChips = (next: Chip[]) => nav.setQuery({ chips: next.length ? next : undefined });
+  const { rows, counts, origins, pool, candidates } = useMemo(() => rowsOf(j, period, chips, fields, query.vat, query.q, (n) => acName[n] ?? ''), [j, period, chips, fields, query.vat, query.q, acName]);
+  const toggle = (c: Chip) => setChips(has(chips, c) ? chips.filter((x) => !(x.field === c.field && x.value === c.value)) : [...chips.filter((x) => x.field !== c.field), c]);
+  const whoChip = (o: JournalOrigin): Chip => ({ field: 'who', value: o });
   const months = byMonth(rows);
   const ids = months.filter(([m]) => !s.collapsed.has(m)).flatMap(([, xs]) => xs.map((v) => v.e.id));
   listed.ids = ids;
@@ -54,27 +68,25 @@ function List(props: Props) {
     if (ids.includes(v.e.id)) return;
     if (v.e.date < period.from || v.e.date > period.to) { if (!query.period) nav.go(at(route, v.e.date)); return; }
     toggleMonth(v.e.date.slice(0, 7), true);
-    if ((s.filter || s.origin) && !rows.includes(v)) setUi({ filter: undefined, origin: undefined });
   }, [route.id, ids[0], j]);
 
   const select = (id: string) => nav.select({ area: 'journal', id });
   // A pending entry (just booked) and a deleted one (its place kept with «Rückgängig», r6h-28) hold the selection.
   useSelectionFollowsRows(route.id, ids, select, !!route.id && held.includes(route.id));
-  const setFilter = (filter?: JournalFilter) => setUi({ filter });
 
   return (
     <div className="page">
       <ListHead period={period} books={books} canEdit={canEdit}>
         <div className="counts" role="tablist" aria-label={t('journal.filters')}>
-          <button type="button" role="tab" aria-selected={!s.filter} className={s.filter ? '' : 'on'} onClick={() => setFilter()}><span className="n">{counts.alle}</span>{t('journal.all')}</button>
-          {JOURNAL_FILTERS.filter((f) => counts[f] > 0 || s.filter === f).map((f) => (
-            <button key={f} type="button" role="tab" aria-selected={s.filter === f} className={s.filter === f ? 'on' : ''} onClick={() => setFilter(f)}><span className="n">{counts[f]}</span>{t(FILTER_LABEL[f])}</button>
+          <button type="button" role="tab" aria-selected={!chips.length} className={chips.length ? '' : 'on'} onClick={() => setChips([])}><span className="n">{counts.alle}</span>{t('journal.all')}</button>
+          {JOURNAL_FILTERS.filter((f) => counts[f] > 0 || has(chips, COUNT_CHIP[f])).map((f) => (
+            <button key={f} type="button" role="tab" aria-selected={has(chips, COUNT_CHIP[f])} className={has(chips, COUNT_CHIP[f]) ? 'on' : ''} onClick={() => toggle(COUNT_CHIP[f])}><span className="n">{counts[f]}</span>{t(FILTER_LABEL[f])}</button>
           ))}
           {JOURNAL_ORIGINS.some((o) => origins[o] > 0) && (
             <span className="origins" role="group" aria-label={t('journal.originFilter')}>
-              {JOURNAL_ORIGINS.filter((o) => origins[o] > 0 || s.origin === o).map((o) => (
-                <button key={o} type="button" aria-pressed={s.origin === o} className={s.origin === o ? 'on' : ''} data-origin={o} data-tip={t('journal.originFilterTip', { who: t(`journal.origin.${o}`) })}
-                  onClick={() => setUi({ origin: s.origin === o ? undefined : o })}><span className="n">{origins[o]}</span>{t(`journal.origin.${o}`)}</button>
+              {JOURNAL_ORIGINS.filter((o) => origins[o] > 0 || has(chips, whoChip(o))).map((o) => (
+                <button key={o} type="button" aria-pressed={has(chips, whoChip(o))} className={has(chips, whoChip(o)) ? 'on' : ''} data-origin={o} data-tip={t('journal.originFilterTip', { who: t(`journal.origin.${o}`) })}
+                  onClick={() => toggle(whoChip(o))}><span className="n">{origins[o]}</span>{t(`journal.origin.${o}`)}</button>
               ))}
             </span>
           )}
@@ -84,27 +96,17 @@ function List(props: Props) {
             </button>
           )}
           <button type="button" className="vhbtn" aria-label={t('codes.histogramTitle')} onClick={() => setCodesUi({ histogram: true })}>{BARS}</button>
-          <label className="search">
-            {ICONS.search}
-            <span className="sr">{t('journal.searchLabel')}</span>
-            <input
-              type="search"
-              placeholder={t('shell.search')}
-              value={query.q ?? ''}
-              className={query.q ? 'has' : ''}
-              autoComplete="off"
-              onChange={(e) => nav.setQuery({ q: e.target.value || undefined })}
-              onKeyDown={(e) => { if (e.key === 'Escape') nav.setQuery({ q: undefined }); }}
-            />
-            <Kbd keys={['/']} tip={t('journal.searchTip')} />
-          </label>
         </div>
+        <ChipFilter fields={fields} rows={pool} chips={chips} onChips={setChips} q={query.q} onQ={(q) => nav.setQuery({ q })}
+          searchLabel={t('journal.searchLabel')} searchKey={<Kbd keys={['/']} tip={t('journal.searchTip')} />} />
       </ListHead>
 
-      {rows.length === 0 ? (
+      {rows.length === 0 && chips.length && candidates.length ? (
+        <ChipEmpty fields={fields} rows={candidates} chips={chips} onChips={setChips} />
+      ) : rows.length === 0 ? (
         <div className="empty">
-          <h2>{query.q || query.vat || s.filter || s.origin ? t('journal.nothingFound') : t('journal.emptyTitle', { period: periodName(period) })}</h2>
-          {!query.q && !query.vat && !s.filter && !s.origin && canEdit && <p>{t('journal.emptyText')}</p>}
+          <h2>{query.q || query.vat || chips.length ? t('journal.nothingFound') : t('journal.emptyTitle', { period: periodName(period) })}</h2>
+          {!query.q && !query.vat && !chips.length && canEdit && <p>{t('journal.emptyText')}</p>}
         </div>
       ) : (
         <div className="rows je" role="listbox" aria-label={t('area.journal')}>

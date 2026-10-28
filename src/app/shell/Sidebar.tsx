@@ -363,7 +363,7 @@ function SentFile({ a, conversation }: { a: Attachment; conversation: string | u
 }
 
 export function Sidebar({ page, books, onGo }: Props) {
-  const columnNoAi = useColumnNoAi();
+  const columnNoAi = useColumnNoAi(() => onGo({ area: 'company', section: 'ai' }));
   const s = useAssistant();
   const [text, setText] = useState('');
   const [pick, setPick] = useState(0);
@@ -497,7 +497,7 @@ export function Sidebar({ page, books, onGo }: Props) {
   ));
 
   // In the setup conversation the buttons carry on without an AI: only the words wait for one.
-  const noAi = setup && columnNoAi ? { card: null, placeholder: t('aiSetup.talkWaits') } : columnNoAi;
+  const noAi = setup && columnNoAi ? { card: columnNoAi.off ? columnNoAi.card : null, placeholder: t(columnNoAi.off ? 'aiOff.talk' : 'aiSetup.talkWaits') } : columnNoAi;
   return (
     <aside className={setup ? 'aside setup' : 'aside'} aria-label={t(setup ? 'onboarding.title' : 'assistant.title')}>
       <header className="aihead">

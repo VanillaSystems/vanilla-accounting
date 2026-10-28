@@ -1,5 +1,5 @@
 /**
- * What Buchungen keeps beside the URL: the filter (urls.md names only ?vat=), the closed months
+ * What Buchungen keeps beside the URL (the filter chips and ?vat= are in it): the closed months
  * and the open detail sections (per viewer, kept in this browser), the new-entry dialog, and the list
  * as last shown, which the keys walk.
  */
@@ -7,15 +7,11 @@ import { useSyncExternalStore } from 'react';
 import type { JournalEntryInput } from '../../lib/api.js';
 import type { JournalEntry } from '../../../types/index.js';
 import { store, stored } from '../../shell/storage.js';
-import type { JournalFilter, JournalOrigin } from './model.js';
 import type { CorrectionKind } from '../../../accounting/correction.js';
 
 export type Section = 'teile' | 'buchung' | 'herkunft';
 
 interface State {
-  filter?: JournalFilter;
-  /** Only the entries one writer booked. */
-  origin?: JournalOrigin;
   collapsed: ReadonlySet<string>;
   open: Record<Section, boolean>;
   /** The new-entry dialog with what it starts from. */

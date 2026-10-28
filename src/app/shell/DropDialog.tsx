@@ -24,6 +24,7 @@ import { setBankDraft } from '../areas/company/bank-draft.js';
 import { chfOf, suggestion } from '../areas/receipts/model.js';
 import { ledgerFor } from '../areas/receipts/view.js';
 import { useFx } from '../hooks/use-fx.js';
+import { ReportCorrections } from '../areas/receipts/ReportCorrections.js';
 
 /** `note`: what a drop left out, a limit it hit named (a limit is never hit silently). */
 interface State { open: boolean; session?: DropSession; adding: number; note?: string; error?: string }
@@ -181,6 +182,8 @@ function reportLine(s: NonNullable<DropRow['report']>): string {
   return [
     s.from && s.to && `${formatDate(s.from)} – ${formatDate(s.to)}`,
     s.kind === 'sales' ? t('drop.booked.sales', { orders: s.orders, refunds: s.refunds }) : t('drop.booked.fees', { n: s.fees }),
+    s.kind === 'fees' && (s.orders || s.refunds) ? t('drop.booked.completed', { orders: s.orders, refunds: s.refunds }) : '',
+    s.unpaid ? t('drop.booked.unpaid', { n: s.unpaid }) : '',
     s.known ? t('drop.booked.known', { n: s.known }) : '',
     s.filed ? t('drop.booked.filed', { n: s.filed }) : '',
     s.before ? t('drop.booked.before', { n: s.before }) : '',
@@ -189,6 +192,7 @@ function reportLine(s: NonNullable<DropRow['report']>): string {
       orders: s.beforeSinceRows.map((o) => (s.kind === 'sales' ? `#${o}` : o)).join(', '), more: s.beforeSinceMore ? t('drop.booked.more', { n: s.beforeSinceMore }) : '',
     }) : '',
     s.other ? t('drop.booked.other', { n: s.other, ways: s.ways.join(', '), more: s.waysMore ? t('drop.booked.more', { n: s.waysMore }) : '' }) : '',
+    s.test ? t('drop.booked.test', { n: s.test }) : '',
     s.unread ? t('drop.booked.unread', { n: s.unread }) : '',
     held ? t('drop.booked.held', { n: s.held.length + s.heldMore, orders: held, more: s.heldMore ? t('drop.booked.more', { n: s.heldMore }) : '' }) : '',
     s.proofs ? t('drop.booked.proofs', { n: s.proofs }) : '',
@@ -362,6 +366,7 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
           </button>
         ) : <span />}
       </div>
+      {(r.report?.corrections ?? []).map((id) => <ReportCorrections key={id} receipt={id} books={books} canEdit said={(message, ok) => { set({ error: ok ? undefined : message }); refresh(); }} />)}
       {shown ? <ReceiptDetails id={receipt.id} books={books} go={go} /> : null}
     </>
   );

@@ -8,6 +8,7 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AskOptions } from '../llm/ask.js';
+import { aiOff } from '../llm/off.js';
 import { emptyBooks, hasBooks, loadBooks, updateSaved, type Actor, type Books } from '../books/store.js';
 import type { Workspace } from '../workspace/workspace.js';
 
@@ -194,7 +195,9 @@ export async function runIntake({ ws, books, ask, steps, log = () => {}, onChang
 export function noteLines(notes: IntakeNote[]): string[] {
   return notes.map((n) => {
     switch (n.code) {
-      case 'noModel': return `⚠ no working claude CLI: ${n.waiting} item(s) wait for the model (install Claude Code and log in, then run again)`;
+      case 'noModel': return aiOff()
+        ? `⚠ the AI is switched off on this Mac (Firma › KI): ${n.waiting} item(s) wait for it until it is on again`
+        : `⚠ no working claude CLI: ${n.waiting} item(s) wait for the model (install Claude Code and log in, then run again)`;
       case 'failed': return `⚠ ${n.count} item(s) failed: ${n.detail}`;
       case 'unmatched': return `⛔ ${n.files.length} bank statement(s) belong to no bank account; nothing was written:\n${n.files.map((f) => `  ${f}`).join('\n')}`;
       case 'filedKept': return `⛔ ${n.count} link(s) or payment(s) of a FILED quarter lost their file; kept as they were (see above)`;

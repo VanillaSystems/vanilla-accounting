@@ -30,6 +30,8 @@ export interface CompanyInfo extends Pick<Workspace, 'company' | 'bankAccounts' 
   /** The build of the app serving these books (src/version.ts), and how old it is. */
   appVersion: string;
   appTime?: { at: string; kind: 'built' | 'committed' };
+  /** The company's repository keeps a history: a file deleted from the books stays in it (#228). */
+  versioned?: true;
 }
 
 function filedQuarters(ws: Workspace): QuarterKey[] {
@@ -71,5 +73,6 @@ export function companyInfo(ws: Workspace, books: Books): CompanyInfo {
     statementIbans: statementIbansOf(ws),
     appVersion: appVersion(),
     ...(appTime() ? { appTime: appTime() } : {}),
+    ...(existsSync(join(ws.paths.repository, '.git')) ? { versioned: true as const } : {}),
   };
 }

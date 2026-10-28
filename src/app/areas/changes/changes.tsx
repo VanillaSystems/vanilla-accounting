@@ -7,6 +7,7 @@
  */
 import { Fragment, useState } from 'react';
 import './changes.css';
+import { aiIsOff, useAiOff } from '../../ai/ai-off.js';
 import type { RouteOf } from '../../shell/route.js';
 import { moveKey } from '../../shell/keyboard.js';
 import { formatDate } from '../../lib/utils.js';
@@ -139,7 +140,7 @@ function useCommand(nav: Nav): [string | undefined, (cmd: SavingCommand) => Prom
       const r = await changesCommand(cmd);
       if (!r.ok) nav.toast(r.message);
       else if (r.saved !== undefined) nav.toast(t('changes.savedToast', { n: r.saved }));
-      else if (r.plain) nav.toast(t('changes.preparedPlainToast'));
+      else if (r.plain) nav.toast(t(aiIsOff() ? 'changes.preparedPlainOff' : 'changes.preparedPlainToast'));
       else if (cmd.kind === 'sync') nav.toast(t('changes.syncedToast'));
       return r;
     } catch (e) {
@@ -281,6 +282,7 @@ function UndoButton({ oid, kind, nav }: { oid: string; kind: 'draft' | 'reverse'
 function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
   const [busy, go] = useCommand(nav);
   const [text, setText] = useState('');
+  const aiOff = useAiOff();
   const p = view.proposal;
   const files = [...view.draft.map((f) => ({ ...f, source: 'draft' as const })), ...view.outside.map((f) => ({ ...f, source: 'outside' as const }))];
   const countOf = (source: string, path: string) => files.find((f) => f.source === source && f.path === path);
@@ -426,9 +428,9 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
         {p.talk.map((m, i) => <Fragment key={i}><div className="msg me">{m.me}</div><div className="msg ai"><BotIcon /><div>{m.ai}</div></div></Fragment>)}
       </div>
       <div className="chcomposer">
-        <textarea rows={2} value={text} placeholder={t('changes.ask')} aria-label={t('changes.ask')} disabled={thinking}
+        <textarea rows={2} value={text} placeholder={t(aiOff ? 'changes.askOff' : 'changes.ask')} aria-label={t('changes.ask')} disabled={thinking || aiOff}
           onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
-        <button type="button" className="btn" disabled={thinking || !text.trim()} onClick={() => void send()}><BotIcon />{t('changes.send')}</button>
+        <button type="button" className="btn" disabled={thinking || aiOff || !text.trim()} onClick={() => void send()}><BotIcon />{t('changes.send')}</button>
       </div>
       <div className="chsave">
         {thinking ? <span className="wfpill st-running">{t('changes.preparing')}</span> : null}

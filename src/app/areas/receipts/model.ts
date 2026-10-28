@@ -6,10 +6,11 @@
 import type { BankTransaction, BankTransactionPart, Index, JournalEntry, Receipt, ReceiptPatch } from '../../../types/index.js';
 import type { EstvRates } from '../../../accounting/fx-conversion.js';
 import type { Period } from '../../../accounting/periods.js';
-import type { ReceiptFilter } from '../../shell/route.js';
+import { applyChips, type Chip, type Field } from '../../shell/chips.js';
 import { baseCurrency, documents } from '../../../engines/index.js';
 import { duplicatesIn, type Twin } from '../../../intake/duplicates.js';
 import { documentKind } from '../../../intake/document-kind.js';
+import { isNoReceipt } from '../../../books/discard.js';
 import { accountOfStatement, statementFacts, type StatementFacts } from '../../../books/statement-facts.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { isManualRef } from '../../../books/refs.js';
@@ -29,9 +30,6 @@ export function noneWhyOf(r: Partial<Pick<Receipt, 'kind' | 'kindRule' | 'extrac
   if (text?.is === 'other') return text.why;
   return r.kind === 'noise' ? 'no-receipt' : 'empty';
 }
-
-/** The kinds of document that are not a receipt of their own. */
-const NON_RECEIPT_KINDS: ReadonlyArray<Receipt['kind']> = ['supporting', 'statement', 'noise', 'duplicate'];
 
 export interface ReceiptView {
   r: Receipt;
@@ -109,8 +107,7 @@ export function ledgerOf(books: Index, openFrom: string): Ledger {
     // "" is no date (an old answer of the model): the receipt is undated and needs you.
     const date = r.date || (fileDate ? `${fileDate[1]}-${fileDate[2]}-${fileDate[3]}` : undefined);
     const [vendor, desc] = r.title ? [r.title.vendor, r.title.what] : splitTitle(r.description || r.filename.replace(/\.pdf$/i, ''));
-    const none = NON_RECEIPT_KINDS.includes(r.kind)
-      || (r.amount === 0 && !(r.vatSummary ?? []).some((g) => g.vat > 0) && links.length === 0);
+    const none = isNoReceipt(r, links.length);
     const paid = links.flatMap((ref) => txByRef.get(ref)?.date ?? []);
     const twin = twins.get(r.id);
     const statement = r.kind === 'statement' ? statementFacts(r, documents()) : undefined;
@@ -141,13 +138,9 @@ export const needsYou = (v: ReceiptView, l: Ledger) =>
 
 export const badgeCount = (l: Ledger) => l.views.filter((v) => needsYou(v, l)).length;
 
-export type Counts = Record<'alle' | ReceiptFilter, number>;
-
-const FILTERS: Record<ReceiptFilter, (v: ReceiptView) => boolean> = {
-  zugeordnet: (v) => !isOpen(v),
-  offen: isOpen,
-  ohneDatum: (v) => !v.date,
-};
+/** The count line above the list: each count is a shortcut to a chip of the state field (#211). */
+export const COUNTED = ['linked', 'open', 'noDate'] as const;
+export type Counts = Record<'all' | typeof COUNTED[number], number>;
 
 /** The text a search looks in: title, description, file, note, date, amount, VAT number. */
 function haystack(v: ReceiptView): string {
@@ -160,15 +153,26 @@ export interface Visible {
   counts: Counts;
   /** Files of the period that are no receipt, but for the statements Kontoauszüge shows at their account. */
   hidden: ReceiptView[];
+  /** What the chips choose from: the period's receipts (and, asked for, the files that are none), searched. */
+  candidates: ReceiptView[];
+  /** The period's receipts and files, unfiltered: the filter menu's values and counts. */
+  pool: ReceiptView[];
 }
 
 /** A statement Kontoauszüge shows at its account and month: its account is told and its last day known. */
 export const placedStatement = (v: ReceiptView, accounts: readonly Account[]) =>
   !!v.statement?.to && !!accountOfStatement(v.statement, v.r, accounts);
 
-export function visible(l: Ledger, period: Period, filter: ReceiptFilter | undefined, q: string | undefined, accounts: readonly Account[] = []): Visible {
-  // A period shows its own receipts and those of its payments; the working period also what from
-  // before it still needs you, and every open receipt without a date, whenever it was read.
+/** The values of the state field the chips name: the list widens to the files that are none only when asked. */
+export const statesOf = (chips: readonly Chip[] | undefined): Set<string> => new Set((chips ?? []).filter((c) => c.field === 'state').map((c) => c.value));
+
+/**
+ * The rows a period shows: its own receipts and those of its payments; the working period also what
+ * from before it still needs you, and every open receipt without a date, whenever it was read. The
+ * chips (`fields` names what they mean) narrow them; a chip of the state field «kein Beleg» lets the
+ * files that are none in as rows, and any state chip hides the note about them.
+ */
+export function visible(l: Ledger, period: Period, chips: readonly Chip[] | undefined, q: string | undefined, accounts: readonly Account[] = [], fields: readonly Field<ReceiptView>[] = []): Visible {
   const working = period.from <= l.openFrom && l.openFrom <= period.to;
   const within = (d: string) => d >= period.from && d <= period.to;
   const pool = l.views.filter((v) => !!v.day && (within(v.day) || v.paid.some(within) || (working && (v.day < period.from || !v.date) && needsYou(v, l))));
@@ -176,16 +180,20 @@ export function visible(l: Ledger, period: Period, filter: ReceiptFilter | undef
   const words = (q ?? '').toLowerCase().split(/\s+/).filter(Boolean);
   const match = (v: ReceiptView) => { const h = haystack(v); return words.every((w) => h.includes(w)); };
   const counts: Counts = {
-    alle: receipts.length,
-    zugeordnet: receipts.filter(FILTERS.zugeordnet).length,
-    offen: receipts.filter(FILTERS.offen).length,
-    ohneDatum: receipts.filter(FILTERS.ohneDatum).length,
+    all: receipts.length,
+    linked: receipts.filter((v) => !isOpen(v)).length,
+    open: receipts.filter(isOpen).length,
+    noDate: receipts.filter((v) => !v.date).length,
   };
-  const by = filter ? FILTERS[filter] : () => true;
+  const states = statesOf(chips);
+  const set = pool.filter((v) => v.none && !placedStatement(v, accounts));
+  const candidates = (states.has('notReceipt') ? [...receipts, ...set] : receipts).filter(match);
   return {
-    rows: receipts.filter(by).filter(match),
+    rows: applyChips(candidates, chips ?? [], fields),
     counts,
-    hidden: pool.filter((v) => v.none && !placedStatement(v, accounts)).filter(match),
+    hidden: states.size ? [] : applyChips(set.filter(match), chips ?? [], fields),
+    candidates,
+    pool: pool.filter((v) => !v.none || !placedStatement(v, accounts)),
   };
 }
 
@@ -197,10 +205,10 @@ const byDateDesc = (a: ReceiptView, b: ReceiptView) => (b.date ?? '').localeComp
 /**
  * The list's groups in order, which is also the ↑↓ order: what needs you (a suggestion first),
  * then each month, newest first. An open receipt without a date needs you (last in its group); a
- * linked one without a date comes last as `later`, unless the filter asks for it.
+ * linked one without a date comes last as `later`, unless a chip asks for receipts without a date.
  */
-export function groups(rows: ReceiptView[], l: Ledger, filter: ReceiptFilter | undefined, suggested: (v: ReceiptView) => boolean): { groups: Group[]; later: ReceiptView[] } {
-  const later = filter === 'ohneDatum' ? [] : rows.filter((v) => !v.date && !needsYou(v, l));
+export function groups(rows: ReceiptView[], l: Ledger, noDateAsked: boolean, suggested: (v: ReceiptView) => boolean): { groups: Group[]; later: ReceiptView[] } {
+  const later = noDateAsked ? [] : rows.filter((v) => !v.date && !needsYou(v, l));
   const dated = rows.filter((v) => !later.includes(v));
   const need = dated.filter((v) => needsYou(v, l)).sort((a, b) => Number(suggested(b)) - Number(suggested(a)) || byDateDesc(a, b));
   const rest = dated.filter((v) => !need.includes(v)).sort(byDateDesc);
@@ -259,6 +267,9 @@ function moneyWay(r: Pick<Receipt, 'amount' | 'kind' | 'description' | 'extracte
   return r.kind === undefined && readsAsPayout(r) ? 'in' : 'out';
 }
 
+/** A payment the link dialog offers for this receipt: one that moved money, no Wise fee row, not yet linked to it. */
+export const linkable = (v: ReceiptView, tx: BankTransaction): boolean => tx.amount !== 0 && tx.type !== 'wise-fee' && !v.links.includes(tx.ref);
+
 /**
  * The payments a receipt could belong to, best first: close in amount (in CHF), close in date,
  * the same currency. A payment that already has a receipt ranks lower but stays findable
@@ -268,16 +279,17 @@ function moneyWay(r: Pick<Receipt, 'amount' | 'kind' | 'description' | 'extracte
  * payment's part of exactly the amount) with the money going the receipt's way; nothing close
  * means no best fit (r8h-21). A payment of a filed quarter without a receipt is listed, marked
  * `filed`, when it is a best fit or a query finds it: a late receipt is led to its correction
- * (corner-33). With a query, every payment it finds; else up to 3 best and 12 more.
+ * (corner-33). With a query, every payment it finds; else up to 3 best and 12 more. `keep` is the
+ * dialog's chip filter (#232): the ranking, «Passt am besten» included, runs over what it keeps.
  */
-export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = ''): { best: Candidate[]; more: Candidate[] } {
+export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = '', keep?: (tx: BankTransaction) => boolean): { best: Candidate[]; more: Candidate[] } {
   const { r } = v;
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   const cur = r.currency || baseCurrency();
   const way = moneyWay(r);
   const all: Candidate[] = [];
   for (const tx of l.txByRef.values()) {
-    if (tx.amount === 0 || tx.type === 'wise-fee' || v.links.includes(tx.ref)) continue;
+    if (!linkable(v, tx) || (keep && !keep(tx))) continue;
     const filed = !!l.closedThrough && tx.date <= l.closedThrough;
     if (words.length) {
       const parts = (tx.parts ?? []).flatMap((p) => [p.counterparty, p.reference, Math.abs(p.amount).toFixed(2)]);
@@ -314,7 +326,7 @@ export interface Unpaid { ref: string; date: string; amount: number; currency: s
  * those with a line of the receipt's amount, nearest in date first. With a query, every one whose
  * text, ref, amount or date hold every word (a depreciation books less than the invoice it carries).
  */
-export function bookingsWithoutPayment(v: ReceiptView, l: Ledger, query = ''): Unpaid[] {
+export function bookingsWithoutPayment(v: ReceiptView, l: Ledger, query = '', keep?: (u: Unpaid) => boolean): Unpaid[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   const cur = v.r.currency || baseCurrency();
   const near = (d: string) => (v.date ? Math.abs(Date.parse(d) - Date.parse(v.date)) : 0);
@@ -326,7 +338,8 @@ export function bookingsWithoutPayment(v: ReceiptView, l: Ledger, query = ''): U
     if (!words.every((w) => h.includes(w))) continue;
     const sameAmount = v.r.amount != null && es.some((x) => (x.exchangeCurrency ?? baseCurrency()) === cur && Math.abs(x.amount - Math.abs(v.r.amount!)) < HALF_RAPPEN);
     if (!words.length && !sameAmount) continue;
-    out.push({ ref, date: e.date, amount: e.amount, currency: e.exchangeCurrency ?? baseCurrency(), description: e.description ?? ref, sameAmount });
+    const u: Unpaid = { ref, date: e.date, amount: e.amount, currency: e.exchangeCurrency ?? baseCurrency(), description: e.description ?? ref, sameAmount };
+    if (!keep || keep(u)) out.push(u);
   }
   return out.sort((a, b) => Number(b.sameAmount) - Number(a.sameAmount) || near(a.date) - near(b.date) || a.ref.localeCompare(b.ref)).slice(0, words.length ? 40 : 8);
 }

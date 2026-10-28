@@ -15,6 +15,7 @@ const providerName = (id: SetupKey) => t(`aiSetup.key.${id}`);
 /** What a test call with a kept key said. */
 export const testLine = (id: SetupKey, test: Probation | undefined): ReactNode => (!test ? null : test.ok
   ? <p className="okline" data-key-state="checked">{ICONS.check}{t('aiSetup.key.checked', { provider: providerName(id) })}</p>
+  : test.why === 'off' ? <p className="m" data-key-state="untested">{t('aiSetup.refused.off')}</p>
   : <p className="warnline" data-key-state="tested-refused">{ICONS.warn}{t(`aiSetup.refused.${test.why}`, { said: test.said })}</p>);
 
 /** The line on what only a CLI can do. */

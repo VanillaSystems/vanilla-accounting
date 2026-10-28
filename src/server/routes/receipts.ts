@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { renameSync, existsSync, createReadStream, mkdirSync } from 'node:fs';
+import { renameSync, existsSync, createReadStream, mkdirSync, rmSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { RECEIPT_KINDS, type Receipt, type ReceiptKind, type ReceiptPatch } from '../../types/index.js';
 import { deletionsOf, dropFromTrash, readTrashed, trashedFile, trashReceipt, type Trashed } from '../../books/receipt-trash.js';
@@ -7,11 +7,13 @@ import { entriesWithoutTheirReceipts, removeReceipt } from '../../accounting/cla
 import { parseVatFacts } from '../../accounting/vat-facts.js';
 import { assertReceiptFieldsOpen, privatePayment, setReceipt, unbookedPayments } from '../edits.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
+import { bookReportCorrection } from '../../intake/sales-report-import.js';
 import type { PrivatePart } from '../../types/assistant.js';
 import { bookAgain } from './automation.js';
 import { ask } from '../../llm/ask.js';
 import { buildVisionPrompt } from '../../llm/prompts.js';
 import { findFile } from '../../workspace/workspace.js';
+import { isNoReceipt, referenced, refsOf } from '../../books/discard.js';
 import { WS, receiptPath, assertOpen, receiptDates, refDates, readBooks, updateBooks, updateBooksWithEffects, withBooks, RequestError, patchBody, stringField } from '../books.js';
 
 export const router = Router();
@@ -113,6 +115,46 @@ router.delete('/api/receipts/:id', async (req, res) => {
   res.json({ ok: true, deletion });
 });
 
+/** The names a delete of several sends (`key`: ids, files): at least one, each a text. */
+export function namesOf(body: unknown, key: string): string[] {
+  const list = (body as Record<string, unknown> | undefined)?.[key];
+  if (!Array.isArray(list) || !list.length || list.some((x) => typeof x !== 'string' || !x)) throw new RequestError(400, `${key} muss eine Liste von Namen sein.`);
+  return [...new Set(list as string[])];
+}
+
+/**
+ * Files listed as «keine Belege» deleted for good (#228), all or none: each is one, belongs to no
+ * closed period, and nothing in the books refers to it (else the refusal names what does). The
+ * books lose them through the write door first, then their files leave the workspace folder.
+ */
+router.post('/api/receipts/discard', (req, res) => {
+  const ids = namesOf(req.body, 'ids');
+  const paths = updateBooks((books) => {
+    const out = ids.map((id) => {
+      const r = books.receipts.find((x) => x.id === id);
+      if (!r) throw new RequestError(404, 'Diesen Beleg gibt es nicht mehr.', { code: 'gone', params: { what: 'receipt' } });
+      assertOpen(books, [r.date || undefined, ...receiptDates(books, id)], 'discardFile');
+      const refs = refsOf(books, r);
+      if (referenced(refs)) {
+        const what = [...refs.payments.map((p) => `Zahlung ${p}`), ...refs.entries.map((e) => `Buchung ${e}`), ...(refs.statements ? ['ein Kontoauszug'] : [])].join(', ');
+        throw new RequestError(409, `${r.filename} bleibt: ${what} verweist darauf.`, { code: 'fileReferenced', params: { file: r.filename, ...refs } });
+      }
+      if (!isNoReceipt(r, 0)) throw new RequestError(400, `${r.filename} ist ein Beleg: löschen über «Beleg löschen».`);
+      return receiptPath(books, r);
+    });
+    const gone = new Set(ids);
+    books.receipts = books.receipts.filter((r) => !gone.has(r.id));
+    for (const r of books.receipts) {
+      if (!r.distinctFrom?.some((id) => gone.has(id))) continue;
+      const rest = r.distinctFrom.filter((id) => !gone.has(id));
+      if (rest.length) r.distinctFrom = rest; else delete r.distinctFrom;
+    }
+    return out;
+  });
+  for (const path of paths) rmSync(path, { force: true });
+  res.json({ ok: true, deleted: ids.length });
+});
+
 /**
  * A deleted receipt back from the trash (its latest deletion, or the one named, which must be the
  * latest), with its links to payments that are still there. Those payments lose the entries booked
@@ -201,6 +243,27 @@ router.post('/api/receipts/:id/private-payment', async (req, res) => {
   const { made, file } = updateBooks((books) => ({ made: privatePayment(books, id, ask, loadFxResolver()), file: books.receipts.find((r) => r.id === id)!.filename }));
   await bookAgain(file);
   res.json({ ok: true, ...made });
+});
+
+/**
+ * «Als Korrektur buchen» (#231, golden rule 1): a refund paid in a filed period that the sales report
+ * `:id` offers as a correction, booked by the person in the open period with `corrects` naming the
+ * filing period of its day (src/intake/sales-report-import.ts bookReportCorrection). `on`: the open day
+ * to book it on, the first open day when absent; a closed one is refused before anything else.
+ */
+router.post('/api/receipts/:id/report-correction', (req, res) => {
+  const b = patchBody(req.body, ['order', 'date', 'on']);
+  const order = stringField(b, 'order').trim();
+  const date = stringField(b, 'date');
+  const on = b.on === undefined ? undefined : stringField(b, 'on');
+  if (!order || !/^\d{4}-\d{2}-\d{2}$/.test(date) || (on !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(on))) throw new RequestError(400, 'order, date (JJJJ-MM-TT) und optional on (JJJJ-MM-TT) erwartet.');
+  withBooks(res, (books) => {
+    if (on !== undefined) assertOpen(books, [on], 'newEntry');
+    const done = bookReportCorrection(WS, books, req.params.id, order, date, { ...(on !== undefined ? { on } : {}) });
+    if (!done.ok) throw new RequestError(done.why === 'gone' ? 404 : 409, done.why === 'gone' ? 'Diesen Verkaufsbericht gibt es nicht (mehr).' : 'Diese Rückerstattung bietet der Bericht nicht (mehr) als Korrektur an.', { code: 'reportCorrection', params: { why: done.why } });
+    assertOpen(books, done.entries.map((e) => e.date), 'newEntry');
+    return { ok: true, entries: done.entries };
+  });
 });
 
 // One edit of a receipt is one write: every field is validated before anything changes, and
