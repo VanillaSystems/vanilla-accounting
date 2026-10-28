@@ -4,8 +4,8 @@
  * read from PDFs before its first bank export or CSV came, or a PDF read on days next to such a file's.
  * There, code proposes the pairs and the person confirms them in one view (src/server/reconcile.ts
  * applies them); until then no run books any of those movements and no period holding their days
- * closes. Every movement takes part in one reconciliation only, so nothing is guessed line by line
- * afterwards. Pure: the statement files come in as `StatementSides` (src/books/bank-import.ts).
+ * closes. A movement decided once (paired, or a payment of its own) takes part in no other, so
+ * nothing is guessed line by line afterwards; only a bank file's own days decide a read movement there. Pure: the statement files come in as `StatementSides` (src/books/bank-import.ts).
  */
 import { madeByHand } from '../workspace/money-accounts.js';
 import type { BankTransaction, ReconcilePair, Reconciliation } from '../types/index.js';
@@ -22,7 +22,6 @@ export interface StatementSides {
 
 type Books = { transactions: readonly BankTransaction[]; reconciliations?: Reconciliation[] };
 
-const plusDays = (day: string, n: number) => new Date(Date.parse(day) + n * 86_400_000).toISOString().slice(0, 10);
 const cents = (x: number) => Math.round(Math.abs(x) * 100);
 const named = (t: BankTransaction) => !!t.counterparty || !!t.counterpartyIban;
 const sameSet = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x) => b.includes(x));
@@ -30,18 +29,29 @@ const sameSet = (a: readonly string[], b: readonly string[]) => a.length === b.l
 /** The reconciliation that waits for the person, per account. */
 export const pending = (books: Pick<Books, 'reconciliations'>): Reconciliation[] => (books.reconciliations ?? []).filter((r) => !r.done);
 
+/** Whether `date` lies on a day the bank files of `r` cover: there every read movement is decided, «Eigene Zahlung» included. */
+export const covers = (r: Pick<Reconciliation, 'covered'>, date: string): boolean => (r.covered ?? []).some((s) => date >= s.from && date <= s.to);
+
 /**
  * Opens, updates or drops each account's waiting reconciliation from the books and the statement
- * files (the statement import, a statement taken back, the inbox run's read step). A movement read from
- * a PDF takes part when no reconciliation took it yet and a structured file of its account covers its
- * day, or holds a movement within MATCH_DAYS days of it (a value date read for the booking day); every
- * bank movement of the account from MATCH_DAYS days before the first of those to MATCH_DAYS days after
- * the last takes part too, open or filed, booked or not. A waiting one whose movements stay the same
- * keeps its day and proposal; one left without a read movement goes. `ledgerOf`: a movement's ledger account.
+ * files (the statement import, a statement taken back, the inbox run's read step). Scoped by the days
+ * the account's bank export or CSV covers, never by where the read movements lie:
+ * - a movement read from a PDF that no reconciliation took yet takes part when a bank file of its
+ *   account covers its day (it is decided there: the same as one bank movement, or a payment of its own),
+ *   or as a candidate when it lies within MATCH_DAYS days of a bank movement it was not set against
+ *   yet (a value date read for the booking day): a candidate may be paired, else it stays as it is,
+ *   for the bank file that will cover its day;
+ * - the bank movements no reconciliation paired yet within MATCH_DAYS days of those take part, of the
+ *   same direction and currency, open or filed, booked or not; one left unpaired stays free for a
+ *   movement read later.
+ * So a PDF read months later neither stretches a reconciliation nor holds the days between. A waiting
+ * one whose movements stay the same keeps its day and proposal; one left without a read movement goes.
+ * `ledgerOf`: a movement's ledger account.
  */
 export function openReconciliations(books: Books, sides: StatementSides, ledgerOf: (t: BankTransaction) => string | undefined, today: string, differenceTo?: string): void {
   const done = (books.reconciliations ?? []).filter((r) => r.done);
-  const took = new Set(done.flatMap((r) => [...r.read, ...r.bank, ...(r.same ?? [])]));
+  const took = new Set(done.flatMap((r) => [...r.pairs.flatMap((p) => [p.read, p.bank]), ...(r.own ?? []), ...(r.same ?? [])]));
+  const setAgainst = new Set(done.flatMap((r) => r.read.flatMap((x) => r.bank.map((b) => `${x}\u0000${b}`))));
   const byAccount = new Map<string, { reads: BankTransaction[]; banks: BankTransaction[]; same: BankTransaction[] }>();
   const of = (account: string) => byAccount.get(account) ?? byAccount.set(account, { reads: [], banks: [], same: [] }).get(account)!;
   for (const t of books.transactions) {
@@ -51,24 +61,24 @@ export function openReconciliations(books: Books, sides: StatementSides, ledgerO
     else if (sides.structured.has(t.ref)) of(account).banks.push(t);
     else if (sides.both.has(t.ref)) of(account).same.push(t);
   }
+  const near = (x: BankTransaction, b: BankTransaction) => x.direction === b.direction && x.currency === b.currency && dayGap(x.date, b.date) <= MATCH_DAYS;
   const fresh: Reconciliation[] = [];
   for (const [account, { reads, banks, same }] of byAccount) {
     const spans = sides.spans.filter((s) => s.account === account);
-    // The days within MATCH_DAYS of a bank movement, once: a read movement on one of them may be it.
-    const nearBank = new Set(banks.flatMap((b) => Array.from({ length: 2 * MATCH_DAYS + 1 }, (_, i) => plusDays(b.date, i - MATCH_DAYS))));
-    const due = reads.filter((r) => spans.some((s) => r.date >= s.from && r.date <= s.to) || nearBank.has(r.date));
+    const inSpan = (date: string) => spans.filter((s) => date >= s.from && date <= s.to);
+    const due = reads.filter((x) => inSpan(x.date).length || banks.some((b) => near(x, b) && !setAgainst.has(`${x.ref}\u0000${b.ref}`)));
     if (!due.length) continue;
-    const days = due.map((r) => r.date).sort();
-    const from = plusDays(days[0], -MATCH_DAYS), to = plusDays(days.at(-1)!, MATCH_DAYS);
-    const inside = (t: BankTransaction) => t.date >= from && t.date <= to;
-    const bank = banks.filter(inside);
-    const all = [...due, ...bank, ...same.filter(inside)].map((t) => t.date).sort();
+    const bank = banks.filter((b) => due.some((x) => near(x, b)));
+    const nearDue = (t: BankTransaction) => due.some((x) => dayGap(x.date, t.date) <= MATCH_DAYS);
+    const sameNear = same.filter(nearDue);
+    const covered = [...new Map(due.flatMap((x) => inSpan(x.date)).map((s) => [`${s.from} ${s.to}`, { from: s.from, to: s.to }])).values()].sort((a, b) => a.from.localeCompare(b.from));
+    const all = [...due, ...bank, ...sameNear].map((t) => t.date).sort();
     const was = pending(books).find((r) => r.account === account);
     const read = due.map((t) => t.ref), bankRefs = bank.map((t) => t.ref);
     const kept = was && sameSet(was.read, read) && sameSet(was.bank, bankRefs);
     fresh.push({
-      account, from: all[0], to: all.at(-1)!, since: was?.since ?? today, read, bank: bankRefs,
-      ...(same.some(inside) ? { same: same.filter(inside).map((t) => t.ref) } : {}),
+      account, from: all[0], to: all.at(-1)!, since: was?.since ?? today, covered, read, bank: bankRefs,
+      ...(sameNear.length ? { same: sameNear.map((t) => t.ref) } : {}),
       pairs: kept ? was.pairs : propose(due, bank),
       ...(differenceTo ? { differenceTo } : {}),
     });

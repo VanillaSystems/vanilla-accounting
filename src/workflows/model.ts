@@ -435,14 +435,17 @@ export interface RunDetail extends RunSummary { steps: StepRecord[] }
  * a person's step (`noModel`: no rule decided and no model was there to ask), stopped, or still going.
  */
 export type RunResult =
-  | { kind: 'done'; entries: number }
+  | { kind: 'done'; entries: number; held?: Extract<Took, { kind: 'held' }>[] }
   | { kind: 'waiting'; step: Text | string; noModel: boolean }
   | { kind: 'stuck'; error: string; why?: Refusal }
   | { kind: 'running' };
 
 export function runResult(w: WorkflowDecl, r: Pick<RunDetail, 'status' | 'at' | 'error' | 'why' | 'digest' | 'steps'>): RunResult {
   switch (r.status) {
-    case 'done': return { kind: 'done', entries: r.digest.entries };
+    case 'done': {
+      const held = r.steps.flatMap((s) => ((s.output?.took as Took[] | undefined) ?? []).filter((x): x is Extract<Took, { kind: 'held' }> => x.kind === 'held'));
+      return { kind: 'done', entries: r.digest.entries, ...(held.length ? { held } : {}) };
+    }
     case 'waiting': return { kind: 'waiting', step: (r.at && stepOf(w, r.at)?.label) || r.at || '', noModel: r.steps.some((s) => s.output?.why === 'noModel') };
     case 'stuck': return { kind: 'stuck', error: r.error ?? '', ...(r.why ? { why: r.why } : {}) };
     default: return { kind: 'running' };

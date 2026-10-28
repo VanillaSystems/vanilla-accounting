@@ -16,7 +16,7 @@
  * 31.12. first, then closes and seals it. `--close` refuses a fourth quarter unless `--force`
  * says the year-end entries are booked already.
  */
-import { closeThrough, loadBooks, saveBooks } from '../books/store.js';
+import { closeThroughSaved, loadBooks } from '../books/store.js';
 import { Refused } from '../types/refusal.js';
 import { asQuarter, checkSeals, closesTheYear, periodKeyOf, writeSeal } from '../books/seal.js';
 import { addDays, derivePeriod } from '../accounting/periods.js';
@@ -45,13 +45,12 @@ if (args.includes('--close') && (!closedThrough || closedThrough < end)) {
     process.exit(1);
   }
   try {
-    closeThrough(books, end);
+    closeThroughSaved(ws, books, end);
   } catch (e) {
     if (!(e instanceof Refused)) throw e;
     console.error(`${e.message}. Nothing closed or sealed.`);
     process.exit(1);
   }
-  saveBooks(ws, books);
   console.log(`Closed: config.closedThrough ${closedThrough ?? '(not set)'} → ${end}. Nothing dated on or before it can change any more.`);
 }
 

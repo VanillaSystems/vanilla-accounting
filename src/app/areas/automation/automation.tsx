@@ -52,6 +52,7 @@ import { addDays, localToday, parsePeriod } from '../../../accounting/periods.js
 import { waitingForReceipt } from '../../../accounting/receipt-due.js';
 import { periodName } from '../../lib/period-label.js';
 import { codeLabel } from '../codes/names.js';
+import { reconciliationOf } from '../../../books/reconcile.js';
 
 type Props = AreaProps<RouteOf<'automation'>>;
 type R = RouteOf<'automation'>;
@@ -374,7 +375,7 @@ function runTitle(data: RunDetail, books: Index, w?: WorkflowDecl): string {
 const money = (amount?: number, currency?: string) => (amount === undefined ? '' : `${currency ?? ''} ${fmt(amount)}`.trim());
 
 /** LIEST: what the step had in front of it. */
-function Took({ s }: { s: StepRecord }) {
+function Took({ s, nav }: { s: StepRecord; nav: Nav }) {
   const took = (s.output?.took as Took[] | undefined) ?? [];
   const input = Object.entries(s.input).filter(([, v]) => v);
   if (!took.length && !input.length) return <p className="m">—</p>;
@@ -383,6 +384,7 @@ function Took({ s }: { s: StepRecord }) {
       {took.map((x, i) => (
         x.kind === 'files' ? <div key={i}>{t('automation.took.files', { n: x.names.length })}<ul>{x.names.map((n) => <li key={n} className="mono">{n}</li>)}</ul></div>
           : x.kind === 'receipts' ? <div key={i}>{t('automation.took.receipts', { n: x.ids.length })}<ul>{x.files.slice(0, 8).map((n) => <li key={n} className="mono">{n}</li>)}</ul></div>
+          : x.kind === 'held' ? <div key={i}><Go to={at({ area: 'bank', payment: x.payment }, x.date)} nav={nav} className="golink">{t('reconcile.heldRun', { n: x.n, account: x.account })}</Go></div>
           : <div key={i}>{t('automation.took.transactions', { n: x.n })}</div>
       ))}
       {input.map(([k, v]) => <div key={k} className="mono">{k}: {k === 'period' ? periodText(v) : v}</div>)}
@@ -623,7 +625,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
                 {s.outcome ? <span className="m">→ {outcomeText(s.outcome)}</span> : null}
               </div>
               <div className="io">
-                <div className="box"><small>{t('automation.io.took')}</small><Took s={s} /></div>
+                <div className="box"><small>{t('automation.io.took')}</small><Took s={s} nav={nav} /></div>
                 <div className="box"><small>{t('automation.io.made')}</small><Made s={s} nav={nav} /></div>
               </div>
               {s.error ? <div className="warnline">{refusalText(s.error, s.why)}<WhyGo why={s.why} nav={nav} /></div> : null}
@@ -823,6 +825,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
                   <span className="mono">{formatDate(p.date)}</span> {payText(p).name} <span className="mono">{p.currency} {fmt(signed(p))}</span>
                 </button>
                 {p.waitsForPerson && <span className="m"> · {t('automation.unbookedWaits')}</span>}
+                {reconciliationOf(books, p.ref) ? <> · <Go to={at({ area: 'bank', payment: p.ref }, p.date)} nav={nav} className="golink">{t('reconcile.held')}</Go></> : null}
               </li>
             ))}
           </ul>

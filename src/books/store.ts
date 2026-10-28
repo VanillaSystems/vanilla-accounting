@@ -402,10 +402,28 @@ export interface PeriodLock {
 export function closeThrough(books: Pick<Books, 'config' | 'statementAsks' | 'reconciliations'>, end: string): void {
   const open = reconcilePendingThrough(books, end);
   if (open) throw open;
+  closeAsksThrough(books, end);
   books.config.closedThrough = end;
-  if (!books.statementAsks) return;
+}
+
+function closeAsksThrough(books: Pick<Books, 'statementAsks'>, end: string): boolean {
+  if (!books.statementAsks?.some((a) => a.date <= end)) return false;
   books.statementAsks = books.statementAsks.filter((a) => a.date > end);
   if (!books.statementAsks.length) delete books.statementAsks;
+  return true;
+}
+
+/**
+ * closeThrough and save, for a close that may reach 31.12. (the year close, `npm run seal -- <Q4>
+ * --close --force`): the statement questions it closes are saved first, since once closedThrough
+ * reaches the year's end its files take no change and the save would be refused.
+ */
+export function closeThroughSaved(ws: Workspace, books: Books, end: string): void {
+  const open = reconcilePendingThrough(books, end);
+  if (open) throw open;
+  if (closeAsksThrough(books, end)) saveBooks(ws, books);
+  books.config.closedThrough = end;
+  saveBooks(ws, books);
 }
 
 /**

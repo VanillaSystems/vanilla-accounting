@@ -94,7 +94,7 @@ test('books schema 7 (#254): books of schema 6 load and verify their seals, npm 
 
   const again = loadBooks(ws);
   const open = again.transactions.find((t) => t.date > (again.config.closedThrough ?? ''))!;
-  again.reconciliations = [{ account: '1021', from: open.date, to: open.date, since: '2026-10-28', read: [open.ref], bank: [], pairs: [] }];
+  again.reconciliations = [{ account: '1021', from: open.date, to: open.date, since: '2026-10-28', covered: [{ from: open.date, to: open.date }], read: [open.ref], bank: [], pairs: [] }];
   const statement = { iban: 'CH6580808000000000001', currency: 'CHF', opening: { date: '2026-11-01', amount: 10 }, closing: { date: '2026-11-30', amount: 10 }, movements: [] };
   again.statementAsks = [{ file: 'Raiffeisen/Kontoauszug 01.11.2026 - 30.11.2026.pdf', account: '1021', date: '2026-11-30', since: '2026-12-01', read: { by: 'model', statement, check: { ok: true, gaps: [] }, known: [] } }];
   saveBooks(ws, again);

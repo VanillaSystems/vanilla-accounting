@@ -106,7 +106,7 @@ test('probe: 20.00 read, 21.50 at the bank: no proposal; paired, the bank\'s amo
   assert.deepEqual([books.transactions.map((t) => t.ref), books.journalEntries], [['B'], []], 'the read amount\'s booking goes; the run books the bank\'s 21.50 once');
 });
 
-test('probe: the weekly cleaner, 150 filed on 29.09 and 150 at the bank on 06.10: proposed, not decided; «Eigene Zahlung» books the bank\'s, the filed side stays; until then Q4 does not close', () => {
+test('probe: the weekly cleaner, 150 filed on 29.09 and 150 at the bank on 06.10: proposed, not decided; left apart, the bank\'s is booked, the filed side stays and is not asked again; until then Q4 does not close', () => {
   const filed = move('P-0929', '2026-09-29', -150, { counterparty: 'Reinigung Muster' });
   const next = move('B-1006', '2026-10-06', -150, { counterparty: 'Reinigung Muster' });
   const books = booksOf('2026-09-30', [filed, next], [entry('q3', 'P-0929', '2026-09-29', 150)]);
@@ -115,8 +115,11 @@ test('probe: the weekly cleaner, 150 filed on 29.09 and 150 at the bank on 06.10
   assert.deepEqual([r.from, r.to, r.pairs], ['2026-09-29', '2026-10-06', [{ read: 'P-0929', bank: 'B-1006' }]], 'the filed line before the export\'s days takes part');
   assert.throws(() => closeThrough(books, '2026-12-31'), (e: unknown) => e instanceof Refused && e.why.code === 'reconcilePending' && e.why.params.payment === 'B-1006', 'the close names where it is answered');
   const before = structuredClone(filed);
-  answer(books, { pairs: [], own: ['P-0929'] });
+  assert.throws(() => answer(books, { pairs: [], own: ['P-0929'] }), (e: unknown) => e instanceof ReconcileRefused && e.code === 'reconcileNotCovered', 'no day of the export: never «Eigene Zahlung»');
+  answer(books, { pairs: [], own: [] });
   assert.deepEqual(books.transactions.find((t) => t.ref === 'P-0929'), before, 'the filed movement never changes');
+  open(books, sides(['P-0929'], ['B-1006'], { from: '2026-10-01', to: '2026-10-31' }));
+  assert.deepEqual(pending(books), [], 'set against the bank\'s once: not asked again');
   assert.deepEqual([heldByReconciliation(books).size, bookedInFiled(next), bookings(books, 'B-1006')], [0, false, []], 'the bank\'s is a payment of its own, booked by the run');
   closeThrough(books, '2026-12-31');
   assert.equal(books.config.closedThrough, '2026-12-31');
@@ -190,7 +193,7 @@ test('a waiting reconciliation goes when its read movements go (the bank\'s file
 test('the run books no movement of a waiting reconciliation', async () => {
   const ws = workspaceAt(DEMO_ROOT);
   const bank = { ...move('B-in', '2026-10-13', 1199.5), bank: 'Raiffeisen' } as BankTransaction;
-  const books = { ...booksOf('2026-03-31', [{ ...move('P-in', '2026-10-11', 1200), bank: 'Raiffeisen' }, bank]), reconciliations: [{ account: '1021', from: '2026-10-11', to: '2026-10-13', since: '2026-10-28', read: ['P-in'], bank: ['B-in'], pairs: [] } satisfies Reconciliation] } as Books;
+  const books = { ...booksOf('2026-03-31', [{ ...move('P-in', '2026-10-11', 1200), bank: 'Raiffeisen' }, bank]), reconciliations: [{ account: '1021', from: '2026-10-11', to: '2026-10-13', since: '2026-10-28', covered: [{ from: '2026-10-01', to: '2026-10-31' }], read: ['P-in'], bank: ['B-in'], pairs: [] } satisfies Reconciliation] } as Books;
   const out = await ACTIONS['accounting.expenses.classification'].run!({ transaction: bank, books }, {}, { ws } as never);
   assert.deepEqual([out.outcome, (out as { output?: { why?: string } }).output?.why], ['held', 'reconcile']);
 });
@@ -200,8 +203,63 @@ test('closing a period closes the statement questions of its days, and waits for
   const books = { config: {}, transactions: [], journalEntries: [], statementAsks: [ask('a.pdf', '2026-09-30'), ask('b.pdf', '2026-10-31')] } as unknown as Books;
   closeThrough(books, '2026-09-30');
   assert.deepEqual([books.config.closedThrough, books.statementAsks?.map((a) => a.file)], ['2026-09-30', ['b.pdf']]);
-  books.reconciliations = [{ account: '1021', from: '2026-12-28', to: '2027-01-04', since: '2027-01-05', read: ['P'], bank: ['B'], pairs: [] }];
+  books.reconciliations = [{ account: '1021', from: '2026-12-28', to: '2027-01-04', since: '2027-01-05', covered: [{ from: '2027-01-01', to: '2027-01-31' }], read: ['P'], bank: ['B'], pairs: [] }];
   assert.equal(reconcilePendingThrough(books, '2026-12-27'), undefined, 'a period before its first day closes');
   assert.throws(() => closeThrough(books, '2026-12-31'), (e: unknown) => e instanceof Refused && e.why.code === 'reconcilePending' && e.why.params.through === '2026-12-31');
   assert.equal(books.config.closedThrough, '2026-09-30', 'nothing closed');
+});
+
+/** The statement files' word on the books with several bank files: `spans` the days each covers. */
+const sidesOf = (read: string[], bank: string[], ...spans: { from: string; to: string }[]): StatementSides =>
+  ({ pdf: new Set(read), structured: new Set(bank), both: new Set(), spans: spans.map((s) => ({ account: '1021', ...s })) });
+
+test('review: a read movement past the bank file\'s last day is only a candidate: never «Eigene Zahlung»; left apart, the export of its day decides it, and pairs it with that export\'s movement', () => {
+  const books = booksOf('2026-09-30', [move('P-1003', '2026-10-03', -12), move('P-1103', '2026-11-03', -80, { counterparty: 'Beta GmbH' }), move('B-1003', '2026-10-03', -12), move('B-1031', '2026-10-31', -80, { counterparty: 'Alpha AG' })]);
+  const october = { from: '2026-10-01', to: '2026-10-31' };
+  open(books, sidesOf(['P-1003', 'P-1103'], ['B-1003', 'B-1031'], october));
+  const r = pending(books)[0];
+  assert.deepEqual([r.covered, r.read, r.pairs], [[october], ['P-1003', 'P-1103'], [{ read: 'P-1003', bank: 'B-1003' }]], 'the covered days are recorded; 03.11 takes part only as a candidate');
+  assert.throws(() => answer(books, { pairs: [{ read: 'P-1003', bank: 'B-1003' }], own: ['P-1103'] }), (e: unknown) => e instanceof ReconcileRefused && e.code === 'reconcileNotCovered');
+  answer(books, { pairs: [{ read: 'P-1003', bank: 'B-1003' }], own: [] });
+  assert.deepEqual(books.reconciliations?.[0].own, undefined, 'nothing named a payment of its own');
+  // The November export comes, holding the payment of 03.11.
+  books.transactions.push(move('B-1103', '2026-11-03', -80, { counterparty: 'Beta GmbH' }));
+  open(books, sidesOf(['P-1103'], ['B-1031', 'B-1103'], october, { from: '2026-11-01', to: '2026-11-30' }));
+  const next = pending(books)[0];
+  assert.ok(next, 'a new reconciliation for the days the new file covers');
+  assert.deepEqual([next.read, next.pairs], [['P-1103'], [{ read: 'P-1103', bank: 'B-1103' }]], 'the read movement is decided by the export of its day: one payment');
+  answer(books, { pairs: [{ read: 'P-1103', bank: 'B-1103' }], own: [] });
+  assert.deepEqual(books.transactions.map((t) => t.ref).sort(), ['B-1003', 'B-1031', 'B-1103'], 'each payment once');
+});
+
+test('review: a bank movement left unpaired stays free: a movement read later for its day is set against it', () => {
+  const books = booksOf('2026-09-30', [move('P-1025', '2026-10-25', -7), move('B-1030', '2026-10-30', -45, { counterparty: 'Alpha AG' })]);
+  const october = { from: '2026-10-01', to: '2026-10-31' };
+  open(books, sidesOf(['P-1025'], ['B-1030'], october));
+  answer(books, { pairs: [], own: ['P-1025'] });
+  // Another PDF of October read later brings the payment of 29.10.
+  books.transactions.push(move('P-1029', '2026-10-29', -45, { counterparty: 'Alpha AG' }));
+  open(books, sidesOf(['P-1025', 'P-1029'], ['B-1030'], october));
+  const r = pending(books)[0];
+  assert.deepEqual([r?.read, r?.bank, r?.pairs], [['P-1029'], ['B-1030'], [{ read: 'P-1029', bank: 'B-1030' }]], 'the unpaired bank movement takes part again; the decided read one does not');
+});
+
+test('review: a year\'s export and PDFs read for February and November: only the bank movements near the read ones are held, not the months between', () => {
+  const year = { from: '2026-01-01', to: '2026-12-31' };
+  const books = booksOf('2025-12-31', [move('P-0210', '2026-02-10', -30), move('P-1110', '2026-11-10', -40), move('B-0211', '2026-02-11', -30), move('B-0615', '2026-06-15', -99), move('B-1110', '2026-11-10', -40)]);
+  open(books, sidesOf(['P-0210', 'P-1110'], ['B-0211', 'B-0615', 'B-1110'], year));
+  const r = pending(books)[0];
+  assert.deepEqual([r.bank, [...heldByReconciliation(books)].includes('B-0615')], [['B-0211', 'B-1110'], false], 'June is booked as any');
+});
+
+test('review: a pair of another direction or currency is refused', () => {
+  const october = { from: '2026-10-01', to: '2026-10-31' };
+  const books = booksOf('2026-09-30', [move('P', '2026-10-05', -100), move('Q', '2026-10-05', 100), move('B', '2026-10-05', 100)]);
+  open(books, sidesOf(['P', 'Q'], ['B'], october));
+  assert.deepEqual(pending(books)[0].pairs, [{ read: 'Q', bank: 'B' }], 'only the same direction proposed');
+  assert.throws(() => answer(books, { pairs: [{ read: 'P', bank: 'B' }], own: ['Q'] }), (e: unknown) => e instanceof ReconcileRefused && e.code === 'reconcileMismatch', '−100 read is not +100 at the bank');
+  const usd = booksOf('2026-09-30', [move('P', '2026-10-05', -100), move('Q', '2026-10-05', -100, { currency: 'USD' }), move('B', '2026-10-05', -100, { currency: 'USD' })]);
+  open(usd, sidesOf(['P', 'Q'], ['B'], october));
+  assert.throws(() => answer(usd, { pairs: [{ read: 'P', bank: 'B' }], own: ['Q'] }), (e: unknown) => e instanceof ReconcileRefused && e.code === 'reconcileMismatch', 'CHF read is not USD at the bank');
+  assert.equal(usd.transactions.length, 3, 'nothing changed');
 });

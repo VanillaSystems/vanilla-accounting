@@ -49,7 +49,7 @@ function paidByRead(setup: VatSetup, bankAmount: number) {
   assert.deepEqual(book.invoices[0].status === 'issued' && book.invoices[0].payments.map((p) => p.transactionRef), ['P'], 'the read movement paid the invoice');
   // The bank's file came: the account's reconciliation sets the read movement against the bank's.
   books.transactions.push(tx('B', '2026-10-12', bankAmount));
-  const r: Reconciliation = { account: '1021', from: '2026-10-10', to: '2026-10-12', since: '2026-10-28', read: ['P'], bank: ['B'], pairs: [{ read: 'P', bank: 'B' }] };
+  const r: Reconciliation = { account: '1021', from: '2026-10-10', to: '2026-10-12', since: '2026-10-28', covered: [{ from: '2026-10-01', to: '2026-10-31' }], read: ['P'], bank: ['B'], pairs: [{ read: 'P', bank: 'B' }] };
   books.reconciliations = [r];
   const answer = () => confirm(books, r, { pairs: [{ read: 'P', bank: 'B' }], own: [] }, { rateOf: () => undefined, isClosed: periodLock(books).isClosed, chart: new Set(['1021', '6960']), bankOf: () => '1021', today: '2026-10-28', invoices: { book, ctx } });
   return { book, books, answer };

@@ -158,6 +158,9 @@ export function errorText(e: unknown): string {
     case 'reconcileUndecided': return t('error.reconcileUndecided', { n: b.params.n });
     case 'reconcileTwice': return t('error.reconcileTwice', { ref: b.params.ref });
     case 'reconcileDifference': return t('error.reconcileDifference', { amount: `${b.params.currency} ${fmt(b.params.amount)}` });
+    case 'reconcileMismatch': return t('error.reconcileMismatch');
+    case 'reconcileNotCovered': return t('error.reconcileNotCovered', { date: formatDate(b.params.date) });
+    case 'reconciledTwins': return t('error.reconciledTwins', { n: b.params.refs.length, refs: b.params.refs.slice(0, 3).join(', ') });
     case 'bookedInFiled': return b.params.date ? t('error.bookedInFiled', { date: formatDate(b.params.date) }) : t('error.bookedInFiledUnnamed');
     case 'twinBookedByHand': return t('error.twinBookedByHand', { entry: b.params.entry, read: `${b.params.currency} ${fmt(b.params.read)}`, bank: `${b.params.currency} ${fmt(b.params.bank)}` });
     case 'bookedByHand': return t('error.bookedByHand', { entry: b.params.entry, date: formatDate(b.params.date), amount: `${b.params.currency} ${fmt(b.params.amount)}` });

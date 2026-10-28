@@ -30,7 +30,7 @@ import { loadInvoices } from '../invoices/store.js';
 import { liveInvoices, openOn, paymentsNamingOpen } from '../invoices/rules.js';
 import { hasEvent } from './refs.js';
 import { workspaceChecks } from '../workspace/checks.js';
-import { closeThrough, loadBooks, moduleActor, periodLock, PERSON, saveBooks, sealsOf, update, type Books } from './store.js';
+import { closeThroughSaved, loadBooks, moduleActor, periodLock, PERSON, saveBooks, sealsOf, update, type Books } from './store.js';
 import { reconcilePendingThrough } from './reconcile.js';
 import { writeSeal } from './seal.js';
 import { nextManualRef } from './next-ref.js';
@@ -375,8 +375,7 @@ export async function closeYear(ws: Workspace, year: string, rates: EstvRates = 
   if (!books.config.closedThrough || books.config.closedThrough < end) {
     const reconcile = reconcilePendingThrough(books, end);
     if (reconcile) throw new YearCloseRefused(reconcile.why, `${year} cannot close yet: ${reconcile.message}.`);
-    closeThrough(books, end);
-    saveBooks(ws, books);
+    closeThroughSaved(ws, books, end);
   }
   const q4 = filingKeyOf(end, ws.filingLength) as QuarterKey;
   const seal = writeSeal(ws, books, q4, today);

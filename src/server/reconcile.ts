@@ -12,10 +12,11 @@ import type { InvoiceBook } from '../invoices/model.js';
 import { matchPayments, releasePayment, type PaymentContext, type PaymentOutcome } from '../invoices/payments.js';
 import { bookInvoiceEvents } from '../invoices/events.js';
 import { baseCurrency } from '../engines/index.js';
+import { covers } from '../books/reconcile.js';
 
 /** Why a confirmation is refused, with the API's code and its parameters (src/types/api-error.ts). */
 export class ReconcileRefused extends Error {
-  constructor(readonly status: number, readonly code: 'reconcileUndecided' | 'reconcileTwice' | 'reconcileDifference' | 'twinBookedByHand' | 'gone', readonly params: Record<string, unknown>, message: string) {
+  constructor(readonly status: number, readonly code: 'reconcileUndecided' | 'reconcileTwice' | 'reconcileDifference' | 'reconcileMismatch' | 'reconcileNotCovered' | 'twinBookedByHand' | 'gone', readonly params: Record<string, unknown>, message: string) {
     super(message);
   }
 }
@@ -39,9 +40,11 @@ export interface Decision { pairs: ReconcilePair[]; own: string[] }
 const centsOf = (ts: readonly BankTransaction[]) => ts.reduce((n, t) => n + Math.round((t.direction === 'DBIT' ? -t.amount : t.amount) * 100), 0);
 
 /**
- * Confirms the waiting reconciliation `r`. Every movement read from a PDF must be named once: paired
- * with one bank movement, or a payment of its own; a bank movement is paired once at most, and every
- * other is a payment of its own, booked as any. A pair:
+ * Confirms the waiting reconciliation `r`. Every movement read from a PDF on a day the bank files cover
+ * must be named once: paired with one bank movement of its direction and currency, or a payment of its
+ * own. A candidate on another day may only be paired: left apart, it stays as it is for the bank file
+ * that covers its day. A bank movement is paired once at most; every other stays free, booked as any.
+ * A pair:
  * - read in a filed period and booked there: the filed side stays as filed; the bank's movement is
  *   marked as booked there (`filedTwin`), and only what the bank booked beyond the read amount is booked,
  *   on its day, to the account the person names (the year end's exchange difference proposed), which
@@ -61,14 +64,18 @@ export function confirm(books: Books, r: Reconciliation, d: Decision, ctx: Confi
   if (twice) throw new ReconcileRefused(400, 'reconcileTwice', { ref: twice }, `${twice} is named twice`);
   const stranger = [...named.filter((ref) => !r.read.includes(ref)), ...d.pairs.map((p) => p.bank).filter((ref) => !r.bank.includes(ref))][0];
   if (stranger) throw new ReconcileRefused(400, 'reconcileTwice', { ref: stranger }, `${stranger} takes no part in this reconciliation`);
-  const undecided = r.read.filter((ref) => !named.includes(ref));
-  if (undecided.length) throw new ReconcileRefused(400, 'reconcileUndecided', { n: undecided.length }, `${undecided.length} movement(s) read from PDFs are neither paired nor a payment of their own: ${undecided.join(', ')}`);
   const tx = (ref: string) => {
     const t = books.transactions.find((x) => x.ref === ref);
     if (!t) throw new ReconcileRefused(409, 'gone', { what: 'payment' }, `${ref} is no longer in the books`);
     return t;
   };
+  const elsewhere = d.own.map(tx).find((t) => !covers(r, t.date));
+  if (elsewhere) throw new ReconcileRefused(400, 'reconcileNotCovered', { ref: elsewhere.ref, date: elsewhere.date }, `${elsewhere.ref} lies on ${elsewhere.date}, a day no bank file of the account covers: it is the same as a bank movement or stays as it is until one does`);
+  const undecided = r.read.filter((ref) => !named.includes(ref) && covers(r, tx(ref).date));
+  if (undecided.length) throw new ReconcileRefused(400, 'reconcileUndecided', { n: undecided.length }, `${undecided.length} movement(s) read from PDFs are neither paired nor a payment of their own: ${undecided.join(', ')}`);
   const pairs = d.pairs.map((p) => ({ p, read: tx(p.read), bank: tx(p.bank) }));
+  const odd = pairs.find(({ read, bank }) => read.direction !== bank.direction || read.currency !== bank.currency);
+  if (odd) throw new ReconcileRefused(400, 'reconcileMismatch', { read: odd.read.ref, bank: odd.bank.ref }, `${odd.read.ref} and ${odd.bank.ref} differ in direction or currency: they are not one payment`);
   const refs = new Set(books.transactions.map((t) => t.ref));
   // An entry on a ref no payment has (a leg from before unique refs) is its base's.
   const ownerOf = (ref: string, read: BankTransaction) => ref === read.ref || (!refs.has(ref) && ref.split('~')[0] === read.ref);
@@ -114,7 +121,7 @@ export function confirm(books: Books, r: Reconciliation, d: Decision, ctx: Confi
     kept.push({ read: p.read, bank: p.bank });
   }
   // Confirmed before the invoices are matched again: its movements are held no longer.
-  Object.assign(r, { pairs: kept, done: ctx.today });
+  Object.assign(r, { pairs: kept, ...(d.own.length ? { own: d.own } : {}), done: ctx.today });
   if (released && ctx.invoices) {
     files.push(...bookInvoiceEvents(books, ctx.invoices.book, ctx.invoices.ctx).files);
     files.push(...matchPayments(books, ctx.invoices.book, ctx.invoices.ctx).files);

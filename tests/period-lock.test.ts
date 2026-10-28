@@ -52,7 +52,7 @@ before(async () => {
     b.statementAsks = [{ file: `Raiffeisen/${MAY_PDF}`, account: '1021', date: '2026-05-31', since: '2026-06-01', read: { by: 'hand', statement: MAY, check: { ok: true, gaps: [] }, known: [] } }];
     // A reconciliation whose read movement C1 lies in the filed quarter, booked there (#254), and an open bank movement of its amount.
     b.transactions.push({ ref: 'O2', bank: 'Raiffeisen', date: '2026-07-01', amount: 10, currency: 'CHF', direction: 'DBIT', description: 'Bank Juli' });
-    b.reconciliations = [{ account: '1021', from: '2026-05-10', to: '2026-07-01', since: '2026-07-02', read: ['C1'], bank: ['O2'], pairs: [] }];
+    b.reconciliations = [{ account: '1021', from: '2026-05-10', to: '2026-07-01', since: '2026-07-02', covered: [], read: ['C1'], bank: ['O2'], pairs: [] }];
   });
   saveBooks(api.ws, books);
   writeFileSync(join(api.root, 'data/trash/rx/d1/trashed.json'), JSON.stringify({ deletedAt: new Date().toISOString(), receipt: { id: 'rx', filename: 'late.pdf', originalFilename: 'late.pdf', extractedText: '', extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-06-01T08:00:00Z', location: 'archived' }, mappings: [{ receiptId: 'rx', transactionRef: 'C1' }], file: 'transactional-data/2026/receipts/late.pdf' }));

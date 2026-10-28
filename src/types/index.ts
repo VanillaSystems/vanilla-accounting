@@ -186,9 +186,10 @@ export interface ReconcilePair { read: string; bank: string; account?: string }
 
 /**
  * An account's movements read from statement PDFs set against the movements of its bank export or CSV
- * on the same days, give or take MATCH_DAYS (#254, src/books/reconcile.ts). Opened by the import that
- * brings them together; until the person confirms it (`done`), none of its movements is booked by a run
- * and no period holding its days closes. Every movement takes part in one reconciliation only.
+ * (#254, src/books/reconcile.ts): those on the days the bank files cover (`covered`), and those within
+ * MATCH_DAYS of a bank movement as candidates. Opened by the import that brings them together; until
+ * the person confirms it (`done`), none of its movements is booked by a run and no period holding its
+ * days closes. A movement it paired, or named a payment of its own, takes part in no other.
  */
 export interface Reconciliation {
   /** The ledger account of the bank account. */
@@ -198,7 +199,9 @@ export interface Reconciliation {
   to: string;
   /** The day it was opened. */
   since: string;
-  /** The refs of the movements read from PDFs that take part. */
+  /** The days the account's bank files cover on which a read movement takes part: each is decided, the same as a bank movement or a payment of its own. */
+  covered: { from: string; to: string }[];
+  /** The refs of the movements read from PDFs that take part: those on `covered` days, and candidates on other days, which only a pair decides. */
   read: string[];
   /** The refs of the bank's movements that take part. */
   bank: string[];
@@ -208,6 +211,8 @@ export interface Reconciliation {
   pairs: ReconcilePair[];
   /** The year end's exchange-difference account, when the chart has it: proposed for a filed pair's difference. */
   differenceTo?: string;
+  /** Confirmed: the read movements of `covered` days the person named payments of their own. */
+  own?: string[];
   /** The day the person confirmed it. */
   done?: string;
 }

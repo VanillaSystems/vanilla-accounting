@@ -365,6 +365,9 @@ export function removeStatement(file: string, refs?: readonly string[], o: { kee
   // A payment of a statement read without camt.053 that a bank export holds too stays, under the export's ref (#217).
   const moved = [...moves].filter(([was, t]) => books.transactions.some((x) => x.ref === was) && !books.transactions.some((x) => x.ref === t.ref));
   assertOpen(books, [...mine, ...moved.map(([was]) => was)].flatMap((ref) => refDates(books, ref)), 'deleteTransaction');
+  // A bank movement a confirmed reconciliation set in a read movement's place (#254): the read one left the books, and its row brings nothing again, so the payment, its entries and links would be lost.
+  const twins = (books.reconciliations ?? []).flatMap((r) => (r.done ? r.pairs.map((p) => p.bank) : [])).filter((ref) => mine.has(ref));
+  if (twins.length) throw new RequestError(409, `Der bestätigte Abgleich hat aus PDFs gelesene Bewegungen durch Bewegungen dieses Auszugs ersetzt (${twins.slice(0, 5).join(', ')}): er bleibt.`, { code: 'reconciledTwins', params: { refs: twins } });
   if ((books.journalEntries ?? []).some((e) => mine.has(e.transactionRef) && e.origin === 'manual')) throw new RequestError(409, 'Auf einer dieser Zahlungen steht eine Buchung von Hand. Erst sie löschen.');
   const bytes = readFileSync(path);
   const lock = periodLock(books);
@@ -490,24 +493,29 @@ router.post('/api/reconciliations/:account', (req, res) => {
   if (!pairs.every((p) => p && ref(p.read) && ref(p.bank) && (p.account === undefined || ref(p.account))) || !own.every(ref)) throw new RequestError(400, 'pairs: [{ read, bank, account? }], own: [refs].');
   const ctx = paymentContext(WS);
   const book = ctx ? loadInvoices(WS) : undefined;
-  withBooks(res, (books) => {
+  // The invoice PDFs are filed and the invoices saved only once the books are: a stale save is refused, never run twice.
+  let saved: Books | undefined;
+  const files = updateBooksWithEffects((books) => {
+    saved = books;
     const r = pending(books).find((x) => x.account === req.params.account);
     if (!r) throw new RequestError(404, 'Dieses Konto wartet auf keinen Abgleich.', { code: 'gone', params: { what: 'payment' } });
     const lock = periodLock(books);
-    // The open side changes: the bank's movements, and the read movements of open days.
-    assertOpen(books, books.transactions.filter((t) => r.bank.includes(t.ref) || (r.read.includes(t.ref) && !lock.isClosed(t.date))).map((t) => t.date), 'editTransaction');
+    // No assertOpen over its movements: a filed one may take part (a bank movement of 28.09 filed, a PDF read for 02.10), and confirm leaves it as filed; the write door refuses any change to it.
     try {
-      const files = confirm(books, r, { pairs: pairs as { read: string; bank: string; account?: string }[], own: own as string[] }, {
+      return confirm(books, r, { pairs: pairs as { read: string; bank: string; account?: string }[], own: own as string[] }, {
         rateOf: estvRate(), isClosed: lock.isClosed, chart: new Set(chartOf(WS)), bankOf: (t) => bankAccountFor(t, WS.bankAccounts), today: new Date().toISOString().slice(0, 10),
         ...(book && ctx ? { invoices: { book, ctx } } : {}),
       });
-      if (book) { fileReceipts(WS, books, files); saveInvoices(WS, book); }
     } catch (e) {
       if (e instanceof ReconcileRefused) throw new RequestError(e.status, e.message, { code: e.code, params: e.params } as never);
       throw e;
     }
-    return { ok: true };
   });
+  if (book && saved) {
+    fileReceipts(WS, saved, files);
+    saveInvoices(WS, book);
+  }
+  res.json({ ok: true });
 });
 
 /**

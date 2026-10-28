@@ -63,6 +63,11 @@ export type ApiRefusal =
   | { code: 'reconcileUndecided'; params: { n: number } }
   | { code: 'reconcileTwice'; params: { ref: string } }
   | { code: 'reconcileDifference'; params: { read: string; amount: number; currency: string } }
+  /** A pair of movements of another direction or currency, or «Eigene Zahlung» for a read movement on a day no bank file of the account covers (#254): only a bank file's days decide a read movement as a payment of its own. */
+  | { code: 'reconcileMismatch'; params: { read: string; bank: string } }
+  | { code: 'reconcileNotCovered'; params: { ref: string; date: string } }
+  /** A bank file taken back that holds bank movements a confirmed reconciliation paired with movements read from PDFs (#254): their bookings and links would go with them, the read movements never come back. */
+  | { code: 'reconciledTwins'; params: { refs: string[] } }
   /** A booking of a bank movement the person paired with a movement read from a PDF of a filed period, booked there (#254): only with «Trotzdem buchen». `read`, `date`: that filed movement. */
   | { code: 'bookedInFiled'; params: { read: string; date: string } }
   /** A second bank payment of another payee for a receipt that has one, asked without `confirm` (src/server/edits.ts assertNotSecondPayment, r8h-21). */

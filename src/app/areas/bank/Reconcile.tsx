@@ -1,8 +1,9 @@
 /**
  * An account's reconciliation that waits for the person (#254, src/books/reconcile.ts): the movements
- * read from statement PDFs beside the bank's export or CSV of the same days. Each read movement is the
- * same as one bank movement (code's proposal preselected) or a payment of its own; nothing is left to a
- * default. One «Abgleich bestätigen» applies all (src/server/reconcile.ts). A filed pair keeps its filed
+ * read from statement PDFs beside the bank's export or CSV of the same days. Each read movement on a
+ * day the bank's file covers is the same as one bank movement (code's proposal preselected) or a payment
+ * of its own; one on another day is the same as one, or not in this export (it waits for the export of
+ * its day). Nothing is left to a default. One «Abgleich bestätigen» applies all (src/server/reconcile.ts). A filed pair keeps its filed
  * side and books only a difference, to an account of the chart.
  */
 import { useState } from 'react';
@@ -12,9 +13,12 @@ import { getAccounts } from '../../lib/accounts.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
+import { covers } from '../../../books/reconcile.js';
 import { payText, signed } from './model.js';
 
 const OWN = 'own';
+/** A read movement on a day the bank's file does not cover, left for the export of its day. */
+const LATER = 'later';
 const cents = (t: BankTransaction) => Math.round(signed(t) * 100);
 const line = (p: BankTransaction) => `${formatDate(p.date)} · ${payText(p).name} · ${fmt(signed(p))}`;
 
@@ -28,9 +32,10 @@ export function ReconcilePanel({ r, books, label, closedThrough, edit, nav }: { 
   const [account, setAccount] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const chosen = new Set(Object.values(choice).filter((v) => v && v !== OWN));
+  const paired = (v: string | undefined) => !!v && v !== OWN && v !== LATER;
+  const chosen = new Set(Object.values(choice).filter(paired));
   const differenceOf = (x: BankTransaction) => {
-    const b = choice[x.ref] && choice[x.ref] !== OWN ? byRef.get(choice[x.ref]) : undefined;
+    const b = paired(choice[x.ref]) ? byRef.get(choice[x.ref]) : undefined;
     return b && filed(x) && booked.has(x.ref) ? cents(b) - cents(x) : 0;
   };
   // A read movement not named yet, or a filed pair's difference without an account.
@@ -41,7 +46,7 @@ export function ReconcilePanel({ r, books, label, closedThrough, edit, nav }: { 
     setBusy(true);
     setError(undefined);
     try {
-      const pairs = reads.flatMap((x) => (choice[x.ref] && choice[x.ref] !== OWN ? [{ read: x.ref, bank: choice[x.ref], ...(account[x.ref] ? { account: account[x.ref] } : {}) }] : []));
+      const pairs = reads.flatMap((x) => (paired(choice[x.ref]) ? [{ read: x.ref, bank: choice[x.ref], ...(account[x.ref] ? { account: account[x.ref] } : {}) }] : []));
       await api.confirmReconciliation(r.account, { pairs, own: reads.filter((x) => choice[x.ref] === OWN).map((x) => x.ref) });
       nav.toast(t('reconcile.done'));
       nav.refresh();
@@ -60,7 +65,8 @@ export function ReconcilePanel({ r, books, label, closedThrough, edit, nav }: { 
         <tbody>
           {reads.map((x) => {
             const pick = choice[x.ref] ?? '';
-            const b = pick && pick !== OWN ? byRef.get(pick) : undefined;
+            const b = paired(pick) ? byRef.get(pick) : undefined;
+            const mine = covers(r, x.date);
             const diff = b ? cents(b) - cents(x) : 0;
             const filedBooked = filed(x) && booked.has(x.ref);
             return (
@@ -68,11 +74,12 @@ export function ReconcilePanel({ r, books, label, closedThrough, edit, nav }: { 
                 <td>
                   <span className="mono">{line(x)}</span>
                   {filed(x) ? <small className="m"> · {t(filedBooked ? 'reconcile.filedBooked' : 'reconcile.filed')}</small> : null}
+                  {mine ? null : <small className="m"> · {t('reconcile.candidate')}</small>}
                 </td>
                 <td>
                   <select value={pick} disabled={!edit || busy} data-testid="reconcile-choice" onChange={(e) => setChoice({ ...choice, [x.ref]: e.target.value })}>
                     <option value="">{t('reconcile.choose')}</option>
-                    <option value={OWN}>{t('reconcile.own')}</option>
+                    {mine ? <option value={OWN}>{t('reconcile.own')}</option> : <option value={LATER}>{t('reconcile.later')}</option>}
                     {banks.filter((o) => o.direction === x.direction && o.currency === x.currency).map((o) => <option key={o.ref} value={o.ref} disabled={chosen.has(o.ref) && pick !== o.ref}>{t('reconcile.sameAs', { line: line(o) })}</option>)}
                   </select>
                   {b && filedBooked ? <small className="m"> {t('reconcile.filedSame')}</small> : null}
