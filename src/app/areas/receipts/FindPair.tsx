@@ -13,6 +13,7 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { baseCurrency } from '../../../engines/index.js';
 import type { Nav } from '../index.js';
 import { amountOf, at, bankOf, txLine } from './view.js';
+import { useAiOff } from '../../ai/ai-off.js';
 
 type On = { receipt: string } | { payment: string };
 
@@ -31,6 +32,7 @@ const receiptText = (r: Receipt) => `${r.title?.vendor ?? r.description ?? r.fil
 
 export function FindPair({ on, books, nav, compact }: { on: On; books: Index; nav: Nav; compact?: boolean }) {
   const [state, setState] = useState<'idle' | 'busy' | Found>('idle');
+  const aiOff = useAiOff();
   const forReceipt = 'receipt' in on;
   const txOf = (ref: string) => books.transactions.find((x) => x.ref === ref);
   const receiptOf = (id: string) => books.receipts.find((x) => x.id === id);
@@ -67,7 +69,7 @@ export function FindPair({ on, books, nav, compact }: { on: On; books: Index; na
   );
   if (state === 'idle' || state === 'busy') return button;
 
-  const noModel = !state.model ? <span className="findpair-note">{t('pair.noModel')}</span> : null;
+  const noModel = !state.model ? <span className="findpair-note" data-testid="pair-no-model">{t(aiOff ? 'pair.aiOff' : 'pair.noModel')}</span> : null;
   const cls = `findpair${compact ? ' compact' : ''}`;
   if (state.outcome === 'linked' || state.outcome === 'filed') {
     const tx = txOf(state.payment);

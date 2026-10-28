@@ -46,4 +46,6 @@ export interface AiView {
   cli?: TerminalCli;
   /** Whether the app asks the other CLI by itself when the one asked cannot answer. */
   askOther: boolean;
+  /** «KI ganz ausschalten» (issue #212): no model is asked on this Mac. */
+  off: boolean;
 }

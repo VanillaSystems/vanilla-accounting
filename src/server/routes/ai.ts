@@ -8,7 +8,7 @@ import { keyedStates, keyName, subscriptions } from '../../llm/providers/index.j
 import { keepKey, KeyNotKept } from '../../llm/key-store.js';
 import { claudeCli } from '../../llm/providers/claude-cli.js';
 import { KEYED, type KeyedId } from '../../llm/providers/keyed.js';
-import { PROVIDERS, readSettings, writeChoice, writeCli } from '../../llm/settings.js';
+import { PROVIDERS, readSettings, writeChoice, writeCli, writeOff } from '../../llm/settings.js';
 import { codexCli, codexStatus, refreshCodexModels } from '../../llm/providers/codex-cli.js';
 import { tierModels, usable as codexUsable } from '../../llm/providers/codex-models.js';
 import { isTerminalCli } from '../../platform/terminal.js';
@@ -17,6 +17,7 @@ import type { Provider, ProviderId } from '../../llm/provider.js';
 import { secrets } from '../../secrets/secrets.js';
 import type { AiProviderView, AiView } from '../../llm/view.js';
 import { patchBody, RequestError } from '../books.js';
+import { resumeAfterAi } from './automation.js';
 
 export const router = Router();
 
@@ -51,11 +52,24 @@ async function view({ recheck = false } = {}): Promise<AiView> {
   });
   return {
     providers, steps, keysInApp: secrets.inApp(), keysWhere: Object.fromEntries(KEYED.map((s) => [s.id, secrets.where(keyName(s.id))])),
-    ...(settings.cli ? { cli: settings.cli } : {}), askOther: settings.askOther === true,
+    ...(settings.cli ? { cli: settings.cli } : {}), askOther: settings.askOther === true, off: settings.off === true,
   };
 }
 
 router.get('/api/ai', async (_req, res) => {
+  res.json(await view());
+});
+
+/**
+ * «KI ganz ausschalten» (issue #212), kept on this Mac; it changes nothing in the books. Switched
+ * on again, the work that waited for the model starts at once.
+ */
+router.put('/api/ai/off', async (req, res) => {
+  const { off } = patchBody(req.body, ['off']);
+  if (typeof off !== 'boolean') throw new RequestError(400, 'off: true oder false.');
+  const was = readSettings().off === true;
+  writeOff(off);
+  if (was && !off) void resumeAfterAi().catch((e) => console.error(`resume: ${(e as Error).message}`));
   res.json(await view());
 });
 

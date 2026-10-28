@@ -19,7 +19,7 @@ import type { AiRefusal } from './ai-refusal.js';
 export const CLOSED_REASONS = [
   'editTransaction', 'deleteTransaction', 'newTransaction', 'mapping',
   'editReceipt', 'deleteReceipt', 'editEntry', 'deleteEntry', 'newStatement', 'newEntry',
-  'openingBalance',
+  'openingBalance', 'discardFile',
 ] as const;
 export type ClosedReason = (typeof CLOSED_REASONS)[number];
 
@@ -45,6 +45,8 @@ export type ApiRefusal =
   | { code: 'pointerLinked'; params: { receipt: string; payment: string } }
   /** «Lösen» of a filed pointer while a correction entry books the receipt's input tax for that payment (#187): the correction is deleted first. */
   | { code: 'correctionBooked'; params: { receipt: string; entry: string } }
+  /** «Als Korrektur buchen» on a refund of a filed period a sales report offers (#231): the report is gone, or it offers that refund no more. */
+  | { code: 'reportCorrection'; params: { why: 'gone' | 'notOffered' } }
   /** «Privat oder bar bezahlt» for a part: the part must be above 0 and at most the receipt's total (src/server/edits.ts privatePayment). */
   | { code: 'partAmount'; params: { total: number; currency: string } }
   /** A part of a receipt that shows several Swiss VAT rates names the rate line it falls under (`rates`: the receipt's). */
@@ -93,10 +95,16 @@ export type ApiRefusal =
   | { code: 'sameAccount'; params: { account: string } }
   /** A code whose sign contradicts the line's direction (src/server/edits.ts assertCodeSign): M81 on a credit note, -V81 on a sale; `expected` is the code the line takes. */
   | { code: 'codeSign'; params: { code: string; expected: string } }
+  /** The AI's tax-amount code (M81-2) on a line with two different accounts: it books the tax alone, one-legged (src/server/edits.ts assertImportVatRule). */
+  | { code: 'taxAmountTwoSided'; params: { code: string; debit: string; credit: string } }
+  /** The AI's input tax on the import VAT account without the customs assessment linked that states it (assertImportVatRule, pv-import-vat-evv). */
+  | { code: 'importVatUnproven'; params: { account: string; amount: number } }
   | { code: 'accountInUse'; params: { account: string; entries: number } }
   /** Re-classify of a payment that holds a person's booking (origin manual), asked without `overwrite`. */
   | { code: 'personsBooking'; params: { entries: number } }
   | { code: 'fileExists'; params: { filename: string } }
+  /** «Löschen» of a file listed as «keine Belege» (#228) that payments, bookings or statements still refer to: their refs, and how many statements. */
+  | { code: 'fileReferenced'; params: { file: string; payments: string[]; entries: string[]; statements: number } }
   /** A restore of a deleted receipt (POST /api/receipts/:id/restore): gone from the trash, deleted again later, or back already. */
   | { code: 'notInTrash' }
   | { code: 'deletedAgain' }
@@ -150,7 +158,7 @@ export type ApiRefusal =
   | { code: 'sourceSecret'; params: { id: string; file: string } }
   | { code: 'sourceAppId'; params: { id: string } }
   /** What a change names is not in the books (any more): a receipt, a booking, a payment, a change by hand since the last save. */
-  | { code: 'gone'; params: { what: 'receipt' | 'entry' | 'payment' | 'handEdit' | 'file' } }
+  | { code: 'gone'; params: { what: 'receipt' | 'entry' | 'payment' | 'handEdit' | 'file' | 'quarantined' } }
   /** Firma › Bankkonten › «Entfernen» (or the undo of an add) while statements, bookings or invoices use the account (r9k-1). */
   | { code: 'bankInUse'; params: { account: string; label: string; statements: number; entries: number; invoices: number } }
   /** Firma › Bankkonten › «Bankkonto hinzufügen» on a ledger account another bank account already has (r10h-2): the one that has it. */
@@ -268,7 +276,8 @@ export type ApiErrorBody = ({ error: string } & (ApiRefusal | { code?: undefined
  * GET /api/status: the API runs, and whether it refuses every write (READONLY=1, `npm run start:audit`).
  * The static audit export's status always is readonly and names its snapshot.
  */
-export interface ApiStatus { ok: true; readonly: boolean; snapshot?: AuditSnapshot }
+/** `aiOff`: «KI ganz ausschalten» is on on this Mac (src/llm/off.ts), so every place says so instead of asking. */
+export interface ApiStatus { ok: true; readonly: boolean; aiOff?: true; snapshot?: AuditSnapshot }
 
 /** GET /api/mail: whether the company's mailbox can send (Firma › E-Mail-Versand). */
 export interface MailStatus {

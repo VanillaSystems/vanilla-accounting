@@ -15,7 +15,8 @@ import { evidenceText, patchOf } from '../journal/Detail.js';
 import { saveEntry } from '../journal/actions.js';
 import { journalOf, unsettledAtFiling } from '../journal/model.js';
 import { thresholdWatch, thresholdYears } from '../vat/model.js';
-import { baseCurrency, filing } from '../../../engines/index.js';
+import { baseCurrency, documents, filing, withoutInputTax } from '../../../engines/index.js';
+import { missingAssessments, type MissingAssessment } from '../../../booking/customs-invoice.js';
 import { filingKeyOf, localToday, openFilingPeriod, parsePeriod } from '../../../accounting/periods.js';
 import type { WaitingPayment } from '../../../accounting/receipt-due.js';
 import { payText, signed } from '../bank/model.js';
@@ -186,6 +187,41 @@ export function FiledEvidence({ books, nav }: { books: Index; nav: Nav }) {
         {u.items.map(({ v, check }) => (
           <li key={v.e.id}>
             <button type="button" className="linkbtn" onClick={() => nav.go(at({ area: 'journal', id: v.e.id }, v.e.date))}>{`${formatDate(v.e.date)} ${v.e.description ?? ''}: ${evidenceText(v.e, check)}`}</button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** The import VAT of the books whose deduction waits for the customs office's assessment (issue #227): none for a firm without input tax. */
+export const assessmentsMissing = (books: Index): MissingAssessment[] => missingAssessments(books, documents().customs, !withoutInputTax());
+
+/**
+ * «Veranlagungsverfügung fehlt» (issue #227): import VAT booked without input tax because the
+ * customs office's assessment is not linked, each with what the courier's invoice says is needed to
+ * fetch it (the declaration number, the access code, the link). The assessment linked to the
+ * payment brings the deduction on the next run (src/booking/customs-invoice.ts).
+ */
+export function AssessmentTasks({ books, nav }: { books: Index; nav: Nav }) {
+  const items = assessmentsMissing(books);
+  if (!items.length) return null;
+  return (
+    <section className="wfissues" data-testid="assessment-tasks">
+      <h3>{t('issues.assessmentTitle', { n: items.length })}</h3>
+      <p className="m">{t('issues.assessmentLead')}</p>
+      <ul>
+        {items.map((i) => (
+          <li key={`${i.payment}-${i.receipt}-${i.amount}`}>
+            <button type="button" className="linkbtn" onClick={() => nav.go(at({ area: 'bank', payment: i.payment }, i.date))}>{t('issues.assessment', { date: formatDate(i.date), file: i.file, amount: `${i.currency} ${fmt(i.amount)}` })}</button>
+            <span className="m">
+              {' · '}
+              {[
+                i.access.numbers.length ? t('issues.assessmentNumber', { numbers: i.access.numbers.join(', ') }) : undefined,
+                i.access.code ? t('issues.assessmentCode', { code: i.access.code }) : undefined,
+              ].filter(Boolean).join(' · ') || t('issues.assessmentWhere')}
+            </span>
+            {i.access.url ? <>{' '}<a className="golink" href={i.access.url} target="_blank" rel="noopener noreferrer">{t('issues.assessmentLink')}</a></> : null}
           </li>
         ))}
       </ul>

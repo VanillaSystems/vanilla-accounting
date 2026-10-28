@@ -23,6 +23,7 @@ import { learnFromCorrection, undoAnswer } from '../questions.js';
 import { heldRows, holdReasons, withoutProof } from '../../assistant/held.js';
 import { takeInProposals } from '../../assistant/terminal-drafts.js';
 import { appMap } from '../app-map.js';
+import { gate } from '../../llm/off.js';
 import { automationView, bookAgain, engine } from './automation.js';
 import { openWork } from '../open-work.js';
 import { askedBy } from '../../workflows/held.js';
@@ -138,6 +139,7 @@ router.get('/api/assistant/:id/attachments/:att', (req, res) => {
 
 router.post('/api/assistant', async (req, res) => {
   const send = sendOf(req.body);
+  gate();
   let attachments;
   try { attachments = findAttachments(WS, send.attachments ?? [], send.conversation); } catch (e) { throw asRequest(e); }
   const emit = ndjson(res);
@@ -224,7 +226,7 @@ const apply: ApplyChanges = async (answered, earlier, language, { conversation, 
     const before = readBooks();
     const trial = readBooks();
     try {
-      applyAnswer(trial, asked, { bankAccounts: WS.bankAccounts, chart: chart.size ? new Set([...chart, ...added]) : chart, earlier, conversation });
+      applyAnswer(trial, asked, { bankAccounts: WS.bankAccounts, chart: chart.size ? new Set([...chart, ...added]) : chart, earlier, conversation, uid: WS.company.uid });
     } catch (e) {
       throw new RefusedChanges((e as Error).message, refusalOf(e));
     }
@@ -240,7 +242,7 @@ const apply: ApplyChanges = async (answered, earlier, language, { conversation, 
     if (asked.length) {
       const now = new Set((accountsOf(WS) as Array<{ number: unknown }>).map((a) => String(a.number)));
       books = updateBooks((b) => {
-        const made = applyAnswer(b, asked, { bankAccounts: WS.bankAccounts, chart: now, earlier, conversation });
+        const made = applyAnswer(b, asked, { bankAccounts: WS.bankAccounts, chart: now, earlier, conversation, uid: WS.company.uid });
         for (const m of made) {
           const id = m.change.kind === 'entry' ? m.change.id : m.undo?.kind === 'deleteEntry' ? m.undo.id : undefined;
           const e = id ? b.journalEntries.find((x) => x.id === id) : undefined;

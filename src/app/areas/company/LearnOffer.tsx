@@ -12,12 +12,14 @@ import type { LearnOffer as Offer, LearnProposal } from '../../../saving/learn-r
 import type { Nav } from '../index.js';
 import { onBooksChanged } from '../../assistant/store.js';
 import { RuleDraft } from './RulesSection.js';
+import { useAiOff } from '../../ai/ai-off.js';
 
 type NoteState = 'open' | 'kept' | 'discarded';
 
 export function LearnOffer({ payment, nav }: { payment: string; nav: Nav }) {
   const [offer, setOffer] = useState<Offer | null>(null);
   const [proposal, setProposal] = useState<LearnProposal>();
+  const aiOff = useAiOff();
   const [note, setNote] = useState<NoteState>('open');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -70,7 +72,9 @@ export function LearnOffer({ payment, nav }: { payment: string; nav: Nav }) {
       {error ? <span className="warnline">{error}</span> : null}
       {proposal ? <span className="ruleacts">{self}</span> : (
         <span className="ruleacts">
-          <button type="button" className="btn" disabled={busy} data-act="learn-ai" onClick={propose}>{busy ? t('rules.learn.thinking') : t('rules.learn.ai')}</button>
+          {aiOff
+            ? <span className="m" data-testid="learn-ai-off">{t('rules.learn.aiOff')}</span>
+            : <button type="button" className="btn" disabled={busy} data-act="learn-ai" onClick={propose}>{busy ? t('rules.learn.thinking') : t('rules.learn.ai')}</button>}
           {self}
         </span>
       )}

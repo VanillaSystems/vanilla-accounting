@@ -27,7 +27,7 @@ import { codeForRate } from '../accounting/vat-codes.js';
 import { normalRate } from '../accounting/sales-without-vat.js';
 import { baseCurrency, vat } from '../engines/index.js';
 import type { ClassifyEntry } from '../llm/prompts.js';
-import type { BankTransaction, BookedBy, JournalEntry, Mapping, Receipt } from '../types/index.js';
+import type { BankTransaction, BookedBy, JournalEntry, Mapping, Receipt, ReceiptLine } from '../types/index.js';
 
 export type CustomsWords = DocumentsData['customs'];
 
@@ -111,16 +111,37 @@ export function assessmentNumbers(text: string, words: CustomsWords): string[] {
   return [...new Set([...text.matchAll(new RegExp(words.assessment.number, 'g'))].map((m) => m[0].toUpperCase()))];
 }
 
+/** Whether a line names only the tax (the words of documents.yaml `customs.tax`): every word of it is one of the tax's names. */
+function namesOnlyTax(text: string, words: CustomsWords): boolean {
+  if (!words.tax?.length || !wordsRe(words.tax).test(text)) return false;
+  return !text.replace(new RegExp(wordsRe(words.tax).source, 'giu'), '').replace(/[^\p{L}]/gu, '');
+}
+
 /**
- * A receipt read as a customs invoice: undefined when it is none (no line charges duty or import
- * VAT, or its lines were not read), a hold when one of its lines names no position or the lines do
- * not add up to its total. Lines of nothing (0.00) are left out. Fees and freight are summed per
- * rate; each import VAT line stays apart, for an invoice of several shipments has one assessment each.
+ * The position of a line on a customs invoice whose words name none: a line that names only the
+ * tax, at no rate of its own, is the import VAT the carrier advanced (the carrier's own VAT is
+ * charged at a rate on its services, never a line of 0 %); a line at the domestic rate is the
+ * carrier's own service, fees (duty and import VAT never carry Swiss VAT). Else none.
+ */
+function unnamedPosition(l: ReceiptLine, words: CustomsWords): CustomsPosition | undefined {
+  const tax = namesOnlyTax(l.description, words);
+  if (!l.ratePercent) return tax ? 'importVat' : undefined;
+  return !tax && vat().isDomesticRate(l.ratePercent) ? 'fees' : undefined;
+}
+
+/**
+ * A receipt read as a customs invoice: undefined when it is none (no line, not even one of 0.00,
+ * charges duty or import VAT by its words, or its lines were not read), a hold when one of its
+ * lines names no position or the lines do not add up to its total. A courier prints duty at 0.00
+ * when none was due: such a line tells what the invoice is, and is left out of the booking. On a
+ * customs invoice a line that names only the tax is import VAT and a line at the domestic rate is
+ * fees (unnamedPosition). Fees and freight are summed per rate; each import VAT line stays apart,
+ * for an invoice of several shipments has one assessment each.
  */
 export function readCustomsInvoice(r: Receipt, words: CustomsWords): { invoice: CustomsInvoice } | { hold: CustomsHold } | undefined {
-  const items = (r.lineItems ?? []).filter((l) => toRappen(l.gross) !== 0);
-  const named = items.map((l) => ({ l, position: positionOf(l.description, words) }));
-  if (!named.some((n) => n.position === 'importVat' || n.position === 'duty')) return undefined;
+  const all = (r.lineItems ?? []).map((l) => ({ l, position: positionOf(l.description, words) }));
+  if (!all.some((n) => n.position === 'importVat' || n.position === 'duty')) return undefined;
+  const named = all.filter((n) => toRappen(n.l.gross) !== 0).map((n) => ({ l: n.l, position: n.position ?? unnamedPosition(n.l, words) }));
   const loose = named.find((n) => !n.position || n.l.gross < 0);
   if (loose) return { hold: { why: 'line', file: r.filename, line: loose.l.description } };
   const lines: PositionLine[] = [];
@@ -438,4 +459,83 @@ export function importVatDeductions(books: CustomsBooks, ctx: DeductionContext):
     booked++;
   }
   return { booked, marked };
+}
+
+/** What a courier's invoice says is needed to fetch its assessment: the declaration numbers it cites, and the access code and the link beside it, each when it shows one. */
+export interface AssessmentAccess { numbers: string[]; code?: string; url?: string }
+
+const URL_RE = /https?:\/\/[^\s|<>()\]]+/g;
+/** How near the label of the access code a link stands to be the one that fetches the assessment, in characters. */
+const NEAR = 300;
+
+/** The cell under the column `label` names in a table of the reading (`| … | EVV Code | … |`): its first row's, when not empty. */
+function tableCell(text: string, label: RegExp): string | undefined {
+  const rows = text.split('\n');
+  for (let k = 0; k < rows.length - 2; k++) {
+    if (!rows[k].trim().startsWith('|')) continue;
+    const at = rows[k].split('|').map((c) => c.trim()).findIndex((c) => label.test(c) && !c.replace(label, '').replace(/[^\p{L}]/gu, ''));
+    if (at < 0 || !/^\|[\s|:-]+$/.test(rows[k + 1].trim())) continue;
+    const value = rows[k + 2].split('|').map((c) => c.trim())[at];
+    if (value) return value;
+  }
+  return undefined;
+}
+
+/**
+ * What the invoice's text says is needed to fetch the assessment (processes/authorities/bazg.yaml#evv-download):
+ * the declaration numbers it cites, the access code after its label («Zugangscode: …») or under it in
+ * a table, and the first link that stands near the label.
+ */
+export function assessmentAccess(text: string, words: CustomsWords): AssessmentAccess {
+  const access = words.assessment.access ?? [];
+  const label = access.length ? wordsRe(access) : undefined;
+  const said = label && new RegExp(`${label.source}\\s*[:：]\\s*([^\\s|]{6,})`, 'iu').exec(text)?.[1];
+  const code = said || (label ? tableCell(text, label) : undefined);
+  const labels = label ? [...text.matchAll(new RegExp(label.source, 'giu'))].map((m) => m.index) : [];
+  const url = [...text.matchAll(URL_RE)].find((m) => labels.some((at) => Math.abs(at - m.index) <= NEAR))?.[0].replace(/[.,;:]+$/, '');
+  return { numbers: assessmentNumbers(text, words), ...(code ? { code } : {}), ...(url ? { url } : {}) };
+}
+
+/** An import VAT line of a booked payment's customs invoice that no deduction covers yet: the person fetches its assessment. */
+export interface MissingAssessment {
+  payment: string;
+  date: string;
+  /** The customs invoice: its receipt and file. */
+  receipt: string;
+  file: string;
+  amount: number;
+  currency: string;
+  access: AssessmentAccess;
+}
+
+/**
+ * The import VAT the app cannot deduct for want of the customs office's assessment («Veranlagungsverfügung
+ * fehlt»): each import VAT line of a booked payment's linked customs invoices that no deduction stands
+ * for (on the payment, or as a correction holding an assessment that points at it), with what the
+ * invoice says is needed to fetch the assessment. None for a firm without input tax. Pure, so the
+ * tasks and the books read the same lines.
+ */
+export function missingAssessments(books: Pick<CustomsBooks, 'transactions' | 'mappings' | 'receipts'> & { journalEntries?: readonly JournalEntry[] }, words: CustomsWords, inputTax: boolean): MissingAssessment[] {
+  const account = words.positions.importVat.account;
+  const code = deductionCode(account);
+  if (!inputTax || !code) return [];
+  const entries = books.journalEntries ?? [];
+  const byId = new Map(books.receipts.map((r) => [r.id, r]));
+  const booked = new Set(entries.map((e) => e.transactionRef));
+  const done = entries.filter((e) => e.vatCode === code && e.accountCredit === account && !e.accountDebit)
+    .map((e) => ({ e, payments: [e.transactionRef, ...(e.receipts ?? []).map((id) => byId.get(id)?.filedPayment).filter((p): p is string => !!p)] }));
+  // An invoice linked to two payments (paid in parts) asks for its assessments once.
+  const seen = new Set<string>();
+  return books.transactions.filter((t) => t.direction === 'DBIT' && booked.has(t.ref)).flatMap((t) => books.mappings.filter((m) => m.transactionRef === t.ref).flatMap((m) => {
+    const r = byId.get(m.receiptId);
+    const read = r && !seen.has(r.id) && isPurchaseDocument(r) ? readCustomsInvoice(r, words) : undefined;
+    if (!r || !read || !('invoice' in read)) return [];
+    seen.add(r.id);
+    const paidBy = books.mappings.filter((x) => x.receiptId === r.id).map((x) => x.transactionRef);
+    return read.invoice.lines.filter((l) => l.position === 'importVat').flatMap((l): MissingAssessment[] => {
+      const at = done.findIndex((d) => d.payments.some((p) => paidBy.includes(p)) && toRappen(d.e.amount) === toRappen(l.gross));
+      if (at >= 0) { done.splice(at, 1); return []; }
+      return [{ payment: t.ref, date: t.date, receipt: r.id, file: r.filename, amount: l.gross, currency: read.invoice.currency, access: assessmentAccess(r.extractedText ?? '', words) }];
+    });
+  }));
 }

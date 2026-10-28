@@ -10,6 +10,7 @@ import { applyChips, type Chip, type Field } from '../../shell/chips.js';
 import { baseCurrency, documents } from '../../../engines/index.js';
 import { duplicatesIn, type Twin } from '../../../intake/duplicates.js';
 import { documentKind } from '../../../intake/document-kind.js';
+import { isNoReceipt } from '../../../books/discard.js';
 import { accountOfStatement, statementFacts, type StatementFacts } from '../../../books/statement-facts.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { isManualRef } from '../../../books/refs.js';
@@ -29,9 +30,6 @@ export function noneWhyOf(r: Partial<Pick<Receipt, 'kind' | 'kindRule' | 'extrac
   if (text?.is === 'other') return text.why;
   return r.kind === 'noise' ? 'no-receipt' : 'empty';
 }
-
-/** The kinds of document that are not a receipt of their own. */
-const NON_RECEIPT_KINDS: ReadonlyArray<Receipt['kind']> = ['supporting', 'statement', 'noise', 'duplicate'];
 
 export interface ReceiptView {
   r: Receipt;
@@ -109,8 +107,7 @@ export function ledgerOf(books: Index, openFrom: string): Ledger {
     // "" is no date (an old answer of the model): the receipt is undated and needs you.
     const date = r.date || (fileDate ? `${fileDate[1]}-${fileDate[2]}-${fileDate[3]}` : undefined);
     const [vendor, desc] = r.title ? [r.title.vendor, r.title.what] : splitTitle(r.description || r.filename.replace(/\.pdf$/i, ''));
-    const none = NON_RECEIPT_KINDS.includes(r.kind)
-      || (r.amount === 0 && !(r.vatSummary ?? []).some((g) => g.vat > 0) && links.length === 0);
+    const none = isNoReceipt(r, links.length);
     const paid = links.flatMap((ref) => txByRef.get(ref)?.date ?? []);
     const twin = twins.get(r.id);
     const statement = r.kind === 'statement' ? statementFacts(r, documents()) : undefined;
@@ -270,6 +267,9 @@ function moneyWay(r: Pick<Receipt, 'amount' | 'kind' | 'description' | 'extracte
   return r.kind === undefined && readsAsPayout(r) ? 'in' : 'out';
 }
 
+/** A payment the link dialog offers for this receipt: one that moved money, no Wise fee row, not yet linked to it. */
+export const linkable = (v: ReceiptView, tx: BankTransaction): boolean => tx.amount !== 0 && tx.type !== 'wise-fee' && !v.links.includes(tx.ref);
+
 /**
  * The payments a receipt could belong to, best first: close in amount (in CHF), close in date,
  * the same currency. A payment that already has a receipt ranks lower but stays findable
@@ -279,16 +279,17 @@ function moneyWay(r: Pick<Receipt, 'amount' | 'kind' | 'description' | 'extracte
  * payment's part of exactly the amount) with the money going the receipt's way; nothing close
  * means no best fit (r8h-21). A payment of a filed quarter without a receipt is listed, marked
  * `filed`, when it is a best fit or a query finds it: a late receipt is led to its correction
- * (corner-33). With a query, every payment it finds; else up to 3 best and 12 more.
+ * (corner-33). With a query, every payment it finds; else up to 3 best and 12 more. `keep` is the
+ * dialog's chip filter (#232): the ranking, «Passt am besten» included, runs over what it keeps.
  */
-export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = ''): { best: Candidate[]; more: Candidate[] } {
+export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = '', keep?: (tx: BankTransaction) => boolean): { best: Candidate[]; more: Candidate[] } {
   const { r } = v;
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   const cur = r.currency || baseCurrency();
   const way = moneyWay(r);
   const all: Candidate[] = [];
   for (const tx of l.txByRef.values()) {
-    if (tx.amount === 0 || tx.type === 'wise-fee' || v.links.includes(tx.ref)) continue;
+    if (!linkable(v, tx) || (keep && !keep(tx))) continue;
     const filed = !!l.closedThrough && tx.date <= l.closedThrough;
     if (words.length) {
       const parts = (tx.parts ?? []).flatMap((p) => [p.counterparty, p.reference, Math.abs(p.amount).toFixed(2)]);
@@ -325,7 +326,7 @@ export interface Unpaid { ref: string; date: string; amount: number; currency: s
  * those with a line of the receipt's amount, nearest in date first. With a query, every one whose
  * text, ref, amount or date hold every word (a depreciation books less than the invoice it carries).
  */
-export function bookingsWithoutPayment(v: ReceiptView, l: Ledger, query = ''): Unpaid[] {
+export function bookingsWithoutPayment(v: ReceiptView, l: Ledger, query = '', keep?: (u: Unpaid) => boolean): Unpaid[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   const cur = v.r.currency || baseCurrency();
   const near = (d: string) => (v.date ? Math.abs(Date.parse(d) - Date.parse(v.date)) : 0);
@@ -337,7 +338,8 @@ export function bookingsWithoutPayment(v: ReceiptView, l: Ledger, query = ''): U
     if (!words.every((w) => h.includes(w))) continue;
     const sameAmount = v.r.amount != null && es.some((x) => (x.exchangeCurrency ?? baseCurrency()) === cur && Math.abs(x.amount - Math.abs(v.r.amount!)) < HALF_RAPPEN);
     if (!words.length && !sameAmount) continue;
-    out.push({ ref, date: e.date, amount: e.amount, currency: e.exchangeCurrency ?? baseCurrency(), description: e.description ?? ref, sameAmount });
+    const u: Unpaid = { ref, date: e.date, amount: e.amount, currency: e.exchangeCurrency ?? baseCurrency(), description: e.description ?? ref, sameAmount };
+    if (!keep || keep(u)) out.push(u);
   }
   return out.sort((a, b) => Number(b.sameAmount) - Number(a.sameAmount) || near(a.date) - near(b.date) || a.ref.localeCompare(b.ref)).slice(0, words.length ? 40 : 8);
 }

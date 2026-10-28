@@ -10,6 +10,7 @@ import { usableProviders } from './providers/index.js';
 import { record } from './ask.js';
 import { defaultFor, otherSubscription, resolve, unserved } from './resolve.js';
 import { readSettings } from './settings.js';
+import { gate } from './off.js';
 import { confidentOf, STEPS, type StepId } from './steps.js';
 
 export interface JudgeOptions {
@@ -66,6 +67,7 @@ async function judgeOne(step: StepId, provider: Provider, model: string, call: O
 }
 
 export async function judge(state: JudgeCall['state'], question: Question, opts: JudgeOptions): Promise<Judged> {
+  gate();
   const providers = await usableProviders();
   const settings = readSettings();
   const standard = defaultFor(opts.step, providers);

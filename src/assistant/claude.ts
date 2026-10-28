@@ -15,12 +15,12 @@
  * customizing folders, which a person keeps with «Behalten» on a rule's card or saves in Änderungen
  * (docs/0.4.0/saving.md).
  */
-import { spawn } from 'node:child_process';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { record, sidebarModel } from '../llm/ask.js';
-import { claudeCommand, NoClaudeError } from '../llm/providers/claude-cli.js';
+import { NoClaudeError, spawnClaude } from '../llm/providers/claude-cli.js';
 import { STEPS } from '../llm/steps.js';
 import { customizingNames } from '../saving/changes.js';
 import { ownerAccount } from '../accounting/bank-accounts.js';
@@ -131,6 +131,7 @@ export function assistantSystem(language: string, owner: string, map: string, te
     'A receipt that is a second copy of another is "as":"duplicate"; a file that is no receipt at all (an ad, a delivery note without amount) is "as":"noise"; "as":null makes it an ordinary receipt again. Either takes it off the to-do list and its links go; the app books its payments again, and a link to a payment of a closed period cannot go, so the app refuses it there. A bank or card statement among the receipts is "as":"statement", never noise: it keeps its links (a filed quarter\'s too, such as the payment whose foreign amount only the statement shows) and leaves Belege for Kontoauszüge; with no date, give it its period\'s last day ("receipt" with "set":{"date":…}). A filed quarter\'s receipt takes both.',
     'A booking goes only on an account of the chart: when it needs a new one, add it with "account" in the same block. The VAT code\'s letter follows the account the booking lands on (material and goods: M; operating costs and investments: I); the app sets it and says so.',
     'The code\'s sign follows the money: a supplier\'s credit note or a refund (the bank debited, the expense credited) carries the minus code (-M81, -I81), which lowers the input tax claimed; a customer refund (revenue debited) carries -V81. The plain code on money that comes back would claim input tax on a credit; the app refuses it. Say the effect as the code has it: a minus code lowers the input tax (or the turnover), a plain code raises it.',
+    'A tax-amount code (ending in -2, such as M81-2) books the tax alone: its line has one account and no other side, never the bank. Import VAT a courier advanced is booked as a cost without input tax (the zero code); its input tax is deducted only with the customs office\'s import VAT assessment that names the firm as importer, linked to the payment: then the app books the one-sided deduction itself. Without it, say that the assessment is missing and where the courier\'s invoice says to fetch it (declaration number, access code); the app refuses input tax on import VAT without it.',
     `The owner's private account in these books is ${owner}. A private expense, or the private share of one, is booked to it and has no VAT code at all (leave "vatCode" out or empty; not a zero-rate code): no input tax is claimed on it. Never use another account for private.`,
     agreedBasis()
       ? `The VAT is reported on the agreed consideration (invoices): a sale's VAT belongs to the quarter of its invoice, input tax to the quarter of the bill. The app books it so: a payment's line with a VAT code carries its receipt's date against the receivable (customers) or the payable (suppliers), and the payment settles that account on its own date; an invoice the app issues is booked on its date when it is issued. Every other line of a payment carries the payment's date; never move one, and never offer to. Bookings on the payout clearing account ${SHOPIFY_ACCOUNT} take the order's date.`
@@ -292,8 +293,13 @@ export function callClaude(call: AssistantCall): Promise<void> {
   const started = Date.now();
   const root = call.ws.paths.root;
   return new Promise((resolve) => {
-    const { bin, env } = claudeCommand();
-    const child = spawn(bin, assistantArgs(call.send, call.session, call.ws.paths.repository, ownerAccount(call.ws), call.map, call.ws.invoicing?.paymentTermsDays), { cwd: root, env: { ...env, VANILLA_WORKSPACE: root } });
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = spawnClaude(assistantArgs(call.send, call.session, call.ws.paths.repository, ownerAccount(call.ws), call.map, call.ws.invoicing?.paymentTermsDays), { cwd: root, env: { VANILLA_WORKSPACE: root } });
+    } catch (e) {
+      call.onEvent({ type: 'error', message: (e as Error).message });
+      return resolve();
+    }
     let real = root;
     try { real = realpathSync(root); } catch { /* the path as given */ }
     const parse = streamParser([...new Set([root, real])]);

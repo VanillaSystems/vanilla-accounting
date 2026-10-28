@@ -19,6 +19,7 @@ import { useAiSetup, type AiSetup } from '../../ai/useAiSetup.js';
 import '../../ai/ai-setup.css';
 import { TIERS } from '../../../llm/steps.js';
 import { formatDate } from '../../lib/utils.js';
+import { setAiOff } from '../../ai/ai-off.js';
 
 const fits = (step: AiStepView, can: readonly string[]) => step.needs.every((n) => can.includes(n));
 const usable = (p: AiProviderView) => p.state === 'ready' || p.state === 'set';
@@ -48,9 +49,22 @@ export function AiSection({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
     );
   };
 
+  const switchOff = (off: boolean) => apply(async () => {
+    const next = await api.setAiOff(off);
+    setAiOff(next.off);
+    return next;
+  }, t(off ? 'aiOff.saved.on' : 'aiOff.saved.off'));
+
   return (
     <div className="ai">
       <p>{t('ai.intro')}</p>
+      <div className={view.off ? 'aioff on' : 'aioff'} data-testid="ai-off">
+        <label className="aicheck">
+          <input type="checkbox" name="ai-off" checked={view.off} disabled={!canEdit} onChange={(e) => void switchOff(e.target.checked)} />
+          {t('aiOff.switch')}
+        </label>
+        <small>{t(view.off ? 'aiOff.isOn' : 'aiOff.hint')}</small>
+      </div>
       <Programs setup={setup} ai={view} canEdit={canEdit} apply={apply} />
       <TerminalAppChoice canEdit={canEdit} toast={nav.toast} />
       <details className="aiadv" open={view.providers.some((p) => p.state === 'set') || undefined}>

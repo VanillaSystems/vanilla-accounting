@@ -15,6 +15,7 @@ import { codexCli } from '../llm/providers/codex-cli.js';
 import { forgetCli, keyOf } from '../llm/providers/index.js';
 import { KEYED, keyedProvider } from '../llm/providers/keyed.js';
 import { readSettings, writeCli, writeNoAi } from '../llm/settings.js';
+import { aiOff } from '../llm/off.js';
 import { CallFailed, type Provider } from '../llm/provider.js';
 import { freshLoginPath, installScript, locate, loginScript, probeAll, type ScriptTexts } from '../platform/ai-cli.js';
 import { SETUP_KEYS, isSetupKey, type AiSetupView, type KeySaved, type Probation } from '../platform/ai-setup.js';
@@ -32,6 +33,7 @@ export async function setupView(): Promise<AiSetupView> {
     keys: await Promise.all(SETUP_KEYS.map(async (id) => ({ id, set: !!(await keyOf(id)) }))),
     keysInApp: secrets.inApp(),
     noAi: settings.noAi === true,
+    off: settings.off === true,
     askOther: settings.askOther === true,
     ...(settings.cli ? { preferred: settings.cli } : {}),
     sidebar: sidebarAgent().provider.id === 'codex-cli' ? 'codex' : 'claude',
@@ -52,6 +54,7 @@ const PROMPT = 'Antworte nur mit dem Wort: ok';
 
 /** One call with the cheapest model (decision 2): the only check that sees a plan too small, a region not served or a limit reached. */
 async function testCall(provider: Provider, model: string): Promise<Probation> {
+  if (aiOff()) return { ok: false, why: 'off' };
   const started = Date.now();
   try {
     await provider.ask({ prompt: PROMPT, model, system: 'Answer with one word.', attachments: [], timeoutMs: 90_000 });

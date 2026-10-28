@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import type { Index } from '../src/types/index.js';
 import { issue } from '../src/invoices/rules.js';
 import { DEFAULT_LAYOUT, type InvoiceBook } from '../src/invoices/model.js';
-import { loadBooks, type Books } from '../src/books/store.js';
+import { loadBooks, PERSON, saveBooks, update, type Books } from '../src/books/store.js';
 import { findFile, workspaceAt } from '../src/workspace/workspace.js';
 import { booksOnDisk } from './support/workspace.js';
 import { closedPart } from '../src/books/seal.js';
@@ -40,6 +40,11 @@ before(async () => {
   withInvoice(api.root);
   // A receipt deleted while its payment C1 was open, put back after the quarter was filed.
   mkdirSync(join(api.root, 'data/trash/rx/d1'), { recursive: true });
+  // Two files that are no receipt (#228): one of the filed quarter, one of the open one, neither linked.
+  const books = loadBooks(api.ws);
+  const noise = (id: string, filename: string, date: string) => ({ id, filename, originalFilename: filename, extractedText: 'AGB', extractionMethod: 'pdftotext' as const, fileSize: 1, indexedAt: `${date}T00:00:00Z`, location: 'archived' as const, date, kind: 'noise' as const, kindBy: 'human' as const });
+  update(books, PERSON, (b) => { b.receipts.push(noise('rf', 'agb-mai.pdf', '2026-05-12'), noise('rn', 'agb-august.pdf', '2026-08-12')); });
+  saveBooks(api.ws, books);
   writeFileSync(join(api.root, 'data/trash/rx/d1/trashed.json'), JSON.stringify({ deletedAt: new Date().toISOString(), receipt: { id: 'rx', filename: 'late.pdf', originalFilename: 'late.pdf', extractedText: '', extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-06-01T08:00:00Z', location: 'archived' }, mappings: [{ receiptId: 'rx', transactionRef: 'C1' }], file: 'transactional-data/2026/receipts/late.pdf' }));
 });
 after(() => api?.stop());
@@ -60,6 +65,9 @@ const refused: Array<Call & { status: number }> = [
   { method: 'DELETE', path: '/api/transactions/O1', status: 400 },
   { method: 'POST', path: '/api/transactions/manual', body: { date: '2026-06-20', description: 'rückdatiert', amount: 1, currency: 'CHF' }, status: 403 },
   { method: 'DELETE', path: '/api/receipts/rc', status: 403 },
+  // «Löschen» of a file that is no receipt (#228): never one of a filed period, linked there or dated there.
+  { method: 'POST', path: '/api/receipts/discard', body: { ids: ['rf'] }, status: 403 },
+  { method: 'POST', path: '/api/receipts/discard', body: { ids: ['rn', 'rc'] }, status: 403 },
   { method: 'POST', path: '/api/receipts/rx/restore', status: 403 },
   { method: 'PATCH', path: '/api/receipts/rc', body: { amount: 11, currency: 'CHF' }, status: 403 },
   { method: 'PATCH', path: '/api/receipts/rc', body: { filename: 'neu.pdf' }, status: 403 },
@@ -72,6 +80,8 @@ const refused: Array<Call & { status: number }> = [
   // «Zahlung suchen» on a receipt a filed payment holds (#187).
   { method: 'POST', path: '/api/receipts/rc/find-payment', status: 403 },
   { method: 'POST', path: '/api/receipts/rc/filed-payment', body: { payment: null }, status: 403 },
+  // «Als Korrektur buchen» of a sales report's refund of a filed period (#231): never on a closed day.
+  { method: 'POST', path: '/api/receipts/rc/report-correction', body: { order: '1001', date: '2026-05-04', on: '2026-06-30' }, status: 403 },
   { method: 'PATCH', path: '/api/journal-entries/jc', body: { description: 'neu' }, status: 403 },
   { method: 'PATCH', path: '/api/journal-entries/jo', body: { date: '2026-06-15' }, status: 403 },
   { method: 'PATCH', path: '/api/journal-entries/jc', body: { amount: 5 }, status: 403 },
@@ -189,6 +199,8 @@ const allowed: Array<Call & { check: (index: Index) => boolean }> = [
     check: (i) => i.mappings.some((m) => m.receiptId === 'ro' && m.transactionRef === 'O1') },
   { method: 'DELETE', path: '/api/receipts/ro',
     check: (i) => !i.receipts.some((r) => r.id === 'ro') && !i.mappings.some((m) => m.receiptId === 'ro') },
+  { method: 'POST', path: '/api/receipts/discard', body: { ids: ['rn'] },
+    check: (i) => !i.receipts.some((r) => r.id === 'rn') && i.receipts.some((r) => r.id === 'rf') },
   { method: 'POST', path: '/api/receipts/ro/restore',
     check: (i) => i.receipts.some((r) => r.id === 'ro') && i.mappings.some((m) => m.receiptId === 'ro' && m.transactionRef === 'O1') },
   { method: 'POST', path: '/api/receipts/ro/twin', body: { answer: 'same', of: 'rm' },

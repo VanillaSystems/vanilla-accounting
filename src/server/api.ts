@@ -38,6 +38,7 @@ import { router as batch } from './routes/batch.js';
 import { aiSetup } from './ai-setup.js';
 import { NoClaudeError } from '../llm/providers/claude-cli.js';
 import { AiRefused } from '../llm/provider.js';
+import { aiOff } from '../llm/off.js';
 import { NETWORK_PATHS, fromThisComputer, phoneGate } from './phone.js';
 
 export const app = express();
@@ -74,7 +75,7 @@ if (READONLY) {
 }
 
 app.get('/api/status', (_req, res) => {
-  res.json({ ok: true, readonly: READONLY } satisfies ApiStatus);
+  res.json({ ok: true, readonly: READONLY, ...(aiOff() ? { aiOff: true } : {}) } satisfies ApiStatus);
 });
 
 app.use(files, scan, receipts, transactions, mappings, pairing, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, questions, reports, batch);

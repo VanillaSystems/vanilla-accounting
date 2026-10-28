@@ -172,3 +172,6 @@
 .skipcard b { font-weight: 600; }
 .skipcard .warnline { margin: 0; }
 .skipacts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+
+/* A receipt waiting for the AI while it is switched off (issue #212): the link to Firma › KI stays on one line. */
+.notice.aioffwait a { white-space: nowrap; }

@@ -100,7 +100,13 @@ steps:
           needs_split into Einfuhrsteuer (4030), Zölle (4020), Vorlageprovision / Verzollungsspesen (4040) and
           freight (6280). In code (src/booking/customs-invoice.ts): each read line of the invoice is a position by
           its words (modules/ch documents.yaml customs), freight and fees with the carrier's Swiss VAT where the
-          line shows it, duty and import VAT without; the lines must add up to the invoice and the invoices to the
+          line shows it, duty and import VAT without. A line of 0.00 (duty not due) still tells the invoice is one;
+          on it a line that names only the tax («MwSt / TVA / IVA», code Z at 0 %) is the import VAT advanced, and a
+          line no position names at the domestic rate is the carrier's own service, fees (issue #227). The AI's
+          booking follows the same rule: a -2 code never against the bank, input tax on import VAT only as the
+          one-legged deduction with the assessment linked (src/server/edits.ts assertImportVatRule); without it the
+          task «Veranlagungsverfügung fehlt» names the declaration number, access code and link the invoice prints.
+          The lines must add up to the invoice and the invoices to the
           payment (another currency: the payment shared in proportion, within 5 % of the day's rate), else the
           model books it and its reason says why. A company rule for the business books before it
         why: three different things on one invoice (FedEx, DHL, Post all issue them); issue #197

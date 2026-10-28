@@ -4,6 +4,7 @@
  * and the stored runs (GET /api/automation); nothing here is a list of its own.
  */
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { aiIsOff } from '../../ai/ai-off.js';
 import { api, errorText } from '../../lib/api.js';
 import './automation.css';
 import { AskAi } from '../../assistant/AskAi.js';
@@ -41,7 +42,7 @@ import { useQuestions } from '../../questions/store.js';
 import { forMe } from '../../../questions/model.js';
 import { payText, signed, unbookedPayments } from '../bank/model.js';
 import { at } from '../receipts/view.js';
-import { EvidenceTasks, FiledEvidence, PeriodIssues, ReceiptDueTasks, ThresholdTasks, thresholdPassed, TwinTasks } from './Issues.js';
+import { AssessmentTasks, assessmentsMissing, EvidenceTasks, FiledEvidence, PeriodIssues, ReceiptDueTasks, ThresholdTasks, thresholdPassed, TwinTasks } from './Issues.js';
 import { openTwins } from '../receipts/model.js';
 import { ledgerFor } from '../receipts/view.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
@@ -515,7 +516,7 @@ function XmlFile({ x }: { x: PreparedXml }) {
 /** A note of an inbox step (src/intake/pipeline.ts IntakeNote): why it did less than it had to do. */
 function noteText(n: IntakeNote): string {
   switch (n.code) {
-    case 'noModel': return t('automation.note.noModel', { n: n.waiting });
+    case 'noModel': return t(aiIsOff() ? 'automation.note.aiOff' : 'automation.note.noModel', { n: n.waiting });
     case 'failed': return t('automation.note.failed', { n: n.count, detail: n.detail });
     case 'unmatched': return t('automation.note.unmatched', { n: n.files.length, files: n.files.join(', ') });
     case 'filedKept': return t('automation.note.filedKept', { n: n.count });
@@ -745,7 +746,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
   const receiptDue = forReceipt.filter((w) => w.kind !== 'waits');
   const held = new Set(forReceipt.map((w) => w.tx.ref));
   const waiting = unbookedPayments(books, accounts).filter((p) => !inTasks.has(p.ref) && !held.has(p.ref));
-  const evidence = journalOf(books).views.some((v) => v.evidence) || !!unsettledAtFiling(journalOf(books), filing().length)?.items.length || openTwins(ledgerFor(books)).length > 0;
+  const evidence = journalOf(books).views.some((v) => v.evidence) || !!unsettledAtFiling(journalOf(books), filing().length)?.items.length || openTwins(ledgerFor(books)).length > 0 || assessmentsMissing(books).length > 0;
   // A firm not registered whose turnover passed the threshold has a task without any run (r5f-9).
   const threshold = thresholdPassed(books, useWorkspace()?.company.vat.registered);
   return (
@@ -802,6 +803,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
       <EvidenceTasks books={books} nav={nav} canEdit={canEdit} />
       <FiledEvidence books={books} nav={nav} />
       <TwinTasks books={books} nav={nav} canEdit={canEdit} />
+      <AssessmentTasks books={books} nav={nav} />
       {waiting.length > 0 && (
         <section className="wfunbooked" data-testid="unbooked-payments">
           <h3>{t('automation.unbookedTitle', { n: waiting.length })}</h3>

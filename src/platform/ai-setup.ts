@@ -30,10 +30,14 @@ export type CliProbe =
   | { found: 'signedOut'; bin: string; version: string }
   | { found: 'signedIn'; bin: string; version: string; method?: string; plan?: string };
 
-/** The test call (decision 2): answered, or refused for the plan, a used-up limit or another reason, in the CLI's own words. */
+/**
+ * The test call (decision 2): answered, or refused for the plan, a used-up limit or another reason,
+ * in the CLI's own words; `off`: not made, the AI is switched off on this Mac (issue #212).
+ */
 export type Probation =
   | { ok: true; ms: number }
-  | { ok: false; why: 'plan' | 'limit' | 'other'; said: string };
+  | { ok: false; why: 'plan' | 'limit' | 'other'; said: string }
+  | { ok: false; why: 'off' };
 
 /**
  * The card of one CLI. `installing` and `signingIn` wait for the person in Terminal and look every
@@ -94,6 +98,8 @@ export function nextCard(state: CardState, event: CardEvent): CardState {
     }
     case 'tested':
       if (state.kind !== 'testing') return state;
+      // With the AI switched off nothing was asked: the card shows the program signed in, untested.
+      if (!event.result.ok && event.result.why === 'off') return { kind: 'ready', bin: state.bin, version: state.version, ...(state.plan ? { plan: state.plan } : {}) };
       return event.result.ok
         ? { kind: 'ready', bin: state.bin, version: state.version, ...(state.plan ? { plan: state.plan } : {}), ms: event.result.ms }
         : { kind: 'refused', bin: state.bin, version: state.version, ...(state.plan ? { plan: state.plan } : {}), why: event.result.why, said: event.result.said };
@@ -158,6 +164,8 @@ export interface AiSetupView {
   keysInApp: boolean;
   /** «Ohne KI weitermachen», remembered on this Mac (decision 6). */
   noAi: boolean;
+  /** «KI ganz ausschalten» (Firma › KI, issue #212): no model is asked on this Mac. */
+  off: boolean;
   /** When the CLI the app asks cannot answer, ask the other one by itself (decision 4; off by default). */
   askOther: boolean;
   /** The CLI the app asks (and «Im Terminal» opens) when two are ready. */
