@@ -62,17 +62,17 @@ const sameCents = (a: number, b: number) => Math.round(a * 100) === Math.round(b
  * The opening balance of a statement that prints none but a balance on every row (a running
  * balance column): the balance before the earliest row. The rows run oldest first when each row's
  * balance is the one before plus its amount and the last one's is the closing balance, newest
- * first when that holds read backwards; a statement whose rows run neither way gives none. A statement without a movement opens as it
- * closes. Its day: the period's first, else the earliest row's.
+ * first when that holds read backwards; a statement whose rows run neither way gives none. A
+ * statement without a movement opens as it closes. Its day: the period's first, else the earliest
+ * row's.
  */
 function openingOfRows(rows: readonly { date: string; amount: number; balance?: number }[], { date: closingDay, amount: closing }: { date: string; amount: number }, from?: string): { date: string; amount: number } | undefined {
   if (!rows.length) return { date: from ?? closingDay, amount: closing };
   if (rows.some((r) => r.balance === undefined)) return undefined;
-  // Oldest first: each row's balance is the one before plus its amount, and the last row's is the closing balance.
   const runs = (list: readonly { amount: number; balance?: number }[]) => sameCents(list[list.length - 1].balance!, closing) && list.every((r, i) => i === 0 || sameCents(r.balance!, list[i - 1].balance! + r.amount));
   const oldest = runs(rows) ? rows[0] : runs([...rows].reverse()) ? rows[rows.length - 1] : undefined;
   if (!oldest) return undefined;
-  const day = from ?? [...rows.map((r) => r.date)].sort()[0];
+  const day = from ?? rows.map((r) => r.date).sort()[0];
   return day <= closingDay ? { date: day, amount: round(oldest.balance! - oldest.amount) } : undefined;
 }
 
