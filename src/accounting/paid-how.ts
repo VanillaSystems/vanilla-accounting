@@ -13,7 +13,7 @@ const PRIVATE = /\b(privat\s+(ausgelegt|bezahlt|vorgeschossen|beglichen)|aus\s+e
 const CASH = /(\bbar\s*(bezahlt|erhalten|gegeben|zahlung|chf|eur|fr\.?)|\bbarzahlung|\b(zahlungsart|zahlart|zahlungsmittel|bezahlt|bezahlung)\s*:?\s*bar\b|\bin\s+bar\b|\brückgeld\b|\bwechselgeld\b|\b(pay[ée]e?|paiement|r[èe]glement)\s+(en\s+)?esp[èe]ces\b|\bcomptant\b|\b(pagat[oa]|pagamento)\s+in\s+contanti\b|\bcontanti\b|\bpaid\s+(in\s+)?cash\b|\bcash\s+(payment|paid|tendered)\b|\bchange\s+(due|given)\b)/iu;
 
 /** A card, a phone or an invoice paid it: the cash words of the same till receipt are its other lines. */
-const CARD = /\b(kartenzahlung|karte\s*:|bargeldlos|debit\s*card|credit\s*card|maestro|mastercard|visa|v\s*pay|postfinance\s*card|twint|apple\s*pay|google\s*pay|carte\s+(bancaire|de\s+cr[ée]dit|de\s+d[ée]bit)|carta\s+di\s+credito|paid\s+by\s+card|zahlbar\s+(bis|innert|innerhalb)|qr-rechnung|einzahlungsschein)\b/iu;
+const CARD = /\b(kartenzahlung|karte\s*:|bargeldlos|debit\s*card|credit\s*card|maestro|mastercard|visa|v\s*pay|postfinance\s*card|twint|apple\s*pay|carte\s+(bancaire|de\s+cr[ée]dit|de\s+d[ée]bit)|carta\s+di\s+credito|paid\s+by\s+card|zahlbar\s+(bis|innert|innerhalb)|qr-rechnung|einzahlungsschein)\b/iu;
 
 export function paidPrivately(text: string): boolean {
   const words = text.slice(0, 6000);
