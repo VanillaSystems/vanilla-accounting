@@ -156,8 +156,15 @@ function payoutsOf(books: Books, p: Provider, context: ClassifyContext): Array<{
  * not booked bank / clearing account (as sales the old way, or not yet booked): each may have paid
  * the rows before it; and for a sales report the sales booked elsewhere than on the clearing account,
  * which only name a refund of a filed period whose sale sits in one (#239).
+ *
+ * A payment is the provider's payout here by the provider's recognition alone (providerOfMoneyIn: its
+ * reference, processors, `match`), never because an order document is linked to it (#247): a customer's
+ * bank transfer for an order, booked as a sale with the order page as its proof, is no payout. One whose
+ * linked order document names an order the provider did not collect (`other`: the report's «anders
+ * bezahlt») holds nothing; nor do the entries on a payout's ref that correct a filed period
+ * (`corrects`): beside them the payout is booked from the clearing account all the same.
  */
-function legacyOf(books: Books, p: Provider, kind: 'sales' | 'fees', revenue: string, from: string, context: ClassifyContext): NonNullable<ReportContext['legacy']> {
+function legacyOf(books: Books, p: Provider, kind: 'sales' | 'fees', revenue: string, from: string, context: ClassifyContext, other: ReadonlySet<string>): NonNullable<ReportContext['legacy']> {
   const lock = periodLock(books);
   const clearing = p.provider.clearing!;
   const since = p.provider.since!;
@@ -168,13 +175,21 @@ function legacyOf(books: Books, p: Provider, kind: 'sales' | 'fees', revenue: st
   const entries = books.journalEntries.filter((e) => carried(e) && (kind === 'sales'
     ? ofKind(clearing, revenue, e) || ((e.accountDebit === clearing || e.accountCredit === clearing) && sideOf(e.vatCode) === 'sale')
     : !!fees && ofKind(fees, clearing, e)));
-  const otherwise = (booked: readonly JournalEntry[]) => !fromClearing(booked, clearing);
-  const through = payoutsOf(books, p, context)
-    .filter(({ tx, entries: booked }) => booked.length && otherwise(booked) && !lock.isClosed(tx.date))
-    .map(({ tx }) => tx.date).sort().at(-1);
+  /** A payout's own entries: those on its ref that correct a filed period aside (#242, #247). */
+  const ownOf = (tx: BankTransaction) => books.journalEntries.filter((e) => e.transactionRef === tx.ref && !e.corrects);
+  const otherwise = (own: readonly JournalEntry[]) => !fromClearing(own, clearing);
+  /** The provider's payout by its own recognition, never by a linked order document; none whose order the provider did not collect (#247). */
+  const payoutOf = (tx: BankTransaction) => {
+    const linked = mappedReceipts(books, tx);
+    if (linked.some((r) => r.order && other.has(r.order.number.replace(/^#/, '')))) return false;
+    return providerOfMoneyIn(tx, linked.filter((r) => !r.order), context.counterparties ?? [])?.id === p.id;
+  };
+  const through = books.transactions
+    .filter((tx) => tx.date >= since && !lock.isClosed(tx.date) && payoutOf(tx))
+    .filter((tx) => { const own = ownOf(tx); return own.length > 0 && otherwise(own); })
+    .map((tx) => tx.date).sort().at(-1);
   const paidBefore = books.transactions
-    .filter((tx) => tx.date >= from && tx.date < since && providerOfMoneyIn(tx, mappedReceipts(books, tx), context.counterparties ?? [])?.id === p.id
-      && otherwise(books.journalEntries.filter((e) => e.transactionRef === tx.ref)))
+    .filter((tx) => tx.date >= from && tx.date < since && payoutOf(tx) && otherwise(ownOf(tx)))
     .map((tx) => tx.date).sort();
   // Sales booked elsewhere (a payout booked as sales naming its orders): they only name a refund of a filed period (#239).
   const named = kind === 'sales' ? books.journalEntries.filter((e) => !isReportRef(e.transactionRef) && e.accountDebit !== clearing && e.accountCredit !== clearing
@@ -211,15 +226,16 @@ function unseenPayout(books: Books, p: Provider, read: ReadReport, context: Clas
 /** The first day a report of `p` books: its cut-over day less its payout days (a sale collected then may be paid out after the cut-over day). */
 const reachOf = (p: Provider): string => addDays(p.provider.since!, -payoutDaysOf(p));
 
-/** The context of a report's booking for provider `p`: its accounts, the firm's codes and basis, the official daily sell rates (ADR 0001), the lock. */
-function reportContext(ws: Workspace, books: Books, p: Provider, kind: 'sales' | 'fees', receipt: string, texts: ReportTexts, fx: FxResolver, context: ClassifyContext, payments?: PaymentFacts, correct?: ReportContext['correct']): ReportContext {
+/** The context of a report's booking for provider `p`: its accounts, the firm's codes and basis, the official daily sell rates (ADR 0001), the lock; `read`, a sales report as read: the orders the provider did not collect hold no payout (#247). */
+function reportContext(ws: Workspace, books: Books, p: Provider, kind: 'sales' | 'fees', receipt: string, texts: ReportTexts, fx: FxResolver, context: ClassifyContext, payments?: PaymentFacts, correct?: ReportContext['correct'], read?: ReadReport): ReportContext {
+  const other = new Set(read?.kind === 'sales' ? read.rows.filter((o) => !collectedBy(o, p.provider.gateways)).map((o) => o.order) : []);
   const lock = periodLock(books);
   const codes = saleCodes();
   const revenue = revenueOf(ws, p) ?? '';
   const from = reachOf(p);
   return {
     provider: { id: p.id, name: p.name }, clearing: p.provider.clearing!, revenue, since: p.provider.since!, from,
-    legacy: legacyOf(books, p, kind, revenue, from, context),
+    legacy: legacyOf(books, p, kind, revenue, from, context, other),
     ...(p.provider.foreignTax ? { foreignTax: p.provider.foreignTax } : {}),
     ...(p.provider.fees ? { fees: { account: p.provider.fees.account, ...(formTakes(p.provider.fees.vat) ? { vat: p.provider.fees.vat } : {}) } } : {}),
     receipt, base: baseCurrency(), rate: (c, d) => fx.daily(c, d), ...(codes ? { codes } : {}), territory: invoicing().territory,
@@ -281,7 +297,7 @@ function dropStale(books: Books, refs: readonly string[]): void {
 
 /** A sales report's taking: booked with the provider's payments reports, what it holds kept on its receipt (the latest taking's); `stale`: the app's refunds no day dates any more go back first. */
 function takeSales(ws: Workspace, books: Books, p: Provider, receipt: Receipt, read: ReadReport, fx: FxResolver, context: ClassifyContext, payments: PaymentFacts | undefined, stale = false): ReportOutcome {
-  const out = bookReport(books, read, reportContext(ws, books, p, 'sales', receipt.id, texts(p.name, receipt.filename), fx, context, payments));
+  const out = bookReport(books, read, reportContext(ws, books, p, 'sales', receipt.id, texts(p.name, receipt.filename), fx, context, payments, undefined, read));
   if (stale) dropStale(books, out.stale);
   pushOutcome(books, out, receipt.id);
   keepHeld(books, receipt.id, out);
@@ -534,7 +550,7 @@ export function bookReportCorrection(ws: Workspace, books: Books, receiptId: str
   const said = texts(p.name, receipt.filename);
   const text = de.t('salesReport.correctionText', { provider: p.name, order, date: date.split('-').reverse().join('.'), period: corrects });
   const correct = { order, date, on, corrects, at: (opts.now ?? new Date()).toISOString(), text };
-  const out = bookReport(books, read, reportContext(ws, books, p, 'sales', receipt.id, said, loadFxResolver(), loadClassifyContext(ws), paymentsOf(ws, books, p), correct));
+  const out = bookReport(books, read, reportContext(ws, books, p, 'sales', receipt.id, said, loadFxResolver(), loadClassifyContext(ws), paymentsOf(ws, books, p), correct, read));
   const ref = out.corrected[0];
   if (!ref) return { ok: false, why: 'notOffered' };
   const entries = out.entries.filter((e) => e.transactionRef === ref);
