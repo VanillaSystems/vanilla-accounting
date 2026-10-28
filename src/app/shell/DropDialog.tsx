@@ -24,6 +24,8 @@ import { chfOf, suggestion } from '../areas/receipts/model.js';
 import { ledgerFor } from '../areas/receipts/view.js';
 import { useFx } from '../hooks/use-fx.js';
 import { ReportCorrections } from '../areas/receipts/ReportCorrections.js';
+import { processingText } from '../automation/processing.js';
+import { inProcess, processingOf, runProcessing } from '../../workflows/processing.js';
 
 /** `note`: what a drop left out, a limit it hit named (a limit is never hit silently). */
 interface State { open: boolean; session?: DropSession; adding: number; note?: string; error?: string }
@@ -255,8 +257,12 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
   );
 }
 
-/** Where one taken file is, read from the books and its run: still in its step, read, matched, waiting for a person, or set aside by the run with the reason. */
-type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string };
+/**
+ * Where one taken file is, read from the books and its run: still in its step (said as Belege says
+ * it, #218: «Sucht die Zahlung …», «Wartet (3 vor diesem)»), read, matched, waiting for a person,
+ * its run stopped, or set aside by the run with the reason.
+ */
+type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'stuck'; run: string } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string };
 
 const isWorking = (run?: { status: string }) => !!run && (run.status === 'queued' || run.status === 'running');
 
@@ -275,16 +281,22 @@ function fileState(r: DropRow, books: Index, view: View): FileState {
   const working: FileState = { kind: 'working', ...(step ? { step: textIn(step.label, language()) } : {}) };
   // Its run is not in the last poll yet: it has only just started.
   if (r.run && !run) return working;
-  if (r.statement) return isWorking(run) ? working : { kind: 'statement' };
+  if (r.statement) {
+    const p = run && runProcessing(run, view?.runs ?? []);
+    return inProcess(p) ? { kind: 'working', step: processingText(p, view) } : isWorking(run) ? working : { kind: 'statement' };
+  }
   if (r.report) return { kind: 'report' };
   const arrival = run?.arrived?.find((x) => x.file === r.name);
   if (arrival?.kind === 'refused') return { kind: 'refused', reason: arrival.reason };
   const id = receiptIdOf(r, view);
+  const proc = processingOf(view?.runs ?? [], books.receipts).get(id);
+  if (inProcess(proc)) return { kind: 'working', step: processingText(proc, view) };
   if (books.mappings.some((m) => m.receiptId === id)) return { kind: 'matched' };
   if (isWorking(run)) return working;
+  if (proc?.kind === 'stuck') return { kind: 'stuck', run: proc.run };
   const receipt = books.receipts.find((x) => x.id === id);
   // At rest but not in the books the page holds: they are being loaded again, unless the run stopped.
-  if (!receipt) return run?.status === 'stuck' ? { kind: 'waits' } : working;
+  if (!receipt) return run?.status === 'stuck' ? { kind: 'stuck', run: run.id } : working;
   return receipt.location === 'archived' ? { kind: 'read' } : { kind: 'waits' };
 }
 
@@ -333,11 +345,11 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
   const facts = !r.report && receipt && (receipt.date || receipt.amount !== undefined)
     ? [receipt.date && formatDate(receipt.date), receipt.amount !== undefined && `${receipt.currency ?? ''} ${fmt(receipt.amount)}`.trim()].filter(Boolean).join(' · ') : '';
   const running = view?.runs.find((y) => y.id === r.run)?.status === 'running';
-  const lacks = x.kind === 'waits' && receipt ? [!receipt.date && t('drop.p.date'), receipt.amount === undefined && t('drop.p.amount')].filter(Boolean).join(', ') : '';
+  const lacks = (x.kind === 'waits' || x.kind === 'stuck') && receipt ? [!receipt.date && t('drop.p.date'), receipt.amount === undefined && t('drop.p.amount')].filter(Boolean).join(', ') : '';
   // «Zahlung bestätigen» only when Belege has a payment to propose for it (r8k-5).
   const ledger = ledgerFor(books);
   const proposed = x.kind === 'waits' && receipt && ledger.byId.has(receipt.id) ? !!suggestion(ledger.byId.get(receipt.id)!, ledger, chfOf(rates)) : false;
-  const missing = x.kind !== 'waits' ? '' : lacks ? t('drop.p.missing', { what: lacks }) : proposed ? t('drop.p.payment') : t('drop.p.noPayment');
+  const missing = x.kind !== 'waits' && x.kind !== 'stuck' ? '' : lacks ? t('drop.p.missing', { what: lacks }) : proposed ? t('drop.p.payment') : t('drop.p.noPayment');
   const shown = !!receipt && open;
   // The books changed under the page: Belege must not show the receipt any more.
   const undo = () => { setBusy(true); void act(session, r, { kind: 'undo' }).then(refresh).finally(() => setBusy(false)); };
@@ -349,6 +361,7 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
           <span className={`dchip p-${x.kind}`}>{x.kind === 'working' ? (x.step ?? t('drop.p.working')) : t(`drop.p.${x.kind}` as 'drop.p.read')}</span>
           {missing ? <small className="dwhy">{missing}</small> : x.kind === 'refused' ? <small className="dwhy">{reasonText(x.reason)}</small> : null}
           <span className="dacts">
+            {x.kind === 'stuck' ? <button type="button" className="linkbtn" data-testid="drop-stuck-run" onClick={() => go({ area: 'automation', view: 'run', run: x.run })}>{t('processing.toRun')}</button> : null}
             {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id }, receipt.date)}>{t('drop.openReceipt')}</button> : null}
             <button type="button" className="linkbtn" disabled={running || busy} data-tip={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</button>
           </span>
@@ -378,7 +391,7 @@ export function DropDialog({ onGo, books, refresh }: { onGo(loc: Location): void
   const working = s.adding > 0 || rows.some((r) => r.state === 'take') || states.some((x) => x.kind === 'working');
   const finished = states.filter((x) => x.kind !== 'working').length;
   const pct = taken.length ? Math.round((finished / taken.length) * 100) : 0;
-  const waits = !working && states.some((x) => x.kind === 'waits');
+  const waits = !working && states.some((x) => x.kind === 'waits' || x.kind === 'stuck');
   // A receipt of a sealed quarter opens in that quarter, not in the open one (r9k-8).
   const go = (route: Route, date?: string) => { closeDrop(); onGo(date ? at(route, date) : { route, query: {} }); };
   return (

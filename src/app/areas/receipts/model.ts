@@ -16,6 +16,7 @@ import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { isManualRef } from '../../../books/refs.js';
 import type { OtherWhy, SupportingWhy } from '../../../core/modules/schema.js';
 import { kindByOf, type KindBy } from '../../../intake/unclear.js';
+import { inProcess, type Processing } from '../../../workflows/processing.js';
 
 /** Why a file in Belege is no receipt: what its words say it is, or its kind, or that it holds no amount. */
 export type NoneWhy = SupportingWhy | OtherWhy | 'supporting' | 'duplicate' | 'statement' | 'empty';
@@ -73,6 +74,8 @@ export interface Ledger {
   closedThrough?: string;
   /** The first day of the open quarter: receipts from here on are still being worked on. */
   openFrom: string;
+  /** Where each receipt stands in the inbox's runs (#218): one still in processing does not need the person yet. */
+  processing: ReadonlyMap<string, Processing>;
 }
 
 const FILE_DATE = /^(20\d\d)(\d\d)(\d\d)-/;
@@ -83,7 +86,7 @@ export function splitTitle(text: string): [string, string] {
   return m ? [m[1], m[2]] : [text, ''];
 }
 
-export function ledgerOf(books: Index, openFrom: string): Ledger {
+export function ledgerOf(books: Index, openFrom: string, processing: ReadonlyMap<string, Processing> = new Map()): Ledger {
   const closedThrough = books.config?.closedThrough;
   const isClosed = (d: string | undefined) => !!closedThrough && !!d && d <= closedThrough;
   const txByRef = new Map(books.transactions.map((t) => [t.ref, t]));
@@ -113,7 +116,7 @@ export function ledgerOf(books: Index, openFrom: string): Ledger {
     const statement = r.kind === 'statement' ? statementFacts(r, documents()) : undefined;
     return { r, date, day: date || r.indexedAt.slice(0, 10) || undefined, vendor, desc, links, paid, none, ...(none ? { noneWhy: noneWhyOf(r), noneBy: kindByOf(r) } : {}), locked: links.some(refClosed), ...(twin ? { twin } : {}), ...(statement ? { statement } : {}) };
   });
-  return { views, byId: new Map(views.map((v) => [v.r.id, v])), txByRef, entriesByRef, receiptsByRef, closedThrough, openFrom };
+  return { views, byId: new Map(views.map((v) => [v.r.id, v])), txByRef, entriesByRef, receiptsByRef, closedThrough, openFrom, processing };
 }
 
 export const isOpen = (v: ReceiptView) => v.links.length === 0;
@@ -128,13 +131,16 @@ export const lockedRefuses = (act: 'link' | 'edit' | 'del' | 'mark' | 'notreceip
 export const openTwins = (l: Ledger): ReceiptView[] =>
   l.views.filter((v) => v.twin?.relation === 'duplicate' && !v.links.length && v.r.kind !== 'duplicate' && !v.locked && l.byId.has(v.twin.of));
 
+/** A run of the inbox still works on it (#218): it shows as in processing, not as needing the person. */
+export const working = (v: ReceiptView, l: Pick<Ledger, 'processing'>) => inProcess(l.processing.get(v.r.id));
+
 /**
  * Still waiting for its payment or its date, and not in a filed quarter: what the dock's badge
  * counts. Books that never filed have no quarter to leave behind: a June invoice paid in July
- * needs you as well.
+ * needs you as well. A receipt a run still works on needs nobody yet (#218).
  */
 export const needsYou = (v: ReceiptView, l: Ledger) =>
-  !v.none && isOpen(v) && !v.locked && (!v.date || v.date >= l.openFrom || !l.closedThrough || v.date > l.closedThrough);
+  !v.none && isOpen(v) && !v.locked && !working(v, l) && (!v.date || v.date >= l.openFrom || !l.closedThrough || v.date > l.closedThrough);
 
 export const badgeCount = (l: Ledger) => l.views.filter((v) => needsYou(v, l)).length;
 
@@ -173,9 +179,9 @@ export const statesOf = (chips: readonly Chip[] | undefined): Set<string> => new
  * files that are none in as rows, and any state chip hides the note about them.
  */
 export function visible(l: Ledger, period: Period, chips: readonly Chip[] | undefined, q: string | undefined, accounts: readonly Account[] = [], fields: readonly Field<ReceiptView>[] = []): Visible {
-  const working = period.from <= l.openFrom && l.openFrom <= period.to;
+  const current = period.from <= l.openFrom && l.openFrom <= period.to;
   const within = (d: string) => d >= period.from && d <= period.to;
-  const pool = l.views.filter((v) => !!v.day && (within(v.day) || v.paid.some(within) || (working && (v.day < period.from || !v.date) && needsYou(v, l))));
+  const pool = l.views.filter((v) => !!v.day && (within(v.day) || v.paid.some(within) || (current && (v.day < period.from || !v.date) && (needsYou(v, l) || working(v, l)))));
   const receipts = pool.filter((v) => !v.none);
   const words = (q ?? '').toLowerCase().split(/\s+/).filter(Boolean);
   const match = (v: ReceiptView) => { const h = haystack(v); return words.every((w) => h.includes(w)); };
@@ -197,22 +203,24 @@ export function visible(l: Ledger, period: Period, chips: readonly Chip[] | unde
   };
 }
 
-export type GroupKey = 'need' | 'noDate' | `month:${string}`;
+export type GroupKey = 'working' | 'need' | 'noDate' | `month:${string}`;
 export interface Group { key: GroupKey; rows: ReceiptView[] }
 
 const byDateDesc = (a: ReceiptView, b: ReceiptView) => (b.date ?? '').localeCompare(a.date ?? '') || a.r.filename.localeCompare(b.r.filename);
 
 /**
- * The list's groups in order, which is also the ↑↓ order: what needs you (a suggestion first),
- * then each month, newest first. An open receipt without a date needs you (last in its group); a
- * linked one without a date comes last as `later`, unless a chip asks for receipts without a date.
+ * The list's groups in order, which is also the ↑↓ order: what a run still works on (#218), what
+ * needs you (a suggestion first), then each month, newest first. An open receipt without a date
+ * needs you (last in its group); a linked one without a date comes last as `later`, unless a chip
+ * asks for receipts without a date.
  */
 export function groups(rows: ReceiptView[], l: Ledger, noDateAsked: boolean, suggested: (v: ReceiptView) => boolean): { groups: Group[]; later: ReceiptView[] } {
-  const later = noDateAsked ? [] : rows.filter((v) => !v.date && !needsYou(v, l));
-  const dated = rows.filter((v) => !later.includes(v));
+  const busy = rows.filter((v) => working(v, l)).sort((a, b) => a.r.indexedAt.localeCompare(b.r.indexedAt) || a.r.filename.localeCompare(b.r.filename));
+  const later = noDateAsked ? [] : rows.filter((v) => !v.date && !needsYou(v, l) && !busy.includes(v));
+  const dated = rows.filter((v) => !later.includes(v) && !busy.includes(v));
   const need = dated.filter((v) => needsYou(v, l)).sort((a, b) => Number(suggested(b)) - Number(suggested(a)) || byDateDesc(a, b));
   const rest = dated.filter((v) => !need.includes(v)).sort(byDateDesc);
-  const out: Group[] = need.length ? [{ key: 'need', rows: need }] : [];
+  const out: Group[] = [...(busy.length ? [{ key: 'working' as const, rows: busy }] : []), ...(need.length ? [{ key: 'need' as const, rows: need }] : [])];
   const byMonth = new Map<GroupKey, ReceiptView[]>();
   for (const v of rest) {
     const key: GroupKey = v.date ? `month:${v.date.slice(0, 7)}` : 'noDate';

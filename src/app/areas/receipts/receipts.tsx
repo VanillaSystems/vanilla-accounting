@@ -2,7 +2,7 @@
  * Belege: the receipts of a period, what needs you first, then month by month; the receipt with
  * its paper, its payment, its details and its file on the right (the mockup's Belege).
  */
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { QuarantinedFile } from '../../../types/drop.js';
 import { api, errorText } from '../../lib/api.js';
 import type { InboxFile } from '../../../types/index.js';
@@ -26,6 +26,10 @@ import { at, ledgerFor, listed, noneText } from './view.js';
 import { Kbd, accept, runAct, type Act } from './commands.js';
 import { intakeAdd } from './intake.js';
 import { startIntake, useIntakeRunning } from '../../automation/intake.js';
+import { useAutomation } from '../../automation/store.js';
+import { processingText } from '../../automation/processing.js';
+import { inProcess, type Processing } from '../../../workflows/processing.js';
+import type { AutomationView } from '../../../workflows/model.js';
 import { Detail } from './Detail.js';
 import { I } from './icons.js';
 import { EmptyTable, FirstRun, Strip } from './InflowStrip.js';
@@ -48,11 +52,12 @@ const COUNT_LABEL = { linked: 'receipts.filterLinked', open: 'receipts.filterOpe
 const noReceiptsYet = (books: AreaProps['books'], inbox: readonly InboxFile[]) => books.receipts.length === 0 && inbox.length === 0;
 
 const groupLabel = (key: GroupKey) =>
-  key === 'need' ? t('receipts.groupNeed') : key === 'noDate' ? t('receipts.noDate') : monthName(`${key.slice(6)}-01`);
+  key === 'working' ? t('receipts.groupWorking') : key === 'need' ? t('receipts.groupNeed') : key === 'noDate' ? t('receipts.noDate') : monthName(`${key.slice(6)}-01`);
 
 function List(props: Props) {
   const { route, query, period, books, nav, canEdit } = props;
   const s = useUi();
+  const { view } = useAutomation();
   const { rates } = useFx();
   const l = ledgerFor(books);
   const toChf = useMemo(() => chfOf(rates), [rates]);
@@ -69,7 +74,15 @@ function List(props: Props) {
     return out;
   }, [rows, l, toChf]);
   const { groups: gs, later } = groups(rows, l, states.has('noDate'), (v) => suggestions.has(v.r.id));
-  const pending = period.to >= l.openFrom && !chips.length && !query.q ? s.inbox.filter((f) => !l.byId.has(f.id)) : [];
+  const inbox = period.to >= l.openFrom && !chips.length && !query.q ? s.inbox.filter((f) => !l.byId.has(f.id)) : [];
+  // A file still being read is in processing (#218); one that could not be read needs you.
+  const pending = inbox.filter((f) => !f.failed);
+  const failed = inbox.filter((f) => f.failed);
+  const busy = gs.find((g) => g.key === 'working');
+  const need = gs.find((g) => g.key === 'need');
+  const rest = gs.filter((g) => g !== busy && g !== need);
+  const workingKey: GroupKey = 'working';
+  const needKey: GroupKey = 'need';
   /** A count is a shortcut to the one state chip it names; «alle» takes the state chips away. */
   const onlyState = states.size === 1 ? [...states][0] : undefined;
   const countTo = (state?: string) => setChips([...chips.filter((c) => c.field !== 'state'), ...(state ? [{ field: 'state', value: state }] : [])]);
@@ -77,8 +90,9 @@ function List(props: Props) {
   const firstRun = canEdit && noReceiptsYet(books, s.inbox);
 
   const ids = [
-    ...pending.map((f) => f.id),
-    ...gs.filter((g) => !s.collapsed.has(g.key)).flatMap((g) => g.rows.map((v) => v.r.id)),
+    ...(s.collapsed.has(workingKey) ? [] : [...pending.map((f) => f.id), ...(busy?.rows ?? []).map((v) => v.r.id)]),
+    ...(s.collapsed.has(needKey) ? [] : [...failed.map((f) => f.id), ...(need?.rows ?? []).map((v) => v.r.id)]),
+    ...rest.filter((g) => !s.collapsed.has(g.key)).flatMap((g) => g.rows.map((v) => v.r.id)),
     ...(s.showLater ? later.map((v) => v.r.id) : []),
     ...(s.showHidden ? hidden.map((v) => v.r.id) : []),
   ];
@@ -103,9 +117,11 @@ function List(props: Props) {
   const select = (id: string) => nav.select({ area: 'receipts', id });
   useSelectionFollowsRows(route.id, ids, select);
   const row = (v: ReceiptView, same: boolean) => (
-    <Row key={v.r.id} v={v} sel={!picked && v.r.id === route.id} picked={pickedIds.has(v.r.id)} same={same} canEdit={canEdit} onSelect={select}
+    <Row key={v.r.id} v={v} proc={l.processing.get(v.r.id)} view={view} sel={!picked && v.r.id === route.id} picked={pickedIds.has(v.r.id)} same={same} canEdit={canEdit} onSelect={select}
       onClick={(e) => clickRow(e, 'receipt', v.r.id, route.id, select, nav.toast)} toast={nav.toast} onAct={(a) => runAct(props, a, v.r.id)} />
   );
+  /** Rows of one group: a row of the same day as the one above names its date only for screen readers. */
+  const dated = (rows: ReceiptView[]) => { let prev: string | undefined; return rows.map((v) => { const same = !!v.date && v.date === prev; prev = v.date; return row(v, same); }); };
 
   return (
     <div className="page">
@@ -148,24 +164,19 @@ function List(props: Props) {
           )
       ) : (
         <div className={`rows${picked ? ' picking' : ''}`} role="listbox" aria-multiselectable="true" aria-label={t('area.receipts')}>
-          {pending.length > 0 && (
-            <>
-              <div className="group"><span>{t('receipts.groupNeed')}</span><span className="mono">{pending.length}</span></div>
-              {pending.map((f) => <PendingRow key={f.id} file={f} sel={f.id === route.id} onSelect={select} />)}
-            </>
+          {(pending.length > 0 || busy) && (
+            <GroupHead k={workingKey} n={pending.length + (busy?.rows.length ?? 0)}>
+              {pending.map((f) => <PendingRow key={f.id} file={f} proc={l.processing.get(f.id)} view={view} sel={f.id === route.id} onSelect={select} />)}
+              {busy?.rows.map((v) => row(v, false))}
+            </GroupHead>
           )}
-          {gs.map((g) => {
-            const shut = s.collapsed.has(g.key);
-            let prev: string | undefined;
-            return (
-              <Fragment key={g.key}>
-                <button type="button" className={`group${shut ? ' shut' : ''}`} aria-expanded={!shut} data-tip={shut ? t('receipts.expand') : t('receipts.collapse')} onClick={() => toggleGroup(g.key)}>
-                  <span>{I.gch}{groupLabel(g.key)}</span><span className="mono">{g.rows.length}</span>
-                </button>
-                {!shut && g.rows.map((v) => { const same = !!v.date && v.date === prev; prev = v.date; return row(v, same); })}
-              </Fragment>
-            );
-          })}
+          {(failed.length > 0 || need) && (
+            <GroupHead k={needKey} n={failed.length + (need?.rows.length ?? 0)}>
+              {failed.map((f) => <PendingRow key={f.id} file={f} sel={f.id === route.id} onSelect={select} />)}
+              {need && dated(need.rows)}
+            </GroupHead>
+          )}
+          {rest.map((g) => <GroupHead key={g.key} k={g.key} n={g.rows.length}>{dated(g.rows)}</GroupHead>)}
           {later.length > 0 && (
             <>
               <div className="hidden-note">
@@ -199,13 +210,26 @@ function List(props: Props) {
   );
 }
 
-function Row({ v, sel, picked, same, canEdit, onSelect, onClick, toast, onAct }: { v: ReceiptView; sel: boolean; picked: boolean; same: boolean; canEdit: boolean; onSelect(id: string): void; onClick(e: React.MouseEvent): void; toast(msg: string): void; onAct(a: Act): void }) {
+/** A group of the list: its head folds it, its rows show while it is open. */
+function GroupHead({ k, n, children }: { k: GroupKey; n: number; children: React.ReactNode }) {
+  const shut = useUi().collapsed.has(k);
+  return (
+    <>
+      <button type="button" className={`group${shut ? ' shut' : ''}`} aria-expanded={!shut} data-group={k} data-tip={shut ? t('receipts.expand') : t('receipts.collapse')} onClick={() => toggleGroup(k)}>
+        <span>{I.gch}{groupLabel(k)}</span><span className="mono">{n}</span>
+      </button>
+      {!shut && children}
+    </>
+  );
+}
+
+function Row({ v, proc, view, sel, picked, same, canEdit, onSelect, onClick, toast, onAct }: { v: ReceiptView; proc?: Processing; view?: AutomationView; sel: boolean; picked: boolean; same: boolean; canEdit: boolean; onSelect(id: string): void; onClick(e: React.MouseEvent): void; toast(msg: string): void; onAct(a: Act): void }) {
   const { r } = v;
   const act = (run: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); onSelect(r.id); run(); };
   const edit = canEdit && !v.locked;
   return (
     <div
-      className={`row${sel ? ' sel' : ''}${picked ? ' picked' : ''}${v.none ? ' nonreceipt' : ''}`}
+      className={`row${sel ? ' sel' : ''}${picked ? ' picked' : ''}${v.none ? ' nonreceipt' : ''}${inProcess(proc) ? ' working' : ''}`}
       role="option"
       aria-selected={sel || picked}
       tabIndex={sel ? 0 : -1}
@@ -214,7 +238,7 @@ function Row({ v, sel, picked, same, canEdit, onSelect, onClick, toast, onAct }:
     >
       <Pick kind="receipt" id={r.id} on={picked} label={v.vendor || r.filename} toast={toast} />
       <span className="d mono">{same ? <span className="sr">{formatDate(v.date)}</span> : v.date ? <><span className="dl">{formatDate(v.date)}</span><span className="ds">{formatDate(v.date).slice(0, 6)}</span></> : <span className="d none">{t('receipts.noDate')}</span>}</span>
-      <span className="t">{isOpen(v) && !v.locked && !v.none && I.dot}{v.vendor}{v.desc && <small> {v.desc}</small>}{v.none && <small className="nonewhy" data-testid="none-why" data-by={v.noneBy} data-tip={noneText(v)}> · {noneText(v)}</small>}</span>
+      <span className="t">{inProcess(proc) ? <span className="spin small" aria-hidden="true" /> : isOpen(v) && !v.locked && !v.none && I.dot}{v.vendor}{v.desc && <small> {v.desc}</small>}{inProcess(proc) && <small className="proc" data-testid="row-processing"> · {processingText(proc, view)}</small>}{v.none && <small className="nonewhy" data-testid="none-why" data-by={v.noneBy} data-tip={noneText(v)}> · {noneText(v)}</small>}</span>
       <span className="a mono">{r.amount != null && <>{(r.currency ?? baseCurrency()) !== baseCurrency() && <span className="c">{r.currency}</span>}{fmt(r.amount)}</>}</span>
       <span className="acts">
         {v.none ? (
@@ -305,7 +329,7 @@ function RunInbox() {
   );
 }
 
-function PendingRow({ file, sel, onSelect }: { file: InboxFile; sel: boolean; onSelect(id: string): void }) {
+function PendingRow({ file, proc, view, sel, onSelect }: { file: InboxFile; proc?: Processing; view?: AutomationView; sel: boolean; onSelect(id: string): void }) {
   if (file.failed) {
     return (
       <div className={`row reading failed${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={file.id} data-tip={file.failed.error} onClick={() => onSelect(file.id)}>
@@ -318,7 +342,7 @@ function PendingRow({ file, sel, onSelect }: { file: InboxFile; sel: boolean; on
   return (
     <div className={`row reading${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={file.id} data-tip={t('receipts.readingTip')} onClick={() => onSelect(file.id)}>
       <span className="d mono"><span className="shimmer" style={{ width: 70 }} /></span>
-      <span className="t"><span className="shimmer" style={{ width: 150 }} /> <span style={{ fontSize: 12, marginLeft: 6 }}>{t('receipts.reading')}</span></span>
+      <span className="t"><span className="shimmer" style={{ width: 150 }} /> <span style={{ fontSize: 12, marginLeft: 6 }} data-testid="row-processing">{inProcess(proc) ? processingText(proc, view) : t('receipts.reading')}</span></span>
       <span className="a mono" />
     </div>
   );
