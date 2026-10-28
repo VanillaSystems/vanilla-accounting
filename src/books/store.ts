@@ -422,7 +422,7 @@ export function closeThroughSaved(ws: Workspace, books: Books, end: string): voi
   const open = reconcilePendingThrough(books, end);
   if (open) throw open;
   if (closeAsksThrough(books, end)) saveBooks(ws, books);
-  books.config.closedThrough = end;
+  closeThrough(books, end);
   saveBooks(ws, books);
 }
 

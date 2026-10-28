@@ -3,8 +3,8 @@
  * read from statement PDFs beside the bank's export or CSV of the same days. Each read movement on a
  * day the bank's file covers is the same as one bank movement (code's proposal preselected) or a payment
  * of its own; one on another day is the same as one, or not in this export (it waits for the export of
- * its day). Nothing is left to a default. One «Abgleich bestätigen» applies all (src/server/reconcile.ts). A filed pair keeps its filed
- * side and books only a difference, to an account of the chart.
+ * its day). Nothing is left to a default. One «Abgleich bestätigen» applies all (src/server/reconcile.ts).
+ * A filed pair keeps its filed side and books only a difference, to an account of the chart.
  */
 import { useState } from 'react';
 import type { BankTransaction, Index, Reconciliation } from '../../../types/index.js';

@@ -4,8 +4,9 @@
  * read from PDFs before its first bank export or CSV came, or a PDF read on days next to such a file's.
  * There, code proposes the pairs and the person confirms them in one view (src/server/reconcile.ts
  * applies them); until then no run books any of those movements and no period holding their days
- * closes. A movement decided once (paired, or a payment of its own) takes part in no other, so
- * nothing is guessed line by line afterwards; only a bank file's own days decide a read movement there. Pure: the statement files come in as `StatementSides` (src/books/bank-import.ts).
+ * closes. Only a bank file's own days decide a read movement; one decided there (paired, or a payment
+ * of its own) takes part in no other, so nothing is guessed line by line afterwards. Pure: the
+ * statement files come in as `StatementSides` (src/books/bank-import.ts).
  */
 import { madeByHand } from '../workspace/money-accounts.js';
 import type { BankTransaction, ReconcilePair, Reconciliation } from '../types/index.js';
@@ -30,7 +31,7 @@ const sameSet = (a: readonly string[], b: readonly string[]) => a.length === b.l
 export const pending = (books: Pick<Books, 'reconciliations'>): Reconciliation[] => (books.reconciliations ?? []).filter((r) => !r.done);
 
 /** Whether `date` lies on a day the bank files of `r` cover: there every read movement is decided, «Eigene Zahlung» included. */
-export const covers = (r: Pick<Reconciliation, 'covered'>, date: string): boolean => (r.covered ?? []).some((s) => date >= s.from && date <= s.to);
+export const covers = (r: Pick<Reconciliation, 'covered'>, date: string): boolean => r.covered.some((s) => date >= s.from && date <= s.to);
 
 /**
  * Opens, updates or drops each account's waiting reconciliation from the books and the statement
