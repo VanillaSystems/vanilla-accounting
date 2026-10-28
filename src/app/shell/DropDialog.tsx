@@ -23,6 +23,7 @@ import { setBankDraft } from '../areas/company/bank-draft.js';
 import { chfOf, suggestion } from '../areas/receipts/model.js';
 import { ledgerFor } from '../areas/receipts/view.js';
 import { useFx } from '../hooks/use-fx.js';
+import { ReportCorrections } from '../areas/receipts/ReportCorrections.js';
 
 /** `note`: what a drop left out, a limit it hit named (a limit is never hit silently). */
 interface State { open: boolean; session?: DropSession; adding: number; note?: string; error?: string }
@@ -358,6 +359,7 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
           </button>
         ) : <span />}
       </div>
+      {(r.report?.corrections ?? []).map((id) => <ReportCorrections key={id} receipt={id} books={books} canEdit said={(message, ok) => { set({ error: ok ? undefined : message }); refresh(); }} />)}
       {shown ? <ReceiptDetails id={receipt.id} books={books} go={go} /> : null}
     </>
   );

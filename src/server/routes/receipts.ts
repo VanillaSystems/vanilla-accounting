@@ -7,6 +7,7 @@ import { entriesWithoutTheirReceipts, removeReceipt } from '../../accounting/cla
 import { parseVatFacts } from '../../accounting/vat-facts.js';
 import { assertReceiptFieldsOpen, privatePayment, setReceipt, unbookedPayments } from '../edits.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
+import { bookReportCorrection } from '../../intake/sales-report-import.js';
 import type { PrivatePart } from '../../types/assistant.js';
 import { bookAgain } from './automation.js';
 import { ask } from '../../llm/ask.js';
@@ -242,6 +243,27 @@ router.post('/api/receipts/:id/private-payment', async (req, res) => {
   const { made, file } = updateBooks((books) => ({ made: privatePayment(books, id, ask, loadFxResolver()), file: books.receipts.find((r) => r.id === id)!.filename }));
   await bookAgain(file);
   res.json({ ok: true, ...made });
+});
+
+/**
+ * «Als Korrektur buchen» (#231, golden rule 1): a refund paid in a filed period that the sales report
+ * `:id` offers as a correction, booked by the person in the open period with `corrects` naming the
+ * filing period of its day (src/intake/sales-report-import.ts bookReportCorrection). `on`: the open day
+ * to book it on, the first open day when absent; a closed one is refused before anything else.
+ */
+router.post('/api/receipts/:id/report-correction', (req, res) => {
+  const b = patchBody(req.body, ['order', 'date', 'on']);
+  const order = stringField(b, 'order').trim();
+  const date = stringField(b, 'date');
+  const on = b.on === undefined ? undefined : stringField(b, 'on');
+  if (!order || !/^\d{4}-\d{2}-\d{2}$/.test(date) || (on !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(on))) throw new RequestError(400, 'order, date (JJJJ-MM-TT) und optional on (JJJJ-MM-TT) erwartet.');
+  withBooks(res, (books) => {
+    if (on !== undefined) assertOpen(books, [on], 'newEntry');
+    const done = bookReportCorrection(WS, books, req.params.id, order, date, { ...(on !== undefined ? { on } : {}) });
+    if (!done.ok) throw new RequestError(done.why === 'gone' ? 404 : 409, done.why === 'gone' ? 'Diesen Verkaufsbericht gibt es nicht (mehr).' : 'Diese Rückerstattung bietet der Bericht nicht (mehr) als Korrektur an.', { code: 'reportCorrection', params: { why: done.why } });
+    assertOpen(books, done.entries.map((e) => e.date), 'newEntry');
+    return { ok: true, entries: done.entries };
+  });
 });
 
 // One edit of a receipt is one write: every field is validated before anything changes, and

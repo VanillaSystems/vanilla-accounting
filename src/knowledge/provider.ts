@@ -5,7 +5,7 @@
  *   # processes/suppliers/<id>.yaml (the app layer: true for every company)
  *   provider:
  *     reports:
- *       sales: { order: Name, date: Paid at, shipTo: Shipping Country, gross: Total, tax: Taxes, refunded: Refunded Amount, currency: Currency, gateway: Payment Method }
+ *       sales: { order: Name, date: Paid at, shipTo: Shipping Country, gross: Total, tax: Taxes, outstanding: Outstanding Balance, refunded: Refunded Amount, currency: Currency, gateway: Payment Method }
  *       fees: { date: Transaction Date, fee: Fee, currency: Currency, order: Order, type: Type, amount: Amount }
  *     gateways: [ Shopify Payments ]
  *     processors: [ stripe ]
@@ -25,7 +25,10 @@
  * refund, …) with the provider's fee. With its `order` column the payments export says which orders
  * the provider collected (a row names them) and, with `type` and `amount`, on which day and how much
  * each refund went back (a `type` that reads «refund»): the sales report dates its refunds from there
- * (src/booking/sales-report.ts PaymentFacts). `test` in either report: a column that flags a test
+ * (src/booking/sales-report.ts PaymentFacts); its rows whose `type` reads «charge» are the order's
+ * charges, each on its day. `outstanding` in the sales report: the part of an order's total not
+ * charged yet (an order edited after checkout): the sale is the total less it, its tax in the same
+ * share (#231). `test` in either report: a column that flags a test
  * (true, yes, 1, test): such a row is no sale, no refund, no fee. `gateways`: the values of
  * the sales report's `gateway` column whose orders the provider collected and pays out (the others,
  * paid by PayPal, by bank transfer, on delivery, with a gift card or through a test gateway, come
@@ -44,7 +47,7 @@
 
 import { isIsoDate } from '../accounting/periods.js';
 
-export const SALES_COLUMNS = ['order', 'date', 'ordered', 'shipTo', 'gross', 'tax', 'refunded', 'refundedAt', 'currency', 'gateway', 'test'] as const;
+export const SALES_COLUMNS = ['order', 'date', 'ordered', 'shipTo', 'gross', 'tax', 'outstanding', 'refunded', 'refundedAt', 'currency', 'gateway', 'test'] as const;
 export type SalesColumn = (typeof SALES_COLUMNS)[number];
 /** Without these a file is no sales report. */
 export const SALES_NEEDS: readonly SalesColumn[] = ['order', 'date', 'gross'];

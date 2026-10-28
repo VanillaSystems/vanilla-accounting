@@ -40,9 +40,9 @@ import { businessOfReceipt } from './batch-payers.js';
 import { loadFxResolver, type FxResolver } from '../accounting/fx-rates.js';
 import { normalRate, saleVatCode } from '../accounting/sales-without-vat.js';
 import { formTakes } from '../accounting/vat-codes.js';
-import { addDays, isIsoDate } from '../accounting/periods.js';
+import { addDays, filingKeyOf, isIsoDate } from '../accounting/periods.js';
 import { sideOf } from '../accounting/tax-point.js';
-import { agreedBasis, baseCurrency, chart, invoicing, setup, vat, withoutInputTax } from '../engines/index.js';
+import { agreedBasis, baseCurrency, chart, filing, invoicing, setup, vat, withoutInputTax } from '../engines/index.js';
 import { toRappen } from '../accounting/rappen.js';
 import { payoutSales } from '../workspace/sells.js';
 import { findFile, APP_ROOT, type Workspace } from '../workspace/workspace.js';
@@ -207,7 +207,7 @@ function unseenPayout(books: Books, p: Provider, read: ReadReport, context: Clas
 const reachOf = (p: Provider): string => addDays(p.provider.since!, -payoutDaysOf(p));
 
 /** The context of a report's booking for provider `p`: its accounts, the firm's codes and basis, the official daily sell rates (ADR 0001), the lock. */
-function reportContext(ws: Workspace, books: Books, p: Provider, kind: 'sales' | 'fees', receipt: string, texts: ReportTexts, fx: FxResolver, context: ClassifyContext, payments?: PaymentFacts): ReportContext {
+function reportContext(ws: Workspace, books: Books, p: Provider, kind: 'sales' | 'fees', receipt: string, texts: ReportTexts, fx: FxResolver, context: ClassifyContext, payments?: PaymentFacts, correct?: ReportContext['correct']): ReportContext {
   const lock = periodLock(books);
   const codes = saleCodes();
   const revenue = revenueOf(ws, p) ?? '';
@@ -220,6 +220,7 @@ function reportContext(ws: Workspace, books: Books, p: Provider, kind: 'sales' |
     receipt, base: baseCurrency(), rate: (c, d) => fx.daily(c, d), ...(codes ? { codes } : {}), territory: invoicing().territory,
     ...(p.provider.gateways?.length ? { gateways: p.provider.gateways } : {}),
     ...(payments ? { payments } : {}),
+    ...(correct ? { correct } : {}),
     agreed: agreedBasis(), isClosed: (d) => lock.isClosed(d), beforeBooks: (d) => lock.beforeBooks(d), newId: () => randomBytes(8).toString('hex'),
     texts,
   };
@@ -233,7 +234,8 @@ function pushOutcome(books: Books, out: ReportOutcome, receipt: string): void {
   for (const m of out.links) link(m.transactionRef);
   const known = new Set(out.knownRefs);
   books.journalEntries = books.journalEntries.map((e) => (known.has(e.transactionRef) && appMade(e) && !lock.isClosed(e.date) && !e.receipts?.includes(receipt) ? { ...e, receipts: [...(e.receipts ?? []), receipt].sort() } : e));
-  for (const ref of known) link(ref);
+  // A sale of a filed period another report named first gets no new link: its links are sealed with it.
+  for (const ref of known) if (books.journalEntries.every((e) => e.transactionRef !== ref || !lock.isClosed(e.date))) link(ref);
 }
 
 /** The reports of provider `p` of `kind` in the books, each with its text as filed; one whose file is gone is left out. */
@@ -277,12 +279,19 @@ function takeSales(ws: Workspace, books: Books, p: Provider, receipt: Receipt, r
   return out;
 }
 
-/** What a taking could not book stays on its receipt for the person, the latest taking's: a held order booked meanwhile is known now. */
+/**
+ * What a taking could not book stays on its receipt for the person, the latest taking's: a held order booked meanwhile is known now.
+ * So do the refunds paid in a filed period it offers as corrections (#231), each with the filing period it corrects.
+ */
 function keepHeld(books: Books, id: string, out: ReportOutcome): void {
   const r = books.receipts.find((x) => x.id === id)!;
-  const { held: _held, heldMore: _more, ...said } = r.report!;
-  r.report = { ...said, ...(out.held.length ? { held: out.held.slice(0, HELD_KEPT) } : {}), ...(out.held.length > HELD_KEPT ? { heldMore: out.held.length - HELD_KEPT } : {}) };
+  const { held: _held, heldMore: _more, filedRefunds: _filed, ...said } = r.report!;
+  const filed = out.filedRefunds.slice(0, HELD_KEPT).map((f) => ({ ...f, corrects: filingKeyOf(f.date, filing().length) }));
+  r.report = { ...said, ...(out.held.length ? { held: out.held.slice(0, HELD_KEPT) } : {}), ...(out.held.length > HELD_KEPT ? { heldMore: out.held.length - HELD_KEPT } : {}), ...(filed.length ? { filedRefunds: filed } : {}) };
 }
+
+/** The provider's sales reports in the books that offer a refund of a filed period as a correction (#231). */
+const offering = (books: Books, p: Provider): string[] => books.receipts.filter((r) => r.report?.provider === p.id && r.report.kind === 'sales' && r.report.filedRefunds?.length).map((r) => r.id);
 
 /**
  * Every sales report of provider `p` in the books taken again, with the payments reports in the books
@@ -420,7 +429,7 @@ export function importSalesReport(ws: Workspace, bytes: Buffer, name: string, op
     }
     const lock = periodLock(books);
     const proofs = linkOrdersToSales(books, (d) => !lock.isClosed(d), providers);
-    return { out, retaken, unpaid: unpaidSales(ws, books, p), proofs: proofs.length, filename: receipt.filename, books };
+    return { out, retaken, unpaid: unpaidSales(ws, books, p), proofs: proofs.length, filename: receipt.filename, corrections: offering(books, p), books };
   });
   askUnpaid(ws, result.books, p, result.unpaid);
   return { ok: true, summary: summaryOf(p, hit.kind, facts, read, result) };
@@ -439,14 +448,14 @@ function saleCodes(): ReportContext['codes'] {
   return { domestic, rate: normal, ...(reduced.length ? { reduced } : {}), ...(abroad ? { abroad } : {}), negative: vat().codes.negativePrefix };
 }
 
-function summaryOf(p: Provider, kind: 'sales' | 'fees', facts: ReturnType<typeof reportFacts>, read: ReadReport, r: { out: ReportOutcome; retaken: { orders: number; refunds: number }; unpaid: readonly JournalEntry[]; proofs: number; filename: string }): ReportSummary {
+function summaryOf(p: Provider, kind: 'sales' | 'fees', facts: ReturnType<typeof reportFacts>, read: ReadReport, r: { out: ReportOutcome; retaken: { orders: number; refunds: number }; unpaid: readonly JournalEntry[]; proofs: number; filename: string; corrections: string[] }): ReportSummary {
   const held = r.out.held;
   return {
     provider: p.id, name: p.name, kind, from: facts.from, to: facts.to, file: r.filename, since: p.provider.since!, reach: reachOf(p),
     orders: r.retaken.orders, refunds: r.retaken.refunds, test: r.out.test, unpaid: r.unpaid.length, fees: r.out.fees, known: r.out.known, filed: r.out.filed, before: r.out.before, beforeSince: r.out.beforeSince,
     beforeSinceRows: r.out.beforeSinceRows.slice(0, HELD_NAMED), beforeSinceMore: Math.max(0, r.out.beforeSinceRows.length - HELD_NAMED), payoutDays: payoutDaysOf(p), home: homeOf('workspace', p.role, p.id),
     other: r.out.other, ways: r.out.ways.slice(0, WAYS_NAMED), waysMore: Math.max(0, r.out.ways.length - WAYS_NAMED),
-    held: held.slice(0, HELD_NAMED), heldMore: Math.max(0, held.length - HELD_NAMED), unread: read.unread.length, proofs: r.proofs,
+    held: held.slice(0, HELD_NAMED), heldMore: Math.max(0, held.length - HELD_NAMED), unread: read.unread.length, proofs: r.proofs, corrections: r.corrections,
   };
 }
 
@@ -487,6 +496,45 @@ export function removeSalesReport(ws: Workspace, id: string): boolean {
   rmSync(path, { force: true });
   if (p) askUnpaid(ws, after.books, p, after.unpaid);
   return true;
+}
+
+/** Why a refund of a filed period is not booked as a correction: the report is gone (`gone`), or it offers that refund no more (`notOffered`: booked already, or no payments report dates it now). */
+export type CorrectionRefusal = 'gone' | 'notOffered';
+
+/**
+ * The person's click on a refund paid in a filed period that the books never carried (#231, golden
+ * rule 1): the sales report `receiptId` taken again with the provider's payments reports, and that
+ * refund of `order` paid on `date` booked as the report books a refund (its sale's code with the minus,
+ * an export's foreign tax in its share, at the rate of the day the money went back), dated `on` (the
+ * first open day unless the caller names another open day), with `corrects` naming the filing period of
+ * its day: it is declared in that period's correction return, never in the open one. As the person
+ * (call inside the write door as PERSON). Nothing else of the report is booked by the click. Returns
+ * the entries, or why not.
+ */
+export function bookReportCorrection(ws: Workspace, books: Books, receiptId: string, order: string, date: string, opts: { on?: string; now?: Date } = {}): { ok: true; entries: JournalEntry[] } | { ok: false; why: CorrectionRefusal } {
+  const receipt = books.receipts.find((r) => r.id === receiptId && r.report?.kind === 'sales');
+  const p = receipt && providersOf(ws).find((x) => x.id === receipt.report!.provider);
+  const path = receipt && receiptFile(ws, books, receipt);
+  if (!receipt || !p?.provider.clearing || !p.provider.since || !path || !existsSync(path)) return { ok: false, why: 'gone' };
+  const read = readReport(readFileSync(path, 'utf8'), 'sales', p.provider);
+  if ('missing' in read) return { ok: false, why: 'gone' };
+  const lock = periodLock(books);
+  const on = opts.on ?? (lock.lockedThrough ? addDays(lock.lockedThrough, 1) : date);
+  const corrects = filingKeyOf(date, filing().length);
+  const de = wordsIn('de');
+  const said = texts(p.name, receipt.filename);
+  const text = de.t('salesReport.correctionText', { provider: p.name, order, date: date.split('-').reverse().join('.'), period: corrects });
+  const correct = { order, date, on, corrects, at: (opts.now ?? new Date()).toISOString(), text };
+  const out = bookReport(books, read, reportContext(ws, books, p, 'sales', receipt.id, said, loadFxResolver(), loadClassifyContext(ws), paymentsOf(ws, books, p), correct));
+  const ref = out.corrected[0];
+  if (!ref) return { ok: false, why: 'notOffered' };
+  const entries = out.entries.filter((e) => e.transactionRef === ref);
+  books.journalEntries.push(...entries);
+  if (!books.mappings.some((m) => m.transactionRef === ref && m.receiptId === receipt.id)) books.mappings.push({ transactionRef: ref, receiptId: receipt.id, by: 'rule', rule: REPORT_LINK_RULE });
+  const left = (receipt.report!.filedRefunds ?? []).filter((f) => !(f.order === order && f.date === date));
+  const { filedRefunds: _filed, ...rest } = receipt.report!;
+  receipt.report = { ...rest, ...(left.length ? { filedRefunds: left } : {}) };
+  return { ok: true, entries };
 }
 
 /** Why the drop row's answer is not kept (src/types/api-error.ts). */

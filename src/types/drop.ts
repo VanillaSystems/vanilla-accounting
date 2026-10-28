@@ -129,7 +129,7 @@ export interface ProviderAsk { provider: string; name: string; missing: 'clearin
 export interface PayoutUnseen { provider: string; name: string; since: string; through: string; banks: string[]; file: string; account?: string }
 
 /** Why an order of a report was not booked by code (src/booking/sales-report.ts ReportHold). */
-export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' }
+export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' }
 
 /**
  * What a report booked (src/intake/sales-report-import.ts): orders, refunds and fees booked; `known`
@@ -146,6 +146,8 @@ export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax'
  * (fee) report takes the provider's sales reports again (#214): `orders` and `refunds` are what that
  * booked of theirs. `unpaid`: sales the books carry of the provider whose order a payments report
  * should name and names not; they stay booked, and the app asks the person on each (askUnpaid).
+ * `corrections`: the sales reports' receipts that offer a refund paid in a filed period as a correction
+ * (SalesReportFacts.filedRefunds, #231): the row lists those offers from the books, each with its button.
  */
 export interface ReportSummary {
   provider: string; name: string; kind: 'sales' | 'fees'; from: string; to: string; file: string; since: string; reach: string;
@@ -153,6 +155,7 @@ export interface ReportSummary {
   beforeSinceRows: string[]; beforeSinceMore: number; payoutDays: number; home: string;
   other: number; ways: string[]; waysMore: number; test: number; unpaid: number;
   held: ReportHeld[]; heldMore: number; unread: number; proofs: number;
+  corrections: string[];
 }
 
 /** `duplicate`: the same bytes; `possible-duplicate`: the same facts, asked; `same`: the person said it is the same; `not-receipt`: its words say so (`document` says what it is). */
