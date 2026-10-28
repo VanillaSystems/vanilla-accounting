@@ -132,6 +132,9 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
   const pdf = pdfOf(s);
   const ask = pdf ? props.books.statementAsks?.find((a) => a.file === pdf) : undefined;
   const edit = canEdit && !closed;
+  // The movements read from PDFs that this bank export or CSV does not hold (#254): it lists them nowhere else.
+  const own = s.file ? `${s.file.bank}/${s.file.filename}` : undefined;
+  const unmatched = own ? props.books.transactions.filter((t) => t.unmatched?.by === own && t.ref !== tx?.ref) : [];
 
   return (
     <div className="detail-in" data-for={s.key}>
@@ -177,6 +180,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
       {c?.bookDiff && !c.gap ? <BookDiff {...props} diff={c.bookDiff} s={s} /> : null}
       {ask ? <PdfQuestion key={ask.file} ask={ask} nav={nav} edit={edit} /> : null}
       {tx?.unmatched ? <UnmatchedNotice key={`u-${tx.ref}`} tx={tx} nav={nav} edit={edit} /> : null}
+      {unmatched.map((u) => <UnmatchedNotice key={`u-${u.ref}`} tx={u} nav={nav} edit={edit} named />)}
 
       <div className="body">
         <div className="desk">

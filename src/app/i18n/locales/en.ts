@@ -3484,7 +3484,7 @@ export default {
     'bank.pdfAsks': 'This PDF’s movements are not read in yet (asked on {since}): check them and «Import», or keep it as the month’s statement.',
     'bank.pdfKept': 'Kept as the month’s statement.',
     'bank.noMovements': '{month}: no movements read in.',
-    'bank.unmatched': 'Read from a PDF; the camt.053 or CSV {file} that covers these days holds no movement of this day and amount.',
+    'bank.unmatched': 'Read from a PDF; the bank’s statement for these days ({file}) holds no movement of this day and amount.',
     'bank.unmatchedKeep': 'Keep',
     'bank.unmatchedRemove': 'Remove',
     'bank.unmatchedRemoveTip': 'The movement leaves the books, with its entries and receipt links.',

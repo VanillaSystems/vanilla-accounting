@@ -3484,7 +3484,7 @@ export default {
     'bank.pdfAsks': 'I movimenti di questo PDF non sono ancora importati (chiesto il {since}): verificarli e «Importa», o tenerlo come estratto del mese.',
     'bank.pdfKept': 'Tenuto come estratto del mese.',
     'bank.noMovements': '{month}: nessun movimento importato.',
-    'bank.unmatched': 'Letto da un PDF; il camt.053 o CSV {file} che copre questi giorni non ha alcun movimento di questo giorno e importo.',
+    'bank.unmatched': 'Letto da un PDF; l’estratto della banca per questi giorni ({file}) non ha alcun movimento di questo giorno e importo.',
     'bank.unmatchedKeep': 'Tenere',
     'bank.unmatchedRemove': 'Rimuovere',
     'bank.unmatchedRemoveTip': 'Il movimento lascia la contabilità, con le sue registrazioni e i collegamenti ai giustificativi.',

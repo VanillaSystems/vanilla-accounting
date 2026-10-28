@@ -7,6 +7,7 @@
  * rows until it closes; the work goes on when it does.
  */
 import { useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import { api, errorText } from '../lib/api.js';
 import { language, t, tWith } from '../i18n/index.js';
 import { addEach, dropStart, failedLine } from './drop-upload.js';
@@ -381,7 +382,8 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
             {keptPdf ? <button type="button" className="linkbtn" data-act="actions" data-testid="drop-actions" aria-haspopup="menu" aria-expanded={!!menu} disabled={busy} onClick={(e) => setMenu(e.currentTarget.getBoundingClientRect())}>{t('actions.label')}</button> : null}
             <button type="button" className="linkbtn" disabled={running || busy} data-tip={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</button>
           </span>
-          {menu ? <Menu anchor={menu} items={[{ label: <span data-action="readPdf">{t('statementActions.readPdf')}</span>, run: readPdf }]} onClose={() => setMenu(null)} /> : null}
+          {/* The dialog is moved and blurred, which would shift a fixed menu inside it: the menu goes to the page. */}
+          {menu ? createPortal(<Menu anchor={menu} items={[{ label: <span data-action="readPdf">{t('statementActions.readPdf')}</span>, run: readPdf }]} onClose={() => setMenu(null)} />, document.body) : null}
         </div>
         {receipt ? (
           <button type="button" className="dtog" aria-expanded={shown} aria-label={t('drop.d.toggle', { name: r.name })} onClick={() => setOpen(!open)}>

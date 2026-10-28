@@ -8,14 +8,14 @@
 import { useState } from 'react';
 import type { BankTransaction, StatementAsk } from '../../../types/index.js';
 import { api, errorText } from '../../lib/api.js';
-import { formatDate } from '../../lib/utils.js';
+import { fmt, formatDate } from '../../lib/utils.js';
 import { monthName } from '../../lib/period-label.js';
 import { t } from '../../i18n/index.js';
 import { StatementRead, type ReadAction } from '../../shell/StatementRead.js';
 import type { ActionSet } from '../../selection/ActionsMenu.js';
 import type { Nav } from '../index.js';
 import { at } from '../receipts/view.js';
-import { fileKey, type Statement } from './model.js';
+import { fileKey, payText, signed, type Statement } from './model.js';
 import { forgetPages } from './StatementPaper.js';
 
 /** The file of a statement's PDF in the books: `<bank>/<file name>`; none for a bank export or a month without a file. */
@@ -82,8 +82,12 @@ export function NoMovements({ s, nav, edit }: { s: Statement; nav: Nav; edit: bo
   );
 }
 
-/** A movement read from a PDF that the account's bank export or CSV does not hold: «Behalten» or «Entfernen» (with its bookings). */
-export function UnmatchedNotice({ tx, nav, edit }: { tx: BankTransaction; nav: Nav; edit: boolean }) {
+/**
+ * A movement read from a PDF that the account's bank export or CSV does not hold: «Behalten» or
+ * «Entfernen» (with its bookings). `named`: shown on the bank export's statement, which does not list
+ * it, so it says which movement it is.
+ */
+export function UnmatchedNotice({ tx, nav, edit, named }: { tx: BankTransaction; nav: Nav; edit: boolean; named?: boolean }) {
   const [busy, setBusy] = useState(false);
   const run = (call: () => Promise<unknown>) => {
     setBusy(true);
@@ -92,6 +96,7 @@ export function UnmatchedNotice({ tx, nav, edit }: { tx: BankTransaction; nav: N
   return (
     <div className="status" data-testid="unmatched">
       <span className="notice warn" style={{ margin: 0 }}>
+        {named ? <><b className="mono">{formatDate(tx.date)}</b> {payText(tx).name} <span className="mono">{fmt(signed(tx))}</span>{' · '}</> : null}
         {t('bank.unmatched', { file: tx.unmatched!.by.split('/').pop() ?? tx.unmatched!.by })}{' '}
         {edit ? (
           <>

@@ -260,6 +260,15 @@ classDiagram
     +replaced: JournalEntry[0..*]
     +waitsForPerson: since, why [0..1]
     +waitsForReceipt: since, unread, decided [0..1]
+    +unmatched: since, by [0..1] «read from a PDF, not in the bank export that covers its day (#254)»
+  }
+  class StatementAsk {
+    <<books/asks.jsonl>>
+    +file: string «the kept statement PDF, bank/name»
+    +account: string
+    +date: date «the statement's last day»
+    +since: date
+    +read: StatementRead «the table as read or corrected»
   }
   class BankTransactionPart {
     +amount: number

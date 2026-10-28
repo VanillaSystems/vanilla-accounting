@@ -3481,7 +3481,7 @@ export const messages = {
   'bank.pdfAsks': 'Die Bewegungen dieses PDFs sind noch nicht eingelesen (gefragt am {since}): prüfen und «Einlesen», oder als Monatsauszug behalten.',
   'bank.pdfKept': 'Als Monatsauszug behalten.',
   'bank.noMovements': '{month}: keine Bewegungen eingelesen.',
-  'bank.unmatched': 'Aus einem PDF gelesen; das camt.053 oder die CSV {file}, das diese Tage abdeckt, hält keine Bewegung dieses Tages und Betrags.',
+  'bank.unmatched': 'Aus einem PDF gelesen; der Auszug der Bank für diese Tage ({file}) hält keine Bewegung dieses Tages und Betrags.',
   'bank.unmatchedKeep': 'Behalten',
   'bank.unmatchedRemove': 'Entfernen',
   'bank.unmatchedRemoveTip': 'Die Bewegung geht aus den Büchern, mit ihren Buchungen und Beleg-Verknüpfungen.',
