@@ -34,6 +34,7 @@ import { chargesOf } from '../../src/intake/charges.js';
 import { batchPayersOf } from '../../src/intake/match.js';
 import { businesses, type Businesses } from '../../src/intake/batch-payers.js';
 import { namesToLearn } from '../../src/knowledge/learned-names.js';
+import { delaysOf } from '../../src/intake/delays.js';
 import { providerOfPayment } from '../../src/booking/providers.js';
 import { loadKnowledge } from '../../src/knowledge/layers.js';
 import { APP_ROOT } from '../../src/workspace/workspace.js';
@@ -139,7 +140,7 @@ export async function main(): Promise<void> {
   line('code + oracle', withModel, tm);
   // --detail: what spoke for each wrong code link, and for the right one (features only: no name, amount or ref).
   if (process.argv.includes('--detail')) {
-    const search = searchPairs(blind, toChf, () => false, { businesses: known });
+    const search = searchPairs(blind, toChf, () => false, { businesses: known, delays: delaysOf(blind, known) });
     for (const l of code.linked.filter((x) => !pairs.has(`${x.receipt}|${x.payment}`))) {
       const list = search.byReceipt.get(l.receipt) ?? [];
       const right = truth.find((m) => m.receiptId === l.receipt);
