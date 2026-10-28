@@ -239,9 +239,17 @@ type FilePart = 'receipts' | 'statements' | 'invoices';
  * year folders; undefined when none holds it. Throws DuplicateFileError when two do.
  */
 export function findFile(paths: WorkspacePaths, part: FilePart, name: string): string | undefined {
-  const found = yearsOf(paths).map((y) => join(yearPaths(paths, y)[part], name)).filter((p) => existsSync(p));
-  if (found.length > 1) throw new DuplicateFileError(`${name} lies in ${found.map((p) => relative(paths.root, p)).join(' and ')}: keep one.`);
-  return found[0];
+  return fileFinder(paths)(part, name);
+}
+
+/** findFile over the year folders as they are now, listed once: for a caller that looks up many files. */
+export function fileFinder(paths: WorkspacePaths): (part: FilePart, name: string) => string | undefined {
+  const years = yearsOf(paths).map((y) => yearPaths(paths, y));
+  return (part, name) => {
+    const found = years.map((y) => join(y[part], name)).filter((p) => existsSync(p));
+    if (found.length > 1) throw new DuplicateFileError(`${name} lies in ${found.map((p) => relative(paths.root, p)).join(' and ')}: keep one.`);
+    return found[0];
+  };
 }
 
 /** Every file of a part in every year folder, as [name relative to the part's folder, full path], recursively. */

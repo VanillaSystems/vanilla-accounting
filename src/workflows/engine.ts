@@ -147,17 +147,19 @@ export function openEngine(workspace: () => Workspace, deps: EngineDeps): Engine
     const at = 'at' in run.state ? run.state.at : undefined;
     return w && at && stepOf(w, at)?.kind === 'agent' ? 'ai' : 'other';
   };
-  const laneOf = (run: Run, books: Books): string | undefined => {
+  const laneOf = (run: Run, books: () => Books): string | undefined => {
     // The company is one item: its live runs of one workflow go one after the other.
     if (run.item.kind === 'company' && run.mode === 'live') return `${run.workflow}:company:${run.item.id}`;
     const w = workflow(run.workflow);
     if (w?.lane !== 'account' || run.item.kind !== 'transaction') return undefined;
-    return `${w.id}:${books.transactions.find((t) => t.ref === run.item.id)?.bank ?? '?'}`;
+    return `${w.id}:${books().transactions.find((t) => t.ref === run.item.id)?.bank ?? '?'}`;
   };
 
   function pump(): void {
     if (paused) { notifyIdle(); return; }
-    const books = loadBooks(workspace());
+    // Read only when a run's lane is its payment's account.
+    let read: Books | undefined;
+    const books = () => (read ??= loadBooks(workspace()));
     const busy = { ai: 0, other: 0 };
     const lanes = new Set<string>();
     for (const id of active) {
@@ -223,8 +225,10 @@ export function openEngine(workspace: () => Workspace, deps: EngineDeps): Engine
     const step = stepOf(w, state.at);
     if (!step) return move(run, stuck(state.at, refuse('stepGone', { workflow: w.id, step: state.at }, `${w.id} has no step ${state.at}`)));
     const body = step.body;
-    const books = booksFor(run);
-    const available: Record<string, unknown> = { ...outputsOf(run), books, item: run.item, [run.item.kind]: itemValue(run.item, books) };
+    // The books are read only for a step that reads them or its item (an inbox step reads them through its port).
+    const wants = new Set([...step.reads, ...(step.forEach ? [step.forEach] : [])]);
+    const books = wants.has('books') || wants.has(run.item.kind) ? booksFor(run) : undefined;
+    const available: Record<string, unknown> = { ...outputsOf(run), ...(books ? { books, [run.item.kind]: itemValue(run.item, books) } : {}), item: run.item };
     const input = Object.fromEntries(step.reads.map((k) => [k, short(available[k])]));
     const record: StepRecord = { step: step.id, startedAt: now(), input, llm: [], effects: [] };
 
