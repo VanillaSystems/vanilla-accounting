@@ -32,7 +32,12 @@ if (process.env.CLAUDE_STUB_ARGS) appendFileSync(process.env.CLAUDE_STUB_ARGS, J
 const gate = process.env.CLAUDE_STUB_GATE;
 if (gate) {
   appendFileSync(`${gate}.started`, 'x\n');
-  while (!existsSync(gate)) await new Promise((r) => setTimeout(r, 20));
+  // A gate its test never opens, because the test was killed, must not keep the stub waiting forever.
+  const parent = process.ppid;
+  while (!existsSync(gate)) {
+    if (process.ppid !== parent) process.exit(1);
+    await new Promise((r) => setTimeout(r, 20));
+  }
 }
 
 function classify() {

@@ -52,7 +52,7 @@ export async function startApi(fixture: string, env: Record<string, string> = {}
   writeIndex(ws, source.endsWith('.json') ? JSON.parse(readFileSync(source, 'utf8')) : JSON.parse(JSON.stringify(loadBooks(workspaceAt(source)))));
   // The runs and the approvals live outside the workspace, by default in the user's application data.
   const outside = [`${root}-runs`, `${root}-approvals`];
-  const server: ChildProcess = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), join(REPO, 'src/server/main.ts')], {
+  const server: ChildProcess = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), '--import', import.meta.resolve('./exit-with-parent.ts'), join(REPO, 'src/server/main.ts')], {
     cwd: root,
     env: { ...process.env, PATH: `${join(REPO, 'tests/support/no-model-bin')}:${process.env.PATH}`, VANILLA_WORKSPACE: root, VANILLA_KEYCHAIN: 'off', VANILLA_RUNS_DIR: outside[0], VANILLA_APPROVALS_DIR: outside[1], VANILLA_API_HOST: '127.0.0.1', PORT: '0', READONLY: '', ...env },
     stdio: ['ignore', 'pipe', 'inherit'],
