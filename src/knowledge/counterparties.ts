@@ -68,6 +68,8 @@ export interface Counterparty {
   sharedUid?: string[];
   /** A file of it says `grouped` at all, true or false: the app offers no «Immer so?» to say it again (#190). */
   groupedSaid?: true;
+  /** The names the company's file learned from confirmed links (src/knowledge/learned-names.ts): in `match.tx` while a person keeps them, here for good, so a removed one is not learned again. */
+  learnedTx?: string[];
   /** When present, the only accounts an entry for this counterparty may use. */
   accounts?: string[];
   documents: DocumentType[];
@@ -224,7 +226,7 @@ export function identify(s: Signals, counterparties: readonly Counterparty[]): R
 
 export type RawCounterparty = {
   id?: string; name?: string; grouped?: boolean; sharedUid?: string[]; accounts?: string[]; roles?: string[];
-  match?: Partial<Record<Tier, string[]>>; steps?: Record<string, unknown>;
+  match?: Partial<Record<Tier, string[]>>; steps?: Record<string, unknown>; learnedTx?: string[];
   documents?: { id?: string; kind?: string; text?: string[] }[];
   facts?: Partial<Fact>[];
   provider?: unknown;
@@ -248,6 +250,8 @@ export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['
   };
   if (TIERS.every((t) => match[t].length === 0)) fail('match needs at least one signal');
   const sharedUid = raw.sharedUid ?? [];
+  const learnedTx = raw.learnedTx ?? [];
+  if (!Array.isArray(learnedTx) || learnedTx.some((t) => typeof t !== 'string')) fail('learnedTx must be a list of names');
   for (const u of sharedUid) {
     if (!/^CHE-\d{3}\.\d{3}\.\d{3}$/.test(u)) fail(`sharedUid "${u}" must look like CHE-###.###.###`);
     if (match.uid.includes(u)) fail(`sharedUid "${u}" is in match.uid too — a shared UID identifies nobody; keep it in one of them`);
@@ -266,7 +270,7 @@ export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['
   if (parsed && 'problem' in parsed) throw new Error(`${origin.binding ?? origin.vendor}: ${parsed.problem}`);
   const provider = parsed?.provider;
   return {
-    id: stem, name: raw.name!, role, roles: roles as Role[], match, grouped: raw.grouped === true, ...(sharedUid.length ? { sharedUid } : {}), ...(raw.grouped !== undefined ? { groupedSaid: true as const } : {}), documents, facts,
+    id: stem, name: raw.name!, role, roles: roles as Role[], match, grouped: raw.grouped === true, ...(sharedUid.length ? { sharedUid } : {}), ...(raw.grouped !== undefined ? { groupedSaid: true as const } : {}), ...(learnedTx.length ? { learnedTx } : {}), documents, facts,
     accounts: raw.accounts, steps: raw.steps ?? {}, origin, ...(provider ? { provider } : {}),
   };
 }

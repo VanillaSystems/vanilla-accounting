@@ -12,6 +12,7 @@ import { loadInvoices, saveInvoices } from '../../invoices/store.js';
 import { liveInvoices } from '../../invoices/rules.js';
 import { fileReceipts, paymentContext } from '../../invoices/service.js';
 import { releasePayment } from '../../invoices/payments.js';
+import { learnMerchantNames } from '../../knowledge/learned-names.js';
 
 export const router = Router();
 
@@ -73,6 +74,8 @@ async function relink(kind: 'link' | 'unlink', body: unknown): Promise<{ ok: tru
     const out = relinked(books, [change]);
     return restoreReplaced(books, payment, receipt) ? { ...out, payments: out.payments.filter((p) => p !== payment) } : out;
   });
+  // A person's link confirms the payment's name for the receipt's business (#190).
+  if (kind === 'link') learnMerchantNames(WS, readBooks());
   await closeAsksWithoutRule(engine(), WS);
   if (payments.length) await bookAgain(file ?? payment);
   return { ok: true, again: payments, ...(keep ? { kept: [payment] } : {}) };

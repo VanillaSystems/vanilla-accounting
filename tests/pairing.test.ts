@@ -165,7 +165,7 @@ test('a payment that needs no receipt is never a candidate: marked so, or what t
   const marked = books([receipt('r')], [payment('p', { noReceiptNeeded: true })]);
   assert.deepEqual(searchPairs(marked, toChf, () => false).byReceipt.get('r'), []);
   const exempt = books([receipt('r')], [payment('p')]);
-  assert.deepEqual(searchPairs(exempt, toChf, () => false, (t) => t.ref === 'p').byReceipt.get('r'), []);
+  assert.deepEqual(searchPairs(exempt, toChf, () => false, { noReceipt: (t) => t.ref === 'p' }).byReceipt.get('r'), []);
 });
 
 test('the firm\'s decision: an own transfer and a payment a person booked onto the owner\'s account have no receipt of their own', () => {
