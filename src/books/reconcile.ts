@@ -11,7 +11,7 @@
 import { madeByHand } from '../workspace/money-accounts.js';
 import type { BankTransaction, ReconcilePair, Reconciliation } from '../types/index.js';
 import { refuse, type Refused } from '../types/refusal.js';
-import { MATCH_DAYS, dayGap, fit, nearAmount, pairUp, sameParty } from './twins.js';
+import { MATCH_DAYS, bookedWithBase, dayGap, fit, nearAmount, pairUp, sameParty } from './twins.js';
 
 /** What the statement files say of the books' movements: the refs only PDFs bring, those only a bank export or CSV brings, those both bring, and the days each structured file covers. */
 export interface StatementSides {
@@ -33,11 +33,16 @@ export const pending = (books: Pick<Books, 'reconciliations'>): Reconciliation[]
 /** Whether `date` lies on a day the bank files of `r` cover: there every read movement is decided, «Eigene Zahlung» included. */
 export const covers = (r: Pick<Reconciliation, 'covered'>, date: string): boolean => r.covered.some((s) => date >= s.from && date <= s.to);
 
-/** The refs the books' entries book: an entry on a ref no payment has (a leg from before unique refs) books its base too. */
+/**
+ * The refs the books' entries book, both ways of the books from before unique legs: an entry on a ref
+ * no payment has (`X~2`) books its base `X` too, and a leg `X~1` counts as booked by entries on its
+ * base `X` (bookedWithBase, as the year close counts it).
+ */
 export function bookedRefs(books: Pick<Books, 'transactions' | 'journalEntries'>): Set<string> {
   const refs = new Set(books.transactions.map((t) => t.ref));
   const booked = new Set<string>();
   for (const { transactionRef: ref } of books.journalEntries) booked.add(refs.has(ref) ? ref : ref.split('~')[0]).add(ref);
+  for (const ref of refs) if (bookedWithBase(ref, (r) => booked.has(r))) booked.add(ref);
   return booked;
 }
 

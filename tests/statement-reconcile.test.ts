@@ -297,6 +297,22 @@ test('a filed booked bank movement and an open read one: still paired, the read 
   assert.deepEqual([books.transactions.map((t) => t.ref), books.journalEntries.map((e) => e.id)], [['B-0928'], ['q3']]);
 });
 
+test('books from before unique legs: a filed bank leg booked on its base counts as booked, as the year close counts it', () => {
+  const books = booksOf('2026-09-30', [move('B~1', '2026-09-28', -80, { counterparty: 'Alpha AG' }), move('P-1002', '2026-10-02', -80, { counterparty: 'Alpha AG' })], [entry('q3', 'B', '2026-09-28', 80), entry('app', 'P-1002', '2026-10-02', 80)]);
+  open(books, sides(['P-1002'], ['B~1'], { from: '2026-09-01', to: '2026-09-30' }));
+  assert.deepEqual(pending(books)[0].pairs, [{ read: 'P-1002', bank: 'B~1' }], 'proposed: the filed leg is booked on its base');
+  answer(books, { pairs: [{ read: 'P-1002', bank: 'B~1' }], own: [] });
+  assert.deepEqual([books.transactions.map((t) => t.ref), books.journalEntries.map((e) => e.id)], [['B~1'], ['q3']], 'confirmed: the read movement goes, booked once on the filed leg\'s base');
+});
+
+test('books from before unique legs: a filed read leg booked on its base marks its bank twin booked there, and that twin may leave with its file', () => {
+  const books = booksOf('2026-09-30', [move('P~1', '2026-09-29', -150, { counterparty: 'Reinigung Muster' }), move('B', '2026-10-01', -150, { counterparty: 'Reinigung Muster' })], [entry('q3', 'P', '2026-09-29', 150)]);
+  open(books, sides(['P~1'], ['B'], { from: '2026-10-01', to: '2026-10-31' }));
+  answer(books, { pairs: [{ read: 'P~1', bank: 'B' }], own: [] });
+  assert.ok(bookedInFiled(books.transactions.find((t) => t.ref === 'B')!), 'booked there: no run books it again');
+  assert.deepEqual(lostWithFile(books, new Set(['B'])), [], 'the filed read leg stays booked on its base: nothing lost');
+});
+
 test('a bank file taken back: a filed read movement\'s twin that books nothing goes and its pair with it; a twin with a difference line, or one that took an open read movement\'s place, keeps the file', () => {
   const books = booksOf('2026-09-30', [
     move('P', '2026-09-29', -150, { counterparty: 'Reinigung Muster' }), move('B', '2026-10-01', -150, { counterparty: 'Reinigung Muster' }),

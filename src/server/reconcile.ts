@@ -90,8 +90,8 @@ export function confirm(books: Books, r: Reconciliation, d: Decision, ctx: Confi
   for (const { p, read, bank } of pairs) {
     const rest = centsOf([bank]) - centsOf([read]);
     if (ctx.isClosed(read.date)) {
-      // Unbooked there, or the bank's movement filed too: nothing filed changes, and the bank's is booked as any.
-      if (!entriesOf(read).length || ctx.isClosed(bank.date)) { kept.push({ read: p.read, bank: p.bank }); continue; }
+      // Unbooked there (bookedRefs: on its base too, as the year close counts it), or the bank's movement filed too: nothing filed changes, and the bank's is booked as any.
+      if (!booked.has(read.ref) || ctx.isClosed(bank.date)) { kept.push({ read: p.read, bank: p.bank }); continue; }
       const account = p.account ?? r.differenceTo;
       if (rest && (!account || !ctx.chart.has(account))) throw new ReconcileRefused(400, 'reconcileDifference', { read: read.ref, amount: Math.abs(rest) / 100, currency: bank.currency }, `the difference of ${(Math.abs(rest) / 100).toFixed(2)} ${bank.currency} between ${read.ref} and ${bank.ref} needs an account of the chart`);
       bank.waitsForPerson = { since, why: 'filedTwin', read: read.ref };

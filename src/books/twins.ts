@@ -71,6 +71,13 @@ export function pairUp<L extends Described, T extends Described>(lines: readonly
 /** The same payment a few days or a little off: a fee or an exchange rounding between what a PDF printed and what the bank booked. */
 export const nearAmount = (a: number, b: number): boolean => Math.abs(cents(a) - cents(b)) <= Math.max(50, Math.round(Math.max(cents(a), cents(b)) * 0.01));
 
+/**
+ * Whether a payment counts as booked, `bookedOn` saying whether a ref's own entries book it: by its own
+ * ref, or by its base's (`X~1` on `X`, books from before unique legs). The one rule of the year close
+ * (src/accounting/year-close.ts) and the reconciliation (src/books/reconcile.ts bookedRefs).
+ */
+export const bookedWithBase = (ref: string, bookedOn: (ref: string) => boolean): boolean => bookedOn(ref) || bookedOn(ref.split('~')[0]);
+
 /** A bank movement the person paired with a movement read from a PDF of a filed period, booked there (#254): no run books it, the year counts it as booked, and a booking by hand asks first. */
 export const bookedInFiled = (t: Pick<BankTransaction, 'waitsForPerson'>): boolean => t.waitsForPerson?.why === 'filedTwin';
 

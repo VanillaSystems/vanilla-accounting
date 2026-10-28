@@ -25,7 +25,7 @@ import { formTakes } from './vat-codes.js';
 import { ownerAccountNumber } from './bank-accounts.js';
 import { chart, filing, setup, vat, vatSetup, baseCurrency, yearEnd as yearEndData } from '../engines/index.js';
 import type { TaxCodeInfo } from '../engines/tax-codes.js';
-import { bookedInFiled } from '../books/twins.js';
+import { bookedInFiled, bookedWithBase } from '../books/twins.js';
 import type { ReturnFigures } from '../engines/return.js';
 
 export type Books = Pick<Index, 'transactions' | 'bankStatements' | 'statementBalances' | 'reconciliations'> & {
@@ -663,7 +663,7 @@ function preconditions(input: YearCloseInput): Check[] {
   // Booked means the lines add up to the payment (r9k-2); a leg's booking may sit on its base ref (books from before unique legs). A bank movement booked in a filed quarter as its PDF's movement (#254) is booked; a filed movement read from a PDF that a confirmed reconciliation paired with an open bank movement is that one's payment, booked once its twin is.
   const state = bookedStates(books, input.bankAccounts);
   const twinOf = new Map((books.reconciliations ?? []).flatMap((r) => (r.done ? r.pairs.map((p) => [p.read, p.bank] as const) : [])));
-  const booked = (ref: string) => state(ref) === 'booked' || state(ref.split('~')[0]) === 'booked';
+  const booked = (ref: string) => bookedWithBase(ref, (r) => state(r) === 'booked');
   const unbookedRefs = books.transactions.filter((t) => inYear(year)(t.date) && !bookedInFiled(t) && !booked(t.ref) && !(twinOf.has(t.ref) && booked(twinOf.get(t.ref)!))).map((t) => t.ref);
   const unbooked: Problem[] = unbookedRefs.length ? [{ code: 'unbooked', count: unbookedRefs.length, refs: unbookedRefs.slice(0, 8) }] : [];
 
