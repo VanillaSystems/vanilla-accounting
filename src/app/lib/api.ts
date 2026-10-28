@@ -240,6 +240,7 @@ export function errorText(e: unknown): string {
     case 'partnerGone': return t('partners.gone');
     case 'topicGone': return t('knowledge.topicGone');
     case 'notesChanged': return t('partners.notes.changed');
+    case 'learnedNameGone': return t('partners.match.learnedGone');
     case 'notesTitle': return t('knowledge.newPage.needsTitle');
     case 'gone': return t(`error.gone.${b.params.what}`);
     case 'fileReferenced': return t('error.fileReferenced', { file: b.params.file, refs: [
@@ -442,6 +443,7 @@ export const api = {
   rules: () => request<RulesView>('GET', '/api/rules'),
   partners: () => request<PartnersView>('GET', '/api/partners'),
   partner: (id: string) => request<PartnerDetail>('GET', `/api/partners/${encodeURIComponent(id)}`),
+  removeLearnedName: (id: string, name: string) => request<{ path: string; committed: boolean }>('POST', `/api/partners/${encodeURIComponent(id)}/learned-names/remove`, { name }),
   topics: () => request<{ topics: TopicRow[] }>('GET', '/api/knowledge').then((r) => r.topics),
   topic: (slug: string) => request<{ slug: string; note: Note }>('GET', `/api/knowledge/topics/${encodeURIComponent(slug)}`),
   knowledgeGaps: () => request<GapsView>('GET', '/api/knowledge/gaps'),

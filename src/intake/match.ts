@@ -32,7 +32,7 @@ import { titlesFor } from './titles.js';
 import { estvToChf, noPaymentFor, noReceiptFor, runPairChain } from './pair-chain.js';
 import { linkOrdersToSales } from '../booking/sales-report.js';
 import { linkReceiptSets, linkSplitLegs, MAX_RUN, MAX_TRIED } from './receipt-sets.js';
-import { batchPayers, NO_BATCH_PAYERS, type BatchPayers } from './batch-payers.js';
+import { batchPayers, businesses, NO_BATCH_PAYERS, type BatchPayers, type Businesses } from './batch-payers.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { providersOf } from './sales-report-import.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
@@ -197,6 +197,15 @@ export function batchPayersOf(ws: Pick<Workspace, 'paths' | 'company'>): BatchPa
   }
 }
 
+/** Whose receipts and payments are by the workspace's business files in both layers; none when its knowledge does not load (a test's bare workspace). */
+export function businessesOf(ws: Pick<Workspace, 'paths' | 'company'>): Businesses | undefined {
+  try {
+    return businesses(loadKnowledge(APP_ROOT, ws.paths.root).counterparties, ws.company?.uid);
+  } catch {
+    return undefined;
+  }
+}
+
 export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const IMPORT_DIR = ws.paths.inbox;
   const toChf = estvToChf();
@@ -210,7 +219,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const noPayment = noPaymentFor(ws);
   const byCode = async (stagedNow: readonly Receipt[] = []) => {
     const noReceipt = noReceiptFor(ws);
-    const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt, noPayment });
+    const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt, noPayment, businesses: businessesOf(ws) });
     const providers = providersOf(ws);
     for (const l of books.update((index) => linkOrdersToSales(index, (d) => !periodLock(index).isClosed(d), providers))) log(`linked the order document to its sale: receipt ${l.receipt} → ${l.sale}`);
     const found = books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, { isOpen: (d) => !lock.isClosed(d), payers, toChf, buyerUid: ws.company?.uid, noReceipt: noReceipt(index), noPayment: noPayment(index) }); });

@@ -21,6 +21,8 @@ import { loadFxResolver, type FxResolver } from '../accounting/fx-rates.js';
 import { SHORT_LIST, pairMapping, pairablePayment, pairableReceipt, searchPairs, signalsOfCandidate, stagesOf, takenPayments, type Maker, type PairCandidate, type PairStage, type Signal, type ToChf } from './pairing.js';
 import { legOf } from '../workspace/money-accounts.js';
 import { chargesOf } from './charges.js';
+import type { Businesses } from './batch-payers.js';
+import { delaysOf } from './delays.js';
 import { noReceiptOfItsOwn, receiptKnowledge } from '../booking/receipt-wait.js';
 import { loadClassifyContext } from '../booking/classify.js';
 import { loadKnowledge } from '../knowledge/layers.js';
@@ -71,6 +73,8 @@ export interface ChainOptions {
   noReceipt?: (books: Books) => (t: BankTransaction) => boolean;
   /** The receipts without a payment of their own on these books (noPaymentFor: an order page of the provider way): never a candidate. */
   noPayment?: (books: Books) => (r: Receipt) => boolean;
+  /** Whose a receipt and a payment are by the business files (businessesOf): a payment naming the receipt's business counts as its name. */
+  businesses?: Businesses;
 }
 
 /** The payments of `books` without a receipt of their own, as the wait for a receipt decides it (src/booking/receipt-wait.ts noReceiptOfItsOwn), for the workspace `ws`. */
@@ -190,7 +194,7 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
   const stagedIds = new Set((opts.staged ?? []).map((r) => r.id));
   const books = stagedIds.size ? { ...stored, receipts: [...stored.receipts.filter((r) => !stagedIds.has(r.id)), ...opts.staged!] } : stored;
   const lock = periodLock(books);
-  const search = searchPairs(books, opts.toChf, lock.isClosed, opts.noReceipt?.(books), opts.noPayment?.(books));
+  const search = searchPairs(books, opts.toChf, lock.isClosed, { noReceipt: opts.noReceipt?.(books), noPayment: opts.noPayment?.(books), businesses: opts.businesses, delays: delaysOf(books, opts.businesses) });
   // «Beleg suchen» on a leg of a split charge searches for the charge, which its first movement names.
   const onlyTx = opts.only && 'payment' in opts.only ? books.transactions.find((t) => t.ref === (opts.only as { payment: string }).payment) : undefined;
   const only = onlyTx ? { payment: chargesOf(books.transactions, opts.toChf).of(onlyTx).refs[0] } : opts.only;
@@ -226,9 +230,9 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
     return undefined;
   };
 
-  // Without a model's check, an amount and a day alone are no proof: code links only a pair that also names the vendor, carries a number or the bank's original amount.
+  // Without a model's check, an amount and a day alone are no proof: code links only a pair that also names the vendor (by its words or its business's file), carries a number or the bank's original amount.
   const byCodeAlone = (c: PairCandidate) => {
-    if (c.number || c.words > 0 || c.amount === 'original') links.push({ c, by: 'code' });
+    if (c.number || c.words > 0 || c.business || c.amount === 'original') links.push({ c, by: 'code' });
     else { const list = search.byReceipt.get(c.receipt) ?? [c]; result.left.push({ receipt: c.receipt, candidates: list.slice(0, SHORT_LIST), total: list.length }); }
   };
 

@@ -144,6 +144,8 @@ export type ApiRefusal =
   | { code: 'partnerGone' }
   | { code: 'topicGone' }
   | { code: 'notesChanged' }
+  /** A learned merchant name a person took out of a partner's file is no longer in it (#190). */
+  | { code: 'learnedNameGone' }
   | { code: 'notesTitle' }
   | { code: 'noWorkspace' }
   | { code: 'notWorkspace' }
