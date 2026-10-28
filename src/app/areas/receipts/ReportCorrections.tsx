@@ -3,6 +3,8 @@
  * golden rule 1): the books never carried them, their sales they carry. Each is named with its day,
  * amount and the filing period it belongs to; «Als Korrektur buchen» books it in the open period with
  * `corrects` (POST /api/receipts/:id/report-correction), declared in that period's correction return.
+ * One whose sale sits in an old entry naming it beside other orders (`byHand`, #239: a payout entry, which
+ * may net the refund already) is named with what to do, without the button: the person books it by hand.
  * Shown on the report's receipt and in the drop row of a report whose taking found them.
  */
 import { useState } from 'react';
@@ -35,8 +37,8 @@ export function ReportCorrections({ receipt, books, canEdit, said }: { receipt: 
           const period = nameOf(f.corrects);
           return (
             <span key={`${f.order}-${f.date}`} data-testid="report-correction">
-              {t('receipts.report.filedRefund', { order: f.order, date: formatDate(f.date), amount: `${f.currency ?? baseCurrency()} ${fmt(f.amount)}`, period })}{' '}
-              {canEdit ? <button type="button" className="linkbtn" disabled={busy} data-tip={t('receipts.report.correctionTip', { period })} onClick={() => book(f.order, f.date, period)}>{t('receipts.report.bookCorrection')}</button> : null}{' '}
+              {t(f.byHand ? 'receipts.report.filedRefundByHand' : 'receipts.report.filedRefund', { order: f.order, date: formatDate(f.date), amount: `${f.currency ?? baseCurrency()} ${fmt(f.amount)}`, period })}{' '}
+              {canEdit && !f.byHand ? <button type="button" className="linkbtn" disabled={busy} data-tip={t('receipts.report.correctionTip', { period })} onClick={() => book(f.order, f.date, period)}>{t('receipts.report.bookCorrection')}</button> : null}{' '}
             </span>
           );
         })}
