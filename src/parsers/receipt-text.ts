@@ -53,6 +53,12 @@ const UID_VAT = /CHE[-\s]*(\d{3})[.\s]*(\d{3})[.\s]*(\d{3})\s*(?:MWST|TVA|IVA|VA
 const TOTAL_LINE = /total|gesamtbetrag|rechnungsbetrag|zu bezahlen|endbetrag|summe/i;
 const NOT_TOTAL = /exkl|excl|netto|zwischen|sub/i;
 
+/** The Swiss VAT number a text names with its «MWST» (CHE-123.456.789): textFacts' vatId without the rest. */
+export function vatIdIn(text: string): string | undefined {
+  const uid = UID_VAT.exec(text);
+  return uid ? `CHE-${uid[1]}.${uid[2]}.${uid[3]}` : undefined;
+}
+
 const money = (s: string) => Number(s.replace(/[’' ]/g, '').replace(/[.,](\d{2})$/, '#$1').replace(/[.,]/g, '').replace('#', '.'));
 const amounts = (line: string) => [...line.replace(DATE, ' ').matchAll(MONEY)].map((m) => money(m[0]));
 const near = (a: number, b: number, eps: number) => Math.abs(a - b) <= eps + 1e-9;
@@ -101,14 +107,14 @@ export function textFacts(text: string): TextFacts {
   const group = exclusive(all) ?? inclusive(lines, all);
   const totalLine = lines.filter((l) => TOTAL_LINE.test(l) && !NOT_TOTAL.test(l) && amounts(l).length).at(-1);
   const amount = group?.gross ?? (totalLine ? amounts(totalLine).at(-1) : undefined);
-  const uid = UID_VAT.exec(text);
+  const vatId = vatIdIn(text);
   const date = dateOf(text);
   const currency = amount === undefined ? undefined : currencyOf(totalLine, text);
   return {
     ...(date ? { date } : {}),
     ...(amount !== undefined ? { amount } : {}),
     ...(currency ? { currency } : {}),
-    ...(uid ? { vatId: `CHE-${uid[1]}.${uid[2]}.${uid[3]}` } : {}),
-    ...(uid && group ? { vatSummary: [group] } : {}),
+    ...(vatId ? { vatId } : {}),
+    ...(vatId && group ? { vatSummary: [group] } : {}),
   };
 }

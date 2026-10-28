@@ -147,19 +147,37 @@ export function openEngine(workspace: () => Workspace, deps: EngineDeps): Engine
     const at = 'at' in run.state ? run.state.at : undefined;
     return w && at && stepOf(w, at)?.kind === 'agent' ? 'ai' : 'other';
   };
-  const laneOf = (run: Run, books: () => Books): string | undefined => {
+  /** A run whose lane is its payment's account, which only the books know. */
+  const onAccountLane = (run: Run) => workflow(run.workflow)?.lane === 'account' && run.item.kind === 'transaction';
+  const laneOf = (run: Run, books: Books | undefined): string | undefined => {
     // The company is one item: its live runs of one workflow go one after the other.
     if (run.item.kind === 'company' && run.mode === 'live') return `${run.workflow}:company:${run.item.id}`;
-    const w = workflow(run.workflow);
-    if (w?.lane !== 'account' || run.item.kind !== 'transaction') return undefined;
-    return `${w.id}:${books().transactions.find((t) => t.ref === run.item.id)?.bank ?? '?'}`;
+    if (!onAccountLane(run)) return undefined;
+    return `${run.workflow}:${books?.transactions.find((t) => t.ref === run.item.id)?.bank ?? '?'}`;
+  };
+
+  /**
+   * The books the lanes need, read once before any run starts (pump runs in a drive's finally, so a
+   * throw there would be nobody's). Books that cannot be read now keep the account's runs queued
+   * for a retry; the others go on.
+   */
+  const booksForLanes = (queued: Run[]): { books?: Books; queued: Run[] } => {
+    if (![...active].some((id) => onAccountLane(runs.get(id)!)) && !queued.some(onAccountLane)) return { queued };
+    try {
+      return { books: loadBooks(workspace()), queued };
+    } catch {
+      for (const r of queued.filter(onAccountLane)) {
+        retryAt.set(r.id, Date.now() + 5000);
+        if (r.state.status === 'queued' && r.state.reason !== 'busy') move(r, { ...r.state, reason: 'busy' });
+      }
+      return { queued: queued.filter((r) => !onAccountLane(r)) };
+    }
   };
 
   function pump(): void {
     if (paused) { notifyIdle(); return; }
-    // Read only when a run's lane is its payment's account.
-    let read: Books | undefined;
-    const books = () => (read ??= loadBooks(workspace()));
+    const due = [...runs.values()].filter((r) => r.state.status === 'queued' && !active.has(r.id) && (retryAt.get(r.id) ?? 0) <= Date.now()).sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+    const { books, queued } = booksForLanes(due);
     const busy = { ai: 0, other: 0 };
     const lanes = new Set<string>();
     for (const id of active) {
@@ -168,7 +186,6 @@ export function openEngine(workspace: () => Workspace, deps: EngineDeps): Engine
       const lane = laneOf(r, books);
       if (lane) lanes.add(lane);
     }
-    const queued = [...runs.values()].filter((r) => r.state.status === 'queued' && !active.has(r.id) && (retryAt.get(r.id) ?? 0) <= Date.now()).sort((a, b) => a.startedAt.localeCompare(b.startedAt));
     const later = [...retryAt.values()].filter((t) => t > Date.now());
     clearTimeout(retryTimer);
     if (later.length) retryTimer = setTimeout(pump, Math.min(...later) - Date.now());

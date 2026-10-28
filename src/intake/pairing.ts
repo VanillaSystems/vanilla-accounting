@@ -268,6 +268,44 @@ export function fitOf(r: Receipt, tx: BankTransaction, toChf: ToChf, isClosed: (
   return { receipt: r.id, payment: tx.ref, leg: legOf(tx), charge: [tx.ref], filed: isClosed(tx.date), score, amount, number, words, days };
 }
 
+/**
+ * Of `payments`, every one fitOf could take for a receipt, in their order (which decides between
+ * equal legs): in the receipt's currency only those of its amount to the cent (their own or a
+ * part's), in another currency every one, each within the day bounds give or take a day, and
+ * every payment without a day Date.parse reads. The rest fitOf refuses, so a receipt is held
+ * against the few payments near it instead of a year's.
+ */
+function paymentsNear(payments: readonly BankTransaction[]): (r: Receipt) => readonly BankTransaction[] {
+  const at = payments.map((t) => Date.parse(t.date));
+  const key = (currency: string | undefined, amount: number) => `${currency}|${cents(amount)}`;
+  const byAmount = new Map<string, number[]>();
+  const byCurrency = new Map<string | undefined, number[]>();
+  const undated: number[] = [];
+  const add = <K>(index: Map<K, number[]>, k: K, i: number) => { const list = index.get(k); if (list) list.push(i); else index.set(k, [i]); };
+  payments.forEach((t, i) => {
+    add(byAmount, key(t.currency, t.amount), i);
+    for (const p of t.parts ?? []) add(byAmount, key(p.currency, p.amount), i);
+    if (Number.isFinite(at[i])) add(byCurrency, t.currency, i);
+    else undated.push(i);
+  });
+  for (const list of byCurrency.values()) list.sort((a, b) => at[a] - at[b]);
+  return (r) => {
+    const from = Date.parse(r.date!);
+    if (!Number.isFinite(from)) return payments;
+    const lo = from - (BOUNDS.daysBefore + 1) * DAY, hi = from + (BOUNDS.daysAfter + 1) * DAY;
+    const cur = r.currency || baseCurrency();
+    const found = new Set(undated);
+    for (const i of byAmount.get(key(cur, r.amount!)) ?? []) if (!(at[i] < lo || at[i] > hi)) found.add(i);
+    for (const [currency, list] of byCurrency) {
+      if (currency === cur) continue;
+      let a = 0, b = list.length;
+      while (a < b) { const mid = (a + b) >> 1; if (at[list[mid]] < lo) a = mid + 1; else b = mid; }
+      for (let k = a; k < list.length && at[list[k]] <= hi; k++) found.add(list[k]);
+    }
+    return [...found].sort((a, b) => a - b).map((i) => payments[i]);
+  };
+}
+
 /** Best first: the score, then the nearer day. */
 const rank = (a: PairCandidate, b: PairCandidate) => b.score - a.score || Math.abs(a.days) - Math.abs(b.days) || a.payment.localeCompare(b.payment);
 
@@ -287,12 +325,13 @@ export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string)
   const pairable = books.receipts.filter((r) => pairableReceipt(r, linkedReceipts, noPayment));
   // Of two documents of one invoice (duplicatesIn), the copy is no candidate: it would compete with its original for one payment, or pair beside the one linked already (#190). It stays for Belege's copy question.
   const twins = pairable.length ? duplicatesIn([...pairable, ...books.receipts.filter((r) => linkedReceipts.has(r.id))], linkedReceipts, documents()) : new Map();
+  const near = paymentsNear(payments);
   for (const r of pairable) {
     if (twins.get(r.id)?.relation === 'duplicate') continue;
     const apart = new Set(r.notPaidBy ?? []);
     // One candidate per charge: of a charge split over two currencies, the leg that fits best.
     const best = new Map<string, PairCandidate>();
-    for (const t of payments) {
+    for (const t of near(r)) {
       const charge = charges.of(t);
       const split = charge.refs.length > 1;
       const fit = charge.refs.some((ref) => apart.has(ref)) ? undefined : fitOf(r, t, toChf, isClosed);

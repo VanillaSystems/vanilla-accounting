@@ -207,10 +207,19 @@ const NONE_OF_ITS_OWN: ReadonlySet<NoWait> = new Set<NoWait>(['marked', 'zero', 
  */
 export function noReceiptOfItsOwn(books: Books, context: ClassifyContext, known: ReceiptKnowledge, fx: FxResolver): (tx: BankTransaction) => boolean {
   const settles = (account: string) => account === context.ownerAccount || !!context.moneyAccounts?.has(account);
+  // The entries by payment, listed on the first question: the chain asks it of every payment, and books nothing meanwhile.
+  let byRef: Map<string | undefined, JournalEntry[]> | undefined;
+  const entriesOf = (ref: string) => {
+    if (!byRef) {
+      byRef = new Map();
+      for (const e of books.journalEntries) { const list = byRef.get(e.transactionRef); if (list) list.push(e); else byRef.set(e.transactionRef, [e]); }
+    }
+    return byRef.get(ref) ?? [];
+  };
   return (tx) => {
     const w = receiptWaitOf(books, tx, context, known, fx);
     if (!w.wait && NONE_OF_ITS_OWN.has(w.why)) return true;
-    const entries = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
+    const entries = entriesOf(tx.ref);
     if (!entries.length) return false;
     try { return onlySettles(entries, bankAccountFor(tx, context.bankAccounts), settles); } catch { return false; }
   };

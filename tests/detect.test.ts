@@ -68,6 +68,25 @@ test('not the same: a monthly bill of the same amount, two postage receipts of o
   assert.equal(twinFinder([{ ...pdf, distinctFrom: ['again'] }], W).find(r('again', FM77812, FACTS)), undefined, 'remembered on either side');
 });
 
+test('among a year of other receipts, a copy is found up to 7 days apart and a companion up to 31, to the day; one without a day by its text (#258)', () => {
+  const year = Array.from({ length: 300 }, (_, i) => r(`f${i}`, `Lieferant ${i}\nRechnung R-${100000 + i}\nTotal CHF ${i}.50`, { date: new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10), amount: i + 0.5, currency: 'CHF' }));
+  const photo = 'Farbmix AG St. Gallen\nRechnung FM-77812 vom 28.06.2026\nDispersionsfarbe weiss 682.40\nAbdeckvlies 196.00\nMalerkrepp 271.95\nTotal CHF 1243.55';
+  const copies = twinFinder([...year, r('pdf', FM77812, FACTS)], W);
+  assert.equal(copies.find(r('photo', photo, { ...FACTS, date: '2026-07-05' }))?.of, 'pdf', '7 days apart');
+  assert.equal(copies.find(r('photo', photo, { ...FACTS, date: '2026-07-06' })), undefined, '8 days apart');
+  assert.equal(copies.find(r('again', FM77812, { amount: FACTS.amount }))?.of, 'pdf', 'no day: the same text');
+  const bill = 'Restaurant Beispielhof Zürich\nTisch vier, bedient von Anna\nzwei Menus, ein Mineral\nTotal CHF 64.50';
+  const meal = twinFinder([...year, r('meal', bill, { date: '2026-08-14', amount: 64.5, currency: 'CHF' })], W);
+  assert.equal(meal.find(r('scan', `${bill}\nKopie`, { date: '2026-08-15', amount: 64.5, currency: 'CHF' }))?.of, 'meal', 'by its words a day apart');
+  assert.equal(meal.find(r('scan', `${bill}\nKopie`, { date: '2026-08-16', amount: 64.5, currency: 'CHF' })), undefined, 'two days apart');
+  const companions = twinFinder([...year, r('inv', FM78230, { date: '2026-07-30', amount: 2410.8, currency: 'CHF' })], W);
+  assert.equal(companions.find(r('ab', ORDER, { date: '2026-06-29', kind: 'supporting' }))?.of, 'inv', '31 days before');
+  assert.equal(companions.find(r('ab', ORDER, { date: '2026-06-28', kind: 'supporting' })), undefined, '32 days before');
+  assert.equal(companions.find(r('ab', ORDER, { kind: 'supporting' }))?.of, 'inv', 'no day: in reach of its invoice');
+  const dateless = twinFinder([...year, r('inv', FM78230, { amount: 2410.8, currency: 'CHF' })], W);
+  assert.equal(dateless.find(r('ab', ORDER, { date: '2026-07-24', kind: 'supporting' }))?.of, 'inv', 'an invoice without a day: in reach of its order');
+});
+
 test('an order confirmation is the companion of its invoice, not a copy; of a pair the copy is the one without a link', () => {
   const books = [r('inv', FM78230, { date: '2026-07-30', amount: 2410.8, currency: 'CHF' }), r('old', FM77812, FACTS), r('ab', ORDER, { date: '2026-07-24', kind: 'supporting' })];
   assert.deepEqual(twinFinder(books, W).find(books[2]), { of: 'inv', why: 'same-facts', relation: 'companion' });
