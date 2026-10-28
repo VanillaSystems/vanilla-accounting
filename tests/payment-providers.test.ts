@@ -180,7 +180,7 @@ test('the pair chain and the receipt sets link no receipt to a payout: its order
   const books = { transactions: [payout('P', { amount: 198.1 })], receipts: [page('1001', 108.1), page('1002', 90)], mappings: [], journalEntries: [], bankStatements: [], config: { closedThrough: '2026-06-30' } } as unknown as Books;
   const none = noReceiptOfItsOwn(books, context, receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root)), fx);
   const toChf = (a: number) => a;
-  assert.equal(searchPairs(books, toChf, () => false, none).byReceipt.get('1001')?.length ?? 0, 0, 'no pair candidate');
+  assert.equal(searchPairs(books, toChf, () => false, { noReceipt: none }).byReceipt.get('1001')?.length ?? 0, 0, 'no pair candidate');
   assert.deepEqual(linkReceiptSets(books, { isOpen: () => true, toChf, noReceipt: none }).sets, [], 'no set, though the two add up to it');
   assert.equal(linkReceiptSets(structuredClone(books), { isOpen: () => true, toChf }).sets.length, 1, 'without the provider\'s word they would');
 });

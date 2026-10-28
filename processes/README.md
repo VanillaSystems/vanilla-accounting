@@ -72,7 +72,14 @@ Every field has one owner. A company file adds signals, documents and rules
 after the app's; it never redeclares `name` and never replaces a rule. It says
 `grouped: true` only for a business whose app file does not say `grouped`: the
 company learned from its own payments that the business is paid for several
-receipts at once (the «Immer so?» after two such links, issue #190). The lint keeps the app layer generic: no `accounts`, no precedents, a
+receipts at once (the «Immer so?» after two such links, issue #190). The app
+writes into a company file the merchant names its confirmed links teach (issue
+#190): a card statement's name for the business («AMZN Mktp DE») goes into
+`match.tx` and into `learnedTx`, once two payments with that name are linked to
+the business's receipts by a person or the model and no link puts it on another
+business's receipt (src/knowledge/learned-names.ts). A name taken out of
+`match.tx` (on the partner's page, or in the file) stays in `learnedTx` and is
+never learned again. The lint keeps the app layer generic: no `accounts`, no precedents, a
 source that names a law, a document or a dated decision, no bank ref, date,
 long number or amount to the cent, and no name of a private supplier.
 

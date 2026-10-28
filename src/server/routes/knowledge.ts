@@ -9,6 +9,7 @@
  *   GET  /api/knowledge/gaps          Lücken: who decided the open year's bookings, payments of no partner, open questions
  *   GET  /api/knowledge/app           Von der App: the public layer, read only
  *   POST /api/notes                   { kind: save, ref, text, basis, title? } | { kind: restore, ref, text, now } → a NoteWrite
+ *   POST /api/partners/:id/learned-names/remove  { name } → the learned merchant name out of the partner's company file, for good (#190)
  *
  * Notes are the company's customizing, not its books: no period lock, but the read-only mode refuses
  * the write (src/server/api.ts). A save is the person's own and is saved at once, as a kept rule is.
@@ -30,6 +31,7 @@ import { APP_ROOT } from '../../workspace/workspace.js';
 import { askRuns } from '../../workflows/held.js';
 import { engine } from './automation.js';
 import { keepingSwitchedOn } from './rules.js';
+import { removeLearnedName } from '../../knowledge/learned-names.js';
 
 export const router = Router();
 
@@ -66,6 +68,20 @@ router.get('/api/partners/:id', async (req, res) => {
     ...partnerDetailOf(row, cp, knowledge.counterpartyFiles, questions, refsOf(row)),
     ...(note ? { note: { ...note, ...(last ? { last } : {}) } } : {}),
   } satisfies PartnerDetail);
+});
+
+/** A person takes a learned merchant name out of the partner's company file: saved at once, as notes are; the file keeps it in `learnedTx`, so it is not learned again. */
+router.post('/api/partners/:id/learned-names/remove', async (req, res) => {
+  const name = (req.body as { name?: unknown } | undefined)?.name;
+  if (typeof name !== 'string' || !name.trim()) throw new RequestError(400, 'name erwartet.');
+  const cp = loadKnowledge(APP_ROOT, WS.paths.root).counterparties.find((c) => c.id === req.params.id);
+  if (!cp) throw new RequestError(404, `Den Geschäftspartner ${req.params.id} gibt es nicht.`, { code: 'partnerGone' });
+  const out = await keepingSwitchedOn(async () => {
+    const path = removeLearnedName(WS, cp, name);
+    return path && { path, committed: await commit(WS, `Gelernter Name entfernt: ${cp.id}`, path) };
+  });
+  if (!out) throw new RequestError(409, 'Diesen gelernten Namen hält die Datei nicht mehr.', { code: 'learnedNameGone' });
+  res.json(out);
 });
 
 router.get('/api/knowledge', (_req, res) => { res.json({ topics: listTopics(WS) }); });

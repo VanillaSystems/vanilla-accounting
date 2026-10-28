@@ -50,6 +50,8 @@ export interface PartnerDetail {
   note?: Note;
   /** How the app recognises it, per signal (the file patterns as written). */
   match: Record<Tier, string[]>;
+  /** The names of `match.tx` the company's file learned from confirmed links (src/knowledge/learned-names.ts): a person may take each out, for good. */
+  learned: string[];
   documents: Array<{ id: string; kind: string }>;
   accounts?: string[];
   facts: Array<{ id: string; fact: string; source: string }>;
@@ -193,6 +195,7 @@ export function partnerDetailOf(row: PartnerRow, cp: Counterparty | undefined, f
   return {
     row,
     match,
+    learned: (cp?.learnedTx ?? []).filter((n) => cp!.match.tx.includes(n)),
     documents: (cp?.documents ?? []).map((d) => ({ id: d.id, kind: d.kind })),
     ...(cp?.accounts ? { accounts: cp.accounts } : {}),
     facts: (cp?.facts ?? []).map((f) => ({ id: f.id, fact: f.fact, source: f.source })),
