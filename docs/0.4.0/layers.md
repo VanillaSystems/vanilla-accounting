@@ -60,7 +60,7 @@ both generic logic and Swiss data or code.
 | `src/accounting/` (rest) | 19 | split | `vat-codes*`, `ziffern.ts`, `declarations.ts`, `return-figures.ts`, `filed-return.ts` → engine + `ch` data; `fx-rates.ts` → ESTV provider; statements → engine + chart data |
 | `src/booking/`, `src/intake/` | 7 | split | classification is the first replaceable capability (`accounting.expenses.classification`) |
 | `src/invoices/` | 12 | split | rules → engine + `ch/invoicing.yaml`; QR-bill → provider; sheet → module data |
-| `src/parsers/` | 7 | providers | camt.053, Wise PDF, statement balances |
+| `src/parsers/` | 7 | providers | camt.053, PDF text (a statement PDF's figures are the model's read since #243) |
 | `src/collect/` | 7 | module `mail-collection` + providers | IMAP is bytes in |
 | `src/export/` | 5 | provider | the Banana export |
 | `src/knowledge/` | 6 | core (layer merge) + engine (gates, gaps) | the two-layer merge is the overlay pattern, already built |

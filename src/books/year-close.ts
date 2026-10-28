@@ -61,7 +61,7 @@ export function bankBalances(ws: Workspace, books: Books): BankBalance[] {
 /**
  * A bank's year-end confirmation the person attached (#119) lies in filings/<year>/year-end/; its
  * balance is a StatementClosingBalance read off a PDF like a statement's, whose `sourceFile` names
- * it under that folder. `npm run extract-balances` reads statements only and keeps these.
+ * it under that folder. A statement PDF's read (#243) replaces only its own file's balance and keeps these.
  */
 const YEAR_END_DOCUMENTS = 'year-end';
 export const fromYearEndDocument = (b: Pick<StatementClosingBalance, 'sourceFile'>): boolean => b.sourceFile.startsWith(`${YEAR_END_DOCUMENTS}/`);

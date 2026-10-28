@@ -425,11 +425,12 @@ answers:
   data.bank-formats:
     answer: >
       camt.053 per the Swiss Payment Standards (ISO 20022); a Sammelzahlung with several parts stays
-      one transaction. Wise PDF statements by their own provider. A statement without camt.053 (a PDF,
-      scan or photo of any bank, a bank's CSV) is read by the model or by a column mapping into the
-      same shape and written as a camt.053 (#217).
+      one transaction. A statement without camt.053 (a PDF, scan or photo of any bank, a bank's CSV)
+      is read by the model or by a column mapping into the same shape and written as a camt.053
+      (#217); a statement PDF beside a camt.053 is read by the model once for the references, foreign
+      amounts and closing balance the export lacks (#243).
     law: [none (SIX Swiss Payment Standards, ISO 20022)]
-    where: [src/providers/camt053, src/providers/wise-pdf, src/providers/statement-read]
+    where: [src/providers/camt053, src/providers/statement-read, src/intake/statement-read.ts]
 
   data.authority-feeds:
     answer: >

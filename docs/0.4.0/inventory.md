@@ -10,11 +10,11 @@ and the providers.
 |---|---:|---:|
 | core | 69 | 23 |
 | engine | 4 | 1 |
-| provider | 16 | 13 |
+| provider | 14 | 11 |
 | split | 114 | 26 |
 | infrastructure | 69 | 4 |
 | workflow | 26 | 0 |
-| view | 321 | 56 |
+| view | 320 | 56 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -108,9 +108,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/providers/ech0217/xml.ts` | MWST 5, ESTV 1, Ziffer 2, eCH-0217 38, Rappen 1 |
 | `src/providers/qr-bill/reference.ts` | camt.053 1, QR-bill 13 |
 | `src/providers/statement-files.ts` | camt.053 2 |
-| `src/providers/statement-pdf/statement-pdf-balances.ts` | CHF 2 |
 | `src/providers/statement-read/camt-writer.ts` | camt.053 4 |
-| `src/providers/wise-pdf/wise-statement-pdf.ts` | camt.053 1, QR-bill 1 |
 
 ## split
 
