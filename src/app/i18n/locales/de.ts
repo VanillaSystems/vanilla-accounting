@@ -4897,6 +4897,19 @@ export const messages = {
   'assistant.selectionTip': 'Die ausgewählten Zeilen gehen mit der Nachricht: «mach das mit allen ausgewählten». × schickt sie ohne.',
   'assistant.undoAll': { one: '{n} Änderung rückgängig', other: 'Alle {n} Änderungen rückgängig' },
   'actions.askSelection': 'Die KI zur Auswahl fragen',
+  'receipts.paidPrivatelyNotice': 'Der Beleg sagt: bar oder privat bezahlt.',
+  'receipts.paidPrivatelyOther': 'Doch eine Bankzahlung?',
+  'actions.employee': 'Von Mitarbeitenden bezahlt',
+  'receipts.employeeNeeds': 'Name und Konto nennen.',
+  'receipts.employeeAdd': 'Andere Person …',
+  'receipts.employeeAddHint': 'Die Person und das Konto im Kontenplan, auf dem die Firma ihr die Auslagen schuldet. Die App behält es für das nächste Mal.',
+  'receipts.employeeFirst': 'Die Firma hat noch kein Konto für Auslagen von Mitarbeitenden. Wer hat bezahlt, und auf welchem Konto des Kontenplans schuldet die Firma es ihr oder ihm? Die App fragt das nur einmal.',
+  'receipts.employeeName': 'Name',
+  'receipts.employeeAccount': 'Konto',
+  'receipts.employeeBook': 'Als Auslage buchen',
+  'receipts.employeeDone': 'Als Auslage von {name} erfasst: die Buchung folgt im Eingang.',
+  'error.notEmployee': 'Konto {account} ist kein Konto einer Mitarbeiterin oder eines Mitarbeiters der Firma.',
+  'error.employeeCurrency': 'Das Konto {label} führt {currency}, der Beleg ist in {receipt}: diese Auslage von Hand buchen.',
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

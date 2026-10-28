@@ -154,6 +154,8 @@ export function errorText(e: unknown): string {
     case 'batchNotOn': return t('error.batchNotOn', { account: b.params.account });
     case 'batchBooked': return t('error.batchBooked');
     case 'batchNoReceipt': return t('error.batchNoReceipt');
+    case 'notEmployee': return t('error.notEmployee', { account: b.params.account });
+    case 'employeeCurrency': return t('error.employeeCurrency', { label: b.params.label, currency: b.params.currency, receipt: b.params.receipt });
     case 'batchLimit': return t('selection.limit', { max: b.params.max, n: b.params.n - b.params.max });
     case 'noBatchPayer': return t('error.noBatchPayer');
     case 'tagShape': return t('error.tagShape');

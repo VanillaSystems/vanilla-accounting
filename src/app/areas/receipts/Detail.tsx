@@ -34,7 +34,7 @@ import { SkipOffer } from './SkipOffer.js';
 import { RunHistory } from '../../history/RunHistory.js';
 import { I } from './icons.js';
 import { ActionsMenu } from '../../selection/ActionsMenu.js';
-import { receiptActions } from './actions-menu.js';
+import { readsPaidPrivately, receiptActions } from './actions-menu.js';
 import { baseCurrency, chargesVat, filing, withoutInputTax } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'receipts'>>;
@@ -267,6 +267,15 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
   }
   if (!v.date) {
     return <span className="notice warn" style={{ margin: 0 }}>{I.dot}{t('receipts.noDateWarn')} {canEdit && <button type="button" className="mono" style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => runAct(props, 'edit')}>E</button>}</span>;
+  }
+  // Its words say cash or private (#216): the Aktionen offer «Privat bezahlt buchen» first, and no «Noch keine Zahlung».
+  if (readsPaidPrivately(v)) {
+    return (
+      <span className="notice" style={{ margin: 0 }} data-testid="paid-privately">
+        {t('receipts.paidPrivatelyNotice')}
+        {canEdit && <> <button type="button" className="quiet" onClick={() => runAct(props, 'link')}>{t('receipts.paidPrivatelyOther')}</button></>}
+      </span>
+    );
   }
   return (
     <span className="notice warn" style={{ margin: 0 }}>

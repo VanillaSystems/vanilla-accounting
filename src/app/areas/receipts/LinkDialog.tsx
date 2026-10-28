@@ -23,6 +23,7 @@ import { bookingsWithoutPayment, candidates, chfOf, linkKey, type Candidate, typ
 import { bankOf, dayText, fitText, signed, txLine } from './view.js';
 import { correctFiled, linkPayment } from './actions.js';
 import { PrivateForm } from './PrivateForm.js';
+import { EmployeeForm } from './EmployeeForm.js';
 import { Kbd } from './commands.js';
 import { ui } from './state.js';
 import { withoutInputTax, baseCurrency } from '../../../engines/index.js';
@@ -57,6 +58,8 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
   const [second, setSecond] = useState<Candidate>();
   /** «Privat oder bar bezahlt» picked: its form replaces the list. */
   const [privately, setPrivately] = useState(() => ui().linkStart === 'private');
+  /** «Von Mitarbeitenden bezahlt» (#216): its form replaces the list. */
+  const [byEmployee, setByEmployee] = useState(() => ui().linkStart === 'employee');
   const { best, more } = useMemo(() => candidates(v, l, chfOf(rates), q), [v, l, rates, q]);
   const unpaid = useMemo(() => bookingsWithoutPayment(v, l, q), [v, l, q]);
   const items: Array<Candidate | Unpaid | 'private'> = [...best, ...unpaid, ...more, 'private'];
@@ -127,7 +130,8 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
             {second ? t('receipts.secondPaymentAsk', { what: txLine(second.tx) }) : t('receipts.hasPaymentAlready', { what: paid.map(txLine).join(', ') })}
           </p>
         )}
-        {privately ? <PrivateForm v={v} nav={nav} onBack={() => setPrivately(false)} onDone={onClose} /> : <>
+        {byEmployee ? <EmployeeForm v={v} nav={nav} onBack={() => setByEmployee(false)} onDone={onClose} />
+          : privately ? <PrivateForm v={v} nav={nav} onBack={() => setPrivately(false)} onDone={onClose} /> : <>
         <input autoFocus value={q} placeholder={t('receipts.linkSearch')} aria-label={t('receipts.linkSearch')} autoComplete="off" onChange={(e) => { setQ(e.target.value); setIdx(undefined); setSecond(undefined); }} onKeyDown={onKeyDown} />
         <div className="res" role="listbox">
           {best.length > 0 && <div className="gh">{t('receipts.bestFit')}</div>}

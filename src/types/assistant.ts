@@ -71,7 +71,11 @@ export type BookChange =
   | { kind: 'deletePayment'; ref: string; receipt: string };
 
 /** What «Privat oder bar bezahlt» takes beside the receipt: the business part in the receipt's currency (none: the whole), what it was, its VAT rate line, the booking by hand it replaces. */
-export interface PrivatePart { amount?: number; part?: string; rate?: number; replace?: string }
+export interface PrivatePart {
+  amount?: number; part?: string; rate?: number; replace?: string;
+  /** Paid by an employee (#216): the ledger account of the firm's money account for that person (role `employee`); none: the owner. */
+  by?: string;
+}
 
 /** Firma › Rechnungslayout as a change sets it: the payment term, the texts per language (null: the app's own text again). */
 export interface InvoicingSet {

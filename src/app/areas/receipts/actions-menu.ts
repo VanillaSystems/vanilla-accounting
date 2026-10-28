@@ -1,6 +1,6 @@
 /**
  * The Aktionen of one receipt (#216): only what fits it, the most likely one first (likelyReceipt).
- * A receipt without a payment: link it, «Privat oder bar bezahlt», find its
+ * A receipt without a payment: link it, «Privat oder bar bezahlt», paid by an employee, find its
  * payment, not a receipt, a copy of another; one set aside: «Ist ein Beleg»; and for every one its
  * Angaben, «Löschen» and the AI.
  */
@@ -12,6 +12,7 @@ import type { ActionSet, ObjAction } from '../../selection/ActionsMenu.js';
 import { likelyReceipt } from '../../selection/likely.js';
 import { runEach } from '../../selection/batch.js';
 import { api } from '../../lib/api.js';
+import { paidPrivately } from '../../../accounting/paid-how.js';
 import type { Ledger, ReceiptView } from './model.js';
 import { openSection, setUi } from './state.js';
 import { at, listed } from './view.js';
@@ -19,6 +20,9 @@ import { accept, runAct } from './commands.js';
 import { answerTwin, setKind } from './actions.js';
 
 type Props = AreaProps<RouteOf<'receipts'>>;
+
+/** Its words say it was paid in cash or privately (src/accounting/paid-how.ts). */
+export const readsPaidPrivately = (v: ReceiptView): boolean => !!v.r.extractedText && paidPrivately(v.r.extractedText);
 
 export function receiptActions(p: Props, v: ReceiptView, l: Ledger): ActionSet {
   const { nav, canEdit } = p;
@@ -35,6 +39,7 @@ export function receiptActions(p: Props, v: ReceiptView, l: Ledger): ActionSet {
     mark: v.none ? { id: 'mark', label: t('receipts.isReceipt'), run: () => setKind(nav, v, 'invoice') } : undefined,
     accept: open && sug ? { id: 'accept', label: t('actions.accept'), key: '↵', run: () => void accept(p, v, sug) } : undefined,
     private: open ? { id: 'private', label: t('actions.private'), run: () => { openSection('zahlung'); setUi({ overlay: 'link', linkStart: 'private' }); } } : undefined,
+    employee: open ? { id: 'employee', label: t('actions.employee'), run: () => { openSection('zahlung'); setUi({ overlay: 'link', linkStart: 'employee' }); } } : undefined,
     link: open ? { id: 'link', label: t('actions.link'), key: 'L', run: () => runAct(p, 'link') } : undefined,
     findPayment: open && v.date ? { id: 'findPayment', label: t('actions.findPayment'), run: () => void runEach(nav, [r.id], async (id) => {
       const found = await api.findPayment(id);
@@ -49,7 +54,7 @@ export function receiptActions(p: Props, v: ReceiptView, l: Ledger): ActionSet {
     del: !v.locked ? { id: 'del', label: t('actions.delete'), key: '⌘⌫', run: () => runAct(p, 'del') } : undefined,
     ask,
   };
-  const likely = likelyReceipt({ none: v.none, linked: v.links.length > 0, locked: v.locked, suggestion: !!sug, paidPrivately: false, dated: !!v.date });
+  const likely = likelyReceipt({ none: v.none, linked: v.links.length > 0, locked: v.locked, suggestion: !!sug, paidPrivately: readsPaidPrivately(v), dated: !!v.date });
   const primary = likely ? all[likely] : undefined;
   const rest = Object.values(all).filter((a): a is ObjAction => !!a && a !== primary);
   return { primary, rest };

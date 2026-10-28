@@ -230,7 +230,7 @@ function bookedByHand(books: Books, r: Receipt, amounts: readonly number[], curr
  * 1, r8k-10): its payment is dated the first open day and names the receipt's day, and its
  * bookings carry `corrects` (correctsFor). Deleting the payment is the whole undo.
  */
-export function privatePayment(books: Books, receiptId: string, ask: PrivatePart, fx: FxResolver): PrivateOutlay {
+export function privatePayment(books: Books, receiptId: string, ask: PrivatePart, fx: FxResolver, employee?: { label: string; currency: string }): PrivateOutlay {
   const r = receiptOf(books, receiptId);
   const links = books.mappings.filter((m) => m.receiptId === receiptId);
   // A booking without a payment that carries the receipt books it by hand: bookedByHand below offers to replace it.
@@ -239,6 +239,8 @@ export function privatePayment(books: Books, receiptId: string, ask: PrivatePart
   if (!r.date || r.amount == null) throw new RequestError(400, 'Für eine Auslage braucht der Beleg Datum und Betrag.');
   const total = Math.abs(r.amount);
   const currency = r.currency || baseCurrency();
+  // An employee's account holds one currency: an outlay in another is booked by hand (the owner's account takes any, #87).
+  if (employee && employee.currency !== currency) throw new RequestError(400, `Das Konto ${employee.label} führt ${employee.currency}, der Beleg ist in ${currency}.`, { code: 'employeeCurrency', params: { label: employee.label, currency: employee.currency, receipt: currency } });
   const amount = ask.amount === undefined ? total : cents(ask.amount);
   if (!(amount > 0 && amount <= total)) throw new RequestError(400, `Der Geschäftsanteil muss über 0 und höchstens ${currency} ${total.toFixed(2)} sein, der Betrag des Belegs.`, { code: 'partAmount', params: { total, currency } });
   const part = amount < total;
@@ -271,7 +273,7 @@ export function privatePayment(books: Books, receiptId: string, ask: PrivatePart
   const named = ask.part?.trim();
   const text = part ? `${what} · ${named || 'Geschäftsanteil'} (Teil von ${currency} ${total.toFixed(2)}, Rest privat)` : what;
   const businessPart = part ? { ...(named && { what: named }), ...(rates.length > 1 && { rate: ask.rate }) } : undefined;
-  books.transactions.push({ ref, bank: 'manual', source: 'manual', date, amount, currency, direction: 'DBIT', description: late ? `${text} · Beleg vom ${day(r.date)}` : text, ...(businessPart && { businessPart }), ...(replaced.length && { replaced }) });
+  books.transactions.push({ ref, bank: employee?.label ?? 'manual', source: 'manual', date, amount, currency, direction: 'DBIT', description: late ? `${text} · Beleg vom ${day(r.date)}` : text, ...(businessPart && { businessPart }), ...(replaced.length && { replaced }) });
   books.mappings.push({ transactionRef: ref, receiptId });
   const corrects = late ? correctsFor({ source: 'manual' }, [r], lock.isClosed, filing().length) : undefined;
   return { ref, date, ...(corrects ? { corrects } : {}), ...(exchangeRate !== undefined && { exchangeRate }), ...(replaced.length && { replaced }) };

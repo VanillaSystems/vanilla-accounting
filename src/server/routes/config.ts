@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { accountsOf, filedReturnsOf } from '../../workspace/reads.js';
 import { WS, RequestError, patchBody, readBooks, reopenWorkspace, stringField } from '../books.js';
 import { readEstvRateTable } from '../../accounting/fx-rates.js';
+import { MONEY_ROLES, type MoneyRole } from '../../workspace/banks.js';
 import { companyInfo } from '../../books/company.js';
 import { WorkspaceError, WorkspaceRefusal } from '../../workspace/workspace.js';
 import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
@@ -105,14 +106,17 @@ function bankPatch(raw: unknown): BankPatch {
  * uses, every statement would list under both and the balance sheet would show the account twice.
  */
 function newBank(raw: unknown): NewBank {
-  const b = patchBody(raw, ['bank', 'currency', 'account', 'label', 'iban']);
+  const b = patchBody(raw, ['bank', 'currency', 'account', 'label', 'iban', 'role']);
   const account = stringField(b, 'account').trim();
+  // A money account of another kind than a bank's (#216: an employee's, asked once by «Von Mitarbeitenden bezahlt»); never a second owner's.
+  const role = b.role === undefined ? undefined : stringField(b, 'role');
+  if (role !== undefined && (!MONEY_ROLES.includes(role as MoneyRole) || role === 'owner')) throw new RequestError(400, `role: ${MONEY_ROLES.filter((r) => r !== 'owner').join(', ')}.`);
   const taken = WS.bankAccounts.find((a) => a.account === account);
   if (taken) {
     throw new RequestError(400, `Konto ${account} gehört schon zum Bankkonto ${taken.label} (${taken.bank} ${taken.currency}). Jedes Bankkonto braucht ein eigenes Konto im Kontenplan.`,
       { code: 'ledgerAccountTaken', params: { account, bank: taken.bank, currency: taken.currency, label: taken.label } });
   }
-  return { bank: stringField(b, 'bank'), currency: stringField(b, 'currency'), account, label: stringField(b, 'label'), iban: optText(b, 'iban') ?? undefined };
+  return { bank: stringField(b, 'bank'), currency: stringField(b, 'currency'), account, label: stringField(b, 'label'), iban: optText(b, 'iban') ?? undefined, ...(role ? { role: role as MoneyRole } : {}) };
 }
 
 /**

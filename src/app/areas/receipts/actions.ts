@@ -14,6 +14,7 @@ import { correct } from '../journal/commands.js';
 import { correctionKinds } from '../../../accounting/correction.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { baseCurrency } from '../../../engines/index.js';
+import { workspaceNow } from '../../hooks/use-workspace.js';
 
 /** `message`: the toast, or a function for one that depends on what the call made. `refused`: a refusal the caller shows itself (true: no toast). */
 async function run(nav: Nav, call: () => Promise<unknown>, message: string | (() => string), undo?: () => Promise<unknown>, refused?: (e: unknown) => boolean): Promise<boolean> {
@@ -86,7 +87,7 @@ export async function privateOutlay(nav: Nav, v: ReceiptView, part: PrivatePart 
   // A foreign receipt: the toast names the amount in the books' currency at the official daily rate of the receipt's day (ADR 0001).
   const rate = () => (made.exchangeRate ? ` · ${t('receipts.privateRate', { chf: `${baseCurrency()} ${fmt((part.amount ?? Math.abs(r.amount!)) * made.exchangeRate)}`, rate: String(made.exchangeRate), date: formatDate(made.date) })}` : '');
   // A receipt of a filed period: the toast says the payment is dated the first open day and corrects that period (r8k-10).
-  const said = () => (made.corrects ? t('receipts.privateDoneCorrection', { date: formatDate(made.date), period: made.corrects })
+  const said = () => (part.by ? t('receipts.employeeDone', { name: workspaceNow()?.bankAccounts.find((a) => a.account === part.by)?.label ?? part.by }) : made.corrects ? t('receipts.privateDoneCorrection', { date: formatDate(made.date), period: made.corrects })
     : part.amount !== undefined && part.amount < Math.abs(r.amount!) ? t('receipts.privatePartDone', { amount, what: part.part || t('receipts.privatePartUnnamed') }) : t('receipts.privateDone')) + rate();
   const undo = () => api.deleteTransaction(made.ref);
   const held = (e: unknown) => {

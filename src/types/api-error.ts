@@ -61,6 +61,9 @@ export type ApiRefusal =
   | { code: 'batchNotOn'; params: { account: string } }
   | { code: 'batchBooked' }
   | { code: 'batchNoReceipt' }
+  /** «Von Mitarbeitenden bezahlt» (#216): the account named is no employee's money account of the firm, or it holds another currency than the receipt. */
+  | { code: 'notEmployee'; params: { account: string } }
+  | { code: 'employeeCurrency'; params: { label: string; currency: string; receipt: string } }
   /** More objects than one batch takes (src/types/batch.ts BATCH_MAX). */
   | { code: 'batchLimit'; params: { max: number; n: number } }
   /** «Immer so?» under several receipts linked to one payment (#190): the payment offers no batch payer (fewer such links, no business, or it is one already). */
