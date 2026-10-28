@@ -265,8 +265,10 @@ export interface DocumentsData {
   /** A courier's customs invoice: its positions by their words and accounts, and the customs office's assessment that proves import VAT (src/booking/customs-invoice.ts). */
   customs: {
     positions: Record<CustomsPosition, { account: string; words: string[] }>;
-    /** `number`: the pattern (a regular expression's source) of the assessment's number. */
-    assessment: { title: string[]; total: string[]; number: string };
+    /** Words that name only the tax («MwSt / TVA / IVA»): such a line at no rate is the import VAT the carrier advanced, on an invoice whose lines name duty or import VAT. */
+    tax: string[];
+    /** `number`: the pattern (a regular expression's source) of the assessment's number; `access`: the label of the access code a courier's invoice prints to fetch it. */
+    assessment: { title: string[]; total: string[]; number: string; access: string[] };
   };
   /** The title of a bank statement: the drop reads such a PDF as a statement, not as a receipt. */
   statement: string[];

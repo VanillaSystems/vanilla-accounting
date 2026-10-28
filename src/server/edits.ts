@@ -11,7 +11,9 @@ import { nextManualRef } from '../books/next-ref.js';
 import { addDays, isFilingKey, parsePeriod } from '../accounting/periods.js';
 import { correctsFor } from '../accounting/correction.js';
 import { bookedState, paymentDates, paymentSides, type PaymentSide } from '../accounting/payment-entries.js';
-import { baseCurrency, chart, filing, vat } from '../engines/index.js';
+import { baseCurrency, chart, documents, filing, vat } from '../engines/index.js';
+import { toRappen } from '../accounting/rappen.js';
+import { readAssessment } from '../booking/customs-invoice.js';
 import { codeSignFor } from '../accounting/code-sign.js';
 import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
 import { unbookPayments } from '../accounting/classify-force.js';
@@ -401,6 +403,37 @@ export function assertCodeSign(code: string | undefined, accountDebit: string | 
 }
 
 /**
+ * The AI books import VAT by the rule code books it by (src/booking/customs-invoice.ts,
+ * processes/booking.guide.yaml#purchase_vat pv-import-vat-evv), issue #227. A tax-amount code (M81-2)
+ * books the tax alone: one-legged, or a correction with one account on both sides, never against the
+ * bank or another account, which would book the amount as cost and as input tax at once. The import
+ * VAT account's input tax is only that one-legged deduction, and only with the customs office's
+ * assessment for the firm linked to the payment (or the booking) whose tax is the amount: the
+ * courier's invoice is no proof. Without it the import VAT stays a cost without input tax. A
+ * person's own booking is not checked here: she may deduct on other proof (Art. 81 Abs. 3 of the VAT act).
+ */
+export function assertImportVatRule(books: Pick<Books, 'mappings' | 'receipts'>, e: Pick<JournalEntry, 'accountDebit' | 'accountCredit' | 'vatCode' | 'amount' | 'receipts'> & { transactionRef?: string }, uid: string | undefined): void {
+  const code = e.vatCode;
+  if (!code) return;
+  const debit = e.accountDebit ?? '';
+  const credit = e.accountCredit ?? '';
+  if (isVatAmountCode(code) && debit && credit && debit !== credit) {
+    throw new RequestError(400, `Der Code ${code} bucht nur die Steuer: die Zeile hat ein Konto und keine Gegenseite, oder dasselbe Konto auf beiden Seiten für eine Korrektur. Gegen ${credit} gebucht wäre derselbe Betrag Aufwand und Vorsteuer zugleich; die Zahlung bucht den Aufwand ohne diesen Code.`, { code: 'taxAmountTwoSided', params: { code, debit, credit } });
+  }
+  const words = documents().customs;
+  const account = words?.positions.importVat.account;
+  if (!account || (debit !== account && credit !== account)) return;
+  const parsed = vat().codes.parse(code);
+  const deduction = isVatAmountCode(code) && credit === account && !debit;
+  const claims = deduction || (!isVatAmountCode(code) && debit === account && !!parsed?.rate);
+  if (!claims) return;
+  const linked = new Set([...books.mappings.filter((m) => m.transactionRef === e.transactionRef).map((m) => m.receiptId), ...(e.receipts ?? [])]);
+  const proven = deduction && books.receipts.some((r) => linked.has(r.id) && toRappen(readAssessment(r, words, uid)?.amount ?? 0) === toRappen(Math.abs(e.amount)));
+  if (proven) return;
+  throw new RequestError(400, `Vorsteuer auf der Einfuhrsteuer (${account}) gibt es nur mit der Veranlagungsverfügung des Zolls, die die Firma als Importeurin nennt und deren Steuer ${Math.abs(e.amount).toFixed(2)} ist: zuerst sie mit der Zahlung verknüpfen, dann bucht die App den Abzug als Zeile ohne Gegenkonto (-/${account}). Die Rechnung des Kuriers belegt sie nicht; ohne die Verfügung bleibt die Einfuhrsteuer Aufwand ohne Vorsteuer.`, { code: 'importVatUnproven', params: { account, amount: Math.abs(e.amount) } });
+}
+
+/**
  * Soll and Haben on the same account without a VAT code move nothing: refused (r8k-8). With a code
  * it is a VAT-only correction (src/accounting/correction.ts), which keeps both sides on one account.
  */
@@ -650,6 +683,8 @@ export interface AnswerContext {
   earlier: readonly MadeChange[];
   /** The conversation: the bookings it changes record the AI, on the person's wish, as their author. */
   conversation: string;
+  /** The firm's UID: a customs assessment proves import VAT for the firm it names (assertImportVatRule). */
+  uid?: string;
 }
 
 /** The fields a change sets, without who set them. */
@@ -723,6 +758,7 @@ export function applyAnswer(books: Books, changes: BookChange[], ctx: AnswerCont
       const own = shaped.accountDebit || shaped.accountCredit;
       throw new RequestError(400, `Soll und Haben gehören beide hin. Nur die Steuer korrigieren: ${own} auf beiden Seiten (${own}/${own} mit dem umgekehrten Code), die Bank bleibt.`, { code: 'oneSided', params: { account: own } });
     }
+    if (shaped && (change.kind === 'newEntry' || (change.kind === 'entry' && ['accountDebit', 'accountCredit', 'vatCode', 'amount'].some((k) => k in change.set)))) assertImportVatRule(books, shaped, ctx.uid);
     if (undo?.kind === 'deleteEntry') dated.push(undo.id);
     if (change.kind === 'entry' && change.set.date) dated.push(change.id);
     const set = change.kind === 'newEntry' ? change.entry : change.kind === 'entry' ? change.set : {};

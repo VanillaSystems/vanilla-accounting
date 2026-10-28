@@ -77,10 +77,15 @@ function predicates<T>(chips: readonly Chip[], fields: readonly Field<T>[]): Arr
   });
 }
 
+/** Whether a row passes every field's chips (AND across fields); every row passes no chips. */
+export function chipTest<T>(chips: readonly Chip[], fields: readonly Field<T>[]): (row: T) => boolean {
+  const ps = predicates(chips, fields);
+  return (r) => ps.every((p) => p.pass(r));
+}
+
 /** The rows every field's chips let through (AND across fields). */
 export function applyChips<T>(rows: readonly T[], chips: readonly Chip[], fields: readonly Field<T>[]): T[] {
-  const ps = predicates(chips, fields);
-  return ps.length ? rows.filter((r) => ps.every((p) => p.pass(r))) : [...rows];
+  return chips.length ? rows.filter(chipTest(chips, fields)) : [...rows];
 }
 
 /**

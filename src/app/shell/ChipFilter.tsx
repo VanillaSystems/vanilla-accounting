@@ -22,8 +22,9 @@ export interface ChipFilterProps<T> {
   chips: readonly Chip[];
   onChips(chips: Chip[]): void;
   q?: string;
-  onQ(q: string | undefined): void;
-  searchLabel: string;
+  /** Without it the bar draws no search: the list has its own (the link dialog's, #232). */
+  onQ?(q: string | undefined): void;
+  searchLabel?: string;
   /** The search's key hint (the list's own Kbd). */
   searchKey?: ReactNode;
 }
@@ -78,7 +79,7 @@ export function ChipFilter<T>({ fields, rows, chips, onChips, q, onQ, searchLabe
         </button>
         {chips.length > 1 && <button type="button" className="fclear" onClick={() => onChips([])}>{t('chips.clear')}</button>}
       </span>
-      <label className="search">
+      {onQ && <label className="search">
         {ICONS.search}
         <span className="sr">{searchLabel}</span>
         <input
@@ -96,13 +97,13 @@ export function ChipFilter<T>({ fields, rows, chips, onChips, q, onQ, searchLabe
           }}
         />
         {searchKey}
-      </label>
+      </label>}
 
       {hits.length > 0 && (
         <div className="fpop fsuggest" role="menu" aria-label={t('chips.suggestions')}>
           <p className="fhead">{t('chips.suggestions')}</p>
           {hits.map(({ field: f, option: o }) => (
-            <button key={`${f.id}_${o.value}`} type="button" role="menuitem" onClick={() => { add({ field: f.id, value: o.value }); onQ(undefined); setFocus(false); }}>
+            <button key={`${f.id}_${o.value}`} type="button" role="menuitem" onClick={() => { add({ field: f.id, value: o.value }); onQ?.(undefined); setFocus(false); }}>
               <span>{t('chips.chip', { field: f.label(), value: o.label })}</span><span className="n mono">{count({ field: f.id, value: o.value })}</span>
             </button>
           ))}
