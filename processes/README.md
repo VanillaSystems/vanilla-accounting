@@ -274,7 +274,11 @@ provider:
   `gateways` may be said in the company's file too: its payout days win, its
   gateways are added.
 - Order documents prove the delivery: code links them to their order's sale,
-  never to the payout.
+  never to the payout. A linked order document never makes a payment the
+  provider's payout. Code knows an order document by the order facts read from
+  it, or, for a page read before those were read, by the app file's
+  `orderPage`: patterns over the page's text, the first group the order number
+  as the sales report names it without # (Shopify's: `'^\s*(?:.*\n+){0,2}?#(\d+)(?=\s|$)'`).
 - At a period's close, the review shows the clearing account's balance, its
   month ends, and what the provider paid out within `payoutDays` after the end:
   that holds sales after the end too, so it is the most the balance may be; a

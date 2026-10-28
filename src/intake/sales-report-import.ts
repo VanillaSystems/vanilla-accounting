@@ -32,7 +32,7 @@ import { appendQuestionLine, readQuestions } from '../questions/store.js';
 import { APP_ASKER } from './sale-questions.js';
 import { loadClassifyContext, chartOf, mappedReceipts, type ClassifyContext } from '../booking/classify.js';
 import { chartNames } from '../booking/rule-book.js';
-import { fromClearing, isProvider, payoutDaysOf, providerOfMoneyIn, providerOfPayment, type Provider } from '../booking/providers.js';
+import { fromClearing, isProvider, orderOf, payoutDaysOf, providerOfMoneyIn, providerOfPayment, type Provider } from '../booking/providers.js';
 import { bookReport, collectedBy, isReportRef, linkOrdersToSales, paymentFacts, readReport, recognizeReport, reportFacts, REPORT_LINK_RULE, saleRef, unpaidRow, type PaymentFacts, type ReadReport, type ReportContext, type ReportOutcome, type ReportTexts } from '../booking/sales-report.js';
 import { loadKnowledge, homeOf } from '../knowledge/layers.js';
 import { silentUids } from '../knowledge/counterparties.js';
@@ -158,7 +158,8 @@ function payoutsOf(books: Books, p: Provider, context: ClassifyContext): Array<{
  * which only name a refund of a filed period whose sale sits in one (#239).
  *
  * A payment is the provider's payout here by the provider's recognition alone (providerOfMoneyIn: its
- * reference, processors, `match`), never because an order document is linked to it (#247): a customer's
+ * reference, processors, `match`), never because an order document is linked to it (#247; a page read
+ * before order facts were read is known by the provider's `orderPage`, #249): a customer's
  * bank transfer for an order, booked as a sale with the order page as its proof, is no payout. One whose
  * linked order document names an order the provider did not collect (`other`: the report's «anders
  * bezahlt») holds nothing; nor do the entries on a payout's ref that correct a filed period
@@ -181,8 +182,9 @@ function legacyOf(books: Books, p: Provider, kind: 'sales' | 'fees', revenue: st
   /** The provider's payout by its own recognition, never by a linked order document; none whose order the provider did not collect (#247). */
   const payoutOf = (tx: BankTransaction) => {
     const linked = mappedReceipts(books, tx);
-    if (linked.some((r) => r.order && other.has(r.order.number.replace(/^#/, '')))) return false;
-    return providerOfMoneyIn(tx, linked.filter((r) => !r.order), context.counterparties ?? [])?.id === p.id;
+    const orders = linked.map((r) => orderOf(r, p));
+    if (orders.some((o) => o && other.has(o))) return false;
+    return providerOfMoneyIn(tx, linked.filter((_, i) => !orders[i]), context.counterparties ?? [])?.id === p.id;
   };
   const through = books.transactions
     .filter((tx) => tx.date >= since && !lock.isClosed(tx.date) && payoutOf(tx))
