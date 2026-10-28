@@ -26,7 +26,7 @@ import { APP_ROOT } from '../../src/workspace/workspace.js';
 import { loadJurisdiction } from '../../src/core/modules/load.js';
 import { setJurisdiction } from '../../src/engines/index.js';
 import { loadCases, type BookingCase } from '../../src/knowledge/cases.js';
-import { lookupVatCode, vatCodes, vatCodeRateName, VAT_CODE_FAMILIES, VAT_CODE_KINDS } from '../../src/accounting/vat-codes.js';
+import { vatCodeName, vatCodes, vatCodeRateName, VAT_CODE_FAMILIES, VAT_CODE_KINDS } from '../../src/accounting/vat-codes.js';
 import { loadChart } from '../../src/workspace/chart.js';
 import { formatIn } from '../../src/app/i18n/core.js';
 import type { Key, Locale } from '../../src/app/i18n/types.js';
@@ -139,17 +139,8 @@ function contextOf(site: Site, ui: Locale): Context {
 /** The id of a code's row on the VAT-code page, so any page links to `mwst-codes#code-m81-2`. */
 export const codeAnchor = (code: string) => `code-${anchor(code.replace(/^-/, ''))}`;
 
-/**
- * A code as a person reads it: what kind it is and its rate, the code beside it.
- * Issue #224 gives every code a plain name in the catalogue; this is the one place that takes it.
- */
-function plainName(c: Context, code: string): string {
-  const found = lookupVatCode(code);
-  if (!found) return code;
-  const { entry, negative } = found;
-  const parts = [c.text(`vatCodes.kind.${entry.kind}.name`), entry.rate ? `${entry.rate} %` : '', entry.rate ? c.word(`code.${entry.amountIs}`) : ''];
-  return `${negative ? `${c.word('code.negative')} ` : ''}${parts.filter(Boolean).join(', ')}`;
-}
+/** A code as a person reads it, from the app's catalogue (issue #224): the same words as the app's pickers. */
+const plainName = (c: Context, code: string): string => vatCodeName(code, c.text) ?? code;
 
 function vatCodesBlock(c: Context): string {
   const codes = vatCodes();
@@ -163,14 +154,14 @@ function vatCodesBlock(c: Context): string {
       out.push(`<h3>${escape(c.text(`vatCodes.kind.${k.kind}.name`))}</h3>`,
         `<p><strong>${escape(c.text('vatCodes.when'))}:</strong> ${escape(c.text(`vatCodes.kind.${k.kind}.when`))}</p>`,
         `<p><strong>${escape(c.text('vatCodes.notWhen'))}:</strong> ${escape(c.text(`vatCodes.kind.${k.kind}.notWhen`))}</p>`,
-        `<table class="codes"><thead><tr><th>Code</th><th>${escape(c.word('codes.rate'))}</th><th>${escape(c.word('codes.amount'))}</th><th>${escape(c.text('vatCodes.ziffern'))}</th></tr></thead><tbody>`);
+        `<table class="codes"><thead><tr><th>Code</th><th>${escape(c.word('codes.name'))}</th><th>${escape(c.word('codes.rate'))}</th><th>${escape(c.word('codes.amount'))}</th><th>${escape(c.text('vatCodes.ziffern'))}</th></tr></thead><tbody>`);
       for (const e of codes.filter((x) => x.kind === k.kind && x.family === family)) {
         const rateName = e.rate ? vatCodeRateName(e.rate) : undefined;
         const rate = e.rate === null ? '' : `${e.rate} %${rateName ? ` ${c.text(RATE_NAMES[rateName])}` : ''}${e.superseded ? ` (${c.text('vatCodes.superseded')})` : ''}`;
         const amountIs = c.text(e.amountIs === 'tax' ? 'vatCodes.amountTax' : e.amountIs === 'net' ? 'vatCodes.amountNet' : 'vatCodes.amountGross');
         const ziffern = !e.ziffern ? c.text('vatCodes.notDeclared') : e.ziffern.length === 0 ? c.text('vatCodes.noZiffer')
           : e.ziffern.map((z) => zifferName(c, z.ziffer)).join('; ');
-        out.push(`<tr id="${codeAnchor(e.code)}"><td><code>${escape(e.code)}</code></td><td>${escape(rate)}</td><td>${escape(amountIs)}</td><td>${escape(ziffern)}</td></tr>`);
+        out.push(`<tr id="${codeAnchor(e.code)}"><td><code>${escape(e.code)}</code></td><td>${escape(plainName(c, e.code))}</td><td>${escape(rate)}</td><td>${escape(amountIs)}</td><td>${escape(ziffern)}</td></tr>`);
       }
       out.push('</tbody></table>');
     }
