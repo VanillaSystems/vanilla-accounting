@@ -24,6 +24,8 @@ interface State {
   inbox: InboxFile[];
   /** A field of Angaben to focus once the form shows. */
   focus?: string;
+  /** The link dialog opens on this form instead of the payments (the Aktionen menu, #216). */
+  linkStart?: 'private' | 'employee';
   /** What the open «Löschen» confirmation deletes. */
   discard?: Discard;
 }

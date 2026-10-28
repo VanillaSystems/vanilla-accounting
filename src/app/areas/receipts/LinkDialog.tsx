@@ -30,7 +30,9 @@ import { chipTest, knownChips, type Chip } from '../../shell/chips.js';
 import { bankOf, dayText, fitText, signed, txLine } from './view.js';
 import { correctFiled, linkPayment } from './actions.js';
 import { PrivateForm } from './PrivateForm.js';
+import { EmployeeForm } from './EmployeeForm.js';
 import { Kbd } from './commands.js';
+import { ui } from './state.js';
 import { withoutInputTax, baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'receipts'>> & { v: ReceiptView; l: Ledger; onClose(): void };
@@ -68,7 +70,9 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
   /** A second payment for a receipt that has one: picked once, linked on the next ↵ or click. */
   const [second, setSecond] = useState<Candidate>();
   /** «Privat oder bar bezahlt» picked: its form replaces the list. */
-  const [privately, setPrivately] = useState(false);
+  const [privately, setPrivately] = useState(() => ui().linkStart === 'private');
+  /** «Von Mitarbeitenden bezahlt» (#216): its form replaces the list. */
+  const [byEmployee, setByEmployee] = useState(() => ui().linkStart === 'employee');
   const pass = useMemo(() => chipTest(chips, fields), [chips, fields]);
   const { best, more } = useMemo(() => candidates(v, l, chfOf(rates), q, chips.length ? (tx) => pass(rowOfTx(tx)) : undefined), [v, l, rates, q, chips.length, pass]);
   const unpaid = useMemo(() => bookingsWithoutPayment(v, l, q, chips.length ? (u) => pass(rowOfUnpaid(u)) : undefined), [v, l, q, chips.length, pass]);
@@ -155,7 +159,8 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
             {second ? t('receipts.secondPaymentAsk', { what: txLine(second.tx) }) : t('receipts.hasPaymentAlready', { what: paid.map(txLine).join(', ') })}
           </p>
         )}
-        {privately ? <PrivateForm v={v} nav={nav} onBack={() => setPrivately(false)} onDone={onClose} /> : <>
+        {byEmployee ? <EmployeeForm v={v} nav={nav} onBack={() => setByEmployee(false)} onDone={onClose} />
+          : privately ? <PrivateForm v={v} nav={nav} onBack={() => setPrivately(false)} onDone={onClose} /> : <>
         <input ref={search} autoFocus value={q} placeholder={t('receipts.linkSearch')} aria-label={t('receipts.linkSearch')} autoComplete="off" onChange={(e) => { setQ(e.target.value); setIdx(undefined); setSecond(undefined); }} onKeyDown={onKeyDown} />
         <div className="linkfilter">
           <ChipFilter fields={fields} rows={rows} chips={chips} onChips={(next) => { setChips(next); search.current?.focus(); }} />

@@ -8,6 +8,12 @@ import type { ContextRef } from '../../types/assistant.js';
 import { automationNow } from '../automation/store.js';
 import { language, t } from '../i18n/index.js';
 import { textIn } from '../../workflows/model.js';
+import type { Selection } from '../selection/model.js';
+
+const PICKED = { receipt: 'selection.receipts', payment: 'selection.payments', entry: 'selection.entries' } as const;
+
+/** The picked rows as the message's reference (#216): their ids go with it, the chip says how many. */
+export const selectionContext = (sel: Selection): ContextRef => ({ kind: 'selection', id: sel.kind, ids: [...sel.ids], label: t(PICKED[sel.kind], { n: sel.ids.length }) });
 
 export function pageContext(route: Route, books: Index): ContextRef | undefined {
   switch (route.area) {

@@ -44,6 +44,12 @@ import { openAmount } from '../../../invoices/rules.js';
 import { QuestionsOn } from '../../questions/Questions.js';
 import { bookDiffParts, missingOpenings } from '../../../accounting/opening-balance.js';
 import { GroupedOffer } from '../company/RulesSection.js';
+import { Pick } from '../../selection/Pick.js';
+import { ActionsMenu } from '../../selection/ActionsMenu.js';
+import { paymentActions } from './actions-menu.js';
+import { SelectionView } from '../../selection/SelectionView.js';
+import { paymentRows } from '../../selection/rows.js';
+import { clickRow, useSelection, useShown } from '../../selection/store.js';
 
 type Props = AreaProps<RouteOf<'bank'>>;
 
@@ -112,6 +118,11 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
     const byId = new Map(props.books.receipts.map((r) => [r.id, `${r.description ?? ''} ${r.filename}`]));
     return (ref: string) => b.receiptsOf(ref).map((id) => byId.get(id) ?? '').join(' ');
   }, [props.books, b]);
+  // The payments shown: the search dims the others, so ⌘A and a ⇧-range take only the hits (#216).
+  const hits = pays.filter((p) => !query.q || matches(payHaystack(p, words(p.ref)), query.q));
+  const picked = useSelection('payment');
+  useShown('payment', hits.map((p) => p.ref));
+  const pickedRefs = new Set(picked?.ids);
 
   return (
     <div className="detail-in" data-for={s.key}>
@@ -156,10 +167,12 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
 
       <div className="body">
         <div className="desk">
+          {picked ? <PickedPayments {...props} ids={picked.ids} /> : <>
           {(file || tx) && (
             <div className="src paybar">
               <span><PayBar {...props} tx={tx} closed={closed} onClear={() => choose(undefined)} /></span>
               {tx && !closed ? <WorkflowButtons kind="transaction" id={tx.ref} facts={[b.unbooked(tx) ? 'unbooked' : 'booked']} nav={nav} canEdit={canEdit} /> : null}
+              {tx ? <ActionsMenu set={paymentActions(props as AreaProps, b, tx, closed)} /> : null}
               {tx ? <AskAi context={{ kind: 'payment', id: tx.ref, label: tx.description ?? tx.ref }} /> : null}
               {src && <span className="pgno">{page}</span>}
               {file && <a className="dl inline" href={file} download={s.file!.filename} data-tip={t('bank.downloadTitle', { file: s.file!.filename })}>{I.dl}<span>{t('receipts.download')}</span></a>}
@@ -187,6 +200,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
               ) : null}
             </>
           )}
+          </>}
         </div>
         <aside className="margin" aria-label={t('receipts.details')}>
           {pays.length > 0 && (
@@ -196,12 +210,15 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
                   {onlyUnbooked ? t('bank.showAllPayments', { n: all.length }) : t('bank.onlyUnbooked', { n: nUnbooked })}
                 </button>
               )}
-              <div className="paylist" role="listbox" aria-label={t('bank.paymentsOf')}>
+              <div className={`paylist${picked ? ' picking' : ''}`} role="listbox" aria-multiselectable="true" aria-label={t('bank.paymentsOf')}>
                 {pays.map((p) => {
-                  const hit = !query.q || matches(payHaystack(p, words(p.ref)), query.q);
-                  const on = p.ref === tx?.ref;
+                  const hit = hits.includes(p);
+                  const on = !picked && p.ref === tx?.ref;
+                  const isPicked = pickedRefs.has(p.ref);
                   return (
-                    <button key={p.ref} type="button" className={`pay${on ? ' on' : ''}${hit ? '' : ' dim'}`} role="option" aria-selected={on} data-pay={p.ref} onClick={() => choose(on ? undefined : p.ref)}>
+                    <button key={p.ref} type="button" className={`pay${on ? ' on' : ''}${isPicked ? ' picked' : ''}${hit ? '' : ' dim'}`} role="option" aria-selected={on || isPicked} data-pay={p.ref}
+                      onClick={(e) => clickRow(e, 'payment', p.ref, tx?.ref, (ref) => choose(ref === tx?.ref ? undefined : ref), nav.toast)}>
+                      <Pick kind="payment" id={p.ref} on={isPicked} label={payText(p).name} toast={nav.toast} />
                       <span className="d">{p.date.slice(8)}.{p.date.slice(5, 7)}.</span>
                       <span className="t">{b.needsReceipt(p) && I.dot}{payText(p).name}{b.unbooked(p) && <span className="nb" data-tip={t('bank.notBooked')}>{t('bank.unbookedMark')}</span>}
                         {madeByHand(p) && <span className="hm" data-testid="by-hand" data-tip={t(byStatement(p) ? 'bank.byHandConfirmedTip' : 'bank.byHandTip')}>{t(byStatement(p) ? 'bank.byHandConfirmed' : 'bank.byHand')}</span>}</span>
@@ -227,6 +244,12 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
       {ui.overlay === 'quick' && src && <Quick src={src} file={s.file!.filename} mark={mark} />}
     </div>
   );
+}
+
+/** The picked payments in place of the paper (#216): the list beside it stays, so more can be picked. */
+function PickedPayments({ books, nav, canEdit, ids }: Props & { ids: readonly string[] }) {
+  const { rates } = useFx();
+  return <SelectionView kind="payment" rows={paymentRows(books, ids, rates)} books={books} nav={nav} canEdit={canEdit} />;
 }
 
 /** The chosen payment in one line: its receipt, its entry, what is missing; a hint while none is chosen. */

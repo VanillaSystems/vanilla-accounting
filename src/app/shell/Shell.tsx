@@ -36,12 +36,14 @@ import { useToast } from './Toast.js';
 import { TopBar } from './TopBar.js';
 import { Corner } from './Corner.js';
 import { Sidebar } from './Sidebar.js';
-import { pageContext } from '../assistant/context.js';
-import { attachDropped, onBooksChanged, syncSidebarWidth, toggleAssistant, useAssistant } from '../assistant/store.js';
+import { pageContext, selectionContext } from '../assistant/context.js';
+import { attachDropped, keepPage, onBooksChanged, syncSidebarWidth, toggleAssistant, useAssistant } from '../assistant/store.js';
 import { CHAT_TAKES, PAGE_TAKES, droppedFiles, leftOut } from '../lib/folder-drop.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import { ShellUiContext, type ShellUi } from './ui.js';
 import { filing } from '../../engines/index.js';
+import { clearSelection, selectAll, selectionNow, useSelection } from '../selection/store.js';
+import { actionsNow, openActions } from '../selection/ActionsMenu.js';
 
 type Overlay =
   | { kind: 'palette' }
@@ -173,8 +175,17 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
     exportOpen: () => openExport(),
     assistant: toggleAssistant,
     toggleNav,
+    selectAll: () => !!area.selects && selectAll(area.selects, toast),
+    unselect: () => { if (!selectionNow()) return false; clearSelection(); focusSelectedRow(); return true; },
+    actions: () => !overlay && openActions(),
   });
   useLayoutEffect(syncSidebarWidth, []);
+  // A selection belongs to its list: another area starts with none (#216).
+  useEffect(clearSelection, [loc.route.area]);
+  // The chat carries the picked rows as its chip; a new selection is a new reference, shown again after the chip was taken off.
+  const picked = useSelection();
+  const pickedKey = picked?.ids.join(',');
+  useEffect(() => { if (pickedKey) keepPage(); }, [pickedKey]);
 
   // urls.md rule 6: the tab names the object.
   useEffect(() => {
@@ -224,7 +235,9 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
       { label: t('dock.navToggle'), side: '⌘B', run: toggleNav },
     ].filter(hit);
     const areas: PaletteItem[] = DOCK.flat().map((id) => ({ label: AREAS[id].label(), side: `G ${AREAS[id].dock!.key.toUpperCase()}`, run: () => goArea(id) })).filter(hit);
-    return [...objects, [t('shell.actions'), actions], [t('shell.areas'), areas]].filter(([, xs]) => xs.length > 0) as PaletteGroup[];
+    // The Aktionen of what is open or picked (#216), first: the A key's menu, by name.
+    const here: PaletteItem[] = actionsNow().map((a) => ({ label: a.label, side: a.key, run: a.run })).filter(hit);
+    return [[t('actions.palette'), here], ...objects, [t('shell.actions'), actions], [t('shell.areas'), areas]].filter(([, xs]) => xs.length > 0) as PaletteGroup[];
   }, [go, goArea]);
 
   // The filing periods that hold payments: quarters, or half years on a half-yearly setup (r6f-29).
@@ -284,7 +297,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
         language={language}
         onLanguage={(anchor) => setOverlay({ kind: 'language', anchor: anchor.getBoundingClientRect() })}
       />
-      <Sidebar page={pageContext(loc.route, books)} books={books} onGo={(route) => nav.go({ route, query: {} })} />
+      <Sidebar page={picked ? selectionContext(picked) : pageContext(loc.route, books)} books={books} onGo={(route) => nav.go({ route, query: {} })} />
       <DropDialog books={books} refresh={refresh} onGo={(loc) => nav.go(loc)} />
       <Corner onAssistant={toggleAssistant} onGo={(route) => nav.go({ route, query: {} })} />
       <Dock current={loc.route.area} books={books} keys={dockKeys} wide={navWide} onToggle={toggleNav} nav={nav} canEdit={canEdit} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />

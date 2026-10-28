@@ -315,7 +315,7 @@ function AnswerText({ text }: { text: string }) {
 
 function Chip({ r, onRemove }: { r: ContextRef; onRemove(): void }) {
   return (
-    <span className="aichip" data-tip={`${t(`assistant.kind.${r.kind}` as 'assistant.kind.entry')} ${r.id}`}>
+    <span className="aichip" data-kind={r.kind} data-tip={r.kind === 'selection' ? t('assistant.selectionTip') : `${t(`assistant.kind.${r.kind}` as 'assistant.kind.entry')} ${r.id}`}>
       {r.label}
       <button type="button" aria-label={t('assistant.removeContext', { label: r.label })} onClick={onRemove}>×</button>
     </span>
@@ -478,6 +478,7 @@ export function Sidebar({ page, books, onGo }: Props) {
           {withoutChanges(turn.text) ? <div className={turn.done ? 'aitext' : 'aitext pending'}><AnswerText text={withoutChanges(turn.text)} /></div> : !turn.done ? <div className="m">{t('assistant.thinking')}</div> : null}
           {turn.held ? <HeldCard held={turn.held} turn={i} standing={(turn.changes ?? []).filter((c) => !c.undone && c.undo).length} books={books} onGo={onGo} /> : null}
           {turn.changes?.length ? <Changes changes={turn.changes} books={books} onGo={onGo} /> : null}
+          {!turn.held && (turn.changes ?? []).filter((c) => !c.undone && c.undo).length > 1 ? <button type="button" className="linkbtn" data-act="undo-all" onClick={() => void undoAll(i)}>{t('assistant.undoAll', { n: (turn.changes ?? []).filter((c) => !c.undone && c.undo).length })}</button> : null}
           {turn.done && turn.terminal ? <TerminalCard request={turn.terminal} /> : null}
           {turn.done && turn.changes?.length ? <ShareOffers refs={[...new Set(turn.changes.filter((c) => !c.undone && c.payment).map((c) => c.payment!))]} onRules={() => onGo({ area: 'company', section: 'rules' })} /> : null}
           {turn.refused ? <div className="warnline">{t('assistant.refused', { why: errorText(new ApiError({ error: turn.refused, ...turn.refusal })) })}</div> : null}

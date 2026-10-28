@@ -100,6 +100,13 @@ const refused: Array<Call & { status: number }> = [
   { method: 'POST', path: '/api/statements/bookings', body: { entries: [{ id: 'back', transactionRef: 'C1', date: '2026-06-30', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'zurück' }], mappings: [] }, status: 403 },
   { method: 'POST', path: '/api/invoices/in_p/payments', body: { transactionRef: 'CI' }, status: 403 },
   { method: 'DELETE', path: '/api/invoices/in_p/payments/CI', status: 403 },
+  // Several objects at once (#216): a batch of filed objects only is refused as their single changes are; its undo too.
+  { method: 'POST', path: '/api/batch', body: { action: { kind: 'noReceiptNeeded' }, ids: ['C1'] }, status: 403 },
+  { method: 'POST', path: '/api/batch', body: { action: { kind: 'vatCode', to: 'I0' }, ids: ['jc'] }, status: 403 },
+  { method: 'POST', path: '/api/batch', body: { action: { kind: 'account', from: '6500', to: '6800' }, ids: ['jc'] }, status: 403 },
+  { method: 'POST', path: '/api/batch', body: { action: { kind: 'notReceipt' }, ids: ['rc'] }, status: 403 },
+  { method: 'POST', path: '/api/batch', body: { action: { kind: 'book', account: '6800', vat: '' }, ids: ['C1'] }, status: 403 },
+  // Its undo is the server's own, named by its id: a batch's undo after its period was filed is refused in tests/batch.test.ts.
 ];
 
 test('status: not in audit mode', async () => {
@@ -125,6 +132,9 @@ for (const call of refused) {
 }
 
 const allowed: Array<Call & { check: (index: Index) => boolean }> = [
+  // A batch over a filed and an open object (#216): the filed one is left out, the open one changes.
+  { method: 'POST', path: '/api/batch', body: { action: { kind: 'noReceiptNeeded' }, ids: ['C1', 'O1'] },
+    check: (i) => i.transactions.find((t) => t.ref === 'O1')?.noReceiptNeeded === true && !i.transactions.find((t) => t.ref === 'C1')?.noReceiptNeeded },
   // An opening balance is in no VAT return and no seal: a filed quarter does not lock the year's opening (r5h-30).
   { method: 'PUT', path: '/api/opening-balances/2026/1021', body: { amount: 5000 },
     check: (i) => i.config?.openingBalances?.['2026']?.['1021'] === 5000 },

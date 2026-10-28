@@ -21,7 +21,7 @@ export function runAct(p: Props, a: Act, id = p.route.id): void {
   const v = ledgerFor(p.books).byId.get(id);
   if (!v) return;
   if (v.locked && lockedRefuses(a)) { p.nav.toast(t('receipts.lockedToast')); return; }
-  if (a === 'link') { openSection('zahlung'); setUi({ overlay: 'link' }); }
+  if (a === 'link') { openSection('zahlung'); setUi({ overlay: 'link', linkStart: undefined }); }
   if (a === 'edit') openSection('angaben', 'date');
   if (a === 'del') setUi({ overlay: 'delete' });
   if (a === 'mark' || a === 'notreceipt') setKind(p.nav, v, a === 'mark' ? 'invoice' : 'noise');
