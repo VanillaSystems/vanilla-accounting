@@ -388,7 +388,9 @@ export interface ReportContext {
    * another one names (by its ref, its text, or its day and amount) waits; one dated on or after
    * `since` that books no row of its own holds every row up to its day. `through`: the last day of a payout of the provider
    * on or after `since` booked otherwise than from the clearing account (it may hold every sale,
-   * refund and fee up to its day): those wait too. `paidBefore`: the days of the provider's payouts
+   * refund and fee up to its day): those wait too. A payout here is one by the provider's recognition
+   * (providerOfMoneyIn), never by a linked order document, nor one whose order document names an order the
+   * provider did not collect; its entries correcting a filed period are no booking of it (#247). `paidBefore`: the days of the provider's payouts
    * from `from` to before `since` not booked bank / clearing account (the old way, as sales, or not
    * booked yet): a row dated before `since` and before one of them may have been paid by it, so it
    * waits. `named`: sales booked elsewhere than on the clearing account no report booked (a payout
