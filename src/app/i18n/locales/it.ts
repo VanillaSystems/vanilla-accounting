@@ -3196,6 +3196,8 @@ export default {
     'receipts.report.heldMore': 'e altri {n} (al massimo {limit} sono nominati qui uno per uno)',
     'receipts.report.filedRefund': 'n. {order}: rimborso del {date} di {amount} appartiene al periodo inoltrato {period}: registrare come correzione?',
     'receipts.report.filedRefundByHand': 'n. {order}: rimborso del {date} di {amount} appartiene al periodo inoltrato {period}; la vendita è in una vecchia registrazione che nomina anche altri ordini (un versamento, ad esempio): verificare e registrare a mano come correzione',
+    'receipts.report.filedRefundBooked': 'n. {order}: rimborso del {date} di {amount} appartiene al periodo inoltrato {period} ed è già registrato, nessuna correzione necessaria:',
+    'receipts.report.filedRefundBookedAt': 'registrazione del {date} ({ref})',
     'receipts.report.bookCorrection': 'Registra come correzione',
     'receipts.report.correctionTip': 'Registra il rimborso il primo giorno aperto, con il codice della vendita; dichiarato nel rendiconto di correzione {period}, non in quello aperto',
     'receipts.report.corrected': 'Correzione registrata: rimborso n. {order}, dichiarato nel rendiconto di correzione {period}',

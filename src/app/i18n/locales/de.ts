@@ -3193,6 +3193,8 @@ export const messages = {
   'receipts.report.heldMore': 'und {n} weitere (höchstens {limit} sind hier einzeln genannt)',
   'receipts.report.filedRefund': '#{order}: Rückerstattung vom {date} über {amount} gehört in die eingereichte Periode {period}: als Korrektur buchen?',
   'receipts.report.filedRefundByHand': '#{order}: Rückerstattung vom {date} über {amount} gehört in die eingereichte Periode {period}; der Verkauf steht in einer alten Buchung, die auch andere Bestellungen nennt (etwa einer Auszahlung): prüfen und von Hand als Korrektur buchen',
+  'receipts.report.filedRefundBooked': '#{order}: Rückerstattung vom {date} über {amount} gehört in die eingereichte Periode {period} und ist schon gebucht, keine Korrektur nötig:',
+  'receipts.report.filedRefundBookedAt': 'Buchung vom {date} ({ref})',
   'receipts.report.bookCorrection': 'Als Korrektur buchen',
   'receipts.report.correctionTip': 'Bucht die Rückerstattung am ersten offenen Tag, mit dem Code des Verkaufs; deklariert in der Korrekturabrechnung {period}, nicht in der offenen',
   'receipts.report.corrected': 'Korrektur gebucht: Rückerstattung #{order}, deklariert in der Korrekturabrechnung {period}',
