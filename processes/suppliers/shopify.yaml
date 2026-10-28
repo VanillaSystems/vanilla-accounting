@@ -39,6 +39,8 @@ provider:
       shipTo: Shipping Country
       gross: Total
       tax: Taxes
+      # An order edited after checkout (an item added) shows the part not charged yet: the sale is Total less it (#231).
+      outstanding: Outstanding Balance
       refunded: Refunded Amount
       currency: Currency
       gateway: Payment Method

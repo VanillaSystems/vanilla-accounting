@@ -146,6 +146,7 @@ export function errorText(e: unknown): string {
     case 'receiptPaid': return t('error.receiptPaid', { payment: b.params.payment });
     case 'pointerLinked': return t('error.pointerLinked', { payment: b.params.payment });
     case 'correctionBooked': return t('error.correctionBooked', { entry: b.params.entry });
+    case 'reportCorrection': return t(`error.reportCorrection.${b.params.why}`);
     case 'secondPayment': return t('error.secondPayment', { payment: b.params.payment });
     case 'paidPrivately': return t('error.paidPrivately', { payment: b.params.payment });
     case 'partAmount': return t('error.partAmount', { total: `${b.params.currency} ${fmt(b.params.total)}` });
@@ -345,6 +346,8 @@ export const api = {
   removeMapping: (link: Link) => request<Linked>('POST', '/api/mapping/remove', link),
   /** «Zahlung suchen» / «Beleg suchen» (#187): the matching chain for one receipt or one payment. */
   findPayment: (receipt: string) => request<Found>('POST', `/api/receipts/${encodeURIComponent(receipt)}/find-payment`),
+  /** «Als Korrektur buchen» on a refund of a filed period a sales report offers (#231): booked in the open period with `corrects`. */
+  reportCorrection: (receipt: string, order: string, date: string) => request<{ ok: true; entries: JournalEntry[] }>('POST', `/api/receipts/${encodeURIComponent(receipt)}/report-correction`, { order, date }),
   setFiledPayment: (receipt: string, payment: string | null) => request<{ ok: true }>('POST', `/api/receipts/${encodeURIComponent(receipt)}/filed-payment`, { payment }),
   findReceipt: (payment: string) => request<Found>('POST', `/api/transactions/${encodeURIComponent(payment)}/find-receipt`),
 
