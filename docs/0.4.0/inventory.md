@@ -8,13 +8,13 @@ and the providers.
 
 | Layer | Files | With Swiss specifics |
 |---|---:|---:|
-| core | 67 | 23 |
+| core | 69 | 23 |
 | engine | 4 | 1 |
-| provider | 14 | 12 |
-| split | 113 | 26 |
+| provider | 16 | 13 |
+| split | 114 | 26 |
 | infrastructure | 69 | 4 |
 | workflow | 25 | 0 |
-| view | 319 | 56 |
+| view | 320 | 56 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -68,12 +68,12 @@ Layers are assigned by path prefix, most specific first:
 | `src/accounting/ledger.ts` | CHF 3 |
 | `src/accounting/rappen.ts` | Rappen 1 |
 | `src/accounting/validate.ts` | MWST 1, Ziffer 1, tax code 11 |
-| `src/books/bank-import.ts` | camt.053 14 |
+| `src/books/bank-import.ts` | camt.053 20 |
 | `src/books/company.ts` | ESTV 1 |
 | `src/books/year-close.ts` | CHF 2, ESTV 4, camt.053 2 |
 | `src/core/modules/check.ts` | Ziffer 9 |
 | `src/core/modules/schema.ts` | MWST 1, eCH-0217 1 |
-| `src/types/api-error.ts` | camt.053 2 |
+| `src/types/api-error.ts` | camt.053 3 |
 | `src/types/index.ts` | CHF 2, MWST 4, ESTV 3, Ziffer 2, form 0535 2, camt.053 6, Rappen 1 |
 | `src/workspace/bank-statements.ts` | camt.053 7 |
 | `src/workspace/banks.ts` | camt.053 7 |
@@ -109,6 +109,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/providers/qr-bill/reference.ts` | camt.053 1, QR-bill 13 |
 | `src/providers/statement-files.ts` | camt.053 2 |
 | `src/providers/statement-pdf/statement-pdf-balances.ts` | CHF 2 |
+| `src/providers/statement-read/camt-writer.ts` | camt.053 4 |
 | `src/providers/wise-pdf/wise-statement-pdf.ts` | camt.053 1, QR-bill 1 |
 
 ## split
@@ -147,7 +148,7 @@ Layers are assigned by path prefix, most specific first:
 | File | Swiss specifics (lines) |
 |---|---|
 | `src/audit/sources.ts` | ESTV 1 |
-| `src/llm/prompts.ts` | CHF 6, MWST 23, Rappen 1 |
+| `src/llm/prompts.ts` | CHF 9, MWST 23, camt.053 2, Rappen 1 |
 | `src/publish/leak-guard.ts` | camt.053 1 |
 | `src/reconcile/vat-consistency.ts` | MWST 5 |
 
@@ -156,7 +157,7 @@ Layers are assigned by path prefix, most specific first:
 | File | Swiss specifics (lines) |
 |---|---|
 | `src/app/areas/bank/Detail.tsx` | ESTV 1 |
-| `src/app/areas/bank/actions.ts` | camt.053 1 |
+| `src/app/areas/bank/actions.ts` | camt.053 2 |
 | `src/app/areas/codes/codes.tsx` | MWST 1, Ziffer 1 |
 | `src/app/areas/codes/model.ts` | CHF 1 |
 | `src/app/areas/codes/vat-card.tsx` | MWST 1, Ziffer 1 |
@@ -188,11 +189,11 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 43, MWST 307, ESTV 42, Ziffer 52, form 0535 1, UID 1, camt.053 17, QR-bill 1, Rappen 3 |
-| `src/app/i18n/locales/en.ts` | CHF 43, MWST 5, ESTV 28, form 0535 1, UID 1, camt.053 17, QR-bill 4 |
-| `src/app/i18n/locales/fr.ts` | CHF 43, MWST 1, form 0535 1, UID 1, camt.053 17, QR-bill 1 |
-| `src/app/i18n/locales/it.ts` | CHF 43, MWST 1, form 0535 1, UID 1, camt.053 17, QR-bill 1 |
-| `src/app/lib/api.ts` | camt.053 1 |
+| `src/app/i18n/locales/de.ts` | CHF 43, MWST 307, ESTV 42, Ziffer 52, form 0535 1, UID 1, camt.053 22, QR-bill 1, Rappen 3 |
+| `src/app/i18n/locales/en.ts` | CHF 43, MWST 5, ESTV 28, form 0535 1, UID 1, camt.053 22, QR-bill 4 |
+| `src/app/i18n/locales/fr.ts` | CHF 43, MWST 1, form 0535 1, UID 1, camt.053 22, QR-bill 1 |
+| `src/app/i18n/locales/it.ts` | CHF 43, MWST 1, form 0535 1, UID 1, camt.053 22, QR-bill 1 |
+| `src/app/lib/api.ts` | camt.053 2 |
 | `src/app/lib/fx-text.ts` | ESTV 1 |
 | `src/cli/check-processes.ts` | ESTV 1 |
 | `src/cli/evidence.ts` | camt.053 1, QR-bill 1 |
@@ -210,4 +211,4 @@ Layers are assigned by path prefix, most specific first:
 | `src/cli/year-open.ts` | CHF 2, ESTV 1 |
 | `src/server/routes/config.ts` | MWST 1, ESTV 2 |
 | `src/server/routes/receipts.ts` | CHF 1 |
-| `src/server/routes/statements.ts` | camt.053 8 |
+| `src/server/routes/statements.ts` | camt.053 16 |

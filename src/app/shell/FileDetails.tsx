@@ -28,6 +28,7 @@ export function FileDetails({ d, name, importedAt, children }: { d: StatementDet
       {d.opening ? <><dt>{t('drop.c.opening')}</dt><dd>{balanceText(d.currency, d.opening)}</dd></> : null}
       {d.closing ? <><dt>{t('drop.c.closing')}</dt><dd>{balanceText(d.currency, d.closing)}</dd></> : null}
       <dt>{t('drop.c.file')}</dt><dd className="mono">{name}</dd>
+      {d.read ? <><dt>{t('drop.c.readFrom')}</dt><dd>{t(`drop.read.by.${d.read.by}`)} · <span className="mono">{d.read.from}</span></dd></> : null}
       {importedAt ? <><dt>{t('drop.c.imported')}</dt><dd>{formatDate(importedAt)}</dd></> : null}
       {d.preview.length ? (
         <>

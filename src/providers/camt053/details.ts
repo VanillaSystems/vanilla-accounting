@@ -26,7 +26,9 @@ export function camtDetails(xml: string, filename: string, preview: number): Sta
   const closing = balances.filter((b) => b.type === 'CLBD').sort(byDate).at(-1);
   const periods = camt.statements.flatMap((s) => (s.period ? [s.period] : []));
   const bankName = pick('bankName'), bic = pick('bic'), iban = pick('iban'), owner = pick('ownerName');
+  const read = camt.statements.find((s) => s.read)?.read;
   return {
+    ...(read ? { read } : {}),
     ...(bankName ? { bankName } : {}),
     ...(bic ? { bic } : {}),
     currency: first.currency,
