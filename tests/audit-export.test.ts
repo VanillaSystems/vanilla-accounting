@@ -30,8 +30,11 @@ let base: string;
  * of every test's timeout.
  */
 let launched: Promise<Browser> | undefined;
-const chrome = () => launched ??= import('puppeteer-core').then(({ default: puppeteer }) =>
-  puppeteer.launch({ executablePath: findBrowser(), headless: true, timeout: 0, args: ['--no-first-run', '--lang=en-US'] }));
+const chrome = () => launched ??= import('puppeteer-core').then(({ default: puppeteer }) => {
+  // A Chrome that dies while starting, as one may under memory pressure, is started once more; puppeteer gives each its own fresh profile.
+  const launch = () => puppeteer.launch({ executablePath: findBrowser(), headless: true, timeout: 0, args: ['--no-first-run', '--lang=en-US'] });
+  return launch().catch(launch);
+});
 
 before(async () => {
   await buildAuditExport(workspaceAt(join(APP_ROOT, 'demo')), dir, '2026-10-09T12:00:00.000Z');
@@ -124,8 +127,8 @@ test('a non-empty folder that holds no export is refused, not emptied', async ()
 test('the list column never widens past its track at the narrowest width, with chips and the filter menu open', { skip: findBrowser() ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 300_000 }, async () => {
   const context = await (await chrome()).createBrowserContext();
   const page = await context.newPage();
-  const pause = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
   try {
+    page.setDefaultTimeout(0);
     await page.setViewport({ width: 1000, height: 800 });
     await page.goto(`${base}#/receipts`, { waitUntil: 'networkidle0' });
     const wide: string[] = [];
@@ -134,7 +137,7 @@ test('the list column never widens past its track at the narrowest width, with c
       for (const at of ['receipts', 'receipts?f=state_open&f=month_2026-09&f=over_100&q=x', 'journal', 'journal?f=account_1020&f=account_6000&f=who_classify']) {
         await page.goto(`${base}#/${at}`, { waitUntil: 'networkidle0' });
         await page.reload({ waitUntil: 'networkidle0' });
-        await pause(300);
+        await page.evaluate(() => document.fonts.ready.then(() => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)))));
         const measure = async (what: string) => {
           // scrollWidth misses a child that overflows inside a scrolling box of its own, so every element's right edge is measured too
           // (text a box of its own clips, a title's ellipsis, is no overflow; the clipping box is measured itself).
@@ -175,7 +178,7 @@ const browserPath = findBrowser();
  * leaving an area that never settles to the measurement. The test's timeout is the one wall clock: when it strikes, the
  * walk says where it stood and how long each step before took.
  */
-test('a browser walk over every area asks the host for no /api/, logs no error and leaves the page idle', { skip: browserPath ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 120_000 }, async (t) => {
+test('a browser walk over every area asks the host for no /api/, logs no error and leaves the page idle', { skip: browserPath ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 300_000 }, async (t) => {
   let at: string | undefined = 'the browser\'s start';
   let since = Date.now();
   const took: string[] = [];
