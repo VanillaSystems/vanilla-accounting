@@ -154,6 +154,33 @@ test('through the API: the chat, Terminal, «Neu lesen», «Neu klassifizieren»
   }
 });
 
+test('a statement PDF dropped with the switch on: no model reads it; the row offers the hand table and «Als Monatsauszug behalten», which keeps it as the month\'s statement', async () => {
+  switchOn(true);
+  empty();
+  const { SESSION } = await import('./support/inbox-run.js');
+  const { DEMO_OCTOBER, inventedStatement } = await import('./support/statement-pdf.js');
+  const { pdf } = await inventedStatement(DEMO_OCTOBER);
+  const demo = await startApi('demo', { PATH: `${STUB}:${process.env.PATH}`, VANILLA_AI_SETTINGS: settings, CLAUDE_STUB_ARGS: claudeCalls, CODEX_STUB_ARGS: codexCalls, CODEX_HOME: join(dir, 'codex-home-drop'), CLAUDE_BIN: '', CODEX_BIN: '' });
+  cpSync(DEMO_ROOT, demo.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
+  try {
+    const { post, rest } = SESSION(demo);
+    const had = ((await (await demo.fetch('/books.json')).json()) as Index).transactions.length;
+    let s = await post('/api/drop');
+    s = await post(`/api/drop/${s.id}/files?name=oktober.pdf`, pdf);
+    let [row] = s.rows;
+    assert.deepEqual([row.state, row.read?.by, row.read?.why], ['asks', 'hand', 'noAi']);
+    s = await post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'keep' });
+    [row] = s.rows;
+    assert.deepEqual([row.state, row.statement?.file], ['taken', 'Raiffeisen/Kontoauszug 01.10.2026 - 31.10.2026.pdf']);
+    await rest();
+    assert.equal(((await (await demo.fetch('/books.json')).json()) as Index).transactions.length, had, 'kept as the month\'s statement: no movement imported');
+    assert.deepEqual(reached(), [], 'no call reached a provider');
+  } finally {
+    await SESSION(demo).rest().catch(() => {});
+    await demo.stop();
+  }
+});
+
 test('the switch is kept per Mac beside the other AI settings, apart from «Ohne KI weitermachen»', async () => {
   const { parseSettings, readSettings, writeNoAi, writeOff } = await import('../src/llm/settings.js');
   assert.deepEqual(parseSettings({ steps: {}, off: true, noAi: true }), { steps: {}, off: true, noAi: true });

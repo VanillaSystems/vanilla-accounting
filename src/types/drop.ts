@@ -9,9 +9,10 @@
 import type { AccountChoice, UnknownAccount } from './api-error.js';
 import type { OtherWhy, SupportingWhy } from '../core/modules/schema.js';
 import type { TwinWhy } from './index.js';
+import type { CsvAsk, CsvColumns, ReadBy, ReadStatement, StatementRead } from './statement-read.js';
 
 /** What a file is. Unset while nobody knows (the row asks). */
-export type DropKind = 'receipt' | 'photo' | 'camt' | 'statement-pdf' | 'zip' | 'sales-report';
+export type DropKind = 'receipt' | 'photo' | 'camt' | 'statement-pdf' | 'statement-csv' | 'zip' | 'sales-report';
 
 /** How it was recognized: by its structure (bytes, a namespace), or by a hint (a word, the name). */
 export type DropHow = 'structure' | 'hint';
@@ -49,10 +50,22 @@ export interface DropRow {
   chooseAccount?: AccountChoice;
   /** A statement file that asks for its account: what the file says about itself (#208). */
   details?: StatementDetails;
+  /**
+   * A statement without a bank export (#217): its movements as the model read them off the PDF, scan or
+   * photo, as a person fills them by hand, or as a CSV's columns give them; checked, the lines the
+   * books hold marked. Corrected in the row, imported with «Einlesen» as an ISO 20022 statement.
+   */
+  read?: StatementRead;
+  /** A bank's CSV waiting for its columns (#217): its header, a few rows, the mapping proposed. */
+  csv?: CsvAsk;
   /** A statement read in already (`statement-read`): its file under bank-statements/ and its first payment, which opens it. */
   readAs?: { file: string; ref?: string };
-  /** The bank account (ledger number) the person said the statement is of. */
+  /** The bank account (ledger number) the person said the statement is of, or the CSV's. */
   account?: string;
+  /** The person said «Einlesen» on a statement read without a bank export: it is imported as written. */
+  confirmed?: true;
+  /** The person said «Als Monatsauszug behalten» on a statement PDF: kept as the month's statement (`month`, when its name does not say), its movements not imported. */
+  keep?: { month: string };
   /** Taken: the run that takes it up. */
   run?: string;
   /** A receipt: the name it got in the inbox. */
@@ -91,6 +104,8 @@ export interface StatementFacts { iban?: string; from?: string; to?: string; ent
  * (`preview`, at most STATEMENT_PREVIEW of src/providers/statement-files.ts; `more` says how many are not shown).
  */
 export interface StatementDetails {
+  /** An ISO 20022 statement the app wrote from a statement read without one (#217): the file it was read from, and how. */
+  read?: { from: string; by: ReadBy };
   bankName?: string;
   bic?: string;
   currency: string;
@@ -167,6 +182,10 @@ export type DropReason =
   | 'unreadable'
   /** A statement whose file is read in already (`readAs`): its movements are in the books. */
   | 'statement-read'
+  /** A statement without a bank export read into a table (`read`): the person checks it and says «Einlesen». */
+  | 'check-read'
+  /** A bank's CSV: the person says which column holds what (`csv`). */
+  | 'csv-columns'
   /** A statement of an account the owner said is private: set aside, not read into the books. */
   | 'private'
   /** A provider's report its file cannot book yet: the row asks for the missing account (`askProvider`). */
@@ -198,7 +217,15 @@ export type DropAction =
   /** A report's provider lacks an account (`askProvider`): the person names it, it is kept in the company's file of the provider, and the report is taken. */
   | { kind: 'provider'; account?: string; vat?: string; since?: string }
   /** A report held because no payout of its provider is recognised (`payoutUnseen`): «Trotzdem übernehmen» books it. */
-  | { kind: 'anyway' };
+  | { kind: 'anyway' }
+  /** A statement read without a bank export (`read`), as the person corrected it: checked again and, with `import`, imported («Einlesen»). */
+  | { kind: 'read'; statement: ReadStatement; import?: boolean }
+  /** A bank's CSV (`csv`): its columns and its account; the mapping is kept for the account's next CSV. */
+  | { kind: 'csv'; columns: CsvColumns; account: string }
+  /** A receipt, photo or scan that is a bank statement: read as one (#217). */
+  | { kind: 'statement' }
+  /** A statement PDF whose table waits (`read`): kept as the month's statement instead, its movements not imported; `statement`: the table as shown, for its days. */
+  | { kind: 'keep'; statement?: ReadStatement };
 
 /** Why a file is in data/quarantine/: its words say it is no receipt (and which kind, and the mail's sender), a person set it aside, or it is no PDF inside. */
 export type QuarantineReason = { kind: 'not-receipt'; why?: OtherWhy; from?: string } | { kind: 'held' } | { kind: 'unreadable' };

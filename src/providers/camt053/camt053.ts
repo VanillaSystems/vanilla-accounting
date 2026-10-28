@@ -13,6 +13,8 @@ import { XMLParser } from 'fast-xml-parser';
 import type { BankTransaction, StatementClosingBalance } from '../../types/index.js';
 import { parseStatementBalances } from './statement-balances.js';
 import type { StatementKind } from '../../workspace/banks.js';
+import { readMarkOf } from '../statement-read/camt-writer.js';
+import type { ReadBy } from '../../types/statement-read.js';
 
 /** The ISO 20022 cash-management message a file holds: only camt.053 is a statement. */
 export type CamtMessage = 'camt.053' | 'camt.052' | 'camt.054' | 'other';
@@ -34,6 +36,8 @@ export interface CamtStatement {
   ownerName?: string;
   /** Stmt/FrToDt: the days the bank says the statement covers (r9k-10); absent when the bank leaves it out. */
   period?: { from: string; to: string };
+  /** A statement the app wrote from a PDF, a scan, a table or a CSV (#217): the file it was read from, and how. */
+  read?: { from: string; by: ReadBy };
   node: Node;
 }
 
@@ -65,6 +69,7 @@ export function readCamt(xml: string): { message: CamtMessage; statements: CamtS
       ...(bicOf(node.Acct?.Svcr?.FinInstnId) ? { bic: bicOf(node.Acct?.Svcr?.FinInstnId) } : {}),
       ...(node.Acct?.Ownr?.Nm ? { ownerName: String(node.Acct.Ownr.Nm).trim() } : {}),
       ...(periodOf(node.FrToDt) ? { period: periodOf(node.FrToDt) } : {}),
+      ...(readMarkOf(node.AddtlStmtInf) ? { read: readMarkOf(node.AddtlStmtInf) } : {}),
       node,
     })),
   };

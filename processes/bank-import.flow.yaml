@@ -76,12 +76,22 @@ steps:
     phase: import
     duration: 30s
 
+  - id: read_statement
+    name: Read a statement without camt.053 into its movements and balances
+    with: { guide: bank-import.guide.yaml#read }
+    produces: transactions
+    icon: file-search
+    note: the drop dialog; the AI reads the PDF, code checks it adds up, the person imports it or keeps it as the month's statement
+    needs: [download_pdf]
+    phase: import
+    duration: 2m
+
   - id: reconcile
     name: Compare ledger to bank, per account, in its own currency
     icon: scale
     uses: npm:reconcile-balances
     note: opening balance plus native movements
-    needs: [import_camt.refs_stable, relink, import_balances]
+    needs: [import_camt.refs_stable, relink, import_balances, read_statement]
     phase: reconcile
     duration: 10s
 

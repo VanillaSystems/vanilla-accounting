@@ -32,6 +32,8 @@ export const STEPS = {
   // An unclear document with little of an invoice (issue #186): receipt, supporting or no receipt, with a reason.
   'receipt-kind': { ledger: 'receipt-intake.guide.yaml#kind', tier: 'fast', needs: ['json'] },
   'receipt-titles': { ledger: 'receipt-intake.guide.yaml#titles', tier: 'fast', needs: ['json'] },
+  // A statement without a bank export (#217): every movement, the balances and the page carry-overs off a PDF, scan or photo; code checks they add up.
+  'statement-read': { ledger: 'bank-import.guide.yaml#read', tier: 'standard', needs: ['json', 'pdf'] },
   'receipt-match': { ledger: 'evidence.guide.yaml#ai', tier: 'standard', needs: ['json', 'pdf'] },
   // The matching chain (#187): short facts of ~20 pairs per call, checked or chosen; no file is read.
   'receipt-pair': { ledger: 'evidence.guide.yaml#pair', tier: 'fast', needs: ['json'] },

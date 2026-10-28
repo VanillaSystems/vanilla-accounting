@@ -5,6 +5,8 @@
  * `corrects` (POST /api/receipts/:id/report-correction), declared in that period's correction return.
  * One whose sale sits in an old entry naming it beside other orders (`byHand`, #239: a payout entry, which
  * may net the refund already) is named with what to do, without the button: the person books it by hand.
+ * One the books carry already, on another account, paid from the bank directly or netted into its sale (`booked`, #242),
+ * is named with a link to that entry and nothing to click: a correction would count it twice.
  * Shown on the report's receipt and in the drop row of a report whose taking found them.
  */
 import { useState } from 'react';
@@ -16,6 +18,8 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import { baseCurrency } from '../../../engines/index.js';
 import { I } from './icons.js';
+import { at } from './view.js';
+import { hrefOf } from '../../shell/history.js';
 
 const nameOf = (key: string): string => { const p = parsePeriod(key, localToday()); return p ? periodName(p) : key; };
 
@@ -37,8 +41,9 @@ export function ReportCorrections({ receipt, books, canEdit, said }: { receipt: 
           const period = nameOf(f.corrects);
           return (
             <span key={`${f.order}-${f.date}`} data-testid="report-correction">
-              {t(f.byHand ? 'receipts.report.filedRefundByHand' : 'receipts.report.filedRefund', { order: f.order, date: formatDate(f.date), amount: `${f.currency ?? baseCurrency()} ${fmt(f.amount)}`, period })}{' '}
-              {canEdit && !f.byHand ? <button type="button" className="linkbtn" disabled={busy} data-tip={t('receipts.report.correctionTip', { period })} onClick={() => book(f.order, f.date, period)}>{t('receipts.report.bookCorrection')}</button> : null}{' '}
+              {t(f.booked ? 'receipts.report.filedRefundBooked' : f.byHand ? 'receipts.report.filedRefundByHand' : 'receipts.report.filedRefund', { order: f.order, date: formatDate(f.date), amount: `${f.currency ?? baseCurrency()} ${fmt(f.amount)}`, period })}{' '}
+              {f.booked ? <a className="golink" data-testid="report-correction-booked" href={hrefOf(at({ area: 'journal', id: f.booked.entry }, f.booked.date))}>{t('receipts.report.filedRefundBookedAt', { date: formatDate(f.booked.date), ref: f.booked.ref })}</a> : null}
+              {canEdit && !f.byHand && !f.booked ? <button type="button" className="linkbtn" disabled={busy} data-tip={t('receipts.report.correctionTip', { period })} onClick={() => book(f.order, f.date, period)}>{t('receipts.report.bookCorrection')}</button> : null}{' '}
             </span>
           );
         })}

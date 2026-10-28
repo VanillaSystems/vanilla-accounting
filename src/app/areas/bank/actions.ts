@@ -110,8 +110,9 @@ export async function importStatements(files: File[], nav: Nav, into?: { account
     try {
       read.push(await api.importStatement(f, f.name, into && { account: into.account.account, month: into.month }));
     } catch (e) {
-      // Several accounts could take it: the drop dialog asks which, and takes the rest after it (#25).
-      if (e instanceof ApiError && e.body.code === 'statement' && e.body.params.problem?.kind === 'whichAccount') {
+      // Several accounts could take it: the drop dialog asks which, and takes the rest after it (#25). A PDF no
+      // camt.053 covers goes there too: it is read into its movements, or kept as the month's statement (#217).
+      if (e instanceof ApiError && e.body.code === 'statement' && (e.body.params.problem?.kind === 'whichAccount' || e.body.params.reason === 'read')) {
         if (read.length) nav.refresh();
         void dropFiles(ok.slice(i));
         return;
@@ -163,7 +164,7 @@ export async function removeStatement(nav: Nav, s: Statement): Promise<void> {
   const kept = bytes;
   // The undo reads the file again, then puts its bookings and links back as they were (r10h-3): the payment comes back booked.
   nav.toast(t('bank.statementRemoved', { name: s.file.filename }), () => {
-    api.importStatement(kept, s.file!.filename, { account: s.account.account, month: s.from.slice(0, 7) })
+    api.importStatement(kept, s.file!.filename, { account: s.account.account, month: s.from.slice(0, 7) }, true)
       .then(async (r) => { if (taken.entries.length || taken.mappings.length) await api.restoreStatementBookings(taken); return r; })
       .then((r) => { forgetPages(); nav.refresh(); nav.go(at({ area: 'bank', statement: keyOf(r) }, r.to)); }, (e) => nav.toast(errorText(e)));
   });
