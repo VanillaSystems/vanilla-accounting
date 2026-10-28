@@ -9,7 +9,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { assistantArgs, assistantSystem, draftPatterns, streamParser } from '../src/assistant/claude.js';
@@ -310,6 +310,10 @@ test('cash basis: the AI never dates a payment\'s booking off the payment\'s dat
     ]));
     assert.equal(splitOff?.refusal?.code, 'paymentDate', 'a new booking of a payment takes its date too');
 
+    // The clearing account is the one a provider's file of the company names, whatever its number.
+    const shop = join(api.root, 'knowledge', 'suppliers');
+    mkdirSync(shop, { recursive: true });
+    writeFileSync(join(shop, 'webshop.yaml'), 'id: webshop\nname: Webshop\nmatch: { tx: [ "webshop" ] }\nprovider: { clearing: "1093" }\n');
     const clearing = await answer([
       { kind: 'entry', id: entry.id, set: { accountCredit: '1093', date: before } },
       { kind: 'newEntry', entry: { transactionRef: tx.ref, date: tx.date, accountDebit: '1093', accountCredit: '1021', amount: entry.amount, description: 'Auszahlung' } },

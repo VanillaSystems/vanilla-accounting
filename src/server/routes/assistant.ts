@@ -28,6 +28,8 @@ import { automationView, bookAgain, engine } from './automation.js';
 import { openWork } from '../open-work.js';
 import { askedBy } from '../../workflows/held.js';
 import { accountsOf } from '../../workspace/reads.js';
+import { providersOf } from '../../intake/sales-report-import.js';
+import { clearingAccounts } from '../../booking/providers.js';
 import { PRESETS, parseRequest, presetPeriod } from '../../export/model.js';
 import { buildBundle, downloadOf, zipBundle } from '../../export/bundle.js';
 import { NoBrowserError, printPdf } from '../../invoices/pdf.js';
@@ -226,12 +228,13 @@ const apply: ApplyChanges = async (answered, earlier, language, { conversation, 
   let books: Array<Omit<MadeChange, 'id'>> = [];
   const asked = changes.filter(isBookChange);
   const chart = new Set((accountsOf(WS) as Array<{ number: unknown }>).map((a) => String(a.number)));
+  const clearing = clearingAccounts(providersOf(WS));
   if (hold === 'always' || (hold && asked.length)) {
     const added = changes.flatMap((c) => (c.kind === 'account' && c.name !== null ? [c.number] : []));
     const before = readBooks();
     const trial = readBooks();
     try {
-      applyAnswer(trial, asked, { bankAccounts: WS.bankAccounts, chart: chart.size ? new Set([...chart, ...added]) : chart, earlier, conversation, uid: WS.company.uid });
+      applyAnswer(trial, asked, { bankAccounts: WS.bankAccounts, chart: chart.size ? new Set([...chart, ...added]) : chart, earlier, conversation, uid: WS.company.uid, clearing });
     } catch (e) {
       throw new RefusedChanges((e as Error).message, refusalOf(e));
     }
@@ -247,7 +250,7 @@ const apply: ApplyChanges = async (answered, earlier, language, { conversation, 
     if (asked.length) {
       const now = new Set((accountsOf(WS) as Array<{ number: unknown }>).map((a) => String(a.number)));
       books = updateBooks((b) => {
-        const made = applyAnswer(b, asked, { bankAccounts: WS.bankAccounts, chart: now, earlier, conversation, uid: WS.company.uid });
+        const made = applyAnswer(b, asked, { bankAccounts: WS.bankAccounts, chart: now, earlier, conversation, uid: WS.company.uid, clearing });
         for (const m of made) {
           const id = m.change.kind === 'entry' ? m.change.id : m.undo?.kind === 'deleteEntry' ? m.undo.id : undefined;
           const e = id ? b.journalEntries.find((x) => x.id === id) : undefined;

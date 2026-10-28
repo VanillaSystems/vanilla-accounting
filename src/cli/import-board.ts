@@ -13,6 +13,7 @@ import { APP_ROOT, filesOfPart, openWorkspace, partDirs } from '../workspace/wor
 import { readBankStatements } from '../workspace/bank-statements.js';
 import { mailboxesOf } from '../platform/sources/mail.js';
 import { readLedger } from '../platform/sources/ledger.js';
+import { loadKnowledge } from '../knowledge/layers.js';
 
 const ws = openWorkspace();
 const quarter = process.argv[2] ?? (() => {
@@ -86,25 +87,20 @@ const emailRows: Row[] = mailboxesOf(ws, APP_ROOT).map(({ source, label: lbl, ad
   return { label: addr, state: n ? DONE : BLOCK, note: n ? `${n} attachments` : 'not collected' };
 });
 
-// ── vendor portals (declared checklist + filename detection) ───────────────
-const VENDORS: { label: string; re: RegExp; need: string }[] = [
-  { label: 'AliExpress  Tax Invoice PDFs', re: /_payment\.pdf$|aliexpress/i, need: 'CHE-447.613.666 + 8.1%' },
-  { label: 'Amazon.de   per-seller Rechnung', re: /amazon/i, need: 'CHE-269.567.571' },
-  { label: 'Shopify     monthly bills', re: /shopify-bill/i, need: 'CHE-153.004.184' },
-  { label: 'Shopify     Payments fee invoices', re: /shopify-payments/i, need: 'VAT 8.1% line' },
-  { label: 'Shopify     order pages', re: /shopify-order/i, need: 'sales records' },
-  { label: 'Digitec / Galaxus', re: /digitec|galaxus/i, need: 'invoice PDF' },
-  { label: 'OpenAI / ChatGPT', re: /openai|chatgpt/i, need: 'itemized Stripe invoice' },
-  { label: 'Anthropic', re: /anthropic/i, need: 'usually via email' },
-];
-const vendorRows: Row[] = VENDORS.map((v) => {
-  const hits = all.filter((f) => v.re.test(f));
+// ── vendor portals: the businesses whose files say how to fetch their receipts ──
+// Each business with a rule in receipt-collection.guide.yaml#scrape (its app file or the company's),
+// its files found by its `match.file` patterns; while none is there, the rule says what to fetch.
+const SCRAPE = 'receipt-collection.guide.yaml#scrape';
+const vendorRows: Row[] = loadKnowledge(APP_ROOT, ws.paths.root).counterparties.flatMap((c) => {
+  const rules = (c.steps[SCRAPE] as { rules?: Array<{ then?: unknown }> } | undefined)?.rules ?? [];
+  if (!rules.length) return [];
+  const hits = all.filter((f) => c.match.file.some((re) => re.test(f)));
   const qHits = hits.filter((f) => months.some((m) => f.includes(m.replace('-', '')) || f.includes(m)));
-  return {
-    label: v.label,
+  return [{
+    label: c.name,
     state: qHits.length ? PART : TODO,
-    note: qHits.length ? `${qHits.length} file(s) for ${quarter}` : v.need,
-  };
+    note: qHits.length ? `${qHits.length} file(s) for ${quarter}` : String(rules[0].then ?? '').slice(0, 60),
+  }];
 });
 
 // ── scans + pipeline ───────────────────────────────────────────────────────

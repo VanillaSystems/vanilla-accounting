@@ -108,8 +108,8 @@ steps:
       - id: pv-shopify-fees
         when: Webshop Gebühren
         then: >
-          the fees come onto the clearing account from the payments export at the company's fee code (provider.fees: I0 while no bill shows Shopify's Swiss VAT); the month's Vorsteuer is one single-leg entry — empty Soll / C 6580 / M81-2, amount = fees × 8.1 / 108.1
-        why: the proof is the monthly Shopify bill, not the payout
+          the fees come onto the clearing account from the payments export at the company's fee code (provider.fees: I0 while no bill shows Shopify's Swiss VAT); the month's Vorsteuer from the monthly bill ("Payments Invoice") is one single-leg entry without a payment — empty Soll (the code books that leg to the MWST account) / C the fee account (6580) / M81-2, amount = the VAT only = gross fees × 8.1 / 108.1, description "Shopify, Vorsteuer Transaktionsgebühren <Mon JJJJ>". Never both legs, never the owner's account (2451): no money moves
+        why: the proof is the monthly Shopify bill, not the payout; Shopify keeps its fees from the payouts, so no payment of its own carries them
         apply: { inputTax: none, direction: in }
         source: docs/runbooks/booking-patterns.md § Shopify
     precedents: []

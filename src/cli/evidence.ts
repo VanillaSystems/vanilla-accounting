@@ -11,19 +11,20 @@
  *     a batch payment (camt053 Sammelzahlung parts);
  *   - the receipt is dated at most 45 days before or 10 days after the payment.
  * Several candidates, or a candidate that already carries a receipt of the same amount (a
- * likely duplicate), are listed for a person instead. Shopify order pages (sales records)
- * link to the payout their orders add up to exactly.
+ * likely duplicate), are listed for a person instead. A provider's order page and payout are no
+ * pair here: the page goes with its order's sale (src/booking/order-pages.ts), the payout settles the
+ * provider's clearing account.
  *
  * Never touches a closed period (golden rule 1) or a link a person made.
  */
 
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import type { Receipt, BankTransaction } from '../types/index.js';
 import { loadBooks, periodLock, saveBooks, update, PERSON } from '../books/store.js';
 import { derivePeriod, isFilingKey } from '../accounting/periods.js';
 import { documentTypeOf } from '../knowledge/counterparties.js';
 import { loadKnowledge } from '../knowledge/layers.js';
+import { isProvider, providerOfMoneyIn } from '../booking/providers.js';
+import { noPaymentOf } from '../booking/order-pages.js';
 import { APP_ROOT, openWorkspace } from '../workspace/workspace.js';
 import { documents, filing } from '../engines/index.js';
 import { duplicatesIn } from '../intake/duplicates.js';
@@ -105,6 +106,8 @@ function main() {
     if (t && (r.kind !== t.kind || r.kindRule !== t.rule)) kinded.push({ receipt: r, kind: t.kind, rule: t.rule });
   }
   const kindOf = (r: Receipt) => kinded.find((k) => k.receipt.id === r.id)?.kind ?? r.kind;
+  const providers = counterparties.filter(isProvider);
+  const orderPage = noPaymentOf(index, providers);
 
   const linkedReceipts = new Set(index.mappings.map((m) => m.receiptId));
   const twins = duplicatesIn(index.receipts, linkedReceipts, documents());
@@ -119,14 +122,15 @@ function main() {
 
   // ── payment receipts ──────────────────────────────────────────────────────
   const open = index.receipts
-    .filter((r) => !linkedReceipts.has(r.id) && r.location === 'archived' && inPeriod(r.date) && !/shopify-order-\d+/.test(r.filename) && !NOT_A_RECEIPT.test(r.filename))
+    .filter((r) => !linkedReceipts.has(r.id) && r.location === 'archived' && inPeriod(r.date) && !orderPage(r) && !NOT_A_RECEIPT.test(r.filename))
     .filter((r) => (kindOf(r) ?? 'invoice') === 'invoice')
     // A copy of another receipt (by its facts) is no second receipt for a payment: a person says first (Belege).
     .filter((r) => twins.get(r.id)?.relation !== 'duplicate')
     .sort((a, b) => receiptRank(a) - receiptRank(b) || a.filename.localeCompare(b.filename));
   const claimed = new Map<string, Receipt[]>(); // tx ref → receipts this run links to it
   // A payment reference printed on the receipt proves the link, whatever the amount or date.
-  const withRef = txs.filter((t) => t.reference && !/^Shopify /.test(t.reference)).map((t) => ({ t, tokens: referenceTokens(t.reference!) })).filter((x) => x.tokens.length);
+  // A provider's payout names the provider in its reference, never an invoice of a receipt.
+  const withRef = txs.filter((t) => t.reference && !providerOfMoneyIn(t, receiptsOf(t.ref), counterparties)).map((t) => ({ t, tokens: referenceTokens(t.reference!) })).filter((x) => x.tokens.length);
   for (const r of open) {
     const text = compact(r.extractedText ?? '');
     const byRef = [...new Map(withRef.filter((x) => x.tokens.some((tok) => carries(text, tok))).map((x) => [x.t.ref, x.t])).values()]
@@ -168,40 +172,18 @@ function main() {
     if (byRef.length === 1 && !linkedTo.includes(t.ref) && r.amount && fits({ ...r, date: t.date }, t)) conflicts.push({ receipt: r, linkedTo, proven: t });
   }
 
-  // ── Shopify order pages → the payout they add up to ────────────────────────
-  const ordersPath = join(ws.paths.data, `shopify-orders-${key}.json`);
-  let ordersLinked = 0;
-  if (existsSync(ordersPath)) {
-    const orders = JSON.parse(readFileSync(ordersPath, 'utf8')).orders as { num: string; payouts: { eur: number; date: string }[]; file: string }[];
-    const byPayoutDate = new Map<string, typeof orders>();
-    for (const o of orders) for (const p of o.payouts) (byPayoutDate.get(p.date) ?? byPayoutDate.set(p.date, []).get(p.date)!).push(o);
-    const stripe = txs.filter((t) => t.direction === 'CRDT' && /stripe/i.test(t.description));
-    for (const [date, group] of byPayoutDate) {
-      const sum = group.reduce((s, o) => s + o.payouts.filter((p) => p.date === date).reduce((a, p) => a + p.eur, 0), 0);
-      const hits = stripe.filter((t) => Math.abs(day(t.date) - day(date)) <= 3 && Math.abs(t.amount - sum) < 0.02);
-      if (hits.length !== 1) continue;
-      for (const o of group) {
-        const r = index.receipts.find((x) => x.filename === o.file);
-        if (!r || linkedReceipts.has(r.id) || index.mappings.some((m) => m.receiptId === r.id && m.transactionRef === hits[0].ref)) continue;
-        links.push({ receipt: r, tx: hits[0], rule: 'shopify-payout' });
-        ordersLinked++;
-      }
-    }
-  }
-
   // ── report ────────────────────────────────────────────────────────────────
   const byRule = new Map<string, number>();
   for (const l of links) byRule.set(l.rule, (byRule.get(l.rule) ?? 0) + 1);
   const byKind = new Map<string, number>();
   for (const k of kinded) byKind.set(`${k.kind} (${k.rule})`, (byKind.get(`${k.kind} (${k.rule})`) ?? 0) + 1);
   if (kinded.length) console.log(`document types: ${[...byKind].map(([k, n]) => `${n} ${k}`).join(', ')}`);
-  console.log(`${key}: ${open.length} unlinked receipts with an amount (+ order pages)`);
+  console.log(`${key}: ${open.length} unlinked receipts with an amount`);
   console.log(`  link by rule: ${links.length}  (${[...byRule].map(([k, v]) => `${k} ${v}`).join(', ')})`);
   console.log(`  several candidates (you decide): ${several.length}`);
   console.log(`  likely duplicates (a same-amount receipt is already linked): ${duplicates.length}`);
   console.log(`  no candidate: ${none}  (supporting documents, private payments, or a missing bank record)\n`);
-  for (const l of links.filter((x) => x.rule !== 'shopify-payout')) console.log(`  + [${l.rule}] ${l.receipt.filename}  →  ${l.tx.date} ${l.tx.amount} ${l.tx.currency} ${l.tx.description.slice(0, 55)}`);
-  if (ordersLinked) console.log(`  + [shopify-payout] ${ordersLinked} order pages → their payouts`);
+  for (const l of links) console.log(`  + [${l.rule}] ${l.receipt.filename}  →  ${l.tx.date} ${l.tx.amount} ${l.tx.currency} ${l.tx.description.slice(0, 55)}`);
   if (several.length) { console.log('\n  several candidates:'); for (const s of several) console.log(`  ? ${s.receipt.filename} ${s.receipt.amount} ${s.receipt.currency}: ${s.cands.map((t) => `${t.date} ${t.ref}`).join(' | ')}`); }
   if (conflicts.length) { console.log('\n  linked to a different payment than its reference proves (you decide):'); for (const c of conflicts) console.log(`  ! ${c.receipt.filename}: linked to ${c.linkedTo.join(', ')}, reference proves ${c.proven.ref} (${c.proven.date} ${c.proven.amount} ${c.proven.currency})`); }
   if (duplicates.length) { console.log('\n  likely duplicates:'); for (const d of duplicates) console.log(`  = ${d.receipt.filename}  same as  ${d.existing.filename}  (${d.tx.ref})`); }

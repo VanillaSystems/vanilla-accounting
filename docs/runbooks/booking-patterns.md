@@ -45,7 +45,9 @@ owner's Kontokorrent.
 - `src/accounting/validate.ts` allows one blank leg **only** for `-2` codes (`isVatAmountCode`),
   and skips the M/I/V account-class warnings for them (a single-leg correction pairs the code with
   the account being corrected, not the code family's "expected" account class).
-- `src/llm/prompts.ts` rule **9b** teaches the classifier this pattern.
+- No payment carries this entry (Shopify keeps its fees from the payouts), so the classifier never
+  books it: the person or the AI sidebar books it by hand, from `processes/suppliers/shopify.yaml`
+  (`booking.guide.yaml#purchase_vat` pv-shopify-fees), the vendor's file both read.
 
 ## Payment providers — payout over the clearing account (#203)
 

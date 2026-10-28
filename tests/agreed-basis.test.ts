@@ -110,7 +110,7 @@ test('agreed basis: a payment\'s coded line takes its document\'s date and the o
   setJurisdiction(ch, AGREED);
   let n = 0;
   const point = (closedThrough: string, dates: string[]): TaxPointContext => ({
-    accounts: ITEMS, bankAccount: '1021', lock: periodLock(books(closedThrough)), rateOn: (c, d) => (c === 'EUR' ? RATES[d] : undefined),
+    accounts: ITEMS, bankAccount: '1021', clearing: new Set(['1093']), lock: periodLock(books(closedThrough)), rateOn: (c, d) => (c === 'EUR' ? RATES[d] : undefined),
     documents: dates.map((date) => ({ date, kind: 'invoice' as const })), length: 'quarter', newId: () => `n${++n}`,
   });
   const line = (over: Partial<JournalEntry>): JournalEntry => ({ id: 'e1', transactionRef: 'b1', date: '2026-10-05', accountDebit: '6500', accountCredit: '1021', amount: 108.1, vatCode: 'I81', description: 'Swisscom', origin: 'classify', ...over });
@@ -137,6 +137,9 @@ test('agreed basis: a payment\'s coded line takes its document\'s date and the o
     ['2026-09-25', '1100', '3200', 1081, 'V81', ''],
     ['2026-10-05', '1021', '1100', 1081, '', ''],
   ], 'a sale by its earliest document: the tax is never declared late');
+  const onClearing = line({ accountDebit: '1021', accountCredit: '1093', amount: 1081, vatCode: 'V81' });
+  assert.deepEqual(rows(atTaxPoint(pay, [onClearing], point('2026-06-30', ['2026-09-25']))), [['2026-10-05', '1021', '1093', 1081, 'V81', '']], 'a line on a provider\'s clearing account is dated by its order already');
+  assert.equal(atTaxPoint(pay, [onClearing], { ...point('2026-06-30', ['2026-09-25']), clearing: new Set() })[0].date, '2026-09-25', 'the clearing accounts are the providers\' files\', never a number of the app');
 
   const eur = line({ accountCredit: '1023', exchangeCurrency: 'EUR', exchangeRate: 0.95 });
   const moved = atTaxPoint({ ...pay, currency: 'EUR' }, [eur], { ...point('2026-06-30', ['2026-09-28']), bankAccount: '1023' });
@@ -220,7 +223,7 @@ test('the electronic return on the agreed basis says so (formOfReporting 1) and 
 const tpRows = (es: JournalEntry[]) => es.map((e) => [e.date, e.accountDebit, e.accountCredit, e.amount, e.vatCode ?? '', e.corrects ?? '']);
 let pointIds = 0;
 const point = (closedThrough: string, dates: string[]): TaxPointContext => ({
-  accounts: ITEMS, bankAccount: '1021', lock: periodLock(books(closedThrough)), rateOn: () => undefined,
+  accounts: ITEMS, bankAccount: '1021', clearing: new Set(['1093']), lock: periodLock(books(closedThrough)), rateOn: () => undefined,
   documents: dates.map((date) => ({ date, kind: 'invoice' as const })), length: 'quarter', newId: () => `n${++pointIds}`,
 });
 const Q3_SALE = { 200: 1081, 299: 1081, 303: 1081, 399: 81, 500: 81 };
