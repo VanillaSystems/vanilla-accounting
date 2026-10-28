@@ -57,11 +57,12 @@ export function engine(): Engine {
     const sw = openSwitch(ws);
     baseline(ws, loadWorkflows(APP_ROOT, ws.paths.root).workflows);
     const root = ws.paths.root;
-    e = openEngine(() => openedAt(root), {
-      appRoot: APP_ROOT, ask: askIfReady, lock: () => lockIntake(ws),
+    const now = () => openedAt(root);
+    e = openEngine(now, {
+      appRoot: APP_ROOT, ask: askIfReady, lock: () => lockIntake(now()),
       isApproved: sw.isApproved, approve: sw.approve,
-      keeps: (run) => holdsFiledPeriod(ws, run),
-      onRest: (run) => releaseApproval(ws, run),
+      keeps: (run) => holdsFiledPeriod(now(), run),
+      onRest: (run) => releaseApproval(now(), run),
     });
     engines.set(ws.paths.root, e);
   }
