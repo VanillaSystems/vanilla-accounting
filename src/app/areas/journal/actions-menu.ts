@@ -7,6 +7,7 @@ import type { RouteOf } from '../../shell/route.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps } from '../index.js';
 import { askAbout } from '../../assistant/store.js';
+import { aiIsOff } from '../../ai/ai-off.js';
 import type { ActionSet, ObjAction } from '../../selection/ActionsMenu.js';
 import { likelyEntry } from '../../selection/likely.js';
 import type { EntryView } from './model.js';
@@ -34,7 +35,7 @@ export function entryActions(p: Props, v: EntryView): ActionSet {
     openPayment: v.tx ? { id: 'openPayment', label: t('actions.openPayment'), key: '⇧↵', run: () => runAct(p, 'payment') } : undefined,
     openReceipt: v.receipts.length ? { id: 'openReceipt', label: t('actions.openReceipt'), key: '↵', run: () => runAct(p, 'receipt') } : undefined,
     del: edit ? { id: 'del', label: t('actions.delete'), key: '⌘⌫', run: () => runAct(p, 'del') } : undefined,
-    ask: { id: 'ask', label: t('actions.ask'), run: () => askAbout({ kind: 'entry', id: e.id, label: e.description ?? e.id }) },
+    ask: aiIsOff() ? undefined : { id: 'ask', label: t('actions.ask'), run: () => askAbout({ kind: 'entry', id: e.id, label: e.description ?? e.id }) },
   };
   const likely = p.canEdit ? likelyEntry({ locked: v.locked, yearClose: e.origin === 'year-close' }) : undefined;
   const primary = likely ? all[likely] : undefined;

@@ -8,6 +8,7 @@ import type { RouteOf } from '../../shell/route.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps } from '../index.js';
 import { askAbout } from '../../assistant/store.js';
+import { aiIsOff } from '../../ai/ai-off.js';
 import type { ActionSet, ObjAction } from '../../selection/ActionsMenu.js';
 import { likelyReceipt } from '../../selection/likely.js';
 import { runEach } from '../../selection/batch.js';
@@ -28,10 +29,11 @@ export function receiptActions(p: Props, v: ReceiptView, l: Ledger): ActionSet {
   const { nav, canEdit } = p;
   const { r } = v;
   const name = v.vendor || r.filename;
-  const ask: ObjAction = { id: 'ask', label: t('actions.ask'), run: () => askAbout({ kind: 'receipt', id: r.id, label: r.filename }) };
+  // With the AI switched off (#212) nothing offers to ask it.
+  const ask: ObjAction | undefined = aiIsOff() ? undefined : { id: 'ask', label: t('actions.ask'), run: () => askAbout({ kind: 'receipt', id: r.id, label: r.filename }) };
   const firstTx = v.links.map((ref) => l.txByRef.get(ref)).find(Boolean);
   const openPayment: ObjAction | undefined = firstTx && { id: 'openPayment', label: t('actions.openPayment'), run: () => nav.go(at({ area: 'bank', payment: firstTx.ref }, firstTx.date)) };
-  if (!canEdit) return { primary: openPayment, rest: [ask] };
+  if (!canEdit) return { primary: openPayment, rest: ask ? [ask] : [] };
   const open = !v.none && !v.links.length && !v.locked;
   const sug = listed.suggestions.get(r.id);
   const twin = v.twin && !v.links.length && !v.locked ? l.byId.get(v.twin.of) : undefined;

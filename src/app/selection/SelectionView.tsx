@@ -12,6 +12,7 @@ import { ActionsMenu, type ActionSet } from './ActionsMenu.js';
 import { likelySelection } from './likely.js';
 import { countsOf } from './rows.js';
 import { askAbout } from '../assistant/store.js';
+import { aiIsOff } from '../ai/ai-off.js';
 import { selectionContext } from '../assistant/context.js';
 import { baseCurrency } from '../../engines/index.js';
 import { fmt, formatDate } from '../lib/utils.js';
@@ -50,7 +51,7 @@ function selectionActions(offers: BatchOffer[], likely: string | undefined, open
   const primary = all.find((a) => a.id === likely);
   // The chat with the picked rows as its reference: «mach das mit allen ausgewählten».
   const sel = selectionNow();
-  const ask = sel ? [{ id: 'ask', label: t('actions.askSelection'), run: () => askAbout(selectionContext(sel)) }] : [];
+  const ask = sel && !aiIsOff() ? [{ id: 'ask', label: t('actions.askSelection'), run: () => askAbout(selectionContext(sel)) }] : [];
   return { primary, rest: [...all.filter((a) => a !== primary), ...ask] };
 }
 

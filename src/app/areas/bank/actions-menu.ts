@@ -7,6 +7,7 @@ import type { BankTransaction } from '../../../types/index.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps } from '../index.js';
 import { askAbout } from '../../assistant/store.js';
+import { aiIsOff } from '../../ai/ai-off.js';
 import type { ActionSet, ObjAction } from '../../selection/ActionsMenu.js';
 import { likelyPayment } from '../../selection/likely.js';
 import { runEach } from '../../selection/batch.js';
@@ -44,7 +45,7 @@ export function paymentActions(p: AreaProps, b: Bank, tx: BankTransaction, close
     rule: edit ? { id: 'rule', label: t('actions.rule'), run: () => nav.go({ route: { area: 'company', section: 'rules' }, query: { payment: tx.ref } }) } : undefined,
     openEntry: entry ? { id: 'openEntry', label: t('actions.openEntry'), run: () => nav.go(at({ area: 'journal', id: entry.id }, entry.date)) } : undefined,
     openReceipt: receipt ? { id: 'openReceipt', label: t('actions.openReceipt'), run: () => nav.go(at({ area: 'receipts', id: receipt }, r?.date ?? tx.date)) } : undefined,
-    ask: { id: 'ask', label: t('actions.ask'), run: () => askAbout({ kind: 'payment', id: tx.ref, label: tx.description ?? tx.ref }) },
+    ask: aiIsOff() ? undefined : { id: 'ask', label: t('actions.ask'), run: () => askAbout({ kind: 'payment', id: tx.ref, label: tx.description ?? tx.ref }) },
   };
   const likely = likelyPayment({ unbooked, needsReceipt: needs && edit, locked: closed || !canEdit, booked: !!entry });
   const primary = likely ? all[likely] : undefined;

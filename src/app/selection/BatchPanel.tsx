@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { Index } from '../../types/index.js';
 import type { BatchAction, BatchAnswer } from '../../types/batch.js';
 import { firmCodes } from '../../accounting/vat-codes.js';
+import { aiIsOff } from '../ai/ai-off.js';
 import { api, errorText } from '../lib/api.js';
 import { t } from '../i18n/index.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
@@ -32,7 +33,7 @@ export function batchOffers(kind: SelectKind, hasDimensions: boolean): BatchOffe
     case 'receipt': return [
       { id: 'findPayment', label: t('batch.findPayment') },
       { id: 'notReceipt', label: t('batch.notReceipt') },
-      { id: 'readAgain', label: t('batch.readAgain') },
+      ...(aiIsOff() ? [] : [{ id: 'readAgain' as const, label: t('batch.readAgain') }]),
       { id: 'delete', label: t('batch.delete') },
     ];
     case 'payment': return [
