@@ -50,6 +50,7 @@ import { GroupedOffer } from '../company/RulesSection.js';
 import { Pick } from '../../selection/Pick.js';
 import { ActionsMenu } from '../../selection/ActionsMenu.js';
 import { paymentActions } from './actions-menu.js';
+import { NoMovements, PdfQuestion, UnmatchedNotice, pdfOf, statementActions } from './PdfQuestion.js';
 import { SelectionView } from '../../selection/SelectionView.js';
 import { paymentRows } from '../../selection/rows.js';
 import { clickRow, useSelection, useShown } from '../../selection/store.js';
@@ -127,6 +128,10 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
   const picked = useSelection('payment');
   useShown('payment', hits.map((p) => p.ref));
   const pickedRefs = new Set(picked?.ids);
+  // A statement PDF's question kept in the books (#254), and a PDF that brought no movement.
+  const pdf = pdfOf(s);
+  const ask = pdf ? props.books.statementAsks?.find((a) => a.file === pdf) : undefined;
+  const edit = canEdit && !closed;
 
   return (
     <div className="detail-in" data-for={s.key}>
@@ -150,6 +155,8 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
             : s.missing
               ? <span className="notice warn" style={{ margin: 0 }} data-testid="missing-notice">{I.dot}{t('bank.missingNotice')}</span>
               : <span className="notice" style={{ margin: 0 }} data-testid="without-notice">{t('bank.withoutNotice', { amount: `${s.account.currency} ${fmt(b.check(s).book)}` })}</span>
+        ) : pdf && !all.length && !ask ? (
+          <NoMovements s={s} nav={nav} edit={edit} />
         ) : c!.gap ? (
           <span className="notice warn" style={{ margin: 0 }} data-testid="statement-gap">{I.dot}{t('bank.gap', { from: formatDate(c!.gap.from), to: formatDate(c!.gap.to), bank: fmt(c!.gap.bank), open: fmt(c!.gap.open), diff: fmt(c!.gap.diff) })}</span>
         ) : c!.ok ? (
@@ -168,6 +175,8 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
         </div>
       ))}
       {c?.bookDiff && !c.gap ? <BookDiff {...props} diff={c.bookDiff} s={s} /> : null}
+      {ask ? <PdfQuestion key={ask.file} ask={ask} nav={nav} edit={edit} /> : null}
+      {tx?.unmatched ? <UnmatchedNotice key={`u-${tx.ref}`} tx={tx} nav={nav} edit={edit} /> : null}
 
       <div className="body">
         <div className="desk">
@@ -176,7 +185,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
             <div className="src paybar">
               <span><PayBar {...props} tx={tx} closed={closed} onClear={() => choose(undefined)} /></span>
               {tx && !closed ? <WorkflowButtons kind="transaction" id={tx.ref} facts={[b.unbooked(tx) ? 'unbooked' : 'booked']} nav={nav} canEdit={canEdit} /> : null}
-              {tx ? <ActionsMenu set={paymentActions(props as AreaProps, b, tx, closed)} /> : null}
+              {tx ? <ActionsMenu set={paymentActions(props as AreaProps, b, tx, closed)} /> : <ActionsMenu set={statementActions(nav, s, ask, edit)} />}
               {tx ? <AskAi context={{ kind: 'payment', id: tx.ref, label: tx.description ?? tx.ref }} /> : null}
               {src && <span className="pgno">{page}</span>}
               {file && <a className="dl inline" href={file} download={s.file!.filename} data-tip={t('bank.downloadTitle', { file: s.file!.filename })}>{I.dl}<span>{t('receipts.download')}</span></a>}

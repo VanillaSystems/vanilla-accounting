@@ -307,4 +307,4 @@ export interface MailStatus {
   inApp: boolean;
 }
 
-export interface StatementReadParams { why: 'line' | 'gap' | 'csvRow' | 'csvRows' | 'csvEmpty' | 'columns' | 'account' | 'covered'; row?: number; rows?: number; limit?: number; gap?: number; page?: number; currency?: string; file?: string }
+export interface StatementReadParams { why: 'line' | 'gap' | 'csvRow' | 'csvRows' | 'csvEmpty' | 'columns' | 'account' | 'covered' | 'blank'; row?: number; rows?: number; limit?: number; gap?: number; page?: number; currency?: string; file?: string }

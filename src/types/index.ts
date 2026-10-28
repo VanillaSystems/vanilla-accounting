@@ -204,6 +204,10 @@ export interface StatementImport {
   added: number;
   /** Movements made by hand that rows of the statement confirmed (#88): matched, not added. */
   confirmed?: number;
+  /** Movements read from PDFs on the days this bank export or CSV covers that it does not hold (#254): kept, each for the person to keep or remove. */
+  unmatched?: number;
+  /** Statement PDFs of the account whose question this bank export or CSV closed: kept as statements (#254). */
+  closedAsks?: number;
   bank: string;
   currency: string;
   /** The days it covers, as far as the file says (a camt export: its first and last booking). */

@@ -12,10 +12,10 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import { basename, dirname, join, relative } from 'node:path';
 import { accountForStatement, type StatementProblem } from '../../accounting/bank-accounts.js';
 import { legOf, madeByHand } from '../../workspace/money-accounts.js';
-import { exportSpans, heldWithout, mergeIndex, readStatementFiles, readTransactions, readWiseReferences, transactionsOfFiles, withCamtBalances, withinBooks } from '../../books/bank-import.js';
+import { alignReads, heldWithout, mergeIndex, readStatementFiles, readTransactions, readWiseReferences, sourceOf, structuredSpans, transactionsOfFiles, withCamtBalances, withinBooks, type Unmatched } from '../../books/bank-import.js';
 import { statementPdf } from '../../books/statement-facts.js';
 import { compactIban, readBankStatements } from '../../workspace/bank-statements.js';
-import { periodLock } from '../../books/store.js';
+import { periodLock, type Books } from '../../books/store.js';
 import { openYear } from '../../books/years.js';
 import { assignUniqueRefs, readCamt, transactionsOf, type CamtStatement } from '../../providers/camt053/camt053.js';
 import { proposedAccount } from '../../accounting/statement-bank.js';
@@ -24,7 +24,7 @@ import { refDates } from '../books.js';
 import { parseStatementBalances } from '../../providers/camt053/statement-balances.js';
 import { extractStatementBalances } from '../../providers/statement-pdf/statement-pdf-balances.js';
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
-import { coveredByExport } from '../../intake/statement-read.js';
+import { placeByText } from '../../intake/statement-read.js';
 import { firstPages } from '../../intake/recognize.js';
 import { matchPayments } from '../../invoices/payments.js';
 import { bookInvoiceEvents } from '../../invoices/events.js';
@@ -35,6 +35,7 @@ import { parseIban } from '../../workspace/banks.js';
 import { findFile, partDirs, yearPaths, type LedgerBankAccount } from '../../workspace/workspace.js';
 import { RequestError, WS, assertOpen, patchBody, readBooks, updateBooks, updateBooksWithEffects, withBooks } from '../books.js';
 import { addEntry } from '../edits.js';
+import { askAbout, closeAsk, correctAsk, importAsk } from '../statement-asks.js';
 import { openingLock, withOpening } from '../../accounting/opening-balance.js';
 import { yearEndAccounts } from '../../accounting/year-close.js';
 import { chartOf } from '../../books/year-close.js';
@@ -58,6 +59,8 @@ interface Placed {
   iban?: string;
   /** A camt.053 the app wrote from a statement read without one (#217): its movements carry no bank reference. */
   read?: boolean;
+  /** A bank's own camt.053, or one the app wrote from a bank CSV: a structured source of its account (#254). */
+  structured?: boolean;
 }
 
 const refuse = (status: number, error: string, reason: StatementRefusal, detail?: string): never => {
@@ -102,6 +105,7 @@ function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Pl
   const transactions: BankTransaction[] = [];
   let iban: string | undefined;
   const read = camt.statements.some((s) => s.read);
+  const structured = camt.statements.every((s) => sourceOf(s) !== 'pdf');
   for (const statement of camt.statements) {
     // The account the person named takes a statement of its currency, unless an IBAN the books know says otherwise.
     const named = statement.iban ? parseIban(statement.iban) : undefined;
@@ -135,32 +139,47 @@ function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Pl
   if (!account || !last) return refuse(400, 'Der Auszug hat keine Daten.', 'notCamt');
   const closing = closings.sort((a, b) => a.date.localeCompare(b.date)).at(-1);
   const opening = openings.sort((a, b) => a.date.localeCompare(b.date))[0];
-  return { account, filename, first: sorted[0], last, transactions, ...(iban ? { iban } : {}), ...(closing ? { closing } : {}), ...(opening ? { opening } : {}), ...(read ? { read } : {}) };
+  return { account, filename, first: sorted[0], last, transactions, ...(iban ? { iban } : {}), ...(closing ? { closing } : {}), ...(opening ? { opening } : {}), ...(read ? { read } : {}), ...(structured ? { structured } : {}) };
 }
 
 /**
  * A statement reaching into a filed period may repeat payments the books hold (a year-to-date
- * export): those stay as filed. One it holds that the books lack cannot be added there (golden
- * rule 1), so the file is refused before anything is written, naming the payments and the first
- * open day a new export should start on.
+ * export, a bank export of days a PDF was read for, #254): those stay as filed. One it would add
+ * there (golden rule 1) refuses the file, naming the payments and the first open day a new export
+ * should start on. Decided by the merge's own rule: the folder's files as they are now, the new one
+ * written, give each payment its ref (transactionsOfFiles); one dated in the filed period whose ref
+ * the books lack, and no movement by hand stands for, would be new.
  */
-function assertNoFiledPayments(placed: Placed): void {
+function assertNoFiledPayments(): void {
   const books = readBooks();
   const lock = periodLock(books);
   const through = books.config.closedThrough;
-  if (!through || !placed.transactions) return;
-  const key = (t: BankTransaction) => [t.bank, t.ref.split('~')[0], t.date, t.direction, t.amount.toFixed(2), t.currency].join('\u0000');
-  const held = new Set(books.transactions.map(key));
-  // A statement read without camt.053 names no bank reference: its movement is held when the books have the same one (src/books/bank-import.ts heldLines).
-  const loose = (t: BankTransaction) => [t.bank, t.currency, t.date, t.direction, Math.abs(t.amount).toFixed(2)].join('\u0000');
-  const pool = new Map<string, number>();
-  if (placed.read) for (const t of books.transactions) if (!madeByHand(t)) pool.set(loose(t), (pool.get(loose(t)) ?? 0) + 1);
-  const heldLoosely = (t: BankTransaction) => { const n = pool.get(loose(t)) ?? 0; if (n) pool.set(loose(t), n - 1); return n > 0; };
-  const missing = placed.transactions.filter((t) => lock.isClosed(t.date) && !held.has(key(t)) && !heldLoosely(t));
+  if (!through) return;
+  const legs = new Set(books.transactions.map(legOf));
+  const claimed = new Set(books.transactions.flatMap((t) => (t.statement === undefined ? [] : [`${t.statement} ${t.currency}`])));
+  const fresh = assignUniqueRefs(withinBooks(readTransactions(WS).transactions, books.config).kept);
+  const missing = fresh.filter((t) => lock.isClosed(t.date) && !legs.has(legOf(t)) && !claimed.has(legOf(t)));
   if (!missing.length) return;
   const refs = missing.map((t) => t.ref);
   throw new RequestError(403, `Der Auszug enthält ${missing.length} Zahlung${missing.length === 1 ? '' : 'en'} bis ${through}, die in den Büchern fehlen (${refs.slice(0, 5).join(', ')}). Die Periode ist eingereicht: nichts eingelesen. Einen Auszug ab dem ersten offenen Tag einlesen.`,
     { code: 'statement', params: { reason: 'filedPayments', closed: { n: missing.length, through, refs } } });
+}
+
+/**
+ * The movements read from PDFs that a structured file does not hold (#254, src/books/bank-import.ts
+ * alignReads): each stays as a movement of its own (`source: 'manual'`), so its bookings and links
+ * stay, marked for the person to keep or remove. Never one of the filed period.
+ */
+function keepUnmatched(books: Books, unmatched: readonly Unmatched[], by: string): void {
+  const lock = periodLock(books);
+  const since = new Date().toISOString().slice(0, 10);
+  for (const u of unmatched) {
+    const t = books.transactions.find((x) => !madeByHand(x) && !lock.isClosed(x.date) && x.bank === u.bank && x.currency === u.currency && x.date === u.date
+      && x.direction === u.direction && Math.abs(x.amount) === Math.abs(u.amount) && x.ref.split('~')[0] === u.ref.split('~')[0]);
+    if (!t) continue;
+    t.source = 'manual';
+    t.unmatched = { since, by };
+  }
 }
 
 const monthEnd = (month: string) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
@@ -202,14 +221,27 @@ function mergeBalances(old: StatementClosingBalance[] = [], fresh: StatementClos
   return [...out.values()].sort((a, b) => a.date.localeCompare(b.date) || a.account.localeCompare(b.account));
 }
 
+/**
+ * The account and month a statement PDF is kept for without a question (#254): its text or name names
+ * the account and its days, and a camt.053 or bank CSV of that account is in the books. Undefined when
+ * the file does not say, or the account has none: then it is read.
+ */
+export function keptAsStatement(text: string, name: string): { account: string; month: string } | undefined {
+  const { account, period } = placeByText(text, name, WS.bankAccounts);
+  if (!account || !period) return undefined;
+  return structuredSpans(WS).some((s) => s.account === account.account) ? { account: account.account, month: period.to.slice(0, 7) } : undefined;
+}
+
 router.post('/api/statements', express.raw({ type: () => true, limit: '50mb' }), async (req, res) => {
   const body = req.body as unknown;
   if (!Buffer.isBuffer(body) || body.length === 0) throw new RequestError(400, 'Keine Datei erhalten.');
   const month = typeof req.query.month === 'string' && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : undefined;
   const name = basename(String(req.query.name ?? '')).trim();
-  // A PDF of days no bank export covers is read into its movements in the drop dialog, as a dropped one is (#217); `keep=1` keeps it as the month's statement (the undo of «Auszug entfernen»).
-  if (/\.pdf$/i.test(name) && req.query.keep !== '1' && !coveredByExport(await firstPages(body) ?? '', name, WS.bankAccounts, exportSpans(WS))) {
-    refuse(409, 'Kein camt.053 deckt diesen Auszug ab: er wird im Ablage-Dialog gelesen.', 'read');
+  // A PDF of an account a camt.053 or bank CSV feeds is kept as its statement without a question (#254); any other is read in the drop dialog, as a dropped one is (#217). `keep=1` keeps it as the month's statement (the undo of «Auszug entfernen»).
+  if (/\.pdf$/i.test(name) && req.query.keep !== '1') {
+    const kept = keptAsStatement(await firstPages(body) ?? '', name);
+    if (!kept) refuse(409, 'Das Konto dieses Auszugs hat kein camt.053 und keine CSV: er wird im Ablage-Dialog gelesen.', 'read');
+    else return void res.json(await importStatement(body, name, kept.account, month ?? kept.month));
   }
   res.json(await importStatement(body, name, typeof req.query.account === 'string' ? req.query.account : undefined, month));
 });
@@ -228,7 +260,6 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
   if (!xml && !/\.pdf$/i.test(name)) refuse(400, 'Nur camt.053 (XML) oder PDF.', 'format');
   const placed = xml ? placeCamt(body, name, hint) : placePdf(name, hint, month);
   assertOpen(readBooks(), [placed.last], 'newStatement');
-  assertNoFiledPayments(placed);
 
   const year = openYear(placed.last.slice(0, 4), readBooks().config.closedThrough);
   const dir = join(yearPaths(WS.paths, year).statements, placed.account.bank);
@@ -245,7 +276,17 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
   mkdirSync(dir, { recursive: true });
   writeFileSync(path, body);
   if (beside && source) writeFileSync(beside, source.bytes);
+  // A read statement's file the structured one realigns, as it was: a refusal puts it back.
+  const realigned = new Map<string, string>();
   try {
+    assertNoFiledPayments();
+    // A bank's export or CSV takes the movements read from PDFs on its days (#254).
+    const aligned = placed.structured ? alignReads(readBankStatements(WS), mine, periodLock(readBooks()).isClosed, (f) => readFileSync(findFile(WS.paths, 'statements', f)!, 'utf8')) : undefined;
+    for (const [f, xml] of aligned?.files ?? []) {
+      const at = findFile(WS.paths, 'statements', f)!;
+      realigned.set(at, readFileSync(at, 'utf8'));
+      writeFileSync(at, xml);
+    }
     const bank = readTransactions(WS);
     const unmatched = bank.files.find((f) => f.status === 'unmatched');
     if (unmatched?.status === 'unmatched') throw refusedAccount(unmatched.refusal, unmatched.unknown);
@@ -261,6 +302,13 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
     const payments = paymentContext(WS);
     return updateBooksWithEffects((books): StatementImport => {
       assertOpen(books, [placed.last], 'newStatement');
+      if (aligned?.unmatched.length) keepUnmatched(books, aligned.unmatched, mine);
+      // The account's PDFs waiting for their question are its statements now: kept as they are.
+      const asked = (books.statementAsks ?? []).length;
+      if (placed.structured && books.statementAsks) {
+        books.statementAsks = books.statementAsks.filter((a) => a.account !== placed.account.account);
+        if (!books.statementAsks.length) delete books.statementAsks;
+      }
       const before = new Set(books.transactions.map((t) => t.ref));
       const confirmedBefore = new Set(books.transactions.filter((t) => t.statement !== undefined).map((t) => t.ref));
       const fresh = assignUniqueRefs(withinBooks(bank.transactions, books.config).kept);
@@ -275,6 +323,10 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
       const known = merged.index.transactions.filter((t) => pos.has(t.ref)).sort((a, b) => pos.get(a.ref)! - pos.get(b.ref)!);
       Object.assign(books, merged.index, { transactions: [...known, ...merged.index.transactions.filter((t) => !pos.has(t.ref))] });
       if (balances) books.statementBalances = mergeBalances(books.statementBalances, balances);
+      // A movement a row of this file confirmed (#88) is matched: nothing for the person to decide.
+      for (const t of books.transactions) if (t.unmatched && t.statement !== undefined) delete t.unmatched;
+      const unmatched = books.transactions.filter((t) => t.unmatched?.by === mine).length;
+      const closedAsks = asked - (books.statementAsks ?? []).length;
       // On the agreed basis an issued document's event comes first: its payment then only settles the receivable.
       const events = payments ? bookInvoiceEvents(books, invoices, payments) : undefined;
       if (events) fileReceipts(WS, books, events.files);
@@ -294,11 +346,14 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
         to: placed.last,
         ...(closing ? { closing } : {}),
         ...(placed.opening ? { opening: placed.opening } : {}),
+        ...(unmatched ? { unmatched } : {}),
+        ...(closedAsks ? { closedAsks } : {}),
       };
     });
   } catch (e) {
     rmSync(path, { force: true });
     if (beside) rmSync(beside, { force: true });
+    for (const [at, xml] of realigned) writeFileSync(at, xml);
     throw e;
   }
 }
@@ -321,7 +376,7 @@ function refsOnlyIn(file: string): string[] {
  * and the statement list is read again from the folder. Never in the closed period, never over an
  * entry a person booked by hand (such a payment stays, and the refusal says so).
  */
-export function removeStatement(file: string, refs?: readonly string[]): StatementRemoved {
+export function removeStatement(file: string, refs?: readonly string[], o: { keepPdf?: boolean } = {}): StatementRemoved {
   const path = findFile(WS.paths, 'statements', file);
   if (!path) throw new RequestError(404, `Den Auszug ${file} gibt es nicht.`, { code: 'gone', params: { what: 'file' } });
   const books = readBooks();
@@ -336,7 +391,8 @@ export function removeStatement(file: string, refs?: readonly string[]): Stateme
   // A camt.053 the app wrote from a statement read without one (#217) takes the file it was read from along.
   const from = /\.xml$/i.test(path) ? readCamtSafe(bytes)?.statements.find((x) => x.read)?.read?.from : undefined;
   const beside = from ? join(dirname(path), basename(from)) : undefined;
-  const besideBytes = beside && existsSync(beside) && beside !== path ? readFileSync(beside) : undefined;
+  // `keepPdf`: only the reading goes (the undo of «Bewegungen aus dem PDF einlesen», #254); the PDF stays the statement.
+  const besideBytes = !o.keepPdf && beside && existsSync(beside) && beside !== path ? readFileSync(beside) : undefined;
   rmSync(path, { force: true });
   if (besideBytes) rmSync(beside!, { force: true });
   try {
@@ -390,7 +446,45 @@ router.get('/api/statements/:bank/:filename/details', (req, res) => {
 });
 
 router.delete('/api/statements/:bank/:filename', (req, res) => {
-  res.json(removeStatement(`${req.params.bank}/${basename(req.params.filename)}`));
+  res.json(removeStatement(`${req.params.bank}/${basename(req.params.filename)}`, undefined, { keepPdf: req.query.keepPdf === '1' }));
+});
+
+/** A kept statement PDF's question (#254, src/server/statement-asks.ts). */
+const pdfOf = (req: express.Request) => `${req.params.bank}/${basename(String(req.params.filename))}`;
+
+/** «Bewegungen aus dem PDF einlesen»: read now (the model, or the hand form) and kept as the PDF's question. */
+router.post('/api/statements/:bank/:filename/read', async (req, res) => {
+  res.json(await askAbout(pdfOf(req)));
+});
+
+/** The question's table as the person corrected it: checked again and kept. */
+router.put('/api/statements/:bank/:filename/read', (req, res) => {
+  res.json(correctAsk(pdfOf(req), (req.body as { statement?: unknown } | undefined)?.statement));
+});
+
+/** «Einlesen»: the table written as a camt.053 beside the PDF and read in; the question goes. */
+router.post('/api/statements/:bank/:filename/read/import', async (req, res) => {
+  res.json(await importAsk(pdfOf(req), (req.body as { statement?: unknown } | undefined)?.statement, (body, name, account) => importStatement(body, name, account)));
+});
+
+/** «Als Auszug behalten»: the PDF stays the statement, its movements are not read in. */
+router.delete('/api/statements/:bank/:filename/read', (req, res) => {
+  closeAsk(pdfOf(req));
+  res.json({ ok: true });
+});
+
+/**
+ * «Behalten» on a movement read from a PDF that the account's camt.053 or CSV does not hold (#254): it
+ * stays as a movement of its own, the mark goes. «Entfernen» is DELETE /api/transactions/:ref.
+ */
+router.post('/api/transactions/:ref/kept', (req, res) => {
+  withBooks(res, (books) => {
+    const t = books.transactions.find((x) => x.ref === req.params.ref);
+    if (!t?.unmatched) throw new RequestError(404, 'Diese Bewegung wartet auf keine Antwort.', { code: 'gone', params: { what: 'payment' } });
+    assertOpen(books, [t.date], 'editTransaction');
+    delete t.unmatched;
+    return { ok: true };
+  });
 });
 
 /**

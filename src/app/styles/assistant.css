@@ -207,6 +207,7 @@ a.dmove:hover, a.dmove:focus-visible { background: var(--hover); outline: none; 
 .dread-check { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 8px; font-size: 12px; }
 .dread-check.ok { background: var(--pos-soft); color: var(--pos); }
 .dread-check.gap { background: var(--warn-soft); color: var(--warn); }
+.dread-check.blank { background: var(--line); color: var(--muted); }
 .dread-check .m { color: var(--muted); }
 .dread-acts { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
 .dread-acts .m { flex: 1; }

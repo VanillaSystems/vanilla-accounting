@@ -4,16 +4,18 @@
  * them, each line correctable; the balance check reruns on every change (src/books/statement-check.ts),
  * and «Einlesen» imports it as an ISO 20022 statement only once it adds up. A PDF can instead be kept as the
  * month's statement («Als Monatsauszug behalten», as before #217): the way without AI, and the only
- * one when a bank's own export covers days of it (its movements are then not imported). A bank CSV first
- * asks which column holds what; the answer is kept for that account's next CSV.
+ * one when a camt.053 or bank CSV of its account covers all its days (#254; on some of them, those days
+ * import only the payments the books hold). The same table answers a PDF's question kept in the books,
+ * in Bank › Kontoauszüge (#254). A bank CSV first asks which column holds what; the answer is kept for
+ * that account's next CSV.
  */
 import { useMemo, useState } from 'react';
 import { t } from '../i18n/index.js';
 import { fmt, formatDate } from '../lib/utils.js';
-import { amountOf, checkStatement, parseReadStatement } from '../../books/statement-check.js';
+import { amountOf, checkStatement, isBlank, parseReadStatement } from '../../books/statement-check.js';
 import type { DropAction, DropRow } from '../../types/drop.js';
 import type { Route } from './route.js';
-import type { BalanceGap, CsvColumns, ReadStatement } from '../../types/statement-read.js';
+import type { BalanceGap, CsvColumns, ReadStatement, StatementRead as Read } from '../../types/statement-read.js';
 
 /** A line as typed: amounts stay text until the check reads them. */
 interface Line { date: string; amount: string; counterparty: string; text: string; reference: string; page?: number; valueDate?: string; original?: { amount: number; currency: string } }
@@ -43,12 +45,26 @@ function gapText(g: BalanceGap, currency: string): string {
   return t(`drop.read.gap.${g.where}`, vars);
 }
 
-export function StatementRead({ r, act, go }: { r: DropRow; act(action: DropAction): Promise<unknown>; go(route: Route): void }) {
-  const read = r.read!;
+/** What the table sends: the table corrected (with `import`: «Einlesen»), or «Als Monatsauszug behalten». */
+export type ReadAction = Extract<DropAction, { kind: 'read' | 'keep' }>;
+
+/** Why the table is to fill by hand, in words: what is off, and what is left to do. */
+function whyText(read: Read): string {
+  if (read.why === 'failed') return read.error ? t('drop.read.why.failedCall', { error: read.error }) : t('drop.read.why.failed');
+  return read.why ? t(`drop.read.why.${read.why}`, { limit: read.limit ?? '', pages: read.pages ?? '' }) : '';
+}
+
+/**
+ * `pdf`: the table was read off a PDF, which may be kept as the statement instead; `asReceipt`: the
+ * file may still be a receipt (the drop row).
+ */
+export function StatementRead({ read, pdf, act, go, asReceipt }: { read: Read; pdf: boolean; act(action: ReadAction): Promise<unknown>; go(route: Route): void; asReceipt?: () => void }) {
   const [draft, setDraft] = useState(() => draftOf(read.statement));
   const [busy, setBusy] = useState(false);
   const statement = useMemo(() => statementOf(draft), [draft]);
-  const check = statement ? checkStatement(statement) : undefined;
+  // A table nobody filled checks nothing (#254): no «Geht auf», no «Einlesen».
+  const blank = !!statement && isBlank(statement);
+  const check = statement && !blank ? checkStatement(statement) : undefined;
   const known = useMemo(() => {
     // A line the books hold: the server's marks by day and amount, each taken once; a line changed since is no longer one.
     const pool = read.known.map((k) => `${k.date} ${k.amount.toFixed(2)}`);
@@ -68,6 +84,8 @@ export function StatementRead({ r, act, go }: { r: DropRow; act(action: DropActi
     try { await act({ kind: 'read', statement, import: true }); } finally { setBusy(false); }
   };
   const knownCount = known.filter(Boolean).length;
+  // Nothing to read in: a CSV beside a bank export, or a PDF whose every day a structured source covers.
+  const stuck = !!read.covered && (read.by === 'csv' || !!read.whole);
   const keep = async () => {
     setBusy(true);
     try { await act({ kind: 'keep', ...(statement ? { statement } : {}) }); } finally { setBusy(false); }
@@ -76,10 +94,17 @@ export function StatementRead({ r, act, go }: { r: DropRow; act(action: DropActi
     <div className="dread" data-testid="drop-read">
       <div className="dread-hd">
         <span className={`dchip r-${read.by}`} data-testid="drop-read-by">{t(`drop.read.by.${read.by}`)}</span>
-        {read.why ? <small>{t(`drop.read.why.${read.why}`, { limit: read.limit ?? '', pages: read.pages ?? '' })}</small> : null}
-        {read.why === 'noAi' ? <button type="button" className="linkbtn" data-testid="drop-read-ai" onClick={() => go({ area: 'company', section: 'ai' })}>{t('aiOff.toFirma')}</button> : null}
+        {read.why ? <small data-testid="drop-read-why" data-why={read.why}>{whyText(read)}</small> : null}
+        {read.why === 'noAi' || read.why === 'noProvider' ? <button type="button" className="linkbtn" data-testid="drop-read-ai" onClick={() => go({ area: 'company', section: 'ai' })}>{t('aiOff.toFirma')}</button> : null}
       </div>
-      {read.covered ? <p className="dwhy" data-testid="drop-read-covered">{t('drop.read.covered', { file: read.covered.file.split('/').pop() ?? read.covered.file, from: formatDate(read.covered.from), to: formatDate(read.covered.to) })}</p> : null}
+      {read.covered ? (
+        <p className="dwhy" data-testid="drop-read-covered" data-whole={!!read.whole}>
+          {t(read.by === 'csv' ? 'drop.read.covered' : read.whole ? 'drop.read.coveredAll' : 'drop.read.coveredSome', {
+            days: read.covered.map((c) => t('drop.read.coveredDays', { file: c.file.split('/').pop() ?? c.file, from: formatDate(c.from), to: formatDate(c.to) })).join('; '),
+            file: read.covered[0].file.split('/').pop() ?? read.covered[0].file, from: formatDate(read.covered[0].from), to: formatDate(read.covered[0].to),
+          })}
+        </p>
+      ) : null}
       <div className="dread-facts">
         <label>{t('drop.read.iban')}<input className="iban" value={draft.iban} onChange={(e) => setDraft({ ...draft, iban: e.target.value })} /></label>
         <label>{t('drop.read.currency')}<input className="ccy" value={draft.currency} maxLength={3} onChange={(e) => setDraft({ ...draft, currency: e.target.value.toUpperCase() })} /></label>
@@ -128,16 +153,17 @@ export function StatementRead({ r, act, go }: { r: DropRow; act(action: DropActi
           ))}
         </div>
       ) : null}
-      <div className={`dread-check ${check?.ok ? 'ok' : 'gap'}`} data-testid="drop-read-check" data-ok={!!check?.ok}>
+      <div className={`dread-check ${check?.ok ? 'ok' : blank ? 'blank' : 'gap'}`} data-testid="drop-read-check" data-ok={!!check?.ok}>
         {!statement ? t('drop.read.incomplete')
+          : blank ? t('drop.read.blank')
           : check!.ok ? t('drop.read.ok', { n: statement.movements.length, currency: statement.currency, closing: fmt(statement.closing.amount) })
           : check!.gaps.map((g, i) => <span key={i}>{gapText(g, statement.currency)}</span>)}
         {statement && knownCount ? <span className="m">{t('drop.read.knownCount', { n: knownCount })}</span> : null}
       </div>
       <div className="dread-acts">
-        {r.kind === 'statement-pdf' ? <button type="button" className="linkbtn" onClick={() => void act({ kind: 'as', as: 'receipt' })}>{t('drop.isReceipt')}</button> : null}
-        {r.kind === 'statement-pdf' ? <button type="button" className={read.covered ? 'btn primary' : 'btn'} data-testid="drop-read-keep" disabled={busy} data-tip={t('drop.read.keepTip')} onClick={() => void keep()}>{t('drop.read.keep')}</button> : null}
-        {read.covered ? null : <button type="button" className="btn primary" data-testid="drop-read-import" disabled={!check?.ok || busy} data-tip={check?.ok ? undefined : t('drop.read.importBlocked')} onClick={() => void importIt()}>{t('drop.read.import')}</button>}
+        {asReceipt ? <button type="button" className="linkbtn" onClick={asReceipt}>{t('drop.isReceipt')}</button> : null}
+        {pdf ? <button type="button" className={stuck ? 'btn primary' : 'btn'} data-testid="drop-read-keep" disabled={busy} data-tip={t('drop.read.keepTip')} onClick={() => void keep()}>{t('drop.read.keep')}</button> : null}
+        {stuck ? null : <button type="button" className="btn primary" data-testid="drop-read-import" disabled={!check?.ok || busy} data-tip={check?.ok ? undefined : t('drop.read.importBlocked')} onClick={() => void importIt()}>{t('drop.read.import')}</button>}
       </div>
     </div>
   );

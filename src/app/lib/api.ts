@@ -6,7 +6,8 @@ import type { MoneyRole } from '../../workspace/banks.js';
 import type { AiView } from '../../llm/view.js';
 import type { AiRefusal, ProviderId } from '../../llm/provider.js';
 import { isStepId, type StepId } from '../../llm/steps.js';
-import type { BankTransaction, InboxFile, Index, StatementImport, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
+import type { BankTransaction, InboxFile, Index, StatementAsk, StatementImport, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
+import type { ReadStatement } from '../../types/statement-read.js';
 import type { StatementRemoved } from '../../server/routes/statements.js';
 import type { PaymentReleased } from '../../invoices/payments.js';
 export type { StatementRemoved };
@@ -513,6 +514,18 @@ export const api = {
   statementFileDetails: (file: string) => request<{ details?: StatementDetails; importedAt?: string }>('GET', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/details`),
   /** A statement taken back out of the books (`file`: `<bank>/<filename>` as the import named it): the drop dialog's undo, from the page (r9k-3). */
   deleteStatement: (file: string) => request<StatementRemoved>('DELETE', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}`),
+  /** The undo of «Bewegungen aus dem PDF einlesen» (#254): the camt.053 written from the PDF goes, the PDF stays the statement. */
+  unreadStatement: (xml: string) => request<StatementRemoved>('DELETE', `/api/statements/${xml.split('/').map(encodeURIComponent).join('/')}?keepPdf=1`),
+  /** «Bewegungen aus dem PDF einlesen» on a kept statement PDF (#254): read now (the model, or the hand form), kept as its question. */
+  readStatementPdf: (file: string) => request<StatementAsk>('POST', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/read`),
+  /** The question's table as the person corrected it. */
+  correctStatementRead: (file: string, statement: ReadStatement) => request<StatementAsk>('PUT', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/read`, { statement }),
+  /** «Einlesen»: the table read in beside the PDF; the question goes. */
+  importStatementRead: (file: string, statement: ReadStatement) => request<StatementImport>('POST', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/read/import`, { statement }),
+  /** «Als Auszug behalten»: the PDF stays the statement, its movements are not read in. */
+  keepStatementPdf: (file: string) => request<Ok>('DELETE', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/read`),
+  /** «Behalten» on a movement read from a PDF that the account's camt.053 or CSV does not hold (#254). */
+  keepUnmatched: (ref: string) => request<Ok>('POST', `/api/transactions/${encodeURIComponent(ref)}/kept`),
   /** The undo of a removal, after the file is read again: its bookings and links back as they were (r10h-3). */
   restoreStatementBookings: (removed: StatementRemoved['removed']) => request<Ok>('POST', '/api/statements/bookings', removed),
 
