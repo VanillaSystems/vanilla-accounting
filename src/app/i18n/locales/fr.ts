@@ -3207,6 +3207,8 @@ export default {
     'receipts.report.heldMore': 'et {n} autres (au plus {limit} sont nommés ici un par un)',
     'receipts.report.filedRefund': 'n° {order} : remboursement du {date} de {amount} appartient à la période déposée {period} : comptabiliser comme correction ?',
     'receipts.report.filedRefundByHand': 'n° {order} : remboursement du {date} de {amount} appartient à la période déposée {period} ; la vente figure dans une ancienne écriture qui nomme aussi d’autres commandes (un versement, par exemple) : à vérifier et à comptabiliser à la main comme correction',
+    'receipts.report.filedRefundBooked': 'n° {order} : remboursement du {date} de {amount} appartient à la période déposée {period} et est déjà comptabilisé, aucune correction nécessaire :',
+    'receipts.report.filedRefundBookedAt': 'écriture du {date} ({ref})',
     'receipts.report.bookCorrection': 'Comptabiliser comme correction',
     'receipts.report.correctionTip': 'Comptabilise le remboursement au premier jour ouvert, avec le code de la vente ; déclaré dans le décompte rectificatif {period}, pas dans la période ouverte',
     'receipts.report.corrected': 'Correction comptabilisée : remboursement n° {order}, déclaré dans le décompte rectificatif {period}',

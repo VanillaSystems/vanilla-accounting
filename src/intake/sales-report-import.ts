@@ -226,6 +226,7 @@ function reportContext(ws: Workspace, books: Books, p: Provider, kind: 'sales' |
     ...(p.provider.gateways?.length ? { gateways: p.provider.gateways } : {}),
     ...(payments ? { payments } : {}),
     ...(correct ? { correct } : {}),
+    moneyAccounts: [...(context.moneyAccounts ?? [])],
     agreed: agreedBasis(), isClosed: (d) => lock.isClosed(d), beforeBooks: (d) => lock.beforeBooks(d), newId: () => randomBytes(8).toString('hex'),
     texts,
   };
@@ -233,8 +234,11 @@ function reportContext(ws: Workspace, books: Books, p: Provider, kind: 'sales' |
 
 /** A report's entries and links pushed into the books; the entries the books carried already with the same figures name the report too, while open and the app's. */
 function pushOutcome(books: Books, out: ReportOutcome, receipt: string): void {
-  books.journalEntries.push(...out.entries);
   const lock = periodLock(books);
+  // The app's own one-sum sales of the open period the outcome splits per charge day (#242) make room for their parts.
+  const replaced = new Set(out.replaced);
+  if (replaced.size) books.journalEntries = books.journalEntries.filter((e) => !(replaced.has(e.id) && isReportRef(e.transactionRef) && appMade(e) && !lock.isClosed(e.date)));
+  books.journalEntries.push(...out.entries);
   const link = (ref: string) => { if (!books.mappings.some((x) => x.transactionRef === ref && x.receiptId === receipt)) books.mappings.push({ transactionRef: ref, receiptId: receipt, by: 'rule', rule: REPORT_LINK_RULE }); };
   for (const m of out.links) link(m.transactionRef);
   const known = new Set(out.knownRefs);
@@ -295,8 +299,8 @@ function keepHeld(books: Books, id: string, out: ReportOutcome): void {
   r.report = { ...said, ...(out.held.length ? { held: out.held.slice(0, HELD_KEPT) } : {}), ...(out.held.length > HELD_KEPT ? { heldMore: out.held.length - HELD_KEPT } : {}), ...(filed.length ? { filedRefunds: filed } : {}) };
 }
 
-/** The provider's sales reports in the books that offer a refund of a filed period as a correction (#231). */
-const offering = (books: Books, p: Provider): string[] => books.receipts.filter((r) => r.report?.provider === p.id && r.report.kind === 'sales' && r.report.filedRefunds?.length).map((r) => r.id);
+/** The provider's sales reports in the books that offer a refund of a filed period as a correction (#231), or name one for the hand; one the books carry already (#242) only on the report's receipt. */
+const offering = (books: Books, p: Provider): string[] => books.receipts.filter((r) => r.report?.provider === p.id && r.report.kind === 'sales' && r.report.filedRefunds?.some((f) => !f.booked)).map((r) => r.id);
 
 /**
  * Every sales report of provider `p` in the books taken again, with the payments reports in the books

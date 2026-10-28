@@ -3207,6 +3207,8 @@ export default {
     'receipts.report.heldMore': 'and {n} more (at most {limit} are named here one by one)',
     'receipts.report.filedRefund': '#{order}: refund of {date} for {amount} belongs to the filed period {period}: book as a correction?',
     'receipts.report.filedRefundByHand': '#{order}: refund of {date} for {amount} belongs to the filed period {period}; the sale sits in an old entry that names other orders too (a payout, say): check it and book the correction by hand',
+    'receipts.report.filedRefundBooked': '#{order}: refund of {date} for {amount} belongs to the filed period {period} and is booked already, no correction needed:',
+    'receipts.report.filedRefundBookedAt': 'entry of {date} ({ref})',
     'receipts.report.bookCorrection': 'Book as a correction',
     'receipts.report.correctionTip': 'Books the refund on the first open day, with the sale\'s code; declared in the correction return {period}, not in the open one',
     'receipts.report.corrected': 'Correction booked: refund #{order}, declared in the correction return {period}',
