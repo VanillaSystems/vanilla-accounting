@@ -1,0 +1,84 @@
+# The German help site (tools/help/build.ts): its words, its sections in the order the menu shows
+# them, and the words for each step of processes/quarter-close.flow.yaml. The build fails while a
+# step of the flow has no words here, or a step named here is no longer in the flow.
+title: Hilfe zu Vanilla Accounting
+
+sections:
+  - { id: start, title: Loslegen }
+  - { id: faelle, title: Häufige Fälle }
+  - { id: nachschlagen, title: Nachschlagen }
+
+words:
+  version: "Diese Seite beschreibt Vanilla Accounting {version}."
+  contents: Inhalt
+  codes.rate: Satz
+  codes.amount: Der Betrag
+  case.receipt: Der Beleg
+  case.payment: Die Zahlung
+  case.booking: So bucht die App
+  case.debit: Soll
+  case.credit: Haben
+  case.amount: Betrag
+  case.code: MWST-Code
+  case.noCode: kein Code
+  case.text: Text
+  case.rate: zum Kurs
+  case.corrects: korrigiert
+  case.ziffern: Was sich in der MWST-Abrechnung ändert
+  case.payable: Mehr an die ESTV
+  case.refund: Weniger an die ESTV
+  code.gross: MWST inbegriffen
+  code.net: MWST kommt dazu
+  code.tax: nur die Steuer
+  code.negative: "Rückerstattung oder Storno:"
+  case.noReceipt: Es gibt keinen Beleg.
+  case.noPayment: Keine Zahlung, eine Buchung ohne Bankbewegung.
+  case.in: Eingang
+  case.out: Ausgang
+
+phases:
+  take-stock: Überblick
+  assemble: Zusammentragen
+  book: Buchen
+  file: Abrechnen
+
+quarter:
+  quarter_ends:
+    name: Ein Quartal endet.
+    text: Die MWST wird pro Quartal abgerechnet, mit dem Saldosteuersatz pro Halbjahr.
+  board:
+    name: Sehen, was fehlt.
+    text: Die App zählt, welche Zahlungen noch einen Beleg brauchen und welche Belege noch keine Zahlung haben.
+  collect:
+    name: Belege sammeln.
+    text: Aus den Mails, von Portalen, vom Handy und auf Papier. Was die App selbst holen kann, holt sie.
+  intake:
+    name: Belege ablegen.
+    text: Die App liest jeden Beleg, legt ihn im Quartal ab und merkt sich Betrag, Datum, Firma und MWST.
+  banks:
+    name: Kontoauszüge einlesen.
+    text: Ein camt.053 aus dem E-Banking, eine CSV oder das PDF des Auszugs.
+  evidence:
+    name: Belege und Zahlungen paaren.
+    text: Zuerst nach Regeln, dann mit der KI. Was offen bleibt, steht unter «Offen».
+  booking:
+    name: Buchen.
+    text: Jede Zahlung bekommt mindestens eine Buchung mit Konto und MWST-Code.
+  review_rules:
+    name: Bestätigen, was das Quartal gelehrt hat.
+    text: Vorgeschlagene Regeln behalten oder ersetzen, offene Fragen beantworten.
+  filing:
+    name: Die MWST-Abrechnung einreichen.
+    text: Die App erzeugt die Datei für «MWST abrechnen» der ESTV. Danach ist das Quartal gesperrt.
+  last_quarter:
+    name: War es das letzte Quartal des Jahres?
+    text: Wenn nicht, beginnt das nächste Quartal.
+  quarter_done:
+    name: Das Quartal ist abgeschlossen.
+    text: Was darin gebucht ist, bleibt so, wie es eingereicht wurde.
+  year:
+    name: Das Jahr abschliessen.
+    text: Fremdwährungskonten bewerten, den Abschluss prüfen, die Saldi ins neue Jahr vortragen.
+  year_done:
+    name: Das Jahr ist abgeschlossen.
+    text: Das neue Jahr beginnt mit den vorgetragenen Saldi.
