@@ -6,10 +6,14 @@
  * silently cost money or misstate VAT:
  *   - a rate code (I81/M26/...) not backed by any linked receipt showing Swiss MWST
  *   - a rate code with no receipt linked at all and no other proof named (BankTransaction.inputTaxProof)
- *   - a 0-code (I0/M0) where a linked receipt DOES show Swiss MWST (missed deduction)
+ *   - a 0-code (I0/M0) where a linked receipt DOES show Swiss MWST (missed deduction), unless the
+ *     line is on an account the bank's own fee movements are booked on (isSeparateFee): a bank fee is
+ *     an exempt financial service (MWSTG Art. 21 Abs. 2 Ziff. 19), and the receipt linked beside it
+ *     is the paid merchant's
  */
 
 import type { Index } from '../types/index.js';
+import { isSeparateFee } from '../booking/separate-fee.js';
 
 const POS_RATE_CODE = /^-?[IMV](77|81|25|26|37|38)\b/;
 const ZERO_CODE = /^-?[IMV]0\b/;
@@ -24,6 +28,8 @@ export interface VatAuditReport {
 export function auditVat(index: Index): VatAuditReport {
   const entries = index.journalEntries ?? [];
 
+  const feeTxs = new Set(index.transactions.filter(isSeparateFee).map((tx) => tx.ref));
+  const feeAccounts = new Set(entries.filter((e) => feeTxs.has(e.transactionRef)).map((e) => e.accountDebit).filter(Boolean));
   const proved = new Set(index.transactions.filter((tx) => tx.inputTaxProof).map((tx) => tx.ref));
   const receiptsByTx = new Map<string, Array<{ hasSwissVat?: boolean }>>();
   for (const tx of index.transactions) {
@@ -48,25 +54,13 @@ export function auditVat(index: Index): VatAuditReport {
     const anySwiss = recs.some((r) => r.hasSwissVat === true);
     const label = `${e.transactionRef}  ${code || '(none)'}  ${desc}`;
 
-    // Coop Pronto is an explicit exception: I81 is allowed even when the receipt
-    // (bad OCR) or no receipt shows MWST. Don't flag it as a rate-code violation.
-    const isCoopPronto = /coop\s*pronto/i.test(desc);
-    // Shopify Webshop Gebühren are I81 by rule — Shopify charges 8.1% on fees and
-    // the proof is the MONTHLY billing statement, not the per-order payout PDF, so
-    // the individual per-order fee transactions legitimately have no linked receipt.
-    const isWebshopFee = /webshop\s*geb[üu]hr/i.test(desc);
-    // Wise fees are rule-bound to I0 (account 6940) regardless of any statement
-    // linked to the same transaction, so a 0-code there is never a missed deduction.
-    const isWiseFee = /^wise,/i.test(desc) || /kartengeb|transfergeb|bankspesen/i.test(desc);
-
     if (POS_RATE_CODE.test(code)) {
-      if (isCoopPronto || isWebshopFee) continue;
       if (recs.length === 0) { if (!proved.has(e.transactionRef)) report.rateCodeNoReceipt.push(label); }
       else if (!anySwiss) report.rateCodeNoSwissReceipt.push(label);
     } else if (ZERO_CODE.test(code) && anySwiss && /^-?[IM]0\b/.test(code)) {
       // Revenue exports (V0) are legitimately 0-rated even with a Swiss-VAT
       // receipt, so only input-tax (I/M) 0-codes are flagged here.
-      if (isWiseFee) continue;
+      if (feeAccounts.has(e.accountDebit)) continue;
       report.zeroCodeButSwissReceipt.push(label);
     }
   }
