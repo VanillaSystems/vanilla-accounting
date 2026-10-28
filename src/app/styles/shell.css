@@ -54,6 +54,12 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .row.reading.failed .t span { color: var(--warn); }
 .shimmer { display: inline-block; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--line) 0%, var(--hover) 50%, var(--line) 100%); background-size: 200% 100%; animation: sh 1.2s linear infinite; vertical-align: middle; }
 @keyframes sh { to { background-position: -200% 0; } }
+/* A run of the inbox still works on it (#218): the small turning ring (.spin below) where the orange dot would be. */
+.row .t > .spin, .facts .proc > .spin { display: inline-block; vertical-align: -1px; margin-right: 7px; }
+.row .t small.proc { color: var(--muted); }
+.row.working .d.none { color: var(--muted); }
+.notice.proc, .notice.proc a, .facts .proc { color: var(--muted); }
+.facts .proc { font-family: "Instrument Sans"; display: inline-flex; align-items: center; }
 .row.leaving { animation: leave .28s ease forwards; }
 @keyframes leave { to { opacity: 0; transform: translateX(8px); } }
 .row.entering { animation: enter .35s ease; }

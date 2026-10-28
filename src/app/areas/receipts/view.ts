@@ -9,12 +9,18 @@ import type { Location, Route } from '../../shell/route.js';
 import { ledgerOf, type AmountFit, type Candidate, type Ledger, type ReceiptView } from './model.js';
 import { baseCurrency, filing } from '../../../engines/index.js';
 import { MODEL_TEXT, modelCut } from '../../../intake/unclear.js';
+import { automationNow } from '../../automation/store.js';
+import { processingOf } from '../../../workflows/processing.js';
+import type { RunSummary } from '../../../workflows/model.js';
 
-let memo: { books: Index; ledger: Ledger } | undefined;
+let memo: { books: Index; runs: RunSummary[] | undefined; ledger: Ledger } | undefined;
 
-/** The ledger of these books, computed once per load. */
+/** The ledger of these books, computed once per load and once per change of the runs (what they still work on, #218). */
 export function ledgerFor(books: Index): Ledger {
-  if (memo?.books !== books) memo = { books, ledger: ledgerOf(books, booksOpenPeriod(books, localToday(), filing().length).from) };
+  const runs = automationNow()?.runs;
+  if (memo?.books !== books || memo.runs !== runs) {
+    memo = { books, runs, ledger: ledgerOf(books, booksOpenPeriod(books, localToday(), filing().length).from, processingOf(runs ?? [], books.receipts)) };
+  }
   return memo.ledger;
 }
 

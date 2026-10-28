@@ -18,7 +18,7 @@ import { ICONS } from '../areas/icons.js';
 import { Dock } from './Dock.js';
 import { hrefOf, useLocationState } from './history.js';
 import { DropDialog, closeDrop, dropFiles, dropOpen } from './DropDialog.js';
-import { INTAKE, watchRuns } from '../automation/intake.js';
+import { INTAKE, watchRuns, watchSteps } from '../automation/intake.js';
 import { STATIC_EXPORT } from '../lib/api.js';
 import { noTitleBar } from '../desktop/bridge.js';
 import { ExportDialog } from '../areas/export/ExportDialog.js';
@@ -155,6 +155,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
     if (run.status === 'done') noteRef.current(t('intake.finished'));
     else toast(t('intake.note.error', { detail: run.error ?? run.status }));
   })), [toast]);
+  useEffect(() => (STATIC_EXPORT ? undefined : watchSteps(() => reload.current())), []);
 
   useShellKeys({
     overlayOpen: () => overlay !== null || dropOpen(),

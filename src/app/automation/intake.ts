@@ -41,3 +41,28 @@ export function watchRuns(onRest: (run: RunSummary) => void): () => void {
   check();
   return subscribe(check);
 }
+
+/**
+ * Calls `onStep` whenever a live run still under way finished a step since the last poll: the
+ * step may have written the books (the inbox's reading puts each file in as a receipt still being
+ * processed), so the screens show it at once and not only when the run comes to rest (#218).
+ */
+export function watchSteps(onStep: () => void): () => void {
+  const done = new Map<string, number>();
+  let first = true;
+  const check = () => {
+    const view = automationNow();
+    if (!view) return;
+    let moved = false;
+    for (const r of view.runs) {
+      if (r.mode !== 'live' || !OPEN.has(r.status)) { done.delete(r.id); continue; }
+      // A run first seen with steps behind it (it started between two polls) moved as well, but not on the page's first view.
+      if (r.path.length > (done.get(r.id) ?? (first ? r.path.length : 0))) moved = true;
+      done.set(r.id, r.path.length);
+    }
+    first = false;
+    if (moved) onStep();
+  };
+  check();
+  return subscribe(check);
+}

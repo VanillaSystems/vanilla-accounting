@@ -33,6 +33,9 @@ import { baseCurrency } from '../../../engines/index.js';
 import { localToday } from '../../../accounting/periods.js';
 import { linkedOf, receiptState, type Linked } from '../../../accounting/receipt-due.js';
 import { WorkflowButtons } from '../../automation/marks.js';
+import { useAutomation } from '../../automation/store.js';
+import { processingText } from '../../automation/processing.js';
+import { bookingRun, type Processing } from '../../../workflows/processing.js';
 import { AskAi } from '../../assistant/AskAi.js';
 import { salesWithoutVat } from '../../../accounting/sales-without-vat.js';
 import { intakeAdd } from '../receipts/intake.js';
@@ -101,6 +104,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
   const [page, setPage] = useState('');
   const all = b.payments(s);
   const [onlyUnbooked, setOnlyUnbooked] = useState(false);
+  const booking = !!bookingRun(useAutomation().view?.runs ?? []);
   const nUnbooked = all.filter(b.unbooked).length;
   const pays = onlyUnbooked && nUnbooked ? all.filter(b.unbooked) : all;
   const tx = route.payment ? all.find((p) => p.ref === route.payment) : undefined;
@@ -220,7 +224,9 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
                       onClick={(e) => clickRow(e, 'payment', p.ref, tx?.ref, (ref) => choose(ref === tx?.ref ? undefined : ref), nav.toast)}>
                       <Pick kind="payment" id={p.ref} on={isPicked} label={payText(p).name} toast={nav.toast} />
                       <span className="d">{p.date.slice(8)}.{p.date.slice(5, 7)}.</span>
-                      <span className="t">{b.needsReceipt(p) && I.dot}{payText(p).name}{b.unbooked(p) && <span className="nb" data-tip={t('bank.notBooked')}>{t('bank.unbookedMark')}</span>}
+                      <span className="t">{b.needsReceipt(p) && I.dot}{payText(p).name}{b.unbooked(p) && (booking && !p.waitsForPerson
+                        ? <span className="nb m" data-testid="booking-mark" data-tip={t('bank.bookingTip')}>{t('bank.bookingMark')}</span>
+                        : <span className="nb" data-tip={t('bank.notBooked')}>{t('bank.unbookedMark')}</span>)}
                         {madeByHand(p) && <span className="hm" data-testid="by-hand" data-tip={t(byStatement(p) ? 'bank.byHandConfirmedTip' : 'bank.byHandTip')}>{t(byStatement(p) ? 'bank.byHandConfirmed' : 'bank.byHand')}</span>}</span>
                       <span className="a"><Amount tx={p} /></span>
                     </button>
@@ -443,6 +449,10 @@ function PayoutWait({ books, tx }: { books: Props['books']; tx: BankTransaction 
 
 /** A payment without a booking: one that waits for its receipt says so as a fact, with its return's due day once it is the person's (issue #29); one whose receipt could not be read says that (issue #57). */
 function NotBooked({ tx, linked }: { tx: BankTransaction; linked: Linked }) {
+  const { view } = useAutomation();
+  const run: Processing | undefined = tx.waitsForPerson ? undefined : bookingRun(view?.runs ?? []);
+  // The inbox's run is open and books it (#218): what it does, not yet what the person should do.
+  if (run) return <span className="m" data-testid="booking-now">{run.kind === 'running' ? processingText(run, view) : t('bank.bookingNow', { what: processingText(run, view) })}</span>;
   const wait = receiptState(tx, linked, false, localToday());
   if (!wait) return <span className="wn">{t('bank.notBooked')}</span>;
   if (wait.kind === 'unread') return <span className="wn" data-testid="waits-for-receipt">{t('bank.receiptUnread')}</span>;

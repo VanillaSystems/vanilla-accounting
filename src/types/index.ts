@@ -63,6 +63,11 @@ export interface Receipt {
   kindWhy?: string;
   /** The workflow run that took it up (src/workflows/engine.ts): the receipt's page links to it. */
   run?: string;
+  /**
+   * Facts a person entered while the inbox's run still read the receipt (staged, #218): the matching
+   * step keeps them instead of what it reads, and takes the mark off when it files the receipt.
+   */
+  handSet?: Array<'date' | 'amount' | 'description'>;
   /** What a list shows: the vendor as people say it and what it is in 1–3 words (src/intake/titles.ts). */
   title?: ReceiptTitle;
   /** Receipts a person said are other documents, though their facts look alike (src/intake/duplicates.ts): never paired again. */

@@ -38,27 +38,33 @@ import { ActionsMenu } from '../../selection/ActionsMenu.js';
 import { readsPaidPrivately, receiptActions } from './actions-menu.js';
 import { useAiOff } from '../../ai/ai-off.js';
 import { baseCurrency, chargesVat, filing, withoutInputTax } from '../../../engines/index.js';
+import { processingText } from '../../automation/processing.js';
+import { inProcess, type Processing } from '../../../workflows/processing.js';
+import { refusalText } from '../../automation/refusal.js';
 
 type Props = AreaProps<RouteOf<'receipts'>>;
 
 export function Detail(props: Props) {
   const { route, books } = props;
   const s = useUi();
+  // The runs' state is part of the ledger (what they still work on, #218): a poll that moved them shows here.
+  useAutomation();
   const l = ledgerFor(books);
   const v = route.id ? l.byId.get(route.id) : undefined;
   const pending = route.id && !v ? s.inbox.find((f) => f.id === route.id) : undefined;
-  if (pending) return <PendingDetail file={pending} nav={props.nav} />;
+  if (pending) return <PendingDetail file={pending} nav={props.nav} proc={l.processing.get(pending.id)} />;
   if (!v) return <div className="detail-empty"><div>{route.id ? t('receipts.gone') : ''}</div></div>;
   return <ReceiptDetail key={v.r.id} {...props} v={v} l={l} />;
 }
 
-function PendingDetail({ file, nav }: { file: InboxFile; nav: Props['nav'] }) {
+function PendingDetail({ file, nav, proc }: { file: InboxFile; nav: Props['nav']; proc?: Processing }) {
   const s = useUi();
   const running = useIntakeRunning();
+  const { view } = useAutomation();
   const failed = file.failed;
   return (
     <div className="detail-in">
-      <div className="head"><h2 className="who">{failed ? file.filename : <span className="shimmer" style={{ width: 260, height: 18 }} />}<small>{failed ? t('receipts.readFailedDetail') : t('receipts.readingDetail')}</small></h2></div>
+      <div className="head"><h2 className="who">{failed ? file.filename : <span className="shimmer" style={{ width: 260, height: 18 }} />}<small data-testid="pending-processing">{failed ? t('receipts.readFailedDetail') : inProcess(proc) ? processingText(proc, view) : t('receipts.readingDetail')}</small></h2></div>
       <div className="facts"><span>{file.filename}</span></div>
       {failed && (
         <div className="notice warn" data-testid="read-failed">
@@ -123,9 +129,14 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
   const src = sources.receipt(r.id);
   const open = parsePeriod(l.openFrom.slice(0, 4) + '-Q' + Math.ceil(Number(l.openFrom.slice(5, 7)) / 3), localToday());
   const aiOff = useAiOff();
+  const { view } = useAutomation();
+  // A run of the inbox still works on it (#218): what it does instead of what is missing; a run that stopped says so.
+  const proc = l.processing.get(r.id);
+  const busy = inProcess(proc) && !v.none;
+  const unread = !v.date || r.amount == null || vatChipOf(r.hasSwissVat, withoutInputTax()) === 'unread';
 
   return (
-    <div className="detail-in" data-for={r.id}>
+    <div className="detail-in" data-for={r.id} data-processing={busy ? proc.kind : proc?.kind === 'stuck' ? 'stuck' : undefined}>
       <div className="head">
         <h2 className="who">{v.vendor}<small>{v.desc}</small></h2>
         {r.amount != null && (
@@ -135,7 +146,15 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
           </div>
         )}
       </div>
-      {!v.none && (
+      {busy && (
+        <div className="facts">
+          {v.date && <span data-tip={t('receipts.factDate')}>{formatDate(v.date)}</span>}
+          {r.amount != null && <span data-tip={t('receipts.factAmount')}>{cur} {fmt(r.amount)}</span>}
+          {vat.map((g) => <span key={g.ratePercent} data-tip={t('receipts.factVat', { rate: g.ratePercent, tax: fmt(g.vat) })}>{t('receipts.vatLine', { rate: g.ratePercent, tax: fmt(g.vat) })}</span>)}
+          {unread && <span className="proc" data-testid="facts-working" data-tip={t('processing.tip')}><span className="spin small" aria-hidden="true" />{t('processing.field')}</span>}
+        </div>
+      )}
+      {!v.none && !busy && (
         <div className="facts">
           {v.date ? <span data-tip={t('receipts.factDate')}>{formatDate(v.date)}</span>
             : <button type="button" className="miss" disabled={!canEdit} data-tip={t('receipts.addDate')} onClick={() => runAct(props, 'edit')}>{t('receipts.dateMissing')}</button>}
@@ -161,7 +180,8 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
         </div>
       )}
       {!v.locked && !v.links.some((ref) => l.txByRef.has(ref)) && r.filedPayment && <FiledPaymentNotice {...props} payment={r.filedPayment} open={open ? periodName(open) : ''} receipt={r.id} corrected={v.links.length > 0} />}
-      {aiOff && !v.none && !r.extractedText.trim() && (
+      {proc?.kind === 'stuck' && !v.none && !v.links.length && <StuckNotice proc={proc} nav={nav} view={view} />}
+      {aiOff && !busy && !v.none && !r.extractedText.trim() && (
         <div className="notice aioffwait" data-testid="waits-ai-off">
           {I.dot}<span>{t('receipts.waitsAiOff')}</span>
           <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'company', section: 'ai' }, query: {} }); }}>{t('aiOff.toFirma')}</a>
@@ -172,6 +192,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       <ReportCorrections receipt={r.id} books={props.books} canEdit={canEdit} said={(message) => { nav.refresh(); nav.toast(message); }} />
       {v.none
         ? <div className="notice">{v.noneWhy ? t('receipts.noneNoticeWhy', { why: noneText(v) }) : t('receipts.noneNotice')} {canEdit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t('receipts.isReceipt')}</a>}</div>
+        : busy && !v.links.length ? <div className="status"><Working proc={proc} nav={nav} view={view} /></div>
         : v.twin?.relation === 'duplicate' && !v.links.length ? null : <div className="status"><Status {...props} /></div>}
       {canEdit && r.kind === 'noise' && r.kindBy === 'human' && <SkipOffer receipt={r.id} nav={nav} />}
 
@@ -184,8 +205,8 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
           </div>
         </div>
         <aside className="margin" aria-label={t('receipts.details')}>
-          {!v.none && <Payments {...props} edit={edit} />}
-          {!v.none && <Angaben {...props} edit={edit} />}
+          {!v.none && <Payments {...props} edit={edit} working={busy ? proc : undefined} />}
+          {!v.none && <Angaben {...props} edit={edit} working={busy} />}
           <Datei {...props} edit={edit} />
           <RunHistory on={{ kind: 'receipt', id: r.id }} books={props.books} nav={nav} period={props.query.period} />
           {r.remarks && !s.open.angaben && <div className="note">{r.remarks}</div>}
@@ -219,6 +240,27 @@ const entryLine = (e: JournalEntry) => `${formatDate(e.date)} · ${e.description
 
 /** A payment made by hand only this receipt holds: releasing it deletes the payment, as unlinking would leave it orphaned. */
 const ownPrivate = (l: Ledger, tx: BankTransaction) => !byStatement(tx) && (l.receiptsByRef.get(tx.ref)?.length ?? 0) <= 1;
+
+/** What the inbox's run is doing with the receipt now, in place of what it still lacks (#218): the person may still edit, and the run keeps what she enters. */
+function Working({ proc, nav, view }: { proc: Processing; nav: Props['nav']; view: ReturnType<typeof useAutomation>['view'] }) {
+  return (
+    <span className="notice proc" style={{ margin: 0 }} data-testid="processing" data-tip={t('processing.tip')}>
+      <span className="spin small" aria-hidden="true" />{processingText(proc, view)}
+      {' '}<a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'automation', view: 'run', run: proc.run }, query: {} }); }}>{t('processing.toRun')}</a>
+    </span>
+  );
+}
+
+/** The run that was working on the receipt stopped: the receipt needs the person, and the run says why (#218, #215). */
+function StuckNotice({ proc, nav, view }: { proc: Extract<Processing, { kind: 'stuck' }>; nav: Props['nav']; view: ReturnType<typeof useAutomation>['view'] }) {
+  const why = refusalText(proc.error, proc.why);
+  return (
+    <div className="notice warn" data-testid="processing-stuck">
+      {I.dot}<span>{why ? t('processing.stuckWhy', { what: processingText(proc, view), why }) : processingText(proc, view)}</span>
+      <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'automation', view: 'run', run: proc.run }, query: {} }); }}>{t('processing.toRun')}</a>
+    </div>
+  );
+}
 
 function Status(props: Props & { v: ReceiptView; l: Ledger }) {
   const { v, l, nav, canEdit } = props;
@@ -302,13 +344,13 @@ function Sec({ k, val, children }: { k: Section; val: ReactNode; children: React
   );
 }
 
-function Payments(props: Props & { v: ReceiptView; l: Ledger; edit: boolean }) {
-  const { v, l, nav, edit } = props;
+function Payments(props: Props & { v: ReceiptView; l: Ledger; edit: boolean; working?: Processing }) {
+  const { v, l, nav, edit, working } = props;
   const one = v.links.length === 1 ? (l.txByRef.get(v.links[0])?.date ?? l.entriesByRef.get(v.links[0])?.[0]?.date) : undefined;
   const val = !v.links.length ? '—' : v.links.length === 1 ? (one ? formatDate(one) : '?') : t('receipts.nPayments', { n: v.links.length });
   return (
     <Sec k="zahlung" val={val}>
-      {v.links.length === 0 && <div style={{ color: 'var(--muted)', fontSize: 12.5, padding: '4px 0 2px' }}>{t('receipts.noPaymentLinked')}</div>}
+      {v.links.length === 0 && <div style={{ color: 'var(--muted)', fontSize: 12.5, padding: '4px 0 2px' }}>{working ? processingText(working) : t('receipts.noPaymentLinked')}</div>}
       {v.links.map((ref) => {
         const tx = l.txByRef.get(ref);
         if (!tx) {
@@ -349,8 +391,10 @@ function Payments(props: Props & { v: ReceiptView; l: Ledger; edit: boolean }) {
 const CURRENCIES = ['CHF', 'EUR', 'USD', 'GBP'];
 const parseAmount = (s: string) => { const n = Number(s.replace(/['’\s]/g, '').replace(',', '.')); return Number.isFinite(n) ? n : null; };
 
-function Angaben(props: Props & { v: ReceiptView; edit: boolean }) {
-  const { v, nav, edit, canEdit } = props;
+function Angaben(props: Props & { v: ReceiptView; edit: boolean; working: boolean }) {
+  const { v, nav, edit, canEdit, working } = props;
+  // While a run still reads the receipt, an empty field says so instead of asking to be filled (#218).
+  const reading = working ? t('processing.field') : undefined;
   // A receipt of a filed period keeps its amount, VAT and file; its date and words may still change.
   const frozen = v.locked ? t('receipts.frozenField') : undefined;
   const { r } = v;
@@ -423,14 +467,14 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean }) {
         onKeyDown={(e) => { if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA') { e.preventDefault(); save(); } }}
       >
         <label>{t('receipts.field.filename')}<input className="mono" name="filename" defaultValue={r.filename} readOnly={!edit} data-tip={frozen} style={{ fontSize: 12 }} /></label>
-        <label>{t('receipts.field.date')}<input className="mono" name="date" defaultValue={r.date ? formatDate(r.date) : ''} placeholder={t('receipts.datePlaceholder')} readOnly={!canEdit} /></label>
+        <label>{t('receipts.field.date')}<input className="mono" name="date" defaultValue={r.date ? formatDate(r.date) : ''} placeholder={reading ?? t('receipts.datePlaceholder')} readOnly={!canEdit} /></label>
         {r.dateSource === 'captured' && <div className="fhint">{t('receipts.dateCaptured')}</div>}
         <div className="two">
           <label>{t('receipts.field.currency')}<select name="currency" defaultValue={r.currency || baseCurrency()} disabled={!edit} data-tip={frozen}>{currencies.map((c) => <option key={c}>{c}</option>)}</select></label>
-          <label>{t('receipts.field.amount')}<input className="mono" name="amount" defaultValue={r.amount == null ? '' : fmt(r.amount)} readOnly={!edit} data-tip={frozen} style={{ textAlign: 'right' }} /></label>
+          <label>{t('receipts.field.amount')}<input className="mono" name="amount" defaultValue={r.amount == null ? '' : fmt(r.amount)} readOnly={!edit} data-tip={frozen} placeholder={reading} style={{ textAlign: 'right' }} /></label>
         </div>
         {withoutInputTax() !== 'none' ? <VatFields v={v} nav={nav} edit={edit} title={frozen} /> : null}
-        <label>{t('receipts.field.description')}<input name="description" defaultValue={r.description ?? ''} readOnly={!canEdit} /></label>
+        <label>{t('receipts.field.description')}<input name="description" defaultValue={r.description ?? ''} readOnly={!canEdit} placeholder={reading} /></label>
         <label>{t('receipts.field.remarks')}<textarea name="remarks" defaultValue={r.remarks ?? ''} readOnly={!canEdit} placeholder={t('receipts.remarksPlaceholder')} /></label>
         <div className="err" role="alert">{err}</div>
         {canEdit && <div className="fhint">{t('receipts.saveHint')}</div>}

@@ -25,6 +25,8 @@ import { Detail, statementName } from './Detail.js';
 import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
 import './bank.css';
 import { filing } from '../../../engines/index.js';
+import { useAutomation } from '../../automation/store.js';
+import { bookingRun } from '../../../workflows/processing.js';
 
 type Props = AreaProps<RouteOf<'bank'>>;
 
@@ -86,6 +88,7 @@ function List(props: Props) {
   const bad = rows.filter((r) => r.c && troubled(b, r.s)).length - gaps;
   const strays = useMemo(() => b.strays(period.from, period.to), [b, period.from, period.to]);
   const open = (d: string) => !b.closedThrough || d > b.closedThrough;
+  const booking = !!bookingRun(useAutomation().view?.runs ?? []);
   const unbooked = useMemo(() => books.transactions.filter((x) => x.date >= period.from && x.date <= period.to && open(x.date) && b.unbooked(x) && !!b.statementOf(x))
     .sort((x, y) => x.date.localeCompare(y.date)), [b, books, period.from, period.to]);
 
@@ -148,8 +151,9 @@ function List(props: Props) {
             ? <span className="warn">{I.dot}{t('bank.nDiffer', { n: bad })}</span>
             : files > 0 && !gaps && !strays.length && <span className="ok" data-tip={t('bank.balancesOkTip')}>{I.check}{t('bank.balancesOk')}</span>}
           {unbooked.length > 0 && (
-            <button type="button" className="warn golink" data-testid="unbooked-count" data-tip={t('bank.unbookedTip')} onClick={() => nav.go(at({ area: 'bank', payment: unbooked[0].ref }, unbooked[0].date, query.period))}>
-              {I.dot}{t('bank.nUnbooked', { n: unbooked.length })}
+            // While the inbox's run is open, it books them (#218): a fact, not yet the person's to do.
+            <button type="button" className={`${booking ? 'm' : 'warn'} golink`} data-testid="unbooked-count" data-booking={booking ? 'yes' : undefined} data-tip={t(booking ? 'bank.bookingTip' : 'bank.unbookedTip')} onClick={() => nav.go(at({ area: 'bank', payment: unbooked[0].ref }, unbooked[0].date, query.period))}>
+              {booking ? <span className="spin small" aria-hidden="true" /> : I.dot}{t(booking ? 'bank.nBooking' : 'bank.nUnbooked', { n: unbooked.length })}
             </button>
           )}
           <span className="seg gb" role="tablist" aria-label={t('bank.groupBy')}>

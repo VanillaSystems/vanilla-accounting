@@ -27,8 +27,12 @@ import { roleBefore } from './banks.js';
  * 5: bank statements among the receipts are typed and dated on load (#151); no record of a filed
  * period changes, receipts are not sealed; an older app would show them as receipts again, which
  * is harmless, but the number makes npm run update write the result.
+ * 6: a receipt still being processed keeps what the person set by hand (#218): `Receipt.handSet`
+ * names the date, amount or description she set, so finishing the read never writes over them;
+ * emptied once the receipt is filed. An app of schema 5 would read the receipt and overwrite her
+ * values, so it must refuse these books.
  */
-export const BOOKS_SCHEMA = 5;
+export const BOOKS_SCHEMA = 6;
 /**
  * 2: every money account names its `role` (#88).
  * 3: `company.vat.reportingSince`, the year the basis began (#143). An app of schema 2 would read
@@ -51,6 +55,8 @@ export const BOOKS_MIGRATIONS: Ladder<Record<string, unknown>> = {
   // Bank statements among the receipts are typed on every load (src/books/store.ts loadBooks,
   // typeStatements), at any schema; the number says the books may hold typed statements.
   4: (doc) => doc,
+  // No receipt has `handSet` before; the number makes an older app refuse the books.
+  5: (doc) => doc,
 };
 /** On the YAML document, so the comments of the manifest survive the step. */
 export const MANIFEST_MIGRATIONS: Ladder<Document> = {

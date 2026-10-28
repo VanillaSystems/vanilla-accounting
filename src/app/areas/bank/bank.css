@@ -64,3 +64,7 @@
 .payparts ul { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 2px; max-width: 520px; }
 .payparts li { display: flex; justify-content: space-between; gap: 12px; color: var(--ink-2); }
 .wftask .payparts { margin: 2px 0 6px; }
+/* Payments the inbox's open run books (#218): said quietly, not yet the person's to do. */
+.counts.stc button.m { color: var(--muted); display: inline-flex; align-items: center; gap: 6px; font-size: inherit; white-space: nowrap; }
+.counts.stc button.m:hover { text-decoration: underline; }
+.paylist .pay .nb.m { color: var(--muted); }

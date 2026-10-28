@@ -28,8 +28,8 @@ one place, `src/workspace/schema.ts`.
 
 | File | Version now | Migration ladder |
 |---|---|---|
-| The books (`ledger.json` with `transactional-data/<year>/books/*.jsonl`) | `BOOKS_SCHEMA = 4` (2: books split by fiscal year, ADR 0013; 3: money accounts as equals, #88, no record changes; 4: `JournalEntry.tags`, #127, no record changes) | `BOOKS_MIGRATIONS` |
-| `belege.workspace.yaml` | `WORKSPACE_SCHEMA = 2` (2: each money account names its `role`, #88) | `MANIFEST_MIGRATIONS` (on the YAML document, comments survive) |
+| The books (`ledger.json` with `transactional-data/<year>/books/*.jsonl`) | `BOOKS_SCHEMA = 6` (2: books split by fiscal year, ADR 0013; 3: money accounts as equals, #88, no record changes; 4: `JournalEntry.tags`, #127, no record changes; 5: bank statements among the receipts typed and dated on load, #151; 6: `Receipt.handSet`, #218, no record changes) | `BOOKS_MIGRATIONS` |
+| `belege.workspace.yaml` | `WORKSPACE_SCHEMA = 3` (2: each money account names its `role`, #88; 3: `company.vat.reportingSince`, #143) | `MANIFEST_MIGRATIONS` (on the YAML document, comments survive) |
 | `invoices.json` | `INVOICES_SCHEMA = 1` | `INVOICES_MIGRATIONS` |
 | `questions.jsonl` lines | `QUESTION_LINE_VERSION = 1` (`v` on each line) | none |
 
@@ -57,7 +57,7 @@ classDiagram
   }
   class Manifest {
     <<belege.workspace.yaml>>
-    +schema: number = 2
+    +schema: number = 3
     +company: Company
     +bankAccounts: LedgerBankAccount[1..*]
     +profile: WorkspaceProfile [0..1]
@@ -128,7 +128,7 @@ classDiagram
   }
   class Ledger {
     <<ledger.json>>
-    +schema: number = 4
+    +schema: number = 6
     +config: AccountingConfig
   }
   class AccountingConfig {
@@ -292,6 +292,7 @@ classDiagram
     +hasSwissVat: boolean [0..1]
     +vatBy: human [0..1]
     +kindBy: rule | human [0..1]
+    +handSet: (date | amount | description)[0..*]
     +title: vendor, what [0..1]
     +distinctFrom: string[0..*]
     +filedPayment: string [0..1]

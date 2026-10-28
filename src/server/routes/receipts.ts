@@ -80,6 +80,14 @@ function patched(receipt: Receipt, { date, amount, kind, vat: _vat, vatBy: _vatB
   return out;
 }
 
+/** A receipt the inbox's run still reads (staged, #218) remembers which facts the person entered: the run keeps them. */
+function handSetOf(was: Receipt, patch: ReceiptPatch): Pick<Receipt, 'handSet'> {
+  if (was.location !== 'staged') return {};
+  const set = new Set(was.handSet);
+  for (const k of ['date', 'amount', 'description'] as const) if (patch[k] !== undefined) set.add(k);
+  return set.size ? { handSet: [...set] } : {};
+}
+
 router.get('/api/receipts/:id', (req, res) => {
   const books = readBooks();
   const receipt = books.receipts.find((r) => r.id === req.params.id);
@@ -295,7 +303,7 @@ router.patch('/api/receipts/:id', async (req, res) => {
 
       const was = books.receipts[idx];
       if (patch.filename !== undefined) undoRename = renameReceiptFile(receiptPath(books, was), patch.filename);
-      books.receipts[idx] = patched(was, patch);
+      books.receipts[idx] = { ...patched(was, patch), ...handSetOf(was, patch) };
       if (patch.vat !== undefined) {
         setReceipt(books, id, { vat: patch.vat ?? { lineItems: undefined }, ...(patch.vat === null || patch.vatBy === null ? { vatBy: null } : {}) });
         again = unbookedPayments(books, [id]);

@@ -164,7 +164,7 @@ a.dmove:hover, a.dmove:focus-visible { background: var(--hover); outline: none; 
 .dropdlg .dbar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .dropdlg .dbar i { display: block; height: 100%; background: var(--accent); transition: width .4s; }
 .dchip.p-working { background: var(--hover); color: var(--ink-2); }
-.dchip.p-waits { background: var(--warn-soft); color: var(--warn); }
+.dchip.p-waits, .dchip.p-stuck { background: var(--warn-soft); color: var(--warn); }
 .dchip.p-matched { background: color-mix(in srgb, var(--pos, #1a7f4b) 14%, transparent); color: var(--pos, #1a7f4b); }
 .dpw input { font-size: 12px; }
 .droprow.open { border-bottom: 0; }

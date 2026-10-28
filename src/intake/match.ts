@@ -79,6 +79,22 @@ function dateOf(read: string | undefined, r: Receipt): Pick<Receipt, 'date' | 'd
   return captured ? { date: captured, dateSource: 'captured' } : {};
 }
 
+type Read = Partial<Pick<Receipt, 'date' | 'amount' | 'currency' | 'description' | 'title'>>;
+
+/**
+ * What the step read, less the facts a person entered while the run still worked on the receipt
+ * (`handSet`, #218): hers win, the step never writes over them. The mark goes once the receipt is filed.
+ */
+export function keepHand(r: Receipt, read: Read): Read {
+  const hand = new Set(r.handSet);
+  delete r.handSet;
+  const out = { ...read };
+  if (hand.has('date')) delete out.date;
+  if (hand.has('amount')) { delete out.amount; delete out.currency; }
+  if (hand.has('description')) { delete out.description; delete out.title; }
+  return out;
+}
+
 /** A name the model dated 00000000 (it found no date) takes the receipt's date, or none. */
 const datedName = (name: string, date: string | undefined) =>
   name.replace(/^0{8}(?=[-_.])/, date ? date.replace(/-/g, '') : '').replace(/^[-_]+/, '') || 'receipt.pdf';
@@ -219,11 +235,11 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
    * Moves the staged file into its year's receipts/ and changes its receipt in the same synchronous change,
    * if the receipt is still the staged file it was. Returns the new file name, or why not.
    */
-  const archive = (receipt: Receipt, desired: string, change: (r: Receipt, books: Books) => void): string | undefined => books.update((index) => {
+  const archive = (receipt: Receipt, desired: string | ((r: Receipt) => string), change: (r: Receipt, books: Books) => void): string | undefined => books.update((index) => {
     const r = index.receipts.find((x) => x.id === receipt.id);
     if (!r || r.location !== 'staged' || r.filename !== receipt.filename || !existsSync(join(IMPORT_DIR, receipt.filename))) return undefined;
     change(r, index);
-    return archiveReceipt(ws, index, r, desired);
+    return archiveReceipt(ws, index, r, typeof desired === 'string' ? desired : desired(r));
   });
 
   // ── Move needsVisionReview receipts without a model ────────────────────────
@@ -246,7 +262,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
       const out: { result: 'linked' | 'filed' | 'twin' | 'taken' } = { result: 'taken' };
       const target = archive(receipt, codeName(p.date!, title, receipt.originalFilename ?? receipt.filename), (r, index) => {
         out.result = 'taken';
-        Object.assign(r, { date: p.date, amount: p.amount, currency: p.currency, ...(title ? { title, description: `${title.vendor} ${title.what}`.trim() } : {}) });
+        Object.assign(r, keepHand(r, { date: p.date, amount: p.amount, currency: p.currency, ...(title ? { title, description: `${title.vendor} ${title.what}`.trim() } : {}) }));
         if (waitsBehind(index, r, order)) { out.result = 'twin'; return; }
         // Every movement of the charge: one, or each leg of a charge split across balances.
         const refs = l.legs ?? [l.payment];
@@ -325,12 +341,17 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     // A bank statement keeps its period's last day (#151), whatever day the model read off it.
     const dated = receipt.kind === 'statement' && receipt.date ? { date: receipt.date } : dateOf(answer.date, receipt);
     // The change runs once more on books loaded afresh after a stale save (src/books/store.ts updateSaved): what it finds starts empty.
-    const target = archive(receipt, datedName(normalizeFilename(answer.suggestedFilename), dated.date), (r, index) => {
+    // A date a person entered while the run read it names the file too (#218).
+    let handDate: string | undefined;
+    const named = datedName(normalizeFilename(answer.suggestedFilename), dated.date);
+    const target = archive(receipt, (r) => (handDate && r.date ? named.replace(/^\d{8}(?=[-_.])/, r.date.replace(/-/g, '')) : named), (r, index) => {
       linked = [];
       twin = undefined;
       filed = [];
-      Object.assign(r, { date: dated.date, description: answer.description, amount: creditSigned({ amount: answer.amount, vatSummary: r.vatSummary }), currency: answer.currency, ...(answer.title ? { title: answer.title } : {}), ...(answer.payout ? { payout: answer.payout } : {}), ...(answer.order ? { order: answer.order } : {}) });
-      if (dated.dateSource) r.dateSource = dated.dateSource;
+      const byHand = new Set(r.handSet);
+      handDate = byHand.has('date') ? r.date : undefined;
+      Object.assign(r, keepHand(r, { date: dated.date, description: answer.description, amount: creditSigned({ amount: answer.amount, vatSummary: r.vatSummary }), currency: answer.currency, ...(answer.title ? { title: answer.title } : {}) }), { ...(answer.payout ? { payout: answer.payout } : {}), ...(answer.order ? { order: answer.order } : {}) });
+      if (dated.dateSource && !byHand.has('date')) r.dateSource = dated.dateSource;
       // Only an invoice is paid by a payment; a copy of one (by its facts, now read) waits for a person in Belege.
       if (!sure || (r.kind && r.kind !== 'invoice' && r.kind !== 'sales-record')) return;
       const behind = waitsBehind(index, r, order);
