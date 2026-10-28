@@ -264,7 +264,7 @@ test('the first camt.053 after a read: a movement read a few days off takes the 
       const b = await api.send('POST', '/api/journal-entries', { date: t.date, accountDebit: account, accountCredit: '1021', amount: t.amount, description: text, transactionRef: t.ref });
       assert.equal(b.status, 200, JSON.stringify(b.json));
     }
-    const bank = { ...truth, movements: truth.movements.map((m, i) => (i === 3 ? { ...m, reference: 'RF18539007547034' } : m)) };
+    const bank = { ...truth, movements: truth.movements.map((m, i) => (i === 3 ? { ...m, reference: 'Mietvertrag Lager 7' } : m)) };
     const r = await upload(api, 'bank-oktober.xml', bankExport(bank));
     assert.equal(r.status, 200, await r.clone().text());
     assert.equal((await r.json() as StatementImport).unmatched, 1);
@@ -272,7 +272,7 @@ test('the first camt.053 after a read: a movement read a few days off takes the 
     const after = await full(api);
     assert.equal(october(after).length, truth.movements.length + 1, 'the bank\'s seven, and the one it lacks; nothing twice');
     const moved = october(after).find((t) => t.ref === rent.ref)!;
-    assert.deepEqual([moved.date, moved.reference, moved.source], ['2026-10-14', 'RF18539007547034', undefined], 'the bank\'s day and reference, the read\'s ref');
+    assert.deepEqual([moved.date, moved.reference, moved.source], ['2026-10-14', 'Mietvertrag Lager 7', undefined], 'the bank\'s day and reference, the read\'s ref');
     assert.equal(after.journalEntries.find((e) => e.description === 'Miete')?.transactionRef, rent.ref, 'its booking stays on it');
     const kept = october(after).find((t) => t.ref === kiosk.ref)!;
     assert.deepEqual([kept.source, kept.unmatched?.by], ['manual', 'Raiffeisen/bank-oktober.xml'], 'kept as a movement of its own, marked');
