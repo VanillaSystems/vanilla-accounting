@@ -18,6 +18,6 @@ export function refusalText(error: string | undefined, why?: Refusal): string {
   return tWith(`runWhy.${why.code}`, params);
 }
 
-/** The payment where a refusal is answered, when it names one: «Ist das dieselbe Zahlung?» is answered at the bank's movement it holds (#254 twinsOpen). */
+/** The payment where a refusal is answered, when it names one: an account's reconciliation shows on the statement of a movement it holds (#254 reconcilePending). */
 export const refusalPayment = (why?: Refusal): { payment: string; date: string } | undefined =>
-  why?.code === 'twinsOpen' && why.params.payment ? { payment: why.params.payment, date: why.params.date ?? '' } : undefined;
+  why?.code === 'reconcilePending' && why.params.payment ? { payment: why.params.payment, date: why.params.date ?? '' } : undefined;

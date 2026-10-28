@@ -17,7 +17,7 @@ import type { ClosedReason } from '../types/api-error.js';
 import { checkSeals, closedPart, type SealReport } from './seal.js';
 import { parseBookedBy } from './booked-by.js';
 import { documentWordsInUse, typeStatements } from './statement-facts.js';
-import { twinsOpenThrough } from './twins.js';
+import { reconcilePendingThrough } from './reconcile.js';
 import { lockedThrough as lockLine } from './lock-line.js';
 import { BOOK_FILES, PARTS, fromJsonl, isClosedYear, keyOf, placement, splitByYear, statementFile, toJsonl, type InClosedYear, type Part } from './years.js';
 
@@ -396,12 +396,11 @@ export interface PeriodLock {
  * Closes the books through `end` (the filing's seal step, `npm run seal -- <q> --close`, the year
  * close): closedThrough moves there, which the write door never does. A statement PDF's question of a
  * day now filed is closed with its PDF kept as the statement (#254): nothing can be read into a filed
- * period, so it could never be answered. An open «Ist das dieselbe Zahlung?» with a movement on those
- * days refuses the close (`twinsOpen`): its answer may change their entries. `fromPdf`: the movements
- * only read statements bring (src/books/bank-import.ts readFromPdfs).
+ * period, so it could never be answered. An account's reconciliation that waits with a movement on those
+ * days refuses the close (`reconcilePending`, src/books/reconcile.ts): its answer may change their entries.
  */
-export function closeThrough(books: Pick<Books, 'config' | 'statementAsks' | 'transactions' | 'journalEntries'>, end: string, fromPdf: ReadonlySet<string>): void {
-  const open = twinsOpenThrough(books, end, periodLock(books).isClosed, fromPdf);
+export function closeThrough(books: Pick<Books, 'config' | 'statementAsks' | 'reconciliations'>, end: string): void {
+  const open = reconcilePendingThrough(books, end);
   if (open) throw open;
   books.config.closedThrough = end;
   if (!books.statementAsks) return;

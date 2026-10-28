@@ -11,7 +11,7 @@ import { checkStatement, parseReadStatement } from '../src/books/statement-check
 import { parseStatementRead } from '../src/llm/prompts.js';
 import { toStatementXml } from '../src/providers/statement-read/camt-writer.js';
 import { readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
-import { alignReads, heldLines, transactionsOfFiles, refsByFile } from '../src/books/bank-import.js';
+import { heldLines, transactionsOfFiles, refsByFile } from '../src/books/bank-import.js';
 import { csvStatement, csvTable, dayOf, guessColumns, MAX_CSV_ROWS } from '../src/providers/statement-read/csv.js';
 import { camtDetails } from '../src/providers/camt053/details.js';
 import type { StatementFile } from '../src/workspace/bank-statements.js';
@@ -183,29 +183,3 @@ test('the AI switched off while a statement is read: the hand table says «no AI
   assert.equal(none.why, 'noProvider', 'no provider answers here: said so, not «AI off»');
 });
 
-test('the first bank export after a read (#254): the same movement stays, one a few days off takes the bank\'s day, one the bank lacks leaves the read file and is named; nothing of a filed day changes', () => {
-  const statement = (movements: ReadStatement['movements'], amount: number): ReadStatement => ({
-    iban: 'CH6580808000000000001', currency: 'CHF', period: { from: '2026-03-01', to: '2026-04-30' },
-    opening: { date: '2026-03-01', amount: 1000 }, closing: { date: '2026-04-30', amount }, movements,
-  });
-  const read = statement([
-    { date: '2026-03-30', amount: -100, text: 'filed, read a day early' },
-    { date: '2026-04-03', amount: -50, text: 'value date read' },
-    { date: '2026-04-10', amount: -20, text: 'the bank has none' },
-    { date: '2026-04-15', amount: 500, text: 'the same' },
-  ], 1330);
-  const bank = statement([
-    { date: '2026-03-31', amount: -100, text: 'filed' },
-    { date: '2026-04-02', amount: -50, text: 'booked' },
-    { date: '2026-04-15', amount: 500, text: 'the same' },
-  ], 1350);
-  const readXml = toStatementXml(read, { id: 'read-r', source: 'r.pdf', by: 'model' });
-  const bankXml = toStatementXml(bank, { id: 'BANK', source: 'b', by: 'model' }).replace(/<AddtlStmtInf>.*<\/AddtlStmtInf>\n/, '');
-  const files = [fileOf('Musterbank/r.xml', readXml), fileOf('Musterbank/bank.xml', bankXml)];
-  const { files: out, unmatched } = alignReads(files, 'Musterbank/bank.xml', (d) => d <= '2026-03-31', () => readXml);
-  assert.deepEqual(unmatched.map((u) => [u.file, u.date, u.amount]), [['Musterbank/r.xml', '2026-04-10', 20]]);
-  const after = transactionsOf(readCamt(out.get('Musterbank/r.xml')!).statements[0], account);
-  assert.deepEqual(after.map((t) => [t.date, t.amount]), [['2026-03-30', 100], ['2026-04-02', 50], ['2026-04-15', 500]], 'the filed line as it was, the value date now the bank\'s, the lacking one gone');
-  assert.deepEqual(transactionsOf(readCamt(out.get('Musterbank/r.xml')!).statements[0], account).map((t) => t.ref), ['read-r#1', 'read-r#2', 'read-r#4'], 'each keeps its ref');
-  assert.equal(alignReads(files, 'Musterbank/r.xml', () => false, () => readXml).files.size, 0, 'a read file aligns nothing');
-});

@@ -68,3 +68,17 @@
 .counts.stc button.m { color: var(--muted); display: inline-flex; align-items: center; gap: 6px; font-size: inherit; white-space: nowrap; }
 .counts.stc button.m:hover { text-decoration: underline; }
 .paylist .pay .nb.m { color: var(--muted); }
+
+/* An account's reconciliation of movements read from PDFs with its bank's file (#254). */
+.reconcile { margin: 10px 0 14px; padding: 12px 14px; border: 1px solid var(--warn); border-radius: 10px; display: flex; flex-direction: column; gap: 8px; max-width: 760px; }
+.reconcile h3 { margin: 0; font-size: 14px; }
+.reconcile-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.reconcile-table th { text-align: left; font-weight: 500; color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.reconcile-table td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.reconcile-table tr.open td:first-child { color: var(--warn); }
+.reconcile-table select { max-width: 100%; font-size: 12.5px; }
+.reconcile-table .m { color: var(--muted); }
+.reconcile-diff { display: block; margin-top: 4px; color: var(--ink-2); }
+.reconcile-acts { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.reconcile-acts .m { color: var(--muted); font-size: 12.5px; }
+@media (max-width: 640px) { .reconcile-table, .reconcile-table tbody, .reconcile-table tr, .reconcile-table td { display: block; } .reconcile-table thead { display: none; } }

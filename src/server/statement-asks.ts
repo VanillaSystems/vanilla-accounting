@@ -12,8 +12,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { basename, join } from 'node:path';
 import { RequestError, WS, assertOpen, readBooks, updateBooks } from './books.js';
 import { findFile } from '../workspace/workspace.js';
-import { structuredRefs, structuredSpans } from '../books/bank-import.js';
-import { MATCH_DAYS, dayGap, fit, pairUp } from '../books/twins.js';
+import { structuredSpans } from '../books/bank-import.js';
 import { isBlank, parseReadStatement } from '../books/statement-check.js';
 import { accountOfRead, asRead, coveredDays, coversAll, heldOf, isCovered, readDays, readStatementPdf, MAX_READ_PAGES, type PdfRead } from '../intake/statement-read.js';
 import { toStatementXml } from '../providers/statement-read/camt-writer.js';
@@ -71,32 +70,16 @@ export function readAsXml(read: StatementRead, account: LedgerBankAccount | unde
     if (t) refs.set(n, t.ref.split('~')[0]);
     n++;
   }
-  // A line the books hold is written on the day they hold it (a value date at the edge of a bank export's days): the same payment.
   const movements = read.statement.movements.flatMap((m, i) => (keep[i] ? [held.has(i) ? { ...m, date: held.get(i)!.date } : m] : []));
   return toStatementXml({ ...read.statement, movements }, { id: o.id, source: o.source, by: read.by, refs });
 }
 
 /**
  * The lines of a read statement the account's payments in the books are already: the same day and
- * amount (heldOf); and, on a day no bank export or CSV of the account covers, such a file's payment of
- * the same amount within MATCH_DAYS days, beyond doubt (pairUp): a value date read at the edge of the
- * export's days, which would be the payment twice (#254). Line index → that payment.
+ * amount (heldOf). A line near a bank export's or CSV's days that the bank holds otherwise comes in, and
+ * the account's reconciliation sets it against the bank's (#254, src/books/reconcile.ts).
  */
-function heldOfRead(statement: ReadStatement, account: LedgerBankAccount | undefined): Map<number, BankTransaction> {
-  const books = readBooks();
-  const held = heldOf(statement, account, books.transactions);
-  if (!account) return held;
-  const spans = structuredSpans(WS).filter((s) => s.account === account.account);
-  if (!spans.length) return held;
-  const structured = structuredRefs(WS);
-  const taken = new Set(held.values());
-  const pool = books.transactions.filter((t) => t.bank === account.bank && t.currency === account.currency && !taken.has(t) && structured.has(t.ref.split('~')[0]));
-  const open = statement.movements.flatMap((m, i) => (held.has(i) || isCovered(spans, m.date) ? [] : [{ i, line: { date: m.date, direction: m.amount < 0 ? 'DBIT' as const : 'CRDT' as const, amount: Math.abs(m.amount), description: m.text ?? '', counterparty: m.counterparty, reference: m.reference } }]));
-  const cents = (x: number) => Math.round(Math.abs(x) * 100);
-  const pairs = pairUp(open.map((o) => o.line), pool, (l, t) => (t.direction === l.direction && cents(t.amount) === cents(l.amount) && dayGap(t.date, l.date) <= MATCH_DAYS ? dayGap(t.date, l.date) - 10 * fit(l, t) : undefined));
-  for (const [k, j] of pairs) held.set(open[k].i, pool[j]);
-  return held;
-}
+const heldOfRead = (statement: ReadStatement, account: LedgerBankAccount | undefined): Map<number, BankTransaction> => heldOf(statement, account, readBooks().transactions);
 
 /** The PDF read now: by the model when one answers here, else the hand form saying why (the AI switched off, or no provider). */
 export async function readPdf(path: string): Promise<PdfRead & { limit?: number }> {

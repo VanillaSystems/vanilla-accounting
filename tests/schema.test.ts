@@ -69,7 +69,7 @@ test('climb refuses a gap in the ladder and a newer file', () => {
   assert.throws(() => climb({}, 4, 3, ladder, 'books.json', clone), /schema 4; this version of the app reads up to 3/);
 });
 
-test('books schema 7 (#254): books of schema 6 load and verify their seals, npm run update writes 7 with a backup and no record changed; a statement\'s question and an unmatched movement survive a save; an app of schema 6 refuses books of 7', async () => {
+test('books schema 7 (#254): books of schema 6 load and verify their seals, npm run update writes 7 with a backup and no record changed; a statement\'s question and a reconciliation survive a save; an app of schema 6 refuses books of 7', async () => {
   assert.equal(BOOKS_SCHEMA, 7);
   const dir = mkdtempSync(join(tmpdir(), 'schema-7-'));
   cpSync(DEMO_ROOT, dir, { recursive: true });
@@ -94,14 +94,15 @@ test('books schema 7 (#254): books of schema 6 load and verify their seals, npm 
 
   const again = loadBooks(ws);
   const open = again.transactions.find((t) => t.date > (again.config.closedThrough ?? ''))!;
-  open.unmatched = { since: '2026-10-28', by: 'Raiffeisen/bank.xml' };
+  again.reconciliations = [{ account: '1021', from: open.date, to: open.date, since: '2026-10-28', read: [open.ref], bank: [], pairs: [] }];
   const statement = { iban: 'CH6580808000000000001', currency: 'CHF', opening: { date: '2026-11-01', amount: 10 }, closing: { date: '2026-11-30', amount: 10 }, movements: [] };
   again.statementAsks = [{ file: 'Raiffeisen/Kontoauszug 01.11.2026 - 30.11.2026.pdf', account: '1021', date: '2026-11-30', since: '2026-12-01', read: { by: 'model', statement, check: { ok: true, gaps: [] }, known: [] } }];
   saveBooks(ws, again);
   const after = loadBooks(ws);
-  assert.deepEqual(after.transactions.find((t) => t.ref === open.ref)?.unmatched, open.unmatched);
+  assert.deepEqual(after.reconciliations, again.reconciliations);
   assert.deepEqual(after.statementAsks, again.statementAsks);
   assert.ok(booksFiles(ws.paths.transactional).some((f) => f.endsWith('2026/books/asks.jsonl')), 'kept in the year of the statement\'s last day');
+  assert.ok(booksFiles(ws.paths.transactional).some((f) => f.endsWith(`${open.date.slice(0, 4)}/books/reconcile.jsonl`)), 'a reconciliation in the year of its last day');
 
   const clone = (d: Record<string, unknown>) => structuredClone(d);
   assert.throws(() => climb<Record<string, unknown>>({}, 7, 6, BOOKS_MIGRATIONS, 'ledger.json', clone), (e: Error) => e instanceof SchemaTooNewError);

@@ -9,8 +9,8 @@
 export const REFUSAL_CODES = [
   // The VAT filing (src/workflows/filing.ts).
   'periodRunning', 'periodFiled', 'notFilingKey', 'nextToClose', 'activityIdMissing', 'figuresChanged', 'questionsOpen', 'filedNotSealed', 'invoiceEventsMissing',
-  // Closing the books (src/books/store.ts closeThrough: the filing, the seal, the year close) while «Ist das dieselbe Zahlung?» waits (#254).
-  'twinsOpen',
+  // Closing the books (src/books/store.ts closeThrough: the filing, the seal, the year close) or booking a movement while an account's reconciliation waits (#254).
+  'reconcilePending',
   // The year close (src/books/year-close.ts, src/workflows/year-end.ts).
   'notYear', 'yearClosedAlready', 'rateNotPublished', 'yearEndEntryUnknown', 'yearChecklistClosed', 'receivablesBooked', 'yearItemsOpen', 'yearNotClosed', 'openingUnbalanced', 'accountNotInChart', 'paymentsUnlinked', 'noProfitAllocation', 'entryNotStale', 'yearEndAccountUnknown', 'yearEndDocumentType', 'yearEndBalanceStated',
   // The inbox (src/workflows/actions.ts): a statement of no bank account, a receipt in two years, an error.

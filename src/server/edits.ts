@@ -29,7 +29,7 @@ import { isVatAmountCode } from '../accounting/validate.js';
 import { assertOpen, receiptDates, refDates, RequestError } from './books.js';
 import { outsideStatements } from '../accounting/placed-account.js';
 import { nameWords } from '../intake/pairing.js';
-import { bookedInFiled, filedTwinOf } from '../books/twins.js';
+import { bookedInFiled } from '../books/twins.js';
 
 function receiptOf(books: Books, id: string): Receipt {
   const r = books.receipts.find((x) => x.id === id);
@@ -539,14 +539,15 @@ export function bookedAgain(books: Books, ref: string): void {
 
 /**
  * A bank movement booked in a filed quarter as a movement read from a PDF (#254) is booked again only
- * on purpose: refused with 409 `bookedInFiled`, naming the filed movement it is (filedTwinOf), until
- * «Trotzdem buchen» (DELETE /api/transactions/:ref/filed-twin) takes the mark.
+ * on purpose: refused with 409 `bookedInFiled`, naming the filed movement the person paired it with,
+ * until «Trotzdem buchen» (DELETE /api/transactions/:ref/filed-twin) takes the mark.
  */
 export function assertNotBookedInFiled(books: Books, tx: BankTransaction): void {
-  if (!bookedInFiled(tx)) return;
-  const twin = filedTwinOf(books.transactions, tx, periodLock(books).isClosed);
-  throw new RequestError(409, `Die Zahlung ${tx.ref} ist schon im abgerechneten Quartal gebucht${twin ? `, als die am ${twin.date} aus dem PDF gelesene Zahlung ${twin.ref}` : ''}: nur mit «Trotzdem buchen» nochmals.`,
-    { code: 'bookedInFiled', params: { read: twin?.ref ?? '', date: twin?.date ?? '' } });
+  if (tx.waitsForPerson?.why !== 'filedTwin') return;
+  const read = tx.waitsForPerson.read;
+  const twin = books.transactions.find((t) => t.ref === read);
+  throw new RequestError(409, `Die Zahlung ${tx.ref} ist schon im abgerechneten Quartal gebucht, als die${twin ? ` am ${twin.date}` : ''} aus dem PDF gelesene Zahlung ${read}: nur mit «Trotzdem buchen» nochmals.`,
+    { code: 'bookedInFiled', params: { read, date: twin?.date ?? '' } });
 }
 
 /**

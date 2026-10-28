@@ -5,14 +5,13 @@ import express, { Router } from 'express';
 import { WS } from './books.js';
 import { APP_ROOT, findFile } from '../workspace/workspace.js';
 import { loadBooks } from '../books/store.js';
-import { servedBooks } from '../books/bank-import.js';
 import { workspaceModules } from '../core/modules/load.js';
 import { isAppPath } from './app-paths.js';
 
 export const router = Router();
 
 router.get('/books.json', (_req, res) => {
-  res.json(servedBooks(WS, loadBooks(WS)));
+  res.json(loadBooks(WS));
 });
 router.get('/modules.json', (_req, res) => {
   res.json(workspaceModules(APP_ROOT, WS.paths.root, WS.company.vat));

@@ -1,6 +1,5 @@
 import type { Tags } from '../books/tags.js';
 import type { StatementRead } from './statement-read.js';
-import type { TwinOption } from '../books/twins.js';
 
 // One row of a receipt's printed MWST summary block (grouped by rate).
 // This is the receipt-intrinsic VAT evidence — the source of truth for the
@@ -182,6 +181,37 @@ export interface StatementAsk {
   read: StatementRead;
 }
 
+/** One pair of a reconciliation: the movement `read` from a statement PDF is the bank's movement `bank`. `account`: where a filed pair's difference is booked. */
+export interface ReconcilePair { read: string; bank: string; account?: string }
+
+/**
+ * An account's movements read from statement PDFs set against the movements of its bank export or CSV
+ * on the same days, give or take MATCH_DAYS (#254, src/books/reconcile.ts). Opened by the import that
+ * brings them together; until the person confirms it (`done`), none of its movements is booked by a run
+ * and no period holding its days closes. Every movement takes part in one reconciliation only.
+ */
+export interface Reconciliation {
+  /** The ledger account of the bank account. */
+  account: string;
+  /** The first and the last day of its movements. */
+  from: string;
+  to: string;
+  /** The day it was opened. */
+  since: string;
+  /** The refs of the movements read from PDFs that take part. */
+  read: string[];
+  /** The refs of the bank's movements that take part. */
+  bank: string[];
+  /** The refs of the movements the PDF and the bank's file hold on the same day for the same amount: one movement already (src/books/bank-import.ts transactionsOfFiles). */
+  same?: string[];
+  /** Waiting: the pairs code proposes. Confirmed: the person's pairs; every other movement is a payment of its own. */
+  pairs: ReconcilePair[];
+  /** The year end's exchange-difference account, when the chart has it: proposed for a filed pair's difference. */
+  differenceTo?: string;
+  /** The day the person confirmed it. */
+  done?: string;
+}
+
 export interface BankStatement {
   /** The manifest's bank label (belege.workspace.yaml bankAccounts). */
   bank: string;
@@ -205,8 +235,8 @@ export interface StatementImport {
   added: number;
   /** Movements made by hand that rows of the statement confirmed (#88): matched, not added. */
   confirmed?: number;
-  /** Movements read from PDFs on the days this bank export or CSV covers that it does not hold (#254): kept, each for the person to keep or remove. */
-  unmatched?: number;
+  /** The movements of the account's reconciliation that waits for the person (#254): read from PDFs, and the bank's. */
+  reconcile?: { read: number; bank: number };
   /** Statement PDFs of the account whose question this bank export or CSV closed: kept as statements (#254). */
   closedAsks?: number;
   bank: string;
@@ -413,11 +443,10 @@ export interface Index {
   /** Statement PDFs whose movements wait for the person's answer (#254). */
   statementAsks?: StatementAsk[];
   /**
-   * «Ist das dieselbe Zahlung?» (#254, src/books/twins.ts twinsOf): each movement read from a PDF that
-   * may be a bank movement, with the options. Derived from the books and the statement files when the
-   * app reads them (src/books/bank-import.ts servedBooks), never saved.
+   * Each account's movements read from statement PDFs set against its bank export or CSV of the same
+   * days (#254, src/books/reconcile.ts): the one waiting for the person, and those she confirmed.
    */
-  twins?: Record<string, TwinOption[]>;
+  reconciliations?: Reconciliation[];
 }
 
 export interface BankTransactionPart {
@@ -511,19 +540,12 @@ export interface BankTransaction {
    * The payment waits for a person (r10h-5): its booking was deleted on purpose, by hand or on a
    * wish in the KI sidebar, so no run books it again. The mark goes with the next booking on it,
    * by hand or asked for with «Automatisch buchen» (src/server/edits.ts bookedAgain).
-   * `filedTwin` (#254): a bank movement that is a movement read from a statement PDF of a filed
-   * period, booked there: the person's answer «Ja, dieselbe», which nothing else can tell. No run
-   * books it, the year counts it as booked, and no booking takes the mark (bookedAgain): only her
-   * «Trotzdem buchen» does.
+   * `filedTwin` (#254): a bank movement the person paired, in its account's reconciliation, with the
+   * movement `read` read from a statement PDF of a filed period and booked there. No run books it,
+   * the year counts it as booked, and no booking takes the mark (bookedAgain): only her «Trotzdem
+   * buchen» does.
    */
-  waitsForPerson?: { since: string; why: 'bookingDeleted' | 'filedTwin' };
-  /**
-   * A movement read from a statement PDF on days the account's camt.053 or bank CSV (`by`, its file)
-   * covers, which holds no movement of its day and amount (#254): the import took it out of the read
-   * statement and kept it as a movement of its own (`source: 'manual'`), so it is neither lost nor
-   * counted twice. The person keeps it (the mark goes) or removes it with its bookings.
-   */
-  unmatched?: { since: string; by: string };
+  waitsForPerson?: { since: string; why: 'bookingDeleted' } | { since: string; why: 'filedTwin'; read: string };
   /**
    * The payment needs a receipt and has none yet, so the inbox run does not book it (issue #29):
    * no provisional booking, it is booked once a receipt is linked. The run sets the mark and takes

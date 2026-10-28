@@ -258,9 +258,21 @@ classDiagram
     +noReceiptNeeded: boolean [0..1]
     +businessPart: what, rate [0..1]
     +replaced: JournalEntry[0..*]
-    +waitsForPerson: since, why [0..1]
+    +waitsForPerson: since, why, read [0..1] «filedTwin: the filed movement read from a PDF it is (#254)»
     +waitsForReceipt: since, unread, decided [0..1]
-    +unmatched: since, by [0..1] «read from a PDF, not in the bank export that covers its day (#254)»
+  }
+  class Reconciliation {
+    <<books/reconcile.jsonl>>
+    +account: string
+    +from: date
+    +to: date
+    +since: date
+    +read: string[] «refs read from PDFs that take part»
+    +bank: string[] «refs of the bank's file that take part»
+    +same: string[0..*] «one movement already: same day and amount»
+    +pairs: read, bank, account[0..*] «proposed while waiting; the person's once confirmed»
+    +differenceTo: string [0..1]
+    +done: date [0..1]
   }
   class StatementAsk {
     <<books/asks.jsonl>>

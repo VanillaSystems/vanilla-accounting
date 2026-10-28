@@ -21,7 +21,8 @@ import { detectVatProofIssue, textFacts } from '../parsers/receipt-text.js';
 import { buildVisionPrompt } from '../llm/prompts.js';
 import type { Receipt } from '../types/index.js';
 import { filesOfPart, type Workspace } from '../workspace/workspace.js';
-import { mergeIndex, readStatementFiles, readTransactions, readWiseReferences, withinBooks } from '../books/bank-import.js';
+import { mergeIndex, readStatementFiles, readTransactions, readWiseReferences, reconcileWithFiles, withinBooks } from '../books/bank-import.js';
+import { differenceAccountOf } from '../books/year-close.js';
 import type { BankFiles } from '../books/bank-import.js';
 import { loadInvoices, saveInvoices } from '../invoices/store.js';
 import { matchPayments, type PaymentOutcome } from '../invoices/payments.js';
@@ -314,6 +315,8 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
     }
     const merged = mergeIndex(index, { receipts, bankTransactions: assignUniqueRefs(kept), wiseRefs, bankStatements: statementFiles.statements, camtBalances: statementFiles.balances });
     Object.assign(index, merged.index);
+    // Movements read from PDFs and the bank's file of the same days: the account's reconciliation, before any run books them (#254).
+    reconcileWithFiles(ws, index, differenceAccountOf(ws));
     // On the agreed basis each issued document's VAT event comes before its payment, which then only settles the receivable (src/invoices/events.ts).
     const events = payments ? bookInvoiceEvents(index, invoices, payments) : undefined;
     if (events) fileReceipts(ws, index, events.files);

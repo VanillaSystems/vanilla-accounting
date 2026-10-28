@@ -31,8 +31,7 @@ import { liveInvoices, openOn, paymentsNamingOpen } from '../invoices/rules.js';
 import { hasEvent } from './refs.js';
 import { workspaceChecks } from '../workspace/checks.js';
 import { closeThrough, loadBooks, moduleActor, periodLock, PERSON, saveBooks, sealsOf, update, type Books } from './store.js';
-import { twinsOpenThrough } from './twins.js';
-import { readFromPdfs } from './bank-import.js';
+import { reconcilePendingThrough } from './reconcile.js';
 import { writeSeal } from './seal.js';
 import { nextManualRef } from './next-ref.js';
 
@@ -151,6 +150,13 @@ export function setCashCount(ws: Workspace, year: string, account: string, amoun
 
 /** The account numbers of the workspace's chart. */
 export const chartOf = (ws: Workspace): string[] => (accountsOf(ws) as Array<{ number?: string }>).flatMap((a) => (a.number ? [String(a.number)] : []));
+
+/** The year end's exchange-difference account when the chart of `ws` has it: proposed for the difference of a reconciled pair (#254). */
+export function differenceAccountOf(ws: Workspace): string | undefined {
+  const chart = chartOf(ws);
+  const fx = yearEndAccounts(chart, ws.company.legalForm).fxDifference;
+  return chart.includes(fx) ? fx : undefined;
+}
 
 /**
  * The invoices open on 31.12. of `year`, in CHF at the ESTV rate of that day (or the latest before
@@ -367,10 +373,9 @@ export async function closeYear(ws: Workspace, year: string, rates: EstvRates = 
   if (close.blockers.length) throw new YearCloseRefused({ code: 'yearItemsOpen', params: { year, n: String(close.blockers.length) } }, `${year} cannot close yet: ${close.blockers.length} item(s) open.`);
   const end = `${year}-12-31`;
   if (!books.config.closedThrough || books.config.closedThrough < end) {
-    const fromPdf = readFromPdfs(ws);
-    const twins = twinsOpenThrough(books, end, periodLock(books).isClosed, fromPdf);
-    if (twins) throw new YearCloseRefused(twins.why, `${year} cannot close yet: ${twins.message}.`);
-    closeThrough(books, end, fromPdf);
+    const reconcile = reconcilePendingThrough(books, end);
+    if (reconcile) throw new YearCloseRefused(reconcile.why, `${year} cannot close yet: ${reconcile.message}.`);
+    closeThrough(books, end);
     saveBooks(ws, books);
   }
   const q4 = filingKeyOf(end, ws.filingLength) as QuarterKey;

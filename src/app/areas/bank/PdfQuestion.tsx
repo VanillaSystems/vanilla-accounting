@@ -2,12 +2,10 @@
  * What a statement PDF asks in Kontoauszüge (#254): its question kept in the books (whether its
  * movements are read in), the table to check and «Einlesen» or «Als Monatsauszug behalten»; the
  * «Aktionen» of a PDF kept as the statement, «Bewegungen aus dem PDF einlesen» (the model, or the hand
- * form when the AI is off); a month whose PDF brought no movement, said as a fact; and a movement
- * read from a PDF that the account's bank export or CSV does not hold, kept or removed by the person.
+ * form when the AI is off); and a month whose PDF brought no movement, said as a fact.
  */
 import { useState } from 'react';
-import type { BankTransaction, StatementAsk } from '../../../types/index.js';
-import type { TwinOption } from '../../../books/twins.js';
+import type { StatementAsk } from '../../../types/index.js';
 import { api, errorText } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { monthName } from '../../lib/period-label.js';
@@ -82,57 +80,5 @@ export function NoMovements({ s, nav, edit }: { s: Statement; nav: Nav; edit: bo
       {t('bank.noMovements', { month: monthName(s.from) })}{' '}
       {file && edit ? <button type="button" className="linkbtn" data-testid="no-movements-read" onClick={() => void readPdf(nav, file)}>{t('statementActions.readPdfShort')}</button> : null}
     </span>
-  );
-}
-
-/**
- * A movement read from a PDF that a bank movement may be, or that the account's bank export or CSV
- * does not hold. With `options`, the bank's movements it may be (src/books/twins.ts, served as
- * `twins`): «Ist das dieselbe Zahlung?», each answered «Ja, dieselbe», or «Nein, eine eigene Zahlung»;
- * until then those bank movements are not booked. One of a filed period (`filed`) stays as filed:
- * «Ja, dieselbe» marks the bank's movement as booked there, a difference booked on it, and a payment
- * of its own is booked by hand. Without: «Behalten» or «Entfernen» (with its bookings). `named`:
- * shown where the movement is not the one selected, so it says which it is.
- */
-export function UnmatchedNotice({ tx, options, books, nav, edit, named }: { tx: BankTransaction; options?: TwinOption[]; books: { transactions: BankTransaction[] }; nav: Nav; edit: boolean; named?: boolean }) {
-  const [busy, setBusy] = useState(false);
-  const run = (call: () => Promise<unknown>) => {
-    setBusy(true);
-    call().then(() => nav.refresh(), (e) => nav.toast(errorText(e))).finally(() => setBusy(false));
-  };
-  const line = (p: BankTransaction) => <><b className="mono">{formatDate(p.date)}</b> {payText(p).name} <span className="mono">{fmt(signed(p))}</span></>;
-  if (options?.length) {
-    const of = (refs: string[]) => refs.map((r) => books.transactions.find((x) => x.ref === r)).filter((x): x is BankTransaction => !!x);
-    const filed = options[0].filed;
-    return (
-      <div className="status" data-testid="twin-question">
-        <span className="notice warn" style={{ margin: 0 }}>
-          {of(options[0].pdf).map((p) => <span key={p.ref}>{line(p)}{' · '}</span>)}
-          {t(filed ? 'bank.twinAskFiled' : 'bank.twinAsk')}
-          {options.map((o) => (
-            <span key={o.bank.join(' ')} className="twin-option">
-              {' '}{of(o.bank).map((p, i) => <span key={p.ref}>{i ? ' + ' : ''}{line(p)}</span>)}{' '}
-              {edit ? <button type="button" className="linkbtn" disabled={busy} data-testid="twin-same" onClick={() => run(() => api.sameTwin(tx.ref, o.bank))}>{t(filed ? 'bank.twinSameFiled' : 'bank.twinSame')}</button> : null}
-            </span>
-          ))}
-          {filed ? <>{' '}{t('bank.twinOtherFiled')}</>
-            : edit ? <>{' '}<button type="button" className="linkbtn" disabled={busy} data-testid="twin-other" onClick={() => run(() => api.keepUnmatched(tx.ref))}>{t('bank.twinOther')}</button></> : null}
-        </span>
-      </div>
-    );
-  }
-  return (
-    <div className="status" data-testid="unmatched">
-      <span className="notice warn" style={{ margin: 0 }}>
-        {named ? <>{line(tx)}{' · '}</> : null}
-        {t('bank.unmatched', { file: tx.unmatched?.by.split('/').pop() ?? '' })}{' '}
-        {edit ? (
-          <>
-            <button type="button" className="linkbtn" disabled={busy} data-testid="unmatched-keep" onClick={() => run(() => api.keepUnmatched(tx.ref))}>{t('bank.unmatchedKeep')}</button>{' '}
-            <button type="button" className="linkbtn" disabled={busy} data-testid="unmatched-remove" data-tip={t('bank.unmatchedRemoveTip')} onClick={() => run(() => api.deleteTransaction(tx.ref))}>{t('bank.unmatchedRemove')}</button>
-          </>
-        ) : null}
-      </span>
-    </div>
   );
 }

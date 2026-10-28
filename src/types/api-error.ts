@@ -55,11 +55,15 @@ export type ApiRefusal =
   | { code: 'paidPrivately'; params: { receipt: string; payment: string } }
   /** A person's booking without a payment books this receipt already (its amount or the part's, the same day or words): a private payment would book it twice, unless it replaces that booking (`entry`: its ref; `replaceable`: it names the receipt, else it may be another purchase of that day and amount and is deleted by hand). */
   | { code: 'bookedByHand'; params: { entry: string; date: string; amount: number; currency: string; replaceable: boolean } }
-  /** «Ist das dieselbe Zahlung?» answered yes where the amounts differ (#254): a person's entry on the movement read from the PDF books the PDF's amount; she changes it first. */
+  /** A reconciliation confirmed with a pair whose amounts differ (#254): a person's entry on the movement read from the PDF books the PDF's amount; she changes it first. */
   | { code: 'twinBookedByHand'; params: { entry: string; read: number; bank: number; currency: string } }
-  /** «Automatisch buchen» on a bank movement «Ist das dieselbe Zahlung?» holds (#254): `read`, the movement read from a PDF that asks, and its day. */
-  | { code: 'twinHeld'; params: { read: string; date: string } }
-  /** A booking of a bank movement a person said is a movement read from a PDF of a filed period, booked there (#254): only with «Trotzdem buchen». `read`, `date`: that filed movement, when one is found. */
+  /** «Automatisch buchen» on a movement of an account's reconciliation that waits (#254): confirm it first. `payment`: a movement whose statement shows it. */
+  | { code: 'reconcilePending'; params: { account: string; from: string; to: string; payment: string } }
+  /** A reconciliation confirmed with a movement read from a PDF left undecided, a movement paired twice, or a filed pair's difference without an account of the chart (#254). */
+  | { code: 'reconcileUndecided'; params: { n: number } }
+  | { code: 'reconcileTwice'; params: { ref: string } }
+  | { code: 'reconcileDifference'; params: { read: string; amount: number; currency: string } }
+  /** A booking of a bank movement the person paired with a movement read from a PDF of a filed period, booked there (#254): only with «Trotzdem buchen». `read`, `date`: that filed movement. */
   | { code: 'bookedInFiled'; params: { read: string; date: string } }
   /** A second bank payment of another payee for a receipt that has one, asked without `confirm` (src/server/edits.ts assertNotSecondPayment, r8h-21). */
   | { code: 'secondPayment'; params: { receipt: string; payment: string } }

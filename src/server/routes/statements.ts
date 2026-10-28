@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import { basename, dirname, join, relative } from 'node:path';
 import { accountForStatement, type StatementProblem } from '../../accounting/bank-accounts.js';
 import { bankAccountFor, legOf, madeByHand } from '../../workspace/money-accounts.js';
-import { alignReads, heldWithout, mergeIndex, readStatementFiles, readTransactions, readWiseReferences, sourceOf, structuredSpans, transactionsOfFiles, withCamtBalances, withinBooks, followBankDays, outOfRead, readFromPdfs, twinsOfBooks, type HeldReads, type RateOf, type Unmatched } from '../../books/bank-import.js';
+import { heldWithout, mergeIndex, readStatementFiles, readTransactions, readWiseReferences, reconcileWithFiles, sourceOf, structuredSpans, transactionsOfFiles, withCamtBalances, withinBooks, type RateOf } from '../../books/bank-import.js';
 import { statementPdf } from '../../books/statement-facts.js';
 import { compactIban, readBankStatements } from '../../workspace/bank-statements.js';
 import { periodLock, type Books } from '../../books/store.js';
@@ -29,8 +29,9 @@ import { loadInvoices, saveInvoices } from '../../invoices/store.js';
 import { placeByText } from '../../intake/statement-read.js';
 import { firstPages } from '../../intake/recognize.js';
 import { matchPayments } from '../../invoices/payments.js';
-import { sameAs, TwinBookedByHand } from '../twin-answer.js';
+import { confirm, ReconcileRefused } from '../reconcile.js';
 import { bookedInFiled } from '../../books/twins.js';
+import { pending } from '../../books/reconcile.js';
 import { bookInvoiceEvents } from '../../invoices/events.js';
 import { fileReceipts, paymentContext } from '../../invoices/service.js';
 import type { StatementRefusal, UnknownAccount } from '../../types/api-error.js';
@@ -42,7 +43,7 @@ import { addEntry } from '../edits.js';
 import { askAbout, closeAsk, correctAsk, importAsk } from '../statement-asks.js';
 import { openingLock, withOpening } from '../../accounting/opening-balance.js';
 import { yearEndAccounts } from '../../accounting/year-close.js';
-import { chartOf } from '../../books/year-close.js';
+import { chartOf, differenceAccountOf } from '../../books/year-close.js';
 import { baseCurrency, chart } from '../../engines/index.js';
 
 export const router = Router();
@@ -169,37 +170,6 @@ function assertNoFiledPayments(): void {
     { code: 'statement', params: { reason: 'filedPayments', closed: { n: missing.length, through, refs } } });
 }
 
-/** The books' open payment a read statement's movement is: its account, day, direction, amount and ref. */
-function unmatchedIn(books: Books, u: Unmatched): BankTransaction | undefined {
-  const lock = periodLock(books);
-  return books.transactions.find((x) => !madeByHand(x) && !lock.isClosed(x.date)
-    && x.bank === u.bank && x.currency === u.currency && x.date === u.date && x.direction === u.direction && Math.abs(x.amount) === Math.abs(u.amount) && x.ref.split('~')[0] === u.ref.split('~')[0]);
-}
-
-/**
- * The movements read from PDFs that a structured file does not hold (#254, src/books/bank-import.ts
- * alignReads): each stays as a movement of its own (`source: 'manual'`), so its bookings and links
- * stay, marked for the person to keep or remove. Never one of the filed period.
- */
-function keepUnmatched(books: Books, unmatched: readonly Unmatched[], by: string): void {
-  const since = new Date().toISOString().slice(0, 10);
-  for (const u of unmatched) {
-    const t = unmatchedIn(books, u);
-    if (!t) continue;
-    t.source = 'manual';
-    t.unmatched = { since, by };
-  }
-}
-
-/** What alignReads asks of the books: whether they hold a read movement, and whether a person booked it by hand. */
-const heldReads = (books: Books): HeldReads => {
-  const byPerson = new Set(books.journalEntries.filter((e) => e.origin === 'manual').map((e) => e.transactionRef));
-  return {
-    holds: (u) => !!unmatchedIn(books, u),
-    byPerson: (u) => { const t = unmatchedIn(books, u); return !!t && byPerson.has(t.ref); },
-  };
-};
-
 
 const monthEnd = (month: string) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
 const swiss = (iso: string) => iso.split('-').reverse().join('.');
@@ -297,18 +267,8 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
   mkdirSync(dir, { recursive: true });
   writeFileSync(path, body);
   if (beside && source) writeFileSync(beside, source.bytes);
-  // A read statement's file the structured one realigns, as it was: a refusal puts it back.
-  const realigned = new Map<string, string>();
   try {
     assertNoFiledPayments();
-    // A bank's export or CSV takes the movements read from PDFs on its days (#254).
-    const now = readBooks();
-    const aligned = placed.structured ? alignReads(readBankStatements(WS), mine, periodLock(now).isClosed, (f) => readFileSync(findFile(WS.paths, 'statements', f)!, 'utf8'), heldReads(now)) : undefined;
-    for (const [f, xml] of aligned?.files ?? []) {
-      const at = findFile(WS.paths, 'statements', f)!;
-      realigned.set(at, readFileSync(at, 'utf8'));
-      writeFileSync(at, xml);
-    }
     const bank = readTransactions(WS);
     const unmatched = bank.files.find((f) => f.status === 'unmatched');
     if (unmatched?.status === 'unmatched') throw refusedAccount(unmatched.refusal, unmatched.unknown);
@@ -324,11 +284,6 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
     const payments = paymentContext(WS);
     return updateBooksWithEffects((books): StatementImport => {
       assertOpen(books, [placed.last], 'newStatement');
-      if (aligned?.unmatched.length) keepUnmatched(books, aligned.unmatched, mine);
-      const moves = new Map((aligned?.realigned ?? []).flatMap((r) => {
-        const t = unmatchedIn(books, r);
-        return t ? [[t.ref, { from: r.date, to: r.to }] as const] : [];
-      }));
       // The account's PDFs waiting for their question are its statements now, a filed period's too: closing a question books nothing.
       const asked = (books.statementAsks ?? []).length;
       if (placed.structured && books.statementAsks) {
@@ -348,9 +303,10 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
       const pos = new Map(books.transactions.map((t, i) => [t.ref, i]));
       const known = merged.index.transactions.filter((t) => pos.has(t.ref)).sort((a, b) => pos.get(a.ref)! - pos.get(b.ref)!);
       Object.assign(books, merged.index, { transactions: [...known, ...merged.index.transactions.filter((t) => !pos.has(t.ref))] });
-      followBankDays(books, moves, estvRate());
       if (balances) books.statementBalances = mergeBalances(books.statementBalances, balances);
-      const unmatched = books.transactions.filter((t) => t.unmatched?.by === mine).length;
+      // Movements read from PDFs and the bank's file of the same days: the account's reconciliation, before any run books them (#254).
+      reconcileWithFiles(WS, books, differenceAccountOf(WS));
+      const waiting = pending(books).find((r) => r.account === placed.account.account);
       const closedAsks = asked - (books.statementAsks ?? []).length;
       // On the agreed basis an issued document's event comes first: its payment then only settles the receivable.
       const events = payments ? bookInvoiceEvents(books, invoices, payments) : undefined;
@@ -371,14 +327,13 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
         to: placed.last,
         ...(closing ? { closing } : {}),
         ...(placed.opening ? { opening: placed.opening } : {}),
-        ...(unmatched ? { unmatched } : {}),
+        ...(waiting ? { reconcile: { read: waiting.read.length, bank: waiting.bank.length } } : {}),
         ...(closedAsks ? { closedAsks } : {}),
       };
     });
   } catch (e) {
     rmSync(path, { force: true });
     if (beside) rmSync(beside, { force: true });
-    for (const [at, xml] of realigned) writeFileSync(at, xml);
     throw e;
   }
 }
@@ -443,6 +398,7 @@ export function removeStatement(file: string, refs?: readonly string[], o: { kee
       const balances = withCamtBalances(b.statementBalances?.filter((x) => x.sourceFile !== basename(file)), files.balances);
       if (balances) b.statementBalances = balances;
       else delete b.statementBalances;
+      reconcileWithFiles(WS, b, differenceAccountOf(WS));
       return { ok: true, removed };
     });
   } catch (e) {
@@ -499,34 +455,6 @@ router.delete('/api/statements/:bank/:filename/read', (req, res) => {
 });
 
 /**
- * «Behalten» or «Nein, eine eigene Zahlung» on a movement read from a PDF (#254): it stays as a movement
- * of its own, so no question names it again. One the account's camt.053 or CSV did not hold loses its
- * mark; one only a read statement brings leaves that file (outOfRead), its ref and bookings kept.
- * «Entfernen» is DELETE /api/transactions/:ref.
- */
-router.post('/api/transactions/:ref/kept', (req, res) => {
-  const ref = req.params.ref;
-  const now = readBooks();
-  const t = now.transactions.find((x) => x.ref === ref);
-  if (t) assertOpen(now, [t.date], 'editTransaction');
-  const out = t && !t.unmatched && readFromPdfs(WS).has(ref) ? outOfRead(WS, ref) : undefined;
-  const was = out && readFileSync(out.file, 'utf8');
-  if (out) writeFileSync(out.file, out.xml);
-  try {
-    withBooks(res, (books) => {
-      const own = books.transactions.find((x) => x.ref === ref);
-      if (!own || (!own.unmatched && !out)) throw new RequestError(404, 'Diese Bewegung wartet auf keine Antwort.', { code: 'gone', params: { what: 'payment' } });
-      delete own.unmatched;
-      own.source = 'manual';
-      return { ok: true };
-    });
-  } catch (e) {
-    if (out) writeFileSync(out.file, was!);
-    throw e;
-  }
-});
-
-/**
  * «Trotzdem buchen» on a bank movement booked in a filed quarter as a movement read from a PDF (#254):
  * the person says it is a payment of its own. The mark goes, and with it a difference line its answer
  * booked; from then on it is booked like any other payment.
@@ -549,30 +477,33 @@ function estvRate(): RateOf {
 }
 
 /**
- * «Ja, dieselbe» on a movement read from a PDF (#254): `bank`, the refs of one option
- * src/books/twins.ts twinsOf offers for it (src/server/twin-answer.ts sameAs); a filed one's difference
- * goes to the year end's exchange-difference account. «Nein» is «Behalten» (…/kept); for a read movement
- * of a filed period, which stays as filed, the person books the bank's movement by hand instead.
+ * «Abgleich bestätigen» (#254): the account's reconciliation that waits, as the person decided it
+ * (src/server/reconcile.ts confirm): `pairs`, each movement read from a PDF and the bank's movement it
+ * is (`account`: where a filed pair's difference goes), and `own`, those that are payments of their own.
+ * Nothing filed changes: a filed read movement stays as it was filed.
  */
-router.post('/api/transactions/:ref/same', (req, res) => {
-  const bank = (req.body as { bank?: unknown } | undefined)?.bank;
-  if (!Array.isArray(bank) || !bank.length || !bank.every((r) => typeof r === 'string')) throw new RequestError(400, 'bank: die Refs der Bewegungen der Bank.');
+router.post('/api/reconciliations/:account', (req, res) => {
+  const body = (req.body ?? {}) as { pairs?: unknown; own?: unknown };
+  const pairs = Array.isArray(body.pairs) ? body.pairs : [];
+  const own = Array.isArray(body.own) ? body.own : [];
+  const ref = (x: unknown) => typeof x === 'string' && x.length > 0;
+  if (!pairs.every((p) => p && ref(p.read) && ref(p.bank) && (p.account === undefined || ref(p.account))) || !own.every(ref)) throw new RequestError(400, 'pairs: [{ read, bank, account? }], own: [refs].');
   const ctx = paymentContext(WS);
   const book = ctx ? loadInvoices(WS) : undefined;
   withBooks(res, (books) => {
-    const option = twinsOfBooks(WS, books).questions.get(req.params.ref)
-      ?.find((o) => o.bank.length === bank.length && o.bank.every((r) => bank.includes(r)));
-    const t = books.transactions.find((x) => x.ref === req.params.ref);
-    if (!option && t) assertOpen(books, [t.date], 'editTransaction');
-    if (!option) throw new RequestError(404, 'Diese Bewegung wartet auf keine Antwort.', { code: 'gone', params: { what: 'payment' } });
-    // A filed read movement stays as it was filed: only the bank's movements change.
-    assertOpen(books, books.transactions.filter((t) => option.bank.includes(t.ref) || (!option.filed && option.pdf.includes(t.ref))).map((t) => t.date), 'editTransaction');
+    const r = pending(books).find((x) => x.account === req.params.account);
+    if (!r) throw new RequestError(404, 'Dieses Konto wartet auf keinen Abgleich.', { code: 'gone', params: { what: 'payment' } });
+    const lock = periodLock(books);
+    // The open side changes: the bank's movements, and the read movements of open days.
+    assertOpen(books, books.transactions.filter((t) => r.bank.includes(t.ref) || (r.read.includes(t.ref) && !lock.isClosed(t.date))).map((t) => t.date), 'editTransaction');
     try {
-      const difference = { account: yearEndAccounts(chartOf(WS), WS.company.legalForm).fxDifference, bankOf: (t: BankTransaction) => bankAccountFor(t, WS.bankAccounts) };
-      const files = sameAs(books, option, estvRate(), book && ctx ? { book, ctx } : undefined, difference);
+      const files = confirm(books, r, { pairs: pairs as { read: string; bank: string; account?: string }[], own: own as string[] }, {
+        rateOf: estvRate(), isClosed: lock.isClosed, chart: new Set(chartOf(WS)), bankOf: (t) => bankAccountFor(t, WS.bankAccounts), today: new Date().toISOString().slice(0, 10),
+        ...(book && ctx ? { invoices: { book, ctx } } : {}),
+      });
       if (book) { fileReceipts(WS, books, files); saveInvoices(WS, book); }
     } catch (e) {
-      if (e instanceof TwinBookedByHand) throw new RequestError(409, e.message, { code: 'twinBookedByHand', params: e.params });
+      if (e instanceof ReconcileRefused) throw new RequestError(e.status, e.message, { code: e.code, params: e.params } as never);
       throw e;
     }
     return { ok: true };

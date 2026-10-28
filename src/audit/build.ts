@@ -6,7 +6,6 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync,
 import { dirname, join, relative, resolve } from 'node:path';
 import { build } from 'vite';
 import { loadBooks, sealsOf } from '../books/store.js';
-import { servedBooks } from '../books/bank-import.js';
 import { readEstvRateTable } from '../accounting/fx-rates.js';
 import type { ApiStatus } from '../types/api-error.js';
 import { accountsOf, filedReturnsOf, receiptPathOf } from '../workspace/reads.js';
@@ -39,7 +38,7 @@ export async function buildAuditExport(ws: Workspace, outDir: string, createdAt 
   const raw = JSON.parse(readFileSync(ws.paths.ledger, 'utf8')) as { schema?: unknown };
   const snapshot: AuditSnapshot = { createdAt, booksSchema: schemaOf(raw.schema, ws.paths.ledger), appVersion: appVersion() };
 
-  write(EXPORT_FILES.books(), servedBooks(ws, books));
+  write(EXPORT_FILES.books(), books);
   write(EXPORT_FILES.modules(), workspaceModules(APP_ROOT, ws.paths.root, ws.company.vat));
   write(EXPORT_FILES.status(), { ok: true, readonly: true, snapshot } satisfies ApiStatus);
   write(EXPORT_FILES.accounts(), accountsOf(ws));
