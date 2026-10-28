@@ -11,7 +11,7 @@ import { existsSync, linkSync, mkdirSync, readdirSync, readFileSync, renameSync,
 import { dirname, join, relative } from 'node:path';
 import type { AccountingConfig, ApprovedReturn, FiledFigures, Index, JournalEntry, Receipt } from '../types/index.js';
 import { vat } from '../engines/index.js';
-import { APP_FOLDER, findFile, yearPaths, yearsOf, type Workspace, type WorkspacePaths } from '../workspace/workspace.js';
+import { APP_FOLDER, fileFinder, findFile, yearPaths, yearsOf, type Workspace, type WorkspacePaths, type YearPaths } from '../workspace/workspace.js';
 import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, climb, schemaOf } from '../workspace/schema.js';
 import type { ClosedReason } from '../types/api-error.js';
 import { checkSeals, closedPart, type SealReport } from './seal.js';
@@ -337,10 +337,14 @@ export function receiptFile(ws: Workspace, books: Books, receipt: Receipt): stri
 export function placeFiles(ws: Workspace, books: Books): void {
   const closedThrough = books.config.closedThrough;
   const place = placement(books, books.config, closedRecords(books));
+  // Per call, not per file: the year folders are listed once (every year a record names has its books there already) and each year's paths made once.
+  const find = fileFinder(ws.paths);
+  const targets = new Map<string, YearPaths>();
+  const target = (year: string) => targets.get(year) ?? targets.set(year, yearPaths(ws.paths, year)).get(year)!;
   const move = (part: 'receipts' | 'statements', name: string, year: string) => {
     if (isClosedYear(year, closedThrough)) return;
-    const from = findFile(ws.paths, part, name);
-    const to = join(yearPaths(ws.paths, year)[part], name);
+    const from = find(part, name);
+    const to = join(target(year)[part], name);
     if (!from || from === to || isClosedYear(relative(ws.paths.transactional, from).split('/')[0], closedThrough)) return;
     mkdirSync(dirname(to), { recursive: true });
     renameSync(from, to);

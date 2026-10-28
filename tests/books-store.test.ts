@@ -117,6 +117,19 @@ test('a receipt\'s file moves to the year of the entry that first books it, open
   assert.equal(findFile(dir.paths, 'receipts', 'dec.pdf'), join(yearPaths(dir.paths, '2027').receipts, 'dec.pdf'));
 });
 
+test('one load moves every misplaced file of every year, and refuses a name in two year folders (#258)', () => {
+  const receipt = (id: string, date: string) => ({ id, filename: `${id}.pdf`, originalFilename: `${id}.pdf`, extractedText: '', extractionMethod: 'pdftotext' as const, fileSize: 1, indexedAt: `${date}T00:00:00Z`, location: 'archived' as const, date });
+  const dir = root(JSON.stringify({ receipts: [receipt('a', '2027-01-05'), receipt('b', '2027-02-05'), receipt('c', '2026-03-01')], transactions: [], mappings: [], bankStatements: [] }));
+  const in2026 = (name: string) => join(yearPaths(dir.paths, '2026').receipts, name);
+  mkdirSync(yearPaths(dir.paths, '2026').receipts, { recursive: true });
+  for (const name of ['a.pdf', 'b.pdf', 'c.pdf']) writeFileSync(in2026(name), name);
+  loadBooks(dir);
+  assert.deepEqual(['a.pdf', 'b.pdf', 'c.pdf'].map((n) => findFile(dir.paths, 'receipts', n)), [join(yearPaths(dir.paths, '2027').receipts, 'a.pdf'), join(yearPaths(dir.paths, '2027').receipts, 'b.pdf'), in2026('c.pdf')]);
+
+  writeFileSync(in2026('a.pdf'), 'again');
+  assert.throws(() => loadBooks(dir), DuplicateFileError);
+});
+
 test('a file name in two year folders is refused, not resolved to the first', () => {
   const dir = root();
   for (const y of ['2025', '2026']) {
