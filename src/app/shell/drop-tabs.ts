@@ -10,6 +10,6 @@ export type DropTab = 'all' | 'statements' | 'receipts' | 'unclear' | 'out';
 export const tabOf = (r: DropRow): DropTab => (r.state === 'duplicate' || r.state === 'quarantine' || r.state === 'refused' || r.state === 'undone' ? 'out'
   : r.state === 'asks' ? 'statements'
   : r.state === 'locked' || r.state === 'unclear' || !r.kind ? 'unclear'
-  : r.kind === 'camt' || r.kind === 'statement-pdf' ? 'statements' : 'receipts');
+  : r.kind === 'camt' || r.kind === 'statement-pdf' || r.kind === 'statement-csv' ? 'statements' : 'receipts');
 
 export const needsYou = (r: DropRow): boolean => r.state === 'locked' || r.state === 'unclear' || r.state === 'asks';

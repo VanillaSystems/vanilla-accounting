@@ -428,7 +428,7 @@ change, or the issue that tracks it, in `answer`.
 ### `data.bank-formats` In which format do the country's banks deliver statements?
 
 - **Why:** the bank import is the first step of every quarter.
-- **Slot:** providers (src/providers/camt053/, src/providers/wise-pdf/), chosen by file.
+- **Slot:** providers (src/providers/camt053/, src/providers/wise-pdf/, src/providers/statement-read/ for a statement without one), chosen by file.
 - **Minimum:** the standard format of the country's banks; others as workspace sources
   (ADR 0014, ADR 0015).
 

@@ -18,15 +18,24 @@ import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 import { RequestError, WS, assertOpen, readBooks, receiptDates, receiptPath, updateBooks } from '../books.js';
-import { findFile } from '../../workspace/workspace.js';
+import { findFile, partDirs } from '../../workspace/workspace.js';
 import { INTAKE, bookAgain, engine, handedOver } from './automation.js';
 import { removeReceipt } from '../../accounting/classify-force.js';
 import { importStatement, removeStatement } from './statements.js';
 import { statementDetails } from '../../providers/statement-files.js';
+import { accountOfRead, asRead, coveredByExport, exportOverlap, heldOf, keepCsv, keptCsv, MAX_READ_PAGES, readDays, readStatementPdf } from '../../intake/statement-read.js';
+import { csvStatement, csvTable, guessColumns, MAX_CSV_ROWS } from '../../providers/statement-read/csv.js';
+import { toStatementXml } from '../../providers/statement-read/camt-writer.js';
+import { parseReadStatement } from '../../books/statement-check.js';
+import { exportSpans } from '../../books/bank-import.js';
+import { imageToPdf, isImageFile } from '../../parsers/image-pdf.js';
+import { ask, modelReady } from '../../llm/ask.js';
+import type { StatementReadParams } from '../../types/api-error.js';
+import type { CsvColumns, ReadStatement } from '../../types/statement-read.js';
 import { importSalesReport, recognizeCsv, removeSalesReport, setProviderAccount } from '../../intake/sales-report-import.js';
 
 import type { Arrival } from '../../workflows/model.js';
-import { recognize } from '../../intake/recognize.js';
+import { firstPages, recognize } from '../../intake/recognize.js';
 import { unzip } from '../../intake/unzip.js';
 import { freeName, putInQuarantine, release } from '../../intake/quarantine.js';
 import { twinFinder, type Comparable } from '../../intake/duplicates.js';
@@ -154,10 +163,10 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
       Object.assign(row, { state: 'take', reason: undefined });
       break;
     case 'as': {
-      // A PDF its words took for a statement that no account read in may still be a receipt: the person says so (#25).
-      const notStatement = row.kind === 'statement-pdf' && row.reason === 'not-imported' && a.as === 'receipt';
+      // A PDF its words took for a statement that no account read in, or whose table waits, may still be a receipt: the person says so (#25, #217).
+      const notStatement = row.kind === 'statement-pdf' && (row.reason === 'not-imported' || row.reason === 'check-read') && a.as === 'receipt';
       if (settled || ((row.state === 'refused' || row.state === 'asks') && !notStatement) || row.state === 'locked') throw new RequestError(400, 'Diese Datei lässt sich so nicht übernehmen.');
-      if (notStatement) { delete row.message; delete row.unknownAccount; delete row.chooseAccount; delete row.details; }
+      if (notStatement) { delete row.message; delete row.unknownAccount; delete row.chooseAccount; delete row.details; delete row.read; delete row.confirmed; delete row.keep; }
       if (a.as === 'receipt') unquarantine(row);
       Object.assign(row, a.as === 'quarantine' ? { state: 'quarantine', reason: 'held' } : { kind: 'receipt', state: 'take', reason: undefined });
       break;
@@ -209,6 +218,58 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
       for (const f of out.files) await add(s, f.name, f.bytes, row.name);
       break;
     }
+    case 'read': {
+      // The table as the person corrected it: checked again, its known lines marked again; with «Einlesen» imported (#217).
+      if (!row.read || row.state !== 'asks') throw new RequestError(400, 'Nur ein gelesener Auszug wird so korrigiert.');
+      const statement = parseReadStatement(a.statement);
+      if (!statement) throw readRefusal('Eine Zeile hat kein Datum oder keinen Betrag, oder ein Saldo fehlt.', { why: 'line' });
+      row.read = withHeld(statement, row.read.by, row.account, { ...(row.read.why ? { why: row.read.why } : {}), ...(row.read.pages ? { pages: row.read.pages } : {}), ...(row.read.limit ? { limit: row.read.limit } : {}) });
+      if (!a.import) break;
+      if (row.read.covered) throw readRefusal(`Die Tage ${row.read.covered.from} bis ${row.read.covered.to} sind schon aus ${row.read.covered.file} in den Büchern: keine Bewegung eingelesen.`, { why: 'covered', file: row.read.covered.file });
+      const gap = row.read.check.gaps.find((g) => g.where !== 'total') ?? row.read.check.gaps[0];
+      if (gap) throw readRefusal(`Der Auszug geht nicht auf: ${gap.gap.toFixed(2)} ${statement.currency}${gap.page ? ` auf Seite ${gap.page}` : ''}. Nichts eingelesen.`, { why: 'gap', gap: gap.gap, currency: statement.currency, ...(gap.page ? { page: gap.page } : {}) });
+      for (const k of ['chooseAccount', 'unknownAccount', 'details', 'message'] as const) delete row[k];
+      Object.assign(row, { state: 'take', reason: undefined, confirmed: true });
+      break;
+    }
+    case 'keep': {
+      // «Als Monatsauszug behalten»: the PDF is kept as the month's statement, as before #217, its movements not imported (no AI, a table not wanted, or days a bank export covers).
+      if (row.kind !== 'statement-pdf' || !row.read || row.state !== 'asks' || !existsSync(fileOf(s.id, row.key))) throw new RequestError(400, 'Nur ein Auszug als PDF wird als Monatsauszug behalten.');
+      const statement = (a.statement !== undefined ? parseReadStatement(a.statement) : undefined) ?? row.read.statement;
+      const account = accountOfRead(statement, WS.bankAccounts, row.account)?.account ?? row.account;
+      for (const k of ['chooseAccount', 'unknownAccount', 'details', 'message', 'read', 'confirmed'] as const) delete row[k];
+      Object.assign(row, { state: 'take', reason: undefined, keep: { month: readDays(statement).to.slice(0, 7) }, ...(account ? { account } : {}) });
+      break;
+    }
+    case 'csv': {
+      // A bank CSV's columns and account: read into the table, the mapping kept for the account's next CSV (#217).
+      if (row.kind !== 'statement-csv' || !row.csv || row.state !== 'asks' || !existsSync(fileOf(s.id, row.key))) throw new RequestError(400, 'Nur eine Bank-CSV nimmt Spalten.');
+      const account = WS.bankAccounts.find((x) => x.account === a.account && x.statements);
+      if (!account) throw readRefusal(`Konto ${a.account} nimmt keine Auszüge.`, { why: 'account' });
+      const columns = columnsOf(a.columns, row.csv.header.length);
+      if (!columns) throw readRefusal('Datum und Betrag (oder Belastung und Gutschrift) brauchen je eine Spalte der CSV.', { why: 'columns' });
+      const table = csvTable(readFileSync(fileOf(s.id, row.key)));
+      const read = table ? csvStatement(table, columns, account) : ({ kind: 'empty' } as const);
+      if ('kind' in read) throw csvRefusal(read);
+      keepCsv(WS, account.account, row.csv.header, columns);
+      Object.assign(row, { account: account.account, csv: { ...row.csv, columns, account: account.account }, read: withHeld(read, 'csv', account.account), reason: 'check-read' });
+      break;
+    }
+    case 'statement': {
+      // A receipt, photo or scan that is a bank statement (#217): taken back out of the inbox and read as one.
+      if (row.kind !== 'receipt' && row.kind !== 'photo') throw new RequestError(400, 'Nur ein Beleg, ein Foto oder ein Scan wird als Kontoauszug gelesen.');
+      let bytes: Buffer | undefined = existsSync(fileOf(s.id, row.key)) ? readFileSync(fileOf(s.id, row.key)) : undefined;
+      if (row.state === 'taken') {
+        bytes = takenBytes(row);
+        if (!bytes) throw new RequestError(409, 'Die Datei ist nicht mehr da.');
+        if (undo(row).length) await bookAgain(row.name);
+      } else if (settled || !bytes) throw new RequestError(400, 'Diese Datei lässt sich so nicht übernehmen.');
+      const pdf = isImageFile(row.name) || row.kind === 'photo' ? Buffer.from(await imageToPdf(bytes, row.name)) : bytes;
+      writeFileSync(fileOf(s.id, row.key), pdf);
+      for (const k of ['inbox', 'run', 'twin', 'document', 'quarantined', 'message'] as const) delete row[k];
+      Object.assign(row, { kind: 'statement-pdf', how: 'hint', state: 'take', reason: undefined, name: row.name.replace(/\.(png|jpe?g|heic|heif)$/i, '.pdf') });
+      break;
+    }
     case 'twin': {
       if (row.state !== 'duplicate' || !row.twin || row.twin.relation !== 'duplicate') throw new RequestError(400, 'Nur ein möglicher Doppelbeleg wird so beantwortet.');
       if (a.answer === 'same') {
@@ -231,6 +292,100 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
   save(s);
   res.json(s);
 }));
+
+const readRefusal = (error: string, params: StatementReadParams) => new RequestError(400, error, { code: 'statementRead', params });
+
+function csvRefusal(p: Exclude<ReturnType<typeof csvStatement>, ReadStatement>): RequestError {
+  return p.kind === 'amount' ? readRefusal(`Zeile ${p.row} der CSV hat ein Datum, aber keinen Betrag.`, { why: 'csvRow', row: p.row })
+    : p.kind === 'tooMany' ? readRefusal(`Die CSV hat ${p.rows} Zeilen, höchstens ${p.limit} werden gelesen: nichts gelesen. Den Zeitraum kürzer exportieren.`, { why: 'csvRows', rows: p.rows, limit: p.limit })
+    : readRefusal('Keine Zeile der CSV hat ein Datum in der gewählten Spalte.', { why: 'csvEmpty' });
+}
+
+/** The person's columns, each an index of the CSV's header, a day and an amount (or a debit or credit) among them. */
+function columnsOf(c: unknown, width: number): CsvColumns | undefined {
+  const o = c as Record<string, unknown> | null;
+  if (!o || typeof o !== 'object') return undefined;
+  const out: Record<string, number> = {};
+  for (const k of ['date', 'valueDate', 'amount', 'debit', 'credit', 'counterparty', 'text', 'reference', 'balance'] as const) {
+    const v = o[k];
+    if (v === undefined || v === null || v === '') continue;
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < 0 || v >= width) return undefined;
+    out[k] = v;
+  }
+  return out.date !== undefined && (out.amount !== undefined || out.debit !== undefined || out.credit !== undefined) ? (out as unknown as CsvColumns) : undefined;
+}
+
+/**
+ * The statement checked, with the lines the books hold marked against the account it lands on, and
+ * the bank export that covers days of it on that account, if one does: then nothing of it is imported.
+ */
+function withHeld(statement: ReadStatement, by: NonNullable<DropRow['read']>['by'], named: string | undefined, extra: Omit<NonNullable<Parameters<typeof asRead>[3]>, 'covered'> = {}) {
+  const account = accountOfRead(statement, WS.bankAccounts, named);
+  const days = readDays(statement);
+  const covered = account ? exportOverlap(exportSpans(WS), account.account, days.from, days.to) : undefined;
+  return asRead(statement, by, heldOf(statement, account, readBooks().transactions), { ...extra, ...(covered ? { covered } : {}) });
+}
+
+/** A taken receipt's bytes, while the inbox or the books hold it (a photo as the PDF it became). */
+function takenBytes(row: DropRow): Buffer | undefined {
+  if (row.inbox && existsSync(join(WS.paths.inbox, row.inbox))) return readFileSync(join(WS.paths.inbox, row.inbox));
+  const run = row.run ? engine().run(row.run) : undefined;
+  const arrival = run?.arrived?.find((x) => x.kind === 'receipt' && x.file === row.name);
+  const books = readBooks();
+  const receipt = books.receipts.find((r) => r.id === (arrival?.kind === 'receipt' ? arrival.id : row.id));
+  const path = receipt ? receiptPath(books, receipt) : undefined;
+  return path && existsSync(path) ? readFileSync(path) : undefined;
+}
+
+/**
+ * A statement without a bank export read into its table (#217): the PDF by the model when one answers
+ * here, else the table to fill by hand; a CSV by the mapping kept for its header, else its
+ * columns asked. The row then waits for «Einlesen».
+ */
+async function readInto(s: DropSession, row: DropRow, bytes: Buffer): Promise<void> {
+  if (row.kind === 'statement-csv') {
+    const table = csvTable(bytes);
+    if (!table) { Object.assign(row, { state: 'refused', reason: 'bank-csv' }); return; }
+    const kept = keptCsv(WS, table.header);
+    const accounts = WS.bankAccounts.filter((x) => x.statements).map((x) => ({ account: x.account, label: x.label, currency: x.currency }));
+    row.csv = { header: table.header, sample: table.rows.slice(0, 5), rows: table.rows.length, accounts, ...(kept ? { columns: kept.columns, account: kept.account } : guessColumns(table.header) ? { columns: guessColumns(table.header) } : {}) };
+    const account = kept && WS.bankAccounts.find((x) => x.account === kept.account && x.statements);
+    const read = account ? csvStatement(table, kept.columns, account) : undefined;
+    if (account && read && !('kind' in read)) Object.assign(row, { account: account.account, read: withHeld(read, 'csv', account.account), state: 'asks', reason: 'check-read' });
+    else Object.assign(row, { state: 'asks', reason: 'csv-columns', ...(read && 'kind' in read && read.kind === 'tooMany' ? { message: csvRefusal(read).message } : {}) });
+    return;
+  }
+  const path = join(dir(s.id), 'read', `${row.key}.pdf`);
+  mkdirSync(join(dir(s.id), 'read'), { recursive: true });
+  writeFileSync(path, bytes);
+  const read = await readStatementPdf(path, await modelReady() ? ask : undefined);
+  rmSync(path, { force: true });
+  Object.assign(row, { state: 'asks', reason: 'check-read', read: withHeld(read.statement, read.by, row.account, { ...(read.why ? { why: read.why } : {}), ...(read.pages ? { pages: read.pages } : {}), ...(read.why === 'pages' ? { limit: MAX_READ_PAGES } : {}) }) });
+}
+
+/** The ISO 20022 statement a confirmed table is imported as: its lines the books hold carry their refs, so they are not added twice. */
+function asCamt(row: DropRow, bytes: Buffer): { body: Buffer; name: string; source: { ext: string; bytes: Buffer } } {
+  const read = row.read!;
+  const account = accountOfRead(read.statement, WS.bankAccounts, row.account);
+  const held = heldOf(read.statement, account, readBooks().transactions);
+  const ext = row.kind === 'statement-csv' ? 'csv' : 'pdf';
+  const stem = freeStem(basename(row.name, extname(row.name)).replace(/[/\\]/g, '-') || 'auszug', ext);
+  const xml = toStatementXml(read.statement, { id: `read-${row.id}`, source: `${stem}.${ext}`, by: read.by, refs: new Map([...held].map(([i, t]) => [i, t.ref.split('~')[0]])) });
+  return { body: Buffer.from(xml), name: `${stem}.xml`, source: { ext, bytes } };
+}
+
+/**
+ * A stem under which no statement folder holds a file yet, as the ISO 20022 statement or as the file it is read
+ * from (`ext`): the read's two files never meet a file that is there (a PDF kept as a month's
+ * statement of the same name), so the undo removes only what the read wrote.
+ */
+function freeStem(stem: string, ext: string): string {
+  const banks = partDirs(WS.paths, 'statements').filter((d) => existsSync(d)).flatMap((d) => readdirSync(d).map((b) => join(d, b)));
+  const taken = (n: string) => banks.some((b) => existsSync(join(b, `${n}.xml`)) || existsSync(join(b, `${n}.${ext}`)));
+  let name = stem;
+  for (let i = 2; taken(name); i++) name = `${stem}-${i}`;
+  return name;
+}
 
 /** «Nein, privat» on a statement of an account the books lack: it stays out of the books, its copy in the session goes. */
 function setAsidePrivate(s: DropSession, row: DropRow): void {
@@ -276,11 +431,19 @@ async function takeWaiting(s: DropSession): Promise<void> {
       else Object.assign(row, done.ask ? { state: 'unclear', reason: 'provider-account', askProvider: done.ask, message: done.message } : { state: 'refused', reason: 'not-imported', message: done.message });
       continue;
     }
+    // A statement PDF of days a bank export in the books covers is kept as that month's statement, as before; any other is read (#217).
+    const covered = row.kind === 'statement-pdf' && !row.confirmed && !row.read && !row.keep ? coveredByExport(await firstPages(bytes) ?? '', row.name, WS.bankAccounts, exportSpans(WS)) : undefined;
+    if (covered) row.account ??= covered.account;
+    if ((row.kind === 'statement-pdf' || row.kind === 'statement-csv') && !row.confirmed && !covered && !row.keep) {
+      await readInto(s, row, bytes);
+      continue;
+    }
     let arrival: Arrival;
-    if (row.kind === 'camt' || row.kind === 'statement-pdf') {
+    if (row.kind === 'camt' || row.kind === 'statement-pdf' || row.kind === 'statement-csv') {
       const had = new Set(readBooks().transactions.map((t) => t.ref));
+      const camt = row.read ? asCamt(row, bytes) : { body: bytes, name: row.name };
       try {
-        const { month: _month, ...done } = await importStatement(bytes, row.name, row.account);
+        const { month: _month, ...done } = await importStatement(camt.body, camt.name, row.account, covered?.month ?? row.keep?.month, 'source' in camt ? camt.source : undefined);
         row.statement = { file: done.file, refs: readBooks().transactions.filter((t) => !had.has(t.ref)).map((t) => t.ref) };
         arrival = { kind: 'statement', ...done };
       } catch (e) {
@@ -298,7 +461,7 @@ async function takeWaiting(s: DropSession): Promise<void> {
         const choose = problem?.kind === 'whichAccount' ? problem : undefined;
         // A statement asking which account it is of, or whether an unknown one is the firm's, waits for that answer with its file (#208).
         const asks = !!(unknown || choose);
-        const details = asks ? statementDetails(bytes, row.name) : undefined;
+        const details = asks ? statementDetails(camt.body, camt.name) : undefined;
         Object.assign(row, { state: asks ? 'asks' : 'refused', reason: 'not-imported', message: (e as Error).message, ...(unknown ? { unknownAccount: unknown } : {}), ...(choose ? { chooseAccount: choose } : {}), ...(details ? { details } : {}) });
         continue;
       }
