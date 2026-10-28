@@ -1,11 +1,11 @@
 /**
  * The question a statement PDF raises, kept in the books (#254): whether its movements are read in.
- * A PDF of an account that a camt.053 or bank CSV feeds is its statement and asks nothing; one of an
+ * A PDF of an account that a bank export or bank CSV feeds is its statement and asks nothing; one of an
  * account without either is kept as the statement at once and its question waits in the books
  * (Index.statementAsks) with the table as read, in the drop dialog, in Bank › Kontoauszüge, after a
  * restart. «Bewegungen aus dem PDF einlesen» asks it of any statement PDF. «Einlesen» writes the
- * table as a camt.053 beside the PDF, «Als Auszug behalten» closes it, and so does the account's
- * first camt.053 or CSV (src/server/routes/statements.ts importStatement).
+ * table as an ISO 20022 statement beside the PDF, «Als Auszug behalten» closes it, and so does the account's
+ * first bank export or CSV (src/server/routes/statements.ts importStatement).
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -23,7 +23,7 @@ import type { ReadBy, ReadStatement, StatementRead } from '../types/statement-re
 import type { StatementAsk, StatementImport } from '../types/index.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 
-/** Whether a camt.053 or bank CSV of the account is in the books: then its statement PDFs ask nothing. */
+/** Whether a bank export or bank CSV of the account is in the books: then its statement PDFs ask nothing. */
 export const structuredAccount = (account: string): boolean => structuredSpans(WS).some((s) => s.account === account);
 
 /**
@@ -54,8 +54,8 @@ export function assertImportable(read: StatementRead): void {
 }
 
 /**
- * The camt.053 a confirmed table is written as (#217): a line the books hold carries its ref, so it
- * is not added twice; a line on a day a camt.053 or CSV of the account covers that the books do not
+ * The ISO 20022 statement a confirmed table is written as (#217): a line the books hold carries its ref, so it
+ * is not added twice; a line on a day a bank export or CSV of the account covers that the books do not
  * hold is left out (#254), since that file's movements are the account's there.
  */
 export function readAsXml(read: StatementRead, account: LedgerBankAccount | undefined, o: { id: string; source: string }): string {
@@ -144,7 +144,7 @@ export function correctAsk(file: string, raw: unknown): StatementAsk {
 }
 
 /**
- * «Einlesen» on a kept PDF's question: the table, checked again, is written as a camt.053 beside the
+ * «Einlesen» on a kept PDF's question: the table, checked again, is written as an ISO 20022 statement beside the
  * PDF under its name (listed from then on as that statement, its PDF beside it) and read in as every
  * statement is; the question goes. `import`: the statement import (src/server/routes/statements.ts).
  */

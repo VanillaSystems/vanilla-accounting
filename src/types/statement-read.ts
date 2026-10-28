@@ -74,7 +74,7 @@ export interface StatementRead {
   /** The provider's words when its call failed (`why: 'failed'`). */
   error?: string;
   /**
-   * The days of this statement the account's camt.053 or bank CSV covers already (#254): a line on
+   * The days of this statement the account's bank export or bank CSV covers already (#254): a line on
    * them is imported only as the payment the books hold of its day and amount, never as a new one,
    * since a value date or a day misread would double a payment. `whole`: they cover every day, so
    * there is nothing to read in; the PDF is kept as the statement.

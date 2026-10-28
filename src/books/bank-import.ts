@@ -171,10 +171,10 @@ export interface Unmatched { file: string; bank: string; currency: string; date:
  * - one it does not hold at all leaves its read file (`files`) and is named in `unmatched`: the books
  *   keep it as a movement of its own until the person keeps or removes it, so it is neither lost nor
  *   counted twice.
- * A movement dated on a day `isClosed` says is filed is never changed. Pure: `xmlOf` gives a read
- * file's text, and `files` holds each read file's new text.
+ * A movement dated on a day `isClosed` says is filed is never changed, nor one `inBooks` says the
+ * books do not hold. Pure: `xmlOf` gives a read file's text, and `files` holds each read file's new text.
  */
-export function alignReads(statementFiles: readonly StatementFile[], structured: string, isClosed: (date: string) => boolean, xmlOf: (file: string) => string): { files: Map<string, string>; unmatched: Unmatched[] } {
+export function alignReads(statementFiles: readonly StatementFile[], structured: string, isClosed: (date: string) => boolean, xmlOf: (file: string) => string, inBooks: (line: Unmatched) => boolean = () => true): { files: Map<string, string>; unmatched: Unmatched[] } {
   const read = statementFiles.filter((f): f is Read => f.status === 'read');
   const own = read.filter((f) => f.file === structured && sourceOf(f.statement) !== 'pdf');
   const files = new Map<string, string>();
@@ -212,8 +212,11 @@ export function alignReads(statementFiles: readonly StatementFile[], structured:
     }
     for (const l of loose) {
       if (moved.get(l.file)?.has(l.index)) continue;
+      const u: Unmatched = { file: l.file, bank: l.line.bank, currency: l.line.currency, date: l.line.date, direction: l.line.direction, amount: l.line.amount, ref: l.line.ref };
+      // Only a movement the books hold leaves its read file: it stays in the books as one of its own.
+      if (!inBooks(u)) continue;
       set(l.file, l.index, null);
-      unmatched.push({ file: l.file, bank: l.line.bank, currency: l.line.currency, date: l.line.date, direction: l.line.direction, amount: l.line.amount, ref: l.line.ref });
+      unmatched.push(u);
     }
     for (const [file, changes] of moved) {
       let index = -1;

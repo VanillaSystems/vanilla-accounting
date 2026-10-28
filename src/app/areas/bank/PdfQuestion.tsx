@@ -3,7 +3,7 @@
  * movements are read in), the table to check and «Einlesen» or «Als Monatsauszug behalten»; the
  * «Aktionen» of a PDF kept as the statement, «Bewegungen aus dem PDF einlesen» (the model, or the hand
  * form when the AI is off); a month whose PDF brought no movement, said as a fact; and a movement
- * read from a PDF that the account's camt.053 or CSV does not hold, kept or removed by the person.
+ * read from a PDF that the account's bank export or CSV does not hold, kept or removed by the person.
  */
 import { useState } from 'react';
 import type { BankTransaction, StatementAsk } from '../../../types/index.js';
@@ -18,7 +18,7 @@ import { at } from '../receipts/view.js';
 import { fileKey, type Statement } from './model.js';
 import { forgetPages } from './StatementPaper.js';
 
-/** The file of a statement's PDF in the books: `<bank>/<file name>`; none for a camt.053 or a month without a file. */
+/** The file of a statement's PDF in the books: `<bank>/<file name>`; none for a bank export or a month without a file. */
 export const pdfOf = (s: Statement): string | undefined => (s.file && /\.pdf$/i.test(s.file.filename) ? `${s.file.bank}/${s.file.filename}` : undefined);
 
 /** «Bewegungen aus dem PDF einlesen»: the PDF read now, its question kept in the books; the page then shows the table. */
@@ -82,7 +82,7 @@ export function NoMovements({ s, nav, edit }: { s: Statement; nav: Nav; edit: bo
   );
 }
 
-/** A movement read from a PDF that the account's camt.053 or CSV does not hold: «Behalten» or «Entfernen» (with its bookings). */
+/** A movement read from a PDF that the account's bank export or CSV does not hold: «Behalten» or «Entfernen» (with its bookings). */
 export function UnmatchedNotice({ tx, nav, edit }: { tx: BankTransaction; nav: Nav; edit: boolean }) {
   const [busy, setBusy] = useState(false);
   const run = (call: () => Promise<unknown>) => {

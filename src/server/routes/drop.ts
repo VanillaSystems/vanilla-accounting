@@ -369,7 +369,7 @@ async function readInto(s: DropSession, row: DropRow, bytes: Buffer): Promise<vo
 }
 
 /**
- * A dropped statement PDF (#254), kept as its account's statement at once. Of an account a camt.053 or
+ * A dropped statement PDF (#254), kept as its account's statement at once. Of an account a bank export or
  * bank CSV feeds it asks nothing, and is read only when its own words do not name the account and its
  * days. Of any other account it is read, and its question («Einlesen» or «Als Auszug behalten») is
  * kept in the books with the table. One whose account and month neither its words nor the model's
@@ -386,7 +386,7 @@ async function placeStatementPdf(s: DropSession, row: DropRow, bytes: Buffer): P
   if (model) { account ??= accountOfRead(model, WS.bankAccounts); period ??= readDays(model); }
   if (!account || !period) return;
   const month = period.to.slice(0, 7);
-  const done = await intoBooks(row, bytes, row.name, account.account, month);
+  const done = await intoBooks(row, bytes, row.name, account.account, month, undefined, period);
   if (!done) return;
   if (structuredAccount(account.account) || !row.read) {
     delete row.read;
@@ -399,7 +399,7 @@ async function placeStatementPdf(s: DropSession, row: DropRow, bytes: Buffer): P
   Object.assign(row, { state: 'asks', reason: 'check-read', account: account.account, asked: { file: done.file, month }, read: ask.read });
 }
 
-/** A row's PDF kept with its question, settled: kept as the statement, or read in (`statement`: the camt.053 written beside it). */
+/** A row's PDF kept with its question, settled: kept as the statement, or read in (`statement`: the ISO 20022 statement written beside it). */
 function settleAsked(s: DropSession, row: DropRow, statement?: { file: string; refs: string[] }): void {
   const month = row.asked!.month;
   delete row.asked;
@@ -421,11 +421,11 @@ function dropAsked(row: DropRow): void {
  * asking its question (which account, firm or private) or refused, and a statement read in already
  * links to it. Undefined when nothing was read in.
  */
-async function intoBooks(row: DropRow, body: Buffer, name: string, account: string | undefined, month: string | undefined, source?: { ext: string; bytes: Buffer }): Promise<StatementImport | undefined> {
+async function intoBooks(row: DropRow, body: Buffer, name: string, account: string | undefined, month: string | undefined, source?: { ext: string; bytes: Buffer }, days?: { from: string; to: string }): Promise<StatementImport | undefined> {
   const had = new Set(readBooks().transactions.map((t) => t.ref));
   let done: StatementImport;
   try {
-    done = await importStatement(body, name, account, month, source);
+    done = await importStatement(body, name, account, month, source, days);
   } catch (e) {
     const refusal = e instanceof RequestError ? e.refusal : undefined;
     const unknown = refusal?.code === 'statement' ? refusal.params.unknown : undefined;
@@ -547,7 +547,7 @@ async function takeWaiting(s: DropSession): Promise<void> {
 
 /**
  * A row whose PDF waits with its question in the books (#254), answered elsewhere meanwhile: in Bank,
- * or closed by the account's first camt.053 or CSV. It shows what became of it.
+ * or closed by the account's first bank export or CSV. It shows what became of it.
  */
 function syncAsked(s: DropSession): void {
   if (!s.rows.some((r) => r.asked)) return;

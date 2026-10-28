@@ -154,7 +154,7 @@ test('through the API: the chat, Terminal, «Neu lesen», «Neu klassifizieren»
   }
 });
 
-test('a statement PDF dropped with the switch on: no model reads it; the row offers the hand table and «Als Monatsauszug behalten», which keeps it as the month\'s statement', async () => {
+test('a statement PDF dropped with the switch on, of an account without a bank export: no model reads it; the row offers the hand table and «Als Monatsauszug behalten», which closes its question with the PDF kept as the month\'s statement', async () => {
   switchOn(true);
   empty();
   const { SESSION } = await import('./support/inbox-run.js');
@@ -162,18 +162,22 @@ test('a statement PDF dropped with the switch on: no model reads it; the row off
   const { pdf } = await inventedStatement(DEMO_OCTOBER);
   const demo = await startApi('demo', { PATH: `${STUB}:${process.env.PATH}`, VANILLA_AI_SETTINGS: settings, CLAUDE_STUB_ARGS: claudeCalls, CODEX_STUB_ARGS: codexCalls, CODEX_HOME: join(dir, 'codex-home-drop'), CLAUDE_BIN: '', CODEX_BIN: '' });
   cpSync(DEMO_ROOT, demo.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
+  // An account with a bank export keeps its PDFs without a question (#254): this one has none.
+  const folder = join(demo.root, 'transactional-data/2026/bank-statements/Raiffeisen');
+  for (const f of readdirSync(folder).filter((x) => x.endsWith('.xml'))) rmSync(join(folder, f));
   try {
     const { post, rest } = SESSION(demo);
-    const had = ((await (await demo.fetch('/books.json')).json()) as Index).transactions.length;
     let s = await post('/api/drop');
     s = await post(`/api/drop/${s.id}/files?name=oktober.pdf`, pdf);
     let [row] = s.rows;
-    assert.deepEqual([row.state, row.read?.by, row.read?.why], ['asks', 'hand', 'noAi']);
+    assert.deepEqual([row.state, row.read?.by, row.read?.why, row.asked?.file], ['asks', 'hand', 'noAi', 'Raiffeisen/Kontoauszug 01.10.2026 - 31.10.2026.pdf']);
     s = await post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'keep' });
     [row] = s.rows;
-    assert.deepEqual([row.state, row.statement?.file], ['taken', 'Raiffeisen/Kontoauszug 01.10.2026 - 31.10.2026.pdf']);
+    assert.deepEqual([row.state, row.statement?.file, row.asked], ['taken', 'Raiffeisen/Kontoauszug 01.10.2026 - 31.10.2026.pdf', undefined]);
     await rest();
-    assert.equal(((await (await demo.fetch('/books.json')).json()) as Index).transactions.length, had, 'kept as the month\'s statement: no movement imported');
+    const books = (await (await demo.fetch('/books.json')).json()) as Index;
+    assert.deepEqual(books.transactions.filter((t) => t.date >= '2026-10-01'), [], 'kept as the month\'s statement: no movement imported');
+    assert.equal(books.statementAsks, undefined, 'its question is answered');
     assert.deepEqual(reached(), [], 'no call reached a provider');
   } finally {
     await SESSION(demo).rest().catch(() => {});

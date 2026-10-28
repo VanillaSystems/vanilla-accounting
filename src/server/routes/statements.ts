@@ -165,17 +165,19 @@ function assertNoFiledPayments(): void {
     { code: 'statement', params: { reason: 'filedPayments', closed: { n: missing.length, through, refs } } });
 }
 
+/** The books' open payment a read statement's movement is: its account, day, direction, amount and ref. */
+const unmatchedIn = (books: Books, u: Unmatched): BankTransaction | undefined => books.transactions.find((x) => !madeByHand(x) && !periodLock(books).isClosed(x.date)
+  && x.bank === u.bank && x.currency === u.currency && x.date === u.date && x.direction === u.direction && Math.abs(x.amount) === Math.abs(u.amount) && x.ref.split('~')[0] === u.ref.split('~')[0]);
+
 /**
  * The movements read from PDFs that a structured file does not hold (#254, src/books/bank-import.ts
  * alignReads): each stays as a movement of its own (`source: 'manual'`), so its bookings and links
  * stay, marked for the person to keep or remove. Never one of the filed period.
  */
 function keepUnmatched(books: Books, unmatched: readonly Unmatched[], by: string): void {
-  const lock = periodLock(books);
   const since = new Date().toISOString().slice(0, 10);
   for (const u of unmatched) {
-    const t = books.transactions.find((x) => !madeByHand(x) && !lock.isClosed(x.date) && x.bank === u.bank && x.currency === u.currency && x.date === u.date
-      && x.direction === u.direction && Math.abs(x.amount) === Math.abs(u.amount) && x.ref.split('~')[0] === u.ref.split('~')[0]);
+    const t = unmatchedIn(books, u);
     if (!t) continue;
     t.source = 'manual';
     t.unmatched = { since, by };
@@ -190,11 +192,12 @@ const swiss = (iso: string) => iso.split('-').reverse().join('.');
  * "statement_…_EUR_2026-09-01_2026-09-30.pdf"), which gives its month. Another name is renamed
  * that way when the upload names the account and month (the missing month's well).
  */
-function placePdf(filename: string, hint?: LedgerBankAccount, month?: string): Placed {
+function placePdf(filename: string, hint?: LedgerBankAccount, month?: string, days?: { from: string; to: string }): Placed {
   const named = statementPdf(filename);
   if (!named) {
-    if (!hint || !month) return refuse(400, 'Der Dateiname sagt nicht, welchen Monat der Auszug zeigt.', 'name');
-    const from = `${month}-01`, to = monthEnd(month);
+    if (!hint || (!month && !days)) return refuse(400, 'Der Dateiname sagt nicht, welchen Monat der Auszug zeigt.', 'name');
+    // The days the statement itself shows when they are known (#254), else its whole month.
+    const from = days?.from ?? `${month}-01`, to = days?.to ?? monthEnd(month!);
     const canonical = hint.statements === 'wise' ? `statement_0_${hint.currency}_${from}_${to}.pdf` : `Kontoauszug ${swiss(from)} - ${swiss(to)}.pdf`;
     return { account: hint, filename: canonical, first: from, last: to };
   }
@@ -226,10 +229,10 @@ function mergeBalances(old: StatementClosingBalance[] = [], fresh: StatementClos
  * the account and its days, and a camt.053 or bank CSV of that account is in the books. Undefined when
  * the file does not say, or the account has none: then it is read.
  */
-export function keptAsStatement(text: string, name: string): { account: string; month: string } | undefined {
+export function keptAsStatement(text: string, name: string): { account: string; month: string; days: { from: string; to: string } } | undefined {
   const { account, period } = placeByText(text, name, WS.bankAccounts);
   if (!account || !period) return undefined;
-  return structuredSpans(WS).some((s) => s.account === account.account) ? { account: account.account, month: period.to.slice(0, 7) } : undefined;
+  return structuredSpans(WS).some((s) => s.account === account.account) ? { account: account.account, month: period.to.slice(0, 7), days: period } : undefined;
 }
 
 router.post('/api/statements', express.raw({ type: () => true, limit: '50mb' }), async (req, res) => {
@@ -241,7 +244,7 @@ router.post('/api/statements', express.raw({ type: () => true, limit: '50mb' }),
   if (/\.pdf$/i.test(name) && req.query.keep !== '1') {
     const kept = keptAsStatement(await firstPages(body) ?? '', name);
     if (!kept) refuse(409, 'Das Konto dieses Auszugs hat kein camt.053 und keine CSV: er wird im Ablage-Dialog gelesen.', 'read');
-    else return void res.json(await importStatement(body, name, kept.account, month ?? kept.month));
+    else return void res.json(await importStatement(body, name, kept.account, month ?? kept.month, undefined, month ? undefined : kept.days));
   }
   res.json(await importStatement(body, name, typeof req.query.account === 'string' ? req.query.account : undefined, month));
 });
@@ -249,16 +252,17 @@ router.post('/api/statements', express.raw({ type: () => true, limit: '50mb' }),
 /**
  * Reads one statement file (camt.053 or a PDF) into the books: placed by its account and month,
  * refused as a RequestError when it belongs to no account, lies in a closed period or is read
- * already. The Bank area's upload and the drop dialog both take this one way in. `source`: the file
+ * already. The Bank area's upload and the drop dialog both take this one way in. `days`: those a PDF
+ * whose name does not say shows, for its name (else its `month`'s). `source`: the file
  * a camt.053 the app wrote was read from (#217), written beside it under the same stem (refused when
  * a file of that name is there); the import's failure removes only what it wrote.
  */
-export async function importStatement(body: Buffer, given: string, accountHint?: string, month?: string, source?: { ext: string; bytes: Buffer }): Promise<StatementImport> {
+export async function importStatement(body: Buffer, given: string, accountHint?: string, month?: string, source?: { ext: string; bytes: Buffer }, days?: { from: string; to: string }): Promise<StatementImport> {
   const name = basename(given).trim();
   const hint = imported().find((a) => a.account === accountHint);
   const xml = /\.xml$/i.test(name);
   if (!xml && !/\.pdf$/i.test(name)) refuse(400, 'Nur camt.053 (XML) oder PDF.', 'format');
-  const placed = xml ? placeCamt(body, name, hint) : placePdf(name, hint, month);
+  const placed = xml ? placeCamt(body, name, hint) : placePdf(name, hint, month, days);
   assertOpen(readBooks(), [placed.last], 'newStatement');
 
   const year = openYear(placed.last.slice(0, 4), readBooks().config.closedThrough);
@@ -281,7 +285,8 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
   try {
     assertNoFiledPayments();
     // A bank's export or CSV takes the movements read from PDFs on its days (#254).
-    const aligned = placed.structured ? alignReads(readBankStatements(WS), mine, periodLock(readBooks()).isClosed, (f) => readFileSync(findFile(WS.paths, 'statements', f)!, 'utf8')) : undefined;
+    const now = readBooks();
+    const aligned = placed.structured ? alignReads(readBankStatements(WS), mine, periodLock(now).isClosed, (f) => readFileSync(findFile(WS.paths, 'statements', f)!, 'utf8'), (u) => !!unmatchedIn(now, u)) : undefined;
     for (const [f, xml] of aligned?.files ?? []) {
       const at = findFile(WS.paths, 'statements', f)!;
       realigned.set(at, readFileSync(at, 'utf8'));
@@ -303,10 +308,11 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
     return updateBooksWithEffects((books): StatementImport => {
       assertOpen(books, [placed.last], 'newStatement');
       if (aligned?.unmatched.length) keepUnmatched(books, aligned.unmatched, mine);
-      // The account's PDFs waiting for their question are its statements now: kept as they are.
+      // The account's PDFs waiting for their question are its statements now (a filed period's question stays as it was).
       const asked = (books.statementAsks ?? []).length;
       if (placed.structured && books.statementAsks) {
-        books.statementAsks = books.statementAsks.filter((a) => a.account !== placed.account.account);
+        const filed = periodLock(books).isClosed;
+        books.statementAsks = books.statementAsks.filter((a) => a.account !== placed.account.account || filed(a.date));
         if (!books.statementAsks.length) delete books.statementAsks;
       }
       const before = new Set(books.transactions.map((t) => t.ref));
@@ -480,8 +486,8 @@ router.delete('/api/statements/:bank/:filename/read', (req, res) => {
 router.post('/api/transactions/:ref/kept', (req, res) => {
   withBooks(res, (books) => {
     const t = books.transactions.find((x) => x.ref === req.params.ref);
+    if (t) assertOpen(books, [t.date], 'editTransaction');
     if (!t?.unmatched) throw new RequestError(404, 'Diese Bewegung wartet auf keine Antwort.', { code: 'gone', params: { what: 'payment' } });
-    assertOpen(books, [t.date], 'editTransaction');
     delete t.unmatched;
     return { ok: true };
   });

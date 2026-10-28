@@ -33,7 +33,7 @@ import { roleBefore } from './banks.js';
  * values, so it must refuse these books.
  * 7: statement PDFs keep their open question in the books (#254): `statementAsks` (asks.jsonl of a
  * year), a PDF whose movements wait for «Einlesen» or «Als Auszug behalten»; and
- * `BankTransaction.unmatched`, a movement read from a PDF that the account's camt.053 or CSV does
+ * `BankTransaction.unmatched`, a movement read from a PDF that the account's bank export or CSV does
  * not hold, kept as a movement of its own until the person keeps or removes it. An app of schema 6
  * would drop the questions on its next save and show the mark nowhere, so it must refuse these books.
  */

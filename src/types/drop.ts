@@ -64,7 +64,7 @@ export interface DropRow {
   account?: string;
   /** The person said «Einlesen» on a statement read without a bank export: it is imported as written. */
   confirmed?: true;
-  /** Kept as the month's statement (`month`, when its name does not say), its movements not imported: the person said «Als Monatsauszug behalten», or its account has a camt.053 or bank CSV (#254). */
+  /** Kept as the month's statement (`month`, when its name does not say), its movements not imported: the person said «Als Monatsauszug behalten», or its account has a bank export or bank CSV (#254). */
   keep?: { month: string };
   /**
    * A statement PDF kept as its account's statement at once, its question («Einlesen» or «Als Auszug

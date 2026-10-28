@@ -4,7 +4,7 @@
  * them, each line correctable; the balance check reruns on every change (src/books/statement-check.ts),
  * and «Einlesen» imports it as an ISO 20022 statement only once it adds up. A PDF can instead be kept as the
  * month's statement («Als Monatsauszug behalten», as before #217): the way without AI, and the only
- * one when a camt.053 or bank CSV of its account covers all its days (#254; on some of them, those days
+ * one when a bank export or bank CSV of its account covers all its days (#254; on some of them, those days
  * import only the payments the books hold). The same table answers a PDF's question kept in the books,
  * in Bank › Kontoauszüge (#254). A bank CSV first asks which column holds what; the answer is kept for
  * that account's next CSV.
