@@ -83,6 +83,7 @@ import type { Columns, FeeColumn, ProviderFacts, ReportKind, SalesColumn } from 
 import { FEE_NEEDS, SALES_NEEDS } from '../knowledge/provider.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import { addDays, isIsoDate } from '../accounting/periods.js';
+import { orderOf } from './providers.js';
 
 /**
  * The VAT code of an export's foreign tax line: none, the foreign VAT stays out of the return (owner
@@ -1048,15 +1049,16 @@ function legacyRows(rows: readonly LegacyRow[], legacy: ReportContext['legacy'],
 
 /**
  * Order documents linked to the sale a sales report booked for their order (#203 4): an order page
- * or a shipping document whose facts name the order (Receipt.order.number) proves where the goods
- * went, so it goes with the sale, never with the payout. The order is the rest of a sale's ref after
- * its provider's `SR-<id>-` (an order name may hold a dash); a sale is the entry onto the provider's
- * clearing account, a refund the one off it. A sale of a filed period gets no new link.
+ * or a shipping document whose facts name the order (Receipt.order.number), or a page the provider's
+ * `orderPage` knows (orderOf, #253), proves where the goods went, so it goes with the sale, never with
+ * the payout. The order is the rest of a sale's ref after its provider's `SR-<id>-` (an order name may
+ * hold a dash); a sale is the entry onto the provider's clearing account, a refund the one off it. A
+ * sale of a filed period gets no new link; a document linked to anything keeps its links.
  */
 export function linkOrdersToSales(
   books: { receipts: readonly Receipt[]; mappings: Mapping[]; journalEntries: readonly JournalEntry[] },
   isOpen: (date: string) => boolean,
-  providers: ReadonlyArray<{ id: string; provider: Pick<ProviderFacts, 'clearing'> }>,
+  providers: ReadonlyArray<{ id: string; provider: Pick<ProviderFacts, 'clearing' | 'orderPage'> }>,
 ): Array<{ receipt: string; sale: string }> {
   const sales = new Map<string, string[]>();
   for (const p of providers) {
@@ -1069,11 +1071,12 @@ export function linkOrdersToSales(
     }
   }
   const made: Array<{ receipt: string; sale: string }> = [];
+  const linked = new Set(books.mappings.map((m) => m.receiptId));
   for (const r of books.receipts) {
-    const number = r.order?.number.replace(/^#/, '');
-    if (!number || r.kind === 'duplicate') continue;
-    const refs = sales.get(number);
-    if (refs?.length !== 1 || books.mappings.some((m) => m.receiptId === r.id)) continue;
+    if (r.kind === 'duplicate' || linked.has(r.id)) continue;
+    const numbers = new Set(r.order ? [r.order.number.replace(/^#/, '')] : providers.flatMap((p) => orderOf(r, p) ?? []));
+    const refs = [...numbers].flatMap((n) => sales.get(n) ?? []);
+    if (refs.length !== 1) continue;
     books.mappings.push({ transactionRef: refs[0], receiptId: r.id, by: 'rule', rule: REPORT_LINK_RULE });
     made.push({ receipt: r.id, sale: refs[0] });
   }
