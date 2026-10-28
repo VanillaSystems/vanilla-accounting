@@ -52,6 +52,18 @@ test('outside the bounds, against the money\'s way or a Rappen off, a payment is
   }
 });
 
+test('among a year of payments, the candidates are exactly those within the bounds to the day: of its amount, a part of its amount, or across currencies (#258)', () => {
+  const year = Array.from({ length: 365 }, (_, i) => payment(`x${i}`, { date: new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10), amount: 10 + i }));
+  const edges = [
+    payment('before-10', { date: '2026-07-31' }), payment('before-11', { date: '2026-07-30' }),
+    payment('after-60', { date: '2026-10-09' }), payment('after-61', { date: '2026-10-10' }),
+    payment('part', { amount: 100, parts: [{ amount: 42.5, currency: 'CHF', counterparty: 'Papeterie Meier' }, { amount: 57.5, currency: 'CHF', counterparty: 'Migros' }] }),
+    payment('eur', { currency: 'EUR', amount: 45.21 }), payment('eur-far', { currency: 'EUR', amount: 45.21, date: '2026-10-10' }),
+  ];
+  const found = searchPairs(books([receipt('r')], [...year, ...edges]), toChf, () => false).byReceipt.get('r')!.map((c) => c.payment);
+  assert.deepEqual(found.sort(), ['after-60', 'before-10', 'eur', 'part']);
+});
+
 test('the original amount the bank names («Card transaction of 12.40 USD») matches a receipt in that currency to the Rappen, before any rate', () => {
   const card = payment('w', { bank: 'Wise', currency: 'EUR', amount: 11.05, description: 'Card transaction of 12.40 USD issued by Papeterie Meier (fee: 0.07 EUR)' });
   assert.deepEqual(originalOf(card), { amount: 12.40, currency: 'USD' });

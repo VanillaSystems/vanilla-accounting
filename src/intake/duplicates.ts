@@ -9,7 +9,7 @@
  */
 import type { Receipt, TwinWhy } from '../types/index.js';
 import type { DocumentsData } from '../core/modules/schema.js';
-import { textFacts } from '../parsers/receipt-text.js';
+import { vatIdIn } from '../parsers/receipt-text.js';
 
 export type Comparable = Pick<Receipt, 'id' | 'extractedText' | 'date' | 'amount' | 'currency' | 'vatId' | 'kind' | 'distinctFrom'> & { indexedAt?: string; filename?: string };
 
@@ -22,6 +22,8 @@ const DAYS = 7;
 const RARE = 3;
 /** Words two texts share, of the words either has, from which two same-day documents of one total are taken for one. */
 const ALIKE = 0.6;
+/** Days apart «same-day» allows: two documents of one total without a number in common are taken for one only by their words, and only this close. */
+const ALIKE_DAYS = 1;
 /** Days and shared words within which a document beside an invoice belongs to it. */
 const COMPANION_DAYS = 31;
 const COMPANION_WORDS = 0.4;
@@ -41,11 +43,18 @@ export function identifiers(text: string): Set<string> {
   return out;
 }
 
+const labelRes = new WeakMap<DocumentsData, RegExp>();
+
 /** The numbers the text labels as its own (Rechnungsnummer: …, Invoice # …). */
 export function labelledNumbers(text: string, words: DocumentsData): Set<string> {
-  const labels = [...words.receipt.number].sort((a, b) => b.length - a.length).map(escape).join('|');
-  const re = new RegExp(`(?<![\\p{L}])(?:${labels})(?![\\p{L}])[\\s:#.]*(?:no\\.?|nr\\.?|n°|#)?[\\s:#.]*([A-Z0-9][A-Z0-9\\-/]{2,}[A-Z0-9])`, 'giu');
+  let re = labelRes.get(words);
+  if (!re) {
+    const labels = [...words.receipt.number].sort((a, b) => b.length - a.length).map(escape).join('|');
+    re = new RegExp(`(?<![\\p{L}])(?:${labels})(?![\\p{L}])[\\s:#.]*(?:no\\.?|nr\\.?|n°|#)?[\\s:#.]*([A-Z0-9][A-Z0-9\\-/]{2,}[A-Z0-9])`, 'giu');
+    labelRes.set(words, re);
+  }
   const out = new Set<string>();
+  // matchAll works on a copy of the pattern: the one kept per jurisdiction's words keeps no position.
   for (const m of text.matchAll(re)) {
     const t = m[1].toUpperCase().replace(/[-/]/g, '');
     if (/\d/.test(t) && t.length >= 4) out.add(t);
@@ -60,6 +69,8 @@ interface Prepared {
   ids: Set<string>;
   numbers: Set<string>;
   vatId?: string;
+  /** The receipt's day as a number of days, read once: NaN for a date Date.parse cannot read. */
+  day?: number;
 }
 
 const wordSet = (t: string) => new Set(t.split(/[^\p{L}\d]+/u).filter((w) => w.length > 2));
@@ -82,7 +93,7 @@ function same(a: Prepared, b: Prepared, df: Map<string, number>, companion: bool
   if (a.text.length > 40 && a.text === b.text && (x === undefined || y === undefined || near(x, y))) return { why: 'same-text', score: 3 };
   // Asked only once the cheaper facts leave the pair open.
   const sharedRare = () => [...a.ids].some((t) => b.ids.has(t) && (df.get(t) ?? 0) <= RARE);
-  const apart = a.r.date && b.r.date ? Math.abs(day(a.r.date) - day(b.r.date)) : undefined;
+  const apart = a.r.date && b.r.date ? Math.abs(a.day! - b.day!) : undefined;
   if (companion) {
     // A number only these documents carry ties them whenever they are dated and whatever they
     // total: a reminder comes weeks later, often with a fee on top.
@@ -103,9 +114,52 @@ function same(a: Prepared, b: Prepared, df: Map<string, number>, companion: bool
   if (sharedRare()) return { why: 'same-number', score: 2 };
   // Each carries a number no other receipt has: two documents of one kind (two postage receipts of a day).
   const ownNumber = (p: Prepared) => [...p.ids].some((t) => df.get(t) === 1);
-  if (ownNumber(a) && ownNumber(b) || apart > 1) return undefined;
+  if (ownNumber(a) && ownNumber(b) || apart > ALIKE_DAYS) return undefined;
   const j = jaccard(a.words, b.words);
   return j >= ALIKE || (a.vatId && a.vatId === b.vatId && j >= ALIKE / 2) ? { why: 'same-facts', score: j } : undefined;
+}
+
+type Entry = { p: Prepared; supporting: boolean };
+
+/** The positions in `list` (sorted by day) whose day lies within `days` of `at`, give or take one. */
+function within(list: ReadonlyArray<{ day: number; i: number }>, at: number, days: number): number[] {
+  let lo = 0, hi = list.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (list[mid].day < at - days - 1) lo = mid + 1; else hi = mid; }
+  const out: number[] = [];
+  for (let k = lo; k < list.length && list[k].day <= at + days + 1; k++) out.push(list[k].i);
+  return out;
+}
+
+/**
+ * Of `all`, every entry `same` could pair with a receipt, in `all`'s order (which decides between
+ * equal matches): the same text, a rare number in common, a day within COMPANION_DAYS of a
+ * document of the other kind or within ALIKE_DAYS of one of its own kind, and every entry without
+ * a day it can compare. The rest `same` refuses whatever else they carry, so a search over a year
+ * of receipts looks at the few near each one instead of all of them.
+ */
+function candidatePool(all: readonly Entry[]): (me: Prepared, mine: boolean, counts: Map<string, number>) => number[] {
+  const byText = new Map<string, number[]>();
+  const byId = new Map<string, number[]>();
+  const dated = { supporting: [] as Array<{ day: number; i: number }>, plain: [] as Array<{ day: number; i: number }> };
+  const undated: number[] = [];
+  const add = (index: Map<string, number[]>, key: string, i: number) => { const list = index.get(key); if (list) list.push(i); else index.set(key, [i]); };
+  all.forEach(({ p, supporting }, i) => {
+    if (p.text.length > 40) add(byText, p.text, i);
+    for (const t of p.ids) add(byId, t, i);
+    if (p.day === undefined || !Number.isFinite(p.day)) undated.push(i);
+    else (supporting ? dated.supporting : dated.plain).push({ day: p.day, i });
+  });
+  for (const list of [dated.supporting, dated.plain]) list.sort((a, b) => a.day - b.day);
+  const everyone = all.map((_, i) => i);
+  return (me, mine, counts) => {
+    if (me.day === undefined || !Number.isFinite(me.day)) return everyone;
+    const found = new Set<number>(undated);
+    for (const i of byText.get(me.text) ?? []) found.add(i);
+    for (const t of me.ids) if ((counts.get(t) ?? 0) <= RARE) for (const i of byId.get(t) ?? []) found.add(i);
+    for (const i of within(mine ? dated.plain : dated.supporting, me.day, COMPANION_DAYS)) found.add(i);
+    if (!mine) for (const i of within(dated.plain, me.day, ALIKE_DAYS)) found.add(i);
+    return [...found].sort((a, b) => a - b);
+  };
 }
 
 export interface TwinFinder {
@@ -120,19 +174,22 @@ export interface TwinFinder {
 export function twinFinder(receipts: readonly Comparable[], words: DocumentsData, supporting: (r: Comparable) => boolean = (r) => r.kind === 'supporting'): TwinFinder {
   const prep = (r: Comparable): Prepared => {
     const text = norm(r.extractedText ?? '');
-    return { r, text, words: wordSet(text), ids: identifiers(r.extractedText ?? ''), numbers: labelledNumbers(r.extractedText ?? '', words), vatId: r.vatId ?? textFacts(r.extractedText ?? '').vatId };
+    return { r, text, words: wordSet(text), ids: identifiers(r.extractedText ?? ''), numbers: labelledNumbers(r.extractedText ?? '', words), vatId: r.vatId ?? vatIdIn(r.extractedText ?? ''), day: r.date ? day(r.date) : undefined };
   };
   const all = receipts.filter((r) => !outOfPlay(r)).map((r) => ({ p: prep(r), supporting: supporting(r) }));
   const prepared = new Map(all.map(({ p }) => [p.r, p]));
+  const ids = new Set(all.map(({ p }) => p.r.id));
   const df = new Map<string, number>();
   for (const { p } of all) for (const t of p.ids) df.set(t, (df.get(t) ?? 0) + 1);
+  const pool = candidatePool(all);
   return {
     find(r) {
       const me = prepared.get(r) ?? prep(r);
       const mine = supporting(r);
-      const counts = all.some(({ p }) => p.r.id === r.id) ? df : new Map([...df, ...[...me.ids].map((t) => [t, (df.get(t) ?? 0) + 1] as const)]);
+      const counts = ids.has(r.id) ? df : new Map([...df, ...[...me.ids].map((t) => [t, (df.get(t) ?? 0) + 1] as const)]);
       let best: (Twin & { score: number }) | undefined;
-      for (const { p, supporting: theirs } of all) {
+      for (const i of pool(me, mine, counts)) {
+        const { p, supporting: theirs } = all[i];
         if (p.r.id === r.id || (mine && theirs)) continue;
         const companion = mine !== theirs;
         const m = same(me, p, counts, companion);
