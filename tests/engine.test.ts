@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadBooks } from '../src/books/store.js';
@@ -185,4 +185,34 @@ test('a dry run checks the booking through the write door: a closed period is re
   assert.equal(effect.applied, false);
   assert.ok(effect.refused, 'the write door refused the booking');
   assert.deepEqual(booksOnDisk(ws), before);
+});
+
+test('books that cannot be read keep the runs of an account lane queued and stop nothing else; no start rejects (#258)', async () => {
+  const root = app({
+    plain: { 'workflow.yaml': wf(['one']), 'one/step.yaml': 'uses: test.ok\noutcomes: { ok: done }\n' },
+    lane: { 'workflow.yaml': wf(['one'], 'lane: account\n'), 'one/step.yaml': 'uses: test.ok\noutcomes: { ok: done }\n' },
+  });
+  const ws = demo();
+  const ledger = readFileSync(ws.paths.ledger);
+  writeFileSync(ws.paths.ledger, '{ not json');
+  assert.throws(() => loadBooks(ws), 'the books cannot be read');
+  const unhandled: unknown[] = [];
+  const onUnhandled = (e: unknown) => unhandled.push(e);
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    const engine = openEngine(() => ws, { appRoot: root });
+    const lane = await engine.start('lane', { kind: 'transaction', id: 'l' }, { kind: 'manual' });
+    const plain = await engine.start('plain', { kind: 'transaction', id: 'p' }, { kind: 'manual' });
+    await engine.idle();
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(engine.run(plain.ok ? plain.run! : '')!.state.status, 'done', 'the run without a lane went on');
+    const waiting = engine.run(lane.ok ? lane.run! : '')!.state;
+    assert.deepEqual(waiting.status === 'queued' && waiting.reason, 'busy', 'the account\'s run waits for a retry');
+    assert.deepEqual(unhandled, []);
+    writeFileSync(ws.paths.ledger, ledger);
+    for (let i = 0; i < 80 && engine.run(lane.ok ? lane.run! : '')!.state.status !== 'done'; i++) await new Promise((r) => setTimeout(r, 100));
+    assert.equal(engine.run(lane.ok ? lane.run! : '')!.state.status, 'done', 'once the books read again, the retry runs it');
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
 });
