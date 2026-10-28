@@ -29,7 +29,7 @@ import { loadInvoices, saveInvoices } from '../../invoices/store.js';
 import { placeByText } from '../../intake/statement-read.js';
 import { firstPages } from '../../intake/recognize.js';
 import { matchPayments } from '../../invoices/payments.js';
-import { confirm, ReconcileRefused } from '../reconcile.js';
+import { confirm, lostWithFile, ReconcileRefused, releaseTwins } from '../reconcile.js';
 import { bookedInFiled } from '../../books/twins.js';
 import { pending } from '../../books/reconcile.js';
 import { bookInvoiceEvents } from '../../invoices/events.js';
@@ -366,7 +366,7 @@ export function removeStatement(file: string, refs?: readonly string[], o: { kee
   const moved = [...moves].filter(([was, t]) => books.transactions.some((x) => x.ref === was) && !books.transactions.some((x) => x.ref === t.ref));
   assertOpen(books, [...mine, ...moved.map(([was]) => was)].flatMap((ref) => refDates(books, ref)), 'deleteTransaction');
   // A bank movement a confirmed reconciliation set in a read movement's place (#254): the read one left the books, and its row brings nothing again, so the payment, its entries and links would be lost.
-  const twins = (books.reconciliations ?? []).flatMap((r) => (r.done ? r.pairs.map((p) => p.bank) : [])).filter((ref) => mine.has(ref));
+  const twins = lostWithFile(books, mine);
   if (twins.length) throw new RequestError(409, `Der bestätigte Abgleich hat aus PDFs gelesene Bewegungen durch Bewegungen dieses Auszugs ersetzt (${twins.slice(0, 5).join(', ')}): er bleibt.`, { code: 'reconciledTwins', params: { refs: twins } });
   if ((books.journalEntries ?? []).some((e) => mine.has(e.transactionRef) && e.origin === 'manual')) throw new RequestError(409, 'Auf einer dieser Zahlungen steht eine Buchung von Hand. Erst sie löschen.');
   const bytes = readFileSync(path);
@@ -386,6 +386,7 @@ export function removeStatement(file: string, refs?: readonly string[], o: { kee
       for (const t of b.transactions) if (t.statement !== undefined && mine.has(t.statement) && !lock.isClosed(t.date)) delete t.statement;
       b.journalEntries = b.journalEntries.filter((e) => !mine.has(e.transactionRef));
       b.mappings = b.mappings.filter((m) => !mine.has(m.transactionRef));
+      releaseTwins(b, mine);
       for (const [was, now] of moved) {
         const t = b.transactions.find((x) => x.ref === was);
         if (!t) continue;

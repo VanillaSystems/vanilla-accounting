@@ -3531,6 +3531,7 @@ export const messages = {
   'reconcile.candidate': 'kein Tag des Exports',
   'error.reconcileMismatch': 'Eine Zahlung hinein und eine hinaus, oder zwei Währungen: das ist nicht dieselbe Zahlung.',
   'error.reconcileNotCovered': 'Die Bewegung vom {date} liegt an keinem Tag des Bank-Exports: dort ist sie gleich wie eine Bewegung der Bank, oder sie bleibt, bis ein Export ihren Tag enthält.',
+  'error.reconcileFiledUnbooked': 'Die Bewegung der Bank vom {date} liegt in einer abgerechneten Periode und ist dort nicht gebucht: gleichgesetzt, gingen die Zahlung aus dem PDF, ihre Buchungen und Belege verloren, und die abgerechnete bliebe für immer ungebucht. Die Bewegung aus dem PDF bleibt eine eigene Zahlung.',
   'error.reconciledTwins': { one: 'Der bestätigte Abgleich hat eine Bewegung aus dem PDF durch eine dieses Auszugs ersetzt ({refs}). Entfernt, gingen die Zahlung, ihre Buchungen und Belege verloren: der Auszug bleibt.', other: 'Der bestätigte Abgleich hat {n} Bewegungen aus PDFs durch solche dieses Auszugs ersetzt ({refs}). Entfernt, gingen die Zahlungen, ihre Buchungen und Belege verloren: der Auszug bleibt.' },
   'reconcile.heldRun': { one: '1 Zahlung wartet auf den Abgleich von Konto {account}', other: '{n} Zahlungen warten auf den Abgleich von Konto {account}' },
   'reconcile.sameAs': 'Gleich wie {line}',

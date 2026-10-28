@@ -3534,6 +3534,7 @@ export default {
     'reconcile.candidate': 'hors des jours de l’export',
     'error.reconcileMismatch': 'Un paiement entrant et un sortant, ou deux devises : ce n’est pas le même paiement.',
     'error.reconcileNotCovered': 'Le mouvement du {date} n’est sur aucun jour de l’export bancaire : il y est le même qu’un mouvement de la banque, ou il reste jusqu’à ce qu’un export contienne son jour.',
+    'error.reconcileFiledUnbooked': 'Le mouvement de la banque du {date} est dans une période décomptée et n’y est pas comptabilisé : assimilé, le paiement du PDF, ses écritures et ses justificatifs seraient perdus, et celui décompté resterait à jamais non comptabilisé. Le mouvement du PDF reste un paiement à part.',
     'error.reconciledTwins': { one: 'Le rapprochement confirmé a remplacé un mouvement lu du PDF par un de ce relevé ({refs}). Retiré, le paiement, ses écritures et ses justificatifs seraient perdus : le relevé reste.', other: 'Le rapprochement confirmé a remplacé {n} mouvements lus des PDF par ceux de ce relevé ({refs}). Retiré, les paiements, leurs écritures et leurs justificatifs seraient perdus : le relevé reste.' },
     'reconcile.heldRun': { one: '1 paiement attend le rapprochement du compte {account}', other: '{n} paiements attendent le rapprochement du compte {account}' },
     'reconcile.sameAs': 'Le même que {line}',

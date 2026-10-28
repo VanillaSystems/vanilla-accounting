@@ -3534,6 +3534,7 @@ export default {
     'reconcile.candidate': 'not a day of the export',
     'error.reconcileMismatch': 'One payment in and one out, or two currencies: that is not the same payment.',
     'error.reconcileNotCovered': 'The movement of {date} lies on no day of the bank export: there it is the same as one of the bank’s movements, or it stays until an export holds its day.',
+    'error.reconcileFiledUnbooked': 'The bank’s movement of {date} lies in a filed period and is not booked there: set as the same, the payment from the PDF, its bookings and receipts would be lost, and the filed one would stay unbooked for good. The movement from the PDF stays a payment of its own.',
     'error.reconciledTwins': { one: 'The confirmed reconciliation replaced a movement read from the PDF with one of this statement ({refs}). Removed, the payment, its bookings and receipts would be lost: the statement stays.', other: 'The confirmed reconciliation replaced {n} movements read from PDFs with ones of this statement ({refs}). Removed, the payments, their bookings and receipts would be lost: the statement stays.' },
     'reconcile.heldRun': { one: '1 payment waits for the reconciliation of account {account}', other: '{n} payments wait for the reconciliation of account {account}' },
     'reconcile.sameAs': 'Same as {line}',

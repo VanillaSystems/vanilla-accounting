@@ -3534,6 +3534,7 @@ export default {
     'reconcile.candidate': 'fuori dai giorni dell’export',
     'error.reconcileMismatch': 'Un pagamento in entrata e uno in uscita, o due valute: non è lo stesso pagamento.',
     'error.reconcileNotCovered': 'Il movimento del {date} non cade in nessun giorno dell’export bancario: lì è uguale a un movimento della banca, oppure resta finché un export contiene il suo giorno.',
+    'error.reconcileFiledUnbooked': 'Il movimento della banca del {date} è in un periodo rendicontato e non vi è registrato: equiparato, il pagamento dal PDF, le sue registrazioni e i giustificativi andrebbero persi, e quello rendicontato resterebbe per sempre non registrato. Il movimento dal PDF resta un pagamento a sé.',
     'error.reconciledTwins': { one: 'La riconciliazione confermata ha sostituito un movimento letto dal PDF con uno di questo estratto ({refs}). Rimosso, il pagamento, le sue registrazioni e i giustificativi andrebbero persi: l’estratto resta.', other: 'La riconciliazione confermata ha sostituito {n} movimenti letti dai PDF con quelli di questo estratto ({refs}). Rimosso, i pagamenti, le loro registrazioni e i giustificativi andrebbero persi: l’estratto resta.' },
     'reconcile.heldRun': { one: '1 pagamento attende la riconciliazione del conto {account}', other: '{n} pagamenti attendono la riconciliazione del conto {account}' },
     'reconcile.sameAs': 'Lo stesso di {line}',

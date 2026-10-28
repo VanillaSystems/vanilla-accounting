@@ -205,8 +205,8 @@ export function statementSides(ws: Ws): StatementSides {
  * src/books/reconcile.ts openReconciliations), inside the change that read them in or took one out.
  * `differenceTo`: the chart's exchange-difference account (src/books/year-close.ts differenceAccountOf).
  */
-export function reconcileWithFiles(ws: Ws, books: Pick<Index, 'transactions' | 'reconciliations'>, differenceTo?: string): void {
-  openReconciliations(books, statementSides(ws), (t) => accountOf(t, ws.bankAccounts)?.account, new Date().toISOString().slice(0, 10), differenceTo);
+export function reconcileWithFiles(ws: Ws, books: Pick<Index, 'config' | 'transactions' | 'reconciliations'> & { journalEntries: readonly JournalEntry[] }, differenceTo?: string): void {
+  openReconciliations(books, statementSides(ws), (t) => accountOf(t, ws.bankAccounts)?.account, new Date().toISOString().slice(0, 10), periodLock(books).isClosed, differenceTo);
 }
 
 /**

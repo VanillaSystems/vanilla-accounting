@@ -419,6 +419,8 @@ test('read movements of filed days and the bank\'s camt.053 from the first open 
     assert.equal(answered.journalEntries.some((e) => e.transactionRef === bankRent.ref), false, 'the rent: nothing booked');
     assert.deepEqual(answered.journalEntries.filter((e) => e.transactionRef === bankCoop.ref).map((e) => [e.date, e.accountDebit, e.accountCredit, e.amount, e.vatCode, e.origin]), [['2026-10-09', '6940', '1021', 0.05, undefined, 'manual']],
       'the purchase: only the 5 Rappen the bank booked more, without VAT, so the account meets the bank\'s balance');
+    const removed = await api.send('DELETE', `/api/statements/Raiffeisen/${encodeURIComponent('bank-oktober.xml')}`);
+    assert.deepEqual([removed.status, removed.json.code, (removed.json.params as { refs?: string[] } | undefined)?.refs], [409, 'reconciledTwins', [bankCoop.ref]], '«Auszug entfernen» refused for the difference line alone: the rent\'s twin loses nothing');
 
     const again = await api.send('POST', `/api/journal-entries/classify/${bankRent.ref}`, {});
     assert.deepEqual([again.status, again.json.code, (again.json.params as { date?: string } | undefined)?.date], [409, 'bookedInFiled', '2026-10-08'], '«Automatisch buchen» refused, naming the filed movement');

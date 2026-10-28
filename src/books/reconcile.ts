@@ -21,7 +21,7 @@ export interface StatementSides {
   spans: readonly { account: string; from: string; to: string }[];
 }
 
-type Books = { transactions: readonly BankTransaction[]; reconciliations?: Reconciliation[] };
+type Books = { transactions: readonly BankTransaction[]; journalEntries: readonly { transactionRef: string }[]; reconciliations?: Reconciliation[] };
 
 const cents = (x: number) => Math.round(Math.abs(x) * 100);
 const named = (t: BankTransaction) => !!t.counterparty || !!t.counterpartyIban;
@@ -32,6 +32,23 @@ export const pending = (books: Pick<Books, 'reconciliations'>): Reconciliation[]
 
 /** Whether `date` lies on a day the bank files of `r` cover: there every read movement is decided, «Eigene Zahlung» included. */
 export const covers = (r: Pick<Reconciliation, 'covered'>, date: string): boolean => r.covered.some((s) => date >= s.from && date <= s.to);
+
+/** The refs the books' entries book: an entry on a ref no payment has (a leg from before unique refs) books its base too. */
+export function bookedRefs(books: Pick<Books, 'transactions' | 'journalEntries'>): Set<string> {
+  const refs = new Set(books.transactions.map((t) => t.ref));
+  const booked = new Set<string>();
+  for (const { transactionRef: ref } of books.journalEntries) booked.add(refs.has(ref) ? ref : ref.split('~')[0]).add(ref);
+  return booked;
+}
+
+/**
+ * Whether the pair `read` ↔ `bank` would lose a payment: the read movement open, the bank's filed and
+ * not booked there. Confirmed, the read movement would leave the books with its entries and links,
+ * and the filed one can never be booked (filing does not refuse an unbooked payment). Never proposed,
+ * refused on confirmation; the read movement stays a payment of its own.
+ */
+export const losesPayment = (read: BankTransaction, bank: BankTransaction, isClosed: (date: string) => boolean, booked: ReadonlySet<string>): boolean =>
+  !isClosed(read.date) && isClosed(bank.date) && !booked.has(bank.ref);
 
 /**
  * Opens, updates or drops each account's waiting reconciliation from the books and the statement
@@ -47,9 +64,9 @@ export const covers = (r: Pick<Reconciliation, 'covered'>, date: string): boolea
  *   movement read later.
  * So a PDF read months later neither stretches a reconciliation nor holds the days between. A waiting
  * one whose movements stay the same keeps its day and proposal; one left without a read movement goes.
- * `ledgerOf`: a movement's ledger account.
+ * `ledgerOf`: a movement's ledger account; `isClosed`: the period lock.
  */
-export function openReconciliations(books: Books, sides: StatementSides, ledgerOf: (t: BankTransaction) => string | undefined, today: string, differenceTo?: string): void {
+export function openReconciliations(books: Books, sides: StatementSides, ledgerOf: (t: BankTransaction) => string | undefined, today: string, isClosed: (date: string) => boolean, differenceTo?: string): void {
   const done = (books.reconciliations ?? []).filter((r) => r.done);
   const took = new Set(done.flatMap((r) => [...r.pairs.flatMap((p) => [p.read, p.bank]), ...(r.own ?? []), ...(r.same ?? [])]));
   const setAgainst = new Set(done.flatMap((r) => r.read.flatMap((x) => r.bank.map((b) => `${x}\u0000${b}`))));
@@ -63,6 +80,9 @@ export function openReconciliations(books: Books, sides: StatementSides, ledgerO
     else if (sides.both.has(t.ref)) of(account).same.push(t);
   }
   const near = (x: BankTransaction, b: BankTransaction) => x.direction === b.direction && x.currency === b.currency && dayGap(x.date, b.date) <= MATCH_DAYS;
+  const booked = bookedRefs(books);
+  const byRef = new Map(books.transactions.map((t) => [t.ref, t]));
+  const apart = (r: BankTransaction, b: BankTransaction) => losesPayment(r, b, isClosed, booked);
   const fresh: Reconciliation[] = [];
   for (const [account, { reads, banks, same }] of byAccount) {
     const spans = sides.spans.filter((s) => s.account === account);
@@ -80,7 +100,7 @@ export function openReconciliations(books: Books, sides: StatementSides, ledgerO
     fresh.push({
       account, from: all[0], to: all.at(-1)!, since: was?.since ?? today, covered, read, bank: bankRefs,
       ...(sameNear.length ? { same: sameNear.map((t) => t.ref) } : {}),
-      pairs: kept ? was.pairs : propose(due, bank),
+      pairs: kept ? was.pairs.filter((p) => !apart(byRef.get(p.read)!, byRef.get(p.bank)!)) : propose(due, bank, apart),
       ...(differenceTo ? { differenceTo } : {}),
     });
   }
@@ -93,10 +113,10 @@ export function openReconciliations(books: Books, sides: StatementSides, ledgerO
  * The pairs code proposes, each beyond doubt (pairUp): the same day and amount first, then the same
  * amount within MATCH_DAYS days (the payee, then the closest day), then a payee's movement a little off
  * (nearAmount: a fee, a rounding) within those days. Two movements that each name a payee, and not the
- * same one, are never proposed. Every movement it leaves apart is the person's to name: a payment of its
- * own, or the same as another.
+ * same one, are never proposed, nor a pair `apart` names (losesPayment). Every movement it leaves apart
+ * is the person's to name: a payment of its own, or the same as another.
  */
-export function propose(reads: readonly BankTransaction[], banks: readonly BankTransaction[]): ReconcilePair[] {
+export function propose(reads: readonly BankTransaction[], banks: readonly BankTransaction[], apart: (r: BankTransaction, b: BankTransaction) => boolean = () => false): ReconcilePair[] {
   const pairs: ReconcilePair[] = [];
   const rounds: Array<(r: BankTransaction, b: BankTransaction) => number | undefined> = [
     (r, b) => (r.date === b.date && cents(r.amount) === cents(b.amount) ? -fit(r, b) : undefined),
@@ -105,7 +125,7 @@ export function propose(reads: readonly BankTransaction[], banks: readonly BankT
   ];
   let left = [...reads], free = [...banks];
   for (const cost of rounds) {
-    const made = pairUp(left, free, (r, b) => (r.direction === b.direction && r.currency === b.currency && !(named(r) && named(b) && !sameParty(r, b)) ? cost(r, b) : undefined));
+    const made = pairUp(left, free, (r, b) => (r.direction === b.direction && r.currency === b.currency && !(named(r) && named(b) && !sameParty(r, b)) && !apart(r, b) ? cost(r, b) : undefined));
     for (const [i, j] of made) pairs.push({ read: left[i].ref, bank: free[j].ref });
     const takenBanks = new Set(made.values());
     left = left.filter((_, i) => !made.has(i));

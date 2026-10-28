@@ -12,11 +12,11 @@ import type { InvoiceBook } from '../invoices/model.js';
 import { matchPayments, releasePayment, type PaymentContext, type PaymentOutcome } from '../invoices/payments.js';
 import { bookInvoiceEvents } from '../invoices/events.js';
 import { baseCurrency } from '../engines/index.js';
-import { covers } from '../books/reconcile.js';
+import { bookedRefs, covers, losesPayment } from '../books/reconcile.js';
 
 /** Why a confirmation is refused, with the API's code and its parameters (src/types/api-error.ts). */
 export class ReconcileRefused extends Error {
-  constructor(readonly status: number, readonly code: 'reconcileUndecided' | 'reconcileTwice' | 'reconcileDifference' | 'reconcileMismatch' | 'reconcileNotCovered' | 'twinBookedByHand' | 'gone', readonly params: Record<string, unknown>, message: string) {
+  constructor(readonly status: number, readonly code: 'reconcileUndecided' | 'reconcileTwice' | 'reconcileDifference' | 'reconcileMismatch' | 'reconcileNotCovered' | 'reconcileFiledUnbooked' | 'twinBookedByHand' | 'gone', readonly params: Record<string, unknown>, message: string) {
     super(message);
   }
 }
@@ -54,7 +54,7 @@ const centsOf = (ts: readonly BankTransaction[]) => ts.reduce((n, t) => n + Math
  *   on the read day takes the bank's day, a foreign one that day's rate). Otherwise the invoice payments
  *   are released and the app's entries go, and the invoices are matched again; a person's entry refuses.
  *   A bank movement of a filed period takes nothing (it is booked there as filed): the read movement's
- *   entries and links go with it. The read movement leaves the books, and its row in the read statement
+ *   entries and links go with it. Not booked there, the pair is refused (losesPayment). The read movement leaves the books, and its row in the read statement
  *   brings nothing again (src/books/bank-import.ts mergeIndex, by the confirmed pairs).
  * Returns the invoice PDFs to file.
  */
@@ -76,6 +76,9 @@ export function confirm(books: Books, r: Reconciliation, d: Decision, ctx: Confi
   const pairs = d.pairs.map((p) => ({ p, read: tx(p.read), bank: tx(p.bank) }));
   const odd = pairs.find(({ read, bank }) => read.direction !== bank.direction || read.currency !== bank.currency);
   if (odd) throw new ReconcileRefused(400, 'reconcileMismatch', { read: odd.read.ref, bank: odd.bank.ref }, `${odd.read.ref} and ${odd.bank.ref} differ in direction or currency: they are not one payment`);
+  const booked = bookedRefs(books);
+  const lost = pairs.find(({ read, bank }) => losesPayment(read, bank, ctx.isClosed, booked));
+  if (lost) throw new ReconcileRefused(400, 'reconcileFiledUnbooked', { read: lost.read.ref, bank: lost.bank.ref, date: lost.bank.date }, `${lost.bank.ref} of ${lost.bank.date} lies in a filed period without a booking: paired, the payment ${lost.read.ref} and its entries and receipts would be lost, and the filed one can never be booked`);
   const refs = new Set(books.transactions.map((t) => t.ref));
   // An entry on a ref no payment has (a leg from before unique refs) is its base's.
   const ownerOf = (ref: string, read: BankTransaction) => ref === read.ref || (!refs.has(ref) && ref.split('~')[0] === read.ref);
@@ -140,4 +143,33 @@ function differenceEntry(t: BankTransaction, rest: number, account: string, ctx:
   };
   const rate = entry.exchangeCurrency ? ctx.rateOf(entry, new Map(books.transactions.map((x) => [x.ref, x.date]))) : undefined;
   return rate === undefined ? entry : { ...entry, exchangeRate: Math.round(rate * 1e6) / 1e6 };
+}
+
+/**
+ * A bank file taken back whose movements a confirmed reconciliation paired (#254, «Auszug entfernen»,
+ * the drop's «Rückgängig»): the bank movements of `mine` whose removal would lose a payment. A filed
+ * read movement's twin (`filedTwin`) that books nothing of its own loses nothing while the read
+ * movement stays in the books, booked: it is free to go. Every other twin took the read movement's
+ * place, entries and links.
+ */
+export function lostWithFile(books: Pick<Books, 'transactions' | 'journalEntries' | 'reconciliations'>, mine: ReadonlySet<string>): string[] {
+  const booked = bookedRefs(books);
+  const free = (p: ReconcilePair) => {
+    const bank = books.transactions.find((t) => t.ref === p.bank);
+    return bank?.waitsForPerson?.why === 'filedTwin' && bank.waitsForPerson.read === p.read && !booked.has(p.bank) && booked.has(p.read) && books.transactions.some((t) => t.ref === p.read);
+  };
+  return (books.reconciliations ?? []).flatMap((r) => (r.done ? r.pairs.filter((p) => mine.has(p.bank) && !free(p)).map((p) => p.bank) : []));
+}
+
+/** The pairs of the bank movements `mine` taken back (lostWithFile found none lost) leave their reconciliations: the bank file read again is reconciled afresh, and a reconciliation left without a read movement goes. */
+export function releaseTwins(books: Pick<Books, 'reconciliations'>, mine: ReadonlySet<string>): void {
+  const next = (books.reconciliations ?? []).flatMap((r) => {
+    const gone = r.done ? r.pairs.filter((p) => mine.has(p.bank)) : [];
+    if (!gone.length) return [r];
+    const reads = new Set(gone.map((p) => p.read));
+    const read = r.read.filter((ref) => !reads.has(ref));
+    return read.length ? [{ ...r, read, bank: r.bank.filter((ref) => !mine.has(ref)), pairs: r.pairs.filter((p) => !gone.includes(p)) }] : [];
+  });
+  if (next.length) books.reconciliations = next;
+  else delete books.reconciliations;
 }
