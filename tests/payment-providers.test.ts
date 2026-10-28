@@ -1206,7 +1206,7 @@ test('N1 / N2. an entry counts as an order\'s own booking only when it names tha
   const both = bookReport({ journalEntries: [] }, read, ctx([hand('m', '2026-11-10', 162.15, 'Shopify Bestellungen #2001 und #2002')]));
   assert.deepEqual([both.orders, both.known, both.held], [1, 0, [{ order: '2001', why: 'legacy' }, { order: '2002', why: 'legacy' }]], 'both held, #2003 after its day booked');
   const sumOnOne = bookReport({ journalEntries: [] }, read, ctx([hand('m', '2026-11-10', 162.15, 'Shopify Bestellung #2002')]));
-  assert.deepEqual([sumOnOne.orders, sumOnOne.known, sumOnOne.held.map((h) => h.order)], [2, 0, ['2002']], 'another amount: it holds the order it names, never rows by its day (#242)');
+  assert.deepEqual([sumOnOne.orders, sumOnOne.known, sumOnOne.held.map((h) => h.order)], [1, 0, ['2001', '2002']], 'another amount: it holds every row up to its day, #2001 is never booked beside the sum');
 
   const reversed = bookReport({ journalEntries: [] }, read, ctx([hand('a', '2026-11-02', 108.1, 'Shopify #2001'), hand('b', '2026-11-03', -108.1, 'Storno Shopify #2001')]));
   assert.deepEqual([reversed.known, reversed.held.map((h) => h.order)], [0, ['2001']], 'a sale and its reversal net nothing: the order is not booked by them, the person decides');
@@ -1626,7 +1626,7 @@ test('#239 the receipt of the report names a refund of a filed period whose sale
 
 // ─── Corrections hold their order only, edited orders in either drop order, fees per day, refunds booked elsewhere (#242) ─
 
-test('#242 a correction of a filed period naming one order, or an entry naming one with another amount, holds that order only, never rows by its day; a correction naming none holds nothing', () => {
+test('#242 a correction of a filed period naming one order with another amount holds that order only, never rows by its day; a correction naming none holds nothing; without corrects the old holds stay', () => {
   const read = salesOf([head, row('9601', '2026-11-02', '108.10', '8.10'), row('9602', '2026-11-05', '54.05', '4.05'), row('9603', '2026-11-20', '54.05', '4.05')].join('\n'));
   const ctx = (entries: JournalEntry[]) => ctxOf({ ...NOV, legacy: { entries } });
   const fix = E('k', 'M-K', '2026-11-25', '3200', '1093', 3.5, '-V81', { origin: 'manual', corrects: '2026-Q3', description: 'Korrektur Shopify #9602' });
@@ -1636,6 +1636,10 @@ test('#242 a correction of a filed period naming one order, or an entry naming o
   assert.deepEqual([none.entries.length, none.held], [3, []], 'a correction naming no order and matching none holds no row by its day');
   const plain = bookReport({ journalEntries: [] }, read, ctx([{ ...fix, corrects: undefined, description: 'Shopify Sammelbuchung' }]));
   assert.deepEqual(plain.held.map((h) => h.order), ['9601', '9602', '9603'], 'an entry naming none, no correction: every row up to its day, as before');
+  const rest = bookReport({ journalEntries: [] }, read, ctx([{ ...fix, corrects: undefined, description: 'Shopify #9602 Rest' }]));
+  assert.deepEqual([rest.entries.length, rest.held.map((h) => h.order)], [0, ['9601', '9602', '9603']], 'no correction, one order with another amount: every row up to its day, nothing booked twice beside it');
+  const exact = bookReport({ journalEntries: [] }, read, ctx([E('s', 'M-S', '2026-11-25', '1093', '3200', 54.05, 'V81', { origin: 'manual', description: 'Shopify #9602' })]));
+  assert.deepEqual([lines(exact.entries).map((l) => l[0]), exact.known, exact.held], [['SR-shopify-9601', 'SR-shopify-9603'], 1, []], 'no correction, one order with its net: that order\'s booking, the others booked');
 });
 
 test('#242 an edited order charged across a quarter end: orders first then payments, or payments first, give the same books; dropped again nothing changes', () => {

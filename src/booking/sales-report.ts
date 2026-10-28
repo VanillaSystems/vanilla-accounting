@@ -1005,9 +1005,9 @@ type Legacy = 'booked' | 'named' | 'held' | undefined;
  * order, less a reversal of it: `reversal` says which entries take back): the row is known, never
  * held again on the next taking. Every other entry holds: the rows it names (one with another net,
  * one naming several orders at once, whose sum books none of them alone), else the row of its day
- * and amount; and one on or after `since` that names no row, matches none and corrects no filed period
- * holds every row up to its day, as a payout booked otherwise does up to `through` (#242: an entry
- * naming an order, or a correction of a filed period, never holds rows by its day). One before `since` holds only the rows it
+ * and amount; and one on or after `since` that books no row of its own and corrects no filed period
+ * holds every row up to its day too, as a payout booked otherwise does up to `through`, so nothing is
+ * booked twice beside it (#242: a correction of a filed period holds only the rows it names or matches). One before `since` holds only the rows it
  * names or matches: the old way booked each sale onto the clearing account and paid it from there,
  * so another sale of those days is not on it yet. A row dated before `since` waits when a payout
  * before `since` not booked from the clearing account is dated after it (`paidBefore`): a payout
@@ -1033,9 +1033,10 @@ function legacyRows(rows: readonly LegacyRow[], legacy: ReportContext['legacy'],
     for (const k of keys) { named.add(k); nameOnly.add(k); }
     const r = keys.length ? undefined : rows.find((x) => !named.has(x.key) && !booked.has(x.key) && x.day === e.date && (toRappen(x.amount) === signed(e) || (x.gross !== undefined && toRappen(x.gross) === signed(e))));
     if (r) named.add(r.key);
-    // Only an entry that names no row and corrects no filed period holds rows by its day (#242): one naming an order
-    // holds that order, a correction of a filed period (a person's, dated in the open one) only what it names or matches.
-    else if (!keys.length && !e.corrects && e.date >= since && e.date > through) through = e.date;
+    // A correction of a filed period (a person's, dated in the open one) holds only what it names or matches (#242). Any
+    // other entry that books no row of its own (another amount, several orders, none) holds every row up to its day:
+    // booking a row beside it could count a sale twice.
+    else if (!e.corrects && e.date >= since && e.date > through) through = e.date;
   }
   const paid = legacy.paidBefore ?? [];
   return (row) => (booked.has(row.key) ? 'booked' : nameOnly.has(row.key) ? 'named' : named.has(row.key) || row.day <= through || (row.day < since && paid.some((d) => d > row.day)) ? 'held' : undefined);
