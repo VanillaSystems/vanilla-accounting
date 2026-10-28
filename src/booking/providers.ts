@@ -25,6 +25,10 @@ export type Provider = Counterparty & { provider: NonNullable<Counterparty['prov
 
 export const isProvider = (c: Counterparty): c is Provider => !!c.provider;
 
+/** The company's clearing accounts, one per provider whose file names one: a line on one is dated by its order, not by a payment. */
+export const clearingAccounts = (counterparties: readonly Counterparty[]): ReadonlySet<string> =>
+  new Set(counterparties.flatMap((c) => (c.provider?.clearing ? [c.provider.clearing] : [])));
+
 /** The days a provider pays a sale out within when its file does not say. */
 export const PAYOUT_DAYS = 7;
 

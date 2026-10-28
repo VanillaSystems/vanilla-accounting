@@ -687,6 +687,8 @@ export interface AnswerContext {
   conversation: string;
   /** The firm's UID: a customs assessment proves import VAT for the firm it names (assertImportVatRule). */
   uid?: string;
+  /** The providers' clearing accounts (src/booking/providers.ts clearingAccounts): a payment's line on one keeps its order's date. */
+  clearing: ReadonlySet<string>;
 }
 
 /** The fields a change sets, without who set them. */
@@ -773,7 +775,7 @@ export function applyAnswer(books: Books, changes: BookChange[], ctx: AnswerCont
   const items = agreedBasis() ? openItemAccounts([...ctx.chart]) : undefined;
   const onOpenItem = (e: JournalEntry) => !!items && (isOpenItemAccount(items, e.accountDebit) || isOpenItemAccount(items, e.accountCredit));
   for (const e of books.journalEntries.filter((x) => dated.includes(x.id) && !x.corrects && !onOpenItem(x))) {
-    const dates = paymentDates(books, e);
+    const dates = paymentDates(books, e, ctx.clearing);
     if (dates.length && !dates.includes(e.date)) {
       const why = items ? 'nur eine Zeile auf Debitoren oder Kreditoren trägt das Datum ihres Belegs' : 'die Steuer wird nach vereinnahmtem Entgelt abgerechnet, sie gehört ins Quartal der Zahlung';
       throw new RequestError(400, `Die Buchung einer Zahlung trägt das Datum der Zahlung (${day(dates[0])}): ${why}.`, { code: 'paymentDate', params: { date: dates[0] } });

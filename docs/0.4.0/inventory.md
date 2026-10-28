@@ -148,7 +148,7 @@ Layers are assigned by path prefix, most specific first:
 | File | Swiss specifics (lines) |
 |---|---|
 | `src/audit/sources.ts` | ESTV 1 |
-| `src/llm/prompts.ts` | CHF 9, MWST 23, camt.053 2, Rappen 1 |
+| `src/llm/prompts.ts` | CHF 9, MWST 21, camt.053 2, Rappen 1 |
 | `src/publish/leak-guard.ts` | camt.053 1 |
 | `src/reconcile/vat-consistency.ts` | MWST 5 |
 
@@ -198,7 +198,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/cli/check-processes.ts` | ESTV 1 |
 | `src/cli/evidence.ts` | camt.053 1, QR-bill 1 |
 | `src/cli/fetch-estv-rates.ts` | CHF 3, MWST 2, ESTV 6 |
-| `src/cli/import-board.ts` | UID 3, camt.053 1 |
+| `src/cli/import-board.ts` | camt.053 1 |
 | `src/cli/import-opening-balances.ts` | CHF 13 |
 | `src/cli/init.ts` | CHF 4, ESTV 2 |
 | `src/cli/reconcile-balances.ts` | camt.053 3 |

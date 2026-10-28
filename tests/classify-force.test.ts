@@ -1,7 +1,7 @@
 /**
  * `classify --force` removes entries so it can book their transactions again. It must
  * only ever remove classify's own open-period work: anything it removes that it cannot
- * book again (corrections, Eigenverbrauch, Shopify sale anchors, closed entries) is lost.
+ * book again (corrections, Eigenverbrauch, a sales report's orders, closed entries) is lost.
  * Runs on the golden master's frozen books (tests/support/golden.ts).
  */
 import { createHash } from 'node:crypto';
@@ -40,7 +40,7 @@ test('a transaction is removed whole or not at all, so classify can book it agai
   assert.deepEqual(partial.map((e) => e.transactionRef), []);
 });
 
-test('rebook-shopify per-order sales on Stripe payouts survive', () => {
+test('per-order sales an earlier tool booked on a provider\'s payouts survive', () => {
   for (const e of sales) assert.ok(!removed.has(e), `${e.id} ${e.description} removed`);
 });
 
@@ -60,7 +60,7 @@ test('origin decides on new entries', () => {
   const ours = entry({ transactionRef: 'TX-1', origin: 'classify' });
   const legacy = entry({ transactionRef: 'TX-2' });
   const mixed = [entry({ transactionRef: 'TX-3', origin: 'classify' }), entry({ transactionRef: 'TX-3', corrects: '2026-Q2' })];
-  const anchor = entry({ transactionRef: 'SHOPIFY-9', origin: 'classify' });
+  const anchor = entry({ transactionRef: 'SR-webshop-9', origin: 'classify' });
   const manual = entry({ transactionRef: 'TX-4', origin: 'manual' });
   const handEdited = [entry({ transactionRef: 'TX-5', origin: 'classify' }), entry({ transactionRef: 'TX-5', origin: 'manual' })];
   const out = entriesForceMayRemove(
@@ -71,7 +71,7 @@ test('origin decides on new entries', () => {
   assert.deepEqual(out, [ours, legacy]);
 });
 
-test('a payout rebook-shopify split into per-order sales is kept whole', () => {
+test('a payout an earlier tool split into per-order sales is kept whole', () => {
   const payoutId = createHash('sha256').update('payout|TX-6').digest('hex').substring(0, 16);
   const split = [
     entry({ transactionRef: 'TX-6', id: 'sale-1', description: 'Webshop Bestellung #1001, Muster, Schweiz' }),

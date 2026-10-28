@@ -78,7 +78,7 @@ export function classifyStep({ force = false } = {}): StepRun {
         index.journalEntries = index.journalEntries.filter((je) => !remove.has(je));
         return remove.size;
       });
-      log(`--force: removed ${removed} entries classify booked in the open period, to book their transactions again. Kept: closed periods, corrections, entries without a bank transaction, payouts the retired rebook-shopify split per order.\n`);
+      log(`--force: removed ${removed} entries classify booked in the open period, to book their transactions again. Kept: closed periods, corrections, entries without a bank transaction, payouts an earlier tool split per order.\n`);
     }
 
     // A receipt linked after its payment was booked: the booking is made again, with what the receipt says.

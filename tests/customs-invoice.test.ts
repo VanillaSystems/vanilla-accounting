@@ -406,7 +406,7 @@ test('#227: «Veranlagungsverfügung fehlt» lists the import VAT without its as
 
 test('#227: the assistant books import VAT by the same rule: no tax-amount code against the bank, no input tax on import VAT without the assessment, the one-sided deduction with it', async () => {
   const ws = company();
-  const ctx = { bankAccounts: ws.bankAccounts, chart: new Set<string>(), earlier: [], conversation: 'c', uid: 'CHE-123.456.789' };
+  const ctx = { bankAccounts: ws.bankAccounts, chart: new Set<string>(), earlier: [], conversation: 'c', uid: 'CHE-123.456.789', clearing: new Set<string>() };
   const booked = async () => {
     const books = booksOf([zInvoice()], undefined, { tx: Z_PAYMENT });
     await classifyTransactions(books, [Z_PAYMENT], { fx, context: loadClassifyContext(ws), ask: noModel });

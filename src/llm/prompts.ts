@@ -184,7 +184,7 @@ export interface ClassifyEntry {
   vat?: VatLineFacts['charge'];
   /** Rule 7: the Swiss VAT rate charged, in percent (8.1). */
   vatRate?: number;
-  /** Rule 9b: the amount is the VAT itself. */
+  /** The amount is the VAT itself: a single-leg VAT-amount row. */
   amountIs?: 'tax';
   description: string;
   /** On a purchase line with a receipt (rule 7h): what it buys; on a sale without Swiss VAT (rule 7g): what it sells. */
@@ -233,7 +233,7 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
    - Example: an Aliexpress transaction with 3 receipts (milk jugs, grinder burrs, USB cable) → 3 journal entries, e.g. 4200/6100/6570.
    - If two receipts genuinely go to the same account, they still get separate rows with separate descriptions.
 6. The entries must move the bank account by exactly the transaction amount: the bank paid what the bank paid.
-   Every row has both accounts, except the bank side you leave "" (and the single-leg VAT-amount row of rule 9b).
+   Every row has both accounts, except the bank side you leave "".
 6b. Skonto / a discount taken at payment (the bank paid less than the invoice total): book what the bank paid,
    ONE entry for the transaction amount on the expense account with the receipt's VAT facts. Cash basis: the
    discount reduces the expense and the input tax, which is the tax on the amount paid. Never add a separate
@@ -270,7 +270,7 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
       rate as its "vatRate". Keep the same expense account for all split rows unless the items
       clearly belong to different accounts. The split rows must sum to the receipt total.
 8. For Wise fees (description starts with "Wise Charges"): use account 6940 (Bankspesen), "vat": "none".
-9. A payout of a payment provider the company's knowledge names as one (a shop platform such as Shopify, a card
+9. A payout of a payment provider the company's knowledge names as one (a shop platform, a card
    terminal), dated on or after the company's cut-over day for it, never reaches you: the app books it from the
    provider's clearing account and the sales from the provider's report, or holds it for the person while no
    clearing account or cut-over day is set. A payout dated before that day is booked as it was before: rule 9a.
@@ -281,15 +281,6 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
    and the fees as their own row on the bank-fee account with "vat": "none" (payment processing is exempt: no input
    tax, no Bezugsteuer). The rows sum to the payout, every amount positive. Without the report: the whole payout on
    the revenue account, "charged" at 8.1.
-9b. Shopify MONTHLY VAT correction (Vorsteuer on transaction fees) — a SEPARATE booking, not a sales order.
-   The monthly Shopify billing statement ("Payments Invoice") shows the 8.1% Swiss MWST on the fees that the
-   per-order payouts hide. Book ONLY the VAT as a SINGLE-LEG correction — this is the ONE case where a leg is
-   intentionally left empty:
-     - accountDebit: "" (EMPTY) — the app books this leg to the MWST account
-     - accountCredit: "6580"
-     - amount: the VAT amount only (= gross fees × 8.1 / 108.1)
-     - "vat": "charged", "vatRate": 8.1, "amountIs": "tax" (the amount IS the VAT amount)
-   Do NOT touch 2451 (Kontokorrent) and do NOT fill both legs. Description: "Shopify, Vorsteuer Transaktionsgebühren <Mon JJJJ>".
 10. Description rules:
    - MUST be in German
    - Format: "Wer, Was" — vendor first, then purpose, comma-separated
@@ -299,7 +290,7 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
    - No amounts in description (the amount is its own field)
    - Use these templates for common categories:
      * Subscriptions/SaaS: "Anbieter, Abo Produkt" → "Anthropic, Abo Claude AI"
-     * Webshop orders (Stripe/Shopify): "Webshop Bestellung #NNNN, Kundenname, Land" → "Webshop Bestellung #1001, M. Muster, USA"; customer name and country are required
+     * Webshop orders: "Webshop Bestellung #NNNN, Kundenname, Land" → "Webshop Bestellung #1001, M. Muster, USA"; customer name and country are required
      * Webshop fees: "Webshop Gebühren #NNNN" → "Webshop Gebühren #1001"
      * Webshop refunds: "Webshop Rückerstattung #NNNN" → "Webshop Rückerstattung #1002"
      * Shipping (FedEx): "FedEx, Versand #NNNN Fracht/Zölle/MWST/Abwicklung" → "FedEx, Versand #1001 Fracht"; #NNNN is the webshop order number, not the carrier's invoice number; if an invoice covers multiple webshop orders, include the order refs like "#1003/#1004"
