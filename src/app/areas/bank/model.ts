@@ -7,6 +7,7 @@
  */
 import type { BankStatement, BankTransaction, Index, JournalEntry } from '../../../types/index.js';
 import type { StatementDetails } from '../../../types/drop.js';
+import type { PdfTable } from '../../../types/statement-read.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { addDays, type IsoDate } from '../../../accounting/periods.js';
 import { bookBalanceNative, nativeOpening } from '../../../accounting/reconcile-bank.js';
@@ -117,6 +118,26 @@ export interface Check {
 export const signed = (t: BankTransaction) => (t.direction === 'DBIT' ? -1 : 1) * Math.abs(t.amount);
 
 const round = (n: number) => fromRappen(toRappen(n));
+
+/**
+ * The table a person fills by hand on a kept statement PDF (#243): the statement's payments, each a
+ * line tied to its payment, closing at the balance the bank states for its last day (`check.close`)
+ * and opening at what they leave. Without one it states no balance: never the books' own figure,
+ * which saved would count as the bank's.
+ */
+export function tableOfPayments(s: Statement, pays: readonly BankTransaction[], check: Pick<Check, 'close'> | undefined): PdfTable {
+  const movements = [...pays].filter((p) => p.amount).sort((a, b) => a.date.localeCompare(b.date)).map((p) => ({
+    date: p.date, amount: signed(p), ...(p.counterparty ? { counterparty: p.counterparty } : {}), ...(p.description ? { text: p.description } : {}),
+    ...(p.reference ? { reference: p.reference } : {}), payment: p.ref,
+  }));
+  const period = { from: s.from, to: s.to };
+  const close = check?.close;
+  if (close == null) return { currency: s.account.currency, period, movements };
+  return {
+    currency: s.account.currency, period,
+    opening: { date: s.from, amount: round(close - movements.reduce((sum, m) => sum + m.amount, 0)) }, closing: { date: s.to, amount: close }, movements,
+  };
+}
 const monthEnd = (d: IsoDate) => addDays(`${monthAdd(d.slice(0, 7), 1)}-01`, -1);
 function monthAdd(ym: string, n: number): string {
   const m = Number(ym.slice(0, 4)) * 12 + Number(ym.slice(5, 7)) - 1 + n;

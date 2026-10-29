@@ -2,7 +2,7 @@
  * A camt.053 alone is a statement (usability finding quarter-close-2): its opening (OPBD) and
  * closing (CLBD) balance become the account's statement balances, the days between them its
  * period, so Kontoauszüge covers its months and checks the balance without a PDF. Beside the
- * PDFs of every month it touches, the camt adds no row, and a PDF's balance of a day wins.
+ * PDFs of every month it touches, the camt adds no row, and its balance of a day wins over a PDF's.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -65,9 +65,9 @@ test('an opening dated on a day the bank booked is the close of the day before (
 const bal = (date: string, amount: number, source: 'pdf' | 'camt'): StatementClosingBalance =>
   ({ account: '1021', bank: 'Raiffeisen', currency: 'CHF', date, amount, source, sourceFile: `${source}-${date}` });
 
-test('a PDF\'s balance of a day wins over the camt\'s; the camt\'s are read anew each time', () => {
-  const pdf = bal('2026-07-31', 950, 'pdf');
-  assert.deepEqual(withCamtBalances([pdf, bal('2026-05-31', 1, 'camt')], [bal('2026-07-31', 951, 'camt'), bal('2026-06-30', 1000, 'camt')]), [bal('2026-06-30', 1000, 'camt'), pdf]);
+test('the camt\'s balance of a day wins over a PDF\'s; a PDF\'s of another day stays; the camt\'s are read anew each time', () => {
+  const pdf = bal('2026-07-31', 950, 'pdf'), august = bal('2026-08-31', 900, 'pdf');
+  assert.deepEqual(withCamtBalances([pdf, august, bal('2026-05-31', 1, 'camt')], [bal('2026-07-31', 951, 'camt'), bal('2026-06-30', 1000, 'camt')]), [bal('2026-06-30', 1000, 'camt'), bal('2026-07-31', 951, 'camt'), august]);
   assert.equal(withCamtBalances(undefined, []), undefined, 'books without balances get none');
 });
 

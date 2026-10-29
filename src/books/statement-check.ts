@@ -5,7 +5,7 @@
  * digit shows as a gap on its page. Pure, in cents: the drop row runs it on every change, the
  * server again before it imports.
  */
-import type { BalanceCheck, BalanceGap, ReadStatement } from '../types/statement-read.js';
+import type { BalanceCheck, BalanceGap, PdfTable, ReadStatement } from '../types/statement-read.js';
 
 const cents = (n: number) => Math.round(n * 100);
 const francs = (c: number) => c / 100;
@@ -56,10 +56,30 @@ function originalOf(v: unknown, account: string): { amount: number; currency: st
   return /^[A-Z]{3}$/.test(currency) && currency !== account && amount !== undefined && amount !== 0 ? { amount: round(Math.abs(amount)), currency } : undefined;
 }
 
+const sameCents = (a: number, b: number) => Math.round(a * 100) === Math.round(b * 100);
+
+/**
+ * The opening balance of a statement that prints none but a balance on every row (a running
+ * balance column): the balance before the earliest row. The rows run oldest first when each row's
+ * balance is the one before plus its amount, newest first when it is the one after less; a
+ * statement whose rows chain neither way gives none. A statement without a movement opens as it
+ * closes. Its day: the period's first, else the earliest row's.
+ */
+function openingOfRows(rows: readonly { date: string; amount: number; balance?: number }[], { date: closingDay, amount: closing }: { date: string; amount: number }, from?: string): { date: string; amount: number } | undefined {
+  if (!rows.length) return { date: from ?? closingDay, amount: closing };
+  if (rows.some((r) => r.balance === undefined)) return undefined;
+  const chains = (list: readonly { amount: number; balance?: number }[]) => list.every((r, i) => i === 0 || sameCents(r.balance!, list[i - 1].balance! + r.amount));
+  const oldest = chains(rows) ? rows[0] : chains([...rows].reverse()) ? rows[rows.length - 1] : undefined;
+  if (!oldest) return undefined;
+  const day = from ?? [...rows.map((r) => r.date)].sort()[0];
+  return day <= closingDay ? { date: day, amount: round(oldest.balance! - oldest.amount) } : undefined;
+}
+
 /**
  * A statement from outside the code (the model's answer, the person's corrected table) in its
  * shape, or undefined when it is none: a currency, the opening and closing balance with their days,
- * movements each with a day and an amount. A wholly empty line is dropped; any other line without
+ * movements each with a day and an amount. An opening the statement does not print comes from the
+ * balance its rows print (openingOfRows). A wholly empty line is dropped; any other line without
  * a day or an amount makes the statement none, so a misread line is never lost silently.
  */
 export function parseReadStatement(x: unknown): ReadStatement | undefined {
@@ -71,8 +91,8 @@ export function parseReadStatement(x: unknown): ReadStatement | undefined {
     const amount = amountOf(b?.amount);
     return b && isDay(b.date) && amount !== undefined ? { date: b.date, amount: round(amount) } : undefined;
   };
-  const opening = balance(o.opening), closing = balance(o.closing);
-  if (!currency || !opening || !closing || !Array.isArray(o.movements)) return undefined;
+  const closing = balance(o.closing);
+  if (!currency || !closing || !Array.isArray(o.movements)) return undefined;
   const movements: ReadStatement['movements'] = [];
   for (const raw of o.movements as unknown[]) {
     const m = raw as Record<string, unknown> | null;
@@ -83,19 +103,24 @@ export function parseReadStatement(x: unknown): ReadStatement | undefined {
     const page = typeof m.page === 'number' && Number.isInteger(m.page) && m.page > 0 ? m.page : undefined;
     const counterparty = words(m.counterparty, 140), said = words(m.text), reference = words(m.reference, 140);
     const original = originalOf(m.original, currency);
+    const after = amountOf(m.balance);
+    const payment = words(m.payment, 120);
     movements.push({
       date: m.date, ...(isDay(m.valueDate) ? { valueDate: m.valueDate } : {}), amount: round(amount),
       ...(counterparty ? { counterparty } : {}), ...(said ? { text: said } : {}), ...(reference ? { reference } : {}),
-      ...(original ? { original } : {}), ...(page ? { page } : {}),
+      ...(original ? { original } : {}), ...(page ? { page } : {}), ...(after !== undefined ? { balance: round(after) } : {}),
+      ...(payment ? { payment } : {}),
     });
   }
+  const p = o.period as Record<string, unknown> | undefined;
+  const period = p && isDay(p.from) && isDay(p.to) && p.from <= p.to ? { from: p.from, to: p.to } : undefined;
+  const opening = o.opening === undefined || o.opening === null ? openingOfRows(movements, closing, period?.from) : balance(o.opening);
+  if (!opening) return undefined;
   const pages = Array.isArray(o.pages) ? (o.pages as (Record<string, unknown> | null)[]).flatMap((p) => {
     if (!p || typeof p.page !== 'number' || !Number.isInteger(p.page) || p.page < 1) return [];
     const carriedIn = amountOf(p.carriedIn), carriedOut = amountOf(p.carriedOut);
     return carriedIn === undefined && carriedOut === undefined ? [] : [{ page: p.page, ...(carriedIn !== undefined ? { carriedIn: round(carriedIn) } : {}), ...(carriedOut !== undefined ? { carriedOut: round(carriedOut) } : {}) }];
   }) : [];
-  const p = o.period as Record<string, unknown> | undefined;
-  const period = p && isDay(p.from) && isDay(p.to) && p.from <= p.to ? { from: p.from, to: p.to } : undefined;
   const compact = typeof o.iban === 'string' ? o.iban.replace(/\s+/g, '').toUpperCase() : '';
   const iban = /^[A-Z]{2}\d{2}[A-Z0-9]{8,30}$/.test(compact) ? compact : undefined;
   const bankName = words(o.bankName, 140), owner = words(o.owner, 140);
@@ -105,9 +130,41 @@ export function parseReadStatement(x: unknown): ReadStatement | undefined {
   };
 }
 
+/** Whether a kept PDF's table states its balances (a person may leave them out, #243). */
+export const hasBalances = (t: PdfTable): t is ReadStatement => t.closing !== undefined;
+
 /**
- * A table nobody filled (#254): no movement and both balances 0.00, as the hand form starts. Nothing
- * was checked, so it neither shows «Geht auf» nor imports.
+ * A kept PDF's table as a person sends it (#243): a statement, or one whose closing balance she left
+ * empty, which states no balance. A closing without an opening opens at what its lines leave, the
+ * table filled from the books' payments; an opening without a closing is none.
  */
-export const isBlank = (s: Pick<ReadStatement, 'movements' | 'opening' | 'closing'>): boolean =>
-  !s.movements.length && s.opening.amount === 0 && s.closing.amount === 0;
+export function parsePdfTable(x: unknown): PdfTable | undefined {
+  const o = x as Record<string, unknown> | null;
+  if (!o || typeof o !== 'object') return undefined;
+  const stated = (v: unknown) => amountOf((v as Record<string, unknown> | null)?.amount) !== undefined;
+  const lines = Array.isArray(o.movements) ? (o.movements as { amount?: unknown }[]) : [];
+  if (stated(o.closing)) {
+    if (stated(o.opening)) return parseReadStatement(o);
+    const close = (o.closing as Record<string, unknown>).date;
+    const from = (o.period as Record<string, unknown> | undefined)?.from;
+    const moved = lines.reduce((sum, m) => sum + Math.round((amountOf(m?.amount) ?? 0) * 100), 0);
+    return parseReadStatement({ ...o, opening: { date: isDay(from) ? from : close, amount: round(amountOf((o.closing as Record<string, unknown>).amount)! - moved / 100) } });
+  }
+  if (stated(o.opening)) return undefined;
+  const day = '2000-01-01';
+  const s = parseReadStatement({ ...o, opening: { date: day, amount: 0 }, closing: { date: day, amount: 0 } });
+  if (!s) return undefined;
+  const { opening: _o, closing: _c, ...lined } = s;
+  return lined;
+}
+
+/** A model's statement without the payments its lines name: only a person's table ties a line to a payment of the books. */
+export const withoutPayments = (s: ReadStatement): ReadStatement => ({ ...s, movements: s.movements.map(({ payment: _, ...m }) => m) });
+
+/**
+ * A table nobody filled (#254): no movement and both balances 0.00, as the hand form starts (a kept
+ * PDF's table without balances: no movement). Nothing was checked, so it neither shows «Geht auf»
+ * nor imports.
+ */
+export const isBlank = (s: { movements: readonly unknown[]; opening?: { amount: number }; closing?: { amount: number } }): boolean =>
+  !s.movements.length && (s.opening?.amount ?? 0) === 0 && (s.closing?.amount ?? 0) === 0;

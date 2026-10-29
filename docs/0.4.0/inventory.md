@@ -8,13 +8,13 @@ and the providers.
 
 | Layer | Files | With Swiss specifics |
 |---|---:|---:|
-| core | 72 | 23 |
+| core | 73 | 23 |
 | engine | 4 | 1 |
-| provider | 16 | 13 |
+| provider | 14 | 11 |
 | split | 118 | 26 |
 | infrastructure | 69 | 4 |
 | workflow | 26 | 0 |
-| view | 328 | 56 |
+| view | 330 | 56 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -68,7 +68,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/accounting/ledger.ts` | CHF 3 |
 | `src/accounting/rappen.ts` | Rappen 1 |
 | `src/accounting/validate.ts` | MWST 1, Ziffer 1, tax code 11 |
-| `src/books/bank-import.ts` | ESTV 1, camt.053 21 |
+| `src/books/bank-import.ts` | ESTV 1, camt.053 19 |
 | `src/books/company.ts` | ESTV 1 |
 | `src/books/year-close.ts` | CHF 2, ESTV 4, camt.053 2 |
 | `src/core/modules/check.ts` | Ziffer 9 |
@@ -108,9 +108,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/providers/ech0217/xml.ts` | MWST 5, ESTV 1, Ziffer 2, eCH-0217 38, Rappen 1 |
 | `src/providers/qr-bill/reference.ts` | camt.053 1, QR-bill 13 |
 | `src/providers/statement-files.ts` | camt.053 2 |
-| `src/providers/statement-pdf/statement-pdf-balances.ts` | CHF 2 |
 | `src/providers/statement-read/camt-writer.ts` | camt.053 4 |
-| `src/providers/wise-pdf/wise-statement-pdf.ts` | camt.053 1, QR-bill 1 |
 
 ## split
 
@@ -211,4 +209,4 @@ Layers are assigned by path prefix, most specific first:
 | `src/cli/year-open.ts` | CHF 2, ESTV 1 |
 | `src/server/routes/config.ts` | MWST 1, ESTV 2 |
 | `src/server/routes/receipts.ts` | CHF 1 |
-| `src/server/routes/statements.ts` | ESTV 1, camt.053 20 |
+| `src/server/routes/statements.ts` | ESTV 1, camt.053 21 |

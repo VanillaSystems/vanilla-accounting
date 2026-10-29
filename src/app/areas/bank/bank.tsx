@@ -22,6 +22,7 @@ import { badgeCount, matches, payHaystack, payText, signed, troubled, type Bank,
 import { bankFor, listed, setUi, toggleGroup, ui, useUi } from './state.js';
 import { importStatements, statementAdd } from './actions.js';
 import { Detail, statementName } from './Detail.js';
+import { StatementReads } from './PdfFacts.js';
 import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
 import './bank.css';
 import { filing } from '../../../engines/index.js';
@@ -184,6 +185,7 @@ function List(props: Props) {
         </div>
       </ListHead>
       {notice && <div className="notice" role="status">{notice}</div>}
+      {ws ? <StatementReads nav={nav} canEdit={canEdit} version={books} /> : null}
       {strays.length > 0 && (
         <div className="notice warn strays" data-testid="bank-strays">
           <span>{t('bank.strays', { n: strays.length })}</span>

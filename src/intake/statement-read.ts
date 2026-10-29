@@ -13,11 +13,13 @@ import { pdfRuns, textOf } from '../parsers/pdf-text.js';
 import { buildStatementReadPrompt, parseStatementRead } from '../llm/prompts.js';
 import { checkStatement } from '../books/statement-check.js';
 import { heldLines, type StructuredSpan } from '../books/bank-import.js';
-import { AiRefused } from '../llm/provider.js';
+import { AiRefused, type AiRefusal } from '../llm/provider.js';
+import { NoClaudeError } from '../llm/providers/claude-cli.js';
 import { statementPdf, statementPeriod } from '../books/statement-facts.js';
 import { accountForStatement } from '../accounting/bank-accounts.js';
 import { baseCurrency } from '../engines/index.js';
-import type { BankTransaction } from '../types/index.js';
+import type { BankTransaction, Index } from '../types/index.js';
+import { keptPdfs, readBeside, writeBeside, type KeptPdf } from '../books/pdf-reads.js';
 import type { CoveredDays, CsvColumns, HandWhy, ReadBy, ReadStatement, StatementRead } from '../types/statement-read.js';
 import type { LedgerBankAccount, Workspace } from '../workspace/workspace.js';
 import type { AskOptions } from '../llm/ask.js';
@@ -40,8 +42,12 @@ export function handStatement(text: string, currency = baseCurrency()): ReadStat
 
 export type Asker = (prompt: string, opts: AskOptions) => Promise<string>;
 
-/** A read of a statement file: the statement, who filled it, and why it is a table to fill by hand (with the provider's words when the call failed). */
-export interface PdfRead { statement: ReadStatement; by: ReadBy; why?: HandWhy; error?: string; pages?: number }
+/**
+ * A read of a statement file: the statement, who filled it, and why it is a table to fill by hand
+ * (with the provider's words when the call failed). `threw`: the call itself failed (a timeout, a
+ * plan's limit, signed out, no program that serves the step), so the model gave no answer at all.
+ */
+export interface PdfRead { statement: ReadStatement; by: ReadBy; why?: HandWhy; error?: string; pages?: number; threw?: { stop: boolean; refusal?: AiRefusal } }
 
 /**
  * The statement in the PDF at `path` (a photo made a PDF first): read by the model when `ask` is
@@ -69,8 +75,9 @@ export async function readStatementPdf(path: string, ask: Asker | undefined, non
   } catch (e) {
     // «KI ganz ausschalten» switched on while it read: the AI is off, not failed (#212).
     if (e instanceof AiRefused && e.refusal.reason === 'off') return hand('noAi');
-    return hand('failed', ((e as Error).message || String(e)).split('\n')[0].slice(0, 200));
+    return { ...hand('failed', ((e as Error).message || String(e)).split('\n')[0].slice(0, 200)), threw: { stop: e instanceof AiRefused || e instanceof NoClaudeError, ...(e instanceof AiRefused ? { refusal: e.refusal } : {}) } };
   }
+  if (answer === 'noAnswer') return { ...hand('failed', 'Die KI gab keine vollständige Antwort.'), threw: { stop: false } };
   if (answer === 'notStatement') return hand('notStatement');
   return answer ? { statement: answer, by: 'model', ...(pages !== undefined ? { pages } : {}) } : hand('failed');
 }
@@ -145,6 +152,74 @@ export function asRead(statement: ReadStatement, by: ReadBy, held: Map<number, B
     ...extra,
   };
 }
+
+// ─── A statement PDF kept as its statement, read for what its export lacks (#243) ───
+
+/**
+ * The kept statement PDFs still to read: of an open month, no question of theirs waiting in the books
+ * (its table is the one, src/books/pdf-reads.ts), and no read beside them yet. A filed month's PDF
+ * is not read: nothing filed takes what it would give.
+ */
+export function unreadPdfs(ws: Pick<Workspace, 'paths' | 'bankAccounts'>, books: Pick<Index, 'bankStatements' | 'statementAsks' | 'config'>): KeptPdf[] {
+  const asked = new Set((books.statementAsks ?? []).map((a) => a.file));
+  const closed = books.config?.closedThrough;
+  return keptPdfs(ws, books.bankStatements).filter((p) => (!closed || p.to > closed) && !asked.has(p.file) && !readBeside(p.path));
+}
+
+/** The reads that failed since the app started, by file (`<bank>/<name>`): said to the person; nothing is kept on disk, so the next run asks again. */
+const failures = new Map<string, string>();
+export const readFailures = (): ReadonlyMap<string, string> => failures;
+
+let reading = false;
+/** Whether kept statement PDFs are being read now (one reading at a time per process: the inbox run's and the person's). */
+export const readingKept = (): boolean => reading;
+
+export interface KeptReadRun {
+  read: number;
+  failed: { file: string; error: string }[];
+  /** Why the reading stopped before the end: a refusal no further call gets past (signed out, a plan's limit, no program for the step). */
+  stopped?: { error: string; refusal?: AiRefusal };
+  busy?: true;
+}
+
+/**
+ * Reads `pdfs` with the model one after the other and keeps each answer beside its PDF: a statement,
+ * «no statement», an answer code could not take, too many pages. A call that fails keeps nothing and
+ * is told (`failed`, readFailures); one that no further call gets past ends the reading (`stopped`).
+ * `cancelled` is asked before each file: the file being read is finished.
+ */
+export async function readKeptPdfs(pdfs: readonly KeptPdf[], ask: Asker, o: { progress?(done: number, total: number, file?: string): void; cancelled?(): boolean; log?(line: string): void } = {}): Promise<KeptReadRun> {
+  if (reading) return { read: 0, failed: [], busy: true };
+  reading = true;
+  const run: KeptReadRun = { read: 0, failed: [] };
+  try {
+    for (const [i, p] of pdfs.entries()) {
+      if (o.cancelled?.()) break;
+      o.progress?.(i, pdfs.length, p.file);
+      const r = await readStatementPdf(p.path, ask);
+      if (r.threw || r.why === 'noAi') {
+        const error = r.why === 'noAi' ? 'off' : r.error ?? 'failed';
+        failures.set(p.file, error);
+        run.failed.push({ file: p.file, error });
+        o.log?.(`  ${p.file}: not read (${error}); the next run asks again`);
+        if (r.why === 'noAi' || r.threw?.stop) { run.stopped = { error, ...(r.threw?.refusal ? { refusal: r.threw.refusal } : r.why === 'noAi' ? { refusal: { reason: 'off' as const } } : {}) }; break; }
+        continue;
+      }
+      failures.delete(p.file);
+      if (r.by === 'model') writeBeside(p.path, { by: 'model', statement: r.statement });
+      else writeBeside(p.path, { by: 'model', why: r.why === 'notStatement' || r.why === 'pages' ? r.why : 'unreadable' });
+      run.read++;
+      o.log?.(`  ${p.file}: ${r.by === 'model' ? `read, ${r.statement.movements.length} movement(s)${checkStatement(r.statement).ok ? '' : ', its figures do not add up'}` : `no statement taken (${r.why})`}`);
+    }
+    o.progress?.(Math.min(run.read + run.failed.length, pdfs.length), pdfs.length);
+    return run;
+  } finally {
+    reading = false;
+  }
+}
+
+/** Whether the inbox run reads these PDFs by itself: one month's statement, at most one PDF of each account. A larger backlog waits for the person («N Kontoauszüge von der KI lesen lassen?»). */
+export const readsByItself = (pdfs: readonly Pick<KeptPdf, 'account'>[]): boolean => new Set(pdfs.map((p) => p.account.account)).size === pdfs.length;
 
 // ─── The column mappings of bank CSVs, kept per account ──────────────────────
 
