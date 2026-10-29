@@ -62,6 +62,7 @@ after(() => api?.stop());
 const MAY_PDF = 'Kontoauszug 01.05.2026 - 31.05.2026.pdf';
 const MAY = { currency: 'CHF', period: { from: '2026-05-01', to: '2026-05-31' }, opening: { date: '2026-05-01', amount: 10 }, closing: { date: '2026-05-31', amount: 10 }, movements: [] };
 const MAY_READ = `/api/statements/Raiffeisen/${encodeURIComponent(MAY_PDF)}/read`;
+const MAY_FACTS = `/api/statements/Raiffeisen/${encodeURIComponent(MAY_PDF)}/facts`;
 
 type Call = { method: string; path: string; body?: unknown };
 
@@ -117,6 +118,9 @@ const refused: Array<Call & { status: number }> = [
   { method: 'POST', path: MAY_READ, status: 403 },
   { method: 'PUT', path: MAY_READ, body: { statement: MAY }, status: 403 },
   { method: 'POST', path: `${MAY_READ}/import`, body: { statement: MAY }, status: 403 },
+  // Its table by hand, and «Neu lesen» (#243): a filed month's balance and references never change.
+  { method: 'PUT', path: MAY_FACTS, body: { statement: MAY }, status: 403 },
+  { method: 'DELETE', path: MAY_FACTS, status: 403 },
   { method: 'DELETE', path: '/api/transactions/C1/filed-twin', status: 403 },
   { method: 'DELETE', path: '/api/invoices/in_p/payments/CI', status: 403 },
   // Several objects at once (#216): a batch of filed objects only is refused as their single changes are; its undo too.

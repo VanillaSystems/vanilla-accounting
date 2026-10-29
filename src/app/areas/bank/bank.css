@@ -82,3 +82,10 @@
 .reconcile-acts { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
 .reconcile-acts .m { color: var(--muted); font-size: 12.5px; }
 @media (max-width: 640px) { .reconcile-table, .reconcile-table tbody, .reconcile-table tr, .reconcile-table td { display: block; } .reconcile-table thead { display: none; } }
+
+/* A kept statement PDF's facts (#243): what it gives the books, the table to fill or correct; the PDFs not read yet above the list. */
+.pdffacts { margin: 10px 0 14px; display: flex; flex-direction: column; gap: 6px; max-width: 760px; }
+.pdffacts .m, .stmreads .m { color: var(--muted); }
+.pdffacts-acts { display: flex; gap: 14px; }
+.notice.stmreads { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.notice.stmreads .warn { color: var(--warn); }

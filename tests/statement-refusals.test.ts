@@ -8,7 +8,7 @@
 import './support/jurisdiction.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { startApi } from './support/api-server.js';
 import { testIban } from './support/iban.js';
@@ -35,17 +35,16 @@ test('a firm with one CHF account and no IBAN in the books reads its camt.053 li
   try {
     const first = await api.fetch('/api/statements?name=okt.xml', { method: 'POST', body: camt('S-OKT', SALON, [['2026-10-02', -89.9, '91000000001'], ['2026-10-05', 180, '91000000002']]) });
     assert.equal(first.status, 200, await first.clone().text());
-    const done = await first.json() as { account: string; added: number };
-    assert.deepEqual([done.account, done.added], ['1020', 2], 'read into the firm\'s only CHF account');
-    const info = await (await api.fetch('/api/workspace')).json() as { statementIbans: Record<string, string> };
-    assert.deepEqual(info.statementIbans, { 1020: SALON }, 'Firma › Bankkonten offers the IBAN the statements show');
+    const done = await first.json() as { account: string; added: number; byBank?: { proposed?: string } };
+    assert.deepEqual([done.account, done.added, done.byBank?.proposed], ['1020', 2, '1020'], 'read into the firm\'s only CHF account, the one of the bank it names (#274)');
+    assert.match(readFileSync(join(api.root, 'belege.workspace.yaml'), 'utf8'), new RegExp(`iban: ${SALON}`), 'its IBAN kept on the account');
 
     const other = await api.fetch('/api/statements?name=privat.xml', { method: 'POST', body: camt('S-PRIV', OTHER, [['2026-10-03', -40, '55000000001']], 'Zürcher Kantonalbank') });
     assert.equal(other.status, 400);
     const body = await other.json() as { error: string; code: string; params: { reason: string; problem: { kind: string; ibans?: string[] }; unknown?: { iban: string; currency: string; bankName?: string } } };
     assert.equal(body.code, 'statement');
     assert.equal(body.params.reason, 'account');
-    assert.deepEqual(body.params.problem, { kind: 'twoAccounts', currency: 'CHF', bank: 'Raiffeisen', ibans: [SALON, OTHER], iban: OTHER });
+    assert.deepEqual(body.params.problem, { kind: 'noAccount', currency: 'CHF', iban: OTHER });
     assert.deepEqual(body.params.unknown, { iban: OTHER, currency: 'CHF', bankName: 'Zürcher Kantonalbank' }, 'the newcomer is the account to add');
     assert.doesNotMatch(body.error, /belege\.workspace\.yaml|bank-statements\//, 'no file for the person to edit');
     assert.deepEqual(readdirSync(folder(api.root)), ['okt.xml'], 'the refused file is not kept');

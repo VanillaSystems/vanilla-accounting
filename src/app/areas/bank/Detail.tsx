@@ -21,7 +21,7 @@ import { checkText } from '../../lib/fx-text.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps, Nav } from '../index.js';
 import { I } from '../receipts/icons.js';
-import { isCamt, matches, payHaystack, payText, signed, type Bank, type Statement } from './model.js';
+import { fileKeyOf, isCamt, matches, payHaystack, payText, signed, type Bank, type Statement } from './model.js';
 import { bankFor, setUi, useUi, type Section } from './state.js';
 import { importStatements, linkReceiptSet, pickStatements, removeStatement, setNote, setNoReceipt } from './actions.js';
 import type { ReceiptSet, SetCut } from '../../../intake/receipt-sets.js';
@@ -54,6 +54,7 @@ import { ActionsMenu } from '../../selection/ActionsMenu.js';
 import { paymentActions } from './actions-menu.js';
 import { NoMovements, PdfQuestion, pdfOf, statementActions } from './PdfQuestion.js';
 import { ReconcilePanel } from './Reconcile.js';
+import { PdfFacts } from './PdfFacts.js';
 import { SelectionView } from '../../selection/SelectionView.js';
 import { paymentRows } from '../../selection/rows.js';
 import { clickRow, useSelection, useShown } from '../../selection/store.js';
@@ -136,6 +137,8 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
   const ask = pdf ? props.books.statementAsks?.find((a) => a.file === pdf) : undefined;
   const edit = canEdit && !closed;
   // The account's reconciliation of movements read from PDFs with its bank's file, on any statement of its days (#254).
+  // A bank export over months is listed whole under Datei: the month's source, or the export that holds its PDF's days too (#273).
+  const exported = s.part ? s.file : s.export;
   const reconcile = pending(props.books).find((r) => r.account === s.account.account && r.from <= s.to && r.to >= s.from);
 
   return (
@@ -172,6 +175,13 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
           <span className="notice warn" style={{ margin: 0 }}>{I.dot}{t('bank.checkDiff', { diff: fmt(c!.diff) })}</span>
         )}
       </div>
+      {exported && (
+        <div className="status">
+          <button type="button" className="golink" data-testid="statement-export" onClick={() => nav.go(at({ area: 'bank', file: fileKeyOf(s.account.account, exported.filename) }, s.from, query.period))}>
+            {t(s.part ? 'bank.partOf' : 'bank.alsoInExport', { filename: exported.filename })} <span className="arr">→</span>
+          </button>
+        </div>
+      )}
       {s.receipts?.map((x) => (
         <div key={x.id} className="status">
           <button type="button" className="golink" data-testid="statement-receipt" onClick={() => nav.go(at({ area: 'receipts', id: x.id }, x.to, query.period))}>
@@ -181,6 +191,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
       ))}
       {c?.bookDiff && !c.gap ? <BookDiff {...props} diff={c.bookDiff} s={s} /> : null}
       {ask ? <PdfQuestion key={ask.file} ask={ask} nav={nav} edit={edit} /> : null}
+      {pdf && !ask ? <PdfFacts key={pdf} file={pdf} s={s} pays={all} check={c} edit={edit} nav={nav} version={props.books} /> : null}
       {reconcile ? <ReconcilePanel key={`${reconcile.account}-${reconcile.read.join(',')}-${reconcile.bank.join(',')}`} r={reconcile} books={props.books} label={s.account.label} closedThrough={b.closedThrough} edit={canEdit} nav={nav} /> : null}
 
       <div className="body">
@@ -205,7 +216,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
             </div>
           ) : (
             <>
-              {camt && <div className="notice" data-testid="camt-notice">{t('bank.camtNotice', { from: formatDate(s.file!.fromDate), to: formatDate(s.file!.toDate) })}</div>}
+              {camt && !s.part && <div className="notice" data-testid="camt-notice">{t('bank.camtNotice', { from: formatDate(s.file!.fromDate), to: formatDate(s.file!.toDate) })}</div>}
               {filedPaper && (
                 <div className="paper real stmt" data-testid="statement-receipt-paper">
                   <StatementPaper key={filedPaper.id} src={sources.receipt(filedPaper.id)} scroller={(el) => el.closest('.detail')} />

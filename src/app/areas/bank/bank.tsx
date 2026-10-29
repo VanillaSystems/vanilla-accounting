@@ -22,6 +22,7 @@ import { badgeCount, matches, payHaystack, payText, signed, troubled, type Bank,
 import { bankFor, listed, setUi, toggleGroup, ui, useUi } from './state.js';
 import { importStatements, statementAdd } from './actions.js';
 import { Detail, statementName } from './Detail.js';
+import { StatementReads } from './PdfFacts.js';
 import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
 import './bank.css';
 import { filing } from '../../../engines/index.js';
@@ -184,6 +185,7 @@ function List(props: Props) {
         </div>
       </ListHead>
       {notice && <div className="notice" role="status">{notice}</div>}
+      {ws ? <StatementReads nav={nav} canEdit={canEdit} version={books} /> : null}
       {strays.length > 0 && (
         <div className="notice warn strays" data-testid="bank-strays">
           <span>{t('bank.strays', { n: strays.length })}</span>
@@ -244,7 +246,9 @@ function List(props: Props) {
 
 function StatementRow({ r, byMonth, same, sel, searching, bad, onSelect }: { r: Row; byMonth: boolean; same: boolean; sel: boolean; searching: boolean; bad: boolean; onSelect(key: string): void }) {
   const { s } = r;
-  const sub = !s.file ? t(s.receipts ? 'bank.receiptStatement' : s.running ? 'bank.running' : s.missing ? 'bank.missing' : 'bank.without') : searching && r.hits ? t('bank.nHits', { n: r.hits }) : t('bank.nPayments', { n: r.n });
+  const count = searching && r.hits ? t('bank.nHits', { n: r.hits }) : t('bank.nPayments', { n: r.n });
+  const sub = !s.file ? t(s.receipts ? 'bank.receiptStatement' : s.running ? 'bank.running' : s.missing ? 'bank.missing' : 'bank.without')
+    : s.part ? `${t('bank.fromExport')} · ${count}` : s.export ? `${count} · ${t('bank.inExport')}` : count;
   return (
     <div className={`row${sel ? ' sel' : ''}${s.missing ? ' missing' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-stmt={s.key} onClick={() => onSelect(s.key)}>
       <span className="d mono">{same ? <span className="sr">{formatDate(s.to)}</span> : <><span className="dl">{formatDate(s.to)}</span><span className="ds">{formatDate(s.to).slice(0, 6)}</span></>}</span>

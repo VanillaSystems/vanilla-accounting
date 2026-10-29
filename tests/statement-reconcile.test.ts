@@ -178,7 +178,7 @@ test('every movement takes part once: confirmed, the next import opens nothing f
   answer(books, { pairs: [{ read: 'P', bank: 'B' }], own: ['P-own'] });
   open(books, s);
   assert.deepEqual([pending(books), heldByReconciliation(books).size], [[], 0], 'nothing asked again');
-  const merged = mergeIndex(books, { receipts: [], bankTransactions: [move('P', '2026-10-03', -60), move('B', '2026-10-04', -60), move('P-own', '2026-10-09', -5)], wiseRefs: new Map(), bankStatements: [], camtBalances: [] });
+  const merged = mergeIndex(books, { receipts: [], bankTransactions: [move('P', '2026-10-03', -60), move('B', '2026-10-04', -60), move('P-own', '2026-10-09', -5)], reads: [], bankStatements: [], camtBalances: [] });
   assert.deepEqual(merged.index.transactions.map((t) => t.ref).sort(), ['B', 'P-own'], 'the paired read row is the bank\'s movement; a payment of its own stays');
 });
 
