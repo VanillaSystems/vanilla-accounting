@@ -21,6 +21,8 @@ export interface ReadMovement {
   original?: { amount: number; currency: string };
   /** The page it is printed on, where the statement has several. */
   page?: number;
+  /** The account's balance the row prints after it (a running balance column), where it prints one. */
+  balance?: number;
 }
 
 /** A page's carry-over as printed: the balance brought forward at its top and carried at its foot. */
