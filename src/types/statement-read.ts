@@ -147,7 +147,7 @@ export interface PdfFactsView {
   adds?: boolean;
   /** The closing balance the books hold from this file. */
   closing?: { date: string; amount: number };
-  /** The balance a camt.053 states for the statement's last day: it stands over the table's (withCamtBalances). */
+  /** The balance the bank's own export states for the statement's last day: it stands over the table's (withCamtBalances). */
   bank?: { date: string; amount: number };
   /** The references and amounts in another currency its lines put on open payments. */
   taken?: { references: number; originals: number };
