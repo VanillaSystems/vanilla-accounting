@@ -5,7 +5,7 @@
  * digit shows as a gap on its page. Pure, in cents: the drop row runs it on every change, the
  * server again before it imports.
  */
-import type { BalanceCheck, BalanceGap, ReadStatement } from '../types/statement-read.js';
+import type { BalanceCheck, BalanceGap, PdfTable, ReadStatement } from '../types/statement-read.js';
 
 const cents = (n: number) => Math.round(n * 100);
 const francs = (c: number) => c / 100;
@@ -130,9 +130,41 @@ export function parseReadStatement(x: unknown): ReadStatement | undefined {
   };
 }
 
+/** Whether a kept PDF's table states its balances (a person may leave them out, #243). */
+export const hasBalances = (t: PdfTable): t is ReadStatement => t.closing !== undefined;
+
 /**
- * A table nobody filled (#254): no movement and both balances 0.00, as the hand form starts. Nothing
- * was checked, so it neither shows «Geht auf» nor imports.
+ * A kept PDF's table as a person sends it (#243): a statement, or one whose closing balance she left
+ * empty, which states no balance. A closing without an opening opens at what its lines leave, the
+ * table filled from the books' payments; an opening without a closing is none.
  */
-export const isBlank = (s: Pick<ReadStatement, 'movements' | 'opening' | 'closing'>): boolean =>
-  !s.movements.length && s.opening.amount === 0 && s.closing.amount === 0;
+export function parsePdfTable(x: unknown): PdfTable | undefined {
+  const o = x as Record<string, unknown> | null;
+  if (!o || typeof o !== 'object') return undefined;
+  const stated = (v: unknown) => amountOf((v as Record<string, unknown> | null)?.amount) !== undefined;
+  const lines = Array.isArray(o.movements) ? (o.movements as { amount?: unknown }[]) : [];
+  if (stated(o.closing)) {
+    if (stated(o.opening)) return parseReadStatement(o);
+    const close = (o.closing as Record<string, unknown>).date;
+    const from = (o.period as Record<string, unknown> | undefined)?.from;
+    const moved = lines.reduce((sum, m) => sum + Math.round((amountOf(m?.amount) ?? 0) * 100), 0);
+    return parseReadStatement({ ...o, opening: { date: isDay(from) ? from : close, amount: round(amountOf((o.closing as Record<string, unknown>).amount)! - moved / 100) } });
+  }
+  if (stated(o.opening)) return undefined;
+  const day = '2000-01-01';
+  const s = parseReadStatement({ ...o, opening: { date: day, amount: 0 }, closing: { date: day, amount: 0 } });
+  if (!s) return undefined;
+  const { opening: _o, closing: _c, ...lined } = s;
+  return lined;
+}
+
+/** A model's statement without the payments its lines name: only a person's table ties a line to a payment of the books. */
+export const withoutPayments = (s: ReadStatement): ReadStatement => ({ ...s, movements: s.movements.map(({ payment: _, ...m }) => m) });
+
+/**
+ * A table nobody filled (#254): no movement and both balances 0.00, as the hand form starts (a kept
+ * PDF's table without balances: no movement). Nothing was checked, so it neither shows «Geht auf»
+ * nor imports.
+ */
+export const isBlank = (s: { movements: readonly unknown[]; opening?: { amount: number }; closing?: { amount: number } }): boolean =>
+  !s.movements.length && (s.opening?.amount ?? 0) === 0 && (s.closing?.amount ?? 0) === 0;

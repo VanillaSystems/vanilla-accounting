@@ -7,44 +7,33 @@
  */
 import { useEffect, useState } from 'react';
 import type { BankTransaction } from '../../../types/index.js';
-import type { PdfFactsView, ReadStatement, StatementReadsView } from '../../../types/statement-read.js';
-import { checkStatement } from '../../../books/statement-check.js';
+import type { PdfFactsView, StatementReadsView } from '../../../types/statement-read.js';
 import { aiRefusedText, api, errorText } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import { StatementRead } from '../../shell/StatementRead.js';
 import type { Nav } from '../index.js';
-import { signed, type Statement } from './model.js';
-
-const round = (n: number) => Math.round(n * 100) / 100;
-
-/** The table a person fills by hand: the statement's payments, each a line tied to its payment, closing at the bank's balance (else the books'), opening at what they leave. */
-export function tableOfPayments(s: Statement, pays: readonly BankTransaction[], close: number): ReadStatement {
-  const movements = [...pays].filter((p) => p.amount).sort((a, b) => a.date.localeCompare(b.date)).map((p) => ({
-    date: p.date, amount: signed(p), ...(p.counterparty ? { counterparty: p.counterparty } : {}), ...(p.description ? { text: p.description } : {}),
-    ...(p.reference ? { reference: p.reference } : {}), payment: p.ref,
-  }));
-  return {
-    currency: s.account.currency, period: { from: s.from, to: s.to },
-    opening: { date: s.from, amount: round(close - movements.reduce((sum, m) => sum + m.amount, 0)) }, closing: { date: s.to, amount: close }, movements,
-  };
-}
+import { tableOfPayments, type Check, type Statement } from './model.js';
 
 /** A kept PDF's facts in its statement: what it gives the books, why it gives nothing yet, and the table to fill or correct. */
-export function PdfFacts({ file, s, pays, close, edit, nav, version }: { file: string; s: Statement; pays: readonly BankTransaction[]; close: number; edit: boolean; nav: Nav; version: unknown }) {
+export function PdfFacts({ file, s, pays, check, edit, nav, version }: { file: string; s: Statement; pays: readonly BankTransaction[]; check: Pick<Check, 'close'> | undefined; edit: boolean; nav: Nav; version: unknown }) {
   const [view, setView] = useState<PdfFactsView>();
   const [open, setOpen] = useState(false);
+  const [forgetting, setForgetting] = useState(false);
   const [error, setError] = useState<string>();
   useEffect(() => { api.statementFacts(file).then(setView, () => setView(undefined)); }, [file, version]);
   if (!view || view.state === 'asked' || (view.state === 'filed' && !view.statement)) return null;
   const done = async (p: Promise<PdfFactsView>) => {
     setError(undefined);
-    try { setView(await p); setOpen(false); nav.refresh(); } catch (e) { setError(errorText(e)); }
+    try { setView(await p); setOpen(false); setForgetting(false); nav.refresh(); } catch (e) { setError(errorText(e)); }
   };
-  const table = view.statement ?? tableOfPayments(s, pays, close);
+  const table = view.statement ?? tableOfPayments(s, pays, check);
   const by = view.statement ? (view.by ?? 'model') : 'hand';
   const facts = view.statement ? [
-    view.closing ? t('bank.facts.closing', { amount: `${s.account.currency} ${fmt(view.closing.amount)}`, date: formatDate(view.closing.date) }) : view.adds ? '' : t('bank.facts.noClosing'),
+    view.closing ? t('bank.facts.closing', { amount: `${s.account.currency} ${fmt(view.closing.amount)}`, date: formatDate(view.closing.date) })
+      : view.bank ? t('bank.facts.bank', { amount: `${s.account.currency} ${fmt(view.bank.amount)}`, date: formatDate(view.bank.date) })
+      : view.statement.closing === undefined ? t('bank.facts.noBalance')
+      : view.adds ? '' : t('bank.facts.noClosing'),
     view.taken?.references ? t('bank.facts.references', { n: view.taken.references }) : '',
     view.taken?.originals ? t('bank.facts.originals', { n: view.taken.originals }) : '',
   ].filter(Boolean).join(' · ') : '';
@@ -61,17 +50,39 @@ export function PdfFacts({ file, s, pays, close, edit, nav, version }: { file: s
       {edit ? (
         <div className="pdffacts-acts">
           <button type="button" className="linkbtn" data-testid="pdf-facts-edit" onClick={() => setOpen(!open)}>{t(view.statement ? 'bank.facts.correct' : 'bank.facts.byHandFill')}</button>
-          {view.statement || view.state === 'notStatement' || view.state === 'pages' || view.state === 'unreadable'
-            ? <button type="button" className="linkbtn" data-testid="pdf-facts-forget" onClick={() => void done(api.forgetStatementRead(file))}>{t('bank.facts.again')}</button> : null}
+          {view.statement
+            ? <button type="button" className="linkbtn" data-testid="pdf-facts-forget" aria-expanded={forgetting} onClick={() => setForgetting(!forgetting)}>{t('bank.facts.again')}</button>
+            : view.state === 'notStatement' || view.state === 'pages' || view.state === 'unreadable'
+              ? <button type="button" className="linkbtn" data-testid="pdf-facts-forget" onClick={() => void done(api.forgetStatementRead(file))}>{t('bank.facts.again')}</button> : null}
+        </div>
+      ) : null}
+      {forgetting && edit && view.statement ? (
+        <div className="notice warn" role="alertdialog" data-testid="pdf-facts-forget-confirm" style={{ margin: 0 }}>
+          <span>{forgetText(view, s.account.currency)}</span>
+          <span className="pdffacts-acts">
+            <button type="button" className="btn ghost" onClick={() => setForgetting(false)}>{t('common.cancel')}</button>
+            <button type="button" className="btn danger" data-testid="pdf-facts-forget-yes" onClick={() => void done(api.forgetStatementRead(file, true))}>{t('bank.facts.forget.yes')}</button>
+          </span>
         </div>
       ) : null}
       {open && edit ? (
-        <StatementRead key={`${by}-${table.movements.length}-${table.closing.amount}`} read={{ by, statement: table, check: checkStatement(table), known: [] }} pdf={false} facts
-          act={async (a) => { if (a.kind === 'read') await done(api.saveStatementFacts(file, a.statement)); }} go={(route) => nav.go({ route, query: {} })} />
+        <StatementRead key={`${by}-${table.movements.length}-${table.closing?.amount ?? ''}`} read={{ by, statement: table, known: [] }} pdf={false}
+          save={(statement) => done(api.saveStatementFacts(file, statement))} go={(route) => nav.go({ route, query: {} })} />
       ) : null}
       {error ? <p className="notice warn" style={{ margin: 0 }} data-testid="pdf-facts-error-save">{error}</p> : null}
     </div>
   );
+}
+
+/**
+ * What «Neu lesen» takes away, said before it does: the table (hers or the model's) with the
+ * references it gave the books. The closing balance it gave stays in the books until a new reading
+ * gives one (forgetRead).
+ */
+function forgetText(view: PdfFactsView, currency: string): string {
+  const what = t(view.state === 'hand' ? 'bank.facts.forget.hand' : 'bank.facts.forget.model', { n: view.taken?.references ?? 0 });
+  const kept = view.closing ? ` ${t('bank.facts.forget.balance', { amount: `${currency} ${fmt(view.closing.amount)}`, date: formatDate(view.closing.date) })}` : '';
+  return `${what}${kept}`;
 }
 
 /** Why the reading stopped or a file failed, in the person's words. */
@@ -116,7 +127,7 @@ export function StatementReads({ nav, canEdit, version }: { nav: Nav; canEdit: b
         n ? (
           <span>
             {canEdit ? <button type="button" className="linkbtn" data-testid="statement-reads-start" onClick={() => void act(api.startStatementReads())}>{t('bank.reads.ask', { n })}</button> : t('bank.reads.unread', { n })}
-            <span className="m"> {t('bank.reads.what', { limit: view.limit, auto: view.withoutAsking })}</span>
+            <span className="m"> {t('bank.reads.what', { limit: view.limit })}</span>
           </span>
         ) : null
       ) : (

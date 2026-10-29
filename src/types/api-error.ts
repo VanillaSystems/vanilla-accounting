@@ -325,4 +325,4 @@ export interface MailStatus {
   inApp: boolean;
 }
 
-export interface StatementReadParams { why: 'line' | 'gap' | 'csvRow' | 'csvRows' | 'csvEmpty' | 'columns' | 'account' | 'covered' | 'blank' | 'asked' | 'currency'; row?: number; rows?: number; limit?: number; gap?: number; page?: number; currency?: string; file?: string }
+export interface StatementReadParams { why: 'line' | 'gap' | 'csvRow' | 'csvRows' | 'csvEmpty' | 'columns' | 'account' | 'covered' | 'blank' | 'asked' | 'currency' | 'hand'; row?: number; rows?: number; limit?: number; gap?: number; page?: number; currency?: string; file?: string }

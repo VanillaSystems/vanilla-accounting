@@ -48,6 +48,13 @@ export interface ReadStatement {
 }
 
 /**
+ * A kept statement PDF's table (#243): a statement with its balances, as the model read it or a person
+ * typed it, or a person's table that states none: she typed no closing balance, so it gives the books
+ * its references and amounts in another currency and never a balance.
+ */
+export type PdfTable = ReadStatement | (Omit<ReadStatement, 'opening' | 'closing'> & { opening?: undefined; closing?: undefined });
+
+/**
  * Where the figures do not add up, to the cent: the whole statement (opening + movements =
  * closing), one page (carried in + its movements = carried out) or the step between two pages (what
  * one carries out, the next brings in). `expected` is what the statement prints, `found` what its
@@ -135,11 +142,13 @@ export interface PdfFactsView {
   to: string;
   state: PdfFactsState;
   by?: 'model' | 'hand';
-  statement?: ReadStatement;
+  statement?: PdfTable;
   /** Its figures add up (a person's table is taken as she typed it): only then the books take its closing balance. */
   adds?: boolean;
   /** The closing balance the books hold from this file. */
   closing?: { date: string; amount: number };
+  /** The balance a camt.053 states for the statement's last day: it stands over the table's (withCamtBalances). */
+  bank?: { date: string; amount: number };
   /** The references and amounts in another currency its lines put on open payments. */
   taken?: { references: number; originals: number };
   /** Lines with a reference or foreign amount that more than one payment could be, and those no payment of their day and amount is: nothing taken. */
@@ -155,8 +164,6 @@ export interface StatementReadsView {
   ai: 'ready' | 'noAi' | 'noProvider' | 'unserved';
   /** The PDFs of open months not read yet (`<bank>/<file name>`). */
   unread: string[];
-  /** The most the inbox run reads by itself; a larger backlog waits for the person. */
-  withoutAsking: number;
   /** The most pages the model reads of one statement. */
   limit: number;
   failures: { file: string; error: string }[];

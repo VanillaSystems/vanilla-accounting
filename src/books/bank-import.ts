@@ -10,7 +10,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { assignUniqueRefs, statementSpan, transactionsOf, type CamtStatement } from '../providers/camt053/camt053.js';
 import { statementPdf } from './statement-facts.js';
-import { keptReads, withReadBalances, withReadFacts, type KeptRead } from './pdf-reads.js';
+import { confirmsYearEnd, keptReads, withReadBalances, withReadFacts, type KeptRead } from './pdf-reads.js';
 import type { BankStatement, BankTransaction, Index, JournalEntry, Mapping, Receipt, StatementClosingBalance } from '../types/index.js';
 import { readBankStatements, type StatementFile } from '../workspace/bank-statements.js';
 import { partDirs, type Workspace } from '../workspace/workspace.js';
@@ -302,12 +302,19 @@ export function structuredSpans(ws: Ws): StructuredSpan[] {
   return out;
 }
 
-/** The balances read from the camt.053 files now, beside the others (a PDF's): the PDF's balance of a day wins. */
+/**
+ * The balances read from the camt.053 files now, beside the others: a camt.053 (the bank's export, or a
+ * statement read in once it added up) states the balance of its day over a kept PDF's table, read by
+ * the model or typed by a person (#243). Only a year-end confirmation the person attached (#119)
+ * stands against it.
+ */
 export function withCamtBalances(others: StatementClosingBalance[] = [], camt: StatementClosingBalance[]): StatementClosingBalance[] | undefined {
-  const kept = others.filter((b) => b.source !== 'camt');
   const day = (b: StatementClosingBalance) => `${b.account} ${b.date}`;
-  const given = new Set(kept.map(day));
-  const out = [...kept, ...camt.filter((b) => !given.has(day(b)))].sort((a, b) => a.date.localeCompare(b.date) || a.account.localeCompare(b.account));
+  const confirmed = new Set(others.filter((b) => b.source !== 'camt' && confirmsYearEnd(b)).map(day));
+  const fresh = camt.filter((b) => !confirmed.has(day(b)));
+  const theirs = new Set(fresh.map(day));
+  const kept = others.filter((b) => b.source !== 'camt' && !theirs.has(day(b)));
+  const out = [...kept, ...fresh].sort((a, b) => a.date.localeCompare(b.date) || a.account.localeCompare(b.account));
   return out.length || others.length ? out : undefined;
 }
 

@@ -140,6 +140,26 @@ test('a table that adds up closes its month at its account, one that does not cl
   assert.deepEqual(merge(previousIndex({ statementBalances: [confirmed] }), scan({ reads: [kept('Wise', [line])] })).statementBalances, [confirmed]);
 });
 
+test('a person\'s table gives a balance only when she typed one: none stated, or both at 0.00 as the hand form starts, keeps the books\' balance; its reference still goes on (#243 review)', () => {
+  const pay = [tx('A', '2026-08-03', { bank: 'Wise' })];
+  const line = { date: '2026-08-03', amount: -10, reference: 'RE-7', payment: 'A' };
+  const held = { account: '1022', bank: 'Wise', currency: 'CHF', date: '2026-08-31', amount: 91, source: 'pdf' as const, sourceFile: 'statement-2026-08.pdf' };
+  const { opening: _o, closing: _c, ...lines } = kept('Wise', [line]).statement;
+  const none = merge(previousIndex({ statementBalances: [held] }), scan({ bankTransactions: pay, reads: [{ ...kept('Wise', [line], { by: 'hand' }), statement: lines }] }));
+  assert.deepEqual([none.statementBalances, byRef(none, 'A')?.reference], [[held], 'RE-7'], 'no balance stated: the books keep theirs');
+  const zeros = { ...kept('Wise', [line], { by: 'hand' }), statement: { ...kept('Wise', [line]).statement, opening: { date: '2026-08-01', amount: 0 }, closing: { date: '2026-08-31', amount: 0 } } };
+  assert.equal(merge(previousIndex(), scan({ bankTransactions: pay, reads: [zeros] })).statementBalances, undefined, 'a hand form left at 0.00 states no balance of 0.00');
+});
+
+test('a camt.053 states its day\'s balance over a kept PDF\'s table, read or typed; a year-end confirmation stands against it (#243 review)', () => {
+  const day = (amount: number, source: 'pdf' | 'camt', sourceFile: string) => ({ account: '1022', bank: 'Wise', currency: 'CHF', date: '2026-08-31', amount, source, sourceFile });
+  const camt = day(90, 'camt', 'q3.xml');
+  const typed = merge(previousIndex(), scan({ reads: [kept('Wise', [{ date: '2026-08-03', amount: -10 }], { closing: 99, by: 'hand' })], camtBalances: [camt] }));
+  assert.deepEqual(typed.statementBalances, [camt], 'the bank\'s 90 stays the balance of 31.08., not the typed 99');
+  const confirmed = day(95, 'pdf', 'year-end/confirmation.pdf');
+  assert.deepEqual(merge(previousIndex({ statementBalances: [confirmed] }), scan({ camtBalances: [camt] })).statementBalances, [confirmed]);
+});
+
 test('a filed month\'s balance is neither replaced nor added by a table (#243)', () => {
   const june = (amount: number) => ({ account: '1022', bank: 'Wise', currency: 'CHF', date: '2026-06-30', amount, source: 'pdf' as const, sourceFile: 'statement-2026-06.pdf' });
   const read = { ...kept('Wise', []), file: 'statement-2026-06.pdf', statement: { currency: 'CHF', opening: { date: '2026-06-01', amount: 70 }, closing: { date: '2026-06-30', amount: 70 }, movements: [] } };

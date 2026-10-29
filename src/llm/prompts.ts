@@ -5,7 +5,7 @@ import type { SalesDefaults } from "../workspace/sells.js";
 import type { SalesKind } from "../workspace/setup.js";
 import type { VatLineFacts } from "../accounting/vat-codes.js";
 import { formatCase, type BookingCase } from "../knowledge/cases.js";
-import { parseReadStatement } from "../books/statement-check.js";
+import { parseReadStatement, withoutPayments } from "../books/statement-check.js";
 import type { ReadStatement } from "../types/statement-read.js";
 
 export interface MatchResult {
@@ -510,8 +510,13 @@ Rules:
 - If the file is no account statement, return {"notStatement": true}.`;
 }
 
-/** The model's statement, or `notStatement` when it said the file is none; undefined when the answer is no statement code can take. */
-export function parseStatementRead(raw: string): ReadStatement | 'notStatement' | undefined {
+/**
+ * The model's statement, or `notStatement` when it said the file is none; `noAnswer` when the call
+ * gave none (an empty result, or JSON cut off before its end): a failed call, asked again. Undefined
+ * when the answer is no statement code can take. Its lines name no payment of the books: only a
+ * person's table does.
+ */
+export function parseStatementRead(raw: string): ReadStatement | 'notStatement' | 'noAnswer' | undefined {
   const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   let parsed: unknown;
   try {
@@ -520,8 +525,10 @@ export function parseStatementRead(raw: string): ReadStatement | 'notStatement' 
     const match = cleaned.match(/\{[\s\S]*\}/);
     try { parsed = match ? JSON.parse(match[0]) : undefined; } catch { parsed = undefined; }
   }
+  if (parsed === undefined && (!cleaned || cleaned.includes('{'))) return 'noAnswer';
   if ((parsed as { notStatement?: unknown } | undefined)?.notStatement === true) return 'notStatement';
-  return parseReadStatement(parsed);
+  const statement = parseReadStatement(parsed);
+  return statement && withoutPayments(statement);
 }
 
 // ─── Receipt-level VAT extraction (extract-vat step) ─────────────────────────

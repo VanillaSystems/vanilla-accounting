@@ -12,17 +12,17 @@
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { checkStatement, parseReadStatement } from './statement-check.js';
+import { checkStatement, hasBalances, parsePdfTable, parseReadStatement, withoutPayments } from './statement-check.js';
 import { madeByHand } from '../workspace/money-accounts.js';
 import { findFile, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
 import type { BankStatement, BankTransaction, StatementAsk, StatementClosingBalance } from '../types/index.js';
-import type { ReadMovement, ReadStatement } from '../types/statement-read.js';
+import type { PdfTable, ReadMovement, ReadStatement } from '../types/statement-read.js';
 
 /** What the model answered without a statement code can use: no statement at all, too many pages to read, or an answer that does not parse. */
 export type ReadWithout = 'notStatement' | 'pages' | 'unreadable';
 
 /** A read kept beside its PDF, which it names by the SHA-256 of its bytes: a different file under the same name has none. */
-export type BesideRead = { pdf: string; at: string; by: 'model' | 'hand' } & ({ statement: ReadStatement } | { why: ReadWithout });
+export type BesideRead = { pdf: string; at: string } & ({ by: 'model'; statement: ReadStatement } | { by: 'hand'; statement: PdfTable } | { by: 'model'; why: ReadWithout });
 
 export const besidePath = (pdf: string): string => pdf.replace(/\.pdf$/i, '.read.json');
 const sha256 = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex');
@@ -32,16 +32,17 @@ export function readBeside(path: string): BesideRead | undefined {
   try {
     const raw = JSON.parse(readFileSync(besidePath(path), 'utf8')) as Record<string, unknown>;
     if (raw.pdf !== sha256(readFileSync(path)) || (raw.by !== 'model' && raw.by !== 'hand')) return undefined;
-    const base = { pdf: raw.pdf, at: typeof raw.at === 'string' ? raw.at : '', by: raw.by } as const;
-    if (raw.why === 'notStatement' || raw.why === 'pages' || raw.why === 'unreadable') return { ...base, why: raw.why };
+    const base = { pdf: raw.pdf, at: typeof raw.at === 'string' ? raw.at : '' };
+    if (raw.by === 'model' && (raw.why === 'notStatement' || raw.why === 'pages' || raw.why === 'unreadable')) return { ...base, by: 'model', why: raw.why };
+    if (raw.by === 'hand') { const statement = parsePdfTable(raw.statement); return statement ? { ...base, by: 'hand', statement } : undefined; }
     const statement = parseReadStatement(raw.statement);
-    return statement ? { ...base, statement } : undefined;
+    return statement ? { ...base, by: 'model', statement: withoutPayments(statement) } : undefined;
   } catch {
     return undefined;
   }
 }
 
-export function writeBeside(path: string, read: { by: 'model' | 'hand' } & ({ statement: ReadStatement } | { why: ReadWithout })): void {
+export function writeBeside(path: string, read: { by: 'model'; statement: ReadStatement } | { by: 'hand'; statement: PdfTable } | { by: 'model'; why: ReadWithout }): void {
   writeFileSync(besidePath(path), `${JSON.stringify({ pdf: sha256(readFileSync(path)), at: new Date().toISOString(), ...read }, null, 1)}\n`);
 }
 
@@ -73,7 +74,7 @@ export interface KeptRead {
   /** The PDF's name in its bank's folder: the `sourceFile` of its closing balance. */
   file: string;
   account: Pick<LedgerBankAccount, 'account' | 'bank' | 'currency'>;
-  statement: ReadStatement;
+  statement: PdfTable;
   by: 'model' | 'hand';
 }
 
@@ -199,14 +200,20 @@ export function withReadFacts(transactions: readonly BankTransaction[], reads: r
 
 // ─── The month-end balance ──────────────────────────────────────────────────
 
-/** A table's closing balance: a person's as she typed it, the model's only when its figures add up to the cent. */
+/**
+ * A table's closing balance: a person's as she typed it, the model's only when its figures add up to
+ * the cent. A person's table gives none when she typed none: no balance, or both at 0.00 as the hand
+ * form starts them.
+ */
 export function closingOfRead(r: KeptRead): StatementClosingBalance | undefined {
-  if (r.by === 'model' && !checkStatement(r.statement).ok) return undefined;
+  const s = r.statement;
+  if (!hasBalances(s) || (r.by === 'model' ? !checkStatement(s).ok : s.opening.amount === 0 && s.closing.amount === 0)) return undefined;
   const { account, bank, currency } = r.account;
-  return { account, bank, currency, date: r.statement.closing.date, amount: r.statement.closing.amount, source: 'pdf', sourceFile: r.file };
+  return { account, bank, currency, date: s.closing.date, amount: s.closing.amount, source: 'pdf', sourceFile: r.file };
 }
 
-const YEAR_END = 'year-end/';
+/** A bank's year-end confirmation the person attached (#119): its balance stands for its day against any other. */
+export const confirmsYearEnd = (b: StatementClosingBalance): boolean => b.sourceFile.startsWith('year-end/');
 
 /**
  * The closing balances of the tables beside the others. A table's balance replaces what the books
@@ -219,7 +226,7 @@ export function withReadBalances(others: readonly StatementClosingBalance[] = []
   const files = new Set(read.map((b) => b.sourceFile));
   const kept = others.filter((b) => !(b.source === 'pdf' && files.has(b.sourceFile) && !isClosed(b.date)));
   const day = (b: StatementClosingBalance) => `${b.account} ${b.date}`;
-  const confirmed = new Set(kept.filter((b) => b.sourceFile.startsWith(YEAR_END)).map(day));
+  const confirmed = new Set(kept.filter(confirmsYearEnd).map(day));
   return [...kept, ...read.filter((b) => !confirmed.has(day(b)))];
 }
 

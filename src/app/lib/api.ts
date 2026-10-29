@@ -7,7 +7,7 @@ import type { AiView } from '../../llm/view.js';
 import type { AiRefusal, ProviderId } from '../../llm/provider.js';
 import { isStepId, type StepId } from '../../llm/steps.js';
 import type { BankTransaction, InboxFile, Index, StatementAsk, StatementImport, JournalEntry, Receipt, ReceiptPatch, ReconcilePair, TransactionPatch } from '../../types/index.js';
-import type { PdfFactsView, ReadStatement, StatementReadsView } from '../../types/statement-read.js';
+import type { PdfFactsView, PdfTable, ReadStatement, StatementReadsView } from '../../types/statement-read.js';
 import type { StatementRemoved } from '../../server/routes/statements.js';
 import type { PaymentReleased } from '../../invoices/payments.js';
 export type { StatementRemoved };
@@ -539,9 +539,9 @@ export const api = {
   /** What a kept statement PDF gives the books: its closing balance, the references and foreign amounts its table adds, or why it has none yet (#243). */
   statementFacts: (file: string) => request<PdfFactsView>('GET', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/facts`),
   /** Its table as the person filled it in or corrected it: kept as hers. */
-  saveStatementFacts: (file: string, statement: ReadStatement) => request<PdfFactsView>('PUT', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/facts`, { statement }),
-  /** «Neu lesen»: its read goes; the next reading asks the model again. */
-  forgetStatementRead: (file: string) => request<PdfFactsView>('DELETE', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/facts`),
+  saveStatementFacts: (file: string, statement: PdfTable) => request<PdfFactsView>('PUT', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/facts`, { statement }),
+  /** «Neu lesen»: its read goes; the next reading asks the model again. A person's table only `confirmed`. */
+  forgetStatementRead: (file: string, confirmed = false) => request<PdfFactsView>('DELETE', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/facts${confirmed ? '?confirmed=1' : ''}`),
   /** The kept statement PDFs not read yet, and the reading the person started. */
   statementReads: () => request<StatementReadsView>('GET', '/api/statement-reads'),
   /** «N Kontoauszüge von der KI lesen lassen?» answered yes (`files`: only these). */

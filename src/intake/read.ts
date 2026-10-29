@@ -23,7 +23,7 @@ import type { Receipt } from '../types/index.js';
 import { filesOfPart, type Workspace } from '../workspace/workspace.js';
 import { mergeIndex, readStatementFiles, readTransactions, reconcileWithFiles, withinBooks } from '../books/bank-import.js';
 import { keptReads } from '../books/pdf-reads.js';
-import { readKeptPdfs, readsWithoutAsking, unreadPdfs } from './statement-read.js';
+import { readKeptPdfs, readsByItself, unreadPdfs } from './statement-read.js';
 import { differenceAccountOf } from '../books/year-close.js';
 import type { BankFiles } from '../books/bank-import.js';
 import { loadInvoices, saveInvoices } from '../invoices/store.js';
@@ -270,7 +270,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
   // A statement PDF kept as its statement is read for what its bank export lacks (#243): a month's worth by the run, a larger backlog once the person asks for it.
   const unread = ask ? unreadPdfs(ws, { ...books.read(), bankStatements: readStatementFiles(ws).statements }) : [];
   const readFailed: { file: string; error: string }[] = [];
-  if (unread.length && unread.length <= readsWithoutAsking(ws)) readFailed.push(...(await readKeptPdfs(unread, ask!, { log })).failed);
+  if (unread.length && readsByItself(unread)) readFailed.push(...(await readKeptPdfs(unread, ask!, { log })).failed);
   else if (unread.length) log(`  ${unread.length} statement PDF(s) not read yet: Kontoauszüge › «${unread.length} Kontoauszüge von der KI lesen lassen?», or npm run read-statements`);
   const statementFiles = readStatementFiles(ws);
   const invoices = loadInvoices(ws);

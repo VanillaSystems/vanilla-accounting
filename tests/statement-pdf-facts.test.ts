@@ -14,10 +14,11 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { besidePath, readBeside, writeBeside } from '../src/books/pdf-reads.js';
-import { readFailures, readKeptPdfs, unreadPdfs } from '../src/intake/statement-read.js';
+import { readFailures, readKeptPdfs, readsByItself, unreadPdfs } from '../src/intake/statement-read.js';
 import { AiRefused } from '../src/llm/provider.js';
 import { workspacePaths, type LedgerBankAccount } from '../src/workspace/workspace.js';
-import type { BankStatement, BankTransaction, StatementAsk, StatementClosingBalance } from '../src/types/index.js';
+import { bankOf, tableOfPayments, type Account } from '../src/app/areas/bank/model.js';
+import type { BankStatement, BankTransaction, Index, StatementAsk, StatementClosingBalance } from '../src/types/index.js';
 import type { PdfFactsView, ReadStatement, StatementReadsView } from '../src/types/statement-read.js';
 import { DEMO_OCTOBER, inventedStatement } from './support/statement-pdf.js';
 import { DEMO_ROOT } from './support/workspace.js';
@@ -72,6 +73,47 @@ test('reading kept PDFs: real answers kept beside each, a failed call keeps noth
   assert.equal(keptStatement(1)?.by, 'hand');
 });
 
+test('an empty or cut-off answer is a failed call: nothing kept, told, asked again; the inbox run reads at most one PDF of each account by itself (#243 review)', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'pdf-facts-'));
+  const dir = join(root, 'transactional-data', '2026', 'bank-statements', 'Musterbank');
+  mkdirSync(dir, { recursive: true });
+  const { pdf } = await inventedStatement(DEMO_OCTOBER);
+  const months = [month('07', '31'), month('08', '31')];
+  months.forEach((m, i) => writeFileSync(join(dir, m.filename), Buffer.concat([pdf, Buffer.from(`\n%cut${i}`)])));
+  const ws = { paths: workspacePaths(root), bankAccounts: [account] };
+  const books = { bankStatements: months, config: { closedThrough: '2026-06-30' } as never };
+  const answers = ['', '{"currency": "CHF", "movements": [{"date": "2026-07-02", "amo'];
+  const run = await readKeptPdfs(unreadPdfs(ws, books), async () => answers.shift()!);
+  assert.deepEqual([run.read, run.failed.map((f) => f.file)], [0, months.map((m) => `Musterbank/${m.filename}`)]);
+  assert.equal(months.some((m) => existsSync(besidePath(join(dir, m.filename)))), false, 'nothing kept as unreadable');
+  assert.equal(unreadPdfs(ws, books).length, 2, 'both asked again');
+
+  const other = { ...account, account: '1022', bank: 'Zweitbank' } as LedgerBankAccount;
+  const [july, august] = unreadPdfs(ws, books);
+  assert.equal(readsByItself([july, august]), false, 'two of one account are a backlog the person is asked about');
+  assert.equal(readsByItself([july, { ...august, account: other }]), true, 'one of each account');
+});
+
+test('the table by hand is prefilled with the bank\'s balance of the statement\'s last day, never the books\' own figure (#243 review)', () => {
+  const ACCOUNTS: Account[] = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Raiffeisen', statements: 'camt053', role: 'bank' }];
+  const pay: BankTransaction = { ref: 'P1', bank: 'Raiffeisen', date: '2026-09-03', amount: 40, currency: 'CHF', direction: 'DBIT', description: 'Coop' };
+  const index = (balances?: StatementClosingBalance[]): Index => ({
+    receipts: [], transactions: [pay], mappings: [],
+    bankStatements: [{ bank: 'Raiffeisen', filename: 'Kontoauszug 01.09.2026 - 30.09.2026.pdf', fromDate: '2026-09-01', toDate: '2026-09-30' }],
+    journalEntries: [{ id: 'E1', date: '2026-09-03', description: 'Coop', debit: '6000', credit: '1021', amount: 40, currency: 'CHF' } as never],
+    ...(balances ? { statementBalances: balances } : {}),
+  });
+  const tableOf = (i: Index) => {
+    const bank = bankOf(i, ACCOUNTS, '2026-10-15');
+    const [s] = bank.statements('2026-09-01', '2026-09-30');
+    return tableOfPayments(s, [pay], bank.check(s));
+  };
+  const none = tableOf(index());
+  assert.deepEqual([none.closing, none.opening, none.movements.map((m) => [m.amount, m.payment])], [undefined, undefined, [[-40, 'P1']]], 'no bank balance: the closing stays empty');
+  const bank = tableOf(index([{ account: '1021', bank: 'Raiffeisen', currency: 'CHF', date: '2026-09-30', amount: 960, source: 'camt', sourceFile: 'q3.xml' }]));
+  assert.deepEqual([bank.opening, bank.closing], [{ date: '2026-09-01', amount: 1000 }, { date: '2026-09-30', amount: 960 }]);
+});
+
 // ─── Through the API ────────────────────────────────────────────────────────
 
 const SEPTEMBER = 'Kontoauszug 01.09.2026 - 30.09.2026 - CH6580808000000000001 - 2026-09-30.pdf';
@@ -102,7 +144,7 @@ function septemberTable(t: BankTransaction, reference: string, closing: number, 
   };
 }
 
-test('by hand: a person\'s table of a kept PDF gives the books its balance and reference and survives a rebuild; «Neu lesen» drops it; a filed month refuses', async () => {
+test('by hand: a person\'s table of a kept PDF gives the books its reference, which survives a rebuild; the camt\'s balance of the day stands over hers; «Neu lesen» only once confirmed, and drops it; a filed month refuses', async () => {
   const api = await demo();
   try {
     const before = await full(api);
@@ -111,25 +153,51 @@ test('by hand: a person\'s table of a kept PDF gives the books its balance and r
     assert.deepEqual([unread.body.state, unread.body.closing?.amount], ['unread', 88252.44], 'not read yet; the balance the books hold from this file is named');
     const saved = await json<PdfFactsView>(api, `${URL_OF}/facts`, 'PUT', { statement: septemberTable(pay, 'RE-2026-0777', 70000, { payment: true }) });
     assert.equal(saved.status, 200);
-    assert.deepEqual([saved.body.state, saved.body.closing, saved.body.taken], ['hand', { date: '2026-09-30', amount: 70000 }, { references: 1, originals: 0 }]);
+    assert.deepEqual([saved.body.state, saved.body.closing, saved.body.bank, saved.body.taken], ['hand', undefined, { date: '2026-09-30', amount: 88252.44 }, { references: 1, originals: 0 }], 'the bank\'s export states 30.09.: her typed balance does not stand over it');
     const after = await full(api);
     assert.equal(after.transactions.find((t) => t.ref === pay.ref)?.reference, 'RE-2026-0777');
-    assert.deepEqual(after.statementBalances?.filter((b) => b.sourceFile === SEPTEMBER).map((b) => b.amount), [70000], 'the person\'s balance replaces the one the books held from this file');
+    const lastDay = (b: Full) => b.statementBalances?.filter((x) => x.account === '1021' && x.date === '2026-09-30').map((x) => [x.source, x.amount]);
+    assert.deepEqual(lastDay(after), [['camt', 88252.44]], 'one balance of 30.09., the camt\'s');
     assert.equal(readBeside(join(api.root, 'transactional-data/2026/bank-statements', FILE))?.by, 'hand', 'kept beside the PDF as hers');
     // A rebuild of the bank side from the folder (an import does one) takes it again.
     const other = 'Kontoauszug 01.08.2026 - 31.08.2026 - CH6580808000000000001 - 2026-08-31.pdf';
     await json(api, `/api/statements/Raiffeisen/${encodeURIComponent(other)}/facts`, 'DELETE');
     assert.equal((await full(api)).transactions.find((t) => t.ref === pay.ref)?.reference, 'RE-2026-0777', 'survives the next merge');
 
-    const forgot = await json<PdfFactsView>(api, `${URL_OF}/facts`, 'DELETE');
+    const refused = await json<{ code?: string; params?: { why?: string } }>(api, `${URL_OF}/facts`, 'DELETE');
+    assert.deepEqual([refused.status, refused.body.code, refused.body.params?.why], [409, 'statementRead', 'hand'], 'her table goes only once she confirmed it');
+    assert.equal((await full(api)).transactions.find((t) => t.ref === pay.ref)?.reference, 'RE-2026-0777', 'nothing gone yet');
+    const forgot = await json<PdfFactsView>(api, `${URL_OF}/facts?confirmed=1`, 'DELETE');
     assert.equal(forgot.body.state, 'unread');
     const again = await full(api);
     assert.equal(again.transactions.find((t) => t.ref === pay.ref)?.reference, undefined, 'the reference came from the table and goes with it');
-    assert.deepEqual(again.statementBalances?.filter((b) => b.sourceFile === SEPTEMBER).map((b) => b.amount), [70000], 'a balance stays until another table replaces it');
+    assert.deepEqual(lastDay(again), [['camt', 88252.44]]);
 
     const march = 'Kontoauszug 01.03.2026 - 31.03.2026 - CH6580808000000000001 - 2026-03-31.pdf';
     const filed = await json<{ code?: string }>(api, `/api/statements/Raiffeisen/${encodeURIComponent(march)}/facts`, 'PUT', { statement: septemberTable(pay, 'x', 1) });
     assert.equal(filed.status, 403, 'a filed month takes no table');
+  } finally {
+    await api.stop();
+  }
+});
+
+test('by hand without a balance: her references go into the books, no balance is made, the books keep the one they hold (#243 review)', async () => {
+  const api = await demo();
+  try {
+    const AUGUST = 'Kontoauszug 01.08.2026 - 31.08.2026 - CH6580808000000000001 - 2026-08-31.pdf';
+    const url = `/api/statements/Raiffeisen/${encodeURIComponent(AUGUST)}/facts`;
+    const before = await full(api);
+    const held = before.statementBalances?.filter((b) => b.sourceFile === AUGUST).map((b) => [b.date, b.amount]);
+    assert.equal(held?.length, 1, 'the demo\'s books hold August\'s balance from its PDF');
+    const pay = before.transactions.find((t) => t.bank === 'Raiffeisen' && t.date.startsWith('2026-08') && !t.reference && !t.counterparty?.includes('Raiffeisen'))!;
+    const table = { currency: 'CHF', period: { from: '2026-08-01', to: '2026-08-31' }, opening: { date: '2026-08-01', amount: '' }, closing: { date: '2026-08-31', amount: '' },
+      movements: [{ date: pay.date, amount: signed(pay), text: pay.description, reference: 'RE-2026-0778', payment: pay.ref }] };
+    const saved = await json<PdfFactsView>(api, url, 'PUT', { statement: table });
+    assert.equal(saved.status, 200, JSON.stringify(saved.body));
+    assert.deepEqual([saved.body.state, saved.body.adds, saved.body.taken?.references, saved.body.statement?.closing], ['hand', false, 1, undefined]);
+    const after = await full(api);
+    assert.equal(after.transactions.find((t) => t.ref === pay.ref)?.reference, 'RE-2026-0778');
+    assert.deepEqual(after.statementBalances?.filter((b) => b.sourceFile === AUGUST).map((b) => [b.date, b.amount]), held, 'no balance of hers: the one the books held stays');
   } finally {
     await api.stop();
   }
@@ -143,7 +211,7 @@ test('the reading the person starts: N of M, the model\'s table kept beside the 
   try {
     const view = await json<StatementReadsView>(api, '/api/statement-reads');
     assert.equal(view.body.ai, 'ready');
-    assert.ok(view.body.unread.includes(FILE) && view.body.unread.length > view.body.withoutAsking, `a backlog the run does not read by itself: ${view.body.unread.length}`);
+    assert.ok(view.body.unread.includes(FILE) && view.body.unread.length > 1, `a backlog the run does not read by itself: ${view.body.unread.length}`);
     assert.ok(!view.body.unread.some((f) => f.includes('2026-03-31') || f.includes('_2026-03-01_')), 'no filed month among them');
     const started = await json<StatementReadsView>(api, '/api/statement-reads', 'POST', { files: [FILE] });
     assert.deepEqual([started.status, started.body.job?.total], [200, 1]);
@@ -155,14 +223,14 @@ test('the reading the person starts: N of M, the model\'s table kept beside the 
     assert.deepEqual([now.job?.finished, now.job?.read, now.job?.failed], [true, 1, []]);
     assert.equal(now.unread.includes(FILE), false);
     const facts = (await json<PdfFactsView>(api, `${URL_OF}/facts`)).body;
-    assert.deepEqual([facts.state, facts.adds, facts.closing?.amount, facts.taken?.references], ['read', true, 71000, 1]);
+    assert.deepEqual([facts.state, facts.adds, facts.closing?.amount, facts.bank?.amount, facts.taken?.references], ['read', true, undefined, 88252.44, 1], 'the read adds up, yet the camt\'s balance of 30.09. stands');
     assert.equal((await full(api)).transactions.find((t) => t.ref === pay.ref)?.reference, 'RE-2026-0999');
   } finally {
     await api.stop();
   }
 });
 
-test('a question\'s table is the PDF\'s one table: «Als Auszug behalten» keeps it beside the PDF, and the books take its balance from it', async () => {
+test('a question\'s table is the PDF\'s one table: «Als Auszug behalten» keeps it beside the PDF, and a question asked again starts from it', async () => {
   const api = await demo();
   try {
     const pay = (await full(api)).transactions.find((t) => t.bank === 'Raiffeisen' && t.date.startsWith('2026-09') && !t.reference && !t.counterparty?.includes('Raiffeisen'))!;
@@ -173,7 +241,7 @@ test('a question\'s table is the PDF\'s one table: «Als Auszug behalten» keeps
     await json(api, `${URL_OF}/read`, 'PUT', { statement: septemberTable(pay, 'RF-ASKED', 72000) });
     await json(api, `${URL_OF}/read`, 'DELETE');
     const kept = readBeside(join(api.root, 'transactional-data/2026/bank-statements', FILE));
-    assert.ok(kept && 'statement' in kept && kept.statement.closing.amount === 72000, 'the table as corrected stays the PDF\'s');
+    assert.ok(kept && 'statement' in kept && kept.statement.closing?.amount === 72000, 'the table as corrected stays the PDF\'s');
     const again = await json<StatementAsk>(api, `${URL_OF}/read`, 'POST');
     assert.equal(again.body.read.statement.closing.amount, 72000, 'asked again, it starts from that table, no model asked');
   } finally {

@@ -77,6 +77,7 @@ export async function readStatementPdf(path: string, ask: Asker | undefined, non
     if (e instanceof AiRefused && e.refusal.reason === 'off') return hand('noAi');
     return { ...hand('failed', ((e as Error).message || String(e)).split('\n')[0].slice(0, 200)), threw: { stop: e instanceof AiRefused || e instanceof NoClaudeError, ...(e instanceof AiRefused ? { refusal: e.refusal } : {}) } };
   }
+  if (answer === 'noAnswer') return { ...hand('failed', 'Die KI gab keine vollständige Antwort.'), threw: { stop: false } };
   if (answer === 'notStatement') return hand('notStatement');
   return answer ? { statement: answer, by: 'model', ...(pages !== undefined ? { pages } : {}) } : hand('failed');
 }
@@ -217,8 +218,8 @@ export async function readKeptPdfs(pdfs: readonly KeptPdf[], ask: Asker, o: { pr
   }
 }
 
-/** The most kept PDFs the inbox run reads without asking: one month's statement of each account that takes statements. A larger backlog waits for the person («N Kontoauszüge von der KI lesen lassen?»). */
-export const readsWithoutAsking = (ws: Pick<Workspace, 'bankAccounts'>): number => Math.max(1, ws.bankAccounts.filter((a) => a.statements).length);
+/** Whether the inbox run reads these PDFs by itself: one month's statement, at most one PDF of each account. A larger backlog waits for the person («N Kontoauszüge von der KI lesen lassen?»). */
+export const readsByItself = (pdfs: readonly Pick<KeptPdf, 'account'>[]): boolean => new Set(pdfs.map((p) => p.account.account)).size === pdfs.length;
 
 // ─── The column mappings of bank CSVs, kept per account ──────────────────────
 

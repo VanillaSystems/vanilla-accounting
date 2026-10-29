@@ -19,7 +19,7 @@ import { RequestError, WS, assertOpen, readBooks, updateBooks } from './books.js
 import { findFile } from '../workspace/workspace.js';
 import { structuredSpans } from '../books/bank-import.js';
 import { readBeside, writeBeside } from '../books/pdf-reads.js';
-import { isBlank, parseReadStatement } from '../books/statement-check.js';
+import { hasBalances, isBlank, parseReadStatement } from '../books/statement-check.js';
 import { accountOfRead, asRead, coveredDays, coversAll, heldOf, isCovered, readDays, readStatementPdf, MAX_READ_PAGES, type PdfRead } from '../intake/statement-read.js';
 import { toStatementXml } from '../providers/statement-read/camt-writer.js';
 import { ask, modelReady } from '../llm/ask.js';
@@ -124,7 +124,7 @@ export function keepAsk(file: string, account: string, date: string, read: State
 export function keepAskTable(ask: StatementAsk): void {
   if (isBlank(ask.read.statement)) return;
   const path = findFile(WS.paths, 'statements', ask.file);
-  if (path) writeBeside(path, { by: ask.read.by === 'hand' ? 'hand' : 'model', statement: ask.read.statement });
+  if (path) writeBeside(path, ask.read.by === 'hand' ? { by: 'hand', statement: ask.read.statement } : { by: 'model', statement: ask.read.statement });
 }
 
 /**
@@ -152,7 +152,9 @@ export async function askAbout(file: string): Promise<StatementAsk> {
   const listed = readBooks().bankStatements.find((s) => `${s.bank}/${s.filename}` === file)!;
   assertOpen(readBooks(), [listed.toDate], 'newStatement');
   const beside = readBeside(path);
-  if (beside && 'statement' in beside) return keepAsk(file, account.account, listed.toDate, readView(beside.statement, beside.by, account.account));
+  // A person's table without balances asks with 0.00 for each, as the hand form starts.
+  const table = beside && 'statement' in beside ? (hasBalances(beside.statement) ? beside.statement : { ...beside.statement, opening: { date: listed.fromDate, amount: 0 }, closing: { date: listed.toDate, amount: 0 } }) : undefined;
+  if (table) return keepAsk(file, account.account, listed.toDate, readView(table, beside!.by, account.account));
   const dir = join(WS.paths.data, 'statement-read');
   mkdirSync(dir, { recursive: true });
   const copy = join(dir, `${sha16(readFileSync(path))}.pdf`);

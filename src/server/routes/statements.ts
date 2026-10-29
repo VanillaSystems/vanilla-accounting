@@ -296,9 +296,10 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
       if (events) fileReceipts(WS, books, events.files);
       const paid = payments ? matchPayments(books, invoices, payments) : undefined;
       if (paid) { fileReceipts(WS, books, paid.files); saveInvoices(WS, invoices); }
-      // A kept PDF's closing balance comes from its table once it is read (#243).
-      const closing = placed.closing ?? books.statementBalances?.filter((b) => b.sourceFile === placed.filename && b.account === placed.account.account)
-        .sort((a, b) => a.date.localeCompare(b.date)).map((b) => ({ date: b.date, amount: b.amount })).at(-1);
+      // A kept PDF's closing balance comes from its table once it is read (#243); a camt.053's balance of its last day stands over it.
+      const own = books.statementBalances?.filter((b) => b.sourceFile === placed.filename && b.account === placed.account.account).sort((a, b) => a.date.localeCompare(b.date)).at(-1)
+        ?? books.statementBalances?.find((b) => b.source === 'camt' && b.account === placed.account.account && b.date === placed.last);
+      const closing = placed.closing ?? (own && { date: own.date, amount: own.amount });
       return {
         file: `${placed.account.bank}/${placed.filename}`,
         account: placed.account.account,
@@ -457,9 +458,9 @@ router.put('/api/statements/:bank/:filename/facts', (req, res) => {
   res.json(saveTable(pdfOf(req), (req.body as { statement?: unknown } | undefined)?.statement));
 });
 
-/** «Neu lesen»: its read goes, the next reading asks the model again. */
+/** «Neu lesen»: its read goes, the next reading asks the model again; a person's table only with `?confirmed=1`. */
 router.delete('/api/statements/:bank/:filename/facts', (req, res) => {
-  res.json(forgetRead(pdfOf(req)));
+  res.json(forgetRead(pdfOf(req), req.query.confirmed === '1'));
 });
 
 /** The kept statement PDFs not read yet and the reading the person started. */

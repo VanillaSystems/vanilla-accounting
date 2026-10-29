@@ -7,7 +7,7 @@
 import './support/jurisdiction.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkStatement, parseReadStatement } from '../src/books/statement-check.js';
+import { checkStatement, hasBalances, parsePdfTable, parseReadStatement } from '../src/books/statement-check.js';
 import { parseStatementRead } from '../src/llm/prompts.js';
 import { toStatementXml } from '../src/providers/statement-read/camt-writer.js';
 import { readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
@@ -48,6 +48,26 @@ test('the model\'s answer and the person\'s table: amounts as printed, wholly em
   assert.equal(parseStatementRead('kein JSON'), undefined);
   assert.equal(parseReadStatement({ currency: 'CHF', opening: { date: '2026-10-01', amount: 0 }, closing: { date: '2026-10-31', amount: 0 }, movements: [{ date: '2026-10-02', text: 'ohne Betrag' }] }), undefined, 'a misread line is never dropped silently');
   assert.equal(parseReadStatement({ currency: 'CHF', opening: { date: '2026-02-30', amount: 0 }, closing: { date: '2026-10-31', amount: 0 }, movements: [] }), undefined, 'no such day');
+});
+
+test('the model\'s answer names no payment of the books, and an empty or cut-off answer is no answer, not an unreadable one (#243 review)', () => {
+  const answer = { currency: 'CHF', opening: { date: '2026-10-01', amount: 10 }, closing: { date: '2026-10-31', amount: 5 }, movements: [{ date: '2026-10-02', amount: -5, reference: 'RE-1', payment: 'T-OTHER' }] };
+  const s = parseStatementRead(JSON.stringify(answer)) as ReadStatement;
+  assert.deepEqual(s.movements, [{ date: '2026-10-02', amount: -5, reference: 'RE-1' }], 'only a person\'s table ties a line to a payment');
+  assert.equal(parseStatementRead(''), 'noAnswer', 'an empty result');
+  assert.equal(parseStatementRead('  \n'), 'noAnswer');
+  assert.equal(parseStatementRead(JSON.stringify(answer).slice(0, 60)), 'noAnswer', 'JSON cut off before its end');
+  assert.equal(parseStatementRead('Das ist eine Rechnung.'), undefined, 'a real answer that is no statement stays unreadable');
+});
+
+test('a kept PDF\'s table by hand may state no balance; a closing typed without an opening opens at what its lines leave (#243 review)', () => {
+  const lines = [{ date: '2026-09-03', amount: -40, reference: 'RE-1' }];
+  const none = parsePdfTable({ currency: 'CHF', period: { from: '2026-09-01', to: '2026-09-30' }, opening: { date: '2026-09-01', amount: '' }, closing: { date: '2026-09-30', amount: '' }, movements: lines });
+  assert.ok(none && !hasBalances(none), 'empty balances: none stated');
+  assert.deepEqual(none.movements, lines);
+  const typed = parsePdfTable({ currency: 'CHF', period: { from: '2026-09-01', to: '2026-09-30' }, opening: { date: '2026-09-01', amount: '' }, closing: { date: '2026-09-30', amount: '960' }, movements: lines });
+  assert.deepEqual(typed && hasBalances(typed) && [typed.opening, typed.closing], [{ date: '2026-09-01', amount: 1000 }, { date: '2026-09-30', amount: 960 }]);
+  assert.equal(parsePdfTable({ currency: 'CHF', opening: { date: '2026-09-01', amount: 5 }, closing: { date: '2026-09-30', amount: '' }, movements: lines }), undefined, 'an opening without a closing');
 });
 
 test('a statement that prints no opening balance but a balance on each row: the opening is the balance before its earliest row, oldest or newest first', () => {
