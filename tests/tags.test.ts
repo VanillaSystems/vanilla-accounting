@@ -92,7 +92,7 @@ test('a field offers the active declared values, then the values bookings carry 
 });
 
 test('books schema 4: the step from 3 changes no record and runs twice to the same result; an app of schema 3 refuses books of schema 4', () => {
-  assert.equal(BOOKS_SCHEMA, 6);
+  assert.equal(BOOKS_SCHEMA, 7);
   const clone = (d: Record<string, unknown>) => structuredClone(d);
   const books = { schema: 3, journalEntries: [{ id: 'e1', tags: { projekt: 'alpha' } }], config: { closedThrough: '2026-03-31' } };
   const once = climb<Record<string, unknown>>(books, 3, BOOKS_SCHEMA, BOOKS_MIGRATIONS, 'ledger.json', clone);

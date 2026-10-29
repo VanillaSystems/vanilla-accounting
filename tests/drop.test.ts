@@ -69,7 +69,7 @@ test('a PDF taken for a statement that no account reads stays a file the person 
     s = await post(`/api/drop/${s.id}/files?name=billing.pdf`, await textPdf(['Billing statement October 2026', 'Example Hosting Ltd', 'Amount due USD 20.00']));
     const row = s.rows[0];
     // No model here: the table to fill by hand (#217), beside «Ist ein Beleg».
-    assert.deepEqual([row.kind, row.state, row.reason, row.read?.by, row.read?.why], ['statement-pdf', 'asks', 'check-read', 'hand', 'noAi']);
+    assert.deepEqual([row.kind, row.state, row.reason, row.read?.by, row.read?.why], ['statement-pdf', 'asks', 'check-read', 'hand', 'noProvider'], 'no provider answers here: said so (#254)');
     s = await post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'as', as: 'receipt' });
     assert.deepEqual([s.rows[0].kind, s.rows[0].state, s.rows[0].message], ['receipt', 'taken', undefined], 'taken into the inbox as a receipt');
     await rest();

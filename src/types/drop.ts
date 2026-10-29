@@ -64,8 +64,14 @@ export interface DropRow {
   account?: string;
   /** The person said «Einlesen» on a statement read without a bank export: it is imported as written. */
   confirmed?: true;
-  /** The person said «Als Monatsauszug behalten» on a statement PDF: kept as the month's statement (`month`, when its name does not say), its movements not imported. */
+  /** Kept as the month's statement (`month`, when its name does not say), its movements not imported: the person said «Als Monatsauszug behalten», or its account has a bank export or bank CSV (#254). */
   keep?: { month: string };
+  /**
+   * A statement PDF kept as its account's statement at once, its question («Einlesen» or «Als Auszug
+   * behalten») kept in the books (#254): the PDF's file under bank-statements/ and its month. Closing
+   * the dialog leaves the question in Bank › Kontoauszüge.
+   */
+  asked?: { file: string; month: string };
   /** Taken: the run that takes it up. */
   run?: string;
   /** A receipt: the name it got in the inbox. */
@@ -225,7 +231,9 @@ export type DropAction =
   /** A receipt, photo or scan that is a bank statement: read as one (#217). */
   | { kind: 'statement' }
   /** A statement PDF whose table waits (`read`): kept as the month's statement instead, its movements not imported; `statement`: the table as shown, for its days. */
-  | { kind: 'keep'; statement?: ReadStatement };
+  | { kind: 'keep'; statement?: ReadStatement }
+  /** «Bewegungen aus dem PDF einlesen» on a statement PDF kept as the statement (#254): read now, its question kept in the books. */
+  | { kind: 'readPdf' };
 
 /** Why a file is in data/quarantine/: its words say it is no receipt (and which kind, and the mail's sender), a person set it aside, or it is no PDF inside. */
 export type QuarantineReason = { kind: 'not-receipt'; why?: OtherWhy; from?: string } | { kind: 'held' } | { kind: 'unreadable' };

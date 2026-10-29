@@ -7,6 +7,7 @@
  */
 import type { ApiRefusal } from './api-error.js';
 import type { BookChange } from './assistant.js';
+import type { BankTransaction } from './index.js';
 
 export type BatchAction =
   /** Receipts: «kein Beleg», as a person sets a receipt's kind (it pays nothing, its links go). */
@@ -41,7 +42,7 @@ export type BatchUndo =
   | Extract<BookChange, { kind: 'entry' } | { kind: 'receiptKind' }>
   | { kind: 'payment'; ref: string; noReceiptNeeded: boolean }
   /** A booking by hand taken back: these entries of the payment go, and it waits for the person again when it did. */
-  | { kind: 'unbook'; ref: string; entries: string[]; waits?: { since: string; why: 'bookingDeleted' } };
+  | { kind: 'unbook'; ref: string; entries: string[]; waits?: NonNullable<BankTransaction['waitsForPerson']> };
 
 /** `batchId` names the undo the server keeps; none when nothing changed, or in a preview. */
 export interface BatchAnswer { changes: BatchChange[]; left: BatchLeft[]; batchId?: string }

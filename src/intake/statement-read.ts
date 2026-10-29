@@ -12,13 +12,13 @@ import { parse, stringify } from 'yaml';
 import { pdfRuns, textOf } from '../parsers/pdf-text.js';
 import { buildStatementReadPrompt, parseStatementRead } from '../llm/prompts.js';
 import { checkStatement } from '../books/statement-check.js';
-import { heldLines, type ExportSpan } from '../books/bank-import.js';
+import { heldLines, type StructuredSpan } from '../books/bank-import.js';
 import { AiRefused } from '../llm/provider.js';
 import { statementPdf, statementPeriod } from '../books/statement-facts.js';
 import { accountForStatement } from '../accounting/bank-accounts.js';
 import { baseCurrency } from '../engines/index.js';
 import type { BankTransaction } from '../types/index.js';
-import type { CsvColumns, HandWhy, ReadBy, ReadStatement, StatementRead } from '../types/statement-read.js';
+import type { CoveredDays, CsvColumns, HandWhy, ReadBy, ReadStatement, StatementRead } from '../types/statement-read.js';
 import type { LedgerBankAccount, Workspace } from '../workspace/workspace.js';
 import type { AskOptions } from '../llm/ask.js';
 
@@ -40,12 +40,17 @@ export function handStatement(text: string, currency = baseCurrency()): ReadStat
 
 export type Asker = (prompt: string, opts: AskOptions) => Promise<string>;
 
+/** A read of a statement file: the statement, who filled it, and why it is a table to fill by hand (with the provider's words when the call failed). */
+export interface PdfRead { statement: ReadStatement; by: ReadBy; why?: HandWhy; error?: string; pages?: number }
+
 /**
  * The statement in the PDF at `path` (a photo made a PDF first): read by the model when `ask` is
  * given and the file has no more than MAX_READ_PAGES pages, else the table to fill by hand with
- * why (`notStatement`: the model says the file is none, then it may be a receipt).
+ * why: `none` when there is no model to ask (the AI switched off, or no provider answers here),
+ * `pages`, `failed` (with the provider's words when the call failed, none when its answer was no
+ * statement code could take), `notStatement` (the model says the file is none: then it may be a receipt).
  */
-export async function readStatementPdf(path: string, ask: Asker | undefined): Promise<{ statement: ReadStatement; by: ReadBy; why?: HandWhy; pages?: number }> {
+export async function readStatementPdf(path: string, ask: Asker | undefined, none: 'noAi' | 'noProvider' = 'noAi'): Promise<PdfRead> {
   let text = '';
   let pages: number | undefined;
   try {
@@ -55,40 +60,56 @@ export async function readStatementPdf(path: string, ask: Asker | undefined): Pr
   } catch {
     // A PDF pdf.js cannot open: the model may still read it; the hand table starts empty.
   }
-  const hand = (why: HandWhy) => ({ statement: handStatement(text), by: 'hand' as const, why, ...(pages !== undefined ? { pages } : {}) });
-  if (!ask) return hand('noAi');
+  const hand = (why: HandWhy, error?: string): PdfRead => ({ statement: handStatement(text), by: 'hand', why, ...(error ? { error } : {}), ...(pages !== undefined ? { pages } : {}) });
+  if (!ask) return hand(none);
   if (pages !== undefined && pages > MAX_READ_PAGES) return hand('pages');
   let answer: ReturnType<typeof parseStatementRead>;
   try {
     answer = parseStatementRead(await ask(buildStatementReadPrompt(path, text), { step: 'statement-read', attachments: [path], timeoutMs: 300_000 }));
   } catch (e) {
     // «KI ganz ausschalten» switched on while it read: the AI is off, not failed (#212).
-    return hand(e instanceof AiRefused && e.refusal.reason === 'off' ? 'noAi' : 'failed');
+    if (e instanceof AiRefused && e.refusal.reason === 'off') return hand('noAi');
+    return hand('failed', ((e as Error).message || String(e)).split('\n')[0].slice(0, 200));
   }
   if (answer === 'notStatement') return hand('notStatement');
   return answer ? { statement: answer, by: 'model', ...(pages !== undefined ? { pages } : {}) } : hand('failed');
 }
 
 /**
- * The bank export that covers days of the account's statement from `from` to `to`, if any: then its
- * movements are the export's (#217). A read value date or a line misread by a day would not meet its
- * twin in the export and be imported twice, so such a statement imports no movement at all; it is
- * kept as the month's statement, as before.
+ * The days of [from, to] the account's structured sources cover (a bank export, a bank CSV, #254),
+ * each clipped to those days, oldest first. A statement read off a PDF adds no movement on them: a read
+ * value date or a line misread by a day would not meet its twin and be counted twice, so the structured
+ * source's movements are the account's there. `csv: false` leaves the CSVs out (a CSV read beside one).
  */
-export function exportOverlap(spans: readonly ExportSpan[], account: string, from: string, to: string): ExportSpan | undefined {
-  return spans.find((s) => s.account === account && s.from <= to && s.to >= from);
+export function coveredDays(spans: readonly StructuredSpan[], account: string, from: string, to: string, o: { csv?: boolean } = {}): CoveredDays[] {
+  return spans.filter((s) => s.account === account && s.from <= to && s.to >= from && (o.csv !== false || !s.csv))
+    .map((s) => ({ file: s.file, from: s.from > from ? s.from : from, to: s.to < to ? s.to : to }))
+    .sort((x, y) => x.from.localeCompare(y.from) || x.to.localeCompare(y.to));
 }
 
+const nextDay = (d: string) => new Date(Date.parse(`${d}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+
+/** Whether the covered days hold every day of [from, to]. */
+export function coversAll(covered: readonly CoveredDays[], from: string, to: string): boolean {
+  let next = from;
+  for (const c of covered) {
+    if (c.from > next) return false;
+    if (c.to >= next) next = nextDay(c.to);
+    if (next > to) return true;
+  }
+  return next > to;
+}
+
+/** Whether a day lies in the covered days. */
+export const isCovered = (covered: readonly CoveredDays[], day: string): boolean => covered.some((c) => c.from <= day && c.to >= day);
+
 /**
- * The account and month of a statement PDF whose days a bank export in the books covers, in part or
- * whole (its account by the IBAN its text or name prints, else as a monthly PDF of its bank's naming
- * is placed: a Wise statement by its currency, another by the only account of the books' currency;
- * its days by its text or name): then there
- * is nothing to read, the PDF is kept as that month's statement as before. Undefined when the file
- * does not say, or no bank export covers any of its days: then it is read (and checked again
- * against the account and days the read gives, src/server/routes/drop.ts).
+ * The account and days a statement PDF names by itself, before any read (#254): its account by the IBAN
+ * its text or name prints, else as a monthly PDF of its bank's naming is placed (a Wise statement by
+ * its currency, another by the only account of the books' currency); its days by its text or name.
+ * Either may be missing: then the read gives it.
  */
-export function coveredByExport(text: string, name: string, accounts: readonly LedgerBankAccount[], spans: readonly ExportSpan[]): { account: string; month: string } | undefined {
+export function placeByText(text: string, name: string, accounts: readonly LedgerBankAccount[]): { account?: LedgerBankAccount; period?: { from: string; to: string } } {
   const iban = (IBAN.exec(text)?.[0] ?? IBAN.exec(name.replace(/\s+(?=\d)/g, ''))?.[0])?.replace(/\s/g, '').toUpperCase();
   const named = statementPdf(name);
   const period = statementPeriod(text) ?? (named ? { from: named.fromDate, to: named.toDate } : undefined);
@@ -96,8 +117,7 @@ export function coveredByExport(text: string, name: string, accounts: readonly L
   const base = accounts.filter((a) => a.statements && a.statements !== 'wise' && a.currency === baseCurrency());
   const byName = !iban && named ? (named.currency ? accounts.find((a) => a.statements === 'wise' && a.currency === named.currency) : base.length === 1 ? base[0] : undefined) : undefined;
   const account = byIban ?? byName;
-  if (!account || !period) return undefined;
-  return exportOverlap(spans, account.account, period.from, period.to) ? { account: account.account, month: period.to.slice(0, 7) } : undefined;
+  return { ...(account ? { account } : {}), ...(period ? { period } : {}) };
 }
 
 /** The days a read statement covers: its period as printed, else from its opening to its closing day. */
@@ -118,7 +138,7 @@ export function heldOf(s: ReadStatement, account: LedgerBankAccount | undefined,
 }
 
 /** The statement checked and its known lines marked, as the drop row shows it. */
-export function asRead(statement: ReadStatement, by: ReadBy, held: Map<number, BankTransaction>, extra: Pick<StatementRead, 'why' | 'pages' | 'limit' | 'covered'> = {}): StatementRead {
+export function asRead(statement: ReadStatement, by: ReadBy, held: Map<number, BankTransaction>, extra: Pick<StatementRead, 'why' | 'error' | 'pages' | 'limit' | 'covered' | 'whole'> = {}): StatementRead {
   return {
     by, statement, check: checkStatement(statement),
     known: [...held.keys()].map((i) => ({ date: statement.movements[i].date, amount: statement.movements[i].amount })),

@@ -135,21 +135,33 @@ test('a card charge in another currency: the read keeps the amount as printed, t
   assert.deepEqual([tx.amount, tx.currency, tx.original], [86.4, 'CHF', { amount: 98.5, currency: 'USD' }]);
 });
 
-test('a bank export\'s days: a statement overlapping them on the same account, in part or whole, is covered; another account or other days are not', async () => {
-  const { exportOverlap, coveredByExport, readDays } = await import('../src/intake/statement-read.js');
-  const spans = [{ account: '1021', from: '2026-07-01', to: '2026-09-30', file: 'Raiffeisen/q3.xml' }];
-  assert.equal(exportOverlap(spans, '1021', '2026-09-21', '2026-10-15')?.file, 'Raiffeisen/q3.xml', 'in part');
-  assert.equal(exportOverlap(spans, '1021', '2026-10-01', '2026-10-31'), undefined);
-  assert.equal(exportOverlap(spans, '1022', '2026-09-01', '2026-09-30'), undefined);
+test('a structured source\'s days (#254): those of a statement on the same account, in part or whole, are covered and clipped to it; a CSV only when asked; a PDF names its account and days by its text or name', async () => {
+  const { coveredDays, coversAll, isCovered, placeByText, readDays } = await import('../src/intake/statement-read.js');
+  const spans = [{ account: '1021', from: '2026-07-01', to: '2026-09-30', file: 'Raiffeisen/q3.xml' }, { account: '1021', from: '2026-10-01', to: '2026-10-10', file: 'Raiffeisen/okt.xml', csv: true as const }];
+  const part = coveredDays(spans, '1021', '2026-09-21', '2026-10-15');
+  assert.deepEqual(part, [{ file: 'Raiffeisen/q3.xml', from: '2026-09-21', to: '2026-09-30' }, { file: 'Raiffeisen/okt.xml', from: '2026-10-01', to: '2026-10-10' }], 'in part, clipped');
+  assert.equal(coversAll(part, '2026-09-21', '2026-10-15'), false, '11 to 15 October are no source\'s');
+  assert.equal(coversAll(part, '2026-09-21', '2026-10-10'), true, 'end to end');
+  assert.deepEqual([isCovered(part, '2026-10-10'), isCovered(part, '2026-10-11')], [true, false]);
+  assert.deepEqual(coveredDays(spans, '1021', '2026-10-01', '2026-10-31', { csv: false }), [], 'a CSV read beside a CSV is not covered');
+  assert.deepEqual(coveredDays(spans, '1022', '2026-09-01', '2026-09-30'), []);
   const { parseIban } = await import('../src/workspace/banks.js');
   const accounts = [{ ...account, bank: 'Raiffeisen', iban: parseIban('CH6580808000000000001')! }];
-  assert.deepEqual(coveredByExport('Kontoauszug 21.09.2026 - 15.10.2026\nIBAN CH65 8080 8000 0000 0000 1', 'x.pdf', accounts, spans), { account: '1021', month: '2026-10' });
-  assert.equal(coveredByExport('Kontoauszug 21.09.2026 - 15.10.2026', 'x.pdf', accounts, spans), undefined, 'no IBAN in the text: read, then checked again by what the read gives');
-  assert.deepEqual(coveredByExport('', 'Kontoauszug 01.09.2026 - 30.09.2026.pdf', accounts, spans), { account: '1021', month: '2026-09' }, 'a monthly PDF of its bank\'s naming: placed as the upload places it');
+  const by = (text: string, name: string, list: Parameters<typeof placeByText>[2] = accounts) => { const p = placeByText(text, name, list); return [p.account?.account, p.period?.to]; };
+  assert.deepEqual(by('Kontoauszug 21.09.2026 - 15.10.2026\nIBAN CH65 8080 8000 0000 0000 1', 'x.pdf'), ['1021', '2026-10-15']);
+  assert.deepEqual(by('Kontoauszug 21.09.2026 - 15.10.2026', 'x.pdf'), [undefined, '2026-10-15'], 'no IBAN in the text: the read gives the account');
+  assert.deepEqual(by('', 'Kontoauszug 01.09.2026 - 30.09.2026.pdf'), ['1021', '2026-09-30'], 'a monthly PDF of its bank\'s naming: placed as the upload places it');
   const wise = { ...account, account: '1023', bank: 'Wise', currency: 'EUR', statements: 'wise' as const };
-  assert.deepEqual(coveredByExport('', 'statement_1_EUR_2026-08-01_2026-08-31.pdf', [...accounts, wise], [{ account: '1023', from: '2026-01-01', to: '2026-09-30', file: 'Wise/x.xml' }]), { account: '1023', month: '2026-08' });
+  assert.deepEqual(by('', 'statement_1_EUR_2026-08-01_2026-08-31.pdf', [...accounts, wise]), ['1023', '2026-08-31']);
   const { truth } = await inventedStatement(DEMO_OCTOBER);
   assert.deepEqual(readDays(truth), { from: '2026-10-01', to: '2026-10-31' });
+});
+
+test('an empty hand table is blank: no movement and both balances 0.00; a month without movements is not', async () => {
+  const { isBlank } = await import('../src/books/statement-check.js');
+  const day = { date: '2026-10-28', amount: 0 };
+  assert.equal(isBlank({ movements: [], opening: day, closing: day }), true);
+  assert.equal(isBlank({ movements: [], opening: { ...day, amount: 120 }, closing: { ...day, amount: 120 } }), false);
 });
 
 test('the AI switched off while a statement is read: the hand table says «no AI», not that the read failed', async () => {
@@ -163,6 +175,11 @@ test('the AI switched off while a statement is read: the hand table says «no AI
   writeFileSync(path, pdf);
   const off = await readStatementPdf(path, async () => { throw new AiRefused({ reason: 'off' }, 'aus'); });
   assert.deepEqual([off.by, off.why, off.statement.iban], ['hand', 'noAi', DEMO_OCTOBER.iban]);
-  const failed = await readStatementPdf(path, async () => { throw new Error('timeout'); });
-  assert.equal(failed.why, 'failed');
+  const failed = await readStatementPdf(path, async () => { throw new Error('timeout after 300 s\nstack'); });
+  assert.deepEqual([failed.why, failed.error], ['failed', 'timeout after 300 s'], 'the provider\'s words say why (#254)');
+  const unusable = await readStatementPdf(path, async () => 'no json here');
+  assert.deepEqual([unusable.why, unusable.error], ['failed', undefined], 'an answer code cannot take: failed, no words of a provider');
+  const none = await readStatementPdf(path, undefined, 'noProvider');
+  assert.equal(none.why, 'noProvider', 'no provider answers here: said so, not «AI off»');
 });
+

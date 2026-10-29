@@ -17,6 +17,8 @@ import type { ClosedReason } from '../types/api-error.js';
 import { checkSeals, closedPart, type SealReport } from './seal.js';
 import { parseBookedBy } from './booked-by.js';
 import { documentWordsInUse, typeStatements } from './statement-facts.js';
+import { reconcilePendingThrough } from './reconcile.js';
+import { lockedThrough as lockLine } from './lock-line.js';
 import { BOOK_FILES, PARTS, fromJsonl, isClosedYear, keyOf, placement, splitByYear, statementFile, toJsonl, type InClosedYear, type Part } from './years.js';
 
 export type Books = Index & { journalEntries: JournalEntry[]; config: AccountingConfig };
@@ -391,6 +393,40 @@ export interface PeriodLock {
 }
 
 /**
+ * Closes the books through `end` (the filing's seal step, `npm run seal -- <q> --close`, the year
+ * close): closedThrough moves there, which the write door never does. A statement PDF's question of a
+ * day now filed is closed with its PDF kept as the statement (#254): nothing can be read into a filed
+ * period, so it could never be answered. An account's reconciliation that waits with a movement on those
+ * days refuses the close (`reconcilePending`, src/books/reconcile.ts): its answer may change their entries.
+ */
+export function closeThrough(books: Pick<Books, 'config' | 'statementAsks' | 'reconciliations'>, end: string): void {
+  const open = reconcilePendingThrough(books, end);
+  if (open) throw open;
+  closeAsksThrough(books, end);
+  books.config.closedThrough = end;
+}
+
+function closeAsksThrough(books: Pick<Books, 'statementAsks'>, end: string): boolean {
+  if (!books.statementAsks?.some((a) => a.date <= end)) return false;
+  books.statementAsks = books.statementAsks.filter((a) => a.date > end);
+  if (!books.statementAsks.length) delete books.statementAsks;
+  return true;
+}
+
+/**
+ * closeThrough and save, for a close that may reach 31.12. (the year close, `npm run seal -- <Q4>
+ * --close --force`): the statement questions it closes are saved first, since once closedThrough
+ * reaches the year's end its files take no change and the save would be refused.
+ */
+export function closeThroughSaved(ws: Workspace, books: Books, end: string): void {
+  const open = reconcilePendingThrough(books, end);
+  if (open) throw open;
+  if (closeAsksThrough(books, end)) saveBooks(ws, books);
+  closeThrough(books, end);
+  saveBooks(ws, books);
+}
+
+/**
  * The books' first day: 1 January of the first year with opening balances, else of the year of the
  * earliest payment; undefined for books with neither. The year before is the opening balances'
  * (#39): no entry is dated in it and no year folder is made for it.
@@ -406,7 +442,7 @@ export function periodLock(books: Pick<Index, 'config'> & { transactions?: reado
   const opens = () => (first ??= { day: booksOpen(books) }).day;
   const closedThrough = books.config?.closedThrough;
   const approved = books.config?.approvedReturn;
-  const lockedThrough = approved && (!closedThrough || approved.through > closedThrough) ? approved.through : closedThrough;
+  const lockedThrough = lockLine(books.config);
   const isClosed = (date: string | undefined) => !!lockedThrough && !!date && date <= lockedThrough;
   const heldBy = (date: string | undefined) => (isClosed(date) && !(closedThrough && date! <= closedThrough) ? approved : undefined);
   const closedText = (date: string | undefined) => {

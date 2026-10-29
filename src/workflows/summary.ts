@@ -11,7 +11,9 @@ import type { JournalEntry, Receipt } from '../types/index.js';
 export type Took =
   | { kind: 'files'; names: string[] }
   | { kind: 'receipts'; ids: string[]; files: string[] }
-  | { kind: 'transactions'; n: number };
+  | { kind: 'transactions'; n: number }
+  /** Open payments it left alone: they wait for the account's reconciliation (#254); `payment`, `date`: a movement whose statement shows it. */
+  | { kind: 'held'; account: string; n: number; payment: string; date: string };
 
 /** One thing it made, with the facts to check it by. */
 export type Made =

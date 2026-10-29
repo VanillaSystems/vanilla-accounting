@@ -6,7 +6,8 @@ import type { MoneyRole } from '../../workspace/banks.js';
 import type { AiView } from '../../llm/view.js';
 import type { AiRefusal, ProviderId } from '../../llm/provider.js';
 import { isStepId, type StepId } from '../../llm/steps.js';
-import type { BankTransaction, InboxFile, Index, StatementImport, JournalEntry, Receipt, ReceiptPatch, TransactionPatch } from '../../types/index.js';
+import type { BankTransaction, InboxFile, Index, StatementAsk, StatementImport, JournalEntry, Receipt, ReceiptPatch, ReconcilePair, TransactionPatch } from '../../types/index.js';
+import type { ReadStatement } from '../../types/statement-read.js';
 import type { StatementRemoved } from '../../server/routes/statements.js';
 import type { PaymentReleased } from '../../invoices/payments.js';
 export type { StatementRemoved };
@@ -154,6 +155,16 @@ export function errorText(e: unknown): string {
     case 'paidPrivately': return t('error.paidPrivately', { payment: b.params.payment });
     case 'partAmount': return t('error.partAmount', { total: `${b.params.currency} ${fmt(b.params.total)}` });
     case 'partRate': return t('error.partRate', { rates: b.params.rates.map((r) => `${r} %`).join(', ') });
+    case 'reconcilePending': return t('error.reconcilePending', { from: formatDate(b.params.from), to: formatDate(b.params.to) });
+    case 'reconcileUndecided': return t('error.reconcileUndecided', { n: b.params.n });
+    case 'reconcileTwice': return t('error.reconcileTwice', { ref: b.params.ref });
+    case 'reconcileDifference': return t('error.reconcileDifference', { amount: `${b.params.currency} ${fmt(b.params.amount)}` });
+    case 'reconcileMismatch': return t('error.reconcileMismatch');
+    case 'reconcileNotCovered': return t('error.reconcileNotCovered', { date: formatDate(b.params.date) });
+    case 'reconcileFiledUnbooked': return t('error.reconcileFiledUnbooked', { date: formatDate(b.params.date) });
+    case 'reconciledTwins': return t('error.reconciledTwins', { n: b.params.refs.length, refs: b.params.refs.slice(0, 3).join(', ') });
+    case 'bookedInFiled': return b.params.date ? t('error.bookedInFiled', { date: formatDate(b.params.date) }) : t('error.bookedInFiledUnnamed');
+    case 'twinBookedByHand': return t('error.twinBookedByHand', { entry: b.params.entry, read: `${b.params.currency} ${fmt(b.params.read)}`, bank: `${b.params.currency} ${fmt(b.params.bank)}` });
     case 'bookedByHand': return t('error.bookedByHand', { entry: b.params.entry, date: formatDate(b.params.date), amount: `${b.params.currency} ${fmt(b.params.amount)}` });
     case 'yearClose': return t('error.yearClose');
     case 'batchUnchanged': return t('error.batchUnchanged');
@@ -517,6 +528,20 @@ export const api = {
   statementFileDetails: (file: string) => request<{ details?: StatementDetails; importedAt?: string }>('GET', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/details`),
   /** A statement taken back out of the books (`file`: `<bank>/<filename>` as the import named it): the drop dialog's undo, from the page (r9k-3). */
   deleteStatement: (file: string) => request<StatementRemoved>('DELETE', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}`),
+  /** The undo of «Bewegungen aus dem PDF einlesen» (#254): the camt.053 written from the PDF goes, the PDF stays the statement. */
+  unreadStatement: (xml: string) => request<StatementRemoved>('DELETE', `/api/statements/${xml.split('/').map(encodeURIComponent).join('/')}?keepPdf=1`),
+  /** «Bewegungen aus dem PDF einlesen» on a kept statement PDF (#254): read now (the model, or the hand form), kept as its question. */
+  readStatementPdf: (file: string) => request<StatementAsk>('POST', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/read`),
+  /** The question's table as the person corrected it. */
+  correctStatementRead: (file: string, statement: ReadStatement) => request<StatementAsk>('PUT', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/read`, { statement }),
+  /** «Einlesen»: the table read in beside the PDF; the question goes. */
+  importStatementRead: (file: string, statement: ReadStatement) => request<StatementImport>('POST', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/read/import`, { statement }),
+  /** «Als Auszug behalten»: the PDF stays the statement, its movements are not read in. */
+  keepStatementPdf: (file: string) => request<Ok>('DELETE', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/read`),
+  /** «Abgleich bestätigen»: the account's reconciliation as the person decided it (#254): the pairs, and the movements read from PDFs that are payments of their own. */
+  confirmReconciliation: (account: string, decision: { pairs: ReconcilePair[]; own: string[] }) => request<Ok>('POST', `/api/reconciliations/${encodeURIComponent(account)}`, decision),
+  /** «Trotzdem buchen» on a bank movement booked in a filed quarter as a read one (#254): a payment of its own, booked from then on like any other. */
+  bookFiledTwinAnyway: (ref: string) => request<Ok>('DELETE', `/api/transactions/${encodeURIComponent(ref)}/filed-twin`),
   /** The undo of a removal, after the file is read again: its bookings and links back as they were (r10h-3). */
   restoreStatementBookings: (removed: StatementRemoved['removed']) => request<Ok>('POST', '/api/statements/bookings', removed),
 

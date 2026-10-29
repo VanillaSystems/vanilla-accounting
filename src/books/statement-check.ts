@@ -104,3 +104,10 @@ export function parseReadStatement(x: unknown): ReadStatement | undefined {
     opening, closing, ...(pages.length ? { pages } : {}), movements,
   };
 }
+
+/**
+ * A table nobody filled (#254): no movement and both balances 0.00, as the hand form starts. Nothing
+ * was checked, so it neither shows «Geht auf» nor imports.
+ */
+export const isBlank = (s: Pick<ReadStatement, 'movements' | 'opening' | 'closing'>): boolean =>
+  !s.movements.length && s.opening.amount === 0 && s.closing.amount === 0;

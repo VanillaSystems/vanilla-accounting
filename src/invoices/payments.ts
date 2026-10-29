@@ -13,6 +13,7 @@
  * booked again, a receipt and its link are added once. Anything less certain is never booked by
  * itself; `paymentProposals` offers it (amount, customer, date) for a person to confirm.
  */
+import { bookedInFiled } from '../books/twins.js';
 import type { BankTransaction, JournalEntry, Mapping, Receipt } from '../types/index.js';
 import { periodLock, type Books } from '../books/store.js';
 import { bankAccountFor } from '../workspace/money-accounts.js';
@@ -41,6 +42,8 @@ export interface PaymentContext {
   receiptId(pdf: Buffer): string;
   /** When the invoice PDF of a payment is indexed as its receipt (ISO): now, on import. */
   indexedAt(at: Pick<BankTransaction, 'date'>): string;
+  /** The movements of an account's reconciliation that waits (#254, src/books/reconcile.ts heldByReconciliation): they pay no invoice. */
+  held(books: Books): ReadonlySet<string>;
 }
 
 /** A payment that names an invoice but cannot be booked by rule: a person decides. */
@@ -108,8 +111,11 @@ export function matchPayments(books: Books, book: InvoiceBook, ctx: PaymentConte
   const issued = liveInvoices(book).filter((i): i is Issued => i.status === 'issued');
   if (issued.length === 0) return out;
   const byRef = new Map(issued.filter((i) => i.kind === 'invoice').map((i) => [i.reference, i]));
+  // A movement of a reconciliation that waits, or one booked in a filed quarter as a movement read from a PDF (#254): it pays nothing twice.
+  const held = ctx.held(books);
 
   for (const tx of books.transactions) {
+    if (held.has(tx.ref) || bookedInFiled(tx)) continue;
     const hits = hitsOf(tx, byRef, book);
     if (!hits.some(Boolean)) continue;
     const ask = (h: Hit, problem: PaymentQuestion['problem']) => out.questions.push({ transactionRef: tx.ref, number: h.inv.number, problem, amount: h.amount });

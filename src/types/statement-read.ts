@@ -53,11 +53,15 @@ export interface BalanceCheck { ok: boolean; gaps: BalanceGap[] }
 export type ReadBy = 'model' | 'hand' | 'csv';
 
 /**
- * Why a statement file is a table to fill by hand: no AI here, the file has more pages than the
- * model reads (`limit`), the model's answer was no statement code could take, or the model says the
- * file is no statement at all (then it may be a receipt).
+ * Why a statement file is a table to fill by hand: the AI is switched off (Firma › KI), no provider
+ * answers here, the file has more pages than the model reads (`limit`), the model's call failed (its
+ * words in `error`) or its answer was no statement code could take, or the model says the file is no
+ * statement at all (then it may be a receipt).
  */
-export type HandWhy = 'noAi' | 'pages' | 'failed' | 'notStatement';
+export type HandWhy = 'noAi' | 'noProvider' | 'pages' | 'failed' | 'notStatement';
+
+/** Days of a statement a structured source of its account covers (#254): that file's, clipped to the statement's days. */
+export interface CoveredDays { file: string; from: string; to: string }
 
 /** A statement read and checked, as the drop row shows it for the person to correct and import. */
 export interface StatementRead {
@@ -67,12 +71,16 @@ export interface StatementRead {
   /** The lines the books hold already (by day and amount), from an ISO 20022 statement or an earlier statement: not added again. */
   known: { date: string; amount: number }[];
   why?: HandWhy;
+  /** The provider's words when its call failed (`why: 'failed'`). */
+  error?: string;
   /**
-   * A bank export in the books covers days of this statement's account (`file`, from `from` to `to`):
-   * its movements are not imported, whatever lines match, since a value date or a day misread would
-   * double a payment. A PDF is kept as the month's statement instead («Als Monatsauszug behalten»).
+   * The days of this statement the account's bank export or bank CSV covers already (#254): a line on
+   * them is imported only as the payment the books hold of its day and amount, never as a new one,
+   * since a value date or a day misread would double a payment. `whole`: they cover every day, so
+   * there is nothing to read in; the PDF is kept as the statement.
    */
-  covered?: { file: string; from: string; to: string };
+  covered?: CoveredDays[];
+  whole?: true;
   /** The file's pages, and the most the model reads (`why: 'pages'`). */
   pages?: number;
   limit?: number;

@@ -44,10 +44,24 @@ before(async () => {
   const books = loadBooks(api.ws);
   const noise = (id: string, filename: string, date: string) => ({ id, filename, originalFilename: filename, extractedText: 'AGB', extractionMethod: 'pdftotext' as const, fileSize: 1, indexedAt: `${date}T00:00:00Z`, location: 'archived' as const, date, kind: 'noise' as const, kindBy: 'human' as const });
   update(books, PERSON, (b) => { b.receipts.push(noise('rf', 'agb-mai.pdf', '2026-05-12'), noise('rn', 'agb-august.pdf', '2026-08-12')); });
+  // A statement PDF of the filed quarter whose question waits (#254).
+  mkdirSync(join(api.root, 'transactional-data/2026/bank-statements/Raiffeisen'), { recursive: true });
+  writeFileSync(join(api.root, 'transactional-data/2026/bank-statements/Raiffeisen', MAY_PDF), '%PDF-1.4 Mai');
+  update(books, PERSON, (b) => {
+    b.bankStatements.push({ bank: 'Raiffeisen', filename: MAY_PDF, fromDate: '2026-05-01', toDate: '2026-05-31', currency: 'CHF' });
+    b.statementAsks = [{ file: `Raiffeisen/${MAY_PDF}`, account: '1021', date: '2026-05-31', since: '2026-06-01', read: { by: 'hand', statement: MAY, check: { ok: true, gaps: [] }, known: [] } }];
+    // A reconciliation whose read movement C1 lies in the filed quarter, booked there (#254), and an open bank movement of its amount.
+    b.transactions.push({ ref: 'O2', bank: 'Raiffeisen', date: '2026-07-01', amount: 10, currency: 'CHF', direction: 'DBIT', description: 'Bank Juli' });
+    b.reconciliations = [{ account: '1021', from: '2026-05-10', to: '2026-07-01', since: '2026-07-02', covered: [], read: ['C1'], bank: ['O2'], pairs: [] }];
+  });
   saveBooks(api.ws, books);
   writeFileSync(join(api.root, 'data/trash/rx/d1/trashed.json'), JSON.stringify({ deletedAt: new Date().toISOString(), receipt: { id: 'rx', filename: 'late.pdf', originalFilename: 'late.pdf', extractedText: '', extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-06-01T08:00:00Z', location: 'archived' }, mappings: [{ receiptId: 'rx', transactionRef: 'C1' }], file: 'transactional-data/2026/receipts/late.pdf' }));
 });
 after(() => api?.stop());
+
+const MAY_PDF = 'Kontoauszug 01.05.2026 - 31.05.2026.pdf';
+const MAY = { currency: 'CHF', period: { from: '2026-05-01', to: '2026-05-31' }, opening: { date: '2026-05-01', amount: 10 }, closing: { date: '2026-05-31', amount: 10 }, movements: [] };
+const MAY_READ = `/api/statements/Raiffeisen/${encodeURIComponent(MAY_PDF)}/read`;
 
 type Call = { method: string; path: string; body?: unknown };
 
@@ -99,6 +113,11 @@ const refused: Array<Call & { status: number }> = [
   { method: 'PUT', path: '/api/year-close/2025/cash/1000', body: { amount: 100 }, status: 403 },
   { method: 'POST', path: '/api/statements/bookings', body: { entries: [{ id: 'back', transactionRef: 'C1', date: '2026-06-30', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'zurück' }], mappings: [] }, status: 403 },
   { method: 'POST', path: '/api/invoices/in_p/payments', body: { transactionRef: 'CI' }, status: 403 },
+  // A filed statement PDF's question (#254): not read, corrected nor read in (closing it books nothing: see below); a filed movement's mark not taken away.
+  { method: 'POST', path: MAY_READ, status: 403 },
+  { method: 'PUT', path: MAY_READ, body: { statement: MAY }, status: 403 },
+  { method: 'POST', path: `${MAY_READ}/import`, body: { statement: MAY }, status: 403 },
+  { method: 'DELETE', path: '/api/transactions/C1/filed-twin', status: 403 },
   { method: 'DELETE', path: '/api/invoices/in_p/payments/CI', status: 403 },
   // Several objects at once (#216): a batch of filed objects only is refused as their single changes are; its undo too.
   { method: 'POST', path: '/api/batch', body: { action: { kind: 'noReceiptNeeded' }, ids: ['C1'] }, status: 403 },
@@ -132,6 +151,11 @@ for (const call of refused) {
 }
 
 const allowed: Array<Call & { check: (index: Index) => boolean }> = [
+  // «Als Auszug behalten» on a filed statement PDF's question (#254): it books nothing, and nothing else could ever answer it.
+  { method: 'DELETE', path: MAY_READ, check: (i) => !i.statementAsks?.length },
+  // A reconciliation confirmed with a filed read movement (#254): it stays as filed; the open bank movement is marked as booked there.
+  { method: 'POST', path: '/api/reconciliations/1021', body: { pairs: [{ read: 'C1', bank: 'O2' }], own: [] },
+    check: (i) => i.transactions.find((t) => t.ref === 'O2')?.waitsForPerson?.why === 'filedTwin' && i.transactions.find((t) => t.ref === 'C1')?.description === 'Bank Mai' && !!i.reconciliations?.[0].done },
   // A batch over a filed and an open object (#216): the filed one is left out, the open one changes.
   { method: 'POST', path: '/api/batch', body: { action: { kind: 'noReceiptNeeded' }, ids: ['C1', 'O1'] },
     check: (i) => i.transactions.find((t) => t.ref === 'O1')?.noReceiptNeeded === true && !i.transactions.find((t) => t.ref === 'C1')?.noReceiptNeeded },

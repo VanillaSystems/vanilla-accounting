@@ -13,6 +13,8 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { hasVat } from '../codes/model.js';
 import { baseCurrency, chart, vat } from '../../../engines/index.js';
 import { isManualRef } from '../../../books/refs.js';
+import { bookedInFiled } from '../../../books/twins.js';
+import { lockedThrough } from '../../../books/lock-line.js';
 import { applyChips, type Chip, type Field } from '../../shell/chips.js';
 
 export interface EntryView {
@@ -207,12 +209,12 @@ export function whySeen(e: JournalEntry, receipts: readonly Receipt[]): WhySeen[
  * typed amount first, then newest first.
  */
 export function unbookedPayments(books: Pick<Index, 'transactions' | 'journalEntries' | 'config'>, q: string, amount: number | undefined, accounts: readonly LedgerBankAccount[]): BankTransaction[] {
-  const closed = books.config?.closedThrough;
+  const closed = lockedThrough(books.config);
   const booked = bookedStates(books, accounts);
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const same = (t: BankTransaction) => amount !== undefined && Math.abs(t.amount - Math.abs(amount)) < 0.005;
   return books.transactions
-    .filter((t) => booked(t.ref) !== 'booked' && t.amount !== 0 && !(closed && t.date <= closed))
+    .filter((t) => booked(t.ref) !== 'booked' && !bookedInFiled(t) && t.amount !== 0 && !(closed && t.date <= closed))
     .filter((t) => {
       const h = [formatDate(t.date), t.date, fmt(t.amount), t.amount.toFixed(2), t.description, t.counterparty, t.reference, t.bank, t.currency, t.ref].join(' ').toLowerCase();
       return words.every((w) => h.includes(w));

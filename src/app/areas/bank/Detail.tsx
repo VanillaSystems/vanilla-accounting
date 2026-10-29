@@ -9,15 +9,17 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { BankTransaction } from '../../../types/index.js';
 import type { PayoutWaitView } from '../../../types/drop.js';
 import { ratesUsed } from '../../../accounting/fx-conversion.js';
+import { bookedInFiled } from '../../../books/twins.js';
+import { pending, reconciliationOf } from '../../../books/reconcile.js';
 import type { RouteOf } from '../../shell/route.js';
-import { api, sources } from '../../lib/api.js';
+import { api, errorText, sources } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { monthName } from '../../lib/period-label.js';
 import { useFx } from '../../hooks/use-fx.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import { checkText } from '../../lib/fx-text.js';
 import { t } from '../../i18n/index.js';
-import type { AreaProps } from '../index.js';
+import type { AreaProps, Nav } from '../index.js';
 import { I } from '../receipts/icons.js';
 import { isCamt, matches, payHaystack, payText, signed, type Bank, type Statement } from './model.js';
 import { bankFor, setUi, useUi, type Section } from './state.js';
@@ -50,6 +52,8 @@ import { GroupedOffer } from '../company/RulesSection.js';
 import { Pick } from '../../selection/Pick.js';
 import { ActionsMenu } from '../../selection/ActionsMenu.js';
 import { paymentActions } from './actions-menu.js';
+import { NoMovements, PdfQuestion, pdfOf, statementActions } from './PdfQuestion.js';
+import { ReconcilePanel } from './Reconcile.js';
 import { SelectionView } from '../../selection/SelectionView.js';
 import { paymentRows } from '../../selection/rows.js';
 import { clickRow, useSelection, useShown } from '../../selection/store.js';
@@ -127,6 +131,12 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
   const picked = useSelection('payment');
   useShown('payment', hits.map((p) => p.ref));
   const pickedRefs = new Set(picked?.ids);
+  // A statement PDF's question kept in the books (#254), and a PDF that brought no movement.
+  const pdf = pdfOf(s);
+  const ask = pdf ? props.books.statementAsks?.find((a) => a.file === pdf) : undefined;
+  const edit = canEdit && !closed;
+  // The account's reconciliation of movements read from PDFs with its bank's file, on any statement of its days (#254).
+  const reconcile = pending(props.books).find((r) => r.account === s.account.account && r.from <= s.to && r.to >= s.from);
 
   return (
     <div className="detail-in" data-for={s.key}>
@@ -150,6 +160,8 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
             : s.missing
               ? <span className="notice warn" style={{ margin: 0 }} data-testid="missing-notice">{I.dot}{t('bank.missingNotice')}</span>
               : <span className="notice" style={{ margin: 0 }} data-testid="without-notice">{t('bank.withoutNotice', { amount: `${s.account.currency} ${fmt(b.check(s).book)}` })}</span>
+        ) : pdf && !all.length && !ask ? (
+          <NoMovements s={s} nav={nav} edit={edit} />
         ) : c!.gap ? (
           <span className="notice warn" style={{ margin: 0 }} data-testid="statement-gap">{I.dot}{t('bank.gap', { from: formatDate(c!.gap.from), to: formatDate(c!.gap.to), bank: fmt(c!.gap.bank), open: fmt(c!.gap.open), diff: fmt(c!.gap.diff) })}</span>
         ) : c!.ok ? (
@@ -168,6 +180,8 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
         </div>
       ))}
       {c?.bookDiff && !c.gap ? <BookDiff {...props} diff={c.bookDiff} s={s} /> : null}
+      {ask ? <PdfQuestion key={ask.file} ask={ask} nav={nav} edit={edit} /> : null}
+      {reconcile ? <ReconcilePanel key={`${reconcile.account}-${reconcile.read.join(',')}-${reconcile.bank.join(',')}`} r={reconcile} books={props.books} label={s.account.label} closedThrough={b.closedThrough} edit={canEdit} nav={nav} /> : null}
 
       <div className="body">
         <div className="desk">
@@ -176,7 +190,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
             <div className="src paybar">
               <span><PayBar {...props} tx={tx} closed={closed} onClear={() => choose(undefined)} /></span>
               {tx && !closed ? <WorkflowButtons kind="transaction" id={tx.ref} facts={[b.unbooked(tx) ? 'unbooked' : 'booked']} nav={nav} canEdit={canEdit} /> : null}
-              {tx ? <ActionsMenu set={paymentActions(props as AreaProps, b, tx, closed)} /> : null}
+              {tx ? <ActionsMenu set={paymentActions(props as AreaProps, b, tx, closed)} /> : <ActionsMenu set={statementActions(nav, s, ask, edit)} />}
               {tx ? <AskAi context={{ kind: 'payment', id: tx.ref, label: tx.description ?? tx.ref }} /> : null}
               {src && <span className="pgno">{page}</span>}
               {file && <a className="dl inline" href={file} download={s.file!.filename} data-tip={t('bank.downloadTitle', { file: s.file!.filename })}>{I.dl}<span>{t('receipts.download')}</span></a>}
@@ -292,11 +306,12 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
       ) : tx.noReceiptNeeded ? (
         <> · {t('bank.noReceiptNotNeeded')}{edit && <> <button type="button" className="golink" data-tip={t('bank.resetTip')} onClick={() => setNoReceipt(nav, tx, false)}>{t('bank.reset')}</button></>}</>
       ) : null}
+      {bookedInFiled(tx) ? <> · <FiledTwin tx={tx} books={props.books} nav={nav} edit={edit} /></> : null}
       {entry ? (
         <> · <button type="button" className="golink" data-testid="go-entry" data-tip={t('bank.openEntry')} onClick={() => nav.go(at({ area: 'journal', id: entry.id }, entry.date))}>
           {t('bank.entries', { lines })}
         </button></>
-      ) : tx.amount ? <> · <NotBooked tx={tx} linked={linkedOf(props.books.receipts.filter((r) => receipts.includes(r.id) && r.kind !== 'duplicate'))} />{edit && tx.direction === 'CRDT' ? <PayoutWait key={`pw-${tx.ref}`} books={props.books} tx={tx} /> : null}</> : null}
+      ) : tx.amount && !bookedInFiled(tx) ? <> · {reconciliationOf(props.books, tx.ref) ? <span className="m" data-testid="reconcile-held">{t('reconcile.held')}</span> : <NotBooked tx={tx} linked={linkedOf(props.books.receipts.filter((r) => receipts.includes(r.id) && r.kind !== 'duplicate'))} />}{edit && tx.direction === 'CRDT' ? <PayoutWait key={`pw-${tx.ref}`} books={props.books} tx={tx} /> : null}</> : null}
       {edit ? <ReceiptSetOffer key={`rs-${tx.ref}`} {...props} tx={tx} /> : null}
       {edit && receipts.length > 1 ? <GroupedOffer key={`go-${tx.ref}`} payment={tx.ref} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
       <Note key={tx.ref} tx={tx} nav={nav} edit={edit} />
@@ -445,6 +460,23 @@ function PayoutWait({ books, tx }: { books: Props['books']; tx: BankTransaction 
   }, [books, tx.ref]);
   if (!wait) return null;
   return <> · <span className="wn" data-testid="payout-wait">{t(`bank.payoutWait.${wait.why}`, { provider: wait.provider, file: wait.file, since: wait.since ? formatDate(wait.since) : '' })}</span></>;
+}
+
+/**
+ * A bank movement the person said is a movement read from a PDF of a filed quarter (#254): booked there,
+ * naming that movement. «Trotzdem buchen» is her saying it is a payment of its own; only then is it booked.
+ */
+function FiledTwin({ tx, books, nav, edit }: { tx: BankTransaction; books: Props['books']; nav: Nav; edit: boolean }) {
+  const read = tx.waitsForPerson?.why === 'filedTwin' ? tx.waitsForPerson.read : undefined;
+  const twin = books.transactions.find((x) => x.ref === read);
+  const date = twin ? formatDate(twin.date) : '';
+  const anyway = () => void api.bookFiledTwinAnyway(tx.ref).then(() => nav.refresh(), (e) => nav.toast(errorText(e)));
+  return (
+    <span data-testid="filed-twin">
+      <span className="m">{twin ? t('bank.filedTwinOf', { date }) : t('bank.filedTwin')}</span>
+      {edit ? <>{' '}<button type="button" className="golink" data-testid="filed-twin-anyway" data-tip={t('bank.filedTwinAnywayTip', { date: date || '…' })} onClick={anyway}>{t('bank.filedTwinAnyway')}</button></> : null}
+    </span>
+  );
 }
 
 /** A payment without a booking: one that waits for its receipt says so as a fact, with its return's due day once it is the person's (issue #29); one whose receipt could not be read says that (issue #57). */

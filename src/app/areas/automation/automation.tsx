@@ -34,7 +34,8 @@ import { approvalWithheld, fileName, returnSummary } from './filing-summary.js';
 import { outcomeText, periodText, readsInWords } from './words.js';
 import type { PeriodReturn, PreparedXml, SealOutput } from '../../../workflows/filing.js';
 import type { ClearingCheck } from '../../../booking/providers.js';
-import { commandRefusalText, refusalText } from '../../automation/refusal.js';
+import { commandRefusalText, refusalPayment, refusalText } from '../../automation/refusal.js';
+import type { Refusal } from '../../../types/refusal.js';
 import { RunFromLog } from '../../history/RunHistory.js';
 import { baseCurrency, chargesVat, filing, vat } from '../../../engines/index.js';
 import { QuestionTasks } from '../../questions/Questions.js';
@@ -51,6 +52,7 @@ import { addDays, localToday, parsePeriod } from '../../../accounting/periods.js
 import { waitingForReceipt } from '../../../accounting/receipt-due.js';
 import { periodName } from '../../lib/period-label.js';
 import { codeLabel } from '../codes/names.js';
+import { reconciliationOf } from '../../../books/reconcile.js';
 
 type Props = AreaProps<RouteOf<'automation'>>;
 type R = RouteOf<'automation'>;
@@ -96,6 +98,12 @@ function groupsOf(view: AutomationView | undefined): Array<{ key: string; label:
 }
 
 const sameRow = (a: R, b: R) => a.view === b.view && (a.view !== 'workflow' || (b.view === 'workflow' && a.workflow === b.workflow));
+
+/** The way to where a refusal is answered, when it names a payment (refusalPayment). */
+function WhyGo({ why, nav }: { why?: Refusal; nav: Nav }) {
+  const to = refusalPayment(why);
+  return to ? <>{' '}<button type="button" className="golink" data-testid="why-go" onClick={() => nav.go(at({ area: 'bank', payment: to.payment }, to.date))}>{t('automation.answerAtPayment')}</button></> : null;
+}
 
 /** The row a route marks: a run marks its workflow. */
 function selectedRow(route: R, view: AutomationView | undefined): R | undefined {
@@ -367,7 +375,7 @@ function runTitle(data: RunDetail, books: Index, w?: WorkflowDecl): string {
 const money = (amount?: number, currency?: string) => (amount === undefined ? '' : `${currency ?? ''} ${fmt(amount)}`.trim());
 
 /** LIEST: what the step had in front of it. */
-function Took({ s }: { s: StepRecord }) {
+function Took({ s, nav }: { s: StepRecord; nav: Nav }) {
   const took = (s.output?.took as Took[] | undefined) ?? [];
   const input = Object.entries(s.input).filter(([, v]) => v);
   if (!took.length && !input.length) return <p className="m">—</p>;
@@ -376,6 +384,7 @@ function Took({ s }: { s: StepRecord }) {
       {took.map((x, i) => (
         x.kind === 'files' ? <div key={i}>{t('automation.took.files', { n: x.names.length })}<ul>{x.names.map((n) => <li key={n} className="mono">{n}</li>)}</ul></div>
           : x.kind === 'receipts' ? <div key={i}>{t('automation.took.receipts', { n: x.ids.length })}<ul>{x.files.slice(0, 8).map((n) => <li key={n} className="mono">{n}</li>)}</ul></div>
+          : x.kind === 'held' ? <div key={i}><Go to={at({ area: 'bank', payment: x.payment }, x.date)} nav={nav} className="golink">{t('reconcile.heldRun', { n: x.n, account: x.account })}</Go></div>
           : <div key={i}>{t('automation.took.transactions', { n: x.n })}</div>
       ))}
       {input.map(([k, v]) => <div key={k} className="mono">{k}: {k === 'period' ? periodText(v) : v}</div>)}
@@ -586,7 +595,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
         {data.mode !== 'live' ? ` · ${t(data.mode === 'dry' ? 'automation.mode.dry' : 'automation.mode.replay')}` : ''}{data.reason ? ` · ${t(`automation.queuedBecause.${data.reason}` as 'automation.queuedBecause.slot')}` : ''}
       </p>
       <p className="m mono runid">{id}</p>
-      {data.error ? <p className="warnline" data-testid="run-why">{refusalText(data.error, data.why)}</p> : null}
+      {data.error ? <p className="warnline" data-testid="run-why">{refusalText(data.error, data.why)}<WhyGo why={data.why} nav={nav} /></p> : null}
       <div className="wfactions">
         {data.status === 'waiting' ? <button type="button" className="btn" onClick={() => nav.select({ area: 'automation', view: 'tasks', run: id })}>{t('automation.openTask')}</button> : null}
         {data.status === 'stuck' || data.status === 'parked' ? <button type="button" className="btn" onClick={act({ kind: 'resume', run: id })}>{t('automation.resume')}</button> : null}
@@ -616,10 +625,10 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
                 {s.outcome ? <span className="m">→ {outcomeText(s.outcome)}</span> : null}
               </div>
               <div className="io">
-                <div className="box"><small>{t('automation.io.took')}</small><Took s={s} /></div>
+                <div className="box"><small>{t('automation.io.took')}</small><Took s={s} nav={nav} /></div>
                 <div className="box"><small>{t('automation.io.made')}</small><Made s={s} nav={nav} /></div>
               </div>
-              {s.error ? <div className="warnline">{refusalText(s.error, s.why)}</div> : null}
+              {s.error ? <div className="warnline">{refusalText(s.error, s.why)}<WhyGo why={s.why} nav={nav} /></div> : null}
               {((s.output?.notes as IntakeNote[] | undefined) ?? []).map((n, j) => <div key={`n${j}`} className="warnline">{noteText(n)}</div>)}
               {s.effects.filter((e) => e.refused || (!e.applied && e.would !== undefined)).map((e, j) => (
                 <div key={j} className={e.refused ? 'warnline' : 'm'}>{e.refused ? t('automation.refused', { reason: e.refused }) : Array.isArray(e.would) ? t('automation.wouldBook', { n: e.would.length }) : t('automation.skippedEffect')}</div>
@@ -816,6 +825,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
                   <span className="mono">{formatDate(p.date)}</span> {payText(p).name} <span className="mono">{p.currency} {fmt(signed(p))}</span>
                 </button>
                 {p.waitsForPerson && <span className="m"> · {t('automation.unbookedWaits')}</span>}
+                {reconciliationOf(books, p.ref) ? <> · <Go to={at({ area: 'bank', payment: p.ref }, p.date)} nav={nav} className="golink">{t('reconcile.held')}</Go></> : null}
               </li>
             ))}
           </ul>

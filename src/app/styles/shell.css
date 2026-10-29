@@ -179,6 +179,8 @@ main { margin-left: var(--abw); }
 
 /* menus, palette, toast, overlays */
 .menu { position: fixed; z-index: 40; min-width: 240px; padding: 6px; border-radius: 12px; background: var(--glass); backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4); border: 1px solid var(--glass-line); box-shadow: var(--shadow); animation: pop .16s ease; }
+/* A menu a dialog hands to the page (the drop dialog's «Aktionen», #254) opens above the dialog. */
+body > .menu { z-index: 42; }
 @keyframes pop { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
 .menu button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; font-size: 13px; text-align: left; }
 .menu button:hover, .menu button.on { background: var(--accent-soft); }

@@ -31,8 +31,16 @@ import { roleBefore } from './banks.js';
  * names the date, amount or description she set, so finishing the read never writes over them;
  * emptied once the receipt is filed. An app of schema 5 would read the receipt and overwrite her
  * values, so it must refuse these books.
+ * 7: statement PDFs keep their open question in the books (#254): `statementAsks` (asks.jsonl of a
+ * year), a PDF whose movements wait for «Einlesen» or «Als Auszug behalten»; `reconciliations`
+ * (reconcile.jsonl of a year), an account's movements read from PDFs set against its bank export or
+ * CSV, waiting for the person or confirmed, with the days its bank files cover (`covered`) and the read
+ * movements named payments of their own (`own`) (src/books/reconcile.ts); and `waitsForPerson.why:
+ * 'filedTwin'` with the `read` movement, a bank movement booked in a filed quarter as a movement read
+ * from a PDF. An app of schema 6 would drop the questions and reconciliations on its next save and show
+ * the mark nowhere, so it must refuse these books.
  */
-export const BOOKS_SCHEMA = 6;
+export const BOOKS_SCHEMA = 7;
 /**
  * 2: every money account names its `role` (#88).
  * 3: `company.vat.reportingSince`, the year the basis began (#143). An app of schema 2 would read
@@ -57,6 +65,8 @@ export const BOOKS_MIGRATIONS: Ladder<Record<string, unknown>> = {
   4: (doc) => doc,
   // No receipt has `handSet` before; the number makes an older app refuse the books.
   5: (doc) => doc,
+  // No books hold a statement's question or a reconciliation before; the number makes an older app refuse them.
+  6: (doc) => doc,
 };
 /** On the YAML document, so the comments of the manifest survive the step. */
 export const MANIFEST_MIGRATIONS: Ladder<Document> = {

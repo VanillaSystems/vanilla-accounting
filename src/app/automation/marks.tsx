@@ -32,7 +32,7 @@ function runResultText(w: WorkflowDecl, r: RunDetail): string {
   const workflow = textIn(w.label, language());
   const res = runResult(w, r);
   switch (res.kind) {
-    case 'done': return t('marks.done', { workflow, n: res.entries });
+    case 'done': return [t('marks.done', { workflow, n: res.entries }), ...(res.held ?? []).map((h) => `${t('reconcile.heldRun', { n: h.n, account: h.account })}.`)].join(' ');
     case 'waiting': {
       const step = typeof res.step === 'string' ? res.step : textIn(res.step, language());
       // A workflow that books nothing (the VAT filing) does not say «nichts gebucht» (r7h-34).

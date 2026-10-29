@@ -258,8 +258,29 @@ classDiagram
     +noReceiptNeeded: boolean [0..1]
     +businessPart: what, rate [0..1]
     +replaced: JournalEntry[0..*]
-    +waitsForPerson: since, why [0..1]
+    +waitsForPerson: since, why, read [0..1] «filedTwin: the filed movement read from a PDF it is (#254)»
     +waitsForReceipt: since, unread, decided [0..1]
+  }
+  class Reconciliation {
+    <<books/reconcile.jsonl>>
+    +account: string
+    +from: date
+    +to: date
+    +since: date
+    +read: string[] «refs read from PDFs that take part»
+    +bank: string[] «refs of the bank's file that take part»
+    +same: string[0..*] «one movement already: same day and amount»
+    +pairs: read, bank, account[0..*] «proposed while waiting; the person's once confirmed»
+    +differenceTo: string [0..1]
+    +done: date [0..1]
+  }
+  class StatementAsk {
+    <<books/asks.jsonl>>
+    +file: string «the kept statement PDF, bank/name»
+    +account: string
+    +date: date «the statement's last day»
+    +since: date
+    +read: StatementRead «the table as read or corrected»
   }
   class BankTransactionPart {
     +amount: number

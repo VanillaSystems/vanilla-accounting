@@ -10,7 +10,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { initRepository } from '../src/workspace/git.js';
-import { loadBooks, saveBooks, sealsOf } from '../src/books/store.js';
+import { loadBooks, periodLock, saveBooks, sealsOf } from '../src/books/store.js';
+import { openReconciliations, pending } from '../src/books/reconcile.js';
+import { confirm } from '../src/server/reconcile.js';
+import type { Reconciliation } from '../src/types/index.js';
 import { writeSeal } from '../src/books/seal.js';
 import { yearEnd as yearEndData } from '../src/engines/index.js';
 import {
@@ -541,4 +544,33 @@ test('#119: «every month has its statement» only on an account with an importe
   } finally {
     yearEndData().moneyAccounts = swiss;
   }
+});
+
+test('review (#254): a statement PDF\'s question of the year still open closes with the year, its PDF kept as the statement; the close is not refused by its own save', async () => {
+  const ws = readyToClose();
+  const b = loadBooks(ws);
+  const statement = { currency: 'CHF', period: { from: '2026-11-01', to: '2026-11-30' }, opening: { date: '2026-11-01', amount: 0 }, closing: { date: '2026-11-30', amount: 0 }, movements: [] };
+  b.statementAsks = [{ file: 'Raiffeisen/Kontoauszug 01.11.2026 - 30.11.2026.pdf', account: '1020', date: '2026-11-30', since: '2026-12-01', read: { by: 'hand', statement, check: { ok: true, gaps: [] }, known: [] } }];
+  saveBooks(ws, b);
+  bookRevaluation(ws, '2026', RATES);
+  for (const t of yearEndTemplates()) markTemplate(ws, '2026', t.id, 'na');
+  const result = await closeYear(ws, '2026', RATES, '2027-03-01');
+  assert.equal(result.closedThrough, '2026-12-31');
+  const after = loadBooks(ws);
+  assert.deepEqual([after.config.closedThrough, after.statementAsks], ['2026-12-31', undefined], 'closed, the question with it');
+  assert.ok(sealsOf(after).checks.every((c) => c.status === 'intact'));
+});
+
+test('a filed movement read from a PDF and not booked there, confirmed the same as an open bank movement: the year counts it booked once its twin is (#254)', () => {
+  const b: Books & { reconciliations?: Reconciliation[] } = books();
+  const move = (ref: string, date: string) => ({ ref, bank: 'Raiffeisen', date, amount: 150, currency: 'CHF', direction: 'DBIT' as const, description: 'Reinigung Muster', counterparty: 'Reinigung Muster' });
+  b.transactions.push(move('P', '2026-09-29'), move('B', '2026-10-06'));
+  const { isClosed } = periodLock(b);
+  openReconciliations(b, { pdf: new Set(['P']), structured: new Set(['B']), both: new Set(), spans: [{ account: '1020', from: '2026-10-01', to: '2026-10-31' }] }, () => '1020', '2026-10-28', isClosed);
+  confirm(b as never, pending(b)[0], { pairs: [{ read: 'P', bank: 'B' }], own: [] }, { rateOf: () => undefined, isClosed, chart: new Set(CHART), bankOf: () => '1020', today: '2026-10-28' });
+  assert.deepEqual([b.transactions.some((t) => t.ref === 'P'), b.reconciliations?.[0].pairs], [true, [{ read: 'P', bank: 'B' }]], 'confirmed: the filed one stays as filed, paired');
+  const unbooked = () => yearClose(input(b)).checks.find((c) => c.id === 'allBooked')!.problems;
+  assert.deepEqual(unbooked(), [{ code: 'unbooked', count: 2, refs: ['P', 'B'] }], 'its twin unbooked: both wait');
+  b.journalEntries.push(e('B', '2026-10-06', '6570', '1020', 150));
+  assert.deepEqual(unbooked(), [], 'its twin booked: the filed one is that payment, booked');
 });

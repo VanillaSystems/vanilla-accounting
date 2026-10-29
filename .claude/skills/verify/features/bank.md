@@ -93,11 +93,31 @@ Wise EUR (1023), January to September 2026.
 
 - The demo's statement PDFs are generated text pages: the closing-balance reader (`npm run extract-balances`,
   src/providers/statement-pdf/statement-pdf-balances.ts) does not recognise them, so a re-imported demo PDF shows `Ende ?`. The demo's
-  balances were written by the generator. A camt.053 covers their days, so they are kept, not read (#217); an upload of a PDF
-  no camt.053 covers opens the drop dialog, which reads it (features/drop.md).
+  balances were written by the generator. Their account has a camt.053, so every PDF of it is kept without a question, whatever
+  days it shows (#254); an upload of a PDF of an account without camt.053 or CSV opens the drop dialog, which reads it (features/drop.md).
+- **A statement PDF's question and «Aktionen» (#254, driven 2026-10-28).** A PDF statement with no movement in its days shows
+  `[data-testid=no-movements]` `<Monat>: keine Bewegungen eingelesen.` with `[data-testid=no-movements-read]` `Bewegungen aus dem PDF lesen`;
+  with no payment chosen the paybar's `Aktionen` (`[data-act=actions]`) offers `[data-action=readPdf]` `Bewegungen aus dem PDF einlesen`. Either
+  reads the PDF (the sandbox has no model: the hand form, `[data-testid=drop-read-why]` `data-why=noProvider`, or `failed` with the stub) and keeps
+  the table as the PDF's question in the books (`statementAsks`): `[data-testid=pdf-question]` with the drop dialog's table (`[data-testid=drop-read-*]`),
+  `Einlesen` and `Als Monatsauszug behalten`. An empty table shows `Noch nichts erfasst …` in grey (`.dread-check.blank`), never `Geht auf`. Days a
+  camt.053 or CSV of the account covers are named in `[data-testid=drop-read-covered]` (`data-whole`); all days: no `Einlesen`. To make the
+  state by API: `POST /api/statements?name=x.pdf` (kept), then `POST|PUT /api/statements/<bank>/<file>/read[/import]`.
+- **The account's reconciliation (#254).** Read movements and a bank camt.053 or CSV of the same days (± 7) meet in one reconciliation
+  (`reconciliations` in `/books.json`, `reconcile.jsonl`): every statement of the account whose days it touches shows `[data-testid=reconcile]`
+  «Abgleich: bisher aus PDFs gelesen ↔ jetzt vom Bank-Export», a row per read movement (`tr[data-read=<ref>]`) with
+  `[data-testid=reconcile-choice]` (`— wählen —`, `own` «Eigene Zahlung», or a bank movement's ref, the code's pairs preselected; `$B select`
+  works), `[data-testid=reconcile-account]` for a filed pair's difference, `[data-testid=reconcile-bank-only]`, `[data-testid=reconcile-same]`
+  and `[data-testid=reconcile-confirm]` «Abgleich bestätigen» (`POST /api/reconciliations/<account>` with `{ pairs, own }`), disabled while a
+  row is open. A held movement's paybar says `[data-testid=reconcile-held]`. Quickest state on the demo (Raiffeisen has camt.053 through
+  September): upload an October PDF (`POST /api/statements?name=oktober.pdf`, kept), `POST …/read` (hand form), then `POST …/read/import` with
+  a table whose first lines repeat the last September payments on 1 and 2 October: the import answers `reconcile: { read, bank }`.
 - The import is additive: a payment no statement file holds any more stays in the books (extract's rebuild decides). The
   order of the books' transactions is kept; new ones come last.
 - A statement's group label is the manifest's account label (`Bank Raiffeisen`), not a shortened one.
 - Driven on 2026-10-11 (phase 3): list by account and month, payment line on the PDF, preview, links to receipt and entry
   and back, `/payments/<ref>`, missing month and its import through the well, camt.053 drop into the running month,
   closed-quarter refusal, `braucht keinen` and undo, search, ⌘K, dark mode.
+- **A filed pair (#254).** A reconciliation's pair with a read movement filed and booked marks the bank's movement
+  `[data-testid=filed-twin]` «schon im abgerechneten Quartal gebucht, als die am … gelesene Zahlung» with `[data-testid=filed-twin-anyway]`
+  `Trotzdem buchen` (`DELETE /api/transactions/<ref>/filed-twin`); a difference of a few Rappen is booked on it.

@@ -11,6 +11,7 @@ import { APP_ROOT } from '../workspace/workspace.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { bookedState } from '../accounting/payment-entries.js';
 import { loadBooks, periodLock, type Books } from '../books/store.js';
+import { heldByReconciliation, pending, reconciliationOf } from '../books/reconcile.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
 import type { AskOptions } from '../llm/ask.js';
@@ -132,12 +133,18 @@ const receiptsWhere = (keep: (r: Books['receipts'][number]) => boolean) => (b: B
   const rs = b.receipts.filter(keep);
   return rs.length ? [{ kind: 'receipts', ids: rs.map((r) => r.id), files: rs.map((r) => r.filename) }] : [];
 };
-/** New payments, and payments booked before a receipt was linked to them (booked again). */
-const unbooked = (b: Books): Took[] => {
+/** New payments, and payments booked before a receipt was linked to them (booked again); those an account's reconciliation holds (#254) are named with it, never left out silently. */
+export const unbooked = (b: Books): Took[] => {
   const booked = new Set(b.journalEntries.map((e) => e.transactionRef));
   const again = new Set(entriesWithoutTheirReceipts(b.journalEntries, b.mappings, new Set(b.transactions.map((t) => t.ref)), periodLock(b).closedThrough).map((e) => e.transactionRef));
-  const n = b.transactions.filter((t) => (!booked.has(t.ref) || again.has(t.ref)) && !periodLock(b).isClosed(t.date) && !t.waitsForPerson).length;
-  return n ? [{ kind: 'transactions', n }] : [];
+  const open = b.transactions.filter((t) => (!booked.has(t.ref) || again.has(t.ref)) && !periodLock(b).isClosed(t.date) && !t.waitsForPerson);
+  const held = heldByReconciliation(b);
+  const n = open.filter((t) => !held.has(t.ref)).length;
+  const waiting = pending(b).flatMap((r): Took[] => {
+    const mine = open.filter((t) => r.read.includes(t.ref) || r.bank.includes(t.ref));
+    return mine.length ? [{ kind: 'held', account: r.account, n: mine.length, payment: mine[0].ref, date: mine[0].date }] : [];
+  });
+  return [...(n ? [{ kind: 'transactions' as const, n }] : []), ...waiting];
 };
 
 const tx = (input: Record<string, unknown>) => input.transaction as BankTransaction;
@@ -165,6 +172,8 @@ export const ACTIONS: Record<string, Action> = {
       const t = tx(input);
       // A payment a person booked in part (one line of a split undone, r9k-2) is hers to finish: no rule or model books over her lines.
       if (bookedState(scratch, t.ref, ws.bankAccounts) === 'partly') return { outcome: 'undecided', output: { why: 'partlyBooked' } };
+      // A movement of an account's reconciliation that waits (#254): booked now, it might count twice.
+      if (reconciliationOf(scratch, t.ref)) return { outcome: 'held', output: { why: 'reconcile' } };
       const fx = loadFxResolver();
       const context = loadClassifyContext(ws);
       // No provisional booking: a payment that needs a receipt waits for it, as in the inbox run (issue #29).

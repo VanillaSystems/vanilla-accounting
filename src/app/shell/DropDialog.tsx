@@ -7,17 +7,20 @@
  * rows until it closes; the work goes on when it does.
  */
 import { useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import { api, errorText } from '../lib/api.js';
 import { language, t, tWith } from '../i18n/index.js';
 import { addEach, dropStart, failedLine } from './drop-upload.js';
 import { needsYou, tabOf, type DropTab } from './drop-tabs.js';
 import { fmt, formatDate } from '../lib/utils.js';
+import { monthName } from '../lib/period-label.js';
 import { useAutomation } from '../automation/store.js';
 import { textIn } from '../../workflows/model.js';
 import type { Index } from '../../types/index.js';
 import type { DropRow, DropSession } from '../../types/drop.js';
 import { FileDetails } from './FileDetails.js';
 import { CsvColumnsForm, StatementRead } from './StatementRead.js';
+import { Menu } from './Menu.js';
 import type { Location, Route } from './route.js';
 import { at } from '../areas/receipts/view.js';
 import { setBankDraft } from '../areas/company/bank-draft.js';
@@ -237,7 +240,8 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
               <small>{t('drop.readAs', { file: r.readAs.file })}</small>
               {r.readAs.ref ? <button type="button" className="linkbtn" data-testid="drop-open-statement" onClick={() => go({ area: 'bank', payment: r.readAs!.ref })}>{t('drop.openStatement')}</button> : null}
             </>
-          ) : r.message ? <small>{r.message}</small> : r.reason ? <small>{t(`drop.reason.${r.reason}` as 'drop.reason.duplicate')}</small> : null}
+          ) : r.asked ? <small data-testid="drop-asked">{t('drop.read.asked', { month: monthName(`${r.asked.month}-01`) })}</small>
+          : r.message ? <small>{r.message}</small> : r.reason ? <small>{t(`drop.reason.${r.reason}` as 'drop.reason.duplicate')}</small> : null}
           {asked ? (
             <span className="dacts">
               <button type="button" className="linkbtn" data-testid="drop-twin-same" onClick={() => void act(session, r, { kind: 'twin', answer: 'same' })}>{t('drop.twin.same')}</button>
@@ -257,7 +261,8 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
         {r.state === 'take' || r.state === 'undone' ? <span /> : <button type="button" className="dx" aria-label={t('drop.remove', { name: r.name })} onClick={() => void act(session, r, { kind: 'remove' })}>×</button>}
       </div>
       {details && open ? <FileDetails d={details} name={r.from ? `${r.from} › ${r.name}` : r.name} /> : null}
-      {table ? <StatementRead key={`${r.read!.by}-${r.read!.statement.movements.length}-${r.read!.statement.closing.amount}`} r={r} act={(a) => act(session, r, a)} go={go} /> : null}
+      {table ? <StatementRead key={`${r.read!.by}-${r.read!.statement.movements.length}-${r.read!.statement.closing.amount}`} read={r.read!} pdf={r.kind === 'statement-pdf'} act={(a) => act(session, r, a)} go={go}
+        asReceipt={r.kind === 'statement-pdf' ? () => void act(session, r, { kind: 'as', as: 'receipt' }) : undefined} /> : null}
       {columns ? <CsvColumnsForm r={r} act={(a) => act(session, r, a)} /> : null}
     </>
   );
@@ -362,10 +367,14 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
   const shown = !!receipt && open;
   // The books changed under the page: Belege must not show the receipt any more.
   const undo = () => { setBusy(true); void act(session, r, { kind: 'undo' }).then(refresh).finally(() => setBusy(false)); };
+  // A statement PDF kept as the statement, its movements not read in (#254): «Aktionen» reads them.
+  const keptPdf = r.kind === 'statement-pdf' && !!r.statement?.file.toLowerCase().endsWith('.pdf');
+  const [menu, setMenu] = useState<DOMRect | null>(null);
+  const readPdf = () => { setBusy(true); void act(session, r, { kind: 'readPdf' }).then(refresh).finally(() => setBusy(false)); };
   return (
     <>
       <div className={`droprow s-taken${shown ? ' open' : ''}`} data-testid="drop-row" data-file={r.name} data-state={x.kind}>
-        <div className="dn"><b className="mono">{r.name}</b><small>{r.report ? `${t(`drop.report.${r.report.kind}`, { provider: r.report.name })} · ${reportLine(r.report)}` : r.statement ? [r.read && t(`drop.read.by.${r.read.by}`), r.facts?.from && r.facts.to && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to)}`, t('drop.entries', { n: r.statement.refs.length })].filter(Boolean).join(' · ') : receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}{r.twin?.relation === 'companion' ? ` · ${t('drop.twin.companion', { name: r.twin.name })}` : r.document ? ` · ${t(`drop.doc.${r.document}` as 'drop.doc.newsletter')}` : ''}</small></div>
+        <div className="dn"><b className="mono">{r.name}</b><small>{r.report ? `${t(`drop.report.${r.report.kind}`, { provider: r.report.name })} · ${reportLine(r.report)}` : r.statement ? [r.read && t(`drop.read.by.${r.read.by}`), r.facts?.from && r.facts.to && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to)}`, keptPdf ? t('drop.kept') : t('drop.entries', { n: r.statement.refs.length })].filter(Boolean).join(' · ') : receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}{r.twin?.relation === 'companion' ? ` · ${t('drop.twin.companion', { name: r.twin.name })}` : r.document ? ` · ${t(`drop.doc.${r.document}` as 'drop.doc.newsletter')}` : ''}</small></div>
         <div className="dgo">
           <span className={`dchip p-${x.kind}`}>{x.kind === 'working' ? (x.step ?? t('drop.p.working')) : t(`drop.p.${x.kind}` as 'drop.p.read')}</span>
           {missing ? <small className="dwhy">{missing}</small> : x.kind === 'orderPage' ? <small className="dwhy" data-testid="drop-order-page">{t('drop.p.orderPageWhy', { provider: x.provider })}</small> : x.kind === 'refused' ? <small className="dwhy">{reasonText(x.reason)}</small> : null}
@@ -373,8 +382,11 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
             {x.kind === 'stuck' ? <button type="button" className="linkbtn" data-testid="drop-stuck-run" onClick={() => go({ area: 'automation', view: 'run', run: x.run })}>{t('processing.toRun')}</button> : null}
             {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id }, receipt.date)}>{t('drop.openReceipt')}</button> : null}
             {(r.kind === 'receipt' || r.kind === 'photo') && !r.report && x.kind !== 'matched' && x.kind !== 'working' ? <button type="button" className="linkbtn" data-testid="drop-as-statement" disabled={busy} onClick={() => { setBusy(true); void act(session, r, { kind: 'statement' }).then(refresh).finally(() => setBusy(false)); }}>{t('drop.asStatement')}</button> : null}
+            {keptPdf ? <button type="button" className="linkbtn" data-act="actions" data-testid="drop-actions" aria-haspopup="menu" aria-expanded={!!menu} disabled={busy} onClick={(e) => setMenu(e.currentTarget.getBoundingClientRect())}>{t('actions.label')}</button> : null}
             <button type="button" className="linkbtn" disabled={running || busy} data-tip={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</button>
           </span>
+          {/* The dialog is moved and blurred, which would shift a fixed menu inside it: the menu goes to the page. */}
+          {menu ? createPortal(<Menu anchor={menu} items={[{ label: <span data-action="readPdf">{t('statementActions.readPdf')}</span>, run: readPdf }]} onClose={() => setMenu(null)} />, document.body) : null}
         </div>
         {receipt ? (
           <button type="button" className="dtog" aria-expanded={shown} aria-label={t('drop.d.toggle', { name: r.name })} onClick={() => setOpen(!open)}>
@@ -438,7 +450,8 @@ export function DropDialog({ onGo, books, refresh }: { onGo(loc: Location): void
         {s.error ? <p className="warnline">{s.error}</p> : null}
         {waits ? <p className="m">{t('drop.waitsHint')}</p> : null}
         {rows.some((r) => (r.state === 'duplicate' && r.reason === 'possible-duplicate') || r.state === 'locked' || r.state === 'unclear') ? <p className="m" data-testid="close-hint">{t('drop.closeHint')}</p> : null}
-        {rows.some((r) => r.state === 'asks' && (r.read || r.csv)) ? <p className="m" data-testid="read-hint">{t('drop.read.closeHint')}</p> : null}
+        {rows.some((r) => r.state === 'asks' && !r.asked) ? <p className="m" data-testid="read-hint">{t('drop.read.closeHint')}</p> : null}
+        {rows.some((r) => r.state === 'asks' && r.asked) ? <p className="m" data-testid="asked-hint">{t('drop.read.askedHint')}</p> : null}
         <div className="dfoot">
           <span className="m">{taken.length ? <button type="button" className="linkbtn" onClick={() => go({ area: 'automation', view: 'runs' })}>{t('drop.toRuns')}</button> : t('drop.moreHint')}</span>
           <button type="button" className="btn primary" data-testid="drop-close" onClick={closeDrop}>{working ? t('drop.background') : t('common.close')}</button>

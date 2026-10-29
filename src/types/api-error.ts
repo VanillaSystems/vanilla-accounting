@@ -55,6 +55,22 @@ export type ApiRefusal =
   | { code: 'paidPrivately'; params: { receipt: string; payment: string } }
   /** A person's booking without a payment books this receipt already (its amount or the part's, the same day or words): a private payment would book it twice, unless it replaces that booking (`entry`: its ref; `replaceable`: it names the receipt, else it may be another purchase of that day and amount and is deleted by hand). */
   | { code: 'bookedByHand'; params: { entry: string; date: string; amount: number; currency: string; replaceable: boolean } }
+  /** A reconciliation confirmed with a pair whose amounts differ (#254): a person's entry on the movement read from the PDF books the PDF's amount; she changes it first. */
+  | { code: 'twinBookedByHand'; params: { entry: string; read: number; bank: number; currency: string } }
+  /** «Automatisch buchen» on a movement of an account's reconciliation that waits (#254): confirm it first. `payment`: a movement whose statement shows it. */
+  | { code: 'reconcilePending'; params: { account: string; from: string; to: string; payment: string } }
+  /** A reconciliation confirmed with a movement read from a PDF left undecided, a movement paired twice, or a filed pair's difference without an account of the chart (#254). */
+  | { code: 'reconcileUndecided'; params: { n: number } }
+  | { code: 'reconcileTwice'; params: { ref: string } }
+  | { code: 'reconcileDifference'; params: { read: string; amount: number; currency: string } }
+  /** A pair of movements of another direction or currency, or «Eigene Zahlung» for a read movement on a day no bank file of the account covers (#254): only a bank file's days decide a read movement as a payment of its own. */
+  | { code: 'reconcileMismatch'; params: { read: string; bank: string } }
+  | { code: 'reconcileNotCovered'; params: { ref: string; date: string } }
+  | { code: 'reconcileFiledUnbooked'; params: { read: string; bank: string; date: string } }
+  /** A bank file taken back that holds bank movements a confirmed reconciliation paired with movements read from PDFs (#254): their bookings and links would go with them, the read movements never come back. */
+  | { code: 'reconciledTwins'; params: { refs: string[] } }
+  /** A booking of a bank movement the person paired with a movement read from a PDF of a filed period, booked there (#254): only with «Trotzdem buchen». `read`, `date`: that filed movement. */
+  | { code: 'bookedInFiled'; params: { read: string; date: string } }
   /** A second bank payment of another payee for a receipt that has one, asked without `confirm` (src/server/edits.ts assertNotSecondPayment, r8h-21). */
   | { code: 'secondPayment'; params: { receipt: string; payment: string } }
   | { code: 'yearClose' }
@@ -309,4 +325,4 @@ export interface MailStatus {
   inApp: boolean;
 }
 
-export interface StatementReadParams { why: 'line' | 'gap' | 'csvRow' | 'csvRows' | 'csvEmpty' | 'columns' | 'account' | 'covered'; row?: number; rows?: number; limit?: number; gap?: number; page?: number; currency?: string; file?: string }
+export interface StatementReadParams { why: 'line' | 'gap' | 'csvRow' | 'csvRows' | 'csvEmpty' | 'columns' | 'account' | 'covered' | 'blank'; row?: number; rows?: number; limit?: number; gap?: number; page?: number; currency?: string; file?: string }

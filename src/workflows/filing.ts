@@ -18,7 +18,8 @@
 import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { addDays, derivePeriod, isFilingKey, localToday } from '../accounting/periods.js';
-import { loadBooks, saveBooks, type Books } from '../books/store.js';
+import { closeThrough, loadBooks, periodLock, saveBooks, type Books } from '../books/store.js';
+import { reconcilePendingThrough } from '../books/reconcile.js';
 import { closesTheYear, periodKeyOf, writeSeal } from '../books/seal.js';
 import { filing, filingBasis, filingMethod, ratesWithoutActivityId, vat } from '../engines/index.js';
 import { closeGoneSaleQuestions } from '../intake/sale-questions.js';
@@ -159,6 +160,9 @@ export const FILING_ACTIONS: Record<string, Action> = {
       // The owner's open VAT questions about the period's payments are hers to answer first: no return is filed over them (r8h-24).
       const open = openSaleQuestionsIn(readQuestions(ws), books, ret.from, ret.to);
       if (open.length) throw refuse('questionsOpen', { period: key, n: String(open.length) }, `${key}: ${open.length} VAT question(s) about its payments are open; answer them before the return is written`);
+      // An account's reconciliation of movements read from PDFs with its bank's file waits on these days (#254): its answer may change the figures.
+      const reconcile = reconcilePendingThrough(books, ret.to);
+      if (reconcile) throw reconcile;
       // On the agreed basis an invoice whose event is not booked (no rate of its day yet) would be missing from the return.
       const unbooked = eventsMissing(books, loadInvoices(ws), ret.to);
       if (unbooked.length) throw refuse('invoiceEventsMissing', { period: key, invoices: unbooked.join(', ') }, `${key}: the VAT of invoice(s) ${unbooked.join(', ')} is not booked yet (no official rate of its day); the return would leave it out`);
@@ -201,7 +205,7 @@ export const FILING_ACTIONS: Record<string, Action> = {
         if (next !== key) throw refuse('nextToClose', { through: closed ?? '', next, period: key }, `the books are closed through ${closed}; the next ${ws.filingLength === 'half' ? 'half year' : 'quarter'} to close is ${next}, not ${key}`);
         // Closing moves closedThrough, which the write door never allows: as `npm run seal -- <q> --close` does, after the person filed.
         // The year's last period is left open: the year close books the year-end entries on 31.12., then closes and seals it.
-        if (!lastOfYear) books.config.closedThrough = end;
+        if (!lastOfYear) closeThrough(books, end);
       }
       // Filed: the hold gave way to the close (or, for the year's last period, to the year close).
       if (books.config.approvedReturn?.period === key) delete books.config.approvedReturn;

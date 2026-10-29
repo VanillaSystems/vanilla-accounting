@@ -30,7 +30,8 @@ import { loadInvoices } from '../invoices/store.js';
 import { liveInvoices, openOn, paymentsNamingOpen } from '../invoices/rules.js';
 import { hasEvent } from './refs.js';
 import { workspaceChecks } from '../workspace/checks.js';
-import { loadBooks, moduleActor, PERSON, saveBooks, sealsOf, update, type Books } from './store.js';
+import { closeThroughSaved, loadBooks, moduleActor, periodLock, PERSON, saveBooks, sealsOf, update, type Books } from './store.js';
+import { reconcilePendingThrough } from './reconcile.js';
 import { writeSeal } from './seal.js';
 import { nextManualRef } from './next-ref.js';
 
@@ -149,6 +150,13 @@ export function setCashCount(ws: Workspace, year: string, account: string, amoun
 
 /** The account numbers of the workspace's chart. */
 export const chartOf = (ws: Workspace): string[] => (accountsOf(ws) as Array<{ number?: string }>).flatMap((a) => (a.number ? [String(a.number)] : []));
+
+/** The year end's exchange-difference account when the chart of `ws` has it: proposed for the difference of a reconciled pair (#254). */
+export function differenceAccountOf(ws: Workspace): string | undefined {
+  const chart = chartOf(ws);
+  const fx = yearEndAccounts(chart, ws.company.legalForm).fxDifference;
+  return chart.includes(fx) ? fx : undefined;
+}
 
 /**
  * The invoices open on 31.12. of `year`, in CHF at the ESTV rate of that day (or the latest before
@@ -365,8 +373,9 @@ export async function closeYear(ws: Workspace, year: string, rates: EstvRates = 
   if (close.blockers.length) throw new YearCloseRefused({ code: 'yearItemsOpen', params: { year, n: String(close.blockers.length) } }, `${year} cannot close yet: ${close.blockers.length} item(s) open.`);
   const end = `${year}-12-31`;
   if (!books.config.closedThrough || books.config.closedThrough < end) {
-    books.config.closedThrough = end;
-    saveBooks(ws, books);
+    const reconcile = reconcilePendingThrough(books, end);
+    if (reconcile) throw new YearCloseRefused(reconcile.why, `${year} cannot close yet: ${reconcile.message}.`);
+    closeThroughSaved(ws, books, end);
   }
   const q4 = filingKeyOf(end, ws.filingLength) as QuarterKey;
   const seal = writeSeal(ws, books, q4, today);
