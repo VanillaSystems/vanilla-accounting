@@ -108,7 +108,7 @@ test('by hand: a person\'s table of a kept PDF gives the books its balance and r
     const before = await full(api);
     const pay = before.transactions.find((t) => t.bank === 'Raiffeisen' && t.date.startsWith('2026-09') && !t.reference && !t.counterparty?.includes('Raiffeisen'))!;
     const unread = await json<PdfFactsView>(api, `${URL_OF}/facts`);
-    assert.equal(unread.body.state, 'unread');
+    assert.deepEqual([unread.body.state, unread.body.closing?.amount], ['unread', 88252.44], 'not read yet; the balance the books hold from this file is named');
     const saved = await json<PdfFactsView>(api, `${URL_OF}/facts`, 'PUT', { statement: septemberTable(pay, 'RE-2026-0777', 70000, { payment: true }) });
     assert.equal(saved.status, 200);
     assert.deepEqual([saved.body.state, saved.body.closing, saved.body.taken], ['hand', { date: '2026-09-30', amount: 70000 }, { references: 1, originals: 0 }]);

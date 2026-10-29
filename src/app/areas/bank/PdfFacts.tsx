@@ -52,6 +52,7 @@ export function PdfFacts({ file, s, pays, close, edit, nav, version }: { file: s
     <div className="pdffacts" data-testid="pdf-facts" data-state={view.state}>
       <p className="notice" style={{ margin: 0 }}>
         {view.statement ? <>{t(view.state === 'hand' ? 'bank.facts.byHand' : 'bank.facts.byModel')}{facts ? `: ${facts}` : ''}</> : t(`bank.facts.${view.state}`)}
+        {!view.statement && view.closing ? <span className="m" data-testid="pdf-facts-held"> {t('bank.facts.held', { amount: `${s.account.currency} ${fmt(view.closing.amount)}`, date: formatDate(view.closing.date) })}</span> : null}
         {view.error ? <span className="m" data-testid="pdf-facts-error"> {t('bank.facts.failed', { error: view.error })}</span> : null}
       </p>
       {view.ambiguous || view.unmatched ? (

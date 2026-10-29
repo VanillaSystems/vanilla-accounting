@@ -31,9 +31,11 @@ export function factsView(p: KeptPdf, books: Books = readBooks()): PdfFactsView 
   const beside = ask ? undefined : readBeside(p.path);
   const error = readFailures().get(p.file);
   const statement = ask ? ask.read.statement : beside && 'statement' in beside ? beside.statement : undefined;
+  const closing = books.statementBalances?.find((b) => b.source === 'pdf' && b.sourceFile === p.file.slice(p.file.indexOf('/') + 1) && b.account === p.account.account);
+  const held = closing ? { closing: { date: closing.date, amount: closing.amount } } : {};
   if (!statement) {
     const state = beside && 'why' in beside ? beside.why : lock.isClosed(p.to) ? 'filed' : 'unread';
-    return { ...base, state, ...(error ? { error } : {}) };
+    return { ...base, state, ...held, ...(error ? { error } : {}) };
   }
   const by = ask ? (ask.read.by === 'hand' ? 'hand' : 'model') : beside!.by;
   const open = books.transactions.filter((t) => !lock.isClosed(t.date));
@@ -44,12 +46,11 @@ export function factsView(p: KeptPdf, books: Books = readBooks()): PdfFactsView 
     if (l.reference && t.reference === l.reference.trim()) references++;
     if (l.original && t.original && t.original.currency === l.original.currency && Math.round(t.original.amount * 100) === Math.round(l.original.amount * 100)) originals++;
   }
-  const closing = books.statementBalances?.find((b) => b.source === 'pdf' && b.sourceFile === p.file.slice(p.file.indexOf('/') + 1) && b.account === p.account.account);
   const carries = (i: number) => !!(statement.movements[i].reference || statement.movements[i].original);
   return {
     ...base, state: ask ? 'asked' : by === 'hand' ? 'hand' : 'read', by, statement,
     adds: by === 'hand' || checkStatement(statement).ok,
-    ...(closing ? { closing: { date: closing.date, amount: closing.amount } } : {}),
+    ...held,
     taken: { references, originals }, ambiguous: ambiguous.filter(carries).length, unmatched: unmatched.filter(carries).length,
   };
 }
