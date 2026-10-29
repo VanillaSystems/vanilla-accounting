@@ -244,7 +244,7 @@ test('«Rückgängig» takes a file back out: a receipt the run read leaves the 
     s = await post(`/api/drop/${s.id}/files?name=august.xml`, Buffer.from(camt));
     const [rc, st] = s.rows;
     assert.deepEqual([rc.state, st.state], ['taken', 'taken']);
-    assert.deepEqual(st.statement, { file: 'Raiffeisen/august.xml', refs: ['REF-UNDO'] });
+    assert.deepEqual(st.statement, { file: 'Raiffeisen/august.xml', refs: ['REF-UNDO'], account: '1021' });
     await rest();
     assert.ok((await books()).receipts.some((r) => r.id === rc.id), 'the run read the receipt');
 

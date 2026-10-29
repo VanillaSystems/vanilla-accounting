@@ -369,6 +369,8 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
   const undo = () => { setBusy(true); void act(session, r, { kind: 'undo' }).then(refresh).finally(() => setBusy(false)); };
   // A statement PDF kept as the statement, its movements not read in (#254): «Aktionen» reads them.
   const keptPdf = r.kind === 'statement-pdf' && !!r.statement?.file.toLowerCase().endsWith('.pdf');
+  // Taken onto the one account of the bank it names (#273): said in the row, with «ändern».
+  const byBank = r.byBank?.accounts.find((a) => a.account === r.statement?.account);
   const [menu, setMenu] = useState<DOMRect | null>(null);
   const readPdf = () => { setBusy(true); void act(session, r, { kind: 'readPdf' }).then(refresh).finally(() => setBusy(false)); };
   return (
@@ -378,7 +380,9 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
         <div className="dgo">
           <span className={`dchip p-${x.kind}`}>{x.kind === 'working' ? (x.step ?? t('drop.p.working')) : t(`drop.p.${x.kind}` as 'drop.p.read')}</span>
           {missing ? <small className="dwhy">{missing}</small> : x.kind === 'orderPage' ? <small className="dwhy" data-testid="drop-order-page">{t('drop.p.orderPageWhy', { provider: x.provider })}</small> : x.kind === 'refused' ? <small className="dwhy">{reasonText(x.reason)}</small> : null}
+          {byBank ? <small className="dwhy" data-testid="drop-by-bank">{t('drop.byBank', { label: byBank.label })}</small> : null}
           <span className="dacts">
+            {byBank ? <button type="button" className="linkbtn" data-testid="drop-other-account" disabled={running || busy} data-tip={t('drop.byBankChangeTip')} onClick={() => { setBusy(true); void act(session, r, { kind: 'otherAccount' }).then(refresh).finally(() => setBusy(false)); }}>{t('drop.byBankChange')}</button> : null}
             {x.kind === 'stuck' ? <button type="button" className="linkbtn" data-testid="drop-stuck-run" onClick={() => go({ area: 'automation', view: 'run', run: x.run })}>{t('processing.toRun')}</button> : null}
             {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id }, receipt.date)}>{t('drop.openReceipt')}</button> : null}
             {(r.kind === 'receipt' || r.kind === 'photo') && !r.report && x.kind !== 'matched' && x.kind !== 'working' ? <button type="button" className="linkbtn" data-testid="drop-as-statement" disabled={busy} onClick={() => { setBusy(true); void act(session, r, { kind: 'statement' }).then(refresh).finally(() => setBusy(false)); }}>{t('drop.asStatement')}</button> : null}
