@@ -19,15 +19,17 @@ import type { DropRow } from '../src/types/drop.js';
 
 const COIFFEUR = join(APP_ROOT, 'demo-coiffeur', APP_FOLDER);
 const IBAN = testIban('80808000000000031');
+/** An account at a second bank, clearing 70000. */
+const OTHER = testIban('70000000000000042');
 
-const camt = (bank: string) => `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt>
-<GrpHdr><MsgId>M-273</MsgId><CreDtTm>2026-11-01T06:00:00</CreDtTm></GrpHdr>
-<Stmt><Id>S-273</Id><FrToDt><FrDtTm>2017-01-01T00:00:00</FrDtTm><ToDtTm>2026-10-31T23:59:59</ToDtTm></FrToDt>
-<Acct><Id><IBAN>${IBAN}</IBAN></Id><Ccy>CHF</Ccy><Ownr><Nm>Muster Coiffeur</Nm></Ownr><Svcr><FinInstnId><Nm>${bank}</Nm></FinInstnId></Svcr></Acct>
+const camt = (bank: string, iban = IBAN) => `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt>
+<GrpHdr><MsgId>M-${iban.slice(-4)}</MsgId><CreDtTm>2026-11-01T06:00:00</CreDtTm></GrpHdr>
+<Stmt><Id>S-${iban.slice(-4)}</Id><FrToDt><FrDtTm>2017-01-01T00:00:00</FrDtTm><ToDtTm>2026-10-31T23:59:59</ToDtTm></FrToDt>
+<Acct><Id><IBAN>${iban}</IBAN></Id><Ccy>CHF</Ccy><Ownr><Nm>Muster Coiffeur</Nm></Ownr><Svcr><FinInstnId><Nm>${bank}</Nm></FinInstnId></Svcr></Acct>
 <Bal><Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">1000.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2026-10-01</Dt></Dt></Bal>
 <Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="CHF">1210.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><Dt><Dt>2026-10-31</Dt></Dt></Bal>
-<Ntry><Amt Ccy="CHF">250.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><BookgDt><Dt>2026-10-03</Dt></BookgDt><AcctSvcrRef>R-273-1</AcctSvcrRef><NtryDtls><TxDtls><RltdPties><Dbtr><Nm>Kundin Muster</Nm></Dbtr></RltdPties></TxDtls></NtryDtls></Ntry>
-<Ntry><Amt Ccy="CHF">40.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-10-05</Dt></BookgDt><AcctSvcrRef>R-273-2</AcctSvcrRef><NtryDtls><TxDtls><RltdPties><Cdtr><Nm>Strom AG</Nm></Cdtr></RltdPties></TxDtls></NtryDtls></Ntry>
+<Ntry><Amt Ccy="CHF">250.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><BookgDt><Dt>2026-10-03</Dt></BookgDt><AcctSvcrRef>R-${iban.slice(-4)}-1</AcctSvcrRef><NtryDtls><TxDtls><RltdPties><Dbtr><Nm>Kundin Muster</Nm></Dbtr></RltdPties></TxDtls></NtryDtls></Ntry>
+<Ntry><Amt Ccy="CHF">40.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-10-05</Dt></BookgDt><AcctSvcrRef>R-${iban.slice(-4)}-2</AcctSvcrRef><NtryDtls><TxDtls><RltdPties><Cdtr><Nm>Strom AG</Nm></Cdtr></RltdPties></TxDtls></NtryDtls></Ntry>
 </Stmt></BkToCstmrStmt></Document>`;
 
 const OCTOBER = 'Kontoauszug 01.10.2026 - 31.10.2026.pdf';
@@ -89,6 +91,45 @@ test('a camt.053 whose bank names no account of the books asks which; an IBAN an
     let again = await post('/api/drop');
     again = await post(`/api/drop/${again.id}/files?name=oktober.xml`, Buffer.from(camt('Bank Beispiel AG')));
     assert.deepEqual([camtRow(again.rows).state, camtRow(again.rows).statement?.file, camtRow(again.rows).byBank], ['taken', 'ZKB/oktober.xml', undefined], 'its IBAN, typed spaced and in lower case, places it');
+    await rest();
+  } finally {
+    await api.stop();
+  }
+});
+
+test('a second bank\'s camt.053 is asked, the account left by elimination only proposed, never placed on another bank\'s account (#274)', async () => {
+  const api = await twoChfAccounts();
+  const { SESSION } = await import('./support/inbox-run.js');
+  try {
+    const { post, rest } = SESSION(api);
+    let s = await post('/api/drop');
+    s = await post(`/api/drop/${s.id}/files?name=oktober.xml`, Buffer.from(camt('Raiffeisenbank Beispiel')));
+    assert.equal(camtRow(s.rows).state, 'taken');
+    assert.equal(ibanOf(api, '1020'), IBAN, '1022 is now the only CHF account without an IBAN');
+    await rest();
+    s = await post(`/api/drop/${s.id}/files?name=andere-bank.xml`, Buffer.from(camt('Bank Beispiel AG', OTHER)));
+    const row = s.rows.find((r) => r.name === 'andere-bank.xml')!;
+    assert.deepEqual([row.state, row.chooseAccount?.accounts.map((a) => a.account), row.chooseAccount?.proposed, row.statement, row.byBank], ['asks', ['1022'], '1022', undefined, undefined], 'asked, with the account left as the proposal');
+    assert.equal(ibanOf(api, '1022'), undefined, 'no IBAN kept on a guess');
+    assert.equal((await books(api)).bankStatements.some((b) => b.filename === 'andere-bank.xml'), false, 'not in the books until the person answers');
+    await rest();
+  } finally {
+    await api.stop();
+  }
+});
+
+test('a camt.053 of an IBAN an account carries goes straight onto it, whatever bank its servicer\'s name suggests', async () => {
+  const api = await twoChfAccounts();
+  const { SESSION } = await import('./support/inbox-run.js');
+  try {
+    const kept = await api.send('PATCH', '/api/workspace', { banks: [{ bank: 'ZKB', currency: 'CHF', iban: OTHER }] });
+    assert.equal(kept.status, 200, JSON.stringify(kept.json));
+    const { post, rest } = SESSION(api);
+    let s = await post('/api/drop');
+    s = await post(`/api/drop/${s.id}/files?name=zkb.xml`, Buffer.from(camt('Raiffeisenbank Beispiel', OTHER)));
+    const row = s.rows.find((r) => r.name === 'zkb.xml')!;
+    assert.deepEqual([row.state, row.chooseAccount, row.byBank, row.statement?.file, row.statement?.account], ['taken', undefined, undefined, 'ZKB/zkb.xml', '1022']);
+    assert.equal(ibanOf(api, '1020'), undefined, 'the bank its name suggests is left alone');
     await rest();
   } finally {
     await api.stop();

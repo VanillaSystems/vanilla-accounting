@@ -14,7 +14,7 @@ and the providers.
 | split | 118 | 26 |
 | infrastructure | 69 | 4 |
 | workflow | 26 | 0 |
-| view | 328 | 57 |
+| view | 328 | 56 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -158,7 +158,6 @@ Layers are assigned by path prefix, most specific first:
 |---|---|
 | `src/app/areas/bank/Detail.tsx` | ESTV 1 |
 | `src/app/areas/bank/actions.ts` | camt.053 2 |
-| `src/app/areas/bank/model.ts` | camt.053 1 |
 | `src/app/areas/codes/codes.tsx` | MWST 1, Ziffer 1 |
 | `src/app/areas/codes/model.ts` | CHF 1 |
 | `src/app/areas/codes/vat-card.tsx` | Ziffer 1 |

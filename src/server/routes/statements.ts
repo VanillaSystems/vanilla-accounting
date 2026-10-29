@@ -10,7 +10,7 @@
 import express, { Router } from 'express';
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
-import { accountForStatement, type StatementProblem } from '../../accounting/bank-accounts.js';
+import { accountForStatement, unknownOf, type StatementProblem } from '../../accounting/bank-accounts.js';
 import { bankAccountFor, legOf, madeByHand } from '../../workspace/money-accounts.js';
 import { heldWithout, mergeIndex, readStatementFiles, readTransactions, readWiseReferences, reconcileWithFiles, sourceOf, structuredSpans, transactionsOfFiles, withCamtBalances, withinBooks, type RateOf } from '../../books/bank-import.js';
 import { statementPdf } from '../../books/statement-facts.js';
@@ -20,7 +20,7 @@ import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { rateDateOf } from '../../accounting/fx-conversion.js';
 import { openYear } from '../../books/years.js';
 import { assignUniqueRefs, readCamt, transactionsOf, type CamtStatement } from '../../providers/camt053/camt053.js';
-import { proposedAccount } from '../../accounting/statement-bank.js';
+import { namesBank, proposedAccount } from '../../accounting/statement-bank.js';
 import { statementDetails } from '../../providers/statement-files.js';
 import { refDates } from '../books.js';
 import { parseStatementBalances } from '../../providers/camt053/statement-balances.js';
@@ -91,24 +91,33 @@ function wordsOf(p: StatementProblem): string {
 const refusedAccount = (p: StatementProblem, unknown?: UnknownAccount, bankName?: string, owner?: string): RequestError =>
   new RequestError(400, wordsOf(p), { code: 'statement', params: { reason: 'account', detail: wordsOf(p), problem: p, ...(unknown ? { unknown: { ...unknown, ...(bankName ? { bankName } : {}), ...(owner ? { owner } : {}) } } : {}) } });
 
+/** The IBANs each bank label already shows: the manifest's and those of the statements in its folder. */
+function knownIbans(): (bank: string) => string[] {
+  const read = readBankStatements(WS).flatMap((f) => (f.status === 'read' && f.statement.iban ? [{ bank: f.account.bank, iban: f.statement.iban }] : []));
+  return (bank) => [...WS.bankAccounts.filter((a) => a.bank === bank && a.iban).map((a) => a.iban!), ...read.filter((x) => x.bank === bank).map((x) => x.iban)];
+}
+
 /**
  * A camt.053 asking which account it is of names the one whose bank it names, when exactly one
- * does (#208): by the IBANs the manifest and the folder's statements already show under each label.
+ * does (#208), else the only account it could be of (#274): a proposal the person confirms.
  */
 function withProposal(p: StatementProblem, statement: CamtStatement): StatementProblem {
   if (p.kind !== 'whichAccount') return p;
-  const read = readBankStatements(WS).flatMap((f) => (f.status === 'read' && f.statement.iban ? [{ bank: f.account.bank, iban: f.statement.iban }] : []));
-  const known = (bank: string) => [...WS.bankAccounts.filter((a) => a.bank === bank && a.iban).map((a) => a.iban!), ...read.filter((x) => x.bank === bank).map((x) => x.iban)];
-  const proposed = proposedAccount(p, statement, known);
+  const proposed = proposedAccount(p, statement, knownIbans()) ?? (p.accounts.length === 1 ? p.accounts[0].account : undefined);
   return proposed ? { ...p, proposed } : p;
 }
 
 /**
- * The account a camt.053 asking which account it is of lands on without the question (#273): the one
- * account of its currency at the bank it names (a bank and currency are one account in the manifest).
- * Undefined when the file names no bank of the books, or several: then the person is asked.
+ * The account a camt.053 whose IBAN no account carries lands on without a question (#273, #274):
+ * the one account of its currency at the bank it names, while that account names no IBAN. Undefined
+ * when the file names no bank of the books, or several, or its bank's account has another IBAN: then
+ * the person is asked, whichever account is left by elimination.
  */
-const ofItsBank = (p: AccountChoice): Imported | undefined => (p.proposed ? imported().find((a) => a.account === p.proposed) : undefined);
+function ofItsBank(statement: CamtStatement): Imported | undefined {
+  const known = knownIbans();
+  const hits = imported().filter((a) => a.currency === statement.currency && namesBank(statement, a.bank, known(a.bank)));
+  return hits.length === 1 && !hits[0].iban ? hits[0] : undefined;
+}
 
 /** A statement in the account's folder of another IBAN than `iban`: the folder is another account's. */
 function otherIbanIn(account: LedgerBankAccount, iban: string): { statement: { iban?: string } } | undefined {
@@ -137,12 +146,17 @@ function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Pl
     const match = chosen ? { account: chosen } : accountForStatement(WS.bankAccounts, { iban: statement.iban, currency: statement.currency, folder: hint?.bank ?? '' });
     const stated = statement.iban ? compactIban(statement.iban) : undefined;
     let found: Imported;
-    if ('problem' in match) {
-      const asked = withProposal(match.refusal, statement);
-      const one = asked.kind === 'whichAccount' ? ofItsBank(asked) : undefined;
+    // Being the only account of its currency without an IBAN places nothing: it may be another bank's (#274).
+    const left = 'by' in match && match.by === 'currency' ? match.account : undefined;
+    if ('problem' in match || left) {
+      const valid = stated ? parseIban(stated) : undefined;
+      const refusal: StatementProblem = 'problem' in match ? match.refusal : { kind: 'whichAccount', currency: statement.currency, ...(valid ? { iban: valid } : {}), accounts: [{ account: left!.account, bank: left!.bank, label: left!.label }] };
+      const unknown = 'problem' in match ? match.unknown : unknownOf(refusal).unknown;
+      const asked = withProposal(refusal, statement);
+      const one = asked.kind === 'whichAccount' ? ofItsBank(statement) : undefined;
       // The bank's folder showing another IBAN is another account of that bank: the person says which.
-      if (asked.kind !== 'whichAccount' || !one || (stated && otherIbanIn(one, stated))) throw refusedAccount(asked, match.unknown, statement.bankName, statement.ownerName);
-      byBank ??= asked;
+      if (asked.kind !== 'whichAccount' || !one || (stated && otherIbanIn(one, stated))) throw refusedAccount(asked, unknown, statement.bankName, statement.ownerName);
+      byBank ??= { ...asked, proposed: one.account };
       found = one;
     } else found = match.account;
     if (account && account.bank !== found.bank) return refuse(400, 'Die Datei hält Auszüge zweier Banken.', 'account');

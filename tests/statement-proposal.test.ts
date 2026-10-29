@@ -91,15 +91,17 @@ test('the drop row of a camt.053 asking for its account carries its details and 
     assert.equal(added.status, 200, JSON.stringify(added.json));
     const { post, rest } = SESSION(api);
     let s = await post('/api/drop');
-    s = await post(`/api/drop/${s.id}/files?name=unbekannt.xml`, Buffer.from(camt(AT_70000, { name: 'Bank Beispiel AG' }, SEVEN.slice(0, 2))));
     s = await post(`/api/drop/${s.id}/files?name=raiffeisen-oktober.xml`, Buffer.from(camt(AT_80808, { name: 'Raiffeisenbank Beispiel' }, SEVEN)));
-    // The one account of the bank it names takes it without a question (#273); «ändern» asks it as it would have.
-    assert.deepEqual([s.rows[1].state, s.rows[1].byBank?.proposed], ['taken', '1020']);
+    // The one account of the bank it names takes it without a question (#273).
+    assert.deepEqual([s.rows[0].state, s.rows[0].byBank?.proposed], ['taken', '1020']);
     await rest();
-    s = await post(`/api/drop/${s.id}/rows/${s.rows[1].key}`, { kind: 'otherAccount' });
-    const [other, one] = s.rows;
+    // No bank matches: the account left without an IBAN is only proposed (#274), never taken.
+    s = await post(`/api/drop/${s.id}/files?name=unbekannt.xml`, Buffer.from(camt(AT_70000, { name: 'Bank Beispiel AG' }, SEVEN.slice(0, 2))));
+    assert.deepEqual([s.rows[1].state, s.rows[1].chooseAccount?.proposed, s.rows[1].details?.movements], ['asks', '1022', 2]);
+    // «ändern» asks the first as it would have.
+    s = await post(`/api/drop/${s.id}/rows/${s.rows[0].key}`, { kind: 'otherAccount' });
+    const [one] = s.rows;
     assert.deepEqual([one.state, one.chooseAccount?.proposed, one.details?.bankName, one.details?.movements, one.details?.more], ['asks', '1020', 'Raiffeisenbank Beispiel', 7, 2]);
-    assert.deepEqual([other.state, other.chooseAccount?.proposed, other.details?.movements], ['asks', undefined, 2], 'no bank matches: asked plainly');
     s = await post(`/api/drop/${s.id}/rows/${one.key}`, { kind: 'account', account: '1020' });
     const taken = s.rows.find((r) => r.key === one.key)!;
     assert.deepEqual([taken.state, taken.details, taken.chooseAccount], ['taken', undefined, undefined], 'the person confirmed: read in, the question gone');

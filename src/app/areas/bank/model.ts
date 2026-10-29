@@ -273,7 +273,7 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
   };
   const held = (s: Statement): BankTransaction[] => byAccount.get(s.account.account)!.filter((t) => holds(s, t));
 
-  // A bank export states its days from the account's opening on (a camt.053 «since 2017»): the books start no earlier than their first year or payment.
+  // A bank export states its days from the account's opening on (an export «since 2017»): the books start no earlier than their first year or payment.
   const opens = Object.keys(books.config?.openingBalances ?? {}).sort()[0];
   const firstYear = opens ?? books.transactions.map((t) => t.date).filter(Boolean).sort()[0]?.slice(0, 4);
   const booksFrom = firstYear ? `${firstYear}-01-01` : undefined;
