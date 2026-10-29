@@ -13,6 +13,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startApi } from './support/api-server.js';
+import { closeChrome, launchChrome } from './support/browser.js';
 import { findBrowser } from '../src/invoices/pdf.js';
 import { devProxy } from '../src/server/app-paths.js';
 import de from '../src/app/i18n/locales/de.js';
@@ -39,8 +40,7 @@ test('each area says the AI is off and offers the way by hand; Firma › KI swit
     preview: { host: '127.0.0.1', port: 0, proxy: devProxy(`http://127.0.0.1:${api.port}`) },
   });
   const ui = vite.resolvedUrls!.local[0].replace(/\/$/, '');
-  const { default: puppeteer } = await import('puppeteer-core');
-  const browser = await puppeteer.launch({ executablePath: browserPath, headless: true, args: ['--no-first-run'] });
+  const browser = await launchChrome(browserPath!);
   try {
     const page = await browser.newPage();
     await page.setViewport({ width: 1400, height: 900 });
@@ -96,7 +96,7 @@ test('each area says the AI is off and offers the way by hand; Firma › KI swit
     assert.equal((await api.send('GET', '/api/status')).json.aiOff, undefined);
     assert.equal(JSON.parse(readFileSync(settings, 'utf8')).off, undefined, 'kept on this Mac: the switch is gone from the settings');
   } finally {
-    await browser.close();
+    await closeChrome(browser);
     await vite.close();
     await api.stop();
     rmSync(dir, { recursive: true, force: true });

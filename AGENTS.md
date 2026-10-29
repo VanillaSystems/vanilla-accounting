@@ -98,7 +98,8 @@ Shopify billing:
 
 Running tests:
 - While you work, run only the test files your change touches: `node --import tsx --test tests/foo.test.ts`.
-- Run the full suite (`npm test`) only before you commit or merge. Never start several full suites in parallel: `npm test` takes a machine-wide lock and waits («waiting for another test run (pid N)…») while another run holds it. It runs 3 test files at once at nice 10; `TEST_CONCURRENCY=<n>` overrides the 3.
+- Run the full suite (`npm test`) only before you commit or merge. Never start several full suites in parallel: `npm test` takes a machine-wide lock and waits («waiting for another test run (pid N)…») while another run holds it. It runs 3 test files at once at nice 10; `TEST_CONCURRENCY=<n>` overrides the 3. A run stops after 20 minutes (`TEST_TIME_LIMIT=<seconds>` overrides it), with every process it started, frees the lock and says so (exit 124).
+- A browser test starts and closes Chrome through tests/support/browser.ts (`launchChrome`, `closeChrome`), which bound both: a test file's process lives as long as its Chrome, so an unbounded start or close keeps a failed run alive.
 
 Tests (golden master):
 - `npm test` runs the golden master (tests/vat-golden.test.ts) on each demo workspace (expected files in tests/golden/demo/ and tests/golden/demo-consulting/): Ziffern per period, Ziffer line assignment, return figures, filed-return parsing, correction-case reconciliation, and the eCH-0217 XML. `npm run test:books` runs the same test on your own workspace's frozen books (`transactional-data/<year>/expected/`, see tests/support/golden.ts), which protects its filed quarters; run it too when you keep real books. Before committing any change under src/accounting, src/cli/vat-*, or the MWST tab logic, `npm test` must be green (and `test:books` where a workspace exists). A failure means the code changed a figure.

@@ -16,6 +16,7 @@ import type { Index } from '../src/types/index.js';
 import { APP_ROOT, workspaceAt } from '../src/workspace/workspace.js';
 import { BOOKS_SCHEMA } from '../src/workspace/schema.js';
 import { serveStatic, type StaticServer } from './support/static-server.js';
+import { closeChrome, closeContext, launchChrome } from './support/browser.js';
 import { findBrowser } from '../src/invoices/pdf.js';
 import type { Browser } from 'puppeteer-core';
 import en from '../src/app/i18n/locales/en.js';
@@ -27,14 +28,11 @@ let base: string;
 /**
  * One browser for the file's walks, each in a context of its own (its own storage, as a fresh profile), closed in `after`:
  * on a busy machine Chrome took up to 80 s to shut down (#246), which is no part of what a walk checks and so is kept out
- * of every test's timeout.
+ * of every test's timeout. Its start and close have time limits of their own (support/browser.ts): `after` waits on both,
+ * and a start without one once stalled for good, leaving the run and its Chrome waiting forever.
  */
 let launched: Promise<Browser> | undefined;
-const chrome = () => launched ??= import('puppeteer-core').then(({ default: puppeteer }) => {
-  // A Chrome that dies while starting, as one may under memory pressure, is started once more; puppeteer gives each its own fresh profile.
-  const launch = () => puppeteer.launch({ executablePath: findBrowser(), headless: true, timeout: 0, args: ['--no-first-run', '--lang=en-US'] });
-  return launch().catch(launch);
-});
+const chrome = () => launched ??= launchChrome(findBrowser()!, ['--lang=en-US']);
 
 before(async () => {
   await buildAuditExport(workspaceAt(join(APP_ROOT, 'demo')), dir, '2026-10-09T12:00:00.000Z');
@@ -42,7 +40,7 @@ before(async () => {
   base = `${server.url}/snapshot/`;
 });
 after(async () => {
-  await (await launched)?.close();
+  await closeChrome(await launched?.catch(() => undefined));
   await server?.stop();
   rmSync(tmp, { recursive: true, force: true });
 });
@@ -125,7 +123,8 @@ test('a non-empty folder that holds no export is refused, not emptied', async ()
  * track: its heading's counts, chips, «Filter» menu and search wrap, so scrollWidth equals clientWidth.
  */
 test('the list column never widens past its track at the narrowest width, with chips and the filter menu open', { skip: findBrowser() ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 300_000 }, async () => {
-  const context = await (await chrome()).createBrowserContext();
+  const browser = await chrome();
+  const context = await browser.createBrowserContext();
   const page = await context.newPage();
   try {
     page.setDefaultTimeout(0);
@@ -164,7 +163,7 @@ test('the list column never widens past its track at the narrowest width, with c
     }
     assert.deepEqual(wide, []);
   } finally {
-    await context.close();
+    await closeContext(browser, context);
   }
 });
 
@@ -185,7 +184,8 @@ test('a browser walk over every area asks the host for no /api/, logs no error a
   const reach = (step: string) => { took.push(`${at} ${Date.now() - since} ms`); at = step; since = Date.now(); };
   // The signal aborts after every test, passed or not: only a walk still under way says where it stood.
   t.signal.addEventListener('abort', () => { if (at) t.diagnostic(`the walk stood at ${at} for ${Date.now() - since} ms, after ${took.join(', ')}`); });
-  const context = await (await chrome()).createBrowserContext();
+  const browser = await chrome();
+  const context = await browser.createBrowserContext();
   reach('a new page');
   const page = await context.newPage();
   const pause = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
@@ -227,6 +227,6 @@ test('a browser walk over every area asks the host for no /api/, logs no error a
     assert.deepEqual(errors, []);
   } finally {
     at = undefined;
-    await context.close();
+    await closeContext(browser, context);
   }
 });
