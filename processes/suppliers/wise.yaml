@@ -45,6 +45,6 @@ steps:
         source: AGENTS.md § Special cases
       - id: wise-transfer-reference
         when: a receipt prints the reference of a Wise transfer
-        then: read the transfer's reference from the Wise monthly statement PDF; the Wise camt053 drops it
+        then: the transfer's reference is on the Wise monthly statement PDF, not in the Wise camt053; the table of that PDF (the AI's read, or entered by hand on the statement) puts it on the payment (#243)
         source: AGENTS.md § Special cases
     precedents: []

@@ -219,8 +219,8 @@ test('each file tells its run what it is: a statement by its bank, account and d
     s = await post(`/api/drop/${s.id}/files?name=fresh.pdf`, await invoicePdf('R-1002', 'Rollen'));
     assert.deepEqual(s.rows.map((r) => r.state), ['taken', 'taken'], 'both taken as they came, without «Hinzufügen»');
     const [st, rc] = s.rows;
-    // The demo's PDFs print no closing balance, so the run claims none.
-    assert.deepEqual((await runOf(st.run!)).arrived?.find((a) => a.file.endsWith(name)), { kind: 'statement', file: `Raiffeisen/${name}`, account: '1021', added: 0, bank: 'Raiffeisen', currency: 'CHF', from: '2026-09-01', to: '2026-09-30' });
+    // No table of the PDF yet (#243): the run names the closing balance the books keep from this file.
+    assert.deepEqual((await runOf(st.run!)).arrived?.find((a) => a.file.endsWith(name)), { kind: 'statement', file: `Raiffeisen/${name}`, account: '1021', added: 0, bank: 'Raiffeisen', currency: 'CHF', from: '2026-09-01', to: '2026-09-30', closing: { date: '2026-09-30', amount: 88252.44 } });
     assert.deepEqual((await runOf(rc.run!)).arrived?.find((a) => a.file === 'fresh.pdf'), { kind: 'receipt', file: 'fresh.pdf', id: rc.id, inbox: 'fresh.pdf' });
   } finally {
     // The run a drop started works on; the workspace goes only once it rests.

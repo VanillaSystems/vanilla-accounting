@@ -54,6 +54,7 @@ import { ActionsMenu } from '../../selection/ActionsMenu.js';
 import { paymentActions } from './actions-menu.js';
 import { NoMovements, PdfQuestion, pdfOf, statementActions } from './PdfQuestion.js';
 import { ReconcilePanel } from './Reconcile.js';
+import { PdfFacts } from './PdfFacts.js';
 import { SelectionView } from '../../selection/SelectionView.js';
 import { paymentRows } from '../../selection/rows.js';
 import { clickRow, useSelection, useShown } from '../../selection/store.js';
@@ -181,6 +182,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
       ))}
       {c?.bookDiff && !c.gap ? <BookDiff {...props} diff={c.bookDiff} s={s} /> : null}
       {ask ? <PdfQuestion key={ask.file} ask={ask} nav={nav} edit={edit} /> : null}
+      {pdf && !ask ? <PdfFacts key={pdf} file={pdf} s={s} pays={all} check={c} edit={edit} nav={nav} version={props.books} /> : null}
       {reconcile ? <ReconcilePanel key={`${reconcile.account}-${reconcile.read.join(',')}-${reconcile.bank.join(',')}`} r={reconcile} books={props.books} label={s.account.label} closedThrough={b.closedThrough} edit={canEdit} nav={nav} /> : null}
 
       <div className="body">

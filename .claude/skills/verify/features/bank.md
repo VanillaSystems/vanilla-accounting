@@ -91,9 +91,10 @@ Wise EUR (1023), January to September 2026.
 
 ## Gotchas
 
-- The demo's statement PDFs are generated text pages: the closing-balance reader (`npm run extract-balances`,
-  src/providers/statement-pdf/statement-pdf-balances.ts) does not recognise them, so a re-imported demo PDF shows `Ende ?`. The demo's
-  balances were written by the generator. Their account has a camt.053, so every PDF of it is kept without a question, whatever
+- The demo's statement PDFs are generated text pages; their balances were written by the generator and stay in the books. A
+  kept PDF gets a new balance only from its table (#243): the model's read (`[data-testid=statement-reads-start]` «N Kontoauszüge
+  von der KI lesen lassen?» above the list, `npm run read-statements`) or `[data-testid=pdf-facts-edit]` «Saldo und Referenzen von
+  Hand erfassen» on the statement (`[data-testid=pdf-facts]`, its `data-state`). Their account has a camt.053, so every PDF of it is kept without a question, whatever
   days it shows (#254); an upload of a PDF of an account without camt.053 or CSV opens the drop dialog, which reads it (features/drop.md).
 - **A statement PDF's question and «Aktionen» (#254, driven 2026-10-28).** A PDF statement with no movement in its days shows
   `[data-testid=no-movements]` `<Monat>: keine Bewegungen eingelesen.` with `[data-testid=no-movements-read]` `Bewegungen aus dem PDF lesen`;

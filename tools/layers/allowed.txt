@@ -1,6 +1,4 @@
-src/books/bank-import.ts -> src/parsers/pdf-text.ts
 src/books/bank-import.ts -> src/providers/camt053/camt053.ts
-src/books/bank-import.ts -> src/providers/wise-pdf/wise-statement-pdf.ts
 src/books/year-close.ts -> src/accounting/fx-conversion.ts
 src/books/year-close.ts -> src/accounting/fx-rates.ts
 src/books/year-close.ts -> src/accounting/year-close.ts

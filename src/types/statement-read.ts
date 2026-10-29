@@ -4,6 +4,7 @@
  * shape, checked in code (src/books/statement-check.ts) and written as an ISO 20022 statement
  * (src/providers/statement-read/camt-writer.ts), so everything after it is the camt path.
  */
+import type { AiRefusal } from './ai-refusal.js';
 
 /** One movement as the statement prints it: signed in the account's currency (money out negative). */
 export interface ReadMovement {
@@ -21,6 +22,13 @@ export interface ReadMovement {
   original?: { amount: number; currency: string };
   /** The page it is printed on, where the statement has several. */
   page?: number;
+  /** The account's balance the row prints after it (a running balance column), where it prints one. */
+  balance?: number;
+  /**
+   * The payment of the books a person said this line is (#243: a table filled by hand from a kept
+   * statement PDF's payments): its reference and amount in another currency go onto that payment.
+   */
+  payment?: string;
 }
 
 /** A page's carry-over as printed: the balance brought forward at its top and carried at its foot. */
@@ -38,6 +46,13 @@ export interface ReadStatement {
   pages?: ReadPage[];
   movements: ReadMovement[];
 }
+
+/**
+ * A kept statement PDF's table (#243): a statement with its balances, as the model read it or a person
+ * typed it, or a person's table that states none: she typed no closing balance, so it gives the books
+ * its references and amounts in another currency and never a balance.
+ */
+export type PdfTable = ReadStatement | (Omit<ReadStatement, 'opening' | 'closing'> & { opening?: undefined; closing?: undefined });
 
 /**
  * Where the figures do not add up, to the cent: the whole statement (opening + movements =
@@ -109,4 +124,53 @@ export interface CsvAsk {
   account?: string;
   /** The bank accounts that take statements, for the person to say whose CSV it is. */
   accounts: { account: string; label: string; currency: string }[];
+}
+
+/**
+ * What a statement PDF kept as its statement gives the books (#243, src/server/statement-reads.ts):
+ * `read` by the model or `hand` by a person (the read beside it), `asked` (the table of its question
+ * in the books), not read yet (`unread`, or `filed`: its month is filed, so it is not read), or the
+ * model's answer gave no statement (`notStatement`, `pages`: more than the model reads, `unreadable`).
+ */
+export type PdfFactsState = 'read' | 'hand' | 'asked' | 'unread' | 'filed' | 'notStatement' | 'pages' | 'unreadable';
+
+export interface PdfFactsView {
+  /** `<bank>/<file name>`. */
+  file: string;
+  account: string;
+  from: string;
+  to: string;
+  state: PdfFactsState;
+  by?: 'model' | 'hand';
+  statement?: PdfTable;
+  /** Its figures add up (a person's table is taken as she typed it): only then the books take its closing balance. */
+  adds?: boolean;
+  /** The closing balance the books hold from this file. */
+  closing?: { date: string; amount: number };
+  /** The balance the bank's own export states for the statement's last day: it stands over the table's (withCamtBalances). */
+  bank?: { date: string; amount: number };
+  /** The references and amounts in another currency its lines put on open payments. */
+  taken?: { references: number; originals: number };
+  /** Lines with a reference or foreign amount that more than one payment could be, and those no payment of their day and amount is: nothing taken. */
+  ambiguous?: number;
+  unmatched?: number;
+  /** Why the last reading of it failed (nothing kept: the next run asks again). */
+  error?: string;
+}
+
+/** The kept statement PDFs still to read, and the reading the person started (GET /api/statement-reads). */
+export interface StatementReadsView {
+  /** Whether the model reads statement PDFs here: `noAi` switched off, `noProvider` no AI set up, `unserved` none here reads a PDF. */
+  ai: 'ready' | 'noAi' | 'noProvider' | 'unserved';
+  /** The PDFs of open months not read yet (`<bank>/<file name>`). */
+  unread: string[];
+  /** The most pages the model reads of one statement. */
+  limit: number;
+  failures: { file: string; error: string }[];
+  job?: {
+    done: number; total: number; current?: string; cancelling?: true; finished?: true;
+    read: number; failed: { file: string; error: string }[];
+    stopped?: { error: string; refusal?: AiRefusal };
+    error?: string;
+  };
 }

@@ -6,19 +6,20 @@
  * month's statement («Als Monatsauszug behalten», as before #217): the way without AI, and the only
  * one when a bank export or bank CSV of its account covers all its days (#254; on some of them, those days
  * import only the payments the books hold). The same table answers a PDF's question kept in the books,
- * in Bank › Kontoauszüge (#254). A bank CSV first asks which column holds what; the answer is kept for
- * that account's next CSV.
+ * in Bank › Kontoauszüge (#254), and is a kept PDF's table, read or filled by hand, saved as what it gives
+ * the books (`facts`, #243: its closing balance, its references). A bank CSV first asks which column holds
+ * what; the answer is kept for that account's next CSV.
  */
 import { useMemo, useState } from 'react';
 import { t } from '../i18n/index.js';
 import { fmt, formatDate } from '../lib/utils.js';
-import { amountOf, checkStatement, isBlank, parseReadStatement } from '../../books/statement-check.js';
+import { amountOf, checkStatement, hasBalances, isBlank, parsePdfTable, parseReadStatement } from '../../books/statement-check.js';
 import type { DropAction, DropRow } from '../../types/drop.js';
 import type { Route } from './route.js';
-import type { BalanceGap, CsvColumns, ReadStatement, StatementRead as Read } from '../../types/statement-read.js';
+import type { BalanceGap, CsvColumns, PdfTable, StatementRead as Read } from '../../types/statement-read.js';
 
 /** A line as typed: amounts stay text until the check reads them. */
-interface Line { date: string; amount: string; counterparty: string; text: string; reference: string; page?: number; valueDate?: string; original?: { amount: number; currency: string } }
+interface Line { date: string; amount: string; counterparty: string; text: string; reference: string; page?: number; valueDate?: string; original?: { amount: number; currency: string }; payment?: string }
 interface Draft {
   iban: string; currency: string; bankName?: string; owner?: string; period?: { from: string; to: string };
   opening: { date: string; amount: string }; closing: { date: string; amount: string };
@@ -28,17 +29,17 @@ interface Draft {
 
 const money = (n: number | undefined) => (n === undefined ? '' : n.toFixed(2));
 
-function draftOf(s: ReadStatement): Draft {
+function draftOf(s: PdfTable): Draft {
   return {
     iban: s.iban ?? '', currency: s.currency, ...(s.bankName ? { bankName: s.bankName } : {}), ...(s.owner ? { owner: s.owner } : {}), ...(s.period ? { period: s.period } : {}),
-    opening: { date: s.opening.date, amount: money(s.opening.amount) }, closing: { date: s.closing.date, amount: money(s.closing.amount) },
+    opening: { date: s.opening?.date ?? s.period?.from ?? '', amount: money(s.opening?.amount) }, closing: { date: s.closing?.date ?? s.period?.to ?? '', amount: money(s.closing?.amount) },
     pages: (s.pages ?? []).map((p) => ({ page: p.page, carriedIn: money(p.carriedIn), carriedOut: money(p.carriedOut) })),
-    movements: s.movements.map((m) => ({ date: m.date, amount: money(m.amount), counterparty: m.counterparty ?? '', text: m.text ?? '', reference: m.reference ?? '', ...(m.page ? { page: m.page } : {}), ...(m.valueDate ? { valueDate: m.valueDate } : {}), ...(m.original ? { original: m.original } : {}) })),
+    movements: s.movements.map((m) => ({ date: m.date, amount: money(m.amount), counterparty: m.counterparty ?? '', text: m.text ?? '', reference: m.reference ?? '', ...(m.page ? { page: m.page } : {}), ...(m.valueDate ? { valueDate: m.valueDate } : {}), ...(m.original ? { original: m.original } : {}), ...(m.payment ? { payment: m.payment } : {}) })),
   };
 }
 
-/** The draft as a statement, or undefined while a line lacks its day or amount (the parser's rule, here and on the server). */
-const statementOf = (d: Draft) => parseReadStatement({ ...d, iban: d.iban || undefined, pages: d.pages.map((p) => ({ page: p.page, carriedIn: p.carriedIn || undefined, carriedOut: p.carriedOut || undefined })) });
+/** The draft as a statement (a kept PDF's table: its balances may be left empty), or undefined while a line lacks its day or amount (the parser's rule, here and on the server). */
+const statementOf = (d: Draft, table: boolean): PdfTable | undefined => (table ? parsePdfTable : parseReadStatement)({ ...d, iban: d.iban || undefined, pages: d.pages.map((p) => ({ page: p.page, carriedIn: p.carriedIn || undefined, carriedOut: p.carriedOut || undefined })) });
 
 function gapText(g: BalanceGap, currency: string): string {
   const vars = { gap: `${currency} ${fmt(g.gap)}`, expected: `${currency} ${fmt(g.expected)}`, found: `${currency} ${fmt(g.found)}`, page: g.page ?? '' };
@@ -49,22 +50,28 @@ function gapText(g: BalanceGap, currency: string): string {
 export type ReadAction = Extract<DropAction, { kind: 'read' | 'keep' }>;
 
 /** Why the table is to fill by hand, in words: what is off, and what is left to do. */
-function whyText(read: Read): string {
+function whyText(read: Pick<Read, 'why' | 'error' | 'limit' | 'pages'>): string {
   if (read.why === 'failed') return read.error ? t('drop.read.why.failedCall', { error: read.error }) : t('drop.read.why.failed');
   return read.why ? t(`drop.read.why.${read.why}`, { limit: read.limit ?? '', pages: read.pages ?? '' }) : '';
 }
 
+/** What the table shows: a read or a question's table, or a kept PDF's table (`save`), whose balances may be missing. */
+type Shown = Omit<Read, 'statement' | 'check'> & { statement: PdfTable };
+
 /**
  * `pdf`: the table was read off a PDF, which may be kept as the statement instead; `asReceipt`: the
- * file may still be a receipt (the drop row).
+ * file may still be a receipt (the drop row); `save`: a kept PDF's table, saved as it is (no import),
+ * its closing balance left empty when she types none.
  */
-export function StatementRead({ read, pdf, act, go, asReceipt }: { read: Read; pdf: boolean; act(action: ReadAction): Promise<unknown>; go(route: Route): void; asReceipt?: () => void }) {
+export function StatementRead({ read, pdf, act, go, asReceipt, save: saveTable }: { read: Shown; pdf: boolean; act?(action: ReadAction): Promise<unknown>; go(route: Route): void; asReceipt?: () => void; save?(table: PdfTable): Promise<unknown> }) {
+  const facts = !!saveTable;
   const [draft, setDraft] = useState(() => draftOf(read.statement));
   const [busy, setBusy] = useState(false);
-  const statement = useMemo(() => statementOf(draft), [draft]);
+  const statement = useMemo(() => statementOf(draft, facts), [draft, facts]);
+  const full = statement && hasBalances(statement) ? statement : undefined;
   // A table nobody filled checks nothing (#254): no «Geht auf», no «Einlesen».
   const blank = !!statement && isBlank(statement);
-  const check = statement && !blank ? checkStatement(statement) : undefined;
+  const check = full && !blank ? checkStatement(full) : undefined;
   const known = useMemo(() => {
     // A line the books hold: the server's marks by day and amount, each taken once; a line changed since is no longer one.
     const pool = read.known.map((k) => `${k.date} ${k.amount.toFixed(2)}`);
@@ -79,16 +86,21 @@ export function StatementRead({ read, pdf, act, go, asReceipt }: { read: Read; p
   const add = () => setDraft({ ...draft, movements: [...draft.movements, { date: draft.movements.at(-1)?.date ?? draft.closing.date, amount: '', counterparty: '', text: '', reference: '' }] });
   const page = (n: number, patch: Partial<Draft['pages'][number]>) => setDraft({ ...draft, pages: draft.pages.map((p) => (p.page === n ? { ...p, ...patch } : p)) });
   const importIt = async () => {
-    if (!statement) return;
+    if (!full) return;
     setBusy(true);
-    try { await act({ kind: 'read', statement, import: true }); } finally { setBusy(false); }
+    try { await act?.({ kind: 'read', statement: full, import: true }); } finally { setBusy(false); }
   };
   const knownCount = known.filter(Boolean).length;
   // Nothing to read in: a CSV beside a bank export, or a PDF whose every day a structured source covers.
   const stuck = !!read.covered && (read.by === 'csv' || !!read.whole);
   const keep = async () => {
     setBusy(true);
-    try { await act({ kind: 'keep', ...(statement ? { statement } : {}) }); } finally { setBusy(false); }
+    try { await act?.({ kind: 'keep', ...(full ? { statement: full } : {}) }); } finally { setBusy(false); }
+  };
+  const save = async () => {
+    if (!statement) return;
+    setBusy(true);
+    try { await saveTable?.(statement); } finally { setBusy(false); }
   };
   return (
     <div className="dread" data-testid="drop-read">
@@ -153,18 +165,24 @@ export function StatementRead({ read, pdf, act, go, asReceipt }: { read: Read; p
           ))}
         </div>
       ) : null}
-      <div className={`dread-check ${check?.ok ? 'ok' : blank ? 'blank' : 'gap'}`} data-testid="drop-read-check" data-ok={!!check?.ok}>
+      <div className={`dread-check ${check?.ok ? 'ok' : blank || (statement && !full) ? 'blank' : 'gap'}`} data-testid="drop-read-check" data-ok={!!check?.ok}>
         {!statement ? t('drop.read.incomplete')
           : blank ? t('drop.read.blank')
-          : check!.ok ? t('drop.read.ok', { n: statement.movements.length, currency: statement.currency, closing: fmt(statement.closing.amount) })
+          : !full ? t('drop.read.noBalance')
+          : check!.ok ? t('drop.read.ok', { n: full.movements.length, currency: full.currency, closing: fmt(full.closing.amount) })
           : check!.gaps.map((g, i) => <span key={i}>{gapText(g, statement.currency)}</span>)}
         {statement && knownCount ? <span className="m">{t('drop.read.knownCount', { n: knownCount })}</span> : null}
       </div>
-      <div className="dread-acts">
+      {facts ? (
+        <div className="dread-acts">
+          <small className="m">{t('drop.read.factsSave')}</small>
+          <button type="button" className="btn primary" data-testid="drop-read-save" disabled={!statement || blank || busy} onClick={() => void save()}>{t('common.save')}</button>
+        </div>
+      ) : <div className="dread-acts">
         {asReceipt ? <button type="button" className="linkbtn" onClick={asReceipt}>{t('drop.isReceipt')}</button> : null}
         {pdf ? <button type="button" className={stuck ? 'btn primary' : 'btn'} data-testid="drop-read-keep" disabled={busy} data-tip={t('drop.read.keepTip')} onClick={() => void keep()}>{t('drop.read.keep')}</button> : null}
         {stuck ? null : <button type="button" className="btn primary" data-testid="drop-read-import" disabled={!check?.ok || busy} data-tip={check?.ok ? undefined : t('drop.read.importBlocked')} onClick={() => void importIt()}>{t('drop.read.import')}</button>}
-      </div>
+      </div>}
     </div>
   );
 }
