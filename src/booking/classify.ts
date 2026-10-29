@@ -175,6 +175,8 @@ export interface ClassifyContext extends ClassifyPromptContext {
   counterparties?: readonly Counterparty[];
   /** The owner's private account (its number): where a rule's private share goes. */
   ownerAccount?: string;
+  /** The owner's name (company.owner): a payment to her is one the owner's account may settle (answerSettles). */
+  ownerName?: string;
   /** The firm's VAT setup (src/workspace/vat-setup.ts): which codes its bookings may carry; absent: the effective method. */
   vat?: VatSetup;
   /** The accounts that hold money (moneyAccounts): a transfer between two carries no VAT code. */
@@ -260,6 +262,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     counterparties,
     purchaseVat: businessVat(knowledge),
     ownerAccount: ownerAccount(ws).split(' ')[0],
+    ownerName: ws.company.owner,
     vat: ws.company.vat,
     ...(ws.profile?.sells.length ? { sells: salesDefaults(ws.profile.sells, setup().sells) } : {}),
     moneyAccounts: moneyAccounts(ws.bankAccounts, loadChart().accounts),
