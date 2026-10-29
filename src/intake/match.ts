@@ -32,7 +32,7 @@ import { titlesFor } from './titles.js';
 import { estvToChf, noPaymentFor, noReceiptFor, runPairChain } from './pair-chain.js';
 import { linkOrdersToSales } from '../booking/sales-report.js';
 import { linkReceiptSets, linkSplitLegs, MAX_RUN, MAX_TRIED } from './receipt-sets.js';
-import { batchPayers, NO_BATCH_PAYERS, type BatchPayers } from './batch-payers.js';
+import { batchPayers, businesses, NO_BATCH_PAYERS, type BatchPayers, type Businesses } from './batch-payers.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { providersOf } from './sales-report-import.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
@@ -197,6 +197,15 @@ export function batchPayersOf(ws: Pick<Workspace, 'paths' | 'company'>): BatchPa
   }
 }
 
+/** Whose receipts and payments are by the workspace's business files in both layers; none when its knowledge does not load (a test's bare workspace). */
+export function businessesOf(ws: Pick<Workspace, 'paths' | 'company'>): Businesses | undefined {
+  try {
+    return businesses(loadKnowledge(APP_ROOT, ws.paths.root).counterparties, ws.company?.uid);
+  } catch {
+    return undefined;
+  }
+}
+
 export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const IMPORT_DIR = ws.paths.inbox;
   const toChf = estvToChf();
@@ -210,7 +219,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const noPayment = noPaymentFor(ws);
   const byCode = async (stagedNow: readonly Receipt[] = []) => {
     const noReceipt = noReceiptFor(ws);
-    const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt, noPayment });
+    const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt, noPayment, businesses: businessesOf(ws) });
     const providers = providersOf(ws);
     for (const l of books.update((index) => linkOrdersToSales(index, (d) => !periodLock(index).isClosed(d), providers))) log(`linked the order document to its sale: receipt ${l.receipt} → ${l.sale}`);
     const found = books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, { isOpen: (d) => !lock.isClosed(d), payers, toChf, buyerUid: ws.company?.uid, noReceipt: noReceipt(index), noPayment: noPayment(index) }); });
@@ -355,8 +364,8 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
       if (dated.dateSource && !byHand.has('date')) r.dateSource = dated.dateSource;
       // Only an invoice is paid by a payment; a copy of one (by its facts, now read) waits for a person in Belege.
       if (!sure || (r.kind && r.kind !== 'invoice' && r.kind !== 'sales-record')) return;
-      // An order page of the provider way goes with its sale from the order export, never with a payment (#253).
-      if (noPayment(index)(r)) { log(`  ${receipt.filename}: an order page whose order the provider's export books: no payment linked`); return; }
+      // An order page of the provider way goes with its sale from the order export (#253), a bill that proves a VAT-only correction with its booking (#190): never with a payment.
+      if (noPayment(index)(r)) { log(`  ${receipt.filename}: an order page the provider's export books, or a bill of a VAT-only correction: no payment linked`); return; }
       const behind = waitsBehind(index, r, order);
       if (behind) { twin = index.receipts.find((x) => x.id === behind)?.filename; return; }
       // Periodensperre: never attach a mapping to a transaction inside a closed period.

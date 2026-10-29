@@ -77,7 +77,7 @@ export function mergeSection(app: Section | undefined, workspace: Section | unde
  * Pure. Same id in both layers = one counterparty.
  * - name: the vendor's (a binding of a vendor may not redeclare it).
  * - grouped: the vendor's when its file says it; else the binding's (a company learns that a business pays several receipts at once, #190).
- * - accounts: the binding's only (the app layer cannot know a chart of accounts).
+ * - accounts, learnedTx: the binding's only (the app layer cannot know a chart of accounts, nor learn from the company's links).
  * - provider: its reports and payout days the vendor's (a binding may add what the vendor does not say), its accounts the binding's only (src/booking/providers.ts mergeProvider).
  * - match, documents: union, vendor first; one signal or document id has one owner. sharedUid: union.
  * - steps: per address, vendor rules first, then the binding's.
@@ -118,7 +118,7 @@ export function mergeCounterparty(
     steps[ref] = mergeSection(vendor.steps?.[ref] as Section | undefined, section as Section);
   }
   return compileCounterparty({
-    id: vendor.id, name: vendor.name, grouped: vendor.grouped ?? binding.grouped, accounts: binding.accounts, ...(provider !== undefined ? { provider } : {}),
+    id: vendor.id, name: vendor.name, grouped: vendor.grouped ?? binding.grouped, accounts: binding.accounts, learnedTx: binding.learnedTx, ...(provider !== undefined ? { provider } : {}),
     sharedUid: [...new Set([...(vendor.sharedUid ?? []), ...(binding.sharedUid ?? [])])],
     roles: [...new Set([...(vendor.roles ?? []), ...(binding.roles ?? [])])], match, documents, facts, steps,
   }, files, role);

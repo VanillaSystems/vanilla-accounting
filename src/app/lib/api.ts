@@ -71,6 +71,7 @@ import type { PartnerDetail, PartnersView } from '../../knowledge/partners.js';
 import type { Note, NoteCommand, NoteResult, TopicRow } from '../../knowledge/notes.js';
 import type { AppLayerView, GapsView } from '../../knowledge/wissen.js';
 import type { OrderPage } from '../../booking/order-pages.js';
+import type { VatCorrection } from '../../booking/vat-corrections.js';
 
 export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
 
@@ -250,6 +251,7 @@ export function errorText(e: unknown): string {
     case 'partnerGone': return t('partners.gone');
     case 'topicGone': return t('knowledge.topicGone');
     case 'notesChanged': return t('partners.notes.changed');
+    case 'learnedNameGone': return t('partners.match.learnedGone');
     case 'notesTitle': return t('knowledge.newPage.needsTitle');
     case 'gone': return t(`error.gone.${b.params.what}`);
     case 'fileReferenced': return t('error.fileReferenced', { file: b.params.file, refs: [
@@ -452,6 +454,7 @@ export const api = {
   rules: () => request<RulesView>('GET', '/api/rules'),
   partners: () => request<PartnersView>('GET', '/api/partners'),
   partner: (id: string) => request<PartnerDetail>('GET', `/api/partners/${encodeURIComponent(id)}`),
+  removeLearnedName: (id: string, name: string) => request<{ path: string; committed: boolean }>('POST', `/api/partners/${encodeURIComponent(id)}/learned-names/remove`, { name }),
   topics: () => request<{ topics: TopicRow[] }>('GET', '/api/knowledge').then((r) => r.topics),
   topic: (slug: string) => request<{ slug: string; note: Note }>('GET', `/api/knowledge/topics/${encodeURIComponent(slug)}`),
   knowledgeGaps: () => request<GapsView>('GET', '/api/knowledge/gaps'),
@@ -642,4 +645,5 @@ export const api = {
   filedReturns: (year: string) => request<ReturnFigures[]>('GET', sources.filedReturns(year)),
   fxRates: () => request<EstvRateTable>('GET', sources.fxRates()),
   orderPages: () => request<Record<string, OrderPage>>('GET', sources.orderPages()),
+  vatCorrections: () => request<Record<string, VatCorrection>>('GET', sources.vatCorrections()),
 };

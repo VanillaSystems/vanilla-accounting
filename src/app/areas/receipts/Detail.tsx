@@ -3,6 +3,7 @@
  * what is missing), the paper, and in the margin Zahlung, Angaben and Datei.
  */
 import type { OrderPage } from '../../../booking/order-pages.js';
+import type { VatCorrection } from '../../../booking/vat-corrections.js';
 import { byStatement } from '../../../workspace/money-accounts.js';
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PaymentBooking } from '../journal/PaymentBooking.js';
@@ -25,7 +26,7 @@ import { amountOf, at, bankOf, dayText, ledgerFor, listed, noneText, txLine } fr
 import { Kbd, accept, runAct } from './commands.js';
 import { correctionPeriodName } from '../journal/commands.js';
 import { QuestionsOn } from '../../questions/Questions.js';
-import { correctFiled, deleteReceipt, unpointFiled, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
+import { correctFiled, deleteReceipt, linkPayment, unpointFiled, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
 import { LinkDialog } from './LinkDialog.js';
 import { FindPair, madeBy } from './FindPair.js';
 import { ByHand, VatFields } from './VatFields.js';
@@ -281,6 +282,23 @@ function OrderPageNotice({ page, l, nav }: { page: OrderPage; l: Ledger; nav: Pr
   );
 }
 
+/**
+ * A bill that proves a VAT-only correction (#190) needs no payment: its tax is booked once, on a
+ * booking without a payment with a VAT-amount code. The notice names the booking that fits it, to
+ * link, or says that it is still to be booked.
+ */
+function VatCorrectionNotice({ c, v, l, nav, canEdit }: { c: VatCorrection; v: ReceiptView; l: Ledger; nav: Props['nav']; canEdit: boolean }) {
+  const entry = c.booking ? l.entriesByRef.get(c.booking)?.[0] : undefined;
+  const vat = c.vat === undefined ? undefined : `${v.r.currency || baseCurrency()} ${fmt(Math.abs(c.vat))}`;
+  return (
+    <span className="notice" style={{ margin: 0 }} data-testid="vat-correction">
+      {I.dot}{t(entry ? 'receipts.vatCorrection.fits' : vat ? 'receipts.vatCorrection.book' : 'receipts.vatCorrection.noVat', { business: c.name, vat: vat ?? '', date: entry ? formatDate(entry.date) : '' })}
+      {entry && <> <button type="button" className="golink" onClick={() => nav.go(at({ area: 'journal', id: entry.id }, entry.date))}>{t('receipts.vatCorrection.toEntry')} <span className="arr">→</span></button></>}
+      {entry && canEdit && <> <button type="button" className="btn primary" data-testid="vat-correction-link" onClick={() => linkPayment(nav, v, entry.transactionRef, `${v.vendor} → ${formatDate(entry.date)} ${entry.description ?? ''}`.trim())}>{t('receipts.vatCorrection.link')}</button></>}
+    </span>
+  );
+}
+
 function Status(props: Props & { v: ReceiptView; l: Ledger }) {
   const { v, l, nav, canEdit } = props;
   const { rates } = useFx();
@@ -326,6 +344,7 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
   // A receipt of a filed payment: the notice above says where its tax goes, not «Noch keine Zahlung».
   if (v.locked || (v.r.filedPayment && l.txByRef.has(v.r.filedPayment))) return null;
   if (v.orderPage) return <OrderPageNotice page={v.orderPage} l={l} nav={nav} />;
+  if (v.vatCorrection) return <VatCorrectionNotice c={v.vatCorrection} v={v} l={l} nav={nav} canEdit={canEdit} />;
   if (sug && canEdit) {
     const why = [t('receipts.whySameAmount'), sug.days !== undefined && dayText(sug.days)].filter(Boolean).join(' · ');
     return (

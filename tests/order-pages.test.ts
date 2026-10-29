@@ -82,7 +82,7 @@ test('an order page is never paired with a bank payment of its amount and day', 
   const books = { receipts: [page('p1', '2026-11-03', '#2001\nPaid\nHans Muster', { kind: 'sales-record' })], transactions: [deposit], mappings: [] as Mapping[] };
   const toChf = (a: number) => a;
   assert.ok(searchPairs(books, toChf, () => false).byReceipt.get('p1')?.length, 'without the provider way the deposit is its candidate');
-  assert.equal(searchPairs(books, toChf, () => false, undefined, noPaymentOf(books, [SHOP])).byReceipt.has('p1'), false);
+  assert.equal(searchPairs(books, toChf, () => false, { noPayment: noPaymentOf(books, [SHOP]) }).byReceipt.has('p1'), false);
 });
 
 test('Belege: an order page waiting for the export needs nobody and counts in no badge', () => {

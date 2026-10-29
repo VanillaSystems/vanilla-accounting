@@ -20,12 +20,14 @@ import { legOf } from '../workspace/money-accounts.js';
 import { chargesOf } from './charges.js';
 import { duplicatesIn } from './duplicates.js';
 import { assessmentNumbers, namesAssessment } from '../booking/customs-invoice.js';
+import type { Businesses } from './batch-payers.js';
+import { DELAY, type Delays } from './delays.js';
 
 /** Which payments are candidates at all. */
 export const BOUNDS = {
   /** Across currencies, both converted at the official daily rate of the payment's day: how much the amounts may differ, as a share (a bank's rate is not the official one). In one currency the amount is the same to the cent. */
   crossCurrency: 0.04,
-  /** The payment's day lies from this many days before the receipt's day to this many after it. */
+  /** The payment's day lies from this many days before the receipt's day to this many after it; after it, further when the supplier's usual delay reaches further (src/intake/delays.ts DELAY.reach). */
   daysBefore: 10,
   daysAfter: 60,
 } as const;
@@ -34,9 +36,11 @@ export const BOUNDS = {
  * What speaks for a candidate, in points. The amount: the same to the cent in one currency (or
  * the original amount the bank names for a payment in another, Wise's «Card transaction of 12.40
  * USD»), else across currencies within `nearShare` or within the bounds. The day: the first band
- * the distance falls in. The name: words of the payment's text in the receipt's vendor. A number of
- * the receipt («FM-78230») in the payment's text. Room for more signals (a supplier's usual delay,
- * a learned alias): a new row here, nothing else.
+ * the distance falls in, from the day the supplier's usual delay expects the payment
+ * (src/intake/delays.ts) when it pays days or weeks later, else from the receipt's day. The name: words of the payment's text in the receipt's vendor. A number of
+ * the receipt («FM-78230») in the payment's text. The business: the payment names the business
+ * the receipt is of by that business's file (src/intake/batch-payers.ts businesses). Room for more
+ * signals: a new row here, nothing else.
  */
 export const WEIGHTS = {
   amount: { same: 40, near: 25, within: 10, nearShare: 0.02 },
@@ -44,6 +48,8 @@ export const WEIGHTS = {
   /** A payment before the receipt by more than this many days scores no day points: an invoice is rarely paid before it is written. */
   dayEarly: 3,
   name: { one: 12, more: 20 },
+  /** The payment names the receipt's business by its file (match.tx, iban; learned names among them, src/knowledge/learned-names.ts): as strong as two words of its name. */
+  business: 20,
   number: 30,
 } as const;
 
@@ -86,7 +92,7 @@ export function signalsOf(m: Pick<Mapping, 'rule'>): Signal[] {
 
 /** What matched in a candidate. */
 export function signalsOfCandidate(c: PairCandidate): Signal[] {
-  return [c.amount === 'same' ? 'amount' : c.amount === 'original' ? 'original' : 'currency', ...(dayPoints(c.days) > 0 ? ['day' as const] : []), ...(c.words > 0 ? ['name' as const] : []), ...(c.number ? ['number' as const] : [])];
+  return [c.amount === 'same' ? 'amount' : c.amount === 'original' ? 'original' : 'currency', ...(dayOf(c) > 0 ? ['day' as const] : []), ...(c.words > 0 || c.business ? ['name' as const] : []), ...(c.number ? ['number' as const] : [])];
 }
 
 /** Who of the chain made a link: code alone, code checked by the model, the model from a short list. */
@@ -131,8 +137,12 @@ export interface PairCandidate {
   number: boolean;
   /** Words of the payment's text that name the receipt's vendor. */
   words: number;
+  /** The payment names the business the receipt is of, by that business's file. */
+  business: boolean;
   /** The payment's day minus the receipt's. */
   days: number;
+  /** The payment's day minus the day the supplier's usual delay expects it (src/intake/delays.ts); `days` for a supplier without one, or one that pays within the first day band. */
+  offDays: number;
 }
 
 export interface PairSearch {
@@ -223,9 +233,16 @@ export function paysIn(r: Pick<Receipt, 'amount' | 'vatSummary' | 'kind' | 'extr
   return credit.length > 0 && wordsRe(credit).test((r.extractedText ?? '').slice(0, HEAD));
 }
 
-function dayPoints(days: number): number {
-  if (days < -WEIGHTS.dayEarly) return 0;
-  return WEIGHTS.day.find((b) => Math.abs(days) <= b.upTo)?.points ?? 0;
+/** The last day after the receipt's a payment is a candidate: the fixed window, or as far past the supplier's usual delay as DELAY.reach when that is further. */
+const daysAfterOf = (usual: number | undefined): number => Math.max(BOUNDS.daysAfter, (usual ?? 0) + DELAY.reach);
+
+/**
+ * The day's points: the band the distance to the expected day falls in (offDays), none for a payment
+ * early by more than WEIGHTS.dayEarly both before the receipt and before the expected day.
+ */
+function dayOf(c: Pick<PairCandidate, 'days' | 'offDays'>): number {
+  if (c.days < -WEIGHTS.dayEarly && c.offDays < -WEIGHTS.dayEarly) return 0;
+  return WEIGHTS.day.find((b) => Math.abs(c.offDays) <= b.upTo)?.points ?? 0;
 }
 
 /**
@@ -233,10 +250,12 @@ function dayPoints(days: number): number {
  * day, and the amount (to the cent in one currency, its own, a part's or the original the bank
  * names; across currencies both at the official daily rate of the payment's day). Scored by WEIGHTS.
  */
-export function fitOf(r: Receipt, tx: BankTransaction, toChf: ToChf, isClosed: (date: string) => boolean): PairCandidate | undefined {
+export function fitOf(r: Receipt, tx: BankTransaction, toChf: ToChf, isClosed: (date: string) => boolean, businesses?: Businesses, usual?: number): PairCandidate | undefined {
   if (paysIn(r) !== (tx.direction === 'CRDT')) return undefined;
   const days = Math.round((Date.parse(tx.date) - Date.parse(r.date!)) / DAY);
-  if (days < -BOUNDS.daysBefore || days > BOUNDS.daysAfter) return undefined;
+  if (days < -BOUNDS.daysBefore || days > daysAfterOf(usual)) return undefined;
+  // A usual delay within the first day band says nothing the receipt's day does not: only a supplier that pays days or weeks later moves the expected day.
+  const offDays = usual !== undefined && Math.abs(usual) > WEIGHTS.day[0].upTo ? days - usual : days;
   const cur = r.currency || baseCurrency();
   const want = cents(r.amount!);
   const original = originalOf(tx);
@@ -263,9 +282,12 @@ export function fitOf(r: Receipt, tx: BankTransaction, toChf: ToChf, isClosed: (
   const number = !!assessment || numbersIn(r.extractedText ?? '').some((n) => text.includes(n));
   const vendor = [r.title?.vendor ?? '', r.description ?? '', r.filename].join(' ').toLowerCase();
   const words = nameWords(tx).filter((w) => vendor.includes(w)).length;
-  const score = WEIGHTS.amount[amount === 'original' ? 'same' : amount] + dayPoints(days)
-    + (words >= 2 ? WEIGHTS.name.more : words === 1 ? WEIGHTS.name.one : 0) + (number ? WEIGHTS.number : 0);
-  return { receipt: r.id, payment: tx.ref, leg: legOf(tx), charge: [tx.ref], filed: isClosed(tx.date), score, amount, number, words, days };
+  const of = businesses?.ofReceipt(r);
+  const business = !!of && businesses!.ofPayment(tx) === of;
+  // The name counts once: by its words or by the business's file, whichever says more.
+  const name = Math.max(words >= 2 ? WEIGHTS.name.more : words === 1 ? WEIGHTS.name.one : 0, business ? WEIGHTS.business : 0);
+  const score = WEIGHTS.amount[amount === 'original' ? 'same' : amount] + dayOf({ days, offDays }) + name + (number ? WEIGHTS.number : 0);
+  return { receipt: r.id, payment: tx.ref, leg: legOf(tx), charge: [tx.ref], filed: isClosed(tx.date), score, amount, number, words, business, days, offDays };
 }
 
 /**
@@ -275,7 +297,7 @@ export function fitOf(r: Receipt, tx: BankTransaction, toChf: ToChf, isClosed: (
  * every payment without a day Date.parse reads. The rest fitOf refuses, so a receipt is held
  * against the few payments near it instead of a year's.
  */
-function paymentsNear(payments: readonly BankTransaction[]): (r: Receipt) => readonly BankTransaction[] {
+function paymentsNear(payments: readonly BankTransaction[]): (r: Receipt, usual?: number) => readonly BankTransaction[] {
   const at = payments.map((t) => Date.parse(t.date));
   const key = (currency: string | undefined, amount: number) => `${currency}|${cents(amount)}`;
   const byAmount = new Map<string, number[]>();
@@ -289,10 +311,10 @@ function paymentsNear(payments: readonly BankTransaction[]): (r: Receipt) => rea
     else undated.push(i);
   });
   for (const list of byCurrency.values()) list.sort((a, b) => at[a] - at[b]);
-  return (r) => {
+  return (r, usual) => {
     const from = Date.parse(r.date!);
     if (!Number.isFinite(from)) return payments;
-    const lo = from - (BOUNDS.daysBefore + 1) * DAY, hi = from + (BOUNDS.daysAfter + 1) * DAY;
+    const lo = from - (BOUNDS.daysBefore + 1) * DAY, hi = from + (daysAfterOf(usual) + 1) * DAY;
     const cur = r.currency || baseCurrency();
     const found = new Set(undated);
     for (const i of byAmount.get(key(cur, r.amount!)) ?? []) if (!(at[i] < lo || at[i] > hi)) found.add(i);
@@ -306,15 +328,24 @@ function paymentsNear(payments: readonly BankTransaction[]): (r: Receipt) => rea
   };
 }
 
-/** Best first: the score, then the nearer day. */
-const rank = (a: PairCandidate, b: PairCandidate) => b.score - a.score || Math.abs(a.days) - Math.abs(b.days) || a.payment.localeCompare(b.payment);
+/** Best first: the score, then the day nearer the expected one. */
+const rank = (a: PairCandidate, b: PairCandidate) => b.score - a.score || Math.abs(a.offDays) - Math.abs(b.offDays) || a.payment.localeCompare(b.payment);
+
+/** What the search knows of the books beyond them: the payments without a receipt of their own, the receipts without a payment of their own, and whose a receipt and a payment are by the business files. */
+export interface SearchOptions {
+  noReceipt?: (t: BankTransaction) => boolean;
+  noPayment?: (r: Receipt) => boolean;
+  businesses?: Businesses;
+  /** Each supplier's usual delay between receipt and payment, from the books' links (src/intake/delays.ts delaysOf). */
+  delays?: Delays;
+}
 
 /**
  * The candidates of every pairable receipt and payment, each list best first. A pair a person took
  * apart (Receipt.notPaidBy) is never a candidate again. A filed payment is a candidate too: its
  * receipt is pointed at it, never linked (golden rule 1).
  */
-export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string) => boolean, noReceipt?: (t: BankTransaction) => boolean, noPayment?: (r: Receipt) => boolean): PairSearch {
+export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string) => boolean, { noReceipt, noPayment, businesses, delays }: SearchOptions = {}): PairSearch {
   const linkedReceipts = new Set(books.mappings.map((m) => m.receiptId));
   const taken = takenPayments(books);
   const charges = chargesOf(books.transactions, toChf);
@@ -331,10 +362,11 @@ export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string)
     const apart = new Set(r.notPaidBy ?? []);
     // One candidate per charge: of a charge split over two currencies, the leg that fits best.
     const best = new Map<string, PairCandidate>();
-    for (const t of near(r)) {
+    const usual = delays?.(r);
+    for (const t of near(r, usual)) {
       const charge = charges.of(t);
       const split = charge.refs.length > 1;
-      const fit = charge.refs.some((ref) => apart.has(ref)) ? undefined : fitOf(r, t, toChf, isClosed);
+      const fit = charge.refs.some((ref) => apart.has(ref)) ? undefined : fitOf(r, t, toChf, isClosed, businesses, usual);
       // A split charge is paid by what its original amount names, never by what one leg moved.
       const c = fit && (!split || fit.amount === 'original') ? { ...fit, payment: charge.refs[0], charge: charge.refs } : undefined;
       const had = c && best.get(c.payment);
