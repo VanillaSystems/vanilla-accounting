@@ -76,10 +76,11 @@ async function aiState(): Promise<StatementReadsView['ai']> {
 }
 
 export async function readsView(): Promise<StatementReadsView> {
-  const books = readBooks();
-  const unread = unreadPdfs(WS, books).map((p) => p.file);
+  // Asked first: the files and the reading's state below are then read in one go, so a reading that ends meanwhile shows its files read.
+  const ai = await aiState();
+  const unread = unreadPdfs(WS, readBooks()).map((p) => p.file);
   return {
-    ai: await aiState(),
+    ai,
     unread,
     withoutAsking: readsWithoutAsking(WS),
     limit: MAX_READ_PAGES,
