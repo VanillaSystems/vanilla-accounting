@@ -13,7 +13,7 @@ import { bookAgain } from './automation.js';
 import { ask } from '../../llm/ask.js';
 import { buildVisionPrompt } from '../../llm/prompts.js';
 import { findFile } from '../../workspace/workspace.js';
-import { orderPagesIn } from '../../intake/pair-chain.js';
+import { orderPagesIn, vatCorrectionsIn } from '../../intake/pair-chain.js';
 import { isNoReceipt, referenced, refsOf } from '../../books/discard.js';
 import { WS, receiptPath, assertOpen, receiptDates, refDates, readBooks, updateBooks, updateBooksWithEffects, withBooks, RequestError, patchBody, stringField } from '../books.js';
 
@@ -91,6 +91,10 @@ function handSetOf(was: Receipt, patch: ReceiptPatch): Pick<Receipt, 'handSet'> 
 
 router.get('/api/receipts/order-pages', (_req, res) => {
   res.json(orderPagesIn(WS, readBooks()));
+});
+
+router.get('/api/receipts/vat-corrections', (_req, res) => {
+  res.json(vatCorrectionsIn(WS, readBooks()));
 });
 
 router.get('/api/receipts/:id', (req, res) => {

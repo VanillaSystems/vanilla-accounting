@@ -25,6 +25,7 @@ import { documentTypeOf } from '../knowledge/counterparties.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { isProvider, providerOfMoneyIn } from '../booking/providers.js';
 import { noPaymentOf } from '../booking/order-pages.js';
+import { vatCorrectionsOf } from '../booking/vat-corrections.js';
 import { APP_ROOT, openWorkspace } from '../workspace/workspace.js';
 import { documents, filing } from '../engines/index.js';
 import { duplicatesIn } from '../intake/duplicates.js';
@@ -107,7 +108,10 @@ function main() {
   }
   const kindOf = (r: Receipt) => kinded.find((k) => k.receipt.id === r.id)?.kind ?? r.kind;
   const providers = counterparties.filter(isProvider);
-  const orderPage = noPaymentOf(index, providers);
+  const page = noPaymentOf(index, providers);
+  // A bill that proves a VAT-only correction is no receipt of a payment either (#190).
+  const corrections = vatCorrectionsOf(index, counterparties);
+  const noPayment = (r: Receipt) => page(r) || corrections.has(r.id);
 
   const linkedReceipts = new Set(index.mappings.map((m) => m.receiptId));
   const twins = duplicatesIn(index.receipts, linkedReceipts, documents());
@@ -122,7 +126,7 @@ function main() {
 
   // ── payment receipts ──────────────────────────────────────────────────────
   const open = index.receipts
-    .filter((r) => !linkedReceipts.has(r.id) && r.location === 'archived' && inPeriod(r.date) && !orderPage(r) && !NOT_A_RECEIPT.test(r.filename))
+    .filter((r) => !linkedReceipts.has(r.id) && r.location === 'archived' && inPeriod(r.date) && !noPayment(r) && !NOT_A_RECEIPT.test(r.filename))
     .filter((r) => (kindOf(r) ?? 'invoice') === 'invoice')
     // A copy of another receipt (by its facts) is no second receipt for a payment: a person says first (Belege).
     .filter((r) => twins.get(r.id)?.relation !== 'duplicate')

@@ -6,7 +6,7 @@
  */
 import { useEffect, useState, useSyncExternalStore, type ReactElement } from 'react';
 import { t } from '../../i18n/index.js';
-import { api } from '../../lib/api.js';
+import { api, errorText } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { moveKey } from '../../shell/keyboard.js';
 import { ListHead } from '../../shell/ListHead.js';
@@ -23,7 +23,7 @@ import { entryAt } from '../vat/links.js';
 import { invoiceAt } from '../invoices/actions.js';
 import { useInvoices } from '../invoices/data.js';
 import { countOf, FILTERS, linkedOf, partnerRules, passes, type PartnerFilter } from './model.js';
-import { once, readPartners, useFetched } from './data.js';
+import { once, readPartners, refreshKnowledge, useFetched } from './data.js';
 import { ChangedNotePrompt, DetailGroup, DetailsBlock, Go, linesOf, NoteRulePanel, NotesBlock, SelfBlock } from './page.js';
 import { noteMarks } from '../../../knowledge/note-rules.js';
 
@@ -187,15 +187,41 @@ function Detail(props: Props) {
             ) : null}
           </div>
         </section>
-        <PartnerDetails d={d} />
+        <PartnerDetails d={d} canEdit={canEdit} nav={nav} />
       </div>
     </div>
   );
 }
 
-function PartnerDetails({ d }: { d: PartnerDetail }) {
+/** A merchant name the partner's file learned from confirmed links (#190): marked, and a person may take it out for good. */
+function LearnedName({ partner, name, canEdit, nav }: { partner: string; name: string; canEdit: boolean; nav: Props['nav'] }) {
+  const [busy, setBusy] = useState(false);
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await api.removeLearnedName(partner, name);
+      refreshKnowledge();
+      nav.toast(t('partners.match.removed', { name }));
+    } catch (e) {
+      nav.toast(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      {t('partners.match.tx')} <span className="mono">{name}</span> <span className="m">{t('partners.match.learned')}</span>
+      {canEdit ? <> <button type="button" className="linkbtn" disabled={busy} data-tip={t('partners.match.removeTip')} onClick={remove}>{t('partners.match.remove')}</button></> : null}
+    </>
+  );
+}
+
+function PartnerDetails({ d, canEdit, nav }: { d: PartnerDetail; canEdit: boolean; nav: Props['nav'] }) {
   const mono = (s: string) => <span className="mono">{s}</span>;
-  const signals = (['uid', 'iban', 'domain', 'tx', 'file'] as const).flatMap((k) => d.match[k].map((v) => <>{t(`partners.match.${k}`)} {mono(v)}</>));
+  const learned = new Set(d.learned);
+  const signals = (['uid', 'iban', 'domain', 'tx', 'file'] as const).flatMap((k) => d.match[k].map((v) => (k === 'tx' && learned.has(v)
+    ? <LearnedName partner={d.row.id} name={v} canEdit={canEdit} nav={nav} />
+    : <>{t(`partners.match.${k}`)} {mono(v)}</>)));
   const appNotes = d.fileNotes.filter((n) => n.layer === 'app');
   const ownNotes = d.fileNotes.filter((n) => n.layer === 'workspace');
   const note = (n: PartnerDetail['fileNotes'][number]) => <>{n.when ? `${n.when} → ` : ''}{n.then}</>;

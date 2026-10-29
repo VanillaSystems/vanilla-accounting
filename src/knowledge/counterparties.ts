@@ -13,6 +13,7 @@
 import { RECEIPT_KINDS, type BankTransaction, type Receipt, type ReceiptKind } from '../types/index.js';
 import { HEAD, wordsRe } from '../core/modules/words.js';
 import { parseProvider, type ProviderFacts } from './provider.js';
+import { PROVES, type Proves } from '../booking/vat-corrections.js';
 
 /** Strongest first. The order is the routing precedence. */
 export const TIERS = ['uid', 'iban', 'domain', 'tx', 'file'] as const;
@@ -41,6 +42,8 @@ export interface DocumentType {
   id: string;
   kind: ReceiptKind;
   text: RegExp[];
+  /** What such a document proves instead of a payment: `vat-correction`, the input tax of a single-leg correction without a payment (src/booking/vat-corrections.ts, #190). */
+  proves?: Proves;
 }
 
 /** A fact of the law or of an authority's practice (a period, a deadline, a form), with where it is written. */
@@ -68,6 +71,8 @@ export interface Counterparty {
   sharedUid?: string[];
   /** A file of it says `grouped` at all, true or false: the app offers no «Immer so?» to say it again (#190). */
   groupedSaid?: true;
+  /** The names the company's file learned from confirmed links (src/knowledge/learned-names.ts): in `match.tx` while a person keeps them, here for good, so a removed one is not learned again. */
+  learnedTx?: string[];
   /** When present, the only accounts an entry for this counterparty may use. */
   accounts?: string[];
   documents: DocumentType[];
@@ -224,8 +229,8 @@ export function identify(s: Signals, counterparties: readonly Counterparty[]): R
 
 export type RawCounterparty = {
   id?: string; name?: string; grouped?: boolean; sharedUid?: string[]; accounts?: string[]; roles?: string[];
-  match?: Partial<Record<Tier, string[]>>; steps?: Record<string, unknown>;
-  documents?: { id?: string; kind?: string; text?: string[] }[];
+  match?: Partial<Record<Tier, string[]>>; steps?: Record<string, unknown>; learnedTx?: string[];
+  documents?: { id?: string; kind?: string; text?: string[]; proves?: string }[];
   facts?: Partial<Fact>[];
   provider?: unknown;
 };
@@ -248,6 +253,8 @@ export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['
   };
   if (TIERS.every((t) => match[t].length === 0)) fail('match needs at least one signal');
   const sharedUid = raw.sharedUid ?? [];
+  const learnedTx = raw.learnedTx ?? [];
+  if (!Array.isArray(learnedTx) || learnedTx.some((t) => typeof t !== 'string')) fail('learnedTx must be a list of names');
   for (const u of sharedUid) {
     if (!/^CHE-\d{3}\.\d{3}\.\d{3}$/.test(u)) fail(`sharedUid "${u}" must look like CHE-###.###.###`);
     if (match.uid.includes(u)) fail(`sharedUid "${u}" is in match.uid too — a shared UID identifies nobody; keep it in one of them`);
@@ -256,7 +263,8 @@ export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['
     if (!d.id) fail(`documents[${i}] needs an id`);
     if (!d.kind || !(RECEIPT_KINDS as readonly string[]).includes(d.kind)) fail(`documents ${d.id}: kind must be one of ${RECEIPT_KINDS.join(', ')}`);
     if (!d.text?.length) fail(`documents ${d.id}: text needs at least one pattern`);
-    return { id: d.id!, kind: d.kind as ReceiptKind, text: d.text!.map((t) => new RegExp(t, 'i')) };
+    if (d.proves !== undefined && !(PROVES as readonly string[]).includes(d.proves)) fail(`documents ${d.id}: proves must be ${PROVES.join(' or ')}`);
+    return { id: d.id!, kind: d.kind as ReceiptKind, text: d.text!.map((t) => new RegExp(t, 'i')), ...(d.proves ? { proves: d.proves as Proves } : {}) };
   });
   const facts = (raw.facts ?? []).map((f, i) => {
     for (const k of ['id', 'fact', 'source'] as const) if (!f[k]) fail(`facts[${i}] needs ${k}`);
@@ -266,7 +274,7 @@ export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['
   if (parsed && 'problem' in parsed) throw new Error(`${origin.binding ?? origin.vendor}: ${parsed.problem}`);
   const provider = parsed?.provider;
   return {
-    id: stem, name: raw.name!, role, roles: roles as Role[], match, grouped: raw.grouped === true, ...(sharedUid.length ? { sharedUid } : {}), ...(raw.grouped !== undefined ? { groupedSaid: true as const } : {}), documents, facts,
+    id: stem, name: raw.name!, role, roles: roles as Role[], match, grouped: raw.grouped === true, ...(sharedUid.length ? { sharedUid } : {}), ...(raw.grouped !== undefined ? { groupedSaid: true as const } : {}), ...(learnedTx.length ? { learnedTx } : {}), documents, facts,
     accounts: raw.accounts, steps: raw.steps ?? {}, origin, ...(provider ? { provider } : {}),
   };
 }

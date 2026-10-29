@@ -17,7 +17,7 @@ import { askIfReady } from '../../intake/run.js';
 import { estvToChf, noPaymentFor, noReceiptFor, runPairChain, type ChainResult, type Found } from '../../intake/pair-chain.js';
 import type { BooksPort } from '../../intake/pipeline.js';
 import { proposalsFor } from '../../intake/receipt-sets.js';
-import { batchPayersOf } from '../../intake/match.js';
+import { batchPayersOf, businessesOf } from '../../intake/match.js';
 
 export const router = Router();
 
@@ -25,7 +25,7 @@ const port: BooksPort = { read: readBooks, update: updateBooks };
 
 async function find(only: { receipt: string } | { payment: string }): Promise<Found> {
   const ask = await askIfReady();
-  const result: ChainResult = await runPairChain(port, { ask, toChf: estvToChf(), only, noReceipt: noReceiptFor(WS), noPayment: noPaymentFor(WS) });
+  const result: ChainResult = await runPairChain(port, { ask, toChf: estvToChf(), only, noReceipt: noReceiptFor(WS), noPayment: noPaymentFor(WS), businesses: businessesOf(WS) });
   const model = result.calls > 0 && !result.modelFailed;
   const link = result.linked.find((l) => ('receipt' in only ? l.receipt === only.receipt : l.payment === only.payment));
   if (link) {

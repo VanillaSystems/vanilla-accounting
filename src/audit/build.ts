@@ -9,7 +9,7 @@ import { loadBooks, sealsOf } from '../books/store.js';
 import { readEstvRateTable } from '../accounting/fx-rates.js';
 import type { ApiStatus } from '../types/api-error.js';
 import { accountsOf, filedReturnsOf, receiptPathOf } from '../workspace/reads.js';
-import { orderPagesIn } from '../intake/pair-chain.js';
+import { orderPagesIn, vatCorrectionsIn } from '../intake/pair-chain.js';
 import { companyInfo } from '../books/company.js';
 import { APP_ROOT, findFile, yearPaths, yearsOf as yearsWithFolders, type Workspace } from '../workspace/workspace.js';
 import { schemaOf } from '../workspace/schema.js';
@@ -46,6 +46,7 @@ export async function buildAuditExport(ws: Workspace, outDir: string, createdAt 
   for (const year of yearsOf(ws, books)) write(EXPORT_FILES.filedReturns(year), filedReturnsOf(ws, year));
   write(EXPORT_FILES.fxRates(), readEstvRateTable());
   write(EXPORT_FILES.orderPages(), orderPagesIn(ws, books));
+  write(EXPORT_FILES.vatCorrections(), vatCorrectionsIn(ws, books));
 
   const missing: string[] = [];
   for (const r of books.receipts) {

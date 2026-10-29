@@ -32,6 +32,9 @@ import { documents } from '../../src/engines/index.js';
 import { linkReceiptSets, linkSplitLegs } from '../../src/intake/receipt-sets.js';
 import { chargesOf } from '../../src/intake/charges.js';
 import { batchPayersOf } from '../../src/intake/match.js';
+import { businesses, type Businesses } from '../../src/intake/batch-payers.js';
+import { namesToLearn } from '../../src/knowledge/learned-names.js';
+import { delaysOf } from '../../src/intake/delays.js';
 import { providerOfPayment } from '../../src/booking/providers.js';
 import { loadKnowledge } from '../../src/knowledge/layers.js';
 import { APP_ROOT } from '../../src/workspace/workspace.js';
@@ -115,10 +118,14 @@ export async function main(): Promise<void> {
   const oneToOne = truth.filter((m) => books.mappings.filter((x) => x.receiptId === m.receiptId).length === 1 && books.mappings.filter((x) => x.transactionRef === m.transactionRef).length === 1).length;
 
   const noReceipt = noReceiptFor(ws);
+  // The names the links outside the window teach (#190 part 1), as the app would have written them into the company's files: in memory only.
+  const counterparties = loadKnowledge(APP_ROOT, ws.paths.root).counterparties;
+  const taught = namesToLearn(blind, counterparties, ws.company.uid);
+  const known = businesses(counterparties.map((c) => { const add = taught.filter((l) => l.business === c.id).map((l) => l.name); return add.length ? { ...c, match: { ...c.match, tx: [...c.match.tx, ...add] } } : c; }), ws.company.uid);
   const afterCode = structuredClone(blind);
-  const code = await runPairChain(memoryPort(afterCode), { toChf, noReceipt });
+  const code = await runPairChain(memoryPort(afterCode), { toChf, noReceipt, businesses: known });
   const o = oracle(pairs, blind);
-  const withModel = await runPairChain(memoryPort(structuredClone(blind)), { toChf, ask: o.ask, noReceipt });
+  const withModel = await runPairChain(memoryPort(structuredClone(blind)), { toChf, ask: o.ask, noReceipt, businesses: known });
 
   // Before: the intake's match prompt of each receipt of the window (candidates as the intake ranks them), which the chain does not replace.
   const linked = new Set(blind.mappings.map((m) => m.transactionRef));
@@ -126,14 +133,14 @@ export async function main(): Promise<void> {
   const intakeChars = inWindow.reduce((sum, r) => sum + buildMatchPrompt(r.extractedText, []).length + JSON.stringify(candidates(r, blind.transactions, linked), null, 2).length, 0);
 
   const line = (name: string, r: ChainResult, t: Tally) => console.log(`${name.padEnd(18)} linked ${String(r.linked.length).padStart(4)}  right ${String(t.linkedRight).padStart(4)}  wrong ${String(t.linkedWrong).padStart(3)}  new ${String(t.linkedNew).padStart(3)}  | of ${oneToOne} one-to-one: left with the right candidate ${t.leftWithRight}, left without ${t.leftWithout}, not searched ${t.notSearched}  | ${Object.entries(t.byMaker).map(([k, v]) => `${k} ${v.right}/${v.right + v.wrong}`).join(', ')}`);
-  console.log(`window ${from} – ${to}: ${truth.length} links taken away, ${oneToOne} of them one receipt to one payment`);
+  console.log(`window ${from} – ${to}: ${truth.length} links taken away, ${oneToOne} of them one receipt to one payment; ${taught.length} merchant name(s) of ${new Set(taught.map((l) => l.business)).size} business(es) learned from the links outside it`);
   const tc = tally(code, truth, books);
   const tm = tally(withModel, truth, books);
   line('code alone', code, tc);
   line('code + oracle', withModel, tm);
   // --detail: what spoke for each wrong code link, and for the right one (features only: no name, amount or ref).
   if (process.argv.includes('--detail')) {
-    const search = searchPairs(blind, toChf, () => false);
+    const search = searchPairs(blind, toChf, () => false, { businesses: known, delays: delaysOf(blind, known) });
     for (const l of code.linked.filter((x) => !pairs.has(`${x.receipt}|${x.payment}`))) {
       const list = search.byReceipt.get(l.receipt) ?? [];
       const right = truth.find((m) => m.receiptId === l.receipt);
@@ -167,14 +174,13 @@ export async function main(): Promise<void> {
   const isOpen = () => true;
   linkReceiptSets(afterCode, { isOpen, payers: batchPayersOf(ws), toChf, buyerUid: ws.company.uid });
   linkSplitLegs(afterCode, isOpen, toChf);
-  const counterparties = loadKnowledge(APP_ROOT, ws.paths.root).counterparties;
   const multi = multiTally(afterCode, truth, books, toChf, (t) => !!providerOfPayment(t, [], counterparties));
   const say = (t: MultiTally) => `${t.payments} in the window; code alone found ${t.full} in full, ${t.part} in part, ${t.wrong} with a document the books do not have there, missed ${t.missed}`;
   console.log(`multi-receipt payments (two documents or more, or one on every leg of a card charge split across balances; documents counted, copies once): ${say(multi.out)}`);
   console.log(`  left out: ${multi.payouts.payments} payout(s) of a payment provider with documents linked in the books (out of matching since #203: their documents prove the sales, not the payout)`);
   console.log(`model stages: ${o.usage.calls} calls (batches of ${CHECK_BATCH} checks, ${CHOOSE_BATCH} choices), ${withModel.checked} pairs checked, ${withModel.chosen} short lists; ~${Math.round(o.usage.promptChars / 4)} prompt and ~${Math.round(o.usage.answerChars / 4)} answer tokens (estimated, 4 characters each)`);
   console.log(`intake match prompts before #187 of the window's ${inWindow.length} receipts (read facts): ~${Math.round(intakeChars / 4)} prompt tokens (estimated; standard tier)`);
-  await intake(blind, truth, toChf, noReceipt);
+  await intake(blind, truth, toChf, noReceipt, known);
 }
 
 interface MultiTally { payments: number; full: number; part: number; wrong: number; missed: number }
@@ -235,7 +241,7 @@ function multiTally(after: Books, truth: readonly Mapping[], books: Books, toChf
  * code's short list where there is one. Tokens estimated at 4 characters each; a file attached to
  * a match prompt (a scan with little text) is not counted on either side.
  */
-async function intake(blind: Books, truth: readonly Mapping[], toChf: ReturnType<typeof estvToChf>, noReceipt: ReturnType<typeof noReceiptFor>): Promise<void> {
+async function intake(blind: Books, truth: readonly Mapping[], toChf: ReturnType<typeof estvToChf>, noReceipt: ReturnType<typeof noReceiptFor>, known: Businesses): Promise<void> {
   const ids = new Set(truth.map((m) => m.receiptId));
   const books = structuredClone(blind);
   for (const r of books.receipts) {
@@ -248,7 +254,7 @@ async function intake(blind: Books, truth: readonly Mapping[], toChf: ReturnType
   const view: Books = { ...books, receipts: [...books.receipts.filter((r) => r.location !== 'staged'), ...early] };
   const pairs = new Set(truth.map((m) => `${m.receiptId}|${m.transactionRef}`));
   const o = oracle(pairs, view);
-  const chain = await runPairChain(memoryPort(books), { toChf, ask: o.ask, staged: early, noReceipt });
+  const chain = await runPairChain(memoryPort(books), { toChf, ask: o.ask, staged: early, noReceipt, businesses: known });
   const linked = new Set(books.mappings.map((m) => m.transactionRef));
   const matchChars = (r: typeof staged[number], shown = candidates(r, books.transactions, linked)) => buildMatchPrompt(r.extractedText, shown).length;
   // Before #187 the prompt listed the 20 candidates as indented JSON with every field.

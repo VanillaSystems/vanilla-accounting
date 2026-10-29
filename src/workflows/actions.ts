@@ -19,6 +19,7 @@ import { noteLines, stemOf, type BooksPort, type IntakeNote, type StepContext, t
 import { readStep } from '../intake/read.js';
 import { vatCandidates, vatStep } from '../intake/vat.js';
 import { matchStep } from '../intake/match.js';
+import { learnMerchantNames } from '../knowledge/learned-names.js';
 import { classifyStep } from '../intake/classify.js';
 import { entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
 import { FILING_ACTIONS } from './filing.js';
@@ -98,6 +99,15 @@ function batch(step: StepRun, took: (books: Books, ws: Workspace, later?: () => 
     if (r.stop) throw stopped(r.notes);
     // What it read and what it made, for the run view (src/workflows/summary.ts).
     return { outcome: 'ok', output: { took: todo, made: madeBetween(before, port.read()), notes: r.notes } };
+  };
+}
+
+/** After a live run of `run`, the merchant names its confirmed links teach go into the company's business files (#190, src/knowledge/learned-names.ts); a dry run or a replay writes no knowledge. */
+function learning(run: NonNullable<Action['run']>): NonNullable<Action['run']> {
+  return async (input, effects, ctx) => {
+    const out = await run(input, effects, ctx);
+    if (ctx.run?.mode === 'live') learnMerchantNames(ctx.ws, effects['books.write']!.read());
+    return out;
   };
 }
 
@@ -223,7 +233,7 @@ export const ACTIONS: Record<string, Action> = {
   // The inbox, one run per arrival (src/intake/): every step takes up only what is still to do.
   'intake.read': { outcomes: ['ok'], effects: ['books.write'], run: batch(readStep, inboxFiles) },
   'intake.extract-vat': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(vatStep(), (b) => { const todo = new Set(vatCandidates(b)); return receiptsWhere((r) => todo.has(r))(b); }) },
-  'intake.match': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(matchStep, receiptsWhere((r) => r.location === 'staged')) },
+  'intake.match': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: learning(batch(matchStep, receiptsWhere((r) => r.location === 'staged'))) },
   'intake.book': { outcomes: ['ok'], effects: ['books.write', 'runs.close'], ai: true, run: batch(classifyStep(), unbooked) },
   'parsers.statement': declared(['ok']),
   'books.merge-statement': declared(['ok'], { effects: ['books.transactions'] }),
