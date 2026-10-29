@@ -38,7 +38,8 @@ function loadBaseline(gitRef: string): Index {
   try {
     const ledger = JSON.parse(show(`${prefix}ledger.json`)) as { config?: Index['config'] };
     const books: Index = { config: ledger.config, journalEntries: [], transactions: [], mappings: [] };
-    const files = git('ls-tree', '-r', '--name-only', gitRef, `${prefix}transactional-data`).split('\n').filter(Boolean);
+    // --full-tree: without it ls-tree reads the path, and prints its names, relative to the cwd, the app's folder (#117).
+    const files = git('ls-tree', '-r', '--full-tree', '--name-only', gitRef, `${prefix}transactional-data`).split('\n').filter(Boolean);
     for (const part of ['journalEntries', 'transactions', 'mappings'] as const) {
       for (const f of files.filter((f) => f.endsWith(`/books/${BOOK_FILES[part]}`)).sort()) books[part]!.push(...fromJsonl(show(f), f));
     }
