@@ -2,8 +2,8 @@
  * Kontoauszüge as the list and detail show them, derived from the books and never stored: each
  * bank account's monthly statements in a period, a month that ended without one (missing on an
  * account that has had statements, else a month whose balance comes from the movements alone: #88),
- * the payments of a statement (a Wise fee folded into its payment), and the balance checks. Pure, so
- * the list, the keys, the dock badge and the tests read the same statements.
+ * the payments of a statement (a booked fee the bank debited apart folded into its payment), and
+ * the balance checks. Pure, so the list, the keys, the dock badge and the tests read the same statements.
  */
 import type { BankStatement, BankTransaction, Index, JournalEntry } from '../../../types/index.js';
 import type { StatementDetails } from '../../../types/drop.js';
@@ -18,6 +18,7 @@ import { baseCurrency, documents } from '../../../engines/index.js';
 import { accountOfStatement, statementFacts } from '../../../books/statement-facts.js';
 import { bookedInFiled } from '../../../books/twins.js';
 import { lockedThrough } from '../../../books/lock-line.js';
+import { isSeparateFee, separateFeeOf } from '../../../booking/separate-fee.js';
 
 export type Account = Pick<LedgerBankAccount, 'bank' | 'currency' | 'account' | 'label' | 'role' | 'statements' | 'iban'>;
 
@@ -190,21 +191,17 @@ function keyed(account: string, list: Statement[]): Statement[] {
   });
 }
 
-/** A Wise fee is folded into its payment when that payment is there ("FEE-CARD-1" belongs to "CARD-1"). */
-const baseRef = (fee: BankTransaction) => fee.ref.replace(/^FEE-/, '');
-
 /**
  * Whether a payment has an amount and is not booked: no entry, or entries that do not add up to
- * what the bank paid (src/accounting/payment-entries.ts bookedState, r9k-2); a Wise fee folded into
- * a booked payment counts as booked with it, and a bank movement booked in a filed quarter as a read
- * one (bookedInFiled, #254) is booked. `accounts`: the manifest's bank accounts, which say
- * where a payment's bank side is booked.
+ * what the bank paid (src/accounting/payment-entries.ts bookedState, r9k-2); a bank movement booked
+ * in a filed quarter as a read one (bookedInFiled, #254) is booked. A fee the bank debits as a
+ * movement of its own (src/booking/separate-fee.ts) is booked by its own entries alone: its
+ * payment's booking never carries it (#24), so a booked payment leaves its fee open (#42).
+ * `accounts`: the manifest's bank accounts, which say where a payment's bank side is booked.
  */
 export function isUnbooked(books: Pick<Index, 'transactions' | 'journalEntries'>, accounts: readonly LedgerBankAccount[]): (t: BankTransaction) => boolean {
   const state = bookedStates(books, accounts);
-  const booked = (ref: string) => state(ref) === 'booked';
-  const refs = new Set(books.transactions.map((t) => t.ref));
-  return (t) => t.amount !== 0 && !booked(t.ref) && !bookedInFiled(t) && !(t.type === 'wise-fee' && refs.has(baseRef(t)) && booked(baseRef(t)));
+  return (t) => t.amount !== 0 && state(t.ref) !== 'booked' && !bookedInFiled(t);
 }
 
 /** The payments of the open period nobody has booked yet, oldest first: Aufgaben lists them (corner-9). */
@@ -228,9 +225,9 @@ export interface Bank {
   byKey(key: string): Statement | undefined;
   /** The statement a payment is on; none for a private one. */
   statementOf(t: BankTransaction): Statement | undefined;
-  /** Its payments, newest first; a Wise fee folded into its payment is left out. */
+  /** Its payments, newest first; a booked fee folded into its payment is left out. */
   payments(s: Statement): BankTransaction[];
-  /** The fee folded into a payment. */
+  /** The booked fee folded into a payment. */
   feeOf(ref: string): BankTransaction | undefined;
   check(s: Statement): Check;
   receiptsOf(ref: string): string[];
@@ -259,9 +256,15 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
     const a = accountOf(t.bank, t.currency);
     if (a) byAccount.get(a.account)!.push(t);
   }
+  const unbooked = isUnbooked(books, accounts);
+  // A booked fee is folded into its payment's row; an open one keeps a row of its own, to be booked (#42).
+  const separateFees = books.transactions.filter(isSeparateFee);
   const fees = new Map<string, BankTransaction>();
-  for (const t of books.transactions) if (t.type === 'wise-fee' && txByRef.has(baseRef(t))) fees.set(baseRef(t), t);
-  const folded = (t: BankTransaction) => t.type === 'wise-fee' && txByRef.has(baseRef(t));
+  for (const t of books.transactions) {
+    const fee = isSeparateFee(t) ? undefined : separateFeeOf(t, separateFees);
+    if (fee && !unbooked(fee)) fees.set(t.ref, fee);
+  }
+  const folded = new Set(fees.values());
 
   const receiptById = new Map(books.receipts.map((r) => [r.id, r]));
   const receipts = new Map<string, string[]>();
@@ -456,7 +459,7 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
         ?? forAccount(a, t.date, t.date)[0];
     },
     payments: (s) => held(s)
-      .filter((t) => !folded(t))
+      .filter((t) => !folded.has(t))
       .sort((x, y) => y.date.localeCompare(x.date) || y.ref.localeCompare(x.ref)),
     feeOf: (ref) => fees.get(ref),
     check,
@@ -467,8 +470,8 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
     },
     entriesOf: (ref) => entries.get(ref) ?? [],
     txByRef,
-    needsReceipt: (t) => t.type !== 'wise-fee' && t.amount !== 0 && !t.noReceiptNeeded && !(receipts.get(t.ref) ?? []).length,
-    unbooked: isUnbooked(books, accounts),
+    needsReceipt: (t) => !isSeparateFee(t) && t.amount !== 0 && !t.noReceiptNeeded && !(receipts.get(t.ref) ?? []).length,
+    unbooked,
     strays: (from, to) => (books.journalEntries ?? []).filter((e) => e.date >= from && e.date <= to && e.origin !== 'year-close'
       && e.accountDebit !== e.accountCredit && !txByRef.has(e.transactionRef)
       && banked.some((a) => a.account === e.accountDebit || a.account === e.accountCredit)),
