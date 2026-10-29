@@ -1,5 +1,6 @@
 import type { Tags } from '../books/tags.js';
 import type { StatementRead } from './statement-read.js';
+import type { AccountChoice } from './api-error.js';
 
 // One row of a receipt's printed MWST summary block (grouped by rate).
 // This is the receipt-intrinsic VAT evidence — the source of truth for the
@@ -244,6 +245,11 @@ export interface StatementImport {
   reconcile?: { read: number; bank: number };
   /** Statement PDFs of the account whose question this bank export or CSV closed: kept as statements (#254). */
   closedAsks?: number;
+  /**
+   * Placed on the one account of the bank it names, which carried no IBAN (#273): the question it
+   * would have asked, so the person can still choose another; its IBAN is kept on the account.
+   */
+  byBank?: AccountChoice;
   bank: string;
   currency: string;
   /** The days it covers, as far as the file says (a camt export: its first and last booking). */

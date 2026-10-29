@@ -80,7 +80,7 @@ test('«Rückgängig» on an overlapping statement removes only what it alone br
     await rest();
     const [a, b] = s.rows;
     assert.deepEqual([a.state, b.state], ['taken', 'taken']);
-    assert.deepEqual(b.statement, { file: 'Raiffeisen/b.xml', refs: ['91000000006'] }, 'the second statement brought one payment');
+    assert.deepEqual(b.statement, { file: 'Raiffeisen/b.xml', refs: ['91000000006'], account: '1021' }, 'the second statement brought one payment');
 
     s = await post(`/api/drop/${s.id}/rows/${b.key}`, { kind: 'undo' });
     assert.equal(s.rows[1].state, 'undone');
@@ -93,7 +93,7 @@ test('«Rückgängig» on an overlapping statement removes only what it alone br
     s = await post(`/api/drop/${s.id}/files?name=b.xml`, Buffer.from(B));
     await rest();
     const b2 = s.rows[2];
-    assert.deepEqual([b2.state, b2.statement], ['taken', { file: 'Raiffeisen/b.xml', refs: ['91000000006'] }], 'the file can be dropped again');
+    assert.deepEqual([b2.state, b2.statement], ['taken', { file: 'Raiffeisen/b.xml', refs: ['91000000006'], account: '1021' }], 'the file can be dropped again');
 
     s = await post(`/api/drop/${s.id}/rows/${a.key}`, { kind: 'undo' });
     assert.equal(s.rows[0].state, 'undone');

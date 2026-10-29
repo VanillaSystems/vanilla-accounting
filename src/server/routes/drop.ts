@@ -17,8 +17,10 @@ import express, { Router } from 'express';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
-import { RequestError, WS, assertOpen, readBooks, receiptDates, receiptPath, updateBooks } from '../books.js';
-import { findFile, partDirs } from '../../workspace/workspace.js';
+import { RequestError, WS, assertOpen, readBooks, receiptDates, receiptPath, reopenWorkspace, updateBooks } from '../books.js';
+import { findFile, partDirs, type LedgerBankAccount } from '../../workspace/workspace.js';
+import { patchManifest } from '../../workspace/manifest-write.js';
+import { compactIban } from '../../workspace/bank-statements.js';
 import { INTAKE, bookAgain, engine, handedOver } from './automation.js';
 import { removeReceipt } from '../../accounting/classify-force.js';
 import { importStatement, removeStatement } from './statements.js';
@@ -181,6 +183,9 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
       delete row.details;
       delete row.message;
       Object.assign(row, { account: a.account, state: 'take', reason: undefined });
+      break;
+    case 'otherAccount':
+      backToChoice(s, row);
       break;
     case 'provider': {
       const ask = row.askProvider;
@@ -378,7 +383,7 @@ async function readInto(s: DropSession, row: DropRow, bytes: Buffer): Promise<vo
  */
 async function placeStatementPdf(s: DropSession, row: DropRow, bytes: Buffer): Promise<void> {
   const byText = placeByText(await firstPages(bytes) ?? '', row.name, WS.bankAccounts);
-  let account = (row.account ? WS.bankAccounts.find((x) => x.account === row.account && x.statements) : undefined) ?? byText.account;
+  let account = (row.account ? WS.bankAccounts.find((x) => x.account === row.account && x.statements) : undefined) ?? byText.account ?? sessionAccount(s, row.facts?.iban);
   let period = byText.period;
   if (!(account && period && structuredAccount(account.account)) && !row.read) await readInto(s, row, bytes);
   if (row.read?.why === 'notStatement') return;
@@ -446,7 +451,8 @@ async function intoBooks(row: DropRow, body: Buffer, name: string, account: stri
     Object.assign(row, { state: asks ? 'asks' : 'refused', reason: 'not-imported', message: (e as Error).message, ...(unknown ? { unknownAccount: unknown } : {}), ...(choose ? { chooseAccount: choose } : {}), ...(details ? { details } : {}) });
     return undefined;
   }
-  row.statement = { file: done.file, refs: readBooks().transactions.filter((t) => !had.has(t.ref)).map((t) => t.ref) };
+  row.statement = { file: done.file, refs: readBooks().transactions.filter((t) => !had.has(t.ref)).map((t) => t.ref), account: done.account };
+  if (done.byBank) row.byBank = done.byBank;
   await handToRun(row, done);
   return done;
 }
@@ -480,6 +486,25 @@ function freeStem(stem: string, ext: string): string {
   return name;
 }
 
+/**
+ * «ändern» on a statement taken onto the one account of the bank it names (#273): it leaves that
+ * account with its payments, as «Rückgängig» takes it, the IBAN kept there for it goes too, and the
+ * row asks which account it is of, as it would have.
+ */
+function backToChoice(s: DropSession, row: DropRow): void {
+  const choice = row.byBank;
+  const path = row.statement && findFile(WS.paths, 'statements', row.statement.file);
+  if (row.state !== 'taken' || !choice || !path) throw new RequestError(400, 'Nur ein Auszug, den die App dem Konto seiner Bank zugeordnet hat, wird so geändert.');
+  const bytes = readFileSync(path);
+  const account = row.statement!.account;
+  undo(row);
+  const kept = WS.bankAccounts.find((a) => a.account === account && a.iban === choice.iban);
+  if (kept) { patchManifest(WS.paths.manifest, { banks: [{ bank: kept.bank, currency: kept.currency, iban: null }] }); reopenWorkspace(); }
+  writeFileSync(fileOf(s.id, row.key), bytes);
+  for (const k of ['byBank', 'statement', 'run'] as const) delete row[k];
+  Object.assign(row, { state: 'asks', reason: 'not-imported', chooseAccount: choice, details: statementDetails(bytes, row.name) });
+}
+
 /** «Nein, privat» on a statement of an account the books lack: it stays out of the books, its copy in the session goes. */
 function setAsidePrivate(s: DropSession, row: DropRow): void {
   if (!row.unknownAccount) throw new RequestError(400, 'Nur ein Auszug eines unbekannten Kontos wird als privat beiseitegelegt.');
@@ -499,6 +524,40 @@ const OTHER_WHY = ['newsletter', 'terms', 'price-list', 'tracking', 'no-receipt'
  */
 async function takeWaiting(s: DropSession): Promise<void> {
   syncAsked(s);
+  await takeRows(s);
+  // A bank export or CSV taken in this drop feeds its account: the statement PDFs of its IBAN that asked meanwhile are its statements (#273).
+  if (toItsExport(s)) await takeRows(s);
+  syncAsked(s);
+}
+
+/**
+ * The account of a bank export or bank CSV this session read in for an IBAN. A statement PDF of that
+ * IBAN in the same drop is that account's statement without a question, whichever file came first and
+ * whether or not the IBAN is on the account (#273).
+ */
+function sessionAccount(s: DropSession, iban: string | undefined): LedgerBankAccount | undefined {
+  const wanted = iban && compactIban(iban);
+  if (!wanted) return undefined;
+  const row = s.rows.find((r) => r.state === 'taken' && (r.kind === 'camt' || r.kind === 'statement-csv') && r.statement?.account
+    && ((r.facts?.iban && compactIban(r.facts.iban) === wanted) || WS.bankAccounts.some((a) => a.account === r.statement!.account && a.iban === wanted)));
+  return row ? WS.bankAccounts.find((a) => a.account === row.statement!.account && a.statements) : undefined;
+}
+
+/** The statement PDFs asking in their row whose IBAN a bank export or CSV of this drop names, placed again on its account. Whether any was. */
+function toItsExport(s: DropSession): boolean {
+  let any = false;
+  for (const row of s.rows) {
+    if (row.kind !== 'statement-pdf' || row.state !== 'asks' || row.asked || row.account || row.confirmed) continue;
+    const account = sessionAccount(s, row.facts?.iban ?? row.read?.statement.iban);
+    if (!account) continue;
+    for (const k of ['read', 'chooseAccount', 'unknownAccount', 'details', 'message'] as const) delete row[k];
+    Object.assign(row, { state: 'take', reason: undefined, account: account.account });
+    any = true;
+  }
+  return any;
+}
+
+async function takeRows(s: DropSession): Promise<void> {
   for (const row of s.rows) {
     if (row.state === 'quarantine' && !row.quarantined && existsSync(fileOf(s.id, row.key))) {
       const why = OTHER_WHY.find((w) => w === row.document);

@@ -92,10 +92,16 @@ test('the drop row of a camt.053 asking for its account carries its details and 
     const { post, rest } = SESSION(api);
     let s = await post('/api/drop');
     s = await post(`/api/drop/${s.id}/files?name=raiffeisen-oktober.xml`, Buffer.from(camt(AT_80808, { name: 'Raiffeisenbank Beispiel' }, SEVEN)));
+    // The one account of the bank it names takes it without a question (#273).
+    assert.deepEqual([s.rows[0].state, s.rows[0].byBank?.proposed], ['taken', '1020']);
+    await rest();
+    // No bank matches: the account left without an IBAN is only proposed (#274), never taken.
     s = await post(`/api/drop/${s.id}/files?name=unbekannt.xml`, Buffer.from(camt(AT_70000, { name: 'Bank Beispiel AG' }, SEVEN.slice(0, 2))));
-    const [one, other] = s.rows;
+    assert.deepEqual([s.rows[1].state, s.rows[1].chooseAccount?.proposed, s.rows[1].details?.movements], ['asks', '1022', 2]);
+    // «ändern» asks the first as it would have.
+    s = await post(`/api/drop/${s.id}/rows/${s.rows[0].key}`, { kind: 'otherAccount' });
+    const [one] = s.rows;
     assert.deepEqual([one.state, one.chooseAccount?.proposed, one.details?.bankName, one.details?.movements, one.details?.more], ['asks', '1020', 'Raiffeisenbank Beispiel', 7, 2]);
-    assert.deepEqual([other.state, other.chooseAccount?.proposed, other.details?.movements], ['asks', undefined, 2], 'no bank matches: asked plainly');
     s = await post(`/api/drop/${s.id}/rows/${one.key}`, { kind: 'account', account: '1020' });
     const taken = s.rows.find((r) => r.key === one.key)!;
     assert.deepEqual([taken.state, taken.details, taken.chooseAccount], ['taken', undefined, undefined], 'the person confirmed: read in, the question gone');
@@ -118,7 +124,7 @@ test('an answer given while the next file of the drop is still being read in is 
     assert.equal(added.status, 200, JSON.stringify(added.json));
     const { post, rest } = SESSION(api);
     let s = await post('/api/drop');
-    s = await post(`/api/drop/${s.id}/files?name=oktober.xml`, Buffer.from(camt(AT_80808, { name: 'Raiffeisenbank Beispiel' }, SEVEN)));
+    s = await post(`/api/drop/${s.id}/files?name=oktober.xml`, Buffer.from(camt(AT_80808, { name: 'Bank Beispiel AG' }, SEVEN)));
     const asked = s.rows[0];
     assert.equal(asked.state, 'asks');
     // The person answers while the drop's next files are still on their way in: every request changes the same session.
@@ -129,12 +135,12 @@ test('an answer given while the next file of the drop is still being read in is 
     assert.deepEqual(saved.rows.map((r) => [r.name, r.state]).sort(), [['beleg-1.pdf', 'taken'], ['beleg-2.pdf', 'taken'], ['beleg-3.pdf', 'taken'], ['beleg-4.pdf', 'taken'], ['oktober.xml', 'taken']], 'no request\'s change is lost');
     await rest();
 
-    // The same file dropped again later and answered: it is read in already, said so (not «nicht gespeichert»), with the way to its statement.
+    // The same file dropped again later: its IBAN is the one of the bank's folder now, so it asks nothing (#273);
+    // it is read in already, said so (not «nicht gespeichert»), with the way to its statement.
     let again = await post('/api/drop');
-    again = await post(`/api/drop/${again.id}/files?name=oktober-kopie.xml`, Buffer.from(camt(AT_80808, { name: 'Raiffeisenbank Beispiel' }, SEVEN)));
-    again = await post(`/api/drop/${again.id}/files?name=oktober-kopie-2.xml`, Buffer.from(camt(AT_80808, { name: 'Raiffeisenbank Beispiel' }, SEVEN)));
-    assert.deepEqual(again.rows.map((r) => [r.state, r.reason]), [['asks', 'not-imported'], ['duplicate', 'duplicate']], 'the same bytes twice in one drop ask once');
-    again = await post(`/api/drop/${again.id}/rows/${again.rows[0].key}`, { kind: 'account', account: '1020' });
+    again = await post(`/api/drop/${again.id}/files?name=oktober-kopie.xml`, Buffer.from(camt(AT_80808, { name: 'Bank Beispiel AG' }, SEVEN)));
+    again = await post(`/api/drop/${again.id}/files?name=oktober-kopie-2.xml`, Buffer.from(camt(AT_80808, { name: 'Bank Beispiel AG' }, SEVEN)));
+    assert.deepEqual(again.rows.map((r) => [r.state, r.reason]), [['duplicate', 'statement-read'], ['duplicate', 'duplicate']], 'the same bytes twice in one drop: read in already, and a copy');
     const dup = again.rows[0];
     assert.deepEqual([dup.state, dup.reason, dup.readAs?.file, dup.message, dup.chooseAccount], ['duplicate', 'statement-read', 'Raiffeisen/oktober.xml', undefined, undefined], 'names the file that holds it');
     assert.match(dup.readAs?.ref ?? '', /^R-/, 'its first payment opens the statement');

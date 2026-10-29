@@ -315,3 +315,49 @@ test('a statement file is shown whole with the movements it holds, its days and 
   assert.equal(b.fileByKey('1021/none.xml'), undefined);
   assert.equal(b.files('2026-07-01', '2026-07-31').length, 1, 'a PDF is no file of this view: its month is its page');
 });
+
+test('#273: a bank export over months is its part of each month: one row a month, never «fehlt» for a month it covers, no row over years, no one-day row', () => {
+  const bal = (date: string, amount: number, sourceFile: string, account = '1021') => ({ account, bank: account === '1021' ? 'Raiffeisen' : 'Wise', currency: account === '1021' ? 'CHF' : 'EUR', date, amount, source: 'camt' as const, sourceFile });
+  const pdf = (m: string, last: string) => ({ bank: 'Raiffeisen', filename: `Kontoauszug ${m}.pdf`, fromDate: `2026-${m}-01`, toDate: `2026-${m}-${last}` });
+  const b = bankOf(books({
+    transactions: [
+      tx('H1', '2026-06-10', -40), tx('Q1', '2026-07-08', -100), tx('Q2', '2026-08-12', 300), tx('Q3', '2026-09-03', -20), tx('Q4', '2026-09-30', -5),
+      tx('W1', '2026-06-20', -10, { bank: 'Wise', currency: 'EUR' }),
+    ],
+    bankStatements: [
+      pdf('05', '31'), pdf('06', '30'),
+      // A quarter's export the bank dates through the day after its last booking, and the next one «since the account's opening».
+      { bank: 'Raiffeisen', filename: 'q2.xml', fromDate: '2026-04-01', toDate: '2026-07-01', currency: 'CHF', refs: ['H1'] },
+      { bank: 'Raiffeisen', filename: 'q3.xml', fromDate: '2017-01-01', toDate: '2026-09-30', currency: 'CHF', refs: ['Q1', 'Q2', 'Q3', 'Q4'] },
+      { bank: 'Wise', filename: 'wise-q2.xml', fromDate: '2026-04-01', toDate: '2026-07-01', currency: 'EUR', refs: ['W1'] },
+    ],
+    statementBalances: [
+      bal('2026-06-30', 1000, 'Kontoauszug 06.pdf'),
+      bal('2026-07-07', 1000, 'q3.xml'), bal('2026-09-30', 1175, 'q3.xml'),
+      bal('2026-03-31', 500, 'wise-q2.xml', '1023'), bal('2026-07-01', 490, 'wise-q2.xml', '1023'),
+    ],
+    journalEntries: [],
+    config: { closedThrough: '2026-06-30', openingBalances: { 2026: { 1021: 1000 } } },
+  }), ACCOUNTS, '2026-10-01');
+  const q3 = b.statements('2026-07-01', '2026-09-30');
+  assert.deepEqual(q3.map((s) => [s.key, s.from, s.to, s.file?.filename ?? (s.missing ? 'fehlt' : s.running ? 'läuft' : '-')]), [
+    ['1021-2026-09', '2026-09-01', '2026-09-30', 'q3.xml'],
+    ['1023-2026-09', '2026-09-01', '2026-09-30', 'fehlt'],
+    ['1021-2026-08', '2026-08-01', '2026-08-31', 'q3.xml'],
+    ['1023-2026-08', '2026-08-01', '2026-08-31', 'fehlt'],
+    ['1021-2026-07', '2026-07-01', '2026-07-31', 'q3.xml'],
+    ['1023-2026-07', '2026-07-01', '2026-07-31', 'fehlt'],
+  ], 'one row a month from the export; the Wise export reaching one day into July is no July statement');
+  const aug = b.byKey('1021-2026-08')!;
+  assert.deepEqual([aug.part, b.payments(aug).map((t) => t.ref)], [true, ['Q2']], 'a month\'s part holds that month\'s payments only');
+  assert.equal(b.statementOf(b.txByRef.get('Q2')!)?.key, '1021-2026-08', 'a payment opens its month, not the export\'s first');
+  const c = (key: string) => { const x = b.check(b.byKey(key)!); return [x.open, x.inc, x.out, x.close, x.diff]; };
+  assert.deepEqual(c('1021-2026-07'), [1000, 0, 100, 900, 0], 'the export\'s opening carries into its first month');
+  assert.deepEqual(c('1021-2026-08'), [900, 300, 0, 1200, 0]);
+  assert.deepEqual(c('1021-2026-09'), [1200, 0, 25, 1175, 0], 'the last month closes on the bank\'s stated balance');
+  const june = b.byKey('1021-2026-06')!;
+  assert.deepEqual([june.file?.filename, june.export?.filename], ['Kontoauszug 06.pdf', 'q2.xml'], 'a PDF month the export covers too is the PDF, marked with the export');
+  assert.equal(b.byKey('1021-2026-05')!.export?.filename, 'q2.xml');
+  assert.equal(b.statements('2017-01-01', '2026-12-31').filter((s) => s.account.account === '1021').some((s) => s.from < '2026-01-01'), false, 'nothing before the books\' first year');
+  assert.deepEqual(b.files('2026-07-01', '2026-09-30').map((f) => [f.key, f.payments.length]), [['1021/q3.xml', 4], ['1021/q2.xml', 1], ['1023/wise-q2.xml', 1]], 'Datei lists each export whole');
+});

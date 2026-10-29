@@ -46,6 +46,13 @@ export interface Statement {
   missing?: true;
   /** Statements among the receipts of this account whose days overlap this one's. */
   receipts?: StatementReceipt[];
+  /**
+   * `file` is a bank export over several months, and this is its part of one month (#273): its
+   * payments and balances are that month's, and the export is listed whole under Datei.
+   */
+  part?: true;
+  /** A PDF whose whole month a bank export over several months covers too: that export. */
+  export?: BankStatement;
 }
 
 /**
@@ -159,6 +166,17 @@ function coversMonth(list: readonly Statement[], first: IsoDate, last: IsoDate):
   return false;
 }
 
+/** A bank export over several months as its part of each month it reaches, from the day the books start (#273). */
+function partsOf(s: Statement, booksFrom: IsoDate | undefined): Statement[] {
+  const from = booksFrom && booksFrom > s.from ? booksFrom : s.from;
+  const out: Statement[] = [];
+  for (let m = from.slice(0, 7); m <= s.to.slice(0, 7); m = monthAdd(m, 1)) {
+    const first = `${m}-01`, last = monthEnd(first);
+    out.push({ ...s, from: first > from ? first : from, to: last < s.to ? last : s.to, part: true });
+  }
+  return out;
+}
+
 /** The key of a statement file of `account` covering [from, to]: its month when it covers the whole month, else its first day. */
 export const fileKey = (account: string, from: IsoDate, to: IsoDate) =>
   (from.slice(8) === '01' && to >= monthEnd(from) ? statementKey(account, from) : `${account}-${from}`);
@@ -264,6 +282,22 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
     return overlap.length ? { ...s, receipts: overlap } : s;
   };
 
+  const refSets = new Map<BankStatement, Set<string>>();
+  const refsOf = (f: BankStatement) => refSets.get(f) ?? refSets.set(f, new Set(f.refs)).get(f)!;
+  /** Whether a statement holds a payment: one its file holds (`refs`; a part, of its days), else one of its days (a PDF, books from before refs). */
+  const holds = (s: Statement, t: BankTransaction): boolean => {
+    const within = t.date >= s.from && t.date <= s.to;
+    if (!s.file?.refs) return within;
+    const refs = refsOf(s.file);
+    // A movement made by hand a row of this statement confirmed stands for that row (#88).
+    return (refs.has(t.ref) || (t.statement !== undefined && refs.has(t.statement))) && (!s.part || within);
+  };
+  const held = (s: Statement): BankTransaction[] => byAccount.get(s.account.account)!.filter((t) => holds(s, t));
+
+  // A bank export states its days from the account's opening on (an export «since 2017»): the books start no earlier than their first year or payment.
+  const opens = Object.keys(books.config?.openingBalances ?? {}).sort()[0];
+  const firstYear = opens ?? books.transactions.map((t) => t.date).filter(Boolean).sort()[0]?.slice(0, 4);
+  const booksFrom = firstYear ? `${firstYear}-01-01` : undefined;
   const files = new Map<string, Statement[]>(banked.map((a) => [a.account, []]));
   const received = new Set<string>();
   for (const f of books.bankStatements) {
@@ -272,22 +306,32 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
     received.add(a.account);
     files.get(a.account)!.push({ key: statementKey(a.account, f.fromDate), account: a, from: f.fromDate, to: f.toDate, file: f });
   }
-  // An XML statement counts from the first month no PDF covers; beside the PDFs of all its months it adds nothing to see. PDFs come first.
   for (const [account, list] of files) {
     const pdfs = list.filter((s) => !isCamt(s.file!));
     const covered = (m: string) => pdfs.some((p) => p.from <= `${m}-01` && p.to >= monthEnd(`${m}-01`));
-    const months = (s: Statement) => { const out: string[] = []; for (let m = s.from.slice(0, 7); m <= s.to.slice(0, 7); m = monthAdd(m, 1)) out.push(m); return out; };
-    const camts = list.filter((s) => isCamt(s.file!)).flatMap((s): Statement[] => {
-      const first = months(s).find((m) => !covered(m));
-      if (!first) return [];
-      const from = first === s.from.slice(0, 7) ? s.from : `${first}-01`;
-      return [{ ...s, key: statementKey(account, from), from }];
+    const camts = list.filter((s) => isCamt(s.file!));
+    // An XML statement of days within one month is that statement; beside a PDF of its whole month it adds nothing to see.
+    const short = camts.filter((s) => s.from.slice(0, 7) === s.to.slice(0, 7) && !covered(s.from.slice(0, 7)));
+    // A bank export over several months is no statement of its own (#273): each month it covers whole is its part, unless a PDF shows that month.
+    const parts = camts.filter((s) => s.from.slice(0, 7) !== s.to.slice(0, 7)).flatMap((s) => partsOf(s, booksFrom));
+    const whole = (p: Statement) => p.from.slice(8) === '01' && p.to === monthEnd(p.from);
+    // Of two exports covering a month, the one of fewer days is the month's (a quarter's export before a year's).
+    const span = (p: Statement) => Date.parse(p.file!.toDate) - Date.parse(p.file!.fromDate > (booksFrom ?? '') ? p.file!.fromDate : booksFrom!);
+    const monthly = new Map<string, Statement>();
+    for (const p of parts.filter(whole).sort((x, y) => span(x) - span(y))) if (!monthly.has(p.from.slice(0, 7))) monthly.set(p.from.slice(0, 7), p);
+    const shown = [
+      ...[...monthly.values()].filter((p) => !covered(p.from.slice(0, 7))),
+      // A part of a month the export reaches only into is shown when it holds a payment the month's whole part does not.
+      ...parts.filter((p) => !whole(p) && !monthly.has(p.from.slice(0, 7)) && !covered(p.from.slice(0, 7)) && held(p).length > 0),
+    ];
+    const marked = pdfs.map((p) => {
+      const ex = whole(p) ? monthly.get(p.from.slice(0, 7))?.file : undefined;
+      return ex ? { ...p, export: ex } : p;
     });
-    files.set(account, keyed(account, [...pdfs, ...camts]).map(withReceipts));
+    files.set(account, keyed(account, [...marked, ...short, ...shown]).map(withReceipts));
   }
 
   // An account's months start with its first statement or payment, or the year its books open.
-  const opens = Object.keys(books.config?.openingBalances ?? {}).sort()[0];
   const startOf = new Map(banked.map((a) => {
     const firsts = [...files.get(a.account)!.map((s) => s.from), ...byAccount.get(a.account)!.map((t) => t.date), ...filedAsReceipt.get(a.account)!.map((x) => x.from)].sort();
     const first = opens && firsts[0] && `${opens}-01-01` < firsts[0] ? `${opens}-01-01` : firsts[0];
@@ -313,14 +357,28 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
   const balanceOn = (account: string, date: IsoDate) => books.statementBalances?.find((b) => b.account === account && b.date === date)?.amount ?? null;
   /** The balances the statement's own file states, oldest first: its opening and its closing (r10c-2). */
   const ownBalances = (s: Statement) => (books.statementBalances ?? []).filter((b) => b.account === s.account.account && b.sourceFile === s.file?.filename).sort((a, b) => a.date.localeCompare(b.date));
-  /** A statement's payments: those its file holds (`refs`), else those of its days (a PDF, books from before refs). */
-  const held = (s: Statement): BankTransaction[] => {
-    const own = byAccount.get(s.account.account)!;
-    if (!s.file?.refs) return own.filter((t) => t.date >= s.from && t.date <= s.to);
-    const refs = new Set(s.file.refs);
-    // A movement made by hand a row of this statement confirmed stands for that row (#88).
-    return own.filter((t) => refs.has(t.ref) || (t.statement !== undefined && refs.has(t.statement)));
-  };
+  /** A file's balances as the books keep them: its own, else the bank's of the same day from another file (a PDF's balance of a day wins over the XML's). */
+  function fileBalances(f: BankStatement, account: string) {
+    const kept = (books.statementBalances ?? []).filter((x) => x.account === account);
+    const own = kept.filter((x) => x.sourceFile === f.filename).sort((x, y) => x.date.localeCompare(y.date));
+    return {
+      opening: own.find((x) => x.date < f.toDate) ?? kept.find((x) => x.date === addDays(f.fromDate, -1)),
+      closing: own.find((x) => x.date === f.toDate) ?? kept.find((x) => x.date === f.toDate),
+    };
+  }
+  /**
+   * A bank export's part of a month (#273): opening on the export's opening and its payments before
+   * the month, closing on the bank's balance of the month's last day, else on its payments.
+   */
+  function partBalances(s: Statement, own: readonly { date: string; amount: number }[], inc: number, out: number): { open: number | null; close: number | null } {
+    const { account } = s.account;
+    const stated = own.find((b) => b.date === s.to)?.amount ?? balanceOn(account, s.to);
+    const start = fileBalances(s.file!, account).opening;
+    if (!start) return { open: balanceOn(account, addDays(s.from, -1)), close: stated };
+    const before = held({ ...s, from: s.file!.fromDate, part: undefined }).filter((t) => t.date < s.from).reduce((a, t) => a + signed(t), 0);
+    const open = round(start.amount + before);
+    return { open, close: stated ?? round(open + inc - out) };
+  }
   /** The account's statement before `s`: the latest one that ends by the day `s` starts. */
   const before = (s: Statement) => files.get(s.account.account)!.filter((x) => x !== s && x.to <= s.from && x.from < s.from).sort((x, y) => y.to.localeCompare(x.to) || y.from.localeCompare(x.from))[0];
 
@@ -331,13 +389,14 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
     const { account, currency } = s.account;
     const year = s.from.slice(0, 4);
     const own = ownBalances(s);
-    const ownOpen = own.find((b) => b.date < s.to && b.date !== s.to && own.length > 1)?.amount;
-    const open = ownOpen ?? balanceOn(account, addDays(s.from, -1))
-      ?? (s.from.slice(5) === '01-01' && books.config?.openingBalances?.[year] ? nativeOpening(books, account, currency, year) : null);
-    const close = own.find((b) => b.date === s.to)?.amount ?? balanceOn(account, s.to);
+    const ownOpen = s.part ? undefined : own.find((b) => b.date < s.to && b.date !== s.to && own.length > 1)?.amount;
     const xs = held(s);
     const inc = round(xs.filter((t) => signed(t) > 0).reduce((a, t) => a + signed(t), 0));
     const out = round(xs.filter((t) => signed(t) < 0).reduce((a, t) => a - signed(t), 0));
+    const part = s.part ? partBalances(s, own, inc, out) : undefined;
+    const open = part ? part.open : ownOpen ?? balanceOn(account, addDays(s.from, -1))
+      ?? (s.from.slice(5) === '01-01' && books.config?.openingBalances?.[year] ? nativeOpening(books, account, currency, year) : null);
+    const close = part ? part.close : own.find((b) => b.date === s.to)?.amount ?? balanceOn(account, s.to);
     const diff = open == null || close == null ? null : round(open + inc - out - close);
     const book = bookBalanceNative(books.journalEntries ?? [], account, currency, s.to.slice(0, 4), s.to, nativeOpening(books, account, currency, s.to.slice(0, 4)));
     const c: Check = { open, close, inc, out, n: xs.length, diff, ok: diff === 0, book, bookDiff: close == null ? null : round(book - close) };
@@ -357,11 +416,7 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
     const a = accountOf(f.bank, f.currency ?? baseCurrency());
     if (!a) return [];
     const whole: Statement = { key: '', account: a, from: f.fromDate, to: f.toDate, file: f };
-    // Its own balances, else the bank's of the same day from another file (a PDF's balance of a day wins over the XML's).
-    const kept = (books.statementBalances ?? []).filter((x) => x.account === a.account);
-    const own = kept.filter((x) => x.sourceFile === f.filename).sort((x, y) => x.date.localeCompare(y.date));
-    const opening = own.find((x) => x.date < f.toDate) ?? kept.find((x) => x.date === addDays(f.fromDate, -1));
-    const closing = own.find((x) => x.date === f.toDate) ?? kept.find((x) => x.date === f.toDate);
+    const { opening, closing } = fileBalances(f, a.account);
     return [{
       key: fileKeyOf(a.account, f.filename), account: a, file: f,
       payments: held(whole).sort((x, y) => x.date.localeCompare(y.date) || x.ref.localeCompare(y.ref)),
@@ -396,7 +451,7 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
       // The file that holds the payment; else the narrowest statement that holds the day: a statement of some days before the month's.
       const days = (s: Statement) => Date.parse(s.to) - Date.parse(s.from);
       const own = files.get(a.account)!;
-      return own.find((s) => s.file?.refs?.includes(t.ref) || (t.statement !== undefined && s.file?.refs?.includes(t.statement)))
+      return own.find((s) => !!s.file?.refs && holds(s, t))
         ?? own.filter((s) => !s.file?.refs && t.date >= s.from && t.date <= s.to).sort((x, y) => days(x) - days(y) || y.from.localeCompare(x.from))[0]
         ?? forAccount(a, t.date, t.date)[0];
     },

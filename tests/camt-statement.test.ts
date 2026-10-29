@@ -29,7 +29,7 @@ ${entries.map(([d, a], i) => `<Ntry><Amt Ccy="CHF">${Math.abs(a)}</Amt><CdtDbtIn
 const books = (): Index => loadBooks(workspaceAt(api.ws.paths.root));
 const accounts = (): Account[] => api.ws.bankAccounts as Account[];
 
-test('a quarter\'s camt.053: one statement Jul–Sep, its balances recorded, every month covered, the balance checked', async () => {
+test('a quarter\'s camt.053: its part of each month a row (#273), its balances recorded, every month covered, the balance checked', async () => {
   const q3 = camt('Q3', '2026-06-30', [['2026-07-14', 4860], ['2026-08-12', -120], ['2026-09-03', -1000]], '2026-09-30', 8450.35, 12190.35);
   const res = await api.fetch('/api/statements?name=q3.xml', { method: 'POST', body: q3 });
   assert.equal(res.status, 200, await res.clone().text());
@@ -44,9 +44,13 @@ test('a quarter\'s camt.053: one statement Jul–Sep, its balances recorded, eve
 
   const bank = bankOf(b, accounts(), '2026-10-15');
   const listed = bank.statements('2026-07-01', '2026-09-30');
-  assert.deepEqual(listed.map((s) => [s.key, !!s.file]), [[`${account.account}-2026-07`, true]], 'no month is missing');
-  const c = bank.check(listed[0]);
-  assert.deepEqual({ open: c.open, close: c.close, diff: c.diff, ok: c.ok, n: c.n }, { open: 8450.35, close: 12190.35, diff: 0, ok: true, n: 3 });
+  assert.deepEqual(listed.map((s) => [s.key, s.file?.filename, s.part]), [9, 8, 7].map((m) => [`${account.account}-2026-0${m}`, 'q3.xml', true]), 'no month is missing');
+  const checks = listed.map((s) => bank.check(s)).reverse().map((c) => ({ open: c.open, close: c.close, diff: c.diff, n: c.n }));
+  assert.deepEqual(checks, [
+    { open: 8450.35, close: 13310.35, diff: 0, n: 1 },
+    { open: 13310.35, close: 13190.35, diff: 0, n: 1 },
+    { open: 13190.35, close: 12190.35, diff: 0, n: 1 },
+  ], 'each month carries the last one\'s balance; September closes on the bank\'s');
 });
 
 test('an opening dated on a day the bank booked is the close of the day before (Raiffeisen\'s export)', async () => {
@@ -67,7 +71,7 @@ test('the camt\'s balance of a day wins over a PDF\'s; a PDF\'s of another day s
   assert.equal(withCamtBalances(undefined, []), undefined, 'books without balances get none');
 });
 
-test('beside a PDF for every month it touches, a camt adds no row; from the first month without one it does', () => {
+test('beside a PDF for every month it touches, a camt adds no row; each month without one is its own row (#273)', () => {
   const ACCOUNTS: Account[] = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Raiffeisen', statements: 'camt053', role: 'bank' }];
   const pdf = (m: string, last: string) => ({ bank: 'Raiffeisen', filename: `Kontoauszug 01.${m}.2026 - ${last}.${m}.2026.pdf`, fromDate: `2026-${m}-01`, toDate: `2026-${m}-${last}` });
   const camtFile = { bank: 'Raiffeisen', filename: 'q3.xml', fromDate: '2026-07-08', toDate: '2026-09-30', currency: 'CHF' };
@@ -75,5 +79,5 @@ test('beside a PDF for every month it touches, a camt adds no row; from the firs
   const all = bankOf(of([pdf('07', '31'), pdf('08', '31'), pdf('09', '30'), camtFile]), ACCOUNTS, '2026-10-15').statements('2026-07-01', '2026-09-30');
   assert.deepEqual(all.map((s) => s.file?.filename), [pdf('09', '30').filename, pdf('08', '31').filename, pdf('07', '31').filename]);
   const julyOnly = bankOf(of([pdf('07', '31'), camtFile]), ACCOUNTS, '2026-10-15').statements('2026-07-01', '2026-09-30');
-  assert.deepEqual(julyOnly.map((s) => [s.key, s.from, s.file?.filename]), [['1021-2026-08', '2026-08-01', 'q3.xml'], ['1021-2026-07', '2026-07-01', pdf('07', '31').filename]]);
+  assert.deepEqual(julyOnly.map((s) => [s.key, s.from, s.file?.filename]), [['1021-2026-09', '2026-09-01', 'q3.xml'], ['1021-2026-08', '2026-08-01', 'q3.xml'], ['1021-2026-07', '2026-07-01', pdf('07', '31').filename]]);
 });

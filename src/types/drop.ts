@@ -48,6 +48,8 @@ export interface DropRow {
   unknownAccount?: UnknownAccount;
   /** A statement several accounts of its currency could take (none names an IBAN): the UI asks which (#25). */
   chooseAccount?: AccountChoice;
+  /** Taken onto the one account of the bank it names, its IBAN now kept there (#273): the question it would have asked, for «ändern». */
+  byBank?: AccountChoice;
   /** A statement file that asks for its account: what the file says about itself (#208). */
   details?: StatementDetails;
   /**
@@ -78,8 +80,8 @@ export interface DropRow {
   inbox?: string;
   /** Not a receipt: the name it got in data/quarantine/. */
   quarantined?: string;
-  /** A statement: its file under bank-statements/ and the payments it added. */
-  statement?: { file: string; refs: string[] };
+  /** A statement: its file under bank-statements/, the payments it added, and the account (ledger number) it was read into. */
+  statement?: { file: string; refs: string[]; account?: string };
   /** A payment provider's sales or fee report (a CSV its file's columns recognise, #203): whose, and which kind. */
   provider?: { id: string; name: string; kind: 'sales' | 'fees' };
   /** A report taken: what it booked onto the provider's clearing account and what it left. */
@@ -218,6 +220,8 @@ export type DropAction =
   | { kind: 'private' }
   /** A statement of one of the accounts it offered (`chooseAccount`): read into that one. */
   | { kind: 'account'; account: string }
+  /** A statement taken onto its bank's account (`byBank`) belongs to another: taken back out, and asked which. */
+  | { kind: 'otherAccount' }
   /** A possible duplicate: «ist dasselbe» (not taken) or «verschieden» (taken, and the pair is not asked again). */
   | { kind: 'twin'; answer: 'same' | 'distinct' }
   /** A report's provider lacks an account (`askProvider`): the person names it, it is kept in the company's file of the provider, and the report is taken. */
