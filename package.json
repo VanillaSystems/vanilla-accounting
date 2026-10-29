@@ -50,7 +50,6 @@
     "year:close": "tsx src/cli/year-close.ts",
     "year:open": "tsx src/cli/year-open.ts",
     "board": "tsx src/cli/import-board.ts",
-    "extract-balances": "tsx src/cli/extract-statement-balances.ts",
     "read-statements": "tsx src/cli/read-statements.ts",
     "check-processes": "tsx src/cli/check-processes.ts",
     "migrate-workspace": "tsx src/cli/migrate-workspace.ts",

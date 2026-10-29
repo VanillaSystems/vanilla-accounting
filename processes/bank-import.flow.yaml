@@ -70,8 +70,8 @@ steps:
     name: Read the month-end closing balances off the PDFs
     produces: statementBalances
     icon: file-search
-    uses: npm:extract-balances
-    note: Raiffeisen Saldo, Wise closing line
+    uses: npm:read-statements
+    note: the AI reads each statement PDF kept as its month's statement once (the inbox run a month's worth by itself, a backlog when the person says yes) and keeps its table beside it; its closing balance, and the references and foreign amounts the bank export lacks, go into the books. Without AI, the table is filled by hand on the statement (Kontoauszüge). Filed months are not read
     needs: [download_pdf]
     phase: import
     duration: 30s
