@@ -11,8 +11,11 @@ import express, { Router } from 'express';
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { accountForStatement, type StatementProblem } from '../../accounting/bank-accounts.js';
-import { bankAccountFor, legOf, madeByHand } from '../../workspace/money-accounts.js';
-import { heldWithout, mergeIndex, readStatementFiles, readTransactions, readWiseReferences, reconcileWithFiles, sourceOf, structuredSpans, transactionsOfFiles, withCamtBalances, withinBooks, type RateOf } from '../../books/bank-import.js';
+import { bankAccountFor, legOf } from '../../workspace/money-accounts.js';
+import { heldWithout, mergeBankFiles, readStatementFiles, readTransactions, reconcileWithFiles, sourceOf, structuredSpans, transactionsOfFiles, withCamtBalances, withinBooks, type RateOf } from '../../books/bank-import.js';
+import { besidePath } from '../../books/pdf-reads.js';
+import { keepAskTable } from '../statement-asks.js';
+import { cancelReads, forgetRead, pdfFacts, readsView, saveTable, startReads } from '../statement-reads.js';
 import { statementPdf } from '../../books/statement-facts.js';
 import { compactIban, readBankStatements } from '../../workspace/bank-statements.js';
 import { periodLock, type Books } from '../../books/store.js';
@@ -24,7 +27,6 @@ import { proposedAccount } from '../../accounting/statement-bank.js';
 import { statementDetails } from '../../providers/statement-files.js';
 import { refDates } from '../books.js';
 import { parseStatementBalances } from '../../providers/camt053/statement-balances.js';
-import { extractStatementBalances } from '../../providers/statement-pdf/statement-pdf-balances.js';
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
 import { placeByText } from '../../intake/statement-read.js';
 import { firstPages } from '../../intake/recognize.js';
@@ -37,7 +39,7 @@ import { fileReceipts, paymentContext } from '../../invoices/service.js';
 import type { StatementRefusal, UnknownAccount } from '../../types/api-error.js';
 import type { BankTransaction, JournalEntry, Mapping, StatementClosingBalance, StatementImport } from '../../types/index.js';
 import { parseIban } from '../../workspace/banks.js';
-import { findFile, partDirs, yearPaths, type LedgerBankAccount } from '../../workspace/workspace.js';
+import { findFile, yearPaths, type LedgerBankAccount } from '../../workspace/workspace.js';
 import { RequestError, WS, assertOpen, patchBody, readBooks, updateBooks, updateBooksWithEffects, withBooks } from '../books.js';
 import { addEntry } from '../edits.js';
 import { askAbout, closeAsk, correctAsk, importAsk } from '../statement-asks.js';
@@ -203,14 +205,6 @@ function placePdf(filename: string, hint?: LedgerBankAccount, month?: string, da
   return { account, filename, first: named.fromDate, last: named.toDate };
 }
 
-/** The new closing balances replace those of the same account and day; the others stay. */
-function mergeBalances(old: StatementClosingBalance[] = [], fresh: StatementClosingBalance[]): StatementClosingBalance[] {
-  const key = (b: StatementClosingBalance) => `${b.account} ${b.date}`;
-  const out = new Map(old.map((b) => [key(b), b]));
-  for (const b of fresh) out.set(key(b), b);
-  return [...out.values()].sort((a, b) => a.date.localeCompare(b.date) || a.account.localeCompare(b.account));
-}
-
 /**
  * The account and month a statement PDF is kept for without a question (#254): its text or name names
  * the account and its days, and a camt.053 or bank CSV of that account is in the books. Undefined when
@@ -278,8 +272,6 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
       refuse(409, `Schon eingelesen aus ${other}.`, 'duplicate', other);
     }
 
-    const wiseRefs = await readWiseReferences(WS);
-    const balances = xml ? undefined : (await extractStatementBalances(partDirs(WS.paths, 'statements'), WS.bankAccounts)).balances;
     const invoices = loadInvoices(WS);
     const payments = paymentContext(WS);
     return updateBooksWithEffects((books): StatementImport => {
@@ -287,23 +279,14 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
       // The account's PDFs waiting for their question are its statements now, a filed period's too: closing a question books nothing.
       const asked = (books.statementAsks ?? []).length;
       if (placed.structured && books.statementAsks) {
+        // Their tables stay theirs (#243): kept beside each PDF, so the books take its balance and references and no model reads it again.
+        for (const a of books.statementAsks.filter((x) => x.account === placed.account.account)) keepAskTable(a);
         books.statementAsks = books.statementAsks.filter((a) => a.account !== placed.account.account);
         if (!books.statementAsks.length) delete books.statementAsks;
       }
       const before = new Set(books.transactions.map((t) => t.ref));
       const confirmedBefore = new Set(books.transactions.filter((t) => t.statement !== undefined).map((t) => t.ref));
-      const fresh = assignUniqueRefs(withinBooks(bank.transactions, books.config).kept);
-      const freshLegs = new Set(fresh.map(legOf));
-      // An upload adds: a payment no file holds any more stays until extract's rebuild decides.
-      const lock = periodLock(books);
-      const stay = books.transactions.filter((t) => !madeByHand(t) && !freshLegs.has(legOf(t)) && !lock.isClosed(t.date));
-      const files = readStatementFiles(WS);
-      const merged = mergeIndex(books, { receipts: books.receipts, bankTransactions: [...fresh, ...stay], wiseRefs, bankStatements: files.statements, camtBalances: files.balances });
-      // The books keep their order; the new payments come after them.
-      const pos = new Map(books.transactions.map((t, i) => [t.ref, i]));
-      const known = merged.index.transactions.filter((t) => pos.has(t.ref)).sort((a, b) => pos.get(a.ref)! - pos.get(b.ref)!);
-      Object.assign(books, merged.index, { transactions: [...known, ...merged.index.transactions.filter((t) => !pos.has(t.ref))] });
-      if (balances) books.statementBalances = mergeBalances(books.statementBalances, balances);
+      mergeBankFiles(WS, books);
       // Movements read from PDFs and the bank's file of the same days: the account's reconciliation, before any run books them (#254).
       reconcileWithFiles(WS, books, differenceAccountOf(WS));
       const waiting = pending(books).find((r) => r.account === placed.account.account);
@@ -313,7 +296,8 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
       if (events) fileReceipts(WS, books, events.files);
       const paid = payments ? matchPayments(books, invoices, payments) : undefined;
       if (paid) { fileReceipts(WS, books, paid.files); saveInvoices(WS, invoices); }
-      const closing = placed.closing ?? balances?.filter((b) => b.sourceFile === placed.filename && b.account === placed.account.account)
+      // A kept PDF's closing balance comes from its table once it is read (#243).
+      const closing = placed.closing ?? books.statementBalances?.filter((b) => b.sourceFile === placed.filename && b.account === placed.account.account)
         .sort((a, b) => a.date.localeCompare(b.date)).map((b) => ({ date: b.date, amount: b.amount })).at(-1);
       return {
         file: `${placed.account.bank}/${placed.filename}`,
@@ -376,8 +360,12 @@ export function removeStatement(file: string, refs?: readonly string[], o: { kee
   const beside = from ? join(dirname(path), basename(from)) : undefined;
   // `keepPdf`: only the reading goes (the undo of «Bewegungen aus dem PDF einlesen», #254); the PDF stays the statement.
   const besideBytes = !o.keepPdf && beside && existsSync(beside) && beside !== path ? readFileSync(beside) : undefined;
+  // A kept statement PDF takes its table along (#243).
+  const read = /\.pdf$/i.test(path) && existsSync(besidePath(path)) ? besidePath(path) : undefined;
+  const readBytes = read ? readFileSync(read) : undefined;
   rmSync(path, { force: true });
   if (besideBytes) rmSync(beside!, { force: true });
+  if (read) rmSync(read, { force: true });
   try {
     return updateBooks((b) => {
       const removed = { entries: b.journalEntries.filter((e) => mine.has(e.transactionRef)), mappings: b.mappings.filter((m) => mine.has(m.transactionRef)) };
@@ -408,6 +396,7 @@ export function removeStatement(file: string, refs?: readonly string[], o: { kee
   } catch (e) {
     writeFileSync(path, bytes);
     if (besideBytes) writeFileSync(beside!, besideBytes);
+    if (read && readBytes) writeFileSync(read, readBytes);
     throw e;
   }
 }
@@ -456,6 +445,38 @@ router.post('/api/statements/:bank/:filename/read/import', async (req, res) => {
 router.delete('/api/statements/:bank/:filename/read', (req, res) => {
   closeAsk(pdfOf(req));
   res.json({ ok: true });
+});
+
+/** What a kept statement PDF gives the books: its closing balance, the references and foreign amounts it adds, or why it has none yet (#243, src/server/statement-reads.ts). */
+router.get('/api/statements/:bank/:filename/facts', (req, res) => {
+  res.json(pdfFacts(pdfOf(req)));
+});
+
+/** Its table as a person filled it in or corrected it: kept as hers. */
+router.put('/api/statements/:bank/:filename/facts', (req, res) => {
+  res.json(saveTable(pdfOf(req), (req.body as { statement?: unknown } | undefined)?.statement));
+});
+
+/** «Neu lesen»: its read goes, the next reading asks the model again. */
+router.delete('/api/statements/:bank/:filename/facts', (req, res) => {
+  res.json(forgetRead(pdfOf(req)));
+});
+
+/** The kept statement PDFs not read yet and the reading the person started. */
+router.get('/api/statement-reads', async (_req, res) => {
+  res.json(await readsView());
+});
+
+/** «N Kontoauszüge von der KI lesen lassen?» answered yes: those not read yet (`files`: only these), one after the other. */
+router.post('/api/statement-reads', async (req, res) => {
+  const files = (req.body as { files?: unknown } | undefined)?.files;
+  res.json(await startReads(Array.isArray(files) ? files.filter((f): f is string => typeof f === 'string') : undefined));
+});
+
+/** «Abbrechen»: the reading stops after the file being read. */
+router.delete('/api/statement-reads', async (_req, res) => {
+  cancelReads();
+  res.json(await readsView());
 });
 
 /**

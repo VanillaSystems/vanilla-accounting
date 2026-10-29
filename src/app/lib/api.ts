@@ -7,7 +7,7 @@ import type { AiView } from '../../llm/view.js';
 import type { AiRefusal, ProviderId } from '../../llm/provider.js';
 import { isStepId, type StepId } from '../../llm/steps.js';
 import type { BankTransaction, InboxFile, Index, StatementAsk, StatementImport, JournalEntry, Receipt, ReceiptPatch, ReconcilePair, TransactionPatch } from '../../types/index.js';
-import type { ReadStatement } from '../../types/statement-read.js';
+import type { PdfFactsView, ReadStatement, StatementReadsView } from '../../types/statement-read.js';
 import type { StatementRemoved } from '../../server/routes/statements.js';
 import type { PaymentReleased } from '../../invoices/payments.js';
 export type { StatementRemoved };
@@ -125,7 +125,7 @@ function statementProblemText(p: StatementProblem): string {
   }
 }
 
-function aiRefusedText(r: AiRefusal): string {
+export function aiRefusedText(r: AiRefusal): string {
   if (r.reason === 'off') return t('error.ai.off');
   if (r.reason === 'unserved') return t('error.ai.unserved', { step: isStepId(r.step) ? t(`ai.step.${r.step}`) : r.step });
   if (r.reason === 'modelRefused') return t('error.ai.modelRefused', { model: r.model });
@@ -203,6 +203,7 @@ export function errorText(e: unknown): string {
       if (p.why === 'covered') return t('error.statementRead.covered', { file: (p.file ?? '').split('/').pop() ?? '' });
       return t(`error.statementRead.${p.why}`, { row: p.row ?? '', rows: p.rows ?? '', limit: p.limit ?? '' });
     }
+    case 'readsRunning': return t('error.readsRunning');
     case 'notInTrash': return t('error.notInTrash');
     case 'deletedAgain': return t('error.deletedAgain');
     case 'alreadyBack': return t('error.alreadyBack');
@@ -535,6 +536,18 @@ export const api = {
   importStatementRead: (file: string, statement: ReadStatement) => request<StatementImport>('POST', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/read/import`, { statement }),
   /** «Als Auszug behalten»: the PDF stays the statement, its movements are not read in. */
   keepStatementPdf: (file: string) => request<Ok>('DELETE', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/read`),
+  /** What a kept statement PDF gives the books: its closing balance, the references and foreign amounts its table adds, or why it has none yet (#243). */
+  statementFacts: (file: string) => request<PdfFactsView>('GET', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/facts`),
+  /** Its table as the person filled it in or corrected it: kept as hers. */
+  saveStatementFacts: (file: string, statement: ReadStatement) => request<PdfFactsView>('PUT', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/facts`, { statement }),
+  /** «Neu lesen»: its read goes; the next reading asks the model again. */
+  forgetStatementRead: (file: string) => request<PdfFactsView>('DELETE', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/facts`),
+  /** The kept statement PDFs not read yet, and the reading the person started. */
+  statementReads: () => request<StatementReadsView>('GET', '/api/statement-reads'),
+  /** «N Kontoauszüge von der KI lesen lassen?» answered yes (`files`: only these). */
+  startStatementReads: (files?: string[]) => request<StatementReadsView>('POST', '/api/statement-reads', files ? { files } : {}),
+  /** «Abbrechen»: the reading stops after the file being read. */
+  cancelStatementReads: () => request<StatementReadsView>('DELETE', '/api/statement-reads'),
   /** «Abgleich bestätigen»: the account's reconciliation as the person decided it (#254): the pairs, and the movements read from PDFs that are payments of their own. */
   confirmReconciliation: (account: string, decision: { pairs: ReconcilePair[]; own: string[] }) => request<Ok>('POST', `/api/reconciliations/${encodeURIComponent(account)}`, decision),
   /** «Trotzdem buchen» on a bank movement booked in a filed quarter as a read one (#254): a payment of its own, booked from then on like any other. */

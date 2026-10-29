@@ -21,7 +21,9 @@ import { detectVatProofIssue, textFacts } from '../parsers/receipt-text.js';
 import { buildVisionPrompt } from '../llm/prompts.js';
 import type { Receipt } from '../types/index.js';
 import { filesOfPart, type Workspace } from '../workspace/workspace.js';
-import { mergeIndex, readStatementFiles, readTransactions, readWiseReferences, reconcileWithFiles, withinBooks } from '../books/bank-import.js';
+import { mergeIndex, readStatementFiles, readTransactions, reconcileWithFiles, withinBooks } from '../books/bank-import.js';
+import { keptReads } from '../books/pdf-reads.js';
+import { readKeptPdfs, readsWithoutAsking, unreadPdfs } from './statement-read.js';
 import { differenceAccountOf } from '../books/year-close.js';
 import type { BankFiles } from '../books/bank-import.js';
 import { loadInvoices, saveInvoices } from '../invoices/store.js';
@@ -265,7 +267,11 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
     }
   })));
 
-  const wiseRefs = await readWiseReferences(ws, (msg) => log(`  warn: ${msg}`));
+  // A statement PDF kept as its statement is read for what its bank export lacks (#243): a month's worth by the run, a larger backlog once the person asks for it.
+  const unread = ask ? unreadPdfs(ws, { ...books.read(), bankStatements: readStatementFiles(ws).statements }) : [];
+  const readFailed: { file: string; error: string }[] = [];
+  if (unread.length && unread.length <= readsWithoutAsking(ws)) readFailed.push(...(await readKeptPdfs(unread, ask!, { log })).failed);
+  else if (unread.length) log(`  ${unread.length} statement PDF(s) not read yet: Kontoauszüge › «${unread.length} Kontoauszüge von der KI lesen lassen?», or npm run read-statements`);
   const statementFiles = readStatementFiles(ws);
   const invoices = loadInvoices(ws);
   const payments = paymentContext(ws);
@@ -313,7 +319,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
     if (kept.length < now.transactions.length) {
       log(`  skipped ${now.transactions.length - kept.length} bank transaction(s) dated before ${before}, when the books open (config.openingBalances)`);
     }
-    const merged = mergeIndex(index, { receipts, bankTransactions: assignUniqueRefs(kept), wiseRefs, bankStatements: statementFiles.statements, camtBalances: statementFiles.balances });
+    const merged = mergeIndex(index, { receipts, bankTransactions: assignUniqueRefs(kept), reads: keptReads(ws, statementFiles.statements, index.statementAsks), bankStatements: statementFiles.statements, camtBalances: statementFiles.balances });
     Object.assign(index, merged.index);
     // Movements read from PDFs and the bank's file of the same days: the account's reconciliation, before any run books them (#254).
     reconcileWithFiles(ws, index, differenceAccountOf(ws));
@@ -359,6 +365,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
   const kept = brokenClosedLinks.length + vanishedClosedTransactions.length;
   if (kept) notes.push({ code: 'filedKept', count: kept });
   if (waitingForModel) notes.push({ code: 'noModel', waiting: waitingForModel });
+  if (readFailed.length) notes.push({ code: 'failed', count: readFailed.length, detail: `${readFailed[0].file}: ${readFailed[0].error}` });
   if (sameBytes.length) notes.push({ code: 'sameBytes', files: sameBytes });
   return { notes };
 };

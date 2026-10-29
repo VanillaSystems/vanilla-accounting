@@ -136,6 +136,8 @@ export type ApiRefusal =
    * column of the CSV, or an account that takes no statements.
    */
   | { code: 'statementRead'; params: StatementReadParams }
+  /** A reading of the kept statement PDFs runs already (#243). */
+  | { code: 'readsRunning'; params: Record<string, never> }
   /** A bank account's IBAN typed in Firma › Bankkonten or the invoicing setup fails the length or check-digit test. */
   | { code: 'iban'; params: { bank: string; detail: string } }
   /** Firma › Firma: the company UID typed has a wrong shape or check digit (r9c-5). */
@@ -323,4 +325,4 @@ export interface MailStatus {
   inApp: boolean;
 }
 
-export interface StatementReadParams { why: 'line' | 'gap' | 'csvRow' | 'csvRows' | 'csvEmpty' | 'columns' | 'account' | 'covered' | 'blank'; row?: number; rows?: number; limit?: number; gap?: number; page?: number; currency?: string; file?: string }
+export interface StatementReadParams { why: 'line' | 'gap' | 'csvRow' | 'csvRows' | 'csvEmpty' | 'columns' | 'account' | 'covered' | 'blank' | 'asked' | 'currency'; row?: number; rows?: number; limit?: number; gap?: number; page?: number; currency?: string; file?: string }

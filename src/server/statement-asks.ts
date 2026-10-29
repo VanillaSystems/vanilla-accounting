@@ -6,6 +6,11 @@
  * restart. «Bewegungen aus dem PDF einlesen» asks it of any statement PDF. «Einlesen» writes the
  * table as an ISO 20022 statement beside the PDF, «Als Auszug behalten» closes it, and so does the account's
  * first bank export or CSV (src/server/routes/statements.ts importStatement).
+ *
+ * The question's table is the PDF's one table while it waits (#243, src/books/pdf-reads.ts): the
+ * books take its closing balance and references from it, and no model reads the PDF meanwhile. When
+ * the question closes, the table as last read or corrected is kept beside the PDF, and a question
+ * asked again starts from that table instead of asking the model again.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -13,6 +18,7 @@ import { basename, join } from 'node:path';
 import { RequestError, WS, assertOpen, readBooks, updateBooks } from './books.js';
 import { findFile } from '../workspace/workspace.js';
 import { structuredSpans } from '../books/bank-import.js';
+import { readBeside, writeBeside } from '../books/pdf-reads.js';
 import { isBlank, parseReadStatement } from '../books/statement-check.js';
 import { accountOfRead, asRead, coveredDays, coversAll, heldOf, isCovered, readDays, readStatementPdf, MAX_READ_PAGES, type PdfRead } from '../intake/statement-read.js';
 import { toStatementXml } from '../providers/statement-read/camt-writer.js';
@@ -114,11 +120,21 @@ export function keepAsk(file: string, account: string, date: string, read: State
   });
 }
 
+/** A question's table kept beside its PDF as the PDF's read: a person's as hers, the model's (corrected or not) as its read. A blank table is no read. */
+export function keepAskTable(ask: StatementAsk): void {
+  if (isBlank(ask.read.statement)) return;
+  const path = findFile(WS.paths, 'statements', ask.file);
+  if (path) writeBeside(path, { by: ask.read.by === 'hand' ? 'hand' : 'model', statement: ask.read.statement });
+}
+
 /**
- * «Als Auszug behalten»: the PDF stays the statement, its movements are not read in; the question goes.
+ * «Als Auszug behalten»: the PDF stays the statement, its movements are not read in; the question goes,
+ * its table stays the PDF's (keepAskTable).
  * Also in a filed period: nothing booked changes, and a question there could never be answered otherwise.
  */
 export function closeAsk(file: string): void {
+  const was = askOf(file);
+  if (was) keepAskTable(was);
   updateBooks((b) => {
     const ask = b.statementAsks?.find((a) => a.file === file);
     if (!ask) return;
@@ -127,11 +143,16 @@ export function closeAsk(file: string): void {
   });
 }
 
-/** «Bewegungen aus dem PDF einlesen» on a kept statement PDF: read now (the model, or the hand form) and kept as its question. */
+/**
+ * «Bewegungen aus dem PDF einlesen» on a kept statement PDF: its table kept beside it when it has one
+ * (#243), else read now (the model, or the hand form), kept as its question.
+ */
 export async function askAbout(file: string): Promise<StatementAsk> {
   const { path, account } = keptPdf(file);
   const listed = readBooks().bankStatements.find((s) => `${s.bank}/${s.filename}` === file)!;
   assertOpen(readBooks(), [listed.toDate], 'newStatement');
+  const beside = readBeside(path);
+  if (beside && 'statement' in beside) return keepAsk(file, account.account, listed.toDate, readView(beside.statement, beside.by, account.account));
   const dir = join(WS.paths.data, 'statement-read');
   mkdirSync(dir, { recursive: true });
   const copy = join(dir, `${sha16(readFileSync(path))}.pdf`);

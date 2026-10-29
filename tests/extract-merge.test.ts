@@ -6,6 +6,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mergeIndex, withinBooks, type Scan } from '../src/books/bank-import.js';
+import type { KeptRead } from '../src/books/pdf-reads.js';
+import type { ReadMovement } from '../src/types/statement-read.js';
 import { moduleActor, update, type Books } from '../src/books/store.js';
 import type { BankTransaction, Index, Receipt } from '../src/types/index.js';
 import { readFileSync } from 'node:fs';
@@ -42,7 +44,7 @@ function scan(over: Partial<Scan> = {}): Scan {
   return {
     receipts: [receipt('r-closed'), receipt('r-open')],
     bankTransactions: [tx('T-closed', '2026-05-10'), tx('T-open', '2026-08-10')],
-    wiseRefs: new Map(),
+    reads: [],
     camtBalances: [],
     bankStatements: [],
     ...over,
@@ -50,6 +52,15 @@ function scan(over: Partial<Scan> = {}): Scan {
 }
 
 const merge = (previous: Index, s: Scan) => mergeIndex(previous, s).index;
+
+/** The table of an August statement PDF kept beside the bank's export (#243): opening 100, the lines, closing as they make it unless given. */
+function kept(bank: string, lines: ReadMovement[], o: { closing?: number; by?: KeptRead['by']; file?: string } = {}): KeptRead {
+  const made = Math.round((100 + lines.reduce((s, l) => s + l.amount, 0)) * 100) / 100;
+  return {
+    file: o.file ?? 'statement-2026-08.pdf', account: { account: '1022', bank, currency: 'CHF' }, by: o.by ?? 'model',
+    statement: { currency: 'CHF', opening: { date: '2026-08-01', amount: 100 }, closing: { date: '2026-08-31', amount: o.closing ?? made }, movements: lines },
+  };
+}
 const byRef = (index: Index, ref: string) => index.transactions.find((t) => t.ref === ref);
 
 // ─── Characterization: behavior that must not change ─────────────────────────
@@ -83,16 +94,57 @@ test('remarks and noReceiptNeeded set by a person survive the rebuild', () => {
   assert.equal(byRef(merged, 'T-open')?.noReceiptNeeded, true);
 });
 
-test('a Wise transfer reference is filled from the statement PDF in an open period', () => {
-  const wise = tx('W-1~a', '2026-08-03', { bank: 'Wise' });
-  const merged = merge(previousIndex(), scan({ bankTransactions: [wise], wiseRefs: new Map([['W-1', 'INV-42']]) }));
-  assert.equal(byRef(merged, 'W-1~a')?.reference, 'INV-42');
+test('a reference and an original amount the export drops are filled from its statement PDF\'s table, on the payment of the same day, direction and amount', () => {
+  const payments = [tx('W-1~a', '2026-08-03', { bank: 'Beispielbank' }), tx('W-2', '2026-08-03', { bank: 'Beispielbank', amount: 12 }), tx('W-3', '2026-08-04', { bank: 'Beispielbank' })];
+  const read = kept('Beispielbank', [
+    { date: '2026-08-03', amount: -10, reference: ' INV-42 ' }, { date: '2026-08-03', amount: -12, original: { amount: 13.4, currency: 'USD' } },
+    { date: '2026-08-05', amount: -10, reference: 'a day off' },
+  ]);
+  const merged = merge(previousIndex(), scan({ bankTransactions: payments, reads: [read] }));
+  assert.deepEqual(payments.map((t) => [byRef(merged, t.ref)?.reference, byRef(merged, t.ref)?.original]), [['INV-42', undefined], [undefined, { amount: 13.4, currency: 'USD' }], [undefined, undefined]]);
+  const elsewhere = merge(previousIndex(), scan({ bankTransactions: payments, reads: [{ ...read, account: { account: '1023', bank: 'Beispielbank', currency: 'EUR' } }] }));
+  assert.equal(byRef(elsewhere, 'W-1~a')?.reference, undefined, 'a table of another account adds nothing');
 });
 
-test('a reference the camt053 already has wins over the Wise PDF', () => {
-  const wise = tx('W-1', '2026-08-03', { bank: 'Wise', reference: 'from-camt' });
-  const merged = merge(previousIndex(), scan({ bankTransactions: [wise], wiseRefs: new Map([['W-1', 'from-pdf']]) }));
-  assert.equal(byRef(merged, 'W-1')?.reference, 'from-camt');
+test('a reference or original amount the camt053 already has wins over the table', () => {
+  const wise = tx('W-1', '2026-08-03', { bank: 'Wise', reference: 'from-camt', original: { amount: 11, currency: 'EUR' } });
+  const merged = merge(previousIndex(), scan({ bankTransactions: [wise], reads: [kept('Wise', [{ date: '2026-08-03', amount: -10, reference: 'from-pdf', original: { amount: 11.5, currency: 'EUR' } }])] }));
+  assert.deepEqual([byRef(merged, 'W-1')?.reference, byRef(merged, 'W-1')?.original], ['from-camt', { amount: 11, currency: 'EUR' }]);
+});
+
+test('two payments of one day and amount: a line takes the one its counterparty names, a line that could be either takes none (#243)', () => {
+  const pay = [tx('A', '2026-08-03', { bank: 'Wise', counterparty: 'Muster Druck AG' }), tx('B', '2026-08-03', { bank: 'Wise', counterparty: 'Beispiel Hosting GmbH' })];
+  const named = merge(previousIndex(), scan({ bankTransactions: pay, reads: [kept('Wise', [{ date: '2026-08-03', amount: -10, counterparty: 'Beispiel Hosting', reference: 'RE-7' }, { date: '2026-08-03', amount: -10, text: 'Muster Druck Rechnung', reference: 'RE-8' }])] }));
+  assert.deepEqual(pay.map((t) => byRef(named, t.ref)?.reference), ['RE-8', 'RE-7']);
+  const unnamed = merge(previousIndex(), scan({ bankTransactions: pay, reads: [kept('Wise', [{ date: '2026-08-03', amount: -10, reference: 'RE-7' }, { date: '2026-08-03', amount: -10, reference: 'RE-8' }])] }));
+  assert.deepEqual(pay.map((t) => byRef(unnamed, t.ref)?.reference), [undefined, undefined], 'nothing tells them apart: left empty');
+  const one = merge(previousIndex(), scan({ bankTransactions: pay, reads: [kept('Wise', [{ date: '2026-08-03', amount: -10, reference: 'RE-7' }])] }));
+  assert.deepEqual(pay.map((t) => byRef(one, t.ref)?.reference), [undefined, undefined], 'one line, two payments it could be: left empty');
+  const alike = merge(previousIndex(), scan({ bankTransactions: pay, reads: [kept('Wise', [{ date: '2026-08-03', amount: -10, original: { amount: 9, currency: 'EUR' } }, { date: '2026-08-03', amount: -10, original: { amount: 9, currency: 'EUR' } }])] }));
+  assert.deepEqual(pay.map((t) => byRef(alike, t.ref)?.original), [{ amount: 9, currency: 'EUR' }, { amount: 9, currency: 'EUR' }], 'lines alike in what they add go either way');
+  const hand = merge(previousIndex(), scan({ bankTransactions: pay, reads: [kept('Wise', [{ date: '2026-08-03', amount: -10, reference: 'RE-9', payment: 'B' }], { by: 'hand' })] }));
+  assert.deepEqual(pay.map((t) => byRef(hand, t.ref)?.reference), [undefined, 'RE-9'], 'a line a person tied to its payment');
+});
+
+test('a table that adds up closes its month at its account, one that does not closes none; it replaces what the books hold from its file, and a file without one keeps its balance (#243)', () => {
+  const line = { date: '2026-08-03', amount: -10 };
+  const balance = (over: object = {}) => ({ account: '1022', bank: 'Wise', currency: 'CHF', date: '2026-08-31', amount: 90, source: 'pdf' as const, sourceFile: 'statement-2026-08.pdf', ...over });
+  assert.deepEqual(merge(previousIndex(), scan({ reads: [kept('Wise', [line])] })).statementBalances, [balance()]);
+  assert.equal(merge(previousIndex(), scan({ reads: [kept('Wise', [line], { closing: 99 })] })).statementBalances, undefined, 'opening 100 and -10 do not make 99');
+  assert.deepEqual(merge(previousIndex(), scan({ reads: [kept('Wise', [line], { closing: 99, by: 'hand' })] })).statementBalances, [balance({ amount: 99 })], 'a person\'s balance as she typed it');
+  const july = balance({ date: '2026-07-31', amount: 80, sourceFile: 'statement-2026-07.pdf' });
+  const before = previousIndex({ statementBalances: [balance({ amount: 91 }), july] });
+  assert.deepEqual(merge(before, scan({ reads: [kept('Wise', [line])] })).statementBalances, [july, balance()], 'July\'s balance an older reader wrote stays: no table gives one');
+  assert.deepEqual(merge(before, scan({ reads: [kept('Wise', [line], { closing: 99 })] })).statementBalances, [july, balance({ amount: 91 })], 'a table that does not add up replaces nothing');
+  const confirmed = balance({ amount: 95, sourceFile: 'year-end/confirmation.pdf' });
+  assert.deepEqual(merge(previousIndex({ statementBalances: [confirmed] }), scan({ reads: [kept('Wise', [line])] })).statementBalances, [confirmed]);
+});
+
+test('a filed month\'s balance is neither replaced nor added by a table (#243)', () => {
+  const june = (amount: number) => ({ account: '1022', bank: 'Wise', currency: 'CHF', date: '2026-06-30', amount, source: 'pdf' as const, sourceFile: 'statement-2026-06.pdf' });
+  const read = { ...kept('Wise', []), file: 'statement-2026-06.pdf', statement: { currency: 'CHF', opening: { date: '2026-06-01', amount: 70 }, closing: { date: '2026-06-30', amount: 70 }, movements: [] } };
+  assert.deepEqual(merge(previousIndex({ statementBalances: [june(60)] }), scan({ reads: [read] })).statementBalances, [june(60)]);
+  assert.equal(merge(previousIndex(), scan({ reads: [read] })).statementBalances, undefined);
 });
 
 test('closed transactions get no batch parts and no reference', () => {
@@ -183,7 +235,7 @@ test('merging the same scan twice gives the same index', () => {
   const s = scan({
     receipts: [receipt('r-open')],
     bankTransactions: [tx('T-closed', '2026-05-10', { parts }), tx('T-open', '2026-08-10', { parts }), tx('W-1~a', '2026-08-03', { bank: 'Wise' })],
-    wiseRefs: new Map([['W-1', 'INV-42']]),
+    reads: [kept('Wise', [{ date: '2026-08-03', amount: -10, reference: 'INV-42' }])],
   });
   const once = mergeIndex(prev, s);
   const twice = mergeIndex(once.index, s);
@@ -233,9 +285,11 @@ test('re-reading a Wise camt053 gives open transactions their Wise id and leaves
   const asFiled = [...read, ...open].map(({ bankTxId: _, ...t }) => t);
   const prev = previousIndex({ transactions: asFiled });
   const sealed = sealOf(prev, '2026-Q2', '2026-07-01').sha256;
-  const merged = merge(prev, scan({ bankTransactions: [...read, ...open], wiseRefs: new Map([['CARD-7200000001', 'Rechnung 4711']]) }));
+  const lines = [...read, ...open].map((t) => ({ date: t.date, amount: t.direction === 'DBIT' ? -Math.abs(t.amount) : Math.abs(t.amount), reference: 'Rechnung 4711' }));
+  const merged = merge(prev, scan({ bankTransactions: [...read, ...open], reads: [{ ...kept('Wise', lines), account: { account: '1024', bank: 'Wise', currency: read[0].currency } }] }));
   assert.equal(sealOf(merged, '2026-Q2', '2026-07-01').sha256, sealed, 'the seal of the filed quarter holds');
   assert.deepEqual(read.map((t) => byRef(merged, t.ref)?.bankTxId), [undefined, undefined], 'a filed transaction keeps what it was filed with');
   assert.deepEqual(open.map((t) => byRef(merged, t.ref)?.bankTxId), ['CARD-7200000001', 'FEE-CARD-7200000001']);
-  assert.equal(byRef(merged, open[0].ref)?.reference, 'Rechnung 4711', 'the statement PDF\'s reference is found by the Wise id too');
+  assert.equal(byRef(merged, open[0].ref)?.reference, 'Rechnung 4711', 'the table\'s reference reaches the open payment');
+  assert.deepEqual(read.map((t) => byRef(merged, t.ref)?.reference), [undefined, undefined], 'and never a filed one');
 });

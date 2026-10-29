@@ -104,10 +104,12 @@ export function parseReadStatement(x: unknown): ReadStatement | undefined {
     const counterparty = words(m.counterparty, 140), said = words(m.text), reference = words(m.reference, 140);
     const original = originalOf(m.original, currency);
     const after = amountOf(m.balance);
+    const payment = words(m.payment, 120);
     movements.push({
       date: m.date, ...(isDay(m.valueDate) ? { valueDate: m.valueDate } : {}), amount: round(amount),
       ...(counterparty ? { counterparty } : {}), ...(said ? { text: said } : {}), ...(reference ? { reference } : {}),
       ...(original ? { original } : {}), ...(page ? { page } : {}), ...(after !== undefined ? { balance: round(after) } : {}),
+      ...(payment ? { payment } : {}),
     });
   }
   const p = o.period as Record<string, unknown> | undefined;

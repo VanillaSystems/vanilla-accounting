@@ -1,7 +1,7 @@
 /**
  * The bank side of the books, read from bank-statements/: the transactions of every camt.053
  * (a bank's export, or one the app wrote from a statement read without camt.053, #217), the monthly
- * statement PDFs, and the Wise transfer references only those PDFs keep. `npm run extract` and the
+ * statement PDFs, and what their tables add to the exports' payments (#243, src/books/pdf-reads.ts). `npm run extract` and the
  * statement upload (POST /api/statements) both read the folder through here and merge with
  * mergeIndex, so a statement imported from the UI lands exactly as extract would put it.
  */
@@ -9,9 +9,8 @@ import { accountOf, legOf, madeByHand } from '../workspace/money-accounts.js';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { assignUniqueRefs, statementSpan, transactionsOf, type CamtStatement } from '../providers/camt053/camt053.js';
-import { pdfText } from '../parsers/pdf-text.js';
 import { statementPdf } from './statement-facts.js';
-import { wiseReferences } from '../providers/wise-pdf/wise-statement-pdf.js';
+import { keptReads, withReadBalances, withReadFacts, type KeptRead } from './pdf-reads.js';
 import type { BankStatement, BankTransaction, Index, JournalEntry, Mapping, Receipt, StatementClosingBalance } from '../types/index.js';
 import { readBankStatements, type StatementFile } from '../workspace/bank-statements.js';
 import { partDirs, type Workspace } from '../workspace/workspace.js';
@@ -312,19 +311,6 @@ export function withCamtBalances(others: StatementClosingBalance[] = [], camt: S
   return out.length || others.length ? out : undefined;
 }
 
-/** Wise drops transfer references from camt053; its monthly PDFs keep them (Wise transaction id → reference). */
-export async function readWiseReferences(ws: Ws, warn: (msg: string) => void = () => {}): Promise<Map<string, string>> {
-  const refs = new Map<string, string>();
-  for (const bank of new Set(ws.bankAccounts.filter((a) => a.statements === 'wise').map((a) => a.bank))) {
-    for (const dir of partDirs(ws.paths, 'statements').map((d) => join(d, bank)).filter((d) => existsSync(d))) for (const f of readdirSync(dir).filter((x) => x.endsWith('.pdf'))) {
-      try {
-        for (const [id, ref] of wiseReferences(await pdfText(join(dir, f), 'raw'))) refs.set(id, ref);
-      } catch (e) { warn(`${f}: ${e}`); }
-    }
-  }
-  return refs;
-}
-
 // ─── Merge: previous index + what is on disk now → new index ──────────────────
 
 export interface Scan {
@@ -332,8 +318,8 @@ export interface Scan {
   receipts: Receipt[];
   /** Transactions parsed from the camt053 files, refs already unique. */
   bankTransactions: BankTransaction[];
-  /** Wise transaction id → transfer reference, from the monthly statement PDFs of the `wise` accounts. */
-  wiseRefs: Map<string, string>;
+  /** The tables of the kept statement PDFs (src/books/pdf-reads.ts keptReads): references, amounts in another currency and closing balances the exports lack (#243). */
+  reads: KeptRead[];
   bankStatements: BankStatement[];
   /** The balances the camt.053 files state (readStatementFiles). */
   camtBalances: StatementClosingBalance[];
@@ -341,7 +327,7 @@ export interface Scan {
 
 /**
  * Where each transaction field comes from. A rebuild takes the 'bank' fields from the camt053
- * (and the Wise PDFs) and keeps every other field from the previous index: a remark, "no
+ * (and the tables of the kept statement PDFs) and keeps every other field from the previous index: a remark, "no
  * receipt needed", whatever a later step adds. A new BankTransaction field does not compile
  * until it is listed here.
  */
@@ -443,15 +429,8 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
     return rest;
   });
 
-  const transactions = [...fromBank, ...vanishedClosedTransactions, ...manual].map((t) => {
-    if (isClosed(t)) return t;
-    const out = { ...t };
-    // Wise drops transfer references from camt053; its monthly PDFs keep them. The map holds
-    // Wise transaction ids only (CARD-…, TRANSFER-…), read from the folders of `wise` accounts.
-    const fromPdf = scan.wiseRefs.get(t.bankTxId ?? t.ref.split('~')[0]);
-    if (fromPdf && !out.reference) out.reference = fromPdf;
-    return out;
-  });
+  // A reference or an amount in another currency the export drops and its statement PDF prints (#243).
+  const transactions = withReadFacts([...fromBank, ...vanishedClosedTransactions, ...manual], scan.reads, lock.isClosed);
 
   const receiptIds = new Set(scan.receipts.map((r) => r.id));
   const byRef = new Map(transactions.map((t) => [t.ref, t]));
@@ -465,7 +444,7 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
   });
 
   return {
-    index: withBalances({ ...previous, receipts: scan.receipts, transactions, bankStatements: scan.bankStatements, mappings }, withCamtBalances(previous.statementBalances, scan.camtBalances)),
+    index: withBalances({ ...previous, receipts: scan.receipts, transactions, bankStatements: scan.bankStatements, mappings }, withCamtBalances(withReadBalances(previous.statementBalances, scan.reads, lock.isClosed), scan.camtBalances)),
     brokenClosedLinks,
     vanishedClosedTransactions,
   };
@@ -475,4 +454,22 @@ function withBalances(index: Index, balances: StatementClosingBalance[] | undefi
   if (balances) return { ...index, statementBalances: balances };
   const { statementBalances: _, ...rest } = index;
   return rest;
+}
+
+/**
+ * The bank side of `books` merged again from the folder, as an import merges it: the payments of
+ * every statement file, with what the kept PDFs' tables add, and the closing balances. A payment no
+ * file holds any more stays until extract's rebuild decides; the books keep their order, new payments
+ * come after them.
+ */
+export function mergeBankFiles(ws: Ws, books: Index): void {
+  const fresh = assignUniqueRefs(withinBooks(readTransactions(ws).transactions, books.config).kept);
+  const freshLegs = new Set(fresh.map(legOf));
+  const lock = periodLock(books);
+  const stay = books.transactions.filter((t) => !madeByHand(t) && !freshLegs.has(legOf(t)) && !lock.isClosed(t.date));
+  const files = readStatementFiles(ws);
+  const merged = mergeIndex(books, { receipts: books.receipts, bankTransactions: [...fresh, ...stay], reads: keptReads(ws, files.statements, books.statementAsks), bankStatements: files.statements, camtBalances: files.balances });
+  const pos = new Map(books.transactions.map((t, i) => [t.ref, i]));
+  const known = merged.index.transactions.filter((t) => pos.has(t.ref)).sort((a, b) => pos.get(a.ref)! - pos.get(b.ref)!);
+  Object.assign(books, merged.index, { transactions: [...known, ...merged.index.transactions.filter((t) => !pos.has(t.ref))] });
 }
