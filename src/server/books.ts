@@ -93,6 +93,7 @@ export const CLOSED: Record<ClosedReason, string> = {
   newStatement: 'Ein Auszug, der ganz in einer geschlossenen Periode liegt, wird nicht mehr eingelesen.',
   newEntry: 'Neue Buchungen müssen in der offenen Periode liegen.',
   openingBalance: 'Die Eröffnungssaldi eines Jahres mit geschlossenen Perioden bleiben, wie sie sind.',
+  vatAdjustment: 'Eine Nachdeklaration gehört in eine offene Periode; die einer eingereichten bleibt, wie sie ist.',
 };
 
 /**

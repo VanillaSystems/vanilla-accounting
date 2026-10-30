@@ -562,7 +562,8 @@ Notes on the diagram:
   changed load read-only.
 - Every entry with `corrects` belongs to exactly one `CorrectionCase`.
 - A `VatAdjustment` is only for a VAT event of the open period that refers to a filed entry. It is
-  never dated into a filed period.
+  never dated into a filed period. A person enters, changes and removes it in Firma › MWST
+  (`/api/vat-adjustments`, src/accounting/vat-adjustments.ts).
 - Opening balances (`config.openingBalances`) enter no return and no seal.
 - `expected/` holds the golden master that `npm run test:books` compares the books against. The
   demo workspaces keep theirs in `tests/golden/<demo>/`.
