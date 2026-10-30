@@ -79,6 +79,12 @@ bot button at the top right, or ⌘J, opens and closes it; while the sidebar is 
 shows an arrow to the right («KI-Spalte schliessen»), since the sidebar's own title carries the
 bot. ⌘K stays search only.
 
+On a narrow window (issue #34) the page gives way in order: the list narrows to its compact
+280 px while the detail keeps at least 420 px, then the sidebar narrows to 320 px (520 px for the
+setup conversation). With still less room the sidebar lies over the page's right edge instead,
+with a shadow, and the page keeps the window with its list compact; ⌘J closes it. Selecting a row
+never moves the layout (src/app/shell/look.ts `sidebarFit`).
+
 - **Header:** "KI", «Verlauf» (a clock), «Neu» (+), close.
 - **A status line** under the header: "2 laufen · 4 in der Schlange · 3 warten auf dich"; a click
   opens the status panel.

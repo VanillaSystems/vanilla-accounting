@@ -39,7 +39,7 @@
   .rows.je .row > .a { grid-area: 1 / 4; }
   .rows.je .row > .dr { grid-area: 2 / 2; padding-left: 6px; }
   .rows.je .row > .cr { grid-area: 2 / 3; }
-  .rows.je .row > .vc { grid-area: 2 / 4; justify-self: end; padding-left: 0; }
+  .rows.je .row > .vc { grid-area: 2 / 4; justify-self: end; padding-left: 8px; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .rows.je .group .gl { grid-column: 1 / 4; }
   .rows.je .group .cap { display: none; }
   .rows.je .group .n { grid-column: 4; }
