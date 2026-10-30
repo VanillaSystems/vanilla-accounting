@@ -10,7 +10,7 @@ import { useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { api, errorText } from '../lib/api.js';
 import { language, t, tWith } from '../i18n/index.js';
-import { addEach, dropStart, failedLine } from './drop-upload.js';
+import { dropStore, failedLine } from './drop-upload.js';
 import { needsYou, tabOf, type DropTab } from './drop-tabs.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { monthName } from '../lib/period-label.js';
@@ -31,46 +31,23 @@ import { ReportCorrections } from '../areas/receipts/ReportCorrections.js';
 import { processingText } from '../automation/processing.js';
 import { inProcess, processingOf, runProcessing } from '../../workflows/processing.js';
 
-/** `note`: what a drop left out, a limit it hit named (a limit is never hit silently). */
-interface State { open: boolean; session?: DropSession; adding: number; note?: string; error?: string }
-let state: State = { open: false, adding: 0 };
-const listeners = new Set<() => void>();
-const set = (patch: Partial<State>) => { state = { ...state, ...patch }; for (const l of listeners) l(); };
-const useDrop = () => useSyncExternalStore((l) => { listeners.add(l); return () => { listeners.delete(l); }; }, () => state);
+const drop = dropStore(
+  { open: api.dropOpen, add: api.dropAdd, close: api.dropClose },
+  errorText,
+  (f) => { const line = failedLine(f, errorText); return line && tWith(line.key, line.vars); },
+);
+const { set } = drop;
+const useDrop = () => useSyncExternalStore(drop.subscribe, drop.get);
 
-export const dropOpen = (): boolean => state.open;
+export const dropOpen = (): boolean => drop.get().open;
 
 /** Opens the dialog (or uses the open one) and adds the files to its list; `note` says what the drop left out. */
-export async function dropFiles(files: File[], note?: string): Promise<void> {
-  set(dropStart(note));
-  let session: DropSession;
-  try {
-    session = state.session ?? await api.dropOpen();
-  } catch (e) {
-    set({ error: errorText(e) });
-    return;
-  }
-  set({ session, adding: state.adding + files.length });
-  const add = async (f: File) => {
-    try {
-      return await api.dropAdd(session.id, f);
-    } finally {
-      set({ adding: Math.max(0, state.adding - 1) });
-    }
-  };
-  const failed = await addEach(files, add, (next) => set({ session: next }));
-  const line = failedLine(failed, errorText);
-  if (line) set({ error: tWith(line.key, line.vars) });
-}
+export const dropFiles = (files: File[], note?: string): Promise<void> => drop.drop(files, note);
 
-export function closeDrop(): void {
-  const s = state.session;
-  if (s) void api.dropClose(s.id).catch(() => undefined);
-  set({ open: false, session: undefined, adding: 0, note: undefined, error: undefined });
-}
+export const closeDrop = (): void => drop.close();
 
 const act = (session: DropSession, r: DropRow, action: Parameters<typeof api.dropRow>[2]) =>
-  api.dropRow(session.id, r.key, action).then((next) => set({ session: next }), (e) => set({ error: errorText(e) }));
+  api.dropRow(session.id, r.key, action).then(drop.answered, (e) => set({ error: errorText(e) }));
 
 const groupIban = (iban: string) => iban.replace(/(.{4})/g, '$1 ').trim();
 
@@ -105,7 +82,7 @@ function ChooseAccount({ r, session, go }: { r: DropRow; session: DropSession; g
     setBusy(true);
     try {
       const next = await api.dropRow(session.id, r.key, { kind: 'account', account: a.account });
-      set({ session: next });
+      drop.answered(next);
       // Only once the statement is read in: a refused one leaves the account as it was.
       if (keep && choice.iban && next.rows.find((x) => x.key === r.key)?.state === 'taken') await api.patchWorkspace({ banks: [{ bank: a.bank, currency: choice.currency, iban: choice.iban }] });
     } catch (e) {
