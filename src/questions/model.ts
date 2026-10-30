@@ -49,7 +49,26 @@ export function questionChoices(raw: readonly unknown[]): Choice[] | undefined {
 export const QUESTION_TOPICS = ['saleVat', 'reportPayment'] as const;
 export type QuestionTopic = (typeof QUESTION_TOPICS)[number];
 
-export type Answer = { choice: Choice } | { text: string };
+/**
+ * A sale abroad that carried a foreign VAT (OSS, IOSS, a registration abroad), as the owner answered it:
+ * the tax in the payment's currency (`amount`), its rate in percent, and the company's account it goes
+ * onto without a code (as a sales report's `provider.foreignTax`, #206); the net is the export, never
+ * the gross.
+ */
+export interface ForeignTax { rate: number; amount: number; account: string }
+
+export type Answer = { choice: Choice; foreignTax?: ForeignTax } | { text: string };
+
+/** A stored or sent foreign tax, checked: a rate and an amount above zero, an account. */
+export function parseForeignTax(raw: unknown): ForeignTax | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const f = raw as Record<string, unknown>;
+  const rate = Number(f.rate);
+  const amount = Number(f.amount);
+  const account = typeof f.account === 'string' ? f.account.trim() : typeof f.account === 'number' ? String(f.account) : '';
+  if (!Number.isFinite(rate) || rate <= 0 || rate >= 100 || !Number.isFinite(amount) || amount <= 0 || !account) return undefined;
+  return { rate, amount, account };
+}
 
 /** Who put the question: a person, the AI sidebar, or the booking when it needs the person's knowledge. */
 export type QuestionOrigin = 'person' | 'assistant' | 'booking';
@@ -66,13 +85,13 @@ export type SaleGone = (typeof SALE_GONE)[number];
  * What the app did with an answer: the bookings it wrote or changed, with the changes that take
  * them back, and the precedent or the rule it kept; or why it did nothing (a filed quarter, a
  * payment it cannot read; `detail`: the refusal's own words). A sale's answer says the VAT code it
- * booked (`vatCode`, empty: none) and, «kein Umsatz», that it marked the payment as needing no receipt
+ * booked (`vatCode`, empty: none), the foreign VAT it split off the turnover (`foreignTax`) and, «kein Umsatz», that it marked the payment as needing no receipt
  * and the account its revenue entries went to (`account`, the owner's); `correction`: the answer is
  * a person's correction of the booking, which booked it already; `also`: the payer's other payments
  * whose open questions this answer answered along (r10f-34), each answered `from` its rule.
  */
 export type Acted =
-  | { booked: string[]; undo: BookChange[]; precedent?: string; rule?: string; vatCode?: string; marked?: true; account?: string; correction?: true; also?: string[] }
+  | { booked: string[]; undo: BookChange[]; precedent?: string; rule?: string; vatCode?: string; marked?: true; account?: string; correction?: true; also?: string[]; foreignTax?: ForeignTax }
   | { precedent: string }
   | { refused: NotActed; detail?: string };
 
@@ -128,8 +147,11 @@ export function undoable(q: Pick<Question, 'on'>, books: { config?: { closedThro
   return !date || date > closed;
 }
 
-/** GET /api/questions: every question, the names to pick from, the owner's account («2451 Kontokorrent …»), which «privat» books on. */
-export interface QuestionsView { questions: Question[]; people: string[]; owner: string }
+/**
+ * GET /api/questions: every question, the names to pick from, the owner's account («2451 Kontokorrent …»), which «privat» books on,
+ * and the account a foreign VAT on a sale abroad goes onto as far as the company said it (`foreignTax`, sales-without-vat.ts foreignTaxAccount).
+ */
+export interface QuestionsView { questions: Question[]; people: string[]; owner: string; foreignTax?: string }
 
 /** The questions the lines tell, oldest first. A line about an unknown question is skipped. */
 export function fold(lines: readonly QuestionLine[]): Question[] {
@@ -193,7 +215,8 @@ export function parseLine(raw: unknown): QuestionLine | undefined {
     }
     case 'answered': {
       const a = l.answer as Record<string, unknown> | undefined;
-      const answer: Answer | undefined = a && CHOICES.includes(a.choice as Choice) ? { choice: a.choice as Choice } : a && typeof a.text === 'string' ? { text: a.text } : undefined;
+      const foreignTax = a?.choice === 'saleAbroad' ? parseForeignTax(a.foreignTax) : undefined;
+      const answer: Answer | undefined = a && CHOICES.includes(a.choice as Choice) ? { choice: a.choice as Choice, ...(foreignTax ? { foreignTax } : {}) } : a && typeof a.text === 'string' ? { text: a.text } : undefined;
       if (!answer) return undefined;
       return { v: 1, event: 'answered', id: l.id, at: l.at, by: l.by, answer, ...(l.acted ? { acted: l.acted as Acted } : {}), ...(typeof l.from === 'string' ? { from: l.from } : {}) };
     }

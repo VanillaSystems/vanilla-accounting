@@ -29,7 +29,7 @@ import { loadInvoices } from '../invoices/store.js';
 import type { InvoiceBook } from '../invoices/model.js';
 import { correctsFor } from '../accounting/correction.js';
 import { EFFECTIVE_QUARTERLY, type VatSetup } from '../workspace/vat-setup.js';
-import { saleCodeOf, saleCodeReason } from '../accounting/sales-without-vat.js';
+import { foreignTaxIn, saleCodeOf, saleCodeReason } from '../accounting/sales-without-vat.js';
 import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { creditNoteCodeOf } from '../accounting/credit-note-code.js';
 import { acquisitionCodeOf, acquisitionReason, readSupplier, type AcquisitionDocument } from '../accounting/acquisition-tax.js';
@@ -343,13 +343,18 @@ export interface RuleLine { account: string; vat?: string; amount: number }
 /**
  * What a rule's booking books for `tx`: the whole amount on the rule's account with its VAT code
  * (ruleVatCode), or, with a private share, that share on the owner's account without VAT and the
- * rest on the rule's account. The lines add up to what the bank paid, to the Rappen. `documents`
+ * rest on the rule's account, or, with a foreign VAT, that tax on its account without a code and the
+ * net on the rule's. The lines add up to what the bank paid, to the Rappen. `documents`
  * are the payment's linked receipts: only a purchase document (evidence-check isPurchaseDocument)
  * proves Swiss VAT, never a delivery note or a supporting document (#81).
  */
 export function ruleBookingLines(tx: BankTransaction, booking: RuleBooking, documents: readonly Pick<Receipt, 'kind' | 'hasSwissVat'>[], owner: string | undefined): RuleLine[] {
   const vat = ruleVatCode(booking.vat, tx, documents.some((r) => isPurchaseDocument(r) && r.hasSwissVat));
   const whole: RuleLine = { account: booking.account, ...(vat ? { vat } : {}), amount: tx.amount };
+  if (booking.foreignTax) {
+    const tax = foreignTaxIn(tx.amount, booking.foreignTax.rate);
+    return [{ ...whole, amount: Math.round((tx.amount - tax) * 100) / 100 }, { account: booking.foreignTax.account, amount: tax }];
+  }
   if (!booking.private || !owner) return [whole];
   const total = Math.round(tx.amount * 100);
   const own = Math.round((total * booking.private) / 100);

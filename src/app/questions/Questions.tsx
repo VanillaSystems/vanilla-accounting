@@ -16,7 +16,7 @@ import type { Nav } from '../areas/index.js';
 import type { Location } from '../shell/route.js';
 import type { Index } from '../../types/index.js';
 import { askedByMe, PRIVATE_CHOICES, forMe, onTarget, undoable, type Choice, type Question, type QuestionTarget } from '../../questions/model.js';
-import { domesticSale, normalRate, saleChoiceOf, saleProposal } from '../../accounting/sales-without-vat.js';
+import { domesticSale, foreignTaxIn, normalRate, saleChoiceOf, saleProposal, saleVatCode } from '../../accounting/sales-without-vat.js';
 import { baseCurrency, chart, invoicing } from '../../engines/index.js';
 import { answerQuestion, askQuestion, closeQuestion, setMe, undoAnswer, useQuestions } from './store.js';
 import { RuleDraft } from '../areas/company/RulesSection.js';
@@ -109,6 +109,40 @@ function AlwaysSo({ q, nav }: { q: Question; nav: Nav }) {
   );
 }
 
+/**
+ * «Ausland mit ausländischer MWST»: an export that carried a foreign VAT (OSS, IOSS) is booked as a
+ * sales report books one (#206), the net at the export code and the tax onto the company's account
+ * for it without a code. The rate or the amount, either one fills the other; the account as the
+ * company said it last (QuestionsView.foreignTax), else typed once.
+ */
+function ForeignTaxForm({ q, books, account: said, onAnswer, onCancel }: { q: Question; books: Index; account?: string; onAnswer(a: { choice: 'saleAbroad'; foreignTax: { rate: number; amount: number; account: string } }): void; onCancel(): void }) {
+  const tx = books.transactions.find((x) => x.ref === q.on.id);
+  const gross = Math.abs(tx?.amount ?? 0);
+  const [rate, setRate] = useState('');
+  const [amount, setAmount] = useState('');
+  const [account, setAccount] = useState(said ?? '');
+  const num = (v: string) => Number(v.replace(',', '.').replace(/\s*%$/, ''));
+  const onRate = (v: string) => { setRate(v); const r = num(v); setAmount(r > 0 && r < 100 ? foreignTaxIn(gross, r).toFixed(2) : ''); };
+  const onAmount = (v: string) => { setAmount(v); const a = num(v); setRate(a > 0 && a < gross ? String(Math.round((a / (gross - a)) * 1000) / 10) : ''); };
+  const r = num(rate);
+  const a = num(amount);
+  const ok = r > 0 && r < 100 && a > 0 && a < gross && !!account.trim();
+  const code = saleVatCode('saleAbroad') ?? '';
+  return (
+    <div className="qforeign" data-testid="foreign-tax">
+      <label>{t('questions.foreignTax.rate')}<input inputMode="decimal" value={rate} aria-label={t('questions.foreignTax.rate')} data-field="foreign-rate" onChange={(e) => onRate(e.target.value)} /></label>
+      <label>{t('questions.foreignTax.amount', { currency: tx?.currency ?? '' })}<input inputMode="decimal" value={amount} aria-label={t('questions.foreignTax.amount', { currency: tx?.currency ?? '' })} data-field="foreign-amount" onChange={(e) => onAmount(e.target.value)} /></label>
+      <label>{t('questions.foreignTax.account')}<input value={account} aria-label={t('questions.foreignTax.account')} data-field="foreign-account" onChange={(e) => setAccount(e.target.value)} /></label>
+      {said ? null : <p className="qnote">{t('questions.foreignTax.accountOnce')}</p>}
+      {ok ? <p className="qnote" data-testid="foreign-tax-does">{t('questions.foreignTax.does', { net: `${tx?.currency ?? ''} ${fmt(Math.round((gross - a) * 100) / 100)}`, code: code ? codeLabel(code) : '–', tax: `${tx?.currency ?? ''} ${fmt(a)}`, account: account.trim() })}</p> : null}
+      <span className="qacts">
+        <button type="button" className="btn primary" disabled={!ok} data-act="foreign-tax-book" onClick={() => onAnswer({ choice: 'saleAbroad', foreignTax: { rate: r, amount: a, account: account.trim() } })}>{t('questions.foreignTax.book')}</button>
+        <button type="button" className="linkbtn" onClick={onCancel}>{t('questions.cancel')}</button>
+      </span>
+    </div>
+  );
+}
+
 /** What the app did with the answer, in one line. */
 function Acted({ q, owner }: { q: Question; owner: string }) {
   const a = q.answer?.acted;
@@ -117,6 +151,7 @@ function Acted({ q, owner }: { q: Question; owner: string }) {
   if ('vatCode' in a) {
     const sale = [
       a.marked ? (a.booked.length && a.account ? t('questions.sale.notSale', { n: a.booked.length, account: owner.startsWith(`${a.account} `) ? owner : a.account }) : t('questions.sale.marked')) : a.correction ? t('questions.sale.corrected', { code: a.vatCode ? codeLabel(a.vatCode) : t('journal.noVat') }) : t('questions.sale.booked', { n: a.booked.length, code: a.vatCode ? codeLabel(a.vatCode) : '–' }),
+      ...(a.foreignTax ? [t('questions.sale.foreignTax', { amount: fmt(a.foreignTax.amount), rate: String(a.foreignTax.rate), account: a.foreignTax.account })] : []),
       ...(a.rule ? [t('questions.sale.rule')] : []),
       ...(a.also?.length ? [t('questions.sale.also', { n: a.also.length })] : []),
     ];
@@ -132,6 +167,7 @@ function Acted({ q, owner }: { q: Question; owner: string }) {
 export function QuestionCard({ q, nav, canEdit, books, showItem }: { q: Question; nav: Nav; canEdit: boolean; books: Index; showItem?: boolean }) {
   const { me, view } = useQuestions();
   const [text, setText] = useState('');
+  const [foreign, setForeign] = useState(false);
   const mine = same(q.by, me);
   const owner = view?.owner ?? '';
   const item = showItem ? itemOf(books, q.on) : undefined;
@@ -163,6 +199,7 @@ export function QuestionCard({ q, nav, canEdit, books, showItem }: { q: Question
             <div className="qacts">
               {mine ? null : <>
                 {q.choices.map((c) => { const proposed = !zero && c === q.proposal?.choice; return <button key={c} type="button" className={proposed ? 'btn primary' : 'btn'} data-choice={c} onClick={() => void answer({ choice: c })}>{choiceText(c)}{proposed ? ` · ${t('questions.proposed')}` : ''}</button>; })}
+                {q.topic === 'saleVat' && q.choices.includes('saleAbroad') && saleVatCode('saleAbroad') ? <button type="button" className="btn" data-choice="saleAbroadForeignTax" aria-expanded={foreign} onClick={() => setForeign(!foreign)}>{t('questions.choice.saleAbroadForeignTax')}</button> : null}
                 <input className="qinput" value={text} placeholder={t('questions.answerPlaceholder')} aria-label={t('questions.answerPlaceholder')} onChange={(e) => setText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && text.trim()) void answer({ text: text.trim() }).then((ok) => ok && setText('')); }} />
                 <button type="button" className="btn ghost" disabled={!text.trim()} onClick={() => void answer({ text: text.trim() }).then((ok) => ok && setText(''))}>{t('questions.reply')}</button>
@@ -170,11 +207,14 @@ export function QuestionCard({ q, nav, canEdit, books, showItem }: { q: Question
               {mine ? <button type="button" className="linkbtn" onClick={() => void run(nav, closeQuestion(q.id, 'withdrawn'), t('questions.withdrawn'))}>{t('questions.withdraw')}</button> : null}
             </div>
           ) : null}
+          {canEdit && !mine && foreign ? (
+            <ForeignTaxForm q={q} books={books} account={view?.foreignTax} onCancel={() => setForeign(false)} onAnswer={(a) => void answer(a).then((ok) => ok && setForeign(false))} />
+          ) : null}
         </>
       ) : q.answer ? (
         <>
           <p className="qanswer">
-            <b>{'choice' in q.answer.answer ? choiceText(q.answer.answer.choice) : q.answer.answer.text}</b>
+            <b>{'choice' in q.answer.answer ? (q.answer.answer.foreignTax ? t('questions.choice.saleAbroadWith', { rate: String(q.answer.answer.foreignTax.rate) }) : choiceText(q.answer.answer.choice)) : q.answer.answer.text}</b>
             <span className="m">{' '}{q.answer.from ? t('questions.answeredFrom', { by: q.answer.by }) : t('questions.answeredBy', { by: q.answer.by, date: when(q.answer.at) })}</span>
           </p>
           <Acted q={q} owner={owner} />

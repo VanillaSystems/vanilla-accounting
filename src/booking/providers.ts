@@ -29,6 +29,10 @@ export const isProvider = (c: Counterparty): c is Provider => !!c.provider;
 export const clearingAccounts = (counterparties: readonly Counterparty[]): ReadonlySet<string> =>
   new Set(counterparties.flatMap((c) => (c.provider?.clearing ? [c.provider.clearing] : [])));
 
+/** The company's accounts for a foreign VAT on a sale abroad, one per provider whose file names one (`provider.foreignTax`, #206). */
+export const foreignTaxAccounts = (counterparties: readonly Counterparty[]): ReadonlySet<string> =>
+  new Set(counterparties.flatMap((c) => (c.provider?.foreignTax ? [c.provider.foreignTax] : [])));
+
 /** The days a provider pays a sale out within when its file does not say. */
 export const PAYOUT_DAYS = 7;
 
