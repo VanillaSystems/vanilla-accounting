@@ -60,7 +60,8 @@ export function vatIdIn(text: string): string | undefined {
 }
 
 const money = (s: string) => Number(s.replace(/[’' ]/g, '').replace(/[.,](\d{2})$/, '#$1').replace(/[.,]/g, '').replace('#', '.'));
-const amounts = (line: string) => [...line.replace(DATE, ' ').matchAll(MONEY)].map((m) => money(m[0]));
+/** The money values a text states, in order: each standing alone, never a piece of a date, a UID or a longer number. */
+export const amounts = (line: string) => [...line.replace(DATE, ' ').matchAll(MONEY)].map((m) => money(m[0]));
 const near = (a: number, b: number, eps: number) => Math.abs(a - b) <= eps + 1e-9;
 
 function dateOf(text: string): string | undefined {

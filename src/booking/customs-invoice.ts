@@ -19,7 +19,7 @@
  */
 import { CUSTOMS_POSITIONS, type CustomsPosition, type DocumentsData } from '../core/modules/schema.js';
 import { wordsRe } from '../core/modules/words.js';
-import { textFacts } from '../parsers/receipt-text.js';
+import { amounts, textFacts } from '../parsers/receipt-text.js';
 import { isPurchaseDocument } from '../accounting/evidence-check.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import { filingKeyOf, type FilingLength } from '../accounting/periods.js';
@@ -117,21 +117,45 @@ function namesOnlyTax(text: string, words: CustomsWords): boolean {
   return !text.replace(new RegExp(wordsRe(words.tax).source, 'giu'), '').replace(/[^\p{L}]/gu, '');
 }
 
+/** Whether a line at no rate names costs passed on free of VAT (documents.yaml `customs.untaxed`). */
+const namesUntaxed = (l: ReceiptLine, words: CustomsWords): boolean => !l.ratePercent && !!words.untaxed?.length && wordsRe(words.untaxed).test(l.description);
+
+/** The rate a line's own words state («8,10 % MWST»). */
+function rateIn(text: string): number | undefined {
+  const m = /(?<![\d.,])(\d{1,2}(?:[.,]\d{1,2})?)\s*%/.exec(text);
+  return m ? Number(m[1].replace(',', '.')) : undefined;
+}
+
+/** A line's position, its rate, and whether it is the carrier's VAT on its own services. */
+interface LineReading { position: CustomsPosition; rate?: number; carrierTax?: boolean }
+
 /**
- * The position of a line on a customs invoice whose words name none: a line that names only the
- * tax, at no rate of its own, is the import VAT the carrier advanced (the carrier's own VAT is
- * charged at a rate on its services, never a line of 0 %); a line at the domestic rate is the
- * carrier's own service, fees (duty and import VAT never carry Swiss VAT). Else none.
+ * The position of a line on a customs invoice whose words name none:
+ *  - a line that names only the tax and the domestic rate it is charged at («8,10 % MWST») is the
+ *    carrier's VAT on its services: fees at that rate, added to the fees it is charged on;
+ *  - a line that names only the tax at no rate is the import VAT the carrier advanced (the carrier's own
+ *    VAT is charged at a rate on its services, never a line of 0 %); at a rate of the line's own, without
+ *    the words saying which, it is none;
+ *  - a line at the domestic rate is the carrier's own service, fees (duty and import VAT never carry
+ *    Swiss VAT);
+ *  - a line of costs passed on free of VAT at no rate, on an invoice that cites a declaration's number
+ *    (`cites`), is the import VAT.
+ * Else none.
  */
-function unnamedPosition(l: ReceiptLine, words: CustomsWords): CustomsPosition | undefined {
-  const tax = namesOnlyTax(l.description, words);
-  if (!l.ratePercent) return tax ? 'importVat' : undefined;
-  return !tax && vat().isDomesticRate(l.ratePercent) ? 'fees' : undefined;
+function unnamedPosition(l: ReceiptLine, words: CustomsWords, cites: boolean): LineReading | undefined {
+  if (namesOnlyTax(l.description, words)) {
+    const stated = rateIn(l.description);
+    if (stated !== undefined) return vat().isDomesticRate(stated) ? { position: 'fees', rate: stated, carrierTax: true } : undefined;
+    return l.ratePercent ? undefined : { position: 'importVat' };
+  }
+  if (l.ratePercent) return vat().isDomesticRate(l.ratePercent) ? { position: 'fees', rate: l.ratePercent } : undefined;
+  return cites && namesUntaxed(l, words) ? { position: 'importVat' } : undefined;
 }
 
 /**
  * A receipt read as a customs invoice: undefined when it is none (no line, not even one of 0.00,
- * charges duty or import VAT by its words, or its lines were not read), a hold when one of its
+ * charges duty or import VAT by its words, nor costs free of VAT on an invoice that cites a customs
+ * declaration's number, or its lines were not read), a hold when one of its
  * lines names no position or the lines do not add up to its total. A courier prints duty at 0.00
  * when none was due: such a line tells what the invoice is, and is left out of the booking. On a
  * customs invoice a line that names only the tax is import VAT and a line at the domestic rate is
@@ -139,43 +163,59 @@ function unnamedPosition(l: ReceiptLine, words: CustomsWords): CustomsPosition |
  * for an invoice of several shipments has one assessment each.
  */
 export function readCustomsInvoice(r: Receipt, words: CustomsWords): { invoice: CustomsInvoice } | { hold: CustomsHold } | undefined {
+  const numbers = assessmentNumbers(r.extractedText ?? '', words);
   const all = (r.lineItems ?? []).map((l) => ({ l, position: positionOf(l.description, words) }));
-  if (!all.some((n) => n.position === 'importVat' || n.position === 'duty')) return undefined;
-  const named = all.filter((n) => toRappen(n.l.gross) !== 0).map((n) => ({ l: n.l, position: n.position ?? unnamedPosition(n.l, words) }));
-  const loose = named.find((n) => !n.position || n.l.gross < 0);
+  const customs = all.some((n) => n.position === 'importVat' || n.position === 'duty') || (numbers.length > 0 && all.some((n) => !n.position && namesUntaxed(n.l, words)));
+  if (!customs) return undefined;
+  const named = all.filter((n) => toRappen(n.l.gross) !== 0).map((n) => ({ l: n.l, reading: n.position ? { position: n.position } as LineReading : unnamedPosition(n.l, words, numbers.length > 0) }));
+  const rateOf = (l: ReceiptLine, reading: LineReading) => reading.position === 'fees' || reading.position === 'freight' ? reading.rate ?? l.ratePercent : undefined;
+  // The carrier's VAT is added to the fees it is charged on: without a fee at its rate, it is a line no position names.
+  const loose = named.find(({ l, reading }) => !reading || l.gross < 0
+    || (reading.carrierTax && !named.some((n) => n.reading && !n.reading.carrierTax && n.reading.position === 'fees' && rateOf(n.l, n.reading) === reading.rate)));
   if (loose) return { hold: { why: 'line', file: r.filename, line: loose.l.description } };
   const lines: PositionLine[] = [];
-  for (const { l, position } of named) {
-    const rate = position === 'fees' || position === 'freight' ? l.ratePercent : undefined;
+  for (const { l, reading } of named) {
+    const { position } = reading!;
+    const rate = rateOf(l, reading!);
     const same = position === 'importVat' ? undefined : lines.find((x) => x.position === position && x.rate === rate);
     if (same) same.gross = fromRappen(toRappen(same.gross) + toRappen(l.gross));
-    else lines.push({ position: position!, gross: l.gross, ...(rate !== undefined ? { rate } : {}) });
+    else lines.push({ position, gross: l.gross, ...(rate !== undefined ? { rate } : {}) });
   }
   const sum = lines.reduce((s, x) => s + toRappen(x.gross), 0);
   if (r.amount !== undefined && toRappen(r.amount) !== sum) return { hold: { why: 'sum', file: r.filename, lines: fromRappen(sum), total: r.amount } };
-  return { invoice: { receipt: r.id, file: r.filename, ...(r.date ? { date: r.date } : {}), currency: r.currency ?? baseCurrency(), total: fromRappen(sum), lines, numbers: assessmentNumbers(r.extractedText ?? '', words) } };
+  return { invoice: { receipt: r.id, file: r.filename, ...(r.date ? { date: r.date } : {}), currency: r.currency ?? baseCurrency(), total: fromRappen(sum), lines, numbers } };
 }
 
-const MONEY = /(\d{1,3}(?:['’]\d{3})+|\d+)[.,](\d{2})(?!\d)/;
 const UID = /CHE[-\s.]?(\d{3})[.\s]?(\d{3})[.\s]?(\d{3})/g;
 
 /**
+ * The assessment's total: the first money value after its label, on the label's page. The text
+ * may put the values of the header's other fields between the two (the assessment's header is a
+ * column of labels and a column of values: bordereau number, country, positions, the account, the
+ * UID, the currency), none of them money; a date, a UID or a tariff number never reads as one.
+ */
+function assessmentTotal(text: string, words: CustomsWords): number | undefined {
+  const label = wordsRe(words.assessment.total).exec(text);
+  if (!label) return undefined;
+  const from = label.index + label[0].length;
+  const end = text.indexOf('\f', from);
+  return amounts(text.slice(from, end < 0 ? undefined : end))[0];
+}
+
+/**
  * A receipt read as the customs office's assessment of import VAT for the firm whose UID is `uid`:
- * its title, the total of the tax after its label, and the firm's UID as importer, anywhere in the
- * text (a courier may put the assessment's pages behind its invoice), with its number when it shows
- * one. Undefined otherwise: an assessment without the firm's UID proves nothing for the firm.
+ * its title, its total (assessmentTotal), and the firm's UID as importer, anywhere in the text (a
+ * courier may put the assessment's pages behind its invoice), with its number when it shows one.
+ * Undefined otherwise: an assessment without the firm's UID proves nothing for the firm.
  */
 export function readAssessment(r: Pick<Receipt, 'id' | 'filename' | 'date' | 'extractedText'>, words: CustomsWords, uid: string | undefined): Assessment | undefined {
   const text = r.extractedText ?? '';
   const digits = uid?.replace(/\D/g, '');
   if (!digits || !wordsRe(words.assessment.title).test(text)) return undefined;
   if (![...text.matchAll(UID)].some((m) => m.slice(1).join('') === digits)) return undefined;
-  const label = wordsRe(words.assessment.total).exec(text);
-  const money = label && MONEY.exec(text.slice(label.index + label[0].length, label.index + label[0].length + 80));
-  if (!money) return undefined;
-  const amount = Number(`${money[1].replace(/['’]/g, '')}.${money[2]}`);
+  const amount = assessmentTotal(text, words);
   const [number] = assessmentNumbers(text, words);
-  return amount > 0 ? { receipt: r.id, file: r.filename, ...(r.date ? { date: r.date } : {}), amount, ...(number ? { number } : {}) } : undefined;
+  return amount ? { receipt: r.id, file: r.filename, ...(r.date ? { date: r.date } : {}), amount, ...(number ? { number } : {}) } : undefined;
 }
 
 /**
@@ -184,10 +224,9 @@ export function readAssessment(r: Pick<Receipt, 'id' | 'filename' | 'date' | 'ex
  * to the customs office by them (src/intake/pairing.ts). In the books' currency.
  */
 export function assessmentFacts(text: string, words: CustomsWords): Pick<Receipt, 'amount' | 'currency' | 'date'> {
-  const label = wordsRe(words.assessment.total).exec(text);
-  const money = label && MONEY.exec(text.slice(label.index + label[0].length, label.index + label[0].length + 80));
+  const amount = assessmentTotal(text, words);
   const date = textFacts(text).date;
-  return { ...(money ? { amount: Number(`${money[1].replace(/['’]/g, '')}.${money[2]}`), currency: baseCurrency() } : {}), ...(date ? { date } : {}) };
+  return { ...(amount !== undefined ? { amount, currency: baseCurrency() } : {}), ...(date ? { date } : {}) };
 }
 
 /** Whether `a` proves an import VAT line of `invoice`: the same tax, and its number among those the invoice names, when the invoice names any. */
