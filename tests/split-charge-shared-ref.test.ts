@@ -72,4 +72,5 @@ test('#287: a payment\'s separate fee is the one on its own balance', () => {
   const fees = [feeLeg(0.26, 'EUR'), feeLeg(0.04, 'USD')];
   assert.equal(separateFeeOf(leg(16.6, 'USD'), fees)?.currency, 'USD');
   assert.equal(separateFeeOf(leg(60, 'EUR'), fees)?.currency, 'EUR');
+  assert.equal(separateFeeOf(leg(3, 'CHF'), fees), undefined, 'a leg on a balance the bank took no fee from has none');
 });

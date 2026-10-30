@@ -22,7 +22,7 @@ import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { APP_ROOT, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
 import { sharedReceipts, inputTaxOverReceipts } from './shared-receipts.js';
-import { chargesOf } from '../intake/charges.js';
+import { chargesOf, legKey } from '../intake/charges.js';
 import { agreedBasis, baseCurrency, documents, filing, setup, vat, withoutInputTax } from '../engines/index.js';
 import { paymentProposals, type PaymentProposal } from '../invoices/payments.js';
 import { loadInvoices } from '../invoices/store.js';
@@ -509,8 +509,11 @@ function partRuleEntries(books: Books, tx: BankTransaction, context: ClassifyCon
 
 type PromptInput = Parameters<typeof buildBatchClassifyPrompt>[0][number];
 
-/** What the prompt says about one transaction: the transaction and its receipts, with their VAT facts; `legs`: the refs of its card charge (src/intake/charges.ts), whose other legs that hold its receipts it names. */
-export function classifyInput(books: Books, tx: BankTransaction, legs: readonly string[] = [tx.ref]): PromptInput {
+/**
+ * What the prompt says about one transaction: the transaction and its receipts, with their VAT facts; `legs`: the movements of its
+ * card charge (src/intake/charges.ts), whose other legs that hold its receipts it names. A leg that shares its ref goes by its legKey.
+ */
+export function classifyInput(books: Books, tx: BankTransaction, legs: readonly BankTransaction[] = [tx]): PromptInput {
   const receipts = mappedReceipts(books, tx)
     .filter((r) => r.extractedText && r.extractedText.length > 10)
     .map((r) => ({
@@ -527,7 +530,7 @@ export function classifyInput(books: Books, tx: BankTransaction, legs: readonly 
   const fee = separateFeeOf(tx, books.transactions);
   const shared = sharedReceipts(books, tx, legs);
   return {
-    tx: { ref: tx.ref, date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction, description: tx.description, bank: tx.bank, ...(tx.counterparty ? { counterparty: tx.counterparty } : {}), ...(fee ? { separateFee: { ref: fee.ref, amount: fee.amount, currency: fee.currency } } : {}), ...(tx.businessPart ? { businessPart: { ...(tx.businessPart.what && { what: tx.businessPart.what }) } } : {}), ...(shared ? { sharedWith: shared.others.map((t) => ({ ref: t.ref, amount: t.amount, currency: t.currency })) } : {}) },
+    tx: { ref: legKey(tx, legs), date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction, description: tx.description, bank: tx.bank, ...(tx.counterparty ? { counterparty: tx.counterparty } : {}), ...(fee ? { separateFee: { ref: fee.ref, amount: fee.amount, currency: fee.currency } } : {}), ...(tx.businessPart ? { businessPart: { ...(tx.businessPart.what && { what: tx.businessPart.what }) } } : {}), ...(shared ? { sharedWith: shared.others.map((t) => ({ ref: t.ref, amount: t.amount, currency: t.currency })) } : {}) },
     receipts,
   };
 }
@@ -626,7 +629,9 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [], partly: [] };
   // The legs of a card charge split across balances share its receipts: each books its share, the input tax of all of them never more than the receipts show (#190).
   const charges = chargesOf(books.transactions, (amount, currency, date) => { if (currency === baseCurrency()) return amount; const rate = fx.daily(currency, date) ?? fx.flat(currency); return rate === undefined ? undefined : amount * rate; });
-  const legsOf = (tx: BankTransaction) => charges.of(tx).refs;
+  const legsOf = (tx: BankTransaction) => charges.of(tx).legs;
+  // The model answers by the key the prompt gives each transaction: the legs of a split under one ref apart (#287).
+  const keyOf = (tx: BankTransaction) => legKey(tx, legsOf(tx));
   const invoicePaid = openInvoicesPaid(books, context);
   const toModel: BankTransaction[] = [];
   /** Asked payments whose rule proposes nothing: the model proposes, the entries go to `asked`. */
@@ -724,7 +729,8 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         return;
       }
       for (const tx of batch) {
-        const llmEntries = result[tx.ref]?.entries;
+        const answer = result[keyOf(tx)];
+        const llmEntries = answer?.entries;
         if (!llmEntries?.length) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  no entries in response`);
           fail(tx, 'no entries in response');
@@ -732,11 +738,11 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         }
         const mapped = mappedReceipts(books, tx);
         const bankAccount = bankAccountFor(tx, context.bankAccounts);
-        const said = result[tx.ref].reason;
+        const said = answer.reason;
         const reason = typeof said === 'string' && said.trim() ? said.trim().slice(0, 300) : undefined;
         const derived = withDerivedCodes(llmEntries, tx.direction, bankAccount);
         const separate = separateFeeOf(tx, books.transactions);
-        const fee = separate && withoutSeparateFee(tx, separate, derived, { booked: books.journalEntries, answered: result[separate.ref]?.entries });
+        const fee = separate && withoutSeparateFee(tx, separate, derived, { booked: books.journalEntries, answered: result[keyOf(separate)]?.entries });
         if (fee && 'refused' in fee) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${fee.refused.reason}`);
           if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, ...fee.refused });

@@ -6,7 +6,7 @@
  * its document's date as well (src/accounting/tax-point.ts). The AI sidebar's changes keep both
  * (src/server/edits.ts applyAnswer).
  */
-import type { Index, JournalEntry } from '../types/index.js';
+import type { BankTransaction, Index, JournalEntry } from '../types/index.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import { accountOf } from '../workspace/money-accounts.js';
 import { fromRappen, toRappen } from './rappen.js';
@@ -68,5 +68,23 @@ export function bookedStates(books: Pick<Index, 'transactions' | 'journalEntries
     const entries = byRef.get(ref);
     if (!entries) return 'none';
     return bookedState({ transactions: txByRef.get(ref) ?? [], journalEntries: entries }, ref, accounts);
+  };
+}
+
+/**
+ * Whether a movement has a booking of its own. A ref of one movement is booked by any entry on it;
+ * the legs of a card charge split across balances under one ref (the camt.053 reader keeps a
+ * currency split's shared ref) each by an entry on that ref that moves its own bank account, so one
+ * booked leg never hides its sibling (#287). A leg on an account the manifest does not name: by any entry.
+ */
+export function legBooked(books: Pick<Index, 'transactions' | 'journalEntries'>, accounts: readonly LedgerBankAccount[]): (tx: BankTransaction) => boolean {
+  const byRef = new Map<string, JournalEntry[]>();
+  for (const e of books.journalEntries ?? []) byRef.set(e.transactionRef, [...(byRef.get(e.transactionRef) ?? []), e]);
+  const movements = new Map<string, number>();
+  for (const t of books.transactions) movements.set(t.ref, (movements.get(t.ref) ?? 0) + 1);
+  return (tx) => {
+    const entries = byRef.get(tx.ref) ?? [];
+    const account = (movements.get(tx.ref) ?? 0) > 1 ? accountOf(tx, accounts)?.account : undefined;
+    return account ? entries.some((e) => e.accountDebit === account || e.accountCredit === account) : entries.length > 0;
   };
 }
