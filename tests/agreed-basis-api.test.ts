@@ -9,13 +9,13 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findBrowser } from '../src/invoices/pdf.js';
 import { loadBooks } from '../src/books/store.js';
 import { appFolderIn, MANIFEST_FILE } from '../src/workspace/workspace.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 import { DEMO_ROOT } from './support/workspace.js';
+import { browserPath } from './support/browser.js';
 
-const skip = findBrowser() ? false : 'no Chromium-based browser installed (Chrome, Edge, Brave or Chromium; or set CHROME_PATH)';
+const skip = browserPath ? false : 'no Chromium-based browser installed (Chrome, Edge, Brave or Chromium; or set CHROME_PATH)';
 let api: ApiServer;
 before(async () => {
   const agreed = mkdtempSync(join(tmpdir(), 'belege-agreed-'));

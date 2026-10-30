@@ -8,12 +8,12 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { findBrowser } from '../src/invoices/pdf.js';
 import { issuedPdfUrl, sentPdfUrl } from '../src/invoices/model.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 import { DEMO_ROOT } from './support/workspace.js';
+import { browserPath } from './support/browser.js';
 
-const skip = findBrowser() ? false : 'no Chromium-based browser installed (Chrome, Edge, Brave or Chromium; or set CHROME_PATH)';
+const skip = browserPath ? false : 'no Chromium-based browser installed (Chrome, Edge, Brave or Chromium; or set CHROME_PATH)';
 let api: ApiServer;
 before(async () => {
   api = await startApi('tests/fixtures/period-lock-index.json');

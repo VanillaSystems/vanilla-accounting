@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { closeBrowser, findBrowser, renderPdf, stampDates } from '../src/invoices/pdf.js';
+import { closeBrowser, renderPdf, stampDates } from '../src/invoices/pdf.js';
 import { createCustomer, createDraft, issueInvoice, issuedPdf, logoSrc, recordSend, sendReminder, cancelInvoice, updateDraft } from '../src/invoices/service.js';
 import { issuedSheet } from '../src/invoices/documents.js';
 import { workspaceAt } from '../src/workspace/workspace.js';
@@ -18,9 +18,9 @@ import { DEFAULT_LAYOUT, type InvoiceLine, type Issued } from '../src/invoices/m
 import { qrReference } from '../src/providers/qr-bill/reference.js';
 import type { SheetData } from '../src/invoices/sheet.js';
 import { DEMO_ROOT, tempWorkspace } from './support/workspace.js';
+import { browserPath } from './support/browser.js';
 
-const browser = findBrowser();
-const skip = browser ? false : 'no Chromium-based browser installed (Chrome, Edge, Brave or Chromium; or set CHROME_PATH)';
+const skip = browserPath ? false : 'no Chromium-based browser installed (Chrome, Edge, Brave or Chromium; or set CHROME_PATH)';
 after(() => closeBrowser());
 
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
