@@ -27,7 +27,7 @@ const port = (b: Books) => ({ read: () => b, update: <T>(fn: (x: Books) => T) =>
 const closed = (d: string) => d <= '2026-03-31';
 const checked = (ref: string, receiptId: string): Mapping => ({ transactionRef: ref, receiptId, by: 'llm', rule: 'pair-checked:original+day+name' });
 const booked = (ref: string, receipts: string[], over: Partial<JournalEntry> = {}): JournalEntry =>
-  ({ id: `e-${ref}`, transactionRef: ref, date: '2026-07-07', accountDebit: '6570', accountCredit: '1023', amount: 21.7, vatCode: 'B81-1', description: 'Streamly, Abo', origin: 'classify', receipts, by: { kind: 'model', model: 'test' } }) as JournalEntry;
+  ({ id: `e-${ref}`, transactionRef: ref, date: '2026-07-07', accountDebit: '6570', accountCredit: '1023', amount: 21.7, vatCode: 'B81-1', description: 'Streamly, Abo', origin: 'classify', receipts, by: { kind: 'model', model: 'test' }, ...over }) as JournalEntry;
 
 /** June's payment holds a scan of June's receipt code could not read; June's invoice, a second document of it, lies unlinked; July's payment is free. */
 const june = () => books(
