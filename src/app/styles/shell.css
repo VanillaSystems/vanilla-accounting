@@ -214,6 +214,10 @@ body > .menu { z-index: 42; }
 .toast button { color: inherit; font-weight: 600; padding: 4px 8px; border-radius: 7px; }
 .toast button:hover { background: color-mix(in srgb, var(--bg) 15%, transparent); }
 .toast .k { font: 500 11px "Geist Mono"; opacity: .6; margin-left: 4px; }
+.toast.droplost { bottom: 74px; max-width: min(720px, calc(100vw - 32px)); }
+.toast.droplost span { overflow-wrap: anywhere; }
+.droplost button { white-space: nowrap; }
+.warnline.droplost { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .drop { position: fixed; inset: 0; z-index: 35; display: grid; place-items: center; background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); opacity: 0; pointer-events: none; transition: opacity .18s; }
 .drop.show { opacity: 1; pointer-events: auto; }
 .drop .box { width: min(640px, 80vw); height: min(380px, 60vh); border: 2px dashed var(--accent); border-radius: 22px; display: grid; place-items: center; text-align: center; transform: scale(.98); transition: transform .25s; }
