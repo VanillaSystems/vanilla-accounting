@@ -7,8 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DETAIL_MIN, LIST_MIN, sidebarFit, sidebarWidths } from '../src/app/shell/look.js';
-import { closeChrome, launchChrome } from './support/browser.js';
-import { findBrowser } from '../src/invoices/pdf.js';
+import { browserPath, closeChrome, launchChrome } from './support/browser.js';
 
 const DOCK = 52;
 const fit = (window: number, setup = false) => sidebarFit(window - DOCK, sidebarWidths(window, setup));
@@ -21,7 +20,6 @@ test('the sidebar stays beside the page while the list and the detail fit at the
   assert.deepEqual(fit(900), { width: 306, over: true }, '900 px: over the page, no wider than it wants');
 });
 
-const browserPath = findBrowser();
 
 test('the detail column keeps its minimum width and the list narrows first, in the real CSS', { skip: browserPath ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 120_000 }, async () => {
   const css = ['shell.css', 'assistant.css'].map((f) => readFileSync(`src/app/styles/${f}`, 'utf8')).join('\n');

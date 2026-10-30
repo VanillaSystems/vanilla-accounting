@@ -14,7 +14,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadBooks, saveBooks } from '../src/books/store.js';
 import { workspaceAt } from '../src/workspace/workspace.js';
-import { findBrowser } from '../src/invoices/pdf.js';
 import type { AssistantEvent, MadeChange } from '../src/types/assistant.js';
 import type { ApiRefusal } from '../src/types/api-error.js';
 import type { Index } from '../src/types/index.js';
@@ -26,6 +25,7 @@ import { TEXTS } from '../src/invoices/texts.js';
 import { appMap } from '../src/server/app-map.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { startApi } from './support/api-server.js';
+import { browserPath } from './support/browser.js';
 
 const REPO = process.cwd();
 const demo = loadBooks(workspaceAt(DEMO_ROOT));
@@ -324,7 +324,7 @@ test('an account neither statement shows is refused by every path, with the clas
   assert.equal(renamed.status, 200, 'an account the statements show is still added or renamed');
 });
 
-test('the Treuhänder-Paket of a quarter is packed and downloaded from the card', { skip: !findBrowser() && 'no Chromium browser for the PDFs' }, async (t) => {
+test('the Treuhänder-Paket of a quarter is packed and downloaded from the card', { skip: !browserPath && 'no Chromium browser for the PDFs' }, async (t) => {
   const s = await sidebar(t);
   const { made, refused } = await s.answer([{ kind: 'export', preset: 'treuhand', period: '2026-Q3' }]);
   assert.equal(refused, undefined, refused?.message);

@@ -13,13 +13,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startApi } from './support/api-server.js';
-import { closeChrome, launchChrome } from './support/browser.js';
-import { findBrowser } from '../src/invoices/pdf.js';
+import { browserPath, closeChrome, launchChrome } from './support/browser.js';
 import { devProxy } from '../src/server/app-paths.js';
 import de from '../src/app/i18n/locales/de.js';
 import type { Index } from '../src/types/index.js';
 
-const browserPath = findBrowser();
 const STUB = join(process.cwd(), 'tests/support/stub-bin');
 
 test('each area says the AI is off and offers the way by hand; Firma › KI switches it on again', { skip: browserPath ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 240_000 }, async () => {

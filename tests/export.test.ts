@@ -16,10 +16,11 @@ import { localToday, parsePeriod } from '../src/accounting/periods.js';
 import { chfAmount } from '../src/accounting/ledger.js';
 import { buildBundle, downloadOf, zipBundle, type Bundle } from '../src/export/bundle.js';
 import { BadRequest, PRESETS, countOf, entriesIn, parseRequest, presetPeriod, receiptsIn, statementsIn, type PresetId } from '../src/export/model.js';
-import { closeBrowser, findBrowser, printPdf } from '../src/invoices/pdf.js';
+import { closeBrowser, printPdf } from '../src/invoices/pdf.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { startApi } from './support/api-server.js';
 import { booksOnDisk } from './support/workspace.js';
+import { browserPath } from './support/browser.js';
 
 const ws = workspaceAt(DEMO_ROOT);
 const books = loadBooks(ws);
@@ -148,8 +149,7 @@ test('a request with an unknown part or format is refused at the boundary', () =
   assert.throws(() => parseRequest({ period: '2026-Q3', items: { ledger: ['csv'] }, language: 'de' }), BadRequest, 'a ledger needs its account');
 });
 
-const browser = findBrowser();
-test('a report PDF is printed by Chromium', { skip: browser ? false : 'no Chromium-based browser installed' }, async () => {
+test('a report PDF is printed by Chromium', { skip: browserPath ? false : 'no Chromium-based browser installed' }, async () => {
   const b = await buildBundle(ws, books, names, parseRequest({ period: '2026-Q3', items: { income: ['pdf'] }, sums: false, oneBook: false, language: 'de' }), { print: printPdf });
   const pdf = Buffer.from(b.files[0].data);
   assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
