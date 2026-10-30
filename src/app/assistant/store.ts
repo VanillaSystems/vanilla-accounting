@@ -15,12 +15,7 @@ import type { AssistantEvent, ContextRef, ConversationSummary, MadeChange, Purpo
 import { KEPT_CONVERSATION, KEPT_PURPOSE, afterSend, askAboutThread, messageOf, newThread, startThread, type Thread } from './thread.js';
 import { attachmentRefusal, attachmentType, showsAsImage, type Attachment, type AttachmentType } from '../../types/attachment.js';
 import { CHAT_TAKES, leftOut, type Dropped } from '../lib/folder-drop.js';
-
-/** 400 px, less on a small window, so the page keeps room for its list and its detail. */
-export const SIDEBAR_WIDTH = 'min(400px, 34vw)';
-/** The setup conversation (docs/0.4.0/onboarding.md) is about twice as wide: a card with its evidence fits, and the page stays usable beside it. */
-export const SETUP_WIDTH = 'min(760px, 52vw)';
-const widthOf = (s: Pick<AssistantState, 'open' | 'purpose'>) => (!s.open ? '0px' : s.purpose === 'onboarding' ? SETUP_WIDTH : SIDEBAR_WIDTH);
+import { sidebarFit, sidebarWidths } from '../shell/look.js';
 
 export interface AssistantState extends Thread {
   /** The conversations list instead of a conversation. */
@@ -44,7 +39,7 @@ let stop: AbortController | undefined;
 function set(patch: Partial<AssistantState>): void {
   state = { ...state, ...patch };
   if ('open' in patch) remember('assistant.open', state.open ? '1' : null);
-  if ('open' in patch || 'purpose' in patch) syncSidebarWidth();
+  if ('open' in patch || 'purpose' in patch) refit();
   if ('conversation' in patch) remember(KEPT_CONVERSATION, state.conversation ?? null);
   if ('conversation' in patch || 'purpose' in patch) remember(KEPT_PURPOSE, state.conversation ? null : state.purpose ?? null);
   for (const l of listeners) l();
@@ -61,8 +56,32 @@ if (state.conversation) {
 
 export const useAssistant = (): AssistantState => useSyncExternalStore((l) => { listeners.add(l); return () => { listeners.delete(l); }; }, () => state);
 
-/** The shell sets the page's width at start, from the remembered state. */
-export function syncSidebarWidth(): void { document.documentElement.style.setProperty('--aiw', widthOf(state)); dispatchEvent(new Event('resize')); }
+/**
+ * The sidebar's width (--aiw) and whether it lies over the page (html.aiover) for the window as it is now
+ * (src/app/shell/look.ts sidebarFit). Says whether either changed.
+ */
+function fitSidebar(): boolean {
+  const root = document.documentElement;
+  const windowWidth = innerWidth / (Number(root.style.zoom) || 1);
+  const phone = root.classList.contains('phone');
+  const dock = phone ? 0 : document.querySelector<HTMLElement>('.activity')?.offsetWidth ?? 0;
+  const wanted = sidebarWidths(windowWidth, state.purpose === 'onboarding');
+  // A phone keeps the sidebar beside its one column, as before #34.
+  const fit = !state.open ? { width: 0, over: false } : phone ? { width: wanted.want, over: false } : sidebarFit(windowWidth - dock, wanted);
+  const width = `${Math.round(fit.width)}px`;
+  if (root.style.getPropertyValue('--aiw') === width && root.classList.contains('aiover') === fit.over) return false;
+  root.style.setProperty('--aiw', width);
+  root.classList.toggle('aiover', fit.over);
+  return true;
+}
+const refit = () => { if (fitSidebar()) dispatchEvent(new Event('resize')); };
+
+/** The shell sets the page's width at start, from the remembered state, and again whenever the window, the zoom or the dock changes. */
+export function syncSidebarWidth(): () => void {
+  refit();
+  addEventListener('resize', refit);
+  return () => removeEventListener('resize', refit);
+}
 
 export function toggleAssistant(): void { set({ open: !state.open }); }
 export function openAssistant(): void { set({ open: true, listing: false }); }
