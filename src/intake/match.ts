@@ -37,6 +37,7 @@ import { loadKnowledge } from '../knowledge/layers.js';
 import { providersOf } from './sales-report-import.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { creditSigned } from '../accounting/credit-signed.js';
+import { isBankFee } from '../booking/separate-fee.js';
 
 const MAPPING_THRESHOLD = 0.8;
 const CONCURRENCY = 10;
@@ -142,7 +143,7 @@ export type Candidate = BankTransaction & { filed?: true };
 export function candidates(receipt: Receipt, all: readonly BankTransaction[], linked: ReadonlySet<string> = new Set(), isClosed: (date: string) => boolean = () => false, payers: BatchPayers = NO_BATCH_PAYERS, receiptsOf: (tx: BankTransaction) => readonly Receipt[] = () => []): Candidate[] {
   const text = receipt.extractedText ?? '';
   const grouped = payers.ofReceipt(receipt);
-  const usable = all.filter((tx) => tx.amount !== 0 && tx.type !== 'wise-fee');
+  const usable = all.filter((tx) => tx.amount !== 0 && !isBankFee(tx));
   const ofVendor = grouped ? usable.filter((tx) => payers.ofPayment(tx, receiptsOf(tx)) === grouped) : [];
   const pool = ofVendor.length ? ofVendor : usable.filter((tx) => !linked.has(tx.ref));
   const { date, amount, currency } = factsOf(receipt);

@@ -10,8 +10,12 @@ import { isVatAmountCode } from '../accounting/validate.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import { lookupVatCode } from '../accounting/vat-codes.js';
 
-/** Whether `tx` is itself a fee the bank debited as a movement of its own, the fee of another payment. */
-export const isSeparateFee = (tx: Pick<BankTransaction, 'type'>): boolean => tx.type === 'wise-fee';
+/**
+ * Whether `tx` is a fee row of the bank: the fee of another payment debited as a movement of its own,
+ * or the bank's fee for the account itself (issue #290). The statement is its evidence: it needs no
+ * receipt, is no candidate for one, and belongs to no business's payments.
+ */
+export const isBankFee = (tx: Pick<BankTransaction, 'type'>): boolean => tx.type === 'wise-fee' || tx.type === 'bank-fee';
 
 /**
  * The fee the bank debited apart from `tx`, as its own movement. The one place that knows how the

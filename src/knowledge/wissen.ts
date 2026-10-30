@@ -8,6 +8,7 @@ import type { Gap } from './gaps.js';
 import type { Knowledge, Section } from './layers.js';
 import { fileNotesOf, type FileNote, type PartnerRow } from './partners.js';
 import type { BookedBy, Index, JournalEntry } from '../types/index.js';
+import { isBankFee } from '../booking/separate-fee.js';
 
 /** Who decided a payment's booking: a company rule, a check of the app's code, the AI, a person, or the entry does not say. */
 export const DECIDERS = ['rule', 'code', 'model', 'person', 'unknown'] as const;
@@ -48,7 +49,7 @@ export function decidedShares(books: Pick<Index, 'transactions' | 'journalEntrie
   let payments = 0;
   let unbooked = 0;
   for (const tx of books.transactions) {
-    if (!tx.date.startsWith(year) || tx.type === 'wise-fee') continue;
+    if (!tx.date.startsWith(year) || isBankFee(tx)) continue;
     payments++;
     const ds = byRef.get(tx.ref);
     if (!ds) { unbooked++; continue; }

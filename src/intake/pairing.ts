@@ -22,6 +22,7 @@ import { duplicatesIn } from './duplicates.js';
 import { assessmentNumbers, namesAssessment } from '../booking/customs-invoice.js';
 import type { Businesses } from './batch-payers.js';
 import { DELAY, type Delays } from './delays.js';
+import { isBankFee } from '../booking/separate-fee.js';
 
 /** Which payments are candidates at all. */
 export const BOUNDS = {
@@ -215,7 +216,7 @@ export function pairableReceipt(r: Receipt, linked: ReadonlySet<string>, noPayme
  * only settles, a fee row, a business or wording a rule exempts).
  */
 export function pairablePayment(t: BankTransaction, taken: ReadonlySet<string>, noReceipt?: (t: BankTransaction) => boolean): boolean {
-  return t.amount !== 0 && t.type !== 'wise-fee' && !t.noReceiptNeeded && !taken.has(t.ref) && !noReceipt?.(t);
+  return t.amount !== 0 && !isBankFee(t) && !t.noReceiptNeeded && !taken.has(t.ref) && !noReceipt?.(t);
 }
 
 /** The payments a receipt holds: linked, or, for a filed payment, pointed at (Receipt.filedPayment, which the next correction counts). */

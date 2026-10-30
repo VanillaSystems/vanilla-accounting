@@ -31,13 +31,14 @@ function askSales(ws: Workspace, books: BooksPort, log: (line: string) => void):
 
 /**
  * The open payments without a booking, less those waiting for a person: a booking deleted on purpose
- * (r10h-5), or a movement of an account's reconciliation that waits (#254, src/books/reconcile.ts).
+ * (r10h-5), or a movement of an account's reconciliation that waits (#254, src/books/reconcile.ts). A movement of
+ * amount 0 moved nothing and needs no booking (#290).
  */
 const unbooked = (books: Books) => {
   const lock = periodLock(books);
   const booked = new Set(books.journalEntries.map((je) => je.transactionRef));
   const held = heldByReconciliation(books);
-  return books.transactions.filter((tx) => !booked.has(tx.ref) && !lock.isClosed(tx.date) && !tx.waitsForPerson && !held.has(tx.ref));
+  return books.transactions.filter((tx) => tx.amount !== 0 && !booked.has(tx.ref) && !lock.isClosed(tx.date) && !tx.waitsForPerson && !held.has(tx.ref));
 };
 
 /** The open payments that need a receipt and have none, and those whose receipt could not be read (src/booking/receipt-wait.ts). */

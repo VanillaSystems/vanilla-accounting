@@ -37,6 +37,7 @@ import { duplicatesIn } from './duplicates.js';
 import { chargesOf, type Charge, type Charges } from './charges.js';
 import { NO_BATCH_PAYERS, type BatchPayers } from './batch-payers.js';
 import type { ToChf } from './pairing.js';
+import { isBankFee } from '../booking/separate-fee.js';
 
 /** At most this many receipts of one vendor are tried for one payment, nearest first: every subset of them (4096 at most). A vendor with more near the payment is only proposed, never linked, since a set among the others could fit as well. */
 export const MAX_TRIED = 12;
@@ -233,7 +234,7 @@ function fitOf(books: Books, ctx: SetContext, charge: Charge, search: SetSearch)
   const { isOpen, payers = NO_BATCH_PAYERS, toChf, noReceipt } = search;
   const { keyOf } = ctx;
   const [first] = charge.legs;
-  if (charge.legs.some((t) => t.amount === 0 || t.type === 'wise-fee' || madeByHand(t) || !isOpen(t.date) || noReceipt?.(t))) return undefined;
+  if (charge.legs.some((t) => t.amount === 0 || isBankFee(t) || madeByHand(t) || !isOpen(t.date) || noReceipt?.(t))) return undefined;
   const held = charge.refs.flatMap((ref) => ctx.linksOf.get(ref) ?? []);
   const linkedIds = new Set(held.map((m) => m.receiptId));
   const linkedAll = [...linkedIds].map((id) => ctx.byId.get(id));

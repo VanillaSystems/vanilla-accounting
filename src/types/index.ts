@@ -506,7 +506,12 @@ export interface BankTransaction {
    * src/server/edits.ts privatePayment), as they were: deleting the payment puts them back.
    */
   replaced?: JournalEntry[];
-  type?: 'wise-fee';
+  /**
+   * A fee row of the bank (src/booking/separate-fee.ts isBankFee): the statement is its evidence.
+   * `wise-fee`: the fee of another payment, debited as a movement of its own (separateFeeOf finds
+   * its payment); `bank-fee`: the bank's fee for the account itself, of no payment.
+   */
+  type?: 'wise-fee' | 'bank-fee';
   remarks?: string;
   noReceiptNeeded?: boolean;
   /**

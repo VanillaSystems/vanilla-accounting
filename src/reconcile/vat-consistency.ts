@@ -7,13 +7,13 @@
  *   - a rate code (I81/M26/...) not backed by any linked receipt showing Swiss MWST
  *   - a rate code with no receipt linked at all and no other proof named (BankTransaction.inputTaxProof)
  *   - a 0-code (I0/M0) where a linked receipt DOES show Swiss MWST (missed deduction), unless the
- *     line is on an account the bank's own fee movements are booked on (isSeparateFee): a bank fee is
+ *     line is on an account the bank's own fee movements are booked on (isBankFee): a bank fee is
  *     an exempt financial service (MWSTG Art. 21 Abs. 2 Ziff. 19), and the receipt linked beside it
  *     is the paid merchant's
  */
 
 import type { Index } from '../types/index.js';
-import { isSeparateFee } from '../booking/separate-fee.js';
+import { isBankFee } from '../booking/separate-fee.js';
 
 const POS_RATE_CODE = /^-?[IMV](77|81|25|26|37|38)\b/;
 const ZERO_CODE = /^-?[IMV]0\b/;
@@ -28,7 +28,7 @@ export interface VatAuditReport {
 export function auditVat(index: Index): VatAuditReport {
   const entries = index.journalEntries ?? [];
 
-  const feeTxs = new Set(index.transactions.filter(isSeparateFee).map((tx) => tx.ref));
+  const feeTxs = new Set(index.transactions.filter(isBankFee).map((tx) => tx.ref));
   const feeAccounts = new Set(entries.filter((e) => feeTxs.has(e.transactionRef)).map((e) => e.accountDebit).filter(Boolean));
   const proved = new Set(index.transactions.filter((tx) => tx.inputTaxProof).map((tx) => tx.ref));
   const receiptsByTx = new Map<string, Array<{ hasSwissVat?: boolean }>>();

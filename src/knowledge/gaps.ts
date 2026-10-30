@@ -5,6 +5,7 @@
  */
 import type { BankTransaction, Mapping, Receipt } from '../types/index.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from './counterparties.js';
+import { isBankFee } from '../booking/separate-fee.js';
 
 export interface Gap {
   /** The merchant text, lowercased, without what changes per payment: digits (card numbers, order ids), month names, punctuation. */
@@ -29,7 +30,7 @@ export function knowledgeGaps(
   const linked = (ref: string) => books.mappings.filter((m) => m.transactionRef === ref).flatMap((m) => receipts.get(m.receiptId) ?? []);
   const gaps = new Map<string, Gap>();
   for (const tx of txs) {
-    if (tx.type === 'wise-fee') continue;
+    if (isBankFee(tx)) continue;
     if (identify(signalsOfTransaction(tx, linked(tx.ref)), counterparties).kind !== 'unknown') continue;
     const merchant = groupKey(merchantOf(tx.description)) || '(no text)';
     const gap = gaps.get(merchant);
