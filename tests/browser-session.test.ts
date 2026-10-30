@@ -12,11 +12,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { closeSession, openSession, sessionDir } from '../src/platform/browser/chrome.js';
-import { findBrowser } from '../src/invoices/pdf.js';
+import { browserPath } from './support/browser.js';
 
 process.env.VANILLA_BROWSER_DIR = mkdtempSync(join(tmpdir(), 'browser-sessions-'));
 
-test('a session starts Chrome once, a second open attaches, the profile keeps its cookie, close ends it', { skip: !findBrowser() && 'no Chromium browser installed' }, async () => {
+test('a session starts Chrome once, a second open attaches, the profile keeps its cookie, close ends it', { skip: !browserPath && 'no Chromium browser installed' }, async () => {
   const server = createServer((_q, r) => { r.setHeader('set-cookie', 'signed=yes; Max-Age=3600'); r.end('<h1>in</h1>'); }).listen(0, '127.0.0.1');
   await new Promise((r) => server.once('listening', r));
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/`;

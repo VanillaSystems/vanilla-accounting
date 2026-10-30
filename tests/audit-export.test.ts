@@ -16,8 +16,7 @@ import type { Index } from '../src/types/index.js';
 import { APP_ROOT, workspaceAt } from '../src/workspace/workspace.js';
 import { BOOKS_SCHEMA } from '../src/workspace/schema.js';
 import { serveStatic, type StaticServer } from './support/static-server.js';
-import { closeChrome, closeContext, launchChrome } from './support/browser.js';
-import { findBrowser } from '../src/invoices/pdf.js';
+import { browserPath, closeChrome, closeContext, launchChrome } from './support/browser.js';
 import type { Browser } from 'puppeteer-core';
 import en from '../src/app/i18n/locales/en.js';
 
@@ -32,7 +31,7 @@ let base: string;
  * and a start without one once stalled for good, leaving the run and its Chrome waiting forever.
  */
 let launched: Promise<Browser> | undefined;
-const chrome = () => launched ??= launchChrome(findBrowser()!, ['--lang=en-US']);
+const chrome = () => launched ??= launchChrome(browserPath!, ['--lang=en-US']);
 
 before(async () => {
   await buildAuditExport(workspaceAt(join(APP_ROOT, 'demo')), dir, '2026-10-09T12:00:00.000Z');
@@ -122,7 +121,7 @@ test('a non-empty folder that holds no export is refused, not emptied', async ()
  * #211: at the narrowest list width (Split.tsx's MIN, 340 px) the list column is never wider than its
  * track: its heading's counts, chips, «Filter» menu and search wrap, so scrollWidth equals clientWidth.
  */
-test('the list column never widens past its track at the narrowest width, with chips and the filter menu open', { skip: findBrowser() ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 300_000 }, async () => {
+test('the list column never widens past its track at the narrowest width, with chips and the filter menu open', { skip: browserPath ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 300_000 }, async () => {
   const browser = await chrome();
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
@@ -169,7 +168,6 @@ test('the list column never widens past its track at the narrowest width, with c
 
 const AREAS = ['receipts', 'bank', 'journal', 'vat', 'vat/codes', 'reports/income', 'reports/balance', 'reports/custom', 'close', 'company/profile',
   'company/rules', 'company/sources', 'company/mail', 'invoices', 'automation', 'automation/runs', 'changes', 'partners', 'knowledge', 'receipts'];
-const browserPath = findBrowser();
 
 /**
  * Conditions, not clocks (#246): an area is measured once its page settled (no request for 300 ms, then an idle moment of

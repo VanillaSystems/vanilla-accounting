@@ -13,7 +13,7 @@ import { workspaceAt } from '../src/workspace/workspace.js';
 import { accountsOf } from '../src/workspace/reads.js';
 import { loadInvoices } from '../src/invoices/store.js';
 import { parsePeriod } from '../src/accounting/periods.js';
-import { closeBrowser, findBrowser, printPdf } from '../src/invoices/pdf.js';
+import { closeBrowser, printPdf } from '../src/invoices/pdf.js';
 import { wordsIn } from '../src/export/texts.js';
 import { money } from '../src/export/bundle.js';
 import { parseSpec } from '../src/reports/spec.js';
@@ -22,6 +22,7 @@ import { reportCsv, reportFileName, reportHtml, reportTable } from '../src/repor
 import { filtersInWords } from '../src/reports/words.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { startApi } from './support/api-server.js';
+import { browserPath } from './support/browser.js';
 
 const ws = workspaceAt(DEMO_ROOT);
 const books = loadBooks(ws);
@@ -74,8 +75,7 @@ test('the PDF page names the period and the filters in words, prints each total,
   assert.ok(html.includes('Gesamttotal'));
 });
 
-const browser = findBrowser();
-test('a report PDF is printed by Chromium', { skip: browser ? false : 'no Chromium-based browser installed' }, async () => {
+test('a report PDF is printed by Chromium', { skip: browserPath ? false : 'no Chromium-based browser installed' }, async () => {
   const pdf = await printPdf(reportHtml(result, de, { company: 'Muster Kaffee GmbH', fonts: '', now: '2026-10-16T08:00:00Z' }), '2026-10-16T08:00:00Z');
   assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
 });

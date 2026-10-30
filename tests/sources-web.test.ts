@@ -30,7 +30,7 @@ const { LoginNeeded, navigationAllowed, signInUrl, webChannel } = await import('
 const { ReachError } = await import('../src/platform/sources/reach.js');
 const { playwrightDriver } = await import('../src/platform/sources/web-driver.js');
 const { closeSession } = await import('../src/platform/browser/chrome.js');
-const { findBrowser } = await import('../src/invoices/pdf.js');
+const { browserPath } = await import('./support/browser.js');
 const { APP_ROOT } = await import('../src/workspace/workspace.js');
 const { tempWorkspace } = await import('./support/workspace.js');
 type WebDriver = import('../src/platform/sources/web-channel.js').WebDriver;
@@ -210,7 +210,7 @@ test('io.api reads within its allow list with the stored token, which the code n
   assert.deepEqual(await pull({ ws: noToken, appRoot: APP_ROOT, source: 'other', run: 'c1', mode: 'live', apiFetch: fakeApi().fetcher }), { outcome: 'missing-secret', channel: 'api', feeds: [] });
 });
 
-test('the browser driver blocks a navigation its guard refuses before the request leaves, reads, lists, clicks, refuses no submit itself, and downloads in the session', { skip: !findBrowser() && 'no Chromium browser installed' }, async () => {
+test('the browser driver blocks a navigation its guard refuses before the request leaves, reads, lists, clicks, refuses no submit itself, and downloads in the session', { skip: !browserPath && 'no Chromium browser installed' }, async () => {
   const hits: string[] = [];
   const server = createServer((q, r) => {
     hits.push(`${q.method} ${q.url}`);
