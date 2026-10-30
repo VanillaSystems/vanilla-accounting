@@ -26,9 +26,16 @@ other:
   tracking: [Sendungsverfolgung, Sendung verfolgen, Ihr Paket ist unterwegs, Track your parcel, Track your package, Tracking number, Suivi de colis, Suivre mon colis, Tracciamento, Traccia la spedizione]
   no-receipt: [Kein Beleg, Keine Rechnung, Not a receipt, Not an invoice, Pas un justificatif, Pas une facture, Non è un giustificativo, Non è una fattura]
 
-# A bank statement names itself in its first lines, before any receipt word (src/intake/document-kind.ts
+# A bank statement names itself in its first lines, before any receipt word (src/core/modules/words.ts
 # namesStatement): «Kontoauszug», «CHF statement» of a currency account, «Relevé de compte».
 statement: [Kontoauszug, Bankauszug, Account statement, Bank statement, Statement, Relevé de compte, Relevé bancaire, Extrait de compte, Estratto conto]
+
+# The columns of a statement's movements, money out and money in (src/core/modules/words.ts
+# isBankStatement): a statement shows the account's IBAN or these. A supplier's «Statement» of
+# its charges shows neither and stays a receipt.
+movements:
+  out: [Belastung, Belastungen, Lastschrift, Lastschriften, Debit, Debits, Outgoing, Paid out, Money out, Withdrawals, Débit, Débits, Addebito, Addebiti, Uscite]
+  in: [Gutschrift, Gutschriften, Credit, Credits, Incoming, Paid in, Money in, Deposits, Crédit, Crédits, Accredito, Accrediti, Entrate]
 
 # The balance lines of a statement (src/books/statement-facts.ts): with the title, an IBAN and a
 # period they tell a statement among the receipts from an invoice that only mentions one.
