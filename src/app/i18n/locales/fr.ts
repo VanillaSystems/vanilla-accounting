@@ -3877,6 +3877,8 @@ export default {
     'rules.say.zeroCode': 'comptabilisé avec {code} : aucun justificatif ne montre la TVA suisse',
     'salesReport.payoutText': '{provider}, versement',
     'salesReport.payoutReason': 'Versement de {provider} : du compte de passage {account} à la banque, sans TVA ; le rapport du prestataire comptabilise ventes et frais',
+    'vatCorrection.text': '{business}, impôt préalable selon facture du {date}',
+    'vatCorrection.reason': 'La facture de {business} du {date} montre {rate} % de TVA suisse, {currency} {amount} : impôt préalable {code} sur {account}, sans paiement, car le prestataire retient ses frais sur les versements',
     'salesReport.saleText': '{provider}, commande n° {order}, {country}',
     'salesReport.refundText': '{provider}, remboursement n° {order}',
     'salesReport.correctionText': '{provider}, remboursement n° {order} du {date}, correction {period}',

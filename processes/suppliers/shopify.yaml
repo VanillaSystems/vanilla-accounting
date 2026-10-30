@@ -17,7 +17,10 @@
 # it bank / clearing account without VAT; the sales come from its order export and
 # the fees from its payments export, both CSV (src/booking/sales-report.ts). The
 # company's file names the accounts and its cut-over day (from it on, nothing before it changes):
-# provider: { clearing, since, revenue, fees: { account, vat }, foreignTax }.
+# provider: { clearing, since, revenue, fees: { account, vat, billVat }, foreignTax }.
+# The monthly Payments Invoice shows Shopify's Swiss VAT on the fees it kept: code books that
+# input tax once per bill, without a payment, on fees.account with fees.billVat (the code of
+# the tax itself, e.g. M81-2; absent: the one the fee account takes), src/booking/vat-corrections.ts.
 # `foreignTax` is the account for the foreign VAT an export order shows in its Taxes
 # column (IOSS, for example): the report books the net at V0 onto revenue and the tax onto it
 # without a code; without it such an order waits for the person (#206).
@@ -28,6 +31,14 @@ match:
   tx: [ "shopify" ]
   uid: [ "CHE-153.004.184" ]
   file: [ '^\d{8}[-_]shopify' ]
+
+documents:
+  # Shopify Admin › Einstellungen › Rechnungen: the monthly «Shopify Payments Invoice for <month>» of the
+  # transaction fees Shopify kept from the payouts, with its Swiss VAT. No payment will come for it.
+  - id: payments-invoice
+    kind: invoice
+    text: [ 'Shopify Payments Invoice for' ]
+    proves: vat-correction
 
 provider:
   reports:
@@ -108,7 +119,7 @@ steps:
       - id: pv-shopify-fees
         when: Webshop Gebühren
         then: >
-          the fees come onto the clearing account from the payments export at the company's fee code (provider.fees: I0 while no bill shows Shopify's Swiss VAT); the month's Vorsteuer from the monthly bill ("Payments Invoice") is one single-leg entry without a payment — empty Soll (the code books that leg to the MWST account) / C the fee account (6580) / M81-2, amount = the VAT only = gross fees × 8.1 / 108.1, description "Shopify, Vorsteuer Transaktionsgebühren <Mon JJJJ>". Never both legs, never the owner's account (2451): no money moves
+          the fees come onto the clearing account from the payments export at the company's fee code (provider.fees: I0 while no bill shows Shopify's Swiss VAT); the month's Vorsteuer from the monthly bill ("Payments Invoice", document payments-invoice) is one single-leg entry without a payment — empty Soll (the code books that leg to the MWST account) / C the fee account (provider.fees.account) / the code of the tax itself (provider.fees.billVat, e.g. M81-2), amount = the VAT the bill shows, in its currency at the daily rate of its day. Code books it once per bill and links the bill to it, or links the bill to a correction booking that books it already. Never both legs, never the owner's account (2451): no money moves
         why: the proof is the monthly Shopify bill, not the payout; Shopify keeps its fees from the payouts, so no payment of its own carries them
         apply: { inputTax: none, direction: in }
         source: docs/runbooks/booking-patterns.md § Shopify

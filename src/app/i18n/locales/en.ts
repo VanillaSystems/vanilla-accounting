@@ -3877,6 +3877,8 @@ export default {
     'rules.say.zeroCode': 'booked with {code}: no receipt shows Swiss VAT',
     'salesReport.payoutText': '{provider}, payout',
     'salesReport.payoutReason': 'Payout of {provider}: from the clearing account {account} to the bank, without VAT; the provider\'s report books the sales and fees',
+    'vatCorrection.text': '{business}, input tax per bill of {date}',
+    'vatCorrection.reason': 'The bill of {business} of {date} shows {rate} % Swiss VAT, {currency} {amount}: input tax {code} on {account}, without a payment, since the provider keeps its fees from the payouts',
     'salesReport.saleText': '{provider}, order #{order}, {country}',
     'salesReport.refundText': '{provider}, refund #{order}',
     'salesReport.correctionText': '{provider}, refund #{order} of {date}, correction {period}',

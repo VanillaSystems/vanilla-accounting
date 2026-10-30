@@ -5,11 +5,12 @@
  * transactions that are still there, still open and still without an entry.
  * `force` first removes the entries classify itself booked in the open period (see
  * entriesForceMayRemove) and books those transactions again. Last, every customer payment booked
- * without VAT and without an invoice becomes a question to the owner (src/intake/sale-questions.ts).
+ * without VAT and without an invoice becomes a question to the owner (src/intake/sale-questions.ts), and
+ * the input tax a payment provider's fee bill shows is booked once per bill (src/booking/vat-corrections.ts).
  */
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { entriesForceMayRemove, entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
-import { BATCH_SIZE, CONCURRENCY, bookImportVatDeductions, classifyTransactions, loadClassifyContext, type ClassifyContext } from '../booking/classify.js';
+import { BATCH_SIZE, CONCURRENCY, bookBillCorrections, bookImportVatDeductions, classifyTransactions, loadClassifyContext, type ClassifyContext } from '../booking/classify.js';
 import { answerSettles, receiptKnowledge, receiptWaitOf } from '../booking/receipt-wait.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { APP_ROOT } from '../workspace/workspace.js';
@@ -120,6 +121,12 @@ export function classifyStep({ force = false } = {}): StepRun {
       const would = bookImportVatDeductions(structuredClone(books.read()), context);
       const deducted = would.booked + would.marked ? books.update((index) => bookImportVatDeductions(index, context)).booked : 0;
       if (deducted) log(`Customs   : ${deducted} import VAT deduction(s) booked from customs assessments.`);
+      // A payment provider's fee bill brings the input tax it shows: booked once per bill, without a payment.
+      const bills = bookBillCorrections(structuredClone(books.read()), context, fx);
+      const corrected = bills.booked.length + bills.linked.length ? books.update((index) => bookBillCorrections(index, context, fx)) : bills;
+      if (corrected.booked.length) log(`Fee bills : ${corrected.booked.length} provider bill(s): the input tax they show booked as ${corrected.booked.map((b) => b.ref).join(', ')}.`);
+      if (corrected.linked.length) log(`Fee bills : ${corrected.linked.length} provider bill(s) linked to the correction that books their input tax: ${corrected.linked.map((b) => b.ref).join(', ')}.`);
+      if (corrected.waiting.length) log(`Fee bills : ${corrected.waiting.length} provider bill(s) left to the person (${corrected.waiting.map((w) => `${w.receipt}: ${w.why}`).join(', ')}).`);
       // A provider's payout report read at the match step books its sales and fees onto the provider's clearing account (#203).
       const reports = books.update((index) => bookPayoutReports(ws, index, fx));
       if (reports) log(`Reports   : ${reports} payout report(s) of a payment provider booked onto its clearing account.`);

@@ -16,7 +16,7 @@
  *     clearing: "1093"
  *     since: 2026-10-01
  *     revenue: "3200"
- *     fees: { account: "6580", vat: I0 }
+ *     fees: { account: "6580", vat: I0, billVat: M81-2 }
  *     foreignTax: "2201"
  *     account: "1020"
  *
@@ -41,6 +41,9 @@
  * company's chart, so only its own file names them. `since`: the company's cut-over day, from which
  * on the provider's payouts are booked from the clearing account and its reports book the sales and
  * fees; whatever is dated before it stays as it was booked, and the app never books it again.
+ * `fees.billVat`: the code of the input tax the provider's fee bill shows (a document of its file that
+ * proves a VAT-only correction, src/booking/vat-corrections.ts), booked on `fees.account` without a
+ * payment; absent: the code the fee account takes at the bill's rate.
  * `foreignTax`: the account a foreign VAT an export order shows (IOSS, for example) goes onto, a pass-through
  * the firm pays abroad from; the net is the export. Without it such an order waits (#206).
  * `account`: the bank account (ledger account) the provider pays into, where the report's check for
@@ -88,8 +91,8 @@ export interface ProviderFacts {
   since?: string;
   /** The company's revenue account for the provider's sales; absent: the firm's own for what it sells. */
   revenue?: string;
-  /** The company's account and VAT code for the provider's fees. */
-  fees?: { account: string; vat: string };
+  /** The company's account and VAT code for the provider's fees, and the code of the input tax its fee bill shows (a VAT-amount code). */
+  fees?: { account: string; vat: string; billVat?: string };
   /** The company's account for a foreign VAT on an export (IOSS, for example): the tax goes onto it without a code, the net is the export. */
   foreignTax?: string;
 }
@@ -168,8 +171,10 @@ export function parseProvider(raw: unknown): { provider: ProviderFacts } | { pro
   if (raw.fees !== undefined) {
     const account = isMap(raw.fees) ? text(raw.fees.account) : undefined;
     const vat = isMap(raw.fees) ? text(raw.fees.vat) : undefined;
-    if (!account || !vat || Object.keys(raw.fees as object).some((k) => k !== 'account' && k !== 'vat')) return { problem: 'provider.fees must be { account: <account number>, vat: <VAT code> } (I0 when no bill shows the provider\'s Swiss VAT)' };
-    out.fees = { account, vat };
+    const billVat = isMap(raw.fees) ? raw.fees.billVat : undefined;
+    if (!account || !vat || Object.keys(raw.fees as object).some((k) => k !== 'account' && k !== 'vat' && k !== 'billVat')) return { problem: 'provider.fees must be { account: <account number>, vat: <VAT code> } (I0 when no bill shows the provider\'s Swiss VAT)' };
+    if (billVat !== undefined && !/^[A-Z]+\d+-2$/.test(text(billVat) ?? '')) return { problem: 'provider.fees.billVat must be the code of the tax itself, e.g. M81-2: the input tax the provider\'s fee bill shows' };
+    out.fees = { account, vat, ...(billVat !== undefined ? { billVat: text(billVat)! } : {}) };
   }
   return { provider: out };
 }
