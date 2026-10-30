@@ -46,6 +46,23 @@ export const dropFiles = (files: File[], note?: string): Promise<void> => drop.d
 
 export const closeDrop = (): void => drop.close();
 
+/**
+ * The files a closed window could not upload (#279), named with their reasons: a line beside the
+ * pages while the window is closed, in the window while it is open. «Erneut ablegen» drops them again.
+ */
+function Lost({ inDialog }: { inDialog?: boolean }) {
+  const s = useDrop();
+  const line = failedLine(s.lost, errorText);
+  if (!line || s.open !== !!inDialog) return null;
+  return (
+    <div className={inDialog ? 'warnline droplost' : 'toast show droplost'} role="alert" data-testid="drop-lost">
+      <span>{tWith(line.key, line.vars)}</span>
+      <button type="button" className={inDialog ? 'linkbtn' : undefined} data-act="drop-retry" onClick={() => void drop.retry()}>{t('drop.lost.retry')}</button>
+      <button type="button" className={inDialog ? 'linkbtn' : undefined} data-act="drop-dismiss" onClick={drop.dismiss}>{t('drop.lost.dismiss')}</button>
+    </div>
+  );
+}
+
 const act = (session: DropSession, r: DropRow, action: Parameters<typeof api.dropRow>[2]) =>
   api.dropRow(session.id, r.key, action).then(drop.answered, (e) => set({ error: errorText(e) }));
 
@@ -385,7 +402,7 @@ export function DropDialog({ onGo, books, refresh }: { onGo(loc: Location): void
   const s = useDrop();
   const { view } = useAutomation();
   const [tab, setTab] = useState<DropTab>('all');
-  if (!s.open) return null;
+  if (!s.open) return <Lost />;
   const rows = s.session?.rows ?? [];
   const tabs: DropTab[] = ['all', 'statements', 'receipts', ...(rows.some((r) => tabOf(r) === 'unclear') ? ['unclear' as const] : []), 'out'];
   const shown = tab === 'all' ? rows : rows.filter((r) => tabOf(r) === tab);
@@ -429,6 +446,7 @@ export function DropDialog({ onGo, books, refresh }: { onGo(loc: Location): void
         </div>
         {s.note ? <p className="warnline" data-testid="drop-note">{s.note}</p> : null}
         {s.error ? <p className="warnline">{s.error}</p> : null}
+        <Lost inDialog />
         {waits ? <p className="m">{t('drop.waitsHint')}</p> : null}
         {rows.some((r) => (r.state === 'duplicate' && r.reason === 'possible-duplicate') || r.state === 'locked' || r.state === 'unclear') ? <p className="m" data-testid="close-hint">{t('drop.closeHint')}</p> : null}
         {rows.some((r) => r.state === 'asks' && !r.asked) ? <p className="m" data-testid="read-hint">{t('drop.read.closeHint')}</p> : null}
