@@ -139,7 +139,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/invoices/texts.ts` | MWST 5 |
 | `src/knowledge/cases.ts` | MWST 5, ESTV 4, Ziffer 4, camt.053 1 |
 | `src/knowledge/layers.ts` | CHF 1 |
-| `src/parsers/receipt-text.ts` | CHF 1, MWST 7, UID 1 |
+| `src/parsers/receipt-text.ts` | CHF 1, MWST 8, UID 1 |
 
 ## infrastructure
 
@@ -148,7 +148,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/audit/sources.ts` | ESTV 1 |
 | `src/llm/prompts.ts` | CHF 9, MWST 21, camt.053 2, Rappen 1 |
 | `src/publish/leak-guard.ts` | camt.053 1 |
-| `src/reconcile/vat-consistency.ts` | MWST 4 |
+| `src/reconcile/vat-consistency.ts` | MWST 5 |
 
 ## view
 
