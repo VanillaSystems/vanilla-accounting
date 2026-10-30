@@ -4,8 +4,7 @@
  * the outputs the step `emits`.
  */
 import { classifyTransactions, loadClassifyContext } from '../booking/classify.js';
-import { onlySettles, receiptKnowledge, receiptWaitOf, settlementAccount } from '../booking/receipt-wait.js';
-import { bankAccountFor } from '../workspace/money-accounts.js';
+import { answerSettles, receiptKnowledge, receiptWaitOf } from '../booking/receipt-wait.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
@@ -184,7 +183,7 @@ export const ACTIONS: Record<string, Action> = {
       if (waits && (!ask || t.waitsForReceipt?.decided)) return { outcome: 'held', output: { why: 'waitsForReceipt' } };
       const { classified, failed, asked, unasked } = await classifyTransactions(scratch, [t], { ask, fx, context });
       const entries = scratch.journalEntries.slice(before);
-      if (waits && !onlySettles(entries, bankAccountFor(t, context.bankAccounts), settlementAccount(context))) return { outcome: 'held', output: { why: 'waitsForReceipt' } };
+      if (waits && !answerSettles(t, entries, context)) return { outcome: 'held', output: { why: 'waitsForReceipt' } };
       if (!failed.length && classified.length) return { outcome: 'decided', output: { entries } };
       // A rule holds the payment for the person: its one question (workflows/ask) is the task, not «Bewegung von Hand buchen» (r7h-27).
       if (asked.length) {

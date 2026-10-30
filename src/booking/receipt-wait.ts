@@ -15,7 +15,8 @@
  * names as `apply: { receipt: none, text }` (in the app's guide the cash withdrawal, which only
  * moves money onto the cash box; issue #99). A payment booked onto a settlement
  * account (the owner's, a money account, a debt) pays what was booked elsewhere and never waits
- * (settlementAccount): by a rule, decided here; by the model, decided on its answer (onlySettles).
+ * (settlementAccount): by a rule, decided here; by the model, decided on its answer (answerSettles),
+ * where the owner's account settles only a payment to the owner (issue #201).
  * Any other company rule that books waits for the receipt like the model: the receipt decides its
  * rate (ruleVatCode). A rule that asks first is the person's
  * wish to be asked: its question comes at once, and her answer books it.
@@ -129,6 +130,27 @@ export function settlementAccount(context: Pick<ClassifyContext, 'moneyAccounts'
 /** Whether the classifier's entries of a payment only settle (settlementAccount): each line's other side than the bank is such an account. */
 export function onlySettles(entries: readonly Pick<JournalEntry, 'accountDebit' | 'accountCredit'>[], bankAccount: string, settles: (account: string) => boolean): boolean {
   return entries.length > 0 && entries.every((e) => [e.accountDebit, e.accountCredit].filter((a) => a && a !== bankAccount).every(settles));
+}
+
+/**
+ * Whether the model's answer for a payment that needs a receipt only settles, so it is booked
+ * without one (issue #90). The owner's account settles only a payment to the owner (her outlays or
+ * her loan paid back): the model putting a supplier's payment there books it as private, which
+ * hides the missing receipt and loses its input tax. That is a person's decision or a rule's,
+ * never the stand-in for a receipt the run did not link (issue #201): the payment waits.
+ */
+export function answerSettles(tx: BankTransaction, entries: readonly Pick<JournalEntry, 'accountDebit' | 'accountCredit'>[], context: Pick<ClassifyContext, 'bankAccounts' | 'moneyAccounts' | 'ownerAccount' | 'ownerName'>): boolean {
+  const settles = settlementAccount(context);
+  const toOwner = paysOwner(tx, context.ownerName);
+  return onlySettles(entries, bankAccountFor(tx, context.bankAccounts), (a) => (a === context.ownerAccount ? toOwner : settles(a)));
+}
+
+/** Every word of the owner's name stands in the payment's counterparty or text («Anna Muster» in «Sent money to Anna Maria Muster»). */
+function paysOwner(tx: BankTransaction, owner: string | undefined): boolean {
+  const words = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().split(/[^\p{L}]+/u).filter((w) => w.length > 1);
+  const name = words(owner ?? '');
+  const said = new Set(words(`${tx.counterparty ?? ''} ${tx.description}`));
+  return name.length > 0 && name.every((w) => said.has(w));
 }
 
 const ibanOf = (iban: string) => iban.replace(/\s+/g, '').toUpperCase();

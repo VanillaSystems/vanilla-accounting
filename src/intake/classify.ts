@@ -10,8 +10,7 @@
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { entriesForceMayRemove, entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
 import { BATCH_SIZE, CONCURRENCY, bookImportVatDeductions, classifyTransactions, loadClassifyContext, type ClassifyContext } from '../booking/classify.js';
-import { onlySettles, receiptKnowledge, receiptWaitOf, settlementAccount } from '../booking/receipt-wait.js';
-import { bankAccountFor } from '../workspace/money-accounts.js';
+import { answerSettles, receiptKnowledge, receiptWaitOf } from '../booking/receipt-wait.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
@@ -105,16 +104,16 @@ export function classifyStep({ force = false } = {}): StepRun {
     const context = loadClassifyContext(ws);
     const fx = loadFxResolver();
     // A payment that needs a receipt waits for it. One no run with a model has judged yet goes to the model once:
-    // an answer that only settles (the owner's outlays paid back, a card's bill) is booked, any other waits (issue #90).
+    // an answer that only settles (the owner's outlays paid back, a card's bill) is booked, any other waits (issue #90),
+    // a supplier's payment the model puts on the owner's account too (issue #201).
     // Without a model it waits too, and the next run with one judges it (issue #110).
     // A payment whose receipt could not be read waits for the person's word, without a guess (issue #57).
     const { need, unread } = needReceipts(ws, scratch, context, fx);
     const judged = new Set(scratch.transactions.filter((tx) => tx.waitsForReceipt?.decided).map((tx) => tx.ref));
     const probe = new Set(ask ? [...need].filter((ref) => !judged.has(ref)) : []);
     const waiting = new Set([...need].filter((ref) => !probe.has(ref)));
-    const settles = settlementAccount(context);
-    const bankOf = new Map(scratch.transactions.map((tx) => [tx.ref, bankAccountFor(tx, context.bankAccounts)]));
-    const keeps = (ref: string) => !probe.has(ref) || onlySettles(scratch.journalEntries.filter((je) => je.transactionRef === ref), bankOf.get(ref) ?? '', settles);
+    const txOf = new Map(scratch.transactions.map((tx) => [tx.ref, tx]));
+    const keeps = (ref: string) => !probe.has(ref) || answerSettles(txOf.get(ref)!, scratch.journalEntries.filter((je) => je.transactionRef === ref), context);
     const done = (notes: IntakeNote[]) => {
       // A customs assessment that came after its import VAT was booked brings the deduction (issue #197).
       // Saved whenever it books or marks an assessment as used: a mark lost would let a deduction a person took back come again.

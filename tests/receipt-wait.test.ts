@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { classifyStep } from '../src/intake/classify.js';
 import type { IntakeNote } from '../src/intake/pipeline.js';
-import { parseReceiptApply, receiptFree, receiptKnowledge, receiptWait, settlementAccount, type WaitContext } from '../src/booking/receipt-wait.js';
+import { answerSettles, parseReceiptApply, receiptFree, receiptKnowledge, receiptWait, settlementAccount, type WaitContext } from '../src/booking/receipt-wait.js';
 import { receiptDue, waitingForReceipt } from '../src/accounting/receipt-due.js';
 import { ACTIONS } from '../src/workflows/actions.js';
 import { loadKnowledge } from '../src/knowledge/layers.js';
@@ -105,12 +105,13 @@ function booksOf(txs: BankTransaction[]): Books {
   return { transactions: txs, receipts: [], mappings: [], bankStatements: [], journalEntries: [], config: { closedThrough: '2026-06-30' } } as unknown as Books;
 }
 
-const REFS = ['TEL-10', 'ESTV-1', 'IN-1', 'FEE-1', 'OWNER-1', 'STAFF-1', 'ATM-1'];
+const REFS = ['TEL-10', 'ESTV-1', 'IN-1', 'FEE-1', 'OWNER-1', 'STAFF-1', 'ATM-1', 'INV-0815'];
 /** The model's answer: a payment out on 6570 with I81, the one in as a sale, the bank on the other side. */
 const model = async (prompt: string) => {
   const refs = REFS.filter((ref) => prompt.includes(ref));
   const line = (ref: string) => (ref === 'IN-1' ? { accountDebit: '', accountCredit: '3200', amount: 89, vatCode: 'V81', description: 'Verkauf' }
     : ref === 'OWNER-1' ? { accountDebit: '2451', accountCredit: '', amount: 89, vatCode: '', description: 'Spesen Inhaberin' }
+      : ref === 'INV-0815' ? { accountDebit: '2451', accountCredit: '', amount: 89, vatCode: '', description: 'Druckerei Beispiel AG, privat (kein Beleg)' }
       : ref === 'STAFF-1' ? { accountDebit: '2270', accountCredit: '', amount: 89, vatCode: '', description: 'Spesen Mitarbeiter' }
         : ref === 'ATM-1' ? { accountDebit: '1000', accountCredit: '', amount: 89, vatCode: '', description: 'Barbezug' }
         : { accountDebit: '6570', accountCredit: '', amount: 89, vatCode: 'I81', description: 'Telefon' });
@@ -233,6 +234,42 @@ test('the reimbursement of an outlay is booked at once: onto the owner\'s accoun
   let asked = 0;
   await run(ws, books, async (p) => { asked++; return model(p); });
   assert.equal(asked, 0, 'a waiting payment goes to the model once, not on every run');
+});
+
+/** A Swiss supplier's invoice paid weeks after its date, whose receipt the run did not link (#201). */
+const LATE_INVOICE = OUT('INV-0815', { date: '2026-10-20', counterparty: 'Druckerei Beispiel AG', description: 'Rechnung 2026-0815 vom 01.09.2026' });
+
+test('a supplier\'s payment the model books onto the owner\'s account for want of a receipt waits for its receipt, not booked as private (issue #201)', async () => {
+  const ws = company();
+  const books = booksOf([LATE_INVOICE, OUT('OWNER-1', { description: 'Spesen Juli Anna Muster' })]);
+  await run(ws, books);
+  assert.deepEqual(entries(books, 'INV-0815'), [], 'no private booking in place of the missing receipt');
+  assert.equal(tx(books, 'INV-0815').waitsForReceipt?.decided, true, 'it waits, judged by the model once');
+  assert.deepEqual(entries(books, 'OWNER-1'), [['2451', '1021', 89, '']], 'a payment to the owner herself still settles her outlays');
+
+  books.receipts.push({ ...RECEIPT, id: 'inv-0815', date: '2026-09-01', extractedText: 'Druckerei Beispiel AG, Rechnung 2026-0815, Total CHF 89.00 inkl. 8.1% MWST 6.67' } as Receipt);
+  books.mappings.push({ transactionRef: 'INV-0815', receiptId: 'inv-0815' });
+  await run(ws, books, async () => JSON.stringify({ 'INV-0815': { entries: [{ accountDebit: '6570', accountCredit: '', amount: 89, vat: 'charged', vatRate: 8.1, description: 'Druckerei Beispiel AG, Drucksachen' }], reason: 'Rechnung mit 8.1 % MWST' } }));
+  assert.deepEqual(entries(books, 'INV-0815'), [['6570', '1021', 89, 'I81']], 'the receipt linked later books it with its input tax');
+  assert.equal(tx(books, 'INV-0815').waitsForReceipt, undefined);
+});
+
+test('the owner\'s account settles a payment to the owner by her name, a middle name or accents between; a debt or the cash box settles any payment (issue #201)', () => {
+  const context = { bankAccounts: company().bankAccounts, moneyAccounts: new Set(['1000', '1021']), ownerAccount: '2451', ownerName: 'Anna Müller' };
+  const onto = (account: string) => [{ accountDebit: account, accountCredit: '' }];
+  assert.equal(answerSettles(OUT('a', { counterparty: 'ANNA MARIA MULLER' }), onto('2451'), context), true);
+  assert.equal(answerSettles(OUT('a', { description: 'Sent money to Anna Maria Müller' }), onto('2451'), context), true);
+  assert.equal(answerSettles(OUT('a', { counterparty: 'Anna Beispiel AG' }), onto('2451'), context), false, 'another name');
+  assert.equal(answerSettles(OUT('a', { counterparty: 'Anna Beispiel AG' }), onto('2451'), { ...context, ownerName: undefined }), false, 'no owner named: it waits');
+  assert.equal(answerSettles(OUT('a'), onto('1000'), context), true);
+  assert.equal(answerSettles(OUT('a'), onto('2270'), context), true);
+});
+
+test('«Buchen» of a supplier\'s payment holds it when the model would book it onto the owner\'s account without a receipt (issue #201)', async () => {
+  const ws = company();
+  const books = booksOf([LATE_INVOICE]);
+  const held = await ACTIONS['accounting.expenses.classification'].run!({ transaction: tx(books, 'INV-0815'), books }, {}, { ws, ask: model, now: () => '2026-10-23T08:00:00Z' });
+  assert.deepEqual(held, { outcome: 'held', output: { why: 'waitsForReceipt' } });
 });
 
 const ATM = (ref: string, amount = 89) => OUT(ref, { description: 'BANCOMAT Bezug Zürich HB', amount });
