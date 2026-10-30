@@ -2,10 +2,11 @@ import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
 import { t } from '../i18n/index.js';
 import { store, stored } from './storage.js';
 import type { AreaId } from './route.js';
+import { LIST_MIN } from './look.js';
 
-const MIN = 340;
 const zoom = () => Number(document.documentElement.style.zoom) || 1;
-const clamp = (w: number) => Math.min(Math.max(MIN, innerWidth / zoom() - 560), Math.max(MIN, w));
+// The widest the list may be is shell.css's: it leaves the detail --detail-min.
+const clamp = (w: number) => Math.max(LIST_MIN, w);
 
 /**
  * The list column's width: drag the divider, ←/→ while it has focus, double-click resets.

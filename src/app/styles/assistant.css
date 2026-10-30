@@ -1,5 +1,10 @@
 /* The AI sidebar (docs/0.4.0/views.md, "The AI, as a sidebar"): beside the page, which narrows by --aiw. */
 main { width: calc(100% - var(--abw) - var(--aiw)); }
+/* Too little room for the list and the detail beside it (src/app/shell/look.ts sidebarFit, #34): the sidebar lies over the page's
+   right edge, and the list takes its compact width so the detail starts as far left as it can. */
+html.aiover main { width: calc(100% - var(--abw)); grid-template-columns: var(--list-min) minmax(0, 1fr); }
+html.aiover .aside { box-shadow: var(--shadow); }
+html.aiover .list { padding-left: 24px; padding-right: 16px; }
 .legend { right: calc(16px + var(--aiw)); }
 .aside { position: fixed; top: 0; right: 0; bottom: 0; width: var(--aiw); z-index: 30; display: flex; flex-direction: column; background: var(--desk); border-left: 1px solid var(--line); }
 .aihead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 14px 10px; }
