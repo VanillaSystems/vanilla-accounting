@@ -78,8 +78,9 @@ test('the check: opening + payments − closing against the bank, and the ledger
   assert.equal(unbooked.check(unbooked.byKey('1021-2026-07')!).bookDiff, 50, 'payments not booked show against the ledger');
 });
 
-test('a Wise fee is folded into its payment: not listed, counted in the balance', () => {
-  const b = bankOf(books(), ACCOUNTS, '2026-09-15');
+test('a booked fee the bank debited apart is folded into its payment: not listed, counted in the balance; an open one keeps its row (#42)', () => {
+  const feeEntry = { id: 'J4', transactionRef: 'FEE-CARD-1', date: '2026-07-05', accountDebit: '6940', accountCredit: '1023', amount: 0.5 };
+  const b = bankOf(books({ journalEntries: [...books().journalEntries!, feeEntry] }), ACCOUNTS, '2026-09-15');
   const s = b.byKey('1023-2026-07')!;
   assert.deepEqual(b.payments(s).map((p) => p.ref), ['CARD-1']);
   assert.equal(b.feeOf('CARD-1')?.ref, 'FEE-CARD-1');
@@ -87,6 +88,24 @@ test('a Wise fee is folded into its payment: not listed, counted in the balance'
   assert.equal(c.out, 20.5);
   assert.equal(c.open, null, 'July has no balance before it and is not the year\'s start');
   assert.equal(b.needsReceipt(b.feeOf('CARD-1')!), false);
+
+  const open = bankOf(books(), ACCOUNTS, '2026-09-15');
+  const fee = open.txByRef.get('FEE-CARD-1')!;
+  assert.deepEqual(open.payments(open.byKey('1023-2026-07')!).map((p) => p.ref), ['FEE-CARD-1', 'CARD-1'], 'an open fee is listed, to be booked');
+  assert.equal(open.feeOf('CARD-1'), undefined);
+  assert.equal(open.unbooked(fee), true);
+  assert.equal(open.needsReceipt(fee), false);
+});
+
+test('a fee the bank links by its id apart from the ref is folded into its payment once booked (#42)', () => {
+  const charge = tx('WEUR1', '2026-07-05', -20, { bank: 'Wise', currency: 'EUR', bankTxId: 'CARD-9' });
+  const fee = tx('WEUR2', '2026-07-05', -0.5, { bank: 'Wise', currency: 'EUR', type: 'wise-fee', bankTxId: 'FEE-CARD-9' });
+  const b = bankOf(books({
+    transactions: [charge, fee],
+    journalEntries: [{ id: 'J4', transactionRef: 'WEUR2', date: '2026-07-05', accountDebit: '6940', accountCredit: '1023', amount: 0.5 }],
+  }), ACCOUNTS, '2026-09-15');
+  assert.deepEqual(b.payments(b.byKey('1023-2026-07')!).map((p) => p.ref), ['WEUR1']);
+  assert.equal(b.feeOf('WEUR1')?.ref, 'WEUR2');
 });
 
 test('a payment needs a receipt until one is linked or it is marked as needing none', () => {
@@ -206,11 +225,14 @@ test('another bank\'s payment is the dated row with its amount closest to its da
   assert.equal(findLines(oneText, { ref: 'X', date: '2026-07-21', amount: -217.75 }, false).length, 1, 'a row printed as one text, with a four-digit year');
 });
 
-test('payments without an entry are listed, oldest first: the open period only, a fee folded into a booked payment counts as booked (corner-9)', () => {
+test('payments without an entry are listed, oldest first: the open period only; a fee the bank debited apart is booked by its own entry alone (corner-9, #42)', () => {
   const b = books();
   assert.deepEqual(unbookedPayments(b, ACCOUNTS).map((t) => t.ref), ['CARD-1', 'FEE-CARD-1', 'M1', 'R3']);
-  const booked = books({ journalEntries: [...b.journalEntries!, { id: 'J3', transactionRef: 'CARD-1', date: '2026-07-05', accountDebit: '6000', accountCredit: '1023', amount: 20 }] });
-  assert.deepEqual(unbookedPayments(booked, ACCOUNTS).map((t) => t.ref), ['M1', 'R3'], 'the fee goes with its payment');
+  const charge = { id: 'J3', transactionRef: 'CARD-1', date: '2026-07-05', accountDebit: '6000', accountCredit: '1023', amount: 20 };
+  const chargeBooked = books({ journalEntries: [...b.journalEntries!, charge] });
+  assert.deepEqual(unbookedPayments(chargeBooked, ACCOUNTS).map((t) => t.ref), ['FEE-CARD-1', 'M1', 'R3'], 'the payment\'s booking leaves its fee open');
+  const fee = { id: 'J4', transactionRef: 'FEE-CARD-1', date: '2026-07-05', accountDebit: '6940', accountCredit: '1023', amount: 0.5 };
+  assert.deepEqual(unbookedPayments(books({ journalEntries: [...b.journalEntries!, charge, fee] }), ACCOUNTS).map((t) => t.ref), ['M1', 'R3'], 'the fee\'s own entry books it');
   assert.deepEqual(unbookedPayments(books({ config: { closedThrough: '2026-07-31' } }), ACCOUNTS).map((t) => t.ref), ['R3'], 'a filed payment is a correction, not a task');
   assert.equal(bankOf(b, ACCOUNTS, '2026-09-15').unbooked(tx('R1', '2026-07-03', -100)), false);
 });
