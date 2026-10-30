@@ -1,9 +1,10 @@
 /**
- * What the intake reads off a receipt's extracted text without a model: a Swiss UID, a VAT
- * indicator worth a model call, and the vendor traps that look like an invoice but prove no VAT.
+ * What the intake reads off a receipt's extracted text without a model: whether it can prove
+ * anything at all (textProves), a Swiss UID, a VAT indicator worth a model call, and the vendor
+ * traps that look like an invoice but prove no VAT.
  */
 
-import type { VatRateGroup } from '../types/index.js';
+import type { Receipt, VatRateGroup } from '../types/index.js';
 
 // A Swiss UID survives text extraction in more shapes than one: extraction wraps it across
 // lines ("#CHE-\n153.004.184 MWST" on Shopify's bills, the same break after "CHE-" on some
@@ -100,6 +101,27 @@ function currencyOf(line: string | undefined, text: string): string | undefined 
   const of = (s: string) => (/\bCHF\b|\bFr\./.test(s) ? 'CHF' : /\bEUR\b|€/.test(s) ? 'EUR' : /\bUSD\b|US\$/.test(s) ? 'USD' : undefined);
   return (line && of(line)) || of(text);
 }
+
+const WORD = /\p{L}{3,}/gu;
+/** Shorter than this, even a PDF's own text says too little to read anything off. */
+const MIN_OWN_TEXT = 20;
+
+/**
+ * Whether a receipt's text can prove what it lacks (a «MWST», above all). A digital PDF's own text
+ * (`pdftotext`) says what the document says. A reading of a picture (an old local OCR's, the
+ * model's) only when it is legible: at least three words, and an amount or twenty words. An OCR's
+ * noise off a phone photo («=\n.;\nx!\n\nEX dr ir\nale», #284) is not, however long it is.
+ */
+export function textProves(r: Pick<Receipt, 'extractedText' | 'extractionMethod'>): boolean {
+  const text = r.extractedText ?? '';
+  if (r.extractionMethod === 'pdftotext') return text.length >= MIN_OWN_TEXT;
+  const words = text.match(WORD)?.length ?? 0;
+  return words >= 3 && (words >= 20 || amounts(text).length > 0);
+}
+
+/** «No Swiss VAT» read off a text that proves nothing: no evidence either way, so the VAT is not read (#284). A person's facts are hers. */
+export const unprovenNoVat = (r: Pick<Receipt, 'vatBy' | 'vatExtractedAt' | 'hasSwissVat' | 'vatSummary' | 'extractedText' | 'extractionMethod'>): boolean =>
+  r.vatBy !== 'human' && r.vatExtractedAt != null && r.hasSwissVat === false && !r.vatSummary?.length && !textProves(r);
 
 export function textFacts(text: string): TextFacts {
   const lines = text.split('\n');
