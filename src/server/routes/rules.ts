@@ -216,6 +216,7 @@ router.post('/api/rules/hand', (req, res) => {
   const h = req.body as HandRule;
   if (!h || !h.match || !MATCHES.has(h.match.kind) || typeof h.account !== 'string' || (h.vat !== null && typeof h.vat !== 'string')) throw new RequestError(400, 'Regel erwartet.');
   if (h.tags !== undefined) h.tags = tagsField(h.tags);
+  if (h.private !== undefined && (!h.private || typeof h.private.share !== 'number' || (h.private.ownUse !== undefined && typeof h.private.ownUse !== 'boolean'))) throw new RequestError(400, 'private { share, ownUse } erwartet.');
   const out = draftHandRule(WS, h);
   if (out.ok) { res.json({ path: out.path }); return; }
   throw refused(out.refusal);
