@@ -12,13 +12,13 @@
  * A pair the model was shown and did not take is not asked about again (Receipt.pairDoubted), unless
  * a person asks with the button; a pair a person took apart is never a candidate (Receipt.notPaidBy).
  */
-import type { Receipt, BankTransaction } from '../types/index.js';
+import type { Receipt, BankTransaction, JournalEntry } from '../types/index.js';
 import { periodLock, type Books } from '../books/store.js';
 import type { Ask, BooksPort } from './pipeline.js';
 import { numbersIn } from '../accounting/document-numbers.js';
 import { baseCurrency } from '../engines/index.js';
 import { loadFxResolver, type FxResolver } from '../accounting/fx-rates.js';
-import { SHORT_LIST, pairMapping, pairablePayment, pairableReceipt, searchPairs, signalsOfCandidate, stagesOf, takenPayments, type Maker, type PairCandidate, type PairStage, type Signal, type ToChf } from './pairing.js';
+import { SHORT_LIST, chainMade, pairMapping, pairablePayment, pairableReceipt, searchPairs, signalsOfCandidate, stagesOf, takenPayments, type Maker, type PairCandidate, type PairStage, type Signal, type ToChf } from './pairing.js';
 import { legOf } from '../workspace/money-accounts.js';
 import { chargesOf } from './charges.js';
 import type { Businesses } from './batch-payers.js';
@@ -41,13 +41,15 @@ const SURE = 0.8;
 
 
 
+/** A pair the chain made. `legs`: every movement of a card charge split across balances, each linked (src/intake/charges.ts); absent for one movement. `replaced`: the receipt whose link it took over (takeOver, #291). */
+export interface ChainLink { receipt: string; payment: string; by: Maker; signals: Signal[]; filed?: true; legs?: string[]; replaced?: string }
+
 /** What the chain did and left. `left`: the receipts that are the person's, each with the code's candidates (`total` of them before the cut to the short list). */
 export interface ChainResult {
-  /** `legs`: every movement of a card charge split across balances, each linked (src/intake/charges.ts); absent for one movement. */
-  linked: Array<{ receipt: string; payment: string; by: Maker; signals: Signal[]; filed?: true; legs?: string[] }>;
+  linked: ChainLink[];
   left: Array<{ receipt: string; candidates: PairCandidate[]; total: number }>;
-  /** The clear pairs of `staged` receipts, for the caller to archive, name and link (filed: point at) in its own change. */
-  staged: Array<{ receipt: string; payment: string; by: Maker; signals: Signal[]; filed?: true; legs?: string[] }>;
+  /** The clear pairs of `staged` receipts, for the caller to archive, name and link (filed: point at; replaced: takeOver first) in its own change. */
+  staged: ChainLink[];
   /** Model calls made, and the pairs and receipts they were asked about. */
   calls: number;
   checked: number;
@@ -281,7 +283,7 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
   const times = new Map<string, number>();
   for (const { c } of asked) times.set(c.payment, (times.get(c.payment) ?? 0) + 1);
   const mine = asked.filter((l) => times.get(l.c.payment) === 1);
-  result.staged = mine.filter((l) => stagedIds.has(l.c.receipt)).map(({ c, by }) => ({ receipt: c.receipt, payment: c.payment, by, signals: signalsOfCandidate(c), ...(c.filed ? { filed: true as const } : {}), ...legsOf(c) }));
+  result.staged = mine.filter((l) => stagedIds.has(l.c.receipt)).map(({ c, by }) => ({ receipt: c.receipt, payment: c.payment, by, signals: signalsOfCandidate(c), ...(c.filed ? { filed: true as const } : {}), ...legsOf(c), ...(c.replaces ? { replaced: c.replaces } : {}) }));
   result.linked = port.update((index: Books) => applyLinks(index, mine.filter((l) => !stagedIds.has(l.c.receipt)), doubts, opts.noReceipt?.(index)));
   const leftStored = result.left.filter((l) => !stagedIds.has(l.receipt));
   const cut = leftStored.filter((l) => l.total > l.candidates.length);
@@ -289,9 +291,27 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
   if (leftStored.length) log(`${leftStored.length} receipt(s) left for the person, with the code's candidates`);
   for (const l of result.linked) {
     const how = l.by === 'code' ? 'by code' : l.by === 'checked' ? 'by code, checked by the model' : 'by the model from the short list';
-    log(l.filed ? `pays the filed payment ${l.payment} (${how}): receipt ${l.receipt}, not linked` : `linked ${how}: receipt ${l.receipt} → ${l.payment}`);
+    log(l.filed ? `pays the filed payment ${l.payment} (${how}): receipt ${l.receipt}, not linked` : `linked ${how}: receipt ${l.receipt} → ${l.payment}${l.replaced ? ` in place of receipt ${l.replaced}, a whole period off the payment's day` : ''}`);
   }
   return result;
+}
+
+/** A booking the app made on its own (the classifier, by a rule, a check of code or the model): never one a person made or decided. */
+const appBooked = (e: JournalEntry): boolean => e.origin === 'classify' && (!e.by || e.by.kind === 'rule' || e.by.kind === 'code' || e.by.kind === 'model');
+
+/**
+ * Takes the chain's link of receipt `old` off the payment's movements `refs`, for a receipt that fits
+ * the payment's day where `old` lies a whole period off (#291), while that link is still the
+ * chain's alone and every booking of the payment the app's own. The classify step then books the
+ * payment again with the new receipt (src/accounting/classify-force.ts entriesWithoutTheirReceipts).
+ * False, and nothing changed, when not.
+ */
+export function takeOver(index: Pick<Books, 'mappings' | 'journalEntries'>, refs: readonly string[], old: string): boolean {
+  const theirs = index.mappings.filter((m) => refs.includes(m.transactionRef) || m.receiptId === old);
+  if (!theirs.length || theirs.some((m) => m.receiptId !== old || !refs.includes(m.transactionRef) || !chainMade(m))) return false;
+  if (index.journalEntries.some((e) => refs.includes(e.transactionRef) && !appBooked(e))) return false;
+  index.mappings = index.mappings.filter((m) => !theirs.includes(m));
+  return true;
 }
 
 /** The legs a link names beside its payment: only for a charge split across balances. */
@@ -312,7 +332,10 @@ function applyLinks(index: Books, links: ReadonlyArray<{ c: PairCandidate; by: M
     // Every movement of the charge: the leg that fit, and the other legs of a charge split across balances.
     const legs = c.charge.length > 1 ? c.charge.map((ref) => index.transactions.find((x) => x.ref === ref)) : [index.transactions.find((x) => legOf(x) === c.leg)];
     const t = legs[0];
-    if (!r || !t || legs.some((x) => !x || !pairablePayment(x, linkedPayments, noReceipt) || r.notPaidBy?.includes(x.ref)) || !pairableReceipt(r, linkedReceipts)) continue;
+    // A link taken over (#291): its payment counts as free while the rest is checked, and is freed only once all of it holds.
+    const taken = c.replaces ? new Set([...linkedPayments].filter((ref) => !c.charge.includes(ref))) : linkedPayments;
+    if (!r || !t || legs.some((x) => !x || !pairablePayment(x, taken, noReceipt) || r.notPaidBy?.includes(x.ref)) || !pairableReceipt(r, linkedReceipts)) continue;
+    if (c.replaces && (lock.isClosed(t.date) || !takeOver(index, c.charge, c.replaces))) continue;
     const signals = signalsOfCandidate(c);
     linkedReceipts.add(r.id);
     for (const ref of c.charge) linkedPayments.add(ref);
@@ -322,7 +345,7 @@ function applyLinks(index: Books, links: ReadonlyArray<{ c: PairCandidate; by: M
       continue;
     }
     for (const ref of c.charge) index.mappings.push(pairMapping(by, ref, r.id, signals));
-    done.push({ receipt: r.id, payment: t.ref, by, signals, ...legsOf(c) });
+    done.push({ receipt: r.id, payment: t.ref, by, signals, ...legsOf(c), ...(c.replaces ? { replaced: c.replaces } : {}) });
   }
   for (const c of doubts) {
     const r = index.receipts.find((x) => x.id === c.receipt);

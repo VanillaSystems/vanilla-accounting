@@ -72,6 +72,12 @@ customs:
   # A line that names no position but carries the carrier's Swiss rate (a printed invoice, an extra
   # service) is the carrier's own service: fees. Duty and import VAT never carry Swiss VAT.
   tax: [MWST, MwSt, Mehrwertsteuer, TVA, Taxe sur la valeur ajoutée, IVA, Imposta sul valore aggiunto, VAT, Value added tax]
+  # A line of costs the carrier passed on free of VAT («MWST.-freie Kosten»), at no rate, on an
+  # invoice that cites a customs declaration's number (assessment.number): what the carrier advanced
+  # for the customs office there is the import VAT (Swiss industrial goods carry no duty since 2024;
+  # duty lumped into it makes the line differ from the assessment, which then proves nothing). Only
+  # with the number: postage and other invoices list VAT-free costs too.
+  untaxed: [MWST.-freie Kosten, MWST-freie Kosten, MWST freie Kosten, MwSt.-freie Kosten, MwSt-freie Kosten]
   # The BAZG's assessment of import VAT (Veranlagungsverfügung MWST): its title, and the label of its
   # total. It proves the deduction when it names the firm's UID. The German words are the BAZG's
   # document; the French, Italian and English ones are its names in those languages, not yet seen

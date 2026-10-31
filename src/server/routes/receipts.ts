@@ -14,6 +14,7 @@ import { ask } from '../../llm/ask.js';
 import { buildVisionPrompt } from '../../llm/prompts.js';
 import { findFile } from '../../workspace/workspace.js';
 import { orderPagesIn, vatCorrectionsIn } from '../../intake/pair-chain.js';
+import { forgetReadFacts } from '../../intake/vat.js';
 import { isNoReceipt, referenced, refsOf } from '../../books/discard.js';
 import { WS, receiptPath, assertOpen, receiptDates, refDates, readBooks, updateBooks, updateBooksWithEffects, withBooks, RequestError, patchBody, stringField } from '../books.js';
 
@@ -215,7 +216,8 @@ router.post('/api/receipts/:id/restore', async (req, res) => {
 
 /**
  * OCR of a receipt PDF by the model. Only called when the user explicitly approves via the UI.
- * The model reads the PDF first; the text is then saved to books loaded after it answered.
+ * The model reads the PDF first; the text is then saved to books loaded after it answered, and the
+ * VAT facts read off the old text are forgotten, so the next run reads them off the new one (#284).
  */
 router.post('/api/vision/extract', async (req, res) => {
   const { receiptId } = req.body as { receiptId: string };
@@ -237,6 +239,7 @@ router.post('/api/vision/extract', async (req, res) => {
     receipt.extractedText = text;
     receipt.extractionMethod = 'claude';
     receipt.needsVisionReview = undefined;
+    forgetReadFacts(receipt);
     return { ok: true, extractedText: text };
   });
 });
