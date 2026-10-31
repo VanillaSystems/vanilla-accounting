@@ -367,6 +367,51 @@ test('a collective payment partly decided by payer rules: with a model the undec
   assert.deepEqual([bare.journalEntries.filter((e) => e.transactionRef === 'BATCH-3').length, none.partly], [1, ['BATCH-3']], 'no model: the rest stays for the person');
 });
 
+const batchOut = () => tx({ ref: 'BATCH-OUT', amount: 211, description: 'Sammelzahlung', parts: [
+  { amount: 23.4, currency: 'CHF', counterparty: 'Kurier Muster AG', counterpartyIban: 'CH0000000000000000001', reference: '000000000000000000000001234' },
+  { amount: 187.6, currency: 'CHF', counterparty: 'Papier Beispiel AG', counterpartyIban: 'CH0000000000000000002', reference: '000000000000000000000005678' },
+] });
+const partReceipts = [
+  { id: 'r-courier', ref: 'BATCH-OUT', amount: 23.4, currency: 'CHF', description: 'Kurier Muster, Verzollung', extractedText: 'Kurier Muster AG Rechnung Verzollung Total 23.40' },
+  { id: 'r-paper', ref: 'BATCH-OUT', amount: 187.6, currency: 'CHF', description: 'Papier Beispiel, Papier', extractedText: 'Papier Beispiel AG Monatsrechnung Papier Total 187.60' },
+];
+
+test('a collective payment with a receipt for each part: the model is asked about each part alone with its own receipt, and books one line per part, each with its receipt; the payment stays one', async () => {
+  const books = booksOf([batchOut()], partReceipts);
+  const prompts: string[] = [];
+  const ask: ClassifyDeps['ask'] = async (prompt) => {
+    prompts.push(prompt);
+    return JSON.stringify({
+      'BATCH-OUT#1': { entries: [{ accountDebit: '4000', accountCredit: '1021', amount: 23.4, vatCode: 'I0', description: 'Verzollung' }] },
+      'BATCH-OUT#2': { entries: [{ accountDebit: '4000', accountCredit: '1021', amount: 187.6, vatCode: 'M81', description: 'Papier' }] },
+    });
+  };
+  const out = await classifyTransactions(books, books.transactions, { ask, fx: loadFxResolver(), context: loadClassifyContext(company()) });
+  const sections = prompts.join('\n').split('### Transaction ').slice(1);
+  assert.deepEqual(sections.map((s) => [/^\d+: (\S+)/.exec(s)?.[1], /Amount: ([\d.]+)/.exec(s)?.[1], /Kurier Muster AG Rechnung/.test(s), /Papier Beispiel AG Monatsrechnung/.test(s)]), [['BATCH-OUT#1', '23.4', true, false], ['BATCH-OUT#2', '187.6', false, true]], 'each part with its own receipt only');
+  assert.deepEqual(out.failed, []);
+  assert.deepEqual(books.journalEntries.map((e) => [e.transactionRef, e.amount, e.receipts]), [['BATCH-OUT', 23.4, ['r-courier']], ['BATCH-OUT', 187.6, ['r-paper']]]);
+  assert.deepEqual([out.classified, out.failed, books.transactions.length], [['BATCH-OUT'], [], 1]);
+});
+
+test('a collective payment whose one part a rule decides: that part by the rule with its own receipt, the other part to the model with its own', async () => {
+  const ws = company(`${RULES}      - id: courier
+        when: { payer: CH0000000000000000001, direction: out }
+        then: { account: "4210", vat: 0 }
+        source: wish 2026-10-15
+`);
+  const books = booksOf([batchOut()], partReceipts);
+  const prompts: string[] = [];
+  const ask: ClassifyDeps['ask'] = async (prompt) => {
+    prompts.push(prompt);
+    return JSON.stringify({ 'BATCH-OUT#2': { entries: [{ accountDebit: '4000', accountCredit: '1021', amount: 187.6, vatCode: 'M81', description: 'Papier' }] } });
+  };
+  await classifyTransactions(books, books.transactions, { ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+  assert.deepEqual(books.journalEntries.map((e) => [e.amount, e.rule ?? 'model', e.receipts]), [[23.4, 'courier', ['r-courier']], [187.6, 'model', ['r-paper']]]);
+  assert.equal(prompts.length, 1);
+  assert.doesNotMatch(prompts[0], /Kurier Muster AG Rechnung/, 'the ruled part\'s receipt is not the model\'s');
+});
+
 test('a private share as own use books the whole payment with its input tax and corrects the share with the private-use code, once per payment', async () => {
   const ws = company(RULES.replace('      - id: old-note', `      - id: abo-own-use
         when: { text: "Videoabo" }
