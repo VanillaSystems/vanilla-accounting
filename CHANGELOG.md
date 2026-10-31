@@ -14,6 +14,10 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Fixed
+
+- A card payment shown as «Post Billingonline Zollikofen» (Swiss Post's online label) now belongs to the business Swiss Post.
+
 ## [0.3.0] - 2026-10-11
 
 The redesign and the Mac app. The app is one window with nine areas, each page with its own
