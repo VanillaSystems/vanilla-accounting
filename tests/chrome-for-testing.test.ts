@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { chromeForTesting } from './support/browser.js';
+import { browserCandidates, chromeForTesting } from '../src/invoices/pdf.js';
 
 function place(file: string): void {
   mkdirSync(dirname(file), { recursive: true });
@@ -25,4 +25,12 @@ test('without PLAYWRIGHT_BROWSERS_PATH the cache under the home folder is read; 
   const program = join(home, 'Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
   place(program);
   assert.equal(chromeForTesting('darwin', {}, home), program);
+});
+
+test('the app tries CHROME_PATH, then Chrome for Testing, then the installed browsers', () => {
+  const home = mkdtempSync(join(tmpdir(), 'home-'));
+  const program = join(home, 'Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing');
+  place(program);
+  assert.deepEqual(browserCandidates('darwin', { CHROME_PATH: '/opt/chrome' }, home).slice(0, 3),
+    ['/opt/chrome', program, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome']);
 });
