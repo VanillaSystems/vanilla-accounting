@@ -5,6 +5,7 @@ import type { SalesDefaults } from "../workspace/sells.js";
 import type { SalesKind } from "../workspace/setup.js";
 import type { VatLineFacts } from "../accounting/vat-codes.js";
 import { formatCase, type BookingCase } from "../knowledge/cases.js";
+import { formatGuidance, type Guidance } from "../knowledge/guidance.js";
 import { parseReadStatement, withoutPayments } from "../books/statement-check.js";
 import type { ReadStatement } from "../types/statement-read.js";
 
@@ -215,6 +216,8 @@ interface TxInput {
   businessPart?: { what?: string };
   /** The other legs of its card charge split across balances that hold the same receipts (src/booking/shared-receipts.ts): this payment books only its share. */
   sharedWith?: Array<{ ref: string; amount: number; currency: string }>;
+  /** The business the payment routes to and the decisions of its file for the booking steps (src/knowledge/guidance.ts). */
+  business?: { name: string; guidance: Guidance[] };
 }
 
 const CLASSIFY_INSTRUCTIONS = `## Instructions
@@ -337,6 +340,12 @@ function formatVatFacts(r: ReceiptInput): string | null {
   return `VAT facts: Swiss MWST${r.vatId ? ` ${r.vatId}` : ''} — ${parts.join('; ')}`;
 }
 
+/** The receipt's items as extract-vat read them: they stay in the prompt when the text is cut, and the company's decisions name items. */
+function itemsLine(r: ReceiptInput): string | null {
+  const names = (r.lineItems ?? []).map((l) => l.description?.trim()).filter(Boolean);
+  return names.length ? `Items: ${names.join('; ').slice(0, 400)}` : null;
+}
+
 /** What every classify prompt says about the company: its name, chart, prior-year entries, and the firm's VAT setup (absent: the effective method). */
 export interface ClassifyPromptContext {
   companyName: string;
@@ -345,6 +354,10 @@ export interface ClassifyPromptContext {
   vat?: VatSetup;
   /** What the firm sells and the default accounts that follow (src/workspace/sells.ts, #46); absent: not answered. */
   sells?: SalesDefaults;
+  /** The company's decisions for the booking steps (knowledge/rules/booking.guide.yaml, src/knowledge/guidance.ts). */
+  guidance?: readonly Guidance[];
+  /** The owner's private account (its number): where a private purchase or a private share goes. */
+  ownerAccount?: string;
 }
 
 const KIND_WORDS: Record<SalesKind, { sells: string; buys?: string }> = {
@@ -392,9 +405,24 @@ function sharedLine(tx: TxInput): string {
   return `Shared receipt: the receipt below also pays ${others}, the other part${tx.sharedWith!.length > 1 ? 's' : ''} of one card charge. Book only this payment's ${Math.abs(tx.amount)} ${tx.currency} as its share, with the receipt's VAT facts in proportion: the input tax of all these payments together never exceeds the VAT the receipt shows.`;
 }
 
+/** At most this many of the company's decisions in one prompt, the newest (the file's last) kept; the prompt says how many are left out. */
+export const GUIDANCE_LIMIT = 80;
+
+/** The company's decisions, and how they decide: they name an item, so a receipt that names it brings them into play. */
+function guidanceSection(guidance: readonly Guidance[] | undefined, owner: string | undefined): string {
+  if (!guidance?.length) return '';
+  const shown = guidance.slice(-GUIDANCE_LIMIT);
+  const left = guidance.length - shown.length;
+  return `
+## The company's decisions (its knowledge, made by its people)
+These decide over the instructions below, the casebook and the prior year's pattern. Read every receipt's items, and what they are for, against them: a decision that names an item, a kind of item or the thing it is for applies when a receipt names it, whatever the bank text says. A purchase a decision calls private is booked on the owner's account${owner ? ` ${owner}` : ''} with "vat": "none" (no input tax on a private purchase); a private share puts that share there. Name the decision's id in "reason".
+${shown.map(formatGuidance).join('\n')}${left > 0 ? `\n(${left} older decisions left out: at most ${GUIDANCE_LIMIT} in one prompt.)` : ''}
+`;
+}
+
 export function buildBatchClassifyPrompt(
   transactions: Array<{ tx: TxInput; receipts: ReceiptInput[] }>,
-  { companyName, chartOfAccounts, historicEntries, vat: setup, sells }: ClassifyPromptContext,
+  { companyName, chartOfAccounts, historicEntries, vat: setup, sells, guidance, ownerAccount }: ClassifyPromptContext,
   cases: readonly BookingCase[] = [],
 ): string {
   const txSections = transactions.map(({ tx, receipts }, i) => {
@@ -405,17 +433,19 @@ export function buildBatchClassifyPrompt(
       const r = receipts[0];
       const meta = [r.amount != null && r.currency && `${r.amount} ${r.currency}`, r.description].filter(Boolean).join(' — ');
       const vat = formatVatFacts(r);
-      receiptPart = `  Receipt${meta ? ` (${meta})` : ''}:${vat ? `\n    ${vat}` : ''}\n    ${r.text.slice(0, 1200)}`;
+      const items = itemsLine(r);
+      receiptPart = `  Receipt${meta ? ` (${meta})` : ''}:${vat ? `\n    ${vat}` : ''}${items ? `\n    ${items}` : ''}\n    ${r.text.slice(0, 1200)}`;
     } else {
       receiptPart = `  Receipts (${receipts.length} — create one entry per receipt):\n${receipts.map((r, j) => {
         const meta = [r.filename, r.amount != null && r.currency && `${r.amount} ${r.currency}`, r.description].filter(Boolean).join(' | ');
         const vat = formatVatFacts(r);
-        return `    ${j + 1}. ${meta ? `[${meta}] ` : ''}${vat ? `${vat} — ` : ''}${r.text.slice(0, 700)}`;
+        const items = itemsLine(r);
+        return `    ${j + 1}. ${meta ? `[${meta}] ` : ''}${vat ? `${vat} — ` : ''}${items ? `${items} — ` : ''}${r.text.slice(0, 700)}`;
       }).join('\n')}`;
     }
     return `### Transaction ${i + 1}: ${tx.ref}
   Date: ${tx.date} | Amount: ${tx.amount} ${tx.currency} | Direction: ${tx.direction} | Bank: ${tx.bank}
-  Bank description: ${tx.description}${tx.counterparty ? `\n  Counterparty: ${tx.counterparty}` : ''}${tx.separateFee ? `\n  Fee: ${tx.separateFee.amount} ${tx.separateFee.currency}, debited separately as ${tx.separateFee.ref} and booked there. The amount above is without it: book no fee line here.` : ''}${tx.businessPart ? `\n  ${businessPartLine(tx, receipts[0])}` : ''}${tx.sharedWith?.length ? `\n  ${sharedLine(tx)}` : ''}
+  Bank description: ${tx.description}${tx.counterparty ? `\n  Counterparty: ${tx.counterparty}` : ''}${tx.separateFee ? `\n  Fee: ${tx.separateFee.amount} ${tx.separateFee.currency}, debited separately as ${tx.separateFee.ref} and booked there. The amount above is without it: book no fee line here.` : ''}${tx.businessPart ? `\n  ${businessPartLine(tx, receipts[0])}` : ''}${tx.sharedWith?.length ? `\n  ${sharedLine(tx)}` : ''}${tx.business?.guidance.length ? `\n  Decisions of ${tx.business.name}'s file (they decide like the company's decisions below):\n${tx.business.guidance.map((g) => `    ${formatGuidance(g)}`).join('\n')}` : ''}
 ${receiptPart}`;
   }).join('\n\n');
 
@@ -436,7 +466,7 @@ ${cases.length ? `
 ## Casebook: invented examples of how similar cases are booked
 These are standard Swiss cases on KMU account numbers. Follow their pattern and VAT facts, but use this company's own chart of accounts above. "bank" is the side you leave empty.
 ${cases.map(formatCase).join('\n')}
-` : ''}
+` : ''}${guidanceSection(guidance, ownerAccount)}
 ${CLASSIFY_INSTRUCTIONS}
 
 Return ONLY a valid JSON object keyed by transaction ref. Each value has an "entries" array and a "reason":

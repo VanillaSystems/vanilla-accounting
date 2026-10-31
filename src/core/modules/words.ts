@@ -33,3 +33,20 @@ export function namesStatement(text: string, words: DocumentsData): boolean {
   const lists = [words.receipt.title, ...Object.values(words.supporting), ...Object.values(words.other)];
   return !firstOf(Object.fromEntries(lists.map((l, i) => [i, l])), head).some((x) => x.at < at);
 }
+
+/** An account's IBAN as a document prints it, its groups with or without spaces. */
+export const IBAN = /\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,7}(?:\s?[A-Z0-9]{1,3})?\b/;
+
+/** The columns of an account's movements: a word for money out and one for money in («Belastung» and «Gutschrift», «Outgoing» and «Incoming»). */
+export function namesMovements(text: string, words: DocumentsData): boolean {
+  const { out, in: into } = words.movements;
+  return out.length > 0 && into.length > 0 && wordsRe(out).test(text) && wordsRe(into).test(text);
+}
+
+/**
+ * A bank statement names itself so (namesStatement) and shows what only an account's statement
+ * has: the account's IBAN or the columns of its movements. A supplier's «Statement» of its
+ * charges, with a period and balances of its own but neither, stays a receipt (#289).
+ */
+export const isBankStatement = (text: string, words: DocumentsData): boolean =>
+  namesStatement(text, words) && (IBAN.test(text) || namesMovements(text, words));
