@@ -23,9 +23,9 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { XMLParser } from 'fast-xml-parser';
-import { loadBooks, mutateJournal, saveBooks } from '../books/store.js';
+import { hasBooks, loadBooks, saveBooks, update, PERSON } from '../books/store.js';
 import { toRappen, fromRappen } from '../accounting/rappen.js';
-import { isDebitNormal } from '../accounting/ledger.js';
+import { chart, baseCurrency } from '../engines/index.js';
 import { openWorkspace } from '../workspace/workspace.js';
 
 const ws = openWorkspace();
@@ -104,7 +104,7 @@ function parseAccounts(xmlPath: string): ParsedAccount[] {
 
 /** Convert Banana's debit-positive signed CHF balance into the app's natural direction. */
 function naturalBalance(account: string, bananaBalanceCHF: number): number {
-  return isDebitNormal(account) ? bananaBalanceCHF : -bananaBalanceCHF;
+  return chart().isDebitNormal(account) ? bananaBalanceCHF : -bananaBalanceCHF;
 }
 
 function fmt(n: number): string {
@@ -128,7 +128,7 @@ function main() {
     const nat = naturalBalance(a.account, a.balanceCHF);
     if (toRappen(nat) === 0) continue;
     opening[a.account] = fromRappen(toRappen(nat));
-    if (a.currency && a.currency !== 'CHF') {
+    if (a.currency && a.currency !== baseCurrency()) {
       const natCur = naturalBalance(a.account, a.balanceCurrency);
       openingNative[a.account] = { amount: fromRappen(toRappen(natCur)), currency: a.currency };
       currencyNotes.push(
@@ -207,16 +207,16 @@ function main() {
   }
 
   if (!write) {
-    console.log('\nDry run — no changes written. Re-run with --write to save into books.json.');
+    console.log('\nDry run — no changes written. Re-run with --write to save into the books.');
     return;
   }
 
-  if (!existsSync(ws.paths.books)) {
-    console.error(`\nCannot write: ${ws.paths.books} not found.`);
+  if (!hasBooks(ws)) {
+    console.error(`\nCannot write: no books in ${ws.paths.root}.`);
     process.exit(1);
   }
   const index = loadBooks(ws);
-  mutateJournal(index, ({ config }) => {
+  update(index, PERSON, ({ config }) => {
     if (!config.openingBalances) config.openingBalances = {};
     config.openingBalances[year] = opening;
     // A native value the export does not carry was set from another source (1093 Stripe EUR is a

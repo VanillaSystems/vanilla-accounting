@@ -1,0 +1,6 @@
+label: {"de": "Kursdifferenz zum 31.12.", "en": "Exchange difference at 31 Dec", "fr": "Différence de change au 31.12", "it": "Differenza di cambio al 31.12"}
+uses: accounting.ledger.currencies
+reads: ["year"]
+effects: ["books.year-end"]
+emits: ["revaluation"]
+outcomes: {"ok": "review"}

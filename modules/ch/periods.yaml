@@ -1,0 +1,6 @@
+# How long one VAT return covers and when its tax is due (MWSTG Art. 35, 86). The effective method
+# files by quarter; a workspace on the net tax rate method overlays `length: half`.
+
+vat:
+  length: quarter
+  dueDays: 60

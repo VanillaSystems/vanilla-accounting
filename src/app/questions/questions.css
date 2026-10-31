@@ -1,0 +1,29 @@
+/* Questions on a payment, receipt or booking, and in Aufgaben (src/app/questions/Questions.tsx). */
+.qblock { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 12px; max-width: 640px; }
+.qaskbtn { align-self: flex-start; font-size: 12.5px; }
+.qcard { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.qcard.open { border-color: var(--warn); }
+.qhead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; }
+.qhead .m, .qanswer .m, .qtasks .m { color: var(--muted); }
+.qpill { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; line-height: 16px; background: var(--hover); color: var(--ink-2); }
+.qpill.open { background: var(--warn-soft); color: var(--warn); }
+.qpill.answered { background: var(--pos-soft); color: var(--pos); }
+.qtext { margin: 2px 0; font-size: 14px; color: var(--ink); white-space: pre-wrap; }
+.qanswer { margin: 2px 0; font-size: 13.5px; }
+.qnote { margin: 0; font-size: 12px; color: var(--ink-2); }
+.qnote.warn { color: var(--warn); }
+.qacts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+.qinput { flex: 1 1 180px; min-width: 120px; }
+.qform { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.qform textarea { width: 100%; resize: vertical; font: inherit; }
+.qme { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.qme input { min-width: 160px; }
+.qcheck { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.qtasks { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; max-width: 720px; }
+.qtasks h3 { margin: 10px 0 2px; font-size: 13px; font-weight: 600; }
+.qtaskshead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; }
+.qacts .btn { border: 1px solid var(--line-2); color: var(--ink); }
+.qacts .btn:hover { background: var(--hover); }
+.qacts .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.qacts .btn:disabled { opacity: .45; }
+.qacts .btn { height: auto; min-height: 32px; padding-block: 5px; max-width: 100%; white-space: normal; text-align: left; line-height: 1.3; }

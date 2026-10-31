@@ -1,0 +1,26 @@
+# The balance sheet and the income statement of a Swiss KMU (OR Art. 959a, 959b), by account
+# range: `from` is the first account of a group, `to` the first one after it. A group with
+# `accounts` lists them one by one. The titles are the keys the UI translates (src/app/i18n/core.ts).
+
+balance:
+  assets:
+    - { title: Umlaufvermögen, from: "1000", to: "1500" }
+    - { title: Anlagevermögen, from: "1500", to: "2000" }
+  liabilities:
+    - { title: Kurzfristiges Fremdkapital, from: "2000", to: "2400" }
+    - { title: Langfristiges Fremdkapital, from: "2400", to: "2800" }
+    - { title: Eigenkapital, from: "2800", to: "3000", openResult: Jahresergebnis (noch nicht abgeschlossen) }
+
+income:
+  revenue: { title: Erlöse, from: "3000", to: "4000" }
+  costOfGoods: { title: Aufwand für Material und Waren, from: "4000", to: "5000" }
+  operatingExpenses: { title: Betriebsaufwand, from: "5000", to: "7000" }
+  otherIncome: { title: Nebenbetrieblicher Ertrag, accounts: ["7000", "8100", "8510"] }
+  otherExpenses: { title: Nebenbetrieblicher Aufwand, accounts: ["7010", "8000", "8500", "8900"] }
+  extraordinaryItems: { title: Ausserordentliches, accounts: [] }
+
+# The VAT during the year: net, as Banana shows it. The tax each code splits off sits on the VAT
+# account (year-end.yaml vatSettlement) from the day it is booked, the way the year close posts it,
+# so revenue and expense are net and the Bilanz balances within the year (decision 16.10.2026).
+# `gross` leaves the tax in revenue and expense until the year close.
+vat: net

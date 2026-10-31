@@ -1,0 +1,100 @@
+/* Geschäftspartner and the page shape Wissen shares (docs/0.4.0/mockups/onboarding-chat/wissen.css):
+   prose first, the rules the app carries out in a quiet box, the machine details folded away. */
+
+/* The list. */
+.kw .row.kwrow { grid-template-columns: minmax(0, 1fr) auto; row-gap: 5px; align-items: baseline; }
+.kw .row.kwrow .t { font-weight: 500; }
+.kw .row.kwrow .kwop { font-size: 12px; color: var(--warn); }
+.kw .row.kwrow .kwks { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.kw .row.kwwarn .a { color: var(--warn); }
+.kw .kwnone { font-size: 12.5px; margin: 10px 0 0; }
+.kw .kwk { font-size: 11.5px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); }
+.kw .kwk b { font-weight: 600; color: var(--ink); }
+.kw .kwk.app { color: var(--muted); border-style: dashed; }
+
+/* The page. */
+.kw .docbody { max-width: 880px; }
+.kw .docbody > :first-child { margin-top: 0; }
+.kw .docbody h3 { margin: 0; }
+.kw .docbody .lead { max-width: 70ch; margin: 0 0 14px; color: var(--ink-2); line-height: 1.5; }
+.kw .kwq { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 0 0 12px; display: grid; gap: 4px; background: var(--warn-soft); }
+.kw .kwq > b { font-size: 14px; font-weight: 600; color: var(--ink); }
+.kw .kwq .m { font-size: 12.5px; }
+
+/* «Notizen». */
+.kw .kwnotes, .kw .kwself, .kw .kwdetails, .kw section.kwsec { margin-top: 18px; }
+.kw .kwnotes > header, .kw .kwself > header, .kw .kwsec > header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.kw .kwnotes > header .linkbtn, .kw .kwself > header .linkbtn, .kw .kwsec > header .linkbtn { margin-left: auto; font-size: 12.5px; }
+.kw .kwprose { font-size: 14.5px; line-height: 1.6; color: var(--ink); max-width: 68ch; }
+.kw .kwprose p { margin: 0 0 10px; }
+.kw .kwprose ul { margin: 0 0 10px; padding-left: 20px; }
+.kw .kwprose h4 { margin: 14px 0 4px; font-size: 14px; font-weight: 600; }
+.kw .kwprose b { font-weight: 600; }
+.kw .kwby { font-size: 12px; margin: 2px 0 0; }
+.kw .kwby .linkbtn { font-size: 12px; }
+.kw .kwnotes textarea { width: 100%; box-sizing: border-box; min-height: 220px; padding: 12px 14px; border: 1px solid var(--accent); border-radius: 10px; background: var(--bg); color: var(--ink); font: 14px/1.6 inherit; font-family: inherit; resize: vertical; }
+.kw .kwnotes textarea:focus { outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+.kw .kwnacts { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.kw .kwnacts .m { font-size: 12px; }
+
+/* «Das macht die App selbst». */
+.kw .kwself { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--desk); }
+.kw .kwself > ul { list-style: none; margin: 0; padding: 0; display: grid; }
+.kw .kwself > ul > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 12px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+.kw .kwself > ul > li:first-child { border-top: 0; }
+.kw .kwself > ul > li > b { font-weight: 600; font-size: 13px; color: var(--ink); }
+.kw .kwself > ul > li > .m { grid-column: 1; font-size: 12px; }
+.kw .kwself > ul > li > .btn { grid-column: 2; grid-row: 1 / 3; height: 26px; font-size: 12px; }
+.kw .kwself > ul > li.off > b { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line-2); }
+.kw .kwself > .m { margin: 0; font-size: 12.5px; }
+.kw .kwself .kwnewrule { margin: 8px 0 0; font-size: 12.5px; }
+
+/* A sentence of the notes: its mark when a rule carries it out, «Als Regel vorschlagen» when pointed at. */
+.kw .kwmark { display: inline-block; margin-left: 5px; padding: 0 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11px; line-height: 17px; font-weight: 500; text-decoration: none; vertical-align: 1px; white-space: nowrap; }
+.kw .kwmark:hover { text-decoration: underline; text-underline-offset: 2px; }
+.kw .kwsent.marked { text-decoration: underline; text-decoration-color: var(--accent-soft); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.kw .kwsent { position: relative; }
+.kw .kwprop { position: absolute; z-index: 1; margin: 2px 0 0 5px; padding: 0 6px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--muted); font: inherit; font-size: 11px; line-height: 16px; cursor: pointer; opacity: 0; vertical-align: 1px; white-space: nowrap; }
+.kw .kwsent:hover .kwprop, .kw .kwprop:focus-visible { opacity: 1; }
+.kw .kwprop:hover { color: var(--accent); border-color: var(--accent); }
+.kw .kwself > ul > li.flash { animation: kwflash 1.4s ease-out; }
+@keyframes kwflash { from { background: var(--accent-soft); } to { background: transparent; } }
+.kw .kwself > ul > li > .kwchanged { grid-column: 1 / -1; display: grid; gap: 3px; margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: var(--warn-soft); font-size: 12.5px; }
+.kw .kwself .kwchanged > b { font-size: 12.5px; }
+.kw .kwself .kwchanged .ruledraft { margin: 4px 0 0; }
+.kw .kwself .kwnoterule { margin-top: 10px; }
+.kw .kwself .ruledraft { margin: 10px 0 0; }
+.kw .kwquote { font-size: 13px; color: var(--ink-2); }
+
+/* Folded: the details only the app needs. */
+.kw details.kwdetails { border-top: 1px solid var(--line); padding-top: 4px; }
+.kw details > summary { list-style: none; display: flex; align-items: baseline; gap: 8px; padding: 9px 0; cursor: pointer; font-size: 13.5px; color: var(--ink); }
+.kw details > summary::-webkit-details-marker { display: none; }
+.kw details > summary .chev { width: 13px; height: 13px; color: var(--faint); transition: transform .15s; align-self: center; flex: none; }
+.kw details[open] > summary .chev { transform: rotate(90deg); }
+.kw details > summary b { font-weight: 600; }
+.kw details > summary .m { font-size: 12.5px; }
+.kw details > summary .linkbtn { margin-left: auto; font-size: 12.5px; }
+.kw .kwdetails h4, .kw .kwlink-g h4 { margin: 10px 0 4px 21px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); display: flex; gap: 6px; }
+.kw .kwdetails ul, .kw .kwdetails > p { margin: 0 0 6px 21px; padding-left: 16px; font-size: 12.5px; color: var(--ink-2); display: grid; gap: 3px; }
+.kw .kwdetails > p { padding-left: 0; }
+.kw .kwdetails ul.app { color: var(--muted); }
+
+/* «Verknüpft»: what the books hold for the partner. */
+.kw section.kwsec { border-top: 1px solid var(--line); padding-top: 14px; }
+.kw .kwsec > header .m { font-size: 12.5px; }
+.kw .kwsec > header .n { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--muted); }
+.kw .kwlinked { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 24px; }
+.kw .kwlink-g { min-width: 0; }
+.kw .kwlink-g h4 { margin-left: 0; }
+.kw .kwlink-g h4 .n { font-family: "Geist Mono", monospace; color: var(--muted); letter-spacing: 0; }
+.kw .kwlink-g ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
+.kw .kwlink-g li { min-width: 0; display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 12.5px; border-bottom: 1px solid var(--line); }
+.kw .kwlink-g li a { min-width: 0; color: var(--ink); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kw .kwlink-g li a:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.kw .kwlink-g li .mono { color: var(--muted); white-space: nowrap; }
+.kw .kwlink-g > .m { font-size: 12px; }
+
+@media (max-width: 700px) {
+  .kw .kwlinked { grid-template-columns: minmax(0, 1fr); }
+}

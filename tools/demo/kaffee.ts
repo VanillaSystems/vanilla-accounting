@@ -356,6 +356,57 @@ steps:
         source: decision 2026-01-25
     precedents: []
 `,
+  // The prose notes beside the partner files, and the company's own pages (docs/0.4.0/knowledge.md "Files").
+  'suppliers/gruenkaffee-muster.md': `Grünkaffee Muster AG liefert unseren Rohkaffee, je nach Ernte aus Brasilien, Kolumbien und Äthiopien. Sie ist unser grösster Lieferant.
+
+Die Rechnung kommt als PDF per Mail, eine pro Lieferung, und wir zahlen sie innert 30 Tagen per Überweisung. Auf der Rechnung steht die UID CHE-999.888.777.
+
+So buchen wir sie:
+
+- Rohkaffee auf **4000 Rohkaffee**, mit 2.6 % MWST (Kaffee ist ein Lebensmittel).
+- Jede Rechnung ist eine eigene Buchung, auch wenn zwei am selben Tag bezahlt werden.
+- Jutesäcke und Verpackung, die sie manchmal mitliefert, gehören auf 4210 Verbrauchsmaterial Gastronomie, mit 8.1 %.
+`,
+  'suppliers/swiss-post.md': `Die Post bringt unsere Webshop-Pakete. Sie stellt einmal im Monat eine Sammelrechnung für alle Pakete des Vormonats.
+
+Die Rechnung lädt Anna im Geschäftskundenportal der Post herunter; per Mail kommt nur der Hinweis, dass sie bereit ist.
+
+Wir buchen sie auf **6513 Porti und Versand** mit 8.1 % MWST, als «Post CH, Pakete Webshop» mit dem Monat.
+`,
+  'suppliers/coop-pronto.md': `An der Coop-Pronto-Tankstelle in Musterdorf tanken wir den Lieferwagen, mit der Debitkarte der Firma.
+
+Den Kassenzettel fotografiert Anna mit dem Handy. Ist er unleserlich, gilt trotzdem 8.1 % MWST: Coop Pronto rechnet immer so ab.
+
+Treibstoff gehört auf 6200 Fahrzeugaufwand. Den privaten Anteil buchen wir einmal im Quartal, siehe «Fahrzeug und Privatanteil».
+`,
+  'company/fahrzeug.md': `---
+title: Fahrzeug und Privatanteil
+steps: [booking#eigenverbrauch, booking#private]
+---
+
+Der Lieferwagen ist ein Firmenwagen: Treibstoff, Service und Parkgebühren gehören der Firma, auf 6200 Fahrzeugaufwand.
+
+Anna fährt ihn auch privat. Darum buchen wir am Ende jedes Quartals 30 % des Treibstoffs als Privatanteil auf 2451 Kontokorrent Gesellschafterin, mit der Vorsteuerkorrektur K81-B.
+`,
+  'company/belege-sammeln.md': `---
+title: Belege sammeln
+steps: [receipt-collection#triage]
+---
+
+Rechnungen kommen per Mail an belege@muster-kaffee.example. Kassenzettel fotografiert Anna mit dem Handy und lädt sie in der App hoch.
+
+Was nur im Kundenkonto eines Lieferanten liegt (die Post), holt Anna einmal im Monat selbst.
+
+Ein Beleg ohne MWST-Ausweis ist trotzdem ein Beleg, nur ohne Vorsteuer.
+`,
+  'company/mwst-abrechnung.md': `---
+title: MWST-Abrechnung
+---
+
+Wir rechnen effektiv ab, pro Quartal, nach vereinnahmten Entgelten: es zählt das Zahlungsdatum, nicht das Rechnungsdatum.
+
+Ein eingereichtes Quartal ändern wir nie. Eine Korrektur kommt ins offene Quartal und in die Korrekturabrechnung des Quartals, das sie betrifft.
+`,
 };
 
 export const kaffee: Demo = {

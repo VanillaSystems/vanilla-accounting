@@ -17,12 +17,13 @@ import { execFile, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
-import type { Index } from '../types/index.js';
-import { loadBooks, mutateJournal, periodLock, saveBooks, type Books } from '../books/store.js';
+import { loadBooks, periodLock, saveBooks, type Books, update, moduleActor } from '../books/store.js';
 import { ask } from '../llm/ask.js';
-import { openWorkspace } from '../workspace/workspace.js';
+import { openWorkspace, yearPaths } from '../workspace/workspace.js';
+import { openYear } from '../books/years.js';
+import { nextManualRef } from '../books/next-ref.js';
 
 const execFileAsync = promisify(execFile);
 const ws = openWorkspace();
@@ -197,7 +198,7 @@ async function propose() {
     const h = hash(transcript(c));
     const old = purchases.find((p) => p.conversationId === c.id);
     if (old && (old.messagesHash === h || old.business !== null || old.imported)) continue;
-    const raw = await ask(proposePrompt(c), { step: 'receipt-collection.guide.yaml#tutti', model: 'sonnet' });
+    const raw = await ask(proposePrompt(c), { step: 'tutti' });
     const j = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
     const p: Purchase = {
       conversationId: c.id, title: c.title, seller: j.seller ?? '', bought: !!j.bought, item: j.item ?? c.title,
@@ -231,17 +232,9 @@ ${c.messages.map((m) => `<div class="m ${m.from}"><span class="at">${m.from === 
   if (statSync(out).size < 2000) throw new Error(`${out} is a blank print`);
 }
 
-function nextManualRef(index: Index, year: string): string {
-  // Same rule as POST /api/transactions/manual: a ref is taken if anything points at it.
-  const taken = [...index.transactions.map((t) => t.ref), ...(index.journalEntries ?? []).map((j) => j.transactionRef), ...index.mappings.map((m) => m.transactionRef)]
-    .filter((ref) => ref.startsWith(`M${year}-`));
-  const max = taken.reduce((mx, ref) => Math.max(mx, parseInt(ref.slice(6), 10) || 0), 0);
-  return `M${year}-${String(max + 1).padStart(3, '0')}`;
-}
-
 function importApproved(apply: boolean) {
   const index = loadBooks(ws);
-  mutateJournal(index, (books) => bookApproved(books, apply));
+  update(index, moduleActor('tutti'), (books) => bookApproved(books, apply));
 }
 
 function bookApproved(index: Books, apply: boolean) {
@@ -264,7 +257,8 @@ function bookApproved(index: Books, apply: boolean) {
       description: `tutti.ch ${p.seller}: ${p.item}${late ? ` — Korrektur: Kauf vom ${p.date} (Periode abgeschlossen)` : ''}`, remarks: `privat ausgelegt (${p.payment === 'twint' ? 'TWINT' : p.payment === 'cash' ? 'bar' : OWNER}), Beleg = tutti-Chat`,
     });
     if (!apply) continue;
-    const out = join(ws.paths.receipts, file);
+    const out = join(yearPaths(ws.paths, openYear(bookDate.slice(0, 4), index.config?.closedThrough)).receipts, file);
+    mkdirSync(dirname(out), { recursive: true });
     chatPdf(c, p, out);
     const content = readFileSync(out);
     const id = createHash('sha256').update(content).digest('hex').substring(0, 16);

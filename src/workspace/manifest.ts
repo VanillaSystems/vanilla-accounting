@@ -5,18 +5,24 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { parseDocument } from 'yaml';
 import { MANIFEST_MIGRATIONS, WORKSPACE_SCHEMA, climb, schemaOf } from './schema.js';
-import { WorkspaceError, appLanguages, type Company, type LedgerBankAccount, type ProfileKey, type Uid, type WorkspaceProfile } from './workspace.js';
-import { MANUAL_BANK, STATEMENT_KINDS, bankKind, parseIban, type StatementKind } from './banks.js';
-import { LEGAL_FORMS, PRESET_NAMES, QUESTIONS, optionOf, type LegalForm, type Preset } from './setup.js';
+import { WorkspaceError, WorkspaceRefusal, appLanguages, type Company, type LedgerBankAccount, type ProfileKey, type Uid, type WorkspaceProfile } from './workspace.js';
+import { MANUAL_BANK, MONEY_ROLES, STATEMENT_KINDS, bankKind, parseIban, type MoneyRole, type StatementKind } from './banks.js';
+import { BUSINESS_PROFILES, LEGAL_FORMS, PRESET_NAMES, QUESTIONS, VAT_QUESTIONS, kindsOf, optionOf, type BusinessProfile, type GoodsKind, type LegalForm, type Preset, type SalesKind } from './setup.js';
+import { parseVatSetup } from './vat-setup.js';
 import {
   DEFAULT_LAYOUT, INVOICE_CURRENCIES, INVOICE_FONTS, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, MAIL_SECURITY, OWN_TEXTS,
   type Address, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type MailSecurity, type OutgoingMail,
 } from '../invoices/model.js';
-import { isQrIban } from '../invoices/reference.js';
+import { isQrIban } from '../providers/qr-bill/reference.js';
+import { readDimensions, type Dimension } from '../books/tags.js';
 
-const PROFILE_KEYS = Object.keys(QUESTIONS).filter((k) => !['legalForm', 'vatRegistered', 'vatMethod', 'basis', 'period'].includes(k)) as ProfileKey[];
+const PROFILE_KEYS = Object.keys(QUESTIONS).filter((k) => k !== 'legalForm' && !(VAT_QUESTIONS as readonly string[]).includes(k)) as ProfileKey[];
 
-export type Manifest = { company: Company; bankAccounts: LedgerBankAccount[]; profile?: WorkspaceProfile; invoicing?: InvoicingSettings; outgoingMail?: OutgoingMail };
+export type Manifest = {
+  company: Company; bankAccounts: LedgerBankAccount[]; profile?: WorkspaceProfile; invoicing?: InvoicingSettings; outgoingMail?: OutgoingMail;
+  /** The reporting dimensions bookings may carry a tag of (#127, src/books/tags.ts); absent: none. */
+  dimensions?: Dimension[];
+};
 
 export function readManifest(path: string): Manifest {
   if (!existsSync(path)) throw new WorkspaceError(`${path} not found.`);
@@ -40,10 +46,7 @@ export function parseManifest(source: string, path: string): Manifest {
   const text = (v: unknown, where: string): string => (typeof v === 'string' && v.trim() ? v : fail(`${where} must be a non-empty text`));
   const uid = text(c.uid, 'company.uid');
   if (!/^CHE-\d{3}\.\d{3}\.\d{3}$/.test(uid)) fail(`company.uid "${uid}" must look like CHE-###.###.###`);
-  const vat = (c.vat ?? {}) as Record<string, unknown>;
-  if (vat.method !== 'effective' || vat.reporting !== 'received' || (vat.registered ?? true) !== true || (vat.period ?? 'quarterly') !== 'quarterly') {
-    fail('company.vat must be { registered: true, method: effective, reporting: received, period: quarterly }: the only VAT setup the engine supports');
-  }
+  const vat = parseVatSetup(c.vat, fail);
   if (c.language !== undefined && !appLanguages().includes(c.language as string)) fail(`company.language must be one of ${appLanguages().join(', ')}`);
   if (c.legalForm !== undefined && !LEGAL_FORMS.includes(c.legalForm as LegalForm)) fail(`company.legalForm must be one of ${LEGAL_FORMS.join(', ')}`);
   const company: Company = {
@@ -54,7 +57,7 @@ export function parseManifest(source: string, path: string): Manifest {
     ...(c.legalForm === undefined ? {} : { legalForm: c.legalForm as LegalForm }),
     ...(c.language === undefined ? {} : { language: c.language as string }),
     ...(c.address === undefined ? {} : { address: readAddress(c.address, 'company.address', fail) }),
-    vat: { method: 'effective', reporting: 'received' },
+    vat,
   };
 
   if (!Array.isArray(raw.bankAccounts) || raw.bankAccounts.length === 0) fail('bankAccounts must list at least one account');
@@ -62,18 +65,28 @@ export function parseManifest(source: string, path: string): Manifest {
     const account = String(a.account ?? '');
     if (!/^\d{4}$/.test(account)) fail(`bankAccounts[${i}].account "${account}" must be a 4-digit ledger account`);
     const bank = text(a.bank, `bankAccounts[${i}].bank`);
+    if (!MONEY_ROLES.includes(a.role as MoneyRole)) fail(`bankAccounts[${i}].role must be one of ${MONEY_ROLES.join(', ')}`);
+    const role = a.role as MoneyRole;
+    if (bank === MANUAL_BANK && role !== 'owner') fail(`bankAccounts[${i}]: the label manual is the owner's account, its role is owner`);
     if (a.statements !== undefined && !STATEMENT_KINDS.includes(a.statements as StatementKind)) fail(`bankAccounts[${i}].statements must be ${STATEMENT_KINDS.join(' or ')}`);
-    const statements = bank === MANUAL_BANK ? undefined : (a.statements as StatementKind | undefined) ?? bankKind(bank).statements;
-    const iban = a.iban === undefined ? undefined : parseIban(String(a.iban)) ?? fail(`bankAccounts[${i}].iban "${String(a.iban)}" is not an IBAN (wrong length or check digits)`);
+    // The bank registry names the reader of an account at a bank; a cash box, a person's account or a clearing account has one only when the manifest says so.
+    const statements = (a.statements as StatementKind | undefined) ?? (role === 'bank' || role === 'card' ? bankKind(bank).statements : undefined);
+    const iban = a.iban === undefined ? undefined : parseIban(String(a.iban)) ?? ((): never => {
+      throw new WorkspaceRefusal(`${path}: bankAccounts[${i}].iban "${String(a.iban)}" is not an IBAN (wrong length or check digits)`, { code: 'iban', params: { bank: `${String(a.bank)} ${String(a.currency)}`, detail: String(a.iban) } });
+    })();
     return {
       bank,
       currency: text(a.currency, `bankAccounts[${i}].currency`),
       account,
       label: text(a.label, `bankAccounts[${i}].label`),
+      role,
       ...(statements ? { statements } : {}),
       ...(iban ? { iban } : {}),
     };
   });
+  // The owner is one person on one ledger account, which may run in several currencies (manual CHF, EUR, USD on 2451).
+  const ownerAccounts = [...new Set(bankAccounts.filter((a) => a.role === 'owner').map((a) => a.account))];
+  if (ownerAccounts.length > 1) fail(`bankAccounts: the owner's accounts (role owner) book on one ledger account, not on ${ownerAccounts.join(' and ')}`);
   const seen = new Set<string>();
   for (const a of bankAccounts) {
     for (const key of [`${a.bank} ${a.currency}`, ...(a.iban ? [`${a.iban} ${a.currency}`] : [])]) {
@@ -87,6 +100,7 @@ export function parseManifest(source: string, path: string): Manifest {
     ...(raw.profile === undefined ? {} : { profile: readProfile(raw.profile, fail) }),
     ...(raw.invoicing === undefined ? {} : { invoicing: readInvoicing(raw.invoicing, bankAccounts, fail) }),
     ...(raw.outgoingMail === undefined ? {} : { outgoingMail: readOutgoingMail(raw.outgoingMail, fail) }),
+    ...(raw.dimensions === undefined ? {} : { dimensions: readDimensions(raw.dimensions, fail) }),
   };
 }
 
@@ -142,7 +156,7 @@ function readInvoicing(raw: unknown, accounts: LedgerBankAccount[], fail: (msg: 
     const p = v as Record<string, unknown>;
     const bank = accounts.find((a) => a.account === String(p.account) && a.currency === cur);
     if (!bank) fail(`${where}.account "${String(p.account)}" must be a ${cur} account of bankAccounts`);
-    if (!bank!.iban) fail(`${where}: bankAccounts ${bank!.bank} ${cur} needs its iban to be printed on invoices`);
+    if (!bank!.iban) throw new WorkspaceRefusal(`${where}: bankAccounts ${bank!.bank} ${cur} needs its iban to be printed on invoices`, { code: 'payToNeedsIban', params: { bank: bank!.bank, currency: cur } });
     const qrIban = p.qrIban === undefined ? undefined : parseIban(String(p.qrIban));
     if (p.qrIban !== undefined && (!qrIban || !isQrIban(qrIban))) fail(`${where}.qrIban "${String(p.qrIban)}" is not a QR-IBAN (CH or LI, institution id 30000 to 31999, valid check digits)`);
     payTo[cur as InvoiceCurrency] = { account: bank!.account, iban: bank!.iban!, ...(qrIban ? { qrIban } : {}), bank: bank!.bank };
@@ -196,7 +210,9 @@ function readProfile(raw: unknown, fail: (msg: string) => never): WorkspaceProfi
   if (!raw || typeof raw !== 'object') return fail('profile must be a mapping');
   const p = raw as Record<string, unknown>;
   if (!PRESET_NAMES.includes(p.preset as Preset)) fail(`profile.preset must be one of ${PRESET_NAMES.join(', ')}`);
+  const sells = readSells(p, fail);
   for (const key of PROFILE_KEYS) {
+    if (key === 'sells') continue;
     const multi = 'multi' in QUESTIONS[key];
     const values = multi ? p[key] : [p[key]];
     const allowed = QUESTIONS[key].options.filter((o) => !('unsupported' in o)).map((o) => o.value);
@@ -204,5 +220,19 @@ function readProfile(raw: unknown, fail: (msg: string) => never): WorkspaceProfi
     if (!ok) fail(`profile.${key} must be ${multi ? 'a list of ' : 'one of '}${allowed.join(', ')}${p[key] === undefined ? ' (missing: rerun npm run init in a new folder, or add it)' : ''}`);
   }
   if (p.exportTo !== undefined && (typeof p.exportTo !== 'string' || !p.exportTo.trim())) fail('profile.exportTo must be a non-empty text');
-  return p as unknown as WorkspaceProfile;
+  const { goods: _, ...rest } = p;
+  return { ...rest, sells } as unknown as WorkspaceProfile;
+}
+
+/**
+ * What the firm sells (src/workspace/setup.ts SALES_KINDS), from the manifest's `sells` (services,
+ * goods or both, as it has always been kept) and `goods` (which goods: made, traded); a manifest
+ * without `goods` sells traded goods, what `goods` stood for before #46.
+ */
+function readSells(p: Record<string, unknown>, fail: (msg: string) => never): SalesKind[] {
+  if (!BUSINESS_PROFILES.includes(p.sells as BusinessProfile)) fail(`profile.sells must be one of ${BUSINESS_PROFILES.join(', ')}${p.sells === undefined ? ' (missing: rerun npm run init in a new folder, or add it)' : ''}`);
+  const goods = p.goods;
+  const kinds = ['made', 'traded'];
+  if (goods !== undefined && (!Array.isArray(goods) || !goods.every((g) => kinds.includes(g)))) fail(`profile.goods must be a list of ${kinds.join(', ')}`);
+  return kindsOf(p.sells as BusinessProfile, goods as GoodsKind[] | undefined);
 }

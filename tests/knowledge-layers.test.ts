@@ -8,7 +8,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { mergeCounterparty, companySpecific, loadKnowledge } from '../src/knowledge/layers.js';
-import { identify } from '../src/knowledge/counterparties.js';
+import { compileCounterparty, identify, signalsOfReceipt, signalsOfTransaction } from '../src/knowledge/counterparties.js';
+import type { BankTransaction, Receipt } from '../src/types/index.js';
 import { APP_ROOT } from '../src/workspace/workspace.js';
 import { DEMO_ROOT } from './support/workspace.js';
 
@@ -45,6 +46,13 @@ test('each field has one owner', () => {
   assert.throws(() => mergeCounterparty({ ...vendor, accounts: ['4000'] }, binding, files, 'supplier'), /accounts are one company's chart — move them to knowledge\/suppliers\/acme\.yaml/);
   assert.throws(() => mergeCounterparty(vendor, { ...binding, name: 'Acme AG' }, files, 'supplier'), /name belongs to the vendor file/);
   assert.throws(() => mergeCounterparty(vendor, { ...binding, match: { tx: ['acme'] } }, files, 'supplier'), /match\.tx "acme" is also in processes\/suppliers\/acme\.yaml/);
+});
+
+test('grouped: the vendor\'s fact when its file says it; else the company\'s, learned from its own payments (#190)', () => {
+  const { grouped: _, ...silent } = vendor;
+  assert.equal(mergeCounterparty(silent, { ...binding, grouped: true }, files, 'supplier').grouped, true, 'the company says it');
+  assert.equal(mergeCounterparty(silent, binding, files, 'supplier').grouped, false, 'nobody says it');
+  assert.throws(() => mergeCounterparty(vendor, { ...binding, grouped: true }, files, 'supplier'), /grouped is said in the vendor file processes\/suppliers\/acme\.yaml already/);
 });
 
 /** An app root and a workspace root holding `files` (path → YAML). */
@@ -103,7 +111,7 @@ test('the app layer refuses one company’s items', () => {
 test('a payment to an authority routes to its app file, and each tells its facts', () => {
   const { counterparties } = loadKnowledge(APP_ROOT, DEMO_ROOT);
   const route = (merchant: string) => {
-    const r = identify({ uids: [], domains: [], merchant, filenames: [] }, counterparties);
+    const r = identify({ uids: [], ibans: [], domains: [], names: [merchant], filenames: [] }, counterparties);
     return r.kind === 'known' ? r.counterparty : r.kind;
   };
   assert.equal(route('Eidg. Steuerverwaltung ESTV, Hauptabteilung MWST'), 'estv');
@@ -115,4 +123,15 @@ test('a payment to an authority routes to its app file, and each tells its facts
     assert.equal(cp.role, 'authority', id);
     assert.ok(cp.facts.length > 0 && cp.facts.every((f) => f.source), `${id} has sourced facts`);
   }
+});
+
+test('the archived name routes a receipt; the name it came with only when no file pattern matches the archived one', () => {
+  const cp = (id: string) => compileCounterparty({ id, name: id, match: { file: [id] } }, { vendor: id }, 'supplier');
+  const cps = [cp('coop-pronto'), cp('shopify')];
+  const stale = { id: 'r1', filename: '20260102-coop-pronto-benzin.pdf', originalFilename: '20260630-shopify-bill-1.pdf' } as Receipt;
+  // check-processes reports a clash when identify says ambiguous on these signals
+  assert.deepEqual(identify(signalsOfReceipt(stale), cps), { kind: 'known', counterparty: 'coop-pronto', tier: 'file', signal: 'coop-pronto' });
+  assert.equal((identify(signalsOfTransaction({ description: '', counterparty: '' } as BankTransaction, [stale]), cps) as { counterparty: string }).counterparty, 'coop-pronto');
+  const renamed = { id: 'r2', filename: '20260620-store.pdf', originalFilename: '20260630-shopify-bill-2.pdf' } as Receipt;
+  assert.equal((identify(signalsOfReceipt(renamed), cps) as { counterparty: string }).counterparty, 'shopify');
 });

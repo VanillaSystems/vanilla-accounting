@@ -1,0 +1,299 @@
+{
+  "config": {},
+  "receipts": [
+    {
+      "id": "0c47f0c99782c32d",
+      "filename": "20261005-baucenter-gossau.pdf",
+      "originalFilename": "IMG_4733.pdf",
+      "extractionMethod": "claude-vision",
+      "fileSize": 13816,
+      "indexedAt": "2026-10-16T05:01:48.684Z",
+      "location": "archived",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "vat": 14.04
+        }
+      ],
+      "date": "2026-10-05",
+      "description": "Baucenter Gossau / Malerbedarf (Abdeckfolie, Pinselset, Silikon, Schleifpapier)",
+      "amount": 187.35,
+      "currency": "CHF",
+      "extractedText": "Baucenter Gossau / Malerbedarf (Abdeckfolie, Pinselset, Silikon, Schleifpapier)"
+    },
+    {
+      "id": "8f9ede6c6040e6c9",
+      "filename": "20260705-tankstelle-wil-ost.pdf",
+      "originalFilename": "IMG_4471.pdf",
+      "extractionMethod": "claude-vision",
+      "fileSize": 18631,
+      "indexedAt": "2026-10-16T00:40:13.091Z",
+      "location": "archived",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "vat": 6.47
+        }
+      ],
+      "date": "2026-07-05",
+      "description": "Tankstelle Wil Ost / Diesel tanken (41.2 l)",
+      "amount": 86.4,
+      "currency": "CHF",
+      "extractedText": "Tankstelle Wil Ost / Diesel tanken (41.2 l)"
+    },
+    {
+      "id": "b502e164c439d568",
+      "filename": "20260708-baucenter-gossau.pdf",
+      "originalFilename": "IMG_4502.pdf",
+      "extractionMethod": "claude-vision",
+      "fileSize": 21138,
+      "indexedAt": "2026-10-16T00:40:13.092Z",
+      "location": "archived",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "vat": 23.45
+        }
+      ],
+      "date": "2026-07-08",
+      "description": "Baucenter Gossau / Baumaterial und Werkzeug (Spachtelmasse, Farbroller Set, Leiter Alu)",
+      "amount": 312.9,
+      "currency": "CHF",
+      "extractedText": "Baucenter Gossau / Baumaterial und Werkzeug (Spachtelmasse, Farbroller Set, Leiter Alu)"
+    },
+    {
+      "id": "ebea16003f63e4fe",
+      "filename": "20260820-restaurant-hirschen.pdf",
+      "originalFilename": "IMG_4588.pdf",
+      "extractionMethod": "claude-vision",
+      "fileSize": 19186,
+      "indexedAt": "2026-10-16T00:40:13.092Z",
+      "location": "archived",
+      "hasSwissVat": true,
+      "vatSummary": [
+        {
+          "ratePercent": 8.1,
+          "vat": 3.41
+        }
+      ],
+      "date": "2026-08-20",
+      "description": "Restaurant Hirschen / Restaurantbesuch (2x Menu, Mineral)",
+      "amount": 45.5,
+      "currency": "CHF",
+      "extractedText": "Restaurant Hirschen / Restaurantbesuch (2x Menu, Mineral)"
+    }
+  ],
+  "transactions": [
+    {
+      "ref": "RB-2026-0003",
+      "bank": "Raiffeisen",
+      "date": "2026-07-05",
+      "amount": 86.4,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Karte 5412 Tanken",
+      "reference": "Karte 5412 Tanken",
+      "counterparty": "Tankstelle Wil Ost"
+    },
+    {
+      "ref": "RB-2026-0004",
+      "bank": "Raiffeisen",
+      "date": "2026-07-08",
+      "amount": 312.9,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Karte 5412 Einkauf",
+      "reference": "Karte 5412 Einkauf",
+      "counterparty": "Baucenter Gossau"
+    },
+    {
+      "ref": "RB-2026-0011",
+      "bank": "Raiffeisen",
+      "date": "2026-08-12",
+      "amount": 74.2,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Karte 5412 Tanken",
+      "reference": "Karte 5412 Tanken",
+      "counterparty": "Tankstelle Wil Ost"
+    },
+    {
+      "ref": "RB-2026-0014",
+      "bank": "Raiffeisen",
+      "date": "2026-08-20",
+      "amount": 45.5,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Karte 5412",
+      "reference": "Karte 5412",
+      "counterparty": "Restaurant Hirschen"
+    },
+    {
+      "ref": "RB-2026-0019",
+      "bank": "Raiffeisen",
+      "date": "2026-09-09",
+      "amount": 158.6,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Karte 5412 Einkauf",
+      "reference": "Karte 5412 Einkauf",
+      "counterparty": "Baucenter Gossau"
+    },
+    {
+      "ref": "RB-2026-1002",
+      "bank": "Raiffeisen",
+      "date": "2026-10-05",
+      "amount": 187.35,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "description": "Karte 5412 Einkauf",
+      "reference": "Karte 5412 Einkauf",
+      "counterparty": "Baucenter Gossau"
+    }
+  ],
+  "mappings": [
+    {
+      "transactionRef": "RB-2026-0003",
+      "receiptId": "8f9ede6c6040e6c9",
+      "run": "receipt-intake-861d8f0f"
+    },
+    {
+      "transactionRef": "RB-2026-0004",
+      "receiptId": "b502e164c439d568",
+      "run": "receipt-intake-861d8f0f"
+    },
+    {
+      "transactionRef": "RB-2026-0014",
+      "receiptId": "ebea16003f63e4fe",
+      "run": "receipt-intake-861d8f0f"
+    },
+    {
+      "transactionRef": "RB-2026-1002",
+      "receiptId": "0c47f0c99782c32d",
+      "run": "receipt-intake-d2342150"
+    }
+  ],
+  "journalEntries": [
+    {
+      "id": "53c21b50cd7a2f93",
+      "transactionRef": "RB-2026-0004",
+      "date": "2026-07-08",
+      "accountDebit": "1510",
+      "accountCredit": "1021",
+      "amount": 209.5,
+      "vatCode": "I81",
+      "description": "Baucenter Gossau, Leiter Alu",
+      "origin": "classify",
+      "receipts": [
+        "b502e164c439d568"
+      ],
+      "reason": "Beleg zeigt 8.1 % MWST: Spachtelmasse und Roller (38.90 + 64.50) als Material auf 4400, M81; die Leiter (209.50, über CHF 150) wird auf 1510 aktiviert, I81.",
+      "run": "receipt-intake-861d8f0f"
+    },
+    {
+      "id": "84c5e166ef208d7e",
+      "transactionRef": "RB-2026-0004",
+      "date": "2026-07-08",
+      "accountDebit": "4400",
+      "accountCredit": "1021",
+      "amount": 103.4,
+      "vatCode": "M81",
+      "description": "Baucenter Gossau, Spachtelmasse und Farbroller",
+      "origin": "classify",
+      "receipts": [
+        "b502e164c439d568"
+      ],
+      "reason": "Beleg zeigt 8.1 % MWST: Spachtelmasse und Roller (38.90 + 64.50) als Material auf 4400, M81; die Leiter (209.50, über CHF 150) wird auf 1510 aktiviert, I81.",
+      "run": "receipt-intake-861d8f0f"
+    },
+    {
+      "id": "881b7f3645e66a68",
+      "transactionRef": "RB-2026-0014",
+      "date": "2026-08-20",
+      "accountDebit": "6641",
+      "accountCredit": "1021",
+      "amount": 45.5,
+      "vatCode": "I81",
+      "description": "Restaurant Hirschen, Geschäftsessen",
+      "origin": "classify",
+      "receipts": [
+        "ebea16003f63e4fe"
+      ],
+      "reason": "Quittung zeigt 8.1 % MWST mit CHE-Nummer: Restaurantbesuch auf 6641, I81.",
+      "run": "receipt-intake-861d8f0f"
+    },
+    {
+      "id": "8cf320dcaef01a0a",
+      "transactionRef": "RB-2026-0019",
+      "date": "2026-09-09",
+      "accountDebit": "4400",
+      "accountCredit": "1021",
+      "amount": 158.6,
+      "vatCode": "M81",
+      "description": "Abdeckfolie und Pinsel Baucenter",
+      "origin": "manual",
+      "receipts": [],
+      "run": "receipt-intake-a0af9cbe",
+      "by": {
+        "kind": "person",
+        "at": "2026-10-16T05:00:48.090Z",
+        "was": {
+          "vatCode": "M0"
+        }
+      }
+    },
+    {
+      "id": "c66961564d906314",
+      "transactionRef": "RB-2026-1002",
+      "date": "2026-10-05",
+      "accountDebit": "4400",
+      "accountCredit": "1021",
+      "amount": 187.35,
+      "vatCode": "M81",
+      "description": "Baucenter Gossau, Malerbedarf",
+      "origin": "classify",
+      "receipts": [
+        "0c47f0c99782c32d"
+      ],
+      "reason": "Beleg Baucenter Gossau zeigt 8.1 % MWST mit CHE-Nummer: Malerbedarf auf 4400, M81.",
+      "by": {
+        "kind": "model",
+        "model": "sonnet"
+      },
+      "run": "receipt-intake-d2342150"
+    },
+    {
+      "id": "ceff9000e3272a36",
+      "transactionRef": "RB-2026-0003",
+      "date": "2026-07-05",
+      "accountDebit": "6200",
+      "accountCredit": "1021",
+      "amount": 86.4,
+      "vatCode": "I81",
+      "description": "Tankstelle Wil Ost, Tanken",
+      "origin": "classify",
+      "receipts": [
+        "8f9ede6c6040e6c9"
+      ],
+      "reason": "Tankquittung zeigt 8.1 % MWST mit CHE-Nummer: Treibstoff auf 6200, I81.",
+      "run": "receipt-intake-861d8f0f"
+    },
+    {
+      "id": "e7a8aa7bc784fea9",
+      "transactionRef": "RB-2026-0011",
+      "date": "2026-08-12",
+      "accountDebit": "6200",
+      "accountCredit": "1021",
+      "amount": 74.2,
+      "vatCode": "I0",
+      "description": "Tankstelle Wil Ost, Tanken",
+      "origin": "classify",
+      "receipts": [],
+      "reason": "Kartenzahlung Tanken ohne Beleg: Fahrzeugaufwand 6200, ohne MWST-Angabe I0.",
+      "run": "receipt-intake-a0af9cbe"
+    }
+  ]
+}

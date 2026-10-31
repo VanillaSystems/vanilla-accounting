@@ -3,11 +3,13 @@
  * each account's name and the VAT code explained, its payment and receipt, the receipt itself, and
  * in the margin the other entries of the same payment, the entry's form and where it came from.
  */
+import { useSelection } from '../../selection/store.js';
+import { SelectionView } from '../../selection/SelectionView.js';
+import { entryRows } from '../../selection/rows.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { localToday, parsePeriod, periodContaining } from '../../../accounting/periods.js';
-import { lookupVatCode, VAT_CODES } from '../../../accounting/vat-codes.js';
-import type { BankTransaction } from '../../../types/index.js';
-import { vatLine } from '../../../accounting/index.js';
+import { firmCodes, lookupVatCode, parseRate, vatCodeOf } from '../../../accounting/vat-codes.js';
+import type { BankTransaction, JournalEntry } from '../../../types/index.js';
 import type { RouteOf } from '../../shell/route.js';
 import { getAccountMap } from '../../lib/accounts.js';
 import { sources } from '../../lib/api.js';
@@ -17,45 +19,102 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { useFx } from '../../hooks/use-fx.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import { t } from '../../i18n/index.js';
+import { useAiOff } from '../../ai/ai-off.js';
 import { ICONS } from '../icons.js';
 import type { AreaProps } from '../index.js';
 import { Paper } from '../receipts/Paper.js';
 import { I } from '../receipts/icons.js';
 import { at, bankOf, amountOf } from '../receipts/view.js';
-import { explain, codeText } from '../codes/vat-card.js';
-import type { EntryView, Journal } from './model.js';
+import { explain } from '../codes/vat-card.js';
+import { codeLabel, codeText } from '../codes/names.js';
+import { VatCodeField } from '../codes/VatCodeField.js';
+import { receiptsFor, whySeen, type EntryView, type Journal, type WhySeen } from './model.js';
+import { bookedByText, changesText, reasonText, type Say } from './by.js';
+
+const say: Say = (key, vars) => t(key, vars as never);
 import { selectNew, setUi, useUi, type Section } from './state.js';
-import { journalFor, openPeriod, runAct, splitReceipt } from './commands.js';
-import { reclassify, saveEntry, type Field } from './actions.js';
+import type { EvidenceCheck } from '../../../accounting/evidence-check.js';
+import { bookingWarnings } from '../../../accounting/booking-warnings.js';
+import { isAccrual, newYearAfter, reversalIn } from '../../../accounting/reversal.js';
+import { correctionPeriodName, journalFor, openPeriod, recentlyDeleted, runAct, splitReceipt } from './commands.js';
+import { createEntry, linkReceipt, reclassify, saveEntry, type Field } from './actions.js';
+import { undoInput } from '../../../books/entry-input.js';
+import { RunLink } from '../../automation/marks.js';
+import { RunHistory } from '../../history/RunHistory.js';
+import { ActionsMenu } from '../../selection/ActionsMenu.js';
+import { entryActions } from './actions-menu.js';
+import { AskAi } from '../../assistant/AskAi.js';
+import { showConversation } from '../../assistant/store.js';
+import { QuestionsOn } from '../../questions/Questions.js';
 import { AccountField } from './AccountField.js';
 import { StatementPaper } from '../bank/StatementPaper.js';
 import { bankFor } from '../bank/state.js';
+import { isCamt } from '../bank/model.js';
+import { CorrectionOffer } from '../company/RulesSection.js';
+import { LearnOffer } from '../company/LearnOffer.js';
+import { baseCurrency, chargesVat, filing, vat, withoutInputTax } from '../../../engines/index.js';
+import { correctionName } from '../../lib/vat-words.js';
+import { TagFields, tagField, tagsOfForm } from './TagFields.js';
+import { sameTags, valueLabel } from '../../../books/tags.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
 export function Detail(props: Props) {
+  const picked = useSelection('entry');
+  return picked ? <SelectionView kind="entry" rows={entryRows(props.books, picked.ids)} books={props.books} nav={props.nav} canEdit={props.canEdit} /> : <OneEntry {...props} />;
+}
+
+function OneEntry(props: Props) {
   const { route, books } = props;
   const j = journalFor(books);
   const v = route.id ? j.byId.get(route.id) : undefined;
+  const { deleted } = useUi();
+  const gone = !v && route.id ? (deleted?.id === route.id ? deleted : recentlyDeleted.get(route.id)) : undefined;
+  if (gone) return <Deleted e={gone} nav={props.nav} />;
   if (!v) return <div className="detail-empty"><div>{route.id ? t('journal.gone') : t('journal.noneSelected')}</div></div>;
   return <EntryDetail key={v.e.id} {...props} v={v} j={j} />;
 }
 
-const quarterName = (date: string) => { const p = parsePeriod(periodContaining(date), localToday()); return p ? periodName(p) : date; };
+/** The place of an entry just deleted: nothing moves under the pointer, and the undo stays while its place is shown, also after leaving and coming back (r6h-28, r7h-31). */
+function Deleted({ e, nav }: { e: JournalEntry; nav: AreaProps<RouteOf<'journal'>>['nav'] }) {
+  const back = () => { createEntry(nav, undoInput(e)).then((entry) => { if (entry) { setUi({ deleted: undefined }); recentlyDeleted.delete(e.id); selectNew(nav, entry.id); } }); };
+  return (
+    <div className="detail-empty" data-testid="deleted">
+      <div>
+        <p>{t('journal.deletedHere', { text: e.description ?? e.transactionRef })}</p>
+        <p><button type="button" className="btn" onClick={back}>{t('changes.handUndo')}</button></p>
+        <p className="m">{t('journal.deletedHint')}</p>
+      </div>
+    </div>
+  );
+}
+
+const quarterName = (date: string) => { const p = parsePeriod(periodContaining(date, undefined, filing().length), localToday()); return p ? periodName(p) : date; };
 const filedName = (quarter: string) => { const p = parsePeriod(quarter, localToday()); return p ? periodName(p) : quarter; };
 
 function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
   const { v, j, nav, canEdit } = props;
   const { e, tx } = v;
   const fx = useFx().convert(e);
+  const aiOff = useAiOff();
   const acName = getAccountMap();
   const found = e.vatCode ? lookupVatCode(e.vatCode) : null;
-  const tax = vatLine(e)?.tax;
-  const cur = e.exchangeCurrency || 'CHF';
+  const tax = vat().vatLine(e)?.tax;
+  const cur = e.exchangeCurrency || baseCurrency();
   const edit = canEdit && !v.locked && e.origin !== 'year-close';
   const siblings = (j.byRef.get(e.transactionRef) ?? []).filter((x) => x !== v);
   const receipt = v.receipts[0];
   const open = openPeriod(props.books);
+  const payment = tx ? (j.byRef.get(tx.ref) ?? []).map((x) => x.e) : [];
+  const hers = payment.filter((x) => x.origin === 'manual');
+  const [asking, setAsking] = useState(false);
+  const rebook = (overwrite: boolean) => { setAsking(false); if (tx) void reclassify(nav, tx.ref, payment, overwrite).then((es) => es?.[0] && selectNew(nav, es[0].id)); };
+  const seen = whySeen(e, props.books.receipts);
+  // Input tax on other proof than a receipt (#134): the person's words, kept on the payment.
+  const proof = !v.receipts.length && e.vatCode ? tx?.inputTaxProof : undefined;
+  const ws = useWorkspace();
+  // The tags in the order the firm lists its dimensions; one it no longer lists last.
+  const rank = (d: string) => { const i = ws?.dimensions?.findIndex((x) => x.id === d) ?? -1; return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
 
   return (
     <div className="detail-in" data-for={e.id}>
@@ -63,49 +122,71 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
         <h2 className="who">{v.title}<small>{v.sub}</small></h2>
         <div className="amount">
           <small>{cur}</small>{fmt(e.amount)}
-          {fx && <span className="fx" title={checkText(fx)}>{t('journal.fxLine', { chf: fmt(fx.chf), rate: String(fx.rate ?? '—') })}</span>}
+          {fx && <span className="fx" data-tip={checkText(fx)}>{t('journal.fxLine', { chf: fmt(fx.chf), rate: String(fx.rate ?? '—') })}</span>}
         </div>
       </div>
 
       <div className="satz" role="table" aria-label={t('journal.satz')}>
         <div role="row"><span className="k">{t('journal.field.accountDebit')}</span><span className="mono n">{e.accountDebit || '–'}</span><span className="nm">{acName[e.accountDebit] ?? (e.accountDebit ? '' : t('journal.noCounter'))}</span></div>
         <div role="row"><span className="k">{t('journal.field.accountCredit')}</span><span className="mono n">{e.accountCredit || '–'}</span><span className="nm">{acName[e.accountCredit] ?? (e.accountCredit ? '' : t('journal.noCounter'))}</span></div>
-        <div role="row">
+        {(e.vatCode || firmCodes().length > 0) && <div role="row">
           <span className="k">{t('journal.field.vatCode')}</span>
-          <span className="mono n">{e.vatCode ? <button type="button" className="vlink" data-vat={e.vatCode} title={t('codes.explainCode', { code: e.vatCode })} onClick={() => explain(props, e.vatCode!)}>{e.vatCode}</button> : '–'}</span>
+          <span className="mono n">{e.vatCode ? <button type="button" className="vlink" data-vat={e.vatCode} data-tip={t('codes.explainCode', { code: e.vatCode })} onClick={() => explain(props, e.vatCode!)}>{e.vatCode}</button> : '–'}</span>
           <span className="nm">
             {e.vatCode
-              ? <>{found?.negative && <span className="m">{t('journal.reversed')} · </span>}{codeText(e.vatCode)}{!!tax && found?.entry.amountIs !== 'tax' && <span className="mono m"> · {t('journal.vatIncluded', { tax: fmt(Math.abs(tax)) })}</span>}</>
+              ? <>{codeText(e.vatCode)}{!!tax && found?.entry.amountIs !== 'tax' && <span className="mono m"> · {t('journal.vatIncluded', { tax: fmt(Math.abs(tax)) })}</span>}</>
               : t('journal.noVat')}
           </span>
-        </div>
+        </div>}
         {fx && fx.check.kind !== 'estv' && <div role="row"><span className="k" /><span /><span className="nm warn">{checkText(fx)}</span></div>}
+        {Object.entries(e.tags ?? {}).sort(([a], [b]) => rank(a) - rank(b)).map(([d, value]) => {
+          const dim = ws?.dimensions?.find((x) => x.id === d);
+          return <div key={d} role="row" data-tag={d}><span className="k">{dim?.label ?? d}</span><span /><span className="nm">{valueLabel(dim, value)}</span></div>;
+        })}
       </div>
+
+      {bookingWarnings(props.books, e).map((w) => (
+        <p key={w.code} className="warnline" data-testid="booking-warning">
+          {I.dot}{w.code === 'cashNegative' ? t('journal.warn.cashNegative', { account: w.account, date: formatDate(w.date), balance: fmt(w.balance) }) : t('journal.warn.swappedSale', { accountDebit: w.accountDebit, accountCredit: w.accountCredit })}
+        </p>
+      ))}
+
+      <div className="actbar"><ActionsMenu set={entryActions(props, v)} /></div>
+      {canEdit && <EntryActions {...props} />}
 
       <div className="status jst">
         {tx
-          ? <span className="linked">{I.check}<button type="button" className="golink" data-testid="go-payment" title={t('journal.openPaymentKey')} onClick={() => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date))}>{t('journal.payment')} <span className="mono">{formatDate(tx.date)}</span> · {bankOf(tx)} · <span className="mono">{amountOf(tx)}</span> <span className="arr">{t('journal.toStatement')}</span></button></span>
+          ? <span className="linked">{I.check}<button type="button" className="golink" data-testid="go-payment" data-tip={t('journal.openPaymentKey')} onClick={() => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date))}>{t('journal.payment')} <span className="mono">{formatDate(tx.date)}</span> · {bankOf(tx)} · <span className="mono">{amountOf(tx)}</span> <span className="arr">{t('journal.toStatement')}</span></button></span>
           : <span className="notice" style={{ margin: 0 }}>{e.corrects ? t('journal.correctionNoPayment', { date: formatDate(e.date), quarter: filedName(e.corrects) }) : t('journal.manualNoPayment')}</span>}
         {v.receipts.length > 0
-          ? <span className="linked">{I.check}{t('journal.receipt')} {v.receipts.map((r, i) => { const [who, what] = splitReceipt(r); return <span key={r.id}>{i > 0 && ' · '}<button type="button" className="golink" data-testid="go-receipt" title={t('journal.openReceiptKey')} onClick={() => nav.go(at({ area: 'receipts', id: r.id }, r.date))}>{who}{what && <span className="m"> {what}</span>}</button></span>; })}</span>
+          ? <span className="linked">{I.check}{t('journal.receipt')} {v.receipts.map((r, i) => { const [who, what] = splitReceipt(r); return <span key={r.id}>{i > 0 && ' · '}<button type="button" className="golink" data-testid="go-receipt" data-tip={t('journal.openReceiptKey')} onClick={() => nav.go(at({ area: 'receipts', id: r.id }, r.date))}>{who}{what && <span className="m"> {what}</span>}</button></span>; })}</span>
           : v.missing && <span className="notice warn" style={{ margin: 0 }}>{I.dot}{t('journal.noReceipt')}</span>}
+        {edit && !tx && !v.receipts.length && <LinkReceipt key={`lr-${e.transactionRef}`} {...props} entries={[e, ...siblings.map((x) => x.e)]} />}
       </div>
 
+      {v.evidence && (
+        <div className="notice warn" data-testid="evidence">
+          {I.dot}<span>{evidenceText(e, v.evidence)}</span>
+          {edit && <a href="#" data-testid="evidence-book" onClick={(ev) => { ev.preventDefault(); void saveEntry(nav, e, patchOf(v.evidence!), ['vatCode']); }}>{t(v.evidence.kind === 'receiptShowsVat' ? 'journal.evidence.bookByReceipt' : 'journal.evidence.bookWithoutReceipt')}</a>}
+        </div>
+      )}
+
       {e.corrects
-        ? <div className="notice">{ICONS.lock}<span>{t('journal.correctsNotice', { filed: filedName(e.corrects), declared: quarterName(e.date) })}</span></div>
+        ? <div className="notice">{ICONS.lock}<span>{t('journal.correctsNotice', { filed: filedName(e.corrects), declared: quarterName(e.date), correction: correctionName() })}</span></div>
         : v.locked && (
           <div className="notice">
-            {ICONS.lock}<span>{t('journal.lockedNotice', { period: quarterName(e.date) })}</span>
-            {canEdit && open && <a href="#" onClick={(ev) => { ev.preventDefault(); runAct(props, 'correct'); }}>{t('journal.correctIn', { period: periodName(open) })}</a>}
+            {ICONS.lock}<span>{t(chargesVat() ? 'journal.lockedNotice' : 'journal.lockedNoticeClosed', { period: quarterName(e.date) })}</span>
+            {canEdit && open && <a href="#" onClick={(ev) => { ev.preventDefault(); runAct(props, 'correct'); }}>{t('journal.correctIn', { period: correctionPeriodName(props.books) })}</a>}
           </div>
         )}
 
       <div className="body">
         <div className="desk">
+          <QuestionsOn key={`q-${e.id}`} on={{ kind: 'entry', id: e.id }} also={[...(tx ? [{ kind: 'payment' as const, id: tx.ref }] : []), ...v.receipts.map((r) => ({ kind: 'receipt' as const, id: r.id }))]} nav={nav} canEdit={canEdit} books={props.books} />
           {receipt ? (
             <div className="paper real" role="button" tabIndex={0} aria-label={t('journal.openReceipt')} onClick={() => nav.go(at({ area: 'receipts', id: receipt.id }, receipt.date))}>
               <Paper key={receipt.id} src={sources.receipt(receipt.id)} />
-              <a className="dl float" href={sources.receipt(receipt.id)} download={receipt.filename} title={t('receipts.downloadTitle', { file: receipt.filename })} onClick={(ev) => ev.stopPropagation()}>{I.dl}<span>{t('receipts.download')}</span></a>
+              <a className="dl float" href={sources.receipt(receipt.id)} download={receipt.filename} data-tip={t('receipts.downloadTitle', { file: receipt.filename })} onClick={(ev) => ev.stopPropagation()}>{I.dl}<span>{t('receipts.download')}</span></a>
             </div>
           ) : tx ? (
             <Excerpt {...props} tx={tx} />
@@ -118,7 +199,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
             <Sec k="teile" val={t('journal.nEntries', { n: siblings.length + 1 })}>
               {siblings.map((x) => (
                 <div key={x.e.id} className="tx go" onClick={() => nav.select({ area: 'journal', id: x.e.id })}>
-                  <span className="d">{x.e.accountDebit || '–'} / {x.e.accountCredit || '–'} · {x.e.vatCode || t('journal.noVat')}</span>
+                  <span className="d">{x.e.accountDebit || '–'} / {x.e.accountCredit || '–'} · {x.e.vatCode ? codeLabel(x.e.vatCode) : t('journal.noVat')}</span>
                   <span className="am">{fmt(x.e.amount)}</span>
                   <span className="tt">{x.e.description}</span>
                 </div>
@@ -126,22 +207,128 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
             </Sec>
           )}
           <EntryForm {...props} edit={edit} />
-          <Sec k="herkunft" val={t(`journal.origin.${e.origin ?? 'other'}`)}>
+          {edit && (e.by?.kind === 'person' || e.by?.kind === 'assistant') && e.by.was ? <div className="jlearn"><LearnOffer payment={e.transactionRef} nav={nav} /></div> : null}
+          <Sec k="herkunft" val={e.by ? t(`journal.by.${e.by.kind}`) : t(`journal.origin.${e.origin ?? 'other'}`)}>
             <dl className="kv">
               <dt>{t('journal.entryId')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{e.id}</dd>
               <dt>{t('journal.ref')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{e.transactionRef}</dd>
-              <dt>{t('journal.booked')}</dt><dd>{t(`journal.originText.${e.origin ?? 'other'}`)}</dd>
+              <dt>{t('journal.booked')}</dt><dd data-testid="booked-by"><BookedByText e={e} nav={nav} />
+                {((e.by?.kind === 'person' || e.by?.kind === 'assistant') && (e.by.was || e.corrects)) ? <CorrectionOffer payment={e.transactionRef} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
+              </dd>
+              {seen || proof || e.reason || e.by?.kind === 'person' || e.by?.kind === 'assistant' ? <><dt>{t('journal.why')}</dt><dd data-testid="why">
+                {seen?.map((w, i) => <WhyLine key={i} w={w} nav={nav} />)}
+                {proof && <div data-testid="why-proof">{t('journal.why.otherProof', { text: proof.text })}</div>}
+                {e.reason && <div className="m">{reasonText(e, e.reason, say)}</div>}
+                {(e.by?.kind === 'person' || e.by?.kind === 'assistant') && e.by.was && <div className="m">{t(`journal.why.${e.by.kind}`, { changes: changesText(e, e.by.was, say) })}</div>}
+              </dd></> : null}
+              {e.run ? <><dt>{t('journal.run')}</dt><dd><RunLink run={e.run} by={e.by} nav={nav} /></dd></> : null}
             </dl>
+            <AskAi context={{ kind: 'entry', id: e.id, label: e.description ?? e.id }} />
             {edit && (
               <div className="dangers">
-                {tx && <button type="button" title={t('journal.reclassifyTip')} onClick={() => reclassify(nav, tx.ref, (j.byRef.get(tx.ref) ?? []).map((x) => x.e)).then((es) => es?.[0] && selectNew(nav, es[0].id))}>{t('journal.reclassify')}</button>}
+                {tx && <button type="button" data-tip={t(aiOff ? 'journal.reclassifyTipOff' : 'journal.reclassifyTip')} onClick={() => (hers.length ? setAsking(true) : rebook(false))}>{t('journal.reclassify')}</button>}
                 <button type="button" className="del" onClick={() => runAct(props, 'del')}>{t('common.delete')}</button>
               </div>
             )}
           </Sec>
+          <RunHistory on={{ kind: 'entry', id: e.id }} books={props.books} nav={nav} period={props.query.period} />
         </aside>
       </div>
+      {asking && <KeepHers hers={hers} onKeep={() => setAsking(false)} onRebook={() => rebook(true)} />}
     </div>
+  );
+}
+
+/** Who decided the entry, and for a rule the way to Firma › Regeln. */
+function BookedByText({ e, nav }: { e: JournalEntry; nav: Props['nav'] }) {
+  return (
+    <>{bookedByText(e, say)}{e.by?.kind === 'rule' && <> · <button type="button" className="golink" data-testid="to-rules" onClick={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })}>{t('area.company')} › {t('company.rules')}</button></>}
+      {e.by?.kind === 'assistant' && <> · <button type="button" className="golink" data-testid="to-conversation" onClick={() => void showConversation((e.by as { conversation: string }).conversation)}>{t('journal.toConversation')}</button></>}</>
+  );
+}
+
+/** A booking without a payment takes its receipt here as a payment does in Belege (#89): the receipts no payment holds, its amount first. */
+function LinkReceipt({ books, nav, entries }: Props & { entries: JournalEntry[] }) {
+  const options = receiptsFor(books, entries);
+  const [pick, setPick] = useState('');
+  if (!options.length) return null;
+  const chosen = options.find((r) => r.id === pick) ?? options[0];
+  const name = (r: (typeof options)[number]) => [r.date ? formatDate(r.date) : '', splitReceipt(r).filter(Boolean).join(' '), r.amount != null ? `${r.currency || baseCurrency()} ${fmt(r.amount)}` : ''].filter(Boolean).join(' · ');
+  return (
+    <span className="linkinv" data-testid="link-receipt">
+      <label>{t('journal.linkReceipt')}{' '}
+        <select value={chosen.id} onChange={(ev) => setPick(ev.target.value)}>
+          {options.map((r) => <option key={r.id} value={r.id}>{name(r)}</option>)}
+        </select>
+      </label>
+      {' '}<button type="button" className="golink" onClick={() => void linkReceipt(nav, chosen.id, entries[0].transactionRef, name(chosen))}>{t('receipts.linkVerbShort')}</button>
+    </span>
+  );
+}
+
+/** What the booking page and the row say when an entry contradicts its receipts (src/accounting/evidence-check.ts). */
+export function evidenceText(e: JournalEntry, c: EvidenceCheck): string {
+  return c.kind === 'receiptShowsVat'
+    ? t('journal.evidence.receiptShowsVat', { rate: String(c.rate), code: e.vatCode ? codeLabel(e.vatCode) : '' })
+    : t('journal.evidence.vatWithoutReceipt', { code: e.vatCode ? codeLabel(e.vatCode) : '', zero: codeLabel(c.code) });
+}
+
+/** The click: the proposed code, and for a receipt that shows VAT the receipts the entry now records as seen. */
+export const patchOf = (c: EvidenceCheck) => (c.kind === 'receiptShowsVat' ? { vatCode: c.code, receipts: c.receipts } : { vatCode: c.code });
+
+/** Book from this entry: its Gegenbuchung, a copy, and for an accrual its reversal on the next 1.1. (treuhaender-27). */
+function EntryActions(props: Props & { v: EntryView; j: Journal }) {
+  const { v, nav } = props;
+  const { e } = v;
+  const accrual = e.origin !== 'year-close' && isAccrual(e);
+  const back = accrual ? reversalIn(props.books.journalEntries ?? [], e) : undefined;
+  const newYear = newYearAfter(e.date);
+  return (
+    <div className="jacts" data-testid="entry-actions">
+      {!v.locked && <button type="button" className="quiet2" data-tip={t('journal.reverseTip')} onClick={() => runAct(props, 'reverse')}>{t('journal.reverse')}</button>}
+      <button type="button" className="quiet2" data-tip={t('journal.copyTip')} onClick={() => runAct(props, 'copy')}>{t('journal.copy')}</button>
+      {accrual && (back
+        ? <button type="button" className="golink" data-testid="reversed" onClick={() => nav.select({ area: 'journal', id: back.id })}>{t('journal.reversedOn', { date: formatDate(back.date) })}</button>
+        : <button type="button" className="quiet2" data-testid="reverse-new-year" data-tip={t('journal.reverseNewYearTip')} onClick={() => runAct(props, 'reverseNewYear')}>{t('journal.reverseNewYear', { date: formatDate(newYear) })}</button>)}
+    </div>
+  );
+}
+
+/** One thing the classifier saw: a receipt with the VAT facts that set the code, or no receipt at all. */
+function WhyLine({ w, nav }: { w: WhySeen; nav: Props['nav'] }) {
+  if (w.kind === 'noReceipt') return <div>{w.untaxed !== undefined ? t('journal.why.noInvoiceUntaxed', { code: w.untaxed || t('journal.noVat') }) : t(w.sale ? 'journal.why.noInvoice' : 'journal.why.noReceipt')}</div>;
+  const facts = w.vat === 'none' ? t(w.sale ? 'journal.why.vatNoneSale' : 'journal.why.vatNone')
+    : w.vat === 'unread' ? t('journal.why.vatUnread')
+      : t(w.vat.vatId ? 'journal.why.vatId' : 'journal.why.vat', { rate: String(w.vat.rate), tax: fmt(w.vat.tax), id: w.vat.vatId ?? '' });
+  return (
+    <div>
+      {t('journal.why.receipt')} <button type="button" className="golink" onClick={() => nav.go(at({ area: 'receipts', id: w.id }, w.date))}>{w.name}</button>{': '}{facts}
+    </div>
+  );
+}
+
+const satzOf = (x: JournalEntry) => `${x.accountDebit || '–'} / ${x.accountCredit || '–'} · ${x.vatCode ? codeLabel(x.vatCode) : t('journal.noVat')} · ${fmt(x.amount)}`;
+
+/**
+ * Asked before «Neu klassifizieren» replaces a person's booking (by hand, or by a wish in the AI
+ * sidebar): what she set, and that Claude would book the payment anew. Keeping hers is the default.
+ * Its keys stay in it: the ↵ that keeps hers would otherwise also open the receipt.
+ */
+function KeepHers({ hers, onKeep, onRebook }: { hers: JournalEntry[]; onKeep(): void; onRebook(): void }) {
+  return (
+    <>
+      <div className="scrim" style={{ background: 'color-mix(in srgb, var(--bg) 40%, transparent)' }} onClick={onKeep} />
+      <div className="palette confirm" role="alertdialog" aria-label={t('journal.keepTitle')} data-testid="keep-hers" onKeyDown={(ev) => { ev.stopPropagation(); if (ev.key === 'Escape') onKeep(); }}>
+        <h2>{t('journal.keepTitle')}</h2>
+        <p>{t('journal.keepText', { n: hers.length })}</p>
+        {hers.map((x) => <div key={x.id} className="file">{satzOf(x)}{x.description ? ` · ${x.description}` : ''}</div>)}
+        <p>{t('journal.keepWarn')}</p>
+        <div className="acts" style={{ marginTop: 16 }}>
+          <button type="button" className="btn ghost" onClick={onRebook}>{t('journal.keepRebook')}</button>
+          <button type="button" className="btn primary" autoFocus onClick={onKeep}>{t('journal.keepMine')} <span className="k">↵</span></button>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -164,8 +351,11 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
   const { v, nav, edit } = props;
   const { e } = v;
   const s = useUi();
+  const dimensions = useWorkspace()?.dimensions ?? [];
   const form = useRef<HTMLFormElement>(null);
   const [err, setErr] = useState('');
+  const [note, setNote] = useState('');
+  const wrong = useRef(false);
 
   useEffect(() => {
     if (!s.open.buchung || !s.focus) return;
@@ -173,32 +363,69 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
     setUi({ focus: undefined });
   }, [s.open.buchung, s.focus]);
 
+  const field = (name: string) => form.current?.querySelector<HTMLInputElement>(`[name="${name}"]`) ?? null;
+
+  /** The fields as the books hold the booking; the field being edited is left alone unless `force` (a refused save puts the booked value back, r8h-27). */
+  const reset = (force = false) => {
+    const values: Record<string, string> = {
+      accountDebit: e.accountDebit, accountCredit: e.accountCredit, vatCode: e.vatCode ?? '', amount: fmt(e.amount), description: e.description ?? '',
+      ...Object.fromEntries(dimensions.map((d) => [tagField(d.id), e.tags?.[d.id] ?? ''])),
+    };
+    for (const [name, value] of Object.entries(values)) {
+      const el = field(name);
+      if (el && (force || el !== document.activeElement) && el.value !== value) el.value = value;
+    }
+  };
+  // The form keeps what is typed while a field is left: a saved entry only rewrites the fields not being edited.
+  useEffect(() => {
+    if (wrong.current) return;
+    reset();
+  }, [e.accountDebit, e.accountCredit, e.vatCode, e.amount, e.description, JSON.stringify(e.tags ?? {})]);
+
+  function fail(message: string) { wrong.current = true; setErr(message); setNote(''); nav.dismissToast(); }
+
   function save() {
     if (!edit || !form.current) return;
     const f = Object.fromEntries(new FormData(form.current)) as Record<Field, string>;
     const accounts = getAccountMap();
     const next = { accountDebit: f.accountDebit.trim(), accountCredit: f.accountCredit.trim(), vatCode: f.vatCode.trim(), description: f.description.trim(), amount: parseAmount(f.amount) };
     const unknown = [next.accountDebit, next.accountCredit].find((n) => n && !accounts[n]);
-    if (unknown) { setErr(t('journal.errAccount', { account: unknown })); return; }
-    if (!next.accountDebit && !next.accountCredit) { setErr(t('journal.errNoAccount')); return; }
-    if (next.vatCode && !lookupVatCode(next.vatCode)) { setErr(t('journal.errVat', { code: next.vatCode })); return; }
-    if (!next.amount) { setErr(t('journal.errAmount')); return; }
+    if (unknown) return fail(t('journal.errAccount', { account: unknown }));
+    if (!next.accountDebit && !next.accountCredit) return fail(t('journal.errNoAccount'));
+    // Both sides on one account moves nothing (the API refuses it too, r8k-8): the form waits until the other side is typed.
+    if (next.accountDebit && next.accountDebit === next.accountCredit && !next.vatCode) return fail(t('error.sameAccount', { account: next.accountDebit }));
+    const vatCode = vatCodeOf(next.vatCode, next.accountDebit, next.accountCredit);
+    // A rate typed in a firm without input tax hears why no code takes it, as the payment form says (r8f-50, r9n-41).
+    if (!vatCode) return fail(parseRate(next.vatCode) ? (withoutInputTax() ? t(`journal.errVatNotTaken.${withoutInputTax()!}`, { code: next.vatCode }) : t('journal.errVatRate', { rate: next.vatCode })) : t('journal.errVat', { code: next.vatCode }));
+    if (!next.amount) return fail(t('journal.errAmount'));
+    wrong.current = false;
     setErr('');
-    const changed = (['accountDebit', 'accountCredit', 'vatCode', 'amount', 'description'] as Field[]).filter((k) => next[k] !== ((k === 'vatCode' || k === 'description' ? e[k] ?? '' : e[k])));
+    next.vatCode = vatCode.code;
+    if (vatCode.fromRate !== undefined) {
+      const el = field('vatCode'); if (el) el.value = vatCode.code;
+      setNote(t('journal.vatFromRate', { rate: String(vatCode.fromRate), code: vatCode.code, text: codeText(vatCode.code) }));
+    }
+    const el = field('amount'); if (el) el.value = fmt(next.amount);
+    const changed: Field[] = (['accountDebit', 'accountCredit', 'vatCode', 'amount', 'description'] as const).filter((k) => next[k] !== ((k === 'vatCode' || k === 'description' ? e[k] ?? '' : e[k])));
+    const tags = tagsOfForm(new FormData(form.current), dimensions);
+    // Tags of dimensions the firm no longer declares stay as they are: only the declared ones are in the form.
+    const kept = Object.fromEntries(Object.entries(e.tags ?? {}).filter(([d]) => !dimensions.some((x) => x.id === d)));
+    const nextTags = Object.keys(kept).length || tags ? { ...kept, ...tags } : undefined;
+    if (!sameTags(nextTags, e.tags)) changed.push('tags');
     if (!changed.length) return;
-    saveEntry(nav, e, Object.fromEntries(changed.map((k) => [k, next[k]])), changed);
+    const patch = Object.fromEntries(changed.map((k) => [k, k === 'tags' ? nextTags ?? null : next[k as Exclude<Field, 'tags'>]]));
+    // Refused (a held period, a code against the money's direction): the field shows the booked value again, not the refused one.
+    void saveEntry(nav, e, patch, changed).then((saved) => { if (!saved) reset(true); });
   }
 
-  const key = [e.accountDebit, e.accountCredit, e.vatCode, e.amount, e.description].join('|');
   return (
     <Sec k="buchung" val={edit ? t('journal.editable') : t('journal.readOnly')}>
       <form
-        key={key}
         ref={form}
         className="form"
         autoComplete="off"
         onSubmit={(ev) => { ev.preventDefault(); save(); }}
-        onBlur={(ev) => { if (!ev.currentTarget.contains(ev.relatedTarget as Node | null)) save(); }}
+        onBlur={save}
         onKeyDown={(ev) => { if (ev.key === 'Enter' && !ev.defaultPrevented) { ev.preventDefault(); save(); } }}
       >
         <div className="two">
@@ -206,21 +433,18 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
           <AccountField name="accountCredit" label={t('journal.field.accountCredit')} defaultValue={e.accountCredit} readOnly={!edit} onPick={save} />
         </div>
         <div className="two">
-          <label>{t('journal.field.vatCode')}<input className="mono" name="vatCode" defaultValue={e.vatCode ?? ''} readOnly={!edit} list="vat-codes" /></label>
-          <label>{t('journal.amountIn', { currency: e.exchangeCurrency || 'CHF' })}<input className="mono" name="amount" defaultValue={fmt(e.amount)} readOnly={!edit} style={{ textAlign: 'right' }} /></label>
+          <VatCodeField name="vatCode" label={t('journal.field.vatCode')} defaultValue={e.vatCode ?? ''} readOnly={!edit} placeholder={edit ? t('journal.vatPlaceholder') : undefined} onPick={save} />
+          <label>{t('journal.amountIn', { currency: e.exchangeCurrency || baseCurrency() })}<input className="mono" name="amount" defaultValue={fmt(e.amount)} readOnly={!edit} style={{ textAlign: 'right' }} /></label>
         </div>
         <label>{t('journal.field.description')}<input name="description" defaultValue={e.description ?? ''} readOnly={!edit} /></label>
-        <VatCodeList />
+        <TagFields dimensions={dimensions} entries={props.books.journalEntries ?? []} tags={e.tags} readOnly={!edit} onPick={save} />
+        {v.locked && dimensions.length > 0 && <div className="fhint" data-testid="tags-locked">{t('tags.locked')}</div>}
         <div className="err" role="alert">{err}</div>
+        {note && <div className="fhint" data-testid="vat-from-rate">{note}</div>}
         {edit && <div className="fhint">{t('journal.saveHint')}</div>}
       </form>
     </Sec>
   );
-}
-
-/** The codes a VAT field offers as you type. */
-export function VatCodeList() {
-  return <datalist id="vat-codes">{VAT_CODES.map((c) => <option key={c.code} value={c.code}>{c.bananaText ?? ''}</option>)}</datalist>;
 }
 
 /** No receipt: the strip of the payment's statement that shows it, as in Kontoauszüge. */
@@ -229,16 +453,16 @@ function Excerpt({ books, nav, tx }: Props & { tx: BankTransaction }) {
   const [page, setPage] = useState('');
   const b = bankFor(books, ws?.bankAccounts);
   const s = b.statementOf(tx);
-  const src = s?.file && sources.statement(s.file.bank, s.file.filename);
+  const src = s?.file && !isCamt(s.file) && sources.statement(s.file.bank, s.file.filename);
   const toStatement = () => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date));
-  const link = <button type="button" title={t('journal.openPaymentKey')} onClick={toStatement}>{t('journal.statementOf', { month: monthName(tx.date) })}</button>;
+  const link = <button type="button" data-tip={t('journal.openPaymentKey')} onClick={toStatement}>{t('journal.statementOf', { month: monthName(tx.date) })}</button>;
   if (!src) return <div className="src">{t('journal.noReceiptSource')} {link}</div>;
   return (
     <>
       <div className="src">
         {t('journal.excerptFrom')} {link}
         <span className="pgno">{page}</span>
-        <a className="dl inline" href={src} download={s.file!.filename} title={t('bank.downloadTitle', { file: s.file!.filename })}>{I.dl}<span>{t('receipts.download')}</span></a>
+        <a className="dl inline" href={src} download={s.file!.filename} data-tip={t('bank.downloadTitle', { file: s.file!.filename })}>{I.dl}<span>{t('receipts.download')}</span></a>
       </div>
       <div className="paper real stmt excerpt" role="button" tabIndex={0} aria-label={t('journal.openPaymentKey')} onClick={toStatement}>
         <StatementPaper src={src} mark={{ tx, fee: b.feeOf(tx.ref), wise: s.account.statements === 'wise' }} excerpt onPage={setPage} />

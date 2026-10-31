@@ -15,10 +15,12 @@ import { accountsOf } from '../src/workspace/reads.js';
 import { localToday, parsePeriod } from '../src/accounting/periods.js';
 import { chfAmount } from '../src/accounting/ledger.js';
 import { buildBundle, downloadOf, zipBundle, type Bundle } from '../src/export/bundle.js';
-import { BadRequest, PRESETS, entriesIn, parseRequest, presetPeriod, receiptsIn, statementsIn, type PresetId } from '../src/export/model.js';
-import { closeBrowser, findBrowser, printPdf } from '../src/invoices/pdf.js';
+import { BadRequest, PRESETS, countOf, entriesIn, parseRequest, presetPeriod, receiptsIn, statementsIn, type PresetId } from '../src/export/model.js';
+import { closeBrowser, printPdf } from '../src/invoices/pdf.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { startApi } from './support/api-server.js';
+import { booksOnDisk } from './support/workspace.js';
+import { browserPath } from './support/browser.js';
 
 const ws = workspaceAt(DEMO_ROOT);
 const books = loadBooks(ws);
@@ -44,7 +46,7 @@ async function unzip(b: Bundle): Promise<Record<string, Uint8Array>> {
 
 const paths = (b: Bundle) => b.files.map((f) => f.path);
 
-test('Treuhänder-Paket: reports as PDF, journal for Banana and as CSV, payments, every original, LIESMICH and sums', async () => {
+test('Treuhänder-Paket: reports as PDF, journal for Banana, as CSV and as PDF, payments, every original, LIESMICH and sums', async () => {
   const b = await bundleOf('treuhand');
   const receipts = receiptsIn(books, Q3).map((v) => `Belege/${v.r.filename}`);
   const statements = statementsIn(books, Q3).map((s) => `Kontoauszuege/${s.bank}/${s.filename}`);
@@ -52,7 +54,7 @@ test('Treuhänder-Paket: reports as PDF, journal for Banana and as CSV, payments
   assert.deepEqual(paths(b).sort(), [
     'LIESMICH.txt',
     'Berichte/Erfolgsrechnung.pdf', 'Berichte/Bilanz.pdf', 'Berichte/Saldobilanz.pdf', 'Berichte/MWST-Abrechnungen.pdf',
-    'Daten/Banana-Import.tsv', 'Daten/Buchungen.csv', 'Daten/Zahlungen.csv',
+    'Daten/Banana-Import.tsv', 'Daten/Buchungen.csv', 'Daten/Buchungen.pdf', 'Daten/Zahlungen.csv',
     ...receipts, ...statements,
     'manifest.json', 'SHA256SUMS.txt',
   ].sort());
@@ -62,10 +64,12 @@ test('Treuhänder-Paket: reports as PDF, journal for Banana and as CSV, payments
 
 test('Prüfung ESTV / AHV and Jahresarchiv: the year, with the filed returns and seals of its filed quarters', async () => {
   const audit = paths(await bundleOf('audit'));
-  for (const p of ['Berichte/Kontoblätter.pdf', 'Berichte/Kontoblätter.csv', 'Daten/Buchungen.json', 'Daten/Belege.csv', 'Daten/Kontenplan.csv', 'MWST-eingereicht/2026/mwst-ech0217-2026-Q1.xml', 'MWST-eingereicht/2026/seal-Q1.json']) {
+  for (const p of ['Berichte/Kontoblätter.pdf', 'Berichte/Kontoblätter.csv', 'Daten/Buchungen.pdf', 'Daten/Buchungen.json', 'Daten/Belege.csv', 'Daten/Kontenplan.csv', 'MWST-eingereicht/2026/mwst-ech0217-2026-Q1.xml', 'MWST-eingereicht/2026/seal-Q1.json']) {
     assert.ok(audit.includes(p), `audit has ${p}`);
   }
   assert.ok(!audit.some((p) => p.includes('Q2') && p.startsWith('MWST-eingereicht')), 'only filed quarters');
+  assert.equal(countOf('filings', books, parsePeriod('2026', today)!, names, undefined, ['2026-Q1']), 1, 'the dialog counts the quarters filed, not every quarter before the lock (r4t-9)');
+  assert.equal(countOf('filings', books, parsePeriod('2026', today)!, names, undefined, []), 0);
   const archive = paths(await bundleOf('archive'));
   for (const p of ['Berichte/Erfolgsrechnung.csv', 'Daten/Belege.json']) assert.ok(archive.includes(p), `archive has ${p}`);
 });
@@ -98,6 +102,24 @@ test('SHA256SUMS.txt and manifest.json name every file of the ZIP with the hash 
   assert.equal(Object.keys(zip).length, b.files.length, 'nothing in the ZIP but the files');
 });
 
+test('the quarter\'s receipts are those of its payments and entries too: an invoice of June paid in July is in Q3 (treuhaender-39)', () => {
+  const tx = books.transactions.find((t) => t.date >= Q3.from && t.date <= Q3.to && books.mappings.some((m) => m.transactionRef === t.ref))!;
+  const receipt = books.receipts.find((r) => books.mappings.some((m) => m.transactionRef === tx.ref && m.receiptId === r.id))!;
+  const june = { ...books, receipts: books.receipts.map((r) => (r.id === receipt.id ? { ...r, date: '2026-06-28' } : r)) };
+  assert.ok(receiptsIn(june, Q3).some((v) => v.r.id === receipt.id), 'paid in Q3');
+  const may = { ...june, receipts: june.receipts.map((r) => (r.id === receipt.id ? { ...r, date: '2026-05-28' } : r)) };
+  assert.ok(!receiptsIn(may, parsePeriod('2026-06', today)!).some((v) => v.r.id === receipt.id), 'not in June, where it was neither dated, paid nor booked');
+});
+
+test('the journal as PDF prints the period\'s entries by month', async () => {
+  let html = '';
+  const b = await buildBundle(ws, books, names, parseRequest({ period: Q3.token, items: { journal: ['pdf'] }, sums: false, oneBook: false, language: 'de' }), { print: async (h) => { html = h; return Buffer.from('%PDF'); } });
+  assert.deepEqual(paths(b), ['Daten/Buchungen.pdf']);
+  assert.match(html, /<th class="">Datum<\/th><th class="">Ref<\/th>/);
+  for (const m of ['07.2026', '08.2026', '09.2026']) assert.match(html, new RegExp(`<tr class="grp"><td colspan="9">${m}</td>`), m);
+  assert.equal((html.match(/<tr class="">/g) ?? []).length, entriesIn(books, Q3).length, 'one row per entry');
+});
+
 const journalOf = async (format: 'csv' | 'xlsx', period = Q3) =>
   buildBundle(ws, books, names, parseRequest({ period: period.token, items: { journal: [format] }, sums: false, oneBook: false, language: 'de' }), { print: stubPdf });
 
@@ -121,14 +143,13 @@ test('the journal as Excel holds the same entries, amounts as numbers', async ()
 });
 
 test('a request with an unknown part or format is refused at the boundary', () => {
-  assert.throws(() => parseRequest({ period: '2026-Q3', items: { journal: ['pdf'] }, language: 'de' }), BadRequest);
+  assert.throws(() => parseRequest({ period: '2026-Q3', items: { payments: ['pdf'] }, language: 'de' }), BadRequest);
   assert.throws(() => parseRequest({ period: '2026-Q3', items: { secrets: ['csv'] }, language: 'de' }), BadRequest);
   assert.throws(() => parseRequest({ period: 'gestern', items: { journal: ['csv'] }, language: 'de' }), BadRequest);
   assert.throws(() => parseRequest({ period: '2026-Q3', items: { ledger: ['csv'] }, language: 'de' }), BadRequest, 'a ledger needs its account');
 });
 
-const browser = findBrowser();
-test('a report PDF is printed by Chromium', { skip: browser ? false : 'no Chromium-based browser installed' }, async () => {
+test('a report PDF is printed by Chromium', { skip: browserPath ? false : 'no Chromium-based browser installed' }, async () => {
   const b = await buildBundle(ws, books, names, parseRequest({ period: '2026-Q3', items: { income: ['pdf'] }, sums: false, oneBook: false, language: 'de' }), { print: printPdf });
   const pdf = Buffer.from(b.files[0].data);
   assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
@@ -137,9 +158,9 @@ test('a report PDF is printed by Chromium', { skip: browser ? false : 'no Chromi
 
 test('POST /api/export answers in audit mode with the ZIP, the books unchanged', async () => {
   const api = await startApi('tests/fixtures/period-lock-index.json', { READONLY: '1' });
-  const before = readFileSync(api.indexPath);
+  const before = JSON.stringify(booksOnDisk(api.ws));
   try {
-    const res = await fetch(`http://127.0.0.1:${api.port}/api/export`, {
+    const res = await api.fetch('/api/export', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ period: 'all', items: { journal: ['csv', 'json'] }, sums: true, language: 'de' }),
     });
@@ -149,8 +170,8 @@ test('POST /api/export answers in audit mode with the ZIP, the books unchanged',
     assert.deepEqual(files, ['Daten/Buchungen.csv', 'Daten/Buchungen.json', 'LIESMICH.txt', 'SHA256SUMS.txt', 'manifest.json']);
     const bad = await api.send('POST', '/api/export', { period: 'all', items: {} });
     assert.equal(bad.status, 400);
-    assert.ok(readFileSync(api.indexPath).equals(before), 'books.json is byte-identical');
+    assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'books.json is byte-identical');
   } finally {
-    api.stop();
+    await api.stop();
   }
 });

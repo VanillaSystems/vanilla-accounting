@@ -1,0 +1,10 @@
+label: { de: Konto und MWST-Code wählen, en: Choose the accounts and the VAT code, fr: …, it: … }
+uses: accounting.expenses.classification   # ai: true in the action table → kind agent, bot icon, AI slot
+reads: [transaction, books]
+emits: [entries]
+outcomes:
+  decided: book
+  no-rule: manual                # was `undecided: wait` (a waiting run with no task, no question); → newcase once new-case runs (unit 11)
+  unsure: manual
+guide: booking.guide.yaml#classify
+knowledge: [suppliers/*]

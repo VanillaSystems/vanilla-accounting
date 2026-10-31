@@ -1,9 +1,11 @@
 # Set up a mailbox for receipt collection
 
 Many receipts arrive by email: software subscriptions, online shops, shipping invoices.
-Vanilla Accounting can fetch them for you. `npm run collect` logs in to your mailboxes over
-IMAP, reads the mail of one quarter, and saves every PDF attachment into the import folder
-(`beleg-import/`) of your workspace. From there the receipts go through the usual steps
+Vanilla Accounting can fetch them for you. A mailbox is a **source** (ADR 0014): a folder
+`sources/<name>/` in your workspace that says where the app may look. Every day the workflow
+«Belege und Daten holen» signs in to each mailbox over IMAP, takes the PDF attachments of the
+mail that arrived since it last looked, and puts them into the import folder (`beleg-import/`)
+of your workspace. From there they go through the usual steps
 (see [The quarter, step by step](quarter-workflow.md)).
 
 The setup takes about ten minutes per mailbox. You do it once. You need:
@@ -12,56 +14,56 @@ The setup takes about ten minutes per mailbox. You do it once. You need:
 - for each mailbox, its IMAP server and a password that IMAP accepts. With most providers
   this is an **app-specific password**, not the password you use in the browser.
 
+**In the app.** Firma › Quellen › «Postfach verbinden» asks for the address, the IMAP server, the
+login (the address unless it differs) and the app password. It writes the source folder described
+below (every sender, the inbox, daily) and puts the password into the keychain store; «Verbindung
+prüfen» signs in and lists which of the last 60 days' mails the source would read, without fetching
+anything. Then «Einschalten». A source's password is set or replaced on its row the same way. The
+Mac app keeps the source and its password and checks the connection, but does not fetch mail by
+itself yet (ADR 0014, unit 2b: its launcher for a source's code is not built); `npm start` and
+`npm run pull` do. The rest of this page is the same setup by hand, with more choices (senders,
+several addresses on one login).
+
 The setup has two parts, kept apart on purpose:
 
 | What | Where | Why there |
 |---|---|---|
-| Which mailboxes, and how their senders are sorted | `mail.yaml` in your **workspace** | It describes your company, so it lives with your books. |
-| User names and passwords | `.env` in the **app** folder | Secrets never go into the books, which are a git repository you may share with your Treuhand. |
+| Which mailbox, which senders, which addresses | `sources/<name>/source.yaml` in your **workspace** | It describes your company, so it lives with your books. |
+| The password | the Mac's **keychain** (`npm run secret`) | Secrets never go into the books, which are a git repository you may share with your Treuhand, and never into a file. |
 
-The app reads `.env` from its own folder, the folder you run `npm` commands in. A `.env` in
-the workspace is not read.
+A workspace from before sources has a `mail.yaml`: `npm run update` turns each login in it into
+a source, keeps a copy in `data/backups/`, and starts each source where the old collector stopped.
 
-## 1. Describe your mailboxes in `mail.yaml`
+## 1. Describe the mailbox in `sources/<name>/source.yaml`
 
-`npm run init` puts a commented `mail.yaml` into your workspace. Open it and replace it with
-your mailboxes. Each mailbox has these fields:
+One login is one source. Its fields:
 
-| Field | Required | Meaning |
-|---|---|---|
-| `label` | yes | A short name, shown in the output: `office`, `gmail`. |
-| `address` | yes | The mail address, shown in the output and in `npm run doctor`. |
-| `env` | yes | The prefix of this mailbox's keys in `.env`, in capitals. `OFFICE` means `OFFICE_IMAP_USER` and `OFFICE_IMAP_PASSWORD`. |
-| `host` | yes | The IMAP server, for example `imap.gmail.com`. |
-| `filterTo` | no | Collect only mail sent to this address. Use it when several addresses share one login (an alias). |
-| `mixed` | no | `true` when business and private mail share the mailbox. Then `skipDomains` decides which senders to ignore. Default `false`. |
-
-Three lists apply to all mailboxes. Each is a list of sender domains, such as `newsletter.example.com`:
-
-| List | Meaning |
+| Field | Meaning |
 |---|---|
-| `skipDomains` | Senders of a mixed mailbox that never send receipts: newsletters, private shops, social media. |
-| `includeDomains` | Senders whose mail is always business: your software vendors, suppliers, shipping companies. |
-| `linkReceiptDomains` | Senders that send a link to the receipt instead of an attachment (`npm run collect-links`). |
+| `label` | A short name, shown in Firma › Quellen. |
+| `code: app:imap` | The app's mailbox code: it takes every PDF attached to a mail. |
+| `settings.boxes` | The addresses of this login, each `{ label, address }`; add `to:` when several addresses share one login and only mail to that address counts. Add `mixed: true` to a box where business and private mail share the mailbox. |
+| `reach.mail.host` | The IMAP server, for example `imap.gmail.com`. |
+| `reach.mail.account` | The login name, mostly the full mail address. |
+| `reach.mail.from` | The senders the app may read: `["*"]` for anyone, or a list such as `["*@vendor.example"]`. |
+| `reach.mail.skip` | Senders it never reads, for example newsletters in a mixed mailbox: `["*@news.example.com"]`. |
+| `feeds.attachments.every` | How often: `daily` (the default), `weekly`, `monthly`. |
 
-You can start with three empty lists. Fill them in when the first collection shows you which
-senders write to you.
-
-The examples below each show one provider. A `mail.yaml` can list several mailboxes, from
+The examples below each show one provider. A workspace can have several mail sources, from
 different providers.
 
 ### Gmail (and Google Workspace)
 
 ```yaml
-mailboxes:
-  - label: gmail
-    address: you@gmail.com
-    env: GMAIL
-    host: imap.gmail.com
-    mixed: true          # a personal address that also gets business mail
-skipDomains: []
-includeDomains: []
-linkReceiptDomains: []
+# sources/gmail/source.yaml
+label: gmail
+code: app:imap
+settings:
+  boxes: [{ label: gmail, address: you@gmail.com, mixed: true }]
+reach:
+  mail: { host: imap.gmail.com, account: you@gmail.com, from: ["*"] }
+feeds:
+  attachments: { output: document, every: daily }
 ```
 
 **Password.** Google requires 2-Step Verification for app passwords. Turn it on first, then:
@@ -77,12 +79,15 @@ says app passwords are not available, ask your administrator, or use another way
 ### iCloud Mail (also with your own domain)
 
 ```yaml
-mailboxes:
-  - label: office
-    address: info@example.ch
-    env: ICLOUD
-    host: imap.mail.me.com
-    filterTo: info@example.ch   # your own domain on iCloud: collect only mail to this address
+# sources/icloud/source.yaml
+label: icloud
+code: app:imap
+settings:
+  boxes: [{ label: icloud, address: info@example.ch, to: info@example.ch }]
+reach:
+  mail: { host: imap.mail.me.com, account: name@icloud.com, from: ["*"] }
+feeds:
+  attachments: { output: document, every: daily }
 ```
 
 **Password.** Apple requires two-factor authentication for app-specific passwords.
@@ -91,41 +96,48 @@ mailboxes:
 2. Open **Sign-In and Security**, then **App-Specific Passwords**.
 3. Select **+**, enter a name such as `vanilla-accounting`, and copy the password.
 
-The IMAP user name is your iCloud Mail address (`name@icloud.com`), also when you collect the
-mail of a custom domain address. `filterTo` then picks the mail sent to the business address.
+The login (`account`) is your iCloud Mail address (`name@icloud.com`), also when you collect the
+mail of a custom domain address. `to:` then picks the mail sent to the business address.
 
 ### Infomaniak
 
 ```yaml
-mailboxes:
-  - label: office
-    address: info@example.ch
-    env: INFOMANIAK
-    host: mail.infomaniak.com
+# sources/infomaniak/source.yaml
+label: infomaniak
+code: app:imap
+settings:
+  boxes: [{ label: infomaniak, address: info@example.ch }]
+reach:
+  mail: { host: mail.infomaniak.com, account: info@example.ch, from: ["*"] }
+feeds:
+  attachments: { output: document, every: daily }
 ```
 
 **Password.** At Infomaniak, a mail address has its own password, apart from the login to your
 Infomaniak account. Set or reset it in the Infomaniak Manager, under **Mail Service**, on the
 address. If you use Infomaniak's two-factor login with the Infomaniak Mail app, create an app
-password there instead. The user name is the full mail address.
+password there instead.
 
 ### Hostpoint, or any other provider with IMAP
 
 ```yaml
-mailboxes:
-  - label: office
-    address: info@example.ch
-    env: OFFICE
-    host: imap.mail.hostpoint.ch
+# sources/office/source.yaml
+label: office
+code: app:imap
+settings:
+  boxes: [{ label: office, address: info@example.ch }]
+reach:
+  mail: { host: imap.mail.hostpoint.ch, account: info@example.ch, from: ["*"] }
+feeds:
+  attachments: { output: document, every: daily }
 ```
 
 For another provider, look for its help page on setting up a mail program ("E-Mail-Programm
-einrichten"). It names the IMAP server (incoming server). Use port 993 with SSL/TLS: that is
-the default, so you set no port unless the provider names another one.
+einrichten"). It names the IMAP server (incoming server). Port 993 with SSL/TLS is used.
 
 **Password.** With Hostpoint and most smaller providers, the IMAP password is the mailbox
 password. If the provider offers two-factor login, it usually also offers app passwords: use
-one. The user name is almost always the full mail address.
+one.
 
 ### Microsoft 365, Outlook.com and Hotmail
 
@@ -134,90 +146,60 @@ tenants since 2022, Outlook.com and Hotmail since 2024). It requires a sign-in t
 Microsoft (OAuth), which Vanilla Accounting does not do yet. See
 [When IMAP is not possible](#when-imap-is-not-possible).
 
-## 2. Put the credentials into the app's `.env`
+## 2. The password into the keychain
 
-Open `.env` in the **app** folder (the one with `package.json`; `npm run init` created it).
-Add two lines per mailbox, with the `env` prefix of that mailbox:
-
-```sh
-GMAIL_IMAP_USER=you@gmail.com
-GMAIL_IMAP_PASSWORD=abcdabcdabcdabcd
-```
-
-Two more keys are optional:
-
-| Key | When |
-|---|---|
-| `<ENV>_IMAP_HOST` | Overrides `host` from `mail.yaml`, for example to test another server. |
-| `<ENV>_IMAP_PORT` | The provider uses a port other than 993. |
-
-`.env` is in `.gitignore`, so the passwords never get into git. Do not copy them into
-`mail.yaml` or into any file of the workspace.
-
-## 3. Check the setup
+The password never goes into a file. Put it into the Mac's keychain, typed without echo, under
+the source's name:
 
 ```sh
-npm run doctor
+npm run secret -- source:gmail:mail
 ```
 
-For each mailbox in `mail.yaml`, `doctor` shows whether its keys are in `.env`. A missing key
-is a ✗ line that names the exact key to add.
+`npm run secret -- source:gmail:mail --delete` removes it again. A password that is still in
+the app's `.env` from an earlier version moves into the keychain with `npm run secret -- --import`,
+which then deletes its line from `.env`.
 
-To test the login itself:
+## 3. Switch the source on
+
+Open **Firma › Quellen**. The new source shows what it may reach and waits to be switched on.
+Read it, then select **Einschalten**. A change to the source later (another sender, another
+address) waits to be switched on again, so nothing reaches further than you agreed.
+
+## 4. Check the login
 
 ```sh
 npm run doctor -- --mail
 ```
 
-This logs in to each mailbox and logs out again. It reads no mail. Each mailbox gets one line:
+This logs in to each mail source and logs out again. It reads no mail. Each source gets one line:
 
 | Line | Meaning | What to do |
 |---|---|---|
-| ✓ … logs in to imap.gmail.com:993 | The setup works. | Go on to step 4. |
-| ✗ … refused the login | The server is reached, but the user name or password is wrong. | Create a new app password and replace `<ENV>_IMAP_PASSWORD`. Check that `<ENV>_IMAP_USER` is the full address. |
-| ✗ … cannot reach | The server does not answer. | Check `host` in `mail.yaml` and your network. Check that IMAP is turned on for the mailbox. |
+| ✓ … logs in to imap.gmail.com:993 | The setup works. | Go on to step 5. |
+| ✗ … refused the login | The server is reached, but the login or password is wrong. | Create a new app password and set it with `npm run secret -- source:<name>:mail`. Check that `account` is the full address. |
+| ✗ … cannot reach | The server does not answer. | Check `reach.mail.host` and your network. Check that IMAP is turned on for the mailbox. |
 
 Signed in to the mailbox in the browser is not the same as IMAP access. A mailbox can work in
 the browser and still refuse the IMAP login.
 
-## 4. Do a test fetch
-
-```sh
-npx tsx src/collect/test-imap.ts 2026-Q3
-```
-
-This reads the envelopes (sender, subject, date) of the quarter's mail, with 14 days before
-and after, and downloads nothing. It prints every sender domain with its number of mails, most
-first, and saves the list as `email-summaries-2026-Q3.json` in `beleg-import/`. Use it to
-fill in `skipDomains` and `includeDomains` of a mixed mailbox. Delete the JSON file when you
-are done.
-
 ## 5. Collect
 
+The workflow «Belege und Daten holen» collects every day on its own, and **Automatisierung ›
+Belege und Daten holen › Belege holen** starts it now. By hand, one source:
+
 ```sh
-npm run collect -- 2026-Q3
+npm run pull -- gmail          # what arrived since the last time
+npm run pull -- gmail --dry    # fetch and count, deliver nothing
 ```
 
-This saves every PDF attachment of the quarter's mail (again with 14 days on each side, because
-an invoice often arrives after the payment) into `beleg-import/`. In a mixed mailbox it skips
-the senders in `skipDomains`. A journal (`download-journal.json` in the workspace) remembers
-what it saved, so you can run it again: it only adds what is new.
-
-To collect from one mailbox only: `COLLECT_ACCOUNTS=gmail npm run collect -- 2026-Q3`.
+A first pull reads the mail of the last 60 days; then each pull goes on where the last one
+stopped. What a source delivered is written to `collected/<name>.jsonl`, so nothing is taken
+twice, and a file the books or the inbox hold already is not taken again. A missing password
+becomes a task in **Aufgaben**: set it with `npm run secret`, then mark the task done.
 
 Not every receipt comes as an attachment. Some vendors send a link, some show the invoice
 only in their web portal. The [receipt collection runbook](runbooks/receipt-collection.md)
 lists the known vendors and what to do for each.
-
-## 6. After collecting: revoke the app password
-
-An app password gives full access to the mailbox. Create it before you collect and revoke it
-after:
-
-1. Open the same page where you created it, and delete the password.
-2. Remove the password from `.env`, or leave the value empty.
-
-`npm run doctor` then shows a ✗ for that mailbox until the next collection. That is expected.
 
 ## When IMAP is not possible
 

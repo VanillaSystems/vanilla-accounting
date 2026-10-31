@@ -1,0 +1,19 @@
+# The booking pilot in the full declaration (unit 2). Same three runnable steps as today plus the
+# person step that replaces `undecided: wait`, and the new-case call. Labels in four languages.
+label: { de: Buchen, en: Book, fr: Comptabiliser, it: Contabilizzare }
+desc:
+  de: Macht aus einer belegten Bankbewegung Buchungen, Konto, MWST-Code und Kurs des Zahltags.
+  en: Turns a settled bank transaction into entries, with account, VAT code and the payment day's rate.
+  fr: …
+  it: …
+phase: book
+cadence: { de: laufend, en: ongoing, fr: en continu, it: continuo }
+for: transaction
+lane: account                     # one account's transactions in date order
+on:
+  manual: { for: transaction, label: { de: Buchen, en: Book, fr: Comptabiliser, it: Contabilizzare } }
+  event: { name: transaction.settled }
+emits: [entry.booked]
+start: open
+steps: [open, classify, manual, book]   # + newcase (a call to new-case) when new-case is runnable: a call to a not-runnable workflow makes the caller not runnable
+guide: booking.guide.yaml

@@ -1,0 +1,76 @@
+{
+  "sections": [
+    [
+      "Erlöse",
+      14611.3,
+      [
+        [
+          "3200",
+          1021.05
+        ],
+        [
+          "3400",
+          13590.25
+        ]
+      ]
+    ],
+    [
+      "Aufwand für Material und Waren",
+      1323.7,
+      [
+        [
+          "4200",
+          897.4
+        ],
+        [
+          "4400",
+          426.3
+        ]
+      ]
+    ],
+    [
+      "Betriebsaufwand",
+      5394.1,
+      [
+        [
+          "6000",
+          4350
+        ],
+        [
+          "6300",
+          680
+        ],
+        [
+          "6400",
+          179.1
+        ],
+        [
+          "6510",
+          177
+        ],
+        [
+          "6940",
+          8
+        ]
+      ]
+    ],
+    [
+      "Nebenbetrieblicher Ertrag",
+      0,
+      []
+    ],
+    [
+      "Nebenbetrieblicher Aufwand",
+      0,
+      []
+    ],
+    [
+      "Ausserordentliches",
+      0,
+      []
+    ]
+  ],
+  "grossProfit": 13287.6,
+  "operatingResult": 7893.5,
+  "netResult": 7893.5
+}

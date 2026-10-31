@@ -6,10 +6,13 @@
 import { useSyncExternalStore } from 'react';
 import type { Customer, Invoice } from '../../../invoices/model.js';
 import { api, STATIC_EXPORT, type InvoiceList } from '../../lib/api.js';
+import { localEdits } from '../../lib/local-edits.js';
 
 export type Load = { state: 'loading' } | { state: 'failed' } | { state: 'ready'; data: InvoiceList };
 
 let load: Load = { state: 'loading' };
+/** Drafts edited on the sheet whose saves are on the way: a read does not undo them (src/app/lib/local-edits.ts). */
+export const edits = localEdits();
 let pending: Promise<void> | undefined;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
@@ -21,8 +24,9 @@ export function reloadInvoices(): Promise<void> {
     emit();
     return Promise.resolve();
   }
+  const merge = edits.read();
   pending = api.invoices().then(
-    (data) => { load = { state: 'ready', data }; emit(); },
+    (data) => { load = { state: 'ready', data: load.state === 'ready' ? { ...data, invoices: merge(data.invoices, load.data.invoices) } : data }; emit(); },
     () => { if (load.state !== 'ready') { load = { state: 'failed' }; emit(); } },
   );
   return pending;
@@ -32,6 +36,19 @@ export function useInvoices(): Load {
   const l = useSyncExternalStore((fn) => { listeners.add(fn); return () => listeners.delete(fn); }, () => load);
   if (l.state === 'loading' && !pending) void reloadInvoices();
   return l;
+}
+
+let readFor: object | undefined;
+
+/**
+ * A statement dropped or a run may have paid an invoice or refunded a credit note: the records are
+ * read again whenever the books shown are not the ones they were last read with.
+ */
+export function followBooks(books: object): void {
+  if (books === readFor) return;
+  const first = readFor === undefined && load.state === 'loading';
+  readFor = books;
+  if (!first) void reloadInvoices();
 }
 
 /** The records for code outside components (⌘K, the tab title, keys). */

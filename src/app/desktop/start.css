@@ -1,5 +1,6 @@
 /* The desktop app's start screen (StartScreen.tsx): the mockup's tokens, type and form fields. */
-.st { min-height: 100vh; overflow: auto; background: var(--bg); color: var(--ink); }
+/* The body never scrolls (tokens.css); the screen is the viewport's height and scrolls itself, so a long setup form is reached at any window height. */
+.st { height: 100%; overflow: auto; background: var(--bg); color: var(--ink); }
 .st-top { display: flex; justify-content: flex-end; padding: 18px 24px 0; }
 .st-main { max-width: 640px; margin: 0 auto; padding: 56px 24px 96px; }
 .st-main h1 { margin-bottom: 8px; }
@@ -12,10 +13,12 @@
 .st-choice:disabled, .st-book:disabled { opacity: .55; cursor: default; }
 .st-recent { margin-top: 36px; }
 .st-recent h2, .st-form h2 { font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin: 0 0 8px; }
-.st-book { display: flex; align-items: baseline; gap: 12px; width: 100%; text-align: left; padding: 8px 10px; margin-left: -10px; border-radius: 8px; }
+.st-book { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; width: 100%; text-align: left; padding: 8px 10px; margin-left: -10px; border-radius: 8px; }
 .st-book:hover:not(:disabled) { background: var(--hover); }
 .st-book b { font-weight: 600; font-size: 14px; white-space: nowrap; }
 .st-book .mono { font: 12px "Geist Mono"; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-book .st-problem { flex-basis: 100%; font-size: 12px; line-height: 1.4; color: var(--warn); }
+.st-upgrade { margin: 12px 0 0; }
 .st-back { margin-top: 28px; font-size: 13px; }
 .st-back a { color: var(--accent); }
 
@@ -26,7 +29,7 @@
 .st-form .cf.s2 { grid-column: span 2; } .st-form .cf.s4 { grid-column: span 4; }
 .st-form .cf input { box-sizing: border-box; width: 100%; font: 13px "Instrument Sans"; color: var(--ink); padding: 6px 9px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); }
 .st-form .cf input.mono { font-family: "Geist Mono"; font-size: 12.5px; }
-.st-form .cf.err input, .st-bank.err input { border-color: var(--warn); }
+.st-form .cf.err input { border-color: var(--warn); }
 .st-form .cf em, .st-bankerr { font-style: normal; color: var(--warn); margin-left: 4px; }
 .st-form .seg2 { justify-self: start; }
 .st-row { display: flex; gap: 8px; align-items: center; }
@@ -44,3 +47,9 @@
 .st-bank { display: grid; grid-template-columns: minmax(0, 1.4fr) 64px 90px minmax(0, 2fr) 32px; gap: 8px; align-items: end; margin: 10px 0; }
 .st-bankerr { grid-column: 1 / -1; font-size: 12px; margin: 0; }
 .st-foot { display: flex; justify-content: flex-end; gap: 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+.st-rates { margin: 10px 0 4px 0; }
+.st-rates .st-row { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 8px; margin: 6px 0; }
+.st-rates.err .st-qhd b { color: var(--warn, inherit); }
+.st-badge { flex: none; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--ink-2); }
+.st-noai { font-size: 13px; line-height: 1.5; margin: -16px 0 24px; padding: 10px 12px; border-left: 3px solid var(--warn); background: var(--warn-soft); border-radius: 0 8px 8px 0; color: var(--ink); }
+.st-byhand { margin-right: auto; font-size: 13px; color: var(--muted); }

@@ -6,5 +6,11 @@
   <true/>
   <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
   <true/>
+  <!-- «Mail-Programm auf diesem Mac»: the app asks Mail through osascript (src/platform/sources/mac-mail.ts); under the hardened runtime macOS refuses those Apple events without this. -->
+  <key>com.apple.security.automation.apple-events</key>
+  <true/>
+  <!-- The chat's microphone: the speech recognizer (Contents/MacOS/vanilla-dictation) inherits this; under the hardened runtime macOS gives it no audio without it. -->
+  <key>com.apple.security.device.audio-input</key>
+  <true/>
 </dict>
 </plist>

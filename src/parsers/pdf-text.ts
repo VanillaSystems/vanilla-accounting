@@ -6,10 +6,9 @@
  *    reading order, their lines with single spaces, a blank line between blocks, as pdftotext's
  *    default lays a page out. Receipts (src/cli/extract.ts); stored as `extractedText`.
  *  - `raw`: the runs in content-stream order, broken into lines by poppler's rule (a new line
- *    when the baseline moves or the x position goes back). Wise statements keep a transfer's
- *    "Transaction: … | Reference: …" on one line this way (src/parsers/wise-statement-pdf.ts).
+ *    when the baseline moves or the x position goes back).
  *  - `layout`: the lines top to bottom, the runs padded with spaces to their column, blank lines
- *    for vertical gaps. Statement closing balances (src/parsers/statement-pdf-balances.ts).
+ *    for vertical gaps. A statement's own text beside the model's read (src/intake/statement-read.ts).
  *
  * Pages end with a form feed, as pdftotext prints them.
  */
@@ -62,19 +61,20 @@ function loadPdfjs() {
   return (pdfjs ??= import('pdfjs-dist/legacy/build/pdf.mjs'));
 }
 
-/** The runs of every page of a PDF. */
-export async function pdfRuns(pdfPath: string): Promise<PageRuns[]> {
+/** The runs of every page of a PDF (a path, or its bytes), or of its first `pages`. */
+export async function pdfRuns(pdf: string | Uint8Array, pages = Infinity): Promise<PageRuns[]> {
   const { getDocument, VerbosityLevel } = await loadPdfjs();
-  const doc = await getDocument({ data: new Uint8Array(readFileSync(pdfPath)), ...FONT_OPTIONS, verbosity: VerbosityLevel.ERRORS }).promise;
+  const data = typeof pdf === 'string' ? new Uint8Array(readFileSync(pdf)) : new Uint8Array(pdf);
+  const doc = await getDocument({ data, ...FONT_OPTIONS, verbosity: VerbosityLevel.ERRORS }).promise;
   try {
-    const pages: PageRuns[] = [];
-    for (let n = 1; n <= doc.numPages; n++) {
+    const out: PageRuns[] = [];
+    for (let n = 1; n <= Math.min(doc.numPages, pages); n++) {
       const page = await doc.getPage(n);
       const content = await page.getTextContent();
-      pages.push(content.items.flatMap((item) => ('str' in item ? runOf(item) : [])));
+      out.push(content.items.flatMap((item) => ('str' in item ? runOf(item) : [])));
       page.cleanup();
     }
-    return pages;
+    return out;
   } finally {
     await doc.destroy();
   }

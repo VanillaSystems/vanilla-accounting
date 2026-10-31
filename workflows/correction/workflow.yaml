@@ -1,0 +1,10 @@
+label: {"de": "Korrektur", "en": "Correction", "fr": "Correction", "it": "Correzione"}
+desc: {"de": "Korrigiert eine Buchung in einer eingereichten Periode: eine neue Buchung in der offenen Periode, nie eine Änderung, erklärt mit der Korrekturabrechnung.", "en": "Corrects an entry of a filed period: a new entry in the open period, never a change, declared on the correction return.", "fr": "Corrige une écriture d’une période déclarée : une nouvelle écriture dans la période ouverte, jamais une modification, déclarée dans le décompte rectificatif.", "it": "Corregge una registrazione di un periodo dichiarato: una nuova registrazione nel periodo aperto, mai una modifica, dichiarata nel rendiconto di correzione."}
+phase: quarter
+cadence: {"de": "bei Bedarf", "en": "when needed", "fr": "au besoin", "it": "al bisogno"}
+for: entry
+triggers:
+  - manual: {"for": "entry", "label": {"de": "Korrigieren", "en": "Correct", "fr": "Corriger", "it": "Correggi"}}
+emits: ["entry.corrected"]
+start: what
+steps: ["what", "storno", "declare"]

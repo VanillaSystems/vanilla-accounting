@@ -4,15 +4,17 @@
  * sheet. Saved in belege.workspace.yaml's invoicing block; an issued invoice keeps the layout it
  * was issued with.
  */
+import { banksOf } from '../../../workspace/money-accounts.js';
 import { useMemo, useState } from 'react';
-import { INVOICE_FONTS, LAYOUT_ELEMENTS, type Draft, type InvoiceLanguage, type InvoiceLayout, type LayoutElement, type OWN_TEXTS } from '../../../invoices/model.js';
+import { INVOICE_CURRENCIES, INVOICE_FONTS, LAYOUT_ELEMENTS, type Draft, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type LayoutElement, type OWN_TEXTS } from '../../../invoices/model.js';
 import { draftSheet } from '../../../invoices/documents.js';
-import { TEXTS } from '../../../invoices/texts.js';
+import { builtInTexts } from '../../../invoices/texts.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import type { InvoicingPatch } from '../../../workspace/manifest-write.js';
 import { api, errorText } from '../../lib/api.js';
 import { reloadWorkspace } from '../../hooks/use-workspace.js';
 import { localToday } from '../../../accounting/periods.js';
+import { getAccountMap } from '../../lib/accounts.js';
 import { usePersistedFlag } from '../../shell/prefs.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
@@ -21,12 +23,11 @@ import { bookOf } from '../invoices/model.js';
 import { contextOf, screenOf } from '../invoices/sheets.js';
 import { Sheet } from '../invoices/Sheet.js';
 import '../invoices/invoices.css';
+import { invoiceRates } from '../../../engines/index.js';
 
 const LANGS: InvoiceLanguage[] = ['de', 'fr', 'it', 'en'];
 const ACCENTS: Array<[string, 'black' | 'blue' | 'green' | 'bordeaux' | 'ochre']> = [['#141a26', 'black'], ['#1d4ed8', 'blue'], ['#0f766e', 'green'], ['#9f1239', 'bordeaux'], ['#b45309', 'ochre']];
 const DAYS = '{days}';
-/** The app's own texts of a language, the payment term left as {days}. */
-const builtIn = (lang: InvoiceLanguage): Record<OwnText, string> => ({ intro: TEXTS[lang].intro, closing: TEXTS[lang].closing(9999).replace('9999', DAYS), mailSubject: TEXTS[lang].mailSubject, mailBody: TEXTS[lang].mailBody });
 type OwnText = (typeof OWN_TEXTS)[number];
 
 export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boolean }) {
@@ -35,7 +36,7 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
   const [guide, setGuide] = usePersistedFlag('invoices.windowGuide', true);
   const [local, setLocal] = useState<InvoiceLayout | undefined>(settings?.layout);
   const load = useInvoices();
-  if (!settings || !local) return <p className="m">{t('invoiceLayout.noInvoicing')}</p>;
+  if (!settings || !local) return <InvoicingSetup ws={ws} nav={nav} canEdit={canEdit} onDone={(l) => setLocal(l)} />;
   const layout = local;
 
   async function patch(change: InvoicingPatch, next?: InvoiceLayout) {
@@ -56,15 +57,15 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
   }
 
   const own = settings.texts[lang] ?? {};
-  const texts = { ...builtIn(lang), ...own };
+  const texts = { ...builtInTexts(lang), ...own };
   const changed = Object.keys(own).length;
   function saveText(key: OwnText, value: string) {
     if (value === texts[key]) return;
-    void patch({ texts: { [lang]: { [key]: value === builtIn(lang)[key] ? null : value } } });
+    void patch({ texts: { [lang]: { [key]: value === builtInTexts(lang)[key] ? null : value } } });
   }
   function resetTexts() {
     const was = { ...own };
-    void patch({ texts: { [lang]: { intro: null, closing: null, mailSubject: null, mailBody: null } } });
+    void patch({ texts: { [lang]: { salutation: null, intro: null, closing: null, mailSubject: null, mailBody: null } } });
     nav.toast(t('invoiceLayout.textsReset'), () => { void patch({ texts: { [lang]: was } }); });
   }
 
@@ -79,14 +80,17 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
       <div>
         <div className="lkf">
           <div className="lkr"><span>{t('invoiceLayout.language')}</span>{seg(lang, LANGS.map((l): [InvoiceLanguage, string] => [l, l.toUpperCase()]), setLang, t('invoiceLayout.language'))}</div>
+          <label className="lkr"><span>{t('invoiceLayout.days')}</span>
+            <input key={settings.paymentTermsDays} className="mono" name="paymentTermsDays" inputMode="numeric" defaultValue={String(settings.paymentTermsDays)} disabled={!canEdit}
+              onBlur={(e) => { const days = Number(e.target.value); if (Number.isInteger(days) && days > 0 && days !== settings.paymentTermsDays) void patch({ paymentTermsDays: days }); }} />
+          </label>
           <label className="lkr"><span>{t('invoiceLayout.font')}</span>
             <select value={layout.font} disabled={!canEdit} onChange={(e) => setLayout('font', e.target.value as InvoiceLayout['font'])}>{INVOICE_FONTS.map((f) => <option key={f}>{f}</option>)}</select>
           </label>
           <div className="lkr"><span>{t('invoiceLayout.accent')}</span>
             <span className="sw">
               {[...ACCENTS.map(([c, name]) => [c, t(`invoiceLayout.colour.${name}`)]), ...(ACCENTS.some(([c]) => c === layout.accent) ? [] : [[layout.accent, layout.accent]])].map(([c, name]) => (
-                <button key={c} type="button" className={`swc${layout.accent === c ? ' on' : ''}`} style={{ ['--c' as string]: c }} disabled={!canEdit}
-                  title={name} aria-label={name} aria-pressed={layout.accent === c} onClick={() => setLayout('accent', c)} />
+                <button key={c} type="button" className={`swc${layout.accent === c ? ' on' : ''}`} style={{ ['--c' as string]: c }} disabled={!canEdit} aria-label={name} aria-pressed={layout.accent === c} onClick={() => setLayout('accent', c)} />
               ))}
             </span>
           </div>
@@ -109,6 +113,10 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
             </span>
           </div>
         </div>
+        <PayTo ws={ws} nav={nav} canEdit={canEdit} />
+        <div className="lkf" key={`greet-${lang}`}>
+          <label className="lkr"><span>{t('invoiceLayout.salutation')}</span><input name="salutation" defaultValue={texts.salutation} placeholder={t('invoiceLayout.salutationHint')} disabled={!canEdit} onBlur={(e) => saveText('salutation', e.target.value.trim())} /></label>
+        </div>
         <div className="lkf lkmail" key={lang}>
           <div className="lkr"><span>{t('invoiceLayout.mail')}</span><span className="m">{t('invoiceLayout.mailHint', { document: '{document}', company: '{company}' })}</span></div>
           <label className="lkr"><span>{t('invoiceLayout.mailSubject')}</span><input name="mailSubject" defaultValue={texts.mailSubject} disabled={!canEdit} onBlur={(e) => saveText('mailSubject', e.target.value)} /></label>
@@ -124,9 +132,63 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
   );
 }
 
+/**
+ * Firma › Rechnungslayout › Zahlungskonten: per currency, the bank account customers pay to, set
+ * after the first setup too (r8c-1: an EUR invoice needs payTo.EUR). An account without an IBAN
+ * takes it here, in the same change, as the setup does.
+ */
+function PayTo({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boolean }) {
+  const banks = banksOf(ws.bankAccounts);
+  const [pending, setPending] = useState<Partial<Record<InvoiceCurrency, string>>>({});
+  const [ibans, setIbans] = useState<Partial<Record<InvoiceCurrency, string>>>({});
+  async function set(currency: InvoiceCurrency, account: string, iban?: string) {
+    const bank = banks.find((a) => a.account === account);
+    try {
+      await api.patchWorkspace({ ...(iban && bank ? { banks: [{ bank: bank.bank, currency, iban }] } : {}), invoicing: { payTo: { [currency]: account ? { account } : null } } });
+      reloadWorkspace();
+      setPending({ ...pending, [currency]: undefined });
+      nav.toast(account ? t('invoiceLayout.payToSet', { currency, account: `${account} ${bank?.label ?? ''}`.trim() }) : t('invoiceLayout.payToCleared', { currency }));
+    } catch (e) { nav.toast(errorText(e)); }
+  }
+  return (
+    <div className="lkf" data-testid="pay-to">
+      <div className="lkr"><span>{t('invoiceLayout.payToTitle')}</span><span className="m">{t('invoiceLayout.payToHint')}</span></div>
+      {INVOICE_CURRENCIES.map((c) => {
+        const own = banks.filter((a) => a.currency === c);
+        const current = ws.invoicing?.payTo[c]?.account ?? '';
+        const picked = pending[c] ?? current;
+        const bank = own.find((a) => a.account === picked);
+        const needsIban = !!bank && !bank.iban;
+        return (
+          <label className="lkr" key={c} data-currency={c}><span>{t('invoiceLayout.payToIn', { currency: c })}</span>
+            {own.length === 0 ? <span className="m">{t('invoiceLayout.payToNoBank', { currency: c })}</span> : (
+              <span className="lkpay">
+                <select value={picked} disabled={!canEdit} onChange={(e) => {
+                  const account = e.target.value;
+                  if (!account || own.find((a) => a.account === account)?.iban) void set(c, account);
+                  else setPending({ ...pending, [c]: account });
+                }}>
+                  <option value="">{t('invoiceLayout.payToNone')}</option>
+                  {own.map((a) => <option key={a.account} value={a.account}>{a.account} {a.label}{a.iban ? ` · ${a.iban}` : ''}</option>)}
+                </select>
+                {needsIban && (
+                  <>
+                    <input className="mono wide" value={ibans[c] ?? ''} placeholder={t('invoiceLayout.ibanExample')} aria-label={t('invoiceLayout.iban')} disabled={!canEdit} onChange={(e) => setIbans({ ...ibans, [c]: e.target.value })} />
+                    <button type="button" className="btn" disabled={!canEdit || !ibans[c]?.trim()} onClick={() => void set(c, picked, ibans[c]!.trim())}>{t('common.save')}</button>
+                  </>
+                )}
+              </span>
+            )}
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 /** The newest invoice laid out as a draft with this layout (or a sample when there is none), its texts editable. */
 function Preview({ ws, layout, lang, texts, guide, canEdit, onText }: {
-  ws: CompanyInfo; layout: InvoiceLayout; lang: InvoiceLanguage; texts: { intro: string; closing: string }; guide: boolean; canEdit: boolean; onText(key: 'intro' | 'closing', value: string): void;
+  ws: CompanyInfo; layout: InvoiceLayout; lang: InvoiceLanguage; texts: { salutation: string; intro: string; closing: string }; guide: boolean; canEdit: boolean; onText(key: 'intro' | 'closing', value: string): void;
 }) {
   const load = useInvoices();
   const d = load.state === 'ready' ? load.data : undefined;
@@ -137,7 +199,7 @@ function Preview({ ws, layout, lang, texts, guide, canEdit, onText }: {
     const sample: Draft = {
       id: 'sample', createdAt: '', origin: 'manual', deleted: false, status: 'draft', comments: [], kind: 'invoice',
       customerId: customer?.id ?? '', date: localToday(), currency: 'CHF', language: lang,
-      lines: latest?.lines.length ? latest.lines : [{ text: t('invoiceLayout.sampleLine'), quantity: 4, unit: 'h', price: 120, vatRate: 8.1 }],
+      lines: latest?.lines.length ? latest.lines : [{ text: t('invoiceLayout.sampleLine'), quantity: 4, unit: 'h', price: 120, vatRate: invoiceRates()[0] }],
       intro: texts.intro, closing: texts.closing,
     };
     const ctx = contextOf(ws);
@@ -145,7 +207,55 @@ function Preview({ ws, layout, lang, texts, guide, canEdit, onText }: {
     const fallback = customer ? {} : { customer: { ...sheet.customer, name: t('invoiceLayout.sampleCustomer'), address: { street: t('invoiceLayout.sampleStreet'), number: '1', postcode: '8000', town: t('invoiceLayout.sampleTown'), country: 'CH' } } };
     const windowGuide = guide ? t(layout.window === 'left' ? 'invoiceLayout.windowFrameLeft' : 'invoiceLayout.windowFrameRight') : undefined;
     return { ...sheet, ...fallback, screen: screenOf(d, canEdit ? 'texts' : undefined, undefined, windowGuide) };
-  }, [d, ws, layout, lang, texts.intro, texts.closing, guide, canEdit]);
+  }, [d, ws, layout, lang, texts.intro, texts.closing, texts.salutation, guide, canEdit]);
   if (!data) return null;
   return <Sheet data={data} editing={canEdit} className="lkprev" onEdit={(key, value, final) => { if (final && (key === 'intro' || key === 'closing')) onText(key, value); }} />;
+}
+
+/**
+ * Before the first invoice: the three things an invoice needs that the layout does not hold, with
+ * the likely answers filled in (the CHF bank account, a revenue account). «Rechnungen einrichten»
+ * writes the invoicing block; the layout editor takes over.
+ */
+function InvoicingSetup({ ws, nav, canEdit, onDone }: { ws: CompanyInfo; nav: Nav; canEdit: boolean; onDone(layout: InvoiceLayout | undefined): void }) {
+  const banks = banksOf(ws.bankAccounts);
+  const names = getAccountMap();
+  const revenue = Object.keys(names).filter((n) => n.startsWith('3')).sort();
+  const first = (banks.find((a) => a.currency === 'CHF') ?? banks[0])?.account ?? '';
+  const [account, setAccountOnly] = useState(first);
+  const [revenueAccount, setRevenue] = useState(revenue.find((n) => n === '3400') ?? revenue[0] ?? '');
+  const [days, setDays] = useState('30');
+  // The IBAN the account's statements show is offered; the field asks only for one the books do not know.
+  const [iban, setIban] = useState(ws.statementIbans?.[first] ?? '');
+  const setAccount = (a: string) => { setAccountOnly(a); setIban(ws.statementIbans?.[a] ?? ''); };
+  const [busy, setBusy] = useState(false);
+  if (!banks.length) return <p className="m">{t('invoiceLayout.needsBank')}</p>;
+  async function setup() {
+    setBusy(true);
+    try {
+      const bank = banks.find((a) => a.account === account)!;
+      const info = await api.patchWorkspace({ ...(bank.iban ? {} : { banks: [{ bank: bank.bank, currency: bank.currency, iban: iban.trim() }] }), invoicing: { setup: { currency: bank.currency, account, revenueAccount, paymentTermsDays: Number(days) } } });
+      reloadWorkspace();
+      onDone(info.invoicing?.layout);
+      nav.toast(t('invoiceLayout.setupDone'));
+    } catch (e) { nav.toast(errorText(e)); } finally { setBusy(false); }
+  }
+  return (
+    <div className="invsetup">
+      <p className="lead">{t('invoiceLayout.setupLead')}</p>
+      <label>{t('invoiceLayout.payTo')}
+        <select value={account} onChange={(e) => setAccount(e.target.value)} disabled={!canEdit}>
+          {banks.map((a) => <option key={a.account} value={a.account}>{a.label} · {a.currency}{a.iban ? ` · ${a.iban}` : ''}</option>)}
+        </select>
+      </label>
+      {!banks.find((a) => a.account === account)?.iban ? <label>{t('invoiceLayout.iban')}<input className="mono wide" value={iban} placeholder={t('invoiceLayout.ibanExample')} onChange={(e) => setIban(e.target.value)} disabled={!canEdit} /></label> : null}
+      <label>{t('invoiceLayout.revenue')}
+        <select value={revenueAccount} onChange={(e) => setRevenue(e.target.value)} disabled={!canEdit}>
+          {revenue.map((n) => <option key={n} value={n}>{n} {names[n]}</option>)}
+        </select>
+      </label>
+      <label>{t('invoiceLayout.days')}<input className="mono" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value.replace(/\D/g, ''))} disabled={!canEdit} /></label>
+      <button type="button" className="btn primary" disabled={!canEdit || busy || !account || !revenueAccount || !days || (!banks.find((a) => a.account === account)?.iban && !iban.trim())} onClick={() => void setup()}>{t('invoiceLayout.setup')}</button>
+    </div>
+  );
 }

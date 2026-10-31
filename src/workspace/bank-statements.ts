@@ -1,5 +1,5 @@
 /**
- * Every statement under bank-statements/, with the ledger account it lands on. Extract (the
+ * Every statement under bank-statements/ of each year folder, with the ledger account it lands on. Extract (the
  * transactions), reconcile-balances (the closing balances), the import board and doctor all
  * read the folder through here, so they agree on which file counts.
  *
@@ -8,18 +8,22 @@
  * folder holding statements of two IBANs in one currency is a problem: both would book on one
  * ledger account.
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
-import { accountForStatement, type StatementMatch } from '../accounting/bank-accounts.js';
-import { readCamt, type CamtMessage, type CamtStatement } from '../parsers/camt053.js';
-import type { Workspace } from './workspace.js';
+import { readFileSync } from 'node:fs';
+import { accountForStatement, unknownOf, type StatementMatch, type StatementProblem } from '../accounting/bank-accounts.js';
+import { parseIban } from './banks.js';
+import { readCamt, type CamtMessage, type CamtStatement } from '../providers/camt053/camt053.js';
+import { filesOfPart, type Workspace } from './workspace.js';
+import type { UnknownAccount } from '../types/api-error.js';
+
+/** An IBAN as written, compact and upper case, for telling two accounts apart even when a check digit is off. */
+export const compactIban = (raw: string): string => raw.replace(/\s+/g, '').toUpperCase();
 
 type Matched = Extract<StatementMatch, { account: unknown }>;
 
 export type StatementFile =
   | { status: 'read'; file: string; statement: CamtStatement; account: Matched['account']; by: Matched['by'] }
   | { status: 'duplicate'; file: string; statement: CamtStatement; of: string }
-  | { status: 'unmatched'; file: string; statement: CamtStatement; problem: string }
+  | { status: 'unmatched'; file: string; statement: CamtStatement; problem: string; refusal: StatementProblem; unknown?: UnknownAccount }
   | { status: 'skipped'; file: string; message: CamtMessage | 'unreadable'; reason: string };
 
 const SKIPPED: Record<Exclude<CamtMessage, 'camt.053'>, string> = {
@@ -28,26 +32,20 @@ const SKIPPED: Record<Exclude<CamtMessage, 'camt.053'>, string> = {
   other: 'not a camt.053 bank statement.',
 };
 
-/** *.xml files under `dir`, relative to it, in directory order (dot files skipped). */
-function xmlFiles(dir: string, root = dir): string[] {
-  let names: string[];
-  try { names = readdirSync(dir).sort(); } catch { return []; }
-  return names.filter((n) => !n.startsWith('.')).flatMap((n) => {
-    const path = join(dir, n);
-    if (statSync(path).isDirectory()) return xmlFiles(path, root);
-    return n.toLowerCase().endsWith('.xml') ? [relative(root, path)] : [];
-  });
-}
+/** *.xml files of the statements, as [name relative to bank-statements/, full path], by name (dot files skipped). */
+const xmlFiles = (ws: Pick<Workspace, 'paths'>) => filesOfPart(ws.paths, 'statements')
+  .filter(([name]) => name.toLowerCase().endsWith('.xml'))
+  .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
 
 export function readBankStatements(ws: Pick<Workspace, 'paths' | 'bankAccounts'>): StatementFile[] {
   const out: StatementFile[] = [];
   const seen = new Map<string, string>();
   const ibanOf = new Map<string, { iban: string; file: string }>();
-  for (const file of xmlFiles(ws.paths.statements)) {
-    const folder = file.includes(sep) ? file.split(sep)[0] : '';
+  for (const [file, path] of xmlFiles(ws)) {
+    const folder = file.includes('/') ? file.split('/')[0] : '';
     let camt: ReturnType<typeof readCamt>;
     try {
-      camt = readCamt(readFileSync(join(ws.paths.statements, file), 'utf8'));
+      camt = readCamt(readFileSync(path, 'utf8'));
     } catch (e) {
       out.push({ status: 'skipped', file, message: 'unreadable', reason: `does not read as XML (${(e as Error).message.split('\n')[0]}).` });
       continue;
@@ -58,14 +56,16 @@ export function readBankStatements(ws: Pick<Workspace, 'paths' | 'bankAccounts'>
     }
     for (const statement of camt.statements) {
       const match = accountForStatement(ws.bankAccounts, { iban: statement.iban, currency: statement.currency, folder });
-      if ('problem' in match) { out.push({ status: 'unmatched', file, statement, problem: match.problem }); continue; }
+      if ('problem' in match) { out.push({ status: 'unmatched', file, statement, problem: match.problem, refusal: match.refusal, ...(match.unknown ? { unknown: match.unknown } : {}) }); continue; }
       const { account } = match;
-      const first = statement.iban ? ibanOf.get(`${account.bank} ${account.currency}`) : undefined;
-      if (first && first.iban !== statement.iban) {
-        out.push({ status: 'unmatched', file, statement, problem: `bank-statements/${folder}/ holds statements of two ${account.currency} accounts: IBAN ${first.iban} (${first.file}) and IBAN ${statement.iban}. Add iban: ${first.iban} to ${account.bank} ${account.currency} in belege.workspace.yaml, and list the other account with its own bank label, ledger account and iban.` });
+      const iban = statement.iban ? compactIban(statement.iban) : undefined;
+      const first = iban ? ibanOf.get(`${account.bank} ${account.currency}`) : undefined;
+      if (first && iban && first.iban !== iban) {
+        const refusal: StatementProblem = { kind: 'twoAccounts', currency: account.currency, bank: account.bank, ibans: [first.iban, iban], ...(parseIban(iban) ? { iban: parseIban(iban) } : {}) };
+        out.push({ status: 'unmatched', file, statement, refusal, ...unknownOf(refusal), problem: `bank-statements/${folder}/ holds statements of two ${account.currency} accounts: IBAN ${first.iban} (${first.file}) and IBAN ${iban}. Add iban: ${first.iban} to ${account.bank} ${account.currency} in belege.workspace.yaml, and list the other account with its own bank label, ledger account and iban.` });
         continue;
       }
-      if (statement.iban) ibanOf.set(`${account.bank} ${account.currency}`, { iban: statement.iban, file });
+      if (iban) ibanOf.set(`${account.bank} ${account.currency}`, { iban, file });
       const key = `${account.bank} ${account.currency} ${statement.id}`;
       const earlier = seen.get(key);
       if (earlier) { out.push({ status: 'duplicate', file, statement, of: earlier }); continue; }

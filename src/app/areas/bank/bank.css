@@ -20,6 +20,9 @@
 .row .wn, .paybar .wn { color: var(--warn); }
 .row.missing .t { color: var(--warn); }
 .paybar { min-height: 22px; flex-wrap: wrap; align-items: center; color: var(--ink-2); }
+/* A long note or text wraps inside the desk: never under the payment list beside it. */
+.paybar > span { min-width: 0; }
+.paybar button.golink { white-space: normal; overflow-wrap: anywhere; text-align: left; }
 .paybar .payhint { color: var(--faint); }
 .paybar .golink { color: var(--ink-2); border-bottom: 1px solid var(--line-2); }
 .paybar .x { color: var(--faint); margin-left: 6px; font-size: 15px; line-height: 1; }
@@ -47,3 +50,42 @@
 .page > .notice { margin: 0 0 14px; }
 .paybar .addnote { color: var(--faint); border-bottom-style: dashed; }
 .paybar input.note { font: inherit; color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--accent); outline: 0; padding: 0; width: 220px; }
+.counts.stc button.warn { font-size: inherit; white-space: nowrap; }
+.counts.stc button.warn:hover { text-decoration: underline; }
+.notice.strays { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.notice.strays .golink { color: var(--ink-2); font-size: 12.5px; text-align: left; }
+.paylist .pay .nb { color: var(--warn); font-size: 11px; margin-left: 4px; }
+.paylist .pay .hm { color: var(--muted); font-size: 11px; margin-left: 4px; }
+.zfilter { font-size: 11.5px; color: var(--muted); margin: 0 0 6px; }
+.zfilter.on { color: var(--warn); }
+
+/* The parts of a collective payment (r9k-6): payee and reference left, amount right. */
+.payparts { flex-basis: 100%; margin-top: 4px; font-size: 12.5px; }
+.payparts ul { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 2px; max-width: 520px; }
+.payparts li { display: flex; justify-content: space-between; gap: 12px; color: var(--ink-2); }
+.wftask .payparts { margin: 2px 0 6px; }
+/* Payments the inbox's open run books (#218): said quietly, not yet the person's to do. */
+.counts.stc button.m { color: var(--muted); display: inline-flex; align-items: center; gap: 6px; font-size: inherit; white-space: nowrap; }
+.counts.stc button.m:hover { text-decoration: underline; }
+.paylist .pay .nb.m { color: var(--muted); }
+
+/* An account's reconciliation of movements read from PDFs with its bank's file (#254). */
+.reconcile { margin: 10px 0 14px; padding: 12px 14px; border: 1px solid var(--warn); border-radius: 10px; display: flex; flex-direction: column; gap: 8px; max-width: 760px; }
+.reconcile h3 { margin: 0; font-size: 14px; }
+.reconcile-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.reconcile-table th { text-align: left; font-weight: 500; color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.reconcile-table td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.reconcile-table tr.open td:first-child { color: var(--warn); }
+.reconcile-table select { max-width: 100%; font-size: 12.5px; }
+.reconcile-table .m { color: var(--muted); }
+.reconcile-diff { display: block; margin-top: 4px; color: var(--ink-2); }
+.reconcile-acts { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.reconcile-acts .m { color: var(--muted); font-size: 12.5px; }
+@media (max-width: 640px) { .reconcile-table, .reconcile-table tbody, .reconcile-table tr, .reconcile-table td { display: block; } .reconcile-table thead { display: none; } }
+
+/* A kept statement PDF's facts (#243): what it gives the books, the table to fill or correct; the PDFs not read yet above the list. */
+.pdffacts { margin: 10px 0 14px; display: flex; flex-direction: column; gap: 6px; max-width: 760px; }
+.pdffacts .m, .stmreads .m { color: var(--muted); }
+.pdffacts-acts { display: flex; gap: 14px; }
+.notice.stmreads { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.notice.stmreads .warn { color: var(--warn); }

@@ -1,0 +1,48 @@
+# The rate rows of section II of the MWST return (effective method), keyed by Ziffer.
+# A supply row is declared gross, a Bezugsteuer row net. Superseded rates ended on 31.12.2023.
+
+rows:
+  "302":
+    rate: 7.7
+    kind: supply
+    code: V77
+    name: Normalsatz
+    superseded: true
+  "303":
+    rate: 8.1
+    kind: supply
+    code: V81
+    name: Normalsatz
+  "312":
+    rate: 2.5
+    kind: supply
+    code: V25-N
+    name: Reduzierter Satz
+    superseded: true
+  "313":
+    rate: 2.6
+    kind: supply
+    code: V26
+    name: Reduzierter Satz
+  "342":
+    rate: 3.7
+    kind: supply
+    code: V37
+    name: Beherbergungssatz
+    superseded: true
+  "343":
+    rate: 3.8
+    kind: supply
+    code: V38
+    name: Beherbergungssatz
+  "382":
+    rate: 7.7
+    kind: acquisition
+    code: B77
+    name: Bezugsteuer
+    superseded: true
+  "383":
+    rate: 8.1
+    kind: acquisition
+    code: B81
+    name: Bezugsteuer

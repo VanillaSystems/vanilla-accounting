@@ -1,0 +1,12 @@
+label: {"de": "Belege zuordnen", "en": "Match the evidence", "fr": "Rapprocher les pièces", "it": "Abbinare i documenti"}
+desc: {"de": "Findet zu jeder Bankbewegung eines Zeitraums ihre Belege: erst Regeln, dann KI, dann eine Person. Eine belegte Bewegung geht danach von selbst an «Buchen».", "en": "Finds the receipts of every bank transaction of a period: rules first, then the AI, then a person. A transaction with its evidence then goes to «Book» on its own.", "fr": "Trouve les pièces de chaque mouvement d’une période : d’abord les règles, puis l’IA, puis une personne. Un mouvement justifié passe ensuite de lui-même à « Comptabiliser ».", "it": "Trova i documenti di ogni movimento di un periodo: prima le regole, poi l’IA, poi una persona. Un movimento documentato passa poi da solo a «Registrare»."}
+phase: book
+cadence: {"de": "laufend", "en": "ongoing", "fr": "en continu", "it": "continuo"}
+for: transaction
+triggers:
+  - manual: {"for": "period", "label": {"de": "Zuordnen und buchen", "en": "Match and book", "fr": "Rapprocher et comptabiliser", "it": "Abbina e registra"}}
+  - event: {"name": "transaction.imported", "off": true}
+  - event: {"name": "receipt.archived", "off": true}
+emits: ["transaction.settled"]
+start: rules
+steps: ["rules", "ai", "wait", "person", "settle"]

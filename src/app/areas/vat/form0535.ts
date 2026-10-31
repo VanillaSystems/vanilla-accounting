@@ -2,8 +2,12 @@
  * Form 0535 (Korrekturabrechnung, effective method): its lines in the ESTV form's order, and what
  * a correction case changes on them. Figures come from figuresFromBooks and the filed XML.
  */
-import { roundCHF, taxOf, TAX_RATE_ROWS, type ReturnFigures, type TaxRateRow, type ZifferEffect } from '../../../accounting/index.js';
+import { roundCHF, type ZifferEffect } from '../../../accounting/index.js';
+import { taxOfRow, type RateRowAt } from '../../../engines/return.js';
+import { vat } from '../../../engines/index.js';
 import { accountingName, t } from '../../i18n/index.js';
+import type { ReturnFigures } from '../../../engines/return.js';
+import { correctionBoxes } from './model.js';
 
 export interface FormLine {
   ziffer: string;
@@ -20,23 +24,30 @@ export interface FormLine {
 const plain = (ziffer: string, opts: Partial<FormLine> = {}): FormLine =>
   ({ ziffer, label: t(`form0535.z${ziffer}` as 'form0535.z200'), value: (f) => f.ziffern[ziffer] ?? 0, ...opts });
 
-function rateLines(row: TaxRateRow): FormLine[] {
+function rateLines(row: RateRowAt): FormLine[] {
   const turnover = (f: ReturnFigures) => f.ziffern[row.ziffer] ?? 0;
   const name = accountingName(row.name);
   const optional = row.superseded;
   return [
     { ziffer: row.ziffer, label: t(row.kind === 'supply' ? 'form0535.rateSuppliesGross' : 'form0535.rateSuppliesNet', { name, rate: row.rate }), value: turnover, optional },
-    { ziffer: row.ziffer, label: t('form0535.rateTax', { name, rate: row.rate }), value: (f) => roundCHF(taxOf(row, turnover(f))), optional, tax: true },
+    { ziffer: row.ziffer, label: t('form0535.rateTax', { name, rate: row.rate }), value: (f) => roundCHF(taxOfRow(row, turnover(f))), optional, tax: true },
   ];
 }
 
+/**
+ * The sections of the firm's own form (vat().form): its deduction boxes, its rate rows, its
+ * input-tax boxes (none on the net tax rate method, whose section is left out, r6f-26) and the
+ * derived totals it has.
+ */
 export function formSections(): Array<{ title: string; lines: FormLine[] }> {
+  const boxes = correctionBoxes(vat().form);
+  const lines = (ns: string[], totals: string[]) => [...ns.map((n) => plain(n, { optional: n === '205' })), ...totals.map((n) => plain(n, { total: true }))];
   return [
-    { title: t('vat.sectionTurnover'), lines: [...['200', '205', '220', '221', '225', '230', '235', '280'].map((n) => plain(n)), plain('289', { total: true }), plain('299', { total: true })] },
-    { title: t('vat.sectionTax'), lines: [...TAX_RATE_ROWS.flatMap(rateLines), plain('399', { total: true })] },
-    { title: t('vat.sectionInputTax'), lines: [...['400', '405', '410', '415', '420'].map((n) => plain(n)), plain('479', { total: true })] },
-    { title: t('vat.sectionSettlement'), lines: [plain('500', { total: true }), plain('510', { total: true })] },
-    { title: t('vat.sectionOtherFlows'), lines: [plain('900'), plain('910')] },
+    { title: t('vat.sectionTurnover'), lines: lines(boxes.turnover, boxes.turnoverTotals) },
+    { title: t('vat.sectionTax'), lines: [...vat().rateRows.flatMap(rateLines), ...lines([], boxes.taxTotals)] },
+    ...(boxes.inputTax.length ? [{ title: t('vat.sectionInputTax'), lines: lines(boxes.inputTax, boxes.inputTaxTotals) }] : []),
+    { title: t('vat.sectionSettlement'), lines: lines([], boxes.settlement) },
+    { title: t('vat.sectionOtherFlows'), lines: lines(boxes.otherFlows, []) },
   ];
 }
 

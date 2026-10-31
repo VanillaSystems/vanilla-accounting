@@ -1,0 +1,6 @@
+label: {"de": "Korrekturbuchung in der offenen Periode", "en": "Correcting entry in the open period", "fr": "Écriture de correction dans la période ouverte", "it": "Registrazione di correzione nel periodo aperto"}
+uses: ledger.book
+reads: ["entries"]
+effects: ["ledger.book"]
+emits: ["made"]
+outcomes: {"booked": "declare"}

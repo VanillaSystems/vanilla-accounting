@@ -1,0 +1,10 @@
+label: {"de": "Jahresabschluss und Eröffnung", "en": "Year close and opening", "fr": "Clôture et ouverture", "it": "Chiusura e apertura"}
+desc: {"de": "Bewertet die Fremdwährungskonten zum 31.12., lässt den Abschluss freigeben und bucht die Eröffnungssalden des neuen Jahres.", "en": "Revalues the foreign-currency accounts at 31 December, has the close approved and books the new year’s opening balances.", "fr": "Réévalue les comptes en devises au 31.12, fait approuver la clôture et comptabilise les soldes d’ouverture de la nouvelle année.", "it": "Rivaluta i conti in valuta al 31.12, fa approvare la chiusura e registra i saldi di apertura del nuovo anno."}
+phase: year
+cadence: {"de": "jährlich", "en": "yearly", "fr": "annuel", "it": "annuale"}
+for: year
+triggers:
+  - manual: {"for": "year", "label": {"de": "Jahr abschliessen", "en": "Close the year", "fr": "Clôturer l’année", "it": "Chiudi l’anno"}}
+emits: ["year.opened"]
+start: revalue
+steps: ["revalue", "review", "close", "open"]

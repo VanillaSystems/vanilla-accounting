@@ -17,7 +17,8 @@
 # rebook is `npm run classify -- --force`, which removes and rebooks every
 # transaction whose entries are all classify's own open-period work. It keeps
 # closed periods, entries with `corrects`, entries with no bank transaction behind
-# them (SHOPIFY-<n>, M-refs) and rebook-shopify payouts (src/accounting/classify-force.ts).
+# them (a sales report's SR-<provider>-<order>, M-refs) and payouts an earlier tool split per order
+# (src/accounting/classify-force.ts).
 
 id: booking
 name: Book transactions
@@ -201,9 +202,9 @@ steps:
     outcomes: [swiss, export, new_case]
     needs: [side.a_sale]
     expect: >
-      every sale's code follows the tax its own order carried, and no sale is
-      V0 without a recorded reason. A regime the guide has no settled rule for
-      (EU VAT collected by Shopify, as of 2026-10) is parked, not guessed.
+      every sale's code follows its delivery country, checked against the tax its
+      own order carried, and no sale is V0 without a recorded reason. A foreign
+      tax line on an export is a fact in the reason, not a reason to park it.
     phase: vat
 
   - id: sale_rated

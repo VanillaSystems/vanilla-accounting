@@ -17,11 +17,17 @@ targets:
     info:
       path: Belege/Info.plist
       properties:
-        NSCameraUsageDescription: "Used to photograph receipts"
-        NSLocalNetworkUsageDescription: "Used to find and connect to the Belege server on your local network"
+        NSCameraUsageDescription: "Zum Fotografieren von Belegen und zum Scannen des Koppel-Codes, den der Mac zeigt"
+        NSLocalNetworkUsageDescription: "Um den Mac im lokalen Netzwerk zu finden und ihm die Belege zu senden"
         NSBonjourServices:
           - "_http._tcp"
-        UILaunchScreen: {}
+        # Short enough not to be squeezed under the home screen icon; the App Store name can stay «Vanilla Belege».
+        CFBundleDisplayName: "Belege"
+        # Stand-in until the branding repo delivers the launch image (see docs/0.4.0/mockups/phone-app/NOTES.md).
+        UILaunchScreen:
+          UIColorName: LaunchBlue
+          UIImageName: LaunchMark
+          UIImageRespectsSafeAreaInsets: false
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
     configFiles:
@@ -35,3 +41,4 @@ targets:
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
         CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor

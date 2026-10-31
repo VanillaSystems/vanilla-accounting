@@ -4,15 +4,21 @@
  * the period is parsed here by src/accounting/periods.ts and leaves as a Period, never a token.
  */
 import { localToday, parsePeriod, type IsoDate, type Period } from '../../accounting/periods.js';
+import { KNOWLEDGE_PAGES, type KnowledgePage } from '../../knowledge/topics.js';
+import { chipToken, parseChip, type Chip } from './chips.js';
 
 export const REPORTS = ['income', 'balance', 'trial'] as const;
 export type Report = typeof REPORTS[number];
 
-export const COMPANY_SECTIONS = ['profile', 'vat', 'banks', 'invoice-layout', 'mail', 'accounts', 'periods', 'opening', 'display'] as const;
+export const COMPANY_SECTIONS = ['profile', 'vat', 'banks', 'invoice-layout', 'mail', 'sources', 'rules', 'accounts', 'dimensions', 'periods', 'opening', 'display', 'ai', 'phone'] as const;
 export type CompanySection = typeof COMPANY_SECTIONS[number];
 
-export const RECEIPT_FILTERS = ['zugeordnet', 'offen', 'ohneDatum'] as const;
-export type ReceiptFilter = typeof RECEIPT_FILTERS[number];
+/** The tabs of a workflow in Automatisierung; `graph` is the default and leaves no segment. */
+export const AUTOMATION_TABS = ['graph', 'triggers', 'runs', 'files'] as const;
+export type AutomationTab = typeof AUTOMATION_TABS[number];
+
+/** Segments under /automation that name a page, not a workflow: no workflow may take these ids. */
+export const AUTOMATION_PAGES = ['runs', 'workflows', 'map', 'queue', 'tasks'] as const;
 
 export const INVOICE_STATUSES = ['open', 'overdue', 'draft', 'paid'] as const;
 export type InvoiceStatus = typeof INVOICE_STATUSES[number];
@@ -20,15 +26,35 @@ export type InvoiceStatus = typeof INVOICE_STATUSES[number];
 export type Route =
   | { area: 'receipts'; id?: string }
   /** A payment without its statement is /payments/<ref>: the bank area finds the statement. */
-  | { area: 'bank'; statement?: string; payment?: string }
+  /** `file`: one statement file read in, whole (Kontoauszüge › Dateien, #208): `<account>/<file name>`, /bank/files/<account>/<file name>. */
+  | { area: 'bank'; statement?: string; payment?: string; file?: string }
   | { area: 'journal'; id?: string }
   | { area: 'vat'; ziffer?: string }
   | { area: 'codes'; code?: string }
   | { area: 'reports'; report: Report; account?: string }
+  /** Eigene Berichte: the reports the owner saved (knowledge/reports/<slug>.report.yaml), one of them by its slug. */
+  | { area: 'reports'; report: 'custom'; saved?: string }
   | { area: 'close'; step?: string }
   /** An unknown section stays in the route, so the area can say it does not exist (urls.md rule 5). */
   | { area: 'company'; section: CompanySection | (string & {}) }
-  | { area: 'invoices'; view: 'list' | 'customers' | 'sent'; id?: string };
+  | { area: 'invoices'; view: 'list' | 'customers' | 'sent'; id?: string }
+  /** Automatisierung (docs/0.4.0/ui/design.md): a workflow with its tab, one run, the process map, the queue, the tasks. */
+  /** The area's home (Leitstand): what the app did in the period, what waits for the person, what runs. */
+  | { area: 'automation'; view: 'home' }
+  /** Läufe: the latest runs, each with what came in and what came of it. */
+  | { area: 'automation'; view: 'runs' }
+  | { area: 'automation'; view: 'workflow'; workflow?: string; tab: AutomationTab; step?: string }
+  | { area: 'automation'; view: 'run'; run: string }
+  | { area: 'automation'; view: 'map'; map: 'phases' | 'events' }
+  | { area: 'automation'; view: 'queue' }
+  | { area: 'automation'; view: 'tasks'; run?: string }
+  /** Änderungen: the AI's draft, edits made outside the app, or one save of Verlauf; `file` one file of it. */
+  | { area: 'changes'; commit?: string; file?: string }
+  /** Geschäftspartner (docs/0.4.0/knowledge.md): the list, and one partner's page by its id. */
+  | { area: 'partners'; id?: string }
+  /** Wissen: Lücken, Von der App, or (absent) the area's first page; a topic of Arbeitsweise by its slug. */
+  | { area: 'knowledge'; page?: KnowledgePage }
+  | { area: 'knowledge'; topic: string };
 
 export type AreaId = Route['area'];
 export type RouteOf<A extends AreaId> = Extract<Route, { area: A }>;
@@ -44,17 +70,24 @@ export const AREA_HOME: { [A in AreaId]: RouteOf<A> } = {
   reports: { area: 'reports', report: 'income' },
   close: { area: 'close' },
   company: { area: 'company', section: 'profile' },
+  automation: { area: 'automation', view: 'home' },
+  changes: { area: 'changes' },
+  partners: { area: 'partners' },
+  knowledge: { area: 'knowledge' },
 };
 
 export interface Query {
   /** Absent: the open period. */
   period?: Period;
   q?: string;
-  filter?: ReceiptFilter;
+  /** A list's filter chips (src/app/shell/chips.ts), `?f=<field>_<value>`, repeated, in their order. */
+  chips?: Chip[];
   status?: InvoiceStatus;
   vat?: string;
   /** /invoices/new?customer=<id>: the customer of the draft to write. */
   customer?: string;
+  /** /company/rules?payment=<ref>: the form of a new rule, started from that payment. */
+  payment?: string;
 }
 
 export interface Location { route: Route; query: Query }
@@ -76,10 +109,11 @@ export function formatLocation({ route, query }: Location): string {
   const path = `/${segmentsOf(route).filter((s): s is string => !!s).map(encodeURIComponent).join('/')}`;
   const qs = new URLSearchParams();
   if (query.period) qs.set('period', query.period.token.replace('..', '_'));
-  if (query.filter) qs.set('filter', query.filter);
   if (query.status) qs.set('status', query.status);
   if (query.vat) qs.set('vat', query.vat);
   if (query.customer) qs.set('customer', query.customer);
+  if (query.payment) qs.set('payment', query.payment);
+  for (const c of query.chips ?? []) qs.append('f', chipToken(c));
   if (query.q) qs.set('q', query.q);
   const s = qs.toString();
   return s ? `${path}?${s}` : path;
@@ -90,43 +124,79 @@ export const isRedirect = (p: Location | Redirect): p is Redirect => 'redirect' 
 function segmentsOf(r: Route): Array<string | undefined> {
   switch (r.area) {
     case 'receipts': return ['receipts', r.id];
-    case 'bank': return r.statement ? ['bank', r.statement, r.payment] : r.payment ? ['payments', r.payment] : ['bank'];
+    case 'bank': return r.file ? ['bank', 'files', ...r.file.split(/\/(.*)/s, 2)] : r.statement ? ['bank', r.statement, r.payment] : r.payment ? ['payments', r.payment] : ['bank'];
     case 'journal': return ['journal', r.id];
     case 'vat': return ['vat', r.ziffer];
     case 'codes': return ['vat', 'codes', r.code];
-    case 'reports': return ['reports', r.report, r.account];
+    case 'reports': return r.report === 'custom' ? ['reports', 'custom', r.saved] : ['reports', r.report, r.account];
     case 'close': return ['close', r.step];
     case 'company': return ['company', r.section];
     case 'invoices': return ['invoices', r.view === 'list' ? undefined : r.view, r.id];
+    case 'automation': return automationSegments(r);
+    case 'changes': return ['changes', r.commit, r.commit ? r.file : undefined];
+    case 'partners': return ['partners', r.id];
+    case 'knowledge': return ['knowledge', 'topic' in r ? r.topic : r.page];
   }
 }
 
-function routeOf([a, b, c]: string[]): Route {
+function routeOf([a, b, c, d]: string[]): Route {
   switch (a) {
     case 'receipts': return defined({ area: 'receipts', id: b });
-    case 'bank': return defined({ area: 'bank', statement: b, payment: b && c });
+    case 'bank': return b === 'files' && c && d ? { area: 'bank', file: `${c}/${d}` } : defined({ area: 'bank', statement: b, payment: b && c });
     case 'payments': return defined({ area: 'bank', payment: b });
     case 'journal': return defined({ area: 'journal', id: b });
     case 'vat': return b === 'codes' ? defined({ area: 'codes', code: c }) : defined({ area: 'vat', ziffer: b });
-    case 'reports': return isOneOf(REPORTS, b) ? defined({ area: 'reports', report: b, account: c }) : { area: 'reports', report: 'income' };
+    case 'reports': return b === 'custom' ? defined({ area: 'reports', report: 'custom', saved: c }) : isOneOf(REPORTS, b) ? defined({ area: 'reports', report: b, account: c }) : { area: 'reports', report: 'income' };
     case 'close': return defined({ area: 'close', step: b });
     case 'company': return { area: 'company', section: b ?? 'profile' };
     case 'invoices': return b === 'customers' || b === 'sent' ? defined({ area: 'invoices', view: b, id: c }) : defined({ area: 'invoices', view: 'list', id: b });
+    case 'automation': return automationRoute(b, c, d);
+    case 'changes': return defined({ area: 'changes', commit: b, file: b ? c : undefined });
+    case 'partners': return defined({ area: 'partners', id: b });
+    case 'knowledge': return !b ? { area: 'knowledge' } : isOneOf(KNOWLEDGE_PAGES, b) ? { area: 'knowledge', page: b } : { area: 'knowledge', topic: b };
     default: return { area: 'receipts' };
   }
 }
 
+function automationSegments(r: RouteOf<'automation'>): Array<string | undefined> {
+  switch (r.view) {
+    case 'home': return ['automation'];
+    case 'runs': return ['automation', 'runs'];
+    case 'workflow':
+      if (!r.workflow) return ['automation', 'workflows'];
+      return r.step ? ['automation', r.workflow, 'graph', r.step] : ['automation', r.workflow, r.tab === 'graph' ? undefined : r.tab];
+    case 'run': return ['automation', 'runs', r.run];
+    case 'map': return ['automation', 'map', r.map === 'phases' ? undefined : r.map];
+    case 'queue': return ['automation', 'queue'];
+    case 'tasks': return ['automation', 'tasks', r.run];
+  }
+}
+
+function automationRoute(b?: string, c?: string, d?: string): Route {
+  if (b === 'runs' && c) return { area: 'automation', view: 'run', run: c };
+  if (b === 'map') return { area: 'automation', view: 'map', map: c === 'events' ? 'events' : 'phases' };
+  if (b === 'queue') return { area: 'automation', view: 'queue' };
+  if (b === 'tasks') return defined({ area: 'automation', view: 'tasks', run: c });
+  if (!b) return { area: 'automation', view: 'home' };
+  if (b === 'runs') return { area: 'automation', view: 'runs' };
+  if (b === 'workflows') return { area: 'automation', view: 'workflow', tab: 'graph' };
+  if (c === 'graph' && d) return { area: 'automation', view: 'workflow', workflow: b, tab: 'graph', step: d };
+  return { area: 'automation', view: 'workflow', workflow: b, tab: isOneOf(AUTOMATION_TABS, c) ? c : 'graph' };
+}
+
 function queryOf(params: URLSearchParams, today: IsoDate): Query {
   const get = (k: string) => params.get(k) || undefined;
-  const filter = LEGACY_FILTER[get('filter') ?? ''] ?? get('filter');
+  const legacy = LEGACY_FILTER[get('filter') ?? ''];
+  const chips = [...(legacy ? [legacy] : []), ...params.getAll('f').flatMap((f) => parseChip(f) ?? [])];
   const status = get('status');
   return defined({
     period: periodOf(get('period'), today),
     q: get('q'),
-    filter: isOneOf(RECEIPT_FILTERS, filter) ? filter : undefined,
+    chips: chips.length ? chips : undefined,
     status: isOneOf(INVOICE_STATUSES, status) ? status : undefined,
     vat: get('vat'),
     customer: get('customer'),
+    payment: get('payment'),
   });
 }
 
@@ -135,7 +205,12 @@ function periodOf(token: string | undefined, today: IsoDate): Period | undefined
   return token ? parsePeriod(token.replace('_', '..'), today) ?? undefined : undefined;
 }
 
-const LEGACY_FILTER: Record<string, ReceiptFilter> = { linked: 'zugeordnet', unlinked: 'offen' };
+/** Belege's old count tabs (`?filter=`), now chips of its state field. */
+const LEGACY_FILTER: Record<string, Chip> = {
+  zugeordnet: { field: 'state', value: 'linked' }, linked: { field: 'state', value: 'linked' },
+  offen: { field: 'state', value: 'open' }, unlinked: { field: 'state', value: 'open' },
+  ohneDatum: { field: 'state', value: 'noDate' },
+};
 
 /** The tabs of /<lang>/<period>/<tab>?receipt=&tx=&je=&account=&ziffer=&view=&code= links. */
 const LEGACY_TABS: Record<string, (p: (k: string) => string | undefined) => Route> = {

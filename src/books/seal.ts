@@ -1,19 +1,19 @@
 /**
  * Seals of the filed quarters: golden rule 1 (AGENTS.md) made checkable after the fact. When a
- * quarter is closed, filings/<year>/seal-<Qn>.json records a SHA-256 of every journal entry,
+ * quarter is closed, transactional-data/<year>/filings/seal-<Qn>.json records a SHA-256 of every journal entry,
  * bank transaction and receipt mapping dated on or before the quarter's last day. loadBooks
  * checks every seal; books whose sealed part changed still open, so the change can be looked at,
  * but saveBooks refuses to write them until they are restored from git.
  *
- * mutateJournal (src/books/store.ts) stops a change while the app runs; a seal also catches one
+ * The write door, update (src/books/store.ts), stops a change while the app runs; a seal also catches one
  * made by a hand edit, an ad-hoc script or a bad merge, and still holds after a git commit.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { derivePeriod } from '../accounting/periods.js';
+import { addDays, derivePeriod, filingKeyOf, isFilingKey, type FilingLength } from '../accounting/periods.js';
 import type { Index, QuarterKey } from '../types/index.js';
-import type { Workspace } from '../workspace/workspace.js';
+import { yearPaths, yearsOf, type Workspace } from '../workspace/workspace.js';
 
 type Records = Pick<Index, 'transactions' | 'mappings' | 'journalEntries'>;
 
@@ -87,17 +87,19 @@ function fingerprint(books: Records, through: string): Pick<Seal, 'sha256' | 're
   };
 }
 
-const QUARTER = /^(\d{4})-Q([1-4])$/;
+const PERIOD = /^(\d{4})-(Q[1-4]|H[12])$/;
 
-export function asQuarter(text: string): QuarterKey | undefined {
-  return QUARTER.test(text) ? (text as QuarterKey) : undefined;
+/** `text` as a filing period of `length` (a quarter, or a half year for a firm filing half-yearly). */
+export function asQuarter(text: string, length: FilingLength): QuarterKey | undefined {
+  return isFilingKey(text, length) ? (text as QuarterKey) : undefined;
 }
 
 const quarterEnd = (q: QuarterKey) => derivePeriod(q)!.to;
 
+/** filings/seal-Q3.json, filings/seal-H1.json. */
 export function sealFile(ws: Workspace, q: QuarterKey): string {
-  const [, year, n] = QUARTER.exec(q)!;
-  return join(ws.paths.filings, year, `seal-Q${n}.json`);
+  const [, year, n] = PERIOD.exec(q)!;
+  return join(yearPaths(ws.paths, year).filings, `seal-${n}.json`);
 }
 
 /** Pure: the seal of `quarter` for these books. */
@@ -108,14 +110,14 @@ export function sealOf(books: Records, quarter: QuarterKey, sealedAt: string): S
 
 /** Every seal file of the workspace, by quarter. */
 function sealFiles(ws: Workspace): { quarter: QuarterKey; file: string }[] {
-  const { filings } = ws.paths;
-  if (!existsSync(filings)) return [];
-  return readdirSync(filings, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && /^\d{4}$/.test(d.name))
-    .flatMap((d) => readdirSync(join(filings, d.name))
-      .map((f) => /^seal-Q([1-4])\.json$/.exec(f))
-      .filter((m): m is RegExpExecArray => !!m)
-      .map((m) => ({ quarter: `${d.name}-Q${m[1]}` as QuarterKey, file: join(filings, d.name, m[0]) })))
+  return yearsOf(ws.paths)
+    .flatMap((year) => {
+      const { filings } = yearPaths(ws.paths, year);
+      return existsSync(filings) ? readdirSync(filings)
+        .map((f) => /^seal-(Q[1-4]|H[12])\.json$/.exec(f))
+        .filter((m): m is RegExpExecArray => !!m)
+        .map((m) => ({ quarter: `${year}-${m[1]}` as QuarterKey, file: join(filings, m[0]) })) : [];
+    })
     .sort((a, b) => a.quarter.localeCompare(b.quarter));
 }
 
@@ -145,7 +147,7 @@ export function checkSeals(ws: Workspace, books: Records & Pick<Index, 'config'>
   const dates = [...books.transactions.map((t) => t.date), ...(books.journalEntries ?? []).map((e) => e.date)].filter(Boolean).sort();
   const unsealed: QuarterKey[] = [];
   if (closedThrough && dates.length) {
-    for (let q = quarterOf(dates[0]); quarterEnd(q) <= closedThrough; q = nextQuarter(q)) {
+    for (let q = periodKeyOf(dates[0], ws.filingLength); quarterEnd(q) <= closedThrough; q = nextQuarter(q)) {
       const { from, to } = derivePeriod(q)!;
       if (!sealed.has(q) && dates.some((d) => d >= from && d <= to)) unsealed.push(q);
     }
@@ -153,12 +155,16 @@ export function checkSeals(ws: Workspace, books: Records & Pick<Index, 'config'>
   return { checks, unsealed };
 }
 
-export const quarterOf = (date: string): QuarterKey => `${date.slice(0, 4)}-Q${Math.floor((+date.slice(5, 7) - 1) / 3) + 1}` as QuarterKey;
+/** The filing period of `length` that holds `date`. */
+export const periodKeyOf = (date: string, length: FilingLength): QuarterKey => filingKeyOf(date, length) as QuarterKey;
 
+/** The filing period after `q`, of the same length. */
 export function nextQuarter(q: QuarterKey): QuarterKey {
-  const [, year, n] = QUARTER.exec(q)!;
-  return (n === '4' ? `${+year + 1}-Q1` : `${year}-Q${+n + 1}`) as QuarterKey;
+  return filingKeyOf(addDays(quarterEnd(q), 1), derivePeriod(q)!.kind) as QuarterKey;
 }
+
+/** Whether `q` is the last filing period of its year: it closes with the year, not on its own. */
+export const closesTheYear = (q: QuarterKey): boolean => quarterEnd(q).endsWith('-12-31');
 
 export type SealResult = { status: 'written' | 'intact'; file: string; seal?: Seal };
 

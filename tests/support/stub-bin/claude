@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 // Stands in for the `claude` CLI that src/llm/ask.ts spawns, so a test runs the real code with
 // no model call. A classify prompt gets one entry on 6570 per transaction, I81 when its section
-// carries Swiss VAT facts. A VAT facts prompt gets STUB_VAT (no Swiss VAT). The vision prompt that
+// carries Swiss VAT facts, or the answer $CLAUDE_STUB_CLASSIFY (JSON keyed by ref) gives its ref. A VAT facts prompt gets STUB_VAT (no Swiss VAT). The vision prompt that
 // reads a scan's text gets STUB_OCR_TEXT; any other prompt (a match, also one that reads the file)
-// answers STUB_ANSWER (JSON), or $CLAUDE_STUB_ANSWER when set. `--version` answers at once.
-// $CLAUDE_STUB_PROMPTS: each prompt is appended there.
+// answers STUB_ANSWER (JSON), or $CLAUDE_STUB_ANSWER when set; the question what an unclear document is, $CLAUDE_STUB_KIND when set. `--version` and `auth status` answer at once.
+// $CLAUDE_STUB_TEXT: what an answer says first. $CLAUDE_STUB_PROMPTS: each prompt is appended there; $CLAUDE_STUB_ARGS: each call's arguments.
+// A message of the AI sidebar (--output-format stream-json) streams a stub answer to its last line as
+// Claude Code does: the session, the text in pieces and the result; --resume keeps its session.
 // $CLAUDE_STUB_GATE: the stub appends a line to <gate>.started, then waits until <gate> exists.
+import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 
 const STUB_OCR_TEXT = 'Stub-OCR\n\nBeleg vom Stub gelesen';
@@ -16,28 +19,70 @@ if (process.argv.includes('--version')) {
   process.stdout.write('0.0.0 (stub)\n');
   process.exit(0);
 }
+// `claude auth status`: signed in with Pro, unless $CLAUDE_STUB_SIGNED_OUT; the email and organization are there for the app to drop.
+if (process.argv[2] === 'auth' && process.argv[3] === 'status') {
+  const out = process.env.CLAUDE_STUB_SIGNED_OUT ? { loggedIn: false } : { loggedIn: true, authMethod: 'claude.ai', subscriptionType: 'pro', email: 'stub@example.test', orgName: 'Stub Org' };
+  process.stdout.write(JSON.stringify(out));
+  process.exit(out.loggedIn ? 0 : 1);
+}
 
 const prompt = readFileSync(0, 'utf8');
 if (process.env.CLAUDE_STUB_PROMPTS) appendFileSync(process.env.CLAUDE_STUB_PROMPTS, prompt + '\n\0\n');
+if (process.env.CLAUDE_STUB_ARGS) appendFileSync(process.env.CLAUDE_STUB_ARGS, JSON.stringify(process.argv.slice(2)) + '\n');
 const gate = process.env.CLAUDE_STUB_GATE;
 if (gate) {
   appendFileSync(`${gate}.started`, 'x\n');
-  while (!existsSync(gate)) await new Promise((r) => setTimeout(r, 20));
+  // A gate its test never opens, because the test was killed, must not keep the stub waiting forever.
+  const parent = process.ppid;
+  while (!existsSync(gate)) {
+    if (process.ppid !== parent) process.exit(1);
+    await new Promise((r) => setTimeout(r, 20));
+  }
 }
 
 function classify() {
+  const scripted = process.env.CLAUDE_STUB_CLASSIFY ? JSON.parse(process.env.CLAUDE_STUB_CLASSIFY) : {};
   const answer = {};
   for (const section of prompt.split('## Chart of Accounts')[0].split(/^### Transaction \d+: /m).slice(1)) {
     const ref = section.split('\n')[0].trim();
     const amount = Number(section.match(/Amount: (-?[\d.]+) /)[1]);
     const vatCode = /VAT facts: Swiss MWST/.test(section) ? 'I81' : 'I0';
-    answer[ref] = { entries: [{ accountDebit: '6570', accountCredit: '', amount, vatCode, description: 'Stub, Aufwand' }] };
+    answer[ref] = scripted[ref] ?? { entries: [{ accountDebit: '6570', accountCredit: '', amount, vatCode, description: 'Stub, Aufwand' }] };
   }
   return JSON.stringify(answer);
+}
+
+if (process.argv.includes('stream-json')) {
+  const at = process.argv.indexOf('--resume');
+  const session = at > 0 ? process.argv[at + 1] : randomUUID();
+  const line = (o) => process.stdout.write(JSON.stringify({ ...o, session_id: session }) + '\n');
+  line({ type: 'system', subtype: 'init', cwd: process.cwd() });
+  const asked = prompt.trim().split('\n').at(-1) ?? '';
+  // $CLAUDE_STUB_CHANGES: a file with the changes to the books the answer asks for (the sidebar's block), when it exists.
+  const file = process.env.CLAUDE_STUB_CHANGES;
+  const changes = file && existsSync(file) ? `\n\n\`\`\`vanilla-changes\n${readFileSync(file, 'utf8')}\n\`\`\`` : '';
+  // $CLAUDE_STUB_TEXT: a file with what the answer says before its own line, when it exists (a long answer).
+  const said = process.env.CLAUDE_STUB_TEXT && existsSync(process.env.CLAUDE_STUB_TEXT) ? `${readFileSync(process.env.CLAUDE_STUB_TEXT, 'utf8').trim()}\n\n` : '';
+  // The app's call after it refused an answer's changes (src/assistant/conversations.ts saidAgain), answered as the prompt
+  // asks: the answer as it was, its claim of a change (the stub's own line) said again as not done, every other paragraph kept; no block.
+  const START = 'Your answer as it was:\n<<<';
+  const was = prompt.includes(START) ? prompt.slice(prompt.indexOf(START) + START.length, prompt.lastIndexOf('>>>')).trim() : undefined;
+  const answer = was !== undefined ? [...was.split(/\n\n+/).filter((p) => p && !p.startsWith('Stub-Antwort')), 'Stub: Das ist nicht gemacht, die App hat es abgelehnt.'].join('\n\n')
+    : `${said}Stub-Antwort auf «${asked.trim()}». ${at > 0 ? 'Das Gespräch geht weiter.' : 'Ein neues Gespräch.'}${changes}`;
+  // $CLAUDE_STUB_TOOLS: a file with the tools the answer uses first, a JSON list of { name, input }.
+  const tools = process.env.CLAUDE_STUB_TOOLS && existsSync(process.env.CLAUDE_STUB_TOOLS) ? JSON.parse(readFileSync(process.env.CLAUDE_STUB_TOOLS, 'utf8')) : [];
+  tools.forEach((t, i) => line({ type: 'assistant', message: { content: [{ type: 'tool_use', id: `stub-tool-${i}`, name: t.name, input: t.input }] } }));
+  line({ type: 'stream_event', event: { type: 'message_start' } });
+  line({ type: 'stream_event', event: { type: 'content_block_start', content_block: { type: 'text', text: '' } } });
+  for (const piece of answer.match(/.{1,12}/gs)) line({ type: 'stream_event', event: { type: 'content_block_delta', delta: { type: 'text_delta', text: piece } } });
+  line({ type: 'assistant', message: { content: [{ type: 'text', text: answer }] } });
+  line({ type: 'result', subtype: 'success', is_error: false, result: answer, num_turns: 1, usage: { input_tokens: 7, output_tokens: 3 }, modelUsage: { 'claude-stub-sonnet': {} } });
+  process.exit(0);
 }
 
 const result = prompt.includes('## Chart of Accounts') ? classify()
   : prompt.includes('Extract ONLY the VAT (MWST) facts') ? JSON.stringify(STUB_VAT)
   : prompt.includes('Extrahiere den vollständigen Text') ? STUB_OCR_TEXT
+  : prompt.includes('Decide what this one is:') && process.env.CLAUDE_STUB_KIND ? process.env.CLAUDE_STUB_KIND
   : process.env.CLAUDE_STUB_ANSWER ?? JSON.stringify(STUB_ANSWER);
 process.stdout.write(JSON.stringify({ result, is_error: false, usage: { input_tokens: 7, output_tokens: 3 }, num_turns: 1 }));

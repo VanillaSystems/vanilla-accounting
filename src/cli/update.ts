@@ -5,27 +5,32 @@
  *   1. the app's folder has no uncommitted change
  *   2. git pull --ff-only
  *   3. npm ci, when package-lock.json differs from the last install
- *   4. books.json and belege.workspace.yaml written at the new schema (backups in data/backups/)
+ *   4. the books and belege.workspace.yaml written at the new schema and layout (backups in data/backups/),
+ *      and the terminal AI's instructions (src/workspace/terminal-agents.ts)
  *   5. npm run doctor
- *   6. npm run test:books: no filed figure moved (skipped while the workspace has no golden/)
+ *   6. npm run test:books: no filed figure moved (skipped while the workspace has no expected/)
  *
  * Stops at the first step that fails and says how to fix it. Safe to rerun: each step checks
  * its own end state. Steps 4 to 6 run in a new process, so they run the code just pulled.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
+import { requireGit } from '../platform/git-program.js';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { upgradeWorkspace } from '../workspace/upgrade.js';
-import { APP_ROOT, openWorkspace } from '../workspace/workspace.js';
+import { ensureTerminalAgents } from '../workspace/terminal-agents.js';
+import { convertMail, mailConfigured } from '../platform/sources/mail.js';
+import { config as loadEnv } from 'dotenv';
+import { APP_ROOT, openWorkspace, openWorkspaceAt, partDirs } from '../workspace/workspace.js';
 
 type Outcome = { ok: true; note?: string } | { ok: false; problem: string; fix: string };
-interface Step { name: string; run(): Outcome }
+interface Step { name: string; run(): Outcome | Promise<Outcome> }
 
 const done = (note?: string): Outcome => ({ ok: true, note });
 const failed = (problem: string, fix: string): Outcome => ({ ok: false, problem, fix });
 
-const git = (...args: string[]) => execFileSync('git', ['-C', APP_ROOT, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+const git = (...args: string[]) => execFileSync(requireGit(), ['-C', APP_ROOT, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 const tryGit = (...args: string[]): { ok: true; out: string } | { ok: false; err: string } => {
   try { return { ok: true, out: git(...args) }; } catch (e) { return { ok: false, err: String((e as { stderr?: string }).stderr || (e as Error).message).trim() }; }
 };
@@ -94,18 +99,39 @@ const beforePull: Step[] = [
 
 const afterPull: Step[] = [
   {
-    name: 'Workspace files at the schema of this version',
-    run() {
-      let ws;
-      try { ws = openWorkspace(); } catch (e) { return failed((e as Error).message, 'Set VANILLA_WORKSPACE in the app\'s .env to your workspace folder (npm run doctor checks it).'); }
+    name: 'Workspace files at the schema and layout of this version',
+    async run() {
+      let opened;
+      try { opened = openWorkspace(); } catch (e) { return failed((e as Error).message, 'Set VANILLA_WORKSPACE in the app\'s .env to your workspace folder (npm run doctor checks it).'); }
       try {
-        const changed = upgradeWorkspace(ws);
+        const { ws, done: changed } = await upgradeWorkspace(opened);
+        openWorkspaceAt(ws.paths.root);
         if (!changed.length) return done(`${ws.paths.root}: up to date`);
-        return done(changed.map((u) => `${relative(ws.paths.root, u.file)}: schema ${u.from ?? '(none)'} → ${u.to}, backup ${relative(ws.paths.root, u.backup)}`).join('\n    ')
-          + '\n    Commit the workspace (git commit -am "Schema update"), so the change is on record.');
+        const at = (f: string) => relative(ws.paths.repository, f);
+        return done(changed.map((u) => `${at(u.file)}: schema ${u.from ?? '(none)'} → ${u.to}, backup ${at(u.backup)}${u.moved ? `; ${u.moved} files and folders moved into vanilla-accounting/ (ADR 0013)` : ''}`).join('\n    ')
+          + '\n    Commit the workspace (git add -A && git commit -m "Schema update"), so the change is on record.');
       } catch (e) {
         return failed((e as Error).message.split('\n')[0], 'Each file is written whole, and a rerun finishes the rest: fix what the message names, then run npm run update again.');
       }
+    },
+  },
+  {
+    name: 'Instructions for an AI in the terminal (AGENTS.md)',
+    run() {
+      const ws = openWorkspace();
+      const written = ensureTerminalAgents(ws.paths);
+      return done(written.length ? `${written.join(', ')} written; commit them with the workspace` : 'up to date');
+    },
+  },
+  {
+    name: 'Mailboxes as sources (ADR 0014)',
+    run() {
+      const ws = openWorkspace();
+      if (!mailConfigured(ws)) return done(existsSync(join(ws.paths.root, 'sources')) ? 'sources/ already' : 'no mail.yaml');
+      loadEnv({ path: join(APP_ROOT, '.env'), quiet: true });
+      const { sources: made, backup } = convertMail(ws, process.env);
+      const at = (f: string) => relative(ws.paths.repository, f);
+      return done(`mail.yaml → ${made.map((id) => `sources/${id}/`).join(', ') || 'nothing new'} (backup ${at(backup)}). Switch each on in Firma › Quellen; their passwords: npm run secret -- source:<id>:mail.`);
     },
   },
   {
@@ -115,7 +141,7 @@ const afterPull: Step[] = [
   {
     name: 'npm run test:books: no filed figure moved',
     run() {
-      if (!existsSync(join(openWorkspace().paths.root, 'golden'))) return done('skipped: the workspace has no golden/ yet (npm run test:books:freeze, then test:books:update, after your first filed quarter)');
+      if (!partDirs(openWorkspace().paths, 'expected').length) return done('skipped: the workspace has no expected/ yet (npm run test:books:init, then test:books:update, after your first filed quarter)');
       return npm('run', '-s', 'test:books') ? done()
         : failed('a figure differs from the frozen golden master',
           'A filed quarter\'s figure must never move: go back to the old version (git reset --hard ORIG_HEAD and npm ci in the app; git checkout . in the workspace) and report it. An open quarter\'s figure may move only where CHANGELOG.md marks the release ⚠ figures: read it, then accept with npm run test:books:update and commit the workspace.');
@@ -123,9 +149,9 @@ const afterPull: Step[] = [
   },
 ];
 
-function runSteps(steps: Step[]): boolean {
+async function runSteps(steps: Step[]): Promise<boolean> {
   for (const step of steps) {
-    const r = step.run();
+    const r = await step.run();
     if (!r.ok) {
       console.log(`✗ ${step.name}: ${r.problem}\n    fix: ${r.fix}`);
       return false;
@@ -136,9 +162,9 @@ function runSteps(steps: Step[]): boolean {
 }
 
 if (process.argv.includes('--after-pull')) {
-  process.exitCode = runSteps(afterPull) ? 0 : 1;
+  process.exitCode = (await runSteps(afterPull)) ? 0 : 1;
   if (!process.exitCode) console.log('\nUp to date.');
-} else if (!runSteps(beforePull)) {
+} else if (!(await runSteps(beforePull))) {
   process.exitCode = 1;
 } else {
   const next = spawnSync(process.execPath, ['--import', 'tsx', join(APP_ROOT, 'src/cli/update.ts'), '--after-pull'], { cwd: APP_ROOT, stdio: 'inherit' });

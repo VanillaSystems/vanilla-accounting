@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { crc32 } from 'node:zlib';
 import { join } from 'node:path';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { imageToPdf, isImageFile } from '../src/parsers/image-pdf.js';
@@ -19,6 +20,18 @@ test('a PNG becomes a one-page PDF whose page is the image', async () => {
   const page = await doc.getPage(1);
   assert.deepEqual(page.view, [0, 0, 2, 2]);
   assert.equal((await page.getOperatorList()).fnArray.length > 0, true, 'the page draws something');
+  await doc.destroy();
+});
+
+test('a PNG that sips cannot read still becomes a PDF, through pdf-lib (#258)', { skip: !existsSync('/usr/bin/sips') && 'not a Mac' }, async () => {
+  // A wrong checksum of the header chunk: sips refuses the file, pdf-lib does not check it.
+  const odd = Buffer.from(PNG);
+  odd[29] ^= 0xff;
+  const dir = mkdtempSync(join(tmpdir(), 'odd-png-'));
+  writeFileSync(join(dir, 'odd.png'), odd);
+  assert.throws(() => execFileSync('/usr/bin/sips', ['-s', 'format', 'jpeg', join(dir, 'odd.png'), '--out', join(dir, 'out.jpg')], { stdio: 'ignore' }), 'sips refuses it');
+  const doc = await getDocument({ data: await imageToPdf(odd, 'odd.png') }).promise;
+  assert.deepEqual((await doc.getPage(1)).view, [0, 0, 2, 2]);
   await doc.destroy();
 });
 
@@ -114,4 +127,53 @@ test('a rotated iPhone photo (HEIC) stands upright too', { skip: (!existsSync('/
   const { size, quadrants } = await rendered(await imageToPdf(readFileSync(join(dir, 'IMG_0004.HEIC')), 'IMG_0004.HEIC'));
   assert.deepEqual(size, [20, 40]);
   assert.deepEqual(quadrants, SHOWN[6]);
+});
+
+/** The quadrants of `photo` as a PNG, the white one transparent, with an eXIf chunk of `orientation`. */
+async function screenshot(orientation: number): Promise<Buffer> {
+  const { createCanvas } = await import('@napi-rs/canvas');
+  const canvas = createCanvas(40, 20);
+  const g = canvas.getContext('2d');
+  for (const [x, y, colour] of [[0, 0, '#f00'], [20, 0, '#0f0'], [0, 10, '#00f']] as const) {
+    g.fillStyle = colour;
+    g.fillRect(x, y, 20, 10);
+  }
+  const png = canvas.encodeSync('png');
+  const tiff = Buffer.from([0x4d, 0x4d, 0, 0x2a, 0, 0, 0, 8, 0, 1, 0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, orientation, 0, 0, 0, 0, 0, 0]);
+  const chunk = Buffer.concat([Buffer.alloc(4), Buffer.from('eXIf'), tiff, Buffer.alloc(4)]);
+  chunk.writeUInt32BE(tiff.length, 0);
+  chunk.writeUInt32BE(crc32(chunk.subarray(4, chunk.length - 4)), chunk.length - 4);
+  const idat = png.indexOf('IDAT') - 4;
+  return Buffer.concat([png.subarray(0, idat), chunk, png.subarray(idat)]);
+}
+
+test('a screenshot (PNG) stands upright in its PDF by its EXIF orientation, a transparent part white as on the page', { skip: !canvasAvailable && 'no canvas to render with' }, async () => {
+  for (const orientation of [1, 6]) {
+    const { size, quadrants } = await rendered(await imageToPdf(await screenshot(orientation), 'Screenshot.png'));
+    assert.deepEqual(size, orientation >= 5 ? [20, 40] : [40, 20]);
+    assert.deepEqual(quadrants, SHOWN[orientation]);
+  }
+});
+
+test('a large screenshot (PNG) becomes a PDF while the app goes on: sips decodes it in a process of its own (#258)', { skip: (!existsSync('/usr/bin/sips') || !canvasAvailable) && 'not a Mac' }, async () => {
+  const { createCanvas } = await import('@napi-rs/canvas');
+  const canvas = createCanvas(2400, 3000);
+  const g = canvas.getContext('2d');
+  for (let y = 0; y < 3000; y += 30) for (let x = 0; x < 2400; x += 40) {
+    g.fillStyle = `rgb(${(x * 7) % 256},${(y * 3) % 256},${(x + y) % 256})`;
+    g.fillRect(x, y, 40, 30);
+  }
+  const png = canvas.encodeSync('png');
+  let last = performance.now();
+  let longest = 0;
+  const tick = setInterval(() => { const now = performance.now(); longest = Math.max(longest, now - last); last = now; }, 1);
+  const started = performance.now();
+  const pdf = await imageToPdf(png, 'Screenshot 2026-10-28.png');
+  const took = performance.now() - started;
+  clearInterval(tick);
+  longest = Math.max(longest, performance.now() - last);
+  const doc = await getDocument({ data: pdf }).promise;
+  assert.deepEqual((await doc.getPage(1)).view, [0, 0, 2400, 3000]);
+  await doc.destroy();
+  assert.ok(longest < took / 2, `the event loop stood still ${longest.toFixed(0)} ms of ${took.toFixed(0)} ms`);
 });

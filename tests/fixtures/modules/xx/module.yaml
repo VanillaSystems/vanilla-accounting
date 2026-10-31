@@ -1,0 +1,7 @@
+# A made-up jurisdiction (migration step 11): another chart, other codes and boxes, a yearly
+# return and another currency. tests/swap.test.ts books with it through the same engines as ch.
+id: xx
+kind: jurisdiction
+version: 2026.1.0
+schema: 1
+baseCurrency: XXX

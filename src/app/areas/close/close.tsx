@@ -1,6 +1,7 @@
 /**
- * Abschluss: the year-end in seven steps on the left (before, the close, after), the selected
- * step on the right. Every state comes from the close the API computes (src/books/year-close.ts).
+ * Abschluss: the year-end's steps on the left (before, the close, after; seven, six for a legal
+ * form without a profit allocation), the selected step on the right. Every state comes from the
+ * close the API computes (src/books/year-close.ts).
  */
 import { Fragment } from 'react';
 import './close.css';
@@ -13,30 +14,33 @@ import { ICONS } from '../icons.js';
 import { I } from '../receipts/icons.js';
 import type { Area, AreaProps, LegendItem } from '../index.js';
 import { closeYear, useYearClose } from './data.js';
-import { GROUPS, STEPS, stepGone, stepLabel, stepOf, stepState } from './steps.js';
+import { groupsFor, stepGone, stepLabel, stepOf, stepState, stepsFor } from './steps.js';
 import { Detail } from './Detail.js';
+import { WorkflowButtons } from '../../automation/marks.js';
+import { loadedWorkspace, useWorkspace } from '../../hooks/use-workspace.js';
 
 type Props = AreaProps<RouteOf<'close'>>;
 
-function List({ route, query, books, nav }: Props) {
+function List({ route, query, books, nav, canEdit }: Props) {
   const ui = useShellUi();
   const year = closeYear(query.period, books);
   const { data } = useYearClose(year, books);
-  const step = stepGone(route.step) ? undefined : stepOf(route.step);
+  const steps = stepsFor(useWorkspace()?.company.legalForm);
+  const step = stepGone(route.step, steps) ? undefined : stepOf(route.step, steps);
   const today = localToday();
   const yearOver = today > `${year}-12-31`;
   return (
     <>
       <h1>
         {t('area.close')}
-        <button type="button" className="ytag mono" title={t('close.chooseYear')} data-testid="period-picker" onClick={(e) => ui.openPeriod(e.currentTarget)}>{year}</button>
+        <button type="button" className="ytag mono" data-tip={t('close.chooseYear')} data-testid="period-picker" onClick={(e) => ui.openPeriod(e.currentTarget)}>{year}</button>
       </h1>
-      <div className="counts"><span>{yearOver ? t('close.yearOver') : t('close.yearRuns', { year })}</span></div>
+      <div className="counts"><span>{yearOver ? t('close.yearOver') : t('close.yearRuns', { year })}</span>{yearOver && (books.config?.closedThrough ?? '') < `${year}-12-31` ? <WorkflowButtons kind="year" id={String(year)} nav={nav} canEdit={canEdit} /> : null}</div>
       <div className="rows" role="listbox" aria-label={t('close.steps')}>
-        {GROUPS.map(([group, steps]) => (
+        {groupsFor(steps).map(([group, own]) => (
           <Fragment key={group}>
             <div className="group"><span>{t(group)}</span></div>
-            {steps.map((s) => {
+            {own.map((s) => {
               const [st, text] = stepState(s, data, today);
               const sel = s === step;
               return (
@@ -49,7 +53,7 @@ function List({ route, query, books, nav }: Props) {
                   data-step={s}
                   onClick={() => nav.select({ area: 'close', step: s })}
                 >
-                  <span className="d mono">{STEPS.indexOf(s) + 1}</span>
+                  <span className="d mono">{steps.indexOf(s) + 1}</span>
                   <span className="t">{stepLabel(s, year)}</span>
                   <span className="a"><span className="pill">{st === 'ok' ? I.check : st === 'warn' ? I.dot : null}{text}</span></span>
                 </div>
@@ -75,7 +79,7 @@ export const close: Area<RouteOf<'close'>> = {
   Detail,
   legend,
   periodless: true,
-  title: (r, books) => (stepGone(r.step) ? '' : stepLabel(stepOf(r.step), closeYear(undefined, books))),
+  title: (r, books) => (stepGone(r.step, stepsFor(loadedWorkspace()?.company.legalForm)) ? '' : stepLabel(stepOf(r.step), closeYear(undefined, books))),
   keys(e, { route, nav }) {
     if (e.key === 'Enter') {
       document.querySelector<HTMLElement>('.detail button:not(:disabled), .detail input')?.focus();
@@ -83,11 +87,12 @@ export const close: Area<RouteOf<'close'>> = {
     }
     const d = moveKey(e);
     if (!d) return false;
-    const i = STEPS.indexOf(stepOf(route.step));
-    nav.select({ area: 'close', step: STEPS[Math.min(STEPS.length - 1, Math.max(0, i + d))] });
+    const steps = stepsFor(loadedWorkspace()?.company.legalForm);
+    const i = steps.indexOf(stepOf(route.step, steps));
+    nav.select({ area: 'close', step: steps[Math.min(steps.length - 1, Math.max(0, i + d))] });
     return true;
   },
-  palette: ({ nav, query, books }) => STEPS.map((s) => ({
+  palette: ({ nav, query, books }) => stepsFor(loadedWorkspace()?.company.legalForm).map((s) => ({
     label: stepLabel(s, closeYear(query.period, books)),
     run: () => nav.go({ route: { area: 'close', step: s }, query: query.period ? { period: query.period } : {} }),
   })),

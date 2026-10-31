@@ -35,7 +35,8 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick }: { 
     if (!open) return;
     if (e.key === 'ArrowDown') move(active + 1);
     else if (e.key === 'ArrowUp') move(active - 1);
-    else if (e.key === 'Enter' && matches[active]) pick(matches[active].account.number);
+    // ↵ with the list open commits the pick and never reaches the form: a stray ↵ books nothing half typed (r9k-7).
+    else if (e.key === 'Enter') { if (matches[active]) pick(matches[active].account.number); else setOpen(false); }
     else if (e.key === 'Escape') setOpen(false);
     else return;
     e.preventDefault();
@@ -54,7 +55,7 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick }: { 
         aria-expanded={open}
         aria-controls={listId}
         aria-autocomplete="list"
-        title={name0}
+        data-tip={name0}
         onFocus={(e) => { if (!readOnly) { setOpen(true); setActive(0); e.currentTarget.select(); } }}
         onChange={(e) => { setValue(e.target.value.trim()); setActive(0); setOpen(true); }}
         onBlur={() => setOpen(false)}
@@ -62,7 +63,7 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick }: { 
       />
       <span className="acn">{name0 ?? (value ? t('journal.noSuchAccount') : t('journal.noAccount'))}</span>
       {open && (
-        <ul ref={list} id={listId} role="listbox" aria-label={label} className="acl">
+        <ul ref={list} id={listId} role="listbox" aria-label={label} className="acl" tabIndex={-1}>
           {matches.length === 0 && <li className="none">{t('combobox.none')}</li>}
           {matches.map((m, i) => (
             <li

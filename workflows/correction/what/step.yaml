@@ -1,0 +1,6 @@
+label: {"de": "Bücher oder Abrechnung falsch?", "en": "Books or return wrong?", "fr": "Livres ou décompte faux ?", "it": "Libri o rendiconto errati?"}
+by: person
+task: {"title": {"de": "Was ist an {entry} falsch?", "en": "What is wrong with {entry}?", "fr": "Qu’est-ce qui est faux dans {entry} ?", "it": "Cosa è sbagliato in {entry}?"}, "do": "decide"}
+reads: ["entry"]
+emits: ["case"]
+outcomes: {"books": "storno", "return": "declare"}

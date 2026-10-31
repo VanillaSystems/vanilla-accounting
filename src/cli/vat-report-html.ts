@@ -6,12 +6,13 @@
  * Usage: npm run vat-report-html -- <outfile.html> [YYYY-Qn ...]
  * Without quarters it covers the filed quarters of the year config.closedThrough falls in.
  */
-import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { loadBooks } from '../books/store.js';
-import { computeVatReport, computeVatReportLines, type VatLine } from '../accounting/vat-report.js';
 import { derivePeriod } from '../accounting/periods.js';
 import { openWorkspace } from '../workspace/workspace.js';
+import { vat } from '../engines/index.js';
+import type { VatLine } from '../engines/return.js';
 
 const ws = openWorkspace();
 const index = loadBooks(ws);
@@ -78,8 +79,8 @@ function block(zNumber: string, zLabel: string, lines: VatLine[] | undefined, fi
 }
 
 function quarterSection(q: typeof QUARTERS[number]): string {
-  const rep = computeVatReport(entries, q.key, adjustments);
-  const L = computeVatReportLines(entries, q.key, adjustments);
+  const rep = vat().report(entries, q.key, adjustments);
+  const L = vat().lines(entries, q.key, adjustments);
   const z = (n: string) => rep.ziffern.find(x => x.number === n)?.amount ?? 0;
   // Gross (VAT-inclusive) total of a Ziffer's lines — the filing is gross (grossOrNet=2),
   // so the ESTV portal shows Ziffer 303 gross, not the net basis.
@@ -241,6 +242,7 @@ const html = `<style>
   </footer>
 </div>`;
 
-const out = outArg || join(ws.paths.root, `vat-filing-${years.join('-')}.html`);
+const out = outArg || join(ws.paths.data, `vat-filing-${years.join('-')}.html`);
+mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, html);
 console.log(`✓ wrote ${out} (${(html.length / 1024).toFixed(1)} KB)`);

@@ -1,6 +1,6 @@
 /**
  * Writes an ISO 20022 camt.053.001.08 statement in the shape Swiss banks and Wise export,
- * reduced to the elements src/parsers/camt053.ts and statement-balances.ts read.
+ * reduced to the elements src/providers/camt053/camt053.ts and statement-balances.ts read.
  */
 
 export interface CamtDetail {

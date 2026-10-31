@@ -1,0 +1,8 @@
+{
+  "images" : [
+    { "idiom" : "universal", "filename" : "BrandLockup.pdf" },
+    { "idiom" : "universal", "filename" : "BrandLockup-dark.pdf", "appearances" : [ { "appearance" : "luminosity", "value" : "dark" } ] }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 },
+  "properties" : { "preserves-vector-representation" : true, "template-rendering-intent" : "original" }
+}

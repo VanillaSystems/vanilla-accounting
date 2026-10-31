@@ -1,0 +1,5 @@
+label: {"de": "Anmelden", "en": "Sign in", "fr": "Se connecter", "it": "Accedere"}
+by: person
+task: {"title": {"de": "Bei {source} anmelden", "en": "Sign in to {source}", "fr": "Se connecter à {source}", "it": "Accedere a {source}"}, "why": {"de": "Die Sitzung ist abgelaufen, oder die Seite verlangt eine Person.", "en": "The session expired, or the page asks for a person.", "fr": "La session a expiré, ou la page demande une personne.", "it": "La sessione è scaduta, o la pagina chiede una persona."}, "do": "open-login"}
+reads: ["source"]
+outcomes: {"done": "pull"}

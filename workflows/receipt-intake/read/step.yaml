@@ -1,0 +1,5 @@
+label: {"de": "Belege und Kontoauszüge lesen", "en": "Read receipts and statements", "fr": "Lire pièces et relevés", "it": "Leggere giustificativi ed estratti"}
+uses: intake.read
+effects: ["books.write"]
+emits: ["took", "made", "notes"]
+outcomes: {"ok": "facts"}

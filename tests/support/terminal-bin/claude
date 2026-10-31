@@ -1,0 +1,12 @@
+#!/bin/sh
+# Stands in for Claude Code started in Terminal (tests/terminal.test.ts): it writes where it runs and its arguments, one file each.
+# `--version` and `auth status` answer as Claude Code does (signed in unless $CLAUDE_STUB_SIGNED_OUT), so detection finds it.
+if [ "$1" = --version ]; then echo '2.1.211 (Claude Code)'; exit 0; fi
+if [ "$1" = auth ] && [ "$2" = status ]; then
+  if [ -n "$CLAUDE_STUB_SIGNED_OUT" ]; then echo '{"loggedIn":false}'; exit 1; fi
+  echo '{"loggedIn":true,"authMethod":"claude.ai","subscriptionType":"pro","email":"anna@example.test","orgId":"org-1","orgName":"Anna GmbH"}'; exit 0
+fi
+printf %s "$PWD" > "$TERMINAL_STUB_OUT.cwd"
+printf %s "$#" > "$TERMINAL_STUB_OUT.argc"
+printf %s "$1" > "$TERMINAL_STUB_OUT.arg"
+printf %s claude > "$TERMINAL_STUB_OUT.cli"

@@ -1,23 +1,44 @@
 /** Workspaces for tests: the demos, a temp copy of a manifest, and the company's own when this checkout has one. */
-import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parse as parseEnv } from 'dotenv';
-import { APP_ROOT, DEMO_NAME, MANIFEST_FILE, workspaceAt, type Workspace } from '../../src/workspace/workspace.js';
+import { APP_FOLDER, APP_ROOT, DEMO_NAME, MANIFEST_FILE, appFolderIn, workspaceAt, yearPaths, yearsOf, type Workspace } from '../../src/workspace/workspace.js';
+import { writeBooks } from '../../src/books/store.js';
+import type { Index } from '../../src/types/index.js';
 
-/** The synthetic demo company (tools/demo/generate.ts). Tests read no other company's data. */
-export const DEMO_ROOT = join(APP_ROOT, 'demo');
+/** The synthetic demo company's repository (tools/demo/generate.ts). Tests read no other company's data. */
+export const DEMO_REPO = join(APP_ROOT, 'demo');
+/** Its books: the workspace, demo/vanilla-accounting/. */
+export const DEMO_ROOT = join(DEMO_REPO, APP_FOLDER);
 
-/** Every synthetic demo workspace the app ships: demo/ and each demo-<name>/. */
+/** The workspace of every synthetic demo the app ships: demo/vanilla-accounting/ and each demo-<name>/vanilla-accounting/. */
 export const DEMO_ROOTS: readonly string[] = readdirSync(APP_ROOT, { withFileTypes: true })
-  .filter((d) => d.isDirectory() && DEMO_NAME.test(d.name) && existsSync(join(APP_ROOT, d.name, MANIFEST_FILE)))
-  .map((d) => join(APP_ROOT, d.name));
+  .filter((d) => d.isDirectory() && DEMO_NAME.test(d.name) && existsSync(join(APP_ROOT, d.name, APP_FOLDER, MANIFEST_FILE)))
+  .map((d) => join(APP_ROOT, d.name, APP_FOLDER));
 
-/** A temp workspace holding a copy of the manifest in `manifestOf` (the demo's by default). */
-export function tempWorkspace(prefix = 'belege-ws-', manifestOf: string = DEMO_ROOT): Workspace {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  copyFileSync(join(manifestOf, MANIFEST_FILE), join(dir, MANIFEST_FILE));
+/** A temp workspace holding a copy of the manifest in `manifestOf` (the demo's by default); `inRepository`: as the app's folder of a company repository (ADR 0013). */
+export function tempWorkspace(prefix = 'belege-ws-', manifestOf: string = DEMO_ROOT, { inRepository = false } = {}): Workspace {
+  const repo = mkdtempSync(join(tmpdir(), prefix));
+  const dir = inRepository ? join(repo, APP_FOLDER) : repo;
+  mkdirSync(dir, { recursive: true });
+  copyFileSync(join(appFolderIn(manifestOf) ?? manifestOf, MANIFEST_FILE), join(dir, MANIFEST_FILE));
   return workspaceAt(dir);
+}
+
+/** Writes `index` (books.json's content before ADR 0013) as the workspace's books, by year. */
+export const writeIndex = (ws: Pick<Workspace, 'paths'>, index: object): void =>
+  writeBooks(ws.paths, { receipts: [], transactions: [], mappings: [], bankStatements: [], ...index } as Index);
+
+/** Every file of the workspace's books, by path: to prove a step wrote nothing. */
+export function booksOnDisk(ws: Pick<Workspace, 'paths'>): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (existsSync(ws.paths.ledger)) out['ledger.json'] = readFileSync(ws.paths.ledger, 'utf8');
+  for (const year of yearsOf(ws.paths)) {
+    const dir = yearPaths(ws.paths, year).books;
+    if (existsSync(dir)) for (const f of readdirSync(dir).sort()) out[`${year}/${f}`] = readFileSync(join(dir, f), 'utf8');
+  }
+  return out;
 }
 
 /**
@@ -32,7 +53,7 @@ export function companyWorkspace(): Workspace | undefined {
   for (const candidate of [process.env.VANILLA_WORKSPACE, fromEnvFile, APP_ROOT]) {
     if (!candidate || DEMO_NAME.test(candidate)) continue;
     const root = resolve(candidate.replace(/^~(?=$|\/)/, homedir()));
-    if (existsSync(join(root, MANIFEST_FILE)) && !demos.has(realpathSync(root))) return workspaceAt(root);
+    if (appFolderIn(root) && !demos.has(realpathSync(root))) return workspaceAt(root);
   }
   return undefined;
 }

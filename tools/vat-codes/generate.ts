@@ -14,6 +14,11 @@ import { pathToFileURL } from 'node:url';
 import { loadCases } from '../../src/knowledge/cases.js';
 import { APP_ROOT } from '../../src/workspace/workspace.js';
 import type { Messages } from '../../src/app/i18n/types.js';
+import { loadJurisdiction } from '../../src/core/modules/load.js';
+import { setJurisdiction } from '../../src/engines/index.js';
+
+// The catalogue is the shipped jurisdiction's, for a firm on the effective method.
+setJurisdiction(loadJurisdiction(APP_ROOT, 'ch').jurisdiction);
 
 export const SOURCE_FILE = join(APP_ROOT, 'src/accounting/vat-codes.source.ts');
 export const DOCS_FILE = join(APP_ROOT, 'docs/vat-codes.md');
@@ -88,7 +93,9 @@ export const VAT_CODE_EXAMPLES: Readonly<Record<string, readonly VatCodeExample[
 
 /** docs/vat-codes.md, from the catalogue and the English texts. */
 export async function renderDocs(): Promise<string> {
-  const { VAT_CODES, VAT_CODE_FAMILIES, VAT_CODE_KINDS, vatCodeRateName } = await import('../../src/accounting/vat-codes.js');
+  const { vatCodes, VAT_CODE_FAMILIES, VAT_CODE_KINDS, vatCodeName, vatCodeRateName } = await import('../../src/accounting/vat-codes.js');
+  (await import('../../src/workspace/workspace.js')).workspaceAt(join(APP_ROOT, 'demo'));
+  const VAT_CODES = vatCodes();
   const en = ((await import('../../src/app/i18n/locales/en.js')) as { default: { messages: Messages } }).default.messages;
   const text = (key: string, vars: Record<string, string | number> = {}) =>
     String(en[key as keyof Messages]).replace(/\{(\w+)\}/g, (_, n: string) => String(vars[n]));
@@ -115,7 +122,8 @@ export async function renderDocs(): Promise<string> {
     text('vatCodes.intro'),
     '',
     'The app shows the same catalogue in German, French, Italian and English: MWST tab, **Codes erklärt**, or a',
-    'click on any code. There each code also lists the entries of the period that use it.',
+    'click on any code. There each code also lists the entries of the period that use it. Wherever the app shows',
+    'or offers a code, it names it in plain words first (the Name column), the code beside it.',
     '',
     '## How to read a code',
     '',
@@ -129,7 +137,7 @@ export async function renderDocs(): Promise<string> {
     '- **-B, -E, -N, -T, -D** on a sale code name the kind of supply (opted, abroad, not taxable, notification procedure, various).',
     '- **Boxes (Ziffern)** are the numbers of the ESTV return (form 0550). "turnover" means the gross amount counts in the box,',
     '  "taxable" that it is taxable turnover whose tax the rate row computes, "tax" that only the VAT in the amount counts.',
-    '  The boxes below are what the app\'s engine books (`computeVatReport`), proven by tests/vat-codes.test.ts.',
+    '  The boxes below are what the app\'s engine books (`vat().report` over modules/ch), proven by tests/vat-codes.test.ts.',
     '- **Not declared**: the app puts the code into no box. Banana would; the column names Banana\'s boxes.',
     '',
     'The rules that choose a code are in `processes/booking.guide.yaml` (purchase_vat, sale_vat, side, eigenverbrauch);',
@@ -147,11 +155,11 @@ export async function renderDocs(): Promise<string> {
         `**When:** ${text(`vatCodes.kind.${k.kind}.when`)}`, '',
         `**Not when:** ${text(`vatCodes.kind.${k.kind}.notWhen`)}`);
       if (k.rules.length) out.push('', `**Rules:** ${k.rules.map((r) => `\`${r}\``).join(', ')}`);
-      out.push('', '| Code | Banana text | Rate | Amount is | Boxes | Example |', '|---|---|---|---|---|---|');
+      out.push('', '| Code | Name | Banana text | Rate | Amount is | Boxes | Example |', '|---|---|---|---|---|---|---|');
       for (const c of codes) {
         const ex = c.examples[0];
         const example = ex ? `[${md(ex.title)}](../examples/cases/${ex.caseId}.yaml)` : '';
-        out.push(`| ${c.code} | ${md(c.bananaText ?? '(not in Banana\'s list)')} | ${rateCell(c)} | ${amountCell(c)} | ${zifferCell(c)} | ${example} |`);
+        out.push(`| ${c.code} | ${md(vatCodeName(c.code, text) ?? '')} | ${md(c.bananaText ?? '(not in Banana\'s list)')} | ${rateCell(c)} | ${amountCell(c)} | ${zifferCell(c)} | ${example} |`);
       }
     }
   }

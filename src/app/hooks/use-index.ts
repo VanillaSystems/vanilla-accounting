@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Index } from '../../types/index.js';
 import { setAccounts } from '../lib/accounts.js';
+import { setOrderPages, setVatCorrections } from '../lib/order-pages.js';
 import { api } from '../lib/api.js';
+import { setJurisdiction } from '../../engines/index.js';
 
 const EMPTY: Index = { receipts: [], transactions: [], mappings: [], bankStatements: [] };
 
@@ -15,8 +17,14 @@ export function useIndex() {
     Promise.all([
       api.books(),
       api.accounts().catch(() => []),
-    ]).then(([json, accounts]) => {
+      api.modules(),
+      api.orderPages().catch(() => ({})),
+      api.vatCorrections().catch(() => ({})),
+    ]).then(([json, accounts, modules, orderPages, corrections]) => {
       setAccounts(accounts);
+      setOrderPages(orderPages);
+      setVatCorrections(corrections);
+      setJurisdiction(modules.effective, modules.vat);
       setData(json);
       setLoading(false);
     }).catch((e: Error) => {

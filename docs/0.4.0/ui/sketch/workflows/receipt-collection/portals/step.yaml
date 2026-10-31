@@ -1,0 +1,9 @@
+label: { de: Händlerportale besuchen, en: Visit the vendor portals, fr: …, it: … }
+for-each: sources                 # one part-run per source: one waiting holds no other up
+uses: source.pull                 # was collect.portal; every channel is a source now (ADR 0014)
+reads: [source]
+emits: [documents]
+outcomes:
+  ok: verify
+  login-needed: login
+retry: { on: [network, timeout], times: 5, backoff: 10m }

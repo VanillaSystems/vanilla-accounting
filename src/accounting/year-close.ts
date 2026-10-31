@@ -11,81 +11,129 @@
  */
 import type { Index, JournalEntry, QuarterKey } from '../types/index.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
+import type { MoneyRole } from '../workspace/banks.js';
+import type { LegalForm } from '../workspace/setup.js';
+import { bookedStates } from './payment-entries.js';
 import type { SealReport } from '../books/seal.js';
 import type { EstvRate, EstvRates } from './fx-conversion.js';
-import { chfAmount, computeBalances, isDebitNormal } from './ledger.js';
-import { parseVatCode, vatLine } from './vat-report.js';
-import { figuresFromBooks, type ReturnFigures } from './return-figures.js';
+import { chfAmount, computeBalances } from './ledger.js';
+import { plausibility, type Plausibility } from './booking-warnings.js';
 import { bookBalanceNative, nativeOpening } from './reconcile-bank.js';
 import { fromRappen, roundCHF, toRappen } from './rappen.js';
-import { derivePeriod } from './periods.js';
+import { booksOpenPeriod, derivePeriod, filingKeyOf } from './periods.js';
+import { formTakes } from './vat-codes.js';
+import { ownerAccountNumber } from './bank-accounts.js';
+import { chart, filing, setup, vat, vatSetup, baseCurrency, yearEnd as yearEndData } from '../engines/index.js';
+import type { TaxCodeInfo } from '../engines/tax-codes.js';
+import { bookedInFiled, bookedWithBase } from '../books/twins.js';
+import type { ReturnFigures } from '../engines/return.js';
 
-export type Books = Pick<Index, 'transactions' | 'bankStatements' | 'statementBalances'> & {
+export type Books = Pick<Index, 'transactions' | 'bankStatements' | 'statementBalances' | 'reconciliations'> & {
   journalEntries: JournalEntry[];
   config: NonNullable<Index['config']>;
 };
 
 const yearEnd = (year: string) => `${year}-12-31`;
 const inYear = (year: string) => (date: string | undefined) => !!date && date >= `${year}-01-01` && date <= yearEnd(year);
-const quartersOf = (year: string): QuarterKey[] => [1, 2, 3, 4].map((n) => `${year}-Q${n}` as QuarterKey);
+/** The year's filing periods of the firm's length: its four quarters, or its two half years. */
+const quartersOf = (year: string): QuarterKey[] => [...new Set([1, 4, 7, 10].map((m) => filingKeyOf(`${year}-${String(m).padStart(2, '0')}-01`, filing().length)))] as QuarterKey[];
 
 // ─── Accounts by role ────────────────────────────────────────────────────────
 
-/** The accounts the year-end books on, each the first of its candidates the chart has. */
+/**
+ * The profit allocation a legal form offers after the shareholders' resolution (modules/ch/year-end.yaml
+ * byLegalForm), each row only when the chart has its accounts; `missing` names those it lacks, for
+ * the step to say and offer to add (r9c-2). Absent on a legal form without one (an Einzelfirma).
+ */
+export interface ProfitAllocation {
+  /** Gesetzliche Gewinnreserve. */
+  reserve?: string;
+  /** The dividend: what the shareholder is paid, and the Verrechnungssteuer the company owes on it at `rate`. */
+  dividend?: { account: string; withholdingTax: string; rate: number };
+  missing: Array<{ role: AllocationRole; account: string }>;
+}
+export type AllocationRole = 'reserve' | 'dividend' | 'withholdingTax';
+
+/** The accounts the year-end books on, each the first of its candidates the chart has; the close of the result as the legal form has it. */
 export interface YearEndAccounts {
-  /** Gewinnvortrag: the year's result is carried here when the next year opens. */
-  retainedEarnings: string;
+  /** The equity account the year's result is carried to when the next year opens: Gewinnvortrag (2970) on a company with share capital, the owner's capital on an Einzelfirma. */
+  resultTo: string;
+  /** The owner's private account whose balance closes into `resultTo` with the year (an Einzelfirma's 2850); absent on a company with share capital, or when the chart lacks it. */
+  privateInto?: string;
+  /** The profit allocation the legal form offers; absent where the profit is the owner's without a resolution. */
+  allocation?: ProfitAllocation;
   /** Kursdifferenzen: the exchange difference of the foreign-currency accounts. */
   fxDifference: string;
   /** Abrechnungskonto MWST: the tax the VAT codes split off is posted here. */
   vatSettlement: string;
   /** Every VAT account: owed (2200, 2201) and input tax (1170, 1171). */
   vatAccounts: string[];
+  /** Debitoren: the first candidate the chart has, else the first candidate with `inChart` false (the person adds it or picks another; nothing is booked on it, r9c-2). */
+  receivables: { account: string; inChart: boolean };
 }
 
-const ROLES = {
-  retainedEarnings: ['2970'],
-  fxDifference: ['6960', '6950'],
-  vatSettlement: ['2201', '2200'],
-} as const;
-const VAT_ACCOUNTS = ['1170', '1171', '2200', '2201'];
 
-export function yearEndAccounts(chart: readonly string[]): YearEndAccounts {
+/** How the legal form closes the result: its own entry of year-end.yaml, else the capital company's (`otherwise`), as the setup's owner account falls back. */
+export const resultCloseOf = (legalForm?: string) => (legalForm && yearEndData().byLegalForm[legalForm]) || yearEndData().byLegalForm.otherwise;
+
+export function yearEndAccounts(chart: readonly string[], legalForm?: LegalForm): YearEndAccounts {
   const has = new Set(chart);
   const pick = (candidates: readonly string[]) => candidates.find((a) => has.has(a)) ?? candidates[0];
-  const vatSettlement = pick(ROLES.vatSettlement);
+  const roles = yearEndData().accounts;
+  const vatSettlement = pick(roles.vatSettlement);
+  const receivables = pick(roles.receivables);
+  const close = resultCloseOf(legalForm);
+  const privateInto = close.privateInto?.find((a) => has.has(a));
+  const allocation = close.allocation && ((a) => ({
+    ...(has.has(a.reserve) && { reserve: a.reserve }),
+    ...(has.has(a.dividend) && has.has(a.withholdingTax) && { dividend: { account: a.dividend, withholdingTax: a.withholdingTax, rate: a.withholdingTaxRate } }),
+    missing: (['reserve', 'dividend', 'withholdingTax'] as const).filter((role) => !has.has(a[role])).map((role) => ({ role, account: a[role] })),
+  }))(close.allocation);
   return {
-    retainedEarnings: pick(ROLES.retainedEarnings),
-    fxDifference: pick(ROLES.fxDifference),
+    resultTo: pick(close.resultTo),
+    ...(privateInto && { privateInto }),
+    ...(allocation && { allocation }),
+    fxDifference: pick(roles.fxDifference),
     vatSettlement,
-    vatAccounts: [...new Set([...VAT_ACCOUNTS.filter((a) => has.has(a)), vatSettlement])].sort(),
+    vatAccounts: [...new Set([...roles.vat.filter((a) => has.has(a)), vatSettlement])].sort(),
+    receivables: { account: receivables, inChart: has.has(receivables) },
   };
 }
 
 // ─── The closing ledger: the journal plus the tax its VAT codes split off ───
 
+/** A tax posting with the code it comes from, so a reader can tell sales tax, input tax and Bezugsteuer apart. */
+export type VatPosting = JournalEntry & { code: string };
+
+/** Bezugsteuer the firm's form owes without the deduction (the net tax rate method): tax on top of the purchase, posted. */
+export const owesAcquisition = (info: Pick<TaxCodeInfo, 'acquisitionZiffer' | 'inputTaxZiffer'>): boolean => !!info.acquisitionZiffer && !info.inputTaxZiffer;
+
 /**
  * The tax each entry's VAT code splits off, as the entry Banana books for it: the tax moves
  * from the account that carries it (revenue on a sale, expense on a purchase) to the VAT
  * account. A sale's tax sits on the credit side, a purchase's input tax on the debit side; a
- * minus code (refund, storno) on the other one. Bezugsteuer is owed and deducted on the same
- * account, so it posts nothing. A single-leg tax correction (`-2`, empty Soll) posts against
- * its empty side and so balances it.
+ * minus code (refund, storno) on the other one. Bezugsteuer owed and deducted in the same entry
+ * (the effective method) posts nothing; on the net tax rate method it is owed without a deduction,
+ * so it is tax on top of the purchase, posted from the expense to the VAT account (r9n-27). A
+ * single-leg tax correction (`-2`, empty Soll) posts against its empty side and so balances it.
  */
-export function vatPostings(entries: readonly JournalEntry[], vatAccount: string): JournalEntry[] {
-  const out: JournalEntry[] = [];
+export function vatPostings(entries: readonly JournalEntry[], vatAccount: string): VatPosting[] {
+  const out: VatPosting[] = [];
   for (const e of entries) {
-    const info = e.vatCode ? parseVatCode(e.vatCode) : null;
-    const line = vatLine(e);
-    if (!info || !line || line.tax === 0 || info.acquisitionZiffer) continue;
-    const owed = !!(info.revenueZiffer || info.correctionZiffer);
+    const info = e.vatCode ? vat().codes.parse(e.vatCode) : null;
+    const line = vat().vatLine(e);
+    if (!info || !line || line.tax === 0) continue;
+    const acquisition = owesAcquisition(info);
+    if (info.acquisitionZiffer && !acquisition) continue;
+    const owed = !!(info.revenueZiffer || info.correctionZiffer) || acquisition;
     if (!owed && !info.inputTaxZiffer) continue;
     const amount = Math.abs(line.tax);
-    // The side that carries the tax: credit for a sale, debit for a purchase; a minus code swaps it.
-    const onCredit = owed !== info.isNegative;
+    // The side that carries the tax: credit for a sale, debit for a purchase and for Bezugsteuer (the expense owes it); a minus code swaps it.
+    const onCredit = acquisition ? info.isNegative : owed !== info.isNegative;
     const carrier = onCredit ? e.accountCredit : e.accountDebit;
-    // Tax leaves the carrier: a credit carrier is debited, a debit carrier credited.
-    const [accountDebit, accountCredit] = onCredit ? [carrier, vatAccount] : [vatAccount, carrier];
+    // Tax leaves the carrier towards the VAT account when owed, comes back to it when deducted; Bezugsteuer owed is added to its carrier.
+    const toVat = acquisition ? !info.isNegative : onCredit;
+    const [accountDebit, accountCredit] = toVat ? [carrier, vatAccount] : [vatAccount, carrier];
     out.push({
       id: `vat:${e.id}`,
       transactionRef: e.transactionRef,
@@ -94,6 +142,7 @@ export function vatPostings(entries: readonly JournalEntry[], vatAccount: string
       accountCredit,
       amount,
       description: `MWST ${e.vatCode} ${e.id}`,
+      code: e.vatCode!,
     });
   }
   return out;
@@ -111,6 +160,12 @@ export interface ClosingLedger {
   /** totalAssets − totalLiabilities − result: zero when the books balance. */
   residual: number;
   causes: DifferenceCause[];
+  /**
+   * Whether the Bilanz as shown balances: the residual is zero and no balance sits on an account
+   * the Bilanz leaves out (one outside the chart, or outside both statements). A booking on 1100
+   * with no 1100 in the chart balances the double entry and still drops out of the Bilanz (r9c-2).
+   */
+  balanced: boolean;
 }
 
 /**
@@ -124,38 +179,59 @@ export type DifferenceCause =
   | { code: 'outsideStatements'; account: string; amount: number }
   | { code: 'notInChart'; account: string; amount: number };
 
-const digit = (account: string) => account.charAt(0);
-const isBalanceSheet = (account: string) => digit(account) === '1' || digit(account) === '2';
-const isProfitAndLoss = (account: string) => '345678'.includes(digit(account)) && account !== '';
+const side = (account: string) => chart().sideOf(account);
+const isDebitNormal = (account: string) => chart().isDebitNormal(account);
+const isBalanceSheet = (account: string) => side(account) === 'assets' || side(account) === 'liabilities';
+const isProfitAndLoss = (account: string) => side(account) === 'result';
 
 /** The year's ledger as Banana would close it: opening + the year's entries + their VAT postings. */
 export function closingLedger(books: Books, year: string, chart: readonly string[], accounts: YearEndAccounts): ClosingLedger {
   const opening = books.config.openingBalances?.[year] ?? {};
   const entries = books.journalEntries.filter((e) => inYear(year)(e.date));
   const vat = vatPostings(entries, accounts.vatSettlement);
-  const rows = computeBalances([...entries, ...vat], `${year}-01-01`, yearEnd(year), opening);
+  const rows = computeBalances([...entries, ...vat], `${year}-01-01`, yearEnd(year), opening, isDebitNormal);
   const balances: Record<string, number> = {};
   for (const r of rows) if (toRappen(r.balance) !== 0) balances[r.account] = r.balance;
 
   let assets = 0, liabilities = 0, result = 0;
   for (const [account, balance] of Object.entries(balances)) {
     const rappen = toRappen(balance);
-    if (digit(account) === '1') assets += rappen;
-    else if (digit(account) === '2') liabilities += rappen;
+    if (side(account) === 'assets') assets += rappen;
+    else if (side(account) === 'liabilities') liabilities += rappen;
     else if (isProfitAndLoss(account)) result += isDebitNormal(account) ? -rappen : rappen;
   }
   const residual = assets - liabilities - result;
 
+  const causes = differenceCauses(opening, [...entries, ...vat], balances, chart);
+  return {
+    year,
+    balances,
+    result: fromRappen(result),
+    totalAssets: fromRappen(assets),
+    totalLiabilities: fromRappen(liabilities),
+    residual: fromRappen(residual),
+    causes,
+    balanced: residual === 0 && causes.length === 0,
+  };
+}
+
+/**
+ * Why Aktiven and Passiven differ, from the opening, the postings and each account's balance: an
+ * opening that does not balance, lines booked on one side only that do not balance under their
+ * ref, an account outside both statements (9100 Eröffnungsbilanz), one missing from the chart. The
+ * close reads its ledger (with the VAT postings), the Bilanz its entries as booked.
+ */
+export function differenceCauses(opening: Record<string, number>, postings: readonly JournalEntry[], balances: Record<string, number>, chart: readonly string[]): DifferenceCause[] {
   const causes: DifferenceCause[] = [];
   let openAssets = 0, openLiabilities = 0;
   for (const [account, value] of Object.entries(opening)) {
-    if (digit(account) === '1') openAssets += toRappen(value);
-    else if (digit(account) === '2') openLiabilities += toRappen(value);
+    if (side(account) === 'assets') openAssets += toRappen(value);
+    else if (side(account) === 'liabilities') openLiabilities += toRappen(value);
   }
   if (openAssets !== openLiabilities) causes.push({ code: 'openingUnbalanced', amount: fromRappen(openAssets - openLiabilities) });
   // A booking of several lines (Banana's split entry) has one-leg lines that balance under its ref.
   const oneLeg = new Map<string, { effect: number; ids: string[] }>();
-  for (const p of [...entries, ...vat]) {
+  for (const p of postings) {
     const chf = toRappen(chfAmount(p));
     const effect = (p.accountDebit === '' ? chf : 0) - (p.accountCredit === '' ? chf : 0);
     if (!effect) continue;
@@ -169,19 +245,11 @@ export function closingLedger(books: Books, year: string, chart: readonly string
   if (unbalanced.reduce((s, r) => s + r.effect, 0) !== 0) causes.push({ code: 'oneLeg', entryIds: [...new Set(unbalanced.flatMap((r) => r.ids))], amount: fromRappen(-unbalanced.reduce((s, r) => s + r.effect, 0)) });
   const inChart = new Set(chart);
   for (const [account, balance] of Object.entries(balances)) {
-    if (account === '') continue;
+    if (account === '' || toRappen(balance) === 0) continue;
     if (!isBalanceSheet(account) && !isProfitAndLoss(account)) causes.push({ code: 'outsideStatements', account, amount: balance });
     else if (chart.length && !inChart.has(account)) causes.push({ code: 'notInChart', account, amount: balance });
   }
-  return {
-    year,
-    balances,
-    result: fromRappen(result),
-    totalAssets: fromRappen(assets),
-    totalLiabilities: fromRappen(liabilities),
-    residual: fromRappen(residual),
-    causes,
-  };
+  return causes;
 }
 
 // ─── Exchange difference (Kursdifferenz) ─────────────────────────────────────
@@ -198,7 +266,7 @@ export function foreignAccounts(bankAccounts: readonly LedgerBankAccount[]): For
   const byAccount = new Map<string, LedgerBankAccount[]>();
   for (const b of bankAccounts) byAccount.set(b.account, [...(byAccount.get(b.account) ?? []), b]);
   return [...byAccount.values()]
-    .filter((bs) => bs[0].currency !== 'CHF' && bs.every((b) => b.currency === bs[0].currency))
+    .filter((bs) => bs[0].currency !== baseCurrency() && bs.every((b) => b.currency === bs[0].currency))
     .map(([b]) => ({ account: b.account, currency: b.currency, label: b.label }))
     .sort((a, b) => a.account.localeCompare(b.account));
 }
@@ -233,7 +301,7 @@ export function revaluations(books: Books, year: string, foreign: readonly Forei
   const opening = books.config.openingBalances?.[year] ?? {};
   return foreign.map((f) => {
     const native = bookBalanceNative(others, f.account, f.currency, year, yearEnd(year), nativeOpening(books, f.account, f.currency, year));
-    const chf = computeBalances(others, `${year}-01-01`, yearEnd(year), { [f.account]: opening[f.account] ?? 0 }).find((b) => b.account === f.account)?.balance ?? (opening[f.account] ?? 0);
+    const chf = computeBalances(others, `${year}-01-01`, yearEnd(year), { [f.account]: opening[f.account] ?? 0 }, isDebitNormal).find((b) => b.account === f.account)?.balance ?? (opening[f.account] ?? 0);
     const bookChf = roundCHF(chf);
     const booked = fromRappen(ownEntries.filter((e) => e.id === revaluationId(year, f.account))
       .reduce((s, e) => s + (e.accountDebit === f.account ? toRappen(e.amount) : -toRappen(e.amount)), 0));
@@ -289,6 +357,8 @@ export interface VatCheck {
   opening: number;
   /** The tax of the year's entries, as their codes post it to the VAT account. */
   booked: number;
+  /** Of `booked`: the Bezugsteuer owed without a deduction (the net tax rate method); 0 where it nets to zero. */
+  acquisition: number;
   /** Paid to (positive) or refunded by the ESTV: the year's entries on the VAT accounts. */
   paid: number;
   /** Owed at 31.12.: opening + booked − paid. */
@@ -302,27 +372,29 @@ export interface VatCheck {
 }
 
 export function vatCheck(books: Books, year: string, filed: readonly ReturnFigures[], accounts: YearEndAccounts): VatCheck {
-  const owedSign = (account: string) => (digit(account) === '2' ? 1 : -1);
+  const owedSign = (account: string) => (side(account) === 'liabilities' ? 1 : -1);
   const group = new Set(accounts.vatAccounts);
   const opening = fromRappen(accounts.vatAccounts.reduce((s, a) => s + owedSign(a) * toRappen(books.config.openingBalances?.[year]?.[a] ?? 0), 0));
   const entries = books.journalEntries.filter((e) => inYear(year)(e.date));
   // Effect on the amount owed: a credit to a VAT account raises it, a debit lowers it.
   const effect = (es: readonly JournalEntry[]) => fromRappen(es.reduce((s, e) =>
     s + (group.has(e.accountCredit) ? toRappen(e.amount) : 0) - (group.has(e.accountDebit) ? toRappen(e.amount) : 0), 0));
-  const booked = effect(vatPostings(entries, accounts.vatSettlement));
+  const postings = vatPostings(entries, accounts.vatSettlement);
+  const booked = effect(postings);
+  const acquisition = effect(postings.filter((p) => owesAcquisition(vat().codes.parse(p.code)!)));
   const paid = -effect(entries);
   const owed = roundCHF(opening + booked - paid);
   const adjustments = books.config.vatAdjustments ?? [];
   const quarters = quartersOf(year).map((quarter): VatQuarter => {
-    const fromBooks = figuresFromBooks(books.journalEntries, quarter, adjustments).payable;
+    const fromBooks = vat().figures(books.journalEntries, quarter, adjustments).payable;
     const asFiled = filed.find((f) => f.period === quarter);
     const filedPayable = asFiled ? roundCHF((asFiled.ziffern['500'] ?? 0) - (asFiled.ziffern['510'] ?? 0)) : undefined;
     return { quarter, filed: filedPayable, books: fromBooks, correction: roundCHF(fromBooks - (filedPayable ?? 0)) };
   });
-  // Every return filed in the year is paid in the year; the fourth quarter, and any quarter not filed yet, is still owed.
-  const expected = roundCHF(quarters.reduce((s, q, i) => s + (i === 3 || q.filed === undefined ? q.books : 0), 0));
+  // Every return filed in the year is paid in the year; the last period, and any period not filed yet, is still owed.
+  const expected = roundCHF(quarters.reduce((s, q, i) => s + (i === quarters.length - 1 || q.filed === undefined ? q.books : 0), 0));
   const rounding = roundCHF(booked - quarters.reduce((s, q) => s + q.books, 0));
-  return { quarters, opening, booked, paid, owed, expected, rounding, unexplained: roundCHF(owed - expected - rounding) };
+  return { quarters, opening, booked, acquisition, paid, owed, expected, rounding, unexplained: roundCHF(owed - expected - rounding) };
 }
 
 // ─── Guided year-end entries ─────────────────────────────────────────────────
@@ -333,39 +405,32 @@ export interface EntryTemplate {
   accountDebit: string;
   accountCredit: string;
   vatCode?: string;
-  /** Dated in the next year (after the shareholders' resolution), not on 31.12. */
-  nextYear?: boolean;
   /** A proposed amount the books computed (open invoices); absent: the user's figure. */
   amount?: number;
 }
 
-export const YEAR_END_TEMPLATES: readonly EntryTemplate[] = [
-  { id: 'depreciation', accountDebit: '6800', accountCredit: '' },
-  { id: 'accruedExpense', accountDebit: '', accountCredit: '2300' },
-  { id: 'prepaidExpense', accountDebit: '1300', accountCredit: '' },
-  { id: 'accruedIncome', accountDebit: '1301', accountCredit: '' },
-  { id: 'deferredIncome', accountDebit: '', accountCredit: '2301' },
-  { id: 'provision', accountDebit: '', accountCredit: '2330' },
-  { id: 'taxProvision', accountDebit: '8900', accountCredit: '2208' },
-  { id: 'privateUse', accountDebit: '2451', accountCredit: '', vatCode: 'K81-B' },
-  { id: 'inventoryChange', accountDebit: '', accountCredit: '' },
-  { id: 'socialInsurance', accountDebit: '5700', accountCredit: '2270' },
-  { id: 'doubtfulAccounts', accountDebit: '3805', accountCredit: '1109' },
-];
-
+/** The jurisdiction's guided year-end entries (modules/ch/year-end.yaml), each without a VAT code the firm's form does not take (K81-B of a firm without input tax). */
 /**
- * The profit allocation after the shareholders' resolution, dated in the new year: reserves,
- * and a dividend with the 35% Verrechnungssteuer the company owes on it. Guided, never automatic.
+ * The jurisdiction's templates for this firm: a code only when its form takes one, and the
+ * jurisdiction's default owner account (setup.yaml, the GmbH's 2451) replaced by this firm's own
+ * (`owner`: 2850 on an Einzelfirma), so the private-use entry debits the right account.
  */
-export const PROFIT_ALLOCATION: EntryTemplate = { id: 'profitAllocation', accountDebit: '2970', accountCredit: '2950', nextYear: true };
+export const yearEndTemplates = (owner?: string, legalForm?: string): EntryTemplate[] => {
+  const standIn = setup().owner.otherwise.account;
+  const own = (account: string) => (owner && account === standIn ? owner : account);
+  return yearEndData().templates
+    .filter((t) => !t.legalForms || !legalForm || t.legalForms.includes(legalForm))
+    .map(({ vatCode, legalForms: _forms, ...t }) => ({ ...t, accountDebit: own(t.accountDebit), accountCredit: own(t.accountCredit), ...(vatCode && formTakes(vatCode) && { vatCode }) }));
+};
 
-export const WITHHOLDING_TAX_RATE = 0.35;
+/** The template id of the profit allocation after the shareholders' resolution, dated in the new year: reserves and a dividend with its Verrechnungssteuer. Guided, never automatic. */
+export const PROFIT_ALLOCATION_ID = 'profitAllocation';
 
 export interface DividendSplit { net: number; withholdingTax: number }
 
-/** A gross dividend split into what the shareholders are paid and the 35% Verrechnungssteuer (2206). */
-export function dividendSplit(gross: number): DividendSplit {
-  const withholdingTax = roundCHF(gross * WITHHOLDING_TAX_RATE);
+/** A gross dividend split into what the shareholders are paid and the Verrechnungssteuer the company owes at `rate`. */
+export function dividendSplit(gross: number, rate: number): DividendSplit {
+  const withholdingTax = roundCHF(gross * rate);
   return { net: roundCHF(gross - withholdingTax), withholdingTax };
 }
 
@@ -374,7 +439,9 @@ export function dividendSplit(gross: number): DividendSplit {
  * year has open invoices, credited to the revenue account, without a VAT code. On the cash
  * basis their VAT is declared when the customer pays; the next year reverses the entry.
  */
-export const RECEIVABLES: EntryTemplate = { id: 'receivables', accountDebit: '1100', accountCredit: '' };
+export const RECEIVABLES_ID = 'receivables';
+/** The Debitoren template: its debit account only when the chart has it (r9c-2), else the person's pick. */
+export const receivablesTemplate = (accounts: YearEndAccounts): EntryTemplate => ({ id: RECEIVABLES_ID, accountDebit: accounts.receivables.inChart ? accounts.receivables.account : '', accountCredit: '' });
 
 /** The receivables entry of `year` carries this id, so the opening of the next year finds it. */
 export const receivablesEntryId = (year: string) => `yc-${year}-receivables`;
@@ -417,7 +484,15 @@ export interface Receivables {
   total: number;
   /** The revenue account the entry credits: invoicing.revenueAccount. */
   revenueAccount?: string;
+  /**
+   * Payments whose text names one of these invoices but are not linked to it: their revenue is
+   * booked (or will be) and the invoice still counts as open, so the Debitoren entry would count it
+   * twice. Linked first (Rechnungen, or the payment's «Rechnung zuordnen»), the open amount drops (r9c-3).
+   */
+  unlinked?: UnlinkedPayment[];
 }
+
+export interface UnlinkedPayment { transactionRef: string; date: string; number: string; currency: string; amount: number }
 
 export type TemplateState = 'done' | 'na';
 
@@ -427,9 +502,40 @@ export interface YearCloseState {
   templates: Record<string, TemplateState>;
   closedAt?: string;
   openedAt?: string;
+  /** The cash the person counted on 31.12., per cash account, in its own currency: a cash box's proof of its balance (#119). */
+  cashCounts?: Record<string, number>;
 }
 
 export const emptyState = (year: string): YearCloseState => ({ year, templates: {} });
+
+/**
+ * The entries of the year's 31.12. that book a template (treuhaender-29): on its given accounts,
+ * each on its side, wherever they were booked (Buchungen, the step's own form). A template with no
+ * account given is the person's to mark.
+ */
+export function bookedFor(entries: readonly JournalEntry[], year: string, t: Pick<EntryTemplate, 'id' | 'accountDebit' | 'accountCredit'>): BookedEntry[] {
+  const onAccounts = (e: JournalEntry) => (!!t.accountDebit || !!t.accountCredit) && e.date === yearEnd(year) && (!t.accountDebit || e.accountDebit === t.accountDebit) && (!t.accountCredit || e.accountCredit === t.accountCredit);
+  // The receivables entry carries the year's id, whatever accounts the person picked for it.
+  const own = (e: JournalEntry) => t.id === RECEIVABLES_ID && e.id === receivablesEntryId(year);
+  return entries.filter((e) => own(e) || onAccounts(e)).map((e) => ({ id: e.id, transactionRef: e.transactionRef, chf: chfAmount(e) }));
+}
+
+/** An entry that books a step: `chf` is what it adds to the step's figure. */
+export interface BookedEntry { id: string; transactionRef: string; chf: number }
+
+/**
+ * A booked step whose figure the books compute differently today (r10c-1): the Debitoren were
+ * booked, then an invoice was cancelled or paid. `booked` is what the entries hold, `now` the
+ * figure of today; the step is booked again with one click, and the year does not close before.
+ */
+export interface StaleFigure { booked: number; now: number }
+
+/** The step's bookings against the figure it proposes today; undefined while they agree, or while the step proposes no figure. */
+export function staleFigure(t: Pick<EntryTemplate, 'amount'>, booked: readonly BookedEntry[]): StaleFigure | undefined {
+  if (t.amount === undefined || !booked.length) return undefined;
+  const sum = fromRappen(booked.reduce((s, b) => s + toRappen(b.chf), 0));
+  return toRappen(sum) === toRappen(t.amount) ? undefined : { booked: sum, now: t.amount };
+}
 
 // ─── The checklist ───────────────────────────────────────────────────────────
 
@@ -441,25 +547,49 @@ export type Problem =
   | { code: 'sealBroken'; quarter: QuarterKey; problem: string }
   | { code: 'noYearEndBalance'; account: string; label: string }
   | { code: 'balanceDiffers'; account: string; label: string; currency: string; bank: number; book: number; date: string }
+  | { code: 'noCashCount'; account: string; label: string }
+  /** The cash counted on 31.12. against the books: shown, never booked by the app; the person books the difference or counts again. */
+  | { code: 'cashDiffers'; account: string; label: string; currency: string; counted: number; book: number }
   | { code: 'statementGap'; account: string; label: string; from: string; to: string }
   | { code: 'unbooked'; count: number; refs: string[] }
   | { code: 'doctor'; label: string }
+  /** A balance on an account the Bilanz leaves out: the year cannot close on it (r9c-2). */
+  | { code: 'notInChart'; account: string; amount: number }
+  | { code: 'outsideStatements'; account: string; amount: number }
+  /** Payments naming an open invoice without being linked to it: the Debitoren would count their revenue twice (r9c-3). */
+  | { code: 'paymentsUnlinked'; payments: UnlinkedPayment[] }
+  /** A bank account of the manifest books on a ledger account the chart lacks (r9k-1). */
+  | { code: 'bankNotInChart'; account: string; label: string }
   | { code: 'noRate'; currency: string }
   | { code: 'fxToBook'; account: string; difference: number }
   | { code: 'yearLocked' }
   | { code: 'undecided'; templates: string[] }
-  | { code: 'unbalanced'; residual: number };
+  /** A step booked with a figure the books no longer compute (r10c-1): book it again before the close. */
+  | { code: 'entryStale'; template: string; booked: number; now: number }
+  | { code: 'unbalanced'; residual: number }
+  /** Hints of the bookings' plausibility (src/accounting/booking-warnings.ts): named, never blocking (r8k-8). */
+  | Plausibility;
 
 export type CheckStatus = 'ok' | 'fail' | 'warn';
 
 export interface Check {
-  id: 'q4Filed' | 'quartersSealed' | 'bankReconciled' | 'statementsComplete' | 'allBooked' | 'doctor';
+  id: 'q4Filed' | 'quartersSealed' | 'bankReconciled' | 'statementsComplete' | 'allBooked' | 'doctor' | 'bookingsPlausible';
   status: CheckStatus;
   problems: Problem[];
 }
 
+/** The payments the «every transaction booked» check names (the first few, as the check lists them): the UI links each to its payment (r8c-10). */
+export const unbookedRefs = (checks: readonly Check[]): string[] => checks.flatMap((c) => c.problems.flatMap((p) => (p.code === 'unbooked' ? p.refs : [])));
+
 /** A bank's balance at a date, in the account's own currency, as its statement shows it. */
-export interface BankBalance { account: string; date: string; amount: number; source: string }
+export interface BankBalance {
+  account: string;
+  date: string;
+  amount: number;
+  source: string;
+  /** The bank's year-end confirmation a person attached (#119), not a statement. */
+  document?: true;
+}
 
 export interface YearCloseInput {
   year: string;
@@ -470,6 +600,8 @@ export interface YearCloseInput {
   bankBalances: readonly BankBalance[];
   filed: readonly ReturnFigures[];
   seals: SealReport;
+  /** The firm's legal form: with its bank accounts it names the owner's account (2850 on an Einzelfirma, 2451 on a GmbH), which the private-use entry debits. */
+  legalForm?: LegalForm;
   /** The failed checks of `npm run doctor` for the workspace. */
   doctor: readonly string[];
   rates: EstvRates;
@@ -488,9 +620,12 @@ export interface YearClose {
   checks: Check[];
   revaluations: Revaluation[];
   vat: VatCheck;
-  templates: Array<EntryTemplate & { state?: TemplateState }>;
+  /** `state` as marked, or 'done' when an entry of the year's 31.12. books on the template's accounts (`booked`: those entries); `stale` while their figure is not today's (r10c-1). */
+  templates: Array<EntryTemplate & { state?: TemplateState; booked?: BookedEntry[]; stale?: StaleFigure }>;
   receivables: Receivables;
   ledger: ClosingLedger;
+  /** Every bank, card and cash account's balance on 31.12. against its proof: what the «bankReconciled» check reads. */
+  balances: YearEndBalance[];
   /** Why "Jahr abschliessen" refuses; empty when it may run. */
   blockers: Problem[];
   state: YearCloseState;
@@ -501,66 +636,127 @@ const status = (problems: readonly Problem[], failing: CheckStatus = 'fail'): Ch
 function preconditions(input: YearCloseInput): Check[] {
   const { year, books, seals } = input;
   const closedThrough = books.config.closedThrough;
-  const [q1, q2, q3, q4] = quartersOf(year);
+  const periods = quartersOf(year);
+  const q4 = periods[periods.length - 1];
 
-  const filed = input.filed.some((f) => f.period === q4) ? [] : [{ code: 'q4NotFiled' as const, quarter: q4 }];
+  // A firm not registered for VAT files no return: nothing to file, and its periods close with the year (the close seals the whole year).
+  const files = vatSetup().registered;
+  const filed = !files || input.filed.some((f) => f.period === q4) ? [] : [{ code: 'q4NotFiled' as const, quarter: q4 }];
 
   const sealProblems: Problem[] = [];
   for (const c of seals.checks) if (c.status === 'broken') sealProblems.push({ code: 'sealBroken', quarter: c.quarter, problem: c.problem });
   const sealed = new Set(seals.checks.filter((c) => c.status === 'intact').map((c) => c.quarter));
   const dates = [...books.transactions.map((t) => t.date), ...books.journalEntries.map((e) => e.date)];
-  for (const q of [q1, q2, q3]) {
+  // Books that never filed start with the quarter of their first payment: before it there is nothing to file.
+  const start = closedThrough ? undefined : booksOpenPeriod(books, yearEnd(year), filing().length).from;
+  for (const q of files ? periods.slice(0, -1) : []) {
     const { from, to } = derivePeriod(q)!;
+    if (start && to < start) continue;
     if (!closedThrough || closedThrough < to) sealProblems.push({ code: 'notClosed', quarter: q });
     else if (!sealed.has(q) && dates.some((d) => d >= from && d <= to)) sealProblems.push({ code: 'unsealed', quarter: q });
   }
 
-  const rows = reconciliationAtYearEnd(input);
-  const bankProblems: Problem[] = rows.flatMap((r): Problem[] => r.bank === undefined
-    ? [{ code: 'noYearEndBalance', account: r.account, label: r.label }]
-    : toRappen(r.bank) === toRappen(r.book) ? [] : [{ code: 'balanceDiffers', account: r.account, label: r.label, currency: r.currency, bank: r.bank, book: r.book, date: yearEnd(year) }]);
+  const bankProblems = yearEndBalances(input).flatMap((r) => balanceProblems(r, year));
 
   const gaps = statementGaps(input);
 
-  const booked = new Set(books.journalEntries.map((e) => e.transactionRef.split('~')[0]));
-  const unbookedRefs = books.transactions.filter((t) => inYear(year)(t.date) && !booked.has(t.ref) && !booked.has(t.ref.split('~')[0])).map((t) => t.ref);
+  // Booked means the lines add up to the payment (r9k-2); a leg's booking may sit on its base ref (books from before unique legs). A bank movement booked in a filed quarter as its PDF's movement (#254) is booked; a filed movement read from a PDF that a confirmed reconciliation paired with an open bank movement is that one's payment, booked once its twin is.
+  const state = bookedStates(books, input.bankAccounts);
+  const twinOf = new Map((books.reconciliations ?? []).flatMap((r) => (r.done ? r.pairs.map((p) => [p.read, p.bank] as const) : [])));
+  const booked = (ref: string) => bookedWithBase(ref, (r) => state(r) === 'booked');
+  const unbookedRefs = books.transactions.filter((t) => inYear(year)(t.date) && !bookedInFiled(t) && !booked(t.ref) && !(twinOf.has(t.ref) && booked(twinOf.get(t.ref)!))).map((t) => t.ref);
   const unbooked: Problem[] = unbookedRefs.length ? [{ code: 'unbooked', count: unbookedRefs.length, refs: unbookedRefs.slice(0, 8) }] : [];
 
-  const doctor = input.doctor.map((label): Problem => ({ code: 'doctor', label }));
+  // A bank account whose ledger account the chart lacks, in the person's words (r9k-1): the chart's numbers against the manifest's accounts.
+  const chart = new Set(input.chart);
+  const notInChart = input.bankAccounts.filter((b) => !chart.has(b.account)).map((b): Problem => ({ code: 'bankNotInChart', account: b.account, label: b.label }));
+  const doctor = [...notInChart, ...input.doctor.map((label): Problem => ({ code: 'doctor', label }))];
+  const plausible = plausibility(books, year);
 
   return [
-    { id: 'q4Filed', status: status(filed), problems: filed },
+    ...(files ? [{ id: 'q4Filed' as const, status: status(filed), problems: filed }] : []),
     { id: 'quartersSealed', status: status(sealProblems), problems: sealProblems },
     { id: 'bankReconciled', status: status(bankProblems), problems: bankProblems },
     { id: 'statementsComplete', status: status(gaps), problems: gaps },
     { id: 'allBooked', status: status(unbooked), problems: unbooked },
     { id: 'doctor', status: status(doctor), problems: doctor },
+    { id: 'bookingsPlausible', status: status(plausible, 'warn'), problems: plausible },
   ];
 }
 
-interface YearEndRow { account: string; label: string; currency: string; book: number; bank?: number }
+/**
+ * What proves a money account's balance on 31.12. (#119): the bank's word (an imported statement
+ * covering the day, or the year-end confirmation the person attached) for an account at a bank or
+ * a card issuer, the person's count for a cash box. The owner's, an employee's and a clearing
+ * account need no outside confirmation.
+ */
+export type YearEndProof = 'bank' | 'count';
+const PROOF: Record<MoneyRole, YearEndProof | undefined> = { bank: 'bank', card: 'bank', cash: 'count', owner: undefined, employee: undefined, clearing: undefined };
 
-/** Every account with bank statements: its book balance on 31.12. in its own currency, and the bank's. */
-function reconciliationAtYearEnd({ year, books, bankAccounts, bankBalances }: YearCloseInput): YearEndRow[] {
+export const proofOf = (role: MoneyRole): YearEndProof | undefined => PROOF[role];
+
+/** A money account's balance on 31.12. in its own currency: the books', and what its proof states (absent while none is in). */
+export interface YearEndBalance {
+  account: string;
+  label: string;
+  currency: string;
+  proof: YearEndProof;
+  book: number;
+  stated?: number;
+  /** The statement or document the bank's balance was read from. */
+  source?: string;
+  /** The balance is the bank's year-end confirmation the person attached, not a statement's. */
+  document?: true;
+}
+
+/** Every bank, card and cash account of the manifest with its balance on 31.12., as the books and its proof state it. */
+export function yearEndBalances({ year, books, bankAccounts, bankBalances, state }: Pick<YearCloseInput, 'year' | 'books' | 'bankAccounts' | 'bankBalances' | 'state'>): YearEndBalance[] {
   const own = isRevaluationOf(year);
   const entries = books.journalEntries.filter((e) => !own(e));
   const seen = new Set<string>();
-  return bankAccounts.filter((b) => b.statements && !seen.has(b.account) && seen.add(b.account)).map((b) => {
+  return bankAccounts.flatMap((b): YearEndBalance[] => {
+    const proof = PROOF[b.role];
+    if (!proof || seen.has(b.account)) return [];
+    seen.add(b.account);
     const book = bookBalanceNative(entries, b.account, b.currency, year, yearEnd(year), nativeOpening(books, b.account, b.currency, year));
-    const bank = bankBalances.find((x) => x.account === b.account && x.date === yearEnd(year))?.amount;
-    return { account: b.account, label: b.label, currency: b.currency, book, bank };
+    const row: YearEndBalance = { account: b.account, label: b.label, currency: b.currency, proof, book };
+    if (proof === 'count') {
+      const counted = state.cashCounts?.[b.account];
+      return [counted === undefined ? row : { ...row, stated: counted }];
+    }
+    // A statement covering the day is the proof before a confirmation the person attached.
+    const day = bankBalances.filter((x) => x.account === b.account && x.date === yearEnd(year));
+    const bank = day.find((x) => !x.document) ?? day[0];
+    return [bank ? { ...row, stated: bank.amount, source: bank.source, ...(bank.document && { document: true as const }) } : row];
   });
 }
 
-/** Stretches of the year no statement of an account covers, from 1.1. (or its first statement, for an account opened during the year). */
+function balanceProblems(r: YearEndBalance, year: string): Problem[] {
+  const { account, label, currency, book, stated } = r;
+  if (stated === undefined) return [r.proof === 'bank' ? { code: 'noYearEndBalance', account, label } : { code: 'noCashCount', account, label }];
+  if (toRappen(stated) === toRappen(book)) return [];
+  return [r.proof === 'bank'
+    ? { code: 'balanceDiffers', account, label, currency, bank: stated, book, date: yearEnd(year) }
+    : { code: 'cashDiffers', account, label, currency, counted: stated, book }];
+}
+
+/**
+ * Stretches of the year no statement of an account covers, from 1.1. (or its first statement, for
+ * an account opened during the year): on an account with an imported statement, as Kontoauszüge
+ * marks a month «fehlt» (#116), and on the roles the country's law asks it of (year-end.yaml
+ * `moneyAccounts.monthlyStatements`; Switzerland asks it of none).
+ */
 function statementGaps({ year, books, bankAccounts }: YearCloseInput): Problem[] {
   const out: Problem[] = [];
   const seen = new Set<string>();
+  const byLaw = new Set(yearEndData().moneyAccounts?.monthlyStatements ?? []);
   for (const b of bankAccounts) {
-    if (!b.statements || seen.has(b.account)) continue;
+    if (seen.has(b.account)) continue;
+    const statements = books.bankStatements.filter((s) => s.bank === b.bank && (!s.currency || s.currency === b.currency));
+    if (!statements.length && !byLaw.has(b.role)) continue;
     seen.add(b.account);
-    const ranges = books.bankStatements
-      .filter((s) => s.bank === b.bank && (!s.currency || s.currency === b.currency) && s.toDate >= `${year}-01-01` && s.fromDate <= yearEnd(year))
+    const ranges = statements
+      .filter((s) => s.toDate >= `${year}-01-01` && s.fromDate <= yearEnd(year))
       .map((s) => [s.fromDate, s.toDate] as const)
       .sort(([a], [c]) => a.localeCompare(c));
     const openedThisYear = !books.config.openingBalances?.[year]?.[b.account] && !books.config.openingBalancesNative?.[year]?.[b.account];
@@ -581,26 +777,36 @@ const dayBefore = (date: string) => shift(date, -1);
 /** Every item of the year's close, computed from the books. */
 export function yearClose(input: YearCloseInput): YearClose {
   const { year, books, state } = input;
-  const accounts = yearEndAccounts(input.chart);
+  const accounts = yearEndAccounts(input.chart, input.legalForm);
   const closedThrough = books.config.closedThrough;
   const locked = !!closedThrough && closedThrough >= yearEnd(year);
   const checks = preconditions(input);
   const reval = revaluations(books, year, foreignAccounts(input.bankAccounts), input.rates);
   const ledger = closingLedger(books, year, input.chart, accounts);
   const receivables = input.receivables ?? { invoices: [], total: 0 };
-  const proposed = receivables.invoices.length
-    ? [{ ...RECEIVABLES, accountCredit: receivables.revenueAccount ?? '', amount: receivables.total }]
+  // The step stays while its entry is booked, so a figure that fell to 0 (every invoice paid or cancelled since) is still seen (r10c-1).
+  const proposed = receivables.invoices.length || books.journalEntries.some((x) => x.id === receivablesEntryId(year))
+    ? [{ ...receivablesTemplate(accounts), accountCredit: receivables.revenueAccount ?? '', amount: receivables.total }]
     : [];
-  const templates = [...YEAR_END_TEMPLATES, ...proposed].map((t) => ({ ...t, state: state.templates[t.id] }));
+  const owner = ownerAccountNumber({ bankAccounts: input.bankAccounts, company: { legalForm: input.legalForm } });
+  const templates = [...yearEndTemplates(owner, input.legalForm), ...proposed].map((t) => {
+    const booked = bookedFor(books.journalEntries, year, t);
+    const stale = staleFigure(t, booked);
+    return { ...t, state: state.templates[t.id] ?? (booked.length ? 'done' as const : undefined), ...(booked.length && { booked }), ...(stale && { stale }) };
+  });
 
-  const blockers: Problem[] = checks.flatMap((c) => c.problems);
+  // A hint (status warn) is named, never a blocker.
+  const blockers: Problem[] = checks.filter((c) => c.status === 'fail').flatMap((c) => c.problems);
   for (const r of reval) {
     if (r.status === 'no-rate') blockers.push({ code: 'noRate', currency: r.currency });
     else if (r.status === 'to-book') blockers.push(locked ? { code: 'yearLocked' } : { code: 'fxToBook', account: r.account, difference: roundCHF(r.difference - r.booked) });
   }
   const undecided = templates.filter((t) => !t.state).map((t) => t.id);
   if (undecided.length) blockers.push({ code: 'undecided', templates: undecided });
+  for (const t of templates) if (t.stale) blockers.push({ code: 'entryStale', template: t.id, ...t.stale });
+  if (receivables.unlinked?.length) blockers.push({ code: 'paymentsUnlinked', payments: receivables.unlinked });
   if (toRappen(ledger.residual) !== 0) blockers.push({ code: 'unbalanced', residual: ledger.residual });
+  for (const c of ledger.causes) if (c.code === 'notInChart' || c.code === 'outsideStatements') blockers.push(c);
 
   return {
     year,
@@ -614,6 +820,7 @@ export function yearClose(input: YearCloseInput): YearClose {
     templates,
     receivables,
     ledger,
+    balances: yearEndBalances(input),
     blockers: dedupe(blockers),
     state,
   };
@@ -633,9 +840,9 @@ export interface Opening {
   balances: Record<string, number>;
   /** config.openingBalancesNative[year]: the foreign accounts' closing balance in their currency. */
   native: Record<string, { amount: number; currency: string }>;
-  /** The closed year's result, carried to retained earnings. */
+  /** The closed year's result, carried to `resultTo`. */
   result: number;
-  retainedEarnings: string;
+  resultTo: string;
   totalAssets: number;
   totalLiabilities: number;
   /** totalAssets − totalLiabilities: zero when the opening balances. */
@@ -646,17 +853,20 @@ export interface Opening {
 
 /**
  * The next year's opening from the closed year's closing ledger: the balance-sheet accounts
- * carried, profit and loss reset, the result added to retained earnings (profit allocation is a
- * later entry of its own). The closing exchange rates become the opening rates: a foreign
- * account opens with its native closing balance, and its CHF is native × the 31.12. rate once
- * the Kursdifferenz is booked.
+ * carried, profit and loss reset, the result added to the legal form's equity account (Gewinnvortrag
+ * on a company with share capital, where the profit allocation is a later entry of its own; the
+ * owner's capital on an Einzelfirma, into which her private account closes too, so it starts the
+ * year at zero). The closing exchange rates become the opening rates: a foreign account opens with
+ * its native closing balance, and its CHF is native × the 31.12. rate once the Kursdifferenz is booked.
  */
 export function openingOf(closing: ClosingLedger, books: Books, foreign: readonly ForeignAccount[], rates: EstvRates, accounts: YearEndAccounts): Opening {
   const year = String(+closing.year + 1);
   const balances: Record<string, number> = {};
   for (const [account, balance] of Object.entries(closing.balances)) if (isBalanceSheet(account)) balances[account] = balance;
-  const re = accounts.retainedEarnings;
-  const carried = roundCHF((balances[re] ?? 0) + closing.result);
+  const re = accounts.resultTo;
+  const closedIn = accounts.privateInto ? balances[accounts.privateInto] ?? 0 : 0;
+  if (accounts.privateInto) delete balances[accounts.privateInto];
+  const carried = roundCHF((balances[re] ?? 0) + closing.result + closedIn);
   if (toRappen(carried) === 0) delete balances[re]; else balances[re] = carried;
 
   const causes: Opening['causes'] = [...closing.causes];
@@ -673,7 +883,7 @@ export function openingOf(closing: ClosingLedger, books: Books, foreign: readonl
 
   let assets = 0, liabilities = 0;
   for (const [account, value] of Object.entries(balances)) {
-    if (digit(account) === '1') assets += toRappen(value);
+    if (side(account) === 'assets') assets += toRappen(value);
     else liabilities += toRappen(value);
   }
   const sorted = Object.fromEntries(Object.entries(balances).sort(([a], [b]) => a.localeCompare(b)));
@@ -682,7 +892,7 @@ export function openingOf(closing: ClosingLedger, books: Books, foreign: readonl
     balances: sorted,
     native,
     result: closing.result,
-    retainedEarnings: re,
+    resultTo: re,
     totalAssets: fromRappen(assets),
     totalLiabilities: fromRappen(liabilities),
     residual: fromRappen(assets - liabilities),

@@ -3,10 +3,12 @@
  * the selected account's ledger on the right. A search finds an account by number or name in
  * whichever report holds it.
  */
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import './reports.css';
 import { localToday, parsePeriod } from '../../../accounting/periods.js';
-import { REPORTS, type Report, type RouteOf } from '../../shell/route.js';
+import type { Report, RouteOf } from '../../shell/route.js';
+import { REPORT_LABEL, Tabs } from './Tabs.js';
+import { CustomDetail, CustomList, customKeys } from './custom/Custom.js';
 import { ListHead } from '../../shell/ListHead.js';
 import { moveKey } from '../../shell/keyboard.js';
 import { getAccountMap } from '../../lib/accounts.js';
@@ -16,15 +18,23 @@ import { ICONS } from '../icons.js';
 import type { Area, AreaProps, LegendItem } from '../index.js';
 import { entryAt } from '../vat/links.js';
 import {
-  NO_ACCOUNT, NO_ACCOUNT_SLUG, accountsOf, filterBlocks, ledgerOf, reportOfAccount, reportView, searchReport,
+  NO_ACCOUNT, NO_ACCOUNT_SLUG, accountsOf, filterBlocks, incomeColumns, ledgerOf, reportOfAccount, reportView, searchReport,
   type AccountRow, type Block, type ReportView,
 } from './model.js';
+import { SliceBar } from './SliceBar.js';
+import { setSlice, useSliced } from './slice.js';
+import { valueLabel } from '../../../books/tags.js';
 import { Detail } from './Detail.js';
+import { vatParts } from '../../../accounting/vat-in-figures.js';
+import { causeText } from '../close/steps.js';
+import type { DifferenceCause } from '../../../accounting/year-close.js';
 import { accountName, accountOfRoute, routeAccount } from './view.js';
+import { missingOpenings } from '../../../accounting/opening-balance.js';
+import { useWorkspace } from '../../hooks/use-workspace.js';
 
-type Props = AreaProps<RouteOf<'reports'>>;
-
-const REPORT_LABEL = { income: 'tab.incomeStatement', balance: 'tab.balanceSheet', trial: 'tab.trialBalance' } as const satisfies Record<Report, string>;
+/** The route of one of the books' three reports (not Eigene Berichte). */
+export type BooksRoute = Extract<RouteOf<'reports'>, { report: Report }>;
+type Props = AreaProps<BooksRoute>;
 const SUM_LABEL = {
   grossProfit: 'income.grossProfit', operatingResult: 'income.operatingResult', netResult: 'reports.result',
   totalAssets: 'balance.totalAssets', totalLiabilities: 'balance.totalLiabilities',
@@ -58,12 +68,16 @@ function useView({ route, query, books, period }: Pick<Props, 'route' | 'query' 
 }
 
 function List(props: Props) {
-  const { route, query, period, books, nav, canEdit } = props;
+  const { route, query, period, nav, canEdit } = props;
   const names = getAccountMap();
   const [all, setAll] = useState(() => read(ALL_KEY, false));
   const [shut, setShut] = useState(() => new Set(read<string[]>(SHUT_KEY, [])));
   const q = query.q ?? '';
-  const view = useView(props, all);
+  const { dimensions, slice, books } = useSliced(route.report, props.books);
+  const view = useView({ ...props, books }, all);
+  const by = dimensions.find((d) => d.id === slice.by);
+  const columns = useMemo(() => (by ? incomeColumns(books, period, names, by) : undefined), [by, books, period, names]);
+  const cols = columns && columnsOf(columns);
   const ids = accountsOf(view);
   listed.ids = ids;
   const account = accountOfRoute(route);
@@ -89,24 +103,28 @@ function List(props: Props) {
     setShut(next);
     write(SHUT_KEY, [...next]);
   };
-  const showOneSided = () => nav.go({
-    route: { area: 'reports', report: 'trial', account: NO_ACCOUNT_SLUG },
+  const inTrial = (account: string) => nav.go({
+    route: { area: 'reports', report: 'trial', account },
     query: { period: parsePeriod(`${period.to.slice(0, 4)}-01-01..${period.to}`, localToday()) ?? undefined },
   });
+  /** Where a cause of the gap is looked at: the one-sided entries, the account, or the year's opening. */
+  const goCause = (c: DifferenceCause) => (c.code === 'oneLeg' ? inTrial(NO_ACCOUNT_SLUG)
+    : c.code === 'openingUnbalanced' ? nav.go({ route: { area: 'company', section: 'opening' }, query: {} })
+      : inTrial(c.account));
   const sb = route.report === 'trial';
+  const ws = useWorkspace();
+  const year = period.to.slice(0, 4);
+  const unopened = useMemo(() => (ws && route.report !== 'income' ? missingOpenings(props.books, ws.bankAccounts, year) : []), [ws, props.books, year, route.report]);
 
   return (
     <div className="page">
-      <ListHead period={period} books={books} canEdit={canEdit} />
-      <div className="counts" role="tablist" aria-label={t('reports.report')}>
-        {REPORTS.map((r) => (
-          <button key={r} type="button" role="tab" aria-selected={r === route.report} className={r === route.report ? 'on' : ''} onClick={() => nav.select({ area: 'reports', report: r })}>{t(REPORT_LABEL[r])}</button>
-        ))}
+      <ListHead period={period} books={props.books} canEdit={canEdit} />
+      <Tabs route={route} nav={nav}>
         <span className="rnote">{switched && q ? `→ ${t(REPORT_LABEL[switched])}` : view.asOf ? t('balance.asOf', { date: formatDate(view.asOf) }) : ''}</span>
-        <button type="button" className={`rall${all ? ' on' : ''}`} aria-pressed={all} title={all ? t('reports.onlyWithAmountTip') : t('reports.allAccountsTip')} onClick={toggleAll}>
+        <button type="button" className={`rall${all ? ' on' : ''}`} aria-pressed={all} data-tip={all ? t('reports.onlyWithAmountTip') : t('reports.allAccountsTip')} onClick={toggleAll}>
           {all ? t('reports.allAccounts') : t('reports.onlyWithAmount')}
         </button>
-      </div>
+      </Tabs>
       <label className="search rsearch">
         {ICONS.search}
         <span className="sr">{t('reports.searchLabel')}</span>
@@ -120,34 +138,57 @@ function List(props: Props) {
           onKeyDown={(e) => { if (e.key === 'Escape') nav.setQuery({ q: undefined }); }}
         />
       </label>
+      {route.report === 'income' && dimensions.length > 0 && <SliceBar dimensions={dimensions} slice={slice} entries={props.books.journalEntries ?? []} onChange={setSlice} />}
       {q && !ids.length && <div className="empty"><h2>{t('reports.nothingFound', { q })}</h2></div>}
       <div className={`vresult static${view.balanced === false ? ' bad' : ''}`}>
         <span>{t(HEADLINE[view.headline.label])}</span>
         <b className="mono"><small>CHF</small>{fmt(view.headline.value)}</b>
       </div>
+      {view.vat?.shown === 'net' && (
+        <p className="m rvat" data-testid="vat-note" data-shown="net">{t('reports.vatNet', { account: view.vat.account })}</p>
+      )}
+      {view.vat?.shown === 'gross' && (
+        <p className="m rvat" data-testid="vat-note" data-shown="gross" data-net={view.vat.figures.net}>
+          {t(route.report === 'income' ? 'reports.vatNoteIncome' : 'reports.vatNoteBalance', { net: fmt(view.vat.figures.net), parts: vatParts(view.vat.figures).map((x) => t(x.key, { amount: fmt(x.amount) })).join(', ') })}
+        </p>
+      )}
       {view.gap && (
         <div className="notice warn rgap">
           <span className="dot" aria-hidden="true" />
           <span>
-            {t('reports.gap', { liabilities: fmt(view.gap.liabilities), gap: fmt(view.gap.value), n: view.gap.oneSided })}{' '}
-            <button type="button" onClick={showOneSided}>{t('reports.show')}</button>
+            {t('reports.gap', { liabilities: fmt(view.gap.liabilities), gap: fmt(view.gap.value) })}
+            {view.gap.causes.map((c, i) => (
+              <span key={i} className="cause" data-cause={c.code}>{' '}{causeText(c)}{' '}<button type="button" onClick={() => goCause(c)}>{t('reports.show')}</button></span>
+            ))}
+            {!view.gap.causes.length && <span>{' '}{t('reports.gapUnknown')}</span>}
           </span>
         </div>
       )}
-      <div className={`rows rep${sb ? ' sbal' : ''}`} role="listbox" aria-label={t('reports.accounts')}>
+      {unopened.map((m) => (
+        <div key={m.account} className="notice warn rgap" data-testid="opening-missing" data-account={m.account}>
+          <span className="dot" aria-hidden="true" />
+          <span>
+            {t('reports.openingMissing', { account: `${m.account} ${m.label}`, year: m.year, amount: fmt(m.amount) })}{' '}
+            {m.canType && <button type="button" onClick={() => nav.go({ route: { area: 'company', section: 'opening' }, query: {} })}>{t('reports.openingSet')}</button>}
+          </span>
+        </div>
+      ))}
+      <div className={`rows rep${sb ? ' sbal' : ''}${cols ? ' cols' : ''}`} role="listbox" aria-label={t('reports.accounts')} data-columns={cols?.values.length} style={cols ? ({ '--cols': cols.values.length } as CSSProperties) : undefined}>
         {sb && <div className="group sbh"><span>{t('col.account')}</span><span /><span className="r">{t('reports.opening')}</span><span className="r">{t('reports.debit')}</span><span className="r">{t('reports.credit')}</span><span className="r">{t('reports.balance')}</span></div>}
+        {cols && by && <div className="group sbh" data-testid="slice-head"><span>{t('col.account')}</span><span>{by.label}</span>{cols.values.map((v) => <span key={v} className="r" data-tip={v}>{v ? valueLabel(by, v) : t('tags.without')}</span>)}<span className="r">{t('common.total')}</span></div>}
         {view.blocks.map((b, i) => {
           if (b.kind === 'head') return <div key={i} className="rhead">{t(b.title === 'assets' ? 'balance.assets' : 'balance.liabilities')}</div>;
-          if (b.kind === 'sum') return <div key={i} className={`rsum${b.strong ? ' strong' : ''}`}><span>{t(SUM_LABEL[b.title])}</span><span className="mono">{fmt(b.value)}</span></div>;
+          if (b.kind === 'sum') return <div key={i} className={`rsum${b.strong ? ' strong' : ''}`}><span>{t(SUM_LABEL[b.title])}</span>{cols?.sum(b.title).map((x, j) => <span key={j} className="mono f">{fmt(x)}</span>)}<span className="mono">{fmt(b.value)}</span></div>;
           const key = `${route.report}:${b.title}`;
           const closed = shut.has(key) && !q;
           return (
             <Fragment key={key}>
               <button type="button" className={`group${closed ? ' shut' : ''}`} aria-expanded={!closed} onClick={() => toggleGroup(key)}>
                 <span><svg className="gch" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>{groupTitle(b)}</span>
+                {cols?.total(b.title).map((x, j) => <span key={j} className="mono f">{fmt(x)}</span>)}
                 <span className="mono">{b.total != null ? fmt(b.total) : ''}</span>
               </button>
-              {!closed && b.rows.map((r) => <Row key={r.account} r={r} sb={sb} sel={r.account === account} names={names} onSelect={(a) => nav.select({ area: 'reports', report: route.report, account: routeAccount(a) })} />)}
+              {!closed && b.rows.map((r) => <Row key={r.account} r={r} sb={sb} cols={cols?.row(r.account)} sel={r.account === account} names={names} onSelect={(a) => nav.select({ area: 'reports', report: route.report, account: routeAccount(a) })} />)}
               {!closed && b.plain && <div className="row plain"><span className="d" /><span className="t">{accountingName(b.plain.name)}</span><span className="a mono">{fmt(b.plain.value)}</span></div>}
             </Fragment>
           );
@@ -157,12 +198,25 @@ function List(props: Props) {
   );
 }
 
-function Row({ r, sb, sel, names, onSelect }: { r: AccountRow; sb: boolean; sel: boolean; names: Record<string, string>; onSelect(a: string): void }) {
+/** The columns of the Erfolgsrechnung per value of a dimension, looked up by account, by group and by sum. */
+function columnsOf(columns: ReturnType<typeof incomeColumns>) {
+  const groups = (v: ReportView) => v.blocks.filter((b): b is Extract<Block, { kind: 'group' }> => b.kind === 'group');
+  const sumOf = (v: ReportView, title: string) => v.blocks.find((b): b is Extract<Block, { kind: 'sum' }> => b.kind === 'sum' && b.title === title)?.value ?? 0;
+  return {
+    values: columns.map((c) => c.value),
+    row: (account: string) => columns.map((c) => groups(c.view).flatMap((b) => b.rows).find((r) => r.account === account)?.value ?? 0),
+    total: (title: string) => columns.map((c) => groups(c.view).find((b) => b.title === title)?.total ?? 0),
+    sum: (title: string) => columns.map((c) => sumOf(c.view, title)),
+  };
+}
+
+function Row({ r, sb, cols, sel, names, onSelect }: { r: AccountRow; sb: boolean; cols?: number[]; sel: boolean; names: Record<string, string>; onSelect(a: string): void }) {
   const zero = !r.value && !r.open && !r.debit && !r.credit;
   return (
     <div className={`row${sel ? ' sel' : ''}${zero ? ' zero' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-acct={routeAccount(r.account)} onClick={() => onSelect(r.account)}>
       <span className="d mono">{r.account === NO_ACCOUNT ? '·' : r.account}</span>
       <span className="t">{accountName(r.account, names)}</span>
+      {cols?.map((x, j) => <span key={j} className="a mono f">{x ? fmt(x) : ''}</span>)}
       {sb && (
         <>
           <span className="a mono f">{r.open ? fmt(r.open) : ''}</span>
@@ -186,26 +240,28 @@ export const reports: Area<RouteOf<'reports'>> = {
   id: 'reports',
   label: () => t('area.reports'),
   dock: { key: 'r', icon: ICONS.reports, tip: () => t('area.reports.tip') },
-  List,
-  Detail,
+  List: (p) => (p.route.report === 'custom' ? <CustomList {...p} route={p.route} /> : <List {...p} route={p.route} />),
+  Detail: (p) => (p.route.report === 'custom' ? <CustomDetail {...p} route={p.route} /> : <Detail {...p} route={p.route} />),
   legend,
   wide: true,
-  title: (r) => { const a = accountOfRoute(r); return a === undefined ? t(REPORT_LABEL[r.report]) : a === NO_ACCOUNT ? t('reports.noAccount') : `${a} ${accountName(a)}`; },
+  title: (r) => { if (r.report === 'custom') return t('custom.tab'); const a = accountOfRoute(r); return a === undefined ? t(REPORT_LABEL[r.report]) : a === NO_ACCOUNT ? t('reports.noAccount') : `${a} ${accountName(a)}`; },
   keys(e, p) {
+    if (p.route.report === 'custom') return customKeys(e, { ...p, route: p.route });
+    const route = p.route;
     const d = moveKey(e);
     if (d) {
-      const a = accountOfRoute(p.route);
+      const a = accountOfRoute(route);
       const i = a === undefined ? -1 : listed.ids.indexOf(a);
       const next = listed.ids[Math.min(listed.ids.length - 1, Math.max(0, i + d))];
-      if (next !== undefined) p.nav.select({ area: 'reports', report: p.route.report, account: routeAccount(next) });
+      if (next !== undefined) p.nav.select({ area: 'reports', report: route.report, account: routeAccount(next) });
       return true;
     }
     if (e.metaKey || e.ctrlKey || e.altKey) return false;
     if (e.key === 'Escape' && p.query.q) { p.nav.setQuery({ q: undefined }); return true; }
     if (e.key === 'd') { document.querySelector<HTMLElement>('[data-dlpop]')?.click(); return true; }
     if (e.key !== 'Enter') return false;
-    const a = accountOfRoute(p.route);
-    const first = a === undefined ? undefined : ledgerOf(p.books, a, p.period).rows[0]?.entry;
+    const a = accountOfRoute(route);
+    const first = a === undefined ? undefined : ledgerOf(p.books, a, p.period, getAccountMap()).rows[0]?.entry;
     if (!first) return false;
     p.nav.go(entryAt(first, p.period));
     return true;

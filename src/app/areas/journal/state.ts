@@ -1,23 +1,25 @@
 /**
- * What Buchungen keeps beside the URL: the filter (urls.md names only ?vat=), the closed months
+ * What Buchungen keeps beside the URL (the filter chips and ?vat= are in it): the closed months
  * and the open detail sections (per viewer, kept in this browser), the new-entry dialog, and the list
  * as last shown, which the keys walk.
  */
 import { useSyncExternalStore } from 'react';
 import type { JournalEntryInput } from '../../lib/api.js';
-import { store, stored } from '../../shell/prefs.js';
-import type { JournalFilter } from './model.js';
+import type { JournalEntry } from '../../../types/index.js';
+import { store, stored } from '../../shell/storage.js';
+import type { CorrectionKind } from '../../../accounting/correction.js';
 
 export type Section = 'teile' | 'buchung' | 'herkunft';
 
 interface State {
-  filter?: JournalFilter;
   collapsed: ReadonlySet<string>;
   open: Record<Section, boolean>;
   /** The new-entry dialog with what it starts from. */
-  overlay: { kind: 'new'; draft: Partial<JournalEntryInput> } | null;
+  overlay: { kind: 'new'; draft: Partial<JournalEntryInput>; correcting?: { entry: string; as: CorrectionKind; from?: string } } | null;
   /** A field of the entry form to focus once it shows. */
   focus?: string;
+  /** The entry just deleted: the detail keeps its place with «Rückgängig», so no row moves under the pointer (r6h-28). */
+  deleted?: JournalEntry;
 }
 
 function read<T>(key: string, fallback: T): T {

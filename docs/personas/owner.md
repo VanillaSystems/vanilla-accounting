@@ -53,5 +53,5 @@ and who has access (on the git host) are the owner's (or another maintainer's).
 ## Risks and pains
 
 - Forking the app to adapt it breaks every later upgrade.
-- An agent that edits `books.json` by hand bypasses the rules and the history.
+- An agent that edits the books' files by hand bypasses the rules and the history.
 - Real books on a public URL publish them.

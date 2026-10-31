@@ -8,7 +8,8 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AskOptions } from '../llm/ask.js';
-import { emptyBooks, loadBooks, mutateJournal, saveBooks, type Books } from '../books/store.js';
+import { aiOff } from '../llm/off.js';
+import { emptyBooks, hasBooks, loadBooks, updateSaved, type Actor, type Books } from '../books/store.js';
 import type { Workspace } from '../workspace/workspace.js';
 
 export const INTAKE_STEPS = ['read', 'vat', 'match', 'classify'] as const;
@@ -24,6 +25,18 @@ export type IntakeNote =
   | { code: 'unmatched'; files: string[] }
   /** A receipt link or bank payment of a filed quarter is gone; kept as it was, a person must look. */
   | { code: 'filedKept'; count: number }
+  /** Receipts whose text is too poor to read: flagged for a vision read, out of the runs until then. */
+  | { code: 'poorScan'; files: string[] }
+  /** Inbox files with the bytes of a file the books or the inbox hold (`of`): removed from the inbox. */
+  | { code: 'sameBytes'; files: Array<{ file: string; of: string }> }
+  /** Payments a company rule holds for the person (src/booking/rules.ts): not booked, each a question in Automatisierung. */
+  | { code: 'asked'; count: number }
+  /** Customer payments without an invoice booked without VAT: each a question to the owner (src/intake/sale-questions.ts). */
+  | { code: 'saleAsked'; count: number }
+  /** Payments that need a receipt and have none yet (src/booking/receipt-wait.ts): not booked, booked once it is linked. */
+  | { code: 'waitingReceipt'; count: number }
+  /** Payments whose receipt's VAT could not be read (issue #57): not booked, each a question under Aufgaben. */
+  | { code: 'receiptUnread'; count: number }
   /** The step threw. */
   | { code: 'error'; detail: string };
 
@@ -55,8 +68,10 @@ export interface IntakeStatus {
 
 /**
  * The books as a step sees them. `update` loads, changes and saves in one synchronous call inside
- * mutateJournal, so a filed quarter never changes and an edit made while a model was thinking is
+ * the write door (src/books/store.ts update), so a filed quarter never changes and an edit made while a model was thinking is
  * not saved over: a step asks the model on what it `read`, then applies the answer in `update`.
+ * When another process saved in between, `update` runs its `fn` once more on books loaded afresh
+ * (updateSaved, #132): `fn` decides from the books it is given and changes nothing else.
  */
 export interface BooksPort {
   read(): Books;
@@ -72,7 +87,22 @@ export interface StepContext {
   ask?: Ask;
   progress(done: number, total: number): void;
   log(line: string): void;
+  /** Payments left for the person (a company rule asks, or no model to book them): a run of the engine asks each (src/workflows/actions.ts); the CLI only says so. */
+  hold?(refs: string[]): void;
+  /** Payments booked now: a question that held one of them (its report was missing, a rule asked) is closed (r7h-21). */
+  release?(refs: string[]): void;
+  /** Stems of inbox files a run waiting behind this one came in with: left for it (src/workflows/actions.ts). */
+  later?: () => ReadonlySet<string>;
+  /**
+   * The files that came in with the run (the drop dialog's rows, src/workflows/model.ts Arrival),
+   * told by their inbox name when the read step turns a photo into a PDF (`renamed`: the name and
+   * id it has now) or sets a file aside (`refused`), so a row ends as what its file became (r8k-9).
+   */
+  arrived?: { renamed(inbox: string, next: { inbox: string; id: string }): void; refused(inbox: string, reason: string): void };
 }
+
+/** A file's name without its extension: a photo converted to PDF in the inbox keeps it. */
+export const stemOf = (name: string): string => name.replace(/\.[^.]*$/, '');
 
 export interface StepResult {
   notes: IntakeNote[];
@@ -82,18 +112,13 @@ export interface StepResult {
 
 export type StepRun = (ctx: StepContext) => Promise<StepResult>;
 
-/** The books of `ws` through src/books/store.ts, for a CLI. */
-export function storePort(ws: Workspace): BooksPort {
-  // Before the first run there is no books.json: the books start empty.
-  const load = () => (existsSync(ws.paths.books) ? loadBooks(ws) : emptyBooks());
+/** The books of `ws` through src/books/store.ts, written as `actor`. */
+export function storePort(ws: Workspace, actor: Actor): BooksPort {
+  // Before the first run there are no books: they start empty.
+  const load = () => (hasBooks(ws) ? loadBooks(ws) : emptyBooks());
   return {
     read: load,
-    update(fn) {
-      const books = load();
-      const out = mutateJournal(books, fn);
-      saveBooks(ws, books);
-      return out;
-    },
+    update: (fn) => updateSaved(ws, actor, fn, load),
   };
 }
 
@@ -170,10 +195,18 @@ export async function runIntake({ ws, books, ask, steps, log = () => {}, onChang
 export function noteLines(notes: IntakeNote[]): string[] {
   return notes.map((n) => {
     switch (n.code) {
-      case 'noModel': return `⚠ no working claude CLI: ${n.waiting} item(s) wait for the model (install Claude Code and log in, then run again)`;
+      case 'noModel': return aiOff()
+        ? `⚠ the AI is switched off on this Mac (Firma › KI): ${n.waiting} item(s) wait for it until it is on again`
+        : `⚠ no working claude CLI: ${n.waiting} item(s) wait for the model (install Claude Code and log in, then run again)`;
       case 'failed': return `⚠ ${n.count} item(s) failed: ${n.detail}`;
       case 'unmatched': return `⛔ ${n.files.length} bank statement(s) belong to no bank account; nothing was written:\n${n.files.map((f) => `  ${f}`).join('\n')}`;
       case 'filedKept': return `⛔ ${n.count} link(s) or payment(s) of a FILED quarter lost their file; kept as they were (see above)`;
+      case 'poorScan': return `⚠ ${n.files.length} receipt(s) too poorly scanned to read; flagged for a vision read (Belege › Neu lesen):\n${n.files.map((f) => `  ${f}`).join('\n')}`;
+      case 'sameBytes': return `${n.files.length} file(s) in beleg-import/ had the bytes of one already there; removed:\n${n.files.map((f) => `  ${f.file} = ${f.of}`).join('\n')}`;
+      case 'asked': return `? ${n.count} payment(s) wait for the person: a company rule says to ask first`;
+      case 'saleAsked': return `? ${n.count} customer payment(s) without an invoice wait for the owner: with VAT, abroad, or no sale?`;
+      case 'waitingReceipt': return `${n.count} payment(s) wait for their receipt: booked once it is linked`;
+      case 'receiptUnread': return `? ${n.count} payment(s) have a receipt whose VAT could not be read: each waits for the person under Aufgaben`;
       case 'error': return `⛔ ${n.detail}`;
     }
   });

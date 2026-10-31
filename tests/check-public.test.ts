@@ -14,7 +14,7 @@ import { APP_ROOT, type Company, type Uid } from '../src/workspace/workspace.js'
 const j = (...parts: string[]) => parts.join('');
 const company: Company = {
   name: 'Beispiel Velo GmbH', uid: j('CHE-', '987.654.321') as Uid, owner: 'Petra Beispiel',
-  vat: { method: 'effective', reporting: 'received' },
+  vat: { registered: true, method: 'effective', reporting: 'received', period: 'quarterly' },
 };
 const IBAN = j('CH93', '00762011623852957');
 const sources: SecretSources = {
@@ -98,6 +98,8 @@ test('scan, structural half: allowlist, binaries, IBANs, UIDs, prose amounts and
     ['docs/a.md amount-in-prose', 'docs/a.md long-number']);
   assert.deepEqual(run([{ path: 'examples/cases/c.yaml', text: 'Total CHF 108.10, order 304-9462744' }]), ['examples/cases/c.yaml long-number'],
     'casebook figures are invented; long numbers are still refused');
+  assert.deepEqual(run([{ path: 'demo/m.yaml', text: `key: x${j('sk-ant-', 'api03-', 'A'.repeat(30))}` }, { path: 'src/a.ts', text: `const k = '${j('sk-proj-', 'b'.repeat(40))}'; const s = 'sk-learn', id = 'task-${'c'.repeat(36)}';` }]),
+    ['demo/m.yaml api-key', 'src/a.ts api-key'], 'an API key nowhere, a demo neither');
 });
 
 test("this repo's public view passes the structural half", () => {

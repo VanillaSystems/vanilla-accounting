@@ -1,7 +1,7 @@
 # Casebook
 
 The casebook shows how standard Swiss booking cases are booked: one invented case per booking
-pattern, on account numbers of the Swiss KMU chart (`reference/charts/ch-kmu.yaml`). Each case in
+pattern, on account numbers of the Swiss KMU chart (`modules/ch/accounts.yaml`). Each case in
 `examples/cases/` says when it applies and shows a receipt, the bank transaction, the journal
 lines, the VAT code, the Ziffern of the VAT return it moves, the rule in `processes/*.guide.yaml`
 and the law that decide it, and the usual mistakes.

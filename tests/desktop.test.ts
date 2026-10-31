@@ -5,19 +5,23 @@
  */
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import fs from 'node:fs';
 import git from 'isomorphic-git';
 import { request as httpRequest, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { desktopServer } from '../src/desktop/server.js';
-import { claudeOn } from '../src/desktop/claude.js';
+import { programOn } from '../src/platform/login-path.js';
 import { sealedStore } from '../src/secrets/sealed-store.js';
 import { envSecrets, useSecretStore } from '../src/secrets/secrets.js';
-import { ask, modelReady, NoClaudeError } from '../src/llm/ask.js';
+import { ask, modelReady } from '../src/llm/ask.js';
+import { NoClaudeError } from '../src/llm/providers/claude-cli.js';
 import { PRESET_NAMES, QUESTIONS, QUESTION_ORDER } from '../src/workspace/setup.js';
-import { APP_ROOT, MANIFEST_FILE } from '../src/workspace/workspace.js';
+import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, workspaceAt } from '../src/workspace/workspace.js';
+import { loadBooks, sealsOf } from '../src/books/store.js';
+import { readState, writeState } from '../src/desktop/state.js';
+import { writeOldLayout } from './support/old-layout.js';
 import de from '../src/app/i18n/locales/de.js';
 import { DEMO_ROOT } from './support/workspace.js';
 
@@ -43,7 +47,7 @@ const SETUP = {
   preset: 'consultant', name: 'Neu Test GmbH', uid: 'CHE-153.004.184', owner: 'Erika Test', language: 'de',
   answers: {
     legalForm: 'GmbH', vatRegistered: 'yes', vatMethod: 'effective', basis: 'received', period: 'quarterly', fiscalYear: 'calendar', start: 'new',
-    sells: 'services', foreignCustomers: 'yes', imports: 'no', employees: 'owner', ownerPaysPrivately: 'yes', privateUse: [], payouts: 'no',
+    sells: ['services'], foreignCustomers: 'yes', imports: 'no', employees: 'owner', ownerPaysPrivately: 'yes', privateUse: [], payouts: 'no',
   },
   banks: [{ bank: 'UBS', currency: 'CHF' }],
 };
@@ -62,7 +66,7 @@ test('every setup question, option, stop and note has words on the start screen'
 });
 
 test('without books: the start screen is served, the books API answers noWorkspace, a folder without a manifest is refused', async () => {
-  assert.deepEqual((await call('GET', '/api/desktop')).json, { open: null, recent: [], booksHome: join(home, 'Documents') });
+  assert.deepEqual((await call('GET', '/api/desktop')).json, { open: null, recent: [], booksHome: join(home, 'Documents'), folders: [] });
   assert.match((await call('GET', '/start')).text, /<title>app<\/title>/);
   const status = await call('GET', '/api/status');
   assert.deepEqual([status.status, status.json.code], [409, 'noWorkspace']);
@@ -74,14 +78,19 @@ test('without books: the start screen is served, the books API answers noWorkspa
 test('Demo: a copy in the user data folder opens; another workspace is created, opened and switched in place; the recent list follows', async () => {
   const demo = await call('POST', '/api/desktop/demo');
   assert.equal(demo.status, 200, demo.text);
-  assert.ok(existsSync(join(home, 'Demo', MANIFEST_FILE)), 'the demo was copied');
-  assert.deepEqual((await call('GET', '/books.json')).json, JSON.parse(readFileSync(join(DEMO_ROOT, 'books.json'), 'utf8')));
+  assert.ok(existsSync(join(home, 'Demo', APP_FOLDER, MANIFEST_FILE)), 'the demo was copied');
+  assert.deepEqual((await call('GET', '/books.json')).json, JSON.parse(JSON.stringify(loadBooks(workspaceAt(DEMO_ROOT)))));
   const demoName = (await call('GET', '/api/workspace')).json.company.name;
   const receipt = (await call('GET', '/books.json')).json.receipts.find((r: { location?: string }) => r.location === 'archived').filename;
   assert.equal((await call('GET', `/receipts/${encodeURIComponent(receipt)}`)).status, 200);
 
-  const unsupported = await call('POST', '/api/desktop/create', { ...SETUP, root: join(home, 'Saldo'), answers: { ...SETUP.answers, vatMethod: 'saldo' } });
-  assert.deepEqual([unsupported.status, unsupported.json.code, unsupported.json.params], [400, 'setup', { reason: 'unsupported', question: 'vatMethod', value: 'saldo' }]);
+  const unsupported = await call('POST', '/api/desktop/create', { ...SETUP, root: join(home, 'Saldo'), answers: { ...SETUP.answers, period: 'monthly' } });
+  assert.deepEqual([unsupported.status, unsupported.json.code, unsupported.json.params], [400, 'setup', { reason: 'unsupported', question: 'period', value: 'monthly' }]);
+  assert.ok(!existsSync(join(home, 'Saldo')), 'a refused setup writes nothing');
+  const noRate = await call('POST', '/api/desktop/create', { ...SETUP, root: join(home, 'Saldo'), answers: { ...SETUP.answers, vatMethod: 'net-rate', period: 'half-yearly' } });
+  assert.deepEqual([noRate.status, noRate.json.code, noRate.json.params.reason], [400, 'setup', 'netRates']);
+  const unknown = await call('POST', '/api/desktop/create', { ...SETUP, root: join(home, 'Saldo'), answers: { ...SETUP.answers, vatMethod: 'saldo' } });
+  assert.deepEqual([unknown.status, unknown.json.params], [400, { reason: 'missing', question: 'vatMethod' }]);
   assert.ok(!existsSync(join(home, 'Saldo')), 'a refused setup writes nothing');
   const badIban = await call('POST', '/api/desktop/create', { ...SETUP, root: join(home, 'Iban'), banks: [{ bank: 'UBS', currency: 'CHF', iban: 'CH00 0000' }] });
   assert.equal(badIban.json.params.reason, 'iban');
@@ -112,8 +121,8 @@ test('claude: found on the login PATH as a program, not as a name; without it, a
   const bin = mkdtempSync(join(tmpdir(), 'bin-'));
   writeFileSync(join(bin, 'claude'), '#!/bin/sh\n');
   chmodSync(join(bin, 'claude'), 0o755);
-  assert.equal(claudeOn(`/nonexistent:${bin}:/usr/bin`), join(bin, 'claude'));
-  assert.equal(claudeOn('/nonexistent:relative/bin'), undefined);
+  assert.equal(programOn(`/nonexistent:${bin}:/usr/bin`, 'claude'), join(bin, 'claude'));
+  assert.equal(programOn('/nonexistent:relative/bin', 'claude'), undefined);
 
   // As the app runs: PATH /usr/bin:/bin, the CLI known only by CLAUDE_BIN, its node in its own folder.
   const path = process.env.PATH;
@@ -130,7 +139,7 @@ test('claude: found on the login PATH as a program, not as a name; without it, a
     process.env.PATH = path;
   }
   try {
-    await assert.rejects(ask('hi', { step: 'test' }), NoClaudeError);
+    await assert.rejects(ask('hi', { step: 'receipt-titles' }), NoClaudeError);
     const before = (await call('GET', '/books.json')).text;
     const receipts = JSON.parse(before).receipts as Array<{ id: string }>;
     let answer: Awaited<ReturnType<typeof call>> | undefined;
@@ -160,8 +169,50 @@ test('the SMTP password: npm start keeps it in .env; the app saves it through Fi
     assert.equal((await call('PUT', '/api/mail/password', { password: 'geheim' })).status, 200);
     assert.equal((await call('GET', '/api/mail')).json.password, 'set');
     assert.ok(!readFileSync(file, 'utf8').includes('geheim'));
-    assert.ok(!readFileSync(join(desktop.current()!.root, MANIFEST_FILE), 'utf8').includes('geheim'), 'the books never hold it');
+    assert.ok(!readFileSync(workspaceAt(desktop.current()!.root).paths.manifest, 'utf8').includes('geheim'), 'the books never hold it');
   } finally {
     useSecretStore(envSecrets);
   }
+});
+
+test('the recent list says why books cannot be opened: a folder that is gone has no name, a refused manifest carries the reader\'s words', async () => {
+  const refused = join(home, 'Refused');
+  mkdirSync(join(refused, APP_FOLDER), { recursive: true });
+  writeFileSync(join(refused, APP_FOLDER, MANIFEST_FILE), readFileSync(join(DEMO_ROOT, MANIFEST_FILE), 'utf8').replace('uid: CHE-123.456.789', 'uid: nicht'));
+  const was = readState(join(home, 'desktop.json'));
+  writeState(join(home, 'desktop.json'), { ...was, recent: [refused, join(home, 'Gone'), ...was.recent] });
+  const [problem, gone, ...rest] = (await call('GET', '/api/desktop')).json.recent as { root: string; name?: string; problem?: string }[];
+  assert.equal(problem.name, undefined);
+  assert.match(problem.problem!, /company\.uid "nicht" must look like CHE-/);
+  assert.deepEqual(gone, { root: join(home, 'Gone'), demo: false }, 'neither a name nor a problem: the folder is gone');
+  assert.ok(rest.every((b) => b.name && !b.problem));
+  mkdirSync(join(home, 'Documents', 'Buchhaltung 2026'), { recursive: true });
+  assert.deepEqual((await call('GET', '/api/desktop')).json.folders, ['Buchhaltung 2026'], 'the folders in the books home, so a new default name steps aside');
+});
+
+test('a demo copy an app before 0.4.0 made (books.json at its top) is replaced by a fresh copy when the demo is opened', async () => {
+  rmSync(join(home, 'Demo'), { recursive: true, force: true });
+  writeOldLayout(DEMO_ROOT, join(home, 'Demo'));
+  assert.ok(existsSync(join(home, 'Demo', 'books.json')));
+  const demo = await call('POST', '/api/desktop/demo');
+  assert.equal(demo.status, 200, demo.text);
+  assert.ok(!existsSync(join(home, 'Demo', 'books.json')), 'the old copy is gone');
+  assert.deepEqual((await call('GET', '/books.json')).json, JSON.parse(JSON.stringify(loadBooks(workspaceAt(DEMO_ROOT)))));
+});
+
+test('books in the layout before 0.4.0 are refused with oldLayout; /api/desktop/upgrade moves them as npm run update does, seals intact, and opens them', async () => {
+  const repo = join(home, 'Alt');
+  writeOldLayout(DEMO_ROOT, repo);
+  const refused = await call('POST', '/api/desktop/open', { root: repo });
+  assert.deepEqual([refused.status, refused.json.code, refused.json.params], [400, 'oldLayout', { root: repo }]);
+  assert.ok(existsSync(join(repo, 'books.json')), 'a refusal moves nothing');
+  const upgraded = await call('POST', '/api/desktop/upgrade', { root: repo });
+  assert.equal(upgraded.status, 200, upgraded.text);
+  assert.equal(upgraded.json.name, workspaceAt(DEMO_ROOT).company.name);
+  assert.ok(!existsSync(join(repo, 'books.json')) && existsSync(join(repo, APP_FOLDER, 'ledger.json')), 'the books moved into vanilla-accounting/');
+  assert.ok(existsSync(join(repo, APP_FOLDER, 'data', 'backups', 'books.json.schema-none')), 'books.json stays as a backup');
+  const books = loadBooks(workspaceAt(repo));
+  assert.ok(sealsOf(books).checks.length > 0 && sealsOf(books).checks.every((c) => c.status === 'intact'), 'every filed quarter\'s seal holds');
+  assert.deepEqual((await call('GET', '/books.json')).json.journalEntries.length, books.journalEntries.length);
+  assert.equal((await call('GET', '/api/desktop')).json.recent[0].name, upgraded.json.name, 'the moved books lead the recent list');
 });

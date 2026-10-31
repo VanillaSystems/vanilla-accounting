@@ -11,9 +11,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { chartFor, ChartError, KMU_CHART, loadChart } from '../src/workspace/chart.js';
-import { QUESTIONS, QUESTION_ORDER } from '../src/workspace/setup.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, isSupported, profileOf, type Answers } from '../src/workspace/setup.js';
 import { parseUid } from '../src/workspace/uid.js';
-import { APP_ROOT, MANIFEST_FILE, WorkspaceError, workspaceAt } from '../src/workspace/workspace.js';
+import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, workspaceAt, workspacePaths, yearPaths } from '../src/workspace/workspace.js';
+import { loadBooks, saveBooks } from '../src/books/store.js';
 import { testIban, withTestIbans } from './support/iban.js';
 
 // A UID with a wrong check digit, written in parts so the leak guard does not take it for a real one.
@@ -72,6 +73,18 @@ test('chart: profile and legal form pick the accounts; a rule broken in the file
   rmSync(dir, { recursive: true, force: true });
 });
 
+test('preset trades: a small Swiss trades GmbH, fully supported, with the chart it needs', () => {
+  assert.deepEqual(PRESETS.trades.answers, {
+    legalForm: 'GmbH', vatRegistered: 'yes', vatMethod: 'effective', basis: 'received', period: 'quarterly',
+    fiscalYear: 'calendar', start: 'new', sells: ['made', 'services'], foreignCustomers: 'no', imports: 'no',
+    employees: 'staff', ownerPaysPrivately: 'yes', privateUse: ['car', 'phone'], payouts: 'no',
+  });
+  assert.ok(isSupported(PRESETS.trades.answers as unknown as Answers), 'every answer is one the engine runs on');
+  assert.deepEqual(PRESET_NAMES, ['consultant', 'webshop', 'trades', 'freelancer', 'custom']);
+  const numbers = new Set(chartFor(loadChart(), profileOf(PRESETS.trades.answers.sells), 'GmbH').map((a) => a.number));
+  for (const n of ['3000', '3400', '4000', '4400', '5000', '2451']) assert.ok(numbers.has(n), `${n} is in the trades chart`);
+});
+
 test('init without a terminal: the workspace opens, doctor passes, a rerun changes nothing', () => {
   const base = tmp();
   const dir = join(base, 'books');
@@ -84,21 +97,24 @@ test('init without a terminal: the workspace opens, doctor passes, a rerun chang
   assert.match(first.out, /Committed the workspace to a new git repository/);
 
   const ws = workspaceAt(dir);
+  assert.equal(ws.paths.root, join(dir, APP_FOLDER), 'the books lie in the repository\'s vanilla-accounting/');
   assert.equal(ws.company.uid, 'CHE-153.004.184');
   assert.equal(ws.company.legalForm, 'GmbH');
   assert.equal(ws.company.language, 'fr');
-  assert.equal(ws.profile?.sells, 'services');
+  assert.deepEqual(ws.profile?.sells, ['services']);
+  assert.equal(parse(readFileSync(ws.paths.manifest, 'utf8')).profile.sells, 'services', 'the manifest keeps the answer as it always did');
   assert.equal(ws.profile?.ownerPaysPrivately, 'yes');
   assert.deepEqual(ws.bankAccounts.map((a) => `${a.bank} ${a.currency} ${a.account} ${a.statements ?? '-'}`), [
     'UBS CHF 1020 camt053', 'Wise EUR 1021 wise', 'manual CHF 2451 -',
   ]);
   const accounts = JSON.parse(readFileSync(ws.paths.accounts, 'utf8')) as { number: string; name: string; type: string }[];
   assert.deepEqual(accounts.filter((a) => ['1020', '1021', '1022', '2451'].includes(a.number)).map((a) => a.name), ['UBS CHF', 'Wise EUR', 'Bankguthaben USD', 'Kontokorrent Gesellschafter']);
-  assert.deepEqual(JSON.parse(readFileSync(ws.paths.books, 'utf8')).config, {}, 'no closedThrough');
-  for (const d of [ws.paths.receipts, ws.paths.inbox, ws.paths.filings, join(ws.paths.statements, 'UBS'), join(ws.paths.statements, 'Wise'), ...['suppliers', 'customers', 'authorities', 'rules'].map((k) => join(dir, 'knowledge', k))]) {
+  assert.deepEqual(loadBooks(ws).config, {}, 'no closedThrough');
+  const year = yearPaths(ws.paths, new Date().toISOString().slice(0, 4));
+  for (const d of [year.receipts, ws.paths.inbox, year.filings, join(year.statements, 'UBS'), join(year.statements, 'Wise'), ...['suppliers', 'customers', 'authorities', 'rules'].map((k) => join(ws.paths.root, 'knowledge', k))]) {
     assert.ok(existsSync(d), d);
   }
-  assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /AGENTS\.md \(golden rule 1/);
+  assert.match(readFileSync(join(dir, 'AGENTS.md'), 'utf8'), /read `vanilla-accounting\/AGENTS\.md`/);
   assert.equal(readFileSync(envFile, 'utf8'), `VANILLA_WORKSPACE=${dir}\n`);
   const log = spawnSync('git', ['log', '--oneline'], { cwd: dir, encoding: 'utf8' }).stdout.trim().split('\n');
   assert.equal(log.length, 1, 'one first commit');
@@ -133,12 +149,40 @@ test('init keeps a VANILLA_WORKSPACE that points elsewhere unless told to replac
   rmSync(base, { recursive: true, force: true });
 });
 
+test('a freelancer not registered for VAT and a firm on the net tax rate method are set up; the net rate is asked for', () => {
+  const base = tmp();
+  const envFile = join(base, 'app.env');
+  const salon = cli('init.ts', ['--preset', 'freelancer', '--dir', join(base, 'salon'), '--name', 'Salon Beispiel', '--uid', 'CHE-153.004.184', '--owner', 'Bella Beispiel', '--bank', 'UBS:CHF', '--app-env', envFile, '--yes']);
+  assert.equal(salon.code, 0, salon.out);
+  assert.match(salon.out, /booked gross, without VAT codes/);
+  const salonWs = workspaceAt(join(base, 'salon'));
+  assert.deepEqual(salonWs.company.vat, { registered: false });
+  assert.equal(salonWs.filingLength, 'quarter');
+  assert.match(readFileSync(salonWs.paths.manifest, 'utf8'), /vat:\n\s+registered: false\n/);
+
+  const noRate = cli('init.ts', [...consultant(join(base, 'a'), envFile), '--vat-method', 'net-rate', '--period', 'half-yearly']);
+  assert.equal(noRate.code, 1);
+  assert.match(noRate.out, /--net-rate/);
+  assert.ok(!existsSync(join(base, 'a')), 'nothing written without the rate');
+
+  const schreinerei = cli('init.ts', [...consultant(join(base, 'b'), envFile), '--vat-method', 'net-rate', '--period', 'half-yearly', '--net-rate', '4.5:Schreinerei']);
+  assert.equal(schreinerei.code, 0, schreinerei.out);
+  const ws = workspaceAt(join(base, 'b'));
+  assert.deepEqual(ws.company.vat, { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei' }] });
+  assert.equal(ws.filingLength, 'half');
+
+  const agreed = cli('init.ts', [...consultant(join(base, 'c'), envFile), '--basis', 'agreed']);
+  assert.equal(agreed.code, 0, agreed.out);
+  assert.deepEqual(workspaceAt(join(base, 'c')).company.vat, { registered: true, method: 'effective', reporting: 'agreed', period: 'quarterly' });
+  rmSync(base, { recursive: true, force: true });
+});
+
 test('init takes an IBAN per bank and refuses one with wrong check digits', () => {
   const base = tmp();
   const withIban = cli('init.ts', consultant(join(base, 'a'), join(base, 'app.env'), '--bank', `PostFinance:CHF::${testIban('09000000000000002').replace(/(.{4})(?!$)/g, '$1 ')}`));
   assert.equal(withIban.code, 0, withIban.out);
   assert.deepEqual(workspaceAt(join(base, 'a')).bankAccounts.find((a) => a.bank === 'PostFinance'),
-    { bank: 'PostFinance', currency: 'CHF', account: '1023', label: 'PostFinance CHF', statements: 'camt053', iban: testIban('09000000000000002') });
+    { bank: 'PostFinance', currency: 'CHF', account: '1023', label: 'PostFinance CHF', role: 'bank', statements: 'camt053', iban: testIban('09000000000000002') });
   const typo = cli('init.ts', consultant(join(base, 'b'), join(base, 'app.env'), '--bank', 'PostFinance:CHF::CH00 0900 0000 0000 0000 2'));
   assert.equal(typo.code, 1);
   assert.match(typo.out, /Bank PostFinance: "CH00 0900 0000 0000 0000 2" is not an IBAN/);
@@ -149,9 +193,7 @@ test('init takes an IBAN per bank and refuses one with wrong check digits', () =
 test('an answer the app does not support yet stops with its explanation and writes nothing', () => {
   const base = tmp();
   const cases: [string[], RegExp][] = [
-    [['--preset', 'freelancer'], /Books without VAT are not supported yet/],
-    [['--vat-method', 'saldo'], /Saldosteuersatz method is not supported yet/],
-    [['--basis', 'agreed'], /Vereinbarte Entgelte are not supported yet/],
+
     [['--period', 'monthly'], /Monthly returns are not supported yet/],
     [['--fiscal-year', 'other'], /calendar year is not supported yet/],
   ];
@@ -173,7 +215,8 @@ test('doctor names the fix when a bank books on an account the chart lacks; the 
   const dir = join(base, 'books');
   const bin = stubTools();
   assert.equal(cli('init.ts', consultant(dir, join(base, 'app.env'))).code, 0);
-  const manifestPath = join(dir, MANIFEST_FILE);
+  const manifestPath = join(dir, APP_FOLDER, MANIFEST_FILE);
+  const ubs = join(yearPaths(workspacePaths(join(dir, APP_FOLDER)), new Date().toISOString().slice(0, 4)).statements, 'UBS');
   const manifest = readFileSync(manifestPath, 'utf8');
 
   writeFileSync(manifestPath, manifest.replace('account: "1021"', 'account: "1029"'));
@@ -182,14 +225,14 @@ test('doctor names the fix when a bank books on an account the chart lacks; the 
   assert.match(doctor.out, /✗ Wise EUR books on 1029, which is not in accounts\.json\n {4}fix: Add \{ "number": "1029"/);
 
   writeFileSync(manifestPath, manifest);
-  writeFileSync(join(dir, 'bank-statements', 'UBS', 'export.xml'), '<Document/>');
+  writeFileSync(join(ubs, 'export.xml'), '<Document/>');
   const fixture = (name: string) => withTestIbans(readFileSync(join(import.meta.dirname, 'fixtures/camt053', name), 'utf8'));
-  writeFileSync(join(dir, 'bank-statements', 'UBS', 'Kontoauszug Juli.xml'), fixture('ubs_camt053_001_04.xml'));
+  writeFileSync(join(ubs, 'Kontoauszug Juli.xml'), fixture('ubs_camt053_001_04.xml'));
   const named = cli('doctor.ts', ['--workspace', dir], bin);
   assert.equal(named.code, 0, named.out);
   assert.ok(named.out.includes(`! UBS CHF books on 1020: 1 statement(s) read from bank-statements/UBS/, for IBAN ${testIban('00230000000000001')}: add iban: ${testIban('00230000000000001')}`), named.out);
   assert.match(named.out, /! bank-statements\/UBS\/export\.xml is not read: not a camt\.053 bank statement/);
-  writeFileSync(join(dir, 'bank-statements', 'UBS', 'pf.xml'), fixture('postfinance_camt053_001_08.xml'));
+  writeFileSync(join(ubs, 'pf.xml'), fixture('postfinance_camt053_001_08.xml'));
   const foreign = cli('doctor.ts', ['--workspace', dir], bin);
   assert.equal(foreign.code, 1);
   assert.match(foreign.out, /✗ bank-statements\/UBS\/pf\.xml belongs to no bank account\n {4}fix: bank-statements\/UBS\/ holds statements of two CHF accounts/);
@@ -214,15 +257,16 @@ test('a new workspace books its first transaction: no prior-year export, the cha
   const base = tmp();
   const dir = join(base, 'books');
   assert.equal(cli('init.ts', consultant(dir, join(base, 'app.env'))).code, 0);
-  const booksPath = join(dir, 'books.json');
-  const books = JSON.parse(readFileSync(booksPath, 'utf8'));
-  books.transactions.push({ ref: 'TX-1', bank: 'UBS', date: '2026-08-14', amount: 50, currency: 'CHF', direction: 'DBIT', description: 'Software Abo' });
-  writeFileSync(booksPath, JSON.stringify(books));
+  const ws = workspaceAt(dir);
+  const books = loadBooks(ws);
+  // Marked as needing no receipt, so the run books it now instead of waiting for one (issue #29).
+  books.transactions.push({ ref: 'TX-1', bank: 'UBS', date: '2026-08-14', amount: 50, currency: 'CHF', direction: 'DBIT', description: 'Software Abo', noReceiptNeeded: true });
+  saveBooks(ws, books);
 
   const prompts = join(base, 'prompts.txt');
   const r = cli('classify.ts', [], join(APP_ROOT, 'tests/support/stub-bin'), { VANILLA_WORKSPACE: dir, CLAUDE_STUB_PROMPTS: prompts });
   assert.equal(r.code, 0, r.out);
-  const entries = JSON.parse(readFileSync(booksPath, 'utf8')).journalEntries as { transactionRef: string; accountDebit: string; accountCredit: string; amount: number }[];
+  const entries = loadBooks(workspaceAt(dir)).journalEntries;
   assert.deepEqual(entries.map((e) => [e.transactionRef, e.accountDebit, e.accountCredit, e.amount]), [['TX-1', '6570', '1020', 50]]);
   const prompt = readFileSync(prompts, 'utf8');
   assert.match(prompt, /## Chart of Accounts[\s\S]*\n1020\tUBS CHF\n/);

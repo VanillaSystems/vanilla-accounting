@@ -1,0 +1,34 @@
+# What an invoice may charge (Art. 25, 26 MWSTG): the rates a line offers, and for a line at 0 %
+# the deduction box its turnover goes to, by why it carries no Swiss VAT. The code each one books
+# with is asked from tax-codes.yaml by meaning.
+
+# The first is the normal rate, a new line's default.
+rates: [8.1, 2.6, 3.8, 0]
+
+exemptions:
+  abroad: "221"   # a service whose place of supply is abroad (Art. 8 MWSTG)
+  export: "220"   # an export of goods (Art. 23 MWSTG)
+
+# The countries of the VAT territory (Art. 3 MWSTG: Switzerland and Liechtenstein), by the first
+# two letters of an IBAN: a customer payment in CHF from such an IBAN is proposed as a domestic
+# sale at the normal rate, any other as an export (src/accounting/sales-without-vat.ts).
+territory: [CH, LI]
+
+# Words with which a sales invoice without Swiss VAT says its service is supplied abroad (Art. 8
+# MWSTG), in the four languages: such a sale is booked at the abroad code (Ziffer 221), not the
+# export code, which is for goods (src/accounting/sales-without-vat.ts saleCodeOf).
+placeAbroad:
+  - Leistungsort
+  - Ort der Leistung
+  - nicht der schweizerischen MWST
+  - nicht der schweizerischen Mehrwertsteuer
+  - Steuerschuldnerschaft des Leistungsempfängers
+  - lieu de la prestation
+  - non soumis à la TVA suisse
+  - autoliquidation
+  - luogo della prestazione
+  - non soggetto all'IVA svizzera
+  - inversione contabile
+  - place of supply
+  - not subject to Swiss VAT
+  - reverse charge

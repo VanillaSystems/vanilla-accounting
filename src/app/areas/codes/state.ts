@@ -5,7 +5,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import type { VatCodeFamily } from '../../../accounting/vat-codes.js';
-import { store, stored } from '../../shell/prefs.js';
+import { store, stored } from '../../shell/storage.js';
 
 interface State {
   usedOnly: boolean;

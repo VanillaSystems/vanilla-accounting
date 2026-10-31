@@ -1,0 +1,235 @@
+/**
+ * Änderungen, write (src/saving/saving.ts): the AI's proposal covers every change, a change since
+ * makes it stale and a stale proposal is never saved, refresh keeps the saves that did not move, a
+ * held save stays unsaved, the books are a save of their own with the runs that wrote them,
+ * Rückgängig of a customizing save goes back to the draft and of a run reverses its bookings in an
+ * open period only (the reversal waits to be saved), and sync pushes, refusing two diverged lines.
+ * Checked with the git program.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { initRepository } from '../src/workspace/git.js';
+import { APP_FOLDER, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
+import { draftDir, saveDetail } from '../src/saving/changes.js';
+import { recordsPaths } from '../src/saving/changes.js';
+import { commitExactly } from '../src/workspace/git.js';
+import { relative } from 'node:path';
+import { openSaving, syncNow, syncState, type Ask } from '../src/saving/saving.js';
+import { loadBooks, saveBooks, update, moduleActor } from '../src/books/store.js';
+import { DEMO_ROOT } from './support/workspace.js';
+
+process.env.GIT_AUTHOR_NAME = 'Erika Beispiel';
+process.env.GIT_AUTHOR_EMAIL = 'erika@example.com';
+process.env.GIT_COMMITTER_NAME = 'Erika Beispiel';
+process.env.GIT_COMMITTER_EMAIL = 'erika@example.com';
+
+const RULES = 'knowledge/rules/house.guide.yaml';
+const STEP = 'workflows/booking/classify/step.yaml';
+
+async function company(): Promise<{ ws: Workspace; repo: string; git: (...a: string[]) => string }> {
+  const repo = mkdtempSync(join(tmpdir(), 'saving-repo-'));
+  cpSync(DEMO_ROOT, join(repo, APP_FOLDER), { recursive: true });
+  mkdirSync(join(repo, APP_FOLDER, 'knowledge', 'rules'), { recursive: true });
+  writeFileSync(join(repo, APP_FOLDER, RULES), 'rules:\n  - one\n');
+  await initRepository(repo, 'Workspace set up');
+  return { ws: workspaceAt(join(repo, APP_FOLDER)), repo, git: (...a) => execFileSync('git', ['-C', repo, ...a], { encoding: 'utf8' }).trim() };
+}
+
+/** A model that puts each file the prompt shows into a save of its own, and holds back what the owner names. */
+function fakeModel(): { ask: Ask; calls: string[] } {
+  const calls: string[] = [];
+  const ask: Ask = async (prompt, { step, detail }) => {
+    calls.push(`${step}#${detail}`);
+    const paths = [...prompt.matchAll(/^### (\S+) \(/gm)].map((m) => m[1]);
+    const said = prompt.match(/The owner says: (.*)$/m)?.[1] ?? '';
+    return JSON.stringify({ reply: said ? 'Gut.' : 'Vorbereitet.', saves: paths.map((p) => ({ message: `Geändert: ${p}`, why: 'Test.', files: [p], held: said.includes('noch nicht') && said.includes(p.split('/')[0]) })) });
+  };
+  return { ask, calls };
+}
+
+function changeBoth(ws: Workspace): void {
+  writeFileSync(join(ws.paths.root, RULES), 'rules:\n  - one\n  - two\n');
+  mkdirSync(join(draftDir(ws), 'workflows', 'booking', 'classify'), { recursive: true });
+  writeFileSync(join(draftDir(ws), STEP), 'label: { en: Ours }\n');
+}
+
+test('a proposal covers every changed file; a file changed since makes it stale, and stale is never saved', async () => {
+  const { ws, git } = await company();
+  changeBoth(ws);
+  const model = fakeModel();
+  const saving = openSaving(ws, { ask: model.ask });
+  assert.deepEqual(await saving.command({ kind: 'prepare' }), { ok: true, reply: 'Vorbereitet.' });
+  let view = await saving.view();
+  assert.deepEqual(view.proposal!.saves.map((s) => s.files.map((f) => `${f.source}:${f.path}`)), [[`draft:${STEP}`], [`outside:${RULES}`]]);
+  assert.equal(view.proposal!.ready, true);
+  writeFileSync(join(ws.paths.root, RULES), 'rules:\n  - one\n  - two\n  - three\n');
+  view = await saving.view();
+  assert.deepEqual([view.proposal!.ready, view.proposal!.stale.length], [false, 1]);
+  const refused = await saving.command({ kind: 'save' });
+  assert.equal(refused.ok ? '' : refused.refusal, 'stale');
+  assert.equal(git('log', '--format=%s'), 'Workspace set up', 'nothing was committed');
+  const kept = view.proposal!.saves.find((s) => !view.proposal!.stale.includes(s.id))!;
+  await saving.command({ kind: 'refresh' });
+  view = await saving.view();
+  assert.equal(view.proposal!.ready, true);
+  assert.ok(view.proposal!.saves.some((s) => s.id === kept.id && s.message === kept.message), 'the save that did not move stays as it was');
+  assert.deepEqual(model.calls, ['saving#prepare', 'saving#prepare']);
+});
+
+test('a held save stays unsaved; the books are a save of their own, with the run that wrote them; each save commits exactly its part', async () => {
+  const { ws, git } = await company();
+  changeBoth(ws);
+  const books = loadBooks(ws);
+  update(books, moduleActor('test'), (b) => { b.journalEntries.push({ id: 'w1', transactionRef: 'w', date: '2026-09-20', accountDebit: '6500', accountCredit: '1020', amount: 1 }); });
+  saveBooks(ws, books);
+  const run = { run: 'booking-w1', workflow: 'booking', label: 'Buchen', at: '2026-10-15T10:00:00.000Z', entries: 1, links: 0, receipts: 0 };
+  const saving = openSaving(ws, { ...fakeModel(), runs: () => [run] });
+  assert.deepEqual((await saving.view()).books, { files: 1, runs: [run], hand: [], receipts: [], records: [] });
+  await saving.command({ kind: 'prepare' });
+  assert.deepEqual(await saving.command({ kind: 'talk', text: 'workflows noch nicht' }), { ok: true, reply: 'Gut.' });
+  const result = await saving.command({ kind: 'save' });
+  assert.deepEqual(result, { ok: true, saved: 2 });
+  const [rules, books1] = git('log', '-2', '--format=%H').split('\n');
+  assert.deepEqual(git('show', '--name-only', '--format=', rules).split('\n'), [`vanilla-accounting/${RULES}`]);
+  assert.match(git('log', '-1', '--format=%B', rules), /Vanilla-Kind: customizing/);
+  assert.deepEqual(git('show', '--name-only', '--format=', books1).split('\n'), ['vanilla-accounting/transactional-data/2026/books/entries.jsonl']);
+  assert.match(git('log', '-1', '--format=%B', books1), /Vanilla-Kind: books\nVanilla-Run: booking-w1/);
+  assert.doesNotMatch(git('status', '--porcelain'), /entries\.jsonl/, 'the books are saved');
+  const view = await saving.view();
+  assert.deepEqual(view.proposal!.saves.map((s) => [s.files[0].path, s.held]), [[STEP, true]]);
+  assert.ok(existsSync(join(draftDir(ws), STEP)), 'the held draft stays in the draft');
+});
+
+test('without the AI (r8c-3): prepare builds one plain save per file and saves them; talking to the AI is refused and keeps the saves', async () => {
+  const { ws, git } = await company();
+  changeBoth(ws);
+  const books = loadBooks(ws);
+  update(books, moduleActor('test'), (b) => { b.journalEntries.push({ id: 'w1', transactionRef: 'w', date: '2026-09-20', accountDebit: '6500', accountCredit: '1020', amount: 1 }); });
+  saveBooks(ws, books);
+  const run = { run: 'booking-w1', workflow: 'booking', label: 'Buchen', at: '2026-10-15T10:00:00.000Z', entries: 1, links: 0, receipts: 0 };
+  const noModel: Ask = async () => { throw new Error('claude exited 1: verify sandbox: no model calls'); };
+  const saving = openSaving(ws, { ask: noModel, runs: () => [run] });
+  const prepared = await saving.command({ kind: 'prepare' });
+  assert.equal(prepared.ok, true, 'prepared without the model');
+  assert.equal(prepared.ok && prepared.plain, true, 'the result says the saves are code-built');
+  const view = await saving.view();
+  assert.equal(view.proposal!.plain, true);
+  assert.deepEqual(view.proposal!.saves.map((s) => s.files.map((f) => `${f.source}:${f.path}`)), [['books:Bücher'], [`draft:${STEP}`], [`outside:${RULES}`]], 'one save per changed file');
+  assert.deepEqual(view.proposal!.saves.map((s) => s.message), ['Bücher: 1 Buchung aus Buchen', `${STEP} neu`, `${RULES} geändert`]);
+  assert.equal(view.proposal!.ready, true);
+  const talk = await saving.command({ kind: 'talk', text: 'alles in einen' });
+  assert.equal(talk.ok ? '' : talk.refusal, 'model');
+  assert.match(talk.ok ? '' : talk.message, /KI/);
+  assert.equal((await saving.view()).proposal!.saves.length, 3, 'the saves stay');
+  assert.deepEqual(await saving.command({ kind: 'save' }), { ok: true, saved: 3 });
+  assert.equal(git('log', '--format=%s').split('\n').length, 4);
+  assert.doesNotMatch(git('status', '--porcelain'), /entries\.jsonl/, 'the books are saved');
+});
+
+test('a saved draft file moves into the books folder; Rückgängig puts the old version back into the draft', async () => {
+  const { ws, git } = await company();
+  changeBoth(ws);
+  const saving = openSaving(ws, fakeModel());
+  await saving.command({ kind: 'prepare' });
+  await saving.command({ kind: 'save' });
+  assert.equal(readFileSync(join(ws.paths.root, STEP), 'utf8'), 'label: { en: Ours }\n');
+  assert.equal(existsSync(join(draftDir(ws), STEP)), false);
+  assert.equal((await saving.view()).proposal, undefined);
+  const rulesSave = git('log', '--format=%H', '-1', '--', `vanilla-accounting/${RULES}`);
+  assert.deepEqual(await saving.command({ kind: 'undo', oid: rulesSave }), { ok: true, reversed: 1 });
+  assert.equal(readFileSync(join(draftDir(ws), RULES), 'utf8'), 'rules:\n  - one\n');
+  assert.deepEqual((await saving.view()).draft.map((f) => f.path), [RULES]);
+});
+
+test('Rückgängig of a run reverses its bookings in an open period and refuses a closed one', async () => {
+  const { ws, git } = await company();
+  const book = async (id: string, date: string) => {
+    const books = loadBooks(ws);
+    update(books, { kind: 'run', id, workflow: 'booking' }, (b) => { b.journalEntries.push({ id: `e-${id}`, transactionRef: id, date, accountDebit: '6500', accountCredit: '1020', amount: 5, vatCode: 'I81', run: id }); });
+    saveBooks(ws, books);
+    await commitExactly(ws.paths.repository, `Buchen: ${id}\n\nVanilla-Kind: books\nVanilla-Run: ${id}`, recordsPaths(ws).map((p) => relative(ws.paths.repository, p)));
+    return git('rev-parse', 'HEAD');
+  };
+  const open = await book('r-open', '2026-09-20');
+  const saving = openSaving(ws, fakeModel());
+  assert.deepEqual(await saving.command({ kind: 'undo', oid: open }), { ok: true, reversed: 1 });
+  const storno = loadBooks(ws).journalEntries.find((e) => e.id === 'storno-e-r-open')!;
+  assert.deepEqual([storno.accountDebit, storno.accountCredit, storno.vatCode, storno.date], ['1020', '6500', '-I81', '2026-09-20']);
+  assert.equal(git('log', '-1', '--format=%s'), 'Buchen: r-open', 'the reversal is not saved by itself');
+  assert.match(git('status', '--porcelain'), /entries\.jsonl/, 'it waits in Änderungen');
+  const again = await saving.command({ kind: 'undo', oid: open });
+  assert.equal(again.ok ? '' : again.refusal, 'cannot-undo', 'reversed once only');
+  assert.deepEqual([(await saveDetail(ws, open))?.undo, (await saveDetail(ws, open))?.undoBlocked], [undefined, 'reversed'], 'the row offers no second Rückgängig');
+
+  const old = await book('r-old', '2026-05-10');
+  const books = loadBooks(ws);
+  books.config.closedThrough = '2026-06-30';
+  saveBooks(ws, books);
+  // A sealed run's row offers no «Rückgängig» and says why (r7f-36); the command refuses with the seal.
+  assert.deepEqual([(await saveDetail(ws, old))?.undo, (await saveDetail(ws, old))?.undoBlocked], [undefined, 'closed']);
+  const closed = await saving.command({ kind: 'undo', oid: old });
+  assert.match(closed.ok ? '' : closed.message, /2026-06-30/);
+  assert.equal(closed.ok ? '' : closed.refusal, 'closed');
+  assert.equal(loadBooks(ws).journalEntries.some((e) => e.id === 'storno-e-r-old'), false);
+});
+
+test('sync pushes what was saved; two diverged lines are refused as two versions', async () => {
+  const { ws, repo, git } = await company();
+  const remote = mkdtempSync(join(tmpdir(), 'saving-remote-'));
+  execFileSync('git', ['init', '--bare', '--quiet', remote]);
+  const branch = git('rev-parse', '--abbrev-ref', 'HEAD');
+  git('remote', 'add', 'origin', remote);
+  git('push', '--quiet', '-u', 'origin', branch);
+  const saving = openSaving(ws, fakeModel());
+  assert.deepEqual((await saving.view()).sync, { remote: true, ahead: 0, git: true });
+  changeBoth(ws);
+  await saving.command({ kind: 'prepare' });
+  await saving.command({ kind: 'save' });
+  assert.deepEqual((await saving.view()).sync, { remote: true, ahead: 2, git: true });
+  assert.deepEqual(await saving.command({ kind: 'sync' }), { ok: true });
+  assert.deepEqual((await saving.view()).sync, { remote: true, ahead: 0, git: true });
+
+  const other = mkdtempSync(join(tmpdir(), 'saving-other-'));
+  execFileSync('git', ['clone', '--quiet', remote, other]);
+  writeFileSync(join(other, 'elsewhere.txt'), 'x');
+  execFileSync('git', ['-C', other, 'add', '.']);
+  execFileSync('git', ['-C', other, 'commit', '--quiet', '-m', 'Elsewhere']);
+  execFileSync('git', ['-C', other, 'push', '--quiet']);
+  writeFileSync(join(ws.paths.root, RULES), 'rules:\n  - here\n');
+  await saving.command({ kind: 'prepare' });
+  await saving.command({ kind: 'save' });
+  const r = await saving.command({ kind: 'sync' });
+  assert.equal(r.ok ? '' : r.refusal, 'two-versions');
+  assert.equal(existsSync(join(repo, 'elsewhere.txt')), false, 'nothing merged, nothing rewritten');
+});
+
+test('without a git program the view and Synchronisieren run none: the state says what is missing', async () => {
+  const { ws, git } = await company();
+  const remote = mkdtempSync(join(tmpdir(), 'saving-remote-'));
+  execFileSync('git', ['init', '--bare', '--quiet', remote]);
+  git('remote', 'add', 'origin', remote);
+  git('push', '--quiet', '-u', 'origin', git('rev-parse', '--abbrev-ref', 'HEAD'));
+  writeFileSync(join(ws.paths.root, 'later.txt'), 'x');
+  git('add', '.');
+  git('commit', '--quiet', '-m', 'Later');
+  // A git on the PATH that only leaves a trace: on a Mac without developer tools /usr/bin/git opens the install dialog.
+  const bin = mkdtempSync(join(tmpdir(), 'saving-bin-'));
+  const trace = join(bin, 'ran');
+  writeFileSync(join(bin, 'git'), `#!/bin/sh\necho "$@" >> '${trace}'\nexit 1\n`, { mode: 0o755 });
+  const path = process.env.PATH;
+  process.env.PATH = `${bin}:${path}`;
+  try {
+    const none = () => undefined;
+    assert.deepEqual(await syncState(ws, none), { remote: true, ahead: 1, git: false });
+    const r = await syncNow(ws, none);
+    assert.equal(r.ok ? '' : r.refusal, 'no-git');
+  } finally {
+    process.env.PATH = path;
+  }
+  assert.equal(existsSync(trace), false, 'no git program ran');
+  assert.equal(execFileSync('git', ['-C', remote, 'rev-list', '--count', '--all'], { encoding: 'utf8' }).trim(), '1', 'nothing pushed');
+});

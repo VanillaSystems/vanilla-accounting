@@ -3,15 +3,23 @@
 # Zollrechnung — and lives in booking.guide.yaml#shape.
 #
 # Not matched by UID: CHE-105.998.554 is also printed on the BAZG's
-# Veranlagungsverfügungen and Ausfuhr documents, which are not FedEx's.
+# Veranlagungsverfügungen and Ausfuhr documents, which are not FedEx's. It is
+# `sharedUid` instead: it says nothing of who wrote a document, so a FedEx
+# invoice, which prints it and the buyer's UID, is still recognised by its text
+# (fedex.com, the word FedEx at its head), its title's vendor or its filenames
+# (archived <date>-fedex…, staged <date>_fedex_…). A BAZG assessment of a
+# FedEx shipment names the BAZG too (ambiguous, so no one's); were it taken for
+# FedEx's, it would still join no FedEx set: sets take invoices only, and an
+# assessment is a supporting document.
 
 id: fedex
 name: FedEx Express
 match:
   tx: [ "fedex" ]
   domain: [ "fedex.com" ]
-  file: [ '^\d{8}-fedex-' ]
+  file: [ '^\d{8}[-_]fedex(?:[-_.]|$)' ]
 grouped: true
+sharedUid: [ "CHE-105.998.554" ]
 
 steps:
   receipt-collection.guide.yaml#triage:

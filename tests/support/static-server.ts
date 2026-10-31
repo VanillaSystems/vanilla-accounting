@@ -27,7 +27,8 @@ export function serveStatic(dir: string, port = 0, log = false): Promise<StaticS
     if (!file.startsWith(root)) { res.writeHead(403).end(); return; }
     if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html');
     if (!existsSync(file)) { res.writeHead(404).end('not found'); return; }
-    res.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream' });
+    // With its length, as a host sends a file: chunked, Chrome now and then never finished the app's script and the page's load hung (#246).
+    res.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream', 'Content-Length': statSync(file).size });
     createReadStream(file).pipe(res);
   });
   return new Promise((ok) => server.listen(port, '127.0.0.1', () => {

@@ -71,6 +71,16 @@
 .form .fhint { color: var(--faint); font-size: 11.5px; }
 .form select:disabled { border-color: transparent; padding-left: 0; background: transparent; appearance: none; opacity: 1; }
 .form input[readonly], .form textarea[readonly] { border-color: transparent; padding-left: 0; background: transparent; }
+.form .vatf { display: grid; gap: 6px; justify-items: start; }
+.form .vatf > * { justify-self: stretch; }
+.form .vatf > .seg2, .form .vatf > .addlink { justify-self: start; }
+.form .vatf .lbl { display: flex; gap: 6px; align-items: center; font-size: 11.5px; color: var(--muted); }
+.form .vline { display: grid; grid-template-columns: 76px 1fr 18px; gap: 8px; align-items: center; }
+.form .vline .rm { color: var(--muted); font-size: 15px; line-height: 1; }
+.form .vline .rm:hover { color: var(--ink); }
+.byhand { font: 11px "Instrument Sans"; color: var(--muted); border: 1px solid var(--line-2); border-radius: 5px; padding: 0 5px; white-space: nowrap; }
+.facts > .byhand { margin-left: 8px; align-self: center; }
+.facts > .byhand::before { content: none; }
 .kv { display: grid; grid-template-columns: 74px 1fr; gap: 5px 10px; font-size: 12.5px; }
 .kv dt { color: var(--muted); } .kv dd { margin: 0; overflow: hidden; text-overflow: ellipsis; }
 .ocr { margin-top: 12px; font: 11px/1.5 "Geist Mono"; color: var(--muted); background: var(--hover); border-radius: 8px; padding: 10px; max-height: 120px; overflow: auto; white-space: pre-wrap; }
@@ -99,15 +109,45 @@
 .linkdlg .ctx { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 16px 20px 0; font-size: 13.5px; }
 .linkdlg .ctx .lbl { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 4px; }
 .linkdlg .ctx .m { color: var(--muted); } .linkdlg .ctx .mono { font-size: 12.5px; color: var(--muted); white-space: nowrap; } .linkdlg .ctx .mono b { color: var(--ink); font-weight: 500; }
-.linkdlg input { padding: 14px 20px 16px; }
+.linkdlg > input { padding: 14px 20px 16px; }
+/* The chip filter under the search (#232): the chips, «Filter», and the money accounts by ⌥1…9. */
+.linkdlg .linkfilter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 20px; border-bottom: 1px solid var(--line); }
+.linkdlg .linkfilter .chipbar { margin: 0; }
+.linkdlg .acctkeys { display: flex; flex-wrap: wrap; gap: 6px; }
+.linkdlg .acctkeys button { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px 0 4px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.linkdlg .acctkeys button:hover { color: var(--ink); border-color: var(--line-2); }
+.linkdlg .acctkeys button.on { color: var(--ink); background: var(--accent-soft); border-color: var(--accent); }
+.linkdlg .acctkeys .cap { font: 500 10.5px "Geist Mono"; min-width: 16px; height: 17px; padding: 0 4px; display: inline-grid; place-items: center; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; color: var(--muted); background: var(--bg); }
+.linkdlg .hiddenbest { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin: 0; padding: 8px 20px; font-size: 12.5px; color: var(--warn); border-bottom: 1px solid var(--line); }
+.linkdlg .hiddenbest .golink { color: var(--ink); }
 .linkdlg .o.tx2 { display: grid; grid-template-columns: 84px 1fr auto; gap: 14px; align-items: center; padding: 9px 12px; }
 .linkdlg .tx2 .d { font-size: 12px; color: var(--muted); }
 .linkdlg .tx2 .t { display: flex; flex-direction: column; min-width: 0; } .linkdlg .tx2 .t > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .linkdlg .tx2 .t small { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+.linkdlg .tx2 .t small .off { color: var(--warn); font-weight: 500; }
+.facts .misfit { color: var(--warn); font-family: "Instrument Sans"; }
+.status:has(.fitnote) { flex-wrap: wrap; row-gap: 0; }
+.status .fitnote { flex-basis: 100%; margin: 6px 0 0; font-size: 12.5px; }
+.status .fitnote.warn { color: var(--warn); } .status .fitnote.note { color: var(--muted); }
 .linkdlg .tx2 .a { font-size: 13px; text-align: right; white-space: nowrap; } .linkdlg .tx2 .a i { font-style: normal; color: var(--muted); font-size: 11.5px; margin-right: 5px; }
 .linkdlg .none { padding: 14px 12px; color: var(--muted); font-size: 13px; }
 .linkdlg .foot { display: flex; gap: 6px; align-items: center; justify-content: flex-end; padding: 10px 16px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--faint); }
 .linkdlg .foot .k { margin-left: 10px; }
+.linkdlg .privform { padding: 14px 20px 16px; display: flex; flex-direction: column; gap: 10px; font-size: 13.5px; }
+.linkdlg .privform .lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.linkdlg .privform .opt { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; cursor: pointer; }
+.linkdlg .privform .opt:has(input[type="radio"]:checked) { border-color: var(--accent); }
+.linkdlg .privform .opt.rate { cursor: default; }
+.linkdlg .privform .opt > b { margin-left: auto; font-weight: 500; }
+.linkdlg .privform input[type="radio"] { accent-color: var(--accent); width: auto; flex: none; margin: 0; padding: 0; border: 0; }
+.linkdlg .privform .part { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.linkdlg .privform .part input, .linkdlg .privform select { padding: 4px 8px; height: 28px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--ink); font: inherit; font-size: 13.5px; }
+.linkdlg .privform .part .amt { width: 92px; text-align: right; }
+.linkdlg .privform .part .what { width: 200px; }
+.linkdlg .privform .m { color: var(--muted); }
+.linkdlg .privform .hint { margin: 0; color: var(--muted); font-size: 12px; }
+.linkdlg .privform .warnline { margin: 0; flex-wrap: wrap; }
+.linkdlg .privform .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .golink { color: inherit; font: inherit; text-align: left; border-bottom: 1px solid color-mix(in srgb, currentColor 30%, transparent); }
 .golink:hover { border-bottom-color: currentColor; }
 .golink .m { color: var(--muted); }
@@ -135,13 +175,17 @@
 /* the app's own: the PDF pages sit straight in the paper, the delete question, the inbox file */
 .paper.real .pages { display: contents; }
 .detail { container-type: inline-size; }
+/* A narrow detail (a small window, the AI sidebar open): the big amount goes under the title, smaller, never cut off. */
+@container (max-width: 520px) { .detail-in > .head { flex-wrap: wrap; gap: 8px 24px; } .detail-in > .head .amount { font-size: 30px; } }
 @media (max-width: 1340px) { .body { grid-template-columns: minmax(0, 1fr) 240px; gap: 28px; } }
 .confirm { width: 440px; top: 22vh; padding: 20px 22px 16px; }
 .confirm h2 { font: 700 17px "Hanken Grotesk"; margin: 0 0 6px; }
 .confirm p { margin: 0 0 4px; color: var(--muted); font-size: 13px; }
 .confirm .file { font: 12px "Geist Mono"; color: var(--ink-2); margin: 10px 0 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .confirm .acts { display: flex; justify-content: flex-end; gap: 8px; }
-.confirm .btn.danger { background: var(--neg); color: #fff; }
+.confirm .files { list-style: none; margin: 10px 0 16px; padding: 0; max-height: 40vh; overflow: auto; font: 12px "Geist Mono"; color: var(--ink-2); }
+.confirm .files li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 0; }
+.confirm .btn.danger { background: var(--neg); border-color: var(--neg); color: var(--on-fill); }
 
 /* Pages of text (Abschluss, Firma): a lead, key/value rows, quarter cards, small tables, inline forms */
 .docbody { max-width: 760px; margin-top: 18px; }
@@ -155,6 +199,12 @@
 .kv2 dt { color: var(--muted); }
 .kv2 dd { margin: 0; }
 .kv2 .m { color: var(--muted); font-size: 12.5px; }
+/* A narrow detail (the AI sidebar open, wide in setup mode): the labels go above the values. */
+.kv2 dd { overflow-wrap: anywhere; }
+@container (max-width: 560px) {
+  .kv2 { grid-template-columns: minmax(0, 1fr); gap: 2px 0; }
+  .kv2 dd { margin-bottom: 8px; }
+}
 .quiet2 { font-size: 12px; color: var(--muted); }
 .quiet2:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 .clink { font-size: 13px; color: var(--accent); }
@@ -184,3 +234,15 @@ button.qcard:hover { background: var(--hover); }
 .form.inline { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); align-items: end; max-width: 760px; padding: 12px 14px; margin: 6px 0 10px; border: 1px solid var(--line); border-radius: 12px; }
 .form.inline .wide { grid-column: 1 / -1; }
 .form.inline .acts { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; }
+
+/* «Zahlung suchen» / «Beleg suchen» (#187): the button in a line, its outcome below it, and who made a link. */
+.notice:has(.findpair), .wfactions:has(.findpair) { flex-wrap: wrap; }
+.findpair { flex-basis: 100%; display: grid; gap: 4px; margin-top: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); font-size: 12.5px; color: var(--ink-2); }
+.findpair.compact { margin-top: 4px; }
+.findpair-ok { color: var(--pos); }
+.findpair-note, .madeby { color: var(--muted); font-size: 12px; }
+.findpair-list { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 4px; }
+.findpair-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; }
+.findpair-list .golink { text-align: left; overflow-wrap: anywhere; }
+.findpair-score { font: 500 11.5px "Geist Mono", monospace; color: var(--muted); }
+.findpair-go[disabled] { opacity: .6; cursor: progress; }

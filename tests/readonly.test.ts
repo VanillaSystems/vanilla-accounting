@@ -6,6 +6,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { startApi, type ApiServer } from './support/api-server.js';
+import { booksOnDisk } from './support/workspace.js';
 
 let api: ApiServer;
 before(async () => { api = await startApi('tests/fixtures/period-lock-index.json', { READONLY: '1' }); });
@@ -16,12 +17,12 @@ test('status reports audit mode', async () => {
 });
 
 test('a write in an open period is refused with code readonly, the books unchanged', async () => {
-  const before = readFileSync(api.indexPath);
+  const before = JSON.stringify(booksOnDisk(api.ws));
   const { status, json } = await api.send('PATCH', '/api/transactions/O1', { description: 'neu' });
   assert.equal(status, 403);
   assert.equal(json.code, 'readonly');
   assert.match(String(json.error), /Nur-Lese-Modus/);
-  assert.ok(readFileSync(api.indexPath).equals(before), 'books.json is byte-identical');
+  assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'books.json is byte-identical');
 });
 
 test('reads still work', async () => {

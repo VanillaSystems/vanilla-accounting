@@ -8,12 +8,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { bankAccountFor } from '../src/accounting/bank-accounts.js';
-import { assignUniqueRefs, transactionsOf } from '../src/parsers/camt053.js';
-import { parseStatementBalances } from '../src/parsers/statement-balances.js';
+import { bankAccountFor } from '../src/workspace/money-accounts.js';
+import { assignUniqueRefs, transactionsOf } from '../src/providers/camt053/camt053.js';
+import { parseStatementBalances } from '../src/providers/camt053/statement-balances.js';
 import { readBankStatements, type StatementFile } from '../src/workspace/bank-statements.js';
 import { parseIban } from '../src/workspace/banks.js';
-import { WorkspaceError, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
+import { WorkspaceError, workspaceAt, yearPaths, type Workspace } from '../src/workspace/workspace.js';
 import { testIban, withTestIbans } from './support/iban.js';
 import { tempWorkspace } from './support/workspace.js';
 
@@ -25,11 +25,11 @@ const OTHER = testIban('00790000000000005');
 const UBS_GROUPED = UBS.replace(/(.{4})(?!$)/g, '$1 ');
 
 const BANK_ACCOUNTS = `bankAccounts:
-  - { bank: UBS, currency: CHF, account: "1020", label: UBS Geschäftskonto, iban: ${UBS_GROUPED} }
-  - { bank: PostFinance, currency: CHF, account: "1021", label: PostFinance CHF }
-  - { bank: PostFinance, currency: EUR, account: "1022", label: PostFinance EUR }
-  - { bank: BEKB, currency: CHF, account: "1023", label: BEKB }
-  - { bank: manual, currency: CHF, account: "2451", label: Kontokorrent }
+  - { bank: UBS, currency: CHF, account: "1020", label: UBS Geschäftskonto, iban: ${UBS_GROUPED}, role: bank }
+  - { bank: PostFinance, currency: CHF, account: "1021", label: PostFinance CHF, role: bank }
+  - { bank: PostFinance, currency: EUR, account: "1022", label: PostFinance EUR, role: bank }
+  - { bank: BEKB, currency: CHF, account: "1023", label: BEKB, role: bank }
+  - { bank: manual, currency: CHF, account: "2451", label: Kontokorrent, role: owner }
 `;
 
 /** A workspace with the banks above and the given statement files (path under bank-statements/ → fixture). */
@@ -38,8 +38,9 @@ function workspaceWith(files: Record<string, string>, bankAccounts = BANK_ACCOUN
   const manifest = readFileSync(paths.manifest, 'utf8');
   writeFileSync(paths.manifest, manifest.slice(0, manifest.indexOf('bankAccounts:')) + bankAccounts);
   for (const [to, fixture] of Object.entries(files)) {
-    mkdirSync(dirname(join(paths.statements, to)), { recursive: true });
-    writeFileSync(join(paths.statements, to), withTestIbans(fixture.startsWith('<') ? fixture : readFileSync(join(FIXTURES, fixture), 'utf8')));
+    const statements = yearPaths(paths, '2026').statements;
+    mkdirSync(dirname(join(statements, to)), { recursive: true });
+    writeFileSync(join(statements, to), withTestIbans(fixture.startsWith('<') ? fixture : readFileSync(join(FIXTURES, fixture), 'utf8')));
   }
   return workspaceAt(paths.root);
 }
@@ -98,7 +99,7 @@ test('what each bank shape reads as: QR batch parts, Ustrd lines, SCOR reference
   const byRef = (ref: string) => txs.find((t) => t.ref === ref);
   assert.deepEqual(byRef('8000000000001AB'), {
     ref: '8000000000001AB', bank: 'UBS', date: '2026-07-06', amount: 1200, currency: 'CHF', direction: 'CRDT',
-    description: 'Gutschrift QR-Rechnung', reference: '000000000000000000000012342',
+    description: 'Gutschrift QR-Rechnung', reference: '000000000000000000000012342', counterparty: 'Kunde Alpha AG',
   });
   assert.deepEqual(byRef('8000000000002AB')?.parts, [
     { amount: 500, currency: 'CHF', counterparty: 'Coworking Beispiel AG', reference: '000000000000000000000056781' },
@@ -109,7 +110,7 @@ test('what each bank shape reads as: QR batch parts, Ustrd lines, SCOR reference
   assert.equal(byRef('PF-NREF-0003')?.reference, 'RF19539007547034');
   assert.equal(byRef('KB-TX-0001')?.description, 'Lohn Juli 2026');
   assert.deepEqual(byRef('KB-STMT-0042#3'), {
-    ref: 'KB-STMT-0042#3', bank: 'BEKB', date: '2026-07-30', amount: 12, currency: 'CHF', direction: 'DBIT', description: 'Beispiel Telecom AG',
+    ref: 'KB-STMT-0042#3', bank: 'BEKB', date: '2026-07-30', amount: 12, currency: 'CHF', direction: 'DBIT', description: 'Beispiel Telecom AG', counterparty: 'Beispiel Telecom AG',
   });
   rmSync(ws.paths.root, { recursive: true, force: true });
 });
@@ -161,10 +162,10 @@ test('the manifest checks an IBAN and keeps it without spaces', () => {
   assert.throws(() => workspaceWith({}, BANK_ACCOUNTS.replace(UBS_GROUPED, typo)),
     (e: Error) => e instanceof WorkspaceError && e.message.includes(`bankAccounts[0].iban "${typo}" is not an IBAN`));
   const mixed = workspaceWith({}, `bankAccounts:
-  - { bank: Wise, currency: EUR, account: "1023", label: Wise EUR }
-  - { bank: Wise Business, currency: USD, account: "1024", label: Wise USD, statements: wise }
-  - { bank: Valiant, currency: CHF, account: "1020", label: Valiant }
-  - { bank: manual, currency: CHF, account: "2451", label: Kontokorrent }
+  - { bank: Wise, currency: EUR, account: "1023", label: Wise EUR, role: bank }
+  - { bank: Wise Business, currency: USD, account: "1024", label: Wise USD, statements: wise, role: bank }
+  - { bank: Valiant, currency: CHF, account: "1020", label: Valiant, role: bank }
+  - { bank: manual, currency: CHF, account: "2451", label: Kontokorrent, role: owner }
 `);
   assert.deepEqual(mixed.bankAccounts.map((a) => `${a.bank} ${a.statements ?? '-'}`), ['Wise wise', 'Wise Business wise', 'Valiant camt053', 'manual -'], 'the manifest names the kind, else the bank registry');
   rmSync(mixed.paths.root, { recursive: true, force: true });

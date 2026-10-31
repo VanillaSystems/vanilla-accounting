@@ -22,3 +22,6 @@ ios/Team.local.xcconfig
 
 # Verification evidence from .claude/skills/verify
 .verify/
+
+# The help pages (npm run help:build).
+/dist-help/

@@ -4,19 +4,26 @@
  * dependency in package.json, since electron-builder packs only those. A package the app does not
  * pack (desktop/not-packed.cjs) may only be imported dynamically, on a path the app does not take.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { builtinModules, createRequire } from 'node:module';
 import { build } from 'esbuild';
+import { bundles } from './bundles.mjs';
+import { describeBuild } from '../../src/version.ts';
+import { iconProblems } from '../brand/icons.mjs';
+import { buildDictation } from './dictation.mjs';
 
 const { NOT_PACKED } = createRequire(import.meta.url)('../../desktop/not-packed.cjs');
 
-const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-const common = { bundle: true, platform: 'node', target: 'node22', packages: 'external', sourcemap: 'linked', logLevel: 'warning', metafile: true };
+// The dmg carries the brand's icon or none: an old icon brought back by a merge stops the build here.
+const icons = iconProblems();
+if (icons.length) { console.error(`desktop:build refused, the icons are not the brand's:\n  ${icons.join('\n  ')}`); process.exit(1); }
 
-const results = await Promise.all([
-  build({ ...common, entryPoints: ['src/desktop/main.ts'], outfile: 'out/desktop/main.mjs', format: 'esm' }),
-  build({ ...common, entryPoints: ['src/desktop/preload.ts'], outfile: 'out/desktop/preload.cjs', format: 'cjs' }),
-]);
+const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+// The packed app has no git: its build is baked in, and electron-builder names the dmg after it.
+const app = describeBuild(process.cwd());
+mkdirSync('out/desktop', { recursive: true });
+writeFileSync('out/desktop/build.json', JSON.stringify(app));
+const results = await Promise.all(bundles(app).map((options) => build(options)));
 
 const builtin = new Set(builtinModules);
 const packageOf = (spec) => spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0];
@@ -34,4 +41,13 @@ if (unpacked.length) {
   console.error(`The desktop bundle imports ${unpacked.join(', ')} at start, which desktop/not-packed.cjs leaves out of the app: import it dynamically where it is used.`);
   process.exit(1);
 }
-console.log(`out/desktop: main.mjs, preload.cjs (packages: ${[...imported].sort().join(', ')})`);
+// The chat's microphone on the Mac (src/desktop/dictation.swift); swiftc comes with the Xcode command line tools.
+if (process.platform === 'darwin') {
+  try {
+    buildDictation();
+  } catch (e) {
+    console.error(`desktop:build refused, the speech recognizer did not build (xcode-select --install gives swiftc): ${e.message}`);
+    process.exit(1);
+  }
+}
+console.log(`out/desktop: main.mjs, preload.cjs, build ${app.version} (packages: ${[...imported].sort().join(', ')})`);

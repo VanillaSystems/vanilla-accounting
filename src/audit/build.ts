@@ -8,11 +8,13 @@ import { build } from 'vite';
 import { loadBooks, sealsOf } from '../books/store.js';
 import { readEstvRateTable } from '../accounting/fx-rates.js';
 import type { ApiStatus } from '../types/api-error.js';
-import { accountsOf, filedReturnsOf, receiptDirOf } from '../workspace/reads.js';
+import { accountsOf, filedReturnsOf, receiptPathOf } from '../workspace/reads.js';
+import { orderPagesIn, vatCorrectionsIn } from '../intake/pair-chain.js';
 import { companyInfo } from '../books/company.js';
-import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
+import { APP_ROOT, findFile, yearPaths, yearsOf as yearsWithFolders, type Workspace } from '../workspace/workspace.js';
 import { schemaOf } from '../workspace/schema.js';
 import { EXPORT_FILES, type AuditSnapshot } from './sources.js';
+import { workspaceModules } from '../core/modules/load.js';
 import { appVersion, hashFiles, MANIFEST, MANIFEST_FORMAT, type ExportedSeal, type ExportManifest } from './manifest.js';
 
 export class ExportError extends Error {}
@@ -33,25 +35,28 @@ export async function buildAuditExport(ws: Workspace, outDir: string, createdAt 
 
   const books = loadBooks(ws);
   const write = (path: string, data: unknown) => writeOut(out, path, JSON.stringify(data));
-  const raw = JSON.parse(readFileSync(ws.paths.books, 'utf8')) as { schema?: unknown };
-  const snapshot: AuditSnapshot = { createdAt, booksSchema: schemaOf(raw.schema, ws.paths.books), appVersion: appVersion() };
+  const raw = JSON.parse(readFileSync(ws.paths.ledger, 'utf8')) as { schema?: unknown };
+  const snapshot: AuditSnapshot = { createdAt, booksSchema: schemaOf(raw.schema, ws.paths.ledger), appVersion: appVersion() };
 
-  copyOut(out, EXPORT_FILES.books(), ws.paths.books);
+  write(EXPORT_FILES.books(), books);
+  write(EXPORT_FILES.modules(), workspaceModules(APP_ROOT, ws.paths.root, ws.company.vat));
   write(EXPORT_FILES.status(), { ok: true, readonly: true, snapshot } satisfies ApiStatus);
   write(EXPORT_FILES.accounts(), accountsOf(ws));
   write(EXPORT_FILES.workspace(), companyInfo(ws, books));
   for (const year of yearsOf(ws, books)) write(EXPORT_FILES.filedReturns(year), filedReturnsOf(ws, year));
   write(EXPORT_FILES.fxRates(), readEstvRateTable());
+  write(EXPORT_FILES.orderPages(), orderPagesIn(ws, books));
+  write(EXPORT_FILES.vatCorrections(), vatCorrectionsIn(ws, books));
 
   const missing: string[] = [];
   for (const r of books.receipts) {
-    const src = join(receiptDirOf(ws, r.location), r.filename);
-    if (existsSync(src)) copyOut(out, EXPORT_FILES.receipt(r.id), src);
+    const src = receiptPathOf(ws, r);
+    if (src) copyOut(out, EXPORT_FILES.receipt(r.id), src);
     else missing.push(`receipt ${r.id} (${r.filename})`);
   }
   for (const s of books.bankStatements) {
-    const src = join(ws.paths.statements, s.bank, s.filename);
-    if (existsSync(src)) copyOut(out, EXPORT_FILES.statement(s.bank, s.filename), src);
+    const src = findFile(ws.paths, 'statements', `${s.bank}/${s.filename}`);
+    if (src) copyOut(out, EXPORT_FILES.statement(s.bank, s.filename), src);
     else missing.push(`statement ${s.bank}/${s.filename}`);
   }
 
@@ -69,7 +74,7 @@ export async function buildAuditExport(ws: Workspace, outDir: string, createdAt 
 /** Every year the period picker can show, and every year with a filing. */
 function yearsOf(ws: Workspace, books: ReturnType<typeof loadBooks>): string[] {
   const dated = [...books.transactions, ...books.journalEntries].map((x) => x.date?.slice(0, 4));
-  const filed = existsSync(ws.paths.filings) ? readdirSync(ws.paths.filings) : [];
+  const filed = yearsWithFolders(ws.paths).filter((y) => existsSync(yearPaths(ws.paths, y).filings));
   return [...new Set([...dated, ...filed])].filter((y): y is string => !!y && /^\d{4}$/.test(y)).sort();
 }
 

@@ -6,11 +6,12 @@
 import { useSyncExternalStore } from 'react';
 import type { Index } from '../../../types/index.js';
 import { localToday } from '../../../accounting/periods.js';
-import { store, stored } from '../../shell/prefs.js';
+import { store, stored } from '../../shell/storage.js';
 import { workspaceNow } from '../../hooks/use-workspace.js';
 import { bankOf, type Account, type Bank } from './model.js';
 
-export type GroupBy = 'konto' | 'monat';
+/** By account, by month, or the statement files whole (#208). */
+export type GroupBy = 'konto' | 'monat' | 'datei';
 export type Section = 'zahlungen' | 'kurse' | 'datei';
 
 interface State {
@@ -25,7 +26,7 @@ function read<T>(key: string, fallback: T): T {
 }
 
 let state: State = {
-  groupBy: stored('bank.group') === 'monat' ? 'monat' : 'konto',
+  groupBy: stored('bank.group') === 'monat' ? 'monat' : stored('bank.group') === 'datei' ? 'datei' : 'konto',
   collapsed: new Set(read<string[]>('bank.collapsed', [])),
   open: { zahlungen: true, kurse: false, datei: false, ...read<Partial<Record<Section, boolean>>>('bank.open', {}) },
   overlay: null,
@@ -63,5 +64,5 @@ export function bankFor(books: Index, accounts: readonly Account[] | undefined =
   return memo.bank;
 }
 
-/** The statements as last listed, in ↑↓ order: the keys move through them. */
+/** The statements (or, by file, the files) as last listed, in ↑↓ order: the keys move through them. */
 export const listed: { keys: string[] } = { keys: [] };

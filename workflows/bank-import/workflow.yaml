@@ -1,0 +1,11 @@
+label: {"de": "Kontoauszug einlesen", "en": "Import a bank statement", "fr": "Importer un relevé", "it": "Importare un estratto conto"}
+desc: {"de": "Liest camt.053 oder PDF-Auszüge, führt sie mit den Büchern zusammen und prüft den Saldo auf den Rappen.", "en": "Reads camt.053 or PDF statements, merges them into the books and checks the balance to the cent.", "fr": "Lit les relevés camt.053 ou PDF, les fusionne avec les livres et vérifie le solde au centime.", "it": "Legge estratti camt.053 o PDF, li unisce ai libri e verifica il saldo al centesimo."}
+phase: collect
+cadence: {"de": "laufend, Saldo je Monatsende", "en": "ongoing, balance at each month end", "fr": "en continu, solde à chaque fin de mois", "it": "continuo, saldo a ogni fine mese"}
+for: statement
+lane: account
+triggers:
+  - outside: {"accepts": ["statement"]}
+emits: ["transaction.imported"]
+start: parse
+steps: ["parse", "merge", "balance", "ask"]

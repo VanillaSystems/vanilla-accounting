@@ -1,6 +1,6 @@
 /** One account's ledger for the period: opening, debits, credits and closing, then every entry with its running balance. */
 import { useMemo } from 'react';
-import type { RouteOf } from '../../shell/route.js';
+import type { Report, RouteOf } from '../../shell/route.js';
 import { periodName } from '../../lib/period-label.js';
 import { getAccountMap } from '../../lib/accounts.js';
 import { fmt, formatDate } from '../../lib/utils.js';
@@ -10,15 +10,18 @@ import { Go, entryAt } from '../vat/links.js';
 import { NO_ACCOUNT, ledgerOf, reportOfAccount } from './model.js';
 import { accountName, accountOfRoute } from './view.js';
 import { DownloadMenu } from '../export/DownloadMenu.js';
+import { useSliced } from './slice.js';
 
-type Props = AreaProps<RouteOf<'reports'>>;
+type Props = AreaProps<Extract<RouteOf<'reports'>, { report: Report }>>;
 
-export function Detail({ route, books, period, nav }: Props) {
+export function Detail({ route, period, nav, ...props }: Props) {
   const account = accountOfRoute(route);
-  const l = useMemo(() => (account === undefined ? undefined : ledgerOf(books, account, period)), [books, account, period]);
+  // The Erfolgsrechnung sliced by tags (#127): the ledger of one of its accounts shows the same entries.
+  const { books } = useSliced(route.report, props.books);
+  const names = getAccountMap();
+  const l = useMemo(() => (account === undefined ? undefined : ledgerOf(books, account, period, names)), [books, account, period, names]);
   if (account === undefined || !l) return <div className="detail-empty"><div>{t('reports.noAccounts', { period: periodName(period) })}</div></div>;
   const none = account === NO_ACCOUNT;
-  const names = getAccountMap();
   const of = reportOfAccount(account);
   return (
     <div className="detail-in" key={account}>
@@ -27,10 +30,10 @@ export function Detail({ route, books, period, nav }: Props) {
         <div className="amount"><small>CHF</small>{fmt(l.closing)}</div>
       </div>
       <div className="facts">
-        <span title={t('reports.balanceOn', { date: formatDate(period.from) })}>{t('reports.factOpening', { amount: fmt(l.opening) })}</span>
+        <span data-tip={t('reports.balanceOn', { date: formatDate(period.from) })}>{t('reports.factOpening', { amount: fmt(l.opening) })}</span>
         <span>{t('reports.factDebit', { amount: fmt(l.debit) })}</span>
         <span>{t('reports.factCredit', { amount: fmt(l.credit) })}</span>
-        <span title={t('reports.balanceOn', { date: formatDate(period.to) })}>{t('reports.factClosing', { amount: fmt(l.closing) })}</span>
+        <span data-tip={t('reports.balanceOn', { date: formatDate(period.to) })}>{t('reports.factClosing', { amount: fmt(l.closing) })}</span>
         <span>{t('common.entryCount', { n: l.rows.length })}</span>
       </div>
       <DownloadMenu account={account} label={none ? t('reports.noAccount') : `${account} ${names[account] ?? ''}`.trim()} period={period} toast={nav.toast} />
@@ -45,7 +48,7 @@ export function Detail({ route, books, period, nav }: Props) {
             <>
               <span className="mono d">{formatDate(r.date)}</span>
               <span className="tt">{r.description || r.entryId}</span>
-              <span className="mono oc" title={r.other ? names[r.other] : t('reports.noAccount')}>{r.other || '·'}</span>
+              <span className="mono oc" data-tip={r.other ? names[r.other] : t('reports.noAccount')}>{r.other || '·'}</span>
               <span className="r mono">{r.debit != null ? fmt(r.debit) : ''}</span>
               <span className="r mono">{r.credit != null ? fmt(r.credit) : ''}</span>
               <span className="r mono">{fmt(r.balance)}</span>

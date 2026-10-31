@@ -57,7 +57,7 @@ an answer, or type another one.
 |---|---|
 | Consultant / services GmbH | You sell your work: consulting, software, design. The owner is employed by the company. |
 | Webshop / goods GmbH | You sell goods, often online, and import some of them. |
-| Freelancer, not registered for VAT | Not supported yet. The wizard explains and stops. |
+| Freelancer, not registered for VAT | An Einzelfirma below the registration threshold: purchases and sales booked gross, no VAT codes, no return. |
 | Custom | You answer every question yourself. |
 
 Then the wizard asks for the company name, the folder for the books, the UID (from
@@ -68,17 +68,24 @@ words on what the company does. Then these questions, in this order:
    money taken out is booked on 2850 Privat. Day-to-day bookkeeping and VAT work. The year-end
    (AHV on the profit, the tax return) is not covered.
 2. **Registered for VAT (MWST)?** Registration is mandatory from CHF 100,000 turnover a year.
-   Books without VAT are not supported yet. If you answer no, the wizard stops.
-3. **VAT method.** Effective (you pay the VAT you charged minus the input tax on your costs).
-   The Saldosteuersatz method is not supported yet. If you choose it, the wizard stops.
+   If you answer no, the next three questions are skipped: every purchase and sale is booked
+   gross without VAT codes, there is no return, and the MWST page watches the calendar year's
+   turnover against the threshold.
+3. **VAT method.** Effective (you pay the VAT you charged minus the input tax on your costs), or
+   Saldosteuersatz (a flat rate the ESTV approved for you on your gross turnover, no input tax).
+   On the Saldosteuersatz the wizard then asks for the approved rate(s), one or two
+   (`--net-rate 4.5:Schreinerei`); the ESTV's five-character activity code of a rate can be
+   added later under Firma › MWST, the electronic return needs it.
 4. **VAT basis.** Vereinnahmt (cash): VAT is due when the money moves. Vereinbart (invoice) is
    not supported yet, because Vanilla Accounting books from the bank statement and keeps no open invoices.
-5. **VAT reporting period.** Quarterly. Half-yearly and monthly returns are not supported yet.
+5. **VAT reporting period.** Quarterly (the effective method's default) or half-yearly (the
+   Saldosteuersatz's). Monthly returns are not supported yet. The method, the period and the
+   rate hold for whole years: a change is possible on 1 January, in a year without entries.
 6. **Fiscal year.** The calendar year. Another fiscal year is not supported yet.
 7. **Starting point.** A new company starts with empty books. If you switch from other
    bookkeeping, bring your opening balances of 1 January: `npm run import-opening` reads them
    from a Banana export (Konten XML), or you enter them later.
-8. **What you sell.** Services, goods, or both. This picks the accounts of your chart.
+8. **What you sell.** Any combination of products you make yourself, goods you buy and resell (trade), and services (`--sells made,services`). This picks the accounts of your chart and the default accounts the app books with: material for your own products on 4000, goods for resale on 4200; sales of own products on 3000, traded goods on 3200, services on 3400. A supplier or customer can differ by a rule of its own.
 9. **Customers abroad?** A service to a customer abroad is usually declared without Swiss VAT.
 10. **Do you import goods?** Imports come with customs and import VAT invoices.
 11. **Employees.** None, the owner only, or staff. Vanilla Accounting books the salary and the AHV, BVG and
@@ -99,20 +106,24 @@ Last it asks where the books go at year-end, such as Banana or your Treuhand. In
 bank is `<bank>:<currency>[:<ledger account>[:<IBAN>]]`, for example `--bank "UBS:CHF::<IBAN>"`
 (an empty ledger account takes the suggested one).
 
-The workspace gets:
+The folder becomes your company's repository. Its `AGENTS.md` holds notes for Claude about your
+company; the books lie in its `vanilla-accounting/` ([ADR 0013](adr/0013-workspace-layout-and-ownership.md)):
 
-| File or folder | Holds |
+| File or folder in `vanilla-accounting/` | Holds |
 |---|---|
 | `belege.workspace.yaml` | Who the company is, your answers, and which ledger account each bank books on |
-| `accounts.json` | Your chart of accounts, taken from the Swiss KMU chart for your profile |
-| `books.json` | The books: transactions, receipts, journal entries. Empty at first |
-| `bank-statements/<bank>/` | Your camt.053 statements |
-| `beleg-import/` | Where new receipts arrive |
-| `receipts/` | Receipts after they are read and matched |
-| `filings/` | Your VAT returns as filed |
 | `knowledge/` | What the app learns about your suppliers (`suppliers/`), customers (`customers/`), authorities (`authorities/`) and your own rules (`rules/`); each folder starts with a commented `_example.yaml` |
-| `mail.yaml` | Mailboxes to collect receipts from (optional, commented template) |
-| `AGENTS.md` | Notes for Claude about your company |
+| `sources/` | Places to collect receipts from: one folder per mailbox, portal or API (see sources/README.md) |
+| `beleg-import/` | Where new receipts arrive |
+| `ledger.json` | The books' settings: up to which day they are closed, opening balances, corrections |
+| `master-data/accounts.json` | Your chart of accounts, taken from the Swiss KMU chart for your profile |
+| `transactional-data/<year>/books/` | The books of the year: transactions, receipts, journal entries, one record per line. Empty at first |
+| `transactional-data/<year>/bank-statements/<bank>/` | Your camt.053 statements |
+| `transactional-data/<year>/receipts/` | Receipts after they are read and matched |
+| `transactional-data/<year>/filings/` | Your VAT returns as filed, and their seals |
+
+Files that are not the app's (notes, scripts, exports of an earlier program) go into `own/` at the
+repository's root; `npm run doctor` names every other one.
 
 Every question also has a flag, so `npm run init` runs without questions too:
 
@@ -134,7 +145,7 @@ npm run doctor
 ```
 
 It checks the tools (Node.js, the `claude` command and its login) and the workspace
-(the manifest, `books.json`, the folders, that every bank account is in the chart, and which
+(the manifest, the books, the folders, that every bank account is in the chart, and which
 bank account each statement file lands on). Each line starts with ✓ or ✗. A ✗ line says how
 to fix it. A ! line is a note that does not stop you.
 
@@ -153,8 +164,8 @@ Which banks: the import is tested with Raiffeisen and Wise statements, and with 
 the shapes UBS, PostFinance and the cantonal banks export (the tests read synthetic ones).
 Any other bank's camt.053 reads the same way.
 
-Save each file in `bank-statements/<bank>/` of your workspace, for example
-`bank-statements/UBS/`. The file name does not matter, and a subfolder is fine. Each statement
+Save each file in `transactional-data/<year>/bank-statements/<bank>/` of your workspace, for example
+`transactional-data/2026/bank-statements/UBS/` (or upload it in the app, which files it there). The file name does not matter, and a subfolder is fine. Each statement
 lands on a bank account of `belege.workspace.yaml`:
 
 1. The account with the statement's IBAN and currency, when you entered the IBAN. Then the
@@ -197,7 +208,7 @@ inbox itself after every drop, add, statement upload or phone scan, and when a f
    shows as "wird gelesen" until it is read.
 2. Read each receipt's VAT facts, with Claude.
 3. Link each receipt to its payment and name it, with Claude. Receipts move from
-   `beleg-import/` to `receipts/`.
+   `beleg-import/` to `transactional-data/<year>/receipts/`.
 4. Book each new payment (accounts, VAT code, exchange rate), with Claude.
    **Neu klassifizieren** on an entry in Buchungen books that one payment again.
 
@@ -220,7 +231,7 @@ it. The areas sit in the dock at the bottom edge of the window; press `G` and th
 | `G K` | Kontoauszüge: the bank statements and their payments | `/bank`, `/bank/1021-2026-09` |
 | `G U` | Buchungen: the journal | `/journal`, `/journal/<entry-id>` |
 | `G M` | MWST: the VAT return of a quarter, and the VAT codes | `/vat`, `/vat/405`, `/vat/codes/I81` |
-| `G R` | Bilanz & ER: Erfolgsrechnung, Bilanz, Saldobilanz and each account's ledger | `/reports/balance/1021` |
+| `G R` | Bilanz & ER: Erfolgsrechnung, Bilanz, Saldobilanz and each account's ledger; Eigene Berichte | `/reports/balance/1021`, `/reports/custom/<name>` |
 | `G A` | Abschluss: the year-end in seven steps | `/close`, `/close/<step>` |
 | `G F` | Firma: profile, VAT, banks, chart of accounts, periods, invoice layout, display | `/company/<section>` |
 
@@ -247,6 +258,35 @@ The keys that work everywhere:
 The key help lists the keys of the area you are in, such as `L` (link a payment), `Space`
 (preview), `D` (download) and `E` (edit) in Belege.
 
+## Your own reports
+
+A report the app has no page for («all expenses this quarter by account», «what came in EUR
+this year») is one you describe, and the app computes. There are two ways to make one:
+
+- **Ask the AI in the sidebar** (`⌘J`) in your own words. It writes what the report shows,
+  never a figure: the app runs it on the books and shows a card with the first rows and every
+  total, «PDF», «CSV» and «Bericht speichern». When the AI's words state a figure the app did
+  not compute, the app withdraws those words; the card stays.
+- **Without the AI:** Bilanz & ER › Eigene Berichte › «Neuer Bericht». Pick the period, then one
+  or more sections. Each section reads bookings, payments, receipts or invoices, with filters
+  (accounts or ranges such as `6000-6999`, VAT codes, a text or the other party, who booked it,
+  with or without a receipt, currencies), a grouping (month, quarter, account, other party, VAT
+  code) and the columns. «Vorschau» runs it.
+
+A comment under the report holds no figure of its own. Placeholders such as `{total}`,
+`{count}`, `{period}` or `{section1.total}` are filled from the books. With an account filter, a
+booking counts on the account's normal side, so a refund counts against an expense. Amounts in
+different currencies are summed apart. A booking's amount is as booked, VAT included; its net
+is the amount without the VAT, which is what Bilanz and Erfolgsrechnung show for the account,
+and the report says on which account the VAT stands there.
+
+A saved report is a file, `knowledge/reports/<name>.report.yaml`, that holds what the report
+shows and never its figures. Eigene Berichte lists it and runs it each time it is opened, for
+its own period or, with one click, for the period of the page. «Bearbeiten» opens it in the
+form, and «Löschen» has «Rückgängig». Änderungen lists it until you save. The PDF has the title,
+the period, the filters in words, the group and section totals, the comment and the VAT note.
+The CSV is the plain table, one row per line, as the export writes it.
+
 ## 7. File the VAT return
 
 Open MWST (`G M`). It shows the return of the quarter: the figures (Ziffern) with the amount to
@@ -257,14 +297,14 @@ npm run vat-xml -- 2026-Q3
 ```
 
 This writes an eCH-0217 XML. Import it in the ESTV portal ("MWST abrechnen"), check, and
-submit. Then copy the XML into `filings/<year>/` and close the quarter (the fourth quarter closes with
+submit. Then copy the XML into `transactional-data/<year>/filings/` and close the quarter (the fourth quarter closes with
 the year instead, see [year-end.md](year-end.md)):
 
 ```sh
 npm run seal -- 2026-Q3 --close
 ```
 
-This sets `config.closedThrough` in `books.json` to the last day of the quarter and seals it.
+This sets `config.closedThrough` in `ledger.json` to the last day of the quarter and seals it.
 From then on, that quarter never changes: the app shows it with a lock and refuses every edit
 in it. Corrections are booked in the next open quarter (in Buchungen, a filed entry offers
 **Korrektur in … erfassen**), and MWST shows them on the Korrekturabrechnung (form 0535, `/vat/0535`); see the
@@ -332,8 +372,10 @@ again; `invoices.json` holds the customers, the invoices and what was sent.
 
 ## Limits
 
-- **VAT:** effective method, cash basis, quarterly returns only. No Saldosteuersatz, no
-  vereinbarte Entgelte, no books without VAT, no fiscal year other than the calendar year.
+- **VAT:** cash basis; the effective method by quarter, the Saldosteuersatz by half year
+  (form 0553 as the app models it: the approved rates on the gross turnover and Bezugsteuer;
+  the credits of the forms 1050/1055 are not kept), or books without VAT. No vereinbarte
+  Entgelte, no monthly returns, no fiscal year other than the calendar year.
 - **Payroll:** Vanilla Accounting books salary and social security payments. It does not calculate
   payroll, the Lohnausweis or the AHV statement.
 - **Invoicing:** invoices, credit notes, reminders and cancellations are written in the app and

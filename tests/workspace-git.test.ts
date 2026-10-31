@@ -6,10 +6,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { commitPaths, initRepository, isTracked, repositoryAt } from '../src/workspace/git.js';
+import { commitExactly, initRepository, isTracked, moveTracked, repositoryAt } from '../src/workspace/git.js';
 
 const git = (dir: string, ...args: string[]) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' }).trim();
 
@@ -29,13 +29,40 @@ test('init commits the folder; a commit of paths takes only them, once per chang
   assert.equal(await repositoryAt(join(dir, 'filings')), null, 'inside a repository, not one of its own');
   assert.equal(await isTracked(dir, 'filings/2026/seal-Q1.json'), true);
 
-  assert.equal(await commitPaths(dir, 'Nothing changed', [join(dir, 'books.json')]), false);
+  assert.equal(await commitExactly(dir, 'Nothing changed', [join(dir, 'books.json')]), false);
   writeFileSync(join(dir, 'books.json'), '{"schema":2}');
   writeFileSync(join(dir, 'filings/2026/seal-Q4.json'), '{}');
   writeFileSync(join(dir, 'notes.md'), 'not part of the close');
-  assert.equal(await commitPaths(dir, 'Jahresabschluss 2026', [join(dir, 'books.json'), join(dir, 'filings/2026'), join(dir, 'missing')]), true);
+  assert.equal(await commitExactly(dir, 'Jahresabschluss 2026', [join(dir, 'books.json'), join(dir, 'filings/2026'), join(dir, 'missing')]), true);
   assert.equal(git(dir, 'show', '--stat', '--format=%s', 'HEAD').split('\n')[0], 'Jahresabschluss 2026');
   assert.deepEqual(git(dir, 'show', '--name-only', '--format=', 'HEAD').split('\n'), ['books.json', 'filings/2026/seal-Q4.json']);
   assert.equal(git(dir, 'status', '--porcelain'), '?? notes.md', 'the note stays unstaged');
-  assert.equal(await commitPaths(dir, 'Again', [join(dir, 'books.json')]), false, 'a rerun has nothing to commit');
+  assert.equal(await commitExactly(dir, 'Again', [join(dir, 'books.json')]), false, 'a rerun has nothing to commit');
+});
+
+test('a commit of paths leaves what else was staged (a migration\'s git mv) staged and out of the commit, and commits a deletion', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ws-git-'));
+  mkdirSync(join(dir, 'books'), { recursive: true });
+  writeFileSync(join(dir, 'books/entries.jsonl'), '{"id":"a"}\n');
+  writeFileSync(join(dir, 'books/old.jsonl'), 'x\n');
+  writeFileSync(join(dir, 'history.txt'), 'h');
+  await initRepository(dir, 'Workspace set up');
+
+  await moveTracked(dir, 'history.txt', 'moved.txt');
+  writeFileSync(join(dir, 'books/entries.jsonl'), '{"id":"a"}\n{"id":"b"}\n');
+  rmSync(join(dir, 'books/old.jsonl'));
+  assert.equal(await commitExactly(dir, 'Jahresabschluss 2026', ['books']), true);
+
+  assert.deepEqual(git(dir, 'show', '--name-status', '--format=', 'HEAD').split('\n').sort(), ['D\tbooks/old.jsonl', 'M\tbooks/entries.jsonl']);
+  assert.deepEqual(git(dir, 'status', '--porcelain').split('\n'), ['R  history.txt -> moved.txt'], 'the move is still staged, not committed');
+});
+
+test('a commit never carries an AI provider\'s API key; the file stays as it was, uncommitted', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ws-git-key-'));
+  writeFileSync(join(dir, 'notes.md'), 'Notizen\n');
+  await initRepository(dir, 'Workspace set up');
+  writeFileSync(join(dir, 'notes.md'), `Schlüssel: ${['sk-ant-', 'api03-', 'x'.repeat(30)].join('')}\n`);
+  await assert.rejects(commitExactly(dir, 'Notizen', ['notes.md']), /notes\.md holds an API key \(sk-ant-api…\): not saved/);
+  assert.equal(git(dir, 'log', '--format=%s'), 'Workspace set up');
+  assert.equal(git(dir, 'status', '--porcelain'), 'M notes.md', 'changed on disk, not staged');
 });

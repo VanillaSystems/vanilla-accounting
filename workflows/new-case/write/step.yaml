@@ -1,0 +1,6 @@
+label: {"de": "In die Regeln schreiben", "en": "Write it into the rules", "fr": "L’écrire dans les règles", "it": "Scriverlo nelle regole"}
+uses: knowledge.add-precedent
+reads: ["decision"]
+emits: ["rule"]
+effects: ["knowledge.write"]
+outcomes: {"ok": "lint"}

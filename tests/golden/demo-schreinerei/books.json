@@ -1,0 +1,900 @@
+{
+ "note": "The books of Schreinerei Beispiel GmbH frozen on 2026-10-16, the golden master's input.",
+ "journalEntries": [
+  {
+   "id": "004d56ee45c7b36c",
+   "transactionRef": "M2026-009",
+   "date": "2026-09-25",
+   "accountDebit": "5000",
+   "accountCredit": "2270",
+   "amount": 396.8,
+   "description": "Lohn September 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV), Marco Beispiel"
+  },
+  {
+   "id": "0697c066928fbcb1",
+   "transactionRef": "90000000068",
+   "date": "2026-08-27",
+   "accountDebit": "2201",
+   "accountCredit": "1020",
+   "amount": 1707.14,
+   "description": "ESTV, MWST-Abrechnung H1 2026 (Saldosteuersatz)"
+  },
+  {
+   "id": "0b35a5e2f155aba4",
+   "transactionRef": "90000000039",
+   "date": "2026-05-14",
+   "accountDebit": "6200",
+   "accountCredit": "1020",
+   "amount": 287.4,
+   "description": "Garage Beispiel, Diesel Lieferwagen Mai 2026"
+  },
+  {
+   "id": "0cf15ff866cb4b68",
+   "transactionRef": "90000000031",
+   "date": "2026-04-14",
+   "accountDebit": "6200",
+   "accountCredit": "1020",
+   "amount": 201.65,
+   "description": "Garage Beispiel, Diesel Lieferwagen April 2026"
+  },
+  {
+   "id": "0ded262aaa3c8940",
+   "transactionRef": "90000000053",
+   "date": "2026-07-01",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 2300,
+   "description": "Beispiel Liegenschaften, Miete Werkstatt Juli 2026"
+  },
+  {
+   "id": "13ce8ebaa2feed1d",
+   "transactionRef": "90000000049",
+   "date": "2026-06-22",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 3480,
+   "vatCode": "V0",
+   "description": "Beispiel Immobilien, Unterhalt Juni 2026"
+  },
+  {
+   "id": "16afc4222abc1991",
+   "transactionRef": "90000000025",
+   "date": "2026-03-26",
+   "accountDebit": "2270",
+   "accountCredit": "1020",
+   "amount": 1190.4,
+   "description": "Ausgleichskasse, Beiträge Arbeitnehmer Q1 2026"
+  },
+  {
+   "id": "1d41695834ab1bb3",
+   "transactionRef": "90000000061",
+   "date": "2026-08-10",
+   "accountDebit": "4000",
+   "accountCredit": "1020",
+   "amount": 2018.8,
+   "description": "Beispiel Holzhandel, Massivholz und Platten August 2026"
+  },
+  {
+   "id": "1d785150b284dcae",
+   "transactionRef": "M2026-007",
+   "date": "2026-07-27",
+   "accountDebit": "5000",
+   "accountCredit": "2270",
+   "amount": 396.8,
+   "description": "Lohn Juli 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV), Marco Beispiel"
+  },
+  {
+   "id": "2238b5fb6c4b492f",
+   "transactionRef": "M2026-005",
+   "date": "2026-05-25",
+   "accountDebit": "5000",
+   "accountCredit": "2270",
+   "amount": 396.8,
+   "description": "Lohn Mai 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV), Marco Beispiel"
+  },
+  {
+   "id": "228b371788a00e7f",
+   "transactionRef": "90000000034",
+   "date": "2026-04-22",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 2347.35,
+   "vatCode": "F1",
+   "description": "Beispiel Immobilien, Unterhalt April 2026"
+  },
+  {
+   "id": "25a6e2f7ffd5f002",
+   "transactionRef": "90000000013",
+   "date": "2026-02-16",
+   "accountDebit": "6200",
+   "accountCredit": "1020",
+   "amount": 280.9,
+   "description": "Garage Beispiel, Diesel Lieferwagen Februar 2026"
+  },
+  {
+   "id": "2e100442f7d8fd3a",
+   "transactionRef": "90000000060",
+   "date": "2026-08-03",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 2300,
+   "description": "Beispiel Liegenschaften, Miete Werkstatt August 2026"
+  },
+  {
+   "id": "3565426d22e5adf7",
+   "transactionRef": "90000000035",
+   "date": "2026-04-27",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 5803.2,
+   "description": "Lohn April 2026 netto, Marco Beispiel"
+  },
+  {
+   "id": "3a00c8c9167d4ff1",
+   "transactionRef": "90000000062",
+   "date": "2026-08-11",
+   "accountDebit": "6570",
+   "accountCredit": "1020",
+   "amount": 29,
+   "vatCode": "B81-1",
+   "description": "Example Tools, CAD-Abo August 2026 (Bezugsteuer)"
+  },
+  {
+   "id": "3c5d5f06b3dd3400",
+   "transactionRef": "90000000001",
+   "date": "2026-01-01",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 2300,
+   "description": "Beispiel Liegenschaften, Miete Werkstatt Januar 2026"
+  },
+  {
+   "id": "3dfefc8da253a062",
+   "transactionRef": "90000000010",
+   "date": "2026-02-09",
+   "accountDebit": "4000",
+   "accountCredit": "1020",
+   "amount": 1377.9,
+   "description": "Beispiel Holzhandel, Massivholz und Platten Februar 2026"
+  },
+  {
+   "id": "3f83d2653b0cdfc4",
+   "transactionRef": "90000000058",
+   "date": "2026-07-22",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 3068.45,
+   "vatCode": "F1",
+   "description": "Beispiel Immobilien, Unterhalt Juli 2026"
+  },
+  {
+   "id": "407739fc9d32a1c9",
+   "transactionRef": "90000000003",
+   "date": "2026-01-12",
+   "accountDebit": "6570",
+   "accountCredit": "1020",
+   "amount": 29,
+   "vatCode": "B81-1",
+   "description": "Example Tools, CAD-Abo Januar 2026 (Bezugsteuer)"
+  },
+  {
+   "id": "41f24a41ee040c67",
+   "transactionRef": "90000000071",
+   "date": "2026-09-11",
+   "accountDebit": "6570",
+   "accountCredit": "1020",
+   "amount": 29,
+   "vatCode": "B81-1",
+   "description": "Example Tools, CAD-Abo September 2026 (Bezugsteuer)"
+  },
+  {
+   "id": "433dc50baf570482",
+   "transactionRef": "M2026-006",
+   "date": "2026-06-25",
+   "accountDebit": "5000",
+   "accountCredit": "2270",
+   "amount": 396.8,
+   "description": "Lohn Juni 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV), Marco Beispiel"
+  },
+  {
+   "id": "4516305e8009d720",
+   "transactionRef": "90000000067",
+   "date": "2026-08-25",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 5803.2,
+   "description": "Lohn August 2026 netto, Marco Beispiel"
+  },
+  {
+   "id": "46a79516892745b1",
+   "transactionRef": "90000000073",
+   "date": "2026-09-15",
+   "accountDebit": "2201",
+   "accountCredit": "1020",
+   "amount": 156.6,
+   "description": "ESTV, Korrekturabrechnung (0535) H1 2026"
+  },
+  {
+   "id": "483cfe5551ce220c",
+   "transactionRef": "90000000077",
+   "date": "2026-09-28",
+   "accountDebit": "5700",
+   "accountCredit": "1020",
+   "amount": 1413.6,
+   "description": "Ausgleichskasse, Beiträge Arbeitgeber Q3 2026"
+  },
+  {
+   "id": "4be8575d9926d3db",
+   "transactionRef": "90000000057",
+   "date": "2026-07-20",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 92.75,
+   "description": "Muster Telecom, Telefon und Internet Juli 2026"
+  },
+  {
+   "id": "4cefe3d6364871ca",
+   "transactionRef": "90000000023",
+   "date": "2026-03-23",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 3064.5,
+   "vatCode": "F1",
+   "description": "Beispiel Immobilien, Unterhalt März 2026"
+  },
+  {
+   "id": "50b1ad8f01b8cf2f",
+   "transactionRef": "M2026-008",
+   "date": "2026-08-25",
+   "accountDebit": "5000",
+   "accountCredit": "2270",
+   "amount": 396.8,
+   "description": "Lohn August 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV), Marco Beispiel"
+  },
+  {
+   "id": "5104621e655f3498",
+   "transactionRef": "90000000040",
+   "date": "2026-05-18",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 82.25,
+   "description": "Muster Telecom, Telefon und Internet Mai 2026"
+  },
+  {
+   "id": "5220d6f058f4049b",
+   "transactionRef": "90000000070",
+   "date": "2026-09-08",
+   "accountDebit": "4000",
+   "accountCredit": "1020",
+   "amount": 2125.6,
+   "description": "Beispiel Holzhandel, Massivholz und Platten September 2026"
+  },
+  {
+   "id": "635f0b815578c5f4",
+   "transactionRef": "90000000012",
+   "date": "2026-02-12",
+   "accountDebit": "4000",
+   "accountCredit": "1020",
+   "amount": 1420,
+   "description": "Muster Beschläge, Beschläge und Schubladensysteme Küche Muster"
+  },
+  {
+   "id": "6647c7006f9e53aa",
+   "transactionRef": "M2026-011",
+   "date": "2026-07-10",
+   "accountDebit": "3400",
+   "accountCredit": "3400",
+   "amount": 3480,
+   "vatCode": "F1",
+   "description": "Korrekturbuchung zu Buchung 13ce8ebaa2feed1d (H1): Beispiel Immobilien Rechnung 2026-061 ist Inlandumsatz zum Saldosteuersatz (F1)",
+   "corrects": "2026-H1"
+  },
+  {
+   "id": "6c1d0331543f4975",
+   "transactionRef": "90000000066",
+   "date": "2026-08-24",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 2513.65,
+   "vatCode": "F1",
+   "description": "Beispiel Immobilien, Unterhalt August 2026"
+  },
+  {
+   "id": "6d385a56041c9217",
+   "transactionRef": "90000000014",
+   "date": "2026-02-18",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 87.95,
+   "description": "Muster Telecom, Telefon und Internet Februar 2026"
+  },
+  {
+   "id": "71e67566b374f0f2",
+   "transactionRef": "90000000025",
+   "date": "2026-03-26",
+   "accountDebit": "5700",
+   "accountCredit": "1020",
+   "amount": 1413.6,
+   "description": "Ausgleichskasse, Beiträge Arbeitgeber Q1 2026"
+  },
+  {
+   "id": "735bda20ff7593b7",
+   "transactionRef": "90000000005",
+   "date": "2026-01-19",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 85.7,
+   "description": "Muster Telecom, Telefon und Internet Januar 2026"
+  },
+  {
+   "id": "738c01da7cc7001c",
+   "transactionRef": "90000000055",
+   "date": "2026-07-13",
+   "accountDebit": "6570",
+   "accountCredit": "1020",
+   "amount": 29,
+   "vatCode": "B81-1",
+   "description": "Example Tools, CAD-Abo Juli 2026 (Bezugsteuer)"
+  },
+  {
+   "id": "73e73f5d28c34372",
+   "transactionRef": "90000000064",
+   "date": "2026-08-14",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 6800,
+   "vatCode": "V0",
+   "description": "Möbelhaus Beispiel, Tische (Ausfuhr)"
+  },
+  {
+   "id": "7592ad33ec4c2b9d",
+   "transactionRef": "90000000006",
+   "date": "2026-01-19",
+   "accountDebit": "6300",
+   "accountCredit": "1020",
+   "amount": 1860,
+   "description": "Muster Versicherungen, Betriebshaftpflicht und Sachversicherung 2026"
+  },
+  {
+   "id": "769e8c36d55d4235",
+   "transactionRef": "M2026-003",
+   "date": "2026-03-25",
+   "accountDebit": "5000",
+   "accountCredit": "2270",
+   "amount": 396.8,
+   "description": "Lohn März 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV), Marco Beispiel"
+  },
+  {
+   "id": "7ce581fb5c9cd3ff",
+   "transactionRef": "M2026-002",
+   "date": "2026-02-25",
+   "accountDebit": "5000",
+   "accountCredit": "2270",
+   "amount": 396.8,
+   "description": "Lohn Februar 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV), Marco Beispiel"
+  },
+  {
+   "id": "7d7f179e367ed078",
+   "transactionRef": "90000000074",
+   "date": "2026-09-18",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 83.8,
+   "description": "Muster Telecom, Telefon und Internet September 2026"
+  },
+  {
+   "id": "8194a068c1be023e",
+   "transactionRef": "90000000069",
+   "date": "2026-09-01",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 2300,
+   "description": "Beispiel Liegenschaften, Miete Werkstatt September 2026"
+  },
+  {
+   "id": "82132cf4492e0b89",
+   "transactionRef": "90000000072",
+   "date": "2026-09-14",
+   "accountDebit": "6200",
+   "accountCredit": "1020",
+   "amount": 287.85,
+   "description": "Garage Beispiel, Diesel Lieferwagen September 2026"
+  },
+  {
+   "id": "83557dd9ede17684",
+   "transactionRef": "90000000030",
+   "date": "2026-04-13",
+   "accountDebit": "6570",
+   "accountCredit": "1020",
+   "amount": 29,
+   "vatCode": "B81-1",
+   "description": "Example Tools, CAD-Abo April 2026 (Bezugsteuer)"
+  },
+  {
+   "id": "8393db4ef92dee57",
+   "transactionRef": "90000000006",
+   "date": "2026-01-19",
+   "accountDebit": "5730",
+   "accountCredit": "1020",
+   "amount": 1240,
+   "description": "Muster Versicherungen, UVG-Prämie 2026"
+  },
+  {
+   "id": "83cda664ca63df8f",
+   "transactionRef": "M2026-010",
+   "date": "2026-07-10",
+   "accountDebit": "3400",
+   "accountCredit": "3400",
+   "amount": 3480,
+   "vatCode": "-V0",
+   "description": "Stornobuchung zu Buchung 13ce8ebaa2feed1d (H1): Beispiel Immobilien Rechnung 2026-061 war als Ausfuhr (V0) gebucht",
+   "corrects": "2026-H1"
+  },
+  {
+   "id": "8cd8ae3fd0fb065c",
+   "transactionRef": "90000000076",
+   "date": "2026-09-25",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 5803.2,
+   "description": "Lohn September 2026 netto, Marco Beispiel"
+  },
+  {
+   "id": "8dccbf09bdbac2cb",
+   "transactionRef": "90000000051",
+   "date": "2026-06-26",
+   "accountDebit": "5700",
+   "accountCredit": "1020",
+   "amount": 1413.6,
+   "description": "Ausgleichskasse, Beiträge Arbeitgeber Q2 2026"
+  },
+  {
+   "id": "8f7617ef74112b9c",
+   "transactionRef": "90000000008",
+   "date": "2026-01-26",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 5803.2,
+   "description": "Lohn Januar 2026 netto, Marco Beispiel"
+  },
+  {
+   "id": "911ec57169079c09",
+   "transactionRef": "90000000077",
+   "date": "2026-09-28",
+   "accountDebit": "2270",
+   "accountCredit": "1020",
+   "amount": 1190.4,
+   "description": "Ausgleichskasse, Beiträge Arbeitnehmer Q3 2026"
+  },
+  {
+   "id": "936052b8cd6eb9fa",
+   "transactionRef": "90000000009",
+   "date": "2026-02-02",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 2300,
+   "description": "Beispiel Liegenschaften, Miete Werkstatt Februar 2026"
+  },
+  {
+   "id": "98f9457060a1c8f7",
+   "transactionRef": "90000000033",
+   "date": "2026-04-21",
+   "accountDebit": "6100",
+   "accountCredit": "1020",
+   "amount": 1850,
+   "description": "Garage Beispiel, Service Lieferwagen und Reparatur Hebebühne"
+  },
+  {
+   "id": "a0252c5543ee84ca",
+   "transactionRef": "90000000059",
+   "date": "2026-07-27",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 5803.2,
+   "description": "Lohn Juli 2026 netto, Marco Beispiel"
+  },
+  {
+   "id": "a35b34e4f215b649",
+   "transactionRef": "90000000047",
+   "date": "2026-06-15",
+   "accountDebit": "6200",
+   "accountCredit": "1020",
+   "amount": 186,
+   "description": "Garage Beispiel, Diesel Lieferwagen Juni 2026"
+  },
+  {
+   "id": "a4f51b563f758893",
+   "transactionRef": "90000000026",
+   "date": "2026-03-31",
+   "accountDebit": "6940",
+   "accountCredit": "1020",
+   "amount": 15,
+   "description": "Raiffeisen, Kontoführung Q1"
+  },
+  {
+   "id": "a91520075efdd675",
+   "transactionRef": "90000000011",
+   "date": "2026-02-11",
+   "accountDebit": "6570",
+   "accountCredit": "1020",
+   "amount": 29,
+   "vatCode": "B81-1",
+   "description": "Example Tools, CAD-Abo Februar 2026 (Bezugsteuer)"
+  },
+  {
+   "id": "ab182932d537f7ff",
+   "transactionRef": "90000000044",
+   "date": "2026-06-01",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 2300,
+   "description": "Beispiel Liegenschaften, Miete Werkstatt Juni 2026"
+  },
+  {
+   "id": "aee3a9aa151a75a6",
+   "transactionRef": "90000000065",
+   "date": "2026-08-18",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 86.2,
+   "description": "Muster Telecom, Telefon und Internet August 2026"
+  },
+  {
+   "id": "aef1a9e8719e3c1c",
+   "transactionRef": "90000000032",
+   "date": "2026-04-20",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 78.45,
+   "description": "Muster Telecom, Telefon und Internet April 2026"
+  },
+  {
+   "id": "b7993a933f2b6101",
+   "transactionRef": "90000000021",
+   "date": "2026-03-16",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 12400,
+   "vatCode": "F1",
+   "description": "Familie Muster, Küche"
+  },
+  {
+   "id": "b91b2d9477a0716f",
+   "transactionRef": "90000000036",
+   "date": "2026-05-01",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 2300,
+   "description": "Beispiel Liegenschaften, Miete Werkstatt Mai 2026"
+  },
+  {
+   "id": "b9a7cba1c428824f",
+   "transactionRef": "90000000041",
+   "date": "2026-05-22",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 3222.85,
+   "vatCode": "F1",
+   "description": "Beispiel Immobilien, Unterhalt Mai 2026"
+  },
+  {
+   "id": "ba3d2cc3bcb68abb",
+   "transactionRef": "M2026-001",
+   "date": "2026-01-26",
+   "accountDebit": "5000",
+   "accountCredit": "2270",
+   "amount": 396.8,
+   "description": "Lohn Januar 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV), Marco Beispiel"
+  },
+  {
+   "id": "bd99dc7f1fd46934",
+   "transactionRef": "90000000056",
+   "date": "2026-07-14",
+   "accountDebit": "6200",
+   "accountCredit": "1020",
+   "amount": 221.3,
+   "description": "Garage Beispiel, Diesel Lieferwagen Juli 2026"
+  },
+  {
+   "id": "be79fbaa19281a28",
+   "transactionRef": "90000000022",
+   "date": "2026-03-18",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 83.85,
+   "description": "Muster Telecom, Telefon und Internet März 2026"
+  },
+  {
+   "id": "beb46de0da819eda",
+   "transactionRef": "90000000017",
+   "date": "2026-03-02",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 2300,
+   "description": "Beispiel Liegenschaften, Miete Werkstatt März 2026"
+  },
+  {
+   "id": "bec9823f547deb8c",
+   "transactionRef": "90000000048",
+   "date": "2026-06-18",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 76.95,
+   "description": "Muster Telecom, Telefon und Internet Juni 2026"
+  },
+  {
+   "id": "c19d1fdf340a4a48",
+   "transactionRef": "90000000038",
+   "date": "2026-05-11",
+   "accountDebit": "6570",
+   "accountCredit": "1020",
+   "amount": 29,
+   "vatCode": "B81-1",
+   "description": "Example Tools, CAD-Abo Mai 2026 (Bezugsteuer)"
+  },
+  {
+   "id": "c2c2906d5a08c35e",
+   "transactionRef": "90000000019",
+   "date": "2026-03-11",
+   "accountDebit": "6570",
+   "accountCredit": "1020",
+   "amount": 29,
+   "vatCode": "B81-1",
+   "description": "Example Tools, CAD-Abo März 2026 (Bezugsteuer)"
+  },
+  {
+   "id": "c600692da0ad15d3",
+   "transactionRef": "90000000042",
+   "date": "2026-05-25",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 5803.2,
+   "description": "Lohn Mai 2026 netto, Marco Beispiel"
+  },
+  {
+   "id": "c9c976536f024ca5",
+   "transactionRef": "90000000007",
+   "date": "2026-01-22",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 3567.7,
+   "vatCode": "F1",
+   "description": "Beispiel Immobilien, Unterhalt Januar 2026"
+  },
+  {
+   "id": "cb81d1072a39749c",
+   "transactionRef": "90000000054",
+   "date": "2026-07-08",
+   "accountDebit": "4000",
+   "accountCredit": "1020",
+   "amount": 1903.65,
+   "description": "Beispiel Holzhandel, Massivholz und Platten Juli 2026"
+  },
+  {
+   "id": "d05230c47dd4c418",
+   "transactionRef": "90000000020",
+   "date": "2026-03-16",
+   "accountDebit": "6200",
+   "accountCredit": "1020",
+   "amount": 248.45,
+   "description": "Garage Beispiel, Diesel Lieferwagen März 2026"
+  },
+  {
+   "id": "d134b5cb2aefe43c",
+   "transactionRef": "90000000045",
+   "date": "2026-06-08",
+   "accountDebit": "4000",
+   "accountCredit": "1020",
+   "amount": 1385.95,
+   "description": "Beispiel Holzhandel, Massivholz und Platten Juni 2026"
+  },
+  {
+   "id": "d9c2e3f88f681295",
+   "transactionRef": "90000000002",
+   "date": "2026-01-08",
+   "accountDebit": "4000",
+   "accountCredit": "1020",
+   "amount": 904.65,
+   "description": "Beispiel Holzhandel, Massivholz und Platten Januar 2026"
+  },
+  {
+   "id": "d9ca56afa980744c",
+   "transactionRef": "90000000004",
+   "date": "2026-01-14",
+   "accountDebit": "6200",
+   "accountCredit": "1020",
+   "amount": 317.35,
+   "description": "Garage Beispiel, Diesel Lieferwagen Januar 2026"
+  },
+  {
+   "id": "db29fd20d9cf2827",
+   "transactionRef": "90000000029",
+   "date": "2026-04-09",
+   "accountDebit": "4000",
+   "accountCredit": "1020",
+   "amount": 680,
+   "description": "Muster Beschläge, Beschläge Hotelzimmer Vaduz"
+  },
+  {
+   "id": "dbedf1b643cd6e91",
+   "transactionRef": "90000000037",
+   "date": "2026-05-08",
+   "accountDebit": "4000",
+   "accountCredit": "1020",
+   "amount": 1014.55,
+   "description": "Beispiel Holzhandel, Massivholz und Platten Mai 2026"
+  },
+  {
+   "id": "dd65c91e02798c86",
+   "transactionRef": "90000000027",
+   "date": "2026-04-01",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 2300,
+   "description": "Beispiel Liegenschaften, Miete Werkstatt April 2026"
+  },
+  {
+   "id": "de9bbad101f334c4",
+   "transactionRef": "90000000063",
+   "date": "2026-08-14",
+   "accountDebit": "6200",
+   "accountCredit": "1020",
+   "amount": 286.2,
+   "description": "Garage Beispiel, Diesel Lieferwagen August 2026"
+  },
+  {
+   "id": "dfba0f116e118a1f",
+   "transactionRef": "M2026-004",
+   "date": "2026-04-27",
+   "accountDebit": "5000",
+   "accountCredit": "2270",
+   "amount": 396.8,
+   "description": "Lohn April 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV), Marco Beispiel"
+  },
+  {
+   "id": "e12b32a16cd8b10b",
+   "transactionRef": "90000000016",
+   "date": "2026-02-25",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 5803.2,
+   "description": "Lohn Februar 2026 netto, Marco Beispiel"
+  },
+  {
+   "id": "e70d8e4ecb23ae77",
+   "transactionRef": "90000000024",
+   "date": "2026-03-25",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 5803.2,
+   "description": "Lohn März 2026 netto, Marco Beispiel"
+  },
+  {
+   "id": "e7525e69bc60defd",
+   "transactionRef": "90000000028",
+   "date": "2026-04-08",
+   "accountDebit": "4000",
+   "accountCredit": "1020",
+   "amount": 1586.35,
+   "description": "Beispiel Holzhandel, Massivholz und Platten April 2026"
+  },
+  {
+   "id": "ec15a424fe8da881",
+   "transactionRef": "90000000046",
+   "date": "2026-06-11",
+   "accountDebit": "6570",
+   "accountCredit": "1020",
+   "amount": 29,
+   "vatCode": "B81-1",
+   "description": "Example Tools, CAD-Abo Juni 2026 (Bezugsteuer)"
+  },
+  {
+   "id": "ede413d44965c34b",
+   "transactionRef": "90000000018",
+   "date": "2026-03-09",
+   "accountDebit": "4000",
+   "accountCredit": "1020",
+   "amount": 2591.2,
+   "description": "Beispiel Holzhandel, Massivholz und Platten März 2026"
+  },
+  {
+   "id": "f20c49f966d7fa29",
+   "transactionRef": "90000000052",
+   "date": "2026-06-30",
+   "accountDebit": "6940",
+   "accountCredit": "1020",
+   "amount": 15,
+   "description": "Raiffeisen, Kontoführung Q2"
+  },
+  {
+   "id": "f26716c1b0d7dce7",
+   "transactionRef": "90000000015",
+   "date": "2026-02-23",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 4420.95,
+   "vatCode": "F1",
+   "description": "Beispiel Immobilien, Unterhalt Februar 2026"
+  },
+  {
+   "id": "f46cf757412e4f99",
+   "transactionRef": "90000000078",
+   "date": "2026-09-30",
+   "accountDebit": "6940",
+   "accountCredit": "1020",
+   "amount": 15,
+   "description": "Raiffeisen, Kontoführung Q3"
+  },
+  {
+   "id": "fa97142ba4558bb4",
+   "transactionRef": "90000000043",
+   "date": "2026-05-29",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 8600,
+   "vatCode": "F1",
+   "description": "Hotel Rheinpark, Zimmermöbel (Vaduz, Inland)"
+  },
+  {
+   "id": "fc8f59188c3974ce",
+   "transactionRef": "90000000050",
+   "date": "2026-06-25",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 5803.2,
+   "description": "Lohn Juni 2026 netto, Marco Beispiel"
+  },
+  {
+   "id": "fda91b688a056819",
+   "transactionRef": "90000000075",
+   "date": "2026-09-22",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 2482.05,
+   "vatCode": "F1",
+   "description": "Beispiel Immobilien, Unterhalt September 2026"
+  },
+  {
+   "id": "fe35aade6ffcb9c4",
+   "transactionRef": "90000000051",
+   "date": "2026-06-26",
+   "accountDebit": "2270",
+   "accountCredit": "1020",
+   "amount": 1190.4,
+   "description": "Ausgleichskasse, Beiträge Arbeitnehmer Q2 2026"
+  }
+ ],
+ "config": {
+  "closedThrough": "2026-06-30",
+  "openingBalances": {
+   "2026": {
+    "1020": 31000,
+    "1500": 24000,
+    "1530": 18000,
+    "2800": 20000,
+    "2970": 53000
+   }
+  },
+  "openingBalancesNative": {
+   "2026": {}
+  },
+  "vatAdjustments": [],
+  "correctionCases": [
+   {
+    "id": "2026-H1-immobilien-inland",
+    "period": "2026-H1",
+    "title": "Inlandumsatz Beispiel Immobilien als Ausfuhr deklariert",
+    "wrong": "Die Juni-Zahlung der Beispiel Immobilien AG (St. Gallen) für die Rechnung 2026-061 lief mit V0 (Ziffer 220) statt F1: CHF 3’480.00 ohne Steuer deklariert.",
+    "fix": "Storno -V0 und Neubuchung F1 über je CHF 3’480.00 vom 10.07.2026 mit corrects 2026-H1, Steuer CHF 156.60 nachdeklariert; die Buchung vom Juni bleibt wie eingereicht.",
+    "originalEntryIds": [
+     "13ce8ebaa2feed1d"
+    ],
+    "correctionEntryIds": [
+     "83cda664ca63df8f",
+     "6647c7006f9e53aa"
+    ],
+    "source": "receipts/20260603-schreinerei-beispiel-rechnung-2026-061.pdf"
+   }
+  ]
+ }
+}

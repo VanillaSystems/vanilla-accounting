@@ -7,8 +7,6 @@
  *     enough for the vision match, Swiss UID(s), VAT indicator, VAT-proof trap, grouped vendor,
  *     foreign hint, the document type a knowledge file assigns, the casebook keywords that hit,
  *     and the Shopify order page's figures)
- *   bank-statements/Wise, bank-statements/Raiffeisen: the Wise transfer references (-raw) and
- *     the closing balance (-layout)
  *
  *   npx tsx tools/pdf-text/compare.ts <out-dir> <workspace>...
  *
@@ -20,14 +18,11 @@ import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join, relative } from 'node:path';
 import { promisify } from 'node:util';
-import { parseOrderPage } from '../../src/cli/extract-shopify-orders.js';
 import { FOREIGN_HINT, loadCases } from '../../src/knowledge/cases.js';
 import { documentTypeOf, uidsIn, type Counterparty } from '../../src/knowledge/counterparties.js';
 import { loadKnowledge } from '../../src/knowledge/layers.js';
 import { pdfText, type TextMode } from '../../src/parsers/pdf-text.js';
 import { detectVatProofIssue, hasSwissUid, hasVatIndicator } from '../../src/parsers/receipt-text.js';
-import { closingBalance } from '../../src/parsers/statement-pdf-balances.js';
-import { wiseReferences } from '../../src/parsers/wise-statement-pdf.js';
 import { APP_ROOT } from '../../src/workspace/workspace.js';
 
 const execFileAsync = promisify(execFile);
@@ -41,7 +36,7 @@ async function poppler(file: string, mode: TextMode): Promise<string> {
 
 type Verdicts = Record<string, unknown>;
 
-/** What src/cli/extract.ts, extract-vat, match, the knowledge layer and the Shopify parser read off a receipt's text. */
+/** What src/cli/extract.ts, extract-vat, match and the knowledge layer read off a receipt's text. */
 function receiptVerdicts(file: string, text: string, counterparties: readonly Counterparty[], keywords: readonly string[]): Verdicts {
   const t = text.trim();
   const lower = t.toLowerCase();
@@ -57,13 +52,7 @@ function receiptVerdicts(file: string, text: string, counterparties: readonly Co
     foreignHint: FOREIGN_HINT.test(t),
     documentType: documentTypeOf({ extractedText: t }, counterparties),
     caseKeywords: keywords.filter((kw) => lower.includes(kw)),
-    ...(/shopify-order-\d+/.test(basename(file)) ? { shopify: parseOrderPage(basename(file), t) } : {}),
   };
-}
-
-function statementBank(file: string): 'Raiffeisen' | 'Wise' | null {
-  const dir = basename(join(file, '..'));
-  return /raiffeisen/i.test(dir) ? 'Raiffeisen' : /wise/i.test(dir) ? 'Wise' : null;
 }
 
 function pdfsUnder(dir: string): string[] {
@@ -75,7 +64,7 @@ function pdfsUnder(dir: string): string[] {
 }
 
 /** The folders of a workspace whose PDFs the app reads. */
-const FOLDERS = ['receipts', 'beleg-import', 'bank-statements', 'invoices'];
+const FOLDERS = ['receipts', 'beleg-import', 'invoices'];
 
 interface FileResult { file: string; old: Verdicts; new: Verdicts; differs: string[] }
 
@@ -85,18 +74,8 @@ async function compareWorkspace(root: string): Promise<{ results: FileResult[]; 
   const results: FileResult[] = [];
   const failures: string[] = [];
   for (const file of FOLDERS.flatMap((f) => pdfsUnder(join(root, f)))) {
-    const bank = statementBank(file);
     try {
-      const verdicts = async (read: (mode: TextMode) => Promise<string>): Promise<Verdicts> => {
-        if (bank) {
-          const currency = basename(file).match(/_(EUR|USD|CHF)_/)?.[1] ?? 'CHF';
-          return {
-            wiseRefs: [...wiseReferences(await read('raw'))],
-            closing: closingBalance(await read('layout'), bank, currency),
-          };
-        }
-        return receiptVerdicts(file, await read('reading'), counterparties, keywords);
-      };
+      const verdicts = async (read: (mode: TextMode) => Promise<string>): Promise<Verdicts> => receiptVerdicts(file, await read('reading'), counterparties, keywords);
       const [oldV, newV] = await Promise.all([verdicts((m) => poppler(file, m)), verdicts((m) => pdfText(file, m))]);
       const differs = Object.keys(oldV).filter((k) => JSON.stringify(oldV[k]) !== JSON.stringify(newV[k]));
       results.push({ file: relative(root, file), old: oldV, new: newV, differs });

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Umzug als Gespräch</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@700;800&family=Instrument+Sans:wght@400;500;600&family=Geist+Mono:wght@500&display=swap">
+<style>
+:root { --bg: #ffffff; --ink: #0b1220; --ink-2: #4a5263; --muted: #6e7685; --line: #e7eaf0; --accent: #0067b1; --page: #eceff4; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #151a23; --ink: #eef1f6; --ink-2: #b9c0cc; --muted: #8b93a3; --line: #262d3a; --accent: #6cb4f0; --page: #0b0e14; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 400 15px/1.55 "Instrument Sans", system-ui, sans-serif; }
+.doc { max-width: 1180px; margin: 0 auto; padding: 48px 16px 120px; display: grid; gap: 28px; }
+h1 { font: 800 34px/1.1 "Hanken Grotesk", system-ui, sans-serif; margin: 0; }
+h2 { font: 700 22px/1.2 "Hanken Grotesk", system-ui, sans-serif; margin: 0; }
+p, li { color: var(--ink-2); max-width: 78ch; }
+p { margin: 0; }
+b { color: var(--ink); }
+.shot { display: grid; gap: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+.frame { position: relative; width: 100%; aspect-ratio: 1440 / 900; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; container-type: inline-size; }
+.frame iframe { position: absolute; top: 0; left: 0; width: 1440px; height: 900px; border: 0; transform-origin: 0 0; transform: scale(calc(100cqw / 1440px)); pointer-events: none; }
+a { color: var(--accent); font-weight: 600; }
+code { font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; }
+ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+</style>
+</head>
+<body>
+<div class="doc">
+  <h1>Umzug als Gespräch · Design B</h1>
+
+  <section class="shot">
+    <h2>Clickable prototype</h2>
+    <p>The whole switch as one conversation with the setup, from the UID lookup to landing in the books. The dark bar picks the path (<b>per 1.1.</b> or <b>im laufenden Jahr</b>, starting in Q3 with Q1 and Q2 filed from Bexio), jumps to a chapter, switches light and dark, and starts over. The path also follows from the answer to «Ab wann soll Vanilla Accounting buchen?». Inside, every answer button and card button works, typed answers are matched by keywords («bexio», «doppelt», «ab Juli»), a file can be dragged into the conversation, and a green step in the rail slides the panel away to show that part of the app.</p>
+    <p><a href="prototype.html">Open the prototype →</a> · <a href="../onboarding-compare.html">Design A and B side by side →</a> · <a href="../onboarding/index.html">Design A →</a></p>
+    <p>Behind the panel is the real Firma page of the demo workspace (Muster Kaffee GmbH), captured read-only, with its CSS. The conversation and its cards are written by hand in the app's class names (<code>.ruledraft</code>, <code>.rulepreview</code>, <code>.aiact</code>, <code>.qacts</code>, <code>.okline</code>, <code>.warnline</code>, <code>.srchead</code>) and its colour tokens. The story and the figures are those of design A, so the two compare one to one.</p>
+  </section>
+
+  <section class="shot">
+    <h2>The idea</h2>
+    <ul>
+      <li><b>A specialist, not a form.</b> The switch is a conversation with «Einrichtung», a Vanilla Accounting setup specialist: plain words, du, short messages, one question at a time. It says what it already found before it asks anything.</li>
+      <li><b>A wide panel, the app behind it.</b> The panel is about 840 px wide, more than twice the AI column, so a rule with its evidence or a quarter's Ziffern fit without scrolling sideways. The Firma list on the left stays visible and fills in as answers come in (UID, MWST, Bankkonten, Quellen, Kontenplan, Perioden, Eröffnung), each row flashing green when it is set. What the setup learns about partners and the company fills two dock icons, Geschäftspartner and Wissen.</li>
+      <li><b>A rail says what is done.</b> «Firma · MWST · Kontenplan · Journal · Wissen · Eröffnung» across the top. A green step is a link: the panel slides away and shows that page of the app as it now is; «Zurück zum Gespräch» brings it back.</li>
+      <li><b>Cards inside the conversation instead of screens.</b> The UID result, the checklist, the source card, the quarter checks, the partner bins, a rule with its bookings, the patterns not taken over, the summary. Each card is the app's own look, so what the person learns here is what they see later.</li>
+      <li><b>The same rules as A.</b> Find out first, then ask. «Ich hole es für dich» is the default. Review only where it matters (a rule and a filed quarter). A filed quarter is compared, then sealed (golden rule 1). History is evidence, not knowledge. A rule exists only once the person has seen its evidence and kept it. Old mistakes are not learned. Every question can be skipped.</li>
+    </ul>
+  </section>
+
+  <section class="shot">
+    <h2>1 · Gespräch</h2>
+    <p>The specialist opens with what the public UID register says about CHE-123.456.789: name, GmbH, address, registered for VAT. «Stimmt so» fills the Firma row and the company name. Then one question at a time, each with buttons: the old program (Bexio, Abacus, Banana, Excel, «Mein Treuhänder macht es»), single or double entry (phrased as a confirmation for Bexio, which is double entry almost always), the VAT method and period (only because the register says registered; «Weiss nicht» reads it from the last return), the start date, and who can get at the data. On the running-year path two more: which quarters of 2026 are filed, and whether the first half year comes in as the full journal (recommended) or as account totals, the alternative named in one sentence. «Mein Treuhänder macht es» answers the last question, so it is not asked. Each answer changes the next message: Banana gets «die Datei nehme ich direkt», the Treuhänder gets «ich schreibe dir die Mail».</p>
+    <p><a href="prototype.html#p=jan">Open this step →</a></p>
+    <div class="frame"><iframe src="app.html#p=jan&amp;at=talk" title="1 Gespräch" loading="lazy"></iframe></div>
+  </section>
+
+  <section class="shot">
+    <h2>2 · Was ich von dir brauche</h2>
+    <p>One card, written for these answers: each item says what it is for and who gets it («ich hole es», «du meldest dich an», «optional», «von dir»). The Bexio journal 2025 is marked as examples that never enter the books. On the running-year path the journal of 1 January to 30 June and the filed returns for Q1 and Q2 are added. The last line names the one thing only the person can do: two minutes to create an access key, or a mail to send, or a file to drop. The answer buttons under the card are the way forward: «Hol es dir» or «Ich exportiere lieber selbst».</p>
+    <p><a href="prototype.html#p=mitte&amp;at=list">Open this step →</a></p>
+    <div class="frame"><iframe src="app.html#p=mitte&amp;at=list" title="2 Was ich von dir brauche" loading="lazy"></iframe></div>
+  </section>
+
+  <section class="shot">
+    <h2>3 · Ich hole es für dich</h2>
+    <p>The source card «Bexio: Umzug, einmal holen» says its reach in plain words: what it reads, that it writes nothing to Bexio and nothing to the books before the person takes it over, that it runs once and switches itself off, and that the key stays in the Mac's keychain. «Einfügen», then «Prüfen» shows the counts it would fetch (27 accounts, 1'184 bookings, 2 bank accounts, 12 VAT codes, 6 balances), then «Holen». Below it, three other ways in the same order as A: an export file (steps, then a drop zone in the conversation), the app's own browser window (the person signs in, the setup downloads), the Treuhänder (the mail is drafted, the app sends nothing itself, the reply comes in through the receipts address). On the running-year path a second card fetches the filed Q1 and Q2 returns from the ESTV ePortal in the app's window. Then one question the data could not answer: is 2451 the owner's private account.</p>
+    <p><a href="prototype.html#p=jan&amp;at=fetch">Open this step →</a></p>
+    <div class="frame"><iframe src="app.html#p=jan&amp;at=fetch" title="3 Ich hole es für dich" loading="lazy"></iframe></div>
+  </section>
+
+  <section class="shot">
+    <h2>4 · Erstes Halbjahr (running year only)</h2>
+    <p>Each filed quarter is recomputed from the imported journal and set beside the return as filed, Ziffer by Ziffer (299, 399, 400, 405, 500). Q1 matches: «Q1 versiegeln». Q2 differs in Ziffer 405 by CHF 12.40, and the card says why: a Digitec invoice of CHF 165.50 that Bexio booked on its invoice date, 24 June, paid on 2 July; on cash basis its input tax belongs to Q3. Two answers say what each does: book it on the payment date in Q3 (recommended, Q2 then matches) or keep it in Q2 (sealed with the difference, shown in the Q2 Korrekturabrechnung, form 0535). «Q2 versiegeln» stays disabled until one is chosen. «Perioden und Siegel» in the list moves to «bis 30.06.2026». With account totals instead of the journal, nothing is compared or sealed, and the conversation says so in one message.</p>
+    <p><a href="prototype.html#p=mitte&amp;at=half">Open this step →</a></p>
+    <div class="frame"><iframe src="app.html#p=mitte&amp;at=half" title="4 Erstes Halbjahr" loading="lazy"></iframe></div>
+  </section>
+
+  <section class="shot">
+    <h2>5 · Aus 2025 lernen</h2>
+    <p>First the principle in two sentences: 2025 is an example, not a rule. Then the 88 partners in one card with three bins. «Eindeutig» lists the 8 partners booked the same way every time (at least 4×); a row opens the app's rule card with the newest five bookings that carry it and «Behalten» / «Nicht als Regel»; «Alle 8 übernehmen» keeps the rest in one click. «Uneinheitlich» shows the three mixed partners with a split bar. «Selten» lists rare partners that stay examples. A second card, «So nicht übernehmen», shows three patterns with the 2025 booking struck through, how the app books instead, and one reason: AliExpress with input tax but no receipt showing Swiss VAT, a Vienna studio without Bezugsteuer, private purchases with input tax. «Ich sehe es anders» opens a recorded question, never a silent override. Then the three mixed partners, one question each, with what each answer becomes (a sentence in the partner's notes, a rule that asks, a rule) and «Überspringen». The first kept rule fills the dock icons Geschäftspartner and Wissen, and the rail step «Wissen» opens Geschäftspartner behind the panel.</p>
+    <p><a href="prototype.html#p=jan&amp;at=know">Open this step →</a></p>
+    <div class="frame"><iframe src="app.html#p=jan&amp;at=know" title="5 Aus 2025 lernen" loading="lazy"></iframe></div>
+  </section>
+
+  <section class="shot">
+    <h2>6 · Fertig</h2>
+    <p>What the app now knows, each line with its source as a badge (UID-Register, deine Antwort, aus Bexio, Buchungen 2025 bestätigt, Regel der App, nur Hinweise), what it will still ask (rare and new partners, skipped questions at their next payment), and the opening balances at 1 January 2026 from the Bexio balance sheet with «Eröffnung übernehmen». Besides «Los geht's» it offers «Geschäftspartner ansehen» and «Wissen ansehen». «Los geht's» closes the panel and lands in Buchungen with one line: from when the app books, where it asks, and where its knowledge stands. From there the prototype stays clickable: the dock opens Firma, Buchungen, Geschäftspartner and Wissen, and a partner's name in Buchungen opens its page.</p>
+    <p><a href="prototype.html#p=mitte&amp;at=done">Open this step →</a></p>
+    <div class="frame"><iframe src="app.html#p=mitte&amp;at=done" title="6 Fertig" loading="lazy"></iframe></div>
+  </section>
+
+  <section class="shot">
+    <h2>After the setup: Geschäftspartner and Wissen</h2>
+    <p>The owner wants the knowledge base to be a first-class part of the app, because it is what lets the AI run the books with little help. In this prototype it gets two areas in the dock, each a list with a detail beside it. Firma keeps the master data and drops its «Regeln» row for a pointer to both.</p>
+    <ul>
+      <li><b>Geschäftspartner</b> (<code>/partners/&lt;id&gt;</code>). A list with search and a role filter (Lieferanten, Kunden, Banken &amp; Behörden, Offen), each row with what is known and how much is open. A partner page is prose first: open questions as cards, then «Notizen», a readable page the AI drafted from 2025 and the answers, which «Bearbeiten» turns into a text field. Under it a small box «Das macht die App selbst» lists only the executable rules with how often they applied, and offers a rule when a sentence in the notes could be one («Aus den Notizen: Zeile «Verpackung» → 4210, MWST I81 als Regel? Behalten»). «Vorschläge der KI» is one folded batch whose sentences merge into the notes. Then «Verknüpft»: the partner's Buchungen, Belege, Zahlungen and Rechnungen, each a link. The machine details (recognition, decided cases, the public layer, the 2025 examples) are folded at the bottom.</li>
+      <li><b>Wissen</b> (<code>/knowledge/&lt;topic&gt;</code>). How the company works, not per partner: «Lücken» (how far the knowledge reaches, the gaps from the setup, and after a quarter the share per step and the batch before the VAT return), «Von der App» (read-only), and prose pages per topic of the Arbeitsweise in the same shape: «Fahrzeug und Privatanteil», «Privates, Spesen und Bargeld», «Belege sammeln», «MWST-Abrechnung». «Neue Seite» starts an empty one.</li>
+      <li><b>Day one and a quarter later.</b> Right after the setup both areas show what the conversation kept. «Wissen nach Q3» in the bar shows them after a quarter of work, with design A's figures: 87 % of payments booked by the app, five gaps each with the step that closes it, and the Röstkurs question on Grünkaffee Muster AG.</li>
+    </ul>
+    <p><a href="prototype.html#p=jan&amp;at=done">Open at «Fertig» →</a> · The proposal: <a href="../../knowledge.md">knowledge.md</a></p>
+  </section>
+  <section class="shot">
+    <h2>How it differs from design A</h2>
+    <ul>
+      <li><b>One place instead of many.</b> A moves through screens in Firma (plan, read, half year, partners, rule, not taken over, questions, done) with the AI column beside them. B keeps everything in one thread; the screens become cards. The person never wonders where to look next: it is always the bottom of the conversation.</li>
+      <li><b>Progress is the app itself.</b> In A, progress is a step list in the left column. In B, the real Firma list fills in behind the panel and the rail names the six parts; a green step opens that part of the app.</li>
+      <li><b>Tone.</b> B speaks as a person who sets up books for a living: it says what it found, recommends one answer, and explains the alternative in a sentence. A says the same things as labels and hints on screens.</li>
+      <li><b>Density.</b> A's partner screen shows all three bins and every row at once, which suits a person who wants to scan. In B the same card sits in a 700 px column; it works, but a long list scrolls inside the conversation.</li>
+      <li><b>Coming back later.</b> A has a natural home (a group in Firma) to return to when the Treuhänder's files arrive next week. B needs the thread to persist and to be reopenable from the AI column or Firma.</li>
+      <li><b>Doing it by hand.</b> MISSION.md asks that whatever the AI does, a person can do by hand. In A each list row can be answered by hand. In B the answers are buttons, but the facts land in the ordinary Firma pages, which stay editable.</li>
+    </ul>
+  </section>
+
+  <section class="shot">
+    <h2>Open questions</h2>
+    <ul>
+      <li><b>Where the panel lives.</b> Here it is a large panel over Firma. It could be the first screen of the desktop setup (which already asks whether the firm is new or switching), or the AI column grown wide for the duration of the switch and shrinking back after «Los geht's».</li>
+      <li><b>Scripted or model-driven.</b> The prototype is a script with buttons. In the app the questions and cards could come from a flow (<code>processes/*.flow.yaml</code>) with the model writing only the messages, so the switch works without a model and every answer lands in the same place.</li>
+      <li><b>Long lists in a thread.</b> The 8-row bin fits; a firm with 30 unanimous partners will not. A card could open as a sheet over the panel, or link to the partner list in Firma.</li>
+      <li><b>One thread or resumable chapters.</b> If the person stops after «Holen» and returns tomorrow, does the thread continue where it was, or does the specialist summarise and pick up?</li>
+      <li><b>The facts behind the cards.</b> As in A: the UID register web service, the Bexio interface and its access key, and whether the ESTV ePortal offers filed returns as download are taken from memory and must be checked. The app must not grow a Bexio branch; the source is written in the workspace by the AI (ADR 0015).</li>
+      <li><b>The threshold for «Eindeutig».</b> 4 identical bookings, as in A, is a guess.</li>
+      <li><b>Two areas or one.</b> Geschäftspartner and Wissen sit side by side in the dock, below the divider (G P, G E). Partners could join the work areas, and the customer list of Rechnungen could become the «Kunden» filter of Geschäftspartner.</li>
+      <li><b>Prose and rules.</b> The notes are the source; the app offers a rule when a sentence could be one. How sure must the AI be before it offers, and does a kept rule mark its sentence in the prose?</li>
+      <li><b>The rail step «Wissen».</b> It opens Geschäftspartner, since chapter 5 is about partners; Wissen is one dock click away. Lücken would be the other candidate.</li>
+    </ul>
+  </section>
+</div>
+</body>
+</html>

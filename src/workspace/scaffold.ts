@@ -4,24 +4,27 @@
  * so a run that stopped halfway has none and the next run fills in the rest.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join } from 'node:path';
 import { stringify } from 'yaml';
-import { bankKind, type Iban } from './banks.js';
+import { bankKind, roleBefore, type Iban } from './banks.js';
 import { chartFor, type Chart, type WorkspaceAccount } from './chart.js';
-import type { Preset, SupportedAnswers } from './setup.js';
-import { WORKSPACE_SCHEMA } from './schema.js';
-import { MANIFEST_FILE, type LedgerBankAccount, type Uid, type WorkspaceProfile } from './workspace.js';
+import { VAT_QUESTIONS, goodsOf, profileOf, type Preset, type SupportedAnswers } from './setup.js';
+import { vatSetupYaml, type VatSetup } from './vat-setup.js';
+import { BOOKS_SCHEMA, WORKSPACE_SCHEMA } from './schema.js';
+import { OUTPUT_DIR, repositoryAgents, withAgentsImport, withSection } from './terminal-agents.js';
+import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, type LedgerBankAccount, type Uid, type WorkspaceProfile } from './workspace.js';
+import { loadJurisdiction } from '../core/modules/load.js';
 
-/** The chart's bank accounts per currency (reference/charts/ch-kmu.yaml); a further account takes the next free number. */
-const BANK_BY_CURRENCY: Record<string, string> = { CHF: '1020', EUR: '1021', USD: '1022' };
-const NEXT_FREE = { bank: 1023, card: 2101 } as const;
+/** The shipped jurisdiction a new workspace starts from (no workspace, so no overlay yet). */
+const ch = () => loadJurisdiction(APP_ROOT, 'ch').jurisdiction;
 
 /** The ledger account a new bank account books on: the chart's for its currency while free, else the next free one. */
 export function suggestAccount(bank: string, currency: string, taken: ReadonlySet<string>): string {
   const range = bankKind(bank).range;
-  const preferred = range === 'bank' ? BANK_BY_CURRENCY[currency] : undefined;
+  const { byCurrency, nextFree } = ch().setup.bankAccounts;
+  const preferred = range === 'bank' ? byCurrency[currency] : undefined;
   if (preferred && !taken.has(preferred)) return preferred;
-  for (let n = NEXT_FREE[range]; ; n++) if (!taken.has(String(n))) return String(n);
+  for (let n = nextFree[range]; ; n++) if (!taken.has(String(n))) return String(n);
 }
 
 export interface InitInput {
@@ -33,6 +36,8 @@ export interface InitInput {
   language?: string;
   preset: Preset;
   answers: SupportedAnswers;
+  /** What the VAT answers (and the approved net rates) came to: company.vat of the manifest. */
+  vat: VatSetup;
   banks: { bank: string; currency: string; account: string; iban?: Iban }[];
   exportTo?: string;
 }
@@ -45,15 +50,15 @@ export interface Plan {
 
 /** The owner's private payments: a current account (GmbH, AG) or the private account (Einzelfirma). */
 function ownerAccount(input: InitInput): LedgerBankAccount {
-  return input.answers.legalForm === 'Einzelfirma'
-    ? { bank: 'manual', currency: 'CHF', account: '2850', label: `Privat ${input.owner}` }
-    : { bank: 'manual', currency: 'CHF', account: '2451', label: `Kontokorrent ${input.owner}` };
+  const { setup, manifest } = ch();
+  const owner = setup.owner[input.answers.legalForm] ?? setup.owner.otherwise;
+  return { bank: 'manual', currency: manifest.baseCurrency, account: owner.account, label: `${owner.label} ${input.owner}`, role: 'owner' };
 }
 
 export function bankAccountsOf(input: InitInput): LedgerBankAccount[] {
   const banks = input.banks.map((b): LedgerBankAccount => {
     const { statements } = bankKind(b.bank);
-    return { bank: b.bank, currency: b.currency, account: b.account, label: `${b.bank} ${b.currency}`, ...(statements ? { statements } : {}), ...(b.iban ? { iban: b.iban } : {}) };
+    return { bank: b.bank, currency: b.currency, account: b.account, label: `${b.bank} ${b.currency}`, role: roleBefore(b.bank), ...(statements ? { statements } : {}), ...(b.iban ? { iban: b.iban } : {}) };
   });
   return input.answers.ownerPaysPrivately === 'yes' ? [...banks, ownerAccount(input)] : banks;
 }
@@ -61,23 +66,27 @@ export function bankAccountsOf(input: InitInput): LedgerBankAccount[] {
 /** The chart of the profile and legal form, plus what the answers need, with the bank accounts named after their bank. */
 export function accountsOf(input: InitInput, chart: Chart): WorkspaceAccount[] {
   const { sells, legalForm, payouts, imports } = input.answers;
-  const extra = new Set([...(payouts === 'yes' ? ['1093', '6580'] : []), ...(imports === 'yes' ? ['4020', '4030', '4040'] : [])]);
-  const base = chartFor(chart, sells, legalForm);
+  const { answers, bankAccounts } = ch().setup;
+  const extra = new Set([...(payouts === 'yes' ? answers.payouts.accounts : []), ...(imports === 'yes' ? answers.imports : [])]);
+  const base = chartFor(chart, profileOf(sells), legalForm);
   const byNumber = new Map(base.map((a) => [a.number, a]));
   for (const a of chartFor(chart, 'both', legalForm)) if (extra.has(a.number)) byNumber.set(a.number, a);
   for (const b of bankAccountsOf(input)) {
-    const line = b.account.startsWith('1') ? 'fluessige-mittel' : 'kurzfristig-verzinslich';
+    const added = bankAccounts.byClass[b.account[0]] ?? bankAccounts.byClass.otherwise;
     const known = byNumber.get(b.account);
-    byNumber.set(b.account, known && b.bank === 'manual'
+    byNumber.set(b.account, known && b.role === 'owner'
       ? known
-      : { number: b.account, name: b.label, type: b.account.startsWith('1') ? 'asset' : 'liability', line: known?.line ?? line });
+      : { number: b.account, name: b.label, type: added.type, line: known?.line ?? added.line });
   }
   return [...byNumber.values()].sort((a, b) => a.number.localeCompare(b.number));
 }
 
 function manifestYaml(input: InitInput, bankAccounts: LedgerBankAccount[]): string {
-  const { legalForm, vatRegistered: _r, vatMethod: _m, basis: _b, period: _p, ...answers } = input.answers;
-  const profile: WorkspaceProfile = { preset: input.preset, ...answers, ...(input.exportTo ? { exportTo: input.exportTo } : {}) };
+  const { legalForm } = input.answers;
+  const answers = Object.fromEntries(Object.entries(input.answers).filter(([k]) => k !== 'legalForm' && !(VAT_QUESTIONS as readonly string[]).includes(k)));
+  // What it sells as the manifest has always kept it, and which goods beside it (setup.ts kindsOf).
+  const goods = goodsOf(input.answers.sells);
+  const profile = { preset: input.preset, ...answers, sells: profileOf(input.answers.sells), ...(goods.length ? { goods } : {}), ...(input.exportTo ? { exportTo: input.exportTo } : {}) };
   const doc = {
     schema: WORKSPACE_SCHEMA,
     company: {
@@ -87,7 +96,7 @@ function manifestYaml(input: InitInput, bankAccounts: LedgerBankAccount[]): stri
       ...(input.business ? { business: input.business } : {}),
       ...(input.language ? { language: input.language } : {}),
       legalForm,
-      vat: { registered: true, method: 'effective', reporting: 'received', period: 'quarterly' },
+      vat: vatSetupYaml(input.vat),
     },
     profile,
     bankAccounts,
@@ -102,25 +111,34 @@ data/
 beleg-import/
 .DS_Store
 .llm-concurrency.json
-
-# Generated VAT artifacts at the root (as-filed copies are committed under filings/<year>/).
-/mwst-ech0217-*.xml
-/mwst-report-*.html
 `;
 
-const MAIL_YAML = `# Mailboxes receipts are collected from (npm run collect). Uncomment and fill in to use it.
-# Passwords never go here: put <env>_IMAP_USER and <env>_IMAP_PASSWORD (an app password) in .env.
-# See the app's docs/runbooks/receipt-collection.md.
-#
-# mailboxes:
-#   - label: Business
-#     address: you@example.com
-#     env: WORK                  # .env keys WORK_IMAP_USER, WORK_IMAP_PASSWORD
-#     host: imap.example.com
-#     mixed: false               # true when business and private mail share the box
-# skipDomains: []                # senders of a mixed mailbox that never send receipts
-# includeDomains: []             # senders whose mail always is collected
-# linkReceiptDomains: []         # senders that send receipts as a link
+/**
+ * Two people who keep the books append to the same questions file in their clones; git keeps
+ * both sides' lines instead of a conflict (src/questions/store.ts: append-only, folded by id).
+ */
+export const GITATTRIBUTES = `${APP_FOLDER}/transactional-data/*/questions.jsonl merge=union
+`;
+
+const SOURCES_README = `# Sources
+
+Each folder here is a place the app collects documents from (ADR 0014 of the app): a mailbox, a
+vendor's portal, an API. A mailbox needs no code; it binds the app's IMAP source:
+
+\`\`\`yaml
+# sources/work/source.yaml
+label: Business
+code: app:imap
+settings:
+  boxes: [{ label: Business, address: you@example.com }]
+reach:
+  mail: { host: imap.example.com, account: you@example.com, from: ["*"] }
+feeds:
+  attachments: { output: document, every: daily }
+\`\`\`
+
+The password goes into the keychain, never here: npm run secret -- source:work:mail. Firma ›
+Quellen shows each source, and a new one runs once you switch it on there.
 `;
 
 /** Commented templates, one per knowledge folder. A file starting with _ is never read as knowledge. */
@@ -172,62 +190,46 @@ const KNOWLEDGE_TEMPLATES: [string, string][] = [
   ['knowledge/rules/_example.guide.yaml', `# Your company's rules for one process, next to the app's processes/<process>.guide.yaml.
 # Name the file like the app's guide (booking.guide.yaml) and use its step ids.
 #
+# A rule whose then is a map is carried out by the app (AGENTS.md, "Rules the app carries out"):
+#
 # steps:
 #   classify:
 #     rules:
 #       - id: own-coffee
-#         when: coffee for the office
-#         then: 6500 Büromaterial, I81 when the receipt shows Swiss MWST
+#         when: { text: "Kaffee Bar" }
+#         then: { account: "6500", vat: I81 }
 #         source: decision 2026-01-15, owner
 #     precedents: []
 `],
 ];
 
-function agentsMd(input: InitInput, appRel: string): string {
-  return `# ${input.name}: books (private workspace)
-
-This folder holds the books, not the code. It is a Vanilla Accounting workspace: \`belege.workspace.yaml\`
-(who the company is, how it works, which ledger account each bank books on), \`accounts.json\`
-(chart of accounts), \`books.json\`, \`receipts/\`, \`bank-statements/\`, \`filings/\`, plus the
-company's own knowledge: \`knowledge/\` (suppliers, customers, authorities, rules), \`mail.yaml\`.
-
-The app is at \`${appRel}\`. Its \`.env\` sets \`VANILLA_WORKSPACE\` to this folder, so every
-command run there works on these books:
-
-    cd ${appRel} && npm start          # UI on http://localhost:5173
-    cd ${appRel} && npm run doctor     # is everything set up?
-
-Read the app's rules first: ${appRel}/AGENTS.md (golden rule 1: a filed quarter never changes;
-corrections are booked in the open quarter with \`corrects:\` and declared on a form 0535).
-
-What goes where:
-- Code, generic process rules, public vendor facts: the app.
-- Anything naming this company's accounts, amounts, customers, suppliers or the owner's
-  decisions: here (knowledge/, this file).
-
-Company notes:
-- (add what an agent should know about this company)
-`;
-}
-
-export function planWorkspace(input: InitInput, chart: Chart, root: string, appRoot: string): Plan {
+/**
+ * The company's repository (ADR 0013): its agent files at the root, the books in
+ * vanilla-accounting/ with the folders of the fiscal year `year`.
+ */
+export function planWorkspace(input: InitInput, chart: Chart, year = new Date().toISOString().slice(0, 4)): Plan {
   const bankAccounts = bankAccountsOf(input);
   const accounts = accountsOf(input, chart);
-  const statementDirs = [...new Set(bankAccounts.filter((b) => b.statements).map((b) => `bank-statements/${b.bank}`))];
-  const kept = ['receipts', 'filings', ...statementDirs];
-  const appRel = relative(root, appRoot) || '.';
+  const app = (p: string) => `${APP_FOLDER}/${p}`;
+  const yearDir = (p: string) => app(`transactional-data/${year}/${p}`);
+  const statementDirs = [...new Set(bankAccounts.filter((b) => b.statements).map((b) => yearDir(`bank-statements/${b.bank}`)))];
+  const kept = [yearDir('receipts'), yearDir('filings'), ...statementDirs];
   return {
-    dirs: [...kept, 'beleg-import', 'data'],
+    dirs: [...kept, app('beleg-import'), app('data')],
     files: [
       ...kept.map((d): [string, string] => [`${d}/.gitkeep`, '']),
-      ...KNOWLEDGE_TEMPLATES,
-      ['accounts.json', JSON.stringify(accounts, null, 2) + '\n'],
-      ['books.json', JSON.stringify({ receipts: [], transactions: [], mappings: [], bankStatements: [], config: {} }, null, 2) + '\n'],
-      ['mail.yaml', MAIL_YAML],
-      ['AGENTS.md', agentsMd(input, appRel)],
+      ...KNOWLEDGE_TEMPLATES.map(([path, text]): [string, string] => [app(path), text]),
+      [app('master-data/accounts.json'), JSON.stringify(accounts, null, 2) + '\n'],
+      [app('ledger.json'), JSON.stringify({ schema: BOOKS_SCHEMA, config: {} }, null, 2) + '\n'],
+      [app('sources/README.md'), SOURCES_README],
+      [app('AGENTS.md'), withSection(undefined)],
+      [app('CLAUDE.md'), withAgentsImport(undefined)],
+      [app(`${OUTPUT_DIR}/.gitignore`), '*\n'],
+      ['AGENTS.md', repositoryAgents(input.name)],
       ['CLAUDE.md', '@AGENTS.md\n'],
       ['.gitignore', GITIGNORE],
-      [MANIFEST_FILE, manifestYaml(input, bankAccounts)],
+      ['.gitattributes', GITATTRIBUTES],
+      [app(MANIFEST_FILE), manifestYaml(input, bankAccounts)],
     ],
   };
 }

@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { simpleParser, type ParsedMail } from 'mailparser';
 import { SMTPServer } from 'smtp-server';
 import { issue } from '../src/invoices/rules.js';
@@ -54,7 +54,7 @@ before(async () => {
   withIssuedInvoice(api.root);
 });
 after(async () => {
-  api?.stop();
+  await api?.stop();
   await new Promise<void>((resolve) => smtp.close(resolve));
 });
 
@@ -65,9 +65,9 @@ function withIssuedInvoice(root: string): void {
     customerId: 'cu_m', date: '2026-06-01', currency: 'CHF' as const, language: 'de' as const, comments: [], lines: [{ text: 'Leistung', quantity: 1, price: 100, vatRate: 8.1 as const }] };
   const sender = { name: 'Muster', uid: 'CHE-123.456.789', address: { street: 'Weg', postcode: '8000', town: 'Zürich', country: 'CH' }, payTo: { account: '1021', iban: 'CH6580808000000000001' } };
   const issued = issue(draft, { customer: { id: 'cu_m', createdAt: '', origin: 'manual', deleted: false, ...customer }, sender, layout: DEFAULT_LAYOUT, invoices: [], now: '2026-06-01T09:00:00Z' });
-  const book: InvoiceBook = { schema: 1, customers: [], invoices: [{ ...issued, pdf: { file: 'invoices/2026-001.pdf', sha256: sha(PDF) } }], sent: [] };
-  mkdirSync(join(root, 'invoices'));
-  writeFileSync(join(root, 'invoices/2026-001.pdf'), PDF);
+  const book: InvoiceBook = { schema: 1, customers: [], invoices: [{ ...issued, pdf: { file: 'transactional-data/2026/invoices/2026-001.pdf', sha256: sha(PDF) } }], sent: [] };
+  mkdirSync(join(root, 'transactional-data/2026/invoices'), { recursive: true });
+  writeFileSync(join(root, 'transactional-data/2026/invoices/2026-001.pdf'), PDF);
   writeFileSync(join(root, 'invoices.json'), JSON.stringify(book));
 }
 
@@ -92,7 +92,7 @@ test('an invoice by e-mail: the stored PDF byte for byte, recorded with channel,
   const res = await api.send('POST', '/api/invoices/in_m/send', { email: { to: 'chefin@bistro.example', subject: 'Rechnung 2026-001 · Muster GmbH', body: 'Guten Tag\n\nIm Anhang finden Sie Rechnung 2026-001.' } });
   assert.equal(res.status, 200, String(res.json.error));
   const doc = res.json as unknown as SentDocument;
-  assert.deepEqual([doc.kind, doc.channel, doc.to, doc.file, doc.sha256], ['invoice', 'email', 'chefin@bistro.example', 'invoices/2026-001.pdf', sha(PDF)]);
+  assert.deepEqual([doc.kind, doc.channel, doc.to, doc.file, doc.sha256], ['invoice', 'email', 'chefin@bistro.example', 'transactional-data/2026/invoices/2026-001.pdf', sha(PDF)]);
   assert.ok(doc.messageId && doc.sentAt);
   const { rcpt, mail } = inbox.at(-1)!;
   assert.deepEqual(rcpt, ['chefin@bistro.example']);
@@ -130,10 +130,11 @@ test('a reminder and a cancellation notice by e-mail; a refused notice leaves no
   assert.equal(sha(got.attachments[0].content), sent.sha256, 'the attachment is the reminder as stored');
   assert.equal(sha(readFileSync(join(api.root, sent.file))), sent.sha256);
 
-  const files = readdirSync(join(api.root, 'invoices/sent')).length;
+  const sentDir = join(api.root, dirname(sent.file));
+  const files = readdirSync(sentDir).length;
   const refused = await api.send('POST', '/api/invoices/in_m/cancel', { reason: 'Doppelt', notify: true, email: { to: 'abgelehnt@bistro.example', subject: 's', body: 'b' } });
   assert.equal(refused.status, 502);
-  assert.equal(readdirSync(join(api.root, 'invoices/sent')).length, files, 'the printed notice is removed again');
+  assert.equal(readdirSync(sentDir).length, files, 'the printed notice is removed again');
   const book = JSON.parse(readFileSync(join(api.root, 'invoices.json'), 'utf8')) as InvoiceBook;
   assert.ok(!('cancelled' in book.invoices[0] && book.invoices[0].cancelled), 'not cancelled');
 

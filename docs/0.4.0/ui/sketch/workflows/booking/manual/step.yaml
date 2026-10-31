@@ -1,0 +1,13 @@
+label: { de: Von Hand buchen, en: Book by hand, fr: …, it: … }
+by: person
+reads: [transaction, entries]
+emits: [entries]
+task:
+  title: { de: "{transaction.counterparty} {transaction.amount}: Konto wählen", en: "…" }
+  why: { de: "{reason}", en: "{reason}" }
+  do: { open-item: transaction }
+  due: end-of-period
+  remind: [morning-summary]
+outcomes:
+  done: book
+  skip: end

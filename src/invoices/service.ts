@@ -5,11 +5,13 @@
  * given twice and nothing saves over another change.
  */
 import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { parseUid } from '../workspace/uid.js';
 import { extname, join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
-import { defaultTexts, issuedSheet, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
+import { receiptFile, type Books } from '../books/store.js';
+import { defaultTexts, issuedIntro, issuedSheet, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
 import {
-  INVOICE_CURRENCIES, INVOICE_LANGUAGES, UNITS, VAT_RATES, DEFAULT_LAYOUT,
+  INVOICE_CURRENCIES, INVOICE_LANGUAGES, UNITS, DEFAULT_LAYOUT,
   type Comment, type Customer, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent,
   type InvoiceLine, type Issued, type Reminder, type SentDocument, type SentKind,
 } from './model.js';
@@ -23,6 +25,10 @@ import { loadInvoices, newEnvelope, readPdf, sha256, storePdf, updateInvoices, w
 import type { PaymentContext, PaymentOutcome } from './payments.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { TEXTS } from './texts.js';
+import { invoiceRates, invoicing } from '../engines/index.js';
+import { openItemAccounts } from '../accounting/tax-point.js';
+import { heldByReconciliation } from '../books/reconcile.js';
+import { accountsOf } from '../workspace/reads.js';
 
 export interface Printer {
   pdf(d: SheetData, at: string): Promise<Rendered & { pdf: Buffer }>;
@@ -74,15 +80,15 @@ export function findInvoice(book: InvoiceBook, idOrNumber: string): Invoice | un
 
 const isText = (v: unknown): v is string => typeof v === 'string';
 const isDate = (v: unknown): v is string => isText(v) && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
-const bad = (msg: string): never => { throw new InvoiceRuleError('incomplete', msg); };
+const bad = (msg: string, missing?: Missing[]): never => { throw new InvoiceRuleError('incomplete', msg, missing); };
 
 function parseLines(v: unknown): InvoiceLine[] {
   if (!Array.isArray(v)) return bad('lines muss eine Liste sein.');
   return v.map((raw, i) => {
     const l = (raw ?? {}) as Record<string, unknown>;
-    if (!isText(l.text)) bad(`Position ${i + 1}: text fehlt.`);
-    if (typeof l.quantity !== 'number' || typeof l.price !== 'number') bad(`Position ${i + 1}: quantity und price sind Zahlen.`);
-    if (!VAT_RATES.includes(l.vatRate as never)) bad(`Position ${i + 1}: vatRate ist einer von ${VAT_RATES.join(', ')}.`);
+    if (!isText(l.text)) bad(`Position ${i + 1}: text fehlt.`, [{ field: 'line.text', line: i }]);
+    if (typeof l.quantity !== 'number' || typeof l.price !== 'number') bad(`Position ${i + 1}: quantity und price sind Zahlen.`, [{ field: 'line.quantity', line: i }]);
+    if (!invoiceRates().includes(l.vatRate as number)) bad(`Position ${i + 1}: vatRate ist einer von ${invoiceRates().join(', ')}.`, [{ field: 'line.vatRate', line: i }]);
     if (l.unit !== undefined && !UNITS.includes(l.unit as never)) bad(`Position ${i + 1}: unit ist eine von ${UNITS.join(', ')}.`);
     if (l.account !== undefined && !/^\d{4}$/.test(String(l.account))) bad(`Position ${i + 1}: account ist ein Konto mit 4 Ziffern.`);
     return {
@@ -92,7 +98,7 @@ function parseLines(v: unknown): InvoiceLine[] {
   });
 }
 
-const DRAFT_FIELDS = ['customerId', 'date', 'dueDate', 'currency', 'language', 'subject', 'lines', 'intro', 'closing', 'exemption', 'settlement'] as const;
+const DRAFT_FIELDS = ['customerId', 'date', 'supplied', 'dueDate', 'currency', 'language', 'subject', 'lines', 'intro', 'closing', 'exemption', 'settlement'] as const;
 export type DraftPatch = Partial<Pick<InvoiceContent, (typeof DRAFT_FIELDS)[number]>>;
 
 /** A draft patch from a request body; `null` clears an optional field. */
@@ -103,9 +109,14 @@ export function parseDraftPatch(body: unknown, book: InvoiceBook): DraftPatch & 
   if (unknown.length) bad(`Unbekannte Felder: ${unknown.join(', ')}`);
   const out: DraftPatch & { clear: string[] } = { clear: [] };
   for (const [k, v] of Object.entries(b)) {
-    if (v === null && ['dueDate', 'subject', 'intro', 'closing', 'exemption', 'settlement'].includes(k)) { out.clear.push(k); continue; }
-    if (k === 'customerId') { if (!liveCustomers(book).some((c) => c.id === v)) bad('Kunde nicht gefunden.'); out.customerId = v as string; }
+    if (v === null && ['supplied', 'dueDate', 'subject', 'intro', 'closing', 'exemption', 'settlement'].includes(k)) { out.clear.push(k); continue; }
+    if (k === 'customerId') { if (!liveCustomers(book).some((c) => c.id === v)) bad('Kunde nicht gefunden.', [{ field: 'customer' }]); out.customerId = v as string; }
     else if (k === 'date' || k === 'dueDate') { if (!isDate(v)) bad(`${k} ist ein Datum JJJJ-MM-TT.`); out[k] = v as string; }
+    else if (k === 'supplied') {
+      const p = (v ?? {}) as Record<string, unknown>;
+      if (typeof v !== 'object' || !isDate(p.from) || (p.to !== undefined && (!isDate(p.to) || (p.to as string) < (p.from as string))) || Object.keys(p).some((x) => x !== 'from' && x !== 'to')) bad('supplied ist { from, to? }, Daten JJJJ-MM-TT, to nicht vor from.');
+      out.supplied = { from: p.from as string, ...(p.to !== undefined && p.to !== p.from ? { to: p.to as string } : {}) };
+    }
     else if (k === 'currency') { if (!INVOICE_CURRENCIES.includes(v as never)) bad('currency ist CHF oder EUR.'); out.currency = v as InvoiceContent['currency']; }
     else if (k === 'language') { if (!INVOICE_LANGUAGES.includes(v as never)) bad(`language ist eine von ${INVOICE_LANGUAGES.join(', ')}.`); out.language = v as InvoiceContent['language']; }
     else if (k === 'lines') out.lines = parseLines(v);
@@ -123,13 +134,18 @@ export function parseCustomer(body: unknown, partial: boolean): Partial<Customer
   const unknown = Object.keys(b).filter((k) => !known.includes(k));
   if (unknown.length) bad(`Unbekannte Felder: ${unknown.join(', ')}`);
   const out: Partial<CustomerFields> = {};
-  if (b.name !== undefined || !partial) { if (!isText(b.name) || !b.name.trim()) bad('name fehlt.'); out.name = (b.name as string).trim(); }
+  if (b.name !== undefined || !partial) { if (!isText(b.name) || !b.name.trim()) bad('name fehlt.', [{ field: 'customer.name' }]); out.name = (b.name as string).trim(); }
   for (const k of ['attn', 'vatId', 'email'] as const) if (b[k] !== undefined) { if (!isText(b[k])) bad(`${k} ist ein Text.`); out[k] = (b[k] as string).trim(); }
+  // A Swiss UID carries a check digit (r8c-18): a typo is caught here; a foreign VAT number is any text.
+  if (out.vatId && /^CHE/i.test(out.vatId)) {
+    const parsed = parseUid(out.vatId.replace(/\s*(MWST|TVA|IVA|VAT)$/i, ''));
+    if ('error' in parsed) throw new InvoiceRuleError('uid', parsed.error);
+  }
   if (b.language !== undefined || !partial) { if (!INVOICE_LANGUAGES.includes(b.language as never)) bad(`language ist eine von ${INVOICE_LANGUAGES.join(', ')}.`); out.language = b.language as CustomerFields['language']; }
   if (b.paymentTermsDays !== undefined) { if (!Number.isInteger(b.paymentTermsDays) || (b.paymentTermsDays as number) < 0) bad('paymentTermsDays ist eine ganze Zahl von Tagen.'); out.paymentTermsDays = b.paymentTermsDays as number; }
   if (b.address !== undefined || !partial) {
     const a = (b.address ?? {}) as Record<string, unknown>;
-    if (!isText(a.postcode) || !isText(a.town) || !isText(a.country) || !/^[A-Z]{2}$/.test(a.country)) bad('address braucht postcode, town und country (zwei Buchstaben, CH, DE, …).');
+    if (!isText(a.postcode) || !isText(a.town) || !isText(a.country) || !/^[A-Z]{2}$/.test(a.country)) bad('address braucht postcode, town und country (zwei Buchstaben, CH, DE, …).', [{ field: 'customer.address' }]);
     const address: CustomerFields['address'] = { postcode: a.postcode as string, town: a.town as string, country: a.country as string };
     for (const k of ['street', 'number', 'line2', 'state'] as const) if (a[k] !== undefined) { if (!isText(a[k])) bad(`address.${k} ist ein Text.`); address[k] = a[k] as string; }
     out.address = address;
@@ -226,12 +242,12 @@ export function issueInvoice(ws: Workspace, id: string, opts: { now?: string; pr
     const ctx = invoicingContext(ws);
     const customer = liveCustomers(book).find((c) => c.id === draft.customerId);
     const texts = defaultTexts(ctx, draft.kind, draft.language, customer?.paymentTermsDays ?? 30);
-    const frozen: Draft = { ...draft, intro: draft.intro ?? texts.intro, closing: draft.closing ?? texts.closing };
+    const frozen: Draft = { ...draft, intro: issuedIntro(texts.salutation, draft.intro ?? texts.intro), closing: draft.closing ?? texts.closing };
     const issued = issue(frozen, { customer, sender: senderFor(ctx, draft.currency), layout: ctx.settings?.layout ?? DEFAULT_LAYOUT, invoices: liveInvoices(book), now });
     const printed = await (opts.printer ?? chromium).pdf(issuedSheet(book, issued as Issued, logoSrc(ws, issued.layout.logo)), now);
     return commit(ws, draft.id, draft, (fresh, at) => {
       if (nextNumberTaken(fresh, issued.number)) throw new InvoiceRuleError('changed', `Die Nummer ${issued.number} wurde inzwischen vergeben; bitte erneut ausstellen.`);
-      const done: Issued = { ...issued, pdf: storePdf(ws, `${issued.number}.pdf`, printed.pdf) };
+      const done: Issued = { ...issued, pdf: storePdf(ws, now.slice(0, 4), `${issued.number}.pdf`, printed.pdf) };
       fresh.invoices[at] = done;
       return done;
     });
@@ -292,7 +308,7 @@ async function printOwnDocument(ws: Workspace, inv: Issued, kind: SentKind, shee
   const env = newEnvelope('sd', now);
   const printed = await printer.pdf(sheet, now);
   const title = sentTitle(inv, kind, level);
-  const pdf = storePdf(ws, `sent/${env.id}.pdf`, printed.pdf);
+  const pdf = storePdf(ws, now.slice(0, 4), `sent/${env.id}.pdf`, printed.pdf);
   let delivered: Awaited<ReturnType<Deliver>> | undefined;
   try {
     delivered = deliver && await deliver({ filename: `${title.replace(/[/\\:*?"<>|]/g, '-')}.pdf`, pdf: printed.pdf });
@@ -406,17 +422,21 @@ export function paymentContext(ws: Workspace): PaymentContext | undefined {
     bankAccounts: ws.bankAccounts,
     revenueAccount: s.revenueAccount,
     ...(s.feeAccount ? { feeAccount: s.feeAccount } : {}),
+    openItems: openItemAccounts((accountsOf(ws) as Array<{ number?: string }>).flatMap((a) => (a.number ? [String(a.number)] : []))),
     fx,
     pdfOf: (inv) => readPdf(ws, inv.pdf),
     receiptId: (pdf) => sha256(pdf).slice(0, 16),
     indexedAt: () => new Date().toISOString(),
+    held: heldByReconciliation,
   };
 }
 
-/** Files the invoice PDFs that became receipts under receipts/, once. */
-export function fileReceipts(ws: Workspace, files: PaymentOutcome['files']): void {
+/** Files the invoice PDFs that became receipts of `books` under their year's receipts/, once. */
+export function fileReceipts(ws: Workspace, books: Books, files: PaymentOutcome['files']): void {
   for (const f of files) {
-    const path = join(ws.paths.receipts, f.filename);
+    const receipt = books.receipts.find((r) => r.filename === f.filename);
+    if (!receipt) throw new Error(`${f.filename}: no receipt of the books names it`);
+    const path = receiptFile(ws, books, receipt);
     if (!existsSync(path)) writeAtomic(path, f.pdf);
   }
 }

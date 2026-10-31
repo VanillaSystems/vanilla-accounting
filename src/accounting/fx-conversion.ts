@@ -5,6 +5,7 @@
  */
 import type { JournalEntry } from '../types/index.js';
 import { chfAmount } from './ledger.js';
+import { agreedBasis, baseCurrency } from '../engines/index.js';
 
 /** reference/estv-daily-rates-<year>.json as `npm run fetch-rates` writes it. */
 export interface EstvRateTable {
@@ -62,6 +63,15 @@ export function paymentDateOf(entry: JournalEntry, txDates: ReadonlyMap<string, 
   return txDates.get(entry.transactionRef) ?? txDates.get(entry.transactionRef.split('~')[0]) ?? entry.date;
 }
 
+/**
+ * The day whose rate converts an entry (MWSTV Art. 45 Abs. 1: when the tax arises): on the cash
+ * basis the payment's, on the agreed basis the entry's own date, which is its document's for a
+ * line on an open item and the payment's for the settlement (src/accounting/tax-point.ts).
+ */
+export function rateDateOf(entry: JournalEntry, txDates: ReadonlyMap<string, string>): string {
+  return agreedBasis() ? entry.date : paymentDateOf(entry, txDates);
+}
+
 /** Whether the stored rate is the ESTV sell rate of the payment date. */
 export type RateCheck =
   | { kind: 'estv'; estv: EstvRate }
@@ -83,7 +93,7 @@ export interface Conversion {
 /** Undefined for a CHF entry. */
 export function conversionOf(entry: JournalEntry, paymentDate: string, rates: EstvRates): Conversion | undefined {
   const currency = entry.exchangeCurrency;
-  if (!currency || currency === 'CHF') return undefined;
+  if (!currency || currency === baseCurrency()) return undefined;
   const estv = rates.on(currency, paymentDate);
   const check: RateCheck = !estv ? { kind: 'unknown' } : sameRate(entry.exchangeRate, estv.rate) ? { kind: 'estv', estv } : { kind: 'differs', estv };
   return { currency, amount: entry.amount, rate: entry.exchangeRate, chf: chfAmount(entry), paymentDate, check };

@@ -1,0 +1,15 @@
+balance:
+  assets:
+    - { title: Fixed assets, from: "0000", to: "1000" }
+    - { title: Current assets, from: "1000", to: "2000" }
+  liabilities:
+    - { title: Equity, from: "2000", to: "3000", openResult: Result of the year }
+    - { title: Debt, from: "3000", to: "4000" }
+income:
+  revenue: { title: Sales, from: "4000", to: "5000" }
+  costOfGoods: { title: Goods, from: "5000", to: "6000" }
+  operatingExpenses: { title: Expenses, from: "6000", to: "7000" }
+  otherIncome: { title: Other income, accounts: [] }
+  otherExpenses: { title: Other expenses, from: "7000", to: "8000" }
+  extraordinaryItems: { title: Extraordinary, accounts: [] }
+vat: gross

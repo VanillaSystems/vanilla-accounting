@@ -1,0 +1,9 @@
+bankAccounts:
+  byCurrency: { XXX: "1800" }
+  nextFree: { bank: 1810, card: 3510 }
+  byClass:
+    "1": { type: asset, line: cash }
+    otherwise: { type: liability, line: debt }
+owner:
+  otherwise: { account: "1890", label: Owner }
+answers: { payouts: [], imports: [] }

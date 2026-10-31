@@ -14,7 +14,7 @@
 .ivacts { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
 .ivacts .dl.inline { margin-left: auto; }
 .btn.danger { color: var(--warn); }
-.btn.primary.danger { background: var(--warn); color: #fff; }
+.btn.primary.danger { background: var(--warn); border-color: var(--warn); color: var(--on-fill); }
 .status .ivmissing, .status .ivpay { margin-top: 8px; }
 .status .ivpay { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
 .linked .m { color: var(--muted); font-size: 12px; }
@@ -55,6 +55,7 @@
 .isend .lkr textarea, .idlg .ibody .lkr textarea { font: 12.5px "Instrument Sans"; padding: 6px 8px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); width: 100%; box-sizing: border-box; resize: vertical; }
 .lkr { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; align-items: center; }
 .lkr.top { align-items: start; }
+.lkpay { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; } .lkpay select { max-width: 100%; }
 .lkr > span:first-child { color: var(--muted); }
 .lkr select, .lkr textarea, .lkr > input { font: 12.5px "Instrument Sans"; padding: 4px 8px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); width: 100%; box-sizing: border-box; }
 .lkr input.mono { font-family: "Geist Mono"; }
@@ -70,8 +71,8 @@
 .lklogo input[type=file] { display: none; }
 .lklogo label { cursor: pointer; }
 .lkfoot { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; }
-.lkpage { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(0, 1.25fr); gap: 32px; align-items: start; }
-@container (max-width: 760px) { .lkpage { grid-template-columns: minmax(0, 1fr); } }
+.lkpage { display: grid; grid-template-columns: minmax(240px, .85fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@container (max-width: 560px) { .lkpage { grid-template-columns: minmax(0, 1fr); } }
 .lkprevw { position: sticky; top: 0; }
 .ivhint { font-size: 12px; margin: 6px 0 0; }
 .ivsent { display: grid; gap: 2px; }
@@ -129,3 +130,13 @@
 .idlg .cform .cf input:not([type]) { width: 100%; text-align: left; }
 .cform .cf.err input { border-color: var(--warn); }
 .cform .cf em { font-style: normal; color: var(--warn); margin-left: 4px; }
+.invsetup { display: grid; gap: 12px; max-width: 520px; }
+.invsetup label { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.invsetup select, .invsetup input { height: 32px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; font-size: 13px; }
+.invsetup input { width: 90px; }
+.invsetup .btn { justify-self: start; }
+.invsetup input.wide { width: 100%; }
+
+/* Offen: a second currency beside the CHF sum (r8c-9). */
+.vresult b .also { font-size: 16px; color: var(--muted); margin-left: 6px; }
+.row.inv .a small.m { font-size: 11px; }

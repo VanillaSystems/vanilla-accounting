@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
+  filingKeyOf,
   ALL, addDays, derivePeriod, localToday, parsePeriod, parseSwissDate, rangeToken,
   type IsoDate, type Period, type RelativePreset,
 } from '../../accounting/periods.js';
@@ -7,6 +8,7 @@ import { formatDate } from '../lib/utils.js';
 import { monthLocale, t } from '../i18n/index.js';
 import { monthName, periodLabel, periodName } from '../lib/period-label.js';
 import { ICONS } from '../areas/icons.js';
+import { filing } from '../../engines/index.js';
 
 type Menu = 'root' | 'last' | 'todate' | 'quarters' | 'years';
 
@@ -94,7 +96,7 @@ export function PeriodPicker({ anchor, period, quarters, years, closedThrough, o
               <hr />
               <Item sub on={TO_DATE.includes(draft.token as RelativePreset) && draft.token !== 'ytd'} onClick={() => setMenu('todate')}>{t('period.menuToDate')}</Item>
               <Item sub on={LAST.includes(draft.token as RelativePreset)} onClick={() => setMenu('last')}>{t('period.menuLast')}</Item>
-              <Item sub on={draft.kind === 'quarter' && !quartersBegun(today).includes(draft.token)} onClick={() => setMenu('quarters')}>{t('period.menuQuarters')}</Item>
+              <Item sub on={draft.kind === 'quarter' && !quartersBegun(today).includes(draft.token)} onClick={() => setMenu('quarters')}>{t(filing().length === 'half' ? 'period.menuHalves' : 'period.menuQuarters')}</Item>
               <Item sub on={draft.kind === 'year'} onClick={() => setMenu('years')}>{t('period.menuYears')}</Item>
               <hr />
               {item('today', t('period.today'))}
@@ -134,10 +136,10 @@ export function PeriodPicker({ anchor, period, quarters, years, closedThrough, o
 }
 
 /** This year's quarters that have begun, the running one first. */
+/** This year's filing periods begun so far, newest first: quarters, or half years on a half-yearly setup. */
 function quartersBegun(today: IsoDate): string[] {
-  const year = today.slice(0, 4);
-  const current = Math.floor((Number(today.slice(5, 7)) - 1) / 3) + 1;
-  return Array.from({ length: current }, (_, i) => `${year}-Q${current - i}`);
+  const months = Array.from({ length: Number(today.slice(5, 7)) }, (_, i) => `${today.slice(0, 4)}-${String(i + 1).padStart(2, '0')}-01`);
+  return [...new Set(months.map((d) => filingKeyOf(d, filing().length)))].reverse();
 }
 
 const MENU_TITLE = { last: 'period.menuLast', todate: 'period.menuToDate', quarters: 'period.menuQuarters', years: 'period.menuYears' } as const;
@@ -159,7 +161,7 @@ function Item({ children, on, sub, filed, onClick }: { children: React.ReactNode
   return (
     <button type="button" className={`pi${on ? ' on' : ''}`} onClick={onClick} aria-current={on || undefined}>
       <span>{children}</span>
-      {filed && <span title={t('period.filed')}>{ICONS.lock}</span>}
+      {filed && <span data-tip={t('period.filed')}>{ICONS.lock}</span>}
       {sub && <span className="chev">›</span>}
     </button>
   );
@@ -187,7 +189,7 @@ function DateInput({ label, value, onDate, inputRef }: { label: string; value: I
       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
       aria-label={label}
       aria-invalid={invalid}
-      title={invalid ? t('period.invalidDate') : label}
+      data-tip={invalid ? t('period.invalidDate') : label}
       placeholder={t('period.dateFormat')}
       style={invalid ? { borderColor: 'var(--neg)' } : undefined}
     />

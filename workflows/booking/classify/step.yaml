@@ -1,0 +1,8 @@
+label: {"de": "Konto und MWST-Code wählen", "en": "Choose the accounts and the VAT code", "fr": "Choisir les comptes et le code TVA", "it": "Scegliere i conti e il codice IVA"}
+uses: accounting.expenses.classification
+reads: ["transaction", "books"]
+effects: ["runs.start"]
+emits: ["entries", "why"]
+outcomes: {"decided": "book", "undecided": "manual", "held": "done"}
+guide: booking.guide.yaml#classify
+knowledge: ["suppliers/*"]

@@ -11,10 +11,11 @@
  * Pure strings, no Node module: the UI imports it as it is.
  */
 import { SwissQRBill } from 'swissqrbill/svg';
-import { UNITS, VAT_RATES, type Address, type CustomerFields, type Exemption, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type InvoiceLine, type Sender } from './model.js';
-import { isQrBillIban, prettyReference } from './reference.js';
+import { UNITS, type Address, type CustomerFields, type Exemption, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type InvoiceLine, type Sender } from './model.js';
+import { isQrBillIban, prettyReference } from '../providers/qr-bill/reference.js';
 import { lineAmount, totals } from './rules.js';
 import { TEXTS, formatAmount, formatDate, formatQuantity, type InvoiceTexts } from './texts.js';
+import { chargesVat, invoiceRates, invoicing } from '../engines/index.js';
 
 /** Everything a sheet shows, whatever document it is: a draft, an issued invoice, a credit note, a reminder, a cancellation notice. */
 export interface SheetData {
@@ -25,12 +26,16 @@ export interface SheetData {
   /** A reminder's level: the title becomes "1. Mahnung · Rechnung …". */
   reminderLevel?: number;
   date: string;
+  /** The day or period of the supply when it is not the invoice date. */
+  supplied?: { from: string; to?: string };
   dueDate?: string;
   currency: InvoiceCurrency;
   customer: CustomerFields;
   sender: Omit<Sender, 'payTo'> & { payTo?: Sender['payTo'] };
   lines: InvoiceLine[];
   exemption?: Exemption;
+  /** A draft's greeting line above the intro (Firma › Rechnungslayout); an issued invoice has it in its intro. */
+  salutation?: string;
   intro: string;
   closing: string;
   layout: InvoiceLayout;
@@ -61,7 +66,7 @@ export interface ScreenSheet {
     scope: 'draft' | 'texts';
     customers: Array<{ id: string; name: string }>;
     customerId?: string;
-    words: { newCustomer: string; chooseCustomer: string; addLine: string; removeLine: string; intro: string; closing: string; desc: string; noExemption: string };
+    words: { newCustomer: string; chooseCustomer: string; addLine: string; removeLine: string; intro: string; closing: string; desc: string; noExemption: string; supplied: string };
   };
 }
 
@@ -77,6 +82,8 @@ const editable = (key: string, html: string, ph = '', cls = '') =>
 const pick = (key: string, options: Array<[string, string]>, value: string) =>
   `<select class="ed edsel" data-ed="${esc(key)}">${options.map(([v, l]) => `<option value="${esc(v)}"${v === value ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
 const dmy = (iso: string) => iso.split('-').reverse().join('.');
+/** A day, or a period from – to. */
+export const suppliedText = (s: { from: string; to?: string }, date: (iso: string) => string): string => (s.to && s.to !== s.from ? `${date(s.from)} – ${date(s.to)}` : date(s.from));
 
 const countryName = (code: string, lang: InvoiceLanguage): string => {
   try { return new Intl.DisplayNames([lang], { type: 'region' }).of(code) ?? code; } catch { return code; }
@@ -98,7 +105,9 @@ export function addressLines(a: Address, lang: InvoiceLanguage): string[] {
   return out.filter(Boolean);
 }
 
-const oneLine = (a: Address) => `${[a.street, a.number].filter(Boolean).join(' ')}, ${a.postcode} ${a.town}`;
+/** The address on one line, its empty parts left out (a company not yet given its address). */
+export const oneLine = (a: Address): string => [[a.street, a.number].filter(Boolean).join(' '), `${a.postcode ?? ''} ${a.town ?? ''}`.trim()].filter(Boolean).join(', ');
+const withAddress = (name: string, a: Address, sep: string) => [name, oneLine(a)].filter(Boolean).join(sep);
 
 /** Where the money goes, and whether the QR-bill can carry it (a Swiss or Liechtenstein IBAN). */
 function payment(d: SheetData): { iban: string; qr: boolean } | undefined {
@@ -129,7 +138,9 @@ export function sheetBlocks(d: SheetData): Block[] {
   const draft = ed?.scope === 'draft';
   const n = (x: number) => formatAmount(x, d.language);
   const t = totals(d.lines);
-  const vatColumn = show.vatColumn || draft;
+  // A document without VAT (a firm not registered) prints no rate column, no VAT line and no net total: what an invoice shows, the firm owes. An issued document says so by its lines, a draft by the firm's setup.
+  const withVat = draft ? chargesVat() : d.lines.some((l) => l.vatRate > 0) || !!d.exemption;
+  const vatColumn = (show.vatColumn || draft) && withVat;
   const cols: Array<[string, string]> = [['d', L.desc], ...(show.quantity ? [['q', L.qty], ['p', L.price]] as Array<[string, string]> : []), ...(vatColumn ? [['v', L.vat]] as Array<[string, string]> : []), ['a', `${L.amount} ${d.currency}`]];
   const colgroup = `<colgroup>${cols.map(([k]) => `<col class="c${k}">`).join('')}</colgroup>`;
   const B: Block[] = [];
@@ -140,10 +151,13 @@ export function sheetBlocks(d: SheetData): Block[] {
   if (d.cancelled) B.push({ html: `<p class="cxnote">${esc(L.cancelledOn(formatDate(d.cancelled.date, d.language), d.cancelled.reason))}</p>` });
   const meta = [
     `<span>${L.date} ${date('date', d.date)}</span>`,
+    draft ? `<span>${L.supplied} ${editable('supplied', d.supplied ? esc(suppliedText(d.supplied, dmy)) : '', ed.words.supplied)}</span>`
+      : d.supplied ? `<span>${L.supplied} ${esc(suppliedText(d.supplied, (iso) => formatDate(iso, d.language)))}</span>` : '',
     d.kind === 'credit-note' && d.credit ? `<span>${L.forInvoice} ${esc(d.credit.number)}</span>` : d.dueDate ? `<span>${L.due} ${date('dueDate', d.dueDate)}</span>` : '',
     show.customerVatId && d.customer.vatId && d.customer.address.country !== 'CH' ? `<span>${L.yourVat} ${esc(d.customer.vatId)}</span>` : '',
   ].join('');
   B.push({ html: `<h3>${esc(sheetTitle(d, L))} ${d.number ? esc(d.number) : `<span class="draftno">${L.draft}</span>`}</h3><div class="meta">${meta}</div>` });
+  if (show.intro && d.salutation) B.push({ html: `<p class="intro salutation">${esc(d.salutation)}</p>` });
   if (show.intro) B.push(...texts('intro', d.intro));
   B.push({ html: `<table class="tb">${colgroup}<thead><tr>${cols.map(([k, x]) => `<th class="${k === 'd' ? '' : 'r'}">${esc(x)}</th>`).join('')}</tr></thead></table>`, head: true });
   d.lines.forEach((l, k) => {
@@ -153,7 +167,7 @@ export function sheetBlocks(d: SheetData): Block[] {
         text: editable(`l:${k}:text`, esc(l.text), ed.words.desc, 'blocked'),
         qty: `${editable(`l:${k}:quantity`, esc(formatQuantity(l.quantity)))} ${pick(`l:${k}:unit`, [['', '–'], ...UNITS.map((u): [string, string] => [u, L.units[u]])], l.unit ?? '')}`,
         price: editable(`l:${k}:price`, n(l.price)),
-        rate: pick(`l:${k}:vatRate`, VAT_RATES.map((r): [string, string] => [String(r), `${r} %`]), String(l.vatRate)),
+        rate: pick(`l:${k}:vatRate`, invoiceRates().map((r): [string, string] => [String(r), `${r} %`]), String(l.vatRate)),
         remove: d.lines.length > 1 ? `<button type="button" class="edx scr" data-ia="rmline" data-k="${k}" title="${esc(ed.words.removeLine)}" aria-label="${esc(ed.words.removeLine)}">×</button>` : '',
       }
       : { text: esc(l.text), qty: esc(`${formatQuantity(l.quantity)}${unit}`), price: n(l.price), rate: `${l.vatRate} %`, remove: '' };
@@ -166,14 +180,16 @@ export function sheetBlocks(d: SheetData): Block[] {
     d.due.fee ? `<div><span>${L.fee}</span><span>${n(d.due.fee)}</span></div>` : '',
     `<div class="tot"><span>${L.openNow} ${d.currency}</span><span>${n(d.due.open)}</span></div>`,
   ].join('') : '';
-  B.push({ html: `<div class="sum"><div><span>${L.net}</span><span>${n(t.net)}</span></div>${rates}<div class="tot"><span>${L.total} ${d.currency}</span><span>${n(t.gross)}</span></div>${due}</div>` });
+  const net = withVat ? `<div><span>${L.net}</span><span>${n(t.net)}</span></div>` : '';
+  B.push({ html: `<div class="sum">${net}${rates}<div class="tot"><span>${L.total} ${d.currency}</span><span>${n(t.gross)}</span></div>${due}</div>` });
   if (d.kind === 'credit-note' && d.credit) {
     const c = d.credit, credit = -t.gross, open = Math.round((c.gross - c.paid) * 100) / 100;
     const back = Math.max(0, Math.round((credit - open) * 100) / 100), A = (x: number) => `${d.currency} ${n(x)}`;
     const settled = back > 0 ? (c.settlement === 'offset' ? L.offset(A(back)) : L.refund(A(back))) : L.stillOpen(c.number, A(Math.round((open - credit) * 100) / 100));
     B.push({ html: `<div class="settle"><div><span>${esc(L.ofInvoice(c.number, formatDate(c.date, d.language)))}</span><span>${n(c.gross)}</span></div>${c.paid ? `<div><span>${L.paidOn(formatDate(c.paidDate ?? c.date, d.language))}</span><span>${n(-c.paid)}</span></div>` : ''}<div><span>${L.creditLine}</span><span>${n(-credit)}</span></div></div><p class="settled">${esc(settled)}</p>` });
   }
-  if (draft && d.lines.some((l) => l.vatRate === 0)) {
+  // The reason for 0 % is a registered firm's: one that charges no VAT has none to give.
+  if (draft && withVat && d.lines.some((l) => l.vatRate === 0)) {
     const options: Array<[string, string]> = [...(d.exemption ? [] : [['', ed.words.noExemption] as [string, string]]), ['abroad', L.exemption.abroad], ['export', L.exemption.export]];
     B.push({ html: `<p class="abroad">${pick('exemption', options, d.exemption ?? '')}</p>` });
   } else if (d.exemption) B.push({ html: `<p class="abroad">${esc(L.exemption[d.exemption])}</p>` });
@@ -215,10 +231,12 @@ export function assembleSheets(d: SheetData, blocks: Block[], pagination: { page
   const n = pages.length + (qrOwnPage ? 1 : 0);
   const title = `${esc(sheetTitle(d, L))} ${d.number ? esc(d.number) : `<span class="draftno">${L.draft}</span>`}`;
   const s = d.sender;
-  const uid = `${esc(s.uid)} ${L.vatSuffix}`;
+  const withVat = d.screen?.edit?.scope === 'draft' || !d.number ? chargesVat() : d.lines.some((l) => l.vatRate > 0) || !!d.exemption;
+  const uid = withVat ? `${esc(s.uid)} ${L.vatSuffix}` : esc(s.uid);
+  const uidLabel = withVat ? L.vatNo : L.uidNo;
   const pageHead = (k: number) => `<div class="phead"><span>${esc(s.name)} · ${title}</span><span>${L.page(k, n)}</span></div>`;
   const footer = (k: number, qrHere = false) => show.footer && !qrHere
-    ? `<div class="foot"><span>${esc(s.name)}<br>${esc(oneLine(s.address))}</span>${s.payTo ? `<span>${L.bank}${s.payTo.bank ? `: ${esc(s.payTo.bank)}` : ''}<br>${L.iban} ${esc(prettyIban(s.payTo.iban))}</span>` : ''}<span>${L.vatNo}<br>${uid}</span>${n > 1 ? `<span class="pno">${L.page(k, n)}</span>` : ''}</div>`
+    ? `<div class="foot"><span>${[s.name, oneLine(s.address)].filter(Boolean).map(esc).join('<br>')}</span>${s.payTo ? `<span>${L.bank}${s.payTo.bank ? `: ${esc(s.payTo.bank)}` : ''}<br>${L.iban} ${esc(prettyIban(s.payTo.iban))}</span>` : ''}<span>${uidLabel}<br>${uid}</span>${n > 1 ? `<span class="pno">${L.page(k, n)}</span>` : ''}</div>`
     : n > 1 ? `<div class="foot bare"><span class="pno">${L.page(k, n)}</span></div>` : '';
   const style = `--ivf:${FONT_STACK[layout.font]};--iva:${layout.accent};--lh:${LOGO_MM[layout.logoSize]}mm`;
   const sheet = (cls: string, inner: string) => `<div class="a4 ${cls}" style="${style}" lang="${d.language}">${inner}</div>`;
@@ -229,9 +247,9 @@ export function assembleSheets(d: SheetData, blocks: Block[], pagination: { page
     ? pick('customer', [...(ed.customerId ? [] : [['', ed.words.chooseCustomer] as [string, string]]), ...ed.customers.map((c): [string, string] => [c.id, c.name]), ['+', `＋ ${ed.words.newCustomer}`]], ed.customerId ?? '')
     : esc(cust.name);
   const guide = d.screen?.windowGuide ? `<div class="winframe scr"><span>${esc(d.screen.windowGuide)}</span></div>` : '';
-  const to = `${guide}<div class="to${addr.length + (cust.attn ? 1 : 0) > 4 ? ' many' : ''}">${show.senderLine ? `<span class="sl">${esc(`${s.name} · ${oneLine(s.address)}`)}</span>` : ''}<span>${name}</span>${cust.attn ? `<span>${esc(cust.attn)}</span>` : ''}${addr.map((x) => `<span>${esc(x)}</span>`).join('')}</div>`;
+  const to = `${guide}<div class="to${addr.length + (cust.attn ? 1 : 0) > 4 ? ' many' : ''}">${show.senderLine ? `<span class="sl">${esc(withAddress(s.name, s.address, ' · '))}</span>` : ''}<span>${name}</span>${cust.attn ? `<span>${esc(cust.attn)}</span>` : ''}${addr.map((x) => `<span>${esc(x)}</span>`).join('')}</div>`;
   const logo = show.logo ? `<div class="logo pos-${layout.logoPosition} sz-${layout.logoSize}">${d.logoSrc ? `<img src="${esc(d.logoSrc)}" alt="${esc(s.name)}">` : `<span class="wordmark">${esc(s.name)}</span>`}</div>` : '';
-  const from = `<div class="from"><b>${esc(s.name)}</b><span>${esc(oneLine(s.address))}</span><span>${uid}</span></div>`;
+  const from = `<div class="from"><b>${esc(s.name)}</b>${oneLine(s.address) ? `<span>${esc(oneLine(s.address))}</span>` : ''}${s.uid ? `<span>${uid}</span>` : ''}</div>`;
   let h = '';
   pages.forEach((ids, i) => {
     const k = i + 1;

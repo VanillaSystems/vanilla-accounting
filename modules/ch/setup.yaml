@@ -1,0 +1,34 @@
+# The accounts a new workspace gets from the setup's answers (src/workspace/scaffold.ts), on the
+# chart of accounts.yaml.
+
+bankAccounts:
+  # The chart's bank account per currency; a further one takes the next free number of its range.
+  byCurrency: { CHF: "1020", EUR: "1021", USD: "1022" }
+  nextFree: { bank: 1023, card: 2101 }
+  # Where an added account goes, by the class of its number.
+  byClass:
+    "1": { type: asset, line: fluessige-mittel }
+    otherwise: { type: liability, line: kurzfristig-verzinslich }
+
+# The owner's private payments: the private account of an Einzelfirma, else a current account.
+owner:
+  Einzelfirma: { account: "2850", label: Privat }
+  otherwise: { account: "2451", label: Kontokorrent }
+
+# Accounts an answer adds to the chart.
+answers:
+  payouts:
+    accounts: ["1093", "6580"]
+    # A payout report's split when no rule names the provider (src/booking/classify.ts payoutDefault): the gross
+    # sales on the revenue account of what the firm sells (sells below), here when it sells more than one kind,
+    # at its sale code; the fees here, the code only where the form takes it.
+    sales: { otherwise: "3400" }
+    fees: { account: "6580", vat: I0 }
+  imports: ["4020", "4030", "4040"]
+
+# «Was verkauft ihr?» (src/workspace/sells.ts, #46): the default accounts of each kind, any combination.
+# Purchases: material for the firm's own products, goods bought for resale. Sales: each kind's revenue.
+sells:
+  made: { purchase: "4000", sales: "3000" }
+  traded: { purchase: "4200", sales: "3200" }
+  services: { sales: "3400" }

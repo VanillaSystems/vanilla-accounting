@@ -1,19 +1,18 @@
 /**
  * The casebook (examples/cases/) cannot drift from the engine: every case is booked into a copy
- * of each shipped demo workspace, and its declared Ziffern are what computeVatReport / figuresFromBooks
+ * of each shipped demo workspace, and its declared Ziffern are what vat().report / vat().figures
  * then add to its quarter. Selection (selectCases) and the classify prompt are tested on
  * synthetic transactions.
  */
 import { test } from 'node:test';
+import './support/jurisdiction.js';
 import assert from 'node:assert/strict';
 import { cpSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
-import { computeVatReport } from '../src/accounting/vat-report.js';
-import { figuresFromBooks } from '../src/accounting/return-figures.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
-import { loadBooks, mutateJournal } from '../src/books/store.js';
+import { loadBooks, PERSON, update } from '../src/books/store.js';
 import { classifyTransactions, type ClassifyDeps } from '../src/booking/classify.js';
 import {
   CASE_TOKEN_LIMIT, OWN_HISTORY_THRESHOLD, caseEntries, casePeriod, caseTokens, loadCaseChart, loadCases, selectCases, validateCase,
@@ -23,6 +22,7 @@ import type { BankTransaction, JournalEntry } from '../src/types/index.js';
 import { APP_ROOT, workspaceAt } from '../src/workspace/workspace.js';
 import { DEMO_ROOT, DEMO_ROOTS } from './support/workspace.js';
 import { inventoryMarkdown, minePatterns } from '../tools/cases/mine.js';
+import { vat } from '../src/engines/index.js';
 
 const cases = loadCases();
 const byId = (id: string) => cases.find((c) => c.id === id)!;
@@ -44,18 +44,21 @@ test('every case fits the prompt budget', () => {
   for (const c of cases) assert.ok(caseTokens(c) <= CASE_TOKEN_LIMIT, `${c.id}: ~${caseTokens(c)} tokens`);
 });
 
-for (const demo of DEMO_ROOTS) test(`booked into the books of ${demo.split('/').pop()}, each case adds exactly its declared Ziffern to its quarter`, () => {
+// The cases are examples of the effective method: a demo of another kind of firm books none of them.
+const EFFECTIVE_DEMOS = DEMO_ROOTS.filter((d) => { const v = workspaceAt(d).company.vat; return v.registered && v.method === 'effective'; });
+workspaceAt(DEMO_ROOT);
+for (const demo of EFFECTIVE_DEMOS) test(`booked into the books of ${demo.split('/').at(-2)}, each case adds exactly its declared Ziffern to its quarter`, () => {
   const dir = mkdtempSync(join(tmpdir(), 'belege-casebook-'));
   cpSync(demo, dir, { recursive: true });
   const books = loadBooks(workspaceAt(dir));
   const base = books.journalEntries.slice();
   const adjustments = books.config.vatAdjustments ?? [];
-  const figures = (entries: JournalEntry[], c: BookingCase) => figuresFromBooks(entries, casePeriod(c), adjustments);
+  const figures = (entries: JournalEntry[], c: BookingCase) => vat().figures(entries, casePeriod(c), adjustments);
 
   for (const c of cases) {
     books.journalEntries = base.slice();
     // The period lock of the demo (Q1 filed) holds: a case only ever adds to an open quarter.
-    mutateJournal(books, (b) => { b.journalEntries.push(...caseEntries(c)); });
+    update(books, PERSON, (b) => { b.journalEntries.push(...caseEntries(c)); });
     const before = figures(base, c);
     const after = figures(books.journalEntries, c);
     const delta: Record<string, number> = {};
@@ -72,7 +75,7 @@ for (const demo of DEMO_ROOTS) test(`booked into the books of ${demo.split('/').
     assert.ok(Math.abs(after.payable - before.payable - c.payable) < 0.011, `${c.id}: payable moved ${after.payable - before.payable}, the case says ${c.payable}`);
 
     // The per-entry report (MWST tab, npm run vat-report) agrees on the source Ziffern.
-    const rep = (entries: JournalEntry[]) => Object.fromEntries(computeVatReport(entries, casePeriod(c), adjustments).ziffern.map((z) => [z.number, z.amount]));
+    const rep = (entries: JournalEntry[]) => Object.fromEntries(vat().report(entries, casePeriod(c), adjustments).ziffern.map((z) => [z.number, z.amount]));
     const [r0, r1] = [rep(base), rep(books.journalEntries)];
     for (const z of ['200', '220', '221', '400', '405', '415']) {
       assert.equal(Math.round(((r1[z] ?? 0) - (r0[z] ?? 0)) * 100) / 100, c.ziffern[z] ?? 0, `${c.id}: report Ziffer ${z}`);
@@ -91,7 +94,7 @@ test('validation catches a case that drifted from the engine or breaks a booking
   const correction = byId('correction-private-purchase');
   assert.match(validate({ ...correction, date: '2026-02-10' }).join('\n'), /dated in a later, open quarter/);
   assert.match(validate({ ...c, rules: ['no-such-rule'] }).join('\n'), /rule "no-such-rule" is in no processes/);
-  assert.match(validate({ ...c, lines: [{ ...c.lines[0], debit: '6999' }] }).join('\n'), /account 6999 is not in reference\/charts\/ch-kmu.yaml/);
+  assert.match(validate({ ...c, lines: [{ ...c.lines[0], debit: '6999' }] }).join('\n'), /account 6999 is not in modules\/ch\/accounts.yaml/);
 });
 
 // ─── Selection ────────────────────────────────────────────────────────────────
@@ -145,7 +148,7 @@ function classifyPrompt(journalRows: number, historicEntries = ''): Promise<stri
   } as unknown as Parameters<typeof classifyTransactions>[0];
   let prompt = '';
   const ask: ClassifyDeps['ask'] = async (p) => { prompt = p; return '{}'; };
-  const context = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries, vatCodes: '', bankAccounts: [], casebook: cases };
+  const context = { companyName: 'Test GmbH', chartOfAccounts: '', historicEntries, bankAccounts: [], casebook: cases };
   return classifyTransactions(books, [salary], { ask, fx, context }).then(() => prompt);
 }
 

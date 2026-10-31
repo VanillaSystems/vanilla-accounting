@@ -9,7 +9,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
-import type { Workspace } from '../workspace/workspace.js';
+import { yearPaths, type Workspace } from '../workspace/workspace.js';
 import { INVOICES_MIGRATIONS, INVOICES_SCHEMA, climb, schemaOf } from '../workspace/schema.js';
 import type { Envelope, InvoiceBook } from './model.js';
 
@@ -47,11 +47,12 @@ export function updateInvoices<T>(ws: Pick<Workspace, 'paths'>, fn: (book: Invoi
 export const sha256 = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex');
 
 /**
- * Stores a document's PDF under invoices/ and returns its path relative to the workspace and its
- * checksum. A file once written is never replaced: the same bytes again are fine, other bytes refused.
+ * Stores a document's PDF under invoices/ of `year`, the year it is issued or sent, and returns its
+ * path relative to the workspace and its checksum. A file once written is never replaced: the same
+ * bytes again are fine, other bytes refused.
  */
-export function storePdf(ws: Pick<Workspace, 'paths'>, name: string, pdf: Buffer): { file: string; sha256: string } {
-  const path = join(ws.paths.invoiceFiles, name);
+export function storePdf(ws: Pick<Workspace, 'paths'>, year: string, name: string, pdf: Buffer): { file: string; sha256: string } {
+  const path = join(yearPaths(ws.paths, year).invoices, name);
   if (existsSync(path) && !readFileSync(path).equals(pdf)) throw new Error(`${relative(ws.paths.root, path)} exists with other content; a sent document is never replaced.`);
   if (!existsSync(path)) writeAtomic(path, pdf);
   return { file: relative(ws.paths.root, path), sha256: sha256(pdf) };

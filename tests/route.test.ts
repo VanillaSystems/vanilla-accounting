@@ -16,11 +16,15 @@ const parse = (url: string) => {
 const CANONICAL = [
   '/receipts',
   '/receipts/3f2a9c01b7d4e5f6',
-  '/receipts?filter=offen&q=coop',
-  '/receipts?period=2026-Q3&filter=ohneDatum',
+  '/receipts?f=state_open&q=coop',
+  '/receipts?period=2026-Q3&f=state_noDate',
+  '/receipts?f=partner_fedex&f=partner_cu_amazon&f=over_100.5&f=from_2026-08-01',
+  '/journal?vat=I81&f=account_6510&f=who_rule',
   '/bank',
   '/bank/1021-2026-09',
   '/bank/1021-2026-09/ZKB-4711~2',
+  '/bank/files/1021/camt053_2026-09.xml',
+  '/bank/files/1021/Auszug%20September.xml',
   '/payments/ZKB-4711',
   '/journal',
   '/journal/M2026-001',
@@ -47,11 +51,28 @@ const CANONICAL = [
   '/invoices/sent',
   '/invoices/sent/d-42',
   '/invoices/new?customer=cu_17',
+  '/company/rules?payment=2026-08-12-a1',
   '/journal?period=2026-07-01_2026-09-30',
   '/journal?period=2026-09',
   '/journal?period=ytd',
   '/journal?period=all',
   '/receipts?q=a+b%26c',
+  '/automation',
+  '/automation/workflows',
+  '/automation/booking',
+  '/automation/booking/runs',
+  '/automation/booking/graph/classify',
+  '/automation/runs',
+  '/automation/runs/booking-1a2b3c4d',
+  '/automation/map',
+  '/automation/map/events',
+  '/automation/queue',
+  '/automation/tasks',
+  '/automation/tasks/booking-1a2b3c4d',
+  '/changes',
+  '/changes/3f2a9c0',
+  '/changes/draft/knowledge%2Frules%2Fbooking.guide.yaml',
+  '/changes/3f2a9c0/vanilla-accounting%2Fledger.json',
 ];
 
 test('every path of urls.md parses and formats back to itself', () => {
@@ -67,12 +88,28 @@ test('the routes the paths name', () => {
   assert.deepEqual(route('/receipts/3f2a9c01b7d4e5f6'), { area: 'receipts', id: '3f2a9c01b7d4e5f6' });
   assert.deepEqual(route('/bank/1021-2026-09/ZKB-4711~2'), { area: 'bank', statement: '1021-2026-09', payment: 'ZKB-4711~2' });
   assert.deepEqual(route('/payments/ZKB-4711'), { area: 'bank', payment: 'ZKB-4711' });
+  assert.deepEqual(route('/bank/files/1021/camt053_2026-09.xml'), { area: 'bank', file: '1021/camt053_2026-09.xml' }, 'a statement file whole (#208)');
   assert.deepEqual(route('/vat/405'), { area: 'vat', ziffer: '405' });
   assert.deepEqual(route('/vat/codes/I81'), { area: 'codes', code: 'I81' });
   assert.deepEqual(route('/reports/balance/1021'), { area: 'reports', report: 'balance', account: '1021' });
   assert.deepEqual(route('/company/banks'), { area: 'company', section: 'banks' });
   assert.deepEqual(route('/invoices/2026-006'), { area: 'invoices', view: 'list', id: '2026-006' });
   assert.deepEqual(route('/invoices/sent/d-42'), { area: 'invoices', view: 'sent', id: 'd-42' });
+  assert.deepEqual(route('/automation'), { area: 'automation', view: 'home' });
+  assert.deepEqual(route('/automation/runs'), { area: 'automation', view: 'runs' });
+  assert.deepEqual(route('/automation/workflows'), { area: 'automation', view: 'workflow', tab: 'graph' });
+  assert.deepEqual(route('/automation/booking/triggers'), { area: 'automation', view: 'workflow', workflow: 'booking', tab: 'triggers' });
+  assert.deepEqual(route('/automation/booking/graph/classify'), { area: 'automation', view: 'workflow', workflow: 'booking', tab: 'graph', step: 'classify' });
+  assert.deepEqual(route('/automation/runs/booking-1a2b'), { area: 'automation', view: 'run', run: 'booking-1a2b' });
+  assert.deepEqual(route('/automation/map/events'), { area: 'automation', view: 'map', map: 'events' });
+  assert.deepEqual(route('/automation/tasks/booking-1a2b'), { area: 'automation', view: 'tasks', run: 'booking-1a2b' });
+  assert.deepEqual(route('/changes/3f2a9c0'), { area: 'changes', commit: '3f2a9c0' });
+  assert.deepEqual(route('/changes/outside/mail.yaml'), { area: 'changes', commit: 'outside', file: 'mail.yaml' });
+});
+
+test('automation: the default tab leaves no segment, an unknown tab is the graph', () => {
+  assert.equal(formatLocation((parse('/automation/booking/graph') as { redirect: Location }).redirect), '/automation/booking');
+  assert.equal(formatLocation((parse('/automation/booking/nonsense') as { redirect: Location }).redirect), '/automation/booking');
 });
 
 test('the period leaves the parser as a Period, a range in either spelling', () => {
@@ -100,8 +137,11 @@ test('other spellings redirect to the canonical path', () => {
   assert.equal(to('/journal?q=x&vat=I81'), '/journal?vat=I81&q=x');
   assert.equal(to('/journal?period=2026-Q9'), '/journal');
   assert.equal(to('/invoices?status=whatever'), '/invoices');
-  assert.equal(to('/receipts?filter=linked'), '/receipts?filter=zugeordnet');
-  assert.equal(to('/receipts?filter=unlinked'), '/receipts?filter=offen');
+  assert.equal(to('/receipts?filter=linked'), '/receipts?f=state_linked');
+  assert.equal(to('/receipts?filter=unlinked'), '/receipts?f=state_open');
+  assert.equal(to('/receipts?filter=offen'), '/receipts?f=state_open');
+  assert.equal(to('/receipts?filter=ohneDatum&f=month_2026-08'), '/receipts?f=state_noDate&f=month_2026-08');
+  assert.equal(to('/receipts?f=Bad_x&f=nofield&f=state_open'), '/receipts?f=state_open');
 });
 
 test('old /<lang>/<period>/<tab> links redirect to what they named', () => {
@@ -109,8 +149,8 @@ test('old /<lang>/<period>/<tab> links redirect to what they named', () => {
     ['/de', '/receipts'],
     ['/fr/receipts', '/receipts'],
     ['/de/2026-Q3/receipts?receipt=3f2a9c01b7d4e5f6', '/receipts/3f2a9c01b7d4e5f6?period=2026-Q3'],
-    ['/receipts?receipt=3f2a9c01b7d4e5f6&filter=linked&q=coop', '/receipts/3f2a9c01b7d4e5f6?filter=zugeordnet&q=coop'],
-    ['/de/2026-Q3/receipts?filter=unlinked', '/receipts?period=2026-Q3&filter=offen'],
+    ['/receipts?receipt=3f2a9c01b7d4e5f6&filter=linked&q=coop', '/receipts/3f2a9c01b7d4e5f6?f=state_linked&q=coop'],
+    ['/de/2026-Q3/receipts?filter=unlinked', '/receipts?period=2026-Q3&f=state_open'],
     ['/de/2026-Q3/transactions?tx=ZKB-4711', '/payments/ZKB-4711?period=2026-Q3'],
     ['/de/transactions', '/bank'],
     ['/it/2026-09/bank-statements?statement=zkb%2Fsept.pdf', '/bank?period=2026-09'],

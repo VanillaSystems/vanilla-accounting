@@ -3,33 +3,51 @@
  * invoicing), every filed return and seal by quarter, and each bank account's last balance
  * as its statement shows it. The API answers it at /api/workspace; the audit export writes it.
  */
+import { readBankStatements } from '../workspace/bank-statements.js';
+import { parseIban } from '../workspace/banks.js';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { QuarterKey } from '../types/index.js';
-import type { Workspace } from '../workspace/workspace.js';
+import { partDirs, type Workspace } from '../workspace/workspace.js';
 import type { Seal } from './seal.js';
 import { sealsOf, type Books } from './store.js';
 import { bankBalances } from './year-close.js';
+import { appTime, appVersion } from '../version.js';
 
 /** A quarter's seal file as checked against today's books. */
 export type SealView =
   | ({ status: 'intact' } & Pick<Seal, 'quarter' | 'through' | 'sha256' | 'sealedAt' | 'records'>)
   | { status: 'broken'; quarter: QuarterKey; problem: string };
 
-export interface CompanyInfo extends Pick<Workspace, 'company' | 'bankAccounts' | 'invoicing' | 'outgoingMail'> {
-  /** The quarters whose return lies in filings/<year>/ as filed with the ESTV. */
+export interface CompanyInfo extends Pick<Workspace, 'company' | 'bankAccounts' | 'invoicing' | 'outgoingMail' | 'dimensions'> {
+  /** The quarters whose return lies in transactional-data/<year>/filings/ as filed with the ESTV. */
   filed: QuarterKey[];
   seals: SealView[];
   /** The latest balance a statement shows, per ledger account, in the account's currency. */
   statementBalances: Array<{ account: string; date: string; amount: number }>;
+  /** Per ledger account whose manifest line names no IBAN: the IBAN its read statements show (Firma › Bankkonten offers it). */
+  statementIbans: Record<string, string>;
+  /** The build of the app serving these books (src/version.ts), and how old it is. */
+  appVersion: string;
+  appTime?: { at: string; kind: 'built' | 'committed' };
+  /** The company's repository keeps a history: a file deleted from the books stays in it (#228). */
+  versioned?: true;
 }
 
 function filedQuarters(ws: Workspace): QuarterKey[] {
-  const dir = ws.paths.filings;
-  if (!existsSync(dir)) return [];
-  return readdirSync(dir).filter((y) => /^\d{4}$/.test(y)).flatMap((y) => readdirSync(join(dir, y))
-    .map((f) => /^mwst-ech0217-(\d{4}-Q[1-4])\.xml$/.exec(f)?.[1] as QuarterKey | undefined)
+  return partDirs(ws.paths, 'filings').flatMap((dir) => readdirSync(dir)
+    .map((f) => /^mwst-ech0217-(\d{4}-(?:Q[1-4]|H[12]))\.xml$/.exec(f)?.[1] as QuarterKey | undefined)
     .filter((q): q is QuarterKey => !!q)).sort();
+}
+
+function statementIbansOf(ws: Workspace): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of readBankStatements(ws)) {
+    if (f.status !== 'read' || f.account.iban || !f.statement.iban || out[f.account.account]) continue;
+    const iban = parseIban(f.statement.iban);
+    if (iban) out[f.account.account] = iban;
+  }
+  return out;
 }
 
 export function companyInfo(ws: Workspace, books: Books): CompanyInfo {
@@ -48,8 +66,13 @@ export function companyInfo(ws: Workspace, books: Books): CompanyInfo {
     bankAccounts: ws.bankAccounts,
     ...(ws.invoicing ? { invoicing: ws.invoicing } : {}),
     ...(ws.outgoingMail ? { outgoingMail: ws.outgoingMail } : {}),
+    ...(ws.dimensions?.length ? { dimensions: ws.dimensions } : {}),
     filed: filedQuarters(ws),
     seals,
     statementBalances: [...latest.values()],
+    statementIbans: statementIbansOf(ws),
+    appVersion: appVersion(),
+    ...(appTime() ? { appTime: appTime() } : {}),
+    ...(existsSync(join(ws.paths.repository, '.git')) ? { versioned: true as const } : {}),
   };
 }

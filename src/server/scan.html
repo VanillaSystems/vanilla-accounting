@@ -125,6 +125,16 @@
     const btnUp    = document.getElementById('btn-upload');
     const statusEl = document.getElementById('status');
 
+    // The Mac's QR code opens this page as /scan#token=…: the token is kept on the phone and the
+    // fragment removed, so it stays out of the history. Uploads carry it.
+    const TOKEN_KEY = 'vanilla.phoneToken';
+    const fromCode = new URLSearchParams(location.hash.slice(1)).get('token');
+    if (fromCode) {
+      try { localStorage.setItem(TOKEN_KEY, fromCode); } catch {}
+      history.replaceState(null, '', location.pathname);
+    }
+    const token = () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } };
+
     function capture() {
       input.value = '';
       input.click();
@@ -218,10 +228,11 @@
         const blob = doc.output('blob');
         const res  = await fetch('/api/upload', {
           method:  'POST',
-          headers: { 'Content-Type': 'application/pdf' },
+          headers: { 'Content-Type': 'application/pdf', ...(token() ? { Authorization: 'Bearer ' + token() } : {}) },
           body:    blob,
         });
 
+        if (res.status === 401) throw new Error('Nicht gekoppelt: den Code am Mac (Firma › Handy) mit der Kamera scannen.');
         if (!res.ok) throw new Error(await res.text());
         const { filename } = await res.json();
 

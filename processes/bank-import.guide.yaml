@@ -3,6 +3,43 @@
 process: bank-import
 
 steps:
+  read:
+    goal: Read a statement that comes without camt.053 (a PDF, a scan, a photo, a bank's CSV) into its movements and balances, checked to the cent.
+    rules:
+      - id: bnk-read-as-printed
+        when: the AI reads a statement PDF, scan or photo
+        then: every movement once, as printed (money out negative), the balances and carry-overs apart; it computes nothing, code checks opening + movements = closing and each page's carry-over
+        source: docs/0.4.0/intake.md
+      - id: bnk-read-gap
+        when: the check shows a gap
+        then: nothing is imported; the person corrects the line the gap's page points to (often a misread digit) until it adds up
+        source: docs/0.4.0/intake.md
+      - id: bnk-read-known
+        when: a line is a payment the books hold already (same account, day, direction, amount)
+        then: it is not added again; its camt.053 and the read statement are one payment
+        source: docs/0.4.0/intake.md
+      - id: bnk-read-structured
+        when: a statement PDF arrives for an account that has a camt.053 or a bank CSV in the books (#254)
+        then: it is kept as its statement without a question, whatever days it shows and whenever it comes; it is read only when its own words do not name the account and days, and «Bewegungen aus dem PDF einlesen» reads it on request
+        source: docs/0.4.0/intake.md
+      - id: bnk-read-asked
+        when: a statement PDF arrives for an account without camt.053 or CSV
+        then: it is kept as its statement at once and its question (read its movements in, or keep it as the statement alone) waits in the books with the table, answered in the drop dialog or under Kontoauszüge; the account's first camt.053 or CSV closes it as kept
+        source: docs/0.4.0/intake.md
+      - id: bnk-read-covered
+        when: a camt.053 or CSV of the account covers days of a statement read from a PDF
+        then: a line on those days is imported only as the payment the books hold of its day and amount, never as a new one (a value date or a day misread would double a payment); when they cover every day there is nothing to read in
+        source: docs/0.4.0/intake.md
+      - id: bnk-read-replaced
+        when: the account's first camt.053 or CSV arrives after movements were read from PDFs for its days
+        then: a read movement of the same day and amount is its payment, under the read's ref with the bank's references and IBANs, its bookings and receipt links kept, the payee deciding between equal amounts; every other read movement on the bank file's days or within seven days of a bank movement, and every bank movement within seven days of those, open or filed, goes into one reconciliation of the account that the person confirms as a whole (Kontoauszüge, «Abgleich bestätigen»), code proposing only pairs beyond doubt and never two payees that differ; each read movement is the same as one bank movement or a payment of its own, none by default; until confirmed no run books any of them and no period holding their days closes; a pair of an open read movement leaves the bank's movement with the read's bookings and links (for another amount the app's booking goes and the bank's is booked anew; a person's booking of the other amount is hers to change first); a filed read movement never changes, its bank twin is marked as booked there and only a difference is booked, to an account of the chart the person names; every movement takes part in one reconciliation only
+        source: docs/0.4.0/intake.md
+      - id: bnk-read-csv
+        when: a bank's CSV is dropped
+        then: the person names its columns once; the mapping is kept per account in knowledge/bank-csv.yaml and reads the next CSV of that header
+        source: docs/0.4.0/intake.md
+    precedents: []
+
   relink:
     goal: Re-attach journal entries and mappings whose transaction ref changed on re-import.
     rules:

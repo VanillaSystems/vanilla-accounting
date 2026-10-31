@@ -1,3 +1,4 @@
+import { baseCurrency } from '../../engines/index.js';
 export function formatDate(date: string | undefined): string {
   if (!date) return '—';
   try {
@@ -11,7 +12,7 @@ export function formatDate(date: string | undefined): string {
 
 export function formatAmount(amount: number | undefined, currency: string | undefined): string {
   if (amount === undefined) return '—';
-  const ccy = currency?.trim() || 'CHF';
+  const ccy = currency?.trim() || baseCurrency();
   try {
     return new Intl.NumberFormat('de-CH', { style: 'currency', currency: ccy }).format(amount);
   } catch {

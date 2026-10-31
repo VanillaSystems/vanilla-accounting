@@ -5,24 +5,29 @@
  */
 import { Fragment, useEffect, useState } from 'react';
 import './vat.css';
-import type { ReturnFigures } from '../../../accounting/index.js';
-import { localToday, openQuarter } from '../../../accounting/periods.js';
+import { localToday, booksOpenPeriod, inPeriod, type Period } from '../../../accounting/periods.js';
+import { salesWithoutVat } from '../../../accounting/sales-without-vat.js';
+import type { Index } from '../../../types/index.js';
+import { useWorkspace } from '../../hooks/use-workspace.js';
+import { at } from '../receipts/view.js';
 import type { RouteOf } from '../../shell/route.js';
 import { ListHead } from '../../shell/ListHead.js';
+import { WorkflowButtons } from '../../automation/marks.js';
 import { moveKey } from '../../shell/keyboard.js';
 import { periodName } from '../../lib/period-label.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import { ICONS } from '../icons.js';
-import type { Area, AreaProps, LegendItem } from '../index.js';
+import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import {
-  FORM_0535, SECTIONS, SUMS, amountOf, filedDiff, formAmount, rateOf, resultZiffer, sectionOf, shownZiffern, vatKeyOf, vatReturn,
+  FORM_0535, SECTIONS, amountOf, filedDiff, formAmount, rateOf, resultZiffer, sectionOf, shownZiffern, sumsOf, ratesRoundedApart, thresholdWatch, vatKeyOf, vatReturn, yearTurnover,
   type Section, type VatReturn,
 } from './model.js';
-import { correctionDiff, signed, useReturn, zifferLabel } from './view.js';
-import { entryAt } from './links.js';
+import { correctionDiff, signed, useReturn, zifferLabel, headline } from './view.js';
+import { Go, entryAt } from './links.js';
 import { Detail } from './Detail.js';
-import { VatCards } from '../codes/vat-card.js';
+import type { ReturnFigures } from '../../../engines/return.js';
+import { baseCurrency, chargesVat, filing } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'vat'>>;
 
@@ -34,9 +39,47 @@ const readAll = () => { try { return localStorage.getItem(ALL_KEY) === '1'; } ca
 /** The list as last shown, in ↑↓ order, and the return behind it: the keys act on it. */
 const listed: { ids: string[]; v?: VatReturn } = { ids: [] };
 
+/** The return of a registered firm; a firm not registered sees that it files none, and its turnover against the threshold. */
 function List(props: Props) {
+  const setup = useWorkspace()?.company.vat;
+  return setup && !setup.registered ? <NotRegistered {...props} /> : <Return {...props} />;
+}
+
+/** The turnover against the threshold: «passed» from the limit on, a warning from 90 % reached or projected (r5f-9), else the figure alone. */
+function NotRegistered({ period, books, canEdit }: Props) {
+  const today = localToday();
+  const year = period.kind === 'all' ? today.slice(0, 4) : period.from.slice(0, 4);
+  const w = thresholdWatch(books.journalEntries ?? [], year, today);
+  const turnover = w?.turnover ?? yearTurnover(books.journalEntries ?? [], year);
+  const money = (n: number) => `${baseCurrency()} ${fmt(n)}`;
+  const level = w?.level ?? 'ok';
+  return (
+    <div className="page">
+      <ListHead period={period} books={books} canEdit={canEdit} />
+      <div className="counts vst"><span>{t('vat.stateNone')}</span></div>
+      <div className="notice vnovat" data-testid="not-registered">
+        <span className="dot" aria-hidden="true" />
+        <span>{t('vat.notRegisteredText', { threshold: w ? money(w.threshold) : '' })}</span>
+      </div>
+      <div className={`vresult${level === 'passed' ? ' bad' : ''}`} data-testid="year-turnover">
+        <span>{t('vat.turnoverYear', { year })}</span>
+        <b className="mono"><small>{baseCurrency()}</small>{fmt(turnover)}</b>
+      </div>
+      {w && (
+        <p className={level === 'ok' ? 'm' : 'notice warn'} data-testid="threshold" data-level={level}>
+          {level !== 'ok' && <span className="dot" aria-hidden="true" />}
+          <span>{level === 'passed' ? t('vat.thresholdPassed', { threshold: money(w.threshold), next: String(Number(year) + 1) })
+            : level === 'near' ? t('vat.thresholdNear', { turnover: money(w.turnover), percent: String(w.percent), threshold: money(w.threshold), projected: money(w.projected) })
+              : t('vat.thresholdOk', { threshold: money(w.threshold) })}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Return(props: Props) {
   const { route, period, books, nav, canEdit } = props;
-  const { v, filed } = useReturn({ books, period });
+  const { v, filed, key } = useReturn({ books, period });
   const [all, setAll] = useState(readAll);
   const rows = shownZiffern(v, filed, all);
   const ids = [...rows, ...(filed ? [FORM_0535] : [])];
@@ -57,10 +100,13 @@ function List(props: Props) {
   const select = (n: string) => nav.select({ area: 'vat', ziffer: n });
   const corrections = v.corrections.length;
   const result = resultZiffer(v);
+  const head = headline(v, filed, books);
 
   return (
     <div className="page">
-      <ListHead period={v.period} books={books} canEdit={canEdit} />
+      <ListHead period={v.period} books={books} canEdit={canEdit}>
+        {v.state.kind === 'open' ? <WorkflowButtons kind="period" id={String(key)} nav={nav} canEdit={canEdit} /> : null}
+      </ListHead>
       <div className="counts vst">
         {v.state.kind === 'filed' ? (
           <>
@@ -69,13 +115,19 @@ function List(props: Props) {
           </>
         ) : v.state.kind === 'open' ? (
           <span className={v.state.overdue ? 'warn' : ''}>{t(v.state.overdue ? 'vat.stateOverdue' : 'vat.stateOpen', { date: formatDate(v.state.due) })}</span>
+        ) : v.state.kind === 'running' ? (
+          <span data-testid="period-running">{t('vat.stateRunning', { ends: formatDate(v.state.ends), from: formatDate(v.state.from) })}</span>
         ) : <span>{t('vat.stateOverview')}</span>}
         <button type="button" className="clink2" onClick={() => nav.go({ route: { area: 'codes' }, query: {} })}>{t('vatCodes.open')}</button>
       </div>
-      <button type="button" className="vresult" onClick={() => select(result)}>
-        <span>{t(result === '510' ? 'vat.credit' : 'vat.toPay')}</span>
-        <b className="mono"><small>CHF</small>{fmt(v.report.credit || v.report.toPay)}</b>
+      <SalesWithoutVat books={books} period={period} nav={nav} />
+      <button type="button" className="vresult" data-filed={head.filed || undefined} onClick={() => select(result)}>
+        <span>{t(head.kind === 'credit' ? 'vat.credit' : 'vat.toPay')}{head.filed ? ` · ${t('vat.asFiled')}` : ''}</span>
+        <b className="mono"><small>CHF</small>{fmt(head.amount)}</b>
+        {head.corrected ? <span className="m" data-testid="corrected-now">{t(head.corrected.kind === 'credit' ? 'vat.nowCredit' : 'vat.nowToPay', { amount: fmt(head.corrected.amount), diff: signed(head.corrected.diff) })}</span> : null}
+        {head.rounding ? <span className="m" data-testid="rounding-note">{t('vat.headRounding', { ziffern: fmt(head.rounding.ziffern) })}</span> : null}
       </button>
+      {ratesRoundedApart(v) ? <p className="m" data-testid="rate-rounding-note">{t('vat.rateRounding')}</p> : null}
       <div className="rows vz" role="listbox" aria-label={t('vat.ziffern')}>
         {SECTIONS.map((s) => {
           const ns = rows.filter((n) => sectionOf(Number(n)) === s);
@@ -99,23 +151,38 @@ function List(props: Props) {
         )}
       </div>
       <div className="hidden-note"><button type="button" onClick={toggleAll}>{all ? t('vat.hideEmpty') : t('vat.showAll')}</button></div>
-      <VatCards {...(props as AreaProps)} />
     </div>
   );
 }
 
+/** The period's customer payments booked without output tax for want of an invoice, each a link to the payment. */
+function SalesWithoutVat({ books, period, nav }: { books: Index; period: Period; nav: Nav }) {
+  const sales = salesWithoutVat(books, useWorkspace()?.company.vat.registered ?? true).filter((s) => inPeriod(period, s.payment.date));
+  if (!sales.length) return null;
+  return (
+    <div className="notice warn vnovat" data-testid="sales-without-vat">
+      <span className="dot" aria-hidden="true" />
+      <span>
+        {t('sales.noVat', { n: sales.length })} {t('sales.noVatDo')}{' '}
+        {sales.map(({ payment: p }, i) => (
+          <Fragment key={p.ref}>{i > 0 && ', '}<Go to={at({ area: 'bank', payment: p.ref }, p.date, period)} nav={nav}>{formatDate(p.date)} · {p.currency} {fmt(p.amount)}</Go></Fragment>
+        ))}
+      </span>
+    </div>
+  );
+}
 
 function ZifferRow({ v, n, filed, sel, onSelect }: { v: VatReturn; n: string; filed?: ReturnFigures; sel: boolean; onSelect(n: string): void }) {
   const r = rateOf(v, n);
   const was = filedDiff(v, filed, n);
-  const sum = n in SUMS;
+  const sum = n in sumsOf();
   return (
     <div className={`row${sel ? ' sel' : ''}${sum ? ' sum' : ''}${amountOf(v, n) || sum ? '' : ' zero'}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-z={n} onClick={() => onSelect(n)}>
       <span className="d mono">{n}</span>
       <span className="t">{zifferLabel(v, n)}</span>
       <span className="a mono">
         {r ? <><span className="tv">{fmt(r.row.kind === 'supply' ? r.base + r.tax : r.base)}</span>{fmt(r.tax)}</> : fmt(formAmount(v, n))}
-        {was != null && <span className="was" title={t('vat.filedValue', { amount: fmt(was) })}><span className="dot" aria-hidden="true" /></span>}
+        {was != null && <span className="was" data-tip={t('vat.filedValue', { amount: fmt(was) })}><span className="dot" aria-hidden="true" /></span>}
       </span>
     </div>
   );
@@ -130,7 +197,7 @@ const legend = (): LegendItem[] => [
 export const vat: Area<RouteOf<'vat'>> = {
   id: 'vat',
   label: () => t('area.vat'),
-  dock: { key: 'm', icon: ICONS.vat, tip: () => t('area.vat.tip') },
+  dock: { key: 'm', icon: ICONS.vat, tip: () => t(!chargesVat() ? 'area.vat.tip.none' : filing().length === 'half' ? 'area.vat.tip.half' : 'area.vat.tip') },
   List,
   Detail,
   legend,
@@ -150,7 +217,7 @@ export const vat: Area<RouteOf<'vat'>> = {
     return true;
   },
   palette: ({ books, nav, period }) => {
-    const v = vatReturn(books, vatKeyOf(period, openQuarter(books.config?.closedThrough, localToday())));
+    const v = vatReturn(books, vatKeyOf(period, booksOpenPeriod(books, localToday(), filing().length)));
     return shownZiffern(v, undefined, false).map((n) => ({
       label: `${n} ${zifferLabel(v, n)}`,
       side: `${periodName(v.period)}  ${fmt(formAmount(v, n))}`,

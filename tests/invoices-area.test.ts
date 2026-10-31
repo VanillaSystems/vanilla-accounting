@@ -12,6 +12,7 @@ import type { InvoiceBook } from '../src/invoices/model.js';
 import { byRouteId, counts, customerChange, groupsOf, openSums, routeId, rowsOf } from '../src/app/areas/invoices/model.js';
 import { addressRule, countryOf, languageFor, numberFirst, vatRule } from '../src/app/areas/invoices/address.js';
 import { DEMO_ROOT } from './support/workspace.js';
+import './support/jurisdiction.js';
 
 const TODAY = '2026-10-11';
 const book = JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as InvoiceBook;
@@ -27,6 +28,8 @@ test('each invoice\'s state: paid, overdue past its due date, open, a credit not
   assert.deepEqual(groupsOf(rows, 'open').map((g) => g.state), ['overdue', 'open']);
   assert.deepEqual(groupsOf(rows, undefined).map((g) => g.state), ['overdue', 'open', 'draft', 'paid', 'credit', 'cancelled']);
   assert.deepEqual(openSums(rows, d.invoices).overdue, 861.84, 'what 2026-003 still owes');
+  assert.deepEqual(openSums(rows, d.invoices), { open: 1827.03, overdue: 861.84, foreign: [{ currency: 'EUR', open: 865, overdue: 0 }] }, 'the EUR invoice counts in its own currency (r8c-9)');
+  assert.deepEqual(rows.filter((r) => r.state === 'open' || r.state === 'overdue').map((r) => [r.inv.status === 'issued' ? r.inv.number : '', r.open]), [['2026-003', 861.84], ['2026-005', 865], ['2026-006', 965.19]], 'each row knows what is still open');
 });
 
 test('a period shows the invoices dated in it and every draft; the search finds number, customer and subject', () => {
@@ -66,4 +69,20 @@ test('the customer form per country: the postcode\'s name and shape, a state, th
   assert.equal(vatRule('US').pattern, undefined);
   assert.deepEqual([languageFor('CH', '1204'), languageFor('CH', '6900'), languageFor('CH', '8000'), languageFor('AT', ''), languageFor('US', '')], ['fr', 'it', 'de', 'de', 'en']);
   assert.deepEqual([countryOf('Schweiz'), countryOf('Suisse'), countryOf('usa'), countryOf('Vereinigtes Königreich'), countryOf('Atlantis')], ['CH', 'CH', 'US', 'GB', undefined]);
+});
+
+test('linking from either side (r9c-3): a payment\'s page offers the open invoices of its currency, the named one first; an invoice\'s page offers the open period\'s incoming payments not yet allocated, a prepayment before its date included', async () => {
+  const { linkableInvoices, linkablePayments } = await import('../src/app/areas/invoices/model.js');
+  const issued = (id: string, number: string, currency: string, over: Record<string, unknown> = {}) => ({
+    id, status: 'issued', kind: 'invoice', deleted: false, number, reference: `RF${number}`, currency, date: '2026-10-16', payments: [], reminders: [],
+    customer: { name: 'Kunde' }, lines: [{ text: 'x', quantity: 1, price: 4200, vatRate: 0 }], ...over,
+  }) as unknown as InvoiceBook['invoices'][number];
+  const invoices = [issued('a', '2026-001', 'CHF'), issued('b', '2026-002', 'EUR'), issued('c', '2026-003', 'EUR'), issued('d', '2026-004', 'EUR', { cancelled: { date: '2026-10-17', reason: 'x' } }), issued('e', '2026-005', 'EUR', { payments: [{ transactionRef: 'W9', date: '2026-10-01', amount: 4200, by: 'reference' }] })];
+  const tx = (ref: string, currency: string, date: string, description: string, direction: 'CRDT' | 'DBIT' = 'CRDT') => ({ ref, currency, date, description, direction, amount: 3000, source: 'camt053' }) as never;
+  const wise = tx('W1', 'EUR', '2026-10-12', 'Rechnung 2026-003 Teilzahlung');
+  assert.deepEqual(linkableInvoices(invoices, wise).map((i) => i.number), ['2026-003', '2026-002'], 'EUR only, the named one first; cancelled and paid left out');
+  assert.deepEqual(linkableInvoices(invoices, tx('W2', 'EUR', '2026-10-12', 'x', 'DBIT')), [], 'money out pays no invoice');
+  assert.deepEqual(linkableInvoices(invoices, tx('W9', 'EUR', '2026-10-01', 'x')), [], 'allocated already');
+  const books = { transactions: [wise, tx('W9', 'EUR', '2026-10-01', 'x'), tx('R1', 'CHF', '2026-10-14', 'x'), tx('W0', 'EUR', '2026-03-03', 'alt')], config: { closedThrough: '2026-03-31' } };
+  assert.deepEqual(linkablePayments(books, invoices, invoices[2] as never).map((t) => t.ref), ['W1'], 'W9 is allocated, R1 is CHF, W0 lies in a filed quarter');
 });

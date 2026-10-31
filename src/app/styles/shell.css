@@ -1,7 +1,9 @@
 /* The shell: page grid, list and detail, rows, top bar, dock, menus, palette, toast, drop zone, period picker. */
 /* page */
-main { height: calc(100vh / var(--z, 1)); display: grid; grid-template-columns: var(--lw, minmax(400px, 38%)) 1fr; }
-main[data-area="journal"], main[data-area="reports"] { grid-template-columns: var(--lw, minmax(560px, 50%)) 1fr; }
+/* The list takes its width (dragged: --lw) while the detail keeps --detail-min; with less room the list narrows to its compact
+   --list-min first (src/app/shell/look.ts LIST_MIN, DETAIL_MIN; the AI sidebar makes room for both or lies over the page, #34). */
+main { --list-min: 280px; --detail-min: 420px; --list: max(min(400px, 45%), 38%); height: calc(100vh / var(--z, 1)); display: grid; grid-template-columns: clamp(var(--list-min), var(--lw, var(--list)), 100% - var(--detail-min)) minmax(0, 1fr); }
+main[data-area="journal"], main[data-area="reports"] { --list: max(min(560px, 55%), 50%); }
 .split { position: fixed; top: 0; bottom: 0; width: 11px; margin-left: -5px; cursor: col-resize; z-index: 6; outline: 0; }
 .split::after { content: ''; position: absolute; left: 5px; top: 0; bottom: 0; width: 1px; background: transparent; transition: background .15s; }
 .split:hover::after, .split:focus-visible::after, .split.drag::after { background: var(--accent, #0067b1); width: 2px; left: 4px; }
@@ -9,8 +11,14 @@ main[data-area="journal"], main[data-area="reports"] { grid-template-columns: va
 body.resizing { cursor: col-resize; user-select: none; } body.resizing iframe, body.resizing canvas { pointer-events: none; }
 .list { padding: 33px 32px 140px 56px; overflow: auto; border-right: 1px solid var(--line); scrollbar-width: thin; }
 .detail { padding: 36px 56px 140px; overflow: auto; scrollbar-width: thin; }
+/* Both columns near their narrowest: less margin, more room for the rows and the detail's content. */
+main { container: page / inline-size; }
+@container page (max-width: 760px) {
+  .list { padding-left: 24px; padding-right: 16px; }
+  .detail { padding-left: 28px; padding-right: 28px; }
+}
 h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; margin: 0; display: flex; align-items: baseline; gap: 14px; }
-.period { font: 500 15px "Geist Mono"; color: var(--muted); letter-spacing: 0; display: inline-flex; align-items: center; gap: 6px; border-radius: 6px; padding: 2px 4px; margin-left: -4px; }
+.period { white-space: nowrap; font: 500 15px "Geist Mono"; color: var(--muted); letter-spacing: 0; display: inline-flex; align-items: center; gap: 6px; border-radius: 6px; padding: 2px 4px; margin-left: -4px; }
 .period:hover { color: var(--ink); }
 .period svg { width: 13px; height: 13px; }
 .counts { margin: 10px 0 24px; color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 14px; min-height: 26px; }
@@ -51,8 +59,15 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .row .acts button:hover { color: var(--ink); background: var(--bg); }
 .row .acts button.del:hover { color: var(--neg); }
 .row.reading .t { color: var(--muted); }
+.row.reading.failed .t span { color: var(--warn); }
 .shimmer { display: inline-block; height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--line) 0%, var(--hover) 50%, var(--line) 100%); background-size: 200% 100%; animation: sh 1.2s linear infinite; vertical-align: middle; }
 @keyframes sh { to { background-position: -200% 0; } }
+/* A run of the inbox still works on it (#218): the small turning ring (.spin below) where the orange dot would be. */
+.row .t > .spin, .facts .proc > .spin { display: inline-block; vertical-align: -1px; margin-right: 7px; }
+.row .t small.proc { color: var(--muted); }
+.row.working .d.none { color: var(--muted); }
+.notice.proc, .notice.proc a, .facts .proc { color: var(--muted); }
+.facts .proc { font-family: "Instrument Sans"; display: inline-flex; align-items: center; }
 .row.leaving { animation: leave .28s ease forwards; }
 @keyframes leave { to { opacity: 0; transform: translateX(8px); } }
 .row.entering { animation: enter .35s ease; }
@@ -60,6 +75,17 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .hidden-note { margin-top: 28px; font-size: 12.5px; color: var(--faint); }
 .hidden-note button { color: var(--muted); text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
 .hidden-note button:hover { color: var(--ink); }
+.quarantine .qlead { font-size: 12.5px; margin: 8px 0; color: var(--muted); }
+.quarantine .qlist .m { color: var(--muted); }
+.quarantine .qacts a { color: var(--accent); text-decoration: none; }
+.quarantine .qacts a:hover { text-decoration: underline; }
+.quarantine .qlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.quarantine .qlist li { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.quarantine .qfile { color: var(--ink-2); overflow-wrap: anywhere; }
+.quarantine .qacts { margin-left: auto; display: flex; gap: 12px; }
+.linkbtn.danger { color: var(--neg); }
+.quarantine .qall { margin-top: 10px; font-size: 12.5px; }
+.nonewhy { color: var(--muted); }
 .row.nonreceipt .t { color: var(--muted); font-style: italic; }
 
 /* empty */
@@ -74,18 +100,28 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .detail-in { max-width: 980px; animation: fade .22s ease; }
 @keyframes fade { from { opacity: 0; transform: translateY(3px); } }
 
-.btn { height: 32px; padding: 0 12px; border-radius: 9px; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; }
-.btn.primary { background: var(--accent); color: var(--on-accent); }
-.btn.primary:hover { filter: brightness(1.08); }
-.btn.ghost { color: var(--ink-2); }
-.btn.ghost:hover { background: var(--bg); color: var(--ink); }
+/* A button reads as one on any surface: a frame for the plain one, a fill for the main one, a light frame for the quiet one; never the text it sits in (italics). */
+.btn { height: 32px; padding: 0 12px; border-radius: 9px; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-style: normal; white-space: nowrap; cursor: pointer;
+  border: 1px solid var(--line-2); background: var(--bg); color: var(--ink); }
+.btn:hover:not(:disabled) { background: var(--hover); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
+/* On a filled button an icon takes the button's text colour: its own tint (the AI's violet on the accent) has no contrast there. */
+:is(.btn.primary, .btn.danger, .chip.primary, .aiact.primary, .btn2.primary, .addbtn, .aisend) :is(svg.i, svg.bot) { color: inherit; stroke: currentColor; }
+.btn.ghost { border-color: var(--line); background: transparent; color: var(--ink-2); }
+.btn.ghost:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
 .btn .k { font: 500 11px "Geist Mono"; opacity: .75; }
+/* A button that reads as a link (accent, underlined on hover); an area's own rule may size it. */
+.linkbtn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; text-align: left; }
+.linkbtn:hover { text-decoration: underline; text-underline-offset: 2px; }
+.linkbtn:disabled { color: var(--faint); cursor: default; text-decoration: none; }
+[data-theme="dark"] .linkbtn:not(:disabled) { text-decoration: underline; text-decoration-color: var(--muted); text-underline-offset: 3px; }
 
 /* top glass bar + dock (from the agreed shell) */
-.topbar { position: fixed; left: 50%; top: 14px; transform: translate(-50%, -16px); opacity: 0; pointer-events: none;
+.topbar { position: fixed; left: var(--page-mid); top: 14px; transform: translate(-50%, 0);
   display: flex; gap: 6px; align-items: center; padding: 6px; border-radius: 14px; background: var(--glass); backdrop-filter: blur(18px) saturate(1.4);
   -webkit-backdrop-filter: blur(18px) saturate(1.4); border: 1px solid var(--glass-line); box-shadow: var(--shadow); transition: opacity .2s, transform .25s cubic-bezier(.2,.8,.2,1); z-index: 20; }
-.topbar.show, .topbar:focus-within { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
 .chip { height: 32px; padding: 0 12px; border-radius: 9px; display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font-size: 13px; cursor: pointer; white-space: nowrap; }
 .chip:hover { background: var(--accent-soft); }
 .chip .k { font: 500 11px "Geist Mono"; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; }
@@ -94,41 +130,73 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .chip.lock { color: var(--muted); cursor: default; }
 .chip.lock:hover { background: none; }
 .sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
-.dock { position: fixed; left: 50%; bottom: 14px; transform: translate(-50%, 130%); display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px;
-  border-radius: 22px; background: var(--glass); backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4);
-  border: 1px solid var(--glass-line); box-shadow: var(--shadow); transition: transform .3s cubic-bezier(.2,.8,.2,1); z-index: 20; }
-.dock.show, .dock:focus-within { transform: translate(-50%, 0); }
-.dock { gap: 2px; padding: 7px 8px 6px; }
-.dock .it { position: relative; min-width: 66px; padding-inline: 6px !important; padding: 7px 0 5px; border-radius: 13px; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; color: var(--muted); text-decoration: none; transition: background .15s, color .15s; }
-.dock .it .ic { position: relative; width: 24px; height: 24px; display: grid; place-items: center; transform-origin: 50% 100%; transition: transform .12s; }
-.dock .it .lb { font: 500 11px "Instrument Sans"; letter-spacing: .01em; white-space: nowrap; }
-.dock .it:hover { background: var(--hover); color: var(--ink); }
-.dock .it.on { background: var(--accent-soft); color: var(--ink); }
-.dock .it.on .lb { font-weight: 600; }
-.dock .it:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--accent); }
-.dock .it .badge { position: absolute; top: -5px; left: 15px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font: 600 9.5px "Geist Mono"; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--bg); }
-.dock .it .badge:empty { display: none; }
-.dock .it .tip { position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 5px 6px 5px 10px; border-radius: 8px; background: var(--ink); color: var(--bg); font: 500 12px "Instrument Sans"; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .12s; }
-.dock .it:hover .tip { opacity: 1; transition-delay: .5s; }
-.dock .it:focus-visible .tip, .dock.keys .it .tip { opacity: 1; transition-delay: 0s; }
-.dock .tip .kk { display: inline-flex; gap: 3px; }
-.dock .tip .kk span { font: 500 10.5px "Geist Mono"; min-width: 17px; height: 18px; padding: 0 4px; display: inline-grid; place-items: center; border-radius: 4px; border: 1px solid color-mix(in srgb, var(--bg) 30%, transparent); border-bottom-width: 2px; }
-.dock.keys .it .tip { padding-left: 6px; }
-.dock.keys .it .tip .tx { display: none; }
-.dock .div { width: 1px; align-self: stretch; margin: 8px 5px; background: var(--line); }
-.dock svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
-.hint { position: fixed; left: 50%; bottom: 6px; width: 120px; height: 4px; margin-left: -60px; border-radius: 3px; background: var(--line); transition: opacity .3s; z-index: 10; }
-.dock.show ~ .hint { opacity: 0; }
+/* the areas: an activity bar down the left edge, as in VS Code (shell/Dock.tsx) */
+.activity { position: fixed; left: 0; top: 0; bottom: 0; width: var(--abw); z-index: 21; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 0;
+  background: var(--desk, var(--bg)); border-right: 1px solid var(--line); }
+.no-titlebar .activity { padding-top: 40px; -webkit-app-region: drag; }
+.no-titlebar .activity .it { -webkit-app-region: no-drag; }
+.activity .it { position: relative; width: 100%; height: 46px; display: grid; place-items: center; color: var(--faint); text-decoration: none; cursor: pointer; transition: color .12s; }
+.activity .it::before { content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; width: 2px; border-radius: 0 2px 2px 0; background: transparent; }
+.activity .it:hover { color: var(--ink); }
+.activity .it.on { color: var(--ink); }
+.activity .it.on::before { background: var(--accent); }
+.activity .it:focus-visible { outline: none; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.activity .it .ic { position: relative; width: 24px; height: 24px; display: grid; place-items: center; }
+.activity svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.activity .it .mark { position: absolute; top: -2px; right: -4px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--desk, var(--bg)); }
+.activity .nm { display: none; }
+.activity .tip { position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 12px; padding: 6px 7px 6px 11px; border-radius: 7px;
+  background: var(--ink); color: var(--bg); font: 400 12px/1.35 "Instrument Sans"; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .1s; z-index: 1; }
+.activity .tip .tx { display: flex; flex-direction: column; text-align: left; }
+.activity .tip .tx b { font-weight: 600; font-size: 12.5px; }
+.activity :is(.it, .wopen, .navtoggle):hover .tip { opacity: 1; transition-delay: .3s; }
+.activity :is(.it, .wopen, .navtoggle):focus-visible .tip, .activity.keys :is(.it, .wopen) .tip { opacity: 1; transition-delay: 0s; }
+.activity .tip .kk { display: inline-flex; gap: 3px; }
+.activity .tip .kk span { font: 500 10.5px "Geist Mono"; min-width: 17px; height: 18px; padding: 0 4px; display: inline-grid; place-items: center; border-radius: 4px; border: 1px solid color-mix(in srgb, var(--bg) 30%, transparent); border-bottom-width: 2px; }
+.activity.keys .tip { padding-left: 7px; }
+.activity.keys .tip .tx { display: none; }
+.activity .div { width: 24px; height: 1px; margin: 8px 0; background: var(--line); }
+main { margin-left: var(--abw); }
+
+/* little room (a small window, or a high zoom: useZoom sets .tight): the top bar keeps search, period, zoom, export, theme and language; the legend steps aside */
+.tight .topbar > .chip:first-child, .tight .topbar > .chip:first-child + .sep { display: none; }
+.tight .topbar .chip .k { display: none; }
+.tight .topbar { gap: 2px; }
+.tight .topbar .chip { padding: 0 8px; }
+.tight .legend { display: none; }
+
+/* folded bars: a pill (docs/0.4.0/views.md, "Both bars") */
+.topbar.folded { padding: 4px; border-radius: 999px; }
+.barpill { display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 12px; border: 0; border-radius: 999px; background: none; color: var(--ink-2); font: 500 12px "Instrument Sans"; cursor: pointer; white-space: nowrap; }
+.barpill:hover, .barpill:focus-visible { color: var(--ink); background: var(--hover); outline: none; }
+.barpill b { font-weight: 600; color: var(--ink); }
+.barpill .pbadge { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font: 600 9.5px "Geist Mono"; display: inline-grid; place-items: center; }
+.pin { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 9px; color: var(--muted); cursor: pointer; align-self: center; }
+.pin input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.pin:hover, .pin:focus-within { background: var(--hover); color: var(--ink); }
+.pin.on { color: var(--accent); }
+.pin .ptip { position: absolute; right: 0; width: 280px; display: none; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 10px; background: var(--ink); color: var(--bg); font: 400 12px/1.4 "Instrument Sans"; text-align: left; z-index: 30; }
+.topbar .pin .ptip { top: calc(100% + 10px); }
+.pin:hover .ptip, .pin:focus-within .ptip { display: flex; }
+.pin .ptip span { opacity: .7; }
+.pin .ptip span.cur { opacity: 1; font-weight: 600; }
+.bartip { position: absolute; left: 50%; transform: translateX(-50%); width: 320px; padding: 12px 14px; border-radius: 12px; background: var(--ink); color: var(--bg); font-size: 12.5px; box-shadow: var(--shadow); z-index: 30; }
+.topbar .bartip { top: calc(100% + 12px); }
+.bartip p { margin: 0 0 10px; }
+.bartip span { display: flex; justify-content: flex-end; gap: 6px; }
 
 /* menus, palette, toast, overlays */
 .menu { position: fixed; z-index: 40; min-width: 240px; padding: 6px; border-radius: 12px; background: var(--glass); backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4); border: 1px solid var(--glass-line); box-shadow: var(--shadow); animation: pop .16s ease; }
+/* A menu a dialog hands to the page (the drop dialog's «Aktionen», #254) opens above the dialog. */
+body > .menu { z-index: 42; }
 @keyframes pop { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
 .menu button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; font-size: 13px; text-align: left; }
 .menu button:hover, .menu button.on { background: var(--accent-soft); }
 .menu button .s { margin-left: auto; color: var(--muted); font-size: 12px; display: inline-flex; gap: 5px; align-items: center; }
 .menu button.cur { font-weight: 600; }
 .scrim { position: fixed; inset: 0; z-index: 30; }
-.palette { position: fixed; z-index: 41; left: 50%; top: 14vh; width: 600px; max-width: calc(100vw - 32px); transform: translateX(-50%); border-radius: 16px; background: var(--glass); backdrop-filter: blur(24px) saturate(1.4); -webkit-backdrop-filter: blur(24px) saturate(1.4); border: 1px solid var(--glass-line); box-shadow: var(--shadow); overflow: hidden; animation: pop .16s ease; }
+/* Centred over the page beside the sidebar, but never past the window's edge: with the sidebar open in a narrow window the page's middle lies too far left for the dialog's width (r6h-30). */
+.palette { --w: min(600px, 100vw - 32px); position: fixed; z-index: 41; left: clamp(calc(16px + var(--w) / 2), var(--page-mid), calc(100vw - 16px - var(--w) / 2)); top: 14vh; width: var(--w); transform: translateX(-50%); border-radius: 16px; background: var(--glass); backdrop-filter: blur(24px) saturate(1.4); -webkit-backdrop-filter: blur(24px) saturate(1.4); border: 1px solid var(--glass-line); box-shadow: var(--shadow); overflow: hidden; animation: pop .16s ease; }
 .palette input { width: 100%; border: 0; outline: 0; background: transparent; padding: 18px 20px; font-size: 16px; border-bottom: 1px solid var(--line); }
 .palette .res { max-height: 52vh; overflow: auto; padding: 6px; }
 .palette .gh { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); padding: 10px 12px 4px; }
@@ -137,20 +205,19 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .palette .o .r { margin-left: auto; color: var(--muted); font: 12px "Geist Mono"; }
 .palette .o svg { color: var(--muted); }
 /* the inbox processing while it runs (shell/Intake.tsx), bottom left, out of the dock's way */
-.intake { position: fixed; left: 16px; bottom: 16px; z-index: 6; display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 10px; border-radius: 10px; font-size: 12.5px; color: var(--ink-2); background: var(--glass); backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4); border: 1px solid var(--glass-line); box-shadow: var(--shadow); animation: fade .2s ease; }
-.intake:hover { color: var(--ink); }
-.intake .mono { font: 11.5px "Geist Mono"; color: var(--muted); }
-.intake .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .3; transform: scale(.8); } }
 .counts button.runinbox { display: inline-flex; align-items: center; gap: 5px; }
 .counts button.runinbox:disabled { cursor: default; color: var(--faint); }
 .runinbox svg { width: 13px; height: 13px; }
-.toast { position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 20px); opacity: 0; z-index: 45; display: flex; align-items: center; gap: 14px; padding: 9px 10px 9px 16px; border-radius: 12px; background: var(--ink); color: var(--bg); font-size: 13px; box-shadow: var(--shadow); transition: opacity .2s, transform .25s cubic-bezier(.2,.8,.2,1), bottom .3s; pointer-events: none; }
+.toast { position: fixed; left: var(--page-mid); bottom: 26px; transform: translate(-50%, 20px); opacity: 0; z-index: 70; display: flex; align-items: center; gap: 14px; padding: 9px 10px 9px 16px; border-radius: 12px; background: var(--ink); color: var(--bg); font-size: 13px; box-shadow: var(--shadow); transition: opacity .2s, transform .25s cubic-bezier(.2,.8,.2,1), bottom .3s; pointer-events: none; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
-.dock.show ~ .toast { bottom: 104px; }
 .toast button { color: inherit; font-weight: 600; padding: 4px 8px; border-radius: 7px; }
 .toast button:hover { background: color-mix(in srgb, var(--bg) 15%, transparent); }
 .toast .k { font: 500 11px "Geist Mono"; opacity: .6; margin-left: 4px; }
+.toast.droplost { bottom: 74px; max-width: min(720px, calc(100vw - 32px)); }
+.toast.droplost span { overflow-wrap: anywhere; }
+.droplost button { white-space: nowrap; }
+.warnline.droplost { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .drop { position: fixed; inset: 0; z-index: 35; display: grid; place-items: center; background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); opacity: 0; pointer-events: none; transition: opacity .18s; }
 .drop.show { opacity: 1; pointer-events: auto; }
 .drop .box { width: min(640px, 80vw); height: min(380px, 60vh); border: 2px dashed var(--accent); border-radius: 22px; display: grid; place-items: center; text-align: center; transform: scale(.98); transition: transform .25s; }
@@ -165,10 +232,11 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .k { position: relative; display: inline-flex; vertical-align: middle; margin-left: 6px; gap: 2px; align-items: center; }
 .k .cap { font: 500 10.5px "Geist Mono"; min-width: 16px; height: 17px; padding: 0 4px; display: inline-grid; place-items: center; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; color: var(--muted); background: var(--bg); }
 .search .k { border: 0; padding: 0; margin-left: 0; } .legend .k { margin-left: 0; }
-[data-tip] { cursor: help; }
-[data-tip]:hover::after { content: attr(data-tip); position: absolute; right: 0; top: calc(100% + 8px); width: max-content; max-width: 260px; white-space: pre-line; text-align: left;
-  font: 400 12px/1.45 "Instrument Sans"; color: var(--bg); background: var(--ink); padding: 8px 10px; border-radius: 8px; z-index: 50; box-shadow: 0 8px 24px -8px rgba(0,0,0,.3); pointer-events: none; }
-.legend [data-tip]:hover::after { top: auto; bottom: calc(100% + 8px); }
+.k[data-tip] { cursor: help; }
+/* The one tooltip (HoverTip.tsx): an element's data-tip, or an icon control's aria-label. */
+.hovertip { position: fixed; z-index: 200; width: max-content; max-width: 280px; white-space: pre-line; text-align: left; padding: 6px 9px; border-radius: 7px;
+  font: 400 12px/1.4 "Instrument Sans"; color: var(--bg); background: var(--ink); box-shadow: var(--shadow); pointer-events: none; animation: hovertip .1s ease-out; }
+@keyframes hovertip { from { opacity: 0; } }
 .legend { pointer-events: auto; }
 .legend .item { display: inline-flex; gap: 5px; align-items: center; margin-left: 12px; }
 .zoom { display: inline-flex; align-items: center; gap: 0; }
@@ -202,13 +270,11 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .pp .day { padding: 1px 0; } .pp .day.in, .pp .day.l, .pp .day.r { background: var(--accent-soft); } .pp .day.l { border-radius: 8px 0 0 8px; } .pp .day.r { border-radius: 0 8px 8px 0; }
 .pp .day button { width: 32px; height: 30px; border-radius: 7px; font: 12.5px "Geist Mono"; color: var(--ink-2); } .pp .day button:hover { background: var(--hover); }
 .pp .day.fut button { color: var(--faint); } .pp .day.tod button { text-decoration: underline; text-underline-offset: 4px; }
-.pp .day.edge button { background: var(--accent); color: #fff; font-weight: 600; }
-[data-theme="dark"] .pp .day.edge button { background: var(--ink); color: var(--bg); }
+.pp .day.edge button { background: var(--accent); color: var(--on-accent); font-weight: 600; }
 .pp .ft { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); }
 .pp .ft .lab { margin-right: auto; color: var(--muted); font-size: 12.5px; display: inline-flex; gap: 6px; align-items: center; } .pp .ft .lab svg { width: 12px; height: 12px; }
 .pp .btn2 { height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line-2); color: var(--ink); } .pp .btn2:hover { background: var(--hover); }
-.pp .btn2.primary { background: var(--accent); border-color: var(--accent); color: #fff; } .pp .btn2.primary:disabled { opacity: .4; }
-[data-theme="dark"] .pp .btn2.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.pp .btn2.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); } .pp .btn2.primary:disabled { opacity: .4; }
 .group { width: 100%; text-align: left; cursor: pointer; border-radius: 6px; padding: 4px 6px; margin-left: -6px; margin-right: -6px; width: calc(100% + 12px); }
 .group:hover { color: var(--muted); background: var(--hover); }
 .group { position: relative; } .group > span:first-child { display: inline-flex; align-items: center; }
@@ -243,3 +309,213 @@ main.full { display: flex; flex-direction: column; }
 /* audit mode: every write is refused */
 .auditbar { position: fixed; top: 0; left: 0; right: 0; z-index: 15; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 4px 16px; font-size: 12px; font-weight: 500; background: var(--warn-soft); color: var(--warn); border-bottom: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); }
 .drop .ic { margin: 0 auto; }
+
+/* The Mac app without a title bar: a strip along the top edge moves the window (double-click zooms); what floats over it stays clickable. */
+.dragbar { position: fixed; top: 0; left: 0; right: 0; height: 36px; -webkit-app-region: drag; z-index: 15; }
+/* .drop only while it shows: hidden, it still spans the window, and its no-drag switched off moving the window everywhere. */
+.no-titlebar :is(.topbar, .menu, .scrim, .palette, .drop.show, .corner, .aside) { -webkit-app-region: no-drag; }
+/* Whatever can be clicked stays clickable inside the title bar zone. */
+.no-titlebar :is(button, a, input, select, textarea, label, [role=button], [role=tab]) { -webkit-app-region: no-drag; }
+
+/* Fixed elements centre on the page, not the window: the AI sidebar (when open) is not page. */
+:root { --aiw: 0px; --abw: 52px; --page-mid: calc(var(--abw) + (100% - var(--abw) - var(--aiw)) / 2); }
+.bartip .btn { background: transparent; color: var(--bg); border: 1px solid color-mix(in srgb, var(--bg) 40%, transparent); }
+.bartip .btn:last-child { background: var(--bg); color: var(--ink); border-color: var(--bg); }
+.bartip .btn:hover:not(:disabled) { background: color-mix(in srgb, var(--bg) 16%, transparent); color: var(--bg); }
+.bartip .btn:last-child:hover:not(:disabled) { background: var(--bg); color: var(--ink); filter: brightness(.94); }
+
+/* the status corner (docs/0.4.0/views.md "Status, top right") */
+.corner { position: fixed; top: 14px; right: calc(16px + var(--aiw)); z-index: 22; display: flex; align-items: flex-start; gap: 8px; }
+.cornerbtn.aibtn { width: 30px; padding: 0; justify-content: center; color: var(--ai, var(--ink)); }
+.cornerbtn.aibtn svg { width: 16px; height: 16px; }
+.cornerbtn.aibtn[aria-expanded="true"] { color: var(--ink-2); }
+.cornerbtn { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--glass-line); background: var(--glass); backdrop-filter: blur(18px); color: var(--ink); font: 500 12.5px "Instrument Sans"; cursor: pointer; box-shadow: var(--shadow); }
+.spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--accent); animation: spin .9s linear infinite; flex: none; }
+.spin.small { width: 10px; height: 10px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; border-color: var(--accent); } }
+.amber { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); flex: none; }
+.cornerpanel { position: absolute; right: 0; top: calc(100% + 8px); width: 340px; padding: 8px; border-radius: 12px; background: var(--glass); backdrop-filter: blur(18px) saturate(1.4); border: 1px solid var(--glass-line); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 2px; }
+.cprow { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.cprow:hover { background: var(--hover); }
+.cprow b { font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cplinks { display: flex; gap: 12px; padding: 6px 8px 2px; border-top: 1px solid var(--line); margin-top: 4px; }
+/* While the top bar stands open (new or pinned), the pages start below it instead of under it. */
+body:has(.topbar.open) :is(.list, .detail, main.full) { padding-top: 76px; }
+
+/* Automatisierung at the foot of the bar (Dock.tsx, src/app/automation/widget.ts): the open period's figures, what waits, the summary card. */
+:root { --abw-wide: 212px; }
+html:not(.phone) .activity a.it.bolt { display: none; }
+.autow .wopen[aria-expanded="true"] .tip { display: none; }
+@media (max-height: 800px) { .activity .it { height: 40px; } }
+@media (max-height: 700px) { .activity .it { height: 34px; } .activity .div { margin: 4px 0; } }
+@media (max-height: 620px) { .autow .n span { display: none; } .autow { gap: 6px; padding-top: 6px; } }
+.autow { margin-top: auto; width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 10px 0 4px; border-top: 1px solid var(--line); }
+.autow .wopen { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 2px 0; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; cursor: pointer; }
+.autow .wopen::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; border-radius: 0 2px 2px 0; background: transparent; }
+.autow.on .wopen::before { background: var(--accent); }
+.autow .wopen:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--accent); }
+.autow .n { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.autow .n b { font: 600 13px/1 "Geist Mono"; color: var(--ink); }
+.autow .n span { font: 500 8.5px/1 "Instrument Sans"; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+.autow .n.waiting b { color: var(--faint); }
+.autow.asks .n.waiting { background: var(--warn-soft); border-radius: 7px; padding: 4px 5px; }
+.autow.asks .n.waiting b, .autow.asks .n.waiting span { color: var(--warn); }
+.autow .trig { position: relative; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); transition: filter .12s; }
+.autow .trig svg { width: 18px; height: 18px; stroke-width: 1.8; }
+.autow .wopen:hover .trig { filter: brightness(.96); }
+/* While a run goes, a light runs round the button's border, as round the chat field's (assistant.css .aibox.busy). */
+@property --wang { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+.autow.running .trig::after { content: ''; position: absolute; inset: -2px; border-radius: inherit; padding: 2px; background: conic-gradient(from var(--wang), transparent 0 45%, var(--accent) 75%, var(--accent) 85%, transparent);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: wspin 1.4s linear infinite; }
+@keyframes wspin { to { --wang: 360deg; } }
+@media (prefers-reduced-motion: reduce) { .autow.running .trig::after { animation: none; background: var(--accent); } }
+.navtoggle { position: relative; display: grid; place-items: center; width: 28px; height: 22px; margin: 2px auto 0; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--faint); cursor: pointer; flex: none; }
+.navtoggle svg { width: 14px; height: 14px; stroke-width: 2; }
+.navtoggle:hover, .navtoggle:focus-visible { color: var(--ink); background: var(--hover); outline: none; }
+.activity svg.play { width: 11px; height: 11px; fill: currentColor; stroke: none; }
+
+/* The wide bar (html.navwide, nav-width.ts): icon and name per row; the widget gets a title, the figures in a row, a button. No tooltips but the keys while G is held. */
+html.navwide { --abw: var(--abw-wide); }
+html.navwide:not(.phone) .activity { align-items: stretch; padding-left: 8px; padding-right: 8px; }
+html.navwide:not(.phone) .activity .it { height: 36px; display: flex; align-items: center; justify-content: flex-start; gap: 12px; padding: 0 10px; border-radius: 8px; }
+html.navwide:not(.phone) .activity .it::before { left: -8px; }
+html.navwide:not(.phone) .activity .it.on { background: var(--hover); }
+html.navwide:not(.phone) .activity .it .ic { width: 20px; height: 20px; flex: none; }
+html.navwide:not(.phone) .activity .it .ic svg { width: 20px; height: 20px; }
+html.navwide:not(.phone) .activity .nm { display: inline; font: 500 13.5px "Instrument Sans"; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html.navwide:not(.phone) .activity .div { width: auto; margin: 8px 10px; }
+html.navwide:not(.phone) .activity:not(.keys) .tip { display: none; }
+html.navwide:not(.phone) .autow { padding: 12px 2px 6px; }
+html.navwide:not(.phone) .autow .wopen { align-items: stretch; gap: 10px; padding: 4px; }
+html.navwide:not(.phone) .autow .wopen::before { left: -8px; }
+.autow .wtitle { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; font: 600 12.5px "Instrument Sans"; color: var(--ink); }
+.autow .wtitle .trig { width: 24px; height: 24px; border-radius: 7px; }
+.autow .wtitle .trig svg { width: 14px; height: 14px; }
+.autow .wtitle .trig { flex: none; }
+.autow .wtitle .wname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.autow .wtitle em { margin-left: auto; flex: none; font: 500 10.5px "Geist Mono"; font-style: normal; color: var(--muted); white-space: nowrap; }
+.autow.running .wtitle em { color: var(--accent); }
+.autow.waiting .wtitle em { color: var(--warn); }
+.autow .figrow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.autow .figrow .n { padding: 6px 0; border-radius: 8px; background: var(--hover); }
+.autow .wbtn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 30px; margin: 0 4px; border: 0; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font: 600 12.5px "Instrument Sans"; text-decoration: none; cursor: pointer; }
+.autow .wbtn.ask { background: var(--warn-soft); color: var(--warn); }
+.autow .wbtn:hover:not(:disabled) { filter: brightness(.96); }
+.autow .wbtn:disabled { opacity: .5; cursor: default; }
+.autow .wbtn:focus-visible { outline: 1.5px solid var(--accent); outline-offset: 1px; }
+html.navwide:not(.phone) .navtoggle { margin: 2px 4px 0 auto; }
+
+/* The summary card the widget opens: beside the bar, at its foot; left of the AI sidebar, never over it. */
+.autocard { position: fixed; left: calc(var(--abw) + 8px); bottom: 12px; width: max(240px, min(340px, calc(100vw - var(--abw) - var(--aiw) - 24px))); z-index: 25; display: flex; flex-direction: column; gap: 12px; padding: 14px;
+  background: var(--bg); color: var(--ink); border: 1px solid var(--line-2); border-radius: 14px; box-shadow: var(--shadow); font: 400 13px/1.35 "Instrument Sans"; animation: pop .12s ease-out; }
+.no-titlebar .autocard { -webkit-app-region: no-drag; }
+.autocard header { display: flex; align-items: center; gap: 8px; }
+.autocard header svg { width: 16px; height: 16px; color: var(--accent); }
+.autocard header b { font: 700 15px "Hanken Grotesk", sans-serif; }
+.autocard header span { margin-left: auto; font: 500 11px "Geist Mono"; color: var(--muted); }
+.autocard .now { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 9px; background: var(--hover); color: var(--ink-2); }
+.autocard .ndot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
+.autocard.running .ndot { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .autocard.running .ndot { animation: none; } }
+.autocard .figs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.autocard .figs div { display: flex; flex-direction: column; }
+.autocard .figs b { font: 600 18px/1.1 "Geist Mono"; }
+.autocard .figs span { color: var(--muted); font-size: 11.5px; }
+.autocard .ask { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 9px; background: var(--warn-soft); color: var(--warn); font-weight: 600; text-decoration: none; }
+.autocard .ask svg { margin-left: auto; width: 15px; height: 15px; stroke-width: 2; }
+.autocard .ask:focus-visible { outline: 1.5px solid var(--warn); outline-offset: 1px; }
+.autocard footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.autocard footer .btn { height: 30px; font-weight: 600; font-size: 12.5px; }
+.autocard footer .btn.ghost { margin-left: auto; padding: 0 8px; border-color: transparent; color: var(--accent); text-decoration: none; }
+.autocard .m { margin: 0; color: var(--muted); font-size: 11.5px; }
+/* A narrow list (a small window with the AI sidebar open): short dates, the add button under the title. */
+.list { container-type: inline-size; }
+.row .ds { display: none; }
+@container (max-width: 340px) {
+  .lhead h1:has(.addbtn) { padding-right: 0; flex-wrap: wrap; }
+  .lhead .addbtn { position: static; transform: none; display: flex; width: max-content; margin: 10px 0 0; }
+  .lhead .addbtn .kb { display: none; }
+  .row { grid-template-columns: 50px 1fr auto; gap: 10px; }
+  .row .dl { display: none; }
+  .row .ds { display: inline; }
+}
+
+/* A phone-wide window (html.phone, set by prefs.ts like .tight, r8c-8): one column at a time, the list or the detail
+   («←» at its top goes back, a tap on a row goes in), and the dock as a bar along the bottom. */
+.phoneback { display: none; }
+html.phone { --abw: 0px; }
+html.phone main { grid-template-columns: minmax(0, 1fr) !important; margin-left: 0; }
+html.phone .split { display: none; }
+html.phone main[data-phone="list"] .detail { display: none; }
+html.phone main[data-phone="detail"] .list { display: none; }
+html.phone .list { padding: 72px 16px 84px; border-right: 0; }
+html.phone .detail { padding: 60px 16px 84px; }
+html.phone main.full { padding-top: 60px; padding-bottom: 84px; }
+html.phone .lhead { padding-left: 16px; padding-right: 16px; }
+html.phone .phoneback { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 14px -6px; padding: 4px 8px; border-radius: 8px; color: var(--muted); font: 500 13px "Instrument Sans"; cursor: pointer; }
+html.phone .phoneback:hover { color: var(--ink); background: var(--hover); }
+html.phone .detail-in > .head .amount { font-size: 26px; }
+html.phone .legend { display: none; }
+html.phone .topbar { max-width: calc(100vw - 24px); overflow-x: auto; }
+html.phone .corner { right: 12px; }
+html.phone .activity { top: auto; right: 0; bottom: 0; width: auto; height: 56px; padding: 0 6px; flex-direction: row; justify-content: space-around; gap: 0; border-right: 0; border-top: 1px solid var(--line); overflow-x: auto; }
+html.phone .activity .it { width: 44px; height: 56px; }
+html.phone .activity .it::before { left: 10px; right: 10px; top: 0; bottom: auto; width: auto; height: 2px; border-radius: 0 0 2px 2px; }
+html.phone .activity .div, html.phone .activity .tip { display: none; }
+html.phone :is(.autow, .navtoggle, .autocard) { display: none; }
+html.phone .activity .it.bolt { display: grid; }
+html.phone .activity .it .cnt { position: absolute; top: -6px; right: -10px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--warn); color: var(--bg); font: 600 9.5px "Geist Mono"; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--desk, var(--bg)); }
+/* Files dragged over the window (src/app/shell/Shell.tsx useDrop): the page takes them as receipts, the AI sidebar (closed: the window's right edge, --ai-edge wide) as a message's attachments; the zone under the pointer is lit. */
+:root { --ai-edge: 88px; }
+.drop { right: max(var(--aiw), var(--ai-edge)); }
+.drop.show:not(.on) .box { opacity: .45; }
+.dropchat { position: fixed; top: 0; right: 0; bottom: 0; width: max(var(--aiw), var(--ai-edge)); z-index: 36; display: grid; background: color-mix(in srgb, var(--desk) 88%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); border-left: 1px solid var(--line); opacity: 0; pointer-events: none; transition: opacity .18s; }
+.dropchat.show { opacity: 1; pointer-events: auto; }
+.dropchat .box { margin: 14px; border: 2px dashed color-mix(in srgb, var(--ai) 55%, transparent); border-radius: 18px; display: grid; place-items: center; text-align: center; padding: 12px; transition: background .15s, border-color .15s; }
+.dropchat.on .box { border-color: var(--ai); background: color-mix(in srgb, var(--ai) 10%, transparent); }
+.dropchat .box svg { width: 34px; height: 34px; color: var(--ai); }
+.dropchat h2 { font: 800 20px "Hanken Grotesk"; letter-spacing: -.01em; margin: 10px 0 6px; }
+.dropchat p { color: var(--muted); margin: 0; font-size: 13px; }
+.dropchat.edge .box { margin: 10px 8px; padding: 8px 0; }
+.dropchat.edge h2 { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 15px; margin: 10px auto 0; }
+
+/* The list column is never wider than its track (#211): no child may widen it, the heading's rows wrap
+   instead (tests/audit-export.test.ts measures scrollWidth == clientWidth at the narrowest list). */
+.list { overflow-x: hidden; }
+.list > *, .lhead, .lhead > *, .chipbar > * { min-width: 0; }
+.counts { flex-wrap: wrap; row-gap: 6px; }
+
+/* A list's filter as chips (src/app/shell/ChipFilter.tsx): the chips, «Filter» with its menu, the search. */
+.lhead .counts:has(+ .chipbar) { margin-bottom: 8px; }
+.chipbar { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 14px; min-height: 26px; color: var(--muted); font-size: 13px; }
+.list .chipbar { margin-bottom: 24px; }
+.chipbar .fchipwrap { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }
+.chipbar .or { font-size: 12px; color: var(--faint); }
+.fchip { display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 3px 0 9px; border-radius: 7px; background: var(--accent-soft); color: var(--ink); max-width: 100%; min-width: 0; }
+.fchip .fl { color: var(--muted); white-space: nowrap; }
+.fchip .fl::after { content: ':'; }
+.fchip b { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fchip .x { flex: none; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 5px; color: var(--muted); font-size: 15px; line-height: 1; }
+.fchip .x:hover { background: var(--hover); color: var(--ink); }
+.fbtn { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border: 1px dashed var(--line-2); border-radius: 7px; color: var(--muted); white-space: nowrap; }
+.fbtn:hover, .fbtn.on { color: var(--ink); border-color: var(--accent); }
+.fbtn svg.i { width: 13px; height: 13px; }
+.fclear { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.fclear:hover { color: var(--ink); }
+.fpop { position: absolute; left: 0; top: 100%; z-index: 20; margin-top: 6px; width: min(300px, 100%); max-height: 340px; overflow: auto; padding: 6px; display: flex; flex-direction: column; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); color: var(--ink); }
+.fpop .fhead { margin: 4px 8px 6px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+.fpop button[role^="menuitem"] { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px; border-radius: 6px; color: var(--ink); text-align: left; }
+.fpop button[role^="menuitem"]:hover, .fpop button[role^="menuitem"]:focus-visible { background: var(--hover); outline: 0; }
+.fpop button[role^="menuitem"] > span:first-child { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fpop button.on { font-weight: 600; }
+.fpop .n { flex: none; font-size: 12px; color: var(--muted); }
+.fpop svg.i { width: 13px; height: 13px; }
+.fpop .fback { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; padding: 4px 6px; border-radius: 6px; color: var(--muted); font-weight: 600; }
+.fpop .fback:hover { color: var(--ink); }
+.fpop .ftyped { display: flex; gap: 6px; padding: 6px; }
+.fpop .ftyped input { flex: 1; min-width: 0; height: 32px; padding: 0 8px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; }
+.fpop .ftyped input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+.chipempty p { max-width: 42ch; }
+.chipempty .fexits { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 18px; }
+.chipempty .fexits .btn { max-width: 100%; height: auto; min-height: 32px; padding-top: 6px; padding-bottom: 6px; white-space: normal; text-align: left; }

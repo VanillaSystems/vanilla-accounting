@@ -1,0 +1,526 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08">
+  <BkToCstmrStmt>
+    <GrpHdr>
+      <MsgId>MSG-STM-RAIFFEISEN-2026-01</MsgId>
+      <CreDtTm>2026-04-01T06:00:00</CreDtTm>
+    </GrpHdr>
+    <Stmt>
+      <Id>STM-RAIFFEISEN-2026-01</Id>
+      <CreDtTm>2026-04-01T06:00:00</CreDtTm>
+      <FrToDt><FrDtTm>2026-01-01T00:00:00</FrDtTm><ToDtTm>2026-03-31T23:59:59</ToDtTm></FrToDt>
+      <Acct>
+        <Id><IBAN>CH8180808000000000004</IBAN></Id>
+        <Ccy>CHF</Ccy>
+        <Ownr><Nm>Salon Beispiel</Nm></Ownr>
+        <Svcr><FinInstnId><Nm>Raiffeisenbank Beispiel</Nm></FinInstnId></Svcr>
+      </Acct>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="CHF">6500.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-01-01</Dt></Dt>
+      </Bal>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="CHF">6893.50</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-03-31</Dt></Dt>
+      </Bal>
+      <Ntry>
+        <Amt Ccy="CHF">1450.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-01</Dt></BookgDt>
+        <ValDt><Dt>2026-01-01</Dt></ValDt>
+        <AcctSvcrRef>90000000001</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">1450.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>MUSTER IMMOBILIEN WINTERTHUR AG</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Miete Salon Januar 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Dauerauftrag Miete Salon</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">439.75</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-09</Dt></BookgDt>
+        <ValDt><Dt>2026-01-09</Dt></ValDt>
+        <AcctSvcrRef>90000000002</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">439.75</Amt>
+            <RltdPties><Cdtr><Pty><Nm>BEISPIEL HAARKOSMETIK AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000042002026016</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung HK-2026-01</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Beispiel Haarkosmetik AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">1601.65</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-14</Dt></BookgDt>
+        <ValDt><Dt>2026-01-14</Dt></ValDt>
+        <AcctSvcrRef>90000000003</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">1601.65</Amt>
+            <RltdPties><Dbtr><Pty><Nm>BELLA BEISPIEL</Nm></Pty></Dbtr></RltdPties>
+            <AddtlTxInf>Bareinzahlung Kasse Januar 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Bareinzahlung</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">59.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-19</Dt></BookgDt>
+        <ValDt><Dt>2026-01-19</Dt></ValDt>
+        <AcctSvcrRef>90000000004</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">59.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Muster Telecom AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000086422026013</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung MT-202601</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>eBill Muster Telecom AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">1491.15</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-20</Dt></BookgDt>
+        <ValDt><Dt>2026-01-20</Dt></ValDt>
+        <AcctSvcrRef>90000000005</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">1491.15</Amt>
+            <RltdPties><Dbtr><Pty><Nm>SUMUP PAYMENTS LTD</Nm></Pty></Dbtr></RltdPties>
+            <AddtlTxInf>SumUp Auszahlung PO-202601</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>SumUp Auszahlung</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">680.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-21</Dt></BookgDt>
+        <ValDt><Dt>2026-01-21</Dt></ValDt>
+        <AcctSvcrRef>90000000006</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">680.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Muster Versicherungen AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000000630020263</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Prämienrechnung 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Muster Versicherungen AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">2500.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-26</Dt></BookgDt>
+        <ValDt><Dt>2026-01-26</Dt></ValDt>
+        <AcctSvcrRef>90000000007</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">2500.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>BELLA BEISPIEL</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Privatbezug Januar 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Privatbezug Bella Beispiel</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">787.35</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-01-27</Dt></BookgDt>
+        <ValDt><Dt>2026-01-27</Dt></ValDt>
+        <AcctSvcrRef>90000000008</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">787.35</Amt>
+            <RltdPties><Dbtr><Pty><Nm>TWINT AG</Nm></Pty></Dbtr></RltdPties>
+            <AddtlTxInf>TWINT Sammelgutschrift Januar 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>TWINT Gutschrift</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">1102.20</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-02-02</Dt></BookgDt>
+        <ValDt><Dt>2026-02-02</Dt></ValDt>
+        <AcctSvcrRef>90000000009</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">1102.20</Amt>
+            <RltdPties><Dbtr><Pty><Nm>BELLA BEISPIEL</Nm></Pty></Dbtr></RltdPties>
+            <AddtlTxInf>Bareinzahlung Kasse Januar 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Bareinzahlung</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">1450.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-02-02</Dt></BookgDt>
+        <ValDt><Dt>2026-02-02</Dt></ValDt>
+        <AcctSvcrRef>90000000010</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">1450.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>MUSTER IMMOBILIEN WINTERTHUR AG</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Miete Salon Februar 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Dauerauftrag Miete Salon</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">386.25</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-02-09</Dt></BookgDt>
+        <ValDt><Dt>2026-02-09</Dt></ValDt>
+        <AcctSvcrRef>90000000011</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">386.25</Amt>
+            <RltdPties><Cdtr><Pty><Nm>BEISPIEL HAARKOSMETIK AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000042002026024</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung HK-2026-02</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Beispiel Haarkosmetik AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">1676.60</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-02-16</Dt></BookgDt>
+        <ValDt><Dt>2026-02-16</Dt></ValDt>
+        <AcctSvcrRef>90000000012</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">1676.60</Amt>
+            <RltdPties><Dbtr><Pty><Nm>BELLA BEISPIEL</Nm></Pty></Dbtr></RltdPties>
+            <AddtlTxInf>Bareinzahlung Kasse Februar 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Bareinzahlung</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">59.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-02-18</Dt></BookgDt>
+        <ValDt><Dt>2026-02-18</Dt></ValDt>
+        <AcctSvcrRef>90000000013</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">59.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Muster Telecom AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000086422026029</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung MT-202602</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>eBill Muster Telecom AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">1624.40</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-02-20</Dt></BookgDt>
+        <ValDt><Dt>2026-02-20</Dt></ValDt>
+        <AcctSvcrRef>90000000014</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">1624.40</Amt>
+            <RltdPties><Dbtr><Pty><Nm>SUMUP PAYMENTS LTD</Nm></Pty></Dbtr></RltdPties>
+            <AddtlTxInf>SumUp Auszahlung PO-202602</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>SumUp Auszahlung</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">2500.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-02-26</Dt></BookgDt>
+        <ValDt><Dt>2026-02-26</Dt></ValDt>
+        <AcctSvcrRef>90000000015</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">2500.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>BELLA BEISPIEL</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Privatbezug Februar 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Privatbezug Bella Beispiel</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">595.50</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-02-27</Dt></BookgDt>
+        <ValDt><Dt>2026-02-27</Dt></ValDt>
+        <AcctSvcrRef>90000000016</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">595.50</Amt>
+            <RltdPties><Dbtr><Pty><Nm>TWINT AG</Nm></Pty></Dbtr></RltdPties>
+            <AddtlTxInf>TWINT Sammelgutschrift Februar 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>TWINT Gutschrift</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">1440.65</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-02</Dt></BookgDt>
+        <ValDt><Dt>2026-03-02</Dt></ValDt>
+        <AcctSvcrRef>90000000017</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">1440.65</Amt>
+            <RltdPties><Dbtr><Pty><Nm>BELLA BEISPIEL</Nm></Pty></Dbtr></RltdPties>
+            <AddtlTxInf>Bareinzahlung Kasse Februar 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Bareinzahlung</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">1450.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-02</Dt></BookgDt>
+        <ValDt><Dt>2026-03-02</Dt></ValDt>
+        <AcctSvcrRef>90000000018</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">1450.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>MUSTER IMMOBILIEN WINTERTHUR AG</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Miete Salon März 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Dauerauftrag Miete Salon</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">497.70</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-09</Dt></BookgDt>
+        <ValDt><Dt>2026-03-09</Dt></ValDt>
+        <AcctSvcrRef>90000000019</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">497.70</Amt>
+            <RltdPties><Cdtr><Pty><Nm>BEISPIEL HAARKOSMETIK AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000042002026032</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung HK-2026-03</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Beispiel Haarkosmetik AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">179.10</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-12</Dt></BookgDt>
+        <ValDt><Dt>2026-03-12</Dt></ValDt>
+        <AcctSvcrRef>90000000020</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">179.10</Amt>
+            <RltdPties><Cdtr><Pty><Nm>STADTWERK BEISPIEL</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000006400202612</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung SW-2026-Q1</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Zahlung Stadtwerk Beispiel</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">1298.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-16</Dt></BookgDt>
+        <ValDt><Dt>2026-03-16</Dt></ValDt>
+        <AcctSvcrRef>90000000021</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">1298.00</Amt>
+            <RltdPties><Dbtr><Pty><Nm>BELLA BEISPIEL</Nm></Pty></Dbtr></RltdPties>
+            <AddtlTxInf>Bareinzahlung Kasse März 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Bareinzahlung</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">59.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-18</Dt></BookgDt>
+        <ValDt><Dt>2026-03-18</Dt></ValDt>
+        <AcctSvcrRef>90000000022</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">59.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Muster Telecom AG</Nm></Pty></Cdtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000086422026037</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung MT-202603</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>eBill Muster Telecom AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">1212.35</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-20</Dt></BookgDt>
+        <ValDt><Dt>2026-03-20</Dt></ValDt>
+        <AcctSvcrRef>90000000023</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">1212.35</Amt>
+            <RltdPties><Dbtr><Pty><Nm>SUMUP PAYMENTS LTD</Nm></Pty></Dbtr></RltdPties>
+            <AddtlTxInf>SumUp Auszahlung PO-202603</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>SumUp Auszahlung</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">2500.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-26</Dt></BookgDt>
+        <ValDt><Dt>2026-03-26</Dt></ValDt>
+        <AcctSvcrRef>90000000024</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">2500.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>BELLA BEISPIEL</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Privatbezug März 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Privatbezug Bella Beispiel</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">557.85</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-27</Dt></BookgDt>
+        <ValDt><Dt>2026-03-27</Dt></ValDt>
+        <AcctSvcrRef>90000000025</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">557.85</Amt>
+            <RltdPties><Dbtr><Pty><Nm>TWINT AG</Nm></Pty></Dbtr></RltdPties>
+            <AddtlTxInf>TWINT Sammelgutschrift März 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>TWINT Gutschrift</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">1223.60</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-31</Dt></BookgDt>
+        <ValDt><Dt>2026-03-31</Dt></ValDt>
+        <AcctSvcrRef>90000000026</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">1223.60</Amt>
+            <RltdPties><Dbtr><Pty><Nm>BELLA BEISPIEL</Nm></Pty></Dbtr></RltdPties>
+            <AddtlTxInf>Bareinzahlung Kasse März 2026</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Bareinzahlung</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">8.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-03-31</Dt></BookgDt>
+        <ValDt><Dt>2026-03-31</Dt></ValDt>
+        <AcctSvcrRef>90000000027</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">8.00</Amt>
+            <RltdPties><Cdtr><Pty><Nm>Raiffeisenbank Beispiel</Nm></Pty></Cdtr></RltdPties>
+            <AddtlTxInf>Kontoführung 1. Quartal</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Kontoführungsgebühren</AddtlNtryInf>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>

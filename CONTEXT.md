@@ -13,13 +13,19 @@ A confirmed link between a Receipt and a BankTransaction. Many-to-many: one Rece
 The staging folder `beleg-import/` where new receipts arrive — either manually on the laptop (downloaded PDFs) or uploaded from the iOS app via `POST /api/upload`. Files here are unprocessed. After `extract` + `match`, they are renamed and moved to `receipts/`.
 
 ## Workspace
-The directory holding one company's data: `belege.workspace.yaml` (who the company is, which ledger account each bank books on), `books.json`, `receipts/`, `beleg-import/`, `bank-statements/`, `filings/`, `accounts.json`, `history/` (prior-year books) and `data/` (gitignored). The layout is fixed (`src/workspace/workspace.ts`). Every CLI and the API open it with `openWorkspace()`: `VANILLA_WORKSPACE`, else the first directory from the cwd upward that holds a manifest. The app's own files (`processes/`, `reference/`) are found from the code, never from the cwd.
+The folder `vanilla-accounting/` of one company's repository, holding its data: `belege.workspace.yaml` (who the company is, which ledger account each bank books on), `knowledge/`, `beleg-import/`, `history/` (prior-year books), `ledger.json`, `master-data/accounts.json`, the **Year folders** and `data/` (gitignored). The layout is fixed, one list with each name's owner (`LAYOUT` in `src/workspace/workspace.ts`, ADR 0013). Every CLI and the API open it with `openWorkspace()`: `VANILLA_WORKSPACE`, else the first directory from the cwd upward that holds a manifest or a `vanilla-accounting/` with one. The app's own files (`processes/`, `reference/`) are found from the code, never from the cwd.
 
 ## Profile
 How the company works, as `npm run init` asked it: legal form and VAT setup on `company`, the rest (what it sells, employees, private payments, payouts) in the manifest's `profile` block. The questions, their supported answers and why the others stop are one table, `src/workspace/setup.ts`. The profile picks the accounts of the chart a workspace starts from (`reference/charts/ch-kmu.yaml`, each account with a `type` and its `line` in the balance sheet or income statement per OR 959a/959b).
 
+## VAT setup
+The kind of firm the books belong to, one typed value (`VatSetup`, `src/workspace/vat-setup.ts`) on `company.vat`: **not registered** (every entry gross, no codes, no return), **effective method** (input tax per receipt, form 0550, quarterly), or **net tax rate method** (Saldosteuersatz: one or two approved rates on the gross turnover, no input tax, form 0553, half-yearly). Parsed once at the manifest boundary and handed to the engines with the jurisdiction; `vatSetup()`, `filing()` and `vat()` answer for it everywhere. A **filing period** is a quarter or a half year accordingly (`QuarterKey`, seals, `corrects`). The setup holds for whole years.
+
+## Year folder
+`transactional-data/<year>/` of the workspace: one fiscal year's `books/` (entries, transactions, mappings, receipts, statements and balances as JSON Lines), `receipts/`, `bank-statements/<bank>/`, `filings/`, `invoices/` and `expected/`. A record and its file lie in the year of the entry that books it; a closed year's folder is never written again.
+
 ## Index
-The single shared data file `books.json` at the workspace root (see **Workspace**). Written by CLI scripts, read by the React app and mutated by the local API server.
+The books as one object (`Books` in `src/books/store.ts`): `ledger.json` and every year folder's `books/`, read by `loadBooks` and written back by `saveBooks`, file by file (see **Workspace**). The API serves it to the React app as `/books.json`.
 
 ## Local API Server
 A minimal Express server (`src/server/api.ts`) that runs alongside Vite during `npm run dev:full`. Provides write access to the Index and the filesystem. Not present in production static builds.

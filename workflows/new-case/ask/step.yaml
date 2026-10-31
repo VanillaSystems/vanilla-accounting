@@ -1,0 +1,6 @@
+label: {"de": "Person entscheidet", "en": "A person decides", "fr": "Une personne décide", "it": "Una persona decide"}
+by: person
+task: {"title": {"de": "Neuer Fall: {case}", "en": "New case: {case}", "fr": "Nouveau cas : {case}", "it": "Nuovo caso: {case}"}, "do": "decide"}
+reads: ["case"]
+emits: ["decision"]
+outcomes: {"decided": "write"}

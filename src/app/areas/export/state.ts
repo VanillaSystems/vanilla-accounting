@@ -5,7 +5,7 @@
 import { localToday, parsePeriod, type Period } from '../../../accounting/periods.js';
 import { PRESETS, presetPeriod, type ExportRequest, type PresetId, type Selection } from '../../../export/model.js';
 import type { Route } from '../../shell/route.js';
-import { ApiError } from '../../lib/api.js';
+import { ApiError, apiFetch } from '../../lib/api.js';
 import { language } from '../../i18n/index.js';
 
 export interface DialogConfig {
@@ -39,7 +39,7 @@ function pageItems(route: Route): Selection {
     case 'bank': return { payments: ['csv'], statements: ['orig'] };
     case 'journal': case 'codes': return { journal: ['csv'] };
     case 'vat': return { vat: ['pdf', 'csv'] };
-    case 'reports': return { [route.report]: ['pdf', 'csv'] };
+    case 'reports': return route.report === 'custom' ? {} : { [route.report]: ['pdf', 'csv'] };
     default: return {};
   }
 }
@@ -57,14 +57,17 @@ export function saveOwnPresets(list: OwnPreset[]): void {
 
 export const periodOf = (token: string): Period => parsePeriod(token, localToday())!;
 
-/** Sends the request and saves what comes back under the name the server gives it; returns that name. */
-export async function download(req: Omit<ExportRequest, 'language'>): Promise<string> {
-  const res = await fetch('/api/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...req, language: language() }) });
+/** Sends the request and hands what comes back to the browser under the name the server gives it; returns that name. The browser (or its Save dialog) finishes the file later, unseen by the page. */
+export const download = (req: Omit<ExportRequest, 'language'>): Promise<string> => postDownload('/api/export', { ...req, language: language() }, 'export.zip');
+
+/** A POST whose answer is a file: saved by the browser under the server's name, which it returns. */
+export async function postDownload(path: string, body: unknown, fallback: string): Promise<string> {
+  const res = await apiFetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!res.ok) {
-    const body = await res.json().catch(() => null) as ConstructorParameters<typeof ApiError>[0] | null;
-    throw new ApiError(body?.error ? body : { error: `HTTP ${res.status}` });
+    const err = await res.json().catch(() => null) as ConstructorParameters<typeof ApiError>[0] | null;
+    throw new ApiError(err?.error ? err : { error: `HTTP ${res.status}` });
   }
-  const name = decodeURIComponent(/filename\*=UTF-8''([^;]+)/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? 'export.zip');
+  const name = decodeURIComponent(/filename\*=UTF-8''([^;]+)/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? fallback);
   const url = URL.createObjectURL(await res.blob());
   const a = Object.assign(document.createElement('a'), { href: url, download: name });
   document.body.append(a);

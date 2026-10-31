@@ -2,7 +2,7 @@
 
 Quarterly VAT accounting requires gathering receipts from email and vendor portals.
 This document describes the design decisions for automating that process. To set up a
-mailbox for the first time (mail.yaml, app passwords, the app's .env), follow
+mailbox for the first time (a source in sources/, its password in the keychain), follow
 [Set up a mailbox for receipt collection](../mail-setup.md).
 
 ## Vendor Quick Index
@@ -60,7 +60,7 @@ the same way. The vendor notes below describe the pages, not the tool. Three har
   fresh one instead of trying to resume.
 
 **Mail: browser login ≠ IMAP access.** Being signed in to a mailbox in the browser does nothing
-for `npm run collect`, which authenticates over IMAP with an app-specific password. If IMAP
+for a mail source, which authenticates over IMAP with an app-specific password. If IMAP
 LOGIN hangs or fails while the IMAP host is reachable and the other mailboxes work,
 the app password is stale — mint a new one. As a fallback when no app password is available,
 a webmail's receipts can be collected through an Aside session instead, with
@@ -77,23 +77,17 @@ The user is present to handle 2FA, CAPTCHAs, and login prompts as needed.
 
 ### 1. Fetch email summaries
 
-Check that every mailbox logs in (`npm run doctor -- --mail`), then run the IMAP fetch across
-the workspace's mailboxes (`mail.yaml`) for the target quarter:
-
-```
-npx tsx src/collect/test-imap.ts 2026-Q3   # the quarter; default: the current one
-```
-
-(Or Claude runs the fetch inline during the session.)
-
-This produces a sender-domain breakdown of all emails in the date range.
+Check that every mail source logs in (`npm run doctor -- --mail`), then pull each one
+(`npm run pull -- <source>`; `--dry` counts first). The daily workflow «Belege und Daten holen»
+does the same on its own; each source goes on where it stopped (`collected/<source>.jsonl`).
 
 ### 2. Filter a mixed mailbox by sender domain
 
-A mailbox marked `mixed: true` in the workspace's `mail.yaml` (a personal address, say) holds
-business and private mail. Business-only mailboxes need no filtering.
+A mailbox marked `mixed: true` in its source (a personal address, say) holds business and
+private mail. Business-only mailboxes need no filtering.
 
-The sender lists are in `mail.yaml` (read by `src/collect/mail-config.ts`):
+The sender lists are in the source's `source.yaml`: `reach.mail.skip` holds the senders it never
+reads, and `settings.skip`, `settings.include` and `settings.links` the lists of before:
 
 - **skipDomains** — definitely private/irrelevant (real estate, personal travel, newsletters, social media, etc.)
 - **includeDomains** — definitely business (SaaS invoices, suppliers, shipping, banking)
@@ -101,7 +95,7 @@ The sender lists are in `mail.yaml` (read by `src/collect/mail-config.ts`):
   against what the company buys (`company.business` in `belege.workspace.yaml`).
 
 When new domains appear, Claude classifies them and the user confirms.
-Add newly confirmed domains to `mail.yaml` after each quarter.
+Add newly confirmed domains to the source after each quarter; the change waits to be switched on in Firma › Quellen.
 
 ### 3. Classify ambiguous emails
 
@@ -152,7 +146,7 @@ gs -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dQUIET -dPDFSETTINGS=/screen -dColorImag
 
 ### Phase 1: Email
 
-Scan every mailbox of `mail.yaml` via IMAP for the requested date range.
+Pull every mail source (sources/) via IMAP.
 Claude classifies each email in-session (no per-call API costs).
 This phase discovers receipts across all vendors — no hardcoded vendor list.
 
@@ -177,15 +171,14 @@ Before collecting:
 1. Open the provider's app-password page (Google: https://myaccount.google.com/apppasswords)
 2. Name it "vanilla-accounting-collect"
 3. Copy the generated password
-4. Add it to the **app's** `.env` (the app folder, where `npm` runs; dotenv reads it from
-   there, a workspace `.env` is not read): `<ENV>_IMAP_PASSWORD=xxxx-xxxx-xxxx-xxxx` (the
-   `env` prefix of that mailbox in mail.yaml)
+4. Put it into the keychain, typed without echo: `npm run secret -- source:<env>:mail` (the
+   `env` prefix of that mailbox in mail.yaml, in small letters)
 5. `npm run doctor -- --mail`: every mailbox shows ✓ logs in
 
 After collecting:
 1. Open the same app-password page
 2. Delete the "vanilla-accounting-collect" app password
-3. Remove or blank the password in the app's `.env`
+3. Remove it from the keychain: `npm run secret -- source:<env>:mail --delete`
 
 **Claude: always remind the user to revoke the app password after the collection run completes.**
 
@@ -197,9 +190,9 @@ Explicit date range via `--quarter` shorthand:
 
 ## Code Location
 
-Utility functions in `src/collect/` within the app repo:
-- `imap.ts` — IMAP connection, email fetch, quarter parsing
-- `mail-config.ts` — the workspace's `mail.yaml`: mailboxes and sender classification (skip / include / ambiguous)
+Sources (ADR 0014) in the app repo: `src/platform/sources/` (the host: reach, the mail channel,
+the ledger, the child the code runs in) and `sources/imap/` (the code that takes the PDFs);
+`src/collect/` keeps the vendor tools not yet moved into sources:
 - Attachment extraction from email
 - Email-body-to-PDF conversion
 - URL extraction from email HTML body
@@ -450,11 +443,12 @@ regime applied. Orders fall into three buckets, and treating them as a simple
 | Rest of world | no `Taxes` line at all (orders in other currencies) | export, no VAT — V0 |
 
 **The EU bucket is the trap.** Shopify collects German/French/etc. VAT at the destination rate
-on those orders. That tax is **not Swiss output tax** and must never be booked as V81; the sale
-is an export from Switzerland (zero-rated), and the EU VAT portion of the gross is not revenue.
-Whether Shopify remits it as deemed supplier/IOSS or whether it falls to the company is a
-question for the tax advisor — but it has to be separated out either way, because booking the
-full gross as Swiss-taxable turnover would both overstate turnover and misstate the return.
+on those orders. That tax is **not Swiss output tax** and must never be booked as V81: the sale
+is an export from Switzerland, V0 on the order's whole gross, the foreign tax line named in the
+booking's reason (processes/booking.guide.yaml#sale_vat sv-order-tax, issue #74). The gross is the
+export's consideration (MWSTG Art. 24 Abs. 1), declared in Ziffer 200 and deducted again in 220,
+so the Swiss tax is 0 either way; the foreign VAT the company pays abroad (the courier's import
+VAT on a DDP shipment, an IOSS return) is its own expense entry without Swiss input tax.
 
 The measured split is in the workspace runbook.
 
@@ -464,8 +458,10 @@ unbekannt"), which carry no country or tax breakdown — so every revenue entry 
 back **V0**, and the Swiss output tax of the Swiss orders is then **not** recognised. Understating output tax is
 an error against the authority, so after every `classify` run: cross-check the order pages' `Taxes`
 lines against the V-codes actually booked, and reallocate the Swiss portion to V81. The EU-VAT
-orders stay zero-rated for Swiss purposes, but their EU VAT is not revenue
-either — confirm with the tax advisor whether Shopify remits it as deemed supplier under IOSS.
+orders stay V0. Since #203 the payout is booked bank / clearing account, and the order export
+(Shopify Admin › Bestellungen › Exportieren, CSV) dropped into the app books each order onto the
+clearing account with its own code, by its delivery country (src/booking/sales-report.ts); the order
+pages stay filed as proof of the delivery and are linked to their sale.
 
 **Each order page also carries the payout linkage**, which is how per-order fees are derived:
 
@@ -650,7 +646,7 @@ Google Ads and Google's consumer subscriptions send no PDF anywhere.
   whether it is a business expense before any Vorsteuer is claimed.
 
 ### Infomaniak
-- Mails go to the Infomaniak account's login address. A mailbox in `npm run collect` that filters on
+- Mails go to the Infomaniak account's login address. A mail source whose box filters on
   `To:` an alias never sees them (which address: the workspace runbook).
 - "<Company>: receipt of your payment of CHF x" links the invoice as
   `https://api.infomaniak.com/2/invoicing/invoice/pdf/<token>`. A plain GET downloads the PDF with no

@@ -1,0 +1,7 @@
+# The app's IMAP source (ADR 0014): a company binds it per mailbox with `code: app:imap` and its own
+# reach (host, account, folders, senders). It is never run on its own.
+bindable: true
+label: { en: Mailbox, de: Mailbox, fr: Boîte mail, it: Casella }
+code: ./source.ts
+feeds:
+  attachments: { output: document, every: daily }

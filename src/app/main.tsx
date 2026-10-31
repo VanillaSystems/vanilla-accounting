@@ -14,10 +14,21 @@ import '@fontsource/geist-mono/500.css';
 import './styles/tokens.css';
 import './styles/shell.css';
 import './styles/detail.css';
+import './styles/assistant.css';
 import { Shell } from './shell/Shell.js';
 import { useLanguage } from './shell/prefs.js';
-import { desktop } from './desktop/bridge.js';
+import { desktop, noTitleBar } from './desktop/bridge.js';
 import { StartScreen, useStartScreen } from './desktop/StartScreen.js';
+import { HoverTip } from './shell/HoverTip.js';
+
+if (noTitleBar) {
+  document.documentElement.classList.add('no-titlebar');
+  // The window's title bar zone: a real element, since Electron takes the drag regions from elements.
+  const bar = document.createElement('div');
+  bar.className = 'dragbar';
+  bar.setAttribute('aria-hidden', 'true');
+  document.body.prepend(bar);
+}
 
 /** A new language remounts the app, so every text, including module-level ones, is read again. */
 function Root() {
@@ -25,9 +36,14 @@ function Root() {
   const [language, setLanguage] = useLanguage(start === false);
   useEffect(() => { desktop?.setLanguage(language); }, [language]);
   if (start === undefined) return null;
-  return start
-    ? <StartScreen key={language} language={language} onLanguage={setLanguage} />
-    : <Shell key={language} language={language} onLanguage={setLanguage} />;
+  return (
+    <>
+      {start
+        ? <StartScreen key={language} language={language} onLanguage={setLanguage} />
+        : <Shell key={language} language={language} onLanguage={setLanguage} />}
+      <HoverTip />
+    </>
+  );
 }
 
 createRoot(document.getElementById('root')!).render(

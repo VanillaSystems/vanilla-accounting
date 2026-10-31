@@ -57,7 +57,8 @@ a.vlink:hover { text-decoration-color: currentColor; color: var(--ink); }
 .ftable .fl.tot { font-weight: 600; color: var(--ink); }
 .ftable .fl.chg { background: var(--warn-soft); }
 .ftable .fl.chg > :last-child { color: var(--warn); font-weight: 600; }
-.ftable .tt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A box name wraps rather than being cut («Total der v…» at 1024 px, r9n-38). */
+.ftable .tt { overflow-wrap: anywhere; }
 .ftable .r { text-align: right; }
 .fcases { font: 700 15px "Hanken Grotesk"; margin: 30px 0 4px; }
 .f0535 .notice .block { display: block; }
@@ -75,3 +76,5 @@ a.vlink:hover { text-decoration-color: currentColor; color: var(--ink); }
   .f0535 .ldl { display: none; }
   .ftable .fl.chg { background: none; font-weight: 600; }
 }
+.notice.vnovat { align-items: flex-start; gap: 0; margin: 0 0 16px; line-height: 1.45; }
+.notice.vnovat .dot { flex: none; margin-top: 7px; }

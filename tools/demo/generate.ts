@@ -1,10 +1,11 @@
 /**
  * npm run demo:generate -- [--demo DIR] [--seed N] [--out DIR]
  *
- * Writes every demo workspace in DEMOS (synthetic companies, see tools/demo/kit.ts), or only
- * --demo's: books.json, receipts/ as text PDFs, bank-statements/ as camt053 XML plus monthly
- * PDFs, the as-filed Q1 return under filings/, accounts.json, knowledge/ and the manifest.
- * Each lands in <app>/<demo.dir> unless --out names another directory (only with --demo).
+ * Writes every demo repository in DEMOS (synthetic companies, see tools/demo/kit.ts), or only
+ * --demo's, its books in vanilla-accounting/ (ADR 0013): the books by year, receipts/ as text
+ * PDFs, bank-statements/ as camt053 XML plus monthly PDFs, the as-filed Q1 return under filings/,
+ * master-data/accounts.json, knowledge/ and the manifest. Each lands in <app>/<demo.dir> unless
+ * --out names another directory (only with --demo).
  * The same seed always gives the same bytes; the output directory is replaced as a whole.
  *
  * The filed return is produced by the real `vat-xml` CLI on the books as they stood when
@@ -16,13 +17,16 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, s
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { BankStatement, BankTransaction, Index, JournalEntry, Mapping, Receipt, StatementClosingBalance } from '../../src/types/index.js';
-import { assignUniqueRefs, readCamt, transactionsOf } from '../../src/parsers/camt053.js';
-import { bankKind } from '../../src/workspace/banks.js';
-import { figuresFromBooks } from '../../src/accounting/return-figures.js';
+import type { BankStatement, BankTransaction, Index, JournalEntry, Mapping, QuarterKey, Receipt, StatementClosingBalance } from '../../src/types/index.js';
+import { assignUniqueRefs, readCamt, transactionsOf } from '../../src/providers/camt053/camt053.js';
+import { bankKind, roleBefore } from '../../src/workspace/banks.js';
 import { loadFxResolver } from '../../src/accounting/fx-rates.js';
 import { sealOf } from '../../src/books/seal.js';
-import { BOOKS_SCHEMA } from '../../src/workspace/schema.js';
+import { BOOKS_SCHEMA, WORKSPACE_SCHEMA } from '../../src/workspace/schema.js';
+import { writeBooks } from '../../src/books/store.js';
+import { BOOK_FILES, splitByYear, toJsonl } from '../../src/books/years.js';
+import { APP_FOLDER, workspacePaths } from '../../src/workspace/workspace.js';
+import { GITATTRIBUTES } from '../../src/workspace/scaffold.js';
 import { camt053Xml, type CamtEntry } from './camt053.js';
 import { textPdf } from './pdf.js';
 import { chf, PAID_PRIVATELY, uidChecksumValid, YEAR, type Demo, type Doc, type Payment, type StatementBank } from './kit.js';
@@ -31,11 +35,23 @@ import { loadInvoices, readPdf } from '../../src/invoices/store.js';
 import { matchPayments } from '../../src/invoices/payments.js';
 import { kaffee } from './kaffee.js';
 import { consulting } from './consulting.js';
+import { coiffeur } from './coiffeur.js';
+import { schreinerei } from './schreinerei.js';
+import { setJurisdiction, vat } from '../../src/engines/index.js';
+import { loadJurisdiction } from '../../src/core/modules/load.js';
+import { EFFECTIVE_QUARTERLY, vatSetupYaml } from '../../src/workspace/vat-setup.js';
+import { filingKeyOf } from '../../src/accounting/periods.js';
+import { openItemAccounts } from '../../src/accounting/tax-point.js';
 
 /** Every demo workspace `npm run demo:generate` writes. */
-const DEMOS: readonly Demo[] = [kaffee, consulting];
+const DEMOS: readonly Demo[] = [kaffee, consulting, coiffeur, schreinerei];
 
 const APP_ROOT = fileURLToPath(new URL('../..', import.meta.url));
+/** The demo year's folder in the demo repository: every record of a demo lies in it. */
+const YEAR_DIR = `${APP_FOLDER}/transactional-data/${YEAR}`;
+// The demos are written before any workspace opens: they book with the shipped jurisdiction, each for its own kind of firm (build).
+const CH = loadJurisdiction(APP_ROOT, 'ch').jurisdiction;
+setJurisdiction(CH);
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const hashId = (s: string | Buffer) => createHash('sha256').update(s).digest('hex').slice(0, 16);
@@ -140,7 +156,7 @@ function statements(demo: Demo, bankId: string, booked: Booked[], tree: Tree): {
   const balanceAt = (date: string) => r2(mine.filter((b) => b.payment.date <= date)
     .reduce((s, b) => s + (b.direction === 'CRDT' ? b.amount : -b.amount), bank.opening));
   const before = (date: string) => balanceAt(new Date(Date.parse(`${date}T12:00:00Z`) - 864e5).toISOString().slice(0, 10));
-  const dir = `bank-statements/${bank.bank}`;
+  const dir = `${YEAR_DIR}/bank-statements/${bank.bank}`;
 
   for (const [from, to] of QUARTERS) {
     const created = `${new Date(Date.parse(`${to}T12:00:00Z`) + 864e5).toISOString().slice(0, 10)}T06:00:00`;
@@ -189,12 +205,12 @@ function filedReturn(demo: Demo, books: Index): string {
   try {
     symlinkSync(join(APP_ROOT, 'node_modules'), join(dir, 'node_modules'));
     writeFileSync(join(dir, 'belege.workspace.yaml'), manifest(demo));
-    writeFileSync(join(dir, 'books.json'), JSON.stringify(books));
+    writeBooks(workspacePaths(dir), books);
     const out = join(dir, 'filed.xml');
-    execFileSync(process.execPath, ['--import', 'tsx', join(APP_ROOT, 'src/cli/vat-ech0217.ts'), demo.filed.period, out], {
+    execFileSync(process.execPath, ['--import', 'tsx', join(APP_ROOT, 'src/cli/vat-ech0217.ts'), demo.filed!.period, out], {
       cwd: dir, env: { ...process.env, VANILLA_WORKSPACE: dir }, stdio: 'pipe',
     });
-    return readFileSync(out, 'utf8').replace(/<eCH-0217:generationTime>[^<]*</, `<eCH-0217:generationTime>${demo.filed.generationTime}<`);
+    return readFileSync(out, 'utf8').replace(/<eCH-0217:generationTime>[^<]*</, `<eCH-0217:generationTime>${demo.filed!.generationTime}<`);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -205,18 +221,19 @@ function manifest(demo: Demo): string {
   const inv = demo.invoicing;
   // An invoice prints the IBAN of the account it is paid to, so a demo that invoices names its IBANs.
   const accounts = Object.values(demo.banks).map((b) =>
-    `  - { bank: ${b.bank}, currency: ${b.currency}, account: "${b.account}", label: ${b.label}, statements: ${bankKind(b.bank).statements}${inv ? `, iban: ${b.iban}` : ''} }`);
+    `  - { bank: ${b.bank}, currency: ${b.currency}, account: "${b.account}", label: ${b.label}, statements: ${bankKind(b.bank).statements}${inv ? `, iban: ${b.iban}` : ''}, role: ${roleBefore(b.bank)} }`);
   const address = inv ? `  address: { street: ${inv.address.street}, number: "${inv.address.number}", postcode: "${inv.address.postcode}", town: ${inv.address.town}, country: ${inv.address.country} }\n` : '';
+  const vatLine = demo.vat ? JSON.stringify(vatSetupYaml(demo.vat)).replace(/"(\w+)":/g, '$1: ').replace(/,/g, ', ').replace(/\{/g, '{ ').replace(/\}/g, ' }').replace(/\[/g, '[ ').replace(/\]/g, ' ]') : '{ method: effective, reporting: received }';
   return `# The demo company: synthetic data, generated by tools/demo/generate.ts. Do not edit by hand.
-schema: 1
+schema: ${WORKSPACE_SCHEMA}
 company:
   name: ${company.name}
   uid: ${company.uid}
   owner: ${company.owner}
-${address}  vat: { method: effective, reporting: received }
+${demo.legalForm ? `  legalForm: ${demo.legalForm}\n` : ''}${address}  vat: ${vatLine}
 bankAccounts:
 ${accounts.join('\n')}
-  - { bank: manual, currency: CHF, account: "${demo.ownerAccount.account}", label: ${demo.ownerAccount.label} }
+  - { bank: manual, currency: CHF, account: "${demo.ownerAccount.account}", label: ${demo.ownerAccount.label}, role: owner }
 ${inv ? inv.manifest : ''}`;
 }
 
@@ -231,21 +248,25 @@ function assertFictionalUids(demo: Demo): void {
 
 async function build(demo: Demo, seed: number): Promise<Tree> {
   assertFictionalUids(demo);
+  // The engines compute for this demo's kind of firm: its form, its codes, its filing length.
+  setJurisdiction(CH, demo.vat ?? EFFECTIVE_QUARTERLY);
   const tree: Tree = new Map();
   const sc = demo.scenario(seed);
 
-  // The tax payment of Q1 needs Q1's figure, so the books are made once without it.
+  // The tax payment of the filed period needs its figure, so the books are made once without it.
   const draft = book(demo, sc.payments);
-  const q1 = figuresFromBooks(draft.entries, demo.filed.period, []);
-  if (q1.payable <= 0) throw new Error(`${demo.dir}: Q1 must have tax to pay, got ${q1.payable}`);
-  // The Korrekturabrechnung: Q1 as today's books declare it, corrections included, less what was filed.
+  const filedPeriod = demo.filed?.period;
+  const filedFigures = filedPeriod ? vat().figures(draft.entries, filedPeriod, []) : undefined;
+  if (filedFigures && filedFigures.payable <= 0) throw new Error(`${demo.dir}: ${filedPeriod} must have tax to pay, got ${filedFigures.payable}`);
+  // The Korrekturabrechnung: the filed period as today's books declare it, corrections included, less what was filed.
   const corrections: JournalEntry[] = sc.manual.filter((m) => m.corrects).map((m) => ({
     id: m.key, transactionRef: m.key, date: m.date, accountDebit: m.debit, accountCredit: m.credit, amount: m.amount,
     ...(m.vatCode ? { vatCode: m.vatCode } : {}), description: m.text, corrects: m.corrects,
   }));
-  const difference = r2(figuresFromBooks([...draft.entries, ...corrections], demo.filed.period, []).payable - q1.payable);
+  const difference = filedPeriod && filedFigures ? r2(vat().figures([...draft.entries, ...corrections], filedPeriod, []).payable - filedFigures.payable) : 0;
   const correctionPayment = sc.correctionPayment && difference !== 0 ? [sc.correctionPayment(difference)] : [];
-  const { booked, entries, keys } = book(demo, [...sc.payments, sc.taxPayment(q1.payable), ...correctionPayment]);
+  const taxPayment = filedFigures && sc.taxPayment ? [sc.taxPayment(filedFigures.payable)] : [];
+  const { booked, entries, keys } = book(demo, [...sc.payments, ...taxPayment, ...correctionPayment]);
 
   const privately = booked.filter((b) => b.payment.bank === PAID_PRIVATELY).length;
   const manualEntries = sc.manual.map((m, i) => ({ ...m, ref: `M${YEAR}-${String(privately + i + 1).padStart(3, '0')}` }));
@@ -265,8 +286,8 @@ async function build(demo: Demo, seed: number): Promise<Tree> {
   const mappings: Mapping[] = [];
   const addDoc = (doc: Doc, ref: string, indexedOn: string) => {
     const pdf = textPdf(doc.lines);
-    if (tree.has(`receipts/${doc.file}`)) throw new Error(`${demo.dir}: two receipts are named ${doc.file}`);
-    tree.set(`receipts/${doc.file}`, pdf);
+    if (tree.has(`${YEAR_DIR}/receipts/${doc.file}`)) throw new Error(`${demo.dir}: two receipts are named ${doc.file}`);
+    tree.set(`${YEAR_DIR}/receipts/${doc.file}`, pdf);
     const receipt = receiptOf(doc, pdf, indexedOn);
     receipts.push(receipt);
     mappings.push({ transactionRef: ref, receiptId: receipt.id });
@@ -278,9 +299,9 @@ async function build(demo: Demo, seed: number): Promise<Tree> {
 
   // The bank transactions are what our own parser reads from the statements just written.
   const viaBank = booked.filter((b) => b.payment.bank !== PAID_PRIVATELY);
-  const parsed: BankTransaction[] = assignUniqueRefs([...tree].filter(([path]) => path.endsWith('.xml') && path.startsWith('bank-statements/'))
+  const parsed: BankTransaction[] = assignUniqueRefs([...tree].filter(([path]) => path.endsWith('.xml') && path.startsWith(`${YEAR_DIR}/bank-statements/`))
     .flatMap(([path, xml]) => {
-      const bank = path.split('/')[1];
+      const bank = path.slice(`${YEAR_DIR}/bank-statements/`.length).split('/')[0];
       return readCamt(String(xml)).statements.flatMap((s) => transactionsOf(s, { bank, statements: bankKind(bank).statements! }));
     }));
   if (parsed.length !== viaBank.length) throw new Error(`parser read ${parsed.length} transactions, ${viaBank.length} were written`);
@@ -333,16 +354,26 @@ async function build(demo: Demo, seed: number): Promise<Tree> {
     await withSeededIds(seed, () => invoicing(demo, books, tree, paidByInvoice));
   }
 
-  // As filed: the books on filing day knew nothing of the later correction, and Q1 was still open.
-  const asFiled: Index = { ...books, journalEntries: entries.filter((e) => !e.corrects), config: { ...books.config, closedThrough: undefined } };
-  tree.set(`filings/${YEAR}/mwst-ech0217-${demo.filed.period}.xml`, filedReturn(demo, asFiled));
+  // As filed: the books on filing day knew nothing of the later correction, and the period was still open.
+  if (demo.filed) {
+    const asFiled: Index = { ...books, journalEntries: entries.filter((e) => !e.corrects), config: { ...books.config, closedThrough: undefined } };
+    tree.set(`${YEAR_DIR}/filings/mwst-ech0217-${demo.filed.period}.xml`, filedReturn(demo, asFiled));
+  }
 
-  tree.set('books.json', json(books));
-  tree.set(`filings/${YEAR}/seal-${demo.filed.period.slice(5)}.json`, json(sealOf(books, demo.filed.period, demo.filed.generationTime.slice(0, 10))));
-  tree.set('accounts.json', json(demo.accounts.map(([number, name]) => ({ number, name }))));
-  tree.set('belege.workspace.yaml', manifest(demo));
-  for (const [file, yaml] of Object.entries(demo.knowledge)) tree.set(`knowledge/${file}`, yaml);
+  const years = splitByYear({ ...books, journalEntries: books.journalEntries! }, books.config, () => true);
+  if ([...years.keys()].some((y) => y !== YEAR)) throw new Error(`${demo.dir}: every record lies in ${YEAR}, found ${[...years.keys()].join(', ')}`);
+  for (const [part, records] of years.get(YEAR)!) tree.set(`${YEAR_DIR}/books/${BOOK_FILES[part]}`, toJsonl(records));
+  tree.set(`${APP_FOLDER}/ledger.json`, json({ schema: BOOKS_SCHEMA, config: books.config }));
+  // The closed period's seal: the filed period's, or, for a firm without returns, the bookkeeping period that ends on closedThrough.
+  const sealed = demo.filed?.period ?? filingKeyOf(demo.closedThrough, 'quarter') as QuarterKey;
+  const sealedAt = demo.filed?.generationTime.slice(0, 10) ?? demo.sealedAt;
+  if (!sealedAt) throw new Error(`${demo.dir}: a demo without a filed period names sealedAt`);
+  tree.set(`${YEAR_DIR}/filings/seal-${sealed.slice(5)}.json`, json(sealOf(books, sealed, sealedAt)));
+  tree.set(`${APP_FOLDER}/master-data/accounts.json`, json(demo.accounts.map(([number, name]) => ({ number, name }))));
+  tree.set(`${APP_FOLDER}/belege.workspace.yaml`, manifest(demo));
+  for (const [file, yaml] of Object.entries(demo.knowledge)) tree.set(`${APP_FOLDER}/knowledge/${file}`, yaml);
   tree.set('.gitignore', 'data/\n.env\nbeleg-import/\n');
+  tree.set('.gitattributes', GITATTRIBUTES);
   return tree;
 }
 
@@ -356,8 +387,8 @@ async function invoicing(demo: Demo, books: Index, tree: Tree, payments: DemoPay
     const book = loadInvoices(ws);
     const full = { ...books, journalEntries: books.journalEntries!, config: books.config! };
     const paid = matchPayments(full, book, {
-      bankAccounts: ws.bankAccounts, revenueAccount: ws.invoicing!.revenueAccount, fx,
-      pdfOf: (inv) => readPdf(ws, inv.pdf), receiptId: hashId, indexedAt: (tx) => `${tx.date}T18:00:00.000Z`,
+      bankAccounts: ws.bankAccounts, revenueAccount: ws.invoicing!.revenueAccount, fx, openItems: openItemAccounts([]),
+      pdfOf: (inv) => readPdf(ws, inv.pdf), receiptId: hashId, indexedAt: (tx) => `${tx.date}T18:00:00.000Z`, held: () => new Set(),
     });
     const expected = demo.invoicing!.steps.filter((s) => s.do === 'issue' && s.paid).length;
     if (paid.paid.filter((p) => p.booked).length !== expected || paid.questions.length) {
@@ -365,9 +396,10 @@ async function invoicing(demo: Demo, books: Index, tree: Tree, payments: DemoPay
     }
     books.journalEntries!.sort((a, b) => a.date.localeCompare(b.date) || a.transactionRef.localeCompare(b.transactionRef) || a.id.localeCompare(b.id));
     books.receipts.sort((a, b) => a.filename.localeCompare(b.filename));
-    for (const f of paid.files) tree.set(`receipts/${f.filename}`, f.pdf);
-    for (const [path, bytes] of invoiceFiles(ws)) tree.set(path, bytes);
-    tree.set('invoices.json', json(book));
+    for (const f of paid.files) tree.set(`${YEAR_DIR}/receipts/${f.filename}`, f.pdf);
+    for (const [path, bytes] of invoiceFiles(ws)) tree.set(`${APP_FOLDER}/${path}`, bytes);
+    if (demo.invoicing!.logo) tree.set(`${APP_FOLDER}/${demo.invoicing!.logo.file}`, demo.invoicing!.logo.svg);
+    tree.set(`${APP_FOLDER}/invoices.json`, json(book));
   } finally {
     rmSync(ws.paths.root, { recursive: true, force: true });
   }

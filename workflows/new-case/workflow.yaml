@@ -1,0 +1,10 @@
+label: {"de": "Neuer Fall", "en": "New case", "fr": "Nouveau cas", "it": "Nuovo caso"}
+desc: {"de": "Wenn keine Regel passt: eine Person entscheidet einmal, die Entscheidung kommt in die Regeln, und der wartende Lauf geht weiter.", "en": "When no rule fits: a person decides once, the decision goes into the rules, and the waiting run continues.", "fr": "Quand aucune règle ne s’applique : une personne décide une fois, la décision entre dans les règles, et l’exécution en attente reprend.", "it": "Quando nessuna regola si applica: una persona decide una volta, la decisione entra nelle regole e l’esecuzione in attesa riprende."}
+phase: book
+cadence: {"de": "bei Bedarf", "en": "when needed", "fr": "au besoin", "it": "al bisogno"}
+for: case
+triggers:
+  - event: {"name": "case.no-rule"}
+emits: ["case.decided"]
+start: ask
+steps: ["ask", "write", "lint"]

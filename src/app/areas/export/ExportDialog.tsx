@@ -6,15 +6,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import './export.css';
 import type { Index } from '../../../types/index.js';
-import { localToday, openQuarter, type Period } from '../../../accounting/periods.js';
+import { localToday, booksOpenPeriod, type Period } from '../../../accounting/periods.js';
 import { GROUPS, ITEMS, PRESETS, countOf, quartersIn, receiptsIn, type Format, type ItemDef, type ItemId } from '../../../export/model.js';
-import { t } from '../../i18n/index.js';
+import { t, tWith } from '../../i18n/index.js';
 import { errorText, STATIC_EXPORT } from '../../lib/api.js';
 import { getAccountMap } from '../../lib/accounts.js';
 import { periodName } from '../../lib/period-label.js';
 import { PeriodPicker } from '../../shell/PeriodPicker.js';
 import { ICONS } from '../icons.js';
 import { configOf, download, ownConfig, ownPresets, periodOf, saveOwnPresets, type DialogConfig, type OwnPreset } from './state.js';
+import { filing } from '../../../engines/index.js';
+import { periodWord } from '../../lib/vat-words.js';
+import { useWorkspace } from '../../hooks/use-workspace.js';
 
 interface Props {
   initial: DialogConfig;
@@ -44,10 +47,11 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
   useEffect(() => dialogRef.current?.focus(), []);
   const names = getAccountMap();
   const today = localToday();
-  const open = openQuarter(books.config?.closedThrough, today);
+  const open = booksOpenPeriod(books, today, filing().length);
   const period = periodOf(c.period);
 
-  const counts = useMemo(() => Object.fromEntries(ITEMS.map((i) => [i.id, countOf(i.id, books, period, names, account)])) as Record<ItemId, number>, [books, period, names, account]);
+  const ws = useWorkspace();
+  const counts = useMemo(() => Object.fromEntries(ITEMS.map((i) => [i.id, countOf(i.id, books, period, names, account, ws?.filed, filing().length)])) as Record<ItemId, number>, [books, period, names, account, ws]);
   const receiptKb = useMemo(() => receiptsIn(books, period).reduce((s, v) => s + v.r.fileSize, 0) / 1024, [books, period]);
 
   const year = open.token.slice(0, 4);
@@ -84,7 +88,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
       const items = Object.fromEntries(Object.entries(c.items).filter(([id]) => counts[id as ItemId]));
       const name = await download({ period: c.period, items, sums: c.sums, oneBook: c.oneBook, account });
       onClose();
-      toast(t('export.saved', { name }));
+      toast(t('export.saving', { name }));
     } catch (e) {
       setBusy(false);
       toast(t('export.failed', { error: errorText(e) }));
@@ -117,7 +121,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
 
   const hint = (i: ItemDef): string => {
     const n = counts[i.id];
-    if (i.id === 'vat') return n ? quartersIn(period).map((q) => periodName(periodOf(q))).join(', ') : t('export.noQuarter');
+    if (i.id === 'vat') return n ? quartersIn(period, localToday(), filing().length).map((q) => periodName(periodOf(q))).join(', ') : t('export.noQuarter', { period: periodWord().one });
     if (i.id === 'ledger') return account === undefined ? t('export.noAccountChosen') : account === '' ? t('reports.noAccount') : `${account} ${names[account] ?? ''}`;
     if (!n) return t('export.nothingIn');
     switch (i.id) {
@@ -127,7 +131,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
       case 'ledgers': case 'chart': return t('export.unit.accounts', { n });
       case 'receipts': return `${t('export.unit.files', { n })} · ${kb(receiptKb)}`;
       case 'statements': return t('export.unit.files', { n });
-      case 'filings': return t('export.unit.quarters', { n });
+      case 'filings': return t('export.unit.quarters', { n, period: periodWord().one, periods: periodWord().many });
       default: return '';
     }
   };
@@ -151,7 +155,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
             {periods.map((p) => (
               <button key={p} type="button" role="radio" aria-checked={p === c.period} className={p === c.period ? 'on' : ''} onClick={() => change({ period: p })}>{periodName(periodOf(p))}</button>
             ))}
-            <button type="button" className="xcal" aria-haspopup="dialog" title={t('export.customPeriodTip')} onClick={(e) => setPicker(e.currentTarget.getBoundingClientRect())}>
+            <button type="button" className="xcal" aria-haspopup="dialog" data-tip={t('export.customPeriodTip')} onClick={(e) => setPicker(e.currentTarget.getBoundingClientRect())}>
               {ICONS.calendar}<span>{t('export.customPeriod')}</span>
             </button>
           </div>
@@ -161,7 +165,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
             <div className="gh">{t('export.presets')}</div>
             {PRESETS.map((p) => (
               <button key={p.id} type="button" className={c.preset === p.id ? 'on' : ''} onClick={() => setC(configOf(p.id, open, page))}>
-                <b>{t(`export.preset.${p.id}` as 'export.title')}</b><span>{t(`export.preset.${p.id}Note` as 'export.title')}</span>
+                <b>{t(`export.preset.${p.id}` as 'export.title')}</b><span>{tWith(`export.preset.${p.id}Note`, { period: periodWord().one })}</span>
               </button>
             ))}
             {own.length > 0 && <div className="gh">{t('export.own')}</div>}
@@ -170,7 +174,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
                 <button type="button" onClick={() => setC(ownConfig(p))}>
                   <b>{p.name}</b><span>{t('export.ownMeta', { period: periodName(periodOf(p.period)), n: Object.keys(p.items).length })}</span>
                 </button>
-                <button type="button" className="del" title={t('export.deletePreset')} aria-label={t('export.deletePresetNamed', { name: p.name })} onClick={() => remove(i)}>×</button>
+                <button type="button" className="del" data-tip={t('export.deletePreset')} aria-label={t('export.deletePresetNamed', { name: p.name })} onClick={() => remove(i)}>×</button>
               </div>
             ))}
           </nav>
@@ -197,7 +201,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
                             className={f.includes(x) ? 'on' : ''}
                             aria-pressed={f.includes(x)}
                             disabled={!n}
-                            title={x === 'banana' ? t('export.bananaTip') : t(`export.fmt.${x}` as 'export.title')}
+                            data-tip={x === 'banana' ? t('export.bananaTip') : t(`export.fmt.${x}` as 'export.title')}
                             onClick={() => setFormats(i.id, f.includes(x) ? f.filter((y) => y !== x) : [...f, x])}
                           >{t(`export.fmt.${x}` as 'export.title')}</button>
                         )) : <span className="orig">{t('export.originals')}</span>}
@@ -207,7 +211,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
                 })}
               </div>
             ))}
-            {c.preset === 'audit' && <p className="xnote">{t('export.auditNote', { command: 'npm run build:audit' })}</p>}
+            {c.preset === 'audit' && <p className="xnote">{t('export.auditNote')}</p>}
             {STATIC_EXPORT && <p className="xnote">{t('export.staticOff')}</p>}
           </div>
         </div>
@@ -228,7 +232,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
                 autoFocus
                 placeholder={t('export.presetName')}
                 aria-label={t('export.presetName')}
-                defaultValue={c.preset && !PRESETS.some((p) => p.id === c.preset) ? c.preset : t('export.presetDefault')}
+                defaultValue={c.preset && !PRESETS.some((p) => p.id === c.preset) ? c.preset : t('export.presetDefault', { period: periodWord().one })}
                 onFocus={(e) => e.currentTarget.select()}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); e.stopPropagation(); saveNamed(); } }}
               />

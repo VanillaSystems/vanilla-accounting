@@ -1,0 +1,71 @@
+{
+  "assets": [
+    [
+      "Umlaufvermögen",
+      38902.05,
+      [
+        [
+          "1020",
+          26210.3
+        ],
+        [
+          "1021",
+          12691.75
+        ]
+      ]
+    ],
+    [
+      "Anlagevermögen",
+      3972.99,
+      [
+        [
+          "1520",
+          3972.99
+        ]
+      ]
+    ]
+  ],
+  "liabilities": [
+    [
+      "Kurzfristiges Fremdkapital",
+      3507.74,
+      [
+        [
+          "2201",
+          3507.74
+        ]
+      ]
+    ],
+    [
+      "Langfristiges Fremdkapital",
+      -60.79,
+      [
+        [
+          "2451",
+          -60.79
+        ]
+      ]
+    ],
+    [
+      "Eigenkapital",
+      39428.09,
+      [
+        [
+          "2800",
+          20000
+        ],
+        [
+          "2970",
+          26145.85
+        ],
+        [
+          "",
+          -6717.76
+        ]
+      ]
+    ]
+  ],
+  "totalAssets": 42875.04,
+  "totalLiabilities": 42875.04,
+  "isBalanced": true
+}

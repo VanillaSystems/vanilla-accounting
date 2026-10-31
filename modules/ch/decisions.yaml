@@ -1,0 +1,441 @@
+# Switzerland's answers to docs/country-checklist.md, one per question id, in its order.
+# Not read by the loader: the answers are for the people and the AI who build or check a module.
+# tests/country-checklist.test.ts holds the ids to the checklist and every `where` to a real path.
+# `unverified` names what a person who knows Swiss law still has to confirm.
+schema: 1
+module: ch
+
+answers:
+  # ── VAT ───────────────────────────────────────────────────────────────────────────────────
+  vat.registration:
+    answer: >
+      A firm must register once its turnover from taxable supplies in Switzerland and abroad
+      reaches CHF 100'000 within a year; below that it may register voluntarily. An unregistered
+      firm books gross and files nothing; the MWST page shows its calendar-year turnover against
+      the threshold.
+    law: [MWSTG Art. 10 Abs. 2 lit. a, MWSTG Art. 11]
+    where: [modules/ch/registration.yaml, src/app/areas/vat/model.ts]
+    unverified: >
+      The law counts «innerhalb eines Jahres»; the app counts the calendar year. ESTV practice
+      for a new firm (expected turnover of the first twelve months) is not modelled.
+
+  vat.rates:
+    answer: >
+      Normal rate 8.1 %, reduced rate 2.6 %, accommodation 3.8 %, in force since 1.1.2024. The
+      rates 7.7 / 2.5 / 3.7 % applied until 31.12.2023 and stay as superseded rows so old
+      periods can still be corrected.
+    law: [MWSTG Art. 25]
+    where: [modules/ch/rates.yaml, modules/ch/invoicing.yaml#rates, modules/ch/tax-codes.yaml]
+
+  vat.codes:
+    answer: >
+      Banana's code names: V for sales, M for material and goods, I for investments and operating
+      costs, B for acquisition tax, K for input-tax corrections; a leading minus for a refund;
+      -1 for a net amount, -2 for the tax itself. The code's letter is derived from the account,
+      not read from the receipt.
+    law: [none (convention of Banana Buchhaltung, reference/MWST-codes.txt)]
+    where: [modules/ch/tax-codes.yaml, src/engines/tax-codes.ts, src/accounting/vat-codes.ts, docs/vat-codes.md]
+
+  vat.input-tax:
+    answer: >
+      Input tax on material and goods goes to Ziffer 400, on investments and operating costs to
+      405 (by the income statement section of the account). Corrections: 410
+      Einlageentsteuerung, 415 corrections for mixed use and own consumption, 420 reductions for
+      subsidies and donations, all as K codes.
+    law: [MWSTG Art. 28, MWSTG Art. 29, MWSTG Art. 30, MWSTG Art. 32, MWSTG Art. 33, ESTV form 0550]
+    where: [modules/ch/tax-codes.yaml#purchaseBoxes, modules/ch/tax-codes.yaml#patterns, modules/ch/return.yaml#inputTax]
+
+  vat.own-use:
+    answer: >
+      Private use of business assets corrects the input tax (Eigenverbrauch). The year close
+      offers a private-use template on the owner's account with K81-B (Ziffer 415). A payment
+      split into a business and a private part books the private part without VAT.
+    law: [MWSTG Art. 31, ESTV MWST-Info Privatanteile]
+    where: [modules/ch/year-end.yaml#templates, processes/booking.guide.yaml, src/saving/share-rule.ts]
+    unverified: >
+      The number of the ESTV MWST-Info on private shares (flat rates for vehicles and own
+      consumption) was not checked.
+
+  vat.return-form:
+    answer: >
+      ESTV form 0550 (effective method): turnover in 200, deductions 220-280, tax rows 302-383,
+      input tax 400-420, to pay 500 or credit 510.
+    law: [ESTV form 0550, eCH-0217 v2.0.0]
+    where: [modules/ch/return.yaml, docs/specs/mwst-form-0550-03-2024-de.pdf]
+
+  vat.periods:
+    answer: >
+      Quarterly on the effective method, half-yearly on the net tax rate method; the return and
+      the payment are due 60 days after the period ends. Monthly returns on request are not
+      offered.
+    law: [MWSTG Art. 35, MWSTG Art. 71, MWSTG Art. 86]
+    where: [modules/ch/periods.yaml, src/workspace/vat-setup.ts, src/accounting/receipt-due.ts]
+    unverified: >
+      The yearly return with instalments open to small firms since 1.1.2025 (Art. 35 Abs. 1bis)
+      is not modelled; its conditions were not checked.
+
+  vat.basis:
+    answer: >
+      Both. Agreed consideration (vereinbart) is the law's default: a sale's tax arises with the
+      invoice, input tax and Bezugsteuer with the bill received; an invoice the app issues is
+      booked on its date against the receivable, a payment's coded line takes its receipt's date
+      and the open item, the payment settles it. Received consideration (vereinnahmt, the cash
+      basis) is a choice the ESTV approves on request: the payment date is the tax point. The
+      basis is held for a whole tax period; at a switch the open receivables and payables count
+      in the first period after it. The XML names it in formOfReporting (1 vereinbart, 2 vereinnahmt).
+    law: [MWSTG Art. 39, MWSTG Art. 40, MWSTG Art. 41, MWSTG Art. 48 Abs. 1 lit. b, MWSTV Art. 106, MWSTV Art. 107, eCH-0217 v2.0.0]
+    where: [src/workspace/vat-setup.ts, src/accounting/tax-point.ts, src/invoices/events.ts, src/providers/ech0217/xml.ts]
+    unverified: >
+      Whether the ESTV takes the invoice date for the day the bill was received (Art. 40 Abs. 1);
+      the app uses the receipt's date. Whether input tax not claimed in its period may be claimed
+      in a later one without a correction (a bill of an earlier year paid after the switch).
+
+  vat.filing:
+    answer: >
+      Electronically in the ESTV portal, by importing an eCH-0217 v2.0.0 XML (effective method:
+      grossOrNet 2, formOfReporting 2; net tax rate method: simpleTaxRateMethod). npm run
+      vat-xml writes it and refuses a filed period.
+    law: [eCH-0217 v2.0.0, ESTV ePortal]
+    where: [src/providers/ech0217, src/cli/vat-ech0217.ts, docs/specs/eCH-0217-V2.0.0-E-MWST_de.pdf]
+    unverified: Whether electronic filing is mandatory for every firm since 1.1.2025 was not checked.
+
+  vat.reverse-charge:
+    answer: >
+      Acquisition tax (Bezugsteuer) on services from suppliers abroad that charge no Swiss VAT.
+      A registered firm owes it from the first franc (B81-1: Ziffer 383, deducted again at 405);
+      the CHF 10'000 threshold is only for firms not registered. Not on goods (import VAT), not
+      on services exempt under Art. 21 such as payment processing.
+    law: [MWSTG Art. 45, MWSTG Art. 45a, MWSTG Art. 8 Abs. 1, MWSTG Art. 28 Abs. 1 lit. b]
+    where: [modules/ch/tax-codes.yaml#codes, modules/ch/rates.yaml#rows, src/accounting/acquisition-tax.ts, processes/booking.guide.yaml]
+
+  vat.import:
+    answer: >
+      Import VAT is charged by the BAZG. Only the BAZG's electronic assessment (Veranlagungsverfügung
+      MWST, eVV) naming the firm as importer proves the deduction; a courier's bill does not. Booked
+      on 4030 without code, the tax as a single-leg entry with M81-2 (Ziffer 400). The rule lives
+      in the process guide, not in the module.
+    law: [MWSTG Art. 50, MWSTG Art. 28 Abs. 1 lit. c]
+    where: [processes/booking.guide.yaml, processes/authorities/bazg.yaml, modules/ch/setup.yaml#answers.imports]
+    unverified: The deferral procedure (Verlagerungsverfahren, MWSTG Art. 63) is not modelled.
+
+  vat.exempt:
+    answer: >
+      Exports of goods to Ziffer 220 (V0), services whose place of supply is abroad to 221 (V0-E),
+      the notification procedure to 225, services exempt by law to 230, other deductions to 280.
+      The VAT territory is Switzerland and Liechtenstein; invoice words that name a place of supply
+      abroad send a sale to 221.
+    law: [MWSTG Art. 3, MWSTG Art. 8, MWSTG Art. 21, MWSTG Art. 23, MWSTG Art. 38]
+    where: [modules/ch/invoicing.yaml, modules/ch/tax-codes.yaml#codes, src/accounting/sales-without-vat.ts]
+
+  vat.simplified:
+    answer: >
+      The net tax rate method (Saldosteuersatz): one or two rates approved by the ESTV on the gross
+      turnover, no input tax, form 0553, half-yearly. Acquisition tax is owed at the statutory rate
+      without deduction. The flat-rate method for public bodies (Pauschalsteuersatz) is not offered.
+    law: [MWSTG Art. 37, MWSTV Art. 77 ff., ESTV form 0553]
+    where: [modules/ch/return-net-rate.yaml, modules/ch/tax-codes.yaml#netRateCodes, src/workspace/vat-setup.ts]
+    unverified: >
+      The box numbers 323/333 come from Banana's code list, not the paper form; credits 470/471 and
+      corrections 415 are not modelled; the turnover and tax limits of the method were not checked.
+
+  vat.corrections:
+    answer: >
+      A filed return never changes. A mistake in the books is corrected by an entry in the open
+      period with `corrects: "YYYY-Qn"`, declared in that quarter's Korrekturabrechnung (form 0535);
+      a filed return that was wrong although the books were right shows up in the 0535 by itself.
+      Errors must be corrected until the tax claim expires; the year's returns are reconciled with
+      the annual accounts within 180 days after the fiscal year ends.
+    law: [MWSTG Art. 72, MWSTG Art. 42, ESTV form 0535]
+    where: [src/accounting/declarations.ts, src/app/areas/vat/form0535.ts, src/accounting/correction-cases.ts, docs/specs/mwst-form-0535-04-2024-de.pdf]
+    unverified: The app does not remind of the 180-day reconciliation (Finalisierung); whether it should was not decided.
+
+  vat.method-change:
+    answer: >
+      The app holds the VAT setup (registration, method, period, a rate's percent) for a whole
+      calendar year: a change is refused while the open year has entries. The law's longer waiting
+      times between methods are the ESTV's to enforce.
+    law: [MWSTG Art. 37 Abs. 4]
+    where: [src/server/routes/config.ts, src/workspace/vat-setup.ts]
+    unverified: The waiting times for a switch between the effective and the net tax rate method as revised on 1.1.2025.
+
+  # ── Bookkeeping law ───────────────────────────────────────────────────────────────────────
+  books.duty:
+    answer: >
+      Legal entities and sole traders with a turnover of CHF 500'000 or more keep double-entry
+      books with annual accounts; below that a sole trader may record only income, expenses and
+      assets. The app books double entry for everyone; that costs nothing extra, but nothing only
+      full books require may be asked of a small sole trader.
+    law: [OR Art. 957]
+    where: [src/books/store.ts]
+
+  books.principles:
+    answer: >
+      Complete, truthful and systematic records; no entry without a receipt; traceable. The write
+      door records every change with its actor; a payment out waits for its receipt.
+    law: [OR Art. 957a]
+    where: [src/books/store.ts, src/booking/receipt-wait.ts]
+
+  books.retention:
+    answer: >
+      Books, receipts, annual reports and returns: 10 years after the end of the fiscal year.
+      Records for the input-tax correction of real estate: 20 years. The export preset «Alles für
+      10 Jahre» bundles the books, the originals and checksums; the app has no retention period of
+      its own.
+    law: [OR Art. 958f, MWSTG Art. 70 Abs. 2, MWSTG Art. 70 Abs. 3]
+    where: [src/audit, docs/audit-export.md]
+    verified: 2026-10-23, Art. 70 Abs. 3 MWSTG on fedlex (as of 2025-03-31) says 20 years, not 26 (issue #134).
+
+  books.integrity:
+    answer: >
+      Two rules, and no more. (1) MWST: a filed return is final; corrections go through form 0535.
+      So once a quarter's return is filed, `closedThrough` moves to its end and every entry,
+      transaction and mapping dated on or before it is locked by the write door. (2) GeBüV: books
+      on a changeable medium must be kept so that a change can be detected. The seal
+      (transactional-data/<year>/filings/seal-<Qn>.json) hashes those records; books whose sealed
+      part changed open read-only. Swiss law asks for no lock at the moment of recording
+      (no German Festschreibung), no hash chain and no certified software, so the app adds none:
+      open-period entries stay editable. Owner decision 23.10.2026 (issue #125): the seal stays as
+      it is. It does not extend to receipt records or files, the filed XML or the filed period's
+      config entries; the API already refuses those edits.
+    law: [MWSTG Art. 72, GeBüV Art. 3, GeBüV Art. 9]
+    where: [src/books/seal.ts, src/books/store.ts, src/accounting/opening-balance.ts]
+    unverified: >
+      That the seal plus the workspace's git history meet GeBüV Art. 3 and 9 for a changeable
+      medium is the app's reading; a Treuhänder has not confirmed it.
+
+  books.audit-trail:
+    answer: >
+      The law asks that the books be traceable and that their organisation be documented, not for
+      a log of every field change. Each record names who made it (a person, a module, a run); runs
+      write a short log; the workspace is committed to git (decisions.md D11).
+    law: [OR Art. 957a Abs. 2, GeBüV Art. 4]
+    where: [src/books/booked-by.ts, src/workflows/runlog.ts, docs/0.4.0/decisions.md]
+
+  books.archive-format:
+    answer: >
+      No mandated file format (no SAF-T). The books must be readable within a reasonable time and
+      handed to the ESTV on request. The audit export writes the books, reports, originals and
+      checksums.
+    law: [GeBüV Art. 6, MWSTG Art. 73]
+    where: [src/audit, docs/audit-export.md]
+
+  books.chart:
+    answer: >
+      No prescribed chart. The Kontenrahmen KMU is customary and is the starting chart; an account's
+      type follows its first digit, with exceptions for income in classes 7 and 8.
+    law: [none (Kontenrahmen KMU, customary)]
+    where: [modules/ch/accounts.yaml, modules/ch/chart.yaml, src/workspace/chart.ts]
+
+  books.statements:
+    answer: >
+      Balance sheet and income statement with the minimum lines of the law; the app uses the
+      nature-of-expense method. Each account names its legal line.
+    law: [OR Art. 959a, OR Art. 959b, OR Art. 959c]
+    where: [modules/ch/statements.yaml, modules/ch/accounts.yaml#lines]
+    unverified: The notes (Anhang, OR 959c) are not generated; when a small firm needs them was not checked.
+
+  books.fiscal-year:
+    answer: >
+      The law allows a fiscal year other than the calendar year. The app supports the calendar year
+      only; setup says so when a person picks another one.
+    law: [OR Art. 958]
+    where: [src/app/i18n/locales/de.ts]
+    unverified: The rules for a first fiscal year that is shorter or longer than twelve months.
+
+  books.year-end:
+    answer: >
+      Depreciation, accruals and deferrals, provisions, doubtful accounts, the tax provision of a
+      company, private use, inventory change, social insurance, the foreign-currency revaluation and
+      the closing of the result by legal form; all offered as prefilled templates.
+    law: [OR Art. 958, OR Art. 960]
+    where: [modules/ch/year-end.yaml, src/accounting/year-close.ts, processes/year-close.flow.yaml]
+
+  books.opening:
+    answer: >
+      Opening balances of the books' first year belong to no filed quarter and no seal. They may
+      change until the first year is closed through 31.12.; a missing opening is never booked as an
+      entry of the open period.
+    law: [none (the app's rule; the balances enter no VAT return)]
+    where: [src/accounting/opening-balance.ts]
+
+  books.annual-filing:
+    answer: >
+      The owners approve the annual accounts; they go with the tax return to the cantonal tax
+      authority. Publication only for companies with listed securities or bonds. Not built.
+    law: [OR Art. 698, OR Art. 804, OR Art. 958e]
+    where: [docs/year-end.md]
+    unverified: The audit duty and its opting-out (OR 727a) and the cantonal filing are not described.
+
+  books.numbering:
+    answer: >
+      No law asks for gapless numbering of entries or invoices. The app numbers its invoices for
+      reference only.
+    law: [MWSTG Art. 26 Abs. 2]
+    where: [src/invoices/rules.ts]
+    unverified: That Art. 26 Abs. 2 names no invoice number was read from memory, not the text.
+
+  # ── Currency and rounding ─────────────────────────────────────────────────────────────────
+  fx.base-currency:
+    answer: >
+      CHF. The law also allows the currency that matters most for the business; the statements
+      then show CHF too. A workspace overlay may set its own base currency.
+    law: [OR Art. 957a Abs. 4, OR Art. 958d Abs. 3]
+    where: [modules/ch/module.yaml, src/core/modules/load.ts]
+
+  fx.rate-rule:
+    answer: >
+      The ESTV daily sell rate (Devisenkurs Verkauf) valid when the tax arises: the payment date
+      on the cash basis, the document's date on the agreed basis (an open item's line carries it,
+      the payment settles at its own date's rate, the difference goes to Kursdifferenzen); on a
+      weekend or holiday the last published rate. Never a flat yearly rate. The law also allows
+      the monthly average rate, kept for a whole tax period; the app uses the daily rate.
+    law: [MWSTV Art. 45, docs/adr/0001-foreign-currency-conversion.md]
+    where: [src/accounting/fx-rates.ts, src/accounting/fx-conversion.ts, src/accounting/tax-point.ts, reference/estv-daily-rates-2026.json, src/cli/fetch-estv-rates.ts]
+
+  fx.revaluation:
+    answer: >
+      The EUR and USD bank accounts are revalued at the 31.12. rate; the difference goes to the
+      exchange-difference account.
+    law: [OR Art. 960]
+    where: [modules/ch/year-end.yaml#accounts.fxDifference, src/accounting/year-close.ts]
+
+  fx.rounding:
+    answer: >
+      To the Rappen, half away from zero, so a storno is the exact negative of its entry. The tax
+      payable in the XML is computed on the rate totals as eCH-0217 does, which may differ from
+      the screen by a Rappen. Cash rounding to 5 Rappen is not modelled.
+    law: [none (no statutory rounding rule for books), eCH-0217 v2.0.0]
+    where: [src/accounting/rappen.ts, src/providers/ech0217]
+
+  # ── Documents ─────────────────────────────────────────────────────────────────────────────
+  docs.invoice-fields:
+    answer: >
+      Supplier's name, place and VAT number; recipient's name and place; date or period of the
+      supply; kind, object and scope of the supply; the consideration; the rate and the tax. The
+      recipient may be left out only on a receipt issued by an automated cash register
+      (Kassenzettel, also a register's coupon) of at most CHF 400 including the tax. The app
+      issues invoices with payment terms and a QR-bill, not cash-register receipts, so every
+      invoice names its customer: that is the law's rule for an invoice, not a stricter one
+      (issue #134). The app checks the fields before issue and adds an account for the QR-bill.
+    law: [MWSTG Art. 26 Abs. 2, MWSTG Art. 26 Abs. 3, MWSTV Art. 57, ESTV MWST-Info 16 Ziff. 2.3]
+    where: [src/invoices/rules.ts]
+    verified: >
+      2026-10-23 against fedlex (MWSTG as of 2025-03-31, MWSTV as of
+      2025-01-01) and ESTV MWST-Info 16 Ziff. 2.3 and MWST-Info 09 Ziff. 1.6 (issue #134).
+
+  docs.e-invoicing:
+    answer: >
+      No e-invoicing duty. The payment slip is the QR-bill (Swiss Payment Standards); the app
+      prints it with a QR reference to match the incoming payment.
+    law: [none (SIX Swiss Payment Standards, QR-bill)]
+    where: [src/providers/qr-bill, src/invoices/pdf.ts]
+
+  docs.input-tax-proof:
+    answer: >
+      The law weighs evidence freely and forbids making the proof depend on one kind of evidence
+      alone, but the firm must prove the deduction and that it paid the tax. The ESTV accepts one
+      unambiguous document (an invoice with the fields of Art. 26 Abs. 2) or, without one, several
+      documents that together prove it, such as a contract, a receipt or a payment confirmation;
+      a credit-card debit note is no invoice. So «no receipt, no input tax» holds for the app's
+      own runs, which book a rate only when a linked receipt shows Swiss MWST; without one the
+      payment waits. A person may deduct on other proof: she books the payment by hand with the
+      rate and names the documents that show the VAT, which the payment keeps
+      (BankTransaction.inputTaxProof) and the booking shows. Two weeks before the return is due
+      the waiting payment becomes a task with «Beleg zuordnen», «Mit anderem Nachweis» and «Ohne
+      Vorsteuer buchen» (issue #134).
+    law: [MWSTG Art. 28 Abs. 1 lit. a, MWSTG Art. 28 Abs. 3, MWSTG Art. 81 Abs. 3, MWSTV Art. 59, ESTV MWST-Info 09 Ziff. 1.6, ESTV MWST-Info 16 Ziff. 2.1]
+    where: [processes/evidence.guide.yaml, processes/booking.guide.yaml, src/booking/receipt-wait.ts, src/accounting/receipt-due.ts, src/server/edits.ts, src/accounting/evidence-check.ts]
+    verified: >
+      2026-10-23 against fedlex (MWSTG as of 2025-03-31, MWSTV as of
+      2025-01-01) and ESTV MWST-Info 09 Ziff. 1.6 (published 31.10.2025) and MWST-Info 16 Ziff.
+      2.1 (issue #134).
+
+  docs.self-made:
+    answer: >
+      A self-made receipt (Eigenbeleg) is accepted for small expenses without an outside receipt,
+      without input tax. Not built (issue #8).
+    law: [OR Art. 957a Abs. 2 Ziff. 2]
+    where: [src/app/areas/automation/Issues.tsx]
+    unverified: The fields an Eigenbeleg needs and any amount limit.
+
+  docs.scans:
+    answer: >
+      Electronic and scanned documents count like paper if their integrity is kept. The app
+      compresses own scans before the receipt id is taken and keeps received files byte for byte.
+    law: [GeBüV Art. 9, MWSTG Art. 70 Abs. 4]
+    where: [docs/adr/0008-ingestion-one-inbox.md, src/intake]
+    unverified: ADR 0008 says the compression rule is to be confirmed with a Treuhänder.
+
+  docs.document-words:
+    answer: The words of receipts, reminders, delivery notes and statements in German, French, Italian and English.
+    law: [none]
+    where: [modules/ch/documents.yaml]
+
+  docs.company-id:
+    answer: >
+      The UID, CHE-###.###.###, with a check digit; with «MWST», «TVA» or «IVA» appended it is the
+      VAT number that invoices must show.
+    law: [UIDG, eCH-0097, MWSTG Art. 26 Abs. 2]
+    where: [src/workspace/uid.ts]
+
+  # ── Legal forms and the owner ─────────────────────────────────────────────────────────────
+  entity.legal-forms:
+    answer: >
+      Einzelfirma, GmbH and AG. Partnerships, cooperatives and associations are not offered.
+    law: [OR Art. 945, OR Art. 620, OR Art. 772]
+    where: [src/workspace/setup.ts, modules/ch/year-end.yaml#byLegalForm, modules/ch/accounts.yaml]
+
+  entity.owner-private:
+    answer: >
+      A sole trader's private account (2850 Privat); a company's current account with the owner
+      (2451 Kontokorrent). Private shares are booked there without VAT.
+    law: [none (Kontenrahmen KMU)]
+    where: [modules/ch/setup.yaml#owner, src/saving/share-rule.ts]
+
+  entity.profit-allocation:
+    answer: >
+      A sole trader's profit is hers: the result and the private account close into equity. A
+      company allocates after the shareholders' resolution: legal reserve, dividend, and 35 %
+      Verrechnungssteuer on the dividend, as a guided entry in the new year.
+    law: [OR Art. 672, OR Art. 801, VStG Art. 4, VStG Art. 13]
+    where: [modules/ch/year-end.yaml#byLegalForm, src/accounting/year-close.ts]
+    unverified: The legal reserve's percentages are not in the data; the person enters the amount.
+
+  entity.payroll:
+    answer: >
+      AHV/IV/EO, ALV, BVG and UVG contributions are booked as expenses and liabilities; payroll
+      itself is not built.
+    law: [AHVG, AVIG, BVG, UVG]
+    where: [modules/ch/year-end.yaml#templates, processes/booking.guide.yaml, docs/adr/0011-payroll.md]
+
+  # ── Language and formats ──────────────────────────────────────────────────────────────────
+  locale.languages:
+    answer: >
+      Books in a national language or English. The UI speaks German, French, Italian and English;
+      invoices are written in the same four.
+    law: [OR Art. 958d Abs. 4]
+    where: [src/app/i18n/locales, src/invoices/texts.ts]
+
+  locale.formats:
+    answer: Swiss formats (day.month.year, an apostrophe between thousands, a point before the decimals), fixed in one place as de-CH.
+    law: [none]
+    where: [src/app/lib/utils.ts]
+
+  # ── Interfaces ────────────────────────────────────────────────────────────────────────────
+  data.bank-formats:
+    answer: >
+      camt.053 per the Swiss Payment Standards (ISO 20022); a Sammelzahlung with several parts stays
+      one transaction. A statement without camt.053 (a PDF, scan or photo of any bank, a bank's CSV)
+      is read by the model or by a column mapping into the same shape and written as a camt.053
+      (#217). A statement PDF kept beside a camt.053 gives the books its closing balance and the
+      references and foreign amounts the camt.053 lacks from its table, read by the model or filled by
+      hand; no reader per bank layout (#243).
+    law: [none (SIX Swiss Payment Standards, ISO 20022)]
+    where: [src/providers/camt053, src/providers/statement-read, src/books/pdf-reads.ts]
+
+  data.authority-feeds:
+    answer: >
+      The ESTV daily exchange rates (npm run fetch-rates); the UID register at uid.admin.ch is named
+      to the person, not queried.
+    law: [none]
+    where: [src/cli/fetch-estv-rates.ts, src/workspace/uid.ts]

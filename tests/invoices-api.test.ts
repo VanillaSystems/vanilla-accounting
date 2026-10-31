@@ -8,16 +8,17 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { findBrowser } from '../src/invoices/pdf.js';
+import { issuedPdfUrl, sentPdfUrl } from '../src/invoices/model.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 import { DEMO_ROOT } from './support/workspace.js';
+import { browserPath } from './support/browser.js';
 
-const skip = findBrowser() ? false : 'no Chromium-based browser installed (Chrome, Edge, Brave or Chromium; or set CHROME_PATH)';
+const skip = browserPath ? false : 'no Chromium-based browser installed (Chrome, Edge, Brave or Chromium; or set CHROME_PATH)';
 let api: ApiServer;
 before(async () => {
   api = await startApi('tests/fixtures/period-lock-index.json');
-  mkdirSync(join(api.root, 'invoices'));
-  copyFileSync(join(DEMO_ROOT, 'invoices/logo.svg'), join(api.root, 'invoices/logo.svg'));
+  mkdirSync(join(api.root, 'logos'));
+  copyFileSync(join(DEMO_ROOT, 'logos/logo.svg'), join(api.root, 'logos/logo.svg'));
 });
 after(() => api?.stop());
 
@@ -32,6 +33,18 @@ test('customers: created with the workspace terms; an address without town is re
   const bad = await api.send('POST', '/api/customers', { ...customer, address: { postcode: '1204', country: 'CH' } });
   assert.equal(bad.status, 400);
   assert.equal(bad.json.invoiceRefusal, 'incomplete');
+  assert.deepEqual(bad.json.missing, [{ field: 'customer.address' }], 'the UI names what is missing, never «address braucht postcode»');
+  // A Swiss UID has a check digit (r8c-18): 333 is wrong, 338 right; a foreign VAT number is any text.
+  const wrongUid = await api.send('POST', '/api/customers', { ...customer, vatId: 'CHE-111.222.333 MWST' });
+  assert.equal(wrongUid.status, 400);
+  assert.equal(wrongUid.json.invoiceRefusal, 'uid');
+  // Built from pieces: the leak guard reads a whole UID in a test as a company's; this one is the wrong one above with its digit put right.
+  const right = `${'CHE'}-111.222.338 MWST`;
+  const rightUid = await api.send('POST', '/api/customers', { ...customer, name: 'Muster UID AG', vatId: right });
+  assert.equal(rightUid.status, 200, String(rightUid.json.error));
+  assert.equal(rightUid.json.vatId, right);
+  const foreign = await api.send('POST', '/api/customers', { ...customer, name: 'Muster DE GmbH', vatId: 'DE999999999' });
+  assert.equal(foreign.status, 200, String(foreign.json.error));
 });
 
 test('drafts: created in the customer language, changed, deleted; a draft has no number', async () => {
@@ -57,7 +70,7 @@ test('issue, the PDF as issued, frozen, sent, commented, reminded, cancelled', {
   assert.deepEqual([issued.json.number, issued.json.dueDate], ['2026-001', '2026-12-01']);
   const pdf = (issued.json as { pdf: { file: string; sha256: string } }).pdf;
 
-  const res = await fetch(`http://127.0.0.1:${api.port}/invoices/2026-001.pdf`);
+  const res = await api.fetch(issuedPdfUrl('2026-001'));
   const bytes = Buffer.from(await res.arrayBuffer());
   assert.equal(res.headers.get('content-type'), 'application/pdf');
   assert.equal(createHash('sha256').update(bytes).digest('hex'), pdf.sha256);
@@ -69,13 +82,16 @@ test('issue, the PDF as issued, frozen, sent, commented, reminded, cancelled', {
 
   const sent = await api.send('POST', `/api/invoices/${d.id}/send`, {});
   assert.deepEqual([sent.json.kind, sent.json.to, sent.json.title], ['invoice', 'compta@cafe.example', 'Facture 2026-001']);
+  const sentRes = await api.fetch(sentPdfUrl(String(sent.json.id)));
+  assert.equal(sentRes.status, 200, 'the link the UI builds for a sent document serves its PDF (#61)');
+  assert.equal(createHash('sha256').update(Buffer.from(await sentRes.arrayBuffer())).digest('hex'), sent.json.sha256);
   const note = await api.send('POST', `/api/invoices/${d.id}/comments`, { text: 'paie fin octobre' });
   assert.equal(note.json.author, 'Anna Muster');
   const reminder = await api.send('GET', `/api/invoices/${d.id}/reminder?date=2026-12-10`);
   assert.deepEqual([reminder.json.level, reminder.json.dueDate], [1, '2026-12-20']);
   assert.match(String(reminder.json.intro), /^Notre facture 2026-001/);
 
-  const preview = await fetch(`http://127.0.0.1:${api.port}/api/invoices/${d.id}/preview`);
+  const preview = await api.fetch(`/api/invoices/${d.id}/preview`);
   assert.match(await preview.text(), /<div class="a4 [^"]*has-qr/);
 
   const cancelled = await api.send('POST', `/api/invoices/${d.id}/cancel`, { date: '2026-12-01', reason: 'Fehler' });

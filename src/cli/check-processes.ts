@@ -10,22 +10,29 @@
  * merchants no counterparty file claims, most frequent first.
  */
 
+import { isExecutable } from '../booking/rules.js';
+import { parseApply, PURCHASE_VAT_STEP } from '../booking/purchase-vat.js';
+import { parseReceiptApply, RECEIPT_STEP } from '../booking/receipt-wait.js';
+import { noteRuleProblems } from '../knowledge/note-rules.js';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { parse } from 'yaml';
-import { loadBooks } from '../books/store.js';
+import { hasBooks, loadBooks } from '../books/store.js';
 import {
-  identify, claims, merchantOf, signalsOfReceipt, uidsIn, TIERS, type Counterparty,
+  identify, claims, merchantOf, signalsOfReceipt, signalsOfTransaction, uidsIn, TIERS, type Counterparty, type Role,
 } from '../knowledge/counterparties.js';
 import {
   loadKnowledge, companySpecific, homeOf, RULES_DIR,
-  type Knowledge, type CounterpartyFile, type Rule, type Section, type Guide,
+  type Knowledge, type CounterpartyFile, type Layer, type Rule, type Section, type Guide,
 } from '../knowledge/layers.js';
 import { GATE_TESTS } from '../knowledge/gates.js';
+import { notesProblems } from '../knowledge/notes.js';
+import { loadInvoices } from '../invoices/store.js';
 import { loadCaseChart, loadCases, validateCase } from '../knowledge/cases.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { namesOf, mentionIn, counterpartiesNamedIn } from '../knowledge/mentions.js';
 import { APP_ROOT, identityIn, openWorkspace } from '../workspace/workspace.js';
+import { loadWorkflows } from '../workflows/load.js';
 
 const ws = openWorkspace();
 const DIR = join(APP_ROOT, 'processes');
@@ -175,8 +182,8 @@ function headingsOf(full: string): string[] {
 
 function checkProcedure(where: string, procedure: string, err: (m: string) => void, root: string) {
   const [path, ...anchors] = procedure.split('§').map((p) => p.trim().replace(/,$/, '').trim());
-  // A workspace rule may point at its own docs or at the app's public runbooks.
-  const full = [join(root, path), join(APP_ROOT, path)].find((f) => existsSync(f));
+  // A workspace rule may point at its own docs (in the app's folder or the company's repository) or at the app's public runbooks.
+  const full = [join(root, path), join(ws.paths.repository, path), join(APP_ROOT, path)].find((f) => existsSync(f));
   if (!full) { err(`${where}: procedure file "${path}" does not exist`); return; }
   const heads = headingsOf(full);
   for (const a of anchors.filter(Boolean)) {
@@ -184,16 +191,32 @@ function checkProcedure(where: string, procedure: string, err: (m: string) => vo
   }
 }
 
-function checkRules(where: string, rules: Rule[] | undefined, err: (m: string) => void, opts: { gates?: boolean; root?: string } = {}) {
+/** How a business file's `apply:` on this step reads, in this layer; undefined: the step takes none. */
+type ApplyCheck = (raw: unknown) => { ok: true } | { ok: false; problem: string };
+const applyCheck = (ref: string, layer: Layer): ApplyCheck | undefined =>
+  ref === PURCHASE_VAT_STEP ? (raw) => parseApply(raw, layer) : ref === RECEIPT_STEP ? (raw) => parseReceiptApply(raw) : undefined;
+/** How a guide's `apply:` in this section reads: only evidence.guide.yaml#rules takes one, the wording of payments that need no receipt. */
+const guideApplyCheck = (file: string, section: string): ApplyCheck | undefined =>
+  `${file}#${section}` === RECEIPT_STEP ? (raw) => parseReceiptApply(raw, 'guide') : undefined;
+
+function checkRules(where: string, rules: Rule[] | undefined, err: (m: string) => void, opts: { gates?: boolean; root?: string; apply?: ApplyCheck } = {}) {
   for (const rule of rules ?? []) {
     const at = `${where}/${rule.id ?? '(no id)'}`;
+    // An executable rule (src/booking/rules.ts) in a business's file needs no when: its business is its condition.
+    const executable = isExecutable(rule);
     for (const field of ['id', 'when', 'then', 'source'] as const) {
-      if (!rule[field]) err(`${at}: rule has no ${field}`);
+      if (!rule[field] && !(executable && field === 'when')) err(`${at}: rule has no ${field}`);
     }
     if (rule.status && !RULE_STATUSES.has(rule.status)) err(`${at}: status must be one of ${[...RULE_STATUSES].join(', ')}`);
+    for (const problem of noteRuleProblems(rule)) err(`${at}: ${problem}`);
     if (rule.test !== undefined) {
       if (!opts.gates) err(`${at}: only a gate can carry test:`);
       else if (!(GATE_TESTS as readonly string[]).includes(rule.test)) err(`${at}: test "${rule.test}" is not in src/knowledge/gates.ts — add it there or fix the name`);
+    }
+    if (rule.apply !== undefined) {
+      const parsed = opts.apply?.(rule.apply);
+      if (!parsed) err(`${at}: apply: is for a rule of ${PURCHASE_VAT_STEP} in a business file or of ${RECEIPT_STEP}; a company's booking rule is a rule with then: { account, vat }`);
+      else if (!parsed.ok) err(`${at}: ${parsed.problem}`);
     }
     if (rule.procedure) checkProcedure(at, rule.procedure, err, opts.root ?? APP_ROOT);
     if (rule.id) {
@@ -215,7 +238,7 @@ for (const file of readdirSync(DIR).filter((f) => f.endsWith('.guide.yaml')).sor
   for (const [section, body] of Object.entries(guide.steps ?? {})) {
     if (!usedSections.get(file)?.has(section)) err(`section "${section}" is not referenced by any step's with.guide — reference it or delete it`);
     checkRules(section, body.gates, err, { gates: true });
-    checkRules(section, body.rules, err);
+    checkRules(section, body.rules, err, { apply: guideApplyCheck(file, section) });
     checkOneHome(file, section, body, err);
     checkAppLayer(section, body, err, `${RULES_DIR}/${file}`);
     const t = sectionTokens(body);
@@ -265,7 +288,7 @@ for (const companyGuide of companyGuides) {
     if (!generic.steps?.[section]) { err(`section "${section}" is not in processes/${file} — use a step id of that guide`); continue; }
     if (body.goal) err(`${section}: goal belongs to processes/${file}, not to the company's rules`);
     if (body.gates) err(`${section}: gates hold for every company — they live in processes/${file}`);
-    checkRules(`${companyGuide.path}#${section}`, body.rules, err, { root: companyGuide.root });
+    checkRules(`${companyGuide.path}#${section}`, body.rules, err, { root: companyGuide.root, apply: guideApplyCheck(file, section) });
     checkOneHome(companyGuide.path, section, body, err);
   }
 }
@@ -300,15 +323,24 @@ for (const f of counterpartyFiles) {
     if (!stepRefs.has(ref)) err(`steps."${ref}" is not the with.guide of any flow step — use the exact string, e.g. "booking.guide.yaml#classify"`);
     const section = raw as Section;
     if (section.goal) err(`steps."${ref}": goal belongs to the step's guide, not to a counterparty`);
-    checkRules(`${f.path} ${ref}`, section.rules, err, { root: f.root });
+    checkRules(`${f.path} ${ref}`, section.rules, err, { root: f.root, apply: applyCheck(ref, f.layer) });
     if (section.gates) err(`steps."${ref}": gates hold for every counterparty — they live in the guide`);
   }
+}
+
+// ─── Notes (docs/0.4.0/knowledge.md "Files"): each belongs to a partner or is a topic with a title ───
+
+{
+  const partnerRoles = new Map<string, Role>(counterparties.map((c) => [c.id, c.role]));
+  for (const c of loadInvoices(ws).customers) if (!c.deleted && !partnerRoles.has(c.id)) partnerRoles.set(c.id, 'customer');
+  const known = (step: string) => { const [p, id] = step.split('#'); return stepRefs.has(`${p.endsWith('.guide.yaml') ? p : `${p}.guide.yaml`}#${id ?? ''}`); };
+  for (const problem of notesProblems(ws, partnerRoles, known)) errors.push(problem);
 }
 
 // ─── Routing, proven on the current index ───────────────────────────────────
 
 const unknownMerchants = new Map<string, number>();
-if (existsSync(ws.paths.books) && counterparties.length) {
+if (hasBooks(ws) && counterparties.length) {
   const index = loadBooks(ws);
 
   // A UID routes the strongest tier, so it must belong to this counterparty alone.
@@ -334,7 +366,7 @@ if (existsSync(ws.paths.books) && counterparties.length) {
   }
   for (const tx of index.transactions) {
     const merchant = merchantOf(tx.description);
-    const route = identify({ uids: [], domains: [], merchant, filenames: [] }, counterparties);
+    const route = identify(signalsOfTransaction(tx, []), counterparties);
     if (route.kind === 'ambiguous') clash(route, `${tx.ref} "${merchant}"`);
     if (route.kind === 'unknown' && tx.type !== 'wise-fee') {
       const key = merchant.toLowerCase().replace(/[\d*#]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 40);
@@ -382,6 +414,14 @@ try {
   if (twice !== undefined) errors.push(`examples/cases: rank ${twice} is used twice — every case has its own place in the casebook`);
 } catch (e) {
   errors.push((e as Error).message);
+}
+
+// ─── Workflows (docs/0.4.0/workflows.md): each folder parses and passes checkWorkflow ─────────
+
+{
+  const loaded = loadWorkflows(APP_ROOT);
+  for (const p of loaded.problems) errors.push(`workflows/${p.workflow}: ${p.message}`);
+  for (const w of loaded.warnings) console.log(`  ⚠ workflows/${w.workflow}: ${w.message}`);
 }
 
 // ─── Report ─────────────────────────────────────────────────────────────────

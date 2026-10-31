@@ -2,10 +2,11 @@
  * A photo or screenshot of a receipt (PNG, JPEG, HEIC) as a one-page PDF, so the inbox holds PDFs
  * only: the page is the image's size in points (72 per inch at the image's pixel size), the
  * image fills it, turned upright by its EXIF orientation. Through pdf-lib, no program outside Node (ADR 0006); a HEIC photo (the iPhone's
- * format) is first decoded by macOS's own `/usr/bin/sips`, which every Mac has.
+ * format) is first decoded by macOS's own `/usr/bin/sips`, which every Mac has, and so is a PNG
+ * where sips is there.
  */
 import { execFile } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -23,8 +24,13 @@ export async function imageToPdf(image: Uint8Array, filename: string): Promise<U
   const doc = await PDFDocument.create();
   // pdf-lib reads a JPEG through a DataView on `.buffer` from offset 0: a small Buffer from
   // readFileSync lies inside Node's shared pool at another offset, so each gets its own copy.
-  const bytes = new Uint8Array(/\.hei[cf]$/.test(lower) ? await heicToJpeg(image) : image);
-  const png = lower.endsWith('.png');
+  // pdf-lib decodes a PNG's pixels on the event loop, half a second of a retina screenshot in which
+  // nothing else runs (#258): sips writes it as a JPEG in a process of its own, which pdf-lib embeds
+  // as it is (a transparent pixel turns white, as it shows on the page). A PNG sips cannot read
+  // goes through pdf-lib after all; a HEIC has no other way.
+  const sipsPng = lower.endsWith('.png') && existsSync(SIPS) ? await sipsJpeg(image, 'png').catch(() => undefined) : undefined;
+  const bytes = new Uint8Array(/\.hei[cf]$/.test(lower) ? await heicToJpeg(image) : sipsPng ?? image);
+  const png = lower.endsWith('.png') && !sipsPng;
   const embedded = png ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
   const { width: w, height: h } = embedded;
   const orientation = exifOrientation(bytes, png);
@@ -93,11 +99,16 @@ function pngExif(view: DataView): number | undefined {
   return undefined;
 }
 
-async function heicToJpeg(image: Uint8Array): Promise<Uint8Array> {
-  const dir = mkdtempSync(join(tmpdir(), 'heic-'));
+const SIPS = '/usr/bin/sips';
+
+export const heicToJpeg = (image: Uint8Array): Promise<Uint8Array> => sipsJpeg(image, 'heic');
+
+/** The image as the JPEG sips writes of it at its own quality, EXIF orientation kept. */
+async function sipsJpeg(image: Uint8Array, format: 'heic' | 'png'): Promise<Uint8Array> {
+  const dir = mkdtempSync(join(tmpdir(), `${format}-`));
   try {
-    writeFileSync(join(dir, 'in.heic'), image);
-    await promisify(execFile)('/usr/bin/sips', ['-s', 'format', 'jpeg', join(dir, 'in.heic'), '--out', join(dir, 'out.jpg')]);
+    writeFileSync(join(dir, `in.${format}`), image);
+    await promisify(execFile)(SIPS, ['-s', 'format', 'jpeg', join(dir, `in.${format}`), '--out', join(dir, 'out.jpg')], { timeout: 30_000 });
     return readFileSync(join(dir, 'out.jpg'));
   } finally {
     rmSync(dir, { recursive: true, force: true });

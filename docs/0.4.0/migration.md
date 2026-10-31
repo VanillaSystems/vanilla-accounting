@@ -1,0 +1,74 @@
+# Migration
+
+**Status: proposed order.** Each step ends in a state that a test proves, and none changes a
+figure. A step starts only after the decisions it depends on ([decisions.md](decisions.md)) are
+marked *decided*.
+
+## Gate for every step
+
+- `npm test` and `npm run test:books` green, with no golden-master update.
+- `npm run check-public` at 0 findings, `npm run check-processes` green.
+- The old code path is deleted in the same step that moves its callers. No compatibility layer
+  survives a step.
+
+## Steps
+
+Done on branch `0.4.0`: 0, 1 ([inventory.md](inventory.md)), 2 (`tests/layers.test.ts`, 40 wrong-way
+imports allowed in `tools/layers/allowed.txt`), 3 (without `modules.lock.json`), 4 (`modules/ch/chart.yaml`), 5 (`baseCurrency` in
+`module.yaml`, not in `books.json`: no schema change, and a workspace overlay may name its own;
+the year-end, setup, provider and parser sites follow in step 10), 6 (`modules/ch/periods.yaml`:
+return length and due days; the seals, the filed-return archive and year-close still name
+quarters, `QuarterKey`, and follow with step 10), 7, 8 (`update(books, actor, fn)` in `src/books/store.ts`; ownership by
+`origin`: a person's entries change only by a person), 9 (`workflows/booking/`, `src/workflows/`,
+`npm run workflow`; runs in a local store outside the workspace; `npm run classify` stays the
+batch path until the queue batches model calls), 10 in part (statements, providers, chart, year
+end, invoicing, setup; left: the ESTV rates and eCH-0217 as providers, the legal forms, the
+texts, and the quarter names of seals and filed returns), 11 (`tests/swap.test.ts` books the `xx`
+fixture; `tools/layers/swiss-allowed.txt` lists the 115 files that still name a Swiss specific),
+14 on the demos (`src/workspace/layout.ts`, run by `npm run update`; `tests/layout.test.ts` migrates
+each demo written back in the layout of 0.3 to exactly the files the app ships; the decisions
+the build added are ADR 0013's *As built*; the real workspace moves once its owner has seen the
+demo).
+
+| # | Step | Ends when | Needs |
+|---|---|---|---|
+| 0 | **Freeze figures.** Snapshot the golden masters and a 0.3.0 demo workspace as an upgrade fixture. | the fixture opens in a test | — |
+| 1 | **Inventory.** Sort every file of `src/` into core, engine, module data, provider, view, infrastructure ([layers.md](layers.md)). List every Swiss specific with its file. | the list is checked in under `docs/0.4.0/inventory.md` | — |
+| 2 | **Direction lint.** A test fails on an import that points the wrong way. Start with today's violations as an allow-list that may only shrink. | lint in `npm test` | 1 |
+| 3 | **Module loader.** `module.yaml`, resolution, overlay merge, `modules.lock.json`, `/modules.json`. No module uses it yet except an empty `ch`. | loader tests, overlay fixture | D1, D2 |
+| 4 | **Normal side from the chart.** Balances stop reading debit/credit from the account number's first digit. `chart.yaml` says it. | golden master unchanged | 3 |
+| 5 | **Base currency from the workspace.** CHF stops being implicit; rates are stored against `config.baseCurrency`. | golden master unchanged | 3 |
+| 6 | **Periods from the module.** VAT period length comes from `periods.yaml`; quarters are one value of it. | golden master unchanged | 3 |
+| 7 | **First slice: tax codes and the return.** Generate `ch/tax-codes.yaml`, `rates.yaml` and `return.yaml` from today's constants; build the engines beside the old code; prove both give the same Ziffern on the frozen books; switch callers; delete the old code. | golden master unchanged, old files gone | 4–6 |
+| 8 | **Write door with actors.** `update(actor, fn)` and the ownership table replace direct `mutateJournal` calls. | `period-lock.test.ts`, `books-store.test.ts` extended per actor | 3 |
+| 9 | **Workflow runtime, pilot.** `workflows/booking/`: triggers, steps, outcomes, declared effects, runs, replay. The CLI `classify` becomes a manual trigger. | booking by run equals booking by `classify` on the demo | 8, D3, D4 |
+| 10 | **Remaining jurisdiction data.** Chart, statements, year-end, invoicing, setup, texts move into `modules/ch/`; providers move into `src/providers/`. | golden master unchanged | 7 |
+| 11 | **The swap test.** The `xx` fixture jurisdiction books its scenario set; the lint forbids Swiss specifics outside `src/providers/` and `modules/ch/`. | both in `npm test` | 10 |
+| 12 | **Remaining workflows.** Port the other processes ([workflows.md](workflows.md)); `processes/*.flow.yaml` is deleted when its workflow runs. | per workflow, as step 9 | 9 |
+| 13 | **Firma › Module and the upgrade cycle.** Notices, switch-on gate, update dialog. | upgrade fixture from step 0 climbs and classifies | 3, 10, D6 |
+| 14 | **Workspace layout and the year split** ([ADR 0013](../adr/0013-workspace-layout-and-ownership.md)). The books move into `vanilla-accounting/`; `WorkspacePaths` names each entry's owner; `accounts.json` → `master-data/` (`knowledge/` stays); `books.json` → `transactional-data/<year>/books/*.jsonl`; `receipts/`, `bank-statements/`, `filings/<year>/`, `invoices/` → `transactional-data/<year>/…`; `golden/` → `transactional-data/<year>/expected/`; the check names stray files and points to `own/`. Before the first year close. | `test:books` gives the same figures before and after; every seal verifies; a closed year's files are not written | 8, D12 |
+
+Steps 4, 5 and 6 come first because the research found the swap blocked by three assumptions in
+the core, not by the tax code: the normal side from the account number, CHF as the implicit base
+currency, and quarters as the only period.
+
+## Figure changes after the steps
+
+These change figures on purpose, so they come after the last step, each with its own expected
+update and a CHANGELOG entry marked **⚠ figures**.
+
+- **The statements split off the VAT.** The Reports area (`src/app/areas/reports/model.ts`) and
+  `tests/statements-golden.test.ts` compute the income statement and the balance sheet from the
+  journal alone; only the year close adds the tax the VAT codes split off (`vatPostings`,
+  `src/accounting/year-close.ts`). So the balance sheet does not balance once a single-leg `-2`
+  correction exists (off by exactly the tax of those corrections; the leg they lack goes to
+  2201), and revenue and expenses carry their tax, so the net result is off too. Fix:
+  compute both from the journal plus `vatPostings`, as the year close does. The VAT return is
+  not affected; it reads the codes.
+
+## What is not in 0.4.0
+
+- A second real jurisdiction (`de`, `at`). The `xx` fixture proves the swap; a real one follows
+  with the inspiration work ([inspiration/](inspiration/README.md)).
+- A module registry, remote module install, or multi-tenant hosting.
+- Module code in the browser.

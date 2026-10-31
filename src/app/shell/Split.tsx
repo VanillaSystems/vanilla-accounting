@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useState, type RefObject } from 'react';
 import { t } from '../i18n/index.js';
-import { store, stored } from './prefs.js';
+import { store, stored } from './storage.js';
 import type { AreaId } from './route.js';
+import { LIST_MIN } from './look.js';
 
-const MIN = 340;
 const zoom = () => Number(document.documentElement.style.zoom) || 1;
-const clamp = (w: number) => Math.min(Math.max(MIN, innerWidth / zoom() - 560), Math.max(MIN, w));
+// The widest the list may be is shell.css's: it leaves the detail --detail-min.
+const clamp = (w: number) => Math.max(LIST_MIN, w);
 
 /**
  * The list column's width: drag the divider, ←/→ while it has focus, double-click resets.
@@ -28,7 +29,8 @@ export function Split({ list, width, onWidth }: { list: RefObject<HTMLElement>; 
   const [dragging, setDragging] = useState(false);
 
   useLayoutEffect(() => {
-    const place = () => setLeft(list.current?.offsetWidth ?? 0);
+    // The list starts right of the activity bar: the split sits at its right edge in the window.
+    const place = () => setLeft(list.current ? list.current.offsetLeft + list.current.offsetWidth : 0);
     place();
     addEventListener('resize', place);
     return () => removeEventListener('resize', place);
@@ -40,7 +42,8 @@ export function Split({ list, width, onWidth }: { list: RefObject<HTMLElement>; 
     el.setPointerCapture(e.pointerId);
     setDragging(true);
     document.body.classList.add('resizing');
-    const move = (ev: PointerEvent) => onWidth(ev.clientX / zoom());
+    const origin = list.current?.getBoundingClientRect().left ?? 0;
+    const move = (ev: PointerEvent) => onWidth((ev.clientX - origin) / zoom());
     const up = () => {
       el.removeEventListener('pointermove', move);
       setDragging(false);
@@ -58,7 +61,6 @@ export function Split({ list, width, onWidth }: { list: RefObject<HTMLElement>; 
       aria-orientation="vertical"
       aria-label={t('shell.split')}
       aria-valuenow={Math.round(width ?? left)}
-      title={t('shell.split')}
       tabIndex={0}
       style={{ left }}
       onPointerDown={onPointerDown}

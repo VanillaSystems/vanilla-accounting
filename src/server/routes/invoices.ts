@@ -1,19 +1,26 @@
 /**
  * Invoicing (ADR 0010): customers, drafts, issuing, sending, cancelling, credit notes, reminders,
  * comments, previews and the stored PDFs. Every change goes through src/invoices/service.ts; the
- * one route that books (a payment confirmed by a person) goes through withBooks and assertOpen.
+ * routes that book go through the write door: a payment confirmed by a person (withBooks and
+ * assertOpen), and on the agreed basis issuing and cancelling, which book the document's VAT event
+ * (src/invoices/events.ts) on its date, or on the first open day when its period is locked.
  */
 import { Router, type Request } from 'express';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { WS, assertOpen, readBooks, withBooks, RequestError } from '../books.js';
+import { WS, assertOpen, readBooks, updateBooksWithEffects, RequestError } from '../books.js';
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
 import { liveCustomers, liveInvoices, type CreditRequest } from '../../invoices/rules.js';
 import {
   addComment, cancelInvoice, createCreditNote, createCustomer, createDraft, draftReminder, fileReceipts, findInvoice, issueInvoice, issuedPdf,
   missingOf, parseCustomer, parseDraftPatch, paymentContext, previewHtml, recordSend, removeDraft, sendReminder, sentPdf, updateCustomer, updateDraft, viewOf,
 } from '../../invoices/service.js';
-import { confirmPayment, paymentProposals } from '../../invoices/payments.js';
+import { confirmPayment, paymentProposals, releasePayment, type PaymentReleased } from '../../invoices/payments.js';
+import { bookInvoiceEvents, type EventOutcome } from '../../invoices/events.js';
+import { agreedBasis } from '../../engines/index.js';
+import type { Books } from '../../books/store.js';
+import { recordReplaced, takeReplaced } from '../link-history.js';
+import { bookAgain } from './automation.js';
 import { checkMessage, sendMail } from '../../invoices/mail.js';
 import type { Deliver } from '../../invoices/service.js';
 
@@ -132,8 +139,19 @@ router.delete('/api/invoices/:id', (req, res) => {
 
 // ─── issuing, sending, correcting ──────────────────────────────────────────────
 
+/** The VAT events of the issued documents the books do not carry yet, booked and their PDFs filed; nothing on the cash basis. */
+function bookEvents(books: Books): EventOutcome | undefined {
+  const ctx = paymentContext(WS);
+  if (!ctx || !agreedBasis()) return undefined;
+  const out = bookInvoiceEvents(books, loadInvoices(WS), ctx);
+  fileReceipts(WS, books, out.files);
+  return out;
+}
+
 router.post('/api/invoices/:id/issue', async (req, res) => {
-  res.json(await issueInvoice(WS, req.params.id));
+  const issued = await issueInvoice(WS, req.params.id);
+  if (agreedBasis()) updateBooksWithEffects(bookEvents);
+  res.json(issued);
 });
 
 /** `email: { to, subject, body }` sends it through the company's mailbox; without, it is recorded as downloaded. */
@@ -153,9 +171,11 @@ router.post('/api/invoices/:id/send', async (req, res) => {
 
 router.post('/api/invoices/:id/cancel', async (req, res) => {
   const b = body(req);
-  res.json(await cancelInvoice(WS, req.params.id, {
+  const cancelled = await cancelInvoice(WS, req.params.id, {
     date: optText(b, 'date') ?? today(), reason: optText(b, 'reason') ?? '', notify: b.notify === true, to: optText(b, 'to'),
-  }, { deliver: delivery(b) }));
+  }, { deliver: delivery(b) });
+  if (agreedBasis()) updateBooksWithEffects(bookEvents);
+  res.json(cancelled);
 });
 
 router.post('/api/invoices/:id/credit-note', (req, res) => {
@@ -183,12 +203,41 @@ router.post('/api/invoices/:id/payments', (req, res) => {
   if (!transactionRef) throw new RequestError(400, 'transactionRef fehlt.');
   const ctx = paymentContext(WS);
   if (!ctx) throw new RequestError(400, 'belege.workspace.yaml hat keinen invoicing-Block.');
-  withBooks(res, (books) => {
+  res.json(updateBooksWithEffects((books) => {
     assertOpen(books, books.transactions.filter((t) => t.ref === transactionRef).map((t) => t.date), 'mapping');
+    bookEvents(books);
     const invoices = loadInvoices(WS);
     const result = confirmPayment(books, invoices, req.params.id, transactionRef, ctx);
-    fileReceipts(WS, result.files);
+    fileReceipts(WS, books, result.files);
     saveInvoices(WS, invoices);
+    // What the link replaced waits beside the books for «Lösen» (r10c-3).
+    const inv = liveInvoices(invoices).find((i) => i.id === req.params.id);
+    if (result.replaced?.length && inv?.status === 'issued') recordReplaced(WS, transactionRef, ctx.receiptId(ctx.pdfOf(inv)), result.replaced);
     return { paid: result.paid };
+  }));
+});
+
+/**
+ * «Lösen» on the invoice (r10c-3): the payment leaves it, the link's bookings go, and what the link
+ * replaced is booked again (src/server/link-history.ts); a payment left without a booking is handed
+ * to the booking run. The undo is the link again (POST …/payments).
+ */
+router.delete('/api/invoices/:id/payments/:ref', async (req, res) => {
+  const ctx = paymentContext(WS);
+  if (!ctx) throw new RequestError(400, 'belege.workspace.yaml hat keinen invoicing-Block.');
+  const ref = req.params.ref;
+  let unbooked = false;
+  const out = updateBooksWithEffects((books): Omit<PaymentReleased, 'files'> => {
+    assertOpen(books, books.transactions.filter((t) => t.ref === ref).map((t) => t.date), 'mapping');
+    const invoices = loadInvoices(WS);
+    const inv = liveInvoices(invoices).find((i) => i.id === req.params.id);
+    const restore = inv?.status === 'issued' ? takeReplaced(WS, ref, ctx.receiptId(ctx.pdfOf(inv))) : undefined;
+    const { files, ...result } = releasePayment(books, invoices, req.params.id, ref, ctx, restore);
+    fileReceipts(WS, books, files);
+    saveInvoices(WS, invoices);
+    unbooked = !books.journalEntries.some((e) => e.transactionRef === ref);
+    return result;
   });
+  if (unbooked) await bookAgain(ref);
+  res.json(out);
 });

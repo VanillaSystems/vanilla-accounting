@@ -6,34 +6,34 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ClosedPeriodError, SealBrokenError, loadBooks, saveBooks, sealsOf } from '../src/books/store.js';
 import { checkSeals, writeSeal } from '../src/books/seal.js';
-import type { Workspace } from '../src/workspace/workspace.js';
-import { tempWorkspace } from './support/workspace.js';
+import { yearPaths, type Workspace } from '../src/workspace/workspace.js';
+import { tempWorkspace, writeIndex } from './support/workspace.js';
 
 const FIXTURE = join(process.cwd(), 'tests/fixtures/period-lock-index.json');
 
 function sealed(): Workspace {
   const ws = tempWorkspace('seal-');
-  copyFileSync(FIXTURE, ws.paths.books);
+  writeIndex(ws, JSON.parse(readFileSync(FIXTURE, 'utf8')));
   writeSeal(ws, loadBooks(ws), '2026-Q2', '2026-07-11');
   return ws;
 }
 
-/** Edits books.json the way a hand or an ad-hoc script would: past loadBooks and saveBooks. */
+/** Edits the books' files the way a hand or an ad-hoc script would: past saveBooks and its checks. */
 function handEdit(ws: Workspace, edit: (books: Record<string, any>) => void): void {
-  const raw = JSON.parse(readFileSync(ws.paths.books, 'utf8'));
+  const raw = JSON.parse(JSON.stringify(loadBooks(ws)));
   edit(raw);
-  writeFileSync(ws.paths.books, JSON.stringify(raw, null, 2));
+  writeIndex(ws, raw);
 }
 
 const statuses = (ws: Workspace) => checkSeals(ws, loadBooks(ws)).checks.map((c) => `${c.quarter} ${c.status}`);
 
 test('a sealed quarter verifies, and sealing it again changes nothing', () => {
   const ws = sealed();
-  const file = join(ws.paths.filings, '2026', 'seal-Q2.json');
+  const file = join(yearPaths(ws.paths, '2026').filings, 'seal-Q2.json');
   const seal = JSON.parse(readFileSync(file, 'utf8'));
   assert.deepEqual(seal.records, { entries: 1, transactions: 3, mappings: 1 });
   assert.deepEqual(statuses(ws), ['2026-Q2 intact']);
@@ -43,7 +43,7 @@ test('a sealed quarter verifies, and sealing it again changes nothing', () => {
 
 test('a closed quarter without a seal is listed; an open one cannot be sealed', () => {
   const ws = tempWorkspace('seal-');
-  copyFileSync(FIXTURE, ws.paths.books);
+  writeIndex(ws, JSON.parse(readFileSync(FIXTURE, 'utf8')));
   assert.deepEqual(checkSeals(ws, loadBooks(ws)).unsealed, ['2026-Q2'], 'Q1 holds no records, so it needs no seal');
   assert.throws(() => writeSeal(ws, loadBooks(ws), '2026-Q3', '2026-10-09'), /2026-Q3 is not closed/);
 });
@@ -91,7 +91,7 @@ test('npm run seal -- <quarter> --close moves closedThrough one quarter and seal
   assert.throws(() => seal(ws, '2026-Q4', '--close'), /next quarter to close is 2026-Q3/);
   assert.match(seal(ws, '2026-Q3', '--close'), /closedThrough 2026-06-30 → 2026-09-30[\s\S]*Sealed 2026-Q3/);
   assert.equal(loadBooks(ws).config.closedThrough, '2026-09-30');
-  assert.ok(existsSync(join(ws.paths.filings, '2026', 'seal-Q3.json')));
+  assert.ok(existsSync(join(yearPaths(ws.paths, '2026').filings, 'seal-Q3.json')));
   assert.match(seal(ws, '2026-Q3', '--close'), /sealed already, and the seal holds/);
   assert.deepEqual(statuses(ws), ['2026-Q2 intact', '2026-Q3 intact']);
 });

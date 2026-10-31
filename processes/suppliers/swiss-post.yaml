@@ -3,7 +3,7 @@ name: Post CH
 match:
   tx: [ "post ch", "post billingonline" ]
   uid: [ "CHE-116.302.542" ]
-  file: [ '^\d{8}-post-' ]
+  file: [ '^\d{8}[-_]post(?:[-_.]|$)' ]
 
 steps:
 

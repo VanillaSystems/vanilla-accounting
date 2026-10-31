@@ -7,7 +7,7 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadBooks } from '../books/store.js';
-import { bananaEntries, bananaTsv } from '../export/banana.js';
+import { bananaEntries, bananaTsv } from '../providers/banana/banana.js';
 import { openWorkspace } from '../workspace/workspace.js';
 
 const ws = openWorkspace();

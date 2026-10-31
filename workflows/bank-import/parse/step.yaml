@@ -1,0 +1,5 @@
+label: {"de": "Auszug lesen", "en": "Read the statement", "fr": "Lire le relevé", "it": "Leggere l’estratto"}
+uses: parsers.statement
+reads: ["file"]
+emits: ["transactions"]
+outcomes: {"ok": "merge"}

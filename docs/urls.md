@@ -30,7 +30,9 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | `/receipts/<receipt-id>` | one receipt (id: the first 16 hex characters of its SHA-256) |
 | `/bank` | Kontoauszüge |
 | `/bank/<account>-<yyyy-mm>` | one statement, e.g. `/bank/1021-2026-09` |
-| `/bank/<account>-<yyyy-mm>/<bank-ref>` | one payment in that statement |
+| `/bank/<account>-<yyyy-mm-dd>` | a statement of some days, by its first day, when a month has several, e.g. `/bank/1020-2026-10-15` (`_<last day>` added when two start the same day) |
+| `/bank/<statement>/<bank-ref>` | one payment in that statement |
+| `/bank/files/<account>/<file name>` | one statement file read in, whole, with its details and every movement it holds (Kontoauszüge › Datei), e.g. `/bank/files/1021/camt053_2026-09.xml` |
 | `/payments/<bank-ref>` | resolves to the statement of that payment, or to its entry if it was paid privately |
 | `/journal` | Buchungen; `?vat=<code>` filters by VAT code |
 | `/journal/<entry-id>` | one journal entry |
@@ -40,7 +42,8 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | `/reports/income`, `/reports/balance`, `/reports/trial` | Erfolgsrechnung, Bilanz, Saldobilanz |
 | `/reports/<report>/<account>` | one account's ledger inside that report, e.g. `/reports/balance/1021` |
 | `/close` and `/close/<step>` | year-end close and one of its steps |
-| `/company/<section>` | `profile`, `vat`, `banks`, `invoice-layout`, `mail`, `accounts`, `periods`, `opening`, `display` |
+| `/company/<section>` | `profile`, `vat`, `banks`, `invoice-layout`, `mail`, `sources`, `rules`, `accounts`, `dimensions`, `periods`, `opening`, `display` |
+| `/company/rules?payment=<ref>` | the form of a new rule, started from that payment |
 | `/invoices` | Rechnungen; `?status=open\|overdue\|draft\|paid` |
 | `/invoices/<number>` | an issued invoice or credit note, e.g. `/invoices/2026-006` |
 | `/invoices/draft-<id>` | a draft (it has no number until it is issued) |
@@ -48,16 +51,22 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | `/invoices/new?customer=<id>` | a new draft for that customer (app only) |
 | `/invoices/customers` and `/invoices/customers/<id>` | customers and one customer |
 | `/invoices/sent` and `/invoices/sent/<document-id>` | the log of sent documents and one of them, exactly as sent |
+| `/partners` and `/partners/<id>` | Geschäftspartner and one partner's page; the id is its knowledge file's (`gruenkaffee-muster`) or, for a customer of Rechnungen without one, the customer's (`cu_…`) |
+| `/knowledge` | Wissen, opening on its first page (Lücken) |
+| `/knowledge/gaps`, `/knowledge/app` | Lücken and Von der App |
+| `/knowledge/<topic>` | one page of Arbeitsweise, by its file's name (`knowledge/company/<topic>.md`); a topic is never named `gaps` or `app` |
+| `/automation` | Automatisierung's home: the open period's receipts from collected to filed, what waits for you, what runs; `?period=` another filing period |
+| `/automation/runs` and `/automation/runs/<run-id>` | Läufe, the latest runs, and one run |
 
 ## Query parameters
 
 | Parameter | Where | Meaning |
 |---|---|---|
 | `period` | every list with periods | `2026`, `2026-Q3`, `2026-09` or `2026-07-01_2026-09-30`; left out when it is the open period |
-| `filter` | receipts | `zugeordnet`, `offen`, `ohneDatum` |
+| `f` | receipts, journal | a filter chip `<field>_<value>`, repeated, one per chip (#211, `src/app/shell/chips.ts`): `?f=partner_fedex&f=partner_amazon&f=over_100`. Chips of different fields all hold (AND), chips of one field are alternatives (OR); a bound (`over`, `under`, `amount`, `from`, `to`) or a yes/no field takes one value. Belege: `partner` (a knowledge file's id), `state` (`linked`, `open`, `noDate`, `needsYou`, `unreadable`, `notReceipt`, `quarantine`), `month` (`2026-08`), `from`, `to` (`2026-08-01`), `over`, `under`, `amount` (a number), `currency`, `rate` (the rate the receipt shows, `8.1`, or `none`), `kind`, `linked` (`yes`, `no`). Buchungen: `account`, `rate` (the code's rate, or `none` without a code), `partner`, the same dates and amounts, `currency`, `who` (`classify`, `rule`, `code`, `manual`, `assistant`, `invoice`, `year-close`, `other`), `receipt` (`yes`, `no`, `missing`), `corrects` (`yes`, `no`). The old `?filter=zugeordnet\|offen\|ohneDatum` of Belege redirects to `f=state_linked\|open\|noDate`. |
 | `status` | invoices | as above |
 | `vat` | journal | VAT code filter |
-| `q` | every list | search text |
+| `q` | every list | search text (also the filter's «Text enthält»: it stays the search, not a chip) |
 
 ## Who builds links
 

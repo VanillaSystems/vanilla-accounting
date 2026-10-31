@@ -1,0 +1,90 @@
+[
+  {
+    "number": "1020",
+    "name": "Bank Raiffeisen"
+  },
+  {
+    "number": "1500",
+    "name": "Maschinen und Apparate"
+  },
+  {
+    "number": "1530",
+    "name": "Fahrzeuge"
+  },
+  {
+    "number": "2000",
+    "name": "Verbindlichkeiten aus Lieferungen und Leistungen"
+  },
+  {
+    "number": "2200",
+    "name": "Geschuldete MWST"
+  },
+  {
+    "number": "2201",
+    "name": "Abrechnungskonto MWST"
+  },
+  {
+    "number": "2270",
+    "name": "Sozialversicherungen und Vorsorgeeinrichtungen"
+  },
+  {
+    "number": "2451",
+    "name": "Kontokorrent Gesellschafter"
+  },
+  {
+    "number": "2800",
+    "name": "Stammkapital"
+  },
+  {
+    "number": "2970",
+    "name": "Gewinnvortrag"
+  },
+  {
+    "number": "3400",
+    "name": "Ertrag Schreinerarbeiten"
+  },
+  {
+    "number": "4000",
+    "name": "Materialaufwand Holz und Beschläge"
+  },
+  {
+    "number": "5000",
+    "name": "Lohnaufwand"
+  },
+  {
+    "number": "5700",
+    "name": "AHV, IV, EO, ALV"
+  },
+  {
+    "number": "5730",
+    "name": "Unfallversicherung"
+  },
+  {
+    "number": "6000",
+    "name": "Mietaufwand Werkstatt"
+  },
+  {
+    "number": "6100",
+    "name": "Unterhalt und Reparaturen Maschinen"
+  },
+  {
+    "number": "6200",
+    "name": "Fahrzeugaufwand"
+  },
+  {
+    "number": "6300",
+    "name": "Sachversicherungen"
+  },
+  {
+    "number": "6510",
+    "name": "Telefon, Internet"
+  },
+  {
+    "number": "6570",
+    "name": "Informatik, Software"
+  },
+  {
+    "number": "6940",
+    "name": "Bankspesen"
+  }
+]

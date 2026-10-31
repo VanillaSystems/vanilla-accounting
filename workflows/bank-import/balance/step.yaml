@@ -1,0 +1,4 @@
+label: {"de": "Saldo auf den Rappen?", "en": "Balance to the cent?", "fr": "Solde au centime ?", "it": "Saldo al centesimo?"}
+uses: books.statement-balance
+reads: ["statement"]
+outcomes: {"matches": "done", "differs": "ask"}

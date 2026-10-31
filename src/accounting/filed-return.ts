@@ -1,8 +1,8 @@
 import { XMLParser } from 'fast-xml-parser';
 import type { QuarterKey } from '../types/index.js';
-import { derivePeriod } from './periods.js';
-import { completeFigures, type ReturnFigures } from './return-figures.js';
-import { INPUT_TAX, TAX_RATE_ROWS, TURNOVER_DEDUCTIONS } from './ziffern.js';
+import { derivePeriod, rangeToken } from './periods.js';
+import { vat } from '../engines/index.js';
+import type { ReturnFigures } from '../engines/return.js';
 
 type Node = Record<string, unknown>;
 
@@ -14,44 +14,31 @@ const parser = new XMLParser({
 });
 
 /**
- * Reads a filed eCH-0217 return (filings/<year>/mwst-ech0217-<year>-Qn.xml, as written by
- * src/cli/vat-ech0217.ts) into its form Ziffern. Throws on anything it does not map, so a
- * figure is never silently dropped.
+ * Reads a filed eCH-0217 return (filings/<year>/mwst-ech0217-<period>.xml, as written by
+ * src/cli/vat-ech0217.ts) into its form Ziffern: the effective method's element, or the net tax
+ * rate method's (simpleTaxRateMethod). Throws on anything it does not map, so a figure is never
+ * silently dropped.
  */
 export function parseFiledReturn(xml: string): ReturnFigures {
   const root = parser.parse(xml).VATDeclaration as Node | undefined;
   if (!root) throw new Error('not an eCH-0217 VATDeclaration');
   const info = root.generalInformation as Node;
-  const period = quarterOf(String(info.reportingPeriodFrom), String(info.reportingPeriodTill));
+  const period = periodOf(String(info.reportingPeriodFrom), String(info.reportingPeriodTill));
   const turnover = root.turnoverComputation as Node;
-  const effective = root.effectiveReportingMethod as Node | undefined;
-  if (!effective) throw new Error(`${period}: only the effective reporting method is supported`);
-  if (String(effective.grossOrNet) !== '2') throw new Error(`${period}: only gross figures (grossOrNet = 2) are supported`);
 
   const declared: Record<string, number> = { '200': num(turnover.totalConsideration) };
   const known = new Set(['totalConsideration']);
-  for (const [nr, el] of TURNOVER_DEDUCTIONS) {
+  for (const [nr, el] of Object.entries(vat().form.deductions).flatMap(([nr, d]) => (d.element ? [[nr, d.element] as const] : []))) {
     known.add(el);
     if (el in turnover) declared[nr] = num(turnover[el]);
   }
   rejectUnknown(period, 'turnoverComputation', turnover, known);
 
-  const knownEffective = new Set(['grossOrNet', 'opted', 'suppliesPerTaxRate', 'acquisitionTax']);
-  if ('opted' in effective) declared['205'] = num(effective.opted);
-  for (const kind of ['supply', 'acquisition'] as const) {
-    const el = kind === 'supply' ? 'suppliesPerTaxRate' : 'acquisitionTax';
-    for (const r of (effective[el] ?? []) as Node[]) {
-      const rate = num(r.taxRate);
-      const row = TAX_RATE_ROWS.find((x) => x.kind === kind && x.rate === rate);
-      if (!row) throw new Error(`${period}: ${el} at rate ${rate}% has no Ziffer`);
-      declared[row.ziffer] = num(r.turnover);
-    }
-  }
-  for (const [nr, el] of INPUT_TAX) {
-    knownEffective.add(el);
-    if (el in effective) declared[nr] = num(effective[el]);
-  }
-  rejectUnknown(period, 'effectiveReportingMethod', effective, knownEffective);
+  const effective = root.effectiveReportingMethod as Node | undefined;
+  const simple = root.simpleTaxRateMethod as Node | undefined;
+  if (effective) readEffective(period, effective, declared);
+  else if (simple) readNetRate(period, simple, declared);
+  else throw new Error(`${period}: only the effective and the net tax rate method (simpleTaxRateMethod) are supported`);
 
   const flows = root.otherFlowsOfFunds as Node | undefined;
   if (flows) {
@@ -62,8 +49,45 @@ export function parseFiledReturn(xml: string): ReturnFigures {
 
   // 500/510 are what was filed, not a recomputation.
   const payable = num(root.payableTax);
-  const { ziffern } = completeFigures(period, declared);
+  const { ziffern } = vat().complete(period, declared);
   return { period, ziffern: { ...ziffern, '500': Math.max(0, payable), '510': Math.max(0, -payable) } };
+}
+
+function readEffective(period: QuarterKey, effective: Node, declared: Record<string, number>): void {
+  if (String(effective.grossOrNet) !== '2') throw new Error(`${period}: only gross figures (grossOrNet = 2) are supported`);
+  const known = new Set(['grossOrNet', 'opted', 'suppliesPerTaxRate', 'acquisitionTax']);
+  if ('opted' in effective) declared['205'] = num(effective.opted);
+  readRates(period, effective, 'suppliesPerTaxRate', 'supply', declared);
+  readRates(period, effective, 'acquisitionTax', 'acquisition', declared);
+  for (const [nr, el] of Object.entries(vat().form.inputTax).map(([nr, b]) => [nr, b.element] as const)) {
+    known.add(el);
+    if (el in effective) declared[nr] = num(effective[el]);
+  }
+  rejectUnknown(period, 'effectiveReportingMethod', effective, known);
+}
+
+/** The net tax rate method's section II: each approved rate's gross turnover, matched to the firm's row by activity code, else by rate. */
+function readNetRate(period: QuarterKey, simple: Node, declared: Record<string, number>): void {
+  for (const r of (simple.suppliesPerTaxRate ?? []) as Node[]) {
+    const rate = num(r.taxRate);
+    const id = r.activityId === undefined ? undefined : String(r.activityId);
+    const rows = vat().rateRows.filter((x) => x.kind === 'net-rate');
+    const row = rows.find((x) => id && x.activityId === id) ?? rows.find((x) => x.rate === rate);
+    if (!row) throw new Error(`${period}: suppliesPerTaxRate at ${rate}% (activity ${id ?? 'none'}) is none of the firm's approved net rates`);
+    declared[row.ziffer] = (declared[row.ziffer] ?? 0) + num(r.turnover);
+  }
+  readRates(period, simple, 'acquisitionTax', 'acquisition', declared);
+  if ('inputTaxCorrections' in simple) throw new Error(`${period}: inputTaxCorrections (Ziffer 415) of the net tax rate method is not modelled`);
+  rejectUnknown(period, 'simpleTaxRateMethod', simple, new Set(['suppliesPerTaxRate', 'acquisitionTax']));
+}
+
+function readRates(period: QuarterKey, node: Node, el: string, kind: 'supply' | 'acquisition', declared: Record<string, number>): void {
+  for (const r of (node[el] ?? []) as Node[]) {
+    const rate = num(r.taxRate);
+    const row = vat().rateRows.find((x) => x.kind === kind && x.rate === rate);
+    if (!row) throw new Error(`${period}: ${el} at rate ${rate}% has no Ziffer`);
+    declared[row.ziffer] = num(r.turnover);
+  }
 }
 
 function num(v: unknown): number {
@@ -77,10 +101,10 @@ function rejectUnknown(period: string, parent: string, node: Node, known: Set<st
   if (unknown.length) throw new Error(`${period}: ${parent} has unsupported element(s) ${unknown.join(', ')}`);
 }
 
-function quarterOf(from: string, to: string): QuarterKey {
-  const m = /^(\d{4})-(\d{2})-01$/.exec(from);
-  const key = m && `${m[1]}-Q${Math.ceil(+m[2] / 3)}`;
-  const p = key ? derivePeriod(key) : null;
-  if (!p || p.from !== from || p.to !== to) throw new Error(`reporting period ${from}…${to} is not a quarter`);
+/** The filing period the dates span exactly: a quarter or a half year. */
+function periodOf(from: string, to: string): QuarterKey {
+  const key = rangeToken(from, to);
+  const kind = derivePeriod(key)?.kind;
+  if (kind !== 'quarter' && kind !== 'half') throw new Error(`reporting period ${from}…${to} is neither a quarter nor a half year`);
   return key as QuarterKey;
 }

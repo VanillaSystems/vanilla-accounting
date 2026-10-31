@@ -1,0 +1,5 @@
+label: {"de": "Quelle reparieren", "en": "Repair the source", "fr": "Réparer la source", "it": "Riparare la fonte"}
+by: person
+task: {"title": {"de": "{source}: Seite geändert", "en": "{source}: page changed", "fr": "{source} : page modifiée", "it": "{source}: pagina cambiata"}, "why": {"de": "Die Seite sieht anders aus als erwartet. Die gespeicherte Seite zeigt, was die Quelle sah.", "en": "The page looks different than expected. The saved page shows what the source saw.", "fr": "La page diffère de ce qui était attendu. La page enregistrée montre ce que la source a vu.", "it": "La pagina è diversa dal previsto. La pagina salvata mostra cosa ha visto la fonte."}, "do": "open-item"}
+reads: ["source"]
+outcomes: {"fixed": "pull", "skip": "done"}

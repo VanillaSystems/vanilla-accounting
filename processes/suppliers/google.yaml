@@ -3,7 +3,7 @@ name: Google
 match:
   tx: [ "google" ]
   uid: [ "CHE-426.708.309" ]
-  file: [ '^\d{8}-google-' ]
+  file: [ '^\d{8}[-_]google(?:[-_.]|$)' ]
 
 steps:
   receipt-collection.guide.yaml#scrape:

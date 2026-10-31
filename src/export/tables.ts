@@ -5,12 +5,12 @@
  */
 import type { Index } from '../types/index.js';
 import type { Key } from '../app/i18n/types.js';
-import type { ReturnFigures } from '../accounting/return-figures.js';
 import { chfAmount } from '../accounting/ledger.js';
-import type { Period } from '../accounting/periods.js';
-import { NO_ACCOUNT, ledgerOf, reportView } from '../app/areas/reports/model.js';
+import { localToday, type FilingLength, type Period } from '../accounting/periods.js';
+import { NO_ACCOUNT, ledgerOf, reportView, vatParts } from '../app/areas/reports/model.js';
 import { formAmount, rateOf, shownZiffern, vatReturn } from '../app/areas/vat/model.js';
 import { accountsWithActivity, entriesIn, paymentsIn, quartersIn, receiptsIn, type ItemId } from './model.js';
+import type { ReturnFigures } from '../engines/return.js';
 
 export type Cell = string | number;
 /** How the PDF sets a row: a total whose label spans the row, a bold row, the opening balance. */
@@ -22,6 +22,8 @@ export interface Table {
   styles: RowStyle[];
   /** The columns that hold amounts: right-aligned, two decimals. */
   money: number[];
+  /** A line under the title: the Bilanz and Erfolgsrechnung say whether their figures are net of VAT or hold the VAT not yet settled (r8c-2). */
+  note?: string;
 }
 
 export interface Words {
@@ -34,13 +36,16 @@ export interface TableContext {
   period: Period;
   names: Record<string, string>;
   words: Words;
-  /** The returns as filed, by quarter. */
+  /** The returns as filed, by filing period. */
   filed: Record<string, ReturnFigures>;
+  /** The firm's filing length: which periods the VAT table lists. */
+  filingLength: FilingLength;
   account?: string;
 }
 
-const table = (head: string[], money: number[]) => ({ head, rows: [] as Cell[][], styles: [] as RowStyle[], money });
+const table = (head: string[], money: number[]): Table => ({ head, rows: [], styles: [], money });
 const r2 = (n: number) => Math.round(n * 100) / 100;
+const fmt2 = (n: number) => r2(n).toFixed(2);
 
 const REPORT_SUM: Record<string, Key> = {
   grossProfit: 'income.grossProfit', operatingResult: 'income.operatingResult', netResult: 'reports.result',
@@ -73,6 +78,14 @@ export function tableOf(id: Exclude<ItemId, 'receipts' | 'statements' | 'filings
         if (b.plain) { out.rows.push([group, '', c.words.accountingName(b.plain.name), b.plain.value]); out.styles.push(undefined); }
         if (b.total != null) { out.rows.push([`${t('common.total')} ${c.words.accountingName(b.title)}`, '', '', b.total]); out.styles.push('total'); }
       }
+      if (view.vat?.shown === 'net') out.note = t('reports.vatMetaNet', { account: view.vat.account });
+      if (view.vat?.shown === 'gross') {
+        const { figures } = view.vat;
+        const vars = { net: fmt2(figures.net), parts: vatParts(figures).map((x) => t(x.key, { amount: fmt2(x.amount) })).join(', ') };
+        out.rows.push([t(id === 'income' ? 'reports.vatRowIncome' : 'reports.vatRowBalance', vars), '', '', figures.net]);
+        out.styles.push('open');
+        out.note = t(id === 'income' ? 'reports.vatMetaIncome' : 'reports.vatMetaBalance', vars);
+      }
       return out;
     }
     case 'trial': {
@@ -85,7 +98,7 @@ export function tableOf(id: Exclude<ItemId, 'receipts' | 'statements' | 'filings
     }
     case 'vat': {
       const out = table([t('export.colQuarter'), t('export.colZiffer'), t('col.description'), t('col.amount'), t('export.colTax'), t('export.colFiled')], [3, 4, 5]);
-      for (const q of quartersIn(c.period)) {
+      for (const q of quartersIn(c.period, localToday(), c.filingLength)) {
         const v = vatReturn(c.books, q);
         const filed = c.filed[q];
         for (const n of shownZiffern(v, filed, false)) {
@@ -100,9 +113,9 @@ export function tableOf(id: Exclude<ItemId, 'receipts' | 'statements' | 'filings
     case 'ledger': case 'ledgers': {
       const out = table([t('col.account'), t('export.colAccountName'), t('col.date'), t('vat.colEntry'), t('reports.counter'), t('export.colVat'), t('reports.debit'), t('reports.credit'), t('reports.balance'), t('export.colReceipt')], [6, 7, 8]);
       const files = receiptFiles(c.books);
-      const accounts = id === 'ledger' ? (c.account === undefined ? [] : [c.account]) : accountsWithActivity(c.books, c.period);
+      const accounts = id === 'ledger' ? (c.account === undefined ? [] : [c.account]) : accountsWithActivity(c.books, c.period, c.names);
       for (const a of accounts) {
-        const l = ledgerOf(c.books, a, c.period);
+        const l = ledgerOf(c.books, a, c.period, c.names);
         out.rows.push([a, accName(a), c.period.from, t('reports.openingBalance'), '', '', '', '', l.opening, '']);
         out.styles.push('open');
         for (const r of [...l.rows].reverse()) {

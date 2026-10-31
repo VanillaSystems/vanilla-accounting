@@ -1,0 +1,4 @@
+label: {"de": "Ist die Bewegung jetzt gebucht?", "en": "Is the transaction booked now?", "fr": "Le mouvement est-il comptabilisé ?", "it": "Il movimento è registrato ora?"}
+uses: ledger.transaction-state
+reads: ["transaction", "books"]
+outcomes: {"booked": "done", "closed": "done", "open": "manual"}

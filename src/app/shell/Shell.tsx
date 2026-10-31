@@ -4,21 +4,23 @@
  * Areas own only their list, detail and keys (docs/redesign/architecture.md §3).
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { localToday, openQuarter, parsePeriod } from '../../accounting/periods.js';
+import { localToday, booksOpenPeriod, filingKeyOf, parsePeriod } from '../../accounting/periods.js';
 import { AREAS, DOCK, areaOf, type Area, type AreaProps, type LegendItem, type Nav, type PaletteItem } from '../areas/index.js';
 import { useIndex } from '../hooks/use-index.js';
+import type { Index } from '../../types/index.js';
 import { useApiStatus } from '../hooks/use-api-status.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { FxProvider } from '../hooks/use-fx.js';
-import { LOCALES, t } from '../i18n/index.js';
+import { LOCALES, t, tWith } from '../i18n/index.js';
 import { periodName } from '../lib/period-label.js';
 import { formatDate } from '../lib/utils.js';
 import { ICONS } from '../areas/icons.js';
 import { Dock } from './Dock.js';
 import { hrefOf, useLocationState } from './history.js';
-import { intake } from '../areas/receipts/intake.js';
-import { IntakeLine, finishedText, watchIntake } from './Intake.js';
+import { DropDialog, closeDrop, dropFiles, dropOpen } from './DropDialog.js';
+import { INTAKE, watchRuns, watchSteps } from '../automation/intake.js';
 import { STATIC_EXPORT } from '../lib/api.js';
+import { noTitleBar } from '../desktop/bridge.js';
 import { ExportDialog } from '../areas/export/ExportDialog.js';
 import { configOf, ownConfig, ownPresets, presetFor, type DialogConfig } from '../areas/export/state.js';
 import { PRESETS } from '../../export/model.js';
@@ -27,12 +29,22 @@ import { focusSelectedRow, useShellKeys } from './keyboard.js';
 import { Menu } from './Menu.js';
 import { Palette, type PaletteGroup } from './Palette.js';
 import { PeriodPicker } from './PeriodPicker.js';
-import { usePersistedFlag, useTheme, useZoom, type Theme } from './prefs.js';
+import { nextTheme, useNavWide, usePersistedFlag, useTheme, useZoom, type Theme } from './prefs.js';
 import { AREA_HOME, type AreaId, type Query } from './route.js';
 import { Split, useListWidth } from './Split.js';
 import { useToast } from './Toast.js';
+import { VatCards } from '../areas/codes/vat-card.js';
 import { TopBar } from './TopBar.js';
+import { Corner } from './Corner.js';
+import { Sidebar } from './Sidebar.js';
+import { pageContext, selectionContext } from '../assistant/context.js';
+import { attachDropped, keepPage, onBooksChanged, syncSidebarWidth, toggleAssistant, useAssistant } from '../assistant/store.js';
+import { CHAT_TAKES, PAGE_TAKES, droppedFiles, leftOut } from '../lib/folder-drop.js';
+import { BotIcon } from '../areas/automation/Graph.js';
 import { ShellUiContext, type ShellUi } from './ui.js';
+import { filing } from '../../engines/index.js';
+import { clearSelection, selectAll, selectionNow, useSelection } from '../selection/store.js';
+import { actionsNow, openActions } from '../selection/ActionsMenu.js';
 
 type Overlay =
   | { kind: 'palette' }
@@ -40,22 +52,38 @@ type Overlay =
   | { kind: 'language'; anchor: DOMRect }
   | { kind: 'export'; config: DialogConfig };
 
-export function Shell({ language, onLanguage }: { language: string; onLanguage(code: string): void }) {
-  const { data: books, loading, error, refresh } = useIndex();
+interface ShellProps { language: string; onLanguage(code: string): void }
+
+/** Waits for the books and their jurisdiction (/modules.json): no area computes before both are there. */
+export function Shell(props: ShellProps) {
+  const { data, loading, error, refresh } = useIndex();
+  if (loading || error) {
+    return (
+      <main className="full">
+        <div className="detail-empty">{loading ? t('app.loading') : <div><p>{t('app.loadFailed')}</p><p>{t('app.loadFailedHint')}</p><p>{error}</p></div>}</div>
+      </main>
+    );
+  }
+  return <Workbench {...props} books={data} refresh={refresh} />;
+}
+
+function Workbench({ language, onLanguage, books, refresh }: ShellProps & { books: Index; refresh(): void }) {
   const { online, readonly, snapshot } = useApiStatus();
   const canEdit = online && !readonly;
   const workspace = useWorkspace();
   const [loc, go] = useLocationState();
   const [theme, setTheme, dark] = useTheme();
   const [zoom, zoomStep] = useZoom();
-  const { toast, undo, node: toastNode } = useToast();
+  const { toast, note, dismiss: dismissToast, undo, node: toastNode } = useToast(() => go({ route: { area: 'company', section: 'ai' }, query: {} }));
   const [overlay, setOverlay] = useState<Overlay | null>(null);
   const [dockKeys, setDockKeys] = useState(false);
   const [legend, setLegend] = usePersistedFlag('legend', true);
-  const [dropping, setDropping] = useState(false);
+  const [navWide, toggleNav] = useNavWide();
+  const [dropping, setDropping] = useState<DropTarget | null>(null);
+  const aiOpen = useAssistant().open;
 
   const area = areaOf(loc.route);
-  const open = openQuarter(books.config?.closedThrough, localToday());
+  const open = booksOpenPeriod(books, localToday(), filing().length);
   const period = loc.query.period ?? open;
 
   const current = useRef(loc);
@@ -68,24 +96,30 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
       const query: Query = { ...current.current.query, ...patch };
       if (query.period?.token === open.token) delete query.period;
       for (const k of Object.keys(query) as Array<keyof Query>) if (query[k] === undefined) delete query[k];
+      // Two patches in one event (a chip added and the search cleared) both hold: the next one builds on this one.
+      current.current = { ...current.current, query };
       go({ route: current.current.route, query });
     },
     toast,
+    dismissToast,
     refresh,
-  }), [go, toast, refresh, open.token]);
+  }), [go, toast, dismissToast, refresh, open.token]);
 
   const props: AreaProps = { route: loc.route, query: loc.query, period, books, nav, canEdit };
   const propsRef = useRef(props);
   propsRef.current = props;
 
+  // On a phone one column shows at a time (shell.css `html.phone`): a tap on a row opens the detail, «←» or the dock the list (r8c-8).
+  const [phoneColumn, setPhoneColumn] = useState<'list' | 'detail'>('list');
   const goArea = useCallback((id: AreaId) => {
     const { route, query } = current.current;
+    setPhoneColumn('list');
     if (route.area === id) return;
     go({ route: AREA_HOME[id], query: query.period ? { period: query.period } : {} });
   }, [go]);
 
   const cycleTheme = () => {
-    const next: Theme = theme === 'system' ? 'light' : theme === 'light' ? 'dark' : 'system';
+    const next = nextTheme(theme, matchMedia('(prefers-color-scheme: dark)').matches);
     setTheme(next);
     const name = t(next === 'light' ? 'app.themeLight' : next === 'dark' ? 'app.themeDark' : 'app.themeSystem');
     const before = theme;
@@ -95,7 +129,7 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
   const runAdd = () => { if (area.add && canEdit) area.add.run(propsRef.current); };
 
   // The palette's search keeps the first render's closure: the open quarter is read from the props of now.
-  const openNow = () => openQuarter(propsRef.current.books.config?.closedThrough, localToday());
+  const openNow = () => booksOpenPeriod(propsRef.current.books, localToday(), filing().length);
   const openExport = (config?: DialogConfig) => {
     const { route, period } = propsRef.current;
     setOverlay({ kind: 'export', config: config ?? presetFor(route, period, openNow()) });
@@ -110,16 +144,26 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
     theme, setTheme, dark, zoom, language,
   };
 
-  // The inbox processing runs on the server; the books are loaded again when a job ends.
+  // The runs write the books on the server; they are loaded again when a run comes to rest.
   const reload = useRef(refresh);
   reload.current = refresh;
-  useEffect(() => (STATIC_EXPORT ? undefined : watchIntake(canEdit, (job) => { reload.current(); toast(finishedText(job)); })), [canEdit, toast]);
+  useEffect(() => onBooksChanged(() => reload.current()), []);
+  const noteRef = useRef(note);
+  noteRef.current = note;
+  useEffect(() => (STATIC_EXPORT ? undefined : watchRuns((run) => {
+    reload.current();
+    if (run.workflow !== INTAKE) return;
+    if (run.status === 'done') noteRef.current(t('intake.finished'));
+    else toast(t('intake.note.error', { detail: run.error ?? run.status }));
+  })), [toast]);
+  useEffect(() => (STATIC_EXPORT ? undefined : watchSteps(() => reload.current())), []);
 
   useShellKeys({
-    overlayOpen: () => overlay !== null,
-    closeOverlay: () => { setOverlay(null); focusSelectedRow(); },
+    overlayOpen: () => overlay !== null || dropOpen(),
+    closeOverlay: () => { if (dropOpen()) closeDrop(); setOverlay(null); focusSelectedRow(); },
     palette: () => setOverlay({ kind: 'palette' }),
-    undo,
+    // ⌘Z with nothing left to take back says so instead of doing nothing (r8k-7).
+    undo: () => { if (!undo()) toast(t('shell.nothingToUndo')); return true; },
     area: (letter) => {
       const id = DOCK.flat().find((a) => AREAS[a].dock?.key === letter);
       if (id) goArea(id);
@@ -131,7 +175,19 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
     toggleTheme,
     toggleLegend: () => setLegend(!legend),
     exportOpen: () => openExport(),
+    assistant: toggleAssistant,
+    toggleNav,
+    selectAll: () => !!area.selects && selectAll(area.selects, toast),
+    unselect: () => { if (!selectionNow()) return false; clearSelection(); focusSelectedRow(); return true; },
+    actions: () => !overlay && openActions(),
   });
+  useLayoutEffect(syncSidebarWidth, []);
+  // A selection belongs to its list: another area starts with none (#216).
+  useEffect(clearSelection, [loc.route.area]);
+  // The chat carries the picked rows as its chip; a new selection is a new reference, shown again after the chip was taken off.
+  const picked = useSelection();
+  const pickedKey = picked?.ids.join(',');
+  useEffect(() => { if (pickedKey) keepPage(); }, [pickedKey]);
 
   // urls.md rule 6: the tab names the object.
   useEffect(() => {
@@ -142,15 +198,21 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
   useLayoutEffect(() => {
     const a = document.activeElement;
     if (!a || a === document.body || a.classList.contains('row')) focusSelectedRow();
-  }, [loc.route, loading]);
+  }, [loc.route]);
 
   const listRef = useRef<HTMLElement>(null);
   const [listWidth, setListWidth] = useListWidth(loc.route.area);
 
-  const topRef = useRef<HTMLDivElement>(null);
-  const dockRef = useRef<HTMLElement>(null);
-  useEdges(topRef, dockRef, overlay !== null || dropping);
-  useDrop(canEdit, setDropping, (files) => (area.drop ? area.drop.run(files, propsRef.current) : intake(files, nav)));
+  // The drop dialog takes every drop, a folder's files with its subfolders' (#188); the Bank area keeps its own, where the open account places a statement.
+  useDrop(canEdit, setDropping, (files, target, entries) => {
+    if (target === 'chat') return void droppedFiles(entries, files, CHAT_TAKES).then(attachDropped);
+    void droppedFiles(entries, files, PAGE_TAKES).then((d) => {
+      const note = leftOut(d, PAGE_TAKES).map((x) => tWith(x.key, x.vars)).join(' ');
+      if (!area.drop || dropOpen()) return void dropFiles(d.files, note);
+      if (note) toast(note);
+      area.drop.run(d.files, propsRef.current);
+    });
+  });
 
   const search = useCallback((q: string): PaletteGroup[] => {
     const p = propsRef.current;
@@ -172,14 +234,18 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
       ...PRESETS.map((x) => ({ label: t('export.palettePreset', { name: t(`export.preset.${x.id}`) }), side: t('export.paletteBuiltin'), run: () => openExport(configOf(x.id, openNow(), p.period)) })),
       ...ownPresets().map((x) => ({ label: t('export.palettePreset', { name: x.name }), side: t('export.paletteOwn'), run: () => openExport(ownConfig(x)) })),
       { label: t('shell.themeToggle'), side: 'T', run: toggleTheme },
+      { label: t('dock.navToggle'), side: '⌘B', run: toggleNav },
     ].filter(hit);
     const areas: PaletteItem[] = DOCK.flat().map((id) => ({ label: AREAS[id].label(), side: `G ${AREAS[id].dock!.key.toUpperCase()}`, run: () => goArea(id) })).filter(hit);
-    return [...objects, [t('shell.actions'), actions], [t('shell.areas'), areas]].filter(([, xs]) => xs.length > 0) as PaletteGroup[];
+    // The Aktionen of what is open or picked (#216), first: the A key's menu, by name.
+    const here: PaletteItem[] = actionsNow().map((a) => ({ label: a.label, side: a.key, run: a.run })).filter(hit);
+    return [[t('actions.palette'), here], ...objects, [t('shell.actions'), actions], [t('shell.areas'), areas]].filter(([, xs]) => xs.length > 0) as PaletteGroup[];
   }, [go, goArea]);
 
+  // The filing periods that hold payments: quarters, or half years on a half-yearly setup (r6f-29).
   const quarters = useMemo(() => {
     const qs = new Set<string>();
-    for (const tx of books.transactions) qs.add(`${tx.date.slice(0, 4)}-Q${Math.ceil(Number(tx.date.slice(5, 7)) / 3)}`);
+    for (const tx of books.transactions) qs.add(filingKeyOf(tx.date, filing().length));
     return [...qs].sort().reverse();
   }, [books.transactions]);
 
@@ -205,26 +271,24 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
         </div>
       )}
       <a className="skip" href="#list">{t('shell.skip')}</a>
-      {loading || error ? (
-        <main className="full">
-          <div className="detail-empty">{loading ? t('app.loading') : <div><p>{t('app.loadFailed')}</p><p>{t('app.loadFailedHint', { command: 'npm run extract' })}</p><p>{error}</p></div>}</div>
-        </main>
-      ) : (
-        <FxProvider index={books}>
-          {Detail ? (
-            <main data-area={loc.route.area} style={mainStyle}>
-              <section className="list" id="list" ref={listRef} aria-label={area.label()}><List {...props} /></section>
-              <section className="detail" aria-live="polite"><Detail {...props} /></section>
-              <Split list={listRef} width={listWidth} onWidth={setListWidth} />
-            </main>
-          ) : (
-            <main className="full" id="list" data-area={loc.route.area}><List {...props} /></main>
-          )}
-        </FxProvider>
-      )}
+      <FxProvider index={books}>
+        {Detail && !area.fullPage?.(loc.route) ? (
+          <main data-area={loc.route.area} data-phone={phoneColumn} style={mainStyle}>
+            <section className="list" id="list" ref={listRef} aria-label={area.label()} onClickCapture={(e) => { if ((e.target as HTMLElement).closest?.('.row')) setPhoneColumn('detail'); }}><List {...props} /></section>
+            <section className="detail" aria-live="polite">
+              <button type="button" className="phoneback" onClick={() => setPhoneColumn('list')}>← {area.label()}</button>
+              <Detail {...props} />
+            </section>
+            <Split list={listRef} width={listWidth} onWidth={setListWidth} />
+          </main>
+        ) : (
+          <main className="full" id="list" data-area={loc.route.area}><List {...props} /></main>
+        )}
+        <VatCards {...props} />
+      </FxProvider>
 
       <TopBar
-        ref={topRef}
+        hold={overlay !== null && overlay.kind !== 'palette'}
         company={workspace?.company.name}
         period={area.periodless ? undefined : periodName(period)}
         zoom={zoom}
@@ -236,10 +300,11 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
         language={language}
         onLanguage={(anchor) => setOverlay({ kind: 'language', anchor: anchor.getBoundingClientRect() })}
       />
-      <Dock ref={dockRef} current={loc.route.area} books={books} keys={dockKeys} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
-      <div className="hint" aria-hidden="true" />
+      <Sidebar page={picked ? selectionContext(picked) : pageContext(loc.route, books)} books={books} onGo={(route) => nav.go({ route, query: {} })} />
+      <DropDialog books={books} refresh={refresh} onGo={(loc) => nav.go(loc)} />
+      <Corner onAssistant={toggleAssistant} onGo={(route) => nav.go({ route, query: {} })} />
+      <Dock current={loc.route.area} books={books} keys={dockKeys} wide={navWide} onToggle={toggleNav} nav={nav} canEdit={canEdit} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
       {toastNode}
-      <IntakeLine onOpen={() => goArea('receipts')} />
       {legend && (
         <div className="legend">
           {t('shell.edges')}<br />
@@ -248,12 +313,19 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
           ))}
         </div>
       )}
-      <div className={`drop${dropping ? ' show' : ''}`} aria-hidden="true">
+      <div className={`drop${dropping ? ' show' : ''}${dropping === 'page' ? ' on' : ''}`} aria-hidden="true" data-testid="drop-page">
         <div className="box"><div>
           {ICONS.upload}
-          <h2>{t('drop.title')}</h2>
+          <h2>{area.drop ? t('drop.title') : t('drop.page')}</h2>
           <p>{area.drop?.text() ?? t('drop.text')}</p>
           <p style={{ marginTop: 4, fontSize: 12.5, color: 'var(--faint)' }}>{area.drop?.formats() ?? t('drop.formats')}</p>
+        </div></div>
+      </div>
+      <div className={`dropchat${dropping ? ' show' : ''}${dropping === 'chat' ? ' on' : ''}${aiOpen ? '' : ' edge'}`} aria-hidden="true" data-testid="drop-chat">
+        <div className="box"><div>
+          <BotIcon />
+          <h2>{t(aiOpen ? 'drop.chat' : 'drop.ai')}</h2>
+          {aiOpen ? <p>{t('drop.chatText')}</p> : null}
         </div></div>
       </div>
 
@@ -271,7 +343,7 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
           books={books}
           company={workspace?.company.name}
           page={period}
-          account={loc.route.area === 'reports' ? accountOfRoute(loc.route) : undefined}
+          account={loc.route.area === 'reports' && loc.route.report !== 'custom' ? accountOfRoute(loc.route) : undefined}
           quarters={quarters}
           toast={toast}
           onClose={() => { setOverlay(null); focusSelectedRow(); }}
@@ -297,54 +369,33 @@ export function Shell({ language, onLanguage }: { language: string; onLanguage(c
   );
 }
 
-/** The top bar shows near the top edge, the dock near the bottom edge; both stay while hovered or held. */
-function useEdges(top: React.RefObject<HTMLElement>, dock: React.RefObject<HTMLElement>, hold: boolean) {
-  const holdRef = useRef(hold);
-  holdRef.current = hold;
-  useEffect(() => {
-    let hideTop: ReturnType<typeof setTimeout>, hideDock: ReturnType<typeof setTimeout>;
-    const show = (el: HTMLElement | null, on: boolean, timer: 'top' | 'dock') => {
-      if (!el) return;
-      clearTimeout(timer === 'top' ? hideTop : hideDock);
-      if (on) el.classList.add('show');
-      else if (timer === 'top') hideTop = setTimeout(() => el.classList.remove('show'), 450);
-      else hideDock = setTimeout(() => el.classList.remove('show'), 450);
-    };
-    const onMove = (e: MouseEvent) => {
-      if (document.querySelector('.drop.show')) return;
-      const d = dock.current, b = top.current;
-      show(d, innerHeight - e.clientY < 80 || !!d?.matches(':hover'), 'dock');
-      show(b, e.clientY < 10 || !!b?.matches(':hover') || !!document.querySelector('.menu'), 'top');
-      if (d?.classList.contains('show')) for (const it of d.querySelectorAll<HTMLElement>('.it')) {
-        const r = it.getBoundingClientRect();
-        const dx = Math.abs(e.clientX - (r.left + r.width / 2));
-        it.querySelector<HTMLElement>('.ic')!.style.transform = `scale(${1 + Math.max(0, 1 - dx / 110) * 0.22})`;
-      }
-    };
-    const unmagnify = () => dock.current?.querySelectorAll<HTMLElement>('.ic').forEach((ic) => { ic.style.transform = ''; });
-    document.addEventListener('mousemove', onMove);
-    dock.current?.addEventListener('mouseleave', unmagnify);
-    return () => { document.removeEventListener('mousemove', onMove); clearTimeout(hideTop); clearTimeout(hideDock); };
-  }, []);
-}
+/** Where dragged files go: the page takes them as receipts, the AI sidebar (or, closed, the window's right edge) as a message's attachments. */
+type DropTarget = 'page' | 'chat';
+/** The width of the «An die KI» edge while the sidebar is closed; shell.css --ai-edge says the same. */
+const AI_EDGE = 88;
 
-/** Files dragged over the page show the drop zone; dropped, they go to the inbox. */
-function useDrop(enabled: boolean, setShown: (on: boolean) => void, onFiles: (files: File[]) => void) {
+/**
+ * Files dragged over the window show the two drop zones, the one under the pointer lit; dropped, they go where it says.
+ * `entries` are the drop's items as entries, read while the event lasts: a folder is one, to walk later.
+ */
+function useDrop(enabled: boolean, setShown: (on: DropTarget | null) => void, onFiles: (files: File[], target: DropTarget, entries: (FileSystemEntry | null)[]) => void) {
   const latest = useRef(onFiles);
   latest.current = onFiles;
   useEffect(() => {
     if (!enabled) return;
     let depth = 0;
     const files = (e: DragEvent) => [...(e.dataTransfer?.types ?? [])].includes('Files');
-    const enter = (e: DragEvent) => { if (!files(e)) return; e.preventDefault(); depth++; setShown(true); };
-    const over = (e: DragEvent) => { if (files(e)) e.preventDefault(); };
-    const leave = () => { if (--depth <= 0) { depth = 0; setShown(false); } };
+    const target = (e: DragEvent): DropTarget => e.clientX >= (document.querySelector('aside.aside')?.getBoundingClientRect().left ?? innerWidth - AI_EDGE) ? 'chat' : 'page';
+    const enter = (e: DragEvent) => { if (!files(e)) return; e.preventDefault(); depth++; setShown(target(e)); };
+    const over = (e: DragEvent) => { if (files(e)) { e.preventDefault(); setShown(target(e)); } };
+    const leave = () => { if (--depth <= 0) { depth = 0; setShown(null); } };
     const drop = (e: DragEvent) => {
       if (!files(e)) return;
       e.preventDefault();
       depth = 0;
-      setShown(false);
-      latest.current([...(e.dataTransfer?.files ?? [])]);
+      setShown(null);
+      const entries = [...(e.dataTransfer?.items ?? [])].map((i) => i.webkitGetAsEntry?.() ?? null);
+      latest.current([...(e.dataTransfer?.files ?? [])], target(e), entries);
     };
     addEventListener('dragenter', enter);
     addEventListener('dragover', over);

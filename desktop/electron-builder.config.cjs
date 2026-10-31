@@ -11,19 +11,32 @@ const signed = Boolean(env.CSC_LINK);
 const notarize = signed && Boolean(env.APPLE_ID && env.APPLE_APP_SPECIFIC_PASSWORD && env.APPLE_TEAM_ID);
 /** owner/repo of the GitHub releases the app updates from; without it the app has no update feed. */
 const releases = env.VANILLA_RELEASES?.split('/');
+/** The build tools/desktop/build.mjs described (src/version.ts): names the dmg, and its number is the bundle version. */
+const build = (() => {
+  const file = join(__dirname, '..', 'out', 'desktop', 'build.json');
+  if (require('node:fs').existsSync(file)) return JSON.parse(require('node:fs').readFileSync(file, 'utf8'));
+  // Read before a build (tests): the version package.json names.
+  const { version } = require('../package.json');
+  return { version, file: version, number: 0 };
+})();
 
 module.exports = {
   appId: 'org.vanilla-accounting.desktop',
   productName: 'Vanilla Accounting',
+  buildVersion: String(build.number),
   directories: { output: 'release', buildResources: 'desktop' },
   // What the app reads at run time from its own folder (APP_ROOT): the bundle, the built UI and the
   // app's data files. Packages come from package.json's dependencies; the UI's own are in dist/.
   files: [
     'package.json',
+    'AGENTS.md',
     'out/desktop/*.{mjs,cjs}',
     'dist/**/*',
     'reference/**/*',
     'processes/**/*',
+    'modules/**/*',
+    'workflows/**/*',
+    'sources/**/*',
     'demo/**/*',
     'examples/cases/**/*',
     'src/server/scan.html',
@@ -44,6 +57,9 @@ module.exports = {
     '!node_modules/**/*.{map,d.ts,d.mts,d.cts}',
   ],
   asar: true,
+  // The AI sidebar's Claude reads the app's rules, workflows, guides and country modules with its own
+  // file tools, which cannot look inside app.asar (src/assistant/claude.ts APP_FILES).
+  asarUnpack: ['AGENTS.md', 'workflows/**/*', 'processes/**/*', 'modules/**/*'],
   // Chromium's own translations only for the app's languages.
   electronLanguages: ['de', 'fr', 'it', 'en'],
   // Hardening of the release build: the app's binary cannot be run as Node, takes no NODE_OPTIONS
@@ -51,7 +67,9 @@ module.exports = {
   // tools/desktop/smoke.mjs drives the fused build through the renderer (docs/desktop.md).
   electronFuses: {
     runAsNode: false,
-    enableCookieEncryption: true,
+    // Off: the app keeps no cookies, and on the Mac the encryption key sits in the keychain, so every
+    // start of a build macOS has not seen asked for the login password before the window appeared.
+    enableCookieEncryption: false,
     enableNodeOptionsEnvironmentVariable: false,
     enableNodeCliInspectArguments: false,
     enableEmbeddedAsarIntegrityValidation: true,
@@ -68,11 +86,20 @@ module.exports = {
     hardenedRuntime: true,
     entitlements: 'desktop/entitlements.mac.plist',
     entitlementsInherit: 'desktop/entitlements.mac.plist',
+    extendInfo: {
+      // What macOS shows when the app first asks Mail for its accounts (Firma › Quellen, «Mail-Programm auf diesem Mac»).
+      NSAppleEventsUsageDescription: 'Vanilla Accounting reads the invoices in your Mail accounts that you choose, and saves their attachments into your books. It never sends or changes mail.',
+      // The chat's microphone (src/desktop/dictation.swift); tools/desktop/dictation.mjs puts the same texts into the helper.
+      NSMicrophoneUsageDescription: 'Vanilla Accounting hört über das Mikrofon zu, wenn du im Chat diktierst. Die Sprache wird auf diesem Mac erkannt und nicht ins Internet geschickt.',
+      NSSpeechRecognitionUsageDescription: 'Vanilla Accounting wandelt deine Sprache auf diesem Mac in Text um, wenn du im Chat diktierst. Nichts davon verlässt den Mac.',
+    },
+    // The speech recognizer, built by tools/desktop/build.mjs; signed with the app (entitlementsInherit).
+    extraFiles: [{ from: 'out/desktop/vanilla-dictation', to: 'MacOS/vanilla-dictation' }],
     // null: no signing, even when the keychain holds an identity.
     identity: signed ? undefined : null,
     notarize,
   },
-  dmg: { artifactName: '${productName}-${version}-${arch}.${ext}' },
+  dmg: { artifactName: '${productName}-' + build.file + '-${arch}.${ext}' },
   // electron-updater reads its feed from here; the app checks only when package.json's desktop.autoUpdate is on.
   publish: releases?.length === 2 ? { provider: 'github', owner: releases[0], repo: releases[1] } : null,
 };

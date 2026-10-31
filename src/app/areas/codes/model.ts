@@ -5,8 +5,10 @@
  */
 import type { JournalEntry } from '../../../types/index.js';
 import type { Period } from '../../../accounting/periods.js';
-import { chfAmount, vatLine } from '../../../accounting/index.js';
-import { VAT_CODES, VAT_CODE_FAMILIES, VAT_CODE_KINDS, lookupVatCode, type VatCodeEntry, type VatCodeFamily } from '../../../accounting/vat-codes.js';
+import { chfAmount } from '../../../accounting/index.js';
+import { firmCodes, VAT_CODE_FAMILIES, VAT_CODE_GROUPS, VAT_CODE_KINDS, lookupVatCode, vatCodeGroup, type VatCodeEntry, type VatCodeFamily, type VatCodeGroup } from '../../../accounting/vat-codes.js';
+import { vat } from '../../../engines/index.js';
+import type { Key } from '../../i18n/types.js';
 
 /** The `?vat=` of the entries without a code. */
 export const NO_VAT = 'none';
@@ -31,7 +33,7 @@ export function vatStats(entries: readonly JournalEntry[], period: Period): Code
     const s = by.get(code) ?? by.set(code, { code, n: 0, chf: 0, tax: 0 }).get(code)!;
     s.n++;
     s.chf = round(s.chf + chfAmount(e));
-    s.tax = round(s.tax + (vatLine(e)?.tax ?? 0));
+    s.tax = round(s.tax + (vat().vatLine(e)?.tax ?? 0));
   }
   return [...by.values()].sort((a, b) => b.n - a.n || a.code.localeCompare(b.code));
 }
@@ -60,7 +62,7 @@ const unsigned = (code: string) => code.replace(/^-/, '');
  */
 export function codeGroups(stats: readonly CodeStat[], text: (r: CodeRow) => string, q?: string, usedOnly?: boolean): CodeGroup[] {
   const used = new Map(stats.map((s) => [s.code, s.n]));
-  const codes = [...new Set([...VAT_CODES.map((c) => c.code), ...stats.map((s) => s.code).filter((c) => c !== NO_VAT)])];
+  const codes = [...new Set([...firmCodes().map((c) => c.code), ...stats.map((s) => s.code).filter((c) => c !== NO_VAT)])];
   const words = (q ?? '').toLowerCase().split(/\s+/).filter(Boolean);
   const rows = codes.flatMap((code): CodeRow[] => {
     const found = lookupVatCode(code);
@@ -72,6 +74,29 @@ export function codeGroups(stats: readonly CodeStat[], text: (r: CodeRow) => str
       || unsigned(a.code).localeCompare(unsigned(b.code), 'de', { numeric: true })
       || a.code.length - b.code.length);
   return VAT_CODE_FAMILIES.map((family) => ({ family, rows: rows.filter((r) => r.entry.family === family) })).filter((g) => g.rows.length);
+}
+
+export interface PickOption { code: string; name: string }
+export interface PickGroup { group: VatCodeGroup; options: PickOption[] }
+
+/**
+ * The code picker's list (issue #224): the codes the firm's form takes (firmCodes), grouped by what
+ * the person is doing, in VAT_CODE_GROUPS order; current rates before the ones that ended in 2023,
+ * then the kinds the booking guide chooses (V81) before the rare ones (V81-B), else catalogue order. A
+ * query keeps the codes whose code or plain name (`name`) holds every word of it; one that starts
+ * with «-» lists the minus codes, a refund or reversal.
+ */
+export function pickGroups(q: string, name: (code: string) => string): PickGroup[] {
+  const typed = q.trim().toLowerCase();
+  const minus = typed.startsWith('-');
+  const words = typed.replace(/^-/, '').split(/\s+/).filter(Boolean);
+  const options = firmCodes()
+    .map((entry, i) => { const code = minus ? `-${entry.code}` : entry.code; return { entry, i, code, name: name(code) }; })
+    .filter((o) => { const hay = `${o.code} ${o.name}`.toLowerCase(); return words.every((w) => hay.includes(w)); })
+    .sort((a, b) => Number(a.entry.superseded) - Number(b.entry.superseded) || Number(!a.entry.rules.length) - Number(!b.entry.rules.length) || a.i - b.i);
+  return VAT_CODE_GROUPS
+    .map((group) => ({ group, options: options.filter((o) => vatCodeGroup(o.entry) === group).map(({ code, name }) => ({ code, name })) }))
+    .filter((g) => g.options.length);
 }
 
 /** Codes named in a text (the catalogue's "Nicht wenn"), split out so each can link: ['Kunde im Ausland (', 'V0-E', ')…']. */
@@ -88,4 +113,40 @@ export function splitCodes(text: string): Array<{ text: string; code?: string }>
   }
   out.push({ text: text.slice(last) });
   return out.filter((p) => p.text);
+}
+
+/** The firm's own net tax rate row for `code` (F1, F2, or their minus), when the firm books at that rate. */
+export const ownNetRate = (code: string) => vat().rateRows.find((r) => r.kind === 'net-rate' && r.code === code.replace(/^-/, ''));
+
+/** A text of the dictionary with its variables; the UI renders it with `t`. */
+export interface Words { key: Key; vars?: Record<string, string> }
+
+export interface CodeExplanation {
+  /** The firm's own rate, named as its row names it («1. Saldosteuersatz (Schreinerei)», German, for accountingName) with its percent; absent for a catalogue code. */
+  own?: { name: string; rate: number };
+  rate: number | null;
+  name: Words;
+  when: Words;
+  notWhen: Words;
+  /** In form order; null when this firm's return never declares the code. */
+  ziffern: string[] | null;
+}
+
+/**
+ * A code explained for this firm (r9n-25): a net tax rate the firm books at is its own code, named
+ * with its label and rate, declared in the turnover box and its rate row of form 0553, explained as
+ * the sale it books; any other code reads as the catalogue explains its kind. Pure: the words are
+ * keys of the dictionary.
+ */
+export function codeExplanation(code: string): CodeExplanation {
+  const found = lookupVatCode(code);
+  const own = ownNetRate(code);
+  if (own) {
+    const form = vat().form;
+    const vars = { code: own.code, turned: `-${own.code}`, rate: String(own.rate), ziffer: own.ziffer, form: form.form ?? '' };
+    return { own: { name: own.name, rate: own.rate }, rate: own.rate, name: { key: 'vatCodes.kind.flatRate.name' }, when: { key: 'vatCodes.netRate.when', vars }, notWhen: { key: 'vatCodes.netRate.notWhen', vars }, ziffern: [form.turnoverBox, own.ziffer] };
+  }
+  if (!found) return { rate: null, name: { key: 'vatCodes.unknown' }, when: { key: 'vatCodes.unknown' }, notWhen: { key: 'vatCodes.unknown' }, ziffern: null };
+  const e = found.entry;
+  return { rate: e.rate, name: { key: `vatCodes.kind.${e.kind}.name` }, when: { key: `vatCodes.kind.${e.kind}.when` }, notWhen: { key: `vatCodes.kind.${e.kind}.notWhen` }, ziffern: e.ziffern ? e.ziffern.map((z) => z.ziffer) : null };
 }

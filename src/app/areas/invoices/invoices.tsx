@@ -15,7 +15,7 @@ import type { InvoiceList as Records } from '../../lib/api.js';
 import { ICONS } from '../icons.js';
 import { I } from '../receipts/icons.js';
 import type { Area, AreaProps, LegendItem } from '../index.js';
-import { invoicesNow, reloadInvoices, useInvoices } from './data.js';
+import { followBooks, invoicesNow, reloadInvoices, useInvoices } from './data.js';
 import { byRouteId, counts, customerOpen, customerRows, customerOf, groupsOf, openSums, routeId, rowsOf, sentRows, type InvoiceRow } from './model.js';
 import { listed, setUi, toggleGroup, ui, useUi } from './state.js';
 import { invoiceAt, invoicePath, newDraftFor } from './actions.js';
@@ -23,6 +23,7 @@ import { Detail } from './Detail.js';
 import { Dialogs } from './dialogs.js';
 import { countryName } from './address.js';
 import { localToday } from '../../../accounting/periods.js';
+import { baseCurrency } from '../../../engines/index.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
 
@@ -58,6 +59,8 @@ function List(props: Props) {
   const { route, nav } = props;
   const load = useInvoices();
   useUi();
+
+  useEffect(() => followBooks(props.books), [props.books]);
 
   // /invoices/new?customer=<id>: a new draft for that customer, then its own link.
   const creating = useRef(false);
@@ -97,7 +100,7 @@ function InvoiceList(props: Props & { d: Records }) {
   // A link to an invoice of another period opens that period (urls.md rule 1).
   useEffect(() => {
     const inv = byRouteId(d.invoices, selected);
-    if (inv?.status === 'issued' && !query.period && (inv.date < period.from || inv.date > period.to)) nav.go(invoiceAt(inv));
+    if (inv?.status === 'issued' && !query.period && !rows.some((r) => r.inv.id === inv.id)) nav.go(invoiceAt(inv));
   }, [selected]);
 
   return (
@@ -115,8 +118,8 @@ function InvoiceList(props: Props & { d: Records }) {
           <Views on="list" props={props} />
         </div>
       </ListHead>
-      <div className="vresult static"><span>{t('invoices.open')}</span><b className="mono"><small>CHF</small>{fmt(sums.open)}</b></div>
-      {sums.overdue > 0 && <div className="notice warn rgap">{I.dot}<span>{t('invoices.overdueSum', { amount: fmt(sums.overdue) })}</span></div>}
+      <div className="vresult static"><span>{t('invoices.open')}</span><b className="mono" data-testid="open-sum"><small>CHF</small>{fmt(sums.open)}{sums.foreign.map((f) => <span key={f.currency} className="also"> + <small>{f.currency}</small>{fmt(f.open)}</span>)}</b></div>
+      {(sums.overdue > 0 || sums.foreign.some((f) => f.overdue > 0)) && <div className="notice warn rgap">{I.dot}<span>{t('invoices.overdueSum', { amount: [sums.overdue > 0 ? `CHF ${fmt(sums.overdue)}` : '', ...sums.foreign.filter((f) => f.overdue > 0).map((f) => `${f.currency} ${fmt(f.overdue)}`)].filter(Boolean).join(' + ') })}</span></div>}
       {groups.length === 0 ? (
         <div className="empty">
           <h2>{query.q ? t('invoices.nothingFound') : t('invoices.none')}</h2>
@@ -147,7 +150,7 @@ function Row({ r, sel, onSelect }: { r: InvoiceRow; sel: boolean; onSelect(): vo
     <div className={`row inv st-${r.state}${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={routeId(inv)} onClick={onSelect}>
       <span className="d mono">{inv.status === 'issued' ? inv.number : <span className="draftno">{t('invoices.draft')}</span>}</span>
       <span className="t">{r.state === 'overdue' && I.dot}{r.customer} {inv.subject && <small>{inv.subject}</small>}</span>
-      <span className="a mono">{inv.currency !== 'CHF' && <span className="c">{inv.currency}</span>}{fmt(r.gross)}</span>
+      <span className="a mono">{inv.currency !== baseCurrency() && <span className="c">{inv.currency}</span>}{(r.state === 'open' || r.state === 'overdue') && r.open !== r.gross ? <>{fmt(r.open)}<small className="m"> {t('invoices.ofGross', { gross: fmt(r.gross) })}</small></> : fmt(r.gross)}</span>
     </div>
   );
 }

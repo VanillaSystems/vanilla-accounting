@@ -4,10 +4,9 @@
  * read the same lists.
  */
 import type { Index } from '../types/index.js';
-import { localToday, parsePeriod, type IsoDate, type Period } from '../accounting/periods.js';
+import { filingKeyOf, localToday, parsePeriod, type FilingLength, type IsoDate, type Period } from '../accounting/periods.js';
 import { ledgerOf as receiptLedger } from '../app/areas/receipts/model.js';
-import { openingBalancesAt } from '../accounting/ledger.js';
-import { NO_ACCOUNT } from '../app/areas/reports/model.js';
+import { NO_ACCOUNT, openingOf, reportPostings } from '../app/areas/reports/model.js';
 
 export const FORMATS = ['pdf', 'csv', 'xlsx', 'json', 'banana', 'orig'] as const;
 export type Format = typeof FORMATS[number];
@@ -35,7 +34,7 @@ export const ITEMS: readonly ItemDef[] = [
   { id: 'vat', group: 'reports', formats: REPORT },
   { id: 'ledger', group: 'reports', formats: REPORT },
   { id: 'ledgers', group: 'reports', formats: REPORT },
-  { id: 'journal', group: 'data', formats: [...TABLE, 'banana'] },
+  { id: 'journal', group: 'data', formats: [...TABLE, 'banana', 'pdf'] },
   { id: 'payments', group: 'data', formats: TABLE },
   { id: 'receiptList', group: 'data', formats: TABLE },
   { id: 'chart', group: 'data', formats: TABLE },
@@ -71,14 +70,20 @@ export interface Preset {
   period: 'open' | 'year' | 'page';
 }
 
+/**
+ * Not migrated to report specs (src/reports/spec.ts) yet: the journal, payments and receipt lists
+ * are a spec's sections (entries, payments, receipts without a filter), but Erfolgsrechnung,
+ * Bilanz, Saldobilanz and the VAT returns are statements a spec cannot say (an account's opening
+ * balance, the report's blocks and sums, the boxes of a return), and a preset also packs the originals.
+ */
 export const PRESETS: readonly Preset[] = [
   {
     id: 'treuhand', period: 'open', sums: true, oneBook: false,
-    items: { income: ['pdf'], balance: ['pdf'], trial: ['pdf'], vat: ['pdf'], journal: ['banana', 'csv'], payments: ['csv'], receipts: ['orig'], statements: ['orig'], filings: ['orig'] },
+    items: { income: ['pdf'], balance: ['pdf'], trial: ['pdf'], vat: ['pdf'], journal: ['banana', 'csv', 'pdf'], payments: ['csv'], receipts: ['orig'], statements: ['orig'], filings: ['orig'] },
   },
   {
     id: 'audit', period: 'year', sums: true, oneBook: false,
-    items: { income: ['pdf'], balance: ['pdf'], trial: ['pdf'], vat: ['pdf', 'csv'], ledgers: ['pdf', 'csv'], journal: ['csv', 'json'], payments: ['csv', 'json'], receiptList: ['csv'], chart: ['csv'], receipts: ['orig'], statements: ['orig'], filings: ['orig'] },
+    items: { income: ['pdf'], balance: ['pdf'], trial: ['pdf'], vat: ['pdf', 'csv'], ledgers: ['pdf', 'csv'], journal: ['pdf', 'csv', 'json'], payments: ['csv', 'json'], receiptList: ['csv'], chart: ['csv'], receipts: ['orig'], statements: ['orig'], filings: ['orig'] },
   },
   {
     id: 'excel', period: 'page', sums: false, oneBook: true,
@@ -96,22 +101,30 @@ export function presetPeriod(p: Preset, open: Period, page: Period): string {
 }
 
 /** The quarters a period holds whole and that have ended by `today`: their returns go into the export. */
-export function quartersIn(period: Period, today: IsoDate = localToday()): string[] {
+export function quartersIn(period: Period, today: IsoDate = localToday(), length: FilingLength = 'quarter'): string[] {
   const out: string[] = [];
   const first = Number((period.kind === 'all' ? '2000' : period.from).slice(0, 4));
   const last = Number((period.kind === 'all' ? today : period.to).slice(0, 4));
   for (let y = first; y <= last; y++) {
-    for (let q = 1; q <= 4; q++) {
-      const p = parsePeriod(`${y}-Q${q}`, today)!;
+    // The firm's filing periods of the year: quarters, or half years on a half-yearly setup.
+    for (const key of new Set([1, 4, 7, 10].map((m) => filingKeyOf(`${y}-${String(m).padStart(2, '0')}-01`, length)))) {
+      const p = parsePeriod(key, today)!;
       if (p.from >= period.from && p.to <= period.to && p.to < today) out.push(p.token);
     }
   }
   return out;
 }
 
-/** The receipts of a period as the Belege list holds them: dated (or read) in it, and a receipt of their own. */
+/**
+ * The receipts of a period: dated (or read) in it as the Belege list holds them, and every receipt
+ * of a payment or entry of the period (cash basis: a September invoice paid in October is October's
+ * evidence, treuhaender-39). A receipt of their own only.
+ */
 export function receiptsIn(books: Index, period: Period) {
-  return receiptLedger(books, period.from).views.filter((v) => !v.none && !!v.day && v.day >= period.from && v.day <= period.to);
+  const l = receiptLedger(books, period.from);
+  const inside = (d: string | undefined) => !!d && d >= period.from && d <= period.to;
+  const booked = (ref: string) => inside(l.txByRef.get(ref)?.date) || (l.entriesByRef.get(ref) ?? []).some((e) => inside(e.date));
+  return l.views.filter((v) => !v.none && (inside(v.day) || v.links.some(booked)));
 }
 
 export const statementsIn = (books: Index, period: Period) =>
@@ -120,31 +133,35 @@ export const statementsIn = (books: Index, period: Period) =>
 export const entriesIn = (books: Index, period: Period) =>
   (books.journalEntries ?? []).filter((e) => e.date >= period.from && e.date <= period.to);
 
-/** Every account with an opening balance or an entry in the period, the one-sided entries' last. */
-export function accountsWithActivity(books: Index, period: Period): string[] {
-  const entries = books.journalEntries ?? [];
-  const opening = openingBalancesAt(entries, period.from, books.config?.openingBalances);
+/** Every account with an opening balance or a posting in the period (the reports' postings, `names` the chart), the one-sided entries' last. */
+export function accountsWithActivity(books: Index, period: Period, names: Record<string, string>): string[] {
+  const postings = reportPostings(books, names);
+  const opening = openingOf(books, postings, period.from);
   const seen = new Set(Object.keys(opening).filter((a) => opening[a]));
-  for (const e of entriesIn(books, period)) { seen.add(e.accountDebit || NO_ACCOUNT); seen.add(e.accountCredit || NO_ACCOUNT); }
+  for (const e of postings.filter((p) => p.date >= period.from && p.date <= period.to)) { seen.add(e.accountDebit || NO_ACCOUNT); seen.add(e.accountCredit || NO_ACCOUNT); }
   return [...seen].sort((a, b) => Number(a === NO_ACCOUNT) - Number(b === NO_ACCOUNT) || a.localeCompare(b));
 }
 
 export const paymentsIn = (books: Index, period: Period) =>
   books.transactions.filter((t) => t.date >= period.from && t.date <= period.to);
 
-/** How many of an item a period holds: the dialog's hint and whether a tick is possible. Filings are counted by the server. */
-export function countOf(id: ItemId, books: Index, period: Period, names: Record<string, string>, account?: string): number {
+/**
+ * How many of an item a period holds: the dialog's hint and whether a tick is possible. Filings
+ * count the quarters whose return lies filed in the books (`filed`, CompanyInfo.filed): a quarter
+ * before the lock that never had a return is not one (r4t-9).
+ */
+export function countOf(id: ItemId, books: Index, period: Period, names: Record<string, string>, account?: string, filed?: readonly string[], length: FilingLength = 'quarter'): number {
   switch (id) {
     case 'income': case 'balance': case 'trial': return 1;
-    case 'vat': return quartersIn(period).length;
+    case 'vat': return quartersIn(period, localToday(), length).length;
     case 'ledger': return account === undefined ? 0 : 1;
-    case 'ledgers': return accountsWithActivity(books, period).length;
+    case 'ledgers': return accountsWithActivity(books, period, names).length;
     case 'journal': return entriesIn(books, period).length;
     case 'payments': return paymentsIn(books, period).length;
     case 'receiptList': case 'receipts': return receiptsIn(books, period).length;
     case 'chart': return Object.keys(names).length;
     case 'statements': return statementsIn(books, period).length;
-    case 'filings': return quartersIn(period).filter((q) => !!books.config?.closedThrough && parsePeriod(q, localToday())!.to <= books.config.closedThrough).length;
+    case 'filings': return quartersIn(period, localToday(), length).filter((q) => (filed ? filed.includes(q) : !!books.config?.closedThrough && parsePeriod(q, localToday())!.to <= books.config.closedThrough)).length;
   }
 }
 

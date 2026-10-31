@@ -1,12 +1,13 @@
 import express from 'express';
-import { ClosedPeriodError } from '../books/store.js';
-import { RequestError } from './books.js';
+import { ClosedPeriodError, StaleBooksError } from '../books/store.js';
+import { RequestError, WS, refusalOf } from './books.js';
 import type { ApiErrorBody, ApiStatus, InvoiceErrorBody } from '../types/api-error.js';
 import { router as classify } from './routes/classify.js';
 import { router as scan } from './routes/scan.js';
 import { router as receipts } from './routes/receipts.js';
 import { router as transactions } from './routes/transactions.js';
 import { router as mappings } from './routes/mappings.js';
+import { router as pairing } from './routes/pairing.js';
 import { router as journal } from './routes/journal.js';
 import { router as config } from './routes/config.js';
 import { router as yearClose } from './routes/year-close.js';
@@ -14,39 +15,55 @@ import { router as files } from './files.js';
 import { router as invoices } from './routes/invoices.js';
 import { router as statements } from './routes/statements.js';
 import { router as exportBundle } from './routes/export.js';
-import { router as intake } from './routes/intake.js';
+import { router as automation } from './routes/automation.js';
+import { router as changes } from './routes/changes.js';
+import { router as assistant } from './routes/assistant.js';
+import { router as drop } from './routes/drop.js';
+import { router as sourcesRoute } from './routes/sources.js';
+import { router as twins } from './routes/twins.js';
+import { router as quarantine } from './routes/quarantine.js';
+import { router as rules } from './routes/rules.js';
+import { router as questions } from './routes/questions.js';
+import { router as reports } from './routes/reports.js';
+import { router as knowledge } from './routes/knowledge.js';
+import { router as onboarding } from './routes/onboarding.js';
 import { InvoiceRuleError, type InvoiceRefusal } from '../invoices/rules.js';
 import { PaymentError } from '../invoices/payments.js';
 import { NoBrowserError } from '../invoices/pdf.js';
 import { MailError, type MailRefusal } from '../invoices/mail.js';
 import { router as mail } from './routes/mail.js';
-import { NoClaudeError } from '../llm/ask.js';
+import { router as ai } from './routes/ai.js';
+import { router as terminal } from './routes/terminal.js';
+import { router as batch } from './routes/batch.js';
+import { aiSetup } from './ai-setup.js';
+import { NoClaudeError } from '../llm/providers/claude-cli.js';
+import { AiRefused } from '../llm/provider.js';
+import { aiOff } from '../llm/off.js';
+import { NETWORK_PATHS, fromThisComputer, phoneGate } from './phone.js';
 
 export const app = express();
 
 const MAIL_STATUS: Record<MailRefusal, number> = { notConfigured: 409, noPassword: 409, recipient: 400, failed: 502 };
 
 const INVOICE_STATUS: Record<InvoiceRefusal, number> = {
-  incomplete: 400, notFound: 404, notDraft: 409, notIssued: 409, cancelled: 409, paid: 409, creditNote: 409, nothingOpen: 409, changed: 409,
+  incomplete: 400, notFound: 404, notDraft: 409, notIssued: 409, cancelled: 409, paid: 409, creditNote: 409, nothingOpen: 409, changed: 409, uid: 400,
 };
 
-/**
- * The server listens on the network only so the phone app can upload scans (src/server/routes/scan.ts).
- * Everything else — the books, receipts, every write — answers only to this computer.
- */
-export const NETWORK_PATHS: ReadonlySet<string> = new Set(['/scan', '/scan/manifest.json', '/api/upload', '/api/status']);
-const LOOPBACK = /^(127\.|::1$|::ffff:127\.)/;
+// From the network only the phone's paths answer (src/server/phone.ts), the API ones with the
+// pairing token once one is configured. Everything else (the books, receipts, every write) answers
+// only to this computer.
 app.use((req, res, next) => {
-  if (LOOPBACK.test(req.socket.remoteAddress ?? '') || NETWORK_PATHS.has(req.path)) return next();
+  if (fromThisComputer(req) || NETWORK_PATHS.has(req.path)) return next();
   res.status(403).json({ error: 'Nur von diesem Computer aus erreichbar.', code: 'localOnly' } satisfies ApiErrorBody);
 });
+app.use(phoneGate);
 app.use(express.json());
 
 // Read-only mode (READONLY=1): block all mutations so an auditor can navigate the
 // whole app without risk of accidental edits/deletes or triggering paid LLM calls.
-// The export is a POST that only reads the books: it stays open.
+// The export and a report's run and file are POSTs that only read the books: they stay open.
 export const READONLY = process.env.READONLY === '1';
-const READ_POSTS: ReadonlySet<string> = new Set(['/api/export']);
+const READ_POSTS: ReadonlySet<string> = new Set(['/api/export', '/api/reports/run', '/api/reports/file']);
 if (READONLY) {
   app.use((req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS' && !READ_POSTS.has(req.path)) {
@@ -58,21 +75,23 @@ if (READONLY) {
 }
 
 app.get('/api/status', (_req, res) => {
-  res.json({ ok: true, readonly: READONLY } satisfies ApiStatus);
+  res.json({ ok: true, readonly: READONLY, ...(aiOff() ? { aiOff: true } : {}) } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, transactions, mappings, journal, config, classify, yearClose, invoices, statements, exportBundle, intake, mail);
+app.use(files, scan, receipts, transactions, mappings, pairing, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, questions, reports, batch);
+app.use(knowledge);
+app.use(onboarding);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  if (err instanceof ClosedPeriodError) {
-    const params = { closedThrough: err.closedThrough ?? '', ...(err.reason ? { reason: err.reason } : {}) };
-    res.status(403).json({ error: err.message, code: 'periodClosed', params } satisfies ApiErrorBody);
-  } else if (err instanceof RequestError) res.status(err.status).json({ error: err.message, ...err.refusal } satisfies ApiErrorBody);
+  if (err instanceof ClosedPeriodError) res.status(403).json({ error: err.message, ...refusalOf(err) } satisfies ApiErrorBody);
+  else if (err instanceof StaleBooksError) res.status(409).json({ error: err.message, ...refusalOf(err) } satisfies ApiErrorBody);
+  else if (err instanceof RequestError) res.status(err.status).json({ error: err.message, ...err.refusal } satisfies ApiErrorBody);
   else if (err instanceof InvoiceRuleError) {
     res.status(INVOICE_STATUS[err.code]).json({ error: err.message, invoiceRefusal: err.code, ...(err.missing ? { missing: err.missing } : {}) } satisfies InvoiceErrorBody);
   } else if (err instanceof PaymentError) res.status(409).json({ error: err.message });
   else if (err instanceof MailError) res.status(MAIL_STATUS[err.code]).json({ error: err.message, mailRefusal: err.code, ...(err.detail ? { detail: err.detail } : {}) } satisfies ApiErrorBody);
-  else if (err instanceof NoClaudeError) res.status(503).json({ error: err.message, code: 'noClaude' } satisfies ApiErrorBody);
+  else if (err instanceof NoClaudeError) res.status(503).json({ error: err.message, code: 'noClaude', params: err.step ? { step: err.step } : {} } satisfies ApiErrorBody);
+  else if (err instanceof AiRefused) res.status(503).json({ error: err.message, code: 'aiRefused', params: err.refusal } satisfies ApiErrorBody);
   else if (err instanceof NoBrowserError) res.status(503).json({ error: err.message, invoiceRefusal: 'noBrowser' } satisfies InvoiceErrorBody);
   else {
     console.error(err);

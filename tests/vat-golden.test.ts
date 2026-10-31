@@ -9,48 +9,49 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import type { QuarterKey } from '../src/types/index.js';
-import { APP_ROOT } from '../src/workspace/workspace.js';
-import { computeVatReport, computeVatReportLines } from '../src/accounting/vat-report.js';
-import { figuresFromBooks } from '../src/accounting/return-figures.js';
+import { APP_ROOT, yearPaths } from '../src/workspace/workspace.js';
 import { parseFiledReturn } from '../src/accounting/filed-return.js';
 import { reconcileCases, caseEffect } from '../src/accounting/correction-cases.js';
 import { goldenSet } from './support/golden.js';
-import { tempWorkspace } from './support/workspace.js';
+import { tempWorkspace, writeIndex } from './support/workspace.js';
+import { vat } from '../src/engines/index.js';
+import { filingKeyOf } from '../src/accounting/periods.js';
 
 const { ws, books, expect: golden } = goldenSet();
 const entries = books.journalEntries;
 const adjustments = books.config.vatAdjustments;
 
-const quarterOf = (date: string) => `${date.slice(0, 4)}-Q${Math.ceil(Number(date.slice(5, 7)) / 3)}` as QuarterKey;
+// The firm's filing periods: quarters, or half years for a firm on the net tax rate method.
+const quarterOf = (date: string) => filingKeyOf(date, ws.filingLength) as QuarterKey;
 const QUARTERS = [...new Set(entries.map((e) => quarterOf(e.date)))].sort();
 const FILED = QUARTERS.filter((q) => q <= quarterOf(books.config.closedThrough));
 const OPEN = QUARTERS.at(-1)!;
 const YEAR = OPEN.slice(0, 4);
-const REPORT_KEYS = [...QUARTERS, `${YEAR}-H1`, YEAR];
-const filedXml = (q: QuarterKey) => readFileSync(join(ws.paths.filings, q.slice(0, 4), `mwst-ech0217-${q}.xml`), 'utf8');
+const REPORT_KEYS = [...new Set([...QUARTERS, `${YEAR}-H1`, YEAR])];
+const filedXml = (q: QuarterKey) => readFileSync(join(yearPaths(ws.paths, q.slice(0, 4)).filings, `mwst-ech0217-${q}.xml`), 'utf8');
 
-test('the frozen books span one year with a filed and an open quarter', () => {
+test('the frozen books span one year with a filed and an open period', () => {
   assert.ok(QUARTERS.every((q) => q.startsWith(YEAR)), `one year: ${QUARTERS.join(', ')}`);
   assert.ok(FILED.length > 0 && !FILED.includes(OPEN), `filed ${FILED.join(', ')}, open ${OPEN}`);
 });
 
 test('VAT report Ziffern per period', () => {
   for (const key of REPORT_KEYS) {
-    const r = computeVatReport(entries, key, adjustments);
+    const r = vat().report(entries, key, adjustments);
     golden(`report-${key}`, { ziffern: r.ziffern.map((z) => [z.number, z.amount]), toPay: r.toPay, credit: r.credit });
   }
 });
 
 test('VAT report lines per Ziffer (which entries feed which Ziffer)', () => {
   for (const key of QUARTERS) {
-    const lines = computeVatReportLines(entries, key, adjustments);
+    const lines = vat().lines(entries, key, adjustments);
     const compact = Object.fromEntries(Object.entries(lines).map(([z, ls]) => [z, ls.map((l) => [l.date, l.ref, l.code, l.gross, l.base, l.tax])]));
     golden(`lines-${key}`, compact);
   }
 });
 
 test('return figures (what vat-xml would file, and the 0535 «korrigiert» column)', () => {
-  for (const q of QUARTERS) golden(`figures-${q}`, figuresFromBooks(entries, q, adjustments));
+  for (const q of QUARTERS) golden(`figures-${q}`, vat().figures(entries, q, adjustments));
 });
 
 test('filed returns parse to their Ziffern', () => {
@@ -59,7 +60,7 @@ test('filed returns parse to their Ziffern', () => {
 
 test('correction cases explain every franc of each Korrekturabrechnung', () => {
   for (const q of FILED) {
-    const corrected = figuresFromBooks(entries, q, adjustments);
+    const corrected = vat().figures(entries, q, adjustments);
     const r = reconcileCases(books.config.correctionCases, entries, parseFiledReturn(filedXml(q)), corrected);
     assert.deepEqual(r.unexplained, [], `${q}: unexplained 0535 difference`);
     assert.deepEqual(r.orphans.map((e) => e.id), [], `${q}: correction entries in no case`);
@@ -72,7 +73,7 @@ test('eCH-0217 XML for the open quarter (the file uploaded to the ESTV)', () => 
   const dir = paths.root;
   try {
     symlinkSync(join(APP_ROOT, 'node_modules'), join(dir, 'node_modules'));
-    writeFileSync(paths.books, JSON.stringify({ receipts: [], transactions: [], mappings: [], bankStatements: [], ...books }));
+    writeIndex({ paths }, books);
     execFileSync(process.execPath, ['--import', 'tsx', join(APP_ROOT, 'src/cli/vat-ech0217.ts'), OPEN, join(dir, 'open.xml')], {
       cwd: dir, env: { ...process.env, VANILLA_WORKSPACE: dir }, stdio: 'pipe',
     });

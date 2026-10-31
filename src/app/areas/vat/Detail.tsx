@@ -5,9 +5,7 @@
  */
 import { Fragment, useMemo } from 'react';
 import type { CorrectionCase, JournalEntry } from '../../../types/index.js';
-import {
-  caseEffect, figuresFromBooks, reconcileCases, roundCHF, vatLine, type ReturnFigures,
-} from '../../../accounting/index.js';
+import { caseEffect, reconcileCases, roundCHF } from '../../../accounting/index.js';
 import { derivePeriod } from '../../../accounting/periods.js';
 import type { RouteOf } from '../../shell/route.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
@@ -15,14 +13,25 @@ import { periodName } from '../../lib/period-label.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps, Nav } from '../index.js';
-import { FORM_0535, SUMS, byCode, correctedPeriod, filedDiff, formAmount, rateOf, type VatReturn } from './model.js';
+import { FORM_0535, byCode, correctedPeriod, filedDiff, formAmount, rateOf, sumsOf, type VatReturn } from './model.js';
 import { effectLines, formSections } from './form0535.js';
-import { CodeLink, Go, codeName, entryAt } from './links.js';
+import { CodeLink, Go, entryAt } from './links.js';
+import { codeText } from '../codes/names.js';
 import { correctionDiff, signed, useReturn, zifferLabel } from './view.js';
+import { vat, vatSetup } from '../../../engines/index.js';
+import { methodOf } from '../../../workspace/vat-setup.js';
+import type { ReturnFigures } from '../../../engines/return.js';
+import { correctionName } from '../../lib/vat-words.js';
 
 type Props = AreaProps<RouteOf<'vat'>>;
 
 export function Detail(props: Props) {
+  const setup = useWorkspace()?.company.vat;
+  if (setup && !setup.registered) return <div className="detail-empty"><div>{t('vat.notRegistered')}</div></div>;
+  return <ReturnDetail {...props} />;
+}
+
+function ReturnDetail(props: Props) {
   const { route } = props;
   const { v, filed } = useReturn(props);
   if (route.ziffer === FORM_0535) {
@@ -36,8 +45,10 @@ export function Detail(props: Props) {
 /** What a Ziffer is, in one sentence. */
 function explanation(v: VatReturn, n: string): string {
   const r = rateOf(v, n);
+  if (r?.row.kind === 'net-rate') return t('vat.xNetRate');
   if (r) return t(r.row.kind === 'supply' ? 'vat.xSupply' : 'vat.xAcquisition', { rate: r.row.rate });
-  if (n in SUMS || n === '200') return t(`vat.x${n}` as 'vat.x289');
+  if (n === '500' && methodOf(vatSetup()) === 'net-rate') return t('vat.x500NetRate');
+  if (n in sumsOf() || n === '200') return t(`vat.x${n}` as 'vat.x289');
   return t(`vat.z${n}` as 'vat.z200');
 }
 
@@ -47,10 +58,13 @@ function Ziffer({ v, filed, n, amount, nav, period }: Props & { v: VatReturn; fi
   const adjustments = v.adjustments.filter((a) => a.ziffer === n);
   const was = filedDiff(v, filed, n);
   const now = formAmount(v, n);
-  const corrections = n in SUMS ? v.corrections.length : lines.filter((l) => l.entry.corrects).length;
+  const sums = sumsOf();
+  const corrections = n in sums ? v.corrections.length : lines.filter((l) => l.entry.corrects).length;
   const select = (x: string) => nav.select({ area: 'vat', ziffer: x });
   const supply = r?.row.kind === 'supply';
-  const gross = Number(n) < 300 || supply;
+  // A net-rate row declares gross turnover like a supply row; only Bezugsteuer is declared net.
+  const turnover = r !== undefined && r.row.kind !== 'acquisition';
+  const gross = Number(n) < 300 || turnover;
 
   return (
     <div className="detail-in" key={`${v.key}:${n}`}>
@@ -61,7 +75,7 @@ function Ziffer({ v, filed, n, amount, nav, period }: Props & { v: VatReturn; fi
       <div className="facts">
         {r && (
           <>
-            <span title={t(supply ? 'vat.turnoverGrossTip' : 'vat.acquisitionNetTip')}>{t(supply ? 'vat.factTurnover' : 'vat.factAcquisition', { amount: fmt(supply ? r.base + r.tax : r.base) })}</span>
+            <span data-tip={t(turnover ? 'vat.turnoverGrossTip' : 'vat.acquisitionNetTip')}>{t(turnover ? 'vat.factTurnover' : 'vat.factAcquisition', { amount: fmt(supply ? r.base + r.tax : r.base) })}</span>
             <span>{t('vat.factRate', { rate: r.row.rate })}</span>
             <span>{t('vat.factTax', { amount: fmt(r.tax) })}</span>
           </>
@@ -75,18 +89,18 @@ function Ziffer({ v, filed, n, amount, nav, period }: Props & { v: VatReturn; fi
           <span>
             {t('vat.filedWas', { was: fmt(was), now: fmt(now) })}{' '}
             {corrections > 0 ? (
-              <>{t('vat.diffFromCorrections', { diff: signed(roundCHF(now - was)), n: corrections })} <a href="#" onClick={(e) => { e.preventDefault(); select(FORM_0535); }}>{t('vat.open0535')}</a></>
+              <>{t('vat.diffFromCorrections', { diff: signed(roundCHF(now - was)), n: corrections, correction: correctionName() })} <a href="#" onClick={(e) => { e.preventDefault(); select(FORM_0535); }}>{t('vat.open0535')}</a></>
             ) : t('vat.diffRounding')}
           </span>
         </div>
       )}
-      {n in SUMS ? (
+      {n in sums ? (
         <div className="formula">
-          {SUMS[n].map((part) => {
+          {sums[n].map((part) => {
             const minus = part.startsWith('-');
             const x = part.replace('-', '');
             const a = formAmount(v, x);
-            if (SUMS[n].length > 4 && !a) return null;
+            if (sums[n].length > 4 && !a) return null;
             return (
               <button key={x} type="button" onClick={() => select(x)}>
                 <span className="op">{minus ? '−' : '+'}</span><span className="mono zn">{x}</span><span>{zifferLabel(v, x)}</span><span className="mono">{fmt(rateOf(v, x)?.tax ?? a)}</span>
@@ -102,7 +116,7 @@ function Ziffer({ v, filed, n, amount, nav, period }: Props & { v: VatReturn; fi
             <Fragment key={code}>
               <div className="vc-h">
                 <CodeLink code={code} nav={nav} />
-                <span>{codeName(code)}</span>
+                <span>{codeText(code)}</span>
                 <span className="r mono">{fmt(sum(ls.map((l) => (gross ? l.gross : l.base))))}</span>
                 <span className="r mono">{fmt(sum(ls.map((l) => l.tax)))}</span>
               </div>
@@ -136,7 +150,7 @@ const sum = (xs: number[]) => roundCHF(xs.reduce((s, x) => s + x, 0));
 function Correction({ books, nav, period, v, filed }: Props & { v: VatReturn; filed: ReturnFigures }) {
   const uid = useWorkspace()?.company.uid ?? '';
   const entries = books.journalEntries ?? [];
-  const corrected = useMemo(() => figuresFromBooks(entries, filed.period, books.config?.vatAdjustments ?? []), [entries, filed.period, books.config?.vatAdjustments]);
+  const corrected = useMemo(() => vat().figures(entries, filed.period, books.config?.vatAdjustments ?? []), [entries, filed.period, books.config?.vatAdjustments]);
   const cases = (books.config?.correctionCases ?? []).filter((c) => c.period === filed.period);
   const check = useMemo(() => reconcileCases(cases, entries, filed, corrected), [cases, entries, filed, corrected]);
   const { from, to } = derivePeriod(filed.period)!;
@@ -155,7 +169,7 @@ function Correction({ books, nav, period, v, filed }: Props & { v: VatReturn; fi
   return (
     <div className="detail-in f0535" key={`0535:${v.key}`}>
       <div className="head">
-        <h2 className="who">{t('form0535.title')}<small>{t('vat.form0535Of', { period: periodName(v.period) })}</small></h2>
+        <h2 className="who">{t(methodOf(vatSetup()) === 'net-rate' ? 'form0535.titleNetRate' : 'form0535.title')}<small>{t('vat.form0535Of', { period: periodName(v.period), correction: correctionName() })}</small></h2>
         <div className="amount"><small>CHF</small>{signed(diff)}</div>
       </div>
       <div className="facts">
@@ -166,7 +180,7 @@ function Correction({ books, nav, period, v, filed }: Props & { v: VatReturn; fi
       <div className="ldl"><button type="button" className="dl inline" onClick={print}>{t('vat.print')}</button></div>
       <dl className="kv2 fhead">
         <dt>{t('vat.uid')}</dt><dd className="mono">{uid}</dd>
-        <dt>{t('vat.periodLabel')}</dt><dd className="mono">{filed.period} · {formatDate(from)}–{formatDate(to)}</dd>
+        <dt>{t('vat.periodLabel')}</dt><dd className="mono">{periodName(v.period)} · {formatDate(from)}–{formatDate(to)}</dd>
         <dt>{t('form0535.declaredTax')}</dt><dd className="mono">CHF {fmt(filedTax)}</dd>
       </dl>
       <div className="ftable">
@@ -196,7 +210,7 @@ function Correction({ books, nav, period, v, filed }: Props & { v: VatReturn; fi
           </Fragment>
         ))}
       </div>
-      <p className="zexpl">{t('form0535.explanation', { period: filed.period })}</p>
+      <p className="zexpl">{t('form0535.explanation', { period: periodName(v.period) })}</p>
 
       <h3 className="fcases">{t('vat.casesTitle', { n: cases.length })}</h3>
       {check.unexplained.length === 0 && check.orphans.length === 0 ? (
@@ -208,7 +222,9 @@ function Correction({ books, nav, period, v, filed }: Props & { v: VatReturn; fi
             {check.unexplained.map((u) => (
               <span key={u.ziffer} className="block">{t('cases.unexplainedLine', { ziffer: u.ziffer, difference: signed(u.difference), explained: signed(u.explained), open: signed(roundCHF(u.difference - u.explained)) })}</span>
             ))}
-            {check.orphans.length > 0 && <span className="block">{t('cases.orphans', { n: check.orphans.length })}: {check.orphans.map((e) => e.id).join(', ')}</span>}
+            {check.orphans.length > 0 && (
+              <span className="block" data-testid="orphans">{t('cases.orphans', { n: check.orphans.length })}: {check.orphans.map((e, i) => <Fragment key={e.id}>{i > 0 && ', '}<Go to={entryAt(e, period)} nav={nav} className="mono">{e.id}</Go></Fragment>)}</span>
+            )}
           </span>
         </div>
       )}
@@ -259,7 +275,7 @@ function Entries({ title, entries, nav, period }: { title: string; entries: Jour
     <div className="vlines">
       <div className="vh"><span>{t('col.date')}</span><span>{title}</span><span className="r">{t('col.amount')}</span><span className="r">{t('vat.colTax')}</span></div>
       {entries.map((e) => {
-        const l = vatLine(e);
+        const l = vat().vatLine(e);
         return (
           <div key={e.id} className="vl">
             <span className="mono d">{formatDate(e.date)}</span>

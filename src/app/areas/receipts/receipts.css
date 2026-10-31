@@ -1,0 +1,177 @@
+/* Belege: the ways receipts come in (docs/0.4.0/mockups/receipt-inflow), the mockup's class names. */
+
+/* No receipt yet: the three ways as cards, and the bank note. */
+.firstrun { margin: 28px 0 0; display: flex; flex-direction: column; gap: 14px; }
+.firstrun h2 { margin: 0; font: 700 19px "Hanken Grotesk"; color: var(--ink); }
+.firstrun > p { margin: 0; color: var(--ink-2); max-width: 46ch; }
+.firstrun .ways3 { display: flex; flex-direction: column; gap: 10px; }
+.firstrun .way3 { display: grid; grid-template-columns: 120px 1fr; gap: 14px; align-items: center; padding: 14px 16px 14px 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); }
+.firstrun .way3.rec { border-color: var(--accent); background: var(--accent-soft); }
+.firstrun .way3.dropway { border-style: dashed; border-width: 1.5px; }
+.firstrun .way3 > div { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.firstrun .way3 b { font-size: 15px; }
+.firstrun .way3 span { color: var(--ink-2); font-size: 12.5px; line-height: 1.45; }
+.firstrun .way3 .aiact { margin-top: 6px; }
+.firstrun .way3 .btns { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 6px; }
+.firstrun .way3 .btns .aiact { margin-top: 0; }
+.firstrun .linkbtn, .ways3s .linkbtn, .inflowdlg .linkbtn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; text-decoration: none; }
+:is(.firstrun, .ways3s, .inflowdlg) .aiact.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+:is(.firstrun, .ways3s, .inflowdlg) .aiact.primary:hover { background: var(--accent); filter: brightness(1.08); }
+:is(.firstrun, .ways3s, .inflowdlg) .aiact.primary:disabled { background: var(--bg); border-color: var(--line-2); color: var(--faint); filter: none; }
+.banknote { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: var(--hover); font-size: 12.5px; color: var(--ink-2); }
+.banknote svg.i { width: 15px; height: 15px; margin-top: 2px; color: var(--ink-2); }
+.banknote .linkbtn { white-space: nowrap; }
+
+.ill { width: 120px; height: 84px; overflow: visible; }
+.ill .ill-paper { fill: var(--bg); stroke: var(--ink-2); stroke-width: 1.4; }
+.ill .ill-tray { fill: var(--hover); stroke: var(--line-2); stroke-width: 1.4; }
+.ill .ill-line { fill: none; stroke: var(--faint); stroke-width: 1.4; stroke-linecap: round; }
+.ill .ill-accent { fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ill .ill-accentfill { fill: var(--accent); }
+.ill .ill-ai { fill: var(--ai); }
+.ill .ill-tag { font: 600 7px "Geist Mono", monospace; fill: var(--accent); text-anchor: middle; }
+.ill .ill-dash { stroke-dasharray: 3 4; animation: illdash 1.6s linear infinite; }
+.ill .ill-float { animation: illfloat 2.4s ease-in-out infinite; }
+.ill .ill-pulse { animation: illpulse 1.8s ease-in-out infinite; }
+.ill.tray { width: 64px; height: 56px; }
+.ill .dashed { stroke-dasharray: 3 3; }
+@keyframes illdash { to { stroke-dashoffset: -14; } }
+@keyframes illfloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+@keyframes illpulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+
+/* The detail column while there is no receipt: an empty table with its note. */
+.emptyph { position: relative; width: min(620px, 100%); margin: 72px auto 0; padding: 0 28px; align-self: start; }
+.emptyph .ghost { display: flex; flex-direction: column; opacity: .7; -webkit-mask-image: linear-gradient(to bottom, var(--ink), transparent 95%); mask-image: linear-gradient(to bottom, var(--ink), transparent 95%); }
+.emptyph .gr { display: flex; align-items: center; gap: 22px; height: 44px; border-bottom: 1px solid var(--line); }
+.emptyph .gr i { display: block; height: 9px; border-radius: 5px; background: var(--hover); }
+.emptyph .gr i.r { margin-left: auto; }
+.emptyph .msgph { position: absolute; left: 50%; top: 72px; transform: translateX(-50%); width: min(340px, 90%); display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; padding: 20px 22px; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
+.emptyph .msgph b { font-size: 15px; color: var(--ink); }
+.emptyph .msgph span { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+
+/* With receipts: three slim rows above the list. */
+.ways3s { margin: -10px 0 14px; display: flex; flex-direction: column; gap: 8px; }
+.ways3s + .empty { padding-top: 40px; }
+.ways3s .segs { display: flex; flex-direction: column; gap: 5px; }
+.ways3s .seg { display: flex; align-items: center; gap: 10px; min-height: 44px; width: 100%; padding: 7px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); font: inherit; color: inherit; text-align: left; text-decoration: none; cursor: pointer; min-width: 0; }
+.ways3s .seg:hover { background: var(--hover); }
+.ways3s .seg > svg.i { color: var(--ink-2); }
+.ways3s .seg .stx { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; flex: 1; }
+.ways3s .seg .go { margin-left: auto; font-size: 12px; color: var(--accent); white-space: nowrap; }
+.ways3s .seg b { font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.ways3s .seg small { font-size: 11.5px; color: var(--muted); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.ways3s .seg.dz { border: 1.5px dashed var(--line-2); cursor: copy; }
+.ways3s .seg.phone .pd { display: inline-block; vertical-align: 1px; margin-right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--line-2); }
+.ways3s .seg.phone.on .pd { background: var(--pos); }
+.ways3s .seg.phone.off { border-color: var(--warn); }
+.ways3s .seg.phone.off .pd { background: var(--warn); }
+.ways3s .seg.phone.off small { color: var(--warn); }
+.ways3s .seg.auto { padding: 0 6px 0 0; cursor: default; }
+.ways3s .seg.auto:hover { background: var(--bg); }
+.ways3s .segmain { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 7px 4px 7px 10px; align-self: stretch; border-radius: 10px 0 0 10px; text-align: left; }
+.ways3s .segmain:hover { background: var(--hover); }
+.ways3s .segmain > svg.i { color: var(--ink-2); }
+.ways3s .segmain .chev { width: 13px; height: 13px; margin-left: auto; color: var(--muted); transition: transform .15s; }
+.ways3s.open .segmain .chev { transform: rotate(180deg); }
+.ways3s .seg.auto.ok .rl { color: var(--pos); }
+.ways3s .seg.auto.fail { border-color: var(--neg); }
+.ways3s .seg.auto.fail .rl { color: var(--neg); }
+.ways3s .fetchbtn { height: 26px; padding: 0 9px; font-size: 12px; flex: none; white-space: nowrap; }
+.ways3s .sdots { display: inline-flex; gap: 2px; }
+.ways3s .sdots .sd { width: 5px; height: 5px; border-radius: 50%; background: var(--pos); }
+.ways3s .sdots .sd.warn { background: var(--warn); }
+.ways3s .sline { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); padding: 0 2px; }
+.ways3s .waiting { font-size: 12px; color: var(--warn); }
+.ways3s .more { display: flex; flex-direction: column; gap: 9px; padding: 10px 12px; border-radius: 10px; background: var(--hover); }
+.ways3s .chans { display: flex; flex-wrap: wrap; gap: 5px; }
+.ways3s .chan { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 7px; background: var(--bg); color: var(--ink-2); font-size: 12px; white-space: nowrap; text-decoration: none; }
+.ways3s .chan svg.i { width: 13px; height: 13px; }
+.ways3s .chan { max-width: 100%; }
+.ways3s .chan svg.i, .ways3s .chan .cdot { flex: none; }
+.ways3s .chan .ct { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ways3s .chan .cdot { width: 6px; height: 6px; border-radius: 50%; background: var(--pos); }
+.ways3s .chan.warn { background: var(--warn-soft); color: var(--warn); }
+.ways3s .chan.warn .cdot { background: var(--warn); }
+.ways3s .nosrc { margin: 0; font-size: 12px; color: var(--muted); }
+.ways3s .cover { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-2); }
+.ways3s .cover .bar { flex: 1; height: 5px; border-radius: 5px; background: var(--line); overflow: hidden; }
+.ways3s .cover .bar i { display: block; height: 100%; background: var(--pos); }
+.ways3s .links { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.ways3s .linkbtn { white-space: nowrap; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.ways3s .linkbtn svg.i { width: 13px; height: 13px; }
+
+/* The dialogs: «Handy koppeln», «Weg hinzufügen», «Alle Wege», forwarding. */
+.inflowscrim { background: color-mix(in srgb, var(--bg) 45%, transparent); }
+.palette.inflowdlg { --w: min(640px, 100vw - 32px); top: 9vh; max-height: 84vh; overflow: auto; background: var(--bg); }
+.palette.inflowdlg.wide { --w: min(720px, 100vw - 32px); }
+.inflowdlg header { display: flex; align-items: center; gap: 8px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.inflowdlg header b { font-size: 15px; margin-right: auto; }
+.inflowdlg header .aiact .bot { width: 14px; height: 14px; stroke: var(--ai); }
+.inflowdlg .dbody { padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
+.inflowdlg h3 { margin: 0; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.inflowdlg .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.inflowdlg .tile { display: grid; align-content: start; grid-template-columns: 18px 1fr; gap: 1px 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; text-align: left; background: var(--bg); }
+.inflowdlg .tile:hover:not(:disabled) { background: var(--hover); }
+.inflowdlg .tile svg.i { grid-row: span 2; margin-top: 2px; color: var(--ink-2); }
+.inflowdlg .tile b { font-size: 13px; font-weight: 600; display: flex; align-items: baseline; gap: 6px; }
+.inflowdlg .tile b small, .inflowdlg .sug > small { font-size: 11px; font-weight: 500; color: var(--muted); }
+.inflowdlg .tile span { font-size: 12px; color: var(--muted); }
+.inflowdlg .tile.later, .inflowdlg .sug.later { opacity: .55; cursor: default; }
+.inflowdlg .foot { margin: 0; font-size: 12px; color: var(--muted); }
+.inflowdlg .form { display: grid; gap: 10px; }
+.inflowdlg .form p { margin: 0; font-size: 13px; }
+.inflowdlg label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+.inflowdlg input:not([type="checkbox"]) { height: 32px; border: 1px solid var(--line-2); border-radius: 8px; padding: 0 10px; font-size: 13px; color: var(--ink); background: var(--bg); }
+.inflowdlg input:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+.inflowdlg label.check { display: flex; align-items: center; gap: 7px; color: var(--ink); font-size: 12.5px; justify-content: flex-start; }
+.inflowdlg label.check input { width: auto; height: auto; flex: none; margin: 0; }
+.inflowdlg .hint { margin: 0; font-size: 11.5px; color: var(--muted); }
+.inflowdlg .err { margin: 0; font-size: 12px; color: var(--neg); }
+.inflowdlg .acts { display: flex; gap: 8px; justify-content: flex-end; }
+.inflowdlg .acts .back { margin-right: auto; }
+.inflowdlg .known { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 9px 11px; border-radius: 9px; background: var(--pos-soft); font-size: 12.5px; color: var(--ink); }
+.inflowdlg .known svg.i { width: 15px; height: 15px; color: var(--pos); margin-top: 1px; }
+.inflowdlg .known small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+.inflowdlg .sug { display: grid; grid-template-columns: 18px 1fr auto; gap: 2px 10px; align-items: center; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.inflowdlg .sug.rec { border-color: var(--accent); background: var(--accent-soft); }
+.inflowdlg .sug svg.i { grid-row: span 2; color: var(--ink-2); align-self: start; margin-top: 2px; }
+.inflowdlg .sug b { font-size: 13px; }
+.inflowdlg .sug span { grid-column: 2; font-size: 12px; color: var(--ink-2); }
+.inflowdlg .sug .aiact, .inflowdlg .sug > small { grid-row: 1 / span 2; grid-column: 3; }
+.inflowdlg .steps2 { display: flex; gap: 6px; font-size: 12px; }
+.inflowdlg .steps2 span { padding: 4px 9px; border-radius: 999px; background: var(--hover); color: var(--muted); }
+.inflowdlg .steps2 span.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.inflowdlg .pair { display: grid; grid-template-columns: 150px 1fr; gap: 18px; align-items: start; }
+.inflowdlg .qr { width: 150px; height: 150px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 10px; padding: 6px; background: var(--paper-bg); }
+.inflowdlg .qr svg { width: 100%; height: 100%; display: block; }
+.inflowdlg .url { display: flex; align-items: center; gap: 8px; }
+.inflowdlg .url code { padding: 6px 9px; border-radius: 7px; background: var(--hover); font: 12px "Geist Mono", monospace; }
+.inflowdlg ol { margin: 0; padding-left: 20px; display: grid; gap: 12px; font-size: 13px; }
+.inflowdlg ol li > div { margin-top: 4px; color: var(--ink-2); }
+.inflowdlg pre { margin: 6px 0; padding: 9px 11px; background: var(--hover); border-radius: 8px; font: 12px/1.5 "Geist Mono", monospace; white-space: pre-wrap; }
+.ways3s .seg small .spin { display: inline-block; vertical-align: -1px; margin-right: 5px; }
+/* A narrow list (the AI sidebar open): a row's status wraps instead of being cut; the collection's button stays beside its text and moves under it only when there is no room at all. */
+.ways3s { container-type: inline-size; }
+@container (max-width: 340px) {
+  .ways3s .seg small { white-space: normal; }
+  .ways3s .chan { height: auto; min-height: 26px; padding: 4px 9px; white-space: normal; }
+  .ways3s .chan .ct { overflow-wrap: anywhere; }
+}
+@container (max-width: 250px) {
+  .ways3s .seg.auto { flex-wrap: wrap; padding: 0 0 6px; }
+  .ways3s .seg.auto .segmain { flex-basis: 100%; border-radius: 10px 10px 0 0; }
+  .ways3s .seg.auto .fetchbtn { margin-left: 36px; }
+}
+
+/* What was set aside (#186): one lead line above the files that are no receipt. */
+.hidden-lead { font-size: 12.5px; margin: 8px 0; color: var(--muted); }
+
+/* «Immer so?» under a person's «kein Beleg» (#186): skip the sender, shown on a card before it is kept. */
+.skipask { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+.skipcard { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); font-size: 13px; }
+.skipcard b { font-weight: 600; }
+.skipcard .warnline { margin: 0; }
+.skipacts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+
+/* A receipt waiting for the AI while it is switched off (issue #212): the link to Firma › KI stays on one line. */
+.notice.aioffwait a { white-space: nowrap; }

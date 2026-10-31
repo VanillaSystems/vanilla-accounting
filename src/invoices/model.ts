@@ -12,9 +12,8 @@ export type InvoiceLanguage = (typeof INVOICE_LANGUAGES)[number];
 export const INVOICE_CURRENCIES = ['CHF', 'EUR'] as const;
 export type InvoiceCurrency = (typeof INVOICE_CURRENCIES)[number];
 
-/** The Swiss VAT rates since 2024: normal, reduced, accommodation, and 0 for an exempt supply. */
-export const VAT_RATES = [8.1, 2.6, 3.8, 0] as const;
-export type VatRate = (typeof VAT_RATES)[number];
+/** A line's VAT rate in percent: one of the jurisdiction's (modules/ch/invoicing.yaml), 0 for an exempt supply. */
+export type VatRate = number;
 
 export const UNITS = ['h', 'day', 'pcs', 'flat', 'km'] as const;
 export type Unit = (typeof UNITS)[number];
@@ -81,13 +80,18 @@ export interface InvoiceContent {
   customerId: string;
   /** The invoice date. */
   date: string;
+  /**
+   * When the supply was made, a day or a period (Art. 26 Abs. 2 lit. d MWSTG), printed when it
+   * differs from the invoice date; absent: the invoice date.
+   */
+  supplied?: { from: string; to?: string };
   /** Absent on a draft: the invoice date plus the customer's payment terms. */
   dueDate?: string;
   currency: InvoiceCurrency;
   language: InvoiceLanguage;
   /** A short title for lists ("Teamporträts"); not printed. */
   subject?: string;
-  /** A credit note's lines carry negative quantities, so its totals are negative. */
+  /** A credit note's lines carry negative prices (older ones negative quantities), so its totals are negative. */
   lines: InvoiceLine[];
   /** The text above the table and below the totals; absent: the layout's default for the language. */
   intro?: string;
@@ -114,15 +118,18 @@ export interface Sender {
   payTo: { account: string; iban: string; qrIban?: string; bank?: string };
 }
 
-/** Money that arrived for an invoice: found by its reference, or confirmed by a person. */
+/**
+ * Money that arrived for an invoice, or went back for a credit note: found by its reference, by
+ * the document's number in its text (and the amount), or confirmed by a person.
+ */
 export interface PaymentAllocation {
   transactionRef: string;
   date: string;
-  /** In the invoice's currency, the reminder fee not included. */
+  /** In the invoice's currency, the reminder fee not included; a credit note's refund as a positive amount. */
   amount: number;
   /** The part of the payment that paid reminder fees. */
   fee?: number;
-  by: 'reference' | 'confirmed';
+  by: 'reference' | 'number' | 'confirmed';
 }
 
 export interface Reminder {
@@ -177,6 +184,13 @@ export interface SentDocument extends Envelope {
   messageId?: string;
 }
 
+/**
+ * Where the app serves an issued invoice's PDF and a sent document (src/server/routes/invoices.ts).
+ * The stored `file` is a path under the workspace, never a URL.
+ */
+export const issuedPdfUrl = (number: string) => `/invoices/${encodeURIComponent(number)}.pdf`;
+export const sentPdfUrl = (id: string) => `/invoices/sent/${encodeURIComponent(id)}.pdf`;
+
 /** invoices.json. */
 export interface InvoiceBook {
   schema: number;
@@ -229,7 +243,8 @@ export interface InvoicingSettings {
   texts: Partial<Record<InvoiceLanguage, InvoiceOwnTexts>>;
 }
 
-export const OWN_TEXTS = ['intro', 'closing', 'mailSubject', 'mailBody'] as const;
+/** `salutation`: a greeting line above the intro («Grüezi»); the app's own has none. */
+export const OWN_TEXTS = ['salutation', 'intro', 'closing', 'mailSubject', 'mailBody'] as const;
 export type InvoiceOwnTexts = Partial<Record<(typeof OWN_TEXTS)[number], string>>;
 
 export const MAIL_SECURITY = ['tls', 'starttls', 'none'] as const;

@@ -8,7 +8,8 @@
  *     --uid <UID> --owner "Erika Beispiel" --bank UBS:CHF --bank Wise:EUR --yes
  *
  * A bank is <bank>:<currency>[:<ledger account>[:<IBAN>]]; the IBAN routes its statements to the
- * account (without it, the folder bank-statements/<bank>/ does).
+ * account (without it, the folder bank-statements/<bank>/ does). On the net tax rate method
+ * (--vat-method net-rate) each approved rate is --net-rate <percent>[:<label>[:<activity code>]], one or two.
  *
  * Rerun on a finished workspace changes nothing. Exit code 2: an answer the app does not support yet.
  */
@@ -17,19 +18,18 @@ import { join, resolve } from 'node:path';
 import { createInterface, type Interface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
 import { BANKS, bankKind } from '../workspace/banks.js';
-import { SetupError, checkBank, checkPreset, createWorkspace, type Bank, type Created } from '../workspace/create.js';
+import { SetupError, checkBank, checkPreset, createWorkspace, flagOf, type Bank, type Created } from '../workspace/create.js';
 import { suggestAccount } from '../workspace/scaffold.js';
-import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, firstUnsupported, optionOf, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstUnsupported, optionOf, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
+import type { NetRate } from '../workspace/vat-setup.js';
 import { parseUid } from '../workspace/uid.js';
-import { APP_ROOT, MANIFEST_FILE, appLanguages, workspaceAt } from '../workspace/workspace.js';
-
-const flagOf = (key: QuestionKey) => key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+import { APP_ROOT, appFolderIn, appLanguages, workspaceAt } from '../workspace/workspace.js';
 
 const { values: flags } = parseArgs({
   options: {
     dir: { type: 'string' }, name: { type: 'string' }, uid: { type: 'string' }, owner: { type: 'string' },
     about: { type: 'string' }, language: { type: 'string' }, preset: { type: 'string' }, bank: { type: 'string', multiple: true },
-    'export-to': { type: 'string' },
+    'export-to': { type: 'string' }, 'net-rate': { type: 'string', multiple: true },
     'app-env': { type: 'string' }, 'no-env': { type: 'boolean' }, 'set-env': { type: 'boolean' },
     yes: { type: 'boolean', short: 'y' },
     ...Object.fromEntries(QUESTION_ORDER.map((k) => [flagOf(k), { type: 'string' as const }])),
@@ -79,7 +79,8 @@ async function choose(key: QuestionKey, n: number, preset: Partial<Answers>): Pr
   const fallback = prefilled === undefined ? undefined : multi ? ([] as string[]).concat(prefilled).join(',') || '-' : String(prefilled);
   for (;;) {
     const raw = await answer(flagOf(key), interactive ? '   ' : q.ask, fallback);
-    const picked = (multi ? raw.split(',') : [raw]).map((s) => s.trim()).filter((s) => s && s !== '-' && s !== 'none')
+    // "-" and "none" empty a multiple-choice answer; a single-choice question may have an option named none.
+    const picked = (multi ? raw.split(',') : [raw]).map((s) => s.trim()).filter((s) => s && !(multi && (s === '-' || s === 'none')))
       .map((s) => (/^\d+$/.test(s) ? options[Number(s) - 1]?.value : options.find((o) => o.value.toLowerCase() === s.toLowerCase())?.value) ?? `?${s}`);
     const bad = picked.find((v) => v.startsWith('?'));
     if (!bad && (multi || picked.length === 1)) return picked;
@@ -89,10 +90,12 @@ async function choose(key: QuestionKey, n: number, preset: Partial<Answers>): Pr
   }
 }
 
-async function askAnswers(preset: Preset): Promise<Answers> {
+async function askAnswers(preset: Preset): Promise<{ answers: Answers; netRates: NetRate[] }> {
   const prefill: Partial<Answers> = PRESETS[preset].answers;
   const answers: Record<string, string | string[]> = {};
+  const netRates: NetRate[] = [];
   for (const [i, key] of QUESTION_ORDER.entries()) {
+    if (!asked(key, answers)) continue;
     const picked = await choose(key, i + 1, prefill);
     answers[key] = 'multi' in QUESTIONS[key] ? picked : picked[0];
     for (const v of picked) {
@@ -100,8 +103,29 @@ async function askAnswers(preset: Preset): Promise<Answers> {
       if (option?.unsupported) throw new Stop(`${QUESTIONS[key].ask}: ${option.label}.\n${option.unsupported}`, 2);
       if (option?.caveat) console.log(`    Note: ${option.caveat}`);
     }
+    if (key === 'vatMethod' && answers[key] === 'net-rate') netRates.push(...await askNetRates());
   }
-  return answers as Answers;
+  return { answers: answers as Answers, netRates };
+}
+
+/** The approved net tax rate(s): --net-rate <percent>[:<label>[:<activity code>]], or typed one per line, Enter on an empty line after the first. */
+async function askNetRates(): Promise<NetRate[]> {
+  const parse = (spec: string): NetRate => {
+    const [percent, label, activityId] = spec.split(':').map((s) => s.trim());
+    const rate = Number(percent.replace(',', '.').replace(/\s*%$/, ''));
+    if (!(rate > 0 && rate < 100)) throw new Stop(`--net-rate "${spec}": the rate is a percent above 0 and below 100, e.g. 4.5, 4.5:Schreinerei or 4.5:Schreinerei:41050.`);
+    return { rate, ...(label ? { label } : {}), ...(activityId ? { activityId: activityId.toUpperCase() } : {}) };
+  };
+  if (Array.isArray(flags['net-rate'])) return flags['net-rate'].map(parse);
+  if (!interactive) throw new Stop('Missing --net-rate <percent>[:<label>]: the rate(s) the ESTV approved for the Saldosteuersatz method, one or two.');
+  const rates: NetRate[] = [];
+  console.log('\n    The approved Saldosteuersatz in percent, a label and the ESTV\'s activity code after colons (e.g. 4.5:Schreinerei:41050; the code is on the ESTV\'s ruling and names the rate in the electronic return). A second one on the next line; Enter on an empty line when done.');
+  for (;;) {
+    const typed = (await rl!.question(`    Rate ${rates.length + 1} > `)).trim();
+    if (!typed) { if (rates.length) return rates; console.log('    At least one rate is needed.'); continue; }
+    try { rates.push(parse(typed)); } catch (e) { console.log(`    ${(e as Error).message}`); continue; }
+    if (rates.length === 2) return rates;
+  }
 }
 
 async function askBanks(): Promise<Bank[]> {
@@ -186,7 +210,7 @@ async function main(): Promise<string> {
   const root = resolve(await text('dir', 'Folder for the books', undefined, interactive ? join(APP_ROOT, '..', `${slug}-books`) : undefined));
 
   let message: string;
-  if (existsSync(join(root, MANIFEST_FILE))) {
+  if (appFolderIn(root)) {
     workspaceAt(root);
     message = `${root} is already a workspace: nothing to change.`;
   } else {
@@ -196,11 +220,11 @@ async function main(): Promise<string> {
     const languages = appLanguages();
     const language = await answer('language', `Language of the app (${languages.join(', ')})`, 'de');
     if (!languages.includes(language)) throw new Stop(`--language must be one of ${languages.join(', ')}.`);
-    const answers = await askAnswers(preset);
+    const { answers, netRates } = await askAnswers(preset);
     const banks = await askBanks();
     const exportTo = await answer('export-to', '\nWhere do the books go at year-end (accounting software or Treuhand; optional)', '');
 
-    const applied = await createWorkspace({ root, preset, name, uid, owner, business: about, language, answers, banks, exportTo });
+    const applied = await createWorkspace({ root, preset, name, uid, owner, business: about, language, answers, netRates, banks, exportTo });
     message = [
       `Created ${applied.created.length} files and folders in ${root}.`,
       ...applied.differing.map((p) => `Kept your ${p}: it differs from what init would write.`),

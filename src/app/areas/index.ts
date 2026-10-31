@@ -17,7 +17,12 @@ import { receipts } from './receipts/receipts.js';
 import { bank } from './bank/bank.js';
 import { reports } from './reports/reports.js';
 import { vat } from './vat/vat.js';
+import { automation } from './automation/automation.js';
+import { changes } from './changes/changes.js';
+import { partners } from './partners/partners.js';
+import { knowledge } from './knowledge/knowledge.js';
 import { ICONS } from './icons.js';
+import type { SelectKind } from '../selection/model.js';
 
 export interface Nav {
   /** To another place: a new history entry when the area changes, else the current one replaced (urls.md rule 4). */
@@ -27,6 +32,8 @@ export interface Nav {
   /** The page's period, search or filter: replaces the history entry. */
   setQuery(query: Query): void;
   toast(msg: string, undo?: () => void): void;
+  /** Takes the shown toast away (a form that now shows an error must not keep the earlier «Gespeichert»). */
+  dismissToast(): void;
   refresh(): void;
 }
 
@@ -73,10 +80,14 @@ export interface Area<R extends Route = Route> {
   title(route: R, books: Index): string | undefined;
   /** Wider list column (journal, reports). */
   wide?: boolean;
+  /** A route whose page takes the whole width: the list shows it, there is no detail column. */
+  fullPage?(route: R): boolean;
   /** Pages without a period (company, codes): no period in the top bar or the heading. */
   periodless?: boolean;
   /** Its rows belong to a period: another period opens the new list at its first row instead of keeping the object. */
   periodRows?: boolean;
+  /** Its list picks several rows of this kind at once (#216): ⌘-click, ⇧-click, ⌘A, Esc. */
+  selects?: SelectKind;
 }
 
 type Registry = { [A in AreaId]: Area<RouteOf<A>> };
@@ -91,10 +102,14 @@ export const AREAS: Registry = {
   reports,
   close,
   company,
+  automation,
+  changes,
+  partners,
+  knowledge,
 };
 
 /** The dock's order; a divider stands before the last group. */
-export const DOCK: AreaId[][] = [['receipts', 'invoices', 'bank', 'journal', 'vat', 'reports', 'close'], ['company']];
+export const DOCK: AreaId[][] = [['receipts', 'invoices', 'bank', 'journal', 'vat', 'reports', 'close'], ['automation', 'partners', 'knowledge', 'changes', 'company']];
 
 /** The area of a route, typed for its own route: the registry pairs them, a lookup cannot show it to the compiler. */
 export const areaOf = <R extends Route>(route: R) => AREAS[route.area] as unknown as Area<R>;

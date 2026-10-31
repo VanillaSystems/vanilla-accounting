@@ -1,20 +1,15 @@
-import type { Index } from '../types/index.js';
+/** A ref of its own (M2026-004): a manual transaction's, or an entry's that has no payment. */
+export const isManualRef = (ref: string): boolean => /^M\d{4}-\d{3,}$/.test(ref);
 
-/**
- * The next free M<year>-NNN, the ref of a manual transaction (an Auslage) or of an entry with no
- * transaction behind it (an Eigenverbrauch rebooking, a year-end accrual). A ref is taken when a
- * transaction, an entry or a mapping names it.
- */
-export function nextManualRef(books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings'>, year: string): string {
-  const prefix = `M${year}-`;
-  const taken = [
-    ...books.transactions.map((t) => t.ref),
-    ...(books.journalEntries ?? []).map((j) => j.transactionRef),
-    ...books.mappings.map((m) => m.transactionRef),
-  ].filter((ref) => ref.startsWith(prefix));
-  const max = taken.reduce((n, ref) => {
-    const seq = parseInt(ref.slice(prefix.length), 10);
-    return isNaN(seq) ? n : Math.max(n, seq);
-  }, 0);
-  return `${prefix}${String(max + 1).padStart(3, '0')}`;
-}
+/** The VAT events of an issued document on the agreed basis (src/invoices/events.ts): its issue, and its cancellation. */
+export type EventKind = 'issue' | 'storno';
+
+/** The ref an event's entries carry: RE-2026-001 for an invoice, GS-2026-004 for a credit note, -storno for a cancellation. */
+export const eventRef = (doc: { number: string; kind: 'invoice' | 'credit-note' }, kind: EventKind): string =>
+  `${doc.kind === 'credit-note' ? 'GS' : 'RE'}-${doc.number}${kind === 'storno' ? '-storno' : ''}`;
+
+/** Whether the books carry the document's issue: then its payments settle the receivable, whatever the basis is by then. */
+export const hasEvent = (books: { journalEntries: ReadonlyArray<{ transactionRef: string }> }, doc: { number: string; kind: 'invoice' | 'credit-note' }): boolean => {
+  const ref = eventRef(doc, 'issue');
+  return books.journalEntries.some((e) => e.transactionRef === ref);
+};

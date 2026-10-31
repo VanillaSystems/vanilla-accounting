@@ -1,0 +1,51 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 965 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 800 Td
+(Raiffeisenbank Beispiel) Tj
+T* (Kontoauszug 01.02.2026 - 28.02.2026) Tj
+T* (Schreinerei Beispiel GmbH, Werkstrasse 12, 9000 St. Gallen) Tj
+T* (IBAN CH1180808000000000003, Währung CHF) Tj
+T* () Tj
+T* (Anfangssaldo 01.02.2026: 22’027.80) Tj
+T* (02.02.2026 | Dauerauftrag Miete Werkstatt | -2’300.00 | Ref. 90000000009) Tj
+T* (09.02.2026 | Zahlung Beispiel Holzhandel AG | -1’377.90 | Ref. 90000000010) Tj
+T* (11.02.2026 | Debitkarte EXAMPLE TOOLS INC PORTLAND | -29.00 | Ref. 90000000011) Tj
+T* (12.02.2026 | Zahlung Muster Beschläge GmbH | -1’420.00 | Ref. 90000000012) Tj
+T* (16.02.2026 | Debitkarte GARAGE BEISPIEL AG | -280.90 | Ref. 90000000013) Tj
+T* (18.02.2026 | eBill Muster Telecom AG | -87.95 | Ref. 90000000014) Tj
+T* (23.02.2026 | Gutschrift Beispiel Immobilien AG | 4’420.95 | Ref. 90000000015) Tj
+T* (25.02.2026 | Lohnzahlung Marco Beispiel | -5’803.20 | Ref. 90000000016) Tj
+T* (Schlusssaldo 28.02.2026: 15’149.80) Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000212 00000 n 
+0000000338 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1353
+%%EOF

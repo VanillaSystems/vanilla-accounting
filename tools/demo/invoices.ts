@@ -7,13 +7,13 @@
  */
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative } from 'node:path';
-import { workspaceAt, type Workspace } from '../../src/workspace/workspace.js';
+import { dirname, join, relative } from 'node:path';
+import { partDirs, workspaceAt, type Workspace } from '../../src/workspace/workspace.js';
 import { addComment, cancelInvoice, createCreditNote, createCustomer, createDraft, issueInvoice, recordSend, sendReminder } from '../../src/invoices/service.js';
 import { closeBrowser } from '../../src/invoices/pdf.js';
 import { idSource, updateInvoices } from '../../src/invoices/store.js';
 import type { Issued } from '../../src/invoices/model.js';
-import { qrReference } from '../../src/invoices/reference.js';
+import { qrReference } from '../../src/providers/qr-bill/reference.js';
 import { totals, withPayment } from '../../src/invoices/rules.js';
 import { TEXTS } from '../../src/invoices/texts.js';
 import { mulberry32, YEAR, type DemoInvoicing, type Payment } from './kit.js';
@@ -53,9 +53,8 @@ export interface DemoPayment { number: string; transactionRef: string; date: str
 export async function playInvoicing(inv: DemoInvoicing, manifest: string, owner: string, payments: DemoPayment[]): Promise<Workspace> {
   const root = mkdtempSync(join(tmpdir(), 'belege-demo-invoices-'));
   writeFileSync(join(root, 'belege.workspace.yaml'), manifest);
-  mkdirSync(join(root, 'receipts'));
   if (inv.logo) {
-    mkdirSync(join(root, 'invoices'), { recursive: true });
+    mkdirSync(dirname(join(root, inv.logo.file)), { recursive: true });
     writeFileSync(join(root, inv.logo.file), inv.logo.svg);
   }
   const ws = workspaceAt(root);
@@ -113,7 +112,7 @@ async function issueAndSend(ws: Workspace, key: string, id: string, at: string, 
   await recordSend(ws, id, { now: at });
 }
 
-/** Every file under invoices/ of the scratch workspace, keyed by its path in the workspace. */
+/** Every file under each year's invoices/ of the scratch workspace, keyed by its path in the workspace. */
 export function invoiceFiles(ws: Workspace): Map<string, Buffer> {
   const out = new Map<string, Buffer>();
   const walk = (dir: string) => {
@@ -123,7 +122,7 @@ export function invoiceFiles(ws: Workspace): Map<string, Buffer> {
       else out.set(relative(ws.paths.root, path), readFileSync(path));
     }
   };
-  walk(ws.paths.invoiceFiles);
+  for (const dir of partDirs(ws.paths, 'invoices')) walk(dir);
   return out;
 }
 

@@ -3,8 +3,8 @@
  * has changed relative to a committed baseline — the proof that a new quarter's work
  * left the filed figures untouched.
  *
- * Compares the workspace's working-tree `books.json` against the same file at a
- * git ref (default HEAD), restricted to records dated on or before closedThrough:
+ * Compares the workspace's books in the working tree against the books at a git ref
+ * (default HEAD; at a ref before ADR 0013, its books.json), restricted to records dated on or before closedThrough:
  * journal entries (the filed VAT figures), bank transactions, and the mappings that
  * hang off closed transactions. Also catches closedThrough itself being moved back.
  *
@@ -12,8 +12,9 @@
  * Exit code 2 on any violation, so it can gate a commit.
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { requireGit } from '../platform/git-program.js';
+import { loadBooks } from '../books/store.js';
+import { BOOK_FILES, fromJsonl } from '../books/years.js';
 import { openWorkspace } from '../workspace/workspace.js';
 
 const ws = openWorkspace();
@@ -26,22 +27,32 @@ type Index = {
   config?: { closedThrough?: string };
 };
 
-/** A ref of the legacy layout (before the app and workspace split) holds the books at public/receipts-index.json. */
+/**
+ * The books at `gitRef`: ledger.json and every year's books/*.jsonl of the app's folder, or at a
+ * ref before ADR 0013 the books.json of the repository's root (or, older still, public/receipts-index.json).
+ */
 function loadBaseline(gitRef: string): Index {
-  const show = (path: string) => execFileSync('git', ['show', `${gitRef}:${path}`], {
-    cwd: ws.paths.root,
-    encoding: 'utf8',
-    maxBuffer: 256 * 1024 * 1024,
-    stdio: ['ignore', 'pipe', 'ignore'],
-  });
+  const git = (...args: string[]) => execFileSync(requireGit(), args, { cwd: ws.paths.root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+  const show = (path: string) => git('show', `${gitRef}:${path}`);
+  const prefix = git('rev-parse', '--show-prefix').trim();
   try {
-    return JSON.parse(show('./books.json'));
+    const ledger = JSON.parse(show(`${prefix}ledger.json`)) as { config?: Index['config'] };
+    const books: Index = { config: ledger.config, journalEntries: [], transactions: [], mappings: [] };
+    // --full-tree: without it ls-tree reads the path, and prints its names, relative to the cwd, the app's folder (#117).
+    const files = git('ls-tree', '-r', '--full-tree', '--name-only', gitRef, `${prefix}transactional-data`).split('\n').filter(Boolean);
+    for (const part of ['journalEntries', 'transactions', 'mappings'] as const) {
+      for (const f of files.filter((f) => f.endsWith(`/books/${BOOK_FILES[part]}`)).sort()) books[part]!.push(...fromJsonl(show(f), f));
+    }
+    return books;
   } catch {
-    return JSON.parse(show('./public/receipts-index.json'));
+    for (const old of [`${prefix}books.json`, `${prefix}../books.json`, 'books.json', `${prefix}public/receipts-index.json`]) {
+      try { return JSON.parse(show(old.replace(/[^/]+\/\.\.\//, ''))); } catch { /* the next layout back */ }
+    }
+    throw new Error(`no books at ${gitRef}`);
   }
 }
 
-const current: Index = JSON.parse(readFileSync(ws.paths.books, 'utf8'));
+const current: Index = loadBooks(ws);
 const baseline = loadBaseline(ref);
 
 const closedThrough = baseline.config?.closedThrough;

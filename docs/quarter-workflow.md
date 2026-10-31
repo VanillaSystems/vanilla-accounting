@@ -14,7 +14,7 @@ The examples use the third quarter, `2026-Q3`. Put in your own quarter.
 | # | Step | You run | Typical time |
 |---|---|---|---|
 | 1 | [Import the bank statements](#1-import-the-bank-statements) | `npm run extract` | 30 minutes |
-| 2 | [Collect the receipts](#2-collect-the-receipts) | `npm run collect`, the phone, the import folder | 1 to 3 days |
+| 2 | [Collect the receipts](#2-collect-the-receipts) | the mail sources (daily), the phone, the import folder | 1 to 3 days |
 | 3 | [Read the receipts](#3-read-the-receipts) | `npm run extract`, `npm run extract-vat` | minutes |
 | 4 | [Match receipts to payments](#4-match-receipts-to-payments) | `npm run match`, `npm run evidence` | hours |
 | 5 | [Book](#5-book) | `npm run classify` | hours |
@@ -37,7 +37,8 @@ receipts you need. Without them you cannot know what is missing.
 1. In the e-banking of every bank account, download the statement for exactly the quarter, in
    the format **camt.053**. Every Swiss bank offers it. At Wise, download it once per currency.
    [Getting started](getting-started.md#4-import-your-first-bank-statement) says where to find it.
-2. Save each file in `bank-statements/<bank>/` of your workspace.
+2. Save each file in `transactional-data/<year>/bank-statements/<bank>/` of your workspace (an
+   upload in the app files it there).
 3. Run `npm run extract`. It reads the new statements into the books.
 
 **Check.** The Kontoauszüge tab shows the statements, the Transaktionen tab the payments.
@@ -53,9 +54,9 @@ employees paid in cash or with a private card. A receipt is what lets you deduct
 paid. Collecting is usually the most tedious part of the quarter. There are three ways in, and
 all three end in the same folder, `beleg-import/` of your workspace:
 
-- **Mailbox.** `npm run collect -- 2026-Q3` reads your mailboxes over IMAP and saves every PDF
-  attachment of the quarter, with 14 days on each side, because an invoice often arrives after
-  the payment. Set it up once: [Set up a mailbox](mail-setup.md).
+- **Mailbox.** Each mailbox is a source: the workflow «Belege und Daten holen» takes the PDF
+  attachments of new mail every day, and `npm run pull -- <source>` does it by hand. Set it up
+  once: [Set up a mailbox](mail-setup.md).
 - **Phone.** Photograph paper receipts with the phone app and import them to the laptop.
 - **Folder.** Drag and drop PDFs into `beleg-import/`: downloads from vendor portals, scans,
   anything else.
@@ -94,7 +95,8 @@ npm run evidence -- 2026-Q3 --apply
 ```
 
 `match` asks Claude for each new receipt which payment it belongs to, gives the file a clear
-name, and moves it to `receipts/`. `evidence` links what fixed rules can prove: the same
+name, and moves it to `receipts/` of its year (`transactional-data/<year>/receipts/`: the year of
+the payment that books it). `evidence` links what fixed rules can prove: the same
 amount, a payment reference printed on the receipt, the parts of a batch payment. Without
 `--apply` it only shows what it would link. Run it again whenever new receipts or statements
 arrive. It changes nothing in a closed period.
@@ -118,7 +120,10 @@ suppliers, customers and authorities (see step 6). The better the knowledge base
 the first pass is right.
 
 **Check.** The Buchungen tab shows every entry. A VAT code with a rate (I81, M81, V81) needs a
-receipt that shows Swiss MWST. No receipt, no input tax: the code is then I0, M0 or V0.
+receipt that shows Swiss MWST. No receipt, no input tax: the app then books I0, M0 or V0. If
+other documents show the VAT (a contract with the VAT and the payment confirmation), you may
+book the payment by hand with the rate and name them in «Anderer Nachweis der Vorsteuer»; the
+payment keeps what you wrote (MWSTG Art. 81 Abs. 3, ESTV MWST-Info 09 Ziff. 1.6).
 
 For agents: [`booking.flow.yaml`](../processes/booking.flow.yaml), step `classify`.
 
@@ -215,7 +220,7 @@ For agents: [`vat-filing.flow.yaml`](../processes/vat-filing.flow.yaml), steps `
 Once the return is filed, the quarter never changes again. This is the first rule of the app
 (see [`AGENTS.md`](../AGENTS.md), golden rule 1).
 
-1. Copy the XML you filed into `filings/<year>/` of the workspace. Never generate a filed
+1. Copy the XML you filed into `transactional-data/<year>/filings/` of the workspace. Never generate a filed
    return again.
 2. Close and seal the quarter:
 
@@ -223,9 +228,9 @@ Once the return is filed, the quarter never changes again. This is the first rul
    npm run seal -- 2026-Q3 --close
    ```
 
-   This sets `config.closedThrough` in `books.json` to the last day of the quarter
+   This sets `config.closedThrough` in `ledger.json` to the last day of the quarter
    (`2026-09-30`). From then on, the app, the commands and Claude refuse to change any entry
-   dated on or before that day. It also writes `filings/2026/seal-Q3.json`, a fingerprint of
+   dated on or before that day. It also writes `transactional-data/2026/filings/seal-Q3.json`, a fingerprint of
    every entry, transaction and receipt link of the closed period. Each time the books load,
    the app checks the fingerprint. If anything sealed has changed, even by a hand edit, the
    books open read-only and `npm run doctor` says so.

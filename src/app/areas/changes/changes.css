@@ -1,0 +1,63 @@
+/* Änderungen (the mockup's screen 7): Verlauf on the left; what changed since the last save, a proposal, a diff on the right. */
+.row.chrow { grid-template-columns: minmax(0, 1fr) auto; }
+.chrow .a { display: inline-flex; align-items: center; gap: 8px; }
+.chnothing { margin: 8px 0 14px; }
+.chcount { font: 500 11.5px "Geist Mono"; white-space: nowrap; }
+.chcount .plus { color: var(--pos); }
+.chcount .minus { color: var(--neg); }
+.chkind { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; background: var(--hover); color: var(--ink-2); white-space: nowrap; margin-right: 8px; }
+.chkind.k-books { background: var(--accent-soft); color: var(--accent); }
+.chkind.k-customizing { background: color-mix(in srgb, var(--ai) 16%, transparent); color: var(--ai); }
+.chpage .head h2.who { font-size: 18px; line-height: 1.35; }
+.chpage .head h2.chpath { word-break: break-all; }
+.chbody { white-space: pre-wrap; font: 400 13px/1.5 "Instrument Sans"; color: var(--ink-2); margin: 8px 0 0; }
+.chh3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 0 6px; }
+.chfiles { display: flex; flex-direction: column; }
+.chfile { display: flex; justify-content: space-between; gap: 12px; padding: 7px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.chfile:hover { background: var(--hover); }
+.chdiff { margin: 0; padding: 10px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--desk); font: 400 12px/1.55 "Geist Mono"; overflow: auto; }
+.chdiff .ln { display: block; padding: 0 12px 0 0; white-space: pre; }
+.chdiff .no { display: inline-block; width: 42px; padding-right: 8px; text-align: right; color: var(--faint); user-select: none; }
+.chdiff .kadd { background: color-mix(in srgb, var(--pos) 14%, transparent); }
+.chdiff .kdel { background: color-mix(in srgb, var(--neg) 12%, transparent); }
+.chdiff .gap { display: block; padding-left: 96px; color: var(--faint); }
+.chsync { display: flex; align-items: center; gap: 8px; margin: 2px 0 10px; }
+.chsync .wfpill { margin-left: 0; }
+.chundo { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; }
+.chsave { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 16px 0 0; }
+.chsave .wfpill { margin-left: 0; }
+.chbanner { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 12px; margin: 6px 0 12px; border-radius: 10px; background: var(--warn-soft); color: var(--ink); font-size: 13px; }
+.chbanner b { color: var(--warn); font-weight: 600; }
+.chpreps { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 14px; }
+.chprep { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.chprep.held { opacity: .6; }
+.chprep.stale { border-color: var(--warn); }
+.chprep .pt { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.chprep .pf { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 12px; }
+.chtalk { display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px; }
+.chtalk .msg { max-width: 85%; padding: 8px 11px; border-radius: 10px; font-size: 13px; line-height: 1.45; }
+.chtalk .msg.me { align-self: flex-end; background: var(--accent-soft); }
+.chtalk .msg.ai { align-self: flex-start; display: flex; gap: 8px; background: var(--hover); }
+.chcomposer { display: flex; gap: 8px; align-items: flex-end; }
+.chcomposer textarea { flex: 1; resize: vertical; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--desk); color: var(--ink); font: inherit; font-size: 13px; }
+.chpage .linkbtn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; }
+.chpage .linkbtn:hover { text-decoration: underline; }
+.chpage .linkbtn:disabled { opacity: .45; cursor: default; text-decoration: none; }
+.chkind.e-needs-switch-on { background: var(--warn-soft); color: var(--warn); }
+.chkind.e-needs-maintainer { background: color-mix(in srgb, var(--neg) 14%, transparent); color: var(--neg); }
+.row.chsave-row { grid-template-columns: minmax(0, 1fr); height: auto; padding-top: 7px; padding-bottom: 7px; row-gap: 1px; }
+.chsave-row .t { display: flex; align-items: center; gap: 8px; }
+.chsub { display: block; padding-left: 24px; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chwho { display: inline-grid; place-items: center; width: 16px; margin-right: 8px; color: var(--muted); flex: none; vertical-align: -3px; }
+.chwho svg { width: 15px; height: 15px; }
+.chlead { margin: 2px 0 14px; }
+.chpage .group { margin: 16px 0 4px; }
+.chraw { display: flex; flex-direction: column; }
+.chrawrow { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.chrawrow:hover { background: var(--hover); }
+.chrawrow .mono { font-size: 12.5px; }
+.chback { margin: 0 0 6px; border: 0; padding: 0; background: none; color: var(--accent); font: inherit; font-size: 12.5px; cursor: pointer; }
+.chsync .m { font-size: 12px; }
+.chpage .chlead, .chsave .m { font-size: 12.5px; color: var(--muted); }
+.chpage .head h2.who { font-size: 16px; }
+.chsync .m { color: var(--muted); }

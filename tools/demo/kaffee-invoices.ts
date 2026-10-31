@@ -22,12 +22,12 @@ export const KAFFEE_INVOICING: DemoInvoicing = {
     EUR: { account: "1023" }
   revenueAccount: "3300"
   paymentTermsDays: 30
-  layout: { logo: invoices/logo.svg, accent: "#5a3a22" }
+  layout: { logo: logos/logo.svg, accent: "#5a3a22" }
   texts:
     de: { closing: "Zahlbar innert {days} Tagen.\\nFreundliche Grüsse, Anna Muster" }
     fr: { closing: "Payable dans les {days} jours.\\nMeilleures salutations, Anna Muster" }
 `,
-  logo: { file: 'invoices/logo.svg', svg: LOGO },
+  logo: { file: 'logos/logo.svg', svg: LOGO },
   customers: {
     bistro: {
       name: 'Beispiel Bistro AG', address: { street: 'Seeweg', number: '12', postcode: '3000', town: 'Bern', country: 'CH' },

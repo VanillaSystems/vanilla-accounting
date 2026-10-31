@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Belegeingang · Mockups</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@700;800&family=Instrument+Sans:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+:root { --bg: #ffffff; --ink: #0b1220; --ink-2: #4a5263; --muted: #6e7685; --line: #e7eaf0; --accent: #0067b1; --page: #eceff4; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 400 15px/1.55 "Instrument Sans", system-ui, sans-serif; }
+.doc { max-width: 1180px; margin: 0 auto; padding: 48px 24px 120px; display: grid; gap: 28px; }
+h1 { font: 800 34px/1.1 "Hanken Grotesk", system-ui, sans-serif; margin: 0; }
+h2 { font: 700 22px/1.2 "Hanken Grotesk", system-ui, sans-serif; margin: 0; }
+p, li { color: var(--ink-2); max-width: 78ch; }
+p { margin: 0; }
+.shot { display: grid; gap: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+.frame { position: relative; width: 100%; aspect-ratio: 1440 / 900; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; container-type: inline-size; }
+.frame iframe { position: absolute; top: 0; left: 0; width: 1440px; height: 900px; border: 0; transform-origin: 0 0; transform: scale(calc(100cqw / 1440px)); pointer-events: none; }
+.shot a { color: var(--accent); font-weight: 600; }
+code, pre { font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; }
+pre { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto; margin: 0; }
+ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+</style>
+</head>
+<body>
+<div class="doc">
+  <h1>Belegeingang · Mockups</h1>
+  <div class="shot"><h2>Clickable prototype</h2><p>The latest state, to click through: a first start with the AI setup, adding a way in (the AI first, «Lieber von Hand einrichten» as the way out), the email-first flow by hand, pairing the phone, «Belege holen» and «Belege verarbeiten». The dark bar at the top switches between «Leer», «Eingerichtet» and «Mit Problem». The screens below are earlier, static versions.</p><a href="prototype.html">Open the prototype →</a></div>
+  <p>Made from the real receipts page of the demo workspace (Muster Kaffee GmbH): the app's own HTML and CSS as rendered, captured read-only, with only the new parts added by hand. Open each screen at full size to click around in it. Nothing in them works; they show what it would look like.</p>
+
+  <h2>The idea in three sentences</h2>
+  <ul>
+    <li><b>What's measured is payments, not vendors.</b> The question that matters is «does every payment have its receipt?». That also covers a one-off purchase from a shop nobody has bought from before: a connected mailbox catches it anyway.</li>
+    <li><b>Ways in are set up per mailbox or folder, not per vendor.</b> Only a vendor whose receipts never come by mail (Shopify's bill, which is only in the admin) needs a way of its own.</li>
+    <li><b>Bank statements stay manual:</b> camt.053 or PDF from e-banking, dragged in whenever it suits you, with no reminder. The app only shows how far the payments go («Zahlungen bis 31.08.»). Not through a browser session into the bank.</li>
+  </ul>
+
+  <div class="shot">
+    <h2>0 · First start: nothing set up yet</h2>
+    <p>No receipts, no ways in, no bank statements yet. The list shows one clear first step, «Mit KI einrichten», with the setup by hand and plain drag and drop beside it. The bank note explains why a statement helps: only then can the app see which payments are still missing a receipt. The detail column, empty until something is selected, shows how receipts get into the app.</p>
+    <a href="0-erster-start.html">Open full size →</a>
+    <div class="frame"><iframe src="0-erster-start.html" title="0-erster-start" loading="lazy"></iframe></div>
+  </div>
+
+  <div class="shot">
+    <h2>1 · Belege, with the «Eingang» strip</h2>
+    <p>Above the list: each way in with its status, how many payments have a receipt, and the two automations as buttons. «Belege holen» runs collection, and «Eingang verarbeiten» runs receipt processing (read, facts, match, book). Both workflows already exist.</p>
+    <a href="1-eingang.html">Open full size →</a>
+    <div class="frame"><iframe src="1-eingang.html" title="1-eingang" loading="lazy"></iframe></div>
+  </div>
+
+  <div class="shot">
+    <h2>2 · «Einrichten»: the AI sets it up with you</h2>
+    <p>«Einrichten» opens the existing AI sidebar with a setup conversation. First the app checks what it can on its own: payments without a receipt, which provider hosts the domain's mail (an MX lookup), and which accounts Apple Mail has. Under «Details» you can see what it looked up. Then it asks only what it can't know («Kommen dort auch private Mails an?»), and proposes a plan as a card. Nothing runs until you take it. A mailbox password goes into the app's form, never into the chat.</p>
+    <a href="2-einrichten.html">Open full size →</a>
+    <div class="frame"><iframe src="2-einrichten.html" title="2-einrichten" loading="lazy"></iframe></div>
+  </div>
+
+  <div class="shot">
+    <h2>3 · «Weg hinzufügen»: every way in, by hand</h2>
+    <p>The same options the AI chooses from, for someone who already knows what they want. Every way ends the same: a preview of what it would find, then switch it on in Änderungen. Faded tiles come later.</p>
+    <a href="3-weg-hinzufuegen.html">Open full size →</a>
+    <div class="frame"><iframe src="3-weg-hinzufuegen.html" title="3-weg-hinzufuegen" loading="lazy"></iframe></div>
+  </div>
+
+  <h2>What the setup AI is told</h2>
+  <p>Its mission comes first. The rules come from a new step in the existing guide.</p>
+<pre># processes/receipt-collection.guide.yaml · new step (sketch)
+setup:
+  goal: >-
+    Automate as much of the receipt collection as possible, for the benefit of the
+    person using the app: every payment should find its receipt without them doing
+    anything. Ask only what only they know, and use the least access that does the job.
+  rules:
+    - id: setup-local-client
+      when: Apple Mail or Outlook classic already has the account
+      then: propose reading it there; no new login needed
+    - id: setup-bank-manual
+      when: bank statements
+      then: the person drags in the export from e-banking (camt.053 or PDF) when it suits them; show how far the payments go, never remind; never log into a bank
+    - id: setup-no-secrets
+      when: always
+      then: passwords go into the app's form, never through the chat
+  precedents: []</pre>
+
+  <p><small>Rebuilt with <code>.verify/mock-capture/build.mjs</code> from captures of <code>npm start</code> on <code>VANILLA_WORKSPACE=demo</code>.</small></p>
+</div>
+</body>
+</html>

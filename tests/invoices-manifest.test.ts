@@ -17,7 +17,7 @@ test('the demo invoices: QR-IBAN for CHF, the Wise IBAN for EUR, its layout and 
     EUR: { account: '1023', iban: 'BE29967000000164', bank: 'Wise' },
   });
   assert.equal(ws.invoicing?.revenueAccount, '3300');
-  assert.deepEqual([ws.invoicing?.layout.font, ws.invoicing?.layout.accent, ws.invoicing?.layout.logo, ws.invoicing?.layout.show.qrBill], ['Inter', '#5a3a22', 'invoices/logo.svg', true]);
+  assert.deepEqual([ws.invoicing?.layout.font, ws.invoicing?.layout.accent, ws.invoicing?.layout.logo, ws.invoicing?.layout.show.qrBill], ['Inter', '#5a3a22', 'logos/logo.svg', true]);
   assert.match(ws.invoicing?.texts.fr?.closing ?? '', /^Payable dans les \{days\} jours\./);
 });
 

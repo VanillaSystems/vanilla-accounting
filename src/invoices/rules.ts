@@ -9,8 +9,9 @@ import type {
   Comment, Customer, CustomerFields, Draft, Envelope, Exemption, Invoice, InvoiceBook, InvoiceContent, InvoiceLayout,
   InvoiceLine, Issued, PaymentAllocation, Reminder, Sender, VatRate,
 } from './model.js';
-import { VAT_RATES } from './model.js';
-import { referenceFor } from './reference.js';
+import { chargesVat, invoiceRates, invoicing, vat, vatSetup } from '../engines/index.js';
+import { parseReference, referenceFor } from '../providers/qr-bill/reference.js';
+import type { BankTransaction } from '../types/index.js';
 
 // ─── totals ──────────────────────────────────────────────────────────────────
 
@@ -61,12 +62,74 @@ export function openAmount(inv: Invoice, invoices: readonly Invoice[], asOf?: st
  * What the customer owed at the end of `date`: an invoice issued by then and not cancelled by
  * then, less the payments and credit notes dated by then. The year-end's receivables (ADR 0010).
  */
+/** What a credit note may still take off an invoice: its total less the credit notes issued before (r8c-14); 0 for a draft, a credit note or a cancelled invoice. */
+export function creditable(inv: Invoice, invoices: readonly Invoice[]): number {
+  if (inv.status !== 'issued' || inv.kind === 'credit-note' || inv.cancelled) return 0;
+  const credited = creditNotesOf(inv, invoices).reduce((s, c) => s - toRappen(totals(c.lines).gross), 0);
+  return fromRappen(Math.max(0, toRappen(totals(inv.lines).gross) - credited));
+}
+
 export function openOn(inv: Invoice, invoices: readonly Invoice[], date: string): number {
   if (inv.status !== 'issued' || inv.kind === 'credit-note' || inv.date > date || (inv.cancelled && inv.cancelled.date <= date)) return 0;
   const credited = creditNotesOf(inv, invoices, date).reduce((s, c) => s - toRappen(totals(c.lines).gross), 0);
   const paid = inv.payments.filter((p) => p.date <= date).reduce((s, p) => s + toRappen(p.amount), 0);
   return fromRappen(Math.max(0, toRappen(totals(inv.lines).gross) - paid - credited));
 }
+
+/**
+ * What a credit note still pays back: the part of it beyond what its invoice still owed when it
+ * was issued (with `settlement: 'refund'`, the default), less the refunds made. 0 when it is set off
+ * against the next invoice, cancelled, or a draft.
+ */
+export function refundDue(cn: Invoice, invoices: readonly Invoice[]): number {
+  if (cn.status !== 'issued' || cn.kind !== 'credit-note' || cn.cancelled || cn.settlement === 'offset') return 0;
+  const target = live(invoices).find((i) => i.id === cn.creditFor);
+  if (!target || target.status !== 'issued') return 0;
+  const earlier = creditNotesOf(target, invoices).filter((c) => c.id !== cn.id && (c.date < cn.date || (c.date === cn.date && c.issuedAt < cn.issuedAt)));
+  const owed = toRappen(totals(target.lines).gross) - toRappen(paidAmount(target)) + earlier.reduce((s, c) => s + toRappen(totals(c.lines).gross), 0);
+  const back = Math.max(0, -toRappen(totals(cn.lines).gross) - Math.max(0, owed));
+  return fromRappen(Math.max(0, back - toRappen(paidAmount(cn))));
+}
+
+/** The text names the document's number, not as part of a longer number ("Rechnung 2026-005", "RE2026-005/Garage"). */
+/**
+ * The issued document a payment names: by its structured reference, else the one whose number its
+ * text carries. A cancelled invoice too: the hand form then says so instead of booking revenue (r8c-5).
+ */
+export function namedInvoice(tx: Pick<BankTransaction, 'reference' | 'description' | 'counterparty' | 'parts'>, invoices: readonly Invoice[]): Issued | undefined {
+  const issued = invoices.filter((i): i is Issued => i.status === 'issued' && !i.deleted);
+  const refs = [tx.reference, ...(tx.parts ?? []).map((p) => p.reference)].flatMap((r) => (r ? [parseReference(r)?.reference] : []));
+  const byRef = issued.find((i) => refs.includes(i.reference));
+  if (byRef) return byRef;
+  const text = [tx.description, tx.reference, tx.counterparty, ...(tx.parts ?? []).flatMap((p) => [p.reference, p.counterparty])].filter(Boolean).join(' ');
+  const named = issued.filter((i) => namesNumber(text, i.number));
+  return named.length === 1 ? named[0] : undefined;
+}
+
+/** A payment naming an open invoice without being allocated to it (r9c-3): the year end's Debitoren would count its revenue twice. */
+export interface UnlinkedNaming { transactionRef: string; date: string; number: string; currency: string; amount: number }
+
+/**
+ * The incoming payments up to `end` whose text names the number of an invoice open on `end` in
+ * their currency, while no live document holds them as a payment (r9c-3). Pure over the
+ * transactions: the proposals of src/invoices/payments.ts are the richer, interactive view.
+ */
+export function paymentsNamingOpen(transactions: readonly BankTransaction[], invoices: readonly Invoice[], end: string): UnlinkedNaming[] {
+  const alive = live(invoices);
+  const allocated = new Set(alive.flatMap((i) => (i.status === 'issued' ? i.payments.map((p) => p.transactionRef) : [])));
+  const open = alive.filter((i): i is Issued => i.status === 'issued' && i.kind === 'invoice' && openOn(i, alive, end) > 0);
+  const out: UnlinkedNaming[] = [];
+  for (const tx of transactions) {
+    if (tx.direction !== 'CRDT' || tx.date > end || allocated.has(tx.ref)) continue;
+    const text = [tx.description, tx.reference, tx.counterparty, ...(tx.parts ?? []).flatMap((p) => [p.counterparty, p.reference])].filter(Boolean).join(' ');
+    for (const inv of open) {
+      if (inv.currency === tx.currency && namesNumber(text, inv.number)) out.push({ transactionRef: tx.ref, date: tx.date, number: inv.number, currency: tx.currency, amount: tx.amount });
+    }
+  }
+  return out;
+}
+
+export const namesNumber = (text: string, number: string): boolean => new RegExp(`(?<![0-9])${number.replace(/[^0-9A-Za-z]/g, (c) => `\\${c}`)}(?![0-9])`).test(text);
 
 /** Reminder fees not paid yet. */
 export function openFees(inv: Issued): number {
@@ -140,9 +203,10 @@ export function missingForIssue(draft: InvoiceContent, ctx: {
   draft.lines.forEach((l, line) => {
     if (!l.text.trim()) out.push({ field: 'line.text', line });
     if (!Number.isFinite(l.quantity) || l.quantity === 0 || !Number.isFinite(l.price)) out.push({ field: 'line.quantity', line });
-    if (!VAT_RATES.includes(l.vatRate)) out.push({ field: 'line.vatRate', line });
+    if (!invoiceRates().includes(l.vatRate)) out.push({ field: 'line.vatRate', line });
   });
-  if (draft.lines.some((l) => l.vatRate === 0) && !draft.exemption) out.push({ field: 'exemption' });
+  // A firm not registered charges no VAT: a line at 0 % needs no reason.
+  if (chargesVat() && draft.lines.some((l) => l.vatRate === 0) && !draft.exemption) out.push({ field: 'exemption' });
   if (draft.kind === 'credit-note') {
     const target = ctx.invoices.find((i) => i.id === draft.creditFor && !i.deleted);
     if (!target || target.status !== 'issued' || target.kind !== 'invoice' || target.cancelled) out.push({ field: 'credit.invoice' });
@@ -159,7 +223,7 @@ export function missingForIssue(draft: InvoiceContent, ctx: {
 export class InvoiceRuleError extends Error {
   constructor(readonly code: InvoiceRefusal, message: string, readonly missing?: Missing[]) { super(message); }
 }
-export type InvoiceRefusal = 'incomplete' | 'notDraft' | 'notIssued' | 'cancelled' | 'paid' | 'creditNote' | 'nothingOpen' | 'notFound' | 'changed';
+export type InvoiceRefusal = 'incomplete' | 'notDraft' | 'notIssued' | 'cancelled' | 'paid' | 'creditNote' | 'nothingOpen' | 'notFound' | 'changed' | 'uid';
 
 /**
  * The draft as an issued invoice: its number (the next of the year), its due date, its payment
@@ -222,7 +286,7 @@ export interface CreditRequest {
   settlement?: 'refund' | 'offset';
 }
 
-/** A credit note drafted from an invoice: its lines negated (or a part of its total), the same customer, currency and language. */
+/** A credit note drafted from an invoice: its lines with negated prices (or a part of its total, one line per rate), the same customer, currency and language. */
 export function creditNoteDraft(inv: Invoice, req: CreditRequest, envelope: Envelope, date: string): Draft {
   if (inv.status !== 'issued' || inv.kind !== 'invoice') throw new InvoiceRuleError('notIssued', 'Eine Gutschrift bezieht sich auf eine ausgestellte Rechnung.');
   if (inv.cancelled) throw new InvoiceRuleError('cancelled', `Rechnung ${inv.number} ist storniert.`);
@@ -230,7 +294,7 @@ export function creditNoteDraft(inv: Invoice, req: CreditRequest, envelope: Enve
   const reason = req.reason.trim();
   let lines: InvoiceLine[];
   if (req.amount === undefined) {
-    lines = inv.lines.map((l) => ({ ...l, text: reason ? `${l.text} (${reason})` : l.text, quantity: -l.quantity }));
+    lines = inv.lines.map((l) => ({ ...l, text: reason ? `${l.text} (${reason})` : l.text, price: -l.price }));
   } else {
     const gross = toRappen(req.amount);
     if (gross <= 0 || gross > toRappen(t.gross)) throw new InvoiceRuleError('incomplete', 'Der Betrag einer Gutschrift liegt zwischen 0 und dem Total der Rechnung.');
@@ -244,7 +308,7 @@ export function creditNoteDraft(inv: Invoice, req: CreditRequest, envelope: Enve
       left -= share;
       const net = fromRappen(Math.round(share * 100 / (100 + r.rate)));
       const account = inv.lines.find((l) => l.vatRate === r.rate)?.account;
-      return { text: rates.length > 1 ? `${text} (${r.rate} %)` : text, quantity: -1, unit: 'flat' as const, price: net, vatRate: r.rate, ...(account ? { account } : {}) };
+      return { text: rates.length > 1 ? `${text} (${r.rate} %)` : text, quantity: 1, price: -net, vatRate: r.rate, ...(account ? { account } : {}) };
     }).filter((l) => l.price !== 0);
   }
   return {
@@ -255,7 +319,7 @@ export function creditNoteDraft(inv: Invoice, req: CreditRequest, envelope: Enve
     date,
     currency: inv.currency,
     language: inv.language,
-    subject: `${TEXTS[inv.language].credit} ${inv.number}`,
+    subject: `${TEXTS[inv.language].forInvoice} ${inv.number}`,
     lines,
     ...(inv.exemption ? { exemption: inv.exemption } : {}),
     creditFor: inv.id,
@@ -303,17 +367,22 @@ export function allocate(inv: Issued, invoices: readonly Invoice[], amount: numb
   return { amount: fromRappen(toInvoice), fee: fromRappen(fee), surplus: fromRappen(pay - toInvoice - fee) };
 }
 
-/** The VAT code a rate books revenue with (cash basis: when the money arrives). */
-export function revenueVatCode(rate: VatRate, exemption: Exemption | undefined): string {
-  if (rate === 0) return exemption === 'abroad' ? 'V0-E' : 'V0';
-  return `V${String(rate).replace('.', '')}`;
+/**
+ * The VAT code a rate books revenue with (cash basis: when the money arrives): the rate's sale
+ * code, the firm's first net rate on the net tax rate method, none for a firm not registered.
+ */
+export function revenueVatCode(rate: VatRate, exemption: Exemption | undefined): string | undefined {
+  if (!vatSetup().registered) return undefined;
+  const code = rate === 0 ? vat().codes.deductedIn(invoicing().exemptions[exemption ?? 'export']) : vat().codes.saleAt(rate) ?? vat().codes.netRateCode(1);
+  if (!code) throw new Error(`the jurisdiction has no code for a sale at ${rate} %${exemption ? ` (${exemption})` : ''}`);
+  return code;
 }
 
 /**
  * The revenue a payment of `amount` books, split like the invoice's total over its accounts and
  * rates, so a part payment books the same mix as the whole. The parts add up to `amount` exactly.
  */
-export function revenueSplit(inv: Pick<InvoiceContent, 'lines' | 'exemption'>, amount: number, revenueAccount: string): Array<{ account: string; vatCode: string; amount: number }> {
+export function revenueSplit(inv: Pick<InvoiceContent, 'lines' | 'exemption'>, amount: number, revenueAccount: string): Array<{ account: string; vatCode: string | undefined; amount: number }> {
   const groups = new Map<string, { account: string; rate: VatRate; gross: number }>();
   for (const [rate, lines] of groupBy(inv.lines, (l) => l.vatRate)) {
     const rt = totals(lines);
@@ -346,6 +415,9 @@ export function withPayment(inv: Issued, p: PaymentAllocation): Issued {
   if (inv.payments.some((x) => x.transactionRef === p.transactionRef)) return inv;
   return { ...inv, payments: [...inv.payments, p] };
 }
+
+/** The document without the payment `transactionRef` («Lösen», r10c-3). */
+export const withoutPayment = (inv: Issued, transactionRef: string): Issued => ({ ...inv, payments: inv.payments.filter((p) => p.transactionRef !== transactionRef) });
 
 /** The book without deleted records. */
 export const liveInvoices = (book: InvoiceBook): Invoice[] => live(book.invoices);

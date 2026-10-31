@@ -5,7 +5,10 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePeriod, rangeToken, vatPeriodOf, RELATIVE_PRESETS, derivePeriod, isIsoDate, inPeriod, openQuarter } from '../src/accounting/periods.js';
+import { entriesForReturn } from '../src/accounting/declarations.js';
+import { parsePeriod, rangeToken, vatPeriodOf, RELATIVE_PRESETS, derivePeriod, isIsoDate, inPeriod, openFilingPeriod, booksOpenPeriod, filingKeyOf, isFilingKey, type FilingLength } from '../src/accounting/periods.js';
+import './support/jurisdiction.js';
+import { chart } from '../src/engines/index.js';
 
 const range = (token: string, today = '2026-10-09') => {
   const p = parsePeriod(token, today);
@@ -92,7 +95,7 @@ test('round trip: a fixed token is its own range token; any other range stays fr
 });
 
 test('the VAT tab: only a range that is exactly a year, half or quarter has a return', () => {
-  const vat = (token: string, today = '2026-10-09') => vatPeriodOf(parsePeriod(token, today)!);
+  const vat = (token: string, today = '2026-10-09') => vatPeriodOf(parsePeriod(token, today)!, 'quarter');
   assert.equal(vat('2026-Q3'), '2026-Q3');
   assert.equal(vat('2026-H1'), '2026-H1');
   assert.equal(vat('2026'), '2026');
@@ -106,10 +109,11 @@ test('the VAT tab: only a range that is exactly a year, half or quarter has a re
   assert.equal(vat('all'), null);
 });
 
-test('derivePeriod still names only VAT periods', () => {
-  assert.equal(derivePeriod('2026-09'), null);
+test('derivePeriod names only VAT periods: a month (monthly filers), quarter, half or year', () => {
+  assert.deepEqual(derivePeriod('2026-09'), { from: '2026-09-01', to: '2026-09-30', kind: 'month' });
   assert.equal(derivePeriod('qtd'), null);
-  assert.deepEqual(derivePeriod('2026-Q4'), { from: '2026-10-01', to: '2026-12-31' });
+  assert.equal(derivePeriod('2026-09-01..2026-09-30'), null);
+  assert.deepEqual(derivePeriod('2026-Q4'), { from: '2026-10-01', to: '2026-12-31', kind: 'quarter' });
 });
 
 test('inPeriod: inclusive at both ends; undated items show everywhere', () => {
@@ -120,14 +124,15 @@ test('inPeriod: inclusive at both ends; undated items show everywhere', () => {
 
 test('openingBalancesAt: a range that starts mid-year carries the year so far', async () => {
   const { openingBalancesAt } = await import('../src/accounting/ledger.js');
+  const { statementPostings } = await import('../src/accounting/statement-postings.js');
   const e = (id: string, date: string, debit: string, credit: string, amount: number) =>
     ({ id, date, accountDebit: debit, accountCredit: credit, amount, description: id }) as never;
-  const entries = [e('a', '2026-02-10', '1020', '3200', 100), e('b', '2026-07-05', '6500', '1020', 30), e('c', '2026-07-20', '1020', '3200', 5)];
+  const entries = statementPostings([e('a', '2026-02-10', '1020', '3200', 100), e('b', '2026-07-05', '6500', '1020', 30), e('c', '2026-07-20', '1020', '3200', 5)], []);
   const openings = { '2026': { '1020': 1000 } };
-  assert.deepEqual(openingBalancesAt(entries, '2026-01-01', openings), { '1020': 1000 });
-  assert.deepEqual(openingBalancesAt(entries, '2026-07-01', openings), { '1020': 1100, '3200': 100 });
-  assert.deepEqual(openingBalancesAt(entries, '2026-07-10', openings), { '1020': 1070, '3200': 100, '6500': 30 });
-  assert.deepEqual(openingBalancesAt(entries, '0000-01-01', openings), { '1020': 1000 }, "the period 'all' starts at the first openings");
+  assert.deepEqual(openingBalancesAt(entries, '2026-01-01', openings, chart().isDebitNormal), { '1020': 1000 });
+  assert.deepEqual(openingBalancesAt(entries, '2026-07-01', openings, chart().isDebitNormal), { '1020': 1100, '3200': 100 });
+  assert.deepEqual(openingBalancesAt(entries, '2026-07-10', openings, chart().isDebitNormal), { '1020': 1070, '3200': 100, '6500': 30 });
+  assert.deepEqual(openingBalancesAt(entries, '0000-01-01', openings, chart().isDebitNormal), { '1020': 1000 }, "the period 'all' starts at the first openings");
 });
 
 test('parseSwissDate: typed dd.mm.yyyy, with or without leading zeros; no impossible days', async () => {
@@ -135,7 +140,9 @@ test('parseSwissDate: typed dd.mm.yyyy, with or without leading zeros; no imposs
   assert.equal(parseSwissDate('09.10.2026'), '2026-10-09');
   assert.equal(parseSwissDate(' 9.1.2026 '), '2026-01-09');
   assert.equal(parseSwissDate('29.02.2028'), '2028-02-29');
-  for (const bad of ['29.02.2026', '2026-10-09', '9/10/2026', '32.01.2026', '1.13.2026', '']) assert.equal(parseSwissDate(bad), null, bad);
+  assert.equal(parseSwissDate('28.6.26'), '2026-06-28');
+  assert.equal(parseSwissDate('11.7.26'), '2026-07-11');
+  for (const bad of ['29.02.2026', '1.1.202', '1.1.2', '29.02.26', '2026-10-09', '9/10/2026', '32.01.2026', '1.13.2026', '']) assert.equal(parseSwissDate(bad), null, bad);
 });
 
 test('periodContaining: a link keeps the current period when it holds the date, else the quarter', async () => {
@@ -150,7 +157,36 @@ test('periodContaining: a link keeps the current period when it holds the date, 
 });
 
 test('the open quarter follows the filed ones, else today', () => {
-  assert.equal(openQuarter('2026-06-30', '2026-10-09').token, '2026-Q3');
-  assert.equal(openQuarter('2025-12-31', '2026-10-09').token, '2026-Q1');
-  assert.equal(openQuarter(undefined, '2026-10-09').token, '2026-Q4');
+  assert.equal(openFilingPeriod('2026-06-30', '2026-10-09', 'quarter').token, '2026-Q3');
+  assert.equal(openFilingPeriod('2025-12-31', '2026-10-09', 'quarter').token, '2026-Q1');
+  assert.equal(openFilingPeriod(undefined, '2026-10-09', 'quarter').token, '2026-Q4');
+});
+
+test('a filing length other than the quarter: its key, its open period, what the VAT tab shows', () => {
+  assert.equal(filingKeyOf('2026-08-14', 'month'), '2026-08');
+  assert.equal(filingKeyOf('2026-08-14', 'half'), '2026-H2');
+  assert.equal(filingKeyOf('2026-08-14', 'year'), '2026');
+  assert.equal(openFilingPeriod('2026-06-30', '2026-10-09', 'half').token, '2026-H2');
+  assert.equal(openFilingPeriod('2026-07-31', '2026-10-09', 'month').token, '2026-08');
+  assert.ok(isFilingKey('2026-H1', 'half') && !isFilingKey('2026-Q1', 'half') && !isFilingKey('2026', 'half'));
+  const vat = (token: string, length: FilingLength) => vatPeriodOf(parsePeriod(token, '2026-10-09')!, length);
+  assert.equal(vat('2026-09', 'month'), '2026-09');
+  assert.equal(vat('2026-Q3', 'month'), '2026-Q3', 'a quarter sums three monthly returns');
+  assert.equal(vat('2026-Q3', 'half'), null, 'a half-year filer has no quarter return');
+  assert.equal(vat('2026-H2', 'half'), '2026-H2');
+});
+
+test('a half-year filer declares a correction in the half it corrects, not where it is dated', () => {
+  const e = (id: string, date: string, corrects?: string) => ({ id, transactionRef: id, date, accountDebit: '1020', accountCredit: '3200', amount: 1, ...(corrects ? { corrects } : {}) });
+  const entries = [e('a', '2026-03-01'), e('b', '2026-08-01', '2026-H1'), e('c', '2026-09-01')];
+  assert.deepEqual(entriesForReturn(entries, '2026-H1', 'half').map((x) => x.id), ['a', 'b']);
+  assert.deepEqual(entriesForReturn(entries, '2026-H2', 'half').map((x) => x.id), ['c']);
+  assert.deepEqual(entriesForReturn(entries, '2026', 'half').map((x) => x.id), ['a', 'b', 'c']);
+});
+
+test('books that never filed work on the period of their first payment; filed books on the one after the filing', () => {
+  const tx = (date: string) => ({ date });
+  assert.equal(booksOpenPeriod({ transactions: [tx('2026-08-14'), tx('2026-07-02')] }, '2026-10-15', 'quarter').token, '2026-Q3');
+  assert.equal(booksOpenPeriod({ transactions: [] }, '2026-10-15', 'quarter').token, '2026-Q4');
+  assert.equal(booksOpenPeriod({ config: { closedThrough: '2026-06-30' }, transactions: [tx('2026-01-05')] }, '2026-10-15', 'quarter').token, '2026-Q3');
 });

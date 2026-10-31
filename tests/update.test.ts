@@ -1,7 +1,7 @@
 /**
  * npm run update (src/cli/update.ts), end to end and offline: a clone of this checkout follows a
- * local bare repo as its origin, and opens a copy of the demo workspace from before the schema,
- * with the demo's golden master. `npm ci` is stubbed (it would download); npm run is real.
+ * local bare repo as its origin, and opens a copy of the demo workspace in the layout of 0.3
+ * (books.json at the root, before the schema), with the demo's golden master. `npm ci` is stubbed (it would download); npm run is real.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,8 +9,10 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { APP_ROOT } from '../src/workspace/workspace.js';
+import { APP_FOLDER, APP_ROOT } from '../src/workspace/workspace.js';
+import { BOOKS_SCHEMA, WORKSPACE_SCHEMA } from '../src/workspace/schema.js';
 import { DEMO_ROOT } from './support/workspace.js';
+import { writeOldLayout } from './support/old-layout.js';
 
 const tmp = mkdtempSync(join(tmpdir(), 'update-'));
 // No automatic maintenance: a recent git repacks after a commit of this many files, in the background,
@@ -34,16 +36,18 @@ git(seed, 'remote', 'add', 'origin', origin);
 // The adopter's copy, with node_modules of its own that links each package of this checkout's.
 const app = join(tmp, 'app');
 execFileSync('git', ['clone', '-q', origin, app]);
+// Not the marker of what this checkout's node_modules was installed from: the copy's update writes its own,
+// and through a link it would read a stale hash and overwrite this checkout's.
+const installedMarker = '.vanilla-installed-lock.sha256';
 mkdirSync(join(app, 'node_modules'));
-for (const p of readdirSync(join(APP_ROOT, 'node_modules'))) symlinkSync(join(APP_ROOT, 'node_modules', p), join(app, 'node_modules', p));
+for (const p of readdirSync(join(APP_ROOT, 'node_modules')).filter((p) => p !== installedMarker)) symlinkSync(join(APP_ROOT, 'node_modules', p), join(app, 'node_modules', p));
 
-// A workspace from before the schema: no `schema` in books.json nor in the manifest.
+// A workspace of 0.3, from before the schema: books.json at the root, no `schema` in it nor in the manifest.
 const ws = join(tmp, 'ws');
-cpSync(DEMO_ROOT, ws, { recursive: true });
-cpSync(join(APP_ROOT, 'tests/golden/demo'), join(ws, 'golden'), { recursive: true });
-const { schema: _schema, ...unversioned } = JSON.parse(readFileSync(join(ws, 'books.json'), 'utf8'));
-writeFileSync(join(ws, 'books.json'), JSON.stringify(unversioned, null, 2));
-writeFileSync(join(ws, 'belege.workspace.yaml'), readFileSync(join(ws, 'belege.workspace.yaml'), 'utf8').replace(/^schema: 1\n/m, ''));
+writeOldLayout(DEMO_ROOT, ws, join(APP_ROOT, 'tests/golden/demo'));
+const unversioned = readFileSync(join(ws, 'books.json'), 'utf8');
+writeFileSync(join(ws, 'belege.workspace.yaml'), readFileSync(join(ws, 'belege.workspace.yaml'), 'utf8').replace(/^schema: \d+\n/m, '').replace(/, role: \w+/g, ''));
+const app_ = (f: string) => `${APP_FOLDER}/${f}`;
 
 // Tools doctor looks for, and an npm whose `ci` only logs.
 const bin = join(tmp, 'bin');
@@ -62,10 +66,11 @@ for (const [name, body] of Object.entries({
 
 function update() {
   // Without NODE_TEST_CONTEXT: under it, the nested node --test of test:books would skip every file and pass.
+  // Without a tsx cache: the copy lies in a new folder each run, so what it compiled would never be read again.
   const { NODE_TEST_CONTEXT: _, ...env } = process.env;
   const r = spawnSync(process.execPath, ['--import', 'tsx', 'src/cli/update.ts'], {
     cwd: app, encoding: 'utf8',
-    env: { ...env, VANILLA_WORKSPACE: ws, PATH: `${bin}:${process.env.PATH}`, NODE_OPTIONS: '' },
+    env: { ...env, VANILLA_WORKSPACE: ws, PATH: `${bin}:${process.env.PATH}`, NODE_OPTIONS: '', TSX_DISABLE_CACHE: '1' },
   });
   return { status: r.status, out: r.stdout + r.stderr };
 }
@@ -92,24 +97,26 @@ test('update pulls a release, prints its changelog, writes the workspace at the 
   assert.equal(r.status, 0, r.out);
   assert.ok(r.out.includes(`version ${current} → ${next}`), r.out);
   assert.match(r.out, /A stand-in fix/);
-  assert.match(r.out, /books\.json: schema \(none\) → 1, backup data\/backups\/books\.json\.schema-none/);
-  assert.match(r.out, /belege\.workspace\.yaml: schema \(none\) → 1/);
+  assert.match(r.out, new RegExp(`books\\.json: schema \\(none\\) → ${BOOKS_SCHEMA}, backup ${APP_FOLDER}/data/backups/books\\.json\\.schema-none; \\d+ files and folders moved into vanilla-accounting/`));
+  assert.match(r.out, new RegExp(`vanilla-accounting/belege\\.workspace\\.yaml: schema \\(none\\) → ${WORKSPACE_SCHEMA}`));
   assert.match(r.out, /^(# |ℹ )pass [1-9]\d*$/m, 'the golden master ran its tests');
   assert.match(r.out, /✓ npm run test:books/);
   assert.match(r.out, /Up to date\./);
   assert.equal(ciCalls(), 0, 'the lockfile did not change');
-  assert.equal(JSON.parse(read('books.json')).schema, 1);
-  assert.match(read('belege.workspace.yaml'), /^schema: 1\n/);
-  assert.deepEqual(JSON.parse(read('data/backups/books.json.schema-none')), unversioned);
+  assert.equal(existsSync(join(ws, 'books.json')), false, 'the books moved into vanilla-accounting/');
+  assert.equal(JSON.parse(read(app_('ledger.json'))).schema, BOOKS_SCHEMA);
+  assert.match(read(app_('belege.workspace.yaml')), new RegExp(`^schema: ${WORKSPACE_SCHEMA}\n`));
+  assert.match(read(app_('belege.workspace.yaml')), /bank: manual, currency: CHF, account: "2451", label: Kontokorrent Anna Muster, role: owner \}/, 'the 0.3 manifest\'s accounts gained their roles (#88)');
+  assert.equal(read(app_('data/backups/books.json.schema-none')), unversioned);
 });
 
 test('a second run changes nothing', () => {
-  const before = [read('books.json'), read('belege.workspace.yaml')];
+  const before = [read(app_('ledger.json')), read(app_('belege.workspace.yaml'))];
   const r = update();
   assert.equal(r.status, 0, r.out);
   assert.match(r.out, /nothing new/);
   assert.match(r.out, /up to date/);
-  assert.deepEqual([read('books.json'), read('belege.workspace.yaml')], before);
+  assert.deepEqual([read(app_('ledger.json')), read(app_('belege.workspace.yaml'))], before);
 });
 
 test('a changed lockfile runs npm ci once', () => {
@@ -124,7 +131,7 @@ test('a changed lockfile runs npm ci once', () => {
 });
 
 test('a moved figure stops the update with what to do', () => {
-  const golden = join(ws, 'golden');
+  const golden = join(ws, app_('transactional-data/2026/expected'));
   const file = readdirSync(golden).find((f) => f.startsWith('figures-'))!;
   writeFileSync(join(golden, file), readFileSync(join(golden, file), 'utf8').replace(/\d+\.\d\d/, '0.01'));
   const r = update();

@@ -4,6 +4,8 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Belege</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -23,15 +25,22 @@
 		<string>_http._tcp</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Used to photograph receipts</string>
+	<string>Zum Fotografieren von Belegen und zum Scannen des Koppel-Codes, den der Mac zeigt</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Used to find and connect to the Belege server on your local network</string>
+	<string>Um den Mac im lokalen Netzwerk zu finden und ihm die Belege zu senden</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
 		<false/>
 	</dict>
 	<key>UILaunchScreen</key>
-	<dict/>
+	<dict>
+		<key>UIColorName</key>
+		<string>LaunchBlue</string>
+		<key>UIImageName</key>
+		<string>LaunchMark</string>
+		<key>UIImageRespectsSafeAreaInsets</key>
+		<false/>
+	</dict>
 </dict>
 </plist>

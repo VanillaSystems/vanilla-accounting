@@ -1,0 +1,37 @@
+{
+  "sections": [
+    [
+      "Erlöse",
+      0,
+      []
+    ],
+    [
+      "Aufwand für Material und Waren",
+      0,
+      []
+    ],
+    [
+      "Betriebsaufwand",
+      0,
+      []
+    ],
+    [
+      "Nebenbetrieblicher Ertrag",
+      0,
+      []
+    ],
+    [
+      "Nebenbetrieblicher Aufwand",
+      0,
+      []
+    ],
+    [
+      "Ausserordentliches",
+      0,
+      []
+    ]
+  ],
+  "grossProfit": 0,
+  "operatingResult": 0,
+  "netResult": 0
+}

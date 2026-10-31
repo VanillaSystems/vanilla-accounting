@@ -2,37 +2,30 @@
  * A VAT code explained where it is booked. Any element with `data-vat="<code>"` shows the hover
  * card (after a short rest, or on focus): what the code means, its rate, its Ziffern, how many
  * entries carry it, and links to its explanation, to only its entries, and to the histogram of all
- * codes. A page that shows codes renders <VatCards> once; Buchungen, MWST and the catalogue do.
+ * codes. The shell renders <VatCards> once, so a code anywhere in the app opens its card.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { TAX_RATE_ROWS } from '../../../accounting/ziffern.js';
+import { vat } from '../../../engines/index.js';
 import { lookupVatCode, vatCodeRateName, type VatCodeEntry } from '../../../accounting/vat-codes.js';
 import { accountingName, isKey, t } from '../../i18n/index.js';
 import { periodName } from '../../lib/period-label.js';
 import { fmt } from '../../lib/utils.js';
 import type { AreaProps } from '../index.js';
-import { NO_VAT, vatStats, type CodeStat } from './model.js';
+import { NO_VAT, codeExplanation, ownNetRate, vatStats, type CodeStat } from './model.js';
+import { codeText } from './names.js';
 import { setCodesUi, useCodesUi } from './state.js';
 import './codes.css';
-
-export const kindName = (e: VatCodeEntry) => t(`vatCodes.kind.${e.kind}.name`);
-
-/** A code's line: Banana's text for it, else what kind of code it is. */
-export const codeText = (code: string) => {
-  const found = lookupVatCode(code);
-  return found ? found.entry.bananaText ?? kindName(found.entry) : t('vatCodes.unknown');
-};
 
 /** "Vorsteuer auf Investitionen/übrigem Betriebsaufwand"; a rate row: "Normalsatz 8.1 %". */
 export function zifferName(z: string): string {
   const key = `vat.z${z}`;
   if (isKey(key)) return t(key as 'vat.z200');
-  const row = TAX_RATE_ROWS.find((r) => r.ziffer === z);
+  const row = vat().rateRows.find((r) => r.ziffer === z);
   return row ? `${accountingName(row.name)} ${row.rate} %` : t('vat.ziffer', { ziffer: z });
 }
 
-export const rateOf = (e: VatCodeEntry) => (e.rate ? `${e.rate} %` : '0 %');
+export const rateOf = (e: VatCodeEntry) => { const own = ownNetRate(e.code); return own ? `${own.rate} %` : e.rate ? `${e.rate} %` : '0 %'; };
 
 export const amountText = (e: VatCodeEntry) =>
   t(e.amountIs === 'tax' ? 'vatCodes.amountTax' : e.amountIs === 'net' ? 'vatCodes.amountNet' : 'vatCodes.amountGross');
@@ -129,10 +122,10 @@ function Card(p: AreaProps & { shown: Shown; onEnter(): void; onLeave(): void; o
       onMouseLeave={p.onLeave}
     >
       <div className="vh"><span className="mono code">{code}</span><span className="mono rate">{e ? rateOf(e) : ''}</span></div>
-      <p>{found?.negative && <><b>{t('codes.reversed')}</b> {t('codes.reversedText', { code: e!.code })} </>}{codeText(code)}</p>
-      {e?.ziffern?.length
-        ? <dl>{e.ziffern.map((z) => <div key={z.ziffer} style={{ display: 'contents' }}><dt className="mono">{z.ziffer}</dt><dd>{zifferName(z.ziffer)}</dd></div>)}</dl>
-        : <p className="m">{e?.ziffern === null || !e ? t('vatCodes.notDeclared') : t('codes.noZiffer')}</p>}
+      <p><b>{codeText(code)}</b>{found?.negative && <> {t('codes.reversedText', { code: e!.code })}</>}</p>
+      {e && codeExplanation(code).ziffern?.length
+        ? <dl>{codeExplanation(code).ziffern!.map((z) => <div key={z} style={{ display: 'contents' }}><dt className="mono">{z}</dt><dd>{zifferName(z)}</dd></div>)}</dl>
+        : <p className="m">{!e || codeExplanation(code).ziffern === null ? t('vatCodes.notDeclared') : t('codes.noZiffer')}</p>}
       {e?.rate ? <p className="m">{amountText(e)}</p> : null}
       <div className="vf">
         <span className="m">{stat ? t('codes.entriesIn', { n: stat.n, period: periodName(period) }) : t('codes.noEntriesIn', { period: periodName(period) })}</span>
@@ -186,8 +179,8 @@ function Histogram(p: AreaProps) {
             const none = x.code === NO_VAT;
             const text = none ? t('codes.noVat') : codeText(x.code);
             return (
-              <div key={x.code} className={`o hr${i === at ? ' on' : ''}`} role="option" aria-selected={i === at} title={none ? t('codes.noVatTip') : text} data-code={x.code} onMouseMove={() => i !== at && setIdx(i)} onClick={() => showOnly(p, x.code)}>
-                <span className="mono code">{none ? '·' : <button type="button" className="clink" title={t('codes.explainCode', { code: x.code })} onClick={(e) => { e.stopPropagation(); close(); explain(p, x.code); }}>{x.code}</button>}</span>
+              <div key={x.code} className={`o hr${i === at ? ' on' : ''}`} role="option" aria-selected={i === at} data-tip={none ? t('codes.noVatTip') : text} data-code={x.code} onMouseMove={() => i !== at && setIdx(i)} onClick={() => showOnly(p, x.code)}>
+                <span className="mono code">{none ? '·' : <button type="button" className="clink" data-tip={t('codes.explainCode', { code: x.code })} onClick={(e) => { e.stopPropagation(); close(); explain(p, x.code); }}>{x.code}</button>}</span>
                 <span className="bar"><i style={{ width: `${(size(x) / max * 100).toFixed(1)}%` }} /><em>{text}</em></span>
                 <span className="mono num">{x.n}</span>
                 <span className="mono num">{fmt(x.chf)}</span>

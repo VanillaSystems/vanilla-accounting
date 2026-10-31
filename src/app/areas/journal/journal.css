@@ -20,6 +20,30 @@
 .rows.je .group .cap.vh { text-align: left; padding-left: 16px; }
 .rows.je .row.cont::before { content: ''; position: absolute; left: 92px; top: -50%; height: 100%; width: 7px; border-left: 1.5px solid var(--line-2); border-bottom: 1.5px solid var(--line-2); border-bottom-left-radius: 5px; transform: translateY(-1px); }
 .rows.je .row.cont > .t { padding-left: 14px; }
+.rows.je .row > .t { min-width: 0; overflow: hidden; }
+/* A narrow list (a 1280 px window with the KI sidebar open): the currency column goes with its track, so the amount keeps a track of its own, and the wide gaps go (r7h-28, r8h-7). */
+@container (max-width: 400px) {
+  .rows.je { grid-template-columns: 76px minmax(0, 1fr) auto auto auto auto; }
+  .rows.je .cu { display: none; }
+  .rows.je .group .n { grid-column: 6; }
+  .rows.je .cr, .rows.je .vc, .rows.je .group .cap, .rows.je .group .cap.vh { padding-left: 8px; }
+  .rows.je .row > .t { padding-left: 6px; padding-right: 6px; }
+  .rows.je .row.cont::before { left: 80px; }
+}
+/* Narrower still (a 1024 px window with the sidebar open): two lines a booking, date, text and amount above, Soll and Haben under the text, the code under the amount (r8h-7). */
+@container (max-width: 300px) {
+  .rows.je { grid-template-columns: 76px auto auto 1fr; }
+  .rows.je .row { grid-template-rows: auto auto; row-gap: 2px; }
+  .rows.je .row > .d { grid-area: 1 / 1; }
+  .rows.je .row > .t { grid-area: 1 / 2 / 2 / 4; padding-left: 6px; }
+  .rows.je .row > .a { grid-area: 1 / 4; }
+  .rows.je .row > .dr { grid-area: 2 / 2; padding-left: 6px; }
+  .rows.je .row > .cr { grid-area: 2 / 3; }
+  .rows.je .row > .vc { grid-area: 2 / 4; justify-self: end; padding-left: 8px; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rows.je .group .gl { grid-column: 1 / 4; }
+  .rows.je .group .cap { display: none; }
+  .rows.je .group .n { grid-column: 4; }
+}
 
 .satz { margin-top: 14px; display: grid; gap: 2px; max-width: 640px; font-size: 13px; }
 .satz > div { display: grid; grid-template-columns: 52px 54px 1fr; gap: 10px; align-items: baseline; }
@@ -53,3 +77,70 @@
 .jnew .form { padding: 8px 20px 18px; }
 .jnew .dacts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 .jnew .form .two { grid-template-columns: 1fr 1fr; }
+
+/* A payment booked by hand where it shows (PaymentBooking.tsx): per line Soll, Haben, MWST, Betrag, and the text below. */
+.form.pbook { max-width: 640px; padding: 12px 14px; margin: 8px 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); container-type: inline-size; }
+.form.pbook .pbh { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-size: 13px; }
+.form.pbook .pbh .m { color: var(--muted); font-size: 11.5px; }
+.form.pbook .pbl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.8fr) minmax(0, 1.3fr) 18px; gap: 8px; align-items: start; }
+.form.pbook .pbl + .pbl { padding-top: 10px; border-top: 1px solid var(--line); }
+.form.pbook .pbl .pbt { grid-column: 1 / 5; }
+.form.pbook .pbl .rm { grid-column: 5; grid-row: 1; color: var(--muted); font-size: 15px; line-height: 1; margin-top: 24px; }
+.form.pbook .pbl .rm:hover { color: var(--ink); }
+.form.pbook .pbv .acn { display: block; margin-top: 3px; font-size: 11.5px; color: var(--muted); }
+.form.pbook .pbl .pbw { grid-column: 1 / 5; margin: -2px 0 0; font-size: 12px; color: var(--warn); }
+/* The other proof of the input tax, named instead of a receipt (#134). */
+.form.pbook .pbp { display: block; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.form.pbook .pbp .m { display: block; margin-top: 3px; font-size: 11.5px; color: var(--muted); }
+/* Beside the sidebar the detail is narrow: two fields a row, none cut off (corner-8). */
+@container (max-width: 520px) {
+  .form.pbook .pbl { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .form.pbook .pbl .pbt, .form.pbook .pbl .pbw { grid-column: 1 / -1; }
+  .form.pbook .pbl .rm { grid-column: 1 / -1; grid-row: auto; justify-self: end; margin-top: 0; }
+}
+.form.pbook .pbf { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.form.pbook .pbf .wn { color: var(--warn); font-size: 12px; }
+.form.pbook .pbf .ok { color: var(--muted); font-size: 12px; }
+.form.pbook .pbf .btn { margin-left: auto; }
+.form.pbook.narrow { padding: 10px; }
+.form.pbook.narrow .pbl { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.form.pbook.narrow .pbl .pbt { grid-column: 1 / -1; }
+.form.pbook.narrow .pbl .rm { grid-column: 1 / -1; grid-row: auto; justify-self: end; margin-top: 0; }
+
+/* Bookings typed without their payment that add up to it (PaymentBooking.tsx Unattached). */
+.pbo { max-width: 640px; margin: 8px 0 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); font-size: 13px; display: grid; gap: 6px; }
+.pbo .pbor { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.pbo .pbor .m { color: var(--muted); font-size: 12px; }
+.pbo .pbor .btn { margin-left: auto; }
+
+/* The payment a new entry books (PaymentField.tsx). */
+.form .payf .acl { width: 100%; }
+.form .payf.picked { display: flex; gap: 8px 10px; align-items: baseline; font-size: 12.5px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.form .payf.picked .lbl { color: var(--muted); }
+.form .payf.picked .mono { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.form .payf.picked .rm { color: var(--muted); font-size: 15px; line-height: 1; }
+.form .payf.picked .rm:hover { color: var(--ink); }
+
+/* Book from an entry: Gegenbuchung, Kopieren, the accrual's reversal on 1.1. (Detail.tsx EntryActions). */
+.jacts { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 8px; }
+.jacts .golink { font-size: 12px; color: var(--muted); }
+.jnew .jrev { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--ink-2); }
+
+/* Who booked an entry, as a filter beside Alle / Ohne Beleg / Korrekturen (journal.tsx). */
+.counts .origins { display: inline-flex; flex-wrap: wrap; row-gap: 6px; gap: inherit; padding-left: 12px; border-left: 1px solid var(--line); }
+/* A phone (390 px): the chips wrap under the counts instead of pushing the page sideways (r9n-38). */
+[data-area="journal"] .counts { flex-wrap: wrap; row-gap: 6px; }
+html.phone .counts .origins { padding-left: 0; border-left: 0; flex-basis: 100%; }
+.jnew .jcorr { margin-top: 10px; }
+.jnew .jcorr .seg { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--hover); border-radius: 7px; padding: 2px; }
+.jnew .jcorr .seg .m { font-size: 12px; color: var(--muted); padding: 0 8px 0 6px; }
+.jnew .jcorr .seg button { font-size: 12px; padding: 2px 10px; border-radius: 5px; color: var(--muted); }
+.jnew .jcorr .seg button.on { background: var(--bg); color: var(--ink); box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 10%, transparent); }
+.jnew .jcorr p { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); }
+.jnew .notice.warn { margin: 4px 0 0; font-size: 12.5px; }
+.jlearn .ruledraft { margin: 10px 0 4px; }
+
+/* A booking's reporting dimensions (#127, TagFields): one field each, side by side. */
+.form .tags { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.form.pbook .pbl .pbg { grid-column: 1 / 5; }
+@container (max-width: 520px) { .form.pbook .pbl .pbg { grid-column: 1 / -1; } }

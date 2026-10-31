@@ -43,12 +43,12 @@ steps:
         then: expense it (6xxx), do not capitalise (1xxx)
         why: not worth an asset record
         source: AGENTS.md § VAT code rules
-      - id: cls-wise-split
-        when: a Wise card charge took money from several currency accounts
+      - id: cls-separate-fee
+        when: the payment's fee is debited as a movement of its own (a fee row that names the payment it charges for)
         then: >
-          one entry per debited account leg; the charge currency first, then other foreign currencies, CHF last
-        why: that is how Wise funds a card payment
-        source: AGENTS.md § Special cases
+          book the whole payment on its expense, with no fee line; the fee is booked once, on its own movement
+        why: a fee line inside the payment books the fee twice and leaves the expense short by it; code removes such a line or refuses the answer (src/booking/separate-fee.ts)
+        source: decision 2026-10-21, owner
       - id: cls-salary
         status: proposed
         when: a salary paid to an employee (the owner too, when employed by the company)
@@ -96,8 +96,20 @@ steps:
         source: AGENTS.md § Special cases
       - id: shp-zollrechnung
         when: a courier's Zollrechnung (customs invoice)
-        then: needs_split into Zölle (4020), ausl. MWST (4030), Zahlungsabwicklungsspesen / Vorlageprovision (4040)
-        why: three different things on one invoice (FedEx, DHL, Post all issue them)
+        then: >
+          needs_split into Einfuhrsteuer (4030), Zölle (4020), Vorlageprovision / Verzollungsspesen (4040) and
+          freight (6280). In code (src/booking/customs-invoice.ts): each read line of the invoice is a position by
+          its words (modules/ch documents.yaml customs), freight and fees with the carrier's Swiss VAT where the
+          line shows it, duty and import VAT without. A line of 0.00 (duty not due) still tells the invoice is one;
+          on it a line that names only the tax («MwSt / TVA / IVA», code Z at 0 %) is the import VAT advanced, and a
+          line no position names at the domestic rate is the carrier's own service, fees (issue #227). The AI's
+          booking follows the same rule: a -2 code never against the bank, input tax on import VAT only as the
+          one-legged deduction with the assessment linked (src/server/edits.ts assertImportVatRule); without it the
+          task «Veranlagungsverfügung fehlt» names the declaration number, access code and link the invoice prints.
+          The lines must add up to the invoice and the invoices to the
+          payment (another currency: the payment shared in proportion, within 5 % of the day's rate), else the
+          model books it and its reason says why. A company rule for the business books before it
+        why: three different things on one invoice (FedEx, DHL, Post all issue them); issue #197
         source: docs/runbooks/receipt-collection.md § FedEx, § DHL Express
       - id: shp-one
         when: otherwise
@@ -114,6 +126,11 @@ steps:
         when: always
         then: the entries sum to the transaction amount in its currency; a difference (rounding, FX, a platform's deduction) is its own entry, never spread across the others
         source: proposed 2026-10-07 by Claude — confirm or replace
+      - id: spl-skonto
+        when: the bank paid less than the invoice because a discount (Skonto) was taken at payment
+        then: "book what the bank paid: one entry for the payment amount on the expense account with the receipt's VAT code (an invoice less 2 % Skonto: 4400 / bank, M81, on the 98 % the bank paid). Never a separate Skonto row with an empty account; the classifier refuses entries that do not move the bank by the payment amount"
+        why: "effective method on cash basis: the discount reduces the consideration, so the expense and the input tax are those of the amount paid (MWSTG Art. 41 Abs. 1); a one-leg Skonto row left the balance sheet off by the discount (persona test misreads, 2026-10-15)"
+        source: MWSTG Art. 41 Abs. 1; src/booking/classify.ts paymentRefusal
     precedents: []
 
   side:
@@ -128,14 +145,29 @@ steps:
         then: a_purchase, with the original purchase's code inverted (-I81, -I0)
         why: a refund inverts the original VAT code
         source: AGENTS.md § VAT code rules
+      - id: sid-credit-note-names-invoice
+        when: a supplier's credit note without its own document whose payment text names an invoice already booked
+        then: >
+          the invoice's code with the minus (-M81 for an M81 invoice, -I81 for I81), in code
+          (src/accounting/credit-note-code.ts creditNoteCodeOf); the booking's reason names the invoice. A credit
+          note that names nothing booked keeps the receipt rule (pv-no-receipt, with the minus)
+        why: the credit takes back part of the input tax claimed on that invoice, whose receipt shows the tax
+        source: decision 2026-10-16, owner
       - id: sid-sale-refund
         status: proposed
         when: a DBIT that pays back all or part of an earlier sale to a customer
         then: a_sale, on the sale's revenue account, with the original sale's code inverted (-V81, -V0)
         why: a reduced consideration reduces the tax owed, in the quarter the money goes back
         source: MWSTG Art. 41 Abs. 1; AGENTS.md § Special cases (-V81)
+      - id: sid-provider-payout
+        when: CRDT from a payment provider whose business file has a `provider:` section (a shop platform, a card terminal)
+        then: >
+          a settlement, not a sale: code books it bank / the provider's clearing account without VAT
+          (src/booking/classify.ts providerPayout); its sales come onto that account from the provider's report
+          (sv-provider-report). Until the company's file names the clearing account it is booked as any money in; dropping the report asks for the account
+        source: decision 2026-10-27, owner
       - id: sid-sale
-        when: CRDT from a sales platform's payout or another customer payment
+        when: CRDT from a sales platform's payout the app does not know as a provider's, or another customer payment
         then: a_sale
         source: definition
     precedents: []
@@ -147,7 +179,10 @@ steps:
       - id: pv-no-receipt
         when: no linked receipt (noReceipt reason, or exempt by rule)
         then: zero_rated — I0, or M0 for goods
-        why: no receipt, no deduction
+        why: >-
+          no receipt, no deduction for the app and the AI; only a person may deduct on other proof
+          (a contract with the VAT and the payment), by hand, naming it (MWSTG Art. 81 Abs. 3,
+          ESTV MWST-Info 09 Ziff. 1.6, issue #134)
         source: AGENTS.md § VAT code rules
         test: no-receipt
       - id: pv-che-but-zero
@@ -158,26 +193,37 @@ steps:
     rules:
       - id: pv-prefix-from-account
         when: always
-        then: "the letter follows the account, not the vendor: 4xxx (material, goods, their freight and customs) → M; investments and operating costs (1xxx assets, 5xxx–6xxx) → I"
-        why: FedEx 4xxx entries were booked I0 and M0 for the same kind of position
-        source: src/llm/prompts.ts CLASSIFY_INSTRUCTIONS § 7a
+        then: >
+          the letter follows the account, not the vendor: 4xxx (material, goods, their freight and customs) → M;
+          investments and operating costs (1xxx assets, 5xxx–6xxx) → I. Computed, never read: the model gives the
+          receipt's facts (Swiss VAT charged or not, the rate, Bezugsteuer, a tax amount) and code derives the
+          letter from the account, the minus from the money's direction and the suffix from the booking pattern
+          (src/booking/line-vat.ts); a code the model or a rule still writes keeps only its rate
+        why: FedEx 4xxx entries were booked I0 and M0 for the same kind of position; models read the facts 92–98 % right but turned them into the wrong letter (issue #64)
+        source: src/accounting/vat-codes.ts codeOfFacts
       - id: pv-charged
         when: the receipt shows Swiss MWST with an explicit amount at 8.1%
-        then: charged — M81 for goods and material, I81 for investments and operating costs
+        then: >
+          charged — M81 for goods and material, I81 for investments and operating costs. In code
+          (src/booking/purchase-vat.ts) on the model's one coded purchase line when the receipts show that one
+          rate on its whole amount; a receipt that taxes part of the payment stays the model's to split
         source: AGENTS.md § VAT code rules
       - id: pv-import-vat-evv
         when: a courier bill passes on Swiss IMPORT VAT for goods imported for the company, and the BAZG Veranlagungsverfügung MWST (eVV) names the company as importer
-        then: "book the import VAT on 4030 without code, then a single-leg entry -/4030 with M81-2 for the eVV's MWST amount → Ziffer 400 (MWSTG Art. 28 Abs. 1 lit. c). File the eVV PDF and link it to the payment. Without the eVV: M0, and get it (how: processes/authorities/bazg.yaml#evv-download)"
+        then: "book the import VAT on 4030 without input tax (M0), then a single-leg entry -/4030 with M81-2 for the eVV's MWST amount → Ziffer 400 (MWSTG Art. 28 Abs. 1 lit. c). File the eVV PDF and link it to the payment. Without the eVV: M0, and get it (how: processes/authorities/bazg.yaml#evv-download). In code (src/booking/customs-invoice.ts): an eVV that names the firm's UID and whose total equals an import VAT line of the payment's customs invoice (and whose number is among those the invoice cites, when it cites any) brings the M81-2 line: linked to the payment, pointed at it, or alone within 120 days of the invoice with no other line it proves; once the payment's quarter is filed, as a correction of its own (M<year>-NNN) in the open period with corrects, linked to the eVV. One eVV proves one line, copies (the same number) count once, and a deduction a person removed or changed is never booked again (Receipt.importVatDeduction). Import VAT paid to the BAZG itself: the eVV is the payment's receipt (the matching pairs it by its number in the payment's text and its amount), booked 4030 M0 with the M81-2 line"
         why: "the courier bill is not proof of import VAT; the eVV is (UPS bill page 3 says so)"
         source: owner decision 2026-10-08
       - id: pv-bezugsteuer
         when: a SERVICE (advertising, consulting, software/online service) from a supplier based abroad that is not in the Swiss VAT register and charges no Swiss MWST
-        then: "B81-1 on the expense entry (amount = the net paid): Ziffer 383 declares 8.1%, and the same entry deducts it again at 405 — net 0 for business use. From the first franc: NO CHF 10,000 threshold for us"
+        then: "B81-1 on the expense entry (amount = the net paid): Ziffer 383 declares 8.1%, and the same entry deducts it again at 405 — net 0 for business use (on the net tax rate method 383 only, no deduction). From the first franc: NO CHF 10,000 threshold for us. In code (src/accounting/acquisition-tax.ts): the model reads the line's supply (service, goods, exempt) and the supplier's country; code books B81-1 when every linked receipt was read and shows neither Swiss MWST nor a CHE number, and takes the model's B81 back when a fact says otherwise"
         why: "MWSTG Art. 45 Abs. 1 lit. a (foreign service, place = recipient's seat per Art. 8 Abs. 1) + Abs. 2 lit. a (a VAT-registered recipient owes it, no threshold — the CHF 10,000 of lit. b is only for recipients NOT registered) + Art. 28 Abs. 1 lit. b (deductible as input tax). eCH-0217 acquisitionTax, always net. Not subject: goods (import VAT instead), services exempt under Art. 21 such as payment processing / Stripe fees (Art. 45a), and foreign suppliers registered in CH that invoice 8.1% themselves (Shopify, Google Commerce, OpenAI → I81)"
         source: owner decision 2026-10-08
       - id: pv-otherwise
         when: otherwise
-        then: zero_rated
+        then: >
+          zero_rated. In code (src/booking/purchase-vat.ts): the model's rate code falls to the zero code of its
+          account when no linked purchase document shows Swiss VAT and every one was read (a receipt not read yet
+          decides nothing)
         source: AGENTS.md § VAT code rules
     ask_human_when:
       - the receipt shows a reduced rate (2.6%) or a special rate (3.8%)
@@ -196,8 +242,76 @@ steps:
         source: MWSTG Art. 8 Abs. 1; ESTV form 0550 Ziffer 221
       - id: sv-order-tax
         when: always
-        then: "the code follows the tax the order or invoice itself states: Swiss 8.1% → swiss (V81); no Swiss tax and delivered abroad → export (V0) with the country as the recorded reason; anything else → new_case"
-        source: booking.flow.yaml sale_vat expect
+        then: >
+          the DELIVERY country decides, the order's own tax line checks it. Delivered in the VAT territory
+          (Switzerland, Liechtenstein: modules/ch/invoicing.yaml territory) → swiss (V81) only when the order shows
+          the Swiss tax at that rate; a domestic delivery without it, or with another country's tax → new_case.
+          Delivered abroad → export (V0; V0-E where the invoicing exemptions say so) with the country as the
+          recorded reason, whatever foreign tax line the order shows (EU or UK VAT the platform charged the
+          buyer): that tax is named in the booking's reason, never a reason to hold. A foreign VAT the order shows
+          is the seller's own debt to the destination state (IOSS on a consignment into the EU), not its
+          turnover: a payment provider's sales report books it apart, onto the company's account named by
+          provider.foreignTax without a code, and the net at the export code (sv-provider-report); the foreign VAT
+          is left out of the Swiss return. Swiss tax on a delivery abroad → new_case (tax invoiced is owed,
+          Art. 27 Abs. 2)
+        why: >
+          an export of goods is exempt with the right to deduct (MWSTG Art. 23 Abs. 1 and 2 Ziff. 1); a foreign
+          VAT is not Swiss turnover tax, so it neither holds the order nor makes it taxable in Switzerland. A strict
+          reading of Art. 24 Abs. 1 (the whole consideration) may count the foreign VAT in Ziffer 200 and deduct it
+          again in Ziffer 220; either way there is no tax effect, since the export is exempt. Which reading a firm
+          follows is its choice, to confirm with its fiduciary; the app follows the first: the foreign VAT apart, out
+          of the return (owner decision 2026-10-27, issue #206). What the seller pays abroad for that tax (an IOSS
+          return) settles the company's account for it; a courier's import VAT invoice on a DDP shipment is its own
+          expense entry without Swiss input tax
+        source: booking.flow.yaml sale_vat expect; issue #74; issue #206, owner decision 2026-10-27
+      - id: sv-provider-report
+        when: a payment provider's sales report (its order export, a CSV) or fee report is dropped
+        then: >
+          in code (src/booking/sales-report.ts), by the columns the provider's file names: each order's gross onto the
+          provider's clearing account against the revenue account, delivered in the VAT territory at the firm's sale
+          code, abroad at V0; an export whose tax column shows a foreign VAT (IOSS, for example) as two lines, the net at V0 onto
+          revenue and the tax onto the company's account for it (provider.foreignTax) without a code, waiting for the
+          person while the company's file names none (#206); an export the books carry as one gross line at V0 (booked
+          before #206) stays so, and its refund is booked gross at -V0; a refund with the code's minus (an export's
+          foreign tax back in the sale's share, also for a filed sale the books do not carry, whose tax the account then
+          never held: the sale is the person's to correct); each fee against the same
+          account at the company's fee code. The tax point is the day the provider collected the payment (cash basis),
+          the order's day on the agreed basis. An order of a filed period is not booked (a correction is the
+          person's); a domestic order whose tax column shows no tax or another rate waits for the person
+          (sv-order-tax). The order documents go with their sale, never with the payout
+        why: a payout is a settlement of what the provider holds; the VAT is decided per order, and the clearing account must return to what the provider holds unpaid
+        source: decision 2026-10-27, owner
+      - id: sv-no-invoice
+        when: a customer payment with no invoice or order linked
+        then: >
+          the app's proposal, in code (src/accounting/sales-without-vat.ts saleCodeOf): the books' currency from an IBAN of the
+          VAT territory (Switzerland and Liechtenstein, modules/ch/invoicing.yaml territory) or with no IBAN named → V81;
+          a foreign currency or a foreign IBAN → V0. Never V0 for want of a paper. The owner confirms it once (the
+          app's question under Aufgaben); her answer or her correction books that payment only. A rule for the
+          payer only by her «Immer so?» under the answer, and only when the payer's other payments are booked
+          the same way: a mixed payer gets none. A payment provider's payout is no customer payment: its sales come
+          from its report (sv-provider-report)
+        why: "the output tax is owed on a domestic supply whether or not an invoice exists (MWSTG Art. 18); «no receipt, zero code» is the input-tax rule"
+        source: decision 2026-10-23, owner
+      - id: sv-card-terminal
+        when: a payout report of a card terminal or payment provider (SumUp, Payrexx, Worldline, TWINT)
+        then: >
+          the card sales at the company's own place of business are domestic sales: the GROSS sales with V81
+          (another rate only when the report shows it), a refund with -V81, the provider's fees on their own
+          account with I0 (payment processing is exempt, Art. 21: no Bezugsteuer). A provider the company's
+          knowledge names gets them onto its clearing account in code (src/intake/sales-report-import.ts
+          bookPayoutReports); a payout of one it does not name is booked from its report by the model, the
+          whole payout with V81 without one
+        why: the payout report rarely shows MWST, yet the sales were made in Switzerland
+        source: proposed 2026-10-16 by Claude — confirm or replace
+      - id: sv-place-abroad
+        when: the sale's invoice shows no Swiss MWST and names the place of supply abroad (modules/ch/invoicing.yaml placeAbroad)
+        then: V0-E (Ziffer 221), in code; not V0, which is the export of goods
+        source: MWSTG Art. 8 Abs. 1
+      - id: sv-unregistered
+        when: the books are not registered for VAT
+        then: no VAT code on any sale
+        source: MWSTG Art. 10
     ask_human_when:
       - a sale with no order or invoice of its own (a private sale of equipment)
     precedents: []
@@ -236,10 +350,6 @@ steps:
   find_imbalance:
     goal: Find why the books do not balance, without plugging the difference.
     rules:
-      - id: imb-fx-legs
-        when: the difference sits on a Wise foreign-currency account
-        then: look for a currency-split leg booked once instead of per account
-        source: AGENTS.md § Special cases (Wise currency splits)
       - id: imb-duplicates
         when: the difference equals one transaction amount
         then: look for a transaction booked twice (re-imported ref, manual + bank)

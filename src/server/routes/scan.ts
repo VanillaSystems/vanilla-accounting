@@ -6,6 +6,11 @@ import { RequestError, WS, readBooks } from '../books.js';
 import type { InboxFile } from '../../types/index.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
 import { RECEIPT_TYPES, receiptType, type ReceiptType } from '../../types/upload.js';
+import { capturedStem } from '../../intake/captured.js';
+import { smallerPdf } from '../../parsers/smaller.js';
+import { INTAKE, engine } from './automation.js';
+import { APP_STORE_URL } from '../phone.js';
+import { qrSvg } from '../../desktop/qr.js';
 
 export const router = Router();
 
@@ -14,6 +19,11 @@ export const router = Router();
 router.get('/scan', (_req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(readFileSync(join(APP_ROOT, 'src', 'server', 'scan.html'), 'utf8'));
+});
+
+/** «Handy koppeln», step 1: the receipt app's download link and its QR code (paper colours, as a scanner expects). */
+router.get('/api/phone/app', (_req, res) => {
+  res.json({ url: APP_STORE_URL, qr: qrSvg(APP_STORE_URL) });
 });
 
 router.get('/scan/manifest.json', (_req, res) => {
@@ -28,7 +38,7 @@ router.get('/scan/manifest.json', (_req, res) => {
   });
 });
 
-router.post('/api/upload', express.raw({ type: Object.keys(RECEIPT_TYPES), limit: '50mb' }), (req, res) => {
+router.post('/api/upload', express.raw({ type: Object.keys(RECEIPT_TYPES), limit: '50mb' }), async (req, res) => {
   if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
     res.status(400).json({ error: 'No PDF or photo (JPG, PNG, HEIC) received' }); return;
   }
@@ -36,17 +46,18 @@ router.post('/api/upload', express.raw({ type: Object.keys(RECEIPT_TYPES), limit
   mkdirSync(WS.paths.inbox, { recursive: true });
   const capturedAtHeader = req.headers['x-captured-at'] as string | undefined;
   const ts = capturedAtHeader ? new Date(capturedAtHeader) : new Date();
-  const date = isNaN(ts.getTime()) ? new Date() : ts;
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const stamp = `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+  const stamp = capturedStem(isNaN(ts.getTime()) ? new Date() : ts);
+  // The phone's own scan: made smaller before its id (a photo is, once the read step wraps it).
+  // Before the name is chosen: from there to the write nothing waits, so two uploads never take one name.
+  const bytes = ext === 'pdf' ? await smallerPdf(req.body) : req.body;
   // Several files dropped at once share their second: none may overwrite another.
   // A photo's PDF takes the photo's name, so no two files may share a name before the extension.
   const stems = new Set(readdirSync(WS.paths.inbox).map((f) => f.replace(/\.[^.]+$/, '')));
   let name = stamp;
   for (let n = 2; stems.has(name); n++) name = `${stamp}-${n}`;
   const filename = `${name}.${ext}`;
-  writeFileSync(join(WS.paths.inbox, filename), req.body);
-  console.log(`  scan upload: ${filename} (${req.body.length} bytes)`);
+  writeFileSync(join(WS.paths.inbox, filename), bytes);
+  console.log(`  scan upload: ${filename} (${req.body.length} bytes${bytes.length < req.body.length ? `, made smaller to ${bytes.length}` : ''})`);
   res.json({ ok: true, filename });
 });
 
@@ -71,14 +82,19 @@ export function inboxFiles({ withRead = false, photos = false } = {}): InboxFile
     });
 }
 
+/** The inbox's files; one whose last run stopped carries that run and its reason, so no file reads as «wird gelesen» for good. */
 router.get('/api/inbox', (_req, res) => {
-  res.json(inboxFiles());
+  const runs = engine().runs().filter((r) => r.workflow === INTAKE && r.item.id === 'inbox').sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  res.json(inboxFiles().map((f) => {
+    const last = runs.find((r) => r.arrived?.some((a) => a.kind === 'receipt' && a.id === f.id) || r.startedAt >= f.addedAt);
+    return last?.state.status === 'stuck' ? { ...f, failed: { run: last.id, error: last.state.reason } } : f;
+  }));
 });
 
 // A page that still shows the file as waiting may ask for it after the processing has read it.
 router.get('/api/inbox/:id', (req, res) => {
   const file = inboxFiles({ withRead: true }).find((f) => f.id === req.params.id);
-  if (!file) throw new RequestError(404, 'Not in the inbox');
+  if (!file) throw new RequestError(404, 'Not in the inbox', { code: 'gone', params: { what: 'file' } });
   res.setHeader('Content-Type', 'application/pdf');
   res.sendFile(join(WS.paths.inbox, file.filename));
 });

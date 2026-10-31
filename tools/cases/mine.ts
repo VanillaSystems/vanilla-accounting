@@ -12,10 +12,10 @@
  */
 import { writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { parseVatCode } from '../../src/accounting/vat-report.js';
 import { loadBooks, type Books } from '../../src/books/store.js';
 import type { BankTransaction, JournalEntry } from '../../src/types/index.js';
 import { openWorkspace, type LedgerBankAccount } from '../../src/workspace/workspace.js';
+import { vat } from '../../src/engines/index.js';
 
 /** The KMU chart's account groups (Kontenrahmen KMU), by the first two digits. */
 const KMU_GROUPS: Record<string, string> = {
@@ -45,7 +45,7 @@ function role(account: string, banks: ReadonlySet<string>, ownerAccounts: Readon
 /** The VAT code with its rate kept and nothing company-specific: "-I81", "M81-2", "K81-B", "none". */
 function vatFamily(code: string | undefined): string {
   if (!code) return 'none';
-  return parseVatCode(code) ? code : `${code} (unknown to the engine)`;
+  return vat().codes.parse(code) ? code : `${code} (unknown to the engine)`;
 }
 
 /** One journal row's pattern. */
@@ -89,7 +89,7 @@ function rowPattern(e: JournalEntry, banks: ReadonlySet<string>, owner: Readonly
 
 function transactionShape(tx: BankTransaction | undefined, rows: JournalEntry[], books: Books, banks: ReadonlySet<string>): TransactionShape {
   const flags: string[] = [];
-  const codes = rows.map((r) => parseVatCode(r.vatCode ?? ''));
+  const codes = rows.map((r) => vat().codes.parse(r.vatCode ?? ''));
   const debits = new Set(rows.map((r) => r.accountDebit).filter((a) => a && !banks.has(a)));
   const credits = new Set(rows.map((r) => r.accountCredit).filter((a) => a && !banks.has(a)));
   if ((tx?.parts?.length ?? 0) > 1) flags.push('Sammelzahlung (parts)');
@@ -114,10 +114,10 @@ function transactionShape(tx: BankTransaction | undefined, rows: JournalEntry[],
   };
 }
 
-/** The inventory of a workspace's journal. `bankAccounts` is the manifest's: manual ones are the owner's current account. */
+/** The inventory of a workspace's journal. `bankAccounts` is the manifest's: the one of role owner is the owner's current account. */
 export function minePatterns(books: Books, bankAccounts: readonly LedgerBankAccount[]): Inventory {
-  const banks = new Set(bankAccounts.filter((b) => b.bank !== 'manual').map((b) => b.account));
-  const owner = new Set(bankAccounts.filter((b) => b.bank === 'manual').map((b) => b.account));
+  const banks = new Set(bankAccounts.filter((b) => b.role !== 'owner').map((b) => b.account));
+  const owner = new Set(bankAccounts.filter((b) => b.role === 'owner').map((b) => b.account));
   const count = <P>(into: Map<string, { pattern: P; count: number }>, key: string, pattern: P) => {
     const hit = into.get(key);
     if (hit) hit.count++;

@@ -1,0 +1,15 @@
+# Booking one bank transaction: the pilot of migration step 9, run by src/workflows/runner.ts.
+# processes/booking.flow.yaml still describes the whole process; this folder is the part that runs.
+label: {"de": "Buchen", "en": "Book", "fr": "Comptabiliser", "it": "Registrare"}
+desc: {"de": "Macht aus einer belegten Bankbewegung Buchungen: Konto, MWST-Code und Kurs des Zahltags.", "en": "Turns a bank transaction with its evidence into entries: account, VAT code and the rate of the payment day.", "fr": "Transforme un mouvement bancaire justifié en écritures : compte, code TVA et cours du jour du paiement.", "it": "Trasforma un movimento bancario documentato in registrazioni: conto, codice IVA e cambio del giorno del pagamento."}
+phase: book
+cadence: {"de": "laufend", "en": "ongoing", "fr": "en continu", "it": "continuo"}
+for: transaction
+lane: account
+triggers:
+  - manual: {"for": "transaction", "when": "unbooked", "label": {"de": "Automatisch buchen", "en": "Book automatically", "fr": "Comptabiliser automatiquement", "it": "Registra automaticamente"}}
+  - event: {"name": "transaction.settled", "off": true}
+emits: ["entry.booked"]
+start: open
+steps: ["open", "classify", "manual", "confirm", "book"]
+guide: booking.guide.yaml

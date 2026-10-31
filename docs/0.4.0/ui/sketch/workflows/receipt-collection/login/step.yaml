@@ -1,0 +1,13 @@
+label: { de: Anmelden, en: Sign in, fr: …, it: … }
+by: person
+reads: [source]
+task:
+  title: { de: "Bei {source.name} anmelden", en: "Sign in to {source.name}" }
+  why: { de: "{reason}", en: "{reason}" }
+  do: { open-login: "{source.loginUrl}" }   # a window that belongs to the person; the AI sees neither password nor code
+  due: end-of-month
+  remind: [notification, morning-summary]
+outcomes:
+  done: portals                   # back to the portal step, for this source only
+  skip: end
+  pause: end

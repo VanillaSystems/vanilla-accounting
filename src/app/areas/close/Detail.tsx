@@ -3,10 +3,12 @@
  * there. Every write goes through the year-close API and then reloads the books; what can be
  * taken back says so in the toast.
  */
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import type { EntryTemplate, TemplateState } from '../../../accounting/year-close.js';
+import type { JournalEntry } from '../../../types/index.js';
 import { dividendSplit } from '../../../accounting/year-close.js';
-import { addDays, localToday, parsePeriod } from '../../../accounting/periods.js';
+import { addDays, booksOpenPeriod, localToday, parsePeriod } from '../../../accounting/periods.js';
+import { chargesVat, filing, withoutInputTax } from '../../../engines/index.js';
 import type { RouteOf } from '../../shell/route.js';
 import { api, errorText, type YearCloseView, type YearEndEntryInput } from '../../lib/api.js';
 import { getAccountMap, getAccounts } from '../../lib/accounts.js';
@@ -19,7 +21,12 @@ import type { AreaProps, Nav } from '../index.js';
 import { closeYear as yearOfPage, useYearClose } from './data.js';
 import { useShellUi } from '../../shell/ui.js';
 import { configOf } from '../export/state.js';
-import { STEPS, stepGone, causeText, checkRows, closeBlockers, problemText, stepLabel, stepOf, tx, type CheckRow, type Step } from './steps.js';
+import { stepGone, causeText, checkRows, closeBlockers, lastPeriodOf, problemText, stepLabel, stepOf, stepsFor, tx, type CheckRow, type Step } from './steps.js';
+import { correctionName } from '../../lib/vat-words.js';
+import { Go } from '../vat/links.js';
+import { at } from '../receipts/view.js';
+import { VatCodeField } from '../codes/VatCodeField.js';
+import { codeLabel } from '../codes/names.js';
 
 type Props = AreaProps<RouteOf<'close'>>;
 
@@ -42,12 +49,13 @@ export function Detail(props: Props) {
   const { route, query, books } = props;
   const year = yearOfPage(query.period, books);
   const { data, error } = useYearClose(year, books);
-  if (stepGone(route.step)) return <div className="detail-empty"><div>{t('close.stepGone')}</div></div>;
-  const step = stepOf(route.step);
+  const steps = stepsFor(useWorkspace()?.company.legalForm);
+  if (stepGone(route.step, steps)) return <div className="detail-empty"><div>{t('close.stepGone')}</div></div>;
+  const step = stepOf(route.step, steps);
   return (
     <div className="detail-in" key={step}>
       <div className="head">
-        <h2 className="who">{stepLabel(step, year)}<small>{t('close.stepOf', { n: STEPS.indexOf(step) + 1, year })}</small></h2>
+        <h2 className="who">{stepLabel(step, year)}<small>{t('close.stepOf', { n: steps.indexOf(step) + 1, total: steps.length, year })}</small></h2>
       </div>
       <div className="docbody">
         {error ? <p className="warnline">{error}</p> : !data ? <p className="m">{t('yearClose.loading')}</p> : <Step step={step} d={data} {...props} />}
@@ -70,12 +78,14 @@ function Step({ step, d, ...p }: Props & { step: Step; d: YearCloseView }) {
 
 type StepProps = Omit<Props, 'step'> & { d: YearCloseView };
 
-function Q4({ d, nav }: StepProps) {
+function Q4({ d, nav, books }: StepProps) {
   const ws = useWorkspace();
   const today = localToday();
+  const start = books.config?.closedThrough ? undefined : booksOpenPeriod(books, today, filing().length).from;
+  if (!chargesVat()) return <p className="lead">{t('close.noReturnLead', { year: d.year })}</p>;
   return (
     <>
-      <p className="lead">{t('close.q4Lead')}</p>
+      <p className="lead">{t('close.q4Lead', { period: lastPeriodOf(d.year) })}</p>
       <div className="qgrid">
         {d.vat.quarters.map((q) => {
           const range = parsePeriod(q.quarter, today)!;
@@ -83,7 +93,7 @@ function Q4({ d, nav }: StepProps) {
           return (
             <button key={q.quarter} type="button" className="qcard" onClick={() => nav.go({ route: { area: 'vat' }, query: { period: range } })}>
               <b>{q.quarter.slice(5)}</b>
-              <span>{q.filed !== undefined ? t('close.qFiled') : range.to < today ? t('close.qOpenDue', { date: formatDate(addDays(range.to, 60)) }) : t('close.qRuns')}</span>
+              <span>{q.filed !== undefined ? t('close.qFiled') : start && range.to < start ? t('close.qBeforeBooks') : range.to < today ? t('close.qOpenDue', { date: formatDate(addDays(range.to, 60)) }) : t('close.qRuns')}</span>
               <span className="m">{seal?.status === 'intact' ? <>{ICONS.lock}{t('close.qSealed')}</> : seal ? <span className="bad">{t('close.qSealBroken')}</span> : q.filed !== undefined ? t('close.qNotSealed') : ''}</span>
             </button>
           );
@@ -102,8 +112,9 @@ function goCheck(c: CheckRow, { nav, d }: StepProps): (() => void) | undefined {
 }
 
 function Checks(p: StepProps) {
-  const { d } = p;
+  const { d, books, nav } = p;
   const rows = checkRows(d, localToday());
+  const dateOf = (ref: string) => books.transactions.find((x) => x.ref === ref)?.date;
   const v = d.vat;
   return (
     <>
@@ -114,7 +125,11 @@ function Checks(p: StepProps) {
           const inner = (
             <>
               <span className="ic">{c.state === 'ok' ? I.check : c.state === 'warn' ? '!' : c.state === 'open' ? '○' : '·'}</span>
-              <span className="cx"><b>{c.label}</b><span>{c.detail}</span></span>
+              <span className="cx">
+                <b>{c.label}</b>
+                <span>{c.detail}</span>
+                {c.payments && <span className="chklinks">{c.payments.map((ref) => <Go key={ref} to={at({ area: 'bank', payment: ref }, dateOf(ref))} nav={nav} className="mono">{ref} →</Go>)}</span>}
+              </span>
               {go ? <span className="arr">→</span> : <span />}
             </>
           );
@@ -123,6 +138,109 @@ function Checks(p: StepProps) {
             : <div key={c.id} className={`chk st-${c.state}`} data-check={c.id}>{inner}</div>;
         })}
       </div>
+      <YearEndBalances {...p} />
+      {chargesVat() && <VatReconciliation d={d} />}
+    </>
+  );
+}
+
+type Balance = YearCloseView['balances'][number];
+
+/**
+ * The balances on 31.12. of every bank, card and cash account against their proof (#119): a
+ * statement covering the day, else the bank's confirmation the person attaches here; the cash box
+ * counted. A difference is shown, never booked.
+ */
+function YearEndBalances({ d, nav, canEdit }: StepProps) {
+  const [open, setOpen] = useState<string | null>(null);
+  if (!d.balances.length) return null;
+  const editable = canEdit && !d.closed;
+  const money = (b: Balance, n: number) => `${b.currency} ${fmt(n)}`;
+  const remove = (b: Balance) => act(nav, () => api.removeYearEndBalance(d.year, b.account), t('close.balances.removed', { account: b.account }));
+  return (
+    <>
+      <h3>{t('close.balances.title')}</h3>
+      <p className="m">{t('close.balances.lead')}</p>
+      <div className="yel">
+        {d.balances.map((b) => {
+          const differs = b.stated !== undefined && Math.round(b.stated * 100) !== Math.round(b.book * 100);
+          const ownProof = b.proof === 'count' || b.document;
+          return (
+            <div key={b.account} data-balance={b.account}>
+              <div className={`ye${b.stated === undefined ? '' : differs ? ' stale' : ' done'}`}>
+                <span className="cx">
+                  <b><span className="mono">{b.account}</span> {b.label}</b>
+                  <span>
+                    {!b.source ? (b.proof === 'bank' ? t('close.balances.hintBank') : t('close.balances.hintCount'))
+                      : b.document ? <a className="golink mono" href={api.yearEndDocumentUrl(d.year, b.account)} target="_blank" rel="noreferrer">{b.source.split('/').at(-1)}</a>
+                      : <span className="mono">{b.source}</span>}
+                  </span>
+                </span>
+                <span className="mono acc">{t('close.balances.book', { amount: money(b, b.book) })}</span>
+                {b.stated === undefined ? (
+                  <span className="st stale">{b.proof === 'bank' ? t('close.balances.missingBank') : t('close.balances.missingCount')}</span>
+                ) : (
+                  <span className={`st${differs ? ' stale' : ''}`}>
+                    {!differs && I.check}
+                    {b.proof === 'bank' ? t('close.balances.bank', { amount: money(b, b.stated) }) : t('close.balances.counted', { amount: money(b, b.stated) })}
+                    {differs && ` · ${t('close.balances.difference', { amount: money(b, b.stated - b.book) })}`}
+                  </span>
+                )}
+                {editable && (b.stated === undefined || ownProof) && (
+                  <button type="button" className={b.stated === undefined ? 'btn' : 'quiet2'} onClick={() => setOpen(open === b.account ? null : b.account)}>
+                    {b.stated !== undefined ? t('close.balances.change') : b.proof === 'bank' ? t('close.balances.enter') : t('close.balances.count')}
+                  </button>
+                )}
+                {editable && b.document && <button type="button" className="quiet2" onClick={() => remove(b)}>{t('close.balances.remove')}</button>}
+              </div>
+              {open === b.account && <BalanceForm d={d} b={b} nav={nav} onDone={() => setOpen(null)} />}
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+/** A bank or card account's balance with the bank's confirmation attached, or the cash counted. */
+function BalanceForm({ d, b, nav, onDone }: { d: YearCloseView; b: Balance; nav: Nav; onDone(): void }) {
+  const [amount, setAmount] = useState(b.stated !== undefined ? b.stated.toFixed(2) : '');
+  const [file, setFile] = useState<File | null>(null);
+  const bank = b.proof === 'bank';
+  const valid = amount.trim() !== '' && Number.isFinite(Number(amount.replace(/['’\s]/g, '').replace(',', '.'))) && (!bank || !!file);
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (!valid) return;
+    const n = num(amount);
+    const shown = `${b.currency} ${fmt(n)}`;
+    const ok = bank
+      ? await act(nav, () => api.setYearEndBalance(d.year, b.account, n, file!), t('close.balances.saved', { account: b.account, amount: shown }))
+      : await act(nav, () => api.setCashCount(d.year, b.account, n), t('close.balances.countSaved', { account: b.account, amount: shown }),
+        () => api.setCashCount(d.year, b.account, b.stated ?? null));
+    if (ok) onDone();
+  }
+  return (
+    <form className="form inline" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onDone(); } }}>
+      <label>{bank ? t('close.balances.amount', { currency: b.currency }) : t('close.balances.countAmount', { currency: b.currency })}
+        <input className="mono" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+      </label>
+      {bank && (
+        <label className="wide">{t('close.balances.document')}
+          <input type="file" accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        </label>
+      )}
+      <div className="acts">
+        <button type="submit" className="btn primary" disabled={!valid}>{t('close.balances.save')}</button>
+        <button type="button" className="btn ghost" onClick={onDone}>{t('common.cancel')}</button>
+      </div>
+    </form>
+  );
+}
+
+function VatReconciliation({ d }: { d: YearCloseView }) {
+  const v = d.vat;
+  return (
+    <>
       <h3>{t('yearClose.sectionVat')}</h3>
       <p className="m">{t('yearClose.vatIntro', { account: d.accounts.vatSettlement })}</p>
       <div className="ftab vatq">
@@ -137,26 +255,47 @@ function Checks(p: StepProps) {
         ))}
       </div>
       <div className="ftab sums">
-        {([['yearClose.vatOpening', v.opening], ['yearClose.vatBooked', v.booked], ['yearClose.vatPaid', v.paid], ['yearClose.vatOwed', v.owed], ['yearClose.vatExpected', v.expected], ['yearClose.vatRounding', v.rounding]] as const).map(([key, value]) => (
+        {([['yearClose.vatOpening', v.opening], ['yearClose.vatBooked', v.booked], ...(v.acquisition ? [['yearClose.vatAcquisition', v.acquisition] as const] : []), ['yearClose.vatPaid', v.paid], ['yearClose.vatOwed', v.owed], ['yearClose.vatExpected', v.expected], ['yearClose.vatRounding', v.rounding]] as const).map(([key, value]) => (
           <div key={key} className="fr"><span className="m">{t(key)}</span><span className="r mono">{fmt(value)}</span></div>
         ))}
       </div>
       {v.unexplained === 0
         ? <p className="okline">{I.check}{t('yearClose.vatExplained')}</p>
-        : <p className="warnline">{I.dot}{t('yearClose.vatUnexplained', { amount: fmt(v.unexplained) })}</p>}
+        : <p className="warnline">{I.dot}{t('yearClose.vatUnexplained', { amount: fmt(v.unexplained), correction: correctionName() })}</p>}
     </>
   );
 }
 
-const accountsOf = (tp: EntryTemplate) => [tp.accountDebit || '…', tp.accountCredit || '…'].join(' / ') + (tp.vatCode ? `, ${tp.vatCode}` : '');
+const accountsOf = (tp: EntryTemplate) => [tp.accountDebit || '…', tp.accountCredit || '…'].join(' / ') + (tp.vatCode ? `, ${codeLabel(tp.vatCode)}` : '');
 
 function Entries({ d, nav, canEdit }: StepProps) {
   const [open, setOpen] = useState<string | null>(null);
   const editable = canEdit && !d.closed;
   const mark = (id: string, state: TemplateState | null, before: TemplateState | undefined) => {
     const label = tx(`yearClose.template.${id}`);
-    act(nav, () => api.markYearEndEntry(d.year, id, state), state === 'na' ? t('close.markedNa', { label }) : state === 'done' ? t('close.markedDone', { label }) : t('close.markedOpen', { label }),
-      () => api.markYearEndEntry(d.year, id, before ?? null));
+    if (state) { act(nav, () => api.markYearEndEntry(d.year, id, state), state === 'na' ? t('close.markedNa', { label }) : t('close.markedDone', { label }), () => api.markYearEndEntry(d.year, id, before ?? null)); return; }
+    // Open again: the booking the step made is removed with it (r9c-16); the undo books it back as it was and marks the step as before.
+    let removed: JournalEntry[] = [];
+    const booked = d.templates.find((tp) => tp.id === id)?.booked ?? [];
+    act(nav, async () => { removed = (await api.markYearEndEntry(d.year, id, null)).removed ?? []; },
+      booked.length ? t('close.reopenedUnbooked', { label, refs: booked.map((b) => b.transactionRef).join(', ') }) : t('close.markedOpen', { label }),
+      async () => {
+        for (const e of removed) await api.createJournalEntry({ id: e.id, transactionRef: e.transactionRef, date: e.date, accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount, description: e.description ?? '', ...(e.vatCode && { vatCode: e.vatCode }), origin: e.origin });
+        await api.markYearEndEntry(d.year, id, before ?? null);
+      });
+  };
+  // The figure changed since the step was booked (r10c-1): the booking is replaced by today's; the undo books the old one back.
+  const rebook = (tp: YearCloseView['templates'][number]) => {
+    const label = tx(`yearClose.template.${tp.id}`);
+    const description = tp.id === 'receivables' ? t('close.receivablesText', { year: d.year, numbers: d.receivables.invoices.map((i) => i.number).join(', ') }) : label;
+    let result: { removed: JournalEntry[]; entry?: JournalEntry } = { removed: [] };
+    act(nav, async () => { result = await api.rebookYearEndEntry(d.year, tp.id, description); },
+      tp.stale!.now > 0 ? t('close.rebooked', { label, now: fmt(tp.stale!.now), booked: fmt(tp.stale!.booked) }) : t('close.rebookedGone', { label, refs: (tp.booked ?? []).map((b) => b.transactionRef).join(', ') }),
+      async () => {
+        if (result.entry) await api.deleteJournalEntry(result.entry.id);
+        for (const e of result.removed) await api.createJournalEntry({ id: e.id, transactionRef: e.transactionRef, date: e.date, accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount, description: e.description ?? '', ...(e.vatCode && { vatCode: e.vatCode }), origin: e.origin });
+        await api.markYearEndEntry(d.year, tp.id, tp.state ?? null);
+      });
   };
   return (
     <>
@@ -164,13 +303,20 @@ function Entries({ d, nav, canEdit }: StepProps) {
       <div className="yel">
         {d.templates.map((tp) => (
           <div key={tp.id} data-template={tp.id}>
-            <div className={`ye${tp.state ? ' done' : ''}`}>
-              <span className="cx"><b>{tx(`yearClose.template.${tp.id}`)}</b><span>{tx(`yearClose.templateHint.${tp.id}`)}</span></span>
+            <div className={`ye${tp.stale ? ' stale' : tp.state ? ' done' : ''}`}>
+              <span className="cx"><b>{tx(`yearClose.template.${tp.id}`)}</b><span>{tp.id === 'privateUse' && withoutInputTax() ? t('yearClose.templateHint.privateUseNoInputTax') : tx(`yearClose.templateHint.${tp.id}`)}</span></span>
               <span className="mono acc">{tp.amount !== undefined ? `${fmt(tp.amount)} · ` : ''}{accountsOf(tp)}</span>
-              {tp.state ? (
+              {tp.stale ? (
+                <>
+                  <span className="st stale" data-testid="stale-figure">{t('close.staleFigure', { booked: fmt(tp.stale.booked), now: fmt(tp.stale.now) })}</span>
+                  {editable && <button type="button" className="btn" onClick={() => rebook(tp)}>{t('close.rebook')}</button>}
+                </>
+              ) : tp.state ? (
                 <>
                   <span className={`st${tp.state === 'na' ? ' na' : ''}`}>{tp.state === 'na' ? t('yearClose.stateNa') : <>{I.check}{t('close.booked')}</>}</span>
-                  {editable && <button type="button" className="quiet2" onClick={() => mark(tp.id, null, tp.state)}>{t('close.undoMark')}</button>}
+                  {tp.booked && !d.state.templates[tp.id]
+                    ? <span className="m" data-testid="booked-by">{t('close.bookedAs')} {tp.booked.map((b, i) => <Fragment key={b.id}>{i > 0 && ', '}<button type="button" className="golink" onClick={() => nav.go({ route: { area: 'journal', id: b.id }, query: { period: parsePeriod(d.year, localToday())! } })}>{b.transactionRef}</button></Fragment>)}</span>
+                    : editable && <button type="button" className="quiet2" onClick={() => mark(tp.id, null, tp.state)}>{t('close.undoMark')}</button>}
                 </>
               ) : editable && (
                 <>
@@ -217,13 +363,23 @@ function EntryForm({ d, tp, nav, onDone }: { d: YearCloseView; tp: EntryTemplate
       <label>{t('yearClose.form.debit')}<input className="mono" list="close-accounts" value={f.accountDebit} onChange={set('accountDebit')} /></label>
       <label>{t('yearClose.form.credit')}<input className="mono" list="close-accounts" value={f.accountCredit} onChange={set('accountCredit')} /></label>
       <label>{t('yearClose.form.amount')}<input className="mono" inputMode="decimal" value={f.amount} onChange={set('amount')} /></label>
-      <label>{t('yearClose.form.vatCode')}<input className="mono" value={f.vatCode} onChange={set('vatCode')} /></label>
+      <VatCodeField name="vatCode" label={t('yearClose.form.vatCode')} defaultValue={f.vatCode} onValue={(vatCode) => setF((was) => ({ ...was, vatCode }))} />
       <label className="wide">{t('yearClose.form.description')}<input value={f.description} onChange={set('description')} /></label>
       <div className="acts">
         <button type="submit" className="btn primary" disabled={!valid}>{t('yearClose.form.save')}</button>
         <button type="button" className="btn ghost" onClick={onDone}>{t('common.cancel')}</button>
         <span className="m">{tp.id === 'receivables' ? t('close.receivablesHint') : ''}</span>
       </div>
+      {tp.id === 'receivables' && d.receivables.unlinked?.length ? (
+        <p className="warnline" data-testid="receivables-unlinked">{I.dot}{t('close.receivablesUnlinked')}{' '}
+          {d.receivables.unlinked.map((p, i) => <Fragment key={p.transactionRef}>{i > 0 && ', '}<button type="button" className="golink" onClick={() => nav.go(at({ area: 'bank', payment: p.transactionRef }, p.date))}>{p.transactionRef} → {p.number} ({p.currency} {fmt(p.amount)})</button></Fragment>)}
+        </p>
+      ) : null}
+      {tp.id === 'receivables' && !d.accounts.receivables.inChart && (
+        <p className="warnline" data-testid="receivables-account-missing">{I.dot}{t('close.receivablesAccountMissing', { account: d.accounts.receivables.account })}{' '}
+          <button type="button" className="btn ghost" onClick={() => act(nav, () => api.setAccountName(d.accounts.receivables.account, t('close.receivablesAccountName')), t('close.accountAdded', { account: d.accounts.receivables.account }))}>{t('close.addAccount', { account: d.accounts.receivables.account })}</button>
+        </p>
+      )}
     </form>
   );
 }
@@ -243,11 +399,11 @@ function Close({ d, nav, canEdit }: StepProps) {
     await act(nav, async () => {
       if (toBook) await api.bookRevaluation(d.year);
       await api.closeYear(d.year);
-    }, t('close.closedToast', { year: d.year }));
+    }, t('close.closedToast', { year: d.year, period: lastPeriodOf(d.year) }));
   }
   return (
     <>
-      <p className="lead">{t('close.closeLead', { year: d.year })}</p>
+      <p className="lead">{t('close.closeLead', { year: d.year, period: lastPeriodOf(d.year) })}</p>
       <h3>{t('yearClose.sectionFx')}</h3>
       <p className="m">{t('yearClose.fxIntro', { account: d.accounts.fxDifference })}</p>
       {d.revaluations.length === 0 ? <p className="m">{t('yearClose.fxNone')}</p> : (
@@ -259,7 +415,7 @@ function Close({ d, nav, canEdit }: StepProps) {
               <span className="r mono">{r.currency} {fmt(r.native)}</span>
               {r.status === 'no-rate' ? <span className="r m" style={{ gridColumn: 'span 4' }}>{t('yearClose.fxNoRate')}</span> : (
                 <>
-                  <span className="r mono" title={r.rate.source}>{r.rate.rate}</span>
+                  <span className="r mono" data-tip={r.rate.source}>{r.rate.rate}</span>
                   <span className="r mono">{fmt(r.targetChf)}</span>
                   <span className="r mono">{fmt(r.bookChf)}</span>
                   <span className={`r mono${r.status === 'booked' ? ' pos' : ''}`}>{fmt(r.difference)}{r.status === 'booked' ? ` ${t('yearClose.fxBooked')}` : ''}</span>
@@ -273,16 +429,16 @@ function Close({ d, nav, canEdit }: StepProps) {
         <p><button type="button" className="btn" onClick={() => act(nav, () => api.bookRevaluation(d.year), t('close.fxBookedToast'))}>{t('yearClose.fxBook')}</button> <span className="m">{t('close.fxRebook')}</span></p>
       )}
       <h3>{t('yearClose.sectionResult')}</h3>
-      <p className="m">{t('yearClose.resultIntro')}</p>
+      <p className="m">{t(chargesVat() ? 'yearClose.resultIntro' : 'yearClose.resultIntroNoVat')}</p>
       <div className="ftab sums">
         <div className="fr"><span className="m">{t('yearClose.totalAssets')}</span><span className="r mono">{fmt(l.totalAssets)}</span></div>
         <div className="fr"><span className="m">{t('yearClose.totalLiabilities')}</span><span className="r mono">{fmt(l.totalLiabilities)}</span></div>
         <div className="fr tot"><span>{t(l.result >= 0 ? 'yearClose.profit' : 'yearClose.loss')}</span><span className="r mono">{fmt(Math.abs(l.result))}</span></div>
       </div>
-      {l.residual === 0 ? <p className="okline">{I.check}{t('yearClose.balanced')}</p> : <p className="warnline">{I.dot}{t('yearClose.unbalanced', { amount: fmt(l.residual) })}</p>}
+      {l.balanced ? <p className="okline">{I.check}{t('yearClose.balanced')}</p> : <p className="warnline">{I.dot}{[...(l.residual === 0 ? [] : [t('yearClose.unbalanced', { amount: fmt(l.residual) })]), ...l.causes.map(causeText)].join(' · ')}</p>}
       {l.causes.map((c, i) => <p key={i} className="m">{causeText(c)}</p>)}
       <h3>{t('close.step.close', { year: d.year })}</h3>
-      {d.closed ? <p className="okline">{I.check}{t('yearClose.closedNote', { date: formatDate(d.state.closedAt), year: d.year })}</p> : (
+      {d.closed ? <p className="okline">{I.check}{t('yearClose.closedNote', { date: formatDate(d.state.closedAt), year: d.year, period: lastPeriodOf(d.year) })}</p> : (
         <>
           <button type="button" className="btn primary big" disabled={!canEdit || block.length > 0} onClick={() => setAsking(true)}>{t('close.step.close', { year: d.year })}</button>
           {block.length > 0 && (
@@ -317,11 +473,14 @@ function Confirm({ title, text, ok, onOk, onCancel }: { title: string; text: str
 function Open({ d, books, nav, canEdit }: StepProps) {
   const next = String(+d.year + 1);
   const names = getAccountMap();
-  const re = d.accounts.retainedEarnings;
+  const re = d.accounts.resultTo;
+  // An owner's firm (r10f-28): the result goes to her capital and the private account closes into it; a company's to Gewinnvortrag.
+  const priv = d.accounts.privateInto;
   const o = d.opening;
-  const lead = <p className="lead">{t('close.openLead', { year: next, account: re })}</p>;
+  const lead = <p className="lead">{priv ? t('close.openLeadOwner', { year: next, account: re, private: priv }) : t('close.openLead', { year: next, account: re })}</p>;
   if (!d.closed || !o) {
     const before = books.config?.openingBalances?.[d.year]?.[re] ?? 0;
+    const closedIn = priv ? d.ledger.balances[priv] ?? 0 : 0;
     return (
       <>
         {lead}
@@ -330,8 +489,9 @@ function Open({ d, books, nav, canEdit }: StepProps) {
           <dl className="kv2">
             <dt>{t('close.balanceTotal')}</dt><dd className="mono">{fmt(d.ledger.totalAssets)}</dd>
             <dt>{t('close.resultSoFar', { year: d.year })}</dt><dd className="mono">{fmt(d.ledger.result)}</dd>
-            <dt>{t('close.retainedToday', { account: re })}</dt><dd className="mono">{fmt(before)}</dd>
-            <dt>{t('close.retainedNew', { account: re })}</dt><dd className="mono"><b>{fmt(before + d.ledger.result)}</b></dd>
+            {priv && <><dt>{t('close.privateCloses', { account: priv })}</dt><dd className="mono">{fmt(closedIn)}</dd></>}
+            <dt>{t(priv ? 'close.capitalToday' : 'close.retainedToday', { account: re })}</dt><dd className="mono">{fmt(before)}</dd>
+            <dt>{t(priv ? 'close.capitalNew' : 'close.retainedNew', { account: re })}</dt><dd className="mono"><b>{fmt(Math.round((before + d.ledger.result + closedIn) * 100) / 100)}</b></dd>
           </dl>
           {d.ledger.residual !== 0 && <p className="warnline">{I.dot}{t('close.openChecks', { amount: fmt(d.ledger.residual) })}</p>}
         </div>
@@ -365,25 +525,30 @@ function Open({ d, books, nav, canEdit }: StepProps) {
   );
 }
 
+/** The profit allocation of a company with share capital: its rows are the accounts the legal form names and the chart has (r10f-28); a missing one is named and offered. */
 function Profit({ d, nav, canEdit }: StepProps) {
   const next = String(+d.year + 1);
   const [date, setDate] = useState(`${next}-06-30`);
   const [reserve, setReserve] = useState('');
   const [dividend, setDividend] = useState('');
+  const a = d.accounts.allocation;
+  if (!a) return <p className="lead">{t('close.noAllocation')}</p>;
   const result = d.ledger.result;
-  const r = num(reserve);
-  const split = dividendSplit(num(dividend));
-  const rest = Math.round((result - r - num(dividend)) * 100) / 100;
+  const r = a.reserve ? num(reserve) : 0;
+  const gross = a.dividend ? num(dividend) : 0;
+  const split = dividendSplit(gross, a.dividend?.rate ?? 0);
+  const rest = Math.round((result - r - gross) * 100) / 100;
+  const pct = (x: number) => `${Math.round(x * 100)} %`;
   const lines = [
-    { amount: r, accountCredit: '2950', description: t('yearClose.allocation.reserveText', { year: d.year }) },
-    { amount: split.net, accountCredit: '2451', description: t('yearClose.allocation.dividendText', { year: d.year }) },
-    { amount: split.withholdingTax, accountCredit: '2206', description: t('yearClose.allocation.taxText', { year: d.year }) },
-  ].filter((l) => l.amount > 0);
+    { amount: r, accountCredit: a.reserve ?? '', description: t('yearClose.allocation.reserveText', { year: d.year }) },
+    { amount: split.net, accountCredit: a.dividend?.account ?? '', description: t('yearClose.allocation.dividendText', { year: d.year }) },
+    { amount: split.withholdingTax, accountCredit: a.dividend?.withholdingTax ?? '', description: t('yearClose.allocation.taxText', { year: d.year, rate: pct(a.dividend?.rate ?? 0) }) },
+  ].filter((l) => l.amount > 0 && l.accountCredit);
   const ready = canEdit && d.closed && lines.length > 0 && date >= `${next}-01-01`;
   async function book() {
     const ids: string[] = [];
     const ok = await act(nav, async () => {
-      for (const l of lines) ids.push((await api.bookYearEndEntry(next, { date, accountDebit: d.accounts.retainedEarnings, accountCredit: l.accountCredit, amount: l.amount, description: l.description, template: 'profitAllocation' })).entry.id);
+      for (const l of lines) ids.push((await api.bookYearEndEntry(next, { date, accountDebit: d.accounts.resultTo, accountCredit: l.accountCredit, amount: l.amount, description: l.description, template: 'profitAllocation' })).entry.id);
     }, t('close.allocationBooked', { n: lines.length }), async () => { for (const id of ids) await api.deleteJournalEntry(id); });
     if (ok) { setReserve(''); setDividend(''); }
   }
@@ -394,13 +559,20 @@ function Profit({ d, nav, canEdit }: StepProps) {
       <div className="gv">
         {row(<>{t('close.result', { year: d.year })} {!d.closed && <span className="m">{t('close.soFar')}</span>}</>, <b className="mono">{fmt(result)}</b>)}
         <label className="gvrow"><span>{t('close.resolutionDate')}</span><input type="date" value={date} min={`${next}-01-01`} onChange={(e) => setDate(e.target.value)} disabled={!canEdit} /></label>
-        <label className="gvrow"><span>{t('close.reserve')} <span className="mono m">2950</span></span><input className="mono" inputMode="decimal" placeholder="0.00" value={reserve} onChange={(e) => setReserve(e.target.value)} disabled={!canEdit} /></label>
-        <label className="gvrow"><span>{t('close.dividend')}</span><input className="mono" inputMode="decimal" placeholder="0.00" value={dividend} onChange={(e) => setDividend(e.target.value)} disabled={!canEdit} /></label>
-        {row(<>{t('close.withholding')} <span className="mono m">2206</span></>, <span className="mono">{fmt(split.withholdingTax)}</span>, 'sub')}
-        {row(<>{t('close.toShareholder')} <span className="mono m">2451</span></>, <span className="mono">{fmt(split.net)}</span>, 'sub')}
-        {row(<>{t('close.staysRetained')} <span className="mono m">{d.accounts.retainedEarnings}</span></>, <b className={`mono${rest < 0 ? ' neg' : ''}`}>{fmt(rest)}</b>, 'tot')}
+        {a.reserve && <label className="gvrow"><span>{t('close.reserve')} <span className="mono m">{a.reserve}</span></span><input className="mono" inputMode="decimal" placeholder="0.00" value={reserve} onChange={(e) => setReserve(e.target.value)} disabled={!canEdit} /></label>}
+        {a.dividend && <>
+          <label className="gvrow"><span>{t('close.dividend')}</span><input className="mono" inputMode="decimal" placeholder="0.00" value={dividend} onChange={(e) => setDividend(e.target.value)} disabled={!canEdit} /></label>
+          {row(<>{t('close.withholding', { rate: pct(a.dividend.rate) })} <span className="mono m">{a.dividend.withholdingTax}</span></>, <span className="mono">{fmt(split.withholdingTax)}</span>, 'sub')}
+          {row(<>{t('close.toShareholder', { rate: pct(1 - a.dividend.rate) })} <span className="mono m">{a.dividend.account}</span></>, <span className="mono">{fmt(split.net)}</span>, 'sub')}
+        </>}
+        {row(<>{t('close.staysRetained')} <span className="mono m">{d.accounts.resultTo}</span></>, <b className={`mono${rest < 0 ? ' neg' : ''}`}>{fmt(rest)}</b>, 'tot')}
       </div>
-      <p className="m">{t('close.withholdingDue')}</p>
+      {a.missing.length > 0 && (
+        <p className="warnline" data-testid="allocation-accounts-missing">{I.dot}{t('close.allocationAccountsMissing', { accounts: a.missing.map((m) => m.account).join(', ') })}{' '}
+          {a.missing.map((m) => <Fragment key={m.account}><button type="button" className="btn ghost" onClick={() => act(nav, () => api.setAccountName(m.account, tx(`close.allocationAccountName.${m.role}`)), t('close.accountAdded', { account: m.account }))}>{t('close.addAccount', { account: m.account })}</button>{' '}</Fragment>)}
+        </p>
+      )}
+      {a.dividend && <p className="m">{t('close.withholdingDue')}</p>}
       <p>
         <button type="button" className="btn" disabled={!ready} onClick={book}>{t('yearClose.allocation.book')}</button>{' '}
         {!d.closed && <span className="m">{t('close.afterResolution')}</span>}

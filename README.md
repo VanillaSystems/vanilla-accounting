@@ -5,6 +5,10 @@ bank statements, collects receipts, matches each receipt to its bank transaction
 journal entries with Claude, and writes the quarterly VAT return as the eCH-0217 XML that the
 ESTV "MWST abrechnen" portal imports.
 
+**[Mission](MISSION.md):** take the bookkeeping off the people who run a small company. Code does
+what rules can decide, the AI what needs judgement, the person only what only they can know; and
+every person can automate the rest by asking the app's AI in their own words.
+
 ## Who built this
 
 Vanilla Accounting is built by Ken Steiner, vibe-coded with Claude Code. Ken is a former SAP
@@ -25,10 +29,12 @@ the ESTV in 2026, and it prepares the year-end close, updated when the year turn
 
 - **The app** is this repository: a React UI, a local API server, the CLI scripts in
   `src/cli/`, and the Mac app around them (`src/desktop/`, [docs/desktop.md](docs/desktop.md)).
-- **A workspace** is one company's data: `belege.workspace.yaml` (who the company is and which
-  ledger account each bank books on), `books.json`, `receipts/`, `bank-statements/`, `filings/`.
+- **A workspace** is one company's data, the folder `vanilla-accounting/` of the company's
+  repository: `belege.workspace.yaml` (who the company is and which ledger account each bank books
+  on), `knowledge/`, `ledger.json`, `master-data/accounts.json`, and per fiscal year
+  `transactional-data/<year>/` with the books, receipts, bank statements and filed returns.
   The app never stores company data, and a workspace contains no code. Booking with Claude reads
-  the chart from `accounts.json`, or from the prior year's Banana export in `history/` when there
+  the chart from `master-data/accounts.json`, or from the prior year's Banana export in `history/` when there
   is one: `<name>.Konten.txt` (chart of accounts) and `<name>.Buchungen-sample.tsv` (example
   entries); the newest `<name>` wins. A company with little history of its own gets examples
   from the casebook (`examples/cases/`).
@@ -118,7 +124,11 @@ npm start
 ```
 
 `npm run desktop` runs the Mac app from the checkout, and `npm run desktop:build` builds the two
-`.dmg` files ([docs/desktop.md](docs/desktop.md)).
+`.dmg` files ([docs/desktop.md](docs/desktop.md)). `npm run desktop:dev` runs the Mac app while you
+edit: a change under `src/app` shows in the window at once through Vite, and a change to the main
+process or the server restarts Electron. It keeps its own data in
+`~/Library/Application Support/vanilla-accounting-dev` and runs beside the installed app
+([docs/desktop.md](docs/desktop.md#dev-mode)).
 
 ### Next
 
@@ -134,7 +144,7 @@ version numbers and how a release is made.
 ## Audit export
 
 `npm run build:audit -- <folder>` writes a read-only copy of your books that needs no Node.js
-and no API: the app, `books.json`, every receipt and statement PDF, the filed returns and a
+and no API: the app, the books, every receipt and statement PDF, the filed returns and a
 `manifest.json` with the SHA-256 of every file. Search, filters and every report work in it.
 Zip it and hand it to your Treuhänder or auditor, who serves it with `npx serve <folder>`;
 `npm run verify-audit -- <folder>` checks it against its manifest later.

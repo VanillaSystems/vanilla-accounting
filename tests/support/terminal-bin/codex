@@ -1,0 +1,8 @@
+#!/bin/sh
+# Stands in for the Codex CLI (tests/terminal.test.ts): `codex login status` exits $CODEX_STUB_STATUS (0: signed in); started otherwise it writes where it runs and its arguments.
+if [ "$1" = --version ]; then echo 'codex-cli 0.163.0'; exit 0; fi
+if [ "$1" = login ] && [ "$2" = status ]; then exit "${CODEX_STUB_STATUS:-0}"; fi
+printf %s "$PWD" > "$TERMINAL_STUB_OUT.cwd"
+printf %s "$#" > "$TERMINAL_STUB_OUT.argc"
+printf %s "$1" > "$TERMINAL_STUB_OUT.arg"
+printf %s codex > "$TERMINAL_STUB_OUT.cli"

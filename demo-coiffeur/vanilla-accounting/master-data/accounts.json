@@ -1,0 +1,66 @@
+[
+  {
+    "number": "1020",
+    "name": "Bank Raiffeisen"
+  },
+  {
+    "number": "1510",
+    "name": "Mobiliar und Einrichtungen"
+  },
+  {
+    "number": "2000",
+    "name": "Verbindlichkeiten aus Lieferungen und Leistungen"
+  },
+  {
+    "number": "2800",
+    "name": "Eigenkapital"
+  },
+  {
+    "number": "2850",
+    "name": "Privat"
+  },
+  {
+    "number": "2970",
+    "name": "Gewinnvortrag"
+  },
+  {
+    "number": "3200",
+    "name": "Ertrag Produkteverkauf"
+  },
+  {
+    "number": "3400",
+    "name": "Ertrag Coiffure"
+  },
+  {
+    "number": "4200",
+    "name": "Handelswarenaufwand Produkte"
+  },
+  {
+    "number": "4400",
+    "name": "Verbrauchsmaterial Salon"
+  },
+  {
+    "number": "6000",
+    "name": "Mietaufwand"
+  },
+  {
+    "number": "6300",
+    "name": "Sachversicherungen"
+  },
+  {
+    "number": "6400",
+    "name": "Energie"
+  },
+  {
+    "number": "6510",
+    "name": "Telefon, Internet"
+  },
+  {
+    "number": "6600",
+    "name": "Werbeaufwand"
+  },
+  {
+    "number": "6940",
+    "name": "Bankspesen"
+  }
+]

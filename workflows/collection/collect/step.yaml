@@ -1,0 +1,5 @@
+label: {"de": "Jede fällige Quelle abholen", "en": "Fetch every due source", "fr": "Relever chaque source due", "it": "Raccogliere ogni fonte dovuta"}
+calls: collect
+for-each: sources
+reads: ["sources"]
+outcomes: {"done": "done"}

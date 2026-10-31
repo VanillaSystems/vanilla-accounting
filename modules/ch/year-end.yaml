@@ -1,0 +1,52 @@
+# The Swiss year close (OR Art. 957 ff.): the accounts it books on, the entries it offers as
+# prefilled forms, and how the result is closed and the profit used by legal form. An account role
+# lists candidates; the first one the workspace's chart has wins.
+
+accounts:
+  fxDifference: ["6960", "6950"]
+  vatSettlement: ["2201", "2200"]
+  vat: ["1170", "1171", "2200", "2201"]
+  # Debitoren: invoices still open on 31.12. (ADR 0010); the credit is the invoices' revenue account.
+  # Proposed only when the chart has one of these; else the person picks or adds the account.
+  receivables: ["1100"]
+  # Kreditoren: on the agreed basis (MWSTG Art. 40 Abs. 1) a supplier bill's input tax is booked on
+  # its date against this account, and its payment settles it (src/accounting/tax-point.ts).
+  payables: ["2000"]
+
+# What the law asks of money accounts at the year end beyond the base the app applies everywhere:
+# every bank and card account's balance on 31.12. from a document (a statement covering the day, or
+# the bank's year-end confirmation), every cash box counted, the owner's and employees' accounts
+# with no outside confirmation, and every month's statement only on an account with an imported
+# one. A stricter country lists here the roles (bank, card, cash, …) whose accounts need a statement
+# for every month of the year. Switzerland asks nothing more (OR Art. 957a, 958c: inventory and
+# proof at the year end, no monthly statement duty).
+moneyAccounts:
+  monthlyStatements: []
+
+# Blank accounts are the user's pick.
+templates:
+  - { id: depreciation, accountDebit: "6800", accountCredit: "" }
+  - { id: accruedExpense, accountDebit: "", accountCredit: "2300" }
+  - { id: prepaidExpense, accountDebit: "1300", accountCredit: "" }
+  - { id: accruedIncome, accountDebit: "1301", accountCredit: "" }
+  - { id: deferredIncome, accountDebit: "", accountCredit: "2301" }
+  - { id: provision, accountDebit: "", accountCredit: "2330" }
+  - { id: taxProvision, accountDebit: "8900", accountCredit: "2208", legalForms: [GmbH, AG] }
+  - { id: privateUse, accountDebit: "2451", accountCredit: "", vatCode: K81-B }
+  - { id: inventoryChange, accountDebit: "", accountCredit: "" }
+  - { id: socialInsurance, accountDebit: "5700", accountCredit: "2270" }
+  - { id: doubtfulAccounts, accountDebit: "3805", accountCredit: "1109" }
+
+# How the year's result is closed and the profit used, by legal form; `otherwise` is a company
+# with share capital. `resultTo` takes the result when the next year opens; `privateInto` is the
+# owner's private account whose balance closes into it with the year; `allocation` is the profit
+# allocation after the shareholders' resolution, dated in the new year, with the Verrechnungssteuer
+# on the dividend (VStG Art. 13). An allocation account the chart lacks is not offered.
+byLegalForm:
+  # The profit is the owner's: no resolution, no dividend, no Verrechnungssteuer; she takes it as Privatbezüge.
+  Einzelfirma:
+    resultTo: ["2800", "2850"]
+    privateInto: ["2850"]
+  otherwise:
+    resultTo: ["2970"]
+    allocation: { reserve: "2950", dividend: "2451", withholdingTax: "2206", withholdingTaxRate: 0.35 }

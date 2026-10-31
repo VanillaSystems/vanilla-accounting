@@ -4,10 +4,11 @@
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isAppPath } from '../src/server/app-paths.js';
+import { devProxy, isAppPath } from '../src/server/app-paths.js';
+import { issuedPdfUrl, sentPdfUrl } from '../src/invoices/model.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 
 test('app paths and data paths', () => {
@@ -19,18 +20,27 @@ test('app paths and data paths', () => {
   }
 });
 
+test('the invoice PDF links the UI builds are files, which the dev server hands to the API (#61)', () => {
+  const proxied = Object.keys(devProxy('http://api')).map((p) => new RegExp(p));
+  for (const url of [issuedPdfUrl('2026-001'), sentPdfUrl('sd_R-O8clcjxMXw')]) {
+    assert.ok(!isAppPath(url), url);
+    assert.ok(proxied.some((r) => r.test(url)), `${url} reaches the API through vite`);
+  }
+});
+
 let api: ApiServer;
 let dist: string;
 before(async () => {
   dist = mkdtempSync(join(tmpdir(), 'belege-dist-'));
   writeFileSync(join(dist, 'index.html'), '<!doctype html><title>app</title>');
   api = await startApi('tests/fixtures/period-lock-index.json', { APP_DIST: dist });
-  writeFileSync(join(api.root, 'receipts', 'scan.pdf'), '%PDF-1.4');
+  mkdirSync(join(api.root, 'transactional-data/2026/receipts'), { recursive: true });
+  writeFileSync(join(api.root, 'transactional-data/2026/receipts', 'scan.pdf'), '%PDF-1.4');
 });
-after(() => { api?.stop(); rmSync(dist, { recursive: true, force: true }); });
+after(async () => { await api?.stop(); rmSync(dist, { recursive: true, force: true }); });
 
 test('the server answers every app path with the built app, and files as files', async () => {
-  const get = (path: string) => fetch(`http://127.0.0.1:${api.port}${path}`);
+  const get = (path: string) => api.fetch(`${path}`);
   for (const path of ['/journal/M2026-001', '/receipts/3f2a9c01b7d4e5f6', '/receipts', '/vat/codes/I81?period=2026-Q3', '/de/2026-Q3/journal-entries']) {
     const res = await get(path);
     assert.equal(res.status, 200, path);

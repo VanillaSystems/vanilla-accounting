@@ -30,7 +30,7 @@ Rules on top of the table:
 
 ## Changing the data format
 
-`books.json` and `belege.workspace.yaml` carry `schema`. `src/workspace/schema.ts` lists both
+The books (`ledger.json`) and `belege.workspace.yaml` carry `schema`. `src/workspace/schema.ts` lists both
 versions and their migration ladders. To change a format:
 
 1. Raise the version by one and add the step from the old version to the new one to its ladder.
@@ -62,7 +62,9 @@ versions and their migration ladders. To change a format:
 
 3. Move the entries under a new heading in `CHANGELOG.md`: `## [X.Y.Z] - YYYY-MM-DD`, with
    **⚠ figures** and **⚠ action** where they apply.
-4. Bump the version. This edits `package.json` and `package-lock.json` and does not commit:
+4. Check the version. `package.json` already holds X.Y.Z while the work on it runs
+   ([versioning.md](versioning.md)); only if it does not, set it. This edits `package.json` and
+   `package-lock.json` and does not commit:
 
    ```sh
    npm version X.Y.Z --no-git-tag-version
@@ -177,3 +179,13 @@ The release run prepares everything up to these steps; each one is the owner's.
    release.
 7. Turn on updates: set `"desktop": { "autoUpdate": true }` in `package.json` and release that in
    the next version; apps from then on update themselves from the GitHub releases.
+
+## Before the public release
+
+Open items that must be done before `1.0.0` ships. Remove an item when it is done.
+
+- [ ] **The iPhone app's download link.** Publish the receipt app (`ios/`, «Vanilla Belege») in
+  the App Store, or on TestFlight for a start, and put its real link where the desktop app pairs
+  a phone: the first step of «Handy koppeln», a QR code plus the written link, with «Ich habe die
+  App schon» to skip to the pairing code. The mockup
+  (`docs/0.4.0/mockups/receipt-inflow/prototype.html`) shows an example link that does not work.

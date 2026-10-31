@@ -1,15 +1,89 @@
-import type { BankTransaction, VatRateGroup, ReceiptLine } from "../types/index.js";
-import { deriveHasSwissVat } from "../accounting/ziffern.js";
+import type { BankTransaction, OrderFacts, PayoutFacts, PayoutShare, VatRateGroup, ReceiptLine, Supply } from "../types/index.js";
+import { vat } from "../engines/index.js";
+import type { VatSetup } from "../workspace/vat-setup.js";
+import type { SalesDefaults } from "../workspace/sells.js";
+import type { SalesKind } from "../workspace/setup.js";
+import type { VatLineFacts } from "../accounting/vat-codes.js";
 import { formatCase, type BookingCase } from "../knowledge/cases.js";
+import { parseReadStatement, withoutPayments } from "../books/statement-check.js";
+import type { ReadStatement } from "../types/statement-read.js";
 
 export interface MatchResult {
   suggestedFilename: string;
+  /** The short title a list shows (TITLE_RULES): parsed into { vendor, what } when both are there. */
+  title?: { vendor: string; what: string };
+  /** A payout report's figures (PAYOUT_RULES), kept only when they add up. */
+  payout?: PayoutFacts;
+  /** An order document's facts (ORDER_RULES), kept only when they hold together. */
+  order?: OrderFacts;
   matchedTransactionRefs: string[];
   date: string;
   description: string;
   amount: number;
   currency: string;
   confidence: number;
+}
+
+/** How a receipt's short title is written (the mockup's titles: the vendor, then 1–3 words). */
+export const TITLE_RULES = `two parts, in German.
+- "v": the vendor as people say it: brand only, no legal form (AG, GmbH, s.r.o., e.K.), no address, no numbers. E.g. "Coop Pronto", "FedEx", "Shopify", "AliExpress", "Google Cloud", "Die Post", "Wise". For the company's own sales (shop orders and payouts, own invoices) use "Verkauf".
+- The vendor is who issued the document, as its head names it: never a carrier, payment method or bank the document only mentions ("Versand: FedEx", "Zahlungsart: Amazon Pay").
+- "w": what it is, 1 to 3 German words, the essence only. No amounts, no dates, no invoice numbers, no VAT info, no parentheses. E.g. "Benzin", "Zoll", "Fracht", "Monatsabo", "Autowäsche", "Leere Datei" (a blank capture). For a sale the order number, e.g. "#1132". For a bank statement the month and currency, e.g. "Kontoauszug USD Feb".`;
+
+/** A model's {v, w}, kept only when both are short text. */
+/** The figures a payout report states; the model gives them once, at the match step, and the booking step books every linked payout by them (src/booking/classify.ts). */
+export const PAYOUT_RULES = `only for the payout report of a card terminal or payment provider (SumUp, TWINT, Stripe, Payrexx, Worldline): "sales" (the card sales before any refund), "refunds", "fees" (the provider's) and "paidOut" (what reached the bank), each a positive number, so that sales − refunds − fees = paidOut; a monthly report gives its totals for the whole month. Leave "payout" out for any other document.`;
+
+/** The report's figures when they are four finite, non-negative numbers that add up (to the Rappen); anything else is no fact. */
+export function parsePayoutFacts(x: unknown): PayoutFacts | undefined {
+  const o = x as Record<string, unknown> | undefined;
+  if (!o || typeof o !== 'object') return undefined;
+  const n = (k: string) => (typeof o[k] === 'number' && Number.isFinite(o[k]) && (o[k] as number) >= 0 ? (o[k] as number) : undefined);
+  const [sales, refunds, fees, paidOut] = [n('sales'), n('refunds') ?? 0, n('fees') ?? 0, n('paidOut')];
+  if (sales === undefined || paidOut === undefined) return undefined;
+  return Math.abs(sales - refunds - fees - paidOut) < 0.05 ? { sales, refunds, fees, paidOut } : undefined;
+}
+
+/** What an order document states, for the booking step's split of the payout it names (src/booking/payout-orders.ts). */
+export const ORDER_RULES = `only for the page of ONE order of the company's own shop or sales platform (an order page, a sales record of one order): "number" (the order number without #), "date" (YYYY-MM-DD), "currency" (the currency of the amounts paid out, e.g. "EUR" when the page says what was added to a EUR payout), "gross" (what the customer paid, in that currency), "shipTo" (the DELIVERY address's country as its ISO 3166 two-letter code, never the billing address), "tax" (only when the order shows a tax line: { "country": the two-letter code of the country whose VAT it charges, "rate": the percent }), "payouts" (every payout the page says the order went into: { "date": the payout's date as the page names it, "amount": what was added to it }) and "refunds" (every refund the page says was deducted from a payout: { "date", "amount" }), amounts positive. Leave "order" out for any other document.`;
+
+const isoDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
+const positive = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+
+/** An order's facts when they hold together: a number, a day, a currency, ISO countries, positive amounts, and no more paid out than paid. */
+export function parseOrderFacts(x: unknown): OrderFacts | undefined {
+  const o = x as Record<string, unknown> | undefined;
+  if (!o || typeof o !== 'object') return undefined;
+  const shares = (v: unknown): PayoutShare[] | undefined => {
+    const list = v === undefined ? [] : v;
+    if (!Array.isArray(list)) return undefined;
+    const out = list.map((s) => (s && isoDay(s.date) && positive(s.amount) ? { date: s.date, amount: s.amount } : undefined));
+    return out.every(Boolean) ? (out as PayoutShare[]) : undefined;
+  };
+  const number = typeof o.number === 'string' || typeof o.number === 'number' ? String(o.number).replace(/^#/, '').trim() : '';
+  const country = (v: unknown) => typeof v === 'string' && /^[A-Z]{2}$/.test(v);
+  const t = o.tax as Record<string, unknown> | undefined;
+  const tax = t === undefined || t === null ? undefined : country(t.country) && positive(t.rate) ? { country: t.country as string, rate: t.rate as number } : null;
+  const [payouts, refunds] = [shares(o.payouts), shares(o.refunds)];
+  if (!number || !isoDay(o.date) || typeof o.currency !== 'string' || !/^[A-Z]{3}$/.test(o.currency) || !positive(o.gross) || !country(o.shipTo) || tax === null || !payouts || !refunds) return undefined;
+  if (payouts.reduce((s, p) => s + p.amount, 0) > o.gross + 0.005) return undefined;
+  return { number, date: o.date, currency: o.currency, gross: o.gross, shipTo: o.shipTo as string, ...(tax ? { tax } : {}), payouts, refunds };
+}
+
+export function parseTitle(x: unknown): { vendor: string; what: string } | undefined {
+  const o = x as { v?: unknown; w?: unknown } | undefined;
+  const v = typeof o?.v === 'string' ? o.v.trim() : '', w = typeof o?.w === 'string' ? o.w.trim() : '';
+  return v && w && v.length <= 40 && w.length <= 40 ? { vendor: v, what: w } : undefined;
+}
+
+/** What the match prompt shows of a payment: what tells it apart, one line each, no bookkeeping state (#187: about half the prompt's tokens were indentation and fields the model never needs). */
+function shownPayment(t: BankTransaction & { filed?: true }): Record<string, unknown> {
+  return {
+    ref: t.ref, date: t.date, amount: t.amount, currency: t.currency, direction: t.direction, description: t.description,
+    ...(t.counterparty ? { counterparty: t.counterparty } : {}), ...(t.reference ? { reference: t.reference } : {}),
+    ...(t.parts?.length ? { parts: t.parts.map((p) => ({ amount: p.amount, currency: p.currency, counterparty: p.counterparty, ...(p.reference ? { reference: p.reference } : {}) })) } : {}),
+    ...(t.filed ? { filed: true } : {}),
+  };
 }
 
 export function buildMatchPrompt(
@@ -25,8 +99,8 @@ export function buildMatchPrompt(
 
 ${receiptSection}
 
-## Bank Statement Transactions (filtered by date window)
-${JSON.stringify(transactions, null, 2)}
+## Bank Statement Transactions (the payments without a receipt most likely to fit, best first)
+${transactions.map((t) => JSON.stringify(shownPayment(t))).join('\n')}
 
 ## Instructions
 Match the receipt to the most likely bank transaction(s). Priority order:
@@ -39,7 +113,8 @@ Rules:
 - One receipt can match multiple transactions (e.g. Wise multi-currency splits where one purchase debits multiple accounts)
 - Multiple receipts can match one transaction (e.g. FedEx freight invoice + customs invoice)
 - Multi-currency: receipt may be in EUR/USD, bank transaction in CHF
-- Transactions are already pre-filtered by amount proximity and date window
+- Transactions are a short selection of the payments without a receipt, ranked by an invoice number in their text, amount, vendor name and date
+- A transaction with "filed": true lies in a quarter whose VAT return is filed. Name it like any other when the receipt pays it (a receipt that came late); the app links nothing there and books its tax as a correction
 - If no good match exists, return empty matchedTransactionRefs and confidence < 0.5
 
 ## Grouped Vendor Note (Amazon, AliExpress, FedEx)
@@ -68,8 +143,17 @@ Return ONLY a valid JSON object with these fields:
   "description": "Vendor / purpose (for a shipping or customs invoice: include total amount, invoice number, and the webshop order number prefixed with # when the shipment names one, e.g. #1001)",
   "amount": 85.40,
   "currency": "CHF",
-  "confidence": 0.95
+  "confidence": 0.95,
+  "title": { "v": "Coop Pronto", "w": "Benzin" },
+  "payout": { "sales": 1480.00, "refunds": 40.00, "fees": 27.65, "paidOut": 1412.35 },
+  "order": { "number": "1001", "date": "2026-08-10", "currency": "EUR", "gross": 120.00, "shipTo": "CH", "tax": { "country": "CH", "rate": 8.1 }, "payouts": [{ "date": "2026-08-12", "amount": 116.20 }], "refunds": [] }
 }
+
+Rules for title: ${TITLE_RULES}
+
+Rules for payout: ${PAYOUT_RULES}
+
+Rules for order: ${ORDER_RULES}
 
 Rules for suggestedFilename: YYYYMMDD prefix, lowercase, hyphens instead of spaces, no special chars, end with .pdf.
 
@@ -90,12 +174,28 @@ export interface ClassifyEntry {
   accountDebit: string;
   accountCredit: string;
   amount: number;
-  vatCode: string;
+  /**
+   * The code of a line the app makes itself (a rule's, a payout's). The model states facts instead
+   * (`vat`, `vatRate`, `amountIs`); a code it still writes is read back to its facts
+   * (src/booking/line-vat.ts), so the letter and the sign are the accounts' either way.
+   */
+  vatCode?: string;
+  /** Rule 7, read off the receipt: Swiss VAT charged, none, or none on a service from abroad (Bezugsteuer). */
+  vat?: VatLineFacts['charge'];
+  /** Rule 7: the Swiss VAT rate charged, in percent (8.1). */
+  vatRate?: number;
+  /** The amount is the VAT itself: a single-leg VAT-amount row. */
+  amountIs?: 'tax';
   description: string;
+  /** On a purchase line with a receipt (rule 7h): what it buys; on a sale without Swiss VAT (rule 7g): what it sells. */
+  supply?: Supply;
+  /** On a purchase line with a receipt (rule 7h): the supplier's country as the receipt gives its seat, ISO 3166 alpha-2 ("IE", "CH"). */
+  supplierCountry?: string;
 }
 
 export interface BatchClassifyResult {
-  [txRef: string]: { entries: ClassifyEntry[] };
+  /** `reason`: why it is booked so, in a sentence the person reads on the booking. */
+  [txRef: string]: { entries: ClassifyEntry[]; reason?: string };
 }
 
 interface TxInput {
@@ -106,10 +206,21 @@ interface TxInput {
   direction: string;
   description: string;
   bank: string;
+  /** Who paid or was paid, as the bank names them; the description often leaves it out. */
+  counterparty?: string;
+  /** The payment's fee, which the bank debited as a movement of its own (src/booking/separate-fee.ts). */
+  separateFee?: { ref: string; amount: number; currency: string };
+  /** An owner's payment of a business part of its receipt (BankTransaction.businessPart): the amount is that part, the rest is private. */
+  businessPart?: { what?: string };
+  /** The other legs of its card charge split across balances that hold the same receipts (src/booking/shared-receipts.ts): this payment books only its share. */
+  sharedWith?: Array<{ ref: string; amount: number; currency: string }>;
 }
 
 const CLASSIFY_INSTRUCTIONS = `## Instructions
 1. Determine the correct expense/revenue account(s) based on the transaction description, receipt text, and historic patterns.
+   Use ONLY account numbers listed in the Chart of Accounts above. The numbers in these instructions are the standard
+   KMU ones: where this company's chart has another account for the same purpose, take its own. A row on an account
+   the chart does not have is refused and the payment is not booked.
 2. The bank account side is already determined — do NOT set it. Leave accountDebit or accountCredit as empty string "" for the bank side. The system will fill it in.
 3. For DBIT (money out): the bank account is credited (leave accountCredit as ""), set accountDebit to the expense account.
 4. For CRDT (money in): the bank account is debited (leave accountDebit as ""), set accountCredit to the revenue account.
@@ -119,52 +230,67 @@ const CLASSIFY_INSTRUCTIONS = `## Instructions
    - Each receipt has its own item, its own account, and its own description.
    - Use each receipt's amount (converted to the transaction currency if needed) as the entry amount.
    - Assign each receipt to its correct expense account based on what was purchased (read the receipt text carefully).
-   - Example: an Aliexpress transaction with 3 receipts (milk jugs, grinder burrs, USB cable) → 3 journal entries, e.g. 4210/6100/6570.
+   - Example: an Aliexpress transaction with 3 receipts (milk jugs, grinder burrs, USB cable) → 3 journal entries, e.g. 4200/6100/6570.
    - If two receipts genuinely go to the same account, they still get separate rows with separate descriptions.
-6. The sum of all entry amounts for a transaction must equal the transaction amount.
-7. VAT code rules (CRITICAL — follow exactly):
-   a) Code prefix is determined by the ACCOUNT NUMBER, not the vendor:
-      - 4xxx accounts (material/goods) → M-codes (M0, M81, M26, ...)
-      - 5xxx/6xxx accounts (operating expenses) → I-codes (I0, I81, I26, ...)
-      - 1xxx accounts (assets/investments) → I-codes
-      - 3xxx accounts (sales revenue, credit side) → V-codes (V0, V81, V26, ...)
-   b) The rate SUFFIX comes from the receipt's "VAT facts" line (extracted directly off
-      the receipt — this is the source of truth, use it over anything in the receipt text):
-      - "NO Swiss MWST" / no VAT facts line → 0-rate code (I0/M0/V0).
-      - Otherwise use the suffix given for the rate: 8.1%→81, 2.6%→26, 3.8%→38
-        (historical 7.7→77, 2.5→25, 3.7→37). Combine prefix + suffix, e.g. account 6570
-        with an 8.1% fact → I81; a 4400 material line at 2.6% → M26.
-   c) No receipt at all (no VAT facts line) → 0-rate code (I0/M0/V0).
-   d) Refunds invert the code with a minus prefix (e.g. -I81, -M26).
-   e) Exception: Coop Pronto receipts can be assumed I81 (always charge 8.1% MWST even if OCR is bad).
+6. The entries must move the bank account by exactly the transaction amount: the bank paid what the bank paid.
+   Every row has both accounts, except the bank side you leave "".
+6b. Skonto / a discount taken at payment (the bank paid less than the invoice total): book what the bank paid,
+   ONE entry for the transaction amount on the expense account with the receipt's VAT facts. Cash basis: the
+   discount reduces the expense and the input tax, which is the tax on the amount paid. Never add a separate
+   Skonto row with an empty account. Example: invoice 1000.00 incl. 8.1% MWST, paid 980.00 with 2% Skonto
+   → { "accountDebit": "4400", "accountCredit": "", "amount": 980.00, "vat": "charged", "vatRate": 8.1, "description": "Lieferant, Material (2% Skonto)" }.
+7. VAT facts (CRITICAL — follow exactly). Give the FACTS of each row, never a VAT code: the app computes the
+   code from these facts and the row's accounts (the letter from the account, the minus from the direction of
+   the money). Do not write "vatCode".
+   a) "vat": what the receipt shows for this row:
+      - "charged": Swiss MWST charged. Then "vatRate": the rate in percent (8.1, 2.6, 3.8; historical 7.7, 2.5, 3.7).
+      - "none": no Swiss MWST charged.
+      - "acquisition": Bezugsteuer, see h).
+   b) The receipt's "VAT facts" line (extracted directly off the receipt) is the source of truth, use it over
+      anything in the receipt text: "NO Swiss MWST" → "none"; "Swiss MWST" at a rate → "charged" at that rate.
+      Swiss MWST is charged only when the receipt shows it; a vendor's country decides nothing.
+   c) No receipt at all (no VAT facts line) on a PURCHASE → "none": no receipt, no input tax.
+      A SALE (CRDT on a revenue account) owes its output tax with or without an invoice: a customer in
+      Switzerland or Liechtenstein → "charged" at 8.1, a customer abroad → "none". The app checks it against
+      the payment and asks the owner; never book a domestic sale "none" for want of a receipt.
+   g) A sale without Swiss MWST: give "supply" as well: "service" when the invoice places the service abroad
+      ("Leistungsort Deutschland", "nicht der schweizerischen MWST unterstellt"), "goods" for an export of goods.
+   h) Bezugsteuer: a SERVICE (software, online service, advertising, consulting) from a supplier based
+      abroad whose receipt shows no Swiss MWST and no CHE number → "acquisition" on the expense line (the
+      amount paid is the net). Not for goods (import VAT instead), not for services exempt from VAT (payment
+      processing, Stripe or card fees, banking, insurance), not when the receipt shows Swiss MWST ("charged").
+      On EVERY purchase line with a receipt, also give two facts read off the receipt, which the app
+      decides Bezugsteuer by: "supply": "service", "goods" or "exempt" (a service exempt from VAT), and
+      "supplierCountry": the supplier's country as the receipt gives its address, as the two-letter
+      ISO country code ("IE", "US", "CH").
+   d) A refund keeps the facts of what it refunds ("charged" at 8.1 when the purchase was); its accounts make it a refund.
    f) MULTI-RATE RECEIPTS: when a receipt's VAT facts list MORE THAN ONE positive rate
       (e.g. Coop fuel "8.1% + 0%", or a mixed cart "8.1% + 2.6%"), SPLIT it into one journal
       entry per rate group. Use each group's gross as that entry's amount and the group's
-      suffix for its code. Keep the same expense account for all split rows unless the items
+      rate as its "vatRate". Keep the same expense account for all split rows unless the items
       clearly belong to different accounts. The split rows must sum to the receipt total.
-8. For Wise fees (description starts with "Wise Charges"): use account 6940 (Bankspesen) with VatCode I0.
-9. For Shopify/Stripe sales (Webshop orders): ALWAYS produce exactly 2 journal entry rows. Specify BOTH accountDebit AND accountCredit (do NOT leave one empty):
-   a) Revenue: accountDebit "1093" / accountCredit "3450" — full order amount. Use V81 for Swiss customers, V0 for exports.
-   b) Shopify fees: accountDebit "6580" / accountCredit "1093" — the fee amount (= order amount minus Stripe payout, as shown on the Shopify receipt)
-   The system will automatically add a third entry for the Stripe payout (D=bank C=1093) — do NOT add it yourself.
-9b. Shopify MONTHLY VAT correction (Vorsteuer on transaction fees) — a SEPARATE booking, not a sales order.
-   The monthly Shopify billing statement ("Payments Invoice") shows the 8.1% Swiss MWST on the fees that the
-   per-order payouts hide. Book ONLY the VAT as a SINGLE-LEG correction — this is the ONE case where a leg is
-   intentionally left empty (rule 9's "both legs" requirement is about sales rows, not this):
-     - accountDebit: "" (EMPTY) — the VatCode supplies this leg to the MWST account automatically
-     - accountCredit: "6580"
-     - amount: the VAT amount only (= gross fees × 8.1 / 108.1)
-     - VatCode: "M81-2"  (a "-2" / MwSt-Betrag code: the amount IS the VAT amount)
-   Do NOT touch 2451 (Kontokorrent) and do NOT fill both legs. Description: "Shopify, Vorsteuer Transaktionsgebühren <Mon JJJJ>".
+8. For Wise fees (description starts with "Wise Charges"): use account 6940 (Bankspesen), "vat": "none".
+9. A payout of a payment provider the company's knowledge names as one (a shop platform, a card
+   terminal), dated on or after the company's cut-over day for it, never reaches you: the app books it from the
+   provider's clearing account and the sales from the provider's report, or holds it for the person while no
+   clearing account or cut-over day is set. A payout dated before that day is booked as it was before: rule 9a.
+9a. Only for a payout of a card terminal or payment provider the app does not book by rule 9 (SumUp, Payrexx, Worldline,
+   Stripe Terminal, TWINT, or a known provider's payout before its cut-over day): the payout is the card sales at the company's own place of business minus the provider's fees.
+   Its payout report rarely shows MWST, yet the sales are domestic sales: book the GROSS sales on the revenue account
+   "charged" at 8.1 (the normal rate; another rate only when the report shows it), a refund in the report the same,
+   and the fees as their own row on the bank-fee account with "vat": "none" (payment processing is exempt: no input
+   tax, no Bezugsteuer). The rows sum to the payout, every amount positive. Without the report: the whole payout on
+   the revenue account, "charged" at 8.1.
 10. Description rules:
    - MUST be in German
    - Format: "Wer, Was" — vendor first, then purpose, comma-separated
+   - "Wer" is the real name: the receipt's vendor, else the transaction's Counterparty. Never a role ("Kunde", "Mitarbeiter", "Mobilfunkanbieter") in place of a name you were given
    - Max 60 characters
    - NEVER use raw bank text like "Card Transaction Of..." or "Received Money From..." or "Issued By..." — always clean it up
    - No amounts in description (the amount is its own field)
    - Use these templates for common categories:
      * Subscriptions/SaaS: "Anbieter, Abo Produkt" → "Anthropic, Abo Claude AI"
-     * Webshop orders (Stripe/Shopify): "Webshop Bestellung #NNNN, Kundenname, Land" → "Webshop Bestellung #1001, M. Muster, USA"; customer name and country are required
+     * Webshop orders: "Webshop Bestellung #NNNN, Kundenname, Land" → "Webshop Bestellung #1001, M. Muster, USA"; customer name and country are required
      * Webshop fees: "Webshop Gebühren #NNNN" → "Webshop Gebühren #1001"
      * Webshop refunds: "Webshop Rückerstattung #NNNN" → "Webshop Rückerstattung #1002"
      * Shipping (FedEx): "FedEx, Versand #NNNN Fracht/Zölle/MWST/Abwicklung" → "FedEx, Versand #1001 Fracht"; #NNNN is the webshop order number, not the carrier's invoice number; if an invoice covers multiple webshop orders, include the order refs like "#1003/#1004"
@@ -185,48 +311,89 @@ export interface ReceiptInput {
   description?: string;
   filename?: string;
   // VAT facts extracted at the receipt level (extract-vat step) — source of
-  // truth for the rate. See buildReceiptVatPrompt / deriveHasSwissVat.
+  // truth for the rate. See buildReceiptVatPrompt / hasDomesticVat.
   hasSwissVat?: boolean;
   vatId?: string;
   vatSummary?: VatRateGroup[];
   lineItems?: ReceiptLine[];
 }
 
-// Map a Swiss VAT rate to the code suffix used in the chart of VAT codes.
-export function vatRateSuffix(rate: number): string {
-  const map: Record<number, string> = { 8.1: '81', 7.7: '77', 3.8: '38', 3.7: '37', 2.6: '26', 2.5: '25', 0: '0' };
-  return map[rate] ?? String(rate);
-}
-
 // Render the receipt's VAT facts as a compact, authoritative line for the
 // classify prompt — so the rate no longer depends on (truncated) receipt text.
-export function formatVatFacts(r: ReceiptInput): string | null {
+function formatVatFacts(r: ReceiptInput): string | null {
   if (r.hasSwissVat === undefined && !r.vatSummary) return null; // not extracted yet
-  if (r.hasSwissVat === false) return 'VAT facts: NO Swiss MWST on receipt → use 0-rate code (I0/M0/V0)';
+  if (r.hasSwissVat === false) return 'VAT facts: NO Swiss MWST on receipt → a purchase: "vat": "none", but a service from a supplier abroad: "acquisition" (rule 7h); a sale: see rules 7c, 7g and 9a';
   const groups = (r.vatSummary ?? []).filter((g) => g.ratePercent > 0);
   if (groups.length === 0) {
     return r.hasSwissVat
-      ? `VAT facts: Swiss MWST present${r.vatId ? ` (${r.vatId})` : ''} but rate not parsed — assume 8.1% (suffix 81) unless the text says otherwise`
+      ? `VAT facts: Swiss MWST present${r.vatId ? ` (${r.vatId})` : ''} but rate not parsed — assume 8.1% unless the text says otherwise`
       : null;
   }
   const parts = groups.map(
     (g) =>
-      `${g.ratePercent}% → suffix ${vatRateSuffix(g.ratePercent)}${g.gross != null ? `, gross ${g.gross}` : ''}${g.vat != null ? `, vat ${g.vat}` : ''}`,
+      `${g.ratePercent}%${g.gross != null ? `, gross ${g.gross}` : ''}${g.vat != null ? `, vat ${g.vat}` : ''}`,
   );
   return `VAT facts: Swiss MWST${r.vatId ? ` ${r.vatId}` : ''} — ${parts.join('; ')}`;
 }
 
-/** What every classify prompt says about the company: its name, chart, prior-year entries, VAT codes. */
+/** What every classify prompt says about the company: its name, chart, prior-year entries, and the firm's VAT setup (absent: the effective method). */
 export interface ClassifyPromptContext {
   companyName: string;
   chartOfAccounts: string;
   historicEntries: string;
-  vatCodes: string;
+  vat?: VatSetup;
+  /** What the firm sells and the default accounts that follow (src/workspace/sells.ts, #46); absent: not answered. */
+  sells?: SalesDefaults;
+}
+
+const KIND_WORDS: Record<SalesKind, { sells: string; buys?: string }> = {
+  made: { sells: 'products it makes itself', buys: 'material for its own products' },
+  traded: { sells: 'goods it buys and resells', buys: 'goods bought for resale' },
+  services: { sells: 'services' },
+};
+
+/** What the firm sells, as the setup answered it, and the default accounts the model starts from. */
+function sellsSection(d: SalesDefaults | undefined): string {
+  if (!d?.kinds.length) return '';
+  const accounts = [...d.purchase.map((p) => `${KIND_WORDS[p.kind].buys} → ${p.account}`), ...d.sales.map((s) => `sales of ${KIND_WORDS[s.kind].sells} → ${s.account}`)];
+  return `## What the company sells
+${d.kinds.map((k) => KIND_WORDS[k].sells).join(', ')}. Default accounts, unless a rule, the receipt or the prior year says otherwise: ${accounts.join('; ')}.
+`;
+}
+
+/** The VAT part of the prompt: the model gives facts on every kind of firm, what code books of them differs (code enforces it either way). */
+function vatSection(setup: VatSetup | undefined): string {
+  if (setup && !setup.registered) {
+    return `## VAT
+The company is NOT registered for VAT. Give no VAT facts (leave out "vat") on EVERY row and book every amount gross, whatever a receipt shows. Ignore the VAT facts rules below.`;
+  }
+  if (setup?.registered && setup.method === 'net-rate') {
+    const rates = setup.rates.map((r) => `${r.rate} %${r.label ? ` (${r.label})` : ''}`).join(', ');
+    return `## VAT (net tax rate method, Saldosteuersatz)
+The company files with approved flat rates on its gross turnover: ${rates}. Give the VAT facts of rule 7 as for any company; the app books them by this method:
+- A PURCHASE (expense, material, investment) claims no input tax, whatever the receipt shows.
+- A SALE on a revenue account: "vat": "charged" with "vatRate" the approved rate${setup.rates.length > 1 ? ' that fits the activity' : ''} (not the 8.1 % the invoice shows); the app books it GROSS at that rate. An export of goods and a service supplied abroad as rule 7g says.
+- Bezugsteuer on a service from a supplier abroad that charged no Swiss MWST: "acquisition" (rule 7h), owed without a deduction. Give the "supply" and "supplierCountry" facts of rule 7h on every purchase line with a receipt.`;
+  }
+  return '';
+}
+
+/** What the model is told of an owner's payment of a business part of its receipt: book the part only, the rest is private. */
+function businessPartLine(tx: TxInput, receipt: ReceiptInput | undefined): string {
+  const of = receipt?.amount != null ? ` of the receipt's ${Math.abs(receipt.amount)} ${receipt.currency ?? tx.currency}` : ' of the receipt';
+  const what = tx.businessPart?.what ? ` (${tx.businessPart.what})` : '';
+  return `Business part: only ${tx.amount} ${tx.currency}${of} was for the business${what}; the owner paid the rest privately and it is not booked. Book exactly this amount, in one entry, with the VAT facts the receipt shows for that part.`;
+}
+
+/** What the model is told of a leg of a card charge split across balances: the receipt also pays the other legs, so this one books only its share and its share of the VAT. */
+function sharedLine(tx: TxInput): string {
+  const others = tx.sharedWith!.map((o) => `${o.ref} (${Math.abs(o.amount)} ${o.currency})`).join(', ');
+  return `Shared receipt: the receipt below also pays ${others}, the other part${tx.sharedWith!.length > 1 ? 's' : ''} of one card charge. Book only this payment's ${Math.abs(tx.amount)} ${tx.currency} as its share, with the receipt's VAT facts in proportion: the input tax of all these payments together never exceeds the VAT the receipt shows.`;
 }
 
 export function buildBatchClassifyPrompt(
   transactions: Array<{ tx: TxInput; receipts: ReceiptInput[] }>,
-  { companyName, chartOfAccounts, historicEntries, vatCodes }: ClassifyPromptContext,
+  { companyName, chartOfAccounts, historicEntries, vat: setup, sells }: ClassifyPromptContext,
   cases: readonly BookingCase[] = [],
 ): string {
   const txSections = transactions.map(({ tx, receipts }, i) => {
@@ -247,7 +414,7 @@ export function buildBatchClassifyPrompt(
     }
     return `### Transaction ${i + 1}: ${tx.ref}
   Date: ${tx.date} | Amount: ${tx.amount} ${tx.currency} | Direction: ${tx.direction} | Bank: ${tx.bank}
-  Bank description: ${tx.description}
+  Bank description: ${tx.description}${tx.counterparty ? `\n  Counterparty: ${tx.counterparty}` : ''}${tx.separateFee ? `\n  Fee: ${tx.separateFee.amount} ${tx.separateFee.currency}, debited separately as ${tx.separateFee.ref} and booked there. The amount above is without it: book no fee line here.` : ''}${tx.businessPart ? `\n  ${businessPartLine(tx, receipts[0])}` : ''}${tx.sharedWith?.length ? `\n  ${sharedLine(tx)}` : ''}
 ${receiptPart}`;
   }).join('\n\n');
 
@@ -260,30 +427,33 @@ ${txSections}
 ## Chart of Accounts
 ${chartOfAccounts}
 
-## VAT Codes Reference
-${vatCodes}
+${sellsSection(sells)}${vatSection(setup)}
 
 ## Historic Journal Entry Examples (prior year)
 ${historicEntries}
 ${cases.length ? `
 ## Casebook: invented examples of how similar cases are booked
-These are standard Swiss cases on KMU account numbers. Follow their pattern and VAT code, but use this company's own chart of accounts above. "bank" is the side you leave empty.
+These are standard Swiss cases on KMU account numbers. Follow their pattern and VAT facts, but use this company's own chart of accounts above. "bank" is the side you leave empty.
 ${cases.map(formatCase).join('\n')}
 ` : ''}
 ${CLASSIFY_INSTRUCTIONS}
 
-Return ONLY a valid JSON object keyed by transaction ref. Each value has an "entries" array.
+Return ONLY a valid JSON object keyed by transaction ref. Each value has an "entries" array and a "reason":
+one short German sentence the bookkeeper reads on the booking, naming the receipt fact and the rule behind the
+account (e.g. "Beleg DigitalOcean zeigt 8.1 % MWST mit CHE-Nummer: Webhosting auf 6570."). Name no VAT code: the app computes it.
 Example:
 {
   "WEUR000042": {
     "entries": [
-      { "accountDebit": "6570", "accountCredit": "", "amount": 7.55, "vatCode": "I81", "description": "DigitalOcean, Webhosting" }
-    ]
+      { "accountDebit": "6570", "accountCredit": "", "amount": 7.55, "vat": "charged", "vatRate": 8.1, "description": "DigitalOcean, Webhosting", "supply": "service", "supplierCountry": "US" }
+    ],
+    "reason": "Beleg DigitalOcean zeigt 8.1 % MWST mit CHE-Nummer: Webhosting auf 6570."
   },
   "20123456790": {
     "entries": [
-      { "accountDebit": "6940", "accountCredit": "", "amount": 0.02, "vatCode": "I0", "description": "Wise, Kartengebühren" }
-    ]
+      { "accountDebit": "6940", "accountCredit": "", "amount": 0.02, "vat": "none", "description": "Wise, Kartengebühren" }
+    ],
+    "reason": "Wise-Gebühr ohne Beleg: Bankspesen 6940, ohne Vorsteuer."
   }
 }`;
 }
@@ -304,6 +474,61 @@ export function parseBatchClassifyResult(raw: string): BatchClassifyResult | nul
     }
     return null;
   }
+}
+
+// ─── A bank statement without camt.053 (statement-read step, #217) ────────────
+
+/**
+ * A bank statement without camt.053 (#217), read off its file: the PDF, scan or photo is attached;
+ * a digital PDF's own text comes along (it holds the digits as printed). The answer is the shape
+ * code checks (src/books/statement-check.ts): code, not the model, decides whether it adds up.
+ */
+export function buildStatementReadPrompt(absPath: string, text?: string): string {
+  return `Use the Read tool to read the file '${absPath}': a bank or card account statement. Read it into JSON, exactly as printed. Do not compute, round, complete or correct anything: code checks the figures afterwards.
+
+${text?.trim() ? `The file's own text, page by page (form feeds between pages), for the digits as printed:\n<<<\n${text.slice(0, 60_000)}\n>>>\n\n` : ''}Return ONLY one JSON object, no commentary:
+{
+  "iban": "the account's IBAN without spaces, or omit",
+  "currency": "the account's ISO currency, e.g. CHF",
+  "bankName": "the bank as it names itself, or omit",
+  "owner": "the account holder as printed, or omit",
+  "period": { "from": "YYYY-MM-DD", "to": "YYYY-MM-DD" },
+  "opening": { "date": "YYYY-MM-DD (the period's first day)", "amount": the balance brought forward before the first movement } or omit when the statement prints none,
+  "closing": { "date": "YYYY-MM-DD (the period's last day)", "amount": the closing balance after the last movement },
+  "pages": [ { "page": 1, "carriedIn": the balance carried in at the top of the page if printed, "carriedOut": the balance carried to the next page at its foot if printed } ],
+  "movements": [ { "date": "YYYY-MM-DD (booking date)", "valueDate": "YYYY-MM-DD or omit", "amount": signed number, "counterparty": "who paid or was paid, or omit", "text": "the booking text as printed", "reference": "the payment reference the payer gave (QR or creditor reference, invoice number, remittance text) if printed, or omit", "original": { "amount": positive number, "currency": "ISO code" } only when the row also prints the amount in another currency than the account's (a card charge in USD on a CHF account), else omit, "page": the page it is printed on, "balance": the account's balance the row prints after it (a running balance column) or omit } ]
+}
+
+Rules:
+- Every movement row of every page, in the printed order (oldest or newest first, as the statement runs), once. A booking with detail lines (a collective payment) is one movement with its total; detail lines are no movements.
+- "amount": money into the account positive, money out (debit, Belastung, Lastschrift) negative. A balance in the account's favour is positive, an overdraft negative.
+- Balances, totals and carry-over lines (Saldo, Übertrag, Total, Report) are no movements; put them into opening, closing and pages.
+- Numbers as plain JSON numbers with a dot: 1'234.50 becomes 1234.5. Dates as YYYY-MM-DD.
+- "original" is the other currency's amount exactly as the row prints it (e.g. "USD 12.40" beside a CHF debit, or an exchange-rate line under it); never convert one yourself.
+- "reference" is never the bank's own id of the transaction (a transaction id or a card number the bank prints), nor the booking text again.
+- Omit "pages" when the statement prints no carry-overs. Omit a field you cannot read; never guess one.
+- If the file is no account statement, return {"notStatement": true}.`;
+}
+
+/**
+ * The model's statement, or `notStatement` when it said the file is none; `noAnswer` when the call
+ * gave none (an empty result, or JSON cut off before its end): a failed call, asked again. Undefined
+ * when the answer is no statement code can take. Its lines name no payment of the books: only a
+ * person's table does.
+ */
+export function parseStatementRead(raw: string): ReadStatement | 'notStatement' | 'noAnswer' | undefined {
+  const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    try { parsed = match ? JSON.parse(match[0]) : undefined; } catch { parsed = undefined; }
+  }
+  if (parsed === undefined && (!cleaned || cleaned.includes('{'))) return 'noAnswer';
+  if ((parsed as { notStatement?: unknown } | undefined)?.notStatement === true) return 'notStatement';
+  const statement = parseReadStatement(parsed);
+  return statement && withoutPayments(statement);
 }
 
 // ─── Receipt-level VAT extraction (extract-vat step) ─────────────────────────
@@ -349,6 +574,10 @@ ${(text || "(no text)").slice(0, 8000)}
 6. lineItems (optional, best-effort): only include when the receipt itemizes purchases AND the
    items fall under different rates or clearly different expense categories. Each:
    { "description": "...", "gross": 12.90, "ratePercent": 8.1 }. Omit entirely for simple receipts.
+   A courier's or forwarder's customs invoice (Zollrechnung) is always itemized: one line per charge
+   as printed (import VAT, customs duty, each fee, freight), its printed name as the description,
+   the amount it adds to the total as gross, the rate of the carrier's own VAT on it as ratePercent
+   (0 where none; the import VAT line takes 0, it is the tax itself).
 
 Return ONLY a valid JSON object, no commentary:
 {
@@ -404,7 +633,7 @@ export function parseReceiptVat(raw: string): ReceiptVatResult | null {
     vatId: typeof parsed.vatId === "string" && parsed.vatId.trim() ? parsed.vatId.trim() : undefined,
     currency: typeof parsed.currency === "string" ? parsed.currency : undefined,
     total: typeof parsed.total === "number" ? parsed.total : undefined,
-    hasSwissVat: deriveHasSwissVat(summary, parsed.hasSwissVat === true),
+    hasSwissVat: hasDomesticVat(summary, parsed.hasSwissVat === true),
     vatSummary: summary,
     lineItems,
   };
@@ -433,5 +662,22 @@ export function parseMatchResult(raw: string): MatchResult | null {
   if (!parsed.suggestedFilename || !parsed.suggestedFilename.trim().toLowerCase().endsWith('.pdf')) {
     return null;
   }
-  return parsed;
+  const title = parseTitle((parsed as { title?: unknown }).title);
+  const payout = parsePayoutFacts((parsed as { payout?: unknown }).payout);
+  const order = parseOrderFacts((parsed as { order?: unknown }).order);
+  delete parsed.title;
+  delete parsed.payout;
+  delete parsed.order;
+  return { ...parsed, ...(title ? { title } : {}), ...(payout ? { payout } : {}), ...(order ? { order } : {}) };
+}
+
+/**
+ * Whether a receipt charged the jurisdiction's own VAT: only when it shows one of its positive
+ * rates (modules/ch/rates.yaml). A 0%-only summary or a foreign rate does not count, even under a
+ * domestic VAT number in the letterhead. When no rate could be parsed at all (poor OCR), the
+ * model's own call decides.
+ */
+function hasDomesticVat(summary: VatRateGroup[], llmSaidYes: boolean): boolean {
+  if (summary.some((g) => g.ratePercent > 0 && vat().isDomesticRate(g.ratePercent))) return true;
+  return summary.length === 0 ? llmSaidYes : false;
 }

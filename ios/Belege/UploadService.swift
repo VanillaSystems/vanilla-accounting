@@ -2,18 +2,20 @@ import Foundation
 
 enum UploadError: LocalizedError {
     case fileNotFound
+    case notPaired
     case serverError(Int)
 
     var errorDescription: String? {
         switch self {
-        case .fileNotFound: return "Receipt file not found on device"
-        case .serverError(let code): return "Server returned error \(code)"
+        case .fileNotFound: return "Die Datei des Belegs fehlt auf dem Handy"
+        case .notPaired: return "Dieses Handy ist nicht mit dem Mac gekoppelt: in den Einstellungen den Code am Mac scannen"
+        case .serverError(let code): return "Der Mac hat mit Fehler \(code) geantwortet"
         }
     }
 }
 
 enum UploadService {
-    static func upload(_ upload: PendingUpload, to serverURL: URL) async throws {
+    static func upload(_ upload: PendingUpload, to serverURL: URL, token: String?) async throws {
         guard FileManager.default.fileExists(atPath: upload.fileURL.path) else {
             throw UploadError.fileNotFound
         }
@@ -32,11 +34,12 @@ enum UploadService {
             ISO8601DateFormatter().string(from: upload.capturedAt),
             forHTTPHeaderField: "X-Captured-At"
         )
+        request.authorize(token)
         request.httpBody = data
 
         let (_, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw UploadError.serverError((response as? HTTPURLResponse)?.statusCode ?? 0)
-        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if status == 401 { throw UploadError.notPaired }
+        guard status == 200 else { throw UploadError.serverError(status) }
     }
 }

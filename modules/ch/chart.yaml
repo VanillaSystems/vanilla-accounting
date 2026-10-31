@@ -1,0 +1,28 @@
+# The Swiss KMU chart's account classes: an account's type follows from its first digit, and the
+# type says its normal side and where its balance counts on the statements. The statement groups
+# themselves follow in migration step 10.
+
+classes:
+  "1": asset
+  "2": liability
+  "3": revenue
+  "4": expense
+  "5": expense
+  "6": expense
+  "7": expense
+  "8": expense
+  "9": closing
+  # Income in the expense classes 7 and 8 (Ertrag Nebenbetrieb, betriebsfremder und
+  # ausserordentlicher Ertrag): the longest prefix wins.
+  "7000": revenue
+  "8100": revenue
+  "8510": revenue
+
+types:
+  asset: { normal: debit, side: assets }
+  liability: { normal: credit, side: liabilities }
+  revenue: { normal: credit, side: result }
+  expense: { normal: debit, side: result }
+  closing: { normal: debit, side: none }
+
+unclassified: { normal: debit, side: none }

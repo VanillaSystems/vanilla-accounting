@@ -3,4 +3,4 @@ name: UPS United Parcel Service (Schweiz) AG
 match:
   tx: [ "united parcel service" ]
   domain: [ "ups.com" ]
-  file: [ '^\d{8}-ups-' ]
+  file: [ '^\d{8}[-_]ups(?:[-_.]|$)' ]

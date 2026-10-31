@@ -1,6 +1,6 @@
 /**
- * The pdf.js text extractor in the three shapes the parsers read: `reading` for receipts, `raw`
- * for the Wise transfer references, `layout` for statement closing balances. The shapes are
+ * The pdf.js text extractor in its three shapes: `reading` for receipts, `raw` in content-stream
+ * order, `layout` for a statement's own text beside the model's read. The shapes are
  * checked on synthetic runs; the extraction on the demo PDFs, whose generator wrote the lines.
  */
 import { test } from 'node:test';
@@ -10,8 +10,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { textPdf } from '../tools/demo/pdf.js';
 import { pdfText, textOf, type Run } from '../src/parsers/pdf-text.js';
-import { closingBalance } from '../src/parsers/statement-pdf-balances.js';
-import { wiseReferences } from '../src/parsers/wise-statement-pdf.js';
 import { DEMO_ROOT } from './support/workspace.js';
 
 const run = (text: string, x: number, y: number, size = 10, angle = 0): Run => ({ text, x, xMax: x + text.length * size * 0.5, y, size, angle });
@@ -26,7 +24,6 @@ test('raw: content-stream order; a new line when the baseline moves or the x pos
   ];
   const raw = textOf([page], 'raw');
   assert.equal(raw, '25 August 2026 | Transaction: TRANSFER-1 | Reference: Invoice 1 Ref.: 2-1\n26 August 2026 | Transaction: CARD-2\nPage 1\f');
-  assert.deepEqual([...wiseReferences(raw)], [['TRANSFER-1', 'Invoice 1 Ref.: 2-1']]);
 });
 
 test('raw: two runs that touch are one word, and the stream order wins over the position on the page', () => {
@@ -42,11 +39,6 @@ test('layout: runs of one row stay on one line, padded to their columns; a verti
   ];
   const layout = textOf([page], 'layout');
   assert.match(layout, /^\s*Kontoauszug\n\n\n\s*Saldo zu Ihren Gunsten {2,}12'345\.67\f$/);
-  assert.equal(closingBalance(layout, 'Raiffeisen', 'CHF'), 12345.67);
-  assert.equal(closingBalance(layout.replace('Gunsten', 'Lasten'), 'Raiffeisen', 'CHF'), -12345.67);
-  const wise = [run('EUR on 31 August 2026', 50, 700), run('1,234.50 EUR', 400, 700)];
-  assert.equal(closingBalance(textOf([wise], 'layout'), 'Wise', 'EUR'), 1234.5);
-  assert.equal(closingBalance(textOf([wise], 'layout'), 'Wise', 'USD'), null);
 });
 
 test('reading: lines top to bottom, left to right, single spaces, whatever the stream order; a paragraph gap is a blank line', () => {
@@ -80,7 +72,7 @@ test('a generated PDF reads back line for line, with a form feed after every pag
 });
 
 test('a letter-spaced word reads as one word', async () => {
-  const text = await pdfText(join(DEMO_ROOT, 'invoices', '2026-001.pdf'));
+  const text = await pdfText(join(DEMO_ROOT, 'transactional-data/2026/invoices', '2026-001.pdf'));
   assert.match(text, /^RÖSTEREI · ZÜRICH$/m);
   assert.match(text, /^Total netto\nMWST 8\.1 % auf 360\.00\nMWST 2\.6 % auf 560\.00\nTotal CHF\n\n920\.00\n29\.16\n14\.56\n963\.72$/m, 'the totals and their amounts are a column each, as pdftotext read them');
 });

@@ -1,0 +1,5 @@
+label: {"de": "XML erzeugen", "en": "Write the XML", "fr": "Produire le XML", "it": "Produrre l’XML"}
+uses: providers.ech-0217
+reads: ["return"]
+emits: ["xml"]
+outcomes: {"ok": "submit", "changed": "compute"}

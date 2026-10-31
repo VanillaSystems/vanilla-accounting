@@ -1,0 +1,36 @@
+# One business event, as every inspiration repo writes it. A scenario names the event in plain
+# words, the bookings it must produce, and its effect on the tax return. It holds no vendor text
+# and no real company: amounts are invented, accounts are the jurisdiction's standard chart.
+#
+# The format is specified in docs/0.4.0/inspiration/README.md. An inspiration repo holds one
+# file per jurisdiction, scenarios/<cc>.yaml. Later a test replays each scenario through this
+# app's engines and compares (docs/0.4.0/migration.md, step 11).
+
+schema: 1
+jurisdiction: de
+chart: SKR03
+basis: { profit: euer, vat: ist }      # how the company determines profit and when VAT is due
+source:                                # where the expected answer comes from
+  program: MonKey Office 2026 (23.2.2)
+  evidence: documented                 # observed | documented | inferred (see README)
+  ref: docs/learn/10-event-catalogue.md, row P-01, company A
+
+scenarios:
+  - id: de-purchase-office-supplies-19
+    event: Office supplies bought for 119.00 EUR gross with 19 % VAT, paid in cash
+    date: 2025-01-15
+    capabilities: [accounting.tax.vat-codes, accounting.ledger.journal]
+    entries:
+      - { debit: "4930", credit: "1000", amount: "100.00", tax: { code: VSt19, amount: "19.00" } }
+    postings:                          # the journal lines after the tax split
+      - { account: "4930", debit: "100.00" }
+      - { account: "1576", debit: "19.00" }
+      - { account: "1000", credit: "119.00" }
+    return:                            # the boxes of the return for the period
+      period: 2025-01
+      boxes: { "66": "19.00" }
+    reports:                           # other figures the event moves
+      euer: { expense: "100.00", box-185: "19.00" }
+    notes: >
+      Company A is a freelancer on EÜR. MonKey books nothing on receipt of the invoice, only the
+      payment, so the purchase is one booking on the payment date.

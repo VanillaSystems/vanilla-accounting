@@ -1,5 +1,8 @@
-import type { JournalEntry } from '../types/index.js';
-import { computeBalances, isDebitNormal } from './ledger.js';
+import type { Postings } from './ledger.js';
+import { computeBalances } from './ledger.js';
+import { chart, statements } from '../engines/index.js';
+import { inGroup } from '../engines/chart.js';
+import type { AccountGroup } from '../core/modules/schema.js';
 import { toRappen, fromRappen, roundCHF } from './rappen.js';
 
 export interface BalanceSheetSection {
@@ -16,37 +19,25 @@ export interface BalanceSheet {
   isBalanced: boolean;
 }
 
-const ASSET_GROUPS: [string, (a: string) => boolean][] = [
-  ['Umlaufvermögen', a => a >= '1000' && a < '1500'],
-  ['Anlagevermögen', a => a >= '1500' && a < '2000'],
-];
-
-const LIABILITY_GROUPS: [string, (a: string) => boolean][] = [
-  ['Kurzfristiges Fremdkapital', a => a >= '2000' && a < '2400'],
-  ['Langfristiges Fremdkapital', a => a >= '2400' && a < '2800'],
-  ['Eigenkapital', a => a >= '2800' && a < '3000'],
-];
-
 export function computeBalanceSheet(
-  entries: JournalEntry[],
+  postings: Postings,
   asOfDate: string,
   openingBalances: Record<string, number>,
   accountNames: Record<string, string>,
 ): BalanceSheet {
   const year = asOfDate.slice(0, 4);
   const from = `${year}-01-01`;
-  const balances = computeBalances(entries, from, asOfDate, openingBalances);
+  const balances = computeBalances(postings, from, asOfDate, openingBalances, chart().isDebitNormal);
   const balanceMap = new Map(balances.map(b => [b.account, b.balance]));
 
   // Compute P&L result (3xxx-8xxx) to show as "Jahresergebnis" on the balance sheet
   let plResultRappen = 0;
   for (const b of balances) {
-    const prefix = parseInt(b.account.charAt(0));
-    if (prefix >= 3 && prefix <= 8) {
+    if (chart().sideOf(b.account) === 'result') {
       // For credit-normal (revenue 3xxx): positive balance = revenue
       // For debit-normal (expenses 4-8xxx): positive balance = expense
       // Net result = revenue - expenses
-      if (isDebitNormal(b.account)) {
+      if (chart().isDebitNormal(b.account)) {
         plResultRappen -= toRappen(b.balance); // expenses reduce result
       } else {
         plResultRappen += toRappen(b.balance); // revenue increases result
@@ -57,10 +48,11 @@ export function computeBalanceSheet(
 
   const allAccounts = Object.keys(accountNames).sort();
 
-  function buildSection(groups: typeof ASSET_GROUPS): BalanceSheetSection[] {
-    return groups.map(([title, filter]) => {
+  function buildSection(groups: AccountGroup[]): BalanceSheetSection[] {
+    return groups.map((group) => {
+      const title = group.title;
       const rows = allAccounts
-        .filter(a => filter(a))
+        .filter(inGroup(group))
         .map(a => ({ account: a, name: accountNames[a] ?? a, balance: balanceMap.get(a) ?? 0 }));
       return {
         title,
@@ -70,18 +62,15 @@ export function computeBalanceSheet(
     });
   }
 
-  const assets = buildSection(ASSET_GROUPS);
-  const liabilities = buildSection(LIABILITY_GROUPS);
+  const layout = statements().balance;
+  const assets = buildSection(layout.assets);
+  const liabilities = buildSection(layout.liabilities);
 
-  // Add Jahresergebnis to Eigenkapital section
-  const eigenkapitalSection = liabilities.find(s => s.title === 'Eigenkapital');
-  if (eigenkapitalSection) {
-    eigenkapitalSection.rows.push({
-      account: '',
-      name: 'Jahresergebnis (noch nicht abgeschlossen)',
-      balance: plResult,
-    });
-    eigenkapitalSection.total = roundCHF(eigenkapitalSection.total + plResult);
+  // While the year is open, its result shows in the equity group.
+  const equity = layout.liabilities.findIndex((g) => g.openResult);
+  if (equity >= 0) {
+    liabilities[equity].rows.push({ account: '', name: layout.liabilities[equity].openResult!, balance: plResult });
+    liabilities[equity].total = roundCHF(liabilities[equity].total + plResult);
   }
 
   const totalAssets = roundCHF(assets.reduce((sum, s) => sum + s.total, 0));

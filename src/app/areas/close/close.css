@@ -13,7 +13,7 @@
 button.chk:hover { background: var(--hover); }
 .chk .ic { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font: 600 12px "Geist Mono"; color: var(--faint); border: 1.5px solid var(--line-2); }
 .chk .ic .i { width: 12px; height: 12px; }
-.chk.st-ok .ic { background: var(--pos); border-color: var(--pos); color: #fff; }
+.chk.st-ok .ic { background: var(--pos); border-color: var(--pos); color: var(--on-fill); }
 .chk.st-warn .ic { border-color: var(--warn); color: var(--warn); }
 .chk.st-open .ic { border-color: var(--ink-2); color: var(--ink-2); }
 .chk .cx b { display: block; font-weight: 500; font-size: 13.5px; }
@@ -28,12 +28,12 @@ button.chk:hover { background: var(--hover); }
 .ye .cx span { display: block; font-size: 12.5px; color: var(--muted); }
 .ye .acc { font-size: 12px; color: var(--muted); min-width: 92px; }
 .ye.done .cx b { color: var(--muted); }
-.ye .st { font-size: 12.5px; color: var(--pos); display: inline-flex; gap: 4px; align-items: center; min-width: 92px; }
+.ye .st { font-size: 12.5px; color: var(--pos); display: inline-flex; gap: 4px; align-items: center; min-width: 92px; min-height: 0; }
 .ye .st.na { color: var(--muted); }
+.ye .st.stale { color: var(--warn); }
 .ye .st .i { width: 13px; height: 13px; }
 .ye-inv { margin: 0 12px 6px; font-size: 12.5px; color: var(--muted); }
 .btn.big { font-size: 14px; height: auto; padding: 9px 18px; margin: 4px 0 12px; }
-.btn:disabled { opacity: .45; cursor: default; }
 .blk { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
 .prev, .gv { max-width: 560px; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
 .prev { margin-bottom: 14px; }
@@ -54,3 +54,8 @@ button.chk:hover { background: var(--hover); }
 .ftab.vatq .fh, .ftab.vatq .fr { grid-template-columns: minmax(0, 1fr) repeat(3, minmax(110px, auto)); }
 .ftab.sums .fr { grid-template-columns: minmax(0, 1fr) auto; }
 .ftab.open .fh, .ftab.open .fr { grid-template-columns: 64px minmax(0, 1fr) minmax(130px, auto); }
+
+/* The unbooked payments of the year, each a link (r8c-10). */
+.chk .chklinks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; }
+.chk .chklinks a { color: var(--accent); text-decoration: none; }
+.chk .chklinks a:hover { text-decoration: underline; }

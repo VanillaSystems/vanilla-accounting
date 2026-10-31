@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI setup</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700;800&family=Instrument+Sans:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+:root { --bg: #ffffff; --ink: #0b1220; --ink-2: #4a5263; --muted: #6e7685; --line: #e7eaf0; --accent: #0067b1; --page: #eceff4; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #151a23; --ink: #eef1f6; --ink-2: #b9c0cc; --muted: #8b93a3; --line: #262d3a; --accent: #6cb4f0; --page: #0b0e14; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 400 15px/1.55 "Instrument Sans", system-ui, sans-serif; }
+.doc { max-width: 1180px; margin: 0 auto; padding: 48px 16px 120px; display: grid; gap: 28px; }
+h1 { font: 800 34px/1.1 "Hanken Grotesk", system-ui, sans-serif; margin: 0; }
+h2 { font: 700 22px/1.2 "Hanken Grotesk", system-ui, sans-serif; margin: 0; }
+h3 { font: 700 16px/1.3 "Hanken Grotesk", system-ui, sans-serif; margin: 0; }
+p, li { color: var(--ink-2); max-width: 80ch; }
+p { margin: 0; }
+b { color: var(--ink); }
+a { color: var(--accent); font-weight: 600; }
+code { font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; }
+ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.box { display: grid; gap: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
+.shot { display: grid; gap: 8px; align-content: start; }
+.frame { position: relative; width: 100%; aspect-ratio: 1440 / 900; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; container-type: inline-size; background: var(--bg); }
+.frame iframe { position: absolute; top: 0; left: 0; width: 1440px; height: 900px; border: 0; transform-origin: 0 0; transform: scale(calc(100cqw / 1440px)); pointer-events: none; }
+.shot p { font-size: 13.5px; }
+.bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.bar button { font: 500 13px "Instrument Sans", system-ui, sans-serif; height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.bar button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.tag { display: inline-block; font: 600 11px "Instrument Sans", sans-serif; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+@media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main class="doc">
+  <header class="box">
+    <span class="tag">0.4.0 · mockups · AI setup on a fresh install</span>
+    <h1>KI einrichten</h1>
+    <p><b>Decided 25.10.2026 by the owner:</b> design B, every open question as recommended, no Homebrew or Node anywhere, and API keys as a folded advanced path under the subscription cards (see the decisions in <a href="../../ai-setup.md">ai-setup.md</a>). Design A stays below as the alternative that was not chosen.</p>
+    <p>How a person gets from a fresh install of the Mac app to «KI bereit»: Claude Code or Codex installed by the person, with the vendor's official installer, signed in with their own subscription, detected by the app on its own. Two alternatives for the first run (A and B), each in every state, and the places where the same help shows up later. The rules behind them, the detection and the open questions are in <a href="../../ai-setup.md">docs/0.4.0/ai-setup.md</a>.</p>
+    <p>Every screen is the real app, captured read-only on the demo workspace (start screen, setup conversation, Firma › KI, Buchungen with the KI column) with its own CSS (<code>app.css</code>); the new parts are written by hand in the app's tokens and class names (<code>ai-setup.css</code>, built by <code>tools/build.mjs</code>). Click a screen to open it full size.</p>
+    <div class="bar"><span class="tag">Theme</span><button type="button" data-theme="light" aria-pressed="true">Hell</button><button type="button" data-theme="dark" aria-pressed="false">Dunkel</button></div>
+  </header>
+
+  <section class="box">
+    <h2>What holds in both designs</h2>
+    <ul>
+      <li><b>The app never touches a login.</b> It runs the CLI's own status commands (<code>claude auth status</code>, <code>codex login status</code>) and keeps the answer: signed in or not, the kind of login and, for Claude, the plan name. No token, no keychain read, no file under <code>~/.claude</code> or <code>~/.codex</code>.</li>
+      <li><b>The person installs.</b> «Im Terminal installieren» opens Terminal with the vendor's own command written out; it runs only after Enter. The command and a link to the vendor's guide are on the card, so the same works by copy and paste.</li>
+      <li><b>No Node, no Homebrew, ever.</b> The app brings its own runtime, both vendors' native installers (<code>curl … | bash</code>, <code>curl … | sh</code>) need only what macOS has, and the CLIs they install are standalone programs. The app offers no other way.</li>
+      <li><b>The app notices by itself.</b> While a card waits it looks every 2 seconds (and when the window gets focus), in <code>~/.local/bin</code> and the shell's PATH. No restart.</li>
+      <li><b>API keys are the advanced path.</b> «Erweitert: mit API-Schlüssel», folded under the cards: a key from Anthropic or OpenAI, kept in the Mac's keychain, billed per call by the provider. The subscription stays the recommended way. The KI column and «Im Terminal» need a CLI, and the block says so.</li>
+      <li><b>The minimum plan is a fact on every card</b>: Claude Pro for Claude Code, ChatGPT Plus for Codex, each «etwa 20 USD im Monat», with a link to the vendor's plans page (checked 25.10.2026). A plan too small or a limit reached is stated as what the CLI said, nothing more.</li>
+      <li><b>«Ohne KI weitermachen» is always there.</b> Everything except reading receipts, booking proposals and the KI column works without an AI (MISSION: whatever the AI does, a person can do by hand).</li>
+    </ul>
+  </section>
+
+  <section class="box">
+    <h2>A · «KI einrichten» before the start screen (not chosen)</h2>
+    <p>A dedicated first step of the Mac app, shown once on a fresh install and whenever no AI is set up and the person has not chosen «Ohne KI weitermachen». Two equal cards, Claude Code and Codex, each with its state, its minimum plan, the official command and one button. «Weiter» unlocks when one is ready; the stepper says what comes next (1 KI · 2 Buchhaltung). After it the existing start screen opens, with the AI as one quiet fact under the choices.</p>
+    <div class="grid" data-set="a">
+      <div class="shot"><a class="frame" href="a1-nichts.html"><iframe src="a1-nichts.html" loading="lazy" title="A1"></iframe></a><p><b>A1 · Nothing installed.</b> Two equal cards with the official command each.</p></div>
+      <div class="shot"><a class="frame" href="a2-installiert.html"><iframe src="a2-installiert.html" loading="lazy" title="A2"></iframe></a><p><b>A2 · Installing.</b> Terminal is open with the command written out and waits for Enter; the card waits and says it looks every 2 seconds.</p></div>
+      <div class="shot"><a class="frame" href="a3-nicht-angemeldet.html"><iframe src="a3-nicht-angemeldet.html" loading="lazy" title="A3"></iframe></a><p><b>A3 · Installed, not signed in.</b> Version and place as found; «Im Terminal anmelden» runs <code>claude auth login</code>, which opens claude.ai in the browser.</p></div>
+      <div class="shot"><a class="frame" href="a4-anmeldung.html"><iframe src="a4-anmeldung.html" loading="lazy" title="A4"></iframe></a><p><b>A4 · Signing in.</b> The browser has the vendor's page; the app asks <code>claude auth status</code> until it says signed in.</p></div>
+      <div class="shot"><a class="frame" href="a5-bereit.html"><iframe src="a5-bereit.html" loading="lazy" title="A5"></iframe></a><p><b>A5 · Ready.</b> Signed in with Claude Pro, version, and one short test call that answered. Codex stays offered, never pushed. «Weiter zur Buchhaltung».</p></div>
+      <div class="shot"><a class="frame" href="a6-fehler.html"><iframe src="a6-fehler.html" loading="lazy" title="A6"></iframe></a><p><b>A6 · Errors.</b> Claude: signed in with an account whose plan has no Claude Code, stated with the minimum plan. Codex: nothing found after 15 minutes, with where the app looked and three ways on.</p></div>
+      <div class="shot"><a class="frame" href="a7-ohne-ki.html"><iframe src="a7-ohne-ki.html" loading="lazy" title="A7"></iframe></a><p><b>A7 · «Ohne KI weitermachen».</b> The real start screen; one line states that no AI is set up and what that means («Neue Buchhaltung» then uses the form). One link, no reminder.</p></div>
+      <div class="shot"><a class="frame" href="a8-start-bereit.html"><iframe src="a8-start-bereit.html" loading="lazy" title="A8"></iframe></a><p><b>A8 · Start screen after the setup.</b> The AI as a fact: «KI: Claude Code, angemeldet mit Claude Pro».</p></div>
+    </div>
+  </section>
+
+  <section class="box">
+    <h2>B · The setup conversation starts with the AI (chosen)</h2>
+    <p>On a fresh install the app opens straight into «Einrichtung», the setup conversation the owner chose (design B of the move). Its first message is the AI: the same two cards, stacked, as a card in the conversation; the answers below are the buttons. The conversation's steps are drawn by code, so they run before any AI exists; only typing in your own words waits for one. After «bereit» the conversation goes on with the folder (or «Ich habe schon eine Buchhaltung», «Erst die Demo ansehen»), so the start screen is no longer the first screen.</p>
+    <div class="grid" data-set="b">
+      <div class="shot"><a class="frame" href="b1-nichts.html"><iframe src="b1-nichts.html" loading="lazy" title="B1"></iframe></a><p><b>B1 · Nothing installed.</b> «Eins davon reicht.» Answers: Claude Code installieren, Codex installieren, Ohne KI weiter. «Erweitert: mit API-Schlüssel» is folded under the cards. The text box says typing comes once an AI is ready. The Codex card appears in the first run only once #121 is built.</p></div>
+      <div class="shot"><a class="frame" href="b8-schluessel.html"><iframe src="b8-schluessel.html" loading="lazy" title="B8"></iframe></a><p><b>B8 · Erweitert: API-Schlüssel, open.</b> Anthropic or OpenAI, a field to paste the key, the cost as a fact (billed per call by the provider) next to the recommended subscription, and what a key alone cannot do.</p></div>
+      <div class="shot"><a class="frame" href="b9-schluessel-geprueft.html"><iframe src="b9-schluessel-geprueft.html" loading="lazy" title="B9"></iframe></a><p><b>B9 · Key checked.</b> The provider accepted it (the app's check lists the provider's models, which costs nothing), one short test call answered, the key is in the keychain. The conversation goes on.</p></div>
+      <div class="shot"><a class="frame" href="b10-schluessel-abgelehnt.html"><iframe src="b10-schluessel-abgelehnt.html" loading="lazy" title="B10"></iframe></a><p><b>B10 · Key refused.</b> The app's existing words: «Der Anbieter lehnt diesen Schlüssel ab: nichts gespeichert.»</p></div>
+      <div class="shot"><a class="frame" href="b2-installiert.html"><iframe src="b2-installiert.html" loading="lazy" title="B2"></iframe></a><p><b>B2 · Installing.</b> «Drück dort Enter. Wenn es fertig ist, merke ich es von selbst.»</p></div>
+      <div class="shot"><a class="frame" href="b3-nicht-angemeldet.html"><iframe src="b3-nicht-angemeldet.html" loading="lazy" title="B3"></iframe></a><p><b>B3 · Installed, not signed in.</b> «Anmelden» with what it opens, or switch to Codex, or go on without.</p></div>
+      <div class="shot"><a class="frame" href="b4-anmeldung.html"><iframe src="b4-anmeldung.html" loading="lazy" title="B4"></iframe></a><p><b>B4 · Signing in.</b> The browser has claude.ai; the conversation waits.</p></div>
+      <div class="shot"><a class="frame" href="b5-bereit.html"><iframe src="b5-bereit.html" loading="lazy" title="B5"></iframe></a><p><b>B5 · Ready.</b> One green line with the plan and the test call; the text box opens; the next question is the folder.</p></div>
+      <div class="shot"><a class="frame" href="b6-fehler.html"><iframe src="b6-fehler.html" loading="lazy" title="B6"></iframe></a><p><b>B6 · Plan too small.</b> Stated as a fact with the minimum plan; the answers lead to the plans page, another account, Codex, or on without AI.</p></div>
+      <div class="shot"><a class="frame" href="b7-ohne-ki.html"><iframe src="b7-ohne-ki.html" loading="lazy" title="B7"></iframe></a><p><b>B7 · «Ohne KI weiter».</b> The conversation goes on with buttons and fields only (it is code-driven), instead of switching to the separate form as today.</p></div>
+    </div>
+  </section>
+
+  <section class="box">
+    <h2>Later: the same help where the AI is missing</h2>
+    <p>One component, the CLI card, in every place. Its states and words are the same as in the first run, so what a person learned there they see again.</p>
+    <div class="grid" data-set="l">
+      <div class="shot"><a class="frame" href="l1-firma-ki.html"><iframe src="l1-firma-ki.html" loading="lazy" title="L1"></iframe></a><p><b>Firma › KI.</b> «KI-Programme auf diesem Mac» replaces the row «Claude-Abo (Claude Code) · bereit»: both cards, the minimum plans in one sentence, the API keys folded under «Erweitert», then the model per step.</p></div>
+      <div class="shot"><a class="frame" href="l6-firma-schluessel.html"><iframe src="l6-firma-schluessel.html" loading="lazy" title="L6"></iframe></a><p><b>Firma › KI with a key only.</b> No CLI on this Mac; the Anthropic key is checked and in use, the OpenAI field is empty. Without a CLI every step goes to the key.</p></div>
+      <div class="shot"><a class="frame" href="l7-firma-schluessel-abgelehnt.html"><iframe src="l7-firma-schluessel-abgelehnt.html" loading="lazy" title="L7"></iframe></a><p><b>Firma › KI, a key refused.</b> Claude Code is ready; an OpenAI key was pasted and the provider refused it. Nothing was saved.</p></div>
+      <div class="shot"><a class="frame" href="l5-zweites-programm.html"><iframe src="l5-zweites-programm.html" loading="lazy" title="L5"></iframe></a><p><b>Second program.</b> Both ready: «Die App fragt» Claude Code or Codex (also what «Im Terminal» opens), and whether to ask the other one when the first cannot answer.</p></div>
+      <div class="shot"><a class="frame" href="l2-seitenleiste-ohne-ki.html"><iframe src="l2-seitenleiste-ohne-ki.html" loading="lazy" title="L2"></iframe></a><p><b>KI column without an AI.</b> The column says what it needs and shows both cards; the composer is off with the reason. Everything else on the page works.</p></div>
+      <div class="shot"><a class="frame" href="l3-seitenleiste-grenze.html"><iframe src="l3-seitenleiste-grenze.html" loading="lazy" title="L3"></iframe></a><p><b>Limit reached.</b> What Claude Code said, as a fact; Codex is signed in, so «Mit Codex fragen» is offered.</p></div>
+      <div class="shot"><a class="frame" href="l4-fehlerzeile.html"><iframe src="l4-fehlerzeile.html" loading="lazy" title="L4"></iframe></a><p><b>The error line</b> where <code>error.noClaude</code> shows today (struck through below it): what the step needed and what this Mac has, «KI einrichten» (opens the cards) and «Von Hand erfassen».</p></div>
+    </div>
+  </section>
+
+  <section class="box">
+    <h2>Recommendation</h2>
+    <p><b>Chosen: B.</b> The reasoning, kept for the record. <b>B for a fresh install, A's cards as the one component.</b> The owner chose the conversation for the move, and B makes the AI its first message instead of a gate before it, so a new person meets one voice from the first second. It also removes the odd split of today (the conversation with AI, the form without): the conversation is code-driven and runs either way. A stays the shape for every later place (Firma › KI, the KI column, the error line) and for a person who opens existing books: the same card, stacked in B, side by side in A. Details and the open questions are in <a href="../../ai-setup.md">ai-setup.md</a>.</p>
+  </section>
+</main>
+<script>
+document.querySelectorAll('.bar button').forEach((b) => b.addEventListener('click', () => {
+  const theme = b.dataset.theme;
+  document.querySelectorAll('.bar button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  document.querySelectorAll('.frame').forEach((a) => {
+    const page = a.getAttribute('href').split('?')[0];
+    a.setAttribute('href', `${page}?theme=${theme}`);
+    a.querySelector('iframe').src = `${page}?theme=${theme}`;
+  });
+}));
+</script>
+</body>
+</html>

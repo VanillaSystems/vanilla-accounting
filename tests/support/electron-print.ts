@@ -10,7 +10,7 @@ import { issuedSheet } from '../../src/invoices/documents.js';
 import { logoSrc } from '../../src/invoices/service.js';
 import { loadInvoices } from '../../src/invoices/store.js';
 import { DEFAULT_LAYOUT, type InvoiceLine, type Issued } from '../../src/invoices/model.js';
-import { qrReference } from '../../src/invoices/reference.js';
+import { qrReference } from '../../src/providers/qr-bill/reference.js';
 import type { SheetData } from '../../src/invoices/sheet.js';
 import { workspaceAt } from '../../src/workspace/workspace.js';
 import { DEMO_ROOT } from './workspace.js';

@@ -113,7 +113,7 @@ steps:
     duration: weeks
 
   - id: archive
-    name: Archive the return under filings/<year>/
+    name: Archive the return under transactional-data/<year>/filings/
     produces: filings
     icon: archive
     note: never regenerate one in place
@@ -127,7 +127,7 @@ steps:
     expect: >
       once the period is locked, no entry dated on or before that date ever
       changes again. A correction is a new entry in the open period that names
-      the original. filings/<year>/seal-<Qn>.json holds the quarter's seal, which
+      the original. transactional-data/<year>/filings/seal-<Qn>.json holds the quarter's seal, which
       every load of the books checks.
     icon: lock
     note: npm run seal -- <YYYY-Qn> --close

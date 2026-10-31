@@ -7,23 +7,35 @@
  *
  * PNG/JPG files dropped into beleg-import/ are wrapped into a PDF (src/parsers/image-pdf.ts)
  * first; the original image is deleted. iCloud placeholders and files that are no PDF yet are skipped. A
- * file in beleg-import/ with the SHA-256 of an archived receipt is skipped with a warning.
+ * file in beleg-import/ with the SHA-256 of a receipt or of another inbox file is removed, with a note.
  */
+import { assessmentFacts } from '../booking/customs-invoice.js';
 import { closeSync, openSync, readSync, readdirSync, readFileSync, statSync, existsSync, unlinkSync, writeFileSync } from 'node:fs';
-import { join, basename, resolve, dirname } from 'node:path';
+import { join, basename, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
-import { assignUniqueRefs } from '../parsers/camt053.js';
+import { assignUniqueRefs } from '../providers/camt053/camt053.js';
 import { imageToPdf, isImageFile } from '../parsers/image-pdf.js';
+import { smallerPdf } from '../parsers/smaller.js';
 import { pdfText } from '../parsers/pdf-text.js';
-import { detectVatProofIssue } from '../parsers/receipt-text.js';
+import { detectVatProofIssue, textFacts } from '../parsers/receipt-text.js';
 import { buildVisionPrompt } from '../llm/prompts.js';
 import type { Receipt } from '../types/index.js';
-import { mergeIndex, readStatementPdfs, readTransactions, readWiseReferences, withinBooks } from '../books/bank-import.js';
+import { filesOfPart, type Workspace } from '../workspace/workspace.js';
+import { mergeIndex, readStatementFiles, readTransactions, reconcileWithFiles, withinBooks } from '../books/bank-import.js';
+import { keptReads } from '../books/pdf-reads.js';
+import { readKeptPdfs, readsByItself, unreadPdfs } from './statement-read.js';
+import { differenceAccountOf } from '../books/year-close.js';
 import type { BankFiles } from '../books/bank-import.js';
 import { loadInvoices, saveInvoices } from '../invoices/store.js';
 import { matchPayments, type PaymentOutcome } from '../invoices/payments.js';
+import { bookInvoiceEvents } from '../invoices/events.js';
 import { fileReceipts, paymentContext } from '../invoices/service.js';
-import type { Ask, IntakeNote, StepRun } from './pipeline.js';
+import { stemOf, type Ask, type IntakeNote, type StepRun } from './pipeline.js';
+import { putInQuarantine } from './quarantine.js';
+import { documentKind } from './document-kind.js';
+import { askKind, asksModel, kindOfModel, MODEL_TEXT, type ModelKind } from './unclear.js';
+import { statementFacts } from '../books/statement-facts.js';
+import { documents } from '../engines/index.js';
 
 // ─── The PDF's own text, fallback to the model's vision for OCR ─────────────
 
@@ -47,7 +59,7 @@ async function extractTextFast(
   try {
     const text = await ask(
       buildVisionPrompt(absPath),
-      { step: 'receipt-intake.guide.yaml#vision', model: 'sonnet', timeoutMs: 120_000, read: [dirname(absPath)] },
+      { step: 'receipt-vision', timeoutMs: 120_000, attachments: [absPath] },
     );
     return { text, method: 'claude-vision' };
   } catch (e: any) {
@@ -84,11 +96,14 @@ interface FoundFile {
   location: 'staged' | 'archived';
 }
 
-// Wraps any PNG/JPG/HEIC images in a directory into PDFs, then removes the originals so they
-// aren't picked up as duplicates by scanPdfs.
-async function convertImagesToPdf(dir: string, log: (line: string) => void): Promise<void> {
-  if (!existsSync(dir)) return;
-  for (const f of readdirSync(dir).filter(isImageFile)) {
+/**
+ * Wraps any PNG/JPG/HEIC images in a directory into PDFs, then removes the originals so they aren't
+ * picked up as duplicates by scanPdfs. Returns each conversion by the names before and after.
+ */
+async function convertImagesToPdf(dir: string, log: (line: string) => void, theirs?: ReadonlySet<string>): Promise<Array<{ from: string; to: string }>> {
+  const done: Array<{ from: string; to: string }> = [];
+  if (!existsSync(dir)) return done;
+  for (const f of readdirSync(dir).filter((f) => isImageFile(f) && !theirs?.has(stemOf(f)))) {
     const imgPath = join(dir, f);
     const pdfPath = imgPath.replace(/\.[^.]+$/, '.pdf');
     if (existsSync(pdfPath)) {
@@ -96,13 +111,26 @@ async function convertImagesToPdf(dir: string, log: (line: string) => void): Pro
       continue;
     }
     try {
-      writeFileSync(pdfPath, await imageToPdf(readFileSync(imgPath), f));
+      // A photo is an own capture: made smaller before it gets its id.
+      writeFileSync(pdfPath, await smallerPdf(await imageToPdf(readFileSync(imgPath), f)));
       unlinkSync(imgPath);
+      done.push({ from: f, to: basename(pdfPath) });
       log(`  converted ${f} -> ${basename(pdfPath)}`);
     } catch (e: any) {
       log(`  convert failed for ${f}: ${e.message?.substring(0, 100)}`);
     }
   }
+  return done;
+}
+
+/**
+ * The .pdf files of the inbox that are no PDF inside (a download cut short, a file named .pdf by
+ * hand): no step will ever read them, so they go to quarantine with the reason (r8k-9). An empty
+ * file may still be being written and stays; an iCloud placeholder is no file yet.
+ */
+function unreadablePdfs(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).filter((f) => f.toLowerCase().endsWith('.pdf') && !f.endsWith('.icloud') && statSync(join(dir, f)).size > 0 && !isPdf(join(dir, f))).sort();
 }
 
 function isPdf(path: string): boolean {
@@ -115,18 +143,22 @@ function isPdf(path: string): boolean {
   }
 }
 
+const isReceiptPdf = (name: string, path: string) =>
+  name.toLowerCase().endsWith('.pdf') && !name.endsWith('.icloud') && isPdf(path); // An iCloud placeholder or a file still being written is no PDF yet; a small PDF is one.
+
 function scanPdfs(dir: string, location: 'staged' | 'archived'): FoundFile[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
-    .filter((f) => {
-      if (!f.toLowerCase().endsWith('.pdf')) return false;
-      if (f.endsWith('.icloud')) return false;
-      // An iCloud placeholder or a file still being written is no PDF yet; a small PDF is one.
-      return isPdf(join(dir, f));
-    })
+    .filter((f) => isReceiptPdf(f, join(dir, f)))
     .sort()
     .map((f) => ({ filename: f, filepath: join(dir, f), location }));
 }
+
+/** The receipts of every year folder, by name. */
+const archivedPdfs = (ws: Workspace): FoundFile[] => filesOfPart(ws.paths, 'receipts')
+  .filter(([name, path]) => !name.includes('/') && isReceiptPdf(name, path))
+  .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  .map(([filename, filepath]) => ({ filename, filepath, location: 'archived' as const }));
 
 const idOf = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex').substring(0, 16);
 
@@ -137,9 +169,26 @@ function unmatchedOf(bank: BankFiles): string[] {
 
 interface Extracted { text: string; method: Receipt['extractionMethod']; fileSize: number }
 
+/**
+ * What a fresh receipt's text says it is (src/intake/document-kind.ts): an order confirmation or a
+ * delivery note is kept beside its invoice, never paid on its own. That a text is no receipt at all
+ * decides only for what the model read (a photo): a PDF's own text was judged at the drop already,
+ * where the person can say «doch ein Beleg». What the words leave unclear, the model's «no receipt»
+ * sets aside when there is one (src/intake/unclear.ts). A bank statement (#151) is dated on its period's last day.
+ */
+function kindOfText(fresh: Extracted, filename: string, originalFilename: string, model?: ModelKind): Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'kindWhy' | 'date' | 'amount' | 'currency'> {
+  const statement = statementFacts({ extractedText: fresh.text, filename, originalFilename }, documents());
+  if (statement) return { kind: 'statement', kindBy: 'rule', kindRule: 'document:statement', ...(statement.to ? { date: statement.to } : {}) };
+  const v = documentKind(fresh.text, documents());
+  // A customs assessment keeps its tax and day: a payment to the customs office is paired with it by them (#197).
+  if (v.is === 'supporting') return { kind: 'supporting', kindBy: 'rule', kindRule: `document:${v.why}`, ...(v.why === 'customs-assessment' ? assessmentFacts(fresh.text, documents().customs) : {}) };
+  if (v.is === 'other' && fresh.method === 'claude-vision') return { kind: 'noise', kindBy: 'rule', kindRule: `document:${v.why}` };
+  return v.is === 'unclear' && model ? kindOfModel(model) : {};
+}
+
 // ─── The step ────────────────────────────────────────────────────────────────
 
-export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
+export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, arrived }) => {
   // First: a statement that belongs to no bank account stops the step before receipts are read.
   const bank = readTransactions(ws);
   for (const f of bank.files) {
@@ -148,24 +197,40 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   }
   const unmatched = unmatchedOf(bank);
   if (unmatched.length) return { notes: [{ code: 'unmatched', files: unmatched }], stop: true };
-  if (!existsSync(ws.paths.receipts)) return { notes: [{ code: 'error', detail: `receipts/ directory not found at ${ws.paths.receipts}` }], stop: true };
-
-  await convertImagesToPdf(ws.paths.inbox, log);
+  // A photo's row in the drop dialog follows the PDF it became: the file has a new name and the id of its new bytes (r8k-9).
+  // A photo of a run waiting behind this one is left to that run, which renames its own row (r4c-7).
+  for (const c of await convertImagesToPdf(ws.paths.inbox, log, later?.())) arrived?.renamed(c.from, { inbox: c.to, id: idOf(join(ws.paths.inbox, c.to)) });
 
   // Archived receipts first, then staged (for cross-folder duplicate detection)
-  const archivedFiles = scanPdfs(ws.paths.receipts, 'archived');
-  const stagedFiles = scanPdfs(ws.paths.inbox, 'staged');
+  const archivedFiles = archivedPdfs(ws);
+  const twice = archivedFiles.filter((f, i) => archivedFiles.findIndex((g) => g.filename === f.filename) !== i);
+  if (twice.length) return { notes: [{ code: 'error', detail: `${twice.map((f) => f.filename).join(', ')}: in two year folders' receipts/, keep one` }], stop: true };
+  // Asked at the scan, not at the step's start: a file that came in meanwhile with a run waiting behind this one is that run's (r4c-7).
+  const theirs = later?.();
+  for (const f of unreadablePdfs(ws.paths.inbox).filter((f) => !theirs?.has(stemOf(f)))) {
+    const path = join(ws.paths.inbox, f);
+    const held = putInQuarantine(ws.paths.data, f, readFileSync(path), { kind: 'unreadable' });
+    unlinkSync(path);
+    arrived?.refused(f, 'unreadable');
+    log(`  ${f} is no PDF inside: moved to quarantine as ${held}`);
+  }
+  const stagedFiles = scanPdfs(ws.paths.inbox, 'staged').filter((f) => !theirs?.has(stemOf(f.filename)));
   log(`Found ${archivedFiles.length} PDFs in receipts/, ${stagedFiles.length} PDFs in beleg-import/\n`);
 
   const files: Array<FoundFile & { id: string }> = [];
   const seen = new Map<string, string>();
+  // A file in the inbox with the bytes of one the books or the inbox hold already (a phone's
+  // retry, the same scan sent twice) is that file: it leaves the inbox, and the run says so.
+  const sameBytes: Array<{ file: string; of: string }> = [];
   for (const f of [...archivedFiles, ...stagedFiles]) {
     const id = idOf(f.filepath);
     const first = seen.get(id);
     if (first) {
-      log(f.location === 'staged' && archivedFiles.some((a) => a.filename === first)
-        ? `  warn: ${f.filename} in beleg-import/ duplicates an archived receipt — skipping`
-        : `  DUPE  ${f.filename} (same content as ${first})`);
+      if (f.location === 'staged') {
+        unlinkSync(f.filepath);
+        sameBytes.push({ file: f.filename, of: first });
+        log(`  ${f.filename} in beleg-import/ has the same bytes as ${first}: removed`);
+      } else log(`  DUPE  ${f.filename} (same content as ${first})`);
       continue;
     }
     seen.set(id, f.filename);
@@ -187,8 +252,27 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     log(`  [${extracted.size}/${toExtract.length}] ${f.filename} → ${out.method}, ${out.text.length} chars${detectVatProofIssue(out.text) ? '  ⚠ VAT proof missing' : ''}`);
   })));
 
-  const wiseRefs = await readWiseReferences(ws, (msg) => log(`  warn: ${msg}`));
-  const bankStatements = readStatementPdfs(ws);
+  // A new receipt whose words decide nothing and that shows almost nothing of an invoice is asked of the model once (#186).
+  const modelKinds = new Map<string, ModelKind>();
+  const unclear = ask ? toExtract.filter((f) => !known.get(f.id)?.kind && !known.get(f.id)?.kindBy && asksModel(extracted.get(f.id)?.text ?? '', documents())) : [];
+  await Promise.all(unclear.map((f) => pool(async () => {
+    try {
+      const v = await askKind(ask!, extracted.get(f.id)!.text, f.filename);
+      if (v) modelKinds.set(f.id, v);
+      const length = extracted.get(f.id)!.text.length;
+      const cut = length > MODEL_TEXT ? `, from the first ${MODEL_TEXT} of ${length} characters` : '';
+      log(`  ${f.filename}: ${v ? `${v.is}${v.why ? ` (${v.why})` : ''}` : 'no verdict in the answer'}${cut}`);
+    } catch (e: any) {
+      log(`  ${f.filename}: what it is stays unclear, the model failed: ${e.message?.substring(0, 100)}`);
+    }
+  })));
+
+  // A statement PDF kept as its statement is read for what its bank export lacks (#243): a month's worth by the run, a larger backlog once the person asks for it.
+  const unread = ask ? unreadPdfs(ws, { ...books.read(), bankStatements: readStatementFiles(ws).statements }) : [];
+  const readFailed: { file: string; error: string }[] = [];
+  if (unread.length && readsByItself(unread)) readFailed.push(...(await readKeptPdfs(unread, ask!, { log })).failed);
+  else if (unread.length) log(`  ${unread.length} statement PDF(s) not read yet: Kontoauszüge › «${unread.length} Kontoauszüge von der KI lesen lassen?», or npm run read-statements`);
+  const statementFiles = readStatementFiles(ws);
   const invoices = loadInvoices(ws);
   const payments = paymentContext(ws);
 
@@ -203,21 +287,29 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
       const existing = byId.get(id);
       const fresh = existing?.extractedText ? undefined : extracted.get(id);
       if (!fresh) return existing ? [{ ...existing, filename, location, remarks: existing.remarks ?? detectVatProofIssue(existing.extractedText) }] : [];
+      // Without a model nothing else reads the date and the total; what the text states plainly is taken.
+      const plain = ask ? {} : textFacts(fresh.text);
+      const originalFilename = existing?.originalFilename ?? filename;
+      // A kind given before the text was read (a person's, above all) stays as it is.
+      const { date: periodEnd, ...kind }: Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'kindWhy' | 'date'> = existing?.kind || existing?.kindBy
+        ? { kind: existing.kind, kindBy: existing.kindBy, kindRule: existing.kindRule, kindWhy: existing.kindWhy }
+        : kindOfText(fresh, filename, originalFilename, modelKinds.get(id));
       return [{
         id,
         filename,
-        originalFilename: existing?.originalFilename ?? filename,
+        originalFilename,
         extractedText: fresh.text,
         extractionMethod: fresh.method,
         fileSize: fresh.fileSize,
         indexedAt: existing?.indexedAt ?? new Date().toISOString(),
         location,
-        date: existing?.date,
+        date: existing?.date ?? periodEnd ?? plain.date,
         description: existing?.description,
-        amount: existing?.amount,
-        currency: existing?.currency,
+        amount: existing?.amount ?? plain.amount,
+        currency: existing?.currency ?? plain.currency,
         needsVisionReview: fresh.text.length === 0 || undefined,
         remarks: existing?.remarks ?? detectVatProofIssue(fresh.text),
+        ...kind,
       } as Receipt];
     });
     // The books keep their order, new receipts after them: a second run writes the same file.
@@ -227,12 +319,18 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     if (kept.length < now.transactions.length) {
       log(`  skipped ${now.transactions.length - kept.length} bank transaction(s) dated before ${before}, when the books open (config.openingBalances)`);
     }
-    const merged = mergeIndex(index, { receipts, bankTransactions: assignUniqueRefs(kept), wiseRefs, bankStatements });
+    const merged = mergeIndex(index, { receipts, bankTransactions: assignUniqueRefs(kept), reads: keptReads(ws, statementFiles.statements, index.statementAsks), bankStatements: statementFiles.statements, camtBalances: statementFiles.balances });
     Object.assign(index, merged.index);
-    // Paid invoices first (ADR 0010): a payment with an invoice's reference is booked from the invoice, before classify sees it.
+    // Movements read from PDFs and the bank's file of the same days: the account's reconciliation, before any run books them (#254).
+    reconcileWithFiles(ws, index, differenceAccountOf(ws));
+    // On the agreed basis each issued document's VAT event comes before its payment, which then only settles the receivable (src/invoices/events.ts).
+    const events = payments ? bookInvoiceEvents(index, invoices, payments) : undefined;
+    if (events) fileReceipts(ws, index, events.files);
+    if (events?.skipped.length) log(`  VAT of ${events.skipped.map((s) => s.number).join(', ')} not booked: no official rate of the invoice's day yet (npm run fetch-rates); the VAT filing waits for it`);
+    // Paid invoices first (ADR 0010): a payment with an invoice's reference or number, or a credit note's refund, is booked from the document before classify sees it.
     const paid = payments ? matchPayments(index, invoices, payments) : undefined;
     if (paid) {
-      fileReceipts(ws, paid.files);
+      fileReceipts(ws, index, paid.files);
       saveInvoices(ws, invoices);
     }
     return { ...merged, paid, counts: { receipts: index.receipts, transactions: index.transactions.length, statements: index.bankStatements.length, mappings: index.mappings.length } };
@@ -267,13 +365,15 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const kept = brokenClosedLinks.length + vanishedClosedTransactions.length;
   if (kept) notes.push({ code: 'filedKept', count: kept });
   if (waitingForModel) notes.push({ code: 'noModel', waiting: waitingForModel });
+  if (readFailed.length) notes.push({ code: 'failed', count: readFailed.length, detail: `${readFailed[0].file}: ${readFailed[0].error}` });
+  if (sameBytes.length) notes.push({ code: 'sameBytes', files: sameBytes });
   return { notes };
 };
 
 function reportPayments(paid: PaymentOutcome, log: (line: string) => void): void {
   for (const p of paid.paid) {
-    log(`  Rechnung ${p.number}: ${p.amount.toFixed(2)}${p.fee ? ` + Mahngebühr ${p.fee.toFixed(2)}` : ''} bezahlt (${p.transactionRef})${p.booked ? ', Ertrag gebucht' : ''}`);
+    log(`  ${p.number}: ${p.amount.toFixed(2)}${p.fee ? ` + Mahngebühr ${p.fee.toFixed(2)}` : ''} bezahlt (${p.transactionRef})${p.booked ? ', Ertrag gebucht' : ''}`);
   }
   const why = { cancelled: 'die Rechnung ist storniert', currency: 'andere Währung als die Rechnung', surplus: 'mehr als offen', batch: 'Sammelzahlung mit Teilen ohne Rechnung, nicht gebucht', booked: 'die Zahlung ist schon gebucht, ohne die Rechnung', closed: 'in einer abgeschlossenen Periode' };
-  for (const q of paid.questions) log(`  ⚠ Zahlung ${q.transactionRef} (${q.amount.toFixed(2)}) mit der Referenz von Rechnung ${q.number}: ${why[q.problem]}. Bitte entscheiden.`);
+  for (const q of paid.questions) log(`  ⚠ Zahlung ${q.transactionRef} (${q.amount.toFixed(2)}) zu ${q.number}: ${why[q.problem]}. Bitte entscheiden.`);
 }

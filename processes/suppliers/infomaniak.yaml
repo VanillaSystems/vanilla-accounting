@@ -4,5 +4,5 @@ match:
   tx: [ "infomaniak" ]
   uid: [ "CHE-103.167.648" ]
   domain: [ "infomaniak.com" ]
-  file: [ '^\d{8}-infomaniak-' ]
+  file: [ '^\d{8}[-_]infomaniak(?:[-_.]|$)' ]
 grouped: false

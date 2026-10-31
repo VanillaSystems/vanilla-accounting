@@ -22,6 +22,16 @@ steps:
     phase: gather
     duration: day 0
 
+  - id: setup
+    name: Set up where receipts come from
+    with: { guide: receipt-collection.guide.yaml#setup }
+    icon: plug
+    kind: agent
+    note: once, and again when receipts start arriving a new way; the AI sidebar drafts the sources, the person switches them on in the chat or in Firma › Quellen
+    needs: [quarter_chosen]
+    phase: gather
+    duration: 5m
+
   - id: mint_password
     name: Mint a Gmail app password
     icon: key
@@ -41,12 +51,12 @@ steps:
     duration: 30m
 
   - id: fetch_email
-    name: Fetch email summaries from every mailbox in mail.yaml
+    name: Pull every mail source
     icon: inbox
-    uses: npm:collect
-    note: every mailbox in the workspace's mail.yaml, over IMAP
+    uses: npm:pull
+    note: every mail source of the workspace (sources/, ADR 0014), over IMAP; the daily workflow collection does the same
     outcomes: [fetched, login_fails]
-    needs: [mint_password]
+    needs: [setup, mint_password]
     phase: gather
     duration: 5m
 
