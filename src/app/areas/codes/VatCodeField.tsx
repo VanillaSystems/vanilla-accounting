@@ -96,7 +96,8 @@ export function VatCodeField({ name, label, defaultValue = '', readOnly, placeho
         aria-controls={listId}
         aria-autocomplete="list"
         onFocus={(e) => { if (!readOnly) { show(); e.currentTarget.select(); } }}
-        onChange={(e) => { setQ(e.target.value); setChosen(null); setOpen(true); onValue?.(e.target.value); }}
+        // A value the books put in (useBookedFields, after an undo) is no typing: it opens no list.
+        onChange={(e) => { if (e.nativeEvent.isTrusted) { setQ(e.target.value); setChosen(null); setOpen(true); } else redraw((n) => n + 1); onValue?.(e.target.value); }}
         onBlur={() => setOpen(false)}
         onKeyDown={onKeyDown}
       />

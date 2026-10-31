@@ -14,6 +14,7 @@ import { api, errorText, type YearCloseView, type YearEndEntryInput } from '../.
 import { getAccountMap, getAccounts } from '../../lib/accounts.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import { fmt, formatDate } from '../../lib/utils.js';
+import { useBookedState } from '../../lib/booked-fields.js';
 import { t } from '../../i18n/index.js';
 import { ICONS } from '../icons.js';
 import { I } from '../receipts/icons.js';
@@ -343,7 +344,8 @@ function EntryForm({ d, tp, nav, onDone }: { d: YearCloseView; tp: EntryTemplate
   const description = tp.id === 'receivables'
     ? t('close.receivablesText', { year: d.year, numbers: d.receivables.invoices.map((i) => i.number).join(', ') })
     : tx(`yearClose.template.${tp.id}`);
-  const [f, setF] = useState({ date: `${d.year}-12-31`, accountDebit: tp.accountDebit, accountCredit: tp.accountCredit, amount: tp.amount !== undefined ? tp.amount.toFixed(2) : '', vatCode: tp.vatCode ?? '', description });
+  // The prefill follows the books: an account added here fills a field still empty.
+  const [f, setF] = useBookedState({ date: `${d.year}-12-31`, accountDebit: tp.accountDebit, accountCredit: tp.accountCredit, amount: tp.amount !== undefined ? tp.amount.toFixed(2) : '', vatCode: tp.vatCode ?? '', description });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const amount = num(f.amount);
   const valid = /^\d{4}-\d{2}-\d{2}$/.test(f.date) && amount > 0 && !!(f.accountDebit || f.accountCredit) && !!f.description.trim();

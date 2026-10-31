@@ -13,6 +13,7 @@ import type { RouteOf } from '../../shell/route.js';
 import { periodName } from '../../lib/period-label.js';
 import { sources, api } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
+import { useBookedFields } from '../../lib/booked-fields.js';
 import { useFx } from '../../hooks/use-fx.js';
 import { language, t } from '../../i18n/index.js';
 import { useAutomation } from '../../automation/store.js';
@@ -440,7 +441,6 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean; working: boolea
   const s = useUi();
   const form = useRef<HTMLFormElement>(null);
   const [err, setErr] = useState('');
-  const wrong = useRef(new Set<string>());
   const currencies = useMemo(() => [...new Set([...CURRENCIES, r.currency || baseCurrency()])], [r.currency]);
 
   useEffect(() => {
@@ -453,17 +453,10 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean; working: boolea
     return form.current?.querySelector<HTMLInputElement>(`[name="${name}"]`) ?? null;
   }
 
-  // The form keeps what is typed while a field is left: a saved receipt only rewrites the fields not being edited.
-  useEffect(() => {
-    const values: Record<string, string> = {
-      filename: r.filename, date: r.date ? formatDate(r.date) : '', amount: r.amount == null ? '' : fmt(r.amount),
-      description: r.description ?? '', remarks: r.remarks ?? '', currency: r.currency || baseCurrency(),
-    };
-    for (const [name, value] of Object.entries(values)) {
-      const el = field(name);
-      if (el && el !== document.activeElement && !wrong.current.has(name) && el.value !== value) el.value = value;
-    }
-  }, [r.filename, r.date, r.amount, r.currency, r.description, r.remarks]);
+  useBookedFields(form, {
+    filename: r.filename, date: r.date ? formatDate(r.date) : '', amount: r.amount == null ? '' : fmt(r.amount),
+    description: r.description ?? '', remarks: r.remarks ?? '', currency: r.currency || baseCurrency(),
+  });
 
   // Every field is saved on its own: one that is wrong is reported, the others still save.
   function save() {
@@ -473,7 +466,6 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean; working: boolea
     const dateWrong = !!f.date.trim() && !date;
     const amount = f.amount.trim() ? parseAmount(f.amount) : null;
     const amountWrong = !!f.amount.trim() && amount == null;
-    wrong.current = new Set([...(dateWrong ? ['date'] : []), ...(amountWrong ? ['amount'] : [])]);
     setErr(dateWrong ? t('receipts.errDate') : amountWrong ? t('receipts.errAmount') : '');
     if (dateWrong || amountWrong) nav.dismissToast();
     const changed: Field[] = [];
