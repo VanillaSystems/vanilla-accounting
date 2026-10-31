@@ -10,7 +10,7 @@ import type { AttachmentRefusal } from './attachment.js';
 import type { MacMailProblem } from './mac-mail.js';
 import type { TagRefusal } from '../books/tags.js';
 import type { AiRefusal } from './ai-refusal.js';
-import type { AdjustmentRefusal } from '../accounting/vat-adjustments.js';
+import type { AdjustmentRefusal } from './adjustment-refusal.js';
 
 /**
  * The JSON body of every refused API request. `error` is the German text the CLI, the tests and
@@ -92,7 +92,7 @@ export type ApiRefusal =
   | { code: 'noBatchPayer' }
   /** A booking's tags (#127): not a map, a dimension the workspace does not declare, or a value that is no short text. */
   | TagRefusal
-  /** A VAT adjustment of Firma › MWST (src/accounting/vat-adjustments.ts) the app cannot keep. */
+  /** A VAT adjustment of the company's VAT page (src/accounting/vat-adjustments.ts) the app cannot keep. */
   | AdjustmentRefusal
   /** Firma › Dimensionen: a dimension bookings carry a value of is not taken out (`entries`: how many). */
   | { code: 'dimensionInUse'; params: { dimension: string; entries: number } }

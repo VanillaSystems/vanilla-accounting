@@ -1,21 +1,19 @@
 /**
- * A VAT adjustment (config.vatAdjustments) as a person enters it in Firma › MWST: a VAT event of an
+ * A VAT adjustment (config.vatAdjustments) as a person enters it on the company's VAT page: a VAT event of an
  * open period that refers to a filed entry (AGENTS.md golden rule 1), e.g. import VAT refunded now on
- * a filed import. It adds its amount to one input-tax Ziffer of that period's return; the return
+ * a filed import. It adds its amount to one input-tax box of that period's return; the return
  * engine (src/engines/return.ts adjustmentsFor) reads it, this module only decides what may be kept.
  */
 import type { JournalEntry, VatAdjustment } from '../types/index.js';
+import type { AdjustmentRefusal, AdjustmentWhy } from '../types/adjustment-refusal.js';
 import { derivePeriod, isFilingKey, type FilingLength } from './periods.js';
 
-/** Why a line is refused; `entry`, `ziffer`, `period`, `id`: the value refused. */
-export type AdjustmentWhy = 'period' | 'ziffer' | 'amount' | 'reason' | 'noEntry' | 'entryMissing' | 'entryNotFiled' | 'id' | 'idTaken' | 'gone';
-export interface AdjustmentRefusal { code: 'vatAdjustment'; params: { why: AdjustmentWhy; value?: string } }
 
 export type AdjustmentDraft = Omit<VatAdjustment, 'id'>;
 
 export interface AdjustmentContext {
   entries: readonly Pick<JournalEntry, 'id' | 'date'>[];
-  /** The Ziffern an adjustment may add to: the form's input-tax boxes, the only ones whose figure takes it as tax. */
+  /** The boxes an adjustment may add to: the form's input-tax boxes, the only ones whose figure takes it as tax. */
   boxes: readonly string[];
   length: FilingLength;
   /** Whether a day is filed (or held by an approved return): periodLock(books).isClosed. */

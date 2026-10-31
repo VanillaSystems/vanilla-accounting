@@ -1,5 +1,5 @@
 /**
- * Firma › MWST › Nachdeklarationen: config.vatAdjustments entered, changed and removed by the person
+ * The company's VAT page, its adjustments: config.vatAdjustments entered, changed and removed by the person
  * (src/accounting/vat-adjustments.ts). A line of a closed period, before or after the change, is
  * refused with 403 (golden rule 1).
  */
@@ -7,7 +7,8 @@ import { Router } from 'express';
 import type { Books } from '../../books/store.js';
 import { periodLock } from '../../books/store.js';
 import { filing, vat } from '../../engines/index.js';
-import { adjustmentDays, adjustmentId, parseAdjustment, type AdjustmentRefusal } from '../../accounting/vat-adjustments.js';
+import { adjustmentDays, adjustmentId, parseAdjustment } from '../../accounting/vat-adjustments.js';
+import type { AdjustmentRefusal } from '../../types/adjustment-refusal.js';
 import type { VatAdjustment } from '../../types/index.js';
 import { RequestError, assertOpen, patchBody, withBooks } from '../books.js';
 
@@ -15,13 +16,13 @@ export const router = Router();
 
 const WORDS: Record<AdjustmentRefusal['params']['why'], string> = {
   period: 'period: eine Abrechnungsperiode wie 2026-Q3.',
-  ziffer: 'ziffer: eine Vorsteuer-Ziffer der Abrechnung.',
+  ziffer: 'ziffer: ein Vorsteuer-Feld der Abrechnung.',
   amount: 'amount: ein Betrag ungleich 0.',
   reason: 'reason: der Grund fehlt.',
   noEntry: 'entryIds: die eingereichte Buchung fehlt, auf die sich die Nachdeklaration bezieht.',
   entryMissing: 'entryIds: diese Buchung gibt es nicht.',
   entryNotFiled: 'entryIds: die Buchung liegt nicht in einer eingereichten Periode vor der Nachdeklaration.',
-  id: 'id: Buchstaben, Ziffern, Punkt, Strich.',
+  id: 'id: Buchstaben, Zahlen, Punkt, Strich.',
   idTaken: 'id: diese Nachdeklaration gibt es schon.',
   gone: 'Diese Nachdeklaration gibt es nicht mehr.',
 };

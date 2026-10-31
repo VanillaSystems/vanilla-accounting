@@ -1,7 +1,7 @@
 /**
- * Firma › MWST › Nachdeklarationen: config.vatAdjustments by hand (golden rule 1). A line is a VAT event
+ * The company's VAT page, its adjustments: config.vatAdjustments by hand (golden rule 1). A line is a VAT event
  * of an open period that refers to a filed entry, e.g. import VAT refunded now on a filed import; it adds
- * its amount to one input-tax Ziffer of that period's return, which the MWST page shows under the Ziffer.
+ * its amount to one input-tax box of that period's return, which the VAT area shows under that box.
  */
 import { Fragment, useState, type FormEvent } from 'react';
 import type { Index, JournalEntry, VatAdjustment } from '../../../types/index.js';
