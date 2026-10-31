@@ -7,7 +7,7 @@
  *
  * What needs no receipt is decided here in code, for any bank and any business: a payment
  * provider's payout (a settlement of its clearing account, never matched to a receipt, #203), money coming in,
- * a fee the bank debits as a movement of its own, a transfer between the firm's own accounts, a
+ * a fee row of the bank (another payment's fee debited as a movement of its own, or the account's fee), a transfer between the firm's own accounts, a
  * payment a person marked as needing none, a firm that claims no input tax, and a business whose
  * file says so as `apply: { receipt: none }` on a rule of evidence.guide.yaml#rules (in the app's
  * file a fact for every company, such as an authority whose notice is filed apart; in the
@@ -29,7 +29,7 @@ import type { Books } from '../books/store.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import { mappedReceipts, ruleOfPayment, type ClassifyContext } from './classify.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
-import { isSeparateFee } from './separate-fee.js';
+import { isBankFee } from './separate-fee.js';
 import { businessVat } from './purchase-vat.js';
 import { linkedOf, type Linked } from '../accounting/receipt-due.js';
 import { bankAccountFor } from '../workspace/money-accounts.js';
@@ -51,8 +51,8 @@ export type NoWait =
   | 'provider'
   /** Money in claims no input tax; a customer payment without an invoice has its own question. */
   | 'incoming'
-  /** The bank's own fee row of another payment: the statement is the evidence. */
-  | 'separateFee'
+  /** A fee row of the bank, of another payment or of the account itself (isBankFee): the statement is the evidence. */
+  | 'bankFee'
   /** Money to one of the firm's own accounts. */
   | 'ownTransfer'
   /** It is booked onto a settlement account (settlementAccount): the owner's, a money account, a debt such as an employee's or a card's. */
@@ -105,7 +105,7 @@ export function receiptWait(tx: BankTransaction, facts: WaitFacts, ctx: WaitCont
   if (tx.amount === 0) return book('zero');
   if (facts.payout) return book('provider');
   if (tx.direction === 'CRDT') return book('incoming');
-  if (isSeparateFee(tx)) return book('separateFee');
+  if (isBankFee(tx)) return book('bankFee');
   if (tx.counterpartyIban && ctx.ownIbans.has(ibanOf(tx.counterpartyIban))) return book('ownTransfer');
   if (facts.ruleAccount && ctx.settles(facts.ruleAccount)) return book('settlement');
   if (facts.ruleAsks) return book('ruleAsks');
@@ -219,7 +219,7 @@ export function receiptWaitOf(books: Books, tx: BankTransaction, context: Classi
 }
 
 /** Why a payment has no receipt of its own: the matching chain never pairs one (#187), nor the model's match. Money in, a rule that asks first and a firm without input tax still take a receipt; a provider's payout never does (#203). */
-const NONE_OF_ITS_OWN: ReadonlySet<NoWait> = new Set<NoWait>(['marked', 'zero', 'provider', 'separateFee', 'ownTransfer', 'settlement', 'business', 'wording']);
+const NONE_OF_ITS_OWN: ReadonlySet<NoWait> = new Set<NoWait>(['marked', 'zero', 'provider', 'bankFee', 'ownTransfer', 'settlement', 'business', 'wording']);
 
 /**
  * The payments that have no receipt of their own, by the same decision as the wait for one

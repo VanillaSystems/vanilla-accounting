@@ -33,6 +33,7 @@ import { loadFxResolver } from '../accounting/fx-rates.js';
 import { namesOf, mentionIn, counterpartiesNamedIn } from '../knowledge/mentions.js';
 import { APP_ROOT, identityIn, openWorkspace } from '../workspace/workspace.js';
 import { loadWorkflows } from '../workflows/load.js';
+import { isBankFee } from '../booking/separate-fee.js';
 
 const ws = openWorkspace();
 const DIR = join(APP_ROOT, 'processes');
@@ -368,7 +369,7 @@ if (hasBooks(ws) && counterparties.length) {
     const merchant = merchantOf(tx.description);
     const route = identify(signalsOfTransaction(tx, []), counterparties);
     if (route.kind === 'ambiguous') clash(route, `${tx.ref} "${merchant}"`);
-    if (route.kind === 'unknown' && tx.type !== 'wise-fee') {
+    if (route.kind === 'unknown' && !isBankFee(tx)) {
       const key = merchant.toLowerCase().replace(/[\d*#]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 40);
       unknownMerchants.set(key, (unknownMerchants.get(key) ?? 0) + 1);
     }

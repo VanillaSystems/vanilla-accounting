@@ -16,6 +16,7 @@ import { isManualRef } from '../../../books/refs.js';
 import { bookedInFiled } from '../../../books/twins.js';
 import { lockedThrough } from '../../../books/lock-line.js';
 import { applyChips, type Chip, type Field } from '../../shell/chips.js';
+import { isBankFee } from '../../../booking/separate-fee.js';
 
 export interface EntryView {
   e: JournalEntry;
@@ -61,7 +62,7 @@ export interface Journal {
 
 /** A payment needs a receipt unless it is a fee, zero, or marked as needing none. */
 export const needsReceipt = (tx: BankTransaction, receipts: number) =>
-  tx.type !== 'wise-fee' && tx.amount !== 0 && !tx.noReceiptNeeded && receipts === 0;
+  !isBankFee(tx) && tx.amount !== 0 && !tx.noReceiptNeeded && receipts === 0;
 
 /** "Vendor, what" (or " — ", " - ", ": "): the first part and the rest. */
 export function splitText(text: string): [string, string] {

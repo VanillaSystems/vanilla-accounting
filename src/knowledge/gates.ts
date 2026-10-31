@@ -12,7 +12,7 @@ export const GATE_TESTS = [
   'closed-period', // transaction dated on or before config.closedThrough
   'unsettled', // transaction's evidence state is not settled
   'no-receipt', // transaction has no linked receipt
-  'wise-fee', // transaction.type === 'wise-fee'
+  'wise-fee', // a fee row of the bank (src/booking/separate-fee.ts isBankFee); the name predates the account's fee
   'own-transfer', // money between two of our own accounts
   'human-answered', // a person already decided this item
 ] as const;
