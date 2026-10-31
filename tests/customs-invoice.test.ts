@@ -480,3 +480,65 @@ test('#285: costs free of VAT name no import VAT on an invoice that cites no dec
   const split = customsSplit(U_PAYMENT, [lone], splitContext());
   assert.deepEqual(split && 'hold' in split && split.hold, { why: 'line', file: lone.filename, line: '8,10 % MWST' });
 });
+
+/**
+ * A courier's invoice that names the import VAT it advanced only as «MWST.» at no rate (printed as
+ * «Kosten … Total MWST.-frei»), its fee with its own VAT at 8.1 %, and cites the declaration's
+ * number. Invented, of the shape seen in a replay.
+ */
+const TAX_LINES: ReceiptLine[] = [
+  { description: 'Vorlageprovisionsgebühr', gross: 28.65, ratePercent: 8.1 },
+  { description: 'MWST.', gross: 41.3, ratePercent: 0 },
+];
+const TAX_TEXT = 'Rechnung\nMuster Kurier AG\nKosten: 26,50\nTotal MWST.-pflichtig: 26,50\n8,10 % MWST: 2,15\nKosten: 41,30\nTotal MWST.-frei: 41,30\nFälliger Gesamtbetrag CHF 69,95\nZollquittungsnummer: 26CHEI000000008812\nZugangscode: Qw3rTy7u';
+const T_PAYMENT: BankTransaction = { ...PAYMENT, ref: 'P-T', amount: 69.95 };
+const tInvoice = (o: Partial<Receipt> = {}) => invoice({ id: 'invt', filename: '20260512-muster-kurier-rechnung-4712.pdf', extractedText: TAX_TEXT, amount: 69.95, hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 2.15, gross: 28.65 }, { ratePercent: 0, vat: 0, gross: 41.3 }], lineItems: TAX_LINES, ...o });
+const tAssessment = (o: Partial<Receipt> = {}) => assessment({ id: 'evvt', extractedText: COLUMNS_TEXT, amount: 41.3, ...o });
+
+test('«MWST.» at no rate on an invoice that cites the declaration is the import VAT: split in code, and the assessment of that number no one linked brings its deduction', async () => {
+  const ws = company();
+  const books = booksOf([tInvoice(), tAssessment()], ['invt'], { tx: T_PAYMENT });
+  const out = await classifyTransactions(books, [T_PAYMENT], { fx, context: loadClassifyContext(ws), ask: noModel });
+  assert.deepEqual(out.classified, ['P-T']);
+  assert.deepEqual(lines(books, 'P-T'), [['4040', '1021', 28.65, 'M81'], ['4030', '1021', 41.3, 'M0']]);
+  assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)).booked, 1);
+  assert.deepEqual(lines(books, 'P-T').at(-1), ['', '4030', 41.3, 'M81-2']);
+  assert.ok(books.mappings.some((m) => m.receiptId === 'evvt' && m.transactionRef === 'P-T'), 'the assessment is linked to its payment');
+});
+
+test('«MWST.» at no rate on an invoice that cites no declaration is no customs invoice: the model\'s', () => {
+  assert.equal(customsSplit(T_PAYMENT, [tInvoice({ extractedText: 'Rechnung\nMuster Kurier AG\nTotal MWST.-frei: 41,30' })], splitContext()), undefined);
+});
+
+/** An invoice whose lines code does not read as a customs invoice, and a model that books its payment with a rate on the import VAT account. */
+const unread = () => tInvoice({ lineItems: [{ description: 'Sendungsnummer 4712', gross: 69.95, ratePercent: 0 }] });
+const ratedModel = async () => JSON.stringify({ 'P-T': { reason: 'Kurierrechnung mit Einfuhrsteuer', entries: [
+  { accountDebit: '4040', accountCredit: '', amount: 28.65, vatCode: 'M81', description: 'Muster Kurier AG, Vorlageprovision' },
+  { accountDebit: '4030', accountCredit: '', amount: 41.3, vatCode: 'M81', description: 'Muster Kurier AG, Einfuhrsteuer' },
+] } });
+
+test('the model\'s rate on the import VAT account is left off: the import VAT is a cost without input tax until the assessment deducts it', async () => {
+  const books = booksOf([unread()], undefined, { tx: T_PAYMENT });
+  const out = await classifyTransactions(books, [T_PAYMENT], { fx, context: loadClassifyContext(company()), ask: ratedModel });
+  assert.deepEqual(out.classified, ['P-T']);
+  const vatLine = books.journalEntries.find((e) => e.accountDebit === '4030')!;
+  assert.deepEqual([vatLine.amount, vatLine.vatCode], [41.3, undefined], 'no input tax claimed on the import VAT itself');
+  assert.deepEqual(vatLine.by, { kind: 'code', check: 'purchaseVat' });
+  assert.match(vatLine.reason ?? '', /Veranlagungsverfügung/);
+});
+
+test('an invoice code does not read as a customs invoice: the model\'s import VAT line is paired with the assessment no one linked whose number the invoice cites, never with one of another number', async () => {
+  const ws = company();
+  const run = async (evv: Receipt) => {
+    const books = booksOf([unread(), evv], ['invt'], { tx: T_PAYMENT });
+    await classifyTransactions(books, [T_PAYMENT], { fx, context: loadClassifyContext(ws), ask: ratedModel });
+    return books;
+  };
+  const other = await run(tAssessment({ extractedText: COLUMNS_TEXT.replace('26CHEI000000008812', '26CHEI000000009999') }));
+  assert.equal(bookImportVatDeductions(other, loadClassifyContext(ws)).booked, 0, 'an assessment of another declaration proves nothing here');
+  const books = await run(tAssessment());
+  assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)).booked, 1);
+  assert.deepEqual(lines(books, 'P-T').at(-1), ['', '4030', 41.3, 'M81-2']);
+  assert.ok(books.mappings.some((m) => m.receiptId === 'evvt' && m.transactionRef === 'P-T'), 'the assessment is linked to its payment');
+  assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)).booked, 0, 'idempotent');
+});

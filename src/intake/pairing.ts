@@ -23,6 +23,7 @@ import { assessmentNumbers, namesAssessment } from '../booking/customs-invoice.j
 import type { Businesses } from './batch-payers.js';
 import { DELAY, type Delays } from './delays.js';
 import { isBankFee } from '../booking/separate-fee.js';
+import { partPayment, partReceipts, partsOf } from '../accounting/batch-parts.js';
 
 /** Which payments are candidates at all. */
 export const BOUNDS = {
@@ -129,6 +130,8 @@ export interface PairCandidate {
   receipt: string;
   /** The payment's ref: what a link names. */
   payment: string;
+  /** Of a collective payment (partsOf), the index of the part the receipt pays: each part is a candidate of its own, the link names the payment. */
+  part?: number;
   /** The payment's leg (legOf): a card charge split over two currencies is two transactions with one ref. */
   leg: string;
   /** Every movement of its charge by ref, `payment` first: more than one for a card charge split across balances with a ref per leg (src/intake/charges.ts), each of which the link names. */
@@ -156,7 +159,7 @@ export interface PairCandidate {
 export interface PairSearch {
   /** Every pairable receipt, with its candidates, best first. */
   byReceipt: Map<string, PairCandidate[]>;
-  /** Every pairable payment by its ref (its legs together), with its candidate receipts, best first. */
+  /** Every pairable payment by its ref (its legs together), or a collective payment's part by slotOf, with its candidate receipts, best first. */
   byPayment: Map<string, PairCandidate[]>;
 }
 
@@ -226,9 +229,42 @@ export function pairablePayment(t: BankTransaction, taken: ReadonlySet<string>, 
   return t.amount !== 0 && !isBankFee(t) && !t.noReceiptNeeded && !taken.has(t.ref) && !noReceipt?.(t);
 }
 
-/** The payments a receipt holds: linked, or, for a filed payment, pointed at (Receipt.filedPayment, which the next correction counts). */
-export const takenPayments = (books: Pick<Books, 'mappings' | 'receipts'>): Set<string> =>
-  new Set([...books.mappings.map((m) => m.transactionRef), ...books.receipts.flatMap((r) => (r.filedPayment ? [r.filedPayment] : []))]);
+/** What a candidate competes for: a payment, or one part of a collective payment (`ref#part`). */
+export const slotOf = (c: Pick<PairCandidate, 'payment' | 'part'>): string => (c.part === undefined ? c.payment : `${c.payment}#${c.part}`);
+
+/** The receipts that hold each payment by its ref: linked, or, for a filed payment, pointed at (Receipt.filedPayment, which the next correction counts). A link to a receipt the books lack holds it whole. */
+function holdersOf(books: Pick<Books, 'mappings' | 'receipts'>, ref?: string): Map<string, Array<Pick<Receipt, 'amount' | 'currency'>>> {
+  const byId = new Map(books.receipts.map((r) => [r.id, r]));
+  const out = new Map<string, Array<Pick<Receipt, 'amount' | 'currency'>>>();
+  const add = (at: string, r: Pick<Receipt, 'amount' | 'currency'>) => { if (ref === undefined || at === ref) (out.get(at) ?? out.set(at, []).get(at)!).push(r); };
+  for (const m of books.mappings) add(m.transactionRef, byId.get(m.receiptId) ?? {});
+  for (const r of books.receipts) if (r.filedPayment) add(r.filedPayment, r);
+  return out;
+}
+
+/** The parts of a collective payment (partsOf) no receipt holds yet, by index (partReceipts): none when a receipt holds it whole. Undefined: no collective payment. */
+export function freeParts(tx: BankTransaction, holders: ReadonlyArray<Pick<Receipt, 'amount' | 'currency'>>): number[] | undefined {
+  if (!partsOf(tx)) return undefined;
+  return partReceipts(tx, holders)?.flatMap((rs, i) => (rs.length ? [] : [i])) ?? [];
+}
+
+/** The payments receipts hold: every one a receipt is linked or pointed at, except a collective payment with a part no receipt holds yet. */
+export function takenPayments(books: Pick<Books, 'mappings' | 'receipts' | 'transactions'>): Set<string> {
+  const batches = new Map(books.transactions.filter((t) => partsOf(t)).map((t) => [t.ref, t]));
+  return new Set([...holdersOf(books)].flatMap(([ref, rs]) => { const t = batches.get(ref); return t && freeParts(t, rs)!.length ? [] : [ref]; }));
+}
+
+/** Whether receipt `r` may be linked to payment `t` on these books: no receipt holds it, or it is a collective payment with a part of `r`'s amount no receipt holds yet. */
+export function freeFor(books: Pick<Books, 'mappings' | 'receipts'>, t: BankTransaction, r: Pick<Receipt, 'amount' | 'currency'>): boolean {
+  const holders = holdersOf(books, t.ref).get(t.ref) ?? [];
+  return !holders.length || (!!partsOf(t) && !!partReceipts(t, [...holders, r]));
+}
+
+/** What a receipt is fitted against of one payment: the payment, or each part of a collective payment no receipt holds yet as a payment of its own (partPayment). */
+function slotsOf(t: BankTransaction, holders: ReadonlyArray<Pick<Receipt, 'amount' | 'currency'>>): Array<{ tx: BankTransaction; part?: number }> {
+  const free = freeParts(t, holders);
+  return free ? free.map((i) => ({ tx: partPayment(t, t.parts![i]), part: i })) : [{ tx: t }];
+}
 
 /**
  * Money comes in for this receipt: a sales record, or a credit note, which says so by its total
@@ -391,7 +427,8 @@ export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string)
   // A charge split across balances is pairable while none of its legs holds a receipt (one that does: linkSplitLegs completes the others).
   const payments = books.transactions.filter((t) => charges.of(t).refs.every((ref) => ref === t.ref ? pairablePayment(t, taken, noReceipt) : !taken.has(ref)));
   const byReceipt = new Map<string, PairCandidate[]>();
-  const byPayment = new Map<string, PairCandidate[]>(payments.map((t) => [charges.of(t).refs[0], []]));
+  const holders = holdersOf(books);
+  const byPayment = new Map<string, PairCandidate[]>(payments.filter((t) => !partsOf(t)).map((t) => [charges.of(t).refs[0], []]));
   const pairable = books.receipts.filter((r) => pairableReceipt(r, linkedReceipts, noPayment));
   // Of two documents of one invoice (duplicatesIn), the copy is no candidate: it would compete with its original for one payment, or pair beside the one linked already (#190). It stays for Belege's copy question.
   const twins = pairable.length ? duplicatesIn([...pairable, ...books.receipts.filter((r) => linkedReceipts.has(r.id))], linkedReceipts, documents()) : new Map();
@@ -403,17 +440,23 @@ export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string)
   for (const r of pairable) {
     if (twins.get(r.id)?.relation === 'duplicate') continue;
     const apart = new Set(r.notPaidBy ?? []);
-    // One candidate per charge: of a charge split over two currencies, the leg that fits best.
+    // One candidate per charge (per part of a collective payment): of a charge split over two currencies, the leg that fits best.
     const best = new Map<string, PairCandidate>();
     const usual = delays?.(r);
     for (const t of near(r, usual)) {
       const charge = charges.of(t);
       const split = charge.refs.length > 1;
-      const fit = charge.refs.some((ref) => apart.has(ref)) ? undefined : fitOf(r, t, toChf, isClosed, businesses, usual);
-      // A split charge is paid by what its original amount names, never by what one leg moved.
-      const c = fit && (!split || fit.amount === 'original') ? { ...fit, payment: charge.refs[0], charge: charge.refs } : undefined;
-      const had = c && best.get(c.payment);
-      if (c && (!had || rank(c, had) < 0)) best.set(c.payment, c);
+      const fits = charge.refs.some((ref) => apart.has(ref)) ? [] : slotsOf(t, holders.get(t.ref) ?? []).flatMap(({ tx, part }) => {
+        const f = fitOf(r, tx, toChf, isClosed, businesses, usual);
+        return f ? [part === undefined ? f : { ...f, part }] : [];
+      }).sort(rank);
+      // A collective payment fits by its best part, and by every part nothing tells from it (alikeSets pairs those).
+      for (const fit of fits.filter((f, i) => i === 0 || (f.part !== undefined && likeness(f) === likeness(fits[0])))) {
+        // A split charge is paid by what its original amount names, never by what one leg moved.
+        const c = !split || fit.amount === 'original' ? { ...fit, payment: charge.refs[0], charge: charge.refs } : undefined;
+        const had = c && best.get(slotOf(c));
+        if (c && (!had || rank(c, had) < 0)) best.set(slotOf(c), c);
+      }
     }
     const onItsDay = nearHeld(r, usual).flatMap((t) => (apart.has(t.ref) ? [] : fitOf(r, t, toChf, isClosed, businesses, usual) ?? []));
     const mine = [...best.values()].filter((c) => !onItsDay.some((h) => periodApart(c, h)));
@@ -422,7 +465,7 @@ export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string)
       const theirs = linked && fitOf(linked.receipt, linked.payment, toChf, isClosed, businesses, delays?.(linked.receipt));
       if (theirs && periodApart(theirs, h)) mine.push({ ...h, replaces: linked!.receipt.id });
     }
-    for (const c of mine) (byPayment.get(c.payment) ?? byPayment.set(c.payment, []).get(c.payment)!).push(c);
+    for (const c of mine) (byPayment.get(slotOf(c)) ?? byPayment.set(slotOf(c), []).get(slotOf(c))!).push(c);
     byReceipt.set(r.id, mine);
   }
   for (const list of [...byReceipt.values(), ...byPayment.values()]) list.sort(rank);
@@ -439,21 +482,67 @@ export type PairStage =
   /** `total`: how many candidates there were; more than SHORT_LIST are cut to the best SHORT_LIST, and the person is told so. */
   | { kind: 'person'; receipt: string; candidates: PairCandidate[]; total: number };
 
+/** The candidates of a list (best first) tied with its best, when they score CLEAR.score and lead the rest by CLEAR.margin; none otherwise. */
+function tiedTop(list: readonly PairCandidate[]): PairCandidate[] {
+  if (!list.length || list[0].score < CLEAR.score) return [];
+  const top = list.filter((c) => c.score === list[0].score);
+  const next = list[top.length];
+  return next && list[0].score - next.score < CLEAR.margin ? [] : top;
+}
+
+/** What tells one pair from another: the fit, the day, the vendor's name, a number. */
+const likeness = (c: PairCandidate): string => `${c.amount}|${c.days}|${c.offDays}|${c.words}|${c.business}|${c.number}|${c.filed}|${c.replaces ?? ''}`;
+
+/**
+ * Receipts and payments nothing tells apart: n receipts whose clear candidates are the same n
+ * payments (or parts of a collective payment, by slotOf), each of whose clear candidates are
+ * those n receipts, every pair alike (the same fit, the same days, the same name). Two labels of
+ * one shop on one day, paid by two card charges of that day: which goes with which changes no
+ * booking, so they are paired one to one, the receipts by id against the payments by ref. A set
+ * of unequal counts or with pairs that differ is none, unless every slot is a part of one
+ * collective payment: fewer receipts than its alike parts are linked to that one payment all the
+ * same.
+ */
+function alikeSets(search: PairSearch): Map<string, PairCandidate> {
+  const out = new Map<string, PairCandidate>();
+  const seen = new Set<string>();
+  for (const [id, list] of search.byReceipt) {
+    if (seen.has(id)) continue;
+    const payments = tiedTop(list).map(slotOf).sort();
+    if (payments.length < 2) continue;
+    const receipts = tiedTop(search.byPayment.get(payments[0]) ?? []).map((c) => c.receipt).sort();
+    for (const r of receipts) seen.add(r);
+    const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+    const block = receipts.map((r) => tiedTop(search.byReceipt.get(r) ?? []));
+    const onePayment = new Set(block.flat().map((c) => c.payment)).size === 1;
+    const alike = (receipts.length === payments.length || (onePayment && receipts.length < payments.length))
+      && block.every((top) => same(top.map(slotOf).sort(), payments))
+      && payments.every((p) => same(tiedTop(search.byPayment.get(p) ?? []).map((c) => c.receipt).sort(), receipts))
+      && new Set(block.flat().map(likeness)).size === 1;
+    if (alike) receipts.forEach((r, i) => out.set(r, block[i].find((c) => slotOf(c) === payments[i])!));
+  }
+  return out;
+}
+
 /**
  * The stage of each pairable receipt, or of the one receipt or the receipts of the one payment
  * `only` names («Zahlung suchen», «Beleg suchen»). Clear: the receipt's best candidate scores
- * CLEAR.score and leads by CLEAR.margin, and the receipt leads its payment's list by as much. A
- * short list: 1 to SHORT_LIST candidates otherwise. No candidate, or more: the person's.
+ * CLEAR.score and leads by CLEAR.margin, and the receipt leads its payment's list by as much; or
+ * the receipt is one of a set nothing tells apart (alikeSets), paired one to one. A short list: 1
+ * to SHORT_LIST candidates otherwise. No candidate, or more: the person's.
  */
 export function stagesOf(search: PairSearch, only?: { receipt: string } | { payment: string }): PairStage[] {
   const ids = !only ? [...search.byReceipt.keys()]
     : 'receipt' in only ? (search.byReceipt.has(only.receipt) ? [only.receipt] : [])
-      : (search.byPayment.get(only.payment) ?? []).map((c) => c.receipt);
+      : [...new Set([...search.byPayment.values()].flatMap((list) => list.filter((c) => c.payment === only.payment).map((c) => c.receipt)))];
+  const alike = alikeSets(search);
   return ids.map((id): PairStage => {
     const candidates = search.byReceipt.get(id) ?? [];
     const best = candidates[0];
-    const theirs = best ? search.byPayment.get(best.payment) ?? [] : [];
+    const theirs = best ? search.byPayment.get(slotOf(best)) ?? [] : [];
     if (best && best.score >= CLEAR.score && marginOf(candidates) >= CLEAR.margin && theirs[0] === best && marginOf(theirs) >= CLEAR.margin) return { kind: 'clear', pair: best };
+    const twin = alike.get(id);
+    if (twin) return { kind: 'clear', pair: twin };
     if (candidates.length >= 1 && candidates.length <= SHORT_LIST) return { kind: 'short', receipt: id, candidates };
     return { kind: 'person', receipt: id, candidates: candidates.slice(0, SHORT_LIST), total: candidates.length };
   });
