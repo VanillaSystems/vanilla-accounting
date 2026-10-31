@@ -47,9 +47,10 @@ router.post('/api/journal-entries/classify/:txRef', async (req, res) => {
   // Her correction of a sale is kept as a rule first, so the classifier books it as she set.
   if (overwrite) learnFromCorrection([txRef]);
   const scratch = readBooks();
-  const tx = openTransaction(scratch, txRef, overwrite);
+  openTransaction(scratch, txRef, overwrite);
   scratch.journalEntries = scratch.journalEntries.filter((je) => je.transactionRef !== txRef);
-  const { failed } = await classifyTransactions(scratch, [tx], { ask, fx: loadFxResolver(), context: loadClassifyContext(WS) });
+  // Every movement of the ref: the entries of all legs of a charge split across balances under one ref are replaced below (#287).
+  const { failed } = await classifyTransactions(scratch, scratch.transactions.filter((t) => t.ref === txRef), { ask, fx: loadFxResolver(), context: loadClassifyContext(WS) });
   const refused = failed.find((f) => f.refusal);
   if (refused) throw new RequestError(422, refused.reason, refused.refusal);
   if (failed.length) throw new RequestError(500, failed.map((f) => f.reason).join('; '));
