@@ -73,3 +73,18 @@ test('receipts of another amount do not join the set: each pair of its own amoun
   await runPairChain(port(b), { toChf });
   assert.deepEqual(pairs(b), ['big>cb', 'r1>c1', 'r2>c2']);
 });
+
+test('two alike parts of one collective payment and two alike receipts are paired one to one: both receipts are linked to the one payment', async () => {
+  const part = { amount: 7.5, currency: 'CHF', counterparty: 'Kiosk Muster', counterpartyIban: 'CH0000000000000000001' };
+  const batch = card('B', { amount: 15, currency: 'CHF', description: 'Sammelzahlung', parts: [{ ...part }, { ...part }] });
+  const b = books([receipt('r2'), receipt('r1')], [batch]);
+  const stages = stagesOf(searchPairs(b, toChf, () => false));
+  assert.deepEqual(stages.map((s) => s.kind === 'clear' && [s.pair.receipt, s.pair.part]), [['r2', 1], ['r1', 0]], 'each receipt is the clear pair of its own part');
+  const result = await runPairChain(port(b), { toChf });
+  assert.deepEqual(pairs(b), ['r1>B', 'r2>B']);
+  assert.equal(result.left.length, 0, 'none is left for the person');
+  const one = books([receipt('r1')], [batch]);
+  assert.deepEqual(kinds(one), ['clear'], 'one receipt of two alike parts: whichever part, it is linked to the one payment');
+  await runPairChain(port(one), { toChf });
+  assert.deepEqual(pairs(one), ['r1>B']);
+});

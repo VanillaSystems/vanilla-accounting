@@ -232,3 +232,39 @@ test('the original amount the bank names in thousands: «1,234.56», «1\'234.56
     assert.deepEqual(originalOf(payment('w', { currency: 'CHF', description: text })), { amount: 12.4, currency: 'USD' }, text);
   }
 });
+
+const batch = (ref: string) => payment(ref, {
+  date: '2026-09-02', amount: 211, description: 'Sammelzahlung',
+  parts: [
+    { amount: 23.4, currency: 'CHF', counterparty: 'Kurier Muster AG', reference: '000000000000000000000001234', counterpartyIban: 'CH0000000000000000001' },
+    { amount: 187.6, currency: 'CHF', counterparty: 'Papier Beispiel AG', reference: '000000000000000000000005678', counterpartyIban: 'CH0000000000000000002' },
+  ],
+});
+const courier = receipt('courier', { date: '2026-08-20', amount: 23.4, title: { vendor: 'Kurier Muster', what: 'Verzollung' } });
+const paper = (id = 'paper') => receipt(id, { date: '2026-08-25', amount: 187.6, title: { vendor: 'Papier Beispiel', what: 'Papier' } });
+
+test('a batch payment\'s parts are candidates of their own: each part pairs its own receipt, and both receipts are linked to the one payment', async () => {
+  const b = books([courier, paper()], [batch('B')]);
+  assert.deepEqual(stages(b).map((s) => s.kind === 'clear' && [s.pair.receipt, s.pair.payment, s.pair.part]), [['courier', 'B', 0], ['paper', 'B', 1]], 'each receipt is the clear pair of its part');
+  await runPairChain(port(b), { toChf });
+  assert.deepEqual(b.transactions.map((t) => t.ref), ['B'], 'the batch stays one payment');
+  assert.deepEqual(b.mappings.map((m) => [m.transactionRef, m.receiptId]).sort(), [['B', 'courier'], ['B', 'paper']], 'both receipts are linked to it');
+});
+
+test('a batch payment with one part held keeps its other part free: a receipt that comes later pairs it, a second receipt of the held part does not', async () => {
+  const held = [{ transactionRef: 'B', receiptId: 'paper', by: 'human' as const }];
+  const b = books([courier, paper()], [batch('B')], { mappings: [...held] });
+  assert.deepEqual((await runPairChain(port(b), { toChf })).linked.map((l) => [l.receipt, l.payment]), [['courier', 'B']]);
+  const again = books([paper(), paper('paper-2')], [batch('B')], { mappings: [...held] });
+  assert.deepEqual((await runPairChain(port(again), { toChf })).linked, [], 'the part a receipt holds takes no second one');
+});
+
+test('the model is shown a batch payment\'s part, not the whole: its payee and its amount', async () => {
+  const anon = (id: string) => receipt(id, { date: '2026-08-25', amount: 187.6, title: { vendor: 'Ware', what: '' } });
+  const b = books([anon('r'), anon('s')], [batch('B')]);
+  const prompts: string[] = [];
+  const ask: Ask = async (prompt) => { prompts.push(prompt); return '[]'; };
+  await runPairChain(port(b), { toChf, ask });
+  assert.ok(prompts.length, 'the model was asked');
+  assert.match(prompts[0], /"text":"Papier Beispiel AG[^"]*","date":"2026-09-02","amount":187.6,/, 'the part\'s payee and amount');
+});

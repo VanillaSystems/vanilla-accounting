@@ -40,7 +40,7 @@ import { homeOf, loadKnowledge } from '../knowledge/layers.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
 import { payerNames } from '../knowledge/payer.js';
 import { businessGuidance, companyGuidance } from '../knowledge/guidance.js';
-import { partsOf, partText } from '../accounting/manual-booking.js';
+import { partPayment, partReceipts, partsOf, partText } from '../accounting/batch-parts.js';
 import { wordsIn } from '../export/texts.js';
 import { ruleFor, ruleWords, stampRule, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
@@ -547,31 +547,45 @@ export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRul
     .map((e) => stampRule(e, placed.rule.id, booking));
 }
 
+/** A part of a collective payment, or what is left of it, as the model is asked about it: the books with only its own receipts, and the key its answer comes under. */
+interface PartView { books: Books; key: string; note?: string }
+
 /**
- * A collective payment no rule decides as a whole, by its parts (r10h-14): each part is a payment
- * of its own to the rules (its payer, its amount, its reference as the text), and a rule that books
- * books that part's line. Undefined when no part is decided. `whole`: every part was, so the lines
- * add up to the payment; else the payment is booked in part and the rest is the person's (a run
- * never books over a payment booked in part, src/workflows/actions.ts). A rule that asks decides no part.
+ * A collective payment no rule decides as a whole, by its parts (r10h-14): each part is a payment of
+ * its own (partPayment) with the receipts that pay it (partReceipts), decided as a single payment
+ * is, by a rule that books or by its customs invoice. A part left open that a receipt pays goes to
+ * the model alone with that receipt (`alone`); the open parts without one go together (`rest`: the
+ * same ref, what is left of the amount). Undefined when code decides no part and no receipt pays
+ * one: the payment is booked as a whole. `whole`: code decided every part. A rule that asks decides no part.
  */
-function partRuleEntries(books: Books, tx: BankTransaction, context: ClassifyContext, fx: FxResolver): { entries: JournalEntry[]; whole: boolean; rest?: BankTransaction } | undefined {
-  const parts = context.rules?.length ? partsOf(tx) : undefined;
+function byParts(books: Books, tx: BankTransaction, context: ClassifyContext, fx: FxResolver): { entries: JournalEntry[]; whole: boolean; alone: Array<{ tx: BankTransaction; view: PartView }>; rest?: { tx: BankTransaction; view: PartView } } | undefined {
+  const parts = partsOf(tx);
   if (!parts) return undefined;
-  const sign = tx.amount < 0 ? -1 : 1;
-  const decided = parts.map((p) => {
-    const part: BankTransaction = { ...tx, amount: sign * Math.abs(p.amount), description: partText(p), counterparty: p.counterparty, counterpartyIban: p.counterpartyIban, parts: undefined, reference: p.reference };
-    const routing = identify(signalsOfTransaction(part, []), context.counterparties ?? []);
-    const rate = tx.currency === baseCurrency() ? 1 : fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1;
-    const placed = ruleFor(context.rules!, { tx: part, counterparty: routing.kind === 'known' ? routing.counterparty : undefined, bankAccount: bankAccountFor(tx, context.bankAccounts), amount: part.amount * rate });
+  const held = partReceipts(tx, mappedReceipts(books, tx));
+  const paid = held?.some((rs) => rs.length);
+  if (!context.rules?.length && !paid) return undefined;
+  // Each part sees its own receipts only: another part's are no evidence of it. Receipts that pay no part stay the whole payment's.
+  const only = (ids: ReadonlySet<string>): Books => (held ? { ...books, mappings: books.mappings.filter((m) => m.transactionRef !== tx.ref || ids.has(m.receiptId)) } : books);
+  const rate = tx.currency === baseCurrency() ? 1 : fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1;
+  const decided = parts.map((p, i) => {
+    const part = partPayment(tx, p);
+    const view: PartView = { books: only(new Set((held?.[i] ?? []).map((r) => r.id))), key: `${tx.ref}#${i + 1}` };
+    const routing = identify(signalsOfTransaction(part, held ? mappedReceipts(view.books, part) : []), context.counterparties ?? []);
+    const placed = context.rules?.length ? ruleFor(context.rules, { tx: part, counterparty: routing.kind === 'known' ? routing.counterparty : undefined, bankAccount: bankAccountFor(tx, context.bankAccounts), amount: part.amount * rate }) : undefined;
     const then = placed?.rule.then;
-    return placed && then?.kind === 'book' ? ruleEntries(books, part, placed, then.booking, context, fx) : undefined;
+    if (placed && then?.kind === 'book') return { part, view, entries: ruleEntries(view.books, part, placed, then.booking, context, fx) };
+    const customs = held?.[i].length ? customsEntries(view.books, part, context, fx) : undefined;
+    if (customs && 'entries' in customs) return { part, view, entries: customs.entries };
+    return { part, view: customs ? { ...view, note: customs.note } : view, entries: undefined, paid: !!held?.[i].length };
   });
-  const entries = decided.flatMap((e) => e ?? []);
-  if (!entries.length) return undefined;
-  const open = parts.filter((_, i) => !decided[i]);
-  // The parts no rule decided, as a payment of their own for the model: the same ref, what is left of the amount.
-  const rest = open.length ? { ...tx, amount: sign * open.reduce((sum, p) => sum + Math.abs(p.amount), 0), description: open.map(partText).join('; '), parts: open.length > 1 ? open : undefined } : undefined;
-  return { entries, whole: !rest, rest };
+  const entries = decided.flatMap((d) => d.entries ?? []);
+  if (!entries.length && !paid) return undefined;
+  const open = decided.filter((d) => !d.entries);
+  const alone = open.filter((d) => d.paid).map(({ part, view }) => ({ tx: part, view }));
+  const loose = parts.filter((_, i) => !decided[i].entries && !decided[i].paid);
+  const sign = tx.amount < 0 ? -1 : 1;
+  const rest = loose.length ? { tx: { ...tx, amount: sign * loose.reduce((sum, p) => sum + Math.abs(p.amount), 0), description: loose.map(partText).join('; '), parts: loose.length > 1 ? loose : undefined }, view: { books: only(new Set()), key: tx.ref } } : undefined;
+  return { entries, whole: !open.length, alone, rest };
 }
 
 type PromptInput = Parameters<typeof buildBatchClassifyPrompt>[0][number];
@@ -705,23 +719,26 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   const chartAccounts = new Set(chartNames(context.chartOfAccounts).keys());
   const items = openItemAccounts([...chartAccounts]);
   const clearing = clearingAccounts(context.counterparties ?? []);
+  /** The parts of collective payments the model is asked about each on its own (byParts): their books and keys. */
+  const views = new Map<BankTransaction, PartView>();
+  const booksOf = (tx: BankTransaction): Books => views.get(tx)?.books ?? books;
   // On the agreed basis a coded line takes its document's date and the open item; on the cash basis this changes nothing (src/accounting/tax-point.ts).
   const atPoint = (tx: BankTransaction, entries: JournalEntry[]): JournalEntry[] => atTaxPoint(tx, entries, {
     accounts: items, bankAccount: bankAccountFor(tx, context.bankAccounts), clearing, lock, rateOn: (c, d) => fx.daily(c, d),
-    documents: mappedReceipts(books, tx), length: filing().length, newId: () => randomBytes(8).toString('hex'),
+    documents: mappedReceipts(booksOf(tx), tx), length: filing().length, newId: () => randomBytes(8).toString('hex'),
   });
   const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [], partly: [] };
   // The legs of a card charge split across balances share its receipts: each books its share, the input tax of all of them never more than the receipts show (#190).
   const charges = chargesOf(books.transactions, (amount, currency, date) => { if (currency === baseCurrency()) return amount; const rate = fx.daily(currency, date) ?? fx.flat(currency); return rate === undefined ? undefined : amount * rate; });
   const legsOf = (tx: BankTransaction) => charges.of(tx).legs;
   // The model answers by the key the prompt gives each transaction: the legs of a split under one ref apart (#287).
-  const keyOf = (tx: BankTransaction) => legKey(tx, legsOf(tx));
+  const keyOf = (tx: BankTransaction) => views.get(tx)?.key ?? legKey(tx, legsOf(tx));
   const invoicePaid = openInvoicesPaid(books, context);
   const toModel: BankTransaction[] = [];
   /** Asked payments whose rule proposes nothing: the model proposes, the entries go to `asked`. */
   const proposing = new Map<string, ClassifyOutcome['asked'][number]>();
   /** Why a payment's customs invoices were not split in code: the model's reason says it. */
-  const customsNotes = new Map<string, string>();
+  const customsNotes = new Map<BankTransaction, string>();
   for (const tx of txs) {
     // A payment provider's payout settles its clearing account, in code, whatever a rule or the model would say (#203).
     // Until the company's file names the clearing account and the cut-over day (the first sales report asks for both), the payout waits
@@ -755,15 +772,21 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     }
     const placed = ruleOfPayment(books, tx, context, fx);
     const then = placed?.rule.then;
-    const byParts = placed ? undefined : partRuleEntries(books, tx, context, fx);
-    if (byParts) {
-      books.journalEntries.push(...atPoint(tx, byParts.entries));
-      // The parts no rule decided go to the model when there is one; the rule-decided parts stay the rules'.
-      const model = byParts.rest && ask;
-      log(`  ${tx.ref}  → rules by part${byParts.whole ? '' : model ? ', the rest to the model' : ', the rest waits for the person'}`);
-      if (model) { toModel.push(byParts.rest!); continue; }
+    const split = placed ? undefined : byParts(books, tx, context, fx);
+    // Without a model, a payment code books no part of is booked as a whole (no model: unasked).
+    if (split && (split.entries.length || ask)) {
+      books.journalEntries.push(...atPoint(tx, split.entries));
+      // The parts code did not decide go to the model when there is one, each with its own receipts; the decided parts stay code's.
+      const asked = ask ? [...split.alone, ...(split.rest ? [split.rest] : [])] : [];
+      log(`  ${tx.ref}  → by part${split.whole ? '' : asked.length ? ', the rest to the model' : ', the rest waits for the person'}`);
+      for (const { tx: part, view } of asked) {
+        views.set(part, view);
+        if (view.note) customsNotes.set(part, view.note);
+        toModel.push(part);
+      }
+      if (asked.length) continue;
       outcome.classified.push(tx.ref);
-      if (!byParts.whole) outcome.partly.push(tx.ref);
+      if (!split.whole) outcome.partly.push(tx.ref);
       continue;
     }
     if (!placed) {
@@ -775,7 +798,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         outcome.classified.push(tx.ref);
         continue;
       }
-      if (customs) customsNotes.set(tx.ref, customs.note);
+      if (customs) customsNotes.set(tx, customs.note);
     }
     if (!placed || !then) { toModel.push(tx); continue; }
     if (then.kind === 'book') {
@@ -802,7 +825,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     const fail = (tx: BankTransaction, reason: string) => { if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, reason }); };
     try {
       const examples = casebook.length ? casesForBatch(books, batch, casebook) : [];
-      const prompt = buildBatchClassifyPrompt(batch.map((tx) => classifyInput(books, tx, legsOf(tx), context.counterparties)), context, examples);
+      const prompt = buildBatchClassifyPrompt(batch.map((tx) => { const input = classifyInput(booksOf(tx), tx, legsOf(tx), context.counterparties); return { ...input, tx: { ...input.tx, ref: keyOf(tx) } }; }), context, examples);
       let model: string | undefined;
       const raw = await ask(prompt, { step: 'classify', timeoutMs: CALL_TIMEOUT_MS, answered: (by) => { model = by.model; } });
       model ??= (await resolveStep('classify')).model;
@@ -820,7 +843,8 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
           fail(tx, 'no entries in response');
           continue;
         }
-        const mapped = mappedReceipts(books, tx);
+        const own = booksOf(tx);
+        const mapped = mappedReceipts(own, tx);
         const bankAccount = bankAccountFor(tx, context.bankAccounts);
         const said = answer.reason;
         const reason = typeof said === 'string' && said.trim() ? said.trim().slice(0, 300) : undefined;
@@ -833,9 +857,9 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
           continue;
         }
         const lines = splitByReceipts(tx, fee?.lines ?? derived, mapped);
-        const noted = [reason, fee?.note, customsNotes.get(tx.ref)].filter(Boolean).join(' ') || undefined;
-        const entries = withPurchaseVat(tx, withRefundCodes(books, tx, withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), bankAccount), mapped, context.purchaseVat, context.counterparties);
-        const twice = inputTaxOverReceipts(books, tx, legsOf(tx), entries, (c, d) => fx.daily(c, d));
+        const noted = [reason, fee?.note, customsNotes.get(tx)].filter(Boolean).join(' ') || undefined;
+        const entries = withPurchaseVat(tx, withRefundCodes(own, tx, withCreditNoteCodes(own, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), bankAccount), mapped, context.purchaseVat, context.counterparties);
+        const twice = inputTaxOverReceipts(own, tx, legsOf(tx), entries, (c, d) => fx.daily(c, d));
         if (twice) {
           const others = twice.others.map((t) => t.ref).join(', ');
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: input tax ${twice.booked} with ${others} above the receipt's VAT ${twice.shown}`);
@@ -851,8 +875,8 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         const held = proposing.get(tx.ref);
         if (held) { held.entries = atPoint(tx, entries.map((e) => ({ ...e, rule: held.rule }))); continue; }
         books.journalEntries.push(...atPoint(tx, entries));
-        log(`  [Batch ${batchNum}]  ${tx.ref}  → ${lines.length} entries (${lines.map((e) => e.accountDebit || e.accountCredit).join(', ')})`);
-        outcome.classified.push(tx.ref);
+        log(`  [Batch ${batchNum}]  ${keyOf(tx)}  → ${lines.length} entries (${lines.map((e) => e.accountDebit || e.accountCredit).join(', ')})`);
+        if (!outcome.classified.includes(tx.ref)) outcome.classified.push(tx.ref);
       }
     } catch (e) {
       if (e instanceof NoClaudeError || (e instanceof AiRefused && e.refusal.reason !== 'limit')) throw e;

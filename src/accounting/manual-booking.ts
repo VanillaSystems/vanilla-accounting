@@ -3,7 +3,8 @@
  * books what the classifier would): the form's first lines, decided by rules only, and whether
  * the lines add up to the payment. The write is src/server/edits.ts bookPayment.
  */
-import type { BankTransaction, BankTransactionPart, Index, JournalEntry, Receipt } from '../types/index.js';
+import type { BankTransaction, Index, JournalEntry, Receipt } from '../types/index.js';
+import { partsOf, partText } from './batch-parts.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import { paymentSides, type PaymentSide } from './payment-entries.js';
 import { codeForRate, formTakes, lookupVatCode } from './vat-codes.js';
@@ -133,16 +134,6 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
 export function formDraft(books: Books, ref: string, accounts: readonly LedgerBankAccount[], invoices: readonly Invoice[] | 'loading' | undefined): BookingDraft | undefined {
   return invoices === 'loading' ? undefined : bookingDraft(books, ref, accounts, invoices);
 }
-
-/** The parts of a collective payment when they are two or more, in its currency, and add up to what the bank paid; else undefined. */
-export function partsOf(tx: Pick<BankTransaction, 'parts' | 'currency' | 'amount'>, paid = tx.amount): BankTransactionPart[] | undefined {
-  const parts = tx.parts ?? [];
-  if (parts.length < 2 || parts.some((p) => p.currency !== tx.currency)) return undefined;
-  return toRappen(parts.reduce((s, p) => s + Math.abs(p.amount), 0)) === toRappen(Math.abs(paid)) ? parts : undefined;
-}
-
-/** One part of a collective payment in words: its payee and its reference (the invoice number), as the bank gave them. */
-export const partText = (p: Pick<BankTransactionPart, 'counterparty' | 'reference'>): string => [p.counterparty.trim(), p.reference?.trim()].filter(Boolean).join(' · ');
 
 /** The payment's bank sides with these lines added to the entries it has (a payment booked in part keeps them, r9k-2). */
 const sidesWith = (books: Pick<Index, 'transactions' | 'journalEntries'>, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[]) =>
