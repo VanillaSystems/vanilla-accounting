@@ -20,8 +20,8 @@
  * currency) and account (the bank account that paid); all must hold. `then.private` (a percent)
  * books that share on the owner's account without VAT and the rest as the rule says;
  * `then.private: { share: 50, as: own-use }` books the whole payment as the rule says and corrects
- * the share's input tax as own use (Eigenverbrauch: owner's account / the rule's account with the
- * year close's private-use code, K81-B, Ziffer 415), the effective method only. A payment
+ * the share's input tax as own use (owner's account / the rule's account with the private-use code
+ * of the engines), for a firm that deducts input tax only. A payment
  * provider's payout takes no rule: code books it from the provider's clearing account, and the sales
  * come from its sales report (src/booking/providers.ts, #203); `then.fees`, which split a payout into
  * sales and fees before, is refused. A rule whose `when` and `then` are sentences is a note for
@@ -52,7 +52,7 @@ export interface RuleWhen {
  * A booking a rule makes or proposes; `vat` null: no VAT code (a private share, a transfer).
  * `private`: this percent of the payment is the owner's, on the owner's account without VAT; the
  * rest goes on `account` with `vat` («das Natel ist zur Hälfte privat»: private 50).
- * `ownUse`: the private share is own use instead (MWSTG Art. 31): the whole payment goes on
+ * `ownUse`: the private share is own use instead: the whole payment goes on
  * `account` with `vat`, and the share's input tax is taken back by a correction from `account` to
  * the owner's account with the private-use code (src/accounting/correction.ts privateUseCode).
  * `tags`: the reporting dimensions every line it books carries ({ projekt: "alpha" }, #127).
