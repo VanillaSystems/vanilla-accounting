@@ -14,7 +14,7 @@ and the providers.
 | split | 119 | 26 |
 | infrastructure | 69 | 4 |
 | workflow | 26 | 0 |
-| view | 330 | 58 |
+| view | 330 | 56 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -193,7 +193,6 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/i18n/locales/it.ts` | CHF 43, MWST 1, form 0535 1, UID 1, camt.053 24, QR-bill 1 |
 | `src/app/lib/api.ts` | camt.053 3 |
 | `src/app/lib/fx-text.ts` | ESTV 1 |
-| `src/app/questions/Questions.tsx` | MWST 1 |
 | `src/cli/check-processes.ts` | ESTV 1 |
 | `src/cli/evidence.ts` | camt.053 1, QR-bill 1 |
 | `src/cli/fetch-estv-rates.ts` | CHF 3, MWST 2, ESTV 6 |
@@ -208,7 +207,6 @@ Layers are assigned by path prefix, most specific first:
 | `src/cli/year-close-text.ts` | CHF 11, ESTV 1 |
 | `src/cli/year-close.ts` | CHF 4, ESTV 3, form 0535 1 |
 | `src/cli/year-open.ts` | CHF 2, ESTV 1 |
-| `src/server/questions.ts` | MWST 3 |
 | `src/server/routes/config.ts` | MWST 1, ESTV 2 |
 | `src/server/routes/receipts.ts` | CHF 1 |
 | `src/server/routes/statements.ts` | ESTV 1, camt.053 21 |

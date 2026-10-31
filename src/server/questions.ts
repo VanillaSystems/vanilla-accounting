@@ -73,7 +73,7 @@ export function parseAsk(body: unknown, origin: QuestionOrigin = 'person'): AskI
 /** A foreign VAT as the person sends it: its rate or its amount (or both), and the account it goes onto. */
 export interface ForeignTaxInput { rate?: number; amount?: number; account: string }
 
-const FOREIGN_TAX_INVALID = 'Ausländische MWST: einen Satz zwischen 0 und 100 % oder einen Betrag über 0 angeben, dazu das Konto, auf das sie geht.';
+const FOREIGN_TAX_INVALID = 'Ausländische Steuer: einen Satz zwischen 0 und 100 % oder einen Betrag über 0 angeben, dazu das Konto, auf das sie geht.';
 
 function parseForeignTaxInput(raw: unknown): ForeignTaxInput {
   const f = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
@@ -90,7 +90,7 @@ export function parseAnswer(body: unknown): { by: string; answer: Answer; foreig
   const b = (body ?? {}) as Record<string, unknown>;
   const by = name(b.by, 'by');
   if (b.foreignTax !== undefined && b.foreignTax !== null) {
-    if (b.choice !== 'saleAbroad') throw new RequestError(400, 'Ausländische MWST gibt es nur zu einem Verkauf ins Ausland (choice saleAbroad).', { code: 'foreignTaxInvalid' });
+    if (b.choice !== 'saleAbroad') throw new RequestError(400, 'Ausländische Steuer gibt es nur zu einem Verkauf ins Ausland (choice saleAbroad).', { code: 'foreignTaxInvalid' });
     return { by, answer: { choice: 'saleAbroad' }, foreignTax: parseForeignTaxInput(b.foreignTax) };
   }
   if (CHOICES.includes(b.choice as Choice)) return { by, answer: { choice: b.choice as Choice } };
@@ -228,7 +228,7 @@ function foreignTaxOf(gross: number, f: ForeignTaxInput): ForeignTax {
  * onto the company's account for it without a code, never the gross at the export code.
  */
 function bookForeignTax(books: Books, tx: BankTransaction, entries: readonly JournalEntry[], code: string, f: ForeignTaxInput): { booked: string[]; undo: BookChange[]; vatCode: string; account: string; foreignTax: ForeignTax } {
-  if (entries.length !== 1) throw new RequestError(400, 'Ausländische MWST teilt eine Umsatzbuchung: diese Zahlung hat mehrere, von Hand buchen.', { code: 'foreignTaxSplit' });
+  if (entries.length !== 1) throw new RequestError(400, 'Ausländische Steuer teilt eine Umsatzbuchung: diese Zahlung hat mehrere, von Hand buchen.', { code: 'foreignTaxSplit' });
   const [sale] = entries;
   const foreignTax = foreignTaxOf(sale.amount, f);
   const net = Math.round((Math.abs(sale.amount) - foreignTax.amount) * 100) / 100;

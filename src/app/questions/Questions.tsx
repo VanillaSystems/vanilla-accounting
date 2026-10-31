@@ -110,7 +110,7 @@ function AlwaysSo({ q, nav }: { q: Question; nav: Nav }) {
 }
 
 /**
- * «Ausland mit ausländischer MWST»: an export that carried a foreign VAT (OSS, IOSS) is booked as a
+ * The answer «abroad with a foreign VAT»: an export that carried a foreign VAT (OSS, IOSS) is booked as a
  * sales report books one (#206), the net at the export code and the tax onto the company's account
  * for it without a code. The rate or the amount, either one fills the other; the account as the
  * company said it last (QuestionsView.foreignTax), else typed once.
