@@ -3,40 +3,16 @@
  * connection to Chrome: a start without a limit once stalled for good and kept a failed run's runner, test process and
  * Chrome alive, holding the machine's test lock, and puppeteer's close waits for Chrome's exit without one.
  */
-import { existsSync, readdirSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 import type { Browser, BrowserContext } from 'puppeteer-core';
 import { findBrowser } from '../../src/invoices/pdf.js';
 
-/** Playwright's browser cache and Chrome for Testing's program inside one of its chromium-<build> folders, per platform. */
-const PLAYWRIGHT: Record<string, { cache: (home: string, env: NodeJS.ProcessEnv) => string; programs: string[] }> = {
-  darwin: {
-    cache: (home) => join(home, 'Library/Caches/ms-playwright'),
-    programs: ['chrome-mac-arm64', 'chrome-mac-x64', 'chrome-mac'].map((d) => join(d, 'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing')),
-  },
-  linux: { cache: (home) => join(home, '.cache/ms-playwright'), programs: ['chrome-linux64/chrome', 'chrome-linux/chrome'] },
-  win32: { cache: (home, env) => join(env.LOCALAPPDATA ?? join(home, 'AppData/Local'), 'ms-playwright'), programs: ['chrome-win64/chrome.exe', 'chrome-win/chrome.exe'] },
-};
-
-/** The newest Chrome for Testing Playwright installed (PLAYWRIGHT_BROWSERS_PATH, else its cache), if any. */
-export function chromeForTesting(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env, home = homedir()): string | undefined {
-  const { cache, programs } = PLAYWRIGHT[platform] ?? PLAYWRIGHT.linux;
-  const dir = env.PLAYWRIGHT_BROWSERS_PATH && env.PLAYWRIGHT_BROWSERS_PATH !== '0' ? env.PLAYWRIGHT_BROWSERS_PATH : cache(home, env);
-  const builds = existsSync(dir) ? readdirSync(dir).filter((d) => /^chromium-\d+$/.test(d)) : [];
-  builds.sort((a, b) => Number(b.slice(9)) - Number(a.slice(9)));
-  return builds.flatMap((b) => programs.map((p) => join(dir, b, p))).find((p) => existsSync(p));
-}
-
 /**
- * The browser of every browser test: CHROME_PATH, else Chrome for Testing, else an installed Chromium browser. It
- * becomes CHROME_PATH, so the app's code under test (invoice PDFs, browser sessions, an API server the test starts)
- * starts the same one. Chrome for Testing goes before an installed Google Chrome, which was seen ending ~31 s after
- * every start (closeContext). None found: the test skips.
+ * The browser of every browser test, the one the app picks (findBrowser: CHROME_PATH, else Chrome for Testing, else an
+ * installed Chromium browser). It becomes CHROME_PATH, so an API server or script the test starts uses the same one.
+ * None found: the test skips.
  */
-const cft = process.env.CHROME_PATH ? undefined : chromeForTesting();
-if (cft) process.env.CHROME_PATH = cft;
 export const browserPath = findBrowser();
+if (browserPath) process.env.CHROME_PATH = browserPath;
 
 const START_MS = 60_000;
 const ends = new WeakMap<Browser, string>();
