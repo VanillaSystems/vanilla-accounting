@@ -7,9 +7,10 @@
 import { chart } from '../engines/index.js';
 import type { BankTransaction, JournalEntry, Receipt } from '../types/index.js';
 import { numbersIn, squash } from './document-numbers.js';
+import { codeOnAccount } from './vat-codes.js';
 
 export interface CreditNoteCode {
-  /** The invoice's code with the minus: -M81, -I81. */
+  /** The invoice's code with the minus, in the family of the account the credit note credits (#288): -M81, -I81. */
   code: string;
   /** The invoice's own code, as it was booked. */
   invoiceCode: string;
@@ -42,7 +43,9 @@ export function creditNoteCodeOf(e: Pick<JournalEntry, 'vatCode' | 'accountDebit
     if (codes.size !== 1) continue;
     const [invoiceCode] = codes;
     const invoice = text.split(/[\s,;:()[\]«»"']+/).find((w) => squash(w.replace(/^[-/#]+|[-/#.]+$/g, '')) === n) ?? n;
-    return { code: `-${invoiceCode}`, invoiceCode, invoice, receipt: r.id };
+    const code = codeOnAccount(`-${invoiceCode}`, e.accountDebit, e.accountCredit);
+    if (!code) continue;
+    return { code, invoiceCode, invoice, receipt: r.id };
   }
   return undefined;
 }
