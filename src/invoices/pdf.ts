@@ -5,16 +5,37 @@
  * modification dates are set to the document's own time, so the same sheet printed twice by
  * the same browser gives the same bytes. A sent PDF is stored once and never printed again.
  */
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { Browser } from 'puppeteer-core';
+import type { Browser, Page } from 'puppeteer-core';
 import { invoiceFontCss } from './fonts.js';
 import { MEASURE_SCRIPT, assembleSheets, hasQrBill, measureHtml, paginate, sheetBlocks, sheetDocument, sheetTitle, type SheetData } from './sheet.js';
 
-/** Where Chrome, Edge, Brave and Chromium install themselves, per platform. CHROME_PATH comes first. */
-export function browserCandidates(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env): string[] {
-  const home = homedir();
+/** Playwright's browser cache and Chrome for Testing's program inside one of its chromium-<build> folders, per platform. */
+const PLAYWRIGHT: Record<string, { cache: (home: string, env: NodeJS.ProcessEnv) => string; programs: string[] }> = {
+  darwin: {
+    cache: (home) => join(home, 'Library/Caches/ms-playwright'),
+    programs: ['chrome-mac-arm64', 'chrome-mac-x64', 'chrome-mac'].map((d) => join(d, 'Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing')),
+  },
+  linux: { cache: (home) => join(home, '.cache/ms-playwright'), programs: ['chrome-linux64/chrome', 'chrome-linux/chrome'] },
+  win32: { cache: (home, env) => join(env.LOCALAPPDATA ?? join(home, 'AppData/Local'), 'ms-playwright'), programs: ['chrome-win64/chrome.exe', 'chrome-win/chrome.exe'] },
+};
+
+/** The newest Chrome for Testing Playwright installed (PLAYWRIGHT_BROWSERS_PATH, else its cache), if any. */
+export function chromeForTesting(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env, home = homedir()): string | undefined {
+  const { cache, programs } = PLAYWRIGHT[platform] ?? PLAYWRIGHT.linux;
+  const dir = env.PLAYWRIGHT_BROWSERS_PATH && env.PLAYWRIGHT_BROWSERS_PATH !== '0' ? env.PLAYWRIGHT_BROWSERS_PATH : cache(home, env);
+  const builds = existsSync(dir) ? readdirSync(dir).filter((d) => /^chromium-\d+$/.test(d)) : [];
+  builds.sort((a, b) => Number(b.slice(9)) - Number(a.slice(9)));
+  return builds.flatMap((b) => programs.map((p) => join(dir, b, p))).find((p) => existsSync(p));
+}
+
+/**
+ * Where Chrome, Edge, Brave and Chromium install themselves, per platform. CHROME_PATH comes first, then Chrome for
+ * Testing: an installed Google Chrome was seen ending 12 to 31 s after every headless start, where Chrome for Testing ran on.
+ */
+export function browserCandidates(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env, home = homedir()): string[] {
   const byPlatform: Record<string, string[]> = {
     darwin: ['Google Chrome', 'Microsoft Edge', 'Brave Browser', 'Chromium'].flatMap((app) => {
       const bin = `${app}.app/Contents/MacOS/${app}`;
@@ -26,12 +47,20 @@ export function browserCandidates(platform: NodeJS.Platform = process.platform, 
     ]),
     linux: ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/microsoft-edge', '/usr/bin/brave-browser', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/snap/bin/chromium'],
   };
-  return [...(env.CHROME_PATH ? [env.CHROME_PATH] : []), ...(byPlatform[platform] ?? byPlatform.linux)];
+  const cft = chromeForTesting(platform, env, home);
+  return [...(env.CHROME_PATH ? [env.CHROME_PATH] : []), ...(cft ? [cft] : []), ...(byPlatform[platform] ?? byPlatform.linux)];
 }
 
 export class NoBrowserError extends Error {
   constructor() {
     super('Für Rechnungs-PDFs braucht die App einen Chromium-Browser: Google Chrome, Microsoft Edge, Brave oder Chromium installieren (oder CHROME_PATH auf das Programm setzen).');
+  }
+}
+
+/** The browser started once more after the one printing went away, and that start failed too. */
+export class BrowserRestartError extends Error {
+  constructor(executablePath: string, cause: unknown) {
+    super(`Der Browser für PDFs (${executablePath}) hat sich beendet und liess sich nicht neu starten: ${(cause as Error)?.message ?? cause}. CHROME_PATH auf einen anderen Chromium-Browser setzen oder Chrome for Testing installieren (npx playwright install chromium).`, { cause });
   }
 }
 
@@ -41,18 +70,31 @@ export function findBrowser(): string | undefined {
 
 let launched: Promise<Browser> | undefined;
 
+/** The browser printing now: started on the first PDF and dropped when it goes away, so the next PDF starts another. */
 function browser(): Promise<Browser> {
+  if (launched) return launched;
   const executablePath = findBrowser();
   if (!executablePath) return Promise.reject(new NoBrowserError());
   // The process decides when it ends (src/server/main.ts closes the browser on a signal); puppeteer would keep it alive.
   // Imported only here: the desktop app prints without it and does not pack it (desktop/not-packed.cjs).
-  launched ??= import('puppeteer-core').then(({ default: puppeteer }) => puppeteer.launch({
+  const started: Promise<Browser> = import('puppeteer-core').then(({ default: puppeteer }) => puppeteer.launch({
     executablePath, headless: true, args: ['--font-render-hinting=none', '--no-first-run'], handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false,
-  })).catch((e) => {
-    launched = undefined;
-    throw e;
+  })).then((b) => {
+    b.once('disconnected', () => { if (launched === started) launched = undefined; });
+    return b;
   });
-  return launched;
+  launched = started;
+  started.catch(() => { if (launched === started) launched = undefined; });
+  return started;
+}
+
+/** Drops the browser, ending its process when it still runs. */
+async function dropBrowser(): Promise<void> {
+  const b = launched;
+  launched = undefined;
+  const gone = await b?.catch(() => undefined);
+  if (gone?.connected) await gone.disconnect();
+  gone?.process()?.kill('SIGKILL');
 }
 
 /** Closes the browser this process started; a CLI calls it before it exits. */
@@ -60,6 +102,11 @@ export async function closeBrowser(): Promise<void> {
   const b = launched;
   launched = undefined;
   if (b) await (await b).close();
+}
+
+/** The browser this process started for PDFs, if any (a test ends it to prove the next PDF starts another). */
+export function startedBrowser(): Promise<Browser> | undefined {
+  return launched;
 }
 
 export interface Rendered { html: string; pages: number }
@@ -74,8 +121,25 @@ export interface PrintPage {
   close(): Promise<void>;
 }
 
+/** A page of the running browser; one that went away (Google Chrome may end itself) is started once more. */
+async function openPage(): Promise<Page> {
+  try {
+    return await (await browser()).newPage();
+  } catch (e) {
+    if (e instanceof NoBrowserError) throw e;
+    await dropBrowser();
+    try {
+      return await (await browser()).newPage();
+    } catch (again) {
+      if (again instanceof NoBrowserError) throw again;
+      await dropBrowser();
+      throw new BrowserRestartError(findBrowser() ?? '', again);
+    }
+  }
+}
+
 async function puppeteerPage(): Promise<PrintPage> {
-  const page = await (await browser()).newPage();
+  const page = await openPage();
   return {
     setContent: (html) => page.setContent(html, { waitUntil: 'load' }),
     evaluate: (script) => page.evaluate(script),
