@@ -3958,6 +3958,7 @@ export default {
     'rules.say.customsSplit': 'la facture de dédouanement selon ses positions : fret, TVA à l’importation, droits de douane et frais chacun sur son compte',
     'rules.say.customsDirect': 'TVA à l’importation payée directement à la douane : la décision de taxation est le justificatif',
     'rules.say.customsUnproven': 'TVA à l’importation {currency} {amount} sans déduction de l’impôt préalable : la facture du transporteur ne la prouve pas, seule la décision de taxation TVA de la douane qui nomme l’entreprise comme importatrice la prouve. Une fois liée, l’app comptabilise la déduction',
+    'rules.say.importVatRate': 'TVA à l’importation comptabilisée sans impôt préalable, {code} retiré : l’impôt préalable sur {account} n’existe qu’avec la décision de taxation TVA de la douane, comme déduction sans contrepartie, jamais comme taux sur la TVA à l’importation elle-même',
     'rules.say.customsProven': 'impôt préalable sur la TVA à l’importation {currency} {amount} selon la décision de taxation {file}',
     'rules.say.customsDeduction': 'impôt préalable TVA à l’importation selon la décision de taxation {file}',
     'rules.say.customsCorrection': 'correction de l’écriture {id} ({period}) : impôt préalable TVA à l’importation selon la décision de taxation {file}, arrivée après le décompte',

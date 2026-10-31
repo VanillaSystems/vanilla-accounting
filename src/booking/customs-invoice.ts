@@ -24,6 +24,7 @@ import { isPurchaseDocument } from '../accounting/evidence-check.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import { filingKeyOf, type FilingLength } from '../accounting/periods.js';
 import { codeForRate } from '../accounting/vat-codes.js';
+import { isVatAmountCode } from '../accounting/validate.js';
 import { normalRate } from '../accounting/sales-without-vat.js';
 import { baseCurrency, vat } from '../engines/index.js';
 import type { ClassifyEntry } from '../llm/prompts.js';
@@ -153,10 +154,19 @@ function unnamedPosition(l: ReceiptLine, words: CustomsWords, cites: boolean): L
 }
 
 /**
+ * Whether `line` is as much as the domestic tax on the lines at one domestic rate (within 0.05):
+ * the carrier's own VAT printed as a line, not import VAT it advanced.
+ */
+function carrierVat(line: ReceiptLine, lines: readonly ReceiptLine[]): boolean {
+  const rates = new Set(lines.map((l) => l.ratePercent ?? 0).filter((rate) => rate > 0 && vat().isDomesticRate(rate)));
+  return [...rates].some((rate) => Math.abs(toRappen(lines.filter((l) => l.ratePercent === rate).reduce((s, l) => s + l.gross, 0) * rate / 100) - toRappen(line.gross)) <= 5);
+}
+
+/**
  * A receipt read as a customs invoice: undefined when it is none (no line, not even one of 0.00,
- * charges duty or import VAT by its words, nor costs free of VAT on an invoice that cites a customs
- * declaration's number, or its lines were not read), a hold when one of its
- * lines names no position or the lines do not add up to its total. A courier prints duty at 0.00
+ * charges duty or import VAT by its words, nor, on an invoice that cites a customs declaration's
+ * number, costs free of VAT or the tax alone at no rate that is not the carrier's own (carrierVat),
+ * or its lines were not read), a hold when one of its lines names no position or the lines do not add up to its total. A courier prints duty at 0.00
  * when none was due: such a line tells what the invoice is, and is left out of the booking. On a
  * customs invoice a line that names only the tax is import VAT and a line at the domestic rate is
  * fees (unnamedPosition). Fees and freight are summed per rate; each import VAT line stays apart,
@@ -165,7 +175,8 @@ function unnamedPosition(l: ReceiptLine, words: CustomsWords, cites: boolean): L
 export function readCustomsInvoice(r: Receipt, words: CustomsWords): { invoice: CustomsInvoice } | { hold: CustomsHold } | undefined {
   const numbers = assessmentNumbers(r.extractedText ?? '', words);
   const all = (r.lineItems ?? []).map((l) => ({ l, position: positionOf(l.description, words) }));
-  const customs = all.some((n) => n.position === 'importVat' || n.position === 'duty') || (numbers.length > 0 && all.some((n) => !n.position && namesUntaxed(n.l, words)));
+  const customs = all.some((n) => n.position === 'importVat' || n.position === 'duty')
+    || (numbers.length > 0 && all.some((n) => !n.position && unnamedPosition(n.l, words, true)?.position === 'importVat' && (namesUntaxed(n.l, words) || !carrierVat(n.l, r.lineItems!))));
   if (!customs) return undefined;
   const named = all.filter((n) => toRappen(n.l.gross) !== 0).map((n) => ({ l: n.l, reading: n.position ? { position: n.position } as LineReading : unnamedPosition(n.l, words, numbers.length > 0) }));
   const rateOf = (l: ReceiptLine, reading: LineReading) => reading.position === 'fees' || reading.position === 'freight' ? reading.rate ?? l.ratePercent : undefined;
@@ -353,6 +364,16 @@ function deductionCode(account: string): string | undefined {
   return gross ? vat().codes.taxAmountCode(gross) : undefined;
 }
 
+/**
+ * Whether a line claims input tax at a rate on the import VAT account (4030 M81): it would claim the
+ * rate on the import VAT itself. The import VAT account's input tax is only the one-legged deduction
+ * of an assessment's tax (deductionLine); the model and a rule never book a rate there, nor the AI's
+ * changes (src/server/edits.ts assertImportVatRule).
+ */
+export function ratesImportVat(e: Pick<JournalEntry, 'accountDebit' | 'vatCode'>, words: CustomsWords): boolean {
+  return !!e.vatCode && !isVatAmountCode(e.vatCode) && e.accountDebit === words.positions.importVat.account && !!vat().codes.parse(e.vatCode)?.rate;
+}
+
 /** The one-legged line that deducts an assessment's tax off the import VAT account. */
 function deductionLine(a: Assessment, words: CustomsWords, description: string): ClassifyEntry | undefined {
   const account = words.positions.importVat.account;
@@ -427,7 +448,9 @@ export function namesAssessment(r: Pick<Receipt, 'extractedText'>, words: Custom
  * The deductions assessments bring to import VAT the app booked before them, booked into `books`:
  * a payment whose app booking (not a person's) has an import VAT line gets, for each import VAT line
  * of its linked customs invoices that no deduction covers yet, the one-legged line of the tax, from
- * an assessment no one linked yet that proves it. The assessment points at the payment as its filed
+ * an assessment no one linked yet that proves it. When no linked document reads as a customs invoice
+ * (the model booked the payment), each import VAT line of the booking stands for one, proved by the
+ * same tax and a declaration number the linked documents cite, when they cite any. The assessment points at the payment as its filed
  * payment, or stands alone, proving that line alone within ASSESSMENT_DAYS of its invoice. While the
  * payment's period is open the line takes its day and the assessment is linked to the payment;
  * once filed it is booked on the open period's first day (or the assessment's, when later) as a
@@ -449,14 +472,18 @@ export function importVatDeductions(books: CustomsBooks, ctx: DeductionContext):
   const byId = new Map(books.receipts.map((r) => [r.id, r]));
   const linked = new Set(books.mappings.map((m) => m.receiptId));
   const isDeduction = (e: JournalEntry) => e.vatCode === code && e.accountCredit === account && !e.accountDebit;
-  const lines = books.transactions.flatMap((t) => {
-    const original = books.journalEntries.find((e) => e.transactionRef === t.ref && e.origin === 'classify' && e.accountDebit === account && !!e.accountCredit && e.by?.kind !== 'person' && e.by?.kind !== 'assistant');
-    if (original && !withoutInputTax(original)) return [];
-    if (!original) return [];
-    return books.mappings.filter((m) => m.transactionRef === t.ref).map((m) => byId.get(m.receiptId)).flatMap((r) => {
-      const read = r && isPurchaseDocument(r) ? readCustomsInvoice(r, ctx.words) : undefined;
-      return read && 'invoice' in read ? read.invoice.lines.filter((l) => l.position === 'importVat').map((l) => ({ payment: t.ref, original, invoice: read.invoice, amount: l.gross })) : [];
-    });
+  const lines = books.transactions.flatMap((t): Array<{ payment: string; original: JournalEntry; invoice: Pick<CustomsInvoice, 'numbers' | 'date'>; amount: number }> => {
+    const own = books.journalEntries.filter((e) => e.transactionRef === t.ref && e.origin === 'classify' && e.accountDebit === account && !!e.accountCredit && e.by?.kind !== 'person' && e.by?.kind !== 'assistant');
+    const [original] = own;
+    if (!original || !withoutInputTax(original)) return [];
+    const documents = books.mappings.filter((m) => m.transactionRef === t.ref).map((m) => byId.get(m.receiptId)).filter((r): r is Receipt => !!r && isPurchaseDocument(r));
+    const read = documents.map((r) => readCustomsInvoice(r, ctx.words));
+    if (read.some((x) => x && 'invoice' in x)) {
+      return read.flatMap((x) => x && 'invoice' in x ? x.invoice.lines.filter((l) => l.position === 'importVat').map((l) => ({ payment: t.ref, original, invoice: x.invoice, amount: l.gross })) : []);
+    }
+    // No linked document reads as a customs invoice, so the model booked it: its import VAT lines stand for the invoice's, which cites the declaration numbers its text names.
+    const invoice = { numbers: [...new Set(documents.flatMap((r) => assessmentNumbers(r.extractedText ?? '', ctx.words)))], date: documents.find((r) => r.date)?.date };
+    return own.filter(withoutInputTax).map((e) => ({ payment: t.ref, original: e, invoice, amount: e.amount }));
   });
   // A line counts as deducted once a deduction of its amount stands for its payment: on it, or as a correction holding an assessment that points at it.
   const done = books.journalEntries.filter(isDeduction).map((e) => ({ e, payments: [e.transactionRef, ...(e.receipts ?? []).map((id) => byId.get(id)?.filedPayment).filter((p): p is string => !!p)] }));
