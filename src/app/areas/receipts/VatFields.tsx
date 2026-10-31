@@ -68,10 +68,16 @@ export function VatFields({ v, nav, edit, title }: { v: ReceiptView; nav: Nav; e
   const box = useRef<HTMLDivElement>(null);
   const rates = ratesFor(r);
 
-  // A receipt saved or read again shows its facts, unless she is typing in them or they are what the fields say.
+  // A receipt saved, undone or read again shows its facts, unless she changed the fields and the change is not saved yet: what she typed stays.
+  const shown = useRef(key(r));
   useEffect(() => {
-    if (box.current?.contains(document.activeElement)) return;
-    setD((cur) => { const f = factsOf(cur, r); return f && f !== 'wrong' && key(f) === key(r) ? cur : draftOf(r); });
+    const was = shown.current;
+    shown.current = key(r);
+    setD((cur) => {
+      const f = factsOf(cur, r);
+      const typed = !f || f === 'wrong' || key(f) !== was;
+      return f && f !== 'wrong' && key(f) === key(r) ? cur : typed && box.current?.contains(document.activeElement) ? cur : draftOf(r);
+    });
   }, [key(r)]);
 
   function commit(next: Draft) {
