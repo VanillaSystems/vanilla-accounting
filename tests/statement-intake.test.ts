@@ -14,7 +14,8 @@ import type { Receipt } from '../src/types/index.js';
 
 const KONTOAUSZUG = ['Raiffeisenbank Beispieldorf', 'Kontoauszug 01.08.2026 - 31.08.2026', 'Beispiel Kaffee GmbH, Bahnhofweg 1, 8000 Zürich', 'IBAN CH65 8080 8000 0000 0000 1, Währung CHF', '',
   'Saldovortrag 01.08.2026: 18 500.00', '03.08.2026 | Zahlung Swisscom | -89.00 | Ref. R-1', 'Schlusssaldo 31.08.2026: 18 411.00'];
-const WISE = ['Wise Europe SA', 'EUR statement', 'Beispiel Kaffee GmbH', 'Balance brought forward 1,200.00 EUR', 'Closing balance 980.00 EUR'];
+const WISE = ['Wise Europe SA', 'EUR statement', 'Beispiel Kaffee GmbH', 'Balance brought forward 1,200.00 EUR',
+  'Description | Incoming | Outgoing | Amount', 'Card transaction Beispiel Shop | | -220.00 | 980.00', 'Closing balance 980.00 EUR'];
 const WISE_NAME = 'statement_12345678_EUR_2026-08-01_2026-08-31.pdf';
 
 type Books = { receipts: Receipt[]; mappings: Array<{ receiptId: string; transactionRef: string }>; transactions: Array<{ ref: string; date: string }> };
