@@ -8,7 +8,7 @@ and the providers.
 
 | Layer | Files | With Swiss specifics |
 |---|---:|---:|
-| core | 74 | 23 |
+| core | 75 | 23 |
 | engine | 4 | 1 |
 | provider | 14 | 11 |
 | split | 122 | 26 |
@@ -209,4 +209,4 @@ Layers are assigned by path prefix, most specific first:
 | `src/cli/year-open.ts` | CHF 2, ESTV 1 |
 | `src/server/routes/config.ts` | MWST 1, ESTV 2 |
 | `src/server/routes/receipts.ts` | CHF 1 |
-| `src/server/routes/statements.ts` | ESTV 1, camt.053 21 |
+| `src/server/routes/statements.ts` | ESTV 1, camt.053 22 |

@@ -3166,6 +3166,8 @@ export const messages = {
   'error.gone.file': 'Diese Datei liegt nicht (mehr) im Eingang.',
   'error.reportCorrection.gone': 'Diesen Verkaufsbericht gibt es in den Büchern nicht (mehr): nichts gebucht.',
   'error.reportCorrection.notOffered': 'Diese Rückerstattung bietet der Verkaufsbericht nicht (mehr) als Korrektur an: schon gebucht, oder kein Zahlungsbericht datiert sie. Nichts gebucht.',
+  'error.statementUndo.expired': 'Das Entfernen lässt sich nicht mehr rückgängig machen: den Auszug neu hinzufügen.',
+  'error.statementUndo.changed': 'Die Bücher haben sich seit dem Entfernen geändert: nichts zurückgeholt. Den Auszug neu hinzufügen.',
   'error.gone.quarantined': 'Diese Datei liegt nicht (mehr) in der Quarantäne.',
   'error.fileReferenced': '{file} wird nicht gelöscht. Darauf verweist noch: {refs}.',
   'error.fileReferenced.payment': 'Zahlung {ref}',
