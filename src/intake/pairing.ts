@@ -22,6 +22,7 @@ import { duplicatesIn } from './duplicates.js';
 import { assessmentNumbers, namesAssessment } from '../booking/customs-invoice.js';
 import type { Businesses } from './batch-payers.js';
 import { DELAY, type Delays } from './delays.js';
+import { isBankFee } from '../booking/separate-fee.js';
 
 /** Which payments are candidates at all. */
 export const BOUNDS = {
@@ -30,6 +31,8 @@ export const BOUNDS = {
   /** The payment's day lies from this many days before the receipt's day to this many after it; after it, further when the supplier's usual delay reaches further (src/intake/delays.ts DELAY.reach). */
   daysBefore: 10,
   daysAfter: 60,
+  /** A payment this many days or more off the day a receipt expects it, while another payment fits that day, pays the neighbouring bill of a series: last month's invoice of a subscription is no pair for this month's charge (periodApart, #291). */
+  period: 25,
 } as const;
 
 /**
@@ -74,6 +77,9 @@ export const SIGNALS = ['amount', 'original', 'currency', 'day', 'name', 'number
 export type Signal = (typeof SIGNALS)[number];
 
 const ruleOf = (rule: string | undefined) => rule?.split(':')[0];
+
+/** A link the chain made: a better receipt may take it over (#291), a person's never. */
+export const chainMade = (m: Pick<Mapping, 'rule'>): boolean => (Object.values(PAIR_RULE) as string[]).includes(ruleOf(m.rule) ?? '');
 
 export function makerOf(m: Pick<Mapping, 'by' | 'rule'>): LinkMaker {
   if (m.by === 'human') return 'person';
@@ -143,6 +149,8 @@ export interface PairCandidate {
   days: number;
   /** The payment's day minus the day the supplier's usual delay expects it (src/intake/delays.ts); `days` for a supplier without one, or one that pays within the first day band. */
   offDays: number;
+  /** The receipt the chain linked to this payment a whole period off it, whose link this receipt takes over (#291). */
+  replaces?: string;
 }
 
 export interface PairSearch {
@@ -215,7 +223,7 @@ export function pairableReceipt(r: Receipt, linked: ReadonlySet<string>, noPayme
  * only settles, a fee row, a business or wording a rule exempts).
  */
 export function pairablePayment(t: BankTransaction, taken: ReadonlySet<string>, noReceipt?: (t: BankTransaction) => boolean): boolean {
-  return t.amount !== 0 && t.type !== 'wise-fee' && !t.noReceiptNeeded && !taken.has(t.ref) && !noReceipt?.(t);
+  return t.amount !== 0 && !isBankFee(t) && !t.noReceiptNeeded && !taken.has(t.ref) && !noReceipt?.(t);
 }
 
 /** The payments a receipt holds: linked, or, for a filed payment, pointed at (Receipt.filedPayment, which the next correction counts). */
@@ -328,6 +336,34 @@ function paymentsNear(payments: readonly BankTransaction[]): (r: Receipt, usual?
   };
 }
 
+/**
+ * `far` lies a whole billing period off the day its receipt expects, while `near` fits on that day
+ * with as much for it besides the day (amount, name, number): `far` pairs the neighbouring bill of a
+ * series (#291). Of one receipt and two payments, `far` is no candidate; of one payment and two
+ * receipts, `near`'s receipt is the payment's.
+ */
+export function periodApart(far: PairCandidate, near: PairCandidate): boolean {
+  return Math.abs(far.offDays) >= BOUNDS.period && Math.abs(near.offDays) <= WEIGHTS.day[0].upTo && near.score - dayOf(near) >= far.score - dayOf(far);
+}
+
+/** The payments the chain alone linked to one receipt, in the open period and of one movement, with that receipt: a receipt that fits the payment's day better takes the link over (#291). */
+function chainLinksOf(books: Books, isClosed: (date: string) => boolean): Map<string, { receipt: Receipt; payment: BankTransaction }> {
+  const receipt = new Map(books.receipts.map((r) => [r.id, r]));
+  const byPayment = new Map<string, Mapping[]>();
+  const byReceipt = new Map<string, number>();
+  for (const m of books.mappings) {
+    byPayment.set(m.transactionRef, [...(byPayment.get(m.transactionRef) ?? []), m]);
+    byReceipt.set(m.receiptId, (byReceipt.get(m.receiptId) ?? 0) + 1);
+  }
+  const out = new Map<string, { receipt: Receipt; payment: BankTransaction }>();
+  for (const t of books.transactions) {
+    const [m, ...more] = byPayment.get(t.ref) ?? [];
+    const r = m && receipt.get(m.receiptId);
+    if (r?.date && r.amount && !more.length && chainMade(m) && byReceipt.get(r.id) === 1 && !isClosed(t.date)) out.set(t.ref, { receipt: r, payment: t });
+  }
+  return out;
+}
+
 /** Best first: the score, then the day nearer the expected one. */
 const rank = (a: PairCandidate, b: PairCandidate) => b.score - a.score || Math.abs(a.offDays) - Math.abs(b.offDays) || a.payment.localeCompare(b.payment);
 
@@ -343,7 +379,10 @@ export interface SearchOptions {
 /**
  * The candidates of every pairable receipt and payment, each list best first. A pair a person took
  * apart (Receipt.notPaidBy) is never a candidate again. A filed payment is a candidate too: its
- * receipt is pointed at it, never linked (golden rule 1).
+ * receipt is pointed at it, never linked (golden rule 1). Of a series of bills (#291): a payment a
+ * whole period off a receipt's day is none while a payment of that day holds a receipt, and a
+ * payment the chain linked to a receipt a period off is a candidate of the receipt of its day,
+ * which takes the link over (periodApart).
  */
 export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string) => boolean, { noReceipt, noPayment, businesses, delays }: SearchOptions = {}): PairSearch {
   const linkedReceipts = new Set(books.mappings.map((m) => m.receiptId));
@@ -357,6 +396,10 @@ export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string)
   // Of two documents of one invoice (duplicatesIn), the copy is no candidate: it would compete with its original for one payment, or pair beside the one linked already (#190). It stays for Belege's copy question.
   const twins = pairable.length ? duplicatesIn([...pairable, ...books.receipts.filter((r) => linkedReceipts.has(r.id))], linkedReceipts, documents()) : new Map();
   const near = paymentsNear(payments);
+  // The payments a receipt holds already: one on a receipt's day speaks against a candidate a whole period off it, and one the chain linked to a receipt a period off goes to the receipt of its day (#291).
+  const held = books.transactions.filter((t) => taken.has(t.ref) && t.amount !== 0);
+  const nearHeld = paymentsNear(held);
+  const chainLinks = chainLinksOf(books, isClosed);
   for (const r of pairable) {
     if (twins.get(r.id)?.relation === 'duplicate') continue;
     const apart = new Set(r.notPaidBy ?? []);
@@ -372,8 +415,14 @@ export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string)
       const had = c && best.get(c.payment);
       if (c && (!had || rank(c, had) < 0)) best.set(c.payment, c);
     }
-    const mine = [...best.values()];
-    for (const c of mine) byPayment.get(c.payment)!.push(c);
+    const onItsDay = nearHeld(r, usual).flatMap((t) => (apart.has(t.ref) ? [] : fitOf(r, t, toChf, isClosed, businesses, usual) ?? []));
+    const mine = [...best.values()].filter((c) => !onItsDay.some((h) => periodApart(c, h)));
+    for (const h of onItsDay) {
+      const linked = chainLinks.get(h.payment);
+      const theirs = linked && fitOf(linked.receipt, linked.payment, toChf, isClosed, businesses, delays?.(linked.receipt));
+      if (theirs && periodApart(theirs, h)) mine.push({ ...h, replaces: linked!.receipt.id });
+    }
+    for (const c of mine) (byPayment.get(c.payment) ?? byPayment.set(c.payment, []).get(c.payment)!).push(c);
     byReceipt.set(r.id, mine);
   }
   for (const list of [...byReceipt.values(), ...byPayment.values()]) list.sort(rank);

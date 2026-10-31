@@ -267,11 +267,15 @@ export interface DocumentsData {
     positions: Record<CustomsPosition, { account: string; words: string[] }>;
     /** Words that name only the tax («MwSt / TVA / IVA»): such a line at no rate is the import VAT the carrier advanced, on an invoice whose lines name duty or import VAT. */
     tax: string[];
+    /** Words that name costs passed on free of VAT («MWST.-freie Kosten»): such a line at no rate is the import VAT the carrier advanced, on an invoice that cites a customs declaration's number. */
+    untaxed?: string[];
     /** `number`: the pattern (a regular expression's source) of the assessment's number; `access`: the label of the access code a courier's invoice prints to fetch it. */
     assessment: { title: string[]; total: string[]; number: string; access: string[] };
   };
-  /** The title of a bank statement: the drop reads such a PDF as a statement, not as a receipt. */
+  /** The title of a bank statement: with an IBAN or the movement columns, the drop reads such a PDF as a statement, not as a receipt (src/core/modules/words.ts isBankStatement). */
   statement: string[];
+  /** The column words of a statement's movements, money out and money in («Belastung», «Gutschrift»): a bank statement without an IBAN shows them. */
+  movements: { out: string[]; in: string[] };
   /** The balance lines of a statement («Saldovortrag», «Closing balance»): with its title, IBAN and period, a statement among the receipts (src/books/statement-facts.ts). */
   balance: string[];
   /** The title of a credit note («Gutschrift», «Credit note»): money comes back for it, so it is matched to money in (src/intake/pairing.ts paysIn). */

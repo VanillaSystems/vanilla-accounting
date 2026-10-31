@@ -46,7 +46,7 @@ export interface Receipt {
   description?: string;
   amount?: number;
   currency?: string;
-  // local OCR (pdftotext + tesseract) yielded no text — needs manual approval to send image to AI
+  /** Its text is empty or not legible (src/parsers/receipt-text.ts): the VAT step leaves it, its VAT waits for a vision read or the person (#57, #284). */
   needsVisionReview?: boolean;
   remarks?: string;
   // set during extract-vat step (VAT facts read directly off the receipt)
@@ -506,7 +506,12 @@ export interface BankTransaction {
    * src/server/edits.ts privatePayment), as they were: deleting the payment puts them back.
    */
   replaced?: JournalEntry[];
-  type?: 'wise-fee';
+  /**
+   * A fee row of the bank (src/booking/separate-fee.ts isBankFee): the statement is its evidence.
+   * `wise-fee`: the fee of another payment, debited as a movement of its own (separateFeeOf finds
+   * its payment); `bank-fee`: the bank's fee for the account itself, of no payment.
+   */
+  type?: 'wise-fee' | 'bank-fee';
   remarks?: string;
   noReceiptNeeded?: boolean;
   /**

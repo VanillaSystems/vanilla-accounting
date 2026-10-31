@@ -8,7 +8,7 @@ import { bankAccountFor } from '../workspace/money-accounts.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import type { Books } from '../books/store.js';
 import type { BankTransaction } from '../types/index.js';
-import { mappedReceipts, paymentFacts, ruleBookingLines, type ClassifyContext, type RuleLine } from './classify.js';
+import { handOwnUse, mappedReceipts, paymentFacts, ruleBookingLines, type ClassifyContext, type RuleLine } from './classify.js';
 import type { RuleRow } from './rule-book.js';
 import { holds, loneWords, ruleFor, type PlacedRule, type RuleBooking } from './rules.js';
 import { nationalCodes, overrideOf, supplierFacts, type NationalOverride, type SideLine } from './national-vat.js';
@@ -123,12 +123,27 @@ export function openYear(books: Pick<Books, 'config' | 'transactions'>): string 
 export function bookedNow(books: Books, tx: BankTransaction, bank: string, decided = false): RuleLine[] {
   return books.journalEntries.filter((e) => e.transactionRef === tx.ref).map((now) => {
     const e = decided && now.by?.kind === 'assistant' && now.by.was ? { ...now, ...now.by.was } : now;
-    return {
-      account: e.accountDebit === bank ? e.accountCredit : e.accountDebit,
-      ...(e.vatCode ? { vat: e.vatCode } : {}),
-      amount: e.amount,
-    };
+    return lineOf(e, bank, tx.direction);
   });
+}
+
+/**
+ * A line as the card names it: the side opposite the bank; a line without the bank (an own-use
+ * correction) by the side a payment out debits, the other side `against` (ruleBookingLines).
+ */
+function lineOf(e: SideLine, bank: string, direction: BankTransaction['direction']): RuleLine {
+  const apart = !!e.accountDebit && !!e.accountCredit && e.accountDebit !== bank && e.accountCredit !== bank;
+  const [account, against] = !apart ? [e.accountDebit === bank ? e.accountCredit : e.accountDebit] : direction === 'DBIT' ? [e.accountDebit, e.accountCredit] : [e.accountCredit, e.accountDebit];
+  return { account, ...(e.vatCode ? { vat: e.vatCode } : {}), amount: e.amount, ...(against ? { against } : {}) };
+}
+
+/**
+ * `now` with the own-use corrections a person booked for `tx` by hand on a ref of their own
+ * (handOwnUse), for each correction line the rule would book: the owner's way of booking the same.
+ */
+function withHandOwnUse(books: Books, tx: BankTransaction, now: RuleLine[], would: readonly RuleLine[]): RuleLine[] {
+  const hand = would.filter((l) => l.against).flatMap((l) => handOwnUse(books, tx, l).map((e): RuleLine => ({ ...l, amount: e.amount })));
+  return hand.length ? [...now, ...hand] : now;
 }
 
 /** What a rule's booking books for `tx`: its lines, the bank on the other side. */
@@ -136,18 +151,16 @@ function wouldEntries(books: Books, tx: BankTransaction, booking: RuleBooking, c
   const mapped = mappedReceipts(books, tx);
   const bank = bankAccountFor(tx, context.bankAccounts);
   return ruleBookingLines(tx, booking, mapped, context.ownerAccount).map((l) => ({
-    accountDebit: tx.direction === 'DBIT' ? l.account : bank,
-    accountCredit: tx.direction === 'DBIT' ? bank : l.account,
+    accountDebit: tx.direction === 'DBIT' ? l.account : l.against ?? bank,
+    accountCredit: tx.direction === 'DBIT' ? l.against ?? bank : l.account,
     amount: l.amount,
     ...(l.vat ? { vatCode: l.vat } : {}),
   }));
 }
 
-/** A line as the card names it: the side opposite the bank. */
-const asRuleLine = (bank: string) => (e: SideLine): RuleLine => ({ account: e.accountDebit === bank ? e.accountCredit : e.accountDebit, ...(e.vatCode ? { vat: e.vatCode } : {}), amount: e.amount });
-
 function wouldBook(books: Books, tx: BankTransaction, booking: RuleBooking, context: ClassifyContext): RuleLine[] {
-  return wouldEntries(books, tx, booking, context).map(asRuleLine(bankAccountFor(tx, context.bankAccounts)));
+  const bank = bankAccountFor(tx, context.bankAccounts);
+  return wouldEntries(books, tx, booking, context).map((e) => lineOf(e, bank, tx.direction));
 }
 
 /**
@@ -159,8 +172,8 @@ function departures(books: Books, tx: BankTransaction, booking: RuleBooking, con
   const entries = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
   const codes = nationalCodes(tx, lines, mappedReceipts(books, tx), supplierFacts(tx, entries), context);
   const kinds = [...new Set(lines.flatMap((l, i) => overrideOf(l.vatCode, codes[i]) ?? []))];
-  const line = asRuleLine(bankAccountFor(tx, context.bankAccounts));
-  return { kinds, national: lines.map((l, i) => line({ ...l, vatCode: codes[i] })) };
+  const bank = bankAccountFor(tx, context.bankAccounts);
+  return { kinds, national: lines.map((l, i) => lineOf({ ...l, vatCode: codes[i] }, bank, tx.direction)) };
 }
 
 /**
@@ -186,8 +199,8 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
       const deciderRow = decider && pool[placed.indexOf(decider)].row;
       const lines = t.booking ? wouldBook(books, tx, t.booking, context) : [];
       const bank = bankAccountFor(tx, context.bankAccounts);
-      const now = bookedNow(books, tx, bank);
-      const decided = bookedNow(books, tx, bank, true);
+      const now = withHandOwnUse(books, tx, bookedNow(books, tx, bank), lines);
+      const decided = withHandOwnUse(books, tx, bookedNow(books, tx, bank, true), lines);
       return {
         ref: tx.ref, date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction,
         text: [tx.description, tx.counterparty && !tx.description.includes(tx.counterparty) ? tx.counterparty : ''].filter(Boolean).join(' · '),
@@ -217,12 +230,13 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
       }
       // An ask rule asks first: it overrules nobody.
       if (t.kind === 'book') {
-        const decided = bookedNow(books, tx, bankAccountFor(tx, context.bankAccounts), true);
+        const would = wouldBook(books, tx, t.booking, context);
+        const decided = withHandOwnUse(books, tx, bookedNow(books, tx, bankAccountFor(tx, context.bankAccounts), true), would);
         const off = decided.map((l) => l.account).filter((a) => a && !own.has(a));
         if (off.length) elsewhere.push(tx);
         for (const a of off) if (!others.includes(a)) others.push(a);
         const byItself = books.journalEntries.filter((e) => e.transactionRef === tx.ref).every((e) => e.rule === target.row.id && e.origin !== 'manual');
-        const agrees = decided.length > 0 && sameLines(decided, wouldBook(books, tx, t.booking, context));
+        const agrees = decided.length > 0 && sameLines(decided, would);
         if (agrees) same++;
         else if (decided.length && !byItself) { otherwise++; differs.push(tx); }
         // Only where it books: another rule deciding first books nothing by this one.

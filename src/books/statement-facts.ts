@@ -9,7 +9,7 @@
 import type { DocumentsData } from '../core/modules/schema.js';
 import type { Receipt } from '../types/index.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
-import { HEAD, namesStatement, wordsRe } from '../core/modules/words.js';
+import { HEAD, IBAN, isBankStatement, wordsRe } from '../core/modules/words.js';
 
 export interface StatementFacts {
   /** The first day of the period, when the text or the name gives it. */
@@ -22,7 +22,6 @@ export interface StatementFacts {
   currency?: string;
 }
 
-const IBAN = /\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,7}(?:\s?[A-Z0-9]{1,3})?\b/;
 const DMY = String.raw`(\d{1,2})\.(\d{1,2})\.(20\d{2})`;
 const ISO = String.raw`(20\d{2})-(\d{2})-(\d{2})`;
 /** «01.02.2026 – 28.02.2026», «01.02.2026 bis 28.02.2026», «2026-02-01 to 2026-02-28»: a dash or a word between two days. */
@@ -60,14 +59,15 @@ type Named = Pick<Receipt, 'extractedText' | 'filename' | 'originalFilename'>;
 
 /**
  * The facts of a statement among the receipts, or undefined for a document that is none. A
- * statement names itself in its first lines before any receipt word (namesStatement: an invoice
- * that mentions a statement stays an invoice) and shows two more signs of one: an IBAN, a
- * period, a balance line («Statement of work» with its phase's days is none). The period comes
+ * statement names itself in its first lines before any receipt word and shows an IBAN or the
+ * columns of its movements (isBankStatement: an invoice that mentions a statement stays an
+ * invoice, a supplier's «Statement» with a period and balances is a receipt), and two signs of
+ * an IBAN, a period and a balance line («Statement of work» with its phase's days is none). The period comes
  * from the text, else from the file's name (its original name too, before a run renamed it).
  */
 export function statementFacts(r: Named, words: DocumentsData): StatementFacts | undefined {
   const text = r.extractedText ?? '';
-  if (!namesStatement(text, words)) return undefined;
+  if (!isBankStatement(text, words)) return undefined;
   const iban = IBAN.exec(text)?.[0].replace(/\s/g, '');
   const balance = (words.balance.length > 0 && wordsRe(words.balance).test(text)) || BALANCE_AT.test(text);
   const inText = statementPeriod(text);
