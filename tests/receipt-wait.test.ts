@@ -34,7 +34,8 @@ test('the decision: a purchase without a receipt waits; a receipt, a mark, money
   assert.equal(why(OUT('a', { noReceiptNeeded: true })), 'marked');
   assert.equal(why(OUT('a', { amount: 0 })), 'zero');
   assert.equal(why(OUT('a', { direction: 'CRDT' })), 'incoming');
-  assert.equal(why(OUT('a', { type: 'wise-fee' })), 'separateFee');
+  assert.equal(why(OUT('a', { type: 'wise-fee' })), 'bankFee');
+  assert.equal(why(OUT('a', { type: 'bank-fee' })), 'bankFee', 'the bank\'s fee for the account needs no receipt (#290)');
   assert.equal(why(OUT('a', { counterpartyIban: 'ch65 8080 8000 0000 0000 1' })), 'ownTransfer');
   assert.equal(why(OUT('a'), { ruleAccount: '1000' }), 'settlement', 'a rule that books onto cash is a transfer');
   assert.equal(why(OUT('a'), { ruleAccount: '2850' }), 'settlement', 'the owner\'s outlays paid back');

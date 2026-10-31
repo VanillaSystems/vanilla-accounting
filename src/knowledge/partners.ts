@@ -15,6 +15,7 @@ import type { InvoiceBook } from '../invoices/model.js';
 import type { Question, QuestionTarget } from '../questions/model.js';
 import type { Index, Receipt } from '../types/index.js';
 import type { Note } from './notes.js';
+import { isBankFee } from '../booking/separate-fee.js';
 
 /** Where a partner comes from: the app's public file, the company's own file, Rechnungen's customer list. */
 export interface PartnerLayers { app: boolean; workspace: boolean; customer: boolean }
@@ -100,7 +101,7 @@ export function partnersOf(input: PartnerInput): PartnersView {
     for (const e of own) push(entriesOf, id, e.id);
   };
 
-  const txs = books.transactions.filter((tx) => inYear(year, tx.date) && tx.type !== 'wise-fee');
+  const txs = books.transactions.filter((tx) => inYear(year, tx.date) && !isBankFee(tx));
   for (const tx of txs) {
     const own = linked(tx.ref);
     const booked = entriesByRef.get(tx.ref) ?? [];
