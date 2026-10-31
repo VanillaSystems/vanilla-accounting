@@ -3955,6 +3955,7 @@ export const messages = {
   'rules.say.customsSplit': 'die Zollrechnung nach ihren Positionen: Fracht, Einfuhrsteuer, Zoll und Gebühren je auf ihr Konto',
   'rules.say.customsDirect': 'Einfuhrsteuer direkt an den Zoll bezahlt: die Veranlagungsverfügung ist der Beleg',
   'rules.say.customsUnproven': 'Einfuhrsteuer {currency} {amount} ohne Vorsteuerabzug: die Rechnung des Kuriers belegt sie nicht, erst die Veranlagungsverfügung MWST des Zolls, die die Firma als Importeurin nennt. Ist sie verknüpft, bucht die App den Abzug',
+  'rules.say.importVatRate': 'Einfuhrsteuer ohne Vorsteuer gebucht, {code} weggelassen: Vorsteuer auf {account} gibt es nur mit der Veranlagungsverfügung des Zolls, als Abzug ohne Gegenkonto, nie als Satz auf der Einfuhrsteuer selbst',
   'rules.say.customsProven': 'Vorsteuer auf der Einfuhrsteuer {currency} {amount} laut Veranlagungsverfügung {file}',
   'rules.say.customsDeduction': 'Vorsteuer Einfuhrsteuer laut Veranlagungsverfügung {file}',
   'rules.say.customsCorrection': 'Korrektur zu Buchung {id} ({period}): Vorsteuer Einfuhrsteuer laut Veranlagungsverfügung {file}, die nach der Abrechnung kam',

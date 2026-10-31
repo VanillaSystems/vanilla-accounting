@@ -67,8 +67,10 @@ customs:
       account: "6280"
       words: [Fracht, Frachtkosten, Transport, Transportkosten, Versand, Versandkosten, Porto, Freight, Shipping, Carriage, Fret, Frais de port, Frais de transport, Expédition, Trasporto, Spese di trasporto, Spedizione, Nolo]
   # A line that names only the tax («MWST», «MwSt / TVA / IVA») at no rate of its own: on an invoice
-  # whose other lines name duty or import VAT (also lines of 0.00), it is the import VAT the carrier
-  # advanced. The carrier's own VAT is charged at a rate on its services, never a line at 0 %.
+  # whose other lines name duty or import VAT (also lines of 0.00), or that cites a customs
+  # declaration's number (assessment.number; a courier prints it as «Kosten …, Total MWST.-frei»),
+  # it is the import VAT the carrier advanced. The carrier's own VAT is charged at a rate on its
+  # services, never a line at 0 %; a line as much as that rate's tax on its taxed lines is its own.
   # A line that names no position but carries the carrier's Swiss rate (a printed invoice, an extra
   # service) is the carrier's own service: fees. Duty and import VAT never carry Swiss VAT.
   tax: [MWST, MwSt, Mehrwertsteuer, TVA, Taxe sur la valeur ajoutée, IVA, Imposta sul valore aggiunto, VAT, Value added tax]
