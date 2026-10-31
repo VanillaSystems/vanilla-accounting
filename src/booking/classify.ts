@@ -37,6 +37,7 @@ import { codeSignFor } from '../accounting/code-sign.js';
 import { homeOf, loadKnowledge } from '../knowledge/layers.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
 import { payerNames } from '../knowledge/payer.js';
+import { businessGuidance, companyGuidance } from '../knowledge/guidance.js';
 import { partsOf, partText } from '../accounting/manual-booking.js';
 import { wordsIn } from '../export/texts.js';
 import { ruleFor, ruleWords, stampRule, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
@@ -173,8 +174,6 @@ export interface ClassifyContext extends ClassifyPromptContext {
   rules?: readonly PlacedRule[];
   /** The businesses a payment can route to, for a rule of one business. */
   counterparties?: readonly Counterparty[];
-  /** The owner's private account (its number): where a rule's private share goes. */
-  ownerAccount?: string;
   /** The owner's name (company.owner): a payment to her is one the owner's account may settle (answerSettles). */
   ownerName?: string;
   /** The firm's VAT setup (src/workspace/vat-setup.ts): which codes its bookings may carry; absent: the effective method. */
@@ -261,6 +260,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     rules: placedRules(companyRules(ws, facts)),
     counterparties,
     purchaseVat: businessVat(knowledge),
+    guidance: companyGuidance(knowledge),
     ownerAccount: ownerAccount(ws).split(' ')[0],
     ownerName: ws.company.owner,
     vat: ws.company.vat,
@@ -509,9 +509,16 @@ function partRuleEntries(books: Books, tx: BankTransaction, context: ClassifyCon
 
 type PromptInput = Parameters<typeof buildBatchClassifyPrompt>[0][number];
 
-/** What the prompt says about one transaction: the transaction and its receipts, with their VAT facts; `legs`: the refs of its card charge (src/intake/charges.ts), whose other legs that hold its receipts it names. */
-export function classifyInput(books: Books, tx: BankTransaction, legs: readonly string[] = [tx.ref]): PromptInput {
-  const receipts = mappedReceipts(books, tx)
+/**
+ * What the prompt says about one transaction: the transaction and its receipts, with their VAT facts; `legs`: the refs of its card charge (src/intake/charges.ts), whose other legs that hold its receipts it names;
+ * `counterparties`: the businesses it may route to, whose file's decisions for the booking steps it carries (src/knowledge/guidance.ts).
+ */
+export function classifyInput(books: Books, tx: BankTransaction, legs: readonly string[] = [tx.ref], counterparties: readonly Counterparty[] = []): PromptInput {
+  const linked = mappedReceipts(books, tx);
+  const routing = identify(signalsOfTransaction(tx, linked), counterparties);
+  const cp = routing.kind === 'known' ? counterparties.find((c) => c.id === routing.counterparty) : undefined;
+  const guidance = cp ? businessGuidance(cp) : [];
+  const receipts = linked
     .filter((r) => r.extractedText && r.extractedText.length > 10)
     .map((r) => ({
       text: r.extractedText,
@@ -527,7 +534,7 @@ export function classifyInput(books: Books, tx: BankTransaction, legs: readonly 
   const fee = separateFeeOf(tx, books.transactions);
   const shared = sharedReceipts(books, tx, legs);
   return {
-    tx: { ref: tx.ref, date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction, description: tx.description, bank: tx.bank, ...(tx.counterparty ? { counterparty: tx.counterparty } : {}), ...(fee ? { separateFee: { ref: fee.ref, amount: fee.amount, currency: fee.currency } } : {}), ...(tx.businessPart ? { businessPart: { ...(tx.businessPart.what && { what: tx.businessPart.what }) } } : {}), ...(shared ? { sharedWith: shared.others.map((t) => ({ ref: t.ref, amount: t.amount, currency: t.currency })) } : {}) },
+    tx: { ref: tx.ref, date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction, description: tx.description, bank: tx.bank, ...(tx.counterparty ? { counterparty: tx.counterparty } : {}), ...(fee ? { separateFee: { ref: fee.ref, amount: fee.amount, currency: fee.currency } } : {}), ...(tx.businessPart ? { businessPart: { ...(tx.businessPart.what && { what: tx.businessPart.what }) } } : {}), ...(shared ? { sharedWith: shared.others.map((t) => ({ ref: t.ref, amount: t.amount, currency: t.currency })) } : {}), ...(cp && guidance.length ? { business: { name: cp.name, guidance } } : {}) },
     receipts,
   };
 }
@@ -713,7 +720,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     const fail = (tx: BankTransaction, reason: string) => { if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, reason }); };
     try {
       const examples = casebook.length ? casesForBatch(books, batch, casebook) : [];
-      const prompt = buildBatchClassifyPrompt(batch.map((tx) => classifyInput(books, tx, legsOf(tx))), context, examples);
+      const prompt = buildBatchClassifyPrompt(batch.map((tx) => classifyInput(books, tx, legsOf(tx), context.counterparties)), context, examples);
       let model: string | undefined;
       const raw = await ask(prompt, { step: 'classify', timeoutMs: CALL_TIMEOUT_MS, answered: (by) => { model = by.model; } });
       model ??= (await resolveStep('classify')).model;
