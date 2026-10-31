@@ -120,7 +120,7 @@ function namesOnlyTax(text: string, words: CustomsWords): boolean {
 /** Whether a line at no rate names costs passed on free of VAT (documents.yaml `customs.untaxed`). */
 const namesUntaxed = (l: ReceiptLine, words: CustomsWords): boolean => !l.ratePercent && !!words.untaxed?.length && wordsRe(words.untaxed).test(l.description);
 
-/** The rate a line's own words state («8,10 % MWST»). */
+/** The rate a line's own words state («8,10 % VAT»). */
 function rateIn(text: string): number | undefined {
   const m = /(?<![\d.,])(\d{1,2}(?:[.,]\d{1,2})?)\s*%/.exec(text);
   return m ? Number(m[1].replace(',', '.')) : undefined;
@@ -131,7 +131,7 @@ interface LineReading { position: CustomsPosition; rate?: number; carrierTax?: b
 
 /**
  * The position of a line on a customs invoice whose words name none:
- *  - a line that names only the tax and the domestic rate it is charged at («8,10 % MWST») is the
+ *  - a line that names only the tax and the domestic rate it is charged at («8,10 % VAT») is the
  *    carrier's VAT on its services: fees at that rate, added to the fees it is charged on;
  *  - a line that names only the tax at no rate is the import VAT the carrier advanced (the carrier's own
  *    VAT is charged at a rate on its services, never a line of 0 %); at a rate of the line's own, without
