@@ -34,6 +34,7 @@ import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { creditNoteCodeOf } from '../accounting/credit-note-code.js';
 import { acquisitionCodeOf, acquisitionReason, readSupplier, type AcquisitionDocument } from '../accounting/acquisition-tax.js';
 import { codeSignFor } from '../accounting/code-sign.js';
+import { refundCodeOf } from './refund-code.js';
 import { homeOf, loadKnowledge } from '../knowledge/layers.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
 import { payerNames } from '../knowledge/payer.js';
@@ -111,7 +112,7 @@ export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { f
       accountDebit,
       accountCredit,
       amount: e.amount,
-      vatCode: transfer ? undefined : acquired ? acquired.code : signed(permittedCode(e.vatCode), accountDebit, accountCredit, e.amount),
+      vatCode: transfer ? undefined : acquired ? acquired.code : signed(permittedCode(e.vatCode), accountDebit, accountCredit, e.amount, bankAccount),
       description: e.description || tx.description,
     }, acquired && { reason: acquisitionReason(acquired), by: { kind: 'code', check: 'acquisitionTax' } });
   });
@@ -573,13 +574,25 @@ function withCreditNoteCodes(books: Books, tx: BankTransaction, entries: Journal
 }
 
 /**
+ * The model's lines of a refund of a booked purchase with that purchase's code and the minus
+ * (src/booking/refund-code.ts, #288); the reason names the purchase, in place of the model's.
+ */
+function withRefundCodes(books: Books, tx: BankTransaction, entries: JournalEntry[], bank: string): JournalEntry[] {
+  return entries.map((e) => {
+    const decided = e.by?.kind === 'model' ? refundCodeOf(e, tx, bank, books) : undefined;
+    if (!decided || decided.code === e.vatCode) return e;
+    return { ...e, vatCode: decided.code, reason: wordsIn('de').t('rules.say.refundCode', { date: day(decided.original.date), originalCode: decided.originalCode, code: decided.code }), by: { kind: 'code', check: 'creditNote' } };
+  });
+}
+
+/**
  * A code the firm's form does not take is left off the entry: a firm not registered for VAT books
  * everything gross, one on the net tax rate method its purchases. On the effective method the
  * model's code stands as written; one the engine does not know is refused (paymentRefusal).
  */
 const permittedCode = (code: string | undefined): string | undefined => (code && formTakes(code) ? code : undefined);
-/** The model's code with the sign the accounts give it (r9h-11): a credit note's M0 becomes -M0, whatever the model wrote. */
-const signed = (code: string | undefined, accountDebit: string, accountCredit: string, amount: number): string | undefined => codeSignFor(code, accountDebit, accountCredit, amount) ?? code;
+/** The model's code with the sign the accounts and the bank's side give it (r9h-11, #288): a credit note's M0 becomes -M0, money back on 1540 -I81, whatever the model wrote. */
+const signed = (code: string | undefined, accountDebit: string, accountCredit: string, amount: number, bank: string): string | undefined => codeSignFor(code, accountDebit, accountCredit, amount, bank) ?? code;
 
 export interface ClassifyDeps {
   /** Absent: no model; what no rule decides is left in `unasked`. */
@@ -750,7 +763,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         }
         const lines = splitByReceipts(tx, fee?.lines ?? derived, mapped);
         const noted = [reason, fee?.note, customsNotes.get(tx.ref)].filter(Boolean).join(' ') || undefined;
-        const entries = withPurchaseVat(tx, withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), mapped, context.purchaseVat, context.counterparties);
+        const entries = withPurchaseVat(tx, withRefundCodes(books, tx, withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), bankAccount), mapped, context.purchaseVat, context.counterparties);
         const twice = inputTaxOverReceipts(books, tx, legsOf(tx), entries, (c, d) => fx.daily(c, d));
         if (twice) {
           const others = twice.others.map((t) => t.ref).join(', ');

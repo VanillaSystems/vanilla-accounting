@@ -11,7 +11,7 @@ and the providers.
 | core | 73 | 23 |
 | engine | 4 | 1 |
 | provider | 14 | 11 |
-| split | 118 | 27 |
+| split | 119 | 26 |
 | infrastructure | 69 | 4 |
 | workflow | 26 | 0 |
 | view | 330 | 56 |
@@ -120,7 +120,6 @@ Layers are assigned by path prefix, most specific first:
 | `src/accounting/fx-conversion.ts` | CHF 4, ESTV 8 |
 | `src/accounting/fx-rates.ts` | CHF 2, ESTV 5 |
 | `src/accounting/index.ts` | Ziffer 1 |
-| `src/accounting/payment-entries.ts` | camt.053 1 |
 | `src/accounting/reconcile-bank.ts` | CHF 3, camt.053 2 |
 | `src/accounting/vat-codes.source.ts` | MWST 3, ESTV 1, Ziffer 4, tax code 90 |
 | `src/accounting/vat-codes.ts` | MWST 3, ESTV 2, Ziffer 6, tax code 1 |

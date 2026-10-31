@@ -3910,6 +3910,7 @@ export default {
     'salesReport.noSince': 'Versement de {provider} : jour de passage manquant, rien comptabilisé. Inscrire le jour dans {file} sous provider.since (le premier rapport de ventes le demande) : à partir de ce jour, l’app comptabilise les versements depuis le compte de passage ; avant, tout reste tel quel.',
     'salesReport.gapPayout': 'Versement de {provider} avant le jour de passage {since} : le rapport de ventes a déjà comptabilisé des ventes antérieures sur le compte de passage {account} ; rien comptabilisé. S’il paie celles-ci, comptabiliser à la main banque à {account} ; s’il paie des ventes plus anciennes que le rapport n’a pas comptabilisées, cette part comme chiffre d’affaires.',
     'rules.say.creditNoteCode': 'note de crédit pour la facture {invoice}, comptabilisée avec {invoiceCode} : {code} reprend son impôt préalable',
+    'rules.say.refundCode': 'remboursement de l\'achat du {date}, comptabilisé avec {originalCode} : {code} reprend son impôt préalable',
     'rules.say.purchaseVat.noInputTax': '{business} : pas d’impôt préalable sur ce paiement, {code} (règle {rule} de l’app)',
     'rules.say.purchaseVat.unreadReceipt': '{business} : le justificatif illisible compte comme {rate} % de TVA suisse, impôt préalable {code} (règle {rule} de l’entreprise)',
     'rules.say.purchaseVat.receiptShowsVat': 'Le justificatif montre {rate} % de TVA suisse sur tout le montant : impôt préalable {code}',
