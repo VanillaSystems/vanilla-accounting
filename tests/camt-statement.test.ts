@@ -71,6 +71,13 @@ test('the camt\'s balance of a day wins over a PDF\'s; a PDF\'s of another day s
   assert.equal(withCamtBalances(undefined, []), undefined, 'books without balances get none');
 });
 
+test('a balance of a closed period stays as filed: no camt replaces, adds or drops one there', () => {
+  const closed = (date: string) => date <= '2026-06-30';
+  const filedPdf = bal('2026-03-31', 950, 'pdf'), filedCamt = bal('2026-05-31', 1, 'camt'), open = bal('2026-07-31', 900, 'pdf');
+  assert.deepEqual(withCamtBalances([filedPdf, filedCamt, open], [bal('2026-03-31', 951, 'camt'), bal('2026-04-01', 951, 'camt'), bal('2026-07-31', 901, 'camt')], closed),
+    [filedPdf, filedCamt, bal('2026-07-31', 901, 'camt')]);
+});
+
 test('beside a PDF for every month it touches, a camt adds no row; each month without one is its own row (#273)', () => {
   const ACCOUNTS: Account[] = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1021', label: 'Raiffeisen', statements: 'camt053', role: 'bank' }];
   const pdf = (m: string, last: string) => ({ bank: 'Raiffeisen', filename: `Kontoauszug 01.${m}.2026 - ${last}.${m}.2026.pdf`, fromDate: `2026-${m}-01`, toDate: `2026-${m}-${last}` });

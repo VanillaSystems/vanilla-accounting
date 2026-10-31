@@ -14,6 +14,7 @@ import type { RouteOf } from '../../shell/route.js';
 import { getAccountMap } from '../../lib/accounts.js';
 import { sources } from '../../lib/api.js';
 import { checkText } from '../../lib/fx-text.js';
+import { useBookedFields } from '../../lib/booked-fields.js';
 import { periodName, monthName } from '../../lib/period-label.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { useFx } from '../../hooks/use-fx.js';
@@ -355,7 +356,6 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
   const form = useRef<HTMLFormElement>(null);
   const [err, setErr] = useState('');
   const [note, setNote] = useState('');
-  const wrong = useRef(false);
 
   useEffect(() => {
     if (!s.open.buchung || !s.focus) return;
@@ -365,24 +365,13 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
 
   const field = (name: string) => form.current?.querySelector<HTMLInputElement>(`[name="${name}"]`) ?? null;
 
-  /** The fields as the books hold the booking; the field being edited is left alone unless `force` (a refused save puts the booked value back, r8h-27). */
-  const reset = (force = false) => {
-    const values: Record<string, string> = {
-      accountDebit: e.accountDebit, accountCredit: e.accountCredit, vatCode: e.vatCode ?? '', amount: fmt(e.amount), description: e.description ?? '',
-      ...Object.fromEntries(dimensions.map((d) => [tagField(d.id), e.tags?.[d.id] ?? ''])),
-    };
-    for (const [name, value] of Object.entries(values)) {
-      const el = field(name);
-      if (el && (force || el !== document.activeElement) && el.value !== value) el.value = value;
-    }
-  };
-  // The form keeps what is typed while a field is left: a saved entry only rewrites the fields not being edited.
-  useEffect(() => {
-    if (wrong.current) return;
-    reset();
-  }, [e.accountDebit, e.accountCredit, e.vatCode, e.amount, e.description, JSON.stringify(e.tags ?? {})]);
+  // A refused save puts the booked value back (r8h-27).
+  const reset = useBookedFields(form, {
+    accountDebit: e.accountDebit, accountCredit: e.accountCredit, vatCode: e.vatCode ?? '', amount: fmt(e.amount), description: e.description ?? '',
+    ...Object.fromEntries(dimensions.map((d) => [tagField(d.id), e.tags?.[d.id] ?? ''])),
+  });
 
-  function fail(message: string) { wrong.current = true; setErr(message); setNote(''); nav.dismissToast(); }
+  function fail(message: string) { setErr(message); setNote(''); nav.dismissToast(); }
 
   function save() {
     if (!edit || !form.current) return;
@@ -398,7 +387,6 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
     // A rate typed in a firm without input tax hears why no code takes it, as the payment form says (r8f-50, r9n-41).
     if (!vatCode) return fail(parseRate(next.vatCode) ? (withoutInputTax() ? t(`journal.errVatNotTaken.${withoutInputTax()!}`, { code: next.vatCode }) : t('journal.errVatRate', { rate: next.vatCode })) : t('journal.errVat', { code: next.vatCode }));
     if (!next.amount) return fail(t('journal.errAmount'));
-    wrong.current = false;
     setErr('');
     next.vatCode = vatCode.code;
     if (vatCode.fromRate !== undefined) {

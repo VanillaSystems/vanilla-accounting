@@ -57,7 +57,8 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick }: { 
         aria-autocomplete="list"
         data-tip={name0}
         onFocus={(e) => { if (!readOnly) { setOpen(true); setActive(0); e.currentTarget.select(); } }}
-        onChange={(e) => { setValue(e.target.value.trim()); setActive(0); setOpen(true); }}
+        // A value the books put in (useBookedFields, after an undo) is no typing: it opens no list.
+        onChange={(e) => { setValue(e.target.value.trim()); if (e.nativeEvent.isTrusted) { setActive(0); setOpen(true); } }}
         onBlur={() => setOpen(false)}
         onKeyDown={onKeyDown}
       />

@@ -78,7 +78,7 @@ test('with overlapping exports the removal takes only what the file alone brough
   } finally { await api.stop(); }
 });
 
-test('r10h-3: the removal answers with the bookings and links it took, so that the undo of «Auszug entfernen» puts the payment back with its booking', async () => {
+test('r10h-3: the undo of «Auszug entfernen» puts the file, the payment and its booking back as they were, once', async () => {
   const api = await startApi('tests/fixtures/fresh-books-index.json');
   try {
     const books = async () => (await (await api.fetch('/books.json')).json()) as Index;
@@ -86,18 +86,33 @@ test('r10h-3: the removal answers with the bookings and links it took, so that t
     const byRule = { id: 'rb1', transactionRef: '91000000001', date: '2026-10-02', accountDebit: '1021', accountCredit: '3400', amount: 180, description: 'TWINT Gutschrift', origin: 'classify', by: { kind: 'rule', rule: 'twint-3400', at: '2026-10-16T08:00:00Z' } };
     const booked = await api.send('POST', '/api/journal-entries', byRule);
     assert.equal(booked.status, 200, JSON.stringify(booked.json));
+    const before = await books();
 
     const removed = await api.send('DELETE', '/api/statements/Raiffeisen/a.xml');
     assert.equal(removed.status, 200, JSON.stringify(removed.json));
-    const taken = removed.json as { removed: { entries: Array<Record<string, unknown>>; mappings: unknown[] } };
-    assert.deepEqual(taken.removed.entries.map((e) => [e.id, e.transactionRef, e.origin, (e.by as { kind: string }).kind]), [['rb1', '91000000001', 'classify', 'rule']], 'the booking the removal took, with who made it');
-    assert.deepEqual(taken.removed.mappings, []);
     assert.equal((await books()).journalEntries?.length ?? 0, 0);
 
-    assert.equal((await api.fetch('/api/statements?name=a.xml', { method: 'POST', body: A })).status, 200, 'the undo reads the file again');
-    const back = await api.send('POST', '/api/statements/bookings', taken.removed);
+    const { undo } = removed.json as { undo: string };
+    const back = await api.send('POST', '/api/statements/restore', { undo });
     assert.equal(back.status, 200, JSON.stringify(back.json));
-    const e = (await books()).journalEntries!.find((x) => x.id === 'rb1')!;
-    assert.deepEqual([e.transactionRef, e.origin, e.by?.kind], ['91000000001', 'classify', 'rule'], 'and the booking is back as it was');
+    assert.deepEqual(await books(), before, 'the books are as before, the booking with who made it');
+    assert.ok(existsSync(join(api.root, 'transactional-data/2026/bank-statements/Raiffeisen/a.xml')), 'the file is back');
+    const again = await api.send('POST', '/api/statements/restore', { undo });
+    assert.equal(again.status, 410, 'an undo is taken once');
+    assert.equal((again.json as { code: string }).code, 'statementUndo');
+  } finally { await api.stop(); }
+});
+
+test('the undo refuses when the books changed what the removal left, and leaves no file behind', async () => {
+  const api = await startApi('tests/fixtures/fresh-books-index.json');
+  try {
+    assert.equal((await api.fetch('/api/statements?name=a.xml', { method: 'POST', body: A })).status, 200);
+    const removed = await api.send('DELETE', '/api/statements/Raiffeisen/a.xml');
+    assert.equal(removed.status, 200, JSON.stringify(removed.json));
+    assert.equal((await api.fetch('/api/statements?name=b.xml', { method: 'POST', body: B })).status, 200, 'another export brings the Telecom payment back meanwhile');
+    const refused = await api.send('POST', '/api/statements/restore', { undo: (removed.json as { undo: string }).undo });
+    assert.equal(refused.status, 409, JSON.stringify(refused.json));
+    assert.deepEqual(refused.json.params, { why: 'changed' });
+    assert.equal(existsSync(join(api.root, 'transactional-data/2026/bank-statements/Raiffeisen/a.xml')), false, 'the file stays removed');
   } finally { await api.stop(); }
 });
