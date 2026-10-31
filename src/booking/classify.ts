@@ -27,7 +27,7 @@ import { agreedBasis, baseCurrency, documents, filing, setup, vat, withoutInputT
 import { paymentProposals, type PaymentProposal } from '../invoices/payments.js';
 import { loadInvoices } from '../invoices/store.js';
 import type { InvoiceBook } from '../invoices/model.js';
-import { correctsFor } from '../accounting/correction.js';
+import { correctsFor, privateUseCode } from '../accounting/correction.js';
 import { EFFECTIVE_QUARTERLY, type VatSetup } from '../workspace/vat-setup.js';
 import { foreignTaxIn, saleCodeOf, saleCodeReason } from '../accounting/sales-without-vat.js';
 import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
@@ -338,16 +338,33 @@ export function ruleVatCode(code: string | null, tx: Pick<BankTransaction, 'dire
   return back ? `-${unsigned}` : unsigned;
 }
 
-/** A rule's booking line as it lands: account, VAT code (none: no code) and amount, the bank on the other side. */
-export interface RuleLine { account: string; vat?: string; amount: number }
+/**
+ * A rule's booking line as it lands: account, VAT code (none: no code) and amount, the bank on the
+ * other side; `against`: the other side when it is no bank (an own-use correction, owner's account / the rule's account).
+ */
+export interface RuleLine { account: string; vat?: string; amount: number; against?: string }
+
+/**
+ * The code that takes back the input tax of `code` as own use (privateUseCode, K81-B for I81),
+ * with the minus of a refund (-I81: -K81-B). Undefined when the line claims no input tax.
+ */
+export function ownUseCode(code: string | undefined): string | undefined {
+  const negative = !!code?.startsWith(vat().codes.negativePrefix);
+  const unsigned = negative ? code!.slice(vat().codes.negativePrefix.length) : code;
+  const k = privateUseCode(unsigned);
+  return k && (negative ? `${vat().codes.negativePrefix}${k}` : k);
+}
 
 /**
  * What a rule's booking books for `tx`: the whole amount on the rule's account with its VAT code
  * (ruleVatCode), or, with a private share, that share on the owner's account without VAT and the
  * rest on the rule's account, or, with a foreign VAT, that tax on its account without a code and the
- * net on the rule's. The lines add up to what the bank paid, to the Rappen. `documents`
- * are the payment's linked receipts: only a purchase document (evidence-check isPurchaseDocument)
- * proves Swiss VAT, never a delivery note or a supporting document (#81).
+ * net on the rule's. The lines add up to what the bank paid, to the Rappen. A share as own
+ * use leaves the whole amount on the rule's account and adds the share's input-tax correction
+ * between the owner's account and it, only when that line claims input tax (no receipt with Swiss
+ * VAT: the zero code, nothing to correct). `documents` are the payment's linked receipts: only a
+ * purchase document (evidence-check isPurchaseDocument) proves Swiss VAT, never a delivery note or
+ * a supporting document (#81).
  */
 export function ruleBookingLines(tx: BankTransaction, booking: RuleBooking, documents: readonly Pick<Receipt, 'kind' | 'hasSwissVat'>[], owner: string | undefined): RuleLine[] {
   const vat = ruleVatCode(booking.vat, tx, documents.some((r) => isPurchaseDocument(r) && r.hasSwissVat));
@@ -359,7 +376,22 @@ export function ruleBookingLines(tx: BankTransaction, booking: RuleBooking, docu
   if (!booking.private || !owner) return [whole];
   const total = Math.round(tx.amount * 100);
   const own = Math.round((total * booking.private) / 100);
+  if (booking.ownUse) {
+    const correction = ownUseCode(vat);
+    return correction ? [whole, { account: owner, against: booking.account, vat: correction, amount: own / 100 }] : [whole];
+  }
   return [{ ...whole, amount: (total - own) / 100 }, { account: owner, amount: own / 100 }];
+}
+
+/**
+ * The own-use corrections a person booked for `tx` by hand, as the owner books them: an entry on a
+ * ref of no payment, dated the payment's day, from `account` to the owner's account with `code`
+ * (a refund's the other way). The rule then books no second one, and its preview counts them.
+ */
+export function handOwnUse(books: Pick<Books, 'journalEntries' | 'transactions'>, tx: Pick<BankTransaction, 'date' | 'direction'>, line: Pick<RuleLine, 'account' | 'against' | 'vat'>): JournalEntry[] {
+  const payments = new Set(books.transactions.map((t) => t.ref));
+  const [debit, credit] = tx.direction === 'DBIT' ? [line.account, line.against] : [line.against, line.account];
+  return books.journalEntries.filter((e) => e.date === tx.date && e.vatCode === line.vat && e.accountDebit === debit && e.accountCredit === credit && !payments.has(e.transactionRef));
 }
 
 const chf = (n: number) => n.toFixed(2);
@@ -474,10 +506,11 @@ export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRul
   const mapped = mappedReceipts(books, tx);
   const bankAccount = bankAccountFor(tx, context.bankAccounts);
   const out = tx.direction === 'DBIT';
-  const lines = ruleBookingLines(tx, booking, mapped, context.ownerAccount);
-  const entries: ClassifyEntry[] = lines.map((l) => ({
-    accountDebit: out ? l.account : '', accountCredit: out ? '' : l.account, amount: l.amount, vatCode: l.vat ?? '', description: merchantOf(tx.description),
-  }));
+  // An own-use correction a person booked by hand already stands: the rule books the payment, never a second correction.
+  const lines = ruleBookingLines(tx, booking, mapped, context.ownerAccount).filter((l) => !l.against || !handOwnUse(books, tx, l).length);
+  const entries: ClassifyEntry[] = lines.map((l) => (l.against
+    ? { accountDebit: out ? l.account : l.against, accountCredit: out ? l.against : l.account, amount: l.amount, vatCode: l.vat ?? '', description: wordsIn('de').t('rules.say.ownUseText', { percent: String(booking.private), text: merchantOf(tx.description) }) }
+    : { accountDebit: out ? l.account : '', accountCredit: out ? '' : l.account, amount: l.amount, vatCode: l.vat ?? '', description: merchantOf(tx.description) }));
   const code = lines[0].vat;
   // The rule names a rate, the payment got the zero code: the reason says why, never the rule's rate alone.
   const zero = booking.vat && code && code.replace(/^-/, '') !== booking.vat ? `; ${wordsIn('de').t('rules.say.zeroCode', { code })}` : '';

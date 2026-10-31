@@ -19,7 +19,9 @@ import { APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspac
 import { openEngine } from '../src/workflows/engine.js';
 import { taskOf, fillTask } from '../src/workflows/model.js';
 import { loadWorkflows } from '../src/workflows/load.js';
-import type { BankTransaction, Receipt } from '../src/types/index.js';
+import type { BankTransaction, JournalEntry, Receipt } from '../src/types/index.js';
+import { setJurisdiction, vat } from '../src/engines/index.js';
+import { loadJurisdiction } from '../src/core/modules/load.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import './support/jurisdiction.js';
 
@@ -363,4 +365,55 @@ test('a collective payment partly decided by payer rules: with a model the undec
   const bare = mk();
   const none = await classifyTransactions(bare, bare.transactions, { fx: loadFxResolver(), context: loadClassifyContext(ws) });
   assert.deepEqual([bare.journalEntries.filter((e) => e.transactionRef === 'BATCH-3').length, none.partly], [1, ['BATCH-3']], 'no model: the rest stays for the person');
+});
+
+test('a private share as own use books the whole payment with its input tax and corrects the share with the private-use code, once per payment', async () => {
+  const ws = company(RULES.replace('      - id: old-note', `      - id: abo-own-use
+        when: { text: "Videoabo" }
+        then: { account: "6570", vat: 81, private: { share: 50, as: own-use } }
+        source: wish 2026-10-30
+      - id: old-note`));
+  const books = booksOf([
+    tx({ ref: 'ABO-1', description: 'Videoabo Juli', amount: 17.35 }),
+    tx({ ref: 'ABO-2', description: 'Videoabo August', amount: 24.4, date: '2026-08-20' }),
+    tx({ ref: 'ABO-3', description: 'Videoabo September', amount: 9.9, date: '2026-09-20' }),
+    tx({ ref: 'ABO-BACK', description: 'Videoabo Rückerstattung', amount: 17.35, direction: 'CRDT', date: '2026-09-02' }),
+  ], [{ id: 'r1', ref: 'ABO-1', hasSwissVat: true }, { id: 'r2', ref: 'ABO-2', hasSwissVat: true }, { id: 'r4', ref: 'ABO-BACK', hasSwissVat: true }]);
+  // ABO-2's correction a person booked by hand already, on a ref of its own, as the owner books Eigenverbrauch.
+  books.journalEntries.push({ id: 'hand', transactionRef: 'M2026-900', date: '2026-08-20', accountDebit: '2451', accountCredit: '6570', amount: 12.2, vatCode: 'K81-B', origin: 'manual' });
+  const m = model();
+  await classifyTransactions(books, books.transactions, { ask: m.ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+  assert.deepEqual(m.asked, []);
+  const by = (ref: string) => books.journalEntries.filter((e) => e.transactionRef === ref).map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode ?? '']);
+  assert.deepEqual(by('ABO-1'), [['6570', '1021', 17.35, 'I81'], ['2451', '6570', 8.68, 'K81-B']]);
+  assert.deepEqual(by('ABO-2'), [['6570', '1021', 24.4, 'I81']], 'the hand-booked correction stands: no second one');
+  assert.deepEqual(by('ABO-3'), [['6570', '1021', 9.9, 'I0']], 'no receipt with Swiss VAT: no input tax, nothing to correct');
+  assert.deepEqual(by('ABO-BACK'), [['1021', '6570', 17.35, '-I81'], ['6570', '2451', 8.68, '-K81-B']], 'a refund takes the correction back with it');
+  const correction = books.journalEntries.find((e) => e.transactionRef === 'ABO-1' && e.vatCode === 'K81-B')!;
+  assert.equal(correction.description, 'Eigenverbrauch 50 % privat: Videoabo Juli');
+  assert.equal(correction.reason, 'Regel: Text enthält «Videoabo» → Konto 6570 Informatik, Hosting, Software, MWST I81, 50 % privat als Eigenverbrauch (Vorsteuerkorrektur)');
+});
+
+test('own use owes the tax of the private share, as the share on the owner\'s account does, but declares it as a correction in 415 beside the whole input tax in 405', () => {
+  company();
+  const paid = (id: string, account: string, amount: number, vatCode?: string): JournalEntry => ({ id, transactionRef: 'P', date: '2026-08-14', accountDebit: account, accountCredit: '1021', amount, ...(vatCode ? { vatCode } : {}) });
+  const ownUse = [paid('a', '6570', 100, 'I81'), { id: 'b', transactionRef: 'P', date: '2026-08-14', accountDebit: '2451', accountCredit: '6570', amount: 50, vatCode: 'K81-B' }];
+  const ownerShare = [paid('c', '6570', 50, 'I81'), paid('d', '2451', 50)];
+  const boxes = (entries: JournalEntry[]) => Object.fromEntries(vat().report(entries, '2026-Q3', []).ziffern.filter((z) => ['405', '415', '479'].includes(z.number)).map((z) => [z.number, z.amount]));
+  assert.deepEqual(boxes(ownUse), { '405': 7.49, '415': 3.75, '479': 3.74 });
+  assert.deepEqual(boxes(ownerShare), { '405': 3.75, '415': 0, '479': 3.75 }, 'the same input tax, give or take the Rappen each box rounds');
+});
+
+test('a private share as own use is refused where there is no input tax to correct', () => {
+  company();
+  const facts: RuleFacts = { account: () => true, vat: (c) => (/^(I81|I0|K81-B)$/.test(c) ? 'taken' : 'unknown'), counterparty: () => true };
+  const why = (then: Record<string, unknown>) => { const r = parseRule({ id: 'a', when: { text: 'x' }, then }, facts); return r.ok ? r.rule.then : r.refusal; };
+  assert.deepEqual(why({ account: '6570', vat: 81, private: { share: 50, as: 'own-use' } }), { kind: 'book', booking: { account: '6570', vat: 'I81', private: 50, ownUse: true } });
+  assert.deepEqual(why({ account: '6570', vat: 81, private: { share: 50 } }), { kind: 'book', booking: { account: '6570', vat: 'I81', private: 50 } }, 'a share without «as» goes on the owner\'s account');
+  assert.deepEqual(why({ account: '6570', vat: 'none', private: { share: 50, as: 'own-use' } }), { code: 'ownUse', params: { vat: 'none' } });
+  assert.deepEqual(why({ account: '6570', vat: 0, private: { share: 50, as: 'own-use' } }), { code: 'ownUse', params: { vat: 'I0' } });
+  assert.deepEqual(why({ account: '6570', vat: 81, private: { share: 50, as: 'privat' } }), { code: 'field', params: { field: 'then.private.as: privat' } });
+  assert.deepEqual(why({ account: '6570', vat: 81, private: { share: 50, rate: 81 } }), { code: 'field', params: { field: 'then.private.rate' } });
+  setJurisdiction(loadJurisdiction(APP_ROOT, 'ch').jurisdiction, { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei', activityId: '99901' }] });
+  assert.deepEqual(why({ account: '6570', vat: 'none', private: { share: 50, as: 'own-use' } }), { code: 'ownUse', params: { vat: 'none' } }, 'the net tax rate method claims no input tax');
 });

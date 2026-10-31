@@ -69,6 +69,19 @@ test('a hand-made rule the app cannot carry out is refused with its reason as a 
   assert.deepEqual([refused.status, refused.json.code, (refused.json.params as { refusal: { code: string } }).refusal.code], [400, 'rule', 'account'], JSON.stringify(refused.json));
 });
 
+test('a hand-made rule with a private share as own use is drafted as such, and refused where no input tax is claimed', async () => {
+  const api = await start();
+  const made = await api.send('POST', '/api/rules/hand', { match: { kind: 'text', text: 'Videoabo' }, account: '6570', vat: 'I81', private: { share: 50, ownUse: true } });
+  assert.deepEqual([made.status, made.json], [200, { path: GUIDE }], JSON.stringify(made.json));
+  assert.match(readFileSync(join(draftDir(api.ws), GUIDE), 'utf8'), /then: \{ account: "6570", vat: I81, private: \{ share: 50, as: own-use \} \}/);
+  const card = (await api.send('GET', `/api/rules/draft?path=${encodeURIComponent(GUIDE)}`)).json as unknown as DraftView;
+  assert.deepEqual(card.added.map((r) => r.rule?.then), [{ kind: 'book', booking: { account: '6570', vat: 'I81', private: 50, ownUse: true } }]);
+  const none = await api.send('POST', '/api/rules/hand', { match: { kind: 'text', text: 'Videoabo' }, account: '6570', vat: null, private: { share: 50, ownUse: true } });
+  assert.deepEqual([none.status, none.json.code, (none.json.params as { refusal: { code: string } }).refusal.code], [400, 'rule', 'ownUse'], JSON.stringify(none.json));
+  const bad = await api.send('POST', '/api/rules/hand', { match: { kind: 'text', text: 'Videoabo' }, account: '6570', vat: 'I81', private: { share: 'half' } });
+  assert.equal(bad.status, 400);
+});
+
 test('the form makes the rule the person typed, or names the first field it still needs', () => {
   const form = { ...emptyForm(), text: 'Hostpoint', direction: 'out' as const, over: "1'000.50", account: '6570 Informatikaufwand', vat: 'I81' };
   assert.deepEqual(handRuleOf(form), { ok: true, rule: { match: { kind: 'text', text: 'Hostpoint' }, direction: 'out', amount: { over: 1000.5 }, account: '6570', vat: 'I81' } });
@@ -77,6 +90,8 @@ test('the form makes the rule the person typed, or names the first field it stil
   assert.deepEqual(handRuleOf({ ...form, under: '500' }), { ok: false, missing: 'amount' }, '«over» must be less than «under»');
   assert.deepEqual(handRuleOf({ ...form, over: 'viel' }), { ok: false, missing: 'amount' });
   assert.deepEqual(handRuleOf({ ...form, account: '' }), { ok: false, missing: 'account' });
+  assert.deepEqual(handRuleOf({ ...form, share: '50 %', ownUse: true }), { ok: true, rule: { match: { kind: 'text', text: 'Hostpoint' }, direction: 'out', amount: { over: 1000.5 }, account: '6570', vat: 'I81', private: { share: 50, ownUse: true } } });
+  assert.deepEqual(handRuleOf({ ...form, share: '100' }), { ok: false, missing: 'share' });
   assert.deepEqual(emptyForm({ match: { kind: 'business', id: 'swiss-post' }, direction: 'out', name: 'Post CH' }).business, 'swiss-post', 'started from a payment: its business');
 });
 

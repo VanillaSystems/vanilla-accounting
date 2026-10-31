@@ -18,7 +18,10 @@
  * counterparty text as a key, src/knowledge/payer.ts: what an answered question keeps), text (a
  * pattern over the payment's text), direction (in, out), amount ({ over, under }, in the books'
  * currency) and account (the bank account that paid); all must hold. `then.private` (a percent)
- * books that share on the owner's account without VAT and the rest as the rule says.
+ * books that share on the owner's account without VAT and the rest as the rule says;
+ * `then.private: { share: 50, as: own-use }` books the whole payment as the rule says and corrects
+ * the share's input tax as own use (owner's account / the rule's account with the private-use code
+ * of the engines), for a firm that deducts input tax only.
  * `then.foreignTax` ({ rate, account }) splits a sale abroad that carried a foreign VAT (OSS, IOSS):
  * the tax at that rate onto that account without a code, the net on the rule's account at its zero
  * code, as a sales report books such an order (#206). A payment
@@ -32,6 +35,7 @@ import type { BankTransaction, JournalEntry } from '../types/index.js';
 import { ibanKey, isGenericText, isPayer } from '../knowledge/payer.js';
 import { chart, vat, withoutInputTax } from '../engines/index.js';
 import { codeOfFacts, codeOnAccount, rateOf } from '../accounting/vat-codes.js';
+import { privateUseCode } from '../accounting/correction.js';
 import { parseTags, type Tags } from '../books/tags.js';
 
 export const RULE_STEP = 'booking.guide.yaml#classify';
@@ -51,11 +55,17 @@ export interface RuleWhen {
  * A booking a rule makes or proposes; `vat` null: no VAT code (a private share, a transfer).
  * `private`: this percent of the payment is the owner's, on the owner's account without VAT; the
  * rest goes on `account` with `vat` («das Natel ist zur Hälfte privat»: private 50).
+ * `ownUse`: the private share is own use instead: the whole payment goes on
+ * `account` with `vat`, and the share's input tax is taken back by a correction from `account` to
+ * the owner's account with the private-use code (src/accounting/correction.ts privateUseCode).
  * `foreignTax`: the payment holds a foreign VAT at `rate` percent, booked onto `account` without a code;
  * the rest goes on `account` with `vat`, a zero code (a sale abroad, never the gross at it).
  * `tags`: the reporting dimensions every line it books carries ({ projekt: "alpha" }, #127).
  */
-export interface RuleBooking { account: string; vat: string | null; private?: number; foreignTax?: { rate: number; account: string }; tags?: Tags }
+export interface RuleBooking { account: string; vat: string | null; private?: number; ownUse?: true; foreignTax?: { rate: number; account: string }; tags?: Tags }
+
+/** How `then.private` names own use: `private: { share: 50, as: own-use }`. */
+export const OWN_USE = 'own-use';
 
 export type RuleThen =
   | { kind: 'book'; booking: RuleBooking }
@@ -181,9 +191,17 @@ export function parseRule(raw: Record<string, unknown>, facts: RuleFacts, inBusi
     booking = { account, vat: vat && vat.code };
   }
   if (t.private !== undefined) {
-    const share = typeof t.private === 'number' ? t.private : Number(String(t.private).replace(/\s*%$/, ''));
-    if (!booking || !Number.isFinite(share) || share <= 0 || share >= 100) return no({ code: 'share', params: { share: String(t.private) } });
+    const p = isMap(t.private) ? t.private : { share: t.private };
+    for (const k of Object.keys(p)) if (k !== 'share' && k !== 'as') return no({ code: 'field', params: { field: `then.private.${k}` } });
+    if (p.as !== undefined && p.as !== OWN_USE) return no({ code: 'field', params: { field: `then.private.as: ${String(p.as)}` } });
+    const share = typeof p.share === 'number' ? p.share : Number(String(p.share).replace(/\s*%$/, ''));
+    if (!booking || !Number.isFinite(share) || share <= 0 || share >= 100) return no({ code: 'share', params: { share: String(p.share) } });
     booking.private = share;
+    if (p.as === OWN_USE) {
+      // Own use corrects input tax: a rule whose code claims none (no code, a zero code, Bezugsteuer, a firm without input tax) has none to correct.
+      if (withoutInputTax() || !privateUseCode(booking.vat ?? undefined)) return no({ code: 'ownUse', params: { vat: booking.vat ?? 'none' } });
+      booking.ownUse = true;
+    }
   }
   if (t.foreignTax !== undefined) {
     const f = isMap(t.foreignTax) ? t.foreignTax : {};
@@ -293,6 +311,7 @@ export interface RuleWordVars {
   'rules.say.book': { account: string; vat: string };
   'rules.say.bookNoVat': { account: string };
   'rules.say.private': { percent: string };
+  'rules.say.ownUse': { percent: string };
   'rules.say.foreignTax': { rate: string; account: string };
   'rules.say.ask': { question: string };
   'rules.say.tags': { tags: string };
@@ -325,8 +344,9 @@ const accountWords = (n: string, names: RuleNames) => { const name = names.accou
 export function bookingWords(b: RuleBooking, names: RuleNames, w: RuleWords): string {
   const main = b.vat ? w('rules.say.book', { account: accountWords(b.account, names), vat: names.vat?.(b.vat) ?? b.vat }) : w('rules.say.bookNoVat', { account: accountWords(b.account, names) });
   const tags = b.tags ? w('rules.say.tags', { tags: Object.entries(b.tags).map(([d, v]) => names.tag?.(d, v) ?? `${d}: ${v}`).join(', ') }) : '';
+  const share = b.private ? w(b.ownUse ? 'rules.say.ownUse' : 'rules.say.private', { percent: String(b.private) }) : '';
   const foreign = b.foreignTax ? w('rules.say.foreignTax', { rate: String(b.foreignTax.rate), account: accountWords(b.foreignTax.account, names) }) : '';
-  return `${b.private ? `${main}${w('rules.say.private', { percent: String(b.private) })}` : main}${foreign}${tags}`;
+  return `${main}${share}${foreign}${tags}`;
 }
 
 /** The rule in one line: «Swisscom → Konto 6510 Telefon» and its VAT code. */

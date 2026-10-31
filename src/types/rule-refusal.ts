@@ -15,6 +15,8 @@ export type RuleRefusal =
   | { code: 'pattern'; params: { text: string } }
   | { code: 'amount' }
   | { code: 'share'; params: { share: string } }
+  /** `then.private: { as: own-use }` on a code that claims no input tax, or on a firm without input tax: there is nothing to correct. */
+  | { code: 'ownUse'; params: { vat: string } }
   | { code: 'fees' }
   /** `then.foreignTax` is not { rate, account } with a rate between 0 and 100, or stands beside a private share or a rate above zero. */
   | { code: 'foreignTax'; params: { value: string } }

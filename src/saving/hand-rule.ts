@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path';
 import { parseDocument, YAMLMap, YAMLSeq } from 'yaml';
 import { loadBooks } from '../books/store.js';
 import { loadClassifyContext, paymentFacts } from '../booking/classify.js';
-import { parseRule, RULE_SECTION, RULE_STEP, type RuleRefusal } from '../booking/rules.js';
+import { OWN_USE, parseRule, RULE_SECTION, RULE_STEP, type RuleRefusal } from '../booking/rules.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { homeOf, loadKnowledge, RULES_DIR } from '../knowledge/layers.js';
 import { ibanKey, payerKey, payerNames, textKey } from '../knowledge/payer.js';
@@ -40,6 +40,8 @@ export interface HandRule {
   foreignTax?: { rate: number; account: string };
   /** The reporting dimensions every booking of the rule carries (#127). */
   tags?: Tags;
+  /** The owner's share in percent (`then.private`); `ownUse`: booked as own use, the input tax corrected (`as: own-use`). */
+  private?: { share: number; ownUse?: boolean };
 }
 
 /** GET /api/rules/hand?payment=: the form started from a payment (a task «Von Hand buchen»), with the payment's name. */
@@ -62,7 +64,12 @@ function written(h: HandRule, today: string, source: HandSource = 'hand'): { whe
     ...(h.direction ? { direction: h.direction } : {}),
     ...(h.amount && (h.amount.over !== undefined || h.amount.under !== undefined) ? { amount: h.amount } : {}),
   };
-  return { ...(Object.keys(when).length ? { when } : {}), then: { account: h.account, vat: h.vat ?? 'none', ...(h.foreignTax ? { foreignTax: h.foreignTax } : {}), ...(h.tags && Object.keys(h.tags).length ? { tags: h.tags } : {}) }, source: `${source} ${today}` };
+  return { ...(Object.keys(when).length ? { when } : {}), then: {
+    account: h.account, vat: h.vat ?? 'none',
+    ...(h.private ? { private: h.private.ownUse ? { share: h.private.share, as: OWN_USE } : h.private.share } : {}),
+    ...(h.foreignTax ? { foreignTax: h.foreignTax } : {}),
+    ...(h.tags && Object.keys(h.tags).length ? { tags: h.tags } : {}),
+  }, source: `${source} ${today}` };
 }
 
 /** The text of a rules file with the hand-made rule added at the end of its rules, under an id no rule of the file has. */
