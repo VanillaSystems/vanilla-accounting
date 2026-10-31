@@ -10,7 +10,7 @@ import type { DocumentsData, OtherWhy } from '../core/modules/schema.js';
 import { STATEMENT_FILES } from '../providers/statement-files.js';
 import { documents } from '../engines/index.js';
 import { documentKind } from './document-kind.js';
-import { namesStatement } from '../core/modules/words.js';
+import { isBankStatement } from '../core/modules/words.js';
 import { pdfRuns, textOf } from '../parsers/pdf-text.js';
 import { csvTable } from '../providers/statement-read/csv.js';
 
@@ -53,7 +53,7 @@ export async function recognize(bytes: Buffer, name: string, words?: DocumentsDa
     // A PDF header on bytes no reader opens (cut short, damaged): no step would ever read it, so it waits in quarantine, not in the inbox.
     if (text === undefined) return { kind: 'receipt', how: 'structure', state: 'quarantine', reason: 'unreadable' };
     const iban = IBAN.exec(text)?.[0];
-    if (namesStatement(text, words ?? documents())) {
+    if (isBankStatement(text, words ?? documents())) {
       return { kind: 'statement-pdf', how: 'hint', state: 'take', ...(iban ? { facts: { iban: iban.replace(/\s/g, '') } } : {}) };
     }
     const doc = text.trim() ? documentKind(text, words ?? documents()) : undefined;

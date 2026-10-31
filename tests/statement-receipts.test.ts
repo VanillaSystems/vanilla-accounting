@@ -7,6 +7,7 @@ import './support/jurisdiction.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { documents } from '../src/engines/index.js';
+import { isBankStatement } from '../src/core/modules/words.js';
 import { accountOfStatement, statementFacts, statementPdf, statementPeriod, typeStatements, useDocumentWords } from '../src/books/statement-facts.js';
 import { parseIban } from '../src/workspace/banks.js';
 import { ClosedPeriodError, loadBooks, PERSON, saveBooks, update } from '../src/books/store.js';
@@ -34,7 +35,7 @@ test('a Kontoauszug is told by its title, IBAN, period and balance lines; its da
 });
 
 test('a statement whose text has no numeric period takes it from the file name, its original name included; the bank\'s name and the currency place it', () => {
-  const lines = ['Wise Europe SA', 'EUR statement', 'Muster Kaffee GmbH', 'Balance brought forward 1,200.00 EUR', 'Closing balance 980.00 EUR'];
+  const lines = ['Wise Europe SA', 'EUR statement', 'Muster Kaffee GmbH', 'Balance brought forward 1,200.00 EUR', 'Date Description Incoming Outgoing Balance', 'Closing balance 980.00 EUR'];
   const byName = statementFacts(doc(lines, 'statement_12345678_EUR_2026-02-01_2026-02-28.pdf'), words);
   assert.deepEqual(byName, { from: '2026-02-01', to: '2026-02-28', currency: 'EUR' });
   assert.equal(accountOfStatement(byName!, doc(lines), ACCOUNTS)?.account, '1023', 'two Wise accounts: the currency of the name decides');
@@ -42,13 +43,14 @@ test('a statement whose text has no numeric period takes it from the file name, 
   assert.equal(renamed?.to, '2026-02-28');
   assert.equal(accountOfStatement(renamed!, doc(lines), ACCOUNTS)?.account, '1024');
   assert.equal(statementFacts(doc(lines, 'Auszug.pdf'), words), undefined, 'the title and a balance line alone, with no period and no IBAN, are too little');
-  const period = statementFacts(doc(['EUR statement', 'Period 2026-02-01 to 2026-02-28', 'Closing balance 980.00 EUR']), words);
+  assert.equal(statementFacts(doc(['EUR statement', 'Closing balance 980.00 EUR'], 'statement_12345678_EUR_2026-02-01_2026-02-28.pdf'), words), undefined, 'the title, a balance line and a period, with no IBAN and no movement columns, are too little');
+  const period = statementFacts(doc(['EUR statement', 'Period 2026-02-01 to 2026-02-28', 'Incoming Outgoing', 'Closing balance 980.00 EUR']), words);
   assert.deepEqual(period, { from: '2026-02-01', to: '2026-02-28' });
   assert.equal(accountOfStatement(period!, doc(lines), ACCOUNTS), undefined, 'two accounts of the bank and no currency: no account to tell');
 });
 
 test('a Raiffeisen-named file is a statement too, with the period of its name', () => {
-  const lines = ['Raiffeisen', 'Kontoauszug', 'Saldo zu Ihren Gunsten 4 321.10'];
+  const lines = ['Raiffeisen', 'Kontoauszug', 'Datum Text Belastung Gutschrift Valuta Saldo', 'Saldo zu Ihren Gunsten 4 321.10'];
   const facts = statementFacts(doc(lines, 'Kontoauszug 01.03.2026 - 31.03.2026 - CH6580808000000000001 - 2026-03-31.pdf'), words);
   assert.deepEqual(facts, { from: '2026-03-01', to: '2026-03-31' });
   assert.equal(accountOfStatement(facts!, doc(lines), ACCOUNTS)?.account, '1021', 'one Raiffeisen account: the bank\'s name places it');
@@ -72,10 +74,23 @@ test('a currency account\'s statement without an IBAN is told by its «USD on <d
   assert.deepEqual(facts, { from: '2026-03-01', to: '2026-03-31', currency: 'USD' });
   assert.equal(accountOfStatement(facts!, doc(USD_STATEMENT), ACCOUNTS), undefined, 'no bank named in its head: it stays under Belege, typed');
   assert.equal(statementFacts(doc(USD_STATEMENT, 'scan.pdf'), words), undefined, 'the heading alone, with no period read and no IBAN, is one sign');
-  assert.ok(statementFacts(doc(['EUR statement', 'EUR per 31.03.2026', 'Saldo 10.00'], 'statement_1_EUR_2026-03-01_2026-03-31.pdf'), words), 'a numeric day after the code counts too');
+  assert.ok(statementFacts(doc(['EUR statement', 'EUR per 31.03.2026', 'Incoming Outgoing', 'Saldo 10.00'], 'statement_1_EUR_2026-03-01_2026-03-31.pdf'), words), 'a numeric day after the code counts too');
   const invoice = ['Example Cloud Ltd.', 'Invoice 2026-031', 'Statement of charges', 'USD on 31 March 2026', 'Total 49.00 USD'];
   assert.equal(statementFacts(doc(invoice, 'statement_1_USD_2026-03-01_2026-03-31.pdf'), words), undefined, 'an invoice that names a statement after its title stays an invoice');
   assert.equal(statementFacts(doc(['Statement of work', 'usd on 31 March 2026', 'Phase 1']), words), undefined, 'a currency code is upper case, and one sign is too little');
+});
+
+// A supplier's monthly «Statement» of its charges (issue #289): a period, opening and closing
+// balances and a table of what was paid, but no IBAN and no movement columns. It is a receipt.
+const SUPPLIER_STATEMENT = ['Statement', 'To', 'Muster Kaffee GmbH', 'Musterstrasse 1', '', 'Example Ads', 'Summary for Aug 1, 2026–Aug 31, 2026', 'Payments account ID 1234-5678-9012',
+  'Starting balance CHF 27.69', 'Total new activity CHF 120.00', 'Total payments received -CHF 147.69', 'Ending balance in CHF CHF 0.00', 'This is not a bill.',
+  'PAYMENTS RECEIVED', 'Date Description Amount(CHF)', 'Aug 1 Monthly charge: Visa •••• 0000 -147.69'];
+
+test('a supplier\'s «Statement» with a period and balances but no IBAN and no movement columns is no bank statement (#289)', () => {
+  assert.equal(isBankStatement(SUPPLIER_STATEMENT.join('\n'), words), false);
+  assert.equal(statementFacts(doc(SUPPLIER_STATEMENT, 'statement_12345678_CHF_2026-08-01_2026-08-31.pdf'), words), undefined, 'a period in its name changes nothing');
+  assert.ok(isBankStatement(USD_STATEMENT.join('\n'), words), 'a currency account\'s statement without an IBAN shows its movement columns');
+  assert.ok(isBankStatement(KONTOAUSZUG.join('\n'), words), 'a Kontoauszug shows its IBAN');
 });
 
 test('statementPeriod reads a dash, «bis» or «to» between two days, in either order; statementPdf reads both file names', () => {
