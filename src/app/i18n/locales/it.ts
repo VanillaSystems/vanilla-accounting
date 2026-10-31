@@ -3169,6 +3169,8 @@ export default {
     'error.gone.file': 'Questo file non è (più) nella posta in arrivo.',
     'error.reportCorrection.gone': 'Questo rapporto delle vendite non è (più) nei libri: nulla registrato.',
     'error.reportCorrection.notOffered': 'Il rapporto delle vendite non offre più questo rimborso come correzione: già registrato, o nessun rapporto dei pagamenti lo data. Nulla registrato.',
+    'error.statementUndo.expired': 'La rimozione non può più essere annullata: aggiungere di nuovo l’estratto.',
+    'error.statementUndo.changed': 'I libri sono cambiati dopo la rimozione: nulla ripristinato. Aggiungere di nuovo l’estratto.',
     'error.gone.quarantined': 'Questo file non è (più) in quarantena.',
     'error.fileReferenced': '{file} non viene eliminato. Vi rimanda ancora: {refs}.',
     'error.fileReferenced.payment': 'pagamento {ref}',
