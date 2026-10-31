@@ -4,7 +4,7 @@
 
 ## Sub-features
 
-- Belege (search, receipt PDF), Kontoauszüge (statement PDF with its balance check), Buchungen, MWST with the `0535 Korrekturabrechnung` row of a filed quarter (`#/vat/0535?period=2026-Q1`, detail `Korrekturabrechnung (effektive Methode)`) and Bilanz & ER read from the export's files. Rechnungen, Abschluss (`Der Jahresabschluss braucht den lokalen Server`), Geschäftspartner and Wissen (`Im Prüfexport nicht enthalten: diese Seite liest die App.`), Automatisierung and Änderungen (`Nur in der App mit laufendem Server.`) say they are not in the export.
+- Belege (search, receipt PDF), Kontoauszüge (statement PDF with its balance check), Buchungen, MWST with the `0535 Korrekturabrechnung` row of a filed quarter (`#/vat/0535?period=2026-Q1`, detail `Korrekturabrechnung (effektive Methode)`) and Bilanz & ER read from the export's files. Rechnungen (`Rechnungen gibt es nur in der App mit ihrem Server, nicht in diesem Export.`), Abschluss (its steps show, the detail says `Der Jahresabschluss braucht den lokalen Server (npm start).`), Geschäftspartner and Wissen (`Im Prüfexport nicht enthalten: diese Seite liest die App.`), Automatisierung and Änderungen (`Nur in der App mit laufendem Server.`) say they are not in the export.
 - The audit bar `[data-testid=audit-bar]` reads `Prüfmodus · nur Lesen — Änderungen sind deaktiviert · Stand vom <date> · Buchhaltungsdaten Schema <n> · App v<version>` (translated); no edit control shows.
 - The view lives after `#` (`#/journal/<id>?period=…`; an old `#/<lang>/<period>/<tab>` link redirects), and a pasted `#` link opens its view.
 - `manifest.json` and `npm run verify-audit` (tests/audit-export.test.ts covers tampering). The build prints the seal status, missing PDFs and the manifest's sha256, and refuses a non-empty folder without a manifest or a folder inside the workspace.
@@ -30,7 +30,7 @@ grep -a -v '^GET /sub-path/' <scratch>/audit/requests.log   # must print nothing
 
 ## Gotchas
 
-- `goto` to a URL that differs only in its `#` part relies on the app's hashchange reload; wait a second before reading the DOM.
+- `goto` to a URL that differs only in its `#` part relies on the app re-reading the location on `hashchange` (src/app/shell/history.ts); wait a second before reading the DOM. Driven 2026-10-31: build 201 files in about 7 s, seal intact, verify-audit ok, no request outside the sub-path.
 - Headless Chromium shows a PDF iframe blank. Prove the PDF with `$B js "fetch(document.querySelector('iframe').src).then(r => r.status + ' ' + r.headers.get('content-type'))"`.
 - The export's origin (another port) has its own localStorage: the language starts as the browser's (English) until set.
 - Every call to `/api/` is refused in the export before it is sent (`apiFetch`, src/app/lib/api.ts; issues #66, #67), so the grep prints nothing. tests/audit-export.test.ts walks every area in headless Chrome and fails on any `/api/` request, a console error, or an area that keeps the main thread busy (Änderungen did, until 2026-10-23).

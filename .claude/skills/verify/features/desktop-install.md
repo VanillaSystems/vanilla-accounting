@@ -3,9 +3,13 @@
 The owner downloads the dmg, opens it and starts the app. The build is unsigned
 (`identity: null` in `desktop/electron-builder.config.cjs`) until the Developer ID arrives, so
 macOS Gatekeeper blocks the first start. Started outside /Applications, the app first offers to move
-itself there. The first start shows the start screen (`Wähle die Buchhaltung, mit der du arbeiten
-willst.`, `Bestehende Buchhaltung öffnen`, `Neue Buchhaltung anlegen`, `Demo ansehen`, each with a
-hint line, `Zuletzt geöffnet`, language DE FR IT EN). The language follows the system's until one is
+itself there. The first start, with no books known, opens «Einrichtung» (FirstRun, src/app/ai/FirstRun.tsx:
+`Hallo! Ich richte mit dir Vanilla Accounting ein. …`, the AI step with one test call, `Zur Startseite`
+`[data-act=first-leave]`, then the folder choices `[data-answer=create|open|switch|demo]`). The start
+screen (`Wähle die Buchhaltung, mit der du arbeiten willst.`, `Bestehende Buchhaltung öffnen`,
+`Neue Buchhaltung anlegen`, `Demo ansehen`, each with a hint line, `Zuletzt geöffnet`, language DE FR IT
+EN) shows from `Zur Startseite`, at `/start`, or on a later start without books; a later start with
+books reopens the last ones directly (src/desktop/main.ts). The language follows the system's until one is
 picked (English on `vanilla-clean`).
 
 ## Sub-features
