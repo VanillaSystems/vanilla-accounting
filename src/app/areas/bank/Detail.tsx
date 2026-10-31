@@ -13,6 +13,7 @@ import { bookedInFiled } from '../../../books/twins.js';
 import { pending, reconciliationOf } from '../../../books/reconcile.js';
 import type { RouteOf } from '../../shell/route.js';
 import { api, errorText, sources } from '../../lib/api.js';
+import { useBookedFields } from '../../lib/booked-fields.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { monthName } from '../../lib/period-label.js';
 import { useFx } from '../../hooks/use-fx.js';
@@ -395,12 +396,14 @@ function LinkInvoice({ tx, nav }: { tx: BankTransaction; nav: Props['nav'] }) {
 function Note({ tx, nav, edit }: { tx: BankTransaction; nav: Props['nav']; edit: boolean }) {
   const [editing, setEditing] = useState(false);
   const cancelled = useRef(false);
+  const box = useRef<HTMLSpanElement>(null);
+  useBookedFields(box, { remarks: tx.remarks ?? '' });
   if (editing) {
     const done = (text: string) => { setEditing(false); if (!cancelled.current) void setNote(nav, tx, text.trim()); };
-    return <> · <input className="note" autoFocus defaultValue={tx.remarks ?? ''} aria-label={t('bank.remarks')} data-tip={t('bank.noteTip')}
+    return <> · <span ref={box}><input className="note" name="remarks" autoFocus defaultValue={tx.remarks ?? ''} aria-label={t('bank.remarks')} data-tip={t('bank.noteTip')}
       onFocus={() => { cancelled.current = false; }}
       onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { cancelled.current = true; setEditing(false); } }}
-      onBlur={(e) => done(e.currentTarget.value)} /></>;
+      onBlur={(e) => done(e.currentTarget.value)} /></span></>;
   }
   if (!edit) return tx.remarks ? <> · <span data-tip={t('bank.remarks')}>{tx.remarks}</span></> : null;
   return <> · <button type="button" className={tx.remarks ? 'golink' : 'golink addnote'} data-testid="payment-note" data-tip={t('bank.noteTip')} onClick={() => setEditing(true)}>{tx.remarks || t('bank.addNote')}</button></>;
