@@ -104,6 +104,10 @@ export type ApiRefusal =
   /** Someone answered the question first (the books folder is shared). */
   | { code: 'questionAnswered' }
   | { code: 'questionGone'; params: { why: SaleGone } }
+  /** An answer «Ausland mit ausländischer MWST» without a rate or amount the sale can hold, or without its account. */
+  | { code: 'foreignTaxInvalid' }
+  /** A foreign VAT is split off one revenue entry; the payment has several. */
+  | { code: 'foreignTaxSplit' }
   | { code: 'takesBack' }
   | { code: 'setAside'; params: { receipt: string } }
   | { code: 'unknownAccount'; params: { account: string } }

@@ -128,6 +128,10 @@ function entryRef(entry: Node, txDtls: Node[], kind: StatementKind, statementId:
   return ref !== undefined && String(ref).trim() ? String(ref).trim() : `${statementId}#${n}`;
 }
 
+/** ISO 20022 bank transaction sub-families of the bank's own charges (Domn/Fmly/SubFmlyCd, as ACMT/MDOP/FEES for an account fee). */
+const CHARGES = new Set(['CHRG', 'FEES']);
+const chargesCode = (code: Node | undefined) => CHARGES.has(String(code?.Domn?.Fmly?.SubFmlyCd ?? '').trim());
+
 /** The bank transactions of a statement, booked on the ledger account of `bank` (a manifest label). */
 export function transactionsOf(statement: CamtStatement, account: { bank: string; statements: StatementKind }): BankTransaction[] {
   const entries: Node[] = statement.node.Ntry ?? [];
@@ -183,6 +187,8 @@ export function transactionsOf(statement: CamtStatement, account: { bank: string
     const instructed = single?.AmtDtls?.InstdAmt?.Amt ?? entry.AmtDtls?.InstdAmt?.Amt;
     const original = instructed !== undefined ? getAmt(instructed) : undefined;
     const wiseId = account.statements === 'wise' ? String(entry.BkTxCd?.Prtry?.Cd ?? '').trim() : '';
+    // Wise names a fee row FEE-<the id of the payment it charges for> (FEE-CARD-…, FEE-TRANSFER-…).
+    const feeType = wiseId.startsWith('FEE-') ? 'wise-fee' as const : (chargesCode(entry.BkTxCd) || chargesCode(single?.BkTxCd)) && !counterpartyIban ? 'bank-fee' as const : undefined;
 
     return {
       ref,
@@ -198,7 +204,7 @@ export function transactionsOf(statement: CamtStatement, account: { bank: string
       ...(counterpartyIban ? { counterpartyIban } : {}),
       ...(original && original.currency !== currency && Number.isFinite(original.amount) ? { original: { amount: Math.abs(original.amount), currency: original.currency } } : {}),
       ...(wiseId && wiseId !== ref ? { bankTxId: wiseId } : {}),
-      ...(account.statements === 'wise' && description.startsWith('Wise Charges for: CARD-') ? { type: 'wise-fee' as const } : {}),
+      ...(feeType ? { type: feeType } : {}),
     };
   });
 }
