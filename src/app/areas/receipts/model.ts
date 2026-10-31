@@ -19,6 +19,7 @@ import { kindByOf, type KindBy } from '../../../intake/unclear.js';
 import { inProcess, type Processing } from '../../../workflows/processing.js';
 import type { OrderPage } from '../../../booking/order-pages.js';
 import type { VatCorrection } from '../../../booking/vat-corrections.js';
+import { isBankFee } from '../../../booking/separate-fee.js';
 
 /** Why a file in Belege is no receipt: what its words say it is, or its kind, or that it holds no amount. */
 export type NoneWhy = SupportingWhy | OtherWhy | 'supporting' | 'duplicate' | 'statement' | 'empty';
@@ -285,7 +286,7 @@ function moneyWay(r: Pick<Receipt, 'amount' | 'kind' | 'description' | 'extracte
 }
 
 /** A payment the link dialog offers for this receipt: one that moved money, no Wise fee row, not yet linked to it. */
-export const linkable = (v: ReceiptView, tx: BankTransaction): boolean => tx.amount !== 0 && tx.type !== 'wise-fee' && !v.links.includes(tx.ref);
+export const linkable = (v: ReceiptView, tx: BankTransaction): boolean => tx.amount !== 0 && !isBankFee(tx) && !v.links.includes(tx.ref);
 
 /**
  * The payments a receipt could belong to, best first: close in amount (in CHF), close in date,

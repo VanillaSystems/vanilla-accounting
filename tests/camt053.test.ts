@@ -12,6 +12,7 @@ import type { BankTransaction } from '../src/types/index.js';
 import { assignUniqueRefs, readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
 import type { StatementKind } from '../src/workspace/banks.js';
 import { buildBatchClassifyPrompt } from '../src/llm/prompts.js';
+import { isBankFee, separateFeeOf } from '../src/booking/separate-fee.js';
 
 const RAIFFEISEN = 'uuid_camt053_001_08_raiffeisen.xml';
 const WISE_USD = 'uuid_statement_wise_USD.xml';
@@ -103,6 +104,34 @@ test('a fee line is tagged on a wise account only', () => {
   const xml = read(WISE_USD);
   assert.equal(parse(xml, 'Wise', 'wise').filter((t) => t.type === 'wise-fee').length, 2);
   assert.equal(parse(xml, 'Other', 'camt053').filter((t) => t.type === 'wise-fee').length, 0);
+});
+
+test('a Wise transfer\'s fee row is a fee of its transfer like a card\'s (#286)', () => {
+  const entry = (ref: string, id: string, amount: string, text: string) =>
+    `<Ntry><Amt Ccy="EUR">${amount}</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><DtTm>2026-08-04T10:00:00</DtTm></BookgDt><AcctSvcrRef>${ref}</AcctSvcrRef>
+<BkTxCd><Prtry><Cd>${id}</Cd></Prtry></BkTxCd><AddtlNtryInf>${text}</AddtlNtryInf></Ntry>`;
+  const txs = parse(ntry(entry('WEUR1', 'TRANSFER-501', '250.00', 'Sent money to Beispiel Optik GmbH') + entry('WEUR2', 'FEE-TRANSFER-501', '1.84', 'Wise Charges for: TRANSFER-501')), 'Wise', 'wise');
+  const [transfer, fee] = txs;
+  assert.equal(fee.type, 'wise-fee');
+  assert.equal(transfer.type, undefined);
+  assert.equal(separateFeeOf(transfer, txs)?.ref, 'WEUR2', 'the transfer finds its fee, so withoutSeparateFee guards its booking');
+  assert.equal(isBankFee(fee), true, 'no receipt is asked for the fee');
+});
+
+test('the bank\'s own account fee, by its code for charges and no other party, is a fee row (#290)', () => {
+  const entry = (ref: string, family: string, sub: string, amount: string, text: string, party = '') =>
+    `<Ntry><Amt Ccy="CHF">${amount}</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-09-29</Dt></BookgDt><AcctSvcrRef>${ref}</AcctSvcrRef>
+<BkTxCd><Domn><Cd>${family.split('/')[0]}</Cd><Fmly><Cd>${family.split('/')[1]}</Cd><SubFmlyCd>${sub}</SubFmlyCd></Fmly></Domn></BkTxCd>
+<NtryDtls><TxDtls><Amt Ccy="CHF">${amount}</Amt>${party}</TxDtls></NtryDtls><AddtlNtryInf>${text}</AddtlNtryInf></Ntry>`;
+  const creditor = '<RltdPties><Cdtr><Pty><Nm>Beispiel AG</Nm></Pty></Cdtr><CdtrAcct><Id><IBAN>BE00967000000002</IBAN></Id></CdtrAcct></RltdPties>';
+  const txs = parse(ntry(
+    entry('A1', 'ACMT/MDOP', 'FEES', '15', 'Gebührenbelastung Kontoführung') +
+    entry('A2', 'PMNT/ICDT', 'CHRG', '2', 'Spesen Auslandzahlung') +
+    entry('A3', 'PMNT/ICDT', 'DMCT', '80', 'Zahlung Beispiel AG', creditor) +
+    entry('A4', 'PMNT/ICDT', 'CHRG', '5', 'Zahlung mit Spesen', creditor),
+  ));
+  assert.deepEqual(txs.map((t) => [t.ref, t.type]), [['A1', 'bank-fee'], ['A2', 'bank-fee'], ['A3', undefined], ['A4', undefined]], 'a charge paid to another party is a payment');
+  assert.equal(txs.filter(isBankFee).length, 2);
 });
 
 test('synthetic batch: debit parts name the creditor, credit parts the debtor', () => {

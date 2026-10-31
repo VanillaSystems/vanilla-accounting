@@ -16,6 +16,8 @@ export type RuleRefusal =
   | { code: 'amount' }
   | { code: 'share'; params: { share: string } }
   | { code: 'fees' }
+  /** `then.foreignTax` is not { rate, account } with a rate between 0 and 100, or stands beside a private share or a rate above zero. */
+  | { code: 'foreignTax'; params: { value: string } }
   | { code: 'direction'; params: { direction: string } }
   | { code: 'counterparty'; params: { counterparty: string } }
   | { code: 'payer'; params: { payer: string } }

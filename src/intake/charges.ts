@@ -18,6 +18,7 @@ import type { BankTransaction } from '../types/index.js';
 import { merchantOf } from '../knowledge/counterparties.js';
 import { madeByHand } from '../workspace/money-accounts.js';
 import { originalOf, type ToChf } from './pairing.js';
+import { isBankFee } from '../booking/separate-fee.js';
 
 /** The legs of a split charge, each at the official daily rate, add up to its original amount within this share (a bank's rate is not the official one). */
 export const SPLIT_BAND = 0.03;
@@ -58,7 +59,7 @@ function oneCharge(legs: readonly BankTransaction[], toChf: ToChf): boolean {
   return Math.abs(sum - whole) <= whole * SPLIT_BAND;
 }
 
-const splittable = (t: BankTransaction) => t.amount !== 0 && t.type !== 'wise-fee' && !madeByHand(t);
+const splittable = (t: BankTransaction) => t.amount !== 0 && !isBankFee(t) && !madeByHand(t);
 
 /** The charges of `transactions`. `toChf`: the official daily rates; without them only a ref the bank shares makes legs one charge. */
 export function chargesOf(transactions: readonly BankTransaction[], toChf?: ToChf): Charges {

@@ -30,6 +30,7 @@ import { APP_ROOT, openWorkspace } from '../workspace/workspace.js';
 import { documents, filing } from '../engines/index.js';
 import { duplicatesIn } from '../intake/duplicates.js';
 import { MODEL_RULE } from '../intake/unclear.js';
+import { isBankFee } from '../booking/separate-fee.js';
 
 const ws = openWorkspace();
 const BEFORE_DAYS = 45; // invoice dated up to 45 days before the payment
@@ -117,7 +118,7 @@ function main() {
   const twins = duplicatesIn(index.receipts, linkedReceipts, documents());
   const receiptsOf = (ref: string) => index.mappings.filter((m) => m.transactionRef === ref).map((m) => index.receipts.find((r) => r.id === m.receiptId)).filter(Boolean) as Receipt[];
   // A Wise fee row shares its transfer's reference and amount pattern; it is never what a receipt pays.
-  const txs = index.transactions.filter((t) => !lock.isClosed(t.date) && !t.ref.startsWith('FEE-') && t.type !== 'wise-fee');
+  const txs = index.transactions.filter((t) => !lock.isClosed(t.date) && !t.ref.startsWith('FEE-') && !isBankFee(t));
 
   const links: Link[] = [];
   const several: { receipt: Receipt; cands: BankTransaction[] }[] = [];

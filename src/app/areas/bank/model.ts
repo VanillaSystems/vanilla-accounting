@@ -18,7 +18,7 @@ import { baseCurrency, documents } from '../../../engines/index.js';
 import { accountOfStatement, statementFacts } from '../../../books/statement-facts.js';
 import { bookedInFiled } from '../../../books/twins.js';
 import { lockedThrough } from '../../../books/lock-line.js';
-import { isSeparateFee, separateFeeOf } from '../../../booking/separate-fee.js';
+import { isBankFee, separateFeeOf } from '../../../booking/separate-fee.js';
 
 export type Account = Pick<LedgerBankAccount, 'bank' | 'currency' | 'account' | 'label' | 'role' | 'statements' | 'iban'>;
 
@@ -258,10 +258,10 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
   }
   const unbooked = isUnbooked(books, accounts);
   // A booked fee is folded into its payment's row; an open one keeps a row of its own, to be booked (#42).
-  const separateFees = books.transactions.filter(isSeparateFee);
+  const separateFees = books.transactions.filter(isBankFee);
   const fees = new Map<string, BankTransaction>();
   for (const t of books.transactions) {
-    const fee = isSeparateFee(t) ? undefined : separateFeeOf(t, separateFees);
+    const fee = isBankFee(t) ? undefined : separateFeeOf(t, separateFees);
     if (fee && !unbooked(fee)) fees.set(t.ref, fee);
   }
   const folded = new Set(fees.values());
@@ -470,7 +470,7 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
     },
     entriesOf: (ref) => entries.get(ref) ?? [],
     txByRef,
-    needsReceipt: (t) => !isSeparateFee(t) && t.amount !== 0 && !t.noReceiptNeeded && !(receipts.get(t.ref) ?? []).length,
+    needsReceipt: (t) => !isBankFee(t) && t.amount !== 0 && !t.noReceiptNeeded && !(receipts.get(t.ref) ?? []).length,
     unbooked,
     strays: (from, to) => (books.journalEntries ?? []).filter((e) => e.date >= from && e.date <= to && e.origin !== 'year-close'
       && e.accountDebit !== e.accountCredit && !txByRef.has(e.transactionRef)
