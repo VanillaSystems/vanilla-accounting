@@ -1,0 +1,80 @@
+Eidgenössisches Finanzdepartement EFD
+Bundesamt für Zoll und Grenzsicherheit BAZG
+
+Schweizerische Eidgenossenschaft
+Confédération suisse
+Confederazione Svizzera
+VERANLAGUNGSVERFÜGUNG MWST
+Annahmedatum:
+Ausstellungsdatum:
+Zoll Nord - Musterstadt Kurier
+Postfach
+CH 4000 Musterstadt
+
+Import
+
+Definitiv
+
+26CHEI000000008812.126CHEI000000008812.1
+
+08.05.2026, 00:37
+09.05.2026, 23:55
+
+Versender:
+BEISPIEL OPTIK GMBH
+MUSTERWEG 10
+DE 04109 LEIPZIG
+Importeur:
+MUSTER OPTIK AG
+BEISPIELSTR 1
+CH 8000 ZUERICH
+Sped-Nr./TIN/UID: CHE123456789
+Spediteur:
+Muster Kurier AG
+197
+Kurierstrasse 2
+CH 4142 Musterhausen
+Anmeld. Nr.: 1234X56AB7C-I00001
+
+Bordereaunummer:
+Versendungsland:
+Positionen:
+Konto MWST:
+MWST-Nr.:
+Rechnungswährung:
+Transport (Verkehrszweig, Typ, Land, Kennzeichen):
+Strassenverkehr, LKW, CH, LKW
+Vorpapiere (Art, Nummer, zusätzliche Angaben):
+Hausfrachtbrief, 1234X56AB7C, 1Z0000000000000000
+Gesamtbetrag MWST [CHF]:
+
+1234567
+DE
+1
+1234-5 Muster Kurier AG Musterhaus
+CHE123456789 MWST
+Euro (EUR)
+
+41.30
+
+1
+
+BRILLENGESTELLE
+x Handelswaren
+
+9003.1100
+
+Betrag [CHF]:
+509.90
+0.00
+509.90
+
+Ansatz [%]:
+
+MWST [CHF]:
+
+8.1
+
+41.30
+
+Seite 1 von 2
