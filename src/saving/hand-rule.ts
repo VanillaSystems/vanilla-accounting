@@ -36,6 +36,8 @@ export interface HandRule {
   account: string;
   /** null: booked without a VAT code (a firm not registered, a transfer). */
   vat: string | null;
+  /** A foreign VAT split off a sale abroad: its rate, the account it goes onto (an answer to the sale question, never the form). */
+  foreignTax?: { rate: number; account: string };
   /** The reporting dimensions every booking of the rule carries (#127). */
   tags?: Tags;
 }
@@ -60,7 +62,7 @@ function written(h: HandRule, today: string, source: HandSource = 'hand'): { whe
     ...(h.direction ? { direction: h.direction } : {}),
     ...(h.amount && (h.amount.over !== undefined || h.amount.under !== undefined) ? { amount: h.amount } : {}),
   };
-  return { ...(Object.keys(when).length ? { when } : {}), then: { account: h.account, vat: h.vat ?? 'none', ...(h.tags && Object.keys(h.tags).length ? { tags: h.tags } : {}) }, source: `${source} ${today}` };
+  return { ...(Object.keys(when).length ? { when } : {}), then: { account: h.account, vat: h.vat ?? 'none', ...(h.foreignTax ? { foreignTax: h.foreignTax } : {}), ...(h.tags && Object.keys(h.tags).length ? { tags: h.tags } : {}) }, source: `${source} ${today}` };
 }
 
 /** The text of a rules file with the hand-made rule added at the end of its rules, under an id no rule of the file has. */
