@@ -17,7 +17,8 @@ import { assignUniqueRefs } from '../providers/camt053/camt053.js';
 import { imageToPdf, isImageFile } from '../parsers/image-pdf.js';
 import { smallerPdf } from '../parsers/smaller.js';
 import { pdfText } from '../parsers/pdf-text.js';
-import { detectVatProofIssue, textFacts } from '../parsers/receipt-text.js';
+import { detectVatProofIssue, textFacts, textProves } from '../parsers/receipt-text.js';
+import { filedReceipt, forgetReadFacts } from './vat.js';
 import { buildVisionPrompt } from '../llm/prompts.js';
 import type { Receipt } from '../types/index.js';
 import { filesOfPart, type Workspace } from '../workspace/workspace.js';
@@ -67,6 +68,16 @@ async function extractTextFast(
     return { text: '', method: 'claude-vision' };
   }
 }
+
+const MODEL_READ: ReadonlySet<Receipt['extractionMethod']> = new Set(['claude', 'claude-vision']);
+
+/**
+ * A receipt whose text proves nothing and that no model has read yet: an old local OCR's noise off a
+ * phone photo (#284). The model reads it again, once. A receipt of a filed quarter keeps its text:
+ * its VAT was declared as booked.
+ */
+export const readsAgain = (books: Parameters<typeof filedReceipt>[0], r: Receipt): boolean =>
+  !!r.extractedText && !textProves(r) && !MODEL_READ.has(r.extractionMethod) && !filedReceipt(books, r);
 
 // ─── Concurrency pool ───────────────────────────────────────────────────────
 
@@ -237,8 +248,10 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
     files.push({ ...f, id });
   }
 
-  const known = new Map(books.read().receipts.map((r) => [r.id, r]));
-  const toExtract = files.filter((f) => !known.get(f.id)?.extractedText);
+  const snapshot = books.read();
+  const known = new Map(snapshot.receipts.map((r) => [r.id, r]));
+  const again = new Set(ask ? snapshot.receipts.filter((r) => readsAgain(snapshot, r)).map((r) => r.id) : []);
+  const toExtract = files.filter((f) => !known.get(f.id)?.extractedText || again.has(f.id));
   progress(0, toExtract.length);
 
   const pool = createPool(5);
@@ -254,7 +267,11 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
 
   // A new receipt whose words decide nothing and that shows almost nothing of an invoice is asked of the model once (#186).
   const modelKinds = new Map<string, ModelKind>();
-  const unclear = ask ? toExtract.filter((f) => !known.get(f.id)?.kind && !known.get(f.id)?.kindBy && asksModel(extracted.get(f.id)?.text ?? '', documents())) : [];
+  // A receipt read again keeps the kind it has; a reading that proves nothing (a photo the model could not read) says nothing of its kind and waits as «nicht lesbar» (#284).
+  const unclear = ask ? toExtract.filter((f) => {
+    const read = extracted.get(f.id);
+    return !again.has(f.id) && !known.get(f.id)?.kind && !known.get(f.id)?.kindBy && !!read && textProves({ extractedText: read.text, extractionMethod: read.method }) && asksModel(read.text, documents());
+  }) : [];
   await Promise.all(unclear.map((f) => pool(async () => {
     try {
       const v = await askKind(ask!, extracted.get(f.id)!.text, f.filename);
@@ -285,7 +302,21 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
     const byId = new Map(index.receipts.map((r) => [r.id, r]));
     const receipts = files.filter((f) => existsSync(f.filepath)).flatMap(({ id, filename, location }): Receipt[] => {
       const existing = byId.get(id);
-      const fresh = existing?.extractedText ? undefined : extracted.get(id);
+      const read = extracted.get(id);
+      // Read again (#284): the new text replaces the one read before, if that is still the receipt's, and so do the VAT facts read
+      // off it. An archived receipt is matched no more: a day or total it lacks is taken where the text states it plainly; one it has may be a person's.
+      if (read?.text && existing?.extractedText && again.has(id) && existing.extractedText === known.get(id)?.extractedText) {
+        const plain = textFacts(read.text);
+        const r: Receipt = {
+          ...existing, filename, location, extractedText: read.text, extractionMethod: read.method, needsVisionReview: undefined,
+          date: existing.date ?? plain.date, amount: existing.amount ?? plain.amount, currency: existing.currency ?? plain.currency,
+          remarks: existing.remarks ?? detectVatProofIssue(read.text),
+        };
+        forgetReadFacts(r);
+        log(`  ${filename}: read again by the model, its earlier text proved nothing`);
+        return [r];
+      }
+      const fresh = existing?.extractedText ? undefined : read;
       if (!fresh) return existing ? [{ ...existing, filename, location, remarks: existing.remarks ?? detectVatProofIssue(existing.extractedText) }] : [];
       // Without a model nothing else reads the date and the total; what the text states plainly is taken.
       const plain = ask ? {} : textFacts(fresh.text);

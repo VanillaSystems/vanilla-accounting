@@ -431,3 +431,52 @@ function splitContext(o: Partial<SplitContext> = {}): SplitContext {
     convert: () => undefined, texts: { position: (p) => p, deduction: (a) => a.file }, name: 'Muster Kurier AG', ...o,
   };
 }
+
+/**
+ * Issue #285: the assessment's header is a column of labels and a column of values, so the text puts
+ * the other fields' values (bordereau number, country, positions, the account, the UID, the currency)
+ * between «Gesamtbetrag MWST» and its amount. Invented, of the shape seen on a real assessment.
+ */
+const COLUMNS_TEXT = fixture('assessment-columns.txt');
+
+test('#285: the assessment\'s total is read wherever the text puts it after its label on its page, never a date, a UID or a tariff number', () => {
+  const words = documents().customs;
+  const columns = assessment({ id: 'evvc', extractedText: COLUMNS_TEXT });
+  assert.ok(COLUMNS_TEXT.indexOf('41.30') - COLUMNS_TEXT.indexOf('Gesamtbetrag MWST') > 80, 'the amount stands further from its label than the reader once looked');
+  assert.deepEqual(readAssessment(columns, words, 'CHE-123.456.789'), { receipt: 'evvc', file: columns.filename, date: '2026-05-09', amount: 41.3, number: '26CHEI000000008812' });
+  assert.equal(assessmentFacts(COLUMNS_TEXT, words).amount, 41.3);
+  const dated = COLUMNS_TEXT.replace('Euro (EUR)', 'Euro (EUR)\n26.08.2026\n9003.1100\nCHE-123.456.789');
+  assert.equal(readAssessment({ ...columns, extractedText: dated }, words, 'CHE-123.456.789')?.amount, 41.3, 'a date, a tariff number and a UID are no money');
+  const nextPage = `VERANLAGUNGSVERFÜGUNG MWST\nCHE123456789\nGesamtbetrag MWST [CHF]:\n\f12.50\n`;
+  assert.equal(readAssessment({ ...columns, extractedText: nextPage }, words, 'CHE-123.456.789'), undefined, 'a later page\'s money is not the total');
+});
+
+/**
+ * Issue #285: a courier's invoice that names the import VAT it advanced only as «MWST.-freie Kosten»,
+ * its own VAT on the advance fee as «8,10 % MWST» at no rate of the line's own, and cites the
+ * declaration's number. Invented.
+ */
+const UNTAXED_LINES: ReceiptLine[] = [
+  { description: 'Vorlageprovisionsgebühr', gross: 26.5, ratePercent: 8.1 },
+  { description: 'MWST.-freie Kosten', gross: 41.3, ratePercent: 0 },
+  { description: '8,10 % MWST', gross: 2.15, ratePercent: 0 },
+];
+const UNTAXED_TEXT = 'Rechnung\nMuster Kurier AG\nKosten: 26,50\n8,10 % MWST: 2,15\nTotal MWST.-frei: 41,30\nFälliger Gesamtbetrag CHF 69,95\nZollquittungsnummer: 26CHEI000000008812\nZugangscode: Qw3rTy7u';
+const U_PAYMENT: BankTransaction = { ...PAYMENT, ref: 'P-U', amount: 69.95 };
+const uInvoice = (o: Partial<Receipt> = {}) => invoice({ id: 'invu', filename: '20260512-muster-kurier-rechnung-4711.pdf', extractedText: UNTAXED_TEXT, amount: 69.95, hasSwissVat: true, lineItems: UNTAXED_LINES, ...o });
+
+test('#285: costs free of VAT on an invoice that cites the declaration are the import VAT; «8,10 % MWST» is the carrier\'s VAT on its fee; the assessment proves the import VAT line', async () => {
+  const books = booksOf([uInvoice(), assessment({ id: 'evvc', extractedText: COLUMNS_TEXT, amount: 41.3 })], undefined, { tx: U_PAYMENT });
+  const out = await classifyTransactions(books, [U_PAYMENT], { fx, context: loadClassifyContext(company()), ask: noModel });
+  assert.deepEqual(out.classified, ['P-U']);
+  assert.deepEqual(lines(books, 'P-U'), [['4040', '1021', 28.65, 'M81'], ['4030', '1021', 41.3, 'M0'], ['', '4030', 41.3, 'M81-2']],
+    'the fee with its 2.15 VAT claims that VAT; the import VAT is deducted by the assessment');
+});
+
+test('#285: costs free of VAT name no import VAT on an invoice that cites no declaration, and the carrier\'s VAT without a fee at its rate holds the split', () => {
+  const postage = uInvoice({ extractedText: 'Rechnung\nPorto und MWST.-freie Kosten' });
+  assert.equal(customsSplit(U_PAYMENT, [postage], splitContext()), undefined, 'postage and others list VAT-free costs too: the model\'s');
+  const lone = uInvoice({ lineItems: [{ description: 'MWST.-freie Kosten', gross: 67.8, ratePercent: 0 }, UNTAXED_LINES[2]] });
+  const split = customsSplit(U_PAYMENT, [lone], splitContext());
+  assert.deepEqual(split && 'hold' in split && split.hold, { why: 'line', file: lone.filename, line: '8,10 % MWST' });
+});

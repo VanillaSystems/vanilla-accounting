@@ -10,18 +10,19 @@ import type { BankTransaction, JournalEntry, Receipt } from '../types/index.js';
 import type { Books } from '../books/store.js';
 import { baseCurrency } from '../engines/index.js';
 import { vatInFigures } from '../accounting/vat-in-figures.js';
-import { SPLIT_BAND } from '../intake/charges.js';
+import { SPLIT_BAND, sameLeg } from '../intake/charges.js';
 
 /**
- * The receipts linked to `tx` that other legs of its card charge hold too (`legs`, the refs of its
- * charge, src/intake/charges.ts), and those legs: undefined when it is no leg of a split charge or
- * no other leg shares a receipt. A copy marked as such counts for nothing. Only the legs of one
- * charge: a contract linked to each monthly payment shows each month's VAT, not one total.
+ * The receipts linked to `tx` that other legs of its card charge hold too (`legs`, the movements of
+ * its charge, src/intake/charges.ts: under refs of their own or under one ref, #287), and those legs:
+ * undefined when it is no leg of a split charge or no other leg shares a receipt. A copy marked as
+ * such counts for nothing. Only the legs of one charge: a contract linked to each monthly payment
+ * shows each month's VAT, not one total.
  */
-export function sharedReceipts(books: Pick<Books, 'mappings' | 'receipts' | 'transactions'>, tx: BankTransaction, legs: readonly string[]): { receipts: Receipt[]; others: BankTransaction[] } | undefined {
+export function sharedReceipts(books: Pick<Books, 'mappings' | 'receipts'>, tx: BankTransaction, legs: readonly BankTransaction[]): { receipts: Receipt[]; others: BankTransaction[] } | undefined {
   if (legs.length < 2) return undefined;
   const own = new Set(books.mappings.filter((m) => m.transactionRef === tx.ref).map((m) => m.receiptId));
-  const others = books.transactions.filter((t) => t.ref !== tx.ref && legs.includes(t.ref) && books.mappings.some((m) => m.transactionRef === t.ref && own.has(m.receiptId)));
+  const others = legs.filter((t) => !sameLeg(t, tx) && books.mappings.some((m) => m.transactionRef === t.ref && own.has(m.receiptId)));
   const shared = new Set(books.mappings.filter((m) => own.has(m.receiptId) && others.some((t) => t.ref === m.transactionRef)).map((m) => m.receiptId));
   const receipts = books.receipts.filter((r) => shared.has(r.id) && r.kind !== 'duplicate');
   return receipts.length && others.length ? { receipts, others } : undefined;
@@ -46,7 +47,7 @@ function vatShown(r: Receipt, rateOn: (currency: string, date: string) => number
  * explains (SPLIT_BAND, and 5 centimes). Undefined when no other leg shares a receipt, or a shared
  * receipt's VAT is not read: nothing to check against.
  */
-export function inputTaxOverReceipts(books: Pick<Books, 'mappings' | 'receipts' | 'transactions' | 'journalEntries'>, tx: BankTransaction, legs: readonly string[], entries: readonly JournalEntry[], rateOn: (currency: string, date: string) => number | undefined): { booked: number; shown: number; others: BankTransaction[] } | undefined {
+export function inputTaxOverReceipts(books: Pick<Books, 'mappings' | 'receipts' | 'journalEntries'>, tx: BankTransaction, legs: readonly BankTransaction[], entries: readonly JournalEntry[], rateOn: (currency: string, date: string) => number | undefined): { booked: number; shown: number; others: BankTransaction[] } | undefined {
   const shared = sharedReceipts(books, tx, legs);
   if (!shared) return undefined;
   const each = shared.receipts.map((r) => vatShown(r, rateOn));
