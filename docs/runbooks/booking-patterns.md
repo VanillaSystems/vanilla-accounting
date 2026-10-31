@@ -45,9 +45,14 @@ owner's Kontokorrent.
 - `src/accounting/validate.ts` allows one blank leg **only** for `-2` codes (`isVatAmountCode`),
   and skips the M/I/V account-class warnings for them (a single-leg correction pairs the code with
   the account being corrected, not the code family's "expected" account class).
-- No payment carries this entry (Shopify keeps its fees from the payouts), so the classifier never
-  books it: the person or the AI sidebar books it by hand, from `processes/suppliers/shopify.yaml`
-  (`booking.guide.yaml#purchase_vat` pv-shopify-fees), the vendor's file both read.
+- No payment carries this entry (Shopify keeps its fees from the payouts). The booking step books
+  it from the bill: `processes/suppliers/shopify.yaml` names the Payments Invoice as a document
+  that `proves: vat-correction`, and `src/booking/vat-corrections.ts` (bookVatCorrections) books the
+  VAT it shows once per bill, credit `provider.fees.account` of the company's file, the code
+  `provider.fees.billVat` (absent: the one the account takes, I81-2 on an operating expense
+  account), in the bill's currency at the ESTV daily rate of its date, and links the bill. A
+  correction booked by hand already takes the bill instead. A bill of a filed period, one without
+  Shopify's Swiss VAT, or one whose fee account is missing stays with the person.
 
 ## Payment providers — payout over the clearing account (#203)
 

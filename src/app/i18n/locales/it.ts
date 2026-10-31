@@ -3880,6 +3880,8 @@ export default {
     'rules.say.ownUseText': "Consumo proprio {percent} % privato: {text}",
     'salesReport.payoutText': '{provider}, versamento',
     'salesReport.payoutReason': 'Versamento di {provider}: dal conto di transito {account} alla banca, senza IVA; il rapporto del fornitore registra vendite e commissioni',
+    'vatCorrection.text': '{business}, imposta precedente secondo fattura del {date}',
+    'vatCorrection.reason': 'La fattura di {business} del {date} mostra {rate} % di IVA svizzera, {currency} {amount}: imposta precedente {code} su {account}, senza pagamento, perché il fornitore trattiene le sue commissioni dai versamenti',
     'salesReport.saleText': '{provider}, ordine n. {order}, {country}',
     'salesReport.refundText': '{provider}, rimborso n. {order}',
     'salesReport.correctionText': '{provider}, rimborso n. {order} del {date}, correzione {period}',

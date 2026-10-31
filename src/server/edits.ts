@@ -652,7 +652,9 @@ export function deleteEntry(books: Books, id: string): JournalEntry {
   // One booked in a filed quarter as a read movement (#254) stays so: its difference line gone, it is still booked there.
   if (tx && !bookedInFiled(tx)) tx.waitsForPerson = { since: new Date().toISOString(), why: 'bookingDeleted' };
   // A booking without a payment takes its links along: no receipt hangs on a booking that is gone. The entry keeps them in `receipts` for its undo.
+  // Each receipt is taken apart from it, so code never books from it again (a provider's fee bill, src/booking/vat-corrections.ts); the undo links it back.
   else if (isManualRef(entry.transactionRef) && !books.journalEntries.some((je) => je.transactionRef === entry.transactionRef)) {
+    for (const m of books.mappings) if (m.transactionRef === entry.transactionRef) apart(books, m.receiptId, m.transactionRef, true);
     books.mappings = books.mappings.filter((m) => m.transactionRef !== entry.transactionRef);
   }
   return entry;

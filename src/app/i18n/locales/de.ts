@@ -3877,6 +3877,8 @@ export const messages = {
   'rules.say.ownUseText': "Eigenverbrauch {percent} % privat: {text}",
   'salesReport.payoutText': '{provider}, Auszahlung',
   'salesReport.payoutReason': 'Auszahlung von {provider}: vom Durchlaufkonto {account} auf die Bank, ohne MWST; Umsatz und Gebühren bucht der Bericht des Anbieters',
+  'vatCorrection.text': '{business}, Vorsteuer laut Rechnung vom {date}',
+  'vatCorrection.reason': 'Die Rechnung von {business} vom {date} zeigt {rate} % Schweizer MWST, {currency} {amount}: Vorsteuer {code} auf {account}, ohne Zahlung, weil der Anbieter seine Gebühren von den Auszahlungen einbehält',
   'salesReport.saleText': '{provider}, Bestellung #{order}, {country}',
   'salesReport.refundText': '{provider}, Rückerstattung #{order}',
   'salesReport.correctionText': '{provider}, Rückerstattung #{order} vom {date}, Korrektur {period}',
