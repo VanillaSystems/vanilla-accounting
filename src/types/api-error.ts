@@ -10,6 +10,7 @@ import type { AttachmentRefusal } from './attachment.js';
 import type { MacMailProblem } from './mac-mail.js';
 import type { TagRefusal } from '../books/tags.js';
 import type { AiRefusal } from './ai-refusal.js';
+import type { AdjustmentRefusal } from './adjustment-refusal.js';
 
 /**
  * The JSON body of every refused API request. `error` is the German text the CLI, the tests and
@@ -19,7 +20,7 @@ import type { AiRefusal } from './ai-refusal.js';
 export const CLOSED_REASONS = [
   'editTransaction', 'deleteTransaction', 'newTransaction', 'mapping',
   'editReceipt', 'deleteReceipt', 'editEntry', 'deleteEntry', 'newStatement', 'newEntry',
-  'openingBalance', 'discardFile',
+  'openingBalance', 'discardFile', 'vatAdjustment',
 ] as const;
 export type ClosedReason = (typeof CLOSED_REASONS)[number];
 
@@ -91,6 +92,8 @@ export type ApiRefusal =
   | { code: 'noBatchPayer' }
   /** A booking's tags (#127): not a map, a dimension the workspace does not declare, or a value that is no short text. */
   | TagRefusal
+  /** A VAT adjustment of the company's VAT page (src/accounting/vat-adjustments.ts) the app cannot keep. */
+  | AdjustmentRefusal
   /** Firma › Dimensionen: a dimension bookings carry a value of is not taken out (`entries`: how many). */
   | { code: 'dimensionInUse'; params: { dimension: string; entries: number } }
   /** Cash basis: a booking of a payment keeps the payment's date (src/server/edits.ts applyAnswer). */

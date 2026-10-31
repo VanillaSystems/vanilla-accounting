@@ -53,11 +53,16 @@ before(async () => {
     // A reconciliation whose read movement C1 lies in the filed quarter, booked there (#254), and an open bank movement of its amount.
     b.transactions.push({ ref: 'O2', bank: 'Raiffeisen', date: '2026-07-01', amount: 10, currency: 'CHF', direction: 'DBIT', description: 'Bank Juli' });
     b.reconciliations = [{ account: '1021', from: '2026-05-10', to: '2026-07-01', since: '2026-07-02', covered: [], read: ['C1'], bank: ['O2'], pairs: [] }];
+    // A VAT adjustment declared in the filed quarter.
+    b.config.vatAdjustments = [{ id: 'adj-q2', period: '2026-Q2', ziffer: '405', amount: -1, reason: 'eingereicht', entryIds: ['jc'] }];
   });
   saveBooks(api.ws, books);
   writeFileSync(join(api.root, 'data/trash/rx/d1/trashed.json'), JSON.stringify({ deletedAt: new Date().toISOString(), receipt: { id: 'rx', filename: 'late.pdf', originalFilename: 'late.pdf', extractedText: '', extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-06-01T08:00:00Z', location: 'archived' }, mappings: [{ receiptId: 'rx', transactionRef: 'C1' }], file: 'transactional-data/2026/receipts/late.pdf' }));
 });
 after(() => api?.stop());
+
+/** Import VAT on the filed entry jc refunded in the open quarter. */
+const ADJ = { period: '2026-Q3', ziffer: '400', amount: -0.81, reason: 'Einfuhrsteuer zurückerstattet', entryIds: ['jc'] };
 
 const MAY_PDF = 'Kontoauszug 01.05.2026 - 31.05.2026.pdf';
 const MAY = { currency: 'CHF', period: { from: '2026-05-01', to: '2026-05-31' }, opening: { date: '2026-05-01', amount: 10 }, closing: { date: '2026-05-31', amount: 10 }, movements: [] };
@@ -130,6 +135,10 @@ const refused: Array<Call & { status: number }> = [
   { method: 'POST', path: '/api/batch', body: { action: { kind: 'notReceipt' }, ids: ['rc'] }, status: 403 },
   { method: 'POST', path: '/api/batch', body: { action: { kind: 'book', account: '6800', vat: '' }, ids: ['C1'] }, status: 403 },
   // Its undo is the server's own, named by its id: a batch's undo after its period was filed is refused in tests/batch.test.ts.
+  // A VAT adjustment (Firma › MWST) is never declared in, changed in nor taken out of a filed period.
+  { method: 'POST', path: '/api/vat-adjustments', body: { ...ADJ, period: '2026-Q2' }, status: 403 },
+  { method: 'PUT', path: '/api/vat-adjustments/adj-q2', body: ADJ, status: 403 },
+  { method: 'DELETE', path: '/api/vat-adjustments/adj-q2', status: 403 },
 ];
 
 test('status: not in audit mode', async () => {
@@ -163,6 +172,10 @@ const allowed: Array<Call & { check: (index: Index) => boolean }> = [
   // A batch over a filed and an open object (#216): the filed one is left out, the open one changes.
   { method: 'POST', path: '/api/batch', body: { action: { kind: 'noReceiptNeeded' }, ids: ['C1', 'O1'] },
     check: (i) => i.transactions.find((t) => t.ref === 'O1')?.noReceiptNeeded === true && !i.transactions.find((t) => t.ref === 'C1')?.noReceiptNeeded },
+  { method: 'POST', path: '/api/vat-adjustments', body: ADJ,
+    check: (i) => i.config?.vatAdjustments?.some((a) => a.id === '2026-Q3-1' && a.amount === -0.81 && a.entryIds[0] === 'jc') === true },
+  { method: 'PUT', path: '/api/vat-adjustments/2026-Q3-1', body: { ...ADJ, amount: -0.5 },
+    check: (i) => i.config?.vatAdjustments?.find((a) => a.id === '2026-Q3-1')?.amount === -0.5 },
   // An opening balance is in no VAT return and no seal: a filed quarter does not lock the year's opening (r5h-30).
   { method: 'PUT', path: '/api/opening-balances/2026/1021', body: { amount: 5000 },
     check: (i) => i.config?.openingBalances?.['2026']?.['1021'] === 5000 },
@@ -264,6 +277,21 @@ for (const call of allowed) {
     assert.ok(call.check(loadBooks(workspaceAt(api.ws.paths.root))), 'the change is in the index');
   });
 }
+
+test('a VAT adjustment of the open quarter is not moved into the filed one (403), and is taken out', async () => {
+  const before = JSON.stringify(booksOnDisk(api.ws));
+  const moved = await send({ method: 'PUT', path: '/api/vat-adjustments/2026-Q3-1', body: { ...ADJ, period: '2026-Q2' } });
+  assert.equal(moved.status, 403, moved.error);
+  assert.equal(moved.json.code, 'periodClosed');
+  assert.equal((moved.json.params as { reason: string }).reason, 'vatAdjustment');
+  assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'index is byte-identical');
+  const wrong = await send({ method: 'POST', path: '/api/vat-adjustments', body: { ...ADJ, entryIds: ['nope'] } });
+  assert.equal(wrong.status, 400, wrong.error);
+  assert.deepEqual([wrong.json.code, wrong.json.params], ['vatAdjustment', { why: 'entryMissing', value: 'nope' }], 'the UI says why in the person\'s language');
+  const removed =await send({ method: 'DELETE', path: '/api/vat-adjustments/2026-Q3-1' });
+  assert.equal(removed.status, 200, removed.error);
+  assert.deepEqual(loadBooks(api.ws).config.vatAdjustments?.map((a) => a.id), ['adj-q2'], 'the filed one stays');
+});
 
 test('DELETE of an open manual payment that is booked takes its booking with it (r7h-23: the undo of «Privat bezahlt» is one step)', async () => {
   const made = await send({ method: 'POST', path: '/api/transactions/manual', body: { date: '2026-08-03', description: 'privat', amount: 7, currency: 'CHF' } });

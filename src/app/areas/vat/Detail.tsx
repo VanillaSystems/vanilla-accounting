@@ -52,10 +52,11 @@ function explanation(v: VatReturn, n: string): string {
   return t(`vat.z${n}` as 'vat.z200');
 }
 
-function Ziffer({ v, filed, n, amount, nav, period }: Props & { v: VatReturn; filed?: ReturnFigures; n: string; amount: number }) {
+function Ziffer({ books, v, filed, n, amount, nav, period }: Props & { v: VatReturn; filed?: ReturnFigures; n: string; amount: number }) {
   const r = rateOf(v, n);
   const lines = v.lines[n] ?? [];
   const adjustments = v.adjustments.filter((a) => a.ziffer === n);
+  const byId = new Map((adjustments.length ? books.journalEntries ?? [] : []).map((e) => [e.id, e]));
   const was = filedDiff(v, filed, n);
   const now = formAmount(v, n);
   const sums = sumsOf();
@@ -131,9 +132,12 @@ function Ziffer({ v, filed, n, amount, nav, period }: Props & { v: VatReturn; fi
             </Fragment>
           ))}
           {adjustments.map((a) => (
-            <div key={a.id} className="vl adj">
-              <span className="mono d">{a.period}</span>
-              <span className="tt">{t('vat.adjustmentOf', { reason: a.reason })}</span>
+            <div key={a.id} className="vl adj" data-adjustment={a.id}>
+              <span className="mono d">{formatDate(derivePeriod(a.period)?.to ?? '')}</span>
+              <span className="tt">
+                <Go to={{ route: { area: 'company', section: 'vat' }, query: {} }} nav={nav} title={t('vat.adjustmentEdit')}>{t('vat.adjustmentOf', { reason: a.reason })}</Go>
+                {a.entryIds.map((id) => { const e = byId.get(id); return e ? <Fragment key={id}> <Go to={entryAt(e, period)} nav={nav} className="mono">{id}</Go></Fragment> : <span key={id} className="mono"> {id}</span>; })}
+              </span>
               <span />
               <span className="r mono">{fmt(a.amount)}</span>
             </div>

@@ -41,6 +41,7 @@ import { openingLock } from '../../../accounting/opening-balance.js';
 import { yearEndAccounts } from '../../../accounting/year-close.js';
 import { AccountField } from '../journal/AccountField.js';
 import { DimensionsSection } from './DimensionsSection.js';
+import { AdjustmentsSection } from './AdjustmentsSection.js';
 
 type Props = AreaProps<RouteOf<'company'>>;
 
@@ -260,7 +261,7 @@ function setupOf(f: VatForm): VatSetup | null {
  * and a rate's percent hold for whole years; the API refuses a change while the open year has
  * entries (error vatMethodHeld), a label or an activity code it takes any time.
  */
-function Vat({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
+function Vat({ ws, books, nav, canEdit }: Props & { ws: CompanyInfo }) {
   const v = ws.company.vat;
   const [edit, setEdit] = useState(false);
   const was = (): VatForm => {
@@ -352,6 +353,7 @@ function Vat({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
           </div>
         </form>
       ) : canEdit && <div className="fedit"><button type="button" className="btn" onClick={() => { setF(was()); setErr(''); setEdit(true); }}>{I.edit}{t('company.edit')}</button></div>}
+      {v.registered && <AdjustmentsSection books={books} nav={nav} canEdit={canEdit} />}
       <p>
         <button type="button" className="clink" onClick={() => nav.go({ route: { area: 'vat' }, query: {} })}>{t('company.toVat')}</button>{'  '}
         {v.registered && <button type="button" className="clink" onClick={() => nav.go({ route: { area: 'codes' }, query: {} })}>{t('company.toCodes')}</button>}

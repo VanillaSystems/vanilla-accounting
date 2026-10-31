@@ -6,7 +6,7 @@ import type { MoneyRole } from '../../workspace/banks.js';
 import type { AiView } from '../../llm/view.js';
 import type { AiRefusal, ProviderId } from '../../llm/provider.js';
 import { isStepId, type StepId } from '../../llm/steps.js';
-import type { BankTransaction, InboxFile, Index, StatementAsk, StatementImport, JournalEntry, Receipt, ReceiptPatch, ReconcilePair, TransactionPatch } from '../../types/index.js';
+import type { BankTransaction, InboxFile, Index, VatAdjustment, StatementAsk, StatementImport, JournalEntry, Receipt, ReceiptPatch, ReconcilePair, TransactionPatch } from '../../types/index.js';
 import type { PdfFactsView, PdfTable, ReadStatement, StatementReadsView } from '../../types/statement-read.js';
 import type { StatementRemoved } from '../../server/routes/statements.js';
 import type { PaymentReleased } from '../../invoices/payments.js';
@@ -180,6 +180,7 @@ export function errorText(e: unknown): string {
     case 'tagShape': return t('error.tagShape');
     case 'tagDimension': return t('error.tagDimension', b.params);
     case 'tagValue': return t('error.tagValue', b.params);
+    case 'vatAdjustment': return t(`error.vatAdjustment.${b.params.why}`, { value: b.params.value ?? '' });
     case 'dimensionInUse': return t('error.dimensionInUse', { dimension: b.params.dimension, n: b.params.entries });
     case 'paymentDate': return t(agreedBasis() ? 'error.paymentDateAgreed' : 'error.paymentDate', { date: formatDate(b.params.date) });
     case 'paymentBalance': {
@@ -526,6 +527,11 @@ export const api = {
   /** A bank account's opening balance of `year`; null takes it back (src/accounting/opening-balance.ts). */
   setOpeningBalance: (year: string, account: string, amount: number | null) =>
     request<Ok>('PUT', `/api/opening-balances/${year}/${encodeURIComponent(account)}`, { amount }),
+
+  /** Firma › MWST › Nachdeklarationen (config.vatAdjustments): `id` on an add only puts a removed line back. */
+  addVatAdjustment: (line: Omit<VatAdjustment, 'id'> & { id?: string }) => request<VatAdjustment>('POST', '/api/vat-adjustments', line),
+  changeVatAdjustment: ({ id, ...line }: VatAdjustment) => request<VatAdjustment>('PUT', `/api/vat-adjustments/${encodeURIComponent(id)}`, line),
+  removeVatAdjustment: (id: string) => request<VatAdjustment>('DELETE', `/api/vat-adjustments/${encodeURIComponent(id)}`),
 
   /** What a statement file read in says about itself, and the day it was read in (#208). */
   statementFileDetails: (file: string) => request<{ details?: StatementDetails; importedAt?: string }>('GET', `/api/statements/${file.split('/').map(encodeURIComponent).join('/')}/details`),

@@ -4,6 +4,10 @@
 .ftab.konten .fh, .ftab.konten .fr { grid-template-columns: 64px minmax(0, 1fr) auto; }
 .ftab.banks .fh, .ftab.banks .fr { grid-template-columns: 56px minmax(140px, 1fr) 250px minmax(170px, auto); }
 .ftab.banks .fr > :nth-child(3), .ftab.banks .fr > :nth-child(4) { white-space: nowrap; }
+/* Firma › MWST › Nachdeklarationen */
+.adjs { margin-top: 22px; }
+.adjs h3 { margin: 0 0 6px; }
+.ftab.adj .fh, .ftab.adj .fr { grid-template-columns: 72px 44px minmax(0, 1fr) auto auto; }
 .fedit { margin-top: 14px; display: flex; gap: 10px; align-items: center; }
 /* Firma › Quellen */
 .srcs { display: flex; flex-direction: column; gap: 18px; }
