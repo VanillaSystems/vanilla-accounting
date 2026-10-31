@@ -18,8 +18,9 @@ import type { Ask, BooksPort } from './pipeline.js';
 import { numbersIn } from '../accounting/document-numbers.js';
 import { baseCurrency } from '../engines/index.js';
 import { loadFxResolver, type FxResolver } from '../accounting/fx-rates.js';
-import { SHORT_LIST, chainMade, pairMapping, pairablePayment, pairableReceipt, searchPairs, signalsOfCandidate, stagesOf, takenPayments, type Maker, type PairCandidate, type PairStage, type Signal, type ToChf } from './pairing.js';
+import { SHORT_LIST, chainMade, freeFor, pairMapping, pairablePayment, slotOf, pairableReceipt, searchPairs, signalsOfCandidate, stagesOf, takenPayments, type Maker, type PairCandidate, type PairStage, type Signal, type ToChf } from './pairing.js';
 import { legOf } from '../workspace/money-accounts.js';
+import { partPayment } from '../accounting/batch-parts.js';
 import { chargesOf } from './charges.js';
 import type { Businesses } from './batch-payers.js';
 import { delaysOf } from './delays.js';
@@ -142,7 +143,9 @@ function receiptFacts(r: Receipt): Record<string, unknown> {
 
 /** The short facts of a payment the model sees: its text, day, amount, currency and way. */
 function paymentFacts(t: BankTransaction): Record<string, unknown> {
-  const text = [t.counterparty, t.description, t.reference].filter(Boolean).join(' · ').slice(0, 160);
+  const said = [t.counterparty, t.description, t.reference].filter((x): x is string => !!x);
+  // A part of a collective payment names its payee and reference in its text too: each once.
+  const text = said.filter((x, i) => !said.some((y, j) => j !== i && y.includes(x) && (y.length > x.length || j < i))).join(' · ').slice(0, 160);
   return { text, date: t.date, amount: Math.abs(t.amount), currency: t.currency, way: t.direction === 'CRDT' ? 'in' : 'out' };
 }
 
@@ -202,7 +205,9 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
   const only = onlyTx ? { payment: chargesOf(books.transactions, opts.toChf).of(onlyTx).refs[0] } : opts.only;
   const stages = stagesOf(search, only);
   const receipt = new Map(books.receipts.map((r) => [r.id, r]));
-  const payment = new Map(books.transactions.map((t) => [legOf(t), t]));
+  const byLeg = new Map(books.transactions.map((t) => [legOf(t), t]));
+  // What the model is shown of a candidate: its payment, or the part of a collective payment it pays.
+  const payment = { get: (c: PairCandidate): BankTransaction | undefined => { const t = byLeg.get(c.leg); return t && c.part !== undefined ? partPayment(t, t.parts![c.part]) : t; } };
   const doubted = (c: PairCandidate) => !opts.only && !!receipt.get(c.receipt)?.pairDoubted?.includes(c.payment);
   const result: ChainResult = { linked: [], left: [], staged: [], calls: 0, checked: 0, chosen: 0 };
   const links: Array<{ c: PairCandidate; by: Maker }> = [];
@@ -241,7 +246,7 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
   // Stage 2: the model checks the clear pairs; without one (or when it fails) code links those it may link alone.
   const choose: Array<{ receipt: string; candidates: PairCandidate[] }> = [];
   for (const batch of chunks(clear, CHECK_BATCH)) {
-    const verdict = await call(checkPrompt(batch.map((c) => ({ r: receipt.get(c.receipt)!, t: payment.get(c.leg)! }))), 'check', parseCheck);
+    const verdict = await call(checkPrompt(batch.map((c) => ({ r: receipt.get(c.receipt)!, t: payment.get(c)! }))), 'check', parseCheck);
     if (verdict === undefined) { for (const c of batch) byCodeAlone(c); continue; }
     result.checked += batch.length;
     batch.forEach((c, i) => {
@@ -264,7 +269,7 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
     else toPerson(s);
   }
   for (const batch of chunks(choose, CHOOSE_BATCH)) {
-    const answers = await call(choosePrompt(batch.map((x) => ({ r: receipt.get(x.receipt)!, candidates: x.candidates.map((c) => payment.get(c.leg)!) }))), 'choose', parseChoice);
+    const answers = await call(choosePrompt(batch.map((x) => ({ r: receipt.get(x.receipt)!, candidates: x.candidates.map((c) => payment.get(c)!) }))), 'choose', parseChoice);
     if (answers === undefined) { for (const x of batch) result.left.push({ receipt: x.receipt, candidates: x.candidates, total: x.candidates.length }); continue; }
     result.chosen += batch.length;
     batch.forEach((x, i) => {
@@ -279,10 +284,10 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
 
   // «Beleg suchen» links only its own payment: what the model chose for its candidate receipts elsewhere waits for their own run.
   const asked = only && 'payment' in only ? links.filter((l) => l.c.payment === only.payment) : links;
-  // A payment two receipts were linked to in this run goes to neither: the person decides.
+  // A payment (or a collective payment's part) two receipts were linked to in this run goes to neither: the person decides.
   const times = new Map<string, number>();
-  for (const { c } of asked) times.set(c.payment, (times.get(c.payment) ?? 0) + 1);
-  const mine = asked.filter((l) => times.get(l.c.payment) === 1);
+  for (const { c } of asked) times.set(slotOf(c), (times.get(slotOf(c)) ?? 0) + 1);
+  const mine = asked.filter((l) => times.get(slotOf(l.c)) === 1);
   result.staged = mine.filter((l) => stagedIds.has(l.c.receipt)).map(({ c, by }) => ({ receipt: c.receipt, payment: c.payment, by, signals: signalsOfCandidate(c), ...(c.filed ? { filed: true as const } : {}), ...legsOf(c), ...(c.replaces ? { replaced: c.replaces } : {}) }));
   result.linked = port.update((index: Books) => applyLinks(index, mine.filter((l) => !stagedIds.has(l.c.receipt)), doubts, opts.noReceipt?.(index)));
   const leftStored = result.left.filter((l) => !stagedIds.has(l.receipt));
@@ -335,10 +340,13 @@ function applyLinks(index: Books, links: ReadonlyArray<{ c: PairCandidate; by: M
     // A link taken over (#291): its payment counts as free while the rest is checked, and is freed only once all of it holds.
     const taken = c.replaces ? new Set([...linkedPayments].filter((ref) => !c.charge.includes(ref))) : linkedPayments;
     if (!r || !t || legs.some((x) => !x || !pairablePayment(x, taken, noReceipt) || r.notPaidBy?.includes(x.ref)) || !pairableReceipt(r, linkedReceipts)) continue;
+    // A collective payment takes a receipt while a part of its amount is free.
+    if (!c.replaces && !freeFor(index, t, r)) continue;
     if (c.replaces && (lock.isClosed(t.date) || !takeOver(index, c.charge, c.replaces))) continue;
     const signals = signalsOfCandidate(c);
     linkedReceipts.add(r.id);
-    for (const ref of c.charge) linkedPayments.add(ref);
+    // A collective payment's other parts stay free: freeFor asks the links themselves.
+    if (c.part === undefined) for (const ref of c.charge) linkedPayments.add(ref);
     if (lock.isClosed(t.date)) {
       r.filedPayment = t.ref;
       done.push({ receipt: r.id, payment: t.ref, by, signals, filed: true, ...legsOf(c) });

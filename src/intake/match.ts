@@ -26,7 +26,7 @@ import { twinFinder } from './duplicates.js';
 import { capturedDay } from './captured.js';
 import { isIsoDate } from '../accounting/periods.js';
 import { numbersIn, squash } from '../accounting/document-numbers.js';
-import { nameWords, pairMapping, takenPayments } from './pairing.js';
+import { freeFor, nameWords, pairMapping, takenPayments } from './pairing.js';
 import { legOf } from '../workspace/money-accounts.js';
 import { titlesFor } from './titles.js';
 import { estvToChf, noPaymentFor, noReceiptFor, runPairChain, takeOver } from './pair-chain.js';
@@ -281,7 +281,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
         if (!t || refs.some((ref) => r.notPaidBy?.includes(ref))) return;
         if (l.replaced && (periodLock(index).isClosed(t.date) || !takeOver(index, refs, l.replaced))) return;
         const taken = takenPayments(index);
-        if (refs.some((ref) => taken.has(ref))) return;
+        if (refs.some((ref) => taken.has(ref)) || !freeFor(index, t, r)) return;
         if (periodLock(index).isClosed(t.date)) { r.filedPayment = t.ref; out.result = 'filed'; return; }
         for (const ref of refs) index.mappings.push(pairMapping(l.by, ref, r.id, l.signals));
         out.result = 'linked';
@@ -380,8 +380,9 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
         const tx = index.transactions.find((t) => t.ref === ref);
         // A payment without a receipt of its own takes none, whatever the model says.
         if (tx && (tx.noReceiptNeeded || without(tx) || r.notPaidBy?.includes(ref))) { log(`  ⚠ skipped ${ref}: it needs no receipt, or a person took it apart from this receipt`); return false; }
-        // A payment another receipt took meanwhile (another of this run's receipts, read from the same snapshot) stays with it, unless the vendor groups several receipts into one payment.
-        if (tx && held.has(ref) && !grouped && !index.mappings.some((m) => m.transactionRef === ref && m.receiptId === r.id)) { log(`  ⚠ skipped ${ref}: another receipt holds it; this one waits for a person`); return false; }
+        // A payment another receipt took meanwhile (another of this run's receipts, read from the same snapshot) stays with it, unless the vendor groups several receipts into one payment
+        // or it is a collective payment with a part of this receipt's amount still free.
+        if (tx && !freeFor(index, tx, r) && !grouped && !index.mappings.some((m) => m.transactionRef === ref && m.receiptId === r.id)) { log(`  ⚠ skipped ${ref}: another receipt holds it; this one waits for a person`); return false; }
         if (tx && !lock.isClosed(tx.date)) return true;
         if (tx) { log(`  ⚠ skipped mapping to ${ref}: transaction is in the closed period (≤ ${lock.closedThrough})`); filed.push(ref); }
         return false;
