@@ -6,9 +6,11 @@
  * these are is a fact in the business's file, never a name in code (ADR 0015): a document type with
  * `proves: vat-correction` (its `text` patterns recognise the bill). Such a receipt is never paired
  * with a payment (src/intake/pair-chain.ts noPaymentFor); Belege says what it is, and names the
- * correction booking it belongs to when exactly one fits, for the person to link.
+ * correction booking it belongs to when exactly one fits. The booking step books the input tax of a
+ * payment provider's such bill itself, or links the bill to the correction that fits
+ * (bookVatCorrections); what it cannot decide stays with the person.
  *
- * Derived from the books and the business files on every read, never stored. Pure.
+ * vatCorrectionsOf is derived from the books and the business files on every read, never stored. Pure.
  */
 import type { JournalEntry, Mapping, Receipt, BankTransaction } from '../types/index.js';
 import type { Counterparty } from '../knowledge/counterparties.js';
@@ -69,4 +71,92 @@ export function vatCorrectionsOf(books: Books, counterparties: readonly Counterp
     out.set(r.id, { business: hit.cp.id, name: hit.cp.name, document: hit.document, ...(vat !== undefined ? { vat } : {}), ...(refs.length === 1 ? { booking: refs[0] } : {}) });
   }
   return out;
+}
+
+/** The link rule of a bill linked by code to the correction that books its input tax. */
+export const CORRECTION_LINK = 'vat-correction';
+
+/**
+ * Why code leaves such a bill to the person: it is dated in a filed period (`filed`), it shows no
+ * Swiss VAT of its business (`noVat`), its business is no payment provider whose company file names a fee
+ * account of the chart (`noAccount`), that account takes no code of the tax at the bill's rate
+ * (`noCode`), or no daily rate converts its currency (`noRate`).
+ */
+export type CorrectionWait = 'noVat' | 'filed' | 'noAccount' | 'noCode' | 'noRate';
+
+export interface CorrectionContext {
+  /** The firm deducts input tax (the effective method). */
+  inputTax: boolean;
+  isClosed(date: string): boolean;
+  inChart(account: string): boolean;
+  base: string;
+  /** The official daily sell rate of `currency` on `date`. */
+  rate(currency: string, date: string): number | undefined;
+  /** The code of the tax itself at `rate` on `account`: the company's `billVat` when it is of that rate. */
+  code(rate: number, account: string, billVat: string | undefined): string | undefined;
+  newId(): string;
+  manualRef(date: string): string;
+  texts: {
+    description(business: string, date: string): string;
+    reason(business: string, date: string, rate: number, currency: string, vat: number, code: string, account: string): string;
+  };
+}
+
+export interface CorrectionsDone {
+  booked: Array<{ receipt: string; ref: string }>;
+  linked: Array<{ receipt: string; ref: string }>;
+  waiting: Array<{ receipt: string; why: CorrectionWait }>;
+}
+
+/**
+ * The input tax a payment provider's fee bill shows, booked into `books` (call it inside the write
+ * door): one single-leg entry per rate on the provider's fee account (`provider.fees` of the company's
+ * file), empty debit, the code of the tax itself, in the bill's currency at the daily rate of its day,
+ * under a ref of its own, with the bill linked to it. A correction booking that books the bill's VAT
+ * already (vatCorrectionsOf `booking`, a person's) takes the link instead. A bill linked to anything,
+ * or one a person took apart from a booking (Receipt.notPaidBy: the link undone or the booking
+ * deleted), is done, so each bill books once and never again over the person. Only the business's
+ * Swiss VAT (its UID when its file names one), only in an open period.
+ */
+export function bookVatCorrections(books: Books & { mappings: Mapping[]; journalEntries: JournalEntry[] }, counterparties: readonly Counterparty[], ctx: CorrectionContext): CorrectionsDone {
+  const done: CorrectionsDone = { booked: [], linked: [], waiting: [] };
+  if (!ctx.inputTax) return done;
+  const byId = new Map(counterparties.map((c) => [c.id, c]));
+  const receipts = new Map(books.receipts.map((r) => [r.id, r]));
+  for (const [id, found] of vatCorrectionsOf(books, counterparties)) {
+    const r = receipts.get(id)!;
+    if (r.notPaidBy?.length || !r.date) continue;
+    const date = r.date;
+    const wait = (why: CorrectionWait) => done.waiting.push({ receipt: id, why });
+    if (found.booking) {
+      const entries = books.journalEntries.filter((e) => e.transactionRef === found.booking);
+      if (entries.some((e) => ctx.isClosed(e.date))) continue;
+      books.mappings.push({ transactionRef: found.booking, receiptId: id, by: 'rule', rule: CORRECTION_LINK });
+      for (const e of entries) e.receipts = [...new Set([...(e.receipts ?? []), id])].sort();
+      done.linked.push({ receipt: id, ref: found.booking });
+      continue;
+    }
+    const cp = byId.get(found.business)!;
+    const groups = (r.vatSummary ?? []).filter((g) => g.ratePercent > 0 && g.vat > 0);
+    if (ctx.isClosed(date)) { wait('filed'); continue; }
+    if (!r.hasSwissVat || !groups.length || (cp.match.uid.length > 0 && !cp.match.uid.includes(r.vatId ?? ''))) { wait('noVat'); continue; }
+    const fees = cp.provider?.fees;
+    if (!fees || !ctx.inChart(fees.account)) { wait('noAccount'); continue; }
+    const currency = r.currency ?? ctx.base;
+    const rate = currency === ctx.base ? undefined : ctx.rate(currency, date);
+    if (currency !== ctx.base && rate === undefined) { wait('noRate'); continue; }
+    const codes = groups.map((g) => ctx.code(g.ratePercent, fees.account, fees.billVat));
+    if (codes.some((c) => !c)) { wait('noCode'); continue; }
+    const ref = ctx.manualRef(date);
+    groups.forEach((g, k) => books.journalEntries.push({
+      id: ctx.newId(), transactionRef: ref, date, accountDebit: '', accountCredit: fees.account, amount: g.vat, vatCode: codes[k],
+      description: ctx.texts.description(cp.name, date),
+      ...(rate !== undefined ? { exchangeCurrency: currency, exchangeRate: rate } : {}),
+      origin: 'classify', receipts: [id], reason: ctx.texts.reason(cp.name, date, g.ratePercent, currency, g.vat, codes[k]!, fees.account),
+      by: { kind: 'code', check: 'purchaseVat' },
+    }));
+    books.mappings.push({ transactionRef: ref, receiptId: id, by: 'rule', rule: CORRECTION_LINK });
+    done.booked.push({ receipt: id, ref });
+  }
+  return done;
 }

@@ -97,7 +97,7 @@ VAT code rules:
 
 Shopify billing:
 - Shopify is registered for Swiss MWST and charges 8.1% on their fees (Webshop Gebühren). The per-order payout PDFs do NOT show the MWST — the proof is in Shopify's monthly billing statements (Settings → Billing → Bills in Shopify Admin). These monthly bills must be downloaded and filed as receipts to justify I81 on Webshop Gebühren entries.
-- The monthly Vorsteuer on those fees is booked as a single-leg correction (empty Soll / C 6580 / M81-2), NOT a two-legged entry against 2451. See docs/runbooks/booking-patterns.md.
+- The monthly Vorsteuer on those fees is booked as a single-leg correction (empty Soll / C 6580 / M81-2), NOT a two-legged entry against 2451. See docs/runbooks/booking-patterns.md. Code books it: a provider's document with `proves: vat-correction` (Shopify's Payments Invoice) books the VAT it shows once per bill, on `provider.fees.account` with `provider.fees.billVat` (absent: the code the account takes), in an open period only, and links the bill (src/booking/vat-corrections.ts bookVatCorrections, the booking step). A bill a person took apart from its booking (deleted or unlinked) is never booked again.
 
 Running tests:
 - While you work, run only the test files your change touches: `node --import tsx --test tests/foo.test.ts`.

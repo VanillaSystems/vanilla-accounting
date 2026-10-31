@@ -45,7 +45,8 @@ Every process has two files, and every business with particulars has one:
   `proves: vat-correction` is a bill whose input tax is booked once on a
   single-leg entry without a payment, a `-2` code, such as a platform's monthly
   bill of the fees it kept: it is never paired with a payment, and Belege names
-  the correction booking it fits, issue #190), which accounts it
+  the correction booking it fits, issue #190; a payment provider's such bill is
+  booked by code, see «A payment provider»), which accounts it
   books to (`accounts:`), and its rules for each step it touches. Each step's
   rules sit under the step's exact address:
   `steps: { "booking.guide.yaml#classify": { rules: [...] } }`. An authority's
@@ -206,10 +207,23 @@ provider:
   clearing: "1093"
   since: 2026-10-01
   revenue: "3200"
-  fees: { account: "6580", vat: I0 }
+  fees: { account: "6580", vat: I0, billVat: M81-2 }   # billVat optional: the code of its fee bill's VAT
   foreignTax: "2201"   # optional: where a foreign VAT on an export goes (IOSS, for example)
   account: "1020"   # optional: the bank account it pays into
 ```
+
+- Its fee bill: a document of the provider's file with `proves:
+  vat-correction` (Shopify's monthly Payments Invoice) shows the Swiss VAT on
+  the fees it kept from the payouts. The booking step books that VAT once per
+  bill, without a payment: empty debit, `fees.account` in credit, the code of
+  the tax itself (`fees.billVat`; absent: the one the account takes at the
+  bill's rate, I81-2 on an operating expense account), in the bill's currency
+  at the daily rate of its day, and links the bill to it. A correction booked
+  by hand already takes the bill instead. Only the provider's Swiss VAT (its
+  UID when its file names one), only in an open period; a bill of a filed
+  period, without that VAT, or without the fee account in the chart stays with
+  the person. A bill a person took apart from its booking (the booking
+  deleted, the link undone) is never booked again.
 
 - `since` is the company's cut-over day. From it on the provider's payouts,
   sales, refunds and fees go over the clearing account; whatever is dated before
