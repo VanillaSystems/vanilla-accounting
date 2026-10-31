@@ -1,7 +1,8 @@
 # Receipts (Belege)
 
-Belege (`src/app/areas/receipts/`) lists the receipts of the period in groups: `Braucht dich`
-(open receipts after `closedThrough`, open undated ones, files still being read; a suggestion first),
+Belege (`src/app/areas/receipts/`) lists the receipts of the period in groups (`button.group[data-group=working|need|noDate|month:YYYY-MM]`):
+`Wird verarbeitet` (inbox files and receipts a run works on), `Braucht dich` (failed reads, open
+receipts after `closedThrough`, open undated ones; a suggestion first),
 then one group per month, newest first; linked undated receipts wait at the end behind
 `N ohne Datum … · zeigen`, files that are no receipt behind `N Dateien sind keine Belege … · zeigen`
 (`[data-testid=toggle-hidden]`). Quarantined files show in `[data-testid=quarantine]` with `Ist ein Beleg`. The detail shows the paper (pdf.js, each
@@ -29,15 +30,17 @@ and Datei. The order and the ranking are pure functions in `model.ts` (tests/rec
   file name, note, VAT number, date (ISO or TT.MM.JJJJ) and amount.
 - `rc-detail`: `.detail .who` (vendor, the description up to the first `, ` / ` — ` / ` - `),
   `.amount`, `.facts`, `.status`. A receipt linked to a payment or entry of a filed quarter shows
-  `.notice` with `ist eingereicht. Nur lesen.`; its row has only the preview button and its form is
-  read only. The paper is `.paper.real canvas.pg`, served from `/api/receipts/<id>`. Notes that can
+  `.notice` «<period> ist eingereicht: Zuordnung, Betrag und MWST bleiben. Datum, Beschreibung und
+  Art kannst du noch ändern.»; its row hides link and delete, `L` only toasts the same reason, and
+  the form keeps date, description and remarks editable (filename, currency, amount frozen). The paper is `.paper.real canvas.pg`, served from `/api/receipts/<id>`. Notes that can
   show: `[data-testid=twin]` (`ist dasselbe` / `verschieden`), `[data-testid=filed-payment]` with
   `filed-correct`, `fit-off` / `fit-skonto`, `vat-misfit`, `read-failed`.
 - `rc-link`: `L`, the row's link button or `.addlink` opens `.linkdlg` (`.o[data-ref="<tx ref>"]`,
   the last option `data-ref="private"`, filed payments `.o.filed[data-filed]`). ↑↓ choose; Enter with
   nothing chosen picks the first row, a second Enter links (`POST /api/mapping/add`); Esc closes. A
   receipt that already has a payment shows `[data-testid=has-payment]` and needs one more Enter.
-  `private` books a manual payment on the receipt's date and amount and links it
+  `private` opens `.privform` («Ganzer Betrag» or «Nur ein Teil», #87); its Enter or
+  `[data-testid=private-book]` books a manual payment on the receipt's date and amount and links it
   (`POST /api/receipts/<id>/private-payment`; for a receipt of a filed period dated on the first open day). A unique exact fit shows as `.sug` with
   `[data-accept]` (Enter accepts and selects the next receipt that needs you).
 - `rc-unlink`: `.status .quiet` (`lösen`) or `.tx .un` in Zahlung (`POST /api/mapping/remove`).
@@ -94,8 +97,9 @@ and Datei. The order and the ranking are pure functions in `model.ts` (tests/rec
   `$B press Meta+z`. `$S diff` shows the mapping gone and back.
 - **Link.** After an unlink, focus `.list .row.sel`, press `l`, Enter, Enter. `$S diff` shows `+ mappings`
   (unlink and link also book the payment again, so entries can change too).
-- **Private outlay.** In the dialog `ArrowUp` (wraps to `private`), Enter: `+ transactions
-  M<year>-…` and its mapping; ⌘Z removes both.
+- **Private outlay.** In the dialog `ArrowUp` (wraps to `private`), Enter opens `.privform`, Enter
+  again books: toast «Privat bezahlt · Spesen über das Konto des Inhabers», `+ transactions
+  M<year>-…` and its mapping; ⌘Z removes both (driven 2026-10-31).
 - **Edit.** `e`, `$B fill "form.form input[name=description]" "…"`, Enter: toast `Gespeichert ·
   Beschreibung`, `~ receipts <id> .description`. The focus stays in the field, so ⌘Z there is the
   field's own undo: click the toast's `Rückgängig` (`no changes` again, driven 2026-10-21). A bad

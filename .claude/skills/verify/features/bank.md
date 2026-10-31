@@ -1,7 +1,10 @@
 # Bank statements (Kontoauszüge)
 
 Kontoauszüge (`src/app/areas/bank/`) lists each bank account's monthly statements of the period, grouped by account
-(`Konto`) or by month (`Monat`). A month that ended without its statement PDF is a `fehlt` row; the running month shows
+(`Konto`) or by month (`Monat`). A month that ended without its statement PDF is a `fehlt` row
+(`[data-testid=missing-count]`, detail `[data-testid=missing-notice]`) for an account that has had
+statements before, else `ohne Auszug` (`[data-testid=without-count]`, `[data-testid=without-notice]`);
+a month whose statement is filed among the receipts reads `Auszug unter Belege`. The running month shows
 with its payments (`Monat läuft`). The detail is the statement: the bank's opening and closing balance and whether its
 payments add up to them, the books' balance of the account on its last day (`bookBalanceNative` of
 src/accounting/reconcile-bank.ts), the PDF with the chosen payment's line marked, and in the margin Zahlungen, Kurse
@@ -27,7 +30,9 @@ rows in tests/period-lock.test.ts).
   gelesen.`), `[data-testid=statement-gap]`, `Der Monat läuft noch …`, and, when the books differ from the bank's close,
   a second `.status` with `Die Buchhaltung weicht um …` (or `[data-testid=opening-missing]` with `Eröffnungssaldo …
   setzen`). The paper is `.paper.real.stmt .pgw canvas.pg`, served from `/bank-statements/<bank>/<file>`; a camt.053
-  statement has no paper, only `[data-testid=camt-notice]`. Datei (folded) holds `[data-testid=remove-statement]`
+  statement has no paper, only `[data-testid=camt-notice]`, unless its statement is filed among the receipts
+  (`[data-testid=statement-receipt]` link, `[data-testid=statement-receipt-paper]`). Datei (`.sec[data-sec=datei]`,
+  folded: open its `button.sum` first, or the click times out) holds `[data-testid=remove-statement]`
   (`Auszug entfernen`, `DELETE /api/statements/<bank>/<file>`, Rückgängig; refused when a payment has a booking by hand).
 - `bk-payment`: `.pay[data-pay="<ref>"]` in Zahlungen; a click selects it (`/bank/<key>/<ref>`), again clears it. The
   line shows as `.pgw .hl` and `.pgno` says `Seite N von M` (or `Zeile nicht gefunden`). `.paybar` names the receipt
@@ -121,5 +126,9 @@ Wise EUR (1023), January to September 2026.
   and back, `/payments/<ref>`, missing month and its import through the well, camt.053 drop into the running month,
   closed-quarter refusal, `braucht keinen` and undo, search, ⌘K, dark mode.
 - **A filed pair (#254).** A reconciliation's pair with a read movement filed and booked marks the bank's movement
-  `[data-testid=filed-twin]` «schon im abgerechneten Quartal gebucht, als die am … gelesene Zahlung» with `[data-testid=filed-twin-anyway]`
+  `[data-testid=filed-twin]` «schon im abgerechneten Quartal gebucht, als die am <date> aus dem PDF gelesene Zahlung» with `[data-testid=filed-twin-anyway]`
   `Trotzdem buchen` (`DELETE /api/transactions/<ref>/filed-twin`); a difference of a few Rappen is booked on it.
+- Known product bug (2026-10-31): on the demo, «Auszug entfernen» on 1021-2026-07 and its Rückgängig leave the books
+  changed: the PDF-read balances (`statementBalances` with `source: pdf`, July's 31.07. among them) do not come back,
+  July then reads `Der Endsaldo ist aus dem PDF nicht gelesen.` and August `Der Anfangssaldo fehlt`. Run `down`/`up`
+  after driving the removal.
