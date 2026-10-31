@@ -126,13 +126,15 @@ function ForeignTaxForm({ q, books, account: said, onAnswer, onCancel }: { q: Qu
   const onAmount = (v: string) => { setAmount(v); const a = num(v); setRate(a > 0 && a < gross ? String(Math.round((a / (gross - a)) * 1000) / 10) : ''); };
   const r = num(rate);
   const a = num(amount);
-  const ok = r > 0 && r < 100 && a > 0 && a < gross && !!account.trim();
+  const taxOk = r > 0 && r < 100 && a > 0 && a < gross;
+  const ok = taxOk && !!account.trim();
   const code = saleVatCode('saleAbroad') ?? '';
   return (
     <div className="qforeign" data-testid="foreign-tax">
       <label>{t('questions.foreignTax.rate')}<input inputMode="decimal" value={rate} aria-label={t('questions.foreignTax.rate')} data-field="foreign-rate" onChange={(e) => onRate(e.target.value)} /></label>
       <label>{t('questions.foreignTax.amount', { currency: tx?.currency ?? '' })}<input inputMode="decimal" value={amount} aria-label={t('questions.foreignTax.amount', { currency: tx?.currency ?? '' })} data-field="foreign-amount" onChange={(e) => onAmount(e.target.value)} /></label>
       <label>{t('questions.foreignTax.account')}<input value={account} aria-label={t('questions.foreignTax.account')} data-field="foreign-account" onChange={(e) => setAccount(e.target.value)} /></label>
+      {(rate || amount) && !taxOk ? <p className="qnote warn" data-testid="foreign-tax-invalid">{t('error.foreignTaxInvalid')}</p> : null}
       {said ? null : <p className="qnote">{t('questions.foreignTax.accountOnce')}</p>}
       {ok ? <p className="qnote" data-testid="foreign-tax-does">{t('questions.foreignTax.does', { net: `${tx?.currency ?? ''} ${fmt(Math.round((gross - a) * 100) / 100)}`, code: code ? codeLabel(code) : '–', tax: `${tx?.currency ?? ''} ${fmt(a)}`, account: account.trim() })}</p> : null}
       <span className="qacts">
@@ -150,7 +152,7 @@ function Acted({ q, owner }: { q: Question; owner: string }) {
   if ('refused' in a) return <p className="qnote warn">{notActedText(a)}</p>;
   if ('vatCode' in a) {
     const sale = [
-      a.marked ? (a.booked.length && a.account ? t('questions.sale.notSale', { n: a.booked.length, account: owner.startsWith(`${a.account} `) ? owner : a.account }) : t('questions.sale.marked')) : a.correction ? t('questions.sale.corrected', { code: a.vatCode ? codeLabel(a.vatCode) : t('journal.noVat') }) : t('questions.sale.booked', { n: a.booked.length, code: a.vatCode ? codeLabel(a.vatCode) : '–' }),
+      a.marked ? (a.booked.length && a.account ? t('questions.sale.notSale', { n: a.booked.length, account: owner.startsWith(`${a.account} `) ? owner : a.account }) : t('questions.sale.marked')) : a.correction ? t('questions.sale.corrected', { code: a.vatCode ? codeLabel(a.vatCode) : t('journal.noVat') }) : t('questions.sale.booked', { n: a.booked.length - (a.foreignTax ? 1 : 0), code: a.vatCode ? codeLabel(a.vatCode) : '–' }),
       ...(a.foreignTax ? [t('questions.sale.foreignTax', { amount: fmt(a.foreignTax.amount), rate: String(a.foreignTax.rate), account: a.foreignTax.account })] : []),
       ...(a.rule ? [t('questions.sale.rule')] : []),
       ...(a.also?.length ? [t('questions.sale.also', { n: a.also.length })] : []),
