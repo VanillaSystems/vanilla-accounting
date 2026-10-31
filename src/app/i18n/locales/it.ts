@@ -3912,6 +3912,7 @@ export default {
     'salesReport.noSince': 'Versamento di {provider}: manca il giorno di passaggio, nulla registrato. Inserire il giorno in {file} sotto provider.since (il primo rapporto delle vendite lo chiede): da quel giorno l’app registra i versamenti dal conto di transito, prima tutto resta com’è.',
     'salesReport.gapPayout': 'Versamento di {provider} prima del giorno di passaggio {since}: il rapporto delle vendite ha già registrato vendite precedenti sul conto di transito {account}; nulla registrato. Se paga quelle, registrare a mano banca a {account}; se paga vendite più vecchie che il rapporto non ha registrato, quella parte come ricavo.',
     'rules.say.creditNoteCode': 'nota di credito per la fattura {invoice}, registrata con {invoiceCode}: {code} riprende la sua imposta precedente',
+    'rules.say.refundCode': 'rimborso dell\'acquisto del {date}, registrato con {originalCode}: {code} riprende la sua imposta precedente',
     'rules.say.purchaseVat.noInputTax': '{business}: nessuna imposta precedente su questo pagamento, {code} (regola {rule} dell’app)',
     'rules.say.purchaseVat.unreadReceipt': '{business}: il giustificativo illeggibile vale come {rate} % di IVA svizzera, imposta precedente {code} (regola {rule} dell’azienda)',
     'rules.say.purchaseVat.receiptShowsVat': 'Il giustificativo mostra {rate} % di IVA svizzera sull’intero importo: imposta precedente {code}',
