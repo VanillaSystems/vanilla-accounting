@@ -987,7 +987,7 @@ export default {
     'phone.renewYes': 'Sì, nuovo codice',
     'phone.renewed': "Nuovo codice: associare di nuovo i telefoni.",
     'phone.failed': "Non è stato possibile aprire l'accesso: {detail}",
-    'phone.notDesktop': "L'associazione si mostra nell'app Mac. Con npm start: impostare VANILLA_PHONE_TOKEN in .env; all'avvio il terminale mostra l'indirizzo con il codice.",
+    'phone.notDesktop': "L'associazione si mostra nell'app Mac. Con npm start il terminale mostra a ogni avvio l'indirizzo con il codice; senza il codice il Mac non accetta nulla dal telefono. VANILLA_PHONE_TOKEN in .env mantiene lo stesso codice.",
     'display.color': 'Colori',
     'display.followsOs': 'segue il sistema, ora {mode}',
     'display.toggleHint': 'T alterna chiaro e scuro',

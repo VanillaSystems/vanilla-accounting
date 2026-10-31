@@ -984,7 +984,7 @@ export const messages = {
   'phone.renewYes': 'Ja, neuer Code',
   'phone.renewed': "Neuer Code: die Handys neu koppeln.",
   'phone.failed': "Der Zugang liess sich nicht öffnen: {detail}",
-  'phone.notDesktop': "Das Koppeln zeigt die Mac-App. Unter npm start: VANILLA_PHONE_TOKEN in .env setzen; das Terminal zeigt beim Start die Adresse mit dem Code.",
+  'phone.notDesktop': "Das Koppeln zeigt die Mac-App. Unter npm start zeigt das Terminal bei jedem Start die Adresse mit dem Code, ohne den der Mac nichts vom Handy annimmt; VANILLA_PHONE_TOKEN in .env behält denselben Code.",
   'display.color': 'Farbe',
   'display.followsOs': 'folgt dem Betriebssystem, gerade {mode}',
   'display.toggleHint': 'T wechselt hell und dunkel',

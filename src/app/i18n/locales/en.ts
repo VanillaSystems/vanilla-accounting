@@ -987,7 +987,7 @@ export default {
     'phone.renewYes': 'Yes, new code',
     'phone.renewed': "New code: pair the phones again.",
     'phone.failed': "The access could not be opened: {detail}",
-    'phone.notDesktop': "Pairing is shown in the Mac app. Under npm start: set VANILLA_PHONE_TOKEN in .env; the terminal shows the address with the code at start.",
+    'phone.notDesktop': "Pairing is shown in the Mac app. Under npm start the terminal shows the address with the code at every start; without the code the Mac takes nothing from a phone. VANILLA_PHONE_TOKEN in .env keeps the same code.",
     'display.color': 'Colours',
     'display.followsOs': 'follows the system, now {mode}',
     'display.toggleHint': 'T toggles light and dark',

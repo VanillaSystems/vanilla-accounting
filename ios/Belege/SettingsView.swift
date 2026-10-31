@@ -137,7 +137,7 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
-                        Text("Für Entwickler mit npm start: VANILLA_PHONE_TOKEN in .env setzen; das Terminal zeigt den Koppel-Link.")
+                        Text("Für Entwickler mit npm start: das Terminal zeigt bei jedem Start den Koppel-Link (mit VANILLA_PHONE_TOKEN in .env bleibt der Code gleich).")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
