@@ -16,11 +16,13 @@ export const isSeparateFee = (tx: Pick<BankTransaction, 'type'>): boolean => tx.
 /**
  * The fee the bank debited apart from `tx`, as its own movement. The one place that knows how the
  * books link the two (today `type: 'wise-fee'` and the id `FEE-<id>`, as the bank statement reader writes it):
- * the bank's id when the statement gave one apart from the ref (`bankTxId`), else the ref.
+ * the bank's id when the statement gave one apart from the ref (`bankTxId`), else the ref. The bank takes
+ * a fee from the balance it took the payment from: a charge split across balances under one id has a
+ * fee per balance, or on one of them only (#287), and a leg's fee is the one in its currency.
  */
-export function separateFeeOf(tx: Pick<BankTransaction, 'ref' | 'bankTxId'>, transactions: readonly BankTransaction[]): BankTransaction | undefined {
+export function separateFeeOf(tx: Pick<BankTransaction, 'ref' | 'bankTxId' | 'currency'>, transactions: readonly BankTransaction[]): BankTransaction | undefined {
   const idOf = (t: Pick<BankTransaction, 'ref' | 'bankTxId'>) => t.bankTxId ?? t.ref;
-  return transactions.find((t) => t.type === 'wise-fee' && idOf(t) === `FEE-${idOf(tx)}`);
+  return transactions.find((t) => t.type === 'wise-fee' && t.currency === tx.currency && idOf(t) === `FEE-${idOf(tx)}`);
 }
 
 export type SeparateFeeCheck =

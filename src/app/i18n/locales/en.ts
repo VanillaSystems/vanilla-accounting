@@ -3911,6 +3911,7 @@ export default {
     'salesReport.noSince': 'Payout of {provider}: no cut-over day, nothing booked. Enter the day in {file} under provider.since (the first sales report asks for it): from it on the app books the payouts from the clearing account, before it everything stays as it is.',
     'salesReport.gapPayout': 'Payout of {provider} before the cut-over day {since}: the sales report has already booked sales before its day onto the clearing account {account}; nothing booked. If it pays those, book bank to {account} by hand; if it pays older sales the report did not book, book that part as sales.',
     'rules.say.creditNoteCode': 'credit note for invoice {invoice}, booked with {invoiceCode}: {code} takes its input tax back',
+    'rules.say.refundCode': 'refund of the purchase of {date}, booked with {originalCode}: {code} takes its input tax back',
     'rules.say.purchaseVat.noInputTax': '{business}: no input tax on this payment, {code} (the app\'s rule {rule})',
     'rules.say.purchaseVat.unreadReceipt': '{business}: the unreadable receipt counts as {rate} % Swiss VAT, input tax {code} (the company\'s rule {rule})',
     'rules.say.purchaseVat.receiptShowsVat': 'The receipt shows {rate} % Swiss VAT on the whole amount: input tax {code}',

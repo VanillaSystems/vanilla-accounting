@@ -3908,6 +3908,7 @@ export const messages = {
   'salesReport.noSince': 'Auszahlung von {provider}: Umstellungstag fehlt, nichts gebucht. Den Tag in {file} unter provider.since eintragen (der erste Verkaufsbericht fragt danach): ab ihm bucht die App die Auszahlungen vom Durchlaufkonto, davor bleibt alles, wie es ist.',
   'salesReport.gapPayout': 'Auszahlung von {provider} vor dem Umstellungstag {since}: der Verkaufsbericht hat Verkäufe vor ihrem Tag schon aufs Durchlaufkonto {account} gebucht, nichts gebucht. Zahlt sie diese, von Hand Bank an {account} buchen; zahlt sie ältere Verkäufe, die der Bericht nicht gebucht hat, diesen Teil als Umsatz.',
   'rules.say.creditNoteCode': 'Gutschrift zu Rechnung {invoice}, gebucht mit {invoiceCode}: {code} nimmt deren Vorsteuer zurück',
+  'rules.say.refundCode': 'Rückerstattung zum Einkauf vom {date}, gebucht mit {originalCode}: {code} nimmt dessen Vorsteuer zurück',
   'rules.say.purchaseVat.noInputTax': '{business}: keine Vorsteuer auf dieser Zahlung, {code} (Regel {rule} der App)',
   'rules.say.purchaseVat.unreadReceipt': '{business}: der unleserliche Beleg gilt als {rate} % Schweizer MWST, Vorsteuer {code} (Regel {rule} der Firma)',
   'rules.say.purchaseVat.receiptShowsVat': 'Der Beleg zeigt {rate} % Schweizer MWST auf dem ganzen Betrag: Vorsteuer {code}',
