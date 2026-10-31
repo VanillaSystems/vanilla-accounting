@@ -168,7 +168,8 @@ export function buildVisionPrompt(absPdfPath: string): string {
   return `Verwende das Read-Tool, um die Datei '${absPdfPath}' zu lesen. ` +
     'Extrahiere den vollständigen Text aus diesem Beleg/Rechnung. ' +
     'Beginne mit einer kurzen deutschen Beschreibung (z.B. "Tankquittung", "Lebensmitteleinkauf"), ' +
-    'gefolgt von einer Leerzeile, dann der vollständige Text. Kein weiterer Kommentar.';
+    'gefolgt von einer Leerzeile, dann der vollständige Text. Kein weiterer Kommentar. ' +
+    'Ist der Beleg nicht lesbar, antworte nur «Nicht lesbar» und in einem kurzen Satz, warum; rate keinen Text.';
 }
 
 export interface ClassifyEntry {

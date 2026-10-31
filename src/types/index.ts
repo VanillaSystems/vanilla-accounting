@@ -46,7 +46,7 @@ export interface Receipt {
   description?: string;
   amount?: number;
   currency?: string;
-  // local OCR (pdftotext + tesseract) yielded no text — needs manual approval to send image to AI
+  /** Its text is empty or not legible (src/parsers/receipt-text.ts): the VAT step leaves it, its VAT waits for a vision read or the person (#57, #284). */
   needsVisionReview?: boolean;
   remarks?: string;
   // set during extract-vat step (VAT facts read directly off the receipt)
