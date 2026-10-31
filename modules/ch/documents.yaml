@@ -26,9 +26,16 @@ other:
   tracking: [Sendungsverfolgung, Sendung verfolgen, Ihr Paket ist unterwegs, Track your parcel, Track your package, Tracking number, Suivi de colis, Suivre mon colis, Tracciamento, Traccia la spedizione]
   no-receipt: [Kein Beleg, Keine Rechnung, Not a receipt, Not an invoice, Pas un justificatif, Pas une facture, Non è un giustificativo, Non è una fattura]
 
-# A bank statement names itself in its first lines, before any receipt word (src/intake/document-kind.ts
+# A bank statement names itself in its first lines, before any receipt word (src/core/modules/words.ts
 # namesStatement): «Kontoauszug», «CHF statement» of a currency account, «Relevé de compte».
 statement: [Kontoauszug, Bankauszug, Account statement, Bank statement, Statement, Relevé de compte, Relevé bancaire, Extrait de compte, Estratto conto]
+
+# The columns of a statement's movements, money out and money in (src/core/modules/words.ts
+# isBankStatement): a statement shows the account's IBAN or these. A supplier's «Statement» of
+# its charges shows neither and stays a receipt.
+movements:
+  out: [Belastung, Belastungen, Lastschrift, Lastschriften, Debit, Debits, Outgoing, Paid out, Money out, Withdrawals, Débit, Débits, Addebito, Addebiti, Uscite]
+  in: [Gutschrift, Gutschriften, Credit, Credits, Incoming, Paid in, Money in, Deposits, Crédit, Crédits, Accredito, Accrediti, Entrate]
 
 # The balance lines of a statement (src/books/statement-facts.ts): with the title, an IBAN and a
 # period they tell a statement among the receipts from an invoice that only mentions one.
@@ -65,6 +72,12 @@ customs:
   # A line that names no position but carries the carrier's Swiss rate (a printed invoice, an extra
   # service) is the carrier's own service: fees. Duty and import VAT never carry Swiss VAT.
   tax: [MWST, MwSt, Mehrwertsteuer, TVA, Taxe sur la valeur ajoutée, IVA, Imposta sul valore aggiunto, VAT, Value added tax]
+  # A line of costs the carrier passed on free of VAT («MWST.-freie Kosten»), at no rate, on an
+  # invoice that cites a customs declaration's number (assessment.number): what the carrier advanced
+  # for the customs office there is the import VAT (Swiss industrial goods carry no duty since 2024;
+  # duty lumped into it makes the line differ from the assessment, which then proves nothing). Only
+  # with the number: postage and other invoices list VAT-free costs too.
+  untaxed: [MWST.-freie Kosten, MWST-freie Kosten, MWST freie Kosten, MwSt.-freie Kosten, MwSt-freie Kosten]
   # The BAZG's assessment of import VAT (Veranlagungsverfügung MWST): its title, and the label of its
   # total. It proves the deduction when it names the firm's UID. The German words are the BAZG's
   # document; the French, Italian and English ones are its names in those languages, not yet seen

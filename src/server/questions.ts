@@ -6,7 +6,8 @@
  * kind about the same counterparty is answered without anyone asked. The answer to the app's own
  * question about a customer payment without an invoice (src/intake/sale-questions.ts) books the sale
  * at the normal rate, as an export, or moves it off the turnover onto the owner's account: that one
- * payment only (#38). A rule for the payer is offered under the answer («Immer so?»,
+ * payment only (#38). An export that carried a foreign VAT (OSS, IOSS) is booked as a sales report
+ * books one (#206): the net at the export code, the tax onto the company's account for it without a code. A rule for the payer is offered under the answer («Immer so?»,
  * src/saving/sale-rule.ts), never written by the answer alone. Any other answer, or one the app cannot act
  * on (a filed quarter, a payment it cannot read, one with a receipt or an invoice), goes back to
  * the asker, who decides.
@@ -21,12 +22,15 @@ import { appendQuestionLine, readQuestions } from '../questions/store.js';
 import { APP_ASKER, askSalesWithoutVat, saleQuestionLine } from '../intake/sale-questions.js';
 import { chart } from '../engines/index.js';
 import { dropPrecedent, dropRule, keepPrecedent, precedentFor, precedentKey, type ChoicePrecedent, type PrecedentMatch } from '../knowledge/precedents.js';
-import { CHOICES, PRIVATE_CHOICES, SALE_CHOICES, type SaleChoice, TARGET_KINDS, type Acted, type NotActed, type Answer, type Choice, type PrivateChoice, type Question, type QuestionLine, type QuestionOrigin, type QuestionTarget, type SaleGone } from '../questions/model.js';
-import { saleChoiceOf, saleCodeReason, saleProposal, saleQuestionGone, saleVatCode, salesWithoutInvoice } from '../accounting/sales-without-vat.js';
+import { CHOICES, PRIVATE_CHOICES, SALE_CHOICES, type ForeignTax, type SaleChoice, TARGET_KINDS, type Acted, type NotActed, type Answer, type Choice, type PrivateChoice, type Question, type QuestionLine, type QuestionOrigin, type QuestionTarget, type SaleGone } from '../questions/model.js';
+import { foreignTaxIn, saleChoiceOf, saleCodeReason, saleProposal, saleQuestionGone, saleVatCode, salesWithoutInvoice } from '../accounting/sales-without-vat.js';
+import { chartOf } from '../booking/classify.js';
+import { chartNames } from '../booking/rule-book.js';
+import { wordsIn } from '../export/texts.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import type { BookChange } from '../types/assistant.js';
 import { WS, RequestError, assertOpen, readBooks, updateBooks } from './books.js';
-import { applyChange, bookPayment, setEntry } from './edits.js';
+import { applyChange, assertPlaced, bookPayment, setEntry } from './edits.js';
 import { keepSwitchedOn } from '../workflows/switch-on.js';
 import { loadWorkflows } from '../workflows/load.js';
 import { APP_ROOT } from '../workspace/workspace.js';
@@ -66,9 +70,29 @@ export function parseAsk(body: unknown, origin: QuestionOrigin = 'person'): AskI
   };
 }
 
-export function parseAnswer(body: unknown): { by: string; answer: Answer } {
+/** A foreign VAT as the person sends it: its rate or its amount (or both), and the account it goes onto. */
+export interface ForeignTaxInput { rate?: number; amount?: number; account: string }
+
+const FOREIGN_TAX_INVALID = 'Ausländische Steuer: einen Satz zwischen 0 und 100 % oder einen Betrag über 0 angeben, dazu das Konto, auf das sie geht.';
+
+function parseForeignTaxInput(raw: unknown): ForeignTaxInput {
+  const f = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const num = (v: unknown) => (v === undefined || v === null || v === '' ? undefined : Number(v));
+  const rate = num(f.rate);
+  const amount = num(f.amount);
+  const account = typeof f.account === 'string' ? f.account.trim() : typeof f.account === 'number' ? String(f.account) : '';
+  const ok = (rate === undefined || (Number.isFinite(rate) && rate > 0 && rate < 100)) && (amount === undefined || (Number.isFinite(amount) && amount > 0)) && (rate !== undefined || amount !== undefined);
+  if (!ok || !account) throw new RequestError(400, FOREIGN_TAX_INVALID, { code: 'foreignTaxInvalid' });
+  return { ...(rate !== undefined ? { rate } : {}), ...(amount !== undefined ? { amount } : {}), account };
+}
+
+export function parseAnswer(body: unknown): { by: string; answer: Answer; foreignTax?: ForeignTaxInput } {
   const b = (body ?? {}) as Record<string, unknown>;
   const by = name(b.by, 'by');
+  if (b.foreignTax !== undefined && b.foreignTax !== null) {
+    if (b.choice !== 'saleAbroad') throw new RequestError(400, 'Ausländische Steuer gibt es nur zu einem Verkauf ins Ausland (choice saleAbroad).', { code: 'foreignTaxInvalid' });
+    return { by, answer: { choice: 'saleAbroad' }, foreignTax: parseForeignTaxInput(b.foreignTax) };
+  }
   if (CHOICES.includes(b.choice as Choice)) return { by, answer: { choice: b.choice as Choice } };
   const text = typeof b.text === 'string' ? b.text.trim() : '';
   if (!text) throw new RequestError(400, 'Die Antwort fehlt.');
@@ -155,7 +179,7 @@ const isSaleChoice = (c: Choice): c is SaleChoice => (SALE_CHOICES as readonly s
  * with nothing booked (r4c-28). «Kein Umsatz» on a payment without any booking (deleted since the
  * question was asked) books it bank against the owner's account, so the answer acts (r9n-21).
  */
-function bookSale(books: Books, tx: BankTransaction, choice: SaleChoice): { booked: string[]; undo: BookChange[]; vatCode: string; marked?: true; account?: string } {
+function bookSale(books: Books, tx: BankTransaction, choice: SaleChoice, foreign?: ForeignTaxInput): { booked: string[]; undo: BookChange[]; vatCode: string; marked?: true; account?: string; foreignTax?: ForeignTax } {
   if (books.mappings.some((m) => m.transactionRef === tx.ref)) throw new Unclear('hasReceipt', tx.description);
   const own = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
   if (own.some((e) => e.origin === 'invoice')) throw new Unclear('hasInvoice', tx.description);
@@ -178,12 +202,51 @@ function bookSale(books: Books, tx: BankTransaction, choice: SaleChoice): { book
     return { booked: entries.map((e) => e.id), undo, vatCode: '', marked: true, ...(entries.length ? { account: owner } : {}) };
   }
   const code = saleVatCode(choice) ?? '';
+  if (foreign) return bookForeignTax(books, tx, entries, code, foreign);
   const undo = entries.map((e) => setEntry(books, e.id, { vatCode: code }));
   return { booked: entries.map((e) => e.id), undo, vatCode: code, ...(account ? { account } : {}) };
 }
 
+/**
+ * The foreign VAT the person named, completed from the sale's one revenue entry `gross`: the amount
+ * at the rate, or the rate (to a tenth of a percent) the amount stands for; refused unless the tax is
+ * less than the sale and its account is in the chart.
+ */
+function foreignTaxOf(gross: number, f: ForeignTaxInput): ForeignTax {
+  const amount = f.amount ?? foreignTaxIn(gross, f.rate!);
+  const rate = f.rate ?? Math.round((amount / (Math.abs(gross) - amount)) * 1000) / 10;
+  if (!(amount > 0 && amount < Math.abs(gross)) || !(rate > 0 && rate < 100)) throw new RequestError(400, FOREIGN_TAX_INVALID, { code: 'foreignTaxInvalid' });
+  const chart = chartNames(chartOf(WS));
+  if (chart.size && !chart.has(f.account)) throw new RequestError(400, `Konto ${f.account} gibt es im Kontenplan nicht: zuerst das Konto anlegen.`, { code: 'unknownAccount', params: { account: f.account } });
+  assertPlaced(f.account);
+  return { rate, amount, account: f.account };
+}
+
+/**
+ * An export that carried a foreign VAT, as a sales report books one (#206): the sale's one revenue
+ * entry keeps the net at the export code `code`, and a new entry of the same payment books the tax
+ * onto the company's account for it without a code, never the gross at the export code.
+ */
+function bookForeignTax(books: Books, tx: BankTransaction, entries: readonly JournalEntry[], code: string, f: ForeignTaxInput): { booked: string[]; undo: BookChange[]; vatCode: string; account: string; foreignTax: ForeignTax } {
+  if (entries.length !== 1) throw new RequestError(400, 'Ausländische Steuer teilt eine Umsatzbuchung: diese Zahlung hat mehrere, von Hand buchen.', { code: 'foreignTaxSplit' });
+  const [sale] = entries;
+  const foreignTax = foreignTaxOf(sale.amount, f);
+  const net = Math.round((Math.abs(sale.amount) - foreignTax.amount) * 100) / 100;
+  const undo = [setEntry(books, sale.id, { vatCode: code, amount: net })];
+  const tax: JournalEntry = {
+    id: randomBytes(8).toString('hex'), transactionRef: tx.ref, date: sale.date,
+    accountDebit: sale.accountDebit, accountCredit: foreignTax.account, amount: foreignTax.amount,
+    description: wordsIn('de').t('questions.sale.foreignTaxText', { who: sale.description || tx.counterparty || tx.description, rate: String(foreignTax.rate) }),
+    ...(sale.exchangeCurrency ? { exchangeCurrency: sale.exchangeCurrency, exchangeRate: sale.exchangeRate } : {}),
+    origin: 'manual', receipts: sale.receipts ?? [], ...(sale.tags ? { tags: sale.tags } : {}), by: { kind: 'person', at: now() },
+  };
+  books.journalEntries.push(tax);
+  undo.push({ kind: 'deleteEntry', id: tax.id });
+  return { booked: [sale.id, tax.id], undo, vatCode: code, account: sale.accountCredit, foreignTax };
+}
+
 /** What the answer does in the books and the knowledge, or why it does nothing. `from`: the precedent that answers, kept already. */
-function act(q: Question, answer: Answer, by: string, at: string, from: string | undefined): Acted | undefined {
+function act(q: Question, answer: Answer, by: string, at: string, from: string | undefined, foreign?: ForeignTaxInput): Acted | undefined {
   if (!('choice' in answer)) return undefined;
   const books = readBooks();
   const { tx, entry, why } = paymentOf(books, q.on);
@@ -192,9 +255,13 @@ function act(q: Question, answer: Answer, by: string, at: string, from: string |
   if (isSaleChoice(choice)) {
     let sale: ReturnType<typeof bookSale>;
     try {
-      sale = updateBooks((b) => bookSale(b, b.transactions.find((t) => t.ref === tx.ref)!, choice));
-    } catch (e) { return refusalOf(e); }
-    return { booked: sale.booked, undo: sale.undo, vatCode: sale.vatCode, ...(sale.marked ? { marked: true as const, ...(sale.account ? { account: sale.account } : {}) } : {}) };
+      sale = updateBooks((b) => bookSale(b, b.transactions.find((t) => t.ref === tx.ref)!, choice, foreign));
+    } catch (e) {
+      // A foreign VAT the payment cannot take is the person's to correct: nothing is recorded, the question stays open.
+      if (foreign && e instanceof RequestError) throw e;
+      return refusalOf(e);
+    }
+    return { booked: sale.booked, undo: sale.undo, vatCode: sale.vatCode, ...(sale.marked ? { marked: true as const, ...(sale.account ? { account: sale.account } : {}) } : {}), ...(sale.foreignTax ? { foreignTax: sale.foreignTax } : {}) };
   }
   let booked: { booked: string[]; undo: BookChange[] } | undefined;
   if (choice === 'private') {
@@ -270,7 +337,7 @@ const GONE: Record<SaleGone, string> = {
   ruleHolds: 'Eine Regel der Firma entscheidet diese Zahlung jetzt, oder fragt dich dazu unter Aufgaben: die Frage ist geschlossen.',
 };
 
-export function answerQuestion(id: string, { by, answer }: { by: string; answer: Answer }, from?: string): Question {
+export function answerQuestion(id: string, { by, answer, foreignTax }: { by: string; answer: Answer; foreignTax?: ForeignTaxInput }, from?: string): Question {
   const q = find(id);
   if (q.status !== 'open') throw new RequestError(409, 'Diese Frage ist schon beantwortet.', { code: 'questionAnswered' });
   if ('choice' in answer && !q.choices.includes(answer.choice)) throw new RequestError(400, `Diese Frage hat die Wahl ${answer.choice} nicht.`);
@@ -281,8 +348,10 @@ export function answerQuestion(id: string, { by, answer }: { by: string; answer:
     throw new RequestError(409, GONE[gone], { code: 'questionGone', params: { why: gone } });
   }
   const at = now();
-  const acted = asSwitchedOn(() => act(q, answer, by, at, from));
-  append({ v: 1, event: 'answered', id, at, by, answer, ...(acted ? { acted } : {}), ...(from ? { from } : {}) });
+  const acted = asSwitchedOn(() => act(q, answer, by, at, from, foreignTax));
+  // The answer keeps the foreign VAT as booked: its rate and amount, both, whichever the person typed.
+  const said: Answer = 'choice' in answer && acted && 'foreignTax' in acted && acted.foreignTax ? { ...answer, foreignTax: acted.foreignTax } : answer;
+  append({ v: 1, event: 'answered', id, at, by, answer: said, ...(acted ? { acted } : {}), ...(from ? { from } : {}) });
   return find(id);
 }
 

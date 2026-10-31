@@ -16,6 +16,7 @@ import { APP_ROOT } from '../workspace/workspace.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import { periodLock, type Books } from '../books/store.js';
 import { heldByReconciliation } from '../books/reconcile.js';
+import { legBooked } from '../accounting/payment-entries.js';
 import type { JournalEntry } from '../types/index.js';
 import { askSalesWithoutVat, closeSaleQuestionsHeld } from './sale-questions.js';
 import { bookPayoutReports } from './sales-report-import.js';
@@ -31,13 +32,15 @@ function askSales(ws: Workspace, books: BooksPort, log: (line: string) => void):
 
 /**
  * The open payments without a booking, less those waiting for a person: a booking deleted on purpose
- * (r10h-5), or a movement of an account's reconciliation that waits (#254, src/books/reconcile.ts).
+ * (r10h-5), or a movement of an account's reconciliation that waits (#254, src/books/reconcile.ts). A movement of
+ * amount 0 moved nothing and needs no booking (#290). Each leg of a charge split across balances under one ref is
+ * booked by itself (#287, legBooked).
  */
-const unbooked = (books: Books) => {
+const unbooked = (books: Books, accounts: ClassifyContext['bankAccounts']) => {
   const lock = periodLock(books);
-  const booked = new Set(books.journalEntries.map((je) => je.transactionRef));
+  const booked = legBooked(books, accounts);
   const held = heldByReconciliation(books);
-  return books.transactions.filter((tx) => !booked.has(tx.ref) && !lock.isClosed(tx.date) && !tx.waitsForPerson && !held.has(tx.ref));
+  return books.transactions.filter((tx) => tx.amount !== 0 && !booked(tx) && !lock.isClosed(tx.date) && !tx.waitsForPerson && !held.has(tx.ref));
 };
 
 /** The open payments that need a receipt and have none, and those whose receipt could not be read (src/booking/receipt-wait.ts). */
@@ -45,7 +48,7 @@ function needReceipts(ws: Workspace, books: Books, context: ClassifyContext, fx:
   const known = receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root));
   const need = new Set<string>();
   const unread = new Set<string>();
-  for (const tx of unbooked(books)) {
+  for (const tx of unbooked(books, context.bankAccounts)) {
     const w = receiptWaitOf(books, tx, context, known, fx);
     if (w.wait) (w.unread ? unread : need).add(tx.ref);
   }
@@ -136,7 +139,7 @@ export function classifyStep({ force = false } = {}): StepRun {
       if (unread.size) log(`Unread    : ${unread.size} payment(s) have a receipt whose VAT could not be read: the person is asked.`);
       return { notes: [...notes, ...(waiting.size ? [{ code: 'waitingReceipt' as const, count: waiting.size }] : []), ...(unread.size ? [{ code: 'receiptUnread' as const, count: unread.size }] : []), ...askSales(ws, books, log)] };
     };
-    const todo = unbooked(scratch).filter((tx) => !waiting.has(tx.ref) && !unread.has(tx.ref));
+    const todo = unbooked(scratch, context.bankAccounts).filter((tx) => !waiting.has(tx.ref) && !unread.has(tx.ref));
     if (todo.length === 0) {
       log('All transactions are already classified.');
       return done([]);
@@ -148,7 +151,7 @@ export function classifyStep({ force = false } = {}): StepRun {
       const fresh = scratch.journalEntries.filter((je) => !applied.has(je));
       fresh.forEach((je) => applied.add(je));
       books.update((index) => {
-        const open = new Set(unbooked(index).map((tx) => tx.ref));
+        const open = new Set(unbooked(index, context.bankAccounts).map((tx) => tx.ref));
         index.journalEntries.push(...fresh.filter((je) => open.has(je.transactionRef) && keeps(je.transactionRef)));
       });
     };

@@ -24,7 +24,7 @@ steps:
         source: AGENTS.md § Period close
         test: closed-period
       - id: ev-exempt-separate-fee
-        when: the transaction is the fee of another payment, debited as a movement of its own (a fee row that names the payment it charges for)
+        when: "the transaction is a fee row of the bank: the fee of another payment, debited as a movement of its own (a fee row that names the payment it charges for), or the bank's fee for the account itself (the statement's code for charges, no other party)"
         then: settled, exempt — the bank statement is the evidence
         source: definition
         test: wise-fee

@@ -221,6 +221,8 @@ export function errorText(e: unknown): string {
     case 'uid': return t('error.uid', b.params);
     case 'payToNeedsIban': return t('error.payToNeedsIban', b.params);
     case 'questionAnswered': return t('error.questionAnswered');
+    case 'foreignTaxInvalid': return t('error.foreignTaxInvalid');
+    case 'foreignTaxSplit': return t('error.foreignTaxSplit');
     case 'questionGone': return t(`questions.gone.${b.params.why}`);
     case 'takesBack': return t('error.takesBack');
     case 'setAside': return t('error.setAside', b.params);

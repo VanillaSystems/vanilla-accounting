@@ -12,7 +12,7 @@
 import type { BankTransaction, Index, JournalEntry, Receipt } from '../types/index.js';
 import { baseCurrency, chart, invoicing, vat } from '../engines/index.js';
 import { ibanKey } from '../knowledge/payer.js';
-import type { SaleChoice, SaleGone, SaleProposal, SaleWhy } from '../questions/model.js';
+import type { Question, SaleChoice, SaleGone, SaleProposal, SaleWhy } from '../questions/model.js';
 import { methodOf, type VatSetup } from '../workspace/vat-setup.js';
 
 export interface SaleWithoutVat {
@@ -74,6 +74,23 @@ export function saleProposal(tx: Pick<BankTransaction, 'currency' | 'counterpart
   const country = ibanKey(tx.counterpartyIban)?.slice(0, 2);
   if (!country) return { choice: 'saleDomestic', why: 'domesticCurrency' };
   return invoicing().territory.includes(country) ? { choice: 'saleDomestic', why: 'domesticIban' } : { choice: 'saleAbroad', why: 'foreignIban' };
+}
+
+/** The foreign VAT inside the gross `gross` at `rate` percent, to the cent of the payment's currency. */
+export const foreignTaxIn = (gross: number, rate: number): number => Math.round((Math.abs(gross) * 100 * rate) / (100 + rate)) / 100;
+
+/**
+ * The account a foreign VAT on a sale abroad goes onto, as the company said it: the one its last
+ * answer booked it on, else the one its providers' files name (`provider.foreignTax`, the sales
+ * report's, #206; `providers`). Undefined when it said none, or several, so the person names it once.
+ */
+export function foreignTaxAccount(providers: ReadonlySet<string>, questions: readonly Question[]): string | undefined {
+  const answered = questions.filter((q) => q.status === 'answered').sort((a, b) => b.answer!.at.localeCompare(a.answer!.at));
+  for (const q of answered) {
+    const a = q.answer!.acted;
+    if (a && 'foreignTax' in a && a.foreignTax) return a.foreignTax.account;
+  }
+  return providers.size === 1 ? [...providers][0] : undefined;
 }
 
 /** The normal rate a domestic sale is booked at (the first rate an invoice line offers). */

@@ -22,21 +22,23 @@ import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { APP_ROOT, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
 import { sharedReceipts, inputTaxOverReceipts } from './shared-receipts.js';
-import { chargesOf } from '../intake/charges.js';
+import { chargesOf, legKey } from '../intake/charges.js';
 import { agreedBasis, baseCurrency, documents, filing, setup, vat, withoutInputTax } from '../engines/index.js';
 import { paymentProposals, type PaymentProposal } from '../invoices/payments.js';
 import { loadInvoices } from '../invoices/store.js';
 import type { InvoiceBook } from '../invoices/model.js';
-import { correctsFor } from '../accounting/correction.js';
+import { correctsFor, privateUseCode } from '../accounting/correction.js';
 import { EFFECTIVE_QUARTERLY, type VatSetup } from '../workspace/vat-setup.js';
-import { saleCodeOf, saleCodeReason } from '../accounting/sales-without-vat.js';
+import { foreignTaxIn, saleCodeOf, saleCodeReason } from '../accounting/sales-without-vat.js';
 import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { creditNoteCodeOf } from '../accounting/credit-note-code.js';
 import { acquisitionCodeOf, acquisitionReason, readSupplier, type AcquisitionDocument } from '../accounting/acquisition-tax.js';
 import { codeSignFor } from '../accounting/code-sign.js';
+import { refundCodeOf } from './refund-code.js';
 import { homeOf, loadKnowledge } from '../knowledge/layers.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
 import { payerNames } from '../knowledge/payer.js';
+import { businessGuidance, companyGuidance } from '../knowledge/guidance.js';
 import { partsOf, partText } from '../accounting/manual-booking.js';
 import { wordsIn } from '../export/texts.js';
 import { ruleFor, ruleWords, stampRule, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
@@ -111,7 +113,7 @@ export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { f
       accountDebit,
       accountCredit,
       amount: e.amount,
-      vatCode: transfer ? undefined : acquired ? acquired.code : signed(permittedCode(e.vatCode), accountDebit, accountCredit, e.amount),
+      vatCode: transfer ? undefined : acquired ? acquired.code : signed(permittedCode(e.vatCode), accountDebit, accountCredit, e.amount, bankAccount),
       description: e.description || tx.description,
     }, acquired && { reason: acquisitionReason(acquired), by: { kind: 'code', check: 'acquisitionTax' } });
   });
@@ -173,8 +175,6 @@ export interface ClassifyContext extends ClassifyPromptContext {
   rules?: readonly PlacedRule[];
   /** The businesses a payment can route to, for a rule of one business. */
   counterparties?: readonly Counterparty[];
-  /** The owner's private account (its number): where a rule's private share goes. */
-  ownerAccount?: string;
   /** The owner's name (company.owner): a payment to her is one the owner's account may settle (answerSettles). */
   ownerName?: string;
   /** The firm's VAT setup (src/workspace/vat-setup.ts): which codes its bookings may carry; absent: the effective method. */
@@ -261,6 +261,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     rules: placedRules(companyRules(ws, facts)),
     counterparties,
     purchaseVat: businessVat(knowledge),
+    guidance: companyGuidance(knowledge),
     ownerAccount: ownerAccount(ws).split(' ')[0],
     ownerName: ws.company.owner,
     vat: ws.company.vat,
@@ -337,23 +338,60 @@ export function ruleVatCode(code: string | null, tx: Pick<BankTransaction, 'dire
   return back ? `-${unsigned}` : unsigned;
 }
 
-/** A rule's booking line as it lands: account, VAT code (none: no code) and amount, the bank on the other side. */
-export interface RuleLine { account: string; vat?: string; amount: number }
+/**
+ * A rule's booking line as it lands: account, VAT code (none: no code) and amount, the bank on the
+ * other side; `against`: the other side when it is no bank (an own-use correction, owner's account / the rule's account).
+ */
+export interface RuleLine { account: string; vat?: string; amount: number; against?: string }
+
+/**
+ * The code that takes back the input tax of `code` as own use (privateUseCode, K81-B for I81),
+ * with the minus of a refund (-I81: -K81-B). Undefined when the line claims no input tax.
+ */
+export function ownUseCode(code: string | undefined): string | undefined {
+  const negative = !!code?.startsWith(vat().codes.negativePrefix);
+  const unsigned = negative ? code!.slice(vat().codes.negativePrefix.length) : code;
+  const k = privateUseCode(unsigned);
+  return k && (negative ? `${vat().codes.negativePrefix}${k}` : k);
+}
 
 /**
  * What a rule's booking books for `tx`: the whole amount on the rule's account with its VAT code
  * (ruleVatCode), or, with a private share, that share on the owner's account without VAT and the
- * rest on the rule's account. The lines add up to what the bank paid, to the Rappen. `documents`
- * are the payment's linked receipts: only a purchase document (evidence-check isPurchaseDocument)
- * proves Swiss VAT, never a delivery note or a supporting document (#81).
+ * rest on the rule's account, or, with a foreign VAT, that tax on its account without a code and the
+ * net on the rule's. The lines add up to what the bank paid, to the Rappen. A share as own
+ * use leaves the whole amount on the rule's account and adds the share's input-tax correction
+ * between the owner's account and it, only when that line claims input tax (no receipt with Swiss
+ * VAT: the zero code, nothing to correct). `documents` are the payment's linked receipts: only a
+ * purchase document (evidence-check isPurchaseDocument) proves Swiss VAT, never a delivery note or
+ * a supporting document (#81).
  */
 export function ruleBookingLines(tx: BankTransaction, booking: RuleBooking, documents: readonly Pick<Receipt, 'kind' | 'hasSwissVat'>[], owner: string | undefined): RuleLine[] {
   const vat = ruleVatCode(booking.vat, tx, documents.some((r) => isPurchaseDocument(r) && r.hasSwissVat));
   const whole: RuleLine = { account: booking.account, ...(vat ? { vat } : {}), amount: tx.amount };
+  if (booking.foreignTax) {
+    const tax = foreignTaxIn(tx.amount, booking.foreignTax.rate);
+    return [{ ...whole, amount: Math.round((tx.amount - tax) * 100) / 100 }, { account: booking.foreignTax.account, amount: tax }];
+  }
   if (!booking.private || !owner) return [whole];
   const total = Math.round(tx.amount * 100);
   const own = Math.round((total * booking.private) / 100);
+  if (booking.ownUse) {
+    const correction = ownUseCode(vat);
+    return correction ? [whole, { account: owner, against: booking.account, vat: correction, amount: own / 100 }] : [whole];
+  }
   return [{ ...whole, amount: (total - own) / 100 }, { account: owner, amount: own / 100 }];
+}
+
+/**
+ * The own-use corrections a person booked for `tx` by hand, as the owner books them: an entry on a
+ * ref of no payment, dated the payment's day, from `account` to the owner's account with `code`
+ * (a refund's the other way). The rule then books no second one, and its preview counts them.
+ */
+export function handOwnUse(books: Pick<Books, 'journalEntries' | 'transactions'>, tx: Pick<BankTransaction, 'date' | 'direction'>, line: Pick<RuleLine, 'account' | 'against' | 'vat'>): JournalEntry[] {
+  const payments = new Set(books.transactions.map((t) => t.ref));
+  const [debit, credit] = tx.direction === 'DBIT' ? [line.account, line.against] : [line.against, line.account];
+  return books.journalEntries.filter((e) => e.date === tx.date && e.vatCode === line.vat && e.accountDebit === debit && e.accountCredit === credit && !payments.has(e.transactionRef));
 }
 
 const chf = (n: number) => n.toFixed(2);
@@ -468,10 +506,11 @@ export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRul
   const mapped = mappedReceipts(books, tx);
   const bankAccount = bankAccountFor(tx, context.bankAccounts);
   const out = tx.direction === 'DBIT';
-  const lines = ruleBookingLines(tx, booking, mapped, context.ownerAccount);
-  const entries: ClassifyEntry[] = lines.map((l) => ({
-    accountDebit: out ? l.account : '', accountCredit: out ? '' : l.account, amount: l.amount, vatCode: l.vat ?? '', description: merchantOf(tx.description),
-  }));
+  // An own-use correction a person booked by hand already stands: the rule books the payment, never a second correction.
+  const lines = ruleBookingLines(tx, booking, mapped, context.ownerAccount).filter((l) => !l.against || !handOwnUse(books, tx, l).length);
+  const entries: ClassifyEntry[] = lines.map((l) => (l.against
+    ? { accountDebit: out ? l.account : l.against, accountCredit: out ? l.against : l.account, amount: l.amount, vatCode: l.vat ?? '', description: wordsIn('de').t('rules.say.ownUseText', { percent: String(booking.private), text: merchantOf(tx.description) }) }
+    : { accountDebit: out ? l.account : '', accountCredit: out ? '' : l.account, amount: l.amount, vatCode: l.vat ?? '', description: merchantOf(tx.description) }));
   const code = lines[0].vat;
   // The rule names a rate, the payment got the zero code: the reason says why, never the rule's rate alone.
   const zero = booking.vat && code && code.replace(/^-/, '') !== booking.vat ? `; ${wordsIn('de').t('rules.say.zeroCode', { code })}` : '';
@@ -509,9 +548,17 @@ function partRuleEntries(books: Books, tx: BankTransaction, context: ClassifyCon
 
 type PromptInput = Parameters<typeof buildBatchClassifyPrompt>[0][number];
 
-/** What the prompt says about one transaction: the transaction and its receipts, with their VAT facts; `legs`: the refs of its card charge (src/intake/charges.ts), whose other legs that hold its receipts it names. */
-export function classifyInput(books: Books, tx: BankTransaction, legs: readonly string[] = [tx.ref]): PromptInput {
-  const receipts = mappedReceipts(books, tx)
+/**
+ * What the prompt says about one transaction: the transaction and its receipts, with their VAT facts; `legs`: the movements of its
+ * card charge (src/intake/charges.ts), whose other legs that hold its receipts it names. A leg that shares its ref goes by its legKey.
+ * `counterparties`: the businesses it may route to, whose file's decisions for the booking steps it carries (src/knowledge/guidance.ts).
+ */
+export function classifyInput(books: Books, tx: BankTransaction, legs: readonly BankTransaction[] = [tx], counterparties: readonly Counterparty[] = []): PromptInput {
+  const linked = mappedReceipts(books, tx);
+  const routing = identify(signalsOfTransaction(tx, linked), counterparties);
+  const cp = routing.kind === 'known' ? counterparties.find((c) => c.id === routing.counterparty) : undefined;
+  const guidance = cp ? businessGuidance(cp) : [];
+  const receipts = linked
     .filter((r) => r.extractedText && r.extractedText.length > 10)
     .map((r) => ({
       text: r.extractedText,
@@ -527,7 +574,7 @@ export function classifyInput(books: Books, tx: BankTransaction, legs: readonly 
   const fee = separateFeeOf(tx, books.transactions);
   const shared = sharedReceipts(books, tx, legs);
   return {
-    tx: { ref: tx.ref, date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction, description: tx.description, bank: tx.bank, ...(tx.counterparty ? { counterparty: tx.counterparty } : {}), ...(fee ? { separateFee: { ref: fee.ref, amount: fee.amount, currency: fee.currency } } : {}), ...(tx.businessPart ? { businessPart: { ...(tx.businessPart.what && { what: tx.businessPart.what }) } } : {}), ...(shared ? { sharedWith: shared.others.map((t) => ({ ref: t.ref, amount: t.amount, currency: t.currency })) } : {}) },
+    tx: { ref: legKey(tx, legs), date: tx.date, amount: tx.amount, currency: tx.currency, direction: tx.direction, description: tx.description, bank: tx.bank, ...(tx.counterparty ? { counterparty: tx.counterparty } : {}), ...(fee ? { separateFee: { ref: fee.ref, amount: fee.amount, currency: fee.currency } } : {}), ...(tx.businessPart ? { businessPart: { ...(tx.businessPart.what && { what: tx.businessPart.what }) } } : {}), ...(shared ? { sharedWith: shared.others.map((t) => ({ ref: t.ref, amount: t.amount, currency: t.currency })) } : {}), ...(cp && guidance.length ? { business: { name: cp.name, guidance } } : {}) },
     receipts,
   };
 }
@@ -570,13 +617,25 @@ function withCreditNoteCodes(books: Books, tx: BankTransaction, entries: Journal
 }
 
 /**
+ * The model's lines of a refund of a booked purchase with that purchase's code and the minus
+ * (src/booking/refund-code.ts, #288); the reason names the purchase, in place of the model's.
+ */
+function withRefundCodes(books: Books, tx: BankTransaction, entries: JournalEntry[], bank: string): JournalEntry[] {
+  return entries.map((e) => {
+    const decided = e.by?.kind === 'model' ? refundCodeOf(e, tx, bank, books) : undefined;
+    if (!decided || decided.code === e.vatCode) return e;
+    return { ...e, vatCode: decided.code, reason: wordsIn('de').t('rules.say.refundCode', { date: day(decided.original.date), originalCode: decided.originalCode, code: decided.code }), by: { kind: 'code', check: 'creditNote' } };
+  });
+}
+
+/**
  * A code the firm's form does not take is left off the entry: a firm not registered for VAT books
  * everything gross, one on the net tax rate method its purchases. On the effective method the
  * model's code stands as written; one the engine does not know is refused (paymentRefusal).
  */
 const permittedCode = (code: string | undefined): string | undefined => (code && formTakes(code) ? code : undefined);
-/** The model's code with the sign the accounts give it (r9h-11): a credit note's M0 becomes -M0, whatever the model wrote. */
-const signed = (code: string | undefined, accountDebit: string, accountCredit: string, amount: number): string | undefined => codeSignFor(code, accountDebit, accountCredit, amount) ?? code;
+/** The model's code with the sign the accounts and the bank's side give it (r9h-11, #288): a credit note's M0 becomes -M0, money back on 1540 -I81, whatever the model wrote. */
+const signed = (code: string | undefined, accountDebit: string, accountCredit: string, amount: number, bank: string): string | undefined => codeSignFor(code, accountDebit, accountCredit, amount, bank) ?? code;
 
 export interface ClassifyDeps {
   /** Absent: no model; what no rule decides is left in `unasked`. */
@@ -626,7 +685,9 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [], partly: [] };
   // The legs of a card charge split across balances share its receipts: each books its share, the input tax of all of them never more than the receipts show (#190).
   const charges = chargesOf(books.transactions, (amount, currency, date) => { if (currency === baseCurrency()) return amount; const rate = fx.daily(currency, date) ?? fx.flat(currency); return rate === undefined ? undefined : amount * rate; });
-  const legsOf = (tx: BankTransaction) => charges.of(tx).refs;
+  const legsOf = (tx: BankTransaction) => charges.of(tx).legs;
+  // The model answers by the key the prompt gives each transaction: the legs of a split under one ref apart (#287).
+  const keyOf = (tx: BankTransaction) => legKey(tx, legsOf(tx));
   const invoicePaid = openInvoicesPaid(books, context);
   const toModel: BankTransaction[] = [];
   /** Asked payments whose rule proposes nothing: the model proposes, the entries go to `asked`. */
@@ -713,7 +774,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     const fail = (tx: BankTransaction, reason: string) => { if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, reason }); };
     try {
       const examples = casebook.length ? casesForBatch(books, batch, casebook) : [];
-      const prompt = buildBatchClassifyPrompt(batch.map((tx) => classifyInput(books, tx, legsOf(tx))), context, examples);
+      const prompt = buildBatchClassifyPrompt(batch.map((tx) => classifyInput(books, tx, legsOf(tx), context.counterparties)), context, examples);
       let model: string | undefined;
       const raw = await ask(prompt, { step: 'classify', timeoutMs: CALL_TIMEOUT_MS, answered: (by) => { model = by.model; } });
       model ??= (await resolveStep('classify')).model;
@@ -724,7 +785,8 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         return;
       }
       for (const tx of batch) {
-        const llmEntries = result[tx.ref]?.entries;
+        const answer = result[keyOf(tx)];
+        const llmEntries = answer?.entries;
         if (!llmEntries?.length) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  no entries in response`);
           fail(tx, 'no entries in response');
@@ -732,11 +794,11 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         }
         const mapped = mappedReceipts(books, tx);
         const bankAccount = bankAccountFor(tx, context.bankAccounts);
-        const said = result[tx.ref].reason;
+        const said = answer.reason;
         const reason = typeof said === 'string' && said.trim() ? said.trim().slice(0, 300) : undefined;
         const derived = withDerivedCodes(llmEntries, tx.direction, bankAccount);
         const separate = separateFeeOf(tx, books.transactions);
-        const fee = separate && withoutSeparateFee(tx, separate, derived, { booked: books.journalEntries, answered: result[separate.ref]?.entries });
+        const fee = separate && withoutSeparateFee(tx, separate, derived, { booked: books.journalEntries, answered: result[keyOf(separate)]?.entries });
         if (fee && 'refused' in fee) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${fee.refused.reason}`);
           if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, ...fee.refused });
@@ -744,7 +806,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         }
         const lines = splitByReceipts(tx, fee?.lines ?? derived, mapped);
         const noted = [reason, fee?.note, customsNotes.get(tx.ref)].filter(Boolean).join(' ') || undefined;
-        const entries = withPurchaseVat(tx, withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), mapped, context.purchaseVat, context.counterparties);
+        const entries = withPurchaseVat(tx, withRefundCodes(books, tx, withCreditNoteCodes(books, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), bankAccount), mapped, context.purchaseVat, context.counterparties);
         const twice = inputTaxOverReceipts(books, tx, legsOf(tx), entries, (c, d) => fx.daily(c, d));
         if (twice) {
           const others = twice.others.map((t) => t.ref).join(', ');

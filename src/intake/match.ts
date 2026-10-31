@@ -29,7 +29,7 @@ import { numbersIn, squash } from '../accounting/document-numbers.js';
 import { nameWords, pairMapping, takenPayments } from './pairing.js';
 import { legOf } from '../workspace/money-accounts.js';
 import { titlesFor } from './titles.js';
-import { estvToChf, noPaymentFor, noReceiptFor, runPairChain } from './pair-chain.js';
+import { estvToChf, noPaymentFor, noReceiptFor, runPairChain, takeOver } from './pair-chain.js';
 import { linkOrdersToSales } from '../booking/sales-report.js';
 import { linkReceiptSets, linkSplitLegs, MAX_RUN, MAX_TRIED } from './receipt-sets.js';
 import { batchPayers, businesses, NO_BATCH_PAYERS, type BatchPayers, type Businesses } from './batch-payers.js';
@@ -37,6 +37,7 @@ import { loadKnowledge } from '../knowledge/layers.js';
 import { providersOf } from './sales-report-import.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { creditSigned } from '../accounting/credit-signed.js';
+import { isBankFee } from '../booking/separate-fee.js';
 
 const MAPPING_THRESHOLD = 0.8;
 const CONCURRENCY = 10;
@@ -142,7 +143,7 @@ export type Candidate = BankTransaction & { filed?: true };
 export function candidates(receipt: Receipt, all: readonly BankTransaction[], linked: ReadonlySet<string> = new Set(), isClosed: (date: string) => boolean = () => false, payers: BatchPayers = NO_BATCH_PAYERS, receiptsOf: (tx: BankTransaction) => readonly Receipt[] = () => []): Candidate[] {
   const text = receipt.extractedText ?? '';
   const grouped = payers.ofReceipt(receipt);
-  const usable = all.filter((tx) => tx.amount !== 0 && tx.type !== 'wise-fee');
+  const usable = all.filter((tx) => tx.amount !== 0 && !isBankFee(tx));
   const ofVendor = grouped ? usable.filter((tx) => payers.ofPayment(tx, receiptsOf(tx)) === grouped) : [];
   const pool = ofVendor.length ? ofVendor : usable.filter((tx) => !linked.has(tx.ref));
   const { date, amount, currency } = factsOf(receipt);
@@ -277,8 +278,10 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
         // Every movement of the charge: one, or each leg of a charge split across balances.
         const refs = l.legs ?? [l.payment];
         const t = index.transactions.find((x) => x.ref === l.payment);
+        if (!t || refs.some((ref) => r.notPaidBy?.includes(ref))) return;
+        if (l.replaced && (periodLock(index).isClosed(t.date) || !takeOver(index, refs, l.replaced))) return;
         const taken = takenPayments(index);
-        if (!t || refs.some((ref) => taken.has(ref) || r.notPaidBy?.includes(ref))) return;
+        if (refs.some((ref) => taken.has(ref))) return;
         if (periodLock(index).isClosed(t.date)) { r.filedPayment = t.ref; out.result = 'filed'; return; }
         for (const ref of refs) index.mappings.push(pairMapping(l.by, ref, r.id, l.signals));
         out.result = 'linked';
@@ -286,7 +289,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
       if (!target) continue;
       pairedByCode.add(l.receipt);
       progress(++completed, total);
-      log(`  ${receipt.filename} → ${target}  ${out.result === 'linked' ? `linked ${l.by === 'checked' ? 'by code, checked by the model' : 'by code'}: ${l.payment}` : out.result === 'filed' ? `pays the filed payment ${l.payment}: not linked` : out.result === 'twin' ? 'possibly a copy of another receipt: not linked, Belege asks' : `${l.payment} was linked meanwhile: not linked`}  (no model match)`);
+      log(`  ${receipt.filename} → ${target}  ${out.result === 'linked' ? `linked ${l.by === 'checked' ? 'by code, checked by the model' : 'by code'}: ${l.payment}${l.replaced ? ` in place of receipt ${l.replaced}, a whole period off the payment's day` : ''}` : out.result === 'filed' ? `pays the filed payment ${l.payment}: not linked` : out.result === 'twin' ? 'possibly a copy of another receipt: not linked, Belege asks' : `${l.payment} was linked meanwhile: not linked`}  (no model match)`);
     }
   }
   const toProcess = toRead.filter((r) => !pairedByCode.has(r.id));
