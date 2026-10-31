@@ -36,6 +36,8 @@ export interface HandRule {
   account: string;
   /** null: booked without a VAT code (a firm not registered, a transfer). */
   vat: string | null;
+  /** A foreign VAT split off a sale abroad: its rate, the account it goes onto (an answer to the sale question, never the form). */
+  foreignTax?: { rate: number; account: string };
   /** The reporting dimensions every booking of the rule carries (#127). */
   tags?: Tags;
   /** The owner's share in percent (`then.private`); `ownUse`: booked as own use, the input tax corrected (`as: own-use`). */
@@ -65,6 +67,7 @@ function written(h: HandRule, today: string, source: HandSource = 'hand'): { whe
   return { ...(Object.keys(when).length ? { when } : {}), then: {
     account: h.account, vat: h.vat ?? 'none',
     ...(h.private ? { private: h.private.ownUse ? { share: h.private.share, as: OWN_USE } : h.private.share } : {}),
+    ...(h.foreignTax ? { foreignTax: h.foreignTax } : {}),
     ...(h.tags && Object.keys(h.tags).length ? { tags: h.tags } : {}),
   }, source: `${source} ${today}` };
 }

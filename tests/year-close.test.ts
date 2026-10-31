@@ -574,3 +574,9 @@ test('a filed movement read from a PDF and not booked there, confirmed the same 
   b.journalEntries.push(e('B', '2026-10-06', '6570', '1020', 150));
   assert.deepEqual(unbooked(), [], 'its twin booked: the filed one is that payment, booked');
 });
+
+test('a movement of amount 0 (a quarter\'s closing statement of nothing) needs no booking and is not listed as unbooked (#290)', () => {
+  const b = books();
+  b.transactions.push({ ref: 'Z', bank: 'Raiffeisen', date: '2026-09-30', amount: 0, currency: 'CHF', direction: 'CRDT', description: 'Abschluss 01.07.2026 - 30.09.2026' });
+  assert.deepEqual(yearClose(input(b)).checks.find((c) => c.id === 'allBooked')!.problems, []);
+});

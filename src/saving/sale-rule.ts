@@ -5,7 +5,8 @@
  * then the usual rule card (src/saving/hand-rule.ts draftHandRule). A mixed payer gets no «always»
  * rule: a payment provider's payouts (an order document or payout report linked, or a payout booked
  * from one) are split per order (#26), and a payer booked on other accounts or codes is answered
- * payment by payment. Nothing is kept until the person clicks «Behalten» on the card.
+ * payment by payment. An answer that split a foreign VAT off the sale drafts the rule with that split
+ * (`then.foreignTax`), so the payer's next payment is booked so too. Nothing is kept until the person clicks «Behalten» on the card.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -47,7 +48,7 @@ function isPayout(books: Books, tx: BankTransaction): boolean {
 
 /** Code's verdict for the answered question `q`: the rule to draft, a mixed payer, or why none. */
 export function saleRuleVerdict(ws: Workspace, books: Books, q: Question, context: ClassifyContext = loadClassifyContext(ws)):
-  { kind: 'rule'; match: HandMatch; account: string; vat: string | null; path: string } | Exclude<SaleRuleOffer, { kind: 'rule' }> {
+  { kind: 'rule'; match: HandMatch; account: string; vat: string | null; foreignTax?: { rate: number; account: string }; path: string } | Exclude<SaleRuleOffer, { kind: 'rule' }> {
   const acted = q.answer?.acted;
   const tx = books.transactions.find((t) => t.ref === q.on.id);
   if (q.topic !== 'saleVat' || q.status !== 'answered' || !acted || !('vatCode' in acted) || !tx) return { kind: 'none', why: 'notAnswered' };
@@ -63,26 +64,31 @@ export function saleRuleVerdict(ws: Workspace, books: Books, q: Question, contex
     && (cp ? paymentFacts(books, t, context, fx).counterparty === cp.id : payerKey(t) === payer));
   if (partnerTxs.some((t) => isPayout(books, t))) return { kind: 'mixed', why: 'payout', name, other: 0 };
   const own = bookedAs(books, tx, context);
-  const [line] = [...own];
+  // An answer that split a foreign VAT off books two lines: the sale, and the tax on its account without a code.
+  const foreign = acted.foreignTax;
+  const taxLine = foreign && `${foreign.account}|`;
+  const [line] = [...own].filter((l) => l !== taxLine);
+  const same = (as: Set<string>) => as.size === own.size && [...as].every((l) => own.has(l));
   // A payment still waiting for its answer is booked by the app's guess, which says nothing about the payer.
   const waiting = new Set(readQuestions(ws).filter((x) => x.topic === 'saleVat' && x.status === 'open').map((x) => x.on.id));
   const other = partnerTxs.filter((t) => {
     if (t.ref === tx.ref || waiting.has(t.ref)) return false;
     const as = bookedAs(books, t, context);
-    return as.size > 0 && (as.size !== 1 || !as.has(line));
+    return as.size > 0 && !same(as);
   }).length;
-  if (own.size !== 1 || other > 0) return { kind: 'mixed', why: 'bookings', name, other };
+  if (own.size !== (taxLine ? 2 : 1) || (taxLine && !own.has(taxLine)) || other > 0) return { kind: 'mixed', why: 'bookings', name, other };
   const [account, vat] = line.split('|');
-  return { kind: 'rule', match, account, vat: vat || null, path: cp ? homeOf('workspace', cp.role, cp.id) : `${RULES_DIR}/booking.guide.yaml` };
+  return { kind: 'rule', match, account, vat: vat || null, ...(foreign ? { foreignTax: { rate: foreign.rate, account: foreign.account } } : {}), path: cp ? homeOf('workspace', cp.role, cp.id) : `${RULES_DIR}/booking.guide.yaml` };
 }
 
 /** Whether the draft waiting at `path` holds this rule already: a second «Immer so?» shows the same card, never a second rule. */
 function draftHolds(ws: Workspace, v: Extract<ReturnType<typeof saleRuleVerdict>, { kind: 'rule' }>): boolean {
   const file = join(draftDir(ws), v.path);
   if (!existsSync(file)) return false;
-  const doc = parse(readFileSync(file, 'utf8')) as { steps?: Record<string, { rules?: Array<{ when?: { payer?: string }; then?: { account?: string; vat?: string } }> }> } | null;
+  const doc = parse(readFileSync(file, 'utf8')) as { steps?: Record<string, { rules?: Array<{ when?: { payer?: string }; then?: { account?: string; vat?: string; foreignTax?: { rate?: number; account?: string } } }> }> } | null;
   const rules = doc?.steps?.[v.match.kind === 'business' ? RULE_STEP : RULE_SECTION]?.rules ?? [];
   return rules.some((r) => r.then?.account === v.account && r.then?.vat === (v.vat ?? 'none')
+    && r.then?.foreignTax?.rate === v.foreignTax?.rate && r.then?.foreignTax?.account === v.foreignTax?.account
     && (v.match.kind === 'payer' ? r.when?.payer === v.match.payer : !r.when?.payer));
 }
 
@@ -93,6 +99,6 @@ export function draftSaleRule(ws: Workspace, id: string, today = new Date().toIS
   const verdict = saleRuleVerdict(ws, loadBooks(ws), q);
   if (verdict.kind !== 'rule') return verdict;
   if (draftHolds(ws, verdict)) return { kind: 'rule', path: verdict.path };
-  const drafted = draftHandRule(ws, { match: verdict.match, direction: 'in', account: verdict.account, vat: verdict.vat }, today, 'correction');
+  const drafted = draftHandRule(ws, { match: verdict.match, direction: 'in', account: verdict.account, vat: verdict.vat, ...(verdict.foreignTax ? { foreignTax: verdict.foreignTax } : {}) }, today, 'correction');
   return drafted.ok ? { kind: 'rule', path: drafted.path } : { kind: 'none', why: 'invalid' };
 }
