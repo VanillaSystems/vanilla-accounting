@@ -95,3 +95,10 @@ export function chargesOf(transactions: readonly BankTransaction[], toChf?: ToCh
     splits,
   };
 }
+
+/** Whether two movements are one leg: one ref and one balance (the legs of a split under one ref differ by currency). */
+export const sameLeg = (a: Pick<BankTransaction, 'ref' | 'currency'>, b: Pick<BankTransaction, 'ref' | 'currency'>): boolean => a.ref === b.ref && a.currency === b.currency;
+
+/** What a leg is called in the model's prompt and answer: its ref, or with legs that share it its currency too (`CARD-1@USD`, #287). */
+export const legKey = (tx: Pick<BankTransaction, 'ref' | 'currency'>, legs: readonly Pick<BankTransaction, 'ref'>[]): string =>
+  legs.filter((t) => t.ref === tx.ref).length > 1 ? `${tx.ref}@${tx.currency}` : tx.ref;
