@@ -49,9 +49,11 @@ answers:
     answer: >
       Private use of business assets corrects the input tax (Eigenverbrauch). The year close
       offers a private-use template on the owner's account with K81-B (Ziffer 415). A payment
-      split into a business and a private part books the private part without VAT.
+      split into a business and a private part books the private part without VAT; a booking
+      rule with `private: { share, as: own-use }` books the payment whole with its input tax and
+      corrects the share with the same private-use code (K81-B, Ziffer 415), the effective method only.
     law: [MWSTG Art. 31, ESTV MWST-Info Privatanteile]
-    where: [modules/ch/year-end.yaml#templates, processes/booking.guide.yaml, src/saving/share-rule.ts]
+    where: [modules/ch/year-end.yaml#templates, processes/booking.guide.yaml, src/saving/share-rule.ts, src/booking/classify.ts#ruleBookingLines]
     unverified: >
       The number of the ESTV MWST-Info on private shares (flat rates for vehicles and own
       consumption) was not checked.

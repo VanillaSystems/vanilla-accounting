@@ -1,9 +1,10 @@
 /**
  * Questions between the people who keep the books (src/server/questions.ts):
  *
- *   GET  /api/questions                 every question, the people to pick from, the owner's account
+ *   GET  /api/questions                 every question, the people to pick from, the owner's account, the foreign-VAT account
  *   POST /api/questions                 { on, by, text, choices?, to? } → the question
- *   POST /api/questions/:id/answer      { by, choice } or { by, text } → the question, with what the app did
+ *   POST /api/questions/:id/answer      { by, choice } or { by, text } → the question, with what the app did;
+ *                                       { by, choice: saleAbroad, foreignTax: { rate | amount, account } } splits a foreign VAT off the sale
  *   POST /api/questions/:id/undo        { by } → the answer's bookings and precedent taken back, open again
  *   POST /api/questions/:id/close       { by, how: done | withdrawn }
  */
@@ -12,6 +13,10 @@ import { RequestError, WS, readBooks } from '../books.js';
 import { ownerAccount } from '../../accounting/bank-accounts.js';
 import { readQuestions } from '../../questions/store.js';
 import { peopleOf, type Question, type QuestionsView } from '../../questions/model.js';
+import { foreignTaxAccount } from '../../accounting/sales-without-vat.js';
+import { foreignTaxAccounts } from '../../booking/providers.js';
+import { loadKnowledge } from '../../knowledge/layers.js';
+import { APP_ROOT } from '../../workspace/workspace.js';
 import { APP_ASKER, closeGoneSaleQuestions, goneSaleQuestions } from '../../intake/sale-questions.js';
 import { answerQuestion, askQuestion, closeQuestion, parseAnswer, parseAsk, undoAnswer } from '../questions.js';
 
@@ -39,7 +44,10 @@ function current(): Question[] {
 
 router.get('/api/questions', (_req, res) => {
   const questions = current();
-  res.json({ questions, people: peopleOf(WS.company.owner, questions), owner: ownerAccount(WS) } satisfies QuestionsView);
+  // Read only while a sale question could use it: the businesses' files are not read on every poll.
+  const asks = questions.some((q) => q.topic === 'saleVat' && q.status === 'open');
+  const foreignTax = asks && foreignTaxAccount(foreignTaxAccounts(loadKnowledge(APP_ROOT, WS.paths.root).counterparties), questions);
+  res.json({ questions, people: peopleOf(WS.company.owner, questions), owner: ownerAccount(WS), ...(foreignTax ? { foreignTax } : {}) } satisfies QuestionsView);
 });
 
 router.post('/api/questions', (req, res) => {

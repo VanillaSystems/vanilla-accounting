@@ -22,6 +22,7 @@ import type { Nav } from '../index.js';
 import { lineOf, namesOf, refusalKey, ruleLines } from './rules-model.js';
 import { emptyForm, handRuleOf, type HandForm } from './hand-rule-model.js';
 import { firmCodes } from '../../../accounting/vat-codes.js';
+import { withoutInputTax } from '../../../engines/index.js';
 import { VatCodeField } from '../codes/VatCodeField.js';
 import { codeLabel } from '../codes/names.js';
 import { onBooksChanged } from '../../assistant/store.js';
@@ -172,6 +173,10 @@ function HandRuleForm({ view, nav, payment, onKept }: { view: RulesView; nav: Na
       {codes.length ? (
         <VatCodeField key={started} name="vat" label={t('rules.hand.vat')} defaultValue={f.vat} placeholder={t('rules.hand.noVat')} onValue={(vat) => setF((was) => ({ ...was, vat }))} />
       ) : null}
+      <label>{t('rules.hand.private')}<input className="mono" inputMode="decimal" data-testid="rule-share" value={f.share} onChange={set('share')} /></label>
+      {codes.length && !withoutInputTax() && f.share.trim() ? (
+        <label><input type="checkbox" data-testid="rule-own-use" checked={f.ownUse} onChange={(e) => setF({ ...f, ownUse: e.target.checked })} /> {t('rules.hand.ownUse')}</label>
+      ) : null}
       {(view.names.dimensions ?? []).map((d) => (
         <label key={d.id} data-dimension={d.id}>{d.label}
           <input list={`rule-tag-${d.id}`} value={f.tags[d.id] ?? ''} placeholder={t('tags.none')} onChange={(e) => setF({ ...f, tags: { ...f.tags, [d.id]: e.target.value } })} />
@@ -191,7 +196,9 @@ function HandRuleForm({ view, nav, payment, onKept }: { view: RulesView; nav: Na
 type Done = 'kept' | 'removedDone' | 'discarded';
 
 /** A booking line as the card names it: account and name, VAT code, amount. */
-const lineText = (l: RuleLine, names: RuleNames) => [names.account(l.account) ? `${l.account} ${names.account(l.account)}` : l.account, l.vat && codeLabel(l.vat), fmt(l.amount)].filter(Boolean).join(' · ');
+const accountText = (n: string, names: RuleNames) => (names.account(n) ? `${n} ${names.account(n)}` : n);
+/** A booking line as the card names it; a line without the bank (an own-use correction) with both its accounts. */
+const lineText = (l: RuleLine, names: RuleNames) => [l.against ? `${accountText(l.account, names)} / ${accountText(l.against, names)}` : accountText(l.account, names), l.vat && codeLabel(l.vat), fmt(l.amount)].filter(Boolean).join(' · ');
 
 function PaymentLine({ p, names, national }: { p: PreviewPayment; names: RuleNames; national?: RuleLine[] }) {
   const would = p.would.lines.map((l) => lineText(l, names)).join(' + ');
@@ -378,7 +385,7 @@ function ShareOfferCard({ offer, onRules }: { offer: ShareOffer; onRules?(): voi
   };
   return (
     <div className="ruledraft" data-share={offer.ref}>
-      <span>{t('rules.share.ask', { who, percent: String(offer.percent), account: offer.booking.account })}</span>
+      <span>{t(offer.booking.ownUse ? 'rules.share.askOwnUse' : 'rules.share.ask', { who, percent: String(offer.percent), account: offer.booking.account })}</span>
       {error ? <span className="warnline">{error}</span> : null}
       <span className="ruleacts"><button type="button" className="btn" disabled={busy} onClick={draft}>{t('rules.share.draft')}</button></span>
     </div>

@@ -291,6 +291,36 @@ test('a payment booked in one piece offers no share rule', async () => {
   assert.equal(shareOffer(ws, books, books.transactions.find((t) => t.description === 'Rechnung Post CH August 2026')!.ref), undefined);
 });
 
+test('own use booked by hand on a ref of its own offers «immer so?» as own use: the card counts the payment as booked so, and the kept rule books no second correction', async () => {
+  const { ws } = await company();
+  const books = loadBooks(ws);
+  const tx = books.transactions.find((t) => t.description === 'Rechnung Post CH August 2026')!;
+  update(books, PERSON, (b) => {
+    const e = b.journalEntries.find((x) => x.transactionRef === tx.ref)!;
+    e.vatCode = 'I81';
+    e.origin = 'manual';
+    b.journalEntries.push({ id: 'own-use', transactionRef: 'M2026-900', date: tx.date, accountDebit: '2451', accountCredit: e.accountDebit, amount: Math.round(e.amount * 50) / 100, vatCode: 'K81-B', description: 'Eigenverbrauch Post', origin: 'manual' });
+  });
+  saveBooks(ws, books);
+  const offer = shareOffer(ws, loadBooks(ws), tx.ref)!;
+  assert.deepEqual([offer.percent, offer.booking], [50, { account: '6513', vat: 'I81', private: 50, ownUse: true }]);
+  assert.equal(shareOffer(ws, loadBooks(ws), 'M2026-900')?.ref, tx.ref, 'offered from the correction too: its payment\'s');
+  assert.equal(draftShareRule(ws, tx.ref, '2026-10-31'), POST);
+  assert.match(readFileSync(join(draftDir(ws), POST), 'utf8'), /then: \{ account: "6513", vat: I81, private: \{ share: 50, as: own-use \} \}/);
+  const d = draftRules(ws, POST)!;
+  const shown = d.preview[0].examples.find((x) => x.ref === tx.ref)!;
+  assert.deepEqual(shown.would.lines, shown.now, 'the card shows the payment booked as the rule would');
+  assert.deepEqual(shown.would.lines.map((l) => [l.account, l.against ?? '', l.vat]), [['6513', '', 'I81'], ['2451', '6513', 'K81-B']]);
+  assert.equal((await keepDraft(ws, POST, d.basis, d.confirm)).ok, true);
+  assert.equal(shareOffer(ws, loadBooks(ws), tx.ref), undefined, 'kept: nothing more to offer');
+
+  const again = loadBooks(ws);
+  const was = again.journalEntries.filter((e) => e.transactionRef === tx.ref);
+  again.journalEntries = again.journalEntries.filter((e) => e.transactionRef !== tx.ref);
+  await classifyTransactions(again, [tx], { fx: loadFxResolver(), context: loadClassifyContext(ws) });
+  assert.deepEqual(again.journalEntries.filter((e) => e.transactionRef === tx.ref).map((e) => [e.accountDebit, e.amount]), was.map((e) => [e.accountDebit, e.amount]), 'the payment again, without a second correction beside the hand-booked one');
+});
+
 /** Card payments of the open quarter booked on four accounts today, one privately: what «alles mit Karte 5412» would hit (x02). */
 function cardPayments(ws: Workspace, accounts: string[]): void {
   const books = loadBooks(ws);
