@@ -49,7 +49,7 @@ import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
 import { clearingAccounts, payoutWaitOf, providerOfPayment, type PayoutWait, type Provider } from './providers.js';
 import { splitByReceipts } from './receipt-lines.js';
-import { CUSTOMS_BY, customsSplit, importVatDeductions, type Assessment, type CustomsHold, type CustomsTexts } from './customs-invoice.js';
+import { CUSTOMS_BY, customsSplit, importVatDeductions, ratesImportVat, type Assessment, type CustomsHold, type CustomsTexts } from './customs-invoice.js';
 import { nextManualRef } from '../books/next-ref.js';
 import { salesDefaults } from '../workspace/sells.js';
 import { loadChart, type ChartAccount } from '../workspace/chart.js';
@@ -104,19 +104,24 @@ export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { f
   const entry = (e: Omit<JournalEntry, 'id' | 'transactionRef' | 'origin'>, decided?: { reason: string; by: BookedBy }): JournalEntry =>
     ({ id: randomBytes(8).toString('hex'), transactionRef: tx.ref, ...e, ...fxStamp, origin: 'classify', receipts: [...receipts].sort(), ...(corrects && { corrects }), ...(decided ?? { ...(reason && { reason }), by }) });
 
+  const customs = documents().customs;
   return llmEntries.map((e) => {
     const { accountDebit, accountCredit } = sidesOf(e, tx.direction, bankAccount, isVatAmountCode(e.vatCode));
     const transfer = !!money?.has(accountDebit) && money.has(accountCredit);
     const acquired = acquisition && !transfer ? acquisitionCodeOf({ ...e, accountDebit, accountCredit }, acquisition.documents, acquisition.setup) : undefined;
+    const vatCode = transfer ? undefined : acquired ? acquired.code : signed(permittedCode(e.vatCode), accountDebit, accountCredit, e.amount, bankAccount);
+    // A rate on the import VAT itself is left off: its input tax comes only with the customs assessment, as the one-legged deduction.
+    const importVat = !!customs && ratesImportVat({ accountDebit, vatCode }, customs);
     return entry({
       ...(acquisition && readSupplier(e)),
       date: tx.date,
       accountDebit,
       accountCredit,
       amount: e.amount,
-      vatCode: transfer ? undefined : acquired ? acquired.code : signed(permittedCode(e.vatCode), accountDebit, accountCredit, e.amount, bankAccount),
+      vatCode: importVat ? undefined : vatCode,
       description: e.description || tx.description,
-    }, acquired && { reason: acquisitionReason(acquired), by: { kind: 'code', check: 'acquisitionTax' } });
+    }, importVat ? { reason: wordsIn('de').t('rules.say.importVatRate', { account: accountDebit, code: vatCode! }), by: CUSTOMS_BY }
+      : acquired && { reason: acquisitionReason(acquired), by: { kind: 'code', check: 'acquisitionTax' } });
   });
 }
 

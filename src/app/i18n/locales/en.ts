@@ -3958,6 +3958,7 @@ export default {
     'rules.say.customsSplit': 'the customs invoice by its positions: freight, import VAT, duty and fees each on its account',
     'rules.say.customsDirect': 'import VAT paid to the customs office itself: the assessment is the receipt',
     'rules.say.customsUnproven': 'import VAT {currency} {amount} without input tax deduction: the courier’s invoice does not prove it, only the customs office’s assessment (Veranlagungsverfügung MWST) that names the firm as importer does. Once it is linked, the app books the deduction',
+    'rules.say.importVatRate': 'import VAT booked without input tax, {code} left off: input tax on {account} comes only with the customs office’s assessment, as a deduction without a counter account, never as a rate on the import VAT itself',
     'rules.say.customsProven': 'input tax on the import VAT {currency} {amount} according to the assessment {file}',
     'rules.say.customsDeduction': 'input tax on import VAT according to the assessment {file}',
     'rules.say.customsCorrection': 'correction of entry {id} ({period}): input tax on import VAT according to the assessment {file}, which came after the return',
