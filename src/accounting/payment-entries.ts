@@ -73,7 +73,7 @@ export function bookedStates(books: Pick<Index, 'transactions' | 'journalEntries
 
 /**
  * Whether a movement has a booking of its own. A ref of one movement is booked by any entry on it;
- * the legs of a card charge split across balances under one ref (the camt.053 reader keeps a
+ * the legs of a card charge split across balances under one ref (a bank statement reader keeps a
  * currency split's shared ref) each by an entry on that ref that moves its own bank account, so one
  * booked leg never hides its sibling (#287). A leg on an account the manifest does not name: by any entry.
  */
