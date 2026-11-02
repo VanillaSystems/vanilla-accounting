@@ -3,7 +3,7 @@
  * copy of a fixture index, so a test reads and writes only that copy.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tempWorkspace, writeIndex } from './workspace.js';
 import { workspaceAt, type Workspace } from '../../src/workspace/workspace.js';
@@ -40,18 +40,23 @@ export interface ApiServer {
  * prior-year history/ for classify's prompt. The server finds tests/support/no-model-bin/claude
  * first unless `env.PATH` says otherwise, and listens on 127.0.0.1 unless `env.VANILLA_API_HOST`
  * says otherwise ('' for every interface). `manifestOf`: another workspace's manifest (a demo of
- * another kind of firm) instead of the demo's.
+ * another kind of firm) instead of the demo's. `whole`: the fixture is a workspace copied whole (its receipts, invoices,
+ * knowledge; without its local data/) instead of its books alone.
  */
-export async function startApi(fixture: string, env: Record<string, string> = {}, { manifestOf }: { manifestOf?: string } = {}): Promise<ApiServer> {
+export async function startApi(fixture: string, env: Record<string, string> = {}, { manifestOf, whole = false }: { manifestOf?: string; whole?: boolean } = {}): Promise<ApiServer> {
   const ws = tempWorkspace('belege-api-', manifestOf);
   const { paths } = ws;
   const root = paths.root;
-  mkdirSync(paths.history);
-  writeFileSync(join(paths.history, 'prior-year.Konten.txt'), '1021\tBank\n4400\tAufwand für bezogene Dienstleistungen\n6570\tInformatikaufwand\n');
-  writeFileSync(join(paths.history, 'prior-year.Buchungen-sample.tsv'), 'Datum\tBeschreibung\tKtSoll\tKtHaben\tBetrag\n');
-  // A fixture is an index (books.json's content before ADR 0013), or a workspace whose books are copied.
   const source = join(REPO, fixture);
-  writeIndex(ws, source.endsWith('.json') ? JSON.parse(readFileSync(source, 'utf8')) : JSON.parse(JSON.stringify(loadBooks(workspaceAt(source)))));
+  if (whole) {
+    cpSync(source, root, { recursive: true, filter: (src) => src !== join(source, 'data') });
+  } else {
+    mkdirSync(paths.history);
+    writeFileSync(join(paths.history, 'prior-year.Konten.txt'), '1021\tBank\n4400\tAufwand für bezogene Dienstleistungen\n6570\tInformatikaufwand\n');
+    writeFileSync(join(paths.history, 'prior-year.Buchungen-sample.tsv'), 'Datum\tBeschreibung\tKtSoll\tKtHaben\tBetrag\n');
+    // A fixture is an index (books.json's content before ADR 0013), or a workspace whose books are copied.
+    writeIndex(ws, source.endsWith('.json') ? JSON.parse(readFileSync(source, 'utf8')) : JSON.parse(JSON.stringify(loadBooks(workspaceAt(source)))));
+  }
   // The runs and the approvals live outside the workspace, by default in the user's application data.
   const outside = [`${root}-runs`, `${root}-approvals`];
   const server: ChildProcess = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), '--import', import.meta.resolve('./exit-with-parent.ts'), join(REPO, 'src/server/main.ts')], {

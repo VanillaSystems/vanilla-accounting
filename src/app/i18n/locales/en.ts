@@ -3169,6 +3169,8 @@ export default {
     'error.gone.file': 'This file is not in the inbox (any more).',
     'error.reportCorrection.gone': 'This sales report is not in the books (any more): nothing booked.',
     'error.reportCorrection.notOffered': 'The sales report no longer offers this refund as a correction: booked already, or no payments report dates it. Nothing booked.',
+    'error.statementUndo.expired': 'The removal can no longer be undone: add the statement again.',
+    'error.statementUndo.changed': 'The books changed since the removal: nothing brought back. Add the statement again.',
     'error.gone.quarantined': 'This file is not in quarantine (any more).',
     'error.fileReferenced': '{file} is not deleted. Still referring to it: {refs}.',
     'error.fileReferenced.payment': 'payment {ref}',

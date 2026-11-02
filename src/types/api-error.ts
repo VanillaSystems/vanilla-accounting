@@ -135,6 +135,8 @@ export type ApiRefusal =
   | { code: 'notInTrash' }
   | { code: 'deletedAgain' }
   | { code: 'alreadyBack' }
+  /** The undo of «Auszug entfernen» (POST /api/statements/restore): too old to take back, or the books changed what the removal left. */
+  | { code: 'statementUndo'; params: { why: 'expired' | 'changed' } }
   | { code: 'statement'; params: StatementParams }
   /**
    * A statement read without camt.053 (#217) the drop row does not import: a line without a day or

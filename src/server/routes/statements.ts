@@ -8,12 +8,14 @@
  * before anything is written.
  */
 import express, { Router } from 'express';
+import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { accountForStatement, unknownOf, type StatementProblem } from '../../accounting/bank-accounts.js';
 import { bankAccountFor, legOf, madeByHand } from '../../workspace/money-accounts.js';
-import { heldWithout, mergeBankFiles, readStatementFiles, readTransactions, reconcileWithFiles, sourceOf, structuredSpans, transactionsOfFiles, withCamtBalances, withinBooks, type RateOf } from '../../books/bank-import.js';
+import { heldWithout, mergeBankFiles, readStatementFiles, readTransactions, reconcileWithFiles, sourceOf, structuredSpans, transactionsOfFiles, withinBooks, type RateOf } from '../../books/bank-import.js';
 import { besidePath } from '../../books/pdf-reads.js';
+import { changesSince, partsOf, snapshot, stillAsLeft, takeBack, type RecordChange } from '../../books/record-diff.js';
 import { keepAskTable } from '../statement-asks.js';
 import { cancelReads, forgetRead, pdfFacts, readsView, saveTable, startReads } from '../statement-reads.js';
 import { statementPdf } from '../../books/statement-facts.js';
@@ -21,7 +23,7 @@ import { compactIban, readBankStatements } from '../../workspace/bank-statements
 import { periodLock, type Books } from '../../books/store.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { rateDateOf } from '../../accounting/fx-conversion.js';
-import { openYear } from '../../books/years.js';
+import { openYear, type Part } from '../../books/years.js';
 import { assignUniqueRefs, readCamt, transactionsOf, type CamtStatement } from '../../providers/camt053/camt053.js';
 import { namesBank, proposedAccount } from '../../accounting/statement-bank.js';
 import { statementDetails } from '../../providers/statement-files.js';
@@ -37,12 +39,11 @@ import { pending } from '../../books/reconcile.js';
 import { bookInvoiceEvents } from '../../invoices/events.js';
 import { fileReceipts, paymentContext } from '../../invoices/service.js';
 import type { AccountChoice, StatementRefusal, UnknownAccount } from '../../types/api-error.js';
-import type { BankTransaction, JournalEntry, Mapping, StatementClosingBalance, StatementImport } from '../../types/index.js';
+import type { BankTransaction, StatementClosingBalance, StatementImport } from '../../types/index.js';
 import { parseIban, type StatementKind } from '../../workspace/banks.js';
 import { findFile, yearPaths, type LedgerBankAccount } from '../../workspace/workspace.js';
 import { RequestError, WS, assertOpen, patchBody, readBooks, reopenWorkspace, updateBooks, updateBooksWithEffects, withBooks } from '../books.js';
 import { patchManifest } from '../../workspace/manifest-write.js';
-import { addEntry } from '../edits.js';
 import { askAbout, closeAsk, correctAsk, importAsk } from '../statement-asks.js';
 import { openingLock, withOpening } from '../../accounting/opening-balance.js';
 import { yearEndAccounts } from '../../accounting/year-close.js';
@@ -392,13 +393,14 @@ function refsOnlyIn(file: string): string[] {
 
 /**
  * A statement taken back (the drop dialog's «Rückgängig», the statement page's «Auszug entfernen»,
- * the toast after an import, r9k-3): its file, its closing balances, the payments it alone brought
+ * the toast after an import, r9k-3): its file, its row and closing balances, the payments it alone brought
  * (`refs`: as the import recorded them, else read from the folder) with their links and entries;
  * a payment another file on disk still holds (the bank's exports overlap) stays with its bookings,
- * and the statement list is read again from the folder. Never in the closed period, never over an
- * entry a person booked by hand (such a payment stays, and the refusal says so).
+ * and every other statement and balance stays as the books hold it. Never in the closed period (a
+ * filed month's statement and its balance stay), never over an entry a person booked by hand (such a
+ * payment stays, and the refusal says so). Answers what it took, for its undo.
  */
-export function removeStatement(file: string, refs?: readonly string[], o: { keepPdf?: boolean } = {}): StatementRemoved {
+export function removeStatement(file: string, refs?: readonly string[], o: { keepPdf?: boolean } = {}): StatementRemoval {
   const path = findFile(WS.paths, 'statements', file);
   if (!path) throw new RequestError(404, `Den Auszug ${file} gibt es nicht.`, { code: 'gone', params: { what: 'file' } });
   const books = readBooks();
@@ -421,12 +423,19 @@ export function removeStatement(file: string, refs?: readonly string[], o: { kee
   // A kept statement PDF takes its table along (#243).
   const read = /\.pdf$/i.test(path) && existsSync(besidePath(path)) ? besidePath(path) : undefined;
   const readBytes = read ? readFileSync(read) : undefined;
+  // The statement's rows and balances, and only those: the others stay as the books hold them, whatever the folder would say of them now.
+  const bank = file.slice(0, file.indexOf('/'));
+  const names = new Set([basename(path), ...(besideBytes ? [basename(beside!)] : [])]);
+  const isMine = (s: { bank: string; filename: string }) => s.bank === bank && names.has(s.filename);
+  const ownBalance = (x: StatementClosingBalance) => x.bank === bank && names.has(x.sourceFile);
+  assertOpen(books, [...books.bankStatements.filter(isMine).map((s) => s.toDate), ...(books.statementBalances ?? []).filter(ownBalance).map((x) => x.date)], 'discardFile');
   rmSync(path, { force: true });
   if (besideBytes) rmSync(beside!, { force: true });
   if (read) rmSync(read, { force: true });
+  const deleted = [{ path, bytes }, ...(besideBytes ? [{ path: beside!, bytes: besideBytes }] : []), ...(read && readBytes ? [{ path: read, bytes: readBytes }] : [])];
   try {
-    return updateBooks((b) => {
-      const removed = { entries: b.journalEntries.filter((e) => mine.has(e.transactionRef)), mappings: b.mappings.filter((m) => mine.has(m.transactionRef)) };
+    return updateBooks((b): StatementRemoval => {
+      const start = snapshot(b);
       b.transactions = b.transactions.filter((t) => !mine.has(t.ref));
       // A movement made by hand this statement confirmed stays, with its bookings, as not confirmed (#88).
       for (const t of b.transactions) if (t.statement !== undefined && mine.has(t.statement) && !lock.isClosed(t.date)) delete t.statement;
@@ -443,13 +452,14 @@ export function removeStatement(file: string, refs?: readonly string[], o: { kee
         for (const m of b.mappings) if (m.transactionRef === was) m.transactionRef = now.ref;
         for (const x of b.transactions) if (x.statement === was) x.statement = now.ref;
       }
+      // A PDF a removed camt.053 was written from and that stays (`keepPdf`) is the month's statement again.
       const files = readStatementFiles(WS);
-      b.bankStatements = files.statements;
-      const balances = withCamtBalances(b.statementBalances?.filter((x) => x.sourceFile !== basename(file)), files.balances);
-      if (balances) b.statementBalances = balances;
+      b.bankStatements = [...b.bankStatements.filter((s) => !isMine(s)), ...files.statements.filter(isMine)];
+      const balances = (b.statementBalances ?? []).filter((x) => !ownBalance(x));
+      if (balances.length) b.statementBalances = balances;
       else delete b.statementBalances;
       reconcileWithFiles(WS, b, differenceAccountOf(WS));
-      return { ok: true, removed };
+      return { files: deleted, changes: changesSince(start, b), parts: partsOf(start) };
     });
   } catch (e) {
     writeFileSync(path, bytes);
@@ -461,8 +471,47 @@ export function removeStatement(file: string, refs?: readonly string[], o: { kee
 
 const readCamtSafe = (bytes: Buffer) => { try { return readCamt(bytes.toString('utf8')); } catch { return undefined; } };
 
-/** What a removal took with the statement's payments: the undo puts them back once the file is read again (r10h-3). */
-export interface StatementRemoved { ok: true; removed: { entries: JournalEntry[]; mappings: Mapping[] } }
+/** What a removal took: the files it deleted and every record it changed, so its undo puts back exactly that (r10h-3). */
+export interface StatementRemoval { files: { path: string; bytes: Buffer }[]; changes: RecordChange[]; parts: Set<Part> }
+/** The answer to «Auszug entfernen»: `undo` names the removal for POST /api/statements/restore. */
+export interface StatementRemoved { ok: true; undo: string }
+
+/** The last removals, for their toast's «Rückgängig»; an older one is refused as expired. */
+const removals = new Map<string, StatementRemoval>();
+const KEPT_REMOVALS = 10;
+
+function keepRemoval(removal: StatementRemoval): StatementRemoved {
+  const undo = randomUUID();
+  removals.set(undo, removal);
+  for (const old of [...removals.keys()].slice(0, Math.max(0, removals.size - KEPT_REMOVALS))) removals.delete(old);
+  return { ok: true, undo };
+}
+
+/**
+ * The undo of «Auszug entfernen» (r9k-3, r10h-3): the removed files go back and every record the
+ * removal changed is put back as it was, so the books read byte for byte as before; no file is read
+ * again and no run books anything. Refused when the removal is too old, when a file of its name is
+ * there again, or when the books changed what the removal left since.
+ */
+router.post('/api/statements/restore', (req, res) => {
+  const { undo } = patchBody(req.body, ['undo']);
+  const removal = typeof undo === 'string' ? removals.get(undo) : undefined;
+  if (!removal) throw new RequestError(410, 'Das Entfernen lässt sich nicht mehr rückgängig machen.', { code: 'statementUndo', params: { why: 'expired' } });
+  const there = removal.files.find((f) => existsSync(f.path));
+  if (there) throw new RequestError(409, `Datei ${basename(there.path)} existiert bereits.`, { code: 'fileExists', params: { filename: basename(there.path) } });
+  for (const f of removal.files) { mkdirSync(dirname(f.path), { recursive: true }); writeFileSync(f.path, f.bytes); }
+  try {
+    withBooks(res, (books) => {
+      if (!stillAsLeft(removal.changes, books)) throw new RequestError(409, 'Die Bücher haben sich seit dem Entfernen geändert: nichts zurückgeholt.', { code: 'statementUndo', params: { why: 'changed' } });
+      takeBack(removal.changes, books, removal.parts);
+      return { ok: true };
+    });
+  } catch (e) {
+    for (const f of removal.files) rmSync(f.path, { force: true });
+    throw e;
+  }
+  removals.delete(undo as string);
+});
 
 /**
  * What a statement file read in says about itself (Kontoauszüge › Dateien, #208): its own words
@@ -478,7 +527,7 @@ router.get('/api/statements/:bank/:filename/details', (req, res) => {
 });
 
 router.delete('/api/statements/:bank/:filename', (req, res) => {
-  res.json(removeStatement(`${req.params.bank}/${basename(req.params.filename)}`, undefined, { keepPdf: req.query.keepPdf === '1' }));
+  res.json(keepRemoval(removeStatement(`${req.params.bank}/${basename(req.params.filename)}`, undefined, { keepPdf: req.query.keepPdf === '1' })));
 });
 
 /** A kept statement PDF's question (#254, src/server/statement-asks.ts). */
@@ -596,28 +645,6 @@ router.post('/api/reconciliations/:account', (req, res) => {
     saveInvoices(WS, book);
   }
   res.json({ ok: true });
-});
-
-/**
- * The undo of «Auszug entfernen», second half (r10h-3): after the file is read again, the bookings
- * and links the removal took go back as they were (who booked them included), no run in between.
- * An entry whose payment the books do not hold, or one booked meanwhile, is refused with the rest.
- */
-router.post('/api/statements/bookings', (req, res) => {
-  const b = patchBody(req.body, ['entries', 'mappings']);
-  const entries = Array.isArray(b.entries) ? b.entries as JournalEntry[] : [];
-  const mappings = Array.isArray(b.mappings) ? b.mappings as Mapping[] : [];
-  for (const e of entries) if (!e || typeof e.id !== 'string' || typeof e.transactionRef !== 'string' || typeof e.date !== 'string') throw new RequestError(400, 'entries: Buchungen mit id, transactionRef und date.');
-  for (const m of mappings) if (!m || typeof m.receiptId !== 'string' || typeof m.transactionRef !== 'string') throw new RequestError(400, 'mappings: receiptId und transactionRef.');
-  withBooks(res, (books) => {
-    assertOpen(books, entries.map((e) => e.date), 'newEntry');
-    for (const e of entries) addEntry(books, { ...e, description: e.description ?? e.transactionRef });
-    const refs = new Set(books.transactions.map((t) => t.ref));
-    const receipts = new Set(books.receipts.map((r) => r.id));
-    const has = (m: Mapping) => books.mappings.some((x) => x.receiptId === m.receiptId && x.transactionRef === m.transactionRef);
-    for (const m of mappings) if (refs.has(m.transactionRef) && receipts.has(m.receiptId) && !has(m)) books.mappings.push(m);
-    return { ok: true };
-  });
 });
 
 /**

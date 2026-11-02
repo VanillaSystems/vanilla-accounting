@@ -3169,6 +3169,8 @@ export default {
     'error.gone.file': 'Ce fichier n’est pas (plus) dans la boîte de réception.',
     'error.reportCorrection.gone': 'Ce rapport de ventes n’est pas (plus) dans les livres : rien comptabilisé.',
     'error.reportCorrection.notOffered': 'Le rapport de ventes ne propose plus ce remboursement comme correction : déjà comptabilisé, ou aucun rapport de paiements ne le date. Rien comptabilisé.',
+    'error.statementUndo.expired': 'La suppression ne peut plus être annulée : ajoutez à nouveau le relevé.',
+    'error.statementUndo.changed': 'Les livres ont changé depuis la suppression : rien n’a été rétabli. Ajoutez à nouveau le relevé.',
     'error.gone.quarantined': 'Ce fichier n’est pas (plus) en quarantaine.',
     'error.fileReferenced': '{file} n’est pas supprimé. Y renvoie encore : {refs}.',
     'error.fileReferenced.payment': 'paiement {ref}',
