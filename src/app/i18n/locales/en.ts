@@ -165,6 +165,7 @@ export default {
     'error.sourceSecret': 'A password or key never goes into a source or the chat: it goes into the field on the source\'s card.',
     'error.sourceAppId': '{id} is the name of the app\'s own code: the source needs a name of its own.',
     'error.localOnly': 'Only reachable from this computer.',
+    'error.foreignHost': 'Only reachable as localhost, 127.0.0.1 or [::1], not under another name.',
     'error.phoneToken': "This phone is not paired: scan the code on the Mac again.",
     'error.periodClosed': 'Period closed up to {date}.',
     'error.periodApproved': '{period} is approved and waits to be filed: until then nothing in this period changes. To change it, press “Back” under Tasks and review the return again.',

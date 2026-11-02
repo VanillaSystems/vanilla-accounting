@@ -14,6 +14,10 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Security
+
+- The API of `npm start` answers this computer only under a loopback name: `localhost`, `127.0.0.1` or `[::1]`, on any port. Before, a web page of any site open in your browser could point its own name at 127.0.0.1 (DNS rebinding) and then read and change the books through the browser, since the server only looked at where a connection came from, and that browser is on this computer. A request from this computer under any other name is now treated as from the network: the books, receipts and every write are refused (403, `foreignHost`, «Nur unter localhost, 127.0.0.1 oder [::1] erreichbar, nicht unter einem anderen Namen.»), and the phone's paths answer as they answer the network, the upload and status only with the pairing token once one is set. The phone app on the local network is unchanged: it reaches the upload and status under the Mac's network address, with its token. The Vite dev server (`npm run dev`) forwards your browser's `localhost` name and checks names itself. The Mac app had this check already; its refusal now carries the same code.
+
 ### Fixed
 
 - **⚠ action** Security: under `npm start` without `VANILLA_PHONE_TOKEN`, anyone on the same network could upload files into the inbox (`POST /api/upload`) and query `/api/status`. Now the server makes a new random pairing token at every start, the terminal prints the pairing link with it for each network address, and a request from another device to those two paths without it is refused (401 `phoneToken`). The books, receipts and every other path were already refused from the network (403 `localOnly`) and still are; requests from this computer need no token, as before. Action: a phone paired with `npm start` scans the new link after each restart, unless `VANILLA_PHONE_TOKEN` in `.env` keeps one code. The Mac app is unchanged.

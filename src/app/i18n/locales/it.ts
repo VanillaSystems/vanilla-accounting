@@ -165,6 +165,7 @@ export default {
     'error.sourceSecret': 'Una password o una chiave non va mai in una fonte né nella chat: va nel campo sulla scheda della fonte.',
     'error.sourceAppId': '{id} è il nome di codice dell’app: la fonte ha bisogno di un nome suo.',
     'error.localOnly': 'Accessibile solo da questo computer.',
+    'error.foreignHost': 'Accessibile solo come localhost, 127.0.0.1 o [::1], non con un altro nome.',
     'error.phoneToken': "Questo telefono non è associato: scansionare di nuovo il codice sul Mac.",
     'error.periodClosed': 'Periodo chiuso fino al {date}.',
     'error.periodApproved': '{period} è approvato e attende l’inoltro: fino ad allora nulla cambia in questo periodo. Per modificare, premi «Indietro» sotto Compiti e verifica di nuovo il rendiconto.',

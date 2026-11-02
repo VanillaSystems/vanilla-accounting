@@ -40,7 +40,7 @@ import { aiSetup } from './ai-setup.js';
 import { NoClaudeError } from '../llm/providers/claude-cli.js';
 import { AiRefused } from '../llm/provider.js';
 import { aiOff } from '../llm/off.js';
-import { NETWORK_PATHS, fromThisComputer, phoneGate } from './phone.js';
+import { NETWORK_PATHS, fromThisComputer, loopbackPeer, phoneGate, refuseForeignHost } from './phone.js';
 
 export const app = express();
 
@@ -55,6 +55,7 @@ const INVOICE_STATUS: Record<InvoiceRefusal, number> = {
 // only to this computer.
 app.use((req, res, next) => {
   if (fromThisComputer(req) || NETWORK_PATHS.has(req.path)) return next();
+  if (loopbackPeer(req)) { refuseForeignHost(res); return; }
   res.status(403).json({ error: 'Nur von diesem Computer aus erreichbar.', code: 'localOnly' } satisfies ApiErrorBody);
 });
 app.use(phoneGate);

@@ -165,6 +165,7 @@ export default {
     'error.sourceSecret': 'Un mot de passe ou une clé ne va jamais dans une source ni dans le chat : il va dans le champ de la carte de la source.',
     'error.sourceAppId': '{id} est le nom d’un code de l’app : la source a besoin de son propre nom.',
     'error.localOnly': 'Accessible uniquement depuis cet ordinateur.',
+    'error.foreignHost': 'Accessible uniquement sous localhost, 127.0.0.1 ou [::1], pas sous un autre nom.',
     'error.phoneToken': "Ce téléphone n'est pas couplé : scanner à nouveau le code sur le Mac.",
     'error.periodClosed': 'Période clôturée jusqu’au {date}.',
     'error.periodApproved': '{period} est approuvé et attend son dépôt : jusque-là, rien ne change dans cette période. Pour modifier, presse « Retour » sous Tâches et vérifie à nouveau le décompte.',

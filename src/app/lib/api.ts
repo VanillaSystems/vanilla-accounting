@@ -142,6 +142,7 @@ export function errorText(e: unknown): string {
   switch (b.code) {
     case 'readonly': return t('error.readonly');
     case 'localOnly': return t('error.localOnly');
+    case 'foreignHost': return t('error.foreignHost');
     case 'phoneToken': return t('error.phoneToken');
     case 'manualOnly': return t('error.manualOnly');
     case 'booksChanged': return t('error.booksChanged');
