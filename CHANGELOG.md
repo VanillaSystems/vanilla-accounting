@@ -14,6 +14,11 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Changed
+
+- A page whose link names no period now opens on the quarter of the newest payment, receipt or booking, not on the oldest quarter not filed yet. Before, in November the demo opened on Q2 and October's files seemed missing. Files you drop move the page to where they landed (a statement's last booking day, a receipt's date once read), and an invoice you issue is shown in its own period, so it no longer vanishes from a list of another quarter. MWST says beside the state when an earlier return is not filed yet («Q2 2026 nicht eingereicht · fällig seit 31.08.2026»), a link to it.
+- The period picker applies a quarter, a year or another preset with one click; «Anwenden» is left for «Benutzerdefiniert», whose calendar opens only when you choose it.
+
 ### Security
 
 - The API of `npm start` answers this computer only under a loopback name: `localhost`, `127.0.0.1` or `[::1]`, on any port. Before, a web page of any site open in your browser could point its own name at 127.0.0.1 (DNS rebinding) and then read and change the books through the browser, since the server only looked at where a connection came from, and that browser is on this computer. A request from this computer under any other name is now treated as from the network: the books, receipts and every write are refused (403, `foreignHost`, «Nur unter localhost, 127.0.0.1 oder [::1] erreichbar, nicht unter einem anderen Namen.»), and the phone's paths answer as they answer the network, the upload and status only with the pairing token once one is set. The phone app on the local network is unchanged: it reaches the upload and status under the Mac's network address, with its token. The Vite dev server (`npm run dev`) forwards your browser's `localhost` name and checks names itself. The Mac app had this check already; its refusal now carries the same code.

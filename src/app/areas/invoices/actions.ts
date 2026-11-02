@@ -70,11 +70,12 @@ export async function deleteDraft(nav: Nav, draft: Draft, next?: Invoice): Promi
   nav.toast(t('invoices.draftDeleted'), draft.kind === 'credit-note' ? undefined : () => { void newDraft(nav, { id: draft.customerId, name: '' }, content); });
 }
 
-export async function issue(nav: Nav, draft: Draft): Promise<Issued | undefined> {
+/** Issues the draft and shows it in a period that holds its date (F10): the period on screen, `current`, when it does. */
+export async function issue(nav: Nav, draft: Draft, current: Period): Promise<Issued | undefined> {
   const issued = await run(nav, api.issue(draft.id));
   if (!issued) return undefined;
   await reloadInvoices();
-  nav.select(invoicePath(issued));
+  nav.go(invoiceAt(issued, current));
   nav.toast(t(issued.kind === 'credit-note' ? 'invoices.creditIssued' : 'invoices.issued', { number: issued.number }));
   return issued;
 }

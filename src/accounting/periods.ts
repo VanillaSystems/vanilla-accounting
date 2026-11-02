@@ -202,3 +202,22 @@ export function booksOpenPeriod(books: { config?: { closedThrough?: IsoDate }; t
   const first = books.config?.closedThrough ? undefined : books.transactions.reduce<IsoDate | undefined>((m, x) => (!m || x.date < m ? x.date : m), undefined);
   return openFilingPeriod(books.config?.closedThrough, today, length, first);
 }
+
+/**
+ * The filing period of the books' newest payment, receipt or entry: what a page shows unless its
+ * link names a period, so new files are in view where they landed. A date after today counts as
+ * today; books with nothing dated show their open period.
+ */
+export function dataPeriod(books: {
+  config?: { closedThrough?: IsoDate };
+  transactions: Array<{ date: IsoDate }>;
+  receipts?: Array<{ date?: IsoDate }>;
+  journalEntries?: Array<{ date: IsoDate }>;
+}, today: IsoDate, length: FilingLength): Period {
+  let newest: IsoDate | undefined;
+  for (const xs of [books.transactions, books.receipts ?? [], books.journalEntries ?? []]) {
+    for (const { date } of xs) if (date && (!newest || date > newest)) newest = date;
+  }
+  if (!newest) return booksOpenPeriod(books, today, length);
+  return parsePeriod(filingKeyOf(newest < today ? newest : today, length), today)!;
+}

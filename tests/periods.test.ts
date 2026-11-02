@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { entriesForReturn } from '../src/accounting/declarations.js';
-import { parsePeriod, rangeToken, vatPeriodOf, RELATIVE_PRESETS, derivePeriod, isIsoDate, inPeriod, openFilingPeriod, booksOpenPeriod, filingKeyOf, isFilingKey, type FilingLength } from '../src/accounting/periods.js';
+import { parsePeriod, rangeToken, vatPeriodOf, RELATIVE_PRESETS, derivePeriod, isIsoDate, inPeriod, openFilingPeriod, booksOpenPeriod, dataPeriod, filingKeyOf, isFilingKey, type FilingLength } from '../src/accounting/periods.js';
 import './support/jurisdiction.js';
 import { chart } from '../src/engines/index.js';
 
@@ -189,4 +189,14 @@ test('books that never filed work on the period of their first payment; filed bo
   assert.equal(booksOpenPeriod({ transactions: [tx('2026-08-14'), tx('2026-07-02')] }, '2026-10-15', 'quarter').token, '2026-Q3');
   assert.equal(booksOpenPeriod({ transactions: [] }, '2026-10-15', 'quarter').token, '2026-Q4');
   assert.equal(booksOpenPeriod({ config: { closedThrough: '2026-06-30' }, transactions: [tx('2026-01-05')] }, '2026-10-15', 'quarter').token, '2026-Q3');
+});
+
+test('a page without a period shows the period of the newest data, not the oldest unfiled one (F10)', () => {
+  const tx = (date: string) => ({ date });
+  const filedQ1 = { closedThrough: '2026-03-31' };
+  assert.equal(dataPeriod({ config: filedQ1, transactions: [tx('2026-04-02'), tx('2026-09-30')] }, '2026-11-02', 'quarter').token, '2026-Q3');
+  assert.equal(dataPeriod({ config: filedQ1, transactions: [tx('2026-09-30')], receipts: [{ date: '2026-10-21' }, {}] }, '2026-11-02', 'quarter').token, '2026-Q4', 'a dropped October receipt moves it');
+  assert.equal(dataPeriod({ config: filedQ1, transactions: [tx('2026-09-30')], journalEntries: [tx('2027-01-15')] }, '2026-11-02', 'quarter').token, '2026-Q4', 'a date after today counts as today');
+  assert.equal(dataPeriod({ config: filedQ1, transactions: [tx('2026-05-01')] }, '2026-11-02', 'half').token, '2026-H1');
+  assert.equal(dataPeriod({ config: filedQ1, transactions: [] }, '2026-11-02', 'quarter').token, '2026-Q2', 'nothing dated: the open period');
 });

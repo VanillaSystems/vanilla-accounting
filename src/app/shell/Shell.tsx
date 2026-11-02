@@ -4,7 +4,7 @@
  * Areas own only their list, detail and keys (docs/redesign/architecture.md §3).
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { localToday, booksOpenPeriod, filingKeyOf, parsePeriod } from '../../accounting/periods.js';
+import { localToday, booksOpenPeriod, dataPeriod, filingKeyOf, parsePeriod, type Period } from '../../accounting/periods.js';
 import { AREAS, DOCK, areaOf, type Area, type AreaProps, type LegendItem, type Nav, type PaletteItem } from '../areas/index.js';
 import { useIndex } from '../hooks/use-index.js';
 import type { Index } from '../../types/index.js';
@@ -83,18 +83,19 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const aiOpen = useAssistant().open;
 
   const area = areaOf(loc.route);
-  const open = booksOpenPeriod(books, localToday(), filing().length);
-  const period = loc.query.period ?? open;
+  // Without a period in the link, a page shows where the newest data is (F10).
+  const latest = dataPeriod(books, localToday(), filing().length);
+  const period = loc.query.period ?? latest;
 
   const current = useRef(loc);
   current.current = loc;
   const nav: Nav = useMemo(() => ({
-    // urls.md: the open period is left out of a link.
-    go: (loc) => go(loc.query.period?.token === open.token ? { ...loc, query: { ...loc.query, period: undefined } } : loc),
+    // urls.md: the period of the newest data is left out of a link.
+    go: (loc) => go(loc.query.period?.token === latest.token ? { ...loc, query: { ...loc.query, period: undefined } } : loc),
     select: (route) => go({ route, query: current.current.query }),
     setQuery: (patch) => {
       const query: Query = { ...current.current.query, ...patch };
-      if (query.period?.token === open.token) delete query.period;
+      if (query.period?.token === latest.token) delete query.period;
       for (const k of Object.keys(query) as Array<keyof Query>) if (query[k] === undefined) delete query[k];
       // Two patches in one event (a chip added and the search cleared) both hold: the next one builds on this one.
       current.current = { ...current.current, query };
@@ -103,7 +104,12 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
     toast,
     dismissToast,
     refresh,
-  }), [go, toast, dismissToast, refresh, open.token]);
+  }), [go, toast, dismissToast, refresh, latest.token]);
+
+  /** Where dropped files landed: the area's list in that period, its first row selected (the one shown before may not be in it). */
+  const showLanded = (next: Period) => {
+    if (!area.periodless) nav.go({ route: AREA_HOME[area.id], query: { ...current.current.query, period: next } });
+  };
 
   const props: AreaProps = { route: loc.route, query: loc.query, period, books, nav, canEdit };
   const propsRef = useRef(props);
@@ -301,7 +307,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
         onLanguage={(anchor) => setOverlay({ kind: 'language', anchor: anchor.getBoundingClientRect() })}
       />
       <Sidebar page={picked ? selectionContext(picked) : pageContext(loc.route, books)} books={books} onGo={(route) => nav.go({ route, query: {} })} />
-      <DropDialog books={books} refresh={refresh} onGo={(loc) => nav.go(loc)} />
+      <DropDialog books={books} refresh={refresh} period={period} onGo={(loc) => nav.go(loc)} onLanded={showLanded} />
       <Corner onAssistant={toggleAssistant} onGo={(route) => nav.go({ route, query: {} })} />
       <Dock current={loc.route.area} books={books} keys={dockKeys} wide={navWide} onToggle={toggleNav} nav={nav} canEdit={canEdit} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
       {toastNode}
