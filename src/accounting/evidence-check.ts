@@ -9,9 +9,11 @@ import { baseCurrency, vat } from '../engines/index.js';
 import type { InputTaxProof, JournalEntry, Receipt } from '../types/index.js';
 
 /**
- * `decided`: a person or the AI sidebar on her wish chose the code (JournalEntry.by): the task
- * explains the contradiction and offers no click, a deliberate code beats the receipt rule's
- * default (r8h-22). A minus rate code (-M81, a credit note) lowers the input tax and claims
+ * `decided`: a person or the AI sidebar on her wish chose the code (JournalEntry.by) with the
+ * receipts linked now before her: the task explains the contradiction and offers no click, a
+ * deliberate code beats the receipt rule's default (r8h-22). A receipt linked after her choice (the
+ * entry's `receipts` lacks it: «Ohne Vorsteuer buchen», then the ticket turns up) is evidence she
+ * never saw, so the click stays (F13). A minus rate code (-M81, a credit note) lowers the input tax and claims
  * nothing, so it is never flagged without a receipt.
  */
 export type EvidenceCheck =
@@ -56,7 +58,8 @@ export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], close
   const [, sign, family] = m;
   const own = lineReceipts(e, receipts);
   const shown = own.map(swissRate).find((rate) => rate !== undefined);
-  const decided = e.by?.kind === 'person' || e.by?.kind === 'assistant' ? { decided: true as const } : {};
+  const sawAll = !e.receipts || receipts.every((r) => e.receipts!.includes(r.id));
+  const decided = (e.by?.kind === 'person' || e.by?.kind === 'assistant') && sawAll ? { decided: true as const } : {};
   if (info.rate === 0) {
     if (shown === undefined) return undefined;
     const boxes = vat().codes.purchaseBoxes;
