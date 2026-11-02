@@ -4,8 +4,11 @@
  * shows it claims input tax without proof. The check only names the code a person's click would set
  * (MISSION.md: a correction is never silently overwritten). Filed quarters, corrections, sales
  * codes, Bezugsteuer and VAT-amount codes are never flagged; a receipt not read yet is no evidence.
+ * A line on the import VAT account is never offered a rate (src/booking/customs-invoice.ts
+ * ratesImportVat): its input tax is only the one-legged deduction an assessment proves, a rate on
+ * the import VAT would claim the rate's tax on the tax itself.
  */
-import { baseCurrency, vat } from '../engines/index.js';
+import { baseCurrency, documents, vat } from '../engines/index.js';
 import type { InputTaxProof, JournalEntry, Receipt } from '../types/index.js';
 
 /**
@@ -58,7 +61,8 @@ export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], close
   const shown = own.map(swissRate).find((rate) => rate !== undefined);
   const decided = e.by?.kind === 'person' || e.by?.kind === 'assistant' ? { decided: true as const } : {};
   if (info.rate === 0) {
-    if (shown === undefined) return undefined;
+    const importVat = documents().customs?.positions.importVat.account;
+    if (shown === undefined || (importVat && (e.accountDebit === importVat || e.accountCredit === importVat))) return undefined;
     const boxes = vat().codes.purchaseBoxes;
     const code = vat().codes.purchaseAt(shown, family === 'M' ? boxes.costOfGoods : boxes.otherwise);
     return code ? { kind: 'receiptShowsVat', rate: shown, code: sign + code, receipts: receipts.map((r) => r.id), ...decided } : undefined;
