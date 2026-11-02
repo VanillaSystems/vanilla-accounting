@@ -70,12 +70,17 @@ test('the check: opening + payments − closing against the bank, and the ledger
   assert.deepEqual({ open: c.open, close: c.close, inc: c.inc, out: c.out, n: c.n, diff: c.diff, ok: c.ok }, { open: 1000, close: 950, inc: 50, out: 100, n: 2, diff: 0, ok: true });
   assert.equal(c.book, 950);
   assert.equal(c.bookDiff, 0);
+  assert.equal(c.agrees, true, 'the payments add up and the books show the bank\'s close: «Stimmt»');
 
   const off = bankOf(books({ transactions: books().transactions.filter((t) => t.ref !== 'R2') }), ACCOUNTS, '2026-09-15');
   assert.equal(off.check(off.byKey('1021-2026-07')!).diff, -50, 'a payment missing from the import shows as the difference');
 
   const unbooked = bankOf(books({ journalEntries: [] }), ACCOUNTS, '2026-09-15');
-  assert.equal(unbooked.check(unbooked.byKey('1021-2026-07')!).bookDiff, 50, 'payments not booked show against the ledger');
+  const lacking = unbooked.check(unbooked.byKey('1021-2026-07')!);
+  assert.equal(lacking.bookDiff, 50, 'payments not booked show against the ledger');
+  assert.equal(lacking.ok, true, 'the statement\'s own payments still add up to its close');
+  assert.equal(lacking.agrees, false, 'no «Stimmt» while the books are off the bank\'s close (F18)');
+  assert.deepEqual(lacking.unbooked, { n: 2, sum: -50 }, 'the payments without a booking explain the difference: books − bank = −their sum');
 });
 
 test('a booked fee the bank debited apart is folded into its payment: not listed, counted in the balance; an open one keeps its row (#42)', () => {

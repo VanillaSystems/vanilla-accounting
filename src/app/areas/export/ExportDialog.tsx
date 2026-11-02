@@ -14,7 +14,8 @@ import { getAccountMap } from '../../lib/accounts.js';
 import { periodName } from '../../lib/period-label.js';
 import { PeriodPicker } from '../../shell/PeriodPicker.js';
 import { ICONS } from '../icons.js';
-import { configOf, download, ownConfig, ownPresets, periodOf, saveOwnPresets, type DialogConfig, type OwnPreset } from './state.js';
+import { choosePeriod, choosePreset, ownConfig, periodRow, type DialogConfig, type OwnPreset } from './config.js';
+import { download, ownPresets, periodOf, saveOwnPresets } from './state.js';
 import { filing } from '../../../engines/index.js';
 import { periodWord } from '../../lib/vat-words.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
@@ -54,8 +55,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
   const counts = useMemo(() => Object.fromEntries(ITEMS.map((i) => [i.id, countOf(i.id, books, period, names, account, ws?.filed, filing().length)])) as Record<ItemId, number>, [books, period, names, account, ws]);
   const receiptKb = useMemo(() => receiptsIn(books, period).reduce((s, v) => s + v.r.fileSize, 0) / 1024, [books, period]);
 
-  const year = open.token.slice(0, 4);
-  const periods = [...new Set([1, 2, 3, 4].map((q) => `${year}-Q${q}`).concat([year, 'ytd', page.token, c.period]))];
+  const periods = periodRow(open.token.slice(0, 4), filing().length, page.token, c.period);
 
   const change = (patch: Partial<DialogConfig>) => setC((x) => ({ ...x, ...patch }));
   const setFormats = (id: ItemId, formats: Format[]) => {
@@ -153,7 +153,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
           <div><span className="lbl">{t('export.title')}</span><b>{company}</b></div>
           <div className="xper" role="radiogroup" aria-label={t('export.period')}>
             {periods.map((p) => (
-              <button key={p} type="button" role="radio" aria-checked={p === c.period} className={p === c.period ? 'on' : ''} onClick={() => change({ period: p })}>{periodName(periodOf(p))}</button>
+              <button key={p} type="button" role="radio" aria-checked={p === c.period} className={p === c.period ? 'on' : ''} onClick={() => setC((x) => choosePeriod(x, p))}>{periodName(periodOf(p))}</button>
             ))}
             <button type="button" className="xcal" aria-haspopup="dialog" data-tip={t('export.customPeriodTip')} onClick={(e) => setPicker(e.currentTarget.getBoundingClientRect())}>
               {ICONS.calendar}<span>{t('export.customPeriod')}</span>
@@ -164,7 +164,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
           <nav className="xpre" aria-label={t('export.presets')}>
             <div className="gh">{t('export.presets')}</div>
             {PRESETS.map((p) => (
-              <button key={p.id} type="button" className={c.preset === p.id ? 'on' : ''} onClick={() => setC(configOf(p.id, open, page))}>
+              <button key={p.id} type="button" className={c.preset === p.id ? 'on' : ''} onClick={() => setC((x) => choosePreset(x, p.id, open, page))}>
                 <b>{t(`export.preset.${p.id}` as 'export.title')}</b><span>{tWith(`export.preset.${p.id}Note`, { period: periodWord().one })}</span>
               </button>
             ))}
@@ -255,7 +255,7 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
           years={[...new Set(quarters.map((q) => q.slice(0, 4)))]}
           closedThrough={books.config?.closedThrough}
           onClose={() => setPicker(null)}
-          onApply={(token) => { setPicker(null); change({ period: token }); }}
+          onApply={(token) => { setPicker(null); setC((x) => choosePeriod(x, token)); }}
         />
       )}
     </>

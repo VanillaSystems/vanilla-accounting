@@ -757,6 +757,11 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   const proposing = new Map<string, ClassifyOutcome['asked'][number]>();
   /** Why a payment's customs invoices were not split in code: the model's reason says it. */
   const customsNotes = new Map<BankTransaction, string>();
+  /**
+   * A collective payment whose parts went to the model: its lines so far and how many parts are still unanswered.
+   * It is booked once every part has its lines, in one go, or in no part: never short of what the bank paid.
+   */
+  const byPart = new Map<string, { entries: JournalEntry[]; open: number }>();
   for (const tx of txs) {
     // A payment provider's payout settles its clearing account, in code, whatever a rule or the model would say (#203).
     // Until the company's file names the clearing account and the cut-over day (the first sales report asks for both), the payout waits
@@ -793,7 +798,6 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     const split = placed ? undefined : byParts(books, tx, context, fx);
     // Without a model, a payment code books no part of is booked as a whole (no model: unasked).
     if (split && (split.entries.length || ask)) {
-      books.journalEntries.push(...atPoint(tx, split.entries));
       // The parts code did not decide go to the model when there is one, each with its own receipts; the decided parts stay code's.
       const asked = ask ? [...split.alone, ...(split.rest ? [split.rest] : [])] : [];
       log(`  ${tx.ref}  → by part${split.whole ? '' : asked.length ? ', the rest to the model' : ', the rest waits for the person'}`);
@@ -802,7 +806,8 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         if (view.note) customsNotes.set(part, view.note);
         toModel.push(part);
       }
-      if (asked.length) continue;
+      if (asked.length) { byPart.set(tx.ref, { entries: atPoint(tx, split.entries), open: asked.length }); continue; }
+      books.journalEntries.push(...atPoint(tx, split.entries));
       outcome.classified.push(tx.ref);
       if (!split.whole) outcome.partly.push(tx.ref);
       continue;
@@ -893,8 +898,14 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         }
         const held = proposing.get(tx.ref);
         if (held) { held.entries = atPoint(tx, entries.map((e) => ({ ...e, rule: held.rule }))); continue; }
-        books.journalEntries.push(...atPoint(tx, entries));
         log(`  [Batch ${batchNum}]  ${keyOf(tx)}  → ${lines.length} entries (${lines.map((e) => e.accountDebit || e.accountCredit).join(', ')})`);
+        const whole = views.has(tx) ? byPart.get(tx.ref) : undefined;
+        if (whole) {
+          whole.entries.push(...atPoint(tx, entries));
+          if (--whole.open) continue;
+          byPart.delete(tx.ref);
+          books.journalEntries.push(...whole.entries);
+        } else books.journalEntries.push(...atPoint(tx, entries));
         if (!outcome.classified.includes(tx.ref)) outcome.classified.push(tx.ref);
       }
     } catch (e) {
@@ -909,5 +920,6 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     await Promise.all(batches.slice(i, i + CONCURRENCY).map((b, j) => processBatch(b, i + j + 1)));
     afterWave?.();
   }
+  for (const ref of byPart.keys()) log(`  ${ref}  booked in no part: a part got no booking from the model, the payment waits whole`);
   return outcome;
 }

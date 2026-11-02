@@ -14,7 +14,7 @@ and the providers.
 | split | 123 | 26 |
 | infrastructure | 69 | 4 |
 | workflow | 26 | 0 |
-| view | 333 | 56 |
+| view | 334 | 55 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -160,7 +160,6 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/areas/codes/model.ts` | CHF 1 |
 | `src/app/areas/codes/vat-card.tsx` | Ziffer 1 |
 | `src/app/areas/company/InvoiceLayout.tsx` | CHF 3 |
-| `src/app/areas/export/state.ts` | MWST 1 |
 | `src/app/areas/index.ts` | MWST 1 |
 | `src/app/areas/invoices/Detail.tsx` | CHF 1, QR-bill 1 |
 | `src/app/areas/invoices/Sheet.tsx` | QR-bill 2 |

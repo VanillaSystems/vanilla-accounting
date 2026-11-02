@@ -37,6 +37,7 @@ import { loadKnowledge } from '../knowledge/layers.js';
 import { providersOf } from './sales-report-import.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { creditSigned } from '../accounting/credit-signed.js';
+import { excessOfPayment } from '../accounting/receipt-due.js';
 import { isBankFee } from '../booking/separate-fee.js';
 
 const MAPPING_THRESHOLD = 0.8;
@@ -383,6 +384,8 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
         // A payment another receipt took meanwhile (another of this run's receipts, read from the same snapshot) stays with it, unless the vendor groups several receipts into one payment
         // or it is a collective payment with a part of this receipt's amount still free.
         if (tx && !freeFor(index, tx, r) && !grouped && !index.mappings.some((m) => m.transactionRef === ref && m.receiptId === r.id)) { log(`  ⚠ skipped ${ref}: another receipt holds it; this one waits for a person`); return false; }
+        // Nor one whose receipts would add up to more than it paid (a grouping vendor's receipt of another of its payments): the receipt stays free for its own.
+        if (tx && answer.matchedTransactionRefs.length === 1 && excessOfPayment(index, ref, r.id) !== undefined) { log(`  ⚠ skipped ${ref}: with this receipt its receipts add up to more than it paid; this one waits for its own payment`); return false; }
         if (tx && !lock.isClosed(tx.date)) return true;
         if (tx) { log(`  ⚠ skipped mapping to ${ref}: transaction is in the closed period (≤ ${lock.closedThrough})`); filed.push(ref); }
         return false;
