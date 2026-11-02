@@ -95,6 +95,20 @@ test('a refund paid back as one payment: the credit notes that add up to it are 
   assert.deepEqual(receiptSetsToLink(filed, open).sets, []);
 });
 
+test('a credit note a refund of its amount pays near its date joins no charge\'s set, though the model doubted that pair: it cannot make the invoices\' sets ambiguous', () => {
+  const a1 = receipt(10), a2 = receipt(20), b1 = receipt(20.5), b2 = receipt(40.7), c1 = receipt(60.25), c2 = receipt(39.75);
+  const credit = receipt(-100, { date: '2026-08-08', pairDoubted: ['R'] });
+  const charges = [pay(30, { ref: 'A' }), pay(61.2, { ref: 'B' }), pay(100, { ref: 'C' })];
+  const refund = pay(100, { ref: 'R', date: '2026-08-09', direction: 'CRDT' });
+  const linked: Mapping[] = [{ transactionRef: 'A', receiptId: a1.id, by: 'llm' }];
+  const sets = (transactions: BankTransaction[], extra: Partial<Receipt> = {}) =>
+    receiptSetsToLink(booksOf(transactions, [a1, a2, b1, b2, c1, c2, { ...credit, ...extra }], linked), open).sets.map((s) => [s.payment, s.receipts]);
+  const invoicesOnly = [['A', [a2.id]], ['B', [b1.id, b2.id].sort()], ['C', [c1.id, c2.id].sort()]];
+  assert.deepEqual(sets([...charges, refund]), invoicesOnly, 'each charge gets its invoices; the credit note stays for its refund');
+  assert.deepEqual(sets(charges), [], 'without the refund the credit note may net into a charge: B and A have a second exact set with it, so code links neither');
+  assert.deepEqual(sets([...charges, refund], { notPaidBy: ['R'] }), [], 'a credit note a person took apart from the refund is not that refund\'s');
+});
+
 test('a vendor with more receipts near the payment than code tries is only proposed: a set among the others could fit as well', () => {
   const many = [receipt(30), receipt(57.4), ...Array.from({ length: 11 }, (_, i) => receipt(100 + i, { date: '2026-07-20' }))];
   const books = booksOf([pay(87.4)], many);

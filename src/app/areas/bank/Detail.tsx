@@ -323,7 +323,7 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
         <> · <button type="button" className="golink" data-testid="go-entry" data-tip={t('bank.openEntry')} onClick={() => nav.go(at({ area: 'journal', id: entry.id }, entry.date))}>
           {t('bank.entries', { lines })}
         </button></>
-      ) : tx.amount && !bookedInFiled(tx) ? <> · {reconciliationOf(props.books, tx.ref) ? <span className="m" data-testid="reconcile-held">{t('reconcile.held')}</span> : <NotBooked tx={tx} linked={linkedOf(props.books.receipts.filter((r) => receipts.includes(r.id) && r.kind !== 'duplicate'))} />}{edit && tx.direction === 'CRDT' ? <PayoutWait key={`pw-${tx.ref}`} books={props.books} tx={tx} /> : null}</> : null}
+      ) : tx.amount && !bookedInFiled(tx) ? <> · {reconciliationOf(props.books, tx.ref) ? <span className="m" data-testid="reconcile-held">{t('reconcile.held')}</span> : <NotBooked tx={tx} linked={linkedOf(props.books.receipts.filter((r) => receipts.includes(r.id) && r.kind !== 'duplicate'), tx)} />}{edit && tx.direction === 'CRDT' ? <PayoutWait key={`pw-${tx.ref}`} books={props.books} tx={tx} /> : null}</> : null}
       {edit ? <ReceiptSetOffer key={`rs-${tx.ref}`} {...props} tx={tx} /> : null}
       {edit && receipts.length > 1 ? <GroupedOffer key={`go-${tx.ref}`} payment={tx.ref} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
       <Note key={tx.ref} tx={tx} nav={nav} edit={edit} />

@@ -171,6 +171,25 @@ function firstFrom(items: ReadonlyArray<{ day: number }>, day: number): number {
   return lo;
 }
 
+/**
+ * Whether a credit note is the refund's that paid it back: a movement in, of its amount to the
+ * centime in its currency, near its date as a payment is near its receipt, holding no receipt,
+ * which no person took it apart from. Such a note joins no set, even when the model doubted the
+ * pair: a note below zero in a vendor's pool lets one more combination of its invoices add up to
+ * nearly any charge, so a single free one made the invoices' own sets ambiguous and code linked
+ * none of them.
+ */
+function refundedNotes(transactions: readonly BankTransaction[], linksOf: ReadonlyMap<string, Mapping[]>): (r: Receipt) => boolean {
+  const refunds = transactions.filter((t) => t.direction === 'CRDT' && t.amount !== 0 && !linksOf.has(t.ref));
+  return (r) => {
+    const owed = owedCents(r);
+    if (owed >= 0) return false;
+    const day = dayOf(r.date!);
+    return refunds.some((t) => t.currency === currencyOf(r) && cents(Math.abs(t.amount)) === -owed && !r.notPaidBy?.includes(t.ref)
+      && dayOf(t.date) - day <= DAYS_BEFORE && day - dayOf(t.date) <= DAYS_AFTER);
+  };
+}
+
 function contextOf(books: Books, payers: BatchPayers, toChf: ToChf | undefined, buyerUid: string | undefined, noPayment?: (r: Receipt) => boolean): SetContext {
   const buyer = buyerUid?.replace(/[^0-9]/g, '') ?? '';
   const keys = new Map<string, string | undefined>();
@@ -192,9 +211,10 @@ function contextOf(books: Books, payers: BatchPayers, toChf: ToChf | undefined, 
   };
   const linksOf = new Map<string, Mapping[]>();
   for (const m of books.mappings) { const links = linksOf.get(m.transactionRef); if (links) links.push(m); else linksOf.set(m.transactionRef, [m]); }
+  const refunded = refundedNotes(books.transactions, linksOf);
   return {
     charges: chargesOf(books.transactions, toChf),
-    free: invoices.filter((r) => !held.has(r.id)).map((r) => ({ r, day: dayOf(r.date!) })).sort((a, b) => a.day - b.day),
+    free: invoices.filter((r) => !held.has(r.id) && !refunded(r)).map((r) => ({ r, day: dayOf(r.date!) })).sort((a, b) => a.day - b.day),
     isCopy,
     byId: new Map(books.receipts.map((r) => [r.id, r])),
     linksOf,

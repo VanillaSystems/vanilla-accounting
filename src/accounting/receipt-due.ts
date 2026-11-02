@@ -4,7 +4,8 @@
  * waiting is the app's work; from then on the person is asked, with the ways out (find the
  * receipt, or book without input tax). Pure, so the screens and the books read the same days.
  */
-import { filing } from '../engines/index.js';
+import { baseCurrency, filing } from '../engines/index.js';
+import { creditSigned } from './credit-signed.js';
 import { addDays, derivePeriod, filingKeyOf, type IsoDate } from './periods.js';
 import type { BankTransaction, Index, Receipt } from '../types/index.js';
 import { isPurchaseDocument } from './evidence-check.js';
@@ -31,13 +32,34 @@ export function isUnreadable(r: Pick<Receipt, 'kind' | 'vatBy' | 'hasSwissVat' |
   return isPurchaseDocument(r) && r.vatBy !== 'human' && r.hasSwissVat === undefined && !r.vatSummary?.length && (!!r.needsVisionReview || !!r.vatExtractedAt);
 }
 
-/** What the receipts linked to a payment say: none, at least one readable, or only purchase documents whose VAT could not be read. */
-export type Linked = 'none' | 'read' | 'unread';
+/**
+ * What the receipts linked to a payment say: none, at least one readable, only purchase documents
+ * whose VAT could not be read, or (`short`, given the payment `tx`) part of a set: two or more
+ * receipts in the payment's currency that add up to less than it paid out, by more than a
+ * centime per receipt. A set short of receipts waits for the rest like a payment without any: the
+ * model would book the part they prove, which the payment's balance refuses, or the whole on
+ * part of the proof.
+ */
+export type Linked = 'none' | 'read' | 'unread' | 'short';
 
-export function linkedOf(receipts: readonly Receipt[]): Linked {
+export function linkedOf(receipts: readonly Receipt[], tx?: Pick<BankTransaction, 'amount' | 'currency' | 'direction'>): Linked {
   const purchase = receipts.filter(isPurchaseDocument);
   if (!receipts.length) return 'none';
-  return purchase.length && purchase.every(isUnreadable) ? 'unread' : 'read';
+  if (purchase.length && purchase.every(isUnreadable)) return 'unread';
+  return tx && shortOf(purchase, tx) ? 'short' : 'read';
+}
+
+const cents = (n: number) => Math.round(n * 100);
+
+function shortOf(purchase: readonly Receipt[], tx: Pick<BankTransaction, 'amount' | 'currency' | 'direction'>): boolean {
+  if (tx.direction !== 'DBIT' || purchase.length < 2) return false;
+  let owed = 0;
+  for (const r of purchase) {
+    const amount = creditSigned(r);
+    if (amount === undefined || (r.currency ?? baseCurrency()) !== tx.currency) return false;
+    owed += cents(amount);
+  }
+  return cents(Math.abs(tx.amount)) - owed > purchase.length;
 }
 
 /**
@@ -65,6 +87,6 @@ export function waitingForReceipt(books: Pick<Index, 'transactions' | 'mappings'
   const receiptsOf = (ref: string) => books.mappings.filter((m) => m.transactionRef === ref).flatMap((m) => { const r = byId.get(m.receiptId); return r ? [r] : []; });
   return books.transactions
     .filter((tx) => tx.waitsForReceipt && !(closed && tx.date <= closed))
-    .flatMap((tx) => { const receipts = receiptsOf(tx.ref); const s = receiptState(tx, linkedOf(receipts), isBooked(tx.ref), today); return s ? [{ tx, receipts, ...s }] : []; })
+    .flatMap((tx) => { const receipts = receiptsOf(tx.ref); const s = receiptState(tx, linkedOf(receipts, tx), isBooked(tx.ref), today); return s ? [{ tx, receipts, ...s }] : []; })
     .sort((a, b) => a.tx.date.localeCompare(b.tx.date) || a.tx.ref.localeCompare(b.tx.ref));
 }

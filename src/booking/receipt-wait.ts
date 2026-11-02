@@ -210,7 +210,7 @@ export function receiptWaitOf(books: Books, tx: BankTransaction, context: Classi
   const then = ruleOfPayment(books, tx, context, fx)?.rule.then;
   const ruleAccount = then?.kind === 'book' ? then.booking.account : then?.booking?.account;
   const payout = !!providerOfPayment(tx, linked, context.counterparties ?? []);
-  return receiptWait(tx, { linked: linkedOf(linked), ...(routing.kind === 'known' && { business: routing.counterparty }), ...(ruleAccount && { ruleAccount }), ...(then?.kind === 'ask' && { ruleAsks: true }), ...(payout && { payout }) }, {
+  return receiptWait(tx, { linked: linkedOf(linked, tx), ...(routing.kind === 'known' && { business: routing.counterparty }), ...(ruleAccount && { ruleAccount }), ...(then?.kind === 'ask' && { ruleAsks: true }), ...(payout && { payout }) }, {
     ...known,
     ownIbans: new Set(context.bankAccounts.flatMap((a) => (a.iban ? [ibanOf(a.iban)] : []))),
     settles: settlementAccount(context),

@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { classifyStep } from '../src/intake/classify.js';
 import type { IntakeNote } from '../src/intake/pipeline.js';
 import { answerSettles, parseReceiptApply, receiptFree, receiptKnowledge, receiptWait, settlementAccount, type WaitContext } from '../src/booking/receipt-wait.js';
-import { receiptDue, waitingForReceipt } from '../src/accounting/receipt-due.js';
+import { linkedOf, receiptDue, waitingForReceipt } from '../src/accounting/receipt-due.js';
 import { ACTIONS } from '../src/workflows/actions.js';
 import { loadKnowledge } from '../src/knowledge/layers.js';
 import type { Books } from '../src/books/store.js';
@@ -82,6 +82,21 @@ test('the person is asked two weeks before the return is due; until then the wai
   assert.deepEqual(waitingForReceipt(books, (ref) => ref === 'W', '2026-11-20'), [], 'booked meanwhile');
   assert.deepEqual(waitingForReceipt({ ...books, transactions: books.transactions.map((t) => ({ ...t, noReceiptNeeded: true })) }, () => false, '2026-11-20'), [], '«Ohne Vorsteuer buchen» answered it');
   assert.deepEqual(waitingForReceipt({ ...books, config: { closedThrough: '2026-09-30' } }, () => false, '2026-12-01'), [], 'a filed quarter holds nothing open');
+});
+
+test('a set short of receipts waits for the rest: two receipts that add up to less than the payment, never one, a sum within a centime per receipt, nor receipts in another currency', () => {
+  const r = (id: string, amount: number, over: Partial<Receipt> = {}) => ({ id, amount, currency: 'CHF', hasSwissVat: true, ...over }) as Receipt;
+  const tx = OUT('S', { amount: 71.4, date: '2026-08-18', waitsForReceipt: { since: '2026-08-19T06:00:00Z' } });
+  const linked = (...receipts: Receipt[]) => linkedOf(receipts, tx);
+  assert.equal(linked(r('a', 12.3), r('b', 18.6)), 'short');
+  assert.equal(receiptWait(tx, { linked: linked(r('a', 12.3), r('b', 18.6)) }, CTX).wait, true, 'it waits like a payment without a receipt');
+  assert.equal(linked(r('a', 12.3), r('b', 18.6), r('c', 30), r('d', 10.5)), 'read', 'the whole set');
+  assert.equal(linked(r('a', 50), r('b', 21.38)), 'read', 'two centimes short on two receipts: rounding');
+  assert.equal(linked(r('a', 50)), 'read', 'one receipt is a pair, whatever it shows: the model judges it');
+  assert.equal(linked(r('a', 12.3, { currency: 'EUR' }), r('b', 18.6, { currency: 'EUR' })), 'read', 'receipts in another currency than the payment');
+  assert.equal(linkedOf([r('a', 12.3), r('b', 18.6)], { ...tx, direction: 'CRDT' }), 'read', 'money in');
+  const books = { transactions: [tx], mappings: [{ transactionRef: 'S', receiptId: 'a' }, { transactionRef: 'S', receiptId: 'b' }], receipts: [r('a', 12.3), r('b', 18.6)], config: {} };
+  assert.deepEqual(waitingForReceipt(books, () => false, '2026-11-01').map((w) => [w.tx.ref, w.kind]), [['S', 'waits']], 'listed as waiting, so the person is asked for the rest in time');
 });
 
 /** The demo company (its rules, its knowledge, the effective method) with an employees' clearing account and a cash box; `rules`: its knowledge/rules/booking.guide.yaml. */
