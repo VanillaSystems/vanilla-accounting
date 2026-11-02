@@ -4539,6 +4539,7 @@ export const messages = {
   'rules.hand.private': "Privat (%)",
   'rules.hand.ownUse': "als Eigenverbrauch (Vorsteuerkorrektur)",
   'rules.hand.noVat': 'ohne MWST',
+  'rules.hand.vatFromReceipts': 'aus den Belegen',
   'rules.hand.preview': 'Vorschau',
   'rules.hand.hint': 'Die Vorschau zeigt die Zahlungen des offenen Jahres, die die Regel trifft, und wie sie sie bucht. Behalten erst danach.',
   'rules.hand.fromTask': 'Damit die nächste Zahlung dieser Art gleich gebucht wird, ohne KI: eine Regel unter',

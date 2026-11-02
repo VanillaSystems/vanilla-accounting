@@ -171,7 +171,7 @@ function HandRuleForm({ view, nav, payment, onKept }: { view: RulesView; nav: Na
       <label>{t('rules.hand.account')}<input className="mono" list="rule-accounts" value={f.account} onChange={set('account')} /></label>
       <datalist id="rule-accounts">{Object.entries(view.names.accounts).map(([n, name]) => <option key={n} value={n}>{name}</option>)}</datalist>
       {codes.length ? (
-        <VatCodeField key={started} name="vat" label={t('rules.hand.vat')} defaultValue={f.vat} placeholder={t('rules.hand.noVat')} onValue={(vat) => setF((was) => ({ ...was, vat }))} />
+        <VatCodeField key={started} name="vat" label={t('rules.hand.vat')} defaultValue={f.vat} placeholder={t('rules.hand.vatFromReceipts')} onValue={(vat) => setF((was) => ({ ...was, vat }))} />
       ) : null}
       <label>{t('rules.hand.private')}<input className="mono" inputMode="decimal" data-testid="rule-share" value={f.share} onChange={set('share')} /></label>
       {codes.length && !withoutInputTax() && f.share.trim() ? (

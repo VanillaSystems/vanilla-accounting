@@ -4542,6 +4542,7 @@ export default {
     'rules.hand.private': "Private (%)",
     'rules.hand.ownUse': "as own use (input tax correction)",
     'rules.hand.noVat': 'without VAT',
+    'rules.hand.vatFromReceipts': 'from the receipts',
     'rules.hand.preview': 'Preview',
     'rules.hand.hint': 'The preview shows the payments of the open year the rule matches, and how it books them. Keep it only then.',
     'rules.hand.fromTask': 'So that the next payment of this kind is booked at once, without AI: a rule under',

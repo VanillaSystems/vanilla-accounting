@@ -12,6 +12,7 @@ import { initRepository } from '../src/workspace/git.js';
 import { APP_FOLDER, APP_ROOT, openWorkspaceAt, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { draftDir } from '../src/saving/changes.js';
 import { draftRules, keepDraft, setDraftVat } from '../src/saving/rules.js';
+import { draftHandRule } from '../src/saving/hand-rule.js';
 import { refusalKey } from '../src/app/areas/company/rules-model.js';
 import { formatIn } from '../src/app/i18n/core.js';
 import de from '../src/app/i18n/locales/de.js';
@@ -85,6 +86,14 @@ test('receipts at different rates: the card names them and asks', async () => {
   draft(ws, GUIDE, HEAD + rule('post-und-kaffee', 'Rechnung Post CH|Rechnung GK-2026', '6200'));
   const [ask] = draftRules(ws, GUIDE)!.vatAsks;
   assert.deepEqual(ask.seen.map((s) => s.rate).sort(), [2.6, 8.1]);
+});
+
+test('a rule made in the form of Firma › Regeln with the VAT field left empty: the receipts decide, as for a wish', async () => {
+  const ws = await company();
+  const made = draftHandRule(ws, { match: { kind: 'text', text: 'Coop Pronto' }, direction: 'out', account: '6200' }, '2026-11-02');
+  assert.deepEqual(made, { ok: true, path: GUIDE });
+  const d = draftRules(ws, GUIDE)!;
+  assert.deepEqual([d.vatAsks, d.keepable, d.added.map((r) => r.rule?.then)], [[], true, [{ kind: 'book', booking: { account: '6200', vat: 'I81' } }]]);
 });
 
 test('a firm not registered for VAT books such a rule without a code, without asking', async () => {

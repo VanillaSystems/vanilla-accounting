@@ -4542,6 +4542,7 @@ export default {
     'rules.hand.private': "Privato (%)",
     'rules.hand.ownUse': "come consumo proprio (correzione dell’imposta precedente)",
     'rules.hand.noVat': 'senza IVA',
+    'rules.hand.vatFromReceipts': 'dai giustificativi',
     'rules.hand.preview': 'Anteprima',
     'rules.hand.hint': 'L’anteprima mostra i pagamenti dell’anno aperto che la regola tocca, e come li registra. Tenere solo dopo.',
     'rules.hand.fromTask': 'Perché il prossimo pagamento di questo tipo sia registrato subito, senza IA: una regola sotto',

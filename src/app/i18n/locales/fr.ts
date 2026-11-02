@@ -4542,6 +4542,7 @@ export default {
     'rules.hand.private': "Privé (%)",
     'rules.hand.ownUse': "comme prestation à soi-même (correction de l’impôt préalable)",
     'rules.hand.noVat': 'sans TVA',
+    'rules.hand.vatFromReceipts': 'selon les justificatifs',
     'rules.hand.preview': 'Aperçu',
     'rules.hand.hint': 'L’aperçu montre les paiements de l’année ouverte que la règle touche, et comment elle les comptabilise. Garder seulement ensuite.',
     'rules.hand.fromTask': 'Pour que le prochain paiement de ce genre soit comptabilisé aussitôt, sans IA : une règle sous',
