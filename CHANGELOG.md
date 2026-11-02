@@ -20,6 +20,7 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A quantity or price typed quickly on an invoice draft's sheet is saved as typed. Before, a number field selected its old value only one frame after you entered it, so digits typed in that moment landed beside the old value: quantity 12 became 121 or 2, a price became ten times what was typed. Now the first key typed into a number field replaces its value whenever it comes.
 - «Nach Beleg buchen» no longer offers a rate for import VAT. On a courier's or customs payment, the line on the import VAT account (4030) without a code got the receipt's rate (M26) with one click, in the journal and in the return's review, which claimed 2.6 % of the import VAT as input tax instead of the whole tax the customs assessment proves. That line now keeps its zero code, as the customs logic books it: its input tax comes only from the one-line deduction (-/4030 M81-2) once the assessment is linked.
 - Export: a preset keeps the period you picked. Choosing «1. Semester» and then «Prüfung ESTV / AHV» exported the whole year (55 receipts instead of 17); now the preset changes only the parts and options, and brings its own period only while you have picked none. On a half-yearly firm the period row offers «1. Semester» and «2. Semester» beside the quarters. Enter in a date field of the period picker applies the range, like «Anwenden»; before, it only moved the calendar.
 
