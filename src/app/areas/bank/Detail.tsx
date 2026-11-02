@@ -22,7 +22,8 @@ import { checkText } from '../../lib/fx-text.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps, Nav } from '../index.js';
 import { I } from '../receipts/icons.js';
-import { fileKeyOf, isCamt, matches, payHaystack, payText, signed, type Bank, type Statement } from './model.js';
+import { fileKeyOf, isCamt, matches, payHaystack, payText, signed, type Bank, type Check, type Statement } from './model.js';
+import { toRappen } from '../../../accounting/rappen.js';
 import { bankFor, setUi, useUi, type Section } from './state.js';
 import { importStatements, linkReceiptSet, pickStatements, removeStatement, setNote, setNoReceipt } from './actions.js';
 import type { ReceiptSet, SetCut } from '../../../intake/receipt-sets.js';
@@ -88,7 +89,7 @@ const Amount = ({ tx }: { tx: BankTransaction }) => {
  * The books off the bank's closing balance: a missing opening balance is named as on the Bilanz,
  * with the way to enter it, and only what it leaves unexplained is blamed on a payment (r4c-33).
  */
-function BookDiff({ books, nav, diff, s }: Props & { diff: number; s: Statement }) {
+function BookDiff({ books, nav, diff, s, unbooked }: Props & { diff: number; s: Statement; unbooked: Check['unbooked'] }) {
   const ws = useWorkspace();
   const { opening: missing, rest } = bookDiffParts(diff, ws ? missingOpenings(books, ws.bankAccounts, s.to.slice(0, 4)).find((m) => m.account === s.account.account) : undefined);
   return (
@@ -99,7 +100,11 @@ function BookDiff({ books, nav, diff, s }: Props & { diff: number; s: Statement 
           {missing.canType && <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'company', section: 'opening' }, query: {} }); }}>{t('reports.openingSet')}</a>}
         </span>
       ) : null}
-      {rest ? <span className="notice warn" style={{ margin: 0 }}>{I.dot}{t('bank.bookDiff', { diff: fmt(rest) })}</span> : null}
+      {rest ? (
+        <span className="notice warn" style={{ margin: 0 }} data-testid="book-diff">{I.dot}
+          {unbooked.n && toRappen(rest) === -toRappen(unbooked.sum) ? t('bank.bookDiffUnbooked', { diff: fmt(rest), n: unbooked.n }) : t('bank.bookDiff', { diff: fmt(rest) })}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -168,8 +173,10 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
           <NoMovements s={s} nav={nav} edit={edit} />
         ) : c!.gap ? (
           <span className="notice warn" style={{ margin: 0 }} data-testid="statement-gap">{I.dot}{t('bank.gap', { from: formatDate(c!.gap.from), to: formatDate(c!.gap.to), bank: fmt(c!.gap.bank), open: fmt(c!.gap.open), diff: fmt(c!.gap.diff) })}</span>
+        ) : c!.agrees ? (
+          <span className="linked" data-testid="statement-agrees">{I.check}{t('bank.checkOk', { n: c!.n })}</span>
         ) : c!.ok ? (
-          <span className="linked">{I.check}{t('bank.checkOk', { n: c!.n })}</span>
+          <span className="notice" style={{ margin: 0 }}>{t('bank.checkAddsUp', { n: c!.n })}</span>
         ) : c!.diff == null ? (
           <span className="notice" style={{ margin: 0 }}>{c!.close == null ? t('bank.noClose') : t('bank.noOpen')}</span>
         ) : (
@@ -190,7 +197,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
           </button>
         </div>
       ))}
-      {c?.bookDiff && !c.gap ? <BookDiff {...props} diff={c.bookDiff} s={s} /> : null}
+      {c?.bookDiff && !c.gap ? <BookDiff {...props} diff={c.bookDiff} s={s} unbooked={c.unbooked} /> : null}
       {ask ? <PdfQuestion key={ask.file} ask={ask} nav={nav} edit={edit} /> : null}
       {pdf && !ask ? <PdfFacts key={pdf} file={pdf} s={s} pays={all} check={c} edit={edit} nav={nav} version={props.books} /> : null}
       {reconcile ? <ReconcilePanel key={`${reconcile.account}-${reconcile.read.join(',')}-${reconcile.bank.join(',')}`} r={reconcile} books={props.books} label={s.account.label} closedThrough={b.closedThrough} edit={canEdit} nav={nav} /> : null}
