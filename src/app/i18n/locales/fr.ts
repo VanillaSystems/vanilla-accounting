@@ -1608,6 +1608,7 @@ export default {
     'bank.receiptSet.more': '{n} choix conviennent ; les {shown} premiers sont affichés.',
     'bank.noReceiptCleared': "Le paiement a de nouveau besoin d'un justificatif",
     'bank.waitsForReceipt': "attend son justificatif",
+    'bank.receiptsOver': "justificatifs {amount} au-dessus du paiement",
     'bank.receiptDue': "attend son justificatif, décompte dû le {date}",
     'bank.receiptUnread': "Justificatif illisible : attend votre réponse",
     'bank.saleNoVat': 'pas de facture, comptabilisé sans TVA',

@@ -35,7 +35,7 @@ import { FileDetail } from './FileDetail.js';
 import { RunHistory } from '../../history/RunHistory.js';
 import { baseCurrency } from '../../../engines/index.js';
 import { localToday } from '../../../accounting/periods.js';
-import { linkedOf, receiptState, type Linked } from '../../../accounting/receipt-due.js';
+import { excessOfPayment, linkedOf, receiptState, type Linked } from '../../../accounting/receipt-due.js';
 import { WorkflowButtons } from '../../automation/marks.js';
 import { useAutomation } from '../../automation/store.js';
 import { processingText } from '../../automation/processing.js';
@@ -302,6 +302,7 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
   // Every line of a split, not only the first (r9k-6).
   const lines = entries.map((e) => `${e.accountDebit || '–'} / ${e.accountCredit || '–'}${entries.length > 1 ? ` ${fmt(e.amount)}` : ''}`).join(' + ');
   const fee = b.feeOf(tx.ref);
+  const over = receipts.length > 1 ? excessOfPayment(props.books, tx.ref) : undefined;
   const first = receipts[0] ? b.receiptOf(receipts[0]) : undefined;
   const edit = canEdit && !closed;
   const saleWithoutVat = salesWithoutVat({ ...props.books, transactions: [tx] }, vatRegistered).length > 0;
@@ -312,7 +313,7 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
       {receipts.length > 0 ? (
         <> · <button type="button" className="golink" data-testid="go-receipt" data-tip={t('bank.openReceipt')} onClick={() => nav.go(at({ area: 'receipts', id: receipts[0] }, first?.date ?? tx.date))}>
           {t('bank.receipt', { name: first?.name ?? receipts[0] })}{receipts.length > 1 && ` +${receipts.length - 1}`}
-        </button>{receipts.length === 1 && madeByOf(props.books, receipts[0], tx.ref) ? <small className="madeby" data-testid="made-by"> {madeByOf(props.books, receipts[0], tx.ref)}</small> : null}</>
+        </button>{receipts.length === 1 && madeByOf(props.books, receipts[0], tx.ref) ? <small className="madeby" data-testid="made-by"> {madeByOf(props.books, receipts[0], tx.ref)}</small> : null}{over !== undefined ? <small className="m" data-testid="receipts-over"> {t('bank.receiptsOver', { amount: `${tx.currency} ${fmt(over)}` })}</small> : null}</>
       ) : tx.inputTaxProof ? (
         <> · <span data-testid="input-tax-proof">{t('bank.inputTaxProof', { text: tx.inputTaxProof.text })}</span></>
       ) : saleWithoutVat ? (
