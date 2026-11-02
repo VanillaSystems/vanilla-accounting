@@ -234,7 +234,7 @@ a.dmove:hover, a.dmove:focus-visible { background: var(--hover); outline: none; 
 .mailboxcard .srcpw input { width: 180px; }
 
 /* A rule the AI drafted, in plain words, kept with one click (src/app/areas/company/RulesSection.tsx RuleDraft). */
-.ruledraft { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 4px 26px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); font-size: 13px; }
+.ruledraft { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 4px 26px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); font-size: 13px; scroll-margin-bottom: 10px; }
 .ruledraft ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .ruledraft .rk { color: var(--muted); font-size: 12px; }
 .ruledraft b { font-weight: 600; }
