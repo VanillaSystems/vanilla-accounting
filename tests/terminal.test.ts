@@ -14,8 +14,9 @@ import { join } from 'node:path';
 import { TERMINAL_APPS, TERMINAL_APP_FACTS, chooseCli, chooseTerminalApp, copyCommand, launchScript, openArgs, shellQuote, type CliState, type TerminalApp } from '../src/platform/terminal.js';
 import { detectTerminalApps, openInTerminal } from '../src/platform/terminal-open.js';
 import { parseSettings, readSettings, writeCli, writeTerminalApp } from '../src/llm/settings.js';
-import { REPOSITORY_SECTION, SECTION_END, SECTION_START, TERMINAL_SECTION, ensureTerminalAgents, repositoryAgents, withAgentsImport, withRepositorySection, withSection } from '../src/workspace/terminal-agents.js';
+import { REPOSITORY_SECTION, SECTION_END, SECTION_START, TERMINAL_SECTION, ensureTerminalAgents, renewTerminalAgents, repositoryAgents, withAgentsImport, withRepositorySection, withSection } from '../src/workspace/terminal-agents.js';
 import { createWorkspace } from '../src/workspace/create.js';
+import { committedAsIs, initRepository } from '../src/workspace/git.js';
 import { changesIn, terminalRequest, withoutChanges } from '../src/assistant/changes.js';
 import { proposalId } from '../src/assistant/terminal-drafts.js';
 import { CONTEXT_MAX, QUESTION_MAX, handover } from '../src/assistant/handover.js';
@@ -264,6 +265,45 @@ ${legacyRepository(bundle).slice(legacyRepository(bundle).indexOf('\nThe app is 
   writeFileSync(join(repo, 'AGENTS.md'), edited);
   assert.deepEqual(ensureTerminalAgents({ root, repository: repo }), []);
   assert.equal(readFileSync(join(repo, 'AGENTS.md'), 'utf8'), edited, 'never overwritten');
+});
+
+test('opening the books commits the terminal AI\'s files: no untracked AGENTS.md or CLAUDE.md left in the company\'s repository, a file the person is editing left to them (F25)', async () => {
+  const files = ['vanilla-accounting/AGENTS.md', 'vanilla-accounting/CLAUDE.md', 'AGENTS.md'];
+  const uncommitted = async (repo: string) => { const ok = await committedAsIs(repo, files); return files.filter((f) => !ok.has(f)); };
+
+  // A repository of a version before #146: the books, no terminal files.
+  const repo = temp('term-commit-');
+  const root = join(repo, 'vanilla-accounting');
+  mkdirSync(root);
+  writeFileSync(join(root, 'ledger.json'), '{}\n');
+  writeFileSync(join(repo, 'AGENTS.md'), repositoryAgents('Muster GmbH').replace(REPOSITORY_SECTION.trimEnd(), `${SECTION_START}\nold words\n${SECTION_END}`));
+  await initRepository(repo, 'Books');
+  const opened = await renewTerminalAgents({ root, repository: repo });
+  assert.deepEqual(opened.written, ['vanilla-accounting/AGENTS.md', 'vanilla-accounting/CLAUDE.md', 'vanilla-accounting/output/.gitignore', 'AGENTS.md']);
+  assert.equal(opened.committed, true);
+  assert.deepEqual(await uncommitted(repo), [], 'git status stays clean');
+  assert.deepEqual(await renewTerminalAgents({ root, repository: repo }), { written: [], committed: false }, 'a second opening changes nothing');
+
+  // Files an earlier version left untracked, already as this version writes them.
+  const stray = temp('term-stray-');
+  const strayRoot = join(stray, 'vanilla-accounting');
+  mkdirSync(strayRoot);
+  writeFileSync(join(strayRoot, 'ledger.json'), '{}\n');
+  await initRepository(stray, 'Books');
+  ensureTerminalAgents({ root: strayRoot, repository: stray });
+  assert.deepEqual(await uncommitted(stray), ['vanilla-accounting/AGENTS.md', 'vanilla-accounting/CLAUDE.md'], 'the finding: two untracked files');
+  assert.deepEqual(await renewTerminalAgents({ root: strayRoot, repository: stray }), { written: [], committed: true });
+  assert.deepEqual(await uncommitted(stray), []);
+
+  // The person writes their own CLAUDE.md and has not saved it: the app adds its line, the save stays theirs.
+  writeFileSync(join(strayRoot, 'CLAUDE.md'), 'Our Claude notes.\n');
+  const editing = await renewTerminalAgents({ root: strayRoot, repository: stray });
+  assert.deepEqual(editing, { written: ['vanilla-accounting/CLAUDE.md'], committed: false });
+  assert.equal(readFileSync(join(strayRoot, 'CLAUDE.md'), 'utf8'), 'Our Claude notes.\n\n@AGENTS.md\n');
+  assert.deepEqual(await uncommitted(stray), ['vanilla-accounting/CLAUDE.md']);
+
+  const plain = temp('term-nogit-');
+  assert.deepEqual(await renewTerminalAgents({ root: plain, repository: plain }), { written: ['AGENTS.md', 'CLAUDE.md', 'output/.gitignore'], committed: false }, 'no repository: written, nothing committed');
 });
 
 test('the sidebar\'s offer: a vanilla-terminal block is the request, never shown as text, beside the changes block', () => {
