@@ -221,11 +221,18 @@ export function receiptWaitOf(books: Books, tx: BankTransaction, context: Classi
 /** Why a payment has no receipt of its own: the matching chain never pairs one (#187), nor the model's match. Money in, a rule that asks first and a firm without input tax still take a receipt; a provider's payout never does (#203). */
 const NONE_OF_ITS_OWN: ReadonlySet<NoWait> = new Set<NoWait>(['marked', 'zero', 'provider', 'bankFee', 'ownTransfer', 'settlement', 'business', 'wording']);
 
+/** A booking the app made on its own (the classifier, by a rule, a check of code or the model): never one a person made or decided. */
+export const appBooked = (e: JournalEntry): boolean => e.origin === 'classify' && (!e.by || e.by.kind === 'rule' || e.by.kind === 'code' || e.by.kind === 'model');
+
 /**
  * The payments that have no receipt of their own, by the same decision as the wait for one
  * (receiptWait), and a payment already booked onto the owner's account or another money account
  * only (an outlay paid back, a transfer, issue #90): what the matching chain never pairs. A booking
- * onto a debt is no sign: on the agreed basis an invoice's payment settles the payables.
+ * onto a debt is no sign: on the agreed basis an invoice's payment settles the payables. Nor is a
+ * booking the app made without a receipt (the model's answer for a payment no receipt had reached
+ * yet): a receipt that matches it later is the better evidence, and the classifier books the
+ * payment again once it is linked (entriesWithoutTheirReceipts), so the order in which statements
+ * and receipts arrive decides nothing.
  */
 export function noReceiptOfItsOwn(books: Books, context: ClassifyContext, known: ReceiptKnowledge, fx: FxResolver): (tx: BankTransaction) => boolean {
   const settles = (account: string) => account === context.ownerAccount || !!context.moneyAccounts?.has(account);
@@ -242,7 +249,7 @@ export function noReceiptOfItsOwn(books: Books, context: ClassifyContext, known:
     const w = receiptWaitOf(books, tx, context, known, fx);
     if (!w.wait && NONE_OF_ITS_OWN.has(w.why)) return true;
     const entries = entriesOf(tx.ref);
-    if (!entries.length) return false;
+    if (!entries.length || entries.every((e) => appBooked(e) && e.receipts?.length === 0)) return false;
     try { return onlySettles(entries, bankAccountFor(tx, context.bankAccounts), settles); } catch { return false; }
   };
 }
