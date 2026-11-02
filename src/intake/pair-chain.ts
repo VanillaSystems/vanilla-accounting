@@ -12,7 +12,7 @@
  * A pair the model was shown and did not take is not asked about again (Receipt.pairDoubted), unless
  * a person asks with the button; a pair a person took apart is never a candidate (Receipt.notPaidBy).
  */
-import type { Receipt, BankTransaction, JournalEntry } from '../types/index.js';
+import type { Receipt, BankTransaction } from '../types/index.js';
 import { periodLock, type Books } from '../books/store.js';
 import type { Ask, BooksPort } from './pipeline.js';
 import { numbersIn } from '../accounting/document-numbers.js';
@@ -24,7 +24,7 @@ import { partPayment } from '../accounting/batch-parts.js';
 import { chargesOf } from './charges.js';
 import type { Businesses } from './batch-payers.js';
 import { delaysOf } from './delays.js';
-import { noReceiptOfItsOwn, receiptKnowledge } from '../booking/receipt-wait.js';
+import { appBooked, noReceiptOfItsOwn, receiptKnowledge } from '../booking/receipt-wait.js';
 import { loadClassifyContext } from '../booking/classify.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { noPaymentOf, orderPagesOf, type OrderPage } from '../booking/order-pages.js';
@@ -300,9 +300,6 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
   }
   return result;
 }
-
-/** A booking the app made on its own (the classifier, by a rule, a check of code or the model): never one a person made or decided. */
-const appBooked = (e: JournalEntry): boolean => e.origin === 'classify' && (!e.by || e.by.kind === 'rule' || e.by.kind === 'code' || e.by.kind === 'model');
 
 /**
  * Takes the chain's link of receipt `old` off the payment's movements `refs`, for a receipt that fits
