@@ -31,7 +31,7 @@ import { chartOf } from '../../booking/classify.js';
 import { chartNames, companyRules } from '../../booking/rule-book.js';
 import { loadKnowledge } from '../../knowledge/layers.js';
 import { baseCurrency } from '../../engines/index.js';
-import { discardDraft, draftRules, keepDraft, ruleCommand, ruleFactsOf, type DraftCommand, type DraftView, type RuleCommand, type RulesView } from '../../saving/rules.js';
+import { discardDraft, draftRules, keepDraft, ruleCommand, ruleFactsOf, setDraftVat, type DraftCommand, type DraftView, type RuleCommand, type RulesView } from '../../saving/rules.js';
 import { loadWorkflows } from '../../workflows/load.js';
 import { draftShareRule, shareOffer } from '../../saving/share-rule.js';
 import { draftGroupedFlag, groupedOffer } from '../../saving/grouped-flag.js';
@@ -132,8 +132,13 @@ router.get('/api/rules/draft', (req, res) => {
 
 router.post('/api/rules/draft', async (req, res) => {
   const c = req.body as DraftCommand;
-  if (!c || typeof c.path !== 'string' || (c.kind !== 'keep' && c.kind !== 'discard')) throw new RequestError(400, 'Unbekannter Befehl.');
+  if (!c || typeof c.path !== 'string' || (c.kind !== 'keep' && c.kind !== 'discard' && c.kind !== 'vat')) throw new RequestError(400, 'Unbekannter Befehl.');
   if (c.kind === 'discard') { res.json({ ok: discardDraft(WS, c.path) }); return; }
+  if (c.kind === 'vat') {
+    if (typeof c.basis !== 'string' || typeof c.step !== 'string' || typeof c.id !== 'string' || typeof c.rate !== 'number') throw new RequestError(400, 'basis, step, id und rate erwartet.');
+    res.json(setDraftVat(WS, c.path, c.basis, c.step, c.id, c.rate));
+    return;
+  }
   if (typeof c.basis !== 'string') throw new RequestError(400, 'basis erwartet.');
   res.json(await keepingSwitchedOn(() => keepDraft(WS, c.path, c.basis, c.confirm === true)));
 });

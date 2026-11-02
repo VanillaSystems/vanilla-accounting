@@ -243,6 +243,7 @@ a.dmove:hover, a.dmove:focus-visible { background: var(--hover); outline: none; 
 .rulepreview li { overflow-wrap: anywhere; }
 .noteoffer { display: flex; flex-direction: column; gap: 3px; padding-top: 6px; border-top: 1px solid var(--line); }
 .noteoffer ul { gap: 2px; font-size: 12px; }
+.vatask { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
 .ruledraft.done { flex-direction: row; align-items: center; gap: 10px; color: var(--muted); }
 .aiheld { margin-left: 0; }
 .aiheld ul { gap: 6px; }

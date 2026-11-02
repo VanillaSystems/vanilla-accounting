@@ -141,7 +141,7 @@ test('what a rule cannot carry out is refused, each with its reason', () => {
   assert.equal(why({ id: 'a', when: { text: 'x' }, then: { account: '6200', vat: 'Q7' } }), 'vat');
   assert.equal(why({ id: 'a', when: { text: 'x' }, then: { account: '4000', vat: 'M81' } }), 'codeNotTaken', 'a code the firm\'s form does not take is the reason, before an account the chart lacks (r7f-32)');
   assert.equal(why({ id: 'a', when: { text: 'x' }, then: { account: '6200', vat: 'none' } }), 'ok', 'without a code is always the firm\'s');
-  assert.equal(why({ id: 'a', when: { text: 'x' }, then: { account: '6200' } }), 'vat', 'a booking names its VAT code, or none');
+  assert.equal(why({ id: 'a', when: { text: 'x' }, then: { account: '6200' } }), 'vatMissing', 'a booking names its VAT code, or none: code fills it in from the receipts, or the card asks (src/booking/rule-vat.ts)');
   assert.equal(why({ id: 'a', when: { text: '(' }, then: { account: '6200', vat: 'I81' } }), 'pattern');
   assert.equal(why({ id: 'a', when: { amount: { over: 500, under: 100 } }, then: { ask: 'Wofür?' } }), 'amount');
   assert.equal(why({ id: 'a', when: { counterparty: 'nobody' }, then: { ask: 'Wofür?' } }), 'counterparty');

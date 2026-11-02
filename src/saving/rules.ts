@@ -13,9 +13,11 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { parse, parseDocument, YAMLMap, YAMLSeq } from 'yaml';
 import { chartNames, companyRules, factsOf, holdsRules, rulesIn, type RuleRow } from '../booking/rule-book.js';
-import { chartOf, loadClassifyContext, ruleLine } from '../booking/classify.js';
+import { chartOf, loadClassifyContext, mappedReceipts, paymentFacts, ruleLine } from '../booking/classify.js';
 import { loadKnowledge, KNOWLEDGE_DIR } from '../knowledge/layers.js';
-import { loneWords, type BookingRule, type RuleFacts } from '../booking/rules.js';
+import { holds, loneWords, parseRule, type BookingRule, type RuleFacts } from '../booking/rules.js';
+import { ruleVatOf, type RateSeen } from '../booking/rule-vat.js';
+import { rateOf } from '../accounting/vat-codes.js';
 import { previewRules, ruleKey, type PlacedRow, type RulePreview } from '../booking/rule-preview.js';
 import { noteOffer, type NoteOffer } from '../knowledge/note-rules.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
@@ -146,7 +148,12 @@ export interface DraftRules extends RuleDiff {
   preview: RulePreview[];
   /** For each added or changed rule drafted from a sentence of the notes, by ruleKey: whether code offers it (src/knowledge/note-rules.ts). Keeping refuses one not offered as it is. */
   offers: Record<string, NoteOffer>;
+  /** The rules that name no VAT and whose receipts do not settle it: the card asks once which rate they book at (F05). */
+  vatAsks: VatAsk[];
 }
+
+/** A drafted rule without `vat` whose receipts show different rates or none: the rates they show, and the rates to choose from (0: no Swiss VAT). */
+export interface VatAsk { step: string; id: string; seen: RateSeen[]; choices: number[] }
 
 /** Every rule of the workspace with `rows` standing for the file at `path`, each as the classifier places it. */
 function rulesWith(ws: Ws, path: string, rows: readonly RuleRow[]): PlacedRow[] {
@@ -158,11 +165,73 @@ export function draftRules(ws: Workspace, path: string): DraftRules | undefined 
   if (!holdsRules(path) || path.includes('..')) return undefined;
   const draft = join(draftDir(ws), path);
   if (!existsSync(draft)) return undefined;
-  const after = read(draft);
+  const drafted = read(draft);
+  // The AI's draft is not the person's yet: the VAT it left out is written in by code, the same on every read.
+  const { text: after, asks: vatAsks } = settleVat(ws, path, drafted);
+  if (after !== drafted) writeFileSync(draft, after);
   const { diff: d, preview } = withPreview(ws, ruleDiff(ws, path, read(join(ws.paths.root, path)), after), after);
   const offers = offersOf(ws, d, preview, after);
   const keepable = !d.broken && !d.refused.length && (d.added.length + d.changed.length + d.removed.length > 0 || d.grouped !== undefined) && !notOffered(offers).length;
-  return { ...d, basis: hashOf(after), keepable, confirm: keepable && (d.wide.length > 0 || d.spread.length > 0 || d.overrides.length > 0 || rebooking(offers).length > 0), preview, offers };
+  return { ...d, basis: hashOf(after), keepable, confirm: keepable && (d.wide.length > 0 || d.spread.length > 0 || d.overrides.length > 0 || rebooking(offers).length > 0), preview, offers, vatAsks };
+}
+
+const businessOf = (path: string) => (path.startsWith(`${KNOWLEDGE_DIR}/rules/`) ? undefined : basename(path, '.yaml'));
+
+/** Rule `id` in `step` of a rules file's document, and its `then` map. */
+function ruleNode(doc: ReturnType<typeof parseDocument>, file: string, step: string, id: string): { rule: YAMLMap; then: YAMLMap } | undefined {
+  const seq = doc.getIn(['steps', sectionOf(file, step), 'rules']);
+  const rule = seq instanceof YAMLSeq ? seq.items.find((item): item is YAMLMap => item instanceof YAMLMap && item.get('id') === id) : undefined;
+  const then = rule?.get('then');
+  return rule && then instanceof YAMLMap ? { rule, then } : undefined;
+}
+
+/**
+ * The draft with the VAT of each rule that names none written in where the receipts of its payments
+ * settle it (src/booking/rule-vat.ts), and the rules whose card must ask. Only the VAT is missing:
+ * a rule refused for anything else keeps that refusal.
+ */
+function settleVat(ws: Workspace, path: string, text: string): { text: string; asks: VatAsk[] } {
+  const business = businessOf(path);
+  const facts = ruleFactsOf(ws, business);
+  let rows: RuleRow[];
+  try { rows = rulesIn(path, text, facts).filter((r) => r.refusal?.code === 'vatMissing'); } catch { return { text, asks: [] }; }
+  if (!rows.length) return { text, asks: [] };
+  const doc = parseDocument(text);
+  const books = hasBooks(ws) ? loadBooks(ws) : undefined;
+  const k = knowledgeWith(ws, path, text);
+  const context = { ...loadClassifyContext(ws), counterparties: 'error' in k ? [] : k.counterparties };
+  const fx = loadFxResolver();
+  const asks: VatAsk[] = [];
+  for (const row of rows) {
+    const node = ruleNode(doc, path, row.step, row.id);
+    if (!node) continue;
+    // Without a code the rule parses as it would book: which payments it holds for, on which account.
+    const raw = node.rule.toJSON() as Record<string, unknown>;
+    const probe = parseRule({ ...raw, then: { ...(raw.then as object), vat: 'none' } }, facts, !!business);
+    const booking = probe.ok ? probe.rule.then.booking : undefined;
+    if (!probe.ok || !booking) continue;
+    const placed = { rule: probe.rule, ...(business ? { business } : {}) };
+    const receipts = books ? books.transactions.filter((tx) => holds(placed, paymentFacts(books, tx, context, fx))).flatMap((tx) => mappedReceipts(books, tx)) : [];
+    const vat = ruleVatOf(booking.account, receipts);
+    if (vat.kind === 'fill') node.then.set('vat', vat.vat);
+    else asks.push({ step: row.step, id: row.id, seen: vat.seen, choices: vat.choices });
+  }
+  return { text: asks.length === rows.length ? text : String(doc), asks };
+}
+
+/** The person's answer to a card's VAT question: the rate goes into the draft as shown (`basis`); refused when the draft changed since. */
+export function setDraftVat(ws: Workspace, path: string, basis: string, step: string, id: string, rate: number): KeepResult {
+  if (!holdsRules(path) || path.includes('..')) return { ok: false, refusal: 'not-rules', message: `${path} hält keine Regeln.` };
+  const draft = join(draftDir(ws), path);
+  if (!existsSync(draft)) return { ok: false, refusal: 'gone', message: 'Diesen Entwurf gibt es nicht mehr.' };
+  const text = read(draft);
+  if (hashOf(text) !== basis) return { ok: false, refusal: 'stale', message: 'Der Entwurf hat sich seit der Anzeige geändert.' };
+  const doc = parseDocument(text);
+  const node = ruleNode(doc, path, step, id);
+  if (!node || rateOf(rate) === undefined) return { ok: false, refusal: 'changed', message: `Regel ${id}: einen Satz von ${rate} % gibt es nicht.` };
+  node.then.set('vat', rate);
+  writeFileSync(draft, String(doc));
+  return { ok: true, committed: false };
 }
 
 /** The checks of each added or changed rule drafted from the notes, against every rule of the workspace with the draft applied. */
@@ -279,7 +348,7 @@ export interface RulesView {
 export type DraftView = DraftRules & Pick<RulesView, 'names' | 'currency'> & { held: Record<string, number> };
 
 /** POST /api/rules/draft. */
-export type DraftCommand = { kind: 'keep'; path: string; basis: string; confirm?: boolean } | { kind: 'discard'; path: string };
+export type DraftCommand = { kind: 'keep'; path: string; basis: string; confirm?: boolean } | { kind: 'discard'; path: string } | { kind: 'vat'; path: string; basis: string; step: string; id: string; rate: number };
 
 export type RuleCommand =
   | { kind: 'off' | 'on' | 'delete'; file: string; step: string; id: string }

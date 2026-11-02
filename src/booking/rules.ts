@@ -163,7 +163,7 @@ export function parseRule(raw: Record<string, unknown>, facts: RuleFacts, inBusi
   // A rate («81», «8.1») names no code until the account does (issue #64).
   const rated = (v: string | undefined) => (v && facts.vat(v) === 'unknown' ? rateOf(v) : undefined);
   const code = (v: string | undefined): RuleRefusal | undefined => {
-    if (!v) return { code: 'vat', params: { vat: '' } };
+    if (!v) return { code: 'vatMissing' };
     if (rated(v) !== undefined) return undefined;
     const taken = facts.vat(v);
     if (taken === 'unknown') return { code: 'vat', params: { vat: v } };
