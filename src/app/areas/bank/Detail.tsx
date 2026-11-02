@@ -22,7 +22,8 @@ import { checkText } from '../../lib/fx-text.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps, Nav } from '../index.js';
 import { I } from '../receipts/icons.js';
-import { fileKeyOf, isCamt, matches, payHaystack, payText, signed, type Bank, type Statement } from './model.js';
+import { fileKeyOf, isCamt, matches, payHaystack, payText, signed, type Bank, type Check, type Statement } from './model.js';
+import { toRappen } from '../../../accounting/rappen.js';
 import { bankFor, setUi, useUi, type Section } from './state.js';
 import { importStatements, linkReceiptSet, pickStatements, removeStatement, setNote, setNoReceipt } from './actions.js';
 import type { ReceiptSet, SetCut } from '../../../intake/receipt-sets.js';
@@ -34,7 +35,7 @@ import { FileDetail } from './FileDetail.js';
 import { RunHistory } from '../../history/RunHistory.js';
 import { baseCurrency } from '../../../engines/index.js';
 import { localToday } from '../../../accounting/periods.js';
-import { linkedOf, receiptState, type Linked } from '../../../accounting/receipt-due.js';
+import { excessOfPayment, linkedOf, receiptState, type Linked } from '../../../accounting/receipt-due.js';
 import { WorkflowButtons } from '../../automation/marks.js';
 import { useAutomation } from '../../automation/store.js';
 import { processingText } from '../../automation/processing.js';
@@ -88,7 +89,7 @@ const Amount = ({ tx }: { tx: BankTransaction }) => {
  * The books off the bank's closing balance: a missing opening balance is named as on the Bilanz,
  * with the way to enter it, and only what it leaves unexplained is blamed on a payment (r4c-33).
  */
-function BookDiff({ books, nav, diff, s }: Props & { diff: number; s: Statement }) {
+function BookDiff({ books, nav, diff, s, unbooked }: Props & { diff: number; s: Statement; unbooked: Check['unbooked'] }) {
   const ws = useWorkspace();
   const { opening: missing, rest } = bookDiffParts(diff, ws ? missingOpenings(books, ws.bankAccounts, s.to.slice(0, 4)).find((m) => m.account === s.account.account) : undefined);
   return (
@@ -99,7 +100,11 @@ function BookDiff({ books, nav, diff, s }: Props & { diff: number; s: Statement 
           {missing.canType && <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'company', section: 'opening' }, query: {} }); }}>{t('reports.openingSet')}</a>}
         </span>
       ) : null}
-      {rest ? <span className="notice warn" style={{ margin: 0 }}>{I.dot}{t('bank.bookDiff', { diff: fmt(rest) })}</span> : null}
+      {rest ? (
+        <span className="notice warn" style={{ margin: 0 }} data-testid="book-diff">{I.dot}
+          {unbooked.n && toRappen(rest) === -toRappen(unbooked.sum) ? t('bank.bookDiffUnbooked', { diff: fmt(rest), n: unbooked.n }) : t('bank.bookDiff', { diff: fmt(rest) })}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -168,8 +173,10 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
           <NoMovements s={s} nav={nav} edit={edit} />
         ) : c!.gap ? (
           <span className="notice warn" style={{ margin: 0 }} data-testid="statement-gap">{I.dot}{t('bank.gap', { from: formatDate(c!.gap.from), to: formatDate(c!.gap.to), bank: fmt(c!.gap.bank), open: fmt(c!.gap.open), diff: fmt(c!.gap.diff) })}</span>
+        ) : c!.agrees ? (
+          <span className="linked" data-testid="statement-agrees">{I.check}{t('bank.checkOk', { n: c!.n })}</span>
         ) : c!.ok ? (
-          <span className="linked">{I.check}{t('bank.checkOk', { n: c!.n })}</span>
+          <span className="notice" style={{ margin: 0 }}>{t('bank.checkAddsUp', { n: c!.n })}</span>
         ) : c!.diff == null ? (
           <span className="notice" style={{ margin: 0 }}>{c!.close == null ? t('bank.noClose') : t('bank.noOpen')}</span>
         ) : (
@@ -190,7 +197,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
           </button>
         </div>
       ))}
-      {c?.bookDiff && !c.gap ? <BookDiff {...props} diff={c.bookDiff} s={s} /> : null}
+      {c?.bookDiff && !c.gap ? <BookDiff {...props} diff={c.bookDiff} s={s} unbooked={c.unbooked} /> : null}
       {ask ? <PdfQuestion key={ask.file} ask={ask} nav={nav} edit={edit} /> : null}
       {pdf && !ask ? <PdfFacts key={pdf} file={pdf} s={s} pays={all} check={c} edit={edit} nav={nav} version={props.books} /> : null}
       {reconcile ? <ReconcilePanel key={`${reconcile.account}-${reconcile.read.join(',')}-${reconcile.bank.join(',')}`} r={reconcile} books={props.books} label={s.account.label} closedThrough={b.closedThrough} edit={canEdit} nav={nav} /> : null}
@@ -295,6 +302,7 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
   // Every line of a split, not only the first (r9k-6).
   const lines = entries.map((e) => `${e.accountDebit || '–'} / ${e.accountCredit || '–'}${entries.length > 1 ? ` ${fmt(e.amount)}` : ''}`).join(' + ');
   const fee = b.feeOf(tx.ref);
+  const over = receipts.length > 1 ? excessOfPayment(props.books, tx.ref) : undefined;
   const first = receipts[0] ? b.receiptOf(receipts[0]) : undefined;
   const edit = canEdit && !closed;
   const saleWithoutVat = salesWithoutVat({ ...props.books, transactions: [tx] }, vatRegistered).length > 0;
@@ -305,7 +313,7 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
       {receipts.length > 0 ? (
         <> · <button type="button" className="golink" data-testid="go-receipt" data-tip={t('bank.openReceipt')} onClick={() => nav.go(at({ area: 'receipts', id: receipts[0] }, first?.date ?? tx.date))}>
           {t('bank.receipt', { name: first?.name ?? receipts[0] })}{receipts.length > 1 && ` +${receipts.length - 1}`}
-        </button>{receipts.length === 1 && madeByOf(props.books, receipts[0], tx.ref) ? <small className="madeby" data-testid="made-by"> {madeByOf(props.books, receipts[0], tx.ref)}</small> : null}</>
+        </button>{receipts.length === 1 && madeByOf(props.books, receipts[0], tx.ref) ? <small className="madeby" data-testid="made-by"> {madeByOf(props.books, receipts[0], tx.ref)}</small> : null}{over !== undefined ? <small className="m" data-testid="receipts-over"> {t('bank.receiptsOver', { amount: `${tx.currency} ${fmt(over)}` })}</small> : null}</>
       ) : tx.inputTaxProof ? (
         <> · <span data-testid="input-tax-proof">{t('bank.inputTaxProof', { text: tx.inputTaxProof.text })}</span></>
       ) : saleWithoutVat ? (

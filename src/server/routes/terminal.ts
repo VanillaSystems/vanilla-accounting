@@ -11,7 +11,7 @@ import { readSettings, writeTerminalApp } from '../../llm/settings.js';
 import { gate } from '../../llm/off.js';
 import { chooseCli, chooseTerminalApp, isTerminalApp, isTerminalCli, type TerminalView } from '../../platform/terminal.js';
 import { detectClis, detectTerminalApps, openInTerminal, stateOf } from '../../platform/terminal-open.js';
-import { ensureTerminalAgents } from '../../workspace/terminal-agents.js';
+import { renewTerminalAgents } from '../../workspace/terminal-agents.js';
 
 export const router = Router();
 
@@ -55,7 +55,7 @@ router.post('/api/terminal/open', async (req, res) => {
   const terminal = chooseTerminalApp(apps, app ?? settings.terminalApp);
   const opened = app ?? (terminal.kind === 'open' ? terminal.app : 'terminal');
   // The terminal AI reads its rules there before anything else: written now, as this version writes them.
-  ensureTerminalAgents(WS.paths);
+  await renewTerminalAgents(WS.paths);
   await openInTerminal({ folder: WS.paths.root, bin: chosen.bin, request, app: opened });
   res.json({ cli: chosen.cli, app: opened });
 });
