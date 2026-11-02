@@ -64,6 +64,8 @@ export function Sheet({ data, editing, className, onEdit, onAction, focus, onFoc
   const held = useRef<HTMLSelectElement | null>(null);
   const ownChange = useRef(false);
   const waiting = useRef<string>();
+  /** A number field focused whose content is still to be selected: the next key replaces it all, however soon it comes. */
+  const toSelect = useRef<HTMLElement | null>(null);
 
   useEffect(() => { let live = true; fontsReady.then(() => { if (live) setFonts(true); }); return () => { live = false; }; }, []);
 
@@ -141,13 +143,17 @@ export function Sheet({ data, editing, className, onEdit, onAction, focus, onFoc
         if (!el) return;
         if (el instanceof HTMLSelectElement) held.current = el;
         el.dataset.was = text(el);
-        // Selected once the click has placed the caret, unless typing began first: a select-all then would let the next key replace what was typed, a minus first.
-        if (el.isContentEditable && numeric(el)) requestAnimationFrame(() => { if (document.activeElement === el && text(el) === el.dataset.was) getSelection()?.selectAllChildren(el); });
+        // Selected once the click has placed the caret, or at the first key if that comes sooner: selected later, the next key would replace what was typed, a minus first.
+        if (el.isContentEditable && numeric(el)) {
+          toSelect.current = el;
+          requestAnimationFrame(() => { if (toSelect.current === el) { toSelect.current = null; if (document.activeElement === el) getSelection()?.selectAllChildren(el); } });
+        }
       }}
       onKeyDown={(e) => {
         const el = field(e);
         if (!el?.isContentEditable) return;
         e.stopPropagation();
+        if (toSelect.current === el) { toSelect.current = null; getSelection()?.selectAllChildren(el); }
         if (e.key === 'Escape' || (e.key === 'Enter' && !e.shiftKey && el.dataset.ed !== 'intro' && el.dataset.ed !== 'closing')) { e.preventDefault(); el.blur(); }
       }}
       onMouseDown={(e) => { if ((e.target as HTMLElement).closest('button')) e.preventDefault(); }}
