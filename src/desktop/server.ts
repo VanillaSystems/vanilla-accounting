@@ -11,7 +11,7 @@ import { createServer, request, type RequestListener, type Server } from 'node:h
 import { join, resolve } from 'node:path';
 import express from 'express';
 import { isApiPath, isAppPath } from '../server/app-paths.js';
-import { lanAddresses, newPhoneToken, pairingUrl, phoneApp, usePhoneToken } from '../server/phone.js';
+import { lanAddresses, newPhoneToken, pairingUrl, phoneApp, refuseForeignHost, usePhoneToken } from '../server/phone.js';
 import { SetupError, createWorkspace, type SetupRequest } from '../workspace/create.js';
 import { readManifest } from '../workspace/manifest.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, WorkspaceRefusal, appFolderIn, openWorkspaceAt, workspaceAt } from '../workspace/workspace.js';
@@ -219,7 +219,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   const app = express();
   app.use((req, res, next) => {
     if (!host || req.headers.host === host) return next();
-    res.status(403).json({ error: 'Nur von diesem Computer aus erreichbar.', code: 'localOnly' } satisfies ApiErrorBody);
+    refuseForeignHost(res);
   });
   app.use('/api/desktop', express.json());
   // This Mac's AI (docs/0.4.0/ai-setup.md): before any books exist, and the same while books are open.

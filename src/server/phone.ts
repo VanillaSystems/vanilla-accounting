@@ -22,7 +22,18 @@ export const PHONE_ROUTES: ReadonlyArray<{ method: 'GET' | 'POST'; path: string;
 export const NETWORK_PATHS: ReadonlySet<string> = new Set(PHONE_ROUTES.map((r) => r.path));
 
 const LOOPBACK = /^(127\.|::1$|::ffff:127\.)/;
-export const fromThisComputer = (req: express.Request) => LOOPBACK.test(req.socket.remoteAddress ?? '');
+const LOOPBACK_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+/** The connection comes from this computer: also a page of any site in this computer's browser. */
+export const loopbackPeer = (req: express.Request) => LOOPBACK.test(req.socket.remoteAddress ?? '');
+/**
+ * From this computer and addressed to it by a loopback name. A page elsewhere can rebind its own
+ * name to 127.0.0.1 (DNS rebinding): its requests then come from this computer's browser, but carry
+ * that name in Host, so they are treated as from the network.
+ */
+export const fromThisComputer = (req: express.Request) => loopbackPeer(req) && LOOPBACK_HOST.test(req.headers.host ?? '');
+
+export const refuseForeignHost = (res: express.Response) =>
+  res.status(403).json({ error: 'Nur unter localhost, 127.0.0.1 oder [::1] erreichbar, nicht unter einem anderen Namen.', code: 'foreignHost' } satisfies ApiErrorBody);
 
 export const newPhoneToken = (): string => randomBytes(32).toString('base64url');
 

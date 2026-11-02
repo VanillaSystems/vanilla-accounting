@@ -27,6 +27,8 @@ export type ClosedReason = (typeof CLOSED_REASONS)[number];
 export type ApiRefusal =
   | { code: 'readonly' }
   | { code: 'localOnly' }
+  /** From this computer, but under a name that is no loopback name (DNS rebinding). */
+  | { code: 'foreignHost' }
   | { code: 'phoneToken' }
   /**
    * `approved`: the date is not filed but held by that period's approved return (r7h-24).

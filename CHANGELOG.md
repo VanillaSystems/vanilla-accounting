@@ -14,6 +14,10 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Security
+
+- The API of `npm start` answers this computer only under a loopback name: `localhost`, `127.0.0.1` or `[::1]`, on any port. Before, a web page of any site open in your browser could point its own name at 127.0.0.1 (DNS rebinding) and then read and change the books through the browser, since the server only looked at where a connection came from, and that browser is on this computer. A request from this computer under any other name is now treated as from the network: the books, receipts and every write are refused (403, `foreignHost`, «Nur unter localhost, 127.0.0.1 oder [::1] erreichbar, nicht unter einem anderen Namen.»), and the phone's paths answer as they answer the network, the upload and status only with the pairing token once one is set. The phone app on the local network is unchanged: it reaches the upload and status under the Mac's network address, with its token. The Vite dev server (`npm run dev`) forwards your browser's `localhost` name and checks names itself. The Mac app had this check already; its refusal now carries the same code.
+
 ### Fixed
 
 - An undone edit stays undone. After ⌘Z (or «Rückgängig» in the toast, or a change in another tab) an open form now shows what the books hold: a booking's form, a receipt's details and VAT, a payment's note. Before, a booking's account field kept the undone account, and focusing it and leaving it booked that account again as your change. A field you changed and have not saved yet keeps what you typed, and leaving a field saves only what you changed. Likewise the year close's receivables entry: «Konto 1100 anlegen» fills its empty Soll at once, no longer only after closing and opening the form again.
