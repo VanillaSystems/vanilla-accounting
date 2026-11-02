@@ -114,7 +114,8 @@ answers:
     answer: >
       Import VAT is charged by the BAZG. Only the BAZG's electronic assessment (Veranlagungsverfügung
       MWST, eVV) naming the firm as importer proves the deduction; a courier's bill does not. Booked
-      on 4030 without code, the tax as a single-leg entry with M81-2 (Ziffer 400). The rule lives
+      on 4030 without code, the tax as a single-leg entry with the tax-amount code of the eVV's
+      rate, M26-2 or M81-2 (Ziffer 400). The rule lives
       in the process guide, not in the module.
     law: [MWSTG Art. 50, MWSTG Art. 28 Abs. 1 lit. c]
     where: [processes/booking.guide.yaml, processes/authorities/bazg.yaml, modules/ch/setup.yaml#answers.imports]
