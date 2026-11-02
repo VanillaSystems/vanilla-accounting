@@ -47,9 +47,11 @@ the phone took it (`X-Captured-At`, carried in the inbox name, `src/intake/captu
 detail says so.
 
 macOS may ask once whether «Vanilla Accounting» may accept incoming connections; the access only
-works after «Erlauben». Under `npm start` the server listens on every interface as before; with
-`VANILLA_PHONE_TOKEN` set in `.env`, requests from the network to `/api/status` and `/api/upload` need that token, and the
-terminal prints the pairing link. Without it they stay open, as for development before.
+works after «Erlauben». Under `npm start` the server listens on every interface, and from the network only the phone's
+paths answer: `/scan` without a token, `/api/status` and `/api/upload` only with the pairing
+token (401 `phoneToken` otherwise; every other path 403 `localOnly`). The token is
+`VANILLA_PHONE_TOKEN` from `.env`, or without it a new random one at each start
+(`src/server/phone.ts`); the terminal prints the pairing link with it for every LAN address.
 
 The port is kept from one start to the next, because the page stores theme, zoom and language
 per origin. The page's zoom is its own (`src/app/shell/prefs.ts`); View › Vergrössern,

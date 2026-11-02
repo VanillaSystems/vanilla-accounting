@@ -50,8 +50,8 @@ const INVOICE_STATUS: Record<InvoiceRefusal, number> = {
   incomplete: 400, notFound: 404, notDraft: 409, notIssued: 409, cancelled: 409, paid: 409, creditNote: 409, nothingOpen: 409, changed: 409, uid: 400,
 };
 
-// From the network only the phone's paths answer (src/server/phone.ts), the API ones with the
-// pairing token once one is configured. Everything else (the books, receipts, every write) answers
+// From the network only the phone's paths answer (src/server/phone.ts), the API ones only with the
+// pairing token. Everything else (the books, receipts, every write) answers
 // only to this computer.
 app.use((req, res, next) => {
   if (fromThisComputer(req) || NETWORK_PATHS.has(req.path)) return next();

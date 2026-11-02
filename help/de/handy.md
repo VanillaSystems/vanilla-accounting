@@ -45,6 +45,6 @@ Die Verbindung im WLAN ist nicht verschlüsselt. Wer im selben WLAN den Verkehr 
 
 ## Ohne die Mac-App
 
-Das Koppeln zeigt die Mac-App. Mit `npm start` setzt du `VANILLA_PHONE_TOKEN` in der `.env` der App. Das Terminal zeigt dann beim Start die Adresse mit dem Code.
+Das Koppeln zeigt die Mac-App. Mit `npm start` zeigt das Terminal bei jedem Start die Adresse mit dem Code; ohne ihn nimmt der Mac nichts vom Handy an. Der Code ist bei jedem Start neu. Damit er bleibt, setzt du `VANILLA_PHONE_TOKEN` in der `.env` der App.
 
 Andere Wege für Belege stehen unter [Belege aus Mails](mail) und [Erste Schritte](erste-schritte).

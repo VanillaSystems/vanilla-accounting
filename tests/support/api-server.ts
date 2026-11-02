@@ -23,6 +23,8 @@ export interface ApiServer {
    * client already sent on it, and the request fails with ECONNRESET.
    */
   fetch(path: string, init?: RequestInit): Promise<Response>;
+  /** What the server printed so far. */
+  output(): string;
   /**
    * Waits until no run is running or queued. A run a request started writes the books after the
    * request answered: a test that writes the books itself waits for it first, or the run's save
@@ -65,8 +67,8 @@ export async function startApi(fixture: string, env: Record<string, string> = {}
   // The server takes the port the system gives 127.0.0.1 and names it: a port probed here and
   // passed on could meanwhile belong to another process, and a wildcard listen shares a port with a
   // process listening on 127.0.0.1 alone, which then gets the test's requests.
+  let out = '';
   const port = await new Promise<number>((resolve, reject) => {
-    let out = '';
     server.once('exit', (code) => reject(new Error(`API exited with ${code}`)));
     server.stdout!.on('data', (chunk: Buffer) => {
       out += chunk.toString();
@@ -85,6 +87,7 @@ export async function startApi(fixture: string, env: Record<string, string> = {}
     root,
     ws,
     fetch: request,
+    output: () => out,
     async send(method, path, body) {
       const res = await request(path, {
         method,

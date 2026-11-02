@@ -46,8 +46,13 @@ export function tokenMatches(given: string | undefined, token: string): boolean 
 
 const bearer = (req: express.Request) => /^Bearer\s+(\S+)$/i.exec(req.headers.authorization ?? '')?.[1];
 
-/** `npm start` takes the token from VANILLA_PHONE_TOKEN (.env); the desktop app sets its own. */
-let configured: () => string | undefined = () => process.env.VANILLA_PHONE_TOKEN?.trim() || undefined;
+/**
+ * The token is there only while the phone is switched on, and whoever switches it on sets it:
+ * the desktop app on the person's switch, `npm start` for its run (src/server/main.ts). The AI is
+ * told the phone is switched on by it (src/server/collection-now.ts), so importing this module
+ * never makes one.
+ */
+let configured: () => string | undefined = () => undefined;
 export function usePhoneToken(get: () => string | undefined): void { configured = get; }
 export const phoneToken = (): string | undefined => configured();
 
@@ -56,13 +61,13 @@ const refuseToken = (res: express.Response) =>
 
 /**
  * For the API: a request from another device to a path that needs the token is refused without
- * it, once a token is configured. Without one (`npm start` with no VANILLA_PHONE_TOKEN) the paths
- * stay open to the network as before. Requests from this computer never need it.
+ * it. With no token (the desktop app's phone access switched off) every such request is refused.
+ * Requests from this computer never need it.
  */
 export function phoneGate(req: express.Request, res: express.Response, next: express.NextFunction): void {
   const token = phoneToken();
   const route = PHONE_ROUTES.find((r) => r.path === req.path);
-  if (!token || !route?.token || fromThisComputer(req) || tokenMatches(bearer(req), token)) return next();
+  if (!route?.token || fromThisComputer(req) || (token && tokenMatches(bearer(req), token))) return next();
   refuseToken(res);
 }
 
