@@ -38,9 +38,16 @@ function prepared(): { ws: Workspace; ask: Ask; refs: string[] } {
   update(books, PERSON, (b) => { b.journalEntries = b.journalEntries.filter((e) => !removed.has(e)); });
   saveBooks(ws, books);
   const ask: Ask = async (prompt) => {
-    const refs = [...prompt.matchAll(/^### Transaction \d+: (\S+)/gm)].map((m) => m[1]);
-    return JSON.stringify(Object.fromEntries(refs.map((ref) => [ref, {
-      entries: (answers.get(ref) ?? []).map((e) => ({ accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount, vatCode: e.vatCode, description: e.description })),
+    const items = [...prompt.matchAll(/^### Transaction \d+: (\S+)\n {2}Date: \S+ \| Amount: (-?[\d.]+)/gm)].map((m) => ({ key: m[1], amount: Number(m[2]) }));
+    // A collective payment is asked about part by part (`ref#n`, and the parts without a receipt under its ref): each gets the entries of its amount.
+    const refOf = (key: string) => key.split('#')[0];
+    const answer = (key: string, amount: number) => {
+      const all = answers.get(refOf(key)) ?? [];
+      const parted = items.filter((x) => refOf(x.key) === refOf(key)).length > 1;
+      return parted ? all.filter((e) => Math.abs(e.amount - Math.abs(amount)) < 0.005) : all;
+    };
+    return JSON.stringify(Object.fromEntries(items.map(({ key, amount }) => [key, {
+      entries: answer(key, amount).map((e) => ({ accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount, vatCode: e.vatCode, description: e.description })),
     }])));
   };
   // A shop's payout waits for the person while its file names no clearing account (#203, tests/payment-providers.test.ts): no run books it.

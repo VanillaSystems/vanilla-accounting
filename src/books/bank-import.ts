@@ -306,15 +306,18 @@ export function structuredSpans(ws: Ws): StructuredSpan[] {
  * The balances read from the camt.053 files now, beside the others: a camt.053 (the bank's export, or a
  * statement read in once it added up) states the balance of its day over a kept PDF's table, read by
  * the model or typed by a person (#243). Only a year-end confirmation the person attached (#119)
- * stands against it.
+ * stands against it. A balance dated in a closed period is what the books held when it was filed: it
+ * stays, and no file adds or replaces one there.
  */
-export function withCamtBalances(others: StatementClosingBalance[] = [], camt: StatementClosingBalance[]): StatementClosingBalance[] | undefined {
+export function withCamtBalances(others: StatementClosingBalance[] = [], camt: StatementClosingBalance[], isClosed: (date: string) => boolean = () => false): StatementClosingBalance[] | undefined {
   const day = (b: StatementClosingBalance) => `${b.account} ${b.date}`;
-  const confirmed = new Set(others.filter((b) => b.source !== 'camt' && confirmsYearEnd(b)).map(day));
-  const fresh = camt.filter((b) => !confirmed.has(day(b)));
+  const filed = others.filter((b) => isClosed(b.date));
+  const open = others.filter((b) => !isClosed(b.date));
+  const confirmed = new Set(open.filter((b) => b.source !== 'camt' && confirmsYearEnd(b)).map(day));
+  const fresh = camt.filter((b) => !isClosed(b.date) && !confirmed.has(day(b)));
   const theirs = new Set(fresh.map(day));
-  const kept = others.filter((b) => b.source !== 'camt' && !theirs.has(day(b)));
-  const out = [...kept, ...fresh].sort((a, b) => a.date.localeCompare(b.date) || a.account.localeCompare(b.account));
+  const kept = open.filter((b) => b.source !== 'camt' && !theirs.has(day(b)));
+  const out = [...filed, ...kept, ...fresh].sort((a, b) => a.date.localeCompare(b.date) || a.account.localeCompare(b.account));
   return out.length || others.length ? out : undefined;
 }
 
@@ -451,7 +454,7 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
   });
 
   return {
-    index: withBalances({ ...previous, receipts: scan.receipts, transactions, bankStatements: scan.bankStatements, mappings }, withCamtBalances(withReadBalances(previous.statementBalances, scan.reads, lock.isClosed), scan.camtBalances)),
+    index: withBalances({ ...previous, receipts: scan.receipts, transactions, bankStatements: scan.bankStatements, mappings }, withCamtBalances(withReadBalances(previous.statementBalances, scan.reads, lock.isClosed), scan.camtBalances, lock.isClosed)),
     brokenClosedLinks,
     vanishedClosedTransactions,
   };

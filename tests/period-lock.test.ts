@@ -117,7 +117,9 @@ const refused: Array<Call & { status: number }> = [
   { method: 'POST', path: '/api/year-close/2025/balances/1020?amount=100&name=saldo.pdf', body: { file: 'x' }, status: 403 },
   { method: 'DELETE', path: '/api/year-close/2025/balances/1020', status: 403 },
   { method: 'PUT', path: '/api/year-close/2025/cash/1000', body: { amount: 100 }, status: 403 },
-  { method: 'POST', path: '/api/statements/bookings', body: { entries: [{ id: 'back', transactionRef: 'C1', date: '2026-06-30', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'zurück' }], mappings: [] }, status: 403 },
+  // «Auszug entfernen» of a filed month's statement: its balance stays as filed. Its undo only puts back what a removal of the open period took.
+  { method: 'DELETE', path: `/api/statements/Raiffeisen/${encodeURIComponent(MAY_PDF)}`, status: 403 },
+  { method: 'POST', path: '/api/statements/restore', body: { undo: 'none' }, status: 410 },
   { method: 'POST', path: '/api/invoices/in_p/payments', body: { transactionRef: 'CI' }, status: 403 },
   // A filed statement PDF's question (#254): not read, corrected nor read in (closing it books nothing: see below); a filed movement's mark not taken away.
   { method: 'POST', path: MAY_READ, status: 403 },

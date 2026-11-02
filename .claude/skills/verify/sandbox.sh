@@ -51,9 +51,13 @@ load() {
   source "$SB/env"
 }
 
+# Both CLIs the app can run (src/platform/ai-cli.ts): Firma › KI may choose Codex, and a real codex on the PATH would answer.
 shim() {
-  printf '#!/bin/sh\ncat >/dev/null\necho "verify sandbox: no model calls" >&2\nexit 1\n' >"$SB/bin/claude"
-  chmod +x "$SB/bin/claude"
+  local cli
+  for cli in claude codex; do
+    printf '#!/bin/sh\ncat >/dev/null\necho "verify sandbox: no model calls" >&2\nexit 1\n' >"$SB/bin/$cli"
+    chmod +x "$SB/bin/$cli"
+  done
 }
 
 # The API spawns `claude` by PATH on every call, so swapping $SB/bin/claude takes effect at once.
@@ -82,7 +86,7 @@ cmd_up() {
   # VANILLA_WORKSPACE points the API here.
   for e in "$WS_SRC"/* "$WS_SRC"/.[!.]*; do [[ -e "$e" && "$(basename "$e")" != data ]] && cp -cR "$e" "$SB/"; done
   [[ -d "$SB/beleg-import" ]] || mkdir "$SB/beleg-import"
-  # No model calls: src/llm/ask.ts spawns `claude`, and the API finds this refusing shim first.
+  # No model calls: src/llm/ask.ts spawns `claude` (or `codex`), and the API finds these refusing shims first.
   mkdir "$SB/bin"
   shim
 
@@ -109,7 +113,8 @@ EOF
   # What the app keeps on this computer outside the workspace (approvals, runs, demo copies, the
   # browser profile, traces) goes next to the sandbox, never into the owner's ~/.vanilla-accounting.
   # READONLY=1 in the caller's environment starts it in audit mode, as `npm run start:audit` does.
-  (cd "$SB" && VANILLA_WORKSPACE="$SB" VANILLA_APPROVALS_DIR="$SB.approvals" VANILLA_RUNS_DIR="$SB.runs" VANILLA_DEMO_DIR="$SB.local/demo" VANILLA_BROWSER_DIR="$SB.local/browser" VANILLA_TRACES_DIR="$SB.local/traces" VANILLA_AI_SETTINGS="${VANILLA_AI_SETTINGS:-$SB.local/ai.json}" VANILLA_SECRETS_FILE="${VANILLA_SECRETS_FILE:-$SB.local/secrets.json}" PATH="$SB/bin:$PATH" VANILLA_API_HOST=127.0.0.1 PORT="$API_PORT" READONLY="${READONLY:-}" exec node --import "$REPO/node_modules/tsx/dist/loader.mjs" "$REPO/src/server/main.ts" </dev/null >"$SB/api.log" 2>&1) &
+  # CLAUDE_BIN or CODEX_BIN would pin a real program past the shims, so the API starts without them.
+  (cd "$SB" && unset CLAUDE_BIN CODEX_BIN && VANILLA_WORKSPACE="$SB" VANILLA_APPROVALS_DIR="$SB.approvals" VANILLA_RUNS_DIR="$SB.runs" VANILLA_DEMO_DIR="$SB.local/demo" VANILLA_BROWSER_DIR="$SB.local/browser" VANILLA_TRACES_DIR="$SB.local/traces" VANILLA_AI_SETTINGS="${VANILLA_AI_SETTINGS:-$SB.local/ai.json}" VANILLA_SECRETS_FILE="${VANILLA_SECRETS_FILE:-$SB.local/secrets.json}" PATH="$SB/bin:$PATH" VANILLA_API_HOST=127.0.0.1 PORT="$API_PORT" READONLY="${READONLY:-}" exec node --import "$REPO/node_modules/tsx/dist/loader.mjs" "$REPO/src/server/main.ts" </dev/null >"$SB/api.log" 2>&1) &
   echo $! >"$SB/api.pid"
   # UI: cwd = the repo; data comes through the API proxy.
   (cd "$REPO" && exec node "$REPO/node_modules/vite/bin/vite.js" --config "$VITE_CONFIG" </dev/null >"$SB/ui.log" 2>&1) &
@@ -192,6 +197,7 @@ cmd_doctor() {
   else
     check "api finds the refusing claude shim"      "ps eww -p $API_PID | grep -q 'PATH=$SB/bin:' && ! $SB/bin/claude </dev/null 2>/dev/null"
   fi
+  check "api finds the refusing codex shim, no CLI pinned" "! $SB/bin/codex </dev/null 2>/dev/null && ! ps eww -p $API_PID | grep -qE '(CLAUDE|CODEX)_BIN='"
   echo "closedThrough: $(get "$API/api/config" | jq -r '.closedThrough // "none"')"
   echo "UI=$UI  API=$API  EVIDENCE=$EVIDENCE"
   return $bad

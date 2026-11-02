@@ -43,9 +43,11 @@ and other areas render `<VatCards>` to get them.
 - `je-delete` is Löschen (or Delete / ⌘⌫; a bare Backspace does nothing): no question, the entry's
   place keeps `[data-testid=deleted]` with Rückgängig, which puts it back with its id, ref, FX fields,
   `corrects` and origin.
-- `je-reclassify` is Neu klassifizieren (Herkunft): the payment is booked again by the classifier
-  (a model call). A payment with a person's entries first asks `[data-testid=keep-hers]` (Behalten /
-  Neu buchen lassen). Undo removes the new entries and restores the old ones.
+- `je-reclassify` is Neu klassifizieren, inside the folded «Herkunft» section of the detail (open
+  it first): the payment is booked again by the classifier (a model call). A payment with a
+  person's entries first asks `[data-testid=keep-hers]` «Deine Buchung behalten?» (Meine behalten /
+  Trotzdem neu buchen). Undo removes the new entries and restores the old ones.
+- `je-actions`: «Aktionen» (A) opens the entry's action menu; its actions also lead ⌘K.
 - `je-closed` refuses every write to a filed entry: the form is read only, Delete and E toast the
   reason, and the API answers 403 for anything that gets through.
 - `vat-card`: hovering (or focusing) a code shows its rate, text, Ziffern, amount kind, the
@@ -69,9 +71,9 @@ Preconditions: the doctor passes; `$CT`, `$OPEN_Q`, `$CLOSED_Q` from the env. Th
 per-viewer preference: `$B js "localStorage.setItem('language','de')"` once, then reload.
 
 - **List and detail.** `$B goto "$UI/journal?period=$OPEN_Q"`. Rows are `.rows.je .row[data-id=<entry id>]`
-  with `.dr`, `.cr`, `.vc[data-vat]`, `.cu`, `.a`; the selected one has `.sel`. The first row should be
-  selected when the link names none; on 2026-10-21 nothing was selected (a product bug, reported),
-  so click a row (`$B js "document.querySelector('.rows.je .row[data-id]').click()"`) first.
+  with `.dr`, `.cr`, `.vc[data-vat]`, `.cu`, `.a`; the selected one has `.sel`. The first row is
+  selected when the link names none, and the URL becomes `/journal/<its id>` (fixed in #62; driven
+  2026-10-31).
 - **Card and histogram.** Hover a cell that has a code (`browse` hovers only a unique selector: mark one
   first, `$B js "document.querySelector('.rows.je .vc[data-vat=I81]').id='__vc'"`, `$B hover '#__vc'`),
   wait 0.5 s, then `.vcard` reads `I81 / 8.1 % / … / 405 …`. A cell without a code shows no card.
@@ -79,25 +81,35 @@ per-viewer preference: `$B js "localStorage.setItem('language','de')"` once, the
 - **Edit.** Select an open entry, `$B press e` (focus in `input[name=accountDebit]`), `$B type "65"`,
   `$B press Enter` (typing opens the list with the first match active; ArrowDown would take the
   second). The toast says `Gespeichert: Soll`; `$S diff` shows `~ journalEntries <id> .accountDebit`,
-  `.origin -> "manual"`, `.by` and `.reason`. The toast's Rückgängig within 6 s writes it back.
+  `.origin -> "manual"` and `.by` (with `was`). The toast's Rückgängig within 6 s writes it back.
 - **New entry.** `$B press n`, `$B fill '.jnew [name=date]' '15.05.2026'` (Swiss date; an ISO date is
-  refused), fill `amount`, `accountDebit` (`6570`), `accountCredit` (`6000`), `description`, pressing
+  refused), fill `amount`, `accountDebit` (`6570`), `accountCredit` (`6000`; a bank account such as
+  1021 without a payment warns «Die Bank ändert sich ohne Zahlung. Nochmals ↵ bucht trotzdem.»
+  and books only on the second ↵), `description`, pressing
   Escape after each account field (↵ in an open list picks instead of booking), focus the description,
   `$B press Enter`. Toast `Gebucht: 6570 / 6000 · <amount>`, the URL is `/journal/<new id>`; `$S diff`
   shows `+ journalEntries <id>` (ref `M2026-003` on the demo). ⌘Z (focus outside a field) deletes it
   again: `no changes`.
 - **Filed entry.** `$B goto "$UI/journal?period=$CLOSED_Q"`, select a row: the detail shows the lock
   notice, every form input is `readOnly`, `$B press Delete` toasts `Eingereicht: diese Buchung ändert
-  sich nicht mehr. Eine Korrektur geht in die offene Periode.` The notice's link opens
-  `.jnew` titled Korrekturbuchung; booking it adds an entry with `corrects`.
-- **Re-classify.** The sandbox refuses model calls: the toast says `claude exited 1`. To drive it,
-  `$S stub <run>` (the stub books 6570), then `$S unstub <run>`.
+  sich nicht mehr. Eine Korrektur geht in die offene Periode.` The link «Korrektur in <quarter>
+  erfassen →» names the open quarter that holds today (Q4 2026 on 2026-10-31) and opens `.jnew`
+  titled Korrekturbuchung; an entry without a code opens on `account`. `storno` on a bank entry warns
+  that books and bank will differ and books on the second click; the new entry carries
+  `corrects: <filed quarter>` and `config.correctionCases` gains a case.
+- **Re-classify.** Open «Herkunft» first (the button is hidden in the fold, and a click on it times
+  out). Under the refusing shim the toast says «Zahlung buchen braucht eine KI. Auf diesem Mac ist
+  keine eingerichtet.» with «KI einrichten» / «Von Hand erfassen». With `$S stub <run>` it says
+  «Neu gebucht: 1 Buchung» and the toast undoes it; then `$S unstub <run>`.
 
 ## Gotchas
 
 - The toast with Rückgängig stays 6 s. Run the undo in the same browse call chain as the action.
   ⌘Z while the focus is still in a form field is the field's own undo, not the app's: click the
   toast's button instead.
+- Known product bug (2026-10-31): after an edit saved with ↵, ⌘Z undoes it in the books and the
+  list, but the open form keeps the new value; focusing that field and leaving it saves the undone
+  value again. A real click on the toast's Rückgängig does not show it.
 - Two account fields filled from `$B js` both show their list; `$B type` in the focused field is
   the user path.
 - The account field's list hides the account name under the field while it is open.

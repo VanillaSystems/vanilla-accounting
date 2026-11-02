@@ -4,7 +4,7 @@
  * splits by them instead of blind (r9k-6). Nothing for a payment without parts.
  */
 import type { BankTransaction } from '../../../types/index.js';
-import { partText } from '../../../accounting/manual-booking.js';
+import { partText } from '../../../accounting/batch-parts.js';
 import { fmt } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 

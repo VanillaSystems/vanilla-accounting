@@ -13,7 +13,7 @@ Automatisierung (`/automation…`) shows what the app does on its own: an overvi
 
 ## How to get to it (user POV)
 
-- Dock `Automatisierung` (`G W`; its badge counts open tasks and questions), or ⌘K.
+- Dock `Automatisierung` (`G W`; the dock widget below the dock shows gelesen / gebucht / für dich, and «für dich» counts open tasks and questions), or ⌘K.
 - From the drop dialog's `In den Läufen ansehen →`, from a run link in the AI sidebar.
 
 ## Driving it with browse + sandbox.sh

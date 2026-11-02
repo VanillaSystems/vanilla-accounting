@@ -29,5 +29,6 @@ The export dialog (redesign phase 6) builds any export of the books in one place
 ## Gotchas
 
 - Report PDFs are printed by the installed Chromium (src/invoices/pdf.ts `printPdf`); without one the API answers 503 `noBrowser`.
+- Known product bug (2026-10-31): with an installed Google Chrome the PDF browser ends 12-18 s after its first use and the API never relaunches it; every later export with a PDF part answers 500 «Connection closed.». Start the sandbox with `CHROME_PATH` on Chrome for Testing (features/invoices.md, Gotchas). The ZIP's `SHA256SUMS.txt` then checks out (`shasum -a 256 -c`, 35 of 35 for the Treuhänder preset on Q2).
 - The demo has no filed quarter in Q3: `Eingereichte MWST-Abrechnungen` is empty there; choose 2026 for Q1's return and seal.
 - Own presets live in the browser profile of the tab: a new sandbox port starts without them, and with the browser's language until one is picked.

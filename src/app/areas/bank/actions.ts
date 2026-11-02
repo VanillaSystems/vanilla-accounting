@@ -11,7 +11,7 @@ import type { OpeningOffer } from '../../../accounting/opening-balance.js';
 import type { ReceiptSet } from '../../../intake/receipt-sets.js';
 import { fmt } from '../../lib/utils.js';
 import { baseCurrency } from '../../../engines/index.js';
-import { ApiError, api, errorText, sources, type StatementRemoved } from '../../lib/api.js';
+import { ApiError, api, errorText } from '../../lib/api.js';
 import { dropFiles } from '../../shell/DropDialog.js';
 import { t } from '../../i18n/index.js';
 import type { Area, Nav } from '../index.js';
@@ -147,28 +147,21 @@ export async function importStatements(files: File[], nav: Nav, into?: { account
 /**
  * «Auszug entfernen» on a statement's page: the file leaves the books as the drop dialog's undo
  * takes it (its payments, their links and entries, its balances; a hand booking refuses it). The
- * toast's «Rückgängig» reads the same file in again, so nothing is lost by a wrong click (r9k-3).
+ * toast's «Rückgängig» puts the file and every record the removal changed back as they were (r9k-3).
  */
 export async function removeStatement(nav: Nav, s: Statement): Promise<void> {
   if (!s.file) return;
-  const file = `${s.file.bank}/${s.file.filename}`;
-  let bytes: Blob | undefined;
-  let taken: StatementRemoved['removed'] = { entries: [], mappings: [] };
+  let undo: string;
   try {
-    bytes = await (await fetch(sources.statement(s.file.bank, s.file.filename))).blob();
-    taken = (await api.deleteStatement(file)).removed;
+    ({ undo } = await api.deleteStatement(`${s.file.bank}/${s.file.filename}`));
   } catch (e) {
     nav.toast(errorText(e));
     return;
   }
   forgetPages();
   nav.refresh();
-  const kept = bytes;
-  // The undo reads the file again, then puts its bookings and links back as they were (r10h-3): the payment comes back booked.
   nav.toast(t('bank.statementRemoved', { name: s.file.filename }), () => {
-    api.importStatement(kept, s.file!.filename, { account: s.account.account, month: s.from.slice(0, 7) }, true)
-      .then(async (r) => { if (taken.entries.length || taken.mappings.length) await api.restoreStatementBookings(taken); return r; })
-      .then((r) => { forgetPages(); nav.refresh(); nav.go(at({ area: 'bank', statement: keyOf(r) }, r.to)); }, (e) => nav.toast(errorText(e)));
+    api.restoreStatement(undo).then(() => { forgetPages(); nav.refresh(); nav.go(at({ area: 'bank', statement: s.key }, s.to)); }, (e) => nav.toast(errorText(e)));
   });
   nav.go(at({ area: 'bank' }, s.to));
 }

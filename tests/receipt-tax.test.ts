@@ -83,3 +83,24 @@ test('a company rule that books the supplier on 8.1 % takes the CHF invoice\'s t
   assert.equal(inputTax(entries), 40.5);
   assert.equal(bankPaid(entries), 575);
 });
+
+test('a collective EUR payment whose CHF invoices are the whole payment\'s: a part booked by a rule keeps its gross code, no part takes the invoices\' tax', async () => {
+  const batch: BankTransaction = { ...pay, ref: 'T2', amount: 595, description: 'Sammelauftrag', parts: [
+    { amount: 575, currency: 'EUR', counterparty: 'Lieferant Muster AG', reference: 'RE-1' },
+    { amount: 20, currency: 'EUR', counterparty: 'Beta GmbH', reference: 'RE-2' },
+  ] };
+  const small = { ...chfInvoice, id: 'r2', amount: 18, vatSummary: [{ ratePercent: 8.1, net: 16.65, vat: 1.35 }] } as Receipt;
+  const facts: RuleFacts = { account: () => true, vat: () => 'taken', counterparty: () => true };
+  const rules = [
+    parseRule({ id: 'muster', when: { text: 'Lieferant Muster' }, then: { account: '4001', vat: 'M81' } }, facts),
+    parseRule({ id: 'beta', when: { text: 'Beta GmbH' }, then: { account: '4001', vat: 'M81' } }, facts),
+  ].map((p) => { assert.ok(p.ok); return { rule: p.rule }; });
+  const receipts = [chfInvoice, small];
+  const books = {
+    transactions: [batch], receipts, mappings: receipts.map((r) => ({ transactionRef: batch.ref, receiptId: r.id })),
+    bankStatements: [], journalEntries: [], config: { closedThrough: '2026-09-30' },
+  } as unknown as Books;
+  const { classified } = await classifyTransactions(books, [batch], { fx, context: { ...context, rules } });
+  assert.deepEqual(classified, [batch.ref]);
+  assert.deepEqual(books.journalEntries.map((e) => [e.amount, e.vatCode]), [[575, 'M81'], [20, 'M81']], 'each part gross at the ESTV rate, no tax-amount line from receipts the part does not hold alone');
+});

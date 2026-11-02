@@ -31,7 +31,7 @@ Each feature file starts with an H1 and one paragraph, then exactly four H2s in 
 
 ## Features
 
-Maintenance pass of 2026-10-21: every file below was read against the source of origin/0.4.0 and every feature file was driven live at least once (evidence `.verify/evidence/live/`, `setup/`, `proof/`, `vsf-proof/`, `vsf-vm/`); `desktop-drop` was blocked by a product regression (see its Gotchas).
+Maintenance pass of 2026-10-31: every file below was read against the source of origin/0.4.0 (7fac48b7) and driven live in a demo sandbox, except `desktop-install` (needs the dmg and the VM; not started this pass). `desktop-setup` and `desktop-drop` were driven through `desktopServer` in a browser instead of the packed app (desktop-setup.md, Gotchas). Product bugs found are named in the Gotchas of their files.
 
 - [Journal entries (Buchungen) and MWST-Codes](./journal-entries.md) covers the rebuilt Buchungen (grid, filters, `?vat=`, detail, edit, new entry, correction, delete and re-classify with undo, the filed-quarter refusals) and the VAT code card, histogram and catalogue. **Driven end to end on 2026-10-11 (redesign phase 4).**
 - [Bank statements (Kontoauszüge)](./bank.md) covers the new Kontoauszüge area: statements by account or month, missing months, the balance check against the bank and the books, the payment's line on the PDF, links to receipt and entry, `/payments/<ref>`, `kein Beleg nötig` and the payment's note with undo, and the statement import (`POST /api/statements`) with its closed-quarter refusal. **Driven end to end on 2026-10-11.**
@@ -56,6 +56,16 @@ Maintenance pass of 2026-10-21: every file below was read against the source of 
 The desktop files use `V`, `A`, `CDP` and `EVIDENCE` from the SKILL.md section "The packed Mac app on a fresh Mac", and their contract names the harness `vm.sh + app.mjs`.
 
 ## Not mapped yet
+
+Driven on 2026-10-31 but without a feature file of their own:
+
+- MWST abrechnen (`vat-filing` run): MWST › «Abrechnung erstellen» → Aufgaben «Abrechnung <q> prüfen» → «Freigegeben» (the period is held: writes 403) → «Eingereicht» → «Ja, eingereicht» → `closedThrough` moves, `filings/` gets the XML and `seal-<q>.json` (`src/workflows/filing.ts`, `GET /api/filing/<q>`).
+- Batch actions on a selection (⌘-click rows, `src/app/selection/BatchPanel.tsx`, `POST /api/batch`): «Konto ändern …», Vorschau names what is left out, «N ausführen», the toast undoes the batch.
+- Fragen («Frage stellen» on a payment, receipt or entry; Aufgaben «Deine offenen Fragen»; `src/app/questions/`, `/api/questions`).
+
+Not driven yet: Dimensionen (Firma › Dimensionen, `tags` on entries and rules), Firma › Quellen with a mailbox (needs an IMAP server), the scan page's camera.
+
+Without a feature file (Änderungen, the plain save without AI, and Firma › Regeln with «Neue Regel» were driven on 2026-10-31; `POST /api/upload` by curl):
 
 - Änderungen (`/changes`, `src/app/areas/changes/changes.tsx`): what changed in rules and settings, saving and history.
 - Firma › Regeln and Firma › Quellen (`src/app/areas/company/RulesSection.tsx`, `src/app/areas/company/SourcesSection.tsx`): the rule list with «Neue Regel» and the rule card, and where receipts come from.

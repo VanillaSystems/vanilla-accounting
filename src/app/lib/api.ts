@@ -142,6 +142,7 @@ export function errorText(e: unknown): string {
   switch (b.code) {
     case 'readonly': return t('error.readonly');
     case 'localOnly': return t('error.localOnly');
+    case 'foreignHost': return t('error.foreignHost');
     case 'phoneToken': return t('error.phoneToken');
     case 'manualOnly': return t('error.manualOnly');
     case 'booksChanged': return t('error.booksChanged');
@@ -151,6 +152,7 @@ export function errorText(e: unknown): string {
     case 'pointerLinked': return t('error.pointerLinked', { payment: b.params.payment });
     case 'correctionBooked': return t('error.correctionBooked', { entry: b.params.entry });
     case 'reportCorrection': return t(`error.reportCorrection.${b.params.why}`);
+    case 'statementUndo': return t(`error.statementUndo.${b.params.why}`);
     case 'secondPayment': return t('error.secondPayment', { payment: b.params.payment });
     case 'paidPrivately': return t('error.paidPrivately', { payment: b.params.payment });
     case 'partAmount': return t('error.partAmount', { total: `${b.params.currency} ${fmt(b.params.total)}` });
@@ -564,7 +566,8 @@ export const api = {
   /** «Trotzdem buchen» on a bank movement booked in a filed quarter as a read one (#254): a payment of its own, booked from then on like any other. */
   bookFiledTwinAnyway: (ref: string) => request<Ok>('DELETE', `/api/transactions/${encodeURIComponent(ref)}/filed-twin`),
   /** The undo of a removal, after the file is read again: its bookings and links back as they were (r10h-3). */
-  restoreStatementBookings: (removed: StatementRemoved['removed']) => request<Ok>('POST', '/api/statements/bookings', removed),
+  /** The undo of «Auszug entfernen»: the removed files and every record the removal changed come back as they were. */
+  restoreStatement: (undo: string) => request<Ok>('POST', '/api/statements/restore', { undo }),
 
   /**
    * A camt.053 or statement PDF into bank-statements/, read into the books; `into` names the missing month it is for.

@@ -27,6 +27,8 @@ export type ClosedReason = (typeof CLOSED_REASONS)[number];
 export type ApiRefusal =
   | { code: 'readonly' }
   | { code: 'localOnly' }
+  /** From this computer, but under a name that is no loopback name (DNS rebinding). */
+  | { code: 'foreignHost' }
   | { code: 'phoneToken' }
   /**
    * `approved`: the date is not filed but held by that period's approved return (r7h-24).
@@ -135,6 +137,8 @@ export type ApiRefusal =
   | { code: 'notInTrash' }
   | { code: 'deletedAgain' }
   | { code: 'alreadyBack' }
+  /** The undo of «Auszug entfernen» (POST /api/statements/restore): too old to take back, or the books changed what the removal left. */
+  | { code: 'statementUndo'; params: { why: 'expired' | 'changed' } }
   | { code: 'statement'; params: StatementParams }
   /**
    * A statement read without camt.053 (#217) the drop row does not import: a line without a day or
