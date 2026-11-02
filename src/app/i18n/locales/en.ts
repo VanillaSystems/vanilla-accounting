@@ -1606,6 +1606,7 @@ export default {
     'bank.receiptSet.more': '{n} choices fit; the first {shown} are shown.',
     'bank.noReceiptCleared': 'Payment needs a receipt again',
     'bank.waitsForReceipt': "waits for its receipt",
+    'bank.receiptsOver': "receipts {amount} above the payment",
     'bank.receiptDue': "waits for its receipt, return due on {date}",
     'bank.receiptUnread': "Receipt not readable: waits for you",
     'bank.saleNoVat': 'no invoice, booked without VAT',
