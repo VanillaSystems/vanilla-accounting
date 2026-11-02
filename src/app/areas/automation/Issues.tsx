@@ -12,8 +12,7 @@ import { useWorkspace } from '../../hooks/use-workspace.js';
 import { at, ledgerFor } from '../receipts/view.js';
 import { openTwins } from '../receipts/model.js';
 import { answerTwin } from '../receipts/actions.js';
-import { evidenceText, patchOf } from '../journal/Detail.js';
-import { saveEntry } from '../journal/actions.js';
+import { EvidenceFix, evidenceText } from '../journal/Detail.js';
 import { journalOf, unsettledAtFiling } from '../journal/model.js';
 import { thresholdWatch, thresholdYears } from '../vat/model.js';
 import { baseCurrency, documents, filing, withoutInputTax } from '../../../engines/index.js';
@@ -30,7 +29,6 @@ import { periodIssues, type PeriodIssue } from './period-issues.js';
 import type { Location } from '../../shell/route.js';
 import type { Nav } from '../index.js';
 import type { Index, JournalEntry } from '../../../types/index.js';
-import type { EvidenceCheck } from '../../../accounting/evidence-check.js';
 
 function goOf(books: Index, i: PeriodIssue): Location | undefined {
   switch (i.kind) {
@@ -54,17 +52,6 @@ function textOf(books: Index, i: PeriodIssue): string {
     case 'unbooked': return t('issues.unbooked', { date: formatDate(i.tx.date), text: i.tx.counterparty || i.tx.description, amount: `${i.tx.currency} ${fmt(i.tx.amount)}` });
     case 'unlinked': return t('issues.unlinked', { date: formatDate(i.receipt.date ?? ''), text: i.receipt.description || i.receipt.filename });
   }
-}
-
-/** One click that books the entry as its receipts say: «Nach Beleg buchen» or «Ohne Beleg buchen». */
-/** The click that books as the evidence says; for a code a person or the AI chose, the explanation instead (r8h-22). */
-function EvidenceFix({ e, check, nav }: { e: JournalEntry; check: EvidenceCheck; nav: Nav }) {
-  if (check.decided) return <span className="m" data-testid="evidence-decided">{t('journal.evidence.decided')}</span>;
-  return (
-    <button type="button" className="btn ghost" data-testid="evidence-book" onClick={() => void saveEntry(nav, e, patchOf(check), ['vatCode'])}>
-      {t(check.kind === 'receiptShowsVat' ? 'journal.evidence.bookByReceipt' : 'journal.evidence.bookWithoutReceipt')}
-    </button>
-  );
 }
 
 /** «Noch offen in {period}»: under the return to review. An open VAT question withholds «Freigegeben» (r8h-24); the rest does not block the filing. */

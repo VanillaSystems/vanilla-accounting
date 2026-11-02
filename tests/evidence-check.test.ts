@@ -41,6 +41,16 @@ test('a code a person or the AI sidebar chose is explained, never offered as a o
   assert.deepEqual(evidenceCheck(entry({ vatCode: 'M81', by: { kind: 'rule', rule: 'r' } }), [], CLOSED), { kind: 'vatWithoutReceipt', code: 'M0' });
 });
 
+test('a person\'s code chosen before the receipt came is no decision about it: the late receipt\'s click is offered (F13)', () => {
+  const person = { kind: 'person' as const, at: '2026-10-16T09:00:00.000Z' };
+  assert.deepEqual(evidenceCheck(entry({ vatCode: 'I0', accountDebit: '6640', by: person, receipts: [] }), [withVat], CLOSED),
+    { kind: 'receiptShowsVat', rate: 8.1, code: 'I81', receipts: ['r1'] }, 'booked «Ohne Vorsteuer» with no receipt linked, the receipt linked later');
+  assert.deepEqual(evidenceCheck(entry({ vatCode: 'I0', accountDebit: '6640', by: person, receipts: ['r2'] }), [noVat, withVat], CLOSED),
+    { kind: 'receiptShowsVat', rate: 8.1, code: 'I81', receipts: ['r2', 'r1'] }, 'a second receipt linked after the decision');
+  assert.deepEqual(evidenceCheck(entry({ vatCode: 'I0', accountDebit: '6640', by: person, receipts: ['r1'] }), [withVat], CLOSED),
+    { kind: 'receiptShowsVat', rate: 8.1, code: 'I81', receipts: ['r1'], decided: true }, 'chosen while the receipt was linked: her decision stands');
+});
+
 test('a rate code without a receipt that shows Swiss VAT: the zero code of the same family', () => {
   assert.deepEqual(evidenceCheck(entry({ vatCode: 'M81' }), [], CLOSED), { kind: 'vatWithoutReceipt', code: 'M0' });
   assert.deepEqual(evidenceCheck(entry({ vatCode: 'I81', accountDebit: '6500' }), [noVat], CLOSED), { kind: 'vatWithoutReceipt', code: 'I0' });
