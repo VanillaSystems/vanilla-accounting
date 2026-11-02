@@ -134,6 +134,21 @@ test('the bank\'s own account fee, by its code for charges and no other party, i
   assert.equal(txs.filter(isBankFee).length, 2);
 });
 
+test('a debit the bank books to itself, named as the bank that keeps the account and with no account of its own, is its fee row whatever its code', () => {
+  const entry = (ref: string, dir: 'DBIT' | 'CRDT', party: string, text: string) =>
+    `<Ntry><Amt Ccy="CHF">15.00</Amt><CdtDbtInd>${dir}</CdtDbtInd><BookgDt><Dt>2026-10-31</Dt></BookgDt><AcctSvcrRef>${ref}</AcctSvcrRef>
+<BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+<NtryDtls><TxDtls><Amt Ccy="CHF">15.00</Amt><RltdPties>${party}</RltdPties><RmtInf><Ustrd>${text}</Ustrd></RmtInf></TxDtls></NtryDtls></Ntry>`;
+  const bank = '<Cdtr><Pty><Nm>RAIFFEISEN  schweiz</Nm></Pty></Cdtr>';
+  const txs = parse(ntry(
+    entry('S1', 'DBIT', bank, 'Kontoführung Oktober') +
+    entry('S2', 'CRDT', '<Dbtr><Pty><Nm>Raiffeisen Schweiz</Nm></Pty></Dbtr>', 'Zinsgutschrift') +
+    entry('S3', 'DBIT', `${bank}<CdtrAcct><Id><IBAN>BE00967000000002</IBAN></Id></CdtrAcct>`, 'Amortisation Darlehen') +
+    entry('S4', 'DBIT', '<Cdtr><Pty><Nm>Raiffeisen Reisen AG</Nm></Pty></Cdtr>', 'Reise'),
+  ));
+  assert.deepEqual(txs.map((t) => [t.ref, t.type]), [['S1', 'bank-fee'], ['S2', undefined], ['S3', undefined], ['S4', undefined]]);
+});
+
 test('synthetic batch: debit parts name the creditor, credit parts the debtor', () => {
   const detail = (amt: string, who: string, side: 'Cdtr' | 'Dbtr') =>
     `<TxDtls><Amt Ccy="CHF">${amt}</Amt><RltdPties><${side}><Pty><Nm>${who}</Nm></Pty></${side}></RltdPties><RmtInf><Ustrd>inv ${amt}</Ustrd></RmtInf></TxDtls>`;

@@ -51,15 +51,51 @@ export function linkedOf(receipts: readonly Receipt[], tx?: Pick<BankTransaction
 
 const cents = (n: number) => Math.round(n * 100);
 
-function shortOf(purchase: readonly Receipt[], tx: Pick<BankTransaction, 'amount' | 'currency' | 'direction'>): boolean {
-  if (tx.direction !== 'DBIT' || purchase.length < 2) return false;
+/**
+ * What the payment `tx` paid out less what a set of its purchase receipts adds up to, in cents: two
+ * or more receipts, each with an amount in the payment's currency (a credit note counts below
+ * zero). Undefined for money in, a single receipt (it may cover several payments: instalments, a
+ * part payment), or a receipt in another currency (comparable only at a rate).
+ */
+function gapOf(purchase: readonly Receipt[], tx: Pick<BankTransaction, 'amount' | 'currency' | 'direction'>): number | undefined {
+  if (tx.direction !== 'DBIT' || purchase.length < 2) return undefined;
   let owed = 0;
   for (const r of purchase) {
     const amount = creditSigned(r);
-    if (amount === undefined || (r.currency ?? baseCurrency()) !== tx.currency) return false;
+    if (amount === undefined || (r.currency ?? baseCurrency()) !== tx.currency) return undefined;
     owed += cents(amount);
   }
-  return cents(Math.abs(tx.amount)) - owed > purchase.length;
+  return cents(Math.abs(tx.amount)) - owed;
+}
+
+function shortOf(purchase: readonly Receipt[], tx: Pick<BankTransaction, 'amount' | 'currency' | 'direction'>): boolean {
+  return (gapOf(purchase, tx) ?? 0) > purchase.length;
+}
+
+/**
+ * How much a set of receipts linked to the payment `tx` adds up to beyond it, in its currency, by
+ * more than a centime per receipt: one of them belongs to another payment. Undefined when the set
+ * is not beyond it, or not comparable (gapOf). Code and the model link no receipt that makes a set
+ * so (excessOfPayment); a person may, and the payment shows the excess as a fact.
+ */
+export function excessOf(receipts: readonly Receipt[], tx: Pick<BankTransaction, 'amount' | 'currency' | 'direction'>): number | undefined {
+  const purchase = receipts.filter(isPurchaseDocument);
+  const gap = gapOf(purchase, tx);
+  return gap !== undefined && -gap > purchase.length ? -gap / 100 : undefined;
+}
+
+/**
+ * excessOf of the receipts linked to payment `ref`, with receipt `adding` as if linked too.
+ * Undefined when a receipt of the set is linked to another payment as well (a card charge split
+ * across balances, instalments): its amount is not this payment's alone.
+ */
+export function excessOfPayment(books: Pick<Index, 'transactions' | 'mappings' | 'receipts'>, ref: string, adding?: string): number | undefined {
+  const tx = books.transactions.find((t) => t.ref === ref);
+  if (!tx) return undefined;
+  const ids = new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId));
+  if (adding) ids.add(adding);
+  if (books.mappings.some((m) => ids.has(m.receiptId) && m.transactionRef !== ref)) return undefined;
+  return excessOf(books.receipts.filter((r) => ids.has(r.id) && r.kind !== 'duplicate'), tx);
 }
 
 /**

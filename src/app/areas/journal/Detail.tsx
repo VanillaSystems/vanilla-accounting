@@ -22,7 +22,7 @@ import { useWorkspace } from '../../hooks/use-workspace.js';
 import { t } from '../../i18n/index.js';
 import { useAiOff } from '../../ai/ai-off.js';
 import { ICONS } from '../icons.js';
-import type { AreaProps } from '../index.js';
+import type { AreaProps, Nav } from '../index.js';
 import { Paper } from '../receipts/Paper.js';
 import { I } from '../receipts/icons.js';
 import { at, bankOf, amountOf } from '../receipts/view.js';
@@ -276,6 +276,16 @@ export function evidenceText(e: JournalEntry, c: EvidenceCheck): string {
 
 /** The click: the proposed code, and for a receipt that shows VAT the receipts the entry now records as seen. */
 export const patchOf = (c: EvidenceCheck) => (c.kind === 'receiptShowsVat' ? { vatCode: c.code, receipts: c.receipts } : { vatCode: c.code });
+
+/** The click that books as the evidence says; for a code a person or the AI chose, the explanation instead (r8h-22). */
+export function EvidenceFix({ e, check, nav }: { e: JournalEntry; check: EvidenceCheck; nav: Nav }) {
+  if (check.decided) return <span className="m" data-testid="evidence-decided">{t('journal.evidence.decided')}</span>;
+  return (
+    <button type="button" className="btn ghost" data-testid="evidence-book" onClick={() => void saveEntry(nav, e, patchOf(check), ['vatCode'])}>
+      {t(check.kind === 'receiptShowsVat' ? 'journal.evidence.bookByReceipt' : 'journal.evidence.bookWithoutReceipt')}
+    </button>
+  );
+}
 
 /** Book from this entry: its Gegenbuchung, a copy, and for an accrual its reversal on the next 1.1. (treuhaender-27). */
 function EntryActions(props: Props & { v: EntryView; j: Journal }) {
