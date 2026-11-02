@@ -28,6 +28,15 @@ export async function isTracked(dir: string, path: string): Promise<boolean> {
   return (await git.listFiles({ fs, dir })).includes(path);
 }
 
+/** Those of `paths` (relative to the repository) with nothing uncommitted: absent everywhere, or on disk and in the index as in HEAD. */
+export async function committedAsIs(dir: string, paths: string[]): Promise<Set<string>> {
+  const rows = new Map((await git.statusMatrix({ fs, dir, filepaths: paths })).map((row) => [row[0], row]));
+  return new Set(paths.filter((p) => {
+    const row = rows.get(p);
+    return !row || (row[1] === 1 && row[2] === 1 && row[3] === 1);
+  }));
+}
+
 /** `git mv`: the file moves on disk and in the index. */
 export async function moveTracked(dir: string, from: string, to: string): Promise<void> {
   renameSync(join(dir, from), join(dir, to));

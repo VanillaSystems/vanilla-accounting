@@ -13,6 +13,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import type { WorkspacePaths } from './workspace.js';
+import { commitExactly, committedAsIs, repositoryAt } from './git.js';
 
 /** Where the terminal AI writes what it makes (reports, merged PDFs, converted files): ignored by git, so the books' history stays the books'. */
 export const OUTPUT_DIR = 'output';
@@ -232,4 +233,26 @@ export function ensureTerminalAgents(paths: Pick<WorkspacePaths, 'root' | 'repos
   put(join(paths.root, OUTPUT_DIR, '.gitignore'), (current) => current ?? '*\n');
   if (paths.repository !== paths.root) put(join(paths.repository, 'AGENTS.md'), (current) => current && withRepositorySection(current));
   return written;
+}
+
+/**
+ * ensureTerminalAgents, and the app's own commit of what it wrote, so opening the books never
+ * leaves the company's repository with files git does not know (F25). The files belong to the
+ * workspace: the company may add its own lines outside the markers, and a clone must carry them
+ * for an AI opened there. Committed are the files that held nothing uncommitted before the write,
+ * and those whose whole text is the app's (left untracked by a version before this one); a file
+ * the person is still editing is left for them to save. No commit outside a repository of its own.
+ */
+export async function renewTerminalAgents(paths: Pick<WorkspacePaths, 'root' | 'repository'>): Promise<{ written: string[]; committed: boolean }> {
+  const repo = await repositoryAt(paths.repository);
+  const appsOnly = new Map([[join(paths.root, 'AGENTS.md'), TERMINAL_SECTION], [join(paths.root, 'CLAUDE.md'), withAgentsImport(undefined)]]);
+  // output/.gitignore ignores itself: git never shows it.
+  const files = [...appsOnly.keys(), ...(paths.repository !== paths.root ? [join(paths.repository, 'AGENTS.md')] : [])].map((f) => relative(paths.repository, f));
+  const clean = repo ? await committedAsIs(repo, files) : new Set<string>();
+  const written = ensureTerminalAgents(paths);
+  if (!repo) return { written, committed: false };
+  const isAppsOnly = (f: string) => { const file = join(paths.repository, f); return existsSync(file) && readFileSync(file, 'utf8') === appsOnly.get(file); };
+  const ours = files.filter((f) => (written.includes(f) && clean.has(f)) || isAppsOnly(f));
+  const committed = ours.length > 0 && await commitExactly(repo, 'Anweisungen für die KI im Terminal (AGENTS.md), wie diese Version sie schreibt\n\nVanilla-Kind: customizing', ours);
+  return { written, committed };
 }
