@@ -590,6 +590,8 @@ export const api = {
   modules: () => request<WorkspaceModules>('GET', `${sources.modules()}?t=${Date.now()}`),
   status: () => request<ApiStatus>('GET', sources.status()),
   accounts: () => request<Account[]>('GET', sources.accounts()),
+  /** The standard chart's accounts an account field offers to add; none in the static export, which adds nothing. */
+  standardAccounts: () => (STATIC_EXPORT ? Promise.resolve([]) : request<Account[]>('GET', '/api/accounts/standard')),
   workspace: () => request<CompanyInfo>('GET', sources.workspace()),
   /** The desktop app's start screen (src/desktop/server.ts). */
   desktop: {

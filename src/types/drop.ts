@@ -136,10 +136,14 @@ export interface PayoutWaitView { why: 'clearing' | 'since' | 'gap'; provider: s
 
 /**
  * What the company's file of a provider lacks for its report: its clearing account (with the cut-over
- * day), the cut-over day alone, its revenue account, or its fee account and code; `file`: where it is
- * kept; `since`: the cut-over day proposed (the first day of the open period) while the file names none.
+ * day), the cut-over day alone, its revenue account, or its fee account and code. `since`: the cut-over
+ * day proposed while the file names none (the first day the report covers, within the open period);
+ * `propose`: the account (and fee code) proposed, with `name` when the chart lacks the account and
+ * keeping the answer adds it (DropAction `create`).
  */
-export interface ProviderAsk { provider: string; name: string; missing: 'clearing' | 'since' | 'revenue' | 'fees'; file: string; since?: string }
+export interface ProviderAsk { provider: string; name: string; missing: 'clearing' | 'since' | 'revenue' | 'fees'; since?: string; propose?: ProviderProposal }
+
+export interface ProviderProposal { account: string; name?: string; vat?: string }
 
 /**
  * A report held because no payout of its provider is recognised (src/intake/sales-report-import.ts
@@ -224,8 +228,8 @@ export type DropAction =
   | { kind: 'otherAccount' }
   /** A possible duplicate: «ist dasselbe» (not taken) or «verschieden» (taken, and the pair is not asked again). */
   | { kind: 'twin'; answer: 'same' | 'distinct' }
-  /** A report's provider lacks an account (`askProvider`): the person names it, it is kept in the company's file of the provider, and the report is taken. */
-  | { kind: 'provider'; account?: string; vat?: string; since?: string }
+  /** A report's provider lacks an account (`askProvider`): the person names it, it is kept in the company's file of the provider, and the report is taken; `create` adds the proposed account to the chart first. */
+  | { kind: 'provider'; account?: string; vat?: string; since?: string; create?: true }
   /** A report held because no payout of its provider is recognised (`payoutUnseen`): «Trotzdem übernehmen» books it. */
   | { kind: 'anyway' }
   /** A statement read without a bank export (`read`), as the person corrected it: checked again and, with `import`, imported («Einlesen»). */

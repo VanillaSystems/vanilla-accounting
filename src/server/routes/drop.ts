@@ -33,6 +33,8 @@ import { imageToPdf, isImageFile } from '../../parsers/image-pdf.js';
 import type { CsvColumns, ReadStatement } from '../../types/statement-read.js';
 import type { StatementImport } from '../../types/index.js';
 import { importSalesReport, recognizeCsv, removeSalesReport, setProviderAccount } from '../../intake/sales-report-import.js';
+import { accountName, removeAccount, setAccountName } from '../../workspace/accounts-write.js';
+import { assertPlaced } from '../edits.js';
 
 import type { Arrival } from '../../workflows/model.js';
 import { firstPages, recognize } from '../../intake/recognize.js';
@@ -196,11 +198,21 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
       const needsAccount = ask?.missing !== 'since';
       if (!ask || (needsAccount && !account) || (ask.missing === 'fees' && !text(a.vat)) || (ask.since !== undefined && !since)) throw new RequestError(400, 'Nur ein Bericht, dessen Konto oder Umstellungstag fehlt, nimmt eines.');
       const set = ask.missing === 'fees' ? { fees: { account: account!, vat: text(a.vat)! } } : ask.missing === 'since' ? { since } : { [ask.missing]: account, ...(since ? { since } : {}) };
+      // The proposed account the chart lacks is added as Firma › Kontenplan adds one, and taken out again when the answer is refused.
+      const create = a.create && ask.propose?.name && account === ask.propose.account && accountName(WS, account) === undefined ? ask.propose.name : undefined;
+      if (create) { assertPlaced(account!); setAccountName(WS, account!, create); }
       const kept = setProviderAccount(WS, ask.provider, set);
-      if (!kept.ok) throw new RequestError(400, `Konto, Steuercode oder Umstellungstag ${[account, a.vat, since].filter(Boolean).join(' / ')} geht so nicht.`, kept.refusal);
-      delete row.askProvider;
-      delete row.message;
-      Object.assign(row, { state: 'take', reason: undefined });
+      if (!kept.ok) {
+        if (create) removeAccount(WS, account!);
+        throw new RequestError(400, `Konto, Steuercode oder Umstellungstag ${[account, a.vat, since].filter(Boolean).join(' / ')} geht so nicht.`, kept.refusal);
+      }
+      // Every row of the provider that asked is asked again by its report: the fee report no longer asks for the clearing account just kept.
+      for (const r of s.rows) {
+        if (r.askProvider?.provider !== ask.provider) continue;
+        delete r.askProvider;
+        delete r.message;
+        Object.assign(r, { state: 'take', reason: undefined });
+      }
       break;
     }
     case 'anyway':

@@ -98,3 +98,13 @@ export function chartFor(chart: Chart, profile: BusinessProfile, legalForm: Lega
     line: a.line,
   }));
 }
+
+/**
+ * The accounts of the standard chart a person may add to a running workspace from an account field:
+ * every account of the chart in any profile, named for the legal form when one is known.
+ */
+export function standardAccounts(legalForm?: LegalForm, chart: Chart = loadChart()): Array<{ number: string; name: string }> {
+  return chart.accounts
+    .filter((a) => !legalForm || !a.legalForms || a.legalForms.includes(legalForm))
+    .map((a) => ({ number: a.number, name: (legalForm && a.names?.[legalForm]) || a.name }));
+}

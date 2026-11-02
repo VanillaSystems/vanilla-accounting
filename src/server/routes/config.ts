@@ -13,6 +13,7 @@ import { SALES_KINDS, salesKinds, type SalesKind } from '../../workspace/setup.j
 import { writeAtomic } from '../../invoices/store.js';
 import { INVOICE_CURRENCIES, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS } from '../../invoices/model.js';
 import { accountName, removeAccount, setAccountName } from '../../workspace/accounts-write.js';
+import { standardAccounts } from '../../workspace/chart.js';
 import { readBankStatements } from '../../workspace/bank-statements.js';
 import type { LedgerBankAccount } from '../../workspace/workspace.js';
 import type { JournalEntry } from '../../types/index.js';
@@ -39,6 +40,11 @@ function checked<T>(run: () => T): T {
 
 router.get('/api/accounts', (_req, res) => {
   res.json(accountsOf(WS));
+});
+
+/** The standard chart's accounts an account field offers to add (F07): only these are created from a field, named as the chart names them. */
+router.get('/api/accounts/standard', (_req, res) => {
+  res.json(standardAccounts(WS.company.legalForm));
 });
 
 router.put('/api/accounts/:number', (req, res) => {

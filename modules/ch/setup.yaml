@@ -24,6 +24,9 @@ answers:
     # at its sale code; the fees here, the code only where the form takes it.
     sales: { otherwise: "3400" }
     fees: { account: "6580", vat: I0 }
+    # The clearing account a provider's first report proposes (src/intake/sales-report-import.ts proposalOf),
+    # named after the provider; a further provider takes the next free number of its ten.
+    clearing: { account: "1093", name: "Durchlaufkonto {provider}" }
   imports: ["4020", "4030", "4040"]
 
 # «Was verkauft ihr?» (src/workspace/sells.ts, #46): the default accounts of each kind, any combination.

@@ -163,6 +163,11 @@ a.dmove:hover, a.dmove:focus-visible { background: var(--hover); outline: none; 
 .ddet .dmove span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dpw { display: flex; gap: 6px; }
 .dpw input { width: 150px; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.dpw:has(.acf) { align-items: flex-end; padding-bottom: 18px; }
+.dpw .acf { position: relative; display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); }
+.dpw .acf .acn { position: absolute; top: 100%; left: 0; margin-top: 3px; max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dpw .acf .acn.warn { color: var(--warn); }
+.dpw .acl { top: 48px; }
 .dropdlg .dfoot { display: flex; align-items: center; gap: 8px; padding-top: 8px; }
 .dropdlg .dfoot .m { flex: 1; font-size: 12px; }
 .dropdlg .dprog { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
