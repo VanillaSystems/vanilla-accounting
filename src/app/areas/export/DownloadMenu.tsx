@@ -77,7 +77,7 @@ export function DownloadMenu({ account, label, period, toast }: Props) {
               </button>
             ))}
             <div className="sep2" />
-            <button type="button" role="menuitem" onClick={() => { close(); ui.openExport({ period: period.token, items: { ledger: ['pdf', 'csv'] }, sums: false, oneBook: false, preset: null }); }}>
+            <button type="button" role="menuitem" onClick={() => { close(); ui.openExport({ period: period.token, items: { ledger: ['pdf', 'csv'] }, sums: false, oneBook: false, preset: null, periodChosen: false }); }}>
               {t('export.more')}<span className="s">⇧E</span>
             </button>
           </div>

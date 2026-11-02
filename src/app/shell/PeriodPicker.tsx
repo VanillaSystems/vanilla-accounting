@@ -69,12 +69,20 @@ export function PeriodPicker({ anchor, period, quarters, years, closedThrough, o
     }
   }
 
-  function typed(which: 'from' | 'to', day: IsoDate) {
+  function typed(which: 'from' | 'to', day: IsoDate): Period {
     const from = which === 'from' ? day : draft.kind === 'all' ? day : draft.from;
     const to = which === 'to' ? day : draft.kind === 'all' ? day : draft.to;
-    setDraft(rangePeriod(from <= to ? from : to, from <= to ? to : from));
+    const next = rangePeriod(from <= to ? from : to, from <= to ? to : from);
+    setDraft(next);
     setPickingEnd(false);
     setShown(monthStart(addMonths(which === 'to' ? day : addMonths(day, 1), -1)));
+    return next;
+  }
+
+  /** Enter in a date field applies the range it ends with, like «Anwenden». */
+  function typedEnter(which: 'from' | 'to', day: IsoDate | undefined) {
+    const next = day ? typed(which, day) : draft;
+    if (next.token === period.token) onClose(); else onApply(next.token);
   }
 
   const isFiled = (key: string) => !!closedThrough && derivePeriod(key)!.to <= closedThrough;
@@ -119,9 +127,9 @@ export function PeriodPicker({ anchor, period, quarters, years, closedThrough, o
         </nav>
         <div className="right">
           <div className="ins">
-            <DateInput inputRef={startInput} label={t('period.start')} value={draft.kind === 'all' ? '' : draft.from} onDate={(d) => typed('from', d)} />
+            <DateInput inputRef={startInput} label={t('period.start')} value={draft.kind === 'all' ? '' : draft.from} onDate={(d) => typed('from', d)} onEnter={(d) => typedEnter('from', d)} />
             <span>→</span>
-            <DateInput label={t('period.end')} value={draft.kind === 'all' ? '' : draft.to} onDate={(d) => typed('to', d)} />
+            <DateInput label={t('period.end')} value={draft.kind === 'all' ? '' : draft.to} onDate={(d) => typed('to', d)} onEnter={(d) => typedEnter('to', d)} />
           </div>
           <Calendars shown={shown} setShown={setShown} draft={draft} today={today} onPick={pickDay} />
           <div className="ft">
@@ -167,16 +175,22 @@ function Item({ children, on, sub, filed, onClick }: { children: React.ReactNode
   );
 }
 
-/** A date typed as dd.mm.yyyy (Swiss), applied on Enter or when the field loses focus. */
-function DateInput({ label, value, onDate, inputRef }: { label: string; value: IsoDate; onDate: (d: IsoDate) => void; inputRef?: React.Ref<HTMLInputElement> }) {
+/** A date typed as dd.mm.yyyy (Swiss): taken into the range when the field loses focus, taken and applied on Enter. */
+function DateInput({ label, value, onDate, onEnter, inputRef }: { label: string; value: IsoDate; onDate: (d: IsoDate) => void; onEnter: (d: IsoDate | undefined) => void; inputRef?: React.Ref<HTMLInputElement> }) {
   const [text, setText] = useState(value ? formatDate(value) : '');
   const [invalid, setInvalid] = useState(false);
   useEffect(() => { setText(value ? formatDate(value) : ''); setInvalid(false); }, [value]);
 
-  function commit() {
-    if (!text.trim() || (value && text === formatDate(value))) return;
+  /** The day typed, undefined when the text is unchanged or empty, null when it is no date. */
+  function read(): IsoDate | null | undefined {
+    if (!text.trim() || (value && text === formatDate(value))) return undefined;
     const day = parseSwissDate(text);
     setInvalid(!day);
+    return day ?? null;
+  }
+
+  function commit() {
+    const day = read();
     if (day) onDate(day);
   }
 
@@ -186,7 +200,13 @@ function DateInput({ label, value, onDate, inputRef }: { label: string; value: I
       value={text}
       onChange={(e) => setText(e.target.value)}
       onBlur={commit}
-      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        e.stopPropagation();
+        const day = read();
+        if (day !== null) onEnter(day);
+      }}
       aria-label={label}
       aria-invalid={invalid}
       data-tip={invalid ? t('period.invalidDate') : label}
