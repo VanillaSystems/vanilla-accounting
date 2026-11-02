@@ -23,7 +23,7 @@ KEY="$HOME/.vanilla-accounting/e2e/id_ed25519"
 X=/tmp/vanilla-e2e
 APP="release/mac-arm64/Vanilla Accounting.app"
 STAMP=$(date +%Y%m%d-%H%M%S)
-SSH="ssh -i $KEY -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5"
+SSH="ssh -i $KEY -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5"
 
 [ -d "$APP" ] || { echo "No $APP: npm run desktop:build first." >&2; exit 1; }
 [ -f "$KEY" ] || { echo "No SSH key $KEY for the VM (see the head of this script)." >&2; exit 1; }
@@ -52,9 +52,16 @@ if ! tart list | grep -q "^local *$VM .*running"; then
   fi
 fi
 IP=
-for _ in $(seq 1 60); do IP=$(tart ip "$VM" 2>/dev/null || true); [ -n "$IP" ] && $SSH "admin@$IP" true 2>/dev/null && break; IP=; sleep 3; done
-[ -n "$IP" ] || { echo "The VM $VM did not answer over SSH." >&2; exit 1; }
-if [ -n "$FRESH" ] && ! $SSH -o BatchMode=yes "admin@$IP" true 2>/dev/null; then echo "The fresh VM has no key: run ssh-copy-id against it once." >&2; exit 1; fi
+# Waits for the SSH port, not a login: a VM without the key would otherwise look like one that never booted.
+for _ in $(seq 1 60); do IP=$(tart ip "$VM" 2>/dev/null || true); [ -n "$IP" ] && nc -z -G 2 "$IP" 22 2>/dev/null && break; IP=; sleep 3; done
+[ -n "$IP" ] || { echo "The VM $VM did not open its SSH port." >&2; exit 1; }
+if ! $SSH "admin@$IP" true 2>/dev/null; then
+  # A fresh clone carries the keys of its base, so the key goes into the base once.
+  echo "The VM $VM does not take the key $KEY.pub. Install it once (password admin):" >&2
+  echo "  tart run $BASE --no-graphics & sleep 30; ssh-copy-id -i $KEY.pub admin@\$(tart ip $BASE); tart stop $BASE" >&2
+  [ -z "$FRESH" ] && echo "  (for the persistent VM: the same with $VM in place of $BASE)" >&2
+  exit 1
+fi
 
 S="/Volumes/My Shared Files/e2e"
 # Installed as a person would: over the copy in /Applications, so a run is also an update.
