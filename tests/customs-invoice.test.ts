@@ -40,7 +40,8 @@ function company(): Workspace {
   cpSync(DEMO_ROOT, dir, { recursive: true });
   const accounts = join(dir, 'master-data/accounts.json');
   const added = [['4020', 'Zölle'], ['4030', 'Einfuhrsteuer'], ['4040', 'Vorlageprovision, Verzollungsspesen'], ['6280', 'Transportaufwand']].map(([number, name]) => ({ number, name }));
-  writeFileSync(accounts, JSON.stringify([...JSON.parse(readFileSync(accounts, 'utf8')), ...added]));
+  const chart: Array<{ number: string }> = JSON.parse(readFileSync(accounts, 'utf8'));
+  writeFileSync(accounts, JSON.stringify([...chart, ...added.filter((a) => !chart.some((c) => c.number === a.number))]));
   return workspaceAt(dir);
 }
 
@@ -150,7 +151,7 @@ test('with the assessment linked, the import VAT is deducted at once: a one-legg
 test('an assessment proves nothing for another firm, nor one whose amount no import VAT line has', () => {
   const words = documents().customs;
   assert.equal(readAssessment(assessment(), words, 'CHE-111.222.333'), undefined, 'another importer');
-  assert.deepEqual(readAssessment(assessment(), words, 'CHE-123.456.789'), { receipt: 'evv1', file: assessment().filename, date: '2026-05-09', amount: 57.55, number: '26CHEI000000004711' });
+  assert.deepEqual(readAssessment(assessment(), words, 'CHE-123.456.789'), { receipt: 'evv1', file: assessment().filename, date: '2026-05-09', amount: 57.55, rate: 8.1, number: '26CHEI000000004711' });
   const invoiceText = readAssessment(invoice({ extractedText: `${INVOICE_TEXT}\nEinfuhrsteuer gemäss Veranlagungsverfügung MWST` }), words, 'CHE-123.456.789');
   assert.equal(invoiceText, undefined, 'a courier invoice that names the assessment is none: it states no total of the assessment');
   const other = customsSplit(PAYMENT, [invoice(), assessment({ extractedText: ASSESSMENT_TEXT.replace('57.55', '41.20') })], splitContext());
@@ -443,7 +444,7 @@ test('#285: the assessment\'s total is read wherever the text puts it after its 
   const words = documents().customs;
   const columns = assessment({ id: 'evvc', extractedText: COLUMNS_TEXT });
   assert.ok(COLUMNS_TEXT.indexOf('41.30') - COLUMNS_TEXT.indexOf('Gesamtbetrag MWST') > 80, 'the amount stands further from its label than the reader once looked');
-  assert.deepEqual(readAssessment(columns, words, 'CHE-123.456.789'), { receipt: 'evvc', file: columns.filename, date: '2026-05-09', amount: 41.3, number: '26CHEI000000008812' });
+  assert.deepEqual(readAssessment(columns, words, 'CHE-123.456.789'), { receipt: 'evvc', file: columns.filename, date: '2026-05-09', amount: 41.3, rate: 8.1, number: '26CHEI000000008812' });
   assert.equal(assessmentFacts(COLUMNS_TEXT, words).amount, 41.3);
   const dated = COLUMNS_TEXT.replace('Euro (EUR)', 'Euro (EUR)\n26.08.2026\n9003.1100\nCHE-123.456.789');
   assert.equal(readAssessment({ ...columns, extractedText: dated }, words, 'CHE-123.456.789')?.amount, 41.3, 'a date, a tariff number and a UID are no money');
@@ -541,4 +542,41 @@ test('an invoice code does not read as a customs invoice: the model\'s import VA
   assert.deepEqual(lines(books, 'P-T').at(-1), ['', '4030', 41.3, 'M81-2']);
   assert.ok(books.mappings.some((m) => m.receiptId === 'evvt' && m.transactionRef === 'P-T'), 'the assessment is linked to its payment');
   assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)).booked, 0, 'idempotent');
+});
+
+/**
+ * An assessment printed as a table (labels in one column, values in the next), its tax labelled
+ * «MWST-Betrag» and no «Gesamtbetrag MWST», at the reduced rate. Read as text the labels come
+ * first and the values after them, so the first money after a label is the tax base.
+ */
+const TABLE_TEXT = fixture('assessment-table.txt');
+const tableAssessment = (o: Partial<Receipt> = {}) => assessment({ id: 'evvk', filename: '20261019-bazg-veranlagungsverfuegung-mwst.pdf', extractedText: TABLE_TEXT, date: '2026-10-19', amount: 29, ...o });
+const K_LINES: ReceiptLine[] = [
+  { description: 'Zoll', gross: 0, ratePercent: 0 },
+  { description: "Einfuhrsteuer (BAZG) 2.6 % auf CHF 1'115.40", gross: 29, ratePercent: 0 },
+  { description: 'Vorlageprovision inkl. MWST 8.1 %', gross: 35.88, ratePercent: 8.1 },
+];
+const K_INVOICE_TEXT = "Muster Kurier AG\nCHE-999.888.777 MWST\nMuster Kaffee GmbH\nZollrechnung 7720-4410\nDatum: 20.10.2026\nPosition\nZoll\nEinfuhrsteuer (BAZG) 2.6 % auf CHF 1'115.40\nVorlageprovision inkl. MWST 8.1 %\nTotal CHF\nDie Veranlagungsverfügung MWST (eVV) liegt bei.\nCHF\n0.00\n29.00\n35.88\n64.88";
+const kInvoice = (o: Partial<Receipt> = {}) => invoice({ id: 'invk', filename: '20261020-kurier-zollrechnung-7720-4410.pdf', extractedText: K_INVOICE_TEXT, date: '2026-10-20', amount: 64.88, lineItems: K_LINES, ...o });
+const K_PAYMENT: BankTransaction = { ref: 'P-K', bank: 'Raiffeisen', date: '2026-10-23', amount: 64.88, currency: 'CHF', direction: 'DBIT', description: 'Muster Kurier AG' };
+
+test('an assessment printed as a table is read by its tax, base × rate, whatever its label: the tax and the rate it states', () => {
+  const words = documents().customs;
+  assert.deepEqual(readAssessment(tableAssessment(), words, 'CHE-123.456.789'), { receipt: 'evvk', file: tableAssessment().filename, date: '2026-10-19', amount: 29, rate: 2.6 });
+  assert.deepEqual(assessmentFacts(TABLE_TEXT, words), { amount: 29, currency: 'CHF', date: '2026-10-19' });
+  const cites = kInvoice({ extractedText: `Importeur CHE-123.456.789\n${K_INVOICE_TEXT}\nEinfuhrsteuer 2.6 % auf CHF 1'115.40: CHF 29.00` });
+  assert.equal(readAssessment(cites, words, 'CHE-123.456.789'), undefined, 'a courier invoice that names the assessment in a sentence is none');
+  const mixed = "Veranlagungsverfügung MWST\nImporteur CHE-123.456.789\nBemessungsgrundlage\nSatz\nMWST\n1'000.00\n8.1 %\n81.00\n500.00\n2.6 %\n13.00\nTotal\n94.00";
+  assert.deepEqual(readAssessment(tableAssessment({ extractedText: mixed }), words, 'CHE-123.456.789'), { receipt: 'evvk', file: tableAssessment().filename, date: '2026-10-19', amount: 94 }, 'two rates: the tax of both, a total row counted once, no one rate');
+});
+
+test('the courier\'s bill and the assessment no one linked: the import VAT is deducted at the assessment\'s rate (– / 4030 M26-2) and the assessment is linked to the payment', async () => {
+  const ws = company();
+  const books = booksOf([kInvoice(), tableAssessment()], ['invk'], { tx: K_PAYMENT, closedThrough: '2026-09-30' });
+  await classifyTransactions(books, [K_PAYMENT], { fx, context: loadClassifyContext(ws), ask: noModel });
+  bookImportVatDeductions(books, loadClassifyContext(ws));
+  assert.deepEqual(lines(books, 'P-K'), [['4030', '1021', 29, 'M0'], ['4040', '1021', 35.88, 'M81'], ['', '4030', 29, 'M26-2']]);
+  assert.ok(books.mappings.some((m) => m.receiptId === 'evvk' && m.transactionRef === 'P-K'), 'the assessment is linked to its payment');
+  assert.deepEqual(missingAssessments(books, documents().customs, true), [], 'nothing is left unclaimed');
+  assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)).booked, 0, 'idempotent at the reduced rate too');
 });
