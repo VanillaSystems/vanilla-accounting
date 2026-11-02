@@ -4,7 +4,7 @@ import { networkInterfaces } from 'node:os';
 import { app, READONLY } from './api.js';
 import { closeBrowser } from '../invoices/pdf.js';
 import { startBackground } from './background.js';
-import { pairingUrl, phoneToken } from './phone.js';
+import { newPhoneToken, pairingUrl, usePhoneToken } from './phone.js';
 import { readBooks, WS } from './books.js';
 import { hasBooks } from '../books/store.js';
 import { locateWorkspace } from '../workspace/workspace.js';
@@ -19,6 +19,10 @@ useKeychain(() => WS.paths.root);
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3456;
 const HOST = process.env.VANILLA_API_HOST;
 
+// npm start switches the phone on for its run: the token from VANILLA_PHONE_TOKEN (.env), else a new one.
+const token = process.env.VANILLA_PHONE_TOKEN?.trim() || newPhoneToken();
+usePhoneToken(() => token);
+
 const server = HOST ? app.listen(PORT, HOST, listening) : app.listen(PORT, listening);
 
 function listening() {
@@ -29,7 +33,6 @@ function listening() {
 
   // Every IPv4 address with the token, so the phone can be pointed at the right one. Printed before
   // the port is named, so whoever waits for that line has the pairing links already.
-  const token = phoneToken()!;
   console.log('\nPhone: open one of these links on the phone; from the network only the phone upload answers, with this code.');
   for (const [iface, addrs] of Object.entries(networkInterfaces())) {
     for (const addr of addrs ?? []) {
