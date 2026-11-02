@@ -141,7 +141,8 @@ export function Sheet({ data, editing, className, onEdit, onAction, focus, onFoc
         if (!el) return;
         if (el instanceof HTMLSelectElement) held.current = el;
         el.dataset.was = text(el);
-        if (el.isContentEditable && numeric(el)) requestAnimationFrame(() => { if (document.activeElement === el) getSelection()?.selectAllChildren(el); });
+        // Selected once the click has placed the caret, unless typing began first: a select-all then would let the next key replace what was typed, a minus first.
+        if (el.isContentEditable && numeric(el)) requestAnimationFrame(() => { if (document.activeElement === el && text(el) === el.dataset.was) getSelection()?.selectAllChildren(el); });
       }}
       onKeyDown={(e) => {
         const el = field(e);

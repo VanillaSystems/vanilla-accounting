@@ -140,9 +140,10 @@ test('credit notes: a part over the invoice rates, or at one rate; they reduce w
   const all = [inv];
   const part = creditNoteDraft(inv, { amount: 100, reason: 'Rabatt' }, env('in_p'), '2026-10-12');
   assert.equal(part.lines.length, 2);
-  assert.ok(Math.abs(totals(part.lines).gross + 100) <= 0.01, 'the parts make the amount, give or take the VAT rounding of a Rappen');
+  assert.equal(totals(part.lines).gross, -100, 'the parts make the amount exactly: each is priced with its VAT in it');
   const one = creditNoteDraft(inv, { amount: 51.3, vatRate: 2.6, reason: '1 Sack' }, env('in_o'), '2026-10-12');
-  assert.deepEqual(one.lines.map((l) => [l.vatRate, l.quantity, l.price]), [[2.6, 1, -50]], 'one line «1 × −50.00»');
+  assert.deepEqual(one.lines.map((l) => [l.vatRate, l.quantity, l.price, l.vatIncluded]), [[2.6, 1, -51.3, true]], 'one line «1 × −51.30», VAT included');
+  assert.deepEqual([totals(one.lines).net, totals(one.lines).vat], [-50, -1.3]);
   const credited: Issued = { ...issued(one, all), id: 'in_o' };
   assert.equal(openAmount(inv, [inv, credited]), Math.round((totals(inv.lines).gross - 51.3) * 100) / 100);
   assert.equal(openAmount(inv, [inv, credited], '2026-10-01'), totals(inv.lines).gross, 'a credit note written later does not count for an earlier payment');
@@ -251,6 +252,15 @@ test('the sheet that carries the QR-bill has no footer; the others keep it', () 
   assert.match(pages[1], /has-qr/);
   assert.doesNotMatch(pages[1], /class="foot"/);
   assert.match(pages[1], /class="foot bare"><span class="pno">Seite 2 von 2/, 'the page number stays');
+});
+
+test('a line priced with the VAT in it: the QR-bill asks for exactly that amount', () => {
+  const d: SheetData = { ...sheet(1), lines: [{ ...line(1, 500, 8.1, 'Workshop'), vatIncluded: true }] };
+  const blocks = sheetBlocks(d);
+  const html = assembleSheets(d, blocks, { pages: [blocks.map((_, i) => i)], qrOwnPage: false });
+  const qr = html.slice(html.indexOf('class="qrb"'));
+  assert.ok(qr.length < html.length, 'the sheet has its QR-bill');
+  assert.match(qr, />500\.00</, 'the QR-bill amount');
 });
 
 test('pagination: a table header never ends a page alone', () => {
