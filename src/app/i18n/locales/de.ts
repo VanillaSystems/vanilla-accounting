@@ -1603,6 +1603,7 @@ export const messages = {
   'bank.receiptSet.more': '{n} Auswahlen passen; gezeigt sind die ersten {shown}.',
   'bank.noReceiptCleared': 'Zahlung braucht wieder einen Beleg',
   'bank.waitsForReceipt': "wartet auf den Beleg",
+  'bank.receiptsOver': "Belege {amount} über der Zahlung",
   'bank.receiptDue': "wartet auf den Beleg, Abrechnung fällig am {date}",
   'bank.receiptUnread': "Beleg nicht lesbar: wartet auf dich",
   'bank.saleNoVat': 'keine Rechnung, ohne MWST gebucht',
