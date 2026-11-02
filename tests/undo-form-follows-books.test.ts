@@ -8,32 +8,15 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { startApi } from './support/api-server.js';
-import { browserPath, closeChrome, launchChrome } from './support/browser.js';
-import { devProxy } from '../src/server/app-paths.js';
+import { noBrowser, openApp } from './support/e2e.js';
 import type { Index, JournalEntry } from '../src/types/index.js';
 
 const ID = 'b9a7cba1c428824f';
 
-test('open forms follow the books: ⌘Z shows the booked account and leaving the field saves nothing; an added account fills the empty Soll', { skip: browserPath ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 240_000 }, async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'undo-form-'));
-  const api = await startApi('demo/vanilla-accounting');
-  // The demo's chart (the account field offers it; it has no 1100) and its open invoices (the year close's receivables), which startApi leaves out.
-  mkdirSync(join(api.root, 'master-data'), { recursive: true });
-  copyFileSync('demo/vanilla-accounting/master-data/accounts.json', join(api.root, 'master-data/accounts.json'));
-  copyFileSync('demo/vanilla-accounting/invoices.json', join(api.root, 'invoices.json'));
-  const { build, preview } = await import('vite');
-  const outDir = join(dir, 'dist');
-  await build({ configFile: join(process.cwd(), 'vite.config.ts'), logLevel: 'error', build: { outDir, emptyOutDir: true } });
-  const vite = await preview({
-    configFile: join(process.cwd(), 'vite.config.ts'), logLevel: 'error', build: { outDir },
-    preview: { host: '127.0.0.1', port: 0, proxy: devProxy(`http://127.0.0.1:${api.port}`) },
-  });
-  const ui = vite.resolvedUrls!.local[0].replace(/\/$/, '');
-  const browser = await launchChrome(browserPath!);
+test('open forms follow the books: ⌘Z shows the booked account and leaving the field saves nothing; an added account fills the empty Soll', { skip: noBrowser, timeout: 240_000 }, async () => {
+  // The demo copied whole: its chart (the account field offers it; it has no 1100) and its open invoices (the year close's receivables).
+  const app = await openApp();
+  const { api, page } = app;
   try {
     const entry = async () => (((await (await api.fetch('/books.json')).json()) as Index).journalEntries ?? []).find((e) => e.id === ID)!;
     const until = async (ok: (e: JournalEntry) => boolean, what: string) => {
@@ -43,12 +26,9 @@ test('open forms follow the books: ⌘Z shows the booked account and leaving the
     const before = await entry();
     assert.equal(before.accountDebit, '6940');
 
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1400, height: 900 });
-    await page.evaluateOnNewDocument(() => localStorage.setItem('language', 'de'));
-    await page.goto(`${ui}/journal/${ID}?period=2026-Q2`, { waitUntil: 'networkidle0', timeout: 120_000 });
-    await page.waitForSelector(`[data-for="${ID}"]`);
     const debit = 'input[name=accountDebit]';
+    // Editable once the app knows the API answers and takes writes (its first status), not when the entry shows.
+    await app.open(`/journal/${ID}?period=2026-Q2`, `[data-for="${ID}"] ${debit}:not([readonly])`);
     const shown = () => page.$eval(debit, (el) => (el as HTMLInputElement).value);
 
     await page.keyboard.press('e');
@@ -56,7 +36,7 @@ test('open forms follow the books: ⌘Z shows the booked account and leaving the
     await page.keyboard.type('65');
     await page.waitForSelector('[role=listbox] [role=option]');
     await page.keyboard.press('Enter');
-        await until((e) => e.accountDebit !== '6940', 'the edit is saved');
+    await until((e) => e.accountDebit !== '6940', 'the edit is saved');
     const saved = (await entry()).accountDebit;
     assert.equal(await shown(), saved);
 
@@ -75,17 +55,15 @@ test('open forms follow the books: ⌘Z shows the booked account and leaving the
     assert.equal(await shown(), '6940');
 
     // Abschluss: «Konto 1100 anlegen» fills the open receivables entry's Soll, still empty, at once.
-    await page.goto(`${ui}/close/entries?period=2026`, { waitUntil: 'networkidle0' });
-    await (await page.waitForSelector('[data-template=receivables] .ye button.btn:not(.ghost)'))!.click();
+    const receivables = '[data-template=receivables] .ye button.btn:not(.ghost)';
+    await app.open('/close/entries?period=2026', receivables);
+    await (await page.$(receivables))!.click();
     const soll = '[data-template=receivables] form input[list=close-accounts]';
     assert.equal(await page.$eval(soll, (el) => (el as HTMLInputElement).value), '', 'the demo\'s chart has no 1100: Soll is empty');
     await (await page.waitForSelector('[data-testid=receivables-account-missing] button'))!.click();
     await page.waitForFunction((sel) => (document.querySelector(sel) as HTMLInputElement | null)?.value === '1100', { timeout: 10_000 }, soll)
       .catch(async () => assert.fail(`Soll shows «${await page.$eval(soll, (el) => (el as HTMLInputElement).value)}» after 1100 was added`));
   } finally {
-    await closeChrome(browser);
-    await vite.close();
-    await api.stop();
-    rmSync(dir, { recursive: true, force: true });
+    await app.stop();
   }
 });
