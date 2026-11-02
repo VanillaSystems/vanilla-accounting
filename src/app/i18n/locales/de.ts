@@ -162,6 +162,7 @@ export const messages = {
   'error.sourceSecret': 'Ein Passwort oder Schlüssel gehört nie in eine Quelle oder in den Chat: es kommt ins Feld auf der Karte der Quelle.',
   'error.sourceAppId': '{id} ist der Name von Code der App: die Quelle braucht einen eigenen Namen.',
   'error.localOnly': 'Nur von diesem Computer aus erreichbar.',
+  'error.foreignHost': 'Nur unter localhost, 127.0.0.1 oder [::1] erreichbar, nicht unter einem anderen Namen.',
   'error.phoneToken': "Dieses Handy ist nicht gekoppelt: den Code am Mac neu scannen.",
   'error.periodClosed': 'Periode geschlossen bis {date}.',
   'error.periodApproved': '{period} ist freigegeben und wartet auf die Einreichung: bis dahin ändert sich nichts in dieser Periode. Zum Ändern unter Aufgaben «Zurück» drücken und die Abrechnung neu prüfen.',
