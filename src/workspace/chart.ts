@@ -101,10 +101,12 @@ export function chartFor(chart: Chart, profile: BusinessProfile, legalForm: Lega
 
 /**
  * The accounts of the standard chart a person may add to a running workspace from an account field:
- * every account of the chart in any profile, named for the legal form when one is known.
+ * every account of the chart in any profile, named for the legal form when one is known. An account
+ * of some legal forms only (2850 Privat of an Einzelfirma) is offered only when the firm's form is known
+ * and is one of them.
  */
 export function standardAccounts(legalForm?: LegalForm, chart: Chart = loadChart()): Array<{ number: string; name: string }> {
   return chart.accounts
-    .filter((a) => !legalForm || !a.legalForms || a.legalForms.includes(legalForm))
+    .filter((a) => !a.legalForms || (!!legalForm && a.legalForms.includes(legalForm)))
     .map((a) => ({ number: a.number, name: (legalForm && a.names?.[legalForm]) || a.name }));
 }
