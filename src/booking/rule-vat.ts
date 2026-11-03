@@ -1,0 +1,41 @@
+/**
+ * The VAT of a drafted rule that names none (F05): code decides it from the receipts of the payments
+ * the rule holds for, never the model. Only a receipt shows a rate (AGENTS.md § VAT code rules), so
+ * the receipts decide: all at one rate, the rule books at that rate (none with Swiss VAT: the zero
+ * rate); receipts at different rates, or none, and the card asks the person once, with the rates
+ * to choose from. A firm that claims no input tax books such a purchase without a code. Pure.
+ */
+import type { Receipt } from '../types/index.js';
+import { chart, invoiceRates, withoutInputTax } from '../engines/index.js';
+import { receiptRate } from '../accounting/correction.js';
+import { isPurchaseDocument } from '../accounting/evidence-check.js';
+import { isUnreadable } from '../accounting/receipt-due.js';
+
+/** A rate the receipts show, and on how many of them. */
+export interface RateSeen { rate: number; receipts: number }
+
+/** What code does with the missing VAT: write it (`fill`, as `then.vat` takes it), or ask with `choices` (percent, 0: no Swiss VAT). */
+export type RuleVat =
+  | { kind: 'fill'; vat: number | 'none' }
+  | { kind: 'ask'; seen: RateSeen[]; choices: number[] };
+
+type VatFacts = Pick<Receipt, 'kind' | 'vatBy' | 'hasSwissVat' | 'vatSummary' | 'needsVisionReview' | 'vatExtractedAt'>;
+
+/** The rate one receipt shows: its Swiss VAT rate, 0 when it was read and shows none; undefined when it decides nothing (unread, a copy, a sales record). */
+export function rateShown(r: VatFacts): number | undefined {
+  if (!isPurchaseDocument(r) || isUnreadable(r)) return undefined;
+  if (r.hasSwissVat) return receiptRate([r]);
+  return r.hasSwissVat === false || r.vatSummary?.length ? 0 : undefined;
+}
+
+/** The rule's VAT, given the account it books on and the receipts linked to the payments it holds for. */
+export function ruleVatOf(account: string, receipts: readonly VatFacts[]): RuleVat {
+  const without = withoutInputTax();
+  const purchase = chart().typeOf(account) === 'expense' || chart().typeOf(account) === 'asset';
+  if (without === 'none' || (without === 'net-rate' && purchase)) return { kind: 'fill', vat: 'none' };
+  const seen = new Map<number, number>();
+  for (const r of receipts) { const rate = rateShown(r); if (rate !== undefined) seen.set(rate, (seen.get(rate) ?? 0) + 1); }
+  if (seen.size === 1) return { kind: 'fill', vat: [...seen.keys()][0] };
+  const choices = [...new Set([...invoiceRates(), 0])].sort((a, b) => b - a);
+  return { kind: 'ask', seen: [...seen].map(([rate, n]) => ({ rate, receipts: n })).sort((a, b) => b.receipts - a.receipts || b.rate - a.rate), choices };
+}

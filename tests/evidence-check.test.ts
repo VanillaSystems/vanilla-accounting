@@ -87,3 +87,12 @@ test('a filed quarter, a correction, a sale, a VAT-amount code and no code are n
 test('without a closed period every entry is checked', () => {
   assert.deepEqual(evidenceCheck(entry({ vatCode: 'M0', date: '2026-05-10' }), [withVat], undefined), { kind: 'receiptShowsVat', rate: 8.1, code: 'M81', receipts: ['r1'] });
 });
+
+test('import VAT is never offered a rate: the courier\'s invoice and the assessment show its 2.6 %, the line on the import VAT account keeps its zero code (F02)', () => {
+  const courier = receipt({ id: 'r6', amount: 64.88, currency: 'CHF', hasSwissVat: true, vatSummary: [{ ratePercent: 2.6, vat: 29 }, { ratePercent: 8.1, vat: 2.69, gross: 35.88 }] });
+  const assessment = receipt({ id: 'r7', kind: 'invoice', amount: 29, currency: 'CHF', hasSwissVat: true, vatSummary: [{ ratePercent: 2.6, net: 1115.4, vat: 29 }] });
+  const importVat = entry({ accountDebit: '4030', amount: 29, vatCode: 'M0' });
+  assert.equal(evidenceCheck(importVat, [courier, assessment], CLOSED), undefined, '«Nach Beleg buchen» would set M26: 0.73 input tax on the 29.00 of import VAT');
+  assert.equal(evidenceCheck({ ...importVat, vatCode: 'I0' }, [courier, assessment], CLOSED), undefined);
+  assert.deepEqual(evidenceCheck({ ...importVat, accountDebit: '4000' }, [courier, assessment], CLOSED), { kind: 'receiptShowsVat', rate: 2.6, code: 'M26', receipts: ['r6', 'r7'] }, 'goods at the reduced rate still get it');
+});

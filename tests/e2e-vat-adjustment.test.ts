@@ -64,7 +64,11 @@ test('a Nachdeklaration moves 405, 479 and 500 by its amount on the MWST page an
     await waitText(page, 'Nachdeklaration entfernt: 2026-Q2, Ziffer 405.');
     assert.deepEqual(adjustments(), []);
     assert.deepEqual(inReport(api.root), before, 'removed, the figures are back');
-    await click(page, '.toast.show button');
+    // The toast comes with the answer, the books reload after it: until then the removed line is still shown, and
+    // waiting for the line after «Rückgängig» would find it before the undo is written. The toast hides after 6 s,
+    // vat-report may take longer under load, and its undo outlives it (src/app/shell/Toast.tsx).
+    await page.waitForSelector(LINE, { hidden: true });
+    await click(page, '.toast button');
     await page.waitForSelector(LINE);
     assert.deepEqual(adjustments(), [line], 'the undo brings the same line back');
 

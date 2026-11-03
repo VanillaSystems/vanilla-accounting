@@ -96,6 +96,8 @@
 
 /* dialogs */
 .idlg { width: min(520px, 94vw); top: 12vh; }
+.idlg.withpdf { width: min(640px, 94vw); top: 5vh; }
+.idlg .isendpdf.paper.real { max-height: 52vh; overflow: auto; padding: 6px 0 10px; margin-bottom: 10px; border-bottom: 1px solid var(--line); }
 .idlg .ihd { padding: 16px 20px 12px; border-bottom: 1px solid var(--line); }
 .idlg .ihd .lbl { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 2px; }
 .idlg .ihd b { font: 700 17px "Hanken Grotesk"; }

@@ -76,10 +76,13 @@ export function sheetEdit(inv: Draft, key: string, value: string, ctx: { custome
     return changed({ lines });
   }
   if (field === 'vatRate') {
-    const rate = Number(value);
-    if (!invoicing().rates.includes(rate)) return { refused: 'value' };
-    if (rate === line.vatRate) return undefined;
+    // «8.1» prices the line net, «incl:8.1» with the VAT in it (src/invoices/sheet.ts).
+    const included = value.startsWith('incl:');
+    const rate = Number(included ? value.slice(5) : value);
+    if (!invoicing().rates.includes(rate) || (included && rate === 0)) return { refused: 'value' };
+    if (rate === line.vatRate && included === !!line.vatIncluded) return undefined;
     line.vatRate = rate;
+    if (included) line.vatIncluded = true; else delete line.vatIncluded;
     return changed({ lines });
   }
   return undefined;

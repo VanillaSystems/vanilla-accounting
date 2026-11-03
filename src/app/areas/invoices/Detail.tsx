@@ -276,7 +276,7 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
   const { d, ws, inv, state, reminderLevel, nav, canEdit } = props;
   const s = useUi();
   const dl = inv.status === 'issued'
-    ? <a className="dl inline" href={issuedPdfUrl(inv.number)} download={`${inv.number}.pdf`} data-tip={t('invoices.downloadTip')}>{I.dl}<span>{t('invoices.download')}</span></a>
+    ? <a className="dl inline" href={issuedPdfUrl(inv.number)} download={`${inv.number}.pdf`} data-tip={t('invoices.downloadTip')}>{I.dl}<span>{t('invoices.downloadInstead')}</span></a>
     : null;
   if (!canEdit) return <div className="ivacts">{dl}</div>;
   const preview = <button type="button" className="btn ghost" data-act="preview" aria-pressed={s.preview} onClick={() => setUi({ preview: !s.preview })}>{s.preview ? t('invoices.edit') : t('invoices.preview')}</button>;
@@ -289,7 +289,7 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
         nav.toast(t('invoices.missing', { list: missing.map(missingText).join(', ') }));
         return;
       }
-      void issue(nav, inv, props.period).then((x) => { if (x) setUi({ preview: false }); });
+      void issue(nav, inv, props.period);
     };
     return (
       <div className="ivacts">

@@ -10,6 +10,7 @@ import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { classifyTransactions, loadClassifyContext, type ClassifyDeps } from '../src/booking/classify.js';
+import { classifyStep } from '../src/intake/classify.js';
 import { parseRule, ruleFor, ruleWords, type PlacedRule, type RuleFacts } from '../src/booking/rules.js';
 import { companyRules, factsOf, chartNames } from '../src/booking/rule-book.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
@@ -141,7 +142,7 @@ test('what a rule cannot carry out is refused, each with its reason', () => {
   assert.equal(why({ id: 'a', when: { text: 'x' }, then: { account: '6200', vat: 'Q7' } }), 'vat');
   assert.equal(why({ id: 'a', when: { text: 'x' }, then: { account: '4000', vat: 'M81' } }), 'codeNotTaken', 'a code the firm\'s form does not take is the reason, before an account the chart lacks (r7f-32)');
   assert.equal(why({ id: 'a', when: { text: 'x' }, then: { account: '6200', vat: 'none' } }), 'ok', 'without a code is always the firm\'s');
-  assert.equal(why({ id: 'a', when: { text: 'x' }, then: { account: '6200' } }), 'vat', 'a booking names its VAT code, or none');
+  assert.equal(why({ id: 'a', when: { text: 'x' }, then: { account: '6200' } }), 'vatMissing', 'a booking names its VAT code, or none: code fills it in from the receipts, or the card asks (src/booking/rule-vat.ts)');
   assert.equal(why({ id: 'a', when: { text: '(' }, then: { account: '6200', vat: 'I81' } }), 'pattern');
   assert.equal(why({ id: 'a', when: { amount: { over: 500, under: 100 } }, then: { ask: 'Wofür?' } }), 'amount');
   assert.equal(why({ id: 'a', when: { counterparty: 'nobody' }, then: { ask: 'Wofür?' } }), 'counterparty');
@@ -410,6 +411,32 @@ test('a collective payment whose one part a rule decides: that part by the rule 
   assert.deepEqual(books.journalEntries.map((e) => [e.amount, e.rule ?? 'model', e.receipts]), [[23.4, 'courier', ['r-courier']], [187.6, 'model', ['r-paper']]]);
   assert.equal(prompts.length, 1);
   assert.doesNotMatch(prompts[0], /Kurier Muster AG Rechnung/, 'the ruled part\'s receipt is not the model\'s');
+});
+
+const COURIER_RULE = `${RULES}      - id: courier
+        when: { payer: CH0000000000000000001, direction: out }
+        then: { account: "4210", vat: 0 }
+        source: wish 2026-10-15
+`;
+/** The books as the inbox run holds them: each read a copy, each update on the saved books. */
+const portOf = (books: Books) => ({ read: () => structuredClone(books), update: <T>(fn: (b: Books) => T) => fn(books) });
+
+test('the inbox run saves every part of a collective payment: the part a rule books before the model is asked, and the part the model books after it', async () => {
+  const books = booksOf([batchOut()], partReceipts);
+  const ask: ClassifyDeps['ask'] = async () => JSON.stringify({ 'BATCH-OUT#2': { entries: [{ accountDebit: '4000', accountCredit: '1021', amount: 187.6, vatCode: 'M81', description: 'Papier' }] } });
+  await classifyStep()({ ws: company(COURIER_RULE), books: portOf(books), ask, progress: () => {}, log: () => {} });
+  assert.deepEqual(books.journalEntries.map((e) => [e.amount, e.rule ?? 'model']), [[23.4, 'courier'], [187.6, 'model']], 'both parts saved: the payment is booked whole');
+  assert.equal(books.transactions[0].waitsForReceipt, undefined);
+});
+
+test('a collective payment whose part the model leaves without a booking is booked in no part: it stays open for the next run and the person, never short of what the bank paid', async () => {
+  const books = booksOf([batchOut()], partReceipts);
+  const ask: ClassifyDeps['ask'] = async () => JSON.stringify({});
+  const logged: string[] = [];
+  const out = await classifyStep()({ ws: company(COURIER_RULE), books: portOf(books), ask, progress: () => {}, log: (l) => logged.push(l) });
+  assert.deepEqual(books.journalEntries, [], 'the rule\'s part is not saved alone');
+  assert.ok(out.notes.some((n) => n.code === 'failed'), JSON.stringify(out.notes));
+  assert.ok(logged.some((l) => /BATCH-OUT.*booked in no part/.test(l)), logged.join('\n'));
 });
 
 test('a private share as own use books the whole payment with its input tax and corrects the share with the private-use code, once per payment', async () => {

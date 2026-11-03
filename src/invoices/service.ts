@@ -91,9 +91,11 @@ function parseLines(v: unknown): InvoiceLine[] {
     if (!invoiceRates().includes(l.vatRate as number)) bad(`Position ${i + 1}: vatRate ist einer von ${invoiceRates().join(', ')}.`, [{ field: 'line.vatRate', line: i }]);
     if (l.unit !== undefined && !UNITS.includes(l.unit as never)) bad(`Position ${i + 1}: unit ist eine von ${UNITS.join(', ')}.`);
     if (l.account !== undefined && !/^\d{4}$/.test(String(l.account))) bad(`Position ${i + 1}: account ist ein Konto mit 4 Ziffern.`);
+    if (l.vatIncluded !== undefined && typeof l.vatIncluded !== 'boolean') bad(`Position ${i + 1}: vatIncluded ist true oder false.`);
     return {
       text: l.text as string, quantity: l.quantity as number, price: l.price as number, vatRate: l.vatRate as InvoiceLine['vatRate'],
       ...(l.unit !== undefined ? { unit: l.unit as InvoiceLine['unit'] } : {}), ...(l.account !== undefined ? { account: String(l.account) } : {}),
+      ...(l.vatIncluded === true && (l.vatRate as number) > 0 ? { vatIncluded: true as const } : {}),
     };
   });
 }

@@ -107,6 +107,10 @@ export interface Check {
   book: number;
   /** book − close: not 0 when a payment is not booked, or booked wrong. */
   bookDiff: number | null;
+  /** The payments add up (`ok`) and the books show the bank's closing balance: only then does the statement read «Stimmt». */
+  agrees: boolean;
+  /** The account's payments of the year up to the statement's last day without a booking: their count and signed sum, what the books lack. */
+  unbooked: { n: number; sum: number };
   /**
    * The bank's balance moved between the statement before this one and this one's opening with no
    * statement in between (r10h-7): a statement is missing for [from, to], or a file is wrong.
@@ -402,7 +406,12 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
     const close = part ? part.close : own.find((b) => b.date === s.to)?.amount ?? balanceOn(account, s.to);
     const diff = open == null || close == null ? null : round(open + inc - out - close);
     const book = bookBalanceNative(books.journalEntries ?? [], account, currency, s.to.slice(0, 4), s.to, nativeOpening(books, account, currency, s.to.slice(0, 4)));
-    const c: Check = { open, close, inc, out, n: xs.length, diff, ok: diff === 0, book, bookDiff: close == null ? null : round(book - close) };
+    const bookDiff = close == null ? null : round(book - close);
+    const lacking = (byAccount.get(account) ?? []).filter((t) => t.date >= `${year}-01-01` && t.date <= s.to && unbooked(t));
+    const c: Check = {
+      open, close, inc, out, n: xs.length, diff, ok: diff === 0, book, bookDiff, agrees: diff === 0 && bookDiff === 0,
+      unbooked: { n: lacking.length, sum: round(lacking.reduce((a, t) => a + signed(t), 0)) },
+    };
     // The statement before this one closed on another balance than this one opens on: the bank moved money no statement shows (r10h-7).
     const prev = ownOpen !== undefined ? before(s) : undefined;
     const prevClose = prev ? check(prev).close : null;

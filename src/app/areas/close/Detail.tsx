@@ -21,7 +21,7 @@ import { I } from '../receipts/icons.js';
 import type { AreaProps, Nav } from '../index.js';
 import { closeYear as yearOfPage, useYearClose } from './data.js';
 import { useShellUi } from '../../shell/ui.js';
-import { configOf } from '../export/state.js';
+import { configOf } from '../export/config.js';
 import { stepGone, causeText, checkRows, closeBlockers, lastPeriodOf, problemText, stepLabel, stepOf, stepsFor, tx, type CheckRow, type Step } from './steps.js';
 import { correctionName } from '../../lib/vat-words.js';
 import { Go } from '../vat/links.js';
@@ -593,7 +593,7 @@ function Handover({ d, nav }: StepProps) {
         <button type="button" className="hcard" onClick={() => nav.go({ route: { area: 'reports', report: 'balance' }, query: { period: year } })}>
           <b>{t('close.handReports', { year: d.year })}</b><span>{t('close.handReportsText')}</span>
         </button>
-        <button type="button" className="hcard" onClick={() => ui.openExport({ period: d.year, items: { journal: ['banana'] }, sums: false, oneBook: false, preset: null })}>
+        <button type="button" className="hcard" onClick={() => ui.openExport({ period: d.year, items: { journal: ['banana'] }, sums: false, oneBook: false, preset: null, periodChosen: false })}>
           <b>{t('close.handBanana', { year: d.year })}</b><span>{t('close.handBananaText')}</span>
         </button>
         <button type="button" className="hcard" onClick={() => ui.openExport(configOf('audit', year, year, d.year))}>

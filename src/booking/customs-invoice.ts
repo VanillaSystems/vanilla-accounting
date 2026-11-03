@@ -56,8 +56,8 @@ export interface PositionLine { position: CustomsPosition; gross: number; rate?:
 /** A customs invoice as read: its positions add up to its total, in its currency; the assessment numbers it names. */
 export interface CustomsInvoice { receipt: string; file: string; date?: string; currency: string; total: number; lines: PositionLine[]; numbers: string[] }
 
-/** The customs office's assessment of import VAT for the firm: the tax it states, in the books' currency, and its number. */
-export interface Assessment { receipt: string; file: string; date?: string; amount: number; number?: string }
+/** The customs office's assessment of import VAT for the firm: the tax it states, in the books' currency, its number, and its rate when one rate makes all of the tax. */
+export interface Assessment { receipt: string; file: string; date?: string; amount: number; number?: string; rate?: number }
 
 /** Why a payment's customs invoices are not split in code: the model books it, its reason says why. */
 export type CustomsHold =
@@ -199,13 +199,19 @@ export function readCustomsInvoice(r: Receipt, words: CustomsWords): { invoice: 
 
 const UID = /CHE[-\s.]?(\d{3})[.\s]?(\d{3})[.\s]?(\d{3})/g;
 
+/** The page of `text` that holds `at` (a page break there begins the next page). */
+function pageAt(text: string, at: number): string {
+  const end = text.indexOf('\f', at + 1);
+  return text.slice(text.lastIndexOf('\f', at) + 1, end < 0 ? undefined : end);
+}
+
 /**
  * The assessment's total: the first money value after its label, on the label's page. The text
  * may put the values of the header's other fields between the two (the assessment's header is a
  * column of labels and a column of values: bordereau number, country, positions, the account, the
  * UID, the currency), none of them money; a date, a UID or a tariff number never reads as one.
  */
-function assessmentTotal(text: string, words: CustomsWords): number | undefined {
+function labelledTotal(text: string, words: CustomsWords): number | undefined {
   const label = wordsRe(words.assessment.total).exec(text);
   if (!label) return undefined;
   const from = label.index + label[0].length;
@@ -213,9 +219,45 @@ function assessmentTotal(text: string, words: CustomsWords): number | undefined 
   return amounts(text.slice(from, end < 0 ? undefined : end))[0];
 }
 
+/** A rate as an assessment prints it («2.6 %», «Ansatz [%]: 8.1»): a number of one decimal or two that is no piece of a longer one. */
+const RATE_NUMBER = /(?<![\d.,'’])(\d{1,2}[.,]\d{1,2})(?![.,]?\d)/g;
+
+/**
+ * The tax rows a page states: each tax that is a base on the page at a domestic rate the page
+ * states (base × rate, to the cent), whatever the layout put where. A tax printed twice (the
+ * position and the total of a one-position assessment) is one row.
+ */
+function taxRows(page: string): Array<{ rate: number; tax: number }> {
+  const rates = [...new Set([...page.matchAll(RATE_NUMBER)].map((m) => Number(m[1].replace(',', '.'))))].filter((r) => r > 0 && vat().isDomesticRate(r));
+  const money = [...new Set(amounts(page).map(toRappen))].filter((x) => x > 0);
+  return rates.flatMap((rate) => money.filter((tax) => money.some((base) => base !== tax && Math.round((base * rate) / 100) === tax)).map((tax) => ({ rate, tax })));
+}
+
+/**
+ * The tax an assessment states, and its rate when one rate makes all of it (the deduction's code
+ * names it). The total by its label when the text shows one (labelledTotal). Else, on an assessment
+ * that names itself in a heading (its title on a line of its own, not a courier's sentence citing
+ * it), the tax rows of that page (taxRows): a row as much as the others together is their total.
+ */
+function assessedTax(text: string, words: CustomsWords): { amount: number; rate?: number } | undefined {
+  const title = wordsRe(words.assessment.title);
+  const lines = text.split('\n');
+  const k = lines.findIndex((l) => title.exec(l)?.[0].length === l.trim().length);
+  const rows = k < 0 ? [] : taxRows(pageAt(text, k ? lines.slice(0, k).join('\n').length + 1 : 0));
+  const sum = (list: typeof rows) => list.reduce((s, r) => s + r.tax, 0);
+  const total = rows.find((r) => rows.length > 1 && r.tax === sum(rows) - r.tax);
+  const parts = total ? rows.filter((r) => r !== total) : rows;
+  const labelled = labelledTotal(text, words);
+  const amount = labelled ?? (parts.length ? fromRappen(sum(parts)) : undefined);
+  if (!amount) return undefined;
+  const rates = new Set(parts.map((r) => r.rate));
+  const rate = rates.size === 1 && toRappen(amount) === sum(parts) ? parts[0].rate : undefined;
+  return { amount, ...(rate !== undefined ? { rate } : {}) };
+}
+
 /**
  * A receipt read as the customs office's assessment of import VAT for the firm whose UID is `uid`:
- * its title, its total (assessmentTotal), and the firm's UID as importer, anywhere in the text (a
+ * its title, its tax (assessedTax), and the firm's UID as importer, anywhere in the text (a
  * courier may put the assessment's pages behind its invoice), with its number when it shows one.
  * Undefined otherwise: an assessment without the firm's UID proves nothing for the firm.
  */
@@ -224,9 +266,9 @@ export function readAssessment(r: Pick<Receipt, 'id' | 'filename' | 'date' | 'ex
   const digits = uid?.replace(/\D/g, '');
   if (!digits || !wordsRe(words.assessment.title).test(text)) return undefined;
   if (![...text.matchAll(UID)].some((m) => m.slice(1).join('') === digits)) return undefined;
-  const amount = assessmentTotal(text, words);
+  const tax = assessedTax(text, words);
   const [number] = assessmentNumbers(text, words);
-  return amount ? { receipt: r.id, file: r.filename, ...(r.date ? { date: r.date } : {}), amount, ...(number ? { number } : {}) } : undefined;
+  return tax ? { receipt: r.id, file: r.filename, ...(r.date ? { date: r.date } : {}), amount: tax.amount, ...(tax.rate !== undefined ? { rate: tax.rate } : {}), ...(number ? { number } : {}) } : undefined;
 }
 
 /**
@@ -235,7 +277,7 @@ export function readAssessment(r: Pick<Receipt, 'id' | 'filename' | 'date' | 'ex
  * to the customs office by them (src/intake/pairing.ts). In the books' currency.
  */
 export function assessmentFacts(text: string, words: CustomsWords): Pick<Receipt, 'amount' | 'currency' | 'date'> {
-  const amount = assessmentTotal(text, words);
+  const amount = assessedTax(text, words)?.amount;
   const date = textFacts(text).date;
   return { ...(amount !== undefined ? { amount, currency: baseCurrency() } : {}), ...(date ? { date } : {}) };
 }
@@ -356,13 +398,18 @@ function withDeductions(lines: ClassifyEntry[], importVat: ReadonlyArray<{ amoun
 }
 
 /**
- * The tax-amount code of the import VAT account at the normal rate (M81-2): its input tax goes to
- * the box of material and goods. The box takes the assessment's tax as stated, whatever its rate.
+ * The tax-amount code of the import VAT account at the assessment's rate (M26-2 for 2.6 %), at the
+ * normal rate (M81-2) when it states several or none: its input tax goes to the box of material and
+ * goods, which takes the assessment's tax as stated, whatever the code's rate.
  */
-function deductionCode(account: string): string | undefined {
-  const gross = codeForRate(normalRate(), account, account);
-  return gross ? vat().codes.taxAmountCode(gross) : undefined;
+function deductionCode(account: string, rate?: number): string | undefined {
+  const at = (r: number) => { const gross = codeForRate(r, account, account); return gross ? vat().codes.taxAmountCode(gross) : undefined; };
+  return (rate !== undefined ? at(rate) : undefined) ?? at(normalRate());
 }
+
+/** Whether `e` is a deduction of import VAT: a one-legged line of a tax-amount code off the import VAT account, at any rate. */
+const isDeduction = (e: Pick<JournalEntry, 'accountDebit' | 'accountCredit' | 'vatCode'>, account: string): boolean =>
+  !e.accountDebit && e.accountCredit === account && isVatAmountCode(e.vatCode) && !e.vatCode!.startsWith(vat().codes.negativePrefix);
 
 /**
  * Whether a line claims input tax at a rate on the import VAT account (4030 M81): it would claim the
@@ -377,7 +424,7 @@ export function ratesImportVat(e: Pick<JournalEntry, 'accountDebit' | 'vatCode'>
 /** The one-legged line that deducts an assessment's tax off the import VAT account. */
 function deductionLine(a: Assessment, words: CustomsWords, description: string): ClassifyEntry | undefined {
   const account = words.positions.importVat.account;
-  const code = deductionCode(account);
+  const code = deductionCode(account, a.rate);
   return code ? { accountDebit: '', accountCredit: account, amount: a.amount, vatCode: code, description } : undefined;
 }
 
@@ -419,11 +466,10 @@ function usable(books: CustomsBooks, ctx: Pick<DeductionContext, 'words' | 'uid'
  */
 export function markDeducted(books: Pick<CustomsBooks, 'journalEntries' | 'receipts'>, ctx: Pick<DeductionContext, 'words' | 'uid'>): number {
   const account = ctx.words.positions.importVat.account;
-  const code = deductionCode(account);
-  if (!code) return 0;
+  if (!deductionCode(account)) return 0;
   let marked = 0;
   for (const e of books.journalEntries) {
-    if (e.vatCode !== code || e.accountCredit !== account || e.accountDebit) continue;
+    if (!isDeduction(e, account)) continue;
     for (const r of books.receipts) {
       if (r.importVatDeduction || !e.receipts?.includes(r.id) || !readAssessment(r, ctx.words, ctx.uid)) continue;
       r.importVatDeduction = e.id;
@@ -436,12 +482,12 @@ export function markDeducted(books: Pick<CustomsBooks, 'journalEntries' | 'recei
 const DAY = 864e5;
 
 /**
- * Whether a document reads as a customs assessment by its words (its title and the label of its
- * total), whoever it names: what the matching takes as a receipt of a payment to the customs office.
+ * Whether a document reads as a customs assessment by its words (its title and the tax it states,
+ * assessedTax), whoever it names: what the matching takes as a receipt of a payment to the customs office.
  */
 export function namesAssessment(r: Pick<Receipt, 'extractedText'>, words: CustomsWords): boolean {
   const text = r.extractedText ?? '';
-  return wordsRe(words.assessment.title).test(text) && wordsRe(words.assessment.total).test(text);
+  return wordsRe(words.assessment.title).test(text) && !!assessedTax(text, words);
 }
 
 /**
@@ -471,7 +517,6 @@ export function importVatDeductions(books: CustomsBooks, ctx: DeductionContext):
   const withoutInputTax = (e: JournalEntry) => !e.vatCode || vat().codes.parse(e.vatCode)?.rate === 0;
   const byId = new Map(books.receipts.map((r) => [r.id, r]));
   const linked = new Set(books.mappings.map((m) => m.receiptId));
-  const isDeduction = (e: JournalEntry) => e.vatCode === code && e.accountCredit === account && !e.accountDebit;
   const lines = books.transactions.flatMap((t): Array<{ payment: string; original: JournalEntry; invoice: Pick<CustomsInvoice, 'numbers' | 'date'>; amount: number }> => {
     const own = books.journalEntries.filter((e) => e.transactionRef === t.ref && e.origin === 'classify' && e.accountDebit === account && !!e.accountCredit && e.by?.kind !== 'person' && e.by?.kind !== 'assistant');
     const [original] = own;
@@ -486,7 +531,7 @@ export function importVatDeductions(books: CustomsBooks, ctx: DeductionContext):
     return own.filter(withoutInputTax).map((e) => ({ payment: t.ref, original: e, invoice, amount: e.amount }));
   });
   // A line counts as deducted once a deduction of its amount stands for its payment: on it, or as a correction holding an assessment that points at it.
-  const done = books.journalEntries.filter(isDeduction).map((e) => ({ e, payments: [e.transactionRef, ...(e.receipts ?? []).map((id) => byId.get(id)?.filedPayment).filter((p): p is string => !!p)] }));
+  const done = books.journalEntries.filter((e) => isDeduction(e, account)).map((e) => ({ e, payments: [e.transactionRef, ...(e.receipts ?? []).map((id) => byId.get(id)?.filedPayment).filter((p): p is string => !!p)] }));
   const open = lines.filter((l) => {
     const at = done.findIndex((d) => d.payments.includes(l.payment) && toRappen(d.e.amount) === toRappen(l.amount));
     if (at >= 0) done.splice(at, 1);
@@ -503,12 +548,12 @@ export function importVatDeductions(books: CustomsBooks, ctx: DeductionContext):
     const filed = ctx.isClosed(original.date);
     const entry: JournalEntry = filed
       ? ((date) => ({
-        id: ctx.newId(), transactionRef: ctx.manualRef(date), date, accountDebit: '', accountCredit: account, amount: a.amount, vatCode: code,
+        id: ctx.newId(), transactionRef: ctx.manualRef(date), date, accountDebit: '', accountCredit: account, amount: a.amount, vatCode: deductionCode(account, a.rate) ?? code,
         description: ctx.texts.correction(a, original, filingKeyOf(original.date, ctx.length)), origin: 'classify', receipts: [a.receipt],
         corrects: filingKeyOf(original.date, ctx.length), reason: ctx.texts.reason(a), by: CUSTOMS_BY,
       }))([ctx.firstOpenDay, a.date ?? ''].sort().at(-1)!)
       : {
-        id: ctx.newId(), transactionRef: line.payment, date: original.date, accountDebit: '', accountCredit: account, amount: a.amount, vatCode: code,
+        id: ctx.newId(), transactionRef: line.payment, date: original.date, accountDebit: '', accountCredit: account, amount: a.amount, vatCode: deductionCode(account, a.rate) ?? code,
         description: `${(original.description ?? '').split(',')[0]}, ${ctx.texts.deduction(a)}`, origin: 'classify',
         receipts: [...new Set([...books.mappings.filter((m) => m.transactionRef === line.payment).map((m) => m.receiptId), a.receipt])].sort(),
         reason: ctx.texts.reason(a), by: CUSTOMS_BY,
@@ -583,12 +628,11 @@ export interface MissingAssessment {
  */
 export function missingAssessments(books: Pick<CustomsBooks, 'transactions' | 'mappings' | 'receipts'> & { journalEntries?: readonly JournalEntry[] }, words: CustomsWords, inputTax: boolean): MissingAssessment[] {
   const account = words.positions.importVat.account;
-  const code = deductionCode(account);
-  if (!inputTax || !code) return [];
+  if (!inputTax || !deductionCode(account)) return [];
   const entries = books.journalEntries ?? [];
   const byId = new Map(books.receipts.map((r) => [r.id, r]));
   const booked = new Set(entries.map((e) => e.transactionRef));
-  const done = entries.filter((e) => e.vatCode === code && e.accountCredit === account && !e.accountDebit)
+  const done = entries.filter((e) => isDeduction(e, account))
     .map((e) => ({ e, payments: [e.transactionRef, ...(e.receipts ?? []).map((id) => byId.get(id)?.filedPayment).filter((p): p is string => !!p)] }));
   // An invoice linked to two payments (paid in parts) asks for its assessments once.
   const seen = new Set<string>();

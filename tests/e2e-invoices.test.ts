@@ -1,7 +1,7 @@
 /**
  * End to end: invoicing through the real UI on a copy of the demo. A draft is issued (its PDF printed, stored with its
  * SHA-256 and served under the invoice's link) and recorded as sent; a part of it is credited and the credit note
- * issued; an incoming payment an open invoice proposes is confirmed, which books its revenue.
+ * issued (its price corrected by typing); an incoming payment an open invoice proposes is confirmed, which books its revenue.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,7 +26,9 @@ test('a draft is issued with its stored PDF and sent; a part is credited; a prop
   try {
     await app.open(`/invoices/draft-${DRAFT}?period=2026`);
     await click(page, '[data-act=issue]');
-    await waitText(page, 'Rechnung 2026-008 ausgestellt');
+    // «Ausstellen» puts the document to take away in front of the person: the stored PDF, to save or send.
+    await page.waitForSelector('.isend.withpdf .isendpdf canvas.pg');
+    assert.equal(await page.$eval('.isend .ihd .lbl', (e) => e.textContent), 'Rechnung 2026-008 ausgestellt');
     await page.waitForFunction(() => location.pathname === '/invoices/2026-008');
     const issued = await invoice(DRAFT);
     assert.equal(issued.status, 'issued');
@@ -39,10 +41,13 @@ test('a draft is issued with its stored PDF and sent; a part is credited; a prop
     const served = Buffer.from(await (await fetch(app.ui + href)).arrayBuffer());
     assert.equal(sha(served), issued.pdf!.sha256, 'the download link serves the stored PDF');
 
-    await click(page, '[data-act=send]');
     await click(page, '.isend [data-act=download]');
     await waitText(page, 'Rechnung 2026-008 als gesendet erfasst');
     assert.deepEqual((await invoice(DRAFT)).sent?.map((s) => s.channel), ['download']);
+    await click(page, '[data-act=send]');
+    await page.waitForSelector('.isend.withpdf .isendpdf canvas.pg');
+    await click(page, '.isend [data-act=later]');
+    await page.waitForFunction(() => !document.querySelector('.isend'));
 
     await click(page, '[data-act=credit]');
     await clickText(page, 'Teilbetrag', '.icredit button[role=radio]');
@@ -50,13 +55,26 @@ test('a draft is issued with its stored PDF and sent; a part is credited; a prop
     await page.type('.icredit input:not(.mono)', 'Rabatt');
     await click(page, '[data-act=credit-ok]');
     await page.waitForFunction(() => /^\/invoices\/draft-/.test(location.pathname));
+    const creditDraft = async () => (await (await api.send('GET', '/api/invoices')).json.invoices as InvoiceView[]).find((i) => i.kind === 'credit-note' && i.status === 'draft')!;
+    assert.equal((await creditDraft()).view.totals.gross, -50, 'the part credited is the amount asked, VAT included (F04)');
+    // Typed at once after the click: the select-all the click schedules must not eat the minus.
+    await page.click('[data-ed="l:0:price"]');
+    await page.keyboard.type('-40');
+    await page.keyboard.press('Tab');
+    for (let k = 0; k < 50 && (await creditDraft()).view.totals.gross === -50; k++) await new Promise((r) => setTimeout(r, 100));
+    assert.equal((await creditDraft()).view.totals.gross, -40, 'the corrected price keeps its minus and its VAT included');
     await click(page, '[data-act=issue]');
-    await waitText(page, 'Gutschrift 2026-009 ausgestellt');
-    const credit = (await (await api.send('GET', '/api/invoices')).json.invoices as InvoiceView[]).find((i) => i.number === '2026-009')!;
+    await page.waitForSelector('.isend.withpdf .isendpdf canvas.pg');
+    assert.equal(await page.$eval('.isend .ihd .lbl', (e) => e.textContent), 'Gutschrift 2026-009 ausgestellt');
+    await click(page, '.isend [data-act=later]');
+    await page.waitForFunction(() => !document.querySelector('.isend'));
+    const list = (await api.send('GET', '/api/invoices')).json;
+    const credit = (list.invoices as InvoiceView[]).find((i) => i.number === '2026-009')!;
+    assert.ok(!(list.sent as Array<{ invoiceId: string }>).some((d) => d.invoiceId === credit.id), '«Später» records nothing as sent');
     assert.equal(credit.kind, 'credit-note');
     assert.equal(credit.status, 'issued');
     assert.match(readFileSync(join(api.root, credit.pdf!.file)).subarray(0, 5).toString(), /%PDF-/);
-    assert.equal((await invoice(DRAFT)).view.open, Math.round((issued.view.totals.gross - 50) * 100) / 100, 'the credit note lowers what is open');
+    assert.equal((await invoice(DRAFT)).view.open, Math.round((issued.view.totals.gross - 40) * 100) / 100, 'the credit note lowers what is open');
 
     // A payment of 2026-003's open amount from its customer, without a reference: the invoice proposes it.
     const due = (await invoice(OPEN)).view.open;
