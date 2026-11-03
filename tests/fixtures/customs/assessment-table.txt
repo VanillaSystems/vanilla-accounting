@@ -1,0 +1,15 @@
+Bundesamt für Zoll und Grenzsicherheit BAZG
+Veranlagungsverfügung MWST
+Dokument-Nr. 26CH000123456789 · Datum 19.10.2026
+Importeur: Muster Kaffee GmbH, Musterstrasse 1, 8000 Zürich, CHE-123.456.789
+
+Warenbezeichnung
+Steuerbemessungsgrundlage
+MWST-Satz
+MWST-Betrag
+
+Röstkaffee, nicht entkoffeiniert
+
+CHF 1'115.40
+2.6 %
+CHF 29.00

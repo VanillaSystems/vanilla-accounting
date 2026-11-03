@@ -15,7 +15,7 @@ import type { InvoiceList as Records } from '../../lib/api.js';
 import { ICONS } from '../icons.js';
 import { I } from '../receipts/icons.js';
 import type { Area, AreaProps, LegendItem } from '../index.js';
-import { followBooks, invoicesNow, reloadInvoices, useInvoices } from './data.js';
+import { followBooks, invoicesNow, newestIssued, reloadInvoices, useInvoices } from './data.js';
 import { byRouteId, counts, customerOpen, customerRows, customerOf, groupsOf, openSums, routeId, rowsOf, sentRows, type InvoiceRow } from './model.js';
 import { listed, setUi, toggleGroup, ui, useUi } from './state.js';
 import { invoiceAt, invoicePath, newDraftFor } from './actions.js';
@@ -249,6 +249,7 @@ export const invoices: Area<RouteOf<'invoices'>> = {
   id: 'invoices',
   label: () => t('area.invoices'),
   dock: { key: 'i', icon: ICONS.invoices, tip: () => t('area.invoices.tip') },
+  newest: newestIssued,
   List: (props) => <><List {...props} /><Dialogs {...props} /></>,
   Detail,
   add: {

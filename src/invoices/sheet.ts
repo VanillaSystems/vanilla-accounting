@@ -162,15 +162,16 @@ export function sheetBlocks(d: SheetData): Block[] {
   B.push({ html: `<table class="tb">${colgroup}<thead><tr>${cols.map(([k, x]) => `<th class="${k === 'd' ? '' : 'r'}">${esc(x)}</th>`).join('')}</tr></thead></table>`, head: true });
   d.lines.forEach((l, k) => {
     const unit = l.unit ? ` ${L.units[l.unit]}` : '';
+    const incl = !!l.vatIncluded && l.vatRate > 0;
     const cells = draft
       ? {
         text: editable(`l:${k}:text`, esc(l.text), ed.words.desc, 'blocked'),
         qty: `${editable(`l:${k}:quantity`, esc(formatQuantity(l.quantity)))} ${pick(`l:${k}:unit`, [['', '–'], ...UNITS.map((u): [string, string] => [u, L.units[u]])], l.unit ?? '')}`,
         price: editable(`l:${k}:price`, n(l.price)),
-        rate: pick(`l:${k}:vatRate`, invoiceRates().map((r): [string, string] => [String(r), `${r} %`]), String(l.vatRate)),
+        rate: pick(`l:${k}:vatRate`, invoiceRates().flatMap((r): Array<[string, string]> => [[String(r), `${r} %`], ...(r > 0 ? [[`incl:${r}`, `${r} % ${L.included}`] as [string, string]] : [])]), `${l.vatIncluded && l.vatRate > 0 ? 'incl:' : ''}${l.vatRate}`),
         remove: d.lines.length > 1 ? `<button type="button" class="edx scr" data-ia="rmline" data-k="${k}" title="${esc(ed.words.removeLine)}" aria-label="${esc(ed.words.removeLine)}">×</button>` : '',
       }
-      : { text: esc(l.text), qty: esc(`${formatQuantity(l.quantity)}${unit}`), price: n(l.price), rate: `${l.vatRate} %`, remove: '' };
+      : { text: `${esc(l.text)}${incl && !vatColumn ? ` (${l.vatRate} % ${L.included})` : ''}`, qty: esc(`${formatQuantity(l.quantity)}${unit}`), price: n(l.price), rate: `${l.vatRate} %${incl ? ` ${L.included}` : ''}`, remove: '' };
     B.push({ row: true, html: `<table class="tb">${colgroup}<tbody><tr><td>${cells.text}</td>${show.quantity ? `<td class="r">${cells.qty}</td><td class="r">${cells.price}</td>` : ''}${vatColumn ? `<td class="r">${cells.rate}</td>` : ''}<td class="r">${n(lineAmount(l))}${cells.remove}</td></tr></tbody></table>` });
   });
   if (draft) B.push({ html: `<div class="edadd scr"><button type="button" data-ia="addline">＋ ${esc(ed.words.addLine)}</button></div>` });

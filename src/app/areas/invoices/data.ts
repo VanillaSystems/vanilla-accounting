@@ -51,6 +51,13 @@ export function followBooks(books: object): void {
   if (!first) void reloadInvoices();
 }
 
+/** The records as they are, without reading them: the shell re-renders when they come in (an area's `newest`). */
+export const useInvoicesLoaded = (): Load => useSyncExternalStore((fn) => { listeners.add(fn); return () => listeners.delete(fn); }, () => load);
+
+/** The newest issued invoice's or credit note's date, once the records are read. */
+export const newestIssued = (): string | undefined =>
+  invoicesNow()?.invoices.reduce<string | undefined>((m, i) => (i.status !== 'draft' && (!m || i.date > m) ? i.date : m), undefined);
+
 /** The records for code outside components (⌘K, the tab title, keys). */
 export const invoicesNow = (): InvoiceList | undefined => (load.state === 'ready' ? load.data : undefined);
 

@@ -118,6 +118,7 @@ function Return(props: Props) {
         ) : v.state.kind === 'running' ? (
           <span data-testid="period-running">{t('vat.stateRunning', { ends: formatDate(v.state.ends), from: formatDate(v.state.from) })}</span>
         ) : <span>{t('vat.stateOverview')}</span>}
+        <EarlierOpen books={books} shown={v.period} nav={nav} />
         <button type="button" className="clink2" onClick={() => nav.go({ route: { area: 'codes' }, query: {} })}>{t('vatCodes.open')}</button>
       </div>
       <SalesWithoutVat books={books} period={period} nav={nav} />
@@ -152,6 +153,22 @@ function Return(props: Props) {
       </div>
       <div className="hidden-note"><button type="button" onClick={toggleAll}>{all ? t('vat.hideEmpty') : t('vat.showAll')}</button></div>
     </div>
+  );
+}
+
+/**
+ * The page shows the period of the newest data (F10); the return the work is due on may be an
+ * earlier one, not filed yet. Said as a fact beside the state, a link to that return.
+ */
+function EarlierOpen({ books, shown, nav }: { books: Index; shown: Period; nav: Nav }) {
+  const oldest = booksOpenPeriod(books, localToday(), filing().length);
+  if (shown.kind === 'all' || oldest.to >= shown.from) return null;
+  const { state, period } = vatReturn(books, oldest.token);
+  if (state.kind !== 'open') return null;
+  return (
+    <button type="button" className={`clink2${state.overdue ? ' warn' : ''}`} data-testid="earlier-open" onClick={() => nav.go({ route: { area: 'vat' }, query: { period } })}>
+      {t(state.overdue ? 'vat.earlierOverdue' : 'vat.earlierOpen', { period: periodName(period), date: formatDate(state.due) })}
+    </button>
   );
 }
 

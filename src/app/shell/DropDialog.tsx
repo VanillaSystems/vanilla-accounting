@@ -6,11 +6,13 @@
  * small action, «Rückgängig» for a taken one. Further drops, onto the window or the dialog, add
  * rows until it closes; the work goes on when it does.
  */
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { api, errorText } from '../lib/api.js';
 import { language, t, tWith } from '../i18n/index.js';
-import { dropStore, failedLine } from './drop-upload.js';
+import { dropStore, failedLine, landedPeriod } from './drop-upload.js';
+import { localToday, type Period } from '../../accounting/periods.js';
+import { filing } from '../../engines/index.js';
 import { needsYou, tabOf, type DropTab } from './drop-tabs.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { monthName } from '../lib/period-label.js';
@@ -407,10 +409,17 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
   );
 }
 
-export function DropDialog({ onGo, books, refresh }: { onGo(loc: Location): void; books: Index; refresh(): void }) {
+/**
+ * `period`: the one on screen. While the window is open, the page behind it moves to where the
+ * dropped files landed (`onLanded`), once per new period, so the person sees them on closing it.
+ */
+export function DropDialog({ onGo, onLanded, period, books, refresh }: { onGo(loc: Location): void; onLanded(p: Period): void; period: Period; books: Index; refresh(): void }) {
   const s = useDrop();
   const { view } = useAutomation();
   const [tab, setTab] = useState<DropTab>('all');
+  const dateOf = (r: DropRow) => r.statement ? r.facts?.to : r.report ? undefined : books.receipts.find((y) => y.id === receiptIdOf(r, view))?.date;
+  const landed = s.open && s.session ? landedPeriod(s.session.rows, dateOf, period, localToday(), filing().length) : undefined;
+  useEffect(() => { if (landed) onLanded(landed); }, [landed?.token]);
   if (!s.open) return <Lost />;
   const rows = s.session?.rows ?? [];
   const tabs: DropTab[] = ['all', 'statements', 'receipts', ...(rows.some((r) => tabOf(r) === 'unclear') ? ['unclear' as const] : []), 'out'];

@@ -81,7 +81,8 @@ customs:
   # with the number: postage and other invoices list VAT-free costs too.
   untaxed: [MWST.-freie Kosten, MWST-freie Kosten, MWST freie Kosten, MwSt.-freie Kosten, MwSt-freie Kosten]
   # The BAZG's assessment of import VAT (Veranlagungsverfügung MWST): its title, and the label of its
-  # total. It proves the deduction when it names the firm's UID. The German words are the BAZG's
+  # total. It proves the deduction when it names the firm's UID. Without the label, an assessment
+  # whose title stands as a heading is read by its rows: each tax that is a base × a rate it states. The German words are the BAZG's
   # document; the French, Italian and English ones are its names in those languages, not yet seen
   # on a document.
   assessment:

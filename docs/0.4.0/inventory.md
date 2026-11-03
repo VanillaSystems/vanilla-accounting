@@ -11,10 +11,10 @@ and the providers.
 | core | 75 | 23 |
 | engine | 4 | 1 |
 | provider | 14 | 11 |
-| split | 123 | 26 |
+| split | 124 | 26 |
 | infrastructure | 69 | 4 |
 | workflow | 26 | 0 |
-| view | 333 | 56 |
+| view | 334 | 55 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -130,10 +130,10 @@ Layers are assigned by path prefix, most specific first:
 | `src/intake/read.ts` | camt.053 4 |
 | `src/intake/vat.ts` | MWST 3 |
 | `src/invoices/fonts.ts` | QR-bill 1 |
-| `src/invoices/model.ts` | CHF 1, MWST 2, Ziffer 1, QR-bill 7 |
+| `src/invoices/model.ts` | CHF 1, MWST 2, Ziffer 1, QR-bill 7, Rappen 1 |
 | `src/invoices/payments.ts` | MWST 1, ESTV 1, camt.053 1, QR-bill 1 |
 | `src/invoices/pdf.ts` | QR-bill 1 |
-| `src/invoices/rules.ts` | MWST 1, QR-bill 3, Rappen 2 |
+| `src/invoices/rules.ts` | MWST 1, QR-bill 3, Rappen 3 |
 | `src/invoices/service.ts` | CHF 2, MWST 1, Ziffer 1 |
 | `src/invoices/sheet.ts` | QR-bill 18 |
 | `src/invoices/texts.ts` | MWST 5 |
@@ -160,7 +160,6 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/areas/codes/model.ts` | CHF 1 |
 | `src/app/areas/codes/vat-card.tsx` | Ziffer 1 |
 | `src/app/areas/company/InvoiceLayout.tsx` | CHF 3 |
-| `src/app/areas/export/state.ts` | MWST 1 |
 | `src/app/areas/index.ts` | MWST 1 |
 | `src/app/areas/invoices/Detail.tsx` | CHF 1, QR-bill 1 |
 | `src/app/areas/invoices/Sheet.tsx` | QR-bill 2 |
@@ -187,7 +186,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 44, MWST 335, ESTV 42, Ziffer 62, form 0535 1, UID 1, camt.053 24, QR-bill 1, Rappen 3 |
+| `src/app/i18n/locales/de.ts` | CHF 44, MWST 339, ESTV 42, Ziffer 62, form 0535 1, UID 1, camt.053 24, QR-bill 1, Rappen 3 |
 | `src/app/i18n/locales/en.ts` | CHF 44, MWST 5, ESTV 28, form 0535 1, UID 1, camt.053 24, QR-bill 4 |
 | `src/app/i18n/locales/fr.ts` | CHF 44, MWST 1, form 0535 1, UID 1, camt.053 24, QR-bill 1 |
 | `src/app/i18n/locales/it.ts` | CHF 44, MWST 1, form 0535 1, UID 1, camt.053 24, QR-bill 1 |

@@ -64,6 +64,9 @@ export function Sheet({ data, editing, className, onEdit, onAction, focus, onFoc
   const held = useRef<HTMLSelectElement | null>(null);
   const ownChange = useRef(false);
   const waiting = useRef<string>();
+  // A number field just entered: its first key replaces what it shows, also when it comes before the
+  // frame that selects it (F14: a quantity of 1 typed over at once as 12 became 121 or 2).
+  const fresh = useRef<HTMLElement | null>(null);
 
   useEffect(() => { let live = true; fontsReady.then(() => { if (live) setFonts(true); }); return () => { live = false; }; }, []);
 
@@ -135,18 +138,22 @@ export function Sheet({ data, editing, className, onEdit, onAction, focus, onFoc
         refocus.current = (e.relatedTarget as HTMLElement | null)?.closest?.<HTMLElement>('[data-ed]')?.dataset.ed;
         if (onEdit?.(el.dataset.ed!, text(el), true) === false) el.innerText = el.dataset.was ?? '';
       }}
-      onPointerDown={(e) => { const el = field(e); if (el instanceof HTMLSelectElement) held.current = el; }}
+      onPointerDown={(e) => { const el = field(e); if (el instanceof HTMLSelectElement) held.current = el; if (el && el === document.activeElement) fresh.current = null; }}
       onFocus={(e) => {
         const el = field(e);
         if (!el) return;
         if (el instanceof HTMLSelectElement) held.current = el;
         el.dataset.was = text(el);
-        if (el.isContentEditable && numeric(el)) requestAnimationFrame(() => { if (document.activeElement === el) getSelection()?.selectAllChildren(el); });
+        if (el.isContentEditable && numeric(el)) {
+          fresh.current = el;
+          requestAnimationFrame(() => { if (fresh.current === el && document.activeElement === el) getSelection()?.selectAllChildren(el); });
+        }
       }}
       onKeyDown={(e) => {
         const el = field(e);
         if (!el?.isContentEditable) return;
         e.stopPropagation();
+        if (fresh.current === el) { fresh.current = null; if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) getSelection()?.selectAllChildren(el); }
         if (e.key === 'Escape' || (e.key === 'Enter' && !e.shiftKey && el.dataset.ed !== 'intro' && el.dataset.ed !== 'closing')) { e.preventDefault(); el.blur(); }
       }}
       onMouseDown={(e) => { if ((e.target as HTMLElement).closest('button')) e.preventDefault(); }}

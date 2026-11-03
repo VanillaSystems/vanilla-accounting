@@ -108,14 +108,20 @@ function List(props: Props) {
   const seen = useRef<string>();
   useEffect(() => {
     if (!route.id) { if (ids[0]) nav.select({ area: 'receipts', id: ids[0] }); return; }
-    if (seen.current === route.id) return;
-    seen.current = route.id;
+    // A receipt opened before its date is read follows once it has one (F10).
     const v = l.byId.get(route.id);
-    if (v && !ids.includes(route.id) && !query.period && v.day && (v.day < period.from || v.day > period.to)) nav.go(at(route, v.day));
+    if (seen.current === route.id || !v?.day) return;
+    seen.current = route.id;
+    if (!ids.includes(route.id) && !query.period && (v.day < period.from || v.day > period.to)) nav.go(at(route, v.day));
   }, [route.id, ids[0], l]);
 
   const select = (id: string) => nav.select({ area: 'receipts', id });
-  useSelectionFollowsRows(route.id, ids, select);
+  // A file read out of the inbox, and a receipt whose date takes it out of the period, keep their selection: the effect above opens its period.
+  const wasInbox = useRef(new Set<string>());
+  for (const f of pending) wasInbox.current.add(f.id);
+  const leaves = route.id ? l.byId.get(route.id)?.day : undefined;
+  const reading = !!route.id && wasInbox.current.has(route.id) && !l.byId.has(route.id);
+  useSelectionFollowsRows(route.id, ids, select, reading || (!query.period && !!leaves && (leaves < period.from || leaves > period.to)));
   const row = (v: ReceiptView, same: boolean) => (
     <Row key={v.r.id} v={v} proc={l.processing.get(v.r.id)} view={view} sel={!picked && v.r.id === route.id} picked={pickedIds.has(v.r.id)} same={same} canEdit={canEdit} onSelect={select}
       onClick={(e) => clickRow(e, 'receipt', v.r.id, route.id, select, nav.toast)} toast={nav.toast} onAct={(a) => runAct(props, a, v.r.id)} />

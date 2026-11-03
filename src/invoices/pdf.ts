@@ -57,10 +57,13 @@ export class NoBrowserError extends Error {
   }
 }
 
-/** The browser started once more after the one printing went away, and that start failed too. */
-export class BrowserRestartError extends Error {
-  constructor(executablePath: string, cause: unknown) {
-    super(`Der Browser für PDFs (${executablePath}) hat sich beendet und liess sich nicht neu starten: ${(cause as Error)?.message ?? cause}. CHROME_PATH auf einen anderen Chromium-Browser setzen oder Chrome for Testing installieren (npx playwright install chromium).`, { cause });
+/**
+ * A browser was found but the PDF did not print: it would not start (twice), it ended mid-print, or the page broke.
+ * Nothing printed is nothing stored, so the change the PDF was for (an invoice issued, a report filed) did not happen.
+ */
+export class PrintFailedError extends Error {
+  constructor(cause: unknown) {
+    super(`Das PDF liess sich nicht drucken: ${(cause as Error)?.message ?? cause}. Nochmals versuchen; sonst CHROME_PATH auf einen anderen Chromium-Browser setzen oder Chrome for Testing installieren (npx playwright install chromium).`, { cause });
   }
 }
 
@@ -131,9 +134,8 @@ async function openPage(): Promise<Page> {
     try {
       return await (await browser()).newPage();
     } catch (again) {
-      if (again instanceof NoBrowserError) throw again;
-      await dropBrowser();
-      throw new BrowserRestartError(findBrowser() ?? '', again);
+      if (!(again instanceof NoBrowserError)) await dropBrowser();
+      throw again;
     }
   }
 }
@@ -156,8 +158,12 @@ export function usePrintPages(pages: () => Promise<PrintPage>): void {
 }
 
 async function withPage<T>(fn: (page: PrintPage) => Promise<T>): Promise<T> {
-  const page = await newPage();
-  try { return await fn(page); } finally { await page.close(); }
+  try {
+    const page = await newPage();
+    try { return await fn(page); } finally { await page.close(); }
+  } catch (e) {
+    throw e instanceof NoBrowserError || e instanceof PrintFailedError ? e : new PrintFailedError(e);
+  }
 }
 
 /** The sheet laid out: blocks measured in the browser, placed on A4 sheets, as one HTML document. */

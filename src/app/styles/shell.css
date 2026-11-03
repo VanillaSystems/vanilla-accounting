@@ -254,6 +254,7 @@ body > .menu { z-index: 42; }
 .pp { position: fixed; z-index: 41; display: flex; border-radius: 14px; background: var(--bg); border: 1px solid var(--line-2); box-shadow: var(--shadow); overflow: hidden; animation: pop .16s ease; font-size: 13px; }
 .pp nav { width: 196px; padding: 8px; border-right: 1px solid var(--line); max-height: 520px; overflow: auto; }
 .pp nav hr { border: 0; border-top: 1px solid var(--line); margin: 6px 4px; }
+.pp.presets nav { border-right: 0; }
 .pp .pi { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 7px; text-align: left; color: var(--ink-2); }
 .pp .pi span:first-child { flex: 1; } .pp .pi:hover, .pp .pi:focus-visible { background: var(--hover); outline: 0; color: var(--ink); }
 .pp .pi.on { background: var(--accent-soft); color: var(--ink); font-weight: 600; } .pp .pi .chev { color: var(--faint); } .pp .pi svg { width: 13px; height: 13px; color: var(--faint); }

@@ -62,7 +62,7 @@ export function handRuleOf(f: HandForm): { ok: true; rule: HandRule } | { ok: fa
       ...(f.direction ? { direction: f.direction } : {}),
       ...(over !== undefined || under !== undefined ? { amount: { ...(over !== undefined ? { over } : {}), ...(under !== undefined ? { under } : {}) } } : {}),
       account: f.account.trim().split(/\s/)[0],
-      vat: f.vat || null,
+      ...(f.vat ? { vat: f.vat } : {}),
       ...(share !== undefined ? { private: { share, ...(f.ownUse ? { ownUse: true } : {}) } } : {}),
       ...((tags) => (Object.keys(tags).length ? { tags } : {}))(Object.fromEntries(Object.entries(f.tags).map(([d, v]) => [d, v.trim()]).filter(([, v]) => v))),
     },

@@ -21,7 +21,7 @@ import type { SetupBegun, SetupDraftView } from '../onboarding/draft.js';
 import { MAX_TEXT, parseTalkRequest, talkDraft, type Ask, type SetupTalked } from '../onboarding/draft-talk.js';
 import { isOldLayout } from '../workspace/layout.js';
 import { upgradeWorkspace } from '../workspace/upgrade.js';
-import { ensureTerminalAgents } from '../workspace/terminal-agents.js';
+import { renewTerminalAgents } from '../workspace/terminal-agents.js';
 import type { ApiErrorBody } from '../types/api-error.js';
 import type { AiAvailability, DesktopInfo, KnownBooks, PhoneInfo } from '../types/desktop.js';
 import { aiSetup } from '../server/ai-setup.js';
@@ -138,7 +138,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     if (isOldLayout(folder)) throw new WorkspaceRefusal(`${root} holds the books in the layout before 0.4.0 (books.json).`, { code: 'oldLayout', params: { root } });
     const ws = workspaceAt(root);
     // The packed app has no `npm run update`: opening is where a new version renews the AI's instructions.
-    try { ensureTerminalAgents(ws.paths); } catch (e) { console.warn(`${root}: AGENTS.md not renewed: ${(e as Error).message}`); }
+    try { await renewTerminalAgents(ws.paths); } catch (e) { console.warn(`${root}: AGENTS.md not renewed: ${(e as Error).message}`); }
     if (books) (await import('../server/books.js')).reopenWorkspace(root);
     else {
       openWorkspaceAt(root);

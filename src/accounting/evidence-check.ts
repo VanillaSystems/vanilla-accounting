@@ -4,14 +4,19 @@
  * shows it claims input tax without proof. The check only names the code a person's click would set
  * (MISSION.md: a correction is never silently overwritten). Filed quarters, corrections, sales
  * codes, Bezugsteuer and VAT-amount codes are never flagged; a receipt not read yet is no evidence.
+ * A line on the import VAT account is never offered a rate (src/booking/customs-invoice.ts
+ * ratesImportVat): its input tax is only the one-legged deduction an assessment proves, a rate on
+ * the import VAT would claim the rate's tax on the tax itself.
  */
-import { baseCurrency, vat } from '../engines/index.js';
+import { baseCurrency, documents, vat } from '../engines/index.js';
 import type { InputTaxProof, JournalEntry, Receipt } from '../types/index.js';
 
 /**
- * `decided`: a person or the AI sidebar on her wish chose the code (JournalEntry.by): the task
- * explains the contradiction and offers no click, a deliberate code beats the receipt rule's
- * default (r8h-22). A minus rate code (-M81, a credit note) lowers the input tax and claims
+ * `decided`: a person or the AI sidebar on her wish chose the code (JournalEntry.by) with the
+ * receipts linked now before her: the task explains the contradiction and offers no click, a
+ * deliberate code beats the receipt rule's default (r8h-22). A receipt linked after her choice (the
+ * entry's `receipts` lacks it: «Ohne Vorsteuer buchen», then the ticket turns up) is evidence she
+ * never saw, so the click stays (F13). A minus rate code (-M81, a credit note) lowers the input tax and claims
  * nothing, so it is never flagged without a receipt.
  */
 export type EvidenceCheck =
@@ -56,9 +61,11 @@ export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], close
   const [, sign, family] = m;
   const own = lineReceipts(e, receipts);
   const shown = own.map(swissRate).find((rate) => rate !== undefined);
-  const decided = e.by?.kind === 'person' || e.by?.kind === 'assistant' ? { decided: true as const } : {};
+  const sawAll = !e.receipts || receipts.every((r) => e.receipts!.includes(r.id));
+  const decided = (e.by?.kind === 'person' || e.by?.kind === 'assistant') && sawAll ? { decided: true as const } : {};
   if (info.rate === 0) {
-    if (shown === undefined) return undefined;
+    const importVat = documents().customs?.positions.importVat.account;
+    if (shown === undefined || (importVat && (e.accountDebit === importVat || e.accountCredit === importVat))) return undefined;
     const boxes = vat().codes.purchaseBoxes;
     const code = vat().codes.purchaseAt(shown, family === 'M' ? boxes.costOfGoods : boxes.otherwise);
     return code ? { kind: 'receiptShowsVat', rate: shown, code: sign + code, receipts: receipts.map((r) => r.id), ...decided } : undefined;

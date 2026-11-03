@@ -4,7 +4,7 @@
  * rule made by hand, without the AI (r8k-4). RuleDraft is the card of a drafted rule (the AI's, the
  * form's, «Immer so?»): the sidebar, Änderungen and the form show it, «Behalten» saves it at once.
  */
-import { Fragment, useEffect, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useRef, useState, type FormEvent } from 'react';
 import { language, t } from '../../i18n/index.js';
 import { textIn } from '../../../workflows/model.js';
 import { api, errorText } from '../../lib/api.js';
@@ -171,7 +171,7 @@ function HandRuleForm({ view, nav, payment, onKept }: { view: RulesView; nav: Na
       <label>{t('rules.hand.account')}<input className="mono" list="rule-accounts" value={f.account} onChange={set('account')} /></label>
       <datalist id="rule-accounts">{Object.entries(view.names.accounts).map(([n, name]) => <option key={n} value={n}>{name}</option>)}</datalist>
       {codes.length ? (
-        <VatCodeField key={started} name="vat" label={t('rules.hand.vat')} defaultValue={f.vat} placeholder={t('rules.hand.noVat')} onValue={(vat) => setF((was) => ({ ...was, vat }))} />
+        <VatCodeField key={started} name="vat" label={t('rules.hand.vat')} defaultValue={f.vat} placeholder={t('rules.hand.vatFromReceipts')} onValue={(vat) => setF((was) => ({ ...was, vat }))} />
       ) : null}
       <label>{t('rules.hand.private')}<input className="mono" inputMode="decimal" data-testid="rule-share" value={f.share} onChange={set('share')} /></label>
       {codes.length && !withoutInputTax() && f.share.trim() ? (
@@ -259,10 +259,14 @@ function Preview({ p, names }: { p: RulePreview; names: RuleNames }) {
 /**
  * The card of one drafted rules file: each added, changed or removed rule in one plain line, then
  * «Behalten» (or «Ja, entfernen» for a removal) and «Verwerfen». A rule the app cannot carry out
- * is named with its reason and cannot be kept. A draft that holds no rule shows nothing.
+ * is named with its reason and cannot be kept; a rule whose VAT the receipts leave open asks for
+ * it once, with the rates to choose from. A draft that holds no rule shows nothing. `reveal`: the
+ * card scrolls itself into view whenever it loads (the AI sidebar, where it appears under an answer).
  */
-export function RuleDraft({ path, nav, onRules, onDone, title }: { path: string; nav?: Nav; onRules?(): void; onDone?(done: Done): void; title?: string }) {
+export function RuleDraft({ path, nav, onRules, onDone, title, reveal }: { path: string; nav?: Nav; onRules?(): void; onDone?(done: Done): void; title?: string; reveal?: boolean }) {
   const [d, setD] = useState<DraftView | null>();
+  const card = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (reveal && d) card.current?.scrollIntoView({ block: 'nearest' }); }, [reveal, d?.basis]);
   const [done, setDone] = useState<Done>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -297,9 +301,23 @@ export function RuleDraft({ path, nav, onRules, onDone, title }: { path: string;
       setBusy(false);
     }
   };
+  const chooseVat = async (step: string, id: string, rate: number) => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      const r = await api.draftCommand({ kind: 'vat', path, basis: d.basis, step, id, rate });
+      if (r.ok) setD(await api.draftRules(path));
+      else setError('message' in r ? r.message : t('rules.draft.gone'));
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const asked = (r: RuleRow) => d.vatAsks.some((a) => a.step === r.step && a.id === r.id);
   const business = d.path.startsWith('knowledge/rules/') ? undefined : d.path.split('/').pop()!.replace(/\.yaml$/, '');
   return (
-    <div className="ruledraft" data-draft={path}>
+    <div className="ruledraft" data-draft={path} ref={card}>
       <span className="m">{title ?? t('rules.draft.title')}</span>
       <ul>
         {d.added.map((r) => <li key={`a${r.step}${r.id}`}><span className="rk">{t('rules.draft.added')}</span> <b>{say(r)}</b></li>)}
@@ -324,12 +342,20 @@ export function RuleDraft({ path, nav, onRules, onDone, title }: { path: string;
       })}
       {d.others && business ? <span className="m">{t('rules.draft.others', { name: names.business(business) ?? business })}</span> : null}
       {d.broken ? <span className="warnline">{t('rules.draft.broken', { why: d.broken })}</span> : null}
-      {d.refused.map((r) => <span key={`x${r.id}`} className="warnline">{t('rules.draft.refused', { id: r.id || '?', why: refusalText(r) })}</span>)}
+      {d.vatAsks.map((a) => (
+        <div key={`v${a.step}${a.id}`} className="vatask" data-vat-ask={a.id}>
+          <span>{a.seen.length ? t('rules.draft.vatAsk.mixed', { seen: a.seen.map((s) => t('rules.draft.vatSeen', { rate: s.rate ? t('rules.draft.vatRate', { rate: String(s.rate) }) : t('rules.draft.vatZero'), n: String(s.receipts) })).join(', ') }) : t('rules.draft.vatAsk.none')}</span>
+          <span className="ruleacts">
+            {a.choices.map((rate) => <button key={rate} type="button" className="btn ghost" disabled={busy} onClick={() => void chooseVat(a.step, a.id, rate)}>{rate ? t('rules.draft.vatRate', { rate: String(rate) }) : t('rules.draft.vatZero')}</button>)}
+          </span>
+        </div>
+      ))}
+      {d.refused.filter((r) => !asked(r)).map((r) => <span key={`x${r.id}`} className="warnline">{t('rules.draft.refused', { id: r.id || '?', why: refusalText(r) })}</span>)}
       {error ? <span className="warnline">{error}</span> : null}
       <span className="ruleacts">
         {d.keepable ? <button type="button" className="btn primary" disabled={busy} onClick={() => void go('keep')}>{t(onlyRemoval ? 'rules.draft.remove' : d.confirm ? 'rules.draft.keepAnyway' : 'rules.draft.keep')}</button> : null}
         <button type="button" className="btn ghost" disabled={busy} onClick={() => void go('discard')}>{t('rules.draft.discard')}</button>
-        {nav && !d.keepable ? <button type="button" className="linkbtn" onClick={() => nav.go({ route: { area: 'changes', commit: 'draft', file: path }, query: {} })}>{t('rules.draft.diff')}</button> : null}
+        {nav && !d.keepable && !d.vatAsks.length ? <button type="button" className="linkbtn" onClick={() => nav.go({ route: { area: 'changes', commit: 'draft', file: path }, query: {} })}>{t('rules.draft.diff')}</button> : null}
       </span>
     </div>
   );

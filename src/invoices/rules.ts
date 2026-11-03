@@ -21,15 +21,22 @@ export interface Totals { byRate: RateTotal[]; net: number; vat: number; gross: 
 export const lineAmount = (l: Pick<InvoiceLine, 'quantity' | 'price'>): number => roundCHF(l.quantity * l.price);
 
 /**
- * Net per line to the Rappen, VAT per rate on the rate's net, to the Rappen. No 5-Rappen rounding:
- * a QR-bill is paid by transfer to the Rappen, and the books carry no rounding line.
+ * Each line to the Rappen; per rate, the VAT on the net of its net-priced lines plus the VAT in the
+ * total of its lines priced with the VAT in it, each to the Rappen, so such a line keeps its amount
+ * exactly. No 5-Rappen rounding: a QR-bill is paid by transfer to the Rappen, and the books carry no
+ * rounding line.
  */
 export function totals(lines: readonly InvoiceLine[]): Totals {
-  const net = new Map<VatRate, number>();
-  for (const l of lines) net.set(l.vatRate, (net.get(l.vatRate) ?? 0) + toRappen(lineAmount(l)));
-  const byRate = [...net].sort(([a], [b]) => b - a).map(([rate, n]) => {
-    const v = toRappen(fromRappen(n) * rate / 100);
-    return { rate, net: fromRappen(n), vat: fromRappen(v), gross: fromRappen(n + v) };
+  const by = new Map<VatRate, { net: number; incl: number }>();
+  for (const l of lines) {
+    const g = by.get(l.vatRate) ?? { net: 0, incl: 0 };
+    g[l.vatIncluded ? 'incl' : 'net'] += toRappen(lineAmount(l));
+    by.set(l.vatRate, g);
+  }
+  const byRate = [...by].sort(([a], [b]) => b - a).map(([rate, { net, incl }]) => {
+    const onNet = toRappen(fromRappen(net) * rate / 100);
+    const inIncl = toRappen(fromRappen(incl) * rate / (100 + rate));
+    return { rate, net: fromRappen(net + incl - inIncl), vat: fromRappen(onNet + inIncl), gross: fromRappen(net + onNet + incl) };
   });
   const sum = (k: 'net' | 'vat' | 'gross') => fromRappen(byRate.reduce((s, r) => s + toRappen(r[k]), 0));
   return { byRate, net: sum('net'), vat: sum('vat'), gross: sum('gross') };
@@ -286,7 +293,7 @@ export interface CreditRequest {
   settlement?: 'refund' | 'offset';
 }
 
-/** A credit note drafted from an invoice: its lines with negated prices (or a part of its total, one line per rate), the same customer, currency and language. */
+/** A credit note drafted from an invoice: its lines with negated prices (or a part of its total, one line per rate at its share, VAT included), the same customer, currency and language. */
 export function creditNoteDraft(inv: Invoice, req: CreditRequest, envelope: Envelope, date: string): Draft {
   if (inv.status !== 'issued' || inv.kind !== 'invoice') throw new InvoiceRuleError('notIssued', 'Eine Gutschrift bezieht sich auf eine ausgestellte Rechnung.');
   if (inv.cancelled) throw new InvoiceRuleError('cancelled', `Rechnung ${inv.number} ist storniert.`);
@@ -306,9 +313,8 @@ export function creditNoteDraft(inv: Invoice, req: CreditRequest, envelope: Enve
     lines = rates.map((r, k) => {
       const share = k === rates.length - 1 ? left : Math.round(gross * toRappen(r.gross) / base);
       left -= share;
-      const net = fromRappen(Math.round(share * 100 / (100 + r.rate)));
       const account = inv.lines.find((l) => l.vatRate === r.rate)?.account;
-      return { text: rates.length > 1 ? `${text} (${r.rate} %)` : text, quantity: 1, price: -net, vatRate: r.rate, ...(account ? { account } : {}) };
+      return { text: rates.length > 1 ? `${text} (${r.rate} %)` : text, quantity: 1, price: -fromRappen(share), vatRate: r.rate, ...(r.rate > 0 ? { vatIncluded: true as const } : {}), ...(account ? { account } : {}) };
     }).filter((l) => l.price !== 0);
   }
   return {

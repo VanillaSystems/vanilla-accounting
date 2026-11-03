@@ -7,6 +7,8 @@ import type { VatCorrection } from '../../../booking/vat-corrections.js';
 import { byStatement } from '../../../workspace/money-accounts.js';
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PaymentBooking } from '../journal/PaymentBooking.js';
+import { EvidenceFix, evidenceText } from '../journal/Detail.js';
+import { journalOf } from '../journal/model.js';
 import type { BankTransaction, InboxFile, JournalEntry, Receipt } from '../../../types/index.js';
 import { filingKeyOf, parsePeriod, parseSwissDate, localToday } from '../../../accounting/periods.js';
 import type { RouteOf } from '../../shell/route.js';
@@ -324,6 +326,8 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
         </>
       );
     }
+    // A booking the app keeps (a person's, or one older than its record of receipts) is not booked again when a receipt comes late: the contradiction and the click show here (F13).
+    const contradicts = (journalOf(props.books).byRef.get(ref) ?? []).find((x) => x.evidence);
     return (
       <>
         <span className="linked">{I.check}
@@ -339,6 +343,11 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
         {tx.businessPart && <span className="fitnote note" data-testid="business-part">{t('receipts.businessPartNotice', { what: tx.businessPart.what || t('receipts.privatePartUnnamed'), amount: `${tx.currency} ${fmt(Math.abs(tx.amount))}`, total: `${v.r.currency || baseCurrency()} ${fmt(Math.abs(v.r.amount ?? 0))}` })}</span>}
         {fit?.kind === 'off' && <span className="fitnote warn" data-testid="fit-off">{t('receipts.fitOffNotice', { amount: `${fit.currency} ${fmt(Math.abs(fit.diff))}` })}</span>}
         {fit?.kind === 'skonto' && <span className="fitnote note" data-testid="fit-skonto">{t('receipts.fitSkontoNotice', { percent: fit.percent })}</span>}
+        {contradicts && (
+          <span className="fitnote warn" data-testid="evidence">
+            {evidenceText(contradicts.e, contradicts.evidence!)}{canEdit && <> <EvidenceFix e={contradicts.e} check={contradicts.evidence!} nav={nav} /></>}
+          </span>
+        )}
       </>
     );
   }

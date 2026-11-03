@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   filingKeyOf,
-  ALL, addDays, derivePeriod, localToday, parsePeriod, parseSwissDate, rangeToken,
+  addDays, derivePeriod, localToday, parsePeriod, parseSwissDate, rangeToken,
   type IsoDate, type Period, type RelativePreset,
 } from '../../accounting/periods.js';
 import { formatDate } from '../lib/utils.js';
@@ -28,15 +28,16 @@ interface Props {
 }
 
 /**
- * The period picker, after Shopify's: presets on the left, a two-month calendar with typed dates
- * on the right, Cancel/Apply below. A preset or a calendar pick only changes the draft; Apply
- * puts it in the URL.
+ * The period picker: presets on the left, one click on one applies it (F17). «Benutzerdefiniert»
+ * opens a two-month calendar with typed dates and Cancel/Apply below: a range takes two picks, so
+ * only it is a draft until Apply. A custom period on screen opens the picker with its calendar.
  */
 export function PeriodPicker({ anchor, period, quarters, years, closedThrough, onApply, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const today = localToday();
   const [draft, setDraft] = useState(period);
   const [menu, setMenu] = useState<Menu>(() => initialMenu(period, today));
+  const [custom, setCustom] = useState(() => isCustom(period));
   /** After a first click on the calendar, the next click ends the range. */
   const [pickingEnd, setPickingEnd] = useState(false);
   /** The first of the left calendar's month; the right one shows the month after. */
@@ -46,16 +47,20 @@ export function PeriodPicker({ anchor, period, quarters, years, closedThrough, o
   useLayoutEffect(() => {
     // The anchor's rect is in zoomed pixels, the picker's position in page pixels.
     const z = Number(document.documentElement.style.zoom) || 1;
-    ref.current!.style.left = `${Math.max(16, Math.min(anchor.left / z, innerWidth / z - 860))}px`;
+    const width = ref.current!.offsetWidth || 860;
+    ref.current!.style.left = `${Math.max(16, Math.min(anchor.left / z, innerWidth / z - width - 16))}px`;
     ref.current!.style.top = `${anchor.bottom / z + 8}px`;
-    ref.current!.querySelector<HTMLElement>('.pi.on, .pi')?.focus();
-  }, [anchor]);
+  }, [anchor, custom]);
+  useLayoutEffect(() => { ref.current!.querySelector<HTMLElement>('.pi.on, .pi')?.focus(); }, []);
 
   function choose(token: string) {
-    const p = parsePeriod(token, today) ?? ALL;
-    setDraft(p);
-    setPickingEnd(false);
-    if (p.kind !== 'all') setShown(monthStart(addMonths(p.to, -1)));
+    if (token === period.token) onClose();
+    else onApply(token);
+  }
+
+  function openCustom() {
+    setCustom(true);
+    setTimeout(() => startInput.current?.focus());
   }
 
   function pickDay(day: IsoDate) {
@@ -69,24 +74,32 @@ export function PeriodPicker({ anchor, period, quarters, years, closedThrough, o
     }
   }
 
-  function typed(which: 'from' | 'to', day: IsoDate) {
+  function typed(which: 'from' | 'to', day: IsoDate): Period {
     const from = which === 'from' ? day : draft.kind === 'all' ? day : draft.from;
     const to = which === 'to' ? day : draft.kind === 'all' ? day : draft.to;
-    setDraft(rangePeriod(from <= to ? from : to, from <= to ? to : from));
+    const next = rangePeriod(from <= to ? from : to, from <= to ? to : from);
+    setDraft(next);
     setPickingEnd(false);
     setShown(monthStart(addMonths(which === 'to' ? day : addMonths(day, 1), -1)));
+    return next;
+  }
+
+  /** Enter in a date field applies the range it ends with, like «Anwenden». */
+  function typedEnter(which: 'from' | 'to', day: IsoDate | undefined) {
+    const next = day ? typed(which, day) : draft;
+    if (next.token === period.token) onClose(); else onApply(next.token);
   }
 
   const isFiled = (key: string) => !!closedThrough && derivePeriod(key)!.to <= closedThrough;
   const item = (token: string, label: string, filed = false) => (
-    <Item key={token} on={draft.token === token} onClick={() => choose(token)} filed={filed}>{label}</Item>
+    <Item key={token} on={period.token === token} onClick={() => choose(token)} filed={filed}>{label}</Item>
   );
   const draftFiled = !!closedThrough && draft.kind !== 'all' && draft.to <= closedThrough;
 
   return (
     <>
       <div className="scrim" onClick={onClose} />
-      <div ref={ref} className="pp" role="dialog" aria-label={t('app.periodPicker')} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
+      <div ref={ref} className={`pp${custom ? '' : ' presets'}`} role="dialog" aria-label={t('app.periodPicker')} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
         <nav>
           {menu === 'root' ? (
             <>
@@ -94,16 +107,16 @@ export function PeriodPicker({ anchor, period, quarters, years, closedThrough, o
               {item('ytd', t('period.ytd'))}
               {quartersBegun(today).map((q) => item(q, periodName(parsePeriod(q, today)!), isFiled(q)))}
               <hr />
-              <Item sub on={TO_DATE.includes(draft.token as RelativePreset) && draft.token !== 'ytd'} onClick={() => setMenu('todate')}>{t('period.menuToDate')}</Item>
-              <Item sub on={LAST.includes(draft.token as RelativePreset)} onClick={() => setMenu('last')}>{t('period.menuLast')}</Item>
-              <Item sub on={draft.kind === 'quarter' && !quartersBegun(today).includes(draft.token)} onClick={() => setMenu('quarters')}>{t(filing().length === 'half' ? 'period.menuHalves' : 'period.menuQuarters')}</Item>
-              <Item sub on={draft.kind === 'year'} onClick={() => setMenu('years')}>{t('period.menuYears')}</Item>
+              <Item sub on={TO_DATE.includes(period.token as RelativePreset) && period.token !== 'ytd'} onClick={() => setMenu('todate')}>{t('period.menuToDate')}</Item>
+              <Item sub on={LAST.includes(period.token as RelativePreset)} onClick={() => setMenu('last')}>{t('period.menuLast')}</Item>
+              <Item sub on={period.kind === 'quarter' && !quartersBegun(today).includes(period.token)} onClick={() => setMenu('quarters')}>{t(filing().length === 'half' ? 'period.menuHalves' : 'period.menuQuarters')}</Item>
+              <Item sub on={period.kind === 'year'} onClick={() => setMenu('years')}>{t('period.menuYears')}</Item>
               <hr />
               {item('today', t('period.today'))}
               {item('yesterday', t('period.yesterday'))}
               <hr />
               {item('all', t('app.allPeriods'))}
-              <Item on={['range', 'month', 'half'].includes(draft.kind)} onClick={() => startInput.current?.focus()}>{t('period.custom')}</Item>
+              <Item on={custom} onClick={openCustom}>{t('period.custom')}</Item>
             </>
           ) : (
             <>
@@ -117,11 +130,11 @@ export function PeriodPicker({ anchor, period, quarters, years, closedThrough, o
             </>
           )}
         </nav>
-        <div className="right">
+        {custom ? <div className="right">
           <div className="ins">
-            <DateInput inputRef={startInput} label={t('period.start')} value={draft.kind === 'all' ? '' : draft.from} onDate={(d) => typed('from', d)} />
+            <DateInput inputRef={startInput} label={t('period.start')} value={draft.kind === 'all' ? '' : draft.from} onDate={(d) => typed('from', d)} onEnter={(d) => typedEnter('from', d)} />
             <span>→</span>
-            <DateInput label={t('period.end')} value={draft.kind === 'all' ? '' : draft.to} onDate={(d) => typed('to', d)} />
+            <DateInput label={t('period.end')} value={draft.kind === 'all' ? '' : draft.to} onDate={(d) => typed('to', d)} onEnter={(d) => typedEnter('to', d)} />
           </div>
           <Calendars shown={shown} setShown={setShown} draft={draft} today={today} onPick={pickDay} />
           <div className="ft">
@@ -129,7 +142,7 @@ export function PeriodPicker({ anchor, period, quarters, years, closedThrough, o
             <button type="button" className="btn2" onClick={onClose}>{t('common.cancel')}</button>
             <button type="button" className="btn2 primary" onClick={() => onApply(draft.token)} disabled={draft.token === period.token}>{t('period.apply')}</button>
           </div>
-        </div>
+        </div> : null}
       </div>
     </>
   );
@@ -141,6 +154,9 @@ function quartersBegun(today: IsoDate): string[] {
   const months = Array.from({ length: Number(today.slice(5, 7)) }, (_, i) => `${today.slice(0, 4)}-${String(i + 1).padStart(2, '0')}-01`);
   return [...new Set(months.map((d) => filingKeyOf(d, filing().length)))].reverse();
 }
+
+/** A period no preset names: the picker opens on its calendar for it. */
+const isCustom = (p: Period) => p.kind === 'range' || p.kind === 'month' || (p.kind === 'half' && filing().length !== 'half');
 
 const MENU_TITLE = { last: 'period.menuLast', todate: 'period.menuToDate', quarters: 'period.menuQuarters', years: 'period.menuYears' } as const;
 
@@ -167,16 +183,22 @@ function Item({ children, on, sub, filed, onClick }: { children: React.ReactNode
   );
 }
 
-/** A date typed as dd.mm.yyyy (Swiss), applied on Enter or when the field loses focus. */
-function DateInput({ label, value, onDate, inputRef }: { label: string; value: IsoDate; onDate: (d: IsoDate) => void; inputRef?: React.Ref<HTMLInputElement> }) {
+/** A date typed as dd.mm.yyyy (Swiss): taken into the range when the field loses focus, taken and applied on Enter. */
+function DateInput({ label, value, onDate, onEnter, inputRef }: { label: string; value: IsoDate; onDate: (d: IsoDate) => void; onEnter: (d: IsoDate | undefined) => void; inputRef?: React.Ref<HTMLInputElement> }) {
   const [text, setText] = useState(value ? formatDate(value) : '');
   const [invalid, setInvalid] = useState(false);
   useEffect(() => { setText(value ? formatDate(value) : ''); setInvalid(false); }, [value]);
 
-  function commit() {
-    if (!text.trim() || (value && text === formatDate(value))) return;
+  /** The day typed, undefined when the text is unchanged or empty, null when it is no date. */
+  function read(): IsoDate | null | undefined {
+    if (!text.trim() || (value && text === formatDate(value))) return undefined;
     const day = parseSwissDate(text);
     setInvalid(!day);
+    return day ?? null;
+  }
+
+  function commit() {
+    const day = read();
     if (day) onDate(day);
   }
 
@@ -186,7 +208,13 @@ function DateInput({ label, value, onDate, inputRef }: { label: string; value: I
       value={text}
       onChange={(e) => setText(e.target.value)}
       onBlur={commit}
-      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        e.stopPropagation();
+        const day = read();
+        if (day !== null) onEnter(day);
+      }}
       aria-label={label}
       aria-invalid={invalid}
       data-tip={invalid ? t('period.invalidDate') : label}

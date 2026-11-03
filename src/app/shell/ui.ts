@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { Theme } from './prefs.js';
-import type { DialogConfig } from '../areas/export/state.js';
+import type { DialogConfig } from '../areas/export/config.js';
 import type { Area } from '../areas/index.js';
 import type { Route } from './route.js';
 
