@@ -18,7 +18,6 @@ src/app/areas/codes/codes.tsx
 src/app/areas/codes/model.ts
 src/app/areas/codes/vat-card.tsx
 src/app/areas/company/InvoiceLayout.tsx
-src/app/areas/export/state.ts
 src/app/areas/index.ts
 src/app/areas/invoices/Detail.tsx
 src/app/areas/invoices/Sheet.tsx

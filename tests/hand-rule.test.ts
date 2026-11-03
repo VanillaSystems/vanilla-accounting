@@ -85,7 +85,7 @@ test('a hand-made rule with a private share as own use is drafted as such, and r
 test('the form makes the rule the person typed, or names the first field it still needs', () => {
   const form = { ...emptyForm(), text: 'Hostpoint', direction: 'out' as const, over: "1'000.50", account: '6570 Informatikaufwand', vat: 'I81' };
   assert.deepEqual(handRuleOf(form), { ok: true, rule: { match: { kind: 'text', text: 'Hostpoint' }, direction: 'out', amount: { over: 1000.5 }, account: '6570', vat: 'I81' } });
-  assert.deepEqual(handRuleOf({ ...form, vat: '' }), { ok: true, rule: { match: { kind: 'text', text: 'Hostpoint' }, direction: 'out', amount: { over: 1000.5 }, account: '6570', vat: null } }, 'no code chosen: booked without VAT');
+  assert.deepEqual(handRuleOf({ ...form, vat: '' }), { ok: true, rule: { match: { kind: 'text', text: 'Hostpoint' }, direction: 'out', amount: { over: 1000.5 }, account: '6570' } }, 'no code chosen: code takes it from the receipts, or the card asks');
   assert.deepEqual(handRuleOf({ ...form, text: ' ' }), { ok: false, missing: 'text' });
   assert.deepEqual(handRuleOf({ ...form, under: '500' }), { ok: false, missing: 'amount' }, '«over» must be less than «under»');
   assert.deepEqual(handRuleOf({ ...form, over: 'viel' }), { ok: false, missing: 'amount' });

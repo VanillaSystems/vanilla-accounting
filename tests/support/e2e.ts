@@ -25,8 +25,12 @@ export interface App {
   /** The UI's origin, e.g. http://127.0.0.1:53210. */
   ui: string;
   page: Page;
-  /** Opens an app path (/receipts/<id>?period=2026-Q2) and waits until the page's requests are done. */
-  open(path: string): Promise<void>;
+  /**
+   * Opens an app path (/receipts/<id>?period=2026-Q2) and waits until the page's requests are done, or, given `ready`,
+   * until that selector is on the page: the app asks for its status every 5 s, so under load the network may not go
+   * quiet for the 500 ms the first wait needs.
+   */
+  open(path: string, ready?: string): Promise<void>;
   /** The books as they are on disk now. */
   books(): Index;
   /** Errors the page threw or logged. */
@@ -90,7 +94,10 @@ export async function openApp(demo = 'demo/vanilla-accounting', env: Record<stri
     page.on('pageerror', (e) => errors.push(String(e)));
     return {
       api, ui, page, errors, stop,
-      async open(path) { await page.goto(ui + path, { waitUntil: 'networkidle0', timeout: 60_000 }); },
+      async open(path, ready) {
+        await page.goto(ui + path, { waitUntil: ready ? 'domcontentloaded' : 'networkidle0', timeout: 60_000 });
+        if (ready) await page.waitForSelector(ready, { timeout: 60_000 });
+      },
       books: () => loadBooks(api.ws),
     };
   } catch (e) {

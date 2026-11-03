@@ -76,6 +76,18 @@
     "name": "Rohkaffee"
   },
   {
+    "number": "4020",
+    "name": "Zölle"
+  },
+  {
+    "number": "4030",
+    "name": "Einfuhrsteuer (MWST bei der Einfuhr)"
+  },
+  {
+    "number": "4040",
+    "name": "Vorlageprovision, Verzollungsspesen"
+  },
+  {
     "number": "4210",
     "name": "Verbrauchsmaterial Gastronomie"
   },

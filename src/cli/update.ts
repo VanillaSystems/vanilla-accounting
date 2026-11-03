@@ -19,7 +19,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { upgradeWorkspace } from '../workspace/upgrade.js';
-import { ensureTerminalAgents } from '../workspace/terminal-agents.js';
+import { renewTerminalAgents } from '../workspace/terminal-agents.js';
 import { convertMail, mailConfigured } from '../platform/sources/mail.js';
 import { config as loadEnv } from 'dotenv';
 import { APP_ROOT, openWorkspace, openWorkspaceAt, partDirs } from '../workspace/workspace.js';
@@ -117,10 +117,10 @@ const afterPull: Step[] = [
   },
   {
     name: 'Instructions for an AI in the terminal (AGENTS.md)',
-    run() {
+    async run() {
       const ws = openWorkspace();
-      const written = ensureTerminalAgents(ws.paths);
-      return done(written.length ? `${written.join(', ')} written; commit them with the workspace` : 'up to date');
+      const { written, committed } = await renewTerminalAgents(ws.paths);
+      return done(written.length ? `${written.join(', ')} written${committed ? ' and committed' : '; commit them with the workspace'}` : committed ? 'committed' : 'up to date');
     },
   },
   {
