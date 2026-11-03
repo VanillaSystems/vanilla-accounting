@@ -313,7 +313,7 @@ export interface StatementParams {
 }
 
 /** An invoicing refusal: which rule of src/invoices/rules.ts refused, and for an incomplete invoice what Art. 26 MWSTG still asks for. */
-export type InvoiceErrorBody = { error: string; code?: undefined; invoiceRefusal: InvoiceRefusal | 'noBrowser'; missing?: Missing[] };
+export type InvoiceErrorBody = { error: string; code?: undefined; invoiceRefusal: InvoiceRefusal | 'noBrowser' | 'printFailed'; missing?: Missing[] };
 
 /** An e-mail the company's mailbox did not send (src/invoices/mail.ts); nothing was recorded. */
 export type MailErrorBody = { error: string; code?: undefined; mailRefusal: MailRefusal; detail?: string };

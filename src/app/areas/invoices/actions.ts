@@ -75,7 +75,7 @@ export async function issue(nav: Nav, draft: Draft): Promise<Issued | undefined>
   if (!issued) return undefined;
   await reloadInvoices();
   nav.select(invoicePath(issued));
-  nav.toast(t(issued.kind === 'credit-note' ? 'invoices.creditIssued' : 'invoices.issued', { number: issued.number }));
+  setUi({ dialog: { kind: 'send', issued: true }, preview: false });
   return issued;
 }
 

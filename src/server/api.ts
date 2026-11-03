@@ -29,7 +29,7 @@ import { router as knowledge } from './routes/knowledge.js';
 import { router as onboarding } from './routes/onboarding.js';
 import { InvoiceRuleError, type InvoiceRefusal } from '../invoices/rules.js';
 import { PaymentError } from '../invoices/payments.js';
-import { NoBrowserError } from '../invoices/pdf.js';
+import { NoBrowserError, PrintFailedError } from '../invoices/pdf.js';
 import { MailError, type MailRefusal } from '../invoices/mail.js';
 import { router as mail } from './routes/mail.js';
 import { router as ai } from './routes/ai.js';
@@ -95,6 +95,7 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   else if (err instanceof NoClaudeError) res.status(503).json({ error: err.message, code: 'noClaude', params: err.step ? { step: err.step } : {} } satisfies ApiErrorBody);
   else if (err instanceof AiRefused) res.status(503).json({ error: err.message, code: 'aiRefused', params: err.refusal } satisfies ApiErrorBody);
   else if (err instanceof NoBrowserError) res.status(503).json({ error: err.message, invoiceRefusal: 'noBrowser' } satisfies InvoiceErrorBody);
+  else if (err instanceof PrintFailedError) res.status(503).json({ error: err.message, invoiceRefusal: 'printFailed' } satisfies InvoiceErrorBody);
   else {
     console.error(err);
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
