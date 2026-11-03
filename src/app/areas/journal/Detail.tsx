@@ -47,7 +47,7 @@ import { entryActions } from './actions-menu.js';
 import { AskAi } from '../../assistant/AskAi.js';
 import { showConversation } from '../../assistant/store.js';
 import { QuestionsOn } from '../../questions/Questions.js';
-import { AccountField } from './AccountField.js';
+import { AccountField, unknownAccountText } from './AccountField.js';
 import { StatementPaper } from '../bank/StatementPaper.js';
 import { bankFor } from '../bank/state.js';
 import { isCamt } from '../bank/model.js';
@@ -379,7 +379,7 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
     const accounts = getAccountMap();
     const next = { accountDebit: f.accountDebit.trim(), accountCredit: f.accountCredit.trim(), vatCode: f.vatCode.trim(), description: f.description.trim(), amount: parseAmount(f.amount) };
     const unknown = [next.accountDebit, next.accountCredit].find((n) => n && !accounts[n]);
-    if (unknown) return fail(t('journal.errAccount', { account: unknown }));
+    if (unknown) return fail(unknownAccountText(unknown));
     if (!next.accountDebit && !next.accountCredit) return fail(t('journal.errNoAccount'));
     // Both sides on one account moves nothing (the API refuses it too, r8k-8): the form waits until the other side is typed.
     if (next.accountDebit && next.accountDebit === next.accountCredit && !next.vatCode) return fail(t('error.sameAccount', { account: next.accountDebit }));

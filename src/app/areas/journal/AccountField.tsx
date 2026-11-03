@@ -19,6 +19,12 @@ interface Option { account: Account; kind: 'have' | 'offer' | 'add' }
 
 const MAX_OPTIONS = 60;
 
+/** Why a form refuses an account number the chart lacks: one of the standard chart is named with the way to add it. */
+export function unknownAccountText(number: string): string {
+  const standard = addableAccounts().find((a) => a.number === number);
+  return standard ? t('journal.errAccountAddable', { account: number, name: standard.name }) : t('journal.errAccount', { account: number });
+}
+
 export function AccountField({ name, label, defaultValue, readOnly, onPick, offer }: { name: string; label: string; defaultValue: string; readOnly?: boolean; onPick?(): void; offer?: Account }) {
   const [value, setValue] = useState(defaultValue);
   const [open, setOpen] = useState(false);
@@ -45,10 +51,11 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick, offe
 
   async function choose(o: Option) {
     if (o.kind !== 'add') { pick(o.account.number); return; }
-    setOpen(false);
+    // The list stays open while the account is added: closed at once, a click's mouseup would land on what lies beneath and blur the field, and the form would save the typed number before the account exists.
     try {
       await api.setAccountName(o.account.number, o.account.name);
     } catch (err) {
+      setOpen(false);
       setRefused(errorText(err));
       return;
     }

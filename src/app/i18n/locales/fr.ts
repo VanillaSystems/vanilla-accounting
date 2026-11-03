@@ -351,6 +351,7 @@ export default {
     'journal.errFiledDate': 'Jusqu’au {date}, tout est déposé: une nouvelle écriture vient après.',
     'journal.errClosedDate': 'Jusqu’au {date}, tout est clôturé : une nouvelle écriture vient après.',
     'journal.errAccount': 'Le compte {account} n’existe pas dans le plan comptable.',
+    'journal.errAccountAddable': 'Le compte {account} n’est pas encore dans le plan comptable : choisir «{account} Créer {name}» dans la liste pour le créer.',
     'journal.errNoAccount': 'Il manque le débit ou le crédit.',
     'journal.errVat': 'Le code TVA {code} n’existe pas.',
     'journal.errVatNotTaken.none': "L’entreprise n’est pas assujettie à la TVA : les écritures ne portent aucun code TVA, {code} non plus. Laisser le champ vide.",

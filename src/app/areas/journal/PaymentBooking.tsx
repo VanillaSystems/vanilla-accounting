@@ -17,7 +17,7 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
-import { AccountField } from './AccountField.js';
+import { AccountField, unknownAccountText } from './AccountField.js';
 import { VatCodeField } from '../codes/VatCodeField.js';
 import { attachEntries, bookPayment } from './actions.js';
 import { useInvoices } from '../invoices/data.js';
@@ -128,7 +128,7 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
     const known = getAccountMap();
     const problem = now.map(({ raw, vat }, i): string => {
       const unknown = [raw.accountDebit, raw.accountCredit].find((n) => n && !known[n]);
-      if (unknown) return t('journal.errAccount', { account: unknown });
+      if (unknown) return unknownAccountText(unknown);
       if (!raw.accountDebit && !raw.accountCredit) return t('journal.errNoAccount');
       if (!vat) return parseRate(raw.vatCode) ? (withoutInputTax() ? t(`journal.errVatNotTaken.${withoutInputTax()!}`, { code: raw.vatCode }) : t('journal.errVatRate', { rate: raw.vatCode })) : t('journal.errVat', { code: raw.vatCode });
       if (vat.code && !formTakes(vat.code)) return t(`journal.errVatNotTaken.${withoutInputTax() ?? 'none'}`, { code: vat.code });

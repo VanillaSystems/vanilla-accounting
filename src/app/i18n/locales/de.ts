@@ -348,6 +348,7 @@ export const messages = {
   'journal.errFiledDate': 'Bis {date} ist eingereicht: eine neue Buchung liegt danach.',
   'journal.errClosedDate': 'Bis {date} ist abgeschlossen: eine neue Buchung liegt danach.',
   'journal.errAccount': 'Konto {account} gibt es nicht im Kontenplan.',
+  'journal.errAccountAddable': 'Konto {account} ist noch nicht im Kontenplan: in der Liste «{account} {name} anlegen» wählen, dann wird es angelegt.',
   'journal.errNoAccount': 'Soll oder Haben fehlt.',
   'journal.errVat': 'MWST-Code {code} gibt es nicht.',
   'journal.errVatNotTaken.none': "Die Firma ist nicht steuerpflichtig: Buchungen tragen keinen MWST-Code, auch nicht {code}. Das Feld leer lassen.",

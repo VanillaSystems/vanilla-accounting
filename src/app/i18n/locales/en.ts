@@ -351,6 +351,7 @@ export default {
     'journal.errFiledDate': 'Everything up to {date} is filed: a new entry comes after.',
     'journal.errClosedDate': 'Everything up to {date} is closed: a new entry comes after.',
     'journal.errAccount': 'Account {account} is not in the chart of accounts.',
+    'journal.errAccountAddable': 'Account {account} is not in the chart of accounts yet: choose «{account} Add {name}» in the list to add it.',
     'journal.errNoAccount': 'Debit or credit is missing.',
     'journal.errVat': 'There is no VAT code {code}.',
     'journal.errVatNotTaken.none': "The firm is not registered for VAT: entries carry no VAT code, {code} neither. Leave the field empty.",

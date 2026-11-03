@@ -351,6 +351,7 @@ export default {
     'journal.errFiledDate': 'Fino al {date} è tutto inoltrato: una nuova registrazione viene dopo.',
     'journal.errClosedDate': 'Fino al {date} è tutto chiuso: una nuova registrazione viene dopo.',
     'journal.errAccount': 'Il conto {account} non esiste nel piano dei conti.',
+    'journal.errAccountAddable': 'Il conto {account} non è ancora nel piano dei conti: scegliere «{account} Creare {name}» nella lista per crearlo.',
     'journal.errNoAccount': 'Manca il dare o l’avere.',
     'journal.errVat': 'Il codice IVA {code} non esiste.',
     'journal.errVatNotTaken.none': "L’impresa non è assoggettata all’IVA: le registrazioni non portano alcun codice IVA, nemmeno {code}. Lasciare vuoto il campo.",

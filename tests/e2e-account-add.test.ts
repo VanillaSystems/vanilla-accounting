@@ -32,10 +32,21 @@ test('F07: typing «werbe» in an entry\'s Soll offers «6600 Werbeaufwand anleg
     assert.equal(chart().some((a) => a.number === '6600'), false, 'listing adds nothing');
     for (let i = 0; i < 3; i++) await page.keyboard.press('Backspace');
     await page.waitForSelector('.acl [data-act=account-add]');
-    await page.keyboard.press('Enter');
+    // A real mouse click (down, up, click), as a person makes it: the field must not save the typed name before the account exists.
+    await page.click('.acl [data-act=account-add]');
     for (let i = 0; i < 100 && (app.books().journalEntries ?? []).find((e) => e.id === ID)?.accountDebit !== '6600'; i++) await new Promise((r) => setTimeout(r, 100));
     assert.deepEqual(chart().find((a) => a.number === '6600'), { number: '6600', name: 'Werbeaufwand' }, 'added to the chart under the standard chart\'s name');
     assert.equal((app.books().journalEntries ?? []).find((e) => e.id === ID)?.accountDebit, '6600', 'the entry is booked on it');
+    assert.equal(await page.$eval(debit, (e) => (e as HTMLInputElement).value), '6600', 'the field holds it');
+    assert.equal((await page.$eval('body', (e) => (e as HTMLElement).innerText)).includes('gibt es nicht'), false, 'no refusal of the typed text on the way');
+    // A standard account typed and left without picking it: the form names the way to add it.
+    await page.$eval(debit, (e) => (e as HTMLInputElement).focus());
+    await page.$eval(debit, (e) => (e as HTMLInputElement).select());
+    await page.keyboard.type('6400');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Tab');
+    await page.waitForFunction(() => document.body.innerText.includes('Konto 6400 ist noch nicht im Kontenplan: in der Liste «6400 Energie- und Entsorgungsaufwand anlegen» wählen'));
+    assert.equal(chart().some((a) => a.number === '6400'), false, 'leaving the field adds nothing');
     assert.deepEqual(app.errors, []);
   } finally {
     await app.stop();
