@@ -129,7 +129,7 @@ export function NewEntry(props: Props) {
     const tags = tagsOfForm(new FormData(form.current!), dimensions);
     const problem = !date && !tx ? t('journal.errDate')
       : !tx && closed && date! <= closed ? t(chargesVat() ? 'journal.errFiledDate' : 'journal.errClosedDate', { date: formatDate(closed) })
-      : [dr, cr].find((n) => n && !accounts[n]) ? unknownAccountText([dr, cr].find((n) => n && !accounts[n])!)
+      : [dr, cr].find((n) => n && !getAccountMap()[n]) ? unknownAccountText([dr, cr].find((n) => n && !getAccountMap()[n])!)
       : [dr, cr].find((n) => n && !chart().isPlaced(n)) ? t('error.accountOutsideStatements', { account: [dr, cr].find((n) => n && !chart().isPlaced(n))!, classes: chart().placedClasses })
       : !dr && !cr ? t('journal.errNoAccount')
       : vat && !lookupVatCode(vat) ? t('journal.errVat', { code: vat })

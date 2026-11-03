@@ -47,6 +47,26 @@ test('F07: typing «werbe» in an entry\'s Soll offers «6600 Werbeaufwand anleg
     await page.keyboard.press('Tab');
     await page.waitForFunction(() => document.body.innerText.includes('Konto 6400 ist noch nicht im Kontenplan: in der Liste «6400 Energie- und Entsorgungsaufwand anlegen» wählen'));
     assert.equal(chart().some((a) => a.number === '6400'), false, 'leaving the field adds nothing');
+
+    // A new entry by hand, its account added last from its own field and booked at once: the form checks the books' accounts as they are now, not as at its last redraw.
+    await page.$eval('[data-add]', (e) => (e as HTMLElement).click());
+    await page.waitForSelector('.jnew form input[name=description]');
+    const form = '.jnew form';
+    await page.$eval(`${form} input[name=accountCredit]`, (e) => (e as HTMLInputElement).focus());
+    await page.keyboard.type('6000');
+    await page.keyboard.press('Escape');
+    await page.$eval(`${form} input[name=amount]`, (e) => (e as HTMLInputElement).focus());
+    await page.keyboard.type('12.50');
+    await page.$eval(`${form} input[name=description]`, (e) => (e as HTMLInputElement).focus());
+    await page.keyboard.type('Strom e2e');
+    await page.$eval(`${form} input[name=accountDebit]`, (e) => (e as HTMLInputElement).focus());
+    await page.keyboard.type('6400');
+    await page.waitForSelector('.jnew .acl [data-act=account-add]');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.querySelector('.jnew input[name=accountDebit] ~ .acn')?.textContent === 'Energie- und Entsorgungsaufwand');
+    await page.$eval(`${form} button[type=submit]`, (e) => (e as HTMLElement).click());
+    for (let i = 0; i < 100 && !(app.books().journalEntries ?? []).some((e) => e.description === 'Strom e2e'); i++) await new Promise((r) => setTimeout(r, 100));
+    assert.equal((app.books().journalEntries ?? []).find((e) => e.description === 'Strom e2e')?.accountDebit, '6400', 'booked on the account added in the form');
     assert.deepEqual(app.errors, []);
   } finally {
     await app.stop();
