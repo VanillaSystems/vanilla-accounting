@@ -33,6 +33,11 @@ test('pages open on the newest data, the picker applies a quarter in one click, 
     await app.open('/journal');
     assert.match(await periodButton(), /Q3 2026/, 'the newest payment is of Q3, Q2 is the oldest unfiled');
 
+    await app.open('/invoices');
+    await page.waitForFunction(() => /Q4 2026/.test(document.querySelector<HTMLElement>('[data-testid=period-picker]')?.innerText ?? ''));
+    assert.ok(await page.$('.rows .row.inv[data-id="2026-007"]'), 'Rechnungen opens where its newest invoice is, 01.10.2026');
+
+    await app.open('/journal');
     await click(page, '[data-testid=period-picker]');
     await page.waitForSelector('.pp');
     assert.equal(await page.$('.pp [data-day]'), null, 'no calendar days before «Benutzerdefiniert»');

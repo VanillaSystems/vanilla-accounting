@@ -30,7 +30,8 @@ import { Menu } from './Menu.js';
 import { Palette, type PaletteGroup } from './Palette.js';
 import { PeriodPicker } from './PeriodPicker.js';
 import { nextTheme, useNavWide, usePersistedFlag, useTheme, useZoom, type Theme } from './prefs.js';
-import { AREA_HOME, type AreaId, type Query } from './route.js';
+import { AREA_HOME, type AreaId, type Query, type Route } from './route.js';
+import { useInvoicesLoaded } from '../areas/invoices/data.js';
 import { Split, useListWidth } from './Split.js';
 import { useToast } from './Toast.js';
 import { VatCards } from '../areas/codes/vat-card.js';
@@ -83,15 +84,19 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const aiOpen = useAssistant().open;
 
   const area = areaOf(loc.route);
-  // Without a period in the link, a page shows where the newest data is (F10).
-  const latest = dataPeriod(books, localToday(), filing().length);
+  // Without a period in the link, a page shows where the newest data is (F10), its own rows outside the books included.
+  useInvoicesLoaded();
+  const latestOf = (route: Route) => dataPeriod(books, localToday(), filing().length, areaOf(route).newest?.());
+  const latest = latestOf(loc.route);
+  const latestNow = useRef(latestOf);
+  latestNow.current = latestOf;
   const period = loc.query.period ?? latest;
 
   const current = useRef(loc);
   current.current = loc;
   const nav: Nav = useMemo(() => ({
     // urls.md: the period of the newest data is left out of a link.
-    go: (loc) => go(loc.query.period?.token === latest.token ? { ...loc, query: { ...loc.query, period: undefined } } : loc),
+    go: (loc) => go(loc.query.period?.token === latestNow.current(loc.route).token ? { ...loc, query: { ...loc.query, period: undefined } } : loc),
     select: (route) => go({ route, query: current.current.query }),
     setQuery: (patch) => {
       const query: Query = { ...current.current.query, ...patch };

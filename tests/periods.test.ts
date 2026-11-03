@@ -199,4 +199,5 @@ test('a page without a period shows the period of the newest data, not the oldes
   assert.equal(dataPeriod({ config: filedQ1, transactions: [tx('2026-09-30')], journalEntries: [tx('2027-01-15')] }, '2026-11-02', 'quarter').token, '2026-Q4', 'a date after today counts as today');
   assert.equal(dataPeriod({ config: filedQ1, transactions: [tx('2026-05-01')] }, '2026-11-02', 'half').token, '2026-H1');
   assert.equal(dataPeriod({ config: filedQ1, transactions: [] }, '2026-11-02', 'quarter').token, '2026-Q2', 'nothing dated: the open period');
+  assert.equal(dataPeriod({ config: filedQ1, transactions: [tx('2026-09-30')] }, '2026-11-02', 'quarter', '2026-10-01').token, '2026-Q4', 'an area\'s own newer row (an issued invoice)');
 });

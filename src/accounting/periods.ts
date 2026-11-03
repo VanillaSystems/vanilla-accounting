@@ -204,17 +204,18 @@ export function booksOpenPeriod(books: { config?: { closedThrough?: IsoDate }; t
 }
 
 /**
- * The filing period of the books' newest payment, receipt or entry: what a page shows unless its
- * link names a period, so new files are in view where they landed. A date after today counts as
- * today; books with nothing dated show their open period.
+ * The filing period of the books' newest payment, receipt or entry, or of `also` (an area's own
+ * newest row, an issued invoice) when it is newer: what a page shows unless its link names a period,
+ * so new files are in view where they landed. A date after today counts as today; books with
+ * nothing dated show their open period.
  */
 export function dataPeriod(books: {
   config?: { closedThrough?: IsoDate };
   transactions: Array<{ date: IsoDate }>;
   receipts?: Array<{ date?: IsoDate }>;
   journalEntries?: Array<{ date: IsoDate }>;
-}, today: IsoDate, length: FilingLength): Period {
-  let newest: IsoDate | undefined;
+}, today: IsoDate, length: FilingLength, also?: IsoDate): Period {
+  let newest = also;
   for (const xs of [books.transactions, books.receipts ?? [], books.journalEntries ?? []]) {
     for (const { date } of xs) if (date && (!newest || date > newest)) newest = date;
   }
