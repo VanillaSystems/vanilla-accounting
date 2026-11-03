@@ -244,7 +244,7 @@ export interface SetupData {
   owner: Record<string, { account: string; label: string }> & { otherwise: { account: string; label: string } };
   answers: {
     /** «Auszahlungen eines Zahlungsanbieters: ja»: the accounts added, and the firm's own payout split when no rule names the provider. */
-    payouts: { accounts: string[]; sales: { otherwise: string }; fees: { account: string; vat: string } };
+    payouts: { accounts: string[]; sales: { otherwise: string }; fees: { account: string; vat: string }; clearing: { account: string; name: string } };
     imports: string[];
   };
   /** «Was verkauft ihr?»: each kind's default accounts (src/workspace/sells.ts). */

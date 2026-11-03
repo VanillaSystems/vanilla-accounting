@@ -45,10 +45,11 @@ import { sideOf } from '../accounting/tax-point.js';
 import { agreedBasis, baseCurrency, chart, filing, invoicing, setup, vat, withoutInputTax } from '../engines/index.js';
 import { toRappen } from '../accounting/rappen.js';
 import { payoutSales } from '../workspace/sells.js';
+import { standardAccounts } from '../workspace/chart.js';
 import { findFile, APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { wordsIn } from '../export/texts.js';
 import type { BankTransaction, JournalEntry, Receipt } from '../types/index.js';
-import type { PayoutUnseen, ProviderAsk, ReportSummary } from '../types/drop.js';
+import type { PayoutUnseen, ProviderAsk, ProviderProposal, ReportSummary } from '../types/drop.js';
 import { accountOf } from '../workspace/money-accounts.js';
 
 const ACTOR = moduleActor('sales-report');
@@ -105,12 +106,16 @@ function revenueOf(ws: Workspace, p: Provider): string | undefined {
 }
 
 /** What the company's file of the provider must still say before `kind` can be booked, or nothing. */
-function lacking(ws: Workspace, p: Provider, kind: 'sales' | 'fees', chart: ReadonlyMap<string, string>): ProviderAsk | { account: string } | undefined {
-  const ask = (missing: ProviderAsk['missing']): ProviderAsk => ({
-    provider: p.id, name: p.name, missing, file: homeOf('workspace', p.role, p.id),
-    // The cut-over day is asked with the clearing account, the first day of the open period proposed.
-    ...((missing === 'clearing' || missing === 'since') && !p.provider.since ? { since: firstOpenDay(ws) } : {}),
-  });
+function lacking(ws: Workspace, p: Provider, kind: 'sales' | 'fees', chart: ReadonlyMap<string, string>, reportFrom: string): ProviderAsk | { account: string } | undefined {
+  const ask = (missing: ProviderAsk['missing']): ProviderAsk => {
+    const propose = proposalOf(ws, p, missing, chart);
+    return {
+      provider: p.id, name: p.name, missing,
+      // The cut-over day is asked with the clearing account: the first day the report covers is proposed, the open period's first day at the earliest.
+      ...((missing === 'clearing' || missing === 'since') && !p.provider.since ? { since: cutOverOf(ws, reportFrom) } : {}),
+      ...(propose ? { propose } : {}),
+    };
+  };
   const clearing = p.provider.clearing;
   if (!clearing) return ask('clearing');
   if (!chart.has(clearing)) return { account: clearing };
@@ -123,6 +128,40 @@ function lacking(ws: Workspace, p: Provider, kind: 'sales' | 'fees', chart: Read
   } else {
     if (!p.provider.fees) return ask('fees');
     if (!chart.has(p.provider.fees.account)) return { account: p.provider.fees.account };
+  }
+  return undefined;
+}
+
+/** The cut-over day proposed for a report whose first day is `from`: that day, or the open period's first day when the report reaches back before it. */
+function cutOverOf(ws: Workspace, from: string): string {
+  const open = firstOpenDay(ws);
+  return isIsoDate(from) && from > open ? from : open;
+}
+
+/**
+ * The account the drop row proposes for what a provider's file lacks (modules/<country>/setup.yaml
+ * answers.payouts), with its name when the chart lacks it, so keeping the answer adds it. The clearing
+ * account is named after the provider and is its own: the chart's clearing account when no other
+ * provider's file names it, else the next number of its ten that is free.
+ */
+function proposalOf(ws: Workspace, p: Provider, missing: ProviderAsk['missing'], chart: ReadonlyMap<string, string>): ProviderProposal | undefined {
+  const payouts = setup().answers.payouts;
+  const named = (account: string, name: string | undefined): ProviderProposal | undefined =>
+    chart.has(account) ? { account } : name ? { account, name } : undefined;
+  const standard = (account: string) => standardAccounts(ws.company.legalForm).find((a) => a.number === account)?.name;
+  if (missing === 'revenue') return named(payouts.sales.otherwise, standard(payouts.sales.otherwise));
+  if (missing === 'fees') {
+    const account = named(payouts.fees.account, standard(payouts.fees.account));
+    return account && formTakes(payouts.fees.vat) ? { ...account, vat: payouts.fees.vat } : account;
+  }
+  if (missing !== 'clearing') return undefined;
+  const taken = new Set(providersOf(ws).filter((x) => x.id !== p.id).map((x) => x.provider.clearing));
+  const first = Number(payouts.clearing.account);
+  for (let n = first; n < Math.ceil((first + 1) / 10) * 10; n++) {
+    const account = String(n);
+    if (taken.has(account)) continue;
+    if (chart.has(account)) { if (n === first) return { account }; continue; }
+    return { account, name: payouts.clearing.name.replace('{provider}', p.name) };
   }
   return undefined;
 }
@@ -417,10 +456,10 @@ export function importSalesReport(ws: Workspace, bytes: Buffer, name: string, op
   const into = p.provider.account;
   if (into && !ws.bankAccounts.some((a) => a.account === into)) return { ok: false, message: de.t('salesReport.noBank', { account: into, file: homeOf('workspace', p.role, p.id) }) };
   const accounts = chartNames(chartOf(ws));
-  const missing = lacking(ws, p, hit.kind, accounts);
+  const facts = reportFacts(p.id, read);
+  const missing = lacking(ws, p, hit.kind, accounts, facts.from);
   if (missing && 'account' in missing) return { ok: false, message: de.t('salesReport.noAccount', { account: missing.account, file: homeOf('workspace', p.role, p.id) }) };
   if (missing) return { ok: false, ask: missing, message: de.t(`salesReport.ask.${missing.missing}`, { provider: p.name }) };
-  const facts = reportFacts(p.id, read);
   const id = sha16(bytes);
   const context = loadClassifyContext(ws);
   const unseen = opts.anyway ? undefined : unseenPayout(loadBooks(ws), p, read, context);

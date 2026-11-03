@@ -19,7 +19,7 @@ import { PaymentField } from './PaymentField.js';
 import { bookingDraft } from '../../../accounting/manual-booking.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import type { JournalEntryInput } from '../../lib/api.js';
-import { AccountField } from './AccountField.js';
+import { AccountField, unknownAccountText } from './AccountField.js';
 import { VatCodeField } from '../codes/VatCodeField.js';
 import { codeLabel } from '../codes/names.js';
 import { listed, setUi, useUi } from './state.js';
@@ -129,7 +129,7 @@ export function NewEntry(props: Props) {
     const tags = tagsOfForm(new FormData(form.current!), dimensions);
     const problem = !date && !tx ? t('journal.errDate')
       : !tx && closed && date! <= closed ? t(chargesVat() ? 'journal.errFiledDate' : 'journal.errClosedDate', { date: formatDate(closed) })
-      : [dr, cr].find((n) => n && !accounts[n]) ? t('journal.errAccount', { account: [dr, cr].find((n) => n && !accounts[n])! })
+      : [dr, cr].find((n) => n && !getAccountMap()[n]) ? unknownAccountText([dr, cr].find((n) => n && !getAccountMap()[n])!)
       : [dr, cr].find((n) => n && !chart().isPlaced(n)) ? t('error.accountOutsideStatements', { account: [dr, cr].find((n) => n && !chart().isPlaced(n))!, classes: chart().placedClasses })
       : !dr && !cr ? t('journal.errNoAccount')
       : vat && !lookupVatCode(vat) ? t('journal.errVat', { code: vat })

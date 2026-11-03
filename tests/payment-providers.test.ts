@@ -932,19 +932,37 @@ test('the company\'s file lacks the clearing account: the report asks for it onc
   const ws = shop('  revenue: "3200"\n');
   const first = importSalesReport(ws, Buffer.from(NOVEMBER), 'orders_export.csv');
   assert.ok(!first.ok && first.ask?.missing === 'clearing');
-  assert.equal(first.ask?.since, '2026-04-01', 'the first day of the open period proposed');
+  assert.equal(first.ask?.since, '2026-11-02', 'F09: the first day the report covers proposed, not the first open day');
+  assert.deepEqual(first.ask?.propose, { account: '1093' }, 'the chart\'s clearing account, which the books have');
   assert.deepEqual(setProviderAccount(ws, 'shopify', { clearing: '9999' }), { ok: false, refusal: { code: 'unknownAccount', params: { account: '9999' } } });
   assert.deepEqual(setProviderAccount(ws, 'shopify', { clearing: '3200' }), { ok: false, refusal: { code: 'clearingNotBalance', params: { account: '3200' } } }, 'note 9: a revenue account holds nothing the provider owes');
   assert.deepEqual(setProviderAccount(ws, 'shopify', { clearing: '1093', since: '2026-03-31' }), { ok: false, refusal: { code: 'sinceNotOpen', params: { since: '2026-03-31', from: '2026-04-01' } } });
   assert.deepEqual(setProviderAccount(ws, 'shopify', { clearing: '1093' }), { ok: true });
   const second = importSalesReport(ws, Buffer.from(NOVEMBER), 'orders_export.csv');
-  assert.ok(!second.ok && second.ask?.missing === 'since' && second.ask.since === '2026-04-01', 'a file with the account but no day asks for the day');
+  assert.ok(!second.ok && second.ask?.missing === 'since' && second.ask.since === '2026-11-02', 'a file with the account but no day asks for the day');
   assert.deepEqual(setProviderAccount(ws, 'shopify', { since: '2026-11-01' }), { ok: true });
   const file = parse(readFileSync(join(ws.paths.root, 'knowledge', 'suppliers', 'shopify.yaml'), 'utf8')) as { provider: Record<string, unknown> };
   assert.deepEqual(file.provider, { revenue: '3200', clearing: '1093', since: '2026-11-01' });
   assert.ok(importSalesReport(ws, Buffer.from(NOVEMBER), 'orders_export.csv').ok);
   const fees = importSalesReport(shop('  clearing: "1093"\n  since: 2026-11-01\n'), Buffer.from(FEES), 'payment_transactions.csv');
   assert.ok(!fees.ok && fees.ask?.missing === 'fees', 'the fee account is asked for the fee report');
+});
+
+test('F08/F09: the ask proposes an account by the chart, named after the provider when the books lack it, and the cut-over day within the open period', () => {
+  const ws = shop('  revenue: "3200"\n');
+  const accounts = join(ws.paths.root, 'master-data', 'accounts.json');
+  writeFileSync(accounts, JSON.stringify((JSON.parse(readFileSync(accounts, 'utf8')) as Array<{ number: string }>).filter((a) => a.number !== '1093' && a.number !== '1094'), null, 2));
+  const first = importSalesReport(ws, Buffer.from(NOVEMBER), 'orders_export.csv');
+  assert.ok(!first.ok);
+  assert.deepEqual(first.ask?.propose, { account: '1093', name: 'Durchlaufkonto Shopify' }, 'a new account named after the provider');
+  assert.equal(JSON.stringify(first.ask).includes('knowledge/'), false, 'no file path in the question');
+  writeFileSync(join(ws.paths.root, 'knowledge', 'suppliers', 'sumup.yaml'), 'id: sumup\nname: SumUp\nmatch:\n  tx: [ "sumup" ]\nprovider:\n  clearing: "1093"\n  since: 2026-11-01\n  revenue: "3200"\n');
+  const taken = importSalesReport(ws, Buffer.from(NOVEMBER), 'orders_export.csv');
+  assert.deepEqual(!taken.ok && taken.ask?.propose, { account: '1094', name: 'Durchlaufkonto Shopify' }, 'another provider\'s clearing account is not proposed: the next free number of its ten');
+  const early = importSalesReport(ws, Buffer.from([head, row('2101', '2026-03-20', '108.10', '8.10'), row('2102', '2026-11-02', '108.10', '8.10')].join('\n')), 'orders_early.csv');
+  assert.equal(!early.ok && early.ask?.since, '2026-04-01', 'a report reaching into a filed quarter: the first open day');
+  const fees = importSalesReport(shop('  clearing: "1093"\n  since: 2026-07-01\n'), Buffer.from(FEES), 'payment_transactions.csv');
+  assert.deepEqual(!fees.ok && fees.ask?.propose, { account: '6580', name: 'Webshop- und Zahlungsanbietergebühren', vat: 'I0' }, 'the chart\'s fee account and code');
 });
 
 test('7. a report that fails on an error is refused in its row with a code; the session is saved and goes on', async () => {
@@ -976,7 +994,36 @@ test('7. a report that fails on an error is refused in its row with a code; the 
   }
 });
 
-test('the drop row asks the clearing account with the cut-over day, the first open day proposed; a revenue account is refused with its code; the answer books the report', async () => {
+test('F08: the drop row proposes the clearing account the chart lacks and adds it with the answer, not when the answer is refused; the fee report\'s row then asks for the fees', async () => {
+  const api = await startApi('demo');
+  try {
+    cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
+    writeFileSync(join(api.root, 'knowledge', 'suppliers', 'shopify.yaml'), 'id: shopify\nprovider:\n  revenue: "3200"\n');
+    const accounts = join(api.root, 'master-data', 'accounts.json');
+    const chartHas = (n: string) => (JSON.parse(readFileSync(accounts, 'utf8')) as Array<{ number: string; name: string }>).find((a) => a.number === n)?.name;
+    const post = async (path: string, body?: Buffer | object): Promise<{ status: number; s: DropSession & { code?: string } }> => {
+      const json = body && !Buffer.isBuffer(body);
+      const res = await api.fetch(path, { method: 'POST', body: json ? JSON.stringify(body) : body ? new Uint8Array(body as Buffer) : undefined, headers: { 'Content-Type': json ? 'application/json' : 'application/octet-stream' } });
+      return { status: res.status, s: (await res.json()) as DropSession & { code?: string } };
+    };
+    const { s } = await post('/api/drop');
+    await post(`/api/drop/${s.id}/files?name=orders_export.csv`, Buffer.from(NOVEMBER));
+    const both = await post(`/api/drop/${s.id}/files?name=payment_transactions.csv`, Buffer.from(FEES));
+    const [orders, fees] = both.s.rows;
+    assert.deepEqual([orders.askProvider?.missing, orders.askProvider?.propose, fees.askProvider?.missing], ['clearing', { account: '1093', name: 'Durchlaufkonto Shopify' }, 'clearing']);
+    const refused = await post(`/api/drop/${s.id}/rows/${orders.key}`, { kind: 'provider', account: '1093', create: true, since: '2026-03-31' });
+    assert.deepEqual([refused.status, refused.s.code, chartHas('1093')], [400, 'sinceNotOpen', undefined], 'a refused answer adds no account');
+    const kept = await post(`/api/drop/${s.id}/rows/${orders.key}`, { kind: 'provider', account: '1093', create: true, since: orders.askProvider!.since });
+    assert.equal(kept.status, 200);
+    assert.equal(chartHas('1093'), 'Durchlaufkonto Shopify', 'added as the proposal names it');
+    const after = kept.s.rows.find((r) => r.key === fees.key)!;
+    assert.deepEqual([after.askProvider?.missing, after.askProvider?.propose], ['fees', { account: '6580', name: 'Webshop- und Zahlungsanbietergebühren', vat: 'I0' }], 'the fee row no longer asks for the clearing account just kept');
+  } finally {
+    await api.stop();
+  }
+});
+
+test('the drop row asks the clearing account with the cut-over day, the report\'s first day proposed; a revenue account is refused with its code; the answer books the report', async () => {
   const api = await startApi('demo');
   try {
     cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
@@ -991,7 +1038,7 @@ test('the drop row asks the clearing account with the cut-over day, the first op
     const { s } = await post('/api/drop');
     const took = await post(`/api/drop/${s.id}/files?name=orders_export.csv`, Buffer.from(NOVEMBER));
     const row = took.s.rows[0];
-    assert.deepEqual([row.state, row.reason, row.askProvider?.missing, row.askProvider?.since], ['unclear', 'provider-account', 'clearing', '2026-04-01']);
+    assert.deepEqual([row.state, row.reason, row.askProvider?.missing, row.askProvider?.since], ['unclear', 'provider-account', 'clearing', '2026-11-02']);
     const wrong = await post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'provider', account: '3200', since: '2026-11-01' });
     assert.deepEqual([wrong.status, wrong.s.code], [400, 'clearingNotBalance']);
     const answered = await post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'provider', account: '1093', since: '2026-11-01' });

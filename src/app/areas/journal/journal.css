@@ -69,6 +69,8 @@
 .acl li .mono { color: var(--muted); min-width: 34px; }
 .acl li.on { background: var(--accent-soft); color: var(--ink); }
 .acl li.none { color: var(--muted); cursor: default; }
+.acl li.add { color: var(--accent); }
+.form .acf .acn.warn { color: var(--warn); white-space: normal; }
 
 /* the new entry */
 .jnew { width: 520px; top: 12vh; overflow: visible; }

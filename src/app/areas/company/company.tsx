@@ -621,7 +621,7 @@ function Opening({ books, nav, canEdit }: Props) {
     const f = new FormData(e.currentTarget);
     const account = String(f.get('account') ?? '').trim();
     const amount = parseAmount(String(f.get('amount') ?? ''));
-    const problem = !names[account] ? t('journal.errAccount', { account: account || '–' })
+    const problem = !getAccountMap()[account] ? t('journal.errAccount', { account: account || '–' })
       : !isBalanceSheet(account) ? t('error.openingAccount.notBalanceSheet', { account })
         : account === equity ? t('error.openingAccount.equity', { account })
           : foreign.has(account) ? t('error.openingAccount.foreign', { account })

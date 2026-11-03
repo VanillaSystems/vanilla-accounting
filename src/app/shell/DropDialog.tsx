@@ -21,6 +21,7 @@ import { textIn } from '../../workflows/model.js';
 import type { Index } from '../../types/index.js';
 import type { DropRow, DropSession } from '../../types/drop.js';
 import { FileDetails } from './FileDetails.js';
+import { AccountField } from '../areas/journal/AccountField.js';
 import { CsvColumnsForm, StatementRead } from './StatementRead.js';
 import { Menu } from './Menu.js';
 import type { Location, Route } from './route.js';
@@ -135,20 +136,28 @@ function ChooseAccount({ r, session, go }: { r: DropRow; session: DropSession; g
 /**
  * A provider's report whose company file lacks an account (#203): the row asks for it once, with the
  * fee code where the fees are missing and the cut-over day with the clearing account (the first day
- * of the open period proposed); the answer is kept in that file and the report is taken.
+ * the report covers proposed, within the open period); the account proposed is filled in, and one the
+ * chart lacks is added when the answer is kept. The answer is kept in that file and the report is taken.
  */
 function ProviderAccount({ r, session }: { r: DropRow; session: DropSession }) {
   const ask = r.askProvider!;
-  const [account, setAccount] = useState('');
-  const [vat, setVat] = useState('');
+  const propose = ask.propose;
+  const [vat, setVat] = useState(propose?.vat ?? '');
   const [since, setSince] = useState(ask.since ?? '');
   const needsAccount = ask.missing !== 'since';
-  const ready = (!needsAccount || !!account.trim()) && (ask.missing !== 'fees' || !!vat.trim()) && (ask.since === undefined || !!since);
+  const ready = (ask.missing !== 'fees' || !!vat.trim()) && (ask.since === undefined || !!since);
+  const keep = (form: HTMLFormElement) => {
+    const field = form.elements.namedItem('account') as HTMLInputElement | null;
+    const account = field?.value.trim() ?? '';
+    if (needsAccount && !account) { field?.focus(); return; }
+    const create = !!propose?.name && account === propose.account;
+    void act(session, r, { kind: 'provider', ...(needsAccount ? { account } : {}), ...(create ? { create: true } : {}), ...(ask.missing === 'fees' ? { vat: vat.trim() } : {}), ...(ask.since !== undefined ? { since } : {}) });
+  };
   return (
     <>
-      <small>{t(`drop.provider.${ask.missing}`, { provider: ask.name, file: ask.file })}{ask.missing === 'clearing' && ask.since !== undefined ? ` ${t('drop.provider.since', { provider: ask.name, file: ask.file })}` : ''}</small>
-      <form className="dpw" data-testid="drop-provider" onSubmit={(e) => { e.preventDefault(); if (ready) void act(session, r, { kind: 'provider', ...(needsAccount ? { account: account.trim() } : {}), ...(ask.missing === 'fees' ? { vat: vat.trim() } : {}), ...(ask.since !== undefined ? { since } : {}) }); }}>
-        {needsAccount ? <input value={account} onChange={(e) => setAccount(e.target.value)} placeholder={t('drop.provider.account')} aria-label={t('drop.provider.account')} inputMode="numeric" /> : null}
+      <small>{t(`drop.provider.${ask.missing}`, { provider: ask.name })}{ask.missing === 'clearing' && ask.since !== undefined ? ` ${t('drop.provider.since', { provider: ask.name })}` : ''}</small>
+      <form className="dpw" data-testid="drop-provider" onSubmit={(e) => { e.preventDefault(); if (ready) keep(e.currentTarget); }}>
+        {needsAccount ? <AccountField name="account" label={t('drop.provider.account')} defaultValue={propose?.account ?? ''} offer={propose?.name ? { number: propose.account, name: propose.name } : undefined} /> : null}
         {ask.missing === 'fees' ? <input value={vat} onChange={(e) => setVat(e.target.value)} placeholder={t('drop.provider.vat')} aria-label={t('drop.provider.vat')} /> : null}
         {ask.since !== undefined ? <input type="date" value={since} onChange={(e) => setSince(e.target.value)} aria-label={t('drop.provider.sinceLabel')} data-tip={t('drop.provider.sinceLabel')} /> : null}
         <button type="submit" className="btn" disabled={!ready}>{t('drop.provider.keep')}</button>
