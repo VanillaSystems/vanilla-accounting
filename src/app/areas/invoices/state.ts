@@ -16,8 +16,11 @@ export type Dialog =
   | { kind: 'cancel' }
   | { kind: 'credit' }
   | { kind: 'delete' }
-  /** Sending the invoice, or the reminder written on the sheet, by e-mail or as a download. */
-  | { kind: 'send'; reminder?: Omit<ReminderEdit, 'invoiceId'> & { level: number } };
+  /**
+   * Sending the invoice with its PDF shown, or the reminder written on the sheet, by e-mail or as a download.
+   * `issued`: opened by «Ausstellen» itself, so the document to take away is in front of the person at once.
+   */
+  | { kind: 'send'; reminder?: Omit<ReminderEdit, 'invoiceId'> & { level: number }; issued?: true };
 
 /** A reminder written on the sheet before it is sent: for this invoice, with these texts and fee. */
 export interface ReminderEdit { invoiceId: string; fee?: number; intro?: string; closing?: string }

@@ -5,7 +5,8 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { localToday } from '../../../accounting/periods.js';
-import type { Customer, CustomerFields, Invoice, Issued } from '../../../invoices/model.js';
+import { issuedPdfUrl, type Customer, type CustomerFields, type Invoice, type Issued } from '../../../invoices/model.js';
+import { Paper } from '../receipts/Paper.js';
 import { openAmount, paidAmount, totals, creditable } from '../../../invoices/rules.js';
 import type { RouteOf } from '../../shell/route.js';
 import { fmt, formatDate } from '../../lib/utils.js';
@@ -36,7 +37,7 @@ export function Dialogs(props: Props) {
     case 'customer': return <CustomerDialog {...props} customer={d.customers.find((c) => c.id === (s.dialog as { id?: string }).id)} />;
     case 'cancel': return inv?.status === 'issued' ? <CancelDialog {...props} inv={inv} /> : null;
     case 'credit': return inv?.status === 'issued' ? <CreditDialog {...props} inv={inv} invoices={d.invoices} /> : null;
-    case 'send': return inv?.status === 'issued' ? <SendDialog {...props} inv={inv} reminder={s.dialog.reminder} /> : null;
+    case 'send': return inv?.status === 'issued' ? <SendDialog {...props} inv={inv} reminder={s.dialog.reminder} issued={s.dialog.issued} /> : null;
     default: return null;
   }
 }
@@ -251,8 +252,11 @@ function MailFields({ mail, value, onChange, nav }: { mail: ReturnType<typeof us
   );
 }
 
-/** Senden: the issued invoice or a reminder, by e-mail with the stored PDF attached, or saved as a download. */
-function SendDialog({ inv, nav, reminder }: Props & { inv: Issued; reminder?: Omit<ReminderEdit, 'invoiceId'> & { level: number } }) {
+/**
+ * Senden: the issued invoice with its stored PDF in view, or a reminder, by e-mail with the PDF attached, or saved as
+ * a download. Right after «Ausstellen» (`issued`) it says so and «Später» closes it.
+ */
+function SendDialog({ inv, nav, reminder, issued }: Props & { inv: Issued; reminder?: Omit<ReminderEdit, 'invoiceId'> & { level: number }; issued?: true }) {
   const mail = useMail(inv, reminder ? { kind: 'reminder', level: reminder.level } : { kind: 'invoice' });
   const [m, setM] = useState<MailMessage>();
   const [busy, setBusy] = useState(false);
@@ -266,17 +270,22 @@ function SendDialog({ inv, nav, reminder }: Props & { inv: Issued; reminder?: Om
     close();
     if (reminder) setUi({ reminder: null, preview: false });
   };
-  const label = reminder ? t('invoices.sendReminder', { level: reminder.level }) : t(inv.kind === 'credit-note' ? 'invoices.sendTitleCredit' : 'invoices.sendTitle', { number: inv.number });
+  const credit = inv.kind === 'credit-note';
+  const label = reminder ? t('invoices.sendReminder', { level: reminder.level })
+    : issued ? t(credit ? 'invoices.creditIssued' : 'invoices.issued', { number: inv.number })
+    : t(credit ? 'invoices.sendTitleCredit' : 'invoices.sendTitle', { number: inv.number });
   const foot = (
     <>
-      <button type="button" className="btn ghost" onClick={close}>{t('common.cancel')}</button>
+      <button type="button" className="btn ghost" data-act="later" onClick={close}>{t(issued ? 'invoices.later' : 'common.cancel')}</button>
       <button type="button" className={`btn ${mail.ready ? 'ghost' : 'primary'}`} data-act="download" disabled={busy} onClick={() => void go()}>{t('invoices.downloadInstead')}</button>
       {mail.ready && <button type="button" className="btn primary" data-act="mail" disabled={busy || !value.to.trim()} onClick={() => void go(value)}>{busy ? t('invoices.mailing') : t('invoices.mailSend')}</button>}
     </>
   );
   return (
-    <Frame label={label} title={`${inv.customer.name} · ${inv.currency} ${fmt(totals(inv.lines).gross)}`} foot={foot} className="isend">
+    <Frame label={label} title={`${inv.customer.name} · ${inv.currency} ${fmt(totals(inv.lines).gross)}`} foot={foot} className={`isend${reminder ? '' : ' withpdf'}`}>
       <div className="ibody lkf">
+        {!reminder && <div className="isendpdf paper real"><Paper src={issuedPdfUrl(inv.number)} maxWidth={560} whole /></div>}
+        {issued && <p className="m ivhint">{t('invoices.issuedNext')}</p>}
         <MailFields mail={mail} value={value} onChange={setM} nav={nav} />
         <p className="m ivhint">{t('invoices.mailAttached', { file: reminder ? t('invoices.reminderFile', { level: reminder.level }) : `${inv.number}.pdf` })}</p>
       </div>
