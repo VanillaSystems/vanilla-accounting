@@ -10,6 +10,8 @@ export type RuleRefusal =
   /** An account the Bilanz and the Erfolgsrechnung do not show (a closing class such as 9xxx). */
   | { code: 'unplaced'; params: { account: string; classes: string } }
   | { code: 'vat'; params: { vat: string } }
+  /** A booking without `vat`: code fills it from the receipts, or the draft's card asks (src/booking/rule-vat.ts). */
+  | { code: 'vatMissing' }
   /** A code the firm's form does not take (formTakes): none on a firm not registered, no input-tax code on the net tax rate method. */
   | { code: 'codeNotTaken'; params: { vat: string; method: 'none' | 'net-rate' } }
   | { code: 'pattern'; params: { text: string } }

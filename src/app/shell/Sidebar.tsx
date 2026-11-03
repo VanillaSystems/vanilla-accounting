@@ -490,7 +490,7 @@ export function Sidebar({ page, books, onGo }: Props) {
         const d = draftsOf(turn);
         return (
           <>
-            {d.rules.map((path) => <RuleDraft key={path} path={path} onRules={() => onGo({ area: 'company', section: 'rules' })} />)}
+            {d.rules.map((path) => <RuleDraft key={path} path={path} reveal onRules={() => onGo({ area: 'company', section: 'rules' })} />)}
             {d.other || !d.rules.length ? <button type="button" className="linkbtn aidraft" onClick={() => onGo({ area: 'changes' })}>{t('assistant.toChanges')}</button> : null}
           </>
         );

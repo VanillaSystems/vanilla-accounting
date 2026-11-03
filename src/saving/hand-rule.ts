@@ -34,8 +34,8 @@ export interface HandRule {
   direction?: 'in' | 'out';
   amount?: { over?: number; under?: number };
   account: string;
-  /** null: booked without a VAT code (a firm not registered, a transfer). */
-  vat: string | null;
+  /** null: booked without a VAT code (a firm not registered, a transfer); absent: not chosen, so code takes it from the receipts of the rule's payments, or the card asks (src/booking/rule-vat.ts). */
+  vat?: string | null;
   /** A foreign VAT split off a sale abroad: its rate, the account it goes onto (an answer to the sale question, never the form). */
   foreignTax?: { rate: number; account: string };
   /** The reporting dimensions every booking of the rule carries (#127). */
@@ -65,7 +65,7 @@ function written(h: HandRule, today: string, source: HandSource = 'hand'): { whe
     ...(h.amount && (h.amount.over !== undefined || h.amount.under !== undefined) ? { amount: h.amount } : {}),
   };
   return { ...(Object.keys(when).length ? { when } : {}), then: {
-    account: h.account, vat: h.vat ?? 'none',
+    account: h.account, ...(h.vat === undefined ? {} : { vat: h.vat ?? 'none' }),
     ...(h.private ? { private: h.private.ownUse ? { share: h.private.share, as: OWN_USE } : h.private.share } : {}),
     ...(h.foreignTax ? { foreignTax: h.foreignTax } : {}),
     ...(h.tags && Object.keys(h.tags).length ? { tags: h.tags } : {}),
@@ -101,7 +101,8 @@ export function draftHandRule(ws: Workspace, h: HandRule, today = new Date().toI
   const id = h.match.kind === 'business' ? h.match.id : undefined;
   const business = id ? loadKnowledge(APP_ROOT, ws.paths.root).counterparties.find((c) => c.id === id) : undefined;
   if (id !== undefined && !business) return { ok: false, refusal: { code: 'counterparty', params: { counterparty: id } } };
-  const parsed = parseRule({ id: 'hand', ...written(h, today, source) }, ruleFactsOf(ws), !!business);
+  // A VAT not chosen is settled on the card (src/saving/rules.ts settleVat): the rest is checked as if it booked without one.
+  const parsed = parseRule({ id: 'hand', ...written({ ...h, vat: h.vat === undefined ? null : h.vat }, today, source) }, ruleFactsOf(ws), !!business);
   if (!parsed.ok) return { ok: false, refusal: parsed.refusal };
   const path = business ? homeOf('workspace', business.role, business.id) : GUIDE;
   const draft = join(draftDir(ws), path);
