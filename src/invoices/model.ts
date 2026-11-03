@@ -62,9 +62,14 @@ export interface InvoiceLine {
   text: string;
   quantity: number;
   unit?: Unit;
-  /** Net unit price in the invoice's currency. */
+  /** Unit price in the invoice's currency: net, or with the VAT in it when `vatIncluded`. */
   price: number;
   vatRate: VatRate;
+  /**
+   * The price includes the VAT («500 VAT included»): the line stays at exactly that amount, its rate's
+   * VAT is derived from it (gross × rate / (100 + rate), to the Rappen) and its net is the rest.
+   */
+  vatIncluded?: true;
   /** The revenue account; absent: invoicing.revenueAccount of the workspace. */
   account?: string;
 }

@@ -47,7 +47,11 @@ export const BOOKS_SCHEMA = 7;
  * past it and declare a document of an earlier agreed year on its payment's date, so it must refuse.
  */
 export const WORKSPACE_SCHEMA = 3;
-export const INVOICES_SCHEMA = 1;
+/**
+ * 2: a line may be priced with the VAT in it (`InvoiceLine.vatIncluded`, a credit note of «500 VAT
+ * included»). An app of schema 1 would read that price as net and add the VAT to it, so it must refuse.
+ */
+export const INVOICES_SCHEMA = 2;
 
 /** Step n: schema n → n + 1. */
 export type Ladder<T> = Readonly<Record<number, (doc: T) => T>>;
@@ -91,7 +95,10 @@ export function stampManifest(doc: Document): Document {
 
 /** The manifest as text, written as the Firma page writes it: a one-line `{ … }` stays one line. */
 export const manifestText = (doc: Document): string => doc.toString({ lineWidth: 0, doubleQuotedAsJSON: true });
-export const INVOICES_MIGRATIONS: Ladder<Record<string, unknown>> = {};
+export const INVOICES_MIGRATIONS: Ladder<Record<string, unknown>> = {
+  // No line has `vatIncluded` before; the number makes an older app refuse the file.
+  1: (doc) => doc,
+};
 
 /** A file written by a newer version of the app than this one. */
 export class SchemaTooNewError extends Error {}
