@@ -3,12 +3,17 @@
  * newest payment on 30.09.2026): without a period in the link a page shows the newest data's quarter,
  * not the oldest unfiled one; one click on a quarter in the picker applies it, and the calendar's days
  * are there only after «Benutzerdefiniert»; MWST names the earlier return not filed as a fact, a link
- * to it; an invoice issued while another quarter is shown stays in the list, in its own period.
+ * to it; an invoice issued while another quarter is shown stays in the list, in its own period; a
+ * receipt opened while it is still read follows into its period once its date is known.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { click, clickText, noBrowser, openApp } from './support/e2e.js';
 import { filingKeyOf, localToday } from '../src/accounting/periods.js';
+import { mkdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { textPdf } from './support/text-pdf.js';
+import { writeIndex } from './support/workspace.js';
 
 /** A camt.053 of the demo's Raiffeisen account with one October payment. */
 const OCTOBER = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt>
@@ -62,6 +67,36 @@ test('pages open on the newest data, the picker applies a quarter in one click, 
     await page.waitForSelector('[data-testid=drop-row][data-file="oktober.xml"]', { timeout: 60_000 });
     await page.waitForFunction(() => /Q4 2026/.test(document.querySelector<HTMLElement>('[data-testid=period-picker]')?.innerText ?? ''), { timeout: 30_000 });
     assert.ok(!new URL(page.url()).search.includes('2026-Q2'), 'the page behind the drop window moved to where the statement landed');
+    assert.deepEqual(app.errors, []);
+  } finally {
+    await app.stop();
+  }
+});
+
+test('a receipt opened while it is still read follows into its period once its date is known', { skip: noBrowser, timeout: 180_000 }, async () => {
+  const app = await openApp();
+  const { page, api } = app;
+  try {
+    const inbox = api.ws.paths.inbox;
+    mkdirSync(inbox, { recursive: true });
+    writeFileSync(join(inbox, 'spaet.pdf'), await textPdf(['Druckerei Muster AG', 'Rechnung D-17', 'Datum: 12.05.2026', 'Total CHF 86.40']));
+    const waiting = (await api.send('GET', '/api/inbox')).json as unknown as Array<{ id: string; filename: string }>;
+    const id = waiting.find((f) => f.filename === 'spaet.pdf')!.id;
+    await app.open(`/receipts/${id}`);
+    assert.match(await page.$eval('[data-testid=period-picker]', (b) => (b as HTMLElement).innerText), /Q3 2026/);
+
+    // What reading it does: the receipt in the books with its date, the file out of the inbox.
+    const archived = join(api.root, 'transactional-data/2026/receipts/spaet.pdf');
+    renameSync(join(inbox, 'spaet.pdf'), archived);
+    const books = app.books();
+    books.receipts.push({
+      id, filename: 'spaet.pdf', originalFilename: 'spaet.pdf', extractedText: 'Druckerei Muster AG', extractionMethod: 'pdftotext',
+      fileSize: statSync(archived).size, indexedAt: new Date().toISOString(), location: 'archived', date: '2026-05-12', amount: 86.4, currency: 'CHF',
+    });
+    writeIndex(api.ws, books);
+
+    await page.waitForFunction(() => location.search === '?period=2026-Q2', { timeout: 30_000 });
+    assert.equal(new URL(page.url()).pathname, `/receipts/${id}`, 'the receipt stays selected');
     assert.deepEqual(app.errors, []);
   } finally {
     await app.stop();
