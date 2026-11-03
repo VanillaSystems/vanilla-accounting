@@ -1317,6 +1317,8 @@ export default {
     'vat.stateFiled': 'inoltrato',
     'vat.stateOpen': 'aperto · scadenza {date}',
     'vat.stateOverdue': 'aperto · scaduto dal {date}',
+    'vat.earlierOpen': '{period} non inoltrato · scade il {date}',
+    'vat.earlierOverdue': '{period} non inoltrato · scaduto dal {date}',
     'vat.stateRunning': 'ancora in corso fino al {ends} · rendiconto dal {from}',
     'company.yearCard': 'Anno {year}',
     'company.yearOpen': 'aperto · la chiusura annuale sigilla l’anno',

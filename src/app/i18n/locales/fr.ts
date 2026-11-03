@@ -1317,6 +1317,8 @@ export default {
     'vat.stateFiled': 'déposé',
     'vat.stateOpen': 'ouvert · échéance {date}',
     'vat.stateOverdue': 'ouvert · échu depuis le {date}',
+    'vat.earlierOpen': '{period} non déposé · échéance le {date}',
+    'vat.earlierOverdue': '{period} non déposé · échu depuis le {date}',
     'vat.stateRunning': 'court encore jusqu’au {ends} · décompte à partir du {from}',
     'company.yearCard': 'Année {year}',
     'company.yearOpen': 'ouvert · le bouclement scelle l’année',

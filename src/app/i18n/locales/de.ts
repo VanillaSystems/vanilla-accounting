@@ -1314,6 +1314,8 @@ export const messages = {
   'vat.stateFiled': 'eingereicht',
   'vat.stateOpen': 'offen · fällig {date}',
   'vat.stateOverdue': 'offen · fällig seit {date}',
+  'vat.earlierOpen': '{period} nicht eingereicht · fällig {date}',
+  'vat.earlierOverdue': '{period} nicht eingereicht · fällig seit {date}',
   'vat.stateRunning': 'läuft noch bis {ends} · Abrechnung ab {from}',
   'company.yearCard': 'Jahr {year}',
   'company.yearOpen': 'offen · der Jahresabschluss versiegelt das Jahr',

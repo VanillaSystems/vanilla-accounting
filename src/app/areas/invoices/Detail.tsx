@@ -289,7 +289,7 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
         nav.toast(t('invoices.missing', { list: missing.map(missingText).join(', ') }));
         return;
       }
-      void issue(nav, inv);
+      void issue(nav, inv, props.period);
     };
     return (
       <div className="ivacts">

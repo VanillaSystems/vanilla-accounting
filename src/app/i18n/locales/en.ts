@@ -1317,6 +1317,8 @@ export default {
     'vat.stateFiled': 'filed',
     'vat.stateOpen': 'open · due {date}',
     'vat.stateOverdue': 'open · overdue since {date}',
+    'vat.earlierOpen': '{period} not filed · due {date}',
+    'vat.earlierOverdue': '{period} not filed · overdue since {date}',
     'vat.stateRunning': 'runs until {ends} · return from {from}',
     'company.yearCard': 'Year {year}',
     'company.yearOpen': 'open · the year close seals the year',
