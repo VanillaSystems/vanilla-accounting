@@ -1,0 +1,14 @@
+{
+  "receipts": [],
+  "transactions": [
+    { "ref": "L1", "bank": "Raiffeisen", "date": "2026-07-25", "amount": 5200, "currency": "CHF", "direction": "DBIT", "counterparty": "Max Muster", "description": "Lohn Juli 2026" },
+    { "ref": "L2", "bank": "Raiffeisen", "date": "2026-07-25", "amount": 4800, "currency": "CHF", "direction": "DBIT", "counterparty": "Erika Beispiel", "description": "Lohn Juli 2026" },
+    { "ref": "L3", "bank": "Raiffeisen", "date": "2026-08-25", "amount": 5200, "currency": "CHF", "direction": "DBIT", "counterparty": "Max Muster", "description": "Lohn August 2026" },
+    { "ref": "L4", "bank": "Raiffeisen", "date": "2026-08-25", "amount": 4800, "currency": "CHF", "direction": "DBIT", "counterparty": "Erika Beispiel", "description": "Lohn August 2026" },
+    { "ref": "K1", "bank": "Raiffeisen", "date": "2026-08-04", "amount": 12450, "currency": "CHF", "direction": "CRDT", "counterparty": "Beispiel Verwaltung AG", "description": "Rechnung 2026-029 Treppenhaus" }
+  ],
+  "mappings": [],
+  "bankStatements": [],
+  "journalEntries": [],
+  "config": {}
+}

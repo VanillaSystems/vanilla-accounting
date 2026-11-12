@@ -155,11 +155,11 @@ test('the draft: the bank on its side, the payment\'s amount and date, the recei
   assert.deepEqual(draft.bank, { account: '1023', side: 'accountCredit' });
   assert.equal(draft.date, '2026-08-14');
   assert.deepEqual(draft.receipts, ['r1']);
-  assert.deepEqual(draft.lines, [{ accountDebit: '4400', accountCredit: '1023', amount: 50, vat: 'M81', description: 'Shop EU, Farbe' }]);
+  assert.deepEqual(draft.lines, [{ accountDebit: '4400', accountCredit: '1023', amount: 50, vat: 'M81', description: 'Shop EU, Farbe', source: { account: { from: 'precedent', date: '2026-07-02' }, vat: { from: 'receipt' } } }], 'each proposal names where it comes from (#344)');
   assert.equal(draft.precedent?.id, 'j0');
 
   const alone = bookingDraft({ ...books, journalEntries: [] }, 'T1', accounts)!;
-  assert.deepEqual(alone.lines[0], { accountDebit: '', accountCredit: '1023', amount: 50, vat: '8.1', description: 'Shop EU, Farbe' }, 'no precedent: the rate waits for the account');
+  assert.deepEqual(alone.lines[0], { accountDebit: '', accountCredit: '1023', amount: 50, vat: '8.1', description: 'Shop EU, Farbe', source: { vat: { from: 'receipt' } } }, 'no precedent: the rate waits for the account');
 });
 
 test('the vendor\'s last payment split into an asset and an expense leg: the draft takes the expense leg, not the ladder (r6h-27)', () => {
