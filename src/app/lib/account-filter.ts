@@ -40,7 +40,16 @@ export interface AccountContext<T extends string = string> {
   defaults?: readonly string[];
   /** The words a person types for a class instead of an account's name («ertrag», «einnahme» for revenue), folded like a query. */
   words?: Partial<Record<T, readonly string[]>>;
+  /** The words the standard chart gives an account besides its name (modules/<country>/accounts.yaml `hints`), else the account's own. */
+  hints?(number: string): readonly string[] | undefined;
 }
+
+/**
+ * Whether a typed word names a hint of the account: the hint starts with it («Benz» finds «Benzin»),
+ * or it holds a hint of five letters or more («Büromiete», «Malerarbeiten» hold «Miete», «Arbeit»).
+ */
+const hinted = (parts: readonly string[], hints: readonly string[] | undefined): boolean =>
+  !!hints?.some((h) => { const f = foldAll(h); return parts.some((p) => f.startsWith(p) || (f.length >= 5 && p.includes(f))); });
 
 /**
  * The accounts a typed query picks, the likeliest first (#344). A word finds the accounts whose
@@ -55,9 +64,10 @@ export function rankAccounts<T extends string>(accounts: readonly Account[], que
   const standing = (a: Account) => { const i = ctx.defaults?.indexOf(a.number) ?? -1; return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
   if (/^\d+$/.test(q)) return filterAccounts(accounts, query);
   const classes = new Set<T>();
+  const parts = q.split(/\s+/).filter((x) => x.length >= 3);
   // Each typed word may name a class («Einnahme von Kunde»): the word itself, the word with an ending, or its start of five letters
   // at least, so three letters («ein», «ver») that start a name («Einlage») never list a whole class before it.
-  for (const part of q.split(/\s+/).filter((x) => x.length >= 3)) {
+  for (const part of parts) {
     for (const [type, words] of Object.entries(ctx.words ?? {}) as Array<[T, readonly string[]]>) {
       if (words.some((w) => { const f = foldAll(w); return part.startsWith(f) || (part.length >= 5 && f.startsWith(part)); })) classes.add(type);
     }
@@ -70,7 +80,10 @@ export function rankAccounts<T extends string>(accounts: readonly Account[], que
     const type = ctx.typeOf(account.number);
     // A word that names the account's class asked for the class: its accounts stay in chart order, whichever name holds the word too.
     const named = type !== undefined && classes.has(type);
-    if (at >= 0) out.push({ m: { account, highlight: [at, at + q.length] }, quality: named ? 3 : at === 0 || at === account.number.length + 1 ? 0 : /[^\p{L}\p{N}]/u.test(hay[at - 1]) ? 1 : 2, i });
+    // A hint is as good as a word of the name that starts with the query; a class alone comes after.
+    const hint = hinted(parts, ctx.hints?.(account.number) ?? account.hints);
+    if (at >= 0) out.push({ m: { account, highlight: [at, at + q.length] }, quality: named ? 3 : at === 0 || at === account.number.length + 1 ? 0 : /[^\p{L}\p{N}]/u.test(hay[at - 1]) || hint ? 1 : 2, i });
+    else if (hint) out.push({ m: { account, highlight: null }, quality: 1, i });
     else if (named) out.push({ m: { account, highlight: null }, quality: 3, i });
   });
   return out

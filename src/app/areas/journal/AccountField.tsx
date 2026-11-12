@@ -13,7 +13,7 @@
  * the name (rankAccounts, #344), and a word that names a class («Ertrag», «Aufwand») lists its accounts.
  */
 import { useId, useMemo, useRef, useState } from 'react';
-import { addAccount, addableAccounts, getAccounts, type Account } from '../../lib/accounts.js';
+import { addAccount, addableAccounts, getAccounts, hintsOf, type Account } from '../../lib/accounts.js';
 import { rankAccounts, type AccountContext } from '../../lib/account-filter.js';
 import { chart } from '../../../engines/index.js';
 import type { AccountType } from '../../../core/modules/schema.js';
@@ -46,7 +46,7 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick, offe
   const all = useMemo((): Option[] => {
     if (!open) return [];
     const query = value === defaultValue && !/\D/.test(value) ? '' : value;
-    const ctx: AccountContext<AccountType> = { typeOf: (n) => chart().typeOf(n), prefer, defaults, words: classWords() };
+    const ctx: AccountContext<AccountType> = { typeOf: (n) => chart().typeOf(n), prefer, defaults, words: classWords(), hints: hintsOf };
     const of = (accounts: readonly Account[], kind: Option['kind']) => rankAccounts(accounts, query, ctx).map((m) => ({ account: m.account, kind }));
     return [...of(offered ? [offered] : [], 'offer'), ...of(getAccounts(), 'have'), ...(query ? of(addableAccounts(), 'add') : [])];
   }, [open, value, defaultValue, offered, prefer, defaults]);

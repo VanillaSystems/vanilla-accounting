@@ -1,6 +1,8 @@
 export interface Account {
   number: string;
   name: string;
+  /** The standard chart's words for the account besides its name («Miete», «Benzin»): an account field finds it by them (#365). */
+  hints?: string[];
 }
 
 let accountsCache: Account[] | null = null;
@@ -37,4 +39,9 @@ export function setStandardAccounts(accounts: Account[]): void {
 export function addableAccounts(): Account[] {
   const have = getAccountMap();
   return standardCache.filter((a) => !(a.number in have));
+}
+
+/** The standard chart's words for an account of that number (Account.hints): the books' accounts carry none of their own. */
+export function hintsOf(number: string): string[] | undefined {
+  return standardCache.find((a) => a.number === number)?.hints;
 }
