@@ -138,6 +138,7 @@ function noteText(n: DraftNote): string {
     case 'taxPoint': return t('journal.byHand.note.taxPoint', { date: formatDate(n.date) });
     case 'invoicePaid': return t('journal.byHand.note.invoicePaid', { number: n.number, amount: fmt(n.surplus) });
     case 'prepayment': return t('journal.byHand.note.prepayment', { number: n.number });
+    case 'bankChargesMissing': return t('journal.byHand.note.bankChargesMissing', { account: n.account, name: n.name });
     default: return t(`journal.byHand.note.${n.kind}`);
   }
 }
