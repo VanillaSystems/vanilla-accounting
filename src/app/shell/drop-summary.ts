@@ -7,7 +7,9 @@
 import type { BankTransaction, Index } from '../../types/index.js';
 import type { DropRow } from '../../types/drop.js';
 import type { Question } from '../../questions/model.js';
+import type { Receipt } from '../../types/index.js';
 import { filingKeyOf, inPeriod, parsePeriod, type FilingLength, type IsoDate, type Period } from '../../accounting/periods.js';
+import { waitsForReading } from '../../parsers/receipt-text.js';
 
 export interface DropSummary {
   /** The payments the drop's statements added to the books. */
@@ -22,7 +24,11 @@ export interface DropSummary {
     /** The day of the oldest one not booked: its period holds what is open. */
     openFrom?: IsoDate;
   };
-  /** The receipts the drop brought into the books: read to the end, and of those linked to a payment or not. */
+  /**
+   * The receipts the drop brought into the books: read to the end, and of those linked to a payment
+   * or not. One archived whose text still waits for the model's reading (`waitsForReading`, the
+   * answer Belege's «warten aufs Lesen» gives) is not read.
+   */
   receipts?: { n: number; read: number; matched: number; unmatched: number };
 }
 
@@ -85,7 +91,7 @@ export function landedPeriod(rows: readonly DropRow[], datesOf: DatesOf, current
  */
 export function dropSummary(
   rows: readonly DropRow[], books: Pick<Index, 'transactions' | 'mappings'>, isUnbooked: (t: BankTransaction) => boolean,
-  held: ReadonlySet<string>, receiptOf: (r: DropRow) => { id: string; location: 'staged' | 'archived' } | undefined, questions: readonly Question[],
+  held: ReadonlySet<string>, receiptOf: (r: DropRow) => (Pick<Receipt, 'id' | 'location'> & Parameters<typeof waitsForReading>[0]) | undefined, questions: readonly Question[],
 ): DropSummary {
   const taken = rows.filter((r) => r.state === 'taken');
   const refs = new Set(taken.flatMap((r) => r.statement?.refs ?? []));
@@ -96,7 +102,7 @@ export function dropSummary(
   const askedN = open.filter((t) => asked.has(t.ref)).length;
   const receipts = taken.filter((r) => !r.statement && !r.report).flatMap((r) => receiptOf(r) ?? []);
   const linked = new Set(books.mappings.map((m) => m.receiptId));
-  const read = receipts.filter((r) => r.location === 'archived');
+  const read = receipts.filter((r) => r.location === 'archived' && !waitsForReading(r));
   const matched = read.filter((r) => linked.has(r.id)).length;
   return {
     ...(pays.length ? { payments: { n: pays.length, from: pays[0].date, to: pays[pays.length - 1].date, booked: pays.length - open.length, waitReceipt, asked: askedN, unbooked: open.length - waitReceipt - askedN, ...(open[0] ? { openFrom: open[0].date } : {}) } } : {}),

@@ -39,9 +39,10 @@ const payments = Array.from({ length: 23 }, (_, i): BankTransaction => ({
   ref: `p${i}`, date: i < 8 ? '2026-07-15' : i < 16 ? '2026-08-15' : '2026-09-15', amount: 100 + i, currency: 'CHF', direction: i % 5 ? 'DBIT' : 'CRDT', bank: 'Raiffeisen', description: `Zahlung ${i}`,
   ...(i >= 12 && i < 20 ? { waitsForReceipt: { since: '2026-11-12' } } : {}),
 } as BankTransaction));
-const receipts: Array<Pick<Receipt, 'id' | 'date' | 'dateSource' | 'location'>> = [
-  { id: 'a', date: '2026-07-03', location: 'archived' }, { id: 'b', date: '2026-08-06', location: 'archived' }, { id: 'c', date: '2026-06-28', location: 'archived' },
-  { id: 'today', date: TODAY, location: 'archived' }, { id: 'phone', date: TODAY, dateSource: 'captured', location: 'archived' }, { id: 'staged', location: 'staged' },
+const READ = { amount: 12.5, extractedText: 'Muster AG Rechnung Total CHF 12.50 inkl. MWST 8.1%', extractionMethod: 'pdftotext' } as const;
+const receipts: Array<Pick<Receipt, 'id' | 'date' | 'dateSource' | 'location' | 'amount'> & Partial<Pick<Receipt, 'extractedText' | 'extractionMethod'>>> = [
+  { id: 'a', date: '2026-07-03', location: 'archived', ...READ }, { id: 'b', date: '2026-08-06', location: 'archived', ...READ }, { id: 'c', date: '2026-06-28', location: 'archived', ...READ },
+  { id: 'today', date: TODAY, location: 'archived', ...READ }, { id: 'phone', date: TODAY, dateSource: 'captured', location: 'archived', ...READ }, { id: 'staged', location: 'staged' },
 ];
 const rows = [row('q3', { kind: 'camt', facts: { from: '2026-07-01', to: '2026-09-30' }, statement: { file: 'q3.xml', refs: payments.map((p) => p.ref) } }), ...receipts.map((r) => row(r.id)), row('dup', { state: 'duplicate' })];
 const receiptOf = (r: DropRow) => receipts.find((x) => x.id === r.id);
@@ -75,6 +76,10 @@ test('the summary counts the drop\'s payments and receipts from the books', () =
   assert.deepEqual(s.payments, { n: 23, from: '2026-07-15', to: '2026-09-15', booked: 12, waitReceipt: 8, asked: 1, unbooked: 2, openFrom: '2026-08-15' });
   assert.deepEqual(s.receipts, { n: 6, read: 5, matched: 2, unmatched: 3 });
   assert.deepEqual(dropSummary([row('dup', { state: 'duplicate' })], books, () => true, new Set(), receiptOf as never, []), {}, 'nothing taken: no counts');
+  // A photo without text, archived on a Mac without an AI: Belege says it waits for reading (#343), so the drop does not call it read.
+  const photo = { id: 'photo', location: 'archived' as const, extractedText: '', extractionMethod: 'tesseract' as const };
+  const withPhoto = (r: DropRow) => (r.id === 'photo' ? photo : receiptOf(r));
+  assert.deepEqual(dropSummary([row('photo'), row('c')], books, () => true, new Set(), withPhoto as never, []).receipts, { n: 2, read: 1, matched: 0, unmatched: 1 });
 });
 
 test('the bar moves with the part of the run that is done, not only with files at rest', () => {
