@@ -36,19 +36,22 @@ At its first start the app has no books yet. The first screen leads to one of th
   (step 3).
 - **Books you already have:** you choose their folder and the app opens it.
 - **The demo:** a made-up company with receipts, statements and invoices. You work in a copy, so
-  try anything.
+  try anything. A line along the bottom says that it is the demo and leads back to your own
+  books.
 
-The app also offers to set up the AI (step 4). You can do that now or later.
+Under these choices one line says whether an AI is ready on this Mac, and offers «KI einrichten»
+when none is (step 4). You can do that now or later.
 
 At the next start the app opens the books you used last. The menu File («Ablage» in German) has «Neue Buchhaltung…»
 and «Buchhaltung öffnen…» for other books.
 
 ## 3. Set up your books
 
-The app asks about your company in a conversation. With an AI you can answer in your own words
-and ask back when a question is unclear (type "was heisst das?"). Without one you answer with buttons
-and fields. Either way the answers end in one summary you can change line by line before the app
-creates the books.
+With an AI ready, the app asks about your company in a conversation: you can answer in your own
+words and ask back when a question is unclear (type "was heisst das?"), and the answers end in one
+summary you can change line by line before the app creates the books. Without an AI the same
+questions are one form with buttons and fields, and «Buchhaltung anlegen» at its end creates the
+books.
 
 What it asks:
 
@@ -100,7 +103,10 @@ receipt and «Von Hand buchen» for a payment.
 One of the two is enough. «Erweitert: mit API-Schlüssel» is a third way for people who already
 pay Anthropic or OpenAI per call; the «KI» column does not work with a key alone.
 
-**How the app sets it up.** Each program has a card that shows where you are.
+**How the app sets it up.** «KI einrichten» on the first screen, or Firma › «KI» once you have
+books, shows a card per program. Before anything is installed the card says what the program
+needs (the account, the subscription, the sign-in in your browser on the maker's page, which is in
+English) and keeps the installer command folded under «Befehl zeigen».
 
 1. Click «Claude Code installieren» (or «Codex installieren»). The app opens the Terminal with
    the official installer command of the maker written out. Nothing runs until you press Enter
@@ -117,8 +123,10 @@ pay Anthropic or OpenAI per call; the «KI» column does not work with a key alo
 If the account has no subscription that includes the program, the card shows what the program
 answered and what it needs.
 
-**It can wait.** «Ohne KI weiter» goes on with buttons and fields, and the app does not ask
-again. Set the AI up whenever you want under Firma › «KI».
+**It can wait.** «Ohne KI weiter» leads back to the choices of the first screen. Set the AI up
+whenever you want under Firma › «KI». In Belege the app says how many receipts wait for the AI's
+reading («3 Belege warten aufs Lesen: das macht die KI.») and offers «Von Hand erfassen» beside
+it.
 
 ## 5. Read in your first bank statement
 
