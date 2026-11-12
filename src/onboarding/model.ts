@@ -9,8 +9,11 @@
 import { parseVatSetup, type VatSetup } from '../workspace/vat-setup.js';
 import { salesKinds, type SalesKind } from '../workspace/setup.js';
 
-/** In the order the conversation takes them: the old program before the opening, whose balance sheet it holds. */
-export const SETUP_TOPICS = ['firm', 'periods', 'history', 'opening', 'bank', 'receipts', 'knowledge'] as const;
+/**
+ * In the order the conversation takes them. Only what the app can do something with (#345): when the
+ * books begin the first statement says, and the old program's data has no import, so neither is a topic.
+ */
+export const SETUP_TOPICS = ['firm', 'opening', 'bank', 'receipts', 'knowledge'] as const;
 export type SetupTopic = typeof SETUP_TOPICS[number];
 
 export const TOPIC_STATES = ['open', 'done', 'skipped'] as const;
@@ -45,16 +48,11 @@ export interface SetupProgress {
  * passed, so the conversation knows where it stands after a restart.
  */
 export const QUESTIONS = {
+  /** The firm as the app has it is shown, not asked: `fix` («Etwas ändern») opens the VAT and the sales question; `ok` is what older books answered. */
   company: ['ok', 'fix'],
   vat: ['none', 'effective', 'net-rate', 'unknown'],
   /** «Was verkauft ihr?» (#46): the kinds chosen, in SALES_KINDS order, joined by «+» (sellsAnswer). */
   sells: ['made', 'traded', 'services', 'made+traded', 'made+services', 'traded+services', 'made+traded+services'],
-  start: ['year', 'during'],
-  filed: ['0', '1', '2', '3'],
-  program: ['bexio', 'abacus', 'banana', 'excel', 'accountant', 'new'],
-  entry: ['double', 'single', 'unknown'],
-  access: ['me', 'accountant', 'both'],
-  needs: ['ok'],
   opening: ['next', 'later'],
   bank: ['next', 'later'],
   receipts: ['next', 'later'],

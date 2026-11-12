@@ -166,3 +166,15 @@ test('the open quarter leads with the figure the return will carry (tax on each 
   assert.deepEqual(headline(q3, undefined, two), { kind: 'toPay', amount: 1.51, filed: false }, 'the return: 8.1 % of 20.10 = 1.51, as the approval card and the XML say; the page shows the same Ziffern, so no rounding note');
   assert.deepEqual(headline(vatReturn(books, '2026-Q3', '2026-10-11'), undefined, books), { kind: 'toPay', amount: 81 - 8.1, filed: false }, 'no note when the figures agree');
 });
+
+test('a quarter that ended before anything in the books is dated is not called due: the page says where the books begin (#345)', () => {
+  // The tester's books: Q1 and Q2 filed elsewhere, the first statement read in is the summer's; nothing is closed here.
+  const fresh: Index = { ...books, config: {}, journalEntries: [], transactions: [{ id: 't1', date: '2026-07-03' } as unknown as Index['transactions'][number]] };
+  assert.deepEqual(vatReturn(fresh, '2026-Q1', '2026-11-12').state, { kind: 'before', first: '2026-07-03' }, 'was «offen · fällig seit 30.05.»');
+  assert.deepEqual(vatReturn(fresh, '2026-Q2', '2026-11-12').state, { kind: 'before', first: '2026-07-03' });
+  assert.deepEqual(vatReturn(fresh, '2026-Q3', '2026-11-12').state, { kind: 'open', due: '2026-11-29', overdue: false }, 'the quarter of the first payment is the first return here');
+  assert.deepEqual(vatReturn({ ...fresh, transactions: [] }, '2026-Q3', '2026-11-12').state, { kind: 'before' }, 'books with nothing dated call nothing due');
+  const byHand: Index = { ...fresh, transactions: [], journalEntries: [je('sale', '2026-05-03', '1020', '3200', 1081, { vatCode: 'V81' })] };
+  assert.equal(vatReturn(byHand, '2026-Q2', '2026-11-12').state.kind, 'open', 'a booking by hand dates the books too');
+  assert.equal(vatReturn(byHand, '2026-Q1', '2026-11-12').state.kind, 'before');
+});

@@ -162,7 +162,8 @@ test('the conversation and the form write the same manifest; the conversation\'s
 
   const ws = workspaceAt(talked);
   const progress = readProgress(ws);
-  assert.deepEqual([progress.answers.company?.value, progress.answers.vat?.value, progress.answers.sells?.value], ['ok', 'effective', 'services'], 'what was asked before the books existed stands answered');
+  assert.ok(progress.created, 'the books know the conversation created them');
+  assert.deepEqual(progress.answers, {}, 'what was asked before the books existed is in the settings: the conversation shows it from there and asks none of it again (#345)');
   const empty = { transactions: [], receipts: [], journalEntries: [] };
   assert.equal(setupView(ws, empty).opensItself, true);
   startSetup(ws, NOW);

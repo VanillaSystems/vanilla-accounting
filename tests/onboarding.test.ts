@@ -38,12 +38,12 @@ test('the next topic is the first open one in the checklist order, and skipped t
   let p = emptyProgress();
   assert.equal(nextTopic(markedStates(p)), 'firm');
   p = withTopic(p, 'firm', 'done', NOW);
-  p = withTopic(p, 'periods', 'skipped', NOW);
-  assert.equal(nextTopic(markedStates(p)), 'history', 'the old program comes before the opening, whose balance sheet it holds');
+  p = withTopic(p, 'opening', 'skipped', NOW);
+  assert.equal(nextTopic(markedStates(p)), 'bank');
   assert.equal(settledCount(markedStates(p)), 2);
-  p = withTopic(p, 'periods', 'open', NOW);
-  assert.equal(nextTopic(markedStates(p)), 'periods', 'a topic taken up again is next once more');
-  assert.equal(p.topics.periods.at, undefined);
+  p = withTopic(p, 'opening', 'open', NOW);
+  assert.equal(nextTopic(markedStates(p)), 'opening', 'a topic taken up again is next once more');
+  assert.equal(p.topics.opening.at, undefined);
   for (const k of SETUP_TOPICS) p = withTopic(p, k, 'done', NOW);
   assert.equal(nextTopic(markedStates(p)), undefined);
 });

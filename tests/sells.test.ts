@@ -104,7 +104,7 @@ const answered = (pairs: Partial<Record<QuestionId, string>>): SetupProgress =>
 const step = (steps: SetupStep[], id: string) => steps.find((s) => s.id === id)!;
 
 test('the onboarding conversation asks it after the VAT, as three toggles started from the profile; the answer\'s card shows the defaults', () => {
-  const asked = setupThread(answered({ company: 'ok', vat: 'effective' }), facts(['services']));
+  const asked = setupThread(answered({ company: 'fix', vat: 'effective' }), facts(['services']));
   const s = asked.at(-1)!;
   assert.deepEqual([s.id, s.multi, s.choices.map((c) => c.value), s.choices.filter((c) => c.primary).map((c) => c.value)], ['sells', true, [...SALES_KINDS], ['services']]);
   const other = answered({ company: 'ok', vat: 'effective', sells: 'made+services' });
@@ -113,7 +113,8 @@ test('the onboarding conversation asks it after the VAT, as three toggles starte
   assert.equal(topicStates(other, facts(['services'])).firm, 'open', 'an answer the profile does not say yet leaves the firm open');
   assert.equal(topicStates(other, facts(['made', 'services'])).firm, 'done', 'taken over: done');
   assert.equal(step(setupThread(other, facts(['made', 'services'])), 'sells').reply?.card?.kind === 'sells' && (step(setupThread(other, facts(['made', 'services'])), 'sells').reply!.card as { state: string }).state, 'kept');
-  assert.equal(setupThread(answered({ company: 'ok', vat: 'effective' }), facts(undefined)).at(-1)!.id, 'start', 'a workspace without a profile is not asked');
+  assert.equal(setupThread(answered({ company: 'fix', vat: 'effective' }), facts(undefined)).at(-1)!.id, 'opening', 'a workspace without a profile is not asked');
+  assert.ok(!setupThread(answered({}), facts(['services'])).some((x) => x.id === 'sells'), 'nor is one whose profile holds the answer, unless the person asks to change it (#345)');
 });
 
 let api: ApiServer | undefined;

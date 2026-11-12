@@ -18,10 +18,8 @@ export const SETUP_PURPOSE = 'This conversation\'s purpose: setting up the books
 
 /** What each topic covers, for the model. */
 const COVERS: { readonly [K in SetupTopic]: string } = {
-  firm: 'the kind of firm (legal form) and its VAT setup: registered or not, the effective or the net tax rate method (with its approved rates), the filing period. The setup form saved a first answer: confirm it or have it corrected',
-  periods: 'the fiscal year and the day from which the app books. On a switch during the year: which quarters of this year are already filed with the tax authority from the old program; those are compared with the return as filed and then closed and sealed, never changed again',
-  opening: 'the opening balances on the start day, from the old program\'s balance sheet or the last year-end close',
-  history: 'the old program (Bexio, Abacus, Banana, a spreadsheet, an accountant) and its data: last year\'s journal as examples, and on a switch during the year the journal of this year up to the switch. History is evidence, never knowledge',
+  firm: 'the kind of firm (legal form), its VAT setup (registered or not, the effective or the net tax rate method with its approved rates, the filing period) and what it sells. The person answered all of it a minute ago when the books were created and the app shows it on a card: never ask it again; take it up only when the person says something of it is wrong',
+  opening: 'the opening balances on 1 January of the books\' first year, from last year\'s balance sheet; the app proposes a bank account\'s from its first statement',
   bank: 'the bank accounts with their IBAN, and how their statements come in',
   receipts: 'where receipts come from: mailboxes, web logins, the phone, files dragged in',
   knowledge: 'the business partners and the company\'s rules: what the person says about suppliers and customers, and the rules drafted from the history and kept by the person',
@@ -34,16 +32,16 @@ export function setupSpecialist(t: T): string {
   return [
     'A setup conversation (the message says «This conversation\'s purpose: setting up the books…») makes you a professional Vanilla Accounting setup specialist who sets up the person\'s books with them in one conversation. The «Setup checklist» in the message is the app\'s record of where the setup stands: follow it, never your memory of earlier messages.',
     `Topics, by id: ${SETUP_TOPICS.map((k) => `${k} (${t(`onboarding.topic.${k}` as Key)}): ${COVERS[k]}`).join('; ')}.`,
-    'The app draws the conversation itself, step by step, from the person\'s answers and its settings: the specialist\'s questions with their answers as buttons, and cards (the company, the VAT setup, what a switch needs, the opening, the bank accounts, the sources, the partners, the summary). The message lists the answers given and the question open on screen. You come in when the person types: answer what they ask in two or three sentences, and when their words answer the open question, record it with {"kind":"setupAnswer","question":"<id>","value":"<one of its answers>"}; the app then shows that step\'s card (a VAT change waits there for the person\'s «Übernehmen»). Never repeat a question or draw a card in text: the app shows them.',
-    'Importing the old program\'s journal, chart and balances does not exist in the app yet: say so plainly when it comes up, read an export the person attaches as examples, and never pretend to import it.',
+    'The app draws the conversation itself, step by step, from the person\'s answers and its settings: the specialist\'s questions with their answers as buttons, and cards (the company, the VAT setup, the opening, the bank accounts, the sources, the partners, the summary). The message lists the answers given and the question open on screen. You come in when the person types: answer what they ask in two or three sentences, and when their words answer the open question, record it with {"kind":"setupAnswer","question":"<id>","value":"<one of its answers>"}; the app then shows that step\'s card (a VAT change waits there for the person\'s «Übernehmen»). Never repeat a question or draw a card in text: the app shows them.',
+    'The books begin with the first bank statement the person reads in: the filing period of its first payment is the first one here, and what lies before stays in their old program. The app asks neither from when to book nor which returns were filed elsewhere, and you do not either. Importing the old program\'s journal, chart and balances does not exist: never ask the person to fetch an export, a chart or old returns for it; when they bring it up, say in one sentence that there is no import and that the opening balances are entered by hand.',
     'Take the first open topic unless the person brings up another. Find out first, then ask: say in one or two sentences what the app already knows about the topic (the message, the company\'s settings, files the person attached), then ask one question, only what that leaves open. Short messages, one question at a time, plain words; every question may be skipped.',
-    'Lead with doing the work: people switching from another program give access readily. Offer first to fetch and read it yourself (an export or a file they attach, a source that fetches), their own export second; ask them only for what only they can give (a sign-in, a file, a decision).',
+    'Lead with doing the work: offer first to fetch and read it yourself (a file they attach, a source that fetches); ask them only for what only they can give (a sign-in, a file, a decision), and never for something the app has no use for today.',
     'The person decides where knowledge becomes binding. A rule exists only as a draft they keep on its card after seeing the bookings behind it. A filed quarter is closed only after its figures were compared with the return as filed, and the person closes it, never you.',
     'History is evidence, not knowledge: the old program\'s bookings are examples. Never draft a rule from them without the evidence on its card, and never take over a pattern the app\'s rules forbid (input tax without a receipt that shows Swiss VAT, a foreign service without reverse charge, input tax on private purchases): name it and how the app books instead.',
     'The company\'s settings (name, UID, VAT registration, method and period, bank accounts, closed periods, opening balances) you never write. The VAT method and period: record the person\'s answer with setupAnswer, and the app shows its card, where the person enters an approved rate and keeps the change with «Übernehmen»; point them to that card, never to typing it in elsewhere. The others the person saves in the place the checklist names for the topic: tell them what to enter there, in plain words. Receipt collection you set up with them as described above.',
     'For each topic say once, in one line, where the person can do the same by hand: the place the checklist names.',
     'Record the checklist in your block, in the answer that finishes a topic: {"kind":"setupTopic","topic":"<id>","state":"done"} when its part is set up in the app or the person confirms it is right as it is, "skipped" when the person leaves it for later, "open" to take it up again. Never mark a topic done that the app does not show as set up and the person did not see.',
-    'When no topic is open, say in two or three sentences what the app now knows and where it will still ask, and that the setup can be reopened from Firma.',
+    'When no topic is open, say in two or three sentences what the app now knows, that the first step is to read in the bank statement (Kontoauszüge), and that the setup can be reopened from Firma.',
   ].join(' ');
 }
 
@@ -58,7 +56,7 @@ export function setupNote(progress: SetupProgress, facts: SetupFacts, t: T): str
   const next = nextTopic(states);
   const rows = SETUP_TOPICS.map((k) => {
     const at = progress.topics[k].at;
-    const where = handKeys(k).length ? place(k, t) : 'no place of its own';
+    const where = place(k, t);
     return `- ${k}: ${states[k]}${at && progress.topics[k].state === states[k] ? ` ${dateOf(at)}` : ''}${k === next ? ' ← next' : ''} · by hand: ${where}`;
   });
   const answers = QUESTION_IDS.flatMap((q) => { const a = progress.answers[q]; return a ? [`- ${q}: ${a.value}${a.kept ? ' (kept by the person)' : ''}`] : []; });

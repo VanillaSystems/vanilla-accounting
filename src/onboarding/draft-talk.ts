@@ -11,10 +11,10 @@ import { join, resolve } from 'node:path';
 import type { AskOptions } from '../llm/ask.js';
 import { SetupError, type BankSpec, type SetupRefusal } from '../workspace/create.js';
 import { BANKS } from '../workspace/banks.js';
-import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, optionOf, type QuestionKey } from '../workspace/setup.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, optionOf, unusualPeriod, type QuestionKey } from '../workspace/setup.js';
 import { APP_FOLDER } from '../workspace/workspace.js';
-import { checkPatch, draftView, readDraft, writeDraft } from './draft-store.js';
-import { draftSteps, markOf, withPatch, type DraftPatch, type Firm, type SetupDraft, type SetupDraftView, type StepMark } from './draft.js';
+import { checkPatch, draftView, readDraft, saidFirm, writeDraft } from './draft-store.js';
+import { draftMarks, draftSteps, markOf, withPatch, type DraftPatch, type Firm, type SetupDraft, type SetupDraftView, type StepMark } from './draft.js';
 
 /** A turn of the conversation typed so far, as the server keeps it in memory; it is not saved. */
 export interface TalkTurn { who: 'me' | 'ai'; text: string }
@@ -25,10 +25,16 @@ export type TalkRefusal =
   /** A UID or an IBAN that is not in the person's words: the AI never fills one in. */
   | { reason: 'notStated'; field: 'uid' | 'iban'; detail: string }
   /** A value the question does not offer. */
-  | { reason: 'notAnOption'; question: QuestionKey; value: string };
+  | { reason: 'notAnOption'; question: QuestionKey; value: string }
+  /**
+   * A filing period the tax authority grants only on request (half-yearly on the effective method,
+   * quarterly on the net tax rate), read from loose words: not taken; the reply says what is usual,
+   * and the person picks it with the question's own button when it was granted (#345).
+   */
+  | { reason: 'unusualPeriod'; method: 'effective' | 'net-rate'; value: string; usual: string };
 
 export type SetupReply =
-  /** `filled`: the answers saved from the words; `firm`: what the words said of the firm, short of a whole one, for its card. */
+  /** `filled`: the answers saved from the words; `firm`: what the words said of the firm so far, short of a whole one (kept in the draft's `said`). */
   | { kind: 'read'; say: string; filled: StepMark[]; refused: Array<{ step: StepMark; refusal: TalkRefusal }>; firm?: Partial<Firm> }
   /** The model answered something other than the JSON asked for: nothing is saved. */
   | { kind: 'unreadable' }
@@ -92,20 +98,26 @@ const describe = (key: QuestionKey): string => {
 function waiting(d: SetupDraft): string {
   const open = draftSteps(d).at(-1)!;
   if (open.id === 'question') return `answers.${open.key}`;
+  if (open.id === 'firm' && d.said && Object.keys(d.said).length) return `firm: only ${(['name', 'uid', 'owner'] as const).filter((k) => !d.said![k]).join(' and ')} is missing`;
   return open.id === 'review' ? 'nothing: every answer is given, the person can create the books' : open.id;
 }
 
+const key = (m: StepMark) => (['firm', 'preset', 'netRates', 'banks'].includes(m) ? m : `answers.${m}`);
+
 /** The prompt for one typed message: the draft, the step waiting, every value code accepts, the turns so far. */
 export function talkPrompt(d: SetupDraft, text: string, history: readonly TalkTurn[], baseCurrency: string): string {
-  const { started: _started, language, fromText: _marks, ...draft } = d;
-  const presets = PRESET_NAMES.map((p) => `  - ${p}: ${PRESETS[p].label}. Gives: ${JSON.stringify(PRESETS[p].answers)}`).join('\n');
+  const { started: _started, language, fromText: _marks, said, ...draft } = d;
+  const presets = PRESET_NAMES.map((p) => `  - ${p}: ${PRESETS[p].label} (${PRESETS[p].fits}). Gives: ${JSON.stringify(PRESETS[p].answers)}`).join('\n');
+  const marks = draftMarks(d);
   const turns = history.length ? history.map((t) => `${t.who === 'me' ? 'person' : 'you'}: ${t.text}`).join('\n') : '(none)';
   return `You help a person set up the bookkeeping of their Swiss company in Vanilla Accounting, before the books exist. They may give several answers at once, ask about the setup, or both.
 
 The setup so far (JSON; a key that is missing is not answered yet):
 ${JSON.stringify(draft, null, 2)}
-
-The step waiting now: ${waiting(d)}
+${said && Object.keys(said).length ? `\nOf the firm the person already said, and the app keeps it: ${JSON.stringify(said)}. Do not ask for these again.\n` : ''}
+Answered, by a button or by the person's words (never ask about these again, also when the conversation below asked them: a button answered since): ${marks.answered.map(key).join(', ') || 'nothing yet'}
+Still open, in the order the app asks them: ${marks.open.map(key).join(', ') || 'nothing'}
+The step waiting now, which the app shows with its buttons right below your words: ${waiting(d)}
 
 What the setup asks, with the only values the app accepts:
 - firm: {"name": company name, "uid": Swiss company number CHE-###.###.###, "owner": the owner's or managing director's name}
@@ -125,12 +137,14 @@ ${text}
 """
 
 Rules:
-- Take only what the message or the conversation so far states or plainly implies («zwei Angestellte»: employees "staff"; «registered for VAT»: vatRegistered "yes"; «Schreinerei»: they make products and sell services). Leave out what it does not say. Never guess.
+- Take only what the message or the conversation so far states or plainly implies («zwei Angestellte»: employees "staff"; «registered for VAT»: vatRegistered "yes"). Leave out what it does not say. Never guess.
+- sells: a trade (a painter, a carpenter, an electrician, a builder …), and any firm that charges material with its work («d Farb verrechned mer mit», «Material kommt auf die Rechnung»), sells "made" and "services": "made" covers the material. "services" alone is work without material.
+- period: give it only when the person names how often they file. Quarterly is usual on the effective method, half-yearly on the net tax rate; the app does not take the other from loose words and says so itself.
 - Never invent, complete or correct a UID or an IBAN: copy one only when the person wrote it.
-- firm: every field the person stated, in this message or the conversation so far: when they now give the UID, repeat the name and the owner they gave before.
-- preset: only when none is chosen yet and one plainly fits; "custom" when none fits.
+- firm: every field the person stated in this message; the app joins it to what they said of the firm before.
+- preset: only when none is chosen yet. Name the one whose kind of firm the words plainly say: a trade is "trades". Leave it out when the words do not say what the firm does: the app then asks with buttons. "custom" only when the person describes a firm none of the others fits.
 - Use the listed values only; an answer the app does not support yet you still give with its listed value, the app explains it.
-- say: in the language of the person's message (when unclear: ${LANGUAGE[language as keyof typeof LANGUAGE] ?? 'German'}), addressing them informally, plain words, no markdown. When the person asks something, answer it in two or three sentences. Then, or otherwise, ask back once, briefly, for what is still missing or unclear: the step waiting now first, unless your answers fill it. Never say that you took over, saved, noted or corrected anything, and never call a UID or an IBAN valid: the app checks every answer, saves it or refuses it, and shows which.
+- say: in the language of the person's message (when unclear: ${LANGUAGE[language as keyof typeof LANGUAGE] ?? 'German'}), addressing them informally, plain words, no markdown. When the person asks something, answer it in two or three sentences. Do not ask the next question and do not list what is still missing: the app asks the step waiting itself, with buttons, right below your words. Ask back only when the message tried to say something you could not read («welche Bank meinst du?»), once and briefly; otherwise end without a question. Do not greet the person by a name: who types need not be the owner. Never say that you took over, saved, noted or corrected anything, and never call a UID or an IBAN valid: the app checks every answer, saves it or refuses it, and shows which.
 
 Answer with only this JSON object and nothing else; leave out every key you have nothing for:
 {"say": "...", "firm": {"name": "...", "uid": "...", "owner": "..."}, "preset": "...", "answers": {"<key>": "<value>" or ["<value>"]}, "netRates": [{"rate": 0, "label": "..."}], "banks": [{"bank": "...", "currency": "...", "iban": "..."}]}`;
@@ -144,8 +158,9 @@ const isVat = (k: QuestionKey) => (VAT_QUESTIONS as readonly string[]).includes(
 /**
  * The draft after the model's answer: each answer it read checked as a click is (checkPatch), the
  * firm's UID and the banks' IBANs only when they stand in `words` (the person's own), then saved in
- * the click's order through withPatch and marked as taken from the words. A non-VAT answer without
- * a preset makes the preset «custom», which keeps answers given (another preset would replace them).
+ * the click's order through withPatch and marked as taken from the words. An answer without a
+ * preset leaves the kind of firm open: the app asks it with buttons, and whichever is picked keeps
+ * what the words said (withPatch).
  */
 export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string[], baseCurrency: string): { draft: SetupDraft; reply: SetupReply } {
   const refused: Array<{ step: StepMark; refusal: TalkRefusal }> = [];
@@ -157,15 +172,24 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
     }
   };
 
-  let hint: Partial<Firm> | undefined;
+  // The firm: what the words say now, joined to what they said before (`said`) or to the firm saved.
+  // A name and an owner given before the UID are kept, so the UID alone completes them (#345).
+  let said: Partial<Firm> | undefined;
   if (out.firm) {
-    const firm = { ...out.firm };
-    if (firm.uid && !stated('uid', firm.uid, words)) {
-      refused.push({ step: 'firm', refusal: { reason: 'notStated', field: 'uid', detail: firm.uid } });
-      delete firm.uid;
+    const now = { ...out.firm };
+    if (now.uid && !stated('uid', now.uid, words)) {
+      refused.push({ step: 'firm', refusal: { reason: 'notStated', field: 'uid', detail: now.uid } });
+      delete now.uid;
     }
-    if (firm.name && firm.uid && firm.owner) take('firm', { step: 'firm', value: firm });
-    if (!patches.some((p) => p.step === 'firm') && !d.firm) hint = firm;
+    const firm = { ...(d.firm ?? d.said), ...now };
+    const whole = !!(firm.name && firm.uid && firm.owner);
+    const before = patches.length;
+    if (whole) take('firm', { step: 'firm', value: firm });
+    // Not whole yet, or refused whole (a UID that is none): what was said of it is kept all the same.
+    if (patches.length === before && !d.firm) {
+      said = saidFirm(firm);
+      if (!whole && firm.uid && !said.uid) refused.push({ step: 'firm', refusal: { reason: 'uid', detail: firm.uid } });
+    }
   }
   if (out.preset) take('preset', { step: 'preset', value: out.preset });
   for (const key of QUESTION_ORDER) {
@@ -185,8 +209,6 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
     take('banks', { step: 'banks', value: banks });
   }
 
-  const presetGiven = d.preset ?? patches.find((p) => p.step === 'preset')?.value;
-  if (!presetGiven && patches.some((p) => p.step === 'question' && !isVat(p.key))) patches.push({ step: 'preset', value: 'custom' });
   const order: StepMark[] = ['firm', 'preset', ...QUESTION_ORDER, 'netRates', 'banks'];
   patches.sort((a, b) => order.indexOf(markOf(a)) - order.indexOf(markOf(b)));
 
@@ -198,8 +220,16 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
     draft = { ...draft, fromText: [...(draft.fromText ?? []), markOf(p)] };
     filled.push(markOf(p));
   }
+  if (said && Object.keys(said).length && !draft.firm && !same(d.said, said)) draft = { ...draft, said };
+  // A period the tax authority grants only on request is not taken from loose words: the question keeps its buttons, the usual one proposed.
+  const odd = unusualPeriod(draft.answers);
+  if (odd && draft.fromText?.includes('period') && (filled.includes('period') || filled.includes('vatMethod'))) {
+    draft = withPatch(draft, { step: 'question', key: 'period', value: null });
+    if (filled.includes('period')) filled.splice(filled.indexOf('period'), 1);
+    refused.push({ step: 'period', refusal: { reason: 'unusualPeriod', method: odd.method, value: odd.period, usual: odd.usual } });
+  }
   // The model writes its words before code checks: beside a refusal they may claim what was not saved, so code's reasons stand alone.
-  return { draft, reply: { kind: 'read', say: refused.length ? '' : out.say, filled, refused, ...(hint && Object.keys(hint).length ? { firm: hint } : {}) } };
+  return { draft, reply: { kind: 'read', say: refused.length ? '' : out.say, filled, refused, ...(draft.said ? { firm: draft.said } : {}) } };
 }
 
 export type Ask = (prompt: string, opts: AskOptions) => Promise<string>;
@@ -249,5 +279,5 @@ export async function talkDraft(root: string, text: string, ask: Ask): Promise<{
   const words = [...before, { who: 'me', text }].filter((t) => t.who === 'me').map((t) => t.text);
   const next = applyTalk(draft, out, words, baseCurrency);
   if (next.reply.kind === 'read' && next.reply.say) keep([...(turnsOf.get(key) ?? []), { who: 'ai', text: next.reply.say }]);
-  return next.reply.kind === 'read' && next.reply.filled.length ? { ...next, draft: writeDraft(root, next.draft) } : next;
+  return next.draft !== draft ? { ...next, draft: writeDraft(root, next.draft) } : next;
 }

@@ -103,6 +103,12 @@ export type ReturnState =
   /** The period has not ended: no return yet, from the day after its end (r6f-33). */
   | { kind: 'running'; ends: IsoDate; from: IsoDate }
   | { kind: 'open'; due: IsoDate; overdue: boolean }
+  /**
+   * The period ended before anything in these books is dated (#345): a firm that began here with a
+   * later quarter filed this one elsewhere, so the page says where the books begin (`first`, absent
+   * for books with nothing dated yet) and calls no return due.
+   */
+  | { kind: 'before'; first?: IsoDate }
   | { kind: 'filed' }
   /** A half year or a year: a sum of returns, no return of its own. */
   | { kind: 'overview' };
@@ -131,9 +137,12 @@ export function vatReturn(books: Index, key: string, today: IsoDate = localToday
   const closed = books.config?.closedThrough;
   const quarter = isFilingKey(key, filing().length);
   const due = addDays(range.to, filing().dueDays);
+  // The books' first dated day: a payment or a booking (books kept by hand have no payments).
+  const first = [...books.transactions, ...entries].reduce<IsoDate | undefined>((m, x) => (x.date && (!m || x.date < m) ? x.date : m), undefined);
   const state: ReturnState = !quarter ? { kind: 'overview' }
     : closed && range.to <= closed ? { kind: 'filed' }
     : range.to >= today ? { kind: 'running', ends: range.to, from: addDays(range.to, 1) }
+    : !closed && !(first && first <= range.to) ? { kind: 'before', ...(first ? { first } : {}) }
     : { kind: 'open', due, overdue: due < today };
   const lines: Record<string, EntryLine[]> = {};
   for (const entry of entriesForReturn(entries, key, filing().length)) {

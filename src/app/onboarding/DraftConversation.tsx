@@ -9,10 +9,10 @@
  */
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { BANKS } from '../../workspace/banks.js';
-import { PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, optionOf, type QuestionKey } from '../../workspace/setup.js';
+import { PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, optionOf, unsureOf, unusualPeriod, type QuestionKey } from '../../workspace/setup.js';
 import type { BankSpec } from '../../workspace/create.js';
 import type { NetRate } from '../../workspace/vat-setup.js';
-import { draftSteps, type DraftPatch, type DraftStep, type Firm, type QuestionValue, type SetupDraft, type SetupDraftView, type StepMark } from '../../onboarding/draft.js';
+import { draftProgress, draftSteps, type DraftPatch, type DraftStep, type Firm, type QuestionValue, type SetupDraft, type SetupDraftView, type StepMark } from '../../onboarding/draft.js';
 import type { SetupReply, TalkRefusal } from '../../onboarding/draft-talk.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
 import { api, errorText, setupText } from '../lib/api.js';
@@ -50,7 +50,8 @@ const filledLine = (m: StepMark, d: SetupDraft): { label: string; value: string 
 const refusalText = (r: TalkRefusal): string =>
   r.reason === 'notStated' ? t(`onboarding.talk.notStated.${r.field}`, { detail: r.detail })
     : r.reason === 'notAnOption' ? t('onboarding.talk.notAnOption', { question: tData(`desktop.q.${r.question}.ask`), value: r.value })
-      : setupText(r);
+      : r.reason === 'unusualPeriod' ? t(`onboarding.talk.unusualPeriod.${r.method}`)
+        : setupText(r);
 const FromText = ({ on }: { on: boolean }) => (on ? <span className="obbadge ai" data-from-text>{t('onboarding.talk.fromText')}</span> : null);
 
 export function DraftConversation({ root, onLeave }: { root: string; onLeave(): void }) {
@@ -64,9 +65,6 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
   const taken = useRef<Partial<Record<string, unknown>>>({});
   const [turns, setTurns] = useState<Turn[]>([]);
   const [text, setText] = useState('');
-  /** What the words said of the firm, short of a whole one: the firm's card starts with it. */
-  const [firmHint, setFirmHint] = useState<{ n: number; firm: Partial<Firm> }>({ n: 0, firm: {} });
-
   /** Typed words need an AI; without one the buttons and fields carry the conversation (docs/0.4.0/ai-setup.md). */
   const [aiAnswers, setAiAnswers] = useState(true);
   /** «KI ganz ausschalten» on this Mac (issue #212): the words wait for it to be on again. */
@@ -98,7 +96,6 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
     try {
       const { view: next, reply } = await api.desktop.setupTalk(root, words);
       setView(next);
-      if (reply.kind === 'read' && reply.firm) setFirmHint((h) => ({ n: h.n + 1, firm: { ...h.firm, ...reply.firm } }));
       settle({ reply, ...(reply.kind === 'read' ? { filled: reply.filled.map((m) => filledLine(m, next.draft)) } : {}) });
     } catch (e) {
       settle({ error: errorText(e) });
@@ -107,6 +104,7 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
   const shown = new Set<string>(steps.map(stepKey));
   const turnsAt = (key: string | null) => turns.map((x, i) => ((key === null ? !shown.has(x.at) : x.at === key) ? <TurnView key={i} turn={x} /> : null));
   const change = (key: string, patch: DraftPatch, was: unknown) => { taken.current[key] = was; void send(patch); };
+  const progress = view ? draftProgress(view.draft) : undefined;
   const create = async () => {
     setBusy(true);
     setError('');
@@ -126,13 +124,15 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
           <span className="obface"><BotIcon /></span>
           <span><b>{t('onboarding.title')}</b><small>{t('onboarding.who')}</small></span>
         </span>
+        {/* How far she is (#345): the steps answered, by click or from her words, of those this firm is asked. */}
+        {progress ? <span className="obcount" data-progress>{t('onboarding.draft.progress', { n: progress.done, of: progress.of })}</span> : null}
         <button type="button" className="linkbtn" data-act="setup-later" data-tip={t('onboarding.draft.laterHint')} onClick={onLeave}>{t('onboarding.draft.later')}</button>
       </header>
       <div ref={turnsBox} className="obflowturns">
         <Ai><p>{t('onboarding.draft.hello')}</p><p className="obfolder mono">{root}</p></Ai>
         {view && steps.map((step) => (
           <Fragment key={stepKey(step)}>
-            <Step step={step} draft={view.draft} currency={view.baseCurrency} root={root} busy={busy} send={send} change={change} taken={taken.current} firmHint={firmHint} onCreate={() => void create()} />
+            <Step step={step} draft={view.draft} currency={view.baseCurrency} root={root} busy={busy} send={send} change={change} taken={taken.current} onCreate={() => void create()} />
             {turnsAt(stepKey(step))}
           </Fragment>
         ))}
@@ -160,7 +160,6 @@ interface StepProps {
   step: DraftStep; draft: SetupDraft; currency: string; root: string; busy: boolean; send: Send;
   change(key: string, patch: DraftPatch, was: unknown): void;
   taken: Partial<Record<string, unknown>>;
-  firmHint: { n: number; firm: Partial<Firm> };
   onCreate(): void;
 }
 
@@ -200,15 +199,16 @@ const Answer = ({ text, busy, fromText, onChange }: { text: string; busy: boolea
   </div>
 );
 
-function Step({ step, draft, currency, root, busy, send, change, taken, firmHint, onCreate }: StepProps) {
+function Step({ step, draft, currency, root, busy, send, change, taken, onCreate }: StepProps) {
   const marked = (m: StepMark) => !!draft.fromText?.includes(m);
   switch (step.id) {
     case 'firm': return (
       <div className="obstep" data-step="firm">
-        <Ai><p>{t('onboarding.draft.firm')}</p></Ai>
+        {/* What her words said of the firm is kept in the draft (`said`): the card starts with it, and only what is empty is asked. */}
+        <Ai><p>{t(!step.answer && draft.said && Object.keys(draft.said).length ? 'onboarding.draft.firmRest' : 'onboarding.draft.firm')}</p></Ai>
         {step.answer
           ? <Answer text={firmLine(step.answer)} busy={busy} fromText={marked('firm')} onChange={() => change('firm', { step: 'firm', value: null }, step.answer)} />
-          : <div className="obind"><FirmCard key={firmHint.n} initial={(taken.firm as Firm | undefined) ?? firmHint.firm} busy={busy} send={send} /></div>}
+          : <div className="obind"><FirmCard key={JSON.stringify(draft.said ?? {})} initial={(taken.firm as Firm | undefined) ?? draft.said} busy={busy} send={send} /></div>}
       </div>
     );
     case 'preset': return (
@@ -223,7 +223,7 @@ function Step({ step, draft, currency, root, busy, send, change, taken, firmHint
           )}
       </div>
     );
-    case 'question': return <QuestionStep step={step} busy={busy} send={send} change={change} fromText={marked(step.key)} />;
+    case 'question': return <QuestionStep step={step} draft={draft} busy={busy} send={send} change={change} fromText={marked(step.key)} />;
     case 'netRates': return (
       <div className="obstep" data-step="netRates">
         <Ai><p>{t('onboarding.draft.netRates')}</p></Ai>
@@ -244,8 +244,12 @@ function Step({ step, draft, currency, root, busy, send, change, taken, firmHint
   }
 }
 
-function QuestionStep({ step, busy, send, change, fromText }: { step: Extract<DraftStep, { id: 'question' }>; busy: boolean; send: Send; change: StepProps['change']; fromText: boolean }) {
+function QuestionStep({ step, draft, busy, send, change, fromText }: { step: Extract<DraftStep, { id: 'question' }>; draft: SetupDraft; busy: boolean; send: Send; change: StepProps['change']; fromText: boolean }) {
   const { key } = step;
+  /** «Weiss nicht»: the answer the setup takes then, named on the button (src/workspace/setup.ts `unsure`). */
+  const unsure = unsureOf(key);
+  /** A period granted only on request, chosen by click: taken, with what is usual said after it. */
+  const odd = key === 'period' && step.answer !== undefined ? unusualPeriod(draft.answers) : undefined;
   const multi = 'multi' in QUESTIONS[key];
   const [on, setOn] = useState<string[]>(() => list(step.suggested));
   const notes = list(step.answer).map((v) => optionOf(key, v)).filter((o) => o?.caveat);
@@ -258,6 +262,7 @@ function QuestionStep({ step, busy, send, change, fromText }: { step: Extract<Dr
         <>
           <Answer text={valueLabel(key, step.answer)} busy={busy} fromText={fromText} onChange={() => change(key, { step: 'question', key, value: null }, step.answer)} />
           {notes.map((o) => <Ai key={o!.value}><p>{tData(`desktop.q.${key}.${o!.value}.caveat`)}</p></Ai>)}
+          {odd ? <Ai><p data-unusual>{t(`onboarding.draft.periodUnusual.${odd.method}`)}</p></Ai> : null}
         </>
       ) : (
         <div className="obind">
@@ -271,6 +276,7 @@ function QuestionStep({ step, busy, send, change, fromText }: { step: Extract<Dr
               );
             })}
             {multi ? <button type="button" className="btn" disabled={busy || ('required' in QUESTIONS[key] && !on.length)} data-act="question-next" onClick={() => void send({ step: 'question', key, value: on })}>{t('onboarding.draft.next')}</button> : null}
+            {unsure ? <button type="button" className="btn ghost" disabled={busy} data-act="question-unsure" onClick={() => void send({ step: 'question', key, value: unsure })}>{t('onboarding.draft.unsure', { answer: tData(`desktop.q.${key}.${unsure}`) })}</button> : null}
           </div>
         </div>
       )}

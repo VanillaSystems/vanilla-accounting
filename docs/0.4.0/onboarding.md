@@ -21,9 +21,8 @@ an AI call, and the conversation stands where it stood after any restart.
 | Part | Who | Why |
 |---|---|---|
 | Greeting, every question and its answers | code | the same for every firm; no judgement |
-| Company card (name, UID, legal form, owner, address, VAT setup) | code, from the settings | the app knows it |
+| Company card (name, UID, legal form, owner, address, VAT setup, what the firm sells) | code, from the settings | the app knows it: shown once, not asked |
 | VAT change card with «Übernehmen» / «Rückgängig» | code, saved by `PATCH /api/workspace` | a setting the person keeps, through the Firma page's own checks |
-| «Was der Umzug braucht» list | code, from the answers | follows from program, bookkeeping, access, start and filed returns |
 | Opening, bank accounts, sources | code, from the books and the settings | the app knows it; each card links to its place by hand |
 | Partner bins (Eindeutig, Uneinheitlich, Selten) | code, `partnerBins` (src/onboarding/facts.ts) | counting bookings per account is a rule |
 | A rule from a clear partner | code drafts (`POST /api/rules/hand`), the person keeps it on the rule card | the same path as Firma › Regeln › «Neue Regel» |
@@ -31,25 +30,29 @@ an AI call, and the conversation stands where it stood after any restart.
 | Words the person types | the AI, unless they name exactly one answer | judgement; `typedChoice` picks an answer by its words first |
 | Recording a typed answer | the AI, with a `setupAnswer` change | reading «wir rechnen mit Saldosteuersatz ab» is judgement |
 
-**Order of the topics.** `SETUP_TOPICS` (src/onboarding/model.ts): firm, periods, history,
-opening, bank, receipts, knowledge. The old program comes before the opening, because its balance
-sheet holds the opening balances. The steps within them follow the prototype:
+**Only what the app cannot know is asked** (#345). The settings hold what the form or the conversation
+before the books asked a minute ago; the first bank statement says from when the books run
+(`booksOpenPeriod`: the filing period of the first payment). So the conversation in the books asks
+nothing of the firm, no start day, no filed returns and nothing about the old program, whose data
+the app cannot import: it shows the firm once and goes on to what is left.
+
+**Order of the topics.** `SETUP_TOPICS` (src/onboarding/model.ts): firm, opening, bank, receipts,
+knowledge.
 
 | Step (question id) | Topic | Asks | Card |
 |---|---|---|---|
-| `company` | firm | «Stimmt so» / «Etwas stimmt nicht» | company |
-| `vat` | firm | not registered, effective quarterly, net tax rate half-yearly, «Weiss nicht» | after the answer: the VAT change, if it differs |
-| `start` | periods | from 1 January, or during the year from the period today is in | |
-| `filed` | periods | none, Q1, Q1 und Q2, … (only a registered firm, only the periods already over) | |
-| `program` | history | Bexio, Abacus, Banana, a spreadsheet, the accountant, a new firm | |
-| `entry` | history | double entry, income and expenses only, «Weiss nicht» (not for a new firm) | |
-| `access` | history | me, my accountant, both (not when the accountant keeps the books) | |
-| `needs` | history | «Verstanden, weiter» | what the switch needs and from whom; the import is a later step |
-| `opening` | opening | «Weiter» / «Später» | the opening balances, if entered |
-| `bank` | bank | «Weiter» / «Später» | the bank accounts, IBAN or not, «Bankkonto erfassen» |
+| `company` | firm | nothing: shown. «Etwas ändern» (`fix`) on the card opens `vat` and `sells` | company, with the VAT setup and what the firm sells |
+| `vat` | firm | only after «Etwas ändern», or once the AI recorded an answer from typed words: not registered, effective quarterly, net tax rate half-yearly, «Weiss nicht» | after the answer: the VAT change, if it differs |
+| `sells` | firm | only after «Etwas ändern»: the three kinds as toggles | the default accounts |
+| `opening` | opening | «Weiter» / «Später»; «Später» says what it means (the balance differs from the bank's by the opening until it is entered) and where it comes back («Eröffnung erfassen» at the first statement, Firma › Eröffnung) | the opening balances, if entered |
+| `bank` | bank | only while no account has an IBAN: «Weiter» / «Später» | the bank accounts, «Bankkonto erfassen» |
 | `receipts` | receipts | «Weiter» / «Später» | the sources switched on, «Mit mir einrichten» (an AI turn), «Quellen ansehen» |
-| `partners` | knowledge | «Weiter» | the partner bins, a rule draft per clear partner |
-| summary | | «Los geht's» | what the app knows and where from, what is open with its place by hand |
+| `partners` | knowledge | only in books that hold bookings: «Weiter» | the partner bins, a rule draft per clear partner |
+| summary | | «Kontoauszug einlesen» (ends the setup and opens Kontoauszüge), «Erst umsehen» | what the app knows and where from, what is open with its place by hand, the first step |
+
+The greeting names no one: who sits there need not be the owner. The rail counts the topics the
+conversation is through, done or left for later (`settledCount`), so the count moves with every
+answer; a topic left with «Später» reads «später», never «übersprungen».
 
 **Answers.** A click stores the answer in the workspace's `onboarding.json` (`answers`, beside the
 topics), with when it was given. «Ändern» beside an answer takes it back; the steps after it wait
@@ -68,21 +71,21 @@ the setup before (`kept.before`), so the card's «Rückgängig» puts it back th
 Neither the AI nor the answer writes the setting.
 
 **Topics marked by what the app sees.** `topicStates(progress, facts)` derives each topic's state:
-firm done when the company was answered and the VAT answer matches the settings (or was «Weiss
-nicht»); periods done when the start is answered and no filed return waits for its comparison
-(none filed, or sealed through the last filed one), skipped while one waits; history done for a new
-firm, skipped once the needs were read (the import is a later step); opening done with opening
-balances for the open year; bank done with a bank account that has an IBAN; receipts done with a
-source switched on; knowledge done once the partners were seen. «Später» skips a topic. A topic the
-AI or a person marked keeps its mark unless the app sees it done. The rail shows these states and
-the count of topics done; a click on a topic opens its place by hand.
+firm done unless a change is under way (after «Etwas ändern», until the VAT answer matches the
+settings or was «Weiss nicht», and the sales answer is what the profile keeps); opening done with
+opening balances for the open year; bank done with a bank account that has an IBAN; receipts done
+with a source switched on; knowledge done once the partners were seen, or when there are none.
+«Später» leaves a topic for later. A topic the AI or a person marked keeps its mark unless the app
+sees it done. The rail shows these states; a click on a topic opens its place by hand.
 
-**History has no place in the app yet.** Importing the old program's chart, journal and balances
-does not exist. The conversation says so on the needs card, and the AI's prompt says so too: the
-person enters the opening by hand, an export they attach is read as examples, and nothing is
-imported. A quarter filed before the switch is not sealed by the setup: comparing it with the
-return needs the old journal, so the reply says the comparison comes with the import and the
-periods topic stays skipped.
+**Where the books begin.** The books' first day is 1 January of the year of the first payment or
+opening balance (`booksOpen`, src/books/store.ts); the first period worked on is the one of the
+first payment (`booksOpenPeriod`). The summary says so as the first step: read in the statement from
+the first quarter (half year) not filed yet; what was before stays in the old program. MWST calls a
+period that ended before anything in the books is dated «vor der ersten Zahlung in diesen Büchern»,
+never «fällig» (`ReturnState` `before`, src/app/areas/vat/model.ts). Books that begin on a chosen
+day of the year, with the quarters before held as filed elsewhere, do not exist: that needs a field
+in the books' format (see «Still missing»).
 
 **What the AI does not write.** The company's settings (profile, VAT setup, bank accounts, closed
 periods, opening balances) are saved by the person: the VAT setup on the conversation's card, the
@@ -90,8 +93,7 @@ rest in their place, through the app's validated paths. Receipt collection the A
 person as before (mailbox, source).
 
 **By hand.** Each topic's place is `TOPIC_HAND` (src/onboarding/hand.ts); every card with a place
-shows «Von Hand: Firma › …». The old program's history has no place of its own: what it becomes
-(rules, opening balances) has.
+shows «Von Hand: Firma › …».
 
 **Way in.** A fresh install opens «Einrichtung» (src/app/ai/FirstRun.tsx; ai-setup.md, decision 1 as
 changed on 12.11.2026, #343): what the app is in two sentences, then what the person wants: new
@@ -110,9 +112,9 @@ unless the preset answers them, and the bank accounts. Each answer is checked as
 checks it and kept in a draft in the folder (`vanilla-accounting/setup-draft.json`,
 src/onboarding/draft.ts and draft-store.ts); the manifest is written only when the draft is complete,
 so a folder holds a draft or books, never half a manifest. «Buchhaltung anlegen» creates the books
-through createWorkspace, removes the draft before the first commit and records the conversation's
-first answers (company, VAT, what the firm sells) in `onboarding.json` with `created`; the
-conversation goes on in the books at the next question. Such books open into the setup until
+through createWorkspace, removes the draft before the first commit and marks the books in
+`onboarding.json` with `created`; the conversation goes on in the books with what the settings do
+not answer. The header shows how far the person is («n von m beantwortet», `draftProgress`). Such books open into the setup until
 «Los geht's» sets `ready`. A folder with a draft opens into the draft's conversation at the step it
 stopped, from the folder dialog, the recent list or at the next start.
 
@@ -122,14 +124,20 @@ provider and model the person set for it) reads them with the draft, the step wa
 of src/workspace/setup.ts and the turns typed before (kept in the server's memory per folder,
 never taken from the screen), and answers one JSON object: `say` (an answer
 to a question, then one short question back) and the answers the words state (`firm`, `preset`,
-`answers`, `netRates`, `banks`). Code is the authority: each answer goes through `checkPatch` and
+`answers`, `netRates`, `banks`). The prompt names the answered set and the open one (`draftMarks`),
+and the model is told not to ask the next question: code shows the step waiting, with its buttons,
+below its words. Code is the authority: each answer goes through `checkPatch` and
 `withPatch`, the click's path; a UID or an IBAN is taken only when it stands in the person's words as the server received them;
 an answer refused is not saved and the reply says why; the AI's words are left out beside a refusal,
-because it wrote them before the check. Non-VAT answers without a preset make it
-«custom», so a preset picked later cannot replace them. Answers taken from the words are kept in the
+because it wrote them before the check. Answers without a preset leave the kind of firm
+open for its buttons; whichever is picked keeps what the words said (`withPatch`), and the prompt
+names a trade as the preset `trades` and material charged with the work as `made`. A filing period
+granted only on request (half-yearly on the effective method, quarterly on the net tax rate,
+`unusualPeriod` in src/workspace/setup.ts) is not taken from loose words: the reply says what is
+usual and the question keeps its buttons; chosen by click it stands, with the same remark. Answers taken from the words are kept in the
 draft's `fromText` and carry «aus deiner Nachricht» until the person changes them, in the
-conversation and on the last card. A firm without its UID is not saved; its card starts with what was
-said. A model that answers no JSON, or none, changes nothing. The call is ledgered in the folder's
+conversation and on the last card. A firm without its UID is not saved, but what was said of it is kept in the draft
+(`said`), so the UID alone completes it and the card asks only for what is empty. A model that answers no JSON, or none, changes nothing. The call is ledgered in the folder's
 `data/llm-ledger.jsonl`, which becomes the books' own.
 
 Without an AI on the computer, «Neue Buchhaltung erstellen» opens the form; with one, «Ohne KI
@@ -166,7 +174,11 @@ books' counts, the partner bins and the number of rules. `kept` belongs to the V
 - The import of the old program (Bexio, Banana, Abacus, a spreadsheet, an accountant's export) as
   evidence and opening balances, with its place by hand; with it, the quarter comparison before
   sealing a quarter filed before the switch, and «So nicht übernehmen» for patterns of the history
-  the app's rules forbid.
+  the app's rules forbid. Until it exists the setup asks nothing about the old program.
+- Books that begin on a chosen first day of a quarter («ab 1. Juli»), with the quarters before
+  known as filed elsewhere: today the first statement decides, and the year's opening balances are
+  those of 1 January. It needs a first day in the books' format (ledger.json), opening balances on
+  that day, and reports and the year close that know the year is not whole: the owner's decision.
 - The prototype's per-partner questions for the mixed bin («Wofür kaufst du bei …?»): the bin
   shows them, and the app asks at the next payment.
 - An approved rate the person typed to the AI is not carried to the VAT card; the person enters it there.

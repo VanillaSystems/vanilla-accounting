@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import type { Index } from '../types/index.js';
 import { writeAtomic } from '../invoices/store.js';
-import { emptyProgress, parseProgress, withAnswer, withTopic, type Answer, type AnswerValue, type QuestionId, type SetupProgress, type SetupTopic, type TopicState } from './model.js';
+import { emptyProgress, parseProgress, withAnswer, withTopic, type Answer, type QuestionId, type SetupProgress, type SetupTopic, type TopicState } from './model.js';
 import type { SetupView } from './facts.js';
 
 export const ONBOARDING_FILE = 'onboarding.json';
@@ -43,15 +43,12 @@ export function setupView(ws: Ws, books: Parameters<typeof emptyBooks>[0]): Pick
 }
 
 /**
- * Books the setup conversation just created (src/onboarding/draft-store.ts): what it asked before
- * the books existed stands answered, so the conversation goes on at the next question.
+ * Books the setup conversation just created (src/onboarding/draft-store.ts). What it asked before the
+ * books existed is in the settings now, and the conversation in the books shows it from there without
+ * asking (#345), so no answer is recorded: only that these books open into the setup until «Los geht's».
  */
-export function seedCreated(ws: Ws, seed: { started: string; vat: AnswerValue<'vat'>; sells: AnswerValue<'sells'> }, now: string): SetupProgress {
-  let p: SetupProgress = { ...emptyProgress(), started: seed.started, created: now };
-  p = withAnswer(p, 'company', { value: 'ok', at: now });
-  p = withAnswer(p, 'vat', { value: seed.vat, at: now });
-  p = withAnswer(p, 'sells', { value: seed.sells, at: now });
-  return write(ws, p);
+export function seedCreated(ws: Ws, seed: { started: string }, now: string): SetupProgress {
+  return write(ws, { ...emptyProgress(), started: seed.started, created: now });
 }
 
 /** «Los geht's»: the setup ends; the books open as books from now on. */

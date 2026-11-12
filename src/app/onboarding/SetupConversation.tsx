@@ -97,7 +97,10 @@ function Toggles({ step }: { step: SetupStep }) {
 function Answered({ step, onGo }: { step: SetupStep; onGo: Go }) {
   const { busy } = useSetup();
   const picked = step.multi && step.answer ? step.choices.filter((c) => kindsOfAnswer(step.answer!.value).includes(c.value as SalesKind)) : [];
-  const chosen = step.multi ? (picked.length ? { label: picked.map((c) => say(c.label)).join(', ') } : undefined) : step.choices.find((c) => c.value === step.answer?.value);
+  // The firm's card is shown, not asked: its answer («Etwas ändern», or «Stimmt so» of older books) has no button to find the words in.
+  const chosen = step.multi ? (picked.length ? { label: picked.map((c) => say(c.label)).join(', ') } : undefined)
+    : step.id === 'company' && step.answer ? { label: say({ key: `onboarding.q.company.${step.answer.value}` }) }
+      : step.choices.find((c) => c.value === step.answer?.value);
   return (
     <div className="obstep" data-answered={step.id}>
       {chosen ? (
@@ -115,18 +118,9 @@ function Answered({ step, onGo }: { step: SetupStep; onGo: Go }) {
 
 function Card({ card, onGo }: { card: SetupCard; onGo: Go }) {
   switch (card.kind) {
-    case 'company': return <CompanyCard company={card.company} origin={card.origin} />;
+    case 'company': return <CompanyCard card={card} />;
     case 'vat': return <VatCard card={card} onGo={onGo} />;
     case 'sells': return <SellsCard card={card} />;
-    case 'needs': return (
-      <div className="obcard">
-        <h4>{t('onboarding.needs.title')}</h4>
-        <ul className="obcheck">
-          {card.items.map((it, i) => <li key={i}>{ICONS.invoices}<b>{say(it.what)}</b><span className="obbadge">{say(it.who)}</span><span className="rk">{say(it.why)}</span></li>)}
-        </ul>
-        <p className="obnote">{say(card.note)}</p>
-      </div>
-    );
     case 'opening': return (
       <div className="obcard">
         <table className="obtable">
@@ -157,7 +151,10 @@ function Card({ card, onGo }: { card: SetupCard; onGo: Go }) {
   }
 }
 
-function CompanyCard({ company: c, origin }: Pick<Extract<SetupCard, { kind: 'company' }>, 'company' | 'origin'>) {
+/** What the app knows of the firm, shown once; «Etwas ändern» opens the questions behind it. */
+function CompanyCard({ card }: { card: Extract<SetupCard, { kind: 'company' }> }) {
+  const { busy } = useSetup();
+  const { company: c, origin } = card;
   const address = c.address && [[c.address.street, c.address.number].filter(Boolean).join(' '), `${c.address.postcode} ${c.address.town}`.trim()].filter(Boolean).join(', ');
   const rows: Array<[string, ReactNode]> = [
     [t('onboarding.company.name'), c.name],
@@ -166,12 +163,14 @@ function CompanyCard({ company: c, origin }: Pick<Extract<SetupCard, { kind: 'co
     ...(c.owner ? [[t('onboarding.company.owner'), c.owner] as [string, ReactNode]] : []),
     ...(address ? [[t('onboarding.company.address'), address] as [string, ReactNode]] : []),
     [t('onboarding.company.vat'), say(vatLine(c.vat))],
+    ...(card.sells ? [[t('onboarding.company.sells'), card.sells.map((k) => t(`onboarding.sellsCard.kind.${k}`)).join(', ')] as [string, ReactNode]] : []),
   ];
   return (
     <div className="obcard">
       <dl className="obkv">
         {rows.map(([k, v], i) => <Fragment key={k}><dt>{k}</dt><dd>{v}</dd><dd>{i === 0 ? <span className="obbadge">{t(`onboarding.origin.${origin}`)}</span> : null}</dd></Fragment>)}
       </dl>
+      {card.change ? <div className="actions"><button type="button" className="linkbtn" disabled={busy} data-answer="fix" onClick={() => void answer('company', 'fix')}>{t('onboarding.q.company.fix')}</button></div> : null}
     </div>
   );
 }
@@ -304,9 +303,11 @@ function PartnersCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'partne
   );
 }
 
-const ORIGIN_CLASS: Record<Origin, string> = { form: '', answer: '', app: 'pos', later: 'warn', open: 'warn' };
+const ORIGIN_CLASS: Record<Origin, string> = { form: '', answer: '', app: 'pos' };
 
+/** What the app knows, what is open, and the first step in the app: the statement, by the name its place has, as a link. */
 function SummaryCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'summary' }>; onGo: Go }) {
+  const end = () => { void setupReady(); closeAssistant(); };
   return (
     <div className="obcard">
       <h4>{t('onboarding.summary.title')}</h4>
@@ -318,14 +319,18 @@ function SummaryCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'summary
             {card.open.map((o) => (
               <li key={o.topic}>
                 <span>{t(`onboarding.topic.${o.topic}`)} <span className="rk">{t(`onboarding.state.${o.state}`)}</span></span>
-                <span>{o.go ? <ByHand go={o.go} onGo={onGo} /> : <span className="rk">{t('onboarding.noHand')}</span>}</span>
+                <span>{o.go ? <ByHand go={o.go} onGo={onGo} /> : null}</span>
               </li>
             ))}
           </ul>
         </>
       ) : null}
-      <span className="lead">{t('onboarding.summary.lead')}</span>
-      <div className="actions"><button type="button" className="aiact primary" data-testid="setup-go" onClick={() => { void setupReady(); closeAssistant(); }}>{t('onboarding.summary.go')}</button></div>
+      <h4>{t('onboarding.summary.first')}</h4>
+      <span className="lead" data-first>{say(card.first)} {t('onboarding.summary.lead')}</span>
+      <div className="actions">
+        <button type="button" className="aiact primary" data-testid="setup-statement" onClick={() => { end(); onGo({ area: 'bank' }); }}>{t('onboarding.summary.statement')}</button>
+        <button type="button" className="aiact" data-testid="setup-go" onClick={end}>{t('onboarding.summary.go')}</button>
+      </div>
     </div>
   );
 }

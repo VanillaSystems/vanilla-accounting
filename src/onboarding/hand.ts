@@ -1,9 +1,7 @@
 /**
  * Where a person sets up each topic by hand (MISSION: whatever the AI does, a person can also do by
  * hand): the place the setup rail links to and the prompt names. Keyed by the checklist, so a topic
- * added without its place does not compile. The old program's history has none yet: the AI reads
- * an export the person attaches as evidence, and what it becomes (rules, opening balances) has its
- * own place.
+ * added without its place does not compile.
  */
 import type { SetupTopic } from './model.js';
 
@@ -12,9 +10,7 @@ export type HandPlace = { area: 'company'; section: 'profile' | 'vat' | 'periods
 
 export const TOPIC_HAND: { readonly [T in SetupTopic]: HandPlace | null } = {
   firm: { area: 'company', section: 'vat' },
-  periods: { area: 'company', section: 'periods' },
   opening: { area: 'company', section: 'opening' },
-  history: null,
   bank: { area: 'company', section: 'banks' },
   receipts: { area: 'company', section: 'sources' },
   knowledge: { area: 'company', section: 'rules' },
