@@ -237,6 +237,8 @@ export type Turn =
     withdrawn?: string;
     /** The request the answer offers to continue in the terminal, written out (issue #146): its card has «Im Terminal öffnen». */
     terminal?: string;
+    /** The rules the answer's drafts add, change or remove, recorded when it ended (src/assistant/proposals.ts, #362). */
+    drafted?: Array<{ path: string; section: string; id: string; change: 'added' | 'changed' | 'removed' }>;
   };
 
 /** data/assistant/<id>.json: one conversation, its session continued by every message. */

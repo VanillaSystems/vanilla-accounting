@@ -17,7 +17,7 @@ import { journalOf, unsettledAtFiling } from '../journal/model.js';
 import { thresholdPassed } from '../vat/model.js';
 import { baseCurrency, documents, filing, withoutInputTax } from '../../../engines/index.js';
 import { missingAssessments, type MissingAssessment } from '../../../booking/customs-invoice.js';
-import { filingKeyOf, localToday, openFilingPeriod, parsePeriod } from '../../../accounting/periods.js';
+import { filingKeyOf, localToday, openFilingPeriod, parsePeriod, type Period } from '../../../accounting/periods.js';
 import type { WaitingPayment } from '../../../accounting/receipt-due.js';
 import { payText, signed } from '../bank/model.js';
 import { bookWithoutInputTax } from '../bank/actions.js';
@@ -97,6 +97,23 @@ export function UnbookedFact({ books, nav, lead, className }: { books: Index; na
     <span className={className} data-testid="unbooked-fact">
       {lead && open.unbooked === open.waitingReceipt ? `${lead} ` : ''}{issueWords(open).join('')}.{' '}
       <button type="button" className="golink" onClick={() => nav.go(to)}>{p ? t('issues.n.see', { period: periodName(p) }) : t('automation.home.open')}</button>
+    </span>
+  );
+}
+
+/**
+ * What the shown period still holds open where no task waits (#362): its payments not booked and its
+ * receipts without a payment, counted by periodIssues, the source of Belege's «Braucht dich» too, so
+ * «Keine Aufgabe wartet auf dich» never stands alone beside receipts that need her. A period with
+ * nothing open says what UnbookedFact says of the other open days.
+ */
+export function OpenFact({ books, nav, period, counts: c, lead, className }: { books: Index; nav: Pick<Nav, 'go'>; period: Period; counts: IssueCounts; lead: string; className?: string }) {
+  if (!c.unbooked && !c.unlinked) return <UnbookedFact books={books} nav={nav} lead={lead} className={className} />;
+  const to: Location = chargesVat() ? { route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period } } : { route: c.unbooked ? { area: 'bank' } : { area: 'receipts' }, query: { period } };
+  return (
+    <span className={className} data-testid="open-fact">
+      {c.unbooked === c.waitingReceipt ? `${lead} ` : ''}{issueWords({ unbooked: c.unbooked, waitingReceipt: c.waitingReceipt, unlinked: c.unlinked }).join(', ')}.{' '}
+      <button type="button" className="golink" onClick={() => nav.go(to)}>{t('issues.n.see', { period: periodName(period) })}</button>
     </span>
   );
 }

@@ -18,6 +18,7 @@ import { NoClaudeError } from '../llm/providers/claude-cli.js';
 import { missing as codexMissing } from '../llm/providers/codex-cli.js';
 import { sidebarAgent } from '../llm/ask.js';
 import { contextText } from './context.js';
+import { draftedBy, proposalsNote } from './proposals.js';
 import { attachmentsNote, keepAttachments } from './attachments.js';
 import type { Attachment } from '../types/attachment.js';
 import { wordsIn } from '../export/texts.js';
@@ -88,7 +89,9 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
   c.at = at;
   storeConversation(ws, c);
   onEvent({ type: 'conversation', id: c.id });
-  const prompt = assistantPrompt(send.text, contextText(ws, send.context), [...(last?.role === 'ai' && last.refused ? [refusedNote(last.refused)] : []), ...(last?.role === 'ai' && last.held ? [heldNote(last.held.status)] : []), waiting, ...(attachments.length ? [attachmentsNote(attachments, paths)] : [])]);
+  // What became of every earlier proposal is the app's to say (#362): read now, before the turns of this message.
+  const proposals = proposalsNote(ws, { turns: c.turns.slice(0, -2) }, send.language);
+  const prompt = assistantPrompt(send.text, contextText(ws, send.context), [...(last?.role === 'ai' && last.refused ? [refusedNote(last.refused)] : []), ...(proposals ? [proposals] : []), waiting, ...(attachments.length ? [attachmentsNote(attachments, paths)] : [])]);
   let done: AssistantEvent | undefined;
   await callAgent(c, {
     ws, send, map, prompt, signal,
@@ -111,6 +114,9 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
   });
   const said = ai.text;
   ai.text = withoutChanges(said);
+  // Which rules its drafts add, change or remove, now that they are written: later messages tell each one's state (#362).
+  const drafted = draftedBy(ws, ai);
+  if (drafted.length) ai.drafted = drafted;
   const terminal = terminalRequest(said);
   if (terminal) { ai.terminal = terminal; onEvent({ type: 'terminal', request: terminal }); }
   if (done?.type === 'done' && !done.isError) {
@@ -177,13 +183,6 @@ function callAgent(c: Conversation, call: Omit<AssistantCall, 'session'>): Promi
   c.agent = agent;
   return agent === 'codex-cli' ? callCodex({ ...call, session: c.session }, model) : callClaude({ ...call, session: c.session });
 }
-
-/** What the next message tells the model about the changes of its last answer the app held for the person (HeldChanges). */
-export const heldNote = (status: HeldChanges['status']): string => ({
-  held: 'The app did not make the changes of your previous answer: they rebook more than one booking fix, so the app shows them to the person as a proposal, booking by booking, and makes them only when the person presses «Übernehmen». The person has not decided yet; nothing of them is in the books.',
-  taken: 'The person pressed «Übernehmen» on the changes of your previous answer: they are made now, each with its «Rückgängig».',
-  dropped: 'The person discarded the changes of your previous answer («Verwerfen»): nothing of them was made.',
-})[status];
 
 /**
  * «Übernehmen» (`take`) or «Verwerfen» on the changes the app held for an answer (`turn`: its

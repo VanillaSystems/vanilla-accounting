@@ -34,6 +34,7 @@ why: >
   expense.
 pitfalls:
   - Do not book the whole payment on 5700, the employee share would be expensed twice.
+  - The amounts here are this example's own. The employee's share is what the salaries put on 2270, never a ratio taken from this case.
   - The year-end statement of the Ausgleichskasse settles the difference to the real payroll; book it the same way.
 signals:
   kind: social-insurance

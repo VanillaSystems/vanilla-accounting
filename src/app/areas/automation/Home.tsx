@@ -16,7 +16,7 @@ import { QuestionCard } from '../../questions/Questions.js';
 import { forMe } from '../../../questions/model.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import { bookedStates } from '../../../accounting/payment-entries.js';
-import { booksOpenPeriod, filingKeyOf, isFilingKey, localToday, parsePeriod, type Period } from '../../../accounting/periods.js';
+import { booksFirstDay, booksOpenPeriod, isFilingKey, localToday, parsePeriod, type Period } from '../../../accounting/periods.js';
 import { chargesVat, filing } from '../../../engines/index.js';
 import { fillTask, stepOf, textIn, type AutomationView, type Task, type Text } from '../../../workflows/model.js';
 import type { Index } from '../../../types/index.js';
@@ -25,8 +25,9 @@ import type { Nav } from '../index.js';
 import { Go } from '../vat/links.js';
 import { approvalWithheld } from './filing-summary.js';
 import { paymentWords, readsInWords } from './words.js';
-import { UnbookedFact } from './Issues.js';
-import { unbookedOpen } from './period-issues.js';
+import { OpenFact, usePeriodIssues } from './Issues.js';
+import { periodsAround } from './periods.js';
+import { countIssues, unbookedOpen, type IssueCounts } from './period-issues.js';
 
 const tx = (v: Text) => textIn(v, language());
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -47,14 +48,6 @@ function shownPeriod(query: Query, books: Index, today: string): Period {
   return named ?? booksOpenPeriod(books, today, length);
 }
 
-/** The filing periods of the shown year and the year before that have begun. */
-function periodsAround(p: Period, today: string): Period[] {
-  const length = filing().length;
-  const year = Number(p.from.slice(0, 4));
-  const keys = [year - 1, year].flatMap((y) => Array.from({ length: 12 }, (_, m) => filingKeyOf(`${y}-${pad(m + 1)}-01`, length)));
-  return [...new Set(keys)].map((k) => parsePeriod(k, today)!).filter((x) => x.from <= today);
-}
-
 /** The outcomes a click may send from here: the filing (which asks first), a booking still to make and a withheld approval wait in Aufgaben. */
 function quickOutcomes(task: Task, books: Index, booked: (ref: string) => string, withheld?: string): string[] {
   const unbooked = task.item.kind === 'transaction' && books.transactions.some((x) => x.ref === task.item.id) && booked(task.item.id) !== 'booked';
@@ -72,8 +65,10 @@ export function HomePage({ view, books, nav, query, canEdit }: { view: Automatio
   const asked = forMe(q.questions, q.me);
   const stuck = view.runs.filter((r) => r.status === 'stuck');
   const waiting = view.tasks.length + stuck.length + asked.length;
-  // No task of hers, yet payments not booked: «nothing waits» would hide them (#341).
-  const unbooked = unbookedOpen(books, ws?.bankAccounts ?? []).unbooked > 0;
+  // What the shown period holds open, once for the page: the hero and the waiting column say it alike.
+  const open = countIssues(usePeriodIssues(books, period.from, period.to));
+  // No task of hers, yet payments not booked or receipts without a payment: «nothing waits» would hide them (#341, #362).
+  const unbooked = unbookedOpen(books, ws?.bankAccounts ?? []).unbooked > 0 || open.unbooked > 0 || open.unlinked > 0;
   const running = view.runs.filter((r) => r.mode === 'live' && (r.status === 'running' || r.status === 'queued' || r.status === 'parked'));
   const next = view.workflows.flatMap((w) => { const s = workflowState(w, view, now); return s.next ? [{ w, at: s.next }] : []; }).sort((a, b) => a.at.getTime() - b.at.getTime()).slice(0, 4);
   const booked = bookedStates(books, ws?.bankAccounts ?? []);
@@ -86,11 +81,11 @@ export function HomePage({ view, books, nav, query, canEdit }: { view: Automatio
     <div className="detail-in ahome" data-testid="automation-home">
       <div className="kicker">
         <select aria-label={t('automation.home.period')} value={period.token} onChange={(e) => nav.setQuery({ ...query, period: parsePeriod(e.target.value, today) ?? undefined })}>
-          {periodsAround(period, today).map((p) => <option key={p.token} value={p.token}>{periodName(p)}</option>)}
+          {periodsAround(period, today, booksFirstDay(books), filing().length).map((p) => <option key={p.token} value={p.token}>{periodName(p)}</option>)}
         </select>
         <span>{rangeText(period.from, period.to)}</span>
       </div>
-      <Hero f={f} period={period} waiting={waiting} unbooked={unbooked} books={books} nav={nav} />
+      <Hero f={f} period={period} open={open} waiting={waiting} unbooked={unbooked} books={books} nav={nav} />
       {fresh ? (
         <p className="lead" data-testid="home-empty">
           {t('automation.home.emptyLead')}{' '}
@@ -124,7 +119,7 @@ export function HomePage({ view, books, nav, query, canEdit }: { view: Automatio
             </div>
           ))}
           {asked.map((x) => <QuestionCard key={x.id} q={x} nav={nav} canEdit={canEdit} books={books} showItem />)}
-          {waiting ? null : unbooked ? <p className="m"><UnbookedFact books={books} nav={nav} lead={t('automation.noTask')} /></p> : <p className="m">{t('automation.tasksEmpty')}</p>}
+          {waiting ? null : unbooked ? <p className="m"><OpenFact books={books} nav={nav} period={period} counts={open} lead={t('automation.noTask')} /></p> : <p className="m">{t('automation.tasksEmpty')}</p>}
           <p><Go to={{ route: { area: 'automation', view: 'tasks' }, query: {} }} nav={nav} className="golink">{t('automation.home.allTasks')} →</Go></p>
         </section>
         <section>
@@ -160,7 +155,7 @@ export function HomePage({ view, books, nav, query, canEdit }: { view: Automatio
   );
 }
 
-function Hero({ f, period, waiting, unbooked, books, nav }: { f: HomeFigures; period: Period; waiting: number; unbooked: boolean; books: Index; nav: Nav }) {
+function Hero({ f, period, open, waiting, unbooked, books, nav }: { f: HomeFigures; period: Period; open: IssueCounts; waiting: number; unbooked: boolean; books: Index; nav: Nav }) {
   const known = f.booked - f.authors.unknown;
   return (
     <>
@@ -171,7 +166,7 @@ function Hero({ f, period, waiting, unbooked, books, nav }: { f: HomeFigures; pe
             {f.withoutYou !== undefined ? <>, {t('automation.home.hero.share', { pct: f.withoutYou })}</> : null}.
           </>
         )}
-        {' '}{waiting ? <span className="w">{t('automation.home.hero.waiting', { n: waiting })}</span> : unbooked ? <UnbookedFact books={books} nav={nav} lead={t('automation.noTask')} /> : t('automation.tasksEmpty')}
+        {' '}{waiting ? <span className="w">{t('automation.home.hero.waiting', { n: waiting })}</span> : unbooked ? <OpenFact books={books} nav={nav} period={period} counts={open} lead={t('automation.noTask')} /> : t('automation.tasksEmpty')}
       </p>
       {f.booked > 0 && f.authors.unknown > 0 ? (
         <p className="m footnote" data-testid="home-unknown">{known > 0 ? t('automation.home.unknown', { n: f.authors.unknown }) : t('automation.home.unknownAll')}</p>

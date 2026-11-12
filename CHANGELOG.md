@@ -29,6 +29,16 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- AI answers (#362): every message to the AI sidebar starts with what became of each rule the
+  earlier answers drafted, rule by rule (kept and on, switched off or removed since, discarded,
+  still a draft, or unknown), and of held changes, so it no longer says a kept rule is not kept.
+  An answer and the «Stand» card under it wrap inside the sidebar instead of running past its
+  edge. The booking model is told never to take an amount, share or ratio from a casebook example.
+  The compensation fund is found as the payee only (a new `payee` match in a business file: the start of the counterparty's name), also as «SVA St. Gallen», «SVA Zürich», «SVA Aargau», «Caisse de
+  compensation» and «Cassa di compensazione», so its payment needs no receipt; a company's own file
+  of a business wins over the app's file that claims the same payment. Automatisierung offers no
+  period before the books begin, names the receipts without a payment beside «Keine Aufgabe wartet
+  auf dich», and its headline reads «… Belege gesammelt, … davon gebucht».
 - The first screen of a fresh install is about the books, not the AI (#343): what the app is in
   two sentences, then «Neue Buchhaltung erstellen», open existing books, «Von anderer Software
   übernehmen» or the demo, with the language switch in sight. The look at this Mac's AI runs in

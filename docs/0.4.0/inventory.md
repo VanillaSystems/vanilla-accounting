@@ -12,9 +12,9 @@ and the providers.
 | engine | 4 | 1 |
 | provider | 14 | 11 |
 | split | 124 | 26 |
-| infrastructure | 69 | 4 |
-| workflow | 27 | 0 |
-| view | 345 | 55 |
+| infrastructure | 70 | 4 |
+| workflow | 28 | 0 |
+| view | 346 | 55 |
 
 Layers are assigned by path prefix, most specific first:
 

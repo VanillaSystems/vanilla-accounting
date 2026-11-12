@@ -4,7 +4,10 @@
 id: ausgleichskasse
 name: Ausgleichskasse (AHV compensation fund)
 match:
-  tx: [ "ausgleichskasse", "sozialversicherungsanstalt" ]
+  # The fund is the payee: its name starts the bank's counterparty (or the merchant of the text). Never
+  # `tx`, which matches anywhere in the text: a fiduciary's or payroll provider's invoice names the fund
+  # too, and needs its receipt (#362). A company's own file of its fund wins over this one.
+  payee: [ "ausgleichskasse", "kantonale ausgleichskasse", "ahv-ausgleichskasse", "sozialversicherungsanstalt", "SVA St. Gallen", "SVA St.Gallen", "SVA Zürich", "SVA Aargau", "caisse de compensation", "caisse cantonale de compensation", "cassa di compensazione", "cassa cantonale di compensazione" ]
 
 facts:
   - id: shares

@@ -107,10 +107,20 @@ file to move it to.
 ## How an item finds its counterparty
 
 Code routes items, never a model. The signals are tried from strongest to
-weakest: Swiss UID, sender email domain, the merchant part of the bank text,
-the archived filename. The first signal type that matches anything decides:
+weakest: Swiss UID (`uid`), the other party's IBAN (`iban`), sender email domain
+(`domain`), the payee (`payee`), the bank text (`tx`), the archived filename
+(`file`). The first signal type that matches anything decides:
+
+- `payee` matches the start of who was paid or paid: the bank's counterparty
+  field, or without one the merchant of its text. Use it for a business that
+  other businesses' invoices name in their payment text (an authority such as
+  the compensation fund, whose invoices a fiduciary or a payroll provider
+  mentions): such a payment is that other business's, with its receipt.
+- `tx` matches a part of the bank's counterparty or of its text anywhere.
 
 - **Exactly one file matches:** that counterparty's rules apply.
+- **A company's own file and an app file match at the same strength:** the
+  company's file wins.
 - **Two files match at the same strength:** ambiguous. The item goes to
   `new_case`, and the answer tightens one `match:` block.
 - **Nothing matches:** the item gets the generic rules only, never a guessed

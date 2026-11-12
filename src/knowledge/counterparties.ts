@@ -16,7 +16,7 @@ import { parseProvider, type ProviderFacts } from './provider.js';
 import { PROVES, type Proves } from '../booking/vat-corrections.js';
 
 /** Strongest first. The order is the routing precedence. */
-export const TIERS = ['uid', 'iban', 'domain', 'tx', 'file'] as const;
+export const TIERS = ['uid', 'iban', 'domain', 'payee', 'tx', 'file'] as const;
 export type Tier = (typeof TIERS)[number];
 
 /** What a business is to the company. Its main role is the folder of its file; `roles:` lists the others. */
@@ -30,6 +30,12 @@ export interface Matchers {
   iban: string[];
   /** Sender email domain, at collection. */
   domain: string[];
+  /**
+   * The start of the payee's name, case-insensitive: the bank's counterparty field, or without one the
+   * merchant of its text (merchantOf). Never anywhere in the text: an authority that other businesses'
+   * invoices name (a fiduciary's «Abrechnung Ausgleichskasse») is found by this alone (#362).
+   */
+  payee: string[];
   /** Case-insensitive substring of the bank's counterparty name or of the MERCHANT part of its description (see merchantOf). */
   tx: string[];
   /** Regex over the archived filename; weakest, because the name was suggested by a model. */
@@ -104,6 +110,8 @@ export interface Signals {
   ibans: string[];
   domains: string[];
   names: string[];
+  /** Who was paid or paid, by name: the bank's counterparty field, else the merchant of the text (`match.payee`). */
+  payees?: string[];
   /** The archived names: the receipt's name as the app or the person last gave it, so they decide. */
   filenames: string[];
   /** The names the receipts came with, a fallback: they route only when no business's file pattern matches an archived name (a stale original must not outvote the archived name). */
@@ -192,6 +200,7 @@ export function signalsOfTransaction(tx: BankTransaction, linked: Receipt[]): Si
     ibans: tx.counterpartyIban ? [ibanOf(tx.counterpartyIban)] : [],
     domains: [],
     names: [tx.counterparty, merchantOf(tx.description)].filter((n): n is string => !!n?.trim()),
+    payees: [tx.counterparty?.trim() ? tx.counterparty : merchantOf(tx.description)].filter((n): n is string => !!n?.trim()),
     filenames: linked.map((r) => r.filename),
     originalFilenames: linked.flatMap(originalsOf),
   };
@@ -206,6 +215,7 @@ export function claims(cp: Counterparty, tier: Tier, s: Signals): string | undef
     case 'uid': return cp.match.uid.find((u) => s.uids.includes(u));
     case 'iban': return cp.match.iban.find((i) => s.ibans.includes(ibanOf(i)));
     case 'domain': return cp.match.domain.find((d) => s.domains.some((x) => x === d || x.endsWith(`.${d}`)));
+    case 'payee': return cp.match.payee.find((t) => !!s.payees?.some((n) => n.trim().toLowerCase().startsWith(t.toLowerCase())));
     case 'tx': return cp.match.tx.find((t) => s.names.some((n) => n.toLowerCase().includes(t.toLowerCase())) || !!s.texts?.some((x) => wholeWord(t).test(x)));
     case 'file': return cp.match.file.find((re) => s.filenames.some((f) => re.test(f)))?.source
       ?? cp.match.file.find((re) => s.originalFilenames?.some((f) => re.test(f)))?.source;
@@ -217,10 +227,12 @@ export function identify(s: Signals, counterparties: readonly Counterparty[]): R
     // The archived name decides; the original name is asked only when no file pattern matches an archived one.
     const byArchived = tier === 'file' && counterparties.some((cp) => claims(cp, tier, { ...s, originalFilenames: [] }));
     const seen = byArchived ? { ...s, originalFilenames: [] } : s;
-    const hits = counterparties.flatMap((cp) => {
+    const all = counterparties.flatMap((cp) => {
       const signal = claims(cp, tier, seen);
-      return signal ? [{ id: cp.id, signal }] : [];
+      return signal ? [{ id: cp.id, signal, own: !!cp.origin.binding }] : [];
     });
+    // The company's own file of a business wins over an app file that claims the same signal (#362): never ambiguous for that.
+    const hits = all.some((h) => h.own) ? all.filter((h) => h.own) : all;
     if (hits.length === 1) return { kind: 'known', counterparty: hits[0].id, tier, signal: hits[0].signal };
     if (hits.length > 1) return { kind: 'ambiguous', candidates: hits.map((h) => h.id), tier };
   }
@@ -248,7 +260,7 @@ export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['
   const m = raw.match ?? {};
   for (const k of Object.keys(m)) if (!(TIERS as readonly string[]).includes(k)) fail(`match.${k} is not a signal — use ${TIERS.join(', ')}`);
   const match: Matchers = {
-    uid: m.uid ?? [], iban: m.iban ?? [], domain: m.domain ?? [], tx: m.tx ?? [],
+    uid: m.uid ?? [], iban: m.iban ?? [], domain: m.domain ?? [], payee: m.payee ?? [], tx: m.tx ?? [],
     file: (m.file ?? []).map((p) => new RegExp(p, 'i')),
   };
   if (TIERS.every((t) => match[t].length === 0)) fail('match needs at least one signal');
