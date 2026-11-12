@@ -8,6 +8,7 @@ import { formatCase, type BookingCase } from "../knowledge/cases.js";
 import { formatGuidance, type Guidance } from "../knowledge/guidance.js";
 import { parseReadStatement, withoutPayments } from "../books/statement-check.js";
 import type { ReadStatement } from "../types/statement-read.js";
+import { NOT_A_RECEIPT } from "../intake/unclear.js";
 
 export interface MatchResult {
   suggestedFilename: string;
@@ -156,7 +157,9 @@ Rules for payout: ${PAYOUT_RULES}
 
 Rules for order: ${ORDER_RULES}
 
-Rules for suggestedFilename: YYYYMMDD prefix, lowercase, hyphens instead of spaces, no special chars, end with .pdf.
+Rules for date: the date the document itself shows (its invoice, receipt or order date). When it shows none, or none can be read, "date" is "" and suggestedFilename starts with 00000000: never today's date, the day it was sent or a guessed one.
+
+Rules for suggestedFilename: YYYYMMDD prefix (the document's date, 00000000 without one), lowercase, hyphens instead of spaces, no special chars, end with .pdf.
 
 Rules for description:
 - General: concise vendor name and purchase purpose
@@ -169,7 +172,8 @@ export function buildVisionPrompt(absPdfPath: string): string {
     'Extrahiere den vollständigen Text aus diesem Beleg/Rechnung. ' +
     'Beginne mit einer kurzen deutschen Beschreibung (z.B. "Tankquittung", "Lebensmitteleinkauf"), ' +
     'gefolgt von einer Leerzeile, dann der vollständige Text. Kein weiterer Kommentar. ' +
-    'Ist der Beleg nicht lesbar, antworte nur «Nicht lesbar» und in einem kurzen Satz, warum; rate keinen Text.';
+    'Ist der Beleg nicht lesbar, antworte nur «Nicht lesbar» und in einem kurzen Satz, warum; rate keinen Text. ' +
+    `Zeigt die Datei gar keinen Beleg (ein Ferien- oder Personenfoto, ein Bild ohne Rechnung, Quittung, Auszug oder Brief), antworte nur «${NOT_A_RECEIPT}:» und in einem kurzen Satz, was sie zeigt.`;
 }
 
 export interface ClassifyEntry {

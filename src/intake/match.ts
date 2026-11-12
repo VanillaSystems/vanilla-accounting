@@ -214,7 +214,9 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const first = books.read();
   const staged = first.receipts.filter((r) => r.location === 'staged');
   const visionNeeded = staged.filter((r) => r.needsVisionReview);
-  const toRead = staged.filter((r) => !r.needsVisionReview);
+  // A file the reading found no receipt at all (a holiday photo, #361) is set aside under the name it came with: no payment, no name the model makes up.
+  const aside = staged.filter((r) => !r.needsVisionReview && r.kind === 'noise');
+  const toRead = staged.filter((r) => !r.needsVisionReview && r.kind !== 'noise');
   // Code first (#187): the staged receipts take part in the chain with the facts code reads off them.
   const early = toRead.flatMap((r) => provisional(r) ?? []);
   const payers = batchPayersOf(ws);
@@ -260,6 +262,11 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     const target = archive(receipt, receipt.filename, (r) => { if (!r.date) Object.assign(r, dateOf(undefined, r)); });
     progress(++completed, total);
     log(target ? `  moved (needsVisionReview): ${receipt.filename} → ${target}` : `  warn: ${receipt.filename} is not staged in beleg-import/ any more, skipping`);
+  }
+  for (const receipt of aside) {
+    const target = archive(receipt, receipt.filename, () => undefined);
+    progress(++completed, total);
+    log(target ? `  set aside, no receipt${receipt.kindWhy ? ` (${receipt.kindWhy})` : ''}: ${receipt.filename} → ${target}` : `  warn: ${receipt.filename} is not staged in beleg-import/ any more, skipping`);
   }
 
   // ── The receipts the chain paired: archived, named and linked without their model match ──
@@ -412,7 +419,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     while (running >= CONCURRENCY) await new Promise<void>((resolve) => queue.push(resolve));
     running++;
     try { await processReceipt(receipt); } finally { running--; queue.shift()?.(); }
-    progress(visionNeeded.length + pairedByCode.size + completed, total);
+    progress(visionNeeded.length + aside.length + pairedByCode.size + completed, total);
   }));
 
   // The receipts just read: what code finds for them the model was not sure of.

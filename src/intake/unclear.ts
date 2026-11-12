@@ -64,6 +64,19 @@ export async function askKind(ask: Ask, text: string, filename: string): Promise
   return parseModelKind(await ask(unclearPrompt(text, filename), { step: 'receipt-kind', timeoutMs: 60_000 }));
 }
 
+/** How the vision reading says that a file is no receipt at all (src/llm/prompts.ts buildVisionPrompt asks for it). */
+export const NOT_A_RECEIPT = 'Kein Beleg';
+
+/**
+ * The vision reading's own verdict (buildVisionPrompt): a file that shows no receipt at all (a holiday
+ * photo) is answered «Kein Beleg: <what it shows>» (#361). Undefined for any other reading: a text, or «Nicht lesbar».
+ */
+export function visionVerdict(text: string): ModelKind | undefined {
+  const m = new RegExp(`^\\s*[«"]?${NOT_A_RECEIPT}[»"]?\\s*[:.–-]?\\s*`, 'i').exec(text);
+  if (!m) return undefined;
+  return { is: 'none', why: text.slice(m[0].length).replace(/\s+/g, ' ').trim().slice(0, 200) };
+}
+
 /** The receipt's kind from the model's verdict: no receipt is noise with the reason; a receipt stays untyped. */
 export function kindOfModel(v: ModelKind): Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'kindWhy'> {
   if (v.is !== 'none') return {};

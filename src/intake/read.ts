@@ -34,7 +34,7 @@ import { fileReceipts, paymentContext } from '../invoices/service.js';
 import { stemOf, type Ask, type IntakeNote, type StepRun } from './pipeline.js';
 import { putInQuarantine } from './quarantine.js';
 import { documentKind } from './document-kind.js';
-import { askKind, asksModel, kindOfModel, MODEL_TEXT, type ModelKind } from './unclear.js';
+import { askKind, asksModel, kindOfModel, MODEL_TEXT, visionVerdict, type ModelKind } from './unclear.js';
 import { statementFacts } from '../books/statement-facts.js';
 import { documents } from '../engines/index.js';
 
@@ -186,6 +186,9 @@ interface Extracted { text: string; method: Receipt['extractionMethod']; fileSiz
  * sets aside when there is one (src/intake/unclear.ts). A bank statement (#151) is dated on its period's last day.
  */
 function kindOfText(fresh: Extracted, filename: string, originalFilename: string, model?: ModelKind): Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'kindWhy' | 'date' | 'amount' | 'currency'> {
+  // The model reading a picture said it shows no receipt at all (a holiday photo, #361): set aside with what it shows.
+  const said = seenAsNone(fresh);
+  if (said) return kindOfModel(said);
   const statement = statementFacts({ extractedText: fresh.text, filename, originalFilename }, documents());
   if (statement) return { kind: 'statement', kindBy: 'rule', kindRule: 'document:statement', ...(statement.to ? { date: statement.to } : {}) };
   const v = documentKind(fresh.text, documents());
@@ -194,6 +197,9 @@ function kindOfText(fresh: Extracted, filename: string, originalFilename: string
   if (v.is === 'other' && fresh.method === 'claude-vision') return { kind: 'noise', kindBy: 'rule', kindRule: `document:${v.why}` };
   return v.is === 'unclear' && model ? kindOfModel(model) : {};
 }
+
+/** The vision reading's «Kein Beleg: …» (src/intake/unclear.ts visionVerdict); only a model's reading of a picture says it. */
+const seenAsNone = (read: Extracted) => (read.method === 'claude-vision' ? visionVerdict(read.text) : undefined);
 
 // ─── The step ────────────────────────────────────────────────────────────────
 
@@ -268,7 +274,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
   // A receipt read again keeps the kind it has; a reading that proves nothing (a photo the model could not read) says nothing of its kind and waits as «nicht lesbar» (#284).
   const unclear = ask ? toExtract.filter((f) => {
     const read = extracted.get(f.id);
-    return !again.has(f.id) && !known.get(f.id)?.kind && !known.get(f.id)?.kindBy && !!read && textProves({ extractedText: read.text, extractionMethod: read.method }) && asksModel(read.text, documents());
+    return !again.has(f.id) && !known.get(f.id)?.kind && !known.get(f.id)?.kindBy && !!read && !seenAsNone(read) && textProves({ extractedText: read.text, extractionMethod: read.method }) && asksModel(read.text, documents());
   }) : [];
   await Promise.all(unclear.map((f) => pool(async () => {
     try {

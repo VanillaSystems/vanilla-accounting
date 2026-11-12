@@ -6,7 +6,7 @@ page adds the dialog and how it hands over to the workflows of 0.4.0.
 
 ## The dialog
 
-1. **Drop anywhere.** Files dropped on any area open the dialog **Dateien hinzufügen**. It stays
+1. **Drop anywhere.** Files dropped on any area, Kontoauszüge too (#361), open the dialog **Dateien hinzufügen**. It stays
    open; every further drop, onto the window or the dialog, extends the list. A ZIP is unpacked
    into its files.
 2. **Each file is recognized at once**, cheaply first (ADR 0008 §2): *Struktur* (camt.053 by its
@@ -136,6 +136,14 @@ dialog, so the same checks run again later:
   to `reach.mail.skip` and, since that only narrows the reach, switches the new version on.
 - **The read step** makes an order confirmation or delivery note kind `supporting`, and a text the
   model read off a photo that says it is no receipt kind `noise` (both by rule; a person's kind wins).
+  The model's reading of a picture answers «Kein Beleg: <what it shows>» for a file that shows no
+  receipt at all (a holiday photo): kind `noise` with that reason (#361). The matching step sets
+  such a file aside under the name it came with, without a model match; the drop row reads «kein
+  Beleg» with the reason. The model gives a receipt's own date only: none read, the receipt stays
+  without one (its name without a day) and its drop row waits «fehlt: Datum».
+- **The drop row of a taken photo** says what Belege says of it, read from the books: «kein Beleg»,
+  «schon da?» (a possible copy, with «ist dasselbe» and «verschieden» as in Belege), «fehlt: Datum»,
+  «noch nicht gelesen» (no AI read it), else read and linked or not.
 - **The matching step** asks the duplicate check with the facts the model read: a possible copy is
   archived but linked to nothing. Belege shows «möglicher Doppelbeleg von …» on it, derived from
   the books every time (`ReceiptView.twin`): «ist dasselbe» makes it kind `duplicate` and removes
