@@ -4412,6 +4412,7 @@ export default {
     'onboarding.sources.none': 'Ancora nessuna fonte attivata.',
     'onboarding.sources.ask': 'Configurare con me',
     'onboarding.sources.noAi': 'Configurare nella conversazione richiede un’IA.',
+    'onboarding.sources.lookFailed': 'L’app non ha potuto verificare se qui risponde un’IA ({why}); verifica di nuovo quando torni alla finestra.',
     'onboarding.sources.askText': 'Configura con me come arrivano i miei giustificativi.',
     'onboarding.sources.show': 'Vedere le fonti',
     'onboarding.s.partners': { one: 'Nelle registrazioni {year} ho trovato un partner commerciale. Una regola esiste solo dopo che l\'hai vista e tenuta:', other: 'Ho ordinato in gruppi {n} partner commerciali dalle registrazioni {year}. Una regola esiste solo dopo che l\'hai vista e tenuta:' },

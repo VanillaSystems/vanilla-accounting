@@ -22,7 +22,7 @@ import { answer, keepSells, keepVat, setupReady, undoVat, useSetup } from './sta
 import { kindsOfAnswer } from '../../onboarding/model.js';
 import { salesKinds, type SalesKind } from '../../workspace/setup.js';
 import { say } from './words.js';
-import { useAiState } from '../ai/no-ai.js';
+import { useAiLookFailed, useAiState } from '../ai/no-ai.js';
 
 /**
  * Whether an AI answers on this Mac (#364): the conversation offers only what works there. `unknown`
@@ -289,12 +289,13 @@ function SourcesCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'sources
   const lang = document.documentElement.lang || 'de';
   // «Mit mir einrichten» asks the AI: offered only while one answers; otherwise its place says so and leads to setting one up (#364).
   const ai = useContext(Ai_);
+  const failed = useAiLookFailed();
   return (
     <div className="obcard" data-ai={ai}>
       {card.sources.length ? (
         <ul className="obcheck">{card.sources.map((s) => <li key={s.id}>{ICONS.receipts}<b>{s.label[lang] ?? s.label.en}</b><span className="obbadge pos">{t('onboarding.sources.on')}</span></li>)}</ul>
       ) : <span className="rk">{t('onboarding.sources.none')}</span>}
-      {ai === 'none' ? <span className="rk" data-testid="sources-no-ai">{t('onboarding.sources.noAi')}</span> : null}
+      {ai === 'none' ? <span className="rk" data-testid="sources-no-ai">{t('onboarding.sources.noAi')}{failed ? ` ${t('onboarding.sources.lookFailed', { why: failed })}` : ''}</span> : null}
       <div className="actions">
         {ai === 'none' ? <button type="button" className="aiact" data-act="ai-set-up" onClick={() => onGo({ area: 'company', section: 'ai' })}>{t('aiSetup.line.setUp')}</button> : null}
         {ai === 'ready' ? <button type="button" className="aiact primary" data-act="sources-ask" onClick={() => void sendMessage(t('onboarding.sources.askText'), undefined)}>{t('onboarding.sources.ask')}</button> : null}

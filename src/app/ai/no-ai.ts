@@ -4,10 +4,12 @@
  * window gets focus (she may have set one up meanwhile). «KI ganz ausschalten» counts as none.
  */
 import { useEffect, useSyncExternalStore } from 'react';
-import { api } from '../lib/api.js';
+import { api, errorText } from '../lib/api.js';
 import { useAiOff } from './ai-off.js';
 
 let available: boolean | undefined;
+/** Why the last look failed (the request, not the AI): said beside the lack it caused. */
+let failed: string | undefined;
 let looking = false;
 let wired = false;
 const listeners = new Set<() => void>();
@@ -15,7 +17,9 @@ const listeners = new Set<() => void>();
 function look(): void {
   if (looking) return;
   looking = true;
-  api.aiSetup.view().then((v) => { available = v.available; for (const l of listeners) l(); }, () => undefined).finally(() => { looking = false; });
+  // A look that fails ends as «none» with its reason, never as a look that stays open (#364): it is taken again on focus.
+  api.aiSetup.view().then((v) => { available = v.available; failed = undefined; }, (e: unknown) => { available = false; failed = errorText(e); })
+    .finally(() => { looking = false; for (const l of listeners) l(); });
 }
 
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
@@ -43,3 +47,6 @@ export function useNoAi(): boolean {
   }, []);
   return off || now === false;
 }
+
+/** Why the last look at this Mac's AI failed, when it did: the request, not the AI. */
+export const useAiLookFailed = (): string | undefined => useSyncExternalStore(subscribe, () => failed);

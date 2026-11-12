@@ -353,9 +353,11 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     app.use((req, res, next) => (isApiPath(req.path) ? next() : forwardTo(opts.devUi!, req, res)));
     app.use((req, res, next) => (books ? books(req, res, next) : next()));
   } else {
+    // The page is this server's `dist`, before the books' API: that router also serves the checkout's own
+    // dist folder (src/server/files.ts), which in a checkout that holds an older build is a stale page.
     app.use(express.static(opts.dist, { index: false }));
-    app.use((req, res, next) => (books ? books(req, res, next) : next()));
     app.get(/.*/, (req, res, next) => (isAppPath(req.path) ? res.sendFile('index.html', { root: opts.dist }) : next()));
+    app.use((req, res, next) => (books ? books(req, res, next) : next()));
   }
   app.use('/api', (_req, res) => {
     res.status(409).json({ error: 'Keine Buchhaltung geöffnet.', code: 'noWorkspace' } satisfies ApiErrorBody);
