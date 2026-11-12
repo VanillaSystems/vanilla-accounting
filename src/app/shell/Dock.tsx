@@ -98,7 +98,8 @@ export function Dock({ current, books, keys, wide, onToggle, nav, canEdit, href,
   const runnable = w.canRun && canEdit;
   const busyRunNow = starting || w.run?.workflow === RUN_NOW;
 
-  const tipLines = [w.stack.map((f) => `${figure(f)} ${figureLabel(f)}`).join(' · '), words.now];
+  // The tip names what each figure counts: «5 Belege gelesen · 1 Zahlung gebucht · 11 warten auf dich».
+  const tipLines = [w.stack.map((f) => `${figure(f)} ${cardLabel(f)}`).join(' · '), words.now];
   const stack = w.stack.map((f) => (
     <span key={f.key} className={`n ${f.key}`}><b>{figure(f)}</b><span>{figureLabel(f)}</span></span>
   ));

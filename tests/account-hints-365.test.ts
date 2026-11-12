@@ -12,7 +12,7 @@ import de from '../src/app/i18n/locales/de.js';
 
 const chart = loadChart();
 const standard = standardAccounts('GmbH');
-const messages = de.messages as Record<string, string>;
+const messages = de.messages as unknown as Record<string, string>;
 const ctx = (prefer: AccountType): AccountContext<AccountType> => ({
   typeOf: (n) => chart.accounts.find((a) => a.number === n)?.type, prefer, defaults: prefer === 'revenue' ? ['3400'] : [],
   words: { revenue: messages['accounts.words.revenue'].split(/\s+/), expense: messages['accounts.words.expense'].split(/\s+/) },

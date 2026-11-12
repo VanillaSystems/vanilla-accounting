@@ -80,6 +80,18 @@ test('the last stage: running, due with its day, overdue, filed, before the book
   assert.deepEqual(homeFigures(b, Q3, { ...ctx, vatRegistered: false }).filing, { kind: 'due', overdue: false });
 });
 
+test('«gebucht» in the dock counts the period\'s booked payments: hers by hand without a receipt too (#365)', () => {
+  const b = books([receipt('a')], [], [entry('1', 'LOHN', { accountDebit: '5000', origin: 'manual' }), entry('2', 'OLD', { date: '2026-09-30' })]);
+  b.transactions = [
+    { ref: 'LOHN', bank: 'Raiffeisen', date: '2026-10-25', amount: 5200, currency: 'CHF', direction: 'DBIT', description: 'Lohn Oktober' },
+    { ref: 'OPEN', bank: 'Raiffeisen', date: '2026-10-26', amount: 89, currency: 'CHF', direction: 'DBIT', description: 'Abo' },
+    { ref: 'OLD', bank: 'Raiffeisen', date: '2026-09-30', amount: 12, currency: 'CHF', direction: 'DBIT', description: 'Kontoführung' },
+  ];
+  const f = homeFigures(b, Q4, ctx);
+  assert.equal(f.booked, 0, 'no receipt of the period is booked');
+  assert.equal(f.paymentsBooked, 1, 'her wage, booked by hand, counts; the open payment and another period\'s do not');
+});
+
 test('an empty workspace has zeros and no share', () => {
   const f = homeFigures(books([], [], []), Q4, ctx);
   assert.equal(f.collected + f.read + f.matched + f.booked, 0);

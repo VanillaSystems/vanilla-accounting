@@ -87,6 +87,8 @@ export interface HomeFigures {
   matched: number;
   /** Of the matched ones, those whose payment is booked. */
   booked: number;
+  /** Payments of the period with a booking, by the app or by hand, with a receipt or without (wages, the bank's fee): what the dock's «gebucht» counts (#365). */
+  paymentsBooked: number;
   /** The booked receipts by who booked their payment. */
   authors: Record<Author, number>;
   /**
@@ -134,6 +136,7 @@ export function homeFigures(books: Index, period: PeriodRange, ctx: HomeContext,
     payable: toPay.length,
     matched: matched.length,
     booked,
+    paymentsBooked: books.transactions.filter((t) => t.amount !== 0 && t.date >= period.from && t.date <= period.to && entriesOf.has(t.ref)).length,
     authors,
     ...(known > 0 ? { withoutYou: Math.round((authors.app / known) * 100) } : {}),
     waitingReceipt: waitingForReceipt(books, (ref) => entriesOf.has(ref), ctx.today)
