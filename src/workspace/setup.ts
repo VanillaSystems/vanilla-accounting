@@ -71,6 +71,11 @@ interface QuestionSpec {
    * question that decides the VAT return, and not for imports: nothing offers the import accounts later.
    */
   unsure?: string;
+  /**
+   * One line for a person who does not know the answer (#364): where it stands in her papers, who knows
+   * it, and what a wrong pick costs. Shown under `why` by the form, the conversation and the wizard.
+   */
+  where?: string;
 }
 
 const registered = (a: Given) => a.vatRegistered === 'yes';
@@ -102,6 +107,7 @@ export const QUESTIONS = {
   vatMethod: {
     ask: 'VAT method',
     why: 'Effective: you pay the VAT you charged minus the input tax on your costs. Saldosteuersatz: a flat rate on turnover, no input tax.',
+    where: 'Not sure? A return on form 0553 is the Saldosteuersatz; the tax authority\'s letter on your VAT number names the method, and your accountant knows. Picked wrong: change it under Company › VAT while this year has no entries.',
     when: registered,
     options: [
       { value: 'effective', label: 'effektive Methode' },
@@ -113,7 +119,8 @@ export const QUESTIONS = {
   },
   basis: {
     ask: 'VAT basis',
-    why: 'Vereinbart (the law\'s default, MWSTG Art. 39): VAT is due when you send the invoice, input tax when you receive the bill. Vereinnahmt (on request): when the money moves.',
+    why: 'When the VAT counts. Vereinnahmt: when the money moves. Vereinbart: when you send your invoice, and for input tax when a bill arrives. Vereinbart is the normal case; vereinnahmt holds when the tax authority allowed it.',
+    where: 'Not sure? The tax authority\'s letter on your VAT number says it, and your accountant knows. Picked wrong: change it under Company › VAT while this year has no entries.',
     when: registered,
     options: [
       { value: 'received', label: 'vereinnahmt (cash)' },
@@ -143,7 +150,8 @@ export const QUESTIONS = {
   },
   start: {
     ask: 'Starting point',
-    why: 'A new company starts with empty books. A running one needs what it had on 1 January: money in the bank, open invoices, debts (the opening balances).',
+    why: 'Both answers create the same books. Switching: you then enter what the firm had on 1 January (bank, open invoices, debts), from last year\'s balance sheet. New company: only the capital paid in.',
+    where: 'Either way you enter it later under Company › Opening; until then the bank balance in the app differs from the bank\'s.',
     options: [
       { value: 'new', label: 'new company, empty books' },
       {
@@ -279,6 +287,9 @@ export const PRESET_NAMES = Object.keys(PRESETS) as Preset[];
 
 /** The answer «Weiss nicht» takes for `key`, where the question has one. */
 export const unsureOf = (key: QuestionKey): string | undefined => (QUESTIONS[key] as QuestionSpec).unsure;
+
+/** Whether `key` has a line for a person who does not know the answer (`where`, #364): the UI says it as `desktop.q.<key>.where`. */
+export const hasWhere = (key: QuestionKey): boolean => (QUESTIONS[key] as QuestionSpec).where !== undefined;
 
 /** The filing period usual for a VAT method: quarterly on the effective one, half-yearly on the net tax rate. */
 export const usualPeriod = (method: string): 'quarterly' | 'half-yearly' => (method === 'net-rate' ? 'half-yearly' : 'quarterly');

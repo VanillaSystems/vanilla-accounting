@@ -110,7 +110,7 @@ const key = (m: StepMark) => (['firm', 'preset', 'netRates', 'banks'].includes(m
 
 /** The prompt for one typed message: the draft, the step waiting, every value code accepts, the turns so far. */
 export function talkPrompt(d: SetupDraft, text: string, history: readonly TalkTurn[], baseCurrency: string): string {
-  const { started: _started, language, fromText: _marks, said, ...draft } = d;
+  const { started: _started, language, fromText: _marks, assumed: _assumed, said, ...draft } = d;
   const presets = PRESET_NAMES.map((p) => `  - ${p}: ${PRESETS[p].label} (${PRESETS[p].fits}). Gives: ${JSON.stringify(PRESETS[p].answers)}`).join('\n');
   const marks = draftMarks(d);
   const turns = history.length ? history.map((t) => `${t.who === 'me' ? 'person' : 'you'}: ${t.text}`).join('\n') : '(none)';

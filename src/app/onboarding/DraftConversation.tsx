@@ -9,10 +9,10 @@
  */
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { BANKS } from '../../workspace/banks.js';
-import { PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, optionOf, unsureOf, unusualPeriod, type QuestionKey } from '../../workspace/setup.js';
+import { PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, hasWhere, optionOf, unsureOf, unusualPeriod, type QuestionKey } from '../../workspace/setup.js';
 import type { BankSpec } from '../../workspace/create.js';
 import type { NetRate } from '../../workspace/vat-setup.js';
-import { draftProgress, draftSteps, type DraftPatch, type DraftStep, type Firm, type QuestionValue, type SetupDraft, type SetupDraftView, type StepMark } from '../../onboarding/draft.js';
+import { DRAFT_PHASES, assumedOf, draftProgress, draftSteps, type DraftPatch, type DraftStep, type Firm, type QuestionValue, type SetupDraft, type SetupDraftView, type StepMark } from '../../onboarding/draft.js';
 import type { SetupReply, TalkRefusal } from '../../onboarding/draft-talk.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
 import { api, errorText, setupText } from '../lib/api.js';
@@ -53,6 +53,10 @@ const refusalText = (r: TalkRefusal): string =>
       : r.reason === 'unusualPeriod' ? t(`onboarding.talk.unusualPeriod.${r.method}`)
         : setupText(r);
 const FromText = ({ on }: { on: boolean }) => (on ? <span className="obbadge ai" data-from-text>{t('onboarding.talk.fromText')}</span> : null);
+/** An answer the kind of firm gave and she never said (#364): marked, with why, until she answers it herself. */
+const Assumed = ({ draft, k }: { draft: SetupDraft; k: StepMark }) => (draft.preset && assumedOf(draft).includes(k as QuestionKey)
+  ? <span className="obbadge assumed" data-assumed data-tip={t('onboarding.draft.assumedWhy', { preset: tData(`desktop.q.preset.${draft.preset}`) })}>{t('onboarding.draft.assumed')}</span>
+  : null);
 
 export function DraftConversation({ root, onLeave }: { root: string; onLeave(): void }) {
   const [view, setView] = useState<SetupDraftView | null>(null);
@@ -124,10 +128,19 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
           <span className="obface"><BotIcon /></span>
           <span><b>{t('onboarding.title')}</b><small>{t('onboarding.who')}</small></span>
         </span>
-        {/* How far she is (#345): the steps answered, by click or from her words, of those this firm is asked. */}
+        {/* How far she is (#364): the four parts of the setup, the same for every firm, so the count never jumps. */}
         {progress ? <span className="obcount" data-progress>{t('onboarding.draft.progress', { n: progress.done, of: progress.of })}</span> : null}
         <button type="button" className="linkbtn" data-act="setup-later" data-tip={t('onboarding.draft.laterHint')} onClick={onLeave}>{t('onboarding.draft.later')}</button>
       </header>
+      {progress ? (
+        <nav className="obrail obphases" aria-label={t('onboarding.rail')}>
+          {DRAFT_PHASES.map((p) => (
+            <span key={p} data-phase={p} className={progress.phases[p] ? 'done' : p === progress.next ? 'next' : 'open'} data-tip={`${t(`onboarding.draft.phase.${p}`)}: ${t(`onboarding.state.${progress.phases[p] ? 'done' : 'open'}`)}`}>
+              <span className="dot" />{t(`onboarding.draft.phase.${p}`)}
+            </span>
+          ))}
+        </nav>
+      ) : null}
       <div ref={turnsBox} className="obflowturns">
         <Ai><p>{t('onboarding.draft.hello')}</p><p className="obfolder mono">{root}</p></Ai>
         {view && steps.map((step) => (
@@ -191,10 +204,11 @@ function TurnView({ turn }: { turn: Turn }) {
 }
 
 /** The person's answer, with «Ändern» beside it. */
-const Answer = ({ text, busy, fromText, onChange }: { text: string; busy: boolean; fromText: boolean; onChange(): void }) => (
+const Answer = ({ text, busy, fromText, assumed, onChange }: { text: string; busy: boolean; fromText: boolean; assumed?: ReactNode; onChange(): void }) => (
   <div className="obme">
     <button type="button" className="linkbtn" disabled={busy} onClick={onChange}>{t('onboarding.change')}</button>
     <FromText on={fromText} />
+    {assumed}
     <div className="msg me">{text}</div>
   </div>
 );
@@ -257,10 +271,10 @@ function QuestionStep({ step, draft, busy, send, change, fromText }: { step: Ext
   return (
     <div className="obstep" data-step={key}>
       {key === 'vatRegistered' ? <Ai><p>{t('onboarding.draft.vat')}</p></Ai> : null}
-      <Ai><p>{tData(`desktop.q.${key}.ask`)}</p><p className="obwhy">{tData(`desktop.q.${key}.why`)}</p></Ai>
+      <Ai><p>{tData(`desktop.q.${key}.ask`)}</p><p className="obwhy">{tData(`desktop.q.${key}.why`)}</p>{hasWhere(key) ? <p className="obwhy obwhere" data-where>{tData(`desktop.q.${key}.where`)}</p> : null}</Ai>
       {step.answer !== undefined ? (
         <>
-          <Answer text={valueLabel(key, step.answer)} busy={busy} fromText={fromText} onChange={() => change(key, { step: 'question', key, value: null }, step.answer)} />
+          <Answer text={valueLabel(key, step.answer)} busy={busy} fromText={fromText} assumed={<Assumed draft={draft} k={key} />} onChange={() => change(key, { step: 'question', key, value: null }, step.answer)} />
           {notes.map((o) => <Ai key={o!.value}><p>{tData(`desktop.q.${key}.${o!.value}.caveat`)}</p></Ai>)}
           {odd ? <Ai><p data-unusual>{t(`onboarding.draft.periodUnusual.${odd.method}`)}</p></Ai> : null}
         </>
@@ -353,7 +367,11 @@ function Review({ draft, root, busy, change, onCreate }: { draft: SetupDraft; ro
   const marked = (m: StepMark) => !!draft.fromText?.includes(m);
   return (
     <div className="obstep" data-step="review">
-      <Ai><p>{t('onboarding.draft.review')}</p>{draft.fromText?.length ? <p className="obwhy">{t('onboarding.talk.reviewNote')}</p> : null}</Ai>
+      <Ai>
+        <p>{t('onboarding.draft.review')}</p>
+        {draft.fromText?.length ? <p className="obwhy">{t('onboarding.talk.reviewNote')}</p> : null}
+        {draft.preset && assumedOf(draft).length ? <p className="obwhy" data-assumed-note>{t('onboarding.draft.assumedNote', { preset: tData(`desktop.q.preset.${draft.preset}`) })}</p> : null}
+      </Ai>
       <div className="obind">
         <div className="obcard">
           <h4>{t('onboarding.draft.reviewTitle')}</h4>
@@ -361,7 +379,7 @@ function Review({ draft, root, busy, change, onCreate }: { draft: SetupDraft; ro
             {draft.firm ? <><dt>{t('onboarding.draft.firmLabel')}</dt><dd>{firmLine(draft.firm)} <FromText on={marked('firm')} /></dd><dd /></> : null}
             {draft.preset ? <><dt>{t('desktop.preset')}</dt><dd>{tData(`desktop.q.preset.${draft.preset}`)} <FromText on={marked('preset')} /></dd><dd /></> : null}
             {questions.map((k) => (
-              <ReviewRow key={k} label={tData(`desktop.q.${k}.ask`)} value={valueLabel(k, draft.answers[k])} fromText={marked(k)} busy={busy} onChange={() => change(k, { step: 'question', key: k, value: null }, draft.answers[k])} />
+              <ReviewRow key={k} label={tData(`desktop.q.${k}.ask`)} value={valueLabel(k, draft.answers[k])} fromText={marked(k)} assumed={<Assumed draft={draft} k={k} />} busy={busy} onChange={() => change(k, { step: 'question', key: k, value: null }, draft.answers[k])} />
             ))}
             {draft.netRates?.length ? <><dt>{t('desktop.netRates')}</dt><dd>{ratesLine(draft.netRates)} <FromText on={marked('netRates')} /></dd><dd /></> : null}
             {draft.banks ? <><dt>{t('desktop.banks')}</dt><dd>{banksLine(draft.banks)} <FromText on={marked('banks')} /></dd><dd /></> : null}
@@ -375,6 +393,6 @@ function Review({ draft, root, busy, change, onCreate }: { draft: SetupDraft; ro
   );
 }
 
-const ReviewRow = ({ label, value, fromText, busy, onChange }: { label: string; value: string; fromText: boolean; busy: boolean; onChange(): void }) => (
-  <><dt>{label}</dt><dd>{value} <FromText on={fromText} /></dd><dd><button type="button" className="linkbtn" disabled={busy} onClick={onChange}>{t('onboarding.change')}</button></dd></>
+const ReviewRow = ({ label, value, fromText, assumed, busy, onChange }: { label: string; value: string; fromText: boolean; assumed: ReactNode; busy: boolean; onChange(): void }) => (
+  <><dt>{label}</dt><dd>{value} <FromText on={fromText} />{assumed}</dd><dd><button type="button" className="linkbtn" disabled={busy} onClick={onChange}>{t('onboarding.change')}</button></dd></>
 );

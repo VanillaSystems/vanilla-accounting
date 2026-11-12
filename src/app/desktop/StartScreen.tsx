@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BANKS, parseIban } from '../../workspace/banks.js';
-import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstMissing, firstUnsupported, optionOf, type Answers, type Preset, type QuestionKey } from '../../workspace/setup.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstMissing, hasWhere, firstUnsupported, optionOf, type Answers, type Preset, type QuestionKey } from '../../workspace/setup.js';
 import { parseUid } from '../../workspace/uid.js';
 import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
@@ -294,7 +294,7 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
             const notes = chosen.map((v) => optionOf(key, v)).filter((o) => o?.unsupported || o?.caveat);
             return (
               <div key={key} className="st-q" data-q={key}>
-                <div className="st-qhd"><b>{tData(`desktop.q.${key}.ask`)}</b><span>{tData(`desktop.q.${key}.why`)}</span></div>
+                <div className="st-qhd"><b>{tData(`desktop.q.${key}.ask`)}</b><span>{tData(`desktop.q.${key}.why`)}</span>{hasWhere(key) ? <span data-where>{tData(`desktop.q.${key}.where`)}</span> : null}</div>
                 <div className="st-opts" role={'multi' in QUESTIONS[key] ? 'group' : 'radiogroup'} aria-label={tData(`desktop.q.${key}.ask`)}>
                   {QUESTIONS[key].options.map((o) => (
                     <button key={o.value} type="button" role={'multi' in QUESTIONS[key] ? 'checkbox' : 'radio'} aria-checked={chosen.includes(o.value)} className={chosen.includes(o.value) ? 'on' : ''} onClick={() => pick(key, o.value)}>

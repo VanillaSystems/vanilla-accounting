@@ -551,7 +551,7 @@ export function Sidebar({ page, books, onGo, onGoTo }: Props) {
           {/* Before the first message: where the open period stands, drawn by code, so it is there without an AI too (#342). */}
           {s.turns.length === 0 && !setup ? <OpenPeriodCard books={books} onGo={onGoTo} /> : null}
           {s.turns.length === 0 && !noAi ? <p className="m aiempty">{t('assistant.empty')}</p> : null}
-          {setup ? <SetupConversation turns={s.turns} turn={turnView} onGo={onGo} /> : s.turns.map(turnView)}
+          {setup ? <SetupConversation turns={s.turns} turn={turnView} onGo={onGo} noAi={!!noAi} /> : s.turns.map(turnView)}
           {s.error ? <p className="warnline">{s.error}</p> : null}
           <div ref={end} />
         </div>

@@ -8,7 +8,7 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { writeAtomic } from '../invoices/store.js';
 import { SetupError, checkBank, checkPreset, createWorkspace, type Bank, type Created } from '../workspace/create.js';
-import { QUESTIONS, optionOf, salesKinds, type QuestionKey } from '../workspace/setup.js';
+import { PRESETS, QUESTIONS, VAT_QUESTIONS, optionOf, salesKinds, type QuestionKey } from '../workspace/setup.js';
 import { parseNetRates } from '../workspace/vat-setup.js';
 import { parseUid } from '../workspace/uid.js';
 import { APP_FOLDER, APP_ROOT, appFolderIn, appLanguages, workspaceAt } from '../workspace/workspace.js';
@@ -105,7 +105,12 @@ export function readDraft(root: string): SetupDraft | undefined {
   if (raw.banks) replay({ step: 'banks', value: raw.banks });
   if (typeof raw.refusedPeriod === 'string' && draft.answers.period === undefined) draft = { ...draft, refusedPeriod: raw.refusedPeriod };
   const marks = Array.isArray(raw.fromText) ? raw.fromText.filter(isStepMark) : [];
-  return marks.length ? { ...draft, fromText: marks } : draft;
+  if (marks.length) draft = { ...draft, fromText: marks };
+  // What the kind of firm assumed (#364); a draft of an earlier version names none: its answers equal to the preset's, not from her words.
+  const given: Partial<Record<string, unknown>> = draft.preset && draft.preset !== 'custom' ? PRESETS[draft.preset].answers : {};
+  const assumed = (Array.isArray(raw.assumed) ? raw.assumed : Object.keys(given).filter((k) => !VAT_QUESTIONS.includes(k as never) && !marks.includes(k as never) && JSON.stringify(given[k]) === JSON.stringify(draft.answers[k as QuestionKey])))
+    .filter((k): k is QuestionKey => typeof k === 'string' && Object.hasOwn(QUESTIONS, k) && draft.answers[k as QuestionKey] !== undefined);
+  return assumed.length ? { ...draft, assumed } : draft;
 }
 
 /** The draft with what the start screen proposes from the jurisdiction new books get (src/workspace/scaffold.ts). */

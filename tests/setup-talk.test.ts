@@ -14,13 +14,14 @@ import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { desktopServer } from '../src/desktop/server.js';
-import { draftProgress, draftSteps, newDraft, withPatch } from '../src/onboarding/draft.js';
+import { assumedOf, draftProgress, draftSteps, newDraft, withPatch, type SetupDraft } from '../src/onboarding/draft.js';
 import { draftFile, readDraft, writeDraft } from '../src/onboarding/draft-store.js';
 import { applyTalk, parseTalk, talkPrompt, type Ask } from '../src/onboarding/draft-talk.js';
-import { QUESTIONS, QUESTION_ORDER, unsureOf, unusualPeriod, type QuestionKey } from '../src/workspace/setup.js';
+import { QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, hasWhere, unsureOf, unusualPeriod, type QuestionKey } from '../src/workspace/setup.js';
 import type { AskOptions } from '../src/llm/ask.js';
 import { APP_FOLDER, MANIFEST_FILE } from '../src/workspace/workspace.js';
 import { testIban } from './support/iban.js';
+import type { Locale } from '../src/app/i18n/types.js';
 
 const NOW = '2026-10-23T09:00:00.000Z';
 const UID = 'CHE-153.004.184';
@@ -272,15 +273,68 @@ test('the model cannot rename a firm: a name or an owner the app holds is replac
   assert.deepEqual(joined.draft.firm, { name: 'Malerei Huber GmbH', uid: UID, owner: 'Thomas Huber' });
 });
 
-test('the person sees how far she is: the steps answered of those her firm is asked, by click or from her words', () => {
+test('the person sees how far she is: four parts, the same for every firm, so the count never jumps or shrinks (#364)', () => {
+  // Round 1 saw «0 von 14», «1 von 4», «4 von 8», «von 7»: the total followed the questions her answers opened.
+  const counts: string[] = [];
+  const seen = (d: SetupDraft) => { const p = draftProgress(d); counts.push(`${p.done}/${p.of}`); return p; };
   let d = newDraft('de', NOW);
-  assert.deepEqual(draftProgress(d), { done: 0, of: 14 }, 'firm, kind of firm, the eleven questions of a firm not known to be registered, the bank');
+  assert.deepEqual(seen(d), { done: 0, of: 4, phases: { firm: false, kind: false, vat: false, banks: false }, next: 'firm' });
   d = withPatch(d, { step: 'firm', value: { name: 'Malerei Huber GmbH', uid: UID, owner: 'Thomas Huber' } });
-  assert.equal(draftProgress(d).done, 1);
+  assert.equal(seen(d).next, 'kind');
   d = withPatch(d, { step: 'preset', value: 'trades' });
-  assert.deepEqual(draftProgress(d), { done: 2, of: 4 }, 'a preset answers the rest: only whether the firm is registered and the bank remain');
+  assert.equal(seen(d).next, 'vat', 'the kind of firm answers the rest of its part');
   d = withPatch(d, { step: 'question', key: 'vatRegistered', value: 'yes' });
-  assert.deepEqual(draftProgress(d), { done: 3, of: 7 }, 'registered: method, basis and period are asked too');
+  seen(d);
+  d = withPatch(d, { step: 'question', key: 'vatMethod', value: 'net-rate' });
+  seen(d);
+  d = withPatch(d, { step: 'question', key: 'basis', value: 'received' });
+  d = withPatch(d, { step: 'question', key: 'period', value: 'half-yearly' });
+  assert.equal(seen(d).phases.vat, false, 'the rates are part of the VAT');
+  d = withPatch(d, { step: 'netRates', value: [{ rate: 4.5 }] });
+  assert.equal(seen(d).phases.vat, true);
+  d = withPatch(d, { step: 'banks', value: [{ bank: 'Raiffeisen', currency: 'CHF' }] });
+  assert.deepEqual(seen(d), { done: 4, of: 4, phases: { firm: true, kind: true, vat: true, banks: true } });
+  assert.deepEqual(counts, ['0/4', '1/4', '2/4', '2/4', '2/4', '2/4', '3/4', '4/4']);
+});
+
+test('answers the kind of firm gave and she never said are marked as assumed, until she answers them herself (#364)', () => {
+  let d = withPatch(newDraft('de', NOW), { step: 'firm', value: { name: 'Malerei Huber GmbH', uid: UID, owner: 'Thomas Huber' } });
+  d = withPatch(d, { step: 'preset', value: 'trades' });
+  assert.ok(assumedOf(d).includes('start') && assumedOf(d).includes('foreignCustomers'), 'the preset filled «Ausgangslage» and «Kundschaft im Ausland»');
+  assert.ok(!assumedOf(d).some((k) => (VAT_QUESTIONS as readonly string[]).includes(k)), 'the VAT is always asked, never assumed');
+  d = withPatch(d, { step: 'question', key: 'start', value: null });
+  d = withPatch(d, { step: 'question', key: 'start', value: 'switching' });
+  assert.ok(!assumedOf(d).includes('start'), 'answered by her: no longer assumed');
+  assert.ok(assumedOf(d).includes('foreignCustomers'), 'the others the kind of firm gave stay marked after it became «Etwas anderes»');
+  // Taken from her words: hers, not assumed.
+  const words = withPatch(d, { step: 'question', key: 'foreignCustomers', value: 'yes' });
+  assert.ok(!assumedOf(words).includes('foreignCustomers'));
+  // Kept in the folder: a setup broken off shows the same marks when opened again.
+  const root = mkdtempSync(join(tmpdir(), 'assumed-'));
+  mkdirSync(join(root, APP_FOLDER), { recursive: true });
+  writeDraft(root, d);
+  assert.deepEqual(assumedOf(readDraft(root)!), assumedOf(d));
+});
+
+test('the questions that need accounting knowledge say where the answer stands and what a wrong pick costs, in her words, without a law citation (#364)', async () => {
+  const where = QUESTION_ORDER.filter((k) => hasWhere(k));
+  assert.deepEqual(where, ['vatMethod', 'basis', 'start']);
+  for (const lang of ['de', 'en', 'fr', 'it']) {
+    const m = (await import(`../src/app/i18n/locales/${lang}.js`) as { default: Locale }).default.messages as unknown as Record<string, string>;
+    for (const k of where) assert.ok(m[`desktop.q.${k}.where`], `${lang}: desktop.q.${k}.where`);
+    for (const k of QUESTION_ORDER) {
+      for (const text of [m[`desktop.q.${k}.why`], m[`desktop.q.${k}.where`]].filter(Boolean)) {
+        assert.doesNotMatch(text, /Art\. \d|art\. \d|MWSTG|LTVA|LIVA|auf Gesuch|on request|sur demande|su richiesta/, `${lang} ${k}: no citation, no «auf Gesuch»`);
+      }
+    }
+  }
+  const de = (await import('../src/app/i18n/locales/de.js') as { default: Locale }).default.messages as unknown as Record<string, string>;
+  for (const k of ['vatMethod', 'basis']) {
+    assert.match(de[`desktop.q.${k}.where`], /ESTV/, `${k}: where it stands`);
+    assert.match(de[`desktop.q.${k}.where`], /Treuhand/, `${k}: who knows`);
+    assert.match(de[`desktop.q.${k}.where`], /Firma › MWST änderst du es, solange dieses Jahr keine Buchungen hat/, `${k}: what a wrong pick costs (vatMethodHeld)`);
+  }
+  assert.match(de['desktop.q.start.why'], /Beides legt dieselben Bücher an/, 'what each answer changes');
 });
 
 test('«Weiss nicht» exists only where assuming does no harm, and never on a question that decides the VAT return', () => {

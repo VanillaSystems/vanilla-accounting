@@ -72,7 +72,7 @@ async function choose(key: QuestionKey, n: number, preset: Partial<Answers>): Pr
   const multi = 'multi' in q;
   const options = q.options as readonly { value: string; label: string }[];
   if (interactive) {
-    console.log(`\n${n}/${QUESTION_ORDER.length} ${q.ask}\n    ${q.why}`);
+    console.log(`\n${n}/${QUESTION_ORDER.length} ${q.ask}\n    ${q.why}${'where' in q ? `\n    ${q.where}` : ''}`);
     console.log('    ' + options.map((o, i) => `${i + 1}) ${o.label}`).join('   ') + (multi ? '   (several: 1,2; none: -)' : ''));
   }
   const prefilled = preset[key] as string | string[] | undefined;

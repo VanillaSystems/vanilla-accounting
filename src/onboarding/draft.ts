@@ -42,6 +42,11 @@ export interface SetupDraft {
   refusedPeriod?: string;
   /** The answers the AI took from the person's own words (#145), shown «aus deiner Nachricht» until the person changes them. */
   fromText?: StepMark[];
+  /**
+   * The answers the kind of firm gave and the person never said (#364): shown «angenommen» on the review
+   * until she answers them herself, so she knows which to check. Absent: none.
+   */
+  assumed?: QuestionKey[];
 }
 
 /** One answer of the draft, as the setup conversation marks it: a step, or a question by its key. */
@@ -137,12 +142,23 @@ function allSteps(d: SetupDraft): DraftStep[] {
 }
 
 /**
- * How far the person is (#345): the steps answered, of those this draft is asked. `of` can still grow
- * (a preset not chosen yet, «registered» opening the VAT questions): it is the count as the answers stand.
+ * The parts of the setup before the books (#364), the same for every firm: who the firm is, what kind of
+ * firm (the preset and, for «Etwas anderes», its questions), the VAT, the bank. How many questions a part
+ * holds depends on the answers (registered or not, the method), so the count is of parts, never of
+ * questions: it never jumps and never shrinks unless she takes an answer back.
  */
-export function draftProgress(d: SetupDraft): { done: number; of: number } {
+export const DRAFT_PHASES = ['firm', 'kind', 'vat', 'banks'] as const;
+export type DraftPhase = (typeof DRAFT_PHASES)[number];
+
+const phaseOf = (s: DraftStep): DraftPhase =>
+  s.id === 'firm' || s.id === 'banks' ? s.id : s.id === 'netRates' || (s.id === 'question' && isVat(s.key)) ? 'vat' : 'kind';
+
+/** How far the person is: each part done (every step of it answered) or not, and the part the open step belongs to. */
+export function draftProgress(d: SetupDraft): { done: number; of: number; phases: Record<DraftPhase, boolean>; next?: DraftPhase } {
   const all = allSteps(d);
-  return { done: all.filter((s) => 'answer' in s).length, of: all.length };
+  const phases = Object.fromEntries(DRAFT_PHASES.map((p) => [p, all.filter((s) => phaseOf(s) === p).every((s) => 'answer' in s)])) as Record<DraftPhase, boolean>;
+  const open = all.find((s) => !('answer' in s));
+  return { done: DRAFT_PHASES.filter((p) => phases[p]).length, of: DRAFT_PHASES.length, phases, ...(open ? { next: phaseOf(open) } : {}) };
 }
 
 /** The questions answered and those still open, by key, in the order asked: what the AI is told, so it asks nothing a click answered. */
@@ -170,11 +186,16 @@ export function draftSteps(d: SetupDraft): DraftStep[] {
  */
 export function withPatch(d: SetupDraft, patch: DraftPatch): SetupDraft {
   const next = answer(d, patch);
-  // A person's answer is theirs, no longer one taken from their words.
+  // A person's answer is theirs, no longer one taken from their words, nor one the kind of firm assumed.
   const marks = (d.fromText ?? []).filter((m) => m !== markOf(patch));
+  const assumed = (next.assumed ?? []).filter((k) => k !== markOf(patch));
   delete next.fromText;
-  return marks.length ? { ...next, fromText: marks } : next;
+  delete next.assumed;
+  return { ...next, ...(marks.length ? { fromText: marks } : {}), ...(assumed.length ? { assumed } : {}) };
 }
+
+/** The answers the kind of firm gave that the person did not say herself (#364). */
+export const assumedOf = (d: SetupDraft): QuestionKey[] => (d.assumed ?? []).filter((k) => d.answers[k] !== undefined && asked(k, d.answers));
 
 function answer(d: SetupDraft, patch: DraftPatch): SetupDraft {
   const without = <K extends keyof SetupDraft>(k: K): SetupDraft => { const next = { ...d }; delete next[k]; return next; };
@@ -187,7 +208,8 @@ function answer(d: SetupDraft, patch: DraftPatch): SetupDraft {
       if (patch.value === 'custom') return { ...d, preset: 'custom' };
       const kept = Object.fromEntries(QUESTION_ORDER.filter((k) => d.answers[k] !== undefined && (isVat(k) || d.fromText?.includes(k))).map((k) => [k, d.answers[k]]));
       const given = Object.fromEntries(Object.entries(presetAnswers(patch.value)).filter(([k]) => !isVat(k as QuestionKey)));
-      return { ...d, preset: patch.value, answers: { ...given, ...kept } as Partial<Answers> };
+      const assumed = QUESTION_ORDER.filter((k) => k in given && !(k in kept));
+      return { ...d, preset: patch.value, answers: { ...given, ...kept } as Partial<Answers>, assumed };
     }
     case 'question': {
       const answers = { ...d.answers } as Record<string, QuestionValue>;
