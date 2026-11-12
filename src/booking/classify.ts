@@ -46,6 +46,7 @@ import { ruleFor, ruleWords, stampRule, type PaymentFacts, type PlacedRule, type
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
 import { businessVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
 import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
+import { bankChargesOf, isOwnBankFee } from './bank-fee.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
 import { withReceiptTax } from './receipt-tax.js';
 import { clearingAccounts, payoutWaitOf, providerOfPayment, type PayoutWait, type Provider } from './providers.js';
@@ -530,6 +531,32 @@ export function providerPayout(books: Books, tx: BankTransaction, provider: Prov
   return paymentRefusal(tx, entries, bankAccount, new Set(chartNames(context.chartOfAccounts).keys())) ?? entries;
 }
 
+/**
+ * The bank's own fee row, booked in code (#359, src/booking/bank-fee.ts): bank / the bank-charges
+ * account, without a VAT code (a bank's services are exempt: no input tax, so a fee refund has no
+ * code to take back either), on the payment's day. Undefined when the firm's chart lacks the
+ * account, or the jurisdiction names none: the row goes on as any payment does, to the model, or
+ * without one to the person, whose form says which account is missing (src/saving/hand-rule.ts).
+ * Call it only for a row no company rule decides. Stamped as the app's purchase-VAT check, as a
+ * customs invoice booked by its positions is (a check of its own would change the books' format):
+ * the reason says what code decided.
+ */
+export function bankFeeEntries(books: Books, tx: BankTransaction, context: ClassifyContext, fx: FxResolver): JournalEntry[] | { reason: string; refusal: ClassifyRefusal } | undefined {
+  const names = chartNames(context.chartOfAccounts);
+  const charges = bankChargesOf(names);
+  if (!charges || 'missing' in charges) return undefined;
+  const de = wordsIn('de');
+  const bankAccount = bankAccountFor(tx, context.bankAccounts);
+  const out = tx.direction === 'DBIT';
+  const bank = tx.counterparty?.trim() || tx.bank;
+  const description = de.t('bankFee.text', { bank, text: tx.description.trim() || bank });
+  const entries = entriesFor(tx, [{ accountDebit: out ? charges.account : '', accountCredit: out ? '' : charges.account, amount: tx.amount, vatCode: '', description }], {
+    fx, receipts: [], bankAccount, lock: periodLock(books), money: context.moneyAccounts,
+    by: { kind: 'code', check: 'purchaseVat' }, reason: de.t(out ? 'bankFee.reason' : 'bankFee.refundReason', { account: charges.account, name: names.get(charges.account) ?? '' }),
+  });
+  return paymentRefusal(tx, entries, bankAccount, new Set(names.keys())) ?? entries;
+}
+
 /** The entries a rule's booking makes for `tx` (ruleBookingLines), the bank on the other side, stamped with the rule. */
 export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRule, booking: RuleBooking, context: ClassifyContext, fx: FxResolver): JournalEntry[] {
   const mapped = mappedReceipts(books, tx);
@@ -795,6 +822,15 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     }
     const placed = ruleOfPayment(books, tx, context, fx);
     const then = placed?.rule.then;
+    // The bank's own fee row is booked in code when no company rule decides it, before the model is asked (#359).
+    const fee = !placed && isOwnBankFee(tx) ? bankFeeEntries(books, tx, context, fx) : undefined;
+    if (fee) {
+      if ('refusal' in fee) { log(`  ${tx.ref}  bank's fee row: refused: ${fee.reason}`); outcome.failed.push({ ref: tx.ref, ...fee }); continue; }
+      books.journalEntries.push(...fee);
+      log(`  ${tx.ref}  → bank's fee row, on ${fee[0].accountDebit === bankAccountFor(tx, context.bankAccounts) ? fee[0].accountCredit : fee[0].accountDebit}`);
+      outcome.classified.push(tx.ref);
+      continue;
+    }
     const split = placed ? undefined : byParts(books, tx, context, fx);
     // Without a model, a payment code books no part of is booked as a whole (no model: unasked).
     if (split && (split.entries.length || ask)) {

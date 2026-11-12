@@ -15,6 +15,12 @@ owner:
   Einzelfirma: { account: "2850", label: Privat }
   otherwise: { account: "2451", label: Kontokorrent }
 
+# The bank's own fee row of a statement (its fee for the account itself, of no other party) is booked
+# by code on this account, without a VAT code: banking services are exempt without credit (MWSTG
+# Art. 21 Abs. 2 Ziff. 19), so there is no input tax (src/booking/bank-fee.ts, #359). A company rule
+# that matches the row still decides it; a chart without this account leaves the row to the person.
+bankCharges: { account: "6940" }
+
 # Accounts an answer adds to the chart.
 answers:
   payouts:
