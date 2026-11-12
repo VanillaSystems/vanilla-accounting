@@ -39,6 +39,20 @@ Two markers flag an entry you must read before you update:
   of a business wins over the app's file that claims the same payment. Automatisierung offers no
   period before the books begin, names the receipts without a payment beside «Keine Aufgabe wartet
   auf dich», and its headline reads «… Belege gesammelt, … davon gebucht».
+- Without an AI (#365): the firm's own invoice is paired with the money in that names its number.
+  A receipt whose number stands as a whole word in one payment's text, with its amount and on or
+  after its day, is linked by code; until now an invoice was only matched to money out, so her own
+  invoice stayed «Noch keine Zahlung». Two payments naming it, or a number other payments name
+  too, are proposed, never linked; a part payment is never linked. The payment then opens «Von
+  Hand buchen» with the sale at the invoice's rate; nothing is booked without her.
+- A task about a payment names it everywhere, the corner included: «Zahlung von Hand buchen ·
+  Familie Keller, CHF 4'860.00, 02.11.2026». Three or more such tasks are one line in the corner,
+  «11 Zahlungen von Hand buchen», listed under Aufgaben (#365).
+- The account field finds an account by the words a person types for it besides its name
+  («Miete», «Benzin», «Versicherung», «Werkzeug», «Malerarbeiten»): the Swiss chart's accounts
+  carry them as `hints` (#365).
+- The dock's «gebucht» counts the payments of the period with a booking, a booking by hand without
+  a receipt among them; its tip names each figure's unit (#365).
 - The first screen of a fresh install is about the books, not the AI (#343): what the app is in
   two sentences, then «Neue Buchhaltung erstellen», open existing books, «Von anderer Software
   übernehmen» or the demo, with the language switch in sight. The look at this Mac's AI runs in
