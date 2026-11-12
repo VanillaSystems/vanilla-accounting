@@ -58,13 +58,20 @@ knowledge.
 | `sells` | firm | only after «Etwas ändern»: the three kinds as toggles | the default accounts |
 | `opening` | opening | «Weiter» / «Später»; «Später» says what it means (the balance differs from the bank's by the opening until it is entered) and where it comes back («Eröffnung erfassen» at the first statement, Firma › Eröffnung) | the opening balances, if entered |
 | `bank` | bank | only while no account has an IBAN: «Weiter» / «Später» | the bank accounts, «Bankkonto erfassen» |
-| `receipts` | receipts | «Weiter» / «Später» | the sources switched on, «Mit mir einrichten» (an AI turn), «Quellen ansehen» |
+| `receipts` | receipts | «Weiter» / «Später» | the sources switched on, «Mit mir einrichten» (an AI turn) while an AI answers, otherwise a line that it needs one and «KI einrichten»; «Quellen ansehen» |
 | `partners` | knowledge | only in books that hold bookings: «Weiter» | the partner bins, a rule draft per clear partner |
-| summary | | «Kontoauszug einlesen» (ends the setup and opens Kontoauszüge), «Erst umsehen» | what the app knows and where from, what is open with its place by hand, the first step |
+| summary | | «Kontoauszug einlesen» (ends the setup and opens Kontoauszüge), «Erst umsehen» | first the first step, one sentence with its buttons and the rest behind «Mehr dazu»; then what the app knows and where from, what is open with its place by hand |
 
-The greeting names no one: who sits there need not be the owner. The rail counts the topics the
-conversation is through, done or left for later (`settledCount`), so the count moves with every
-answer; a topic left with «Später» reads «später», never «übersprungen».
+The greeting names no one: who sits there need not be the owner. Without an AI on this Mac (none
+answers, or the column's CLI is signed out) the greeting and the receipts step say only what works
+there (a line's `noAi` words, #364): «Du antwortest mit einem Klick», no «in deinen Worten». The rail
+counts the topics the conversation took up that are done or left for later, of those it took up
+(`setupCount`, `topicsTaken`): «Partner und Wissen» on books without bookings is not taken up, so it
+is neither asked nor counted, and the summary lists it as «kommt mit den ersten Buchungen». The
+count moves with every answer; a topic left with «Später» reads «später», never «übersprungen».
+After an answer the newest question scrolls into sight, and the summary to its top, so the first
+step and its button show after the last answer (also when the setup opens on it again); smooth only
+without prefers-reduced-motion.
 
 **Answers.** A click stores the answer in the workspace's `onboarding.json` (`answers`, beside the
 topics), with when it was given. «Ändern» beside an answer takes it back; the steps after it wait
@@ -131,7 +138,15 @@ src/onboarding/draft.ts and draft-store.ts); the manifest is written only when t
 so a folder holds a draft or books, never half a manifest. «Buchhaltung anlegen» creates the books
 through createWorkspace, removes the draft before the first commit and marks the books in
 `onboarding.json` with `created`; the conversation goes on in the books with what the settings do
-not answer. The header shows how far the person is («n von m beantwortet», `draftProgress`). Such books open into the setup until
+not answer. The header shows how far the person is in four parts, the same for every firm (Firma, Art
+der Firma, MWST, Bank; «n von 4 erledigt», `draftProgress`): how many questions a part holds depends on
+the answers, so a count of questions jumped («0 von 14», «1 von 4», «4 von 8»), a count of parts does
+not (#364). «MWST-Methode», «Abrechnungsart» and «Ausgangslage» carry a line for a person who does not
+know (`where` in src/workspace/setup.ts, shown by the form, this conversation and `npm run init`):
+where the answer stands, who knows it and what a wrong pick costs (Firma › MWST changes it while the
+year has no entries, `vatMethodHeld`). The review marks an answer the kind of firm gave and the person
+never said «angenommen» (`assumed` in the draft, `assumedOf`) until she answers it herself; the line
+above the card says why. Such books open into the setup until
 «Los geht's» sets `ready`. A folder with a draft opens into the draft's conversation at the step it
 stopped, from the folder dialog, the recent list or at the next start.
 
