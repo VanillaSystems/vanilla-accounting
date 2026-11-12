@@ -69,8 +69,6 @@ export interface Area<R extends Route = Route> {
   Detail?: ComponentType<AreaProps<R>>;
   /** The add button and N; absent when the area has nothing to add. */
   add?: { label(route: R): string; title(route: R): string; run(props: AreaProps): void };
-  /** Files dropped on the page while this area is open, and what the drop zone says; absent: they go to the receipts' inbox. */
-  drop?: { text(): string; formats(): string; run(files: File[], props: AreaProps): void };
   /** The objects ⌘K finds in this area, under the area's name. */
   palette?(props: AreaProps): PaletteItem[];
   /** Keys handled while this area is open, beyond the shell's own; true when handled. */

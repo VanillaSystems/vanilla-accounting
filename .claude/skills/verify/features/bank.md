@@ -55,15 +55,16 @@ rows in tests/period-lock.test.ts).
   outside the period opens the period holding it.
 - `bk-missing`: a missing month's detail shows `Dieser Auszug fehlt …` and `.desk .well`; a click picks a file that is read
   in for that account and month (a PDF with another name is renamed the bank's way). Its payments still show in Zahlungen.
-- `bk-import`: the add button (`.addbtn`, N) or a drop on the page while Kontoauszüge is open: camt.053 (XML) and statement
+- `bk-import`: the add button (`.addbtn`, N): camt.053 (XML) and statement
   PDFs go to `POST /api/statements?name=<file>[&account=&month=]`, which stores them in `transactional-data/<year>/bank-statements/<bank>/` (the first open year from the statement's last day; an existing file's path is reused), reads
   the folder like `npm run extract` (payments kept, invoice payments matched) and the PDF closing balances. Toast
   `Auszug eingelesen · N neue Zahlungen` with Rückgängig (deletes the imported files); the page opens the statement.
   Refusals as toasts: a statement wholly inside the filed quarter (`Periode geschlossen bis $CT. Ein Auszug, der ganz in
   einer geschlossenen Periode liegt, …`), payments up to `$CT` the books lack (`filedPayments`), the same camt.053 again
   (409 `Schon eingelesen: …`), the same name with other bytes (`Datei … existiert bereits.`), no or two accounts for the
-  file, an XML that is no camt.053, a PDF whose name gives no month; other file types are skipped (`Übersprungen (kein
-  XML oder PDF): …`).
+  file, an XML that is no camt.053, a PDF whose name gives no month; any other file (a photo, a ZIP), and the files after a refused one, go to the drop
+  dialog, each with its row. A drop on the page while Kontoauszüge is open goes to the drop dialog as on any page
+  (features/drop.md, #361).
 - `bk-quick`: Space or a click on the paper opens `.quick` (the statement large, the line marked); Space or Esc closes. D
   or `.paybar a.dl.inline` downloads the PDF (the XML for a camt statement).
 - `bk-palette`: ⌘K lists statements (`Kontoauszug <Monat> · <Konto>`, missing months from the open period on) and
@@ -93,8 +94,8 @@ Wise EUR (1023), January to September 2026.
   function(){ this.id='__pick'; document.body.append(this) }"`, click `.desk .well`, then `$B upload '#__pick'
   <file under $TMPDIR>` (browse uploads only from the repo or the temp dir).
 - **Drop a camt.053.** `$B eval <script>` that builds `new File([xml], 'x.xml')` in a `DataTransfer` and dispatches
-  `dragenter` and `drop` on `window`. `$S diff` shows `+ transactions <ref>`; a statement dated on or before `$CT`
-  shows the refusal toast and `$S diff` is unchanged, the file is not kept.
+  `dragenter` and `drop` on `window`: the drop dialog's row for it, `$S diff` shows `+ transactions <ref>`; a statement
+  dated on or before `$CT` gets a row that names the refusal and `$S diff` is unchanged, the file is not kept.
 - **No receipt needed.** Choose a payment with `kein Beleg`, click `braucht keinen`, read the book, ⌘Z, read it again
   (`noReceiptNeeded` gone). On a payment without a booking (`[data-testid=no-receipt-needed]`) the click also starts the
   booking run for it (#340): the bar says `Die App bucht sie gerade` (`[data-testid=booking-now]`), then the booking, or,

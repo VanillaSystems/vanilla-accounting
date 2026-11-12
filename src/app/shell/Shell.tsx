@@ -217,15 +217,11 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const listRef = useRef<HTMLElement>(null);
   const [listWidth, setListWidth] = useListWidth(loc.route.area);
 
-  // The drop dialog takes every drop, a folder's files with its subfolders' (#188); the Bank area keeps its own, where the open account places a statement.
+  // The drop dialog takes every drop on any page, a folder's files with its subfolders' (#188): each file gets its row
+  // there, a statement as a receipt or a photo, and what it is decides where it goes (#361).
   useDrop(canEdit, setDropping, (files, target, entries) => {
     if (target === 'chat') return void droppedFiles(entries, files, CHAT_TAKES).then(attachDropped);
-    void droppedFiles(entries, files, PAGE_TAKES).then((d) => {
-      const note = leftOut(d, PAGE_TAKES).map((x) => tWith(x.key, x.vars)).join(' ');
-      if (!area.drop || dropOpen()) return void dropFiles(d.files, note);
-      if (note) toast(note);
-      area.drop.run(d.files, propsRef.current);
-    });
+    void droppedFiles(entries, files, PAGE_TAKES).then((d) => dropFiles(d.files, leftOut(d, PAGE_TAKES).map((x) => tWith(x.key, x.vars)).join(' ')));
   });
 
   const search = useCallback((q: string): PaletteGroup[] => {
@@ -331,9 +327,9 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
       <div className={`drop${dropping ? ' show' : ''}${dropping === 'page' ? ' on' : ''}`} aria-hidden="true" data-testid="drop-page">
         <div className="box"><div>
           {ICONS.upload}
-          <h2>{area.drop ? t('drop.title') : t('drop.page')}</h2>
-          <p>{area.drop?.text() ?? t('drop.text')}</p>
-          <p style={{ marginTop: 4, fontSize: 12.5, color: 'var(--faint)' }}>{area.drop?.formats() ?? t('drop.formats')}</p>
+          <h2>{t('drop.title')}</h2>
+          <p>{t('drop.text')}</p>
+          <p style={{ marginTop: 4, fontSize: 12.5, color: 'var(--faint)' }}>{t('drop.formats')}</p>
         </div></div>
       </div>
       <div className={`dropchat${dropping ? ' show' : ''}${dropping === 'chat' ? ' on' : ''}${aiOpen ? '' : ' edge'}`} aria-hidden="true" data-testid="drop-chat">
