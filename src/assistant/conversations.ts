@@ -12,6 +12,10 @@ import type { AssistantEvent, AssistantSend, Change, Conversation, ConversationS
 import { ChangesError, changesIn, terminalRequest, withoutChanges } from './changes.js';
 import { assistantPrompt, callClaude, type AssistantCall } from './claude.js';
 import { callCodex } from './codex.js';
+import { isPlanLimit, isSignedOut, type AiRefusal } from '../llm/provider.js';
+import { AI_OFF_MESSAGE } from '../llm/off.js';
+import { NoClaudeError } from '../llm/providers/claude-cli.js';
+import { missing as codexMissing } from '../llm/providers/codex-cli.js';
 import { sidebarAgent } from '../llm/ask.js';
 import { contextText } from './context.js';
 import { attachmentsNote, keepAttachments } from './attachments.js';
@@ -92,7 +96,13 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
       if (e.type === 'session') c.session = e.session;
       if (e.type === 'text') ai.text += e.text;
       if (e.type === 'tool') ai.tools.push({ name: e.name, detail: e.detail, ...(e.denied ? { denied: true } : {}) });
-      if (e.type === 'error') ai.error = e.message;
+      if (e.type === 'error') {
+        ai.error = e.message;
+        const why = noAnswerWhy(e.message, c.agent === 'codex-cli' ? 'codex' : 'claude');
+        // The CLI prints its refusal as the answer's text too («Not logged in · Please run /login»): the app's sentence stands alone.
+        if (why && ai.text.trim() && e.message.includes(ai.text.trim())) { ai.text = ''; onEvent({ type: 'replace', text: '' }); }
+        if (why) { ai.errorWhy = why; onEvent({ ...e, why }); return; }
+      }
       if (e.type === 'done' && e.session) c.session = e.session;
       if (e.type === 'done') done = e;
       else onEvent(e);
@@ -141,6 +151,18 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
   if (done) onEvent(done);
   ai.done = true;
   storeConversation(ws, c);
+}
+
+/**
+ * Why the agent's CLI gave no answer, read off its own words: not signed in, its plan's limit, not
+ * on this Mac, or switched off. Undefined: a failure of another kind, shown as the CLI said it.
+ */
+export function noAnswerWhy(said: string, cli: 'claude' | 'codex'): AiRefusal | undefined {
+  if (said === AI_OFF_MESSAGE) return { reason: 'off' };
+  if (isPlanLimit(said)) return { reason: 'limit', cli, said: said.replace(/^(claude|codex)[^:]*:\s*/i, '').trim() };
+  if (isSignedOut(said)) return { reason: 'signedOut', cli };
+  if (said === new NoClaudeError('sidebar').message || said === codexMissing().message) return { reason: 'missing', cli };
+  return undefined;
 }
 
 /**

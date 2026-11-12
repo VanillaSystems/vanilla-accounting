@@ -21,7 +21,7 @@ import { dictated, dictationLang, carried, fieldAt, follow, recognizer, type Dic
 import { Picker, automationCandidates } from '../assistant/Picker.js';
 import { Recording } from '../assistant/Recording.js';
 import { isBookChange, type ContextRef, type EntrySet, type HeldChanges, type HeldLine, type InvoicingSet, type MadeChange, type Turn } from '../../types/assistant.js';
-import { ApiError, apiFetch, errorText } from '../lib/api.js';
+import { aiRefusedText, ApiError, apiFetch, errorText } from '../lib/api.js';
 import type { Index } from '../../types/index.js';
 import { withoutChanges } from '../../assistant/changes.js';
 import { markdownBlocks, type Span } from '../assistant/markdown.js';
@@ -497,7 +497,12 @@ export function Sidebar({ page, books, onGo, onGoTo }: Props) {
           {turn.done && turn.terminal ? <TerminalCard request={turn.terminal} /> : null}
           {turn.done && turn.changes?.length ? <ShareOffers refs={[...new Set(turn.changes.filter((c) => !c.undone && c.payment).map((c) => c.payment!))]} onRules={() => onGo({ area: 'company', section: 'rules' })} /> : null}
           {turn.refused ? <div className="warnline">{t('assistant.refused', { why: errorText(new ApiError({ error: turn.refused, ...turn.refusal })) })}</div> : null}
-          {turn.error ? <div className="warnline">{turn.error}</div> : null}
+          {turn.errorWhy ? (
+            <div className="warnline" data-testid="ai-no-answer" data-reason={turn.errorWhy.reason}>
+              {aiRefusedText(turn.errorWhy)}{' '}
+              {turn.errorWhy.reason !== 'limit' ? <button type="button" className="linkbtn" data-act="ai-set-up" onClick={() => onGo({ area: 'company', section: 'ai' })}>{t(turn.errorWhy.reason === 'off' ? 'aiOff.line.switchOn' : 'aiSetup.line.setUp')}</button> : null}
+            </div>
+          ) : turn.error ? <div className="warnline">{turn.error}</div> : null}
         </div>
       </div>
       {turn.done && wroteDraft(turn) ? (() => {

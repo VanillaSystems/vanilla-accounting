@@ -22,7 +22,7 @@ import { knownPath, locate } from '../../platform/ai-cli.js';
 import { pdfPages } from '../../parsers/pdf-pages.js';
 import { pdfText } from '../../parsers/pdf-text.js';
 import { openWorkspace } from '../../workspace/workspace.js';
-import { AiRefused, CallFailed, isPlanLimit, NO_USAGE, type Call, type Provider, type Usage } from '../provider.js';
+import { AiRefused, CallFailed, isPlanLimit, isSignedOut, NO_USAGE, type Call, type Provider, type Usage } from '../provider.js';
 import { codexHome } from './codex-home.js';
 import { gate } from '../off.js';
 import { TIERS } from '../steps.js';
@@ -168,7 +168,7 @@ export const isModelRefused = (said: string): boolean => /model_not_found|model 
 export const refusalOf = (said: string, message: string, usage: Usage, model?: string): CallFailed =>
   isPlanLimit(said) ? new AiRefused({ reason: 'limit', cli: 'codex', said }, message, usage)
   : model && isModelRefused(said) ? new AiRefused({ reason: 'modelRefused', cli: 'codex', model }, message, usage)
-  : /not logged in|not signed in|please (log|sign) ?in|codex login|unauthori[sz]ed|\b401\b/i.test(said) ? new AiRefused({ reason: 'signedOut', cli: 'codex' }, message, usage)
+  : (isSignedOut(said) || /unauthori[sz]ed|\b401\b/i.test(said)) ? new AiRefused({ reason: 'signedOut', cli: 'codex' }, message, usage)
   : new CallFailed(message, usage);
 
 export const missing = (): AiRefused => new AiRefused({ reason: 'missing', cli: 'codex' }, 'Codex ist auf diesem Mac nicht installiert.');
