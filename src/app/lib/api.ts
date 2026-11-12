@@ -598,6 +598,8 @@ export const api = {
   /** The desktop app's start screen (src/desktop/server.ts). */
   desktop: {
     info: () => request<DesktopInfo>('GET', '/api/desktop'),
+    /** The folders in booksHome once read (macOS may first ask the person). */
+    folders: () => request<{ folders: string[] }>('GET', '/api/desktop/folders'),
     open: (root: string) => request<KnownBooks>('POST', '/api/desktop/open', { root }),
     create: (setup: SetupRequest) => request<KnownBooks>('POST', '/api/desktop/create', setup),
     demo: () => request<KnownBooks>('POST', '/api/desktop/demo'),

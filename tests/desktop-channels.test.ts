@@ -317,3 +317,24 @@ test('a Documents folder the app may not read («Nicht erlauben») leaves the st
   }
   assert.deepEqual((await desktopServer({ stateFile: join(home, 'desktop.json'), demoRoot: join(home, 'Demo'), booksHome: join(home, 'none'), dist: join(home, 'dist') }).info()).folders, []);
 });
+
+test('GET /api/desktop answers while macOS still asks about the Documents folder; the folders follow (#363 review)', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'vanilla-asking-'));
+  let release: (folders: string[]) => void = () => {};
+  const held = new Promise<string[]>((r) => { release = r; });
+  const server = desktopServer({ stateFile: join(home, 'desktop.json'), demoRoot: join(home, 'Demo'), booksHome: join(home, 'Documents'), dist: join(home, 'dist'), foldersWaitMs: 20, listFolders: () => held });
+  const http = await listen(server.app, '127.0.0.1', undefined);
+  const base = `http://127.0.0.1:${portOf(http)}`;
+  server.allowHost(`127.0.0.1:${portOf(http)}`);
+  try {
+    const now = await (await fetch(`${base}/api/desktop`)).json();
+    assert.deepEqual({ open: now.open, recent: now.recent, folders: now.folders, pending: now.foldersPending }, { open: null, recent: [], folders: [], pending: true });
+    const later = fetch(`${base}/api/desktop/folders`).then((r) => r.json());
+    release(['Buchhaltung 2026']);
+    assert.deepEqual(await later, { folders: ['Buchhaltung 2026'] });
+    const after = await (await fetch(`${base}/api/desktop`)).json();
+    assert.deepEqual([after.folders, after.foldersPending], [['Buchhaltung 2026'], undefined]);
+  } finally {
+    http.close();
+  }
+});

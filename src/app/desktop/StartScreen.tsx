@@ -83,6 +83,8 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
   useEffect(() => {
     void api.desktop.info().then((i) => {
       setInfo(i);
+      // macOS still asks about the Documents folder: the screen shows now, the folders follow.
+      if (i.foldersPending) void api.desktop.folders().then(({ folders }) => setInfo((was) => (was ? { ...was, folders, foldersPending: false } : was)), () => undefined);
       // A fresh install: no books open and none known. Once: «Zur Startseite» from there stays on the start screen.
       if (!looked.current && mode.kind === 'home' && !i.open && !i.recent.length && !location.search) setMode({ kind: 'first' });
       looked.current = true;
@@ -96,6 +98,8 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
   /** «Neue Buchhaltung anlegen» (also the menu's /start?new): «Einrichtung», what the person wants, the AI where it has work. */
   const startNew = () => setMode({ kind: 'first', create: true });
   useEffect(() => { document.title = 'Vanilla Accounting'; }, []);
+  // /start?new has acted once it set the mode: a reload does not open the save panel again.
+  useEffect(() => { if (new URLSearchParams(location.search).has('new')) history.replaceState(null, '', START_PATH); }, []);
 
   const run = async (open: () => Promise<KnownBooks>) => {
     setBusy(true);
