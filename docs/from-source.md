@@ -81,7 +81,9 @@ order:
 6. **Fiscal year.** The calendar year. Another fiscal year is not supported yet.
 7. **Starting point.** A new company starts with empty books. If you switch from other
    bookkeeping, bring your opening balances of 1 January: `npm run import-opening` reads them
-   from a Banana export (Konten XML), or you enter them in Firma › Eröffnung. The first
+   from a Banana export (Konten XML), or you enter them in Firma › Eröffnung. A prior year's
+   Banana export in the workspace's `history/` folder (`<name>.Konten.txt`,
+   `<name>.Buchungen-sample.tsv`) gives the AI its chart and example entries for booking. The first
    statement of a bank account offers its starting balance as the opening balance.
 8. **What you sell.** Any combination of products you make yourself, goods you buy and resell
    (trade), and services (`--sells made,services`). This picks the accounts of your chart and

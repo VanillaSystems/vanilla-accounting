@@ -17,7 +17,7 @@ commands, see [From the source](from-source.md).
 ## 1. Install the app
 
 1. Download the `.dmg` from the
-   [Releases page](../../../releases): `arm64` for a
+   Releases page of this repository on GitHub: `arm64` for a
    Mac with Apple silicon (M1 and later), `x64` for an Intel Mac.
 2. Open the `.dmg` and drag **Vanilla Accounting** into Applications.
 3. Start it. The app is not signed with an Apple Developer ID yet, so macOS refuses it the first
@@ -40,13 +40,13 @@ At its first start the app has no books yet. The first screen leads to one of th
 
 The app also offers to set up the AI (step 4). You can do that now or later.
 
-At the next start the app opens the books you used last. The menu File has «Neue Buchhaltung…»
+At the next start the app opens the books you used last. The menu File («Ablage» in German) has «Neue Buchhaltung…»
 and «Buchhaltung öffnen…» for other books.
 
 ## 3. Set up your books
 
 The app asks about your company in a conversation. With an AI you can answer in your own words
-and ask back when a question is unclear («was heisst das?»). Without one you answer with buttons
+and ask back when a question is unclear (type "was heisst das?"). Without one you answer with buttons
 and fields. Either way the answers end in one summary you can change line by line before the app
 creates the books.
 
@@ -105,10 +105,13 @@ pay Anthropic or OpenAI per call; the «KI» column does not work with a key alo
 1. Click «Claude Code installieren» (or «Codex installieren»). The app opens the Terminal with
    the official installer command of the maker written out. Nothing runs until you press Enter
    there.
-2. Press Enter in the Terminal and wait until it is done. The app notices by itself; you do not
-   restart it.
-3. Click «Anmelden». Your browser opens the maker's page. Sign in with your account there (or
-   create one and choose the subscription). The app never sees your password or your login.
+2. Press Enter in the Terminal and wait until it is done, about a minute. The app notices by
+   itself; you do not restart it.
+3. Sign in. The Terminal offers it right after the installation («Jetzt anmelden: Eingabetaste
+   drücken»): press Enter there. Or click «Anmelden» in the app, which opens a Terminal window
+   for the sign-in. Either way the Terminal then opens your browser on the maker's page. Sign in
+   with your account there (or create one and choose the subscription). The app never sees your
+   password or your login. When the Terminal says it is done, you can close its window.
 4. The app makes one short test call. The card then says «bereit».
 
 If the account has no subscription that includes the program, the card shows what the program
@@ -141,8 +144,8 @@ takes:
 - **Without an AI and without camt.053:** fill the same table by hand, or drop the bank's CSV
   export. The app asks once which column holds what and remembers it for that account.
 
-A statement of an account the books do not know names the IBAN and offers «Bankkonto
-hinzufügen». The same statement dropped twice is read once.
+A statement of an account the books do not know names the IBAN and asks «Gehört dieses Konto
+der Firma?»; «Ja, Bankkonto hinzufügen» adds the account. The same statement dropped twice is read once.
 
 Kontoauszüge then shows each account month by month: the bank's opening and closing balance,
 whether the payments add up to them («Salden stimmen»), the books' balance beside the bank's,
@@ -161,8 +164,12 @@ you can use together:
 - **«Mit dem Handy»:** «Handy koppeln» shows a code for your phone's camera. The phone then
   sends photos of till slips straight into the app while both are on the same Wi-Fi. Firma ›
   «Handy» switches the phone's access on and off.
-- **«Automatisierung»:** the app fetches invoices from a mailbox. In the Mac app this is not
-  finished, see [Limits](#limits). Until then, drag the invoices out of your mail program.
+- **«Automatisierung»:** the app fetches invoices from your mail by itself. The Mac app does
+  this for an account of the Mac's own Mail program: «Mit KI einrichten» opens the «KI» column,
+  the AI sets the source up with you, and a card shows what the source may reach, with «Prüfen»
+  and «Einschalten». macOS asks once whether the app may control Mail. The source then reads the
+  account's inbox every day and takes the attached PDFs. A mailbox read from its server is not
+  fetched by the Mac app yet, see [Limits](#limits).
 
 Add every invoice, every till slip and every customs bill. A receipt is what lets you deduct the
 VAT you paid: without a receipt that shows Swiss VAT, the app claims no input tax.
@@ -311,7 +318,7 @@ settles it.
 ## 10. Update the app
 
 Download the new `.dmg` from the
-[Releases page](../../../releases) and replace the
+Releases page of this repository and replace the
 app in Applications. Until the app is signed, macOS asks again as in step 1. Your books stay
 where they are. If a version changed the format of the books, the app brings them to the new
 format when it opens them.
@@ -348,14 +355,14 @@ totals, the comment and the VAT note. The CSV is the plain table.
 
 ## Limits
 
-What holds today. Where something is missing and has an issue, the issue is linked.
+What holds today. Where something is missing and has an issue, the issue is named.
 
 - **Checked by you.** The app is free and comes without warranty. Check every return before you
   file it, or have your Treuhänder check it.
 - **VAT.** The effective method by quarter, the Saldosteuersatz by half year, on vereinnahmte
   or vereinbarte Entgelte, or books without VAT. No monthly returns and no fiscal year other
   than the calendar year
-  ([#9](../../../issues/9)). The method, the basis
+  (issue #9). The method, the basis
   and the period hold for whole years: the app refuses a change while the open year has
   bookings.
 - **Saldosteuersatz.** The return is form 0553 as the app models it: the approved rates (one or
@@ -366,35 +373,42 @@ What holds today. Where something is missing and has an issue, the issue is link
 - **Vereinbarte Entgelte.** An invoice you write in the app is taxed on its date. A supplier's
   bill counts on its date once its payment is booked: the app keeps no list of unpaid supplier
   bills with due dates
-  ([#93](../../../issues/93)). Documents dated
-  before the books: [#170](../../../issues/170).
+  (issue #93). Documents dated
+  before the books: issue #170.
 - **Banks.** Any Swiss bank's camt.053, and a PDF, scan or photo of any bank's statement (read
   by the AI, at most 20 pages each) or its CSV export (at most 5000 rows). Real camt.053 files
   were tested from Raiffeisen and Wise: for another bank, check the first statement's payments
   and closing balance. Not handled yet: a company credit card whose statement is not read in
-  ([#94](../../../issues/94)), payments from
+  (issue #94), payments from
   PayPal, Twint or another account the app does not import
-  ([#95](../../../issues/95)), and the cash box
-  ([#91](../../../issues/91)): book those by hand.
+  (issue #95), and the cash box
+  (issue #91): book those by hand.
 - **Webshops and card terminals.** A payment provider's payouts, sales and fees go over a
   clearing account, the sales from the provider's CSV export. The app ships the columns of
   Shopify's exports; another provider needs its columns written into your books' knowledge
   ([processes/README.md](../processes/README.md), «A payment provider»). Reading a shop through
-  its API: [#222](../../../issues/222).
-- **Receipts by mail.** The Mac app keeps a mailbox and its password (Firma › «Quellen») and
-  checks the connection, but does not fetch mail by itself yet. Until then, drag invoices from
-  your mail program into Belege. Run from the source, the app fetches them
+  its API: issue #222.
+- **Receipts by mail.** The Mac app fetches mail by itself only from an account of the Mac's
+  Mail program, through a source the AI sets up with you (step 6); there is no way yet to set
+  one up without the AI. A mailbox read from its server (Firma › «Quellen» › «Postfach
+  verbinden», IMAP) is kept with its password and its connection is checked, but the Mac app
+  does not fetch it yet, and Firma › «Quellen» says so. Until then, drag those invoices from
+  your mail program into Belege. Run from the source, the app fetches such a mailbox too
   ([mail-setup.md](mail-setup.md)).
 - **Receipts from the phone.** The iPhone app is not in the App Store yet. The pairing code
   opens the scan page in the phone's browser, on the same Wi-Fi as the Mac.
-- **Moving from another program.** You enter the opening balances by hand; the app does not
-  import another program's books. From the source, a Banana export of the accounts can be read
-  ([from-source.md](from-source.md)). Learning how the company books from its previous books:
-  [#198](../../../issues/198).
+- **Moving from another program.** «Von anderer Software übernehmen» on the first screen
+  creates new books like any other start. The setup then asks which program you used and lists
+  what a move needs, and says that the import from that program does not exist yet. Nothing of
+  your previous books is taken over: you enter the opening balances by hand, and the app learns
+  from the payments and receipts that come in from then on. Your previous journal is not read as
+  examples from the app either (issue #198). From the source, a Banana export of the accounts
+  gives the opening balances, and one put into the books' `history/` folder gives the booking
+  examples ([from-source.md](from-source.md)).
 - **Payroll.** The app books salary and the AHV, BVG and UVG payments. It does not calculate
   payroll, the Lohnausweis or the AHV statement: those stay with your payroll provider or
   Treuhänder. Money an employee advanced:
-  [#92](../../../issues/92).
+  issue #92.
 - **Invoices.** Invoices, credit notes, reminders and cancellations, sent through your own
   mailbox. On vereinnahmte Entgelte, invoices still open on 31 December are booked as
   receivables at the year-end and reversed on 1 January.
