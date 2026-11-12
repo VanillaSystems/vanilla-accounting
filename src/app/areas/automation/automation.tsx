@@ -772,7 +772,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
             const withheld = approvalWithheld(task, q.questions, books);
             return (
               <div key={task.run} className={`wftask${task.run === run ? ' sel' : ''}`}>
-                <b>{fillTask(tx(task.title), task.item, readsInWords(task.reads))}{paymentWords(books, task.item) ? <span className="wfpay" data-testid="task-payment"> · {paymentWords(books, task.item)}</span> : null}{task.overdue ? <span className="wfpill st-stuck">{t('automation.overdue')}</span> : null}</b>
+                <b>{fillTask(tx(task.title), task.item, readsInWords(task.reads))}{paymentWords(task) ? <span className="wfpay" data-testid="task-payment"> · {paymentWords(task)}</span> : null}{task.overdue ? <span className="wfpill st-stuck">{t('automation.overdue')}</span> : null}</b>
                 <span className="m">{w ? label(w) : task.workflow} · {t('automation.since', { date: when(task.since) })}</span>
                 {task.why ? <p>{fillTask(tx(task.why), task.item, readsInWords(task.reads))}</p> : null}
                 {task.item.kind === 'transaction' ? (() => { const p = books.transactions.find((x) => x.ref === task.item.id); return p ? <Parts tx={p} /> : null; })() : null}

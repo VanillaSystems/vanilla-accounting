@@ -2,7 +2,7 @@
  * Without a model (an owner or accountant without a subscription): a link made or taken back by
  * hand never leaves its payment silently unbooked. A payment that lost its receipt waits for one,
  * marked so (issue #29); with its receipt, what no company rule decides becomes a task in
- * Automatisierung, «Zahlung ohne Buchung · von Hand buchen», with the payment's hand form.
+ * Automatisierung, «Zahlung von Hand buchen», naming its payment (#365), with the payment's hand form.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -66,7 +66,9 @@ test('without a model, unlinking and linking by hand leave the payment booked or
     v = await view();
     assert.equal(intakeRuns(v).length, 2, 'the link started an inbox run too');
     assert.equal(forL(v).length, 1, `with its receipt and no model, a task waits for the payment: ${JSON.stringify(v.tasks.map((t) => [t.workflow, t.step, t.item]))} ${JSON.stringify(v.runs.map((r) => [r.workflow, r.item.id, r.status, r.path, r.error]))}`);
-    assert.equal(forL(v)[0].title.de, 'Zahlung ohne Buchung · von Hand buchen');
+    assert.equal(forL(v)[0].title.de, 'Zahlung von Hand buchen');
+    assert.deepEqual(forL(v)[0].payment, { description: 'Post CH Rechnung September', amount: 217.75, currency: 'CHF', date: '2026-09-13', direction: 'DBIT' }, 'the task carries its payment: the corner names it without books (#365)');
+    assert.equal(forL(v)[0].many?.de, '{n} Zahlungen von Hand buchen');
     assert.deepEqual(forL(v)[0].outcomes, ['booked']);
     assert.equal(forL(v)[0].do, 'open-item');
     assert.equal((await books()).transactions.find((t) => t.ref === 'REF-L')?.waitsForReceipt, undefined, 'it waits for its receipt no more');

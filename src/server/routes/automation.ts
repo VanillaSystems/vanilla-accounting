@@ -17,7 +17,7 @@ import { askIfReady } from '../../intake/run.js';
 import { lockIntake } from '../../intake/pipeline.js';
 import { openEngine, type Engine } from '../../workflows/engine.js';
 import { loadWorkflows } from '../../workflows/load.js';
-import { summaryOf, taskOf, textIn, type AutomationCommand, type AutomationView, type PendingVersion, type Run, type RunDetail, type Task, type WorkflowDecl } from '../../workflows/model.js';
+import { summaryOf, taskOf, textIn, type AutomationCommand, type AutomationView, type PendingVersion, type Run, type RunDetail, type Task, type TaskPayment, type WorkflowDecl } from '../../workflows/model.js';
 import { baseline, caseCheck, openSwitch } from '../../workflows/switch-on.js';
 import { setSchedule } from '../../workflows/direct.js';
 import { cronValid } from '../../workflows/cron.js';
@@ -85,13 +85,33 @@ export function runsWroteSince(since: string | undefined): RunWrote[] {
   }).sort((a, b) => b.at.localeCompare(a.at));
 }
 
+/** The payments tasks were about, by workspace and ref: a bank's movement never changes, so the books are read only for a ref not seen yet. Null: no such payment. */
+const payments = new Map<string, Map<string, TaskPayment | null>>();
+
+/** Each task about a payment with that payment's facts (#365): the corner, Aufgaben and Übersicht name it without books of their own. */
+function withPayments(tasks: Task[]): Task[] {
+  const refs = tasks.flatMap((t) => (t.item.kind === 'transaction' ? [t.item.id] : []));
+  if (!refs.length) return tasks;
+  const known = payments.get(WS.paths.root) ?? payments.set(WS.paths.root, new Map()).get(WS.paths.root)!;
+  if (refs.some((ref) => !known.has(ref))) {
+    try {
+      const byRef = new Map(readBooks().transactions.map((t) => [t.ref, t]));
+      for (const ref of refs) {
+        const t = byRef.get(ref);
+        known.set(ref, t ? { ...(t.counterparty ? { counterparty: t.counterparty } : {}), description: t.description, amount: t.amount, currency: t.currency, date: t.date, direction: t.direction } : null);
+      }
+    } catch { /* books that do not load: the tasks keep their titles */ }
+  }
+  return tasks.map((t) => { const p = t.item.kind === 'transaction' ? known.get(t.item.id) : undefined; return p ? { ...t, payment: p } : t; });
+}
+
 export function automationView(): AutomationView {
   const e = engine();
   const loaded = loadWorkflows(APP_ROOT, WS.paths.root);
   const runs = e.runs();
   const byId = new Map(loaded.workflows.map((w) => [w.id, w]));
-  const tasks = runs.map((r) => (byId.has(r.workflow) ? taskOf(byId.get(r.workflow)!, r) : undefined)).filter((t): t is Task => !!t)
-    .sort((a, b) => Number(!!b.overdue) - Number(!!a.overdue) || a.since.localeCompare(b.since));
+  const tasks = withPayments(runs.map((r) => (byId.has(r.workflow) ? taskOf(byId.get(r.workflow)!, r) : undefined)).filter((t): t is Task => !!t)
+    .sort((a, b) => Number(!!b.overdue) - Number(!!a.overdue) || a.since.localeCompare(b.since)));
   // A running step's own count of what it finished (step-progress.ts): part of the revision, so a poll sees it move.
   const summaries = runs.map((r) => summaryOf(r, byId.get(r.workflow))).map((s) => { const p = s.status === 'running' ? progressOf(s.id) : undefined; return p ? { ...s, progress: p } : s; }).sort((a, b) => b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id));
   const pending = pendingVersions(loaded.workflows, runs);
