@@ -331,6 +331,35 @@ the other's when they next open the books.
   and the status corner count the questions waiting for the viewer.
 - **Answering.** One click for «privat» or «geschäftlich», or a few words and ↵. The asker sees
   «beantwortet» with the answer and what the app did.
+- **Booking by hand starts from what code knows (#344).** The form «Von Hand buchen» of a payment
+  (Kontoauszüge, a receipt's payment, the task of a payment no rule and no AI booked) opens once
+  the server has said what it knows of the payment (`GET /api/rules/hand?payment=`: the rule that
+  decides it, what it is, its business's account), never with a first guess replaced under the
+  person; nothing she typed or picked is replaced later, and ↵ books only lines that stood on the
+  screen. The other side is proposed by `bookingDraft` (src/accounting/manual-booking.ts), in this
+  order: a provider's payout that waits proposes nothing and says what it waits for; a payment of
+  an issued invoice settles the receivable without a code where its event is booked (agreed
+  basis), else takes the invoice's own accounts and codes, and names the way to confirm it on the
+  invoice; the company rule that decides the payment (also one that asks first, with its question
+  and tags); the business's last booking; money from the owner goes on her account without a code;
+  money between own accounts, from an authority or with another business's document proposes no
+  revenue and no code and says what it is; money back from a supplier goes on its last purchase's
+  account with the credit note's rate, else the zero code inverted; other money in is taken for a
+  sale on the firm's default revenue account (setup «Was verkauft ihr?», `defaults` of `GET
+  /api/workspace`) with the code the classifier would set (`saleCodeOf`: the net-rate code on that
+  method, the receipt's rate, or the app's sale proposal), and the form says it took it for a sale;
+  money out takes the account only from a rule, a precedent or the business's file, with the
+  receipt's rate (purchase documents only). A receipt gives a rate, never a code: the code follows
+  the account in the field, and a proposed code follows it too (`followedVat`), until she sets one.
+  On the agreed basis a receipt dated in another period than the payment proposes no account and
+  says why: the hand path books on the payment's day. The line under the fields names each
+  proposal still standing and its source. The account field ranks by the payment's direction and
+  the account's class, then by the name, and a word that names a class («Ertrag», «Aufwand»;
+  `accounts.words.*` of the dictionary) lists its accounts (`rankAccounts`,
+  src/app/lib/account-filter.ts); the code field lists for a typed rate only the codes of the
+  chosen account's kind (`fittingGroup`, `pickGroups`). Under the form, the way to a rule for
+  payments of the kind, with how many are open (`HandStart.similar`; `.wider` only for words that
+  tell the payments apart, matched as whole words).
 - **An answer that decides acts, code first.** «privat» on a payment books it on the owner's
   account without a VAT code, as the sidebar and the booking by hand do: an unbooked payment gets
   one booking against its bank, a booked one has its expense side moved and its code removed (a

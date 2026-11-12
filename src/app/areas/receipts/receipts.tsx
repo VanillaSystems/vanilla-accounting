@@ -10,6 +10,7 @@ import type { RouteOf } from '../../shell/route.js';
 import { knownChips, type Chip } from '../../shell/chips.js';
 import { ChipEmpty, ChipFilter, chipWords } from '../../shell/ChipFilter.js';
 import { usePartnerIndex } from '../partners/data.js';
+import { waitsForReading } from '../../../parsers/receipt-text.js';
 import { receiptFields } from './filter.js';
 import { ListHead } from '../../shell/ListHead.js';
 import { moveKey } from '../../shell/keyboard.js';
@@ -245,7 +246,7 @@ function Row({ v, proc, view, sel, picked, same, canEdit, onSelect, onClick, toa
       onClick={onClick}
     >
       <Pick kind="receipt" id={r.id} on={picked} label={v.vendor || r.filename} toast={toast} />
-      <span className="d mono">{same ? <span className="sr">{formatDate(v.date)}</span> : v.date ? <><span className="dl">{formatDate(v.date)}</span><span className="ds">{formatDate(v.date).slice(0, 6)}</span></> : <span className="d none">{t('receipts.noDate')}</span>}</span>
+      <span className="d mono">{same ? <span className="sr">{formatDate(v.date)}</span> : v.date ? <><span className="dl">{formatDate(v.date)}</span><span className="ds">{formatDate(v.date).slice(0, 6)}</span></> : <span className="d none" data-testid={waitsForReading(r) ? 'row-not-read' : undefined}>{t(waitsForReading(r) ? 'receipts.notRead' : 'receipts.noDate')}</span>}</span>
       <span className="t">{inProcess(proc) ? <span className="spin small" aria-hidden="true" /> : isOpen(v) && !v.locked && !v.none && !v.orderPage && I.dot}{v.vendor}{v.desc && <small> {v.desc}</small>}{inProcess(proc) && <small className="proc" data-testid="row-processing"> · {processingText(proc, view)}</small>}{v.none && <small className="nonewhy" data-testid="none-why" data-by={v.noneBy} data-tip={noneText(v)}> · {noneText(v)}</small>}</span>
       <span className="a mono">{r.amount != null && <>{(r.currency ?? baseCurrency()) !== baseCurrency() && <span className="c">{r.currency}</span>}{fmt(r.amount)}</>}</span>
       <span className="acts">

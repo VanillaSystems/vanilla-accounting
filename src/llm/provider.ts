@@ -71,6 +71,13 @@ export class AiRefused extends CallFailed {
 /** A subscription's plan limit, in the words Claude Code and Codex print it. */
 export const isPlanLimit = (said: string): boolean => /usage limit|hit your (usage )?limit|limit reached|limit will reset/i.test(said);
 
+/**
+ * A subscription CLI that is installed but not signed in, in the words Claude Code and Codex print
+ * for a missing login («Not logged in · Please run /login», «run `codex login`»): the app says its
+ * own sentence for that state, never the CLI's. A refused key or any other error is not this.
+ */
+export const isSignedOut = (said: string): boolean => /\bnot (logged|signed) in\b|run \/login\b|\bclaude auth login\b|\bcodex login\b/i.test(said);
+
 export interface Provider {
   id: ProviderId;
   /** A subscription counts against the person's quota; a key costs money per call. */

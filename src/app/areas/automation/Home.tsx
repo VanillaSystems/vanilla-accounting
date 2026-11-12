@@ -24,7 +24,7 @@ import type { Location, Query } from '../../shell/route.js';
 import type { Nav } from '../index.js';
 import { Go } from '../vat/links.js';
 import { approvalWithheld } from './filing-summary.js';
-import { readsInWords } from './words.js';
+import { paymentWords, readsInWords } from './words.js';
 import { UnbookedFact } from './Issues.js';
 import { unbookedOpen } from './period-issues.js';
 
@@ -107,7 +107,7 @@ export function HomePage({ view, books, nav, query, canEdit }: { view: Automatio
             const quick = canEdit ? quickOutcomes(task, books, booked, withheld) : [];
             return (
               <div key={task.run} className="task hot" data-testid="home-task">
-                <b>{fillTask(tx(task.title), task.item, readsInWords(task.reads))}</b>
+                <b>{fillTask(tx(task.title), task.item, readsInWords(task.reads))}{paymentWords(books, task.item) ? <span className="wfpay" data-testid="task-payment"> · {paymentWords(books, task.item)}</span> : null}</b>
                 <span className="acts">
                   {quick.map((o) => <button key={o} type="button" className={o === 'accept' ? 'btn primary' : 'btn'} onClick={send(task, o)}>{t(`automation.outcome.${o}` as 'automation.outcome.accept')}</button>)}
                   <Go to={{ route: { area: 'automation', view: 'tasks', run: task.run }, query: {} }} nav={nav} className="btn ghost">{t('automation.home.open')}</Go>

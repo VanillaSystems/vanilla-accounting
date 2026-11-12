@@ -4,6 +4,7 @@
  * conversation, the changes an answer made to the books and the events it streams as (NDJSON).
  */
 import type { ApiRefusal } from './api-error.js';
+import type { AiRefusal } from './ai-refusal.js';
 import type { JournalEntry, Receipt, ReceiptKind } from './index.js';
 import type { Choice, Question, QuestionTarget } from '../questions/model.js';
 import type { ReportSpec } from '../reports/spec.js';
@@ -229,7 +230,7 @@ export interface ToolUse { name: string; detail: string; denied?: boolean }
 export type Turn =
   | { role: 'me'; text: string; at: string; context: ContextRef[]; attachments?: Attachment[] }
   | {
-    role: 'ai'; text: string; at: string; tools: ToolUse[]; changes?: MadeChange[]; refused?: string; refusal?: ApiRefusal; error?: string; done: boolean;
+    role: 'ai'; text: string; at: string; tools: ToolUse[]; changes?: MadeChange[]; refused?: string; refusal?: ApiRefusal; error?: string; /** Why no AI answered (not signed in, not installed, its limit): the UI says its own sentence for it, never the CLI's words. */ errorWhy?: AiRefusal; done: boolean;
     /** Changes the app holds for the person's «Übernehmen» instead of making them (HeldChanges). */
     held?: HeldChanges;
     /** What the answer said before the app refused its changes; `text` is then what it says now that nothing was changed. */
@@ -271,4 +272,5 @@ export type AssistantEvent =
   /** The answer's text, whole, in place of what streamed: after a refusal, what was not done and why; after changes made, with the app's line on what it made. */
   | { type: 'replace'; text: string }
   | { type: 'done'; session?: string; isError: boolean }
-  | { type: 'error'; message: string };
+  /** `why`: no AI answered, and why; the UI says it in its words with the way to set one up. */
+  | { type: 'error'; message: string; why?: AiRefusal };

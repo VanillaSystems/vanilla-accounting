@@ -9,8 +9,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { parseDocument, YAMLMap, YAMLSeq } from 'yaml';
 import { loadBooks } from '../books/store.js';
-import { loadClassifyContext, paymentFacts } from '../booking/classify.js';
-import { OWN_USE, parseRule, RULE_SECTION, RULE_STEP, type RuleRefusal } from '../booking/rules.js';
+import { loadClassifyContext, mappedReceipts, paymentFacts, ruleBookingLines, ruleOfPayment, type RuleLine } from '../booking/classify.js';
+import { stableWords } from '../knowledge/gaps.js';
+import { paysOwner } from '../booking/receipt-wait.js';
+import { payoutWaitOf } from '../booking/providers.js';
+import type { Counterparty } from '../knowledge/counterparties.js';
+import type { PaymentNature } from '../accounting/manual-booking.js';
+import type { BankTransaction } from '../types/index.js';
+import { OWN_USE, parseRule, RULE_SECTION, RULE_STEP, wholeWords, type RuleRefusal } from '../booking/rules.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { homeOf, loadKnowledge, RULES_DIR } from '../knowledge/layers.js';
 import { ibanKey, payerKey, payerNames, textKey } from '../knowledge/payer.js';
@@ -44,8 +50,23 @@ export interface HandRule {
   private?: { share: number; ownUse?: boolean };
 }
 
-/** GET /api/rules/hand?payment=: the form started from a payment (a task «Von Hand buchen»), with the payment's name. */
-export interface HandStart { match: HandMatch; direction: 'in' | 'out'; name: string }
+/**
+ * GET /api/rules/hand?payment=: the form started from a payment (a task «Von Hand buchen»), with the
+ * payment's name. `similar`: how many payments of the open period without a booking the started
+ * rule would hold for, this one among them, so a task can say «3 Zahlungen wie diese» (#344); `wider`:
+ * the payment's lasting words where they hold for more of them than the start does (`?by=text` starts with them).
+ * `rule`: the company rule that decides the payment already (it waits for its receipt, or asks
+ * first: `ask`, its question), with the lines it would book now and its tags: the hand-booking form
+ * proposes them. `wider.text` is in plain words; the start by text takes them as whole words.
+ */
+export interface HandStart {
+  match: HandMatch; direction: 'in' | 'out'; name: string; similar?: number; wider?: { text: string; similar: number };
+  rule?: { id: string; lines: RuleLine[]; ask?: string; tags?: Tags };
+  /** What the payment is beside a sale or a purchase (own transfer, the owner, an authority, a payout that waits). */
+  nature?: PaymentNature;
+  /** The one account the business's file allows: the hand form proposes it. */
+  account?: string;
+}
 
 const GUIDE = `${RULES_DIR}/booking.guide.yaml`;
 
@@ -113,16 +134,68 @@ export function draftHandRule(ws: Workspace, h: HandRule, today = new Date().toI
   return { ok: true, path };
 }
 
-/** The form started from payment `ref`: its business when the firm knows it, else its payer, else its text. */
-export function handStart(ws: Workspace, ref: string): HandStart | undefined {
+/** The form started from payment `ref`: its business when the firm knows it, else its payer, else its text; `by` 'text': its text. */
+export function handStart(ws: Workspace, ref: string, by?: 'text'): HandStart | undefined {
   const books = loadBooks(ws);
   const tx = books.transactions.find((t) => t.ref === ref);
   if (!tx) return undefined;
   const context = loadClassifyContext(ws);
-  const business = paymentFacts(books, tx, context, loadFxResolver()).counterparty;
+  const fx = loadFxResolver();
+  const business = paymentFacts(books, tx, context, fx).counterparty;
+  const file = business ? context.counterparties?.find((c) => c.id === business) : undefined;
   const payer = payerKey(tx);
-  const name = (business && context.counterparties?.find((c) => c.id === business)?.name) || (payer && payerNames([tx])[payer]) || tx.counterparty || tx.description;
+  const name = file?.name || (payer && payerNames([tx])[payer]) || tx.counterparty || tx.description;
   const direction = tx.direction === 'CRDT' ? 'in' : 'out';
-  const match: HandMatch = business ? { kind: 'business', id: business } : payer ? { kind: 'payer', payer: ibanKey(payer) ?? name } : { kind: 'text', text: tx.description.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') };
-  return { match, direction, name };
+  const closed = books.config?.closedThrough;
+  const booked = new Set((books.journalEntries ?? []).map((e) => e.transactionRef));
+  const kind = books.transactions.filter((t) => t.direction === tx.direction);
+  const open = kind.filter((t) => !(closed && t.date <= closed) && !booked.has(t.ref));
+  const count = (like: (t: BankTransaction) => boolean) => open.filter((t) => t.ref === tx.ref || like(t)).length;
+  // By text: the words that stay from one such payment to the next, never the month or the invoice number of this one, as whole words.
+  const words = stableWords(tx.description) || tx.description;
+  const text = wholeWords(words);
+  const pattern = new RegExp(text, 'i');
+  const says = (t: BankTransaction) => pattern.test(`${t.description} ${t.counterparty ?? ''}`);
+  const byText = count(says);
+  const byPayer = payer ? count((t) => payerKey(t) === payer) : 0;
+  // A business the firm knows first, else the payer, else the text.
+  const [match, similar]: [HandMatch, number] = by === 'text' ? [{ kind: 'text', text }, byText]
+    : business ? [{ kind: 'business', id: business }, count((t) => paymentFacts(books, t, context, fx).counterparty === business)]
+      : payer ? [{ kind: 'payer', payer: ibanKey(payer) ?? name }, byPayer]
+        : [{ kind: 'text', text }, byText];
+  // Where the text holds for more open payments (six wages to two people share «Lohn», #344) it is offered as a wider start the
+  // person takes (`by`), only when it tells these payments apart: it holds for at most half of the year's payments of the kind, so
+  // the bank's own wording («Belastung E-Banking Auftrag») is never offered.
+  const year = kind.filter((t) => t.date.slice(0, 4) === tx.date.slice(0, 4));
+  const tells = year.filter(says).length * 2 <= year.length;
+  const wider = match.kind !== 'text' && byText > similar && tells ? { text: words, similar: byText } : undefined;
+  const placed = ruleOfPayment(books, tx, context, fx);
+  const then = placed?.rule.then;
+  const booking = then?.kind === 'book' ? then.booking : then?.booking;
+  const rule = placed && booking ? {
+    id: placed.rule.id, lines: ruleBookingLines(tx, booking, mappedReceipts(books, tx), context.ownerAccount),
+    ...(then?.kind === 'ask' && { ask: then.question }), ...(booking.tags && { tags: booking.tags }),
+  } : undefined;
+  const nature = natureOf(books, tx, context, file);
+  const account = file?.accounts?.length === 1 ? file.accounts[0] : undefined;
+  return { match, direction, name, similar, ...(wider && { wider }), ...(rule && { rule }), ...(nature && { nature }), ...(account && { account }) };
+}
+
+const ibanOf = (iban: string) => iban.replace(/\s+/g, '').toUpperCase();
+
+/** What the payment is beside a sale or a purchase, from the firm's files (manual-booking.ts PaymentNature). */
+function natureOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, context: ReturnType<typeof loadClassifyContext>, file: Counterparty | undefined): PaymentNature | undefined {
+  const linked = mappedReceipts(books, tx);
+  const waits = payoutWaitOf(tx, linked, context.counterparties ?? [], books.journalEntries);
+  if (waits) {
+    const key = waits.why === 'clearing' ? 'salesReport.noClearing' : waits.why === 'since' ? 'salesReport.noSince' : 'salesReport.gapPayout';
+    return { kind: 'payoutWaits', key, params: { provider: waits.provider.name, file: homeOf('workspace', waits.provider.role, waits.provider.id), since: waits.provider.provider.since ?? '', account: waits.provider.provider.clearing ?? '' } };
+  }
+  const own = new Set(context.bankAccounts.flatMap((a) => (a.iban ? [ibanOf(a.iban)] : [])));
+  if (tx.counterpartyIban && own.has(ibanOf(tx.counterpartyIban))) return { kind: 'ownTransfer' };
+  if (tx.direction !== 'CRDT') return undefined;
+  // Her name as the payer, never in the text: a customer writes the firm's name in the message («Rg 12 Thomas Huber Malerei»).
+  if (context.ownerAccount && paysOwner({ counterparty: tx.counterparty, description: '' }, context.ownerName)) return { kind: 'owner', account: context.ownerAccount };
+  if (file && (file.role === 'authority' || file.roles.includes('authority'))) return { kind: 'authority', name: file.name };
+  return undefined;
 }

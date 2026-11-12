@@ -155,11 +155,12 @@ test('the draft: the bank on its side, the payment\'s amount and date, the recei
   assert.deepEqual(draft.bank, { account: '1023', side: 'accountCredit' });
   assert.equal(draft.date, '2026-08-14');
   assert.deepEqual(draft.receipts, ['r1']);
-  assert.deepEqual(draft.lines, [{ accountDebit: '4400', accountCredit: '1023', amount: 50, vat: 'M81', description: 'Shop EU, Farbe' }]);
+  // The receipt gives the rate, never a code: the form turns it into the code of whatever account stands in the field (#344, M81 on 4400).
+  assert.deepEqual(draft.lines, [{ accountDebit: '4400', accountCredit: '1023', amount: 50, vat: '8.1', description: 'Shop EU, Farbe', source: { account: { from: 'precedent', date: '2026-07-02' }, vat: { from: 'receipt' } } }], 'each proposal names where it comes from (#344)');
   assert.equal(draft.precedent?.id, 'j0');
 
   const alone = bookingDraft({ ...books, journalEntries: [] }, 'T1', accounts)!;
-  assert.deepEqual(alone.lines[0], { accountDebit: '', accountCredit: '1023', amount: 50, vat: '8.1', description: 'Shop EU, Farbe' }, 'no precedent: the rate waits for the account');
+  assert.deepEqual(alone.lines[0], { accountDebit: '', accountCredit: '1023', amount: 50, vat: '8.1', description: 'Shop EU, Farbe', source: { vat: { from: 'receipt' } } }, 'no precedent: the rate waits for the account');
 });
 
 test('the vendor\'s last payment split into an asset and an expense leg: the draft takes the expense leg, not the ladder (r6h-27)', () => {
@@ -225,8 +226,9 @@ test('a payment naming a cancelled invoice (r8c-5): the draft says which one, an
   assert.deepEqual(draft.lines, [{ accountDebit: '1020', accountCredit: '', amount: 1070.19, vat: '', description: 'Gutschrift' }]);
   assert.equal(draft.precedent, undefined);
   const live = bookingDraft(books, 'P2', accounts, [{ ...cancelled, cancelled: undefined } as unknown as Invoice])!;
-  assert.equal(live.cancelledInvoice, undefined, 'a live invoice is the payment rules\' business, not the hand form\'s');
-  assert.equal(live.precedent?.id, 'j1');
+  assert.equal(live.cancelledInvoice, undefined);
+  assert.deepEqual(live.invoice, { id: 'i5', number: '2026-005', settles: false }, 'a live invoice is named: its own lines are the proposal (#344), not the customer\'s last sale');
+  assert.equal(live.precedent, undefined);
   // The form takes its rows once: while the invoices load there is no draft, so the blind one never reaches the form (r9c-4).
   assert.equal(formDraft(books, 'P2', accounts, 'loading'), undefined);
   assert.deepEqual(formDraft(books, 'P2', accounts, [cancelled])?.lines.map((l) => [l.accountCredit, l.vat]), [['', '']]);

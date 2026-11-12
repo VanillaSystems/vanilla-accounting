@@ -208,7 +208,7 @@ function apply(e: AssistantEvent): void {
     case 'conversation': set({ conversation: e.id }); break;
     case 'text': withAi((t) => ({ ...t, text: t.text + e.text })); break;
     case 'tool': withAi((t) => ({ ...t, tools: [...t.tools, { name: e.name, detail: e.detail, ...(e.denied ? { denied: true } : {}) }] })); break;
-    case 'error': withAi((t) => ({ ...t, error: e.message, done: true })); break;
+    case 'error': withAi((t) => ({ ...t, error: e.message, ...(e.why ? { errorWhy: e.why } : {}), done: true })); break;
     case 'changes': withAi((t) => ({ ...t, changes: e.changes })); booksChanged(); break;
     case 'held': withAi((t) => ({ ...t, held: e.held })); break;
     case 'terminal': withAi((t) => ({ ...t, terminal: e.request })); break;

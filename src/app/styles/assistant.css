@@ -185,7 +185,7 @@ a.dmove:hover, a.dmove:focus-visible { background: var(--hover); outline: none; 
 .dropdlg .dsum { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 10px; background: var(--hover); font-size: 13.5px; line-height: 1.45; color: var(--ink); }
 .dropdlg .dsum p { margin: 0; }
 .dchip.p-working { background: var(--hover); color: var(--ink-2); }
-.dchip.p-waits, .dchip.p-stuck { background: var(--warn-soft); color: var(--warn); }
+.dchip.p-waits, .dchip.p-stuck, .dchip.p-unread { background: var(--warn-soft); color: var(--warn); }
 .dchip.p-matched { background: color-mix(in srgb, var(--pos, #1a7f4b) 14%, transparent); color: var(--pos, #1a7f4b); }
 .dpw input { font-size: 12px; }
 .droprow.open { border-bottom: 0; }

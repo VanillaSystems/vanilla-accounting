@@ -176,7 +176,7 @@
 .skipacts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
 
 /* A receipt waiting for the AI while it is switched off (issue #212): the link to Firma › KI stays on one line. */
-.notice.aioffwait a { white-space: nowrap; }
+.notice.aioffwait a, .notice.notread a { white-space: nowrap; }
 
 /* Receipts that wait for the AI's reading on a Mac without one: a fact, the way to an AI and the way by hand (ReadingWaits.tsx). */
 .readwaits { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 0 0 16px; font-size: 12.5px; line-height: 1.5; color: var(--ink-2); }

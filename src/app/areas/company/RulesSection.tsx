@@ -40,7 +40,7 @@ function origin(r: RuleRow): string {
 
 const refusalText = (r: RuleRow) => (r.kind === 'note' ? t('rules.refuse.prose') : r.refusal ? (() => { const k = refusalKey(r.refusal); return t(k.key, k.vars as never); })() : '');
 
-export function RulesSection({ nav, canEdit, payment }: { nav: Nav; canEdit: boolean; payment?: string }) {
+export function RulesSection({ nav, canEdit, payment, by }: { nav: Nav; canEdit: boolean; payment?: string; by?: 'text' }) {
   const [view, setView] = useState<RulesView>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -70,7 +70,7 @@ export function RulesSection({ nav, canEdit, payment }: { nav: Nav; canEdit: boo
   return (
     <div className="rules">
       <p className="m">{t('rules.lead')}</p>
-      {canEdit ? <HandRuleForm key={payment ?? ''} view={view} nav={nav} payment={payment} onKept={reload} /> : null}
+      {canEdit ? <HandRuleForm key={`${payment ?? ''}-${by ?? ''}`} view={view} nav={nav} payment={payment} by={by} onKept={reload} /> : null}
       {view.waiting.map((w) => (
         <p key={w.workflow} className="warnline" data-testid="rules-waiting">
           {t('rules.waiting', { files: w.files.join(', '), workflow: textIn(w.label, language()) })}
@@ -111,7 +111,7 @@ export function RulesSection({ nav, canEdit, payment }: { nav: Nav; canEdit: boo
  * card, with the payments it matches, before anything is kept. A firm without VAT codes sees no
  * VAT field. Opened from a payment (?payment=), the form starts with that payment's business or payer.
  */
-function HandRuleForm({ view, nav, payment, onKept }: { view: RulesView; nav: Nav; payment?: string; onKept(): void }) {
+function HandRuleForm({ view, nav, payment, by, onKept }: { view: RulesView; nav: Nav; payment?: string; by?: 'text'; onKept(): void }) {
   const [open, setOpen] = useState(!!payment);
   const [f, setF] = useState<HandForm>(emptyForm());
   const [path, setPath] = useState<string>();
@@ -121,8 +121,8 @@ function HandRuleForm({ view, nav, payment, onKept }: { view: RulesView; nav: Na
   const [started, setStarted] = useState(0);
   useEffect(() => {
     if (!payment) return;
-    api.handStart(payment).then((r) => { setF(emptyForm(r.start)); setStarted((n) => n + 1); }, () => undefined);
-  }, [payment]);
+    api.handStart(payment, by).then((r) => { setF(emptyForm(r.start)); setStarted((n) => n + 1); }, () => undefined);
+  }, [payment, by]);
   const codes = firmCodes();
   const set = (k: keyof HandForm) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const reset = () => { setOpen(false); setPath(undefined); setError(undefined); setF(emptyForm()); if (payment) nav.setQuery({}); };

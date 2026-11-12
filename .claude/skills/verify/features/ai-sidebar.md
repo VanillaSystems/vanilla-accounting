@@ -35,3 +35,5 @@ Preconditions: a demo sandbox. For a real answer, `$S stub <run> <text-file>` be
 - Never change Firma › KI's provider or CLI in the sandbox. The sandbox shims both `claude` and `codex` (doctor: `api finds the refusing codex shim, no CLI pinned`); an API key entered there could still reach a provider.
 - The sent message carries the selected object of the area as a reference (`Hallo` plus the entry's text).
 - `$S unstub` after a stubbed drive, so later drives cannot reach even the stub by accident.
+
+- **A CLI that is not signed in (#344, driven 2026-11-12).** Put a `claude` into `$SB/bin` that answers `--version`, exits 1 on `auth status` and prints the stream Claude Code prints when signed out (an `assistant` line and a `result` line with `is_error` and «Not logged in · Please run /login»; tests/by-hand-without-ai-api.test.ts writes one). A message, or «Mit mir einrichten» of the setup conversation, ends in `[data-testid=ai-no-answer][data-reason=signedOut]`: `Claude Code ist nicht angemeldet: einmal im Terminal anmelden.` with `[data-act=ai-set-up]` `KI einrichten`; the CLI's words show nowhere.

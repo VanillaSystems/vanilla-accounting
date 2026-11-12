@@ -4,6 +4,7 @@
  * app would carry it out (src/saving/hand-rule.ts).
  */
 import type { HandRule, HandStart } from '../../../saving/hand-rule.js';
+import { patternText } from '../../../booking/rules.js';
 
 export interface HandForm {
   match: 'business' | 'payer' | 'text';
@@ -23,6 +24,8 @@ export interface HandForm {
   share: string;
   /** The share booked as own use, the input tax corrected. */
   ownUse: boolean;
+  /** A text start's pattern (`\\bLohn\\b`) behind the plain words the field shows: kept while the field still shows them. */
+  pattern?: { shown: string; pattern: string };
 }
 
 export type Missing = 'business' | 'payer' | 'text' | 'amount' | 'account' | 'share';
@@ -31,7 +34,8 @@ export const emptyForm = (start?: HandStart | null): HandForm => ({
   match: start?.match.kind ?? 'text',
   business: start?.match.kind === 'business' ? start.match.id : '',
   payer: start?.match.kind === 'payer' ? start.match.payer : '',
-  text: start?.match.kind === 'text' ? start.match.text : '',
+  text: start?.match.kind === 'text' ? patternText(start.match.text) : '',
+  ...(start?.match.kind === 'text' ? { pattern: { shown: patternText(start.match.text), pattern: start.match.text } } : {}),
   direction: start?.direction ?? '',
   over: '', under: '', account: '', vat: '', tags: {}, share: '', ownUse: false,
 });
@@ -54,7 +58,8 @@ export function handRuleOf(f: HandForm): { ok: true; rule: HandRule } | { ok: fa
   if (!f.account.trim()) return { ok: false, missing: 'account' };
   const share = amountOf(f.share.replace(/\s*%$/, ''));
   if (Number.isNaN(share) || (share !== undefined && (share <= 0 || share >= 100))) return { ok: false, missing: 'share' };
-  const match = f.match === 'business' ? { kind: 'business' as const, id: value } : f.match === 'payer' ? { kind: 'payer' as const, payer: value } : { kind: 'text' as const, text: value };
+  const text = f.pattern && value === f.pattern.shown.trim() ? f.pattern.pattern : value;
+  const match = f.match === 'business' ? { kind: 'business' as const, id: value } : f.match === 'payer' ? { kind: 'payer' as const, payer: value } : { kind: 'text' as const, text };
   return {
     ok: true,
     rule: {

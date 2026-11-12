@@ -40,6 +40,8 @@ import { ledgerFor } from '../areas/receipts/view.js';
 import { useFx } from '../hooks/use-fx.js';
 import { ReportCorrections } from '../areas/receipts/ReportCorrections.js';
 import { processingText } from '../automation/processing.js';
+import { waitsForReading } from '../../parsers/receipt-text.js';
+import { useNoAi } from '../ai/no-ai.js';
 import { INTAKE_STEPS, INTAKE_WORKFLOW, inProcess, processingOf, runProcessing } from '../../workflows/processing.js';
 
 const drop = dropStore(
@@ -79,11 +81,10 @@ const act = (session: DropSession, r: DropRow, action: Parameters<typeof api.dro
 
 const groupIban = (iban: string) => iban.replace(/(.{4})/g, '$1 ').trim();
 
-/** What a waiting row says about its file, the parts apart: its kind (when known), how it was recognized, the ZIP it came out of, the statement's account and period. */
+/** What a waiting row says about its file, the parts apart: its kind (when known), the ZIP it came out of, the statement's account and period. */
 function metaOf(r: DropRow): string {
   return [
     r.provider ? t(`drop.report.${r.provider.kind}`, { provider: r.provider.name }) : r.kind && t(`drop.kind.${r.kind}` as 'drop.kind.receipt'),
-    r.how && t(`drop.how.${r.how}` as 'drop.how.structure'),
     r.from && t('drop.from', { name: r.from }),
     r.facts?.iban,
     r.facts?.from && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to!)}`,
@@ -286,7 +287,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
  * it, #218: «Sucht die Zahlung …», «Wartet (3 vor diesem)»), read, matched, waiting for a person,
  * its run stopped, or set aside by the run with the reason.
  */
-type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'orderPage'; provider: string } | { kind: 'stuck'; run: string } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string };
+type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'unread' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'orderPage'; provider: string } | { kind: 'stuck'; run: string } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string };
 
 const isWorking = (run?: { status: string }) => !!run && (run.status === 'queued' || run.status === 'running');
 
@@ -324,7 +325,9 @@ function fileState(r: DropRow, books: Index, view: View): FileState {
   if (receipt.location !== 'archived') return { kind: 'waits' };
   // An order page of the provider way (#253): the provider's order export brings its order, no payment comes for it.
   const page = ledgerFor(books).byId.get(id)?.orderPage;
-  return page ? { kind: 'orderPage', provider: page.name } : { kind: 'read' };
+  if (page) return { kind: 'orderPage', provider: page.name };
+  // A photo or scan no AI read (#344) is not «gelesen»: the row says so, with the two ways on.
+  return waitsForReading(receipt) ? { kind: 'unread' } : { kind: 'read' };
 }
 
 /**
@@ -425,6 +428,7 @@ function ReceiptDetails({ id, books, go }: { id: string; books: Index; go(route:
 function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSession; books: Index; go(route: Route, date?: string): void; refresh(): void }) {
   const { view } = useAutomation();
   const { rates } = useFx();
+  const noAi = useNoAi();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const x = fileState(r, books, view);
@@ -452,12 +456,18 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
         <div className="dn"><b className="mono">{r.name}</b><small>{r.report ? `${t(`drop.report.${r.report.kind}`, { provider: r.report.name })} · ${reportLine(r.report)}` : r.statement ? [r.read && t(`drop.read.by.${r.read.by}`), r.facts?.from && r.facts.to && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to)}`, keptPdf ? t('drop.kept') : t('drop.entries', { n: r.statement.refs.length })].filter(Boolean).join(' · ') : receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}{r.twin?.relation === 'companion' ? ` · ${t('drop.twin.companion', { name: r.twin.name })}` : r.document ? ` · ${t(`drop.doc.${r.document}` as 'drop.doc.newsletter')}` : ''}</small></div>
         <div className="dgo">
           <span className={`dchip p-${x.kind}`}>{x.kind === 'working' ? (x.step ?? t('drop.p.working')) : t(`drop.p.${x.kind}` as 'drop.p.read')}</span>
+          {x.kind === 'unread' ? (
+            <small className="dwhy" data-testid="drop-unread">
+              {t(noAi ? 'drop.p.unreadNoAi' : 'drop.p.unreadFailed')}{' '}
+              {noAi ? <button type="button" className="linkbtn" data-act="ai-set-up" onClick={() => go({ area: 'company', section: 'ai' })}>{t('aiSetup.line.setUp')}</button> : null}
+            </small>
+          ) : null}
           {missing ? <small className="dwhy">{missing}</small> : x.kind === 'orderPage' ? <small className="dwhy" data-testid="drop-order-page">{t('drop.p.orderPageWhy', { provider: x.provider })}</small> : x.kind === 'refused' ? <small className="dwhy">{reasonText(x.reason)}</small> : null}
           {byBank ? <small className="dwhy" data-testid="drop-by-bank">{t('drop.byBank', { label: byBank.label })}</small> : null}
           <span className="dacts">
             {byBank ? <button type="button" className="linkbtn" data-testid="drop-other-account" disabled={running || busy} data-tip={t('drop.byBankChangeTip')} onClick={() => { setBusy(true); void act(session, r, { kind: 'otherAccount' }).then(refresh).finally(() => setBusy(false)); }}>{t('drop.byBankChange')}</button> : null}
             {x.kind === 'stuck' ? <button type="button" className="linkbtn" data-testid="drop-stuck-run" onClick={() => go({ area: 'automation', view: 'run', run: x.run })}>{t('processing.toRun')}</button> : null}
-            {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id }, receipt.date)}>{t('drop.openReceipt')}</button> : null}
+            {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id }, receipt.date)}>{t(x.kind === 'unread' ? 'drop.p.typeIn' : 'drop.openReceipt')}</button> : null}
             {(r.kind === 'receipt' || r.kind === 'photo') && !r.report && x.kind !== 'matched' && x.kind !== 'working' ? <button type="button" className="linkbtn" data-testid="drop-as-statement" disabled={busy} onClick={() => { setBusy(true); void act(session, r, { kind: 'statement' }).then(refresh).finally(() => setBusy(false)); }}>{t('drop.asStatement')}</button> : null}
             {keptPdf ? <button type="button" className="linkbtn" data-act="actions" data-testid="drop-actions" aria-haspopup="menu" aria-expanded={!!menu} disabled={busy} onClick={(e) => setMenu(e.currentTarget.getBoundingClientRect())}>{t('actions.label')}</button> : null}
             <button type="button" className="linkbtn" disabled={running || busy} data-tip={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</button>
@@ -505,7 +515,7 @@ export function DropDialog({ onGo, onLanded, period, books, refresh }: { onGo(lo
   const sum = !working && taken.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? []), receiptOf, questions) : undefined;
   // Only files the books hold already (#341): the window says that nothing new came in.
   const nothingNew = !working && !taken.length && rows.length > 0 && rows.every((r) => (r.state === 'duplicate' && r.reason !== 'possible-duplicate') || !!r.readAs);
-  const waits = !working && states.some((x) => x.kind === 'waits' || x.kind === 'stuck');
+  const waits = !working && states.some((x) => x.kind === 'waits' || x.kind === 'stuck' || x.kind === 'unread');
   // A receipt of a sealed quarter opens in that quarter, not in the open one (r9k-8).
   const go = (route: Route, date?: string) => { closeDrop(); onGo(date ? at(route, date) : { route, query: {} }); };
   return (

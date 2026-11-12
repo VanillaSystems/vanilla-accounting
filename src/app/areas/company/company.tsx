@@ -160,7 +160,7 @@ function Section({ section, ...p }: Props & { section: CompanySection; ws: Compa
     case 'sources': return <SourcesSection nav={p.nav} canEdit={p.canEdit} />;
     case 'ai': return <AiSection nav={p.nav} canEdit={p.canEdit} />;
     case 'phone': return <PhoneSection nav={p.nav} />;
-    case 'rules': return <RulesSection nav={p.nav} canEdit={p.canEdit} payment={p.query.payment} />;
+    case 'rules': return <RulesSection nav={p.nav} canEdit={p.canEdit} payment={p.query.payment} by={p.query.by} />;
     case 'accounts': return <Accounts {...p} />;
     case 'dimensions': return <DimensionsSection dimensions={p.ws.dimensions ?? []} entries={p.books.journalEntries ?? []} canEdit={p.canEdit} save={(next, message) => patch(p.nav, { dimensions: next }, message, { dimensions: [...(p.ws.dimensions ?? [])] })} />;
     case 'periods': return <Periods {...p} />;

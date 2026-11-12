@@ -6,8 +6,8 @@
 import type { JournalEntry } from '../../../types/index.js';
 import type { Period } from '../../../accounting/periods.js';
 import { chfAmount } from '../../../accounting/index.js';
-import { firmCodes, VAT_CODE_FAMILIES, VAT_CODE_GROUPS, VAT_CODE_KINDS, lookupVatCode, vatCodeGroup, type VatCodeEntry, type VatCodeFamily, type VatCodeGroup } from '../../../accounting/vat-codes.js';
-import { vat } from '../../../engines/index.js';
+import { codeForRate, parseRate, firmCodes, VAT_CODE_FAMILIES, VAT_CODE_GROUPS, VAT_CODE_KINDS, lookupVatCode, vatCodeGroup, type VatCodeEntry, type VatCodeFamily, type VatCodeGroup } from '../../../accounting/vat-codes.js';
+import { invoicing, vat } from '../../../engines/index.js';
 import type { Key } from '../../i18n/types.js';
 
 /** The `?vat=` of the entries without a code. */
@@ -84,9 +84,10 @@ export interface PickGroup { group: VatCodeGroup; options: PickOption[] }
  * the person is doing, in VAT_CODE_GROUPS order; current rates before the ones that ended in 2023,
  * then the kinds the booking guide chooses (V81) before the rare ones (V81-B), else catalogue order. A
  * query keeps the codes whose code or plain name (`name`) holds every word of it; one that starts
- * with «-» lists the minus codes, a refund or reversal.
+ * with «-» lists the minus codes, a refund or reversal. `fit` is the group the line's accounts take
+ * (fittingGroup): its codes come first, and a typed rate («8.1») lists only them.
  */
-export function pickGroups(q: string, name: (code: string) => string): PickGroup[] {
+export function pickGroups(q: string, name: (code: string) => string, fit?: VatCodeGroup): PickGroup[] {
   const typed = q.trim().toLowerCase();
   const minus = typed.startsWith('-');
   const words = typed.replace(/^-/, '').split(/\s+/).filter(Boolean);
@@ -94,9 +95,25 @@ export function pickGroups(q: string, name: (code: string) => string): PickGroup
     .map((entry, i) => { const code = minus ? `-${entry.code}` : entry.code; return { entry, i, code, name: name(code) }; })
     .filter((o) => { const hay = `${o.code} ${o.name}`.toLowerCase(); return words.every((w) => hay.includes(w)); })
     .sort((a, b) => Number(a.entry.superseded) - Number(b.entry.superseded) || Number(!a.entry.rules.length) - Number(!b.entry.rules.length) || a.i - b.i);
-  return VAT_CODE_GROUPS
+  const groups = VAT_CODE_GROUPS
     .map((group) => ({ group, options: options.filter((o) => vatCodeGroup(o.entry) === group).map(({ code, name }) => ({ code, name })) }))
     .filter((g) => g.options.length);
+  const fitting = fit ? groups.filter((g) => g.group === fit) : [];
+  if (!fitting.length) return groups;
+  // A typed rate on a chosen account: the few codes of its kind (#344); anything else lists them first.
+  return parseRate(typed) ? fitting : [...fitting, ...groups.filter((g) => g.group !== fit)];
+}
+
+/**
+ * The group of codes a line's accounts take (issue #64: the account gives the code): a sale's for a
+ * revenue account, material's or operating expenses' for an expense account. Undefined while the
+ * accounts say neither or one side is still empty, so the picker lists every group.
+ */
+export function fittingGroup(accountDebit: string, accountCredit: string): VatCodeGroup | undefined {
+  const rate = invoicing().rates.find((r) => r > 0);
+  const code = rate === undefined || !accountDebit || !accountCredit ? null : codeForRate(rate, accountDebit, accountCredit);
+  const found = code ? lookupVatCode(code) : null;
+  return found ? vatCodeGroup(found.entry) : undefined;
 }
 
 /** Codes named in a text (the catalogue's "Nicht wenn"), split out so each can link: ['Kunde im Ausland (', 'V0-E', ')…']. */

@@ -8,6 +8,7 @@ import { readEstvRateTable } from '../../accounting/fx-rates.js';
 import { MANUAL_BANK, MONEY_ROLES, type MoneyRole } from '../../workspace/banks.js';
 import { companyInfo, type CompanyInfo } from '../../books/company.js';
 import { isDemo } from '../../workspace/demo-copy.js';
+import { payoutSales, salesDefaults } from '../../workspace/sells.js';
 import { WorkspaceError, WorkspaceRefusal } from '../../workspace/workspace.js';
 import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
 import { SALES_KINDS, salesKinds, type SalesKind } from '../../workspace/setup.js';
@@ -23,7 +24,7 @@ import { account, setCustomerTerms } from '../workspace-edits.js';
 import type { Address } from '../../invoices/model.js';
 import { basisSinceOf, changesMethod, parseVatSetup, type VatSetup } from '../../workspace/vat-setup.js';
 import { booksOpenPeriod, localToday } from '../../accounting/periods.js';
-import { baseCurrency, chart, filing } from '../../engines/index.js';
+import { baseCurrency, chart, filing, setup } from '../../engines/index.js';
 import { readDimensions, usesOf, type Dimension } from '../../books/tags.js';
 
 export const router = Router();
@@ -77,8 +78,19 @@ router.get('/api/fx-rates', (_req, res) => {
   res.json(readEstvRateTable());
 });
 
-/** The company as the page reads it; a demo says that it is one. */
-const workspaceInfo = (): CompanyInfo => ({ ...companyInfo(WS, readBooks()), ...(isDemo(WS.paths.root) ? { demo: true as const } : {}) });
+/** The firm's default accounts from the setup's «what do you sell?» and the jurisdiction's table (#344); none for a manifest without the answers. */
+function firmDefaults(): CompanyInfo['defaults'] {
+  const kinds = WS.profile?.sells;
+  if (!kinds?.length) return undefined;
+  const all = salesDefaults(kinds, setup().sells);
+  return { sales: payoutSales(kinds, setup().sells, setup().answers.payouts.sales.otherwise), ...(all.purchase[0] ? { purchase: all.purchase[0].account } : {}), all };
+}
+
+/** What GET and PATCH /api/workspace answer: the company's info with its default accounts; a demo says that it is one. */
+function workspaceInfo(): CompanyInfo {
+  const defaults = firmDefaults();
+  return { ...companyInfo(WS, readBooks()), ...(isDemo(WS.paths.root) ? { demo: true as const } : {}), ...(defaults && { defaults }) };
+}
 
 router.get('/api/workspace', (_req, res) => {
   res.json(workspaceInfo());

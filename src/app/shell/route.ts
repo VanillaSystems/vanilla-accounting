@@ -88,6 +88,8 @@ export interface Query {
   customer?: string;
   /** /company/rules?payment=<ref>: the form of a new rule, started from that payment. */
   payment?: string;
+  /** With `payment`, `by=text`: the rule starts with the payment's lasting words instead of its payer (#344). */
+  by?: 'text';
 }
 
 export interface Location { route: Route; query: Query }
@@ -113,6 +115,7 @@ export function formatLocation({ route, query }: Location): string {
   if (query.vat) qs.set('vat', query.vat);
   if (query.customer) qs.set('customer', query.customer);
   if (query.payment) qs.set('payment', query.payment);
+  if (query.payment && query.by) qs.set('by', query.by);
   for (const c of query.chips ?? []) qs.append('f', chipToken(c));
   if (query.q) qs.set('q', query.q);
   const s = qs.toString();
@@ -197,6 +200,7 @@ function queryOf(params: URLSearchParams, today: IsoDate): Query {
     vat: get('vat'),
     customer: get('customer'),
     payment: get('payment'),
+    by: get('payment') && get('by') === 'text' ? 'text' : undefined,
   });
 }
 
