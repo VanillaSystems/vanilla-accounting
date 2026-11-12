@@ -93,9 +93,17 @@ person as before (mailbox, source).
 shows «Von Hand: Firma › …». The old program's history has no place of its own: what it becomes
 (rules, opening balances) has.
 
-**Way in.** In the Mac app, «Neue Buchhaltung anlegen» is the setup (#139): the start screen asks
-the folder and the books' language, and the setup conversation runs before the books exist, in a
-wide panel of the start screen (src/app/onboarding/DraftConversation.tsx). It asks what
+**Way in.** A fresh install opens «Einrichtung» (src/app/ai/FirstRun.tsx; ai-setup.md, decision 1 as
+changed on 12.11.2026, #343): what the app is in two sentences, then what the person wants: new
+books, open existing ones, come from another program, the demo. The look at this Mac's AI runs in
+the background and decides only what «Neue Buchhaltung erstellen» does: with an AI ready, the
+system's save panel asks where the books go and the setup conversation below runs; without one the
+form opens at once, and a line under the choices offers «KI einrichten». «Von anderer Software
+übernehmen» creates new books too and says what happens today: the setup asks for the old program
+and what the move needs, and nothing is imported by itself yet.
+
+In the Mac app, «Neue Buchhaltung anlegen» is the setup (#139): the setup conversation runs before
+the books exist, in a wide panel of the start screen (src/app/onboarding/DraftConversation.tsx). It asks what
 `createWorkspace` needs: the firm (name, UID, owner), the preset, every VAT question (a preset only
 suggests them), the net tax rates when they apply, the other questions of src/workspace/setup.ts
 unless the preset answers them, and the bank accounts. Each answer is checked as createWorkspace
@@ -124,9 +132,9 @@ conversation and on the last card. A firm without its UID is not saved; its card
 said. A model that answers no JSON, or none, changes nothing. The call is ledgered in the folder's
 `data/llm-ledger.jsonl`, which becomes the books' own.
 
-Without an AI provider on the
-computer, «Neue Buchhaltung anlegen» opens the form with the reason; «Ohne KI einrichten» opens it
-too. The form and `npm run init` stay the way by hand and write the same manifest.
+Without an AI on the computer, «Neue Buchhaltung erstellen» opens the form; with one, «Ohne KI
+einrichten» under the choices opens it too. The form and `npm run init` stay the way by hand and
+write the same manifest.
 
 The first start of an empty workspace set up by the form (no payments, receipts or bookings, and no
 `onboarding.json` yet) opens the setup once by itself, on its first step. Firma has «Einrichtung

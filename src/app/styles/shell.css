@@ -309,6 +309,23 @@ main.full { display: flex; flex-direction: column; }
 
 /* audit mode: every write is refused */
 .auditbar { position: fixed; top: 0; left: 0; right: 0; z-index: 15; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 4px 16px; font-size: 12px; font-weight: 500; background: var(--warn-soft); color: var(--warn); border-bottom: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); }
+/* A demo says that it is one: a quiet line along the page's bottom edge while it is open, and once a card on what to look at (src/app/shell/Demo.tsx). */
+.demobar { position: fixed; left: var(--abw); right: var(--aiw); bottom: 0; z-index: 6; display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 2px 14px; padding: 5px 16px; font-size: 12px; line-height: 1.4; color: var(--muted); background: var(--bg); border-top: 1px solid var(--line); pointer-events: none; }
+.demobar a { color: var(--accent); white-space: nowrap; pointer-events: auto; }
+:root:has(.demobar) .legend { bottom: 38px; }
+:root:has(.demobar) .toast { bottom: 52px; }
+:root:has(.demobar) .toast.droplost { bottom: 100px; }
+.demointro { position: fixed; left: calc(var(--abw) + 16px); bottom: 44px; z-index: 24; width: min(360px, calc(100vw - var(--abw) - var(--aiw) - 32px)); display: grid; gap: 8px; padding: 16px 18px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--bg); color: var(--ink-2); font-size: 13px; line-height: 1.5; box-shadow: var(--shadow); }
+.demointro b { font: 700 15px "Hanken Grotesk", system-ui, sans-serif; color: var(--ink); }
+.demointro p, .demointro ul { margin: 0; }
+.demointro ul { padding-left: 18px; }
+.demointro a { color: var(--accent); }
+.demointro .btn { justify-self: start; margin-top: 4px; }
+/* A phone-wide window: the bottom nav (56px, .activity) lies along the bottom edge; the line and the card stand above it. */
+html.phone .demobar { left: 0; right: 0; bottom: 56px; }
+html.phone .demointro { left: 16px; bottom: 100px; width: calc(100vw - 32px); }
+html.phone:has(.demobar) .toast { bottom: 108px; }
+html.phone:has(.demobar) .toast.droplost { bottom: 156px; }
 .drop .ic { margin: 0 auto; }
 
 /* The Mac app without a title bar: a strip along the top edge moves the window (double-click zooms); what floats over it stays clickable. */

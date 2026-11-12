@@ -1,20 +1,20 @@
 /**
  * The desktop app's first screen (ADR 0009): open existing books, set up new ones, or look at a copy
  * of the demo. Shown at /start and whenever no books are open. A fresh install (no books open, none
- * known) opens straight into «Einrichtung» (docs/0.4.0/ai-setup.md, design B): the AI first
- * (src/app/ai/FirstRun.tsx), then the folder, then the setup conversation (#139, DraftConversation),
- * with buttons and fields also without an AI. The form with the questions of `npm run init`
- * (src/workspace/setup.ts, checked again by src/workspace/create.ts) stays as «Ohne KI einrichten».
- * Both end in the same createWorkspace.
+ * known) opens straight into «Einrichtung» (docs/0.4.0/ai-setup.md, decision 1 as changed on
+ * 12.11.2026; src/app/ai/FirstRun.tsx): what the person wants first. With an AI ready, new books run
+ * the setup conversation (#139, DraftConversation); without one they open the form with the
+ * questions of `npm run init` (src/workspace/setup.ts, checked again by src/workspace/create.ts),
+ * which stays «Ohne KI einrichten» beside the conversation. Both end in the same createWorkspace.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BANKS, parseIban } from '../../workspace/banks.js';
 import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstMissing, firstUnsupported, optionOf, type Answers, type Preset, type QuestionKey } from '../../workspace/setup.js';
 import { parseUid } from '../../workspace/uid.js';
 import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
 import { ApiError, api, errorText } from '../lib/api.js';
-import { START_PATH, desktop, setupPath } from './bridge.js';
+import { DEMO_HOME, START_PATH, desktop, setupPath } from './bridge.js';
 import { FirstRun, freeName } from '../ai/FirstRun.js';
 import { DraftConversation } from '../onboarding/DraftConversation.js';
 import './start.css';
@@ -77,11 +77,14 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
   /** Books refused for their layout before 0.4.0: the folder the app offers to move into the current one. */
   const [upgradable, setUpgradable] = useState<string>();
 
+  /** The first look at what this Mac knows was taken. */
+  const looked = useRef(false);
   useEffect(() => {
     void api.desktop.info().then((i) => {
       setInfo(i);
-      // A fresh install: no books open and none known.
-      if (mode.kind === 'home' && !i.open && !i.recent.length && !location.search) setMode({ kind: 'first' });
+      // A fresh install: no books open and none known. Once: «Zur Startseite» from there stays on the start screen.
+      if (!looked.current && mode.kind === 'home' && !i.open && !i.recent.length && !location.search) setMode({ kind: 'first' });
+      looked.current = true;
     }, (e) => setError(errorText(e)));
   }, [mode.kind]);
   const setMode = (next: Mode) => {
@@ -89,7 +92,7 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
     history.replaceState(null, '', next.kind === 'setup' ? setupPath(next.root) : START_PATH);
     setModeState(next);
   };
-  /** «Neue Buchhaltung anlegen» (also the menu's /start?new): «Einrichtung», the AI first, then the folder. */
+  /** «Neue Buchhaltung anlegen» (also the menu's /start?new): «Einrichtung», what the person wants, the AI where it has work. */
   const startNew = () => setMode({ kind: 'first' });
   useEffect(() => { document.title = 'Vanilla Accounting'; }, []);
 
@@ -100,7 +103,7 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
     try {
       const books = await open();
       if (books.setup) { setBusy(false); setMode({ kind: 'setup', root: books.root }); return; }
-      location.assign('/');
+      location.assign(books.demo ? DEMO_HOME : '/');
     } catch (e) {
       setError(errorText(e));
       if (e instanceof ApiError && e.body.code === 'oldLayout') setUpgradable(e.body.params.root);

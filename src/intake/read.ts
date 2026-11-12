@@ -17,7 +17,7 @@ import { assignUniqueRefs } from '../providers/camt053/camt053.js';
 import { imageToPdf, isImageFile } from '../parsers/image-pdf.js';
 import { smallerPdf } from '../parsers/smaller.js';
 import { pdfText } from '../parsers/pdf-text.js';
-import { detectVatProofIssue, textFacts, textProves } from '../parsers/receipt-text.js';
+import { detectVatProofIssue, noiseText, textFacts, textProves } from '../parsers/receipt-text.js';
 import { filedReceipt, forgetReadFacts } from './vat.js';
 import { buildVisionPrompt } from '../llm/prompts.js';
 import type { Receipt } from '../types/index.js';
@@ -69,15 +69,13 @@ async function extractTextFast(
   }
 }
 
-const MODEL_READ: ReadonlySet<Receipt['extractionMethod']> = new Set(['claude', 'claude-vision']);
-
 /**
  * A receipt whose text proves nothing and that no model has read yet: an old local OCR's noise off a
  * phone photo (#284). The model reads it again, once. A receipt of a filed quarter keeps its text:
  * its VAT was declared as booked.
  */
 export const readsAgain = (books: Parameters<typeof filedReceipt>[0], r: Receipt): boolean =>
-  !!r.extractedText && !textProves(r) && !MODEL_READ.has(r.extractionMethod) && !filedReceipt(books, r);
+  !!r.extractedText && noiseText(r) && !filedReceipt(books, r);
 
 // ─── Concurrency pool ───────────────────────────────────────────────────────
 

@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { imageToPdf } from '../src/parsers/image-pdf.js';
-import { textProves } from '../src/parsers/receipt-text.js';
+import { textProves, waitsForReading } from '../src/parsers/receipt-text.js';
 import { readStep } from '../src/intake/read.js';
 import { vatStep } from '../src/intake/vat.js';
 import { runIntake, storePort, type Ask } from '../src/intake/pipeline.js';
@@ -34,6 +34,18 @@ const FACTS = { vatId: 'CHE-123.456.789', currency: 'CHF', total: 52.5, hasSwiss
 
 // 2 x 2 pixels: a photo, no text of its own.
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAD0lEQVR4nGP4z8DwHwYBAB7FA/+WnI5aAAAAAElFTkSuQmCC', 'base64');
+
+test('a receipt waits for the model\'s reading while its text is empty or noise no model read, and nobody entered its date and amount', () => {
+  const r = (extractedText: string, extractionMethod: 'tesseract' | 'pdftotext' | 'claude-vision', rest: { date?: string; amount?: number; kind?: 'noise' | 'duplicate' | 'statement' | 'invoice' } = {}) => ({ extractedText, extractionMethod, ...rest });
+  assert.equal(waitsForReading(r('', 'tesseract')), true, 'a photo without text');
+  assert.equal(waitsForReading(r('', 'claude-vision')), true, 'also after a model call that failed and left nothing');
+  assert.equal(waitsForReading(r(NOISE, 'tesseract', { date: '2026-08-14' })), true, 'an OCR\'s noise, with only the day the phone took it: what the list showed as read on a firm without VAT');
+  assert.equal(waitsForReading(r(NOISE, 'tesseract', { date: '2026-08-14', amount: 52.5 })), false, 'date and amount entered by hand: it waits no more');
+  assert.equal(waitsForReading(r(UNREADABLE, 'claude-vision')), false, 'the model read it and said it is illegible: reading again changes nothing');
+  assert.equal(waitsForReading(r(PHOTO_TEXT, 'claude-vision')), false, 'read');
+  assert.equal(waitsForReading(r('Lieferschein Muster AG, drei Kartons', 'pdftotext')), false, 'a PDF\'s own text');
+  for (const kind of ['noise', 'duplicate', 'statement'] as const) assert.equal(waitsForReading(r('', 'tesseract', { kind })), false, `${kind}: set aside, waits for nothing`);
+});
 
 test('a reading of a picture proves something only when it is legible; a PDF\'s own text says what the document says', () => {
   const ocr = (extractedText: string) => ({ extractedText, extractionMethod: 'tesseract' as const });

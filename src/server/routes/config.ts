@@ -6,7 +6,8 @@ import { accountsOf, filedReturnsOf } from '../../workspace/reads.js';
 import { WS, RequestError, patchBody, readBooks, reopenWorkspace, stringField } from '../books.js';
 import { readEstvRateTable } from '../../accounting/fx-rates.js';
 import { MANUAL_BANK, MONEY_ROLES, type MoneyRole } from '../../workspace/banks.js';
-import { companyInfo } from '../../books/company.js';
+import { companyInfo, type CompanyInfo } from '../../books/company.js';
+import { isDemo } from '../../workspace/demo-copy.js';
 import { WorkspaceError, WorkspaceRefusal } from '../../workspace/workspace.js';
 import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
 import { SALES_KINDS, salesKinds, type SalesKind } from '../../workspace/setup.js';
@@ -76,8 +77,11 @@ router.get('/api/fx-rates', (_req, res) => {
   res.json(readEstvRateTable());
 });
 
+/** The company as the page reads it; a demo says that it is one. */
+const workspaceInfo = (): CompanyInfo => ({ ...companyInfo(WS, readBooks()), ...(isDemo(WS.paths.root) ? { demo: true as const } : {}) });
+
 router.get('/api/workspace', (_req, res) => {
-  res.json(companyInfo(WS, readBooks()));
+  res.json(workspaceInfo());
 });
 
 const optText = (b: Record<string, unknown>, key: string): string | null | undefined =>
@@ -310,7 +314,7 @@ router.post('/api/workspace/logo', express.raw({ type: Object.keys(LOGO_TYPES), 
   writeAtomic(join(WS.paths.root, file), req.body);
   checked(() => patchManifest(WS.paths.manifest, { invoicing: { layout: { logo: file } } }));
   reopenWorkspace();
-  res.json(companyInfo(WS, readBooks()));
+  res.json(workspaceInfo());
 });
 
 /**
@@ -340,7 +344,7 @@ router.patch('/api/workspace', (req, res) => {
   reopenWorkspace();
   chartWithBanks(patch, banksBefore);
   reopenWorkspace();
-  res.json(companyInfo(WS, readBooks()));
+  res.json(workspaceInfo());
 });
 
 router.get('/api/config', (_req, res) => {
