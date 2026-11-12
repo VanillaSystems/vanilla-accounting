@@ -54,14 +54,46 @@ test('the persona\'s own invoice 2026-029 and the money in that names it are pai
   assert.match(b.mappings[0].rule!, /number/, 'the link says the number matched');
 });
 
-test('the firm\'s own invoice: its UID; a firm without one, its name heading the text and no other UID', () => {
-  assert.equal(issuedByFirm(treppenhaus(), FIRM), true);
+test('the firm\'s own invoice: proven by its UID and no other; a firm without one, only named (proposed, never linked)', () => {
+  assert.equal(issuedByFirm(treppenhaus(), FIRM), 'uid');
   assert.equal(issuedByFirm(treppenhaus({ vatId: 'CHE-999.888.777' }), FIRM), false, 'another UID: a supplier\'s');
+  assert.equal(issuedByFirm(treppenhaus({ vatId: 'DE123456789', extractedText: OWN.replace('CHE-123.456.789', 'DE123456789') }), FIRM), false, 'the whole UID counts, not its digits');
   assert.equal(issuedByFirm(treppenhaus(), undefined), false, 'no firm known: no own invoice');
   const unregistered: Firm = { name: 'Malerei Huber GmbH' };
-  assert.equal(issuedByFirm(treppenhaus({ vatId: undefined }), unregistered), true);
-  assert.equal(issuedByFirm(treppenhaus({ vatId: undefined, extractedText: `Garage Meier AG\nAn: Malerei Huber GmbH\n${OWN}` }), unregistered), false, 'her name as the addressee is no issuer');
+  const noUid = OWN.replace('MWST-Nr. CHE-123.456.789 MWST\n', '');
+  assert.equal(issuedByFirm(treppenhaus({ vatId: undefined, extractedText: noUid }), unregistered), 'name');
+  assert.equal(issuedByFirm(treppenhaus({ vatId: undefined, extractedText: `Garage Meier AG\nAn: Malerei Huber GmbH\n${noUid}` }), unregistered), false, 'her name as the addressee is no issuer');
   assert.equal(issuedByFirm(treppenhaus(), unregistered), false, 'a UID on the text the firm has none of: someone else\'s');
+});
+
+test('a supplier\'s invoice that prints the customer\'s UID first and its own after is no own invoice', async () => {
+  const both = garage({ vatId: 'CHE-123.456.789', extractedText: 'Kunde: Malerei Huber GmbH, CHE-123.456.789 MWST\nGarage Meier AG CHE-999.888.777 MWST\nRechnung RE-4471\nDatum: 10.07.2026\nService Lieferwagen\nMWST 8.1%\nTotal CHF 1850.00\nZahlbar innert 30 Tagen' });
+  assert.equal(issuedByFirm(both, FIRM), false);
+  const b = books([both], [refund]);
+  assert.deepEqual((await run(b)).linked, [], 'only the refund in the books: no link');
+});
+
+test('a held money in steps aside: a supplier\'s invoice that shows only the customer\'s UID still pairs with its card payment', async () => {
+  const customerUidOnly = garage({ vatId: 'CHE-123.456.789', extractedText: 'Garage Meier AG\nKunde: Malerei Huber GmbH, CHE-123.456.789 MWST\nRechnung RE-4471\nDatum: 10.07.2026\nService Lieferwagen\nMWST 8.1%\nTotal CHF 1850.00\nZahlbar innert 30 Tagen' });
+  const b = books([customerUidOnly], [card, refund]);
+  assert.deepEqual((await run(b)).linked.map((l) => [l.receipt, l.payment]), [['garage', 'card']]);
+});
+
+test('a firm without a UID: its own invoice and the money in naming it are proposed, never linked by code', async () => {
+  const noUid = treppenhaus({ vatId: undefined, extractedText: OWN.replace('MWST-Nr. CHE-123.456.789 MWST\n', '') });
+  const r = await run(books([noUid], [pay('p')]), { name: 'Malerei Huber GmbH' });
+  assert.deepEqual(r.linked, []);
+  assert.ok(r.left.some((l) => l.candidates.some((c) => c.payment === 'p')), 'proposed');
+});
+
+test('a firm with a UID but not registered prints no «MWST» after it: its own invoice still pairs', async () => {
+  const bare = treppenhaus({ vatId: undefined, hasSwissVat: false, vatSummary: [], extractedText: OWN.replace('MWST-Nr. CHE-123.456.789 MWST', 'UID CHE-123.456.789').replace('MWST 8.1% 932.90\n', '') });
+  assert.equal(issuedByFirm(bare, FIRM), 'uid');
+  assert.deepEqual((await run(books([bare], [pay('p')]))).linked.map((l) => l.payment), ['p']);
+});
+
+test('a year alone is no invoice number: «Rechnung 2026 Unterhalt»', () => {
+  assert.deepEqual(ownNumbers(treppenhaus({ extractedText: OWN.replace('Rechnung 2026-029', 'Rechnung 2026 Unterhalt') })), []);
 });
 
 test('without the firm known, money in is no candidate: the chain is as on 0.4.2', async () => {

@@ -78,6 +78,15 @@ test('hints follow the standard account, not its number: a renamed account has n
   assert.equal(hintsOf('3400'), undefined);
 });
 
+test('a chart made since 0.4.0 with the names the comma cut keeps its hints («Telefon» for «Telefon, Internet»)', () => {
+  setStandardAccounts([{ number: '6510', name: 'Telefon, Internet', hints: ['Handy'] }, { number: '6100', name: 'Unterhalt, Reparaturen, Ersatz', hints: ['Werkzeug'] }]);
+  setAccounts([{ number: '6510', name: 'Telefon' }, { number: '6100', name: 'Unterhalt' }]);
+  assert.deepEqual(hintsOf('6510'), ['Handy']);
+  assert.deepEqual(hintsOf('6100'), ['Werkzeug']);
+  setAccounts([{ number: '6510', name: 'Telefon, Internet' }]);
+  assert.deepEqual(hintsOf('6510'), ['Handy'], 'the whole name too');
+});
+
 test('the chart refuses a hint of fewer than three letters', () => {
   assert.ok(standard.every((a) => (a.hints ?? []).every((h) => h.length >= 3)));
 });

@@ -49,5 +49,6 @@ export function addableAccounts(): Account[] {
 export function hintsOf(number: string): string[] | undefined {
   const standard = standardCache.find((a) => a.number === number);
   const name = getAccountMap()[number];
-  return standard && (name === undefined || name === standard.name) ? standard.hints : undefined;
+  // A chart made from 0.4.0 to #365 carries the name a comma cut («Telefon» for «Telefon, Internet»): still the standard account.
+  return standard && (name === undefined || name === standard.name || name === standard.name.split(',')[0]) ? standard.hints : undefined;
 }

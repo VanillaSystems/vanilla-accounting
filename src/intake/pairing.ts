@@ -164,7 +164,7 @@ export interface PairCandidate {
    * and a supplier's invoice is never paid by money in.
    */
   against?: true;
-  /** An `against` candidate a payment of the receipt's amount going its usual way holds back: proposed, never linked by code. */
+  /** An `against` candidate held back: a payment of the receipt's amount goes its usual way, or only the firm's name says the invoice is its own (issuedByFirm 'name'). Proposed, never linked by code; it steps aside for a clear pair going the usual way. */
   held?: true;
 }
 
@@ -311,7 +311,8 @@ export function fitOf(r: Receipt, tx: BankTransaction, toChf: ToChf, isClosed: (
   if (days < -BOUNDS.daysBefore || days > daysAfterOf(usual)) return undefined;
   // Money in for an invoice only when it names one of its numbers as a whole token, on or after its day: the firm's own invoice (#365).
   const into = paysIn(r);
-  const named = into === (tx.direction === 'CRDT') ? undefined : into || days < 0 || !issuedByFirm(r, own?.firm) ? [] : namedNumbers(r, tx);
+  const issued = into === (tx.direction === 'CRDT') ? false : issuedByFirm(r, own?.firm);
+  const named = into === (tx.direction === 'CRDT') ? undefined : into || days < 0 || !issued ? [] : namedNumbers(r, tx);
   if (named && !named.length) return undefined;
   // A usual delay within the first day band says nothing the receipt's day does not: only a supplier that pays days or weeks later moves the expected day.
   const offDays = usual !== undefined && Math.abs(usual) > WEIGHTS.day[0].upTo ? days - usual : days;
@@ -347,7 +348,7 @@ export function fitOf(r: Receipt, tx: BankTransaction, toChf: ToChf, isClosed: (
   // The name counts once: by its words or by the business's file, whichever says more.
   const name = Math.max(words >= 2 ? WEIGHTS.name.more : words === 1 ? WEIGHTS.name.one : 0, business ? WEIGHTS.business : 0);
   const score = WEIGHTS.amount[amount === 'original' ? 'same' : amount] + dayOf({ days, offDays }) + name + (number ? WEIGHTS.number : 0);
-  return { receipt: r.id, payment: tx.ref, leg: legOf(tx), charge: [tx.ref], filed: isClosed(tx.date), score, amount, number, words, business, days, offDays, ...(named ? { against: true as const } : {}) };
+  return { receipt: r.id, payment: tx.ref, leg: legOf(tx), charge: [tx.ref], filed: isClosed(tx.date), score, amount, number, words, business, days, offDays, ...(named ? { against: true as const, ...(issued === 'name' ? { held: true as const } : {}) } : {}) };
 }
 
 /** What a payment says of what it pays: its text, reference, remarks and its parts' references. */
@@ -528,11 +529,15 @@ export type PairStage =
   /** `total`: how many candidates there were; more than SHORT_LIST are cut to the best SHORT_LIST, and the person is told so. */
   | { kind: 'person'; receipt: string; candidates: PairCandidate[]; total: number };
 
+/** The candidates code may weigh for a clear pair: a held one steps aside, so it never keeps a clear pair going the usual way from being linked (#365). */
+const live = (list: readonly PairCandidate[]): PairCandidate[] => list.filter((c) => !c.held);
+
 /** A candidate code may pair: money in to the firm's own invoice only by a number no other payment names, and while nothing holds it back (#365). */
 const pairable = (c: PairCandidate): boolean => !c.against || (c.number && !c.held);
 
 /** The candidates of a list (best first) tied with its best, when they score CLEAR.score and lead the rest by CLEAR.margin; none otherwise. */
-function tiedTop(list: readonly PairCandidate[]): PairCandidate[] {
+function tiedTop(all: readonly PairCandidate[]): PairCandidate[] {
+  const list = live(all);
   if (!list.length || list[0].score < CLEAR.score || !pairable(list[0])) return [];
   const top = list.filter((c) => c.score === list[0].score);
   const next = list[top.length];
@@ -587,9 +592,10 @@ export function stagesOf(search: PairSearch, only?: { receipt: string } | { paym
   const alike = alikeSets(search);
   return ids.map((id): PairStage => {
     const candidates = search.byReceipt.get(id) ?? [];
-    const best = candidates[0];
-    const theirs = best ? search.byPayment.get(slotOf(best)) ?? [] : [];
-    if (best && pairable(best) && best.score >= CLEAR.score && marginOf(candidates) >= CLEAR.margin && theirs[0] === best && marginOf(theirs) >= CLEAR.margin) return { kind: 'clear', pair: best };
+    const open = live(candidates);
+    const best = open[0];
+    const theirs = best ? live(search.byPayment.get(slotOf(best)) ?? []) : [];
+    if (best && pairable(best) && best.score >= CLEAR.score && marginOf(open) >= CLEAR.margin && theirs[0] === best && marginOf(theirs) >= CLEAR.margin) return { kind: 'clear', pair: best };
     const twin = alike.get(id);
     if (twin) return { kind: 'clear', pair: twin };
     if (candidates.length >= 1 && candidates.length <= SHORT_LIST) return { kind: 'short', receipt: id, candidates };
