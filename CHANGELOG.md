@@ -200,7 +200,7 @@ Two markers flag an entry you must read before you update:
 - The Swiss chart's names with a comma read whole: «Telefon, Internet» was «Telefon», and so 13
   accounts (1093, 1520, 1700, 4040, 5700, 6100, 6360, 6500, 6510, 6520, 6540, 8500, 8510) since
   before 0.4.0. New books get the whole names; existing books keep the names their chart has (it is
-  theirs: no migration), rename them under Firma › Kontenplan if you like. The chart's loader
+  theirs: no migration; their account hints still work), rename them under Firma › Kontenplan if you like. The chart's loader
   refuses a key it does not know, so a name cut at a comma fails at once (#365).
 - Mac app, first screen: «Neue Buchhaltung erstellen» opens the system's save panel again (the
   name prefilled in Documents, «Erstellen»), and the setup starts in the folder you name. In
