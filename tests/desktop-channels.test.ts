@@ -8,13 +8,13 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ASK, PUSH, TELL } from '../src/desktop/channels.js';
 import { chosenFolder, newFolderPanel } from '../src/desktop/new-folder.js';
-import { bringUp, offerMove, type AppWindow, type MoveOffer } from '../src/desktop/start.js';
-import { desktopServer } from '../src/desktop/server.js';
+import { PAINT_GRACE_MS, bringUp, offerMove, type AppWindow, type MoveOffer } from '../src/desktop/start.js';
+import { desktopServer, listen, portOf } from '../src/desktop/server.js';
 import { DesktopCallError, plainFailures } from '../src/app/desktop/bridge.js';
 import de from '../src/app/i18n/locales/de.js';
 import type { DesktopBridge } from '../src/types/desktop.js';
@@ -60,7 +60,7 @@ test('«Neue Buchhaltung erstellen»: the save panel names a new folder in Docum
   const panel = newFolderPanel({ title: 'Wo soll die neue Buchhaltung liegen?', name: 'Buchhaltung 2026', button: 'Erstellen' }, '/Users/sandra/Documents');
   assert.deepEqual(panel, {
     title: 'Wo soll die neue Buchhaltung liegen?', message: 'Wo soll die neue Buchhaltung liegen?',
-    defaultPath: '/Users/sandra/Documents/Buchhaltung 2026', buttonLabel: 'Erstellen', properties: ['createDirectory'],
+    defaultPath: '/Users/sandra/Documents/Buchhaltung 2026', buttonLabel: 'Erstellen', properties: ['createDirectory'], showsTagField: false,
   });
   assert.equal(newFolderPanel({ title: 't', name: '../../etc/x', button: 'b' }, '/home/Documents').defaultPath, '/home/Documents/x');
   for (const odd of [undefined, null, 'text', 7, {}, { name: '..' }, { name: 5, title: [], button: {} }]) {
@@ -126,20 +126,80 @@ function fakeWindow(state: { destroyed?: boolean; minimized?: boolean; visible?:
 test('a click on the Dock icon brings a window: a new one when none is left, the hidden one when it never appeared', () => {
   let created = 0;
   const create = () => { created++; };
-  bringUp(undefined, create);
-  bringUp(fakeWindow({ destroyed: true }), create);
+  const since = 1_000_000;
+  const fine = { since, failed: false };
+  bringUp(undefined, create, fine);
+  bringUp(fakeWindow({ destroyed: true }), create, fine);
   assert.equal(created, 2, 'no window, or a closed one: a new one');
 
-  const hidden = fakeWindow({ visible: false });
-  bringUp(hidden, create);
-  assert.deepEqual(hidden.did, ['show', 'focus'], 'a window that waits hidden is shown: a running app without a window leaves nothing to click');
+  // macOS sends «activate» on an ordinary start too: a window still waiting for its first paint is left to it.
+  const fresh = fakeWindow({ visible: false });
+  bringUp(fresh, create, fine, since + PAINT_GRACE_MS - 1);
+  assert.deepEqual(fresh.did, [], 'no empty frame before the page has painted');
+  const stuck = fakeWindow({ visible: false });
+  bringUp(stuck, create, fine, since + PAINT_GRACE_MS);
+  assert.deepEqual(stuck.did, ['show', 'focus'], 'a window whose paint did not come is shown: a running app without a window leaves nothing to click');
+  const broken = fakeWindow({ visible: false });
+  bringUp(broken, create, { since, failed: true }, since + 1);
+  assert.deepEqual(broken.did, ['show', 'focus'], 'a page that failed to load never paints: shown at once');
+
   const minimized = fakeWindow({ visible: true, minimized: true });
-  bringUp(minimized, create);
+  bringUp(minimized, create, fine, since + 1);
   assert.deepEqual(minimized.did, ['restore', 'focus']);
   const there = fakeWindow({ visible: true });
-  bringUp(there, create);
+  bringUp(there, create, fine, since + 1);
   assert.deepEqual(there.did, ['focus']);
   assert.equal(created, 2);
+});
+
+test('the Dock click is heard before the start first waits, so a start that hangs later still gives a window', () => {
+  const start = source('main.ts').split('async function start(): Promise<void> {')[1];
+  const firstWait = start.search(/\bawait\b/);
+  for (const event of ['activate', 'second-instance']) {
+    const at = start.indexOf(`app.on('${event}'`);
+    assert.ok(at >= 0 && at < firstWait, `app.on('${event}') stands before the first await of start()`);
+  }
+});
+
+test('a folder named for new books is looked at first: books, a started setup and other files are told apart from a new one', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'vanilla-taken-'));
+  const documents = join(home, 'Documents');
+  mkdirSync(documents);
+  const server = desktopServer({ stateFile: join(home, 'desktop.json'), demoRoot: join(home, 'Demo'), booksHome: documents, dist: join(home, 'dist') });
+  const http = await listen(server.app, '127.0.0.1', undefined);
+  const base = `http://127.0.0.1:${portOf(http)}`;
+  server.allowHost(`127.0.0.1:${portOf(http)}`);
+  const look = async (dir: string) => (await fetch(`${base}/api/desktop/folder?root=${encodeURIComponent(dir)}`)).json();
+  const send = (method: string, path: string, body: unknown) => fetch(base + path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  try {
+    assert.deepEqual(await look(join(documents, 'Neu')), { holds: 'nothing' }, 'a name that does not exist yet');
+    const empty = join(documents, 'Leer');
+    mkdirSync(empty);
+    writeFileSync(join(empty, '.DS_Store'), '');
+    assert.deepEqual(await look(empty), { holds: 'nothing' }, 'an empty folder (the Finder\'s own file aside) is as good as new');
+    const photos = join(documents, 'Fotos');
+    mkdirSync(photos);
+    writeFileSync(join(photos, 'baustelle.jpg'), 'x');
+    assert.deepEqual(await look(photos), { holds: 'files' });
+
+    const begun = join(documents, 'Begonnen');
+    assert.equal((await send('POST', '/api/desktop/setup', { root: begun, language: 'de' })).status, 200);
+    assert.equal((await look(begun)).holds, 'setup');
+
+    const books = join(documents, 'Maler Huber');
+    const made = await send('POST', '/api/desktop/create', {
+      preset: 'consultant', name: 'Maler Huber GmbH', uid: 'CHE-153.004.184', owner: 'Sandra Huber', language: 'de', root: books,
+      answers: {
+        legalForm: 'GmbH', vatRegistered: 'yes', vatMethod: 'effective', basis: 'received', period: 'quarterly', fiscalYear: 'calendar', start: 'new',
+        sells: ['services'], foreignCustomers: 'yes', imports: 'no', employees: 'owner', ownerPaysPrivately: 'yes', privateUse: [], payouts: 'no',
+      },
+      banks: [{ bank: 'UBS', currency: 'CHF' }],
+    });
+    assert.equal(made.status, 200, await made.text());
+    assert.deepEqual(await look(books), { holds: 'books', name: 'Maler Huber GmbH' });
+  } finally {
+    http.close();
+  }
 });
 
 test('a Documents folder the app may not read («Nicht erlauben») leaves the start screen its answer: no folders, no error', { skip: process.getuid?.() === 0 ? 'root reads every folder' : false }, () => {
@@ -148,11 +208,16 @@ test('a Documents folder the app may not read («Nicht erlauben») leaves the st
   mkdirSync(join(documents, 'Buchhaltung 2026'), { recursive: true });
   const server = desktopServer({ stateFile: join(home, 'desktop.json'), demoRoot: join(home, 'Demo'), booksHome: documents, dist: join(home, 'dist') });
   assert.deepEqual(server.info().folders, ['Buchhaltung 2026']);
+  const logged = console.error;
+  const lines: unknown[] = [];
+  console.error = (...args: unknown[]) => { lines.push(args); };
   chmodSync(documents, 0o000);
   try {
     assert.deepEqual(server.info().folders, []);
+    assert.deepEqual(lines, [], 'refused is an answer, not an error to log');
   } finally {
     chmodSync(documents, 0o755);
+    console.error = logged;
   }
   assert.deepEqual(desktopServer({ stateFile: join(home, 'desktop.json'), demoRoot: join(home, 'Demo'), booksHome: join(home, 'none'), dist: join(home, 'dist') }).info().folders, []);
 });

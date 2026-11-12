@@ -23,7 +23,7 @@ import { isOldLayout } from '../workspace/layout.js';
 import { upgradeWorkspace } from '../workspace/upgrade.js';
 import { renewTerminalAgents } from '../workspace/terminal-agents.js';
 import type { ApiErrorBody } from '../types/api-error.js';
-import type { AiAvailability, DesktopInfo, KnownBooks, PhoneInfo } from '../types/desktop.js';
+import type { AiAvailability, DesktopInfo, KnownBooks, PhoneInfo, FolderLook } from '../types/desktop.js';
 import { aiSetup } from '../server/ai-setup.js';
 import { qrSvg } from './qr.js';
 import { opened, readState, writeState, type PhonePairing } from './state.js';
@@ -116,6 +116,17 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     if (draft) return { root, ...(draft.firm ? { name: draft.firm.name } : {}), demo, setup: true };
     // A look at the name, never workspaceAt: that would switch the engines to these books' setup while other books are open.
     try { return { root, name: readManifest(join(appFolderIn(root) ?? root, MANIFEST_FILE)).company.name, demo }; } catch (e) { return { root, demo, problem: e instanceof Error ? e.message : String(e) }; }
+  };
+
+  const lookAt = (root: string): FolderLook => {
+    const k = known(root);
+    if (k.setup) return { holds: 'setup', ...(k.name ? { name: k.name } : {}) };
+    if (k.name) return { holds: 'books', name: k.name };
+    // Unreadable counts as taken: nothing new is written into a folder the app cannot see into.
+    let names: string[];
+    try { names = readdirSync(root); } catch (e) { return { holds: (e as NodeJS.ErrnoException).code === 'ENOENT' ? 'nothing' : 'files' }; }
+    // The Finder's own file is no content.
+    return { holds: names.some((n) => n !== '.DS_Store') ? 'files' : 'nothing' };
   };
 
   /** The demo copy as this version reads it: one from an app before 0.4.0 (books.json at its top) is thrown away, it is a copy. */
@@ -251,6 +262,10 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     if (!draft) throw new SetupError('No setup in this folder.', { reason: 'required', field: 'root' });
     return draftView(root, draft);
   };
+  // What a folder named for new books already holds, so the page never goes on silently in one that is not new.
+  app.get('/api/desktop/folder', (req, res) => {
+    try { res.json(lookAt(rootOf(req.query.root))); } catch (e) { refuse(res, e); }
+  });
   app.get('/api/desktop/setup', (req, res) => {
     try { res.json(viewOf(rootOf(req.query.root))); } catch (e) { refuse(res, e); }
   });
@@ -362,7 +377,9 @@ function refuse(res: express.Response, e: unknown): void {
 function foldersIn(dir: string): string[] {
   try {
     return readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
-  } catch {
+  } catch (e) {
+    // Missing or refused is an answer; anything else is worth a line in the log.
+    if (!['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM'].includes((e as NodeJS.ErrnoException).code ?? '')) console.error(`folders in ${dir}:`, e);
     return [];
   }
 }

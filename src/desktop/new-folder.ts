@@ -11,6 +11,8 @@ export interface NewFolderPanel {
   defaultPath: string;
   buttonLabel?: string;
   properties: ['createDirectory'];
+  /** No Finder tags on a folder of books. */
+  showsTagField: false;
 }
 
 const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
@@ -27,6 +29,7 @@ export function newFolderPanel(choice: unknown, home: string): NewFolderPanel {
     defaultPath: name && name !== '.' && name !== '..' ? join(home, name) : home,
     ...(button ? { buttonLabel: button } : {}),
     properties: ['createDirectory'],
+    showsTagField: false,
   };
 }
 

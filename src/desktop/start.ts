@@ -38,15 +38,25 @@ export interface AppWindow {
   focus(): void;
 }
 
+/** A window created hidden: since when it waits for its first paint, and whether its page failed to load. */
+export interface Waiting { since: number; failed: boolean }
+
+/** How long a hidden window may wait for its first paint before a click on the Dock icon shows it unpainted. */
+export const PAINT_GRACE_MS = 4000;
+
 /**
  * A click on the Dock icon, `open -a`, a second start: the window comes to the front, whatever
- * became of it. None (closed): `create` opens one. One that never appeared (it waits hidden for
- * its first paint, which did not come): shown as it is, since a running app without a window
- * leaves the person nothing to click.
+ * became of it. None (closed): `create` opens one. One that waits hidden for its first paint is
+ * left to it (macOS sends this on every ordinary start too, and an empty frame would flash);
+ * one that has waited longer than PAINT_GRACE_MS, or whose page failed to load, is shown as it
+ * is, since a running app without a window leaves the person nothing to click.
  */
-export function bringUp(win: AppWindow | undefined, create: () => void): void {
+export function bringUp(win: AppWindow | undefined, create: () => void, waiting: Waiting, now = Date.now()): void {
   if (!win || win.isDestroyed()) { create(); return; }
   if (win.isMinimized()) win.restore();
-  if (!win.isVisible()) win.show();
+  else if (!win.isVisible()) {
+    if (!waiting.failed && now - waiting.since < PAINT_GRACE_MS) return;
+    win.show();
+  }
   win.focus();
 }

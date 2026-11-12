@@ -21,7 +21,7 @@ import { freshLoginPath } from '../platform/ai-cli.js';
 import { ASK, PUSH, TELL } from './channels.js';
 import { chosenFolder, newFolderPanel } from './new-folder.js';
 import { sameOrigin, saveFile } from './save-file.js';
-import { bringUp, offerMove } from './start.js';
+import { bringUp, offerMove, type Waiting } from './start.js';
 import { dictate, isLang } from './dictation.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
 import { electronPage } from './print.js';
@@ -53,14 +53,38 @@ else void start().catch((e: unknown) => {
 });
 
 async function start(): Promise<void> {
-  await app.whenReady();
   const stateFile = join(app.getPath('userData'), 'desktop.json');
+  let win: BrowserWindow | undefined;
+  /** The local server's address once it listens; until then there is no page to show. */
+  let base: string | undefined;
+  /** The newest window while it waits hidden for its first paint (bringUp). */
+  let waiting: Waiting = { since: 0, failed: false };
+  const show = (path = '/') => {
+    if (!base) return;
+    const fresh = !win || win.isDestroyed();
+    if (fresh) {
+      const opened = (win = createWindow(stateFile));
+      const mine: Waiting = { since: Date.now(), failed: false };
+      waiting = mine;
+      // A new window appears once the page has painted, not as an empty frame.
+      opened.once('ready-to-show', () => opened.show());
+      // -3: a load replaced by the next one, no failure.
+      opened.webContents.on('did-fail-load', (_e, code, _text, _url, mainFrame) => { if (mainFrame && code !== -3) mine.failed = true; });
+    }
+    void win!.loadURL(base + path);
+    if (!fresh) win!.show();
+  };
+  // A second start, a click on the Dock icon, `open -a`: the window in front. Listening before the
+  // first wait of the start, so a start that hangs later (books that do not open, a login shell
+  // that does not answer) still gives the person a window.
+  app.on('second-instance', () => bringUp(win, show, waiting));
+  app.on('activate', () => bringUp(win, show, waiting));
+  await app.whenReady();
   const { homepage } = appPackage();
   usePrintPages(electronPage);
   // The login shell's PATH for a CLI installed elsewhere than ~/.local/bin; every later look asks it again (src/platform/ai-cli.ts).
   const pathKnown = freshLoginPath();
   let language = languageOf(app.getLocale());
-  let win: BrowserWindow | undefined;
   // Moved: Electron quits this process and starts the app in the Applications folder; nothing more starts here.
   if (await offerApplicationsFolder(textsIn(language)) === 'moved') return;
 
@@ -77,20 +101,10 @@ async function start(): Promise<void> {
   const port = portOf(await listen(server.app, '127.0.0.1', readState(stateFile).port));
   writeState(stateFile, { ...readState(stateFile), port });
   server.allowHost(`127.0.0.1:${port}`);
-  const base = `http://127.0.0.1:${port}`;
+  base = `http://127.0.0.1:${port}`;
 
   guard(base);
 
-  const show = (path = '/') => {
-    const fresh = !win || win.isDestroyed();
-    if (fresh) {
-      const opened = (win = createWindow(stateFile));
-      // A new window appears once the page has painted, not as an empty frame.
-      opened.once('ready-to-show', () => opened.show());
-    }
-    void win!.loadURL(base + path);
-    if (!fresh) win!.show();
-  };
   /** Books open on their page; a folder whose setup was broken off continues it on the start screen. */
   const pathOf = (books: KnownBooks | undefined) => (books?.setup ? setupPath(books.root) : '/');
   const opening = (open: () => Promise<KnownBooks>) => async () => {
@@ -157,9 +171,6 @@ async function start(): Promise<void> {
   server.startBackground();
   void server.phone.resume().then((p) => { if (p.error) console.error(`phone: ${p.error}`); });
   show(pathOf(first));
-  // A second start, a click on the Dock icon, `open -a`: the window in front, also one that never appeared.
-  app.on('second-instance', () => bringUp(win, show));
-  app.on('activate', () => bringUp(win, show));
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
   void checkForUpdates();
 }
