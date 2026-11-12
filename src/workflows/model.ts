@@ -349,6 +349,8 @@ export interface RunSummary {
   path: string[];
   /** The step it is on or stopped at. */
   at?: string;
+  /** While it runs: the items the step it is on has finished of those it works on (src/workflows/step-progress.ts); absent when the step counts none. */
+  progress?: { done: number; total: number };
   /** Why it stopped, when it is stuck: the log's line, and the refusal the screens have words for. */
   error?: string;
   why?: Refusal;
