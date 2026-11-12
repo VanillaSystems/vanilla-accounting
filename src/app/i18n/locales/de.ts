@@ -5390,7 +5390,7 @@ export const messages = {
   'journal.byHand.from.invoice': "aus Rechnung {number}",
   'journal.byHand.from.receivable': "Debitoren, Rechnung {number}",
   'journal.byHand.from.bankFee': "Gebühr der Bank, ohne MWST",
-  'journal.byHand.note.bankChargesMissing': "Eine Gebühr der Bank: die App bucht sie selbst auf Konto {account} {name}, aber dieses Konto fehlt im Kontenplan. Unter Firma › Kontenplan anlegen, dann bucht die App die Gebühren der Bank von selbst. Oder hier ein Konto wählen.",
+  'journal.byHand.note.bankChargesMissing': "Eine Gebühr der Bank: die App bucht sie selbst auf das Aufwandkonto {account} {name}, aber dieses Aufwandkonto fehlt im Kontenplan. Unter Firma › Kontenplan anlegen, dann bucht die App die Gebühren der Bank von selbst. Oder hier ein Konto wählen.",
   'bankFee.text': "{bank}, {text}",
   'bankFee.reason': "Gebühr der Bank laut Kontoauszug: auf {account} {name}, ohne MWST. Leistungen einer Bank sind von der MWST ausgenommen, es gibt keine Vorsteuer.",
   'bankFee.refundReason': "Gebühr, die die Bank laut Kontoauszug zurückzahlt: von {account} {name} zurück, ohne MWST, wie die Gebühr.",

@@ -5393,7 +5393,7 @@ export default {
     'journal.byHand.from.invoice': "dalla fattura {number}",
     'journal.byHand.from.receivable': "debitori, fattura {number}",
     'journal.byHand.from.bankFee': "spese della banca, senza IVA",
-    'journal.byHand.note.bankChargesMissing': "Spese della banca: l’app le registra da sé sul conto {account} {name}, ma questo conto manca nel piano dei conti. Aggiungerlo sotto Azienda › Piano dei conti, e l’app registra da sé le spese della banca. Oppure scegliere qui un conto.",
+    'journal.byHand.note.bankChargesMissing': "Spese della banca: l’app le registra da sé sul conto di costo {account} {name}, ma questo conto di costo manca nel piano dei conti. Aggiungerlo sotto Azienda › Piano dei conti, e l’app registra da sé le spese della banca. Oppure scegliere qui un conto.",
     'bankFee.text': "{bank}, {text}",
     'bankFee.reason': "Spese della banca secondo l’estratto: su {account} {name}, senza IVA. Le prestazioni di una banca sono escluse dall’IVA, non c’è imposta precedente.",
     'bankFee.refundReason': "Spese che la banca rimborsa secondo l’estratto: di ritorno da {account} {name}, senza IVA, come le spese.",

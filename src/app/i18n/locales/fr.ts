@@ -5393,7 +5393,7 @@ export default {
     'journal.byHand.from.invoice': "selon la facture {number}",
     'journal.byHand.from.receivable': "débiteurs, facture {number}",
     'journal.byHand.from.bankFee': "frais de la banque, sans TVA",
-    'journal.byHand.note.bankChargesMissing': "Des frais de la banque : l’app les comptabilise elle-même sur le compte {account} {name}, mais ce compte manque au plan comptable. L’ajouter sous Entreprise › Plan comptable, et l’app comptabilise les frais de la banque d’elle-même. Ou choisir un compte ici.",
+    'journal.byHand.note.bankChargesMissing': "Des frais de la banque : l’app les comptabilise elle-même sur le compte de charges {account} {name}, mais ce compte de charges manque au plan comptable. L’ajouter sous Entreprise › Plan comptable, et l’app comptabilise les frais de la banque d’elle-même. Ou choisir un compte ici.",
     'bankFee.text': "{bank}, {text}",
     'bankFee.reason': "Frais de la banque selon le relevé : sur {account} {name}, sans TVA. Les prestations d’une banque sont exclues de la TVA, il n’y a pas d’impôt préalable.",
     'bankFee.refundReason': "Frais que la banque rembourse selon le relevé : en retour de {account} {name}, sans TVA, comme les frais.",

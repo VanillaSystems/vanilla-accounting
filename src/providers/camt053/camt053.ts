@@ -136,10 +136,29 @@ const cardCode = (code: Node | undefined) => String(code?.Domn?.Fmly?.Cd ?? '').
 /** The whole name, never a part of it: «Migros» is not Migros Bank, «Raiffeisenbank» not the one bank that keeps this account (#340). */
 const sameName = (a: string, b: string | undefined) => !!b && a.toLowerCase().replace(/\s+/g, ' ').trim() === b.toLowerCase().replace(/\s+/g, ' ').trim();
 
+/** The domains whose charges are the bank's own for keeping the account or making payments: a custody or securities fee (SECU) may carry VAT. */
+const OWN_CHARGE_DOMAINS = new Set(['ACMT', 'PMNT']);
+const ownChargesCode = (code: Node | undefined) => chargesCode(code) && OWN_CHARGE_DOMAINS.has(String(code?.Domn?.Cd ?? '').trim());
+
 /** The bank transactions of a statement, booked on the ledger account of `bank` (a manifest label). */
 export function transactionsOf(statement: CamtStatement, account: { bank: string; statements: StatementKind }): BankTransaction[] {
+  return readEntries(statement, account).map((e) => e.tx);
+}
+
+/**
+ * The statement's fee rows the bank itself coded as its charges for the account or for payments
+ * (ACMT or PMNT with the sub-family CHRG or FEES), as transactionsOf reads them: the rows code may
+ * book without a model (src/booking/bank-fee.ts, #359). A row marked `bank-fee` only because the
+ * creditor is the bank's name (a loan's amortisation, a mortgage's interest) is not among them. The
+ * books keep no bank code, so this is read again from the statement file.
+ */
+export function bankCodedFees(statement: CamtStatement, account: { bank: string; statements: StatementKind }): BankTransaction[] {
+  return readEntries(statement, account).filter((e) => e.tx.type === 'bank-fee' && e.ownCharge).map((e) => e.tx);
+}
+
+function readEntries(statement: CamtStatement, account: { bank: string; statements: StatementKind }): Array<{ tx: BankTransaction; ownCharge: boolean }> {
   const entries: Node[] = statement.node.Ntry ?? [];
-  return entries.map((entry, i): BankTransaction => {
+  return entries.map((entry, i) => {
     const { amount, currency } = getAmt(entry.Amt);
     const direction = String(entry.CdtDbtInd ?? 'DBIT') as 'CRDT' | 'DBIT';
     const date = getDate(entry.BookgDt) || getDate(entry.ValDt);
@@ -196,7 +215,7 @@ export function transactionsOf(statement: CamtStatement, account: { bank: string
     const toServicer = account.statements !== 'wise' && direction === 'DBIT' && sameName(named, statement.bankName) && !cardCode(entry.BkTxCd) && !cardCode(single?.BkTxCd);
     const feeType = wiseId.startsWith('FEE-') ? 'wise-fee' as const : (chargesCode(entry.BkTxCd) || chargesCode(single?.BkTxCd) || toServicer) && !counterpartyIban ? 'bank-fee' as const : undefined;
 
-    return {
+    const tx: BankTransaction = {
       ref,
       bank: account.bank,
       date,
@@ -212,6 +231,7 @@ export function transactionsOf(statement: CamtStatement, account: { bank: string
       ...(wiseId && wiseId !== ref ? { bankTxId: wiseId } : {}),
       ...(feeType ? { type: feeType } : {}),
     };
+    return { tx, ownCharge: ownChargesCode(entry.BkTxCd) || ownChargesCode(single?.BkTxCd) };
   });
 }
 

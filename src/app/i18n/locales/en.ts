@@ -5393,7 +5393,7 @@ export default {
     'journal.byHand.from.invoice': "from invoice {number}",
     'journal.byHand.from.receivable': "receivables, invoice {number}",
     'journal.byHand.from.bankFee': "the bank's fee, without VAT",
-    'journal.byHand.note.bankChargesMissing': "A fee of the bank: the app books it itself on account {account} {name}, but the chart of accounts lacks that account. Add it under Company › Chart of accounts, and the app books the bank's fees by itself. Or choose an account here.",
+    'journal.byHand.note.bankChargesMissing': "A fee of the bank: the app books it itself on the expense account {account} {name}, but the chart of accounts lacks that expense account. Add it under Company › Chart of accounts, and the app books the bank's fees by itself. Or choose an account here.",
     'bankFee.text': "{bank}, {text}",
     'bankFee.reason': "The bank's fee, as the statement shows: on {account} {name}, without VAT. A bank's services are exempt from VAT, there is no input tax.",
     'bankFee.refundReason': "A fee the bank pays back, as the statement shows: back from {account} {name}, without VAT, as the fee.",

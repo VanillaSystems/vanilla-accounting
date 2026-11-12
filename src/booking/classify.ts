@@ -23,7 +23,7 @@ import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from 
 import { APP_ROOT, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
 import { sharedReceipts, inputTaxOverReceipts } from './shared-receipts.js';
 import { chargesOf, legKey } from '../intake/charges.js';
-import { agreedBasis, baseCurrency, documents, filing, setup, vat, withoutInputTax } from '../engines/index.js';
+import { agreedBasis, baseCurrency, chart, documents, filing, setup, vat, withoutInputTax } from '../engines/index.js';
 import { paymentProposals, type PaymentProposal } from '../invoices/payments.js';
 import { loadInvoices } from '../invoices/store.js';
 import type { InvoiceBook } from '../invoices/model.js';
@@ -46,7 +46,8 @@ import { ruleFor, ruleWords, stampRule, type PaymentFacts, type PlacedRule, type
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
 import { businessVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
 import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
-import { bankChargesOf, isOwnBankFee } from './bank-fee.js';
+import { bankChargesOf, isOwnBankFee, type BankCharges } from './bank-fee.js';
+import { bankCodedFee } from '../books/bank-import.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
 import { withReceiptTax } from './receipt-tax.js';
 import { clearingAccounts, payoutWaitOf, providerOfPayment, type PayoutWait, type Provider } from './providers.js';
@@ -195,6 +196,10 @@ export interface ClassifyContext extends ClassifyPromptContext {
   invoices?: InvoiceBook;
   /** The firm's UID: a customs assessment proves import VAT for the firm it names as importer (src/booking/customs-invoice.ts). */
   companyUid?: string;
+  /** The account the bank's own fee rows go on, or the one the chart lacks (src/booking/bank-fee.ts); absent: code books no fee row. */
+  bankCharges?: BankCharges;
+  /** Whether a fee row is one the bank itself coded as its charge (src/books/bank-import.ts bankCodedFee); absent: none is. */
+  bankCoded?: (tx: BankTransaction) => boolean;
 }
 
 /** At most this many casebook examples in one call: the best of each transaction first. */
@@ -250,6 +255,19 @@ export function chartOf(ws: Pick<Workspace, 'paths'>): string {
 }
 
 /**
+ * What code needs to book the bank's own fee rows (#359): the bank-charges account by the firm's own
+ * chart and its types (accounts.json; a prior-year export's numbers by their class), and which fee
+ * rows the bank coded as its charges, read from its statement files.
+ */
+function bankFeeContext(ws: Workspace, chartOfAccounts: string): Pick<ClassifyContext, 'bankCharges' | 'bankCoded'> {
+  const accounts = existsSync(ws.paths.accounts)
+    ? JSON.parse(readFileSync(ws.paths.accounts, 'utf8')) as Array<{ number: string; type?: string }>
+    : [...chartNames(chartOfAccounts).keys()].map((number) => ({ number, type: chart().typeOf(number) }));
+  const charges = bankChargesOf(accounts);
+  return { ...(charges && { bankCharges: charges }), bankCoded: bankCodedFee(ws) };
+}
+
+/**
  * The company (manifest), its chart and example entries (the prior-year export in history/, else
  * accounts.json and no examples of its own: the casebook stands in), and the app's VAT codes.
  */
@@ -277,6 +295,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     moneyAccounts: moneyAccounts(ws.bankAccounts, loadChart().accounts),
     ...(agreedBasis() ? { invoices: loadInvoices(ws) } : {}),
     companyUid: ws.company.uid,
+    ...bankFeeContext(ws, chartOfAccounts),
   };
 }
 
@@ -535,21 +554,23 @@ export function providerPayout(books: Books, tx: BankTransaction, provider: Prov
  * The bank's own fee row, booked in code (#359, src/booking/bank-fee.ts): bank / the bank-charges
  * account, without a VAT code (a bank's services are exempt: no input tax, so a fee refund has no
  * code to take back either), on the payment's day. Undefined when the firm's chart lacks the
- * account, or the jurisdiction names none: the row goes on as any payment does, to the model, or
- * without one to the person, whose form says which account is missing (src/saving/hand-rule.ts).
- * Call it only for a row no company rule decides. Stamped as the app's purchase-VAT check, as a
- * customs invoice booked by its positions is (a check of its own would change the books' format):
- * the reason says what code decided.
+ * account as an expense account, or the jurisdiction names none: the row goes on as any payment
+ * does, to the model, or without one to the person, whose form says which account is missing
+ * (src/saving/hand-rule.ts). Call it only for a row no company rule decides and the bank coded as
+ * its charge (isOwnBankFee). Stamped as the app's purchase-VAT check, as a customs invoice booked
+ * by its positions is (a check of its own would change the books' format): the reason says what
+ * code decided.
  */
 export function bankFeeEntries(books: Books, tx: BankTransaction, context: ClassifyContext, fx: FxResolver): JournalEntry[] | { reason: string; refusal: ClassifyRefusal } | undefined {
   const names = chartNames(context.chartOfAccounts);
-  const charges = bankChargesOf(names);
+  const charges = context.bankCharges;
   if (!charges || 'missing' in charges) return undefined;
   const de = wordsIn('de');
   const bankAccount = bankAccountFor(tx, context.bankAccounts);
   const out = tx.direction === 'DBIT';
   const bank = tx.counterparty?.trim() || tx.bank;
-  const description = de.t('bankFee.text', { bank, text: tx.description.trim() || bank });
+  const text = tx.description.trim();
+  const description = text && text !== bank ? de.t('bankFee.text', { bank, text }) : bank;
   const entries = entriesFor(tx, [{ accountDebit: out ? charges.account : '', accountCredit: out ? '' : charges.account, amount: tx.amount, vatCode: '', description }], {
     fx, receipts: [], bankAccount, lock: periodLock(books), money: context.moneyAccounts,
     by: { kind: 'code', check: 'purchaseVat' }, reason: de.t(out ? 'bankFee.reason' : 'bankFee.refundReason', { account: charges.account, name: names.get(charges.account) ?? '' }),
@@ -823,7 +844,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     const placed = ruleOfPayment(books, tx, context, fx);
     const then = placed?.rule.then;
     // The bank's own fee row is booked in code when no company rule decides it, before the model is asked (#359).
-    const fee = !placed && isOwnBankFee(tx) ? bankFeeEntries(books, tx, context, fx) : undefined;
+    const fee = !placed && isOwnBankFee(tx, context.bankCoded) ? bankFeeEntries(books, tx, context, fx) : undefined;
     if (fee) {
       if ('refusal' in fee) { log(`  ${tx.ref}  bank's fee row: refused: ${fee.reason}`); outcome.failed.push({ ref: tx.ref, ...fee }); continue; }
       books.journalEntries.push(...fee);
