@@ -27,6 +27,7 @@ import { payerNames } from '../knowledge/payer.js';
 import { commitExactly, repositoryAt } from '../workspace/git.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { draftDir } from './changes.js';
+import { recordSettled } from './settled-drafts.js';
 import type { Dimension } from '../books/tags.js';
 
 type Ws = Pick<Workspace, 'paths'>;
@@ -317,6 +318,7 @@ export async function keepDraft(ws: Workspace, path: string, basis: string, conf
   mkdirSync(dirname(to), { recursive: true });
   if (after.trim()) writeFileSync(to, after); else rmSync(to, { force: true });
   rmSync(draft);
+  recordSettled(ws, path, 'kept');
   return { ok: true, committed: await commit(ws, subjectOf(ws, d), path) };
 }
 
@@ -326,6 +328,7 @@ export function discardDraft(ws: Ws, path: string): boolean {
   const draft = join(draftDir(ws), path);
   if (!existsSync(draft)) return false;
   rmSync(draft);
+  recordSettled(ws, path, 'discarded');
   return true;
 }
 
