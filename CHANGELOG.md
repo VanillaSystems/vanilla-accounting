@@ -16,6 +16,11 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- AI step: before the browser opens for the sign-in, the app says what a person without an account
+  will see: the page in English, where she creates the account and picks the plan the card named,
+  then comes back and the app notices the sign-in by itself. After «… installieren» the vendor's
+  command stays folded under «Befehl zeigen» (#385).
+
 - AI sidebar: «was muss ich noch machen?» is answered from the books. Before the first message the
   sidebar shows where the oldest period not filed stands (payments without a booking and how many
   wait for their receipt, open questions, receipts without a payment, tasks, the day the return is

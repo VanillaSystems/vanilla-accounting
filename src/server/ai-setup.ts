@@ -86,7 +86,7 @@ export function scriptTexts(lang: string, cli: TerminalCli): ScriptTexts {
 const loginTexts = (lang: string, cli: TerminalCli) => {
   const t = textsIn(lang);
   const names = { cli: t(`terminal.cli.${cli}`), vendor: AI_CLIS[cli].vendor };
-  return { ...scriptTexts(lang, cli), title: t('aiSetup.script.loginTitle', names), steps: [t('aiSetup.script.loginStep1', names), t('aiSetup.script.loginStep2'), t('aiSetup.script.step3')] as const };
+  return { ...scriptTexts(lang, cli), title: t('aiSetup.script.loginTitle', names), steps: [t('aiSetup.script.loginStep1', names), t('aiSetup.script.loginStep2', { plan: AI_CLIS[cli].minPlan }), t('aiSetup.script.step3')] as const };
 };
 
 const refuse = (res: Response, status: number, body: ApiErrorBody) => { res.status(status).json(body); };
