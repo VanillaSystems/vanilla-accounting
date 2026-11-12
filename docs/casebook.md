@@ -54,7 +54,7 @@ transaction's receipts on Swiss MWST is never picked. One call carries at most e
 | 10 | [Software subscription from abroad without Swiss VAT (Bezugsteuer)](../examples/cases/bezugsteuer-foreign-service.yaml) | B81-1 | 383, 405 |
 | 11 | [Supplier abroad that charges Swiss MWST](../examples/cases/foreign-supplier-swiss-vat.yaml) | I81 | 405 |
 | 12 | [Private share of a mixed-use expense (Vorsteuerkorrektur)](../examples/cases/private-share.yaml) | K81-B | 415 |
-| 13 | [Bank account and card fees](../examples/cases/bank-fees.yaml) | I0 | none |
+| 13 | [Bank account and card fees](../examples/cases/bank-fees.yaml) | none | none |
 | 14 | [Refund of a purchase](../examples/cases/purchase-refund.yaml) | -I81 | 405 |
 | 15 | [Purchase paid in euros, converted at the ESTV rate](../examples/cases/fx-purchase-estv-rate.yaml) | I81 | 405 |
 | 16 | [Correction of a filed quarter (Stornobuchung with corrects)](../examples/cases/correction-private-purchase.yaml) | -I81 | 405 of the corrected quarter (form 0535) |

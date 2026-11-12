@@ -59,10 +59,10 @@ steps:
         why: "a VAT refund or payment is the payableTax of one filed return"
         source: proposed 2026-10-07 by Claude — confirm or replace
       - id: ev-exempt-bank-fees
-        status: proposed
-        when: our own bank's account fee or quarterly close row (Raiffeisen "Gebührenbelastung Kontoführung", "Abschlussbetreffnis", often CHF 0.00)
-        then: settled, exempt — the bank's monthly statement PDF is the evidence; book 6940 Bankspesen without a VAT code
-        source: proposed 2026-10-08 by Claude — confirm or replace
+        when: "our own bank's fee for the account or for payments, a row the bank itself coded as its charge (bank transaction code ACMT or PMNT with the sub-family CHRG or FEES; «Gebührenbelastung Kontoführung», «Abschlussbetreffnis», a card's annual fee)"
+        then: "settled, exempt — the bank statement is the evidence. Code books it before any model is asked: the bank-charges account (6940 Bankspesen) without a VAT code, a fee paid back the other way; a company rule that matches the row decides it instead. A row under the bank's name without such a code (a loan's amortisation, a mortgage's interest) and a custody fee (SECU) are the model's or the person's"
+        why: a bank's services for the account and for payments are exempt without credit (MWSTG Art. 21 Abs. 2 Ziff. 19), so there is no input tax and no code
+        source: decision 2026-11-12, owner
       - id: ev-exempt-cash-withdrawal
         when: a cash withdrawal from a bank account at a cash machine or a counter
         then: "booked at once, without waiting for a receipt: the money moves onto the cash box (1000), a money account, without a VAT code. What the cash pays for has its own receipt, booked from the cash box. A company rule that asks about withdrawals (booking.guide.yaml#classify) still asks"
