@@ -34,12 +34,18 @@ export function asksModel(text: string, words: DocumentsData): boolean {
   return v.is === 'unclear' && v.score <= LITTLE;
 }
 
+/**
+ * What is a receipt and what is none, for every prompt that may set a file aside (this one and the
+ * vision reading's «Kein Beleg», src/llm/prompts.ts buildVisionPrompt): one definition, with the doubt rule.
+ */
+export const RECEIPT_OR_NONE = `- A receipt: anything that belongs to a payment or a tax: an invoice, a bill, a till or postal receipt, a card or debit slip, a credit note, an order confirmation, a screenshot of an order page, a customs clearance decision, a delivery note, a contract or statement. A poor scan, a blurred photo or a short OCR of one is still a receipt.
+- None: no receipt at all: a brochure, a newsletter, a product sheet, a price list, terms, marketing, a report, a photo of a place or of people that shows no such document.
+When in doubt, it is a receipt: a real receipt set aside is worse than a brochure kept.`;
+
 export function unclearPrompt(text: string, filename: string): string {
   return `You sort documents that reached a Swiss small company's bookkeeping inbox (a mailbox, a scan, a drop).
-Decide what this one is:
-- "receipt": anything that belongs to a payment or a tax: an invoice, a bill, a till or postal receipt, a credit note, an order confirmation, a customs clearance decision, a delivery note, a contract or statement. A poor scan or short OCR of one is still a receipt.
-- "none": no receipt at all: a brochure, a newsletter, a product sheet, a price list, terms, marketing, a report.
-When in doubt, answer "receipt": a real receipt set aside is worse than a brochure kept.
+Decide what this one is ("receipt" or "none"):
+${RECEIPT_OR_NONE}
 
 File name: ${filename}
 Text (start):
@@ -62,6 +68,24 @@ export function parseModelKind(raw: string): ModelKind | undefined {
 /** The model's verdict on one unclear document; undefined when it could not say (the call failed, the answer had no verdict). */
 export async function askKind(ask: Ask, text: string, filename: string): Promise<ModelKind | undefined> {
   return parseModelKind(await ask(unclearPrompt(text, filename), { step: 'receipt-kind', timeoutMs: 60_000 }));
+}
+
+/** How the vision reading says that a file is no receipt at all (src/llm/prompts.ts buildVisionPrompt asks for it). */
+export const NOT_A_RECEIPT = 'Kein Beleg';
+
+/** The longest «what it shows» a verdict may say: a short sentence, not a text. */
+export const VERDICT_WHY = 160;
+
+/**
+ * The vision reading's own verdict (buildVisionPrompt): a file that shows no receipt at all (a holiday
+ * photo) is answered exactly «Kein Beleg: <what it shows>» (#361), one short line and nothing after it.
+ * Any other reading is no verdict, but text: «Kein Belegdatum erkennbar – …», a verdict followed by a
+ * text, a line longer than VERDICT_WHY.
+ */
+export function visionVerdict(text: string): ModelKind | undefined {
+  const m = new RegExp(`^${NOT_A_RECEIPT}: ([^\\n]{1,${VERDICT_WHY}})$`).exec(text.trim());
+  const why = m?.[1].trim();
+  return why ? { is: 'none', why } : undefined;
 }
 
 /** The receipt's kind from the model's verdict: no receipt is noise with the reason; a receipt stays untyped. */

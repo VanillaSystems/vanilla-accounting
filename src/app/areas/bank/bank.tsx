@@ -20,7 +20,7 @@ import { Kbd } from '../receipts/commands.js';
 import { at } from '../receipts/view.js';
 import { badgeCount, matches, payHaystack, payText, signed, troubled, type Bank, type Check, type Statement, type StatementFile } from './model.js';
 import { bankFor, listed, setUi, toggleGroup, ui, useUi } from './state.js';
-import { importStatements, statementAdd } from './actions.js';
+import { statementAdd } from './actions.js';
 import { Detail, statementName } from './Detail.js';
 import { StatementReads } from './PdfFacts.js';
 import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
@@ -310,7 +310,6 @@ export const bank: Area<RouteOf<'bank'>> = {
   List,
   Detail,
   add: statementAdd,
-  drop: { text: () => t('bank.dropText'), formats: () => t('bank.dropFormats'), run: (files, { nav }) => importStatements(files, nav) },
   legend,
   palette,
   title: (r, books) => {

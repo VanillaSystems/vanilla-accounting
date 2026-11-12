@@ -121,7 +121,8 @@ const keyOf = (s: Pick<StatementImport, 'account' | 'from' | 'to' | 'month'>) =>
  */
 export async function importStatements(files: File[], nav: Nav, into?: { account: Account; month: string }): Promise<void> {
   const ok = files.filter((f) => STATEMENT_FILE.test(f.name));
-  const skipped = files.filter((f) => !ok.includes(f)).map((f) => f.name);
+  // Any other file (a photo, a ZIP) goes through the drop dialog, which reads what it is and gives it its row (#361).
+  const others = files.filter((f) => !ok.includes(f));
   const read: StatementImport[] = [];
   for (const [i, f] of ok.entries()) {
     try {
@@ -131,9 +132,12 @@ export async function importStatements(files: File[], nav: Nav, into?: { account
       // camt.053 covers goes there too: it is read into its movements, or kept as the month's statement (#217).
       if (e instanceof ApiError && e.body.code === 'statement' && (e.body.params.problem?.kind === 'whichAccount' || e.body.params.reason === 'read')) {
         if (read.length) nav.refresh();
-        void dropFiles(ok.slice(i));
+        void dropFiles([...ok.slice(i), ...others]);
         return;
       }
+      // The files after it are not left out without a word: the drop dialog takes them.
+      const rest = [...ok.slice(i + 1), ...others];
+      if (rest.length) void dropFiles(rest);
       nav.toast(`${f.name}: ${errorText(e)}`);
       if (read.length) nav.refresh();
       return;
@@ -152,8 +156,8 @@ export async function importStatements(files: File[], nav: Nav, into?: { account
     forgetPages();
     nav.refresh();
   } : undefined;
-  if (skipped.length) nav.toast([last && imported, t('bank.importSkipped', { names: skipped.join(', ') })].filter(Boolean).join(' · '), undo);
-  else if (last) nav.toast(imported, undo);
+  if (others.length) void dropFiles(others);
+  if (last) nav.toast(imported, undo);
   if (!last) return;
   void startIntake();
   forgetPages();

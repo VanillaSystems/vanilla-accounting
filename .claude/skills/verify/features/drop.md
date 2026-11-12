@@ -4,7 +4,7 @@ Files dropped anywhere on the window (left of the AI sidebar) open `Dateien hinz
 
 ## Sub-features
 
-- `dr-open`: a window drop on any area but Kontoauszüge (which imports statements directly) opens `.palette.dropdlg[role=dialog][aria-label="Dateien hinzufügen"]`; overlay `[data-testid=drop-page]` `Als Beleg ablegen` while dragging.
+- `dr-open`: a window drop on any area, Kontoauszüge too (#361), opens `.palette.dropdlg[role=dialog][aria-label="Dateien hinzufügen"]`; overlay `[data-testid=drop-page]` `Loslassen zum Ablegen` while dragging. Every dropped file gets a row; Kontoauszüge › add and a missing month's well read statements straight in and hand any other file to this dialog.
 - `dr-tabs`: `.wftabs button[role=tab]`: Alle, Kontoauszüge, Belege, Unklar (only when such rows exist), Nicht übernommen.
 - `dr-statement`: a camt.053 of a known IBAN → `.droprow.s-taken .dchip.p-statement`, payments in the books (`bank-import` run).
 - `dr-by-bank` (#273): a camt.053 of an IBAN no account carries, of the one account of the bank it names (servicer name, BIC, or the bank code of an IBAN the folder shows), is taken without a question: `[data-testid=drop-by-bank]` `der Bank zugeordnet: <Konto>, IBAN dort gespeichert` and `[data-testid=drop-other-account]` `ändern` (takes it back, removes the IBAN, asks `Zu welchem CHF-Konto …` with the proposal). Only by IBAN or by its own bank is a camt.053 taken without asking: a second bank's camt.053 asks, the account left without an IBAN only its proposal (#274). Statement PDFs of that IBAN in the same drop are kept (`als Auszug behalten`) whichever came first; ones that asked before the camt.053 close with its answer. Driven 2026-10-29: the Raiffeisen camt.053 and its three PDFs of a Q2-like replay copy, all four `eingelesen`.
@@ -44,6 +44,5 @@ $B js "(async()=>{const r=await fetch('/receipts/<file>.pdf');const f=new File([
 ## Gotchas
 
 - `clientX` must lie left of the sidebar, else the files attach to the chat (features/ai-sidebar.md).
-- Dropping while Kontoauszüge is open imports straight into the books (features/bank.md), not through the dialog.
 - `Schliessen` ends the drop session and removes `data/drop/<id>/`: copy `session.json` before closing.
 - Read-only (`READONLY=1`) ignores drops.
