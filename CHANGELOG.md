@@ -20,7 +20,10 @@ Two markers flag an entry you must read before you update:
   sidebar shows where the oldest period not filed stands (payments without a booking and how many
   wait for their receipt, open questions, receipts without a payment, tasks, the day the return is
   due), each line a link; the card needs no AI. The model gets the same state with every message
-  and shows the card under its answer (#342).
+  and shows the card under its answer (#342). Its counts and words are those MWST shows beside a
+  figure that is not final, and the due day and the questions lead to the return's list «Noch
+  offen». When nothing of the period is open but payments of later days are not booked or tasks
+  wait under Aufgaben, the card and the answer say that instead of «nichts offen».
 
 ### Changed
 

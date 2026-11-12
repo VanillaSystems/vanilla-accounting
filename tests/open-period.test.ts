@@ -13,8 +13,8 @@ import type { Task } from '../src/workflows/model.js';
 import type { Books } from '../src/books/store.js';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { TASKS_SHOWN, nothingOpen, openLines, openPeriodState, waitingKinds } from '../src/app/areas/automation/open-period.js';
-import { periodIssues } from '../src/app/areas/automation/period-issues.js';
+import { TASKS_SHOWN, elsewhereCount, elsewhereOf, nothingOpen, openLines, openPeriodState, waitingKinds } from '../src/app/areas/automation/open-period.js';
+import { countIssues, periodIssues, receiptWaits, unbookedOpen } from '../src/app/areas/automation/period-issues.js';
 import { openWork, periodNote, periodState, purposeNow } from '../src/server/open-work.js';
 import { leavesSetup, newThread } from '../src/app/assistant/thread.js';
 import { changesIn } from '../src/assistant/changes.js';
@@ -137,7 +137,9 @@ test('a held payment is told by what it waits for: its receipt, or the person\'s
   const s = openPeriodState(held, [], [], [], early);
   assert.deepEqual(waitingKinds(s), { waits: 1, asks: 0, unread: 1 });
   const line = openLines(s)[0];
-  assert.deepEqual(line.kind === 'unbooked' && [line.n, line.waiting, line.unread], [4, 1, 1], 'the card does not say the unreadable one waits for its receipt');
+  // The count of held payments is the return's page's (receiptWaits: until the receipt comes or can be read); the unreadable one is named besides as the person's.
+  assert.deepEqual(line.kind === 'unbooked' && [line.n, line.waiting, line.unread], [4, 2, 1], 'the card counts as the return\'s page does, and names the unreadable one besides');
+  assert.equal(countIssues(periodIssues(held, [], s.period.from, s.period.to, [], new Map(), early.today)).waitingReceipt, 2);
   const note = periodNote(tempWorkspace('open-period-kinds-'), held as Books, [], 'de', '2026-10-20');
   assert.match(note, /Of them, 1 the app holds until their receipt is linked: it books them itself then and nobody is asked yet/);
   assert.match(note, /Of them, 1 have their receipt linked, but its VAT could not be read: each waits for the person's word at once[^\n]*no receipt is missing/);
@@ -165,4 +167,45 @@ test('the card is a change of the block that changes nothing', () => {
   const [c] = changesIn('```vanilla-changes\n[{"kind":"openPeriod"}]\n```');
   assert.deepEqual(c, { kind: 'openPeriod' });
   assert.equal(isActionChange(c), true);
+});
+
+test('the card, the note and the return\'s page count the same: countIssues and receiptWaits on the same books (#341, #342)', () => {
+  const ws = tempWorkspace('open-period-same-');
+  for (const today of ['2026-10-20', '2026-11-12', '2026-11-20']) {
+    const s = periodState(ws, books as Books, [review], today);
+    const c = countIssues(periodIssues(books, [], s.period.from, s.period.to, [], new Map(), today));
+    assert.deepEqual(s.counts, c, `${today}: the state's counts are the return's page's`);
+    const held = receiptWaits(books, [], today);
+    assert.equal(s.waiting.length, s.unbooked.filter((t) => held.has(t.ref)).length, 'the held payments are receiptWaits');
+    const line = openLines(s)[0];
+    assert.deepEqual(line.kind === 'unbooked' && [line.n, line.waiting], [c.unbooked, c.waitingReceipt]);
+    const note = periodNote(ws, books as Books, [review], 'de', today, s);
+    assert.match(note, new RegExp(`Payments without a booking \\(${c.unbooked}\\)`));
+    const k = waitingKinds(s);
+    assert.equal(k.waits + k.asks + k.unread, c.waitingReceipt, 'the note\'s kinds add up to the page\'s «warten auf ihren Beleg»');
+    assert.match(note, new RegExp(`Receipts without a payment \\(${c.unlinked}\\)`));
+  }
+});
+
+test('nothing open in the period is never «nothing open» while payments of later open days are unbooked or tasks wait (#342)', () => {
+  const ws = tempWorkspace('open-period-later-');
+  // Q3 is booked through; October has a payment nobody booked.
+  const later: Index = { ...books, transactions: [books.transactions[4], books.transactions[5]], receipts: [] };
+  const s = periodState(ws, later as Books, [], '2026-11-12');
+  assert.equal(nothingOpen(s), true, 'nothing of Q3');
+  const e = elsewhereOf(later, [], [], [], s, 'quarter');
+  assert.deepEqual(e.unbooked.map((t) => t.ref), ['OKT']);
+  assert.equal(e.unbooked.length, unbookedOpen(later, []).unbooked, 'the payments UnbookedFact counts');
+  assert.equal(elsewhereCount(e), 1);
+  const note = openWork(ws, later as Books, [], 'de', '2026-11-12');
+  assert.match(note, /Nothing of 2026-Q3 is open[^\n]*Other things wait for the person \(1[^\n]*1 payments of later open days without a booking among them\): never say that nothing is open\./);
+  assert.doesNotMatch(note, /Nothing else waits/);
+  assert.match(note, /Payments without a booking \(1\):\n- 03\.10\.2026 [^\n]*\(OKT\)/);
+  // A stopped run waits too.
+  const quiet: Index = { ...later, transactions: [books.transactions[4]] };
+  const q = periodState(ws, quiet as Books, [], '2026-11-12');
+  assert.equal(elsewhereCount(elsewhereOf(quiet, [], [], [], q, 'quarter')), 0);
+  assert.equal(elsewhereCount(elsewhereOf(quiet, [], [], [], q, 'quarter', 1)), 1);
+  assert.match(openWork(ws, quiet as Books, [], 'de', '2026-11-12', 1), /Runs of the workflows that stopped \(1\)/);
+  assert.match(openWork(ws, quiet as Books, [], 'de', '2026-11-12'), /Nothing of 2026-Q3 is open[^\n]*no task\.\n/);
 });

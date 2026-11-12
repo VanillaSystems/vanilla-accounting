@@ -27,6 +27,7 @@ import { gate } from '../../llm/off.js';
 import { automationView, bookAgain, engine } from './automation.js';
 import { openWork, purposeNow } from '../open-work.js';
 import { askedBy } from '../../workflows/held.js';
+import { openCount } from '../../workflows/model.js';
 import { accountsOf } from '../../workspace/reads.js';
 import { providersOf } from '../../intake/sales-report-import.js';
 import { clearingAccounts } from '../../booking/providers.js';
@@ -113,9 +114,12 @@ async function waitingNow(language: string, asked: Purpose | undefined, setupWan
     return [PURPOSE_NOTE[purpose], setupNote(readProgress(WS), setupFacts(), wordsIn(language).t), await collectionNow(WS, language, books.receipts)].join('\n\n');
   }
   const runs = new Map(engine().runs().map((r) => [r.id, r]));
-  const tasks = automationView().tasks.map((x) => { const rule = runs.get(x.run) && askedBy(runs.get(x.run)!); return rule ? { ...x, rule } : x; });
+  const view = automationView();
+  const tasks = view.tasks.map((x) => { const rule = runs.get(x.run) && askedBy(runs.get(x.run)!); return rule ? { ...x, rule } : x; });
   const books = readBooks();
-  return [openWork(WS, books, tasks, language), await collectionNow(WS, language, books.receipts)].filter(Boolean).join('\n\n');
+  // Stopped runs wait under Automatisierung as the tasks do (openCount): what is open is never said to be nothing while one waits.
+  const stuck = openCount(view) - view.tasks.length;
+  return [openWork(WS, books, tasks, language, undefined, stuck), await collectionNow(WS, language, books.receipts)].filter(Boolean).join('\n\n');
 }
 
 const PURPOSE_NOTE: Record<Purpose, string> = {

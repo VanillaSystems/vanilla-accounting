@@ -14,7 +14,7 @@ import { ledgerOf, needsYou } from '../receipts/model.js';
 import type { OrderPage } from '../../../booking/order-pages.js';
 import { unbookedPayments } from '../bank/model.js';
 import { bookedStates } from '../../../accounting/payment-entries.js';
-import { waitingForReceipt } from '../../../accounting/receipt-due.js';
+import { waitingForReceipt, type WaitingPayment } from '../../../accounting/receipt-due.js';
 import { localToday, type IsoDate } from '../../../accounting/periods.js';
 
 export type PeriodIssue =
@@ -25,7 +25,7 @@ export type PeriodIssue =
   | { kind: 'unlinked'; receipt: Receipt };
 
 /** The date of what a question is about, or undefined when it is gone from the books. */
-function dateOn(books: Index, q: Question): string | undefined {
+export function dateOn(books: Pick<Index, 'transactions' | 'receipts' | 'journalEntries'>, q: Question): string | undefined {
   switch (q.on.kind) {
     case 'payment': return books.transactions.find((t) => t.ref === q.on.id)?.date;
     case 'receipt': return books.receipts.find((r) => r.id === q.on.id)?.date;
@@ -55,8 +55,13 @@ export function periodIssues(books: Index, questions: readonly Question[], from:
  * It holds the ones whose return is near too (then a task of the person's on Aufgaben).
  */
 export function receiptWaits(books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts' | 'config'>, accounts: readonly LedgerBankAccount[], today: IsoDate = localToday()): Set<string> {
+  return new Set(receiptWaiting(books, accounts, today).map((w) => w.tx.ref));
+}
+
+/** `receiptWaits` with what each payment waits for (`waits`, `asks`, `unread`): the AI sidebar's card and note tell the kinds apart (#342). */
+export function receiptWaiting(books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts' | 'config'>, accounts: readonly LedgerBankAccount[], today: IsoDate = localToday()): WaitingPayment[] {
   const booked = bookedStates(books, accounts);
-  return new Set(waitingForReceipt(books, (ref) => booked(ref) === 'booked', today).map((w) => w.tx.ref));
+  return waitingForReceipt(books, (ref) => booked(ref) === 'booked', today);
 }
 
 /**
