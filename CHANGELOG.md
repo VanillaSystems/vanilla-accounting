@@ -14,6 +14,10 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-12
+
+Two fixes for the first run of the Mac app and a dropped statement.
+
 ### Fixed
 
 - «Einrichtung» and the setup conversation before the books follow the newest turn as a chat
