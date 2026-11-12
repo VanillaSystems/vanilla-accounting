@@ -270,6 +270,8 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
       };
       await firstInSight('after the last answer');
       assert.match(await text(page, '.obrail [data-progress]'), /^4 von 4 besprochen$/, `${size}: «Partner und Wissen» was never asked and is not counted`);
+      // The chips are what the count counts (#385, r2-ai-11): four, not five beside «4 von 4».
+      assert.deepEqual(await page.$$eval('.obrail button', (bs) => bs.map((b) => (b as HTMLElement).innerText.trim())), ['Firma und MWST', 'Eröffnung', 'Bank', 'Belege'], `${size}: four chips beside the count`);
       assert.match(await text(page, '[data-open=knowledge]'), /kommt mit den ersten Buchungen/);
       if (!ai) assert.match(await text(page, '[data-testid=setup-summary]'), /Die Firma rechnet keine MWST ab: Käufe und Verkäufe ohne MWST, Rechnungen der App ohne MWST, keine Abrechnung[\s\S]*Änderbar unter Firma › MWST, solange das Jahr keine Buchungen hat/, `${size}: the summary says it too, and where it changes`);
       await shot(page, `${size}-4-summary`);
