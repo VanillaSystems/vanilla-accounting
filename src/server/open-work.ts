@@ -18,7 +18,7 @@ import { payText } from '../app/areas/bank/model.js';
 import { fillTask, textIn, type Task } from '../workflows/model.js';
 import type { EvidenceCheck } from '../accounting/evidence-check.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
-import { chargesVat, filing } from '../engines/index.js';
+import { chargesVat, filing, vatSetup } from '../engines/index.js';
 import { localToday, type IsoDate } from '../accounting/periods.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { elsewhereCount, elsewhereOf, nothingOpen, openPeriodState, waitingKinds, type Elsewhere, type OpenPeriodState } from '../app/areas/automation/open-period.js';
@@ -79,8 +79,8 @@ export const periodState = (ws: Ws, books: Books, tasks: ReadonlyArray<Task>, to
   openPeriodState(books, readQuestions(ws), tasks, ws.bankAccounts, { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays }, orderPagesOf(books, providersOf(ws)));
 
 /** What waits outside the period, from the same inputs as the card (src/app/areas/automation/open-period.ts elsewhereOf). */
-export const elsewhereFor = <T extends Task>(ws: Ws, books: Books, tasks: readonly T[], s: OpenPeriodState, stuck = 0): Elsewhere<T> =>
-  elsewhereOf(books, readQuestions(ws), tasks, ws.bankAccounts, s, filing().length, stuck);
+export const elsewhereFor = <T extends Task>(ws: Ws, books: Books, tasks: readonly T[], s: OpenPeriodState, stuck = 0, today: IsoDate = localToday()): Elsewhere<T> =>
+  elsewhereOf(books, readQuestions(ws), tasks, ws.bankAccounts, s, filing().length, stuck, vatSetup().registered, today);
 
 const taskLine = (x: Task & { rule?: string }, language: string) =>
   `- «${fillTask(textIn(x.title, language), x.item, x.reads)}» on the ${x.item.kind} ${x.item.id}, since ${day(x.since)}${x.rule ? `, held by the rule ${x.rule}` : ''}`;
@@ -91,7 +91,7 @@ const paymentLine = (p: BankTransaction) => `- ${day(p.date)} ${payText(p).name}
  * sidebar's card draws): what the person asks for with «was muss ich noch machen?». The figures
  * are the app's; the model names them with their places and asks the app for the card.
  */
-export function periodNote(ws: Ws, books: Books, tasks: Tasks, language: string, today: IsoDate = localToday(), s: OpenPeriodState = periodState(ws, books, tasks, today), e: Elsewhere = elsewhereFor(ws, books, tasks, s)): string {
+export function periodNote(ws: Ws, books: Books, tasks: Tasks, language: string, today: IsoDate = localToday(), s: OpenPeriodState = periodState(ws, books, tasks, today), e: Elsewhere = elsewhereFor(ws, books, tasks, s, 0, today)): string {
   const { t } = wordsIn(language);
   const f = s.filing;
   const stage = f.kind === 'filed' ? 'its return is filed'
@@ -125,7 +125,7 @@ export function periodNote(ws: Ws, books: Books, tasks: Tasks, language: string,
  */
 export function openWork(ws: Ws, books: Books, tasks: Tasks, language: string, today: IsoDate = localToday(), stuck = 0): string {
   const s = periodState(ws, books, tasks, today);
-  const e = elsewhereFor(ws, books, tasks, s, stuck);
+  const e = elsewhereFor(ws, books, tasks, s, stuck, today);
   return [periodNote(ws, books, tasks, language, today, s, e), elsewhere(books, language, s, e)].join('\n\n');
 }
 
@@ -147,6 +147,7 @@ function elsewhere(books: Books, language: string, s: OpenPeriodState, e: Elsewh
     ...(e.contradicting.length ? [`Bookings whose VAT code contradicts their receipts (${e.contradicting.length}), each with its one click on the booking and under ${where}:`, ...capped(e.contradicting.map((v) => evidenceLine(v.e, v.evidence!, t)))] : []),
     ...(e.unsettled?.items.length ? [`Bookings of the filed ${e.unsettled.period} that contradicted their receipts and were not settled before filing (${e.unsettled.items.length}): they stay as filed, and wait for a correction in the open period:`, ...capped(e.unsettled.items.map((u) => evidenceLine(u.v.e, u.check, t)))] : []),
     ...(e.twins.length ? [`Receipts that may be a copy of another (${e.twins.length}), answered on the receipt («${t('receipts.twin.same')}» or «${t('receipts.twin.distinct')}»):`, ...capped(e.twins.map((v) => `- «${name(v.r.id)}» may be a copy of «${name(v.twin!.of)}» (${v.twin!.why})`))] : []),
+    ...(e.threshold.length ? [`The turnover of ${e.threshold.join(' and ')} reached the VAT registration threshold (the firm is not registered): a task under ${where}, read off «${t('area.vat')}».`] : []),
     ...(e.assessments.length ? [`Import payments whose customs assessment is missing (${e.assessments.length}), under ${where}.`] : []),
   ].join('\n');
 }

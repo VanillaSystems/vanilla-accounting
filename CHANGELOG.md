@@ -23,7 +23,9 @@ Two markers flag an entry you must read before you update:
   and shows the card under its answer (#342). Its counts and words are those MWST shows beside a
   figure that is not final, and the due day and the questions lead to the return's list «Noch
   offen». When nothing of the period is open but payments of later days are not booked or tasks
-  wait under Aufgaben, the card and the answer say that instead of «nichts offen».
+  wait under Aufgaben (the turnover threshold of a firm not registered among them), the card and
+  the answer say that instead of «nichts offen». A period that ended before the books begin reads
+  «vor Beginn dieser Bücher», never «fällig seit».
 
 ### Changed
 

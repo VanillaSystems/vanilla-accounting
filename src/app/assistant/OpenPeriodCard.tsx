@@ -76,23 +76,26 @@ export function OpenPeriodCard({ books, onGo }: { books: Index; onGo(loc: Locati
   const questions = useQuestions().view?.questions;
   const view = useAutomation().view;
   const tasks = view?.tasks;
-  const accounts = useWorkspace()?.bankAccounts;
+  const ws = useWorkspace();
+  const accounts = ws?.bankAccounts;
+  // As Aufgaben reads it: the threshold task is there only for a firm the manifest says is not registered.
+  const registered = ws?.company.vat.registered;
   const pages = orderPagesNow();
   const today = localToday();
   // The sidebar renders again with every word of a streaming answer: the state is computed once per change of what it reads.
   const { s, lines, other, unbookedElsewhere } = useMemo(() => {
     const s = openPeriodState(books, questions ?? [], tasks ?? [], accounts ?? [], { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays }, pages);
-    const e = elsewhereOf(books, questions ?? [], tasks ?? [], accounts ?? [], s, filing().length, view ? openCount(view) - view.tasks.length : 0);
+    const e = elsewhereOf(books, questions ?? [], tasks ?? [], accounts ?? [], s, filing().length, view ? openCount(view) - view.tasks.length : 0, registered, today);
     // UnbookedFact says the payments; the rest is counted as the tasks it is under Aufgaben.
     return { s, lines: openLines(s), other: elsewhereCount(e) - e.unbooked.length, unbookedElsewhere: e.unbooked.length };
-  }, [books, questions, tasks, view, accounts, pages, today]);
+  }, [books, questions, tasks, view, accounts, registered, pages, today]);
   const link = (to: Location, text: string) => (
     <a className="linkbtn" href={hrefOf(to)} onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return; e.preventDefault(); onGo(to); }}>{text}</a>
   );
   return (
     <section className="openp" data-testid="open-period" aria-label={t('openPeriod.title', { period: periodName(s.period) })}>
       <h3>{t('openPeriod.title', { period: periodName(s.period) })}</h3>
-      <p className="m">{openList(s) && s.filing.kind !== 'running' ? link(openList(s)!, filingText(s)) : filingText(s)}</p>
+      <p className="m">{openList(s) && s.filing.kind === 'due' ? link(openList(s)!, filingText(s)) : filingText(s)}</p>
       {nothingOpen(s) ? (
         <ElsewhereLines s={s} books={books} other={other} unbooked={unbookedElsewhere} onGo={onGo} link={link} />
       ) : (

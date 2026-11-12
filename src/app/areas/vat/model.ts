@@ -84,6 +84,12 @@ export function thresholdWatch(entries: readonly JournalEntry[], year: string, t
 }
 
 /** The years whose threshold still matters as of `today`: this year, and the one before until its year close (`closedThrough` at its 31.12.). */
+/** The years whose turnover passed the registration threshold, for a firm not registered (r5f-9): the task's data, none for a registered firm. */
+export function thresholdPassed(books: Index, registered: boolean | undefined, today = localToday()): ThresholdWatch[] {
+  if (registered !== false) return [];
+  return thresholdYears(today, books.config?.closedThrough).flatMap((year) => { const w = thresholdWatch(books.journalEntries ?? [], year, today); return w?.level === 'passed' ? [w] : []; });
+}
+
 export function thresholdYears(today: IsoDate, closedThrough: IsoDate | undefined): string[] {
   const year = today.slice(0, 4);
   const before = String(Number(year) - 1);

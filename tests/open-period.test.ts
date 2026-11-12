@@ -11,7 +11,8 @@ import type { BankTransaction, Index, Receipt } from '../src/types/index.js';
 import type { Question } from '../src/questions/model.js';
 import type { Task } from '../src/workflows/model.js';
 import type { Books } from '../src/books/store.js';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { filingStage } from '../src/app/automation/home.js';
 import { join } from 'node:path';
 import { TASKS_SHOWN, elsewhereCount, elsewhereOf, nothingOpen, openLines, openPeriodState, waitingKinds } from '../src/app/areas/automation/open-period.js';
 import { countIssues, periodIssues, receiptWaits, unbookedOpen } from '../src/app/areas/automation/period-issues.js';
@@ -208,4 +209,34 @@ test('nothing open in the period is never «nothing open» while payments of lat
   assert.equal(elsewhereCount(elsewhereOf(quiet, [], [], [], q, 'quarter', 1)), 1);
   assert.match(openWork(ws, quiet as Books, [], 'de', '2026-11-12', 1), /Runs of the workflows that stopped \(1\)/);
   assert.match(openWork(ws, quiet as Books, [], 'de', '2026-11-12'), /Nothing of 2026-Q3 is open[^\n]*no task\.\n/);
+});
+
+test('a period that ended before the books begin is «vor Beginn dieser Bücher» on the card and in the note, never due or overdue (#345, #342)', () => {
+  // Opening balances of 2026 and the first payment in October: the books' open period is Q4, so the state names Q4; Q3 is before them.
+  const later: Index = { ...books, config: {}, transactions: [tx('OKT', '2026-10-03', 12)], journalEntries: [], receipts: [] };
+  const ws = tempWorkspace('open-period-before-');
+  assert.equal(periodState(ws, later as Books, [], '2026-11-12').period.token, '2026-Q4', 'the open period starts with the first payment');
+  // A state whose period ended before anything is dated: books with nothing dated, asked in a later quarter.
+  const empty: Index = { ...books, config: {}, transactions: [], journalEntries: [], receipts: [] };
+  const s = openPeriodState(empty, [], [], [], { ...ctx, today: '2026-11-12' });
+  assert.equal(s.period.token, '2026-Q4');
+  const past = { ...s, period: { ...s.period, token: '2026-Q3', from: '2026-07-01', to: '2026-09-30' } };
+  assert.deepEqual(filingStage(empty, past.period, { ...ctx, today: '2027-01-20' }), { kind: 'before' });
+  const before = { ...past, filing: { kind: 'before' as const } };
+  const note = periodNote(ws, empty as Books, [], 'de', '2027-01-20', before);
+  assert.match(note, /2026-Q3 \(01\.07\.2026 to 30\.09\.2026\); it ended before anything in these books is dated[^\n]*never call it due or overdue\./);
+  assert.doesNotMatch(note, /was due on|is due on/);
+  const card = readFileSync('src/app/assistant/OpenPeriodCard.tsx', 'utf8');
+  assert.match(card, /if \(f\.kind === 'before'\) return t\('automation\.home\.s\.before'\);/, 'the card says «vor Beginn dieser Bücher»');
+  assert.match(card, /s\.filing\.kind === 'due' \? link\(openList/, 'only a due return links to its list');
+});
+
+test('a firm not registered whose turnover passed the threshold has that task under Aufgaben: nothing else is «nothing open» (#342)', () => {
+  const big: Index = { ...books, config: {}, transactions: [books.transactions[4]], receipts: [], journalEntries: [{ ...books.journalEntries![0], amount: 120000, vatCode: undefined }] };
+  const s = openPeriodState(big, [], [], [], ctx);
+  assert.equal(nothingOpen(s), true);
+  assert.deepEqual(elsewhereOf(big, [], [], [], s, 'quarter', 0, false, '2026-11-12').threshold, ['2026'], 'not registered: the threshold task');
+  assert.equal(elsewhereCount(elsewhereOf(big, [], [], [], s, 'quarter', 0, false, '2026-11-12')), 1);
+  assert.deepEqual(elsewhereOf(big, [], [], [], s, 'quarter', 0, true, '2026-11-12').threshold, [], 'a registered firm has none');
+  assert.deepEqual(elsewhereOf(big, [], [], [], s, 'quarter', 0, undefined, '2026-11-12').threshold, [], 'unknown, as Aufgaben reads it: none');
 });

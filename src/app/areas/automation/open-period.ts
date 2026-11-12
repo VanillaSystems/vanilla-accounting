@@ -15,7 +15,7 @@ import type { Question } from '../../../questions/model.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import type { OrderPage } from '../../../booking/order-pages.js';
 import type { Task } from '../../../workflows/model.js';
-import { addDays, booksOpenPeriod, type FilingLength, type IsoDate, type Period } from '../../../accounting/periods.js';
+import { addDays, booksOpenPeriod, localToday, type FilingLength, type IsoDate, type Period } from '../../../accounting/periods.js';
 import type { WaitingPayment } from '../../../accounting/receipt-due.js';
 import { missingAssessments, type MissingAssessment } from '../../../booking/customs-invoice.js';
 import { documents, withoutInputTax } from '../../../engines/index.js';
@@ -23,6 +23,7 @@ import { filingStage, receiptDay, type FilingStage } from '../../automation/home
 import { unbookedPayments } from '../bank/model.js';
 import { journalOf, unsettledAtFiling, type EntryView, type Unsettled } from '../journal/model.js';
 import { ledgerOf, type ReceiptView } from '../receipts/model.js';
+import { thresholdPassed } from '../vat/model.js';
 import { countIssues, dateOn, periodIssues, receiptWaiting, type IssueCounts } from './period-issues.js';
 
 export interface OpenPeriodContext {
@@ -99,7 +100,7 @@ export function openPeriodState(
  * What waits for the person under Aufgaben outside the period `s` describes: questions, tasks and
  * stopped runs, payments of the other open days without a booking (unbookedPayments, the payments
  * unbookedOpen counts), bookings against their receipts, those a filing left, possible duplicates and
- * missing customs assessments. Nothing of `s` is in it. `stuck`: the runs that stopped.
+ * missing customs assessments, and the turnover threshold a firm not registered passed. Nothing of `s` is in it. `stuck`: the runs that stopped.
  */
 export interface Elsewhere<T extends Task = Task> {
   open: Question[];
@@ -112,9 +113,11 @@ export interface Elsewhere<T extends Task = Task> {
   twins: ReceiptView[];
   assessments: MissingAssessment[];
   stuck: number;
+  /** The years whose turnover passed the registration threshold of a firm not registered (thresholdPassed): a task on Aufgaben without a run. */
+  threshold: string[];
 }
 
-export function elsewhereOf<T extends Task>(books: Index, questions: readonly Question[], tasks: readonly T[], accounts: readonly LedgerBankAccount[], s: OpenPeriodState, length: FilingLength, stuck = 0): Elsewhere<T> {
+export function elsewhereOf<T extends Task>(books: Index, questions: readonly Question[], tasks: readonly T[], accounts: readonly LedgerBankAccount[], s: OpenPeriodState, length: FilingLength, stuck = 0, registered?: boolean, today: IsoDate = localToday()): Elsewhere<T> {
   const closed = books.config?.closedThrough;
   const inOpen = (date: string | undefined) => !closed || !date || date > closed;
   const listed = { questions: new Set(s.questions.map((x) => x.q.id)), tasks: new Set(s.tasks.map((x) => x.run)), payments: new Set(s.unbooked.map((p) => p.ref)), entries: new Set(s.evidence.map((x) => x.entry.id)) };
@@ -133,12 +136,13 @@ export function elsewhereOf<T extends Task>(books: Index, questions: readonly Qu
     twins: ledgerOf(books, closed ? addDays(closed, 1) : '0000-01-01').views.filter((v) => v.twin?.relation === 'duplicate' && !v.none && !v.locked),
     assessments: missingAssessments(books, documents().customs, !withoutInputTax()),
     stuck,
+    threshold: thresholdPassed(books, registered, today).map((w) => w.year),
   };
 }
 
 /** How many things wait outside the period, each counted once. */
 export const elsewhereCount = (e: Elsewhere): number =>
-  e.open.length + e.answered.length + e.tasks.length + e.unbooked.length + e.contradicting.length + (e.unsettled?.items.length ?? 0) + e.twins.length + e.assessments.length + e.stuck;
+  e.open.length + e.answered.length + e.tasks.length + e.unbooked.length + e.contradicting.length + (e.unsettled?.items.length ?? 0) + e.twins.length + e.assessments.length + e.stuck + e.threshold.length;
 
 /** Whether anything of the period waits: a card with nothing on it says so in one line (and that nothing else does, only when `elsewhereOf` is empty too). */
 export const nothingOpen = (s: OpenPeriodState): boolean =>
