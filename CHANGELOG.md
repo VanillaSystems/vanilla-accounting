@@ -40,19 +40,26 @@ Two markers flag an entry you must read before you update:
   period before the books begin, names the receipts without a payment beside «Keine Aufgabe wartet
   auf dich», and its headline reads «… Belege gesammelt, … davon gebucht».
 - Without an AI (#365): the firm's own invoice is paired with the money in that names its number.
-  A receipt whose number stands as a whole word in one payment's text, with its amount and on or
-  after its day, is linked by code; until now an invoice was only matched to money out, so her own
-  invoice stayed «Noch keine Zahlung». Two payments naming it, or a number other payments name
-  too, are proposed, never linked; a part payment is never linked. The payment then opens «Von
-  Hand buchen» with the sale at the invoice's rate; nothing is booked without her.
+  Only an invoice the firm issued (its UID; a firm without one, its name heading the invoice) is
+  paid by money in, and only by the number an invoice word labels («Rechnung 2026-029»), never a
+  customer, account or phone number. Code links it when that payment alone names the number, with
+  the invoice's amount and on or after its day, and no payment of that amount goes the way an
+  invoice is paid; two payments naming it, a number other payments name too, a payment that names
+  another invoice of the series too, an offer, order confirmation, delivery note or reminder are
+  proposed at most, and a part payment is never linked. A supplier's invoice is never paired with
+  a refund that names it. The payment then opens «Von Hand buchen» with the sale at the invoice's
+  rate; nothing is booked without her.
 - A task about a payment names it everywhere, the corner included: «Zahlung von Hand buchen ·
   Familie Keller», with the amount and the day. Three or more such tasks are one line in the corner,
   «11 Zahlungen von Hand buchen», listed under Aufgaben (#365).
-- The account field finds an account by the words a person types for it besides its name
-  («Miete», «Benzin», «Versicherung», «Werkzeug», «Malerarbeiten»): the Swiss chart's accounts
-  carry them as `hints` (#365).
-- The dock's «gebucht» counts the payments of the period with a booking, a booking by hand without
-  a receipt among them; its tip names each figure's unit (#365).
+- The account field finds an account by the whole words a person types for it besides its name
+  («Miete», «Benzin», «Versicherung», «Werkzeug», «Autoversicherung»): the Swiss chart's accounts
+  carry them as `hints`, used while the firm's chart still names the account as the standard does.
+  ↵ after typing takes no row a hint alone found on the other side of the payment (#365).
+- The dock's card says how many of the period's payments are booked («24 von 30 Zahlungen
+  gebucht»), a booking by hand without a receipt among them; the bar's «gebucht» stays the receipts
+  booked, and its tip names each figure's unit (#365).
+
 - The first screen of a fresh install is about the books, not the AI (#343): what the app is in
   two sentences, then «Neue Buchhaltung erstellen», open existing books, «Von anderer Software
   übernehmen» or the demo, with the language switch in sight. The look at this Mac's AI runs in
@@ -190,6 +197,11 @@ Two markers flag an entry you must read before you update:
   pill, no longer covers the page heading. From the start page, «Neue Buchhaltung anlegen» goes on
   to the form (or the save panel, with an AI) without a second click, and the form's «Sprache der
   App» is the language the app is in.
+- The Swiss chart's names with a comma read whole: «Telefon, Internet» was «Telefon», and so 13
+  accounts (1093, 1520, 1700, 4040, 5700, 6100, 6360, 6500, 6510, 6520, 6540, 8500, 8510) since
+  before 0.4.0. New books get the whole names; existing books keep the names their chart has (it is
+  theirs: no migration), rename them under Firma › Kontenplan if you like. The chart's loader
+  refuses a key it does not know, so a name cut at a comma fails at once (#365).
 - Mac app, first screen: «Neue Buchhaltung erstellen» opens the system's save panel again (the
   name prefilled in Documents, «Erstellen»), and the setup starts in the folder you name. In
   0.4.0 and 0.4.1 the button did nothing: the main process had no answer for the page's call

@@ -13,14 +13,15 @@ export const RUN_NOW = 'collection';
 export type WidgetState = 'running' | 'waiting' | 'idle';
 
 export type WidgetFigure =
-  /** `booked`: receipts whose payment is booked; `payments`: payments booked, a person's by hand among them (#365). */
-  | { key: 'collected' | 'read' | 'booked' | 'payments' | 'waiting'; n: number }
+  | { key: 'collected' | 'read' | 'booked' | 'waiting'; n: number }
+  /** Payments of the period booked, `n` of `of`, a person's by hand among them: a fact of its own, beside the receipts (#365). */
+  | { key: 'payments'; n: number; of: number }
   /** Booked by the app with nobody's change, in % of the bookings whose author the books record. */
   | { key: 'withoutYou'; pct: number };
 
 export interface DockWidget {
   state: WidgetState;
-  /** The three figures stacked in the narrow bar and in a row in the wide one: receipts read, payments booked, waiting. */
+  /** The three figures stacked in the narrow bar and in a row in the wide one: read, booked, waiting. */
   stack: WidgetFigure[];
   /** The summary card's figures: collected, read, booked, and the share without the person only when the books record it. */
   card: WidgetFigure[];
@@ -48,11 +49,12 @@ export function dockWidget(f: HomeFigures, view: View | undefined, forMe: number
     .sort((a, b) => a.at.getTime() - b.at.getTime())[0];
   return {
     state: run ? 'running' : waiting ? 'waiting' : 'idle',
-    stack: [{ key: 'read', n: f.read }, { key: 'payments', n: f.paymentsBooked }, { key: 'waiting', n: waiting }],
+    stack: [{ key: 'read', n: f.read }, { key: 'booked', n: f.booked }, { key: 'waiting', n: waiting }],
     card: [
       { key: 'collected', n: f.collected },
       { key: 'read', n: f.read },
       { key: 'booked', n: f.booked },
+      ...(f.payments ? [{ key: 'payments' as const, n: f.paymentsBooked, of: f.payments }] : []),
       ...(f.withoutYou !== undefined ? [{ key: 'withoutYou' as const, pct: f.withoutYou }] : []),
     ],
     waiting,

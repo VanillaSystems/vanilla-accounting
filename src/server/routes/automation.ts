@@ -85,8 +85,8 @@ export function runsWroteSince(since: string | undefined): RunWrote[] {
   }).sort((a, b) => b.at.localeCompare(a.at));
 }
 
-/** The payments tasks were about, by workspace and ref: a bank's movement never changes, so the books are read only for a ref not seen yet. Null: no such payment. */
-const payments = new Map<string, Map<string, TaskPayment | null>>();
+/** The payments tasks were about, by workspace and ref: a bank's movement never changes, so the books are read only for a ref not seen yet. A ref not found is not kept: the next poll reads again (a statement imported meanwhile). */
+const payments = new Map<string, Map<string, TaskPayment>>();
 
 /** Each task about a payment with that payment's facts (#365): the corner, Aufgaben and Übersicht name it without books of their own. */
 function withPayments(tasks: Task[]): Task[] {
@@ -98,7 +98,7 @@ function withPayments(tasks: Task[]): Task[] {
       const byRef = new Map(readBooks().transactions.map((t) => [t.ref, t]));
       for (const ref of refs) {
         const t = byRef.get(ref);
-        known.set(ref, t ? { ...(t.counterparty ? { counterparty: t.counterparty } : {}), description: t.description, amount: t.amount, currency: t.currency, date: t.date, direction: t.direction } : null);
+        if (t) known.set(ref, { ...(t.counterparty ? { counterparty: t.counterparty } : {}), description: t.description, amount: t.amount, currency: t.currency, date: t.date, direction: t.direction });
       }
     } catch { /* books that do not load: the tasks keep their titles */ }
   }

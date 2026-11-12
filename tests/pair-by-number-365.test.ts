@@ -71,8 +71,8 @@ test('without the firm known, money in is no candidate: the chain is as on 0.4.2
 
 // The review's case: a supplier's invoice paid by card, and a refund that names it.
 const garage = (over: Partial<Receipt> = {}): Receipt => treppenhaus({
-  id: 'garage', filename: 'garage.pdf', extractedText: 'Garage Meier AG\nMWST-Nr. CHE-222.333.444 MWST\nAn: Malerei Huber GmbH\nRechnung RE-4471\nDatum: 10.07.2026\nService Lieferwagen\nMWST 8.1%\nTotal CHF 1850.00\nZahlbar innert 30 Tagen',
-  vatId: 'CHE-222.333.444', amount: 1850, date: '2026-07-10', title: { vendor: 'Garage Meier', what: 'Service' }, vatSummary: [{ ratePercent: 8.1, net: 1711.38, vat: 138.62, gross: 1850 }], ...over,
+  id: 'garage', filename: 'garage.pdf', extractedText: 'Garage Meier AG\nMWST-Nr. CHE-999.888.777 MWST\nAn: Malerei Huber GmbH\nRechnung RE-4471\nDatum: 10.07.2026\nService Lieferwagen\nMWST 8.1%\nTotal CHF 1850.00\nZahlbar innert 30 Tagen',
+  vatId: 'CHE-999.888.777', amount: 1850, date: '2026-07-10', title: { vendor: 'Garage Meier', what: 'Service' }, vatSummary: [{ ratePercent: 8.1, net: 1711.38, vat: 138.62, gross: 1850 }], ...over,
 });
 const card = pay('card', { direction: 'DBIT', amount: 1850, date: '2026-07-12', counterparty: undefined, description: 'Kartenzahlung Garage Meier' });
 const refund = pay('refund', { amount: 1850, date: '2026-07-30', counterparty: 'Garage Meier AG', description: 'Gutschrift Rechnung RE-4471 Garage Meier' });
