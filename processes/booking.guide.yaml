@@ -58,8 +58,7 @@ steps:
       - id: cls-social-insurance
         status: proposed
         when: a payment to the Ausgleichskasse, the pension fund (BVG) or the UVG/KTG insurer
-        then: "the employee's withheld share clears 2270; the employer's share: 5700 AHV/IV/EO/ALV (FAK 5710), 5720 BVG, 5730 UVG, 5740 KTG. Contributions: no code; an insurer's invoice: I0 (exempt). The shares come only from the fund's or insurer's statement linked to the payment: without one that names them, the whole payment on the employer's account (5700, 5720, 5730 or 5740), its reason saying the statement settles the shares; never an estimated split or a ratio of an example"
-        why: a guessed split leaves 2270 in debit when the salaries were booked net (#362); the app refuses a split whose parts nothing states
+        then: "the employee's withheld share clears 2270; the employer's share: 5700 AHV/IV/EO/ALV (FAK 5710), 5720 BVG, 5730 UVG, 5740 KTG. Contributions: no code; an insurer's invoice: I0 (exempt)"
         source: AHVG Art. 14 Abs. 1; BVG Art. 66 Abs. 1; MWSTG Art. 21 Abs. 2 Ziff. 18
       - id: cls-vat-payment
         status: proposed

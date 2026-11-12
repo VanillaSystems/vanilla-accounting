@@ -46,7 +46,6 @@ import { ruleFor, ruleWords, stampRule, type PaymentFacts, type PlacedRule, type
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
 import { businessVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
 import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
-import { UNSTATED_SPLIT, UNSTATED_SPLIT_QUESTION, unstatedSplit } from './unstated-split.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
 import { withReceiptTax } from './receipt-tax.js';
 import { clearingAccounts, payoutWaitOf, providerOfPayment, type PayoutWait, type Provider } from './providers.js';
@@ -899,13 +898,6 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         }
         const held = proposing.get(tx.ref);
         if (held) { held.entries = atPoint(tx, entries.map((e) => ({ ...e, rule: held.rule }))); continue; }
-        // A split of the payment whose parts nothing states is the person's to confirm, with the model's lines as the proposal (#362).
-        const guessed = views.has(tx) ? undefined : unstatedSplit(tx, entries, mapped, bankAccount, context.ownerAccount);
-        if (guessed) {
-          log(`  [Batch ${batchNum}]  ${tx.ref}  waits for the person: a split whose parts nothing states (${guessed.map((e) => e.amount.toFixed(2)).join(', ')})`);
-          outcome.asked.push({ ref: tx.ref, rule: UNSTATED_SPLIT, question: UNSTATED_SPLIT_QUESTION, entries: atPoint(tx, entries) });
-          continue;
-        }
         log(`  [Batch ${batchNum}]  ${keyOf(tx)}  → ${lines.length} entries (${lines.map((e) => e.accountDebit || e.accountCredit).join(', ')})`);
         const whole = views.has(tx) ? byPart.get(tx.ref) : undefined;
         if (whole) {

@@ -9,7 +9,6 @@ import { hasBooks, loadBooks } from '../books/store.js';
 import { classifyTransactions, loadClassifyContext } from '../booking/classify.js';
 import type { Workspace } from '../workspace/workspace.js';
 import type { Engine } from './engine.js';
-import { UNSTATED_SPLIT } from '../booking/unstated-split.js';
 import type { Run } from './model.js';
 
 export const ASK_WORKFLOW = 'ask';
@@ -28,8 +27,7 @@ export const CLOSED_REASON = 'Keine Regel hält diese Zahlung mehr zurück (die 
 
 /** Closes each waiting question whose payment no rule holds any more. Returns the runs it closed. */
 export async function closeAsksWithoutRule(engine: Pick<Engine, 'runs' | 'command'>, ws: Workspace): Promise<string[]> {
-  // A split the app's own check holds (src/booking/unstated-split.ts) is no rule's: removing a rule never answers it.
-  const waiting = askRuns(engine).filter((r) => r.state.status === 'waiting' && r.item.kind === 'transaction' && askedBy(r) !== undefined && askedBy(r) !== UNSTATED_SPLIT);
+  const waiting = askRuns(engine).filter((r) => r.state.status === 'waiting' && r.item.kind === 'transaction' && askedBy(r) !== undefined);
   if (!waiting.length || !hasBooks(ws)) return [];
   const books = loadBooks(ws);
   const context = loadClassifyContext(ws);
