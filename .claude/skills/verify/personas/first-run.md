@@ -52,6 +52,23 @@ the run is left out of its total.
 | 14 | «What now?» to the AI | the answer names her open payments, receipts and the return, with links | ai |
 | 15 | The books behind the screen | every booking on a sensible account with the right VAT code for its receipt | ai |
 
+### The total is a funnel
+
+A first run is a funnel: someone who stops at an early step never sees the later ones. So the
+checkpoints are weighted by where they lie, and the report names where she stops.
+
+| Stage | Checkpoints | Weight |
+|---|---|---|
+| Getting in | 1 install and first start, 2 the first screen, 3 getting an AI ready | × 3 |
+| Setting up | 4, 5, 6 | × 2 |
+| First files and the result | 7 to 15 | × 1 |
+
+The total of a run is the weighted points of the weighted possible, as a percentage; a checkpoint
+that does not apply to the run, or was not run, is left out of both. Beside it the report states
+**«stops at»**: the first checkpoint, in order, that scores 0 (she stops there), or «gets through»
+when none does. A total can rise while «stops at» stays where it is: then the round polished what
+she never reaches.
+
 Count beside it, for both runs where they apply: minutes from first start to the first VAT
 figure of Q3; questions asked in the setup (clicked and typed); words she has to read in the
 setup; clicks from the end of the drop to the list of what is missing; payments booked by the app

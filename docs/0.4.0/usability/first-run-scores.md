@@ -5,7 +5,21 @@ app on a fresh Mac VM, the made-up painting firm, once without an AI and once wi
 checkpoints and what 0, 1 and 2 mean are in the scenario. The findings of a round stay local
 (`.verify/findings/`).
 
-## Totals
+## Totals, weighted as a funnel
+
+From 2026-11-12 the total weights the checkpoints by where they lie (getting in × 3, setting up
+× 2, first files and the result × 1; the scenario says why), and names where she stops. Rounds 0
+and 1 are restated here on that scale from their checkpoint scores below.
+
+| Round | Build | Without an AI | stops at | With an AI | stops at |
+|---|---|---|---|---|---|
+| 0 | 0.4.1 | 7 of 42 (17 %) | 1 install | 12 of 36 (33 %) | 2 the first screen |
+| 1 | 0.4.2-rc.35-gaa6d6edb | 23 of 44 (52 %) | 1 install | 25 of 36 (69 %) | gets through |
+
+Without an AI she still stops at the install: the app is not signed, so macOS refuses the first
+double-click. No round of fixes can move that; it needs an Apple Developer ID.
+
+## Totals, every checkpoint counted once (as first recorded)
 
 | Round | Build | Without an AI | With an AI | Minutes to the first VAT figure (AI) | Setup questions (AI) | Clicks from the drop to «what is missing» | Payments booked by the app (AI / no AI) |
 |---|---|---|---|---|---|---|---|
