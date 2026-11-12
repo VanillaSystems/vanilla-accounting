@@ -28,15 +28,17 @@ the setup conversation (`Einrichtung`, `Hallo <owner>. …`, features/setup.md).
 
 ## How to get to it (user POV)
 
-Start screen › `Neue Buchhaltung anlegen` opens «Einrichtung» (FirstRun): the AI step, then `Ohne KI weiter`
-(`[data-answer=no-ai]`) when no CLI answers, then «Was möchtest du?» with `Neue Buchhaltung erstellen`
-(the setup conversation, DraftConversation) or the link `Ohne KI einrichten` (`[data-act=by-hand]`), which
-opens the form (h1 `Neue Buchhaltung anlegen`); fill top to bottom; `Buchhaltung anlegen` at the end.
+Start screen › `Neue Buchhaltung anlegen` opens «Einrichtung» (FirstRun, books first since #343): «Was
+möchtest du?» with `Neue Buchhaltung erstellen` (`[data-answer=create]`). Wait for the line under the
+choices (`[data-ai=none]` or `[data-ready=claude]`): without an AI the button opens the form at once (h1
+`Neue Buchhaltung anlegen`); with one it opens the setup conversation (DraftConversation), and the link
+`Ohne KI einrichten` (`[data-act=by-hand]`) opens the form. Fill top to bottom; `Buchhaltung anlegen` at
+the end.
 
 ## Driving it with vm.sh + app.mjs
 
 ```bash
-node $A 09-first "await clickText('Ohne KI weiter')" "await clickText('Ohne KI einrichten')"
+node $A 09-first "await clickText('Neue Buchhaltung erstellen')"   # no AI on the VM: the form; with one: clickText('Ohne KI einrichten')
 node $A 10-setup "await fill('Firmenname','Malerei Huber GmbH')" \
   "await fill('UID', process.env.PERSONA_UID)" "await fill('Inhaber','Thomas Huber')" \
   "await nth(5,'Raiffeisen')" "await nth(8, process.env.PERSONA_IBAN_SPACED)"
@@ -64,6 +66,8 @@ commit `Workspace set up`.
 - Without a VM, the form and the drop run against `desktopServer` (src/desktop/server.ts, as
   tests/desktop.test.ts builds it) on a temp `booksHome` and state file, serving a `vite build` whose
   index.html loads a stub `window.vanilla` (`chooseFolder`, `chooseNewFolder`, `onMenu`, `setLanguage`,
-  `saveFile`), with refusing `claude`/`codex` first on the PATH: FirstRun's AI step makes one test call
-  on load. Gatekeeper, the move offer and the native menu still need the VM.
+  `saveFile`), with `CLAUDE_BIN`/`CODEX_BIN` set to a stub or to a path that does not exist: FirstRun's
+  look at the AI makes one test call on load when a CLI is signed in (tests/first-run-scroll.test.ts does
+  all of this; `CLAUDE_STUB_SIGNED_OUT=1` gives «installiert, nicht angemeldet»). Gatekeeper, the move
+  offer and the native menu still need the VM.
 - Made-up IBANs and UIDs need valid check digits (the persona data has them).

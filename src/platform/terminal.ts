@@ -26,6 +26,8 @@ export interface CliFacts {
   login: readonly string[];
   /** The vendor's name of the smallest plan with the CLI. */
   minPlan: string;
+  /** About what that plan costs a month, in USD (docs/0.4.0/ai-setup.md «Plans»): said as «etwa», never as an exact price. */
+  minPlanUsd: number;
   /**
    * Variables the installer runs with, so it asks nothing of its own: the app's Terminal screen
    * asks the sign-in in the person's language. OpenAI's installer otherwise asks «Start Codex
@@ -38,12 +40,12 @@ export const AI_CLIS: Record<TerminalCli, CliFacts> = {
   claude: {
     program: 'claude', vendor: 'Anthropic', install: 'curl -fsSL https://claude.ai/install.sh | bash',
     guide: 'https://code.claude.com/docs/en/setup', plans: 'https://claude.com/pricing',
-    status: ['auth', 'status'], login: ['auth', 'login'], minPlan: 'Claude Pro',
+    status: ['auth', 'status'], login: ['auth', 'login'], minPlan: 'Claude Pro', minPlanUsd: 20,
   },
   codex: {
     program: 'codex', vendor: 'OpenAI', install: 'curl -fsSL https://chatgpt.com/codex/install.sh | sh',
     guide: 'https://developers.openai.com/codex/cli', plans: 'https://chatgpt.com/pricing',
-    status: ['login', 'status'], login: ['login'], minPlan: 'ChatGPT Plus',
+    status: ['login', 'status'], login: ['login'], minPlan: 'ChatGPT Plus', minPlanUsd: 20,
     installEnv: { CODEX_NON_INTERACTIVE: '1' },
   },
 };

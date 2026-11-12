@@ -33,6 +33,7 @@ import type { AutomationView } from '../../../workflows/model.js';
 import { Detail } from './Detail.js';
 import { I } from './icons.js';
 import { EmptyTable, FirstRun, Strip } from './InflowStrip.js';
+import { ReadingWaits } from './ReadingWaits.js';
 import { InflowDialogs } from './InflowDialogs.js';
 import { ConfirmDiscard, askDiscard } from './Discard.js';
 import './receipts.css';
@@ -152,6 +153,7 @@ function List(props: Props) {
       </ListHead>
 
       {canEdit && !firstRun && <Strip {...props} />}
+      {canEdit && <ReadingWaits books={books} nav={nav} />}
       {firstRun ? <FirstRun {...props} /> : counts.all === 0 && hidden.length === 0 && pending.length === 0 ? (
         <div className="empty">
           <h2>{t('receipts.emptyTitle', { period: periodName(period) })}</h2>

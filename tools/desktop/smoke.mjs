@@ -165,16 +165,17 @@ const fused = wire[FuseV1Options.RunAsNode] === 48 && wire[FuseV1Options.EnableN
   && wire[FuseV1Options.EnableEmbeddedAsarIntegrityValidation] === 49 && wire[FuseV1Options.EnableCookieEncryption] === 48;
 check('the build is fused: no RunAsNode, NODE_OPTIONS or --inspect; app.asar only, its integrity checked; no cookie encryption (no keychain prompt at start)', fused, JSON.stringify(wire));
 
-// 1. First start: «Einrichtung» (docs/0.4.0/ai-setup.md), nothing opened; the claude stub is signed in, so the AI is ready and the books' choices follow.
+// 1. First start: «Einrichtung» (docs/0.4.0/ai-setup.md), nothing opened: the books' choices first; the claude stub is signed in, so the line under them says the AI is ready.
 const first = await launch(9333, stubShell);
 let { page } = first;
 const { base } = first;
 await settle(page, '[data-answer=demo]');
+await settle(page, '[data-ready=claude]');
 // German, as a Swiss user would pick it: the page remembers it and the native menu follows.
 await clickText(page, '.st-top .seg2 button', 'DE');
 await sleep(500);
 await shot(page, '01-start');
-check('a fresh install opens «Einrichtung», the AI ready, then the books\' choices', await page.$('[data-ready=claude]') && await page.$('[data-answer=create]'));
+check('a fresh install opens «Einrichtung»: the books\' choices, the AI ready, no AI card and no command', await page.$('[data-ready=claude]') && await page.$('[data-answer=create]') && !(await page.$('.aicli')) && !(await page.$('.aicmd')));
 check('the window is dragged by its top edge (no title bar on the Mac)', await page.evaluate(() => {
   const bar = document.querySelector('.dragbar');
   return !!bar && getComputedStyle(bar).getPropertyValue('-webkit-app-region') === 'drag' && bar.getBoundingClientRect().height >= 28;
@@ -189,7 +190,11 @@ check('PATH of the app process is /usr/bin:/bin', execFileSync('ps', ['eww', '-o
 // 2. Demo ansehen.
 await Promise.all([page.waitForNavigation(), page.click('[data-answer=demo]')]);
 await settle(page, 'nav.activity');
+await settle(page, '[data-testid=demo-bar]');
 await shot(page, '02-demo');
+check('the demo says that it is one, opens on Automatisierung and tells once what to look at', new URL(page.url()).pathname === '/automation' && await page.$('[data-testid=demo-intro]') && await page.$('[data-act=demo-leave]'));
+// The card of the first opening lies over the page's lower left corner: «Verstanden» takes it away for the clicks below.
+await page.click('[data-act=demo-intro-close]');
 check('nothing covers the title bar zone with no-drag in the books (the window moves by its top edge)', (await blocking(page)).length === 0, JSON.stringify(await blocking(page)));
 const demoName = (await api(page, '/api/workspace')).json?.company?.name;
 check('Demo ansehen opens a copy in the user data folder', existsSync(join(userData, 'Demo', 'vanilla-accounting', 'belege.workspace.yaml')), demoName);

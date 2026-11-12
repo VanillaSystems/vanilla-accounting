@@ -49,5 +49,8 @@ export const noTitleBar = !!desktop && /Mac/.test(navigator.userAgent);
 /** The start screen shows at /start, and whenever the desktop app has no books open. */
 export const START_PATH = '/start';
 
+/** Where the demo opens from the start screen: Automatisierung's home, what the app did with the receipts, not an arbitrary receipt. */
+export const DEMO_HOME = '/automation';
+
 /** The start screen continuing the setup in `root` (src/onboarding/draft.ts): where the app opens a folder whose setup was broken off. */
 export const setupPath = (root: string): string => `${START_PATH}?setup=${encodeURIComponent(root)}`;

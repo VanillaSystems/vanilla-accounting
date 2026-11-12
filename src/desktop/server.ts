@@ -15,7 +15,7 @@ import { lanAddresses, newPhoneToken, pairingUrl, phoneApp, refuseForeignHost, u
 import { SetupError, createWorkspace, type SetupRequest } from '../workspace/create.js';
 import { readManifest } from '../workspace/manifest.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, WorkspaceRefusal, appFolderIn, openWorkspaceAt, workspaceAt } from '../workspace/workspace.js';
-import { bundledDemo } from '../workspace/demo-copy.js';
+import { bundledDemo, nameDemoCopy } from '../workspace/demo-copy.js';
 import { beginDraft, createFromDraft, draftView, patchDraft, readDraft } from '../onboarding/draft-store.js';
 import type { SetupBegun, SetupDraftView } from '../onboarding/draft.js';
 import { MAX_TEXT, parseTalkRequest, talkDraft, type Ask, type SetupTalked } from '../onboarding/draft-talk.js';
@@ -102,6 +102,8 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   let open: KnownBooks | null = null;
   let host: string | undefined;
   let background: 'off' | 'wanted' | 'running' = 'off';
+  // The books API tells a demo by where it lies (GET /api/workspace `demo`).
+  nameDemoCopy(opts.demoRoot);
   const runBackground = async () => {
     if (background !== 'wanted' || !books) return;
     background = 'running';

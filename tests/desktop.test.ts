@@ -81,6 +81,7 @@ test('Demo: a copy in the user data folder opens; another workspace is created, 
   assert.ok(existsSync(join(home, 'Demo', APP_FOLDER, MANIFEST_FILE)), 'the demo was copied');
   assert.deepEqual((await call('GET', '/books.json')).json, JSON.parse(JSON.stringify(loadBooks(workspaceAt(DEMO_ROOT)))));
   const demoName = (await call('GET', '/api/workspace')).json.company.name;
+  assert.equal((await call('GET', '/api/workspace')).json.demo, true, 'the demo copy says that it is a demo, by where it lies');
   const receipt = (await call('GET', '/books.json')).json.receipts.find((r: { location?: string }) => r.location === 'archived').filename;
   assert.equal((await call('GET', `/receipts/${encodeURIComponent(receipt)}`)).status, 200);
 
@@ -98,6 +99,7 @@ test('Demo: a copy in the user data folder opens; another workspace is created, 
   const created = await call('POST', '/api/desktop/create', { ...SETUP, root: join(home, 'Neu') });
   assert.equal(created.status, 200, created.text);
   assert.equal((await call('GET', '/api/workspace')).json.company.name, 'Neu Test GmbH');
+  assert.equal((await call('GET', '/api/workspace')).json.demo, undefined, 'a person\'s own books are no demo');
   const commits = await git.log({ fs, dir: join(home, 'Neu') });
   assert.deepEqual(commits.map((c) => c.commit.message.trim()), ['Workspace set up'], 'new books are committed as npm run init commits them');
   assert.ok((await git.statusMatrix({ fs, dir: join(home, 'Neu') })).every(([, head, work, stage]) => head === 1 && work === 1 && stage === 1), 'everything written is in the commit');

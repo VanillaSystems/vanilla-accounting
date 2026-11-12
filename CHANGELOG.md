@@ -14,6 +14,25 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Changed
+
+- The first screen of a fresh install is about the books, not the AI (#343): what the app is in
+  two sentences, then «Neue Buchhaltung erstellen», open existing books, «Von anderer Software
+  übernehmen» or the demo, with the language switch in sight. The look at this Mac's AI runs in
+  the background: with an AI ready the setup conversation runs as before; without one, new books
+  open the form at once, and one line offers «KI einrichten». Before the Terminal opens, each
+  program's card says what it needs and what happens: an account with the vendor, a paid plan
+  (about 20 USD a month), the sign-in in the browser in English, that the app sees neither
+  password nor login, and that it can wait. The install command is folded under «Befehl zeigen»,
+  also in Firma › KI and the KI column. «Von anderer Software übernehmen» no longer promises to
+  take the old journal as examples: it says that nothing is imported by itself yet.
+- Belege says as a fact how many receipts wait for the AI's reading on a Mac without one («3
+  Belege warten aufs Lesen: das macht die KI.»), with «KI einrichten» and «Von Hand erfassen».
+- The demo says that it is one: a line along the bottom names the made-up firm while the demo is
+  open and leads back to your own books; opened from the start screen it shows Automatisierung,
+  and the first time a card says what to look at.
+- The start screen names no files any more («Den Ordner wählen, in dem deine Buchhaltung liegt.»).
+
 ### Fixed
 
 - Mac app, first screen: «Neue Buchhaltung erstellen» opens the system's save panel again (the
@@ -31,6 +50,8 @@ Two markers flag an entry you must read before you update:
   (or its page failed to load), not only when it was closed, and is heard from the first moment
   of the start. «Nicht erlauben» on macOS's question about the Documents folder no longer ends the
   start without a window; a start that fails says so and quits (#339).
+- «Zur Startseite» on a fresh install stays on the start screen instead of falling back into
+  «Einrichtung».
 
 - After the first statement, wages no longer wait for a receipt (#340). A payment whose own text is a wage's («Lohn Juli 2026», «Lohnzahlung 09/2026», Salär, Gehalt, salaire, stipendio, salary: the word at the start of the text or followed by a month, a period or a year) is booked without waiting on a firm whose setup says it has staff or an employed owner. The counterparty's name is never read, and a text that also names an invoice, a subscription, a licence, bookkeeping, a firm's legal form, social insurance or tax still waits. A wage is freed from the wait only: a receipt that matches it is still paired, and the payment is then booked again from it. For existing books with a profile that names employees, open-period payments worded so that waited for a receipt are booked on the next run; filed periods, firms without employees and books without a profile are unchanged. The bank's own fee row is known by its code for charges or the bank's whole name, as before, and now never under a card payment's code; the persona test's statement had no bank transaction codes, which no bank's export lacks, and carries them now. «Braucht keinen Beleg» on a payment without a booking goes on to book it in the same click and says what came of it, with «Rückgängig» for the mark in the same message; where the app could not book it by itself, the payment says so («nicht gebucht: die App konnte sie nicht selbst buchen. Unten von Hand buchen.») instead of «kein Beleg nötig · nicht gebucht».
 

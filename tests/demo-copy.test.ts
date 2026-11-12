@@ -11,7 +11,7 @@ import { join } from 'node:path';
 
 process.env.VANILLA_DEMO_DIR = mkdtempSync(join(tmpdir(), 'demo-copy-'));
 process.env.VANILLA_APPROVALS_DIR = mkdtempSync(join(tmpdir(), 'demo-approvals-'));
-const { bundledDemo, demoCopy, resetDemoCopy } = await import('../src/workspace/demo-copy.js');
+const { bundledDemo, demoCopy, isDemo, nameDemoCopy, resetDemoCopy } = await import('../src/workspace/demo-copy.js');
 const { resetDemo, approvalsPath } = await import('../src/workflows/switch-on.js');
 const { APP_ROOT } = await import('../src/workspace/workspace.js');
 const { DEMO_REPO, DEMO_ROOT, tempWorkspace } = await import('./support/workspace.js');
@@ -34,6 +34,18 @@ test('the demo opens as a copy outside the repository, kept between starts, with
   assert.ok(existsSync(join(root, 'played.txt')), 'a second start must not throw away what the person did');
   resetDemoCopy('demo');
   assert.equal(existsSync(join(demoCopy(DEMO_ROOT), 'played.txt')), false, 'reset starts afresh');
+});
+
+test('a demo is told by where the books lie: the original, its copy, the Mac app\'s copy; a company with the demo\'s name is none', () => {
+  assert.ok(isDemo(DEMO_ROOT), 'the bundled original');
+  assert.ok(isDemo(demoCopy(DEMO_ROOT)), 'the copy the server opens');
+  const own = tempWorkspace();
+  assert.equal(isDemo(own.paths.root), false, 'a company\'s books, whatever its name');
+  const app = mkdtempSync(join(tmpdir(), 'demo-app-'));
+  assert.equal(isDemo(join(app, 'Demo', 'vanilla-accounting')), false, 'a folder nobody named');
+  nameDemoCopy(join(app, 'Demo'));
+  assert.ok(isDemo(join(app, 'Demo')) && isDemo(join(app, 'Demo', 'vanilla-accounting')), 'the Mac app\'s copy, by its repository or its app folder');
+  assert.equal(isDemo(join(app, 'Demo 2')), false, 'a folder beside it');
 });
 
 test('a company workspace opens as itself', () => {

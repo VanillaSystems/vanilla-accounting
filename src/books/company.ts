@@ -20,6 +20,8 @@ export type SealView =
   | { status: 'broken'; quarter: QuarterKey; problem: string };
 
 export interface CompanyInfo extends Pick<Workspace, 'company' | 'bankAccounts' | 'invoicing' | 'outgoingMail' | 'dimensions'> {
+  /** Set by GET /api/workspace for a demo (src/workspace/demo-copy.ts isDemo): made-up books, which the page says while they are open. */
+  demo?: true;
   /** The quarters whose return lies in transactional-data/<year>/filings/ as filed with the ESTV. */
   filed: QuarterKey[];
   seals: SealView[];

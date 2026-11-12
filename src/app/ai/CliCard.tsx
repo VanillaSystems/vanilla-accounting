@@ -2,7 +2,10 @@
  * The CLI card (docs/0.4.0/ai-setup.md, «The flow»): one program, its vendor, its state, the
  * minimum plan and one action. The same card stands in the setup conversation, Firma › KI and the
  * KI column; `actions` puts the buttons into the card (in the conversation the answers below it
- * are the buttons). The vendor's command is on the card, so copying it works the same as Terminal.
+ * are the buttons). Before anything is installed the card says in plain words what the program
+ * needs and what will happen (an account with the vendor, a paid plan, Terminal, a sign-in in the
+ * browser in English, that it can wait); the vendor's command stays folded under «Befehl zeigen»
+ * until the person asks for it or installs, so copying it still works the same as Terminal.
  */
 import { useState, type ReactNode } from 'react';
 import { planName, type CardState } from '../../platform/ai-setup.js';
@@ -44,6 +47,27 @@ export function Command({ cli }: { cli: TerminalCli }) {
   );
 }
 
+/**
+ * What a program not yet on this Mac needs and what «installieren» does, before Terminal opens; the
+ * plan and its price come from the one table of CLI facts. The command is folded, open only where
+ * the app cannot open Terminal itself and copying is the way.
+ */
+function Needs({ cli, opens }: { cli: TerminalCli; opens: boolean }) {
+  const { vendor, minPlan, minPlanUsd, plans } = AI_CLIS[cli];
+  return (
+    <>
+      <p className="m" data-needs={cli}>{t('aiSetup.needs.account', { vendor, plan: minPlan, usd: minPlanUsd })} <a className="linkbtn" href={plans} target="_blank" rel="noopener noreferrer">{t('aiSetup.plans', { vendor })}{ICONS.external}</a></p>
+      <p className="m">{t(opens ? 'aiSetup.needs.steps' : 'aiSetup.needs.stepsCopy', { vendor })}</p>
+      <p className="m">{t('aiSetup.needs.later')}</p>
+      <details className="aishow" open={!opens || undefined}>
+        <summary>{t('aiSetup.needs.showCommand')}</summary>
+        <p className="m">{t('aiSetup.installer', { vendor })}</p>
+        <Command cli={cli} />
+      </details>
+    </>
+  );
+}
+
 const Facts = ({ state }: { state: Extract<CardState, { version: string }> }) => (
   <dl className="aifacts">
     {state.kind !== 'signedOut' && state.kind !== 'signingIn' ? <><dt>{t('aiSetup.fact.signedIn')}</dt><dd>{'plan' in state && state.plan ? planName(state.plan) : t('aiSetup.fact.yes')}</dd></> : null}
@@ -62,13 +86,12 @@ export function CliCard({ cli, state, opens, compact, actions, children }: { cli
   return (
     <div className={compact ? 'aicli compact' : 'aicli'} data-cli={cli} data-state={state.kind}>
       <div className="aiclihd"><b>{t(`terminal.cli.${cli}`)}</b><span className="aivendor">{t('aiSetup.vendor', { vendor })}</span><Pill state={state} /></div>
-      {state.kind !== 'ready' && state.kind !== 'testing' ? (
+      {state.kind !== 'ready' && state.kind !== 'testing' && state.kind !== 'missing' ? (
         <p className="aiplan">{t(`aiSetup.plan.${cli}`)} <a className="linkbtn" href={facts.plans} target="_blank" rel="noopener noreferrer">{t('aiSetup.plans', { vendor })}{ICONS.external}</a></p>
       ) : null}
       {state.kind === 'missing' ? (
         <>
-          <p className="m">{t('aiSetup.installer', { vendor })}</p>
-          <Command cli={cli} />
+          <Needs cli={cli} opens={opens} />
           {actions ? <span className="ruleacts">{installButton}{guide}</span> : null}
         </>
       ) : state.kind === 'installing' ? (

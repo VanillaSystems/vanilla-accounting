@@ -21,6 +21,7 @@ import { DropDialog, closeDrop, dropFiles, dropOpen } from './DropDialog.js';
 import { INTAKE, watchRuns, watchSteps } from '../automation/intake.js';
 import { STATIC_EXPORT } from '../lib/api.js';
 import { noTitleBar } from '../desktop/bridge.js';
+import { Demo } from './Demo.js';
 import { ExportDialog } from '../areas/export/ExportDialog.js';
 import { configOf, ownConfig, presetFor, type DialogConfig } from '../areas/export/config.js';
 import { ownPresets } from '../areas/export/state.js';
@@ -316,6 +317,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
       <DropDialog books={books} refresh={refresh} period={period} onGo={(loc) => nav.go(loc)} onLanded={showLanded} />
       <Corner onAssistant={toggleAssistant} onGo={(route) => nav.go({ route, query: {} })} />
       <Dock current={loc.route.area} books={books} keys={dockKeys} wide={navWide} onToggle={toggleNav} nav={nav} canEdit={canEdit} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
+      {workspace?.demo ? <Demo name={workspace.company.name} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} /> : null}
       {toastNode}
       {legend && (
         <div className="legend">

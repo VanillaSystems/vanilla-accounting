@@ -1,6 +1,9 @@
 # AI setup on a fresh install
 
-**Status: designed and decided 25.10.2026; built in the PR that closes #175** (see «As built» at the end). Mockups:
+**Status: designed and decided 25.10.2026; built in the PR that closes #175; decision 1 changed on
+12.11.2026 (#343): the books come first, the AI when it has work** (see «Decision 1, changed» and «As
+built» at the end; «The flow» below describes design B as first built, and the AI step is still that
+conversation). Mockups:
 [mockups/ai-setup/index.html](mockups/ai-setup/index.html). Related: #121 (Codex as a provider),
 #139 and #145 (the setup conversation), #146 (Im Terminal), #175 (a Mac with only an API key).
 
@@ -13,7 +16,9 @@ chooses or creates books, and how the same help shows up later.
 ## Decisions (the owner, 25.10.2026)
 
 1. **Design B.** The setup conversation opens with the AI (see «The flow»). Design A stays in
-   the mockups as the alternative that was not chosen.
+   the mockups as the alternative that was not chosen. **Changed on 12.11.2026, see «Decision 1,
+   changed»: the first screen is about the books; the AI step is this conversation, entered when
+   the person asks for it.**
 2. **A test call when a CLI or a key is first ready**, and on «Nochmals prüfen», with the
    cheapest model. It is the only check that sees a plan too small, a region not served or a
    limit reached.
@@ -38,6 +43,43 @@ chooses or creates books, and how the same help shows up later.
 9. **API keys as an advanced path**: «Erweitert: mit API-Schlüssel», folded under the
    subscription cards in the conversation and in Firma › KI. The recommended way is a
    subscription: Claude Pro or ChatGPT Plus, about USD 20 a month.
+
+## Decision 1, changed (the owner, 12.11.2026, #343)
+
+**The books come first, the AI when it has work.** Two persona tests of the packed 0.4.1 app on
+fresh Macs (a person who does a painting firm's office, not technical) showed what design B's
+order costs: the first thing a new owner saw, before a word about her books, was «Claude Code von
+Anthropic · nicht installiert», two `curl` commands and «Erweitert: mit API-Schlüssel». «Claude
+Code installieren» opened Terminal and ended at an English login page for an account she did not
+have; nothing had said that she needs an account and a paid plan, which one, or that it can wait.
+The tester expected most new owners to stop there.
+
+What changed:
+
+- **The first screen** says in two sentences what the app is and asks what the person wants: new
+  books, open existing ones, come from another program, look at the demo. No AI card, no command,
+  no key. It fits the window, so the language switch is in sight.
+- **The look at this Mac's AI runs in the background** (the same check, cards and 2-second
+  polling) and decides only what follows. With an AI ready, «Neue Buchhaltung erstellen» runs the
+  setup conversation as before, and a line under the choices says «… ist bereit». Without one it
+  opens the form at once: «Ohne KI einrichten» is then the way, not a small link.
+- **The AI is offered where it has work.** On the first screen as one line («Belege lesen und
+  Buchungen vorschlagen macht eine KI … das geht jetzt oder später, alles andere geht ohne») with
+  «KI einrichten», which opens design B's conversation. After the first files as a fact in Belege:
+  «17 Belege warten aufs Lesen: das macht die KI.» with «KI einrichten» (Firma › KI) and «Von Hand
+  erfassen» beside it. Firma › KI, the KI column and the error line stay as they were.
+- **Before Terminal opens, the card says what will happen and what it needs:** an account with the
+  vendor and a paid plan (the plan and «etwa 20 USD im Monat» from the one table of CLI facts),
+  that «installieren» opens Terminal where she presses Enter, that the sign-in is in the browser on
+  the vendor's page in English, that the app sees neither password nor login, and that it can wait.
+  The vendor's command is folded under «Befehl zeigen» on every card (first run, Firma › KI, the KI
+  column); it shows once she asks or has clicked install. Where the app cannot open Terminal the
+  command is the way and stays open. With one program ready, the other's card is not shown in the
+  first run.
+- **«Ohne KI weiter»** in the AI step is still remembered on this Mac (decision 6) and leads back
+  to the choices; the line then reads «Auf diesem Mac geht es ohne KI weiter.»
+
+Everything under «What must hold» stays as it is.
 
 ## What must hold
 
@@ -268,4 +310,6 @@ Rough scope, to size the work. The mockups change no app code.
 - A look tries the PATH (the process's, then the login shell's) before `~/.local/bin`, so a developer's or a test's own `claude` on the PATH wins over the one the native installer wrote.
 - Whether Claude Code answers (`claudeCli.ready`, and with it `modelReady`) is now found, answering and signed in, not only found.
 - #121 (Codex as a provider) was merged while this was built. Firma › KI shows both cards, «Die App fragt» and «das andere fragen» (#121's `cli` and `askOther`). The first run offers both since the owner decided so on 25.10.2026 (`FIRST_RUN_CLIS`): a check in a fresh macOS VM showed that the app's own `codex exec` (plugins off) raises no developer-tools dialog on a Mac without the Command Line Tools. The conversation follows the CLI picked, or the one already on the Mac (signed in first, else installed, else Claude Code), and offers the other as «Doch lieber …» (src/app/ai/first-run.ts). Codex gets the test call too; `codex login status` names no plan, so a ChatGPT sign-in shows as «ChatGPT». The KI column runs on Claude Code or Codex (#181): without an AI it shows the card of the program the app asks for it (`sidebar` in the view, src/llm/ask.ts `sidebarAgent`); the error line says «eine KI». Codex reads PDF receipts since #181, so its card says nothing about PDFs.
+- Decision 1 as changed on 12.11.2026 (#343): src/app/ai/FirstRun.tsx has two stages. `home` is the first screen: the greeting (`aiSetup.hello`, `aiSetup.what`), the choices `[data-answer=create|open|switch|demo]`, and under them the AI as this Mac has it once the look has its answer: `[data-ready=<cli or key>]` with the link «Ohne KI einrichten» `[data-act=by-hand]`, or the line `[data-ai=none]` with «KI einrichten» `[data-act=ai-setup]`; nothing where the AI is switched off. «Neue Buchhaltung erstellen» clicked before the look has its answer waits for it. `ai` is design B's conversation, unchanged in its legs; «Ohne KI weiter» `[data-answer=no-ai]` writes `noAi` and returns to `home`. The conversation's disabled text field is gone from this screen: typing starts in the setup conversation. The card's plain words are `Needs` in src/app/ai/CliCard.tsx (`aiSetup.needs.*`; the price is `minPlanUsd` of `AI_CLIS`), the folded command `details.aishow`. The fact in Belege is src/app/areas/receipts/ReadingWaits.tsx: receipts whose text no code could read and whose date or amount nobody entered (`waitsForReading`, src/accounting/receipt-due.ts), shown only where `GET /api/ai/setup` says no AI answers. «Zur Startseite» on a fresh install now stays on the start screen (it fell back into «Einrichtung» before).
+- The demo says that it is one (#343): `GET /api/workspace` carries `demo: true` for books that lie in a demo copy or a bundled demo (`isDemo`, src/workspace/demo-copy.ts; the Mac app names its copy with `nameDemoCopy`), never by the company's name. While it is open, a line along the bottom names the made-up firm and, in the Mac app, links back to the start screen; on its first opening in the Mac app a card says what to look at (src/app/shell/Demo.tsx). From the start screen the demo opens on Automatisierung (`DEMO_HOME`).
 - #175 in #121's structure: where no subscription answers (found and signed in), a key that writes text comes first and serves every step it can; a key that fails asks a subscription, never another key.

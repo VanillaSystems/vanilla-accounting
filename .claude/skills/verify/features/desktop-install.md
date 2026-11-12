@@ -3,9 +3,18 @@
 The owner downloads the dmg, opens it and starts the app. The build is unsigned
 (`identity: null` in `desktop/electron-builder.config.cjs`) until the Developer ID arrives, so
 macOS Gatekeeper blocks the first start. Started outside /Applications, the app first offers to move
-itself there. The first start, with no books known, opens «Einrichtung» (FirstRun, src/app/ai/FirstRun.tsx:
-`Hallo! Ich richte mit dir Vanilla Accounting ein. …`, the AI step with one test call, `Zur Startseite`
-`[data-act=first-leave]`, then the folder choices `[data-answer=create|open|switch|demo]`). The start
+itself there. The first start, with no books known, opens «Einrichtung» (FirstRun, src/app/ai/FirstRun.tsx,
+books first since #343: `Hallo! Vanilla Accounting ist die Buchhaltung deiner Firma: …`, `Was möchtest du?`,
+the choices `[data-answer=create|open|switch|demo]` at once, `Zur Startseite` `[data-act=first-leave]`).
+The look at this Mac's AI runs in the background (one test call when a CLI is signed in); once it has its
+answer, the line under the choices is `[data-ready=claude]` (`Claude Code ist bereit: …`) with
+`Ohne KI einrichten` `[data-act=by-hand]`, or `[data-ai=none]` (`Belege lesen und Buchungen vorschlagen
+macht eine KI …`) with `KI einrichten` `[data-act=ai-setup]`. No AI card and no command on this screen.
+`KI einrichten` opens the AI step: the cards `.aicli[data-cli][data-state]` say what a program needs
+(account, plan, about 20 USD, Terminal, sign-in in English, it can wait), the command is folded under
+`Befehl zeigen` (`details.aishow`), the answers are `[data-answer=install-claude|install-codex|no-ai]`;
+`Ohne KI weiter` leads back to the choices. Never click install or `Anmelden` outside a VM: they open
+the real Terminal. The start
 screen (`Wähle die Buchhaltung, mit der du arbeiten willst.`, `Bestehende Buchhaltung öffnen`,
 `Neue Buchhaltung anlegen`, `Demo ansehen`, each with a hint line, `Zuletzt geöffnet`, language DE FR IT
 EN) shows from `Zur Startseite`, at `/start`, or on a later start without books; a later start with
@@ -25,6 +34,12 @@ picked (English on `vanilla-clean`).
 - `di-start`: the start screen and its language switch (top right); the menu Ablage › `Buchhaltung
   öffnen…`, `Neue Buchhaltung…`, `Demo`, `Zuletzt geöffnet`. `Demo ansehen` opens a copy of the
   bundled demo in the app's user data (`<userData>/Demo`, src/desktop/server.ts).
+- `di-demo`: the demo says that it is one (#343). From the start screen or `[data-answer=demo]` it opens
+  on `/automation`. `[data-testid=demo-bar]` along the bottom stays while it is open (`Demo: Muster Kaffee
+  GmbH ist eine erfundene Firma. Nichts hier ist echt, du arbeitest in einer Kopie.`, `Zu deiner
+  Buchhaltung` `[data-act=demo-leave]` → `/start`). On its first opening `[data-testid=demo-intro]`
+  (`Das ist die Demo`, three links) lies over the lower left corner until `Verstanden`
+  `[data-act=demo-intro-close]` (kept in localStorage `demoIntroSeen`): close it before clicking rows there.
 
 ## How to get to it (user POV)
 

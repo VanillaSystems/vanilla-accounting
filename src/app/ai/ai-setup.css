@@ -35,6 +35,14 @@
 .aifacts dt { color: var(--muted); }
 .aifacts dd { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; }
 
+/* «Befehl zeigen»: the vendor's command, folded until the person asks for it. */
+.aishow > summary { cursor: pointer; color: var(--muted); font-size: 12.5px; list-style-position: inside; }
+.aishow[open] > summary { margin-bottom: 7px; }
+.aishow[open] { display: grid; gap: 7px; }
+/* The first screen's line about the AI: a fact and a way to it, never a card. */
+.ailine { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.ailine .linkbtn { font-size: 13px; }
+
 /* Design B: the same card in the conversation, the two programs one under the other. */
 .aiobcard { gap: 10px; }
 .aicli.compact { padding: 10px 12px; gap: 7px; border-radius: 10px; }
