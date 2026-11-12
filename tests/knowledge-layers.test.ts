@@ -117,11 +117,6 @@ test('a payment to an authority routes to its app file, and each tells its facts
   assert.equal(route('Eidg. Steuerverwaltung ESTV, Hauptabteilung MWST'), 'estv');
   assert.equal(route('Kantonale Steuerverwaltung Musterkanton'), 'steuerverwaltung');
   assert.equal(route('Ausgleichskasse Musterkanton'), 'ausgleichskasse');
-  // #362: a cantonal fund named SVA on the statement, its text «AHV Beiträge»: the fund, so it needs no receipt (apply: { receipt: none }).
-  assert.equal(route('SVA St. Gallen'), 'ausgleichskasse');
-  const sva = identify(signalsOfTransaction({ description: 'AHV Beiträge Q2', counterparty: 'Sozialversicherungen' } as BankTransaction, []), counterparties);
-  assert.equal(sva.kind === 'known' && sva.counterparty, 'ausgleichskasse');
-  assert.equal(route('Svarovski Kristall AG'), 'unknown', 'no word that merely starts with sva');
   assert.equal(route('BAZG Bern'), 'bazg');
   for (const id of ['estv', 'ausgleichskasse', 'steuerverwaltung', 'bazg']) {
     const cp = counterparties.find((c) => c.id === id)!;
@@ -139,4 +134,39 @@ test('the archived name routes a receipt; the name it came with only when no fil
   assert.equal((identify(signalsOfTransaction({ description: '', counterparty: '' } as BankTransaction, [stale]), cps) as { counterparty: string }).counterparty, 'coop-pronto');
   const renamed = { id: 'r2', filename: '20260620-store.pdf', originalFilename: '20260630-shopify-bill-2.pdf' } as Receipt;
   assert.equal((identify(signalsOfReceipt(renamed), cps) as { counterparty: string }).counterparty, 'shopify');
+});
+
+/** Where a payment routes among the app's files and the demo's (#362). */
+const routeTx = (counterparty: string, description = '', counterparties = loadKnowledge(APP_ROOT, DEMO_ROOT).counterparties) => {
+  const r = identify(signalsOfTransaction({ counterparty, description } as BankTransaction, []), counterparties);
+  return r.kind === 'known' ? r.counterparty : r.kind;
+};
+
+test('the compensation fund is found by its full names, never by a word inside another (#362)', () => {
+  for (const [cp, text] of [['SVA St. Gallen', 'AHV Beiträge Q2'], ['SVA St.Gallen', 'Beiträge'], ['SVA Zürich', ''], ['SVA Aargau', ''], ['Sozialversicherungsanstalt des Kantons St. Gallen', ''], ['Ausgleichskasse Musterkanton', ''], ['Caisse de compensation AVS', ''], ['Cassa di compensazione', '']]) {
+    assert.equal(routeTx(cp, text), 'ausgleichskasse', cp);
+  }
+  // Each of these went to the fund with «AHV» or «SVA » as a substring: booked at once, without a receipt.
+  for (const [cp, text] of [
+    ['Treuhand Muster AG', 'Rechnung 2026-17 Buchhaltung inkl. AHV-Abrechnung'],
+    ['DB Nahverkehr Konstanz', 'Fahrkarte'],
+    ['Kahve Haus GmbH', 'Kaffee'],
+    ['Thomas Huber', 'Lohn Oktober nach Abzug AHV/ALV'],
+    ['Muster Consulting', 'Beratung AHV-Reform'],
+    ['Svarovski Kristall AG', 'Bestellung'],
+  ]) assert.notEqual(routeTx(cp, text), 'ausgleichskasse', `${cp} / ${text}`);
+});
+
+test('a company\'s own file wins over the app\'s file that claims the same payment, instead of making it ambiguous', () => {
+  const { app, ws } = layers({
+    'app/processes/authorities/fund.yaml': 'id: fund\nname: Fund\nmatch: { tx: ["SVA Zürich"] }\n',
+    'ws/knowledge/authorities/sva-zuerich.yaml': 'id: sva-zuerich\nname: SVA Zürich\nmatch: { tx: ["SVA Zürich"] }\n',
+  });
+  assert.equal(routeTx('SVA Zürich', 'Beiträge', loadKnowledge(app, ws).counterparties), 'sva-zuerich');
+  const two = layers({
+    'app/processes/.keep': '',
+    'ws/knowledge/authorities/a.yaml': 'id: a\nname: A\nmatch: { tx: ["SVA Zürich"] }\n',
+    'ws/knowledge/authorities/b.yaml': 'id: b\nname: B\nmatch: { tx: ["SVA Zürich"] }\n',
+  });
+  assert.equal(routeTx('SVA Zürich', '', loadKnowledge(two.app, two.ws).counterparties), 'ambiguous', 'two of the company\'s own files stay ambiguous');
 });

@@ -4,8 +4,10 @@
 id: ausgleichskasse
 name: Ausgleichskasse (AHV compensation fund)
 match:
-  # «SVA St.Gallen», «SVA Zürich»: the cantonal funds go by SVA on the statement; «AHV Beiträge Q2» in the text.
-  tx: [ "ausgleichskasse", "sozialversicherungsanstalt", "SVA ", "AHV" ]
+  # A `tx` name matches as a part of the counterparty or of the bank text, so only full names that no
+  # other word holds (#362: «AHV» and «SVA » took a fiduciary's invoice and a salary). The cantonal funds
+  # that go by «SVA <canton>» on the statement are named whole; a company's own file of its fund wins.
+  tx: [ "ausgleichskasse", "sozialversicherungsanstalt", "SVA St. Gallen", "SVA St.Gallen", "SVA Zürich", "SVA Aargau", "caisse de compensation", "cassa di compensazione" ]
 
 facts:
   - id: shares

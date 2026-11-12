@@ -217,10 +217,12 @@ export function identify(s: Signals, counterparties: readonly Counterparty[]): R
     // The archived name decides; the original name is asked only when no file pattern matches an archived one.
     const byArchived = tier === 'file' && counterparties.some((cp) => claims(cp, tier, { ...s, originalFilenames: [] }));
     const seen = byArchived ? { ...s, originalFilenames: [] } : s;
-    const hits = counterparties.flatMap((cp) => {
+    const all = counterparties.flatMap((cp) => {
       const signal = claims(cp, tier, seen);
-      return signal ? [{ id: cp.id, signal }] : [];
+      return signal ? [{ id: cp.id, signal, own: !!cp.origin.binding }] : [];
     });
+    // The company's own file of a business wins over an app file that claims the same signal (#362): never ambiguous for that.
+    const hits = all.some((h) => h.own) ? all.filter((h) => h.own) : all;
     if (hits.length === 1) return { kind: 'known', counterparty: hits[0].id, tier, signal: hits[0].signal };
     if (hits.length > 1) return { kind: 'ambiguous', candidates: hits.map((h) => h.id), tier };
   }
