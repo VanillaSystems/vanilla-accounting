@@ -14,6 +14,21 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-12
+
+The app learns the company and takes more of the quarter off you. Receipts and payments match
+in either order, several receipts per payment and a part per payee of a collective payment; a
+payment that needs a receipt waits for it instead of being booked without. Booking rules come
+from a wish in your own words or from a correction («Ins Wissen übernehmen?»), are previewed on
+a card before you keep them, and are listed under Firma › Regeln. New areas Geschäftspartner and
+Wissen; the AI setup on a fresh Mac, with Claude Code or Codex; statements as PDF, scan or photo
+for any bank; payment providers (a shop, a card terminal) over a clearing account; VAT on the
+agreed basis, the net tax rate method and firms without VAT registration. Entries marked
+**⚠ action** need a step from you, chiefly the clearing account of a payment provider and the
+phone's pairing link under `npm start`; entries marked **⚠ figures** change figures of an open
+quarter. No filed figure moves. `npm run update` moves the books into the new workspace layout
+and migrates them by itself; commit the result in the company's repository.
+
 ### Changed
 
 - A page whose link names no period now opens on the quarter of the newest payment, receipt or booking, not on the oldest quarter not filed yet. Rechnungen also counts its newest issued invoice. Before, in November the demo opened on Q2 and October's files seemed missing. Files you drop move the page to where they landed (a statement's last booking day, a receipt's date once read), and an invoice you issue is shown in its own period, so it no longer vanishes from a list of another quarter. A receipt you open while it is still being read stays selected and opens in its own period once its date is read; before, the selection jumped to another receipt. MWST says beside the state when an earlier return is not filed yet («Q2 2026 nicht eingereicht · fällig seit 31.08.2026»), a link to it.
