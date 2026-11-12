@@ -322,7 +322,8 @@ test('a line of the fee\'s amount the code cannot tell apart or put back is refu
 });
 
 test('a payment without a separate fee movement keeps a fee line of the same amount as the model gave it', async () => {
-  const charge = tx({ ref: 'KART-2', bank: 'Raiffeisen', amount: 60 });
+  // The text states the fee: a split nothing states would wait for the person (src/booking/unstated-split.ts, #362).
+  const charge = tx({ ref: 'KART-2', bank: 'Raiffeisen', amount: 60, description: 'Kartenzahlung, Gebühr 2.00' });
   const b = books([charge, tx({ ref: 'FEE-KART-3', bank: 'Raiffeisen', amount: 2, type: 'wise-fee' })]);
   const { ask } = stubAsk(() => [expense(58), { accountDebit: '6900', accountCredit: '', amount: 2, vatCode: 'I0', description: 'Bank, Spesen' }]);
   await classifyTransactions(b, [charge], { ask, fx, context });

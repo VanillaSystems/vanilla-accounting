@@ -465,6 +465,7 @@ ${historicEntries}
 ${cases.length ? `
 ## Casebook: invented examples of how similar cases are booked
 These are standard Swiss cases on KMU account numbers. Follow their pattern and VAT facts, but use this company's own chart of accounts above. "bank" is the side you leave empty.
+Their amounts are invented and belong to the example alone: never take an amount, a share or a ratio from an example for a transaction. Split a transaction across accounts only by parts its own text, its receipts or a decision state; where nothing states them, book it whole on the one account its case names, or say in "reason" what is missing. The app refuses a split whose parts nothing states and asks the person instead.
 ${cases.map(formatCase).join('\n')}
 ` : ''}${guidanceSection(guidance, ownerAccount)}
 ${CLASSIFY_INSTRUCTIONS}

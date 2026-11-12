@@ -4,7 +4,8 @@
 id: ausgleichskasse
 name: Ausgleichskasse (AHV compensation fund)
 match:
-  tx: [ "ausgleichskasse", "sozialversicherungsanstalt" ]
+  # «SVA St.Gallen», «SVA Zürich»: the cantonal funds go by SVA on the statement; «AHV Beiträge Q2» in the text.
+  tx: [ "ausgleichskasse", "sozialversicherungsanstalt", "SVA ", "AHV" ]
 
 facts:
   - id: shares

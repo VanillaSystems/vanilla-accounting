@@ -11,6 +11,7 @@ receipt:
   text: |
     Ausgleichskasse Musterkanton, Akontorechnung 3. Quartal 2026
     AHV/IV/EO 10.6%, ALV 2.2%, FAK, Verwaltungskosten
+    Anteil Arbeitnehmer 1230.00, Anteil Arbeitgeber inkl. FAK und Verwaltungskosten 1370.00
     Total 2600, zahlbar bis 10.10.2026
 transaction:
   amount: 2600
@@ -33,7 +34,8 @@ why: >
   with the salary and sits on 2270; only the employer's share (with FAK and admin costs) is new
   expense.
 pitfalls:
-  - Do not book the whole payment on 5700, the employee share would be expensed twice.
+  - The two shares are the statement's, never estimated and never this example's ratio. Without a statement that names them, book the whole payment on 5700; the fund's year-end statement settles it.
+  - With the shares stated, do not book the whole payment on 5700, the employee share would be expensed twice.
   - The year-end statement of the Ausgleichskasse settles the difference to the real payroll; book it the same way.
 signals:
   kind: social-insurance

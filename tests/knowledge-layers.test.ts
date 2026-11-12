@@ -117,6 +117,11 @@ test('a payment to an authority routes to its app file, and each tells its facts
   assert.equal(route('Eidg. Steuerverwaltung ESTV, Hauptabteilung MWST'), 'estv');
   assert.equal(route('Kantonale Steuerverwaltung Musterkanton'), 'steuerverwaltung');
   assert.equal(route('Ausgleichskasse Musterkanton'), 'ausgleichskasse');
+  // #362: a cantonal fund named SVA on the statement, its text «AHV Beiträge»: the fund, so it needs no receipt (apply: { receipt: none }).
+  assert.equal(route('SVA St. Gallen'), 'ausgleichskasse');
+  const sva = identify(signalsOfTransaction({ description: 'AHV Beiträge Q2', counterparty: 'Sozialversicherungen' } as BankTransaction, []), counterparties);
+  assert.equal(sva.kind === 'known' && sva.counterparty, 'ausgleichskasse');
+  assert.equal(route('Svarovski Kristall AG'), 'unknown', 'no word that merely starts with sva');
   assert.equal(route('BAZG Bern'), 'bazg');
   for (const id of ['estv', 'ausgleichskasse', 'steuerverwaltung', 'bazg']) {
     const cp = counterparties.find((c) => c.id === id)!;
