@@ -12,7 +12,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
-import { AiRefused, CallFailed, isPlanLimit, NO_USAGE, type Call, type Provider } from '../provider.js';
+import { AiRefused, CallFailed, isPlanLimit, isSignedOut, NO_USAGE, type Call, type Provider } from '../provider.js';
 import type { StepId } from '../steps.js';
 import { claudeBin, knownPath, probeCli } from '../../platform/ai-cli.js';
 import { gate } from '../off.js';
@@ -105,7 +105,10 @@ export const claudeCli: Provider = {
         if (code === 0 && parsed && !parsed.is_error) return done({ text: (parsed.result ?? '').trim(), usage });
         const said = (parsed?.result ?? (err || out)).slice(0, 300);
         const message = `claude exited ${code}: ${said}`;
-        fail(isPlanLimit(said) ? new AiRefused({ reason: 'limit', cli: 'claude', said: said.trim() }, message, usage) : new CallFailed(message, usage));
+        // The same gate as Codex's (refusalOf): a plan's limit and a missing login are the app's sentences, never the CLI's words.
+        fail(isPlanLimit(said) ? new AiRefused({ reason: 'limit', cli: 'claude', said: said.trim() }, message, usage)
+          : isSignedOut(said) ? new AiRefused({ reason: 'signedOut', cli: 'claude' }, message, usage)
+          : new CallFailed(message, usage));
       });
       child.stdin.on('error', () => { /* the child's 'error' or 'close' settles the call, with the reason */ });
       child.stdin.write(call.prompt);

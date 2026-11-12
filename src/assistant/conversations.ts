@@ -99,8 +99,9 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
       if (e.type === 'error') {
         ai.error = e.message;
         const why = noAnswerWhy(e.message, c.agent === 'codex-cli' ? 'codex' : 'claude');
-        // The CLI prints its refusal as the answer's text too («Not logged in · Please run /login»): the app's sentence stands alone.
-        if (why && ai.text.trim() && e.message.includes(ai.text.trim())) { ai.text = ''; onEvent({ type: 'replace', text: '' }); }
+        // The CLI prints its refusal as the answer's text too («Not logged in · Please run /login»): an answer that is that refusal
+        // itself goes, so the app's sentence stands alone; an answer with words of its own stays.
+        if (why && ai.text.trim() && noAnswerWhy(ai.text.trim(), c.agent === 'codex-cli' ? 'codex' : 'claude')?.reason === why.reason) { ai.text = ''; onEvent({ type: 'replace', text: '' }); }
         if (why) { ai.errorWhy = why; onEvent({ ...e, why }); return; }
       }
       if (e.type === 'done' && e.session) c.session = e.session;

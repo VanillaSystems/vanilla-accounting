@@ -7,11 +7,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { bookingDraft } from '../src/accounting/manual-booking.js';
-import { isUnreadScan } from '../src/accounting/receipt-due.js';
+import { waitsForReading } from '../src/parsers/receipt-text.js';
 import { rankAccounts, type AccountContext } from '../src/app/lib/account-filter.js';
 import { fittingGroup, pickGroups } from '../src/app/areas/codes/model.js';
 import { stableWords } from '../src/knowledge/gaps.js';
-import { isPlanLimit, isSignedOut } from '../src/llm/provider.js';
+import { AiRefused, isPlanLimit, isSignedOut } from '../src/llm/provider.js';
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { noAnswerWhy } from '../src/assistant/conversations.js';
 import { AI_OFF_MESSAGE } from '../src/llm/off.js';
 import { chart, setJurisdiction } from '../src/engines/index.js';
@@ -39,15 +42,15 @@ test('money in without a rule, precedent or receipt: the firm\'s default revenue
   assert.deepEqual([bare.accountCredit, bare.vat, bare.source], ['', '', undefined]);
 });
 
-test('money out with a linked receipt that shows Swiss VAT: the default purchase account and the receipt\'s rate as that account\'s code', () => {
+test('money out with a linked receipt that shows Swiss VAT: the receipt\'s rate, and no account from the defaults (rent is no material)', () => {
   const b = books({
     transactions: [tx('OUT', 'DBIT', 1120, 'Gerüstbau AG', 'Miete Gerüst August')],
     receipts: [receipt('r1', { date: '2026-08-01', amount: 1120, currency: 'CHF', hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, net: 1036.1, vat: 83.9, gross: 1120 }] })],
     mappings: [{ transactionRef: 'OUT', receiptId: 'r1' }],
   });
   const [line] = bookingDraft(b, 'OUT', BANK, undefined, { defaults: DEFAULTS })!.lines;
-  assert.deepEqual([line.accountDebit, line.accountCredit, line.vat], ['4000', '1020', 'M81']);
-  assert.deepEqual(line.source, { account: { from: 'purchase' }, vat: { from: 'receipt' } });
+  assert.deepEqual([line.accountDebit, line.accountCredit, line.vat], ['', '1020', '8.1']);
+  assert.deepEqual(line.source, { vat: { from: 'receipt' } });
 });
 
 test('money out without a receipt: no account from the defaults and no rate (no receipt, no input tax)', () => {
@@ -96,6 +99,7 @@ const ACCOUNTS = [
   { number: '4400', name: 'Aufwand für bezogene Dienstleistungen' },
   { number: '6510', name: 'Telefon' },
   { number: '6950', name: 'Finanzertrag' },
+  { number: '2850', name: 'Einlage Inhaberin' },
 ];
 const ctx = (prefer?: 'revenue' | 'expense'): AccountContext => ({
   typeOf: (n) => chart().typeOf(n), prefer, defaults: ['3400', '3000', '4000'],
@@ -113,6 +117,12 @@ test('«Dienst» for money in: the first row, which Enter takes, is the revenue 
   assert.deepEqual(ranked('Dienst', 'revenue'), ['3400', '1170', '4400']);
   assert.deepEqual(ranked('Dienst', 'expense')[0], '4400', 'for money out the expense account');
   assert.deepEqual(ranked('Dienst'), ['3400', '1170', '4400'], 'without a side: a name that starts with the word before one a later word of which does');
+});
+
+test('three letters that start a class word («ein», «ver») name no class: «Einlage» is found first, not below every revenue account', () => {
+  assert.equal(ranked('ein', 'revenue')[0], '2850');
+  assert.equal(ranked('Einl', 'revenue')[0], '2850');
+  assert.deepEqual(ranked('Einnahme', 'revenue').slice(0, 3), ['3400', '3000', '3200'], 'the class word itself still lists its class');
 });
 
 test('a typed number keeps chart order, and an empty field lists the side\'s class first', () => {
@@ -149,11 +159,10 @@ test('the lasting words of a payment\'s text: without the month, the year and th
   assert.equal(stableWords('2026-07 4711'), '');
 });
 
-test('a photo or scan nobody read is not «gelesen»; one with text, or with a person\'s date or amount, is', () => {
-  assert.equal(isUnreadScan({ needsVisionReview: true, extractedText: '' }), true);
-  assert.equal(isUnreadScan({ needsVisionReview: true, extractedText: '', date: '2026-07-05' }), false);
-  assert.equal(isUnreadScan({ needsVisionReview: true, extractedText: '', amount: 86.4 }), false);
-  assert.equal(isUnreadScan({ extractedText: 'Tankstelle Wil Ost' }), false);
+test('a photo or scan nobody read is not «gelesen»; one with text, or with a person\'s date and amount, is', () => {
+  assert.equal(waitsForReading({ extractedText: '', extractionMethod: 'tesseract' } as unknown as Receipt), true);
+  assert.equal(waitsForReading({ extractedText: '', extractionMethod: 'tesseract', date: '2026-07-05', amount: 86.4 } as unknown as Receipt), false);
+  assert.equal(waitsForReading({ extractedText: 'Tankstelle Wil Ost Total CHF 86.40 Bleifrei 95', extractionMethod: 'pdftotext' } as unknown as Receipt), false);
 });
 
 test('the CLI\'s own words for «not signed in», its limit, missing and switched off become the app\'s refusal, never its text', () => {
@@ -164,4 +173,29 @@ test('the CLI\'s own words for «not signed in», its limit, missing and switche
   assert.deepEqual(noAnswerWhy('claude exited 1: You have hit your usage limit', 'claude'), { reason: 'limit', cli: 'claude', said: 'You have hit your usage limit' });
   assert.deepEqual(noAnswerWhy(AI_OFF_MESSAGE, 'claude'), { reason: 'off' });
   assert.equal(noAnswerWhy('claude exited 1: something else', 'claude'), undefined);
+});
+
+test('S6: «signed out» is what the CLIs print for a missing login, never a refused key or a plea to log in elsewhere', () => {
+  for (const said of ['Not logged in · Please run /login', 'Error: not signed in. Run `codex login`', 'OAuth token has expired. Please run /login']) assert.ok(isSignedOut(said), said);
+  for (const said of ['invalid api key', 'Please log in to your bank to download the statement', 'authentication_error: overloaded']) assert.ok(!isSignedOut(said), said);
+});
+
+test('S6: a booking or reading run on a signed-out Claude Code fails with the app\'s refusal `signedOut`, not the CLI\'s text', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'signed-out-run-'));
+  const bin = join(dir, 'claude');
+  writeFileSync(bin, `#!/usr/bin/env node
+require('node:fs').readFileSync(0, 'utf8');
+process.stdout.write(JSON.stringify({ type: 'result', is_error: true, result: 'Not logged in · Please run /login' }));
+process.exit(1);
+`);
+  chmodSync(bin, 0o755);
+  const was = process.env.CLAUDE_BIN;
+  process.env.CLAUDE_BIN = bin;
+  try {
+    const { claudeCli } = await import('../src/llm/providers/claude-cli.js');
+    await assert.rejects(claudeCli.ask({ prompt: 'x', system: 'y', model: 'haiku', attachments: [], timeoutMs: 20_000 }), (e: unknown) => e instanceof AiRefused && e.refusal.reason === 'signedOut');
+  } finally {
+    if (was === undefined) delete process.env.CLAUDE_BIN; else process.env.CLAUDE_BIN = was;
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

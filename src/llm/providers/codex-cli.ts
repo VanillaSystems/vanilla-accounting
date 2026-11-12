@@ -168,7 +168,7 @@ export const isModelRefused = (said: string): boolean => /model_not_found|model 
 export const refusalOf = (said: string, message: string, usage: Usage, model?: string): CallFailed =>
   isPlanLimit(said) ? new AiRefused({ reason: 'limit', cli: 'codex', said }, message, usage)
   : model && isModelRefused(said) ? new AiRefused({ reason: 'modelRefused', cli: 'codex', model }, message, usage)
-  : (isSignedOut(said) || /unauthori[sz]ed|\b401\b/i.test(said)) ? new AiRefused({ reason: 'signedOut', cli: 'codex' }, message, usage)
+  : (isSignedOut(said) || /please (log|sign) ?in|unauthori[sz]ed|\b401\b/i.test(said)) ? new AiRefused({ reason: 'signedOut', cli: 'codex' }, message, usage)
   : new CallFailed(message, usage);
 
 export const missing = (): AiRefused => new AiRefused({ reason: 'missing', cli: 'codex' }, 'Codex ist auf diesem Mac nicht installiert.');
