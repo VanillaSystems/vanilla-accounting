@@ -29,6 +29,13 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- The bank's own fee for the account (a statement row the bank charges itself, «Kontoführung») is
+  booked by the app itself, with or without an AI (#359): on Bankspesen (6940) without a VAT code,
+  since a bank's services are exempt; a fee paid back the other way. A rule of the firm that matches
+  the row still decides it. A chart without 6940 leaves the row unbooked, and its form «Von Hand
+  buchen» says which account is missing and where to add it. On a first statement without an AI
+  the app now books this row, so it is no longer among the tasks; wages stay a proposal to
+  confirm. Fee rows booked before stay as they are.
 - AI answers (#362): every message to the AI sidebar starts with what became of each rule the
   earlier answers drafted, rule by rule (kept and on, switched off or removed since, discarded,
   still a draft, or unknown), and of held changes, so it no longer says a kept rule is not kept.
