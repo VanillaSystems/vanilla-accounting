@@ -33,6 +33,8 @@ if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 const UID = 'CHE-153.004.184';
 const IBAN = testIban('00762011623852957');
 
+/** The words a person reads in `sel`: what has a letter in it. */
+const words = (page: Page, sel: string) => page.$eval(sel, (e) => (e as HTMLElement).innerText.split(/\s+/).filter((w) => /\p{L}/u.test(w)).length);
 const count = (page: Page) => page.$eval('.obflowhd [data-progress]', (e) => (e as HTMLElement).innerText.trim());
 const shot = async (page: Page, name: string) => { if (SHOTS) await page.screenshot({ path: join(SHOTS, `${name}.png`) }); };
 /** Waits for `sel`, then clicks it as a person would. */
@@ -47,7 +49,7 @@ const inSight = (page: Page, sel: string) => page.$eval(sel, (e) => {
   return { ok: r.top >= Math.max(0, b.top) - 1 && r.bottom <= Math.min(innerHeight, b.bottom) + 1, top: Math.round(r.top), bottom: Math.round(r.bottom), boxTop: Math.round(b.top), boxBottom: Math.round(b.bottom), scrollTop: box?.scrollTop ?? 0 };
 });
 
-test('without an AI: a steady count, help where the answer stands, assumed answers marked, the first step in sight', { skip: browserPath ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 600_000 }, async () => {
+test('without an AI: a steady count, help where the answer stands, assumed answers marked, the first step in sight', { skip: browserPath ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 600_000 }, async (t) => {
   const { build } = await import('vite');
   const dist = join(dir, 'dist');
   await build({ configFile: join(process.cwd(), 'vite.config.ts'), logLevel: 'error', build: { outDir: dist, emptyOutDir: true } });
@@ -68,6 +70,15 @@ test('without an AI: a steady count, help where the answer stands, assumed answe
         window.vanilla = { chooseFolder: none, chooseNewFolder: none, onMenu: () => () => undefined, setLanguage: () => undefined, saveFile: async () => false };
         try { localStorage.setItem('language', 'de'); } catch { /* about:blank has no storage */ }
       `);
+      // The form, the way without an AI: the same help under the same questions.
+      await page.goto(`http://${host}/start?new`, { waitUntil: 'networkidle0', timeout: 60_000 });
+      await press(page, '[data-answer=create]');
+      await page.waitForSelector('.st-form [data-q=vatMethod] [data-where]', { timeout: 20_000 });
+      for (const q of ['vatMethod', 'basis', 'start']) assert.ok(await page.$(`.st-form [data-q=${q}] [data-where]`), `${size}: the form says where «${q}» stands`);
+      assert.doesNotMatch(await page.$eval('.st-form', (e) => (e as HTMLElement).innerText), /Art\. 39|auf Gesuch/, `${size}: the form cites no law`);
+      await page.$eval('.st-form [data-q=vatMethod]', (e) => e.scrollIntoView({ block: 'start' }));
+      await shot(page, `${size}-0-form`);
+      if (size === '1440x900') t.diagnostic(`words: form ${await words(page, '.st-form')}`);
       const root = join(dir, `Malerei-${size}`);
       await page.goto(`http://${host}/start`, { waitUntil: 'networkidle0', timeout: 60_000 });
       await page.evaluate(async (r) => { await fetch('/api/desktop/setup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ root: r, language: 'de' }) }); }, root);
@@ -122,6 +133,7 @@ test('without an AI: a steady count, help where the answer stands, assumed answe
       assert.doesNotMatch(review.slice(review.indexOf('Im MWST-Register'), review.indexOf('Geschäftsjahr')), /angenommen/, 'the VAT she answered is not marked');
       await page.$eval('[data-step=review]', (e) => e.scrollIntoView({ block: 'start' }));
       await shot(page, `${size}-2-review`);
+      if (size === '1440x900') t.diagnostic(`words: conversation before the books ${await words(page, '.obflow .obflowturns')}`);
 
       // In the books: no AI on this Mac.
       await press(page, '[data-act=setup-create]');
@@ -149,6 +161,7 @@ test('without an AI: a steady count, help where the answer stands, assumed answe
       assert.match(await page.$eval('.obrail [data-progress]', (e) => (e as HTMLElement).innerText), /^4 von 4 besprochen$/, `${size}: «Partner und Wissen» was never asked and is not counted`);
       assert.match(await page.$eval('[data-open=knowledge]', (e) => (e as HTMLElement).innerText), /kommt mit den ersten Buchungen/);
       await shot(page, `${size}-4-summary`);
+      if (size === '1440x900') t.diagnostic(`words: conversation in the books ${await words(page, '.aside.setup .aiturns')}`);
       await page.close();
     }
   } finally {
