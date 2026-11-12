@@ -1,7 +1,6 @@
 {
   "name": "vanilla-accounting",
   "version": "0.4.0",
-  "homepage": "https://github.com/VanillaSystems/vanilla-accounting#readme",
   "description": "Swiss bookkeeping for a small company: receipts, bank statements, VAT, invoices.",
   "author": "Vanilla Accounting",
   "main": "out/desktop/main.mjs",
