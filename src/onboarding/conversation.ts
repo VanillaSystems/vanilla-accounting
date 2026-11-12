@@ -16,7 +16,8 @@ import { SALES_KINDS, type SalesKind } from '../workspace/setup.js';
 
 /** A parameter of a line: a value, another key said in the person's language, a date to format, or keys said and joined by commas. */
 export type Param = string | number | { key: string } | { date: string } | { list: string[] };
-export interface Line { key: string; params?: Record<string, Param> }
+/** `noAi`: the words said instead while no AI answers on this Mac (#364): only what she can do there. */
+export interface Line { key: string; params?: Record<string, Param>; noAi?: Line }
 export interface Choice { value: string; label: Line; sub?: Line; primary?: boolean }
 
 /** Where a badge says a fact comes from. */
@@ -38,7 +39,8 @@ export type SetupCard =
   | { kind: 'sources'; sources: SetupFacts['sources'] }
   | { kind: 'partners'; clear: ClearPartner[]; mixed: MixedPartner[]; rare: Array<{ name: string; n: number }>; rareMore: number }
   /** `first`: the person's first step in the app, the statement, and from which period on. */
-  | { kind: 'summary'; items: Array<{ what: Line; origin: Origin }>; open: Array<{ topic: SetupTopic; state: TopicState; go: HandPlace | null }>; first: Line };
+  /** `notYet`: «Partner und Wissen», not taken up while there are no partners to show (shownState). */
+  | { kind: 'summary'; items: Array<{ what: Line; origin: Origin }>; open: Array<{ topic: SetupTopic; state: TopicState | 'notYet'; go: HandPlace | null }>; first: Line };
 
 export type StepId = QuestionId | 'summary';
 
@@ -123,6 +125,30 @@ export function topicStates(p: SetupProgress, f: SetupFacts): Record<SetupTopic,
 }
 
 /**
+ * The topics the conversation takes up (#364): «Partner und Wissen» only with partners to show before
+ * the setup ended, or once seen or marked; on books without bookings it comes with the first payments,
+ * so it is neither asked nor counted as discussed.
+ */
+export function topicsTaken(p: SetupProgress, f: SetupFacts): SetupTopic[] {
+  const partners = f.partners.clear.length + f.partners.mixed.length + f.partners.rare.length;
+  const knowledge = !!p.answers.partners || p.topics.knowledge.state !== 'open' || (partners > 0 && !p.ready);
+  return SETUP_TOPICS.filter((t) => t !== 'knowledge' || knowledge);
+}
+
+/** A topic's state as the summary and the rail say it: `notYet` for «Partner und Wissen» not taken up while there are no partners to show. */
+export function shownState(p: SetupProgress, f: SetupFacts, t: SetupTopic): TopicState | 'notYet' {
+  const partners = f.partners.clear.length + f.partners.mixed.length + f.partners.rare.length;
+  return t === 'knowledge' && !partners && !topicsTaken(p, f).includes(t) ? 'notYet' : topicStates(p, f)[t];
+}
+
+/** How far the conversation is: the topics it took up that are done or left for later, of those it takes up. */
+export function setupCount(p: SetupProgress, f: SetupFacts): { n: number; of: number } {
+  const states = topicStates(p, f);
+  const taken = topicsTaken(p, f);
+  return { n: taken.filter((t) => states[t] !== 'open').length, of: taken.length };
+}
+
+/**
  * The steps so far: every answered one, then the first open one (or the summary when all are answered).
  * Asked is only what neither the settings nor the first bank statement tell the app (#345): the firm,
  * its VAT setup and what it sells are shown as the app has them; from when the books run, the first
@@ -140,7 +166,7 @@ export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
   // The firm as the app has it: shown, not asked. The person who sits there may not be the owner, so the greeting names no one.
   take({
     id: 'company', topic: 'firm',
-    say: [L('s.hello'), L('s.company')],
+    say: [{ ...L('s.hello'), noAi: L('s.helloNoAi') }, L('s.company')],
     card: { kind: 'company', company: f.company, ...(f.sells ? { sells: f.sells.kinds } : {}), origin: p.created ? 'answer' : 'form', change: !a.company },
     choices: [],
     ...(changing(p) ? { reply: { lines: [L('r.companyFix')], go: { area: 'company', section: 'profile' } } } : {}),
@@ -199,7 +225,7 @@ export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
   // Belege
   if (!take({
     id: 'receipts', topic: 'receipts',
-    say: [f.sources.length ? L('s.receipts') : L('s.receiptsNone')],
+    say: [f.sources.length ? L('s.receipts') : { ...L('s.receiptsNone'), noAi: L('s.receiptsNoneNoAi') }],
     card: { kind: 'sources', sources: f.sources },
     choices: [choice('receipts', 'next', { primary: f.sources.length > 0 }), choice('receipts', 'later', { primary: !f.sources.length })],
     go: TOPIC_HAND.receipts ?? undefined,
@@ -251,7 +277,7 @@ function summaryOf(p: SetupProgress, f: SetupFacts): Extract<SetupCard, { kind: 
     ...(f.sources.length ? [{ what: L('sum.sources', { n: f.sources.length }), origin: 'app' as Origin }] : []),
     ...(f.rules ? [{ what: L('sum.rules', { n: f.rules }), origin: 'app' as Origin }] : []),
   ];
-  const open = SETUP_TOPICS.filter((t) => states[t] !== 'done').map((t) => ({ topic: t, state: states[t], go: TOPIC_HAND[t] }));
+  const open = SETUP_TOPICS.filter((t) => states[t] !== 'done').map((t) => ({ topic: t, state: shownState(p, f, t), go: TOPIC_HAND[t] }));
   const first = L(!v.registered ? 'sum.firstNone' : v.period === 'half-yearly' ? 'sum.firstHalf' : 'sum.firstQuarter');
   return { kind: 'summary', items, open, first };
 }

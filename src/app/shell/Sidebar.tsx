@@ -32,7 +32,7 @@ import { postDownload } from '../areas/export/state.js';
 import { ReportView } from '../areas/reports/custom/ReportView.js';
 import { SetupRail, SetupTitle } from '../onboarding/SetupRail.js';
 import { answerTyped, openSetupOnFirstStart } from '../onboarding/state.js';
-import { SetupConversation } from '../onboarding/SetupConversation.js';
+import { SetupConversation, setupHoldsScroll } from '../onboarding/SetupConversation.js';
 import { TOPIC_HAND } from '../../onboarding/hand.js';
 import { isSetupTopic, questionWordsKey, stateWordsKey, topicWordsKey } from '../../onboarding/model.js';
 import { describedOr } from '../assistant/stored-change.js';
@@ -402,7 +402,8 @@ export function Sidebar({ page, books, onGo, onGoTo }: Props) {
   const picker = useRef<HTMLInputElement>(null);
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { if (s.open) area.current?.focus(); }, [s.open, s.conversation]);
-  useEffect(() => { end.current?.scrollIntoView({ block: 'end' }); }, [s.turns]);
+  // The setup's summary keeps its first step in sight while she has not scrolled (#364): the end is not followed then.
+  useEffect(() => { if (s.purpose === 'onboarding' && setupHoldsScroll()) return; end.current?.scrollIntoView({ block: 'end' }); }, [s.turns, s.purpose]);
   useLayoutEffect(() => {
     const field = area.current;
     if (!field || !partial) return;
@@ -551,7 +552,7 @@ export function Sidebar({ page, books, onGo, onGoTo }: Props) {
           {/* Before the first message: where the open period stands, drawn by code, so it is there without an AI too (#342). */}
           {s.turns.length === 0 && !setup ? <OpenPeriodCard books={books} onGo={onGoTo} /> : null}
           {s.turns.length === 0 && !noAi ? <p className="m aiempty">{t('assistant.empty')}</p> : null}
-          {setup ? <SetupConversation turns={s.turns} turn={turnView} onGo={onGo} /> : s.turns.map(turnView)}
+          {setup ? <SetupConversation turns={s.turns} turn={turnView} onGo={onGo} noAi={!!noAi} /> : s.turns.map(turnView)}
           {s.error ? <p className="warnline">{s.error}</p> : null}
           <div ref={end} />
         </div>

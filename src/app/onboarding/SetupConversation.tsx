@@ -4,7 +4,7 @@
  * in the order they happened. The cards show what the app knows (src/onboarding/facts.ts); a VAT
  * change waits on its card for «Übernehmen», saved through the Firma page's own path.
  */
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { t } from '../i18n/index.js';
 import { fmt } from '../lib/utils.js';
 import { api, errorText } from '../lib/api.js';
@@ -15,13 +15,19 @@ import { closeAssistant, sendMessage } from '../assistant/store.js';
 import type { Route } from '../shell/route.js';
 import type { Turn } from '../../types/assistant.js';
 import type { ClearPartner } from '../../onboarding/facts.js';
-import { askedAt, vatLine, vatSetupOf, type Origin, type SetupCard, type SetupStep } from '../../onboarding/conversation.js';
+import { askedAt, vatLine, vatSetupOf, type Line, type Origin, type SetupCard, type SetupStep } from '../../onboarding/conversation.js';
 import type { QuestionId } from '../../onboarding/model.js';
 import { placeKeys, type HandPlace } from '../../onboarding/hand.js';
 import { answer, keepSells, keepVat, setupReady, undoVat, useSetup } from './state.js';
 import { kindsOfAnswer } from '../../onboarding/model.js';
 import { salesKinds, type SalesKind } from '../../workspace/setup.js';
 import { say } from './words.js';
+import { useNoAi } from '../ai/no-ai.js';
+
+/** No AI answers on this Mac (#364): the conversation offers only what works without one. */
+const NoAi = createContext(false);
+/** A line in the words for this Mac: its `noAi` words while no AI answers. */
+const useLine = () => { const noAi = useContext(NoAi); return (l: Line) => say(noAi && l.noAi ? l.noAi : l); };
 
 type Go = (route: Route) => void;
 
@@ -38,8 +44,10 @@ const ByHand = ({ go, onGo }: { go: HandPlace; onGo: Go }) => (
  * answered, the AI's turns where they were sent. An answer the AI recorded for the person thus
  * follows the message that gave it.
  */
-export function SetupConversation({ turns, turn, onGo }: { turns: Turn[]; turn(t: Turn, i: number): ReactNode; onGo: Go }) {
+export function SetupConversation({ turns, turn, onGo, noAi: columnNoAi }: { turns: Turn[]; turn(t: Turn, i: number): ReactNode; onGo: Go; noAi?: boolean }) {
   const { steps, error } = useSetup();
+  const noAi = useNoAi() || !!columnNoAi;
+  useNewestStep(steps?.at(-1)?.id);
   if (!steps) return null;
   const times = askedAt(steps);
   const events: Array<{ at: string; node: ReactNode }> = [];
@@ -50,14 +58,61 @@ export function SetupConversation({ turns, turn, onGo }: { turns: Turn[]; turn(t
   turns.forEach((x, i) => events.push({ at: x.at, node: <Fragment key={`t${i}`}>{turn(x, i)}</Fragment> }));
   // A stable sort: what happened at the same moment keeps the order it was pushed in.
   const ordered = events.map((e, i) => ({ ...e, i })).sort((x, y) => (x.at < y.at ? -1 : x.at > y.at ? 1 : x.i - y.i));
-  return <>{ordered.map((e) => e.node)}{error ? <p className="warnline">{error}</p> : null}</>;
+  return <NoAi.Provider value={noAi}>{ordered.map((e) => e.node)}{error ? <p className="warnline">{error}</p> : null}</NoAi.Provider>;
+}
+
+const stepOf = (id: string) => document.querySelector(`.aside.setup .obstep[data-step="${id}"]`);
+const smooth = (): ScrollBehavior => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
+
+/** The summary holds the sidebar's scroll while it is the last step and she has not scrolled herself (#364). */
+let summaryHeld = false;
+
+/**
+ * Asked by the sidebar before it follows its end (a turn streams in, the turns load after a reopen):
+ * while the summary holds the scroll, its top is put back in sight instead, and the end is not followed.
+ */
+export function setupHoldsScroll(): boolean {
+  if (!summaryHeld) return false;
+  stepOf('summary')?.scrollIntoView({ block: 'start', behavior: 'auto' });
+  return true;
+}
+
+/**
+ * The newest step in sight (#364): a question that appears after an answer is scrolled into view (as
+ * little as needed), the summary to its top, so its first step and button show; the summary also when
+ * the setup opens on it again. After the sidebar's own scroll to its end, which runs after this
+ * effect when both mount together; smooth only without prefers-reduced-motion. The summary then holds
+ * the scroll (setupHoldsScroll) until she scrolls, presses a key or clicks in the conversation.
+ */
+function useNewestStep(id: string | undefined): void {
+  const shown = useRef<string>();
+  useEffect(() => {
+    const was = shown.current;
+    shown.current = id;
+    if (id !== 'summary') summaryHeld = false;
+    if (!id || id === was || (was === undefined && id !== 'summary')) return;
+    const box = document.querySelector('.aside.setup .aiturns');
+    const release = () => { summaryHeld = false; };
+    const events = ['wheel', 'touchmove', 'keydown', 'pointerdown'] as const;
+    if (id === 'summary') {
+      summaryHeld = true;
+      for (const e of events) box?.addEventListener(e, release, { passive: true });
+    }
+    const frame = requestAnimationFrame(() => stepOf(id)?.scrollIntoView({ block: id === 'summary' ? 'start' : 'nearest', behavior: smooth() }));
+    return () => {
+      cancelAnimationFrame(frame);
+      for (const e of events) box?.removeEventListener(e, release);
+      if (id === 'summary') summaryHeld = false;
+    };
+  }, [id]);
 }
 
 function Question({ step, onGo }: { step: SetupStep; onGo: Go }) {
   const { busy } = useSetup();
+  const line = useLine();
   return (
     <div className="obstep" data-step={step.id}>
-      {step.say.map((l, i) => <Ai key={i}><p>{say(l)}</p></Ai>)}
+      {step.say.map((l, i) => <Ai key={i}><p>{line(l)}</p></Ai>)}
       {step.card ? <div className="obind"><Card card={step.card} onGo={onGo} /></div> : null}
       {step.go && !step.answer ? <div className="obind"><ByHand go={step.go} onGo={onGo} /></div> : null}
       {!step.answer && step.multi ? <div className="obind"><Toggles step={step} /></div> : null}
@@ -226,13 +281,18 @@ function SellsCard({ card }: { card: Extract<SetupCard, { kind: 'sells' }> }) {
 
 function SourcesCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'sources' }>; onGo: Go }) {
   const lang = document.documentElement.lang || 'de';
+  // «Mit mir einrichten» asks the AI: offered only while one answers; otherwise its place says so and leads to setting one up (#364).
+  const noAi = useContext(NoAi);
   return (
     <div className="obcard">
       {card.sources.length ? (
         <ul className="obcheck">{card.sources.map((s) => <li key={s.id}>{ICONS.receipts}<b>{s.label[lang] ?? s.label.en}</b><span className="obbadge pos">{t('onboarding.sources.on')}</span></li>)}</ul>
       ) : <span className="rk">{t('onboarding.sources.none')}</span>}
+      {noAi ? <span className="rk" data-testid="sources-no-ai">{t('onboarding.sources.noAi')}</span> : null}
       <div className="actions">
-        <button type="button" className="aiact primary" onClick={() => void sendMessage(t('onboarding.sources.askText'), undefined)}>{t('onboarding.sources.ask')}</button>
+        {noAi
+          ? <button type="button" className="aiact" data-act="ai-set-up" onClick={() => onGo({ area: 'company', section: 'ai' })}>{t('aiSetup.line.setUp')}</button>
+          : <button type="button" className="aiact primary" data-act="sources-ask" onClick={() => void sendMessage(t('onboarding.sources.askText'), undefined)}>{t('onboarding.sources.ask')}</button>}
         <button type="button" className="aiact" onClick={() => onGo({ area: 'company', section: 'sources' })}>{t('onboarding.sources.show')}</button>
       </div>
     </div>
@@ -305,11 +365,24 @@ function PartnersCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'partne
 
 const ORIGIN_CLASS: Record<Origin, string> = { form: '', answer: '', app: 'pos' };
 
-/** What the app knows, what is open, and the first step in the app: the statement, by the name its place has, as a link. */
+/**
+ * The first step first (#364): one sentence and its button, the rest behind «Mehr dazu»; then what the
+ * app knows and what is open. The conversation scrolls to it when it appears (useNewestStep).
+ */
 function SummaryCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'summary' }>; onGo: Go }) {
   const end = () => { void setupReady(); closeAssistant(); };
   return (
-    <div className="obcard">
+    <div className="obcard" data-testid="setup-summary">
+      <h4>{t('onboarding.summary.first')}</h4>
+      <span className="lead" data-first>{say(card.first)}</span>
+      <div className="actions">
+        <button type="button" className="aiact primary" data-testid="setup-statement" onClick={() => { end(); onGo({ area: 'bank' }); }}>{t('onboarding.summary.statement')}</button>
+        <button type="button" className="aiact" data-testid="setup-go" onClick={end}>{t('onboarding.summary.go')}</button>
+      </div>
+      <details className="obmore">
+        <summary>{t('onboarding.summary.more')}</summary>
+        <p>{t('onboarding.sum.firstMore')} {t('onboarding.summary.lead')}</p>
+      </details>
       <h4>{t('onboarding.summary.title')}</h4>
       <ul className="obsum">{card.items.map((it, i) => <li key={i}><span>{say(it.what)}</span><span><span className={`obbadge ${ORIGIN_CLASS[it.origin]}`}>{t(`onboarding.origin.${it.origin}`)}</span></span></li>)}</ul>
       {card.open.length ? (
@@ -317,7 +390,7 @@ function SummaryCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'summary
           <h4>{t('onboarding.summary.open')}</h4>
           <ul className="obsum">
             {card.open.map((o) => (
-              <li key={o.topic}>
+              <li key={o.topic} data-open={o.topic}>
                 <span>{t(`onboarding.topic.${o.topic}`)} <span className="rk">{t(`onboarding.state.${o.state}`)}</span></span>
                 <span>{o.go ? <ByHand go={o.go} onGo={onGo} /> : null}</span>
               </li>
@@ -325,12 +398,6 @@ function SummaryCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'summary
           </ul>
         </>
       ) : null}
-      <h4>{t('onboarding.summary.first')}</h4>
-      <span className="lead" data-first>{say(card.first)} {t('onboarding.summary.lead')}</span>
-      <div className="actions">
-        <button type="button" className="aiact primary" data-testid="setup-statement" onClick={() => { end(); onGo({ area: 'bank' }); }}>{t('onboarding.summary.statement')}</button>
-        <button type="button" className="aiact" data-testid="setup-go" onClick={end}>{t('onboarding.summary.go')}</button>
-      </div>
     </div>
   );
 }

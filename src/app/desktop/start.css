@@ -50,6 +50,7 @@
 .st-rates { margin: 10px 0 4px 0; }
 .st-rates .st-row { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 8px; margin: 6px 0; }
 .st-rates.err .st-qhd b { color: var(--warn, inherit); }
+.st-q.err .st-qhd b { color: var(--warn); }
 .st-badge { flex: none; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--ink-2); }
 .st-noai { font-size: 13px; line-height: 1.5; margin: -16px 0 24px; padding: 10px 12px; border-left: 3px solid var(--warn); background: var(--warn-soft); border-radius: 0 8px 8px 0; color: var(--ink); }
 .st-byhand { margin-right: auto; font-size: 13px; color: var(--muted); }

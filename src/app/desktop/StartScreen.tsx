@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BANKS, parseIban } from '../../workspace/banks.js';
-import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstMissing, firstUnsupported, optionOf, type Answers, type Preset, type QuestionKey } from '../../workspace/setup.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstMissing, hasWhere, firstUnsupported, optionOf, withoutUnsteered, type Answers, type Preset, type QuestionKey } from '../../workspace/setup.js';
 import { parseUid } from '../../workspace/uid.js';
 import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
@@ -177,7 +177,7 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
 }) {
   const [f, setF] = useState<Form>(() => ({
     preset: 'consultant', name: '', uid: '', owner: '', business: '', language: 'de', root: '',
-    answers: { ...PRESETS.consultant.answers }, netRates: NO_RATES, banks: [{ ...NEW_BANK, bank: 'UBS' }], exportTo: '',
+    answers: withoutUnsteered({ ...PRESETS.consultant.answers }), netRates: NO_RATES, banks: [{ ...NEW_BANK, bank: 'UBS' }], exportTo: '',
   }));
   const [checked, setChecked] = useState(false);
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }));
@@ -206,7 +206,7 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
   const invalid = !!(errors.name || errors.uid || errors.owner || errors.netRate || errors.banks.some(Boolean) || f.banks.length === 0);
 
   // «Etwas anderes» keeps what is answered so far and takes its own defaults (not registered for VAT) on top.
-  const choosePreset = (preset: Preset) => setF((x) => ({ ...x, preset, answers: preset === 'custom' ? { ...x.answers, ...PRESETS.custom.answers } : { ...PRESETS[preset].answers } }));
+  const choosePreset = (preset: Preset) => setF((x) => ({ ...x, preset, answers: preset === 'custom' ? { ...x.answers, ...PRESETS.custom.answers } : withoutUnsteered({ ...PRESETS[preset].answers }) }));
   const pick = (key: QuestionKey, value: string) => setF((x) => {
     const multi = 'multi' in QUESTIONS[key];
     const now = answerList(x.answers, key);
@@ -293,8 +293,8 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
             const chosen = answerList(f.answers, key);
             const notes = chosen.map((v) => optionOf(key, v)).filter((o) => o?.unsupported || o?.caveat);
             return (
-              <div key={key} className="st-q" data-q={key}>
-                <div className="st-qhd"><b>{tData(`desktop.q.${key}.ask`)}</b><span>{tData(`desktop.q.${key}.why`)}</span></div>
+              <div key={key} className={checked && !answerList(f.answers, key).length && !('multi' in QUESTIONS[key] && !('required' in QUESTIONS[key])) ? 'st-q err' : 'st-q'} data-q={key}>
+                <div className="st-qhd"><b>{tData(`desktop.q.${key}.ask`)}</b><span>{tData(`desktop.q.${key}.why`)}</span>{hasWhere(key) ? <span data-where>{tData(`desktop.q.${key}.where`)}</span> : null}</div>
                 <div className="st-opts" role={'multi' in QUESTIONS[key] ? 'group' : 'radiogroup'} aria-label={tData(`desktop.q.${key}.ask`)}>
                   {QUESTIONS[key].options.map((o) => (
                     <button key={o.value} type="button" role={'multi' in QUESTIONS[key] ? 'checkbox' : 'radio'} aria-checked={chosen.includes(o.value)} className={chosen.includes(o.value) ? 'on' : ''} onClick={() => pick(key, o.value)}>

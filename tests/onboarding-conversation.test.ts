@@ -8,7 +8,7 @@ import './support/demo-workspace.js';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync } from 'node:fs';
-import { setupThread, topicStates, typedChoice, askedAt, openStep, sellsLine, vatLine, type Line, type SetupStep } from '../src/onboarding/conversation.js';
+import { setupCount, setupThread, shownState, topicStates, topicsTaken, typedChoice, askedAt, openStep, sellsLine, vatLine, type Line, type SetupStep } from '../src/onboarding/conversation.js';
 import { emptyProgress, parseProgress, questionWordsKey, settledCount, stateWordsKey, topicWordsKey, withAnswer, withTopic, QUESTIONS, SETUP_TOPICS, type Answer, type QuestionId, type SetupProgress } from '../src/onboarding/model.js';
 import { describedOr } from '../src/app/assistant/stored-change.js';
 import { partnerBins, type SetupFacts } from '../src/onboarding/facts.js';
@@ -86,9 +86,15 @@ test('the count never goes backwards: partners that appear with the first statem
   const p = answered({ opening: 'later', receipts: 'later' });
   const empty = facts({ banks: IBAN });
   assert.equal(settledCount(topicStates(p, empty)), 5);
+  assert.deepEqual(setupCount(p, empty), { n: 4, of: 4 }, 'the partners were never shown: not counted as discussed (#364)');
   const booked = facts({ banks: IBAN, partners: { clear: [], mixed: [], rare: [{ id: 'x', name: 'X', n: 1 }], ruled: 0 } });
   const ended = { ...p, ready: AT };
   assert.equal(settledCount(topicStates(ended, booked)), 5, 'was 5 von 5, then 4 von 5 after the first statement');
+  assert.deepEqual(setupCount(ended, booked), { n: 4, of: 4 }, 'partners that come after the setup ended are not a topic it took up');
+  assert.equal(shownState(p, empty, 'knowledge'), 'notYet', 'no bookings: comes with the first ones');
+  assert.equal(shownState(ended, booked, 'knowledge'), 'skipped', 'reopened on books with bookings: «später», never «kommt mit den ersten Buchungen»');
+  const summary = setupThread(ended, booked).find((s) => s.id === 'summary');
+  assert.ok(!summary || (summary.card?.kind === 'summary' && summary.card.open.every((o) => o.state !== 'notYet')));
   assert.equal(topicStates(ended, booked).knowledge, 'skipped');
   assert.equal(topicStates(answered({ partners: 'next' }, ended), booked).knowledge, 'done', 'seen: done');
 });
@@ -111,13 +117,26 @@ test('a conversation stored by an earlier version names topics and questions thi
   assert.deepEqual(describedOr(() => ({ text: 'fine' }), () => ({ text: 'generic' })), { text: 'fine' });
 });
 
-test('the count moves with every answer: each topic the conversation is through counts, done or left for later', () => {
+test('the count moves with every answer: each topic the conversation is through counts, done or left for later; one it never took up does not', () => {
   const f = facts();
-  const count = (p: SetupProgress) => settledCount(topicStates(p, f));
-  assert.equal(count(emptyProgress()), 2, 'the firm needs nothing; the partners come with the first bookings');
-  assert.equal(count(answered({ opening: 'later' })), 3);
-  assert.equal(count(answered({ opening: 'later', bank: 'later' })), 4);
-  assert.equal(count(answered({ opening: 'later', bank: 'later', receipts: 'later' })), 5);
+  const count = (p: SetupProgress) => setupCount(p, f);
+  assert.deepEqual(count(emptyProgress()), { n: 1, of: 4 }, 'the firm needs nothing; the partners come with the first bookings and are no topic yet (#364)');
+  assert.deepEqual(count(answered({ opening: 'later' })), { n: 2, of: 4 });
+  assert.deepEqual(count(answered({ opening: 'later', bank: 'later' })), { n: 3, of: 4 });
+  assert.deepEqual(count(answered({ opening: 'later', bank: 'later', receipts: 'later' })), { n: 4, of: 4 }, 'was «5 von 5 besprochen» with «Partner und Wissen» never asked');
+  // Books with partners take the topic up: shown, then counted once seen.
+  const withPartners = facts({ partners: { clear: [], mixed: [], rare: [{ id: 'x', name: 'X', n: 1 }], ruled: 0 } });
+  assert.deepEqual(topicsTaken(emptyProgress(), withPartners), [...SETUP_TOPICS]);
+  assert.deepEqual(setupCount(answered({ opening: 'later', bank: 'later', receipts: 'later' }), withPartners), { n: 4, of: 5 });
+  assert.deepEqual(setupCount(answered({ opening: 'later', bank: 'later', receipts: 'later', partners: 'next' }), withPartners), { n: 5, of: 5 });
+});
+
+test('without an AI the greeting and the receipts step say only what works on this Mac (#364)', () => {
+  const [hello] = setupThread(emptyProgress(), facts())[0].say;
+  assert.equal(hello.key, 'onboarding.s.hello');
+  assert.equal(hello.noAi?.key, 'onboarding.s.helloNoAi', 'the words without an AI');
+  const receipts = setupThread(answered({ opening: 'later', bank: 'later' }), facts()).find((s) => s.id === 'receipts')!;
+  assert.equal(receipts.say[0].noAi?.key, 'onboarding.s.receiptsNoneNoAi');
 });
 
 test('«Später» on the opening says what it means and where it comes back; with an opening entered there is nothing to say', () => {
@@ -168,8 +187,8 @@ test('the summary says each fact once and where from, lists only what is still o
   assert.deepEqual(sum.card.open, [
     { topic: 'opening', state: 'skipped', go: { area: 'company', section: 'opening' } },
     { topic: 'receipts', state: 'skipped', go: { area: 'company', section: 'sources' } },
-    { topic: 'knowledge', state: 'skipped', go: { area: 'company', section: 'rules' } },
-  ], 'only what is left for later, each with its place');
+    { topic: 'knowledge', state: 'notYet', go: { area: 'company', section: 'rules' } },
+  ], 'only what is left for later, each with its place; the partners, never shown on books without bookings, come with the first bookings (#364)');
   assert.equal(sum.card.first.key, 'onboarding.sum.firstQuarter', 'the first step: the statement, from the first quarter not filed');
   const half = last(setupThread(p, facts({ banks: IBAN, company: { ...facts().company, vat: { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5 }] } } })));
   assert.equal(half.card?.kind === 'summary' && half.card.first.key, 'onboarding.sum.firstHalf');
@@ -181,10 +200,12 @@ test('the summary says each fact once and where from, lists only what is still o
 
 test('a firm that starts in the middle of the year is told what follows, and which balance the opening needs: never a July bank balance beside December figures', async () => {
   const de = (await import('../src/app/i18n/locales/de.js') as { default: Locale }).default.messages as unknown as Record<string, string>;
+  // The first step is one sentence (#364); what follows from it stands behind «Mehr dazu», the same for each.
   for (const k of ['onboarding.sum.firstQuarter', 'onboarding.sum.firstHalf', 'onboarding.sum.firstNone']) {
-    assert.match(de[k], /Beginnst du mitten im Jahr, zeigen Bilanz und Erfolgsrechnung dieses Jahres nur/, k);
-    assert.match(de[k], /die Eröffnung bleibt per 1\. Januar/, k);
+    assert.match(de[k], /^Lies den Kontoauszug ab [^.;]+\.$/, `${k}: one sentence`);
   }
+  assert.match(de['onboarding.sum.firstMore'], /Beginnst du mitten im Jahr, zeigen Bilanz und Erfolgsrechnung dieses Jahres nur/);
+  assert.match(de['onboarding.sum.firstMore'], /die Eröffnung bleibt per 1\. Januar/);
   assert.match(de['onboarding.s.openingNone'], /auch den Stand des Bankkontos, aus der Bilanz per \{prev\}/);
   assert.doesNotMatch(de['onboarding.s.openingNone'], /ersten Kontoauszug/, 'the first statement of a firm that starts in July shows July\'s balance, not the opening\'s');
 });
@@ -253,7 +274,8 @@ test('every line a step can say has words in each language', async () => {
   }
   for (const l of [sellsLine(['made', 'traded', 'services'])]) { keys.add(l.key); for (const p of Object.values(l.params ?? {})) if (typeof p === 'object' && 'list' in p) p.list.forEach((k) => keys.add(k)); }
   for (const k of ['ok', 'fix']) keys.add(`onboarding.q.company.${k}`);
-  for (const k of ['first', 'statement', 'lead', 'go', 'title', 'open']) keys.add(`onboarding.summary.${k}`);
+  for (const k of ['first', 'statement', 'lead', 'go', 'title', 'open', 'more']) keys.add(`onboarding.summary.${k}`);
+  for (const k of ['onboarding.sum.firstMore', 'onboarding.sources.noAi', 'onboarding.state.notYet']) keys.add(k);
   walk(vats.map(vatLine));
   for (const q of Object.keys(QUESTIONS)) keys.add(`onboarding.question.${q}`);
   for (const k of ['form', 'answer', 'app']) keys.add(`onboarding.origin.${k}`);

@@ -12,6 +12,8 @@ the setup conversation (`Einrichtung`, `Hallo <owner>. …`, features/setup.md).
 
 - `ds-presets`: `Beratung, Dienstleistungen (GmbH)` (preselected), `Webshop, Waren (GmbH)`, `Handwerk, Bau
   (GmbH)`, `Selbständig, ohne MWST`, `Etwas anderes`.
+  A preset never answers `MWST-Methode` and `Abrechnungsart` (#364): neither has a `button.on` until
+  she clicks one, and submitting without them marks `.st-q[data-q=vatMethod|basis].err` with «Bitte jede Frage beantworten.»
 - `ds-validate`: UID (required) and IBAN check digits (`«…» ist keine gültige UID`, `ist keine IBAN`);
   spaces in either are accepted. On submit the page jumps to the first error: `Bitte oben prüfen: …
   Die App ist zur ersten Stelle gesprungen.`, or `Bitte jede Frage beantworten.` Bank refusals
