@@ -415,8 +415,9 @@ await page.evaluate(() => document.querySelectorAll('.sec > button.sum').forEach
 await sleep(400);
 const clicked = await clickText(page, '.dangers button', 'Neu lesen');
 await sleep(1500);
-const toast = await page.evaluate(() => document.body.innerText.includes('Claude Code'));
-check('the UI says what to install', clicked && toast);
+// It names no product (Claude Code or Codex, #175): it says an AI is missing and offers to set one up or to go on by hand.
+const toast = await page.evaluate(() => document.body.innerText.includes('braucht eine KI') && document.body.innerText.includes('KI einrichten'));
+check('the UI says an AI is missing and offers to set one up', clicked && toast);
 await shot(page, '08-no-claude');
 second.child.kill();
 await new Promise((r) => smtp.close(r));
