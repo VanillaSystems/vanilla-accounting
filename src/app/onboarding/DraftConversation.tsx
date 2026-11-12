@@ -18,6 +18,7 @@ import { LOCALES, t, tData } from '../i18n/index.js';
 import { api, errorText, setupText } from '../lib/api.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import { ICONS } from '../areas/icons.js';
+import { useFollowEnd } from './follow-end.js';
 
 /** As src/onboarding/draft-talk.ts MAX_TEXT: the server refuses a longer message. */
 const MAX_TALK = 4000;
@@ -56,7 +57,9 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
   const [view, setView] = useState<SetupDraftView | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const turnsBox = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
+  useFollowEnd(turnsBox, end);
   /** What an «Ändern» took back, so the step asks again with it filled in. */
   const taken = useRef<Partial<Record<string, unknown>>>({});
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -71,7 +74,6 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
   useEffect(() => { void api.desktop.setup(root).then(setView, (e) => setError(errorText(e))); }, [root]);
   useEffect(() => { void api.desktop.ai().then((r) => { setAiAnswers(r.available); setAiOff(r.off === true); }, () => setAiAnswers(false)); }, []);
   const steps = view ? draftSteps(view.draft) : [];
-  useEffect(() => { end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }, [steps.length, turns]);
 
   const send: Send = async (patch) => {
     setBusy(true);
@@ -126,7 +128,7 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
         </span>
         <button type="button" className="linkbtn" data-act="setup-later" data-tip={t('onboarding.draft.laterHint')} onClick={onLeave}>{t('onboarding.draft.later')}</button>
       </header>
-      <div className="obflowturns">
+      <div ref={turnsBox} className="obflowturns">
         <Ai><p>{t('onboarding.draft.hello')}</p><p className="obfolder mono">{root}</p></Ai>
         {view && steps.map((step) => (
           <Fragment key={stepKey(step)}>
