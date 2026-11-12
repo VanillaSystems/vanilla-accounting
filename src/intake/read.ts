@@ -34,18 +34,23 @@ import { fileReceipts, paymentContext } from '../invoices/service.js';
 import { stemOf, type Ask, type IntakeNote, type StepRun } from './pipeline.js';
 import { putInQuarantine } from './quarantine.js';
 import { documentKind } from './document-kind.js';
-import { askKind, asksModel, kindOfModel, MODEL_TEXT, visionVerdict, type ModelKind } from './unclear.js';
+import { askKind, asksModel, kindOfModel, MODEL_RULE, MODEL_TEXT, NOT_A_RECEIPT, visionVerdict, type ModelKind } from './unclear.js';
 import { statementFacts } from '../books/statement-facts.js';
 import { documents } from '../engines/index.js';
 
 // ─── The PDF's own text, fallback to the model's vision for OCR ─────────────
 
-/** `pdftotext` names the method of a digital PDF's own text, as the books have recorded it since the first extraction. */
+/**
+ * `pdftotext` names the method of a digital PDF's own text, as the books have recorded it since the first extraction.
+ * `verdict`: a file new to the books, whose reading may set it aside as no receipt (#361); its «Kein Beleg: …» comes
+ * back as `verdict`, never as text. A file the books hold is only read: a verdict there is ignored, and no text is kept.
+ */
 async function extractTextFast(
   pdfPath: string,
   ask: Ask | undefined,
   log: (line: string) => void,
-): Promise<{ text: string; method: 'pdftotext' | 'claude-vision'; vision?: 'none' }> {
+  verdict = false,
+): Promise<{ text: string; method: 'pdftotext' | 'claude-vision'; vision?: 'none'; verdict?: ModelKind }> {
   try {
     const text = (await pdfText(pdfPath)).trim();
     if (text.length > 30) {
@@ -59,10 +64,12 @@ async function extractTextFast(
   const absPath = resolve(pdfPath);
   try {
     const text = await ask(
-      buildVisionPrompt(absPath),
+      buildVisionPrompt(absPath, { verdict }),
       { step: 'receipt-vision', timeoutMs: 120_000, attachments: [absPath] },
     );
-    return { text, method: 'claude-vision' };
+    const said = visionVerdict(text);
+    if (said && !verdict) log(`  ${pdfPath}: the reading said «${NOT_A_RECEIPT}» of a file the books hold: ignored, no text kept`);
+    return said ? { text: '', method: 'claude-vision', ...(verdict ? { verdict: said } : {}) } : { text, method: 'claude-vision' };
   } catch (e: any) {
     log(`  claude -p failed: ${e.message?.substring(0, 100)}`);
     return { text: '', method: 'claude-vision' };
@@ -176,7 +183,7 @@ function unmatchedOf(bank: BankFiles): string[] {
   return bank.files.flatMap((f) => (f.status === 'unmatched' ? [`bank-statements/${f.file}: ${f.problem}`] : []));
 }
 
-interface Extracted { text: string; method: Receipt['extractionMethod']; fileSize: number }
+interface Extracted { text: string; method: Receipt['extractionMethod']; fileSize: number; verdict?: ModelKind }
 
 /**
  * What a fresh receipt's text says it is (src/intake/document-kind.ts): an order confirmation or a
@@ -186,20 +193,21 @@ interface Extracted { text: string; method: Receipt['extractionMethod']; fileSiz
  * sets aside when there is one (src/intake/unclear.ts). A bank statement (#151) is dated on its period's last day.
  */
 function kindOfText(fresh: Extracted, filename: string, originalFilename: string, model?: ModelKind): Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'kindWhy' | 'date' | 'amount' | 'currency'> {
-  // The model reading a picture said it shows no receipt at all (a holiday photo, #361): set aside with what it shows.
-  const said = seenAsNone(fresh);
-  if (said) return kindOfModel(said);
   const statement = statementFacts({ extractedText: fresh.text, filename, originalFilename }, documents());
   if (statement) return { kind: 'statement', kindBy: 'rule', kindRule: 'document:statement', ...(statement.to ? { date: statement.to } : {}) };
   const v = documentKind(fresh.text, documents());
   // A customs assessment keeps its tax and day: a payment to the customs office is paired with it by them (#197).
   if (v.is === 'supporting') return { kind: 'supporting', kindBy: 'rule', kindRule: `document:${v.why}`, ...(v.why === 'customs-assessment' ? assessmentFacts(fresh.text, documents().customs) : {}) };
   if (v.is === 'other' && fresh.method === 'claude-vision') return { kind: 'noise', kindBy: 'rule', kindRule: `document:${v.why}` };
-  return v.is === 'unclear' && model ? kindOfModel(model) : {};
+  // What code did not recognise, the model's word decides: its reading said the picture shows no receipt at all
+  // (a holiday photo, #361), or, asked about the text, «none».
+  if (v.is !== 'unclear') return {};
+  const said = fresh.verdict ?? model;
+  return said ? kindOfModel(said) : {};
 }
 
-/** The vision reading's «Kein Beleg: …» (src/intake/unclear.ts visionVerdict); only a model's reading of a picture says it. */
-const seenAsNone = (read: Extracted) => (read.method === 'claude-vision' ? visionVerdict(read.text) : undefined);
+/** A receipt the model's reading set aside as no receipt: its verdict is its kind, it has no text to read. */
+const setAsideByReading = (r: Receipt | undefined) => r?.kind === 'noise' && r.kindRule === `${MODEL_RULE}no-receipt` && !r.extractedText;
 
 // ─── The step ────────────────────────────────────────────────────────────────
 
@@ -255,16 +263,18 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
   const snapshot = books.read();
   const known = new Map(snapshot.receipts.map((r) => [r.id, r]));
   const again = new Set(ask ? snapshot.receipts.filter((r) => readsAgain(snapshot, r)).map((r) => r.id) : []);
-  const toExtract = files.filter((f) => !known.get(f.id)?.extractedText || again.has(f.id));
+  // A file its reading set aside as no receipt has no text and is not read again, until a person says it is one (#361).
+  const toExtract = files.filter((f) => (!known.get(f.id)?.extractedText && !setAsideByReading(known.get(f.id))) || again.has(f.id));
   progress(0, toExtract.length);
 
   const pool = createPool(5);
   const extracted = new Map<string, Extracted>();
   let waitingForModel = 0;
   await Promise.all(toExtract.map((f) => pool(async () => {
-    const out = await extractTextFast(f.filepath, ask, log);
+    // Only a file new to the books may be set aside by its reading: one a person declared a receipt is only read again.
+    const out = await extractTextFast(f.filepath, ask, log, !known.has(f.id));
     if (out.vision === 'none') waitingForModel++;
-    extracted.set(f.id, { text: out.text, method: out.method, fileSize: statSync(f.filepath).size });
+    extracted.set(f.id, { text: out.text, method: out.method, fileSize: statSync(f.filepath).size, ...(out.verdict ? { verdict: out.verdict } : {}) });
     progress(extracted.size, toExtract.length);
     log(`  [${extracted.size}/${toExtract.length}] ${f.filename} → ${out.method}, ${out.text.length} chars${detectVatProofIssue(out.text) ? '  ⚠ VAT proof missing' : ''}`);
   })));
@@ -274,7 +284,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
   // A receipt read again keeps the kind it has; a reading that proves nothing (a photo the model could not read) says nothing of its kind and waits as «nicht lesbar» (#284).
   const unclear = ask ? toExtract.filter((f) => {
     const read = extracted.get(f.id);
-    return !again.has(f.id) && !known.get(f.id)?.kind && !known.get(f.id)?.kindBy && !!read && !seenAsNone(read) && textProves({ extractedText: read.text, extractionMethod: read.method }) && asksModel(read.text, documents());
+    return !again.has(f.id) && !known.get(f.id)?.kind && !known.get(f.id)?.kindBy && !!read && !read.verdict && textProves({ extractedText: read.text, extractionMethod: read.method }) && asksModel(read.text, documents());
   }) : [];
   await Promise.all(unclear.map((f) => pool(async () => {
     try {
@@ -342,7 +352,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
         description: existing?.description,
         amount: existing?.amount ?? plain.amount,
         currency: existing?.currency ?? plain.currency,
-        needsVisionReview: fresh.text.length === 0 || undefined,
+        needsVisionReview: (fresh.text.length === 0 && !fresh.verdict) || undefined,
         remarks: existing?.remarks ?? detectVatProofIssue(fresh.text),
         ...kind,
       } as Receipt];

@@ -147,17 +147,25 @@ Two markers flag an entry you must read before you update:
 ### Fixed
 
 - Files dropped on Kontoauszüge go through «Dateien hinzufügen» as on any page (#361): every file
-  gets its row, the statement under «Kontoauszüge» with the closing sentence on its payments.
-  Before, the statement was read in around the dialog («Kontoauszüge 0», no sentence) and photos
-  vanished without a word. «Auszug hinzufügen» and a missing month's field hand any other file to
-  the dialog too. The rows say what Belege says: a photo the AI finds no receipt (a holiday photo)
-  reads «kein Beleg» with what it shows and is set aside under its own name, never a receipt of
-  CHF 0.00; a photo of an invoice already in the books asks «schon da?» with «ist dasselbe» and
-  «verschieden»; a receipt whose date cannot be read waits «fehlt: Datum» and gets no date (the AI
-  no longer dates it by the day it was read). The closing sentence counts read text PDFs as read
-  also without an AI, names the photos that wait for the AI («6 Belege warten aufs Lesen: das
-  macht die KI») and the files that are no receipt. «Ist ein Kontoauszug» shows only on a photo no
-  AI read or one read as a statement.
+  gets its row, the statement under «Kontoauszüge» with «Auszug öffnen» and the closing sentence on
+  its payments, and closing the window opens that statement. Before, the statement was read in
+  around the dialog («Kontoauszüge 0», no sentence) and photos vanished without a word.
+  «Auszug hinzufügen» and a missing month's field hand any other file to the dialog too. A drop
+  while the app is still loading waits until it can be taken, offline or in audit mode it says
+  that nothing was taken; before, it did nothing, or the browser opened the file.
+- The rows of a drop say what Belege says (#361): a photo the AI finds no receipt at all (a holiday
+  photo) reads «kein Beleg» with what it shows, with «Ist doch ein Beleg», never a receipt of
+  CHF 0.00 (an order page, a delivery note, a customs assessment or a card slip stays a receipt; in
+  doubt the AI reads it as one); a photo of an invoice already in the books asks «schon da?» with
+  «ist dasselbe» and «verschieden»; a receipt whose date cannot be read waits «fehlt: Datum» and
+  gets no date, in its name neither (the AI no longer dates it by the day it was read, and an
+  empty answer no longer erases a date code read). The closing sentence counts as the rows do:
+  read text PDFs are read also without an AI, a receipt without date or amount waits for you, a
+  photo no AI read waits for one («Fotos und Scans liest nur eine KI», with «KI einrichten»).
+  «Ist ein Kontoauszug» is offered on files that could be one, no longer on a receipt linked to its
+  payment.
+- Files set aside as no receipt (a brochure, a holiday photo, one a person marked so) are now
+  archived under the name they came with; the AI no longer names them (#361).
 - Mac app, first screen: «Neue Buchhaltung erstellen» opens the system's save panel again (the
   name prefilled in Documents, «Erstellen»), and the setup starts in the folder you name. In
   0.4.0 and 0.4.1 the button did nothing: the main process had no answer for the page's call

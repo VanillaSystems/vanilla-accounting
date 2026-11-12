@@ -17,7 +17,7 @@ import { formatDate } from '../lib/utils.js';
 import { ICONS } from '../areas/icons.js';
 import { Dock } from './Dock.js';
 import { hrefOf, useLocationState } from './history.js';
-import { DropDialog, closeDrop, dropFiles, dropOpen } from './DropDialog.js';
+import { DropDialog, dropFiles, dropOpen, finishDrop } from './DropDialog.js';
 import { INTAKE, watchRuns, watchSteps } from '../automation/intake.js';
 import { STATIC_EXPORT } from '../lib/api.js';
 import { noTitleBar } from '../desktop/bridge.js';
@@ -47,6 +47,7 @@ import { BotIcon } from '../areas/automation/Graph.js';
 import { ShellUiContext, type ShellUi } from './ui.js';
 import { filing } from '../../engines/index.js';
 import { clearSelection, selectAll, selectionNow, useSelection } from '../selection/store.js';
+import { installWindowDrop, setDropHandler, type DropState, type DropTarget, type Dropped } from './window-drop.js';
 import { actionsNow, openActions } from '../selection/ActionsMenu.js';
 
 type Overlay =
@@ -71,7 +72,7 @@ export function Shell(props: ShellProps) {
 }
 
 function Workbench({ language, onLanguage, books, refresh }: ShellProps & { books: Index; refresh(): void }) {
-  const { online, readonly, snapshot } = useApiStatus();
+  const { online, readonly, snapshot, known } = useApiStatus();
   const canEdit = online && !readonly;
   const workspace = useWorkspace();
   const [loc, go] = useLocationState();
@@ -174,7 +175,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
 
   useShellKeys({
     overlayOpen: () => overlay !== null || dropOpen(),
-    closeOverlay: () => { if (dropOpen()) closeDrop(); setOverlay(null); focusSelectedRow(); },
+    closeOverlay: () => { if (dropOpen()) finishDrop(); setOverlay(null); focusSelectedRow(); },
     palette: () => setOverlay({ kind: 'palette' }),
     // ⌘Z with nothing left to take back says so instead of doing nothing (r8k-7).
     undo: () => { if (!undo()) toast(t('shell.nothingToUndo')); return true; },
@@ -219,10 +220,25 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
 
   // The drop dialog takes every drop on any page, a folder's files with its subfolders' (#188): each file gets its row
   // there, a statement as a receipt or a photo, and what it is decides where it goes (#361).
-  useDrop(canEdit, setDropping, (files, target, entries) => {
+  // The window's listeners are there from the first moment (window-drop.ts); a drop before the API answered waits for it,
+  // one the app cannot take (offline, read-only) is named, nothing taken.
+  const takeDrop = useRef<(d: Dropped) => void>(() => undefined);
+  takeDrop.current = ({ files, target, entries }) => {
     if (target === 'chat') return void droppedFiles(entries, files, CHAT_TAKES).then(attachDropped);
     void droppedFiles(entries, files, PAGE_TAKES).then((d) => dropFiles(d.files, leftOut(d, PAGE_TAKES).map((x) => tWith(x.key, x.vars)).join(' ')));
-  });
+  };
+  const dropState: DropState = !known ? 'unknown' : !online ? 'offline' : readonly ? 'readonly' : 'ready';
+  useEffect(() => {
+    setDropHandler({
+      state: dropState,
+      // The page takes them as receipts, the AI sidebar (or, closed, the window's right edge) as a message's attachments.
+      targetAt: (x) => (x >= (document.querySelector('aside.aside')?.getBoundingClientRect().left ?? innerWidth - AI_EDGE) ? 'chat' : 'page'),
+      shown: setDropping,
+      take: (d) => takeDrop.current(d),
+      refuse: (why, d) => toast(t(why === 'offline' ? 'drop.refused.offline' : 'drop.refused.readonly', { n: d.files.length })),
+    });
+    return () => setDropHandler(undefined);
+  }, [dropState, toast]);
 
   const search = useCallback((q: string): PaletteGroup[] => {
     const p = propsRef.current;
@@ -311,7 +327,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
         onLanguage={(anchor) => setOverlay({ kind: 'language', anchor: anchor.getBoundingClientRect() })}
       />
       <Sidebar page={picked ? selectionContext(picked) : pageContext(loc.route, books)} books={books} onGo={(route) => nav.go({ route, query: {} })} onGoTo={(loc) => nav.go(loc)} />
-      <DropDialog books={books} refresh={refresh} period={period} onGo={(loc) => nav.go(loc)} onLanded={showLanded} />
+      <DropDialog books={books} refresh={refresh} period={period} onGo={(loc) => nav.go(loc)} onLanded={showLanded} onStatement={(loc) => { if (current.current.route.area === 'bank') nav.go(loc); }} />
       <Corner onAssistant={toggleAssistant} onGo={(route) => nav.go({ route, query: {} })} />
       <Dock current={loc.route.area} books={books} keys={dockKeys} wide={navWide} onToggle={toggleNav} nav={nav} canEdit={canEdit} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
       {workspace?.demo ? <Demo name={workspace.company.name} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} /> : null}
@@ -380,38 +396,8 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   );
 }
 
-/** Where dragged files go: the page takes them as receipts, the AI sidebar (or, closed, the window's right edge) as a message's attachments. */
-type DropTarget = 'page' | 'chat';
+if (typeof window !== 'undefined') installWindowDrop(window);
+
 /** The width of the «An die KI» edge while the sidebar is closed; shell.css --ai-edge says the same. */
 const AI_EDGE = 88;
 
-/**
- * Files dragged over the window show the two drop zones, the one under the pointer lit; dropped, they go where it says.
- * `entries` are the drop's items as entries, read while the event lasts: a folder is one, to walk later.
- */
-function useDrop(enabled: boolean, setShown: (on: DropTarget | null) => void, onFiles: (files: File[], target: DropTarget, entries: (FileSystemEntry | null)[]) => void) {
-  const latest = useRef(onFiles);
-  latest.current = onFiles;
-  useEffect(() => {
-    if (!enabled) return;
-    let depth = 0;
-    const files = (e: DragEvent) => [...(e.dataTransfer?.types ?? [])].includes('Files');
-    const target = (e: DragEvent): DropTarget => e.clientX >= (document.querySelector('aside.aside')?.getBoundingClientRect().left ?? innerWidth - AI_EDGE) ? 'chat' : 'page';
-    const enter = (e: DragEvent) => { if (!files(e)) return; e.preventDefault(); depth++; setShown(target(e)); };
-    const over = (e: DragEvent) => { if (files(e)) { e.preventDefault(); setShown(target(e)); } };
-    const leave = () => { if (--depth <= 0) { depth = 0; setShown(null); } };
-    const drop = (e: DragEvent) => {
-      if (!files(e)) return;
-      e.preventDefault();
-      depth = 0;
-      setShown(null);
-      const entries = [...(e.dataTransfer?.items ?? [])].map((i) => i.webkitGetAsEntry?.() ?? null);
-      latest.current([...(e.dataTransfer?.files ?? [])], target(e), entries);
-    };
-    addEventListener('dragenter', enter);
-    addEventListener('dragover', over);
-    addEventListener('dragleave', leave);
-    addEventListener('drop', drop);
-    return () => { removeEventListener('dragenter', enter); removeEventListener('dragover', over); removeEventListener('dragleave', leave); removeEventListener('drop', drop); };
-  }, [enabled]);
-}

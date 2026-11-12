@@ -136,10 +136,15 @@ dialog, so the same checks run again later:
   to `reach.mail.skip` and, since that only narrows the reach, switches the new version on.
 - **The read step** makes an order confirmation or delivery note kind `supporting`, and a text the
   model read off a photo that says it is no receipt kind `noise` (both by rule; a person's kind wins).
-  The model's reading of a picture answers «Kein Beleg: <what it shows>» for a file that shows no
-  receipt at all (a holiday photo): kind `noise` with that reason (#361). The matching step sets
-  such a file aside under the name it came with, without a model match; the drop row reads «kein
-  Beleg» with the reason. The model gives a receipt's own date only: none read, the receipt stays
+  The model's reading of a picture new to the books may answer exactly «Kein Beleg: <what it shows>»
+  (one short line, nothing after it) for a file that shows no receipt at all (a holiday photo), by
+  the one definition of a receipt both prompts share (`RECEIPT_OR_NONE`, src/intake/unclear.ts: an
+  order page, a delivery note, a customs assessment, a card slip are receipts; in doubt it is one).
+  Code's own recognisers decide first; the verdict only for what they leave unclear: kind `noise`
+  with that reason, and no text (#361). The matching step sets such a file aside under the name it
+  came with, without a model match; the drop row reads «kein Beleg» with the reason and «Ist doch
+  ein Beleg». A file the books hold (one a person declared a receipt) is only read: its prompt
+  never asks, and a verdict there, or from «Erneut lesen», is never kept as its text. The model gives a receipt's own date only: none read, the receipt stays
   without one (its name without a day) and its drop row waits «fehlt: Datum».
 - **The drop row of a taken photo** says what Belege says of it, read from the books: «kein Beleg»,
   «schon da?» (a possible copy, with «ist dasselbe» and «verschieden» as in Belege), «fehlt: Datum»,

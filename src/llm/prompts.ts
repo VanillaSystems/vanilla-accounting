@@ -8,7 +8,7 @@ import { formatCase, type BookingCase } from "../knowledge/cases.js";
 import { formatGuidance, type Guidance } from "../knowledge/guidance.js";
 import { parseReadStatement, withoutPayments } from "../books/statement-check.js";
 import type { ReadStatement } from "../types/statement-read.js";
-import { NOT_A_RECEIPT } from "../intake/unclear.js";
+import { NOT_A_RECEIPT, RECEIPT_OR_NONE } from "../intake/unclear.js";
 
 export interface MatchResult {
   suggestedFilename: string;
@@ -166,14 +166,19 @@ Rules for description:
 - Shipping or customs invoices: include total amount (e.g. "CHF 12.50"), invoice number, and the webshop order number prefixed with # when the shipment names one (e.g. "#1001")`;
 }
 
-/** OCR of a scanned PDF through the Read tool. The path is absolute: `ask` runs from an empty directory. */
-export function buildVisionPrompt(absPdfPath: string): string {
+/**
+ * OCR of a scanned PDF through the Read tool. The path is absolute: `ask` runs from an empty directory.
+ * `verdict`: the file is new to the books, so the reading may set it aside as no receipt («Kein Beleg:
+ * <what it shows>», by the one definition RECEIPT_OR_NONE, in doubt a receipt). A file the books hold
+ * already (one a person declared a receipt above all) is only read (#361).
+ */
+export function buildVisionPrompt(absPdfPath: string, { verdict = false }: { verdict?: boolean } = {}): string {
   return `Verwende das Read-Tool, um die Datei '${absPdfPath}' zu lesen. ` +
     'Extrahiere den vollständigen Text aus diesem Beleg/Rechnung. ' +
     'Beginne mit einer kurzen deutschen Beschreibung (z.B. "Tankquittung", "Lebensmitteleinkauf"), ' +
     'gefolgt von einer Leerzeile, dann der vollständige Text. Kein weiterer Kommentar. ' +
-    'Ist der Beleg nicht lesbar, antworte nur «Nicht lesbar» und in einem kurzen Satz, warum; rate keinen Text. ' +
-    `Zeigt die Datei gar keinen Beleg (ein Ferien- oder Personenfoto, ein Bild ohne Rechnung, Quittung, Auszug oder Brief), antworte nur «${NOT_A_RECEIPT}:» und in einem kurzen Satz, was sie zeigt.`;
+    'Ist der Beleg nicht lesbar, antworte nur «Nicht lesbar» und in einem kurzen Satz, warum; rate keinen Text.' +
+    (verdict ? ` Ist die Datei nach dieser Bestimmung gar kein Beleg ("None"), antworte nur mit einer Zeile «${NOT_A_RECEIPT}: <ein kurzer Satz, was sie zeigt>» und nichts danach. Im Zweifel ist sie ein Beleg: dann den Text extrahieren.\n${RECEIPT_OR_NONE}` : '');
 }
 
 export interface ClassifyEntry {

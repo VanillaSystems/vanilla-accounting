@@ -97,9 +97,12 @@ export function keepHand(r: Receipt, read: Read): Read {
   return out;
 }
 
-/** A name the model dated 00000000 (it found no date) takes the receipt's date, or none. */
-const datedName = (name: string, date: string | undefined) =>
-  name.replace(/^0{8}(?=[-_.])/, date ? date.replace(/-/g, '') : '').replace(/^[-_]+/, '') || 'receipt.pdf';
+/**
+ * A name the model dated 00000000 (it found no date) takes the receipt's date. Without a date the name
+ * starts with no day at all, whatever eight digits the model put there: Belege would read a day off it (#361).
+ */
+export const datedName = (name: string, date: string | undefined) =>
+  (date ? name.replace(/^0{8}(?=[-_.])/, date.replace(/-/g, '')) : name.replace(/^\d{8}(?=[-_.])/, '')).replace(/^[-_]+/, '') || 'receipt.pdf';
 
 /** What a receipt says before the model reads it: its date and total as stored, from the file name, the VAT block or the text. */
 export function factsOf(r: Receipt): { date?: string; amount?: number; currency?: string } {
@@ -361,17 +364,21 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     let filed: string[] = [];
     // A bank statement keeps its period's last day (#151), whatever day the model read off it.
     const dated = receipt.kind === 'statement' && receipt.date ? { date: receipt.date } : dateOf(answer.date, receipt);
+    // A model that read no date never erases one code read (a customs assessment's) or a person set (#361).
+    const day = dated.date ?? receipt.date;
     // The change runs once more on books loaded afresh after a stale save (src/books/store.ts updateSaved): what it finds starts empty.
     // A date a person entered while the run read it names the file too (#218).
     let handDate: string | undefined;
-    const named = datedName(normalizeFilename(answer.suggestedFilename), dated.date);
+    // The model read no day: whatever eight digits it put first are no date of the receipt.
+    const suggested = normalizeFilename(answer.suggestedFilename);
+    const named = datedName(dated.date ? suggested : suggested.replace(/^\d{8}(?=[-_.])/, '00000000'), day);
     const target = archive(receipt, (r) => (handDate && r.date ? named.replace(/^\d{8}(?=[-_.])/, r.date.replace(/-/g, '')) : named), (r, index) => {
       linked = [];
       twin = undefined;
       filed = [];
       const byHand = new Set(r.handSet);
       handDate = byHand.has('date') ? r.date : undefined;
-      Object.assign(r, keepHand(r, { date: dated.date, description: answer.description, amount: creditSigned({ amount: answer.amount, vatSummary: r.vatSummary }), currency: answer.currency, ...(answer.title ? { title: answer.title } : {}) }), { ...(answer.payout ? { payout: answer.payout } : {}), ...(answer.order ? { order: answer.order } : {}) });
+      Object.assign(r, keepHand(r, { date: dated.date ?? r.date, description: answer.description, amount: creditSigned({ amount: answer.amount, vatSummary: r.vatSummary }), currency: answer.currency, ...(answer.title ? { title: answer.title } : {}) }), { ...(answer.payout ? { payout: answer.payout } : {}), ...(answer.order ? { order: answer.order } : {}) });
       if (dated.dateSource && !byHand.has('date')) r.dateSource = dated.dateSource;
       // Only an invoice is paid by a payment; a copy of one (by its facts, now read) waits for a person in Belege.
       if (!sure || (r.kind && r.kind !== 'invoice' && r.kind !== 'sales-record')) return;

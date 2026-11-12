@@ -24,28 +24,31 @@ async function dropOn(path: string) {
   const app = await openApp();
   const { page } = app;
   try {
-    await app.open(path, 'main[data-area]');
-    // The window takes drops once the app knows it may write (its first status answer): until the dialog opens, drop again.
-    for (let i = 0; i < 30 && !(await page.$('[data-testid=drop-dialog]')); i++) {
-      await page.evaluate((xml, png) => {
-        const files = new DataTransfer();
-        files.items.add(new File([xml], 'oktober.xml', { type: 'application/xml' }));
-        files.items.add(new File([Uint8Array.from(atob(png), (c) => c.charCodeAt(0))], 'IMG_4590.png', { type: 'image/png' }));
-        dispatchEvent(new DragEvent('drop', { dataTransfer: files, clientX: 300, clientY: 300, bubbles: true, cancelable: true }));
-      }, OCTOBER, PNG);
-      await new Promise((r) => setTimeout(r, 1000));
-    }
+    // Dropped once, as soon as the page is there: a drop before the app's first status answer waits for it, never lost.
+    await app.open(path, '#root > *');
+    const fellThrough = await page.evaluate((xml, png) => {
+      const files = new DataTransfer();
+      files.items.add(new File([xml], 'oktober.xml', { type: 'application/xml' }));
+      files.items.add(new File([Uint8Array.from(atob(png), (c) => c.charCodeAt(0))], 'IMG_4590.png', { type: 'image/png' }));
+      return dispatchEvent(new DragEvent('drop', { dataTransfer: files, clientX: 300, clientY: 300, bubbles: true, cancelable: true }));
+    }, OCTOBER, PNG);
+    assert.equal(fellThrough, false, 'the drop never falls through to the browser');
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=drop-row]').length === 2 && !!document.querySelector('[data-testid=drop-summary]'), { timeout: 120_000 });
     const seen = await page.evaluate(() => ({
       rows: [...document.querySelectorAll<HTMLElement>('[data-testid=drop-row]')].map((r) => `${r.dataset.file} ${r.dataset.state}`),
       tabs: [...document.querySelectorAll<HTMLElement>('.wftabs button')].map((b) => b.innerText.replace(/\s+/g, ' ').trim()),
       summary: document.querySelector<HTMLElement>('[data-testid=drop-summary]')!.innerText,
+      openStatement: !!document.querySelector('[data-testid=drop-row][data-file="oktober.xml"] [data-testid=drop-open-file]'),
     }));
+    // Closing the window by hand opens the statement the drop read in, on Kontoauszüge (as the add button does).
+    await page.click('[data-testid=drop-close]');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=drop-dialog]'));
+    await new Promise((r) => setTimeout(r, 500));
     const books = app.books();
     const photo = books.receipts.find((r) => r.originalFilename === 'IMG_4590.pdf');
     const inbox = readdirSync(app.api.ws.paths.inbox).filter((f) => f.startsWith('IMG_4590'));
     assert.deepEqual(app.errors, []);
-    return { ...seen, payment: books.transactions.some((t) => t.ref === 'REF-OCT-361'), photo: photo ? photo.location : inbox.join(',') || 'missing' };
+    return { ...seen, at: new URL(page.url()).pathname, payment: books.transactions.some((t) => t.ref === 'REF-OCT-361'), photo: photo ? photo.location : inbox.join(',') || 'missing' };
   } finally {
     await app.stop();
   }
@@ -56,10 +59,13 @@ test('a statement and a photo dropped on Kontoauszüge each get their row, as on
   assert.deepEqual(bank.rows, ['oktober.xml statement', 'IMG_4590.png unread'], 'the photo has its row, said not read: no AI on this Mac');
   assert.ok(bank.tabs.includes('Kontoauszüge 1'), bank.tabs.join(' / '));
   assert.match(bank.summary, /^1 Zahlung eingelesen, 14\.10\.2026 – 14\.10\.2026/);
-  assert.match(bank.summary, /1 Beleg wartet aufs Lesen: das macht die KI\./);
+  assert.match(bank.summary, /1 Beleg wartet aufs Lesen: Fotos und Scans liest nur eine KI, auf diesem Mac ist keine eingerichtet\./);
+  assert.equal(bank.openStatement, true, 'the statement row opens its statement');
+  assert.match(bank.at, /^\/bank\/files\/1021\/.+\.xml$/, 'closing on Kontoauszüge selects the statement just read');
   assert.equal(bank.payment, true);
   assert.notEqual(bank.photo, 'missing', 'the photo is in the books or the inbox');
 
   const receipts = await dropOn('/receipts?period=2026-Q4');
-  assert.deepEqual(receipts, bank, 'the same rows, counts and files as the drop on Belege');
+  assert.deepEqual({ ...receipts, at: '' }, { ...bank, at: '' }, 'the same rows, counts and files as the drop on Belege');
+  assert.match(receipts.at, /^\/receipts/, 'closing elsewhere leaves the page where it is');
 });

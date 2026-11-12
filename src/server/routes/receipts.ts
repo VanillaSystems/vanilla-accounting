@@ -12,6 +12,7 @@ import type { PrivatePart } from '../../types/assistant.js';
 import { bookAgain } from './automation.js';
 import { ask } from '../../llm/ask.js';
 import { buildVisionPrompt } from '../../llm/prompts.js';
+import { visionVerdict } from '../../intake/unclear.js';
 import { findFile } from '../../workspace/workspace.js';
 import { orderPagesIn, vatCorrectionsIn } from '../../intake/pair-chain.js';
 import { forgetReadFacts } from '../../intake/vat.js';
@@ -229,9 +230,12 @@ router.post('/api/vision/extract', async (req, res) => {
   const pdfPath = receiptPath(books, receipt);
   if (!existsSync(pdfPath)) throw new RequestError(404, 'PDF file not found on disk');
 
+  // Only read: a person asks for this receipt's text, so the prompt never asks whether it is one (#361).
   const text = await ask(buildVisionPrompt(pdfPath), {
     step: 'receipt-vision', timeoutMs: 120_000, attachments: [pdfPath],
   });
+  // A «Kein Beleg: …» is never kept as a receipt's text: nothing is written.
+  if (visionVerdict(text)) throw new RequestError(422, 'Die KI hat auf der Datei keinen Text eines Belegs gefunden. Datum, Betrag und MWST selbst eintippen.');
   withBooks(res, (books) => {
     const receipt = books.receipts.find((r) => r.id === receiptId);
     if (!receipt) throw new RequestError(404, 'Receipt not found');
