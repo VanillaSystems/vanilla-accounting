@@ -141,6 +141,16 @@
       "counterparty": "Vanilla Wise",
       "description": "Übertrag",
       "counterpartyIban": "BE29 9670 0000 0164"
+    },
+    {
+      "ref": "K4",
+      "bank": "Raiffeisen",
+      "date": "2026-08-07",
+      "amount": 1200,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "counterparty": "Kunde Beispiel",
+      "description": "Rg 12 Anna Muster Malerei"
     }
   ],
   "mappings": [],

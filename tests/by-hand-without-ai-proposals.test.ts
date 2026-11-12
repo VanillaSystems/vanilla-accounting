@@ -7,7 +7,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bookingDraft, followedVat, type DraftKnowledge } from '../src/accounting/manual-booking.js';
+import { bookingDraft, followedVat, withoutProposal, type DraftKnowledge } from '../src/accounting/manual-booking.js';
 import { vatCodeOf } from '../src/accounting/vat-codes.js';
 import { setJurisdiction } from '../src/engines/index.js';
 import { loadJurisdiction } from '../src/core/modules/load.js';
@@ -199,4 +199,68 @@ test('M3: a proposed code follows the account she chooses; a receipt\'s rate sta
   assert.equal(followedVat(fromReceipt, '6100', '1020'), '8.1');
   assert.equal(vatCodeOf('8.1', '6100', '1020')?.code, 'I81');
   assert.equal(vatCodeOf('8.1', '4000', '1020')?.code, 'M81');
+});
+
+// ─── Re-review of #356 ───────────────────────────────────────────────────────
+
+const huber = (amount: number, description: string, vatCode = 'M81') => books({
+  transactions: [tx('BUY', 'DBIT', 890, 'Huber AG', 'Farbe Juli', '2026-07-01'), tx('IN', 'CRDT', amount, 'Huber AG', description)],
+  journalEntries: [entry({ transactionRef: 'BUY', accountDebit: '4000', accountCredit: '1020', amount: 890, vatCode })],
+});
+
+test('A: money in from a business the firm buys from is a refund only when it is plausible, and the form says it assumes one', () => {
+  const refund = firstLine(huber(120, 'Gutschrift Retoure'), 'IN');
+  assert.deepEqual(sideOf(refund.lines[0]), ['1020', '4000', '-M0']);
+  assert.ok(refund.notes.some((n) => n.kind === 'refund'), JSON.stringify(refund.notes));
+  const more = firstLine(huber(5000, 'Rechnung 77 Malerarbeiten'), 'IN');
+  assert.deepEqual(sideOf(more.lines[0]), ['1020', '3400', 'V81'], 'more than the firm ever paid that business: a sale');
+  assert.ok(more.notes.some((n) => n.kind === 'sale') && !more.notes.some((n) => n.kind === 'refund'));
+  const two = [{ ...invoice, id: 'a', number: '2026-007' }, { ...invoice, id: 'b', number: '2026-008' }] as unknown as Invoice[];
+  const named = bookingDraft(huber(108.1, 'Zahlung 2026-007 und 2026-008'), 'IN', BANK, two, KNOWN)!;
+  assert.ok(!named.notes.some((n) => n.kind === 'refund'), 'a text that names an invoice of the firm is no refund');
+});
+
+test('A nit: a refund of a purchase booked with a zero code carries that code with the minus', () => {
+  assert.deepEqual(sideOf(firstLine(huber(120, 'Retoure', 'I0'), 'IN').lines[0]), ['1020', '4000', '-I0']);
+  assert.deepEqual(sideOf(firstLine(huber(120, 'Retoure', 'M0'), 'IN').lines[0]), ['1020', '4000', '-M0']);
+});
+
+test('B: an owner\'s deposit is proposed with a note that it is taken for one', () => {
+  const d = firstLine(books({ transactions: [sale] }), 'IN', { ...KNOWN, nature: { kind: 'owner', account: '2850' } });
+  assert.ok(d.notes.some((n) => n.kind === 'owner'), JSON.stringify(d.notes));
+});
+
+const paidInvoice = (paid: number) => ({ ...invoice, payments: paid ? [{ transactionRef: 'X', date: '2026-07-25', amount: paid, by: 'confirmed' }] : [] }) as unknown as Invoice;
+
+test('D: an invoice paid already proposes no revenue again; an overpayment proposes revenue up to what is open and says what the rest may be', () => {
+  for (const setup of [EFFECTIVE_QUARTERLY, NET_RATE]) {
+    on(setup, () => {
+      const full = firstLine(books({ transactions: [paysInvoice] }), 'P', KNOWN, [paidInvoice(1081)]);
+      assert.deepEqual(full.lines.map(sideOf), [['1020', '', '']]);
+      assert.equal(full.lines[0].source, undefined);
+      assert.ok(full.notes.some((n) => n.kind === 'invoicePaid' && n.number === '2026-005' && n.surplus === 1081), JSON.stringify(full.notes));
+      const part = firstLine(books({ transactions: [paysInvoice] }), 'P', KNOWN, [paidInvoice(581)]);
+      assert.deepEqual(part.lines.map((l) => [l.accountCredit, l.amount]), [['3400', 500], ['', 581]]);
+      assert.ok(part.notes.some((n) => n.kind === 'invoicePaid' && n.surplus === 581));
+    });
+  }
+});
+
+test('E: on the agreed basis a payment before its invoice\'s date is a prepayment: no booking proposed, confirmed on the invoice', () => {
+  on(AGREED, () => {
+    const early = { ...paysInvoice, date: '2026-07-10' };
+    const b = books({ transactions: [early], journalEntries: [entry({ id: 'ev', transactionRef: 'RE-2026-005', date: '2026-07-20', accountDebit: '1100', accountCredit: '3400', amount: 1081, vatCode: 'V81' })] });
+    const d = firstLine(b, 'P', KNOWN, [invoice]);
+    assert.deepEqual(d.lines.map(sideOf), [['1020', '', '']]);
+    assert.equal(d.lines[0].source, undefined);
+    assert.ok(d.notes.some((n) => n.kind === 'prepayment' && n.number === '2026-005'), JSON.stringify(d.notes));
+    assert.equal(d.invoice?.number, '2026-005');
+  });
+});
+
+test('nit: without the server\'s answer the form opens with no proposal and says so', () => {
+  const d = withoutProposal(firstLine(books({ transactions: [sale] }), 'IN'));
+  assert.deepEqual(d.lines.map(sideOf), [['1020', '', '']]);
+  assert.ok(d.lines.every((l) => !l.source));
+  assert.deepEqual(d.notes, [{ kind: 'unloaded' }]);
 });

@@ -13,7 +13,7 @@ import { fromRappen, toRappen } from './rappen.js';
 import { hasEvent, isManualRef } from '../books/refs.js';
 import type { Tags } from '../books/tags.js';
 import type { Invoice } from '../invoices/model.js';
-import { namedInvoice, revenueSplit } from '../invoices/rules.js';
+import { namedInvoice, namesNumber, openAmount, revenueSplit } from '../invoices/rules.js';
 import { saleCodeOf, saleProposal, saleVatCode } from './sales-without-vat.js';
 import type { SaleChoice } from '../questions/model.js';
 import { isPurchaseDocument } from './evidence-check.js';
@@ -81,6 +81,11 @@ export interface DraftKnowledge {
  */
 export type DraftNote =
   | { kind: 'sale' }
+  | { kind: 'refund' }
+  | { kind: 'owner' }
+  | { kind: 'invoicePaid'; number: string; surplus: number }
+  | { kind: 'prepayment'; number: string }
+  | { kind: 'unloaded' }
   | { kind: 'ownTransfer' }
   | { kind: 'authority'; name: string }
   | { kind: 'supplierDocument' }
@@ -156,6 +161,38 @@ function newestOf(books: Books, tx: BankTransaction, side: 'accountDebit' | 'acc
     .filter((e) => e.transactionRef !== tx.ref && e.origin !== 'year-close' && bankAccounts.has(e[side]) && e[other] && !bankAccounts.has(e[other]) && (!only || chart().typeOf(e[other]!) === only) && isSame(e.transactionRef))
     .sort((a, b) => b.date.localeCompare(a.date) || onResult(b) - onResult(a) || Number(b.amount) - Number(a.amount))[0];
   return hit && { account: hit[other], vatCode: hit.vatCode, entry: { id: hit.id, transactionRef: hit.transactionRef, date: hit.date } };
+}
+
+/**
+ * The purchase a payment in from a business the firm buys from would refund: its newest one on an
+ * expense, when the payment is no more than the firm paid that business and its text names none of
+ * the firm's own invoices. Else undefined: a business that is also a customer pays for a sale.
+ */
+function refundOf(books: Books, tx: BankTransaction, bankAccounts: Set<string>, amount: number, invoices: readonly Invoice[] | undefined) {
+  const bought = newestOf(books, tx, 'accountCredit', bankAccounts, 'expense');
+  if (!bought) return undefined;
+  const mine = vendorKeys(books, tx);
+  const byRef = new Map(books.transactions.map((t) => [t.ref, t]));
+  const spent = (books.journalEntries ?? []).filter((e) => e.transactionRef !== tx.ref && bankAccounts.has(e.accountCredit) && chart().typeOf(e.accountDebit) === 'expense'
+    && [...vendorKeys(books, byRef.get(e.transactionRef) ?? ({ ref: e.transactionRef } as BankTransaction))].some((k) => mine.has(k)))
+    .reduce((s, e) => s + toRappen(Number(e.amount)), 0);
+  const text = [tx.description, tx.reference ?? ''].join(' ');
+  const ours = (invoices ?? []).some((i) => i.status === 'issued' && namesNumber(text, i.number));
+  return toRappen(amount) <= spent && !ours ? bought : undefined;
+}
+
+/**
+ * The draft without any proposal, for a form whose knowledge from the server did not come (a
+ * failed or slow request): the bank side and the amounts only, and a note that says so. A client
+ * guess would book an owner's deposit or a transfer as revenue.
+ */
+export function withoutProposal(d: BookingDraft): BookingDraft {
+  const lines = d.lines.map((l) => ({
+    accountDebit: d.bank?.side === 'accountDebit' ? d.bank.account : '', accountCredit: d.bank?.side === 'accountCredit' ? d.bank.account : '',
+    amount: l.amount, vat: '', description: l.description,
+  }));
+  const { precedent: _p, invoice: _i, ...rest } = d;
+  return { ...rest, lines, notes: [{ kind: 'unloaded' }] };
 }
 
 /**
@@ -251,15 +288,27 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   // An issued invoice the payment names: its revenue is the invoice's, booked with it or now.
   if (issued && bank) {
     const invoice = { id: issued.id, number: issued.number };
-    if (hasEvent({ journalEntries: books.journalEntries ?? [] }, issued)) {
+    const event = hasEvent({ journalEntries: books.journalEntries ?? [] }, issued);
+    // A payment before the invoice's date on the agreed basis is a prepayment, taxed on its own day: confirmed on the invoice, which books it so (prepaidEvent).
+    if (event && agreedBasis() && tx.date < issued.date) {
+      notes.push({ kind: 'prepayment', number: issued.number });
+      return result([place('', paid, '')], { invoice: { ...invoice, settles: false } });
+    }
+    // Only what is still open is the invoice's: the rest (a double payment, say) is the customer's, and the form says so.
+    const open = issued.currency === tx.currency ? openAmount(issued, invoices ?? []) : paid;
+    const due = Math.min(paid, open);
+    const surplus = fromRappen(toRappen(paid) - toRappen(due));
+    if (surplus > 0) notes.push({ kind: 'invoicePaid', number: issued.number, surplus });
+    const rest = surplus > 0 ? [place('', surplus, '')] : [];
+    if (event) {
       const receivable = openItemAccounts(known.chart ?? []).receivable;
-      return result([place(receivable, paid, '', { account: { from: 'receivable', number: issued.number } })], { invoice: { ...invoice, settles: true } });
+      return result([...(due > 0 ? [place(receivable, due, '', { account: { from: 'receivable', number: issued.number } })] : []), ...rest], { invoice: { ...invoice, settles: true } });
     }
     const revenue = known.invoiceRevenue ?? known.defaults?.sales ?? '';
     let split: ReturnType<typeof revenueSplit> = [];
-    try { split = revenue ? revenueSplit(issued, paid, revenue) : []; } catch { split = []; }
+    try { split = revenue && due > 0 ? revenueSplit(issued, due, revenue) : []; } catch { split = []; }
     const lines = split.map((l) => { const code = taken(l.vatCode); return place(l.account, l.amount, code, { account: { from: 'invoice', number: issued.number }, ...(code && { vat: { from: 'invoice' as const } }) }); });
-    return result(lines.length ? lines : [place('', paid, '')], { invoice: { ...invoice, settles: false } });
+    return result(lines.length || rest.length ? [...lines, ...rest] : [place('', paid, '')], { invoice: { ...invoice, settles: false } });
   }
 
   // On the agreed basis a coded line of a document is dated by the document (atTaxPoint); the hand form books on the payment's day.
@@ -294,19 +343,24 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
     const vat = rate || (receipts.length ? '' : withoutReceipt(precedent.vatCode));
     other = { account: precedent.account!, vat, source: { account: { from: 'precedent', date: precedent.entry.date }, ...(vat && { vat: fromReceipt(vat) ?? { from: 'precedent' } }) } };
   } else if (proposes && nature?.kind === 'owner') {
+    notes.push({ kind: 'owner' });
     other = { account: nature.account, vat: '', source: { account: { from: 'owner' } } };
   } else if (proposes && (nature?.kind === 'ownTransfer' || nature?.kind === 'authority')) {
     notes.push(nature);
     other = { account: '', vat: '' };
   } else if (proposes && moneyIn) {
     // Money back from a business the firm buys from: a refund on the account of its last purchase, the code inverted on it.
-    const bought = newestOf(books, tx, 'accountCredit', bankAccounts, 'expense');
+    // Plausible only when it is no more than the firm paid that business, and the text names no invoice of the firm's own.
+    const bought = refundOf(books, tx, bankAccounts, paid, invoices);
     const foreign = known.ownUid ? docs.some((d) => d.vatId && norm(d.vatId) !== norm(known.ownUid)) : false;
     if (bought) {
       const refundRate = new Set(claims ? receipts.filter(isPurchaseDocument).flatMap(vatRates).map((g) => g.ratePercent) : []);
-      const zero = inputTaxWithoutReceipt(bought.vatCode);
+      // The purchase's zero code (its own when it was booked without input tax, AGENTS.md: I0 back is -I0), with the minus.
+      const booked = bought.vatCode && !bought.vatCode.startsWith('-') ? lookupVatCode(bought.vatCode) : null;
+      const zero = inputTaxWithoutReceipt(bought.vatCode) ?? (booked?.entry.kind === 'inputNoVat' ? bought.vatCode : undefined);
       // A rate stays a rate: on the expense's credit side the form makes it the refund's code (-M81).
       const vat = refundRate.size === 1 ? String([...refundRate][0]) : zero ? taken(`-${zero}`) : '';
+      notes.push({ kind: 'refund' });
       other = { account: bought.account!, vat, source: { account: { from: 'refund', date: bought.entry.date }, ...(vat && { vat: { from: refundRate.size === 1 ? 'receipt' as const : 'refund' as const } }) } };
     } else if (foreign) {
       notes.push({ kind: 'supplierDocument' });

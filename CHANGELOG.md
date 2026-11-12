@@ -77,9 +77,15 @@ Two markers flag an entry you must read before you update:
   business's last booking. A customer's payment of an invoice the app issued settles Debitoren
   without a code where the invoice's revenue is booked already (agreed basis), else takes the
   invoice's own accounts and codes, and the form points to confirming the payment on the invoice.
-  Money from the owner goes on her account without a code; money between your own accounts, from
-  an authority or with another business's document is no sale and gets no revenue account and no
-  code; money back from a supplier goes on the account of its last purchase. Other money in is
+  An invoice paid already is not proposed as revenue again: only what is open is, and the form
+  names the rest (a double payment to send back); a payment before its invoice on the agreed basis
+  is a prepayment to confirm on the invoice. Money from the owner (her name as the payer) goes on
+  her account without a code; money between your own accounts, from an authority or with another
+  business's document is no sale and gets no revenue account and no code; money back from a
+  supplier, up to what the firm paid it, goes on the account of its last purchase. Each assumption
+  is said under the form («Die App nimmt eine Rückzahlung an. Ein Verkauf? Dann das Konto
+  ändern.»). When the app cannot load what it knows of the payment, the form opens without a
+  proposal and says so. Other money in is
   taken for a sale on the firm's default revenue account, with the code the app would book (on the
   net tax rate method the firm's rate), and the form says so: «Eine Rückzahlung oder eine Einlage?
   Dann das Konto ändern.» A sale whose document is not read gets no code and says why. Money out

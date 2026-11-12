@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Index, JournalEntry } from '../../../types/index.js';
-import { followedVat, formDraft, inputTaxWithoutReceipt, restOf, unattachedFor, type BookingDraft, type BookingLine, type DraftLine, type DraftNote, type DraftSource, type Unattached as UnattachedBooking } from '../../../accounting/manual-booking.js';
+import { followedVat, formDraft, withoutProposal, inputTaxWithoutReceipt, restOf, unattachedFor, type BookingDraft, type BookingLine, type DraftLine, type DraftNote, type DraftSource, type Unattached as UnattachedBooking } from '../../../accounting/manual-booking.js';
 import type { HandStart } from '../../../saving/hand-rule.js';
 import { api } from '../../lib/api.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
@@ -45,6 +45,9 @@ type Props = {
   onBooked?(entries: JournalEntry[]): void;
 };
 
+/** How long the form waits for what the server knows of the payment before it opens without a proposal. */
+const START_TIMEOUT_MS = 10_000;
+
 /**
  * Waits for the workspace's bank accounts and for what the server knows of the payment (the rule
  * that decides it, what it is, its business's account): the form opens once with the final
@@ -56,18 +59,20 @@ export function PaymentBooking(props: Props) {
   const invoices = inv.state === 'ready' ? inv.data.invoices : inv.state === 'loading' ? 'loading' : undefined;
   // The form's rows are set once from the draft, so it waits for the invoices too (formDraft, r9c-4).
   // What the server knows of the payment, and the books it answered for: a later answer is taken without emptying the form first.
-  const [known, setKnown] = useState<{ start: HandStart | null; books: Index }>();
+  const [known, setKnown] = useState<{ start: HandStart | null; books: Index; failed?: true }>();
   useEffect(() => {
     let live = true;
     const books = props.books;
-    api.handStart(props.payment).then((r) => { if (live) setKnown({ start: r.start, books }); }, () => { if (live) setKnown({ start: null, books }); });
+    // A failed or slow answer opens the form without any proposal (withoutProposal): a guess without it would book an owner's deposit as revenue.
+    const late = new Promise<never>((_, no) => setTimeout(() => no(new Error('timeout')), START_TIMEOUT_MS));
+    Promise.race([api.handStart(props.payment), late]).then((r) => { if (live) setKnown({ start: r.start, books }); }, () => { if (live) setKnown({ start: null, books, failed: true }); });
     return () => { live = false; };
   }, [props.payment, props.books]);
   const start = known?.start ?? undefined;
-  const draft = useMemo(() => (ws && known ? formDraft(props.books, props.payment, ws.bankAccounts, invoices, {
+  const draft = useMemo(() => (ws && known ? (known.failed ? (d?: BookingDraft) => d && withoutProposal(d) : (d?: BookingDraft) => d)(formDraft(props.books, props.payment, ws.bankAccounts, invoices, {
     defaults: ws.defaults, rule: start?.rule, nature: start?.nature, account: start?.account,
     invoiceRevenue: ws.invoicing?.revenueAccount, chart: getAccounts().map((a) => a.number), ownUid: ws.company.uid,
-  }) : undefined), [ws, known, start, props.books, props.payment, invoices]);
+  })) : undefined), [ws, known, start, props.books, props.payment, invoices]);
   const typed = useMemo(() => (ws ? unattachedFor(props.books, props.payment, ws.bankAccounts) : []), [ws, props.books, props.payment]);
   if (!ws || !draft) return null;
   const defaults = ws.defaults ? [...new Set([ws.defaults.sales, ...ws.defaults.all.sales.map((x) => x.account), ...ws.defaults.all.purchase.map((x) => x.account)])] : [];
@@ -131,6 +136,8 @@ function noteText(n: DraftNote): string {
     case 'saleVat': return t(`journal.byHand.note.saleVat.${n.why}`);
     case 'ask': return t('journal.byHand.note.ask', { question: n.question });
     case 'taxPoint': return t('journal.byHand.note.taxPoint', { date: formatDate(n.date) });
+    case 'invoicePaid': return t('journal.byHand.note.invoicePaid', { number: n.number, amount: fmt(n.surplus) });
+    case 'prepayment': return t('journal.byHand.note.prepayment', { number: n.number });
     default: return t(`journal.byHand.note.${n.kind}`);
   }
 }
@@ -242,6 +249,9 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
 
   const setForm = (el: HTMLFormElement | null) => { form.current = el; onForm?.(el); };
   const inv = draft.invoice;
+  const invoiceSaid = draft.notes.some((n) => n.kind === 'prepayment' || n.kind === 'invoicePaid');
+  // Nothing is open on the invoice: a confirmation would refuse the payment, so the link only shows the invoice.
+  const paidAlready = draft.notes.some((n) => n.kind === 'invoicePaid') && !rows.some((r) => r.init.source);
   // «Die App nimmt einen Verkauf an» holds while the proposed revenue account stands; once she chose another, it is hers.
   const otherSide = draft.bank && (draft.bank.side === 'accountDebit' ? 'accountCredit' : 'accountDebit');
   const saleStands = !!otherSide && now.some((x, i) => x.raw[otherSide] === rows[i].init[otherSide]);
@@ -261,8 +271,9 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
       ) : null}
       {inv ? (
         <p className="pbw" data-testid="pays-invoice" data-number={inv.number} data-settles={inv.settles}>
-          {t(inv.settles ? 'journal.byHand.invoice.settles' : 'journal.byHand.invoice.revenue', { number: inv.number })}{' '}
-          <Go to={at({ area: 'invoices', view: 'list', id: inv.number }, draft.date)} nav={nav}>{t('journal.byHand.invoice.confirm', { number: inv.number })}</Go>
+          {/* A prepayment or a payment of an invoice paid already: the note under the lines says what it is. */}
+          {invoiceSaid ? null : <>{t(inv.settles ? 'journal.byHand.invoice.settles' : 'journal.byHand.invoice.revenue', { number: inv.number })}{' '}</>}
+          <Go to={at({ area: 'invoices', view: 'list', id: inv.number }, draft.date)} nav={nav}>{t(paidAlready ? 'journal.byHand.showInvoice' : 'journal.byHand.invoice.confirm', { number: inv.number })}</Go>
         </p>
       ) : null}
       {rows.map(({ key, init }, i) => {
@@ -307,7 +318,7 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
           </div>
         );
       })}
-      {draft.notes.filter((n) => !(n.kind === 'sale' || n.kind === 'saleVat') || saleStands).map((n) => <p key={n.kind} className="pbn" data-testid={`note-${n.kind}`}>{noteText(n)}</p>)}
+      {draft.notes.filter((n) => !(n.kind === 'sale' || n.kind === 'saleVat' || n.kind === 'refund' || n.kind === 'owner') || saleStands).map((n) => <p key={n.kind} className="pbn" data-testid={`note-${n.kind}`}>{noteText(n)}</p>)}
       {deducts ? (
         <label className="pbp" data-testid="input-tax-proof">{t('journal.byHand.proofLabel')}
           <input name="inputTaxProof" placeholder={t('journal.byHand.proofPlaceholder')} />

@@ -14,6 +14,7 @@ import { APP_FOLDER, APP_ROOT } from '../src/workspace/workspace.js';
 import type { AssistantEvent, Conversation, Turn } from '../src/types/assistant.js';
 import type { HandStart } from '../src/saving/hand-rule.js';
 import type { DraftView } from '../src/saving/rules.js';
+import { emptyForm, handRuleOf } from '../src/app/areas/company/hand-rule-model.js';
 
 const servers: ApiServer[] = [];
 const dirs: string[] = [];
@@ -49,12 +50,18 @@ test('what money in is beside a sale: the owner\'s deposit by her name, a transf
   const start = async (q: string) => (await api.send('GET', `/api/rules/hand?payment=${q}`)).json.start as unknown as HandStart;
   assert.deepEqual((await start('K2')).nature, { kind: 'owner', account: '2451' });
   assert.deepEqual((await start('K3')).nature, { kind: 'ownTransfer' });
+  assert.equal((await start('K4')).nature, undefined, 'a customer who writes the owner\'s name in the message is no deposit of hers');
 });
 
 test('a text rule started from a payment rests on one word: it is not kept without «Trotzdem behalten» (loneWords)', async () => {
   const api = await startApi('tests/fixtures/by-hand-index.json');
   servers.push(api);
   const start = (await api.send('GET', '/api/rules/hand?payment=L1&by=text')).json.start as unknown as HandStart;
+  // The form shows the words, and keeps the whole-word pattern behind them.
+  const form = { ...emptyForm(start), account: '6570' };
+  assert.equal(form.text, 'Lohn');
+  const rule = handRuleOf(form);
+  assert.ok(rule.ok && rule.rule.match.kind === 'text' && rule.rule.match.text === '\\bLohn\\b', JSON.stringify(rule));
   const made = await api.send('POST', '/api/rules/hand', { match: start.match, direction: 'out', account: '6570', vat: null });
   assert.equal(made.status, 200, JSON.stringify(made.json));
   const path = String(made.json.path);

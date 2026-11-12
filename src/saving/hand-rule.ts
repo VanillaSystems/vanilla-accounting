@@ -194,7 +194,8 @@ function natureOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, cont
   const own = new Set(context.bankAccounts.flatMap((a) => (a.iban ? [ibanOf(a.iban)] : [])));
   if (tx.counterpartyIban && own.has(ibanOf(tx.counterpartyIban))) return { kind: 'ownTransfer' };
   if (tx.direction !== 'CRDT') return undefined;
-  if (context.ownerAccount && paysOwner(tx, context.ownerName)) return { kind: 'owner', account: context.ownerAccount };
+  // Her name as the payer, never in the text: a customer writes the firm's name in the message («Rg 12 Thomas Huber Malerei»).
+  if (context.ownerAccount && paysOwner({ counterparty: tx.counterparty, description: '' }, context.ownerName)) return { kind: 'owner', account: context.ownerAccount };
   if (file && (file.role === 'authority' || file.roles.includes('authority'))) return { kind: 'authority', name: file.name };
   return undefined;
 }
