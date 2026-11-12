@@ -195,12 +195,26 @@ export function openFilingPeriod(closedThrough: IsoDate | undefined, today: IsoD
 }
 
 /**
- * The books' first period not filed yet. Books that never filed start with the period of their
- * first payment: a firm that begins its books in October with the summer's statement works on Q3.
+ * The oldest return not filed: the period after the filed ones (`closedThrough`). Books that never
+ * filed start with the period of their first payment or entry (a firm that begins its books in
+ * October with the summer's statement works on Q3), never before the first year the books have
+ * opening balances for, and today's period while they hold nothing. A period after it is never
+ * skipped: one without payments still owes its return. The one answer to «where is the return's
+ * work» (the return's page without a period in its link, the dock, the links to what is open).
  */
-export function booksOpenPeriod(books: { config?: { closedThrough?: IsoDate }; transactions: Array<{ date: IsoDate }> }, today: IsoDate, length: FilingLength): Period {
-  const first = books.config?.closedThrough ? undefined : books.transactions.reduce<IsoDate | undefined>((m, x) => (!m || x.date < m ? x.date : m), undefined);
-  return openFilingPeriod(books.config?.closedThrough, today, length, first);
+export function booksOpenPeriod(books: {
+  config?: { closedThrough?: IsoDate; openingBalances?: Record<string, unknown> };
+  transactions: Array<{ date: IsoDate }>;
+  journalEntries?: Array<{ date: IsoDate }>;
+}, today: IsoDate, length: FilingLength): Period {
+  if (books.config?.closedThrough) return openFilingPeriod(books.config.closedThrough, today, length);
+  let first: IsoDate | undefined;
+  for (const xs of [books.transactions, books.journalEntries ?? []]) {
+    for (const { date } of xs) if (date && (!first || date < first)) first = date;
+  }
+  const year = Object.keys(books.config?.openingBalances ?? {}).sort()[0];
+  const floor = year && `${year}-01-01`;
+  return openFilingPeriod(undefined, today, length, first && floor && first < floor ? floor : first);
 }
 
 /**

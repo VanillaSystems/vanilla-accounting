@@ -13,8 +13,8 @@ and the providers.
 | provider | 14 | 11 |
 | split | 124 | 26 |
 | infrastructure | 69 | 4 |
-| workflow | 26 | 0 |
-| view | 340 | 55 |
+| workflow | 27 | 0 |
+| view | 341 | 55 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -180,7 +180,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/areas/vat/filed.ts` | ESTV 1 |
 | `src/app/areas/vat/form0535.ts` | ESTV 1, Ziffer 3, form 0535 1 |
 | `src/app/areas/vat/links.tsx` | MWST 1 |
-| `src/app/areas/vat/model.ts` | MWST 1, ESTV 2, Ziffer 10, form 0535 3, Rappen 3 |
+| `src/app/areas/vat/model.ts` | MWST 1, ESTV 2, Ziffer 12, form 0535 3, Rappen 3 |
 | `src/app/areas/vat/vat.tsx` | CHF 1, MWST 1, Ziffer 6, form 0535 2 |
 | `src/app/areas/vat/view.ts` | MWST 1, Ziffer 2, form 0535 1 |
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |

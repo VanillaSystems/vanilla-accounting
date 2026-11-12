@@ -18,4 +18,7 @@ export function readsInWords(reads: Record<string, unknown> | undefined): Record
 }
 
 /** A step's outcome as the person reads it («Freigegeben», «Zurück»); an outcome without words stays its id. */
+/** An outcome's word, or nothing where the app has none: for a label that must not show an id. */
+export const outcomeWord = (outcome: string): string => (isKey(`automation.outcome.${outcome}`) ? t(`automation.outcome.${outcome}` as 'automation.outcome.done') : '');
+
 export const outcomeText = (outcome: string): string => (isKey(`automation.outcome.${outcome}`) ? t(`automation.outcome.${outcome}` as 'automation.outcome.done') : outcome);

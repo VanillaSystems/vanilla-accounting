@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type RefObject } from 'react';
+import { UnbookedFact } from '../areas/automation/Issues.js';
 import type { Index } from '../../types/index.js';
 import { AREAS, DOCK, type Nav } from '../areas/index.js';
 import { ICONS } from '../areas/icons.js';
@@ -162,7 +163,7 @@ export function Dock({ current, books, keys, wide, onToggle, nav, canEdit, href,
       </button>
       {open ? (
         <SummaryCard opener={opener} w={w} words={words} period={period} onClose={() => setOpen(false)}
-          runnable={runnable} explain={w.loaded && canEdit && !w.canRun} busy={busyRunNow} onRun={() => void runNow()} goTo={goTo} />
+          runnable={runnable} explain={w.loaded && canEdit && !w.canRun} busy={busyRunNow} onRun={() => void runNow()} goTo={goTo} books={books} go={nav.go} />
       ) : null}
     </nav>
   );
@@ -170,7 +171,8 @@ export function Dock({ current, books, keys, wide, onToggle, nav, canEdit, href,
 
 const PLAY = <svg className="play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>;
 
-function SummaryCard({ opener, w, words, period, onClose, runnable, explain, busy, onRun, goTo }: {
+function SummaryCard({ opener, w, words, period, onClose, runnable, explain, busy, onRun, goTo, books, go }: {
+  books: Index; go(loc: Location): void;
   opener: RefObject<HTMLButtonElement>; w: DockWidget; words: Words; period: Period;
   onClose(): void; runnable: boolean; explain: boolean; busy: boolean; onRun(): void; goTo(loc: Location): (e: MouseEvent) => void;
 }) {
@@ -200,7 +202,8 @@ function SummaryCard({ opener, w, words, period, onClose, runnable, explain, bus
       <div className="figs">
         {w.card.map((f) => <div key={f.key}><b>{figure(f)}</b><span>{cardLabel(f)}</span></div>)}
       </div>
-      {w.waiting ? <a className="ask" href={hrefOf(TASKS)} onClick={goTo(TASKS)}>{t('dock.ask', { n: w.waiting })}{ICONS.right}</a> : null}
+      {w.waiting ? <a className="ask" href={hrefOf(TASKS)} onClick={goTo(TASKS)}>{t('dock.ask', { n: w.waiting })}{ICONS.right}</a>
+        : <UnbookedFact books={books} nav={{ go: (loc) => { onClose(); go(loc); } }} className="m" />}
       <footer>
         {runnable
           ? <button type="button" className="btn primary" disabled={busy} onClick={onRun}>{PLAY}{t('dock.runNow')}</button>

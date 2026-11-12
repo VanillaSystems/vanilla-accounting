@@ -10,9 +10,17 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { api, errorText } from '../lib/api.js';
 import { language, t, tWith } from '../i18n/index.js';
-import { dropStore, failedLine, landedPeriod } from './drop-upload.js';
+import { dropStore, failedLine } from './drop-upload.js';
+import { datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, type DropSummary } from './drop-summary.js';
+import { isUnbooked } from '../areas/bank/model.js';
+import { receiptWaits } from '../areas/automation/period-issues.js';
+import { parsePeriod, filingKeyOf } from '../../accounting/periods.js';
+import { useQuestions } from '../questions/store.js';
+import { useWorkspace } from '../hooks/use-workspace.js';
+import { periodName } from '../lib/period-label.js';
+import { OPEN_ITEMS } from '../areas/vat/model.js';
 import { localToday, type Period } from '../../accounting/periods.js';
-import { filing } from '../../engines/index.js';
+import { chargesVat, filing } from '../../engines/index.js';
 import { needsYou, tabOf, type DropTab } from './drop-tabs.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { monthName } from '../lib/period-label.js';
@@ -32,7 +40,7 @@ import { ledgerFor } from '../areas/receipts/view.js';
 import { useFx } from '../hooks/use-fx.js';
 import { ReportCorrections } from '../areas/receipts/ReportCorrections.js';
 import { processingText } from '../automation/processing.js';
-import { inProcess, processingOf, runProcessing } from '../../workflows/processing.js';
+import { INTAKE_STEPS, INTAKE_WORKFLOW, inProcess, processingOf, runProcessing } from '../../workflows/processing.js';
 
 const drop = dropStore(
   { open: api.dropOpen, add: api.dropAdd, close: api.dropClose },
@@ -319,6 +327,66 @@ function fileState(r: DropRow, books: Index, view: View): FileState {
   return page ? { kind: 'orderPage', provider: page.name } : { kind: 'read' };
 }
 
+/**
+ * How much of a taken file is done, 0–1 (#341): at rest, all of it; while the inbox's run works on
+ * it, the steps the run has behind it and the part of its step that is done (the step's own count,
+ * RunSummary.progress). Files of one run share it, so the bar moves while the run reads them.
+ */
+function doneOf(r: DropRow, x: FileState, view: View): number {
+  if (x.kind !== 'working') return 1;
+  const run = r.run ? view?.runs.find((y) => y.id === r.run) : undefined;
+  if (!run || run.workflow !== INTAKE_WORKFLOW) return 0;
+  const step = Math.max(0, (INTAKE_STEPS as readonly string[]).indexOf(run.at ?? ''));
+  const within = run.status === 'running' && run.progress?.total ? run.progress.done / run.progress.total : 0;
+  return (step + within) / INTAKE_STEPS.length;
+}
+
+/**
+ * What came of the drop, once nothing of it is worked on any more (#341): the payments read and
+ * from when to when, how many are booked and how many wait for what; the receipts read and linked;
+ * each line with a link to them in the period they landed in.
+ */
+function Summary({ sum, rows, books, go, receiptOf }: { sum: DropSummary; rows: readonly DropRow[]; books: Index; go(loc: Location): void; receiptOf(r: DropRow): { date?: string; dateSource?: 'captured' } | undefined }) {
+  const today = localToday();
+  const dates = datesIn(books, receiptOf);
+  const periodOf = (of: readonly DropRow[]) => majorityPeriod(of, dates, today, filing().length);
+  const pays = sum.payments;
+  const paid = pays ? periodOf(rows.filter((r) => r.statement)) : undefined;
+  const recs = sum.receipts;
+  const filed = recs ? periodOf(rows.filter((r) => !r.statement)) : undefined;
+  // What is open is listed in the period of the oldest payment not booked, which need not be the one most payments are in.
+  const open = pays?.openFrom ? parsePeriod(filingKeyOf(pays.openFrom, filing().length), today) ?? undefined : undefined;
+  if (!pays && !recs) return null;
+  return (
+    <div className="dsum" data-testid="drop-summary">
+      {pays ? (
+        <p>
+          {t('drop.sum.payments', { n: pays.n, from: formatDate(pays.from), to: formatDate(pays.to) })}:{' '}
+          {[
+            t('drop.sum.booked', { n: pays.booked }),
+            pays.waitReceipt ? t('drop.sum.waitReceipt', { n: pays.waitReceipt }) : '',
+            pays.asked ? t('drop.sum.asked', { n: pays.asked }) : '',
+            pays.unbooked ? t('drop.sum.unbooked', { n: pays.unbooked }) : '',
+          ].filter(Boolean).join(', ')}.{' '}
+          {paid ? <button type="button" className="linkbtn" data-testid="drop-to-payments" onClick={() => go({ route: { area: 'bank' }, query: { period: paid } })}>{t('drop.sum.toPayments', { period: periodName(paid) })}</button> : null}
+          {open && chargesVat() ? <>{' · '}<button type="button" className="linkbtn" data-testid="drop-to-open" onClick={() => go({ route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period: open } })}>{t('drop.sum.toOpen', { period: periodName(open) })}</button></> : null}
+        </p>
+      ) : null}
+      {recs ? (
+        <p>
+          {t('drop.sum.receipts', { n: recs.read })}{recs.read ? ': ' : ''}
+          {[
+            recs.matched ? t('drop.sum.matched', { n: recs.matched }) : '',
+            recs.unmatched ? t('drop.sum.unmatched', { n: recs.unmatched }) : '',
+            recs.n > recs.read ? t('drop.sum.unread', { n: recs.n - recs.read }) : '',
+          ].filter(Boolean).join(', ')}.{' '}
+          {filed ? <button type="button" className="linkbtn" data-testid="drop-to-receipts" onClick={() => go({ route: { area: 'receipts' }, query: { period: filed } })}>{t('drop.sum.toReceipts', { period: periodName(filed) })}</button> : null}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 /** A reason the run gives as a code has words of its own; any other is shown as the run said it. */
 const reasonText = (reason: string) => (reason === 'unreadable' ? t('drop.reason.unreadable') : reason);
 
@@ -410,15 +478,18 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
 }
 
 /**
- * `period`: the one on screen. While the window is open, the page behind it moves to where the
- * dropped files landed (`onLanded`), once per new period, so the person sees them on closing it.
+ * `period`: the one on screen. While the window is open, the page behind it moves to the period
+ * most of the dropped files landed in (`onLanded`, drop-summary.ts), once per new period, so the
+ * person sees them on closing it; at its end the window says what came of the drop.
  */
 export function DropDialog({ onGo, onLanded, period, books, refresh }: { onGo(loc: Location): void; onLanded(p: Period): void; period: Period; books: Index; refresh(): void }) {
   const s = useDrop();
   const { view } = useAutomation();
   const [tab, setTab] = useState<DropTab>('all');
-  const dateOf = (r: DropRow) => r.statement ? r.facts?.to : r.report ? undefined : books.receipts.find((y) => y.id === receiptIdOf(r, view))?.date;
-  const landed = s.open && s.session ? landedPeriod(s.session.rows, dateOf, period, localToday(), filing().length) : undefined;
+  const accounts = useWorkspace()?.bankAccounts;
+  const { questions } = useQuestions();
+  const receiptOf = (r: DropRow) => books.receipts.find((y) => y.id === receiptIdOf(r, view));
+  const landed = s.open && s.session ? landedPeriod(s.session.rows, datesIn(books, receiptOf), period, localToday(), filing().length) : undefined;
   useEffect(() => { if (landed) onLanded(landed); }, [landed?.token]);
   if (!s.open) return <Lost />;
   const rows = s.session?.rows ?? [];
@@ -428,7 +499,12 @@ export function DropDialog({ onGo, onLanded, period, books, refresh }: { onGo(lo
   const states = taken.map((r) => fileState(r, books, view));
   const working = s.adding > 0 || rows.some((r) => r.state === 'take') || states.some((x) => x.kind === 'working');
   const finished = states.filter((x) => x.kind !== 'working').length;
-  const pct = taken.length ? Math.round((finished / taken.length) * 100) : 0;
+  // Files still uploading or being taken count as not begun, so the bar does not fall back when they join.
+  const coming = s.adding + rows.filter((r) => r.state === 'take').length;
+  const pct = dropProgress([...taken.map((r, i) => doneOf(r, states[i], view)), ...Array<number>(coming).fill(0)]);
+  const sum = !working && taken.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? []), receiptOf, questions) : undefined;
+  // Only files the books hold already (#341): the window says that nothing new came in.
+  const nothingNew = !working && !taken.length && rows.length > 0 && rows.every((r) => (r.state === 'duplicate' && r.reason !== 'possible-duplicate') || !!r.readAs);
   const waits = !working && states.some((x) => x.kind === 'waits' || x.kind === 'stuck');
   // A receipt of a sealed quarter opens in that quarter, not in the open one (r9k-8).
   const go = (route: Route, date?: string) => { closeDrop(); onGo(date ? at(route, date) : { route, query: {} }); };
@@ -441,12 +517,14 @@ export function DropDialog({ onGo, onLanded, period, books, refresh }: { onGo(lo
           {s.adding ? <span className="wfpill st-running">{t('drop.reading', { n: s.adding })}</span> : null}
           <button type="button" className="chip" aria-label={t('common.close')} onClick={closeDrop}>×</button>
         </div>
-        {taken.length ? (
+        {taken.length && !sum ? (
           <div className="dprog">
             <div className="dbar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><i style={{ width: `${pct}%` }} /></div>
-            <p className="m">{t('drop.overall', { pct, done: finished, n: taken.length })}</p>
+            <p className="m">{t('drop.overall', { pct, done: finished, n: taken.length + coming })}</p>
           </div>
         ) : null}
+        {nothingNew ? <div className="dsum" data-testid="drop-nothing-new"><p>{t('drop.sum.nothing')}</p></div> : null}
+        {sum ? <Summary sum={sum} rows={taken} books={books} receiptOf={receiptOf} go={(loc) => { closeDrop(); onGo(loc); }} /> : null}
         <div className="wftabs" role="tablist">
           {tabs.map((x) => {
             const of = x === 'all' ? rows : rows.filter((r) => tabOf(r) === x);

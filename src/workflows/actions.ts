@@ -3,6 +3,7 @@
  * the effect handles it declares in `effects`; the action returns one of its outcomes and only
  * the outputs the step `emits`.
  */
+import { clearProgress, noteProgress } from './step-progress.js';
 import { classifyTransactions, loadClassifyContext } from '../booking/classify.js';
 import { answerSettles, receiptKnowledge, receiptWaitOf } from '../booking/receipt-wait.js';
 import { loadKnowledge } from '../knowledge/layers.js';
@@ -80,8 +81,10 @@ const declared = (outcomes: string[], o: { effects?: string[]; ai?: boolean } = 
  * run stuck with its reason, nothing written.
  */
 function batch(step: StepRun, took: (books: Books, ws: Workspace, later?: () => ReadonlySet<string>) => Took[]): NonNullable<Action['run']> {
-  return async (_input, effects, { ws, ask, later, arrivals }) => {
+  return async (_input, effects, { ws, ask, later, arrivals, run }) => {
     const port = effects['books.write']!;
+    // How far the step is, for a live run's progress bar (step-progress.ts): in memory only, gone when the step ends.
+    const progress = run?.mode === 'live' ? (done: number, total: number) => noteProgress(run.id, done, total) : () => {};
     const before = structuredClone(port.read());
     const todo = took(before, ws, later);
     const start = effects['runs.start'];
@@ -94,7 +97,7 @@ function batch(step: StepRun, took: (books: Books, ws: Workspace, later?: () => 
       renamed: (inbox, next) => arrivals((all) => all.map((a) => (a.kind === 'receipt' && a.inbox === inbox ? { ...a, ...next } : a))),
       refused: (inbox, reason) => arrivals((all) => all.map((a) => (a.kind === 'receipt' && a.inbox === inbox ? { kind: 'refused', file: a.file, reason } : a))),
     };
-    const r = await step({ ws, books: port, ask, progress: () => {}, log: () => {}, ...(hold ? { hold } : {}), ...(release ? { release } : {}), ...(later ? { later } : {}), ...(arrived ? { arrived } : {}) });
+    const r = await step({ ws, books: port, ask, progress, log: () => {}, ...(hold ? { hold } : {}), ...(release ? { release } : {}), ...(later ? { later } : {}), ...(arrived ? { arrived } : {}) }).finally(() => { if (run) clearProgress(run.id); });
     if (r.stop) throw stopped(r.notes);
     // What it read and what it made, for the run view (src/workflows/summary.ts).
     return { outcome: 'ok', output: { took: todo, made: madeBetween(before, port.read()), notes: r.notes } };

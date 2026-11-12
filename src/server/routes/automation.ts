@@ -8,6 +8,7 @@
  *   GET  /api/history/:kind/:id?all=1  the runs that worked on a receipt, payment or entry (#215)
  *   POST /api/automation               an AutomationCommand → CommandResult
  */
+import { progressOf } from '../../workflows/step-progress.js';
 import { createHash } from 'node:crypto';
 import { Router } from 'express';
 import { readBooks, RequestError, WS } from '../books.js';
@@ -91,9 +92,10 @@ export function automationView(): AutomationView {
   const byId = new Map(loaded.workflows.map((w) => [w.id, w]));
   const tasks = runs.map((r) => (byId.has(r.workflow) ? taskOf(byId.get(r.workflow)!, r) : undefined)).filter((t): t is Task => !!t)
     .sort((a, b) => Number(!!b.overdue) - Number(!!a.overdue) || a.since.localeCompare(b.since));
-  const summaries = runs.map((r) => summaryOf(r, byId.get(r.workflow))).sort((a, b) => b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id));
+  // A running step's own count of what it finished (step-progress.ts): part of the revision, so a poll sees it move.
+  const summaries = runs.map((r) => summaryOf(r, byId.get(r.workflow))).map((s) => { const p = s.status === 'running' ? progressOf(s.id) : undefined; return p ? { ...s, progress: p } : s; }).sort((a, b) => b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id));
   const pending = pendingVersions(loaded.workflows, runs);
-  const rev = createHash('sha256').update(JSON.stringify([loaded.workflows.map((w) => w.version), loaded.problems, e.counter, e.paused, pending])).digest('hex').slice(0, 16);
+  const rev = createHash('sha256').update(JSON.stringify([loaded.workflows.map((w) => w.version), loaded.problems, e.counter, e.paused, pending, summaries.flatMap((s) => (s.progress ? [s.id, s.progress.done, s.progress.total] : []))])).digest('hex').slice(0, 16);
   return { rev, ...loaded, runs: summaries, tasks, paused: e.paused, limits: e.limits, pending };
 }
 

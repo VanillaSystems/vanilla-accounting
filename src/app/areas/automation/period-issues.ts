@@ -13,11 +13,15 @@ import { journalOf } from '../journal/model.js';
 import { ledgerOf, needsYou } from '../receipts/model.js';
 import type { OrderPage } from '../../../booking/order-pages.js';
 import { unbookedPayments } from '../bank/model.js';
+import { bookedStates } from '../../../accounting/payment-entries.js';
+import { waitingForReceipt } from '../../../accounting/receipt-due.js';
+import { localToday, type IsoDate } from '../../../accounting/periods.js';
 
 export type PeriodIssue =
   | { kind: 'question'; q: Question; date: string }
   | { kind: 'evidence'; entry: JournalEntry; check: EvidenceCheck }
-  | { kind: 'unbooked'; tx: BankTransaction }
+  /** `waitsForReceipt`: the app holds it until its receipt comes or can be read (receiptWaits). */
+  | { kind: 'unbooked'; tx: BankTransaction; waitsForReceipt?: true }
   | { kind: 'unlinked'; receipt: Receipt };
 
 /** The date of what a question is about, or undefined when it is gone from the books. */
@@ -30,15 +34,51 @@ function dateOn(books: Index, q: Question): string | undefined {
 }
 
 /** The open issues of the days `from`–`to`, in the order a person works them off: questions, contradicting codes, unbooked payments, receipts without a payment. */
-export function periodIssues(books: Index, questions: readonly Question[], from: string, to: string, accounts: readonly LedgerBankAccount[], orderPages: ReadonlyMap<string, OrderPage> = new Map()): PeriodIssue[] {
+export function periodIssues(books: Index, questions: readonly Question[], from: string, to: string, accounts: readonly LedgerBankAccount[], orderPages: ReadonlyMap<string, OrderPage> = new Map(), today: IsoDate = localToday()): PeriodIssue[] {
   const within = (d: string | undefined): d is string => !!d && d >= from && d <= to;
   const asked = questions.flatMap((q): PeriodIssue[] => {
     const date = q.status === 'open' ? dateOn(books, q) : undefined;
     return within(date) ? [{ kind: 'question', q, date }] : [];
   });
   const evidence = journalOf(books).views.flatMap((v): PeriodIssue[] => (v.evidence && within(v.e.date) ? [{ kind: 'evidence', entry: v.e, check: v.evidence }] : []));
-  const unbooked = unbookedPayments(books, accounts).filter((t) => within(t.date)).map((tx): PeriodIssue => ({ kind: 'unbooked', tx }));
+  const held = receiptWaits(books, accounts, today);
+  const unbooked = unbookedPayments(books, accounts).filter((t) => within(t.date)).map((tx): PeriodIssue => ({ kind: 'unbooked', tx, ...(held.has(tx.ref) ? { waitsForReceipt: true as const } : {}) }));
   const l = ledgerOf(books, from, undefined, orderPages);
   const unlinked = l.views.filter((v) => needsYou(v, l) && within(v.date) && !v.r.filedPayment).map((v): PeriodIssue => ({ kind: 'unlinked', receipt: v.r }));
   return [...asked, ...evidence, ...unbooked, ...unlinked];
+}
+
+/**
+ * The payments the app does not book because their receipt is not there or cannot be read
+ * (src/accounting/receipt-due.ts `waitingForReceipt`, issue #29, #57), by ref: the one answer to
+ * «wartet auf ihren Beleg» for the drop's summary, the return's page, Automatisierung and Aufgaben.
+ * It holds the ones whose return is near too (then a task of the person's on Aufgaben).
+ */
+export function receiptWaits(books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts' | 'config'>, accounts: readonly LedgerBankAccount[], today: IsoDate = localToday()): Set<string> {
+  const booked = bookedStates(books, accounts);
+  return new Set(waitingForReceipt(books, (ref) => booked(ref) === 'booked', today).map((w) => w.tx.ref));
+}
+
+/**
+ * How many issues of each kind are open: one line beside a figure that is not final (the return's
+ * page, #341). `waitingReceipt`: of the unbooked payments, those in `receiptWaits`.
+ */
+export interface IssueCounts { total: number; questions: number; evidence: number; unbooked: number; waitingReceipt: number; unlinked: number }
+
+export function countIssues(issues: readonly PeriodIssue[]): IssueCounts {
+  const of = (kind: PeriodIssue['kind']) => issues.filter((i) => i.kind === kind).length;
+  return {
+    total: issues.length, questions: of('question'), evidence: of('evidence'), unbooked: of('unbooked'), unlinked: of('unlinked'),
+    waitingReceipt: issues.filter((i) => i.kind === 'unbooked' && i.waitsForReceipt).length,
+  };
+}
+
+/**
+ * The payments of every period not filed that nobody booked, and the oldest of them: what «nothing
+ * waits for you» must not hide (#341). The same payments as the period's issues, over all open days.
+ */
+export function unbookedOpen(books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts' | 'config'>, accounts: readonly LedgerBankAccount[], today: IsoDate = localToday()): { unbooked: number; waitingReceipt: number; first?: BankTransaction } {
+  const open = unbookedPayments(books, accounts);
+  const held = receiptWaits(books, accounts, today);
+  return { unbooked: open.length, waitingReceipt: open.filter((t) => held.has(t.ref)).length, ...(open[0] ? { first: open[0] } : {}) };
 }

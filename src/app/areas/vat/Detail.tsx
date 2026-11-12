@@ -13,15 +13,16 @@ import { periodName } from '../../lib/period-label.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps, Nav } from '../index.js';
-import { FORM_0535, byCode, correctedPeriod, filedDiff, formAmount, rateOf, sumsOf, type VatReturn } from './model.js';
+import { FORM_0535, OPEN_ITEMS, byCode, correctedPeriod, filedDiff, formAmount, rateOf, sumsOf, type VatReturn } from './model.js';
 import { effectLines, formSections } from './form0535.js';
 import { CodeLink, Go, entryAt } from './links.js';
 import { codeText } from '../codes/names.js';
-import { correctionDiff, signed, useReturn, zifferLabel } from './view.js';
+import { correctionDiff, isPending, resultSentence, signed, useReturn, zifferLabel } from './view.js';
 import { vat, vatSetup } from '../../../engines/index.js';
 import { methodOf } from '../../../workspace/vat-setup.js';
 import type { ReturnFigures } from '../../../engines/return.js';
 import { correctionName } from '../../lib/vat-words.js';
+import { PeriodIssues, usePeriodIssues } from '../automation/Issues.js';
 
 type Props = AreaProps<RouteOf<'vat'>>;
 
@@ -37,14 +38,29 @@ function ReturnDetail(props: Props) {
   if (route.ziffer === FORM_0535) {
     return filed ? <Correction {...props} v={v} filed={filed} /> : <div className="detail-empty"><div>{t('vat.noFiledReturn', { period: periodName(v.period) })}</div></div>;
   }
+  if (route.ziffer === OPEN_ITEMS) {
+    // The list the return's review shows (Issues.tsx), one click from the return (#341).
+    return (
+      <div className="detail-in" key={`${v.key}:open`} data-testid="vat-open-items">
+        <div className="head"><h2 className="who">{t('vat.openItems')}<small>{periodName(v.period)}</small></h2></div>
+        <PeriodIssues books={props.books} nav={props.nav} from={v.period.from} to={v.period.to} period={periodName(v.period)} canEdit={props.canEdit} />
+      </div>
+    );
+  }
   const z = v.report.ziffern.find((x) => x.number === route.ziffer);
   if (!z) return <div className="detail-empty"><div>{route.ziffer ? t('vat.zifferGone', { n: route.ziffer }) : t('vat.chooseZiffer')}</div></div>;
   return <Ziffer {...props} v={v} filed={filed} n={z.number} amount={z.amount} />;
 }
 
-/** What a Ziffer is, in one sentence. */
-function explanation(v: VatReturn, n: string): string {
+/**
+ * What a Ziffer is, in one sentence. The result's sentence tells to transfer the amount only when
+ * there is one and the figure is final; while something of the period is open (`pending`) it says
+ * that, also for a result of 0.00; a final zero says that the return is still to be filed (#341).
+ */
+function explanation(v: VatReturn, n: string, amount: number, pending: boolean): string {
   const r = rateOf(v, n);
+  const key = n === '500' || n === '510' ? resultSentence(n, amount, pending, v.state.kind, methodOf(vatSetup()) === 'net-rate') : undefined;
+  if (key) return t(key, { period: periodName(v.period) });
   if (r?.row.kind === 'net-rate') return t('vat.xNetRate');
   if (r) return t(r.row.kind === 'supply' ? 'vat.xSupply' : 'vat.xAcquisition', { rate: r.row.rate });
   if (n === '500' && methodOf(vatSetup()) === 'net-rate') return t('vat.x500NetRate');
@@ -66,6 +82,8 @@ function Ziffer({ books, v, filed, n, amount, nav, period }: Props & { v: VatRet
   // A net-rate row declares gross turnover like a supply row; only Bezugsteuer is declared net.
   const turnover = r !== undefined && r.row.kind !== 'acquisition';
   const gross = Number(n) < 300 || turnover;
+  const open = usePeriodIssues(books, v.period.from, v.period.to).length;
+  const pending = isPending(v, books, open);
 
   return (
     <div className="detail-in" key={`${v.key}:${n}`}>
@@ -83,7 +101,7 @@ function Ziffer({ books, v, filed, n, amount, nav, period }: Props & { v: VatRet
         )}
         {lines.length > 0 && <span>{t('common.entryCount', { n: lines.length })}</span>}
       </div>
-      <p className="zexpl">{explanation(v, n)}</p>
+      <p className="zexpl">{explanation(v, n, amount, pending)}{pending && (n === '500' || n === '510') ? <> <span data-testid="vat-to-open"><Go to={{ route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period: v.period } }} nav={nav}>{t('issues.title', { period: periodName(v.period), n: open })}</Go></span></> : null}</p>
       {was != null && (
         <div className="notice warn">
           <span className="dot" aria-hidden="true" />

@@ -2,8 +2,8 @@
  * The period a page shows (F10, F17), in the real UI on a copy of the demo (filed through Q1 2026, its
  * newest payment on 30.09.2026): without a period in the link a page shows the newest data's quarter,
  * not the oldest unfiled one; one click on a quarter in the picker applies it, and the calendar's days
- * are there only after «Benutzerdefiniert»; MWST names the earlier return not filed as a fact, a link
- * to it; an invoice issued while another quarter is shown stays in the list, in its own period; a
+ * are there only after «Benutzerdefiniert»; MWST opens on the oldest return not filed
+ * (#341), and a later one names it as a fact, a link to it; an invoice issued while another quarter is shown stays in the list, in its own period; a
  * receipt opened while it is still read follows into its period once its date is known.
  */
 import { test } from 'node:test';
@@ -50,12 +50,16 @@ test('pages open on the newest data, the picker applies a quarter in one click, 
     await page.waitForSelector('.pp [data-day]');
     await page.keyboard.press('Escape');
 
+    // MWST alone opens where the return's work is (#341): the oldest return not filed, here Q2.
     await app.open('/vat');
-    assert.match(await periodButton(), /Q3 2026/);
+    await page.waitForFunction(() => /Q2 2026/.test(document.querySelector<HTMLElement>('[data-testid=period-picker]')?.innerText ?? ''));
+    assert.equal(await page.$('[data-testid=earlier-open]'), null, 'nothing earlier is open');
+    // A later return still names the earlier one not filed as a fact, a link to it.
+    await app.open('/vat?period=2026-Q3');
     const earlier = await page.waitForSelector('[data-testid=earlier-open]');
     assert.match(await earlier!.evaluate((b) => (b as HTMLElement).innerText), /^Q2 2026 nicht eingereicht · fällig/);
     await earlier!.evaluate((b) => (b as HTMLElement).click());
-    await page.waitForFunction(() => location.search === '?period=2026-Q2');
+    await page.waitForFunction(() => /Q2 2026/.test(document.querySelector<HTMLElement>('[data-testid=period-picker]')?.innerText ?? ''));
 
     await app.open(`/invoices/draft-${DRAFT}?period=2026-Q2`);
     await click(page, '[data-act=issue]');

@@ -5,7 +5,7 @@ import { localToday, booksOpenPeriod, type Period } from '../../../accounting/pe
 import { fmt } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import { rateOf, vatKeyOf, vatReturn, type VatReturn } from './model.js';
-export { correctionDiff, headline } from './model.js';
+export { correctionDiff, headline, isPending, notFiled, resultSentence } from './model.js';
 import { useFiledReturn } from './filed.js';
 import { vat, filing } from '../../../engines/index.js';
 import type { ReturnFigures } from '../../../engines/return.js';

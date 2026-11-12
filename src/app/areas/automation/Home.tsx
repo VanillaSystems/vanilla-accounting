@@ -25,6 +25,8 @@ import type { Nav } from '../index.js';
 import { Go } from '../vat/links.js';
 import { approvalWithheld } from './filing-summary.js';
 import { readsInWords } from './words.js';
+import { UnbookedFact } from './Issues.js';
+import { unbookedOpen } from './period-issues.js';
 
 const tx = (v: Text) => textIn(v, language());
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -70,6 +72,8 @@ export function HomePage({ view, books, nav, query, canEdit }: { view: Automatio
   const asked = forMe(q.questions, q.me);
   const stuck = view.runs.filter((r) => r.status === 'stuck');
   const waiting = view.tasks.length + stuck.length + asked.length;
+  // No task of hers, yet payments not booked: «nothing waits» would hide them (#341).
+  const unbooked = unbookedOpen(books, ws?.bankAccounts ?? []).unbooked > 0;
   const running = view.runs.filter((r) => r.mode === 'live' && (r.status === 'running' || r.status === 'queued' || r.status === 'parked'));
   const next = view.workflows.flatMap((w) => { const s = workflowState(w, view, now); return s.next ? [{ w, at: s.next }] : []; }).sort((a, b) => a.at.getTime() - b.at.getTime()).slice(0, 4);
   const booked = bookedStates(books, ws?.bankAccounts ?? []);
@@ -86,7 +90,7 @@ export function HomePage({ view, books, nav, query, canEdit }: { view: Automatio
         </select>
         <span>{rangeText(period.from, period.to)}</span>
       </div>
-      <Hero f={f} period={period} waiting={waiting} />
+      <Hero f={f} period={period} waiting={waiting} unbooked={unbooked} books={books} nav={nav} />
       {fresh ? (
         <p className="lead" data-testid="home-empty">
           {t('automation.home.emptyLead')}{' '}
@@ -120,7 +124,7 @@ export function HomePage({ view, books, nav, query, canEdit }: { view: Automatio
             </div>
           ))}
           {asked.map((x) => <QuestionCard key={x.id} q={x} nav={nav} canEdit={canEdit} books={books} showItem />)}
-          {waiting ? null : <p className="m">{t('automation.tasksEmpty')}</p>}
+          {waiting ? null : unbooked ? <p className="m"><UnbookedFact books={books} nav={nav} lead={t('automation.noTask')} /></p> : <p className="m">{t('automation.tasksEmpty')}</p>}
           <p><Go to={{ route: { area: 'automation', view: 'tasks' }, query: {} }} nav={nav} className="golink">{t('automation.home.allTasks')} →</Go></p>
         </section>
         <section>
@@ -156,7 +160,7 @@ export function HomePage({ view, books, nav, query, canEdit }: { view: Automatio
   );
 }
 
-function Hero({ f, period, waiting }: { f: HomeFigures; period: Period; waiting: number }) {
+function Hero({ f, period, waiting, unbooked, books, nav }: { f: HomeFigures; period: Period; waiting: number; unbooked: boolean; books: Index; nav: Nav }) {
   const known = f.booked - f.authors.unknown;
   return (
     <>
@@ -167,7 +171,7 @@ function Hero({ f, period, waiting }: { f: HomeFigures; period: Period; waiting:
             {f.withoutYou !== undefined ? <>, {t('automation.home.hero.share', { pct: f.withoutYou })}</> : null}.
           </>
         )}
-        {' '}{waiting ? <span className="w">{t('automation.home.hero.waiting', { n: waiting })}</span> : t('automation.tasksEmpty')}
+        {' '}{waiting ? <span className="w">{t('automation.home.hero.waiting', { n: waiting })}</span> : unbooked ? <UnbookedFact books={books} nav={nav} lead={t('automation.noTask')} /> : t('automation.tasksEmpty')}
       </p>
       {f.booked > 0 && f.authors.unknown > 0 ? (
         <p className="m footnote" data-testid="home-unknown">{known > 0 ? t('automation.home.unknown', { n: f.authors.unknown }) : t('automation.home.unknownAll')}</p>

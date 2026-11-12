@@ -20,12 +20,14 @@ import { t } from '../../i18n/index.js';
 import { ICONS } from '../icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import {
-  FORM_0535, SECTIONS, amountOf, filedDiff, formAmount, rateOf, resultZiffer, sectionOf, shownZiffern, sumsOf, ratesRoundedApart, thresholdWatch, vatKeyOf, vatReturn, yearTurnover,
+  FORM_0535, OPEN_ITEMS, SECTIONS, amountOf, filedDiff, formAmount, rateOf, resultZiffer, sectionOf, shownZiffern, sumsOf, ratesRoundedApart, thresholdWatch, vatKeyOf, vatReturn, yearTurnover,
   type Section, type VatReturn,
 } from './model.js';
-import { correctionDiff, signed, useReturn, zifferLabel, headline } from './view.js';
+import { correctionDiff, signed, useReturn, zifferLabel, headline, isPending, notFiled } from './view.js';
 import { Go, entryAt } from './links.js';
 import { Detail } from './Detail.js';
+import { issueWords, usePeriodIssues } from '../automation/Issues.js';
+import { countIssues } from '../automation/period-issues.js';
 import type { ReturnFigures } from '../../../engines/return.js';
 import { baseCurrency, chargesVat, filing } from '../../../engines/index.js';
 
@@ -77,9 +79,13 @@ function NotRegistered({ period, books, canEdit }: Props) {
   );
 }
 
+
 function Return(props: Props) {
   const { route, period, books, nav, canEdit } = props;
   const { v, filed, key } = useReturn({ books, period });
+  // What is still open in a return not filed: its figure is not final while any of it is (#341).
+  const issues = countIssues(usePeriodIssues(books, v.period.from, v.period.to));
+  const pending = isPending(v, books, issues.total);
   const [all, setAll] = useState(readAll);
   const rows = shownZiffern(v, filed, all);
   const ids = [...rows, ...(filed ? [FORM_0535] : [])];
@@ -88,7 +94,8 @@ function Return(props: Props) {
 
   // A list with no Ziffer selected selects the result; so does the 0535 of a quarter not filed (a
   // period switch keeps the Ziffer). A Ziffer the form does not have stays: the detail says so.
-  const noForm = route.ziffer === FORM_0535 && v.state.kind !== 'filed';
+  // The open list belongs to a return still worked on; it stays while the stores load, also when it is empty (the detail says so).
+  const noForm = (route.ziffer === FORM_0535 && v.state.kind !== 'filed') || (route.ziffer === OPEN_ITEMS && !notFiled(v));
   useEffect(() => {
     if (!route.ziffer || noForm) nav.select({ area: 'vat', ziffer: resultZiffer(v) });
   }, [route.ziffer, noForm, v]);
@@ -123,11 +130,17 @@ function Return(props: Props) {
       </div>
       <SalesWithoutVat books={books} period={period} nav={nav} />
       <button type="button" className="vresult" data-filed={head.filed || undefined} onClick={() => select(result)}>
-        <span>{t(head.kind === 'credit' ? 'vat.credit' : 'vat.toPay')}{head.filed ? ` · ${t('vat.asFiled')}` : ''}</span>
+        <span>{t(head.kind === 'credit' ? 'vat.credit' : 'vat.toPay')}{head.filed ? ` · ${t('vat.asFiled')}` : pending ? ` · ${t('vat.notFinal')}` : ''}</span>
         <b className="mono"><small>CHF</small>{fmt(head.amount)}</b>
         {head.corrected ? <span className="m" data-testid="corrected-now">{t(head.corrected.kind === 'credit' ? 'vat.nowCredit' : 'vat.nowToPay', { amount: fmt(head.corrected.amount), diff: signed(head.corrected.diff) })}</span> : null}
         {head.rounding ? <span className="m" data-testid="rounding-note">{t('vat.headRounding', { ziffern: fmt(head.rounding.ziffern) })}</span> : null}
       </button>
+      {pending ? (
+        <button type="button" className={`notice vpending${route.ziffer === OPEN_ITEMS ? ' sel' : ''}`} data-testid="vat-pending" aria-pressed={route.ziffer === OPEN_ITEMS} onClick={() => select(OPEN_ITEMS)}>
+          <span className="dot" aria-hidden="true" />
+          <span>{t('vat.pending', { period: periodName(v.period) })} {issueWords(issues).join(' · ')}. <u>{t('vat.pendingOpen')}</u></span>
+        </button>
+      ) : null}
       {ratesRoundedApart(v) ? <p className="m" data-testid="rate-rounding-note">{t('vat.rateRounding')}</p> : null}
       <div className="rows vz" role="listbox" aria-label={t('vat.ziffern')}>
         {SECTIONS.map((s) => {
@@ -218,7 +231,9 @@ export const vat: Area<RouteOf<'vat'>> = {
   List,
   Detail,
   legend,
-  title: (r) => r.ziffer && (r.ziffer === FORM_0535 ? t('vat.form0535') : t('vat.zifferN', { n: r.ziffer })),
+  title: (r) => r.ziffer && (r.ziffer === FORM_0535 ? t('vat.form0535') : r.ziffer === OPEN_ITEMS ? t('vat.openItems') : t('vat.zifferN', { n: r.ziffer })),
+  // The return's work is in the oldest return not filed, not where the newest file is dated (#341).
+  home: (books, today) => (chargesVat() ? booksOpenPeriod(books, today, filing().length) : undefined),
   keys(e, p) {
     const d = moveKey(e);
     if (d) {

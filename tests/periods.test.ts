@@ -201,3 +201,15 @@ test('a page without a period shows the period of the newest data, not the oldes
   assert.equal(dataPeriod({ config: filedQ1, transactions: [] }, '2026-11-02', 'quarter').token, '2026-Q2', 'nothing dated: the open period');
   assert.equal(dataPeriod({ config: filedQ1, transactions: [tx('2026-09-30')] }, '2026-11-02', 'quarter', '2026-10-01').token, '2026-Q4', 'an area\'s own newer row (an issued invoice)');
 });
+
+test('the oldest return not filed: after the filed ones, else from the books\' first payment or entry, no period skipped (#341)', () => {
+  const tx = (date: string) => ({ date });
+  // The persona's books: nothing filed, a Q3 statement; a receipt dated today is no payment.
+  assert.equal(booksOpenPeriod({ transactions: [tx('2026-07-02'), tx('2026-09-30')] }, '2026-11-12', 'quarter').token, '2026-Q3');
+  assert.equal(booksOpenPeriod({ transactions: [tx('2026-09-30')], journalEntries: [tx('2026-05-04')] }, '2026-11-12', 'quarter').token, '2026-Q2', 'an entry counts like a payment');
+  assert.equal(booksOpenPeriod({ config: { closedThrough: '2026-03-31' }, transactions: [tx('2026-02-01'), tx('2026-09-30')] }, '2026-11-12', 'quarter').token, '2026-Q2', 'Q2 holds nothing and still owes its return: not skipped for Q3');
+  assert.equal(booksOpenPeriod({ config: { closedThrough: '2026-09-30' }, transactions: [tx('2026-09-30')] }, '2026-11-12', 'quarter').token, '2026-Q4');
+  assert.equal(booksOpenPeriod({ config: { openingBalances: { '2026': {} } }, transactions: [tx('2025-12-28'), tx('2026-02-03')] }, '2026-11-12', 'quarter').token, '2026-Q1', 'never before the books\' first year');
+  assert.equal(booksOpenPeriod({ transactions: [tx('2026-08-01')] }, '2026-11-12', 'half').token, '2026-H2');
+  assert.equal(booksOpenPeriod({ transactions: [tx('2027-01-15')] }, '2026-11-12', 'quarter').token, '2026-Q4', 'a date after today counts as today');
+});
