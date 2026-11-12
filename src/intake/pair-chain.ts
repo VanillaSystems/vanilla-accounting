@@ -23,6 +23,7 @@ import { legOf } from '../workspace/money-accounts.js';
 import { partPayment } from '../accounting/batch-parts.js';
 import { chargesOf } from './charges.js';
 import type { Businesses } from './batch-payers.js';
+import type { Firm } from './own-invoice.js';
 import { delaysOf } from './delays.js';
 import { appBooked, noReceiptOfItsOwn, receiptKnowledge } from '../booking/receipt-wait.js';
 import { loadClassifyContext } from '../booking/classify.js';
@@ -78,6 +79,8 @@ export interface ChainOptions {
   noPayment?: (books: Books) => (r: Receipt) => boolean;
   /** Whose a receipt and a payment are by the business files (businessesOf): a payment naming the receipt's business counts as its name. */
   businesses?: Businesses;
+  /** The firm (company.uid, company.name): money in pays its own invoices (src/intake/own-invoice.ts, #365). */
+  firm?: Firm;
 }
 
 /** The payments of `books` without a receipt of their own, as the wait for a receipt decides it (src/booking/receipt-wait.ts noReceiptOfItsOwn), for the workspace `ws`. */
@@ -135,10 +138,10 @@ export function estvToChf(fx: FxResolver = loadFxResolver()): ToChf {
   };
 }
 
-/** The short facts of a receipt the model sees: vendor, day, amount, currency, its numbers. */
-function receiptFacts(r: Receipt): Record<string, unknown> {
+/** The short facts of a receipt the model sees: vendor, day, amount, currency, its numbers; `own`: the firm's own invoice, paid by its customer. */
+function receiptFacts(r: Receipt, own?: boolean): Record<string, unknown> {
   const named = r.title?.vendor ?? r.description;
-  return { vendor: named ?? r.filename, ...(named ? {} : { text: (r.extractedText ?? '').replace(/\s+/g, ' ').slice(0, 160) }), what: r.title?.what, date: r.date, amount: r.amount, currency: r.currency || baseCurrency(), numbers: numbersIn(r.extractedText ?? '').slice(0, 4) };
+  return { ...(own ? { own: true } : {}), vendor: named ?? r.filename, ...(named ? {} : { text: (r.extractedText ?? '').replace(/\s+/g, ' ').slice(0, 160) }), what: r.title?.what, date: r.date, amount: r.amount, currency: r.currency || baseCurrency(), numbers: numbersIn(r.extractedText ?? '').slice(0, 4) };
 }
 
 /** The short facts of a payment the model sees: its text, day, amount, currency and way. */
@@ -149,18 +152,18 @@ function paymentFacts(t: BankTransaction): Record<string, unknown> {
   return { text, date: t.date, amount: Math.abs(t.amount), currency: t.currency, way: t.direction === 'CRDT' ? 'in' : 'out' };
 }
 
-export function checkPrompt(pairs: ReadonlyArray<{ r: Receipt; t: BankTransaction }>): string {
-  const list = pairs.map((p, i) => ({ i, receipt: receiptFacts(p.r), payment: paymentFacts(p.t) }));
-  return `Each item pairs a receipt with a bank payment that has the same amount (across currencies: within a few percent at the official rate) and a near date. Decide for each whether the payment is what paid this receipt: the payment's text should name the receipt's vendor, its card acquirer or its payment provider, or carry one of its numbers. A different shop, a refund against a purchase, or a vendor the text contradicts does not fit.
+export function checkPrompt(pairs: ReadonlyArray<{ r: Receipt; t: BankTransaction; own?: boolean }>): string {
+  const list = pairs.map((p, i) => ({ i, receipt: receiptFacts(p.r, p.own), payment: paymentFacts(p.t) }));
+  return `Each item pairs a receipt with a bank payment that has the same amount (across currencies: within a few percent at the official rate) and a near date. Decide for each whether the payment is what paid this receipt: the payment's text should name the receipt's vendor, its card acquirer or its payment provider, or carry one of its numbers. A different shop, a refund against a purchase, or a vendor the text contradicts does not fit. A receipt with "own":true is the company's own invoice to a customer: money in pays it, its "vendor" is the company itself, and the payment names the customer or the invoice's number, never that vendor.
 
 ${JSON.stringify(list)}
 
 Answer ONLY a JSON array, one object per item: [{"i":0,"fits":true,"why":"text names the vendor"}]. Keep "why" under 10 words.`;
 }
 
-export function choosePrompt(items: ReadonlyArray<{ r: Receipt; candidates: BankTransaction[] }>): string {
-  const list = items.map((x, i) => ({ i, receipt: receiptFacts(x.r), payments: x.candidates.map((t, k) => ({ k, ...paymentFacts(t) })) }));
-  return `Each item is a receipt and the bank payments that could have paid it (amount and date fit). Choose the payment that paid it, by its text naming the vendor, a card acquirer or payment provider of the vendor, or one of the receipt's numbers, then by the date. Choose none when nothing points to one of them.
+export function choosePrompt(items: ReadonlyArray<{ r: Receipt; candidates: BankTransaction[]; own?: boolean }>): string {
+  const list = items.map((x, i) => ({ i, receipt: receiptFacts(x.r, x.own), payments: x.candidates.map((t, k) => ({ k, ...paymentFacts(t) })) }));
+  return `Each item is a receipt and the bank payments that could have paid it (amount and date fit). Choose the payment that paid it, by its text naming the vendor, a card acquirer or payment provider of the vendor, or one of the receipt's numbers, then by the date. Choose none when nothing points to one of them. A receipt with "own":true is the company's own invoice to a customer: money in pays it, and the payment names the customer or the invoice's number, never the company.
 
 ${JSON.stringify(list)}
 
@@ -199,7 +202,7 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
   const stagedIds = new Set((opts.staged ?? []).map((r) => r.id));
   const books = stagedIds.size ? { ...stored, receipts: [...stored.receipts.filter((r) => !stagedIds.has(r.id)), ...opts.staged!] } : stored;
   const lock = periodLock(books);
-  const search = searchPairs(books, opts.toChf, lock.isClosed, { noReceipt: opts.noReceipt?.(books), noPayment: opts.noPayment?.(books), businesses: opts.businesses, delays: delaysOf(books, opts.businesses) });
+  const search = searchPairs(books, opts.toChf, lock.isClosed, { noReceipt: opts.noReceipt?.(books), noPayment: opts.noPayment?.(books), businesses: opts.businesses, delays: delaysOf(books, opts.businesses), firm: opts.firm });
   // «Beleg suchen» on a leg of a split charge searches for the charge, which its first movement names.
   const onlyTx = opts.only && 'payment' in opts.only ? books.transactions.find((t) => t.ref === (opts.only as { payment: string }).payment) : undefined;
   const only = onlyTx ? { payment: chargesOf(books.transactions, opts.toChf).of(onlyTx).refs[0] } : opts.only;
@@ -246,7 +249,7 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
   // Stage 2: the model checks the clear pairs; without one (or when it fails) code links those it may link alone.
   const choose: Array<{ receipt: string; candidates: PairCandidate[] }> = [];
   for (const batch of chunks(clear, CHECK_BATCH)) {
-    const verdict = await call(checkPrompt(batch.map((c) => ({ r: receipt.get(c.receipt)!, t: payment.get(c)! }))), 'check', parseCheck);
+    const verdict = await call(checkPrompt(batch.map((c) => ({ r: receipt.get(c.receipt)!, t: payment.get(c)!, own: !!c.against }))), 'check', parseCheck);
     if (verdict === undefined) { for (const c of batch) byCodeAlone(c); continue; }
     result.checked += batch.length;
     batch.forEach((c, i) => {
@@ -269,7 +272,7 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
     else toPerson(s);
   }
   for (const batch of chunks(choose, CHOOSE_BATCH)) {
-    const answers = await call(choosePrompt(batch.map((x) => ({ r: receipt.get(x.receipt)!, candidates: x.candidates.map((c) => payment.get(c)!) }))), 'choose', parseChoice);
+    const answers = await call(choosePrompt(batch.map((x) => ({ r: receipt.get(x.receipt)!, candidates: x.candidates.map((c) => payment.get(c)!), own: x.candidates.some((c) => !!c.against) }))), 'choose', parseChoice);
     if (answers === undefined) { for (const x of batch) result.left.push({ receipt: x.receipt, candidates: x.candidates, total: x.candidates.length }); continue; }
     result.chosen += batch.length;
     batch.forEach((x, i) => {

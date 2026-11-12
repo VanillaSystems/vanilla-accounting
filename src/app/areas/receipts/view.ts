@@ -16,15 +16,18 @@ import type { OrderPage } from '../../../booking/order-pages.js';
 import { orderPagesNow, vatCorrectionsNow } from '../../lib/order-pages.js';
 import type { VatCorrection } from '../../../booking/vat-corrections.js';
 
-let memo: { books: Index; runs: RunSummary[] | undefined; pages: ReadonlyMap<string, OrderPage>; corrections: ReadonlyMap<string, VatCorrection>; ledger: Ledger } | undefined;
+let memo: { books: Index; runs: RunSummary[] | undefined; pages: ReadonlyMap<string, OrderPage>; corrections: ReadonlyMap<string, VatCorrection>; company: unknown; ledger: Ledger } | undefined;
 
 /** The ledger of these books, computed once per load and once per change of the runs (what they still work on, #218). */
 export function ledgerFor(books: Index): Ledger {
   const runs = automationNow()?.runs;
   const pages = orderPagesNow();
   const corrections = vatCorrectionsNow();
-  if (memo?.books !== books || memo.runs !== runs || memo.pages !== pages || memo.corrections !== corrections) {
-    memo = { books, runs, pages, corrections, ledger: ledgerOf(books, booksOpenPeriod(books, localToday(), filing().length).from, processingOf(runs ?? [], books.receipts), pages, corrections) };
+  // The firm: money in pays its own invoices by their number (#365); known once the workspace is loaded.
+  const company = workspaceNow()?.company;
+  if (memo?.books !== books || memo.runs !== runs || memo.pages !== pages || memo.corrections !== corrections || memo.company !== company) {
+    const firm = company && { uid: company.uid, name: company.name };
+    memo = { books, runs, pages, corrections, company, ledger: ledgerOf(books, booksOpenPeriod(books, localToday(), filing().length).from, processingOf(runs ?? [], books.receipts), pages, corrections, firm) };
   }
   return memo.ledger;
 }
