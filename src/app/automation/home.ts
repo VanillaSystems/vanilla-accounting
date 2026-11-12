@@ -142,6 +142,7 @@ export function homeFigures(books: Index, period: PeriodRange, ctx: HomeContext,
   };
 }
 
+/** Where a period's return stands today: filed, still running, over before the books begin, or over and due. */
 export function filingStage(books: DatedBooks, period: Pick<PeriodRange, 'to'>, ctx: HomeContext): FilingStage {
   const closedThrough = books.config?.closedThrough;
   if (closedThrough && closedThrough >= period.to) return { kind: 'filed' };

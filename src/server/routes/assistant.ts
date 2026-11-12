@@ -25,8 +25,9 @@ import { takeInProposals } from '../../assistant/terminal-drafts.js';
 import { appMap } from '../app-map.js';
 import { gate } from '../../llm/off.js';
 import { automationView, bookAgain, engine } from './automation.js';
-import { openWork } from '../open-work.js';
+import { openWork, purposeNow } from '../open-work.js';
 import { askedBy } from '../../workflows/held.js';
+import { openCount } from '../../workflows/model.js';
 import { accountsOf } from '../../workspace/reads.js';
 import { providersOf } from '../../intake/sales-report-import.js';
 import { clearingAccounts } from '../../booking/providers.js';
@@ -74,6 +75,7 @@ function sendOf(body: unknown): AssistantSend {
     text: text.slice(0, 20_000), context, ...(attachments.length ? { attachments } : {}),
     ...(typeof b.conversation === 'string' && b.conversation ? { conversation: b.conversation } : {}),
     ...(PURPOSES.includes(b.purpose as Purpose) ? { purpose: b.purpose as Purpose } : {}),
+    ...(b.setup === true ? { setup: true } : {}),
     language: typeof b.language === 'string' ? b.language : 'de',
   };
 }
@@ -99,19 +101,25 @@ router.get('/api/assistant/:id', (req, res) => {
 
 /**
  * What waits under Aufgaben now (the questions, the workflows' tasks with the rule that held each,
- * the payments without a booking), and how receipts come in now. A conversation with a purpose gets
- * only its own context, so the AI has nothing unrelated to bring up.
+ * the payments without a booking) with where the oldest period not filed stands, and how receipts
+ * come in now. A conversation with a purpose gets only its own context, so the AI has nothing
+ * unrelated to bring up; the setup's is one only until the person ends the setup.
  */
-async function waitingNow(language: string, purpose: Purpose | undefined): Promise<string> {
+async function waitingNow(language: string, asked: Purpose | undefined, setupWanted: boolean): Promise<string> {
+  // A setup the person ended is over: its conversation gets the books' state like any other, unless she opened the setup again herself (#342).
+  const purpose = purposeNow(asked, readProgress(WS), setupWanted);
   if (purpose === 'collection-setup') return [PURPOSE_NOTE[purpose], await collectionNow(WS, language, readBooks().receipts)].join('\n\n');
   if (purpose === 'onboarding') {
     const books = readBooks();
     return [PURPOSE_NOTE[purpose], setupNote(readProgress(WS), setupFacts(), wordsIn(language).t), await collectionNow(WS, language, books.receipts)].join('\n\n');
   }
   const runs = new Map(engine().runs().map((r) => [r.id, r]));
-  const tasks = automationView().tasks.map((x) => { const rule = runs.get(x.run) && askedBy(runs.get(x.run)!); return rule ? { ...x, rule } : x; });
+  const view = automationView();
+  const tasks = view.tasks.map((x) => { const rule = runs.get(x.run) && askedBy(runs.get(x.run)!); return rule ? { ...x, rule } : x; });
   const books = readBooks();
-  return [openWork(WS, books, tasks, language), await collectionNow(WS, language, books.receipts)].filter(Boolean).join('\n\n');
+  // Stopped runs wait under Automatisierung as the tasks do (openCount): what is open is never said to be nothing while one waits.
+  const stuck = openCount(view) - view.tasks.length;
+  return [openWork(WS, books, tasks, language, undefined, stuck), await collectionNow(WS, language, books.receipts)].filter(Boolean).join('\n\n');
 }
 
 const PURPOSE_NOTE: Record<Purpose, string> = {
@@ -156,7 +164,7 @@ router.post('/api/assistant', async (req, res) => {
   const purpose = known ? known.purpose : send.purpose;
   // The setup conversation is kept with the checklist, so reopening the setup continues it.
   const told = purpose === 'onboarding' ? (e: AssistantEvent) => { if (e.type === 'conversation') rememberConversation(WS, e.id, new Date().toISOString()); emit(e); } : emit;
-  await sendMessage(WS, send, apply, { map: appMap(send.language), waiting: await waitingNow(send.language, purpose), attachments }, told, stop.signal);
+  await sendMessage(WS, send, apply, { map: appMap(send.language), waiting: await waitingNow(send.language, purpose, !!send.setup), attachments }, told, stop.signal);
   res.end();
 });
 
@@ -201,6 +209,8 @@ async function run(c: ActionChange, language: string): Promise<Pick<MadeChange, 
   try {
     if (c.kind === 'export') return await exported(c, language);
     if (c.kind === 'report') return { note: { report: previewOf(runSpec(c.spec, c.period)) } };
+    // The card is the browser's, drawn from the books as they stand when it is shown: nothing to run.
+    if (c.kind === 'openPeriod') return {};
     await bookAgain('assistant');
     return {};
   } catch (e) {

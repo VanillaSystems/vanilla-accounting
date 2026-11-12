@@ -28,6 +28,14 @@ html.aiover .list { padding-left: 24px; padding-right: 16px; }
 .aiconv small { font-size: 11.5px; color: var(--muted); }
 .aiturns { flex: 1; overflow: auto; padding: 4px 14px 10px; display: flex; flex-direction: column; gap: 10px; }
 .aiempty { margin-top: 8px; line-height: 1.5; }
+/* Where the open period stands (src/app/assistant/OpenPeriodCard.tsx): before the first message and under an answer that names it. */
+.openp { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); font-size: 13px; }
+.openp h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--ink); }
+.openp > p { margin: 2px 0 0; line-height: 1.45; }
+.openp ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 0; }
+.openp li, .aichanges .openp li { display: block; padding: 7px 0; border-top: 1px solid var(--line); border-radius: 0; background: none; font-size: 13px; line-height: 1.4; }
+.openp li small { display: block; color: var(--muted); font-size: 12px; }
+.openp .linkbtn { white-space: normal; text-align: left; }
 .aside .msg { max-width: 92%; padding: 8px 11px; border-radius: 10px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .aside .msg.me { align-self: flex-end; background: var(--accent-soft); }
 .aside .msg.me small { display: block; margin-top: 4px; font-size: 11px; color: var(--muted); }

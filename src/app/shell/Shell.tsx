@@ -314,7 +314,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
         language={language}
         onLanguage={(anchor) => setOverlay({ kind: 'language', anchor: anchor.getBoundingClientRect() })}
       />
-      <Sidebar page={picked ? selectionContext(picked) : pageContext(loc.route, books)} books={books} onGo={(route) => nav.go({ route, query: {} })} />
+      <Sidebar page={picked ? selectionContext(picked) : pageContext(loc.route, books)} books={books} onGo={(route) => nav.go({ route, query: {} })} onGoTo={(loc) => nav.go(loc)} />
       <DropDialog books={books} refresh={refresh} period={period} onGo={(loc) => nav.go(loc)} onLanded={showLanded} />
       <Corner onAssistant={toggleAssistant} onGo={(route) => nav.go({ route, query: {} })} />
       <Dock current={loc.route.area} books={books} keys={dockKeys} wide={navWide} onToggle={toggleNav} nav={nav} canEdit={canEdit} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />

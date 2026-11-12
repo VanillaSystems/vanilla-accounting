@@ -93,7 +93,7 @@ function BookDiff({ books, nav, diff, s, unbooked }: Props & { diff: number; s: 
   const ws = useWorkspace();
   const { opening: missing, rest } = bookDiffParts(diff, ws ? missingOpenings(books, ws.bankAccounts, s.to.slice(0, 4)).find((m) => m.account === s.account.account) : undefined);
   return (
-    <div className="status">
+    <div className="status notes">
       {missing ? (
         <span className="notice warn" style={{ margin: 0 }} data-testid="opening-missing">{I.dot}
           {t('reports.openingMissing', { account: `${missing.account} ${missing.label}`, year: missing.year, amount: fmt(missing.amount) })}{' '}

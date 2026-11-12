@@ -32,6 +32,14 @@ export const startThread = (stored: (key: string) => string | null): Partial<Pic
   return purpose ? { purpose, pageOff: true } : {};
 };
 
+/**
+ * Whether the sidebar leaves the setup conversation for an ordinary one (#342): the setup is over
+ * (the person said «Los geht's») and she did not open it again herself (Firma › «Einrichtung …»,
+ * `wanted`). So after the setup, and after a reload, ⌘J opens the ordinary sidebar at its ordinary width.
+ */
+export const leavesSetup = (t: Pick<Thread, 'purpose'>, setup: { over: boolean; wanted: boolean }): boolean =>
+  t.purpose === 'onboarding' && setup.over && !setup.wanted;
+
 /** A new conversation; one with a purpose starts without the page's reference. */
 export const newThread = (purpose?: Purpose): Pick<Thread, 'conversation' | 'turns' | 'extra' | 'pageOff' | 'purpose'> => ({ conversation: undefined, turns: [], extra: [], pageOff: !!purpose, purpose });
 

@@ -6,7 +6,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import { api, errorText } from '../lib/api.js';
-import { newPurposeConversation, onBooksChanged, openAssistant, showConversation } from '../assistant/store.js';
+import { endSetup, keepSetup, newPurposeConversation, onBooksChanged, openAssistant, setupOver, showConversation } from '../assistant/store.js';
 import { reloadWorkspace } from '../hooks/use-workspace.js';
 import { openStep, setupThread, typedChoice, type SetupStep } from '../../onboarding/conversation.js';
 import { sellsAnswer, type QuestionId } from '../../onboarding/model.js';
@@ -19,7 +19,7 @@ export interface SetupState { view?: SetupView; steps?: SetupStep[]; error?: str
 
 let state: SetupState = {};
 const listeners = new Set<() => void>();
-const set = (s: SetupState) => { state = s; for (const l of listeners) l(); };
+const set = (s: SetupState) => { state = s; if (s.view) setupOver(!!s.view.progress.ready); for (const l of listeners) l(); };
 const withView = (view: SetupView): SetupState => ({ view, steps: setupThread(view.progress, view.facts) });
 
 export const useSetup = (): SetupState => useSyncExternalStore((l) => { listeners.add(l); return () => { listeners.delete(l); }; }, () => state);
@@ -87,6 +87,8 @@ export async function keepSells(kinds: readonly SalesKind[]): Promise<string | u
 export async function openSetup(): Promise<void> {
   let view: SetupView;
   try { view = await api.onboardingStart(); } catch (e) { set({ ...state, error: errorText(e) }); return; }
+  // Opened by the person (or by the first start): it stays the setup, also when it has ended before.
+  keepSetup();
   set(withView(view));
   const id = view.progress.conversation;
   if (id && await api.assistantConversation(id).then(() => true, () => false)) { await showConversation(id); return; }
@@ -96,7 +98,7 @@ export async function openSetup(): Promise<void> {
 
 /** «Los geht's»: books the conversation created open as books from now on. */
 export async function setupReady(): Promise<void> {
-  try { set(withView(await api.onboardingReady())); } catch (e) { set({ ...state, error: errorText(e) }); }
+  try { const view = await api.onboardingReady(); endSetup(); set(withView(view)); } catch (e) { set({ ...state, error: errorText(e) }); }
 }
 
 /** At start: an empty workspace never set up opens the setup by itself, once; books the conversation created, until «Los geht's». */

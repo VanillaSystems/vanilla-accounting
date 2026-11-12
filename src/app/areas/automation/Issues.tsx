@@ -14,7 +14,7 @@ import { openTwins } from '../receipts/model.js';
 import { answerTwin } from '../receipts/actions.js';
 import { EvidenceFix, evidenceText } from '../journal/Detail.js';
 import { journalOf, unsettledAtFiling } from '../journal/model.js';
-import { thresholdWatch, thresholdYears } from '../vat/model.js';
+import { thresholdPassed } from '../vat/model.js';
 import { baseCurrency, documents, filing, withoutInputTax } from '../../../engines/index.js';
 import { missingAssessments, type MissingAssessment } from '../../../booking/customs-invoice.js';
 import { filingKeyOf, localToday, openFilingPeriod, parsePeriod } from '../../../accounting/periods.js';
@@ -143,11 +143,7 @@ export function EvidenceTasks({ books, nav, canEdit }: { books: Index; nav: Nav;
   );
 }
 
-/** The years whose turnover passed the registration threshold, for a firm not registered (r5f-9): the task's data, none for a registered firm. */
-export function thresholdPassed(books: Index, registered: boolean | undefined, today = localToday()): Array<NonNullable<ReturnType<typeof thresholdWatch>>> {
-  if (registered !== false) return [];
-  return thresholdYears(today, books.config?.closedThrough).flatMap((year) => { const w = thresholdWatch(books.journalEntries ?? [], year, today); return w?.level === 'passed' ? [w] : []; });
-}
+export { thresholdPassed } from '../vat/model.js';
 
 /** A firm not registered whose year's turnover reached the threshold: what follows, and the VAT page it is read off (r5f-9). */
 export function ThresholdTasks({ nav, passed }: { nav: Nav; passed: ReturnType<typeof thresholdPassed> }) {

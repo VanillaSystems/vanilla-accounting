@@ -52,10 +52,10 @@ test('every change the block takes is in the prompt\'s example, and parses; an u
   const example = /```vanilla-changes\n([\s\S]*?)\n```/.exec(prompt)![1]
     .replace('<ISO code>', 'CHF').replace(/<[^>]+>/g, 'x').replace(/"date":"[^"]*"/g, '"date":"2026-07-03"').replace(/"amount":[\d.]+/g, '"amount":1').replace(/…/g, 'x');
   const kinds = changesIn('```vanilla-changes\n' + example + '\n```').map((c) => c.kind);
-  const taken = ['receipt', 'link', 'unlink', 'receiptKind', 'privatePayment', 'entry', 'newEntry', 'deleteEntry', 'account', 'invoicing', 'invoiceDraft', 'export', 'bookAgain', 'question', 'mailbox', 'source', 'setupTopic', 'setupAnswer'];
+  const taken = ['receipt', 'link', 'unlink', 'receiptKind', 'privatePayment', 'entry', 'newEntry', 'deleteEntry', 'account', 'invoicing', 'invoiceDraft', 'export', 'bookAgain', 'openPeriod', 'question', 'mailbox', 'source', 'setupTopic', 'setupAnswer'];
   assert.deepEqual([...new Set(kinds)].sort(), [...taken].sort());
   const placeKinds = new Set([...Object.values(AREA_PLACES), ...Object.values(COMPANY_PLACES)].flatMap((p) => p.kinds ?? []));
-  assert.deepEqual(taken.filter((k) => !placeKinds.has(k as never) && k !== 'export' && k !== 'setupTopic' && k !== 'setupAnswer'), [], 'every change is named at the place where a person does it');
+  assert.deepEqual(taken.filter((k) => !placeKinds.has(k as never) && k !== 'export' && k !== 'openPeriod' && k !== 'setupTopic' && k !== 'setupAnswer'), [], 'every change is named at the place where a person does it');
   for (const bad of [
     '[{"kind":"dropInvoiceDraft","id":"in_1"}]', '[{"kind":"dropSource","id":"x"}]', '[{"kind":"account","number":"4000","name":null}]', '[{"kind":"account","number":"40","name":"x"}]',
     '[{"kind":"invoicing","set":{"paymentTermsDays":0}}]', '[{"kind":"invoicing","set":{"texts":{"es":{"intro":"x"}}}}]',

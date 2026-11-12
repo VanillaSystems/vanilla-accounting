@@ -5,10 +5,12 @@
 .firstrun h2 { margin: 0; font: 700 19px "Hanken Grotesk"; color: var(--ink); }
 .firstrun > p { margin: 0; color: var(--ink-2); max-width: 46ch; }
 .firstrun .ways3 { display: flex; flex-direction: column; gap: 10px; }
-.firstrun .way3 { display: grid; grid-template-columns: 120px 1fr; gap: 14px; align-items: center; padding: 14px 16px 14px 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); }
+/* In a narrow list (beside the open AI sidebar) the words go under the picture instead of being cut (#342). */
+.firstrun .way3 { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; padding: 14px 16px 14px 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); }
+.firstrun .way3 > svg { flex: 0 0 120px; width: 120px; }
 .firstrun .way3.rec { border-color: var(--accent); background: var(--accent-soft); }
 .firstrun .way3.dropway { border-style: dashed; border-width: 1.5px; }
-.firstrun .way3 > div { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.firstrun .way3 > div { flex: 1 1 170px; min-width: 0; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
 .firstrun .way3 b { font-size: 15px; }
 .firstrun .way3 span { color: var(--ink-2); font-size: 12.5px; line-height: 1.45; }
 .firstrun .way3 .aiact { margin-top: 6px; }

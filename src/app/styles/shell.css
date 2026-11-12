@@ -121,7 +121,7 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 /* top glass bar + dock (from the agreed shell) */
 .topbar { position: fixed; left: var(--page-mid); top: 14px; transform: translate(-50%, 0);
   display: flex; gap: 6px; align-items: center; padding: 6px; border-radius: 14px; background: var(--glass); backdrop-filter: blur(18px) saturate(1.4);
-  -webkit-backdrop-filter: blur(18px) saturate(1.4); border: 1px solid var(--glass-line); box-shadow: var(--shadow); transition: opacity .2s, transform .25s cubic-bezier(.2,.8,.2,1); z-index: 20; }
+  -webkit-backdrop-filter: blur(18px) saturate(1.4); border: 1px solid var(--glass-line); box-shadow: var(--shadow); transition: opacity .2s; z-index: 20; }
 .chip { height: 32px; padding: 0 12px; border-radius: 9px; display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font-size: 13px; cursor: pointer; white-space: nowrap; }
 .chip:hover { background: var(--accent-soft); }
 .chip .k { font: 500 11px "Geist Mono"; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; }
@@ -164,6 +164,12 @@ main { margin-left: var(--abw); }
 .tight .topbar { gap: 2px; }
 .tight .topbar .chip { padding: 0 8px; }
 .tight .legend { display: none; }
+/* While the AI sidebar is open the bar starts at the page's left edge instead of its middle, so it never lies under the
+   corner's buttons, which stand at the sidebar's edge (src/app/assistant/store.ts sets .aiopen, #342). */
+html.aiopen:not(.phone) .topbar { left: calc(var(--abw) + 16px); transform: none; }
+/* In the Mac app the window's three buttons stand at the top left, over the narrow dock and a little beyond it (src/desktop/main.ts,
+   titleBarStyle hidden): the bar starts right of them, whatever the zoom. */
+html.no-titlebar.aiopen:not(.phone) .topbar { left: max(calc(var(--abw) + 16px), calc(92px / var(--z, 1))); }
 
 /* folded bars: a pill (docs/0.4.0/views.md, "Both bars") */
 .topbar.folded { padding: 4px; border-radius: 999px; }
