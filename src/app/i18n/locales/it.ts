@@ -5331,6 +5331,9 @@ export default {
     'bank.bookingMark': 'in registrazione',
     'bank.bookingTip': 'L’app sta elaborando ciò che è arrivato e intanto registra i pagamenti senza registrazione. Ciò che resta aperto dopo ti aspetta qui.',
     'bank.bookingNow': 'L’app lo sta registrando: {what}',
+    'bank.bookingItNow': "L’app lo sta registrando",
+    'bank.noReceiptBooking': "Non richiede giustificativo. L’app registra il pagamento adesso.",
+    'bank.notBookedYours': "non registrato: l’app non ha potuto registrarlo da sola. Registralo a mano qui sotto.",
     'drop.p.stuck': 'fermata',
   },
 } satisfies Locale;

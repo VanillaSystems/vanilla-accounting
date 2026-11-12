@@ -32,6 +32,8 @@ Two markers flag an entry you must read before you update:
   of the start. «Nicht erlauben» on macOS's question about the Documents folder no longer ends the
   start without a window; a start that fails says so and quits (#339).
 
+- After the first statement, the bank's own fee and the wages no longer wait for a receipt (#340). A debit to the bank that keeps the account is its fee row also when the row names the bank by the first words of its name («Raiffeisenbank» for «Raiffeisenbank Wil und Umgebung») and carries no code for charges. A payment worded as a wage («Lohn Juli 2026», Salär, Gehalt, salaire, stipendio, salary) needs no receipt on a firm whose setup says it has staff or an employed owner; an invoice for payroll services still waits for its receipt, and so does a wage on a firm that said it has no employees. «Braucht keinen Beleg» on a payment without a booking now goes on to book it in the same click and says what came of it; where the app could not book it by itself, the payment says so («nicht gebucht: die App konnte sie nicht selbst buchen. Unten von Hand buchen.») instead of «kein Beleg nötig · nicht gebucht».
+
 ## [0.4.1] - 2026-11-12
 
 Two fixes for the first run of the Mac app and a dropped statement.

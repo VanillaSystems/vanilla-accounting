@@ -46,7 +46,7 @@ const unbooked = (books: Books, accounts: ClassifyContext['bankAccounts']) => {
 
 /** The open payments that need a receipt and have none, and those whose receipt could not be read (src/booking/receipt-wait.ts). */
 function needReceipts(ws: Workspace, books: Books, context: ClassifyContext, fx: FxResolver): { need: Set<string>; unread: Set<string> } {
-  const known = receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root));
+  const known = receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws);
   const need = new Set<string>();
   const unread = new Set<string>();
   for (const tx of unbooked(books, context.bankAccounts)) {

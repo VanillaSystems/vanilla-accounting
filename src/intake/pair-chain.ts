@@ -84,7 +84,7 @@ export interface ChainOptions {
 export function noReceiptFor(ws: Workspace): (books: Books) => (t: BankTransaction) => boolean {
   let firm: Parameters<typeof noReceiptOfItsOwn> extends [unknown, ...infer R] ? R : never;
   try {
-    firm = [loadClassifyContext(ws), receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root)), loadFxResolver()];
+    firm = [loadClassifyContext(ws), receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws), loadFxResolver()];
   } catch {
     // A workspace without its settings (a test's bare one) exempts only what pairablePayment knows itself.
     return () => () => false;

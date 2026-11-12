@@ -69,6 +69,12 @@ steps:
         apply: { receipt: none, text: "Bancomat|Postomat|Geldautomat|\\bATM\\b|Bargeld|Barbezug|\\bRetrait\\b|\\bPrelievo\\b" }
         why: "a withdrawal is a transfer between two money accounts: no purchase, no VAT, no receipt of its own (issue #99)"
         source: docs/0.4.0/money-movements.md
+      - id: ev-exempt-wages
+        when: a wage paid to an employee (the owner too, when employed by the company), on a firm whose setup says it has staff or an employed owner
+        then: "booked at once, without waiting for a receipt: a wage has no supplier's receipt, its evidence is the payslip of the payroll, filed apart; no VAT code (booking.guide.yaml#classify cls-salary). The wording is the payment's own text; an invoice for payroll services (Lohnbuchhaltung) is a purchase and waits for its receipt"
+        apply: { receipt: none, firm: employer, text: "\\b(Monats|Netto|Stunden)?l[oö]hne?\\b|\\bLohnzahlung(en)?\\b|\\bSalär\\b|\\bGehalt\\b|\\bGehälter\\b|\\bSalaires?\\b|\\bSalario\\b|\\bStipendi[oi]\\b|\\bSalary\\b|\\bSalaries\\b" }
+        why: "wages carry no VAT, so no receipt changes their booking; held back for one, the wages of a whole quarter stayed unbooked after the first statement (issue #340)"
+        source: "AGENTS.md § Rules the app carries out"
       - id: ev-unique-amount
         status: proposed
         when: exactly one transaction has the same amount and currency within 10 days of the receipt date, and no other receipt claims it

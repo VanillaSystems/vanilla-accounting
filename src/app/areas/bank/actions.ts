@@ -6,6 +6,7 @@
 import { startIntake } from '../../automation/intake.js';
 import { automationCommand } from '../../automation/store.js';
 import { commandRefusalText } from '../../automation/refusal.js';
+import { startAndSay } from '../../automation/marks.js';
 import type { BankTransaction, StatementImport } from '../../../types/index.js';
 import type { OpeningOffer } from '../../../accounting/opening-balance.js';
 import type { ReceiptSet } from '../../../intake/receipt-sets.js';
@@ -19,7 +20,12 @@ import { at } from '../receipts/view.js';
 import { fileKey, type Account, type Statement } from './model.js';
 import { forgetPages } from './StatementPaper.js';
 
-export async function setNoReceipt(nav: Nav, tx: BankTransaction, on: boolean, undoing = false): Promise<void> {
+/**
+ * Marks a payment as needing no receipt, or takes the mark back. `unbooked`: the payment has no
+ * booking; the receipt was what it waited for, so the mark goes on to book it in the same step
+ * (by a rule or the model, #340), and the toast says what came of it: booked, or why not yet.
+ */
+export async function setNoReceipt(nav: Nav, tx: BankTransaction, on: boolean, undoing = false, unbooked = false): Promise<void> {
   try {
     await api.patchTransaction(tx.ref, { noReceiptNeeded: on });
   } catch (e) {
@@ -27,7 +33,17 @@ export async function setNoReceipt(nav: Nav, tx: BankTransaction, on: boolean, u
     return;
   }
   nav.refresh();
-  if (!undoing) nav.toast(t(on ? 'bank.noReceiptSet' : 'bank.noReceiptCleared'), () => setNoReceipt(nav, tx, !on, true));
+  const undo = () => setNoReceipt(nav, tx, !on, true);
+  if (undoing) return;
+  if (!on || !unbooked) return nav.toast(t(on ? 'bank.noReceiptSet' : 'bank.noReceiptCleared'), undo);
+  nav.toast(t('bank.noReceiptBooking'), undo);
+  try {
+    const said = await startAndSay('booking', { kind: 'transaction', id: tx.ref });
+    if (said) nav.toast(said);
+  } catch (e) {
+    nav.toast(errorText(e));
+  }
+  nav.refresh();
 }
 
 /**

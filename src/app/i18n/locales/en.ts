@@ -5331,6 +5331,9 @@ export default {
     'bank.bookingMark': 'being booked',
     'bank.bookingTip': 'The app is processing what came in and books the payments without a booking as it goes. Whatever is still open afterwards waits here for you.',
     'bank.bookingNow': 'The app is booking it now: {what}',
+    'bank.bookingItNow': "The app is booking it now",
+    'bank.noReceiptBooking': "Needs no receipt. The app is booking the payment now.",
+    'bank.notBookedYours': "not booked: the app could not book it by itself. Book it by hand below.",
     'drop.p.stuck': 'stopped',
   },
 } satisfies Locale;

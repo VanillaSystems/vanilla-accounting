@@ -13,7 +13,8 @@
  * file a fact for every company, such as an authority whose notice is filed apart; in the
  * company's file its own choice, such as its bank or its rent), and wording a guide's rule there
  * names as `apply: { receipt: none, text }` (in the app's guide the cash withdrawal, which only
- * moves money onto the cash box; issue #99). A payment booked onto a settlement
+ * moves money onto the cash box; issue #99), which `firm: employer` limits to a firm that pays wages
+ * (the wage: its evidence is the payroll's payslip, never a supplier's receipt; issue #340). A payment booked onto a settlement
  * account (the owner's, a money account, a debt) pays what was booked elsewhere and never waits
  * (settlementAccount): by a rule, decided here; by the model, decided on its answer (answerSettles),
  * where the owner's account settles only a payment to the owner (issue #201).
@@ -34,6 +35,8 @@ import { businessVat } from './purchase-vat.js';
 import { linkedOf, type Linked } from '../accounting/receipt-due.js';
 import { bankAccountFor } from '../workspace/money-accounts.js';
 import { providerOfPayment } from './providers.js';
+import { employs } from '../workspace/setup.js';
+import type { Workspace } from '../workspace/workspace.js';
 
 export const RECEIPT_STEP = 'evidence.guide.yaml#rules';
 
@@ -61,7 +64,7 @@ export type NoWait =
   | 'ruleAsks'
   /** Its business's file says its payments need no receipt. */
   | 'business'
-  /** Its wording is one a guide's rule says needs no receipt (a cash withdrawal: money onto the cash box). */
+  /** Its wording is one a guide's rule says needs no receipt (a cash withdrawal: money onto the cash box; a wage on a firm that pays wages). */
   | 'wording'
   /** The firm claims no input tax (not registered, or the net tax rate method): a receipt changes no code. */
   | 'noInputTax';
@@ -160,18 +163,19 @@ const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 
  * A rule's `apply:` on evidence.guide.yaml#rules, in either layer: `{ receipt: none }` in a
  * business file (the business is the condition), `{ receipt: none, text: "<pattern>" }` in a guide
  * (it holds for every payment, so it names the wording: a pattern over the payment's text and
- * counterparty, ignoring case).
+ * counterparty, ignoring case; `firm: employer` beside it: only on a firm that pays wages, employs).
  */
-export function parseReceiptApply(raw: unknown, where: 'business' | 'guide' = 'business'): { ok: true; text?: string } | { ok: false; problem: string } {
+export function parseReceiptApply(raw: unknown, where: 'business' | 'guide' = 'business'): { ok: true; text?: string; firm?: 'employer' } | { ok: false; problem: string } {
   if (!isMap(raw)) return { ok: false, problem: `apply must be a map: { receipt: none${where === 'guide' ? ', text: "<pattern>"' : ''} }` };
-  const { receipt, text, ...rest } = raw;
+  const { receipt, text, firm, ...rest } = raw;
   const extra = Object.keys(rest)[0];
-  if (extra) return { ok: false, problem: `apply.${extra} is unknown — apply on ${RECEIPT_STEP} takes receipt${where === 'guide' ? ' and text' : ''}` };
+  if (extra) return { ok: false, problem: `apply.${extra} is unknown — apply on ${RECEIPT_STEP} takes receipt${where === 'guide' ? ', text and firm' : ''}` };
   if (receipt !== 'none') return { ok: false, problem: 'apply.receipt must be none: the payments need no receipt to be booked' };
-  if (where === 'business') return text === undefined ? { ok: true } : { ok: false, problem: 'apply.text is for a guide\'s rule; in a business file the business is the condition' };
+  if (where === 'business') return text === undefined && firm === undefined ? { ok: true } : { ok: false, problem: `apply.${text === undefined ? 'firm' : 'text'} is for a guide\'s rule; in a business file the business is the condition` };
+  if (firm !== undefined && firm !== 'employer') return { ok: false, problem: 'apply.firm must be employer: the wording holds only on a firm that pays wages' };
   if (typeof text !== 'string' || !text.trim()) return { ok: false, problem: 'apply.text must name the wording of the payments that need no receipt, a pattern such as "Bancomat|Bargeldbezug"' };
   try { new RegExp(text, 'i'); } catch { return { ok: false, problem: `apply.text "${text}" is no valid pattern` }; }
-  return { ok: true, text };
+  return { ok: true, text, ...(firm === 'employer' && { firm }) };
 }
 
 type Rules = { rules?: Array<{ id?: string; status?: string; apply?: unknown }> } | undefined;
@@ -179,17 +183,17 @@ type Rules = { rules?: Array<{ id?: string; status?: string; apply?: unknown }> 
 /** What the knowledge says to the decision: whose payments and which wordings need no receipt, and whose unread receipt the company counts at a rate. */
 export interface ReceiptKnowledge { free: ReadonlySet<string>; wordings: readonly RegExp[]; assumesUnread: ReadonlySet<string> }
 
-export function receiptKnowledge(k: Pick<Knowledge, 'counterpartyFiles' | 'guides'>): ReceiptKnowledge {
+export function receiptKnowledge(k: Pick<Knowledge, 'counterpartyFiles' | 'guides'>, firm: Pick<Workspace, 'profile'>): ReceiptKnowledge {
   const { facts } = businessVat(k);
-  return { free: receiptFree(k), wordings: receiptWordings(k), assumesUnread: new Set([...facts].filter(([, fs]) => fs.some((f) => f.fact.kind === 'unreadReceipt')).map(([id]) => id)) };
+  return { free: receiptFree(k), wordings: receiptWordings(k, employs(firm.profile)), assumesUnread: new Set([...facts].filter(([, fs]) => fs.some((f) => f.fact.kind === 'unreadReceipt')).map(([id]) => id)) };
 }
 
-/** The wordings the guides' rules of evidence.guide.yaml#rules, in either layer, say need no receipt; a rule whose question is open says nothing. */
-export function receiptWordings(k: Pick<Knowledge, 'guides'>): RegExp[] {
+/** The wordings the guides' rules of evidence.guide.yaml#rules, in either layer, say need no receipt; a rule whose question is open says nothing, one for an employer nothing on a firm that pays no wages. */
+export function receiptWordings(k: Pick<Knowledge, 'guides'>, employer: boolean): RegExp[] {
   const [file, section] = RECEIPT_STEP.split('#');
   return k.guides.filter((g) => basename(g.path) === file).flatMap((g) => (g.body.steps?.[section] as Rules)?.rules ?? []).flatMap((r) => {
     const parsed = r.apply !== undefined && r.status !== 'open' ? parseReceiptApply(r.apply, 'guide') : undefined;
-    return parsed?.ok && parsed.text ? [new RegExp(parsed.text, 'i')] : [];
+    return parsed?.ok && parsed.text && (!parsed.firm || employer) ? [new RegExp(parsed.text, 'i')] : [];
   });
 }
 

@@ -160,7 +160,7 @@ test('a provider\'s payout needs no receipt and has none of its own; money out t
   const ctx = { free: new Set<string>(), assumesUnread: new Set<string>(), wordings: [], ownIbans: new Set<string>(), settles: settlementAccount(context), inputTax: true };
   assert.deepEqual(receiptWait(payout('P'), { linked: 'none', payout: true }, ctx), { wait: false, why: 'provider' });
   const books = { transactions: [payout('P'), payout('S', { direction: 'DBIT', amount: 39, description: 'Card transaction of 39.00 CHF issued by Shopify' })], receipts: [], mappings: [], journalEntries: [], bankStatements: [], config: { closedThrough: '2026-06-30' } } as unknown as Books;
-  const none = noReceiptOfItsOwn(books, context, receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root)), fx);
+  const none = noReceiptOfItsOwn(books, context, receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws), fx);
   assert.equal(none(books.transactions[0]), true, 'the payout');
   assert.equal(none(books.transactions[1]), false, 'the subscription');
 });
@@ -178,7 +178,7 @@ test('the pair chain and the receipt sets link no receipt to a payout: its order
   // Two documents of the provider that add up to the payout, as a credit to the shop: the shape a set takes for money in.
   const page = (id: string, amount: number): Receipt => ({ id, filename: `${id}.pdf`, originalFilename: `${id}.pdf`, extractedText: `Shopify Order #${id} CHF ${amount}`, extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-07-08T00:00:00Z', location: 'archived', date: '2026-07-04', amount: -amount, currency: 'CHF', vatId: 'CHE-153.004.184', title: { vendor: 'Shopify', what: id } });
   const books = { transactions: [payout('P', { amount: 198.1 })], receipts: [page('1001', 108.1), page('1002', 90)], mappings: [], journalEntries: [], bankStatements: [], config: { closedThrough: '2026-06-30' } } as unknown as Books;
-  const none = noReceiptOfItsOwn(books, context, receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root)), fx);
+  const none = noReceiptOfItsOwn(books, context, receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws), fx);
   const toChf = (a: number) => a;
   assert.equal(searchPairs(books, toChf, () => false, { noReceipt: none }).byReceipt.get('1001')?.length ?? 0, 0, 'no pair candidate');
   assert.deepEqual(linkReceiptSets(books, { isOpen: () => true, toChf, noReceipt: none }).sets, [], 'no set, though the two add up to it');
