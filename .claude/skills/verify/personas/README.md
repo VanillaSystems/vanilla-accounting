@@ -13,6 +13,20 @@ careful but busy. She types the way she talks («bitte richtig eintragen»), use
 she does not understand after two tries. Her files: `persona-files.mjs` (a Q3 2026 Raiffeisen
 statement, supplier invoices with 8.1 % MWST, till-receipt photos, wrong files).
 
+Two more personas walk the same first half hour ([first-run.md](first-run.md)'s checkpoints and
+weights, three of their own each), for setups Sandra's painting firm never touches:
+[first-run-webshop.md](first-run-webshop.md), Corinne Wyss of a tea webshop on Shopify (sales as
+payouts over a clearing account, the orders export, fees and the platform's VAT, mixed rates, exports,
+import VAT), and [first-run-consulting.md](first-run-consulting.md), Matthias Kälin of a one-person
+consultancy (his own invoices, a client abroad in EUR, Bezugsteuer on software from abroad, private
+outlays reimbursed, the phone's private share, a credit card the app does not read). Run Sandra for
+every round, so the scores stay comparable with `docs/0.4.0/usability/first-run-scores.md`; run the
+webshop when a change touches payment providers, sales reports, the drop of CSVs or imports, and the
+consultancy when it touches sales and their questions, Bezugsteuer, foreign currency, the owner's
+account or rules; run all three before a release. `vm.sh up <run> --persona webshop|consulting` puts
+their files into the VM (`persona-files.mjs`, one module per persona under `persona-files/`), and
+`answer-key.md` beside the env holds the figures the books should end with, computed by the generator.
+
 ## How a tester works
 
 1. Start your own VM from a snapshot, never another tester's VM and never the person's desktop:

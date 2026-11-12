@@ -111,7 +111,7 @@ $V up my-vm             # clone, boot, SSH key, Gatekeeper ON, dmg + persona fil
 source $TMPDIR/belege-vm/my-vm/env   # RUN VM IP EVIDENCE DMG and the persona's PERSONA_IBAN, PERSONA_IBAN_SPACED, PERSONA_UID, PERSONA_CAMT; export VERIFY_VM=my-vm so later calls find it
 ```
 
-Ready when it prints `ready`. `~/Downloads` then holds the dmg and made-up files of a painting firm (`persona-files.mjs`: a Q3 2026 camt.053 (`$PERSONA_CAMT`) for the IBAN `$PERSONA_IBAN`, the CSV a bank offers first, supplier PDFs with 8.1 % MWST, till-receipt photos, a holiday photo, a fake .docx, a duplicate PDF), all with the download quarantine flag, so macOS treats them like files from Safari.
+Ready when it prints `ready`. `~/Downloads` then holds the dmg and made-up files of a painting firm (`persona-files.mjs`: a Q3 2026 camt.053 (`$PERSONA_CAMT`) for the IBAN `$PERSONA_IBAN`, the CSV a bank offers first, supplier PDFs with 8.1 % MWST, till-receipt photos, a holiday photo, a fake .docx, a duplicate PDF), all with the download quarantine flag, so macOS treats them like files from Safari. `$V up my-vm --persona webshop` or `--persona consulting` puts another persona's files there instead (personas/README.md), with its answer key in `$TMPDIR/belege-vm/my-vm/answer-key.md`.
 
 **Doctor.** `$V doctor` (read-only): VM running, SSH, Gatekeeper on, screen capture over VNC, and after `$V app` the app's DevTools port and that the app runs in the VM's GUI session (its audit session is the one of `gui/501`, read with `sudo launchctl procinfo`), where the keychain is. Every line `ok`, else `down` + `up`.
 
