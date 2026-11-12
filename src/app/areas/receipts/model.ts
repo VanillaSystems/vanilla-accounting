@@ -323,8 +323,8 @@ export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = '', 
     const want = r.amount == null ? undefined : Math.abs(toChf(r.amount, cur, tx.date));
     const dAmt = part ? 0 : want === undefined ? 1 : Math.abs(Math.abs(toChf(tx.amount, tx.currency, tx.date)) - want) / Math.max(1, want);
     const taken = (l.receiptsByRef.get(tx.ref) ?? []).length;
-    // Money against the receipt's way fits when the payment names one of its numbers on or after its day: the firm's own invoice paid in (#365).
-    const wrongWay = !!way && (tx.direction === 'CRDT') !== (way === 'in') && !((days ?? 0) >= 0 && namesNumberOf(numbers, tx));
+    // Money in for an invoice fits when it names one of its numbers on or after its day: the firm's own invoice (#365).
+    const wrongWay = !!way && (tx.direction === 'CRDT') !== (way === 'in') && !(way === 'out' && (days ?? 0) >= 0 && namesNumberOf(numbers, tx));
     // A collective payment holds one receipt per part: another receipt on it does not make it taken for this one.
     const score = dAmt * 100 + Math.abs(days ?? 0) * 0.6 + (otherCurrency ? 8 : 0) + (taken && !part ? 30 : 0) + (wrongWay ? 30 : 0);
     const fit = part ? { kind: 'same' as const } : taken ? undefined : amountFit(r, tx, toChf);

@@ -155,10 +155,10 @@ export interface PairCandidate {
   /** The receipt the chain linked to this payment a whole period off it, whose link this receipt takes over (#291). */
   replaces?: string;
   /**
-   * The money went against the receipt's way (paysIn): the firm's own invoice paid by money in, a
-   * supplier's invoice by money out. Only a payment naming one of its numbers as a whole token, on
-   * or after the receipt's day, is such a candidate; it is a clear pair only when no other payment
-   * names that number (`number`), else it is proposed (#365).
+   * An invoice paid by money in (paysIn says money out): the firm's own invoice, which nothing but
+   * its number tells from a supplier's. Only money in naming one of its numbers as a whole token, on
+   * or after its day, is such a candidate; it is a clear pair only when no other payment names that
+   * number (`number`), else it is proposed (#365). Money out never pays a credit note.
    */
   against?: true;
 }
@@ -304,8 +304,9 @@ function dayOf(c: Pick<PairCandidate, 'days' | 'offDays'>): number {
 export function fitOf(r: Receipt, tx: BankTransaction, toChf: ToChf, isClosed: (date: string) => boolean, businesses?: Businesses, usual?: number, namedBy?: NamedBy): PairCandidate | undefined {
   const days = Math.round((Date.parse(tx.date) - Date.parse(r.date!)) / DAY);
   if (days < -BOUNDS.daysBefore || days > daysAfterOf(usual)) return undefined;
-  // Against the receipt's way only a payment that names one of its numbers as a whole token, on or after its day (#365).
-  const named = paysIn(r) === (tx.direction === 'CRDT') ? undefined : days < 0 ? [] : namedNumbers(r, tx);
+  // Money in for an invoice only when it names one of its numbers as a whole token, on or after its day: the firm's own invoice (#365).
+  const into = paysIn(r);
+  const named = into === (tx.direction === 'CRDT') ? undefined : into || days < 0 ? [] : namedNumbers(r, tx);
   if (named && !named.length) return undefined;
   // A usual delay within the first day band says nothing the receipt's day does not: only a supplier that pays days or weeks later moves the expected day.
   const offDays = usual !== undefined && Math.abs(usual) > WEIGHTS.day[0].upTo ? days - usual : days;

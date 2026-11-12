@@ -1,9 +1,9 @@
 /**
  * Pairing by what is written (#365): a receipt whose document number stands as a whole token in
  * exactly one payment's text, with its amount and a day not before the document's, is paired by
- * code, without a model, whichever way the money went: the firm's own invoice is paid by money in,
- * though nothing but its number and amount says it is a sale. Anything less sure is proposed,
- * never paired.
+ * code, without a model: money out for a supplier's invoice as before, and money in for an invoice,
+ * the firm's own, though nothing but its number and amount says it is a sale. Anything less sure is
+ * proposed, never paired; money out never pays a credit note (tests/credit-note.test.ts).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
