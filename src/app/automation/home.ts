@@ -87,6 +87,10 @@ export interface HomeFigures {
   matched: number;
   /** Of the matched ones, those whose payment is booked. */
   booked: number;
+  /** Payments of the period that moved money, each once by its ref (a charge split over two legs is one): the dock card's «von … Zahlungen» (#365). */
+  payments: number;
+  /** Of those, the ones with a booking, by the app or by hand, with a receipt or without (wages, the bank's fee). */
+  paymentsBooked: number;
   /** The booked receipts by who booked their payment. */
   authors: Record<Author, number>;
   /**
@@ -105,6 +109,12 @@ export interface HomeContext {
   vatRegistered: boolean;
   /** Days after a period's end its return is due (filing().dueDays). */
   dueDays: number;
+}
+
+/** The period's payments by ref, once each, and how many of them have a booking. */
+function paymentCount(books: Index, period: PeriodRange, booked: (ref: string) => boolean): { payments: number; paymentsBooked: number } {
+  const refs = new Set(books.transactions.filter((t) => t.amount !== 0 && t.date >= period.from && t.date <= period.to).map((t) => t.ref));
+  return { payments: refs.size, paymentsBooked: [...refs].filter(booked).length };
 }
 
 export function homeFigures(books: Index, period: PeriodRange, ctx: HomeContext, asked: ReadonlySet<string> = new Set()): HomeFigures {
@@ -134,6 +144,7 @@ export function homeFigures(books: Index, period: PeriodRange, ctx: HomeContext,
     payable: toPay.length,
     matched: matched.length,
     booked,
+    ...paymentCount(books, period, (ref) => entriesOf.has(ref)),
     authors,
     ...(known > 0 ? { withoutYou: Math.round((authors.app / known) * 100) } : {}),
     waitingReceipt: waitingForReceipt(books, (ref) => entriesOf.has(ref), ctx.today)

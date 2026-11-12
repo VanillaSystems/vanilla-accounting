@@ -11,10 +11,10 @@ and the providers.
 | core | 75 | 23 |
 | engine | 4 | 1 |
 | provider | 14 | 11 |
-| split | 124 | 26 |
+| split | 125 | 26 |
 | infrastructure | 70 | 4 |
 | workflow | 28 | 0 |
-| view | 347 | 55 |
+| view | 348 | 55 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -139,7 +139,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/invoices/texts.ts` | MWST 5 |
 | `src/knowledge/cases.ts` | MWST 5, ESTV 4, Ziffer 4, camt.053 1 |
 | `src/knowledge/layers.ts` | CHF 1 |
-| `src/parsers/receipt-text.ts` | CHF 1, MWST 8, UID 1 |
+| `src/parsers/receipt-text.ts` | CHF 1, MWST 9, UID 3 |
 
 ## infrastructure
 

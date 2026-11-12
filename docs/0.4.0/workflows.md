@@ -121,8 +121,10 @@ A run that cannot go on by itself is in one of three states, and each has its ow
   «Frag: <the rule's question>» with the booking the app would make (the rule's own, else the
   model's); **Übernehmen** books it, **Selbst buchen** closes the task for a booking by hand. The
   workflow reads no guide, so it needs no switching on. Without a model, the inbox run holds
-  every open payment no rule decides the same way; its task is «Zahlung ohne Buchung · von Hand
-  buchen» with the payment's booking form, and **Gebucht** closes it.
+  every open payment no rule decides the same way; its task is «Zahlung von Hand buchen» with the
+  payment it is about (who, how much, when: the server reads it off the books, so the corner names
+  it too) and its booking form, and **Gebucht** closes it. From three such tasks on the corner shows
+  them as one line, «11 Zahlungen von Hand buchen» (the step's `task.many`), Aufgaben lists them.
 - **A question is not a task.** What one person asks another about an item (views.md,
   "Questions between the people who keep the books") waits in Aufgaben beside the tasks, but no
   run waits for it. Planned: the person step «Bewegung von Hand buchen» carries such a question,

@@ -3779,6 +3779,7 @@ export default {
     'dock.card.collected': { one: 'receipt collected', other: 'receipts collected' },
     'dock.card.read': { one: 'receipt read', other: 'receipts read' },
     'dock.card.booked': { one: 'receipt booked', other: 'receipts booked' },
+    'dock.card.payments': { one: 'of {n} payment booked', other: 'of {n} payments booked' },
     'dock.card.waiting': { one: 'waits for you', other: 'wait for you' },
     'dock.now.running': 'Running: {what}',
     'dock.now.paused': 'Paused: nothing starts on a schedule',

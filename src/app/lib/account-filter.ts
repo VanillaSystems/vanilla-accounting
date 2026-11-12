@@ -4,6 +4,8 @@ export interface AccountMatch {
   account: Account;
   /** The matched characters in `${number} ${name}`, [start, end), for highlighting. */
   highlight: [number, number] | null;
+  /** Found by a hint of the standard chart alone, not by its name (#365). */
+  hint?: true;
 }
 
 /** One character folded for search: lower case, accents and umlauts dropped (ä → a, é → e). */
@@ -40,6 +42,25 @@ export interface AccountContext<T extends string = string> {
   defaults?: readonly string[];
   /** The words a person types for a class instead of an account's name («ertrag», «einnahme» for revenue), folded like a query. */
   words?: Partial<Record<T, readonly string[]>>;
+  /** The words the standard chart gives an account besides its name (modules/<country>/accounts.yaml `hints`), else the account's own. */
+  hints?(number: string): readonly string[] | undefined;
+}
+
+/**
+ * Whether a typed word names a hint of the account: the whole word («Miete»), or its start of five
+ * letters or more («Versich» for «Versicherung»). Never a hint inside a longer word: «Arbeitskleider»
+ * is no «Arbeit», «Autoversicherung» no «Auto».
+ */
+const hinted = (parts: readonly string[], hints: readonly string[] | undefined): boolean =>
+  !!hints?.some((h) => { const f = foldAll(h); return parts.some((p) => f === p || (p.length >= 5 && f.startsWith(p))); });
+
+/**
+ * The row ↵ takes after typing: the first, unless it was found by a hint alone on the other side of
+ * the payment (a revenue account on a cost field): then none is chosen until she moves to one (-1).
+ */
+export function firstPick<T extends string>(matches: ReadonlyArray<Pick<AccountMatch, 'account' | 'hint'>>, ctx: Pick<AccountContext<T>, 'typeOf' | 'prefer'>): number {
+  const m = matches[0];
+  return m?.hint && ctx.prefer !== undefined && ctx.typeOf(m.account.number) !== ctx.prefer ? -1 : 0;
 }
 
 /**
@@ -55,9 +76,10 @@ export function rankAccounts<T extends string>(accounts: readonly Account[], que
   const standing = (a: Account) => { const i = ctx.defaults?.indexOf(a.number) ?? -1; return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
   if (/^\d+$/.test(q)) return filterAccounts(accounts, query);
   const classes = new Set<T>();
+  const parts = q.split(/\s+/).filter((x) => x.length >= 3);
   // Each typed word may name a class («Einnahme von Kunde»): the word itself, the word with an ending, or its start of five letters
   // at least, so three letters («ein», «ver») that start a name («Einlage») never list a whole class before it.
-  for (const part of q.split(/\s+/).filter((x) => x.length >= 3)) {
+  for (const part of parts) {
     for (const [type, words] of Object.entries(ctx.words ?? {}) as Array<[T, readonly string[]]>) {
       if (words.some((w) => { const f = foldAll(w); return part.startsWith(f) || (part.length >= 5 && f.startsWith(part)); })) classes.add(type);
     }
@@ -70,7 +92,10 @@ export function rankAccounts<T extends string>(accounts: readonly Account[], que
     const type = ctx.typeOf(account.number);
     // A word that names the account's class asked for the class: its accounts stay in chart order, whichever name holds the word too.
     const named = type !== undefined && classes.has(type);
-    if (at >= 0) out.push({ m: { account, highlight: [at, at + q.length] }, quality: named ? 3 : at === 0 || at === account.number.length + 1 ? 0 : /[^\p{L}\p{N}]/u.test(hay[at - 1]) ? 1 : 2, i });
+    // A hint is as good as a word of the name that starts with the query; a class alone comes after.
+    const hint = hinted(parts, ctx.hints?.(account.number) ?? account.hints);
+    if (at >= 0) out.push({ m: { account, highlight: [at, at + q.length] }, quality: named ? 3 : at === 0 || at === account.number.length + 1 ? 0 : /[^\p{L}\p{N}]/u.test(hay[at - 1]) || hint ? 1 : 2, i });
+    else if (hint) out.push({ m: { account, highlight: null, hint: true }, quality: 1, i });
     else if (named) out.push({ m: { account, highlight: null }, quality: 3, i });
   });
   return out

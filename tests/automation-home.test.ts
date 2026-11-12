@@ -80,6 +80,23 @@ test('the last stage: running, due with its day, overdue, filed, before the book
   assert.deepEqual(homeFigures(b, Q3, { ...ctx, vatRegistered: false }).filing, { kind: 'due', overdue: false });
 });
 
+test('the dock card\'s payments count the period\'s payments once each, and the booked ones: hers by hand without a receipt too (#365)', () => {
+  const b = books([receipt('a')], [], [entry('1', 'LOHN', { accountDebit: '5000', origin: 'manual' }), entry('2', 'OLD', { date: '2026-09-30' })]);
+  b.transactions = [
+    { ref: 'LOHN', bank: 'Raiffeisen', date: '2026-10-25', amount: 5200, currency: 'CHF', direction: 'DBIT', description: 'Lohn Oktober' },
+    { ref: 'OPEN', bank: 'Raiffeisen', date: '2026-10-26', amount: 89, currency: 'CHF', direction: 'DBIT', description: 'Abo' },
+    { ref: 'OLD', bank: 'Raiffeisen', date: '2026-09-30', amount: 12, currency: 'CHF', direction: 'DBIT', description: 'Kontoführung' },
+    // A card charge split over two balances: two legs, one ref, one payment.
+    { ref: 'SPLIT', bank: 'Wise', date: '2026-10-27', amount: 30, currency: 'EUR', direction: 'DBIT', description: 'Card transaction' },
+    { ref: 'SPLIT', bank: 'Wise', date: '2026-10-27', amount: 12, currency: 'CHF', direction: 'DBIT', description: 'Card transaction' },
+  ];
+  b.journalEntries!.push(entry('3', 'SPLIT', { accountDebit: '6570' }));
+  const f = homeFigures(b, Q4, ctx);
+  assert.equal(f.booked, 0, 'no receipt of the period is booked');
+  assert.equal(f.payments, 3, 'the wage, the open payment and the split charge once; not another period\'s');
+  assert.equal(f.paymentsBooked, 2, 'her wage, booked by hand, and the split charge once; the open payment does not count');
+});
+
 test('an empty workspace has zeros and no share', () => {
   const f = homeFigures(books([], [], []), Q4, ctx);
   assert.equal(f.collected + f.read + f.matched + f.booked, 0);

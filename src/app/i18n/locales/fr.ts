@@ -3779,6 +3779,7 @@ export default {
     'dock.card.collected': { one: 'pièce collectée', other: 'pièces collectées' },
     'dock.card.read': { one: 'pièce lue', other: 'pièces lues' },
     'dock.card.booked': { one: 'pièce comptabilisée', other: 'pièces comptabilisées' },
+    'dock.card.payments': { one: 'sur {n} paiement comptabilisé', other: 'sur {n} paiements comptabilisés' },
     'dock.card.waiting': { one: 'vous attend', other: 'vous attendent' },
     'dock.now.running': 'En cours : {what}',
     'dock.now.paused': 'En pause : rien ne démarre selon un horaire',

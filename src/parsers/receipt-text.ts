@@ -17,6 +17,14 @@ export function hasSwissUid(text: string): boolean {
   return SWISS_UID_RE.test(text);
 }
 
+/** Every Swiss UID a text shows, with or without «MWST» after it, as «CHE123456789»: whom a document names (src/intake/own-invoice.ts). */
+export function uidsIn(text: string): Set<string> {
+  return new Set([...text.matchAll(new RegExp(SWISS_UID_RE, 'g'))].map((m) => normUid(m[0])));
+}
+
+/** A VAT number to compare whole: upper case, without spaces, dots and dashes («CHE-123.456.789» → «CHE123456789», «DE123456789» stays). */
+export const normUid = (s: string): string => s.toUpperCase().replace(/[\s.\-]/g, '');
+
 /** Cheap pre-filter: anything that could be Swiss MWST. Absence skips the model and records hasSwissVat=false. */
 export function hasVatIndicator(text: string): boolean {
   return /MWST|MwSt|Mehrwertsteuer|CHE-\d{3}|\bVAT\b|USt|\d[.,]\d\s?%/i.test(text);

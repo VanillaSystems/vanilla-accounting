@@ -1,6 +1,8 @@
 export interface Account {
   number: string;
   name: string;
+  /** The standard chart's words for the account besides its name («Miete», «Benzin»): an account field finds it by them (#365). */
+  hints?: string[];
 }
 
 let accountsCache: Account[] | null = null;
@@ -37,4 +39,16 @@ export function setStandardAccounts(accounts: Account[]): void {
 export function addableAccounts(): Account[] {
   const have = getAccountMap();
   return standardCache.filter((a) => !(a.number in have));
+}
+
+/**
+ * The standard chart's words for an account of that number (Account.hints), while the firm's chart
+ * still names it as the standard chart does: a number the firm renamed («4400 Verbrauchsmaterial
+ * Salon») is no longer the standard account, and its hints («Subunternehmer») would mislead.
+ */
+export function hintsOf(number: string): string[] | undefined {
+  const standard = standardCache.find((a) => a.number === number);
+  const name = getAccountMap()[number];
+  // A chart made from 0.4.0 to #365 carries the name a comma cut («Telefon» for «Telefon, Internet»): still the standard account.
+  return standard && (name === undefined || name === standard.name || name === standard.name.split(',')[0]) ? standard.hints : undefined;
 }

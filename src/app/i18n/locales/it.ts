@@ -3779,6 +3779,7 @@ export default {
     'dock.card.collected': { one: 'giustificativo raccolto', other: 'giustificativi raccolti' },
     'dock.card.read': { one: 'giustificativo letto', other: 'giustificativi letti' },
     'dock.card.booked': { one: 'giustificativo registrato', other: 'giustificativi registrati' },
+    'dock.card.payments': { one: 'su {n} pagamento registrato', other: 'su {n} pagamenti registrati' },
     'dock.card.waiting': { one: 'ti aspetta', other: 'ti aspettano' },
     'dock.now.running': 'In corso: {what}',
     'dock.now.paused': 'In pausa: nulla parte secondo un orario',

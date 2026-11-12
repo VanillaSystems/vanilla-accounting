@@ -152,6 +152,7 @@ function task(t: unknown, fail: (msg: string) => never): TaskDecl {
     ...(r.why ? { why: text(r.why, 'task.why') } : {}),
     ...(r.do ? { do: r.do as TaskDecl['do'] } : {}),
     ...(r.due ? { due: String(r.due) } : {}),
+    ...(r.many ? { many: text(r.many, 'task.many') } : {}),
   };
 }
 

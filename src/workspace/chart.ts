@@ -32,6 +32,8 @@ export interface ChartAccount {
   legalForms?: LegalForm[];
   /** The account's name for a legal form, where it differs. */
   names?: Partial<Record<LegalForm, string>>;
+  /** Words a person types for the account besides its name («Miete», «Benzin»): an account field finds it by them (#365, #47). */
+  hints?: string[];
 }
 
 export interface Chart {
@@ -60,6 +62,9 @@ const TYPE_RULES: Record<AccountType, { statement: Statement; classes: string }>
   closing: { statement: 'abschluss', classes: '9' },
 };
 
+/** The keys an account of the chart may have. */
+const ACCOUNT_KEYS = new Set(['number', 'name', 'type', 'line', 'profiles', 'legalForms', 'names', 'hints']);
+
 export class ChartError extends Error {}
 
 export function loadChart(path: string = KMU_CHART): Chart {
@@ -75,11 +80,15 @@ export function loadChart(path: string = KMU_CHART): Chart {
     if (seen.has(a.number)) fail(`${where} is listed twice`);
     seen.add(a.number);
     if (!a.name) fail(`${where}: name missing`);
+    // A name with an unquoted comma in a flow mapping reads cut, its rest as a key of its own («Telefon, Internet»).
+    const stray = Object.keys(a).filter((k) => !ACCOUNT_KEYS.has(k));
+    if (stray.length) fail(`${where}: unknown key ${stray.map((k) => `"${k}"`).join(', ')} (a name with a comma must be quoted)`);
     const rule = TYPE_RULES[a.type] ?? fail(`${where}: type "${a.type}" is not one of ${ACCOUNT_TYPES.join(', ')}`);
     if (!rule.classes.includes(a.number[0])) fail(`${where}: a ${a.type} account must be in class ${[...rule.classes].join('/')}`);
     const line = lines[a.line] ?? fail(`${where}: line "${a.line}" is not in lines`);
     if (line.statement !== rule.statement) fail(`${where}: a ${a.type} account belongs on the ${rule.statement}, line "${a.line}" is on the ${line.statement}`);
     for (const p of a.profiles ?? []) if (p !== 'services' && p !== 'goods') fail(`${where}: profile "${p}" unknown`);
+    if (a.hints !== undefined && (!Array.isArray(a.hints) || a.hints.some((h) => typeof h !== 'string' || h.trim().length < 3))) fail(`${where}: hints must be a list of words of three letters or more`);
     for (const f of [...(a.legalForms ?? []), ...Object.keys(a.names ?? {})]) {
       if (!LEGAL_FORMS.includes(f as LegalForm)) fail(`${where}: legal form "${f}" unknown`);
     }
@@ -105,8 +114,8 @@ export function chartFor(chart: Chart, profile: BusinessProfile, legalForm: Lega
  * of some legal forms only (2850 Privat of an Einzelfirma) is offered only when the firm's form is known
  * and is one of them.
  */
-export function standardAccounts(legalForm?: LegalForm, chart: Chart = loadChart()): Array<{ number: string; name: string }> {
+export function standardAccounts(legalForm?: LegalForm, chart: Chart = loadChart()): Array<{ number: string; name: string; hints?: string[] }> {
   return chart.accounts
     .filter((a) => !a.legalForms || (!!legalForm && a.legalForms.includes(legalForm)))
-    .map((a) => ({ number: a.number, name: (legalForm && a.names?.[legalForm]) || a.name }));
+    .map((a) => ({ number: a.number, name: (legalForm && a.names?.[legalForm]) || a.name, ...(a.hints?.length ? { hints: a.hints } : {}) }));
 }

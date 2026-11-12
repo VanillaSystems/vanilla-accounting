@@ -8,7 +8,7 @@
  * under an answer that names it (the change `openPeriod`); the model only adds words.
  */
 import { useMemo } from 'react';
-import { t, language } from '../i18n/index.js';
+import { t } from '../i18n/index.js';
 import { formatDate } from '../lib/utils.js';
 import { periodName } from '../lib/period-label.js';
 import { hrefOf } from '../shell/history.js';
@@ -19,14 +19,13 @@ import { useAutomation } from '../automation/store.js';
 import { receiptDay } from '../automation/home.js';
 import { orderPagesNow } from '../lib/order-pages.js';
 import { at } from '../areas/receipts/view.js';
-import { readsInWords } from '../areas/automation/words.js';
+import { taskLine } from '../areas/automation/words.js';
 import { elsewhereCount, elsewhereOf, nothingOpen, openLines, openPeriodState, type OpenLine, type OpenPeriodState } from '../areas/automation/open-period.js';
 import { issueWords, UnbookedFact } from '../areas/automation/Issues.js';
 import { OPEN_ITEMS } from '../areas/vat/model.js';
 import { chargesVat, filing } from '../../engines/index.js';
 import { openCount } from '../../workflows/model.js';
 import { localToday } from '../../accounting/periods.js';
-import { fillTask, textIn } from '../../workflows/model.js';
 import type { Index } from '../../types/index.js';
 
 const TASKS: Location = { route: { area: 'automation', view: 'tasks' }, query: {} };
@@ -56,7 +55,7 @@ function textOf(l: OpenLine): string {
     case 'questions': return issueWords({ ...NONE, questions: l.n })[0];
     case 'evidence': return issueWords({ ...NONE, evidence: l.n })[0];
     case 'unlinked': return issueWords({ ...NONE, unlinked: l.n })[0];
-    case 'task': return fillTask(textIn(l.task.title, language()), l.task.item, readsInWords(l.task.reads));
+    case 'task': return taskLine(l.task);
     case 'moreTasks': return t('openPeriod.moreTasks', { n: l.n });
   }
 }

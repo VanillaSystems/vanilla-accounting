@@ -12,7 +12,7 @@ import type { AutomationView, RunSummary, Task, WorkflowDecl } from '../src/work
 
 const figures = (over: Partial<HomeFigures> = {}): HomeFigures => ({
   period: { key: '2026-Q4', from: '2026-10-01', to: '2026-12-31' },
-  collected: 46, read: 44, withVat: 30, payable: 40, matched: 39, booked: 38,
+  collected: 46, read: 44, withVat: 30, payable: 40, matched: 39, booked: 38, payments: 45, paymentsBooked: 41,
   authors: { app: 30, asked: 2, changed: 1, person: 5, unknown: 0 }, waitingReceipt: 0, filing: { kind: 'running', ends: '2026-12-31' }, ...over,
 });
 const wf = (over: Partial<WorkflowDecl> = {}): WorkflowDecl => ({
@@ -28,12 +28,13 @@ const view = (over: Partial<AutomationView> = {}): AutomationView => ({ rev: '',
 const now = new Date(2026, 9, 21, 10, 0);
 const keys = (fs: Array<{ key: string }>) => fs.map((f) => f.key);
 
-test('the bar stacks read, booked and what waits; the card adds collected, and «ohne dich» only when the books record who booked', () => {
+test('the bar stacks receipts read, receipts booked and what waits; the card adds collected, the payments booked of the period\'s payments (#365), and «ohne dich» only when the books record who booked', () => {
   const w = dockWidget(figures({ withoutYou: 79 }), view(), 0, now);
-  assert.deepEqual(w.stack, [{ key: 'read', n: 44 }, { key: 'booked', n: 38 }, { key: 'waiting', n: 0 }]);
-  assert.deepEqual(w.card, [{ key: 'collected', n: 46 }, { key: 'read', n: 44 }, { key: 'booked', n: 38 }, { key: 'withoutYou', pct: 79 }]);
+  assert.deepEqual(w.stack, [{ key: 'read', n: 44 }, { key: 'booked', n: 38 }, { key: 'waiting', n: 0 }], 'one meaning per word: «gebucht» in the bar is receipts, as the card\'s «Belege gebucht»');
+  assert.deepEqual(w.card, [{ key: 'collected', n: 46 }, { key: 'read', n: 44 }, { key: 'booked', n: 38 }, { key: 'payments', n: 41, of: 45 }, { key: 'withoutYou', pct: 79 }]);
   const unknown = dockWidget(figures({ authors: { app: 0, asked: 0, changed: 0, person: 0, unknown: 38 } }), view(), 0, now);
-  assert.deepEqual(keys(unknown.card), ['collected', 'read', 'booked'], 'no share when no booking records its author');
+  assert.deepEqual(keys(unknown.card), ['collected', 'read', 'booked', 'payments'], 'no share when no booking records its author');
+  assert.deepEqual(keys(dockWidget(figures({ payments: 0, paymentsBooked: 0 }), view(), 0, now).card), ['collected', 'read', 'booked'], 'no payments in the period: no payment fact');
   assert.ok(!keys(unknown.stack).includes('withoutYou'));
 });
 

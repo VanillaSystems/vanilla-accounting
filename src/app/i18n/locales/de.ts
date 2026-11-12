@@ -3776,6 +3776,7 @@ export const messages = {
   'dock.card.collected': { one: 'Beleg gesammelt', other: 'Belege gesammelt' },
   'dock.card.read': { one: 'Beleg gelesen', other: 'Belege gelesen' },
   'dock.card.booked': { one: 'Beleg gebucht', other: 'Belege gebucht' },
+  'dock.card.payments': { one: 'von {n} Zahlung gebucht', other: 'von {n} Zahlungen gebucht' },
   'dock.card.waiting': { one: 'wartet auf dich', other: 'warten auf dich' },
   'dock.now.running': 'Läuft: {what}',
   'dock.now.paused': 'Angehalten: nichts startet nach Zeitplan',

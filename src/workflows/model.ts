@@ -57,6 +57,8 @@ export interface TaskDecl {
   do?: 'open-login' | 'open-secret' | 'decide' | 'open-item';
   /** `end-of-month`, `end-of-period`, or an ISO duration from when the task appears. */
   due?: string;
+  /** Several such tasks as one line, «{n} Zahlungen von Hand buchen» (taskGroups): a pile of one title reads as one fact (#365). */
+  many?: Text;
 }
 
 export interface RetryDecl { on: Array<'network' | 'timeout' | 'unavailable'>; times: number; backoff: string }
@@ -470,7 +472,13 @@ export interface Task {
   overdue?: boolean;
   /** What the step reads from the steps before it (its `reads`), for the person to check: a return, a written file. */
   reads?: Record<string, unknown>;
+  many?: Text;
+  /** The payment a task about a transaction is about, as the server read it off the books: every place that shows the task names it (#365). */
+  payment?: TaskPayment;
 }
+
+/** What names a payment in a task: who, how much, which way, when. */
+export type TaskPayment = { counterparty?: string; description: string; amount: number; currency: string; date: string; direction: 'CRDT' | 'DBIT' };
 
 export function taskOf(w: WorkflowDecl, run: Run, now = new Date().toISOString()): Task | undefined {
   if (run.state.status !== 'waiting') return undefined;
@@ -481,7 +489,7 @@ export function taskOf(w: WorkflowDecl, run: Run, now = new Date().toISOString()
   const reads = Object.fromEntries(step.reads.filter((k) => out[k] !== undefined).map((k) => [k, out[k]]));
   return {
     run: run.id, workflow: w.id, step: step.id, item: run.item, title: task.title, ...(task.why ? { why: task.why } : {}),
-    ...(task.do ? { do: task.do } : {}), ...(task.due ? { due: task.due } : {}), since: run.state.since, outcomes: Object.keys(step.outcomes),
+    ...(task.do ? { do: task.do } : {}), ...(task.due ? { due: task.due } : {}), ...(task.many ? { many: task.many } : {}), since: run.state.since, outcomes: Object.keys(step.outcomes),
     ...(overdue(run, w, now) ? { overdue: true } : {}),
     ...(Object.keys(reads).length ? { reads } : {}),
   };
@@ -525,6 +533,26 @@ export interface CaseCheck {
 
 /** The status corner (views.md "Status, top right"): exactly three states. */
 export type Corner = { kind: 'running'; count: number } | { kind: 'needs-you'; count: number } | { kind: 'quiet' };
+
+/** From this many tasks of one step with a `many` text on, the corner shows them as one line. */
+export const GROUP_FROM = 3;
+
+/** The corner's lines: each task, or the tasks of one step as one line once there are GROUP_FROM of them and the step says how (`many`), at the place of its first. */
+export type TaskLine = { kind: 'one'; task: Task } | { kind: 'many'; tasks: Task[]; many: Text };
+export function taskGroups(tasks: readonly Task[]): TaskLine[] {
+  const key = (t: Task) => `${t.workflow}/${t.step}`;
+  const count = new Map<string, number>();
+  for (const t of tasks) if (t.many) count.set(key(t), (count.get(key(t)) ?? 0) + 1);
+  const out: TaskLine[] = [];
+  const placed = new Map<string, Extract<TaskLine, { kind: 'many' }>>();
+  for (const t of tasks) {
+    if (!t.many || (count.get(key(t)) ?? 0) < GROUP_FROM) { out.push({ kind: 'one', task: t }); continue; }
+    const g = placed.get(key(t));
+    if (g) g.tasks.push(t);
+    else { const line = { kind: 'many' as const, tasks: [t], many: t.many }; placed.set(key(t), line); out.push(line); }
+  }
+  return out;
+}
 
 export function corner(v: AutomationView): Corner {
   const running = v.runs.filter((r) => r.status === 'running' || r.status === 'queued').length;
