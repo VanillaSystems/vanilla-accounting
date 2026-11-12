@@ -3,9 +3,11 @@
 # SSH (shell), the VM's own screen sharing (whole screen: macOS dialogs, Finder, System Settings)
 # and the app's DevTools port through an SSH tunnel (inside the app). Never on the person's desktop.
 #
-#   vm.sh up [run] [--from SNAP]   clone vanilla-clean (or a snapshot), boot, key, Gatekeeper on,
-#                           dmg + persona files into ~/Downloads; macOS runs at most two macOS VMs at
-#                           once (Apple's limit), so `up` refuses a third instead of waiting for SSH
+#   vm.sh up [run] [--from SNAP] [--persona NAME]   clone vanilla-clean (or a snapshot), boot, key,
+#                           Gatekeeper on, dmg + persona files into ~/Downloads; macOS runs at most two
+#                           macOS VMs at once (Apple's limit), so `up` refuses a third instead of waiting
+#                           for SSH. NAME (or $PERSONA): huber (default, the painting firm), webshop,
+#                           consulting (persona-files.mjs --list); its answer key lands beside the env
 #   vm.sh install           the app of release/mac-arm64 (npm run desktop:dir, 15 s) into /Applications,
 #                           over the one there, past Gatekeeper: for iterating, not for install tests
 #   vm.sh snap NAME         keep this VM's state as snapshot belege-snap-NAME (books set up, files in …)
@@ -53,8 +55,17 @@ px() { echo "$1 * $(scale) / 1400" | bc; }
 
 case "$cmd" in
 up)
-  RUN=${1:-vm$(date +%H%M%S)}; VM="belege-vm-$RUN"; D="$ROOT/$RUN"
-  BASE=vanilla-clean; [ "${2:-}" = "--from" ] && BASE="belege-snap-$3"
+  RUN=; BASE=vanilla-clean; PERSONA=${PERSONA:-huber}
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --from) [ $# -ge 2 ] || { echo "--from needs a snapshot name" >&2; exit 1; }; BASE="belege-snap-$2"; shift 2 ;;
+      --persona) [ $# -ge 2 ] || { echo "--persona needs a name" >&2; exit 1; }; PERSONA=$2; shift 2 ;;
+      -*) echo "unknown option $1" >&2; exit 1 ;;
+      *) [ -z "$RUN" ] || { echo "one run name only: $RUN and $1" >&2; exit 1; }; RUN=$1; shift ;;
+    esac
+  done
+  node "$HERE/persona-files.mjs" --list | grep -qx "$PERSONA" || { echo "no persona $PERSONA: $(node "$HERE/persona-files.mjs" --list | tr '\n' ' ')" >&2; exit 1; }
+  RUN=${RUN:-vm$(date +%H%M%S)}; VM="belege-vm-$RUN"; D="$ROOT/$RUN"
   DMG=$(ls -t "$REPO"/release/*arm64.dmg 2>/dev/null | head -1)
   [ -n "$DMG" ] || { echo "no release/*arm64.dmg: npm run desktop:build first" >&2; exit 1; }
   [ -f "$KEY" ] || { echo "no SSH key $KEY" >&2; exit 1; }
@@ -70,7 +81,9 @@ up)
   printf 'RUN=%s\nVM=%s\nIP=%s\nEVIDENCE=%s\nDMG="%s"\n' "$RUN" "$VM" "$IP" "$EVIDENCE" "$DMG" > "$D/env"
   # vanilla-clean has Gatekeeper off; a person's Mac has it on.
   ssh_ 'echo admin | sudo -S spctl --global-enable 2>/dev/null; mkdir -p ~/Downloads; osascript -e "quit app \"Terminal\"" >/dev/null 2>&1 || true'
-  node "$HERE/persona-files.mjs" "$D/Downloads" >/dev/null && cat "$D/persona.env" >> "$D/env"
+  node "$HERE/persona-files.mjs" "$D/Downloads" --persona "$PERSONA" >/dev/null && cat "$D/persona.env" >> "$D/env"
+  # The tester's answer key (personas with one): beside the env, never into the VM, and kept with the evidence.
+  [ -f "$D/answer-key.md" ] && cp "$D/answer-key.md" "$EVIDENCE/answer-key.md"
   # The persona's files on every up (a snapshot may predate new ones); the dmg only on a fresh Mac.
   if [ "$BASE" = vanilla-clean ]; then VERIFY_VM=$RUN "$0" put "$DMG" "$D"/Downloads/* >/dev/null; else VERIFY_VM=$RUN "$0" put "$D"/Downloads/* >/dev/null; fi
   echo ready; cat "$D/env"; echo "source $D/env"
