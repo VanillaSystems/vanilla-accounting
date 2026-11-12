@@ -18,7 +18,7 @@ import { NoClaudeError } from '../llm/providers/claude-cli.js';
 import { missing as codexMissing } from '../llm/providers/codex-cli.js';
 import { sidebarAgent } from '../llm/ask.js';
 import { contextText } from './context.js';
-import { proposalsNote } from './proposals.js';
+import { draftedBy, proposalsNote } from './proposals.js';
 import { attachmentsNote, keepAttachments } from './attachments.js';
 import type { Attachment } from '../types/attachment.js';
 import { wordsIn } from '../export/texts.js';
@@ -114,6 +114,9 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
   });
   const said = ai.text;
   ai.text = withoutChanges(said);
+  // Which rules its drafts add, change or remove, now that they are written: later messages tell each one's state (#362).
+  const drafted = draftedBy(ws, ai);
+  if (drafted.length) ai.drafted = drafted;
   const terminal = terminalRequest(said);
   if (terminal) { ai.terminal = terminal; onEvent({ type: 'terminal', request: terminal }); }
   if (done?.type === 'done' && !done.isError) {

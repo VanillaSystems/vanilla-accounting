@@ -27,7 +27,7 @@ import { payerNames } from '../knowledge/payer.js';
 import { commitExactly, repositoryAt } from '../workspace/git.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { draftDir } from './changes.js';
-import { recordSettled } from './settled-drafts.js';
+import { recordSettled, ruleChanges } from './settled-drafts.js';
 import type { Dimension } from '../books/tags.js';
 
 type Ws = Pick<Workspace, 'paths'>;
@@ -315,11 +315,14 @@ export async function keepDraft(ws: Workspace, path: string, basis: string, conf
   const why = rulesRefusal([d], confirmed);
   if (why) return { ok: false, refusal: (d.wide.length || d.spread.length || d.overrides.length) && !rulesRefusal([d], true) ? 'wide' : 'rules', message: why };
   const to = join(ws.paths.root, path);
+  const changes = ruleChanges(read(to), after);
   mkdirSync(dirname(to), { recursive: true });
   if (after.trim()) writeFileSync(to, after); else rmSync(to, { force: true });
   rmSync(draft);
-  recordSettled(ws, path, 'kept');
-  return { ok: true, committed: await commit(ws, subjectOf(ws, d), path) };
+  const committed = await commit(ws, subjectOf(ws, d), path);
+  // What became of each rule, for the AI sidebar (#362): after the keep is done, and never failing it.
+  recordSettled(ws, path, changes, 'kept');
+  return { ok: true, committed };
 }
 
 /** «Verwerfen»: the draft of one file is gone; the file stays as it is. */
@@ -327,8 +330,9 @@ export function discardDraft(ws: Ws, path: string): boolean {
   if (path.includes('..')) return false;
   const draft = join(draftDir(ws), path);
   if (!existsSync(draft)) return false;
+  const changes = ruleChanges(read(join(ws.paths.root, path)), read(draft));
   rmSync(draft);
-  recordSettled(ws, path, 'discarded');
+  recordSettled(ws, path, changes, 'discarded');
   return true;
 }
 
