@@ -21,6 +21,7 @@ Two markers flag an entry you must read before you update:
   übernehmen», «Erst die Demo ansehen», «Ohne KI einrichten») scroll into sight above the input
   box instead of lying under it, where a click landed in the box (Mac app window 1440 × 900).
   Smooth only without reduced motion.
+- A bank statement dropped on Kontoauszüge opens again when it lands in another quarter. Since a month without a statement shows as «fehlt», the page selected the first such row of the new quarter (in November: October's gap) before the books with the new statement had loaded, and the statement just read was not on screen. A list now moves its selection to the first row only when its rows change under a selection that stayed (a filter, a search), never when a link changes both at once.
 
 ## [0.4.0] - 2026-11-12
 

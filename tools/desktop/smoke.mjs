@@ -40,8 +40,13 @@ const sha = (b) => createHash('sha256').update(b).digest('hex');
 
 // A login shell whose PATH finds the claude stub (and the node it runs on), as a person's terminal finds claude.
 const stubBin = mkdtempSync(join(tmpdir(), 'vanilla-smoke-claude-'));
-copyFileSync('tests/support/stub-bin/claude', join(stubBin, 'claude'));
+copyFileSync('tests/support/stub-bin/claude', join(stubBin, 'claude-stub.mjs'));
 symlinkSync(process.execPath, join(stubBin, 'node'));
+// The stub's own reading of a photo is too little to prove anything (textProves, src/parsers/receipt-text.ts, #284):
+// the photo would be set aside for a person under its own name. A legible photo reads as words, so the model names it.
+const OCR = 'Stub Shop. Quittung vom Stub gelesen: ein Foto eines Belegs, gut lesbar, mit dem Namen des Ladens, der gekauften Ware und dem Dank für den Einkauf.';
+writeFileSync(join(stubBin, 'claude'), `#!/bin/sh\nCLAUDE_STUB_OCR_TEXT='${OCR}'\nexport CLAUDE_STUB_OCR_TEXT\nexec "${join(stubBin, 'node')}" "${join(stubBin, 'claude-stub.mjs')}" "$@"\n`);
+chmodSync(join(stubBin, 'claude'), 0o755);
 const stubShell = join(stubBin, 'login-shell');
 writeFileSync(stubShell, `#!/bin/sh\nPATH=${stubBin}:/usr/bin:/bin\nexport PATH\nexec /bin/sh -c "$2"\n`);
 chmodSync(stubShell, 0o755);
