@@ -163,7 +163,9 @@ Two markers flag an entry you must read before you update:
   while an AI answer streams in and when the setup opens again on it, until she scrolls. «Partner und
   Wissen», never asked on books without bookings, is no longer counted as discussed («4 von 4»,
   listed «kommt mit den ersten Buchungen»). Without an AI the greeting no longer offers «in deinen
-  Worten», and the receipts step offers «KI einrichten» instead of «Mit mir einrichten».
+  Worten», and the receipts step offers «KI einrichten» instead of «Mit mir einrichten». Until the
+  look at this Mac's AI has answered, the receipts step offers neither, so «Mit mir einrichten» is
+  never shown and then taken back when a slow look says no AI answers.
 
 ### Fixed
 
