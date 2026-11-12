@@ -1,11 +1,147 @@
 {
   "receipts": [],
   "transactions": [
-    { "ref": "L1", "bank": "Raiffeisen", "date": "2026-07-25", "amount": 5200, "currency": "CHF", "direction": "DBIT", "counterparty": "Max Muster", "description": "Lohn Juli 2026" },
-    { "ref": "L2", "bank": "Raiffeisen", "date": "2026-07-25", "amount": 4800, "currency": "CHF", "direction": "DBIT", "counterparty": "Erika Beispiel", "description": "Lohn Juli 2026" },
-    { "ref": "L3", "bank": "Raiffeisen", "date": "2026-08-25", "amount": 5200, "currency": "CHF", "direction": "DBIT", "counterparty": "Max Muster", "description": "Lohn August 2026" },
-    { "ref": "L4", "bank": "Raiffeisen", "date": "2026-08-25", "amount": 4800, "currency": "CHF", "direction": "DBIT", "counterparty": "Erika Beispiel", "description": "Lohn August 2026" },
-    { "ref": "K1", "bank": "Raiffeisen", "date": "2026-08-04", "amount": 12450, "currency": "CHF", "direction": "CRDT", "counterparty": "Beispiel Verwaltung AG", "description": "Rechnung 2026-029 Treppenhaus" }
+    {
+      "ref": "L1",
+      "bank": "Raiffeisen",
+      "date": "2026-07-25",
+      "amount": 5200,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "counterparty": "Max Muster",
+      "description": "Lohn Juli 2026"
+    },
+    {
+      "ref": "L2",
+      "bank": "Raiffeisen",
+      "date": "2026-07-25",
+      "amount": 4800,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "counterparty": "Erika Beispiel",
+      "description": "Lohn Juli 2026"
+    },
+    {
+      "ref": "L3",
+      "bank": "Raiffeisen",
+      "date": "2026-08-25",
+      "amount": 5200,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "counterparty": "Max Muster",
+      "description": "Lohn August 2026"
+    },
+    {
+      "ref": "L4",
+      "bank": "Raiffeisen",
+      "date": "2026-08-25",
+      "amount": 4800,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "counterparty": "Erika Beispiel",
+      "description": "Lohn August 2026"
+    },
+    {
+      "ref": "K1",
+      "bank": "Raiffeisen",
+      "date": "2026-08-04",
+      "amount": 12450,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "counterparty": "Beispiel Verwaltung AG",
+      "description": "Rechnung 2026-029 Treppenhaus"
+    },
+    {
+      "ref": "B1",
+      "bank": "Raiffeisen",
+      "date": "2026-08-11",
+      "amount": 100,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "counterparty": "Vermieter AG",
+      "description": "Belastung E-Banking Auftrag"
+    },
+    {
+      "ref": "B2",
+      "bank": "Raiffeisen",
+      "date": "2026-08-12",
+      "amount": 200,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "counterparty": "Garage Huber",
+      "description": "Belastung E-Banking Auftrag"
+    },
+    {
+      "ref": "B3",
+      "bank": "Raiffeisen",
+      "date": "2026-08-13",
+      "amount": 300,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "counterparty": "Elektro Meier",
+      "description": "Belastung E-Banking Auftrag"
+    },
+    {
+      "ref": "B4",
+      "bank": "Raiffeisen",
+      "date": "2026-08-14",
+      "amount": 400,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "counterparty": "Druckerei Keller",
+      "description": "Belastung E-Banking Auftrag"
+    },
+    {
+      "ref": "B5",
+      "bank": "Raiffeisen",
+      "date": "2026-08-15",
+      "amount": 500,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "counterparty": "Treuhand Frei",
+      "description": "Belastung E-Banking Auftrag"
+    },
+    {
+      "ref": "B6",
+      "bank": "Raiffeisen",
+      "date": "2026-08-16",
+      "amount": 600,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "counterparty": "Versicherung Beispiel",
+      "description": "Belastung E-Banking Auftrag"
+    },
+    {
+      "ref": "LA",
+      "bank": "Raiffeisen",
+      "date": "2026-08-20",
+      "amount": 80,
+      "currency": "CHF",
+      "direction": "DBIT",
+      "counterparty": "Print AG",
+      "description": "Lohnausweis Druck"
+    },
+    {
+      "ref": "K2",
+      "bank": "Raiffeisen",
+      "date": "2026-08-05",
+      "amount": 3000,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "counterparty": "Anna Muster",
+      "description": "Einlage"
+    },
+    {
+      "ref": "K3",
+      "bank": "Raiffeisen",
+      "date": "2026-08-06",
+      "amount": 500,
+      "currency": "CHF",
+      "direction": "CRDT",
+      "counterparty": "Vanilla Wise",
+      "description": "Übertrag",
+      "counterpartyIban": "BE29 9670 0000 0164"
+    }
   ],
   "mappings": [],
   "bankStatements": [],

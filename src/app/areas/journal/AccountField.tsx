@@ -37,7 +37,8 @@ const classWords = (): AccountContext<AccountType>['words'] => ({ revenue: t('ac
 export function AccountField({ name, label, defaultValue, readOnly, onPick, offer, prefer, defaults }: { name: string; label: string; defaultValue: string; readOnly?: boolean; onPick?(): void; offer?: Account; prefer?: AccountType; defaults?: readonly string[] }) {
   const [value, setValue] = useState(defaultValue);
   const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(0);
+  // null: the row of the value the field holds (focused and not typed in yet), so ↵ keeps it; a number once she types or moves.
+  const [chosen, setActive] = useState<number | null>(0);
   const [refused, setRefused] = useState<string | null>(null);
   const listId = useId();
   const list = useRef<HTMLUListElement>(null);
@@ -50,6 +51,8 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick, offe
     return [...of(offered ? [offered] : [], 'offer'), ...of(getAccounts(), 'have'), ...(query ? of(addableAccounts(), 'add') : [])];
   }, [open, value, defaultValue, offered, prefer, defaults]);
   const matches = all.slice(0, MAX_OPTIONS);
+  const held = matches.findIndex((m) => m.account.number === value);
+  const active = chosen ?? Math.max(0, held);
   const name0 = getAccounts().find((a) => a.number === value)?.name;
 
   function pick(number: string) {
@@ -81,12 +84,12 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick, offe
 
   function onKeyDown(e: React.KeyboardEvent) {
     if (readOnly) return;
-    if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { setOpen(true); setActive(0); e.preventDefault(); return; }
+    if (!open && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { setOpen(true); setActive(null); e.preventDefault(); return; }
     if (!open) return;
     if (e.key === 'ArrowDown') move(active + 1);
     else if (e.key === 'ArrowUp') move(active - 1);
     // ↵ with the list open commits the pick and never reaches the form: a stray ↵ books nothing half typed (r9k-7).
-    else if (e.key === 'Enter') { if (matches[active]) void choose(matches[active]); else setOpen(false); }
+    else if (e.key === 'Enter') { if (matches[active] && !(chosen === null && held < 0 && value)) void choose(matches[active]); else setOpen(false); }
     else if (e.key === 'Escape') setOpen(false);
     else return;
     e.preventDefault();
@@ -107,7 +110,7 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick, offe
         aria-controls={listId}
         aria-autocomplete="list"
         data-tip={name0}
-        onFocus={(e) => { if (!readOnly) { setOpen(true); setActive(0); e.currentTarget.select(); } }}
+        onFocus={(e) => { if (!readOnly) { setOpen(true); setActive(null); e.currentTarget.select(); } }}
         // A value the books put in (useBookedFields, after an undo) is no typing: it opens no list.
         onChange={(e) => { setValue(e.target.value.trim()); setRefused(null); if (e.nativeEvent.isTrusted) { setActive(0); setOpen(true); } }}
         onBlur={() => setOpen(false)}

@@ -280,8 +280,23 @@ export function holds({ rule, business }: PlacedRule, p: PaymentFacts): boolean 
 export function loneWords({ rule, business }: PlacedRule): string[] {
   const w = rule.when;
   if (business || w.counterparty || w.payer || w.amount || !w.text) return [];
-  return w.text.split('|').map((x) => x.trim()).filter((x) => /^[\p{L}\p{N}.&'-]+$/u.test(x));
+  return w.text.split('|').map((x) => wordOf(x.trim())).filter((x) => /^[\p{L}\p{N}.&'-]+$/u.test(x));
 }
+
+/** A pattern's alternative without the word boundaries that make it match whole words (`\bLohn\b` is «Lohn»). */
+const wordOf = (x: string) => x.replace(/^\\b|\\b$/g, '');
+
+/**
+ * A text as a rule's pattern that matches it as whole words: «Lohn» never inside «Lohnausweis».
+ * The boundary stands only on an edge with a letter or digit of ASCII (`\b` knows no «ü»).
+ */
+export function wholeWords(text: string): string {
+  const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return `${/^[A-Za-z0-9]/.test(text) ? '\\b' : ''}${escaped}${/[A-Za-z0-9]$/.test(text) ? '\\b' : ''}`;
+}
+
+/** A pattern as plain words, for a line that names it: the boundaries and escapes taken off. */
+export const patternText = (p: string): string => p.split('|').map((x) => wordOf(x.trim()).replace(/\\(.)/g, '$1')).join(' | ');
 
 /**
  * The rule that decides a payment: of the rules switched on that hold, a question first (asking
@@ -335,7 +350,7 @@ export interface RuleNames {
 
 /** «Bargeldbezug» or «Bancomat»: a pattern of plain words separated by | reads as alternatives; any other pattern as written. */
 function patternWords(p: string, w: RuleWords): string {
-  const parts = p.split('|');
+  const parts = p.split('|').map(wordOf);
   return parts.every((x) => /^[\p{L}\p{N} .&'-]+$/u.test(x)) ? parts.map((x) => `«${x.trim()}»`).join(w('rules.say.or', {})) : `«${p}»`;
 }
 

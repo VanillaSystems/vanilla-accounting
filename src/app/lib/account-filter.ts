@@ -55,10 +55,11 @@ export function rankAccounts<T extends string>(accounts: readonly Account[], que
   const standing = (a: Account) => { const i = ctx.defaults?.indexOf(a.number) ?? -1; return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
   if (/^\d+$/.test(q)) return filterAccounts(accounts, query);
   const classes = new Set<T>();
-  // Each typed word may name a class («Einnahme von Kunde»): three letters at least, the word's start or the word with an ending.
+  // Each typed word may name a class («Einnahme von Kunde»): the word itself, the word with an ending, or its start of five letters
+  // at least, so three letters («ein», «ver») that start a name («Einlage») never list a whole class before it.
   for (const part of q.split(/\s+/).filter((x) => x.length >= 3)) {
     for (const [type, words] of Object.entries(ctx.words ?? {}) as Array<[T, readonly string[]]>) {
-      if (words.some((w) => { const f = foldAll(w); return f.startsWith(part) || part.startsWith(f); })) classes.add(type);
+      if (words.some((w) => { const f = foldAll(w); return part.startsWith(f) || (part.length >= 5 && f.startsWith(part)); })) classes.add(type);
     }
   }
   const out: Array<{ m: AccountMatch; quality: number; i: number }> = [];

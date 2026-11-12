@@ -157,7 +157,7 @@ export function answerSettles(tx: BankTransaction, entries: readonly Pick<Journa
 }
 
 /** Every word of the owner's name stands in the payment's counterparty or text («Anna Muster» in «Sent money to Anna Maria Muster»). */
-function paysOwner(tx: BankTransaction, owner: string | undefined): boolean {
+export function paysOwner(tx: Pick<BankTransaction, 'counterparty' | 'description'>, owner: string | undefined): boolean {
   const words = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().split(/[^\p{L}]+/u).filter((w) => w.length > 1);
   const name = words(owner ?? '');
   const said = new Set(words(`${tx.counterparty ?? ''} ${tx.description}`));

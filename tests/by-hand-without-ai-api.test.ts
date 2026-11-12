@@ -13,26 +13,58 @@ import { startApi, type ApiServer } from './support/api-server.js';
 import { APP_FOLDER, APP_ROOT } from '../src/workspace/workspace.js';
 import type { AssistantEvent, Conversation, Turn } from '../src/types/assistant.js';
 import type { HandStart } from '../src/saving/hand-rule.js';
+import type { DraftView } from '../src/saving/rules.js';
 
 const servers: ApiServer[] = [];
 const dirs: string[] = [];
 after(async () => { await Promise.all(servers.map((s) => s.stop())); for (const d of dirs) rmSync(d, { recursive: true, force: true }); });
 
-test('a rule started from a wage: the payer\'s three payments, and the wider start «Lohn» for all four of the fixture; by=text takes it', async () => {
+test('a rule started from a wage: the payer\'s three payments, and the wider start «Lohn» for all four, as whole words; by=text takes it', async () => {
   const api = await startApi('tests/fixtures/by-hand-index.json');
   servers.push(api);
   const start = async (q: string) => (await api.send('GET', `/api/rules/hand?payment=${q}`)).json.start as unknown as HandStart;
   const byPayer = await start('L1');
-  assert.deepEqual([byPayer.match.kind, byPayer.direction, byPayer.similar, byPayer.wider], ['payer', 'out', 2, { text: 'Lohn', similar: 4 }]);
+  assert.deepEqual([byPayer.match.kind, byPayer.direction, byPayer.similar, byPayer.wider], ['payer', 'out', 2, { text: 'Lohn', similar: 4 }], '«Lohnausweis Druck» is no wage');
   const byText = await start('L1&by=text');
-  assert.deepEqual([byText.match, byText.similar, byText.wider], [{ kind: 'text', text: 'Lohn' }, 4, undefined]);
+  assert.deepEqual([byText.match, byText.similar, byText.wider], [{ kind: 'text', text: '\\bLohn\\b' }, 4, undefined]);
   const sale = await start('K1');
-  assert.deepEqual([sale.direction, sale.similar, sale.wider, sale.rule], ['in', 1, undefined, undefined], 'one payment of its kind: no count to offer');
+  assert.deepEqual([sale.direction, sale.similar, sale.wider, sale.rule, sale.nature], ['in', 1, undefined, undefined, undefined], 'one payment of its kind: no count to offer');
 
   // A booked wage is no longer one of the open ones.
   const booked = await api.send('POST', '/api/transactions/L3/entries', { lines: [{ accountDebit: '5000', accountCredit: '1021', amount: 5200, description: 'Lohn August' }] });
   assert.equal(booked.status, 200, JSON.stringify(booked.json));
   assert.deepEqual([(await start('L1')).similar, (await start('L1')).wider], [1, { text: 'Lohn', similar: 3 }]);
+});
+
+test('the bank\'s own wording is never offered as a wider rule: «Belastung E-Banking Auftrag» holds for most of the year\'s payments out', async () => {
+  const api = await startApi('tests/fixtures/by-hand-index.json');
+  servers.push(api);
+  const start = (await api.send('GET', '/api/rules/hand?payment=B1')).json.start as unknown as HandStart;
+  assert.deepEqual([start.match.kind, start.similar, start.wider], ['payer', 1, undefined]);
+});
+
+test('what money in is beside a sale: the owner\'s deposit by her name, a transfer from an own account by its IBAN', async () => {
+  const api = await startApi('tests/fixtures/by-hand-index.json');
+  servers.push(api);
+  const start = async (q: string) => (await api.send('GET', `/api/rules/hand?payment=${q}`)).json.start as unknown as HandStart;
+  assert.deepEqual((await start('K2')).nature, { kind: 'owner', account: '2451' });
+  assert.deepEqual((await start('K3')).nature, { kind: 'ownTransfer' });
+});
+
+test('a text rule started from a payment rests on one word: it is not kept without «Trotzdem behalten» (loneWords)', async () => {
+  const api = await startApi('tests/fixtures/by-hand-index.json');
+  servers.push(api);
+  const start = (await api.send('GET', '/api/rules/hand?payment=L1&by=text')).json.start as unknown as HandStart;
+  const made = await api.send('POST', '/api/rules/hand', { match: start.match, direction: 'out', account: '6570', vat: null });
+  assert.equal(made.status, 200, JSON.stringify(made.json));
+  const path = String(made.json.path);
+  const card = (await api.send('GET', `/api/rules/draft?path=${encodeURIComponent(path)}`)).json as unknown as DraftView;
+  assert.equal(card.confirm, true, 'the card asks to confirm');
+  const plain = await api.send('POST', '/api/rules/draft', { kind: 'keep', path, basis: card.basis });
+  assert.notEqual(plain.json.ok, true, JSON.stringify(plain.json));
+  assert.match(JSON.stringify(plain.json), /Lohn/);
+  const kept = await api.send('POST', '/api/rules/draft', { kind: 'keep', path, basis: card.basis, confirm: true });
+  assert.equal(kept.json.ok, true, JSON.stringify(kept.json));
 });
 
 /** The demo's manifest with the setup's answers of a trades firm (it makes goods and sells services), as `npm run init --preset trades` writes them. */
