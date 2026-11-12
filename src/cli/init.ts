@@ -235,7 +235,7 @@ async function main(): Promise<string> {
   if (flags['no-env'] !== true) {
     message += '\n' + await pointEnvAt(typeof flags['app-env'] === 'string' ? resolve(flags['app-env']) : join(APP_ROOT, '.env'), root);
   }
-  return message + '\n\nNext: npm run doctor, then docs/getting-started.md (first bank statement, first receipts).';
+  return message + '\n\nNext: npm run doctor, then npm start. docs/from-source.md lists the commands, docs/getting-started.md walks through the app (first bank statement, first receipts).';
 }
 
 main()

@@ -10,7 +10,8 @@ of your workspace. From there they go through the usual steps
 
 The setup takes about ten minutes per mailbox. You do it once. You need:
 
-- a workspace, made with `npm run init` (see [Getting started](getting-started.md));
+- a workspace, made in the app or with `npm run init` (see [Getting started](getting-started.md)
+  and [From the source](from-source.md));
 - for each mailbox, its IMAP server and a password that IMAP accepts. With most providers
   this is an **app-specific password**, not the password you use in the browser.
 

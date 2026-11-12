@@ -57,6 +57,7 @@ desktop/icon.png
 desktop/brand-icons.json
 
 docs/getting-started.md
+docs/from-source.md
 docs/audit-export.md
 docs/vat-codes.md
 docs/releasing.md

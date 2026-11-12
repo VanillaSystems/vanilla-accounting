@@ -1,11 +1,16 @@
 # The quarter, step by step
 
-A Swiss company registered for VAT files a VAT return every quarter. So you keep the books
-every quarter too: after a quarter ends, you bring in what happened, book it, check it, and
-file the return. This page walks through one quarter in Vanilla Accounting, in order.
+A Swiss company registered for VAT on the effective method files a VAT return every quarter
+(on the Saldosteuersatz every half year: read «half year» for «quarter», and `2026-H1` for
+`2026-Q3`). So you keep the books every quarter too: after a quarter ends, you bring in what
+happened, book it, check it, and file the return. This page walks through one quarter in
+Vanilla Accounting, in order.
 
-It is for you, the owner. For each step it says what to run or click, and what to check
-before you go on. The same steps are written for Claude, in more detail, in the
+It is for you, the owner. The app does these steps itself: it reads what you drop, books it, and
+prepares, checks and seals the return ([Getting started](getting-started.md), steps 5 to 8).
+This page names the command behind each step, for those who run the app
+[from the source](from-source.md), and what to check before you go on. In the Mac app, read the
+checks and skip the commands. The same steps are written for Claude, in more detail, in the
 `processes/*.flow.yaml` files. Each step links to its flow, so you can see what an agent
 does there.
 
@@ -36,7 +41,8 @@ receipts you need. Without them you cannot know what is missing.
 
 1. In the e-banking of every bank account, download the statement for exactly the quarter, in
    the format **camt.053**. Every Swiss bank offers it. At Wise, download it once per currency.
-   [Getting started](getting-started.md#4-import-your-first-bank-statement) says where to find it.
+   [Getting started](getting-started.md#5-read-in-your-first-bank-statement) says where to find
+   it, and what the app takes when a bank gives you only a PDF.
 2. Save each file in `transactional-data/<year>/bank-statements/<bank>/` of your workspace (an
    upload in the app files it there).
 3. Run `npm run extract`. It reads the new statements into the books.
@@ -201,6 +207,10 @@ For agents: [`vat-filing.flow.yaml`](../processes/vat-filing.flow.yaml), steps `
 
 ## 9. File with the ESTV
 
+In the app: MWST › «Abrechnung erstellen», then «Freigegeben» on the task that follows. The app
+writes the XML and offers it as a download
+([Getting started](getting-started.md#8-file-the-vat-return)). The command does the same:
+
 ```sh
 npm run vat-xml -- 2026-Q3 q3.xml
 ```
@@ -219,6 +229,9 @@ For agents: [`vat-filing.flow.yaml`](../processes/vat-filing.flow.yaml), steps `
 
 Once the return is filed, the quarter never changes again. This is the first rule of the app
 (see [`AGENTS.md`](../AGENTS.md), golden rule 1).
+
+In the app: «Eingereicht» on the filing task keeps the filed XML, closes the quarter and seals
+it. That is all of this step. By hand:
 
 1. Copy the XML you filed into `transactional-data/<year>/filings/` of the workspace. Never generate a filed
    return again.

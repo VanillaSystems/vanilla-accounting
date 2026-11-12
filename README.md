@@ -1,13 +1,99 @@
 # Vanilla Accounting
 
-Bookkeeping for a Swiss GmbH on cash-basis VAT (effective method). Vanilla Accounting imports
-bank statements, collects receipts, matches each receipt to its bank transaction, books the
-journal entries with Claude, and writes the quarterly VAT return as the eCH-0217 XML that the
-ESTV "MWST abrechnen" portal imports.
+Bookkeeping for a small Swiss company, as a Mac app. You drop in your bank statements and your
+receipts. The app reads them, matches each receipt to its payment, books the payments, and
+prepares the VAT return as the file the ESTV's "MWST abrechnen" portal imports. It asks you only
+what only you can know.
+
+It is for the person who keeps the books of a GmbH, an AG or an Einzelfirma, without accounting
+training:
+
+- registered for VAT on the effective method (a return every quarter) or on the Saldosteuersatz
+  (a return every half year), on vereinnahmte or vereinbarte Entgelte;
+- or not registered for VAT: the app books without VAT and shows the year's turnover against
+  the limit for registration.
+
+It also writes your invoices with the Swiss QR-bill, shows Bilanz and Erfolgsrechnung, and leads
+through the year-end. [What it does not do yet](docs/getting-started.md#limits).
 
 **[Mission](MISSION.md):** take the bookkeeping off the people who run a small company. Code does
 what rules can decide, the AI what needs judgement, the person only what only they can know; and
 every person can automate the rest by asking the app's AI in their own words.
+
+> **Free to use, at your own risk.** Vanilla Accounting is provided free of charge under the
+> AGPL-3.0, as is, without any warranty. The author takes no responsibility or liability for the
+> software, for your books, or for any VAT return or other filing made with it. It is not tax or
+> legal advice: check every figure and every return yourself, or have your Treuhänder check it,
+> before you file. See [Licence and disclaimer](#licence-and-disclaimer).
+
+## Get started
+
+1. Download the `.dmg` from the
+   [Releases page](https://github.com/VanillaSystems/vanilla-accounting/releases): `arm64` for a
+   Mac with Apple silicon (M1 and later), `x64` for an Intel Mac.
+2. Open it and drag **Vanilla Accounting** into Applications. You need no Node.js, Homebrew or
+   terminal.
+3. Start it. The app is not signed with an Apple Developer ID yet, so macOS refuses it the first
+   time. Open it once and click **Done**, then go to System Settings › Privacy & Security and
+   click **Open Anyway** next to "Vanilla Accounting was blocked".
+
+The first screen leads to new books for your company, to books you already have, or to a copy of
+the demo company to look around in.
+
+Reading receipts and proposing bookings need an AI, on your own subscription: Claude Code with
+Claude Pro, or Codex with ChatGPT Plus, about USD 20 a month each. The app sets it up with you
+and never sees your login. It can wait: statements, the journal, invoices, the VAT return and
+the reports work without it, and the app says what waits for the AI.
+
+**[Getting started](docs/getting-started.md)** walks through the setup, the first bank
+statement, the first receipts, the first VAT return and invoices, and lists the limits.
+[The quarter, step by step](docs/quarter-workflow.md) and
+[the year-end](docs/year-end.md) come after. To update, download the new `.dmg`;
+[CHANGELOG.md](CHANGELOG.md) lists what each version changed.
+
+Developers, and people who want the app in a browser or as commands:
+[From the source](docs/from-source.md).
+
+## The app
+
+One window, a list on the left and the selected item on the right. The areas sit in a dock at
+the bottom edge (click one, or press `G` and a letter); a bar at the top edge holds search, the
+period, the export, zoom, light or dark, and the language (German, French, Italian, English).
+
+The books:
+
+- **Belege**: the receipts, what needs you first. A dropped PDF or photo is read, named, linked
+  to its payment and booked by the app itself. A receipt shows its paper, its facts (date,
+  amount, Swiss VAT, VAT number) and its payment; `L` links one, or books it as paid privately.
+- **Rechnungen**: invoices and credit notes with the Swiss QR-bill, edited on the A4 sheet,
+  checked against Art. 26 MWSTG before they are issued, sent by e-mail through the company's own
+  mailbox; customers, reminders, every document sent.
+- **Kontoauszüge**: each bank account's monthly statements (camt.053, or a PDF, scan or photo of
+  any bank), whether their payments add up to the bank's balances, a missing month, and each
+  payment with its receipt and booking.
+- **Buchungen**: the journal as one grid, edited in place, with corrections of a filed period
+  booked in the open one.
+- **MWST**: the return of a period with the bookings behind each Ziffer, «Abrechnung erstellen»
+  through to «Eingereicht», the Korrekturabrechnung (form 0535), and every VAT code explained.
+- **Bilanz & ER**: Erfolgsrechnung, Bilanz and Saldobilanz of any period, each account's ledger,
+  and reports you describe yourself.
+- **Abschluss**: the year-end, step by step.
+
+How the app works for you:
+
+- **Automatisierung**: what the app does by itself, each run, and the tasks that wait for you.
+- **Geschäftspartner**: suppliers, customers and authorities, each with its notes, its rules and
+  its bookings.
+- **Wissen**: how your company works, as the app has learned it, page by page.
+- **Änderungen**: what changed in rules and settings, to save and to look back.
+- **Firma**: the company's profile, VAT setup, bank accounts, chart of accounts, rules, periods,
+  opening balances, invoice layout, and the AI.
+
+The «KI» column (`⌘J`) takes a wish in your own words («buch Swisscom immer auf Telefon») and
+shows what it would change before you keep it. `⌘K` finds anything, `N` adds, `⌘Z` undoes, `⇧E`
+exports (a package for your Treuhänder, the audit, the year's archive). Every page has its own
+link, such as `/journal/M2026-001` or `/vat/405?period=2026-Q3` ([docs/urls.md](docs/urls.md)).
+A filed period shows with a lock, and the app refuses every edit in it.
 
 ## Who built this
 
@@ -18,12 +104,6 @@ done its accounting himself from the start. The software runs the real books of 
 GmbH and of the webshop behind it, [bananaoptics.com](https://bananaoptics.com). A professional
 Treuhänder (accountant) reviews the books. It has produced the company's VAT returns filed with
 the ESTV in 2026, and it prepares the year-end close, updated when the year turns.
-
-> **Free to use, at your own risk.** Vanilla Accounting is provided free of charge under the
-> AGPL-3.0, as is, without any warranty. The author takes no responsibility or liability for the
-> software, for your books, or for any VAT return or other filing made with it. It is not tax or
-> legal advice: check every figure and every return yourself, or have your Treuhänder check it,
-> before you file. See [Licence and disclaimer](#licence-and-disclaimer).
 
 ## How it is organized
 
@@ -47,75 +127,28 @@ the ESTV in 2026, and it prepares the year-end close, updated when the year turn
   [`docs/vat-codes.md`](docs/vat-codes.md) explains each one: what it means, which Ziffern of
   the VAT return it feeds, and when to use it. In the app, hover or click any code, or open
   **Codes erklärt** in MWST (`/vat/codes`).
-- **The demos** are complete workspaces of made-up companies, January to September 2026, with
-  Q1 filed and corrected:
+- **The demos** are complete workspaces of made-up companies. The first two run from January to
+  September 2026, with Q1 filed and corrected:
   - `demo/`: Muster Kaffee GmbH, a coffee roaster with a café and a webshop (reduced rates,
     card takings, a Sammelzahlung).
   - `demo-consulting/`: Muster Consulting GmbH, a one-person IT consultancy. The owner pays
     himself a salary, bills Swiss clients (8.1%) and foreign clients (Ziffer 221), gets his
     private outlays back each month, and declares a private share of his phone.
+  - `demo-coiffeur/` (an Einzelfirma, not registered for VAT) and `demo-schreinerei/` (a GmbH on
+    the Saldosteuersatz, first half year filed): one of each other kind of firm.
 
-  `npm run demo:generate` writes both from `tools/demo/`. Do not edit them by hand.
+  `npm run demo:generate` writes them from `tools/demo/`. Do not edit them by hand.
 
-## The app
+## Run from the source
 
-One window, a list on the left and the selected item on the right. Nine areas sit in a dock at
-the bottom edge (`G` and a letter); a bar at the top edge holds search, the period, the export,
-zoom, light or dark, and the language (German, French, Italian, English).
-
-- **Belege**: the receipts, what needs you first. A dropped PDF or photo is read, named, linked
-  to its payment and booked by the app itself. A receipt shows its paper, its facts (date,
-  amount, Swiss VAT, VAT number) and its payment; `L` links one, or books it as paid privately.
-- **Rechnungen**: invoices and credit notes with the Swiss QR-bill, edited on the A4 sheet,
-  checked against Art. 26 MWSTG before they are issued, sent by e-mail through the company's own
-  mailbox; customers, reminders, every document sent.
-- **Kontoauszüge**: each bank account's monthly statements, whether their payments add up to the
-  bank's balances, a missing month, and each payment with its receipt and entry.
-- **Buchungen**: the journal as one grid, edited in place, with corrections of a filed quarter
-  booked in the open one.
-- **MWST** and **MWST-Codes**: the return of a quarter with the entries behind each Ziffer, the
-  Korrekturabrechnung (form 0535), and every VAT code explained.
-- **Bilanz & ER**: Erfolgsrechnung, Bilanz and Saldobilanz of any period, each account's ledger.
-- **Abschluss**: the year-end in seven steps. **Firma**: the company's profile, VAT setup, bank
-  accounts, chart of accounts, periods, opening balances and invoice layout.
-
-`⌘K` finds anything, `N` adds, `⌘Z` undoes, `⇧E` exports (a package for your Treuhand, the
-audit, the year's archive). Every page has its own link, such as `/journal/M2026-001` or
-`/vat/405?period=2026-Q3` ([docs/urls.md](docs/urls.md)). A filed quarter shows with a lock, and
-the app refuses every edit in it.
-
-## Get started
-
-### The Mac app
-
-Download the `.dmg` from the Releases page of this repository: `arm64` for a Mac with Apple
-silicon (M1 or newer), `x64` for an Intel Mac. Open it, drag **Vanilla Accounting** into
-Applications and start it. You need no Node.js, Homebrew or terminal.
-
-The app starts on a screen with three choices: open existing books (a workspace folder), set up
-new books (the questions of `npm run init`, as a form), or look at a copy of the demo company.
-It opens the last books at the next start; File switches.
-
-Reading, matching and booking receipts call Claude: install
-[Claude Code](https://claude.com/claude-code) and log in with a Claude subscription. Without it,
-statements, invoices, VAT and every other area work, and the app says what waits for Claude.
-
-Until the app is signed with an Apple Developer ID, macOS refuses to open it the first time:
-open System Settings › Privacy & Security and choose **Open Anyway**.
-
-### From the source
-
-For developers, or to run the app in a browser. You need Node.js 22 and Claude Code with a
-Claude subscription. To look around first, open the demo company:
+You need Node.js 22. To look around, open a demo company:
 
 ```sh
 npm install
 VANILLA_WORKSPACE=demo npm start             # or VANILLA_WORKSPACE=demo-consulting
 ```
 
-Open http://localhost:5173.
-
-To keep your own books:
+Open http://localhost:5173. To keep your own books:
 
 ```sh
 npm run init      # asks about your company, creates its workspace, points .env at it
@@ -123,23 +156,15 @@ npm run doctor    # checks the tools and the workspace, and says how to fix what
 npm start
 ```
 
-`npm run desktop` runs the Mac app from the checkout, and `npm run desktop:build` builds the two
-`.dmg` files ([docs/desktop.md](docs/desktop.md)). `npm run desktop:dev` runs the Mac app while you
-edit: a change under `src/app` shows in the window at once through Vite, and a change to the main
-process or the server restarts Electron. It keeps its own data in
+[docs/from-source.md](docs/from-source.md) explains the questions, the files of a workspace and
+every command; `npm run update` updates a checkout. `npm run desktop` runs the Mac app from the
+checkout, and `npm run desktop:build` builds the two `.dmg` files
+([docs/desktop.md](docs/desktop.md)). `npm run desktop:dev` runs the Mac app while you edit: a
+change under `src/app` shows in the window at once through Vite, and a change to the main process
+or the server restarts Electron. It keeps its own data in
 `~/Library/Application Support/vanilla-accounting-dev` and runs beside the installed app
-([docs/desktop.md](docs/desktop.md#dev-mode)).
-
-### Next
-
-`docs/getting-started.md` walks through the questions, the first bank statement, the first
-receipts and the first VAT return, and lists what Vanilla Accounting does not do yet.
-`docs/quarter-workflow.md` walks through each quarter, and `docs/year-end.md` through closing
-the year (`npm run year:close`) and opening the next one (`npm run year:open`).
-
-To update from the source, run `npm run update`; the Mac app is updated by downloading the new
-`.dmg`. `CHANGELOG.md` lists what each version changed, and `docs/releasing.md` explains the
-version numbers and how a release is made.
+([docs/desktop.md](docs/desktop.md#dev-mode)). [docs/releasing.md](docs/releasing.md) explains
+the version numbers and how a release is made.
 
 ## Audit export
 
