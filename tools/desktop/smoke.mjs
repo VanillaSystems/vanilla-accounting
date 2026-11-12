@@ -384,10 +384,11 @@ const { file, recent } = await menu(page);
 check('the native menu speaks the UI language', file.includes('Buchhaltung öffnen…') && file.includes('Neue Buchhaltung…'), file.join(', '));
 check('the recent list holds both books', recent.join(', ').includes('Rauchtest GmbH'), recent.join(', '));
 await clickMenu(page, 'zoomIn');
-await sleep(400);
+// Waits for the effect, not a fixed time: the x64 build under Rosetta is slower.
+await page.waitForFunction(() => document.documentElement.style.zoom === '1.1', { timeout: 10000 }).catch(() => undefined);
 const zoomed = await page.evaluate(() => document.documentElement.style.zoom);
 await clickMenu(page, 'zoomReset');
-await sleep(400);
+await page.waitForFunction(() => !document.documentElement.style.zoom, { timeout: 10000 }).catch(() => undefined);
 check('View › Vergrössern steps the page\'s own zoom, Originalgrösse resets it', zoomed === '1.1' && !(await page.evaluate(() => document.documentElement.style.zoom)), `zoom ${zoomed}`);
 await Promise.all([page.waitForNavigation({ timeout: 20000 }), clickMenu(page, 'demo')]);
 await settle(page, 'nav.activity');
@@ -414,10 +415,9 @@ await settle(page, '.detail');
 await page.evaluate(() => document.querySelectorAll('.sec > button.sum').forEach((b) => { if (b.getAttribute('aria-expanded') === 'false') b.click(); }));
 await sleep(400);
 const clicked = await clickText(page, '.dangers button', 'Neu lesen');
-await sleep(1500);
 // It names no product (Claude Code or Codex, #175): it says an AI is missing and offers to set one up or to go on by hand.
-const toast = await page.evaluate(() => document.body.innerText.includes('braucht eine KI') && document.body.innerText.includes('KI einrichten'));
-check('the UI says an AI is missing and offers to set one up', clicked && toast);
+const toast = await page.waitForFunction(() => document.body.innerText.includes('braucht eine KI') && document.body.innerText.includes('KI einrichten'), { timeout: 15000 }).then(() => true, () => false);
+check('the UI says an AI is missing and offers to set one up', clicked && toast, `clicked ${clicked}, message ${toast}`);
 await shot(page, '08-no-claude');
 second.child.kill();
 await new Promise((r) => smtp.close(r));
