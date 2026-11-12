@@ -213,7 +213,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     open,
     recent: readState(opts.stateFile).recent.map(known),
     booksHome: opts.booksHome,
-    folders: existsSync(opts.booksHome) ? readdirSync(opts.booksHome, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name) : [],
+    folders: foldersIn(opts.booksHome),
   });
 
   const app = express();
@@ -352,6 +352,19 @@ function refuse(res: express.Response, e: unknown): void {
   else if (e instanceof WorkspaceRefusal) res.status(400).json({ error: e.message, ...e.refusal } satisfies ApiErrorBody);
   else if (e instanceof WorkspaceError) res.status(400).json({ error: e.message, code: 'notWorkspace' } satisfies ApiErrorBody);
   else res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+}
+
+/**
+ * The folders in `dir`; none when it is missing or may not be read. macOS asks the person before
+ * the app reads the Documents folder: «Nicht erlauben» is an answer, never the end of the start
+ * (the menu is built from info() before the first window opens).
+ */
+function foldersIn(dir: string): string[] {
+  try {
+    return readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+  } catch {
+    return [];
+  }
 }
 
 /** Copied file by file with the calls Electron reads its asar archive with (readdir, readFile): the demo lies inside it. */

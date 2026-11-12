@@ -106,7 +106,7 @@ function download(href: string, name: string): void {
  */
 export async function send(nav: Nav, inv: Issued, email?: MailMessage): Promise<boolean> {
   // Cancelled in the Save dialog: nothing went out, nothing is recorded.
-  if (!email && !(await savePdf(issuedPdfUrl(inv.number), `${inv.number}.pdf`))) return false;
+  if (!email && !(await run(nav, savePdf(issuedPdfUrl(inv.number), `${inv.number}.pdf`)))) return false;
   const doc = await run(nav, api.recordSend(inv.id, email ? { email } : { to: 'download' }));
   if (!doc) return false;
   await reloadInvoices();

@@ -108,7 +108,9 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
     }
   };
   const chooseAndOpen = async () => {
-    const root = await desktop?.chooseFolder(t('desktop.chooseOpen'));
+    setError('');
+    let root: string | null | undefined;
+    try { root = await desktop?.chooseFolder(t('desktop.chooseOpen')); } catch (e) { setError(errorText(e)); }
     if (root) await run(() => api.desktop.open(root));
   };
 
@@ -210,9 +212,13 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
     const period: Partial<Answers> = key === 'vatMethod' ? { period: value === 'net-rate' ? 'half-yearly' : 'quarterly' } : {};
     return { ...x, answers: { ...x.answers, [key]: next, ...period } };
   });
+  const [folderError, setFolderError] = useState('');
   const chooseFolder = async () => {
-    const dir = await desktop?.chooseFolder(t('desktop.chooseNew'));
-    if (dir) set('root', dir);
+    setFolderError('');
+    try {
+      const dir = await desktop?.chooseFolder(t('desktop.chooseNew'));
+      if (dir) set('root', dir);
+    } catch (e) { setFolderError(errorText(e)); }
   };
   const submit = () => {
     setChecked(true);
@@ -275,6 +281,7 @@ function CreateForm({ info, busy, error, onCancel, onCreate }: {
               {desktop && <button type="button" className="btn ghost" onClick={() => void chooseFolder()}>{t('desktop.chooseButton')}</button>}
             </span>
           </label>
+          {folderError && <p className="st-stop" role="alert">{folderError}</p>}
         </section>
 
         <section>

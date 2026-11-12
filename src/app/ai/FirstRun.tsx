@@ -198,9 +198,14 @@ function FolderStep({ info, onSetup, onForm }: { info: DesktopInfo | null; onSet
     setError('');
     try { await go(); } catch (e) { setError(errorText(e)); setBusy(false); }
   };
+  /** A dialog of the desktop app; one that fails says so in the step's error line, and gives nothing. */
+  const asked = async (dialog: Promise<string | null> | undefined): Promise<string | null> => {
+    setError('');
+    try { return (await dialog) ?? null; } catch (e) { setError(errorText(e)); return null; }
+  };
   const create = async () => {
     const root = desktop
-      ? await desktop.chooseNewFolder({ title: t('aiSetup.folder.createTitle'), name, button: t('aiSetup.folder.createButton') })
+      ? await asked(desktop.chooseNewFolder({ title: t('aiSetup.folder.createTitle'), name, button: t('aiSetup.folder.createButton') }))
       : info ? `${info.booksHome}/${name}` : null;
     if (!root) return;
     setChosen(root);
@@ -211,7 +216,7 @@ function FolderStep({ info, onSetup, onForm }: { info: DesktopInfo | null; onSet
     });
   };
   const open = async () => {
-    const dir = await desktop?.chooseFolder(t('desktop.chooseOpen'));
+    const dir = await asked(desktop?.chooseFolder(t('desktop.chooseOpen')));
     if (dir) await run(async () => { const books = await api.desktop.open(dir); if (books.setup) onSetup(books.root); else location.assign('/'); });
   };
   const demo = () => run(async () => { await api.desktop.demo(); location.assign('/'); });
