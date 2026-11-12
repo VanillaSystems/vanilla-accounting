@@ -5,8 +5,7 @@
  * Without React or Vite, so tests run it as it is.
  */
 import type { Key } from '../i18n/types.js';
-import type { DropRow, DropSession } from '../../types/drop.js';
-import { filingKeyOf, inPeriod, parsePeriod, type FilingLength, type IsoDate, type Period } from '../../accounting/periods.js';
+import type { DropSession } from '../../types/drop.js';
 
 /** A file that did not go, kept whole so it can be dropped again. */
 export interface Failed { file: File; error: unknown }
@@ -28,22 +27,6 @@ export async function addEach<S>(files: readonly File[], add: (f: File) => Promi
 export function failedLine(failed: readonly Failed[], why: (e: unknown) => string): { key: Key; vars: Record<string, string | number> } | undefined {
   if (!failed.length) return undefined;
   return { key: 'drop.failed', vars: { n: failed.length, list: failed.map((f) => `${f.file.name} (${why(f.error)})`).join(', ') } };
-}
-
-/**
- * Where a drop's files landed (F10): the period of the newest date among its taken files (a
- * statement's last booking day, a receipt's date once read; `dateOf` says it), when the period on
- * screen does not hold it. A date after today counts as today.
- */
-export function landedPeriod(rows: readonly DropRow[], dateOf: (r: DropRow) => IsoDate | undefined, current: Period, today: IsoDate, length: FilingLength): Period | undefined {
-  let newest: IsoDate | undefined;
-  for (const r of rows) {
-    const d = r.state === 'taken' ? dateOf(r) : undefined;
-    if (d && (!newest || d > newest)) newest = d;
-  }
-  if (!newest) return undefined;
-  const day = newest < today ? newest : today;
-  return inPeriod(current, day) ? undefined : parsePeriod(filingKeyOf(day, length), today) ?? undefined;
 }
 
 /** What a new drop sets: the dialog open, and its own note only, never the one of a drop before it. */
