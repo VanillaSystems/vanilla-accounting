@@ -322,7 +322,7 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
           {' · '}<button type="button" className="golink" data-tip={t('bank.noVatTip')} onClick={() => setNoReceipt(nav, tx, true)}>{t('bank.noVat')}</button>
         </>}</>
       ) : b.needsReceipt(tx) ? (
-        <> · <span className="wn">{t('bank.noReceipt')}</span>{edit && <> <button type="button" className="golink" onClick={() => setNoReceipt(nav, tx, true)}>{t('bank.noReceiptNeeded')}</button> · <FindPair key={tx.ref} on={{ payment: tx.ref }} books={props.books} nav={nav} compact /></>}</>
+        <> · <span className="wn">{t('bank.noReceipt')}</span>{edit && <> <button type="button" className="golink" data-testid="no-receipt-needed" onClick={() => setNoReceipt(nav, tx, true, false, !!tx.amount && b.unbooked(tx))}>{t('bank.noReceiptNeeded')}</button> · <FindPair key={tx.ref} on={{ payment: tx.ref }} books={props.books} nav={nav} compact /></>}</>
       ) : tx.noReceiptNeeded ? (
         <> · {t('bank.noReceiptNotNeeded')}{edit && <> <button type="button" className="golink" data-tip={t('bank.resetTip')} onClick={() => setNoReceipt(nav, tx, false)}>{t('bank.reset')}</button></>}</>
       ) : null}
@@ -507,8 +507,12 @@ function NotBooked({ tx, linked }: { tx: BankTransaction; linked: Linked }) {
   const run: Processing | undefined = tx.waitsForPerson ? undefined : bookingRun(view?.runs ?? []);
   // The inbox's run is open and books it (#218): what it does, not yet what the person should do.
   if (run) return <span className="m" data-testid="booking-now">{run.kind === 'running' ? processingText(run, view) : t('bank.bookingNow', { what: processingText(run, view) })}</span>;
+  // Its own run books it now (started by a click on it, #340); or that run came to rest at the person: said as a fact, with where to act.
+  const own = (view?.runs ?? []).some((r) => r.item.kind === 'transaction' && r.item.id === tx.ref && r.mode === 'live' && (r.status === 'queued' || r.status === 'running'));
+  if (own) return <span className="m" data-testid="booking-now">{t('bank.bookingItNow')}</span>;
   const wait = receiptState(tx, linked, false, localToday());
-  if (!wait) return <span className="wn">{t('bank.notBooked')}</span>;
+  const yours = (view?.tasks ?? []).some((k) => k.item.kind === 'transaction' && k.item.id === tx.ref);
+  if (!wait) return <span className="wn" data-testid={yours ? 'not-booked-yours' : 'not-booked'}>{t(yours ? 'bank.notBookedYours' : 'bank.notBooked')}</span>;
   if (wait.kind === 'unread') return <span className="wn" data-testid="waits-for-receipt">{t('bank.receiptUnread')}</span>;
   return <span className={wait.kind === 'asks' ? 'wn' : 'm'} data-testid="waits-for-receipt">{wait.kind === 'asks' ? t('bank.receiptDue', { date: formatDate(wait.due) }) : t('bank.waitsForReceipt')}</span>;
 }

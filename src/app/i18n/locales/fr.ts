@@ -5331,6 +5331,10 @@ export default {
     'bank.bookingMark': 'en comptabilisation',
     'bank.bookingTip': 'L’app traite en ce moment ce qui est arrivé et comptabilise au passage les paiements sans écriture. Ce qui reste ouvert ensuite vous attend ici.',
     'bank.bookingNow': 'L’app le comptabilise en ce moment : {what}',
+    'bank.bookingItNow': "L’app le comptabilise en ce moment",
+    'bank.noReceiptBooking': "Pas besoin de justificatif. L’app comptabilise le paiement maintenant.",
+    'bank.noReceiptResult': "{said} « Annuler » ne retire que « pas besoin de justificatif ».",
+    'bank.notBookedYours': "non comptabilisé : l’app n’a pas pu le comptabiliser elle-même. Comptabilisez-le à la main ci-dessous.",
     'drop.p.stuck': 'arrêtée',
   },
 } satisfies Locale;

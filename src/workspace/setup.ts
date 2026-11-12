@@ -257,6 +257,9 @@ export const PRESETS = {
   custom: { label: 'Something else: answer every question', answers: { vatRegistered: 'no' } },
 } as const satisfies Record<string, { label: string; answers: Partial<Answers> }>;
 
+/** Whether the firm pays wages: its setup says it has staff or an employed owner. A firm without a profile (books older than the setup's questions) has not said so. */
+export const employs = (profile: { employees?: string } | undefined): boolean => profile?.employees === 'staff' || profile?.employees === 'owner';
+
 export type Preset = keyof typeof PRESETS;
 export const PRESET_NAMES = Object.keys(PRESETS) as Preset[];
 

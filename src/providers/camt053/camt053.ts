@@ -131,6 +131,9 @@ function entryRef(entry: Node, txDtls: Node[], kind: StatementKind, statementId:
 /** ISO 20022 bank transaction sub-families of the bank's own charges (Domn/Fmly/SubFmlyCd, as ACMT/MDOP/FEES for an account fee). */
 const CHARGES = new Set(['CHRG', 'FEES']);
 const chargesCode = (code: Node | undefined) => CHARGES.has(String(code?.Domn?.Fmly?.SubFmlyCd ?? '').trim());
+/** A card payment (Domn/Fmly PMNT/CCRD): a purchase at a merchant, never the bank's own charge, whatever the merchant is called. */
+const cardCode = (code: Node | undefined) => String(code?.Domn?.Fmly?.Cd ?? '').trim() === 'CCRD';
+/** The whole name, never a part of it: «Migros» is not Migros Bank, «Raiffeisenbank» not the one bank that keeps this account (#340). */
 const sameName = (a: string, b: string | undefined) => !!b && a.toLowerCase().replace(/\s+/g, ' ').trim() === b.toLowerCase().replace(/\s+/g, ' ').trim();
 
 /** The bank transactions of a statement, booked on the ledger account of `bank` (a manifest label). */
@@ -189,8 +192,8 @@ export function transactionsOf(statement: CamtStatement, account: { bank: string
     const original = instructed !== undefined ? getAmt(instructed) : undefined;
     const wiseId = account.statements === 'wise' ? String(entry.BkTxCd?.Prtry?.Cd ?? '').trim() : '';
     // Wise names a fee row FEE-<the id of the payment it charges for> (FEE-CARD-…, FEE-TRANSFER-…).
-    // The bank's own charge: by its code for charges, or a debit to the bank that keeps the account, which some banks book under a payment's code.
-    const toServicer = account.statements !== 'wise' && direction === 'DBIT' && sameName(named, statement.bankName);
+    // The bank's own charge: by its code for charges, or a debit to the bank that keeps the account, which some banks book under a payment's code; a card payment is never one.
+    const toServicer = account.statements !== 'wise' && direction === 'DBIT' && sameName(named, statement.bankName) && !cardCode(entry.BkTxCd) && !cardCode(single?.BkTxCd);
     const feeType = wiseId.startsWith('FEE-') ? 'wise-fee' as const : (chargesCode(entry.BkTxCd) || chargesCode(single?.BkTxCd) || toServicer) && !counterpartyIban ? 'bank-fee' as const : undefined;
 
     return {

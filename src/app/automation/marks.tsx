@@ -12,7 +12,7 @@ import { BotIcon } from '../areas/automation/Graph.js';
 import type { Nav } from '../areas/index.js';
 import type { Location } from '../shell/route.js';
 import { api, errorText } from '../lib/api.js';
-import { automationCommand, useAutomation } from './store.js';
+import { automationCommand, automationNow, useAutomation } from './store.js';
 import { useState } from 'react';
 
 const OPEN = new Set(['queued', 'running', 'waiting', 'parked', 'stuck']);
@@ -41,6 +41,19 @@ function runResultText(w: WorkflowDecl, r: RunDetail): string {
     case 'stuck': return t('marks.stuck', { workflow, error: refusalText(res.error, res.why) });
     case 'running': return t('marks.started', { workflow });
   }
+}
+
+/**
+ * A workflow's run for one object, started by a click that is not the workflow's own button (a payment
+ * marked as needing no receipt goes on to be booked, #340), awaited until it rests: what came of it,
+ * in the button's words. Undefined when the workflow is not there.
+ */
+export async function startAndSay(workflowId: string, item: { kind: ItemKind; id: string }): Promise<string | undefined> {
+  const workflow = automationNow()?.workflows.find((w) => w.id === workflowId);
+  if (!workflow) return undefined;
+  const r = await automationCommand({ kind: 'start', workflow: workflow.id, item });
+  if (!r.ok) return t('marks.refused', { workflow: textIn(workflow.label, language()), why: commandRefusalText(r) });
+  return r.run ? runResultText(workflow, await rested(r.run)) : undefined;
 }
 
 export function WorkflowButtons({ kind, id, facts = [], nav, canEdit }: { kind: ItemKind; id: string; facts?: ItemFact[]; nav: Nav; canEdit: boolean }) {

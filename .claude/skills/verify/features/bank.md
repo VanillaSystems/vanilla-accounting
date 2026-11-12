@@ -90,7 +90,11 @@ Wise EUR (1023), January to September 2026.
   `dragenter` and `drop` on `window`. `$S diff` shows `+ transactions <ref>`; a statement dated on or before `$CT`
   shows the refusal toast and `$S diff` is unchanged, the file is not kept.
 - **No receipt needed.** Choose a payment with `kein Beleg`, click `braucht keinen`, read the book, ⌘Z, read it again
-  (`noReceiptNeeded` gone).
+  (`noReceiptNeeded` gone). On a payment without a booking (`[data-testid=no-receipt-needed]`) the click also starts the
+  booking run for it (#340): the bar says `Die App bucht sie gerade` (`[data-testid=booking-now]`), then the booking, or,
+  where no rule and no model booked it, `nicht gebucht: die App konnte sie nicht selbst buchen …`
+  (`[data-testid=not-booked-yours]`) above the form «Von Hand buchen»; the toast says the run's outcome. ⌘Z takes back
+  the mark only, never a booking the run made.
 - **Note.** Choose a payment of the open quarter, click `[data-testid=payment-note]`, `$B fill 'input.note' "Test"`,
   `$B press Enter`; toast `Notiz gespeichert`, `$S diff` shows `~ transactions <ref> .remarks: undefined -> "Test"`. ⌘Z,
   and the diff is `no changes` again (driven 2026-10-21 on a May payment of 1021).

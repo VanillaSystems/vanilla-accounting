@@ -25,7 +25,7 @@ import './support/jurisdiction.js';
 const OUT = (ref: string, over: Partial<BankTransaction> = {}): BankTransaction =>
   ({ ref, bank: 'Raiffeisen', date: '2026-10-05', amount: 89, currency: 'CHF', direction: 'DBIT', description: 'Telefonie Muster AG Rechnung 10/2026', ...over });
 
-const CTX: WaitContext = { free: new Set(['estv']), assumesUnread: new Set(['coop']), wordings: [/Bancomat/i], ownIbans: new Set(['CH6580808000000000001']), settles: settlementAccount({ moneyAccounts: new Set(['1020', '1000']), ownerAccount: '2850' }), inputTax: true };
+const CTX: WaitContext = { free: new Set(['estv']), assumesUnread: new Set(['coop']), wordings: [/Bancomat/i], wages: [], ownIbans: new Set(['CH6580808000000000001']), settles: settlementAccount({ moneyAccounts: new Set(['1020', '1000']), ownerAccount: '2850' }), inputTax: true };
 
 test('the decision: a purchase without a receipt waits; a receipt, a mark, money in, a fee row, an own transfer, an ask rule, a receipt-free business, a withdrawal\'s wording or a firm without input tax book at once', () => {
   assert.deepEqual(receiptWait(OUT('a'), { linked: 'none' }, CTX), { wait: true });
@@ -60,7 +60,7 @@ test('apply: { receipt: none } on evidence.guide.yaml#rules: the shipped authori
 });
 
 test('apply: { receipt: none, text } on a guide\'s evidence.guide.yaml#rules: the shipped cash-withdrawal wording in any language, never a word inside another', () => {
-  const { wordings } = receiptKnowledge(loadKnowledge(APP_ROOT, DEMO_ROOT));
+  const { wordings } = receiptKnowledge(loadKnowledge(APP_ROOT, DEMO_ROOT), {});
   const free = (s: string) => wordings.some((w) => w.test(s));
   for (const s of ['BANCOMAT Bezug ZKB Zürich HB', 'Bargeldbezug Postomat Bern', 'ATM withdrawal Lisbon', 'Retrait Bancomat Genève', 'Prelievo contanti Lugano', 'Geldautomat Konstanz']) assert.ok(free(s), s);
   for (const s of ['Telefonie Muster AG Rechnung 10/2026', 'Treatment Klinik AG', 'Batmobil Garage', 'Caisse de retraite BVG']) assert.equal(free(s), false, s);

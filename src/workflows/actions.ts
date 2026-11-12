@@ -177,7 +177,7 @@ export const ACTIONS: Record<string, Action> = {
       const context = loadClassifyContext(ws);
       // No provisional booking: a payment that needs a receipt waits for it, as in the inbox run (issue #29).
       // An answer that only settles (the owner's outlays paid back) has no receipt of its own and is booked (issue #90).
-      const wait = receiptWaitOf(scratch, t, context, receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root)), fx);
+      const wait = receiptWaitOf(scratch, t, context, receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws), fx);
       const waits = wait.wait;
       if (wait.wait && wait.unread) return { outcome: 'held', output: { why: 'receiptUnread' } };
       if (waits && (!ask || t.waitsForReceipt?.decided)) return { outcome: 'held', output: { why: 'waitsForReceipt' } };

@@ -53,7 +53,7 @@ test('the decision: an unread receipt waits for the person, unless the company\'
 });
 
 test('nothing shipped assumes a rate: no app-layer business file counts an unread receipt', () => {
-  assert.equal(receiptKnowledge(loadKnowledge(APP_ROOT, DEMO_ROOT)).assumesUnread.size, 0);
+  assert.equal(receiptKnowledge(loadKnowledge(APP_ROOT, DEMO_ROOT), {}).assumesUnread.size, 0);
 });
 
 test('the person is asked at once, not two weeks before the return; an answer ends the question', () => {

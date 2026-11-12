@@ -41,7 +41,7 @@ export function paymentActions(p: AreaProps, b: Bank, tx: BankTransaction, close
       return undefined;
     }, { done: () => t('actions.searched'), name: () => name }) } : undefined,
     addReceipt: edit && needs ? { id: 'addReceipt', label: t('actions.addReceipt'), run: () => intakeAdd.run(p) } : undefined,
-    noReceipt: edit && needs ? { id: 'noReceipt', label: t('bank.noReceiptNeeded'), run: () => void setNoReceipt(nav, tx, true) } : undefined,
+    noReceipt: edit && needs ? { id: 'noReceipt', label: t('bank.noReceiptNeeded'), run: () => void setNoReceipt(nav, tx, true, false, unbooked) } : undefined,
     rule: edit ? { id: 'rule', label: t('actions.rule'), run: () => nav.go({ route: { area: 'company', section: 'rules' }, query: { payment: tx.ref } }) } : undefined,
     openEntry: entry ? { id: 'openEntry', label: t('actions.openEntry'), run: () => nav.go(at({ area: 'journal', id: entry.id }, entry.date)) } : undefined,
     openReceipt: receipt ? { id: 'openReceipt', label: t('actions.openReceipt'), run: () => nav.go(at({ area: 'receipts', id: receipt }, r?.date ?? tx.date)) } : undefined,
