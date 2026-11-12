@@ -202,6 +202,11 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- The setup conversation keeps its order after a typed message (#385): the message stands under the
+  question it was typed at, above that question's answer, and the open question with its buttons
+  stays under her newest message, also when the words took a step back. In the books the rail shows
+  the topics «n von 4 besprochen» counts («Partner und Wissen» comes with the first bookings), and
+  the chip of the object open stands on the first message about it, not again on each next one.
 - Files dropped on Kontoauszüge go through «Dateien hinzufügen» as on any page (#361): every file
   gets its row, the statement under «Kontoauszüge» with «Auszug öffnen» and the closing sentence on
   its payments, and closing the window opens that statement. Before, the statement was read in
