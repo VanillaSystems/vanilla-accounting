@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { DETAIL_MIN, LIST_MIN, sidebarFit, sidebarWidths } from '../src/app/shell/look.js';
+import { DETAIL_MIN, LIST_MIN, PAGE_BESIDE_SETUP, sidebarFit, sidebarWidths } from '../src/app/shell/look.js';
 import { browserPath, closeChrome, launchChrome } from './support/browser.js';
 
 const DOCK = 52;
@@ -15,7 +15,11 @@ const fit = (window: number, setup = false) => sidebarFit(window - DOCK, sidebar
 test('the sidebar stays beside the page while the list and the detail fit at their narrowest, else it lies over it', () => {
   assert.deepEqual(fit(1440), { width: 400, over: false }, 'a wide window: the sidebar as wide as it wants');
   assert.deepEqual(fit(1100), { width: 1100 - DOCK - LIST_MIN - DETAIL_MIN, over: false }, '1100 px: the sidebar gives up a little for the detail');
-  assert.deepEqual(fit(1440, true), { width: 1440 - DOCK - LIST_MIN - DETAIL_MIN, over: false }, 'setup on a wide window: beside, a bit narrower');
+  assert.deepEqual(fit(1920, true), { width: 760, over: false }, 'setup on a large window: as wide as it wants');
+  assert.deepEqual(fit(1440, true), { width: 1440 - DOCK - PAGE_BESIDE_SETUP, over: false }, 'setup at 1440 px (the Mac app\'s window): it yields, the page keeps room to read (#342)');
+  assert.ok(fit(1440, true).width >= 520, 'and the setup still has its least');
+  assert.deepEqual(fit(1280, true), { width: 520, over: false }, 'setup at 1280 px: at its least beside the page, which keeps more than its narrowest');
+  assert.ok(1280 - DOCK - fit(1280, true).width >= LIST_MIN + DETAIL_MIN);
   assert.deepEqual(fit(1100, true), { width: 520, over: true }, 'setup at 1100 px: over the page at its least');
   assert.deepEqual(fit(900), { width: 306, over: true }, '900 px: over the page, no wider than it wants');
 });

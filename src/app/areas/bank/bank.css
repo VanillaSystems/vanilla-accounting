@@ -48,6 +48,10 @@
 .desk .well b { display: block; color: var(--muted); font-weight: 500; margin-bottom: 4px; }
 .desk .well:hover { border-color: var(--muted); }
 .page > .notice { margin: 0 0 14px; }
+/* A statement's notes on its balance (the opening that is missing, the difference to the books): one under the other, each a
+   sentence with its link in the line, so a narrow detail never sets them side by side at two words a line (#342). */
+.status.notes { flex-direction: column; align-items: flex-start; gap: 6px; }
+.status.notes .notice { display: block; line-height: 1.45; }
 .paybar .addnote { color: var(--faint); border-bottom-style: dashed; }
 .paybar input.note { font: inherit; color: var(--ink); background: transparent; border: 0; border-bottom: 1px solid var(--accent); outline: 0; padding: 0; width: 220px; }
 .counts.stc button.warn { font-size: inherit; white-space: nowrap; }

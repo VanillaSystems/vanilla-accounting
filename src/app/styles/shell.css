@@ -164,6 +164,9 @@ main { margin-left: var(--abw); }
 .tight .topbar { gap: 2px; }
 .tight .topbar .chip { padding: 0 8px; }
 .tight .legend { display: none; }
+/* While the AI sidebar is open the bar starts at the page's left edge instead of its middle, so it never lies under the
+   corner's buttons, which stand at the sidebar's edge (src/app/assistant/store.ts sets .aiopen, #342). */
+html.aiopen:not(.phone) .topbar { left: calc(var(--abw) + 16px); transform: none; }
 
 /* folded bars: a pill (docs/0.4.0/views.md, "Both bars") */
 .topbar.folded { padding: 4px; border-radius: 999px; }
