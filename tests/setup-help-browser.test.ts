@@ -49,6 +49,26 @@ const shot = async (page: Page, name: string) => { if (SHOTS) await page.screens
 /** Waits for `sel`, then clicks it as a person would. */
 const press = async (page: Page, sel: string) => { await page.waitForSelector(sel, { visible: true, timeout: 20_000 }); await page.click(sel); };
 
+/** The receipts card's look at this Mac's AI, once it has answered: `ready` or `none`. */
+const aiLook = (page: Page) => page.waitForFunction(() => {
+  const v = document.querySelector('[data-step=receipts] .obcard[data-ai]')?.getAttribute('data-ai');
+  return v && v !== 'unknown' ? v : false;
+}, { timeout: 60_000, polling: 100 }).then((h) => h.jsonValue() as Promise<string>);
+
+/**
+ * With an AI: the books' look says so. On a machine under load (the full suite beside test VMs) a look
+ * can run past its time and say «none» although the stub answers; the app looks again when the window
+ * gets focus, as for a person who comes back to it, so the test does that, at most three times.
+ */
+async function aiReady(page: Page): Promise<string> {
+  let look = await aiLook(page);
+  for (let i = 0; i < 3 && look !== 'ready'; i++) {
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    look = await page.waitForFunction(() => document.querySelector('[data-step=receipts] .obcard[data-ai]')?.getAttribute('data-ai') === 'ready', { timeout: 30_000, polling: 100 }).then(() => 'ready', () => look);
+  }
+  return look;
+}
+
 /** Where the element lies: wholly inside the window and the scroll box around it (`ok`), with the numbers for the message. */
 const measure = (sel: string) => {
   const e = document.querySelector(sel);
@@ -91,7 +111,8 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
 
       // The form: the same help under the same questions; neither VAT question answered for her.
       await page.goto(`http://${host}/start?new`, { waitUntil: 'networkidle0', timeout: 60_000 });
-      if (ai) { await page.waitForSelector('[data-ready=claude]', { timeout: 60_000 }); await press(page, '[data-act=by-hand]'); } else await press(page, '[data-answer=create]');
+      // /start?new is new books chosen already (#363): without an AI it is the form; with one, «Ohne KI einrichten» leads there.
+      if (ai) { await page.waitForSelector('[data-ready=claude]', { timeout: 60_000 }); await press(page, '[data-act=by-hand]'); }
       await page.waitForSelector('.st-form [data-q=vatMethod] [data-where]', { timeout: 20_000 });
       for (const q of ['vatMethod', 'basis', 'start']) assert.ok(await page.$(`.st-form [data-q=${q}] [data-where]`), `${size}: the form says where «${q}» stands`);
       assert.doesNotMatch(await text(page, '.st-form'), /Art\. 39|auf Gesuch|das Übliche/, `${size}: the form cites no law and calls no method the usual one`);
@@ -171,11 +192,13 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
       // In the books.
       await press(page, '[data-act=setup-create]');
       await page.waitForSelector('.aside.setup [data-step=company]', { timeout: 60_000 });
-      const greeting = ai ? /mit einem Klick oder in deinen Worten/ : /mit einem Klick\./;
-      await page.waitForFunction((re) => new RegExp(re).test((document.querySelector('.aside.setup [data-step=company]') as HTMLElement | null)?.innerText ?? ''), { timeout: 20_000 }, greeting.source);
-      if (!ai) assert.doesNotMatch(await text(page, '.aside.setup [data-step=company]'), /in deinen Worten/, `${size}: the greeting offers no words the field cannot take`);
       await press(page, '[data-step=opening] [data-answer=later]');
       await page.waitForSelector('[data-step=receipts] [data-answer=later]', { timeout: 20_000 });
+      // The look at the AI has answered: the receipts card says which, and the greeting follows it.
+      assert.equal(ai ? await aiReady(page) : await aiLook(page), ai ? 'ready' : 'none', `${size}: the books' look at the AI`);
+      const greeting = ai ? /mit einem Klick oder in deinen Worten/ : /mit einem Klick\./;
+      assert.match(await text(page, '.aside.setup [data-step=company]'), greeting, `${size}: the greeting says what works on this Mac`);
+      if (!ai) assert.doesNotMatch(await text(page, '.aside.setup [data-step=company]'), /in deinen Worten/, `${size}: the greeting offers no words the field cannot take`);
       if (ai) assert.ok(await page.$('[data-step=receipts] [data-act=sources-ask]'), `${size}: with an AI «Mit mir einrichten» is offered`);
       else {
         assert.ok(await page.$('[data-step=receipts] [data-testid=sources-no-ai]'), `${size}: without an AI its place says so`);

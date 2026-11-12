@@ -22,12 +22,17 @@ import { answer, keepSells, keepVat, setupReady, undoVat, useSetup } from './sta
 import { kindsOfAnswer } from '../../onboarding/model.js';
 import { salesKinds, type SalesKind } from '../../workspace/setup.js';
 import { say } from './words.js';
-import { useNoAi } from '../ai/no-ai.js';
+import { useAiState } from '../ai/no-ai.js';
 
-/** No AI answers on this Mac (#364): the conversation offers only what works without one. */
-const NoAi = createContext(false);
-/** A line in the words for this Mac: its `noAi` words while no AI answers. */
-const useLine = () => { const noAi = useContext(NoAi); return (l: Line) => say(noAi && l.noAi ? l.noAi : l); };
+/**
+ * Whether an AI answers on this Mac (#364): the conversation offers only what works there. `unknown`
+ * until the look has answered: the receipts card then offers neither «Mit mir einrichten» nor «KI
+ * einrichten», so nothing is offered and taken back. A line takes its `noAi` words once the look says
+ * so; before, its own (a greeting that gets shorter above the newest question never pushes it away).
+ */
+const Ai_ = createContext<'unknown' | 'ready' | 'none'>('unknown');
+/** A line in the words for this Mac. */
+const useLine = () => { const ai = useContext(Ai_); return (l: Line) => say(ai === 'none' && l.noAi ? l.noAi : l); };
 
 type Go = (route: Route) => void;
 
@@ -46,7 +51,8 @@ const ByHand = ({ go, onGo }: { go: HandPlace; onGo: Go }) => (
  */
 export function SetupConversation({ turns, turn, onGo, noAi: columnNoAi }: { turns: Turn[]; turn(t: Turn, i: number): ReactNode; onGo: Go; noAi?: boolean }) {
   const { steps, error } = useSetup();
-  const noAi = useNoAi() || !!columnNoAi;
+  const look = useAiState();
+  const ai = look === 'none' || columnNoAi ? 'none' : look;
   useNewestStep(steps?.at(-1)?.id);
   if (!steps) return null;
   const times = askedAt(steps);
@@ -58,7 +64,7 @@ export function SetupConversation({ turns, turn, onGo, noAi: columnNoAi }: { tur
   turns.forEach((x, i) => events.push({ at: x.at, node: <Fragment key={`t${i}`}>{turn(x, i)}</Fragment> }));
   // A stable sort: what happened at the same moment keeps the order it was pushed in.
   const ordered = events.map((e, i) => ({ ...e, i })).sort((x, y) => (x.at < y.at ? -1 : x.at > y.at ? 1 : x.i - y.i));
-  return <NoAi.Provider value={noAi}>{ordered.map((e) => e.node)}{error ? <p className="warnline">{error}</p> : null}</NoAi.Provider>;
+  return <Ai_.Provider value={ai}>{ordered.map((e) => e.node)}{error ? <p className="warnline">{error}</p> : null}</Ai_.Provider>;
 }
 
 const stepOf = (id: string) => document.querySelector(`.aside.setup .obstep[data-step="${id}"]`);
@@ -282,17 +288,16 @@ function SellsCard({ card }: { card: Extract<SetupCard, { kind: 'sells' }> }) {
 function SourcesCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'sources' }>; onGo: Go }) {
   const lang = document.documentElement.lang || 'de';
   // «Mit mir einrichten» asks the AI: offered only while one answers; otherwise its place says so and leads to setting one up (#364).
-  const noAi = useContext(NoAi);
+  const ai = useContext(Ai_);
   return (
-    <div className="obcard">
+    <div className="obcard" data-ai={ai}>
       {card.sources.length ? (
         <ul className="obcheck">{card.sources.map((s) => <li key={s.id}>{ICONS.receipts}<b>{s.label[lang] ?? s.label.en}</b><span className="obbadge pos">{t('onboarding.sources.on')}</span></li>)}</ul>
       ) : <span className="rk">{t('onboarding.sources.none')}</span>}
-      {noAi ? <span className="rk" data-testid="sources-no-ai">{t('onboarding.sources.noAi')}</span> : null}
+      {ai === 'none' ? <span className="rk" data-testid="sources-no-ai">{t('onboarding.sources.noAi')}</span> : null}
       <div className="actions">
-        {noAi
-          ? <button type="button" className="aiact" data-act="ai-set-up" onClick={() => onGo({ area: 'company', section: 'ai' })}>{t('aiSetup.line.setUp')}</button>
-          : <button type="button" className="aiact primary" data-act="sources-ask" onClick={() => void sendMessage(t('onboarding.sources.askText'), undefined)}>{t('onboarding.sources.ask')}</button>}
+        {ai === 'none' ? <button type="button" className="aiact" data-act="ai-set-up" onClick={() => onGo({ area: 'company', section: 'ai' })}>{t('aiSetup.line.setUp')}</button> : null}
+        {ai === 'ready' ? <button type="button" className="aiact primary" data-act="sources-ask" onClick={() => void sendMessage(t('onboarding.sources.askText'), undefined)}>{t('onboarding.sources.ask')}</button> : null}
         <button type="button" className="aiact" onClick={() => onGo({ area: 'company', section: 'sources' })}>{t('onboarding.sources.show')}</button>
       </div>
     </div>
