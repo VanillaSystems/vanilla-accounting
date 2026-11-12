@@ -7,6 +7,7 @@
  * Nothing here needs Electron, so the tests run it in Node.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readdir } from 'node:fs/promises';
 import { createServer, request, type RequestListener, type Server } from 'node:http';
 import { join, resolve } from 'node:path';
 import express from 'express';
@@ -67,7 +68,14 @@ export interface DesktopServer {
   /** Copies the demo into the user data folder the first time, then opens the copy. */
   openDemo(): Promise<KnownBooks>;
   current(): KnownBooks | null;
-  info(): DesktopInfo;
+  /**
+   * What the start screen shows. Asynchronous: listing the Documents folder makes macOS ask the
+   * person first, and while the question is open the read waits; off the main thread, the app and
+   * its window go on meanwhile.
+   */
+  info(): Promise<DesktopInfo>;
+  /** The books this Mac opened lately, for the menu: nothing in the Documents folder is listed. */
+  recent(): KnownBooks[];
   /** Only requests to this host reach the books (a page elsewhere cannot rebind its name to this port). */
   allowHost(host: string): void;
   /**
@@ -222,11 +230,12 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     return phoneInfo();
   }
 
-  const info = (): DesktopInfo => ({
+  const recent = () => readState(opts.stateFile).recent.map(known);
+  const info = async (): Promise<DesktopInfo> => ({
     open,
-    recent: readState(opts.stateFile).recent.map(known),
+    recent: recent(),
     booksHome: opts.booksHome,
-    folders: foldersIn(opts.booksHome),
+    folders: await foldersIn(opts.booksHome),
   });
 
   const app = express();
@@ -237,7 +246,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   app.use('/api/desktop', express.json());
   // This Mac's AI (docs/0.4.0/ai-setup.md): before any books exist, and the same while books are open.
   app.use(aiSetup);
-  app.get('/api/desktop', (_req, res) => { res.json(info()); });
+  app.get('/api/desktop', (_req, res, next) => { info().then((i) => res.json(i), next); });
   app.post('/api/desktop/open', async (req, res) => {
     const root = (req.body as { root?: unknown }).root;
     if (typeof root !== 'string' || !root.trim()) return refuse(res, new WorkspaceError('No folder given.'));
@@ -340,7 +349,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   });
 
   return {
-    app, open: openBooks, openDemo, info,
+    app, open: openBooks, openDemo, info, recent,
     current: () => open,
     allowHost: (h) => { host = h; },
     startBackground: () => { if (background === 'off') { background = 'wanted'; void runBackground(); } },
@@ -373,12 +382,13 @@ function refuse(res: express.Response, e: unknown): void {
 
 /**
  * The folders in `dir`; none when it is missing or may not be read. macOS asks the person before
- * the app reads the Documents folder: «Nicht erlauben» is an answer, never the end of the start
- * (the menu is built from info() before the first window opens).
+ * the app reads the Documents folder: «Nicht erlauben» is an answer, never the end of the start.
+ * Read off the main thread (fs/promises): a synchronous read held the main process for as long as
+ * the question was open, and the first window's page then failed to load (issue #363).
  */
-function foldersIn(dir: string): string[] {
+async function foldersIn(dir: string): Promise<string[]> {
   try {
-    return readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+    return (await readdir(dir, { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name);
   } catch (e) {
     // Missing or refused is an answer; anything else is worth a line in the log.
     if (!['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM'].includes((e as NodeJS.ErrnoException).code ?? '')) console.error(`folders in ${dir}:`, e);

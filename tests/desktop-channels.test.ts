@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ASK, PUSH, TELL } from '../src/desktop/channels.js';
 import { chosenFolder, newFolderPanel } from '../src/desktop/new-folder.js';
-import { PAINT_GRACE_MS, bringUp, offerMove, type AppWindow, type MoveOffer } from '../src/desktop/start.js';
+import { LOAD_RETRY_MS, PAINT_GRACE_MS, bringUp, loadPage, offerMove, type AppWindow, type MoveOffer } from '../src/desktop/start.js';
 import { desktopServer, listen, portOf } from '../src/desktop/server.js';
 import { DesktopCallError, plainFailures } from '../src/app/desktop/bridge.js';
 import de from '../src/app/i18n/locales/de.js';
@@ -161,6 +161,57 @@ test('the Dock click is heard before the start first waits, so a start that hang
   }
 });
 
+/** An Electron load error: ERR_FAILED (-2) as the relaunched app's first load threw after «Verschieben» (issue #363). */
+const loadError = (errno: number) => Object.assign(new Error(`ERR (${errno}) loading 'http://127.0.0.1:49152/'`), { errno });
+
+test('a page load that fails is tried again until it loads; the window never stays empty with nothing loading it (#363)', async () => {
+  const pauses: number[] = [];
+  const pause = async (ms: number) => { pauses.push(ms); };
+  let tries = 0;
+  const loaded = await loadPage(async () => { if (++tries < 3) throw loadError(-2); }, () => true, pause);
+  assert.deepEqual(loaded, { result: 'loaded' });
+  assert.equal(tries, 3);
+  assert.deepEqual(pauses, LOAD_RETRY_MS.slice(0, 2));
+
+  // A load replaced by the next one (ERR_ABORTED) is no failure and is not repeated.
+  tries = 0;
+  assert.deepEqual(await loadPage(async () => { tries++; throw loadError(-3); }, () => true, pause), { result: 'replaced' });
+  assert.equal(tries, 1);
+
+  // A closed window is not loaded again.
+  tries = 0;
+  assert.deepEqual(await loadPage(async () => { tries++; throw loadError(-2); }, () => false, pause), { result: 'closed' });
+  assert.equal(tries, 1);
+
+  // One that never loads ends after every pause, with the reason, for the person to read (main.ts says it and quits).
+  tries = 0;
+  const failed = await loadPage(async () => { tries++; throw loadError(-2); }, () => true, pause);
+  assert.equal(failed.result, 'failed');
+  assert.match(failed.result === 'failed' ? failed.reason : '', /ERR \(-2\)/);
+  assert.equal(tries, LOAD_RETRY_MS.length + 1);
+  assert.ok(LOAD_RETRY_MS.reduce((a, b) => a + b, 0) >= 20_000, 'about half a minute of tries before giving up');
+});
+
+test('the first window is loaded through loadPage, and the menu reads nothing of the Documents folder (#363)', () => {
+  const main = source('main.ts');
+  assert.match(main, /loadPage\(/, 'main.ts loads its pages through loadPage');
+  for (const line of main.split('\n').filter((l) => l.includes('.loadURL('))) assert.match(line, /loadPage\(/, `a loadURL outside loadPage: ${line.trim()}`);
+  assert.doesNotMatch(main, /server\.info\(\)/, 'the menu is built from server.recent(), which lists no folder');
+});
+
+test('the start screen\'s look into the Documents folder is read asynchronously, so the question macOS asks holds no main process (#363)', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'vanilla-documents-'));
+  mkdirSync(join(home, 'Documents', 'Buchhaltung 2026'), { recursive: true });
+  const server = desktopServer({ stateFile: join(home, 'desktop.json'), demoRoot: join(home, 'Demo'), booksHome: join(home, 'Documents'), dist: join(home, 'dist') });
+  const pending = server.info();
+  assert.ok(pending instanceof Promise, 'info() answers later, it does not hold the caller');
+  const info = await pending;
+  const foldersIn = source('server.ts').split('function foldersIn(')[1]!.split('\n}\n')[0]!;
+  assert.doesNotMatch(foldersIn, /Sync\(/, 'macOS holds a synchronous read of Documents until the person answers, and the main process with it');
+  assert.deepEqual(info.folders, ['Buchhaltung 2026']);
+  assert.deepEqual(server.recent(), []);
+});
+
 test('a folder named for new books is looked at first: books, a started setup and other files are told apart from a new one', async () => {
   const home = mkdtempSync(join(tmpdir(), 'vanilla-taken-'));
   const documents = join(home, 'Documents');
@@ -202,22 +253,22 @@ test('a folder named for new books is looked at first: books, a started setup an
   }
 });
 
-test('a Documents folder the app may not read («Nicht erlauben») leaves the start screen its answer: no folders, no error', { skip: process.getuid?.() === 0 ? 'root reads every folder' : false }, () => {
+test('a Documents folder the app may not read («Nicht erlauben») leaves the start screen its answer: no folders, no error', { skip: process.getuid?.() === 0 ? 'root reads every folder' : false }, async () => {
   const home = mkdtempSync(join(tmpdir(), 'vanilla-documents-'));
   const documents = join(home, 'Documents');
   mkdirSync(join(documents, 'Buchhaltung 2026'), { recursive: true });
   const server = desktopServer({ stateFile: join(home, 'desktop.json'), demoRoot: join(home, 'Demo'), booksHome: documents, dist: join(home, 'dist') });
-  assert.deepEqual(server.info().folders, ['Buchhaltung 2026']);
+  assert.deepEqual((await server.info()).folders, ['Buchhaltung 2026']);
   const logged = console.error;
   const lines: unknown[] = [];
   console.error = (...args: unknown[]) => { lines.push(args); };
   chmodSync(documents, 0o000);
   try {
-    assert.deepEqual(server.info().folders, []);
+    assert.deepEqual((await server.info()).folders, []);
     assert.deepEqual(lines, [], 'refused is an answer, not an error to log');
   } finally {
     chmodSync(documents, 0o755);
     console.error = logged;
   }
-  assert.deepEqual(desktopServer({ stateFile: join(home, 'desktop.json'), demoRoot: join(home, 'Demo'), booksHome: join(home, 'none'), dist: join(home, 'dist') }).info().folders, []);
+  assert.deepEqual((await desktopServer({ stateFile: join(home, 'desktop.json'), demoRoot: join(home, 'Demo'), booksHome: join(home, 'none'), dist: join(home, 'dist') }).info()).folders, []);
 });

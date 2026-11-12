@@ -60,3 +60,37 @@ export function bringUp(win: AppWindow | undefined, create: () => void, waiting:
   }
   win.focus();
 }
+
+/** Chromium's ERR_ABORTED: a load replaced by the next one, no failure. */
+const ABORTED = -3;
+
+/** The pauses between the tries of a page load that failed: about 30 s in all. */
+export const LOAD_RETRY_MS: readonly number[] = [250, 500, 1000, 2000, 4000, 4000, 6000, 6000, 6000];
+
+export type Loaded = { result: 'loaded' | 'replaced' | 'closed' } | { result: 'failed'; reason: string };
+
+/**
+ * Loads the window's page, and again after a pause when the load failed. Seen in the packed app
+ * (issue #363): after «Verschieben» the relaunched app's first load failed at once with
+ * ERR_FAILED, Chromium's network process having been restarted while macOS's question about the
+ * Documents folder held the main process; nothing loaded the page again, so the window stayed
+ * hidden, then blank. `alive` is false once the window is closed; `replaced`: another load took
+ * its place.
+ */
+export async function loadPage(
+  load: () => Promise<unknown>, alive: () => boolean,
+  pause: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+): Promise<Loaded> {
+  for (let i = 0; ; i++) {
+    try {
+      await load();
+      return { result: 'loaded' };
+    } catch (e) {
+      if ((e as { errno?: number }).errno === ABORTED) return { result: 'replaced' };
+      const wait = LOAD_RETRY_MS[i];
+      if (wait === undefined) return { result: 'failed', reason: (e as Error).message };
+      await pause(wait);
+      if (!alive()) return { result: 'closed' };
+    }
+  }
+}

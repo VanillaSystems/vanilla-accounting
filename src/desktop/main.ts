@@ -21,7 +21,7 @@ import { freshLoginPath } from '../platform/ai-cli.js';
 import { ASK, PUSH, TELL } from './channels.js';
 import { chosenFolder, newFolderPanel } from './new-folder.js';
 import { sameOrigin, saveFile } from './save-file.js';
-import { bringUp, offerMove, type Waiting } from './start.js';
+import { bringUp, loadPage, offerMove, type Waiting } from './start.js';
 import { dictate, isLang } from './dictation.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
 import { electronPage } from './print.js';
@@ -68,11 +68,15 @@ async function start(): Promise<void> {
       waiting = mine;
       // A new window appears once the page has painted, not as an empty frame.
       opened.once('ready-to-show', () => opened.show());
-      // -3: a load replaced by the next one, no failure.
-      opened.webContents.on('did-fail-load', (_e, code, _text, _url, mainFrame) => { if (mainFrame && code !== -3) mine.failed = true; });
     }
-    void win!.loadURL(base + path);
-    if (!fresh) win!.show();
+    const target = win!;
+    // A load that fails is tried again (loadPage); one that never succeeds says so and ends the app.
+    void loadPage(() => target.loadURL(base + path), () => !target.isDestroyed()).then((r) => {
+      if (r.result !== 'failed') return;
+      dialog.showErrorBox(textsIn(language)('desktop.startFailed'), r.reason);
+      app.exit(1);
+    });
+    if (!fresh) target.show();
   };
   // A second start, a click on the Dock icon, `open -a`: the window in front. Listening before the
   // first wait of the start, so a start that hangs later (books that do not open, a login shell
@@ -126,7 +130,7 @@ async function start(): Promise<void> {
     return chosenFolder(win && !win.isDestroyed() ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options));
   };
   function refreshMenu(): void {
-    Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate(language, server.info().recent, {
+    Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate(language, server.recent(), {
       openBooks: async () => {
         const root = await chooseFolder(textsIn(language)('desktop.chooseOpen'));
         if (root) await opening(() => server.open(root))();
