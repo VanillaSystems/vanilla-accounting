@@ -279,6 +279,8 @@ function summaryOf(p: SetupProgress, f: SetupFacts): Extract<SetupCard, { kind: 
     ...(f.sources.length ? [{ what: L('sum.sources', { n: f.sources.length }), origin: 'app' as Origin }] : []),
     ...(f.rules ? [{ what: L('sum.rules', { n: f.rules }), origin: 'app' as Origin }] : []),
   ];
+  // Not registered: where that changes, as a fact (#347).
+  if (!v.registered) items.push({ what: L('sum.noVatChange'), origin: told });
   const open = SETUP_TOPICS.filter((t) => states[t] !== 'done').map((t) => ({ topic: t, state: shownState(p, f, t), go: TOPIC_HAND[t] }));
   const first = L(!v.registered ? 'sum.firstNone' : v.period === 'half-yearly' ? 'sum.firstHalf' : 'sum.firstQuarter');
   return { kind: 'summary', items, open, first };

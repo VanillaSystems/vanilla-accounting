@@ -71,10 +71,13 @@ order:
    On the Saldosteuersatz the wizard then asks for the approved rate(s), one or two
    (`--net-rate 4.5:Schreinerei`, or with the ESTV's five-character activity code
    `--net-rate 4.5:Schreinerei:41050`). The code can be added later under Firma › MWST; the
-   electronic return needs it.
+   electronic return needs it. A third answer, `no-vat` (`--vat-method no-vat`), is for a company
+   that files no VAT returns at all: it answers no to the registration, and the basis, the period
+   and any `--net-rate` are dropped (the wizard says so).
 4. **VAT basis.** Vereinbart (the law's default, MWSTG Art. 39): VAT is due when you send the
    invoice, input tax when you receive the bill. Vereinnahmt (cash, on request to the ESTV): VAT
-   is due when the money moves. Both are supported (`--basis agreed` or `--basis received`).
+   is due when the money moves. Both are supported (`--basis agreed` or `--basis received`);
+   `--basis no-vat` is the same third answer as on the method.
 5. **VAT reporting period.** Quarterly (the effective method's default) or half-yearly (the
    Saldosteuersatz's). Monthly returns are not supported yet. The method, the basis, the period
    and the rate hold for whole years: a change is possible in a year without entries.

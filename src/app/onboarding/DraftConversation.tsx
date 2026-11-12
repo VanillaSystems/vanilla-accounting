@@ -51,6 +51,7 @@ const refusalText = (r: TalkRefusal): string =>
   r.reason === 'notStated' ? t(`onboarding.talk.notStated.${r.field}`, { detail: r.detail })
     : r.reason === 'notAnOption' ? t('onboarding.talk.notAnOption', { question: tData(`desktop.q.${r.question}.ask`), value: r.value })
       : r.reason === 'unusualPeriod' ? t(`onboarding.talk.unusualPeriod.${r.method}`)
+        : r.reason === 'noVat' ? t('onboarding.talk.noVat')
         : setupText(r);
 const FromText = ({ on }: { on: boolean }) => (on ? <span className="obbadge ai" data-from-text>{t('onboarding.talk.fromText')}</span> : null);
 /** An answer the kind of firm gave and she never said (#364): marked, with why, until she answers it herself. */
@@ -294,7 +295,7 @@ function QuestionStep({ step, draft, busy, send, change, fromText }: { step: Ext
             {/* the answer «we file no VAT returns» (#347): «nein» to the registration, the same patch as that answer. */}
             {unsteered(key) ? <button type="button" className="btn" disabled={busy} data-answer={NO_VAT} onClick={() => void send({ step: 'question', key: 'vatRegistered', value: 'no' })}>{t('desktop.q.noVat')}</button> : null}
           </div>
-          {unsteered(key) ? <p className="obwhy" data-no-vat-hint>{t('desktop.q.noVat.hint')}</p> : null}
+          {key === 'vatMethod' ? <p className="obwhy" data-no-vat-hint>{t('desktop.q.noVat.hint')}</p> : null}
         </div>
       )}
     </div>

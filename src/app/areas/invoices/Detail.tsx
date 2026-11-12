@@ -17,6 +17,7 @@ import { useWorkspace } from '../../hooks/use-workspace.js';
 import { api, missingText, type DraftChange, type InvoiceList } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { language, t } from '../../i18n/index.js';
+import { chargesVat } from '../../../engines/index.js';
 import { I } from '../receipts/icons.js';
 import { Paper } from '../receipts/Paper.js';
 import type { AreaProps } from '../index.js';
@@ -352,6 +353,8 @@ function DraftSec({ d, ws, inv, nav, canEdit }: DetailProps & { inv: Draft }) {
           </span>
         </div>
       </div>
+      {/* A firm not registered issues invoices without VAT (#347): said as a fact, with its place. */}
+      {!chargesVat() && <p className="m ivhint" data-testid="invoice-no-vat">{t('invoices.noVat')} · <button type="button" className="quiet2" onClick={() => nav.go({ route: { area: 'company', section: 'vat' }, query: {} })}>{t('invoices.toVat')}</button></p>}
       {own && <p className="m ivhint">{t('invoices.ownTexts')} · <button type="button" className="quiet2" onClick={() => void saveDraft(nav, inv, { intro: null, closing: null })}>{t('invoices.resetTexts')}</button></p>}
       <p className="lkfoot"><button type="button" className="quiet2" onClick={() => nav.go({ route: { area: 'company', section: 'invoice-layout' }, query: {} })}>{t('invoices.toLayout')}</button></p>
     </Sec>

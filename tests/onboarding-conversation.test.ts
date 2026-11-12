@@ -7,7 +7,7 @@
 import './support/demo-workspace.js';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { setupCount, setupThread, shownState, topicStates, topicsTaken, typedChoice, askedAt, openStep, sellsLine, vatLine, type Line, type SetupStep } from '../src/onboarding/conversation.js';
 import { emptyProgress, parseProgress, questionWordsKey, settledCount, stateWordsKey, topicWordsKey, withAnswer, withTopic, QUESTIONS, SETUP_TOPICS, type Answer, type QuestionId, type SetupProgress } from '../src/onboarding/model.js';
 import { describedOr } from '../src/app/assistant/stored-change.js';
@@ -156,6 +156,10 @@ test('the VAT question in the books offers «Wir rechnen keine MWST ab», no «W
   assert.ok(old.choices.some((c) => c.value === 'unknown'), 'an answer an older version kept keeps its words');
   const sum = last(setupThread(answered({ opening: 'later', receipts: 'later' }), facts({ banks: IBAN, company: { ...facts().company, vat: NOT_REGISTERED } })));
   assert.ok(sum.card?.kind === 'summary' && sum.card.items.some((i) => i.what.key === 'onboarding.sum.noVat'));
+  assert.ok(sum.card?.kind === 'summary' && sum.card.items.some((i) => i.what.key === 'onboarding.sum.noVatChange'), 'and where it changes, as a fact');
+  const de = readFileSync('src/app/i18n/locales/de.ts', 'utf8');
+  for (const k of ['onboarding.sum.noVat', 'onboarding.draft.noVat', 'onboarding.vatCard.to.none']) assert.match(/'([^']+)'/.exec(de.slice(de.indexOf(`'${k}':`) + k.length + 3))![1], /Rechnungen der App/, `${k}: the invoices are named`);
+  assert.match(de, /'onboarding.vatCard.to.none': 'Die Firma rechnet keine MWST ab/, 'the card confirms the same sentence as the summary, not «nicht MWST-pflichtig»');
 });
 
 test('the VAT answer: the same as the app has says so, another asks for a change kept on its card, never written by the answer itself', () => {
@@ -285,6 +289,7 @@ test('every line a step can say has words in each language', async () => {
   for (const l of [sellsLine(['made', 'traded', 'services'])]) { keys.add(l.key); for (const p of Object.values(l.params ?? {})) if (typeof p === 'object' && 'list' in p) p.list.forEach((k) => keys.add(k)); }
   for (const k of ['ok', 'fix']) keys.add(`onboarding.q.company.${k}`);
   for (const k of ['first', 'statement', 'lead', 'go', 'title', 'open', 'more']) keys.add(`onboarding.summary.${k}`);
+  for (const k of ['onboarding.sum.noVatChange', 'onboarding.talk.noVat', 'invoices.noVat', 'invoices.toVat', 'company.vatNoneNote']) keys.add(k);
   for (const k of ['onboarding.sum.firstMore', 'onboarding.sources.noAi', 'onboarding.state.notYet', 'onboarding.sum.noVat', 'onboarding.draft.noVat', 'desktop.q.noVat', 'desktop.q.noVat.hint']) keys.add(k);
   walk(vats.map(vatLine));
   for (const q of Object.keys(QUESTIONS)) keys.add(`onboarding.question.${q}`);

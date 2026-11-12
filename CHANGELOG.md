@@ -175,8 +175,12 @@ Two markers flag an entry you must read before you update:
   «Im MWST-Register eingetragen?», so the method, the basis and the period are no longer asked; a line
   under it says it is only for a firm not in the VAT register (registration is required from CHF
   100’000 turnover a year) and that a registered firm that does not know its method asks its
-  Treuhand. The review and the summary say plainly what follows. The VAT question in the books
-  offers the same answer and no longer «Weiss nicht».
+  Treuhand, that a firm whose Treuhand files its returns is registered, and what a wrong pick costs.
+  The review and the summary say plainly what follows, the app's invoices without VAT included; the
+  summary and Firma › MWST say that it changes there while the year has no entries, and an invoice
+  draft of a firm not registered says «Rechnung ohne MWST». The VAT question in the books offers the
+  same answer and no longer «Weiss nicht»; its card confirms with the summary's sentence. Typed words
+  never make the firm unregistered: the answer is always her click.
 
 ### Fixed
 

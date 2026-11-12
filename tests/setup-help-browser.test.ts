@@ -131,9 +131,21 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
       if (!ai) {
         // «Wir rechnen keine MWST ab» (#347) on the form: «nein» to the registration, the two questions gone, the books an unregistered GmbH.
         assert.match(await text(page, '.st-form [data-q=vatMethod] [data-no-vat-hint]'), /nicht im MWST-Register.*CHF 100’000.*Treuhand/s);
+        assert.equal(await page.$$eval('.st-form [data-no-vat-hint]', (e) => e.length), 1, `${size}: the hint once, under the method`);
+        // A rate typed for the Saldosteuersatz goes with the answer, as in the conversation.
+        await press(page, '.st-form [data-q=vatMethod] button[role=radio]:nth-child(2)');
+        await page.waitForSelector('.st-form input[name=netRate1]', { timeout: 10_000 });
+        await page.type('.st-form input[name=netRate1]', '4.5');
         await press(page, '.st-form [data-q=vatMethod] [data-answer=no-vat]');
         await page.waitForFunction(() => !document.querySelector('.st-form [data-q=vatMethod]') && !document.querySelector('.st-form [data-q=basis]'), { timeout: 10_000 });
         assert.match(await text(page, '.st-form [data-q=vatRegistered] button.on'), /^nein$/, `${size}: the registration answer says the same`);
+        // Back to «ja» and the Saldosteuersatz: the rate she typed is gone, the method asked again.
+        await page.$$eval('.st-form [data-q=vatRegistered] button', (bs) => (bs[0] as HTMLButtonElement).click());
+        await press(page, '.st-form [data-q=vatMethod] button[role=radio]:nth-child(2)');
+        await page.waitForSelector('.st-form input[name=netRate1]', { timeout: 10_000 });
+        assert.equal(await page.$eval('.st-form input[name=netRate1]', (e) => (e as HTMLInputElement).value), '', `${size}: the rate went with the answer`);
+        await press(page, '.st-form [data-q=vatMethod] [data-answer=no-vat]');
+        await page.waitForFunction(() => !document.querySelector('.st-form [data-q=vatMethod]'), { timeout: 10_000 });
         await page.$$eval('.st-form button', (bs) => (bs.find((b) => (b as HTMLElement).innerText.trim() === 'Buchhaltung anlegen') as HTMLButtonElement).click());
         const home = join(dir, 'Documents');
         await page.waitForFunction(() => location.pathname !== '/start', { timeout: 60_000 });
@@ -180,7 +192,7 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
         await press(page, '[data-step=period] [data-answer=quarterly]');
       } else {
         // «Wir rechnen keine MWST ab» (#347) in the conversation: the same «nein», the basis and the period not asked.
-        assert.match(await text(page, '[data-step=basis] [data-no-vat-hint]'), /nicht im MWST-Register/);
+        assert.equal(await page.$('[data-step=basis] [data-no-vat-hint]'), null, `${size}: the hint stands once, under the method above`);
         await press(page, '[data-step=basis] [data-answer=no-vat]');
       }
       await seen('.obflow input[name=bank1]');
@@ -204,7 +216,7 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
       assert.match(review, /Ausgangslage\s+neue Firma, leere Bücher\s*angenommen\b/, `${size}: «Ausgangslage» is marked as assumed`);
       assert.match(review, /Kundschaft im Ausland\?\s+nein\s*angenommen/, `${size}: «Kundschaft im Ausland» too`);
       assert.doesNotMatch(review.slice(review.indexOf('Im MWST-Register'), review.indexOf('Geschäftsjahr')), /angenommen/, 'the VAT she answered is not marked');
-      if (!ai) assert.match(review, /Im MWST-Register eingetragen\?\s+Die Firma rechnet keine MWST ab: Käufe und Verkäufe werden ohne MWST gebucht, es gibt keine Abrechnung\.\s*Ändern/, `${size}: the review says plainly what follows, with «Ändern»`);
+      if (!ai) assert.match(review, /Im MWST-Register eingetragen\?\s+Die Firma rechnet keine MWST ab: Käufe und Verkäufe werden ohne MWST gebucht, Rechnungen der App tragen keine MWST, und es gibt keine Abrechnung\.\s*Ändern/, `${size}: the review says plainly what follows, with «Ändern»`);
       if (size === '1440x900') t.diagnostic(`words: conversation before the books ${await words(page, '.obflow .obflowturns')}`);
       await page.$$eval('[data-step=review] dt', (dts) => { const dt = dts.find((d) => (d as HTMLElement).innerText.trim() === 'Ausgangslage')!; ((dt.nextElementSibling!.nextElementSibling as HTMLElement).querySelector('button') as HTMLButtonElement).click(); });
       await press(page, '[data-step=start] [data-answer=switching]');
@@ -247,7 +259,7 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
       await firstInSight('after the last answer');
       assert.match(await text(page, '.obrail [data-progress]'), /^4 von 4 besprochen$/, `${size}: «Partner und Wissen» was never asked and is not counted`);
       assert.match(await text(page, '[data-open=knowledge]'), /kommt mit den ersten Buchungen/);
-      if (!ai) assert.match(await text(page, '[data-testid=setup-summary]'), /Die Firma rechnet keine MWST ab: Käufe und Verkäufe werden ohne MWST gebucht/, `${size}: the summary says it too`);
+      if (!ai) assert.match(await text(page, '[data-testid=setup-summary]'), /Die Firma rechnet keine MWST ab: Käufe und Verkäufe ohne MWST, Rechnungen der App ohne MWST, keine Abrechnung[\s\S]*Änderbar unter Firma › MWST, solange das Jahr keine Buchungen hat/, `${size}: the summary says it too, and where it changes`);
       await shot(page, `${size}-4-summary`);
       if (size === '1440x900') t.diagnostic(`words: conversation in the books ${await words(page, '.aside.setup .aiturns')}`);
 

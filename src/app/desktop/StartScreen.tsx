@@ -220,7 +220,7 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
     // The reporting period follows the method (r5f-14): half-yearly on the net tax rate, quarterly on the effective one; the person may still change it.
     const period: Partial<Answers> = key === 'vatMethod' ? { period: value === 'net-rate' ? 'half-yearly' : 'quarterly' } : {};
     // Not registered, by «nein» or by the answer «we file no VAT returns» (#347): the questions of a registered firm go.
-    if ((key === 'vatRegistered' && value === 'no') || value === NO_VAT) return { ...x, answers: notRegistered(x.answers) };
+    if ((key === 'vatRegistered' && value === 'no') || value === NO_VAT) return { ...x, answers: notRegistered(x.answers), netRates: NO_RATES };
     return { ...x, answers: { ...x.answers, [key]: next, ...period } };
   });
   const [folderError, setFolderError] = useState('');
@@ -311,7 +311,7 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
                   ))}
                   {unsteered(key) ? <button type="button" role="radio" aria-checked={false} data-answer={NO_VAT} onClick={() => pick(key, NO_VAT)}>{t('desktop.q.noVat')}</button> : null}
                 </div>
-                {unsteered(key) ? <p className="st-note" data-no-vat-hint>{t('desktop.q.noVat.hint')}</p> : null}
+                {key === 'vatMethod' ? <p className="st-note" data-no-vat-hint>{t('desktop.q.noVat.hint')}</p> : null}
                 {notes.map((o) => (
                   <p key={o!.value} className={o!.unsupported ? 'st-stop' : 'st-note'}>{tData(`desktop.q.${key}.${o!.value}.${o!.unsupported ? 'unsupported' : 'caveat'}`)}</p>
                 ))}

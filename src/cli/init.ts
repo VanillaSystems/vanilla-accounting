@@ -103,6 +103,8 @@ async function askAnswers(preset: Preset): Promise<{ answers: Answers; netRates:
       for (const k of Object.keys(answers)) delete answers[k];
       Object.assign(answers, unregistered);
       console.log(`    Note: ${optionOf('vatRegistered', 'no')!.caveat}`);
+      // Nothing dropped silently: rates given for a method the firm no longer has.
+      if (flags['net-rate'] !== undefined) console.log('    Note: --net-rate is ignored: a company that files no VAT returns has no net tax rate.');
       continue;
     }
     answers[key] = 'multi' in QUESTIONS[key] ? picked : picked[0];
