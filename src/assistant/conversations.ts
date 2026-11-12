@@ -122,8 +122,10 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
           }
           // What was made is the app's to say, not the model's to guess (r8f-47): its line closes the answer, and says so where the model still named «Übernehmen» (r10f-11).
           const take = ai.text.includes(t('assistant.held.take'));
-          const line = reports.length === applied.made.length ? t('assistant.reportMade', { n: reports.length }) : t('assistant.applied', { n: applied.made.length });
-          ai.text = `${ai.text.trimEnd()}\n\n${line}${take ? ` ${t('assistant.appliedNoTake', { take: t('assistant.held.take') })}` : ''}`;
+          // The card of the open period (#342) changes nothing: it is not counted, and alone it takes no line.
+          const made = applied.made.filter((m) => m.change.kind !== 'openPeriod').length;
+          const line = reports.length === made ? t('assistant.reportMade', { n: reports.length }) : t('assistant.applied', { n: made });
+          if (made) ai.text = `${ai.text.trimEnd()}\n\n${line}${take ? ` ${t('assistant.appliedNoTake', { take: t('assistant.held.take') })}` : ''}`;
           onEvent({ type: 'replace', text: ai.text });
         }
       }

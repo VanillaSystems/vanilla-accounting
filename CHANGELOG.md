@@ -14,6 +14,14 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Added
+
+- AI sidebar: «was muss ich noch machen?» is answered from the books. Before the first message the
+  sidebar shows where the oldest period not filed stands (payments without a booking and how many
+  wait for their receipt, open questions, receipts without a payment, tasks, the day the return is
+  due), each line a link; the card needs no AI. The model gets the same state with every message
+  and shows the card under its answer (#342).
+
 ### Changed
 
 - The first screen of a fresh install is about the books, not the AI (#343): what the app is in
@@ -83,6 +91,13 @@ Two markers flag an entry you must read before you update:
   the steps the run has behind it and the files its step has finished.
 
 - After the first statement, wages no longer wait for a receipt (#340). A payment whose own text is a wage's («Lohn Juli 2026», «Lohnzahlung 09/2026», Salär, Gehalt, salaire, stipendio, salary: the word at the start of the text or followed by a month, a period or a year) is booked without waiting on a firm whose setup says it has staff or an employed owner. The counterparty's name is never read, and a text that also names an invoice, a subscription, a licence, bookkeeping, a firm's legal form, social insurance or tax still waits. A wage is freed from the wait only: a receipt that matches it is still paired, and the payment is then booked again from it. For existing books with a profile that names employees, open-period payments worded so that waited for a receipt are booked on the next run; filed periods, firms without employees and books without a profile are unchanged. The bank's own fee row is known by its code for charges or the bank's whole name, as before, and now never under a card payment's code; the persona test's statement had no bank transaction codes, which no bank's export lacks, and carries them now. «Braucht keinen Beleg» on a payment without a booking goes on to book it in the same click and says what came of it, with «Rückgängig» for the mark in the same message; where the app could not book it by itself, the payment says so («nicht gebucht: die App konnte sie nicht selbst buchen. Unten von Hand buchen.») instead of «kein Beleg nötig · nicht gebucht».
+- After «Los geht's» the AI sidebar is the ordinary one, at its ordinary width, also after a
+  restart. It no longer opens as «Einrichtung», and a conversation of a finished setup no longer
+  answers with the setup's topics (#342).
+- Beside the wide setup conversation the page is no longer cut on a 1440 or 1280 px window: the
+  setup leaves the page 820 px before it grows, the three ways into Belege wrap in a narrow list,
+  a statement's notes stand one under the other, the top bar no longer lies under the «für dich»
+  button, and the line under «Einrichtung» wraps instead of ending in «…» (#342).
 
 ### Changed
 

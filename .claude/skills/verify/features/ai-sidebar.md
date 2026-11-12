@@ -11,6 +11,8 @@ The AI sidebar is a conversation with the model beside every area: the owner ask
 - `ai-dictate`: `button.aimic[data-testid=dictate]` (`Diktieren` / `Diktieren beenden`, aria-pressed), where the browser has `SpeechRecognition`, and in the Mac app when its bridge offers on-device `dictate` (src/app/assistant/dictation.ts, src/desktop/dictation.swift).
 - `ai-links`: in an answer only `http(s)://` links (bare or `[text](https://…)`) become `<a target=_blank rel="noopener noreferrer">`; change rows have `Zeigen` (in-app) and `Herunterladen` (`a[download]`).
 
+- `ai-open-period` (#342): `section.openp[data-testid=open-period]` before the first message of an ordinary conversation (also without an AI) and under an answer whose block has `{"kind":"openPeriod"}`: `h3` «Stand Q3 2026», the return's day («Abrechnung fällig am 29.11.2026»), `li[data-line=unbooked|questions|evidence|unlinked|task]` each an `a.linkbtn` to the first object (`/payments/<ref>?period=…`), `small` «davon warten n auf ihren Beleg»; nothing open: `[data-testid=open-period-none]`. The message's prompt carries «Where the oldest period not filed stands …» (keep it with `CLAUDE_STUB_PROMPTS` in the stub's wrapper). Driven 2026-11-12 on an empty workspace with the persona's camt.053 dropped: 23 payments, 20 waiting, due 29.11.2026, and the stubbed answer showed the card with no «Gemacht» line.
+
 ## How to get to it (user POV)
 
 ⌘J anywhere, the `KI öffnen` button in the top-right corner, `Die KI fragen` on a partner's notes, and Firma › `Einrichtung` (features/setup.md, the same panel in setup mode).
@@ -19,7 +21,7 @@ The AI sidebar is a conversation with the model beside every area: the owner ask
 
 Preconditions: a demo sandbox. For a real answer, `$S stub <run> <text-file>` before the send (doctor then says `api finds the test stub as claude (stubbed)`), `$S unstub <run>` after.
 
-- **Open.** `$B goto "$UI/journal"`, `$B press Meta+j`: on the demo, whose setup is not finished (2 von 7), this opens `aside.aside.setup[aria-label=Einrichtung]`; click its `Neu` to get `aside.aside[aria-label=KI]` (driven 2026-10-31). `$B press Meta+j` again closes it.
+- **Open.** `$B goto "$UI/journal"`, `$B press Meta+j`: on the demo, whose setup is not finished (2 von 7), this opens `aside.aside.setup[aria-label=Einrichtung]`; click its `Neu` to get `aside.aside[aria-label=KI]` (driven 2026-10-31). After «Los geht's» (`[data-testid=setup-go]`) ⌘J opens `aside.aside[aria-label=KI]` at 400 px, also after a reload (#342, driven 2026-11-12). `$B press Meta+j` again closes it.
 - **Send (shim).** `$B fill 'textarea[aria-label="Nachricht an die KI"]' "Hallo"`, `$B press Enter`: `.msg.me` reads `Hallo`, then `.msg.ai .warnline` contains `claude exited 1: verify sandbox: no model calls`; `ls "$SB"/data/assistant/*.json` lists the conversation (stored before the model call).
 - **Send (stub) and links.** `printf 'Mehr unter [Hilfe](https://example.com/hilfe).\n' > <scratch>/stub.md`, `$S stub <run> <scratch>/stub.md`, click `Neu`, send `Hallo`: the answer reads `Mehr unter Hilfe.` and `Stub-Antwort auf «Hallo». Ein neues Gespräch.`; `$B js "const a=document.querySelector('.msg.ai a'); a.href+' '+a.target+' '+a.rel"` is `https://example.com/hilfe _blank noopener noreferrer`. Then `$S unstub <run>`.
 - **Attach.** `$B upload '[data-testid=attach-input]' "$SB/transactional-data/2026/receipts/<file>.pdf"`: one `[data-testid=attachment-chip]`, the file in `$SB/data/assistant/attachments/pending/`; after a send, `[data-testid=sent-attachment]`.

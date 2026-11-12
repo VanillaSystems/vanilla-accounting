@@ -25,7 +25,7 @@ import { takeInProposals } from '../../assistant/terminal-drafts.js';
 import { appMap } from '../app-map.js';
 import { gate } from '../../llm/off.js';
 import { automationView, bookAgain, engine } from './automation.js';
-import { openWork } from '../open-work.js';
+import { openWork, purposeNow } from '../open-work.js';
 import { askedBy } from '../../workflows/held.js';
 import { accountsOf } from '../../workspace/reads.js';
 import { providersOf } from '../../intake/sales-report-import.js';
@@ -99,10 +99,13 @@ router.get('/api/assistant/:id', (req, res) => {
 
 /**
  * What waits under Aufgaben now (the questions, the workflows' tasks with the rule that held each,
- * the payments without a booking), and how receipts come in now. A conversation with a purpose gets
- * only its own context, so the AI has nothing unrelated to bring up.
+ * the payments without a booking) with where the oldest period not filed stands, and how receipts
+ * come in now. A conversation with a purpose gets only its own context, so the AI has nothing
+ * unrelated to bring up; the setup's is one only until the person ends the setup.
  */
-async function waitingNow(language: string, purpose: Purpose | undefined): Promise<string> {
+async function waitingNow(language: string, asked: Purpose | undefined): Promise<string> {
+  // A setup the person ended is over: its conversation gets the books' state like any other (#342).
+  const purpose = purposeNow(asked, readProgress(WS));
   if (purpose === 'collection-setup') return [PURPOSE_NOTE[purpose], await collectionNow(WS, language, readBooks().receipts)].join('\n\n');
   if (purpose === 'onboarding') {
     const books = readBooks();
@@ -201,6 +204,8 @@ async function run(c: ActionChange, language: string): Promise<Pick<MadeChange, 
   try {
     if (c.kind === 'export') return await exported(c, language);
     if (c.kind === 'report') return { note: { report: previewOf(runSpec(c.spec, c.period)) } };
+    // The card is the browser's, drawn from the books as they stand when it is shown: nothing to run.
+    if (c.kind === 'openPeriod') return {};
     await bookAgain('assistant');
     return {};
   } catch (e) {

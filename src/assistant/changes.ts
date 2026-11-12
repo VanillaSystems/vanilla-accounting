@@ -180,6 +180,7 @@ function change(v: unknown): Change {
       return { kind: 'export', preset, ...(typeof c.period === 'string' && c.period.trim() ? { period: c.period.trim() } : {}) };
     }
     case 'bookAgain': return { kind: 'bookAgain' };
+    case 'openPeriod': return { kind: 'openPeriod' };
     case 'report': {
       const p = parseSpec(c.spec);
       if (!p.ok) throw new ChangesError(`report: ${p.refusal.code} ${JSON.stringify(p.refusal.params)}`, { code: 'report', params: { refusal: p.refusal } });

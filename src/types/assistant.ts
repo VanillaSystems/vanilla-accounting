@@ -124,17 +124,20 @@ export type WorkspaceChange =
 /**
  * What the app runs for an answer, with nothing to undo: an export of a preset, the inbox run's
  * booking of every open payment, a report the AI wrote as a spec (src/reports/spec.ts), which the
- * app runs on the books for its card (`period`: another than the spec's own).
+ * app runs on the books for its card (`period`: another than the spec's own); `openPeriod`: the card
+ * of where the oldest period not filed stands (src/app/assistant/OpenPeriodCard.tsx), drawn by the app
+ * from the books under an answer to «was muss ich noch machen?» (#342).
  */
 export type ActionChange =
   | { kind: 'export'; preset: string; period?: string }
   | { kind: 'bookAgain' }
-  | { kind: 'report'; spec: ReportSpec; period?: string };
+  | { kind: 'report'; spec: ReportSpec; period?: string }
+  | { kind: 'openPeriod' };
 
 export type Change = BookChange | WorkspaceChange | ActionChange;
 
 const BOOK_KINDS = new Set<string>(['receipt', 'link', 'unlink', 'entry', 'newEntry', 'deleteEntry', 'receiptKind', 'privatePayment', 'deletePayment'] satisfies Array<BookChange['kind']>);
-const ACTION_KINDS = new Set<string>(['export', 'bookAgain', 'report'] satisfies Array<ActionChange['kind']>);
+const ACTION_KINDS = new Set<string>(['export', 'bookAgain', 'report', 'openPeriod'] satisfies Array<ActionChange['kind']>);
 export const isBookChange = (c: Change): c is BookChange => BOOK_KINDS.has(c.kind);
 export const isActionChange = (c: Change): c is ActionChange => ACTION_KINDS.has(c.kind);
 export const isWorkspaceChange = (c: Change): c is WorkspaceChange => !isBookChange(c) && !isActionChange(c);

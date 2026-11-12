@@ -81,9 +81,21 @@ bot. ⌘K stays search only.
 
 On a narrow window (issue #34) the page gives way in order: the list narrows to its compact
 280 px while the detail keeps at least 420 px, then the sidebar narrows to 320 px (520 px for the
-setup conversation). With still less room the sidebar lies over the page's right edge instead,
+setup conversation, which yields earlier: it leaves the page 820 px before it goes below its
+wanted width, #342). With still less room the sidebar lies over the page's right edge instead,
 with a shadow, and the page keeps the window with its list compact; ⌘J closes it. Selecting a row
-never moves the layout (src/app/shell/look.ts `sidebarFit`).
+never moves the layout (src/app/shell/look.ts `sidebarFit`). While the sidebar is open the top bar
+starts at the page's left edge instead of its middle, so it never lies under the corner's buttons.
+
+**«Was ist noch offen?»** (#342). Before the first message of an ordinary conversation the sidebar
+shows a card drawn by code, with or without an AI: the oldest period not filed, when its return is
+due, the payments without a booking (and how many of them wait for their receipt), the open
+questions, the bookings against their receipts, the receipts without a payment and the workflows'
+tasks, each line a link to the first object of it (src/app/assistant/OpenPeriodCard.tsx). The
+state is one function over what the review's «Noch offen» list, the receipt wait and the tasks
+already hold (src/app/areas/automation/open-period.ts). Every message of a conversation that is
+not the setup carries the same state for the model (src/server/open-work.ts `periodNote`), and an
+answer to «was muss ich noch machen?» adds the change `openPeriod`, which shows the card under it.
 
 - **Header:** "KI", «Verlauf» (a clock), «Neu» (+), close.
 - **A status line** under the header: "2 laufen · 4 in der Schlange · 3 warten auf dich"; a click

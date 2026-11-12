@@ -8,8 +8,18 @@ column. Design A (docs/0.4.0/mockups/onboarding/) stays the reference for what e
 
 **Where it lives.** The setup is the AI sidebar in a wide setup mode, not a window of its own and
 not a modal that blocks the page. A conversation with the purpose `onboarding` widens the sidebar
-to `SETUP_WIDTH` (src/app/assistant/store.ts); the page narrows beside it and stays usable, so a
+(src/app/shell/look.ts `sidebarWidths`); the page narrows beside it and stays usable, so a
 person can open Firma › MWST from the rail and save a setting by hand while the conversation waits.
+The setup yields to the page first: it is wider than its least (520 px) only with what the page
+does not need to be read (`PAGE_BESIDE_SETUP`, 820 px), so on the Mac app's 1440 px window the
+page keeps 820 px and the setup 568 px (#342).
+
+**When it ends.** «Los geht's» ends the setup mode too: the sidebar starts an ordinary
+conversation at its ordinary width, also after the window is loaded again, and shows where the
+open period stands (views.md, «Was ist noch offen?»). Only Firma › «Einrichtung …» (or the
+conversation picked from «Verlauf») opens the setup conversation again. The server no longer gives
+that conversation the setup's checklist once `ready` is set: its messages carry the books' state
+like any other (src/server/open-work.ts `purposeNow`).
 
 **Code draws the conversation, the AI answers in it.** MISSION puts code first. Every step of the
 prototype that the app can know or ask with buttons is drawn by code: `setupThread(progress, facts)`

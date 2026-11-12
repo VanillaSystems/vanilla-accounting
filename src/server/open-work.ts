@@ -3,7 +3,8 @@
  * questions with their text and buttons as their cards show them, the workflows' tasks, the
  * payments of the open period without a booking, the bookings that contradict their receipts
  * (src/accounting/evidence-check.ts; those of the period filed last wait for a correction), and
- * the receipts that may be copies of another. Read when the message is sent, so the model never
+ * the receipts that may be copies of another; before them, where the oldest period not filed stands
+ * (periodNote, #342). Read when the message is sent, so the model never
  * claims a question is missing that is open, or sends the person to answer one the app has closed.
  * The words are the UI's own, in the person's language; the frame is English, for the model.
  */
@@ -19,9 +20,12 @@ import { journalOf, unsettledAtFiling } from '../app/areas/journal/model.js';
 import { ledgerOf } from '../app/areas/receipts/model.js';
 import type { EvidenceCheck } from '../accounting/evidence-check.js';
 import type { JournalEntry } from '../types/index.js';
-import { filing } from '../engines/index.js';
-import { addDays } from '../accounting/periods.js';
+import { chargesVat, filing } from '../engines/index.js';
+import { addDays, localToday, type IsoDate } from '../accounting/periods.js';
 import type { Workspace } from '../workspace/workspace.js';
+import { nothingOpen, openPeriodState } from '../app/areas/automation/open-period.js';
+import type { Purpose } from '../types/assistant.js';
+import type { SetupProgress } from '../onboarding/model.js';
 
 const LIMIT = 20;
 const day = (iso: string) => iso.slice(0, 10).split('-').reverse().join('.');
@@ -67,10 +71,52 @@ const evidenceLine = (e: JournalEntry, c: EvidenceCheck, t: T) =>
   `- ${day(e.date)} ${e.description ?? ''} (${e.transactionRef}): «${c.kind === 'receiptShowsVat' ? t('journal.evidence.receiptShowsVat', { rate: String(c.rate), code: e.vatCode ?? '' }) : t('journal.evidence.vatWithoutReceipt', { code: e.vatCode ?? '', zero: c.code })}»`;
 
 /**
+ * The purpose a message is answered with (#342): the setup's only while the setup runs. Once the
+ * person ended it with «Los geht's» its conversation is an ordinary one: its messages carry the
+ * state of the books (openWork), never the setup's checklist.
+ */
+export const purposeNow = (purpose: Purpose | undefined, progress: Pick<SetupProgress, 'ready'>): Purpose | undefined =>
+  (purpose === 'onboarding' && progress.ready ? undefined : purpose);
+
+/**
+ * Where the oldest period not filed stands (src/app/areas/automation/open-period.ts, the state the
+ * sidebar's card draws): what the person asks for with «was muss ich noch machen?». The figures
+ * are the app's; the model names them with their places and asks the app for the card.
+ */
+export function periodNote(ws: Pick<Workspace, 'paths' | 'bankAccounts'>, books: Books, tasks: ReadonlyArray<Task>, language: string, today: IsoDate = localToday()): string {
+  const { t } = wordsIn(language);
+  const s = openPeriodState(books, readQuestions(ws), tasks, ws.bankAccounts, { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays });
+  const f = s.filing;
+  const stage = f.kind === 'filed' ? 'its return is filed'
+    : f.kind === 'running' ? `it runs until ${day(f.ends)}`
+      : f.kind === 'before' ? 'it ended before anything in these books is dated: whether its return was filed elsewhere the books cannot know, so never call it due or overdue'
+      : f.due ? `it is over; its return ${f.overdue ? 'was due on' : 'is due on'} ${day(f.due)}` : 'it is over and not closed yet (the firm files no return)';
+  const asks = s.waiting.filter((w) => w.kind !== 'waits').length;
+  const tasksPlace = `«${t('area.automation')} › ${t('automation.tasks')}»`;
+  const lines = [
+    `- payments without a booking: ${s.unbooked.length}${s.unbooked.length ? ` (${capped(s.unbooked.map((p) => `${day(p.date)} ${payText(p).name} ${money(p.currency, p.amount)}`)).join('; ')}); where: «${t('area.bank')}»` : ''}`,
+    ...(s.waiting.length ? [`- of those, ${s.waiting.length} the app holds until their receipt is linked (it books them itself then; the receipt goes in under «${t('area.receipts')}»)${asks ? `; for ${asks} of them the return is near, so each is a task under ${tasksPlace} now` : ''}`] : []),
+    `- open questions: ${s.questions.length}${s.questions.length ? `; where: ${tasksPlace}` : ''}`,
+    `- bookings whose code contradicts their receipts: ${s.evidence.length}${s.evidence.length ? `; where: «${t('area.journal')}»` : ''}`,
+    `- receipts without a payment: ${s.unlinked.length}${s.unlinked.length ? `; where: «${t('area.receipts')}»` : ''}`,
+    `- tasks: ${s.tasks.length ? s.tasks.map((x) => `«${fillTask(textIn(x.title, language), x.item, x.reads)}»`).join(', ') + `; where: ${tasksPlace}` : 'none'}`,
+  ];
+  return [
+    `Where the oldest period not filed stands, computed by the app when this message was sent: ${s.period.token} (${day(s.period.from)} to ${day(s.period.to)}); ${stage}.`,
+    ...(nothingOpen(s) ? ['Nothing of it is open: no payment without a booking, no question, no receipt without a payment, no task.'] : lines),
+    'When the person asks what is left to do, what is open or what comes next («was muss ich noch machen?», «was fehlt noch?»), answer from this state and nothing else: two to five short lines in the order above, each with its count and its place in the app\'s words, the due day last; never the setup\'s topics, never a rule or setting already kept. Add {"kind":"openPeriod"} to your block: the app then shows this state under your answer as a card whose lines link to the places, so do not repeat every payment.',
+  ].join('\n');
+}
+
+/**
  * The note for the message, or the plain statement that nothing waits. `tasks`: the workflows'
  * tasks as Automatisierung lists them, each with the rule that held its payment (workflows/ask).
  */
-export function openWork(ws: Pick<Workspace, 'paths' | 'bankAccounts'>, books: Books, tasks: ReadonlyArray<Task & { rule?: string }>, language: string): string {
+export function openWork(ws: Pick<Workspace, 'paths' | 'bankAccounts'>, books: Books, tasks: ReadonlyArray<Task & { rule?: string }>, language: string, today: IsoDate = localToday()): string {
+  return [periodNote(ws, books, tasks, language, today), waitingWork(ws, books, tasks, language)].join('\n\n');
+}
+
+function waitingWork(ws: Pick<Workspace, 'paths' | 'bankAccounts'>, books: Books, tasks: ReadonlyArray<Task & { rule?: string }>, language: string): string {
   const { t } = wordsIn(language);
   const closed = books.config.closedThrough;
   const inOpen = (date: string | undefined) => !closed || !date || date > closed;

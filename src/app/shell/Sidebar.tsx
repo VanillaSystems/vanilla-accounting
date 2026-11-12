@@ -25,7 +25,8 @@ import { ApiError, apiFetch, errorText } from '../lib/api.js';
 import type { Index } from '../../types/index.js';
 import { withoutChanges } from '../../assistant/changes.js';
 import { markdownBlocks, type Span } from '../assistant/markdown.js';
-import type { Route } from './route.js';
+import type { Location, Route } from './route.js';
+import { OpenPeriodCard } from '../assistant/OpenPeriodCard.js';
 import { PRESETS } from '../../export/model.js';
 import { postDownload } from '../areas/export/state.js';
 import { ReportView } from '../areas/reports/custom/ReportView.js';
@@ -57,7 +58,8 @@ import {
   addContext, closeAssistant, hideConversations, newConversation, openConversation, removeContext, sendMessage, settleHeld, showConversations, stopAnswer, undoAll, undoChange, useAssistant, wroteDraft,
 } from '../assistant/store.js';
 
-interface Props { page: ContextRef | undefined; books: Index; onGo(route: Route): void }
+/** `onGoTo`: to a place with its period, for a link to an object of another period than the one shown. */
+interface Props { page: ContextRef | undefined; books: Index; onGo(route: Route): void; onGoTo(loc: Location): void }
 
 /** A booking's fields as they read on a card: accounts, VAT code, amount, date, text. */
 function entryWhat(set: EntrySet, withText = true): string {
@@ -153,6 +155,7 @@ function describe({ change: c, undo, note }: MadeChange, books: Index): { text: 
     }
     case 'bookAgain': return { text: failed ? `${t('assistant.c.bookAgainNot')} · ${failed}` : t('assistant.c.bookAgain'), go: { area: 'automation', view: 'runs' } };
     case 'report': return { text: failed ? `${t('assistant.report.not')} · ${failed}` : `${c.spec.title} · ${note?.report ? spanOf(note.report) : c.period ?? c.spec.period}` };
+    case 'openPeriod': return { text: t('assistant.c.openPeriod') };
     case 'setupTopic': {
       // A topic or a question of an earlier version (`periods`, `start`) is named by one generic sentence (topicWordsKey).
       const go = isSetupTopic(c.topic) ? TOPIC_HAND[c.topic] : null;
@@ -166,11 +169,13 @@ function describe({ change: c, undo, note }: MadeChange, books: Index): { text: 
 /** `describe`, for a change read from a stored conversation: never throws (src/app/assistant/stored-change.ts). */
 const described = (c: MadeChange, books: Index): ReturnType<typeof describe> => describedOr(() => describe(c, books), () => ({ text: t('assistant.c.unknown') }));
 
-function Changes({ changes, books, onGo }: { changes: MadeChange[]; books: Index; onGo(route: Route): void }) {
+function Changes({ changes, books, onGo, onGoTo }: { changes: MadeChange[]; books: Index; onGo(route: Route): void; onGoTo(loc: Location): void }) {
   return (
     <ul className="aichanges">
       {changes.map((c) => {
         if (c.change.kind === 'report' && c.note?.report) return <li key={c.id} className="aireport"><ReportCard result={c.note.report} period={c.change.period} onGo={onGo} /></li>;
+        // Where the open period stands: the app's card, drawn from the books as they are now (#342).
+        if (c.change.kind === 'openPeriod') return <li key={c.id} className="aimailbox"><OpenPeriodCard books={books} onGo={onGoTo} /></li>;
         const d = described(c, books);
         const mailbox = c.change.kind === 'mailbox' && c.note?.mailbox && !c.undone ? { id: c.note.mailbox.id, address: c.change.address, host: c.change.host } : undefined;
         const source = c.change.kind === 'source' && c.note?.source && !c.undone ? c.note.source.id : undefined;
@@ -370,7 +375,7 @@ function SentFile({ a, conversation }: { a: Attachment; conversation: string | u
   );
 }
 
-export function Sidebar({ page, books, onGo }: Props) {
+export function Sidebar({ page, books, onGo, onGoTo }: Props) {
   const columnNoAi = useColumnNoAi(() => onGo({ area: 'company', section: 'ai' }));
   const s = useAssistant();
   const [text, setText] = useState('');
@@ -485,7 +490,7 @@ export function Sidebar({ page, books, onGo }: Props) {
           ) : null}
           {withoutChanges(turn.text) ? <div className={turn.done ? 'aitext' : 'aitext pending'}><AnswerText text={withoutChanges(turn.text)} /></div> : !turn.done ? <div className="m">{t('assistant.thinking')}</div> : null}
           {turn.held ? <HeldCard held={turn.held} turn={i} standing={(turn.changes ?? []).filter((c) => !c.undone && c.undo).length} books={books} onGo={onGo} /> : null}
-          {turn.changes?.length ? <Changes changes={turn.changes} books={books} onGo={onGo} /> : null}
+          {turn.changes?.length ? <Changes changes={turn.changes} books={books} onGo={onGo} onGoTo={onGoTo} /> : null}
           {!turn.held && (turn.changes ?? []).filter((c) => !c.undone && c.undo).length > 1 ? <button type="button" className="linkbtn" data-act="undo-all" onClick={() => void undoAll(i)}>{t('assistant.undoAll', { n: (turn.changes ?? []).filter((c) => !c.undone && c.undo).length })}</button> : null}
           {turn.done && turn.terminal ? <TerminalCard request={turn.terminal} /> : null}
           {turn.done && turn.changes?.length ? <ShareOffers refs={[...new Set(turn.changes.filter((c) => !c.undone && c.payment).map((c) => c.payment!))]} onRules={() => onGo({ area: 'company', section: 'rules' })} /> : null}
@@ -536,6 +541,8 @@ export function Sidebar({ page, books, onGo }: Props) {
       ) : (
         <div className="aiturns">
           {noAi?.card}
+          {/* Before the first message: where the open period stands, drawn by code, so it is there without an AI too (#342). */}
+          {s.turns.length === 0 && !setup ? <OpenPeriodCard books={books} onGo={onGoTo} /> : null}
           {s.turns.length === 0 && !noAi ? <p className="m aiempty">{t('assistant.empty')}</p> : null}
           {setup ? <SetupConversation turns={s.turns} turn={turnView} onGo={onGo} /> : s.turns.map(turnView)}
           {s.error ? <p className="warnline">{s.error}</p> : null}
