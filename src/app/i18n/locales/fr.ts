@@ -4412,6 +4412,7 @@ export default {
     'onboarding.sources.none': 'Aucune source activée pour l\'instant.',
     'onboarding.sources.ask': 'Configurer avec moi',
     'onboarding.sources.noAi': 'Configurer dans la conversation demande une IA.',
+    'onboarding.sources.lookFailed': 'L’app n’a pas pu vérifier si une IA répond ici ({why}) ; elle vérifie à nouveau quand tu reviens à la fenêtre.',
     'onboarding.sources.askText': 'Configure avec moi comment mes justificatifs arrivent.',
     'onboarding.sources.show': 'Voir les sources',
     'onboarding.s.partners': { one: 'Dans les écritures {year}, j\'ai trouvé un partenaire. Une règle n\'existe qu\'une fois que tu l\'as vue et gardée :', other: 'J\'ai trié {n} partenaires des écritures {year} en groupes. Une règle n\'existe qu\'une fois que tu l\'as vue et gardée :' },

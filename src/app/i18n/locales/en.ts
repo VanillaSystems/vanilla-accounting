@@ -4412,6 +4412,7 @@ export default {
     'onboarding.sources.none': 'No source switched on yet.',
     'onboarding.sources.ask': 'Set it up with me',
     'onboarding.sources.noAi': 'Setting it up in the conversation needs an AI.',
+    'onboarding.sources.lookFailed': 'The app could not check whether an AI answers here ({why}); it checks again when you come back to the window.',
     'onboarding.sources.askText': 'Set up with me how my receipts come in.',
     'onboarding.sources.show': 'See sources',
     'onboarding.s.partners': { one: 'In the entries of {year} I found one business partner. A rule exists only once you have seen and kept it:', other: 'I sorted {n} business partners from the entries of {year} into groups. A rule exists only once you have seen and kept it:' },

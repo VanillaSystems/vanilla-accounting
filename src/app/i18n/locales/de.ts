@@ -4409,6 +4409,7 @@ export const messages = {
   'onboarding.sources.none': 'Noch keine Quelle eingeschaltet.',
   'onboarding.sources.ask': 'Mit mir einrichten',
   'onboarding.sources.noAi': 'Im Gespräch einrichten geht erst mit einer KI.',
+  'onboarding.sources.lookFailed': 'Ob hier eine KI antwortet, konnte die App nicht prüfen ({why}); sie prüft es wieder, wenn du zum Fenster zurückkommst.',
   'onboarding.sources.askText': 'Richte mit mir ein, wie meine Belege hereinkommen.',
   'onboarding.sources.show': 'Quellen ansehen',
   'onboarding.s.partners': { one: 'Aus den Buchungen {year} habe ich einen Geschäftspartner gefunden. Eine Regel gibt es erst, wenn du sie gesehen und behalten hast:', other: 'Aus den Buchungen {year} habe ich {n} Geschäftspartner in Gruppen sortiert. Eine Regel gibt es erst, wenn du sie gesehen und behalten hast:' },

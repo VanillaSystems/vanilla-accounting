@@ -165,7 +165,10 @@ Two markers flag an entry you must read before you update:
   listed «kommt mit den ersten Buchungen»). Without an AI the greeting no longer offers «in deinen
   Worten», and the receipts step offers «KI einrichten» instead of «Mit mir einrichten». Until the
   look at this Mac's AI has answered, the receipts step offers neither, so «Mit mir einrichten» is
-  never shown and then taken back when a slow look says no AI answers.
+  never shown and then taken back when a slow look says no AI answers. A look that fails ends as
+  «no AI» with its reason and is taken again when you come back to the window, instead of leaving
+  the step without either. With books open, the Mac app's window now always loads its own build of
+  the page; a checkout with an older build in its `dist/` could serve that one after the setup.
 
 ### Fixed
 
