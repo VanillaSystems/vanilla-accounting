@@ -34,7 +34,7 @@ export default function build() {
   const TEA = [['Sencha Kagoshima 100 g', 16.50], ['Genmaicha 100 g', 12.00], ['Matcha Uji 30 g', 28.00], ['Darjeeling First Flush 100 g', 19.50], ['Rooibos Vanille 100 g', 9.80]];
   const FIRST = ['Anna', 'Lukas', 'Mia', 'Noah', 'Laura', 'Jonas', 'Sara', 'Elias', 'Lea', 'David', 'Nina', 'Simon', 'Julia', 'Fabian', 'Selina', 'Marco'];
   const LAST = ['Bühler', 'Zurfluh', 'Arnold', 'Bachmann', 'Odermatt', 'Schmid', 'Kaufmann', 'Gisler', 'Achermann', 'Portmann', 'Wicki', 'Felder', 'Bucher', 'Studer'];
-  const CITIES = [['6003', 'Luzern'], ['6210', 'Sursee'], ['8004', 'Zürich'], ['3011', 'Bern'], ['4051', 'Basel'], ['6300', 'Zug'], ['9000', 'St. Gallen'], ['6430', 'Schwyz'], ['1003', 'Lausanne'], ['6900', 'Lugano']];
+  const CITIES = [['6003', 'Luzern'], ['6210', 'Sursee'], ['8004', 'Zürich'], ['3011', 'Bern'], ['4051', 'Basel'], ['6300', 'Zug'], ['9000', 'St. Gallen'], ['7000', 'Chur'], ['1003', 'Lausanne'], ['6900', 'Lugano']];
   const ABROAD = { DE: [['80331', 'München'], ['79098', 'Freiburg']], AT: [['6020', 'Innsbruck'], ['1070', 'Wien']], FR: [['68100', 'Mulhouse']], NL: [['3511', 'Utrecht']] };
   const stamp = (d) => `${d} ${String(7 + Math.floor(rnd() * 15)).padStart(2, '0')}:${String(Math.floor(rnd() * 60)).padStart(2, '0')}:${String(Math.floor(rnd() * 60)).padStart(2, '0')} +0200`;
 
