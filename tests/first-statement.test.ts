@@ -8,7 +8,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { classifyStep } from '../src/intake/classify.js';
@@ -26,6 +26,9 @@ import { loadChart } from '../src/workspace/chart.js';
 import { APP_FOLDER, APP_ROOT, workspaceAt, type Uid, type Workspace } from '../src/workspace/workspace.js';
 import type { Books } from '../src/books/store.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
+import type { NetRate } from '../src/workspace/vat-setup.js';
+import { bookingDraft } from '../src/accounting/manual-booking.js';
+import { bankChargesOf } from '../src/booking/bank-fee.js';
 import './support/jurisdiction.js';
 
 /** `code`: the entry's bank transaction code as domain/family/sub-family; absent: a credit transfer out or in. `iban`: the other party's account. */
@@ -62,10 +65,12 @@ function statement(rows: Row[] = ROWS, bank = BANK): string {
 
 const parse = (xml: string): BankTransaction[] => readCamt(xml).statements.flatMap((s) => transactionsOf(s, { bank: 'Raiffeisen', statements: 'camt053' }));
 
-/** New books of a trades firm as the setup makes them: effective method, quarterly; `employees` as answered. */
-function firm(employees: Answers['employees'] = 'staff'): Workspace {
+/** New books of a trades firm as the setup makes them: effective method, quarterly; `employees` as answered; `vatAnswers` and `netRates` another kind of firm. */
+function firm(employees: Answers['employees'] = 'staff', vatAnswers: Partial<Answers> = {}, netRates: NetRate[] = []): Workspace {
   const root = mkdtempSync(join(tmpdir(), 'first-statement-'));
-  const { answers, vat } = checkAnswers({ ...PRESETS.trades.answers, employees } as Answers);
+  const given = { ...PRESETS.trades.answers, employees, ...vatAnswers } as Record<string, unknown>;
+  if (given.vatRegistered === 'no') for (const k of ['vatMethod', 'basis', 'period']) delete given[k];
+  const { answers, vat } = checkAnswers(given as Answers, netRates);
   applyPlan(root, planWorkspace({ name: 'Malerei Beispiel GmbH', uid: 'CHE-153.004.184' as Uid, owner: 'Sandra Huber', preset: 'trades', answers, vat, banks: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020' }] }, loadChart(), '2026'));
   return workspaceAt(join(root, APP_FOLDER));
 }
@@ -114,6 +119,104 @@ test('without an AI: the fee row and the wages do not wait for a receipt; the su
   const notes = await run(firm(), books);
   assert.deepEqual(waiting(books), ['Rechnung FM-77812', 'Rechnung August Natel']);
   assert.deepEqual(notes.filter((n) => n.code === 'waitingReceipt').map((n) => (n as { count: number }).count), [2]);
+});
+
+/** The fee row's entries as [debit, credit, amount, code, by, reason]. */
+const feeLines = (books: Books) => books.journalEntries.filter((e) => books.transactions.find((t) => t.ref === e.transactionRef)?.type === 'bank-fee')
+  .map((e) => [e.accountDebit, e.accountCredit, e.amount, e.vatCode ?? '', e.by?.kind === 'code' ? e.by.check : e.by?.kind ?? '', e.description]);
+
+test('without an AI: code books the bank\'s fee row on the bank-charges account without a VAT code, the wages and the sale wait for the person (#359)', async () => {
+  const books = booksOf(parse(statement()));
+  const notes = await run(firm(), books);
+  assert.deepEqual(booked(books), ['Kontoführung Q3'], '1 of the 7 rows booked by the app, none by a model');
+  assert.deepEqual(feeLines(books), [['6940', '1020', 12, '', 'purchaseVat', 'Raiffeisenbank, Kontoführung Q3']]);
+  const [fee] = books.journalEntries;
+  assert.equal(fee.origin, 'classify', 'the app booked it: «ohne dich» counts it');
+  assert.match(fee.reason ?? '', /^Gebühr der Bank laut Kontoauszug: auf 6940 Bankspesen, ohne MWST/);
+  assert.deepEqual(notes.filter((n) => n.code === 'noModel').map((n) => (n as { waiting: number }).waiting), [4], 'the sale and the three wages: tasks for the person, wages stay a proposal (owner, 2026-11-12)');
+  assert.equal(books.journalEntries.some((e) => e.accountDebit === '5000'), false, 'no wage booked by code');
+
+  // A second run books nothing again.
+  await run(firm(), books);
+  assert.equal(books.journalEntries.length, 1);
+});
+
+test('with an AI: the fee row is booked by code, not by the model', async () => {
+  const books = booksOf(parse(statement()));
+  const asked: string[] = [];
+  await run(firm(), books, async (prompt: string) => { asked.push(...[...prompt.matchAll(/^### Transaction \d+: (RB-2026-\d{4})$/gm)].map((m) => m[1])); return model(prompt); });
+  assert.equal(asked.includes('RB-2026-0007'), false, 'the fee row never reaches the model');
+  assert.deepEqual(feeLines(books).map((l) => l.slice(0, 5)), [['6940', '1020', 12, '', 'purchaseVat']]);
+});
+
+test('a fee the bank pays back is booked the other way, without a VAT code', async () => {
+  const books = booksOf(parse(statement([['2026-09-30', 'CRDT', 5, 'Raiffeisenbank', 'Rückerstattung Kontoführung', 'ACMT/MDOP/FEES']])));
+  assert.equal(books.transactions[0].type, 'bank-fee');
+  await run(firm(), books);
+  assert.deepEqual(feeLines(books).map((l) => l.slice(0, 5)), [['1020', '6940', 5, '', 'purchaseVat']]);
+  assert.match(books.journalEntries[0].reason ?? '', /zurückzahlt/);
+});
+
+test('each kind of firm: the fee row without a VAT code on the effective method, on the net tax rate method and without VAT registration', async () => {
+  const kinds: Array<[string, Workspace]> = [
+    ['effective', firm()],
+    ['net-rate', firm('staff', { vatMethod: 'net-rate', period: 'half-yearly' } as Partial<Answers>, [{ rate: 6.5, label: 'Malerei' }])],
+    ['not registered', firm('staff', { vatRegistered: 'no' } as Partial<Answers>)],
+  ];
+  for (const [kind, ws] of kinds) {
+    const books = booksOf(parse(statement()));
+    await run(ws, books);
+    assert.deepEqual(feeLines(books).map((l) => l.slice(0, 4)), [['6940', '1020', 12, '']], kind);
+  }
+});
+
+test('a chart without the bank-charges account: the fee row is not booked, and its form says which account is missing', async () => {
+  const ws = firm();
+  const accounts = JSON.parse(readFileSync(ws.paths.accounts, 'utf8')) as Array<{ number: string }>;
+  writeFileSync(ws.paths.accounts, JSON.stringify(accounts.filter((a) => a.number !== '6940')));
+  const books = booksOf(parse(statement()));
+  const notes = await run(ws, books);
+  assert.deepEqual(booked(books), []);
+  assert.deepEqual(notes.filter((n) => n.code === 'noModel').map((n) => (n as { waiting: number }).waiting), [5], 'a task like the wages, «von Hand buchen»');
+  const charges = bankChargesOf(new Set(accounts.filter((a) => a.number !== '6940').map((a) => a.number)));
+  assert.deepEqual(charges, { missing: { account: '6940', name: 'Bankspesen' } });
+
+  const fee = books.transactions.find((t) => t.type === 'bank-fee')!;
+  const bank = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Raiffeisen', role: 'bank' as const }];
+  const missing = bookingDraft(books, fee.ref, bank, [], { nature: { kind: 'bankFee', missing: { account: '6940', name: 'Bankspesen' } } })!;
+  assert.deepEqual(missing.notes, [{ kind: 'bankChargesMissing', account: '6940', name: 'Bankspesen' }]);
+  assert.deepEqual(missing.lines.map((l) => [l.accountDebit, l.accountCredit]), [['', '1020']]);
+  const named = bookingDraft(books, fee.ref, bank, [], { nature: { kind: 'bankFee', account: '6940' } })!;
+  assert.deepEqual(named.lines.map((l) => [l.accountDebit, l.accountCredit, l.amount, l.vat, l.source?.account]), [['6940', '1020', 12, '', { from: 'bankFee' }]]);
+});
+
+test('a company rule that matches the fee row decides it; code books only when none does', async () => {
+  const ws = firm();
+  mkdirSync(join(ws.paths.root, 'knowledge', 'rules'), { recursive: true });
+  writeFileSync(join(ws.paths.root, 'knowledge', 'rules', 'booking.guide.yaml'), `
+steps:
+  classify:
+    rules:
+      - id: bank-finanzaufwand
+        when: { text: "Kontoführung" }
+        then: { account: "6900", vat: none }
+        source: wish 2026-11-12
+`);
+  const books = booksOf(parse(statement()));
+  await run(ws, books);
+  assert.deepEqual(feeLines(books).map((l) => l.slice(0, 5)), [['6900', '1020', 12, '', 'rule']]);
+});
+
+test('a fee row of a filed period is never booked; a person\'s own booking of it is never replaced', async () => {
+  const filed = booksOf(parse(statement([['2026-06-30', 'DBIT', 12, 'Raiffeisenbank', 'Kontoführung Q2', 'ACMT/MDOP/FEES']])));
+  await run(firm(), filed);
+  assert.deepEqual(filed.journalEntries, [], 'dated on or before closedThrough');
+
+  const hers = booksOf(parse(statement()));
+  const fee = hers.transactions.find((t) => t.type === 'bank-fee')!;
+  hers.journalEntries.push({ id: 'h1', transactionRef: fee.ref, date: fee.date, accountDebit: '6900', accountCredit: '1020', amount: 12, description: 'Bank', origin: 'manual' } as never);
+  await run(firm(), hers);
+  assert.deepEqual(hers.journalEntries.filter((e) => e.transactionRef === fee.ref).map((e) => [e.id, e.accountDebit]), [['h1', '6900']]);
 });
 
 test('with an AI: the fee row and the wages are booked in the first run, the supplier payments wait for their receipts', async () => {
