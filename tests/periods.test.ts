@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { entriesForReturn } from '../src/accounting/declarations.js';
-import { parsePeriod, rangeToken, vatPeriodOf, RELATIVE_PRESETS, derivePeriod, isIsoDate, inPeriod, openFilingPeriod, booksOpenPeriod, dataPeriod, filingKeyOf, isFilingKey, type FilingLength } from '../src/accounting/periods.js';
+import { parsePeriod, rangeToken, vatPeriodOf, RELATIVE_PRESETS, derivePeriod, isIsoDate, inPeriod, openFilingPeriod, booksOpenPeriod, dataPeriod, oldestUnfiledPeriod, filingKeyOf, isFilingKey, type FilingLength } from '../src/accounting/periods.js';
 import './support/jurisdiction.js';
 import { chart } from '../src/engines/index.js';
 
@@ -200,4 +200,14 @@ test('a page without a period shows the period of the newest data, not the oldes
   assert.equal(dataPeriod({ config: filedQ1, transactions: [tx('2026-05-01')] }, '2026-11-02', 'half').token, '2026-H1');
   assert.equal(dataPeriod({ config: filedQ1, transactions: [] }, '2026-11-02', 'quarter').token, '2026-Q2', 'nothing dated: the open period');
   assert.equal(dataPeriod({ config: filedQ1, transactions: [tx('2026-09-30')] }, '2026-11-02', 'quarter', '2026-10-01').token, '2026-Q4', 'an area\'s own newer row (an issued invoice)');
+});
+
+test('the return page shows the oldest period not filed that holds a payment or an entry (#341)', () => {
+  const tx = (date: string) => ({ date });
+  // The persona's books: nothing filed, a Q3 statement, and one receipt dated today, which is no payment.
+  assert.equal(oldestUnfiledPeriod({ transactions: [tx('2026-07-02'), tx('2026-09-30')] }, '2026-11-12', 'quarter')?.token, '2026-Q3');
+  assert.equal(oldestUnfiledPeriod({ config: { closedThrough: '2026-03-31' }, transactions: [tx('2026-02-01'), tx('2026-09-30')], journalEntries: [tx('2026-05-04')] }, '2026-11-12', 'quarter')?.token, '2026-Q2', 'an entry counts; what is filed does not');
+  assert.equal(oldestUnfiledPeriod({ config: { closedThrough: '2026-09-30' }, transactions: [tx('2026-09-30')] }, '2026-11-12', 'quarter'), undefined, 'nothing after the filed periods: the page shows the newest data');
+  assert.equal(oldestUnfiledPeriod({ transactions: [tx('2026-08-01')] }, '2026-11-12', 'half')?.token, '2026-H2');
+  assert.equal(oldestUnfiledPeriod({ transactions: [tx('2027-01-15')] }, '2026-11-12', 'quarter')?.token, '2026-Q4', 'a date after today counts as today');
 });

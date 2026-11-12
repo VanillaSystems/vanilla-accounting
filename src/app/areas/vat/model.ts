@@ -91,6 +91,8 @@ export function thresholdYears(today: IsoDate, closedThrough: IsoDate | undefine
 
 /** The pseudo-Ziffer of a filed quarter's Korrekturabrechnung (form 0535) in the list and the link. */
 export const FORM_0535 = '0535';
+/** The pseudo-Ziffer of a return not filed yet: what is still open in its period (`/vat/open`, #341). */
+export const OPEN_ITEMS = 'open';
 
 export interface EntryLine extends VatLine {
   entry: JournalEntry;

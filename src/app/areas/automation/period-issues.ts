@@ -42,3 +42,28 @@ export function periodIssues(books: Index, questions: readonly Question[], from:
   const unlinked = l.views.filter((v) => needsYou(v, l) && within(v.date) && !v.r.filedPayment).map((v): PeriodIssue => ({ kind: 'unlinked', receipt: v.r }));
   return [...asked, ...evidence, ...unbooked, ...unlinked];
 }
+
+/**
+ * How many issues of each kind are open: one line beside a figure that is not final (the return's page, #341).
+ * `waitingReceipt`: of the unbooked payments, those the app holds until their receipt comes.
+ */
+export interface IssueCounts { total: number; questions: number; evidence: number; unbooked: number; waitingReceipt: number; unlinked: number }
+
+const heldForReceipt = (t: BankTransaction) => !!t.waitsForReceipt && !t.noReceiptNeeded;
+
+export function countIssues(issues: readonly PeriodIssue[]): IssueCounts {
+  const of = (kind: PeriodIssue['kind']) => issues.filter((i) => i.kind === kind).length;
+  return {
+    total: issues.length, questions: of('question'), evidence: of('evidence'), unbooked: of('unbooked'), unlinked: of('unlinked'),
+    waitingReceipt: issues.filter((i) => i.kind === 'unbooked' && heldForReceipt(i.tx)).length,
+  };
+}
+
+/**
+ * The payments of every period not filed that nobody booked, and the oldest of them: what «nothing
+ * waits for you» must not hide (#341). The same payments as the period's issues, over all open days.
+ */
+export function unbookedOpen(books: Pick<Index, 'transactions' | 'journalEntries' | 'config'>, accounts: readonly LedgerBankAccount[]): { unbooked: number; waitingReceipt: number; first?: BankTransaction } {
+  const open = unbookedPayments(books, accounts);
+  return { unbooked: open.length, waitingReceipt: open.filter(heldForReceipt).length, ...(open[0] ? { first: open[0] } : {}) };
+}

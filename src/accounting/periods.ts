@@ -222,3 +222,21 @@ export function dataPeriod(books: {
   if (!newest) return booksOpenPeriod(books, today, length);
   return parsePeriod(filingKeyOf(newest < today ? newest : today, length), today)!;
 }
+
+/**
+ * The oldest filing period not filed yet that holds a payment or an entry: where the return's work
+ * is, so the return page shows it unless its link names a period (#341). Undefined when nothing is
+ * dated after the filed periods; a date after today counts as today.
+ */
+export function oldestUnfiledPeriod(books: {
+  config?: { closedThrough?: IsoDate };
+  transactions: Array<{ date: IsoDate }>;
+  journalEntries?: Array<{ date: IsoDate }>;
+}, today: IsoDate, length: FilingLength): Period | undefined {
+  const closed = books.config?.closedThrough;
+  let oldest: IsoDate | undefined;
+  for (const xs of [books.transactions, books.journalEntries ?? []]) {
+    for (const { date } of xs) if (date && (!closed || date > closed) && (!oldest || date < oldest)) oldest = date;
+  }
+  return oldest ? parsePeriod(filingKeyOf(oldest < today ? oldest : today, length), today) ?? undefined : undefined;
+}

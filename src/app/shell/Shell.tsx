@@ -87,8 +87,9 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
 
   const area = areaOf(loc.route);
   // Without a period in the link, a page shows where the newest data is (F10), its own rows outside the books included.
+  // An area may name another home (the return: the oldest period not filed that holds something, #341).
   useInvoicesLoaded();
-  const latestOf = (route: Route) => dataPeriod(books, localToday(), filing().length, areaOf(route).newest?.());
+  const latestOf = (route: Route) => areaOf(route).home?.(books, localToday()) ?? dataPeriod(books, localToday(), filing().length, areaOf(route).newest?.());
   const latest = latestOf(loc.route);
   const latestNow = useRef(latestOf);
   latestNow.current = latestOf;

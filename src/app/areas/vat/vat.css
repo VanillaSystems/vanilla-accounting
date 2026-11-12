@@ -78,3 +78,10 @@ a.vlink:hover { text-decoration-color: currentColor; color: var(--ink); }
 }
 .notice.vnovat { align-items: flex-start; gap: 0; margin: 0 0 16px; line-height: 1.45; }
 .notice.vnovat .dot { flex: none; margin-top: 7px; }
+/* What is still open in a return not filed: one line under the figure, a click opens the list. */
+button.vpending { width: 100%; margin: -8px 0 18px; align-items: flex-start; text-align: left; line-height: 1.45; color: var(--ink-2); cursor: pointer; }
+button.vpending .dot { margin-top: 7px; flex: none; }
+button.vpending:hover, button.vpending.sel { color: var(--ink); }
+button.vpending u { color: var(--accent); text-decoration: none; white-space: nowrap; }
+.zexpl a { color: var(--accent); text-decoration: none; }
+.zexpl a:hover { text-decoration: underline; }

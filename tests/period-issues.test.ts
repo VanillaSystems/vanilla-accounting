@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import './support/jurisdiction.js';
 import type { BankTransaction, Index, Receipt } from '../src/types/index.js';
 import type { Question } from '../src/questions/model.js';
-import { periodIssues } from '../src/app/areas/automation/period-issues.js';
+import { countIssues, periodIssues, unbookedOpen } from '../src/app/areas/automation/period-issues.js';
 import { journalOf, unsettledAtFiling } from '../src/app/areas/journal/model.js';
 import { openWork } from '../src/server/open-work.js';
 import { tempWorkspace } from './support/workspace.js';
@@ -62,4 +62,15 @@ test('what waits, for the AI sidebar, names the bookings against their receipts,
   assert.doesNotMatch(open, /Nothing waits/);
   const after = openWork(ws, filed as Books, [], 'de');
   assert.match(after, /Bookings of the filed 2026-Q3 that contradicted their receipts and were not settled before filing \(1\)[^\n]*\n- 15\.08\.2026 /);
+});
+
+test('the counts beside a figure that is not final come from the same list, and name the payments held for their receipt (#341)', () => {
+  const held: Index = { ...books, transactions: books.transactions.map((t) => (t.ref === 'SEP' ? { ...t, waitsForReceipt: { since: '2026-10-01' } } : t)) };
+  const issues = periodIssues(held, [question('q1', 'KELLER')], '2026-07-01', '2026-09-30', []);
+  assert.deepEqual(countIssues(issues), { total: issues.length, questions: 1, evidence: 1, unbooked: 1, waitingReceipt: 1, unlinked: 1 });
+  assert.equal(countIssues(periodIssues(books, [], '2026-07-01', '2026-09-30', [])).waitingReceipt, 0, 'unbooked, but not held for a receipt');
+  // Every period not filed: October's payment too.
+  const open = unbookedOpen(held, []);
+  assert.deepEqual([open.unbooked, open.waitingReceipt, open.first?.ref], [2, 1, 'SEP']);
+  assert.deepEqual(unbookedOpen({ ...held, config: { closedThrough: '2026-12-31' } }, []), { unbooked: 0, waitingReceipt: 0 });
 });

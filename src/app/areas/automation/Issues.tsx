@@ -25,7 +25,9 @@ import { UnreadRuleOffer, UnreadTask } from './UnreadReceipt.js';
 import type { UnreadOffer } from '../../../saving/unread-rule.js';
 import { useState } from 'react';
 import { periodName } from '../../lib/period-label.js';
-import { periodIssues, type PeriodIssue } from './period-issues.js';
+import { periodIssues, unbookedOpen, type IssueCounts, type PeriodIssue } from './period-issues.js';
+import { OPEN_ITEMS } from '../vat/model.js';
+import { chargesVat } from '../../../engines/index.js';
 import type { Location } from '../../shell/route.js';
 import type { Nav } from '../index.js';
 import type { Index, JournalEntry } from '../../../types/index.js';
@@ -54,10 +56,44 @@ function textOf(books: Index, i: PeriodIssue): string {
   }
 }
 
+/** The open issues of the days `from`–`to` with what the page has loaded (questions, bank accounts, order pages): the one source of the task's list and of the return page's line. */
+export function usePeriodIssues(books: Index, from: string, to: string): PeriodIssue[] {
+  const { questions } = useQuestions();
+  return periodIssues(books, questions, from, to, useWorkspace()?.bankAccounts ?? [], orderPagesNow());
+}
+
+/** The counts in words, a part per kind that has any: «11 Zahlungen noch nicht gebucht (8 davon warten auf ihren Beleg)», «2 Fragen offen», … */
+export function issueWords(c: Pick<IssueCounts, 'unbooked' | 'waitingReceipt'> & Partial<IssueCounts>): string[] {
+  return [
+    c.unbooked ? `${t('issues.n.unbooked', { n: c.unbooked })}${c.waitingReceipt ? ` (${t(c.waitingReceipt === c.unbooked ? 'issues.n.allWaitReceipt' : 'issues.n.waitReceipt', { n: c.waitingReceipt })})` : ''}` : '',
+    c.questions ? t('issues.n.questions', { n: c.questions }) : '',
+    c.unlinked ? t('issues.n.unlinked', { n: c.unlinked }) : '',
+    c.evidence ? t('issues.evidenceTitle', { n: c.evidence }) : '',
+  ].filter(Boolean);
+}
+
+/**
+ * Said where the app would else say that nothing waits for the person (#341): no task is hers, yet
+ * payments of a period not filed are not booked, most often because their receipt has not come. A
+ * fact with its count and one link to them: the list of the oldest such period (on the return's
+ * page for a firm that files one, else among the payments). Nothing when every payment is booked.
+ */
+export function UnbookedFact({ books, nav, lead, className }: { books: Index; nav: Pick<Nav, 'go'>; lead?: string; className?: string }) {
+  const open = unbookedOpen(books, useWorkspace()?.bankAccounts ?? []);
+  if (!open.first) return null;
+  const p = parsePeriod(filingKeyOf(open.first.date, filing().length), localToday());
+  const to: Location = chargesVat() && p ? { route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period: p } } : at({ area: 'bank', payment: open.first.ref }, open.first.date);
+  return (
+    <span className={className} data-testid="unbooked-fact">
+      {lead ? `${lead} ` : ''}{issueWords(open).join('')}.{' '}
+      <button type="button" className="golink" onClick={() => nav.go(to)}>{p ? t('issues.n.see', { period: periodName(p) }) : t('automation.home.open')}</button>
+    </span>
+  );
+}
+
 /** «Noch offen in {period}»: under the return to review. An open VAT question withholds «Freigegeben» (r8h-24); the rest does not block the filing. */
 export function PeriodIssues({ books, nav, from, to, period, canEdit }: { books: Index; nav: Nav; from: string; to: string; period: string; canEdit: boolean }) {
-  const { questions } = useQuestions();
-  const issues = periodIssues(books, questions, from, to, useWorkspace()?.bankAccounts ?? [], orderPagesNow());
+  const issues = usePeriodIssues(books, from, to);
   if (!issues.length) return <p className="m" data-testid="period-issues-none">{t('issues.none', { period })}</p>;
   return (
     <section className="wfissues" data-testid="period-issues">

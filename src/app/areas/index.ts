@@ -86,6 +86,8 @@ export interface Area<R extends Route = Route> {
   periodless?: boolean;
   /** The date of its newest row kept outside the books (an issued invoice): a page without a period shows that period when it is newer than the books' data. */
   newest?(): string | undefined;
+  /** The period its page shows when the link names none, instead of the newest data's (the return: the oldest period not filed that holds something); undefined: the newest data's. */
+  home?(books: Index, today: string): Period | undefined;
   /** Its rows belong to a period: another period opens the new list at its first row instead of keeping the object. */
   periodRows?: boolean;
   /** Its list picks several rows of this kind at once (#216): ⌘-click, ⇧-click, ⌘A, Esc. */
