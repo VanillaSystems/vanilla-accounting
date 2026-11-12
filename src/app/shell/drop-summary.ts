@@ -10,6 +10,7 @@ import type { Question } from '../../questions/model.js';
 import type { Receipt } from '../../types/index.js';
 import { filingKeyOf, inPeriod, parsePeriod, type FilingLength, type IsoDate, type Period } from '../../accounting/periods.js';
 import { waitsForReading } from '../../parsers/receipt-text.js';
+import { isNoReceipt } from '../../books/discard.js';
 
 export interface DropSummary {
   /** The payments the drop's statements added to the books. */
@@ -25,11 +26,12 @@ export interface DropSummary {
     openFrom?: IsoDate;
   };
   /**
-   * The receipts the drop brought into the books: read to the end, and of those linked to a payment
-   * or not. One archived whose text still waits for the model's reading (`waitsForReading`, the
-   * answer Belege's «warten aufs Lesen» gives) is not read.
+   * The receipts the drop brought into the books, as their rows and Belege say it (#361): read (its
+   * text is there, a PDF's own or the model's), and of those linked to a payment or not; waiting for
+   * the model's reading (`waitsForReading`, Belege's «warten aufs Lesen»); and the files the reading
+   * found no receipt at all (`isNoReceipt`), set aside and counted apart.
    */
-  receipts?: { n: number; read: number; matched: number; unmatched: number };
+  receipts?: { n: number; read: number; matched: number; unmatched: number; unread: number; none: number };
 }
 
 /** The dates a taken row put into the books: a statement's payments (its last day while they are not loaded), a receipt's own date. */
@@ -91,7 +93,7 @@ export function landedPeriod(rows: readonly DropRow[], datesOf: DatesOf, current
  */
 export function dropSummary(
   rows: readonly DropRow[], books: Pick<Index, 'transactions' | 'mappings'>, isUnbooked: (t: BankTransaction) => boolean,
-  held: ReadonlySet<string>, receiptOf: (r: DropRow) => (Pick<Receipt, 'id' | 'location'> & Parameters<typeof waitsForReading>[0]) | undefined, questions: readonly Question[],
+  held: ReadonlySet<string>, receiptOf: (r: DropRow) => Receipt | undefined, questions: readonly Question[],
 ): DropSummary {
   const taken = rows.filter((r) => r.state === 'taken');
   const refs = new Set(taken.flatMap((r) => r.statement?.refs ?? []));
@@ -100,13 +102,15 @@ export function dropSummary(
   const open = pays.filter(isUnbooked);
   const waitReceipt = open.filter((t) => !asked.has(t.ref) && held.has(t.ref)).length;
   const askedN = open.filter((t) => asked.has(t.ref)).length;
-  const receipts = taken.filter((r) => !r.statement && !r.report).flatMap((r) => receiptOf(r) ?? []);
-  const linked = new Set(books.mappings.map((m) => m.receiptId));
-  const read = receipts.filter((r) => r.location === 'archived' && !waitsForReading(r));
-  const matched = read.filter((r) => linked.has(r.id)).length;
+  const files = taken.filter((r) => !r.statement && !r.report).flatMap((r) => receiptOf(r) ?? []);
+  const links = (id: string) => books.mappings.filter((m) => m.receiptId === id).length;
+  const none = files.filter((r) => isNoReceipt(r, links(r.id))).length;
+  const receipts = files.filter((r) => !isNoReceipt(r, links(r.id)));
+  const read = receipts.filter((r) => !waitsForReading(r));
+  const matched = read.filter((r) => links(r.id) > 0).length;
   return {
     ...(pays.length ? { payments: { n: pays.length, from: pays[0].date, to: pays[pays.length - 1].date, booked: pays.length - open.length, waitReceipt, asked: askedN, unbooked: open.length - waitReceipt - askedN, ...(open[0] ? { openFrom: open[0].date } : {}) } } : {}),
-    ...(receipts.length ? { receipts: { n: receipts.length, read: read.length, matched, unmatched: read.length - matched } } : {}),
+    ...(files.length ? { receipts: { n: receipts.length, read: read.length, matched, unmatched: read.length - matched, unread: receipts.length - read.length, none } } : {}),
   };
 }
 

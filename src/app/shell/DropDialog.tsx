@@ -26,7 +26,7 @@ import { fmt, formatDate } from '../lib/utils.js';
 import { monthName } from '../lib/period-label.js';
 import { useAutomation } from '../automation/store.js';
 import { textIn } from '../../workflows/model.js';
-import type { Index } from '../../types/index.js';
+import type { Index, TwinWhy } from '../../types/index.js';
 import type { DropRow, DropSession } from '../../types/drop.js';
 import { FileDetails } from './FileDetails.js';
 import { AccountField } from '../areas/journal/AccountField.js';
@@ -36,7 +36,7 @@ import type { Location, Route } from './route.js';
 import { at } from '../areas/receipts/view.js';
 import { setBankDraft } from '../areas/company/bank-draft.js';
 import { chfOf, suggestion } from '../areas/receipts/model.js';
-import { ledgerFor } from '../areas/receipts/view.js';
+import { ledgerFor, noneText } from '../areas/receipts/view.js';
 import { useFx } from '../hooks/use-fx.js';
 import { ReportCorrections } from '../areas/receipts/ReportCorrections.js';
 import { processingText } from '../automation/processing.js';
@@ -287,7 +287,8 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
  * it, #218: «Sucht die Zahlung …», «Wartet (3 vor diesem)»), read, matched, waiting for a person,
  * its run stopped, or set aside by the run with the reason.
  */
-type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'unread' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'orderPage'; provider: string } | { kind: 'stuck'; run: string } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string };
+type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'unread' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'orderPage'; provider: string } | { kind: 'stuck'; run: string } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string }
+  | { kind: 'none'; why: string } | { kind: 'twin'; of: string; name: string; why: TwinWhy };
 
 const isWorking = (run?: { status: string }) => !!run && (run.status === 'queued' || run.status === 'running');
 
@@ -324,10 +325,17 @@ function fileState(r: DropRow, books: Index, view: View): FileState {
   if (!receipt) return run?.status === 'stuck' ? { kind: 'stuck', run: run.id } : working;
   if (receipt.location !== 'archived') return { kind: 'waits' };
   // An order page of the provider way (#253): the provider's order export brings its order, no payment comes for it.
-  const page = ledgerFor(books).byId.get(id)?.orderPage;
-  if (page) return { kind: 'orderPage', provider: page.name };
+  const ledger = ledgerFor(books);
+  const v = ledger.byId.get(id);
+  if (v?.orderPage) return { kind: 'orderPage', provider: v.orderPage.name };
+  // What Belege says of it, the row says too (#361): no receipt at all (a holiday photo) is set aside, a copy of a
+  // receipt the books hold asks «schon da?», and one without a date (none read off it) waits for hers.
+  if (v?.none) return { kind: 'none', why: noneText(v) };
+  const twin = v?.twin?.relation === 'duplicate' ? ledger.byId.get(v.twin.of) : undefined;
+  if (twin) return { kind: 'twin', of: twin.r.id, name: twin.vendor || twin.r.filename, why: v!.twin!.why };
   // A photo or scan no AI read (#344) is not «gelesen»: the row says so, with the two ways on.
-  return waitsForReading(receipt) ? { kind: 'unread' } : { kind: 'read' };
+  if (waitsForReading(receipt)) return { kind: 'unread' };
+  return receipt.date ? { kind: 'read' } : { kind: 'waits' };
 }
 
 /**
@@ -356,6 +364,7 @@ function Summary({ sum, rows, books, go, receiptOf }: { sum: DropSummary; rows: 
   const pays = sum.payments;
   const paid = pays ? periodOf(rows.filter((r) => r.statement)) : undefined;
   const recs = sum.receipts;
+  const noAi = useNoAi();
   const filed = recs ? periodOf(rows.filter((r) => !r.statement)) : undefined;
   // What is open is listed in the period of the oldest payment not booked, which need not be the one most payments are in.
   const open = pays?.openFrom ? parsePeriod(filingKeyOf(pays.openFrom, filing().length), today) ?? undefined : undefined;
@@ -377,12 +386,14 @@ function Summary({ sum, rows, books, go, receiptOf }: { sum: DropSummary; rows: 
       ) : null}
       {recs ? (
         <p>
-          {t('drop.sum.receipts', { n: recs.read })}{recs.read ? ': ' : ''}
           {[
-            recs.matched ? t('drop.sum.matched', { n: recs.matched }) : '',
-            recs.unmatched ? t('drop.sum.unmatched', { n: recs.unmatched }) : '',
-            recs.n > recs.read ? t('drop.sum.unread', { n: recs.n - recs.read }) : '',
-          ].filter(Boolean).join(', ')}.{' '}
+            recs.read ? `${t('drop.sum.receipts', { n: recs.read })}: ${[
+              recs.matched ? t('drop.sum.matched', { n: recs.matched }) : '',
+              recs.unmatched ? t('drop.sum.unmatched', { n: recs.unmatched }) : '',
+            ].filter(Boolean).join(', ')}.` : '',
+            recs.unread ? `${t(noAi ? 'drop.sum.waitAi' : 'drop.sum.unread', { n: recs.unread })}.` : '',
+            recs.none ? `${t('drop.sum.none', { n: recs.none })}.` : '',
+          ].filter(Boolean).join(' ')}{' '}
           {filed ? <button type="button" className="linkbtn" data-testid="drop-to-receipts" onClick={() => go({ route: { area: 'receipts' }, query: { period: filed } })}>{t('drop.sum.toReceipts', { period: periodName(filed) })}</button> : null}
         </p>
       ) : null}
@@ -444,6 +455,11 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
   const shown = !!receipt && open;
   // The books changed under the page: Belege must not show the receipt any more.
   const undo = () => { setBusy(true); void act(session, r, { kind: 'undo' }).then(refresh).finally(() => setBusy(false)); };
+  // «schon da?» of a photo the run read (#361): answered as Belege answers it, the copy then set aside, or the pair not asked again.
+  const twin = (answer: 'same' | 'distinct', of: string) => {
+    setBusy(true);
+    api.answerTwin(receipt!.id, answer, of).then(refresh, (e) => set({ error: errorText(e) })).finally(() => setBusy(false));
+  };
   // A statement PDF kept as the statement, its movements not read in (#254): «Aktionen» reads them.
   const keptPdf = r.kind === 'statement-pdf' && !!r.statement?.file.toLowerCase().endsWith('.pdf');
   // Taken onto the one account of the bank it names (#273): said in the row, with «ändern».
@@ -462,13 +478,22 @@ function Taken({ r, session, books, go, refresh }: { r: DropRow; session: DropSe
               {noAi ? <button type="button" className="linkbtn" data-act="ai-set-up" onClick={() => go({ area: 'company', section: 'ai' })}>{t('aiSetup.line.setUp')}</button> : null}
             </small>
           ) : null}
-          {missing ? <small className="dwhy">{missing}</small> : x.kind === 'orderPage' ? <small className="dwhy" data-testid="drop-order-page">{t('drop.p.orderPageWhy', { provider: x.provider })}</small> : x.kind === 'refused' ? <small className="dwhy">{reasonText(x.reason)}</small> : null}
+          {missing ? <small className="dwhy">{missing}</small> : x.kind === 'orderPage' ? <small className="dwhy" data-testid="drop-order-page">{t('drop.p.orderPageWhy', { provider: x.provider })}</small> : x.kind === 'refused' ? <small className="dwhy">{reasonText(x.reason)}</small>
+            : x.kind === 'none' ? <small className="dwhy" data-testid="drop-none">{x.why}</small>
+            : x.kind === 'twin' ? <small className="dwhy" data-testid="drop-twin">{t('drop.twin.duplicate', { name: x.name })} · {t(`drop.twin.why.${x.why}`)}</small> : null}
           {byBank ? <small className="dwhy" data-testid="drop-by-bank">{t('drop.byBank', { label: byBank.label })}</small> : null}
           <span className="dacts">
+            {x.kind === 'twin' && receipt ? (
+              <>
+                <button type="button" className="linkbtn" data-testid="drop-twin-same" disabled={busy} onClick={() => twin('same', x.of)}>{t('drop.twin.same')}</button>
+                <button type="button" className="linkbtn" data-testid="drop-twin-distinct" disabled={busy} onClick={() => twin('distinct', x.of)}>{t('drop.twin.distinct')}</button>
+              </>
+            ) : null}
             {byBank ? <button type="button" className="linkbtn" data-testid="drop-other-account" disabled={running || busy} data-tip={t('drop.byBankChangeTip')} onClick={() => { setBusy(true); void act(session, r, { kind: 'otherAccount' }).then(refresh).finally(() => setBusy(false)); }}>{t('drop.byBankChange')}</button> : null}
             {x.kind === 'stuck' ? <button type="button" className="linkbtn" data-testid="drop-stuck-run" onClick={() => go({ area: 'automation', view: 'run', run: x.run })}>{t('processing.toRun')}</button> : null}
             {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id }, receipt.date)}>{t(x.kind === 'unread' ? 'drop.p.typeIn' : 'drop.openReceipt')}</button> : null}
-            {(r.kind === 'receipt' || r.kind === 'photo') && !r.report && x.kind !== 'matched' && x.kind !== 'working' ? <button type="button" className="linkbtn" data-testid="drop-as-statement" disabled={busy} onClick={() => { setBusy(true); void act(session, r, { kind: 'statement' }).then(refresh).finally(() => setBusy(false)); }}>{t('drop.asStatement')}</button> : null}
+            {/* Offered where the reading decided nothing (a photo no AI read) or found a statement, not on every receipt (#361). */}
+            {(r.kind === 'receipt' || r.kind === 'photo') && !r.report && (x.kind === 'unread' || (x.kind === 'none' && receipt?.kind === 'statement')) ? <button type="button" className="linkbtn" data-testid="drop-as-statement" disabled={busy} onClick={() => { setBusy(true); void act(session, r, { kind: 'statement' }).then(refresh).finally(() => setBusy(false)); }}>{t('drop.asStatement')}</button> : null}
             {keptPdf ? <button type="button" className="linkbtn" data-act="actions" data-testid="drop-actions" aria-haspopup="menu" aria-expanded={!!menu} disabled={busy} onClick={(e) => setMenu(e.currentTarget.getBoundingClientRect())}>{t('actions.label')}</button> : null}
             <button type="button" className="linkbtn" disabled={running || busy} data-tip={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</button>
           </span>
@@ -515,7 +540,7 @@ export function DropDialog({ onGo, onLanded, period, books, refresh }: { onGo(lo
   const sum = !working && taken.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? []), receiptOf, questions) : undefined;
   // Only files the books hold already (#341): the window says that nothing new came in.
   const nothingNew = !working && !taken.length && rows.length > 0 && rows.every((r) => (r.state === 'duplicate' && r.reason !== 'possible-duplicate') || !!r.readAs);
-  const waits = !working && states.some((x) => x.kind === 'waits' || x.kind === 'stuck' || x.kind === 'unread');
+  const waits = !working && states.some((x) => x.kind === 'waits' || x.kind === 'stuck' || x.kind === 'unread' || x.kind === 'twin');
   // A receipt of a sealed quarter opens in that quarter, not in the open one (r9k-8).
   const go = (route: Route, date?: string) => { closeDrop(); onGo(date ? at(route, date) : { route, query: {} }); };
   return (

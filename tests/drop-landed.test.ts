@@ -74,12 +74,24 @@ test('the summary counts the drop\'s payments and receipts from the books', () =
   const held = new Set(payments.filter((p) => p.waitsForReceipt).map((p) => p.ref));
   const s = dropSummary(rows, books, (t) => !booked.has(t.ref), held, receiptOf as never, questions);
   assert.deepEqual(s.payments, { n: 23, from: '2026-07-15', to: '2026-09-15', booked: 12, waitReceipt: 8, asked: 1, unbooked: 2, openFrom: '2026-08-15' });
-  assert.deepEqual(s.receipts, { n: 6, read: 5, matched: 2, unmatched: 3 });
+  assert.deepEqual(s.receipts, { n: 6, read: 5, matched: 2, unmatched: 3, unread: 1, none: 0 }, 'the staged file without text waits for its reading');
   assert.deepEqual(dropSummary([row('dup', { state: 'duplicate' })], books, () => true, new Set(), receiptOf as never, []), {}, 'nothing taken: no counts');
   // A photo without text, archived on a Mac without an AI: Belege says it waits for reading (#343), so the drop does not call it read.
   const photo = { id: 'photo', location: 'archived' as const, extractedText: '', extractionMethod: 'tesseract' as const };
   const withPhoto = (r: DropRow) => (r.id === 'photo' ? photo : receiptOf(r));
-  assert.deepEqual(dropSummary([row('photo'), row('c')], books, () => true, new Set(), withPhoto as never, []).receipts, { n: 2, read: 1, matched: 0, unmatched: 1 });
+  assert.deepEqual(dropSummary([row('photo'), row('c')], books, () => true, new Set(), withPhoto as never, []).receipts, { n: 2, read: 1, matched: 0, unmatched: 1, unread: 1, none: 0 });
+});
+
+test('without a model, text PDFs whose facts code read count as read, as their rows show them; photos wait for the AI; no receipt is counted apart (#361)', () => {
+  // The persona's drop on a Mac without an AI: ten text PDFs, one paired by code, the rest still in the inbox (no model names them), six photos.
+  const pdfs = Array.from({ length: 10 }, (_, i) => ({ id: `pdf${i}`, date: '2026-07-10', amount: 88.98 + i, location: i ? 'staged' as const : 'archived' as const, extractedText: `Maler Muster AG Rechnung R-${i} Total CHF ${88.98 + i}`, extractionMethod: 'pdftotext' as const }));
+  const photos = Array.from({ length: 6 }, (_, i) => ({ id: `img${i}`, location: 'archived' as const, extractedText: '', extractionMethod: 'claude-vision' as const, needsVisionReview: true }));
+  // A holiday photo the model read: «Kein Beleg», set aside as noise.
+  const holiday = { id: 'holiday', location: 'archived' as const, extractedText: 'Kein Beleg: Strand in Rimini', extractionMethod: 'claude-vision' as const, kind: 'noise' as const };
+  const all = [...pdfs, ...photos, holiday];
+  const of = (r: DropRow) => all.find((x) => x.id === r.id);
+  const s = dropSummary(all.map((r) => row(r.id)), { transactions: [], mappings: [{ receiptId: 'pdf0', transactionRef: 'p1' }] as never }, () => true, new Set(), of as never, []);
+  assert.deepEqual(s.receipts, { n: 16, read: 10, matched: 1, unmatched: 9, unread: 6, none: 1 });
 });
 
 test('the bar moves with the part of the run that is done, not only with files at rest', () => {

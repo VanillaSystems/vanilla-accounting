@@ -146,6 +146,18 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Files dropped on Kontoauszüge go through «Dateien hinzufügen» as on any page (#361): every file
+  gets its row, the statement under «Kontoauszüge» with the closing sentence on its payments.
+  Before, the statement was read in around the dialog («Kontoauszüge 0», no sentence) and photos
+  vanished without a word. «Auszug hinzufügen» and a missing month's field hand any other file to
+  the dialog too. The rows say what Belege says: a photo the AI finds no receipt (a holiday photo)
+  reads «kein Beleg» with what it shows and is set aside under its own name, never a receipt of
+  CHF 0.00; a photo of an invoice already in the books asks «schon da?» with «ist dasselbe» and
+  «verschieden»; a receipt whose date cannot be read waits «fehlt: Datum» and gets no date (the AI
+  no longer dates it by the day it was read). The closing sentence counts read text PDFs as read
+  also without an AI, names the photos that wait for the AI («6 Belege warten aufs Lesen: das
+  macht die KI») and the files that are no receipt. «Ist ein Kontoauszug» shows only on a photo no
+  AI read or one read as a statement.
 - Mac app, first screen: «Neue Buchhaltung erstellen» opens the system's save panel again (the
   name prefilled in Documents, «Erstellen»), and the setup starts in the folder you name. In
   0.4.0 and 0.4.1 the button did nothing: the main process had no answer for the page's call
