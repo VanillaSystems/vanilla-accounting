@@ -25,7 +25,7 @@ import { UnreadRuleOffer, UnreadTask } from './UnreadReceipt.js';
 import type { UnreadOffer } from '../../../saving/unread-rule.js';
 import { useState } from 'react';
 import { periodName } from '../../lib/period-label.js';
-import { countIssues, periodIssues, unbookedOpen, type IssueCounts, type PeriodIssue } from './period-issues.js';
+import { periodIssues, unbookedOpen, type IssueCounts, type PeriodIssue } from './period-issues.js';
 import { OPEN_ITEMS } from '../vat/model.js';
 import { chargesVat } from '../../../engines/index.js';
 import type { Location } from '../../shell/route.js';
@@ -107,8 +107,7 @@ export function UnbookedFact({ books, nav, lead, className }: { books: Index; na
  * «Keine Aufgabe wartet auf dich» never stands alone beside receipts that need her. A period with
  * nothing open says what UnbookedFact says of the other open days.
  */
-export function OpenFact({ books, nav, period, lead, className }: { books: Index; nav: Pick<Nav, 'go'>; period: Period; lead: string; className?: string }) {
-  const c = countIssues(usePeriodIssues(books, period.from, period.to));
+export function OpenFact({ books, nav, period, counts: c, lead, className }: { books: Index; nav: Pick<Nav, 'go'>; period: Period; counts: IssueCounts; lead: string; className?: string }) {
   if (!c.unbooked && !c.unlinked) return <UnbookedFact books={books} nav={nav} lead={lead} className={className} />;
   const to: Location = chargesVat() ? { route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period } } : { route: c.unbooked ? { area: 'bank' } : { area: 'receipts' }, query: { period } };
   return (
