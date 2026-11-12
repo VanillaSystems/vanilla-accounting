@@ -20,6 +20,7 @@ import { CliCard } from './CliCard.js';
 import { alreadyHere, legOf, otherOf, type Said } from './first-run.js';
 import { KeyBlock } from './KeyBlock.js';
 import { useAiSetup } from './useAiSetup.js';
+import { useFollowEnd } from '../onboarding/follow-end.js';
 import '../onboarding/onboarding.css';
 import './ai-setup.css';
 
@@ -43,6 +44,9 @@ export function FirstRun({ info, onSetup, onForm, onLeave }: { info: DesktopInfo
   const [keyReady, setKeyReady] = useState<SetupKey>();
   // The CLI found on the first look stays the start, so a sign-in elsewhere does not move the conversation.
   const first = useRef<TerminalCli>(undefined);
+  const turns = useRef<HTMLDivElement>(null);
+  const end = useRef<HTMLDivElement>(null);
+  useFollowEnd(turns, end);
   first.current ??= alreadyHere(ai.cards);
   const leg = legOf(said, first.current);
   const cli = leg?.cli;
@@ -82,7 +86,7 @@ export function FirstRun({ info, onSetup, onForm, onLeave }: { info: DesktopInfo
         </span>
         <button type="button" className="linkbtn" data-act="first-leave" onClick={onLeave}>{t('aiSetup.toStart')}</button>
       </header>
-      <div className="obflowturns">
+      <div ref={turns} className="obflowturns">
         <Ai><p>{t(keptNoAi ? 'aiSetup.helloNoAi' : 'aiSetup.hello')}</p></Ai>
         {!view || !FIRST_RUN_CLIS.some((c) => ai.cards[c]) ? (ai.error ? <p className="warnline" role="alert">{ai.error}</p> : <Ai><p className="aiwait"><span className="aispin" aria-hidden="true" />{t('aiSetup.looking')}</p></Ai>) : keptNoAi ? null : (
           <>
@@ -165,6 +169,7 @@ export function FirstRun({ info, onSetup, onForm, onLeave }: { info: DesktopInfo
         ) : null}
         {done ? <FolderStep info={info} onSetup={onSetup} onForm={onForm} /> : null}
         {ai.error && view ? <p className="warnline" role="alert">{ai.error}</p> : null}
+        <div ref={end} className="obend" />
       </div>
       <div className="obtalk">
         <div className="obtalkbox">
