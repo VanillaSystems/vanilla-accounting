@@ -17,9 +17,11 @@ page keeps 820 px and the setup 568 px (#342).
 **When it ends.** «Los geht's» ends the setup mode too: the sidebar starts an ordinary
 conversation at its ordinary width, also after the window is loaded again, and shows where the
 open period stands (views.md, «Was ist noch offen?»). Only Firma › «Einrichtung …» (or the
-conversation picked from «Verlauf») opens the setup conversation again. The server no longer gives
-that conversation the setup's checklist once `ready` is set: its messages carry the books' state
-like any other (src/server/open-work.ts `purposeNow`).
+conversation picked from «Verlauf») opens the setup conversation again; the sidebar then says so
+with each message (`setup: true`), and the conversation is answered as the setup, with its
+checklist and its open question. Without that wish a setup conversation of a finished setup gets
+no checklist: its messages carry the books' state like any other (src/server/open-work.ts
+`purposeNow`).
 
 **Code draws the conversation, the AI answers in it.** MISSION puts code first. Every step of the
 prototype that the app can know or ask with buttons is drawn by code: `setupThread(progress, facts)`

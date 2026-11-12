@@ -64,7 +64,7 @@ test('the message lists the open questions with their text and the buttons their
   assert.equal(saleQuestion('S-CH').status, 'open', 'the booking step asked about the sale');
   const { prompts } = await wish(undefined);
   const prompt = prompts.at(-1)!;
-  assert.match(prompt, /under «Automatisierung › Aufgaben» now[^\n]*complete: what is not listed does not wait/);
+  assert.match(prompt, /under «Automatisierung › Aufgaben» now[^\n]*complete: what is in neither does not wait/);
   const line = prompt.split('\n').find((l) => l.includes('the payment S-CH'))!;
   assert.ok(line, 'the open question on S-CH is in the message');
   assert.match(line, /«Beispiel Kunde AG hat CHF 1081\.00 am 10\.08\.2026 bezahlt, ohne Rechnung in den Büchern\. War das ein Verkauf mit MWST\?»/, 'its text as the card says it, not the stored one');
@@ -136,7 +136,7 @@ test('an answer whose one change the app refused keeps all it said that did not 
 test('when nothing waits, the message says so plainly (1c)', async () => {
   for (const q of readQuestions(api.ws).filter((x) => x.status === 'open')) await api.send('POST', `/api/questions/${q.id}/close`, { by: 'Anna Muster', how: 'withdrawn' });
   const { prompts } = await wish(undefined);
-  assert.match(prompts.at(-1)!, /Nothing waits: no open question, no task, no payment without a booking, no booking against its receipt, no possible duplicate\./);
+  assert.match(prompts.at(-1)!, /Nothing of 2026-Q3 is open: [^\n]*\n[\s\S]*Nothing else waits: no other open question, no other task, no payment without a booking in another period, no other booking against its receipt, no possible duplicate\./);
 });
 
 test('an answer\'s bold, lists and paragraphs are data, never markup; an unpaired ** stays as written (3)', () => {
@@ -193,7 +193,7 @@ test('the invoice texts are quoted as they read, with the company\'s term, never
 test('a workflow\'s task is in the message with the rule that held its payment, so the model knows an ask rule did its work (1c, w24)', () => {
   const task = { run: 'r-1', workflow: 'ask', step: 'decide', item: { kind: 'transaction', id: 'S-GEN' }, title: { de: 'Frag: {question}', en: 'Ask: {question}' }, since: '2026-10-15T08:00:00Z', outcomes: ['booked'], reads: { question: 'Wofür war der Barbezug?' }, rule: 'cash-ask' } as const;
   const note = openWork(api.ws, loadBooks(api.ws), [task as never], 'de');
-  assert.match(note, /Tasks of the workflows \(1\):\n- «Frag: Wofür war der Barbezug\?» on the transaction S-GEN, since 15\.10\.2026, held by the rule cash-ask/);
+  assert.match(note, /Tasks of the workflows \(1\)[^\n]*:\n- «Frag: Wofür war der Barbezug\?» on the transaction S-GEN, since 15\.10\.2026, held by the rule cash-ask/);
 });
 
 test('the app map says a mailbox is connected in Firma › Quellen by the person, with the page\'s own words (r5h-27)', () => {

@@ -3083,6 +3083,8 @@ export const messages = {
   'openPeriod.over': 'abgelaufen, noch nicht abgeschlossen',
   'openPeriod.unbooked': { one: '{n} Zahlung ohne Buchung', other: '{n} Zahlungen ohne Buchung' },
   'openPeriod.waiting': { one: 'davon wartet {n} auf ihren Beleg', other: 'davon warten {n} auf ihren Beleg' },
+  'openPeriod.unread': { one: '{n} hat einen Beleg, dessen MWST sich nicht lesen liess: braucht deine Angabe', other: '{n} haben einen Beleg, dessen MWST sich nicht lesen liess: brauchen deine Angabe' },
+  'openPeriod.moreTasks': { one: 'und {n} weitere Aufgabe', other: 'und {n} weitere Aufgaben' },
   'openPeriod.questions': { one: '{n} offene Frage', other: '{n} offene Fragen' },
   'openPeriod.unlinked': { one: '{n} Beleg ohne Zahlung', other: '{n} Belege ohne Zahlung' },
   'openPeriod.none': 'In {period} ist nichts offen: keine Frage, keine Zahlung ohne Buchung, kein Beleg ohne Zahlung, keine Aufgabe.',

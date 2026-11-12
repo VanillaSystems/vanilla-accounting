@@ -270,11 +270,13 @@ function HeldCard({ held, turn, standing, books, onGo }: { held: HeldChanges; tu
   const different = new Set(held.rows.filter((r) => r.before).map((r) => `${r.before!.accountDebit}/${r.before!.accountCredit}`)).size > 1;
   const why = held.why.map((w) => (w === 'payments' ? t(different ? 'assistant.held.payments' : 'assistant.held.many', { n: payments })
     : w === 'deletes' ? t('assistant.held.deletes', { n: deleted }) : w === 'terminal' ? t('assistant.held.terminal') : t('assistant.held.rateWithoutReceipt')));
-  const others = held.changes.filter((c) => !isBookChange(c)).map((c, i) => described({ id: String(i), change: c }, books).text);
+  // The card of the open period changes nothing: it is no change to propose.
+  const proposed = held.changes.filter((c) => c.kind !== 'openPeriod');
+  const others = proposed.filter((c) => !isBookChange(c)).map((c, i) => described({ id: String(i), change: c }, books).text);
   const settle = (take: boolean) => { setBusy(true); void settleHeld(turn, take).finally(() => setBusy(false)); };
   return (
     <div className={`ruledraft aiheld ${held.status}`} data-testid="held" data-status={held.status}>
-      <b>{held.rows.length ? t('assistant.held.title', { n: held.rows.length }) : t('assistant.held.titleOther', { n: held.changes.length })}</b>
+      <b>{held.rows.length ? t('assistant.held.title', { n: held.rows.length }) : t('assistant.held.titleOther', { n: proposed.length })}</b>
       {held.status === 'held' ? <span className="m">{t('assistant.held.lead')}</span> : null}
       {why.map((w) => <span key={w} className="warnline">{w}</span>)}
       <ul>

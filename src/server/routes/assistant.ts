@@ -74,6 +74,7 @@ function sendOf(body: unknown): AssistantSend {
     text: text.slice(0, 20_000), context, ...(attachments.length ? { attachments } : {}),
     ...(typeof b.conversation === 'string' && b.conversation ? { conversation: b.conversation } : {}),
     ...(PURPOSES.includes(b.purpose as Purpose) ? { purpose: b.purpose as Purpose } : {}),
+    ...(b.setup === true ? { setup: true } : {}),
     language: typeof b.language === 'string' ? b.language : 'de',
   };
 }
@@ -103,9 +104,9 @@ router.get('/api/assistant/:id', (req, res) => {
  * come in now. A conversation with a purpose gets only its own context, so the AI has nothing
  * unrelated to bring up; the setup's is one only until the person ends the setup.
  */
-async function waitingNow(language: string, asked: Purpose | undefined): Promise<string> {
-  // A setup the person ended is over: its conversation gets the books' state like any other (#342).
-  const purpose = purposeNow(asked, readProgress(WS));
+async function waitingNow(language: string, asked: Purpose | undefined, setupWanted: boolean): Promise<string> {
+  // A setup the person ended is over: its conversation gets the books' state like any other, unless she opened the setup again herself (#342).
+  const purpose = purposeNow(asked, readProgress(WS), setupWanted);
   if (purpose === 'collection-setup') return [PURPOSE_NOTE[purpose], await collectionNow(WS, language, readBooks().receipts)].join('\n\n');
   if (purpose === 'onboarding') {
     const books = readBooks();
@@ -159,7 +160,7 @@ router.post('/api/assistant', async (req, res) => {
   const purpose = known ? known.purpose : send.purpose;
   // The setup conversation is kept with the checklist, so reopening the setup continues it.
   const told = purpose === 'onboarding' ? (e: AssistantEvent) => { if (e.type === 'conversation') rememberConversation(WS, e.id, new Date().toISOString()); emit(e); } : emit;
-  await sendMessage(WS, send, apply, { map: appMap(send.language), waiting: await waitingNow(send.language, purpose), attachments }, told, stop.signal);
+  await sendMessage(WS, send, apply, { map: appMap(send.language), waiting: await waitingNow(send.language, purpose, !!send.setup), attachments }, told, stop.signal);
   res.end();
 });
 

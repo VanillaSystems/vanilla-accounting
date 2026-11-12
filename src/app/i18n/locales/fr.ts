@@ -3086,6 +3086,8 @@ export default {
     'openPeriod.over': 'terminée, pas encore clôturée',
     'openPeriod.unbooked': { one: '{n} paiement sans écriture', other: '{n} paiements sans écriture' },
     'openPeriod.waiting': { one: 'dont {n} attend son justificatif', other: 'dont {n} attendent leur justificatif' },
+    'openPeriod.unread': { one: '{n} a un justificatif dont la TVA n’a pas pu être lue : il faut ton indication', other: '{n} ont un justificatif dont la TVA n’a pas pu être lue : il faut ton indication' },
+    'openPeriod.moreTasks': { one: 'et {n} autre tâche', other: 'et {n} autres tâches' },
     'openPeriod.questions': { one: '{n} question ouverte', other: '{n} questions ouvertes' },
     'openPeriod.unlinked': { one: '{n} justificatif sans paiement', other: '{n} justificatifs sans paiement' },
     'openPeriod.none': 'Rien n’est ouvert en {period} : aucune question, aucun paiement sans écriture, aucun justificatif sans paiement, aucune tâche.',

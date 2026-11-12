@@ -214,6 +214,8 @@ export interface AssistantSend {
   conversation?: string;
   /** Only on a conversation's first message; later ones take the conversation's own. */
   purpose?: Purpose;
+  /** The person opened the setup conversation herself (Firma › «Einrichtung …», Verlauf): it is answered as the setup though the setup has ended (#342). */
+  setup?: boolean;
   text: string;
   context: ContextRef[];
   /** The uploads the message carries (POST /api/assistant/attachments), by id. */

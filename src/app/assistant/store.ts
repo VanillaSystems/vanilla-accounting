@@ -234,7 +234,7 @@ export async function sendMessage(text: string, page: ContextRef | undefined): P
   try {
     const res = await apiFetch('/api/assistant', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: stop.signal,
-      body: JSON.stringify({ conversation, text, context, ...(state.purpose && !conversation ? { purpose: state.purpose } : {}), ...(attachments.length ? { attachments: attachments.map((a) => a.id) } : {}), language: language() }),
+      body: JSON.stringify({ conversation, text, context, ...(state.purpose && !conversation ? { purpose: state.purpose } : {}), ...(state.purpose === 'onboarding' && setup.wanted ? { setup: true } : {}), ...(attachments.length ? { attachments: attachments.map((a) => a.id) } : {}), language: language() }),
     });
     if (!res.ok || !res.body) throw new Error(((await res.json().catch(() => null)) as { error?: string } | null)?.error ?? `HTTP ${res.status}`);
     const reader = res.body.getReader();
@@ -253,6 +253,8 @@ export async function sendMessage(text: string, page: ContextRef | undefined): P
   } finally {
     withAi((t) => ({ ...t, done: true }));
     set({ sending: false });
+    // «Los geht's» while this answer streamed left the conversation alone: it gives way now.
+    leaveSetup();
   }
 }
 

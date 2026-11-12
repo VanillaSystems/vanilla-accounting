@@ -3086,6 +3086,8 @@ export default {
     'openPeriod.over': 'terminato, non ancora chiuso',
     'openPeriod.unbooked': { one: '{n} pagamento senza registrazione', other: '{n} pagamenti senza registrazione' },
     'openPeriod.waiting': { one: 'di cui {n} attende il suo giustificativo', other: 'di cui {n} attendono il loro giustificativo' },
+    'openPeriod.unread': { one: '{n} ha un giustificativo la cui IVA non si è potuta leggere: serve la tua indicazione', other: '{n} hanno un giustificativo la cui IVA non si è potuta leggere: serve la tua indicazione' },
+    'openPeriod.moreTasks': { one: 'e {n} altro compito', other: 'e altri {n} compiti' },
     'openPeriod.questions': { one: '{n} domanda aperta', other: '{n} domande aperte' },
     'openPeriod.unlinked': { one: '{n} giustificativo senza pagamento', other: '{n} giustificativi senza pagamento' },
     'openPeriod.none': 'In {period} non c’è nulla di aperto: nessuna domanda, nessun pagamento senza registrazione, nessun giustificativo senza pagamento, nessun compito.',

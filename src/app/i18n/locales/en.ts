@@ -3086,6 +3086,8 @@ export default {
     'openPeriod.over': 'over, not closed yet',
     'openPeriod.unbooked': { one: '{n} payment without a booking', other: '{n} payments without a booking' },
     'openPeriod.waiting': { one: '{n} of them waits for its receipt', other: '{n} of them wait for their receipt' },
+    'openPeriod.unread': { one: '{n} has a receipt whose VAT could not be read: needs your word', other: '{n} have a receipt whose VAT could not be read: they need your word' },
+    'openPeriod.moreTasks': { one: 'and {n} more task', other: 'and {n} more tasks' },
     'openPeriod.questions': { one: '{n} open question', other: '{n} open questions' },
     'openPeriod.unlinked': { one: '{n} receipt without a payment', other: '{n} receipts without a payment' },
     'openPeriod.none': 'Nothing is open in {period}: no question, no payment without a booking, no receipt without a payment, no task.',
