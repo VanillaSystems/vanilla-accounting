@@ -7,7 +7,8 @@
 # goods); `legalForms` limits it to a legal form; `names` renames it for a legal form. An account
 # without them is in every chart. `hints` are the words a person types for an account besides its
 # name («Miete», «Benzin»): an account field finds the account by them (German, as the names are).
-# Read by src/workspace/chart.ts, which checks every rule here.
+# A name with a comma is quoted: unquoted, a flow mapping cuts it at the comma. Read by
+# src/workspace/chart.ts, which checks every rule here and refuses a key it does not know.
 #
 # The one chart of the app: a new workspace starts from it, and every line of the casebook
 # (examples/cases/) books on one of its accounts (npm run check-processes). Bank accounts by
@@ -56,7 +57,7 @@ accounts:
   - { number: "1022", name: Bankguthaben USD, type: asset, line: fluessige-mittel }
   - { number: "1060", name: Wertschriften, type: asset, line: fluessige-mittel }
   - { number: "1090", name: Transferkonto, type: asset, line: fluessige-mittel }
-  - { number: "1093", name: Guthaben Zahlungsanbieter (Shopify, Stripe), type: asset, line: fluessige-mittel, profiles: [goods] }
+  - { number: "1093", name: "Guthaben Zahlungsanbieter (Shopify, Stripe)", type: asset, line: fluessige-mittel, profiles: [goods] }
   - { number: "1100", name: Forderungen aus Lieferungen und Leistungen, type: asset, line: forderungen-ll }
   - { number: "1109", name: Delkredere, type: asset, line: forderungen-ll }
   - { number: "1140", name: Vorschüsse und Darlehen, type: asset, line: uebrige-forderungen }
@@ -75,11 +76,11 @@ accounts:
   - { number: "1480", name: Beteiligungen, type: asset, line: beteiligungen }
   - { number: "1500", name: Maschinen und Apparate, type: asset, line: sachanlagen, profiles: [goods] }
   - { number: "1510", name: Mobiliar und Einrichtungen, type: asset, line: sachanlagen }
-  - { number: "1520", name: Büromaschinen, Informatik, Kommunikationstechnologie, type: asset, line: sachanlagen }
+  - { number: "1520", name: "Büromaschinen, Informatik, Kommunikationstechnologie", type: asset, line: sachanlagen }
   - { number: "1530", name: Fahrzeuge, type: asset, line: sachanlagen }
   - { number: "1540", name: Werkzeuge und Geräte, type: asset, line: sachanlagen, profiles: [goods] }
   - { number: "1600", name: Geschäftsliegenschaften, type: asset, line: sachanlagen }
-  - { number: "1700", name: Patente, Know-how, Lizenzen, Rechte, Entwicklungen, type: asset, line: immaterielle-werte }
+  - { number: "1700", name: "Patente, Know-how, Lizenzen, Rechte, Entwicklungen", type: asset, line: immaterielle-werte }
   - { number: "1770", name: Goodwill, type: asset, line: immaterielle-werte }
 
   # 2 Passiven: kurzfristiges Fremdkapital
@@ -129,11 +130,11 @@ accounts:
   - { number: "4900", name: Aufwandminderungen, type: expense, line: materialaufwand, profiles: [goods] }
   - { number: "4020", name: Zölle, type: expense, line: materialaufwand, profiles: [goods] }
   - { number: "4030", name: Einfuhrsteuer (MWST bei der Einfuhr), type: expense, line: materialaufwand, profiles: [goods] }
-  - { number: "4040", name: Vorlageprovision, Verzollungsspesen, type: expense, line: materialaufwand, profiles: [goods] }
+  - { number: "4040", name: "Vorlageprovision, Verzollungsspesen", type: expense, line: materialaufwand, profiles: [goods] }
 
   # 5 Personalaufwand
   - { number: "5000", name: Lohnaufwand, type: expense, line: personalaufwand, hints: [Gehalt, Salär] }
-  - { number: "5700", name: Sozialversicherungsaufwand AHV, IV, EO, ALV, type: expense, line: personalaufwand, hints: [Ausgleichskasse, AHV, ALV, Arbeitslosenversicherung] }
+  - { number: "5700", name: "Sozialversicherungsaufwand AHV, IV, EO, ALV", type: expense, line: personalaufwand, hints: [Ausgleichskasse, AHV, ALV, Arbeitslosenversicherung] }
   - { number: "5710", name: Familienausgleichskasse, type: expense, line: personalaufwand }
   - { number: "5720", name: Vorsorgeeinrichtungen (BVG), type: expense, line: personalaufwand }
   - { number: "5730", name: Unfallversicherung (UVG), type: expense, line: personalaufwand }
@@ -147,20 +148,20 @@ accounts:
   # 6 Übriger betrieblicher Aufwand, Abschreibungen, Finanzerfolg
   - { number: "6000", name: Mietaufwand, type: expense, line: uebriger-aufwand, hints: [Miete, Pacht, Parkplatz] }
   - { number: "6040", name: Reinigung, type: expense, line: uebriger-aufwand }
-  - { number: "6100", name: Unterhalt, Reparaturen, Ersatz, type: expense, line: uebriger-aufwand, hints: [Werkzeug, Kleinwerkzeug, Ersatzteil] }
+  - { number: "6100", name: "Unterhalt, Reparaturen, Ersatz", type: expense, line: uebriger-aufwand, hints: [Werkzeug, Kleinwerkzeug, Ersatzteil] }
   - { number: "6105", name: Leasingaufwand mobile Sachanlagen, type: expense, line: uebriger-aufwand }
   - { number: "6200", name: Fahrzeugaufwand, type: expense, line: uebriger-aufwand, hints: [Benzin, Diesel, Tanken, Tankstelle, Treibstoff, Autoversicherung, Fahrzeugversicherung, Lieferwagen] }
   - { number: "6260", name: Fahrzeugleasing und -mieten, type: expense, line: uebriger-aufwand }
   - { number: "6280", name: Transportaufwand, type: expense, line: uebriger-aufwand, profiles: [goods] }
   - { number: "6300", name: Sachversicherungen, type: expense, line: uebriger-aufwand, hints: [Versicherung, Haftpflicht, Police, Prämie] }
-  - { number: "6360", name: Abgaben, Gebühren, Bewilligungen, type: expense, line: uebriger-aufwand }
+  - { number: "6360", name: "Abgaben, Gebühren, Bewilligungen", type: expense, line: uebriger-aufwand }
   - { number: "6400", name: Energie- und Entsorgungsaufwand, type: expense, line: uebriger-aufwand, hints: [Strom, Heizung, Wasser, Abfall, Entsorgung] }
-  - { number: "6500", name: Büromaterial, Verwaltungsaufwand, type: expense, line: uebriger-aufwand }
-  - { number: "6510", name: Telefon, Internet, type: expense, line: uebriger-aufwand, hints: [Handy, Natel, Mobile, Abo] }
+  - { number: "6500", name: "Büromaterial, Verwaltungsaufwand", type: expense, line: uebriger-aufwand }
+  - { number: "6510", name: "Telefon, Internet", type: expense, line: uebriger-aufwand, hints: [Handy, Natel, Mobile, Abo] }
   - { number: "6513", name: Porti, type: expense, line: uebriger-aufwand, hints: [Porto, Versand, Briefmarke] }
-  - { number: "6520", name: Beiträge, Spenden, type: expense, line: uebriger-aufwand }
+  - { number: "6520", name: "Beiträge, Spenden", type: expense, line: uebriger-aufwand }
   - { number: "6530", name: Buchführungs- und Beratungsaufwand, type: expense, line: uebriger-aufwand, hints: [Treuhand, Buchhaltung, Steuerberatung] }
-  - { number: "6540", name: Verwaltungsrat, Generalversammlung, Revisionsstelle, type: expense, line: uebriger-aufwand, legalForms: [GmbH, AG] }
+  - { number: "6540", name: "Verwaltungsrat, Generalversammlung, Revisionsstelle", type: expense, line: uebriger-aufwand, legalForms: [GmbH, AG] }
   - { number: "6570", name: Informatikaufwand inkl. Software und Hosting, type: expense, line: uebriger-aufwand, hints: [Software, Computer, Hosting, Lizenz] }
   - { number: "6580", name: Webshop- und Zahlungsanbietergebühren, type: expense, line: uebriger-aufwand, profiles: [goods] }
   - { number: "6600", name: Werbeaufwand, type: expense, line: uebriger-aufwand, hints: [Werbung, Inserat, Flyer, Marketing] }
@@ -177,8 +178,8 @@ accounts:
   # 8 Betriebsfremder, ausserordentlicher Erfolg, direkte Steuern
   - { number: "8000", name: Betriebsfremder Aufwand, type: expense, line: betriebsfremd }
   - { number: "8100", name: Betriebsfremder Ertrag, type: revenue, line: betriebsfremd }
-  - { number: "8500", name: Ausserordentlicher, einmaliger oder periodenfremder Aufwand, type: expense, line: ausserordentlich }
-  - { number: "8510", name: Ausserordentlicher, einmaliger oder periodenfremder Ertrag, type: revenue, line: ausserordentlich }
+  - { number: "8500", name: "Ausserordentlicher, einmaliger oder periodenfremder Aufwand", type: expense, line: ausserordentlich }
+  - { number: "8510", name: "Ausserordentlicher, einmaliger oder periodenfremder Ertrag", type: revenue, line: ausserordentlich }
   - { number: "8900", name: Direkte Steuern, type: expense, line: direkte-steuern, legalForms: [GmbH, AG] }
 
   # 9 Abschluss

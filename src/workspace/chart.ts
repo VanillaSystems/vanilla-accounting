@@ -62,6 +62,9 @@ const TYPE_RULES: Record<AccountType, { statement: Statement; classes: string }>
   closing: { statement: 'abschluss', classes: '9' },
 };
 
+/** The keys an account of the chart may have. */
+const ACCOUNT_KEYS = new Set(['number', 'name', 'type', 'line', 'profiles', 'legalForms', 'names', 'hints']);
+
 export class ChartError extends Error {}
 
 export function loadChart(path: string = KMU_CHART): Chart {
@@ -77,6 +80,9 @@ export function loadChart(path: string = KMU_CHART): Chart {
     if (seen.has(a.number)) fail(`${where} is listed twice`);
     seen.add(a.number);
     if (!a.name) fail(`${where}: name missing`);
+    // A name with an unquoted comma in a flow mapping reads cut, its rest as a key of its own («Telefon, Internet»).
+    const stray = Object.keys(a).filter((k) => !ACCOUNT_KEYS.has(k));
+    if (stray.length) fail(`${where}: unknown key ${stray.map((k) => `"${k}"`).join(', ')} (a name with a comma must be quoted)`);
     const rule = TYPE_RULES[a.type] ?? fail(`${where}: type "${a.type}" is not one of ${ACCOUNT_TYPES.join(', ')}`);
     if (!rule.classes.includes(a.number[0])) fail(`${where}: a ${a.type} account must be in class ${[...rule.classes].join('/')}`);
     const line = lines[a.line] ?? fail(`${where}: line "${a.line}" is not in lines`);
