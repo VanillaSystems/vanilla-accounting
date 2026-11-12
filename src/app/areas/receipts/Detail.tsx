@@ -43,6 +43,7 @@ import { I } from './icons.js';
 import { ActionsMenu } from '../../selection/ActionsMenu.js';
 import { readsPaidPrivately, receiptActions } from './actions-menu.js';
 import { useAiOff } from '../../ai/ai-off.js';
+import { useNoAi } from '../../ai/no-ai.js';
 import { baseCurrency, chargesVat, filing, withoutInputTax } from '../../../engines/index.js';
 import { processingText } from '../../automation/processing.js';
 import { inProcess, type Processing } from '../../../workflows/processing.js';
@@ -135,6 +136,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
   const src = sources.receipt(r.id);
   const open = parsePeriod(l.openFrom.slice(0, 4) + '-Q' + Math.ceil(Number(l.openFrom.slice(5, 7)) / 3), localToday());
   const aiOff = useAiOff();
+  const noAi = useNoAi();
   const { view } = useAutomation();
   // A run of the inbox still works on it (#218): what it does instead of what is missing; a run that stopped says so.
   const proc = l.processing.get(r.id);
@@ -191,6 +193,13 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
         <div className="notice aioffwait" data-testid="waits-ai-off">
           {I.dot}<span>{t('receipts.waitsAiOff')}</span>
           <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'company', section: 'ai' }, query: {} }); }}>{t('aiOff.toFirma')}</a>
+        </div>
+      )}
+      {!aiOff && !busy && !v.none && waitsForReading(r) && (
+        <div className="notice warn notread" data-testid="not-read">
+          {I.dot}<span>{t(noAi ? 'receipts.notReadNoAi' : 'receipts.notReadFailed')}</span>
+          {noAi ? <a href="#" data-act="ai-set-up" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'company', section: 'ai' }, query: {} }); }}>{t('aiSetup.line.setUp')}</a> : null}
+          {edit ? <a href="#" data-act="by-hand" onClick={(e) => { e.preventDefault(); runAct(props, 'edit'); }}>{t('aiSetup.line.byHand')}</a> : null}
         </div>
       )}
       <TwinNotice {...props} />
@@ -543,6 +552,7 @@ function Datei(props: Props & { v: ReceiptView; edit: boolean }) {
   const runs = runsOf(r, books, view);
   const kb = `${Math.max(1, Math.round(r.fileSize / 1024))} KB`;
   const aiOff = useAiOff();
+  const noAi = useNoAi();
   return (
     <Sec k="datei" val={kb}>
       <dl className="kv">
@@ -555,7 +565,7 @@ function Datei(props: Props & { v: ReceiptView; edit: boolean }) {
         <dt>{t('receipts.size')}</dt><dd className="mono">{kb}</dd>
         <dt>{t('receipts.sha')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{r.id}…</dd>
       </dl>
-      <div className="ocr" aria-label={t('receipts.text')}>{r.extractedText.slice(0, 1500) || t('receipts.noText')}</div>
+      <div className="ocr" aria-label={t('receipts.text')}>{r.extractedText.slice(0, 1500) || t(waitsForReading(r) ? (noAi ? 'receipts.noTextNoAi' : 'receipts.noTextNotRead') : 'receipts.noText')}</div>
       {canEdit && (
         <div className="dangers">
           {v.none

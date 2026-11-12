@@ -13,6 +13,7 @@ import { openCount, textIn, type Arrival, type AutomationView, type RunSummary }
 import { linesOf, standOf, type Line, type Stand } from './runs-model.js';
 import { commandRefusalText, refusalText } from '../../automation/refusal.js';
 import type { Index } from '../../../types/index.js';
+import { waitsForReading } from '../../../parsers/receipt-text.js';
 import type { Nav } from '../index.js';
 import type { Route } from '../../shell/route.js';
 import { takeOpening } from '../bank/actions.js';
@@ -167,6 +168,7 @@ function LineRow({ l, go, nav }: { l: Line; go(route: Route): void; nav: Nav }) 
       <td className="what"><span className="rk">{t('runs.kind.receipt')}</span>{x?.description?.split(/[,(]/)[0].trim() || l.a.file}{facts ? <span className="m"> · {facts}</span> : null}<small className="mono">{l.a.file}</small></td>
       <td className="res">
         {!x ? <span className="warn-t">{t('runs.line.notRead')}</span>
+          : waitsForReading(x) ? <span className="warn-t" data-testid="run-not-read">{t('receipts.notRead')}</span>
           : !l.payments.length ? <span className="warn-t">{t('runs.line.noPayment')}</span>
           : <>
               <span className="ok-t">{t('runs.line.linked')}</span>{' '}
