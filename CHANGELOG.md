@@ -170,6 +170,18 @@ Two markers flag an entry you must read before you update:
   the step without either. With books open, the Mac app's window now always loads its own build of
   the page; a checkout with an older build in its `dist/` could serve that one after the setup.
 
+- Setup (#347): «MWST-Methode» and «Abrechnungsart» have a third answer, «Wir rechnen keine MWST ab»,
+  in the form, the setup conversation and `npm run init` (`--vat-method no-vat`). It answers «nein» to
+  «Im MWST-Register eingetragen?», so the method, the basis and the period are no longer asked; a line
+  under it says it is only for a firm not in the VAT register (registration is required from CHF
+  100’000 turnover a year) and that a registered firm that does not know its method asks its
+  Treuhand, that a firm whose Treuhand files its returns is registered, and what a wrong pick costs.
+  The review and the summary say plainly what follows, the app's invoices without VAT included; the
+  summary and Firma › MWST say that it changes there while the year has no entries, and an invoice
+  draft of a firm not registered says «Rechnung ohne MWST». The VAT question in the books offers the
+  same answer and no longer «Weiss nicht»; its card confirms with the summary's sentence. Typed words
+  never make the firm unregistered: the answer is always her click.
+
 ### Fixed
 
 - Files dropped on Kontoauszüge go through «Dateien hinzufügen» as on any page (#361): every file

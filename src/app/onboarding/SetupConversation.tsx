@@ -104,7 +104,8 @@ function useNewestStep(id: string | undefined): void {
       summaryHeld = true;
       for (const e of events) box?.addEventListener(e, release, { passive: true });
     }
-    const frame = requestAnimationFrame(() => stepOf(id)?.scrollIntoView({ block: id === 'summary' ? 'start' : 'nearest', behavior: smooth() }));
+    // Opened again on the summary: at once, since the turns that load after it would leave a smooth scroll aiming at a place that moved.
+    const frame = requestAnimationFrame(() => stepOf(id)?.scrollIntoView({ block: id === 'summary' ? 'start' : 'nearest', behavior: was === undefined ? 'auto' : smooth() }));
     return () => {
       cancelAnimationFrame(frame);
       for (const e of events) box?.removeEventListener(e, release);

@@ -185,7 +185,8 @@ export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
   if (firmAsked(p, 'vat') && !take({
     id: 'vat', topic: 'firm',
     say: [L('s.vat')],
-    choices: (['none', 'effective', 'net-rate', 'unknown'] as const).map((v) => choice('vat', v, { sub: true, primary: v === now })),
+    // No «Weiss nicht» (#347): the answer «we file no VAT returns» (`none`) is the third answer, as before the books; `unknown` stays only for an answer an older version kept.
+    choices: (['none', 'effective', 'net-rate', ...(vatAnswer === 'unknown' ? ['unknown' as const] : [])] as const).map((v) => choice('vat', v, { sub: true, primary: v === now })),
     reply: vatReply(),
   })) return steps;
 
@@ -270,13 +271,16 @@ function summaryOf(p: SetupProgress, f: SetupFacts): Extract<SetupCard, { kind: 
   const ibans = f.banks.filter((b) => b.iban).length;
   const items: Array<{ what: Line; origin: Origin }> = [
     { what: L('sum.company', { name: f.company.name }), origin: told },
-    { what: vatLine(v), origin: p.answers.vat?.kept ? 'answer' : told },
+    // Not registered: said plainly what follows (#347), not only «nicht eingetragen».
+    { what: v.registered ? vatLine(v) : L('sum.noVat'), origin: p.answers.vat?.kept ? 'answer' : told },
     ...(f.sells ? [{ what: sellsLine(f.sells.kinds), origin: p.answers.sells ? 'answer' as Origin : told }] : []),
     ...(f.opening.length ? [{ what: L('sum.opening', { n: f.opening.length }), origin: 'app' as Origin }] : []),
     ...(ibans ? [{ what: L('sum.banks', { n: ibans }), origin: told }] : []),
     ...(f.sources.length ? [{ what: L('sum.sources', { n: f.sources.length }), origin: 'app' as Origin }] : []),
     ...(f.rules ? [{ what: L('sum.rules', { n: f.rules }), origin: 'app' as Origin }] : []),
   ];
+  // Not registered: where that changes, as a fact (#347).
+  if (!v.registered) items.push({ what: L('sum.noVatChange'), origin: told });
   const open = SETUP_TOPICS.filter((t) => states[t] !== 'done').map((t) => ({ topic: t, state: shownState(p, f, t), go: TOPIC_HAND[t] }));
   const first = L(!v.registered ? 'sum.firstNone' : v.period === 'half-yearly' ? 'sum.firstHalf' : 'sum.firstQuarter');
   return { kind: 'summary', items, open, first };

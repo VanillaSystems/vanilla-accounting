@@ -11,7 +11,7 @@ import { join, resolve } from 'node:path';
 import type { AskOptions } from '../llm/ask.js';
 import { SetupError, type BankSpec, type SetupRefusal } from '../workspace/create.js';
 import { BANKS } from '../workspace/banks.js';
-import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, optionOf, unusualPeriod, type QuestionKey } from '../workspace/setup.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, NO_VAT, notRegistered, optionOf, unsteered, unusualPeriod, type QuestionKey } from '../workspace/setup.js';
 import { APP_FOLDER } from '../workspace/workspace.js';
 import { checkPatch, draftView, readDraft, saidFirm, writeDraft } from './draft-store.js';
 import { draftMarks, draftSteps, markOf, withPatch, type DraftPatch, type Firm, type SetupDraft, type SetupDraftView, type StepMark } from './draft.js';
@@ -31,7 +31,9 @@ export type TalkRefusal =
    * quarterly on the net tax rate), read from loose words: not taken; the reply says what is usual,
    * and the person picks it with the question's own button when it was granted (#345).
    */
-  | { reason: 'unusualPeriod'; method: 'effective' | 'net-rate'; value: string; usual: string };
+  | { reason: 'unusualPeriod'; method: 'effective' | 'net-rate'; value: string; usual: string }
+  /** «Not registered» read from the words: that the firm files no VAT is only ever her click (#347). */
+  | { reason: 'noVat' };
 
 export type SetupReply =
   /** `filled`: the answers saved from the words; `firm`: what the words said of the firm so far, short of a whole one (kept in the draft's `said`). */
@@ -143,6 +145,7 @@ ${text}
 Rules:
 - Take only what the message or the conversation so far states or plainly implies («zwei Angestellte»: employees "staff"; «registered for VAT»: vatRegistered "yes"). Leave out what it does not say. Never guess.
 - sells: a trade (a painter, a carpenter, an electrician, a builder …), and any firm that charges material with its work («d Farb verrechned mer mit», «Material kommt auf die Rechnung»), sells "made" and "services": "made" covers the material. "services" alone is work without material.
+- vatRegistered: never give "no", whatever the words say: that the firm files no VAT is only ever her own click. A registered firm that does not know its method asks its accountant (Treuhand); say so when asked.
 - period: give it only when the person names how often they file. Quarterly is usual on the effective method, half-yearly on the net tax rate; the app does not take the other from loose words and says so itself.
 - Never invent, complete or correct a UID or an IBAN: copy one only when the person wrote it.
 - firm: every field the person stated in this message; the app joins it to what they said of the firm before.
@@ -204,6 +207,8 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
   for (const key of QUESTION_ORDER) {
     const value = out.answers[key];
     if (value === undefined || value === null) continue;
+    // That the firm files no VAT is only ever her click (#347): from the words it would take a «ja» she clicked, with her method and rates.
+    if ((key === 'vatRegistered' && value === 'no') || (unsteered(key) && value === NO_VAT)) { refused.push({ step: key, refusal: { reason: 'noVat' } }); continue; }
     const odd = ([] as unknown[]).concat(value).find((v) => typeof v !== 'string' || !optionOf(key, v));
     if (odd !== undefined) refused.push({ step: key, refusal: { reason: 'notAnOption', question: key, value: String(odd) } });
     else take(key, { step: 'question', key, value });
@@ -230,6 +235,14 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
     filled.push(markOf(p));
   }
   if (said && Object.keys(said).length && !draft.firm && !same(d.said, said)) draft = { ...draft, said };
+  // A firm not registered has no method, basis, period or rates: what the words gave of them is dropped with its marks, so a later «ja» asks them again (#347, #369).
+  if (draft.answers.vatRegistered === 'no') {
+    const gone: StepMark[] = ['vatMethod', 'basis', 'period', 'netRates'];
+    const { netRates: _rates, refusedPeriod: _period, fromText, ...rest } = draft;
+    const marks = (fromText ?? []).filter((m) => !gone.includes(m));
+    draft = { ...rest, answers: notRegistered(draft.answers), ...(marks.length ? { fromText: marks } : {}) };
+    for (const m of gone) if (filled.includes(m)) filled.splice(filled.indexOf(m), 1);
+  }
   // A period the tax authority grants only on request is not taken from loose words: the question keeps its buttons, the usual one proposed.
   // The answer that stood stays (a period the person clicked is theirs); the same value is refused once, not at every message.
   const odd = unusualPeriod(draft.answers);

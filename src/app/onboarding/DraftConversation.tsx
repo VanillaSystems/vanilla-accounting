@@ -9,7 +9,7 @@
  */
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { BANKS } from '../../workspace/banks.js';
-import { PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, hasWhere, optionOf, unsureOf, unusualPeriod, type QuestionKey } from '../../workspace/setup.js';
+import { NO_VAT, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, hasWhere, optionOf, unsteered, unsureOf, unusualPeriod, type QuestionKey } from '../../workspace/setup.js';
 import type { BankSpec } from '../../workspace/create.js';
 import type { NetRate } from '../../workspace/vat-setup.js';
 import { DRAFT_PHASES, assumedOf, draftProgress, draftSteps, type DraftPatch, type DraftStep, type Firm, type QuestionValue, type SetupDraft, type SetupDraftView, type StepMark } from '../../onboarding/draft.js';
@@ -51,6 +51,7 @@ const refusalText = (r: TalkRefusal): string =>
   r.reason === 'notStated' ? t(`onboarding.talk.notStated.${r.field}`, { detail: r.detail })
     : r.reason === 'notAnOption' ? t('onboarding.talk.notAnOption', { question: tData(`desktop.q.${r.question}.ask`), value: r.value })
       : r.reason === 'unusualPeriod' ? t(`onboarding.talk.unusualPeriod.${r.method}`)
+        : r.reason === 'noVat' ? t('onboarding.talk.noVat')
         : setupText(r);
 const FromText = ({ on }: { on: boolean }) => (on ? <span className="obbadge ai" data-from-text>{t('onboarding.talk.fromText')}</span> : null);
 /** An answer the kind of firm gave and she never said (#364): marked, with why, until she answers it herself. */
@@ -291,7 +292,10 @@ function QuestionStep({ step, draft, busy, send, change, fromText }: { step: Ext
             })}
             {multi ? <button type="button" className="btn" disabled={busy || ('required' in QUESTIONS[key] && !on.length)} data-act="question-next" onClick={() => void send({ step: 'question', key, value: on })}>{t('onboarding.draft.next')}</button> : null}
             {unsure ? <button type="button" className="btn ghost" disabled={busy} data-act="question-unsure" onClick={() => void send({ step: 'question', key, value: unsure })}>{t('onboarding.draft.unsure', { answer: tData(`desktop.q.${key}.${unsure}`) })}</button> : null}
+            {/* the answer «we file no VAT returns» (#347): «nein» to the registration, the same patch as that answer. */}
+            {unsteered(key) ? <button type="button" className="btn" disabled={busy} data-answer={NO_VAT} onClick={() => void send({ step: 'question', key: 'vatRegistered', value: 'no' })}>{t('desktop.q.noVat')}</button> : null}
           </div>
+          {key === 'vatMethod' ? <p className="obwhy" data-no-vat-hint>{t('desktop.q.noVat.hint')}</p> : null}
         </div>
       )}
     </div>
@@ -379,7 +383,7 @@ function Review({ draft, root, busy, change, onCreate }: { draft: SetupDraft; ro
             {draft.firm ? <><dt>{t('onboarding.draft.firmLabel')}</dt><dd>{firmLine(draft.firm)} <FromText on={marked('firm')} /></dd><dd /></> : null}
             {draft.preset ? <><dt>{t('desktop.preset')}</dt><dd>{tData(`desktop.q.preset.${draft.preset}`)} <FromText on={marked('preset')} /></dd><dd /></> : null}
             {questions.map((k) => (
-              <ReviewRow key={k} label={tData(`desktop.q.${k}.ask`)} value={valueLabel(k, draft.answers[k])} fromText={marked(k)} assumed={<Assumed draft={draft} k={k} />} busy={busy} onChange={() => change(k, { step: 'question', key: k, value: null }, draft.answers[k])} />
+              <ReviewRow key={k} label={tData(`desktop.q.${k}.ask`)} value={k === 'vatRegistered' && draft.answers[k] === 'no' ? t('onboarding.draft.noVat') : valueLabel(k, draft.answers[k])} fromText={marked(k)} assumed={<Assumed draft={draft} k={k} />} busy={busy} onChange={() => change(k, { step: 'question', key: k, value: null }, draft.answers[k])} />
             ))}
             {draft.netRates?.length ? <><dt>{t('desktop.netRates')}</dt><dd>{ratesLine(draft.netRates)} <FromText on={marked('netRates')} /></dd><dd /></> : null}
             {draft.banks ? <><dt>{t('desktop.banks')}</dt><dd>{banksLine(draft.banks)} <FromText on={marked('banks')} /></dd><dd /></> : null}

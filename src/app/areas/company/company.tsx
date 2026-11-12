@@ -293,7 +293,7 @@ function Vat({ ws, books, nav, canEdit }: Props & { ws: CompanyInfo }) {
   return (
     <>
       <dl className="kv2 wide">
-        <Kv k={t('company.vatRegistered')}>{t(v.registered ? 'company.yes' : 'company.no')}</Kv>
+        <Kv k={t('company.vatRegistered')} note={v.registered ? undefined : t('company.vatNoneNote')}>{t(v.registered ? 'company.yes' : 'company.no')}</Kv>
         {v.registered && (
           <>
             <Kv k={t('company.vatMethod')} note={t(v.method === 'net-rate' ? 'company.vatFormNetRate' : 'company.vatForm')}>{t(v.method === 'net-rate' ? 'company.vatNetRate' : 'company.vatMethodEffective')}</Kv>
