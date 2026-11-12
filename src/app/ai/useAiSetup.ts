@@ -37,6 +37,8 @@ export function useAiSetup(): AiSetup {
     try {
       const v = await api.aiSetup.view();
       setView(v);
+      // A look that answers takes an earlier failure away.
+      setError(undefined);
       const at = Date.now();
       for (const { cli, probe } of v.clis) step(cli, { kind: 'probed', probe, at });
     } catch (e) {

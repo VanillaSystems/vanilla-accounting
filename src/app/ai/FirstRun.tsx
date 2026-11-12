@@ -58,21 +58,26 @@ export function FirstRun({ info, onSetup, onForm, onLeave }: { info: DesktopInfo
   const other = cli ? otherOf(cli) : undefined;
   const name = (c: TerminalCli) => t(`terminal.cli.${c}`);
   const push = (s: Said) => setSaid((was) => [...was, s]);
-  const install = (c: TerminalCli) => { push({ kind: 'install', cli: c }); void ai.install(c); };
-  const signIn = (c: TerminalCli) => { push({ kind: 'signIn', cli: c }); void ai.signIn(c); };
+  /** «Ohne KI weiter» holds until she acts on an AI (installs, signs in, saves a key): looking at the cards and going back keeps it. */
+  const wantsAi = () => { if (view?.noAi) void ai.choose({ noAi: false }); };
+  const install = (c: TerminalCli) => { wantsAi(); push({ kind: 'install', cli: c }); void ai.install(c); };
+  const signIn = (c: TerminalCli) => { wantsAi(); push({ kind: 'signIn', cli: c }); void ai.signIn(c); };
   const toHome = () => { setSaid([]); setStage('home'); };
   /** «Ohne KI weiter»: kept on this Mac (decision 6), and back to the choices. */
   const noAi = () => { void ai.choose({ noAi: true }); toHome(); };
-  const setUp = () => { if (view?.noAi) void ai.choose({ noAi: false }); setStage('ai'); };
+  const setUp = () => setStage('ai');
 
   const looked = !!view && FIRST_RUN_CLIS.every((c) => ai.cards[c]);
-  /** The look has its answer: nothing is still being tested. Until then «new books» waits for it. */
-  const settled = !!ai.error || (looked && !FIRST_RUN_CLIS.some((c) => ai.cards[c]?.kind === 'testing'));
   const readyCli = cli && card?.kind === 'ready' ? cli : FIRST_RUN_CLIS.find((c) => ai.cards[c]?.kind === 'ready');
   const readyCard = readyCli ? ai.cards[readyCli] : undefined;
   /** A key that serves the app's steps: saved just now, or kept on this Mac before. */
   const keyId = keyReady ?? (view?.available && !readyCli ? view.keys.find((k) => k.set)?.id : undefined);
   const done = !view?.off && (!!readyCli || !!keyId);
+  /**
+   * The look has its answer: one program is ready (another's test call may still run, up to a minute
+   * and a half), or every program has answered, or the look failed. Until then «new books» waits.
+   */
+  const settled = done || (!view && !!ai.error) || (looked && !FIRST_RUN_CLIS.some((c) => ai.cards[c]?.kind === 'testing'));
   const wantsInstall = !!card && (card.kind === 'missing' || card.kind === 'silent' || card.kind === 'installing' || (card.kind === 'notFound' && card.waited === 'install'));
   const foundLine = !!card && leg?.by === 'install' && 'version' in card && !!card.version && (card.kind === 'signedOut' || card.kind === 'signingIn' || card.kind === 'testing'
     || card.kind === 'refused' || (card.kind === 'notFound' && card.waited === 'signIn') || card.kind === 'ready');
@@ -93,11 +98,15 @@ export function FirstRun({ info, onSetup, onForm, onLeave }: { info: DesktopInfo
       : t('aiSetup.say.readyNoPlan', { cli: name(readyCli) })}</p>
   ) : keyId ? <p className="okline" data-ready={keyId}>{ICONS.check}{t('aiSetup.say.keyReady', { provider: t(`aiSetup.key.${keyId}`) })}</p> : null;
   const ByHand = <button type="button" className="linkbtn" data-act="by-hand" onClick={onForm}>{t('desktop.flow.byHand')}</button>;
-  /** Under the choices: the AI as this Mac has it, a fact and one way on. Nothing while the look runs, nothing where it is switched off. */
+  /**
+   * Under the choices: the AI as this Mac has it, a fact and one way on. Nothing while the look runs,
+   * nothing where it is switched off. A look that failed says so (the error line below) instead of
+   * «none set up», and still leads to the AI step.
+   */
   const aiFoot = !settled || view?.off ? null : done ? <>{readyLine}{ByHand}</> : (
-    <p className="ailine" data-ai="none">
-      <span>{t(view?.noAi ? 'aiSetup.line.noAiKept' : 'aiSetup.line.none')}</span>
-      {view ? <button type="button" className="linkbtn" data-act="ai-setup" onClick={setUp}>{t('aiSetup.line.setUp')}</button> : null}
+    <p className="ailine" data-ai={view ? 'none' : 'unknown'}>
+      {view ? <span>{t(view.noAi ? 'aiSetup.line.noAiKept' : 'aiSetup.line.none')}</span> : null}
+      <button type="button" className="linkbtn" data-act="ai-setup" onClick={setUp}>{t('aiSetup.line.setUp')}</button>
     </p>
   );
 
@@ -123,7 +132,7 @@ export function FirstRun({ info, onSetup, onForm, onLeave }: { info: DesktopInfo
                     <div className="obind"><div className="obcard aiobcard">
                       {shownCards.map((c) => <CliCard key={c} cli={c} state={ai.cards[c]!} opens={view.opens} compact />)}
                     </div></div>
-                    <div className="obind"><KeyBlock view={view} onSave={ai.saveKey} onKept={setKeyReady} /></div>
+                    <div className="obind"><KeyBlock view={view} onSave={ai.saveKey} onKept={(id) => { wantsAi(); setKeyReady(id); }} /></div>
                     {!leg && !done ? <Answers>{FIRST_RUN_CLIS.map((c, i) => installButton(c, i === 0))}{NoAiButton}</Answers> : null}
                   </>
                 ) : null}
@@ -197,7 +206,7 @@ export function FirstRun({ info, onSetup, onForm, onLeave }: { info: DesktopInfo
             ) : null}
           </>
         )}
-        {ai.error && (view || stage === 'ai') ? <p className="warnline" role="alert">{ai.error}</p> : null}
+        {ai.error ? <p className="warnline" role="alert">{ai.error}</p> : null}
         <div ref={end} className="obend" />
       </div>
     </div>
@@ -208,8 +217,9 @@ export function FirstRun({ info, onSetup, onForm, onLeave }: { info: DesktopInfo
  * What the person wants, in plain choices: new books, books this app made, books from another
  * program (new books; the setup then asks for the old program and says what the move needs: nothing
  * is imported yet, and the answer says so),
- * or the demo first. `ai`: whether an AI answers on this Mac; undefined while the look still runs,
- * and «new books» then waits for it. With an AI the system's save panel asks where the books go
+ * or the demo first. `ai`: whether an AI answers on this Mac; undefined while the look still runs:
+ * «new books» then waits for it, says so, and offers the form as the way on without waiting; the
+ * other choices never wait. With an AI the system's save panel asks where the books go
  * and the setup conversation starts there; without one the form opens, which asks the same and
  * proposes the folder itself. `foot` stands under the choices; `ask` puts the question above them.
  */
@@ -264,24 +274,28 @@ function FolderStep({ info, ai, ask, foot, onSetup, onForm }: { info: DesktopInf
     if (dir) await run(async () => { const books = await api.desktop.open(dir); if (books.setup) onSetup(books.root); else location.assign('/'); });
   };
   const demo = () => run(async () => { await api.desktop.demo(); location.assign(DEMO_HOME); });
-  const stop = busy || waiting;
   return (
     <div className="obstep" data-step="folder">
       {ask ? <Ai><p>{t('aiSetup.folder.ask')}</p></Ai> : null}
       <Answers>
-        <button type="button" className="btn primary" data-answer="create" disabled={stop} onClick={() => void create()}>{t('aiSetup.folder.create')}<small>{t('aiSetup.folder.createHint')}</small></button>
-        {desktop ? <button type="button" className="btn" data-answer="open" disabled={stop} onClick={() => void open()}>{t('aiSetup.folder.open')}<small>{t('aiSetup.folder.openHint')}</small></button> : null}
-        <button type="button" className="btn" data-answer="switch" disabled={stop} onClick={() => setSwitching(true)}>{t('aiSetup.folder.switch')}<small>{t('aiSetup.folder.switchHint')}</small></button>
-        <button type="button" className="btn" data-answer="demo" disabled={stop} onClick={() => void demo()}>{t('aiSetup.folder.demo')}<small>{t('aiSetup.folder.demoHint')}</small></button>
+        <button type="button" className="btn primary" data-answer="create" disabled={busy || waiting} onClick={() => void create()}>{t('aiSetup.folder.create')}<small>{t('aiSetup.folder.createHint')}</small></button>
+        {desktop ? <button type="button" className="btn" data-answer="open" disabled={busy} onClick={() => void open()}>{t('aiSetup.folder.open')}<small>{t('aiSetup.folder.openHint')}</small></button> : null}
+        <button type="button" className="btn" data-answer="switch" disabled={busy} onClick={() => setSwitching(true)}>{t('aiSetup.folder.switch')}<small>{t('aiSetup.folder.switchHint')}</small></button>
+        <button type="button" className="btn" data-answer="demo" disabled={busy} onClick={() => void demo()}>{t('aiSetup.folder.demo')}<small>{t('aiSetup.folder.demoHint')}</small></button>
       </Answers>
       {switching ? (
         <>
           <Me text={t('aiSetup.folder.switch')} />
           <Ai><p>{t('aiSetup.folder.switchSay')}</p></Ai>
-          <Answers><button type="button" className="btn primary" data-answer="create-switch" disabled={stop} onClick={() => void create()}>{t('aiSetup.folder.create')}<small>{t('aiSetup.folder.createHint')}</small></button></Answers>
+          <Answers><button type="button" className="btn primary" data-answer="create-switch" disabled={busy || waiting} onClick={() => void create()}>{t('aiSetup.folder.create')}<small>{t('aiSetup.folder.createHint')}</small></button></Answers>
         </>
       ) : null}
-      {waiting ? <Ai><p className="aiwait"><span className="aispin" aria-hidden="true" />{t('aiSetup.looking')}</p></Ai> : null}
+      {waiting ? (
+        <div data-waiting="ai">
+          <Ai><p className="aiwait"><span className="aispin" aria-hidden="true" />{t('aiSetup.checking')}</p></Ai>
+          <Answers><button type="button" className="btn" data-act="by-hand" onClick={() => { setWaiting(false); onForm(); }}>{t('desktop.flow.byHand')}<small>{t('aiSetup.checkingSkip')}</small></button></Answers>
+        </div>
+      ) : null}
       {chosen ? <Ai><p>{t('aiSetup.folder.chosen')}</p><p className="obfolder mono">{chosen}</p></Ai> : null}
       {taken ? (
         <div data-taken={taken.look.holds}>

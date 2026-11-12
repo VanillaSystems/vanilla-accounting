@@ -24,6 +24,7 @@ import { textIn, type RunSummary } from '../../../workflows/model.js';
 import { ICONS } from '../icons.js';
 import type { AreaProps } from '../index.js';
 import { chfOf, linkFit, vatMisfit, type Ledger, type ReceiptView, vatChipOf } from './model.js';
+import { waitsForReading } from '../../../parsers/receipt-text.js';
 import { setUi, useUi, type Section } from './state.js';
 import { amountOf, at, bankOf, dayText, ledgerFor, listed, noneText, txLine } from './view.js';
 import { Kbd, accept, runAct } from './commands.js';
@@ -186,7 +187,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       )}
       {!v.locked && !v.links.some((ref) => l.txByRef.has(ref)) && r.filedPayment && <FiledPaymentNotice {...props} payment={r.filedPayment} open={open ? periodName(open) : ''} receipt={r.id} corrected={v.links.length > 0} />}
       {proc?.kind === 'stuck' && !v.none && !v.links.length && <StuckNotice proc={proc} nav={nav} view={view} />}
-      {aiOff && !busy && !v.none && !r.extractedText.trim() && (
+      {aiOff && !busy && !v.none && waitsForReading(r) && (
         <div className="notice aioffwait" data-testid="waits-ai-off">
           {I.dot}<span>{t('receipts.waitsAiOff')}</span>
           <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'company', section: 'ai' }, query: {} }); }}>{t('aiOff.toFirma')}</a>

@@ -1,16 +1,18 @@
 /**
  * A demo says that it is one (issue #343). While a demo is open (GET /api/workspace `demo`: told by
  * where the books lie, src/workspace/demo-copy.ts, never by the company's name) a quiet line along
- * the bottom names the made-up firm, says that nothing here is real, and in the Mac app leads back
- * to the person's own books. On its first opening in the Mac app, where a person comes to it from
+ * the bottom names the made-up firm, says that nothing here is real, and in the Mac app leads back:
+ * «Zu deiner Buchhaltung» when this Mac knows books of hers, else «Zur Startseite», which is where
+ * the link goes either way. On its first opening in the Mac app, where a person comes to it from
  * the start screen, a card says what the demo shows and where to look; «Verstanden» is remembered
  * in this browser, the line stays. Under `npm start` the demo was started by its name: the line only.
  * The line takes no click but its link's, so nothing under the page's bottom edge is out of reach.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AREAS } from '../areas/index.js';
 import { START_PATH, desktop } from '../desktop/bridge.js';
 import { t } from '../i18n/index.js';
+import { api } from '../lib/api.js';
 import type { AreaId } from './route.js';
 import { store, stored } from './storage.js';
 
@@ -23,11 +25,19 @@ const LOOK: ReadonlyArray<[AreaId, 'demo.intro.automation' | 'demo.intro.receipt
 export function Demo({ name, href, onGo }: { name: string; href(id: AreaId): string; onGo(id: AreaId): void }) {
   const [intro, setIntro] = useState(() => !!desktop && stored(SEEN) === null);
   const close = () => { store(SEEN, '1'); setIntro(false); };
+  /** Whether this Mac knows books other than a demo: the link back is named by what it finds there. */
+  const [own, setOwn] = useState(false);
+  useEffect(() => {
+    if (!desktop) return;
+    let live = true;
+    void api.desktop.info().then((i) => { if (live) setOwn(i.recent.some((b) => !b.demo && (!!b.name || !!b.setup))); }, () => undefined);
+    return () => { live = false; };
+  }, []);
   return (
     <>
       <div className="demobar" role="status" data-testid="demo-bar">
         <span>{t('demo.bar', { name })}</span>
-        {desktop ? <a href={START_PATH} data-act="demo-leave">{t('demo.toOwn')}</a> : null}
+        {desktop ? <a href={START_PATH} data-act="demo-leave" data-own={own}>{t(own ? 'demo.toOwn' : 'aiSetup.toStart')}</a> : null}
       </div>
       {intro ? (
         <aside className="demointro" data-testid="demo-intro" aria-label={t('demo.intro.title')}>
@@ -37,7 +47,7 @@ export function Demo({ name, href, onGo }: { name: string; href(id: AreaId): str
           <p>{t('demo.intro.look')}</p>
           <ul>
             {LOOK.map(([id, key]) => (
-              <li key={id}><a href={href(id)} onClick={(e) => { e.preventDefault(); onGo(id); }}>{AREAS[id].label()}</a>: {t(key)}</li>
+              <li key={id}><a href={href(id)} onClick={(e) => { e.preventDefault(); onGo(id); }}>{t('demo.intro.item', { area: AREAS[id].label(), what: t(key) })}</a></li>
             ))}
           </ul>
           <button type="button" className="btn" data-act="demo-intro-close" onClick={close}>{t('demo.intro.close')}</button>

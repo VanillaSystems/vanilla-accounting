@@ -120,6 +120,25 @@ export function textProves(r: Pick<Receipt, 'extractedText' | 'extractionMethod'
   return words >= 3 && (words >= 20 || amounts(text).length > 0);
 }
 
+/** The readings a model made: its text is what there is to read, however little. */
+export const MODEL_READ: ReadonlySet<Receipt['extractionMethod']> = new Set(['claude', 'claude-vision']);
+
+/** A text that proves nothing and that no model wrote: a local OCR's noise off a photo, a PDF's own few characters (#284). */
+export const noiseText = (r: Pick<Receipt, 'extractedText' | 'extractionMethod'>): boolean => !textProves(r) && !MODEL_READ.has(r.extractionMethod);
+
+/**
+ * The one answer to «does this receipt wait for the model's reading?», for every kind of firm: its
+ * text is empty (a photo, a scan, also after a model call that failed) or noise no model has read
+ * yet, and its date or amount is not there, so nobody entered them by hand either. A document set
+ * aside (noise, a duplicate, a statement) waits for nothing. The read step takes these up
+ * (`readsAgain` in src/intake/read.ts is the noise case outside filed quarters); Belege's line, the
+ * detail's notice and the list's state «unlesbar» all ask here (src/app/areas/receipts).
+ */
+export function waitsForReading(r: Pick<Receipt, 'extractedText' | 'extractionMethod' | 'date' | 'amount' | 'kind'>): boolean {
+  const unread = !(r.extractedText ?? '').trim() || noiseText(r);
+  return unread && (!r.date || r.amount == null) && r.kind !== 'noise' && r.kind !== 'duplicate' && r.kind !== 'statement';
+}
+
 /** «No Swiss VAT» read off a text that proves nothing: no evidence either way, so the VAT is not read (#284). A person's facts are hers. */
 export const unprovenNoVat = (r: Pick<Receipt, 'vatBy' | 'vatExtractedAt' | 'hasSwissVat' | 'vatSummary' | 'extractedText' | 'extractionMethod'>): boolean =>
   r.vatBy !== 'human' && r.vatExtractedAt != null && r.hasSwissVat === false && !r.vatSummary?.length && !textProves(r);

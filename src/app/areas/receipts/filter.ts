@@ -7,6 +7,7 @@ import type { Field, FieldWords, Option } from '../../shell/chips.js';
 import { rangeFields } from '../../shell/chips.js';
 import { RECEIPT_KINDS } from '../../../types/index.js';
 import { isUnreadable } from '../../../accounting/receipt-due.js';
+import { waitsForReading } from '../../../parsers/receipt-text.js';
 import { baseCurrency } from '../../../engines/index.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import type { PartnerIndex } from '../partners/data.js';
@@ -21,7 +22,8 @@ const STATE: Record<ReceiptState, (v: ReceiptView, l: Ledger) => boolean> = {
   open: (v) => !v.none && isOpen(v),
   noDate: (v) => !v.none && !v.date,
   needsYou: (v, l) => needsYou(v, l),
-  unreadable: (v) => !v.none && isUnreadable(v.r),
+  // Its VAT could not be read (#57), or nothing of it was read yet (a photo, a scan: the model's work, or by hand).
+  unreadable: (v) => !v.none && (isUnreadable(v.r) || waitsForReading(v.r)),
   notReceipt: (v) => v.none,
   quarantine: () => false,
 };

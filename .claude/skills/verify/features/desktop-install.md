@@ -37,7 +37,7 @@ picked (English on `vanilla-clean`).
 - `di-demo`: the demo says that it is one (#343). From the start screen or `[data-answer=demo]` it opens
   on `/automation`. `[data-testid=demo-bar]` along the bottom stays while it is open (`Demo: Muster Kaffee
   GmbH ist eine erfundene Firma. Nichts hier ist echt, du arbeitest in einer Kopie.`, `Zu deiner
-  Buchhaltung` `[data-act=demo-leave]` → `/start`). On its first opening `[data-testid=demo-intro]`
+  Buchhaltung`, or `Zur Startseite` when the Mac knows no other books, `[data-act=demo-leave]` → `/start`). On its first opening `[data-testid=demo-intro]`
   (`Das ist die Demo`, three links) lies over the lower left corner until `Verstanden`
   `[data-act=demo-intro-close]` (kept in localStorage `demoIntroSeen`): close it before clicking rows there.
 

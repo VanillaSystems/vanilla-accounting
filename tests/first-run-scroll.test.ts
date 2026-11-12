@@ -100,7 +100,30 @@ test('the first screen asks what the person wants; the AI is one line, its cards
     await page.click('[data-answer=no-ai]');
     await page.waitForSelector('[data-ai=none]', { timeout: 10_000 });
     assert.ok(await page.$('[data-answer=create]'), '«Ohne KI weiter» leads back to the choices');
-    assert.equal(JSON.parse(readFileSync(join(dir, 'ai.json'), 'utf8')).noAi, true, 'and is kept on this Mac');
+    const kept = () => JSON.parse(readFileSync(join(dir, 'ai.json'), 'utf8')).noAi;
+    assert.equal(kept(), true, 'and is kept on this Mac');
+    // The choice is saved in the background: the line follows once the server has answered.
+    await page.waitForFunction(() => /ohne KI weiter/.test((document.querySelector('[data-ai=none]') as HTMLElement | null)?.innerText ?? ''), { timeout: 10_000 }).catch(() => assert.fail('the line under the choices says «ohne KI weiter»'));
+    // Looking at the cards again and going back keeps her choice: only installing, signing in or a key takes it back.
+    await page.click('[data-act=ai-setup]');
+    await page.waitForSelector('.aicli[data-cli=claude]', { timeout: 20_000 });
+    await page.click('.obme .linkbtn');
+    await page.waitForSelector('[data-ai=none]', { timeout: 10_000 });
+    assert.equal(kept(), true, '«KI einrichten» and back leaves «Ohne KI weiter» as it was');
+
+    // A program whose test call takes long: «new books» says that it checks and offers the form; the other choices never wait.
+    writeFileSync(join(dir, 'slow-claude'), `#!/bin/sh\ncase "$1 $2" in "--version "*) echo "0.0.0 (slow)";; "auth status") echo '{"loggedIn":true}';; *) sleep 60;; esac\n`, { mode: 0o755 });
+    process.env.CLAUDE_BIN = join(dir, 'slow-claude');
+    await page.goto(`http://${host}/start`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    await page.waitForSelector('[data-answer=create]', { timeout: 60_000 });
+    await page.click('[data-answer=create]');
+    await page.waitForSelector('[data-waiting=ai] [data-act=by-hand]', { timeout: 20_000 });
+    for (const sel of ['[data-answer=open]', '[data-answer=switch]', '[data-answer=demo]']) assert.equal(await page.$eval(sel, (e) => (e as HTMLButtonElement).disabled), false, `${sel} does not wait for the AI check`);
+    await page.click('[data-waiting=ai] [data-act=by-hand]');
+    await page.waitForSelector('.st-form input[name=name]', { timeout: 10_000 });
+    process.env.CLAUDE_BIN = join(dir, 'no-such-claude');
+    await page.goto(`http://${host}/start`, { waitUntil: 'networkidle0', timeout: 60_000 });
+    await page.waitForSelector('[data-ai=none]', { timeout: 60_000 });
 
     // «Zur Startseite» on a fresh install shows the start screen and stays there.
     await page.click('[data-act=first-leave]');

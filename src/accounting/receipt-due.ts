@@ -33,15 +33,6 @@ export function isUnreadable(r: Pick<Receipt, 'kind' | 'vatBy' | 'hasSwissVat' |
 }
 
 /**
- * A receipt whose text no code could read (a photo, a scan) and whose date or amount nobody has
- * entered: reading it is the model's work, or the person's by hand. A document set aside (noise, a
- * duplicate, a statement) waits for nothing.
- */
-export function waitsForReading(r: Pick<Receipt, 'needsVisionReview' | 'date' | 'amount' | 'kind'>): boolean {
-  return !!r.needsVisionReview && (!r.date || r.amount == null) && r.kind !== 'noise' && r.kind !== 'duplicate' && r.kind !== 'statement';
-}
-
-/**
  * What the receipts linked to a payment say: none, at least one readable, only purchase documents
  * whose VAT could not be read, or (`short`, given the payment `tx`) part of a set: two or more
  * receipts in the payment's currency that add up to less than it paid out, by more than a
