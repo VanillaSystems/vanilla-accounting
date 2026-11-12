@@ -46,7 +46,11 @@ rows in tests/period-lock.test.ts).
   with `[data-testid=note-sale]`, a wage `3 Zahlungen wie diese` and `oder eine für alle 6 mit «Lohn» im Text`; facts under the
   lines are `[data-testid=note-<kind>]`, a named invoice `[data-testid=pays-invoice]`; the form appears only once
   `/api/rules/hand` answered, tests/by-hand-without-ai-form-ui.test.ts), `[data-testid=link-invoice]` on incoming payments,
-  `[data-testid=sale-without-vat]`, `[data-testid=payment-parts]` for a collective payment.
+  `[data-testid=sale-without-vat]`, `[data-testid=payment-parts]` for a collective payment. The bank's own fee row
+  (`type: 'bank-fee'`, «Kontoführung Q3» of the persona's statement) is booked by the run itself, with or without an AI:
+  `6940 / 1020` without a code, «von der App gebucht» with the reason `Gebühr der Bank laut Kontoauszug: auf 6940
+  Bankspesen, ohne MWST …` (#359); with 6940 missing from the chart it stays unbooked and its form shows
+  `[data-testid=note-bankChargesMissing]` («… aber dieses Konto fehlt im Kontenplan …»).
 - `bk-note`: `[data-testid=payment-note]` in `.paybar` (`Notiz`, or the note itself) opens `input.note`; ↵ or leaving
   the field saves (`PATCH /api/transactions/<ref>` remarks; an empty note removes it), Esc cancels. Toast `Notiz
   gespeichert` or `Notiz entfernt`, ⌘Z restores the old note. A payment of a filed quarter shows its note as text.

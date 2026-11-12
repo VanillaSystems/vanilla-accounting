@@ -14,15 +14,15 @@ transaction:
   account: "1020"
 date: 2026-09-30
 lines:
-  - { debit: "6940", credit: "1020", amount: 15, vatCode: I0, description: "Musterbank, Kontoführung Q3 2026" }
+  - { debit: "6940", credit: "1020", amount: 15, description: "Musterbank, Kontoführung Q3 2026" }
 ziffern: {}
 payable: 0
-rules: [pv-no-receipt]
+rules: [ev-exempt-bank-fees]
 law:
   - MWSTG Art. 21 Abs. 2 Ziff. 19 (banking and payment services are exempt)
 why: >
-  Banking services are exempt, so there is no MWST to deduct: I0. No receipt is needed beyond the
-  statement.
+  Banking services are exempt, so there is no MWST to deduct and the line carries no VAT code, as
+  code books the bank's own fee row (ev-exempt-bank-fees). No receipt is needed beyond the statement.
 pitfalls:
   - Card foreign-currency fees are bank fees too, not part of the purchase they came with.
 signals:

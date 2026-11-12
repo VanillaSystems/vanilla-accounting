@@ -17,7 +17,7 @@ steps:
           the fee is not part of the charge: Wise debits it as a movement of its own
           (FEE-CARD-…, «Wise Charges for: CARD-…»), and the charge's amount is without it.
           Book the whole charge on its expense, with no fee line (cls-separate-fee); the fee
-          is booked once, on its own movement, on the bank-fee account without VAT (I0)
+          is booked once, on its own movement, on the bank-fee account without a VAT code
         why: the fee named in the charge's text was split out of the charge and then booked again on its own movement
         source: decision 2026-10-21, owner
       - id: wise-split

@@ -196,7 +196,8 @@ It sets aside what is no receipt (terms and conditions, a newsletter, a second c
 
 A payment that needs a receipt is not booked until the receipt is there. It waits, and the app
 books it the moment you add the receipt. Money you received, the bank's own fees and transfers
-between your accounts need none.
+between your accounts need none. The bank's own fee for the account (Kontoführung) the app books
+by itself, on Bankspesen without VAT, with or without an AI; a rule of yours for it wins.
 
 **«Braucht dich»** is the group at the top of Belege with what only you can decide:
 

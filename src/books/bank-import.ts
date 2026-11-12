@@ -8,7 +8,7 @@
 import { accountOf, legOf, madeByHand } from '../workspace/money-accounts.js';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { assignUniqueRefs, statementSpan, transactionsOf, type CamtStatement } from '../providers/camt053/camt053.js';
+import { assignUniqueRefs, bankCodedFees, statementSpan, transactionsOf, type CamtStatement } from '../providers/camt053/camt053.js';
 import { statementPdf } from './statement-facts.js';
 import { confirmsYearEnd, keptReads, withReadBalances, withReadFacts, type KeptRead } from './pdf-reads.js';
 import type { BankStatement, BankTransaction, Index, JournalEntry, Mapping, Receipt, StatementClosingBalance } from '../types/index.js';
@@ -47,6 +47,19 @@ export function readTransactions(ws: Ws): BankFiles {
  * one. Written after the export was in the books it carries the export's ref (camt-writer.ts); read
  * before, its ref stays the payment's, so the bookings on it keep their payment.
  */
+/**
+ * Whether a payment is a fee row the bank itself coded as its charge for the account or for payments
+ * (bankCodedFees), read again from the bank's own exports in bank-statements/: the books keep no bank
+ * code (#359). A statement the app wrote from a PDF, a photo or a CSV carries no such code: none of
+ * its rows is one. A ref that assignUniqueRefs suffixed is matched by the bank's ref and the movement.
+ */
+export function bankCodedFee(ws: Ws): (tx: Pick<BankTransaction, 'bank' | 'ref' | 'date' | 'direction' | 'amount' | 'currency'>) => boolean {
+  const key = (t: Pick<BankTransaction, 'bank' | 'ref' | 'date' | 'direction' | 'amount' | 'currency'>) => [t.bank, t.ref.split('~')[0], t.date, t.direction, t.amount.toFixed(2), t.currency].join('|');
+  const keys = new Set<string>();
+  for (const f of readBankStatements(ws)) if (f.status === 'read' && sourceOf(f.statement) === 'export') for (const t of bankCodedFees(f.statement, f.account)) keys.add(key(t));
+  return (tx) => keys.has(key(tx));
+}
+
 export function transactionsOfFiles(files: StatementFile[]): BankTransaction[] {
   return canonical(files).out;
 }

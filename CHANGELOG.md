@@ -29,6 +29,15 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- The bank's own fee (#359): a row of a bank's camt.053 export that the bank itself coded as its
+  charge for the account or for payments («Kontoführung», a card's annual fee) is booked by the
+  app, with or without an AI, on Bankspesen (6940) without a VAT code; a fee paid back the other
+  way. A rule of the firm that matches the row still decides it. A row under the bank's name
+  without that code (a loan, interest) and a custody fee go to the AI or to you as before. A chart
+  without 6940 as an expense account leaves the row unbooked, and its form «Von Hand buchen» says
+  which account is missing. On upgrade: the next inbox run books every unbooked fee row of an open
+  period that the bank coded so; nothing already booked changes. Statements read from a PDF, a
+  photo or a CSV never mark a fee row, so those go on as before.
 - AI answers (#362): every message to the AI sidebar starts with what became of each rule the
   earlier answers drafted, rule by rule (kept and on, switched off or removed since, discarded,
   still a draft, or unknown), and of held changes, so it no longer says a kept rule is not kept.

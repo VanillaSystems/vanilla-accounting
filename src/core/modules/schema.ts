@@ -242,6 +242,8 @@ export interface SetupData {
     byClass: Record<string, { type: AccountType; line: string }> & { otherwise: { type: AccountType; line: string } };
   };
   owner: Record<string, { account: string; label: string }> & { otherwise: { account: string; label: string } };
+  /** The account the bank's own fee row is booked on by code, without a VAT code (src/booking/bank-fee.ts, #359); absent: such a row is left to a rule, the model or the person. */
+  bankCharges?: { account: string };
   answers: {
     /** «Auszahlungen eines Zahlungsanbieters: ja»: the accounts added, and the firm's own payout split when no rule names the provider. */
     payouts: { accounts: string[]; sales: { otherwise: string }; fees: { account: string; vat: string }; clearing: { account: string; name: string } };

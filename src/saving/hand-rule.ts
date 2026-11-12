@@ -13,6 +13,7 @@ import { loadClassifyContext, mappedReceipts, paymentFacts, ruleBookingLines, ru
 import { stableWords } from '../knowledge/gaps.js';
 import { paysOwner } from '../booking/receipt-wait.js';
 import { payoutWaitOf } from '../booking/providers.js';
+import { isOwnBankFee } from '../booking/bank-fee.js';
 import type { Counterparty } from '../knowledge/counterparties.js';
 import type { PaymentNature } from '../accounting/manual-booking.js';
 import type { BankTransaction } from '../types/index.js';
@@ -190,6 +191,11 @@ function natureOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, cont
   if (waits) {
     const key = waits.why === 'clearing' ? 'salesReport.noClearing' : waits.why === 'since' ? 'salesReport.noSince' : 'salesReport.gapPayout';
     return { kind: 'payoutWaits', key, params: { provider: waits.provider.name, file: homeOf('workspace', waits.provider.role, waits.provider.id), since: waits.provider.provider.since ?? '', account: waits.provider.provider.clearing ?? '' } };
+  }
+  // The bank's own fee row: on the bank-charges account, as code books it (#359), or what the chart lacks for it.
+  if (isOwnBankFee(tx, context.bankCoded)) {
+    const charges = context.bankCharges;
+    if (charges) return 'missing' in charges ? { kind: 'bankFee', missing: charges.missing } : { kind: 'bankFee', account: charges.account };
   }
   const own = new Set(context.bankAccounts.flatMap((a) => (a.iban ? [ibanOf(a.iban)] : [])));
   if (tx.counterpartyIban && own.has(ibanOf(tx.counterpartyIban))) return { kind: 'ownTransfer' };

@@ -30,7 +30,7 @@ export interface BookingLine { accountDebit: string; accountCredit: string; amou
  * account, the app's proposal for a sale without an invoice (saleProposal), a supplier's refund.
  */
 export interface DraftSource {
-  account?: { from: 'rule'; rule: string } | { from: 'precedent' | 'refund'; date: string } | { from: 'sales' | 'owner' | 'business' } | { from: 'invoice' | 'receivable'; number: string };
+  account?: { from: 'rule'; rule: string } | { from: 'precedent' | 'refund'; date: string } | { from: 'sales' | 'owner' | 'business' | 'bankFee' } | { from: 'invoice' | 'receivable'; number: string };
   vat?: { from: 'rule' | 'precedent' | 'receipt' | 'invoice' | 'netRate' | 'refund' } | { from: 'sale'; choice: SaleChoice };
 }
 
@@ -53,7 +53,9 @@ export type PaymentNature =
   | { kind: 'ownTransfer' }
   | { kind: 'owner'; account: string }
   | { kind: 'authority'; name: string }
-  | { kind: 'payoutWaits'; key: string; params: Record<string, string> };
+  | { kind: 'payoutWaits'; key: string; params: Record<string, string> }
+  /** The bank's own fee row (src/booking/bank-fee.ts): its account, or the one the firm's chart lacks. */
+  | { kind: 'bankFee'; account: string } | { kind: 'bankFee'; missing: { account: string; name: string } };
 
 /** What code knows beside the books when the form opens. */
 export interface DraftKnowledge {
@@ -90,6 +92,7 @@ export type DraftNote =
   | { kind: 'authority'; name: string }
   | { kind: 'supplierDocument' }
   | { kind: 'payoutWaits'; key: string; params: Record<string, string> }
+  | { kind: 'bankChargesMissing'; account: string; name: string }
   | { kind: 'chooseAccount' }
   | { kind: 'saleVat'; why: 'notRead' | 'noVat' }
   | { kind: 'ask'; question: string }
@@ -327,6 +330,12 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
       const [accountDebit, accountCredit] = moneyIn ? [own(l.against ?? ''), l.account] : [l.account, own(l.against ?? '')];
       return { accountDebit, accountCredit, amount: l.amount, vat: l.vat ?? '', description: text, source: { account: from, ...(l.vat && { vat: { from: 'rule' as const } }) }, ...(rule.tags && { tags: rule.tags }) };
     }));
+  }
+
+  // The bank's own fee row: the account code books it on, without a VAT code (#359); or no account, and the form says which one the chart lacks.
+  if (proposes && nature?.kind === 'bankFee') {
+    if ('missing' in nature) { notes.push({ kind: 'bankChargesMissing', ...nature.missing }); return result([place('', paid, '')]); }
+    return result([place(nature.account, paid, '', { account: { from: 'bankFee' } })]);
   }
 
   // Money for a cancelled invoice is the customer's, not a sale: the earlier sale's account and code would mislead.
