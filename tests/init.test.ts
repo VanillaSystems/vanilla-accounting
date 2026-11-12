@@ -171,6 +171,14 @@ test('a freelancer not registered for VAT and a firm on the net tax rate method 
   assert.deepEqual(ws.company.vat, { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei' }] });
   assert.equal(ws.filingLength, 'half');
 
+  // «we file no VAT returns» beside the method (#347): «no» to the registration, the basis and the period not asked.
+  const noVat = cli('init.ts', [...consultant(join(base, 'd'), envFile), '--vat-method', 'no-vat']);
+  assert.equal(noVat.code, 0, noVat.out);
+  assert.match(noVat.out, /booked gross, without VAT codes/);
+  const noVatWs = workspaceAt(join(base, 'd'));
+  assert.deepEqual(noVatWs.company.vat, { registered: false });
+  assert.equal(noVatWs.company.legalForm, 'GmbH');
+
   const agreed = cli('init.ts', [...consultant(join(base, 'c'), envFile), '--basis', 'agreed']);
   assert.equal(agreed.code, 0, agreed.out);
   assert.deepEqual(workspaceAt(join(base, 'c')).company.vat, { registered: true, method: 'effective', reporting: 'agreed', period: 'quarterly' });

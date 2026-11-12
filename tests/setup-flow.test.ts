@@ -17,6 +17,7 @@ import { draftSteps, newDraft, requestOf, withPatch, type DraftPatch, type Setup
 import { draftFile } from '../src/onboarding/draft-store.js';
 import { finishSetup, readProgress, setupView, startSetup } from '../src/onboarding/store.js';
 import { APP_FOLDER, MANIFEST_FILE, workspaceAt } from '../src/workspace/workspace.js';
+import { PRESETS, notRegistered } from '../src/workspace/setup.js';
 
 const NOW = '2026-10-23T09:00:00.000Z';
 const FIRM = { name: 'Flow Test GmbH', uid: 'CHE-153.004.184', owner: 'Erika Flow' };
@@ -68,6 +69,21 @@ test('a VAT method left over from «yes» does not reach the books after «no»'
     { step: 'question', key: 'vatRegistered', value: 'no' }, { step: 'banks', value: [{ bank: 'UBS', currency: 'CHF', account: '1020' }] });
   assert.equal(requestOf(d)?.answers.vatMethod, undefined);
 });
+
+test('«Wir rechnen keine MWST ab» is «nein» to the registration: the questions of a registered firm and its rates go, nothing else (#347)', () => {
+  const d = play(newDraft('de', NOW), { step: 'firm', value: FIRM }, { step: 'preset', value: 'trades' },
+    { step: 'question', key: 'vatRegistered', value: 'yes' }, { step: 'question', key: 'vatMethod', value: 'net-rate' }, { step: 'netRates', value: [{ rate: 4.5 }] },
+    // What the button beside the method and the basis sends: the same patch as «nein».
+    { step: 'question', key: 'vatRegistered', value: 'no' });
+  assert.equal(d.answers.vatRegistered, 'no');
+  for (const k of ['vatMethod', 'basis', 'period'] as const) assert.equal(d.answers[k], undefined, `${k} cleared`);
+  assert.equal(d.netRates, undefined, 'the rates go with the method');
+  assert.ok(at(d).id === 'banks', 'next: the bank, no VAT question left');
+  assert.equal(d.answers.legalForm, 'GmbH', 'the kind of firm stays a GmbH');
+  assert.deepEqual(notRegistered({ ...PRESETS.trades.answers }), { ...withoutVat(PRESETS.trades.answers), vatRegistered: 'no' }, 'one helper for the form, the conversation and the wizard');
+});
+
+const withoutVat = (a: Record<string, unknown>) => Object.fromEntries(Object.entries(a).filter(([k]) => !['vatMethod', 'basis', 'period'].includes(k)));
 
 // ─── The desktop server ──────────────────────────────────────────────────────
 
@@ -171,6 +187,31 @@ test('the conversation and the form write the same manifest; the conversation\'s
   finishSetup(ws, NOW);
   assert.equal(setupView(ws, empty).opensItself, false, 'after «Los geht\'s» the books open as books');
   assert.equal(setupView(workspaceAt(byHand), { ...empty, transactions: [{}] as never }).opensItself, false, 'books set up by the form never open the setup once in use');
+});
+
+test('a trades GmbH that files no VAT: the conversation and the form create the same unregistered GmbH, with its chart and owner account (#347)', async () => {
+  const { call } = await start();
+  const talked = join(home, 'Ohne MWST Gespräch');
+  await call('POST', '/api/desktop/setup', { root: talked, language: 'de' });
+  for (const patch of [
+    { step: 'firm', value: FIRM }, { step: 'preset', value: 'trades' },
+    { step: 'question', key: 'vatRegistered', value: 'yes' }, { step: 'question', key: 'vatMethod', value: 'effective' },
+    { step: 'question', key: 'vatRegistered', value: 'no' }, { step: 'banks', value: BANKS },
+  ] as DraftPatch[]) assert.equal((await call('PUT', '/api/desktop/setup', { root: talked, patch })).status, 200);
+  const created = await call('POST', '/api/desktop/setup/create', { root: talked });
+  assert.equal(created.status, 200, JSON.stringify(created.json));
+  const byHand = join(home, 'Ohne MWST Formular');
+  const form = await call('POST', '/api/desktop/create', { root: byHand, preset: 'trades', ...FIRM, language: 'de', answers: notRegistered({ ...PRESETS.trades.answers, vatMethod: 'effective', basis: 'received' }), banks: BANKS });
+  assert.equal(form.status, 200, JSON.stringify(form.json));
+  const manifest = (root: string) => readFileSync(join(root, APP_FOLDER, MANIFEST_FILE), 'utf8');
+  assert.equal(manifest(talked), manifest(byHand));
+  const ws = workspaceAt(talked);
+  assert.deepEqual(ws.company.vat, { registered: false });
+  assert.equal(ws.company.legalForm, 'GmbH');
+  assert.doesNotMatch(manifest(talked), /vatMethod|basis|period: quarterly/, 'no VAT answer of a registered firm in the profile');
+  const accounts = (JSON.parse(readFileSync(ws.paths.accounts, 'utf8')) as Array<{ number: string }>).map((a) => a.number);
+  for (const n of ['3000', '3400', '4000', '2451']) assert.ok(accounts.includes(n), `${n}: the trades GmbH's chart and the owner's current account`);
+  assert.ok(!accounts.includes('2850'), 'a GmbH has no Einzelfirma private account');
 });
 
 test('books that came into the folder of a setup are opened as they are, their setup untouched', async () => {

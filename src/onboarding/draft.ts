@@ -9,7 +9,7 @@
  * answered, so a setup broken off stands where it stood when the folder is opened again. Pure,
  * shared by the desktop server (src/onboarding/draft-store.ts) and the start screen.
  */
-import { PRESETS, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, asked, unsteered, usualPeriod, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
+import { PRESETS, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, asked, notRegistered, unsteered, usualPeriod, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
 import type { NetRate } from '../workspace/vat-setup.js';
 import type { BankSpec, SetupRequest } from '../workspace/create.js';
 import type { KnownBooks } from '../types/desktop.js';
@@ -221,6 +221,11 @@ function answer(d: SetupDraft, patch: DraftPatch): SetupDraft {
       if (patch.value === null) delete answers[patch.key]; else answers[patch.key] = patch.value;
       if (patch.key === 'period' && patch.value !== null && d.refusedPeriod) { const { refusedPeriod: _r, ...rest } = d; d = rest; }
       const hidden = patch.value === null && !!d.preset && d.preset !== 'custom' && !isVat(patch.key);
+      // Not registered, by «nein» or by the answer «we file no VAT returns» (#347): the questions of a registered firm and its rates go.
+      if (patch.key === 'vatRegistered' && patch.value === 'no') {
+        const { netRates: _rates, ...rest } = d;
+        return { ...rest, answers: notRegistered(answers as Partial<Answers>), ...(hidden ? { preset: 'custom' as const } : {}) };
+      }
       return { ...d, answers: answers as Partial<Answers>, ...(hidden ? { preset: 'custom' as const } : {}) };
     }
   }

@@ -148,6 +148,16 @@ test('«Später» on the opening says what it means and where it comes back; wit
   assert.equal(setupThread(answered({ opening: 'next' }), facts()).find((s) => s.id === 'opening')!.reply, undefined);
 });
 
+test('the VAT question in the books offers «Wir rechnen keine MWST ab», no «Weiss nicht»; an older «Weiss nicht» still shows; the summary says plainly what no VAT means (#347)', () => {
+  const vat = setupThread(answered({ company: 'fix' }), facts()).find((s) => s.id === 'vat')!;
+  assert.deepEqual(vat.choices.map((c) => c.value), ['none', 'effective', 'net-rate']);
+  assert.equal(vat.choices.find((c) => c.primary)?.value, 'effective', 'the primary is what the app has, nothing else');
+  const old = setupThread(answered({ company: 'fix', vat: 'unknown' }), facts()).find((s) => s.id === 'vat')!;
+  assert.ok(old.choices.some((c) => c.value === 'unknown'), 'an answer an older version kept keeps its words');
+  const sum = last(setupThread(answered({ opening: 'later', receipts: 'later' }), facts({ banks: IBAN, company: { ...facts().company, vat: NOT_REGISTERED } })));
+  assert.ok(sum.card?.kind === 'summary' && sum.card.items.some((i) => i.what.key === 'onboarding.sum.noVat'));
+});
+
 test('the VAT answer: the same as the app has says so, another asks for a change kept on its card, never written by the answer itself', () => {
   const p = answered({ company: 'ok', vat: 'effective' });
   assert.deepEqual(setupThread(p, facts()).find((s) => s.id === 'vat')!.reply, { lines: [{ key: 'onboarding.r.vatSame' }] });
@@ -275,7 +285,7 @@ test('every line a step can say has words in each language', async () => {
   for (const l of [sellsLine(['made', 'traded', 'services'])]) { keys.add(l.key); for (const p of Object.values(l.params ?? {})) if (typeof p === 'object' && 'list' in p) p.list.forEach((k) => keys.add(k)); }
   for (const k of ['ok', 'fix']) keys.add(`onboarding.q.company.${k}`);
   for (const k of ['first', 'statement', 'lead', 'go', 'title', 'open', 'more']) keys.add(`onboarding.summary.${k}`);
-  for (const k of ['onboarding.sum.firstMore', 'onboarding.sources.noAi', 'onboarding.state.notYet']) keys.add(k);
+  for (const k of ['onboarding.sum.firstMore', 'onboarding.sources.noAi', 'onboarding.state.notYet', 'onboarding.sum.noVat', 'onboarding.draft.noVat', 'desktop.q.noVat', 'desktop.q.noVat.hint']) keys.add(k);
   walk(vats.map(vatLine));
   for (const q of Object.keys(QUESTIONS)) keys.add(`onboarding.question.${q}`);
   for (const k of ['form', 'answer', 'app']) keys.add(`onboarding.origin.${k}`);

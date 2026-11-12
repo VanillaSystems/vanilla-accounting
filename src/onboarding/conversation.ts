@@ -185,7 +185,8 @@ export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
   if (firmAsked(p, 'vat') && !take({
     id: 'vat', topic: 'firm',
     say: [L('s.vat')],
-    choices: (['none', 'effective', 'net-rate', 'unknown'] as const).map((v) => choice('vat', v, { sub: true, primary: v === now })),
+    // No «Weiss nicht» (#347): the answer «we file no VAT returns» (`none`) is the third answer, as before the books; `unknown` stays only for an answer an older version kept.
+    choices: (['none', 'effective', 'net-rate', ...(vatAnswer === 'unknown' ? ['unknown' as const] : [])] as const).map((v) => choice('vat', v, { sub: true, primary: v === now })),
     reply: vatReply(),
   })) return steps;
 
@@ -270,7 +271,8 @@ function summaryOf(p: SetupProgress, f: SetupFacts): Extract<SetupCard, { kind: 
   const ibans = f.banks.filter((b) => b.iban).length;
   const items: Array<{ what: Line; origin: Origin }> = [
     { what: L('sum.company', { name: f.company.name }), origin: told },
-    { what: vatLine(v), origin: p.answers.vat?.kept ? 'answer' : told },
+    // Not registered: said plainly what follows (#347), not only «nicht eingetragen».
+    { what: v.registered ? vatLine(v) : L('sum.noVat'), origin: p.answers.vat?.kept ? 'answer' : told },
     ...(f.sells ? [{ what: sellsLine(f.sells.kinds), origin: p.answers.sells ? 'answer' as Origin : told }] : []),
     ...(f.opening.length ? [{ what: L('sum.opening', { n: f.opening.length }), origin: 'app' as Origin }] : []),
     ...(ibans ? [{ what: L('sum.banks', { n: ibans }), origin: told }] : []),

@@ -298,6 +298,20 @@ export const unsteered = (key: QuestionKey): boolean => (UNSTEERED as readonly s
 /** The answers without those of UNSTEERED. */
 export const withoutUnsteered = <A extends Partial<Record<QuestionKey, unknown>>>(a: A): A => Object.fromEntries(Object.entries(a).filter(([k]) => !unsteered(k as QuestionKey))) as A;
 
+/**
+ * the answer «we file no VAT returns» (#347): the third answer of the questions in UNSTEERED, for a person who
+ * stands before them and sees that the firm files no VAT returns. It answers no question of its own:
+ * it is «nein» to `vatRegistered`, given through `notRegistered`, the one way to an unregistered firm.
+ */
+export const NO_VAT = 'no-vat' as const;
+
+/** The answers of a firm not registered for VAT: «nein» to the registration, none of the questions only a registered firm gets. */
+export function notRegistered<A extends Partial<Record<QuestionKey, unknown>>>(answers: A): A {
+  const out: Partial<Record<QuestionKey, unknown>> = { ...answers, vatRegistered: 'no' };
+  for (const k of VAT_QUESTIONS) if (k !== 'vatRegistered') delete out[k];
+  return out as A;
+}
+
 /** Whether `key` has a line for a person who does not know the answer (`where`, #364): the UI says it as `desktop.q.<key>.where`. */
 export const hasWhere = (key: QuestionKey): boolean => (QUESTIONS[key] as QuestionSpec).where !== undefined;
 

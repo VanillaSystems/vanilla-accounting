@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BANKS, parseIban } from '../../workspace/banks.js';
-import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstMissing, hasWhere, firstUnsupported, optionOf, withoutUnsteered, type Answers, type Preset, type QuestionKey } from '../../workspace/setup.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstMissing, hasWhere, firstUnsupported, notRegistered, optionOf, unsteered, withoutUnsteered, NO_VAT, type Answers, type Preset, type QuestionKey } from '../../workspace/setup.js';
 import { parseUid } from '../../workspace/uid.js';
 import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
@@ -219,6 +219,8 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
     const next = multi ? (now.includes(value) ? now.filter((v) => v !== value) : [...now, value]) : value;
     // The reporting period follows the method (r5f-14): half-yearly on the net tax rate, quarterly on the effective one; the person may still change it.
     const period: Partial<Answers> = key === 'vatMethod' ? { period: value === 'net-rate' ? 'half-yearly' : 'quarterly' } : {};
+    // Not registered, by «nein» or by the answer «we file no VAT returns» (#347): the questions of a registered firm go.
+    if ((key === 'vatRegistered' && value === 'no') || value === NO_VAT) return { ...x, answers: notRegistered(x.answers) };
     return { ...x, answers: { ...x.answers, [key]: next, ...period } };
   });
   const [folderError, setFolderError] = useState('');
@@ -307,7 +309,9 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
                       {tData(`desktop.q.${key}.${o.value}`)}
                     </button>
                   ))}
+                  {unsteered(key) ? <button type="button" role="radio" aria-checked={false} data-answer={NO_VAT} onClick={() => pick(key, NO_VAT)}>{t('desktop.q.noVat')}</button> : null}
                 </div>
+                {unsteered(key) ? <p className="st-note" data-no-vat-hint>{t('desktop.q.noVat.hint')}</p> : null}
                 {notes.map((o) => (
                   <p key={o!.value} className={o!.unsupported ? 'st-stop' : 'st-note'}>{tData(`desktop.q.${key}.${o!.value}.${o!.unsupported ? 'unsupported' : 'caveat'}`)}</p>
                 ))}

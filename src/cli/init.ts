@@ -20,7 +20,7 @@ import { parseArgs } from 'node:util';
 import { BANKS, bankKind } from '../workspace/banks.js';
 import { SetupError, checkBank, checkPreset, createWorkspace, flagOf, type Bank, type Created } from '../workspace/create.js';
 import { suggestAccount } from '../workspace/scaffold.js';
-import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstUnsupported, optionOf, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
+import { NO_VAT, PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstUnsupported, notRegistered, optionOf, unsteered, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
 import type { NetRate } from '../workspace/vat-setup.js';
 import { parseUid } from '../workspace/uid.js';
 import { APP_ROOT, appFolderIn, appLanguages, workspaceAt } from '../workspace/workspace.js';
@@ -70,7 +70,8 @@ async function text(flag: string, prompt: string, check?: (v: string) => string 
 async function choose(key: QuestionKey, n: number, preset: Partial<Answers>): Promise<string[]> {
   const q = QUESTIONS[key];
   const multi = 'multi' in q;
-  const options = q.options as readonly { value: string; label: string }[];
+  // «we file no VAT returns» beside the method and the basis (#347): «no» to the registration, also as --vat-method no-vat.
+  const options = [...(q.options as readonly { value: string; label: string }[]), ...(unsteered(key) ? [{ value: NO_VAT, label: 'we file no VAT returns (not registered for VAT)' }] : [])];
   if (interactive) {
     console.log(`\n${n}/${QUESTION_ORDER.length} ${q.ask}\n    ${q.why}${'where' in q ? `\n    ${q.where}` : ''}`);
     console.log('    ' + options.map((o, i) => `${i + 1}) ${o.label}`).join('   ') + (multi ? '   (several: 1,2; none: -)' : ''));
@@ -97,6 +98,13 @@ async function askAnswers(preset: Preset): Promise<{ answers: Answers; netRates:
   for (const [i, key] of QUESTION_ORDER.entries()) {
     if (!asked(key, answers)) continue;
     const picked = await choose(key, i + 1, prefill);
+    if (picked[0] === NO_VAT) {
+      const unregistered = notRegistered(answers);
+      for (const k of Object.keys(answers)) delete answers[k];
+      Object.assign(answers, unregistered);
+      console.log(`    Note: ${optionOf('vatRegistered', 'no')!.caveat}`);
+      continue;
+    }
     answers[key] = 'multi' in QUESTIONS[key] ? picked : picked[0];
     for (const v of picked) {
       const option = optionOf(key, v);

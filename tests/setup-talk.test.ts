@@ -361,6 +361,19 @@ test('the questions that need accounting knowledge say where the answer stands a
   assert.match(de['desktop.q.start.why'], /Beides legt dieselben Bücher an/, 'what each answer changes');
 });
 
+test('the typed setup knows «we file no VAT returns» and takes it only from words that say so (#347)', async () => {
+  const prompt = talkPrompt(newDraft('de', NOW), 'weiss nöd, was heisst das?', [], 'CHF');
+  assert.match(prompt, /vatRegistered: "no" only when the person says the firm is not in the VAT register or files no VAT returns at all; never from loose words, never because they do not know/);
+  assert.match(prompt, /asks its accountant/);
+  // The threshold the hint names is the one of modules/ch/registration.yaml.
+  const yaml = readFileSync('modules/ch/registration.yaml', 'utf8');
+  const threshold = Number(/turnoverThreshold:\s*([\d.e]+)/.exec(yaml)![1]);
+  for (const lang of ['de', 'en', 'fr', 'it']) {
+    const m = (await import(`../src/app/i18n/locales/${lang}.js`) as { default: Locale }).default.messages as unknown as Record<string, string>;
+    assert.ok(m['desktop.q.noVat.hint'].replace(/[’']/g, '').includes(String(threshold)), `${lang}: the hint names CHF ${threshold}`);
+  }
+});
+
 test('«Weiss nicht» exists only where assuming does no harm, and never on a question that decides the VAT return', () => {
   const unsure = QUESTION_ORDER.filter((k) => unsureOf(k));
   assert.deepEqual(unsure, ['foreignCustomers', 'ownerPaysPrivately', 'payouts'], 'not imports: nothing offers the import accounts when such a payment comes');
