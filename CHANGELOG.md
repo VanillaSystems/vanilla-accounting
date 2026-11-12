@@ -14,6 +14,14 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Fixed
+
+- «Einrichtung» and the setup conversation before the books follow the newest turn as a chat
+  does: once the Claude Code check answers, the folder step's answers («Von anderer Software
+  übernehmen», «Erst die Demo ansehen», «Ohne KI einrichten») scroll into sight above the input
+  box instead of lying under it, where a click landed in the box (Mac app window 1440 × 900).
+  Smooth only without reduced motion.
+
 ## [0.4.0] - 2026-11-12
 
 The app learns the company and takes more of the quarter off you. Receipts and payments match
