@@ -3,6 +3,7 @@
  * workspace's onboarding.json; the AI's `setupTopic` change and its undo; the person's routes; and
  * the prompt that makes the AI the setup specialist. Each test names the wrong behaviour it catches.
  */
+import './support/demo-workspace.js';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';

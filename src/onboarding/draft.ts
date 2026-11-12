@@ -35,6 +35,11 @@ export interface SetupDraft {
   answers: Partial<Answers>;
   netRates?: NetRate[];
   banks?: BankSpec[];
+  /**
+   * The unusual filing period the words named and code did not take (src/onboarding/draft-talk.ts): said
+   * once; the model repeating it from the same earlier words raises nothing again. Gone once the period is answered.
+   */
+  refusedPeriod?: string;
   /** The answers the AI took from the person's own words (#145), shown «aus deiner Nachricht» until the person changes them. */
   fromText?: StepMark[];
 }
@@ -187,6 +192,7 @@ function answer(d: SetupDraft, patch: DraftPatch): SetupDraft {
     case 'question': {
       const answers = { ...d.answers } as Record<string, QuestionValue>;
       if (patch.value === null) delete answers[patch.key]; else answers[patch.key] = patch.value;
+      if (patch.key === 'period' && patch.value !== null && d.refusedPeriod) { const { refusedPeriod: _r, ...rest } = d; d = rest; }
       const hidden = patch.value === null && !!d.preset && d.preset !== 'custom' && !isVat(patch.key);
       return { ...d, answers: answers as Partial<Answers>, ...(hidden ? { preset: 'custom' as const } : {}) };
     }

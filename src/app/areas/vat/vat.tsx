@@ -120,10 +120,10 @@ function Return(props: Props) {
             <span>{t('vat.stateFiled')}</span>
             {corrections > 0 && <span className="warn"><span className="dot" aria-hidden="true" />{t('vat.correctionsSince', { n: corrections })}</span>}
           </>
+        ) : v.state.kind === 'open' && v.state.before ? (
+          <span data-testid="period-before">{v.state.before.first ? t('vat.stateBefore', { date: formatDate(v.state.before.first) }) : t('vat.stateBeforeEmpty')}</span>
         ) : v.state.kind === 'open' ? (
           <span className={v.state.overdue ? 'warn' : ''}>{t(v.state.overdue ? 'vat.stateOverdue' : 'vat.stateOpen', { date: formatDate(v.state.due) })}</span>
-        ) : v.state.kind === 'before' ? (
-          <span data-testid="period-before">{v.state.first ? t('vat.stateBefore', { date: formatDate(v.state.first) }) : t('vat.stateBeforeEmpty')}</span>
         ) : v.state.kind === 'running' ? (
           <span data-testid="period-running">{t('vat.stateRunning', { ends: formatDate(v.state.ends), from: formatDate(v.state.from) })}</span>
         ) : <span>{t('vat.stateOverview')}</span>}

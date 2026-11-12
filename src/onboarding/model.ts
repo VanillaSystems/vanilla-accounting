@@ -74,6 +74,16 @@ export type Answers = { [Q in QuestionId]?: Answer<Q> };
 export const kindsOfAnswer = (value: string): SalesKind[] => salesKinds(value.split('+'));
 export const sellsAnswer = (kinds: readonly SalesKind[]): AnswerValue<'sells'> => salesKinds(kinds).join('+') as AnswerValue<'sells'>;
 
+/**
+ * The words of a topic or a question as a stored turn names it. A conversation kept by an earlier
+ * version names topics and questions this one no longer has (`periods`, `history`, `start`, `filed`, …):
+ * those get one generic sentence, never a key the dictionary lacks, which would throw while the
+ * setup opens by itself (review of #352).
+ */
+export const topicWordsKey = (topic: unknown): string => (isSetupTopic(topic) ? `onboarding.topic.${topic}` : 'onboarding.topic.gone');
+export const questionWordsKey = (question: unknown): string => (isQuestion(question) ? `onboarding.question.${question}` : 'onboarding.question.gone');
+export const stateWordsKey = (state: unknown): string => `onboarding.state.${isTopicState(state) ? state : 'open'}`;
+
 export const isQuestion = (s: unknown): s is QuestionId => typeof s === 'string' && Object.hasOwn(QUESTIONS, s);
 export const isAnswerOf = <Q extends QuestionId>(q: Q, v: unknown): v is AnswerValue<Q> => (QUESTIONS[q] as readonly unknown[]).includes(v);
 

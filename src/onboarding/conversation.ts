@@ -113,7 +113,8 @@ export function topicStates(p: SetupProgress, f: SetupFacts): Record<SetupTopic,
     opening: f.opening.length ? 'done' : a.opening?.value === 'later' ? 'skipped' : 'open',
     bank: f.banks.some((b) => b.iban) ? 'done' : a.bank?.value === 'later' ? 'skipped' : 'open',
     receipts: f.sources.length ? 'done' : a.receipts?.value === 'later' ? 'skipped' : 'open',
-    knowledge: a.partners || !partners ? 'done' : 'open',
+    // Books without bookings have no partners to show yet: left for later, not done, so the topic never goes from done back to open.
+    knowledge: a.partners ? 'done' : partners && !p.ready ? 'open' : 'skipped',
   };
   return Object.fromEntries(SETUP_TOPICS.map((t) => {
     const marked = p.topics[t].state;
@@ -275,5 +276,12 @@ export const openStep = (steps: readonly SetupStep[]): SetupStep | undefined => 
 };
 
 
-/** When each step was asked: when the step before it was answered ('' for the first), so the AI's turns fall between them in the order they happened. */
-export const askedAt = (steps: readonly SetupStep[]): string[] => steps.map((_, i) => (i ? steps[i - 1].answer?.at ?? '' : ''));
+/**
+ * When each step was asked: when the step before it was answered ('' for the first), so the AI's turns
+ * fall between them in the order they happened; never after its own answer (a step put before it later,
+ * by «Etwas ändern», was answered after), so an answer always follows its question.
+ */
+export const askedAt = (steps: readonly SetupStep[]): string[] => steps.map((s, i) => {
+  const asked = i ? steps[i - 1].answer?.at ?? '' : '';
+  return s.answer && s.answer.at < asked ? s.answer.at : asked;
+});

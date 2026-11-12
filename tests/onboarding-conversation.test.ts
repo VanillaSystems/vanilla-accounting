@@ -4,11 +4,13 @@
  * words every step can say in each language, the answers over HTTP, and the AI's `setupAnswer`.
  * Each test names the wrong behaviour it catches.
  */
+import './support/demo-workspace.js';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync } from 'node:fs';
 import { setupThread, topicStates, typedChoice, askedAt, openStep, sellsLine, vatLine, type Line, type SetupStep } from '../src/onboarding/conversation.js';
-import { emptyProgress, parseProgress, settledCount, withAnswer, withTopic, QUESTIONS, SETUP_TOPICS, type Answer, type QuestionId, type SetupProgress } from '../src/onboarding/model.js';
+import { emptyProgress, parseProgress, questionWordsKey, settledCount, stateWordsKey, topicWordsKey, withAnswer, withTopic, QUESTIONS, SETUP_TOPICS, type Answer, type QuestionId, type SetupProgress } from '../src/onboarding/model.js';
+import { describedOr } from '../src/app/assistant/stored-change.js';
 import { partnerBins, type SetupFacts } from '../src/onboarding/facts.js';
 import { setupNote } from '../src/onboarding/prompt.js';
 import { readProgress } from '../src/onboarding/store.js';
@@ -77,13 +79,42 @@ test('only what the app cannot know is asked: no start day, no filed returns, no
   const withPartners = facts({ banks: IBAN, partners: { clear: [], mixed: [], rare: [{ id: 'x', name: 'X', n: 1 }], ruled: 0 } });
   assert.equal(last(setupThread(answered({ opening: 'later', receipts: 'later' }), withPartners)).id, 'partners');
   assert.equal(topicStates(emptyProgress(), withPartners).knowledge, 'open');
-  assert.equal(topicStates(emptyProgress(), f).knowledge, 'done');
+  assert.equal(topicStates(emptyProgress(), f).knowledge, 'skipped', 'nothing to show yet: left for later, not done');
+});
+
+test('the count never goes backwards: partners that appear with the first statement, after the setup ended, do not reopen a topic', () => {
+  const p = answered({ opening: 'later', receipts: 'later' });
+  const empty = facts({ banks: IBAN });
+  assert.equal(settledCount(topicStates(p, empty)), 5);
+  const booked = facts({ banks: IBAN, partners: { clear: [], mixed: [], rare: [{ id: 'x', name: 'X', n: 1 }], ruled: 0 } });
+  const ended = { ...p, ready: AT };
+  assert.equal(settledCount(topicStates(ended, booked)), 5, 'was 5 von 5, then 4 von 5 after the first statement');
+  assert.equal(topicStates(ended, booked).knowledge, 'skipped');
+  assert.equal(topicStates(answered({ partners: 'next' }, ended), booked).knowledge, 'done', 'seen: done');
+});
+
+test('a conversation stored by an earlier version names topics and questions this one no longer has: described in a generic sentence, never thrown', async () => {
+  // As 0.4.1 stored them in data/assistant/<id>.json: {"kind":"setupTopic","topic":"periods","state":"skipped"}, {"kind":"setupAnswer","question":"start","value":"year"}.
+  const stored = { topic: 'periods', state: 'skipped', question: 'start' };
+  const keys = [topicWordsKey(stored.topic), stateWordsKey(stored.state), questionWordsKey(stored.question), topicWordsKey('history'), questionWordsKey('filed'), stateWordsKey('paused'), 'assistant.c.unknown'];
+  assert.deepEqual(keys, ['onboarding.topic.gone', 'onboarding.state.skipped', 'onboarding.question.gone', 'onboarding.topic.gone', 'onboarding.question.gone', 'onboarding.state.open', 'assistant.c.unknown']);
+  assert.equal(topicWordsKey('bank'), 'onboarding.topic.bank');
+  assert.equal(questionWordsKey('opening'), 'onboarding.question.opening');
+  const dir = 'src/app/i18n/locales';
+  for (const f of readdirSync(dir).filter((x) => x.endsWith('.ts'))) {
+    const messages = (await import(`../${dir}/${f}`) as { default: Locale }).default.messages as Record<string, unknown>;
+    assert.deepEqual(keys.filter((k) => !(k in messages)), [], `${f} has the words`);
+    for (const gone of ['onboarding.topic.periods', 'onboarding.question.start']) assert.ok(!(gone in messages), `${gone} is the key 0.4.1 used and this version lacks: the lookup that threw`);
+  }
+  // Any other kind a later or earlier version stored: the sidebar's description falls back instead of throwing.
+  assert.deepEqual(describedOr<{ text: string }>(() => { throw new Error('Missing i18n key: onboarding.topic.periods'); }, () => ({ text: 'generic' })), { text: 'generic' });
+  assert.deepEqual(describedOr(() => ({ text: 'fine' }), () => ({ text: 'generic' })), { text: 'fine' });
 });
 
 test('the count moves with every answer: each topic the conversation is through counts, done or left for later', () => {
   const f = facts();
   const count = (p: SetupProgress) => settledCount(topicStates(p, f));
-  assert.equal(count(emptyProgress()), 2, 'the firm and the partners need nothing');
+  assert.equal(count(emptyProgress()), 2, 'the firm needs nothing; the partners come with the first bookings');
   assert.equal(count(answered({ opening: 'later' })), 3);
   assert.equal(count(answered({ opening: 'later', bank: 'later' })), 4);
   assert.equal(count(answered({ opening: 'later', bank: 'later', receipts: 'later' })), 5);
@@ -137,7 +168,8 @@ test('the summary says each fact once and where from, lists only what is still o
   assert.deepEqual(sum.card.open, [
     { topic: 'opening', state: 'skipped', go: { area: 'company', section: 'opening' } },
     { topic: 'receipts', state: 'skipped', go: { area: 'company', section: 'sources' } },
-  ], 'only what she left for later, each with its place');
+    { topic: 'knowledge', state: 'skipped', go: { area: 'company', section: 'rules' } },
+  ], 'only what is left for later, each with its place');
   assert.equal(sum.card.first.key, 'onboarding.sum.firstQuarter', 'the first step: the statement, from the first quarter not filed');
   const half = last(setupThread(p, facts({ banks: IBAN, company: { ...facts().company, vat: { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5 }] } } })));
   assert.equal(half.card?.kind === 'summary' && half.card.first.key, 'onboarding.sum.firstHalf');
@@ -145,6 +177,16 @@ test('the summary says each fact once and where from, lists only what is still o
   assert.equal(none.card?.kind === 'summary' && none.card.first.key, 'onboarding.sum.firstNone');
   const created = last(setupThread({ ...p, created: AT }, facts({ banks: IBAN })));
   assert.equal(created.card?.kind === 'summary' && created.card.items[0].origin, 'answer', 'books the conversation created: her own answers');
+});
+
+test('a firm that starts in the middle of the year is told what follows, and which balance the opening needs: never a July bank balance beside December figures', async () => {
+  const de = (await import('../src/app/i18n/locales/de.js') as { default: Locale }).default.messages as unknown as Record<string, string>;
+  for (const k of ['onboarding.sum.firstQuarter', 'onboarding.sum.firstHalf', 'onboarding.sum.firstNone']) {
+    assert.match(de[k], /Beginnst du mitten im Jahr, zeigen Bilanz und Erfolgsrechnung dieses Jahres nur/, k);
+    assert.match(de[k], /die Eröffnung bleibt per 1\. Januar/, k);
+  }
+  assert.match(de['onboarding.s.openingNone'], /auch den Stand des Bankkontos, aus der Bilanz per \{prev\}/);
+  assert.doesNotMatch(de['onboarding.s.openingNone'], /ersten Kontoauszug/, 'the first statement of a firm that starts in July shows July\'s balance, not the opening\'s');
 });
 
 test('partners sort into the prototype\'s bins: always the same way at least four times, booked in mixed ways, rare; a partner with a rule stays out', () => {
@@ -182,6 +224,11 @@ test('typed words that name exactly one answer pick it; anything else goes to th
 test('a step stands where it was asked: the AI\'s turns between two answers fall between their steps', () => {
   const steps = setupThread(answered({ company: 'ok', vat: 'effective' }), facts());
   assert.deepEqual(askedAt(steps), ['', '2026-10-21T09:00:00.000Z', '2026-10-21T09:01:00.000Z']);
+  // «Etwas ändern» clicked late: the VAT step is put before the opening, which was answered earlier. Its answer still follows its question.
+  const late = withAnswer(withAnswer(withAnswer(emptyProgress(), 'opening', { value: 'later', at: '2026-10-21T09:00:00.000Z' }), 'company', { value: 'fix', at: '2026-10-21T09:05:00.000Z' }), 'vat', { value: 'effective', at: '2026-10-21T09:06:00.000Z' });
+  const order = setupThread(late, facts());
+  assert.deepEqual(ids(order).slice(0, 3), ['company', 'vat', 'opening']);
+  order.forEach((s, i) => { if (s.answer) assert.ok(askedAt(order)[i] <= s.answer.at, `${s.id}: asked no later than answered`); });
 });
 
 test('every line a step can say has words in each language', async () => {

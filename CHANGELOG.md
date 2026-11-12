@@ -104,10 +104,11 @@ Two markers flag an entry you must read before you update:
   the kind of firm picked after them. Half-yearly returns on the effective method (quarterly on
   the Saldosteuersatz) are not taken from loose words: the app says what is usual.
 - Setup questions say the matter in plain words first, the term after it (Kontokorrent,
-  Eigenverbrauch, Durchlaufkonto, Standardkonten, Eröffnungssaldi); four of them have «Weiss
+  Eigenverbrauch, Durchlaufkonto, Standardkonten, Eröffnungssaldi); three of them have «Weiss
   nicht» with the answer the app then takes.
-- MWST: a period that ended before anything in the books is dated reads «vor der ersten Zahlung
-  in diesen Büchern», no longer «offen · fällig seit …».
+- MWST: a period that ended before anything in the books is dated reads «Keine Zahlungen oder
+  Buchungen in dieser Periode · die Bücher beginnen am …», no longer «offen · fällig seit …» in
+  the warning colour; «Abrechnung erstellen» stays.
 
 ## [0.4.1] - 2026-11-12
 

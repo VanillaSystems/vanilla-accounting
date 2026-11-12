@@ -65,9 +65,10 @@ interface QuestionSpec {
   /** Asked only when the answers so far say so; otherwise the answer is absent. */
   when?: (answers: Given) => boolean;
   /**
-   * «Weiss nicht» (#345): the answer the setup takes for a person who cannot say, where assuming it
-   * does no harm (an account more or less in the chart, asked again when such a payment comes).
-   * Not for a question that decides the VAT return.
+   * «Weiss nicht» (#345): the answer the setup takes for a person who cannot say, only where assuming
+   * it does no harm: an answer nothing books by (customers abroad), an account more in the chart (the
+   * owner's), or what the app asks again at the first such file (a provider's payout report). Not for a
+   * question that decides the VAT return, and not for imports: nothing offers the import accounts later.
    */
   unsure?: string;
 }
@@ -171,7 +172,6 @@ export const QUESTIONS = {
   imports: {
     ask: 'Do you import goods?',
     why: 'Imports come with customs and import VAT invoices from the courier, booked apart from the goods.',
-    unsure: 'no',
     options: [{ value: 'yes', label: 'yes' }, { value: 'no', label: 'no' }],
   },
   employees: {

@@ -102,13 +102,14 @@ export interface EntryLine extends VatLine {
 export type ReturnState =
   /** The period has not ended: no return yet, from the day after its end (r6f-33). */
   | { kind: 'running'; ends: IsoDate; from: IsoDate }
-  | { kind: 'open'; due: IsoDate; overdue: boolean }
   /**
-   * The period ended before anything in these books is dated (#345): a firm that began here with a
-   * later quarter filed this one elsewhere, so the page says where the books begin (`first`, absent
-   * for books with nothing dated yet) and calls no return due.
+   * `before`: the period ended before anything in these books is dated (#345). The page then says what
+   * the books hold («keine Zahlungen oder Buchungen in dieser Periode», and the day they begin, `first`,
+   * absent for books with nothing dated), not «fällig seit»: whether its return was filed elsewhere the
+   * books cannot know. The return can still be prepared: a firm whose first payment came in April owes a
+   * nil return for Q1.
    */
-  | { kind: 'before'; first?: IsoDate }
+  | { kind: 'open'; due: IsoDate; overdue: boolean; before?: { first?: IsoDate } }
   | { kind: 'filed' }
   /** A half year or a year: a sum of returns, no return of its own. */
   | { kind: 'overview' };
@@ -142,8 +143,7 @@ export function vatReturn(books: Index, key: string, today: IsoDate = localToday
   const state: ReturnState = !quarter ? { kind: 'overview' }
     : closed && range.to <= closed ? { kind: 'filed' }
     : range.to >= today ? { kind: 'running', ends: range.to, from: addDays(range.to, 1) }
-    : !closed && !(first && first <= range.to) ? { kind: 'before', ...(first ? { first } : {}) }
-    : { kind: 'open', due, overdue: due < today };
+    : { kind: 'open', due, overdue: due < today, ...(!closed && !(first && first <= range.to) ? { before: first ? { first } : {} } : {}) };
   const lines: Record<string, EntryLine[]> = {};
   for (const entry of entriesForReturn(entries, key, filing().length)) {
     const line = vat().vatLine(entry);

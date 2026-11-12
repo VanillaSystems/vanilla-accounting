@@ -74,7 +74,8 @@ Neither the AI nor the answer writes the setting.
 firm done unless a change is under way (after «Etwas ändern», until the VAT answer matches the
 settings or was «Weiss nicht», and the sales answer is what the profile keeps); opening done with
 opening balances for the open year; bank done with a bank account that has an IBAN; receipts done
-with a source switched on; knowledge done once the partners were seen, or when there are none.
+with a source switched on; knowledge done once the partners were seen, left for later while there
+are none or once the setup ended, so the count never goes backwards.
 «Später» leaves a topic for later. A topic the AI or a person marked keeps its mark unless the app
 sees it done. The rail shows these states; a click on a topic opens its place by hand.
 
@@ -82,8 +83,12 @@ sees it done. The rail shows these states; a click on a topic opens its place by
 opening balance (`booksOpen`, src/books/store.ts); the first period worked on is the one of the
 first payment (`booksOpenPeriod`). The summary says so as the first step: read in the statement from
 the first quarter (half year) not filed yet; what was before stays in the old program. MWST calls a
-period that ended before anything in the books is dated «vor der ersten Zahlung in diesen Büchern»,
-never «fällig» (`ReturnState` `before`, src/app/areas/vat/model.ts). Books that begin on a chosen
+period that ended before anything in the books is dated what the books hold, «Keine Zahlungen oder
+Buchungen in dieser Periode · die Bücher beginnen am …», not «fällig seit»; its return can still be
+prepared, since a firm whose first payment came in April owes a nil return for Q1 (`before` on the
+open `ReturnState`, src/app/areas/vat/model.ts). The opening is always per 1 January, from last
+year's balance sheet, the bank balance too; the summary says that a firm beginning mid-year sees
+only the quarters in these books in the year's reports. Books that begin on a chosen
 day of the year, with the quarters before held as filed elsewhere, do not exist: that needs a field
 in the books' format (see «Still missing»).
 

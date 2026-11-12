@@ -85,6 +85,10 @@ function stated(field: 'uid' | 'iban', value: string, words: readonly string[]):
   return wanted.length > 0 && said.some((w) => w.includes(wanted));
 }
 
+const plain = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+/** Whether `value` stands in `words` as written (case and spacing aside). */
+const said_in = (value: string, words: string) => plain(words).includes(plain(value));
+
 const LANGUAGE = { de: 'German', fr: 'French', it: 'Italian', en: 'English' } as const;
 
 const describe = (key: QuestionKey): string => {
@@ -181,7 +185,12 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
       refused.push({ step: 'firm', refusal: { reason: 'notStated', field: 'uid', detail: now.uid } });
       delete now.uid;
     }
-    const firm = { ...(d.firm ?? d.said), ...now };
+    // A name or an owner the app already holds (typed into the card, or said before) is replaced only by one that
+    // stands in the person's latest words, as a UID must: the model never renames a firm on its own.
+    const held = d.firm ?? d.said ?? {};
+    const latest = words.at(-1) ?? '';
+    for (const k of ['name', 'owner'] as const) if (now[k] && held[k] && now[k] !== held[k] && !said_in(now[k]!, latest)) delete now[k];
+    const firm = { ...held, ...now };
     const whole = !!(firm.name && firm.uid && firm.owner);
     const before = patches.length;
     if (whole) take('firm', { step: 'firm', value: firm });
@@ -222,14 +231,23 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
   }
   if (said && Object.keys(said).length && !draft.firm && !same(d.said, said)) draft = { ...draft, said };
   // A period the tax authority grants only on request is not taken from loose words: the question keeps its buttons, the usual one proposed.
+  // The answer that stood stays (a period the person clicked is theirs); the same value is refused once, not at every message.
   const odd = unusualPeriod(draft.answers);
+  let silenced = false;
   if (odd && draft.fromText?.includes('period') && (filled.includes('period') || filled.includes('vatMethod'))) {
-    draft = withPatch(draft, { step: 'question', key: 'period', value: null });
-    if (filled.includes('period')) filled.splice(filled.indexOf('period'), 1);
-    refused.push({ step: 'period', refusal: { reason: 'unusualPeriod', method: odd.method, value: odd.period, usual: odd.usual } });
+    const named = filled.includes('period');
+    const stood = named ? d.answers.period : undefined;
+    const answers = { ...draft.answers };
+    if (stood === undefined) delete answers.period; else answers.period = stood;
+    const marks: StepMark[] = [...(draft.fromText ?? []).filter((m) => m !== 'period'), ...(stood !== undefined && d.fromText?.includes('period') ? ['period' as const] : [])];
+    const { fromText: _marks, refusedPeriod: _was, ...rest } = draft;
+    draft = { ...rest, answers, ...(marks.length ? { fromText: marks } : {}), ...(stood === undefined ? { refusedPeriod: odd.period } : {}) };
+    if (named) filled.splice(filled.indexOf('period'), 1);
+    if (d.refusedPeriod === odd.period && stood === undefined) silenced = true;
+    else refused.push({ step: 'period', refusal: { reason: 'unusualPeriod', method: odd.method, value: odd.period, usual: odd.usual } });
   }
   // The model writes its words before code checks: beside a refusal they may claim what was not saved, so code's reasons stand alone.
-  return { draft, reply: { kind: 'read', say: refused.length ? '' : out.say, filled, refused, ...(draft.said ? { firm: draft.said } : {}) } };
+  return { draft, reply: { kind: 'read', say: refused.length || silenced ? '' : out.say, filled, refused, ...(draft.said ? { firm: draft.said } : {}) } };
 }
 
 export type Ask = (prompt: string, opts: AskOptions) => Promise<string>;

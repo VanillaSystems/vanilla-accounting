@@ -103,6 +103,7 @@ export function readDraft(root: string): SetupDraft | undefined {
   for (const [key, value] of Object.entries(answers)) replay({ step: 'question', key, value });
   if (raw.netRates) replay({ step: 'netRates', value: raw.netRates });
   if (raw.banks) replay({ step: 'banks', value: raw.banks });
+  if (typeof raw.refusedPeriod === 'string' && draft.answers.period === undefined) draft = { ...draft, refusedPeriod: raw.refusedPeriod };
   const marks = Array.isArray(raw.fromText) ? raw.fromText.filter(isStepMark) : [];
   return marks.length ? { ...draft, fromText: marks } : draft;
 }
