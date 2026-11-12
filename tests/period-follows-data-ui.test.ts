@@ -2,7 +2,7 @@
  * The period a page shows (F10, F17), in the real UI on a copy of the demo (filed through Q1 2026, its
  * newest payment on 30.09.2026): without a period in the link a page shows the newest data's quarter,
  * not the oldest unfiled one; one click on a quarter in the picker applies it, and the calendar's days
- * are there only after «Benutzerdefiniert»; MWST opens on the oldest return not filed that holds something
+ * are there only after «Benutzerdefiniert»; MWST opens on the oldest return not filed
  * (#341), and a later one names it as a fact, a link to it; an invoice issued while another quarter is shown stays in the list, in its own period; a
  * receipt opened while it is still read follows into its period once its date is known.
  */
@@ -50,7 +50,7 @@ test('pages open on the newest data, the picker applies a quarter in one click, 
     await page.waitForSelector('.pp [data-day]');
     await page.keyboard.press('Escape');
 
-    // MWST alone opens where the return's work is (#341): the oldest period not filed that holds something, here Q2.
+    // MWST alone opens where the return's work is (#341): the oldest return not filed, here Q2.
     await app.open('/vat');
     await page.waitForFunction(() => /Q2 2026/.test(document.querySelector<HTMLElement>('[data-testid=period-picker]')?.innerText ?? ''));
     assert.equal(await page.$('[data-testid=earlier-open]'), null, 'nothing earlier is open');

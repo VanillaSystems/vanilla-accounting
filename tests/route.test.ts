@@ -3,6 +3,7 @@
  * written back exactly as it was, other spellings redirect to the one canonical path, and every
  * old /<lang>/<period>/<tab>?… link redirects to the place it named.
  */
+import { OPEN_ITEMS } from '../src/app/areas/vat/model.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { formatLocation, isRedirect, parseLocation, type Location } from '../src/app/shell/route.js';
@@ -31,6 +32,7 @@ const CANONICAL = [
   '/journal?vat=I81',
   '/vat',
   '/vat/405?period=2026-Q3',
+  '/vat/open?period=2026-Q3',
   '/vat/codes',
   '/vat/codes/I81',
   '/vat/codes/-V81',
@@ -90,6 +92,8 @@ test('the routes the paths name', () => {
   assert.deepEqual(route('/payments/ZKB-4711'), { area: 'bank', payment: 'ZKB-4711' });
   assert.deepEqual(route('/bank/files/1021/camt053_2026-09.xml'), { area: 'bank', file: '1021/camt053_2026-09.xml' }, 'a statement file whole (#208)');
   assert.deepEqual(route('/vat/405'), { area: 'vat', ziffer: '405' });
+  // What is still open in a return's period (#341): a page of its own beside the return, not a Ziffer.
+  assert.deepEqual(route('/vat/open'), { area: 'vat', ziffer: OPEN_ITEMS });
   assert.deepEqual(route('/vat/codes/I81'), { area: 'codes', code: 'I81' });
   assert.deepEqual(route('/reports/balance/1021'), { area: 'reports', report: 'balance', account: '1021' });
   assert.deepEqual(route('/company/banks'), { area: 'company', section: 'banks' });

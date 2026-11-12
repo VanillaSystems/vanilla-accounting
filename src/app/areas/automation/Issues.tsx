@@ -56,10 +56,19 @@ function textOf(books: Index, i: PeriodIssue): string {
   }
 }
 
-/** The open issues of the days `from`–`to` with what the page has loaded (questions, bank accounts, order pages): the one source of the task's list and of the return page's line. */
+let lastIssues: { key: unknown[]; issues: PeriodIssue[] } | undefined;
+
+/**
+ * The open issues of the days `from`–`to` with what the page has loaded (questions, bank accounts,
+ * order pages): the one source of the task's list and of the return page's line. Computed once per
+ * books, questions and period: the return's list and its detail ask for the same and share it.
+ */
 export function usePeriodIssues(books: Index, from: string, to: string): PeriodIssue[] {
   const { questions } = useQuestions();
-  return periodIssues(books, questions, from, to, useWorkspace()?.bankAccounts ?? [], orderPagesNow());
+  const accounts = useWorkspace()?.bankAccounts;
+  const key = [books, questions, accounts, orderPagesNow(), from, to, localToday()];
+  if (!lastIssues || key.some((k, i) => k !== lastIssues!.key[i])) lastIssues = { key, issues: periodIssues(books, questions, from, to, accounts ?? [], orderPagesNow()) };
+  return lastIssues.issues;
 }
 
 /** The counts in words, a part per kind that has any: «11 Zahlungen noch nicht gebucht (8 davon warten auf ihren Beleg)», «2 Fragen offen», … */
@@ -75,7 +84,8 @@ export function issueWords(c: Pick<IssueCounts, 'unbooked' | 'waitingReceipt'> &
 /**
  * Said where the app would else say that nothing waits for the person (#341): no task is hers, yet
  * payments of a period not filed are not booked, most often because their receipt has not come. A
- * fact with its count and one link to them: the list of the oldest such period (on the return's
+ * fact with its count and one link to them (`lead`, «Keine Aufgabe wartet auf dich», only when every one
+ * of them waits for its receipt: the others are the person's work on Aufgaben): the list of the oldest such period (on the return's
  * page for a firm that files one, else among the payments). Nothing when every payment is booked.
  */
 export function UnbookedFact({ books, nav, lead, className }: { books: Index; nav: Pick<Nav, 'go'>; lead?: string; className?: string }) {
@@ -85,7 +95,7 @@ export function UnbookedFact({ books, nav, lead, className }: { books: Index; na
   const to: Location = chargesVat() && p ? { route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period: p } } : at({ area: 'bank', payment: open.first.ref }, open.first.date);
   return (
     <span className={className} data-testid="unbooked-fact">
-      {lead ? `${lead} ` : ''}{issueWords(open).join('')}.{' '}
+      {lead && open.unbooked === open.waitingReceipt ? `${lead} ` : ''}{issueWords(open).join('')}.{' '}
       <button type="button" className="golink" onClick={() => nav.go(to)}>{p ? t('issues.n.see', { period: periodName(p) }) : t('automation.home.open')}</button>
     </span>
   );

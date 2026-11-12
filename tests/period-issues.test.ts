@@ -8,7 +8,8 @@ import assert from 'node:assert/strict';
 import './support/jurisdiction.js';
 import type { BankTransaction, Index, Receipt } from '../src/types/index.js';
 import type { Question } from '../src/questions/model.js';
-import { countIssues, periodIssues, unbookedOpen } from '../src/app/areas/automation/period-issues.js';
+import { countIssues, periodIssues, receiptWaits, unbookedOpen } from '../src/app/areas/automation/period-issues.js';
+import { isPending, resultSentence, type VatReturn } from '../src/app/areas/vat/model.js';
 import { journalOf, unsettledAtFiling } from '../src/app/areas/journal/model.js';
 import { openWork } from '../src/server/open-work.js';
 import { tempWorkspace } from './support/workspace.js';
@@ -73,4 +74,29 @@ test('the counts beside a figure that is not final come from the same list, and 
   const open = unbookedOpen(held, []);
   assert.deepEqual([open.unbooked, open.waitingReceipt, open.first?.ref], [2, 1, 'SEP']);
   assert.deepEqual(unbookedOpen({ ...held, config: { closedThrough: '2026-12-31' } }, []), { unbooked: 0, waitingReceipt: 0 });
+});
+
+test('a result that is not final never reads as final, a zero included; an approved return stands (#341 review)', () => {
+  const q3 = (kind: 'open' | 'running' | 'filed') => ({ state: { kind }, period: { to: '2026-09-30' } }) as unknown as VatReturn;
+  assert.equal(isPending(q3('open'), books, 3), true);
+  assert.equal(isPending(q3('open'), books, 0), false, 'nothing open');
+  assert.equal(isPending(q3('filed'), books, 3), false);
+  const approved: Index = { ...books, config: { ...books.config, approvedReturn: { through: '2026-09-30' } as never } };
+  assert.equal(isPending(q3('open'), approved, 3), false, 'approved and locked: the figure stands, with the transfer instruction');
+  // The persona's case: the statement is in, nothing is booked, the result is 0.00.
+  assert.equal(resultSentence('500', 0, true, 'open', false), 'vat.xZeroPending');
+  assert.equal(resultSentence('510', 0, true, 'open', false), 'vat.xZeroPending');
+  assert.equal(resultSentence('500', 932.89, true, 'open', false), 'vat.x500Pending');
+  assert.equal(resultSentence('500', 932.89, true, 'open', true), 'vat.x500NetRatePending');
+  assert.equal(resultSentence('510', 364.41, true, 'running', false), 'vat.x510Pending');
+  assert.equal(resultSentence('500', 0, false, 'open', false), 'vat.x500NoneFile', 'a nil return is still due');
+  assert.equal(resultSentence('500', 0, false, 'running', false), 'vat.x500None');
+  assert.equal(resultSentence('510', 0, false, 'open', false), 'vat.x510None');
+  assert.equal(resultSentence('500', 932.89, false, 'open', false), undefined, 'final: the transfer instruction stands');
+});
+
+test('«wartet auf ihren Beleg» is one number: the payments receipt-due holds, whatever the page (#341 review)', () => {
+  const held: Index = { ...books, transactions: books.transactions.map((t) => (t.ref === 'SEP' || t.ref === 'PAID' ? { ...t, waitsForReceipt: { since: '2026-10-01' } } : t)) };
+  assert.deepEqual([...receiptWaits(held, [], '2026-10-05')], ['SEP'], 'PAID carries the mark but is booked: it waits for nothing');
+  assert.deepEqual([...receiptWaits(held, [], '2026-11-25')], ['SEP'], 'near its return it is a task on Aufgaben, and still counted as waiting for its receipt');
 });

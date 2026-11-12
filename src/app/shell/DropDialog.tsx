@@ -13,6 +13,8 @@ import { language, t, tWith } from '../i18n/index.js';
 import { dropStore, failedLine } from './drop-upload.js';
 import { datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, type DropSummary } from './drop-summary.js';
 import { isUnbooked } from '../areas/bank/model.js';
+import { receiptWaits } from '../areas/automation/period-issues.js';
+import { parsePeriod, filingKeyOf } from '../../accounting/periods.js';
 import { useQuestions } from '../questions/store.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { periodName } from '../lib/period-label.js';
@@ -352,7 +354,8 @@ function Summary({ sum, rows, books, go, receiptOf }: { sum: DropSummary; rows: 
   const paid = pays ? periodOf(rows.filter((r) => r.statement)) : undefined;
   const recs = sum.receipts;
   const filed = recs ? periodOf(rows.filter((r) => !r.statement)) : undefined;
-  const waits = pays ? pays.waitReceipt + pays.asked + pays.unbooked : 0;
+  // What is open is listed in the period of the oldest payment not booked, which need not be the one most payments are in.
+  const open = pays?.openFrom ? parsePeriod(filingKeyOf(pays.openFrom, filing().length), today) ?? undefined : undefined;
   if (!pays && !recs) return null;
   return (
     <div className="dsum" data-testid="drop-summary">
@@ -366,7 +369,7 @@ function Summary({ sum, rows, books, go, receiptOf }: { sum: DropSummary; rows: 
             pays.unbooked ? t('drop.sum.unbooked', { n: pays.unbooked }) : '',
           ].filter(Boolean).join(', ')}.{' '}
           {paid ? <button type="button" className="linkbtn" data-testid="drop-to-payments" onClick={() => go({ route: { area: 'bank' }, query: { period: paid } })}>{t('drop.sum.toPayments', { period: periodName(paid) })}</button> : null}
-          {paid && waits && chargesVat() ? <>{' · '}<button type="button" className="linkbtn" data-testid="drop-to-open" onClick={() => go({ route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period: paid } })}>{t('drop.sum.toOpen', { period: periodName(paid) })}</button></> : null}
+          {open && chargesVat() ? <>{' · '}<button type="button" className="linkbtn" data-testid="drop-to-open" onClick={() => go({ route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period: open } })}>{t('drop.sum.toOpen', { period: periodName(open) })}</button></> : null}
         </p>
       ) : null}
       {recs ? (
@@ -499,7 +502,9 @@ export function DropDialog({ onGo, onLanded, period, books, refresh }: { onGo(lo
   // Files still uploading or being taken count as not begun, so the bar does not fall back when they join.
   const coming = s.adding + rows.filter((r) => r.state === 'take').length;
   const pct = dropProgress([...taken.map((r, i) => doneOf(r, states[i], view)), ...Array<number>(coming).fill(0)]);
-  const sum = !working && taken.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptOf, questions) : undefined;
+  const sum = !working && taken.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? []), receiptOf, questions) : undefined;
+  // Only files the books hold already (#341): the window says that nothing new came in.
+  const nothingNew = !working && !taken.length && rows.length > 0 && rows.every((r) => (r.state === 'duplicate' && r.reason !== 'possible-duplicate') || !!r.readAs);
   const waits = !working && states.some((x) => x.kind === 'waits' || x.kind === 'stuck');
   // A receipt of a sealed quarter opens in that quarter, not in the open one (r9k-8).
   const go = (route: Route, date?: string) => { closeDrop(); onGo(date ? at(route, date) : { route, query: {} }); };
@@ -518,6 +523,7 @@ export function DropDialog({ onGo, onLanded, period, books, refresh }: { onGo(lo
             <p className="m">{t('drop.overall', { pct, done: finished, n: taken.length + coming })}</p>
           </div>
         ) : null}
+        {nothingNew ? <div className="dsum" data-testid="drop-nothing-new"><p>{t('drop.sum.nothing')}</p></div> : null}
         {sum ? <Summary sum={sum} rows={taken} books={books} receiptOf={receiptOf} go={(loc) => { closeDrop(); onGo(loc); }} /> : null}
         <div className="wftabs" role="tablist">
           {tabs.map((x) => {

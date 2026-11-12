@@ -70,10 +70,11 @@ test('a statement whose payments the page has not loaded yet counts by its last 
 test('the summary counts the drop\'s payments and receipts from the books', () => {
   const booked = new Set(payments.slice(0, 12).map((p) => p.ref));
   const questions = [{ id: 'q1', status: 'open', on: { kind: 'payment', id: 'p20' } }, { id: 'q2', status: 'closed', on: { kind: 'payment', id: 'p21' } }] as unknown as Question[];
-  const s = dropSummary(rows, books, (t) => !booked.has(t.ref), receiptOf as never, questions);
-  assert.deepEqual(s.payments, { n: 23, from: '2026-07-15', to: '2026-09-15', booked: 12, waitReceipt: 8, asked: 1, unbooked: 2 });
+  const held = new Set(payments.filter((p) => p.waitsForReceipt).map((p) => p.ref));
+  const s = dropSummary(rows, books, (t) => !booked.has(t.ref), held, receiptOf as never, questions);
+  assert.deepEqual(s.payments, { n: 23, from: '2026-07-15', to: '2026-09-15', booked: 12, waitReceipt: 8, asked: 1, unbooked: 2, openFrom: '2026-08-15' });
   assert.deepEqual(s.receipts, { n: 6, read: 5, matched: 2, unmatched: 3 });
-  assert.deepEqual(dropSummary([row('dup', { state: 'duplicate' })], books, () => true, receiptOf as never, []), {}, 'nothing taken: nothing to say');
+  assert.deepEqual(dropSummary([row('dup', { state: 'duplicate' })], books, () => true, new Set(), receiptOf as never, []), {}, 'nothing taken: no counts');
 });
 
 test('the bar moves with the part of the run that is done, not only with files at rest', () => {

@@ -5,7 +5,7 @@
  */
 import { Fragment, useEffect, useState } from 'react';
 import './vat.css';
-import { localToday, booksOpenPeriod, inPeriod, oldestUnfiledPeriod, type Period } from '../../../accounting/periods.js';
+import { localToday, booksOpenPeriod, inPeriod, type Period } from '../../../accounting/periods.js';
 import { salesWithoutVat } from '../../../accounting/sales-without-vat.js';
 import type { Index } from '../../../types/index.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
@@ -23,7 +23,7 @@ import {
   FORM_0535, OPEN_ITEMS, SECTIONS, amountOf, filedDiff, formAmount, rateOf, resultZiffer, sectionOf, shownZiffern, sumsOf, ratesRoundedApart, thresholdWatch, vatKeyOf, vatReturn, yearTurnover,
   type Section, type VatReturn,
 } from './model.js';
-import { correctionDiff, signed, useReturn, zifferLabel, headline } from './view.js';
+import { correctionDiff, signed, useReturn, zifferLabel, headline, isPending, notFiled } from './view.js';
 import { Go, entryAt } from './links.js';
 import { Detail } from './Detail.js';
 import { issueWords, usePeriodIssues } from '../automation/Issues.js';
@@ -79,15 +79,13 @@ function NotRegistered({ period, books, canEdit }: Props) {
   );
 }
 
-/** A return that is still worked on: its period ended or runs, and nothing of it is filed. */
-const notFiled = (v: VatReturn) => v.state.kind === 'open' || v.state.kind === 'running';
 
 function Return(props: Props) {
   const { route, period, books, nav, canEdit } = props;
   const { v, filed, key } = useReturn({ books, period });
   // What is still open in a return not filed: its figure is not final while any of it is (#341).
   const issues = countIssues(usePeriodIssues(books, v.period.from, v.period.to));
-  const pending = notFiled(v) && issues.total > 0;
+  const pending = isPending(v, books, issues.total);
   const [all, setAll] = useState(readAll);
   const rows = shownZiffern(v, filed, all);
   const ids = [...rows, ...(filed ? [FORM_0535] : [])];
@@ -96,7 +94,8 @@ function Return(props: Props) {
 
   // A list with no Ziffer selected selects the result; so does the 0535 of a quarter not filed (a
   // period switch keeps the Ziffer). A Ziffer the form does not have stays: the detail says so.
-  const noForm = (route.ziffer === FORM_0535 && v.state.kind !== 'filed') || (route.ziffer === OPEN_ITEMS && !pending);
+  // The open list belongs to a return still worked on; it stays while the stores load, also when it is empty (the detail says so).
+  const noForm = (route.ziffer === FORM_0535 && v.state.kind !== 'filed') || (route.ziffer === OPEN_ITEMS && !notFiled(v));
   useEffect(() => {
     if (!route.ziffer || noForm) nav.select({ area: 'vat', ziffer: resultZiffer(v) });
   }, [route.ziffer, noForm, v]);
@@ -233,8 +232,8 @@ export const vat: Area<RouteOf<'vat'>> = {
   Detail,
   legend,
   title: (r) => r.ziffer && (r.ziffer === FORM_0535 ? t('vat.form0535') : r.ziffer === OPEN_ITEMS ? t('vat.openItems') : t('vat.zifferN', { n: r.ziffer })),
-  // The return's work is in the oldest period not filed that holds a payment or a booking, not where the newest file is (#341).
-  home: (books, today) => (chargesVat() ? oldestUnfiledPeriod(books, today, filing().length) : undefined),
+  // The return's work is in the oldest return not filed, not where the newest file is dated (#341).
+  home: (books, today) => (chargesVat() ? booksOpenPeriod(books, today, filing().length) : undefined),
   keys(e, p) {
     const d = moveKey(e);
     if (d) {

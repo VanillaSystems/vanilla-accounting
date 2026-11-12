@@ -3,6 +3,7 @@
  * each. Every figure comes from the engine (vat().report, vat().vatLine) and entriesForReturn; this
  * file only arranges them.
  */
+import { lockedThrough } from '../../../books/lock-line.js';
 import type { Index, JournalEntry, QuarterKey, VatAdjustment } from '../../../types/index.js';
 import { entriesForReturn } from '../../../accounting/index.js';
 import { chfAmount } from '../../../accounting/ledger.js';
@@ -244,4 +245,30 @@ export function ratesRoundedApart(v: VatReturn): boolean {
   if (v.state.kind === 'overview') return false;
   const taxes = v.report.rates.map((r) => taxOfRow(r.row, formAmount(v, r.row.ziffer)) * 100);
   return Math.round(taxes.reduce((s, x) => s + x, 0)) !== taxes.reduce((s, x) => s + Math.round(x), 0);
+}
+
+/** A return that is still worked on: its period ended or runs, and nothing of it is filed. */
+export const notFiled = (v: VatReturn) => v.state.kind === 'open' || v.state.kind === 'running';
+
+/**
+ * Its figure is not final (#341): the return is still worked on, something of its period is open
+ * (`open`: the count of periodIssues), and it is not approved. An approved return waits to be filed
+ * with its books locked (lockedThrough): its figure stands, and so does what to do with it.
+ */
+export function isPending(v: VatReturn, books: Index, open: number): boolean {
+  const locked = lockedThrough(books.config);
+  return notFiled(v) && open > 0 && !(locked && locked >= v.period.to);
+}
+
+/**
+ * The sentence under the result (Ziffer 500 or 510), as its key; undefined where the result's own
+ * sentence stands (an amount that is final: transfer it, or it is paid back). Not final comes
+ * first: a result of 0.00 while payments of the period are not booked is no «nothing owed». A
+ * final zero says there is nothing to transfer, and for a period that ended, that its return is
+ * still to be filed (#341).
+ */
+export function resultSentence(n: '500' | '510', amount: number, pending: boolean, state: VatReturn['state']['kind'], netRate: boolean): 'vat.xZeroPending' | 'vat.x510Pending' | 'vat.x500NetRatePending' | 'vat.x500Pending' | 'vat.x510None' | 'vat.x500NoneFile' | 'vat.x500None' | undefined {
+  if (pending) return !amount ? 'vat.xZeroPending' : n === '510' ? 'vat.x510Pending' : netRate ? 'vat.x500NetRatePending' : 'vat.x500Pending';
+  if (!amount) return n === '510' ? 'vat.x510None' : state === 'open' ? 'vat.x500NoneFile' : 'vat.x500None';
+  return undefined;
 }

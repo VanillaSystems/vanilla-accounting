@@ -13,12 +13,14 @@ export interface DropSummary {
   /** The payments the drop's statements added to the books. */
   payments?: {
     n: number; from: IsoDate; to: IsoDate; booked: number;
-    /** Not booked: held until their receipt comes (issue #29). */
+    /** Not booked: held until their receipt comes or can be read (`held`, period-issues.ts receiptWaits). */
     waitReceipt: number;
     /** Not booked: an open question about them waits for an answer. */
     asked: number;
     /** Not booked for any other reason. */
     unbooked: number;
+    /** The day of the oldest one not booked: its period holds what is open. */
+    openFrom?: IsoDate;
   };
   /** The receipts the drop brought into the books: read to the end, and of those linked to a payment or not. */
   receipts?: { n: number; read: number; matched: number; unmatched: number };
@@ -78,25 +80,26 @@ export function landedPeriod(rows: readonly DropRow[], datesOf: DatesOf, current
 
 /**
  * The summary of a session's taken rows. `isUnbooked`: the books' own answer (bank/model.ts);
- * `receiptOf`: the receipt a row became, when the books hold it; `questions`: the open ones.
+ * `held`: the payments that wait for their receipt (receiptWaits); `receiptOf`: the receipt a row
+ * became, when the books hold it; `questions`: the open ones.
  */
 export function dropSummary(
   rows: readonly DropRow[], books: Pick<Index, 'transactions' | 'mappings'>, isUnbooked: (t: BankTransaction) => boolean,
-  receiptOf: (r: DropRow) => { id: string; location: 'staged' | 'archived' } | undefined, questions: readonly Question[],
+  held: ReadonlySet<string>, receiptOf: (r: DropRow) => { id: string; location: 'staged' | 'archived' } | undefined, questions: readonly Question[],
 ): DropSummary {
   const taken = rows.filter((r) => r.state === 'taken');
   const refs = new Set(taken.flatMap((r) => r.statement?.refs ?? []));
   const pays = books.transactions.filter((t) => refs.has(t.ref)).sort((a, b) => a.date.localeCompare(b.date));
   const asked = new Set(questions.filter((q) => q.status === 'open' && q.on.kind === 'payment').map((q) => q.on.id));
   const open = pays.filter(isUnbooked);
-  const waitReceipt = open.filter((t) => !asked.has(t.ref) && t.waitsForReceipt && !t.noReceiptNeeded).length;
+  const waitReceipt = open.filter((t) => !asked.has(t.ref) && held.has(t.ref)).length;
   const askedN = open.filter((t) => asked.has(t.ref)).length;
   const receipts = taken.filter((r) => !r.statement && !r.report).flatMap((r) => receiptOf(r) ?? []);
   const linked = new Set(books.mappings.map((m) => m.receiptId));
   const read = receipts.filter((r) => r.location === 'archived');
   const matched = read.filter((r) => linked.has(r.id)).length;
   return {
-    ...(pays.length ? { payments: { n: pays.length, from: pays[0].date, to: pays[pays.length - 1].date, booked: pays.length - open.length, waitReceipt, asked: askedN, unbooked: open.length - waitReceipt - askedN } } : {}),
+    ...(pays.length ? { payments: { n: pays.length, from: pays[0].date, to: pays[pays.length - 1].date, booked: pays.length - open.length, waitReceipt, asked: askedN, unbooked: open.length - waitReceipt - askedN, ...(open[0] ? { openFrom: open[0].date } : {}) } } : {}),
     ...(receipts.length ? { receipts: { n: receipts.length, read: read.length, matched, unmatched: read.length - matched } } : {}),
   };
 }

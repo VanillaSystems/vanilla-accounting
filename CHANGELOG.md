@@ -39,8 +39,8 @@ Two markers flag an entry you must read before you update:
   behind the window now goes to the period most of the files landed in. Before, the newest date
   among them decided: one till photo without a date, dated today, left the person in an empty
   quarter beside 23 payments. A receipt dated only by the day the phone took it decides nothing.
-- MWST opens on the oldest period not filed that holds a payment or a booking, when its link names
-  no period. Before, it opened where the newest file was dated, which could be the empty current
+- MWST opens on the oldest return not filed, when its link names no period: the period after the
+  filed ones, or for books that never filed the period of their first payment or booking. Before, it opened where the newest file was dated, which could be the empty current
   quarter while the quarter before held all the payments. The other pages still open on the newest
   data, and a later return still names the earlier one that is not filed.
 - A return's figure that is not final says so. While payments of the period are not booked, wait
@@ -48,11 +48,13 @@ Two markers flag an entry you must read before you update:
   one line with the counts («11 Zahlungen noch nicht gebucht (8 davon warten auf ihren Beleg) · 2
   Fragen offen»); a click opens the list «Noch offen in Q3» beside the return (`/vat/open`), the same
   list the review of the return shows. The result no longer tells to transfer the amount to the
-  ESTV while something is open, and an empty result says «Keine Steuer geschuldet: nichts zu
-  überweisen».
+  ESTV while something is open, also when it is 0.00 because nothing is booked yet. A final result
+  of 0.00 says «Keine Steuer geschuldet: nichts zu überweisen. Die Abrechnung ist trotzdem
+  einzureichen.» An approved return keeps its figure and its instruction.
 - Automatisierung no longer says «Nichts wartet auf dich» while payments of a period not filed are
   not booked: it says «Keine Aufgabe wartet auf dich. 11 Zahlungen noch nicht gebucht (alle warten
-  auf ihren Beleg)», with a link to them. The dock's card says the same; its number still counts
+  auf ihren Beleg)», with a link to them, and only the count when some of them are yours to book.
+  A drop of files the books hold already says that nothing new came in. The dock's card says the same; its number still counts
   tasks, stopped runs and questions only.
 - A workflow's drawing names what leads from step to step in words («Freigegeben», «Geändert»),
   and a task links to its run with «Lauf ansehen», not with the run's id.

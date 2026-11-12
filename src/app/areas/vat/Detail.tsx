@@ -17,7 +17,7 @@ import { FORM_0535, OPEN_ITEMS, byCode, correctedPeriod, filedDiff, formAmount, 
 import { effectLines, formSections } from './form0535.js';
 import { CodeLink, Go, entryAt } from './links.js';
 import { codeText } from '../codes/names.js';
-import { correctionDiff, signed, useReturn, zifferLabel } from './view.js';
+import { correctionDiff, isPending, resultSentence, signed, useReturn, zifferLabel } from './view.js';
 import { vat, vatSetup } from '../../../engines/index.js';
 import { methodOf } from '../../../workspace/vat-setup.js';
 import type { ReturnFigures } from '../../../engines/return.js';
@@ -54,12 +54,13 @@ function ReturnDetail(props: Props) {
 
 /**
  * What a Ziffer is, in one sentence. The result's sentence tells to transfer the amount only when
- * there is one and nothing of the period is open (`pending`); an empty result says so (#341).
+ * there is one and the figure is final; while something of the period is open (`pending`) it says
+ * that, also for a result of 0.00; a final zero says that the return is still to be filed (#341).
  */
 function explanation(v: VatReturn, n: string, amount: number, pending: boolean): string {
   const r = rateOf(v, n);
-  if ((n === '500' || n === '510') && !amount) return t(n === '500' ? 'vat.x500None' : 'vat.x510None');
-  if ((n === '500' || n === '510') && pending) return t(n === '510' ? 'vat.x510Pending' : methodOf(vatSetup()) === 'net-rate' ? 'vat.x500NetRatePending' : 'vat.x500Pending', { period: periodName(v.period) });
+  const key = n === '500' || n === '510' ? resultSentence(n, amount, pending, v.state.kind, methodOf(vatSetup()) === 'net-rate') : undefined;
+  if (key) return t(key, { period: periodName(v.period) });
   if (r?.row.kind === 'net-rate') return t('vat.xNetRate');
   if (r) return t(r.row.kind === 'supply' ? 'vat.xSupply' : 'vat.xAcquisition', { rate: r.row.rate });
   if (n === '500' && methodOf(vatSetup()) === 'net-rate') return t('vat.x500NetRate');
@@ -82,7 +83,7 @@ function Ziffer({ books, v, filed, n, amount, nav, period }: Props & { v: VatRet
   const turnover = r !== undefined && r.row.kind !== 'acquisition';
   const gross = Number(n) < 300 || turnover;
   const open = usePeriodIssues(books, v.period.from, v.period.to).length;
-  const pending = open > 0 && (v.state.kind === 'open' || v.state.kind === 'running');
+  const pending = isPending(v, books, open);
 
   return (
     <div className="detail-in" key={`${v.key}:${n}`}>
@@ -100,7 +101,7 @@ function Ziffer({ books, v, filed, n, amount, nav, period }: Props & { v: VatRet
         )}
         {lines.length > 0 && <span>{t('common.entryCount', { n: lines.length })}</span>}
       </div>
-      <p className="zexpl">{explanation(v, n, amount, pending)}{pending && (n === '500' || n === '510') && amount ? <> <a href="#" data-testid="vat-to-open" onClick={(e) => { e.preventDefault(); select(OPEN_ITEMS); }}>{t('issues.title', { period: periodName(v.period), n: open })}</a></> : null}</p>
+      <p className="zexpl">{explanation(v, n, amount, pending)}{pending && (n === '500' || n === '510') ? <> <span data-testid="vat-to-open"><Go to={{ route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period: v.period } }} nav={nav}>{t('issues.title', { period: periodName(v.period), n: open })}</Go></span></> : null}</p>
       {was != null && (
         <div className="notice warn">
           <span className="dot" aria-hidden="true" />

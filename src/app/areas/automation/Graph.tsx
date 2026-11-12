@@ -4,7 +4,7 @@
  * back edges routed below. A run's path is drawn hot when `path` is given.
  * A graph wider than its frame scrolls inside it, the hidden side faded so it never reads as cut off.
  */
-import { outcomeText } from './words.js';
+import { outcomeWord } from './words.js';
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { graphOf, END, textIn, type GraphNode, type WorkflowDecl } from '../../../workflows/model.js';
 import { language, t } from '../../i18n/index.js';
@@ -20,11 +20,11 @@ export function Graph({ workflow, selected, path, at, onSelect }: {
 }) {
   const g = graphOf(workflow);
   const hasBack = g.edges.some((e) => e.back);
-  /** Edges between the same two steps are drawn once, their outcomes in one label, in words where the app has them («In Ordnung · Limite erreicht, später»), never the raw id (#341). */
-  const lines = [...g.edges.map((e) => ({ ...e, outcome: outcomeText(e.outcome) })).reduce((m, e) => {
+  /** Edges between the same two steps are drawn once, their outcomes in one label, in words («In Ordnung · Limite erreicht, später»); an outcome the app has no word for is not named, never shown as its raw id (#341). */
+  const lines = [...g.edges.map((e) => ({ ...e, outcome: outcomeWord(e.outcome) })).reduce((m, e) => {
     const k = `${e.from}>${e.to}`;
     const seen = m.get(k);
-    m.set(k, seen ? { ...seen, outcome: `${seen.outcome} · ${e.outcome}` } : { ...e });
+    m.set(k, seen ? { ...seen, outcome: [seen.outcome, e.outcome].filter(Boolean).join(' · ') } : { ...e });
     return m;
   }, new Map<string, (typeof g.edges)[number]>()).values()];
   /** A label sits before its target, unless several edges enter that target: then beside its source. */
