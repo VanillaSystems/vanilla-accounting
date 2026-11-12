@@ -19,6 +19,7 @@ import { api, errorText, setupText } from '../lib/api.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import { ICONS } from '../areas/icons.js';
 import { useFollowEnd } from './follow-end.js';
+import { placeTurns } from './turn-place.js';
 
 /** As src/onboarding/draft-talk.ts MAX_TEXT: the server refuses a longer message. */
 const MAX_TALK = 4000;
@@ -106,8 +107,8 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
       settle({ error: errorText(e) });
     } finally { setBusy(false); }
   };
-  const shown = new Set<string>(steps.map(stepKey));
-  const turnsAt = (key: string | null) => turns.map((x, i) => ((key === null ? !shown.has(x.at) : x.at === key) ? <TurnView key={i} turn={x} /> : null));
+  const placed = placeTurns(steps.map((s) => ({ key: stepKey(s), open: !('answer' in s) })), turns);
+  const turnsAt = (key: string) => (placed.get(key) ?? []).map((i) => <TurnView key={i} turn={turns[i]} />);
   const change = (key: string, patch: DraftPatch, was: unknown) => { taken.current[key] = was; void send(patch); };
   const progress = view ? draftProgress(view.draft) : undefined;
   const create = async () => {
@@ -146,11 +147,10 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
         <Ai><p>{t('onboarding.draft.hello')}</p><p className="obfolder mono">{root}</p></Ai>
         {view && steps.map((step) => (
           <Fragment key={stepKey(step)}>
-            <Step step={step} draft={view.draft} currency={view.baseCurrency} root={root} busy={busy} send={send} change={change} taken={taken.current} onCreate={() => void create()} />
-            {turnsAt(stepKey(step))}
+            <Step step={step} draft={view.draft} currency={view.baseCurrency} root={root} busy={busy} send={send} change={change} taken={taken.current} onCreate={() => void create()} turns={turnsAt(stepKey(step))} />
           </Fragment>
         ))}
-        {turnsAt(null)}
+        {turnsAt('')}
         {error && <p className="warnline" role="alert">{error}</p>}
         <div ref={end} className="obend" />
       </div>
@@ -175,6 +175,8 @@ interface StepProps {
   change(key: string, patch: DraftPatch, was: unknown): void;
   taken: Partial<Record<string, unknown>>;
   onCreate(): void;
+  /** Her typed messages at this step (placeTurns): under its question, above its answer or its buttons. */
+  turns: ReactNode;
 }
 
 /** A typed message, and the AI's reply: what code saved from it, what it refused and why, the AI's own words. */
@@ -214,13 +216,14 @@ const Answer = ({ text, busy, fromText, assumed, onChange }: { text: string; bus
   </div>
 );
 
-function Step({ step, draft, currency, root, busy, send, change, taken, onCreate }: StepProps) {
+function Step({ step, draft, currency, root, busy, send, change, taken, onCreate, turns }: StepProps) {
   const marked = (m: StepMark) => !!draft.fromText?.includes(m);
   switch (step.id) {
     case 'firm': return (
       <div className="obstep" data-step="firm">
         {/* What her words said of the firm is kept in the draft (`said`): the card starts with it, and only what is empty is asked. */}
         <Ai><p>{t(!step.answer && draft.said && Object.keys(draft.said).length ? 'onboarding.draft.firmRest' : 'onboarding.draft.firm')}</p></Ai>
+        {turns}
         {step.answer
           ? <Answer text={firmLine(step.answer)} busy={busy} fromText={marked('firm')} onChange={() => change('firm', { step: 'firm', value: null }, step.answer)} />
           : <div className="obind"><FirmCard key={JSON.stringify(draft.said ?? {})} initial={(taken.firm as Firm | undefined) ?? draft.said} busy={busy} send={send} /></div>}
@@ -229,6 +232,7 @@ function Step({ step, draft, currency, root, busy, send, change, taken, onCreate
     case 'preset': return (
       <div className="obstep" data-step="preset">
         <Ai><p>{t('onboarding.draft.preset', { name: draft.firm?.name ?? '' })}</p></Ai>
+        {turns}
         {step.answer
           ? <Answer text={tData(`desktop.q.preset.${step.answer}`)} busy={busy} fromText={marked('preset')} onChange={() => change('preset', { step: 'preset', value: null }, step.answer)} />
           : (
@@ -238,10 +242,11 @@ function Step({ step, draft, currency, root, busy, send, change, taken, onCreate
           )}
       </div>
     );
-    case 'question': return <QuestionStep step={step} draft={draft} busy={busy} send={send} change={change} fromText={marked(step.key)} />;
+    case 'question': return <QuestionStep step={step} draft={draft} busy={busy} send={send} change={change} fromText={marked(step.key)} turns={turns} />;
     case 'netRates': return (
       <div className="obstep" data-step="netRates">
         <Ai><p>{t('onboarding.draft.netRates')}</p></Ai>
+        {turns}
         {step.answer
           ? <Answer text={ratesLine(step.answer)} busy={busy} fromText={marked('netRates')} onChange={() => change('netRates', { step: 'netRates', value: null }, step.answer)} />
           : <div className="obind"><RatesCard initial={taken.netRates as NetRate[] | undefined} busy={busy} send={send} /></div>}
@@ -250,16 +255,17 @@ function Step({ step, draft, currency, root, busy, send, change, taken, onCreate
     case 'banks': return (
       <div className="obstep" data-step="banks">
         <Ai><p>{t('onboarding.draft.banks')}</p></Ai>
+        {turns}
         {step.answer
           ? <Answer text={banksLine(step.answer)} busy={busy} fromText={marked('banks')} onChange={() => change('banks', { step: 'banks', value: null }, step.answer)} />
           : <div className="obind"><BanksCard initial={taken.banks as BankSpec[] | undefined} currency={currency} busy={busy} send={send} /></div>}
       </div>
     );
-    case 'review': return <Review draft={draft} root={root} busy={busy} change={change} onCreate={onCreate} />;
+    case 'review': return <Review draft={draft} root={root} busy={busy} change={change} onCreate={onCreate} turns={turns} />;
   }
 }
 
-function QuestionStep({ step, draft, busy, send, change, fromText }: { step: Extract<DraftStep, { id: 'question' }>; draft: SetupDraft; busy: boolean; send: Send; change: StepProps['change']; fromText: boolean }) {
+function QuestionStep({ step, draft, busy, send, change, fromText, turns }: { step: Extract<DraftStep, { id: 'question' }>; draft: SetupDraft; busy: boolean; send: Send; change: StepProps['change']; fromText: boolean; turns: ReactNode }) {
   const { key } = step;
   /** «Weiss nicht»: the answer the setup takes then, named on the button (src/workspace/setup.ts `unsure`). */
   const unsure = unsureOf(key);
@@ -273,6 +279,7 @@ function QuestionStep({ step, draft, busy, send, change, fromText }: { step: Ext
     <div className="obstep" data-step={key}>
       {key === 'vatRegistered' ? <Ai><p>{t('onboarding.draft.vat')}</p></Ai> : null}
       <Ai><p>{tData(`desktop.q.${key}.ask`)}</p><p className="obwhy">{tData(`desktop.q.${key}.why`)}</p>{hasWhere(key) ? <p className="obwhy obwhere" data-where>{tData(`desktop.q.${key}.where`)}</p> : null}</Ai>
+      {turns}
       {step.answer !== undefined ? (
         <>
           <Answer text={valueLabel(key, step.answer)} busy={busy} fromText={fromText} assumed={<Assumed draft={draft} k={key} />} onChange={() => change(key, { step: 'question', key, value: null }, step.answer)} />
@@ -365,7 +372,7 @@ function BanksCard({ initial, currency, busy, send }: { initial?: BankSpec[]; cu
 }
 
 /** Everything the books are created with, each with «Ändern»; the answers a preset gave are changed here. */
-function Review({ draft, root, busy, change, onCreate }: { draft: SetupDraft; root: string; busy: boolean; change: StepProps['change']; onCreate(): void }) {
+function Review({ draft, root, busy, change, onCreate, turns }: { draft: SetupDraft; root: string; busy: boolean; change: StepProps['change']; onCreate(): void; turns: ReactNode }) {
   const questions = QUESTION_ORDER.filter((k) => asked(k, draft.answers));
   const lang = LOCALES.find((l) => l.code === draft.language)?.name ?? draft.language;
   const marked = (m: StepMark) => !!draft.fromText?.includes(m);
@@ -376,6 +383,7 @@ function Review({ draft, root, busy, change, onCreate }: { draft: SetupDraft; ro
         {draft.fromText?.length ? <p className="obwhy">{t('onboarding.talk.reviewNote')}</p> : null}
         {assumedOf(draft).length ? <p className="obwhy" data-assumed-note>{draft.assumedBy ? t('onboarding.draft.assumedNote', { preset: tData(`desktop.q.preset.${draft.assumedBy}`) }) : t('onboarding.draft.assumedNoteBare')}</p> : null}
       </Ai>
+      {turns}
       <div className="obind">
         <div className="obcard">
           <h4>{t('onboarding.draft.reviewTitle')}</h4>
