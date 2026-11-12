@@ -492,7 +492,7 @@ export const api = {
   /** Several objects at once (#216): done, or with `preview` only shown; what changed, what was left out, and the undo. */
   batch: (body: BatchRequest) => request<BatchAnswer>('POST', '/api/batch', body),
   undoBatch: (batchId: string) => request<{ ok: true }>('POST', '/api/batch/undo', { batchId }),
-  handStart: (payment: string) => request<{ start: HandStart | null }>('GET', `/api/rules/hand?payment=${encodeURIComponent(payment)}`),
+  handStart: (payment: string, by?: 'text') => request<{ start: HandStart | null }>('GET', `/api/rules/hand?payment=${encodeURIComponent(payment)}${by ? `&by=${by}` : ''}`),
   draftHand: (rule: HandRule) => request<{ path: string }>('POST', '/api/rules/hand', rule),
   /** «Als Regel vorschlagen» on a sentence of a partner's notes, or «Regel anpassen» after it changed: the rule drafted for its card. */
   draftNoteRule: (c: NoteRuleCommand) => request<{ path: string }>('POST', '/api/rules/note', c),

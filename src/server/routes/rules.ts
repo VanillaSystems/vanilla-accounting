@@ -212,7 +212,7 @@ router.post('/api/rules/learn', async (req, res) => {
 });
 
 router.get('/api/rules/hand', (req, res) => {
-  res.json({ start: handStart(WS, String(req.query.payment ?? '')) ?? null });
+  res.json({ start: handStart(WS, String(req.query.payment ?? ''), req.query.by === 'text' ? 'text' : undefined) ?? null });
 });
 
 const MATCHES = new Set(['business', 'payer', 'text']);

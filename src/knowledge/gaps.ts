@@ -17,6 +17,22 @@ export interface Gap {
 
 const MONTHS = /\b(januar|februar|märz|april|mai|juni|juli|august|september|oktober|november|dezember|january|february|march|may|june|july|october|december)\b/g;
 
+/**
+ * The words of a payment's text that stay the same from one payment of its kind to the next (#344):
+ * without the month names and the words that carry digits (a year, an invoice or card number), the
+ * last run of what is left («Lohn Juli 2026» → «Lohn», «Karte 5412 Tanken» → «Tanken»). A rule
+ * drafted from one payment starts with them, so it holds for the others too. Empty: nothing stays.
+ */
+export function stableWords(text: string): string {
+  const runs: string[][] = [[]];
+  for (const raw of text.split(/\s+/)) {
+    const word = raw.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+    if (!word || /\d/.test(word) || new RegExp(`^${MONTHS.source}$`, 'i').test(word)) { if (runs.at(-1)!.length) runs.push([]); continue; }
+    runs.at(-1)!.push(word);
+  }
+  return runs.filter((r) => r.length).at(-1)?.join(' ') ?? '';
+}
+
 const groupKey = (merchant: string) =>
   merchant.toLowerCase().replace(MONTHS, ' ').replace(/[\d*#,.:;/()-]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40);
 

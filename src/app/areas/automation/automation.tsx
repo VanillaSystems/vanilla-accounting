@@ -31,7 +31,7 @@ import { PaymentBooking } from '../journal/PaymentBooking.js';
 import { bookedStates } from '../../../accounting/payment-entries.js';
 import { Parts } from '../bank/Parts.js';
 import { approvalWithheld, fileName, returnSummary } from './filing-summary.js';
-import { outcomeText, periodText, readsInWords } from './words.js';
+import { outcomeText, periodText, paymentWords, readsInWords } from './words.js';
 import type { PeriodReturn, PreparedXml, SealOutput } from '../../../workflows/filing.js';
 import type { ClearingCheck } from '../../../booking/providers.js';
 import { commandRefusalText, refusalPayment, refusalText } from '../../automation/refusal.js';
@@ -772,7 +772,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
             const withheld = approvalWithheld(task, q.questions, books);
             return (
               <div key={task.run} className={`wftask${task.run === run ? ' sel' : ''}`}>
-                <b>{fillTask(tx(task.title), task.item, readsInWords(task.reads))}{task.overdue ? <span className="wfpill st-stuck">{t('automation.overdue')}</span> : null}</b>
+                <b>{fillTask(tx(task.title), task.item, readsInWords(task.reads))}{paymentWords(books, task.item) ? <span className="wfpay" data-testid="task-payment"> · {paymentWords(books, task.item)}</span> : null}{task.overdue ? <span className="wfpill st-stuck">{t('automation.overdue')}</span> : null}</b>
                 <span className="m">{w ? label(w) : task.workflow} · {t('automation.since', { date: when(task.since) })}</span>
                 {task.why ? <p>{fillTask(tx(task.why), task.item, readsInWords(task.reads))}</p> : null}
                 {task.item.kind === 'transaction' ? (() => { const p = books.transactions.find((x) => x.ref === task.item.id); return p ? <Parts tx={p} /> : null; })() : null}
@@ -786,12 +786,6 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
                 ) : null}
                 {withheld?.questions ? <p className="warnline" data-testid="approval-withheld-questions">{t('automation.questionsOpen', { n: withheld.questions })}</p> : null}
                 {pay ? <PaymentBooking key={pay} books={books} nav={nav} payment={pay} onForm={(el) => forms.current.set(task.run, el)} onBooked={() => { if (task.outcomes.includes('booked')) send(task, 'booked'); }} /> : null}
-                {pay ? (
-                  <p className="m" data-testid="task-make-rule">
-                    {t('rules.hand.fromTask')}{' '}
-                    <Go to={{ route: { area: 'company', section: 'rules' }, query: { payment: pay } }} nav={nav} className="golink">{t('area.company')} › {t('company.rules')}</Go>
-                  </p>
-                ) : null}
                 {confirming === task.run ? (
                   <p className="warnline" data-testid="confirm-filed">
                     {t('automation.confirmFiled', { period: String((task.reads?.return as PeriodReturn | undefined)?.period ?? task.item.id) })}{' '}

@@ -5,6 +5,9 @@
 import { localToday, parsePeriod } from '../../../accounting/periods.js';
 import { periodName } from '../../lib/period-label.js';
 import { isKey, t } from '../../i18n/index.js';
+import type { Index } from '../../../types/index.js';
+import { payText, signed } from '../bank/model.js';
+import { fmt, formatDate } from '../../lib/utils.js';
 
 /** A filing period a step read or a task names («2026-H1»), as the person reads it («1. Semester 2026»); any other value as it is. */
 export function periodText(value: string): string {
@@ -22,3 +25,12 @@ export function readsInWords(reads: Record<string, unknown> | undefined): Record
 export const outcomeWord = (outcome: string): string => (isKey(`automation.outcome.${outcome}`) ? t(`automation.outcome.${outcome}` as 'automation.outcome.done') : '');
 
 export const outcomeText = (outcome: string): string => (isKey(`automation.outcome.${outcome}`) ? t(`automation.outcome.${outcome}` as 'automation.outcome.done') : outcome);
+
+/**
+ * The payment a task is about, named so that three tasks with one title read apart (#344): who,
+ * how much (money out with its minus), when. Empty for a task about anything else.
+ */
+export function paymentWords(books: Pick<Index, 'transactions'>, item: { kind: string; id: string }): string {
+  const p = item.kind === 'transaction' ? books.transactions.find((x) => x.ref === item.id) : undefined;
+  return p ? `${p.counterparty?.trim() || payText(p).name}, ${p.currency} ${fmt(signed(p))}, ${formatDate(p.date)}` : '';
+}

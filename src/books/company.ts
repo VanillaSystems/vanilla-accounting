@@ -13,6 +13,7 @@ import type { Seal } from './seal.js';
 import { sealsOf, type Books } from './store.js';
 import { bankBalances } from './year-close.js';
 import { appTime, appVersion } from '../version.js';
+import type { SalesDefaults } from '../workspace/sells.js';
 
 /** A quarter's seal file as checked against today's books. */
 export type SealView =
@@ -32,6 +33,14 @@ export interface CompanyInfo extends Pick<Workspace, 'company' | 'bankAccounts' 
   /** The build of the app serving these books (src/version.ts), and how old it is. */
   appVersion: string;
   appTime?: { at: string; kind: 'built' | 'committed' };
+  /**
+   * The firm's default accounts, as the setup's «Was verkauft ihr?» wrote them (src/workspace/sells.ts):
+   * the hand-booking form proposes them and its account fields list them first (#344). `sales` is the
+   * one a sale without a rule goes on (the one kind's, else the jurisdiction's for several kinds);
+   * `purchase` the first kind's that buys (none for a firm of services only). The API adds it
+   * (src/server/routes/config.ts): the jurisdiction's table is the engines'.
+   */
+  defaults?: { sales: string; purchase?: string; all: SalesDefaults };
   /** The company's repository keeps a history: a file deleted from the books stays in it (#228). */
   versioned?: true;
 }

@@ -7,10 +7,16 @@
  * anlegen»: picking one adds it to the chart as Firma › Kontenplan does, then picks it. `offer` is an
  * account a question proposes that the books lack: listed first, and named «wird angelegt» while
  * chosen, since answering the question adds it.
+ *
+ * `prefer` is the class the field's side takes first (a payment's other side: revenue for money in,
+ * expense for money out) and `defaults` the firm's default accounts: the list ranks by them, then by
+ * the name (rankAccounts, #344), and a word that names a class («Ertrag», «Aufwand») lists its accounts.
  */
 import { useId, useMemo, useRef, useState } from 'react';
 import { addAccount, addableAccounts, getAccounts, type Account } from '../../lib/accounts.js';
-import { filterAccounts } from '../../lib/account-filter.js';
+import { rankAccounts, type AccountContext } from '../../lib/account-filter.js';
+import { chart } from '../../../engines/index.js';
+import type { AccountType } from '../../../core/modules/schema.js';
 import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 
@@ -25,7 +31,10 @@ export function unknownAccountText(number: string): string {
   return standard ? t('journal.errAccountAddable', { account: number, name: standard.name }) : t('journal.errAccount', { account: number });
 }
 
-export function AccountField({ name, label, defaultValue, readOnly, onPick, offer }: { name: string; label: string; defaultValue: string; readOnly?: boolean; onPick?(): void; offer?: Account }) {
+/** The words a person types for a class, from the dictionary (one line of words per class). */
+const classWords = (): AccountContext<AccountType>['words'] => ({ revenue: t('accounts.words.revenue').split(/\s+/), expense: t('accounts.words.expense').split(/\s+/) });
+
+export function AccountField({ name, label, defaultValue, readOnly, onPick, offer, prefer, defaults }: { name: string; label: string; defaultValue: string; readOnly?: boolean; onPick?(): void; offer?: Account; prefer?: AccountType; defaults?: readonly string[] }) {
   const [value, setValue] = useState(defaultValue);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -36,9 +45,10 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick, offe
   const all = useMemo((): Option[] => {
     if (!open) return [];
     const query = value === defaultValue && !/\D/.test(value) ? '' : value;
-    const of = (accounts: readonly Account[], kind: Option['kind']) => filterAccounts(accounts, query).map((m) => ({ account: m.account, kind }));
+    const ctx: AccountContext<AccountType> = { typeOf: (n) => chart().typeOf(n), prefer, defaults, words: classWords() };
+    const of = (accounts: readonly Account[], kind: Option['kind']) => rankAccounts(accounts, query, ctx).map((m) => ({ account: m.account, kind }));
     return [...of(offered ? [offered] : [], 'offer'), ...of(getAccounts(), 'have'), ...(query ? of(addableAccounts(), 'add') : [])];
-  }, [open, value, defaultValue, offered]);
+  }, [open, value, defaultValue, offered, prefer, defaults]);
   const matches = all.slice(0, MAX_OPTIONS);
   const name0 = getAccounts().find((a) => a.number === value)?.name;
 

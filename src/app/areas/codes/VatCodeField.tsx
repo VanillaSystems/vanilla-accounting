@@ -8,7 +8,7 @@
 import { Fragment, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { lookupVatCode, parseRate } from '../../../accounting/vat-codes.js';
 import { t } from '../../i18n/index.js';
-import { pickGroups } from './model.js';
+import { fittingGroup, pickGroups } from './model.js';
 import { codeText } from './names.js';
 
 interface Props {
@@ -22,9 +22,11 @@ interface Props {
   hint?: ReactNode;
   onPick?(code: string): void;
   onValue?(value: string): void;
+  /** The line's accounts: the codes that fit them come first, and a typed rate lists only those (#344). */
+  accounts?: { debit: string; credit: string };
 }
 
-export function VatCodeField({ name, label, defaultValue = '', readOnly, placeholder, className, hint, onPick, onValue }: Props) {
+export function VatCodeField({ name, label, defaultValue = '', readOnly, placeholder, className, hint, onPick, onValue, accounts }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLUListElement>(null);
   const listId = useId();
@@ -34,7 +36,10 @@ export function VatCodeField({ name, label, defaultValue = '', readOnly, placeho
   // null while typing: the code typed in full, else the first.
   const [chosen, setChosen] = useState<number | null>(-1);
   const [, redraw] = useState(0);
-  const groups = useMemo(() => (open ? pickGroups(q ?? '', codeText) : []), [open, q]);
+  const fit = accounts ? fittingGroup(accounts.debit, accounts.credit) : undefined;
+  const groups = useMemo(() => (open ? pickGroups(q ?? '', codeText, fit) : []), [open, q, fit]);
+  // Only the codes of the account's kind are listed: the list says so, with the way to any other.
+  const onlyFit = !!fit && !!parseRate((q ?? '').trim()) && groups.length === 1 && groups[0].group === fit;
   const options = groups.flatMap((g) => g.options);
   const exact = options.findIndex((o) => o.code.toLowerCase() === (q ?? '').trim().toLowerCase());
   const active = chosen ?? Math.max(exact, 0);
@@ -43,7 +48,7 @@ export function VatCodeField({ name, label, defaultValue = '', readOnly, placeho
   function show() {
     setQ(null);
     setOpen(true);
-    const at = pickGroups('', codeText).flatMap((g) => g.options).findIndex((o) => o.code === input.current?.value);
+    const at = pickGroups('', codeText, fit).flatMap((g) => g.options).findIndex((o) => o.code === input.current?.value);
     setChosen(at);
     if (at >= 0) setTimeout(() => list.current?.querySelector(`[data-code="${CSS.escape(input.current!.value)}"]`)?.scrollIntoView({ block: 'nearest' }));
   }
@@ -126,6 +131,7 @@ export function VatCodeField({ name, label, defaultValue = '', readOnly, placeho
               })}
             </Fragment>
           ))}
+          {onlyFit && <li className="none vr" role="presentation" data-testid="vat-fit-only">{t('vatCodes.pick.fitOnly')}</li>}
           {!(q ?? '').trim().startsWith('-') && <li className="none vr" role="presentation">{t('vatCodes.pick.refund')}</li>}
         </ul>
       )}

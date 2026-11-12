@@ -14,12 +14,30 @@ import { isManualRef } from '../books/refs.js';
 import type { Tags } from '../books/tags.js';
 import type { Invoice } from '../invoices/model.js';
 import { namedInvoice } from '../invoices/rules.js';
+import { saleProposal, saleVatCode } from './sales-without-vat.js';
+import type { SaleChoice } from '../questions/model.js';
 
 /** One line of the booking, in the payment's currency. */
 export interface BookingLine { accountDebit: string; accountCredit: string; amount: number; vatCode?: string; description: string; tags?: Tags }
 
-/** What the form opens with. `vat` is as a person would type it: a code, or a receipt's rate («8.1») that becomes a code once the accounts are known. */
-export interface DraftLine { accountDebit: string; accountCredit: string; amount: number; vat: string; description: string }
+/**
+ * Where a proposed account or VAT code of a line comes from, said beside it in a few words (#344):
+ * a company rule, the business's last booking, the linked receipt, the firm's default account for
+ * sales or purchases, the app's proposal for a sale without an invoice (saleProposal).
+ */
+export interface DraftSource {
+  account?: { from: 'rule'; rule: string } | { from: 'precedent'; date: string } | { from: 'sales' | 'purchase' };
+  vat?: { from: 'rule' | 'precedent' | 'receipt' } | { from: 'sale'; choice: SaleChoice };
+}
+
+/** What the form opens with. `vat` is as a person would type it: a code, or a receipt's rate («8.1») that becomes a code once the accounts are known. `source`: what of it is a proposal, and from where. */
+export interface DraftLine { accountDebit: string; accountCredit: string; amount: number; vat: string; description: string; source?: DraftSource }
+
+/** What code knows beside the books when the form opens: the firm's default accounts (the setup's), and the company rule that decides the payment with the lines it would book. */
+export interface DraftKnowledge {
+  defaults?: { sales?: string; purchase?: string };
+  rule?: { id: string; lines: ReadonlyArray<{ account: string; vat?: string; amount: number; against?: string }> };
+}
 
 export interface BookingDraft {
   ref: string;
@@ -89,11 +107,17 @@ function withoutReceipt(code: string | undefined): string {
 
 /**
  * The booking a person starts from, by rules only: the bank on its side, the amount of the payment,
- * the account of the vendor's last booking, the receipt's VAT rate as its code (codeForRate), and
- * a line per rate when the receipt states several that add up to the payment. Undefined when no
- * payment has the ref.
+ * the receipt's VAT rate as its code (codeForRate), a line per rate when the receipt states several
+ * that add up to the payment, and the other side proposed from what code knows, in this order (#344):
+ * the company rule that decides the payment (its lines as it would book them), the account of the
+ * business's last booking, with a linked receipt on money out the firm's default purchase account,
+ * on money in the firm's default revenue account with the code of a sale without an invoice
+ * (saleProposal: the question the app asks about such a sale, never a second one). Each proposal
+ * names its source (DraftLine.source); nothing is booked before the person's click. No input tax
+ * without a receipt that shows it: a rate comes from the receipt alone. Undefined when no payment
+ * has the ref.
  */
-export function bookingDraft(books: Books, ref: string, accounts: readonly LedgerBankAccount[], invoices?: readonly Invoice[]): BookingDraft | undefined {
+export function bookingDraft(books: Books, ref: string, accounts: readonly LedgerBankAccount[], invoices?: readonly Invoice[], known: DraftKnowledge = {}): BookingDraft | undefined {
   const tx = books.transactions.find((t) => t.ref === ref);
   if (!tx) return undefined;
   const named = invoices && tx.direction === 'CRDT' ? namedInvoice(tx, invoices) : undefined;
@@ -108,21 +132,44 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   // Money for a cancelled invoice is the customer's, not a sale: the earlier sale's account and code would mislead.
   const precedent = !cancelled && bank ? precedentOf(books, tx, bank, new Set(accounts.map((a) => a.account))) : undefined;
   const text = receipts.find((r) => r.description)?.description ?? tx.description;
+  const moneyIn = bank?.side === 'accountDebit';
+  const known0 = (a: string | undefined) => (a && chart().typeOf(a) ? a : undefined);
+  // The other side: the business's last booking, else the firm's default account (money in: revenue; money out with a receipt: purchases).
+  const other: { account: string; source?: NonNullable<DraftSource['account']> } = precedent ? { account: precedent.account!, source: { from: 'precedent', date: precedent.entry.date } }
+    : !bank || cancelled ? { account: '' }
+      : moneyIn && known0(known.defaults?.sales) ? { account: known.defaults!.sales!, source: { from: 'sales' } }
+        : !moneyIn && receipts.length && known0(known.defaults?.purchase) ? { account: known.defaults!.purchase!, source: { from: 'purchase' } }
+          : { account: '' };
   const line = (amount: number, rate?: number): DraftLine => {
-    const accountDebit = bank?.side === 'accountDebit' ? bank.account : precedent?.account ?? '';
-    const accountCredit = bank?.side === 'accountCredit' ? bank.account : precedent?.account ?? '';
+    const accountDebit = bank?.side === 'accountDebit' ? bank.account : other.account;
+    const accountCredit = bank?.side === 'accountCredit' ? bank.account : other.account;
     // A firm without input tax has no code for a receipt's rate (r8f-50): the field stays empty instead of a rate nothing resolves.
-    const vat = rate === undefined ? (receipts.length ? '' : withoutReceipt(precedent?.vatCode)) : withoutInputTax() ? '' : codeForRate(rate, accountDebit, accountCredit) ?? String(rate);
-    return { accountDebit, accountCredit, amount, vat, description: text };
+    const fromReceipt = rate === undefined || withoutInputTax() ? undefined : codeForRate(rate, accountDebit, accountCredit) ?? String(rate);
+    const fromPrecedent = rate === undefined && !receipts.length ? withoutReceipt(precedent?.vatCode) : '';
+    // A sale on the default revenue account without a document: the code the app proposes for it (domestic at the normal rate, abroad the export code).
+    const sale = rate === undefined && !receipts.length && other.source?.from === 'sales' && chart().typeOf(other.account) === 'revenue' ? saleProposal(tx) : undefined;
+    const saleCode = sale && saleVatCode(sale.choice);
+    const vat = fromReceipt ?? (fromPrecedent || (saleCode && formTakes(saleCode) ? saleCode : ''));
+    const vatSource: DraftSource['vat'] = fromReceipt !== undefined ? { from: 'receipt' } : fromPrecedent ? { from: 'precedent' } : vat && sale ? { from: 'sale', choice: sale.choice } : undefined;
+    const source: DraftSource = { ...(other.source && { account: other.source }), ...(vatSource && { vat: vatSource }) };
+    return { accountDebit, accountCredit, amount, vat, description: text, ...(Object.keys(source).length ? { source } : {}) };
   };
+  // A company rule decides the payment (it waits for its receipt, say): its lines as it would book them, when they add up to what is open.
+  const ruled = !cancelled && bank && known.rule && toRappen(known.rule.lines.filter((l) => !l.against).reduce((s, l) => s + l.amount, 0)) === toRappen(paid)
+    ? known.rule.lines.map((l): DraftLine => {
+      const from = { from: 'rule' as const, rule: known.rule!.id };
+      const side = (mine: string) => (l.against ? mine : bank.account);
+      const [accountDebit, accountCredit] = moneyIn ? [side(l.against ?? ''), l.account] : [l.account, side(l.against ?? '')];
+      return { accountDebit, accountCredit, amount: l.amount, vat: l.vat ?? '', description: text, source: { account: from, ...(l.vat && { vat: { from: 'rule' as const } }) } };
+    }) : undefined;
   const groups = receipts.length === 1 && receipts[0].currency === tx.currency ? vatRates(receipts[0]) : [];
   const split = groups.length > 1 && groups.every((g) => gross(g) !== undefined) && toRappen(groups.reduce((s, g) => s + gross(g)!, 0)) === toRappen(paid);
   const rates = new Set(receipts.flatMap(vatRates).map((g) => g.ratePercent));
   // A collective payment (Sammelauftrag): one line per part, named by its payee and reference, when the parts add up to it (r9k-6).
   const parts = partsOf(tx, paid);
-  const lines = split ? groups.map((g) => line(gross(g)!, g.ratePercent))
+  const lines = ruled ?? (split ? groups.map((g) => line(gross(g)!, g.ratePercent))
     : parts ? parts.map((p) => ({ ...line(Math.abs(p.amount)), description: partText(p) }))
-      : [line(paid, rates.size === 1 ? [...rates][0] : undefined)];
+      : [line(paid, rates.size === 1 ? [...rates][0] : undefined)]);
   return { ref, date: tx.date, currency: tx.currency, ...(bank && { bank }), receipts: receiptIds, lines, ...(precedent && { precedent: precedent.entry }), ...(cancelled && { cancelledInvoice: cancelled }) };
 }
 
@@ -131,8 +178,8 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
  * there is no form yet, or a payment of a cancelled invoice would open with the earlier sale's
  * account and code and keep them when the invoices arrive (r9c-4). Without invoicing: undefined.
  */
-export function formDraft(books: Books, ref: string, accounts: readonly LedgerBankAccount[], invoices: readonly Invoice[] | 'loading' | undefined): BookingDraft | undefined {
-  return invoices === 'loading' ? undefined : bookingDraft(books, ref, accounts, invoices);
+export function formDraft(books: Books, ref: string, accounts: readonly LedgerBankAccount[], invoices: readonly Invoice[] | 'loading' | undefined, known?: DraftKnowledge): BookingDraft | undefined {
+  return invoices === 'loading' ? undefined : bookingDraft(books, ref, accounts, invoices, known);
 }
 
 /** The payment's bank sides with these lines added to the entries it has (a payment booked in part keeps them, r9k-2). */
