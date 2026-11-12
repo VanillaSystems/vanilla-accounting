@@ -111,7 +111,7 @@ test('the app layer refuses one company’s items', () => {
 test('a payment to an authority routes to its app file, and each tells its facts', () => {
   const { counterparties } = loadKnowledge(APP_ROOT, DEMO_ROOT);
   const route = (merchant: string) => {
-    const r = identify({ uids: [], ibans: [], domains: [], names: [merchant], filenames: [] }, counterparties);
+    const r = identify({ uids: [], ibans: [], domains: [], names: [merchant], payees: [merchant], filenames: [] }, counterparties);
     return r.kind === 'known' ? r.counterparty : r.kind;
   };
   assert.equal(route('Eidg. Steuerverwaltung ESTV, Hauptabteilung MWST'), 'estv');
@@ -155,6 +155,19 @@ test('the compensation fund is found by its full names, never by a word inside a
     ['Muster Consulting', 'Beratung AHV-Reform'],
     ['Svarovski Kristall AG', 'Bestellung'],
   ]) assert.notEqual(routeTx(cp, text), 'ausgleichskasse', `${cp} / ${text}`);
+});
+
+test('the fund is the payee, never a business whose payment text names the fund (match.payee)', () => {
+  // A fiduciary, a payroll provider, a pension fund: their invoices name the fund, and need their receipt.
+  for (const [cp, text] of [
+    ['Treuhand Muster AG', 'Rechnung 118 Abrechnung Ausgleichskasse 2025'],
+    ['Fiduciaire Dupont SA', 'Décompte caisse de compensation 2025'],
+    ['Lohnpartner GmbH', 'Payroll Service, Meldungen Ausgleichskasse/BVG'],
+    ['PK der Ausgleichskasse Zürcher Arbeitgeber', 'Beiträge BVG'],
+    ['', 'Treuhand Muster AG Rechnung 118 Abrechnung Ausgleichskasse 2025'],
+  ]) assert.notEqual(routeTx(cp, text), 'ausgleichskasse', `${cp} / ${text}`);
+  assert.equal(routeTx('SVA St. Gallen', 'AHV Beiträge Q2'), 'ausgleichskasse', 'the camt reader gives a QR payment\'s creditor as the counterparty');
+  assert.equal(routeTx('', 'SVA St. Gallen AHV Beiträge Q2'), 'ausgleichskasse', 'a bank that puts the payee only in the text: its merchant');
 });
 
 test('a company\'s own file wins over the app\'s file that claims the same payment, instead of making it ambiguous', () => {

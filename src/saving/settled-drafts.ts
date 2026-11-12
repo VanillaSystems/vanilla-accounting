@@ -10,7 +10,11 @@ import { join } from 'node:path';
 import { parse } from 'yaml';
 import type { Workspace } from '../workspace/workspace.js';
 
-export type DraftOutcome = { state: 'kept' | 'discarded'; at: string };
+/** One card's outcome for a rule: which change of it the card held (absent in records from before it was kept). */
+export type DraftOutcome = { state: 'kept' | 'discarded'; at: string; change?: RuleChange['change'] };
+
+/** At most this many outcomes are kept per rule, the newest. */
+const OUTCOMES_KEPT = 20;
 
 /** What a draft does to one rule of its file. */
 export interface RuleChange { section: string; id: string; change: 'added' | 'changed' | 'removed' }
@@ -42,8 +46,11 @@ export function ruleChanges(before: string, after: string): RuleChange[] {
   ];
 }
 
-export function settledDrafts(ws: Pick<Workspace, 'paths'>): Record<string, DraftOutcome> {
-  try { return JSON.parse(readFileSync(fileOf(ws), 'utf8')) as Record<string, DraftOutcome>; } catch { return {}; }
+/** Every outcome of each rule, oldest first: a later card's (a change of the rule discarded) never hides an earlier keep. */
+export function settledDrafts(ws: Pick<Workspace, 'paths'>): Record<string, DraftOutcome[]> {
+  let raw: Record<string, DraftOutcome | DraftOutcome[]>;
+  try { raw = JSON.parse(readFileSync(fileOf(ws), 'utf8')) as typeof raw; } catch { return {}; }
+  return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, Array.isArray(v) ? v : [v]]));
 }
 
 /**
@@ -54,7 +61,10 @@ export function recordSettled(ws: Pick<Workspace, 'paths'>, path: string, change
   if (!changes.length) return;
   try {
     const all = settledDrafts(ws);
-    for (const c of changes) all[ruleKey(path, c.section, c.id)] = { state, at };
+    for (const c of changes) {
+      const key = ruleKey(path, c.section, c.id);
+      all[key] = [...(all[key] ?? []), { state, at, change: c.change }].slice(-OUTCOMES_KEPT);
+    }
     mkdirSync(ws.paths.data, { recursive: true });
     const tmp = `${fileOf(ws)}.${process.pid}.tmp`;
     writeFileSync(tmp, JSON.stringify(all, null, 2) + '\n');

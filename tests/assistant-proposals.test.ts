@@ -85,7 +85,7 @@ test('each rule keeps its own state while other drafts of the same file come and
 
   await command('delete');
   const removed = await say('und?', first.id);
-  assert.match(lineOf(removed.prompt, 1, 'swisscom-telefon'), /KEPT, then removed since/);
+  assert.match(lineOf(removed.prompt, 1, 'swisscom-telefon'), /no longer in the file under this id/);
   assert.ok(!existsSync(join(api.ws.paths.data, 'draft', RULES)));
 });
 
@@ -105,4 +105,22 @@ test('a draft gone without a record is unknown, never guessed, and the list does
   const next = await say('und?', first.id);
   assert.match(lineOf(next.prompt, 1, 'swisscom-telefon'), /UNKNOWN/);
   assert.match(next.prompt, /where it says UNKNOWN, read the file/);
+});
+
+test('a rule kept stays kept when a later draft that changes or removes it is discarded; renamed since, it is no longer in the file under its id', async () => {
+  const first = await say('Swisscom immer auf Telefon buchen', undefined, file(A));
+  await keep();
+  const draft = (text: string) => { writeFileSync(join(api.ws.paths.data, 'draft', RULES), text); };
+  draft(file(A.replace('vat: 81', 'vat: 0')));
+  await discard();
+  const changed = await say('und?', first.id);
+  assert.match(lineOf(changed.prompt, 1, 'swisscom-telefon'), /is KEPT and in effect/, 'a later change of it discarded');
+  draft('process: booking\nsteps:\n  classify:\n    rules: []\n');
+  await discard();
+  const removal = await say('und?', first.id);
+  assert.match(lineOf(removal.prompt, 1, 'swisscom-telefon'), /is KEPT and in effect/, 'its removal discarded');
+  draft(file(A.replace('id: swisscom-telefon', 'id: swisscom-tel')));
+  await keep();
+  const renamed = await say('und?', first.id);
+  assert.match(lineOf(renamed.prompt, 1, 'swisscom-telefon'), /no longer in the file under this id/);
 });

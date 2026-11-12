@@ -79,6 +79,7 @@ export default {
     'partners.match.uid': 'IDE',
     'partners.match.iban': 'IBAN',
     'partners.match.domain': 'Expéditeur',
+    'partners.match.payee': 'Bénéficiaire',
     'partners.match.tx': 'Texte du paiement',
     'partners.match.file': 'Nom de fichier',
     'partners.match.learned': 'appris',

@@ -79,6 +79,7 @@ export default {
     'partners.match.uid': 'IDI',
     'partners.match.iban': 'IBAN',
     'partners.match.domain': 'Mittente',
+    'partners.match.payee': 'Beneficiario',
     'partners.match.tx': 'Testo del pagamento',
     'partners.match.file': 'Nome del file',
     'partners.match.learned': 'appreso',

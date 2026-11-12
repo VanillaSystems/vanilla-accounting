@@ -34,7 +34,7 @@ Two markers flag an entry you must read before you update:
   still a draft, or unknown), and of held changes, so it no longer says a kept rule is not kept.
   An answer and the «Stand» card under it wrap inside the sidebar instead of running past its
   edge. The booking model is told never to take an amount, share or ratio from a casebook example.
-  The compensation fund is also found as «SVA St. Gallen», «SVA Zürich», «SVA Aargau», «Caisse de
+  The compensation fund is found as the payee only (a new `payee` match in a business file: the start of the counterparty's name), also as «SVA St. Gallen», «SVA Zürich», «SVA Aargau», «Caisse de
   compensation» and «Cassa di compensazione», so its payment needs no receipt; a company's own file
   of a business wins over the app's file that claims the same payment. Automatisierung offers no
   period before the books begin, names the receipts without a payment beside «Keine Aufgabe wartet

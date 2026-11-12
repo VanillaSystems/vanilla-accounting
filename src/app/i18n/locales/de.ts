@@ -76,6 +76,7 @@ export const messages = {
   'partners.match.uid': 'UID',
   'partners.match.iban': 'IBAN',
   'partners.match.domain': 'Absender',
+  'partners.match.payee': 'Zahlungsempfänger',
   'partners.match.tx': 'Zahlungstext',
   'partners.match.file': 'Dateiname',
   'partners.match.learned': 'gelernt',

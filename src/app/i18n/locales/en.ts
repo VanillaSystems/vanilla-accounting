@@ -79,6 +79,7 @@ export default {
     'partners.match.uid': 'UID',
     'partners.match.iban': 'IBAN',
     'partners.match.domain': 'Sender',
+    'partners.match.payee': 'Payee',
     'partners.match.tx': 'Payment text',
     'partners.match.file': 'File name',
     'partners.match.learned': 'learned',

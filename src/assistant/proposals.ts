@@ -48,8 +48,9 @@ export function ruleState(ws: Pick<Workspace, 'paths'>, d: Drafted, at: string, 
   const draft = join(draftDir(ws), d.path);
   const live = rulesOf(read(join(ws.paths.root, d.path)));
   if (existsSync(draft) && ruleChanges(read(join(ws.paths.root, d.path)), read(draft)).some((c) => c.section === d.section && c.id === d.id && c.change === d.change)) return 'open';
-  const s = settled[ruleKey(d.path, d.section, d.id)];
-  if (!s || s.at < at) return 'unknown';
+  // The outcome of the card that held this answer's change: the first after the answer for that change, never a later card's of another change.
+  const s = (settled[ruleKey(d.path, d.section, d.id)] ?? []).find((o) => o.at >= at && (!o.change || o.change === d.change));
+  if (!s) return 'unknown';
   if (s.state === 'discarded') return 'discarded';
   const now = live.get(key);
   if (d.change === 'removed') return now ? 'standsAgain' : 'removedKept';
@@ -60,7 +61,7 @@ const stateWords = (t: T, path: string): Record<RuleState, string> => ({
   open: `still a draft: the person has not pressed «${t('rules.draft.keep')}» or «${t('rules.draft.discard')}» on its card yet, so nothing of it applies. Do not bring it up unless the person asks about it.`,
   kept: `KEPT and in effect: the person pressed «${t('rules.draft.keep')}»; it applies to the next matching payments. Never say it is not kept or that a click is missing.`,
   keptOff: `KEPT, but switched off since (${t('area.company')} › ${t('company.rules')}): it does not apply now.`,
-  keptRemoved: `KEPT, then removed since (${t('area.company')} › ${t('company.rules')}): it does not apply.`,
+  keptRemoved: `KEPT, but no longer in the file under this id (removed or renamed since, ${t('area.company')} › ${t('company.rules')}): read the file before you say anything about it.`,
   removedKept: 'removal KEPT: the rule is gone, as proposed.',
   standsAgain: 'removal KEPT, but a rule with this id stands in the file again.',
   discarded: `DISCARDED: the person pressed «${t('rules.draft.discard')}»; it was never kept by that card.`,
