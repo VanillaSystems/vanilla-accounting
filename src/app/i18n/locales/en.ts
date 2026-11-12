@@ -5333,6 +5333,7 @@ export default {
     'bank.bookingNow': 'The app is booking it now: {what}',
     'bank.bookingItNow': "The app is booking it now",
     'bank.noReceiptBooking': "Needs no receipt. The app is booking the payment now.",
+    'bank.noReceiptResult': "{said} “Undo” only takes back “needs no receipt”.",
     'bank.notBookedYours': "not booked: the app could not book it by itself. Book it by hand below.",
     'drop.p.stuck': 'stopped',
   },

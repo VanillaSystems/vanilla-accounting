@@ -5333,6 +5333,7 @@ export default {
     'bank.bookingNow': 'L’app lo sta registrando: {what}',
     'bank.bookingItNow': "L’app lo sta registrando",
     'bank.noReceiptBooking': "Non richiede giustificativo. L’app registra il pagamento adesso.",
+    'bank.noReceiptResult': "{said} «Annulla» toglie solo «non richiede giustificativo».",
     'bank.notBookedYours': "non registrato: l’app non ha potuto registrarlo da sola. Registralo a mano qui sotto.",
     'drop.p.stuck': 'fermata',
   },

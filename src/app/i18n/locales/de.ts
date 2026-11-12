@@ -5330,6 +5330,7 @@ export const messages = {
   'bank.bookingNow': 'Die App bucht sie gerade: {what}',
   'bank.bookingItNow': "Die App bucht sie gerade",
   'bank.noReceiptBooking': "Braucht keinen Beleg. Die App bucht die Zahlung jetzt.",
+  'bank.noReceiptResult': "{said} «Rückgängig» nimmt nur «braucht keinen Beleg» zurück.",
   'bank.notBookedYours': "nicht gebucht: die App konnte sie nicht selbst buchen. Unten von Hand buchen.",
   'drop.p.stuck': 'stehen geblieben',
 } as const;

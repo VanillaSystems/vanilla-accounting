@@ -187,6 +187,25 @@ that file has an `apply:` of its own), and a company's executable booking rule
 books before any of this. `npm run check-processes` checks every `apply:` and
 refuses each form in the other layer.
 
+Whether a payment waits for its receipt before it is booked is carried out the
+same way (src/booking/receipt-wait.ts), by a rule under
+`evidence.guide.yaml#rules`, in either layer:
+
+- `apply: { receipt: none }` in a business file: that business's payments need
+  no receipt (an authority whose notice is filed apart). The business is the
+  condition.
+- `apply: { receipt: none, text: "<pattern>" }` in a guide: a payment whose
+  text or counterparty matches the pattern (ignoring case) needs no receipt and
+  has none of its own, so none is ever paired with it (a cash withdrawal).
+  `not: "<pattern>"` beside it takes the wording back for a payment that
+  matches it too.
+- `firm: employer` beside `text` makes it a wage's wording. It holds only on a
+  firm whose setup says it has staff or an employed owner (`profile.employees`),
+  reads the payment's own text and never the counterparty's name, and frees the
+  payment from the wait only: a receipt that matches it is still paired, and
+  the payment is then booked again from it. Keep such a pattern narrow: a
+  purchase it catches is booked without input tax until its receipt is linked.
+
 ## A payment provider
 
 A shop platform or a card terminal collects the company's sales and pays them

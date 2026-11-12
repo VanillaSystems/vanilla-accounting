@@ -39,9 +39,10 @@ export async function setNoReceipt(nav: Nav, tx: BankTransaction, on: boolean, u
   nav.toast(t('bank.noReceiptBooking'), undo);
   try {
     const said = await startAndSay('booking', { kind: 'transaction', id: tx.ref });
-    if (said) nav.toast(said);
+    // One toast carries the outcome and the undo: the undo stays reachable after the run rested, and says what it takes back.
+    if (said) nav.toast(t('bank.noReceiptResult', { said }), undo);
   } catch (e) {
-    nav.toast(errorText(e));
+    nav.toast(errorText(e), undo);
   }
   nav.refresh();
 }

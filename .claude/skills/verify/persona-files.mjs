@@ -46,9 +46,16 @@ const tx = [
 let bal = 18420.15; const open = bal;
 for (const [, d, a] of tx) bal += d === 'CRDT' ? a : -a;
 const n = (x) => x.toFixed(2);
+// Every entry carries a bank transaction code, as a Swiss bank's camt.053 does: a card payment PMNT/CCRD, a
+// transfer PMNT/ICDT or RCDT, and the bank's own account fee ACMT/MDOP/FEES, by which the app knows its fee row.
+const bkTxCd = (d, txt) => {
+  const [domain, family, sub] = /^Kontoführung/.test(txt) ? ['ACMT', 'MDOP', 'FEES'] : /^Karte /.test(txt) ? ['PMNT', 'CCRD', 'POSD'] : ['PMNT', d === 'CRDT' ? 'RCDT' : 'ICDT', 'DMCT'];
+  return `<BkTxCd><Domn><Cd>${domain}</Cd><Fmly><Cd>${family}</Cd><SubFmlyCd>${sub}</SubFmlyCd></Fmly></Domn></BkTxCd>`;
+};
 const ntry = tx.map(([dt, d, a, who, txt], i) => `
       <Ntry><Amt Ccy="CHF">${n(a)}</Amt><CdtDbtInd>${d}</CdtDbtInd><Sts>BOOK</Sts>
         <BookgDt><Dt>${dt}</Dt></BookgDt><ValDt><Dt>${dt}</Dt></ValDt>
+        ${bkTxCd(d, txt)}
         <NtryDtls><TxDtls><Refs><AcctSvcrRef>RB-2026-${String(i + 1).padStart(4, '0')}</AcctSvcrRef></Refs>
           <Amt Ccy="CHF">${n(a)}</Amt><CdtDbtInd>${d}</CdtDbtInd>
           <RltdPties>${d === 'CRDT' ? `<Dbtr><Nm>${who}</Nm></Dbtr>` : `<Cdtr><Nm>${who}</Nm></Cdtr>`}</RltdPties>
@@ -81,6 +88,7 @@ for (const [, d, a] of oct) balOct += d === 'CRDT' ? a : -a;
 const ntryOct = oct.map(([dt, d, a, who, txt], i) => `
       <Ntry><Amt Ccy="CHF">${n(a)}</Amt><CdtDbtInd>${d}</CdtDbtInd><Sts>BOOK</Sts>
         <BookgDt><Dt>${dt}</Dt></BookgDt><ValDt><Dt>${dt}</Dt></ValDt>
+        ${bkTxCd(d, txt)}
         <NtryDtls><TxDtls><Refs><AcctSvcrRef>RB-2026-1${String(i + 1).padStart(3, '0')}</AcctSvcrRef></Refs>
           <Amt Ccy="CHF">${n(a)}</Amt><CdtDbtInd>${d}</CdtDbtInd>
           <RltdPties>${d === 'CRDT' ? `<Dbtr><Nm>${who}</Nm></Dbtr>` : `<Cdtr><Nm>${who}</Nm></Cdtr>`}</RltdPties>
