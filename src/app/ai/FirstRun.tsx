@@ -39,7 +39,8 @@ const Me = ({ text, onChange }: { text: string; onChange?: () => void }) => (
 );
 const Answers = ({ children }: { children: ReactNode }) => <div className="obind"><div className="qacts" role="group">{children}</div></div>;
 
-export function FirstRun({ info, onSetup, onForm, onLeave }: { info: DesktopInfo | null; onSetup(root: string): void; onForm(): void; onLeave(): void }) {
+/** `create`: the person chose new books already (the start page's «Neue Buchhaltung anlegen», the menu): that choice goes on by itself. */
+export function FirstRun({ info, create, onSetup, onForm, onLeave }: { info: DesktopInfo | null; create?: boolean; onSetup(root: string): void; onForm(): void; onLeave(): void }) {
   const ai = useAiSetup();
   const view = ai.view;
   /** `home`: what the person wants; `ai`: setting up the AI, which she asked for. */
@@ -121,7 +122,7 @@ export function FirstRun({ info, onSetup, onForm, onLeave }: { info: DesktopInfo
       </header>
       <div ref={turns} className="obflowturns">
         <Ai><p>{t('aiSetup.hello')}</p>{stage === 'home' ? <p>{t('aiSetup.what')}</p> : null}</Ai>
-        {stage === 'home' ? <FolderStep info={info} ai={settled ? done : undefined} onSetup={onSetup} onForm={onForm} foot={aiFoot} /> : (
+        {stage === 'home' ? <FolderStep info={info} ai={settled ? done : undefined} create={create} onSetup={onSetup} onForm={onForm} foot={aiFoot} /> : (
           <>
             <Me text={t('aiSetup.line.setUp')} onChange={toHome} />
             <Ai><p>{t('aiSetup.say.intro')}</p></Ai>
@@ -223,7 +224,7 @@ export function FirstRun({ info, onSetup, onForm, onLeave }: { info: DesktopInfo
  * and the setup conversation starts there; without one the form opens, which asks the same and
  * proposes the folder itself. `foot` stands under the choices; `ask` puts the question above them.
  */
-function FolderStep({ info, ai, ask, foot, onSetup, onForm }: { info: DesktopInfo | null; ai: boolean | undefined; ask?: boolean; foot?: ReactNode; onSetup(root: string): void; onForm(): void }) {
+function FolderStep({ info, ai, ask, create: chosenNew, foot, onSetup, onForm }: { info: DesktopInfo | null; ai: boolean | undefined; ask?: boolean; create?: boolean; foot?: ReactNode; onSetup(root: string): void; onForm(): void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [switching, setSwitching] = useState(false);
@@ -231,7 +232,8 @@ function FolderStep({ info, ai, ask, foot, onSetup, onForm }: { info: DesktopInf
   /** The folder she named for new books, when it already holds something. */
   const [taken, setTaken] = useState<{ root: string; look: FolderLook }>();
   /** «New books» was clicked before the look at this Mac's AI had its answer. */
-  const [waiting, setWaiting] = useState(false);
+  // Chosen before this step showed: it runs as soon as the look at the AI has its answer (one click, issue #363).
+  const [waiting, setWaiting] = useState(!!chosenNew);
   const name = freeName(t('desktop.folderName', { year: String(new Date().getFullYear()) }), info?.folders ?? []);
   const run = async (go: () => Promise<void>) => {
     setBusy(true);

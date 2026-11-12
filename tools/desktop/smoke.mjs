@@ -180,6 +180,12 @@ check('the window is dragged by its top edge (no title bar on the Mac)', await p
   const bar = document.querySelector('.dragbar');
   return !!bar && getComputedStyle(bar).getPropertyValue('-webkit-app-region') === 'drag' && bar.getBoundingClientRect().height >= 28;
 }));
+// clickText clicks through the DOM; a mouse lands on whatever lies on top (#363: the drag strip covered the switch).
+const underStrip = await page.evaluate(() => [...document.querySelectorAll('.st-top .seg2 button')].filter((b) => {
+  const r = b.getBoundingClientRect();
+  return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) !== b;
+}).map((b) => b.textContent));
+check('the language switch under the drag strip takes a mouse click at its centre', underStrip.length === 0, underStrip.join(' '));
 const blocking = async (p) => p.evaluate(() => [...document.querySelectorAll('*')].filter((el) => {
   const r = el.getBoundingClientRect();
   return getComputedStyle(el).getPropertyValue('-webkit-app-region') === 'no-drag' && r.width >= innerWidth * 0.9 && r.top <= 0 && r.bottom >= 36;

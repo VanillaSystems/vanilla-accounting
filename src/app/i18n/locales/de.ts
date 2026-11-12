@@ -2499,6 +2499,7 @@ export const messages = {
   'desktop.moveNo': 'Nicht jetzt',
   'desktop.moveFailed': 'Die App liess sich nicht verschieben. Zieh sie von Hand in den Ordner «Programme».',
   'desktop.startFailed': 'Vanilla Accounting konnte nicht starten.',
+  'desktop.loadFailed': 'Die Seite liess sich nicht laden. Die App läuft weiter; versuch es noch einmal.',
   'desktop.dialogFailed': 'Das Fenster zum Auswählen des Ordners liess sich nicht öffnen. Beende Vanilla Accounting und öffne es neu.',
   'desktop.saveFailed': 'Die Datei liess sich nicht speichern. Versuch es noch einmal oder wähle einen anderen Ordner.',
   'desktop.noWorkspace': 'Keine Buchhaltung geöffnet.',

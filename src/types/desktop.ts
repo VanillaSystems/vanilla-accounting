@@ -90,6 +90,8 @@ export interface DesktopInfo {
   booksHome: string;
   /** The folders already in booksHome, so a new default name steps aside from one that is taken. */
   folders: string[];
+  /** The listing waits (macOS asks about the folder): `folders` is the last known, GET /api/desktop/folders answers once it is read. */
+  foldersPending?: boolean;
 }
 
 /** GET and POST /api/desktop/phone: the phone's way in (Firma › Handy). */

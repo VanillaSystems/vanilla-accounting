@@ -21,7 +21,7 @@ import { freshLoginPath } from '../platform/ai-cli.js';
 import { ASK, PUSH, TELL } from './channels.js';
 import { chosenFolder, newFolderPanel } from './new-folder.js';
 import { sameOrigin, saveFile } from './save-file.js';
-import { bringUp, offerMove, type Waiting } from './start.js';
+import { bringUp, offerMove, windowLoader, type Waiting } from './start.js';
 import { dictate, isLang } from './dictation.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
 import { electronPage } from './print.js';
@@ -58,20 +58,32 @@ async function start(): Promise<void> {
   /** The local server's address once it listens; until then there is no page to show. */
   let base: string | undefined;
   /** The newest window while it waits hidden for its first paint (bringUp). */
-  let waiting: Waiting = { since: 0, failed: false };
+  let waiting: Waiting = { since: 0 };
+  /** The newest window's loads (windowLoader): tried again for under 10 s when one fails. */
+  let load: ReturnType<typeof windowLoader> | undefined;
+  /** The start's first page is loaded; a later page that fails to load says so and ends nothing. */
+  let started = false;
+  const loadFailed = (reason: string, first: boolean) => {
+    const t = textsIn(language);
+    if (first) {
+      dialog.showErrorBox(t('desktop.startFailed'), reason);
+      app.exit(1);
+      return;
+    }
+    void dialog.showMessageBox({ type: 'warning', message: t('desktop.loadFailed'), detail: reason });
+  };
   const show = (path = '/') => {
     if (!base) return;
     const fresh = !win || win.isDestroyed();
     if (fresh) {
       const opened = (win = createWindow(stateFile));
-      const mine: Waiting = { since: Date.now(), failed: false };
-      waiting = mine;
+      waiting = { since: Date.now() };
       // A new window appears once the page has painted, not as an empty frame.
       opened.once('ready-to-show', () => opened.show());
-      // -3: a load replaced by the next one, no failure.
-      opened.webContents.on('did-fail-load', (_e, code, _text, _url, mainFrame) => { if (mainFrame && code !== -3) mine.failed = true; });
+      load = windowLoader(opened, loadFailed);
     }
-    void win!.loadURL(base + path);
+    void load!(base + path, !started);
+    started = true;
     if (!fresh) win!.show();
   };
   // A second start, a click on the Dock icon, `open -a`: the window in front. Listening before the
@@ -126,7 +138,7 @@ async function start(): Promise<void> {
     return chosenFolder(win && !win.isDestroyed() ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options));
   };
   function refreshMenu(): void {
-    Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate(language, server.info().recent, {
+    Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate(language, server.recent(), {
       openBooks: async () => {
         const root = await chooseFolder(textsIn(language)('desktop.chooseOpen'));
         if (root) await opening(() => server.open(root))();

@@ -63,6 +63,23 @@ com.apple.quarantine ~/Desktop/"Vanilla Accounting.app" && open ~/Desktop/"Vanil
 `$V shot 03-move-offer`, `$V click 780 521` (Move), `$V click 780 405` (Allow Desktop access): `ls -d
 /Applications/"Vanilla Accounting.app"` exists, the Desktop copy is gone, the start screen shows.
 
+Driven again 2026-11-12 for #363, from a fresh clone each time (a VM that already answered the
+Desktop or Documents question does not ask again, so a repeat needs `down` + `up`): the dmg mounted
+with `hdiutil attach -nobrowse ~/Downloads/*arm64.dmg`, the app `ditto`'d to ~/Desktop,
+unquarantined and `open`ed as above; on the 1400-px shot `Move` is at 731 287, then macOS asks for
+the Desktop folder (`Allow` 731 241, asked by the Desktop copy while it moves itself), then the
+relaunched copy in /Applications opens its window and macOS asks for the Documents folder over it
+(`Allow` 731 241, `Don't Allow` 667 241). Expected: the window behind the Documents question,
+the first screen («Hello! Vanilla Accounting is …», `Create new books` …) within a few seconds
+of the answer, by itself. Before the fix of #363 it showed no window for over a minute, a Dock click a
+blank one (#363). The relaunched copy runs without a DevTools port and its stdout goes nowhere:
+read its state from the shots, and from `curl -s http://127.0.0.1:49152/api/desktop` in the VM
+(`$V sh`); `$V app` restarts it (with the port), which is a second start, not the first. To see
+inside the first start, a temporary build that appends `--remote-debugging-port` and writes a line
+per step to /tmp (see the commit history of #363) is the way; never ship it.
+A drag over VNC: `vncdo … move X Y mousedown 1 drag X2 Y2 mouseup 1` in screen pixels (the
+`.png`, not the `.s.png`); it moves pixel by pixel and takes about a minute for 700 px.
+
 Proof: the dialog texts on the shots, and the start screen's text from `app.mjs`.
 
 ## Gotchas

@@ -61,12 +61,13 @@ export function useStartScreen(): boolean | undefined {
 const answerList = (a: Partial<Answers>, key: QuestionKey): string[] => ([] as string[]).concat(a[key] ?? []);
 
 /** What the start screen shows: the choices, «Einrichtung» from the AI to the folder, the setup conversation in a folder, or the form. */
-type Mode = { kind: 'home' } | { kind: 'first' } | { kind: 'setup'; root: string } | { kind: 'form' };
+/** `first` with `create`: new books were chosen already (the start page, the menu's /start?new). */
+type Mode = { kind: 'home' } | { kind: 'first'; create?: boolean } | { kind: 'setup'; root: string } | { kind: 'form' };
 
 const modeOfUrl = (): Mode => {
   const q = new URLSearchParams(location.search);
   const root = q.get('setup');
-  return root ? { kind: 'setup', root } : q.has('new') ? { kind: 'first' } : { kind: 'home' };
+  return root ? { kind: 'setup', root } : q.has('new') ? { kind: 'first', create: true } : { kind: 'home' };
 };
 
 export function StartScreen({ language, onLanguage }: { language: string; onLanguage(code: string): void }) {
@@ -82,6 +83,8 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
   useEffect(() => {
     void api.desktop.info().then((i) => {
       setInfo(i);
+      // macOS still asks about the Documents folder: the screen shows now, the folders follow.
+      if (i.foldersPending) void api.desktop.folders().then(({ folders }) => setInfo((was) => (was ? { ...was, folders, foldersPending: false } : was)), () => undefined);
       // A fresh install: no books open and none known. Once: «Zur Startseite» from there stays on the start screen.
       if (!looked.current && mode.kind === 'home' && !i.open && !i.recent.length && !location.search) setMode({ kind: 'first' });
       looked.current = true;
@@ -93,8 +96,10 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
     setModeState(next);
   };
   /** «Neue Buchhaltung anlegen» (also the menu's /start?new): «Einrichtung», what the person wants, the AI where it has work. */
-  const startNew = () => setMode({ kind: 'first' });
+  const startNew = () => setMode({ kind: 'first', create: true });
   useEffect(() => { document.title = 'Vanilla Accounting'; }, []);
+  // /start?new has acted once it set the mode: a reload does not open the save panel again.
+  useEffect(() => { if (new URLSearchParams(location.search).has('new')) history.replaceState(null, '', START_PATH); }, []);
 
   const run = async (open: () => Promise<KnownBooks>) => {
     setBusy(true);
@@ -127,9 +132,9 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
         </span>
       </header>
       {mode.kind === 'setup' ? <DraftConversation root={mode.root} onLeave={() => setMode({ kind: 'home' })} />
-        : mode.kind === 'first' ? <FirstRun info={info} onLeave={() => setMode({ kind: 'home' })} onSetup={(root) => setMode({ kind: 'setup', root })} onForm={() => setMode({ kind: 'form' })} />
+        : mode.kind === 'first' ? <FirstRun info={info} create={mode.create} onLeave={() => setMode({ kind: 'home' })} onSetup={(root) => setMode({ kind: 'setup', root })} onForm={() => setMode({ kind: 'form' })} />
         : mode.kind === 'form'
-        ? <CreateForm info={info} busy={busy} error={error} onCancel={() => setMode({ kind: 'home' })} onCreate={(setup) => run(() => api.desktop.create(setup))} />
+        ? <CreateForm info={info} language={language} busy={busy} error={error} onCancel={() => setMode({ kind: 'home' })} onCreate={(setup) => run(() => api.desktop.create(setup))} />
         : (
           <div className="st-main">
             <h1>Vanilla Accounting</h1>
@@ -171,12 +176,13 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
   );
 }
 
-function CreateForm({ info, busy, error, onCancel, onCreate }: {
-  info: DesktopInfo | null; busy: boolean; error: string; onCancel(): void;
+function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
+  /** The app's language now: the form is in it, and the new books' language starts as it. */
+  info: DesktopInfo | null; language: string; busy: boolean; error: string; onCancel(): void;
   onCreate(setup: Parameters<typeof api.desktop.create>[0]): void;
 }) {
   const [f, setF] = useState<Form>(() => ({
-    preset: 'consultant', name: '', uid: '', owner: '', business: '', language: 'de', root: '',
+    preset: 'consultant', name: '', uid: '', owner: '', business: '', language: LOCALES.some((l) => l.code === language) ? language : 'de', root: '',
     answers: withoutUnsteered({ ...PRESETS.consultant.answers }), netRates: NO_RATES, banks: [{ ...NEW_BANK, bank: 'UBS' }], exportTo: '',
   }));
   const [checked, setChecked] = useState(false);
