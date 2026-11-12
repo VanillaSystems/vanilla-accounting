@@ -20,6 +20,7 @@ import { inProcess, type Processing } from '../../../workflows/processing.js';
 import type { OrderPage } from '../../../booking/order-pages.js';
 import type { VatCorrection } from '../../../booking/vat-corrections.js';
 import { isBankFee } from '../../../booking/separate-fee.js';
+import { numbersIn, tokensIn } from '../../../accounting/document-numbers.js';
 
 /** Why a file in Belege is no receipt: what its words say it is, or its kind, or that it holds no amount. */
 export type NoneWhy = SupportingWhy | OtherWhy | 'supporting' | 'duplicate' | 'statement' | 'empty';
@@ -305,6 +306,7 @@ export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = '', 
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   const cur = r.currency || baseCurrency();
   const way = moneyWay(r);
+  const numbers = numbersIn(r.extractedText ?? '');
   const all: Candidate[] = [];
   for (const tx of l.txByRef.values()) {
     if (!linkable(v, tx) || (keep && !keep(tx))) continue;
@@ -321,7 +323,8 @@ export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = '', 
     const want = r.amount == null ? undefined : Math.abs(toChf(r.amount, cur, tx.date));
     const dAmt = part ? 0 : want === undefined ? 1 : Math.abs(Math.abs(toChf(tx.amount, tx.currency, tx.date)) - want) / Math.max(1, want);
     const taken = (l.receiptsByRef.get(tx.ref) ?? []).length;
-    const wrongWay = !!way && (tx.direction === 'CRDT') !== (way === 'in');
+    // Money against the receipt's way fits when the payment names one of its numbers on or after its day: the firm's own invoice paid in (#365).
+    const wrongWay = !!way && (tx.direction === 'CRDT') !== (way === 'in') && !((days ?? 0) >= 0 && namesNumberOf(numbers, tx));
     // A collective payment holds one receipt per part: another receipt on it does not make it taken for this one.
     const score = dAmt * 100 + Math.abs(days ?? 0) * 0.6 + (otherCurrency ? 8 : 0) + (taken && !part ? 30 : 0) + (wrongWay ? 30 : 0);
     const fit = part ? { kind: 'same' as const } : taken ? undefined : amountFit(r, tx, toChf);
@@ -334,6 +337,13 @@ export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = '', 
   const best = all.filter(isBest).slice(0, 3);
   return { best, more: all.filter((c) => !best.includes(c)).slice(0, 12) };
 }
+
+/** Whether the payment's text names one of these numbers (numbersIn) as a whole token. */
+const namesNumberOf = (numbers: readonly string[], tx: BankTransaction): boolean => {
+  if (!numbers.length) return false;
+  const words = tokensIn([tx.description, tx.reference ?? '', tx.remarks ?? '', ...(tx.parts ?? []).map((p) => p.reference ?? '')].join(' '));
+  return numbers.some((n) => words.has(n));
+};
 
 /** A booking without a payment a receipt can hang on (#89): its ref, its first line, and whether a line is the receipt's amount. */
 export interface Unpaid { ref: string; date: string; amount: number; currency: string; description: string; sameAmount: boolean }

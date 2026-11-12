@@ -12,7 +12,7 @@
  * model's to choose from; with none, or more than a short list, it is the person's.
  */
 import type { BankTransaction, Mapping, Receipt } from '../types/index.js';
-import { numbersIn, squash } from '../accounting/document-numbers.js';
+import { numbersIn, squash, tokensIn } from '../accounting/document-numbers.js';
 import { creditSigned } from '../accounting/credit-signed.js';
 import { baseCurrency, documents } from '../engines/index.js';
 import { HEAD, wordsRe } from '../core/modules/words.js';
@@ -154,6 +154,13 @@ export interface PairCandidate {
   offDays: number;
   /** The receipt the chain linked to this payment a whole period off it, whose link this receipt takes over (#291). */
   replaces?: string;
+  /**
+   * The money went against the receipt's way (paysIn): the firm's own invoice paid by money in, a
+   * supplier's invoice by money out. Only a payment naming one of its numbers as a whole token, on
+   * or after the receipt's day, is such a candidate; it is a clear pair only when no other payment
+   * names that number (`number`), else it is proposed (#365).
+   */
+  against?: true;
 }
 
 export interface PairSearch {
@@ -294,10 +301,12 @@ function dayOf(c: Pick<PairCandidate, 'days' | 'offDays'>): number {
  * day, and the amount (to the cent in one currency, its own, a part's or the original the bank
  * names; across currencies both at the official daily rate of the payment's day). Scored by WEIGHTS.
  */
-export function fitOf(r: Receipt, tx: BankTransaction, toChf: ToChf, isClosed: (date: string) => boolean, businesses?: Businesses, usual?: number): PairCandidate | undefined {
-  if (paysIn(r) !== (tx.direction === 'CRDT')) return undefined;
+export function fitOf(r: Receipt, tx: BankTransaction, toChf: ToChf, isClosed: (date: string) => boolean, businesses?: Businesses, usual?: number, namedBy?: NamedBy): PairCandidate | undefined {
   const days = Math.round((Date.parse(tx.date) - Date.parse(r.date!)) / DAY);
   if (days < -BOUNDS.daysBefore || days > daysAfterOf(usual)) return undefined;
+  // Against the receipt's way only a payment that names one of its numbers as a whole token, on or after its day (#365).
+  const named = paysIn(r) === (tx.direction === 'CRDT') ? undefined : days < 0 ? [] : namedNumbers(r, tx);
+  if (named && !named.length) return undefined;
   // A usual delay within the first day band says nothing the receipt's day does not: only a supplier that pays days or weeks later moves the expected day.
   const offDays = usual !== undefined && Math.abs(usual) > WEIGHTS.day[0].upTo ? days - usual : days;
   const cur = r.currency || baseCurrency();
@@ -319,11 +328,12 @@ export function fitOf(r: Receipt, tx: BankTransaction, toChf: ToChf, isClosed: (
     if (off > BOUNDS.crossCurrency) return undefined;
     amount = off <= WEIGHTS.amount.nearShare ? 'near' : 'within';
   }
-  const text = squash([tx.description, tx.reference ?? '', tx.remarks ?? '', ...(tx.parts ?? []).map((p) => p.reference ?? '')].join(' '));
+  const text = squash(paymentText(tx));
   // A customs assessment pays nothing of its own, unless the payment names its number: then it went to the customs office for it.
   const assessment = r.kind === 'supporting' ? assessmentNumbers(r.extractedText ?? '', documents().customs) : undefined;
   if (assessment && !assessment.some((n) => text.includes(n))) return undefined;
-  const number = !!assessment || numbersIn(r.extractedText ?? '').some((n) => text.includes(n));
+  // Against its way the number counts only when this payment alone names it: a number other payments name too (digits common in them) is proposed, never paired.
+  const number = named ? named.some((n) => namedBy?.(n) === 1) : !!assessment || numbersIn(r.extractedText ?? '').some((n) => text.includes(n));
   const vendor = [r.title?.vendor ?? '', r.description ?? '', r.filename].join(' ').toLowerCase();
   const words = nameWords(tx).filter((w) => vendor.includes(w)).length;
   const of = businesses?.ofReceipt(r);
@@ -331,7 +341,23 @@ export function fitOf(r: Receipt, tx: BankTransaction, toChf: ToChf, isClosed: (
   // The name counts once: by its words or by the business's file, whichever says more.
   const name = Math.max(words >= 2 ? WEIGHTS.name.more : words === 1 ? WEIGHTS.name.one : 0, business ? WEIGHTS.business : 0);
   const score = WEIGHTS.amount[amount === 'original' ? 'same' : amount] + dayOf({ days, offDays }) + name + (number ? WEIGHTS.number : 0);
-  return { receipt: r.id, payment: tx.ref, leg: legOf(tx), charge: [tx.ref], filed: isClosed(tx.date), score, amount, number, words, business, days, offDays };
+  return { receipt: r.id, payment: tx.ref, leg: legOf(tx), charge: [tx.ref], filed: isClosed(tx.date), score, amount, number, words, business, days, offDays, ...(named ? { against: true as const } : {}) };
+}
+
+/** What a payment says of what it pays: its text, reference, remarks and its parts' references. */
+const paymentText = (tx: BankTransaction): string => [tx.description, tx.reference ?? '', tx.remarks ?? '', ...(tx.parts ?? []).map((p) => p.reference ?? '')].join(' ');
+
+/** How many payments of the books name a number (squashed) as a whole token of their text. */
+export type NamedBy = (number: string) => number;
+
+/** The receipt's numbers the payment names as whole tokens of its text. */
+const namedNumbers = (r: Receipt, tx: BankTransaction): string[] => { const words = tokensIn(paymentText(tx)); return numbersIn(r.extractedText ?? '').filter((n) => words.has(n)); };
+
+/** NamedBy over these payments, each counted once by its ref. */
+function namedByOf(transactions: readonly BankTransaction[]): NamedBy {
+  const refs = new Map<string, Set<string>>();
+  for (const t of transactions) for (const w of tokensIn(paymentText(t))) (refs.get(w) ?? refs.set(w, new Set()).get(w)!).add(t.ref);
+  return (n) => refs.get(n)?.size ?? 0;
 }
 
 /**
@@ -437,6 +463,7 @@ export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string)
   const held = books.transactions.filter((t) => taken.has(t.ref) && t.amount !== 0);
   const nearHeld = paymentsNear(held);
   const chainLinks = chainLinksOf(books, isClosed);
+  const namedBy = namedByOf(books.transactions);
   for (const r of pairable) {
     if (twins.get(r.id)?.relation === 'duplicate') continue;
     const apart = new Set(r.notPaidBy ?? []);
@@ -447,7 +474,7 @@ export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string)
       const charge = charges.of(t);
       const split = charge.refs.length > 1;
       const fits = charge.refs.some((ref) => apart.has(ref)) ? [] : slotsOf(t, holders.get(t.ref) ?? []).flatMap(({ tx, part }) => {
-        const f = fitOf(r, tx, toChf, isClosed, businesses, usual);
+        const f = fitOf(r, tx, toChf, isClosed, businesses, usual, namedBy);
         return f ? [part === undefined ? f : { ...f, part }] : [];
       }).sort(rank);
       // A collective payment fits by its best part, and by every part nothing tells from it (alikeSets pairs those).
@@ -458,11 +485,11 @@ export function searchPairs(books: Books, toChf: ToChf, isClosed: (date: string)
         if (c && (!had || rank(c, had) < 0)) best.set(slotOf(c), c);
       }
     }
-    const onItsDay = nearHeld(r, usual).flatMap((t) => (apart.has(t.ref) ? [] : fitOf(r, t, toChf, isClosed, businesses, usual) ?? []));
+    const onItsDay = nearHeld(r, usual).flatMap((t) => (apart.has(t.ref) ? [] : fitOf(r, t, toChf, isClosed, businesses, usual, namedBy) ?? []));
     const mine = [...best.values()].filter((c) => !onItsDay.some((h) => periodApart(c, h)));
     for (const h of onItsDay) {
       const linked = chainLinks.get(h.payment);
-      const theirs = linked && fitOf(linked.receipt, linked.payment, toChf, isClosed, businesses, delays?.(linked.receipt));
+      const theirs = linked && fitOf(linked.receipt, linked.payment, toChf, isClosed, businesses, delays?.(linked.receipt), namedBy);
       if (theirs && periodApart(theirs, h)) mine.push({ ...h, replaces: linked!.receipt.id });
     }
     for (const c of mine) (byPayment.get(slotOf(c)) ?? byPayment.set(slotOf(c), []).get(slotOf(c))!).push(c);
@@ -482,16 +509,19 @@ export type PairStage =
   /** `total`: how many candidates there were; more than SHORT_LIST are cut to the best SHORT_LIST, and the person is told so. */
   | { kind: 'person'; receipt: string; candidates: PairCandidate[]; total: number };
 
+/** A candidate code may pair: one against the receipt's way only by a number no other payment names (#365). */
+const pairable = (c: PairCandidate): boolean => !c.against || c.number;
+
 /** The candidates of a list (best first) tied with its best, when they score CLEAR.score and lead the rest by CLEAR.margin; none otherwise. */
 function tiedTop(list: readonly PairCandidate[]): PairCandidate[] {
-  if (!list.length || list[0].score < CLEAR.score) return [];
+  if (!list.length || list[0].score < CLEAR.score || !pairable(list[0])) return [];
   const top = list.filter((c) => c.score === list[0].score);
   const next = list[top.length];
   return next && list[0].score - next.score < CLEAR.margin ? [] : top;
 }
 
 /** What tells one pair from another: the fit, the day, the vendor's name, a number. */
-const likeness = (c: PairCandidate): string => `${c.amount}|${c.days}|${c.offDays}|${c.words}|${c.business}|${c.number}|${c.filed}|${c.replaces ?? ''}`;
+const likeness = (c: PairCandidate): string => `${c.amount}|${c.days}|${c.offDays}|${c.words}|${c.business}|${c.number}|${c.filed}|${c.replaces ?? ''}|${c.against ?? ''}`;
 
 /**
  * Receipts and payments nothing tells apart: n receipts whose clear candidates are the same n
@@ -540,7 +570,7 @@ export function stagesOf(search: PairSearch, only?: { receipt: string } | { paym
     const candidates = search.byReceipt.get(id) ?? [];
     const best = candidates[0];
     const theirs = best ? search.byPayment.get(slotOf(best)) ?? [] : [];
-    if (best && best.score >= CLEAR.score && marginOf(candidates) >= CLEAR.margin && theirs[0] === best && marginOf(theirs) >= CLEAR.margin) return { kind: 'clear', pair: best };
+    if (best && pairable(best) && best.score >= CLEAR.score && marginOf(candidates) >= CLEAR.margin && theirs[0] === best && marginOf(theirs) >= CLEAR.margin) return { kind: 'clear', pair: best };
     const twin = alike.get(id);
     if (twin) return { kind: 'clear', pair: twin };
     if (candidates.length >= 1 && candidates.length <= SHORT_LIST) return { kind: 'short', receipt: id, candidates };
