@@ -12,7 +12,7 @@ import { store as remember, stored } from '../shell/storage.js';
 import { reloadWorkspace } from '../hooks/use-workspace.js';
 import { reloadInvoices } from '../areas/invoices/data.js';
 import type { AssistantEvent, ContextRef, ConversationSummary, MadeChange, Purpose, Turn } from '../../types/assistant.js';
-import { KEPT_CONVERSATION, KEPT_PURPOSE, afterSend, askAboutThread, messageOf, newThread, startThread, type Thread } from './thread.js';
+import { KEPT_CONVERSATION, KEPT_PURPOSE, afterSend, askAboutThread, leavesSetup, messageOf, newThread, startThread, type Thread } from './thread.js';
 import { attachmentRefusal, attachmentType, showsAsImage, type Attachment, type AttachmentType } from '../../types/attachment.js';
 import { CHAT_TAKES, leftOut, type Dropped } from '../lib/folder-drop.js';
 import { sidebarFit, sidebarWidths } from '../shell/look.js';
@@ -36,14 +36,31 @@ let state: AssistantState = { open: stored('assistant.open') === '1', listing: f
 const listeners = new Set<() => void>();
 let stop: AbortController | undefined;
 
+/** The setup as src/app/onboarding/state.ts reads it: over once the person ended it; wanted while she has it open by her own click. */
+const setup = { over: false, wanted: false };
+
 function set(patch: Partial<AssistantState>): void {
   state = { ...state, ...patch };
+  if ('purpose' in patch && state.purpose !== 'onboarding') setup.wanted = false;
   if ('open' in patch) remember('assistant.open', state.open ? '1' : null);
   if ('open' in patch || 'purpose' in patch) refit();
   if ('conversation' in patch) remember(KEPT_CONVERSATION, state.conversation ?? null);
   if ('conversation' in patch || 'purpose' in patch) remember(KEPT_PURPOSE, state.conversation ? null : state.purpose ?? null);
   for (const l of listeners) l();
+  if ('purpose' in patch) leaveSetup();
 }
+
+/** A setup that is over gives way to an ordinary conversation (src/app/assistant/thread.ts leavesSetup); an answer still streaming is left alone. */
+function leaveSetup(): void {
+  if (!state.sending && leavesSetup(state, setup)) set({ listing: false, error: undefined, ...newThread() });
+}
+
+/** Whether the setup has ended, told whenever the setup's state is read. */
+export function setupOver(over: boolean): void { setup.over = over; leaveSetup(); }
+/** Firma › «Einrichtung …»: the person opens the setup herself, so it stays open though it has ended. */
+export function keepSetup(): void { setup.wanted = true; }
+/** «Los geht's»: the setup ends, and the sidebar is the ordinary one from now on. */
+export function endSetup(): void { setup.wanted = false; setup.over = true; leaveSetup(); }
 
 /** The conversation open before the window was loaded again: its turns, or a new one when it is gone. */
 if (state.conversation) {
@@ -69,9 +86,10 @@ function fitSidebar(): boolean {
   // A phone keeps the sidebar beside its one column, as before #34.
   const fit = !state.open ? { width: 0, over: false } : phone ? { width: wanted.want, over: false } : sidebarFit(windowWidth - dock, wanted);
   const width = `${Math.round(fit.width)}px`;
-  if (root.style.getPropertyValue('--aiw') === width && root.classList.contains('aiover') === fit.over) return false;
+  if (root.style.getPropertyValue('--aiw') === width && root.classList.contains('aiover') === fit.over && root.classList.contains('aiopen') === state.open) return false;
   root.style.setProperty('--aiw', width);
   root.classList.toggle('aiover', fit.over);
+  root.classList.toggle('aiopen', state.open);
   return true;
 }
 const refit = () => { if (fitSidebar()) dispatchEvent(new Event('resize')); };
@@ -165,6 +183,8 @@ export function hideConversations(): void { set({ listing: false }); }
 export async function openConversation(id: string): Promise<void> {
   try {
     const c = await api.assistantConversation(id);
+    // Opened by the person from the list or a link: a setup conversation stays one, though the setup has ended.
+    if (c.purpose === 'onboarding') setup.wanted = true;
     set({ listing: false, conversation: c.id, turns: c.turns, extra: [], pageOff: true, purpose: c.purpose, error: undefined });
   } catch (e) { set({ error: errorText(e) }); }
 }
