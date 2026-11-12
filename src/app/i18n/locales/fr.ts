@@ -3878,6 +3878,7 @@ export default {
     'automation.home.s.runsUntil': "la période court jusqu’au {date}",
     'automation.home.s.due': "échéance {date}",
     'automation.home.s.overdue': "en retard depuis le {date}",
+    'automation.home.s.before': "avant le début de cette comptabilité",
     'automation.home.s.notSealed': "pas encore clôturée",
     'automation.home.waiting': "Vous attend",
     'automation.home.waitingLead': "vous seul pouvez en décider",

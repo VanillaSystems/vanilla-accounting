@@ -108,7 +108,11 @@ Two markers flag an entry you must read before you update:
   nicht» with the answer the app then takes.
 - MWST: a period that ended before anything in the books is dated reads «Keine Zahlungen oder
   Buchungen in dieser Periode · die Bücher beginnen am …», no longer «offen · fällig seit …» in
-  the warning colour; «Abrechnung erstellen» stays.
+  the warning colour; «Abrechnung erstellen» stays. Its result of 0.00 says «Keine Steuer
+  geschuldet: nichts zu überweisen.» without «Die Abrechnung ist trotzdem einzureichen», and
+  Automatisierung's last stage reads «vor Beginn dieser Bücher» for it instead of «überfällig seit
+  …». One rule decides it for MWST, Automatisierung and the link to an earlier return: nothing is
+  filed in these books and nothing in them is dated on or before the period's end.
 
 ## [0.4.1] - 2026-11-12
 

@@ -202,6 +202,7 @@ function Stages({ f, nav, at, vatRegistered }: { f: HomeFigures; nav: Nav; at: (
       {stage(vatRegistered ? 'filed' : 'closed', filing.kind === 'filed' ? f.booked : undefined,
         filing.kind === 'filed' ? t(vatRegistered ? 'automation.home.s.filed' : 'automation.home.s.sealed')
           : filing.kind === 'running' ? t('automation.home.s.runsUntil', { date: formatDate(filing.ends) })
+          : filing.kind === 'before' ? t('automation.home.s.before')
           : filing.due ? t(filing.overdue ? 'automation.home.s.overdue' : 'automation.home.s.due', { date: formatDate(filing.due) })
           : t('automation.home.s.notSealed'),
         vatRegistered ? at({ area: 'vat' }) : { route: { area: 'close' }, query: {} }, filing.kind === 'due' && filing.overdue)}

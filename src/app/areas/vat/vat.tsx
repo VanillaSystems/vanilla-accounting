@@ -179,7 +179,7 @@ function EarlierOpen({ books, shown, nav }: { books: Index; shown: Period; nav: 
   const oldest = booksOpenPeriod(books, localToday(), filing().length);
   if (shown.kind === 'all' || oldest.to >= shown.from) return null;
   const { state, period } = vatReturn(books, oldest.token);
-  if (state.kind !== 'open') return null;
+  if (state.kind !== 'open' || state.before) return null;
   return (
     <button type="button" className={`clink2${state.overdue ? ' warn' : ''}`} data-testid="earlier-open" onClick={() => nav.go({ route: { area: 'vat' }, query: { period } })}>
       {t(state.overdue ? 'vat.earlierOverdue' : 'vat.earlierOpen', { period: periodName(period), date: formatDate(state.due) })}

@@ -3878,6 +3878,7 @@ export default {
     'automation.home.s.runsUntil': "period runs until {date}",
     'automation.home.s.due': "due {date}",
     'automation.home.s.overdue': "overdue since {date}",
+    'automation.home.s.before': "before these books begin",
     'automation.home.s.notSealed': "not closed yet",
     'automation.home.waiting': "Waiting for you",
     'automation.home.waitingLead': "only you can decide these",

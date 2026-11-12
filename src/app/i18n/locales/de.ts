@@ -3875,6 +3875,7 @@ export const messages = {
   'automation.home.s.runsUntil': "Periode läuft bis {date}",
   'automation.home.s.due': "fällig {date}",
   'automation.home.s.overdue': "überfällig seit {date}",
+  'automation.home.s.before': "vor Beginn dieser Bücher",
   'automation.home.s.notSealed': "noch nicht abgeschlossen",
   'automation.home.waiting': "Wartet auf dich",
   'automation.home.waitingLead': "nur du kannst das entscheiden",
