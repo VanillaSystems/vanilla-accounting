@@ -26,7 +26,9 @@ The same steps for agents: [`year-close.flow.yaml`](../processes/year-close.flow
 
 File the return of the fourth quarter as every quarter
 ([quarter workflow](quarter-workflow.md), steps 1 to 9), and copy the filed XML to
-`transactional-data/2026/filings/`.
+`transactional-data/2026/filings/`. In the app, MWST › «Abrechnung erstellen» through to
+«Eingereicht» does both: for the year's last period it keeps the filed return and leaves the
+period open for the year-end.
 
 Do **not** run `npm run seal -- 2026-Q4 --close`. Year-end entries such as the exchange
 difference and depreciation are dated 31.12. Once the fourth quarter is closed, nothing can be
@@ -190,9 +192,10 @@ See [audit-export.md](audit-export.md).
 
 ## The balance sheet tab and the year-end
 
-The Bilanz and Erfolgsrechnung tabs show your entries as booked, VAT included, and say so under
-the result, with the VAT the shown figures hold (owed, input tax, net); the exported PDFs and
-CSVs carry the same line. The year-end close and the opening split the VAT off by code, as Banana does. So for a VAT-registered
-company the Bilanz tab on 31.12. differs from the opening balances on 1.1. in the VAT account
-(2201), in assets bought with input tax, and in the result. Abschluss's closing
-balance sheet is the one that carries over.
+Your entries are booked gross, with a VAT code. Bilanz, Erfolgsrechnung and Saldobilanz show
+them net of VAT during the year: the tax each code splits off stands on the VAT account (2201),
+worked out when the report is read, and a line under the result says so; the exported PDFs and
+CSVs carry the same line. Nothing is written to the journal for it. The year-end close books
+the same split, as Banana does, so the year's result on the Erfolgsrechnung is the one the
+close carries into the next year. Abschluss's closing balance sheet is the one that carries
+over.

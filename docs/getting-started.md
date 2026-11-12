@@ -1,269 +1,330 @@
 # Getting started
 
-This guide takes you from an empty folder to your first VAT return. It is for the owner of a
-small Swiss company who keeps the books alone: technical, but not an accountant.
+This guide takes you from the download to your first VAT return, in the Mac app. It is for the
+person who keeps the books of a small Swiss company: you need no terminal and no accounting
+training. The words in «guillemets» are the words on the screen, in German as the app shows them
+(the app also speaks French, Italian and English).
 
-Vanilla Accounting fits a company that is registered for VAT on the effective method, taxed on the cash
-basis (vereinnahmte Entgelte), files quarterly, and keeps a calendar fiscal year. A GmbH or an
-AG is fully supported. Read [Limits](#limits) before you start.
+Vanilla Accounting keeps the books of a GmbH, an AG or an Einzelfirma that
 
-## 1. Install
+- is registered for VAT on the effective method (a return every quarter) or on the
+  Saldosteuersatz (a return every half year), on vereinnahmte or vereinbarte Entgelte, or
+- is not registered for VAT at all.
 
-Both ways need **Claude Code** with a Claude subscription (Pro or Max): Vanilla Accounting calls
-the `claude` command to read receipts, match them to payments and book them. Install it with
-`npm install -g @anthropic-ai/claude-code`, then run `claude` once and log in. Without it,
-everything else works.
+Read [Limits](#limits) before you start. To run the app from its source code, or to work with
+commands, see [From the source](from-source.md).
 
-### The Mac app
+## 1. Install the app
 
-Download the `.dmg` from the Releases page of this repository (`arm64` for Apple silicon, `x64`
-for an Intel Mac), open it and drag **Vanilla Accounting** into Applications. Until the app is
-signed, macOS refuses it the first time: open System Settings › Privacy & Security and choose
-**Open Anyway**.
+1. Download the `.dmg` from the
+   [Releases page](../../../releases): `arm64` for a
+   Mac with Apple silicon (M1 and later), `x64` for an Intel Mac.
+2. Open the `.dmg` and drag **Vanilla Accounting** into Applications.
+3. Start it. The app is not signed with an Apple Developer ID yet, so macOS refuses it the first
+   time. Open it once and click **Done**, then go to System Settings › Privacy & Security and
+   click **Open Anyway** next to "Vanilla Accounting was blocked".
 
-The app starts on a screen with three choices. **Neue Buchhaltung anlegen** asks the questions of
-step 2 as a form and creates the workspace folder you choose; **Bestehende Buchhaltung öffnen**
-opens a workspace you already have; **Demo ansehen** opens a copy of the demo company. The app
-does what this guide does with commands: read on from step 2 for what the questions mean, and
-skip the commands. The [desktop guide](desktop.md) explains how the app is built.
+You install nothing else: no Node.js, no Homebrew. macOS may ask whether the app may access the
+folder your books are in (Documents, for example). Allow it, or the app cannot read and write the
+books.
 
-### From the source
+## 2. The first screen
 
-You need **Node.js 22** or newer (on macOS: `brew install node`). Clone this repository and
-install the app:
+At its first start the app has no books yet. The first screen leads to one of three things:
 
-```sh
-cd vanilla-accounting  # the folder you cloned it into
-npm install
-```
+- **New books** for your company: the app asks about the company and creates the folder
+  (step 3).
+- **Books you already have:** you choose their folder and the app opens it.
+- **The demo:** a made-up company with receipts, statements and invoices. You work in a copy, so
+  try anything.
 
-## 2. Set up your books: `npm run init`
+The app also offers to set up the AI (step 4). You can do that now or later.
 
-In the Mac app: **Neue Buchhaltung anlegen** on the start screen, or File › Neue Buchhaltung…
+At the next start the app opens the books you used last. The menu File has «Neue Buchhaltung…»
+and «Buchhaltung öffnen…» for other books.
 
-```sh
-npm run init
-```
+## 3. Set up your books
 
-The wizard creates a **workspace**: one folder that holds your company's books, receipts and
-statements, kept apart from the app. It is a git repository of its own, so every change to
-your books stays traceable. The app's `.env` then points at it, so every command works on
-your books.
+The app asks about your company in a conversation. With an AI you can answer in your own words
+and ask back when a question is unclear («was heisst das?»). Without one you answer with buttons
+and fields. Either way the answers end in one summary you can change line by line before the app
+creates the books.
 
-First, pick the profile that fits best. It fills in the answers below; press Enter to keep
-an answer, or type another one.
+What it asks:
 
-| Profile | For |
-|---|---|
-| Consultant / services GmbH | You sell your work: consulting, software, design. The owner is employed by the company. |
-| Webshop / goods GmbH | You sell goods, often online, and import some of them. |
-| Freelancer, not registered for VAT | An Einzelfirma below the registration threshold: purchases and sales booked gross, no VAT codes, no return. |
-| Custom | You answer every question yourself. |
+- **Who the company is:** its name as in the commercial register, the owner or managing
+  director, and the UID (CHE-123.456.789; it is on your commercial register extract and on
+  [uid.admin.ch](https://www.uid.admin.ch)).
+- **Its VAT setup:** whether it is registered for VAT, on which method (effective or
+  Saldosteuersatz), whether it reports on vereinbarte or vereinnahmte Entgelte, and how often it
+  files. All of this is on your last VAT return and on the ESTV's letters. If you are not sure,
+  ask your Treuhänder before you answer: the setup holds for the whole year, and the app refuses
+  a change once the year has bookings.
+- **How it works:** what it sells, whether it has customers abroad, imports goods, has
+  employees, and whether the owner pays business costs privately. These answers pick the
+  accounts of your chart and how the app books.
+- **Its bank accounts:** one per bank and currency, with the IBAN. The IBAN is how a statement
+  finds its account.
+- **Where the books are kept:** a folder on your Mac. Everything is in that folder: the books,
+  the receipts, the statements, the filed returns. Nothing is stored anywhere else, so that
+  folder is what you back up.
 
-Then the wizard asks for the company name, the folder for the books, the UID (from
-[uid.admin.ch](https://www.uid.admin.ch); the check digit is verified), the owner, and a few
-words on what the company does. Then these questions, in this order:
+After the books are created the app asks a few more things that depend on your answers, for
+example about a move from another program. You can put them off. What you put off stays reachable
+under **Firma** (`G F`): the VAT setup in «MWST», the bank accounts in «Geldkonten», the opening
+balances in «Eröffnung».
 
-1. **Legal form.** GmbH or AG: fully supported. Einzelfirma: the owner draws no salary, and
-   money taken out is booked on 2850 Privat. Day-to-day bookkeeping and VAT work. The year-end
-   (AHV on the profit, the tax return) is not covered.
-2. **Registered for VAT (MWST)?** Registration is mandatory from CHF 100,000 turnover a year.
-   If you answer no, the next three questions are skipped: every purchase and sale is booked
-   gross without VAT codes, there is no return, and the MWST page watches the calendar year's
-   turnover against the threshold.
-3. **VAT method.** Effective (you pay the VAT you charged minus the input tax on your costs), or
-   Saldosteuersatz (a flat rate the ESTV approved for you on your gross turnover, no input tax).
-   On the Saldosteuersatz the wizard then asks for the approved rate(s), one or two
-   (`--net-rate 4.5:Schreinerei`); the ESTV's five-character activity code of a rate can be
-   added later under Firma › MWST, the electronic return needs it.
-4. **VAT basis.** Vereinnahmt (cash): VAT is due when the money moves. Vereinbart (invoice) is
-   not supported yet, because Vanilla Accounting books from the bank statement and keeps no open invoices.
-5. **VAT reporting period.** Quarterly (the effective method's default) or half-yearly (the
-   Saldosteuersatz's). Monthly returns are not supported yet. The method, the period and the
-   rate hold for whole years: a change is possible on 1 January, in a year without entries.
-6. **Fiscal year.** The calendar year. Another fiscal year is not supported yet.
-7. **Starting point.** A new company starts with empty books. If you switch from other
-   bookkeeping, bring your opening balances of 1 January: `npm run import-opening` reads them
-   from a Banana export (Konten XML), or you enter them later.
-8. **What you sell.** Any combination of products you make yourself, goods you buy and resell (trade), and services (`--sells made,services`). This picks the accounts of your chart and the default accounts the app books with: material for your own products on 4000, goods for resale on 4200; sales of own products on 3000, traded goods on 3200, services on 3400. A supplier or customer can differ by a rule of its own.
-9. **Customers abroad?** A service to a customer abroad is usually declared without Swiss VAT.
-10. **Do you import goods?** Imports come with customs and import VAT invoices.
-11. **Employees.** None, the owner only, or staff. Vanilla Accounting books the salary and the AHV, BVG and
-    UVG payments. Your payroll provider or Treuhand does the payroll itself.
-12. **Does the owner pay business costs privately?** Then those receipts are booked on a current
-    account with the owner (2451 Kontokorrent; 2850 Privat for an Einzelfirma).
-13. **Private use of a company car or phone.** The private share takes back part of the input
-    tax (Eigenverbrauch, VAT code K81-B).
-14. **Do sales reach you as payouts from a webshop or payment provider?** Then a clearing
-    account (1093) holds the payout until its sales and fees are booked.
+**If the company existed before this year,** the books need its opening balances of 1 January:
+the balance sheet of 31 December from your previous program or your Treuhänder. Enter them in
+Firma › «Eröffnung». For a bank account, the first statement you read in offers its starting
+balance as the opening balance. Without the opening, the app's bank balance differs from the
+bank's, and the app says so on the statement.
 
-Last, your bank accounts, one at a time: Raiffeisen, UBS, PostFinance, ZKB, another cantonal
-or regional bank, Wise (one account per currency), PayPal, or a credit card. The wizard
-suggests a ledger account for each: 1020 for CHF, 1021 for EUR, 1022 for USD, then the next
-free number; 2101 for a card. It also asks for the account's IBAN. The IBAN is optional: press
-Enter to skip it, and `npm run doctor` shows it to you once the first statement is imported.
-Last it asks where the books go at year-end, such as Banana or your Treuhand. In the flag form a
-bank is `<bank>:<currency>[:<ledger account>[:<IBAN>]]`, for example `--bank "UBS:CHF::<IBAN>"`
-(an empty ledger account takes the suggested one).
+## 4. The AI
 
-The folder becomes your company's repository. Its `AGENTS.md` holds notes for Claude about your
-company; the books lie in its `vanilla-accounting/` ([ADR 0013](adr/0013-workspace-layout-and-ownership.md)):
+**What it is for.** The AI reads your receipts (the date, the amount, the VAT), finds the payment
+each one belongs to, and proposes how to book each payment. It reads a bank statement you only
+have as a PDF or on paper. It answers in the «KI» column at the side (`⌘J`), where you can ask
+for a report or say a wish in your own words («buch Swisscom immer auf Telefon»).
 
-| File or folder in `vanilla-accounting/` | Holds |
-|---|---|
-| `belege.workspace.yaml` | Who the company is, your answers, and which ledger account each bank books on |
-| `knowledge/` | What the app learns about your suppliers (`suppliers/`), customers (`customers/`), authorities (`authorities/`) and your own rules (`rules/`); each folder starts with a commented `_example.yaml` |
-| `sources/` | Places to collect receipts from: one folder per mailbox, portal or API (see sources/README.md) |
-| `beleg-import/` | Where new receipts arrive |
-| `ledger.json` | The books' settings: up to which day they are closed, opening balances, corrections |
-| `master-data/accounts.json` | Your chart of accounts, taken from the Swiss KMU chart for your profile |
-| `transactional-data/<year>/books/` | The books of the year: transactions, receipts, journal entries, one record per line. Empty at first |
-| `transactional-data/<year>/bank-statements/<bank>/` | Your camt.053 statements |
-| `transactional-data/<year>/receipts/` | Receipts after they are read and matched |
-| `transactional-data/<year>/filings/` | Your VAT returns as filed, and their seals |
+**What works without it.** Everything else: statements in the bank's camt.053 format, the
+journal, invoices, the VAT return, the reports, the year-end. Where the AI would have done
+something, the app says so and offers the way by hand, for example «Von Hand erfassen» for a
+receipt and «Von Hand buchen» for a payment.
 
-Files that are not the app's (notes, scripts, exports of an earlier program) go into `own/` at the
-repository's root; `npm run doctor` names every other one.
+**What it costs.** The app itself is free. The AI runs on your own subscription with its maker:
 
-Every question also has a flag, so `npm run init` runs without questions too:
+- **Claude Code**, with Claude Pro or higher from Anthropic, about USD 20 a month, or
+- **Codex**, with ChatGPT Plus or higher from OpenAI, about USD 20 a month.
 
-```sh
-npm run init -- --preset consultant --dir ../my-books --name "Beispiel GmbH" \
-  --uid <your UID> --owner "Erika Beispiel" --bank UBS:CHF --bank Wise:EUR --yes
-```
+One of the two is enough. «Erweitert: mit API-Schlüssel» is a third way for people who already
+pay Anthropic or OpenAI per call; the «KI» column does not work with a key alone.
 
-Run `npm run init` again on the same folder and it changes nothing. If `.env` already points
-at other books, the wizard asks before it changes that (`--set-env` replaces it without
-asking).
+**How the app sets it up.** Each program has a card that shows where you are.
 
-## 3. Check the setup: `npm run doctor`
+1. Click «Claude Code installieren» (or «Codex installieren»). The app opens the Terminal with
+   the official installer command of the maker written out. Nothing runs until you press Enter
+   there.
+2. Press Enter in the Terminal and wait until it is done. The app notices by itself; you do not
+   restart it.
+3. Click «Anmelden». Your browser opens the maker's page. Sign in with your account there (or
+   create one and choose the subscription). The app never sees your password or your login.
+4. The app makes one short test call. The card then says «bereit».
 
-From the source only. The Mac app opens only a folder that holds `belege.workspace.yaml`.
+If the account has no subscription that includes the program, the card shows what the program
+answered and what it needs.
 
-```sh
-npm run doctor
-```
+**It can wait.** «Ohne KI weiter» goes on with buttons and fields, and the app does not ask
+again. Set the AI up whenever you want under Firma › «KI».
 
-It checks the tools (Node.js, the `claude` command and its login) and the workspace
-(the manifest, the books, the folders, that every bank account is in the chart, and which
-bank account each statement file lands on). Each line starts with ✓ or ✗. A ✗ line says how
-to fix it. A ! line is a note that does not stop you.
+## 5. Read in your first bank statement
 
-## 4. Import your first bank statement
+Start with the bank. The statement lists every payment, so the app can tell you which receipts
+are missing.
 
-Vanilla Accounting reads bank statements in the ISO 20022 format **camt.053**, an XML file that Swiss
-banks offer since the switch to ISO 20022 payments. It is the statement
-(Kontoauszug), with the bank's opening and closing balance. In your e-banking, look for the
-account statement or the account export and choose camt.053. Some banks call it ISO 20022,
-XML, or "elektronischer Kontoauszug". Some banks deliver camt.053 only after you switch it on
-once in the e-banking settings, sometimes for a fee; if you cannot find it, ask your bank for
-"camt.053". At Wise, open the account in each currency, download a statement, and choose the
-camt.053 format.
+Open **Kontoauszüge** (`G K`) and drag the file onto the page, or click «Auszug» (`N`). The app
+takes:
 
-Which banks: the import is tested with Raiffeisen and Wise statements, and with statements in
-the shapes UBS, PostFinance and the cantonal banks export (the tests read synthetic ones).
-Any other bank's camt.053 reads the same way.
+- **camt.053**, an XML file from your e-banking. This is the best way: it needs no AI and brings
+  every payment with the bank's opening and closing balance. In the e-banking, look for the
+  account statement or the account export and choose camt.053. Some banks call it ISO 20022,
+  XML or «elektronischer Kontoauszug», and some switch it on only when you ask. Choose camt.053,
+  not camt.054 or camt.052: those are notifications, and the app skips them. At Wise, download
+  one statement per currency.
+- **A PDF of the statement, of any bank,** when you have no camt.053. The AI reads the payments
+  and the balances, and the app checks that they add up to the cent, page by page. The row shows
+  the payments as a table marked «aus PDF gelesen», where you can correct a line. «Einlesen»
+  imports the statement once it adds up. The AI reads at most 20 pages of one statement and says
+  so when a statement is longer.
+- **A scan or a photo of a paper statement.** Drop it the same way. If the app takes it for a
+  receipt, «Ist ein Kontoauszug» on that receipt turns it into a statement.
+- **Without an AI and without camt.053:** fill the same table by hand, or drop the bank's CSV
+  export. The app asks once which column holds what and remembers it for that account.
 
-Save each file in `transactional-data/<year>/bank-statements/<bank>/` of your workspace, for example
-`transactional-data/2026/bank-statements/UBS/` (or upload it in the app, which files it there). The file name does not matter, and a subfolder is fine. Each statement
-lands on a bank account of `belege.workspace.yaml`:
+A statement of an account the books do not know names the IBAN and offers «Bankkonto
+hinzufügen». The same statement dropped twice is read once.
 
-1. The account with the statement's IBAN and currency, when you entered the IBAN. Then the
-   folder does not matter.
-2. Otherwise, the account whose bank is the folder name, in the statement's currency.
+Kontoauszüge then shows each account month by month: the bank's opening and closing balance,
+whether the payments add up to them («Salden stimmen»), the books' balance beside the bank's,
+and a month without a statement as «fehlt». The page shows one period at a time. A statement of
+an earlier quarter is listed under that quarter: choose the period in the bar at the top edge of
+the window.
 
-A statement that matches no account stops the import before anything is written, and
-`npm run doctor` says which account to add. Two statements of different IBANs in one folder and
-currency stop it too: give each account its own bank name and IBAN, for example
-`bank: UBS Sparkonto`. The same statement saved twice is read once.
+## 6. Add your first receipts
 
-Download camt.053, not camt.054 or camt.052. A camt.054 is a booking notification (Avis) and a
-camt.052 an intraday report. Their bookings come again in the camt.053, so the import skips
-them, and `npm run doctor` names each skipped file.
+Open **Belege** (`G B`). With no receipt yet it shows «So kommen Belege in die App», three ways
+you can use together:
 
-After the first import, open Kontoauszüge in the app (`/bank`): each statement shows the bank's
-opening and closing balance, whether its payments add up to them, and the books' balance beside
-the bank's (`npm run reconcile-balances` checks the same from the command line). You can also add
-a statement there: the add button (N), or drop the camt.053 or statement PDF on the page.
+- **«Hierher ziehen»:** drag PDFs and photos (JPG, PNG, HEIC) onto the page, from the Finder or
+  from a mail, several at once or a whole folder. «Dateien wählen» opens the file dialog. This
+  works on every page of the app; a statement among the files is recognised as one.
+- **«Mit dem Handy»:** «Handy koppeln» shows a code for your phone's camera. The phone then
+  sends photos of till slips straight into the app while both are on the same Wi-Fi. Firma ›
+  «Handy» switches the phone's access on and off.
+- **«Automatisierung»:** the app fetches invoices from a mailbox. In the Mac app this is not
+  finished, see [Limits](#limits). Until then, drag the invoices out of your mail program.
 
-An incoming payment that carries the QR or creditor reference of an invoice you issued in the app
-is booked by the import itself, from the invoice's lines and VAT rates, with the invoice PDF as its
-receipt (see [Invoices](#invoices)).
+Add every invoice, every till slip and every customs bill. A receipt is what lets you deduct the
+VAT you paid: without a receipt that shows Swiss VAT, the app claims no input tax.
 
-## 5. Add receipts
+## 7. What the app does by itself, and what it asks you
 
-Drop receipts (PDF, or photos as JPG, PNG or HEIC) on the app's window, add them with the add
-button in Belege, or put them into the workspace's `beleg-import/` folder (from the Finder or
-the phone). Every invoice, every till slip, every customs
-bill. A receipt is what lets you deduct the VAT you paid.
+After every drop the app works through what arrived. A window lists each file and what became
+of it, and a line at the bottom left says what the app is doing. With an AI it
 
-## 6. Read, match, book
+1. reads each receipt: the date, the amount, the Swiss VAT and the VAT number;
+2. links each receipt to its payment and gives the file a clear name;
+3. books each payment: the accounts, the VAT code and, for a foreign currency, the ESTV's
+   exchange rate of the day.
 
-Open the app (from the source: `npm start`, then http://localhost:5173). The app processes the
-inbox itself after every drop, add, statement upload or phone scan, and when a file arrives in
-`beleg-import/`; a line at the bottom left says what it does. **Eingang verarbeiten** in Belege
-(also in ⌘K) starts it by hand. Its steps:
+It sets aside what is no receipt (terms and conditions, a newsletter, a second copy).
 
-1. Read the statements and the receipts (a photo becomes a PDF, turned upright). A dropped file
-   shows as "wird gelesen" until it is read.
-2. Read each receipt's VAT facts, with Claude.
-3. Link each receipt to its payment and name it, with Claude. Receipts move from
-   `beleg-import/` to `transactional-data/<year>/receipts/`.
-4. Book each new payment (accounts, VAT code, exchange rate), with Claude.
-   **Neu klassifizieren** on an entry in Buchungen books that one payment again.
+A payment that needs a receipt is not booked until the receipt is there. It waits, and the app
+books it the moment you add the receipt. Money you received, the bank's own fees and transfers
+between your accounts need none.
 
-From the source, `npm run extract`, `npm run extract-vat`, `npm run match` and
-`npm run classify` run the same steps one by one; they wait while the app runs a job.
+**«Braucht dich»** is the group at the top of Belege with what only you can decide:
 
-Then check the result in the app. Belege lists first what needs you ("Braucht dich"): a receipt
-without a payment (L links one, or books it as paid privately), a payment without a receipt. Add
-what is missing.
+- a receipt without a payment: «Zahlung verknüpfen» (`L`) links one, or books it as paid
+  privately or in cash;
+- a payment without a receipt: add the receipt, or say on the payment that it «Braucht keinen
+  Beleg»;
+- a question in plain words with a proposed answer, for example «… hat CHF … am
+  … bezahlt, ohne Rechnung in den Büchern. War das ein Verkauf mit MWST?». One click answers it
+  and books the payment.
+
+The dock shows how many points wait «für dich»; a click leads to them. They are also listed as
+«Aufgaben» in **Automatisierung** (`G W`). Two weeks before a return is due, a payment still
+without its receipt becomes a task «Beleg fehlt» with three ways on: «Beleg zuordnen», «Mit
+anderem Nachweis» and «Ohne Vorsteuer buchen».
+
+**Check the result** in **Buchungen** (`G U`). Change an account or a VAT code in place when the
+app got it wrong. After a correction the app offers «Ins Wissen übernehmen?», so the next
+payment of that business is booked your way. A wish works too: write «buch Swisscom immer auf
+Telefon» in the «KI» column, look at the card that shows which payments the rule would match,
+and click «Behalten». Firma › «Regeln» lists every rule, and «Neue Regel» there makes one without
+the AI.
 
 ### Find your way in the app
 
-The page is a list on the left and the selected item on the right; drag the divider to resize
-it. The areas sit in the dock at the bottom edge of the window; press `G` and then a letter:
+A page is a list on the left and the selected item on the right; drag the divider to resize it.
+The areas sit in the dock at the bottom edge of the window. Click one, or press `G` and then its
+letter:
 
-| Key | Area | Link |
+| Key | Area | What is there |
 |---|---|---|
-| `G B` | Belege: the receipts | `/receipts`, `/receipts/<id>` |
-| `G I` | Rechnungen: invoices, customers, sent documents | `/invoices`, `/invoices/2026-006` |
-| `G K` | Kontoauszüge: the bank statements and their payments | `/bank`, `/bank/1021-2026-09` |
-| `G U` | Buchungen: the journal | `/journal`, `/journal/<entry-id>` |
-| `G M` | MWST: the VAT return of a quarter, and the VAT codes | `/vat`, `/vat/405`, `/vat/codes/I81` |
-| `G R` | Bilanz & ER: Erfolgsrechnung, Bilanz, Saldobilanz and each account's ledger; Eigene Berichte | `/reports/balance/1021`, `/reports/custom/<name>` |
-| `G A` | Abschluss: the year-end in seven steps | `/close`, `/close/<step>` |
-| `G F` | Firma: profile, VAT, banks, chart of accounts, periods, invoice layout, display | `/company/<section>` |
+| `G B` | Belege | The receipts, and first what needs you |
+| `G I` | Rechnungen | Invoices you write, customers, what was sent |
+| `G K` | Kontoauszüge | The bank statements and their payments |
+| `G U` | Buchungen | The journal |
+| `G M` | MWST | The VAT return of a period, with the bookings behind each figure |
+| `G R` | Bilanz & ER | Erfolgsrechnung, Bilanz, Saldobilanz, each account's ledger, your own reports |
+| `G A` | Abschluss | The year-end |
+| `G W` | Automatisierung | What the app does by itself, its runs, and the tasks that wait for you |
+| `G P` | Geschäftspartner | Suppliers, customers and authorities: notes, rules, bookings |
+| `G E` | Wissen | How your company works, as the app has learned it |
+| `G V` | Änderungen | What changed in rules and settings, and saving it |
+| `G F` | Firma | The company's profile, VAT setup, bank accounts, chart of accounts, invoice layout, the AI |
 
-Every page has its own link, so the address bar always names what is on screen; `?period=2026-Q3`
-(or `2026`, `2026-09`, `2026-07-01_2026-09-30`) picks the period, and without it a list shows the
-open quarter. [urls.md](urls.md) lists every path. The language is no part of a link: choose it
-in the top bar, which shows when you move the mouse to the top edge, with search, the period,
-the export, zoom and light or dark.
-
-The keys that work everywhere:
+A bar at the top edge, which shows when you move the mouse there, holds the search, the period,
+the export, zoom, light or dark, and the language. A list shows the open period unless you
+choose another one there.
 
 | Key | Does |
 |---|---|
-| `⌘K` | Find a receipt, entry, invoice, account, area or action |
+| `⌘K` | Find a receipt, booking, invoice, account, area or action |
+| `⌘J` | Open or close the «KI» column |
 | `↑` `↓` or `J` `K` | Move through the list; `Esc` goes back from the detail to the list |
-| `N` | Add: a receipt, a statement, an entry, an invoice, depending on the area |
+| `N` | Add: a receipt, a statement, a booking, an invoice, depending on the area |
 | `/` | Search the list |
-| `⌘Z` | Undo the last change (the toast says what it was) |
-| `⇧E` | Export: reports, journal, receipts, a package for your Treuhand |
+| `⌘Z` | Undo the last change (the message says what it was) |
+| `⇧E` | Export: reports, the journal, receipts, a package for your Treuhänder |
 | `T` | Light or dark |
 | `⌘+` `⌘−` `⌘0` | Zoom |
 | `?` | Show or hide the key help at the bottom |
 
-The key help lists the keys of the area you are in, such as `L` (link a payment), `Space`
-(preview), `D` (download) and `E` (edit) in Belege.
+## 8. File the VAT return
+
+A return is prepared once its period has ended. Open **MWST** (`G M`). It shows one period: what
+is to pay on top, the figures (Ziffern) of the ESTV form below, and for each figure the bookings
+behind it. A quarter that has ended and is not filed shows as «… nicht eingereicht · fällig …»;
+click it to open it. A period still running says «läuft noch bis …».
+
+1. **Check the figures.** The turnover (Ziffer 200) should match your sales of the period.
+   Every input tax (Ziffern 400 and 405) needs a receipt with Swiss VAT. Open a figure that
+   surprises you and look at its bookings.
+2. Click **«Abrechnung erstellen»**. The app starts «MWST abrechnen» and stops at a task for
+   you, «Abrechnung … prüfen». Open it («Aufgabe öffnen»; it is also under «Aufgaben» in
+   Automatisierung). It says what is to pay and lists every figure by name, and what is still
+   open in the period: payments without a booking, receipts without a payment.
+3. Click **«Freigegeben»** when the figures are right. The button is not there while a VAT
+   question of the period is unanswered: answer it first. From this click on the period is
+   held: nothing in it changes until you have filed, or until you click «Zurück» to go on
+   working in it.
+4. The next task, «Abrechnung … einreichen», offers the file for the ESTV as a download («…
+   laden»). Log in to the ESTV's ePortal, open «MWST abrechnen» for the period and upload the
+   file. Compare the figures the portal shows with the app's. If they differ, do not submit.
+5. Submit the return at the ESTV and pay the amount. Both are due 60 days after the period
+   ends.
+6. Back in the app, click **«Eingereicht»** and confirm with «Ja, eingereicht». The app keeps
+   the filed return, closes the period and seals it.
+
+From then on that period never changes: the app shows it with a lock and refuses every edit in
+it. When you find a mistake later, you correct it in the open period: a filed booking offers
+«Korrektur in … erfassen», and MWST shows the difference on the Korrekturabrechnung (ESTV form
+0535) of the filed period.
+
+The last period of the year is filed the same way, but the year-end closes and seals it, so the
+year-end bookings can still be dated 31 December ([year-end.md](year-end.md)).
+
+On the Saldosteuersatz the return needs the ESTV's activity code of each rate (five characters,
+on the ESTV's letter that approved the rate). Enter it in Firma › «MWST»; «Freigegeben» appears
+once it is there. A company that is not registered files nothing: MWST shows the year's turnover
+against the limit for registration.
+
+[The quarter, step by step](quarter-workflow.md) goes through a whole quarter in more detail.
+
+## 9. Write invoices
+
+Open **Firma** (`G F`) first:
+
+- «Firma»: the company's address. An invoice needs it.
+- «Rechnungslayout»: the first time, «Rechnungen einrichten» asks which bank account your
+  customers pay to, on which account the revenue is booked, and the payment term in days. After
+  that the section sets the logo, colour, font and texts of the invoice. «Zahlungskonten» there
+  names, per currency, the account whose IBAN is printed on the invoice.
+- «E-Mail-Versand»: your mailbox's outgoing server, to send invoices from the app. The password
+  goes into the Mac's keychain, never into the books. Without it you download the PDF and send
+  it yourself.
+
+Then open **Rechnungen** (`G I`) and press `N` («Neue Rechnung»). You fill in the draft on the
+A4 sheet itself. «Ausstellen» checks what the law requires on an invoice (MWSTG Art. 26), gives
+it its number and stores the PDF; an issued invoice is never changed, a mistake takes a credit
+note or a cancellation. «Senden» sends it by e-mail or downloads the PDF, and records it.
+
+An invoice in Swiss francs or euros to a Swiss account carries the Swiss QR-bill. When a
+statement shows a payment with the invoice's reference, the app books it from the invoice by
+itself and marks the invoice «Bezahlt». On vereinnahmte Entgelte the sale is booked when the
+money arrives. On vereinbarte Entgelte the invoice is booked on its date, and the payment only
+settles it.
+
+## 10. Update the app
+
+Download the new `.dmg` from the
+[Releases page](../../../releases) and replace the
+app in Applications. Until the app is signed, macOS asks again as in step 1. Your books stay
+where they are. If a version changed the format of the books, the app brings them to the new
+format when it opens them.
+
+[CHANGELOG.md](../CHANGELOG.md) lists what each version changed. An entry marked **⚠ figures**
+changes a figure of an open period, and one marked **⚠ action** needs a step from you.
 
 ## Your own reports
 
 A report the app has no page for («all expenses this quarter by account», «what came in EUR
 this year») is one you describe, and the app computes. There are two ways to make one:
 
-- **Ask the AI in the sidebar** (`⌘J`) in your own words. It writes what the report shows,
+- **Ask the AI** in the «KI» column (`⌘J`) in your own words. It writes what the report shows,
   never a figure: the app runs it on the books and shows a card with the first rows and every
   total, «PDF», «CSV» and «Bericht speichern». When the AI's words state a figure the app did
   not compute, the app withdraws those words; the card stays.
@@ -280,112 +341,66 @@ different currencies are summed apart. A booking's amount is as booked, VAT incl
 is the amount without the VAT, which is what Bilanz and Erfolgsrechnung show for the account,
 and the report says on which account the VAT stands there.
 
-A saved report is a file, `knowledge/reports/<name>.report.yaml`, that holds what the report
-shows and never its figures. Eigene Berichte lists it and runs it each time it is opened, for
-its own period or, with one click, for the period of the page. «Bearbeiten» opens it in the
-form, and «Löschen» has «Rückgängig». Änderungen lists it until you save. The PDF has the title,
-the period, the filters in words, the group and section totals, the comment and the VAT note.
-The CSV is the plain table, one row per line, as the export writes it.
-
-## 7. File the VAT return
-
-Open MWST (`G M`). It shows the return of the quarter: the figures (Ziffern) with the amount to
-pay on top, and for each Ziffer the bookings behind it, grouped by VAT code. When they are right:
-
-```sh
-npm run vat-xml -- 2026-Q3
-```
-
-This writes an eCH-0217 XML. Import it in the ESTV portal ("MWST abrechnen"), check, and
-submit. Then copy the XML into `transactional-data/<year>/filings/` and close the quarter (the fourth quarter closes with
-the year instead, see [year-end.md](year-end.md)):
-
-```sh
-npm run seal -- 2026-Q3 --close
-```
-
-This sets `config.closedThrough` in `ledger.json` to the last day of the quarter and seals it.
-From then on, that quarter never changes: the app shows it with a lock and refuses every edit
-in it. Corrections are booked in the next open quarter (in Buchungen, a filed entry offers
-**Korrektur in … erfassen**), and MWST shows them on the Korrekturabrechnung (form 0535, `/vat/0535`); see the
-app's `AGENTS.md`, golden rule 1.
-
-## 8. Update the app
-
-The Mac app: download the new `.dmg` and replace the app in Applications. Your books stay where
-they are; the app brings them to the new format when it opens them.
-
-From the source:
-
-```sh
-npm run update
-```
-
-This pulls the newest version, installs changed dependencies, brings your workspace files to
-the new format (with a backup in `data/backups/`), and runs `npm run doctor` and
-`npm run test:books`. It stops at the first problem and says how to fix it. Read what it prints
-from `CHANGELOG.md`: an entry marked **⚠ figures** changes a figure of an open quarter, and one
-marked **⚠ action** needs something from you. Commit your workspace afterwards.
-
-## Invoices
-
-The app writes invoices with a Swiss QR-bill. Add the company's address and an `invoicing` block to
-`belege.workspace.yaml`:
-
-```yaml
-company:
-  # name, uid, owner as before
-  address: { street: Musterstrasse, number: "1", postcode: "8000", town: Zürich, country: CH }
-bankAccounts:
-  - { bank: Raiffeisen, currency: CHF, account: "1021", label: Bank Raiffeisen, iban: CH65 8080 8000 0000 0000 1 }
-invoicing:
-  payTo:
-    CHF: { account: "1021", qrIban: CH44 3199 9123 0008 8901 2 }
-  revenueAccount: "3400"
-  paymentTermsDays: 30
-  layout: { logo: invoices/logo.svg, accent: "#141a26" }
-```
-
-- `payTo` names, per currency (CHF, EUR), the bank account customers pay to. The account needs its
-  IBAN. With a QR-IBAN from your bank, the QR-bill carries a QR reference; without one, a creditor
-  reference (RF…). An account outside Switzerland and Liechtenstein prints its IBAN instead of a
-  QR-bill.
-- `revenueAccount` is where a paid invoice's revenue is booked, unless a line names its own account.
-- `layout` and `texts` (the text above and below the table, per language, `{days}` for the payment
-  term) are optional.
-
-Write invoices in Rechnungen (`G I`, then `N`). A draft is edited on the A4 sheet itself;
-**Ausstellen** numbers it after checking what Art. 26 MWSTG requires, and **Senden** sends it
-by e-mail or downloads the PDF, and records the send. Firma › Rechnungslayout sets the font,
-colour, logo, texts and the e-mail's subject and text per language.
-
-To send by e-mail, set the company's mailbox in Firma › E-Mail-Versand: SMTP server, port,
-encryption, user, sender and reply-to (`outgoingMail` in `belege.workspace.yaml`). The password
-is never in the workspace: the Mac app keeps it in the Mac's keychain (enter it in
-E-Mail-Versand), and from the source it is `VANILLA_SMTP_PASSWORD` in the app's `.env`
-(`.env.example`). The stored PDF goes out byte for byte; a message the server refuses records
-nothing.
-
-The Mac app prints invoices itself. From the source, printing needs Google Chrome, Microsoft
-Edge, Brave or Chromium on the computer (or `CHROME_PATH` set to one). An issued invoice is stored as `invoices/<number>.pdf` and never printed
-again; `invoices.json` holds the customers, the invoices and what was sent.
+Eigene Berichte lists a saved report and runs it each time it is opened, for its own period or,
+with one click, for the period of the page. «Bearbeiten» opens it in the form, and «Löschen»
+has «Rückgängig». The PDF has the title, the period, the filters in words, the group and section
+totals, the comment and the VAT note. The CSV is the plain table.
 
 ## Limits
 
-- **VAT:** cash basis; the effective method by quarter, the Saldosteuersatz by half year
-  (form 0553 as the app models it: the approved rates on the gross turnover and Bezugsteuer;
-  the credits of the forms 1050/1055 are not kept), or books without VAT. No vereinbarte
-  Entgelte, no monthly returns, no fiscal year other than the calendar year.
-- **Payroll:** Vanilla Accounting books salary and social security payments. It does not calculate
-  payroll, the Lohnausweis or the AHV statement.
-- **Invoicing:** invoices, credit notes, reminders and cancellations are written in the app and
-  sent by e-mail through the company's own SMTP mailbox. A sale is booked when its payment arrives, also for an invoice.
-  Invoices still open on 31 December are booked as receivables at the year-end close and reversed
-  on 1 January.
-- **Banks:** any Swiss bank's camt.053 imports. Real files were tested from Raiffeisen and
-  Wise; for another bank, check the first statement's transactions and closing balance. camt.054
-  notifications and PayPal and credit card statements are not imported: book those by hand.
-- **Year-end:** `npm run year:close` checks the year, books the exchange difference, guides the
-  year-end entries and closes the year; `npm run year:open` opens the next one
-  ([year-end.md](year-end.md)). Your Treuhand still signs off the annual accounts, and
-  Bilanz & ER shows amounts VAT included.
+What holds today. Where something is missing and has an issue, the issue is linked.
+
+- **Checked by you.** The app is free and comes without warranty. Check every return before you
+  file it, or have your Treuhänder check it.
+- **VAT.** The effective method by quarter, the Saldosteuersatz by half year, on vereinnahmte
+  or vereinbarte Entgelte, or books without VAT. No monthly returns and no fiscal year other
+  than the calendar year
+  ([#9](../../../issues/9)). The method, the basis
+  and the period hold for whole years: the app refuses a change while the open year has
+  bookings.
+- **Saldosteuersatz.** The return is form 0553 as the app models it: the approved rates (one or
+  two) on the gross turnover, and Bezugsteuer. Not modelled: the credits of the forms 1050 and
+  1055 (Ziffern 470 and 471) and Ziffer 415. The numbers of the rate rows (323, 333) come from
+  a code list and were not checked against the paper form: compare the first return with the
+  ESTV's form.
+- **Vereinbarte Entgelte.** An invoice you write in the app is taxed on its date. A supplier's
+  bill counts on its date once its payment is booked: the app keeps no list of unpaid supplier
+  bills with due dates
+  ([#93](../../../issues/93)). Documents dated
+  before the books: [#170](../../../issues/170).
+- **Banks.** Any Swiss bank's camt.053, and a PDF, scan or photo of any bank's statement (read
+  by the AI, at most 20 pages each) or its CSV export (at most 5000 rows). Real camt.053 files
+  were tested from Raiffeisen and Wise: for another bank, check the first statement's payments
+  and closing balance. Not handled yet: a company credit card whose statement is not read in
+  ([#94](../../../issues/94)), payments from
+  PayPal, Twint or another account the app does not import
+  ([#95](../../../issues/95)), and the cash box
+  ([#91](../../../issues/91)): book those by hand.
+- **Webshops and card terminals.** A payment provider's payouts, sales and fees go over a
+  clearing account, the sales from the provider's CSV export. The app ships the columns of
+  Shopify's exports; another provider needs its columns written into your books' knowledge
+  ([processes/README.md](../processes/README.md), «A payment provider»). Reading a shop through
+  its API: [#222](../../../issues/222).
+- **Receipts by mail.** The Mac app keeps a mailbox and its password (Firma › «Quellen») and
+  checks the connection, but does not fetch mail by itself yet. Until then, drag invoices from
+  your mail program into Belege. Run from the source, the app fetches them
+  ([mail-setup.md](mail-setup.md)).
+- **Receipts from the phone.** The iPhone app is not in the App Store yet. The pairing code
+  opens the scan page in the phone's browser, on the same Wi-Fi as the Mac.
+- **Moving from another program.** You enter the opening balances by hand; the app does not
+  import another program's books. From the source, a Banana export of the accounts can be read
+  ([from-source.md](from-source.md)). Learning how the company books from its previous books:
+  [#198](../../../issues/198).
+- **Payroll.** The app books salary and the AHV, BVG and UVG payments. It does not calculate
+  payroll, the Lohnausweis or the AHV statement: those stay with your payroll provider or
+  Treuhänder. Money an employee advanced:
+  [#92](../../../issues/92).
+- **Invoices.** Invoices, credit notes, reminders and cancellations, sent through your own
+  mailbox. On vereinnahmte Entgelte, invoices still open on 31 December are booked as
+  receivables at the year-end and reversed on 1 January.
+- **Year-end.** Abschluss checks the year, books the exchange difference, guides the year-end
+  bookings, closes the year and opens the next one ([year-end.md](year-end.md)). For an
+  Einzelfirma the AHV on the profit and the tax return are not covered. Your Treuhänder still
+  signs off the annual accounts.
+- **The Mac app** is not signed yet (step 1) and does not update itself (step 10). There is no
+  Windows or Linux app.
