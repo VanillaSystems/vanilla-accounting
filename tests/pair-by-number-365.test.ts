@@ -19,11 +19,11 @@ import type { LedgerBankAccount } from '../src/workspace/workspace.js';
 import type { BankTransaction, Index, Receipt } from '../src/types/index.js';
 
 const toChf = (a: number) => a;
-const OWN = 'Malerei Huber GmbH\nIndustriestrasse 14, 9500 Wil SG\nMWST-Nr. CHE-345.678.915 MWST\nImmo Verwaltung Säntis AG\nBahnhofstrasse 2\n9000 St. Gallen\nRechnung 2026-029\nDatum: 10.07.2026\nMalerarbeiten Treppenhaus MFH Bronschhofen, 4 Geschosse 11517.10\nMWST 8.1% 932.90\nTotal CHF 12450.00\nZahlbar innert 30 Tagen. IBAN CH93 0076 2011 6238 5295 7';
+const OWN = 'Malerei Huber GmbH\nIndustriestrasse 14, 9500 Wil SG\nMWST-Nr. CHE-123.456.789 MWST\nImmo Verwaltung Säntis AG\nBahnhofstrasse 2\n9000 St. Gallen\nRechnung 2026-029\nDatum: 10.07.2026\nMalerarbeiten Treppenhaus MFH Bronschhofen, 4 Geschosse 11517.10\nMWST 8.1% 932.90\nTotal CHF 12450.00';
 // The persona's own invoice, read without an AI: its date, amount, rate and the firm's own UID.
 const treppenhaus = (over: Partial<Receipt> = {}): Receipt => ({
   id: 'treppenhaus', filename: 'Rechnung_2026-029_Treppenhaus.pdf', originalFilename: 'Rechnung_2026-029_Treppenhaus.pdf', extractedText: OWN, extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '', location: 'archived',
-  date: '2026-07-10', amount: 12450, currency: 'CHF', vatId: 'CHE-345.678.915', hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, net: 11517.1, vat: 932.9, gross: 12450 }], ...over,
+  date: '2026-07-10', amount: 12450, currency: 'CHF', vatId: 'CHE-123.456.789', hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, net: 11517.1, vat: 932.9, gross: 12450 }], ...over,
 });
 const pay = (ref: string, over: Partial<BankTransaction> = {}): BankTransaction => ({
   ref, bank: 'Raiffeisen', date: '2026-08-04', amount: 12450, currency: 'CHF', direction: 'CRDT', counterparty: 'Immo Verwaltung Säntis AG', description: 'Rechnung 2026-029 Treppenhaus MFH Bronschhofen', ...over,
@@ -109,7 +109,7 @@ test('paired, without an AI, the payment opens «Von Hand buchen» as a sale at 
   const b = books([treppenhaus()], [pay('p'), ...quarter]);
   await runPairChain(port(b), { toChf });
   const bank = [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Raiffeisen CHF', role: 'bank' }] as unknown as LedgerBankAccount[];
-  const d = bookingDraft(b, 'p', bank, undefined, { defaults: { sales: '3400' }, chart: ['1020', '1100', '3400'], ownUid: 'CHE-345.678.915' })!;
+  const d = bookingDraft(b, 'p', bank, undefined, { defaults: { sales: '3400' }, chart: ['1020', '1100', '3400'], ownUid: 'CHE-123.456.789' })!;
   assert.deepEqual(d.receipts, ['treppenhaus']);
   assert.deepEqual(d.lines.map((l) => [l.accountDebit, l.accountCredit, l.amount, vatCodeOf(l.vat, l.accountDebit, l.accountCredit)?.code]), [['1020', '3400', 12450, 'V81']]);
   assert.ok(d.notes.some((n) => n.kind === 'sale'));

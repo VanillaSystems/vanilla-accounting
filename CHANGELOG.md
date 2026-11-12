@@ -46,7 +46,7 @@ Two markers flag an entry you must read before you update:
   too, are proposed, never linked; a part payment is never linked. The payment then opens «Von
   Hand buchen» with the sale at the invoice's rate; nothing is booked without her.
 - A task about a payment names it everywhere, the corner included: «Zahlung von Hand buchen ·
-  Familie Keller, CHF 4'860.00, 02.11.2026». Three or more such tasks are one line in the corner,
+  Familie Keller», with the amount and the day. Three or more such tasks are one line in the corner,
   «11 Zahlungen von Hand buchen», listed under Aufgaben (#365).
 - The account field finds an account by the words a person types for it besides its name
   («Miete», «Benzin», «Versicherung», «Werkzeug», «Malerarbeiten»): the Swiss chart's accounts
