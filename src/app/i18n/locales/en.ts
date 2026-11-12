@@ -2502,6 +2502,7 @@ export default {
     'desktop.moveNo': 'Not now',
     'desktop.moveFailed': 'The app could not be moved. Drag it into Applications by hand.',
     'desktop.startFailed': 'Vanilla Accounting could not start.',
+    'desktop.loadFailed': 'The page could not be loaded. The app keeps running; try again.',
     'desktop.dialogFailed': 'The window for choosing the folder did not open. Quit Vanilla Accounting and open it again.',
     'desktop.saveFailed': 'The file could not be saved. Try again or choose another folder.',
     'desktop.noWorkspace': 'No books open.',

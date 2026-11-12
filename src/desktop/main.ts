@@ -21,7 +21,7 @@ import { freshLoginPath } from '../platform/ai-cli.js';
 import { ASK, PUSH, TELL } from './channels.js';
 import { chosenFolder, newFolderPanel } from './new-folder.js';
 import { sameOrigin, saveFile } from './save-file.js';
-import { bringUp, loadPage, offerMove, type Waiting } from './start.js';
+import { bringUp, offerMove, windowLoader, type Waiting } from './start.js';
 import { dictate, isLang } from './dictation.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
 import { electronPage } from './print.js';
@@ -58,25 +58,33 @@ async function start(): Promise<void> {
   /** The local server's address once it listens; until then there is no page to show. */
   let base: string | undefined;
   /** The newest window while it waits hidden for its first paint (bringUp). */
-  let waiting: Waiting = { since: 0, failed: false };
+  let waiting: Waiting = { since: 0 };
+  /** The newest window's loads (windowLoader): tried again for under 10 s when one fails. */
+  let load: ReturnType<typeof windowLoader> | undefined;
+  /** The start's first page is loaded; a later page that fails to load says so and ends nothing. */
+  let started = false;
+  const loadFailed = (reason: string, first: boolean) => {
+    const t = textsIn(language);
+    if (first) {
+      dialog.showErrorBox(t('desktop.startFailed'), reason);
+      app.exit(1);
+      return;
+    }
+    void dialog.showMessageBox({ type: 'warning', message: t('desktop.loadFailed'), detail: reason });
+  };
   const show = (path = '/') => {
     if (!base) return;
     const fresh = !win || win.isDestroyed();
     if (fresh) {
       const opened = (win = createWindow(stateFile));
-      const mine: Waiting = { since: Date.now(), failed: false };
-      waiting = mine;
+      waiting = { since: Date.now() };
       // A new window appears once the page has painted, not as an empty frame.
       opened.once('ready-to-show', () => opened.show());
+      load = windowLoader(opened, loadFailed);
     }
-    const target = win!;
-    // A load that fails is tried again (loadPage); one that never succeeds says so and ends the app.
-    void loadPage(() => target.loadURL(base + path), () => !target.isDestroyed()).then((r) => {
-      if (r.result !== 'failed') return;
-      dialog.showErrorBox(textsIn(language)('desktop.startFailed'), r.reason);
-      app.exit(1);
-    });
-    if (!fresh) target.show();
+    void load!(base + path, !started);
+    started = true;
+    if (!fresh) win!.show();
   };
   // A second start, a click on the Dock icon, `open -a`: the window in front. Listening before the
   // first wait of the start, so a start that hangs later (books that do not open, a login shell

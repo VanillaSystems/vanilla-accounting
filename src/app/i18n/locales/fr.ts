@@ -2502,6 +2502,7 @@ export default {
     'desktop.moveNo': 'Plus tard',
     'desktop.moveFailed': 'L’app n’a pas pu être déplacée. Glisse-la à la main dans «Applications».',
     'desktop.startFailed': 'Vanilla Accounting n’a pas pu démarrer.',
+    'desktop.loadFailed': 'La page n’a pas pu être chargée. L’app continue de fonctionner ; réessaie.',
     'desktop.dialogFailed': 'La fenêtre pour choisir le dossier ne s’est pas ouverte. Quitte Vanilla Accounting et rouvre-le.',
     'desktop.saveFailed': 'Le fichier n’a pas pu être enregistré. Réessaie ou choisis un autre dossier.',
     'desktop.noWorkspace': 'Aucune comptabilité ouverte.',
