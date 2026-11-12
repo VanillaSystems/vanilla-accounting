@@ -70,6 +70,13 @@ export interface SmokeBridge {
  */
 export interface KnownBooks { root: string; name?: string; problem?: string; demo: boolean; setup?: true }
 
+/**
+ * GET /api/desktop/folder: what a folder holds before new books go into it. `nothing`: missing or
+ * empty; `books`: a workspace (`name`, the company's); `setup`: a setup broken off (`name` once
+ * answered); `files`: anything else, also a folder that cannot be read.
+ */
+export interface FolderLook { holds: 'nothing' | 'books' | 'setup' | 'files'; name?: string }
+
 /** GET /api/desktop/ai: whether the setup conversation can run; without a provider the form takes its place. */
 /** `off`: «KI ganz ausschalten» is on on this Mac (src/llm/off.ts); `available` is then false. */
 export interface AiAvailability { available: boolean; off?: boolean }

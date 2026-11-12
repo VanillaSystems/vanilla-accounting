@@ -18,7 +18,10 @@ import { APP_ROOT } from '../workspace/workspace.js';
 import type { KnownBooks, MenuCommand } from '../types/desktop.js';
 import { setupPath } from '../app/desktop/bridge.js';
 import { freshLoginPath } from '../platform/ai-cli.js';
+import { ASK, PUSH, TELL } from './channels.js';
+import { chosenFolder, newFolderPanel } from './new-folder.js';
 import { sameOrigin, saveFile } from './save-file.js';
+import { bringUp, offerMove, type Waiting } from './start.js';
 import { dictate, isLang } from './dictation.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
 import { electronPage } from './print.js';
@@ -43,18 +46,47 @@ const DICTATION = process.platform !== 'darwin' ? undefined
 app.commandLine.appendSwitch('font-render-hinting', 'none');
 
 if (!app.requestSingleInstanceLock()) app.quit();
-else void start();
+// A start that fails says so and ends: never a running app without a window.
+else void start().catch((e: unknown) => {
+  dialog.showErrorBox(textsIn(languageOf(app.getLocale()))('desktop.startFailed'), e instanceof Error ? e.message : String(e));
+  app.exit(1);
+});
 
 async function start(): Promise<void> {
-  await app.whenReady();
   const stateFile = join(app.getPath('userData'), 'desktop.json');
+  let win: BrowserWindow | undefined;
+  /** The local server's address once it listens; until then there is no page to show. */
+  let base: string | undefined;
+  /** The newest window while it waits hidden for its first paint (bringUp). */
+  let waiting: Waiting = { since: 0, failed: false };
+  const show = (path = '/') => {
+    if (!base) return;
+    const fresh = !win || win.isDestroyed();
+    if (fresh) {
+      const opened = (win = createWindow(stateFile));
+      const mine: Waiting = { since: Date.now(), failed: false };
+      waiting = mine;
+      // A new window appears once the page has painted, not as an empty frame.
+      opened.once('ready-to-show', () => opened.show());
+      // -3: a load replaced by the next one, no failure.
+      opened.webContents.on('did-fail-load', (_e, code, _text, _url, mainFrame) => { if (mainFrame && code !== -3) mine.failed = true; });
+    }
+    void win!.loadURL(base + path);
+    if (!fresh) win!.show();
+  };
+  // A second start, a click on the Dock icon, `open -a`: the window in front. Listening before the
+  // first wait of the start, so a start that hangs later (books that do not open, a login shell
+  // that does not answer) still gives the person a window.
+  app.on('second-instance', () => bringUp(win, show, waiting));
+  app.on('activate', () => bringUp(win, show, waiting));
+  await app.whenReady();
   const { homepage } = appPackage();
   usePrintPages(electronPage);
   // The login shell's PATH for a CLI installed elsewhere than ~/.local/bin; every later look asks it again (src/platform/ai-cli.ts).
   const pathKnown = freshLoginPath();
   let language = languageOf(app.getLocale());
-  let win: BrowserWindow | undefined;
-  await offerApplicationsFolder(textsIn(language));
+  // Moved: Electron quits this process and starts the app in the Applications folder; nothing more starts here.
+  if (await offerApplicationsFolder(textsIn(language)) === 'moved') return;
 
   const server = desktopServer({
     stateFile,
@@ -69,20 +101,10 @@ async function start(): Promise<void> {
   const port = portOf(await listen(server.app, '127.0.0.1', readState(stateFile).port));
   writeState(stateFile, { ...readState(stateFile), port });
   server.allowHost(`127.0.0.1:${port}`);
-  const base = `http://127.0.0.1:${port}`;
+  base = `http://127.0.0.1:${port}`;
 
   guard(base);
 
-  const show = (path = '/') => {
-    const fresh = !win || win.isDestroyed();
-    if (fresh) {
-      const opened = (win = createWindow(stateFile));
-      // A new window appears once the page has painted, not as an empty frame.
-      opened.once('ready-to-show', () => opened.show());
-    }
-    void win!.loadURL(base + path);
-    if (!fresh) win!.show();
-  };
   /** Books open on their page; a folder whose setup was broken off continues it on the start screen. */
   const pathOf = (books: KnownBooks | undefined) => (books?.setup ? setupPath(books.root) : '/');
   const opening = (open: () => Promise<KnownBooks>) => async () => {
@@ -98,6 +120,11 @@ async function start(): Promise<void> {
     const r = win && !win.isDestroyed() ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
     return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
   };
+  /** The save panel that names the folder of new books, in the Documents folder (the server's booksHome). */
+  const chooseNewFolder = async (choice: unknown): Promise<string | null> => {
+    const options = newFolderPanel(choice, app.getPath('documents'));
+    return chosenFolder(win && !win.isDestroyed() ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options));
+  };
   function refreshMenu(): void {
     Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate(language, server.info().recent, {
       openBooks: async () => {
@@ -107,14 +134,15 @@ async function start(): Promise<void> {
       newBooks: () => show('/start?new'),
       demo: opening(() => server.openDemo()),
       openRecent: (root) => void opening(() => server.open(root))(),
-      command: (command: MenuCommand) => win?.webContents.send('desktop:menu', command),
+      command: (command: MenuCommand) => win?.webContents.send(PUSH.menu, command),
       docs: homepage ? () => void shell.openExternal(homepage) : undefined,
     }, !app.isPackaged)));
   }
 
   if (SMOKE) smokeHandles();
-  ipcMain.handle('desktop:chooseFolder', (_e, title: unknown) => chooseFolder(typeof title === 'string' ? title : ''));
-  ipcMain.handle('desktop:saveFile', async (e, url: unknown, name: unknown) => {
+  ipcMain.handle(ASK.chooseFolder, (_e, title: unknown) => chooseFolder(typeof title === 'string' ? title : ''));
+  ipcMain.handle(ASK.chooseNewFolder, (_e, choice: unknown) => chooseNewFolder(choice));
+  ipcMain.handle(ASK.saveFile, async (e, url: unknown, name: unknown) => {
     const href = typeof url === 'string' ? sameOrigin(url, e.sender.getURL()) : undefined;
     if (!href) return false;
     return saveFile(href, typeof name === 'string' ? basename(name) : 'document.pdf', {
@@ -132,7 +160,7 @@ async function start(): Promise<void> {
     });
   });
   dictationHandles();
-  ipcMain.on('desktop:language', (_e, code: unknown) => {
+  ipcMain.on(TELL.language, (_e, code: unknown) => {
     const next = languageOf(typeof code === 'string' ? code : undefined);
     if (next !== language) { language = next; refreshMenu(); }
   });
@@ -143,8 +171,6 @@ async function start(): Promise<void> {
   server.startBackground();
   void server.phone.resume().then((p) => { if (p.error) console.error(`phone: ${p.error}`); });
   show(pathOf(first));
-  app.on('second-instance', () => { if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.focus(); } });
-  app.on('activate', () => { if (!win || win.isDestroyed()) show(); });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
   void checkForUpdates();
 }
@@ -153,25 +179,23 @@ async function start(): Promise<void> {
  * Started from the download's window (the dmg) or the Downloads folder, the app is gone once the
  * dmg is ejected. Moved by the app itself, macOS does not ask about it a second time.
  */
-async function offerApplicationsFolder(t: ReturnType<typeof textsIn>): Promise<void> {
-  if (!app.isPackaged || SMOKE || app.isInApplicationsFolder()) return;
-  const { response } = await dialog.showMessageBox({
-    type: 'question', message: t('desktop.moveTitle'), detail: t('desktop.moveDetail'),
-    buttons: [t('desktop.moveYes'), t('desktop.moveNo')], defaultId: 0, cancelId: 1,
+function offerApplicationsFolder(t: ReturnType<typeof textsIn>): Promise<'moved' | 'stays'> {
+  return offerMove({
+    offered: app.isPackaged && !SMOKE && !app.isInApplicationsFolder(),
+    ask: async () => (await dialog.showMessageBox({
+      type: 'question', message: t('desktop.moveTitle'), detail: t('desktop.moveDetail'),
+      buttons: [t('desktop.moveYes'), t('desktop.moveNo')], defaultId: 0, cancelId: 1,
+    })).response === 0,
+    move: () => app.moveToApplicationsFolder({ conflictHandler: () => true }),
+    failed: async (reason) => { await dialog.showMessageBox({ type: 'warning', message: t('desktop.moveFailed'), detail: reason }); },
   });
-  if (response !== 0) return;
-  try {
-    app.moveToApplicationsFolder({ conflictHandler: () => true });
-  } catch (e) {
-    await dialog.showMessageBox({ type: 'warning', message: t('desktop.moveFailed'), detail: (e as Error).message });
-  }
 }
 
 /** One recognizer per dictation of a page, stopped by the page, or when the page goes away. */
 function dictationHandles(): void {
   if (!DICTATION) return;
   const running = new Map<string, () => void>();
-  ipcMain.on('dictation:start', (e, id: unknown, lang: unknown) => {
+  ipcMain.on(TELL.dictationStart, (e, id: unknown, lang: unknown) => {
     const page = e.sender;
     const key = `${page.id}:${String(id)}`;
     if (typeof id !== 'string' || !isLang(lang) || running.has(key)) return;
@@ -182,26 +206,26 @@ function dictationHandles(): void {
         running.delete(key);
         page.off('destroyed', gone).off('did-navigate', gone);
       }
-      if (!page.isDestroyed()) page.send('dictation:event', id, event);
+      if (!page.isDestroyed()) page.send(PUSH.dictationEvent, id, event);
     });
     running.set(key, stop);
     page.once('destroyed', gone).once('did-navigate', gone);
   });
-  ipcMain.on('dictation:stop', (e, id: unknown) => { running.get(`${e.sender.id}:${String(id)}`)?.(); });
+  ipcMain.on(TELL.dictationStop, (e, id: unknown) => { running.get(`${e.sender.id}:${String(id)}`)?.(); });
 }
 
 function smokeHandles(): void {
   const menu = () => Menu.getApplicationMenu();
-  ipcMain.handle('smoke:menu', () => ({
+  ipcMain.handle(ASK.smokeMenu, () => ({
     file: menu()?.items[1]?.submenu?.items.map((i) => i.label) ?? [],
     recent: menu()?.getMenuItemById('recent')?.submenu?.items.map((i) => i.label) ?? [],
   }));
-  ipcMain.handle('smoke:click', (_e, id: unknown) => {
+  ipcMain.handle(ASK.smokeClick, (_e, id: unknown) => {
     const item = typeof id === 'string' ? menu()?.getMenuItemById(id) : null;
     item?.click();
     return !!item;
   });
-  ipcMain.on('smoke:quit', () => app.quit());
+  ipcMain.on(TELL.smokeQuit, () => app.quit());
 }
 
 function createWindow(stateFile: string): BrowserWindow {

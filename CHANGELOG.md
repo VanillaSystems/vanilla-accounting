@@ -14,6 +14,24 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Fixed
+
+- Mac app, first screen: «Neue Buchhaltung erstellen» opens the system's save panel again (the
+  name prefilled in Documents, «Erstellen»), and the setup starts in the folder you name. In
+  0.4.0 and 0.4.1 the button did nothing: the main process had no answer for the page's call
+  (#339). A call the desktop app does not answer now says so in a sentence («Das Fenster zum
+  Auswählen des Ordners liess sich nicht öffnen …», «Die Datei liess sich nicht speichern …»)
+  under the button, in the form, or as a toast for an invoice's PDF, instead of nothing. A
+  folder named there that already holds something is not continued in silently: the app says
+  whether it holds books («Diese Buchhaltung öffnen»), a started setup («Diese Einrichtung
+  fortsetzen») or other files (choose another name), and writes nothing into it.
+- Mac app, start: after «Verschieben» into the Applications folder the copy that was moved
+  starts nothing more (it went on to start its server and window while it quit). A click on
+  the Dock icon shows the window also when it exists but did not appear within four seconds
+  (or its page failed to load), not only when it was closed, and is heard from the first moment
+  of the start. «Nicht erlauben» on macOS's question about the Documents folder no longer ends the
+  start without a window; a start that fails says so and quits (#339).
+
 ## [0.4.1] - 2026-11-12
 
 Two fixes for the first run of the Mac app and a dropped statement.

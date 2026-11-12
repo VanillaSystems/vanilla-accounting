@@ -33,7 +33,8 @@ import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminde
 import type { PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
-import type { AiAvailability, DesktopInfo, KnownBooks, PhoneInfo } from '../../types/desktop.js';
+import type { AiAvailability, DesktopInfo, FolderLook, KnownBooks, PhoneInfo } from '../../types/desktop.js';
+import { DesktopCallError } from '../desktop/bridge.js';
 import { setAiOff } from '../ai/ai-off.js';
 import type { DraftPatch as SetupPatch, SetupBegun, SetupDraftView } from '../../onboarding/draft.js';
 import type { SetupTalked } from '../../onboarding/draft-talk.js';
@@ -135,6 +136,7 @@ export function aiRefusedText(r: AiRefusal): string {
 }
 
 export function errorText(e: unknown): string {
+  if (e instanceof DesktopCallError) return t(e.text);
   if (!(e instanceof ApiError)) return e instanceof Error ? e.message : String(e);
   const b = e.body;
   if ('invoiceRefusal' in b) return invoiceRefusalText(b.invoiceRefusal, b.missing);
@@ -602,6 +604,7 @@ export const api = {
     /** Books in the layout before 0.4.0: moved into vanilla-accounting/ as npm run update does, then opened. */
     upgrade: (root: string) => request<KnownBooks>('POST', '/api/desktop/upgrade', { root }),
     ai: () => request<AiAvailability>('GET', '/api/desktop/ai'),
+    folder: (root: string) => request<FolderLook>('GET', `/api/desktop/folder?root=${encodeURIComponent(root)}`),
     setup: (root: string) => request<SetupDraftView>('GET', `/api/desktop/setup?root=${encodeURIComponent(root)}`),
     setupBegin: (root: string, language: string) => request<SetupBegun>('POST', '/api/desktop/setup', { root, language }),
     setupPatch: (root: string, patch: SetupPatch) => request<SetupDraftView>('PUT', '/api/desktop/setup', { root, patch }),

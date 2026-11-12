@@ -10,7 +10,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { FIRST_RUN_CLIS, planName, type CardState, type SetupKey } from '../../platform/ai-setup.js';
 import { AI_CLIS, type TerminalCli } from '../../platform/terminal.js';
-import type { DesktopInfo } from '../../types/desktop.js';
+import type { DesktopInfo, FolderLook } from '../../types/desktop.js';
 import { language, t } from '../i18n/index.js';
 import { api, errorText } from '../lib/api.js';
 import { desktop } from '../desktop/bridge.js';
@@ -192,26 +192,38 @@ function FolderStep({ info, onSetup, onForm }: { info: DesktopInfo | null; onSet
   const [error, setError] = useState('');
   const [switching, setSwitching] = useState(false);
   const [chosen, setChosen] = useState('');
+  /** The folder she named for new books, when it already holds something. */
+  const [taken, setTaken] = useState<{ root: string; look: FolderLook }>();
   const name = freeName(t('desktop.folderName', { year: String(new Date().getFullYear()) }), info?.folders ?? []);
   const run = async (go: () => Promise<void>) => {
     setBusy(true);
     setError('');
     try { await go(); } catch (e) { setError(errorText(e)); setBusy(false); }
   };
+  /** A dialog of the desktop app; one that fails says so in the step's error line, and gives nothing. */
+  const asked = async (dialog: Promise<string | null> | undefined): Promise<string | null> => {
+    setError('');
+    try { return (await dialog) ?? null; } catch (e) { setError(errorText(e)); return null; }
+  };
   const create = async () => {
     const root = desktop
-      ? await desktop.chooseNewFolder({ title: t('aiSetup.folder.createTitle'), name, button: t('aiSetup.folder.createButton') })
+      ? await asked(desktop.chooseNewFolder({ title: t('aiSetup.folder.createTitle'), name, button: t('aiSetup.folder.createButton') }))
       : info ? `${info.booksHome}/${name}` : null;
     if (!root) return;
+    setTaken(undefined);
     setChosen(root);
     await run(async () => {
+      // A folder that is not new (the save panel lets her pick one): said, never continued in silently.
+      const look = desktop ? await api.desktop.folder(root) : undefined;
+      if (look && look.holds !== 'nothing') { setTaken({ root, look }); setChosen(''); setBusy(false); return; }
       const begun = await api.desktop.setupBegin(root, language());
       if (begun.kind === 'books') location.assign('/');
       else onSetup(begun.view.root);
     });
   };
+  const openTaken = (dir: string) => run(async () => { const books = await api.desktop.open(dir); if (books.setup) onSetup(books.root); else location.assign('/'); });
   const open = async () => {
-    const dir = await desktop?.chooseFolder(t('desktop.chooseOpen'));
+    const dir = await asked(desktop?.chooseFolder(t('desktop.chooseOpen')));
     if (dir) await run(async () => { const books = await api.desktop.open(dir); if (books.setup) onSetup(books.root); else location.assign('/'); });
   };
   const demo = () => run(async () => { await api.desktop.demo(); location.assign('/'); });
@@ -232,6 +244,15 @@ function FolderStep({ info, onSetup, onForm }: { info: DesktopInfo | null; onSet
         </>
       ) : null}
       {chosen ? <Ai><p>{t('aiSetup.folder.chosen')}</p><p className="obfolder mono">{chosen}</p></Ai> : null}
+      {taken ? (
+        <div data-taken={taken.look.holds}>
+          <p className="warnline" role="alert">{taken.look.holds === 'books' ? t('aiSetup.folder.takenBooks', { name: taken.look.name ?? '' }) : t(taken.look.holds === 'setup' ? 'aiSetup.folder.takenSetup' : 'aiSetup.folder.takenFiles')}</p>
+          <p className="obfolder mono">{taken.root}</p>
+          {taken.look.holds === 'files' ? null : (
+            <Answers><button type="button" className="btn" data-answer="open-taken" disabled={busy} onClick={() => void openTaken(taken.root)}>{t(taken.look.holds === 'books' ? 'aiSetup.folder.takenOpen' : 'aiSetup.folder.takenContinue')}</button></Answers>
+          )}
+        </div>
+      ) : null}
       <div className="obind"><button type="button" className="linkbtn" data-act="by-hand" onClick={onForm}>{t('desktop.flow.byHand')}</button></div>
       {error ? <p className="warnline" role="alert">{error}</p> : null}
     </div>
