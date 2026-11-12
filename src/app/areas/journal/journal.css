@@ -91,6 +91,7 @@
 .form.pbook .pbl .rm:hover { color: var(--ink); }
 .form.pbook .pbv .acn { display: block; margin-top: 3px; font-size: 11.5px; color: var(--muted); }
 .form.pbook .pbl .pbs { grid-column: 1 / 5; margin: -2px 0 0; font-size: 12px; color: var(--muted); }
+.form.pbook .pbn { margin: 6px 0 0; font-size: 12px; line-height: 1.45; color: var(--muted); }
 .pbr { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin: 8px 0 0; font-size: 12.5px; color: var(--muted); }
 .form.pbook .pbl .pbw { grid-column: 1 / 5; margin: -2px 0 0; font-size: 12px; color: var(--warn); }
 /* The other proof of the input tax, named instead of a receipt (#134). */

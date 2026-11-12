@@ -242,6 +242,9 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
 
   const setForm = (el: HTMLFormElement | null) => { form.current = el; onForm?.(el); };
   const inv = draft.invoice;
+  // «Die App nimmt einen Verkauf an» holds while the proposed revenue account stands; once she chose another, it is hers.
+  const otherSide = draft.bank && (draft.bank.side === 'accountDebit' ? 'accountCredit' : 'accountDebit');
+  const saleStands = !!otherSide && now.some((x, i) => x.raw[otherSide] === rows[i].init[otherSide]);
 
   return (
     <form ref={setForm} className={`form pbook${narrow ? ' narrow' : ''}`} autoComplete="off" aria-label={t('journal.byHand.title')} data-testid="payment-booking"
@@ -304,7 +307,7 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
           </div>
         );
       })}
-      {draft.notes.map((n) => <p key={n.kind} className="pbs" data-testid={`note-${n.kind}`}>{noteText(n)}</p>)}
+      {draft.notes.filter((n) => !(n.kind === 'sale' || n.kind === 'saleVat') || saleStands).map((n) => <p key={n.kind} className="pbn" data-testid={`note-${n.kind}`}>{noteText(n)}</p>)}
       {deducts ? (
         <label className="pbp" data-testid="input-tax-proof">{t('journal.byHand.proofLabel')}
           <input name="inputTaxProof" placeholder={t('journal.byHand.proofPlaceholder')} />

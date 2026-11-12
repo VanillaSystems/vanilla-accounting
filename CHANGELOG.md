@@ -72,14 +72,23 @@ Two markers flag an entry you must read before you update:
 - A workflow's drawing names what leads from step to step in words («Freigegeben», «Geändert»),
   and a task links to its run with «Lauf ansehen», not with the run's id.
 - Without an AI, booking by hand starts from what the app knows (#344). The form «Von Hand buchen»
-  of a payment opens filled: the bank side, and the other side proposed from a rule of the firm
-  that decides the payment, else the account of the same business's last booking, else, with a
-  linked receipt on money out, the firm's default account for purchases and the receipt's VAT rate
-  as that account's code, and on money in the firm's default revenue account with the code of a
-  sale without an invoice (domestic at the normal rate, abroad the export code). The line under
-  the fields names each proposal and where it comes from («Standardkonto für Verkäufe», «aus dem
-  Beleg»); it is booked only by your click. Money out without a receipt gets no account and no
-  rate, as before: no receipt, no input tax.
+  of a payment opens filled, once the app knows what the payment is: a rule of the firm that
+  decides it (also one that asks first, with its question), else the account of the same
+  business's last booking. A customer's payment of an invoice the app issued settles Debitoren
+  without a code where the invoice's revenue is booked already (agreed basis), else takes the
+  invoice's own accounts and codes, and the form points to confirming the payment on the invoice.
+  Money from the owner goes on her account without a code; money between your own accounts, from
+  an authority or with another business's document is no sale and gets no revenue account and no
+  code; money back from a supplier goes on the account of its last purchase. Other money in is
+  taken for a sale on the firm's default revenue account, with the code the app would book (on the
+  net tax rate method the firm's rate), and the form says so: «Eine Rückzahlung oder eine Einlage?
+  Dann das Konto ändern.» A sale whose document is not read gets no code and says why. Money out
+  with a receipt gets the receipt's rate and an account only where a rule, an earlier booking or
+  the business's file names one. A receipt gives the rate, and the code follows the account you
+  choose: a proposed V81 leaves when you book onto the owner's account, a proposed M81 becomes I81
+  on an operating cost. On the agreed basis a receipt dated in another period than its payment
+  proposes no account and says why. The line under the fields names each proposal and where it
+  comes from; nothing you typed or picked is replaced, and it is booked only by your click.
 - The account field of that form finds what a layperson types: «Ertrag», «Einnahme» or «Umsatz»
   lists the revenue accounts, «Aufwand» or «Kosten» the expenses, though no account is named so.
   For money in the revenue accounts come first, for money out the expenses, the firm's default
@@ -91,9 +100,11 @@ Two markers flag an entry you must read before you update:
   apart. Under the form: how many payments of the kind are not booked, and «Eine Regel für alle n
   anlegen», which opens Firma › Regeln › «Neue Regel» started from this payment; where the
   payment's lasting words («Lohn») hold for more open payments than its payer does, a second link
-  starts the rule with them (`/company/rules?payment=<ref>&by=text`). A rule started by text now
-  takes those words, not the whole text of one payment with its month and year.
-- A photo or scan no AI read is «nicht gelesen», no longer «gelesen»: in the drop dialog (with why,
+  starts the rule with them (`/company/rules?payment=<ref>&by=text`), only when they tell the
+  payments apart (never the bank's «Belastung E-Banking Auftrag»). A rule started by text takes
+  those words as whole words («Lohn», not «Lohnausweis»), not the whole text of one payment with
+  its month and year, and is kept only after «Trotzdem behalten», as any rule on one word.
+- A photo or scan no AI read is «noch nicht gelesen», no longer «gelesen»: in the drop dialog (with why,
   «KI einrichten» and «Selbst eintippen»), in the list of Belege instead of «ohne Datum», on the
   receipt (a notice with both ways, and under Datei instead of «(kein Text erkannt)») and in its
   Verlauf («hat den Beleg abgelegt, nicht gelesen»).
@@ -135,7 +146,8 @@ Two markers flag an entry you must read before you update:
 - The KI column and the setup conversation («Mit mir einrichten») no longer answer with Claude
   Code's own «Not logged in · Please run /login», once as the answer and once as the error. A CLI
   that is not signed in, not installed, at its plan's limit or switched off answers with the app's
-  sentence for that state and «KI einrichten» (#344).
+  sentence for that state and «KI einrichten» (#344). A booking or reading run on a Claude Code
+  that is not signed in says so in the same words, as on Codex.
 
 ### Changed
 
