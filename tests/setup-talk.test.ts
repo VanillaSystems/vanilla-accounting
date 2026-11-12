@@ -325,15 +325,18 @@ test('the questions that need accounting knowledge say where the answer stands a
     for (const k of QUESTION_ORDER) {
       for (const text of [m[`desktop.q.${k}.why`], m[`desktop.q.${k}.where`]].filter(Boolean)) {
         assert.doesNotMatch(text, /Art\. \d|art\. \d|MWSTG|LTVA|LIVA|auf Gesuch|on request|sur demande|su richiesta/, `${lang} ${k}: no citation, no «auf Gesuch»`);
+        assert.doesNotMatch(text, /Schreiben|letter|lettre|lettera/, `${lang} ${k}: no place the repo does not confirm`);
       }
     }
   }
   const de = (await import('../src/app/i18n/locales/de.js') as { default: Locale }).default.messages as unknown as Record<string, string>;
   for (const k of ['vatMethod', 'basis']) {
-    assert.match(de[`desktop.q.${k}.where`], /ESTV/, `${k}: where it stands`);
+    assert.match(de[`desktop.q.${k}.where`], /bei der ESTV beantragt/, `${k}: only what the repo confirms: approved on the firm's request`);
     assert.match(de[`desktop.q.${k}.where`], /Treuhand/, `${k}: who knows`);
     assert.match(de[`desktop.q.${k}.where`], /Firma › MWST änderst du es, solange dieses Jahr keine Buchungen hat/, `${k}: what a wrong pick costs (vatMethodHeld)`);
   }
+  assert.match(de['desktop.q.vatMethod.where'], /Formular 0553.*nie beantragt, ist es die effektive Methode/s);
+  assert.match(de['desktop.q.basis.where'], /nie darum gebeten, ist es vereinbart/);
   assert.match(de['desktop.q.start.why'], /Beides legt dieselben Bücher an/, 'what each answer changes');
 });
 

@@ -107,7 +107,7 @@ export const QUESTIONS = {
   vatMethod: {
     ask: 'VAT method',
     why: 'Effective: you pay the VAT you charged minus the input tax on your costs. Saldosteuersatz: a flat rate on turnover, no input tax.',
-    where: 'Not sure? A return on form 0553 is the Saldosteuersatz; the tax authority\'s letter on your VAT number names the method, and your accountant knows. Picked wrong: change it under Company › VAT while this year has no entries.',
+    where: 'Not sure? The Saldosteuersatz is a rate the tax authority approved on the company\'s application, filed on form 0553; a company that never applied for it is on the effective method. Your accountant knows. Picked wrong: change it under Company › VAT while this year has no entries.',
     when: registered,
     options: [
       { value: 'effective', label: 'effektive Methode' },
@@ -119,8 +119,8 @@ export const QUESTIONS = {
   },
   basis: {
     ask: 'VAT basis',
-    why: 'When the VAT counts. Vereinnahmt: when the money moves. Vereinbart: when you send your invoice, and for input tax when a bill arrives. Vereinbart is the normal case; vereinnahmt holds when the tax authority allowed it.',
-    where: 'Not sure? The tax authority\'s letter on your VAT number says it, and your accountant knows. Picked wrong: change it under Company › VAT while this year has no entries.',
+    why: 'When the VAT counts. Vereinnahmt: when the money moves. Vereinbart: when you send your invoice, and for input tax when a bill arrives. Vereinbart is the normal case.',
+    where: 'Not sure? Vereinnahmt applies only when the tax authority approved it on the company\'s request; a company that never asked is on vereinbart. Your accountant knows. Picked wrong: change it under Company › VAT while this year has no entries.',
     when: registered,
     options: [
       { value: 'received', label: 'vereinnahmt (cash)' },

@@ -100,7 +100,7 @@ test('without an AI: a steady count, help where the answer stands, assumed answe
       await seen('[data-step=vatMethod] [data-answer=net-rate]');
       // «MWST-Methode» says where the answer stands and what a wrong pick costs.
       await page.waitForSelector('[data-step=vatMethod] [data-where]', { timeout: 20_000 });
-      assert.match(await page.$eval('[data-step=vatMethod] [data-where]', (e) => (e as HTMLElement).innerText), /Schreiben der ESTV.*Treuhand.*Firma › MWST/s);
+      assert.match(await page.$eval('[data-step=vatMethod] [data-where]', (e) => (e as HTMLElement).innerText), /beantragt.*Formular 0553.*effektive Methode.*Treuhand.*Firma › MWST/s);
       await shot(page, `${size}-1-method-help`);
       await press(page, '[data-step=vatMethod] [data-answer=net-rate]');
       await seen('[data-step=basis] [data-answer=received]');
@@ -110,7 +110,7 @@ test('without an AI: a steady count, help where the answer stands, assumed answe
       await seen('[data-step=basis] [data-answer=received]');
       const basis = await page.$eval('[data-step=basis]', (e) => (e as HTMLElement).innerText);
       assert.doesNotMatch(basis, /Art\. 39|auf Gesuch/, '«Abrechnungsart» cites no law');
-      assert.match(basis, /Schreiben der ESTV/);
+      assert.match(basis, /nur, wenn die Firma es bei der ESTV beantragt.*ist es vereinbart.*Treuhand/s);
       await press(page, '[data-step=basis] [data-answer=received]');
       await seen('[data-step=period] [data-answer=quarterly]');
       await press(page, '[data-step=period] [data-answer=quarterly]');

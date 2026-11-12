@@ -143,7 +143,7 @@ der Firma, MWST, Bank; «n von 4 erledigt», `draftProgress`): how many question
 the answers, so a count of questions jumped («0 von 14», «1 von 4», «4 von 8»), a count of parts does
 not (#364). «MWST-Methode», «Abrechnungsart» and «Ausgangslage» carry a line for a person who does not
 know (`where` in src/workspace/setup.ts, shown by the form, this conversation and `npm run init`):
-where the answer stands, who knows it and what a wrong pick costs (Firma › MWST changes it while the
+what the repo confirms about the answer (the Saldosteuersatz is approved on application and filed on form 0553, vereinnahmt only on approval, so a firm that never applied is effective and vereinbart), that the Treuhand knows, and what a wrong pick costs (Firma › MWST changes it while the
 year has no entries, `vatMethodHeld`). The review marks an answer the kind of firm gave and the person
 never said «angenommen» (`assumed` in the draft, `assumedOf`) until she answers it herself; the line
 above the card says why. Such books open into the setup until

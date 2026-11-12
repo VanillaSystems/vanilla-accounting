@@ -127,8 +127,8 @@ Two markers flag an entry you must read before you update:
 - The drop dialog says «beiseitegelegt, wird nicht verarbeitet» instead of «Quarantäne, kein
   Ablauf», and no longer how a file was recognised («Struktur», «Hinweis»).
 - Setup (#364): «MWST-Methode», «Abrechnungsart» and «Ausgangslage» say, in the form, the setup
-  conversation and `npm run init`, where the answer stands (the ESTV's letter on the VAT number,
-  form 0553 for the Saldosteuersatz, the Treuhand) and what a wrong pick costs (Firma › MWST changes
+  conversation and `npm run init`, how to tell (the Saldosteuersatz and «vereinnahmt» apply only when
+  the ESTV approved them on the firm's request, the Saldosteuersatz is filed on form 0553; the Treuhand knows) and what a wrong pick costs (Firma › MWST changes
   it while the year has no entries); «Abrechnungsart» no longer cites «MWSTG Art. 39» or «auf
   Gesuch», «Ausgangslage» says what each answer changes. Before the books the count is of four
   parts, the same for every firm («2 von 4 erledigt», with Firma · Art der Firma · MWST · Bank), no
