@@ -166,6 +166,16 @@ Two markers flag an entry you must read before you update:
   payment.
 - Files set aside as no receipt (a brochure, a holiday photo, one a person marked so) are now
   archived under the name they came with; the AI no longer names them (#361).
+- Mac app, first start after «Move» to Applications: the first screen comes by itself once you
+  allow the Documents folder. Before, the moved app showed no window, a click on the Dock icon a
+  blank one, until it was closed and opened again: the app read the Documents folder on its main
+  thread while macOS asked, and the page's first load then failed with nothing loading it again.
+  The folder is now read in the background, and a page load that fails is tried again; one that
+  never loads says so (#363). On the first screen, the start page and the top bar, a control under
+  the window's drag strip (the language switch) takes its click again. The top bar, folded to its
+  pill, no longer covers the page heading. From the start page, «Neue Buchhaltung anlegen» goes on
+  to the form (or the save panel, with an AI) without a second click, and the form's «Sprache der
+  App» is the language the app is in.
 - Mac app, first screen: «Neue Buchhaltung erstellen» opens the system's save panel again (the
   name prefilled in Documents, «Erstellen»), and the setup starts in the folder you name. In
   0.4.0 and 0.4.1 the button did nothing: the main process had no answer for the page's call
