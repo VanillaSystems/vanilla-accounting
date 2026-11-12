@@ -32,6 +32,30 @@ Two markers flag an entry you must read before you update:
   open and leads back to your own books; opened from the start screen it shows Automatisierung,
   and the first time a card says what to look at.
 - The start screen names no files any more («Den Ordner wählen, in dem deine Buchhaltung liegt.»).
+- After a drop, the window says what came of it and leads there (#341). Its last lines count the
+  payments read and from when to when, how many are booked and how many wait for what («23 Zahlungen
+  eingelesen, 02.07.2026 – 30.09.2026: 12 gebucht, 8 warten auf ihren Beleg, 3 warten auf deine
+  Antwort»), and the receipts read and linked, each with a link to them in their period. The page
+  behind the window now goes to the period most of the files landed in. Before, the newest date
+  among them decided: one till photo without a date, dated today, left the person in an empty
+  quarter beside 23 payments. A receipt dated only by the day the phone took it decides nothing.
+- MWST opens on the oldest period not filed that holds a payment or a booking, when its link names
+  no period. Before, it opened where the newest file was dated, which could be the empty current
+  quarter while the quarter before held all the payments. The other pages still open on the newest
+  data, and a later return still names the earlier one that is not filed.
+- A return's figure that is not final says so. While payments of the period are not booked, wait
+  for their receipt, or questions are open, MWST shows «noch nicht endgültig» beside the amount and
+  one line with the counts («11 Zahlungen noch nicht gebucht (8 davon warten auf ihren Beleg) · 2
+  Fragen offen»); a click opens the list «Noch offen in Q3» beside the return (`/vat/open`), the same
+  list the review of the return shows. The result no longer tells to transfer the amount to the
+  ESTV while something is open, and an empty result says «Keine Steuer geschuldet: nichts zu
+  überweisen».
+- Automatisierung no longer says «Nichts wartet auf dich» while payments of a period not filed are
+  not booked: it says «Keine Aufgabe wartet auf dich. 11 Zahlungen noch nicht gebucht (alle warten
+  auf ihren Beleg)», with a link to them. The dock's card says the same; its number still counts
+  tasks, stopped runs and questions only.
+- A workflow's drawing names what leads from step to step in words («Freigegeben», «Geändert»),
+  and a task links to its run with «Lauf ansehen», not with the run's id.
 
 ### Fixed
 
@@ -52,6 +76,9 @@ Two markers flag an entry you must read before you update:
   start without a window; a start that fails says so and quits (#339).
 - «Zur Startseite» on a fresh install stays on the start screen instead of falling back into
   «Einrichtung».
+- The drop window's bar moves while the files are read. It counted only files at rest, and the
+  files of one drop share a run, so it stood at «6 % · 1 von 17» and jumped to 100 %. It now adds
+  the steps the run has behind it and the files its step has finished.
 
 - After the first statement, wages no longer wait for a receipt (#340). A payment whose own text is a wage's («Lohn Juli 2026», «Lohnzahlung 09/2026», Salär, Gehalt, salaire, stipendio, salary: the word at the start of the text or followed by a month, a period or a year) is booked without waiting on a firm whose setup says it has staff or an employed owner. The counterparty's name is never read, and a text that also names an invoice, a subscription, a licence, bookkeeping, a firm's legal form, social insurance or tax still waits. A wage is freed from the wait only: a receipt that matches it is still paired, and the payment is then booked again from it. For existing books with a profile that names employees, open-period payments worded so that waited for a receipt are booked on the next run; filed periods, firms without employees and books without a profile are unchanged. The bank's own fee row is known by its code for charges or the bank's whole name, as before, and now never under a card payment's code; the persona test's statement had no bank transaction codes, which no bank's export lacks, and carries them now. «Braucht keinen Beleg» on a payment without a booking goes on to book it in the same click and says what came of it, with «Rückgängig» for the mark in the same message; where the app could not book it by itself, the payment says so («nicht gebucht: die App konnte sie nicht selbst buchen. Unten von Hand buchen.») instead of «kein Beleg nötig · nicht gebucht».
 

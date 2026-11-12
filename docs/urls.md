@@ -36,7 +36,8 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | `/payments/<bank-ref>` | resolves to the statement of that payment, or to its entry if it was paid privately |
 | `/journal` | Buchungen; `?vat=<code>` filters by VAT code |
 | `/journal/<entry-id>` | one journal entry |
-| `/vat` | MWST report of the open quarter |
+| `/vat` | MWST report of the oldest period not filed that holds a payment or an entry (else of the newest data) |
+| `/vat/open` | what is still open in the period of a return not filed: questions, payments without a booking, receipts without a payment |
 | `/vat/<ziffer>` | one form line with the entries behind it, e.g. `/vat/405?period=2026-Q3` |
 | `/vat/codes` and `/vat/codes/<code>` | the VAT code catalogue, one code, e.g. `/vat/codes/I81` |
 | `/reports/income`, `/reports/balance`, `/reports/trial` | Erfolgsrechnung, Bilanz, Saldobilanz |
@@ -62,7 +63,7 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 
 | Parameter | Where | Meaning |
 |---|---|---|
-| `period` | every list with periods | `2026`, `2026-Q3`, `2026-09` or `2026-07-01_2026-09-30`; left out when it is the period of the newest data (the filing period of the newest payment, receipt or entry, `dataPeriod`; for Rechnungen also its newest issued invoice), which a page shows without one |
+| `period` | every list with periods | `2026`, `2026-Q3`, `2026-09` or `2026-07-01_2026-09-30`; left out when it is the period of the newest data (the filing period of the newest payment, receipt or entry, `dataPeriod`; for Rechnungen also its newest issued invoice; for MWST the oldest period not filed that holds a payment or an entry, `oldestUnfiledPeriod`), which a page shows without one |
 | `f` | receipts, journal | a filter chip `<field>_<value>`, repeated, one per chip (#211, `src/app/shell/chips.ts`): `?f=partner_fedex&f=partner_amazon&f=over_100`. Chips of different fields all hold (AND), chips of one field are alternatives (OR); a bound (`over`, `under`, `amount`, `from`, `to`) or a yes/no field takes one value. Belege: `partner` (a knowledge file's id), `state` (`linked`, `open`, `noDate`, `needsYou`, `unreadable`, `notReceipt`, `quarantine`), `month` (`2026-08`), `from`, `to` (`2026-08-01`), `over`, `under`, `amount` (a number), `currency`, `rate` (the rate the receipt shows, `8.1`, or `none`), `kind`, `linked` (`yes`, `no`). Buchungen: `account`, `rate` (the code's rate, or `none` without a code), `partner`, the same dates and amounts, `currency`, `who` (`classify`, `rule`, `code`, `manual`, `assistant`, `invoice`, `year-close`, `other`), `receipt` (`yes`, `no`, `missing`), `corrects` (`yes`, `no`). The old `?filter=zugeordnet\|offen\|ohneDatum` of Belege redirects to `f=state_linked\|open\|noDate`. |
 | `status` | invoices | as above |
 | `vat` | journal | VAT code filter |

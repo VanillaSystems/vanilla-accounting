@@ -63,7 +63,14 @@ it. Every dialog of the app follows the same rule.
 - **Processing starts at once** with «Hinzufügen». Nothing waits in a queue for later.
 - **Progress:** each file has its own bar and current step ("2/5 · MWST-Fakten gelesen"); the
   dialog header has an overall bar ("Gesamt 62 % · 3 von 4 Dateien fertig"), weighted by the
-  steps of each file's workflow. A file that stopped (waiting) counts as finished for the bar.
+  steps of each file's workflow: a file at rest counts whole, one its run still works on by the
+  steps the run has behind it and the items its step has finished (`RunSummary.progress`, #341).
+  A file that stopped (waiting) counts as finished for the bar.
+- **At the end** the bar gives way to what came of the drop (src/app/shell/drop-summary.ts): the
+  payments read, from when to when, how many are booked and how many wait for their receipt, for an
+  answer or for a booking, and the receipts read and linked, each line with a link to them in their
+  period. The page behind the window stands in the period most of the files landed in; a receipt
+  without a date of its own does not count.
 - **In the background:** «Im Hintergrund weiter», or leaving the area, keeps the runs going. A
   chip in the title bar shows "Import läuft · 62 %" with a small bar and reopens the dialog.
 - **When it ends**, the chip says "Import fertig · 1 braucht dich"; if the person is elsewhere, a
