@@ -6,7 +6,8 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rankAccounts, type AccountContext } from '../src/app/lib/account-filter.js';
+import { firstPick, rankAccounts, type AccountContext } from '../src/app/lib/account-filter.js';
+import { hintsOf, setAccounts, setStandardAccounts } from '../src/app/lib/accounts.js';
 import { chartFor, loadChart, standardAccounts, type AccountType } from '../src/workspace/chart.js';
 import de from '../src/app/i18n/locales/de.js';
 
@@ -26,11 +27,11 @@ const first = (word: string, prefer: AccountType, profile: 'services' | 'goods' 
 };
 
 test('money in: the words for a sale find the firm\'s revenue account first', () => {
-  for (const w of ['Umsatz', 'Einnahme', 'Einnahmen', 'Verkauf', 'Kunde', 'Malerarbeiten']) assert.equal(first(w, 'revenue'), '3400', w);
+  for (const w of ['Umsatz', 'Einnahme', 'Einnahmen', 'Verkauf', 'Kunde', 'Honorar', 'Dienstleistung']) assert.equal(first(w, 'revenue'), '3400', w);
 });
 
 test('money out: the words for common costs find their expense account first', () => {
-  const expected: Record<string, string> = { Miete: '6000', Benzin: '6200', Diesel: '6200', Telefon: '6510', Versicherung: '6300', Material: '4000', Werkzeug: '6100', Lohn: '5000', Büromiete: '6000', Strom: '6400', Porto: '6513' };
+  const expected: Record<string, string> = { Miete: '6000', Benzin: '6200', Diesel: '6200', Telefon: '6510', Versicherung: '6300', Material: '4000', Werkzeug: '6100', Lohn: '5000', Strom: '6400', Porto: '6513', Arbeitslosenversicherung: '5700', Autoversicherung: '6200', Arbeitskleider: '5880', Versich: '6300' };
   for (const [w, account] of Object.entries(expected)) assert.equal(first(w, 'expense'), account, w);
 });
 
@@ -42,6 +43,39 @@ test('a firm of services without a material account still finds «Material» amo
 test('a hint never hides a name: «Tel» still finds 6510 by its name, digits keep their order', () => {
   assert.equal(first('Tel', 'expense'), '6510');
   assert.equal(first('62', 'expense'), '6200');
+});
+
+/** The rows the field lists for a word on a cost field, and the row ↵ takes (firstPick: -1 is none). */
+const onCosts = (word: string) => {
+  const have = chartFor(chart, 'both', 'GmbH');
+  const add = standard.filter((a) => !have.some((h) => h.number === a.number));
+  const rows = [...rankAccounts(have, word, ctx('expense')), ...rankAccounts(add, word, ctx('expense'))];
+  return { rows: rows.map((m) => m.account.number), pick: firstPick(rows, ctx('expense')) };
+};
+
+test('a hint is a whole typed word, never a part inside a longer one: no revenue for work, gardening or repairs on a cost field', () => {
+  for (const w of ['Arbeitskleider', 'Gartenarbeit', 'Reparaturarbeiten', 'arb']) {
+    const { rows, pick } = onCosts(w);
+    const first = rows[pick];
+    assert.notEqual(chart.accounts.find((a) => a.number === first)?.type, 'revenue', `${w}: ↵ never takes revenue (${rows.join(', ')})`);
+    assert.ok(!rows.includes('3400'), `${w}: no hint inside the word lists 3400 (${rows.join(', ')})`);
+  }
+});
+
+test("a hint on the other side of the payment is listed after the field's own side, and ↵ does not take it", () => {
+  const rows = rankAccounts([{ number: '3400', name: 'Dienstleistungserlöse' }, { number: '6000', name: 'Mietaufwand' }], 'Honorar', ctx('expense'));
+  assert.deepEqual(rows.map((m) => [m.account.number, m.hint]), [['3400', true]]);
+  assert.equal(firstPick(rows, ctx('expense')), -1, 'only a revenue row by its hint on a cost field: none is chosen');
+  assert.equal(firstPick(rows, ctx('revenue')), 0);
+});
+
+test('hints follow the standard account, not its number: a renamed account has none', () => {
+  setStandardAccounts([{ number: '4400', name: 'Aufwand für bezogene Dienstleistungen', hints: ['Subunternehmer'] }, { number: '3400', name: 'Dienstleistungserlöse', hints: ['Honorar'] }]);
+  setAccounts([{ number: '4400', name: 'Verbrauchsmaterial Salon' }, { number: '3400', name: 'Dienstleistungserlöse' }]);
+  assert.equal(hintsOf('4400'), undefined);
+  assert.deepEqual(hintsOf('3400'), ['Honorar']);
+  setAccounts([{ number: '3400', name: 'Ertrag Webshop' }]);
+  assert.equal(hintsOf('3400'), undefined);
 });
 
 test('the chart refuses a hint of fewer than three letters', () => {

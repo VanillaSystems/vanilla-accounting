@@ -113,7 +113,7 @@ accounts:
   # 3 Betrieblicher Ertrag aus Lieferungen und Leistungen
   - { number: "3000", name: Produktionserlöse, type: revenue, line: nettoerloese, profiles: [goods] }
   - { number: "3200", name: Handelserlöse, type: revenue, line: nettoerloese, profiles: [goods], hints: [Warenverkauf, Ladenverkauf] }
-  - { number: "3400", name: Dienstleistungserlöse, type: revenue, line: nettoerloese, hints: [Arbeit, Auftrag, Dienstleistung, Honorar] }
+  - { number: "3400", name: Dienstleistungserlöse, type: revenue, line: nettoerloese, hints: [Dienstleistung, Honorar] }
   - { number: "3600", name: Übrige Erlöse aus Lieferungen und Leistungen, type: revenue, line: nettoerloese }
   - { number: "3700", name: Eigenleistungen und Eigenverbrauch, type: revenue, line: nettoerloese }
   - { number: "3800", name: Erlösminderungen, type: revenue, line: nettoerloese }
@@ -133,7 +133,7 @@ accounts:
 
   # 5 Personalaufwand
   - { number: "5000", name: Lohnaufwand, type: expense, line: personalaufwand, hints: [Gehalt, Salär] }
-  - { number: "5700", name: Sozialversicherungsaufwand AHV, IV, EO, ALV, type: expense, line: personalaufwand, hints: [Ausgleichskasse] }
+  - { number: "5700", name: Sozialversicherungsaufwand AHV, IV, EO, ALV, type: expense, line: personalaufwand, hints: [Ausgleichskasse, AHV, ALV, Arbeitslosenversicherung] }
   - { number: "5710", name: Familienausgleichskasse, type: expense, line: personalaufwand }
   - { number: "5720", name: Vorsorgeeinrichtungen (BVG), type: expense, line: personalaufwand }
   - { number: "5730", name: Unfallversicherung (UVG), type: expense, line: personalaufwand }
@@ -141,7 +141,7 @@ accounts:
   - { number: "5810", name: Aus- und Weiterbildung, type: expense, line: personalaufwand }
   - { number: "5820", name: Spesenentschädigung effektiv, type: expense, line: personalaufwand }
   - { number: "5830", name: Spesenentschädigung pauschal, type: expense, line: personalaufwand }
-  - { number: "5880", name: Sonstiger Personalaufwand, type: expense, line: personalaufwand }
+  - { number: "5880", name: Sonstiger Personalaufwand, type: expense, line: personalaufwand, hints: [Arbeitskleider, Arbeitskleidung, Berufskleider] }
   - { number: "5900", name: Leistungen Dritter (Temporärpersonal), type: expense, line: personalaufwand }
 
   # 6 Übriger betrieblicher Aufwand, Abschreibungen, Finanzerfolg
@@ -149,7 +149,7 @@ accounts:
   - { number: "6040", name: Reinigung, type: expense, line: uebriger-aufwand }
   - { number: "6100", name: Unterhalt, Reparaturen, Ersatz, type: expense, line: uebriger-aufwand, hints: [Werkzeug, Kleinwerkzeug, Ersatzteil] }
   - { number: "6105", name: Leasingaufwand mobile Sachanlagen, type: expense, line: uebriger-aufwand }
-  - { number: "6200", name: Fahrzeugaufwand, type: expense, line: uebriger-aufwand, hints: [Benzin, Diesel, Tanken, Tankstelle, Treibstoff, Auto, Lieferwagen] }
+  - { number: "6200", name: Fahrzeugaufwand, type: expense, line: uebriger-aufwand, hints: [Benzin, Diesel, Tanken, Tankstelle, Treibstoff, Autoversicherung, Fahrzeugversicherung, Lieferwagen] }
   - { number: "6260", name: Fahrzeugleasing und -mieten, type: expense, line: uebriger-aufwand }
   - { number: "6280", name: Transportaufwand, type: expense, line: uebriger-aufwand, profiles: [goods] }
   - { number: "6300", name: Sachversicherungen, type: expense, line: uebriger-aufwand, hints: [Versicherung, Haftpflicht, Police, Prämie] }

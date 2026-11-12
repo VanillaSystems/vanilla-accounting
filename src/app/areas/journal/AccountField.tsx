@@ -14,16 +14,18 @@
  */
 import { useId, useMemo, useRef, useState } from 'react';
 import { addAccount, addableAccounts, getAccounts, hintsOf, type Account } from '../../lib/accounts.js';
-import { rankAccounts, type AccountContext } from '../../lib/account-filter.js';
+import { firstPick, rankAccounts, type AccountContext } from '../../lib/account-filter.js';
 import { chart } from '../../../engines/index.js';
 import type { AccountType } from '../../../core/modules/schema.js';
 import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 
 /** An option of the list: an account of the books, the question's offer, or one of the standard chart to add. */
-interface Option { account: Account; kind: 'have' | 'offer' | 'add' }
+interface Option { account: Account; kind: 'have' | 'offer' | 'add'; hint?: true }
 
 const MAX_OPTIONS = 60;
+/** `chosen` after typing: the row firstPick gives, none for a hint on the other side of the payment. */
+const TYPED = -2;
 
 /** Why a form refuses an account number the chart lacks: one of the standard chart is named with the way to add it. */
 export function unknownAccountText(number: string): string {
@@ -43,16 +45,17 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick, offe
   const listId = useId();
   const list = useRef<HTMLUListElement>(null);
   const offered = offer && !getAccounts().some((a) => a.number === offer.number) ? offer : undefined;
+  const ctx: AccountContext<AccountType> = useMemo(() => ({ typeOf: (n) => chart().typeOf(n), prefer, defaults, words: classWords(), hints: hintsOf }), [prefer, defaults]);
   const all = useMemo((): Option[] => {
     if (!open) return [];
     const query = value === defaultValue && !/\D/.test(value) ? '' : value;
-    const ctx: AccountContext<AccountType> = { typeOf: (n) => chart().typeOf(n), prefer, defaults, words: classWords(), hints: hintsOf };
-    const of = (accounts: readonly Account[], kind: Option['kind']) => rankAccounts(accounts, query, ctx).map((m) => ({ account: m.account, kind }));
+    const of = (accounts: readonly Account[], kind: Option['kind']) => rankAccounts(accounts, query, ctx).map((m) => ({ account: m.account, kind, ...(m.hint ? { hint: m.hint } : {}) }));
     return [...of(offered ? [offered] : [], 'offer'), ...of(getAccounts(), 'have'), ...(query ? of(addableAccounts(), 'add') : [])];
-  }, [open, value, defaultValue, offered, prefer, defaults]);
+  }, [open, value, defaultValue, offered, ctx]);
   const matches = all.slice(0, MAX_OPTIONS);
   const held = matches.findIndex((m) => m.account.number === value);
-  const active = chosen ?? Math.max(0, held);
+  // ↵ takes only the row shown chosen: after typing the first, unless a hint alone found it on the other side of the payment (#365).
+  const active = chosen === TYPED ? firstPick(matches, ctx) : chosen ?? Math.max(0, held);
   const name0 = getAccounts().find((a) => a.number === value)?.name;
 
   function pick(number: string) {
@@ -112,7 +115,7 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick, offe
         data-tip={name0}
         onFocus={(e) => { if (!readOnly) { setOpen(true); setActive(null); e.currentTarget.select(); } }}
         // A value the books put in (useBookedFields, after an undo) is no typing: it opens no list.
-        onChange={(e) => { setValue(e.target.value.trim()); setRefused(null); if (e.nativeEvent.isTrusted) { setActive(0); setOpen(true); } }}
+        onChange={(e) => { setValue(e.target.value.trim()); setRefused(null); if (e.nativeEvent.isTrusted) { setActive(TYPED); setOpen(true); } }}
         onBlur={() => setOpen(false)}
         onKeyDown={onKeyDown}
       />

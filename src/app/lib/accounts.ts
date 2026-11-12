@@ -41,7 +41,13 @@ export function addableAccounts(): Account[] {
   return standardCache.filter((a) => !(a.number in have));
 }
 
-/** The standard chart's words for an account of that number (Account.hints): the books' accounts carry none of their own. */
+/**
+ * The standard chart's words for an account of that number (Account.hints), while the firm's chart
+ * still names it as the standard chart does: a number the firm renamed («4400 Verbrauchsmaterial
+ * Salon») is no longer the standard account, and its hints («Subunternehmer») would mislead.
+ */
 export function hintsOf(number: string): string[] | undefined {
-  return standardCache.find((a) => a.number === number)?.hints;
+  const standard = standardCache.find((a) => a.number === number);
+  const name = getAccountMap()[number];
+  return standard && (name === undefined || name === standard.name) ? standard.hints : undefined;
 }
