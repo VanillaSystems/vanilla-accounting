@@ -9,7 +9,7 @@ import { t } from '../i18n/index.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import type { Route } from '../shell/route.js';
 import { SETUP_TOPICS, nextTopic, type SetupTopic } from '../../onboarding/model.js';
-import { setupCount, topicsTaken } from '../../onboarding/conversation.js';
+import { setupCount, shownState } from '../../onboarding/conversation.js';
 import { TOPIC_HAND, handKeys } from '../../onboarding/hand.js';
 import { loadSetup, useSetup } from './state.js';
 import './onboarding.css';
@@ -33,7 +33,6 @@ export function SetupRail({ onGo }: { onGo(route: Route): void }) {
   if (!view) return null;
   const states = view.states;
   const next = nextTopic(states);
-  const taken = topicsTaken(view.progress, view.facts);
   const count = setupCount(view.progress, view.facts);
   return (
     <div className="obtop">
@@ -43,7 +42,7 @@ export function SetupRail({ onGo }: { onGo(route: Route): void }) {
           return (
             <button
               key={k} type="button" className={`${states[k]}${k === next ? ' next' : ''}`} disabled={!hand}
-              data-tip={[`${label(k)}: ${t(`onboarding.state.${taken.includes(k) ? states[k] : 'notYet'}`)}`, ...(hand ? [t('onboarding.byHand', { place: place(k) })] : [])].join(' · ')}
+              data-tip={[`${label(k)}: ${t(`onboarding.state.${shownState(view.progress, view.facts, k)}`)}`, ...(hand ? [t('onboarding.byHand', { place: place(k) })] : [])].join(' · ')}
               onClick={() => { if (hand) onGo(hand); }}
             ><span className="dot" />{label(k)}</button>
           );

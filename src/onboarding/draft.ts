@@ -9,7 +9,7 @@
  * answered, so a setup broken off stands where it stood when the folder is opened again. Pure,
  * shared by the desktop server (src/onboarding/draft-store.ts) and the start screen.
  */
-import { PRESETS, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, asked, usualPeriod, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
+import { PRESETS, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, asked, unsteered, usualPeriod, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
 import type { NetRate } from '../workspace/vat-setup.js';
 import type { BankSpec, SetupRequest } from '../workspace/create.js';
 import type { KnownBooks } from '../types/desktop.js';
@@ -47,6 +47,8 @@ export interface SetupDraft {
    * until she answers them herself, so she knows which to check. Absent: none.
    */
   assumed?: QuestionKey[];
+  /** The kind of firm that gave `assumed`: named on the review although the preset is «Etwas anderes» since (#364). */
+  assumedBy?: Exclude<Preset, 'custom'>;
 }
 
 /** One answer of the draft, as the setup conversation marks it: a step, or a question by its key. */
@@ -108,6 +110,7 @@ const netRateMethod = (a: Partial<Answers>) => a.vatRegistered === 'yes' && a.va
 
 /** What the conversation proposes for a VAT question: the preset's answer; the period follows the method (r5f-14). */
 function suggestion(d: SetupDraft, key: QuestionKey): QuestionValue | undefined {
+  if (unsteered(key)) return undefined;
   if (key === 'period' && d.answers.vatMethod) return usualPeriod(d.answers.vatMethod);
   return d.preset ? presetAnswers(d.preset)[key] : undefined;
 }
@@ -189,9 +192,11 @@ export function withPatch(d: SetupDraft, patch: DraftPatch): SetupDraft {
   // A person's answer is theirs, no longer one taken from their words, nor one the kind of firm assumed.
   const marks = (d.fromText ?? []).filter((m) => m !== markOf(patch));
   const assumed = (next.assumed ?? []).filter((k) => k !== markOf(patch));
+  const by = next.assumedBy;
   delete next.fromText;
   delete next.assumed;
-  return { ...next, ...(marks.length ? { fromText: marks } : {}), ...(assumed.length ? { assumed } : {}) };
+  delete next.assumedBy;
+  return { ...next, ...(marks.length ? { fromText: marks } : {}), ...(assumed.length ? { assumed, ...(by ? { assumedBy: by } : {}) } : {}) };
 }
 
 /** The answers the kind of firm gave that the person did not say herself (#364). */
@@ -209,7 +214,7 @@ function answer(d: SetupDraft, patch: DraftPatch): SetupDraft {
       const kept = Object.fromEntries(QUESTION_ORDER.filter((k) => d.answers[k] !== undefined && (isVat(k) || d.fromText?.includes(k))).map((k) => [k, d.answers[k]]));
       const given = Object.fromEntries(Object.entries(presetAnswers(patch.value)).filter(([k]) => !isVat(k as QuestionKey)));
       const assumed = QUESTION_ORDER.filter((k) => k in given && !(k in kept));
-      return { ...d, preset: patch.value, answers: { ...given, ...kept } as Partial<Answers>, assumed };
+      return { ...d, preset: patch.value, answers: { ...given, ...kept } as Partial<Answers>, assumed, assumedBy: patch.value };
     }
     case 'question': {
       const answers = { ...d.answers } as Record<string, QuestionValue>;

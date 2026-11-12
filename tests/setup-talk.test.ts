@@ -17,7 +17,7 @@ import { desktopServer } from '../src/desktop/server.js';
 import { assumedOf, draftProgress, draftSteps, newDraft, withPatch, type SetupDraft } from '../src/onboarding/draft.js';
 import { draftFile, readDraft, writeDraft } from '../src/onboarding/draft-store.js';
 import { applyTalk, parseTalk, talkPrompt, type Ask } from '../src/onboarding/draft-talk.js';
-import { QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, hasWhere, unsureOf, unusualPeriod, type QuestionKey } from '../src/workspace/setup.js';
+import { PRESETS, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, hasWhere, unsureOf, withoutUnsteered, unusualPeriod, type QuestionKey } from '../src/workspace/setup.js';
 import type { AskOptions } from '../src/llm/ask.js';
 import { APP_FOLDER, MANIFEST_FILE } from '../src/workspace/workspace.js';
 import { testIban } from './support/iban.js';
@@ -297,6 +297,20 @@ test('the person sees how far she is: four parts, the same for every firm, so th
   assert.deepEqual(counts, ['0/4', '1/4', '2/4', '2/4', '2/4', '2/4', '3/4', '4/4']);
 });
 
+test('the VAT method and basis are never proposed: no preset answer drawn as the suggestion, in any kind of firm (#364, #347)', () => {
+  for (const preset of ['consultant', 'webshop', 'trades'] as const) {
+    let d = withPatch(newDraft('de', NOW), { step: 'firm', value: { name: 'Malerei Huber GmbH', uid: UID, owner: 'Thomas Huber' } });
+    d = withPatch(d, { step: 'preset', value: preset });
+    d = withPatch(d, { step: 'question', key: 'vatRegistered', value: 'yes' });
+    const method = draftSteps(d).at(-1)!;
+    assert.ok(method.id === 'question' && method.key === 'vatMethod' && !('suggested' in method), `${preset}: no method suggested`);
+    d = withPatch(d, { step: 'question', key: 'vatMethod', value: 'effective' });
+    const basis = draftSteps(d).at(-1)!;
+    assert.ok(basis.id === 'question' && basis.key === 'basis' && !('suggested' in basis), `${preset}: no basis suggested`);
+  }
+  assert.deepEqual(Object.keys(withoutUnsteered({ ...PRESETS.trades.answers })).filter((k) => k === 'vatMethod' || k === 'basis'), [], 'the form takes neither from a preset');
+});
+
 test('answers the kind of firm gave and she never said are marked as assumed, until she answers them herself (#364)', () => {
   let d = withPatch(newDraft('de', NOW), { step: 'firm', value: { name: 'Malerei Huber GmbH', uid: UID, owner: 'Thomas Huber' } });
   d = withPatch(d, { step: 'preset', value: 'trades' });
@@ -306,6 +320,8 @@ test('answers the kind of firm gave and she never said are marked as assumed, un
   d = withPatch(d, { step: 'question', key: 'start', value: 'switching' });
   assert.ok(!assumedOf(d).includes('start'), 'answered by her: no longer assumed');
   assert.ok(assumedOf(d).includes('foreignCustomers'), 'the others the kind of firm gave stay marked after it became «Etwas anderes»');
+  assert.equal(d.preset, 'custom');
+  assert.equal(d.assumedBy, 'trades', 'and the kind of firm that assumed them is kept, to be named on the review');
   // Taken from her words: hers, not assumed.
   const words = withPatch(d, { step: 'question', key: 'foreignCustomers', value: 'yes' });
   assert.ok(!assumedOf(words).includes('foreignCustomers'));
@@ -314,6 +330,7 @@ test('answers the kind of firm gave and she never said are marked as assumed, un
   mkdirSync(join(root, APP_FOLDER), { recursive: true });
   writeDraft(root, d);
   assert.deepEqual(assumedOf(readDraft(root)!), assumedOf(d));
+  assert.equal(readDraft(root)!.assumedBy, 'trades');
 });
 
 test('the questions that need accounting knowledge say where the answer stands and what a wrong pick costs, in her words, without a law citation (#364)', async () => {
@@ -331,12 +348,16 @@ test('the questions that need accounting knowledge say where the answer stands a
   }
   const de = (await import('../src/app/i18n/locales/de.js') as { default: Locale }).default.messages as unknown as Record<string, string>;
   for (const k of ['vatMethod', 'basis']) {
-    assert.match(de[`desktop.q.${k}.where`], /bei der ESTV beantragt/, `${k}: only what the repo confirms: approved on the firm's request`);
+    assert.match(de[`desktop.q.${k}.where`], /beantragt/, `${k}: only what the repo confirms: approved on the firm's request`);
+    assert.doesNotMatch(de[`desktop.q.${k}.where`], /ist es (die effektive Methode|vereinbart)|nie beantragt|nie darum gebeten/, `${k}: the fact, not a conclusion about her`);
     assert.match(de[`desktop.q.${k}.where`], /Treuhand/, `${k}: who knows`);
     assert.match(de[`desktop.q.${k}.where`], /Firma › MWST änderst du es, solange dieses Jahr keine Buchungen hat/, `${k}: what a wrong pick costs (vatMethodHeld)`);
   }
-  assert.match(de['desktop.q.vatMethod.where'], /Formular 0553.*nie beantragt, ist es die effektive Methode/s);
-  assert.match(de['desktop.q.basis.where'], /nie darum gebeten, ist es vereinbart/);
+  assert.match(de['desktop.q.vatMethod.where'], /beantragt hat und der die ESTV einen Satz bewilligt hat.*Formular 0553/s);
+  assert.match(de['desktop.q.basis.where'], /Vereinbart sieht das Gesetz vor; vereinnahmt gilt, wenn die Firma es beantragt hat, bei der Eintragung oder später, und die ESTV es bewilligt hat/);
+  assert.doesNotMatch(de['desktop.q.vatMethod.why'], /Übliche/, 'no method called the usual one');
+  assert.match(de['desktop.q.start.where'], /kann .* abweichen/, 'a firm with nothing on 1 January sees no difference');
+  assert.doesNotMatch(de['desktop.q.start.why'], /einbezahlte Kapital/, 'capital paid in during the year arrives as a payment: never told to enter it as an opening');
   assert.match(de['desktop.q.start.why'], /Beides legt dieselben Bücher an/, 'what each answer changes');
 });
 

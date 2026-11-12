@@ -110,7 +110,9 @@ export function readDraft(root: string): SetupDraft | undefined {
   const given: Partial<Record<string, unknown>> = draft.preset && draft.preset !== 'custom' ? PRESETS[draft.preset].answers : {};
   const assumed = (Array.isArray(raw.assumed) ? raw.assumed : Object.keys(given).filter((k) => !VAT_QUESTIONS.includes(k as never) && !marks.includes(k as never) && JSON.stringify(given[k]) === JSON.stringify(draft.answers[k as QuestionKey])))
     .filter((k): k is QuestionKey => typeof k === 'string' && Object.hasOwn(QUESTIONS, k) && draft.answers[k as QuestionKey] !== undefined);
-  return assumed.length ? { ...draft, assumed } : draft;
+  const by = typeof raw.assumedBy === 'string' && raw.assumedBy !== 'custom' && Object.hasOwn(PRESETS, raw.assumedBy) ? raw.assumedBy as SetupDraft['assumedBy']
+    : !Array.isArray(raw.assumed) && draft.preset && draft.preset !== 'custom' ? draft.preset : undefined;
+  return assumed.length ? { ...draft, assumed, ...(by ? { assumedBy: by } : {}) } : draft;
 }
 
 /** The draft with what the start screen proposes from the jurisdiction new books get (src/workspace/scaffold.ts). */

@@ -61,23 +61,49 @@ export function SetupConversation({ turns, turn, onGo, noAi: columnNoAi }: { tur
   return <NoAi.Provider value={noAi}>{ordered.map((e) => e.node)}{error ? <p className="warnline">{error}</p> : null}</NoAi.Provider>;
 }
 
+const stepOf = (id: string) => document.querySelector(`.aside.setup .obstep[data-step="${id}"]`);
+const smooth = (): ScrollBehavior => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
+
+/** The summary holds the sidebar's scroll while it is the last step and she has not scrolled herself (#364). */
+let summaryHeld = false;
+
+/**
+ * Asked by the sidebar before it follows its end (a turn streams in, the turns load after a reopen):
+ * while the summary holds the scroll, its top is put back in sight instead, and the end is not followed.
+ */
+export function setupHoldsScroll(): boolean {
+  if (!summaryHeld) return false;
+  stepOf('summary')?.scrollIntoView({ block: 'start', behavior: 'auto' });
+  return true;
+}
+
 /**
  * The newest step in sight (#364): a question that appears after an answer is scrolled into view (as
  * little as needed), the summary to its top, so its first step and button show; the summary also when
  * the setup opens on it again. After the sidebar's own scroll to its end, which runs after this
- * effect when both mount together; smooth only without prefers-reduced-motion.
+ * effect when both mount together; smooth only without prefers-reduced-motion. The summary then holds
+ * the scroll (setupHoldsScroll) until she scrolls, presses a key or clicks in the conversation.
  */
 function useNewestStep(id: string | undefined): void {
   const shown = useRef<string>();
   useEffect(() => {
     const was = shown.current;
     shown.current = id;
+    if (id !== 'summary') summaryHeld = false;
     if (!id || id === was || (was === undefined && id !== 'summary')) return;
-    const frame = requestAnimationFrame(() => {
-      const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-      document.querySelector(`.aside.setup .obstep[data-step="${id}"]`)?.scrollIntoView({ block: id === 'summary' ? 'start' : 'nearest', behavior: reduced ? 'auto' : 'smooth' });
-    });
-    return () => cancelAnimationFrame(frame);
+    const box = document.querySelector('.aside.setup .aiturns');
+    const release = () => { summaryHeld = false; };
+    const events = ['wheel', 'touchmove', 'keydown', 'pointerdown'] as const;
+    if (id === 'summary') {
+      summaryHeld = true;
+      for (const e of events) box?.addEventListener(e, release, { passive: true });
+    }
+    const frame = requestAnimationFrame(() => stepOf(id)?.scrollIntoView({ block: id === 'summary' ? 'start' : 'nearest', behavior: smooth() }));
+    return () => {
+      cancelAnimationFrame(frame);
+      for (const e of events) box?.removeEventListener(e, release);
+      if (id === 'summary') summaryHeld = false;
+    };
   }, [id]);
 }
 

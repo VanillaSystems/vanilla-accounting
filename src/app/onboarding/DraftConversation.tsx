@@ -54,8 +54,8 @@ const refusalText = (r: TalkRefusal): string =>
         : setupText(r);
 const FromText = ({ on }: { on: boolean }) => (on ? <span className="obbadge ai" data-from-text>{t('onboarding.talk.fromText')}</span> : null);
 /** An answer the kind of firm gave and she never said (#364): marked, with why, until she answers it herself. */
-const Assumed = ({ draft, k }: { draft: SetupDraft; k: StepMark }) => (draft.preset && assumedOf(draft).includes(k as QuestionKey)
-  ? <span className="obbadge assumed" data-assumed data-tip={t('onboarding.draft.assumedWhy', { preset: tData(`desktop.q.preset.${draft.preset}`) })}>{t('onboarding.draft.assumed')}</span>
+const Assumed = ({ draft, k }: { draft: SetupDraft; k: StepMark }) => (assumedOf(draft).includes(k as QuestionKey)
+  ? <span className="obbadge assumed" data-assumed data-tip={draft.assumedBy ? t('onboarding.draft.assumedWhy', { preset: tData(`desktop.q.preset.${draft.assumedBy}`) }) : undefined}>{t('onboarding.draft.assumed')}</span>
   : null);
 
 export function DraftConversation({ root, onLeave }: { root: string; onLeave(): void }) {
@@ -370,7 +370,7 @@ function Review({ draft, root, busy, change, onCreate }: { draft: SetupDraft; ro
       <Ai>
         <p>{t('onboarding.draft.review')}</p>
         {draft.fromText?.length ? <p className="obwhy">{t('onboarding.talk.reviewNote')}</p> : null}
-        {draft.preset && assumedOf(draft).length ? <p className="obwhy" data-assumed-note>{t('onboarding.draft.assumedNote', { preset: tData(`desktop.q.preset.${draft.preset}`) })}</p> : null}
+        {assumedOf(draft).length ? <p className="obwhy" data-assumed-note>{draft.assumedBy ? t('onboarding.draft.assumedNote', { preset: tData(`desktop.q.preset.${draft.assumedBy}`) }) : t('onboarding.draft.assumedNoteBare')}</p> : null}
       </Ai>
       <div className="obind">
         <div className="obcard">

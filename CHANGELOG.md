@@ -127,15 +127,19 @@ Two markers flag an entry you must read before you update:
 - The drop dialog says «beiseitegelegt, wird nicht verarbeitet» instead of «Quarantäne, kein
   Ablauf», and no longer how a file was recognised («Struktur», «Hinweis»).
 - Setup (#364): «MWST-Methode», «Abrechnungsart» and «Ausgangslage» say, in the form, the setup
-  conversation and `npm run init`, how to tell (the Saldosteuersatz and «vereinnahmt» apply only when
-  the ESTV approved them on the firm's request, the Saldosteuersatz is filed on form 0553; the Treuhand knows) and what a wrong pick costs (Firma › MWST changes
+  conversation and `npm run init`, the facts that tell (the Saldosteuersatz is a rate the ESTV approved
+  on the firm's application, filed on form 0553; vereinbart is what the law provides, vereinnahmt
+  applies when the firm asked for it and the ESTV approved it; the Treuhand knows) and what a wrong pick costs (Firma › MWST changes
   it while the year has no entries); «Abrechnungsart» no longer cites «MWSTG Art. 39» or «auf
-  Gesuch», «Ausgangslage» says what each answer changes. Before the books the count is of four
+  Gesuch», «Ausgangslage» says what each answer changes. Neither VAT question is
+  answered for her any more: no kind of firm preselects them, no answer is highlighted as the
+  proposal, and the form asks for both before it creates the books. Before the books the count is of four
   parts, the same for every firm («2 von 4 erledigt», with Firma · Art der Firma · MWST · Bank), no
   longer of questions («0 von 14», «1 von 4», «4 von 8»). The review marks the answers the kind of
-  firm gave and she never said «angenommen», until she answers them. In the books, after an answer
+  firm gave and she never said «angenommen», naming that kind of firm, until she answers them. In the books, after an answer
   the newest question comes into sight, and after the last one the summary starts with the first
-  step, one sentence with «Kontoauszug einlesen», the rest behind «Mehr dazu». «Partner und
+  step, one sentence with «Kontoauszug einlesen», the rest behind «Mehr dazu»; it stays in sight
+  while an AI answer streams in and when the setup opens again on it, until she scrolls. «Partner und
   Wissen», never asked on books without bookings, is no longer counted as discussed («4 von 4»,
   listed «kommt mit den ersten Buchungen»). Without an AI the greeting no longer offers «in deinen
   Worten», and the receipts step offers «KI einrichten» instead of «Mit mir einrichten».

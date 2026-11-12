@@ -67,11 +67,14 @@ answers, or the column's CLI is signed out) the greeting and the receipts step s
 there (a line's `noAi` words, #364): «Du antwortest mit einem Klick», no «in deinen Worten». The rail
 counts the topics the conversation took up that are done or left for later, of those it took up
 (`setupCount`, `topicsTaken`): «Partner und Wissen» on books without bookings is not taken up, so it
-is neither asked nor counted, and the summary lists it as «kommt mit den ersten Buchungen». The
+is neither asked nor counted, and the summary lists it as «kommt mit den ersten Buchungen» while there
+are no partners (`shownState`). The
 count moves with every answer; a topic left with «Später» reads «später», never «übersprungen».
 After an answer the newest question scrolls into sight, and the summary to its top, so the first
 step and its button show after the last answer (also when the setup opens on it again); smooth only
-without prefers-reduced-motion.
+without prefers-reduced-motion. The summary then holds the scroll (`setupHoldsScroll`): until she
+scrolls, presses a key or clicks in the conversation, a streamed AI answer or turns that load after a
+reopen put its top back in sight instead of the sidebar following its end.
 
 **Answers.** A click stores the answer in the workspace's `onboarding.json` (`answers`, beside the
 topics), with when it was given. «Ändern» beside an answer takes it back; the steps after it wait
@@ -143,10 +146,11 @@ der Firma, MWST, Bank; «n von 4 erledigt», `draftProgress`): how many question
 the answers, so a count of questions jumped («0 von 14», «1 von 4», «4 von 8»), a count of parts does
 not (#364). «MWST-Methode», «Abrechnungsart» and «Ausgangslage» carry a line for a person who does not
 know (`where` in src/workspace/setup.ts, shown by the form, this conversation and `npm run init`):
-what the repo confirms about the answer (the Saldosteuersatz is approved on application and filed on form 0553, vereinnahmt only on approval, so a firm that never applied is effective and vereinbart), that the Treuhand knows, and what a wrong pick costs (Firma › MWST changes it while the
+the facts the repo confirms (the Saldosteuersatz is a rate the ESTV approved on the firm's application, filed on form 0553; vereinbart is what the law provides, vereinnahmt applies when the firm asked for it and the ESTV approved it), that the Treuhand knows, and what a wrong pick costs. Neither of these two is answered for her: no preset answers them and no answer is drawn as the proposal, in this conversation and on the form, which asks for both before it creates the books (`UNSTEERED`; what an unsure person gets is #347) (Firma › MWST changes it while the
 year has no entries, `vatMethodHeld`). The review marks an answer the kind of firm gave and the person
 never said «angenommen» (`assumed` in the draft, `assumedOf`) until she answers it herself; the line
-above the card says why. Such books open into the setup until
+above the card says why, naming the kind of firm that assumed it (`assumedBy`), also once the preset
+became «Etwas anderes». Such books open into the setup until
 «Los geht's» sets `ready`. A folder with a draft opens into the draft's conversation at the step it
 stopped, from the folder dialog, the recent list or at the next start.
 
