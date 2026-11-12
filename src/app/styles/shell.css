@@ -334,8 +334,10 @@ html.phone:has(.demobar) .toast { bottom: 108px; }
 html.phone:has(.demobar) .toast.droplost { bottom: 156px; }
 .drop .ic { margin: 0 auto; }
 
-/* The Mac app without a title bar: a strip along the top edge moves the window (double-click zooms); what floats over it stays clickable. */
-.dragbar { position: fixed; top: 0; left: 0; right: 0; height: 36px; -webkit-app-region: drag; z-index: 15; }
+/* The Mac app without a title bar: a strip along the top edge moves the window (double-click zooms); what floats over it stays clickable.
+   The strip takes no mouse events of the page (pointer-events: none): Electron moves the window from the drag region itself, and a
+   control under the strip (the first screen's language switch) gets its click (issue #363); the no-drag rules below cut the controls out of the region. */
+.dragbar { position: fixed; top: 0; left: 0; right: 0; height: 36px; -webkit-app-region: drag; z-index: 15; pointer-events: none; }
 /* .drop only while it shows: hidden, it still spans the window, and its no-drag switched off moving the window everywhere. */
 .no-titlebar :is(.topbar, .menu, .scrim, .palette, .drop.show, .corner, .aside) { -webkit-app-region: no-drag; }
 /* Whatever can be clicked stays clickable inside the title bar zone. */
@@ -366,6 +368,9 @@ html.phone:has(.demobar) .toast.droplost { bottom: 156px; }
 .cplinks { display: flex; gap: 12px; padding: 6px 8px 2px; border-top: 1px solid var(--line); margin-top: 4px; }
 /* While the top bar stands open (new or pinned), the pages start below it instead of under it. */
 body:has(.topbar.open) :is(.list, .detail, main.full) { padding-top: 76px; }
+/* Folded too, on a wide window: the pill stands where a heading would start (at the list's left edge while the AI sidebar
+   is open, over the detail's heading when not), and a hover that opens it moves nothing (issue #363). */
+html:not(.phone) body:has(.topbar) :is(.list, .detail, main.full) { padding-top: 76px; }
 
 /* Automatisierung at the foot of the bar (Dock.tsx, src/app/automation/widget.ts): the open period's figures, what waits, the summary card. */
 :root { --abw-wide: 212px; }
