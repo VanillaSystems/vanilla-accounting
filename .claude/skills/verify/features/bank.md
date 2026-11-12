@@ -39,7 +39,11 @@ rows in tests/period-lock.test.ts).
   (`[data-testid=go-receipt]` → `/receipts/<id>`), the entry (`[data-testid=go-entry]` → `/journal/<id>`), a folded Wise
   fee (`Gebühr …`), or `kein Beleg` with `braucht keinen` (`PATCH /api/transactions/<ref>` noReceiptNeeded; ⌘Z undoes;
   `zurücksetzen` clears it). `×` or Esc clears the choice. Also on a payment: `[data-testid=only-unbooked]` (filter),
-  an `ungebucht` mark and a booking by hand, `[data-testid=link-invoice]` on incoming payments,
+  an `ungebucht` mark and a booking by hand (`[data-testid=payment-booking]`: opens filled, `[data-testid=proposal]` names each
+  proposal's source, #344; below it `[data-testid=task-make-rule]` with `data-similar` and, where the payment's lasting words
+  hold for more open payments, `[data-testid=task-make-rule-wider] a` → `/company/rules?payment=<ref>&by=text`; driven 2026-11-12
+  on fresh books of `npm run init --preset trades` with the persona's files: a customer payment opens `1020 / 3400 · V81`, a wage
+  `3 Zahlungen wie diese` and `oder eine für alle 6 mit «Lohn» im Text`), `[data-testid=link-invoice]` on incoming payments,
   `[data-testid=sale-without-vat]`, `[data-testid=payment-parts]` for a collective payment.
 - `bk-note`: `[data-testid=payment-note]` in `.paybar` (`Notiz`, or the note itself) opens `input.note`; ↵ or leaving
   the field saves (`PATCH /api/transactions/<ref>` remarks; an empty note removes it), Esc cancels. Toast `Notiz

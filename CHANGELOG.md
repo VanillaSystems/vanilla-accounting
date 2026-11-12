@@ -71,6 +71,34 @@ Two markers flag an entry you must read before you update:
   tasks, stopped runs and questions only.
 - A workflow's drawing names what leads from step to step in words («Freigegeben», «Geändert»),
   and a task links to its run with «Lauf ansehen», not with the run's id.
+- Without an AI, booking by hand starts from what the app knows (#344). The form «Von Hand buchen»
+  of a payment opens filled: the bank side, and the other side proposed from a rule of the firm
+  that decides the payment, else the account of the same business's last booking, else, with a
+  linked receipt on money out, the firm's default account for purchases and the receipt's VAT rate
+  as that account's code, and on money in the firm's default revenue account with the code of a
+  sale without an invoice (domestic at the normal rate, abroad the export code). The line under
+  the fields names each proposal and where it comes from («Standardkonto für Verkäufe», «aus dem
+  Beleg»); it is booked only by your click. Money out without a receipt gets no account and no
+  rate, as before: no receipt, no input tax.
+- The account field of that form finds what a layperson types: «Ertrag», «Einnahme» or «Umsatz»
+  lists the revenue accounts, «Aufwand» or «Kosten» the expenses, though no account is named so.
+  For money in the revenue accounts come first, for money out the expenses, the firm's default
+  accounts on top; ↵ takes the first row, which is the one marked. «Dienst» + ↵ on a customer
+  payment takes 3400, not 1170 Vorsteuer. The VAT field, once the account is chosen, lists for a
+  typed rate («8.1») only the codes of that account's kind (three for a sale instead of fifteen)
+  and says so; a code or its name still finds any code.
+- A task about a payment names it (who, how much, when), so three «Zahlung ohne Buchung» read
+  apart. Under the form: how many payments of the kind are not booked, and «Eine Regel für alle n
+  anlegen», which opens Firma › Regeln › «Neue Regel» started from this payment; where the
+  payment's lasting words («Lohn») hold for more open payments than its payer does, a second link
+  starts the rule with them (`/company/rules?payment=<ref>&by=text`). A rule started by text now
+  takes those words, not the whole text of one payment with its month and year.
+- A photo or scan no AI read is «nicht gelesen», no longer «gelesen»: in the drop dialog (with why,
+  «KI einrichten» and «Selbst eintippen»), in the list of Belege instead of «ohne Datum», on the
+  receipt (a notice with both ways, and under Datei instead of «(kein Text erkannt)») and in its
+  Verlauf («hat den Beleg abgelegt, nicht gelesen»).
+- The drop dialog says «beiseitegelegt, wird nicht verarbeitet» instead of «Quarantäne, kein
+  Ablauf», and no longer how a file was recognised («Struktur», «Hinweis»).
 
 ### Fixed
 
@@ -103,6 +131,11 @@ Two markers flag an entry you must read before you update:
   setup leaves the page 820 px before it grows, the three ways into Belege wrap in a narrow list,
   a statement's notes stand one under the other, the top bar no longer lies under the «für dich»
   button, and the line under «Einrichtung» wraps instead of ending in «…» (#342).
+
+- The KI column and the setup conversation («Mit mir einrichten») no longer answer with Claude
+  Code's own «Not logged in · Please run /login», once as the answer and once as the error. A CLI
+  that is not signed in, not installed, at its plan's limit or switched off answers with the app's
+  sentence for that state and «KI einrichten» (#344).
 
 ### Changed
 

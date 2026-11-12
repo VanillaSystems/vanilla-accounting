@@ -16,7 +16,7 @@ page adds the dialog and how it hands over to the workflows of 0.4.0.
    statement).
 3. **Each row names the workflow it will start**, as a chip that opens the workflow:
    → *Beleg aufnehmen*, → *Kontoauszug einlesen*. A file that will not be taken says what happens
-   instead: → nicht übernommen, → Quarantäne, kein Ablauf, → wartet im Eingang, → wird entpackt.
+   instead: → nicht übernommen, → beiseitegelegt, wird nicht verarbeitet (the quarantine), → wartet im Eingang, → wird entpackt.
    Above the buttons, one line sums it up: "Startet Beleg aufnehmen 2 · Kontoauszug einlesen 2 ·
    danach, wenn der Zeitraum vollständig ist: Zuordnen und buchen (von Hand) → Buchen (von
    selbst)". When the files are in, «Oktober zuordnen und buchen…» shows whether the period is

@@ -331,6 +331,22 @@ the other's when they next open the books.
   and the status corner count the questions waiting for the viewer.
 - **Answering.** One click for «privat» or «geschäftlich», or a few words and ↵. The asker sees
   «beantwortet» with the answer and what the app did.
+- **Booking by hand starts from what code knows (#344).** The form «Von Hand buchen» of a payment
+  (Kontoauszüge, a receipt's payment, the task of a payment no rule and no AI booked) opens with
+  the bank on its side and the other side proposed, in this order: the company rule that decides
+  the payment (it waits for its receipt, say; `GET /api/rules/hand?payment=` returns its lines),
+  the account of the same business's last booking, with a linked receipt on money out the firm's
+  default purchase account and the receipt's rate as that account's code, on money in the firm's
+  default revenue account with the code the app proposes for a sale without an invoice
+  (`saleProposal`: the app's sale question stays the one question about such a sale). The
+  defaults are the setup's «Was verkauft ihr?» (`defaults` of `GET /api/workspace`). The line
+  under the fields names each proposal and its source; nothing is booked before the click.
+  Money out without a receipt gets neither account nor rate. The account field ranks by the
+  payment's direction and the account's class, then by the name, and a word that names a class
+  («Ertrag», «Aufwand»; `accounts.words.*` of the dictionary) lists its accounts
+  (`rankAccounts`, src/app/lib/account-filter.ts); the code field lists for a typed rate only the
+  codes of the chosen account's kind (`fittingGroup`, `pickGroups`). Under the form, the way to a
+  rule for payments of the kind, with how many are open (`HandStart.similar`, `.wider`).
 - **An answer that decides acts, code first.** «privat» on a payment books it on the owner's
   account without a VAT code, as the sidebar and the booking by hand do: an unbooked payment gets
   one booking against its bank, a booked one has its expense side moved and its code removed (a
