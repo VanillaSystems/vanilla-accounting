@@ -4,11 +4,13 @@
  * words every step can say in each language, the answers over HTTP, and the AI's `setupAnswer`.
  * Each test names the wrong behaviour it catches.
  */
+import './support/demo-workspace.js';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync } from 'node:fs';
-import { setupThread, topicStates, typedChoice, askedAt, openStep, vatLine, type Line, type SetupStep } from '../src/onboarding/conversation.js';
-import { emptyProgress, parseProgress, withAnswer, withTopic, QUESTIONS, type Answer, type QuestionId, type SetupProgress } from '../src/onboarding/model.js';
+import { setupThread, topicStates, typedChoice, askedAt, openStep, sellsLine, vatLine, type Line, type SetupStep } from '../src/onboarding/conversation.js';
+import { emptyProgress, parseProgress, questionWordsKey, settledCount, stateWordsKey, topicWordsKey, withAnswer, withTopic, QUESTIONS, SETUP_TOPICS, type Answer, type QuestionId, type SetupProgress } from '../src/onboarding/model.js';
+import { describedOr } from '../src/app/assistant/stored-change.js';
 import { partnerBins, type SetupFacts } from '../src/onboarding/facts.js';
 import { setupNote } from '../src/onboarding/prompt.js';
 import { readProgress } from '../src/onboarding/store.js';
@@ -32,33 +34,99 @@ const answered = (pairs: Partial<Record<QuestionId, string>>, p: SetupProgress =
   Object.entries(pairs).reduce((acc, [q, value], i) => withAnswer(acc, q as QuestionId, { value, at: `2026-10-21T09:0${i}:00.000Z` } as Answer), p);
 const ids = (steps: SetupStep[]) => steps.map((s) => s.id);
 const last = (steps: SetupStep[]) => steps.at(-1)!;
-const ALL = { company: 'ok', vat: 'effective', start: 'year', filed: '0', program: 'bexio', entry: 'double', access: 'me', needs: 'ok', opening: 'next', bank: 'next', receipts: 'next', partners: 'next' } as const;
+const IBAN = [{ label: 'Bank', bank: 'raiffeisen', currency: 'CHF', account: '1020', iban: 'CH-TEST-IBAN' }];
+const SELLS = { kinds: ['made', 'services'] as Array<'made' | 'services'>, accounts: { made: { purchase: '4000', sales: '3000' }, traded: { purchase: '4200', sales: '3200' }, services: { sales: '3400' } } };
 
-test('a fresh setup draws its first turn from what the app knows, with no AI: the greeting, the company card and two answers', () => {
-  const steps = setupThread(emptyProgress(), facts());
-  assert.deepEqual(ids(steps), ['company']);
+test('a fresh setup shows what the app knows of the firm once, greets no one by name, and asks the first thing the settings do not answer', () => {
+  const steps = setupThread(emptyProgress(), facts({ sells: SELLS }));
+  assert.deepEqual(ids(steps), ['company', 'opening'], 'the firm, its VAT and what it sells were asked a minute ago: not again (#345)');
   const s = steps[0];
-  assert.equal(s.answer, undefined);
-  assert.equal(s.say[0].key, 'onboarding.s.hello');
-  assert.deepEqual(s.say[0].params, { owner: 'Anna' }, 'greets the owner by first name');
-  assert.equal(s.card?.kind, 'company');
-  assert.deepEqual(s.choices.map((c) => c.value), ['ok', 'fix']);
-  assert.equal(setupThread(emptyProgress(), facts({ company: { ...facts().company, owner: '' } }))[0].say[0].key, 'onboarding.s.helloNoName');
+  assert.deepEqual(s.say.map((l) => l.key), ['onboarding.s.hello', 'onboarding.s.company']);
+  assert.equal(s.say[0].params, undefined, 'whoever sits there is not greeted with the owner\'s name');
+  assert.deepEqual(s.choices, [], 'shown, not asked');
+  assert.deepEqual(s.card, { kind: 'company', company: facts().company, sells: ['made', 'services'], origin: 'form', change: true });
+  assert.equal(topicStates(emptyProgress(), facts()).firm, 'done', 'nothing of the firm waits');
+  assert.equal(openStep(steps)?.id, 'opening');
 });
 
-test('the steps stop at the first open question and go on in the prototype\'s order once each is answered', () => {
+test('«Etwas ändern» on the firm\'s card opens the VAT and the sales question; books of an older version that answered «Stimmt so» are not asked', () => {
+  const fix = setupThread(answered({ company: 'fix' }), facts({ sells: SELLS }));
+  assert.deepEqual(ids(fix), ['company', 'vat']);
+  assert.equal(fix[0].reply?.lines[0].key, 'onboarding.r.companyFix');
+  assert.deepEqual(fix[0].reply?.go, { area: 'company', section: 'profile' });
+  assert.equal(fix[0].card?.kind === 'company' && fix[0].card.change, false, 'taken: the card offers it no more');
+  assert.equal(topicStates(answered({ company: 'fix' }), facts()).firm, 'open');
+  assert.deepEqual(ids(setupThread(answered({ company: 'fix', vat: 'effective' }), facts({ sells: SELLS }))), ['company', 'vat', 'sells']);
+  assert.deepEqual(ids(setupThread(answered({ company: 'fix', vat: 'effective', sells: 'made+services' }), facts({ sells: SELLS }))), ['company', 'vat', 'sells', 'opening']);
+  assert.deepEqual(ids(setupThread(answered({ company: 'ok' }), facts({ sells: SELLS }))), ['company', 'opening']);
+  assert.deepEqual(ids(setupThread(answered({ vat: 'net-rate' }), facts())), ['company', 'vat', 'opening'], 'a VAT answer the AI recorded from typed words shows its card');
+});
+
+test('only what the app cannot know is asked: no start day, no filed returns, no old program; a bank with its IBAN and books without partners are not walked through', () => {
+  const asked = new Set(Object.keys(QUESTIONS));
+  for (const gone of ['start', 'filed', 'program', 'entry', 'access', 'needs']) assert.ok(!asked.has(gone), `${gone} led nowhere and is not asked`);
+  assert.deepEqual([...SETUP_TOPICS], ['firm', 'opening', 'bank', 'receipts', 'knowledge']);
+  // The tester's books: a bank account with its IBAN, nothing booked. Two clicks to the summary.
   let p = emptyProgress();
-  const seen: string[] = [];
-  for (const [q, v] of Object.entries(ALL)) {
-    const open = last(setupThread(p, facts()));
-    assert.equal(open.id, q, `${q} is asked after ${seen.at(-1) ?? 'the start'}`);
-    assert.ok(open.choices.some((c) => c.value === v), `${q} offers ${v}`);
-    seen.push(q);
-    p = answered({ [q]: v }, p);
+  const f = facts({ banks: IBAN });
+  assert.equal(last(setupThread(p, f)).id, 'opening');
+  p = answered({ opening: 'later' }, p);
+  assert.equal(last(setupThread(p, f)).id, 'receipts', 'the bank account is known: not asked');
+  p = answered({ receipts: 'later' }, p);
+  assert.equal(last(setupThread(p, f)).id, 'summary', 'no bookings, no partners to show');
+  // Without an IBAN the bank is asked; books with partners show them.
+  assert.equal(last(setupThread(answered({ opening: 'later' }), facts())).id, 'bank');
+  const withPartners = facts({ banks: IBAN, partners: { clear: [], mixed: [], rare: [{ id: 'x', name: 'X', n: 1 }], ruled: 0 } });
+  assert.equal(last(setupThread(answered({ opening: 'later', receipts: 'later' }), withPartners)).id, 'partners');
+  assert.equal(topicStates(emptyProgress(), withPartners).knowledge, 'open');
+  assert.equal(topicStates(emptyProgress(), f).knowledge, 'skipped', 'nothing to show yet: left for later, not done');
+});
+
+test('the count never goes backwards: partners that appear with the first statement, after the setup ended, do not reopen a topic', () => {
+  const p = answered({ opening: 'later', receipts: 'later' });
+  const empty = facts({ banks: IBAN });
+  assert.equal(settledCount(topicStates(p, empty)), 5);
+  const booked = facts({ banks: IBAN, partners: { clear: [], mixed: [], rare: [{ id: 'x', name: 'X', n: 1 }], ruled: 0 } });
+  const ended = { ...p, ready: AT };
+  assert.equal(settledCount(topicStates(ended, booked)), 5, 'was 5 von 5, then 4 von 5 after the first statement');
+  assert.equal(topicStates(ended, booked).knowledge, 'skipped');
+  assert.equal(topicStates(answered({ partners: 'next' }, ended), booked).knowledge, 'done', 'seen: done');
+});
+
+test('a conversation stored by an earlier version names topics and questions this one no longer has: described in a generic sentence, never thrown', async () => {
+  // As 0.4.1 stored them in data/assistant/<id>.json: {"kind":"setupTopic","topic":"periods","state":"skipped"}, {"kind":"setupAnswer","question":"start","value":"year"}.
+  const stored = { topic: 'periods', state: 'skipped', question: 'start' };
+  const keys = [topicWordsKey(stored.topic), stateWordsKey(stored.state), questionWordsKey(stored.question), topicWordsKey('history'), questionWordsKey('filed'), stateWordsKey('paused'), 'assistant.c.unknown'];
+  assert.deepEqual(keys, ['onboarding.topic.gone', 'onboarding.state.skipped', 'onboarding.question.gone', 'onboarding.topic.gone', 'onboarding.question.gone', 'onboarding.state.open', 'assistant.c.unknown']);
+  assert.equal(topicWordsKey('bank'), 'onboarding.topic.bank');
+  assert.equal(questionWordsKey('opening'), 'onboarding.question.opening');
+  const dir = 'src/app/i18n/locales';
+  for (const f of readdirSync(dir).filter((x) => x.endsWith('.ts'))) {
+    const messages = (await import(`../${dir}/${f}`) as { default: Locale }).default.messages as Record<string, unknown>;
+    assert.deepEqual(keys.filter((k) => !(k in messages)), [], `${f} has the words`);
+    for (const gone of ['onboarding.topic.periods', 'onboarding.question.start']) assert.ok(!(gone in messages), `${gone} is the key 0.4.1 used and this version lacks: the lookup that threw`);
   }
-  const steps = setupThread(p, facts());
-  assert.equal(last(steps).id, 'summary', 'all answered: the summary closes the conversation');
-  assert.equal(openStep(steps), undefined, 'the summary is no question');
+  // Any other kind a later or earlier version stored: the sidebar's description falls back instead of throwing.
+  assert.deepEqual(describedOr<{ text: string }>(() => { throw new Error('Missing i18n key: onboarding.topic.periods'); }, () => ({ text: 'generic' })), { text: 'generic' });
+  assert.deepEqual(describedOr(() => ({ text: 'fine' }), () => ({ text: 'generic' })), { text: 'fine' });
+});
+
+test('the count moves with every answer: each topic the conversation is through counts, done or left for later', () => {
+  const f = facts();
+  const count = (p: SetupProgress) => settledCount(topicStates(p, f));
+  assert.equal(count(emptyProgress()), 2, 'the firm needs nothing; the partners come with the first bookings');
+  assert.equal(count(answered({ opening: 'later' })), 3);
+  assert.equal(count(answered({ opening: 'later', bank: 'later' })), 4);
+  assert.equal(count(answered({ opening: 'later', bank: 'later', receipts: 'later' })), 5);
+});
+
+test('«Später» on the opening says what it means and where it comes back; with an opening entered there is nothing to say', () => {
+  const later = setupThread(answered({ opening: 'later' }), facts()).find((s) => s.id === 'opening')!;
+  assert.deepEqual(later.reply, { lines: [{ key: 'onboarding.r.openingLater' }], go: { area: 'company', section: 'opening' } });
+  assert.equal(later.say[0].key, 'onboarding.s.openingNone');
+  const set = setupThread(answered({ opening: 'later' }), facts({ opening: [{ account: '1020', name: 'Bank', amount: 1 }] })).find((s) => s.id === 'opening')!;
+  assert.equal(set.reply, undefined);
+  assert.equal(setupThread(answered({ opening: 'next' }), facts()).find((s) => s.id === 'opening')!.reply, undefined);
 });
 
 test('the VAT answer: the same as the app has says so, another asks for a change kept on its card, never written by the answer itself', () => {
@@ -72,37 +140,6 @@ test('the VAT answer: the same as the app has says so, another asks for a change
   assert.equal(setupThread(answered({ company: 'ok', vat: 'none' }), facts({ company: { ...facts().company, vat: NOT_REGISTERED } })).find((s) => s.id === 'vat')!.reply?.lines[0].key, 'onboarding.r.vatSameNone');
   assert.equal(topicStates(answered({ company: 'ok', vat: 'net-rate' }), facts()).firm, 'open', 'a change not taken leaves the firm open');
   assert.equal(topicStates(answered({ company: 'ok', vat: 'none' }), facts({ company: { ...facts().company, vat: NOT_REGISTERED } })).firm, 'done', 'the app shows what the person answered: done');
-});
-
-test('which returns were filed is asked only of a registered firm, with only the periods already over, and a filed quarter waits for the import', () => {
-  const p = answered({ company: 'ok', vat: 'effective', start: 'during' });
-  const filed = last(setupThread(p, facts()));
-  assert.equal(filed.id, 'filed');
-  assert.deepEqual(filed.choices.map((c) => c.label.key), ['onboarding.q.filed.0', 'onboarding.q.filed.q1', 'onboarding.q.filed.q2', 'onboarding.q.filed.q3'], 'Q4 is not over on 21 October');
-  assert.equal(last(setupThread(answered({ company: 'ok', vat: 'none', start: 'year' }), facts({ company: { ...facts().company, vat: NOT_REGISTERED } }))).id, 'program', 'a firm without VAT files nothing');
-  assert.equal(last(setupThread(answered({ company: 'ok', vat: 'effective', start: 'year' }), facts({ today: '2026-02-10' }))).id, 'program', 'no quarter over yet: nothing to ask');
-  const half = last(setupThread(answered({ company: 'ok', vat: 'net-rate', start: 'during' }), facts()));
-  assert.deepEqual(half.choices.map((c) => c.label.key), ['onboarding.q.filed.0', 'onboarding.q.filed.h1'], 'the net tax rate files half years');
-
-  const two = answered({ company: 'ok', vat: 'effective', start: 'during', filed: '2' });
-  assert.equal(setupThread(two, facts()).find((s) => s.id === 'filed')!.reply?.lines[0].key, 'onboarding.r.filedLater', 'no comparison in the app yet: said so');
-  assert.equal(topicStates(two, facts()).periods, 'skipped');
-  assert.equal(topicStates(two, facts({ closedThrough: '2026-06-30' })).periods, 'done', 'sealed through Q2: done');
-  assert.equal(setupThread(two, facts({ closedThrough: '2026-06-30' })).find((s) => s.id === 'filed')!.reply?.lines[0].key, 'onboarding.r.filedSealed');
-});
-
-test('the old program decides what is asked: a new firm has no history, an accountant\'s books need no login, the needs card says the import is a later step', () => {
-  const base = { company: 'ok', vat: 'effective', start: 'year', filed: '0' } as const;
-  assert.equal(last(setupThread(answered({ ...base, program: 'new' }), facts())).id, 'opening');
-  assert.equal(topicStates(answered({ ...base, program: 'new' }), facts()).history, 'done');
-  assert.deepEqual(ids(setupThread(answered({ ...base, program: 'accountant', entry: 'double' }), facts())).slice(-1), ['needs'], 'no question who has the login');
-  const needs = last(setupThread(answered({ ...base, program: 'bexio', entry: 'single', access: 'accountant' }), facts()));
-  assert.equal(needs.card?.kind, 'needs');
-  if (needs.card?.kind !== 'needs') return;
-  assert.ok(!needs.card.items.some((i) => i.what.key === 'onboarding.needs.chart'), 'single entry: no chart to bring');
-  assert.ok(needs.card.items.every((i) => i.who.key !== 'onboarding.needs.who.export' ), 'the accountant brings it');
-  assert.equal(needs.card.note.key, 'onboarding.needs.later', 'no fake import: the card says it is a later step');
-  assert.equal(topicStates(answered({ ...base, program: 'bexio', entry: 'double', access: 'me', needs: 'ok' }), facts()).history, 'skipped', 'history left for the import, not done');
 });
 
 test('a topic is done when the app sees it, whatever was answered or marked: a bank with IBAN, a source switched on, opening balances', () => {
@@ -120,18 +157,36 @@ test('a topic is done when the app sees it, whatever was answered or marked: a b
   assert.equal(topicStates(answered({ bank: 'later' }), facts()).bank, 'skipped', '«Später» skips the topic');
 });
 
-test('the summary says what the app knows and where from, and lists what is still open with its place by hand', () => {
-  const p = answered(ALL);
-  const sum = last(setupThread(p, facts({ banks: [{ label: 'Bank', bank: 'b', currency: 'CHF', account: '1020', iban: 'CH93' }] })));
+test('the summary says each fact once and where from, lists only what is still open, never a topic answered as skipped, and ends with the first step', () => {
+  const p = answered({ opening: 'later', receipts: 'later' });
+  const sum = last(setupThread(p, facts({ banks: IBAN, sells: SELLS })));
   assert.equal(sum.card?.kind, 'summary');
   if (sum.card?.kind !== 'summary') return;
-  const origin = (key: string) => sum.card?.kind === 'summary' && sum.card.items.find((i) => i.what.key === key)?.origin;
-  assert.equal(origin('onboarding.sum.company'), 'answer');
-  assert.equal(origin('onboarding.sum.banks'), 'app');
-  assert.equal(origin('onboarding.sum.program'), 'later', 'the import from Bexio is a later step');
-  assert.equal(origin('onboarding.sum.openingNone'), 'open');
-  assert.deepEqual(sum.card.open.map((o) => o.topic), ['history', 'opening', 'receipts'], 'open or skipped topics, each with its place');
-  assert.deepEqual(sum.card.open.find((o) => o.topic === 'opening')?.go, { area: 'company', section: 'opening' });
+  assert.deepEqual(sum.card.items.map((i) => [i.what.key, i.origin]), [
+    ['onboarding.sum.company', 'form'], ['onboarding.sum.vatEffective', 'form'], ['onboarding.sum.sells', 'form'], ['onboarding.sum.banks', 'form'],
+  ], 'what is open is not listed here too');
+  assert.deepEqual(sum.card.open, [
+    { topic: 'opening', state: 'skipped', go: { area: 'company', section: 'opening' } },
+    { topic: 'receipts', state: 'skipped', go: { area: 'company', section: 'sources' } },
+    { topic: 'knowledge', state: 'skipped', go: { area: 'company', section: 'rules' } },
+  ], 'only what is left for later, each with its place');
+  assert.equal(sum.card.first.key, 'onboarding.sum.firstQuarter', 'the first step: the statement, from the first quarter not filed');
+  const half = last(setupThread(p, facts({ banks: IBAN, company: { ...facts().company, vat: { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5 }] } } })));
+  assert.equal(half.card?.kind === 'summary' && half.card.first.key, 'onboarding.sum.firstHalf');
+  const none = last(setupThread(p, facts({ banks: IBAN, company: { ...facts().company, vat: NOT_REGISTERED } })));
+  assert.equal(none.card?.kind === 'summary' && none.card.first.key, 'onboarding.sum.firstNone');
+  const created = last(setupThread({ ...p, created: AT }, facts({ banks: IBAN })));
+  assert.equal(created.card?.kind === 'summary' && created.card.items[0].origin, 'answer', 'books the conversation created: her own answers');
+});
+
+test('a firm that starts in the middle of the year is told what follows, and which balance the opening needs: never a July bank balance beside December figures', async () => {
+  const de = (await import('../src/app/i18n/locales/de.js') as { default: Locale }).default.messages as unknown as Record<string, string>;
+  for (const k of ['onboarding.sum.firstQuarter', 'onboarding.sum.firstHalf', 'onboarding.sum.firstNone']) {
+    assert.match(de[k], /Beginnst du mitten im Jahr, zeigen Bilanz und Erfolgsrechnung dieses Jahres nur/, k);
+    assert.match(de[k], /die Eröffnung bleibt per 1\. Januar/, k);
+  }
+  assert.match(de['onboarding.s.openingNone'], /auch den Stand des Bankkontos, aus der Bilanz per \{prev\}/);
+  assert.doesNotMatch(de['onboarding.s.openingNone'], /ersten Kontoauszug/, 'the first statement of a firm that starts in July shows July\'s balance, not the opening\'s');
 });
 
 test('partners sort into the prototype\'s bins: always the same way at least four times, booked in mixed ways, rare; a partner with a rule stays out', () => {
@@ -157,7 +212,7 @@ test('partners sort into the prototype\'s bins: always the same way at least fou
 });
 
 test('typed words that name exactly one answer pick it; anything else goes to the AI', () => {
-  const step = setupThread(answered({ company: 'ok' }), facts()).at(-1)!;
+  const step = setupThread(answered({ company: 'fix' }), facts()).at(-1)!;
   const label = (c: { label: Line }) => ({ 'onboarding.q.vat.none': 'Nicht MWST-pflichtig', 'onboarding.q.vat.effective': 'Effektiv, pro Quartal', 'onboarding.q.vat.net-rate': 'Saldosteuersatz, pro Halbjahr', 'onboarding.q.vat.unknown': 'Weiss nicht' } as Record<string, string>)[c.label.key];
   assert.equal(typedChoice(step, 'effektiv', label), 'effective');
   assert.equal(typedChoice(step, 'Saldosteuersatz, pro Halbjahr', label), 'net-rate');
@@ -169,6 +224,11 @@ test('typed words that name exactly one answer pick it; anything else goes to th
 test('a step stands where it was asked: the AI\'s turns between two answers fall between their steps', () => {
   const steps = setupThread(answered({ company: 'ok', vat: 'effective' }), facts());
   assert.deepEqual(askedAt(steps), ['', '2026-10-21T09:00:00.000Z', '2026-10-21T09:01:00.000Z']);
+  // «Etwas ändern» clicked late: the VAT step is put before the opening, which was answered earlier. Its answer still follows its question.
+  const late = withAnswer(withAnswer(withAnswer(emptyProgress(), 'opening', { value: 'later', at: '2026-10-21T09:00:00.000Z' }), 'company', { value: 'fix', at: '2026-10-21T09:05:00.000Z' }), 'vat', { value: 'effective', at: '2026-10-21T09:06:00.000Z' });
+  const order = setupThread(late, facts());
+  assert.deepEqual(ids(order).slice(0, 3), ['company', 'vat', 'opening']);
+  order.forEach((s, i) => { if (s.answer) assert.ok(askedAt(order)[i] <= s.answer.at, `${s.id}: asked no later than answered`); });
 });
 
 test('every line a step can say has words in each language', async () => {
@@ -184,17 +244,21 @@ test('every line a step can say has words in each language', async () => {
   };
   const vats = [EFFECTIVE_QUARTERLY, NOT_REGISTERED, { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei' }] } as const];
   const answersOf = (q: QuestionId) => QUESTIONS[q] as readonly string[];
-  for (const vat of vats) for (const today of ['2026-10-21', '2027-01-15']) for (const program of answersOf('program')) for (const v of answersOf('vat')) for (const start of answersOf('start')) for (const filed of answersOf('filed')) for (const entry of answersOf('entry')) for (const access of answersOf('access')) {
-    const f = facts({ today, company: { ...facts().company, vat }, opening: program === 'banana' ? [{ account: '1020', name: 'Bank', amount: 1 }] : [], partners: { clear: [], mixed: [], rare: program === 'excel' ? [{ id: 'x', name: 'X', n: 1 }] : [], ruled: 1 } });
-    const p = answered({ company: 'fix', vat: v, start, filed, program, entry, access, needs: 'ok', opening: 'later', bank: 'later', receipts: 'later', partners: 'next' });
+  for (const vat of vats) for (const company of answersOf('company')) for (const v of answersOf('vat')) for (const opening of [true, false]) for (const iban of [true, false]) for (const later of ['next', 'later']) {
+    const f = facts({ company: { ...facts().company, vat }, sells: SELLS, banks: iban ? IBAN : [], opening: opening ? [{ account: '1020', name: 'Bank', amount: 1 }] : [], partners: { clear: [], mixed: [], rare: iban ? [{ id: 'x', name: 'X', n: 1 }] : [], ruled: 1 } });
+    const p = answered({ company, vat: v, sells: 'made+traded', opening: later, bank: later, receipts: later, partners: 'next' });
     walk(setupThread(p, f));
     walk(setupThread(withAnswer(p, 'vat', { value: v as never, at: AT, kept: { before: EFFECTIVE_QUARTERLY, at: AT } }), f));
+    walk(setupThread(emptyProgress(), f));
   }
+  for (const l of [sellsLine(['made', 'traded', 'services'])]) { keys.add(l.key); for (const p of Object.values(l.params ?? {})) if (typeof p === 'object' && 'list' in p) p.list.forEach((k) => keys.add(k)); }
+  for (const k of ['ok', 'fix']) keys.add(`onboarding.q.company.${k}`);
+  for (const k of ['first', 'statement', 'lead', 'go', 'title', 'open']) keys.add(`onboarding.summary.${k}`);
   walk(vats.map(vatLine));
   for (const q of Object.keys(QUESTIONS)) keys.add(`onboarding.question.${q}`);
-  for (const k of ['form', 'answer', 'app', 'later', 'open']) keys.add(`onboarding.origin.${k}`);
+  for (const k of ['form', 'answer', 'app']) keys.add(`onboarding.origin.${k}`);
   for (const k of ['none', 'effective', 'net-rate']) keys.add(`onboarding.vatCard.to.${k}`);
-  assert.ok(keys.size > 120, `the walk reached the conversation (${keys.size} keys)`);
+  assert.ok(keys.size > 70, `the walk reached the conversation (${keys.size} keys)`);
   for (const { code, messages } of locales) {
     const missing = [...keys].filter((k) => !(k in messages));
     assert.deepEqual(missing, [], `${code} has every line`);
@@ -205,11 +269,11 @@ test('the message note tells the AI the checklist as the app sees it, the answer
   const p = withTopic(answered({ company: 'ok', vat: 'effective' }), 'firm', 'done', AT);
   const note = setupNote(p, facts({ closedThrough: '2026-06-30' }), wordsIn('de').t);
   assert.match(note, /- firm: done 2026-10-21 · by hand: Firma › MWST/);
-  assert.match(note, /- periods: open ← next · by hand: Firma › /);
-  assert.match(note, /- history: open · by hand: no place of its own/);
+  assert.match(note, /- opening: open ← next · by hand: Firma › Eröffnung/);
+  assert.doesNotMatch(note, /periods|history/, 'no topic the app has nothing for');
   assert.equal((note.match(/← next/g) ?? []).length, 1);
   assert.match(note, /- vat: effective/);
-  assert.match(note, /Open question on screen: start, answers year \| during\. .*"kind":"setupAnswer","question":"start"/);
+  assert.match(note, /Open question on screen: opening, answers next \| later\. .*"kind":"setupAnswer","question":"opening"/);
   assert.match(note, /company: Muster GmbH/);
   assert.match(note, /closed through: 2026-06-30/);
   assert.match(setupNote(p, facts(), wordsIn('en').t), /by hand: Company › VAT/, 'places in the person\'s language');
@@ -246,13 +310,14 @@ test('the API: the view carries the facts, the states and the steps\' answers; a
   assert.equal(r.status, 200);
   const view = r.json as { facts: SetupFacts; states: Record<string, string>; progress: SetupProgress };
   assert.equal(view.facts.company.name, api.ws.company.name);
-  assert.equal(view.states.firm, 'open');
+  assert.equal(view.states.firm, 'done', 'the firm as the settings have it: nothing asked');
   r = await api.send('PUT', '/api/onboarding/answers/company', { value: 'ok' });
   assert.equal(r.status, 200);
   assert.equal(readProgress(api.ws).answers.company?.value, 'ok', 'written to the workspace');
   assert.equal((await api.send('PUT', '/api/onboarding/answers/payroll', { value: 'x' })).status, 404);
+  assert.equal((await api.send('PUT', '/api/onboarding/answers/filed', { value: '2' })).status, 404, 'a question the setup no longer asks');
   assert.equal((await api.send('PUT', '/api/onboarding/answers/vat', { value: 'maybe' })).status, 400);
-  assert.equal((await api.send('PUT', '/api/onboarding/answers/start', { value: 'year', kept: NOT_REGISTERED })).status, 400, 'kept belongs to the VAT question');
+  assert.equal((await api.send('PUT', '/api/onboarding/answers/bank', { value: 'later', kept: NOT_REGISTERED })).status, 400, 'kept belongs to the VAT question');
   assert.equal((await api.send('PUT', '/api/onboarding/answers/vat', { value: 'none', kept: { registered: 'maybe' } })).status, 400, 'a setup that does not parse');
   r = await api.send('PUT', '/api/onboarding/answers/vat', { value: 'none', kept: EFFECTIVE_QUARTERLY });
   assert.deepEqual(readProgress(api.ws).answers.vat?.kept?.before, EFFECTIVE_QUARTERLY);

@@ -6,6 +6,7 @@
 import { test } from 'node:test';
 import './support/jurisdiction.js';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import type { Index, JournalEntry } from '../src/types/index.js';
 import { computeIncomeStatement, statementPostings } from '../src/accounting/index.js';
 import { parsePeriod } from '../src/accounting/periods.js';
@@ -165,4 +166,63 @@ test('the open quarter leads with the figure the return will carry (tax on each 
   assert.equal(q3.report.toPay, 1.51, 'the page of a filing period shows the return (r9n-28): tax on the rate total, not 0.75 + 0.75');
   assert.deepEqual(headline(q3, undefined, two), { kind: 'toPay', amount: 1.51, filed: false }, 'the return: 8.1 % of 20.10 = 1.51, as the approval card and the XML say; the page shows the same Ziffern, so no rounding note');
   assert.deepEqual(headline(vatReturn(books, '2026-Q3', '2026-10-11'), undefined, books), { kind: 'toPay', amount: 81 - 8.1, filed: false }, 'no note when the figures agree');
+});
+
+test('a period that ended before anything in the books is dated says what the books hold, not «fällig seit», and its return can still be prepared (#345)', async () => {
+  // The tester's books: Q1 and Q2 filed elsewhere, the first statement read in is the summer's; nothing is closed here.
+  const fresh: Index = { ...books, config: {}, journalEntries: [], transactions: [{ id: 't1', date: '2026-07-03' } as unknown as Index['transactions'][number]] };
+  const q1 = vatReturn(fresh, '2026-Q1', '2026-11-12').state;
+  assert.deepEqual(q1, { kind: 'open', due: '2026-05-30', overdue: true, before: { first: '2026-07-03' } });
+  // «Abrechnung erstellen» is drawn for `open` (vat.tsx): a firm with its first payment in April owes a nil return for Q1 and can make it.
+  assert.equal(q1.kind, 'open', 'the return can be prepared');
+  assert.deepEqual(vatReturn(fresh, '2026-Q3', '2026-11-12').state, { kind: 'open', due: '2026-11-29', overdue: false }, 'the quarter of the first payment is as before');
+  assert.deepEqual(vatReturn({ ...fresh, transactions: [] }, '2026-Q3', '2026-11-12').state, { kind: 'open', due: '2026-11-29', overdue: false, before: {} }, 'books with nothing dated');
+  const byHand: Index = { ...fresh, transactions: [], journalEntries: [je('sale', '2026-05-03', '1020', '3200', 1081, { vatCode: 'V81' })] };
+  assert.equal('before' in vatReturn(byHand, '2026-Q2', '2026-11-12').state, false, 'a booking by hand dates the books too');
+  assert.ok('before' in vatReturn(byHand, '2026-Q1', '2026-11-12').state);
+  const de = (await import('../src/app/i18n/locales/de.js')).default.messages as unknown as Record<string, string>;
+  assert.equal(de['vat.stateBefore'], 'Keine Zahlungen oder Buchungen in dieser Periode · die Bücher beginnen am {date}');
+  assert.equal(de['vat.stateBeforeEmpty'], 'Keine Zahlungen oder Buchungen in dieser Periode');
+  // The page: the sentence without the warning colour, and the period's buttons kept.
+  const page = readFileSync('src/app/areas/vat/vat.tsx', 'utf8');
+  assert.match(page, /v\.state\.kind === 'open' \? <WorkflowButtons kind="period"/, 'the buttons are drawn for every open period, a `before` one too');
+  assert.match(page, /v\.state\.kind === 'open' && v\.state\.before \? \(\s*<span data-testid="period-before">/, 'the sentence stands in place of «fällig seit», plain');
+});
+
+test('one answer to «before the books begin»: the return, Automatisierung and the link to an earlier return agree (#345)', async () => {
+  const { beforeBooks, booksOpenPeriod, derivePeriod } = await import('../src/accounting/periods.js');
+  const { filingStage } = await import('../src/app/automation/home.js');
+  const { resultSentence, sentenceState } = await import('../src/app/areas/vat/model.js');
+  const today = '2027-01-20';
+  const ctx = { today, vatRegistered: true, dueDays: 60 };
+  const tx = (date: string) => ({ id: date, ref: date, date } as unknown as Index['transactions'][number]);
+  const cases: Array<[string, Index]> = [
+    ['first payment in July', { ...books, config: {}, journalEntries: [], transactions: [tx('2026-07-03')] }],
+    ['a booking by hand in May', { ...books, config: {}, transactions: [], journalEntries: [je('sale', '2026-05-03', '1020', '3200', 1081, { vatCode: 'V81' })] }],
+    ['a payment of December before the year of the opening balances', { ...books, config: { openingBalances: { '2026': { '1020': 1 } } }, journalEntries: [], transactions: [tx('2025-12-30'), tx('2026-08-01')] }],
+    ['filed through March, first payment in July', { ...books, config: { closedThrough: '2026-03-31' }, journalEntries: [], transactions: [tx('2026-07-03')] }],
+    ['nothing dated', { ...books, config: {}, journalEntries: [], transactions: [] }],
+  ];
+  for (const [name, b] of cases) {
+    const open = booksOpenPeriod(b, today, 'quarter');
+    for (const key of ['2025-Q4', '2026-Q1', '2026-Q2', '2026-Q3']) {
+      const to = derivePeriod(key)!.to;
+      const before = beforeBooks(b, to);
+      const state = vatReturn(b, key, today).state;
+      const stage = filingStage(b, { to }, ctx);
+      if (state.kind === 'filed') { assert.equal(stage.kind, 'filed', `${name} ${key}`); continue; }
+      assert.equal(state.kind === 'open' && !!state.before, before, `${name} ${key}: the return's page`);
+      assert.equal(stage.kind === 'before', before, `${name} ${key}: Automatisierung`);
+      if (!before) {
+        assert.ok(state.kind === 'open' && state.overdue && stage.kind === 'due' && stage.overdue, `${name} ${key}: after the first day a period that ended is overdue on both`);
+        assert.ok(open.from <= derivePeriod(key)!.from, `${name} ${key}: the books' open period (the link to an earlier return) does not lie after it`);
+      } else {
+        assert.ok(open.from > to, `${name} ${key}: the books' open period lies after it, so no link calls it overdue`);
+        assert.equal(resultSentence('500', 0, false, sentenceState(state), false), 'vat.x500None', `${name} ${key}: a zero says nothing owed, not «trotzdem einzureichen»`);
+      }
+    }
+  }
+  assert.equal(beforeBooks(cases[0][1], '2026-06-30'), true);
+  assert.equal(beforeBooks(cases[0][1], '2026-09-30'), false);
+  assert.equal(resultSentence('500', 0, false, 'open', false), 'vat.x500NoneFile', 'a period of the books: its nil return is still to be filed');
 });

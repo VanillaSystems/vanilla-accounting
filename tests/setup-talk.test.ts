@@ -14,9 +14,10 @@ import type { Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { desktopServer } from '../src/desktop/server.js';
-import { draftSteps, newDraft, withPatch } from '../src/onboarding/draft.js';
+import { draftProgress, draftSteps, newDraft, withPatch } from '../src/onboarding/draft.js';
 import { draftFile, readDraft, writeDraft } from '../src/onboarding/draft-store.js';
-import { applyTalk, parseTalk, type Ask } from '../src/onboarding/draft-talk.js';
+import { applyTalk, parseTalk, talkPrompt, type Ask } from '../src/onboarding/draft-talk.js';
+import { QUESTIONS, QUESTION_ORDER, unsureOf, unusualPeriod, type QuestionKey } from '../src/workspace/setup.js';
 import type { AskOptions } from '../src/llm/ask.js';
 import { APP_FOLDER, MANIFEST_FILE } from '../src/workspace/workspace.js';
 import { testIban } from './support/iban.js';
@@ -84,23 +85,28 @@ test('one message fills every answer it states, through the click\'s checks, eac
   assert.deepEqual(reply.filled, ['preset', 'legalForm', 'vatRegistered', 'vatMethod', 'employees', 'netRates', 'banks'], 'every stated answer is saved and marked, those the preset it names gives too');
   assert.deepEqual(reply.firm, { name: 'Muster Schreinerei GmbH', owner: 'Anna Muster' }, 'a firm short of its UID is not saved; its card starts with what was said');
   assert.equal(view.draft.firm, undefined);
+  assert.deepEqual(view.draft.said, { name: 'Muster Schreinerei GmbH', owner: 'Anna Muster' }, 'what was said of it is kept in the draft, so only the UID is asked (#345)');
   assert.deepEqual(view.draft.banks, [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020' }], 'a bank without a currency gets the jurisdiction\'s, its account as a click would');
   assert.equal(view.draft.answers.period, undefined, 'what the words do not say stays open');
   const disk = readDraft(root)!;
   assert.deepEqual(disk.fromText, reply.filled, 'the marks are saved with the draft');
+  assert.deepEqual(disk.said, view.draft.said, 'and what was said of the firm, over a restart');
   assert.equal(disk.netRates?.[0].rate, 4.5);
 
   const [call1] = asked.slice(-1);
   assert.equal(call1.opts.step, 'setup-conversation', 'the call names its step, so the resolver picks the configured provider');
   assert.equal(call1.opts.ledger, join(root, APP_FOLDER, 'data', 'llm-ledger.jsonl'), 'it is ledgered in the folder that becomes the books');
-  assert.ok(call1.prompt.includes(SCHREINEREI) && call1.prompt.includes('The step waiting now: firm'), 'the model reads the words with the step waiting');
+  assert.ok(call1.prompt.includes(SCHREINEREI) && call1.prompt.includes('right below your words: firm\n'), 'the model reads the words with the step waiting');
   assert.ok(call1.prompt.includes('"net-rate" (Saldosteuersatz') && call1.prompt.includes('"monthly" (monthly; not supported'), 'and every value code accepts');
 
-  const uid = await talk(`Die UID ist ${UID}.`, JSON.stringify({ say: '', firm: { name: 'Muster Schreinerei GmbH', uid: UID, owner: 'Anna Muster' } }));
+  // The tester's case: the model answers the UID alone, without repeating the name and the owner given six messages before.
+  const uid = await talk(`Die UID ist ${UID}.`, JSON.stringify({ say: '', firm: { uid: UID } }));
   const call2 = asked.at(-1)!.prompt;
   assert.ok(call2.includes(`person: ${SCHREINEREI}`) && call2.includes(`you: ${reply.say}`), 'the server keeps the turns, so the next message is read with them');
-  assert.deepEqual(uid.json.reply.filled, ['firm'], 'the next message completes the firm from the turns before');
-  assert.equal(uid.json.view.draft.firm.uid, UID);
+  assert.ok(call2.includes('Of the firm the person already said, and the app keeps it: {"name":"Muster Schreinerei GmbH","owner":"Anna Muster"}') && call2.includes('firm: only uid is missing'), 'the model is told what is held and what alone is missing');
+  assert.deepEqual(uid.json.reply.filled, ['firm'], 'the UID alone completes the firm: code joins it to what was said');
+  assert.deepEqual(uid.json.view.draft.firm, { name: 'Muster Schreinerei GmbH', uid: UID, owner: 'Anna Muster' });
+  assert.equal(uid.json.view.draft.said, undefined, 'saved whole: nothing waits');
   const open = draftSteps(uid.json.view.draft).at(-1)!;
   assert.ok(open.id === 'question' && open.key === 'basis', 'the conversation stands at the first answer still open');
 
@@ -127,7 +133,7 @@ test('code refuses what createWorkspace would refuse or the person never wrote, 
   assert.equal(view.draft.answers.vatMethod, undefined);
   assert.equal(view.draft.answers.period, undefined);
   assert.deepEqual(view.draft.banks, [{ bank: 'UBS', currency: 'CHF', account: '1020' }], 'the bank is saved without the IBAN the model made up');
-  assert.deepEqual(reply.firm, { name: 'Muster AG', uid: 'CHE-123.456.789', owner: 'Max Muster' }, 'the firm\'s card shows what was said, to correct');
+  assert.deepEqual(reply.firm, { name: 'Muster AG', owner: 'Max Muster' }, 'the name and the owner are kept for the firm\'s card; a UID that is none is not');
   assert.notEqual(readFileSync(draftFile(root), 'utf8'), before);
 
   const invented = await talk('Wir sind die Muster AG, Inhaber Max Muster.', JSON.stringify({ say: '', firm: { name: 'Muster AG', uid: UID, owner: 'Max Muster' } }));
@@ -164,17 +170,123 @@ test('a model that answers no JSON, or does not answer, changes nothing and says
   assert.equal(asked.length, calls);
 });
 
-test('answers outside a preset make the preset «custom», so a later preset cannot replace them; a preset the words name comes first', () => {
+test('answers the words give leave the kind of firm open for its buttons, and whichever is picked keeps them; a preset the words name comes first', () => {
   const d = newDraft('de', NOW);
-  const custom = applyTalk(d, parseTalk(JSON.stringify({ say: '', answers: { employees: 'staff', imports: 'yes' } }))!, ['x'], 'CHF');
-  assert.equal(custom.draft.preset, 'custom');
-  assert.deepEqual([custom.draft.answers.employees, custom.draft.answers.imports], ['staff', 'yes']);
+  const said = applyTalk(d, parseTalk(JSON.stringify({ say: '', answers: { employees: 'staff', imports: 'yes' } }))!, ['x'], 'CHF');
+  assert.equal(said.draft.preset, undefined, 'the tester\'s «Etwas anderes · aus deiner Nachricht» came from code, not from her words: no kind of firm is made up (#345)');
+  assert.deepEqual([said.draft.answers.employees, said.draft.answers.imports], ['staff', 'yes']);
+  const trades = withPatch(said.draft, { step: 'preset', value: 'trades' });
+  assert.deepEqual([trades.answers.employees, trades.answers.imports, trades.answers.sells], ['staff', 'yes', ['made', 'services']], 'her words hold, the preset fills the rest: material and work');
+  assert.deepEqual(trades.fromText, ['imports', 'employees'], 'and stay marked as taken from her words');
   const preset = applyTalk(d, parseTalk(JSON.stringify({ say: '', preset: 'consultant', answers: { employees: 'staff' } }))!, ['x'], 'CHF');
   assert.deepEqual([preset.draft.preset, preset.draft.answers.employees], ['consultant', 'staff'], 'the preset is applied before the answers, which win over it');
-  const vatOnly = applyTalk(d, parseTalk(JSON.stringify({ say: '', answers: { vatRegistered: 'no' } }))!, ['x'], 'CHF');
-  assert.equal(vatOnly.draft.preset, undefined, 'a VAT answer survives any preset, so it does not decide one');
-  const picked = withPatch(preset.draft, { step: 'preset', value: 'webshop' });
-  assert.ok(!picked.fromText?.includes('employees'), 'a preset the person picks replaces the marks of the answers it gives');
+  const clicked = withPatch(withPatch(d, { step: 'preset', value: 'consultant' }), { step: 'preset', value: 'webshop' });
+  assert.deepEqual(clicked.answers.sells, ['traded'], 'answers a preset gave are replaced by the next preset\'s');
+});
+
+test('«d Farb verrechned mer mit»: the model is told that a trade is the trades preset and that material charged with the work is sold too', () => {
+  const prompt = talkPrompt(newDraft('de', NOW), 'Mir sind e Malerei, d Farb verrechned mer mit.', [], 'CHF');
+  assert.match(prompt, /- trades: Trades \/ construction GmbH \(a trade: painter, carpenter/);
+  assert.match(prompt, /a trade is "trades"/);
+  assert.match(prompt, /charges material with its work .* sells "made" and "services"/);
+  assert.match(prompt, /"made" \(what you make or build yourself, and work you charge with its material/);
+  assert.match(prompt, /Do not greet the person by a name/);
+});
+
+test('the model is given the answered set and the open one, and is not asked to ask: code shows the step waiting', () => {
+  let d = newDraft('de', NOW);
+  d = withPatch(d, { step: 'firm', value: { name: 'Malerei Huber GmbH', uid: UID, owner: 'Thomas Huber' } });
+  d = withPatch(d, { step: 'preset', value: 'custom' });
+  for (const [key, value] of [['legalForm', 'GmbH'], ['vatRegistered', 'yes'], ['vatMethod', 'effective'], ['basis', 'received']] as const) d = withPatch(d, { step: 'question', key, value });
+  // The tester's turns: the AI asked the basis, she answered it with a button, then typed the bank.
+  const prompt = talkPrompt(d, 'nur eis, bi de Raiffeisen', [{ who: 'ai', text: 'Vereinbart oder vereinnahmt?' }], 'CHF');
+  assert.match(prompt, /Answered, by a button or by the person's words \(never ask about these again.*\): firm, preset, answers\.legalForm, answers\.vatRegistered, answers\.vatMethod, answers\.basis\n/);
+  assert.match(prompt, /Still open, in the order the app asks them: answers\.period, /);
+  assert.match(prompt, /The step waiting now, which the app shows with its buttons right below your words: answers\.period\n/);
+  assert.match(prompt, /Do not ask the next question/);
+  assert.doesNotMatch(prompt, /ask back once, briefly, for what is still missing/);
+});
+
+test('a filing period the tax authority grants only on request is not taken from loose words: the reply says what is usual, the question keeps its buttons', () => {
+  const d = newDraft('de', NOW);
+  // «Mir rechned alli halb Jahr ab» on the effective method.
+  const odd = applyTalk(d, parseTalk(JSON.stringify({ say: 'Dänn gah i vo halbjährlich us.', answers: { vatRegistered: 'yes', vatMethod: 'effective', period: 'half-yearly' } }))!, ['x'], 'CHF');
+  assert.equal(odd.draft.answers.period, undefined, 'not saved');
+  assert.deepEqual([odd.draft.answers.vatRegistered, odd.draft.answers.vatMethod], ['yes', 'effective'], 'the rest of the message is');
+  assert.deepEqual(odd.reply.kind === 'read' && odd.reply.refused, [{ step: 'period', refusal: { reason: 'unusualPeriod', method: 'effective', value: 'half-yearly', usual: 'quarterly' } }]);
+  assert.deepEqual(odd.reply.kind === 'read' && [odd.reply.filled, odd.reply.say], [['vatRegistered', 'vatMethod'], ''], 'the model\'s «then half-yearly it is» is left out');
+  assert.ok(!odd.draft.fromText?.includes('period'));
+  const usual = applyTalk(d, parseTalk(JSON.stringify({ say: '', answers: { vatRegistered: 'yes', vatMethod: 'effective', period: 'quarterly' } }))!, ['x'], 'CHF');
+  assert.equal(usual.draft.answers.period, 'quarterly');
+  const net = applyTalk(d, parseTalk(JSON.stringify({ say: '', answers: { vatRegistered: 'yes', vatMethod: 'net-rate', period: 'half-yearly' } }))!, ['x'], 'CHF');
+  assert.equal(net.draft.answers.period, 'half-yearly', 'half-yearly is the usual one on the net tax rate');
+  // The method named after the period: the period from the words goes when the two no longer fit.
+  const later = applyTalk(usual.draft, parseTalk(JSON.stringify({ say: '', answers: { vatMethod: 'net-rate' } }))!, ['x'], 'CHF');
+  assert.equal(later.draft.answers.period, undefined);
+  // A click is the person's own: granted on request, it stands, and the conversation says what is usual (unusualPeriod).
+  let clicked = withPatch(d, { step: 'question', key: 'vatRegistered', value: 'yes' });
+  clicked = withPatch(clicked, { step: 'question', key: 'vatMethod', value: 'effective' });
+  clicked = withPatch(clicked, { step: 'question', key: 'period', value: 'half-yearly' });
+  assert.deepEqual(unusualPeriod(clicked.answers), { method: 'effective', period: 'half-yearly', usual: 'quarterly' });
+  const kept = applyTalk(clicked, parseTalk(JSON.stringify({ say: '', answers: { employees: 'staff' } }))!, ['x'], 'CHF');
+  assert.equal(kept.draft.answers.period, 'half-yearly', 'a later message does not take a clicked period away');
+  assert.equal(unusualPeriod({ vatRegistered: 'no', vatMethod: 'effective', period: 'half-yearly' }), undefined);
+});
+
+test('a period the person clicked stands when the model repeats an unusual one from earlier words; the same refusal is said once', () => {
+  let d = newDraft('de', NOW);
+  d = withPatch(d, { step: 'question', key: 'vatRegistered', value: 'yes' });
+  d = withPatch(d, { step: 'question', key: 'vatMethod', value: 'effective' });
+  const again = () => parseTalk(JSON.stringify({ say: 'Halbjährlich also.', answers: { period: 'half-yearly' } }))!;
+  // She clicked «quartalsweise»; the model reads «alli halb Jahr» out of the turns before once more.
+  const clicked = withPatch(d, { step: 'question', key: 'period', value: 'quarterly' });
+  const kept = applyTalk(clicked, again(), ['x'], 'CHF');
+  assert.equal(kept.draft.answers.period, 'quarterly', 'was deleted: the refusal patched it to null');
+  assert.ok(!kept.draft.fromText?.includes('period'), 'and stays hers, not «aus deiner Nachricht»');
+  assert.equal(kept.reply.kind === 'read' && kept.reply.refused.length, 1);
+  // Nothing answered yet: refused once, then silently.
+  const first = applyTalk(d, again(), ['x'], 'CHF');
+  assert.equal(first.reply.kind === 'read' && first.reply.refused[0]?.refusal.reason, 'unusualPeriod');
+  assert.equal(first.draft.refusedPeriod, 'half-yearly');
+  const second = applyTalk(first.draft, again(), ['x'], 'CHF');
+  assert.deepEqual(second.reply.kind === 'read' && [second.reply.refused, second.reply.filled, second.reply.say], [[], [], ''], 'the same value is not refused again, and the model\'s claim is still left out');
+  assert.equal(second.draft.answers.period, undefined);
+  const answered = withPatch(first.draft, { step: 'question', key: 'period', value: 'quarterly' });
+  assert.equal(answered.refusedPeriod, undefined, 'answered: nothing is remembered');
+});
+
+test('the model cannot rename a firm: a name or an owner the app holds is replaced only by one in the person\'s latest words', () => {
+  let d = newDraft('de', NOW);
+  d = withPatch(d, { step: 'firm', value: { name: 'Malerei Huber GmbH', uid: UID, owner: 'Thomas Huber' } });
+  const renamed = applyTalk(d, parseTalk(JSON.stringify({ say: '', firm: { name: 'Huber Malerei AG', owner: 'Sandra Huber' } }))!, ['nur eis, bi de Raiffeisen'], 'CHF');
+  assert.deepEqual(renamed.draft.firm, d.firm, 'a partial firm from the model was joined onto the saved one');
+  assert.ok(renamed.reply.kind === 'read' && !renamed.reply.filled.includes('firm'));
+  const said = applyTalk(d, parseTalk(JSON.stringify({ say: '', firm: { owner: 'Sandra Huber' } }))!, ['x', 'D Inhaberin isch nöd de Thomas, sondern  sandra huber.'], 'CHF');
+  assert.equal(said.draft.firm?.owner, 'Sandra Huber', 'she wrote it now: taken, case and spacing aside');
+  assert.equal(said.draft.firm?.name, 'Malerei Huber GmbH');
+  const earlier = applyTalk(d, parseTalk(JSON.stringify({ say: '', firm: { owner: 'Sandra Huber' } }))!, ['Sandra Huber', 'und d Bank isch Raiffeisen'], 'CHF');
+  assert.equal(earlier.draft.firm?.owner, 'Thomas Huber', 'words of an earlier message do not replace what she typed since');
+  // What was only said, not saved: the same.
+  const partial = { ...newDraft('de', NOW), said: { name: 'Malerei Huber GmbH', owner: 'Thomas Huber' } };
+  const joined = applyTalk(partial, parseTalk(JSON.stringify({ say: '', firm: { name: 'Huber AG', uid: UID } }))!, [`d UID isch ${UID}`], 'CHF');
+  assert.deepEqual(joined.draft.firm, { name: 'Malerei Huber GmbH', uid: UID, owner: 'Thomas Huber' });
+});
+
+test('the person sees how far she is: the steps answered of those her firm is asked, by click or from her words', () => {
+  let d = newDraft('de', NOW);
+  assert.deepEqual(draftProgress(d), { done: 0, of: 14 }, 'firm, kind of firm, the eleven questions of a firm not known to be registered, the bank');
+  d = withPatch(d, { step: 'firm', value: { name: 'Malerei Huber GmbH', uid: UID, owner: 'Thomas Huber' } });
+  assert.equal(draftProgress(d).done, 1);
+  d = withPatch(d, { step: 'preset', value: 'trades' });
+  assert.deepEqual(draftProgress(d), { done: 2, of: 4 }, 'a preset answers the rest: only whether the firm is registered and the bank remain');
+  d = withPatch(d, { step: 'question', key: 'vatRegistered', value: 'yes' });
+  assert.deepEqual(draftProgress(d), { done: 3, of: 7 }, 'registered: method, basis and period are asked too');
+});
+
+test('«Weiss nicht» exists only where assuming does no harm, and never on a question that decides the VAT return', () => {
+  const unsure = QUESTION_ORDER.filter((k) => unsureOf(k));
+  assert.deepEqual(unsure, ['foreignCustomers', 'ownerPaysPrivately', 'payouts'], 'not imports: nothing offers the import accounts when such a payment comes');
+  for (const k of unsure) assert.ok((QUESTIONS[k as QuestionKey].options as ReadonlyArray<{ value: string }>).some((o) => o.value === unsureOf(k)), `${k}: the assumed answer is one of its own`);
 });
 
 test('books created from a talked draft carry no marks and no draft; the folder\'s ledger stays out of git', async () => {

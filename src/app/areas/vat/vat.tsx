@@ -120,6 +120,8 @@ function Return(props: Props) {
             <span>{t('vat.stateFiled')}</span>
             {corrections > 0 && <span className="warn"><span className="dot" aria-hidden="true" />{t('vat.correctionsSince', { n: corrections })}</span>}
           </>
+        ) : v.state.kind === 'open' && v.state.before ? (
+          <span data-testid="period-before">{v.state.before.first ? t('vat.stateBefore', { date: formatDate(v.state.before.first) }) : t('vat.stateBeforeEmpty')}</span>
         ) : v.state.kind === 'open' ? (
           <span className={v.state.overdue ? 'warn' : ''}>{t(v.state.overdue ? 'vat.stateOverdue' : 'vat.stateOpen', { date: formatDate(v.state.due) })}</span>
         ) : v.state.kind === 'running' ? (
@@ -177,7 +179,7 @@ function EarlierOpen({ books, shown, nav }: { books: Index; shown: Period; nav: 
   const oldest = booksOpenPeriod(books, localToday(), filing().length);
   if (shown.kind === 'all' || oldest.to >= shown.from) return null;
   const { state, period } = vatReturn(books, oldest.token);
-  if (state.kind !== 'open') return null;
+  if (state.kind !== 'open' || state.before) return null;
   return (
     <button type="button" className={`clink2${state.overdue ? ' warn' : ''}`} data-testid="earlier-open" onClick={() => nav.go({ route: { area: 'vat' }, query: { period } })}>
       {t(state.overdue ? 'vat.earlierOverdue' : 'vat.earlierOpen', { period: periodName(period), date: formatDate(state.due) })}

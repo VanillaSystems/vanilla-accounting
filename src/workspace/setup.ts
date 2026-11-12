@@ -64,6 +64,13 @@ interface QuestionSpec {
   required?: boolean;
   /** Asked only when the answers so far say so; otherwise the answer is absent. */
   when?: (answers: Given) => boolean;
+  /**
+   * «Weiss nicht» (#345): the answer the setup takes for a person who cannot say, only where assuming
+   * it does no harm: an answer nothing books by (customers abroad), an account more in the chart (the
+   * owner's), or what the app asks again at the first such file (a provider's payout report). Not for a
+   * question that decides the VAT return, and not for imports: nothing offers the import accounts later.
+   */
+  unsure?: string;
 }
 
 const registered = (a: Given) => a.vatRegistered === 'yes';
@@ -136,7 +143,7 @@ export const QUESTIONS = {
   },
   start: {
     ask: 'Starting point',
-    why: 'A new company starts with empty books. A running one needs its opening balances of 1 January.',
+    why: 'A new company starts with empty books. A running one needs what it had on 1 January: money in the bank, open invoices, debts (the opening balances).',
     options: [
       { value: 'new', label: 'new company, empty books' },
       {
@@ -147,11 +154,11 @@ export const QUESTIONS = {
   },
   sells: {
     ask: 'What you sell',
-    why: 'Sets the default accounts: material for your own products (4000) or goods bought to resell (4200); sales of own products (3000), traded goods (3200), services (3400). Any combination.',
+    why: 'Decides where purchases and sales are booked by default: material for what you make or build (account 4000) or goods bought to resell (4200); sales of your own products and work with material (3000), of traded goods (3200), of services (3400). Any combination.',
     multi: true,
     required: true,
     options: [
-      { value: 'made', label: 'products you make yourself' },
+      { value: 'made', label: 'what you make or build yourself, and work you charge with its material (a trade: paint, wood, parts)' },
       { value: 'traded', label: 'goods you buy and resell (trade)' },
       { value: 'services', label: 'services' },
     ],
@@ -159,6 +166,7 @@ export const QUESTIONS = {
   foreignCustomers: {
     ask: 'Customers abroad?',
     why: 'A service to a customer abroad is usually not taxed in Switzerland: it is declared, but without VAT.',
+    unsure: 'no',
     options: [{ value: 'yes', label: 'yes' }, { value: 'no', label: 'no' }],
   },
   imports: {
@@ -177,18 +185,20 @@ export const QUESTIONS = {
   },
   ownerPaysPrivately: {
     ask: 'Does the owner pay business costs privately?',
-    why: 'Then the company owes them back: those receipts are booked on a current account with the owner.',
+    why: 'Then the company owes them back: those receipts are booked on an account that keeps what the company owes the owner (Kontokorrent).',
+    unsure: 'yes',
     options: [{ value: 'yes', label: 'yes' }, { value: 'no', label: 'no' }],
   },
   privateUse: {
     ask: 'Private use of a company car or phone',
-    why: 'The private share is charged to the owner at the year-end; a firm registered for VAT also takes back the input tax on it (Eigenverbrauch).',
+    why: 'The private share is charged to the owner at the year-end; a firm registered for VAT also pays back the VAT it deducted on that share (own use, Eigenverbrauch).',
     multi: true,
     options: [{ value: 'car', label: 'car' }, { value: 'phone', label: 'phone' }],
   },
   payouts: {
     ask: 'Do sales reach you as payouts from a webshop or payment provider?',
-    why: 'A payout bundles sales and fees; it goes over a clearing account (1093) so both are booked.',
+    why: 'A payout bundles sales and fees; it goes over an account of its own that holds what the provider still owes you (clearing account, 1093), so both are booked.',
+    unsure: 'no',
     options: [{ value: 'yes', label: 'yes' }, { value: 'no', label: 'no' }],
   },
 } as const satisfies Record<string, QuestionSpec>;
@@ -223,6 +233,7 @@ export function asked(key: QuestionKey, answers: Given): boolean {
 export const PRESETS = {
   consultant: {
     label: 'Consultant / services GmbH',
+    fits: 'consulting, software, design, an agency: work without material',
     answers: {
       legalForm: 'GmbH', vatRegistered: 'yes', vatMethod: 'effective', basis: 'received', period: 'quarterly',
       fiscalYear: 'calendar', start: 'new', sells: ['services'], foreignCustomers: 'yes', imports: 'no',
@@ -231,6 +242,7 @@ export const PRESETS = {
   },
   webshop: {
     label: 'Webshop / goods GmbH',
+    fits: 'a shop that buys goods and resells them',
     answers: {
       legalForm: 'GmbH', vatRegistered: 'yes', vatMethod: 'effective', basis: 'received', period: 'quarterly',
       fiscalYear: 'calendar', start: 'new', sells: ['traded'], foreignCustomers: 'no', imports: 'yes',
@@ -239,6 +251,7 @@ export const PRESETS = {
   },
   trades: {
     label: 'Trades / construction GmbH',
+    fits: 'a trade: painter, carpenter, joiner, electrician, plumber, roofer, gardener, builder, garage; work charged with its material',
     answers: {
       legalForm: 'GmbH', vatRegistered: 'yes', vatMethod: 'effective', basis: 'received', period: 'quarterly',
       fiscalYear: 'calendar', start: 'new', sells: ['made', 'services'], foreignCustomers: 'no', imports: 'no',
@@ -247,6 +260,7 @@ export const PRESETS = {
   },
   freelancer: {
     label: 'Freelancer, not registered for VAT',
+    fits: 'one self-employed person below the VAT threshold',
     answers: {
       legalForm: 'Einzelfirma', vatRegistered: 'no',
       fiscalYear: 'calendar', start: 'new', sells: ['services'], foreignCustomers: 'no', imports: 'no',
@@ -254,14 +268,33 @@ export const PRESETS = {
     },
   },
   // None of the above: every question is asked; a firm that fits no preset is more often not registered for VAT.
-  custom: { label: 'Something else: answer every question', answers: { vatRegistered: 'no' } },
-} as const satisfies Record<string, { label: string; answers: Partial<Answers> }>;
+  custom: { label: 'Something else: answer every question', fits: 'none of the others', answers: { vatRegistered: 'no' } },
+} as const satisfies Record<string, { label: string; fits: string; answers: Partial<Answers> }>;
 
 /** Whether the firm pays wages: its setup says it has staff or an employed owner. A firm without a profile (books older than the setup's questions) has not said so. */
 export const employs = (profile: { employees?: string } | undefined): boolean => profile?.employees === 'staff' || profile?.employees === 'owner';
 
 export type Preset = keyof typeof PRESETS;
 export const PRESET_NAMES = Object.keys(PRESETS) as Preset[];
+
+/** The answer «Weiss nicht» takes for `key`, where the question has one. */
+export const unsureOf = (key: QuestionKey): string | undefined => (QUESTIONS[key] as QuestionSpec).unsure;
+
+/** The filing period usual for a VAT method: quarterly on the effective one, half-yearly on the net tax rate. */
+export const usualPeriod = (method: string): 'quarterly' | 'half-yearly' => (method === 'net-rate' ? 'half-yearly' : 'quarterly');
+
+/**
+ * A filing period the tax authority grants only on request: half-yearly on the effective method,
+ * quarterly on the net tax rate. Supported, but never taken from loose words without a remark (#345):
+ * the form switches the period with the method, the conversation proposes the usual one and says so.
+ */
+export function unusualPeriod(answers: Given): { method: 'effective' | 'net-rate'; period: string; usual: 'quarterly' | 'half-yearly' } | undefined {
+  const { vatMethod: method, period } = answers;
+  if (answers.vatRegistered !== 'yes' || (method !== 'effective' && method !== 'net-rate') || typeof period !== 'string') return undefined;
+  if (period !== 'quarterly' && period !== 'half-yearly') return undefined;
+  const usual = usualPeriod(method);
+  return period === usual ? undefined : { method, period, usual };
+}
 
 export function optionOf(key: QuestionKey, value: string): Option | undefined {
   return (QUESTIONS[key].options as readonly Option[]).find((o) => o.value === value);

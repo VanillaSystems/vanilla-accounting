@@ -11,7 +11,7 @@ export function SetupEntry() {
   useEffect(() => { if (!view) void loadSetup(); }, [view]);
   if (!view) return null;
   const going = !!view.progress.started && settledCount(view.states) < SETUP_TOPICS.length;
-  const n = SETUP_TOPICS.filter((k) => view.states[k] === 'done').length;
+  const n = settledCount(view.states);
   return (
     <div className="obentry">
       <button type="button" className="aiact" data-tip={going ? t('onboarding.progress', { n, of: SETUP_TOPICS.length }) : undefined} onClick={() => void openSetup()}>

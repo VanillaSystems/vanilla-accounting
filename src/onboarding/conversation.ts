@@ -14,27 +14,31 @@ import { TOPIC_HAND, type HandPlace } from './hand.js';
 import { NOT_REGISTERED, methodOf, onAgreedBasis, type VatBasis, type VatSetup } from '../workspace/vat-setup.js';
 import { SALES_KINDS, type SalesKind } from '../workspace/setup.js';
 
-/** A parameter of a line: a value, another key said in the person's language, or a date to format. */
-export type Param = string | number | { key: string } | { date: string };
+/** A parameter of a line: a value, another key said in the person's language, a date to format, or keys said and joined by commas. */
+export type Param = string | number | { key: string } | { date: string } | { list: string[] };
 export interface Line { key: string; params?: Record<string, Param> }
 export interface Choice { value: string; label: Line; sub?: Line; primary?: boolean }
 
 /** Where a badge says a fact comes from. */
-export type Origin = 'form' | 'answer' | 'app' | 'later' | 'open';
+export type Origin = 'form' | 'answer' | 'app';
 
 export type SetupCard =
-  /** `origin`: the form saved it, or the person answered it in the conversation that created the books (#139). */
-  | { kind: 'company'; company: SetupFacts['company']; origin: Extract<Origin, 'form' | 'answer'> }
+  /**
+   * What the app knows of the firm, shown once (#345): the form or the conversation that created the books
+   * asked it a minute ago, so nothing of it is asked again. `origin`: which of the two. `sells`: the kinds
+   * the profile keeps. `change`: «Etwas ändern» is still offered (not once the person took it).
+   */
+  | { kind: 'company'; company: SetupFacts['company']; sells?: SalesKind[]; origin: Extract<Origin, 'form' | 'answer'>; change: boolean }
   /** The VAT setup the answer asks for, against the one the app has: `proposed` waits for «Übernehmen», `kept` was taken. */
   | { kind: 'vat'; from: VatSetup; to: VatKind; state: 'proposed' | 'kept' }
   /** What the firm sells as answered, with the default accounts that follow; `proposed` until the profile says the same («Übernehmen»). */
   | { kind: 'sells'; kinds: SalesKind[]; purchase: Array<{ kind: SalesKind; account: string }>; sales: Array<{ kind: SalesKind; account: string }>; state: 'proposed' | 'kept' }
-  | { kind: 'needs'; items: Array<{ what: Line; why: Line; who: Line }>; note: Line }
   | { kind: 'opening'; year: string; rows: SetupFacts['opening'] }
   | { kind: 'banks'; banks: SetupFacts['banks'] }
   | { kind: 'sources'; sources: SetupFacts['sources'] }
   | { kind: 'partners'; clear: ClearPartner[]; mixed: MixedPartner[]; rare: Array<{ name: string; n: number }>; rareMore: number }
-  | { kind: 'summary'; items: Array<{ what: Line; origin: Origin }>; open: Array<{ topic: SetupTopic; state: TopicState; go: HandPlace | null }> };
+  /** `first`: the person's first step in the app, the statement, and from which period on. */
+  | { kind: 'summary'; items: Array<{ what: Line; origin: Origin }>; open: Array<{ topic: SetupTopic; state: TopicState; go: HandPlace | null }>; first: Line };
 
 export type StepId = QuestionId | 'summary';
 
@@ -68,43 +72,17 @@ const choice = (q: QuestionId, value: string, opts: { params?: Record<string, Pa
   value, label: L(`q.${q}.${value}`, opts.params), ...(opts.sub ? { sub: L(`q.${q}.${value}.sub`, opts.params) } : {}), ...(opts.primary ? { primary: true } : {}),
 });
 
-const PERIOD_ENDS = { quarter: ['03-31', '06-30', '09-30', '12-31'], half: ['06-30', '12-31'] } as const;
-type Length = keyof typeof PERIOD_ENDS;
-const PERIOD_STARTS = { quarter: ['01-01', '04-01', '07-01', '10-01'], half: ['01-01', '07-01'] } as const;
-
-/** The VAT setup the conversation goes on with: what the person answered, else what the app has. */
-function intendedVat(p: SetupProgress, f: SetupFacts): VatKind {
-  const a = p.answers.vat?.value;
-  return a && a !== 'unknown' ? a : vatKind(f.company.vat);
-}
-function lengthOf(p: SetupProgress, f: SetupFacts): Length {
-  const kind = intendedVat(p, f);
-  const v = f.company.vat;
-  return kind === 'net-rate' || (kind === vatKind(v) && v.registered && v.period === 'half-yearly') ? 'half' : 'quarter';
-}
-
-/** How many filing periods of the open year ended before today. */
-function endedPeriods(f: Pick<SetupFacts, 'today' | 'year'>, length: Length): number {
-  const ends = PERIOD_ENDS[length];
-  return ends.filter((e) => `${f.year}-${e}` < f.today).length;
-}
-const periodsLine = (length: Length, n: number): Line => L(`q.filed.${length === 'half' ? 'h' : 'q'}${n}`);
-const endOf = (f: SetupFacts, length: Length, n: number) => `${f.year}-${PERIOD_ENDS[length][n - 1]}`;
-/** The first day of the period today is in: where «im laufenden Jahr» starts. */
-const runningFrom = (f: SetupFacts, length: Length) => {
-  const n = Math.min(endedPeriods(f, length), PERIOD_STARTS[length].length - 1);
-  return `${f.year}-${PERIOD_STARTS[length][n]}`;
-};
-
-const PROGRAMS_WITH_JOURNAL = new Set(['bexio', 'abacus', 'banana']);
-const programParam = (v: AnswerValue<'program'> | undefined): Param => ({ key: `onboarding.program.${v ?? 'excel'}` });
-
 /** Whether the answer to `sells` is what the profile keeps: nothing left to take over. A workspace without a profile is not asked. */
 function sellsSettled(p: SetupProgress, f: SetupFacts): boolean {
   if (!f.sells) return true;
   const a = p.answers.sells?.value;
   return !!a && kindsOfAnswer(a).join('+') === f.sells.kinds.join('+');
 }
+
+/** Whether the person asked to change what the app has of the firm: only then are the VAT and the sales question asked. */
+const changing = (p: SetupProgress) => p.answers.company?.value === 'fix';
+/** Whether a question of the firm is drawn: answered (by the person, or by the AI from typed words), or waiting after «Etwas ändern». */
+const firmAsked = (p: SetupProgress, q: 'vat' | 'sells') => !!p.answers[q] || changing(p);
 
 /** The card of an answer to `sells`: the kinds and the default accounts they give. */
 function sellsCard(kinds: SalesKind[], f: Required<Pick<SetupFacts, 'sells'>>['sells'], kept: boolean): Extract<SetupCard, { kind: 'sells' }> {
@@ -121,28 +99,22 @@ function vatSettled(p: SetupProgress, f: SetupFacts): boolean {
   return !!a && (a === 'unknown' || a === vatKind(f.company.vat));
 }
 
-/** How many periods the answer says were filed, never more than are over (an answer given before the VAT setup changed). */
-const filedCount = (p: SetupProgress, f: SetupFacts) => Math.min(Number(p.answers.filed?.value ?? 0), endedPeriods(f, lengthOf(p, f)));
-
 /**
- * Each topic as the app sees it: done by what it observes (a bank account with an IBAN, a source
- * switched on, opening balances, the VAT setup confirmed or kept), skipped where the person left it
- * for later or the app has no place for it yet; a topic marked by the AI or by hand keeps that mark
+ * Each topic as the app sees it: done by what it observes (the firm as the settings have it, a bank
+ * account with an IBAN, a source switched on, opening balances, partners seen or none to see),
+ * skipped where the person left it for later; a topic marked by the AI or by hand keeps that mark
  * unless the app sees it done.
  */
 export function topicStates(p: SetupProgress, f: SetupFacts): Record<SetupTopic, TopicState> {
   const a = p.answers;
-  const length = lengthOf(p, f);
-  const filed = filedCount(p, f);
+  const partners = f.partners.clear.length + f.partners.mixed.length + f.partners.rare.length;
   const seen: Record<SetupTopic, TopicState> = {
-    firm: a.company && vatSettled(p, f) && sellsSettled(p, f) ? 'done' : 'open',
-    periods: !a.start ? 'open' : !needsFiled(p, f) ? 'done' : !a.filed ? 'open'
-      : !filed || (!!f.closedThrough && f.closedThrough >= endOf(f, length, filed)) ? 'done' : 'skipped',
-    history: a.program?.value === 'new' ? 'done' : a.needs ? 'skipped' : 'open',
+    firm: (!firmAsked(p, 'vat') || vatSettled(p, f)) && (!f.sells || !firmAsked(p, 'sells') || sellsSettled(p, f)) ? 'done' : 'open',
     opening: f.opening.length ? 'done' : a.opening?.value === 'later' ? 'skipped' : 'open',
     bank: f.banks.some((b) => b.iban) ? 'done' : a.bank?.value === 'later' ? 'skipped' : 'open',
     receipts: f.sources.length ? 'done' : a.receipts?.value === 'later' ? 'skipped' : 'open',
-    knowledge: a.partners ? 'done' : 'open',
+    // Books without bookings have no partners to show yet: left for later, not done, so the topic never goes from done back to open.
+    knowledge: a.partners ? 'done' : partners && !p.ready ? 'open' : 'skipped',
   };
   return Object.fromEntries(SETUP_TOPICS.map((t) => {
     const marked = p.topics[t].state;
@@ -150,12 +122,12 @@ export function topicStates(p: SetupProgress, f: SetupFacts): Record<SetupTopic,
   })) as Record<SetupTopic, TopicState>;
 }
 
-/** Whether the conversation asks which returns were filed: a registered firm, a period of the year over. */
-function needsFiled(p: SetupProgress, f: SetupFacts): boolean {
-  return intendedVat(p, f) !== 'none' && endedPeriods(f, lengthOf(p, f)) > 0;
-}
-
-/** The steps so far: every answered one, then the first open one (or the summary when all are answered). */
+/**
+ * The steps so far: every answered one, then the first open one (or the summary when all are answered).
+ * Asked is only what neither the settings nor the first bank statement tell the app (#345): the firm,
+ * its VAT setup and what it sells are shown as the app has them; from when the books run, the first
+ * statement says; a bank account with its IBAN and books without partners are not walked through.
+ */
 export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
   const steps: SetupStep[] = [];
   const a = p.answers;
@@ -164,17 +136,15 @@ export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
     steps.push({ ...s, ...(answer ? { answer } : {}) });
     return !!answer;
   };
-  const length = lengthOf(p, f);
-  const prev = String(Number(f.year) - 1);
 
-  // Firm and VAT
-  if (!take({
+  // The firm as the app has it: shown, not asked. The person who sits there may not be the owner, so the greeting names no one.
+  take({
     id: 'company', topic: 'firm',
-    say: [f.company.owner ? L('s.hello', { owner: f.company.owner.split(/\s+/)[0] }) : L('s.helloNoName'), L('s.company')],
-    card: { kind: 'company', company: f.company, origin: p.created ? 'answer' : 'form' },
-    choices: [choice('company', 'ok', { primary: true }), choice('company', 'fix')],
-    ...(a.company?.value === 'fix' ? { reply: { lines: [L('r.companyFix')], go: { area: 'company', section: 'profile' } } } : {}),
-  })) return steps;
+    say: [L('s.hello'), L('s.company')],
+    card: { kind: 'company', company: f.company, ...(f.sells ? { sells: f.sells.kinds } : {}), origin: p.created ? 'answer' : 'form', change: !a.company },
+    choices: [],
+    ...(changing(p) ? { reply: { lines: [L('r.companyFix')], go: { area: 'company', section: 'profile' } } } : {}),
+  });
 
   const now = vatKind(f.company.vat);
   const vatAnswer = a.vat?.value;
@@ -186,7 +156,7 @@ export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
     if (vatAnswer === now) return { lines: [L(now === 'none' ? 'r.vatSameNone' : onAgreedBasis(f.company.vat) ? 'r.vatSameAgreed' : 'r.vatSame')] };
     return { lines: [L('r.vatChange')], card: { kind: 'vat', from: f.company.vat, to: vatAnswer, state: 'proposed' }, go: TOPIC_HAND.firm ?? undefined };
   };
-  if (!take({
+  if (firmAsked(p, 'vat') && !take({
     id: 'vat', topic: 'firm',
     say: [L('s.vat')],
     choices: (['none', 'effective', 'net-rate', 'unknown'] as const).map((v) => choice('vat', v, { sub: true, primary: v === now })),
@@ -194,7 +164,7 @@ export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
   })) return steps;
 
   // Was verkauft ihr? (#46)
-  if (f.sells) {
+  if (f.sells && firmAsked(p, 'sells')) {
     const sold = a.sells ? kindsOfAnswer(a.sells.value) : undefined;
     if (!take({
       id: 'sells', topic: 'firm', multi: true,
@@ -204,87 +174,25 @@ export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
     })) return steps;
   }
 
-  // Geschäftsjahr
-  const from = runningFrom(f, length);
-  if (!take({
-    id: 'start', topic: 'periods',
-    say: [L('s.start')],
-    choices: [choice('start', 'year', { params: { year: f.year }, sub: true, primary: true }), ...(from > `${f.year}-01-01` ? [choice('start', 'during', { params: { from: { date: from } }, sub: true })] : [])],
-  })) return steps;
-  if (needsFiled(p, f)) {
-    const ended = endedPeriods(f, length);
-    const n = filedCount(p, f);
-    const sealed = !!f.closedThrough && n > 0 && f.closedThrough >= endOf(f, length, n);
-    if (!take({
-      id: 'filed', topic: 'periods',
-      say: [L('s.filed', { year: f.year })],
-      choices: [{ value: '0', label: L('q.filed.0') }, ...Array.from({ length: ended }, (_, i) => ({ value: String(i + 1), label: periodsLine(length, i + 1) }))],
-      ...(a.filed ? {
-        reply: !n ? { lines: [L('r.filedNone', { from: { date: a.start?.value === 'during' ? from : `${f.year}-01-01` } })] }
-          : sealed ? { lines: [L('r.filedSealed', { date: { date: f.closedThrough! } })] }
-            : { lines: [L('r.filedLater', { periods: { key: periodsLine(length, n).key } })], go: TOPIC_HAND.periods ?? undefined },
-      } : {}),
-    })) return steps;
-  }
-
-  // Bisheriges Programm
-  const program = a.program?.value;
-  if (!take({
-    id: 'program', topic: 'history',
-    say: [L('s.program')],
-    choices: (['bexio', 'abacus', 'banana', 'excel', 'accountant', 'new'] as const).map((v) => choice('program', v)),
-    ...(program ? { reply: { lines: [L(`r.program.${program}`)] } } : {}),
-  })) return steps;
-  if (program !== 'new') {
-    const entry = a.entry?.value;
-    if (!take({
-      id: 'entry', topic: 'history',
-      say: [program && PROGRAMS_WITH_JOURNAL.has(program) ? L('s.entryLikely', { program: programParam(program) }) : L('s.entry')],
-      choices: [choice('entry', 'double', { primary: !!program && PROGRAMS_WITH_JOURNAL.has(program) }), choice('entry', 'single'), choice('entry', 'unknown')],
-      ...(entry && entry !== 'double' ? { reply: { lines: [L(`r.entry.${entry}`)] } } : {}),
-    })) return steps;
-    if (program !== 'accountant' && !take({
-      id: 'access', topic: 'history',
-      say: [L('s.access', { program: programParam(program) })],
-      choices: (['me', 'accountant', 'both'] as const).map((v) => choice('access', v)),
-    })) return steps;
-    const viaAccountant = program === 'accountant' || a.access?.value === 'accountant';
-    const who = viaAccountant ? L('needs.who.accountant') : L('needs.who.export', { program: programParam(program) });
-    const single = entry === 'single';
-    const n = filedCount(p, f);
-    const items: Array<{ what: Line; why: Line; who: Line }> = [
-      ...(single ? [] : [{ what: L('needs.chart'), why: L('needs.chartWhy', { program: programParam(program) }), who }]),
-      ...(single ? [] : [{ what: L('needs.journal', { year: prev }), why: L('needs.journalWhy'), who }]),
-      { what: L('needs.balance', { date: { date: `${prev}-12-31` } }), why: L('needs.balanceWhy', { date: { date: `${f.year}-01-01` } }), who },
-      ...(a.start?.value === 'during' && !single ? [{ what: L('needs.journalNow', { from: { date: `${f.year}-01-01` }, to: { date: dayBefore(from) } }), why: L('needs.journalNowWhy'), who }] : []),
-      ...(n ? [{ what: L('needs.returns', { periods: { key: periodsLine(length, n).key }, year: f.year }), why: L('needs.returnsWhy'), who: viaAccountant ? who : L('needs.who.portal') }] : []),
-      { what: L('needs.receipts', { year: prev }), why: L('needs.receiptsWhy'), who: L('needs.who.optional') },
-    ];
-    if (!take({
-      id: 'needs', topic: 'history',
-      say: [L('s.needs')],
-      card: { kind: 'needs', items, note: L('needs.later', { program: programParam(program) }) },
-      choices: [choice('needs', 'ok', { primary: true })],
-    })) return steps;
-  }
-
-  // Eröffnung
+  // Eröffnung: «Später» says what it means, and where it comes back.
   const hasOpening = f.opening.length > 0;
+  const prev = String(Number(f.year) - 1);
   if (!take({
     id: 'opening', topic: 'opening',
-    say: [hasOpening ? L('s.openingSet', { date: { date: `${f.year}-01-01` } }) : L(program === 'new' ? 's.openingNew' : 's.openingNone', { date: { date: `${f.year}-01-01` }, prev: { date: `${prev}-12-31` } })],
+    say: [hasOpening ? L('s.openingSet', { date: { date: `${f.year}-01-01` } }) : L('s.openingNone', { date: { date: `${f.year}-01-01` }, prev: { date: `${prev}-12-31` } })],
     ...(hasOpening ? { card: { kind: 'opening', year: f.year, rows: f.opening } } : {}),
     choices: [choice('opening', 'next', { primary: hasOpening }), choice('opening', 'later', { primary: !hasOpening })],
     go: TOPIC_HAND.opening ?? undefined,
+    ...(a.opening?.value === 'later' && !hasOpening ? { reply: { lines: [L('r.openingLater')], go: TOPIC_HAND.opening ?? undefined } } : {}),
   })) return steps;
 
-  // Bank
-  const withIban = f.banks.filter((b) => b.iban).length;
-  if (!take({
+  // Bank: asked only while no account has its IBAN; one that has is in the summary.
+  const withIban = f.banks.some((b) => b.iban);
+  if ((a.bank || !withIban) && !take({
     id: 'bank', topic: 'bank',
     say: [withIban ? L('s.bank') : L('s.bankNone')],
     card: { kind: 'banks', banks: f.banks },
-    choices: [choice('bank', 'next', { primary: withIban > 0 }), choice('bank', 'later', { primary: !withIban })],
+    choices: [choice('bank', 'next', { primary: withIban }), choice('bank', 'later', { primary: !withIban })],
     go: TOPIC_HAND.bank ?? undefined,
   })) return steps;
 
@@ -297,10 +205,10 @@ export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
     go: TOPIC_HAND.receipts ?? undefined,
   })) return steps;
 
-  // Partner und Wissen
+  // Partner und Wissen: only books that hold bookings have partners to show.
   const bins = f.partners;
   const partners = bins.clear.length + bins.mixed.length + bins.rare.length;
-  if (!take({
+  if ((a.partners || partners > 0) && !take({
     id: 'partners', topic: 'knowledge',
     say: partners ? [L('s.partners', { year: f.year, n: partners }), ...(bins.ruled ? [L('s.partnersRuled', { n: bins.ruled })] : [])] : [L('s.partnersEmpty')],
     ...(partners ? { card: { kind: 'partners', clear: bins.clear, mixed: bins.mixed, rare: bins.rare.slice(0, RARE_SHOWN).map((r) => ({ name: r.name, n: r.n })), rareMore: Math.max(0, bins.rare.length - RARE_SHOWN) } } : {}),
@@ -314,8 +222,6 @@ export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
 
 const RARE_SHOWN = 8;
 
-const dayBefore = (iso: string) => { const d = new Date(`${iso}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); };
-
 /** The VAT setup in words: not registered, effective with its period, the net tax rates with theirs. */
 export function vatLine(v: VatSetup): Line {
   if (!v.registered) return L('sum.vatNone');
@@ -324,25 +230,30 @@ export function vatLine(v: VatSetup): Line {
   return L(v.reporting === 'agreed' ? 'sum.vatNetRateAgreed' : 'sum.vatNetRate', { rates: v.rates.map((r) => `${r.rate} %${r.label ? ` ${r.label}` : ''}`).join(', '), period });
 }
 
-/** The closing card: what the app now knows and where it comes from, and what is still open with its place by hand. */
+/** What the firm sells, in words: the kinds the profile keeps. */
+export const sellsLine = (kinds: readonly SalesKind[]): Line => L('sum.sells', { kinds: { list: kinds.map((k) => `onboarding.sellsCard.kind.${k}`) } });
+
+/**
+ * The closing card: what the app knows and where from, what is still open with its place by hand,
+ * and the first step in the app. Each fact stands once: what is open is in `open`, not also in `items`.
+ */
 function summaryOf(p: SetupProgress, f: SetupFacts): Extract<SetupCard, { kind: 'summary' }> {
-  const a = p.answers;
   const states = topicStates(p, f);
-  const length = lengthOf(p, f);
-  const n = filedCount(p, f);
+  const told: Origin = p.created ? 'answer' : 'form';
+  const v = f.company.vat;
+  const ibans = f.banks.filter((b) => b.iban).length;
   const items: Array<{ what: Line; origin: Origin }> = [
-    { what: L('sum.company', { name: f.company.name }), origin: a.company?.value === 'ok' ? 'answer' : 'form' },
-    { what: vatLine(f.company.vat), origin: vatSettled(p, f) && a.vat?.value !== 'unknown' ? 'answer' : 'form' },
-    { what: a.start?.value === 'during' ? L('sum.startDuring', { from: { date: runningFrom(f, length) } }) : L('sum.startYear', { year: f.year }), origin: 'answer' },
-    ...(n ? [{ what: L('sum.filed', { periods: { key: periodsLine(length, n).key } }), origin: (states.periods === 'done' ? 'app' : 'later') as Origin }] : []),
-    ...(a.program && a.program.value !== 'new' ? [{ what: L('sum.program', { program: programParam(a.program.value) }), origin: 'later' as Origin }] : []),
-    { what: f.opening.length ? L('sum.opening', { n: f.opening.length }) : L('sum.openingNone'), origin: f.opening.length ? 'app' : 'open' },
-    { what: f.banks.some((b) => b.iban) ? L('sum.banks', { n: f.banks.filter((b) => b.iban).length }) : L('sum.banksNone'), origin: f.banks.some((b) => b.iban) ? 'app' : 'open' },
-    { what: f.sources.length ? L('sum.sources', { n: f.sources.length }) : L('sum.sourcesNone'), origin: f.sources.length ? 'app' : 'open' },
+    { what: L('sum.company', { name: f.company.name }), origin: told },
+    { what: vatLine(v), origin: p.answers.vat?.kept ? 'answer' : told },
+    ...(f.sells ? [{ what: sellsLine(f.sells.kinds), origin: p.answers.sells ? 'answer' as Origin : told }] : []),
+    ...(f.opening.length ? [{ what: L('sum.opening', { n: f.opening.length }), origin: 'app' as Origin }] : []),
+    ...(ibans ? [{ what: L('sum.banks', { n: ibans }), origin: told }] : []),
+    ...(f.sources.length ? [{ what: L('sum.sources', { n: f.sources.length }), origin: 'app' as Origin }] : []),
     ...(f.rules ? [{ what: L('sum.rules', { n: f.rules }), origin: 'app' as Origin }] : []),
   ];
   const open = SETUP_TOPICS.filter((t) => states[t] !== 'done').map((t) => ({ topic: t, state: states[t], go: TOPIC_HAND[t] }));
-  return { kind: 'summary', items, open };
+  const first = L(!v.registered ? 'sum.firstNone' : v.period === 'half-yearly' ? 'sum.firstHalf' : 'sum.firstQuarter');
+  return { kind: 'summary', items, open, first };
 }
 
 /** Typed text that names exactly one of the open question's answers picks it; anything else goes to the AI. */
@@ -365,5 +276,12 @@ export const openStep = (steps: readonly SetupStep[]): SetupStep | undefined => 
 };
 
 
-/** When each step was asked: when the step before it was answered ('' for the first), so the AI's turns fall between them in the order they happened. */
-export const askedAt = (steps: readonly SetupStep[]): string[] => steps.map((_, i) => (i ? steps[i - 1].answer?.at ?? '' : ''));
+/**
+ * When each step was asked: when the step before it was answered ('' for the first), so the AI's turns
+ * fall between them in the order they happened; never after its own answer (a step put before it later,
+ * by «Etwas ändern», was answered after), so an answer always follows its question.
+ */
+export const askedAt = (steps: readonly SetupStep[]): string[] => steps.map((s, i) => {
+  const asked = i ? steps[i - 1].answer?.at ?? '' : '';
+  return s.answer && s.answer.at < asked ? s.answer.at : asked;
+});

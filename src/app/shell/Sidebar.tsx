@@ -12,7 +12,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useColumnNoAi } from '../ai/ColumnNoAi.js';
 import { codeLabel } from '../areas/codes/names.js';
 import { flushSync } from 'react-dom';
-import { language, t } from '../i18n/index.js';
+import { language, t, tData } from '../i18n/index.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import { ICONS } from '../areas/icons.js';
@@ -33,6 +33,8 @@ import { SetupRail, SetupTitle } from '../onboarding/SetupRail.js';
 import { answerTyped, openSetupOnFirstStart } from '../onboarding/state.js';
 import { SetupConversation } from '../onboarding/SetupConversation.js';
 import { TOPIC_HAND } from '../../onboarding/hand.js';
+import { isSetupTopic, questionWordsKey, stateWordsKey, topicWordsKey } from '../../onboarding/model.js';
+import { describedOr } from '../assistant/stored-change.js';
 import { spanOf } from '../../reports/words.js';
 import { specData } from '../../reports/spec.js';
 import type { ReportResult } from '../../reports/result.js';
@@ -152,19 +154,24 @@ function describe({ change: c, undo, note }: MadeChange, books: Index): { text: 
     case 'bookAgain': return { text: failed ? `${t('assistant.c.bookAgainNot')} · ${failed}` : t('assistant.c.bookAgain'), go: { area: 'automation', view: 'runs' } };
     case 'report': return { text: failed ? `${t('assistant.report.not')} · ${failed}` : `${c.spec.title} · ${note?.report ? spanOf(note.report) : c.period ?? c.spec.period}` };
     case 'setupTopic': {
-      const go = TOPIC_HAND[c.topic];
-      return { text: t('assistant.c.setupTopic', { topic: t(`onboarding.topic.${c.topic}`), state: t(`onboarding.state.${c.state}`) }), ...(go ? { go } : {}) };
+      // A topic or a question of an earlier version (`periods`, `start`) is named by one generic sentence (topicWordsKey).
+      const go = isSetupTopic(c.topic) ? TOPIC_HAND[c.topic] : null;
+      return { text: t('assistant.c.setupTopic', { topic: tData(topicWordsKey(c.topic)), state: tData(stateWordsKey(c.state)) }), ...(go ? { go } : {}) };
     }
-    case 'setupAnswer': return { text: t('assistant.c.setupAnswer', { question: t(`onboarding.question.${c.question}`) }) };
+    case 'setupAnswer': return { text: t('assistant.c.setupAnswer', { question: tData(questionWordsKey(c.question)) }) };
+    default: return { text: t('assistant.c.unknown') };
   }
 }
+
+/** `describe`, for a change read from a stored conversation: never throws (src/app/assistant/stored-change.ts). */
+const described = (c: MadeChange, books: Index): ReturnType<typeof describe> => describedOr(() => describe(c, books), () => ({ text: t('assistant.c.unknown') }));
 
 function Changes({ changes, books, onGo }: { changes: MadeChange[]; books: Index; onGo(route: Route): void }) {
   return (
     <ul className="aichanges">
       {changes.map((c) => {
         if (c.change.kind === 'report' && c.note?.report) return <li key={c.id} className="aireport"><ReportCard result={c.note.report} period={c.change.period} onGo={onGo} /></li>;
-        const d = describe(c, books);
+        const d = described(c, books);
         const mailbox = c.change.kind === 'mailbox' && c.note?.mailbox && !c.undone ? { id: c.note.mailbox.id, address: c.change.address, host: c.change.host } : undefined;
         const source = c.change.kind === 'source' && c.note?.source && !c.undone ? c.note.source.id : undefined;
         return (
@@ -258,7 +265,7 @@ function HeldCard({ held, turn, standing, books, onGo }: { held: HeldChanges; tu
   const different = new Set(held.rows.filter((r) => r.before).map((r) => `${r.before!.accountDebit}/${r.before!.accountCredit}`)).size > 1;
   const why = held.why.map((w) => (w === 'payments' ? t(different ? 'assistant.held.payments' : 'assistant.held.many', { n: payments })
     : w === 'deletes' ? t('assistant.held.deletes', { n: deleted }) : w === 'terminal' ? t('assistant.held.terminal') : t('assistant.held.rateWithoutReceipt')));
-  const others = held.changes.filter((c) => !isBookChange(c)).map((c, i) => describe({ id: String(i), change: c }, books).text);
+  const others = held.changes.filter((c) => !isBookChange(c)).map((c, i) => described({ id: String(i), change: c }, books).text);
   const settle = (take: boolean) => { setBusy(true); void settleHeld(turn, take).finally(() => setBusy(false)); };
   return (
     <div className={`ruledraft aiheld ${held.status}`} data-testid="held" data-status={held.status}>

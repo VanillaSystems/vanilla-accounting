@@ -9,12 +9,11 @@ import { join, resolve } from 'node:path';
 import { writeAtomic } from '../invoices/store.js';
 import { SetupError, checkBank, checkPreset, createWorkspace, type Bank, type Created } from '../workspace/create.js';
 import { QUESTIONS, optionOf, salesKinds, type QuestionKey } from '../workspace/setup.js';
-import { methodOf, parseNetRates } from '../workspace/vat-setup.js';
+import { parseNetRates } from '../workspace/vat-setup.js';
 import { parseUid } from '../workspace/uid.js';
 import { APP_FOLDER, APP_ROOT, appFolderIn, appLanguages, workspaceAt } from '../workspace/workspace.js';
 import { loadJurisdiction } from '../core/modules/load.js';
 import { DRAFT_FILE, isStepMark, newDraft, requestOf, withPatch, type DraftPatch, type Firm, type SetupDraft, type SetupDraftView } from './draft.js';
-import { sellsAnswer, type AnswerValue } from './model.js';
 import { seedCreated } from './store.js';
 
 export const draftFile = (root: string): string => join(resolve(root), APP_FOLDER, DRAFT_FILE);
@@ -31,6 +30,16 @@ function checkFirm(raw: unknown): Firm {
   if ('error' in uid) throw new SetupError(uid.error, { reason: 'uid', detail: text(r.uid) });
   if (!owner) throw new SetupError('The owner is needed.', { reason: 'required', field: 'owner' });
   return { name, uid: uid.uid, owner };
+}
+
+/** What was said of a firm not whole yet: each field as text, the UID only when it is one. */
+export function saidFirm(raw: Record<string, unknown>): Partial<Firm> {
+  const uid = text(raw.uid) ? parseUid(text(raw.uid)) : undefined;
+  return {
+    ...(text(raw.name) ? { name: text(raw.name) } : {}),
+    ...(uid && !('error' in uid) ? { uid: uid.uid } : {}),
+    ...(text(raw.owner) ? { owner: text(raw.owner) } : {}),
+  };
 }
 
 function checkAnswer(key: QuestionKey, raw: unknown): string | string[] {
@@ -85,6 +94,8 @@ export function readDraft(root: string): SetupDraft | undefined {
   let draft = newDraft(language, typeof raw.started === 'string' ? raw.started : new Date().toISOString());
   const replay = (patch: unknown) => { try { draft = withPatch(draft, checkPatch(patch)); } catch { /* left out */ } };
   if (raw.firm) replay({ step: 'firm', value: raw.firm });
+  const said = !draft.firm && isMap(raw.said) ? saidFirm(raw.said) : {};
+  if (Object.keys(said).length) draft = { ...draft, said };
   // The answers before the preset: a preset fills only what it has, so the person's answers are not lost.
   const answers = isMap(raw.answers) ? raw.answers : {};
   if (raw.preset) draft = { ...draft, preset: raw.preset as SetupDraft['preset'] };
@@ -92,6 +103,7 @@ export function readDraft(root: string): SetupDraft | undefined {
   for (const [key, value] of Object.entries(answers)) replay({ step: 'question', key, value });
   if (raw.netRates) replay({ step: 'netRates', value: raw.netRates });
   if (raw.banks) replay({ step: 'banks', value: raw.banks });
+  if (typeof raw.refusedPeriod === 'string' && draft.answers.period === undefined) draft = { ...draft, refusedPeriod: raw.refusedPeriod };
   const marks = Array.isArray(raw.fromText) ? raw.fromText.filter(isStepMark) : [];
   return marks.length ? { ...draft, fromText: marks } : draft;
 }
@@ -116,8 +128,8 @@ export function patchDraft(root: string, raw: unknown): SetupDraft {
 }
 
 /**
- * «Buchhaltung anlegen»: the books, written by createWorkspace from the draft's request, with the
- * conversation's first answers recorded (seedCreated) so it goes on in the books where it stopped.
+ * «Buchhaltung anlegen»: the books, written by createWorkspace from the draft's request, marked as
+ * created by the conversation (seedCreated), which goes on in them with what the settings do not answer.
  * A refusal leaves the draft as it was.
  */
 export async function createFromDraft(root: string, now: string): Promise<Created> {
@@ -134,7 +146,6 @@ export async function createFromDraft(root: string, now: string): Promise<Create
     writeDraft(root, draft);
     throw e;
   }
-  const ws = workspaceAt(created.root);
-  seedCreated(ws, { started: draft.started, vat: methodOf(ws.company.vat) as AnswerValue<'vat'>, sells: sellsAnswer(request.answers.sells) }, now);
+  seedCreated(workspaceAt(created.root), { started: draft.started }, now);
   return created;
 }

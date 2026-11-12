@@ -67,10 +67,13 @@ test('a description changed by hand makes the app booking a changed one', () => 
   assert.equal(authorOf(entry('1', 'T1', { origin: 'manual', by: { kind: 'model', model: 'm' } })), 'changed');
 });
 
-test('the last stage: running, due with its day, overdue, filed', () => {
-  const b = books([], [], []);
+test('the last stage: running, due with its day, overdue, filed, before the books begin', () => {
+  const b = books([], [], [entry('july', 'july', { date: '2026-07-14' })]);
   assert.deepEqual(homeFigures(b, Q4, ctx).filing, { kind: 'running', ends: '2026-12-31' });
   const Q3: PeriodRange = { key: '2026-Q3', from: '2026-07-01', to: '2026-09-30' };
+  const Q2: PeriodRange = { key: '2026-Q2', from: '2026-04-01', to: '2026-06-30' };
+  assert.deepEqual(homeFigures(b, Q2, ctx).filing, { kind: 'before' }, 'ended before the books\' first day: not «überfällig» (#345)');
+  assert.deepEqual(homeFigures(books([], [], []), Q3, ctx).filing, { kind: 'before' }, 'books with nothing dated');
   assert.deepEqual(homeFigures(b, Q3, ctx).filing, { kind: 'due', due: '2026-11-29', overdue: false });
   assert.deepEqual(homeFigures(b, Q3, { ...ctx, today: '2026-12-01' }).filing, { kind: 'due', due: '2026-11-29', overdue: true });
   assert.deepEqual(homeFigures(books([], [], [], '2026-09-30'), Q3, ctx).filing, { kind: 'filed' });

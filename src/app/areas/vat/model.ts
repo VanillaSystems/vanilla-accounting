@@ -7,7 +7,7 @@ import { lockedThrough } from '../../../books/lock-line.js';
 import type { Index, JournalEntry, QuarterKey, VatAdjustment } from '../../../types/index.js';
 import { entriesForReturn } from '../../../accounting/index.js';
 import { chfAmount } from '../../../accounting/ledger.js';
-import { addDays, derivePeriod, localToday, parsePeriod, vatPeriodOf, type IsoDate, type Period, isFilingKey } from '../../../accounting/periods.js';
+import { addDays, beforeBooks, booksFirstDay, derivePeriod, localToday, parsePeriod, vatPeriodOf, type IsoDate, type Period, isFilingKey } from '../../../accounting/periods.js';
 import { chart, vat, filing, registration } from '../../../engines/index.js';
 import { taxOfRow, type ReturnFigures, type VatLine, type VatReport } from '../../../engines/return.js';
 import type { BoxId, Formula, ReturnData } from '../../../core/modules/schema.js';
@@ -102,7 +102,14 @@ export interface EntryLine extends VatLine {
 export type ReturnState =
   /** The period has not ended: no return yet, from the day after its end (r6f-33). */
   | { kind: 'running'; ends: IsoDate; from: IsoDate }
-  | { kind: 'open'; due: IsoDate; overdue: boolean }
+  /**
+   * `before`: the period ended before anything in these books is dated (#345). The page then says what
+   * the books hold («keine Zahlungen oder Buchungen in dieser Periode», and the day they begin, `first`,
+   * absent for books with nothing dated), not «fällig seit»: whether its return was filed elsewhere the
+   * books cannot know. The return can still be prepared: a firm whose first payment came in April owes a
+   * nil return for Q1.
+   */
+  | { kind: 'open'; due: IsoDate; overdue: boolean; before?: { first?: IsoDate } }
   | { kind: 'filed' }
   /** A half year or a year: a sum of returns, no return of its own. */
   | { kind: 'overview' };
@@ -131,10 +138,11 @@ export function vatReturn(books: Index, key: string, today: IsoDate = localToday
   const closed = books.config?.closedThrough;
   const quarter = isFilingKey(key, filing().length);
   const due = addDays(range.to, filing().dueDays);
+  const first = booksFirstDay(books);
   const state: ReturnState = !quarter ? { kind: 'overview' }
     : closed && range.to <= closed ? { kind: 'filed' }
     : range.to >= today ? { kind: 'running', ends: range.to, from: addDays(range.to, 1) }
-    : { kind: 'open', due, overdue: due < today };
+    : { kind: 'open', due, overdue: due < today, ...(beforeBooks(books, range.to) ? { before: first ? { first } : {} } : {}) };
   const lines: Record<string, EntryLine[]> = {};
   for (const entry of entriesForReturn(entries, key, filing().length)) {
     const line = vat().vatLine(entry);
@@ -265,9 +273,12 @@ export function isPending(v: VatReturn, books: Index, open: number): boolean {
  * sentence stands (an amount that is final: transfer it, or it is paid back). Not final comes
  * first: a result of 0.00 while payments of the period are not booked is no «nothing owed». A
  * final zero says there is nothing to transfer, and for a period that ended, that its return is
- * still to be filed (#341).
+ * still to be filed (#341); not for one that ended before the books begin (`before`, #345): whether
+ * its return was filed elsewhere the books cannot know, so the page says only what they hold.
  */
-export function resultSentence(n: '500' | '510', amount: number, pending: boolean, state: VatReturn['state']['kind'], netRate: boolean): 'vat.xZeroPending' | 'vat.x510Pending' | 'vat.x500NetRatePending' | 'vat.x500Pending' | 'vat.x510None' | 'vat.x500NoneFile' | 'vat.x500None' | undefined {
+export const sentenceState = (s: VatReturn['state']): VatReturn['state']['kind'] | 'before' => (s.kind === 'open' && s.before ? 'before' : s.kind);
+
+export function resultSentence(n: '500' | '510', amount: number, pending: boolean, state: VatReturn['state']['kind'] | 'before', netRate: boolean): 'vat.xZeroPending' | 'vat.x510Pending' | 'vat.x500NetRatePending' | 'vat.x500Pending' | 'vat.x510None' | 'vat.x500NoneFile' | 'vat.x500None' | undefined {
   if (pending) return !amount ? 'vat.xZeroPending' : n === '510' ? 'vat.x510Pending' : netRate ? 'vat.x500NetRatePending' : 'vat.x500Pending';
   if (!amount) return n === '510' ? 'vat.x510None' : state === 'open' ? 'vat.x500NoneFile' : 'vat.x500None';
   return undefined;

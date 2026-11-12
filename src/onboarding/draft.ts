@@ -9,7 +9,7 @@
  * answered, so a setup broken off stands where it stood when the folder is opened again. Pure,
  * shared by the desktop server (src/onboarding/draft-store.ts) and the start screen.
  */
-import { PRESETS, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, asked, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
+import { PRESETS, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, asked, usualPeriod, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
 import type { NetRate } from '../workspace/vat-setup.js';
 import type { BankSpec, SetupRequest } from '../workspace/create.js';
 import type { KnownBooks } from '../types/desktop.js';
@@ -24,11 +24,22 @@ export interface SetupDraft {
   /** The books' language, chosen with the folder. */
   language: string;
   firm?: Firm;
+  /**
+   * What the person's words said of the firm while it is not whole (#345): a firm is saved only with
+   * its UID, so a name and an owner given before it wait here, and the UID alone completes them.
+   * Absent once `firm` is saved.
+   */
+  said?: Partial<Firm>;
   preset?: Preset;
   /** The answers of src/workspace/setup.ts: those of the preset, and those the person gave. */
   answers: Partial<Answers>;
   netRates?: NetRate[];
   banks?: BankSpec[];
+  /**
+   * The unusual filing period the words named and code did not take (src/onboarding/draft-talk.ts): said
+   * once; the model repeating it from the same earlier words raises nothing again. Gone once the period is answered.
+   */
+  refusedPeriod?: string;
   /** The answers the AI took from the person's own words (#145), shown «aus deiner Nachricht» until the person changes them. */
   fromText?: StepMark[];
 }
@@ -92,7 +103,7 @@ const netRateMethod = (a: Partial<Answers>) => a.vatRegistered === 'yes' && a.va
 
 /** What the conversation proposes for a VAT question: the preset's answer; the period follows the method (r5f-14). */
 function suggestion(d: SetupDraft, key: QuestionKey): QuestionValue | undefined {
-  if (key === 'period' && d.answers.vatMethod) return d.answers.vatMethod === 'net-rate' ? 'half-yearly' : 'quarterly';
+  if (key === 'period' && d.answers.vatMethod) return usualPeriod(d.answers.vatMethod);
   return d.preset ? presetAnswers(d.preset)[key] : undefined;
 }
 
@@ -111,9 +122,9 @@ export function requestOf(d: SetupDraft): Omit<SetupRequest, 'root'> | undefined
   };
 }
 
-/** The conversation so far: every step in order, up to and with the first one not answered (the review once all are). */
-export function draftSteps(d: SetupDraft): DraftStep[] {
-  const all: DraftStep[] = [
+/** Every step this draft is asked, answered or not, in order. */
+function allSteps(d: SetupDraft): DraftStep[] {
+  return [
     { id: 'firm', ...(d.firm ? { answer: d.firm } : {}) },
     { id: 'preset', ...(d.preset ? { answer: d.preset } : {}) },
     ...askedQuestions(d).map((key): DraftStep => {
@@ -123,6 +134,27 @@ export function draftSteps(d: SetupDraft): DraftStep[] {
     ...(netRateMethod(d.answers) ? [{ id: 'netRates', ...(d.netRates?.length ? { answer: d.netRates } : {}) } as DraftStep] : []),
     { id: 'banks', ...(d.banks?.length ? { answer: d.banks } : {}) },
   ];
+}
+
+/**
+ * How far the person is (#345): the steps answered, of those this draft is asked. `of` can still grow
+ * (a preset not chosen yet, «registered» opening the VAT questions): it is the count as the answers stand.
+ */
+export function draftProgress(d: SetupDraft): { done: number; of: number } {
+  const all = allSteps(d);
+  return { done: all.filter((s) => 'answer' in s).length, of: all.length };
+}
+
+/** The questions answered and those still open, by key, in the order asked: what the AI is told, so it asks nothing a click answered. */
+export function draftMarks(d: SetupDraft): { answered: StepMark[]; open: StepMark[] } {
+  const mark = (s: DraftStep): StepMark => (s.id === 'question' ? s.key : (s.id as StepMark));
+  const all = allSteps(d);
+  return { answered: all.filter((s) => 'answer' in s).map(mark), open: all.filter((s) => !('answer' in s)).map(mark) };
+}
+
+/** The conversation so far: every step in order, up to and with the first one not answered (the review once all are). */
+export function draftSteps(d: SetupDraft): DraftStep[] {
+  const all = allSteps(d);
   const open = all.findIndex((s) => !('answer' in s));
   if (open >= 0) return all.slice(0, open + 1);
   const request = requestOf(d);
@@ -130,15 +162,16 @@ export function draftSteps(d: SetupDraft): DraftStep[] {
 }
 
 /**
- * The draft after an answer. A preset fills the answers it has, but never the VAT ones; «custom»
- * keeps what is there. Taking back an answer the preset gave turns the preset into «custom», so
- * that question is asked in the conversation, with the others the preset answered shown as given.
+ * The draft after an answer. A preset fills the answers it has, but never the VAT ones and never one
+ * the person's own words gave (`fromText`: «wir verrechnen das Material mit» holds whichever kind of
+ * firm is picked after it, #345); «custom» keeps what is there. Taking back an answer the preset gave
+ * turns the preset into «custom», so that question is asked in the conversation, with the others the
+ * preset answered shown as given.
  */
 export function withPatch(d: SetupDraft, patch: DraftPatch): SetupDraft {
   const next = answer(d, patch);
-  // A person's answer is theirs, no longer one taken from their words; a preset replaces the answers it gives.
-  const replaced = patch.step === 'preset' && patch.value && patch.value !== 'custom' ? Object.keys(presetAnswers(patch.value)).filter((k) => !isVat(k as QuestionKey)) : [];
-  const marks = (d.fromText ?? []).filter((m) => m !== markOf(patch) && !replaced.includes(m));
+  // A person's answer is theirs, no longer one taken from their words.
+  const marks = (d.fromText ?? []).filter((m) => m !== markOf(patch));
   delete next.fromText;
   return marks.length ? { ...next, fromText: marks } : next;
 }
@@ -146,19 +179,20 @@ export function withPatch(d: SetupDraft, patch: DraftPatch): SetupDraft {
 function answer(d: SetupDraft, patch: DraftPatch): SetupDraft {
   const without = <K extends keyof SetupDraft>(k: K): SetupDraft => { const next = { ...d }; delete next[k]; return next; };
   switch (patch.step) {
-    case 'firm': return patch.value ? { ...d, firm: patch.value } : without('firm');
+    case 'firm': { const { said: _said, ...rest } = d; return patch.value ? { ...rest, firm: patch.value } : without('firm'); }
     case 'netRates': return patch.value ? { ...d, netRates: patch.value } : without('netRates');
     case 'banks': return patch.value ? { ...d, banks: patch.value } : without('banks');
     case 'preset': {
       if (!patch.value) return without('preset');
       if (patch.value === 'custom') return { ...d, preset: 'custom' };
-      const vat = Object.fromEntries(VAT_QUESTIONS.filter((k) => d.answers[k] !== undefined).map((k) => [k, d.answers[k]]));
+      const kept = Object.fromEntries(QUESTION_ORDER.filter((k) => d.answers[k] !== undefined && (isVat(k) || d.fromText?.includes(k))).map((k) => [k, d.answers[k]]));
       const given = Object.fromEntries(Object.entries(presetAnswers(patch.value)).filter(([k]) => !isVat(k as QuestionKey)));
-      return { ...d, preset: patch.value, answers: { ...given, ...vat } as Partial<Answers> };
+      return { ...d, preset: patch.value, answers: { ...given, ...kept } as Partial<Answers> };
     }
     case 'question': {
       const answers = { ...d.answers } as Record<string, QuestionValue>;
       if (patch.value === null) delete answers[patch.key]; else answers[patch.key] = patch.value;
+      if (patch.key === 'period' && patch.value !== null && d.refusedPeriod) { const { refusedPeriod: _r, ...rest } = d; d = rest; }
       const hidden = patch.value === null && !!d.preset && d.preset !== 'custom' && !isVat(patch.key);
       return { ...d, answers: answers as Partial<Answers>, ...(hidden ? { preset: 'custom' as const } : {}) };
     }

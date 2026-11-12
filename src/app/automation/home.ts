@@ -7,7 +7,7 @@
  * payment, booked, filed. A receipt belongs to the period of its date, or of the day it came in
  * while it is not read yet.
  */
-import { addDays, type IsoDate } from '../../accounting/periods.js';
+import { addDays, beforeBooks, type DatedBooks, type IsoDate } from '../../accounting/periods.js';
 import { waitingForReceipt } from '../../accounting/receipt-due.js';
 import type { Index, JournalEntry, Receipt } from '../../types/index.js';
 import { nextRun } from '../../workflows/cron.js';
@@ -67,7 +67,9 @@ export type FilingStage =
   /** The period is not over yet. */
   | { kind: 'running'; ends: IsoDate }
   /** Over and not filed: due on `due`. A firm not registered has no due day. */
-  | { kind: 'due'; due?: IsoDate; overdue: boolean };
+  | { kind: 'due'; due?: IsoDate; overdue: boolean }
+  /** Over before the books begin (periods.ts beforeBooks, #345): neither owed nor overdue here. */
+  | { kind: 'before' };
 
 export interface PeriodRange { key: string; from: IsoDate; to: IsoDate }
 
@@ -136,13 +138,15 @@ export function homeFigures(books: Index, period: PeriodRange, ctx: HomeContext,
     ...(known > 0 ? { withoutYou: Math.round((authors.app / known) * 100) } : {}),
     waitingReceipt: waitingForReceipt(books, (ref) => entriesOf.has(ref), ctx.today)
       .filter((w) => w.tx.date >= period.from && w.tx.date <= period.to).length,
-    filing: filingStage(books.config?.closedThrough, period, ctx),
+    filing: filingStage(books, period, ctx),
   };
 }
 
-function filingStage(closedThrough: IsoDate | undefined, period: PeriodRange, ctx: HomeContext): FilingStage {
+export function filingStage(books: DatedBooks, period: Pick<PeriodRange, 'to'>, ctx: HomeContext): FilingStage {
+  const closedThrough = books.config?.closedThrough;
   if (closedThrough && closedThrough >= period.to) return { kind: 'filed' };
   if (period.to >= ctx.today) return { kind: 'running', ends: period.to };
+  if (beforeBooks(books, period.to)) return { kind: 'before' };
   if (!ctx.vatRegistered) return { kind: 'due', overdue: false };
   const due = addDays(period.to, ctx.dueDays);
   return { kind: 'due', due, overdue: due < ctx.today };

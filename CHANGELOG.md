@@ -84,6 +84,36 @@ Two markers flag an entry you must read before you update:
 
 - After the first statement, wages no longer wait for a receipt (#340). A payment whose own text is a wage's («Lohn Juli 2026», «Lohnzahlung 09/2026», Salär, Gehalt, salaire, stipendio, salary: the word at the start of the text or followed by a month, a period or a year) is booked without waiting on a firm whose setup says it has staff or an employed owner. The counterparty's name is never read, and a text that also names an invoice, a subscription, a licence, bookkeeping, a firm's legal form, social insurance or tax still waits. A wage is freed from the wait only: a receipt that matches it is still paired, and the payment is then booked again from it. For existing books with a profile that names employees, open-period payments worded so that waited for a receipt are booked on the next run; filed periods, firms without employees and books without a profile are unchanged. The bank's own fee row is known by its code for charges or the bank's whole name, as before, and now never under a card payment's code; the persona test's statement had no bank transaction codes, which no bank's export lacks, and carries them now. «Braucht keinen Beleg» on a payment without a booking goes on to book it in the same click and says what came of it, with «Rückgängig» for the mark in the same message; where the app could not book it by itself, the payment says so («nicht gebucht: die App konnte sie nicht selbst buchen. Unten von Hand buchen.») instead of «kein Beleg nötig · nicht gebucht».
 
+### Changed
+
+- The setup asks only what the app cannot know (#345). In the books it no longer asks the firm,
+  the VAT setup and what you sell again (the form or the conversation asked them a minute ago):
+  it shows them once, with «Etwas ändern». It no longer asks from when to book, which returns
+  were filed, the old program, how its books were kept and who has its login, and the list «Was
+  der Umzug braucht» is gone: none of it led to anything the app does. A bank account with its
+  IBAN and books without bookings are not walked through. A firm set up by the form reaches the
+  summary in two clicks (eleven before). The summary lists each fact once, calls a topic left
+  with «Später» «später», and ends with the first step as a link: «Kontoauszug einlesen».
+- The count in the setup moves with every answer («3 von 5 besprochen»), and the conversation
+  before the books shows «n von m beantwortet». The greeting names no one. «Später» on the
+  opening says what it means and where it comes back.
+- Typed setup before the books: a firm name and owner given before the UID are kept, so the UID
+  alone completes the firm; the AI is told what is answered and no longer asks the next question
+  itself (the app shows it with its buttons); a trade is the preset «Handwerk, Bau», and material
+  charged with the work is sold too (account 4000 in the chart); answers from your words survive
+  the kind of firm picked after them. Half-yearly returns on the effective method (quarterly on
+  the Saldosteuersatz) are not taken from loose words: the app says what is usual.
+- Setup questions say the matter in plain words first, the term after it (Kontokorrent,
+  Eigenverbrauch, Durchlaufkonto, Standardkonten, Eröffnungssaldi); three of them have «Weiss
+  nicht» with the answer the app then takes.
+- MWST: a period that ended before anything in the books is dated reads «Keine Zahlungen oder
+  Buchungen in dieser Periode · die Bücher beginnen am …», no longer «offen · fällig seit …» in
+  the warning colour; «Abrechnung erstellen» stays. Its result of 0.00 says «Keine Steuer
+  geschuldet: nichts zu überweisen.» without «Die Abrechnung ist trotzdem einzureichen», and
+  Automatisierung's last stage reads «vor Beginn dieser Bücher» for it instead of «überfällig seit
+  …». One rule decides it for MWST, Automatisierung and the link to an earlier return: nothing is
+  filed in these books and nothing in them is dated on or before the period's end.
+
 ## [0.4.1] - 2026-11-12
 
 Two fixes for the first run of the Mac app and a dropped statement.

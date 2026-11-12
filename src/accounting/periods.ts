@@ -202,19 +202,44 @@ export function openFilingPeriod(closedThrough: IsoDate | undefined, today: IsoD
  * skipped: one without payments still owes its return. The one answer to «where is the return's
  * work» (the return's page without a period in its link, the dock, the links to what is open).
  */
-export function booksOpenPeriod(books: {
+export function booksOpenPeriod(books: DatedBooks, today: IsoDate, length: FilingLength): Period {
+  if (books.config?.closedThrough) return openFilingPeriod(books.config.closedThrough, today, length);
+  return openFilingPeriod(undefined, today, length, booksFirstDay(books));
+}
+
+/** What the books' first day is read from: the filed line, the payments, the entries, the years of the opening balances. */
+export interface DatedBooks {
   config?: { closedThrough?: IsoDate; openingBalances?: Record<string, unknown> };
   transactions: Array<{ date: IsoDate }>;
   journalEntries?: Array<{ date: IsoDate }>;
-}, today: IsoDate, length: FilingLength): Period {
-  if (books.config?.closedThrough) return openFilingPeriod(books.config.closedThrough, today, length);
+}
+
+/**
+ * The first dated day of the books: their oldest payment or entry (books kept by hand have no
+ * payments), never before 1 January of the first year they have opening balances for; undefined
+ * while nothing is dated. Opening balances alone date nothing.
+ */
+export function booksFirstDay(books: DatedBooks): IsoDate | undefined {
   let first: IsoDate | undefined;
   for (const xs of [books.transactions, books.journalEntries ?? []]) {
     for (const { date } of xs) if (date && (!first || date < first)) first = date;
   }
   const year = Object.keys(books.config?.openingBalances ?? {}).sort()[0];
   const floor = year && `${year}-01-01`;
-  return openFilingPeriod(undefined, today, length, first && floor && first < floor ? floor : first);
+  return first && floor && first < floor ? floor : first;
+}
+
+/**
+ * The one answer to «did the period ending `to` end before these books begin?» (#345): nothing is
+ * filed here (`closedThrough`: every period after it is the books' own) and nothing is dated on or
+ * before `to`. Such a period is never shown as owed or overdue (the return's page, Automatisierung,
+ * the link to an earlier return): whether it was filed elsewhere the books cannot know. Every
+ * period from `booksOpenPeriod` on is the books', and owed once it ended.
+ */
+export function beforeBooks(books: DatedBooks, to: IsoDate): boolean {
+  if (books.config?.closedThrough) return false;
+  const first = booksFirstDay(books);
+  return !first || first > to;
 }
 
 /**
