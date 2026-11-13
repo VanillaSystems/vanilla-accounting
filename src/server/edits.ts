@@ -813,14 +813,15 @@ export function undoByReceipt(books: Books, before: readonly JournalEntry[], aft
 
 /**
  * The undo of «Arbeitnehmeranteil abziehen» (#489): the lines as they were, as undoByReceipt puts them back, and then
- * the payment's booking is hers: she took the proposal back, so the app never books the share on it again
- * (bookWithheldShares books only what the model or that code booked). The open item still offers it.
+ * those lines are hers, as a change by hand makes them (`origin: 'manual'`, `by` the person, as setEntry does): she
+ * took the proposal back, so no run books the payment again (bookWithheldShares, a receipt linked later, --force) and
+ * Änderungen lists only them. The lines the click did not touch stay as they were. The open item still offers the share.
  */
 export function undoClearWithheld(books: Books, before: readonly JournalEntry[], after: readonly JournalEntry[]): void {
   undoByReceipt(books, before, after);
-  const ref = before[0]?.transactionRef ?? after[0]?.transactionRef;
+  const back = new Set(before.map((e) => e.id));
   const at = new Date().toISOString();
-  for (const e of books.journalEntries) if (e.transactionRef === ref && e.by?.kind !== 'person') e.by = { kind: 'person', at };
+  for (const e of books.journalEntries) if (back.has(e.id)) Object.assign(e, { origin: 'manual', by: { kind: 'person', at } });
 }
 
 /**

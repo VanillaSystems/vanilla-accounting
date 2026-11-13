@@ -54,9 +54,9 @@ test('#476 the click books what 2270 holds from 5700 onto 2270 as hers in one wr
   const undo = await api.send('POST', '/api/journal-entries/by-receipt/undo', { undo: done.json.undo });
   assert.equal(undo.status, 200, String(undo.json.error));
   const back = linesOf('AK');
-  assert.deepEqual(back.map((e) => [e.id, e.accountDebit, e.amount, e.origin, e.reason]).sort(), was.map((e) => [e.id, e.accountDebit, e.amount, e.origin, e.reason]).sort());
-  // #489: she took the proposal back, so the booking as it stands is hers: the app never books the share on it again.
-  assert.ok(back.every((e) => e.by?.kind === 'person'), 'marked hers');
+  assert.deepEqual(back.map((e) => [e.id, e.accountDebit, e.amount, e.reason]).sort(), was.map((e) => [e.id, e.accountDebit, e.amount, e.reason]).sort());
+  // #489: she took the proposal back, so the line the undo put back is hers, as a change by hand makes it: no run books the share on it again.
+  assert.deepEqual(back.map((e) => [e.accountDebit, e.origin, e.by?.kind]).sort(), [['5700', 'manual', 'person'], ['5710', 'classify', 'model']]);
 });
 
 test('#476 with the payslips read, a later payment to the fund whose share is nothing has nothing to clear: the pension fund\'s withheld stays on 2270', async () => {

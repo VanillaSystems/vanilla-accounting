@@ -455,7 +455,9 @@ Two markers flag an entry you must read before you update:
   again, so the employees' AHV/IV/EO and ALV stayed in the employer's cost. Now every run books a
   contribution payment the app booked to the share the payslips withheld for that fund, whenever
   that share changes, one line per account, marked as decided by code with its own reason; a payment
-  she booked or changed herself, or whose proposal she took back, stays as it is. Where a proposal is
+  she booked or changed herself, or whose proposal she took back («Rückgängig» makes the lines it
+  puts back hers, as a change by hand), stays as it is. Books format: the check `withheldShare` of
+  `JournalEntry.by` is part of books schema 9 (#450, not released before), no step of its own. Where a proposal is
   still offered, it says what it does in her words: «Vorschlag: Den Arbeitnehmeranteil (CHF …) aus
   den Lohnabrechnungen von den Sozialversicherungskosten abziehen», the button «Arbeitnehmeranteil
   abziehen» (before: «von 5700 auf 2270 umbuchen», «2270 ausgleichen»), in all four languages.

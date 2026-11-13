@@ -19,13 +19,14 @@ import { appendFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { runIntake, storePort, type Ask } from '../src/intake/pipeline.js';
 import { PIPELINE } from '../src/intake/run.js';
+import { classifyStep } from '../src/intake/classify.js';
 import { loadBooks, moduleActor, PERSON, saveBooks, update } from '../src/books/store.js';
 import { loadChart } from '../src/workspace/chart.js';
 import { APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import type { BankTransaction, JournalEntry } from '../src/types/index.js';
 import { tempWorkspace, writeIndex } from './support/workspace.js';
 import { textPdf } from './support/text-pdf.js';
-import { unclearedContributions } from '../src/booking/withheld.js';
+import { mergedLines, unclearedContributions } from '../src/booking/withheld.js';
 import { clearWithheld, undoClearWithheld } from '../src/server/edits.js';
 
 const roots: string[] = [];
@@ -194,9 +195,26 @@ test('#489 review: «Rückgängig» after «Arbeitnehmeranteil abziehen» leaves
   update(books, PERSON, (b) => undoClearWithheld(b, done.before, done.after));
   saveBooks(ws, books);
   const back = linesOf(ws, 'AK');
-  assert.deepEqual(back.map((e) => [e.accountDebit, e.amount]).sort(), [['5700', 2439.75], ['5710', 243.75]]);
-  assert.ok(back.every((e) => e.by?.kind === 'person'), 'marked hers');
+  const asItIs = () => linesOf(ws, 'AK').map((e) => [e.id, e.accountDebit, e.amount, e.origin, e.by?.kind]).sort();
+  // Hers as a change by hand makes a line: only the line the undo put back (what Änderungen lists, by `by`); the FAK line the click never touched stays the model's.
+  assert.deepEqual(back.map((e) => [e.accountDebit, e.amount, e.origin, e.by?.kind]).sort(), [['5700', 2439.75, 'manual', 'person'], ['5710', 243.75, 'classify', 'model']]);
+  assert.deepEqual(back.filter((e) => e.by?.kind === 'person').map((e) => e.id), done.before.map((e) => e.id), 'only the lines the undo changed are hers');
+  const kept = asItIs();
   await drop(ws, slips());
   await run(ws);
-  assert.deepEqual(linesOf(ws, 'AK').map((e) => [e.accountDebit, e.amount]).sort(), [['5700', 2439.75], ['5710', 243.75]], 'not booked again by the app');
+  assert.deepEqual(asItIs(), kept, 'the payslips\' run does not book the share on it again');
+  // A receipt linked to it later, and a --force run, leave it as she left it.
+  const linked = loadBooks(ws);
+  update(linked, moduleActor('test'), (b) => { b.mappings.push({ transactionRef: 'AK', receiptId: b.receipts.find((r) => r.filename.includes('lw-07'))!.id, by: 'llm' }); });
+  saveBooks(ws, linked);
+  await run(ws);
+  assert.deepEqual(asItIs(), kept, 'a receipt linked later: not booked again');
+  await runIntake({ ws, books: storePort(ws, moduleActor('intake')), ask: model, steps: [['classify', classifyStep({ force: true })]] });
+  assert.deepEqual(asItIs(), kept, '--force leaves her booking');
+});
+
+test('#489 review: the merge sums only lines alike in accounts, code, day, corrected period and tags; the descriptions are kept', () => {
+  const line = (id: string, amount: number, over: Partial<JournalEntry> = {}) => ({ id, transactionRef: 'AK', date: '2026-09-28', accountDebit: '2270', accountCredit: '1020', amount, description: 'Akonto', ...over }) as JournalEntry;
+  const merged = mergedLines([line('a', 500), line('b', 1.6, { description: 'Anteil' }), line('c', 99.2, { tags: { projekt: 'x' } }), line('d', 10, { corrects: '2026-Q2' }), line('e', 5, { date: '2026-09-29' }), line('f', 0, { accountDebit: '5700' })]);
+  assert.deepEqual(merged.map((e) => [e.id, e.amount, e.description]), [['a', 501.6, 'Akonto · Anteil'], ['c', 99.2, 'Akonto'], ['d', 10, 'Akonto'], ['e', 5, 'Akonto']]);
 });

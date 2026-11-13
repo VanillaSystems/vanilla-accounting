@@ -172,17 +172,21 @@ export function atWithheld(entries: readonly JournalEntry[], account: string, sh
 }
 
 /**
- * A payment's lines with one line per account pair, code and currency (#489): what `atWithheld` split off one line
- * and moved onto another is summed into the first line of its kind, which keeps its id; a line moved to nothing goes.
+ * A payment's lines with one line per kind (#489): what `atWithheld` split off one line and moved onto another is
+ * summed into the first line of the same accounts, code, currency and rate, day, corrected period and tags, which
+ * keeps its id; the descriptions of the lines summed into it are kept, each once; a line moved to nothing goes.
  */
 export function mergedLines(entries: readonly JournalEntry[]): JournalEntry[] {
   const out: JournalEntry[] = [];
   const first = new Map<string, number>();
+  const tagsOf = (e: JournalEntry) => JSON.stringify(Object.entries(e.tags ?? {}).sort(([a], [b]) => a.localeCompare(b)));
   for (const e of entries) {
-    const key = [e.accountDebit, e.accountCredit, e.vatCode ?? '', e.exchangeCurrency ?? '', e.exchangeRate ?? ''].join('|');
+    const key = JSON.stringify([e.accountDebit, e.accountCredit, e.vatCode ?? '', e.exchangeCurrency ?? '', e.exchangeRate ?? '', e.date, e.corrects ?? '', tagsOf(e)]);
     const at = first.get(key);
     if (at === undefined) { first.set(key, out.length); out.push({ ...e }); continue; }
-    out[at] = { ...out[at], amount: fromRappen(toRappen(out[at].amount) + toRappen(e.amount)) };
+    const into = out[at];
+    const said = [...new Set([into.description, e.description].flatMap((d) => (d ? d.split(' · ') : [])))].join(' · ');
+    out[at] = { ...into, amount: fromRappen(toRappen(into.amount) + toRappen(e.amount)), ...(said && { description: said }) };
   }
   return out.filter((e) => toRappen(e.amount) !== 0);
 }
