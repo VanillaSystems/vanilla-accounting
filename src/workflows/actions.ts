@@ -110,7 +110,7 @@ function batch(step: StepRun, took: (books: Books, ws: Workspace, later?: () => 
     const r = await step({ ws, books: port, ask, progress, log: () => {}, ...(hold ? { hold } : {}), ...(release ? { release } : {}), ...(later ? { later } : {}), ...(arrived ? { arrived } : {}) }).finally(() => { if (run) clearProgress(run.id); });
     if (r.stop) throw stopped(r.notes);
     // What it read and what it made, for the run view (src/workflows/summary.ts).
-    return { outcome: 'ok', output: { took: todo, made: madeBetween(before, port.read()), notes: r.notes } };
+    return { outcome: 'ok', output: { took: todo, made: madeBetween(before, port.read()), notes: r.notes, ...(r.refused?.length && { refused: r.refused }) } };
   };
 }
 
@@ -233,7 +233,9 @@ export const ACTIONS: Record<string, Action> = {
         closeSaleQuestionsHeld(ws, [t.ref], scratch.config.closedThrough);
         return { outcome: 'held', output: { why: 'asked' } };
       }
-      return { outcome: 'undecided', output: { why: unasked.length ? 'noModel' : failed.length ? 'failed' : 'asked' } };
+      // A refused answer is kept with its run (#470): the payment says why, and its «Verlauf» names the run.
+      const refused = failed.map((f) => ({ ref: f.ref, ...(f.refusal && { refusal: f.refusal }) }));
+      return { outcome: 'undecided', output: { why: unasked.length ? 'noModel' : failed.length ? 'failed' : 'asked', ...(refused.length && { refused }) } };
     },
   },
 

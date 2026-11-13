@@ -7,7 +7,7 @@
  * others, so a batch run that read a whole drop shows on one receipt only that receipt's part.
  */
 import type { ItemRef } from './model.js';
-import type { RunLogLine } from './runlog.js';
+import type { LeftPayment, RunLogLine } from './runlog.js';
 
 export const HISTORY_KINDS = ['receipt', 'payment', 'entry'] as const;
 
@@ -41,7 +41,9 @@ export interface HistoryRun {
   wrote: Wrote;
   /** How many other receipts (written or linked) and entries the run wrote: counted, not listed. */
   rest: { receipts: number; entries: number };
-  /** Whether the object is the run's item, or only something it wrote. */
+  /** The run tried to book the payment and left it unbooked (#470): why, when the screens have words for it. */
+  refused?: LeftPayment;
+  /** Whether the object is the run's item, or only something it wrote or left. */
   via: 'item' | 'wrote';
   /** The run store still holds its steps (inputs, the model's answers, errors). */
   stored: boolean;
@@ -95,19 +97,53 @@ export function historyOf(lines: RunLogLine[], target: HistoryTarget, stored: (r
     const all = (k: keyof Wrote) => [...new Set(ls.flatMap((l) => l.wrote?.[k] ?? []))];
     const whole: Wrote = { entries: all('entries'), mappings: all('mappings'), receipts: all('receipts') };
     const wrote = concerning(whole, target);
-    if (!item && !wrote.entries.length && !wrote.mappings.length && !wrote.receipts.length) continue;
+    const refused = target.kind === 'payment' ? leftIn(ls, target.id) : undefined;
+    if (!item && !refused && !wrote.entries.length && !wrote.mappings.length && !wrote.receipts.length) continue;
     const mine = receiptsIn(wrote);
     const last = ls.reduce((a, b) => (b.at >= a.at ? b : a));
     runs.push({
       run, workflow: last.workflow, item: ls[0].item, event: last.event, at: last.at,
       ...(last.step ? { step: last.step } : {}), ...(last.reason ? { reason: last.reason } : {}),
       wrote,
+      ...(refused ? { refused } : {}),
       rest: { receipts: [...receiptsIn(whole)].filter((r) => !mine.has(r)).length, entries: whole.entries.length - wrote.entries.length },
       via: item ? 'item' : 'wrote', stored: stored(run),
     });
   }
   runs.sort((a, b) => b.at.localeCompare(a.at) || b.run.localeCompare(a.run));
   return { runs: runs.slice(0, limit), total: runs.length };
+}
+
+/** The newest of `lines` that left payment `ref` unbooked (#470). */
+function leftIn(lines: readonly RunLogLine[], ref: string): LeftPayment | undefined {
+  let found: { at: string; left: LeftPayment } | undefined;
+  for (const l of lines) {
+    const left = l.refused?.find((r) => r.ref === ref);
+    if (left && (!found || l.at >= found.at)) found = { at: l.at, left };
+  }
+  return found?.left;
+}
+
+/** Why a run left a payment unbooked (#470): the run, when, and the refusal the screens have words for. */
+export interface PaymentRefusal { ref: string; run: string; at: string; refusal?: LeftPayment['refusal'] }
+
+/**
+ * The payments of `open` (still unbooked) whose newest run left them unbooked (#470): the one source
+ * of why such a payment waits, for its page, the lists and the AI's facts. A run that came later and
+ * worked on the payment as its item without leaving it so (it now waits for a receipt, a rule asks)
+ * takes the word.
+ */
+export function refusalsOf(lines: readonly RunLogLine[], open: ReadonlySet<string>): PaymentRefusal[] {
+  const newest = new Map<string, { at: string; refusal?: PaymentRefusal }>();
+  const see = (ref: string, at: string, refusal?: PaymentRefusal) => {
+    const was = newest.get(ref);
+    if (!was || at >= was.at) newest.set(ref, { at, ...(refusal && { refusal }) });
+  };
+  for (const l of lines) {
+    if (l.item.kind === 'transaction' && open.has(l.item.id) && !l.refused?.some((r) => r.ref === l.item.id)) see(l.item.id, l.at);
+    for (const r of l.refused ?? []) if (open.has(r.ref)) see(r.ref, l.at, { ref: r.ref, run: l.run, at: l.at, ...(r.refusal && { refusal: r.refusal }) });
+  }
+  return [...newest.values()].flatMap((n) => (n.refusal ? [n.refusal] : []));
 }
 
 /** One run's lines, oldest first: what the run view shows of a run whose details the store no longer has. */

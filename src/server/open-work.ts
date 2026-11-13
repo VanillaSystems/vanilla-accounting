@@ -8,6 +8,8 @@
  * claims a question is missing that is open, or sends the person to answer one the app has closed.
  * The words are the UI's own, in the person's language; the frame is English, for the model.
  */
+import { paymentRefusals } from './refusals.js';
+import type { PaymentRefusal } from '../workflows/history.js';
 import type { Books } from '../books/store.js';
 import { readQuestions } from '../questions/store.js';
 import type { Question } from '../questions/model.js';
@@ -148,6 +150,13 @@ const taskLine = (x: Task & { rule?: string }, language: string) =>
   `- «${fillTask(textIn(x.title, language), x.item, x.reads)}» on the ${x.item.kind} ${x.item.id}, since ${day(x.since)}${x.rule ? `, held by the rule ${x.rule}` : ''}`;
 const paymentLine = (p: BankTransaction) => `- ${day(p.date)} ${payText(p).name} ${money(p.currency, p.amount)} (${p.ref})`;
 
+/** «: a run left it unbooked: …», the refusal in the person's words (#470); nothing for a payment no run refused. */
+const leftLine = (r: PaymentRefusal | undefined, t: ReturnType<typeof wordsIn>['t']): string => {
+  if (!r?.refusal) return '';
+  const vars = Object.fromEntries(Object.entries(r.refusal.params).map(([k, v]) => [k, typeof v === 'number' ? v.toFixed(2) : String(v)]));
+  return `: a run left it unbooked, and the payment says why: «${t(`error.${r.refusal.code}` as Parameters<typeof t>[0], vars)}»`;
+};
+
 /**
  * Where the oldest period not filed stands (src/app/areas/automation/open-period.ts, the state the
  * sidebar's card draws): what the person asks for with «was muss ich noch machen?». The figures
@@ -166,12 +175,14 @@ export function periodNote(ws: Ws, books: Books, tasks: Tasks, language: string,
   const label = periodWords(t, s.period);
   const unlinked = s.unlinked;
   const owner = ws.company?.owner ?? '';
+  // Why a run left a payment unbooked, as the payment says it (#470).
+  const refused = new Map(paymentRefusals(ws, books).map((r) => [r.ref, r]));
   // In the order of the card's lines (openLines): most important first, as code ranks them (#428).
   const lines = [
     ...(s.held.length ? [`Orders a provider's sales report did not book (${s.held.length}): their turnover is missing from the return, and the review withholds «Freigegeben» until each is booked (on the report's receipt under «${t('area.receipts')}»):`, ...capped(s.held.map((h) => `- ${t(`drop.held.${h.why}`, { order: h.order })}, ${day(h.date)}${h.gross !== undefined ? `, ${money(h.currency ?? baseCurrency(), h.gross)}` : ''} (${h.name})`))] : []),
     `Open questions (${s.questions.length}):`, ...capped(s.questions.map((x) => questionLine(books, x.q, t))),
     ...(s.yours.length ? [`Receipts that wait for the person's own word (${s.yours.length}), under «${t('area.receipts')}»: only she can add what each lacks, or answer whether it is a copy:`, ...capped(s.yours.map((x) => yourLine(books, x, t)))] : []),
-    `Payments without a booking (${s.unbooked.length})${s.unbooked.length ? `, under «${t('area.bank')}»` : ''}:`, ...capped(s.unbooked.map(paymentLine)),
+    `Payments without a booking (${s.unbooked.length})${s.unbooked.length ? `, under «${t('area.bank')}»` : ''}:`, ...capped(s.unbooked.map((p) => paymentLine(p) + leftLine(refused.get(p.ref), t))),
     ...(k.outlays ? [`  Of them, ${k.outlays} go to the owner and pay back business costs she paid privately: they wait until those receipts are booked as her outlays (on each receipt under «${t('area.receipts')}», «${t('actions.privateOne', { owner })}»); the app books them then. No receipt of their own is missing.`] : []),
     ...(k.waits ? [`  Of them, ${k.waits} the app holds until their receipt is linked: it books them itself then and nobody is asked yet; the receipts go in under «${t('area.receipts')}».`] : []),
     ...(k.asks ? [`  Of them, ${k.asks} wait for their receipt and their return is near: each is the person's task under ${tasksPlace} now (link the receipt, name another proof, or book without input tax).`] : []),

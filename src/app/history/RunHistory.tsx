@@ -9,7 +9,7 @@
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { language, t } from '../i18n/index.js';
-import { api, errorText, STATIC_EXPORT } from '../lib/api.js';
+import { api, errorText, leftText, STATIC_EXPORT } from '../lib/api.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { useAutomation } from '../automation/store.js';
 import { refusalText } from '../automation/refusal.js';
@@ -107,6 +107,12 @@ function restText({ receipts, entries }: HistoryRun['rest']): string {
   return '';
 }
 
+/** What a run that left the payment unbooked says of it (#470): why, when the refusal has words. */
+function refusedText(r: NonNullable<HistoryRun['refused']>): string {
+  const why = leftText(r);
+  return why ? t('history.refused', { why }) : t('history.refusedPlain');
+}
+
 function Row({ r, books, nav, period, on }: { r: HistoryRun; books: Index; nav: Nav; period?: Period; on: HistoryObject }) {
   const words = useWords();
   const how = eventText(r, words.step);
@@ -122,6 +128,7 @@ function Row({ r, books, nav, period, on }: { r: HistoryRun; books: Index; nav: 
       </span>
       {how ? <span className={r.event === 'stuck' ? 'hhow hwarn' : 'hhow m'}>{how}</span> : null}
       {did ? <span className="hdid m" data-testid="history-did">{did}</span> : null}
+      {r.refused ? <span className="hhow hwarn" data-testid="history-refused">{refusedText(r.refused)}</span> : null}
       <Wrote wrote={r.wrote} books={books} nav={nav} period={period} skip={on} />
       {rest ? <span className="hrest m" data-testid="history-rest">{rest} · <Go to={runAt} nav={nav}>{t('history.openRun')}</Go></span> : null}
       {r.stored ? null : <span className="hgone m" data-testid="history-no-details" data-tip={t('history.noDetailsTip')}>{t('history.noDetails')}</span>}
