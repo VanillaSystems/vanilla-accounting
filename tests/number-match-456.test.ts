@@ -4,7 +4,8 @@
  * in the drop, though #431 matches a bill by its number past its terms. The rule was never asked:
  * the app's file of the compensation fund says its payments need no receipt to be booked
  * (`apply: { receipt: none }`), and the matching chain took that as «has no receipt of its own», so
- * the fund's payment was no candidate for its own bill. A business's file frees its payments from
+ * the fund's payment was no candidate for its own bill. The fund's file says its bills pair
+ * (`pairs: true`): it frees its payments from
  * the wait only, as a wage's wording does: its bill is still paired. And in «Zahlung verknüpfen» the
  * payment with the same amount that carries the bill's own number ranks above a «Skonto?» guess.
  *
@@ -83,7 +84,7 @@ const chain = (b: Books, stagedNow?: Receipt[]) => runPairChain(port(b), { toChf
 test('the fund\'s payment is booked without waiting for a receipt, and is still a candidate for its bill', () => {
   const b = books([]);
   const wait = receiptWaitOf(b, AKONTO, loadClassifyContext(ws), receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws), loadFxResolver());
-  assert.deepEqual(wait, { wait: false, why: 'business' }, 'the fund\'s file: its payments need no receipt to be booked');
+  assert.deepEqual(wait, { wait: false, why: 'businessBill' }, 'the fund\'s file: its payments need no receipt to be booked, and its bills pair (pairs: true)');
   assert.equal(noReceiptFor(ws)(b)(AKONTO), false, 'but its bill is its receipt: the chain pairs it');
 });
 
