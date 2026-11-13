@@ -23,7 +23,9 @@ import { classifyStep } from '../src/intake/classify.js';
 import { runIntake, storePort } from '../src/intake/pipeline.js';
 import './support/jurisdiction.js';
 
-const open = (d: string) => d > '2026-06-30';
+/** A firm with its UID in its settings: only then is a receipt keyed by its vendor's VAT number (#500; without it see tests/buyer-uid-silent.test.ts). */
+const FIRM = 'CHE-123.456.789';
+const open = { isOpen: (d: string) => d > '2026-06-30', firmUid: FIRM };
 const VENDOR = 'CHE-111.222.333';
 
 const pay = (amount: number, over: Partial<BankTransaction> = {}): BankTransaction =>
@@ -50,7 +52,7 @@ test('three receipts of one vendor that add up to the payment to the centime are
 test('the inbox run\'s match step links such a set without the model', async () => {
   const books = booksOf([pay(87.4)], [receipt(30), receipt(45.5), receipt(11.9)]);
   const lines: string[] = [];
-  await matchStep({ ws: { paths: { inbox: '/nowhere' } } as Workspace, books: { read: () => books, update: <T>(fn: (x: Books) => T) => fn(books) }, progress: () => {}, log: (l) => lines.push(l) });
+  await matchStep({ ws: { paths: { inbox: '/nowhere' }, company: { name: 'Test GmbH', uid: FIRM } } as unknown as Workspace, books: { read: () => books, update: <T>(fn: (x: Books) => T) => fn(books) }, progress: () => {}, log: (l) => lines.push(l) });
   assert.deepEqual(books.mappings.map((m) => m.transactionRef), ['P1', 'P1', 'P1']);
   assert.ok(lines.some((l) => /3 receipts that add up to the payment/.test(l)), lines.join('\n'));
 });
