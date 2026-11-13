@@ -545,13 +545,13 @@ export function customsEntries(books: Books, tx: BankTransaction, context: Class
 }
 
 /** The firm a customs assessment names as its importer: its UID, else its name (#452). */
-const importerOf = (context: Pick<ClassifyContext, 'companyUid' | 'companyName'>): Importer => ({ ...(context.companyUid && { uid: context.companyUid }), ...(context.companyName && { name: context.companyName }) });
+const importerOf = (context: Pick<ClassifyContext, 'companyUid' | 'companyName' | 'ownerName'>): Importer => ({ ...(context.companyUid && { uid: context.companyUid }), ...(context.companyName && { name: context.companyName }), ...(context.ownerName && { owner: context.ownerName }) });
 
 /**
  * The deductions customs assessments bring to import VAT booked before them (importVatDeductions),
  * booked into `books`, and the assessments marked as used. Save the books when either is more than none.
  */
-export function bookImportVatDeductions(books: Books, context: Pick<ClassifyContext, 'companyUid' | 'companyName'>): { booked: number; marked: number } {
+export function bookImportVatDeductions(books: Books, context: Pick<ClassifyContext, 'companyUid' | 'companyName' | 'ownerName'>): { booked: number; marked: number } {
   const words = documents().customs;
   if (!words) return { booked: 0, marked: 0 };
   const lock = periodLock(books);

@@ -301,24 +301,56 @@ function assessedTax(text: string, words: CustomsWords): { amount: number; rate?
   return { amount, ...(rate !== undefined ? { rate } : {}) };
 }
 
-/** The firm an assessment must name as its importer: its UID (company.uid) and its name (company.name). */
-export interface Importer { uid?: string; name?: string }
+/** The firm an assessment must name as its importer: its UID (company.uid), its name (company.name) and its owner (company.owner). */
+export interface Importer { uid?: string; name?: string; owner?: string }
 
 const foldCase = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+const wordsOf = (s: string) => foldCase(s).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
 
 /**
- * Whether `text` names the firm as a party: by its UID when Firma › Firma has one; without one
- * (#452: the setup asks none) by its whole name, the end of a line or an address after a comma
- * after it, never the start of a longer name («Beispiel GmbH Treuhand» is another firm). A UID
- * the text shows beside the name is not the firm's for that: only the person keeps a UID.
+ * How far below an importer label alone on its line its block reaches, in lines of text: a header
+ * printed as a column of labels and then one of values puts the importer's value a few lines down.
  */
-function namesFirm(text: string, firm: Importer | undefined): boolean {
+const IMPORTER_LINES = 8;
+
+/**
+ * The lines of the importer's blocks (documents.yaml customs.assessment.importer): the rest of a
+ * line that begins with the label, or, with nothing after the label, the lines of text below it on
+ * its page (IMPORTER_LINES). Undefined when the text has no line that begins with the label.
+ */
+function importerLines(text: string, words: CustomsWords): string[] | undefined {
+  const labels = words.assessment.importer ?? [];
+  if (!labels.length) return undefined;
+  const label = new RegExp(`^[ \\t]*${wordsRe(labels).source}[ \\t]*[:：]?[ \\t]*(.*)$`, 'iu');
+  const lines = text.split('\n');
+  const found = lines.flatMap((line, k): string[] => {
+    const m = label.exec(line);
+    if (!m) return [];
+    if (m[1].trim()) return [m[1]];
+    const below: string[] = [];
+    for (let j = k + 1; j < lines.length && below.length < IMPORTER_LINES && !lines[j].includes('\f'); j++) if (lines[j].trim()) below.push(lines[j]);
+    return below;
+  });
+  return lines.some((l) => label.test(l)) ? found : undefined;
+}
+
+/**
+ * Whether `text` names the firm as the importer, in the importer's block (importerLines): by its UID
+ * when Firma › Firma has one (anywhere in the text when it has no importer label); without one
+ * (#452: the setup asks none) by its whole name at the start of a line of the block, after the
+ * label or «c/o», with the end of the line or an address after a comma after it: never a longer
+ * name («Zürcher Beispiel GmbH», «Beispiel GmbH (Schweiz) AG», «Beispiel GmbH Treuhand»), never a
+ * name of one word (a word of a goods description) or the owner's name alone. A UID the text shows
+ * beside the name is not the firm's for that: only the person keeps a UID.
+ */
+function namesFirm(text: string, firm: Importer | undefined, words: CustomsWords): boolean {
+  const block = importerLines(text, words);
   const digits = firm?.uid?.replace(/\D/g, '');
-  if (digits) return [...text.matchAll(UID)].some((m) => m.slice(1).join('') === digits);
-  const parts = foldCase(firm?.name ?? '').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
-  if (!parts.length) return false;
-  const name = new RegExp(`(?<![\\p{L}\\p{N}])${parts.join('[^\\p{L}\\p{N}\\n]+')}(?=[ \\t]*$|[ \\t]*[,;·|–—(\\t]| {2,})`, 'mu');
-  return name.test(foldCase(text));
+  if (digits) return [...(block ? block.join('\n') : text).matchAll(UID)].some((m) => m.slice(1).join('') === digits);
+  const parts = wordsOf(firm?.name ?? '');
+  if (!block || parts.length < 2 || parts.join(' ') === wordsOf(firm?.owner ?? '').join(' ')) return false;
+  const name = new RegExp(`^[ \\t]*(?:c[ \\t]*/[ \\t]*o[ \\t]+)?${parts.join('[^\\p{L}\\p{N}\\n]+')}(?=[ \\t]*$|[ \\t]*[,;·|–—])`, 'u');
+  return block.some((line) => name.test(foldCase(line)));
 }
 
 /**
@@ -329,7 +361,7 @@ function namesFirm(text: string, firm: Importer | undefined): boolean {
  */
 export function readAssessment(r: Pick<Receipt, 'id' | 'filename' | 'date' | 'extractedText'>, words: CustomsWords, firm: Importer | undefined): Assessment | undefined {
   const text = r.extractedText ?? '';
-  if (!wordsRe(words.assessment.title).test(text) || !namesFirm(text, firm)) return undefined;
+  if (!wordsRe(words.assessment.title).test(text) || !namesFirm(text, firm, words)) return undefined;
   const tax = assessedTax(text, words);
   const [number] = assessmentNumbers(text, words);
   return tax ? { receipt: r.id, file: r.filename, ...(r.date ? { date: r.date } : {}), amount: tax.amount, ...(tax.rate !== undefined ? { rate: tax.rate } : {}), ...(number ? { number } : {}) } : undefined;
@@ -683,6 +715,8 @@ export interface MissingAssessment {
   amount: number;
   currency: string;
   access: AssessmentAccess;
+  /** An assessment on file of this tax that does not name the firm as importer (namesFirm): why it brings no deduction. */
+  unnamed?: { receipt: string; file: string };
 }
 
 /**
@@ -692,9 +726,15 @@ export interface MissingAssessment {
  * invoice says is needed to fetch the assessment. None for a firm without input tax. Pure, so the
  * tasks and the books read the same lines.
  */
-export function missingAssessments(books: Pick<CustomsBooks, 'transactions' | 'mappings' | 'receipts'> & { journalEntries?: readonly JournalEntry[] }, words: CustomsWords, inputTax: boolean): MissingAssessment[] {
+export function missingAssessments(books: Pick<CustomsBooks, 'transactions' | 'mappings' | 'receipts'> & { journalEntries?: readonly JournalEntry[] }, words: CustomsWords, inputTax: boolean, firm?: Importer): MissingAssessment[] {
   const account = words.positions.importVat.account;
   if (!inputTax || !deductionCode(account)) return [];
+  // The assessments on file that do not name the firm, by their tax: given the firm, each line says why one of its tax brings nothing.
+  const unnamed = firm ? books.receipts.filter((r) => r.kind !== 'duplicate' && r.kind !== 'noise' && !r.importVatDeduction && namesAssessment(r, words) && !readAssessment(r, words, firm)) : [];
+  const unnamedOf = (amount: number) => {
+    const r = unnamed.find((x) => toRappen(assessedTax(x.extractedText ?? '', words)?.amount ?? 0) === toRappen(amount));
+    return r ? { unnamed: { receipt: r.id, file: r.filename } } : {};
+  };
   const entries = books.journalEntries ?? [];
   const byId = new Map(books.receipts.map((r) => [r.id, r]));
   const booked = new Set(entries.map((e) => e.transactionRef));
@@ -712,7 +752,7 @@ export function missingAssessments(books: Pick<CustomsBooks, 'transactions' | 'm
     return read.invoice.lines.filter((l) => l.position === 'importVat').flatMap((l): MissingAssessment[] => {
       const at = done.findIndex((d) => d.payments.some((p) => paidBy.includes(p)) && toRappen(d.e.amount) === toRappen(l.gross));
       if (at >= 0) { done.splice(at, 1); return []; }
-      return [{ payment: t.ref, date: t.date, receipt: r.id, file: r.filename, amount: l.gross, currency: read.invoice.currency, access: assessmentAccess(r.extractedText ?? '', words) }];
+      return [{ payment: t.ref, date: t.date, receipt: r.id, file: r.filename, amount: l.gross, currency: read.invoice.currency, access: assessmentAccess(r.extractedText ?? '', words), ...unnamedOf(l.gross) }];
     });
   }));
 }

@@ -702,9 +702,54 @@ test('a firm without a UID in its settings: the assessment that names it as the 
   bookImportVatDeductions(other, loadClassifyContext(ws));
   assert.deepEqual(lines(other, 'P-F'), [['4030', '1021', 129.46, 'M0'], ['4040', '1021', 27.03, 'M81']], 'another firm whose name begins as hers proves nothing for her');
 
+});
+
+/** An assessment of the shape the courier's bill above cites, with `header` as its parties' block. */
+const evvOf = (header: string, id = 'evvn'): Receipt => assessment({
+  id, filename: `20260710-bazg-${id}.pdf`, date: '2026-07-10', amount: 129.46,
+  extractedText: `Bundesamt für Zoll und Grenzsicherheit BAZG\nVERANLAGUNGSVERFÜGUNG MWST\n26CHEI000000004711.1\n\n${header}\n\nGesamtbetrag MWST [CHF]:\n\n129.46\n\nBemessungsgrundlage MWST: 1598.32\nAnsatz [%]: 8.1`,
+});
+const FIRM = { name: 'Muster Kaffee GmbH', owner: 'Anna Muster' };
+
+test('without a UID the firm is named by its whole name in the importer\'s block, never by a longer name, as consignee, on another page, by one word or by the owner\'s name', () => {
   const words = documents().customs;
-  const named = (importer: string, firm: { uid?: string; name?: string }) => readAssessment(importerAssessment(importer), words, firm)?.amount;
-  assert.equal(named('Importeur: Muster Kaffee GmbH, Musterstrasse 1, 8000 Zürich', { name: 'Muster Kaffee GmbH' }), 129.46, 'the name with its address after a comma');
-  assert.equal(named('Muster Kaffee GmbH', {}), undefined, 'a firm without UID and name is named by none');
-  assert.equal(named('MUSTER KAFFEE GMBH', { uid: 'CHE-111.222.333', name: 'Muster Kaffee GmbH' }), undefined, 'a firm with a UID is named by its UID, never by its name alone');
+  const named = (header: string, firm: { uid?: string; name?: string; owner?: string } = FIRM) => readAssessment(evvOf(header), words, firm)?.amount;
+  for (const header of [
+    'Importeur:\nMUSTER KAFFEE GMBH\nMusterstrasse 1\nCH 8000 Zürich',
+    'Importeur: Muster Kaffee GmbH, Musterstrasse 1, 8000 Zürich',
+    'Importeur: c/o Muster Kaffee GmbH, Musterstrasse 1, 8000 Zürich',
+    // A header printed as a column of labels and then one of values.
+    'Zollanmeldung\nDatum der Annahme\nImporteur\nUID Importeur\nSpediteur\nUrsprungsland\n\n26CHEI000000004711\n10.07.2026\nMuster Kaffee GmbH, Musterstrasse 1, 8000 Zürich\nCHE-999.888.777\nMuster Kurier AG\nJP',
+  ]) assert.equal(named(header), 129.46, header);
+  for (const [header, why] of [
+    ['Importeur:\nZÜRCHER MUSTER KAFFEE GMBH\nBahnhofstrasse 3', 'a longer name in front'],
+    ['Importeur:\nALT-MUSTER KAFFEE GMBH', 'a longer name joined in front'],
+    ['Importeur:\nMUSTER KAFFEE GMBH (Schweiz) AG', 'a longer name in brackets after'],
+    ['Importeur:\nMUSTER KAFFEE GMBH  Holding', 'a longer name after two spaces'],
+    ['Importeur:\nMUSTER KAFFEE GMBH TREUHAND', 'a longer name after'],
+    ['Importeur:\nMUSTER KAFFEE\nGMBH', 'a name wrapped onto two lines'],
+    ['Importeur: Andere Handels AG, Bahnhofstrasse 3, 8001 Zürich\nEmpfänger: Muster Kaffee GmbH, Musterstrasse 1, 8000 Zürich', 'the firm as consignee, another importer'],
+    ['Empfänger:\nMuster Kaffee GmbH\nImporteur:\nAndere Handels AG', 'the firm before the importer\'s label'],
+    ['Versender: Muster Kaffee GmbH, Leipzig, DE', 'no importer\'s block at all'],
+  ]) assert.equal(named(header), undefined, why);
+  const courierPage = { ...evvOf('Importeur:\nAndere Handels AG'), extractedText: `Muster Express AG\nMuster Kaffee GmbH\nMusterstrasse 1\n\f${evvOf('Importeur:\nAndere Handels AG').extractedText}` };
+  assert.equal(readAssessment(courierPage, words, FIRM), undefined, 'the firm\'s name only on the courier\'s page of the same file');
+  assert.equal(named('Importeur:\nOptik\nBahnhofstrasse 3', { name: 'Optik' }), undefined, 'a name of one word is a word of any text');
+  assert.equal(named('Importeur:\nAnna Muster\nMusterstrasse 1', { name: 'Anna Muster', owner: 'Anna Muster' }), undefined, 'the owner\'s name alone names a person, not the firm');
+  assert.equal(named('Importeur:\nMuster Kaffee GmbH', {}), undefined, 'a firm without UID and name is named by none');
+  assert.equal(named('Importeur:\nMUSTER KAFFEE GMBH', { uid: 'CHE-111.222.333', ...FIRM }), undefined, 'a firm with a UID is named by its UID, never by its name alone');
+  assert.equal(named('Importeur: Andere Handels AG, CHE-999.888.777\nSpediteur: Muster Kaffee GmbH, CHE-123.456.789', { uid: 'CHE-123.456.789' }), undefined, 'the UID too counts in the importer\'s block only');
+});
+
+test('an assessment on file that does not name the firm stays «Veranlagungsverfügung fehlt», and says why', async () => {
+  const ws = companyWithoutUid();
+  const wrapped = evvOf('Importeur:\nMUSTER KAFFEE\nGMBH\nMusterstrasse 1', 'evvw');
+  const books = booksOf([fInvoice('MWST'), wrapped], ['invf'], { tx: F_PAYMENT, closedThrough: '2026-06-30' });
+  await classifyTransactions(books, [F_PAYMENT], { fx, context: loadClassifyContext(ws), ask: noModel });
+  bookImportVatDeductions(books, loadClassifyContext(ws));
+  assert.deepEqual(lines(books, 'P-F'), [['4030', '1021', 129.46, 'M0'], ['4040', '1021', 27.03, 'M81']], 'no deduction from a name code cannot read whole');
+  const words = documents().customs;
+  const [missing] = missingAssessments(books, words, true, { name: ws.company.name, owner: ws.company.owner });
+  assert.deepEqual([missing?.amount, missing?.unnamed], [129.46, { receipt: 'evvw', file: wrapped.filename }], 'the line names the assessment on file that does not name the firm');
+  assert.equal(missingAssessments(books, words, true)[0]?.unnamed, undefined, 'without the firm, nothing is said about it');
 });
