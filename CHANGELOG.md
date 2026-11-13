@@ -108,6 +108,21 @@ Two markers flag an entry you must read before you update:
   booked from now on (or booked again) lowers Ziffer 405 (or 400) of its open quarter; a booking
   that stands is not changed. `npm run test:books` shows the difference. The
   demos have no such refund: their figures do not move. Help: «Rückerstattung eines Einkaufs».
+- **⚠ figures** A webshop order of two VAT rates (tea at 2.6 %, a teapot at 8.1 %) is booked from
+  the order export by its line items, a line per rate at its sale code (V26, V81), under the order's
+  usual ref and linked to its report (#416). Code books it only when the items add up to what was
+  charged, shipping and discount are zero, nothing is refunded and exactly one way of putting the
+  items at the rates matches the tax the export shows per rate («Tax 1 Name», «Tax 1 Value»), within the rounding
+  a provider may do (half a Rappen per piece at that rate, the line's quantity counted, a Rappen at least). Every other such order waits for «Aufteilen» as before. Why the figures change: until now
+  each such order waited, and its turnover was missing from the open period's return. An order the
+  report holds for its rates in an open period is booked when that order export is dropped again or
+  a payments export of the provider is dropped; one of a filed period is never booked, and an order split by hand stays as she booked it.
+  The drop row names the orders split so («nach ihren Positionen auf die MWST-Sätze aufgeteilt»), and
+  each entry's reason says it. «Rückgängig» of the report takes these lines back with its other
+  sales. A later refund of such an order waits for her to book it by hand. An order with more
+  line items than code tries (twelve at two rates, seven at three) waits with its own reason that names
+  its rates and that limit. A held reason the app has no words for reads as «wartet auf dich».
+  A split booked on the order's day moves onto the day a payments export later says it was charged.
 - **⚠ figures** Agreed basis (#360): a payment booked by hand dates each line with a VAT code by its
   receipt and books it over Kreditoren or Debitoren, the payment settling that account on its own
   day (an exchange difference to 6960), as the app's own booking does; a receipt of a filed quarter
@@ -357,6 +372,49 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Pairing (#426): a bill whose own number the payment names, with the same amount to the cent, is
+  paired by code past its terms too, up to half a year after its date (a compensation fund's Akonto
+  bill of early July paid at the end of September), so the payment is booked with it in the same
+  drop, not «ohne Beleg». Past the terms only a number of six characters or more that is neither the
+  amount nor a day or a month, that one payment names and one receipt carries, and a bill dated on
+  or after the books' first payment: last year's bill of a licence or a policy that keeps its number
+  is never paired with this year's payment. A title written as a compound with a number of its own
+  («Akontorechnung AK-26-Q3-30871», «Prämienrechnung PR-2026-2210») is read as the bill's title and
+  number; a payslip («Lohnabrechnung»), annual accounts («Erfolgsrechnung 2025») or a calculation are
+  not, a reminder or an order confirmation below such a title stays what it is, and a compound
+  credit note («Warengutschrift WG-…») pays in.
+- Social insurance (#426): with wages booked gross, the AI is told what the deductions account
+  (2270) holds on the payment's day, deducted on the payslips and not paid on yet, for a payment to
+  the compensation fund or to a business booked on the contribution accounts before, so a bill that
+  states its contributions by kind and not by party books the employees' share on 2270 and only the
+  employer's share on the staff expense (it booked the whole payment as expense, and 2270 kept the
+  employees' share). Such payments are asked after the wages of the same drop are booked, and the
+  year's opening of 2270 counts. An answer that takes more off 2270 than it holds is not booked. A
+  payment to the compensation fund (or to a payee that took its share off 2270 before) booked on
+  AHV/ALV or BVG with nothing on 2270, while 2270 still holds a credit at the period's end, is named
+  under «Noch offen» («gebucht ohne den Anteil der Arbeitnehmenden», with what 2270 holds then);
+  never one the employer pays alone (family allowances), and gone once 2270 is cleared. No VAT
+  figure changes.
+- «Noch offen» (#428): the sentence above the list named an open VAT question and an order a sales
+  report could not split for every firm, one without a sales report too. It now names only what of
+  the list holds up «Freigegeben», counted as the review counts it (a net tax rate without its
+  activity code among them), or says that nothing of it does.
+- The owner's repayments (#428): a payment to the owner that waited while her account held outlays
+  not enough for it said «wartet auf ihren Beleg». It now says that it waits until the receipts
+  paid privately are booked as outlays (on the payment, in the counts beside the return and the
+  AI's facts; the drop's summary counts it as not booked), and its hand form says what ends the
+  wait. A payment to her that a company rule decides, or a wage, keeps its own wait. «Automatisch buchen» that books nothing says
+  why (its receipt, the outlays, a receipt that cannot be read), and «Automatisch buchen» for all
+  counts these payments as a group of their own. The inbox run that books an outlay of the owner's
+  now books the repayment it covers in the same run: one of three repayments needed a second click.
+- «Was muss ich jetzt noch machen?» (#428): the AI started with the firm's own invoice that its
+  customer has not paid yet, where there is nothing to do, and left out a bank account without its
+  opening balance and the setup's proposal waiting on a payment. The facts it is handed and the
+  card under its answer now leave the firm's own invoice out of the work only when that is sure
+  (its UID on it, no money in that may be its payment, on the agreed basis its issue booked), name a missing
+  opening (Firma › Eröffnung), a payment provider's clearing account below zero and a proposal
+  that waits, and list everything most important first, as code ranks it. A run attached to a
+  message is named by its workflow and day, not by its id.
 - A receipt's VAT typed by hand on a photo the app cannot read is kept (#438): the run that books
   its payment again tried the photo once more and dropped what she had entered, so the receipt read
   «MWST noch nicht gelesen», was called «nicht lesbar» and its payment lost the input tax. What a

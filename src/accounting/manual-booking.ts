@@ -72,7 +72,9 @@ export type PaymentNature =
   /** Money out to the owner that pays back her outlays, which her account holds not paid back (`open`, src/booking/owner-outlays.ts, #402): her account, without a code. */
   | { kind: 'ownerOutlays'; account: string; open: number; judged?: true }
   /** Money out to the owner in a foreign currency: her outlays are kept in the books' currency, so nothing is proposed and the form says why (#402). */
-  | { kind: 'ownerForeign'; currency: string };
+  | { kind: 'ownerForeign'; currency: string }
+  /** Money out to the owner in the books' currency that her outlays booked do not cover (#428): the form says what ends its wait. */
+  | { kind: 'ownerWaits'; account: string; open: number; owner: string };
 
 /**
  * A payment provider's payout (#404, src/booking/providers.ts): a settlement of what the provider
@@ -125,6 +127,7 @@ export type DraftNote =
   | { kind: 'owner' }
   | { kind: 'ownerOutlays'; open: number; judged?: true }
   | { kind: 'ownerForeign'; currency: string }
+  | { kind: 'ownerWaits'; account: string; open: number; owner: string }
   | { kind: 'invoicePaid'; number: string; surplus: number }
   | { kind: 'prepayment'; number: string }
   | { kind: 'unloaded' }
@@ -540,6 +543,8 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
     notes.push({ kind: 'ownerOutlays', open: nature.open, ...(nature.judged && { judged: true as const }) });
     return result([place(nature.account, paid, '', { account: { from: 'ownerOutlays' } })]);
   }
+  // A payment to the owner her outlays do not cover yet: the form says what it waits for and proposes as for any payment (#428).
+  if (proposes && !moneyIn && nature?.kind === 'ownerWaits') notes.push(nature);
   // Money for a cancelled invoice is the customer's, not a sale (`proposes`): the earlier sale's account and code would mislead.
   const precedent = proposes ? newestOf(books, tx, bank!.side, bankAccounts, undefined, known.wages ? new Set(known.wages) : undefined) : undefined;
   const extra = precedent ? { precedent: precedent.entry } : {};

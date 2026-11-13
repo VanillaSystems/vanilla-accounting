@@ -37,6 +37,7 @@ import { RunHistory } from '../../history/RunHistory.js';
 import { baseCurrency } from '../../../engines/index.js';
 import { localToday } from '../../../accounting/periods.js';
 import { excessOfPayment, linkedOf, receiptState, type Linked } from '../../../accounting/receipt-due.js';
+import { outlayWaitsNow } from '../../lib/order-pages.js';
 import { WorkflowButtons } from '../../automation/marks.js';
 import { useAutomation } from '../../automation/store.js';
 import { processingText } from '../../automation/processing.js';
@@ -523,6 +524,7 @@ function FiledTwin({ tx, books, nav, edit }: { tx: BankTransaction; books: Props
 /** A payment without a booking: one that waits for its receipt says so as a fact, with its return's due day once it is the person's (issue #29); one whose receipt could not be read says that (issue #57). */
 function NotBooked({ tx, linked }: { tx: BankTransaction; linked: Linked }) {
   const { view } = useAutomation();
+  const owner = useWorkspace()?.company.owner;
   const run: Processing | undefined = tx.waitsForPerson ? undefined : bookingRun(view?.runs ?? []);
   // The inbox's run is open and books it (#218): what it does, not yet what the person should do.
   if (run) return <span className="m" data-testid="booking-now">{run.kind === 'running' ? processingText(run, view) : t('bank.bookingNow', { what: processingText(run, view) })}</span>;
@@ -533,5 +535,8 @@ function NotBooked({ tx, linked }: { tx: BankTransaction; linked: Linked }) {
   const yours = (view?.tasks ?? []).some((k) => k.item.kind === 'transaction' && k.item.id === tx.ref);
   if (!wait) return <span className="wn" data-testid={yours ? 'not-booked-yours' : 'not-booked'}>{t(yours ? 'bank.notBookedYours' : 'bank.notBooked')}</span>;
   if (wait.kind === 'unread') return <span className="wn" data-testid="waits-for-receipt">{t('bank.receiptUnread')}</span>;
+  // A payment to the owner waits for the outlays it pays back, not for a receipt of its own (#428).
+  // A due task stays one: its day is said beside it.
+  if (owner && outlayWaitsNow().has(tx.ref)) return <span className={wait.kind === 'asks' ? 'wn' : 'm'} data-testid="waits-for-outlays">{t('bank.waitsForOutlays', { owner })}{wait.kind === 'asks' ? ` · ${t('openPeriod.due', { date: formatDate(wait.due) })}` : ''}</span>;
   return <span className={wait.kind === 'asks' ? 'wn' : 'm'} data-testid="waits-for-receipt">{wait.kind === 'asks' ? t('bank.receiptDue', { date: formatDate(wait.due) }) : t('bank.waitsForReceipt')}</span>;
 }
