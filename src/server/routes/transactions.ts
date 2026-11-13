@@ -10,7 +10,7 @@ import { ownerOf } from '../../workspace/money-accounts.js';
 import { baseCurrency } from '../../engines/index.js';
 import { nextManualRef } from '../../books/next-ref.js';
 import { assertOpen, readBooks, refDates, reopenWorkspace, withBooks, RequestError, patchBody, stringField, tagsField, WS } from '../books.js';
-import { assertPlaced, attachEntries, bookPayment, dropPayment } from '../edits.js';
+import { assertPlaced, attachEntries, bookPayment, dropPayment, handTaxPoint } from '../edits.js';
 import { accountName, setAccountName } from '../../workspace/accounts-write.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { isIsoDate } from '../../accounting/periods.js';
@@ -195,5 +195,5 @@ router.post('/api/transactions/:ref/entries', (req, res) => {
   const proof = inputTaxProof === undefined ? undefined : typeof inputTaxProof === 'string' ? inputTaxProof.trim() : '';
   if (proof === '') throw new RequestError(400, 'inputTaxProof: den anderen Nachweis der Vorsteuer nennen (Vertrag, Auftragsbestätigung, E-Mail).');
   if (links !== undefined && !(Array.isArray(links) && links.every((l) => typeof l === 'string' && l))) throw new RequestError(400, 'links: die Belege, die mit der Buchung verknüpft werden.');
-  return withBooks(res, (books) => ({ entries: bookPayment(books, req.params.ref, parsed, WS.bankAccounts, loadFxResolver(), proof, links as string[] | undefined, WS.company) }));
+  return withBooks(res, (books) => ({ entries: bookPayment(books, req.params.ref, parsed, WS.bankAccounts, loadFxResolver(), proof, links as string[] | undefined, WS.company, handTaxPoint(WS)) }));
 });
