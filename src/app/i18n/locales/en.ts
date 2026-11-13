@@ -5578,6 +5578,7 @@ export default {
     'journal.byHand.note.saleZeroPart': "Part of the invoice is without Swiss VAT, and it names no place of supply abroad: choose that line's code yourself.",
     'journal.byHand.note.ownInvoiceSurplus': "Invoice {number} is paid with this: {amount} is more, perhaps paid twice. Pay it back, or until then book it as owed to the customer.",
     'journal.byHand.note.wageDeductions': "Wages are booked here with their deductions (account {account}): so no account is proposed. Book as the payslip says.",
+    'journal.byHand.note.ownerOutlaysJudged': "The AI did not book this payment onto the owner's account, so the app does not book it. That account holds {amount} of receipts paid privately: if the payment pays them back, book it so, else choose the account.",
     'rules.share.askSetupBare': "In the setup you named about {percent} % as private. For {who}, always book {percent} % as private and the rest on account {account}?",
     'rules.share.notNow': "Not now",
     'rules.share.never': "Never propose",

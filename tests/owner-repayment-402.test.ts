@@ -12,7 +12,9 @@ import { dirname, join } from 'node:path';
 import { bookingDraft, type DraftKnowledge } from '../src/accounting/manual-booking.js';
 import { classifyTransactions, loadClassifyContext, type ClassifyDeps } from '../src/booking/classify.js';
 import { answerSettles, receiptKnowledge, receiptWaitOf } from '../src/booking/receipt-wait.js';
-import { outlaysOpen, ownerFactsOf } from '../src/booking/owner-outlays.js';
+import { outlaysOpen, ownerFactsOf, readingsMade } from '../src/booking/owner-outlays.js';
+import { judgedRepayments } from '../src/booking/owner-judged.js';
+import { ACTIONS } from '../src/workflows/actions.js';
 import { classifyStep } from '../src/intake/classify.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import { loadKnowledge } from '../src/knowledge/layers.js';
@@ -211,4 +213,60 @@ test('a repayment in a foreign currency proposes nothing, and the form says why'
   assert.deepEqual(start.nature, { kind: 'ownerForeign', currency: 'EUR' });
   assert.deepEqual(draft.lines.map(side), [['', '1021', '']]);
   assert.ok(draft.notes.some((n) => n.kind === 'ownerForeign'));
+});
+
+test('a pass over many payments reads the books for the owner\'s repayments once, and a payment not to her costs nothing', () => {
+  const others = Array.from({ length: 2000 }, (_, i) => ({ ...pay(`X${i}`, '2026-08-01', 10 + i, 'Rechnung'), counterparty: `Lieferant ${i}` }));
+  const ws = firm(true, { transactions: others });
+  const books = loadBooks(ws);
+  const context = loadClassifyContext(ws);
+  const k = known(ws);
+  const fx = loadFxResolver();
+  const before = readingsMade();
+  for (const t of books.transactions) receiptWaitOf(books, t, context, k, fx);
+  assert.ok(readingsMade() - before <= 1, `${readingsMade() - before} readings for ${books.transactions.length} payments`);
+});
+
+test('every payment to her booked onto her account uses up what is open, covered or not: a repayment beyond it, a private draw', () => {
+  const outlayAt = (ref: string, date: string, amount: number) => ({ tx: pay(ref, date, amount, 'Beleg', { bank: 'manual', source: 'manual', counterparty: undefined }), e: entry(ref, date, '6640', '2451', amount, 'I81') });
+  const o1 = outlayAt('O1', '2026-07-02', 300);
+  const o2 = outlayAt('O2', '2026-07-20', 200);
+  const over = firm(false, {
+    transactions: [o1.tx, o2.tx, pay('A', '2026-07-10', 400, 'Spesen'), pay('B', '2026-07-25', 200, 'Spesen')],
+    journalEntries: [o1.e, o2.e, entry('A', '2026-07-10', '2451', '1020', 400)],
+  });
+  assert.deepEqual(wait(over, loadBooks(over), 'B'), { wait: true }, 'A took 400 of 300 open: 100 is left for B\'s 200');
+  const draw = firm(false, {
+    transactions: [o1.tx, pay('D', '2026-07-05', 5000, 'Privatbezug'), pay('C', '2026-07-30', 100, 'Spesen')],
+    journalEntries: [o1.e, entry('D', '2026-07-05', '2451', '1020', 5000)],
+  });
+  assert.deepEqual(wait(draw, loadBooks(draw), 'C'), { wait: true }, 'her draw of 5000 used up the 300');
+});
+
+test('a repayment the model answered elsewhere is asked once; then it is hers, with a reason of its own on the form', async () => {
+  const ws = firm();
+  const books = loadBooks(ws);
+  let asked: string[] = [];
+  const counting: ClassifyDeps['ask'] = async (prompt) => { asked.push(...[...prompt.matchAll(/^### Transaction \d+: (\S+)/gm)].map((m) => m[1])); return disobedient!(prompt, {} as never); };
+  await intake(ws, books, counting);
+  assert.deepEqual(asked.filter((r) => r.startsWith('S')).sort(), ['S7', 'S8', 'S9']);
+  asked = [];
+  await intake(ws, books, counting);
+  assert.deepEqual(asked.filter((r) => r.startsWith('S')), [], 'not asked again');
+  assert.deepEqual(judgedRepayments(ws).S7 !== undefined, true);
+  writeIndex(ws, books);
+  const { draft } = draftOf(ws, loadBooks(ws), 'S7');
+  assert.ok(draft.notes.some((n) => n.kind === 'ownerOutlays' && n.judged), 'the form says the AI did not book it');
+});
+
+test('without a model, «Automatisch buchen» on a repayment says the AI is missing', async () => {
+  const ws = firm();
+  const books = loadBooks(ws);
+  const out = await ACTIONS['accounting.expenses.classification'].run!({ transaction: books.transactions.find((t) => t.ref === 'S7')!, books }, {}, { ws, now: () => '2026-11-13T08:00:00Z' } as never);
+  assert.deepEqual(out, { outcome: 'undecided', output: { why: 'noModel' } });
+});
+
+test('a payment to the owner in a foreign currency without outlays open is a payment like any other', () => {
+  const ws = firm(false, { transactions: [pay('EU0', '2026-07-31', 100, 'Spesen', { currency: 'EUR', bank: 'Wise' })] });
+  assert.equal(draftOf(ws, loadBooks(ws), 'EU0').start.nature, undefined);
 });

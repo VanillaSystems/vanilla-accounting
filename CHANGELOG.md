@@ -347,7 +347,7 @@ Two markers flag an entry you must read before you update:
   The hand form proposes bank / the owner's account without a code, never the salary's account «wie
   bei derselben Firma» (between payments to the owner a precedent counts only of the same kind, wage
   or no wage); with an AI the model is told so, and its answer is booked only onto the owner's account:
-  any other answer books nothing and leaves the payment to the person. A repayment in another currency
+  any other answer books nothing and leaves the payment to the person, asked once (the form then says the AI did not book it). Every payment to the owner booked onto her account uses up what is open, covered or not (a draw too). A repayment in another currency
   gets no proposal, and the form says why. Guide rule `cls-owner-outlays-repaid`.
 - A receipt the owner paid privately (#402) is read so by its payment line («Bezahlt mit Mastercard
   ****1150 (privat)») or by the owner's card, known from a receipt marked so or from two receipts paid

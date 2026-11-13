@@ -12,6 +12,7 @@ import { loadFxResolver } from '../accounting/fx-rates.js';
 import { entriesForceMayRemove, entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
 import { BATCH_SIZE, CONCURRENCY, bookBillCorrections, bookImportVatDeductions, classifyTransactions, loadClassifyContext, type ClassifyContext } from '../booking/classify.js';
 import { answerSettles, mustSettle, receiptKnowledge, receiptWaitOf } from '../booking/receipt-wait.js';
+import { judgedRepayments, markJudged } from '../booking/owner-judged.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
@@ -150,11 +151,19 @@ export function classifyStep({ force = false } = {}): StepRun {
         if (answered) decided.add(ref);
       }
       markWaiting(books, waiting, decided, unread);
+      // A repayment the model answered otherwise than onto her account is judged: asked once, then hers (#402 review).
+      if (ask) {
+        const answeredOtherwise = [...repays].filter((ref) => scratch.journalEntries.some((je) => je.transactionRef === ref) && !keeps(ref));
+        markJudged(ws, answeredOtherwise, new Set(unbooked(books.read(), context.bankAccounts).map((tx) => tx.ref)), new Date().toISOString());
+        if (answeredOtherwise.length) log(`Owner     : ${answeredOtherwise.length} repayment(s) of the owner's outlays the model put elsewhere than her account: left to the person.`);
+      }
       if (waiting.size) log(`Waiting   : ${waiting.size} payment(s) need a receipt that has not come: booked once it is linked.`);
       if (unread.size) log(`Unread    : ${unread.size} payment(s) have a receipt whose VAT could not be read: the person is asked.`);
       return { notes: [...notes, ...(waiting.size ? [{ code: 'waitingReceipt' as const, count: waiting.size }] : []), ...(unread.size ? [{ code: 'receiptUnread' as const, count: unread.size }] : []), ...askSales(ws, books, log)] };
     };
-    const todo = unbooked(scratch, context.bankAccounts).filter((tx) => !waiting.has(tx.ref) && !unread.has(tx.ref));
+    // A repayment the model judged once is not asked again: it is the person's now (owner-judged.ts).
+    const judgedOnce = judgedRepayments(ws);
+    const todo = unbooked(scratch, context.bankAccounts).filter((tx) => !waiting.has(tx.ref) && !unread.has(tx.ref) && !(repays.has(tx.ref) && judgedOnce[tx.ref]));
     if (todo.length === 0) {
       log('All transactions are already classified.');
       return done([]);

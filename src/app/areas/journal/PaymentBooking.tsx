@@ -146,7 +146,7 @@ function noteText(n: DraftNote): string {
     case 'nearReceipt': return !n.vat ? t('journal.byHand.note.nearReceiptPlain', { name: n.name, why: n.why }) : n.rate !== undefined ? t('journal.byHand.note.nearReceipt', { name: n.name, why: n.why, rate: String(n.rate) }) : t('journal.byHand.note.nearReceiptNoRate', { name: n.name, why: n.why });
     case 'noProposal': return t(n.linked ? 'journal.byHand.note.noProposal.receipt' : 'journal.byHand.note.noProposal.none', { name: n.name });
     case 'discount': return t(n.vat === 'paid' ? 'journal.byHand.note.discount' : n.vat === 'rates' ? 'journal.byHand.note.discountRates' : 'journal.byHand.note.discountNoVat', { percent: String(n.percent), amount: fmt(n.amount) });
-    case 'ownerOutlays': return t('journal.byHand.note.ownerOutlays', { amount: fmt(n.open) });
+    case 'ownerOutlays': return t(n.judged ? 'journal.byHand.note.ownerOutlaysJudged' : 'journal.byHand.note.ownerOutlays', { amount: fmt(n.open) });
     case 'ownerForeign': return t('journal.byHand.note.ownerForeign', { currency: n.currency });
     default: return t(`journal.byHand.note.${n.kind}`);
   }

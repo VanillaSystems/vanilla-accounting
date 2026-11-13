@@ -54,8 +54,13 @@ const toOwner = (tx: Pick<BankTransaction, 'counterparty'>, name: string | undef
 /** The wage accounts of the jurisdiction: a wage booked expense / her account is no outlay. */
 const wageAccounts = (): Set<string> => { const w = setup().wages; return new Set([...(w ? [w.account] : []), ...(w?.contributions ?? [])]); };
 
+/** How many readings of the books were made: a test bounds the work of a pass over many payments by it (#402 review). */
+let readings = 0;
+export const readingsMade = (): number => readings;
+
 /** One reading of the books: their entries by payment, which payments are on her account, and her outlays and repayments by day. */
 function reading(books: Books, f: OwnerFacts) {
+  readings++;
   const byRef = new Map<string, JournalEntry[]>();
   for (const e of books.journalEntries) if (e.transactionRef) { const l = byRef.get(e.transactionRef); if (l) l.push(e); else byRef.set(e.transactionRef, [e]); }
   const txOf = new Map(books.transactions.map((t) => [t.ref, t]));
@@ -94,25 +99,40 @@ export function outlaysOpen(books: Books, f: OwnerFacts, date: string, except: R
 /**
  * The payments that repay her outlays, each with what was open for it (after the earlier ones), in
  * the books' currency. `wage`: whether a payment's text is a wage's; `ruled`: whether a company rule
- * decides it (then its rule does, as before).
+ * decides it (then its rule does, as before). One reading of the books and one sweep by date: every
+ * payment to her by name booked onto her account uses up what is open, covered or not (a draw of
+ * hers too), and one not booked uses it up when it is covered.
  */
 export function ownerRepayments(books: Books, f: OwnerFacts, wage: (text: string) => boolean, ruled: (tx: BankTransaction) => boolean): Map<string, number> {
   const out = new Map<string, number>();
   if (!f.ownerName) return out;
-  const { byRef, moves, repaid } = reading(books, f);
   const candidates = books.transactions
     .filter((t) => t.direction === 'DBIT' && t.currency === baseCurrency() && toOwner(t, f.ownerName) && !wage(t.description))
     .sort((a, b) => a.date.localeCompare(b.date) || a.ref.localeCompare(b.ref));
-  // Booked otherwise than onto her account and money: no repayment, and nothing of hers it uses up.
+  if (!candidates.length) return out;
+  const { byRef, moves, repaid, outlay } = reading(books, f);
+  // Booked otherwise than onto her account and money: no repayment; its line on her account, if any, counts as any repayment.
   const booked = (t: BankTransaction) => byRef.get(t.ref) ?? [];
   const mine = candidates.filter((t) => booked(t).every((e) => moves(e.accountDebit) && moves(e.accountCredit)) && !ruled(t));
   const refs = new Set(mine.map((t) => t.ref));
+  // Her outlays (+) and the repayments of payments not among `mine` (−), by day.
+  const events: Array<[string, number]> = [];
+  for (const e of books.journalEntries) {
+    if (outlay(e)) events.push([e.date, toRappen(chfAmount(e))]);
+    else if (!refs.has(e.transactionRef)) { const r = repaid(e); if (r) events.push([e.date, -r]); }
+  }
+  events.sort((a, b) => a[0].localeCompare(b[0]));
+  let at = 0;
+  let sum = 0;
   let used = 0;
   for (const t of mine) {
-    const open = toRappen(outlaysOpen(books, f, t.date, refs)) - used;
+    while (at < events.length && events[at][0] <= t.date) sum += events[at++][1];
+    const open = sum - used;
     const entries = booked(t);
     const amount = entries.length ? entries.reduce((s, e) => s + repaid(e), 0) : toRappen(Math.abs(t.amount));
-    if (open > 0 && amount <= open) { out.set(t.ref, fromRappen(open)); used += amount; }
+    const covered = open > 0 && amount <= open;
+    if (covered) out.set(t.ref, fromRappen(open));
+    if (covered || entries.length) used += amount;
   }
   return out;
 }

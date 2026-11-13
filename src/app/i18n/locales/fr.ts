@@ -5578,6 +5578,7 @@ export default {
     'journal.byHand.note.saleZeroPart': "Une partie de la facture est sans TVA suisse, sans qu’elle indique un lieu de la prestation à l’étranger : choisir son code vous-même.",
     'journal.byHand.note.ownInvoiceSurplus': "La facture {number} est ainsi payée : {amount} de plus, peut-être payé deux fois. Rembourser, ou d’ici là comptabiliser comme dette envers le client.",
     'journal.byHand.note.wageDeductions': "Les salaires sont comptabilisés ici avec leurs retenues (compte {account}) : pas de compte proposé. Comptabiliser selon le décompte de salaire.",
+    'journal.byHand.note.ownerOutlaysJudged': "L’IA n’a pas comptabilisé ce paiement sur le compte du titulaire, l’app ne le comptabilise donc pas. Ce compte porte {amount} de justificatifs payés en privé : si le paiement les rembourse, comptabiliser ainsi, sinon choisir le compte.",
     'rules.share.askSetupBare': "À la configuration, tu as indiqué environ {percent} % en privé. Pour {who}, toujours comptabiliser {percent} % en privé et le reste sur le compte {account} ?",
     'rules.share.notNow': "Pas maintenant",
     'rules.share.never': "Ne jamais proposer",

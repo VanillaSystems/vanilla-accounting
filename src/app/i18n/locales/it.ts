@@ -5578,6 +5578,7 @@ export default {
     'journal.byHand.note.saleZeroPart': "Una parte della fattura è senza IVA svizzera, senza che indichi un luogo della prestazione all’estero: scegliere il suo codice da sé.",
     'journal.byHand.note.ownInvoiceSurplus': "La fattura {number} è così pagata: {amount} in più, forse pagato due volte. Restituire, o fino ad allora registrare come debito verso il cliente.",
     'journal.byHand.note.wageDeductions': "Qui i salari sono registrati con le loro trattenute (conto {account}): perciò nessun conto proposto. Registrare come dice il conteggio salariale.",
+    'journal.byHand.note.ownerOutlaysJudged': "L’IA non ha registrato questo pagamento sul conto del titolare, perciò l’app non lo registra. Quel conto ha {amount} di giustificativi pagati privatamente: se il pagamento li rimborsa, registrarlo così, altrimenti scegliere il conto.",
     'rules.share.askSetupBare': "Nella configurazione hai indicato circa il {percent} % privato. Per {who} registrare sempre il {percent} % come privato e il resto sul conto {account}?",
     'rules.share.notNow': "Non ora",
     'rules.share.never': "Non proporre più",

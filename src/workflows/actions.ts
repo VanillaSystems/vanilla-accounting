@@ -191,7 +191,8 @@ export const ACTIONS: Record<string, Action> = {
       const { classified, failed, asked, unasked } = await classifyTransactions(scratch, [t], { ask, fx, context });
       const entries = scratch.journalEntries.slice(before);
       if (waits && !answerSettles(t, entries, context)) return { outcome: 'held', output: { why: 'waitsForReceipt' } };
-      if (settles && !waits && !answerSettles(t, entries, context)) return { outcome: 'undecided', output: { why: 'failed' } };
+      // Without a model nothing was answered: the step says the AI is missing, not that it failed.
+      if (settles && !waits && entries.length && !answerSettles(t, entries, context)) return { outcome: 'undecided', output: { why: 'failed' } };
       if (!failed.length && classified.length) return { outcome: 'decided', output: { entries } };
       // A rule holds the payment for the person: its one question (workflows/ask) is the task, not «Bewegung von Hand buchen» (r7h-27).
       if (asked.length) {

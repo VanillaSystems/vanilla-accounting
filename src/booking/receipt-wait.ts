@@ -169,9 +169,21 @@ export function answerSettles(tx: BankTransaction, entries: readonly Pick<Journa
  * (src/booking/owner-outlays.ts ownerRepayments, #402): one a company rule decides is the rule's.
  */
 export function repaymentsOf(books: Books, context: ClassifyContext, wages: readonly Wording[], fx: FxResolver): Map<string, number> {
+  // Once per books and context (#402 review): a pass over every payment asks this of each one.
+  const sig = `${books.journalEntries.length}:${books.transactions.length}:${books.journalEntries.at(-1)?.id ?? ''}`;
+  const hit = repaid.get(books);
+  if (hit && hit.sig === sig && hit.context === context && hit.wages === wages.length) return hit.map;
   const f = ownerFactsOf(context);
-  return f ? ownerRepayments(books, f, (text) => wages.some((w) => w.test(text)), (t) => !!ruleOfPayment(books, t, context, fx)) : new Map();
+  const map = f ? ownerRepayments(books, f, (text) => wages.some((w) => w.test(text)), (t) => !!ruleOfPayment(books, t, context, fx)) : new Map<string, number>();
+  repaid.set(books, { sig, context, wages: wages.length, map });
+  return map;
 }
+
+const repaid = new WeakMap<object, { sig: string; context: ClassifyContext; wages: number; map: Map<string, number> }>();
+
+/** Money out to the owner by name (the payee): the only payments that may repay her outlays, told apart before anything else is read. */
+const toOwnerByName = (tx: BankTransaction, context: Pick<ClassifyContext, 'ownerAccount' | 'ownerName'>) =>
+  tx.direction === 'DBIT' && !!context.ownerAccount && paysOwner({ counterparty: tx.counterparty, description: '' }, context.ownerName);
 
 export { paysOwner };
 
@@ -251,7 +263,7 @@ export function receiptWaitOf(books: Books, tx: BankTransaction, context: Classi
   const then = ruleOfPayment(books, tx, context, fx)?.rule.then;
   const ruleAccount = then?.kind === 'book' ? then.booking.account : then?.booking?.account;
   const payout = !!providerOfPayment(tx, linked, context.counterparties ?? []);
-  const repays = !then && repaymentsOf(books, context, known.wages, fx).has(tx.ref);
+  const repays = toOwnerByName(tx, context) && !then && repaymentsOf(books, context, known.wages, fx).has(tx.ref);
   return receiptWait(tx, { linked: linkedOf(linked, tx), ...(routing.kind === 'known' && { business: routing.counterparty }), ...(ruleAccount && { ruleAccount }), ...(then?.kind === 'ask' && { ruleAsks: true }), ...(payout && { payout }), ...(repays && { repaysOwner: true }) }, {
     ...known,
     ownIbans: new Set(context.bankAccounts.flatMap((a) => (a.iban ? [ibanOf(a.iban)] : []))),

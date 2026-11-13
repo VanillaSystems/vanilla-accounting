@@ -162,9 +162,13 @@ router.post('/api/rules/draft', async (req, res) => {
   const kept = await keepingSwitchedOn(() => keepDraft(WS, c.path, c.basis, c.confirm === true));
   // A rule kept books the open payments it decides at once (#383): the card showed them, and its tasks close.
   // The server records the keep (#392, #396): its result line and its undo go by the keep's id alone.
-  // The setup's phone share has done its job once a kept rule books a private share on the phone's account (#402).
-  if (kept.ok) clearTakenShares(WS);
-  res.json(kept.ok ? await recordKeep(kept) : kept);
+  const reply = kept.ok ? await recordKeep(kept) : kept;
+  // The setup's phone share has done its job once a kept rule books a private share on the phone's account (#402);
+  // after the keep, and never at its cost: a failure here only leaves the share standing.
+  if (kept.ok) {
+    try { clearTakenShares(WS); } catch (e) { console.error(`clearTakenShares: ${e instanceof Error ? e.message : String(e)}`); }
+  }
+  res.json(reply);
 });
 
 /** «Nicht jetzt» (or «Nie», `never`) on the setup's share offer (#402): kept in onboarding.json, so it does not come back. */

@@ -5575,6 +5575,7 @@ export const messages = {
   'journal.byHand.note.saleZeroPart': "Ein Teil der Rechnung ist ohne Schweizer MWST, ohne dass sie einen Leistungsort im Ausland nennt: seinen Code selbst wählen.",
   'journal.byHand.note.ownInvoiceSurplus': "Rechnung {number} ist damit bezahlt: {amount} sind mehr, vielleicht doppelt bezahlt. Zurückzahlen, oder bis dahin als Verbindlichkeit gegenüber dem Kunden buchen.",
   'journal.byHand.note.wageDeductions': "Löhne sind hier mit ihren Abzügen gebucht (Konto {account}): darum kein Konto vorgeschlagen. Wie die Lohnabrechnung buchen.",
+  'journal.byHand.note.ownerOutlaysJudged': "Die KI hat diese Zahlung nicht auf das Konto der Inhaberin oder des Inhabers gebucht, darum bucht die App sie nicht. Dort stehen {amount} privat bezahlte Belege offen: zahlt die Zahlung sie zurück, so buchen, sonst das Konto wählen.",
   'rules.share.askSetupBare': "Du hast bei der Einrichtung etwa {percent} % privat angegeben. Bei {who} immer {percent} % privat buchen und den Rest auf Konto {account}?",
   'rules.share.notNow': "Nicht jetzt",
   'rules.share.never': "Nie vorschlagen",
