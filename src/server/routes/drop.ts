@@ -201,7 +201,9 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
       // The cut-over day comes with the clearing account while the provider's file names none.
       const needsAccount = ask?.missing !== 'since';
       if (!ask || (needsAccount && !account) || (ask.missing === 'fees' && !text(a.vat)) || (ask.since !== undefined && !since)) throw new RequestError(400, 'Nur ein Bericht, dessen Konto oder Umstellungstag fehlt, nimmt eines.');
-      const set = ask.missing === 'fees' ? { fees: { account: account!, vat: text(a.vat)! } } : ask.missing === 'since' ? { since } : { [ask.missing]: account, ...(since ? { since } : {}) };
+      // The revenue account comes with the clearing account where the row showed its proposal (#404).
+      const revenue = ask.revenue ? text(a.revenue) : undefined;
+      const set = ask.missing === 'fees' ? { fees: { account: account!, vat: text(a.vat)! } } : ask.missing === 'since' ? { since, ...(revenue ? { revenue } : {}) } : { [ask.missing]: account, ...(since ? { since } : {}), ...(revenue ? { revenue } : {}) };
       // The proposed account the chart lacks is added as Firma › Kontenplan adds one, and taken out again when the answer is refused.
       const create = a.create && ask.propose?.name && account === ask.propose.account && accountName(WS, account) === undefined ? ask.propose.name : undefined;
       if (create) { assertPlaced(account!); setAccountName(WS, account!, create); }
@@ -209,7 +211,7 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
       const kept = asHerAct(() => setProviderAccount(WS, ask.provider, set));
       if (!kept.ok) {
         if (create) removeAccount(WS, account!);
-        throw new RequestError(400, `Konto, Steuercode oder Umstellungstag ${[account, a.vat, since].filter(Boolean).join(' / ')} geht so nicht.`, kept.refusal);
+        throw new RequestError(400, `Konto, Steuercode oder Umstellungstag ${[account, a.vat, since, revenue].filter(Boolean).join(' / ')} geht so nicht.`, kept.refusal);
       }
       // Every row of the provider that asked is asked again by its report: the fee report no longer asks for the clearing account just kept.
       for (const r of s.rows) {

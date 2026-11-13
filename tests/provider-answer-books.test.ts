@@ -74,7 +74,10 @@ async function walk(api: ApiServer) {
   const both = await two.add('payment_transactions_export_1.csv');
   const orders = both.s.rows.find((r) => r.name === 'orders_export_1.csv')!;
   assert.equal(orders.askProvider?.missing, 'clearing');
-  const answered = await two.act(orders.key, { kind: 'provider', account: orders.askProvider!.propose!.account, since: orders.askProvider!.since, ...(orders.askProvider!.propose!.name ? { create: true } : {}) });
+  // The revenue account comes with the clearing account, proposed from what she sells, never taken silently.
+  assert.deepEqual(orders.askProvider?.revenue, { account: '3200', sells: ['traded'] });
+  assert.equal(orders.askProvider?.since, '2026-07-01');
+  const answered = await two.act(orders.key, { kind: 'provider', account: orders.askProvider!.propose!.account, since: orders.askProvider!.since, revenue: orders.askProvider!.revenue!.account, ...(orders.askProvider!.propose!.name ? { create: true } : {}) });
   assert.equal(answered.status, 200, JSON.stringify(answered.s));
   const fees = answered.s.rows.find((r) => r.name === 'payment_transactions_export_1.csv')!;
   assert.equal(fees.askProvider?.missing, 'fees');
@@ -95,6 +98,7 @@ test('her answers in the drop row book the 40 payouts bank / clearing account wi
     const lines = payouts.map((t) => b.journalEntries.filter((e) => e.transactionRef === t.ref).map((e) => `${e.accountDebit}/${e.accountCredit} ${e.vatCode ?? ''}`).join());
     assert.deepEqual([...new Set(lines)], ['1020/1093 '], 'each payout bank / clearing account, without a code');
     assert.deepEqual((await pendingOf(api)).filter((p) => p.workflow === 'booking'), [], 'her answer is her switching on');
+    assert.match(readFileSync(join(api.root, 'knowledge', 'suppliers', 'shopify.yaml'), 'utf8'), /revenue: "?3200"?/, 'the revenue account she saw is kept');
     // The same file changed by hand: booking waits for «Einschalten» as before.
     const file = join(api.root, 'knowledge', 'suppliers', 'shopify.yaml');
     writeFileSync(file, readFileSync(file, 'utf8').replace(/since: \S+/, 'since: 2026-08-01'));
@@ -159,5 +163,18 @@ test('«Einschalten» books what waited: the payouts a change by hand decided ar
     assert.equal(booked.length, 40, 'switched on, the 40 payouts are booked from the clearing account');
   } finally {
     await api.stop();
+  }
+});
+
+test('the provider\'s questions in four languages: one question each, the fee code said in words, no file path', async () => {
+  const keys = ['drop.provider.q.clearing', 'drop.provider.q.since', 'drop.provider.q.revenue', 'drop.provider.q.fees', 'drop.provider.why.since', 'drop.provider.why.feesVat', 'drop.provider.label.clearing', 'drop.provider.sinceLabel', 'bank.payoutWait.clearing', 'bank.payoutWait.since', 'salesReport.noClearing', 'salesReport.noSince', 'journal.byHand.note.payout.ready', 'journal.byHand.note.payout.clearing'];
+  for (const lang of ['de', 'en', 'fr', 'it']) {
+    const { messages } = ((await import(`../src/app/i18n/locales/${lang}.ts`)) as { default: { messages: Record<string, unknown> } }).default;
+    for (const k of keys) {
+      const text = String(messages[k] ?? '');
+      assert.ok(text, `${lang} ${k}`);
+      assert.doesNotMatch(text, /provider\.(clearing|since)|knowledge\/|\{file\}/, `${lang} ${k}: no file path`);
+      if (k.startsWith('drop.provider.q.')) assert.equal((text.match(/\?/g) ?? []).length, 1, `${lang} ${k}: one question`);
+    }
   }
 });

@@ -114,7 +114,14 @@ function lacking(ws: Workspace, p: Provider, kind: 'sales' | 'fees', chart: Read
       // The cut-over day is asked with the clearing account: the first day the report covers is proposed, the open period's first day at the earliest.
       ...((missing === 'clearing' || missing === 'since') && !p.provider.since ? { since: cutOverOf(ws, reportFrom) } : {}),
       ...(propose ? { propose } : {}),
+      ...(missing === 'clearing' || missing === 'since' ? revenueAsk() : {}),
     };
+  };
+  // A sales report shows the revenue account it will book with the clearing account, where the file names none: hers to change (#404).
+  const revenueAsk = (): { revenue?: NonNullable<ProviderAsk['revenue']> } => {
+    if (kind !== 'sales' || p.provider.revenue) return {};
+    const account = revenueOf(ws, p);
+    return account && chart.has(account) ? { revenue: { account, sells: [...(ws.profile?.sells ?? [])] } } : {};
   };
   const clearing = p.provider.clearing;
   if (!clearing) return ask('clearing');

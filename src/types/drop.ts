@@ -151,7 +151,15 @@ export interface PayoutWaitView { why: 'clearing' | 'since' | 'gap'; provider: s
  * `propose`: the account (and fee code) proposed, with `name` when the chart lacks the account and
  * keeping the answer adds it (DropAction `create`).
  */
-export interface ProviderAsk { provider: string; name: string; missing: 'clearing' | 'since' | 'revenue' | 'fees'; since?: string; propose?: ProviderProposal }
+export interface ProviderAsk {
+  provider: string; name: string; missing: 'clearing' | 'since' | 'revenue' | 'fees'; since?: string; propose?: ProviderProposal;
+  /**
+   * A sales report asking the clearing account of a provider whose file names no revenue account
+   * (#404): the revenue account proposed with it, the one of what the firm sells (`sells`, its setup's
+   * answer «Was verkauft ihr?»), in its chart; the answer may change it (DropAction `revenue`).
+   */
+  revenue?: { account: string; sells: string[] };
+}
 
 export interface ProviderProposal { account: string; name?: string; vat?: string }
 
@@ -241,7 +249,7 @@ export type DropAction =
   /** A possible duplicate: «ist dasselbe» (not taken) or «verschieden» (taken, and the pair is not asked again). */
   | { kind: 'twin'; answer: 'same' | 'distinct' }
   /** A report's provider lacks an account (`askProvider`): the person names it, it is kept in the company's file of the provider, and the report is taken; `create` adds the proposed account to the chart first. */
-  | { kind: 'provider'; account?: string; vat?: string; since?: string; create?: true }
+  | { kind: 'provider'; account?: string; vat?: string; since?: string; create?: true; revenue?: string }
   /** A report held because no payout of its provider is recognised (`payoutUnseen`): «Trotzdem übernehmen» books it. */
   | { kind: 'anyway' }
   /** A statement read without a bank export (`read`), as the person corrected it: checked again and, with `import`, imported («Einlesen»). */
