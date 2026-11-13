@@ -14,6 +14,8 @@ import type { RuleNames, RuleWords } from '../../../booking/rules.js';
 import type { RuleLine } from '../../../booking/classify.js';
 import type { PreviewPayment, RulePreview } from '../../../booking/rule-preview.js';
 import type { DraftView, KeepResult, KeptView, RulesView } from '../../../saving/rules.js';
+import { BOOKING_WORKFLOW, BookingWaits } from '../../automation/booking-waits.js';
+import { bookingWaitsText } from '../../lib/booking-waits.js';
 import { Go } from '../vat/links.js';
 import { at } from '../receipts/view.js';
 import type { NoteOffer, NoteReason } from '../../../knowledge/note-rules.js';
@@ -80,13 +82,13 @@ export function RulesSection({ nav, canEdit, payment, by }: { nav: Nav; canEdit:
       <p className="m">{t('rules.lead')}</p>
       <LastKept nav={nav} canEdit={canEdit} />
       {canEdit ? <HandRuleForm key={`${payment ?? ''}-${by ?? ''}`} view={view} nav={nav} payment={payment} by={by} onKept={reload} /> : null}
-      {view.waiting.map((w) => (
+      {view.waiting.map((w) => (w.workflow === BOOKING_WORKFLOW ? <p key={w.workflow} data-testid="rules-waiting"><BookingWaits files={w.files} go={(route) => nav.go({ route, query: {} })} onOn={reload} /></p> : (
         <p key={w.workflow} className="warnline" data-testid="rules-waiting">
           {t('rules.waiting', { files: w.files.join(', '), workflow: textIn(w.label, language()) })}
           {' '}
           <button type="button" className="linkbtn" onClick={() => nav.go({ route: { area: 'automation', view: 'workflow', workflow: w.workflow, tab: 'graph' }, query: {} })}>{t('rules.goSwitchOn')}</button>
         </p>
-      ))}
+      )))}
       {!lines.length ? <p className="m">{t('rules.none')}</p> : null}
       <ul className="rulelist">
         {lines.map(({ key, row, line, acts, applied, last, asked }) => (
@@ -253,7 +255,9 @@ function reloadKept(): void {
 /** A keep's answer: every keep has its line above the lists (one that booked nothing too: it may hold an earlier keep's undo). */
 function afterKeep(kept: Kept | undefined, nav: Nav): void {
   if (kept?.keep) reloadKept();
-  else nav.toast(t('rules.draft.kept'));
+  // Its card is closed: «Buchen» waiting for another change (#413) is said in the toast, the page's line holds «Einschalten».
+  if (kept?.bookingWaits) nav.toast(bookingWaitsText(kept.bookingWaits));
+  else if (!kept?.keep) nav.toast(t('rules.draft.kept'));
 }
 
 /** What each rule kept booked, until its line is closed: the tasks it booked are gone from the list, so the result stands above it. */
@@ -476,6 +480,8 @@ export function RuleDraft({ path, nav, onRules, onDone, title, reveal }: { path:
         <span>{kept?.keep && done === 'kept' && (kept.keep.booked.refs.length || kept.keep.waits) ? t('rules.draft.keptNow') : t(`rules.draft.${done}`)}</span>
         {done !== 'discarded' && onRules ? <button type="button" className="linkbtn" onClick={onRules}>{t('rules.draft.toRules')}</button> : null}
         {kept?.keep ? <KeptLine keep={kept.keep} nav={nav} /> : null}
+        {/* Kept while «Buchen» waited for a change from elsewhere (#413): the rule books nothing until that is switched on too. */}
+        {kept?.bookingWaits ? <BookingWaits files={kept.bookingWaits} go={(route) => nav?.go({ route, query: {} })} onOn={() => refreshFor(nav)} /> : null}
       </div>
     );
   }

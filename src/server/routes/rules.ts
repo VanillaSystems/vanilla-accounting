@@ -64,6 +64,7 @@ import { draftHandRule, handStart, type HandRule } from '../../saving/hand-rule.
 import { draftNoteRule, type NoteRuleCommand } from '../../saving/note-rule.js';
 import type { RuleRefusal } from '../../booking/rules.js';
 import { keepSwitchedOn, openSwitch } from '../../workflows/switch-on.js';
+import { bookingWaits } from '../booking-waits.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
 import { engine, queueCommit } from './automation.js';
 import { ASK_WORKFLOW, askedBy, askRuns, closeAsksWithoutRule } from '../../workflows/held.js';
@@ -236,7 +237,9 @@ function keptBookings(k: Pick<KeepRecord, 'book' | 'entries' | 'later'>, books: 
 async function recordKeep(kept: Extract<KeepResult, { ok: true }>): Promise<KeepResult> {
   if (!kept.undo) return kept;
   pruneKeeps();
-  const decided = kept.open?.book ?? [];
+  // Her keep switches on only what ran switched on before it: a change from elsewhere still waits, and no rule books with it (#413).
+  const waiting = bookingWaits();
+  const decided = waiting ? [] : kept.open?.book ?? [];
   const book = decided.slice(0, KEEP_RUNS_MAX);
   const waits = kept.open?.waits ?? [];
   const books = loadBooks(WS);
@@ -253,7 +256,7 @@ async function recordKeep(kept: Extract<KeepResult, { ok: true }>): Promise<Keep
   const closed = [...await closeTasksOf(booked, BOOKED_BY_RULE), ...await closeTasksOf(new Set(waits), WAITS_BY_RULE)];
   updateKeep(WS, id, (x) => { x.entries.push(...made.map((e) => e.id)); x.tasks.push(...closed); delete x.booking; });
   const keep = keptView(loadKeep(WS, id)!, listKeeps(WS), loadBooks(WS), Date.now());
-  return { ...kept, ...(book.length ? { booked: keep.booked } : {}), keep };
+  return { ...kept, ...(book.length ? { booked: keep.booked } : {}), ...(waiting ? { bookingWaits: waiting } : {}), keep };
 }
 
 const fileHash = (file: string): string => { const p = join(WS.paths.root, file); return hashOf(existsSync(p) ? readFileSync(p, 'utf8') : ''); };
@@ -456,6 +459,9 @@ router.post('/api/rules/kept/undo', async (req, res) => {
  * holds it, its receipt cannot be read, a reconciliation holds it, or a run holds it already.
  */
 router.post('/api/rules/book-open', async (_req, res) => {
+  // While «Buchen» waits for «Einschalten» no rule books (#413): the line says why, with the files.
+  const waits = bookingWaits();
+  if (waits) { res.json({ booked: 0, running: 0, notBooked: 0, model: 0, receipt: 0, outlays: 0, deleted: 0, question: 0, unread: 0, reconcile: 0, busy: 0, later: 0, max: KEEP_RUNS_MAX, waits } satisfies BookOpen); return; }
   const books = loadBooks(WS);
   const lock = periodLock(books);
   const context = loadClassifyContext(WS);
