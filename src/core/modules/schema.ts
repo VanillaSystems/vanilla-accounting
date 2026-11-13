@@ -298,6 +298,14 @@ export interface DocumentsData {
   payment?: string[];
   /** The words of a cash discount («Skonto», «escompte»): a percentage beside one is a discount a payment states or an invoice offers (src/intake/near-pairs.ts, #397). */
   discount?: string[];
+  /** Words that negate a discount word right after them («ohne Skonto»). */
+  discountNone?: string[];
+  /** The words of a count of days in payment terms («Tagen», «jours»). */
+  days?: string[];
+  /** The months, January first, each by its names in the jurisdiction's languages. */
+  months?: string[][];
+  /** Legal forms and words of a firm's name that tell no one apart («GmbH», «Holding»). */
+  legalForms?: string[];
 }
 
 /** What a line of a customs invoice charges: the import VAT the carrier advanced, customs duty, the carrier's fees, freight. */

@@ -65,6 +65,28 @@ payment: [Zahlung, Zahlungen, Auftrag, Zahlungsauftrag, Dauerauftrag, Überweisu
 # discount the payment's text states («abzgl. 2% Skonto») or the invoice offers («2 % Skonto innert
 # 10 Tagen»), so a payment less by exactly that pays the invoice.
 discount: [Skonto, Barzahlungsskonto, Skontoabzug, Cash discount, Early payment discount, Prompt payment discount, Escompte, Sconto]
+# A discount word right after one of these is none («ohne Skonto», «kein Skontoabzug»).
+discountNone: [ohne, kein, keine, keinen, sans, aucun, aucune, senza, nessuno, no, without]
+# The word that makes a number a count of days in payment terms («innert 30 Tagen»): only a number
+# right before one of them is a term (src/intake/near-pairs.ts termsOf).
+days: [Tag, Tage, Tagen, jour, jours, giorno, giorni, day, days]
+# The months by number, as a payment's text names them («Miete Gerüst Juli»): a payment that names
+# another month than its receipt is held back from a link by code (#397).
+months:
+  - [Januar, Jänner, janvier, gennaio, January]
+  - [Februar, février, febbraio, February]
+  - [März, mars, marzo, March]
+  - [April, avril, aprile]
+  - [Mai, maggio, May]
+  - [Juni, juin, giugno, June]
+  - [Juli, juillet, luglio, July]
+  - [August, août, agosto]
+  - [September, septembre, settembre]
+  - [Oktober, octobre, ottobre, October]
+  - [November, novembre]
+  - [Dezember, décembre, dicembre, December]
+# Legal forms and words of a firm's name that say nothing of who it is: a payee is never told by them.
+legalForms: [GmbH, AG, SA, Sàrl, Sagl, KlG, KG, Ltd, Limited, Inc, Corp, LLC, Company, Holding, Gruppe, Group, Genossenschaft, Stiftung, Verein]
 
 # A courier's or forwarder's customs invoice (src/booking/customs-invoice.ts): each of its read lines
 # (Receipt.lineItems) is one position by its words, and the position lands on its account of the

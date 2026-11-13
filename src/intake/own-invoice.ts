@@ -10,8 +10,8 @@ import { documentKind } from './document-kind.js';
 import { labelledNumbers } from './duplicates.js';
 import { normUid, uidsIn } from '../parsers/receipt-text.js';
 
-/** The firm: its UID (company.uid) and its name (company.name). */
-export interface Firm { uid?: string; name?: string }
+/** The firm: its UID (company.uid), its name (company.name) and its owner (company.owner). */
+export interface Firm { uid?: string; name?: string; owner?: string }
 
 const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 

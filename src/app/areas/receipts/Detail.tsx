@@ -34,7 +34,7 @@ import { QuestionsOn } from '../../questions/Questions.js';
 import { correctFiled, deleteReceipt, linkPayment, unpointFiled, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
 import { LinkDialog } from './LinkDialog.js';
 import { FindPair, NearList, madeBy } from './FindPair.js';
-import { nearOffers } from '../../../intake/near-pairs.js';
+import { offersInBooks } from '../../../intake/near-pairs.js';
 import { ByHand, VatFields } from './VatFields.js';
 import { TwinNotice } from './TwinNotice.js';
 import { ReportCorrections } from './ReportCorrections.js';
@@ -381,10 +381,11 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
     );
   }
   // What may fit but no rule links (#397): a rounded amount, an undated receipt, two candidates; with what differs, one click to link.
-  const near = canEdit ? nearOffers(props.books, { receipt: v.r.id }, { isClosed: (d) => !!l.closedThrough && d <= l.closedThrough, firm: l.firm }) : [];
+  const near = canEdit ? offersInBooks(props.books, { receipt: v.r.id }, l.firm) : [];
   if (near.length) {
     return (
       <div className="findpair" role="group" aria-label={t('near.maybe')} data-testid="near-receipt">
+        {!v.date && <span className="notice warn" style={{ margin: 0 }} data-testid="near-no-date">{I.dot}{t('receipts.near.noDate')} <button type="button" className="mono" style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => runAct(props, 'edit')}>E</button></span>}
         <NearList offers={near} from="receipt" books={props.books} nav={nav} onPick={(o) => { const tx = l.txByRef.get(o.payment); void linkPayment(nav, v, o.payment, `${v.vendor} → ${tx ? txLine(tx) : o.payment}`); }} />
         <button type="button" className="golink" onClick={() => runAct(props, 'link')}>{t('receipts.other')}</button>
       </div>

@@ -26,7 +26,7 @@ const port: BooksPort = { read: readBooks, update: updateBooks };
 
 async function find(only: { receipt: string } | { payment: string }): Promise<Found> {
   const ask = await askIfReady();
-  const firm = { uid: WS.company.uid, name: WS.company.name };
+  const firm = { uid: WS.company.uid, name: WS.company.name, owner: WS.company.owner };
   const result: ChainResult = await runPairChain(port, { ask, toChf: estvToChf(), only, noReceipt: noReceiptFor(WS), noPayment: noPaymentFor(WS), businesses: businessesOf(WS), firm });
   const model = result.calls > 0 && !result.modelFailed;
   const link = result.linked.find((l) => ('receipt' in only ? l.receipt === only.receipt : l.payment === only.payment));

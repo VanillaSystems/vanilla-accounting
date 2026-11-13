@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { textFacts } from '../src/parsers/receipt-text.js';
 import { runPairChain } from '../src/intake/pair-chain.js';
-import { gapOf, nearPairs, termsOf } from '../src/intake/near-pairs.js';
+import { discountsIn, gapOf, namesSupplier, nearPairs, offersInBooks, termsOf } from '../src/intake/near-pairs.js';
 import type { Books } from '../src/books/store.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
 import type { Firm } from '../src/intake/own-invoice.js';
@@ -150,4 +150,88 @@ test('a filed payment is never linked; a pair a person took apart is never linke
 test('the wage of the firm\'s owner is no supplier of a receipt that names the firm as addressee', () => {
   const b = books([read('Geruest_August.pdf', { amount: 4800 })], [P.wage]);
   assert.deepEqual(near(b), []);
+});
+
+// Review of #400.
+const OWNER: Firm = { ...FIRM, owner: 'Sandra Huber' };
+const runAs = (b: Books, firm: Firm, ask?: Parameters<typeof runPairChain>[1]['ask']) => runPairChain(port(b), { toChf, firm, ...(ask && { ask }) });
+
+test('only the issuer tells a supplier: the owner under the addressee is none, nor one short common word, nor the firm itself', async () => {
+  const addressed = TEXTS['Geruest_August.pdf'].replace('Malerei Huber GmbH', 'Malerei Huber GmbH\nSandra Huber');
+  const toOwner = books([read('Geruest_August.pdf', { extractedText: addressed })], [pay('w', '2026-08-25', 1120, 'Sandra Huber', 'Spesen August')]);
+  await runAs(toOwner, OWNER);
+  assert.deepEqual(toOwner.mappings, [], 'a payment to the owner named in the address block');
+  assert.deepEqual(nearPairs(toOwner, { isClosed: () => false, firm: OWNER }), []);
+  const post = TEXTS['Geruest_August.pdf'].replace('Thurstrasse 88, 9500 Wil', 'Thurstrasse 88, 9500 Wil\nVersand per Post');
+  const byPost = books([read('Geruest_August.pdf', { extractedText: post })], [pay('w', '2026-08-10', 1120, 'Die Post', 'Einzahlung am Schalter')]);
+  await runAs(byPost, OWNER);
+  assert.deepEqual(byPost.mappings, [], '«Die Post»: one short word');
+  assert.deepEqual(nearPairs(byPost, { isClosed: () => false, firm: OWNER }), []);
+  const own = books([read('Geruest_August.pdf')], [pay('w', '2026-08-10', 1120, 'Malerei Huber GmbH', 'Übertrag')]);
+  await run(own);
+  assert.deepEqual(own.mappings, [], 'the firm itself is no supplier');
+  assert.deepEqual(near(own), []);
+  // A supplier whose name holds the firm's words, as read: the firm's words tell no payee.
+  const alike = read('Geruest_August.pdf', { title: { vendor: 'Malerei Huber Bedarf AG', what: 'Material' } });
+  assert.equal(namesSupplier(alike, { counterparty: 'Malerei Huber GmbH' }, FIRM), false);
+});
+
+test('the app\'s own offers take only payments the server says wait for their receipt (a wage takes none)', () => {
+  const b = books([read('swisscom_juli.pdf')], [{ ...P.swisscomJul, waitsForReceipt: { since: '2026-07-15' } }, P.swisscomAug]);
+  assert.deepEqual(offersInBooks(b, { receipt: 'swisscom_juli.pdf' }, FIRM).map((o) => o.payment), ['RB-2026-0005']);
+});
+
+test('by the supplier alone, held back and offered: another month named, a recurring amount, a receipt before the books', async () => {
+  const juni = TEXTS['Geruest_August.pdf'].replace('01.08.2026', '20.06.2026').replace('August', 'Juni');
+  const month = books([read('Geruest_August.pdf', { extractedText: juni, date: '2026-06-20' })], [pay('jul', '2026-07-14', 1120, 'Gerüstbau Thurtal GmbH', 'Miete Gerüst Juli'), pay('x', '2026-06-01', 50, 'Tankstelle', 'Tanken')]);
+  await run(month);
+  assert.deepEqual(month.mappings, [], 'June\'s bill against July\'s charge');
+  assert.equal(near(month).length, 1, 'offered');
+  const recurring = books([read('Geruest_August.pdf')], [{ ...P.geruest, description: 'Miete Gerüst' }, pay('jul', '2026-07-14', 1120, 'Gerüstbau Thurtal GmbH', 'Miete Gerüst')]);
+  recurring.mappings.push({ receiptId: 'other', transactionRef: 'jul' });
+  await run(recurring);
+  assert.ok(!recurring.mappings.some((m) => m.receiptId === 'Geruest_August.pdf'), 'paid this amount twice: a series');
+  const early = books([read('Geruest_August.pdf')], [P.geruest, pay('first', '2026-08-05', 10, 'Bank', 'Gebühr')]);
+  await run(early);
+  assert.deepEqual(early.mappings, [], 'the receipt lies before the books\' first payment');
+});
+
+test('terms: a number counts only right before a day word, never past 90 days', () => {
+  const t = (text: string) => termsOf({ extractedText: text, date: '2026-08-01' });
+  assert.equal(t('Zahlungsfrist 30 Tage, Betrag 150 CHF'), 30);
+  assert.equal(t('Zahlbar innert 30 Tagen auf Konto 80-1234-5'), 30);
+  assert.equal(t('Zahlbar innert 10 Tagen, Kunde 120'), 10);
+  assert.equal(t('zahlbar bis 31.12.2026'), 90);
+});
+
+test('discounts: right beside the word, never negated, never a VAT rate, an invoice offers at most 5 %', () => {
+  assert.deepEqual(discountsIn('ohne Skonto. Verzugszins 5 %'), []);
+  assert.deepEqual(discountsIn('Kein Skontoabzug. MWST 8.1 %'), []);
+  assert.deepEqual(discountsIn('110% Skonto'), []);
+  assert.deepEqual(discountsIn('MWST 8.1% Skonto 2 %'), [2]);
+  assert.deepEqual(discountsIn('abzgl. 2% Skonto'), [2]);
+  assert.deepEqual(discountsIn('8 % Skonto innert 10 Tagen', undefined, 5), []);
+  const text = TEXTS['Farbmix_Rechnung_FM-78230.pdf'].replace(/Zahlbar[^\n]*/, 'Zahlbar innert 30 Tagen netto, ohne Skonto. Verzugszins 5 %.');
+  const r = read('Farbmix_Rechnung_FM-78230.pdf', { extractedText: text });
+  assert.equal(gapOf(r, pay('x', '2026-08-06', 2290.31, 'Farbmix AG', 'Rechnung FM-78230 Teilzahlung')), undefined, '«ohne Skonto. Verzugszins 5 %» is no discount');
+});
+
+test('guards: an instalment naming the number, a second receipt carrying it, a collective payment, the model\'s doubt, a receipt in the inbox', async () => {
+  const fm = () => read('Farbmix_Rechnung_FM-78230.pdf');
+  const instalment = books([fm()], [P.fm78230, pay('rest', '2026-08-20', 1000, 'Farbmix AG', 'Rechnung FM-78230 Rest')]);
+  await run(instalment);
+  assert.deepEqual(instalment.mappings, [], 'another payment of another amount names the number');
+  const second = books([fm(), read('Farbmix_Rechnung_FM-78230.pdf', { id: 'copy', filename: 'copy.pdf', amount: 999 })], [P.fm78230]);
+  await run(second);
+  assert.deepEqual(second.mappings, [], 'a second receipt of another amount carries the number');
+  const collective = books([fm()], [{ ...P.fm78230, parts: [{ counterparty: 'Farbmix AG', amount: 1500, currency: 'CHF', reference: 'FM-78230' }, { counterparty: 'Farbmix AG', amount: 910.8, currency: 'CHF', reference: 'FM-78230' }] } as BankTransaction]);
+  await run(collective);
+  assert.deepEqual(collective.mappings, [], 'a collective payment is the chain\'s');
+  const doubted = books([read('Geruest_August.pdf')], [P.geruest, P.wage]);
+  await runAs(doubted, FIRM, async (prompt) => (prompt.includes('"payments"') ? '[{"i":0,"k":null,"confidence":0.9}]' : '[{"i":0,"fits":false}]'));
+  assert.deepEqual(doubted.mappings, [], 'the model said it does not fit');
+  const inbox = books([read('Farbmix_Rechnung_FM-78230.pdf', { location: 'staged' })], [P.fm78230]);
+  await run(inbox);
+  assert.deepEqual(inbox.mappings, [], 'a receipt still in the inbox is not linked by this rule');
+  assert.deepEqual(near(inbox).map((p) => [p.payment, p.sure]), [['RB-2026-0010', undefined]], 'but offered, not marked sure');
 });

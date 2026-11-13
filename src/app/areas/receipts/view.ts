@@ -26,7 +26,7 @@ export function ledgerFor(books: Index): Ledger {
   // The firm: money in pays its own invoices by their number (#365); known once the workspace is loaded.
   const company = workspaceNow()?.company;
   if (memo?.books !== books || memo.runs !== runs || memo.pages !== pages || memo.corrections !== corrections || memo.company !== company) {
-    const firm = company && { uid: company.uid, name: company.name };
+    const firm = company && { uid: company.uid, name: company.name, owner: company.owner };
     memo = { books, runs, pages, corrections, company, ledger: ledgerOf(books, booksOpenPeriod(books, localToday(), filing().length).from, processingOf(runs ?? [], books.receipts), pages, corrections, firm) };
   }
   return memo.ledger;

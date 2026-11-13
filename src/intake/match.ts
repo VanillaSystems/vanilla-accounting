@@ -226,7 +226,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const noPayment = noPaymentFor(ws);
   const byCode = async (stagedNow: readonly Receipt[] = []) => {
     const noReceipt = noReceiptFor(ws);
-    const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt, noPayment, businesses: businessesOf(ws), firm: ws.company && { uid: ws.company.uid, name: ws.company.name } });
+    const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt, noPayment, businesses: businessesOf(ws), firm: ws.company && { uid: ws.company.uid, name: ws.company.name, owner: ws.company.owner } });
     const providers = providersOf(ws);
     for (const l of books.update((index) => linkOrdersToSales(index, (d) => !periodLock(index).isClosed(d), providers))) log(`linked the order document to its sale: receipt ${l.receipt} → ${l.sale}`);
     const found = books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, { isOpen: (d) => !lock.isClosed(d), payers, toChf, buyerUid: ws.company?.uid, noReceipt: noReceipt(index), noPayment: noPayment(index) }); });

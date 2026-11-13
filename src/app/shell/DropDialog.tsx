@@ -39,7 +39,7 @@ import { startIntake } from '../automation/intake.js';
 import { setBankDraft } from '../areas/company/bank-draft.js';
 import { chfOf, suggestion } from '../areas/receipts/model.js';
 import { ledgerFor, noneText, txLine } from '../areas/receipts/view.js';
-import { nearOffers } from '../../intake/near-pairs.js';
+import { offersInBooks } from '../../intake/near-pairs.js';
 import { useFx } from '../hooks/use-fx.js';
 import { ReportCorrections } from '../areas/receipts/ReportCorrections.js';
 import { processingText } from '../automation/processing.js';
@@ -491,7 +491,7 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
   const proposed = x.kind === 'waits' && receipt && ledger.byId.has(receipt.id) ? !!suggestion(ledger.byId.get(receipt.id)!, ledger, chfOf(rates)) : false;
   // A payment that may fit without any rule linking it (#397): named in the row, the receipt's page offers it with what differs.
   const maybe = (x.kind === 'read' || x.kind === 'waits') && receipt && !lacks && !proposed
-    ? nearOffers(books, { receipt: receipt.id }, { isClosed: (d) => !!ledger.closedThrough && d <= ledger.closedThrough, firm: ledger.firm }).find((o) => !o.filed) : undefined;
+    ? offersInBooks(books, { receipt: receipt.id }, ledger.firm).find((o) => !o.filed) : undefined;
   const maybeTx = maybe && ledger.txByRef.get(maybe.payment);
   const missing = maybeTx ? t('near.dropMaybe', { what: txLine(maybeTx) }) : x.kind !== 'waits' && x.kind !== 'stuck' ? '' : lacks ? t('drop.p.missing', { what: lacks }) : proposed ? t('drop.p.payment') : t('drop.p.noPayment');
   const shown = !!receipt && open;

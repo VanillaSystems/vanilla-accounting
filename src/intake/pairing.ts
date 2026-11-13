@@ -75,7 +75,7 @@ export type LinkMaker = 'code' | 'checked' | 'model' | 'person' | 'unknown';
 export const PAIR_RULE = { code: 'pair', checked: 'pair-checked', model: 'pair-choice' } as const;
 
 /** What matched in a pair: the amount (in one currency, the bank's original amount, or across currencies), the day, the vendor's name, a document number; for a near pair (src/intake/near-pairs.ts) the amount within rounding or less a cash discount. */
-export const SIGNALS = ['amount', 'original', 'currency', 'day', 'name', 'number', 'rounded', 'discount'] as const;
+export const SIGNALS = ['amount', 'original', 'currency', 'day', 'name', 'number', 'rounded', 'discount', 'near'] as const;
 export type Signal = (typeof SIGNALS)[number];
 
 const ruleOf = (rule: string | undefined) => rule?.split(':')[0];
@@ -100,7 +100,7 @@ export function signalsOf(m: Pick<Mapping, 'rule'>): Signal[] {
 
 /** What matched in a candidate. */
 export function signalsOfCandidate(c: PairCandidate): Signal[] {
-  return [c.gap ?? (c.amount === 'same' ? 'amount' : c.amount === 'original' ? 'original' : 'currency'), ...(dayOf(c) > 0 ? ['day' as const] : []), ...(c.words > 0 || c.business ? ['name' as const] : []), ...(c.number ? ['number' as const] : [])];
+  return [c.gap ?? (c.amount === 'same' ? 'amount' : c.amount === 'original' ? 'original' : 'currency'), ...(dayOf(c) > 0 ? ['day' as const] : []), ...(c.words > 0 || c.business ? ['name' as const] : []), ...(c.number ? ['number' as const] : []), ...(c.near ? ['near' as const] : [])];
 }
 
 /** Who of the chain made a link: code alone, code checked by the model, the model from a short list. */
@@ -170,6 +170,8 @@ export interface PairCandidate {
   against?: true;
   /** A near pair code links (src/intake/near-pairs.ts, #397): the amount off by rounding, or less a cash discount. */
   gap?: 'rounded' | 'discount';
+  /** Linked by a rule of the near pairs (src/intake/near-pairs.ts), not by the chain's score: its link says so (signal `near`). */
+  near?: 'number' | 'supplier';
   /** An `against` candidate held back: a payment of the receipt's amount goes its usual way, or only the firm's name says the invoice is its own (issuedByFirm 'name'). Proposed, never linked by code; it steps aside for a clear pair going the usual way. */
   held?: true;
 }

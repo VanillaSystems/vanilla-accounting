@@ -19,13 +19,17 @@ Two markers flag an entry you must read before you update:
 - Pairing without an AI (#397): a supplier's invoice whose payment names its number is paired by
   code when the amounts differ by rounding to 5 Rappen or by exactly the cash discount the payment
   states or the invoice offers («abzgl. 2% Skonto»); an invoice of the same business with the exact
-  amount, paid within its terms (45 days when it states none), is paired too. Only when nothing else
-  could be either of them. What may fit but is not sure (a rounded amount without a number, an
+  amount, paid within the terms it states (45 days when it states none, 90 at most), is paired too,
+  unless the payment names another month, the payee was paid that amount more than once, or the
+  invoice is older than the books' first payment. The business is told by the invoice's issuer
+  (its letterhead), never by the firm's or the owner's name. Only when nothing else could be either
+  of them. What may fit but is not sure (a rounded amount without a number, an
   undated till slip, two candidates) is offered with what differs («gleiche Firma · Betrag … statt
   … · 5 Tage früher») on the receipt, in «Beleg suchen» and in the drop row, one click to link.
 - Hand form (#397): a payment less a cash discount says so and is booked as paid, its VAT on what was
-  paid; a read receipt whose words name one purchase account proposes it («laut Beleg:
-  Dispersionsfarbe»); a payment without a proposal says why in one line; the zero code of a payment
+  paid (a receipt of several rates leaves the codes to her and says why; a firm without input tax
+  hears no VAT sentence); no account is guessed from a receipt's words, which only order the account
+  list by whole words, and the form says so; a payment without a proposal says why in one line; the zero code of a payment
   without a receipt says «ohne Vorsteuer: kein Beleg verknüpft» instead of «wie beim letzten Mal», and
   a receipt that may fit is named with the rate linking it would bring.
 

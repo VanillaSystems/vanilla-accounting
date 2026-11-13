@@ -333,7 +333,7 @@ function sureNearPairs(books: Books, search: ReturnType<typeof searchPairs>, lin
     if ((search.byReceipt.get(p.receipt) ?? []).some((c) => c.payment !== p.payment) || (search.byPayment.get(p.payment) ?? []).some((c) => c.receipt !== p.receipt)) return [];
     const days = p.days ?? 0;
     return [{ receipt: p.receipt, payment: p.payment, leg: legOf(t), charge: [t.ref], filed: false, score: 0, amount: 'same', number: !!p.number, words: 0, business: p.supplier, days, offDays: days,
-      ...(p.gap.kind === 'rounded' || p.gap.kind === 'discount' ? { gap: p.gap.kind } : {}) }];
+      near: p.sure, ...(p.gap.kind === 'rounded' || p.gap.kind === 'discount' ? { gap: p.gap.kind } : {}) }];
   });
 }
 
