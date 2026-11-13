@@ -24,6 +24,7 @@ import { filingKeyOf } from './periods.js';
 import { issuedByFirm, ownNumbers } from '../intake/own-invoice.js';
 import { paymentText, paysIn } from '../intake/pairing.js';
 import { squash, tokensIn } from './document-numbers.js';
+import { gapOf } from '../intake/near-pairs.js';
 
 /** One line of the booking, in the payment's currency. */
 export interface BookingLine { accountDebit: string; accountCredit: string; amount: number; vatCode?: string; description: string; tags?: Tags }
@@ -35,9 +36,11 @@ export interface BookingLine { accountDebit: string; accountCredit: string; amou
  * account, the app's proposal for a sale without an invoice (saleProposal), a supplier's refund.
  */
 export interface DraftSource {
-  account?: { from: 'rule'; rule: string } | { from: 'precedent'; date: string; yours?: true; name?: string } | { from: 'refund'; date: string } | { from: 'sales' | 'owner' | 'business' | 'bankFee' | 'wage' } | { from: 'invoice' | 'receivable'; number: string };
-  /** `abroad`: the firm's own invoice says its service is supplied abroad (invoicing placeAbroad). */
-  vat?: { from: 'rule' | 'precedent' | 'receipt' | 'invoice' | 'netRate' | 'refund' | 'abroad' } | { from: 'sale'; choice: SaleChoice };
+  account?: { from: 'rule'; rule: string } | { from: 'precedent'; date: string; yours?: true; name?: string } | { from: 'refund'; date: string } | { from: 'sales' | 'owner' | 'business' | 'bankFee' | 'wage' } | { from: 'invoice' | 'receivable'; number: string }
+    /** The one purchase account the linked receipt's words name by the chart's hints (#397), with the word. */
+    | { from: 'receiptWords'; word: string };
+  /** `abroad`: the firm's own invoice says its service is supplied abroad (invoicing placeAbroad). `noReceipt`: the last booking's code claimed input tax, which a payment without a receipt does not (#397). */
+  vat?: { from: 'rule' | 'precedent' | 'receipt' | 'invoice' | 'netRate' | 'refund' | 'abroad' | 'noReceipt' } | { from: 'sale'; choice: SaleChoice };
 }
 
 /**
@@ -87,6 +90,10 @@ export interface DraftKnowledge {
   firmName?: string;
   /** A receipt she said is not the invoice this payment pays: the form proposes without it. */
   notOwnInvoice?: string;
+  /** The one purchase account of the firm's chart a receipt's words name by its hints, with the word (src/app/lib/account-filter.ts accountOfWords, #397). */
+  byWords?(words: readonly string[]): { account: string; word: string } | undefined;
+  /** A receipt that may be this payment's but is not linked (src/intake/near-pairs.ts, #397): its name, the rate it shows, what differs. */
+  near?: { name: string; rate?: number; why: string };
 }
 
 /**
@@ -122,7 +129,13 @@ export type DraftNote =
   /** Wages here are booked with their deductions (the deductions account carries them): the form proposes no account. */
   | { kind: 'wageDeductions'; account: string }
   | { kind: 'ask'; question: string }
-  | { kind: 'taxPoint'; date: string };
+  | { kind: 'taxPoint'; date: string }
+  /** A receipt may be this payment's (DraftKnowledge.near): linked, its rate would apply (#397). */
+  | { kind: 'nearReceipt'; name: string; rate?: number; why: string }
+  /** Money out with no proposal at all: why, in one line (#397). */
+  | { kind: 'noProposal'; name: string; linked: boolean }
+  /** The linked receipt was paid less a cash discount: what is booked is what was paid (guide spl-skonto, #397). */
+  | { kind: 'discount'; percent: number; amount: number };
 
 export interface BookingDraft {
   ref: string;
@@ -508,7 +521,9 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
     other = { account: precedent.account!, vat: sale.vat, source: { account: { from: 'precedent', date: precedent.entry.date, ...(precedent.yours && { yours: true as const }), ...(precedent.name && { name: precedent.name }) }, ...(sale.source && { vat: sale.source }) } };
   } else if (precedent) {
     const vat = rate || (receipts.length ? '' : withoutReceipt(precedent.vatCode));
-    other = { account: precedent.account!, vat, source: { account: { from: 'precedent', date: precedent.entry.date, ...(precedent.yours && { yours: true as const }), ...(precedent.name && { name: precedent.name }) }, ...(vat && { vat: fromReceipt(vat) ?? { from: 'precedent' } }) } };
+    // The last booking claimed input tax and this payment has no receipt: its zero code is no «wie beim letzten Mal» (#397).
+    const zeroed = !rate && !receipts.length && !!vat && vat !== precedent.vatCode;
+    other = { account: precedent.account!, vat, source: { account: { from: 'precedent', date: precedent.entry.date, ...(precedent.yours && { yours: true as const }), ...(precedent.name && { name: precedent.name }) }, ...(vat && { vat: fromReceipt(vat) ?? { from: zeroed ? 'noReceipt' as const : 'precedent' as const } }) } };
   } else if (proposes && nature?.kind === 'owner') {
     notes.push({ kind: 'owner' });
     other = { account: nature.account, vat: '', source: { account: { from: 'owner' } } };
@@ -543,7 +558,20 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   } else if (proposes && known.account && chart().typeOf(known.account)) {
     other = { account: known.account, vat: rate, source: { account: { from: 'business' }, ...(rate && { vat: { from: 'receipt' } }) } };
   }
+  // Money out with a purchase document and no account yet: the one purchase account its words name (#397, «Dispersionsfarbe» → material).
+  const aside = notes.some((n) => n.kind === 'ownTransfer' || n.kind === 'authority' || n.kind === 'owner');
+  if (proposes && !moneyIn && !aside && !other.account && docs.length && known.byWords) {
+    const hit = known.byWords(wordsOf(docs) ?? []);
+    if (hit && chart().typeOf(hit.account)) other = { account: hit.account, vat: other.vat, source: { account: { from: 'receiptWords', word: hit.word }, ...(other.source?.vat && { vat: other.source.vat }) } };
+  }
   if (!moneyIn && rate && !other.account) notes.push({ kind: 'chooseAccount' });
+  // No proposal at all on money out: say why in one line (#397).
+  if (proposes && !moneyIn && !aside && !other.account && !other.vat && !notes.length) notes.push({ kind: 'noProposal', name: tx.counterparty?.trim() || tx.description, linked: receipts.length > 0 });
+  // Paid less a cash discount the payment states or the receipt offers: booked is what was paid, its VAT on that (guide spl-skonto).
+  const gap = !moneyIn && docs.length === 1 ? gapOf(docs[0], tx) : undefined;
+  if (gap?.kind === 'discount') notes.push({ kind: 'discount', percent: gap.percent, amount: gap.discount });
+  // A receipt that may be this payment's, not linked: linking it would bring its rate (#397).
+  if (!moneyIn && !receipts.length && known.near && proposes) notes.push({ kind: 'nearReceipt', ...known.near });
   const words = !moneyIn && !other.account ? wordsOf(docs) : undefined;
 
   // A receipt that states several rates adding up to the payment: a line per rate, each with its rate.

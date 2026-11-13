@@ -113,3 +113,23 @@ export function rankAccounts<T extends string>(accounts: readonly Account[], que
       || a.quality - b.quality || a.i - b.i)
     .map((x) => x.m);
 }
+
+/**
+ * The one purchase account (an expense of the chart) a receipt's words name by its hints (#397):
+ * a word that is the hint, or ends in a hint of five letters or more, the head of a compound
+ * («Dispersionsfarbe» names «Farbe», «Gerüstmiete» names «Miete»). Undefined when no account or
+ * several are named: the person chooses, from the list ranked by those words.
+ */
+export function accountOfWords<T extends string>(accounts: readonly Account[], words: readonly string[], ctx: Pick<AccountContext<T>, 'typeOf' | 'hints'> & { expense: T }): { account: string; word: string } | undefined {
+  const said = words.map((w) => ({ w, f: foldAll(w) }));
+  const hits = new Map<string, string>();
+  for (const a of accounts) {
+    if (ctx.typeOf(a.number) !== ctx.expense) continue;
+    const hints = (ctx.hints?.(a.number) ?? a.hints ?? []).map(foldAll);
+    const word = said.find(({ f }) => hints.some((h) => f === h || (h.length >= 5 && f.endsWith(h))));
+    if (word) hits.set(a.number, word.w);
+  }
+  if (hits.size !== 1) return undefined;
+  const [[account, word]] = [...hits];
+  return { account, word };
+}
