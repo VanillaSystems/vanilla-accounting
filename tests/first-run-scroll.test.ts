@@ -11,7 +11,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from 'puppeteer-core';
@@ -81,7 +81,27 @@ test('the first screen asks what the person wants; the AI is one line, its cards
     assert.equal(await page.$('.aicli'), null, 'without an AI the first screen still shows no card');
     assert.equal(await page.$('[data-act=by-hand]'), null, 'without an AI «new books» is the form itself, no small link beside it');
     await page.click('[data-answer=create]');
+    // The Mac app (#373): first the words on macOS's question about the Documents folder, which «Weiter» lets it ask; then the form.
+    await page.waitForSelector('[data-access=ask]', { timeout: 10_000 });
+    const why = await page.$eval('[data-access=ask]', (e) => (e as HTMLElement).innerText);
+    assert.match(why, /«Dokumente»/, 'it names the folder macOS will ask about');
+    assert.match(why, /«Erlauben»/, 'and the button she needs there');
+    assert.match(why, /anderen Ordner/, 'and the way out');
+    assert.ok(await page.$('[data-access=ask] [data-answer=elsewhere]'), 'another folder is one click');
+    assert.equal(await page.$('.st-form'), null, 'nothing goes on before her word');
+    await page.click('[data-answer=allow]');
     await page.waitForSelector('.st-form input[name=name]', { timeout: 10_000 });
+    assert.equal(await page.$('[data-access-note]'), null, 'allowed: the form says no more about it');
+
+    // Allowed once: the next time «new books» goes on at once, and the folder's name steps aside from one there already (#373 review).
+    const year = String(new Date().getFullYear());
+    mkdirSync(join(dir, 'Documents', `Buchhaltung ${year}`), { recursive: true });
+    await page.goto(`http://${host}/start`, { waitUntil: 'networkidle0', timeout: 60_000 });
+    await page.waitForSelector('[data-ai=none]', { timeout: 60_000 });
+    await page.click('[data-answer=create]');
+    await page.waitForSelector('.st-form input[name=name]', { timeout: 10_000 });
+    await page.waitForFunction((y) => (document.querySelector('.st-form input[name=root]') as HTMLInputElement | null)?.value.endsWith(`Buchhaltung ${y} 2`), { timeout: 10_000 }, year)
+      .catch(async () => assert.fail(`the form proposes a free folder: ${await page.$eval('.st-form input[name=root]', (e) => (e as HTMLInputElement).value)}`));
 
     await page.goto(`http://${host}/start`, { waitUntil: 'networkidle0', timeout: 60_000 });
     await page.waitForSelector('[data-act=ai-setup]', { timeout: 60_000 });
@@ -131,6 +151,29 @@ test('the first screen asks what the person wants; the AI is one line, its cards
     assert.doesNotMatch(await page.$eval('.st-main', (e) => (e as HTMLElement).innerText), /\.yaml|\.json/, 'the start screen names no file');
     await new Promise((r) => setTimeout(r, 500));
     assert.ok(await page.$('.st-choices'), 'the start screen stays');
+
+    // A restart (a new server, nothing read in memory) with an AI: «Ohne KI einrichten» opens the form at once,
+    // and the form reads the folder itself, macOS having allowed it to this version: the taken name steps aside (#373 review).
+    process.env.CLAUDE_BIN = join(process.cwd(), 'tests/support/stub-bin/claude');
+    const restarted = desktopServer({ stateFile: join(dir, 'desktop.json'), demoRoot: join(dir, 'Demo'), booksHome: join(dir, 'Documents'), dist });
+    const again = await listen(restarted.app, '127.0.0.1', undefined);
+    const host2 = `127.0.0.1:${portOf(again)}`;
+    restarted.allowHost(host2);
+    try {
+      // While macOS asks about the folder of the books opened last (src/desktop/start.ts askingPath), the start screen says so.
+      await page.goto(`http://${host2}/start?${new URLSearchParams({ asking: join(dir, 'Documents', 'Maler Huber'), name: 'Maler Huber GmbH', folder: 'documents' })}`, { waitUntil: 'networkidle0', timeout: 60_000 });
+      await page.waitForSelector('[data-asking=documents]', { timeout: 20_000 });
+      assert.equal(await page.$eval('[data-asking]', (e) => (e as HTMLElement).innerText),
+        'macOS fragt, ob Vanilla Accounting den Ordner «Dokumente» lesen darf, in dem «Maler Huber GmbH» liegt. Nach «Erlauben» öffnet sich deine Buchhaltung.');
+      await page.goto(`http://${host2}/start`, { waitUntil: 'networkidle0', timeout: 60_000 });
+      await page.waitForSelector('[data-ready=claude]', { timeout: 60_000 });
+      await page.click('[data-act=by-hand]');
+      await page.waitForSelector('.st-form input[name=name]', { timeout: 10_000 });
+      await page.waitForFunction((y) => (document.querySelector('.st-form input[name=root]') as HTMLInputElement | null)?.value.endsWith(`Buchhaltung ${y} 2`), { timeout: 10_000 }, year)
+        .catch(async () => assert.fail(`after a restart the form proposes a free folder: ${await page.$eval('.st-form input[name=root]', (e) => (e as HTMLInputElement).value)}`));
+    } finally {
+      again.close();
+    }
   } finally {
     await closeChrome(browser);
     server.close();

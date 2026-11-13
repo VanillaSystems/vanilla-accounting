@@ -8,7 +8,7 @@
 import { execFile } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { basename, delimiter, dirname, isAbsolute, join } from 'node:path';
-import { loginPath, programOn } from './login-path.js';
+import { inProtectedFolder, loginPath, programOn } from './login-path.js';
 import { AI_CLIS, shellQuote, type TerminalCli } from './terminal.js';
 import type { CliProbe } from './ai-setup.js';
 
@@ -37,7 +37,7 @@ export function placesOf(cli: TerminalCli, { home = homedir(), path = process.en
   const own = pinned(cli);
   if (own) return [own];
   const { program } = AI_CLIS[cli];
-  return [...new Set([...path.split(':').filter(isAbsolute), join(home, '.local', 'bin')].map((dir) => join(dir, program)))];
+  return [...new Set([...path.split(':').filter((dir) => isAbsolute(dir) && !inProtectedFolder(dir, home)), join(home, '.local', 'bin')].map((dir) => join(dir, program)))];
 }
 
 /** The first executable of placesOf. */

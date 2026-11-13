@@ -438,6 +438,33 @@ Two markers flag an entry you must read before you update:
   for their payment again, no longer sets the files at rest back to «in Arbeit» and the bar back to
   0 %; and the window asks for the runs' steps at once when a file is taken, every 2 s while files
   are worked on.
+- «Noch offen»: a month of a payment provider's fees without its bill names the bill as the
+  provider's file names it and where the provider keeps it («Shopify Payments Invoice» …
+  «Shopify Admin › Settings › Billing › Bills»), and shows the VAT it would show, estimated from
+  the fees at the bill's rate («geschätzt CHF … (8.1 % in CHF … Gebühren)»), no longer the
+  fees as if they were the VAT. Its «Rechnung hinzufügen» opens the file dialog that drops it; the
+  line no longer opens Belege on another receipt, and the sidebar's card leads to the list (#459).
+- What the sidebar's AI is told about an account without its opening and a provider's clearing
+  account carries days and states (#459). The bank's balance the statements imply is the one
+  before their first payment, on its day: books whose statements begin on 01.07. no longer hand
+  it over as the balance of 1.1., and the card says «laut Auszügen … vor der ersten Zahlung am
+  01.07.2026». A clearing account below zero names its provider's reports in the books with their
+  days and the bookings each made, and whether the account has its opening, instead of guessing
+  «a sales report not dropped yet».
+- Mac app, first start: macOS no longer asks about the Documents folder over the first screen
+  before you chose anything (#373). The app reads nothing in Documents, Desktop or Downloads until
+  a step needs it. «Neue Buchhaltung erstellen» first says that your books go into «Dokumente»,
+  that macOS will now ask and that «Erlauben» is needed, with «Anderen Ordner wählen» beside
+  «Weiter»; after «Nicht erlauben» it says where to allow it in the System Settings and still
+  works with another folder. Once allowed, the step goes on at once. Books opened before in such a
+  folder are read only after macOS answered: when it asks at a later start, the window comes first
+  with the start screen and the books open after «Erlauben». The menu's «Zuletzt geöffnet» names
+  them without reading their folders, and the start screen says that macOS asks about the folder
+  of those books while it does. Books in a folder macOS refuses keep their name and say how to
+  allow it; a folder whose own rights refuse the app says so apart. New books never open books
+  already in the folder named for them: the form proposes a free name («Buchhaltung 2026 2»), also
+  after a restart. macOS's answer counts for this version of the app only: after an update the
+  words come again before macOS may ask again.
 - A provider's monthly Payments Invoice no longer waits for the AI (#458): no payment comes for it,
   so the inbox takes its date and total from its text by code and the booking step books its input
   tax, as for the other months. Before, one failed AI answer left the bill in the inbox with

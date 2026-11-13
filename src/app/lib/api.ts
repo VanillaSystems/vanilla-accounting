@@ -34,8 +34,9 @@ import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminde
 import type { PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
-import type { AiAvailability, DesktopInfo, FolderLook, KnownBooks, PhoneInfo } from '../../types/desktop.js';
+import type { AiAvailability, DesktopInfo, FolderLook, HomeFolders, KnownBooks, PhoneInfo } from '../../types/desktop.js';
 import { DesktopCallError } from '../desktop/bridge.js';
+import { accessText, type AccessKey } from '../desktop/access-text.js';
 import { setAiOff } from '../ai/ai-off.js';
 import type { DraftPatch as SetupPatch, SetupBegun, SetupDraftView } from '../../onboarding/draft.js';
 import type { SetupTalked } from '../../onboarding/draft-talk.js';
@@ -139,6 +140,9 @@ export function aiRefusedText(r: AiRefusal): string {
   const cli = t(`terminal.cli.${r.cli}`);
   return r.reason === 'limit' ? t('error.ai.limit', { cli, said: r.said }) : t(`error.ai.${r.reason}`, { cli });
 }
+
+/** t() for accessText (src/app/desktop/access-text.ts), which the main process calls with textsIn too. */
+export const sayAccess = (key: AccessKey, vars: Record<string, string>): string => t(key as 'desktop.access.refused', vars as { folder: string });
 
 export function errorText(e: unknown): string {
   if (e instanceof DesktopCallError) return t(e.text);
@@ -314,6 +318,10 @@ export function errorText(e: unknown): string {
     case 'noWorkspace': return t('desktop.noWorkspace');
     case 'notWorkspace': return t('desktop.notWorkspace');
     case 'oldLayout': return t('desktop.oldLayout', { root: b.params.root });
+    case 'folderRefused': return accessText(sayAccess, b.params, b.params.root);
+    case 'folderTaken': return b.params.holds === 'books'
+      ? t('desktop.access.takenBooks', { root: b.params.root, name: b.params.name ?? '', free: b.params.free })
+      : t('desktop.access.takenSetup', { root: b.params.root, free: b.params.free });
     case 'setup': return setupText(b.params);
     case 'openingAccount': return t(`error.openingAccount.${b.params.reason}`, { account: b.params.account, currency: b.params.currency ?? '', base: baseCurrency() });
     case 'openingNotFirstYear': return t('error.openingNotFirstYear', { year: b.params.year });
@@ -646,8 +654,8 @@ export const api = {
   /** The desktop app's start screen (src/desktop/server.ts). */
   desktop: {
     info: () => request<DesktopInfo>('GET', '/api/desktop'),
-    /** The folders in booksHome once read (macOS may first ask the person). */
-    folders: () => request<{ folders: string[] }>('GET', '/api/desktop/folders'),
+    /** The folders in booksHome, read now: macOS asks the person first about the Documents folder (#373). */
+    folders: () => request<HomeFolders>('GET', '/api/desktop/folders'),
     open: (root: string) => request<KnownBooks>('POST', '/api/desktop/open', { root }),
     create: (setup: SetupRequest & { assumed?: Assumed }) => request<KnownBooks>('POST', '/api/desktop/create', setup),
     demo: () => request<KnownBooks>('POST', '/api/desktop/demo'),

@@ -123,3 +123,48 @@ export function windowLoader(
     return r;
   };
 }
+
+/** How long the start waits for the folder of the books opened last before the window comes without them. */
+export const REACH_WAIT_MS = 400;
+
+export interface FirstPage<B> {
+  /** desktop.json's newest recent folder; none on a first start. */
+  last?: string;
+  /** DesktopServer.reach: asynchronous, held while macOS asks about the folder; `ok` or `missing` once it may be read. */
+  reach(root: string): Promise<string>;
+  open(root: string): Promise<B>;
+  /** Books opened meanwhile (she chose on the start screen): the last ones then stay shut. */
+  current(): unknown;
+  pathOf(books: B | undefined): string;
+  /** The start screen while macOS asks about `root`'s folder: it says so (askingPath). */
+  asking(root: string): string;
+  show(path: string): void;
+  wait?: (ms: number) => Promise<void>;
+}
+
+/** The start screen saying that macOS asks about the folder of `root`, the books named `name`, in the protected `folder`. */
+export const askingPath = (root: string, name: string, folder: string): string =>
+  `/start?${new URLSearchParams({ asking: root, name, folder })}`;
+
+/**
+ * The start's first window (issue #373). A first start shows it at once and reads no folder. A
+ * later start opens the books opened last before it shows them, as long as their folder answers
+ * at once; when macOS holds that look (it asks whether the app may read Documents, Desktop or
+ * Downloads, and waits for «Erlauben»), the window comes first with the start screen, which says
+ * so, and the books follow once she allowed it: never a synchronous read macOS holds with the
+ * main process. Refused, the plain start screen stays (its list says how to allow it).
+ */
+export async function firstPage<B>(o: FirstPage<B>): Promise<void> {
+  if (!o.last) { o.show('/'); return; }
+  const last = o.last;
+  const wait = o.wait ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const open = () => o.open(last).catch(() => undefined);
+  const reached = o.reach(last).catch(() => 'ok');
+  const quick = await Promise.race([reached, wait(REACH_WAIT_MS).then(() => undefined)]);
+  if (quick !== undefined) { o.show(o.pathOf(await open())); return; }
+  o.show(o.asking(last));
+  const answer = await reached;
+  if (o.current()) return;
+  if (answer !== 'ok' && answer !== 'missing') { o.show('/start'); return; }
+  o.show(o.pathOf(await open()));
+}

@@ -8,7 +8,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ASK, PUSH, TELL } from '../src/desktop/channels.js';
@@ -237,24 +237,11 @@ test('a page that never loads is said: the start\'s first page as a start that f
   assert.equal(handler.match(/app\.exit/g)?.length, 1);
 });
 
-test('main.ts loads its pages only through windowLoader, and the menu reads nothing of the Documents folder (#363)', () => {
+// What the start reads under the protected folders is proven by running it: tests/desktop-protected-folders.test.ts (#373).
+test('main.ts loads its pages only through windowLoader (#363)', () => {
   const main = source('main.ts');
   assert.match(main, /windowLoader\(/, 'main.ts loads its pages through windowLoader');
   assert.doesNotMatch(main, /\.loadURL\(/, 'no loadURL whose failure nobody sees');
-  assert.doesNotMatch(main, /server\.info\(\)/, 'the menu is built from server.recent(), which lists no folder');
-});
-
-test('the start screen\'s look into the Documents folder is read asynchronously, so the question macOS asks holds no main process (#363)', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'vanilla-documents-'));
-  mkdirSync(join(home, 'Documents', 'Buchhaltung 2026'), { recursive: true });
-  const server = desktopServer({ stateFile: join(home, 'desktop.json'), demoRoot: join(home, 'Demo'), booksHome: join(home, 'Documents'), dist: join(home, 'dist') });
-  const pending = server.info();
-  assert.ok(pending instanceof Promise, 'info() answers later, it does not hold the caller');
-  const info = await pending;
-  const foldersIn = source('server.ts').split('function foldersIn(')[1]!.split('\n}\n')[0]!;
-  assert.doesNotMatch(foldersIn, /Sync\(/, 'macOS holds a synchronous read of Documents until the person answers, and the main process with it');
-  assert.deepEqual(info.folders, ['Buchhaltung 2026']);
-  assert.deepEqual(server.recent(), []);
 });
 
 test('a folder named for new books is looked at first: books, a started setup and other files are told apart from a new one', async () => {
@@ -293,47 +280,6 @@ test('a folder named for new books is looked at first: books, a started setup an
     });
     assert.equal(made.status, 200, await made.text());
     assert.deepEqual(await look(books), { holds: 'books', name: 'Maler Huber GmbH' });
-  } finally {
-    http.close();
-  }
-});
-
-test('a Documents folder the app may not read («Nicht erlauben») leaves the start screen its answer: no folders, no error', { skip: process.getuid?.() === 0 ? 'root reads every folder' : false }, async () => {
-  const home = mkdtempSync(join(tmpdir(), 'vanilla-documents-'));
-  const documents = join(home, 'Documents');
-  mkdirSync(join(documents, 'Buchhaltung 2026'), { recursive: true });
-  const server = desktopServer({ stateFile: join(home, 'desktop.json'), demoRoot: join(home, 'Demo'), booksHome: documents, dist: join(home, 'dist') });
-  assert.deepEqual((await server.info()).folders, ['Buchhaltung 2026']);
-  const logged = console.error;
-  const lines: unknown[] = [];
-  console.error = (...args: unknown[]) => { lines.push(args); };
-  chmodSync(documents, 0o000);
-  try {
-    assert.deepEqual((await server.info()).folders, []);
-    assert.deepEqual(lines, [], 'refused is an answer, not an error to log');
-  } finally {
-    chmodSync(documents, 0o755);
-    console.error = logged;
-  }
-  assert.deepEqual((await desktopServer({ stateFile: join(home, 'desktop.json'), demoRoot: join(home, 'Demo'), booksHome: join(home, 'none'), dist: join(home, 'dist') }).info()).folders, []);
-});
-
-test('GET /api/desktop answers while macOS still asks about the Documents folder; the folders follow (#363 review)', async () => {
-  const home = mkdtempSync(join(tmpdir(), 'vanilla-asking-'));
-  let release: (folders: string[]) => void = () => {};
-  const held = new Promise<string[]>((r) => { release = r; });
-  const server = desktopServer({ stateFile: join(home, 'desktop.json'), demoRoot: join(home, 'Demo'), booksHome: join(home, 'Documents'), dist: join(home, 'dist'), foldersWaitMs: 20, listFolders: () => held });
-  const http = await listen(server.app, '127.0.0.1', undefined);
-  const base = `http://127.0.0.1:${portOf(http)}`;
-  server.allowHost(`127.0.0.1:${portOf(http)}`);
-  try {
-    const now = await (await fetch(`${base}/api/desktop`)).json();
-    assert.deepEqual({ open: now.open, recent: now.recent, folders: now.folders, pending: now.foldersPending }, { open: null, recent: [], folders: [], pending: true });
-    const later = fetch(`${base}/api/desktop/folders`).then((r) => r.json());
-    release(['Buchhaltung 2026']);
-    assert.deepEqual(await later, { folders: ['Buchhaltung 2026'] });
-    const after = await (await fetch(`${base}/api/desktop`)).json();
-    assert.deepEqual([after.folders, after.foldersPending], [['Buchhaltung 2026'], undefined]);
   } finally {
     http.close();
   }

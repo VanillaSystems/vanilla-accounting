@@ -7,7 +7,7 @@ import { ASK, PUSH, TELL } from './channels.js';
 import type { DesktopBridge, DictationEvent, MenuCommand, SmokeBridge } from '../types/desktop.js';
 
 const bridge: DesktopBridge = {
-  chooseFolder: (title) => ipcRenderer.invoke(ASK.chooseFolder, title),
+  chooseFolder: (title, at) => ipcRenderer.invoke(ASK.chooseFolder, title, at),
   chooseNewFolder: (choice) => ipcRenderer.invoke(ASK.chooseNewFolder, choice),
   onMenu(listener) {
     const handler = (_e: IpcRendererEvent, command: MenuCommand) => listener(command);

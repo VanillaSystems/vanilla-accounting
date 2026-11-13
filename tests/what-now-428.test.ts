@@ -61,7 +61,7 @@ test('the firm\'s own invoice not paid yet is no work of hers; an opening, a cle
   assert.deepEqual(s.unlinked.map((r) => r.id), ['hotel'], 'only what a payment may still pay');
   assert.deepEqual(s.issued.map((r) => r.id), ['own'], 'its customer pays it: nothing for her to do');
   assert.deepEqual(s.openings.map((o) => [o.account, o.amount, o.currency]), [['1021', 1710.44, 'EUR']], 'the EUR account opened at nothing while its statement says it held money');
-  assert.deepEqual(s.clearing, [{ name: 'Shop', account: '1093', balance: -300 }]);
+  assert.deepEqual(s.clearing, [{ name: 'Shop', account: '1093', balance: -300, reports: [], opened: false }]);
   assert.deepEqual(s.offers, [offer]);
   assert.deepEqual(openPeriodState(books, [], [], accounts, ctx, new Map(), new Map(), provider, [{ ...offer, date: '2026-10-20' }]).offers, [], 'an offer on a payment of another period is not this period\'s');
   assert.deepEqual(openLines(s).map((l) => l.kind), ['offers', 'openings', 'clearing', 'unlinked', 'task'], 'most important first, the review last');
