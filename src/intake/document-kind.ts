@@ -39,7 +39,9 @@ export function documentKind(text: string, words: DocumentsData): DocumentVerdic
   const score = receiptScore(text, words);
   const head = text.slice(0, HEAD);
   const titleAt = wordsRe(words.receipt.title).exec(head)?.index ?? Infinity;
-  const supporting = firstOf(words.supporting, text.slice(0, TOP))[0];
+  // A balance sheet's word also names what a fiduciary's invoice is for («Honorarrechnung Bilanz 2025»)
+  // or stands in its letterhead: it decides only on a text that shows less than an invoice (#427).
+  const supporting = firstOf(words.supporting, text.slice(0, TOP)).filter((s) => s.key !== 'balance-sheet' || score < RECEIPT)[0];
   if (supporting && supporting.at < titleAt) return { is: 'supporting', why: supporting.key };
   // Terms, a price list or a tracking mail say what they are in their first lines, a newsletter in its
   // footer. Named in its title, it is no receipt unless the text shows most of one; a title that

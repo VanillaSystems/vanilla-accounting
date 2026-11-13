@@ -35,9 +35,19 @@ test('a balance sheet, also an interim one, is told by its title: kept beside th
   assert.deepEqual(documentKind('Bilan au 31.12.2025\nActifs\nBanque 12\'000.00\nTotal des actifs 12\'000.00', W), { is: 'supporting', why: 'balance-sheet' }, 'in French too');
 });
 
-test('the fiduciary\'s invoice for making the balance sheet stays an invoice', () => {
-  const invoice = 'Treuhand Zugersee AG\nRechnung 2026-031\nJahresabschluss 2025: Bilanz und Erfolgsrechnung 1\'711.38\nMWST 8.1 % 138.62\nTotal CHF 1\'850.00\nZahlbar innert 30 Tagen';
-  assert.equal(documentKind(invoice, W).is, 'receipt');
+test('the fiduciary\'s invoice for making the balance sheet stays an invoice, whatever word comes first (PR #433 review)', () => {
+  const tail = '\nMWST 8.1 % 138.62\nTotal CHF 1\'850.00\nZahlbar innert 30 Tagen';
+  const invoices = {
+    'invoice title first': 'Treuhand Zugersee AG\nRechnung 2026-031\nJahresabschluss 2025: Bilanz und Erfolgsrechnung 1\'711.38' + tail,
+    'Honorarrechnung … inkl. Bilanz': 'Treuhand Zugersee AG\nHonorarrechnung Jahresabschluss 2025 inkl. Bilanz' + tail,
+    'Honorarrechnung Bilanz': 'Honorarrechnung Bilanz 2025\nTreuhand Zugersee AG\nTotal CHF 1\'850.00\nMWST 8.1 % 138.62\nZahlbar innert 30 Tagen',
+    'a letterhead named Bilanz': 'Bilanz Treuhand GmbH\nSeestrasse 1, 6300 Zug\nRechnung Nr. 55\nBuchführung 2025 1\'000.00\nMWST 8.1 % 81.00\nTotal CHF 1\'081.00\nZahlbar innert 30 Tagen',
+    'what it was for, then its title': 'Treuhand Zugersee AG\nLeistungen: Erstellung Bilanz und Erfolgsrechnung 2025\nRechnung 2026-12' + tail,
+    'Italian': 'Studio Fiduciario Lugano\nOnorario bilancio 2025\nFattura n. 12\nIVA 8.1 % 81.00\nTotale CHF 1\'081.00',
+    'Rechnung für Bilanzerstellung': 'Rechnung für Bilanzerstellung\nTreuhand Zugersee AG' + tail,
+    'French': 'Facture – bilan annuel\nFiduciaire Léman SA\nTVA 8.1 % 81.00\nTotal CHF 1\'081.00\nPayable jusqu\'au 30.09.2026',
+  };
+  for (const [name, text] of Object.entries(invoices)) assert.equal(documentKind(text, W).is, 'receipt', name);
 });
 
 test('dropped as a PDF, its row names it a balance sheet', async () => {
