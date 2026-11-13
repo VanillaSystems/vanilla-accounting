@@ -774,6 +774,15 @@ export const VAT_CODE_EXAMPLES: Readonly<Record<string, readonly VatCodeExample[
       "amount": 216.2,
       "vatCode": "-I81",
       "description": "Korrektur zu <entry id>: Kopfhörer privat"
+    },
+    {
+      "caseId": "supplier-refund-without-credit-note",
+      "title": "Refund of a purchase without a credit note",
+      "debit": "1020",
+      "credit": "6500",
+      "amount": 216.2,
+      "vatCode": "-I81",
+      "description": "Bürohaus Meier, Rückerstattung zum Einkauf vom 04.08.2026"
     }
   ],
   "I81-2": [
