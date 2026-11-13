@@ -56,6 +56,47 @@ export async function startAndSay(workflowId: string, item: { kind: ItemKind; id
   return r.run ? runResultText(workflow, await rested(r.run)) : undefined;
 }
 
+/** How many runs one click on a list's chip starts; the rest are named, for the next click. */
+export const START_ALL_MAX = 50;
+
+/**
+ * A manual trigger for each open object of its kind at once: «Automatisch buchen» in Automatisierung's
+ * list (r3-noai-22) starts the booking of every unbooked payment that no run holds yet, at most
+ * START_ALL_MAX, waits until they rest and says in one line what came of them: booked (by a rule or
+ * the AI), waiting for the receipt, and, without an AI, that no rule decided the rest and the app
+ * cannot book them by itself: they are booked by hand under Aufgaben.
+ */
+export async function startForEach(workflowId: string, kind: ItemKind, ids: readonly string[]): Promise<string | undefined> {
+  const workflow = automationNow()?.workflows.find((w) => w.id === workflowId);
+  if (!workflow) return undefined;
+  const name = textIn(workflow.label, language());
+  if (!ids.length) return t('marks.allNone', { workflow: name });
+  const runs: string[] = [];
+  for (const id of ids.slice(0, START_ALL_MAX)) {
+    const r = await automationCommand({ kind: 'start', workflow: workflow.id, item: { kind, id } });
+    if (!r.ok) return r.refusal === 'not-approved' ? t('marks.waitsSwitchOn', { workflow: name }) : t('marks.refused', { workflow: name, why: commandRefusalText(r) });
+    if (r.run) runs.push(r.run);
+  }
+  const n = { booked: 0, receipt: 0, noModel: 0, person: 0, other: 0 };
+  for (const run of await Promise.all(runs.map(rested))) {
+    const res = runResult(workflow, run);
+    if (res.kind === 'done' && res.entries) n.booked++;
+    else if (res.kind === 'done' && run.steps.some((s) => s.output?.why === 'waitsForReceipt')) n.receipt++;
+    else if (res.kind === 'waiting' && res.noModel) n.noModel++;
+    else if (res.kind === 'waiting') n.person++;
+    else n.other++;
+  }
+  const later = Math.max(0, ids.length - START_ALL_MAX);
+  return [
+    t('marks.allBooked', { workflow: name, n: n.booked, all: runs.length }),
+    n.receipt ? t('marks.allReceipt', { n: n.receipt }) : '',
+    n.noModel ? t(aiIsOff() ? 'marks.allNoModelOff' : 'marks.allNoModel', { n: n.noModel }) : '',
+    n.person ? t('marks.allPerson', { n: n.person }) : '',
+    n.other ? t('marks.allOther', { n: n.other }) : '',
+    later ? t('marks.allLater', { n: later, max: START_ALL_MAX }) : '',
+  ].filter(Boolean).join(' ');
+}
+
 export function WorkflowButtons({ kind, id, facts = [], nav, canEdit }: { kind: ItemKind; id: string; facts?: ItemFact[]; nav: Nav; canEdit: boolean }) {
   const { view } = useAutomation();
   // What the last click came to, beside the button as well as in the toast: a toast is gone in

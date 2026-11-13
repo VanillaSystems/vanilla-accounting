@@ -54,6 +54,10 @@ import { periodName } from '../../lib/period-label.js';
 import { codeLabel } from '../codes/names.js';
 import { reconciliationOf } from '../../../books/reconcile.js';
 import { LastKept, WageRuleOffer } from '../company/RulesSection.js';
+import { startForEach } from '../../automation/marks.js';
+
+/** A run that holds its payment still: another start for it would only wait beside it. */
+const OPEN_RUN = new Set(['queued', 'running', 'waiting', 'parked', 'stuck']);
 
 type Props = AreaProps<RouteOf<'automation'>>;
 type R = RouteOf<'automation'>;
@@ -113,8 +117,25 @@ function selectedRow(route: R, view: AutomationView | undefined): R | undefined 
   return w ? { area: 'automation', view: 'workflow', workflow: w, tab: 'runs' } : undefined;
 }
 
-function List({ route, nav, books }: Props) {
+/** A manual trigger for each unbooked payment: its chip in the list starts it for all of them at once. */
+const forEachOpen = (tr: Trigger): tr is Extract<Trigger, { kind: 'manual' }> => tr.kind === 'manual' && tr.for === 'transaction' && tr.when === 'unbooked';
+
+function List({ route, nav, books, canEdit }: Props) {
   const { view, error } = useAutomation();
+  const accounts = useWorkspace()?.bankAccounts ?? [];
+  const [said, setSaid] = useState<{ workflow: string; text: string; busy?: boolean }>();
+  // «Automatisch buchen» in the list: every unbooked payment of the open period that no run holds yet, booked where code or the AI can; the line says what came of it.
+  async function startAll(w: WorkflowDecl) {
+    const held = new Set((view?.runs ?? []).filter((r) => OPEN_RUN.has(r.status)).map((r) => r.item.id));
+    const ids = unbookedPayments(books, accounts).map((p) => p.ref).filter((ref) => !held.has(ref));
+    setSaid({ workflow: w.id, text: t('marks.started', { workflow: label(w) }), busy: true });
+    try {
+      const text = (await startForEach(w.id, 'transaction', ids)) ?? '';
+      setSaid({ workflow: w.id, text });
+      if (text) nav.toast(text);
+    } catch (e) { setSaid({ workflow: w.id, text: errorText(e) }); }
+    nav.refresh();
+  }
   if (route.view === 'runs') return view ? <RunsHome view={view} books={books} nav={nav} /> : <><h1>{t('area.automation')}</h1>{error ? <p className="warnline">{error}</p> : <p className="m">{t('automation.empty')}</p>}</>;
   const sel = selectedRow(route, view);
   const now = new Date();
@@ -156,7 +177,11 @@ function List({ route, nav, books }: Props) {
                         : st.open ? <span className="wfpill warn">{t('automation.openCount', { n: st.open })}</span>
                         : st.next ? <span className="wfnext mono">{whenText(st.next, now)}</span> : null}
                     </span>
-                    {on.length ? <span className="wftrig">{on.map((tr, i) => <span key={i} className="trig">{TRIGGER_ICON[tr.kind]}{tr.kind === 'manual' ? tx(tr.label) : t(`automation.trig.${tr.kind}` as 'automation.trig.schedule')}</span>)}</span> : null}
+                    {on.length ? <span className="wftrig">{on.map((tr, i) => (forEachOpen(tr) && canEdit
+                      // A button that runs for every open payment, not a link to the diagram (r3-noai-22).
+                      ? <button key={i} type="button" className="trig go" data-act="start-all" data-workflow={w.id} disabled={!!said?.busy} onClick={(e) => { e.stopPropagation(); void startAll(w); }}>{TRIGGER_ICON.manual}{tx(tr.label)}</button>
+                      : <span key={i} className="trig">{TRIGGER_ICON[tr.kind]}{tr.kind === 'manual' ? tx(tr.label) : t(`automation.trig.${tr.kind}` as 'automation.trig.schedule')}</span>))}</span> : null}
+                    {said?.workflow === w.id ? <span className="wfsaid" role="status" data-testid="start-all-said">{said.text}</span> : null}
                   </>
                 ));
               })}
