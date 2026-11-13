@@ -9,8 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BANKS, parseIban } from '../../workspace/banks.js';
-import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstMissing, hasWhere, noVatHint, offeredAnswers, offeredLabel, firstUnsupported, notRegistered, optionOf, unsteered, withoutUnsteered, NO_VAT, type Answers, type Preset, type QuestionKey } from '../../workspace/setup.js';
-import { parseUid } from '../../workspace/uid.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstMissing, hasWhere, inSetup, noVatHint, offeredAnswers, offeredLabel, firstUnsupported, notRegistered, optionOf, unsteered, withoutUnsteered, NO_VAT, type Answers, type Preset, type QuestionKey } from '../../workspace/setup.js';
 import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
 import { LOCALES, isKey, t, tData } from '../i18n/index.js';
 
@@ -28,12 +27,15 @@ import './start.css';
 
 interface BankRow { bank: string; currency: string; account: string; iban: string }
 
+/**
+ * What the form asks (#452): only what the books need from the start. The UID, what the firm does and
+ * where the books go at year-end are entered under Firma when they matter; the questions the setup does
+ * not ask take their `later` answer (src/workspace/setup.ts).
+ */
 interface Form {
   preset: Preset;
   name: string;
-  uid: string;
   owner: string;
-  business: string;
   language: string;
   /** Empty: the folder follows the name (booksHome/<name>). */
   root: string;
@@ -41,7 +43,6 @@ interface Form {
   /** The approved net tax rates as typed: [percent, label, activity code] each, the second row optional. */
   netRates: [string, string, string][];
   banks: BankRow[];
-  exportTo: string;
   /** The answers the kind of firm gave that she has not touched (#385): marked «angenommen», kept in the books. */
   assumed: QuestionKey[];
   /** The kind of firm that gave them; absent when «Etwas anderes» did. */
@@ -197,8 +198,8 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
   onCreate(setup: Parameters<typeof api.desktop.create>[0]): void;
 }) {
   const [f, setF] = useState<Form>(() => ({
-    preset: 'consultant', name: '', uid: '', owner: '', business: '', language: LOCALES.some((l) => l.code === language) ? language : 'de', root: '',
-    answers: presetAnswers('consultant'), netRates: NO_RATES, banks: [{ ...NEW_BANK, bank: 'UBS' }], exportTo: '',
+    preset: 'consultant', name: '', owner: '', language: LOCALES.some((l) => l.code === language) ? language : 'de', root: '',
+    answers: presetAnswers('consultant'), netRates: NO_RATES, banks: [{ ...NEW_BANK, bank: 'UBS' }],
     assumed: keysOf(presetAnswers('consultant')), assumedBy: 'consultant',
   }));
   const [checked, setChecked] = useState(false);
@@ -206,17 +207,17 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
   const setBank = (i: number, patch: Partial<BankRow>) => set('banks', f.banks.map((b, j) => (j === i ? { ...b, ...patch } : b)));
 
   const root = f.root || (info ? `${info.booksHome}/${freeName(t('desktop.folderName', { year: String(new Date().getFullYear()) }), info.folders)}` : '');
-  const questions = QUESTION_ORDER.filter((k) => asked(k, f.answers));
+  const questions = QUESTION_ORDER.filter((k) => inSetup(k) && asked(k, f.answers));
+  // How few are left (#452, checkpoint 5): the questions shown, and how many of them have an answer.
+  const answeredCount = questions.filter((k) => answerList(f.answers, k).length > 0).length;
   const netRate = f.answers.vatRegistered === 'yes' && f.answers.vatMethod === 'net-rate';
   const complete = firstMissing(f.answers) === undefined;
   // A question «nein» took away and «ja» brought back has no answer: nothing assumed stands there.
   const shownAssumed = f.assumed.filter((k) => questions.includes(k) && f.answers[k] !== undefined);
   const stop = complete ? firstUnsupported(f.answers as Answers) : undefined;
   const errors = useMemo(() => {
-    const uid = parseUid(f.uid);
     return {
       name: !f.name.trim() ? t('desktop.setup.required.name') : '',
-      uid: 'error' in uid ? t('desktop.setup.uid', { detail: f.uid }) : '',
       owner: !f.owner.trim() ? t('desktop.setup.required.owner') : '',
       netRate: netRate && rateOf(f.netRates[0][0]) === undefined ? t('desktop.netRateMissing') : netRate && f.netRates.some((r) => r[2].trim() && !ACTIVITY_ID.test(r[2].trim().toUpperCase())) ? t('desktop.activityIdInvalid') : '',
       banks: f.banks.map((b) => (!b.bank.trim() ? t('desktop.setup.bankName') : b.iban.trim() && !parseIban(b.iban) ? t('desktop.setup.iban', { bank: b.bank, detail: b.iban }) : '')),
@@ -224,10 +225,10 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
     };
   }, [f, netRate]);
   const problems = [
-    errors.name && t('desktop.name'), errors.uid && t('desktop.uid'), errors.owner && t('desktop.owner'), errors.netRate && t('desktop.netRates'),
+    errors.name && t('desktop.name'), errors.owner && t('desktop.owner'), errors.netRate && t('desktop.netRates'),
     ...f.banks.map((b, i) => errors.banks[i] && `${t('desktop.iban')} ${b.bank || i + 1}`),
   ].filter(Boolean);
-  const invalid = !!(errors.name || errors.uid || errors.owner || errors.netRate || errors.banks.some(Boolean) || f.banks.length === 0);
+  const invalid = !!(errors.name || errors.owner || errors.netRate || errors.banks.some(Boolean) || f.banks.length === 0);
 
   // «Etwas anderes» keeps what is answered so far and takes its own defaults (not registered for VAT) on top.
   // What it gives is assumed until she touches it; «Etwas anderes» adds its own (not registered) to what is assumed already, naming no kind of firm.
@@ -267,10 +268,11 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
     }
     if (stop) return;
     const netRates = netRate ? f.netRates.flatMap(([percent, label, activityId]) => (rateOf(percent) === undefined ? [] : [{ rate: rateOf(percent)!, ...(label.trim() ? { label: label.trim() } : {}), ...(activityId.trim() ? { activityId: activityId.trim().toUpperCase() } : {}) }])) : [];
-    const assumed = assumedOf(shownAssumed, f.answers, f.assumedBy);
+    // The answers of the questions not shown (#452) are assumed too: the books show them to check.
+    const assumed = assumedOf(f.assumed.filter((k) => asked(k, f.answers) && f.answers[k] !== undefined), f.answers, f.assumedBy);
     onCreate({
-      root, preset: f.preset, name: f.name, uid: f.uid, owner: f.owner, business: f.business, language: f.language,
-      answers: f.answers as Answers, netRates, banks: f.banks, exportTo: f.exportTo, ...(assumed ? { assumed } : {}),
+      root, preset: f.preset, name: f.name, owner: f.owner, language: f.language,
+      answers: f.answers as Answers, netRates, banks: f.banks, ...(assumed ? { assumed } : {}),
     });
   };
   const setRate = (i: 0 | 1, part: 0 | 1 | 2, value: string) => set('netRates', f.netRates.map((r, j) => (j === i ? r.map((x, k) => (k === part ? value : x)) : r)) as [string, string, string][]);
@@ -295,14 +297,8 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
           <label className={`cf s4${checked && errors.name ? ' err' : ''}`}><span>{t('desktop.name')}{err(errors.name)}</span>
             <input name="name" value={f.name} onChange={(e) => set('name', e.target.value)} placeholder={t('desktop.namePh')} autoFocus />
           </label>
-          <label className={`cf s2${checked && errors.uid ? ' err' : ''}`}><span>{t('desktop.uid')}{err(errors.uid)}</span>
-            <input name="uid" className="mono" value={f.uid} onChange={(e) => set('uid', e.target.value)} placeholder={t('desktop.uidPh')} />
-          </label>
-          <label className={`cf s2${checked && errors.owner ? ' err' : ''}`}><span>{t('desktop.owner')}{err(errors.owner)}</span>
+          <label className={`cf s4${checked && errors.owner ? ' err' : ''}`}><span>{t('desktop.owner')}{err(errors.owner)}</span>
             <input name="owner" value={f.owner} onChange={(e) => set('owner', e.target.value)} />
-          </label>
-          <label className="cf s4"><span>{t('desktop.business')}</span>
-            <input value={f.business} onChange={(e) => set('business', e.target.value)} placeholder={t('desktop.optional')} />
           </label>
           <div className="cf s4"><span>{t('desktop.appLanguage')}</span>
             <span className="seg2" role="radiogroup" aria-label={t('desktop.appLanguage')}>
@@ -378,16 +374,11 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
           <button type="button" className="btn ghost" onClick={() => set('banks', [...f.banks, { ...NEW_BANK }])}>{t('desktop.addBank')}</button>
         </section>
 
-        <section className="st-grid">
-          <label className="cf s4"><span>{t('desktop.exportTo')}</span>
-            <input value={f.exportTo} onChange={(e) => set('exportTo', e.target.value)} placeholder={t('desktop.optional')} />
-          </label>
-        </section>
-
         {error && <p className="warnline" role="alert">{error}</p>}
         {checked && invalid && <p className="warnline" role="alert">{t('desktop.fixAbove', { fields: problems.join(', ') })}</p>}
         {checked && !complete && <p className="warnline">{t('desktop.answerAll')}</p>}
         <div className="st-foot">
+          <span className="st-note" data-progress>{t('desktop.progress', { done: String(answeredCount), of: String(questions.length) })}</span>
           <button type="button" className="btn ghost" onClick={onCancel}>{t('common.cancel')}</button>
           <button type="submit" className="btn primary" data-act="create" disabled={busy || !!stop}>{t('desktop.create')}</button>
         </div>

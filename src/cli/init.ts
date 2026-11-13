@@ -1,11 +1,15 @@
 /**
  * npm run init: set up a workspace for a company's books. Asks the questions of
- * src/workspace/setup.ts (a preset prefills them), the company's identity and its bank accounts,
+ * src/workspace/setup.ts the setup asks (a preset prefills them; those it does not ask take their
+ * `later` answer unless their flag gives one, #452), the company's name and owner and its bank accounts,
  * then writes the folder (src/workspace/scaffold.ts), commits it to a new git repository and
  * points the app's .env at it. Every question also has a flag, so it runs without a terminal:
  *
  *   npm run init -- --preset consultant --dir ../my-books --name "Beispiel GmbH" \
- *     --uid <UID> --owner "Erika Beispiel" --bank UBS:CHF --bank Wise:EUR --yes
+ *     --owner "Erika Beispiel" --bank UBS:CHF --bank Wise:EUR --yes
+ *
+ * The UID (--uid), what the company does (--about) and where the books go at year-end (--export-to)
+ * are flags only, never asked: they can be entered later (the UID under Firma › Firma).
  *
  * A bank is <bank>:<currency>[:<ledger account>[:<IBAN>]]; the IBAN routes its statements to the
  * account (without it, the folder bank-statements/<bank>/ does). On the net tax rate method
@@ -20,7 +24,7 @@ import { parseArgs } from 'node:util';
 import { BANKS, bankKind } from '../workspace/banks.js';
 import { SetupError, checkBank, checkPreset, createWorkspace, flagOf, type Bank, type Created } from '../workspace/create.js';
 import { suggestAccount } from '../workspace/scaffold.js';
-import { NO_VAT, PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstUnsupported, notRegistered, optionOf, unsteered, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
+import { NO_VAT, PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, SETUP_QUESTIONS, asked, firstUnsupported, inSetup, laterAnswer, notRegistered, optionOf, unsteered, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
 import type { NetRate } from '../workspace/vat-setup.js';
 import { parseUid } from '../workspace/uid.js';
 import { APP_ROOT, appFolderIn, appLanguages, workspaceAt } from '../workspace/workspace.js';
@@ -73,7 +77,7 @@ async function choose(key: QuestionKey, n: number, preset: Partial<Answers>): Pr
   // «we file no VAT returns» beside the method and the basis (#347): «no» to the registration, also as --vat-method no-vat.
   const options = [...(q.options as readonly { value: string; label: string }[]), ...(unsteered(key) ? [{ value: NO_VAT, label: 'we file no VAT returns (not registered for VAT)' }] : [])];
   if (interactive) {
-    console.log(`\n${n}/${QUESTION_ORDER.length} ${q.ask}\n    ${q.why}${'where' in q ? `\n    ${q.where}` : ''}`);
+    console.log(`\n${n}/${SETUP_QUESTIONS.length} ${q.ask}\n    ${q.why}${'where' in q ? `\n    ${q.where}` : ''}`);
     console.log('    ' + options.map((o, i) => `${i + 1}) ${o.label}`).join('   ') + (multi ? '   (several: 1,2; none: -)' : ''));
   }
   const prefilled = preset[key] as string | string[] | undefined;
@@ -95,9 +99,15 @@ async function askAnswers(preset: Preset): Promise<{ answers: Answers; netRates:
   const prefill: Partial<Answers> = PRESETS[preset].answers;
   const answers: Record<string, string | string[]> = {};
   const netRates: NetRate[] = [];
-  for (const [i, key] of QUESTION_ORDER.entries()) {
+  for (const key of QUESTION_ORDER) {
     if (!asked(key, answers)) continue;
-    const picked = await choose(key, i + 1, prefill);
+    // Not asked in the setup (#452): its flag, else the preset's answer, else its `later` one.
+    if (!inSetup(key) && flags[flagOf(key)] === undefined) {
+      const given = prefill[key] ?? laterAnswer(key);
+      if (given !== undefined) answers[key] = Array.isArray(given) ? [...given] : given as string;
+      continue;
+    }
+    const picked = await choose(key, SETUP_QUESTIONS.indexOf(key) + 1, prefill);
     if (picked[0] === NO_VAT) {
       const unregistered = notRegistered(answers);
       for (const k of Object.keys(answers)) delete answers[k];
@@ -224,15 +234,17 @@ async function main(): Promise<string> {
     workspaceAt(root);
     message = `${root} is already a workspace: nothing to change.`;
   } else {
-    const uid = await text('uid', 'UID (CHE-###.###.###, from uid.admin.ch)', (v) => { const r = parseUid(v); return 'error' in r ? r.error : undefined; });
+    // Flags only (#452): the UID is entered later, under Firma › Firma; what needs it asks for it then.
+    const uid = typeof flags.uid === 'string' ? flags.uid.trim() : '';
+    if (uid) { const r = parseUid(uid); if ('error' in r) throw new Stop(`--uid: ${r.error}`); }
     const owner = await text('owner', 'Owner (managing director)');
-    const about = await answer('about', 'What the company does, in a few words (helps booking; optional)', '');
+    const about = typeof flags.about === 'string' ? flags.about.trim() : '';
     const languages = appLanguages();
     const language = await answer('language', `Language of the app (${languages.join(', ')})`, 'de');
     if (!languages.includes(language)) throw new Stop(`--language must be one of ${languages.join(', ')}.`);
     const { answers, netRates } = await askAnswers(preset);
     const banks = await askBanks();
-    const exportTo = await answer('export-to', '\nWhere do the books go at year-end (accounting software or Treuhand; optional)', '');
+    const exportTo = typeof flags['export-to'] === 'string' ? flags['export-to'].trim() : '';
 
     const applied = await createWorkspace({ root, preset, name, uid, owner, business: about, language, answers, netRates, banks, exportTo });
     message = [

@@ -789,7 +789,8 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
   const waiting = unbookedPayments(books, accounts).filter((p) => !inTasks.has(p.ref) && !held.has(p.ref) && !isPayout.has(p.ref));
   const evidence = journalOf(books).views.some((v) => v.evidence) || !!unsettledAtFiling(journalOf(books), filing().length)?.items.length || openTwins(ledgerFor(books)).length > 0 || assessmentsMissing(books).length > 0;
   // A firm not registered whose turnover passed the threshold has a task without any run (r5f-9).
-  const threshold = thresholdPassed(books, useWorkspace()?.company.vat.registered);
+  const company = useWorkspace()?.company;
+  const threshold = thresholdPassed(books, company?.vat.registered);
   return (
     <div className="detail-in wfpage">
       <div className="head"><h2 className="who">{t('automation.tasks')}</h2></div>
@@ -803,7 +804,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
           {tasks.map((task) => {
             const w = view.workflows.find((x) => x.id === task.workflow);
             const pay = canEdit ? unbooked(task) : undefined;
-            const withheld = approvalWithheld(task, q.questions, books, providerIssuesNow());
+            const withheld = approvalWithheld(task, q.questions, books, providerIssuesNow(), company);
             return (
               <div key={task.run} className={`wftask${task.run === run ? ' sel' : ''}`}>
                 <b>{fillTask(tx(task.title), task.item, readsInWords(task.reads))}{paymentWords(task) ? <span className="wfpay" data-testid="task-payment"> · {paymentWords(task)}</span> : null}{task.overdue ? <span className="wfpill st-stuck">{t('automation.overdue')}</span> : null}</b>
@@ -816,6 +817,12 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
                   <p className="warnline" data-testid="approval-withheld">
                     {t('automation.activityIdMissing', { rates: withheld.rates.join(', ') })}{' '}
                     <button type="button" className="golink" onClick={() => nav.go({ route: { area: 'company', section: 'vat' }, query: {} })}>{t('area.company')} › {t('company.vat')}</button>
+                  </p>
+                ) : null}
+                {withheld?.uid ? (
+                  <p className="warnline" data-testid="approval-withheld-uid">
+                    {t('automation.uidMissing')}{' '}
+                    <button type="button" className="golink" onClick={() => nav.go({ route: { area: 'company', section: 'profile' }, query: {} })}>{t('area.company')} › {t('company.profile')}</button>
                   </p>
                 ) : null}
                 {withheld?.questions ? <p className="warnline" data-testid="approval-withheld-questions">{t('automation.questionsOpen', { n: withheld.questions })}</p> : null}

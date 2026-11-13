@@ -40,7 +40,7 @@ export function setupFacts(): SetupFacts {
   const c = WS.company;
   return {
     today, year,
-    company: { name: c.name, uid: c.uid, owner: c.owner, vat: c.vat, ...(c.legalForm ? { legalForm: c.legalForm } : {}), ...(c.address ? { address: c.address } : {}) },
+    company: { name: c.name, ...(c.uid ? { uid: c.uid } : {}), owner: c.owner, vat: c.vat, ...(c.legalForm ? { legalForm: c.legalForm } : {}), ...(c.address ? { address: c.address } : {}) },
     banks: banks.map((b) => ({ label: b.label, bank: b.bank, currency: b.currency, account: b.account, ...(b.iban ? { iban: b.iban } : {}) })),
     sources: sources(WS, APP_ROOT).flatMap((v) => (v.kind === 'ready' ? [{ id: v.decl.id, label: v.decl.label }] : [])),
     opening: Object.entries(books.config.openingBalances?.[year] ?? {}).map(([account, amount]) => ({ account, name: chart.get(account) ?? '', amount })).sort((a, b) => a.account.localeCompare(b.account)),

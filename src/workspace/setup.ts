@@ -76,6 +76,14 @@ export interface QuestionSpec {
    * it, and what a wrong pick costs. Shown under `why` by the form, the conversation and the wizard.
    */
   where?: string;
+  /**
+   * Not asked in the setup (#452): the answer the books take without asking, one that books nothing
+   * differently (the only one supported, a sentence of the opening's, an account more, an answer nothing
+   * books by) or that the app asks for where it first matters (a provider's clearing account in the drop
+   * row). A preset's own answer stands; the answer is marked as assumed in the books, where she can
+   * change it. The wizard takes it by its flag only.
+   */
+  later?: string | readonly string[];
 }
 
 const registered = (a: Given) => a.vatRegistered === 'yes';
@@ -147,6 +155,8 @@ export const QUESTIONS = {
       { value: 'calendar', label: 'calendar year (1.1.-31.12.)' },
       { value: 'other', label: 'other', unsupported: 'A fiscal year other than the calendar year is not supported yet: opening balances and the year-end are kept per calendar year.' },
     ],
+    // The only answer supported: the books follow the calendar year (#452).
+    later: 'calendar',
   },
   start: {
     ask: 'Starting point',
@@ -159,6 +169,8 @@ export const QUESTIONS = {
         caveat: 'Bring the opening balances: npm run import-opening reads them from a Banana Konten XML export. The first camt.053 of a bank account offers its starting balance as the opening balance.',
       },
     ],
+    // Both answers create the same books; the opening step in the books asks for the balance sheet either way (#452).
+    later: 'new',
   },
   sells: {
     ask: 'What you sell',
@@ -176,6 +188,8 @@ export const QUESTIONS = {
     why: 'A service to a customer abroad is usually not taxed in Switzerland: it is declared, but without VAT.',
     unsure: 'no',
     options: [{ value: 'yes', label: 'yes' }, { value: 'no', label: 'no' }],
+    // Nothing books by it (#452).
+    later: 'no',
   },
   imports: {
     ask: 'Do you import goods?',
@@ -196,18 +210,24 @@ export const QUESTIONS = {
     why: 'Then the company owes them back: those receipts are booked on an account that keeps what the company owes the owner (Kontokorrent).',
     unsure: 'yes',
     options: [{ value: 'yes', label: 'yes' }, { value: 'no', label: 'no' }],
+    // The owner's account is one account more: nothing is booked on it unless she paid (#452).
+    later: 'yes',
   },
   privateUse: {
     ask: 'Private use of a company car or phone',
     why: 'The private share is charged to the owner at the year-end; a firm registered for VAT also pays back the VAT it deducted on that share (own use, Eigenverbrauch).',
     multi: true,
     options: [{ value: 'car', label: 'car' }, { value: 'phone', label: 'phone' }],
+    // Nothing books by it: the year close offers the private share's correction for every firm (#452).
+    later: [],
   },
   payouts: {
     ask: 'Do sales reach you as payouts from a webshop or payment provider?',
     why: 'A payout bundles sales and fees; it goes over an account of its own that holds what the provider still owes you (clearing account, 1093), so both are booked.',
     unsure: 'no',
     options: [{ value: 'yes', label: 'yes' }, { value: 'no', label: 'no' }],
+    // The drop row asks for the clearing account with the provider's first report, and adds it (#452).
+    later: 'no',
   },
 } as const satisfies Record<string, QuestionSpec>;
 
@@ -231,6 +251,23 @@ export type SupportedAnswers = { [K in Exclude<QuestionKey, ConditionalKey>]: Va
 
 /** The order the wizard asks in. */
 export const QUESTION_ORDER = Object.keys(QUESTIONS) as QuestionKey[];
+
+/** The questions the setup asks (#452): those without a `later` answer, in the wizard's order. */
+export const SETUP_QUESTIONS: readonly QuestionKey[] = QUESTION_ORDER.filter((k) => (QUESTIONS[k] as QuestionSpec).later === undefined);
+/** Whether the setup asks `key` (the form, the conversation, the wizard without its flag). */
+export const inSetup = (key: QuestionKey): boolean => SETUP_QUESTIONS.includes(key);
+/** The answer the books take for a question the setup does not ask; undefined for one it asks. */
+export const laterAnswer = (key: QuestionKey): string | readonly string[] | undefined => (QUESTIONS[key] as QuestionSpec).later;
+
+/**
+ * The answers with each question the setup does not ask filled in by its `later` answer where none is
+ * given (a preset's or her own stands), and which were filled: what the books mark as assumed.
+ */
+export function withLater<A extends Partial<Record<QuestionKey, unknown>>>(answers: A): { answers: A; filled: QuestionKey[] } {
+  const filled = QUESTION_ORDER.filter((k) => !inSetup(k) && answers[k] === undefined);
+  const later = Object.fromEntries(filled.map((k) => [k, laterAnswer(k)]));
+  return { answers: { ...answers, ...later } as A, filled };
+}
 
 /** Whether `key` is asked, given the answers so far. */
 export function asked(key: QuestionKey, answers: Given): boolean {

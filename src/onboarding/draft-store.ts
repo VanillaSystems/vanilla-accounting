@@ -8,7 +8,7 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { writeAtomic } from '../invoices/store.js';
 import { SetupError, checkBank, checkPreset, createWorkspace, type Bank, type Created } from '../workspace/create.js';
-import { PRESETS, QUESTIONS, VAT_QUESTIONS, optionOf, salesKinds, type QuestionKey } from '../workspace/setup.js';
+import { PRESETS, QUESTIONS, VAT_QUESTIONS, optionOf, salesKinds, withLater, type QuestionKey } from '../workspace/setup.js';
 import { parseNetRates } from '../workspace/vat-setup.js';
 import { parseUid } from '../workspace/uid.js';
 import { APP_FOLDER, APP_ROOT, appFolderIn, appLanguages, workspaceAt } from '../workspace/workspace.js';
@@ -35,10 +35,11 @@ function checkFirm(raw: unknown): Firm {
   const name = text(r.name);
   const owner = text(r.owner);
   if (!name) throw new SetupError('The company name is needed.', { reason: 'required', field: 'name' });
-  const uid = parseUid(text(r.uid));
-  if ('error' in uid) throw new SetupError(uid.error, { reason: 'uid', detail: text(r.uid) });
+  // The setup does not ask the UID (#452); one given must be a UID.
+  const uid = text(r.uid) ? parseUid(text(r.uid)) : undefined;
+  if (uid && 'error' in uid) throw new SetupError(uid.error, { reason: 'uid', detail: text(r.uid) });
   if (!owner) throw new SetupError('The owner is needed.', { reason: 'required', field: 'owner' });
-  return { name, uid: uid.uid, owner };
+  return { name, ...(uid ? { uid: uid.uid } : {}), owner };
 }
 
 /** What was said of a firm not whole yet: each field as text, the UID only when it is one. */
@@ -166,7 +167,9 @@ export async function createFromDraft(root: string, now: string): Promise<Create
     throw e;
   }
   // What the kind of firm answered and she never touched stays marked in the books (#385).
-  const assumed = assumedFrom(assumedOfDraft(draft), draft.answers, draft.assumedBy);
+  // So do the answers the setup does not ask (#452), which took their `later` answer.
+  const { answers, filled } = withLater(draft.answers);
+  const assumed = assumedFrom([...assumedOfDraft(draft), ...filled], answers, draft.assumedBy);
   // The private shares her words named, of what she still says is used privately (#402): kept for the rule of the provider's first payment.
   const kept = sharesOf(draft);
   seedCreated(workspaceAt(created.root), { started: draft.started, ...(assumed ? { assumed } : {}), ...(kept ? { shares: kept } : {}) }, now);

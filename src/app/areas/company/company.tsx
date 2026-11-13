@@ -182,7 +182,7 @@ function Profile({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
   const c = ws.company;
   const [edit, setEdit] = useState(false);
   const was: Record<Field, string> = {
-    name: c.name, uid: c.uid, owner: c.owner, business: c.business ?? '',
+    name: c.name, uid: c.uid ?? '', owner: c.owner, business: c.business ?? '',
     street: c.address?.street ?? '', number: c.address?.number ?? '', postcode: c.address?.postcode ?? '', town: c.address?.town ?? '', country: c.address?.country ?? 'CH',
   };
   const [f, setF] = useState(was);
@@ -197,7 +197,7 @@ function Profile({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
     e.preventDefault();
     const changed = FIELDS.filter((k) => f[k].trim() !== was[k]);
     if (!changed.length) { setEdit(false); return; }
-    const undo = { company: { name: c.name, uid: c.uid, owner: c.owner, business: c.business ?? null, address: c.address ?? null } };
+    const undo = { company: { name: c.name, uid: c.uid ?? '', owner: c.owner, business: c.business ?? null, address: c.address ?? null } };
     if (await patch(nav, { company: changeOf(f) }, t('company.saved', { fields: changed.map((k) => t(`company.field.${k}`)).join(', ') }), undo)) setEdit(false);
   }
   const begin = () => { setF(was); setEdit(true); };
@@ -208,8 +208,11 @@ function Profile({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
     <>
       <dl className="kv2 wide">
         <Kv k={t('company.field.name')}>{c.name}</Kv>
-        <Kv k={t('company.field.uid')}><span className="mono">{c.uid}</span></Kv>
-        {chargesVat() && <Kv k={t('company.vatNumber')}><span className="mono">{t('company.vatSuffix', { uid: c.uid })}</span></Kv>}
+        {/* The setup does not ask it (#452): until she enters it, what needs it is named. */}
+        <Kv k={t('company.field.uid')} note={!c.uid && canEdit && !edit ? <button type="button" className="quiet2" onClick={begin}>{t('company.add')}</button> : undefined}>
+          {c.uid ? <span className="mono">{c.uid}</span> : <span className="m" data-testid="uid-missing">{t('company.uidMissing')}</span>}
+        </Kv>
+        {chargesVat() && c.uid && <Kv k={t('company.vatNumber')}><span className="mono">{t('company.vatSuffix', { uid: c.uid })}</span></Kv>}
         <Kv k={t('company.field.owner')}>{c.owner}</Kv>
         <Kv k={t('company.field.business')}>{c.business ?? <span className="m">{t('company.notSet')}</span>}</Kv>
         <Kv k={t('company.address')} note={!c.address && canEdit && !edit ? <button type="button" className="quiet2" onClick={begin}>{t('company.add')}</button> : undefined}>
@@ -309,7 +312,7 @@ function Vat({ ws, books, nav, canEdit }: Props & { ws: CompanyInfo }) {
             )}
             <Kv k={t('company.vatBasis')} note={v.reportingSince ? t('company.vatBasisSince', { year: String(v.reportingSince) }) : undefined}>{t(v.reporting === 'agreed' ? 'company.vatAgreed' : 'company.vatReceived')}</Kv>
             <Kv k={t('company.vatPeriod')} note={t(half ? 'company.vatDueHalf' : 'company.vatDue')}>{t(half ? 'company.vatHalfYearly' : 'company.vatQuarterly')}</Kv>
-            <Kv k={t('company.vatNumber')}><span className="mono">{t('company.vatSuffix', { uid: ws.company.uid })}</span></Kv>
+            <Kv k={t('company.vatNumber')}>{ws.company.uid ? <span className="mono">{t('company.vatSuffix', { uid: ws.company.uid })}</span> : <span className="m">{t('company.uidMissing')}</span>}</Kv>
             <Kv k={t('company.filed')}>{ws.filed.length ? ws.filed.map((q) => <span key={q} className="mono" style={{ display: 'block' }}>{q}</span>) : <span className="m">{t('company.noneFiled')}</span>}</Kv>
           </>
         )}

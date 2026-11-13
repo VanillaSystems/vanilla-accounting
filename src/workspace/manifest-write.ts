@@ -110,7 +110,8 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
   if (c) {
     // A UID a person changes carries a check digit (r9c-5): a typo is refused. The stored one is no change,
     // so a demo's invented UID (wrong on purpose, tools/demo/generate.ts assertFictionalUids) keeps its profile editable.
-    if (typeof c.uid === 'string' && c.uid.trim() !== String(doc.getIn(['company', 'uid']) ?? '')) {
+    // An empty one removes it (#452): the books are kept without a UID until she enters one.
+    if (typeof c.uid === 'string' && c.uid.trim() && c.uid.trim() !== String(doc.getIn(['company', 'uid']) ?? '')) {
       const parsed = parseUid(c.uid);
       if ('error' in parsed) throw new WorkspaceRefusal(`company.uid: ${parsed.error}`, { code: 'uid', params: { detail: c.uid.trim() } });
       c.uid = parsed.uid;

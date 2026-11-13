@@ -120,6 +120,17 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- The setup asks only what the books need from the start (#452). No UID: the form, the setup
+  conversation and `npm run init` (only `--uid`) create the books without it; Firma › Firma shows
+  it as not set, with what needs it, and «Hinzufügen». An invoice with VAT asks for it, and the VAT
+  return's XML waits for it: the review task withholds «Freigegeben» with a link to Firma › Firma,
+  the XML step stops with words, `npm run vat-xml` refuses and says where it goes. An invoice of a
+  firm not registered for VAT needs none. Not asked any more: fiscal year (calendar), starting point
+  (new), customers abroad (no), the owner paying privately (yes), private use (none) and payouts
+  (no; the drop row asks for the clearing account with the provider's first report); each takes the
+  kind of firm's answer, else that one, books nothing differently and is shown as assumed in the
+  books. The form drops «Was die Firma tut» and «Wohin die Bücher Ende Jahr gehen» (the first
+  stays under Firma › Firma, the second is `--export-to` of `npm run init`; nothing reads it yet) and says how many of its questions are answered.
 - **⚠ figures** A supplier's refund without a credit note takes the code of the purchase it refunds
   with a minus (#357, owner's decision 2026-11-13; MWSTG Art. 41 Abs. 2): -I81 for an I81 purchase,
   -I0 for one without input tax, a part at the purchase's rate. Before, a company rule booked and

@@ -17,11 +17,11 @@ const index = loadBooks(ws);
 const entries = index.journalEntries ?? [];
 const adjustments = index.config?.vatAdjustments ?? [];
 
-function buildXml(periodKey: QuarterKey): { xml: string; payable: number } {
+function buildXml(periodKey: QuarterKey, uid: string): { xml: string; payable: number } {
   const { from, to } = derivePeriod(periodKey)!;
   const { ziffern, payable } = vat().figures(entries, periodKey, adjustments);
   const { xml, warnings } = ech0217Xml({
-    uid: ws.company.uid, organisationName: ws.company.name, period: { key: periodKey, from, to },
+    uid, organisationName: ws.company.name, period: { key: periodKey, from, to },
     ziffern, payable, form: vat().form, rateRows: vat().rateRows, method: filingMethod(), basis: filingBasis(),
     generationTime: new Date().toISOString().replace(/\.\d{3}Z$/, ''),
   });
@@ -48,8 +48,13 @@ if (lock.isClosed(derivePeriod(key)!.to)) {
   console.error(`A correction is an entry dated in the open period with corrects: "${key}"; it is declared in ${key}'s Korrekturabrechnung (form 0535, MWST tab).`);
   process.exit(1);
 }
+// The XML names the firm by its UID (#452): the setup does not ask it.
+if (!ws.company.uid) {
+  console.error(`The company's UID is missing: the XML names the company by it. Enter it in the app under Firma › Firma (or company.uid in ${ws.paths.manifest}), then run npm run vat-xml again.`);
+  process.exit(1);
+}
 {
-  const { xml, payable } = buildXml(key);
+  const { xml, payable } = buildXml(key, ws.company.uid);
   const out = process.argv[3] || join(ws.paths.data, `mwst-ech0217-${key}.xml`);
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, xml);

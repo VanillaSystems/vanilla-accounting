@@ -115,9 +115,11 @@ export function secretsOf(src: SecretSources): Secret[] {
   add('company', 'phrase', company.name);
   add('company', 'phrase', company.name.replace(/\s+(GmbH|AG|SA|Sàrl|Sarl|KlG|KG)$/i, ''));
   add('owner', 'phrase', company.owner);
-  add('uid', 'token', company.uid);
-  add('uid', 'token', company.uid.replace(/^CHE-/, ''));
-  add('uid', 'token', company.uid.replace(/\D/g, ''));
+  if (company.uid) {
+    add('uid', 'token', company.uid);
+    add('uid', 'token', company.uid.replace(/^CHE-/, ''));
+    add('uid', 'token', company.uid.replace(/\D/g, ''));
+  }
 
   for (const box of src.mailboxes) {
     add('mailbox', 'token', box);

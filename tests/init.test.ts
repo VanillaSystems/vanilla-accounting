@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { chartFor, ChartError, KMU_CHART, loadChart } from '../src/workspace/chart.js';
-import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, isSupported, profileOf, type Answers } from '../src/workspace/setup.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, SETUP_QUESTIONS, isSupported, profileOf, type Answers } from '../src/workspace/setup.js';
 import { parseUid } from '../src/workspace/uid.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, workspaceAt, workspacePaths, yearPaths } from '../src/workspace/workspace.js';
 import { loadBooks, saveBooks } from '../src/books/store.js';
@@ -255,11 +255,35 @@ test('doctor names the fix when a bank books on an account the chart lacks; the 
   rmSync(bin, { recursive: true, force: true });
 });
 
-test('from-source.md documents every init question, in the order the wizard asks', () => {
+test('from-source.md documents every init question, those it asks in the order the wizard asks, then those it does not ask', () => {
   const guide = readFileSync(join(APP_ROOT, 'docs', 'from-source.md'), 'utf8');
-  const at = QUESTION_ORDER.map((k) => guide.indexOf(`**${QUESTIONS[k].ask}`));
-  QUESTION_ORDER.forEach((k, i) => assert.ok(at[i] >= 0, `the guide names "${QUESTIONS[k].ask}"`));
-  assert.deepEqual(at, [...at].sort((a, b) => a - b), 'same order as QUESTION_ORDER');
+  const at = (keys: readonly (keyof typeof QUESTIONS)[]) => keys.map((k) => guide.indexOf(`**${QUESTIONS[k].ask}`));
+  QUESTION_ORDER.forEach((k) => assert.ok(guide.includes(`**${QUESTIONS[k].ask}`), `the guide names "${QUESTIONS[k].ask}"`));
+  const asked = at(SETUP_QUESTIONS);
+  assert.deepEqual(asked, [...asked].sort((a, b) => a - b), 'same order as the wizard asks');
+  const later = at(QUESTION_ORDER.filter((k) => !SETUP_QUESTIONS.includes(k)));
+  assert.ok(Math.min(...later) > Math.max(...asked), 'those it does not ask after those it asks');
+});
+
+test('init asks no UID and none of the answers that book nothing differently (#452): the books open without them, a UID given by flag is kept', () => {
+  const base = tmp();
+  const dir = join(base, 'books');
+  const r = cli('init.ts', ['--preset', 'custom', '--dir', dir, '--name', 'Ohne UID GmbH', '--owner', 'Erika Beispiel', '--legal-form', 'GmbH',
+    '--vat-registered', 'yes', '--vat-method', 'effective', '--basis', 'received', '--period', 'quarterly', '--sells', 'services', '--imports', 'no', '--employees', 'none',
+    '--bank', 'UBS:CHF', '--no-env', '--yes'], undefined, { PATH: '/nonexistent' });
+  assert.equal(r.code, 0, r.out);
+  const ws = workspaceAt(dir);
+  assert.equal(ws.company.uid, undefined);
+  assert.deepEqual([ws.profile?.fiscalYear, ws.profile?.start, ws.profile?.foreignCustomers, ws.profile?.ownerPaysPrivately, ws.profile?.privateUse, ws.profile?.payouts], ['calendar', 'new', 'no', 'yes', [], 'no']);
+  const withUid = join(base, 'with-uid');
+  const r2 = cli('init.ts', ['--preset', 'consultant', '--dir', withUid, '--name', 'Mit UID GmbH', '--uid', 'CHE-153.004.184', '--owner', 'Erika Beispiel', '--bank', 'UBS:CHF', '--start', 'switching', '--no-env', '--yes'], undefined, { PATH: '/nonexistent' });
+  assert.equal(r2.code, 0, r2.out);
+  assert.equal(workspaceAt(withUid).company.uid, 'CHE-153.004.184');
+  assert.equal(workspaceAt(withUid).profile?.start, 'switching', 'a question the setup does not ask still takes its flag');
+  const bad = cli('init.ts', ['--preset', 'consultant', '--dir', join(base, 'bad'), '--name', 'X GmbH', '--uid', TYPO_UID, '--owner', 'E', '--bank', 'UBS:CHF', '--no-env', '--yes']);
+  assert.notEqual(bad.code, 0);
+  assert.match(bad.out, /check digit/);
+  rmSync(base, { recursive: true, force: true });
 });
 
 test('a new workspace books its first transaction: no prior-year export, the chart from accounts.json, the casebook as examples', () => {

@@ -55,7 +55,7 @@ test('a filing run: the report\'s figures, the review, the XML of vat-xml, the f
   await engine.idle();
   assert.equal(waitsAt(), 'submit');
   const { from, to } = derivePeriod(Q)!;
-  const cli = ech0217Xml({ uid: ws.company.uid, organisationName: ws.company.name, period: { key: Q, from, to }, ziffern: expected.ziffern, payable: expected.payable, form: vat().form, rateRows: vat().rateRows, generationTime: '' });
+  const cli = ech0217Xml({ uid: ws.company.uid!, organisationName: ws.company.name, period: { key: Q, from, to }, ziffern: expected.ziffern, payable: expected.payable, form: vat().form, rateRows: vat().rateRows, generationTime: '' });
   const written = (run().steps.find((s) => s.step === 'xml')!.output!.xml as { path: string }).path;
   assert.equal(noTime(readFileSync(written, 'utf8')), noTime(cli.xml), 'the XML of npm run vat-xml');
   assert.equal(loadBooks(ws).config.closedThrough, '2026-03-31', 'nothing closed before the person filed');
