@@ -144,12 +144,13 @@ Two markers flag an entry you must read before you update:
   books. The form drops «Was die Firma tut» and «Wohin die Bücher Ende Jahr gehen» (the first
   stays under Firma › Firma, the second is `--export-to` of `npm run init`; nothing reads it yet) and says how many of its questions are answered.
   The name field is just «Firmenname» (also in `npm run init`), no longer «wie im Handelsregister».
-  Without a UID in Firma › Firma, the firm's own invoice is still its own when its name heads the
-  text and the one UID it shows stands in the letterhead below it (a VAT invoice prints it): its
-  customer's payment is proposed with it, never linked by code, and a supplier's invoice addressed
-  to the firm stays a supplier's. The receipt then asks «Diese Rechnung trägt die UID …: ist das
-  eure?» with «Übernehmen», which keeps it under Firma › Firma with the usual check; the app never
-  keeps it on its own. An invoice of a firm without a UID prints no empty UID in its footer, and
+  Without a UID in Firma › Firma, the firm's own invoice is still its own when its name is the name
+  of the first line (not the start of a longer one) and the one UID it shows stands in the
+  letterhead below it (a VAT invoice prints it): its customer's payment is proposed with it, never
+  linked by code, and a supplier's invoice addressed to the firm stays a supplier's. Once such an
+  invoice is linked to money in, the receipt asks «Ist das eure eigene UID (nicht die eines
+  Lieferanten)?» with «Übernehmen», which keeps it under Firma › Firma with the usual check; the app
+  never keeps it on its own. An invoice of a firm without a UID prints no empty UID in its footer, and
   the printed 0535 leaves the UID row out. The fiscal year and the customers abroad, which nothing
   in the app changes, are not marked as assumed.
   Manifest schema 4: `company.uid` may be absent. A manifest of schema 3 loads unchanged (every one

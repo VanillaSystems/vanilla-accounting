@@ -70,8 +70,10 @@ test('a firm without a UID in its settings (#452): its VAT invoice is its own by
   const firm: Firm = { name: 'Beispiel GmbH' };
   const probe = treppenhaus({ id: 'probe', vatId: 'CHE-123.456.789', extractedText: 'Beispiel GmbH\nCHE-123.456.789 MWST\nRechnung 2026-014\nDatum: 10.07.2026\nBeratung\nMWST 8.1% 932.90\nTotal CHF 12450.00' });
   assert.equal(issuedByFirm(probe, firm), 'name');
-  assert.equal(uidToKeep(probe, firm), 'CHE-123.456.789');
-  assert.equal(uidToKeep(probe, { ...firm, uid: 'CHE-123.456.789' }), undefined, 'kept already: nothing to offer');
+  assert.equal(uidToKeep(probe, firm, true), 'CHE-123.456.789', 'linked to money in: offered');
+  assert.equal(uidToKeep(probe, firm, false), undefined, 'the letterhead alone: not offered');
+  assert.equal(uidToKeep(probe, { ...firm, uid: 'CHE-123.456.789' }, true), undefined, 'kept already: nothing to offer');
+  assert.equal(issuedByFirm({ ...probe, extractedText: `Beispiel GmbH, Musterweg 1, 8000 Zürich\n${probe.extractedText}` }, firm), 'name', 'the name before its address');
   // Its customer's payment: proposed with it, never linked by code (a name is no proof).
   const r = await run(books([probe], [pay('p', { description: 'Rechnung 2026-014' })]), firm);
   assert.deepEqual(r.linked, []);
@@ -79,7 +81,14 @@ test('a firm without a UID in its settings (#452): its VAT invoice is its own by
 
   const supplier = garage({ extractedText: 'Garage Meier AG\nMWST-Nr. CHE-999.888.777 MWST\nAn: Beispiel GmbH\nRechnung RE-4471\nTotal CHF 1850.00' });
   assert.equal(issuedByFirm(supplier, firm), false, 'her name as the addressee');
-  assert.equal(uidToKeep(supplier, firm), undefined);
+  assert.equal(uidToKeep(supplier, firm, true), undefined);
+  // Re-review (a): her name as the addressee on the first line (the supplier's logo an image), the supplier's UID close below.
+  const addressee = garage({ vatId: 'CHE-999.888.777', extractedText: 'Beispiel GmbH\nMusterweg 1\n8000 Zürich\nGarage Meier AG CHE-999.888.777 MWST\nRechnung RE-4471\nTotal CHF 1850.00' });
+  assert.equal(uidToKeep(addressee, firm, false), undefined, 'paid by money out (her card): the supplier\'s UID is never offered');
+  // (b): a supplier whose name holds hers.
+  const longer = garage({ vatId: 'CHE-999.888.777', extractedText: 'Beispiel GmbH Treuhand\nCHE-999.888.777 MWST\nAn: Malerei Huber\nRechnung RE-4471\nTotal CHF 1850.00' });
+  assert.equal(issuedByFirm(longer, firm), false, 'a longer name is another firm');
+  assert.equal(uidToKeep(longer, firm, true), undefined);
   const logoImage = garage({ vatId: undefined, extractedText: 'Beispiel GmbH\nMusterweg 1\n8000 Zürich\nRechnung RE-4471\nService Lieferwagen\nMWST 8.1%\nTotal CHF 1850.00\nZahlbar innert 30 Tagen\nGarage Meier AG, CHE-999.888.777 MWST' });
   assert.equal(issuedByFirm(logoImage, firm), false, 'a UID below the letterhead is the supplier\'s');
   const two = garage({ vatId: undefined, extractedText: 'Beispiel GmbH\nCHE-123.456.789 MWST\nGarage Meier AG CHE-999.888.777 MWST\nRechnung RE-4471' });

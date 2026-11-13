@@ -1,6 +1,6 @@
 /**
  * The firm's own invoice while Firma › Firma has no UID (#452): the UID its letterhead shows,
- * offered to keep (src/intake/own-invoice.ts uidToKeep). The person decides; «Übernehmen» writes it
+ * offered to keep once the invoice is linked to money in (src/intake/own-invoice.ts uidToKeep). The person decides; «Übernehmen» writes it
  * through Firma's own path, which checks it, and the toast takes it back.
  */
 import { useState } from 'react';
@@ -13,7 +13,8 @@ import type { Ledger, ReceiptView } from './model.js';
 
 export function UidOffer({ v, l, nav }: { v: ReceiptView; l: Ledger; nav: Nav }) {
   const [busy, setBusy] = useState(false);
-  const uid = uidToKeep(v.r, l.firm);
+  // Only on an invoice linked to money in: more than its letterhead says it is hers.
+  const uid = uidToKeep(v.r, l.firm, v.links.some((ref) => l.txByRef.get(ref)?.direction === 'CRDT'));
   if (!uid) return null;
   const keep = () => {
     setBusy(true);
