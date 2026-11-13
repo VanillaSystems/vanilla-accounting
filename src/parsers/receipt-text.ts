@@ -8,6 +8,7 @@ import type { Receipt, VatRateGroup } from '../types/index.js';
 import type { DocumentsData } from '../core/modules/schema.js';
 import { documentWordsInUse } from '../books/statement-facts.js';
 import { HEAD, firstOf, namesStatement, wordsRe } from '../core/modules/words.js';
+import { invoicing } from '../engines/index.js';
 
 // A Swiss UID survives text extraction in more shapes than one: extraction wraps it across
 // lines ("#CHE-\n153.004.184 MWST" on Shopify's bills, the same break after "CHE-" on some
@@ -28,9 +29,13 @@ export function uidsIn(text: string): Set<string> {
 /** A VAT number to compare whole: upper case, without spaces, dots and dashes («CHE-123.456.789» → «CHE123456789», «DE123456789» stays). */
 export const normUid = (s: string): string => s.toUpperCase().replace(/[\s.\-]/g, '');
 
-/** Cheap pre-filter: anything that could be Swiss MWST. Absence skips the model and records hasSwissVat=false. */
-export function hasVatIndicator(text: string): boolean {
-  return /MWST|MwSt|Mehrwertsteuer|CHE-\d{3}|\bVAT\b|USt|\d[.,]\d\s?%/i.test(text);
+/**
+ * Anything on a text that could be VAT: one of the jurisdiction's VAT labels as a word (invoicing.yaml
+ * `vatLabels`: «USt» stands alone, never inside «August»), a Swiss UID however it is spaced, a rate
+ * with a decimal. A sign for the document's kind (document-kind.ts); its absence proves nothing (#391).
+ */
+export function hasVatIndicator(text: string, labels: readonly string[] = invoicing().vatLabels ?? []): boolean {
+  return (labels.length > 0 && wordsRe(labels).test(text)) || hasSwissUid(text) || /\d[.,]\d\s?%/.test(text);
 }
 
 /**

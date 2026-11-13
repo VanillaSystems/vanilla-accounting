@@ -332,6 +332,13 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A receipt that names no VAT is «MWST noch nicht gelesen», no longer «keine CH-MWST» (#391).
+  Only a model, or the receipt's own words («ohne MWST», «not subject to Swiss VAT», «von der MWST
+  ausgenommen»), say it carries no Swiss VAT; the next run with an AI reads it. So a rule drafted on
+  such receipts asks for the VAT instead of filling «keine», and Bezugsteuer is no longer booked
+  because a receipt said nothing. Its payment does not wait because of it. A VAT word counts only
+  as a word: «August», «Muster» and «Industrie» are no longer read as «USt». TVA, IVA and a UID
+  written with spaces («CHE 111.222.333 TVA») count now.
 - A payment provider's payouts list dropped before the firm has that provider is named as the
   provider's other export, with the reports to bring instead, at the first drop too (#425); before,
   it became a bank statement's column question; the dialog's head says it was set aside, not
