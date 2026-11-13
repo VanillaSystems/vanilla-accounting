@@ -146,6 +146,7 @@ function noteText(n: DraftNote): string {
     case 'noProposal': return t(n.linked ? 'journal.byHand.note.noProposal.receipt' : 'journal.byHand.note.noProposal.none', { name: n.name });
     case 'discount': return t(n.vat === 'paid' ? 'journal.byHand.note.discount' : n.vat === 'rates' ? 'journal.byHand.note.discountRates' : 'journal.byHand.note.discountNoVat', { percent: String(n.percent), amount: fmt(n.amount) });
     case 'ownerOutlays': return t('journal.byHand.note.ownerOutlays', { amount: fmt(n.open) });
+    case 'ownerForeign': return t('journal.byHand.note.ownerForeign', { currency: n.currency });
     default: return t(`journal.byHand.note.${n.kind}`);
   }
 }

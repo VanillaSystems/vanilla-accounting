@@ -5,7 +5,7 @@
  */
 import { clearProgress, noteProgress } from './step-progress.js';
 import { classifyTransactions, loadClassifyContext } from '../booking/classify.js';
-import { answerSettles, receiptKnowledge, receiptWaitOf } from '../booking/receipt-wait.js';
+import { answerSettles, mustSettle, receiptKnowledge, receiptWaitOf } from '../booking/receipt-wait.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
@@ -182,12 +182,15 @@ export const ACTIONS: Record<string, Action> = {
       // No provisional booking: a payment that needs a receipt waits for it, as in the inbox run (issue #29).
       // An answer that only settles (the owner's outlays paid back) has no receipt of its own and is booked (issue #90).
       const wait = receiptWaitOf(scratch, t, context, receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws), fx);
+      // A repayment of the owner's outlays goes to the model but is booked only onto her account (#402).
       const waits = wait.wait;
+      const settles = mustSettle(wait);
       if (wait.wait && wait.unread) return { outcome: 'held', output: { why: 'receiptUnread' } };
       if (waits && (!ask || t.waitsForReceipt?.decided)) return { outcome: 'held', output: { why: 'waitsForReceipt' } };
       const { classified, failed, asked, unasked } = await classifyTransactions(scratch, [t], { ask, fx, context });
       const entries = scratch.journalEntries.slice(before);
       if (waits && !answerSettles(t, entries, context)) return { outcome: 'held', output: { why: 'waitsForReceipt' } };
+      if (settles && !waits && !answerSettles(t, entries, context)) return { outcome: 'undecided', output: { why: 'failed' } };
       if (!failed.length && classified.length) return { outcome: 'decided', output: { entries } };
       // A rule holds the payment for the person: its one question (workflows/ask) is the task, not «Bewegung von Hand buchen» (r7h-27).
       if (asked.length) {
@@ -221,7 +224,7 @@ export const ACTIONS: Record<string, Action> = {
         const wait = entries.length ? receiptWaitOf(b, t, context, receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws), fx) : undefined;
         if (wait && !(wait.wait && wait.unread) && !reconciliationOf(b, t.ref) && entries.every((e) => !!e.rule)) {
           // No `rule` in the output: askedBy counts it as the question of an ask rule, and this rule asked nothing.
-          if (wait.wait && !answerSettles(t, entries, context)) return { outcome: 'waits' };
+          if (mustSettle(wait) && !answerSettles(t, entries, context)) return { outcome: 'waits' };
           // Booked here by code, not by the workflow's book step: that step's effect is applied once per payment, so a payment
           // booked once, taken back and decided again would end «booked» with nothing written (#396). A dry run writes nothing.
           if (run?.mode !== 'live') return { outcome: 'booked', output: { entries } };

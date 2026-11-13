@@ -44,7 +44,7 @@ import { bookByRules } from '../../workflows/book-by-rules.js';
 import type { JournalEntry } from '../../types/index.js';
 import { reconciliationOf } from '../../books/reconcile.js';
 import { classifyTransactions, loadClassifyContext } from '../../booking/classify.js';
-import { answerSettles, receiptKnowledge, receiptWaitOf } from '../../booking/receipt-wait.js';
+import { answerSettles, mustSettle, receiptKnowledge, receiptWaitOf } from '../../booking/receipt-wait.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { recordDeletion } from '../../saving/changes.js';
 import { existsSync, readFileSync } from 'node:fs';
@@ -467,7 +467,7 @@ router.post('/api/rules/book-open', async (_req, res) => {
     if (wait.wait && wait.unread) { n.unread++; continue; }
     const entries = decidedBy.get(t.ref);
     if (!entries?.length) { n.model++; continue; }
-    if (wait.wait && !answerSettles(t, entries, context)) { n.receipt++; continue; }
+    if (mustSettle(wait) && !answerSettles(t, entries, context)) { n.receipt++; continue; }
     decided.push(t.ref);
   }
   n.later = Math.max(0, decided.length - KEEP_RUNS_MAX);

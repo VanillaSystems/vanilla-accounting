@@ -11,8 +11,8 @@ import { parseDocument, YAMLMap, YAMLSeq } from 'yaml';
 import { loadBooks } from '../books/store.js';
 import { loadClassifyContext, mappedReceipts, paymentFacts, ruleBookingLines, ruleOfPayment, type RuleLine } from '../booking/classify.js';
 import { stableWords } from '../knowledge/gaps.js';
-import { paysOwner, receiptKnowledge, repaysOwner } from '../booking/receipt-wait.js';
-import { outlaysOpen } from '../booking/owner-outlays.js';
+import { paysOwner, receiptKnowledge, repaymentsOf } from '../booking/receipt-wait.js';
+import { baseCurrency } from '../engines/index.js';
 import { payoutWaitOf } from '../booking/providers.js';
 import { isOwnBankFee } from '../booking/bank-fee.js';
 import type { Counterparty } from '../knowledge/counterparties.js';
@@ -229,7 +229,11 @@ function natureOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, cont
   // A wage on a firm that pays wages (its wording, matched on the text only as receipt-wait.ts does): the wage account, without a code (#382).
   if (tx.direction !== 'CRDT') {
     // Her outlays paid back (#402): her name as the payee, no wage, and her account holds at least as much not paid back.
-    if (context.ownerAccount && repaysOwner(books, tx, context, wages())) return { kind: 'ownerOutlays', account: context.ownerAccount, open: outlaysOpen(books, context.ownerAccount, context.moneyAccounts ?? new Set(), tx.date, tx.ref) };
+    const toOwner = !!context.ownerAccount && paysOwner({ counterparty: tx.counterparty, description: '' }, context.ownerName) && !wages().some((w) => w.test(tx.description));
+    const open = toOwner ? repaymentsOf(books, context, wages(), loadFxResolver()).get(tx.ref) : undefined;
+    if (open !== undefined) return { kind: 'ownerOutlays', account: context.ownerAccount!, open };
+    // In another currency than the books': the outlays are kept in the books' currency, so the form proposes nothing and says why (#402).
+    if (toOwner && tx.currency !== baseCurrency()) return { kind: 'ownerForeign', currency: tx.currency };
     if (!context.wageAccount || !wages().some((w) => w.test(tx.description))) return undefined;
     // Books that carry wages with their deductions (cls-salary): the payslip's lines are hers, no account is proposed.
     const deductions = context.wageDeductions;

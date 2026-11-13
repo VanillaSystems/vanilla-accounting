@@ -32,8 +32,7 @@ import { EFFECTIVE_QUARTERLY, type VatSetup } from '../workspace/vat-setup.js';
 import { foreignTaxIn, saleCodeOf, saleCodeReason } from '../accounting/sales-without-vat.js';
 import { codeOfFacts, formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { takesNoCode } from './rule-vat.js';
-import { receiptWordings, repaysOwner } from './receipt-wait.js';
-import { outlaysOpen } from './owner-outlays.js';
+import { receiptWordings, repaymentsOf } from './receipt-wait.js';
 import { employs } from '../workspace/setup.js';
 import { bookVatCorrections, type CorrectionsDone } from './vat-corrections.js';
 import { creditNoteCodeOf } from '../accounting/credit-note-code.js';
@@ -942,6 +941,8 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     outcome.unasked = toModel.filter((tx) => !proposing.has(tx.ref)).map((tx) => tx.ref);
     return outcome;
   }
+  // The payments that repay the owner's outlays, each told what was open for it after the earlier ones (#402).
+  const repayments = repaymentsOf(books, context, context.wageWordings ?? [], fx);
   const batches: BankTransaction[][] = [];
   for (let i = 0; i < toModel.length; i += BATCH_SIZE) batches.push(toModel.slice(i, i + BATCH_SIZE));
 
@@ -953,8 +954,8 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
       const prompt = buildBatchClassifyPrompt(batch.map((tx) => {
         const input = classifyInput(booksOf(tx), tx, legsOf(tx), context.counterparties);
         // A payment that pays the owner back her outlays (#402): the model is told what her account holds, so it books there, never an expense again.
-        const owed = context.ownerAccount && repaysOwner(books, tx, context, context.wageWordings ?? [])
-          ? { account: context.ownerAccount, open: outlaysOpen(books, context.ownerAccount, context.moneyAccounts ?? new Set(), tx.date, tx.ref) } : undefined;
+        const open = repayments.get(tx.ref);
+        const owed = context.ownerAccount && open !== undefined ? { account: context.ownerAccount, open } : undefined;
         return { ...input, tx: { ...input.tx, ref: keyOf(tx), ...(owed && { ownerOutlays: owed }) } };
       }), context, examples);
       let model: string | undefined;

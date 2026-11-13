@@ -68,7 +68,9 @@ export type PaymentNature =
   /** A wage on a firm whose books carry wages with their deductions (on `deductions`): no account is proposed. */
   | { kind: 'wage'; deductions: string }
   /** Money out to the owner that pays back her outlays, which her account holds not paid back (`open`, src/booking/owner-outlays.ts, #402): her account, without a code. */
-  | { kind: 'ownerOutlays'; account: string; open: number };
+  | { kind: 'ownerOutlays'; account: string; open: number }
+  /** Money out to the owner in a foreign currency: her outlays are kept in the books' currency, so nothing is proposed and the form says why (#402). */
+  | { kind: 'ownerForeign'; currency: string };
 
 /** What code knows beside the books when the form opens. */
 export interface DraftKnowledge {
@@ -109,6 +111,7 @@ export type DraftNote =
   | { kind: 'refund' }
   | { kind: 'owner' }
   | { kind: 'ownerOutlays'; open: number }
+  | { kind: 'ownerForeign'; currency: string }
   | { kind: 'invoicePaid'; number: string; surplus: number }
   | { kind: 'prepayment'; number: string }
   | { kind: 'unloaded' }
@@ -498,6 +501,7 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
 
   // Money for a cancelled invoice is the customer's, not a sale: the earlier sale's account and code would mislead.
   // Her outlays paid back: her account, before any precedent of the payee (#402): the books say what it pays.
+  if (proposes && !moneyIn && nature?.kind === 'ownerForeign') { notes.push(nature); return result([place('', paid, '')]); }
   if (proposes && !moneyIn && nature?.kind === 'ownerOutlays') {
     notes.push({ kind: 'ownerOutlays', open: nature.open });
     return result([place(nature.account, paid, '', { account: { from: 'ownerOutlays' } })]);

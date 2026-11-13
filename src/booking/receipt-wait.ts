@@ -29,8 +29,8 @@
 import { basename } from 'node:path';
 import { identify, signalsOfTransaction } from '../knowledge/counterparties.js';
 import type { Knowledge } from '../knowledge/layers.js';
-import { baseCurrency, chart, withoutInputTax } from '../engines/index.js';
-import { outlaysOpen } from './owner-outlays.js';
+import { chart, withoutInputTax } from '../engines/index.js';
+import { ownerFactsOf, ownerRepayments, paysOwner } from './owner-outlays.js';
 import type { Books } from '../books/store.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import { mappedReceipts, ruleOfPayment, type ClassifyContext } from './classify.js';
@@ -165,24 +165,22 @@ export function answerSettles(tx: BankTransaction, entries: readonly Pick<Journa
 }
 
 /**
- * Whether money out to the owner pays her outlays back (#402): her name as the payee (the
- * counterparty, never the text: PR #389), not a wage by the evidence rule's wording, in the books'
- * currency, and no more than the outlays her account holds not paid back up to its day.
+ * The payments to the owner that pay her outlays back, each with what was open for it
+ * (src/booking/owner-outlays.ts ownerRepayments, #402): one a company rule decides is the rule's.
  */
-export function repaysOwner(books: Pick<Books, 'journalEntries' | 'transactions'>, tx: BankTransaction, context: Pick<ClassifyContext, 'ownerAccount' | 'ownerName' | 'moneyAccounts'>, wages: readonly Wording[]): boolean {
-  if (tx.direction !== 'DBIT' || !context.ownerAccount || tx.currency !== baseCurrency()) return false;
-  if (!paysOwner({ counterparty: tx.counterparty, description: '' }, context.ownerName) || wages.some((w) => w.test(tx.description))) return false;
-  const open = outlaysOpen(books, context.ownerAccount, context.moneyAccounts ?? new Set(), tx.date, tx.ref);
-  return open > 0 && Math.round(Math.abs(tx.amount) * 100) <= Math.round(open * 100);
+export function repaymentsOf(books: Books, context: ClassifyContext, wages: readonly Wording[], fx: FxResolver): Map<string, number> {
+  const f = ownerFactsOf(context);
+  return f ? ownerRepayments(books, f, (text) => wages.some((w) => w.test(text)), (t) => !!ruleOfPayment(books, t, context, fx)) : new Map();
 }
 
-/** Every word of the owner's name stands in the payment's counterparty or text («Anna Muster» in «Sent money to Anna Maria Muster»). */
-export function paysOwner(tx: Pick<BankTransaction, 'counterparty' | 'description'>, owner: string | undefined): boolean {
-  const words = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().split(/[^\p{L}]+/u).filter((w) => w.length > 1);
-  const name = words(owner ?? '');
-  const said = new Set(words(`${tx.counterparty ?? ''} ${tx.description}`));
-  return name.length > 0 && name.every((w) => said.has(w));
-}
+export { paysOwner };
+
+/**
+ * Whether the classifier's answer for a payment may be booked, given its receipt wait: one that
+ * waits only when its answer settles (answerSettles), and one that repays the owner only when the
+ * answer books it onto her account or money (#402): an expense there would book her outlays twice.
+ */
+export const mustSettle = (w: ReceiptWait): boolean => w.wait || w.why === 'repaysOwner';
 
 const ibanOf = (iban: string) => iban.replace(/\s+/g, '').toUpperCase();
 const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -253,7 +251,7 @@ export function receiptWaitOf(books: Books, tx: BankTransaction, context: Classi
   const then = ruleOfPayment(books, tx, context, fx)?.rule.then;
   const ruleAccount = then?.kind === 'book' ? then.booking.account : then?.booking?.account;
   const payout = !!providerOfPayment(tx, linked, context.counterparties ?? []);
-  const repays = repaysOwner(books, tx, context, known.wages);
+  const repays = !then && repaymentsOf(books, context, known.wages, fx).has(tx.ref);
   return receiptWait(tx, { linked: linkedOf(linked, tx), ...(routing.kind === 'known' && { business: routing.counterparty }), ...(ruleAccount && { ruleAccount }), ...(then?.kind === 'ask' && { ruleAsks: true }), ...(payout && { payout }), ...(repays && { repaysOwner: true }) }, {
     ...known,
     ownIbans: new Set(context.bankAccounts.flatMap((a) => (a.iban ? [ibanOf(a.iban)] : []))),
