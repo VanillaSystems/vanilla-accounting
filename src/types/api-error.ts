@@ -190,7 +190,7 @@ export type ApiRefusal =
   | { code: 'oldLayout'; params: { root: string } }
   | { code: 'setup'; params: SetupRefusal }
   /** An opening balance typed for an account that takes none by hand (Firma › Eröffnung). */
-  | { code: 'openingAccount'; params: { account: string; reason: 'notBalanceSheet' | 'equity' | 'foreign' } }
+  | { code: 'openingAccount'; params: { account: string; reason: 'notBalanceSheet' | 'equity' | 'foreign'; currency?: string } }
   /** Opening balances typed for a year an earlier year of the books opens. */
   | { code: 'openingNotFirstYear'; params: { year: string } }
   | { code: 'openingYearClosed'; params: { year: string } }

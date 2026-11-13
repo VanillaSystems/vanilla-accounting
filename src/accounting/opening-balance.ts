@@ -5,7 +5,7 @@
  * exactly that amount. Taken, it is the account's opening of the year (config.openingBalances,
  * keyed by year): nothing moved on the account before the statement in these books, so the
  * balance on 1 January of them is the bank's balance before the statement. The other side is
- * retained earnings, where npm run import-opening carries the difference too, so the year opens
+ * retained earnings, where the import of a closed year carries the difference too, so the year opens
  * balanced. Pure: the statement route writes it, the runs table offers it.
  */
 import type { AccountingConfig, Index } from '../types/index.js';
@@ -83,6 +83,19 @@ export function withOpening(openings: Openings, year: string, account: string, a
   const plug = toRappen(balances[equity] ?? 0) + (liability ? -delta : delta);
   if (plug === 0) delete balances[equity];
   else balances[equity] = fromRappen(plug);
+  const out = { ...openings };
+  if (Object.keys(balances).length) out[year] = balances;
+  else delete out[year];
+  return Object.keys(out).length ? out : undefined;
+}
+
+type NativeOpenings = AccountingConfig['openingBalancesNative'];
+
+/** The native opening balances with `account` opening `year` at `value` in its currency (null: without it); an emptied year is dropped. */
+export function withNativeOpening(openings: NativeOpenings, year: string, account: string, value: { amount: number; currency: string } | null): NativeOpenings {
+  const balances = { ...openings?.[year] };
+  if (value) balances[account] = value;
+  else delete balances[account];
   const out = { ...openings };
   if (Object.keys(balances).length) out[year] = balances;
   else delete out[year];

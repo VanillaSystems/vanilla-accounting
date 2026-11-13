@@ -322,6 +322,9 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Firma › Eröffnung (#427): a foreign-currency bank account is no longer refused with a terminal
+  command. Typed, it shows a second field: its value in CHF and its balance in its own currency,
+  as the balance sheet shows both; the statements are checked against the latter.
 - Keeping rules (#396, #392): «Rückgängig» on a second kept rule took back the first rule's bookings
   and the second rule's file. Each keep now has a line of its own above Aufgaben and Firma › Regeln
   («4 Zahlungen gebucht · Rückgängig»), true to its own numbers and still there after a reload; the
