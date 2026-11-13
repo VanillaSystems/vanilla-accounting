@@ -561,7 +561,7 @@ const MIXED_WAYS = 4096;
 /**
  * A domestic order whose tax shows two or more rates (a cart of tea at the reduced rate and a teapot at
  * the normal one, #416), by its line items: each rate the report names with its tax, the items put
- * at the rates so that each rate's tax on its items rounds to what the report says (a Rappen either
+ * at the rates so that each rate's tax on its items rounds to what the report says (a cent either
  * way), the items adding up to what was charged, no shipping or discount to share out. Exactly one
  * such split, each rate one the firm books: its gross per rate; else none, and the order waits.
  */
@@ -854,7 +854,7 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[]; map
       const refunded = o.refunded > 0 || !!ctx.payments?.refunds.get(o.order)?.length;
       const mix = where || refunded || had?.length || saleRefsOf(sale).length ? undefined : mixedCart(o, rates);
       const charged = chargesOf(o);
-      // Charged on one day (its tax point on the cash basis) and to the Rappen what the report says, or not by the payments export at all.
+      // Charged on one day (its tax point on the cash basis) and to the cent what the report says, or not by the payments export at all.
       const once = !charged || (charged !== 'differ' && !charged.off && (ctx.agreed || charged.days.length === 1));
       const date = charged && charged !== 'differ' && !ctx.agreed ? charged.days[0].date : day;
       if (!mix || !once || dated(date, o.date)) { out.held.push({ order: o.order, why: 'rate' }); return; }
