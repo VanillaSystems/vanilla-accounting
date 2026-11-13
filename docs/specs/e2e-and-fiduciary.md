@@ -449,18 +449,105 @@ The books change hands as a **baton**: one side works at a time. This fits sync 
 1. **Gemeinsamer Ordner / Repository**: the workspace has a git remote (GitHub, or a shared
    folder with a bare repository). Each side syncs with «Synchronisieren». For people with a
    remote.
-2. **Als Datei** (the default for Ernst): «Bücher übergeben …» writes
-   `Malerei Huber GmbH – Übergabe 2026-11-13.vanilla`. The file is a zip of the workspace
-   repository with `.git`, without `data/` and without anything git ignores. Ernst opens it with
-   a double click: the Mac app registers the extension and unpacks the file into
-   `~/Documents/Vanilla Treuhand/<Firma>/`. «Zurückgeben …» writes the file back with his commits.
-   Sandra opens the returned file with «Rückgabe öffnen». Her app checks that the returned HEAD
-   descends from her hand-over mark and that her HEAD is still that mark. It then copies the new
-   commits' objects over with isomorphic-git (`readObject`/`writeObject`) and moves her branch
-   forward. This is a fast-forward, and nothing of hers is replaced.
+2. **Als Datei** (the default for Ernst): a `.vanilla` file that carries **only what the other
+   side lacks**. The format is B3.1.
+
+### B3.1 The `.vanilla` file: incremental
+
+Receipts are about 95 % of a workspace's size: about 250 MB per year of receipts, 864 files in
+one real year, so about 290 KB each. A zip of the whole repository would grow by that much every
+year and would soon take gigabytes to send. The file therefore never carries the whole history.
+
+**What is in the file.** A `.vanilla` file is a zip with two members:
+
+- `manifest.json`: `kind` (`full`, `update` or `return`), the company's name and UID (to refuse a
+  file of another company), `base` (the mark commit the bundle builds on; absent for `full`),
+  `mark` (the commit it brings), the app version, the SHA-256 of `bundle`, and for `full` the list
+  `omitted` (B3.2).
+- `bundle`: a git bundle (v2: a header naming the prerequisite commit and the refs, then one
+  packfile). The app writes and reads it with isomorphic-git (`packObjects` for the pack,
+  `indexPack` on arrival) and writes the bundle header itself. It needs no git program: a Mac
+  without the developer tools has none, and running the `/usr/bin/git` stub opens Apple's install
+  dialog (`src/platform/git-program.ts`).
+
+**Three kinds:**
+
+| Kind | Made by | Carries | Typical size |
+|---|---|---|---|
+| `full`, the first hand-over to this person | «Übergeben» when no earlier mark was returned by this recipient, or when the owner picks «Vollständig» | the `given` mark commit as a shallow root (no parents), all tree objects, and every blob except the closed years' receipts and statements (B3.2) | about 60 MB in April (Q1's receipts and statements); up to about 250 MB at year end; up to about 300 MB in the first months of a year, while the previous year is still open (B3.3) |
+| `update`, every later hand-over | «Übergeben» when the recipient's last return proves he holds a mark | the commits from that mark to the new `given` mark: the quarter's new receipts, statements and bookings | tens of MB (one quarter is about 60 MB of receipts) |
+| `return` | «Zurückgeben» on the recipient's Mac | his commits from the `given` mark to his `returned` mark | kilobytes for bookings, plus any receipt he adds |
+
+The owner's app keeps, per recipient, the newest mark that recipient returned. A `return` built on
+mark M proves the recipient holds M, so the next `update` uses M as its base. The owner never has
+to guess what the other Mac holds.
+
+### B3.2 Closed years stay out, and stay provable
+
+A `full` file leaves out the blobs under `transactional-data/<year>/receipts/` and
+`…/bank-statements/` of every year the books have closed (`closedThrough` at 31.12. of that year
+or later). Everything else of those years comes along: their books (`books/*.jsonl`), filings and
+seals, which are small. The seals and `loadBooks` therefore work on the copy, and corrections that
+reach back (`corrects`) can still be checked.
+
+`omitted` lists each left-out file as `{ path, blob, sha256, bytes }`. The trees in the bundle
+name the same blob ids, so the recipient's app proves two things:
+
+- **Nothing is missing for what it shows.** Every receipt that an entry of an open period links
+  is present. A link to a closed-year receipt shows «Im Archiv bei Sandra Huber (Prüfsumme …)»
+  instead of the PDF.
+- **Integrity.** Each omitted file is in the list, and the list's hashes match the trees. The
+  owner, or an auditor holding the full repository, can check any archived file against them.
+
+**The recipient never loses a closed year by committing.** His copy is a sparse checkout of the
+open paths. When he saves, the app builds the new commit's tree from the base tree and replaces
+only the subtrees he changed. It never writes the tree from the index alone, because the index
+lacks the omitted paths and git would read their absence as a deletion. A save whose tree drops a
+path of `omitted` is refused (a test proves it).
+
+### B3.3 Year boundaries
+
+- **A new year starts small.** As soon as the owner closes a year, its receipts and statements
+  drop out of the next `full` file. A first hand-over in a new year carries at most the one or
+  two open years.
+- **The owner closes the previous year after Q4 is filed, often months later.** Until then, two
+  years are open, and a `full` file carries both, up to about 300 MB in, say, March.
+- **A hand-over that spans the year boundary** (given in December, returned in February) needs
+  nothing special. The `return` holds his entries in both years, and `Vanilla-Window` names both.
+  The owner cannot close the year meanwhile, because the hold (below) refuses that write too. She
+  closes it after the return, and the closed year then leaves the next `full` file.
+- **A year closed after the recipient got it** stays in his copy as it was. A later `update`
+  carries only new commits and removes nothing. «Platz freigeben» on his side may drop closed
+  years' receipts from his copy, keeping them in `omitted`. That is optional and never automatic.
+
+### B3.4 In the app
+
+- **«Übergeben»** (Firma › Personen, and in Änderungen) asks only to whom and where to save the
+  file. The app picks `full` or `update` itself and says which: «Nur die Änderungen seit der
+  Übergabe vom 13.08. (48 MB)», or «Vollständige Übergabe: 2026 (212 MB), abgeschlossene Jahre
+  bleiben bei dir». «Vollständig» is a choice under «Mehr».
+- **«Übergabe öffnen»** applies any `.vanilla` file. A double click on one opens the Mac app
+  (`fileAssociations` in `desktop/electron-builder.config.cjs`, the `open-file` event). The app
+  reads `kind`:
+  - `full`: it creates the copy in its own folder
+    (`~/Library/Application Support/Vanilla Accounting/Treuhand/<UID>/`) and lists the copy under
+    the recent books by the company's name. The fiduciary never sees the folder or git.
+  - `update`: it checks that the copy holds `base`, indexes the pack, moves the branch
+    forward to `mark` and checks out the open paths.
+  - `return` (on the owner's Mac): it checks that `base` is her `given` mark and that her HEAD is
+    still that mark, then fast-forwards. Nothing of hers is replaced.
+- **A missing base** (a lost copy, a new computer, a file opened twice out of order) is refused
+  without changing anything. On the recipient's Mac the refusal says: «Diese Übergabe baut auf
+  der vom 13.08. auf, die auf diesem Mac fehlt. Bitte Sandra Huber um eine vollständige
+  Übergabe.» On the owner's Mac, a `return` whose base is not her current `given` mark is a
+  diverged return, and it opens as a review only (as after «Zurücknehmen»).
+- **«Zurückgeben»** saves what is unsaved and writes the `return` file. It suggests saving the file
+  next to the one he opened and names its size.
+- **Files of another company** (the UID differs) and files whose `bundle` hash does not match are
+  refused, naming the reason.
 
 **The marks** are empty commits on the branch with trailers. Sync carries them like any other
-commit, which it would not do for tags:
+commit, which it would not do for tags. The bundle's base is always such a mark:
 
 ```
 Übergeben an Ernst Bühler
@@ -560,7 +647,7 @@ Nothing counts down, and nothing comes back.
 - **A filed quarter never changes.** The review never offers «Rückgängig» on a closed entry.
   Ernst's corrections of filed quarters are correction entries with `corrects` (B4). A return
   whose commits change a sealed record cannot be opened: `loadBooks` already loads such books
-  read-only (`SealBrokenError` on save). «Rückgabe öffnen» refuses before it moves the branch and
+  read-only (`SealBrokenError` on save). «Übergabe öffnen» refuses before it moves the branch and
   names the record.
 - **A person's change is never overwritten by the AI or a rule.** Ernst's entries are
   `origin: 'manual'`, `by.kind: 'person'`. After the return, the waiting intake and every
@@ -573,7 +660,7 @@ Nothing counts down, and nothing comes back.
 
 The memory rule applies: state facts, never remind of chores.
 
-- On Sandra's Mac after «Rückgabe öffnen»: the Verlauf row «Zurück von Ernst Bühler am 20.11. ·
+- On Sandra's Mac after «Übergabe öffnen»: the Verlauf row «Zurück von Ernst Bühler am 20.11. ·
   14 Änderungen». No badge, no count of «unread», no «bitte prüfen».
 - While the books are away: the `handedOver` fact in the top bar and on refusals (B3).
 - On Ernst's Mac: «von Sandra übergeben am 13.11.». No «noch nicht zurückgegeben» after n days.
@@ -585,13 +672,16 @@ The memory rule applies: state facts, never remind of chores.
 | `person { name, email }` | `desktop.json` (per device, not in the books) | no |
 | `access.yaml` with `schema: 1` | workspace top, `LAYOUT.top` (`company`), listed by `npm run doctor` | **a new file with its own version**. No step of `belege.workspace.yaml` (`WORKSPACE_SCHEMA` 4) or of the books (`BOOKS_SCHEMA` 9). The alternative, `people:` inside `belege.workspace.yaml`, would be `WORKSPACE_SCHEMA` 5 with a ladder step. **Owner decides** (Q-B1). |
 | hand-over marks | empty commits with trailers | no |
+| the `.vanilla` file (`manifest.json` with its own `format: 1`, plus a git bundle) | a file outside the workspace | no: the file is versioned on its own. The books inside are unchanged. |
+| per recipient, the newest mark returned | the owner's desktop state | no |
+| the recipient's copy: shallow root and sparse checkout, `omitted` kept beside it | `.git/shallow` and the app's folder on the recipient's Mac | no: git's own shallow format. The workspace format is unchanged. |
 | `Vanilla-Person: <email>` trailer | commit messages | no |
 | who changed an entry | **derived from git**: the review attributes each changed record to the author of the commits between the marks | no |
 | `by.who` (the person's email on `by.kind: 'person'`) | `JournalEntry.by` | **yes: `BOOKS_SCHEMA` 10 with a ladder step.** Seals hash `by`, and `src/types/index.ts` says a new field there is a format change. Old entries keep their `by` (absent = unknown). Needed only if attribution must survive without git history (an audit export without the repository, a squashed history). **Owner decides** (Q-B2). Not in phases B-1 to B-4. |
 
 ## B10. UI placement and i18n
 
-- **Änderungen:** the Verlauf rows for marks, the review detail (B5), «Rückgabe öffnen».
+- **Änderungen:** the Verlauf rows for marks, the review detail (B5), «Übergabe öffnen».
 - **Firma › Personen** (a new section of the company area, `src/app/areas/company/`): this
   Mac's person, `access.yaml`'s people and roles, «Bücher übergeben …», «Übergabe
   zurücknehmen».
@@ -613,9 +703,20 @@ The memory rule applies: state facts, never remind of chores.
   books a depreciation, deletes one entry, and corrects Q2 with `corrects` (author B), then
   «returned». `handoverReview` returns each change in its group with before/after, author B,
   his reason, and who made the original. It returns nothing for commits outside the marks.
-- `tests/handover-file.test.ts`: «Übergeben» writes a file. Open it as Ernst, change, «Zurückgeben»,
-  and Sandra's «Rückgabe öffnen» fast-forwards. Refused: Sandra booked meanwhile (diverged), the
-  return changes a sealed record, the return is from another company (no common mark).
+- `tests/handover-file.test.ts` runs on a temp workspace with a closed 2025 and an open 2026, and
+  small made-up receipts:
+  - `full` leaves out 2025's receipts and statements, and `omitted` lists them with hashes that
+    match the trees. The seals verify on the copy.
+  - Ernst changes something and returns. Sandra's «Übergabe öffnen» fast-forwards, and the
+    `return` holds only his commits (size of the order of his objects).
+  - A second «Übergeben» is an `update` on the returned mark and carries only the new receipts.
+  - Applied on a copy without its base, the `update` is refused (`handoverBaseMissing`) and
+    nothing changes.
+  - A save on the sparse copy keeps every omitted path in the tree.
+  - A hand-over spanning 31.12. returns entries of both years.
+  - Refused: Sandra booked meanwhile (diverged), the return changes a sealed record, another
+    company's UID, a bundle hash mismatch.
+  - No git program is spawned (`gitProgram` stubbed to throw).
 - `tests/handover-hold.test.ts`: while handed over, a person's and a module's book writes get 403
   `handedOver`, and an upload still reaches the inbox. After the return, the intake runs and does
   not touch Ernst's `origin: 'manual'` entries. «Zurücknehmen» lifts the hold.
@@ -637,7 +738,7 @@ family fiduciary» on two VMs, Apple's limit, so the simulator stays off (A2.4):
 2. The host copies the file into VM `ernst` (fresh, no Claude). He opens it, tells the app who he
    is, and corrects by hand under his name: «Warum?» on two corrections, one correction of the
    filed Q2. Then «Zurückgeben».
-3. Back in `sandra`: «Rückgabe öffnen». Judge: does she understand the review without help? Does
+3. Back in `sandra`: «Übergabe öffnen». Judge: does she understand the review without help? Does
    she keep a rule from it? Does the next intake keep Ernst's changes? Is anything nagging?
 
 Judge Ernst as written in B1: large text, one screen at a time, no technical question, debit and
@@ -650,7 +751,7 @@ reason.
 | Phase | Work | Accepted when |
 |---|---|---|
 | B-1 Identity | `person` in desktop state, the question, `authorOf`, the trailer, names in Verlauf | in a fresh VM, two Macs saving the same repository show two names in Verlauf |
-| B-2 Hand-over by file | `.vanilla` file, marks, the hold, «Rückgabe öffnen», «Zurücknehmen» | `handover-file` and `handover-hold` pass; the persona walk's steps 1–2 work without a terminal |
+| B-2 Hand-over by file | the `.vanilla` format (`full`, `update`, `return`; B3.1–B3.4), marks, the hold, «Übergeben», «Übergabe öffnen» by double click, «Zurückgeben», «Zurücknehmen» | `handover-file` and `handover-hold` pass; the walk's steps 1–2 work without a terminal and without a folder dialog; on books with a closed year of real size, the `full` file is no bigger than the open years' receipts plus their books, an `update` is no bigger than the quarter's new objects, and a `return` of bookings only stays under 1 MB |
 | B-3 Review | `handoverReview`, the review detail, «Warum?» in the editor, i18n de/fr/it/en | `handover-review` passes; Sandra (walk step 3) names what Ernst changed and why, from the screen alone |
 | B-4 Learning | the offers of B6 in the review | from the walk, at least one kept rule books the next quarter's matching payment as Ernst did |
 | B-5 Roles and the shared repository | `access.yaml`, Firma › Personen, `roleRefused`, the hand-over over a remote | `access-roles` passes; the walk repeated with a shared repository instead of a file |
@@ -686,10 +787,16 @@ reason.
 8. **Hold the owner's books while they are handed over?** *Recommendation:* yes, with the inbox
    still filling. Without the hold, two people booking at once diverge, sync refuses, and the
    record merge of ADR 0003 §3 would be needed. That merge is much larger than this loop.
-9. **The `.vanilla` file (a zip with `.git`) as the default hand-over for a fiduciary without a
-   git host?** *Recommendation:* yes. It needs no account, and the fast-forward check makes it
-   safe. A shared repository comes second (B-5). The cloud instance of ADR 0003 §5 stays for
-   fiduciaries with many clients.
+9. **The incremental `.vanilla` file (B3.1) as the default hand-over for a fiduciary without a
+   git host?** The first hand-over carries only the open years without their closed years'
+   receipts (about 60–300 MB). Later ones carry only the commits since the last returned mark
+   (tens of MB), and a return carries only his commits (KBs). *Recommendation:* yes. It needs no
+   account and no git program, its size follows the quarter instead of the books' age, and the
+   base check plus the fast-forward make it safe. Sub-question: should a closed year's receipts
+   ever go along in a `full` file, for a fiduciary who checks an old year?
+   *Recommendation:* only as an explicit «mit Archiv 2025» under «Mehr», never by default. A
+   shared repository comes second (B-5). The cloud instance of ADR 0003 §5 stays for fiduciaries
+   with many clients.
 10. **May a fiduciary mark a quarter «geprüft», and does that block anything?**
     *Recommendation:* he may mark it, as the role table says. It blocks nothing and shows as a
     fact on the MWST tab. Filing stays with the owner.
