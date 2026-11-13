@@ -75,6 +75,7 @@ import type { Note, NoteCommand, NoteResult, TopicRow } from '../../knowledge/no
 import type { AppLayerView, GapsView } from '../../knowledge/wissen.js';
 import type { OrderPage } from '../../booking/order-pages.js';
 import type { VatCorrection } from '../../booking/vat-corrections.js';
+import type { ProviderIssues } from '../../booking/provider-issues.js';
 
 export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
 
@@ -161,6 +162,7 @@ export function errorText(e: unknown): string {
     case 'pointerLinked': return t('error.pointerLinked', { payment: b.params.payment });
     case 'correctionBooked': return t('error.correctionBooked', { entry: b.params.entry });
     case 'reportCorrection': return t(`error.reportCorrection.${b.params.why}`);
+    case 'heldOrder': return t(`error.heldOrder.${b.params.why}`);
     case 'statementUndo': return t(`error.statementUndo.${b.params.why}`);
     case 'secondPayment': return t('error.secondPayment', { payment: b.params.payment });
     case 'paidPrivately': return t('error.paidPrivately', { payment: b.params.payment });
@@ -407,6 +409,7 @@ export const api = {
   /** «Zahlung suchen» / «Beleg suchen» (#187): the matching chain for one receipt or one payment. */
   findPayment: (receipt: string) => request<Found>('POST', `/api/receipts/${encodeURIComponent(receipt)}/find-payment`),
   /** «Als Korrektur buchen» on a refund of a filed period a sales report offers (#231): booked in the open period with `corrects`. */
+  heldOrder: (receipt: string, order: string, parts: Array<{ amount: number; rate: number }>) => request<{ ok: true; entries: JournalEntry[] }>('POST', `/api/receipts/${encodeURIComponent(receipt)}/held-order`, { order, parts }),
   reportCorrection: (receipt: string, order: string, date: string) => request<{ ok: true; entries: JournalEntry[] }>('POST', `/api/receipts/${encodeURIComponent(receipt)}/report-correction`, { order, date }),
   setFiledPayment: (receipt: string, payment: string | null) => request<{ ok: true }>('POST', `/api/receipts/${encodeURIComponent(receipt)}/filed-payment`, { payment }),
   findReceipt: (payment: string) => request<Found>('POST', `/api/transactions/${encodeURIComponent(payment)}/find-receipt`),
@@ -708,4 +711,5 @@ export const api = {
   fxRates: () => request<EstvRateTable>('GET', sources.fxRates()),
   orderPages: () => request<Record<string, OrderPage>>('GET', sources.orderPages()),
   vatCorrections: () => request<Record<string, VatCorrection>>('GET', sources.vatCorrections()),
+  providerIssues: () => request<ProviderIssues>('GET', sources.providerIssues()),
 };

@@ -4,6 +4,7 @@
  */
 import type { OrderPage } from '../../booking/order-pages.js';
 import type { VatCorrection } from '../../booking/vat-corrections.js';
+import type { ProviderIssues } from '../../booking/provider-issues.js';
 
 let pages: ReadonlyMap<string, OrderPage> = new Map();
 let corrections: ReadonlyMap<string, VatCorrection> = new Map();
@@ -20,3 +21,13 @@ export function setVatCorrections(byReceipt: Record<string, VatCorrection>): voi
 }
 
 export const vatCorrectionsNow = (): ReadonlyMap<string, VatCorrection> => corrections;
+
+const NO_PROVIDER_ISSUES: ProviderIssues = { held: [], bills: [], payouts: {} };
+let providerIssues: ProviderIssues = NO_PROVIDER_ISSUES;
+
+/** What the providers' reports leave open (GET /api/receipts/provider-issues, #405), loaded with the books like the order pages. */
+export function setProviderIssues(issues: ProviderIssues | undefined): void {
+  providerIssues = issues ?? NO_PROVIDER_ISSUES;
+}
+
+export const providerIssuesNow = (): ProviderIssues => providerIssues;

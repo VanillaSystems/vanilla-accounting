@@ -340,6 +340,36 @@ Two markers flag an entry you must read before you update:
   oder dich …»), instead of opening the diagram; on a payment whose booking she deleted it asks first.
   A payment an account's reconciliation holds is booked by neither: the rule's card says it waits for
   the reconciliation.
+- A payment provider's sales and fee reports stay receipts after a later drop (#405). The next run
+  read only PDFs and rebuilt the receipts from them, so the reports (CSV files) and every link to the
+  sales and fees they booked went from the books, while those bookings still named them and the
+  files still lay in `receipts/`. A run now keeps every receipt whose file lies there. A file whose
+  bytes changed under its name is read again: the new read is its receipt, the app's links to the old
+  one go and its bookings are made again from the new read; a person's link goes along only when the
+  new read says the same, else it stays with the old receipt, kept beside, as does a person's booking
+  and what lies in a filed period. The run names each such file and how many links to check. Books damaged so get their reports back on the next run: each CSV in
+  `receipts/` whose bytes the bookings name is its receipt again, with its links to every open
+  booking and what it holds; nothing of a filed period changes.
+- The write door refuses a module or a run that removes a receipt whose file still lies in the
+  workspace, or a link whose receipt and payment both stand, unless it lets go of it on purpose (a
+  person's «Rückgängig» of a report, a link of its own it replaces) (#405). A run can therefore stop
+  on it: nothing is saved, and the message says that only a person removes such a receipt (Belege ›
+  «Löschen») or link, or that it is the app's error to report.
+- An order a sales report holds is an open item of the period of its day (#405): in «Noch offen»,
+  on the MWST page's «noch nicht endgültig» line, in the sidebar's card and in the review. An order
+  whose VAT rates the report cannot tell apart (a cart of tea and a teapot) withholds «Freigegeben»
+  until it is booked: its report's receipt has «Aufteilen», one or two amounts at the firm's rates,
+  booked by the person once they add up to the order. An order held for another reason (a possible
+  test order, one booked elsewhere) is shown with that reason and withholds nothing, and one of the
+  days before the provider's cut-over day (less its payout days) is counted, never held; one of a filed
+  period stays named on its report and is no open item. A refund of an order split so is held for
+  the person to book by hand. Each held order keeps its day, gross, currency and delivery country on
+  the report's receipt: optional fields added to `report.held`, as `heldMore` and `filedRefunds` were.
+- A month whose fees the provider's payments export booked while its monthly bill (Shopify's
+  Payments Invoice) is not in the books is named as a fact in «Noch offen»: the VAT on those fees is
+  not deducted. It does not make the period unfinished, and a month of a filed period is not named.
+  A payout in the list is named by the provider the app took it for («Shopify»), not by the processor
+  that paid it. The review's clearing account check names the total of the orders its sales report holds.
 - The owner's outlays paid back (#402): a payment to the owner by name (the payee) that is no wage,
   in francs, that no company rule decides, and that the receipts the owner paid privately and the
   firm has not paid back yet cover (each such payment in date order against what is left after the

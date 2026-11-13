@@ -17,6 +17,8 @@ export interface Sources {
   orderPages(): string;
   /** The bills that prove a VAT-only correction by receipt id (src/booking/vat-corrections.ts, #190): the business files decide them too. */
   vatCorrections(): string;
+  /** What a payment provider's reports leave open (src/booking/provider-issues.ts, #405): held orders, months without the provider's bill. */
+  providerIssues(): string;
   receipt(id: string): string;
   statement(bank: string, filename: string): string;
 }
@@ -31,6 +33,7 @@ export const API_SOURCES: Sources = {
   fxRates: () => '/api/fx-rates',
   orderPages: () => '/api/receipts/order-pages',
   vatCorrections: () => '/api/receipts/vat-corrections',
+  providerIssues: () => '/api/receipts/provider-issues',
   receipt: (id) => `/api/receipts/${id}`,
   statement: (bank, filename) => `/bank-statements/${bank}/${encodeURIComponent(filename)}`,
 };
@@ -46,6 +49,7 @@ export const EXPORT_FILES: Sources = {
   fxRates: () => 'data/fx-rates.json',
   orderPages: () => 'data/order-pages.json',
   vatCorrections: () => 'data/vat-corrections.json',
+  providerIssues: () => 'data/provider-issues.json',
   receipt: (id) => `receipts/${id}.pdf`,
   statement: (bank, filename) => `bank-statements/${bank}/${filename}`,
 };
@@ -63,6 +67,7 @@ export const EXPORT_SOURCES: Sources = {
   fxRates: () => encodePath(EXPORT_FILES.fxRates()),
   orderPages: () => encodePath(EXPORT_FILES.orderPages()),
   vatCorrections: () => encodePath(EXPORT_FILES.vatCorrections()),
+  providerIssues: () => encodePath(EXPORT_FILES.providerIssues()),
   receipt: (id) => encodePath(EXPORT_FILES.receipt(id)),
   statement: (bank, filename) => encodePath(EXPORT_FILES.statement(bank, filename)),
 };

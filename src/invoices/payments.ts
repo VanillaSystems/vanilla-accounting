@@ -15,7 +15,7 @@
  */
 import { bookedInFiled } from '../books/twins.js';
 import type { BankTransaction, JournalEntry, Mapping, Receipt } from '../types/index.js';
-import { periodLock, type Books } from '../books/store.js';
+import { periodLock, release, type Books } from '../books/store.js';
 import { bankAccountFor } from '../workspace/money-accounts.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
@@ -378,6 +378,8 @@ export function releasePayment(books: Books, book: InvoiceBook, invoiceId: strin
   // A prepayment's revenue leaves with it: the event, booked for the rest, is booked again for what is now the invoice's.
   if (removed.some((e) => sideOf(e.vatCode) === 'sale')) dropEvent(books, prepaidEvent(books, allocation, inv));
   const receipt = ctx.receiptId(ctx.pdfOf(inv));
+  // The payment taken off its invoice: its link goes on purpose (the write door, #405).
+  if (receipt) release(books, { mappings: [{ transactionRef, receiptId: receipt }] });
   books.mappings = books.mappings.filter((m) => !(m.transactionRef === transactionRef && m.receiptId === receipt));
   const restored = books.journalEntries.some((e) => e.transactionRef === transactionRef) ? [] : restore.filter((e) => !books.journalEntries.some((x) => x.id === e.id));
   books.journalEntries.push(...restored);

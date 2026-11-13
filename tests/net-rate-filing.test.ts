@@ -46,7 +46,7 @@ test('without the activity code: the review names it and withholds the approval;
   const ret = review.reads!.return as PeriodReturn;
   const name = '1. Saldosteuersatz (Schreinerei)';
   assert.deepEqual(ratesWithoutActivityId(ret.figures), [name], 'the rate with turnover and no code, named as the MWST page names it');
-  assert.deepEqual(approvalWithheld(review, [], loadBooks(ws)), { rates: [name], questions: 0, outcome: 'approved' }, 'the task withholds «Freigegeben» and says why');
+  assert.deepEqual(approvalWithheld(review, [], loadBooks(ws)), { rates: [name], questions: 0, held: 0, outcome: 'approved' }, 'the task withholds «Freigegeben» and says why');
 
   await engine.command({ kind: 'answer', run: r.run!, outcome: 'approved' });
   await engine.idle();

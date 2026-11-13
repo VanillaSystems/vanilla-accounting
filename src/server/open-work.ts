@@ -19,6 +19,7 @@ import { fillTask, textIn, type Task } from '../workflows/model.js';
 import type { EvidenceCheck } from '../accounting/evidence-check.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import { baseCurrency, chargesVat, filing, vatSetup } from '../engines/index.js';
+import { providerIssuesIn } from '../intake/pair-chain.js';
 import { localToday, type IsoDate, type Period } from '../accounting/periods.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { elsewhereCount, elsewhereOf, nothingOpen, openPeriodState, waitingKinds, type Elsewhere, type OpenPeriodState, type YourReceipt } from '../app/areas/automation/open-period.js';
@@ -103,7 +104,7 @@ type Tasks = ReadonlyArray<Task & { rule?: string }>;
 
 /** The state the sidebar's card draws, from the same inputs: the order pages of a provider among them, which are no receipts without a payment. */
 export const periodState = (ws: Ws, books: Books, tasks: ReadonlyArray<Task>, today: IsoDate = localToday(), processing: ReadonlyMap<string, Processing> = new Map()): OpenPeriodState =>
-  openPeriodState(books, readQuestions(ws), tasks, ws.bankAccounts, { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays }, orderPagesOf(books, providersOf(ws)), processing);
+  openPeriodState(books, readQuestions(ws), tasks, ws.bankAccounts, { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays }, orderPagesOf(books, providersOf(ws)), processing, providerIssuesIn(ws, books, today));
 
 /** What waits outside the period, from the same inputs as the card (src/app/areas/automation/open-period.ts elsewhereOf). */
 export const elsewhereFor = <T extends Task>(ws: Ws, books: Books, tasks: readonly T[], s: OpenPeriodState, stuck = 0, today: IsoDate = localToday()): Elsewhere<T> =>
@@ -139,6 +140,8 @@ export function periodNote(ws: Ws, books: Books, tasks: Tasks, language: string,
     `Open questions (${s.questions.length}):`, ...capped(s.questions.map((x) => questionLine(books, x.q, t))),
     `Bookings whose VAT code contradicts their receipts (${s.evidence.length}), each with its one click on the booking and under ${tasksPlace}:`, ...capped(s.evidence.map((x) => evidenceLine(x.entry, x.check, t))),
     `Receipts without a payment (${unlinked.length})${unlinked.length ? `, under «${t('area.receipts')}»` : ''}:`, ...capped(unlinked.map((r) => `- «${name(r)}»${r.date ? ` of ${day(r.date)}` : ''}${r.amount != null ? `, ${money(r.currency ?? baseCurrency(), r.amount)}` : ''}`)),
+    ...(s.held.length ? [`Orders a provider's sales report did not book (${s.held.length}): their turnover is missing from the return, and the review withholds «Freigegeben» until each is booked (on the report's receipt under «${t('area.receipts')}»):`, ...capped(s.held.map((h) => `- ${t(`drop.held.${h.why}`, { order: h.order })}, ${day(h.date)}${h.gross !== undefined ? `, ${money(h.currency ?? baseCurrency(), h.gross)}` : ''} (${h.name})`))] : []),
+    ...(s.bills.length ? [`Monthly bills of a provider not in the books (${s.bills.length}): the VAT on its fees of that month is not deducted until the bill is dropped:`, ...capped(s.bills.map((b) => `- ${b.name}, ${b.month}: fees ${money(baseCurrency(), b.fees)}`))] : []),
     `Tasks of the workflows (${s.tasks.length})${s.tasks.length ? `, under ${tasksPlace}; a task on a payment is one of the payments above, not one more` : ''}:`, ...capped(s.tasks.map((x) => taskLine(x, language))),
   ];
   return [

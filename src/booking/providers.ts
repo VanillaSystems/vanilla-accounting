@@ -209,6 +209,8 @@ export interface ClearingCheck {
   known?: string;
   /** The balance is below zero: the provider paid out more than the account holds sales for, a difference whatever was paid after. */
   below?: true;
+  /** The gross of the orders up to `through` a sales report holds (#405): sales the account lacks until they are booked. */
+  held?: number;
 }
 
 /** The last day of each of the `n` months up to and including the month of `through`, oldest first; `through` itself for its own month. */

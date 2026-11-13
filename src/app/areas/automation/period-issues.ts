@@ -2,8 +2,10 @@
  * What is still open in a period before its return is filed (r4c-38): the questions about its
  * payments, receipts and bookings, the bookings whose code contradicts their receipts (input tax
  * without a receipt, a receipt that shows VAT on a zero code), the payments nobody booked, and the
- * receipts without a payment. The review lists them, each a link; an open VAT question withholds
- * the approval (filing-summary.ts approvalWithheld, r8h-24), the rest blocks nothing.
+ * receipts without a payment, the orders a provider's sales report holds and the months of a
+ * provider's fees whose bill is not in the books (src/booking/provider-issues.ts, #405). The review
+ * lists them, each a link; an open VAT question and a held order withhold the approval
+ * (filing-summary.ts approvalWithheld, r8h-24, #405), the rest blocks nothing.
  */
 import type { BankTransaction, Index, JournalEntry, Receipt } from '../../../types/index.js';
 import type { EvidenceCheck } from '../../../accounting/evidence-check.js';
@@ -18,6 +20,7 @@ import { unbookedPayments } from '../bank/model.js';
 import { bookedStates } from '../../../accounting/payment-entries.js';
 import { waitingForReceipt, type WaitingPayment } from '../../../accounting/receipt-due.js';
 import { localToday, type IsoDate } from '../../../accounting/periods.js';
+import type { HeldOrder, MissingBill, ProviderIssues } from '../../../booking/provider-issues.js';
 
 export type PeriodIssue =
   | { kind: 'question'; q: Question; date: string }
@@ -26,7 +29,11 @@ export type PeriodIssue =
   | { kind: 'unbooked'; tx: BankTransaction; waitsForReceipt?: true }
   | { kind: 'unlinked'; receipt: Receipt }
   /** A receipt that waits for the person's own word (#398): its date, its amount, its reading, or whether it is a copy (`copyOf`). */
-  | { kind: 'own'; receipt: Receipt; name: string; lacks: Lack[]; day: string; copyOf?: string };
+  | { kind: 'own'; receipt: Receipt; name: string; lacks: Lack[]; day: string; copyOf?: string }
+  /** An order a provider's sales report did not book: its turnover is not in the return yet (#405). */
+  | { kind: 'held'; held: HeldOrder }
+  /** A month of a provider's fees without its bill: the VAT on them is not deducted yet (#405). */
+  | { kind: 'bill'; bill: MissingBill };
 
 /** What a receipt lacks for the app to go on without the person: its date, its amount, its reading, or her word that it is no copy. */
 export type Lack = 'date' | 'amount' | 'reading' | 'copy';
@@ -54,8 +61,12 @@ export function dateOn(books: Pick<Index, 'transactions' | 'receipts' | 'journal
   }
 }
 
-/** The open issues of the days `from`–`to`, in the order a person works them off: questions, contradicting codes, unbooked payments, receipts without a payment. */
-export function periodIssues(books: Index, questions: readonly Question[], from: string, to: string, accounts: readonly LedgerBankAccount[], orderPages: ReadonlyMap<string, OrderPage> = new Map(), today: IsoDate = localToday(), processing: ReadonlyMap<string, Processing> = new Map()): PeriodIssue[] {
+/**
+ * The open issues of the days `from`–`to`, in the order a person works them off: questions, held orders, contradicting codes,
+ * unbooked payments, receipts that wait for her word, receipts without a payment, missing bills of a provider. `provider`:
+ * what the providers' reports leave open (#405).
+ */
+export function periodIssues(books: Index, questions: readonly Question[], from: string, to: string, accounts: readonly LedgerBankAccount[], orderPages: ReadonlyMap<string, OrderPage> = new Map(), today: IsoDate = localToday(), processing: ReadonlyMap<string, Processing> = new Map(), provider?: ProviderIssues): PeriodIssue[] {
   const within = (d: string | undefined): d is string => !!d && d >= from && d <= to;
   const asked = questions.flatMap((q): PeriodIssue[] => {
     const date = q.status === 'open' ? dateOn(books, q) : undefined;
@@ -74,7 +85,9 @@ export function periodIssues(books: Index, questions: readonly Question[], from:
   });
   const mine = new Set(own.map((i) => (i as { receipt: Receipt }).receipt.id));
   const unlinked = l.views.filter((v) => needsYou(v, l) && within(v.date) && !v.r.filedPayment && !mine.has(v.r.id)).map((v): PeriodIssue => ({ kind: 'unlinked', receipt: v.r }));
-  return [...asked, ...evidence, ...unbooked, ...own, ...unlinked];
+  const orders = (provider?.held ?? []).filter((h) => !h.filed && within(h.date)).map((h): PeriodIssue => ({ kind: 'held', held: h }));
+  const bills = (provider?.bills ?? []).filter((b) => within(b.date)).map((b): PeriodIssue => ({ kind: 'bill', bill: b }));
+  return [...asked, ...orders, ...evidence, ...unbooked, ...own, ...unlinked, ...bills];
 }
 
 /**
@@ -97,12 +110,13 @@ export function receiptWaiting(books: Pick<Index, 'transactions' | 'journalEntri
  * How many issues of each kind are open: one line beside a figure that is not final (the return's
  * page, #341). `waitingReceipt`: of the unbooked payments, those in `receiptWaits`.
  */
-export interface IssueCounts { total: number; questions: number; evidence: number; unbooked: number; waitingReceipt: number; unlinked: number; own: number }
+export interface IssueCounts { total: number; questions: number; evidence: number; unbooked: number; waitingReceipt: number; unlinked: number; own: number; held: number; bills: number }
 
 export function countIssues(issues: readonly PeriodIssue[]): IssueCounts {
   const of = (kind: PeriodIssue['kind']) => issues.filter((i) => i.kind === kind).length;
   return {
-    total: issues.length, questions: of('question'), evidence: of('evidence'), unbooked: of('unbooked'), unlinked: of('unlinked'), own: of('own'),
+    // A missing bill is information, not an open item: the period's figure is final without it.
+    total: issues.length - of('bill'), questions: of('question'), evidence: of('evidence'), unbooked: of('unbooked'), unlinked: of('unlinked'), own: of('own'), held: of('held'), bills: of('bill'),
     waitingReceipt: issues.filter((i) => i.kind === 'unbooked' && i.waitsForReceipt).length,
   };
 }

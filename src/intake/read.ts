@@ -21,7 +21,7 @@ import { detectVatProofIssue, noiseText, textFacts, textProves } from '../parser
 import { filedReceipt, forgetReadFacts } from './vat.js';
 import { buildVisionPrompt } from '../llm/prompts.js';
 import type { Receipt } from '../types/index.js';
-import { filesOfPart, type Workspace } from '../workspace/workspace.js';
+import { fileFinder, filesOfPart, type Workspace } from '../workspace/workspace.js';
 import { mergeIndex, readStatementFiles, readTransactions, reconcileWithFiles, withinBooks } from '../books/bank-import.js';
 import { keptReads } from '../books/pdf-reads.js';
 import { readKeptPdfs, readsByItself, unreadPdfs } from './statement-read.js';
@@ -37,6 +37,8 @@ import { documentKind } from './document-kind.js';
 import { askKind, asksModel, kindOfModel, MODEL_RULE, MODEL_TEXT, NOT_A_RECEIPT, visionVerdict, type ModelKind } from './unclear.js';
 import { statementFacts } from '../books/statement-facts.js';
 import { documents } from '../engines/index.js';
+import { periodLock, release } from '../books/store.js';
+import { restoreReportReceipts } from './sales-report-import.js';
 
 // ─── The PDF's own text, fallback to the model's vision for OCR ─────────────
 
@@ -159,8 +161,9 @@ function isPdf(path: string): boolean {
   }
 }
 
+const isPdfName = (name: string) => name.toLowerCase().endsWith('.pdf');
 const isReceiptPdf = (name: string, path: string) =>
-  name.toLowerCase().endsWith('.pdf') && !name.endsWith('.icloud') && isPdf(path); // An iCloud placeholder or a file still being written is no PDF yet; a small PDF is one.
+  isPdfName(name) && !name.endsWith('.icloud') && isPdf(path); // An iCloud placeholder or a file still being written is no PDF yet; a small PDF is one.
 
 function scanPdfs(dir: string, location: 'staged' | 'archived'): FoundFile[] {
   if (!existsSync(dir)) return [];
@@ -245,6 +248,8 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
   // A file in the inbox with the bytes of one the books or the inbox hold already (a phone's
   // retry, the same scan sent twice) is that file: it leaves the inbox, and the run says so.
   const sameBytes: Array<{ file: string; of: string }> = [];
+  // Files of receipts/ whose bytes changed under their name (#405): how many links a person should check, and whether the old record stayed.
+  const rewritten: Array<{ file: string; check: number; kept: boolean }> = [];
   for (const f of [...archivedFiles, ...stagedFiles]) {
     const id = idOf(f.filepath);
     const first = seen.get(id);
@@ -357,6 +362,48 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
         ...kind,
       } as Receipt];
     });
+    // A receipt this step does not read (a provider's report, a CSV in receipts/, #405; a file named .pdf that is none) stays
+    // while its file lies there: the scan above takes readable PDFs only, and the books are rebuilt from it. So does a record
+    // kept beside the new read of its file (below): its name is scanned under an id the books know already.
+    const scannedId = new Map(receipts.map((r) => [r.filename, r.id]));
+    const ids = new Set(receipts.map((r) => r.id));
+    const find = fileFinder(ws.paths);
+    receipts.push(...index.receipts.filter((r) => {
+      if (ids.has(r.id) || r.location !== 'archived' || !find('receipts', r.filename)) return false;
+      const other = scannedId.get(r.filename);
+      return other === undefined || known.has(other);
+    }));
+    // A file whose bytes changed under its name (#405): the new read is the receipt. The app's links to the old record go
+    // (release), and the bookings that named it are left as they are, so the classify step takes them back and the payment
+    // is matched and booked from the new read. A person's link goes along only when the new read says what the old did (the
+    // same text, or the same day and total); else it stays with the old record, kept beside the new one, as does a person's
+    // booking (only she changes it) and whatever of it lies in a filed period. The run names each such file and how many links a person should check.
+    const lockNow = periodLock(index);
+    const fresh = new Map(receipts.filter((r) => !known.has(r.id)).map((r) => [r.filename, r]));
+    const words = (t: string | undefined) => (t ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+    for (const old of index.receipts) {
+      const now = fresh.get(old.filename);
+      if (!now || receipts.some((r) => r.id === old.id) || old.location !== 'archived') continue;
+      const agrees = (!!old.extractedText && words(old.extractedText) === words(now.extractedText)) || (!!old.date && old.date === now.date && old.amount != null && old.amount === now.amount);
+      const closedRef = (ref: string) => lockNow.isClosed(index.transactions.find((t) => t.ref === ref)?.date) || index.journalEntries.some((e) => e.transactionRef === ref && lockNow.isClosed(e.date));
+      const naming = index.journalEntries.filter((e) => e.receipts?.includes(old.id));
+      const hers = naming.filter((e) => e.origin === 'manual' && !lockNow.isClosed(e.date));
+      const links = index.mappings.filter((m) => m.receiptId === old.id);
+      const filed = links.filter((m) => closedRef(m.transactionRef));
+      const human = links.filter((m) => !filed.includes(m) && m.by === 'human');
+      const app = links.filter((m) => !filed.includes(m) && !human.includes(m));
+      const carry = agrees ? human : [];
+      release(index, { mappings: [...app, ...carry] });
+      for (const m of carry) if (!index.mappings.some((x) => x.receiptId === now.id && x.transactionRef === m.transactionRef)) index.mappings.push({ ...m, receiptId: now.id });
+      index.mappings = index.mappings.filter((m) => !app.includes(m) && !carry.includes(m));
+      Object.assign(now, { originalFilename: old.originalFilename });
+      const keepOld = filed.length > 0 || hers.length > 0 || naming.some((e) => lockNow.isClosed(e.date)) || (!agrees && human.length > 0);
+      if (keepOld) receipts.push(old);
+      else release(index, { receipts: [old.id] });
+      const check = human.length + hers.length + filed.length;
+      rewritten.push({ file: old.filename, check, kept: keepOld });
+      log(`  ${old.filename}: its file changed; read again. ${app.length} link(s) of the app dropped, ${carry.length} of a person carried, ${check} to check${keepOld ? '; the old record kept beside it' : ''}`);
+    }
     // The books keep their order, new receipts after them: a second run writes the same file.
     const pos = new Map(index.receipts.map((r, i) => [r.id, i]));
     receipts.sort((a, b) => (pos.get(a.id) ?? pos.size) - (pos.get(b.id) ?? pos.size));
@@ -366,6 +413,9 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
     }
     const merged = mergeIndex(index, { receipts, bankTransactions: assignUniqueRefs(kept), reads: keptReads(ws, statementFiles.statements, index.statementAsks), bankStatements: statementFiles.statements, camtBalances: statementFiles.balances });
     Object.assign(index, merged.index);
+    // A provider's report a run before #405 dropped while its entries name it and its file lies in receipts/: its receipt again.
+    const restored = restoreReportReceipts(ws, index);
+    if (restored.length) log(`  restored ${restored.length} report receipt(s) the entries name: ${restored.join(', ')}`);
     // Movements read from PDFs and the bank's file of the same days: the account's reconciliation, before any run books them (#254).
     reconcileWithFiles(ws, index, differenceAccountOf(ws));
     // On the agreed basis each issued document's VAT event comes before its payment, which then only settles the receivable (src/invoices/events.ts).
@@ -412,6 +462,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
   if (waitingForModel) notes.push({ code: 'noModel', waiting: waitingForModel });
   if (readFailed.length) notes.push({ code: 'failed', count: readFailed.length, detail: `${readFailed[0].file}: ${readFailed[0].error}` });
   if (sameBytes.length) notes.push({ code: 'sameBytes', files: sameBytes });
+  if (rewritten.length) notes.push({ code: 'rewritten', files: rewritten });
   return { notes };
 };
 

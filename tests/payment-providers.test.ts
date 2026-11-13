@@ -123,7 +123,8 @@ function seed(ws: Workspace, txs: BankTransaction[], entries: JournalEntry[]): v
   books.journalEntries.push(...entries);
   saveBooks(ws, books);
 }
-const heldOf = (ws: Workspace) => loadBooks(ws).receipts.find((r) => r.report)?.report?.held ?? [];
+/** What the report's receipt holds, by order and why (each keeps its day, gross and currency too, #405). */
+const heldOf = (ws: Workspace) => (loadBooks(ws).receipts.find((r) => r.report)?.report?.held ?? []).map(({ order, why }) => ({ order, why }));
 
 // ─── The provider's file ─────────────────────────────────────────────────────
 
@@ -483,7 +484,7 @@ test('a dropped sales report is filed as a receipt and books the orders from the
   assert.deepEqual(lines(after.journalEntries.filter((e) => e.transactionRef === 'OLD')), [['OLD', '2026-10-29', '1021', '3200', 54.05, 'V81']], 'untouched');
   const receipt = after.receipts.find((r) => r.report);
   assert.ok(receipt && existsSync(join(ws.paths.root, 'transactional-data', '2026', 'receipts', receipt.filename)), 'the CSV is filed in its year');
-  assert.deepEqual(receipt?.report?.held, [{ order: '1999', why: 'legacy' }], 'kept for the person');
+  assert.deepEqual(receipt?.report?.held, [{ order: '1999', why: 'legacy', date: '2026-10-28', gross: 54.05, currency: 'CHF', shipTo: 'CH' }], 'kept for the person, with its day and gross (#405)');
   assert.equal(importSalesReport(ws, Buffer.from(csv), 'orders_export.csv').ok && loadBooks(ws).journalEntries.length, after.journalEntries.length, 'dropped again, nothing twice');
 });
 
