@@ -24,6 +24,7 @@ import type { Workspace } from '../workspace/workspace.js';
 import { elsewhereCount, elsewhereOf, nothingOpen, openPeriodState, waitingKinds, type Elsewhere, type OpenPeriodState, type YourReceipt } from '../app/areas/automation/open-period.js';
 import { orderPagesOf } from '../booking/order-pages.js';
 import { LACK_WORDS } from '../app/areas/automation/period-issues.js';
+import { offersInBooks } from '../intake/near-pairs.js';
 import { moneyInText } from '../app/lib/utils.js';
 import type { Processing } from '../workflows/processing.js';
 import { providersOf } from '../intake/sales-report-import.js';
@@ -47,7 +48,13 @@ export function periodWords(t: T, p: Pick<Period, 'kind' | 'token'>): string {
 }
 
 const yourLine = (books: Books, x: YourReceipt, t: T) =>
-  `- «${x.name}»${x.receipt.date ? ` of ${day(x.receipt.date)}` : ''}${x.receipt.amount != null ? `, ${money(x.receipt.currency ?? baseCurrency(), x.receipt.amount)}` : ''}: «${x.lacks.map((k) => t(LACK_WORDS[k])).join(', ')}»${x.copyOf ? `, may be a copy of «${nameOf(books, x.copyOf)}», answered on the receipt («${t('receipts.twin.same')}» or «${t('receipts.twin.distinct')}»)` : ''}`;
+  `- «${x.name}»${x.receipt.date ? ` of ${day(x.receipt.date)}` : ''}${x.receipt.amount != null ? `, ${money(x.receipt.currency ?? baseCurrency(), x.receipt.amount)}` : ''}: «${x.lacks.map((k) => t(LACK_WORDS[k])).join(', ')}»${fitsOf(books, x.receipt.id)}${x.copyOf ? `, may be a copy of «${nameOf(books, x.copyOf)}», answered on the receipt («${t('receipts.twin.same')}» or «${t('receipts.twin.distinct')}»)` : ''}`;
+/** A payment that may fit the receipt (#397's near offers): named once, on the receipt's line, linked on the receipt with one click (#398). */
+const fitsOf = (books: Books, id: string) => {
+  const o = offersInBooks(books, { receipt: id })[0];
+  const tx = o && books.transactions.find((y) => y.ref === o.payment);
+  return tx ? `; a payment may fit it, offered on the receipt with one click: ${paymentLine(tx).slice(2)}` : '';
+};
 const nameOf = (books: Books, id: string) => { const r = books.receipts.find((x) => x.id === id); return r?.description || r?.filename || id; };
 
 function questionLine(books: Books, q: Question, t: T): string {

@@ -289,6 +289,20 @@ test('a receipt that waits for her word is one issue of the period for the card,
   assert.ok(!periodIssues(withAll, [], '2026-07-01', '2026-09-30', [], new Map(), '2026-11-12', reading).some((i) => i.kind === 'own' && i.receipt.id === 'photo'));
 });
 
+test('a till slip that lacks its date and has a payment that may fit says both on its one line, card and note alike (#398 with #397)', async () => {
+  const { itemsOf } = await import('../src/app/assistant/open-period-items.js');
+  const slip = { ...receipt('slip', '2026-01-01'), date: undefined, description: 'Baucenter Gossau', extractedText: 'BAUCENTER Gossau\nTotal CHF 187.35', amount: 187.35 } as unknown as Receipt;
+  const bau = tx('BAU', '2026-09-09', 187.35, { ...waits, counterparty: 'Baucenter Gossau', description: 'Karte Baucenter Gossau' });
+  const b: Index = { ...books, transactions: [...books.transactions, bau], receipts: [...books.receipts, slip] };
+  const s = openPeriodState(b, [], [], [], ctx);
+  const lines = openLines(s);
+  const mine = itemsOf(lines.find((l) => l.kind === 'yours')!, s, b, say).items[0].text;
+  assert.match(mine, /Datum fehlt · Passt vielleicht zur Zahlung 09\.09\.2026 [^·]*CHF 187\.35$/, `both said: «${mine}»`);
+  assert.equal(mine.split('Passt vielleicht').length - 1, 1, 'the offer once');
+  const note = periodNote(tempWorkspace('open-period-near-'), b as Books, [], 'de', '2026-11-12');
+  assert.match(note, /«Baucenter Gossau»[^\n]*«Datum fehlt»; a payment may fit it, offered on the receipt with one click: 09\.09\.2026 [^\n]*\(BAU\)/);
+});
+
 test('a long list on the card names the first ITEMS_SHOWN and counts the rest, with the way to all of them (#398)', async () => {
   const { itemsOf } = await import('../src/app/assistant/open-period-items.js');
   const many: Index = { ...books, transactions: [...books.transactions, ...Array.from({ length: 8 }, (_, i) => tx(`X${i}`, `2026-09-1${i}`, 10 + i))] };
