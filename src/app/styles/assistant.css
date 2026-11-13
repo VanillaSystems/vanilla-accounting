@@ -193,7 +193,30 @@ a.dmove:hover, a.dmove:focus-visible { background: var(--hover); outline: none; 
 .dpw.dadd small { flex-basis: 100%; }
 .dropdlg .dfoot { display: flex; align-items: center; gap: 8px; padding-top: 8px; }
 .dropdlg .dfoot .m { flex: 1; font-size: 12px; }
-.dropdlg .dprog { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+/*
+ * Only the list gives way when the dialog is full (#453): every other part keeps its height. Before,
+ * the progress line had `min-height: 0` and shrank to nothing, its text drawn over the tabs. The
+ * closing lines may shrink too, once the list is at its least, scrolling in their own box.
+ */
+.dropdlg > * { flex: none; }
+.dropdlg > .drows { flex: 1 1 auto; }
+.dropdlg > .dsum { flex: 0 0.001 auto; min-height: 3em; overflow: auto; }
+.dropdlg .dprog { display: flex; flex-direction: column; gap: 6px; }
+/* A drop of many files (#453): the stages as filters, what needs her named, the rest folded into a line each. */
+.dropdlg .dov { margin-bottom: 6px; }
+.dropdlg .dfilters { display: flex; flex-wrap: wrap; gap: 6px; }
+.dropdlg .dfilter { padding: 2px 10px; border: 1px solid var(--line); border-radius: 999px; background: none; color: var(--ink-2); font: inherit; font-size: 12px; cursor: pointer; }
+.dropdlg .dfilter:hover, .dropdlg .dfilter:focus-visible { background: var(--hover); outline: none; }
+.dropdlg .dfilter[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.dropdlg .dfilter.f-needs { border-color: var(--warn); color: var(--warn); }
+.dropdlg .dfilter.f-needs[aria-pressed="true"] { background: var(--warn-soft); }
+.dropdlg .dgroup { display: flex; flex-direction: column; }
+.dropdlg .dgh { display: flex; align-items: center; gap: 4px; margin: 0; padding: 8px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink-2); font: inherit; font-size: 12.5px; font-weight: 500; text-align: left; }
+.dropdlg .dgroup[data-stage="needs"] .dgh { color: var(--warn); }
+.dropdlg .dfoldh { cursor: pointer; }
+.dropdlg .dfoldh:hover, .dropdlg .dfoldh:focus-visible { background: var(--hover); outline: none; }
+.dropdlg .dfoldh svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; transition: transform .12s; }
+.dropdlg .dfoldh[aria-expanded="true"] svg { transform: rotate(180deg); }
 .dropdlg .dbar { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .dropdlg .dbar i { display: block; height: 100%; background: var(--accent); transition: width .4s; }
 /* What came of the drop, at its end: one line for the payments, one for the receipts, each with its link. */

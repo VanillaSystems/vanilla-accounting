@@ -43,7 +43,13 @@ page adds the dialog and how it hands over to the workflows of 0.4.0.
    **Belege** (receipts, invoices, supporting documents), **Unklar** (shown only while a file has
    no kind), **Nicht übernommen** (duplicates, quarantine). Each tab shows its count and a dot
    when something in it needs the person, and says which workflow takes its files next. A file
-   whose kind is changed moves to its tab.
+   whose kind is changed moves to its tab. From `OVERVIEW_FROM` (10) files the tabs give way to the
+   overview (#453, src/app/shell/drop-overview.ts): the overall bar while the drop is worked on, and
+   the files counted by stage (braucht dich, in Arbeit, Kontoauszüge eingelesen, einer Zahlung
+   zugeordnet, gelesen ohne Zahlung, abgelegt ohne eigene Zahlung, nicht übernommen), each a filter
+   button. Each row's stage is a cut of its closing group (the state its row shows), so the counts,
+   the closing lines and the rows agree. Unfiltered, the rows that need the person are listed first
+   under their count; every other stage is one folded line with its count that opens its rows.
 6. **Quick edits:** «Ändern» on a row edits its name and kind; × removes it. Nothing is written
    while the dialog is open.
 7. **«Hinzufügen»** moves the files into the inbox, which starts the workflows by their

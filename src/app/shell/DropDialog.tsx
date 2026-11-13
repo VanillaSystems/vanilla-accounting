@@ -25,6 +25,7 @@ import { OPEN_ITEMS } from '../areas/vat/model.js';
 import { localToday, type Period } from '../../accounting/periods.js';
 import { baseCurrency, chargesVat, filing } from '../../engines/index.js';
 import { needsYou, tabOf, type DropTab } from './drop-tabs.js';
+import { OVERVIEW_FROM, STAGE_OF, STAGE_TEXT, overviewOf, stagesIn, type Stage } from './drop-overview.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { monthName } from '../lib/period-label.js';
 import { useAutomation } from '../automation/store.js';
@@ -748,6 +749,10 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   const s = useDrop();
   const { view } = useAutomation();
   const [tab, setTab] = useState<DropTab>('all');
+  // A drop of many files (#453): the overview's filter, and the stages whose folded line is opened; a new drop starts with neither.
+  const [stage, setStage] = useState<Stage | 'all'>('all');
+  const [unfolded, setUnfolded] = useState<ReadonlySet<Stage>>(new Set());
+  useEffect(() => { setStage('all'); setUnfolded(new Set()); }, [s.session?.id]);
   const accounts = useWorkspace()?.bankAccounts;
   const { questions, me } = useQuestions();
   const receiptOf = (r: DropRow) => books.receipts.find((y) => y.id === receiptIdOf(r, view));
@@ -760,13 +765,17 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   const taken = rows.filter((r) => r.state === 'taken');
   const states = taken.map((r) => fileState(r, books, view));
   const working = s.adding > 0 || rows.some((r) => r.state === 'take') || states.some((x) => x.kind === 'working');
-  const finished = states.filter((x) => x.kind !== 'working').length;
-  // Files still uploading or being taken count as not begun, so the bar does not fall back when they join.
-  const coming = s.adding + rows.filter((r) => r.state === 'take').length;
-  const pct = dropProgress([...taken.map((r, i) => doneOf(r, states[i], view)), ...Array<number>(coming).fill(0)]);
-  // Every row in one group of the closing lines, by the state its own row shows (#384).
+  // Every row in one group of the closing lines, by the state its own row shows (#384); the overview's stages and the bar's line count the same (#453).
   const stateOf = new Map(taken.map((r, i) => [r, states[i]]));
-  const sum = !working && rows.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? [], undefined, outlayWaitsNow()), questions, (r) => closingGroupOf(r, stateOf.get(r))) : undefined;
+  const groupOf = (r: DropRow) => closingGroupOf(r, stateOf.get(r));
+  const ov = overviewOf(rows.map(groupOf), s.adding);
+  const many = ov.n >= OVERVIEW_FROM;
+  // Files still uploading or being taken count as not begun, so the bar does not fall back when they join; a file at rest counts whole.
+  const pct = dropProgress([...rows.map((r) => (r.state === 'take' ? 0 : r.state === 'taken' ? doneOf(r, stateOf.get(r)!, view) : 1)), ...Array<number>(s.adding).fill(0)]);
+  const sum = !working && rows.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? [], undefined, outlayWaitsNow()), questions, groupOf) : undefined;
+  // A filter whose stage has no file any more (its last one answered) shows the whole drop again.
+  const filter = stage !== 'all' && ov.counts[stage] ? stage : 'all';
+  const stageRows = (st: Stage) => rows.filter((r) => STAGE_OF[groupOf(r)] === st);
   // Only files the books hold already (#341): the window says that nothing new came in.
   const nothingNew = !working && !taken.length && rows.length > 0 && rows.every((r) => (r.state === 'duplicate' && r.reason !== 'possible-duplicate' && r.reason !== 'provider-export') || !!r.readAs);
   // What waits for her, named where it is (#398): the receipts of this drop under Belege, every open task under Automatisierung › Aufgaben, as the dock counts them.
@@ -778,6 +787,9 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   // The last statement the drop read in: closing the window by hand opens it (Kontoauszüge does, #361).
   const statement = [...rows].reverse().map((r) => (r.state === 'taken' ? statementLocation(r, books) : undefined)).find(Boolean);
   finishing = () => { closeDrop(); if (statement) onStatement(statement); };
+  const rowOf = (r: DropRow) => (r.state === 'taken'
+    ? <Taken key={r.key} r={r} session={s.session!} books={books} go={go} onGo={onGo} refresh={refresh} />
+    : <Waiting key={r.key} r={r} session={s.session!} go={go} />);
   return (
     <>
       <div className="scrim" style={{ background: 'color-mix(in srgb, var(--bg) 45%, transparent)' }} onClick={finishDrop} />
@@ -787,28 +799,60 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
           {s.adding ? <span className="wfpill st-running">{t('drop.reading', { n: s.adding })}</span> : null}
           <button type="button" className="chip" aria-label={t('common.close')} onClick={finishDrop}>×</button>
         </div>
-        {taken.length && !sum ? (
-          <div className="dprog">
-            <div className="dbar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><i style={{ width: `${pct}%` }} /></div>
-            <p className="m">{t('drop.overall', { pct, done: finished, n: taken.length + coming })}</p>
+        {many || (taken.length && !sum) ? (
+          <div className={many ? 'dprog dov' : 'dprog'} {...(many && { 'data-testid': 'drop-overview' })}>
+            {/* At the end the bar and its line give way to what came of the drop (Summary); the filters stay. */}
+            {!sum ? (
+              <>
+                <div className="dbar" role="progressbar" aria-label={t('drop.ov.bar')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><i style={{ width: `${pct}%` }} /></div>
+                <p className="m">{t('drop.overall', { pct, done: ov.done, n: ov.n })}</p>
+              </>
+            ) : null}
+            {many ? (
+              <div className="dfilters" role="group" aria-label={t('drop.ov.filters')}>
+                {(['all', ...stagesIn(ov)] as const).map((st) => (
+                  <button key={st} type="button" className={`dfilter f-${st}`} data-testid="drop-filter" data-stage={st} aria-pressed={filter === st}
+                    onClick={() => setStage(st === 'all' || filter === st ? 'all' : st)}>
+                    {st === 'all' ? t('drop.ov.all', { n: ov.n }) : t(STAGE_TEXT[st], { n: ov.counts[st] })}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
         {nothingNew ? <div className="dsum" data-testid="drop-nothing-new"><p>{t('drop.sum.nothing')}</p></div> : null}
         {sum && !nothingNew ? <Summary sum={sum} rows={taken} books={books} receiptOf={receiptOf} feeBillsOf={[...new Set(states.flatMap((x) => (x.kind === 'feeBill' && x.provider ? [x.provider] : [])))].join(', ')} go={(loc) => { closeDrop(); onGo(loc); }} /> : null}
-        <div className="wftabs" role="tablist">
-          {tabs.map((x) => {
-            const of = x === 'all' ? rows : rows.filter((r) => tabOf(r) === x);
-            return (
-              <button key={x} type="button" role="tab" aria-selected={tab === x} className={tab === x ? 'on' : ''} onClick={() => setTab(x)}>
-                {t(`drop.tab.${x}` as 'drop.tab.all')} <span className="mono">{of.length}</span>{of.some(needsYou) ? <i className="ddot" aria-hidden="true" /> : null}
-              </button>
-            );
-          })}
-        </div>
+        {many ? null : (
+          <div className="wftabs" role="tablist">
+            {tabs.map((x) => {
+              const of = x === 'all' ? rows : rows.filter((r) => tabOf(r) === x);
+              return (
+                <button key={x} type="button" role="tab" aria-selected={tab === x} className={tab === x ? 'on' : ''} onClick={() => setTab(x)}>
+                  {t(`drop.tab.${x}` as 'drop.tab.all')} <span className="mono">{of.length}</span>{of.some(needsYou) ? <i className="ddot" aria-hidden="true" /> : null}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div className="drows">
-          {shown.length ? shown.map((r) => (r.state === 'taken'
-            ? <Taken key={r.key} r={r} session={s.session!} books={books} go={go} onGo={onGo} refresh={refresh} />
-            : <Waiting key={r.key} r={r} session={s.session!} go={go} />)) : <p className="m">{rows.length ? t('drop.emptyTab') : t('drop.empty')}</p>}
+          {!many ? (shown.length ? shown.map(rowOf) : <p className="m">{rows.length ? t('drop.emptyTab') : t('drop.empty')}</p>)
+            : filter !== 'all' ? stageRows(filter).map(rowOf)
+            // The whole drop: what needs her listed and named first; every other stage a line with its count, its rows behind it.
+            : stagesIn(ov).map((st) => {
+              const of = stageRows(st);
+              if (st === 'needs') return <div key={st} className="dgroup" data-stage={st}><p className="dgh">{t(STAGE_TEXT[st], { n: ov.counts[st] })}</p>{of.map(rowOf)}</div>;
+              const open = unfolded.has(st);
+              return (
+                <div key={st} className="dgroup" data-stage={st}>
+                  <button type="button" className="dgh dfoldh" data-testid="drop-group" data-stage={st} aria-expanded={open}
+                    onClick={() => setUnfolded((was) => { const next = new Set(was); if (open) next.delete(st); else next.add(st); return next; })}>
+                    {t(STAGE_TEXT[st], { n: ov.counts[st] })}
+                    <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                  </button>
+                  {open ? of.map(rowOf) : null}
+                </div>
+              );
+            })}
         </div>
         {s.note ? <p className="warnline" data-testid="drop-note">{s.note}</p> : null}
         {s.error ? <p className="warnline">{s.error}</p> : null}

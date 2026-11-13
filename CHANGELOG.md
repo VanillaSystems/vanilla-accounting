@@ -398,6 +398,13 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- The drop window with many files (#453): the line «Gesamt 51 % · 1 von 43 Dateien fertig» no
+  longer lies over the tabs (it shrank to nothing once the list was long); only the list gives way.
+  From 10 files the window shows an overview: one bar for the whole drop and where the files stand,
+  in counts («45 Dateien · 9 brauchen dich · 2 Kontoauszüge eingelesen · 12 einer Zahlung
+  zugeordnet · …»), each a filter of the list in place of the tabs. What needs her is listed first
+  under its count; the files still worked on or done are a line each with their count, opened by a
+  click. The counts come from the states the rows show and follow them live.
 - A receipt that names no VAT is «MWST noch nicht gelesen», no longer «keine CH-MWST» (#391).
   Only a model, or the receipt's own words («nicht MWST-pflichtig», «not subject to Swiss VAT», «von
   der MWST ausgenommen», never beside «inkl. MWST» or a Swiss rate, 7.7 % too), say it carries no

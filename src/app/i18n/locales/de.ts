@@ -3680,6 +3680,15 @@ export const messages = {
   'drop.titleWorking': 'Wird verarbeitet',
   'drop.titleDone': 'Hinzugefügt',
   'drop.overall': 'Gesamt {pct} % · {done} von {n} Dateien fertig',
+  // A drop of many files (#453): the overview's stages, each a filter of the list, in the words of the rows.
+  'drop.ov.bar': 'Fortschritt aller Dateien',
+  'drop.ov.filters': 'Dateien nach ihrem Stand zeigen',
+  'drop.ov.all': { one: '{n} Datei', other: '{n} Dateien' },
+  'drop.ov.needs': { one: '{n} braucht dich', other: '{n} brauchen dich' },
+  'drop.ov.working': '{n} in Arbeit',
+  'drop.ov.read': '{n} gelesen, noch keine Zahlung',
+  'drop.ov.other': '{n} abgelegt, ohne eigene Zahlung',
+  'drop.ov.out': '{n} nicht übernommen',
   // After a drop: what came of it, what is still open, and a figure that is not final (#341).
   'drop.sum.payments': { one: '{files} mit {n} Zahlung, {from} – {to}', other: '{files} mit {n} Zahlungen, {from} – {to}' },
   'drop.sum.booked': { one: '{n} gebucht', other: '{n} gebucht' },
