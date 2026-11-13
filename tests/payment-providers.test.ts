@@ -1367,10 +1367,10 @@ test('10. a payout that waits says why on the payment itself (GET /api/transacti
     const ws = workspaceAt(api.root);
     seed(ws, [payout('PW', { date: '2026-11-03', amount: 50 }), viaStripe('ST2', 'STRIPE 4711', { counterparty: 'Stripe Example Ltd' }), later('2026-11-10')], []);
     const wait = async (ref: string) => ((await (await api.fetch(`/api/transactions/${ref}/payout-wait`)).json()) as { wait: unknown }).wait;
-    assert.deepEqual(await wait('PW'), { why: 'clearing', provider: 'Shopify', file: 'knowledge/suppliers/shopify.yaml' });
+    assert.deepEqual(await wait('PW'), { why: 'clearing', provider: 'Shopify', file: 'knowledge/suppliers/shopify.yaml', sales: true });
     assert.equal(await wait('ST2'), null, 'no provider\'s payout');
     writeFileSync(file, 'id: shopify\nprovider:\n  clearing: "1093"\n  revenue: "3200"\n');
-    assert.deepEqual(await wait('PW'), { why: 'since', provider: 'Shopify', file: 'knowledge/suppliers/shopify.yaml' });
+    assert.deepEqual(await wait('PW'), { why: 'since', provider: 'Shopify', file: 'knowledge/suppliers/shopify.yaml', sales: true });
     writeFileSync(file, 'id: shopify\nprovider:\n  clearing: "1093"\n  since: 2026-11-01\n  revenue: "3200"\n');
     assert.equal(await wait('PW'), null, 'booked from the clearing account by the next run');
 
