@@ -4,31 +4,34 @@
  * generator has outgrown (a field the parser reads now, a new shape of a record) fails here, with the files named,
  * instead of being found later behind a seal hash that no longer matches its books.
  *
- * Left out, because Chrome makes them and its bytes vary with the machine (its version and the OS are written into
- * every PDF, its layout follows the installed fonts): the bytes of the PDFs Chrome prints (the demo's invoices, their
- * sent copies and the paid invoices filed as receipts), and what is derived from those bytes, the receipt's id and
- * size and the PDF's SHA-256 in invoices.json and mappings, and in a demo with such a PDF the order of the lines of
- * its books' JSON Lines (they are ordered by id). Such a PDF must still exist under the same name on both sides, and
- * every other field of its records is compared.
+ * The PDFs Chrome prints (the demo's invoices, their sent copies and the paid invoices filed as receipts) are compared
+ * by their text, read by the app's own PDF reader (src/parsers/pdf-text.ts), not by their bytes: Chrome writes its
+ * version and the OS into every PDF, and its layout follows the installed fonts, so the bytes vary with the machine.
+ * Left out with the bytes is what is derived from them: the receipt's id and size and the PDF's SHA-256 in
+ * invoices.json and mappings, and the order of the lines of a JSON Lines file holding such an id (ordered by id).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
-import { promisify } from 'node:util';
 import { browserPath } from './support/browser.js';
 import { DEMO_ROOTS } from './support/workspace.js';
 import { APP_ROOT } from '../src/workspace/workspace.js';
+import { pdfRuns, textOf } from '../src/parsers/pdf-text.js';
 
 /** Every demo tools/demo/generate.ts writes; the last test fails when the app root holds another. */
 const DEMOS = ['demo', 'demo-consulting', 'demo-coiffeur', 'demo-schreinerei'];
 /** Demos whose invoices Chrome prints: without a browser they cannot be generated, and their test skips. */
 const PRINTED = new Set(['demo']);
-const FIX = 'run `npm run demo:generate` and commit the result; when a seal or a golden figure changes with it, stop: no booking or figure may change by a regeneration (#374)';
+const FIX = 'run `npm run demo:generate` and commit the result. Stop instead when entries.jsonl, a filed return or tests/golden change with it: '
+  + 'no booking or figure may change by a regeneration. A seal\'s sha256 may change only because its sealed records gained fields the generator '
+  + 'writes now; check that by recomputing the seal without those fields (#374)';
 const SHOWN = 20;
+/** The generator of one demo, Chrome included, is stopped after this; it takes a few seconds. */
+const GENERATE_MS = 90_000;
 
 /** Every file under `dir`, relative, without what the demo's .gitignore keeps out of the repository. */
 function files(dir: string): string[] {
@@ -48,45 +51,70 @@ function files(dir: string): string[] {
 
 const isChromePdf = (bytes: Buffer) => bytes.subarray(0, 4).toString() === '%PDF' && bytes.includes('HeadlessChrome/');
 
+/** A printed PDF's words in content order: a line broken elsewhere by another font is no difference, a changed amount is. */
+async function printedText(bytes: Buffer): Promise<string> {
+  return `<printed by Chrome>\n${textOf(await pdfRuns(bytes), 'raw').split(/\s+/).filter(Boolean).join(' ')}`;
+}
+
 /**
- * The demo's files with Chrome's PDFs set aside: each such PDF becomes a placeholder naming its path, and its SHA-256
- * (as invoices.json keeps it), its receipt id (the first 16 hex digits) and its receipt's size in every text file
- * become the same placeholder, so both sides compare equal however Chrome printed.
+ * The demo's files as compared: a PDF Chrome printed as its text, and its SHA-256 (as invoices.json keeps it), its
+ * receipt id (the first 16 hex digits) and its receipt's size in every text file as a placeholder naming its path.
  */
-function comparable(dir: string): Map<string, string | Buffer> {
+async function comparable(dir: string): Promise<Map<string, string | Buffer>> {
   const all = new Map(files(dir).map((f) => [f, readFileSync(join(dir, f))]));
-  const printed = [...all].filter(([, bytes]) => isChromePdf(bytes));
-  const swaps = printed.flatMap(([file, bytes]) => {
-    const sha = createHash('sha256').update(bytes).digest('hex');
+  const printed = new Set([...all].filter(([, bytes]) => isChromePdf(bytes)).map(([f]) => f));
+  const swaps = [...printed].flatMap((file) => {
+    const sha = createHash('sha256').update(all.get(file)!).digest('hex');
     return [[sha, `<chrome-pdf ${file}>`], [sha.slice(0, 16), `<chrome-pdf-id ${file}>`]] as const;
   });
   const out = new Map<string, string | Buffer>();
   for (const [file, bytes] of all) {
-    if (printed.some(([f]) => f === file)) { out.set(file, `<printed by Chrome: ${bytes.length > 0 ? 'present' : 'empty'}>`); continue; }
+    if (printed.has(file)) { out.set(file, await printedText(bytes)); continue; }
     if (!/\.(json|jsonl|ya?ml|xml|txt|md|svg)$|^\.git/.test(file.split('/').pop()!)) { out.set(file, bytes); continue; }
     let text = bytes.toString('utf8');
     for (const [from, to] of swaps) text = text.split(from).join(to);
-    // A receipt Chrome printed: its size follows the bytes.
+    if (!text.includes('<chrome-pdf-id ')) { out.set(file, text); continue; }
+    // A receipt Chrome printed: its size follows the bytes, and a JSON Lines file ordered by id moves its line.
     const lines = text.split('\n').map((line) => line.includes('<chrome-pdf-id ') ? line.replace(/"fileSize":\d+/, '"fileSize":"<chrome-pdf size>"') : line);
-    // The books' JSON Lines are ordered by id, and such a receipt's id follows Chrome: its line moves with it.
-    out.set(file, (file.endsWith('.jsonl') && swaps.length ? lines.sort() : lines).join('\n'));
+    out.set(file, (file.endsWith('.jsonl') ? lines.sort() : lines).join('\n'));
   }
   return out;
 }
 
-const run = promisify(execFile);
+/**
+ * Runs the generator of one demo in a process group of its own, so the Chrome it starts goes with it: after
+ * GENERATE_MS the whole group is killed and the test fails, instead of a hung child keeping the test process alive.
+ */
+function generate(demo: string, out: string): Promise<void> {
+  return new Promise((done, fail) => {
+    const child = spawn(process.execPath, ['--import', 'tsx', join(APP_ROOT, 'tools/demo/generate.ts'), '--demo', demo, '--out', out], {
+      cwd: APP_ROOT, env: { ...process.env, ...(browserPath ? { CHROME_PATH: browserPath } : {}) }, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let said = '';
+    child.stdout.on('data', (d) => { said += d; });
+    child.stderr.on('data', (d) => { said += d; });
+    const timer = setTimeout(() => {
+      try { process.kill(-child.pid!, 'SIGKILL'); } catch { /* already gone */ }
+      fail(new Error(`npm run demo:generate -- --demo ${demo} did not end within ${GENERATE_MS / 1000} s; it and its Chrome were killed\n${said}`));
+    }, GENERATE_MS);
+    child.on('error', (e) => { clearTimeout(timer); fail(e); });
+    child.on('exit', (code, signal) => {
+      clearTimeout(timer);
+      if (code === 0) done(); else fail(new Error(`npm run demo:generate -- --demo ${demo} ended with ${code ?? signal}\n${said}`));
+    });
+  });
+}
+
 const scratch = mkdtempSync(join(tmpdir(), 'demos-generated-'));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
 
 for (const demo of DEMOS) {
   const skip = PRINTED.has(demo) && !browserPath ? 'no Chromium browser to print its invoices (npx playwright install chromium, or CHROME_PATH)' : false;
-  test(`${demo}: the committed workspace is what npm run demo:generate writes`, { skip, timeout: 120_000 }, async () => {
+  test(`${demo}: the committed workspace is what npm run demo:generate writes`, { skip, timeout: GENERATE_MS + 30_000 }, async () => {
     const out = join(scratch, demo);
-    await run(process.execPath, ['--import', 'tsx', join(APP_ROOT, 'tools/demo/generate.ts'), '--demo', demo, '--out', out], {
-      cwd: APP_ROOT, env: { ...process.env, ...(browserPath ? { CHROME_PATH: browserPath } : {}) },
-    });
-    const committed = comparable(join(APP_ROOT, demo));
-    const generated = comparable(out);
+    await generate(demo, out);
+    const committed = await comparable(join(APP_ROOT, demo));
+    const generated = await comparable(out);
     const differ = [...new Set([...committed.keys(), ...generated.keys()])].sort().flatMap((f) => {
       const a = committed.get(f), b = generated.get(f);
       if (a === undefined) return [`${f}: written by the generator, not committed`];
