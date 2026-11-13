@@ -17,6 +17,7 @@ import { reconcileRefusal, reconciliationOf } from '../../books/reconcile.js';
 import { WS, assertOpen, readBooks, refDates, updateBooks, RequestError } from '../books.js';
 import { assertNotBookedInFiled, bookedAgain } from '../edits.js';
 import { learnFromCorrection } from '../questions.js';
+import { bookingWaits } from '../booking-waits.js';
 import { askSalesWithoutVat } from '../../intake/sale-questions.js';
 import { ordersPaidElsewhere } from '../../intake/sales-report-import.js';
 
@@ -45,6 +46,9 @@ function openTransaction(books: Books, txRef: string, overwrite: boolean) {
 router.post('/api/journal-entries/classify/:txRef', async (req, res) => {
   const { txRef } = req.params;
   const overwrite = req.body?.overwrite === true;
+  // «Neu buchen» books by the firm's rules or the model: not while «Buchen» waits for «Einschalten» (#413).
+  const waits = bookingWaits();
+  if (waits) throw new RequestError(409, `«Buchen» wartet aufs Einschalten: geändert ${waits.join(', ')}.`, { code: 'bookingWaits', params: { files: waits } });
   // Her correction of a sale is kept as a rule first, so the classifier books it as she set.
   if (overwrite) learnFromCorrection([txRef]);
   const scratch = readBooks();

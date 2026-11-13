@@ -93,6 +93,8 @@ export interface DropRow {
   payouts?: PayoutsBooked & { provider: string };
   /** A report held because no payout of its provider is recognised: why, and what was looked at. */
   payoutUnseen?: PayoutUnseen;
+  /** A report held while «Buchen» waits for «Einschalten» (#413): the files changed since it was switched on; switched on, the row is taken again. */
+  bookingWaits?: string[];
   /** The person took the report anyway («Trotzdem übernehmen»): the unseen-payout check is skipped; a bank CSV «schon da» is read, its columns asked. */
   anyway?: true;
   /** What its text says it is, when it is no plain receipt (src/intake/document-kind.ts): kept beside an invoice, or no receipt at all. */
@@ -148,7 +150,7 @@ export interface PayoutGroup { provider: string; name: string; why: 'ready' | 'c
  * What booking a provider's payouts came to (src/server/provider-payouts.ts bookPayouts): `booked` of
  * `of`; `waits: 'switchOn'`: nothing booked, the booking workflow waits for «Einschalten».
  */
-export interface PayoutsBooked { booked: number; of: number; waits?: 'switchOn' }
+export interface PayoutsBooked { booked: number; of: number; waits?: 'switchOn'; /** With `waits`: the files changed since the booking was switched on (#413). */ files?: string[] }
 
 export interface PayoutWaitView { why: 'clearing' | 'since' | 'gap'; provider: string; file: string; since?: string; /** The provider's file names a sales report (its order export). */ sales: boolean }
 
@@ -214,6 +216,8 @@ export interface ReportSummary {
 
 /** `duplicate`: the same bytes; `possible-duplicate`: the same facts, asked; `same`: the person said it is the same; `not-receipt`: its words say so (`document` says what it is). */
 export type DropReason =
+  /** A provider's report while «Buchen» waits for «Einschalten» (`bookingWaits`, #413): nothing booked, taken once it is switched on. */
+  | 'booking-waits'
   | 'duplicate' | 'possible-duplicate' | 'same' | 'not-receipt' | 'held' | 'pdf-password'
   | 'as-zip' | 'as-pdf' | 'bank-csv' | 'office' | 'not-statement' | 'damaged' | 'too-deep' | 'too-big' | 'wrong-password' | 'not-imported'
   /** A PDF header on bytes no PDF reader opens (damaged, cut short): quarantine, nothing will ever read it (r8k-9). */

@@ -18,7 +18,7 @@ import { lockIntake } from '../../intake/pipeline.js';
 import { openEngine, type Engine } from '../../workflows/engine.js';
 import { loadWorkflows } from '../../workflows/load.js';
 import { summaryOf, taskOf, textIn, type AutomationCommand, type AutomationView, type PendingVersion, type Run, type RunDetail, type Task, type TaskPayment, type WorkflowDecl } from '../../workflows/model.js';
-import { baseline, caseCheck, openSwitch } from '../../workflows/switch-on.js';
+import { BOOKING_WORKFLOW, baseline, caseCheck, openSwitch } from '../../workflows/switch-on.js';
 import { bookWhatWaited } from '../provider-payouts.js';
 import { setSchedule } from '../../workflows/direct.js';
 import { cronValid } from '../../workflows/cron.js';
@@ -62,7 +62,7 @@ export function engine(): Engine {
     const now = () => openedAt(root);
     e = openEngine(now, {
       appRoot: APP_ROOT, ask: askIfReady, lock: () => lockIntake(now()),
-      isApproved: sw.isApproved, approve: sw.approve,
+      isApproved: sw.isApproved, pending: sw.pending, approve: sw.approve,
       keeps: (run) => holdsFiledPeriod(now(), run),
       onRest: (run) => releaseApproval(now(), run),
     });
@@ -224,7 +224,7 @@ export async function resumeAfterAi(): Promise<void> {
   if (!r.ok && r.refusal !== 'not-runnable') console.error(`${INTAKE}: ${r.refusal} ${r.detail ?? ''}`);
 }
 
-export const BOOKING = 'booking';
+export const BOOKING = BOOKING_WORKFLOW;
 
 /**
  * The booking run of one payment a person's undo left without a booking (r8k-6): what

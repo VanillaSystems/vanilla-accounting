@@ -296,6 +296,8 @@ export type KeepResult =
     booked?: KeptBookings;
     /** The server's record of this keep (src/saving/keeps.ts): its result line and its undo go by it alone. */
     keep?: KeptView;
+    /** «Buchen» waited for «Einschalten» before the keep, for a change from elsewhere (#413): the files; the keep booked nothing. */
+    bookingWaits?: string[];
   }
   | { ok: false; refusal: 'gone' | 'stale' | 'rules' | 'wide' | 'not-rules' | 'changed' | 'note'; message: string };
 
@@ -320,7 +322,7 @@ export interface KeptView {
 export type KeptEnded = 'file' | 'expired' | 'closed' | 'bookedSince';
 
 /** POST /api/rules/book-open: what «Automatisch buchen» for all came to, by why each payment is or is not booked. */
-export interface BookOpen { booked: number; running: number; notBooked: number; model: number; receipt: number; deleted: number; question: number; unread: number; reconcile: number; busy: number; later: number; /** How many one click books at most. */ max: number }
+export interface BookOpen { booked: number; running: number; notBooked: number; model: number; receipt: number; deleted: number; question: number; unread: number; reconcile: number; busy: number; later: number; /** How many one click books at most. */ max: number; /** «Buchen» waits for «Einschalten» (#413): nothing booked, these files changed since it was switched on. */ waits?: string[] }
 
 export interface KeptBookings { runs: string[]; refs: string[]; entries: string[]; running: number; notBooked: string[]; later?: number; first?: { id: string; date: string } }
 

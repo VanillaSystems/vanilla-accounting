@@ -36,6 +36,7 @@ import { importSalesReport, recognizeCsv, removeSalesReport, setProviderAccount 
 import { accountName, removeAccount, setAccountName } from '../../workspace/accounts-write.js';
 import { assertPlaced } from '../edits.js';
 import { asHerAct, bookPayouts, readyPayouts } from '../provider-payouts.js';
+import { bookingWaits } from '../booking-waits.js';
 
 import type { Arrival } from '../../workflows/model.js';
 import { firstPages, recognize } from '../../intake/recognize.js';
@@ -627,6 +628,10 @@ async function takeRows(s: DropSession): Promise<void> {
     const bytes = readFileSync(fileOf(s.id, row.key));
     if (row.kind === 'sales-report') {
       // A provider's report is booked here, by code, as a statement is read: it needs no run of the inbox (#203).
+      // It books by the provider's file: while «Buchen» waits for «Einschalten» it waits in its row (#413).
+      const waits = bookingWaits();
+      if (waits) { Object.assign(row, { state: 'unclear', reason: 'booking-waits', bookingWaits: waits }); continue; }
+      delete row.bookingWaits;
       // An error refuses this row only: the session is saved, the other rows are taken.
       let done: ReturnType<typeof importSalesReport>;
       try {

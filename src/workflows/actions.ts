@@ -32,6 +32,7 @@ import { askSalesWithoutVat, closeSaleQuestionsHeld } from '../intake/sale-quest
 import { bookByRules } from './book-by-rules.js';
 import { ordersPaidElsewhere } from '../intake/sales-report-import.js';
 import { refuse, type Refused } from '../types/refusal.js';
+import { BOOKING_WORKFLOW } from './switch-on.js';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -45,6 +46,13 @@ export interface ActionContext {
   now: () => string;
   /** Inbox files that came in with a run of the same workflow still waiting behind this one: that run reads them, not this one (r4c-7). */
   later?: () => ReadonlySet<string>;
+  /**
+   * The files another workflow waits for «Einschalten» with (src/workflows/switch-on.ts), undefined when it runs as
+   * switched on: a step that books by the firm's rules or the model honours the approval of `booking` (#413).
+   */
+  waits?: (workflow: string) => readonly string[] | undefined;
+  /** Runs a change the app's own code makes to the company's knowledge; every workflow switched on before it stays switched on (src/workflows/engine.ts). */
+  keepSwitchedOn?: <T>(change: () => T) => T;
   /** Changes the run's arrivals (the files that came in with it): a photo converted to PDF, a file set aside (r8k-9). */
   arrivals?: (change: (arrived: Arrival[]) => Arrival[]) => void;
 }
@@ -106,11 +114,31 @@ function batch(step: StepRun, took: (books: Books, ws: Workspace, later?: () => 
   };
 }
 
+/**
+ * The inbox's book step honours the approval of `booking` (#413): while that workflow waits for
+ * «Einschalten» (its company part changed since it was switched on), a live run books nothing by
+ * rule or model and changes nothing in the books; its note names the files and how many payments
+ * are open. Reading, the VAT facts and matching ran before it. «Einschalten» starts the inbox run
+ * that books them (src/server/provider-payouts.ts bookWhatWaited).
+ */
+function honoursBooking(run: NonNullable<Action['run']>): NonNullable<Action['run']> {
+  return async (input, effects, ctx) => {
+    const files = ctx.run?.mode === 'live' ? ctx.waits?.(BOOKING_WORKFLOW) : undefined;
+    if (!files) return run(input, effects, ctx);
+    const now = effects['books.write']!.read();
+    const took = unbooked(now);
+    const waiting = took.reduce((n, x) => n + (x.kind === 'transactions' ? x.n : 0), 0);
+    const note: IntakeNote = { code: 'bookingWaits', files: [...files], waiting };
+    return { outcome: 'ok', output: { took, made: madeBetween(now, now), notes: [note] } };
+  };
+}
+
 /** After a live run of `run`, the merchant names its confirmed links teach go into the company's business files (#190, src/knowledge/learned-names.ts); a dry run or a replay writes no knowledge. */
 function learning(run: NonNullable<Action['run']>): NonNullable<Action['run']> {
   return async (input, effects, ctx) => {
     const out = await run(input, effects, ctx);
-    if (ctx.run?.mode === 'live') learnMerchantNames(ctx.ws, effects['books.write']!.read());
+    // Code writes what confirmed links taught: no rule a person has not seen, so «Buchen» does not start to wait for «Einschalten» because of it (#413).
+    if (ctx.run?.mode === 'live') (ctx.keepSwitchedOn ?? ((f) => f()))(() => learnMerchantNames(ctx.ws, effects['books.write']!.read()));
     return out;
   };
 }
@@ -208,7 +236,7 @@ export const ACTIONS: Record<string, Action> = {
     outcomes: ['proposed', 'open', 'gone', 'noModel', 'booked', 'waits'],
     effects: [],
     ai: true,
-    async run(input, _effects, { ws, ask, run }) {
+    async run(input, _effects, { ws, ask, run, waits }) {
       const b = books(input);
       const t = tx(input);
       if (periodLock(b).isClosed(t.date) || b.journalEntries.some((e) => e.transactionRef === t.ref)) return { outcome: 'gone' };
@@ -225,6 +253,8 @@ export const ACTIONS: Record<string, Action> = {
         const entries = scratch.journalEntries.slice(before);
         const wait = entries.length ? receiptWaitOf(b, t, context, receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws), fx) : undefined;
         if (wait && !(wait.wait && wait.unread) && !reconciliationOf(b, t.ref) && entries.every((e) => !!e.rule)) {
+          // While «Buchen» waits for «Einschalten» no rule books it (#413): the question closes, and the inbox run «Einschalten» starts books it.
+          if (run?.mode === 'live' && waits?.(BOOKING_WORKFLOW)) return { outcome: 'waits' };
           // No `rule` in the output: askedBy counts it as the question of an ask rule, and this rule asked nothing.
           if (mustSettle(wait) && !answerSettles(t, entries, context)) return { outcome: 'waits' };
           // Booked here by code, not by the workflow's book step: that step's effect is applied once per payment, so a payment
@@ -262,7 +292,7 @@ export const ACTIONS: Record<string, Action> = {
   'intake.read': { outcomes: ['ok'], effects: ['books.write'], run: batch(readStep, inboxFiles) },
   'intake.extract-vat': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(vatStep(), (b) => { const todo = new Set(vatCandidates(b, false, true)); return receiptsWhere((r) => todo.has(r))(b); }) },
   'intake.match': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: learning(batch(matchStep, receiptsWhere((r) => r.location === 'staged'))) },
-  'intake.book': { outcomes: ['ok'], effects: ['books.write', 'runs.close'], ai: true, run: batch(classifyStep(), unbooked) },
+  'intake.book': { outcomes: ['ok'], effects: ['books.write', 'runs.close'], ai: true, run: honoursBooking(batch(classifyStep(), unbooked)) },
   'parsers.statement': declared(['ok']),
   'books.merge-statement': declared(['ok'], { effects: ['books.transactions'] }),
   'books.statement-balance': declared(['matches', 'differs']),

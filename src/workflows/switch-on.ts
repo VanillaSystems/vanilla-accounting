@@ -24,6 +24,9 @@ import type { CaseCheck, Run, WorkflowDecl } from './model.js';
 
 type Ws = Pick<Workspace, 'paths'>;
 
+/** The workflow whose approval every booking by the firm's rules or the model honours, wherever it starts (#413). */
+export const BOOKING_WORKFLOW = 'booking';
+
 /** Fields that apply at once: changing them never needs switching on. */
 const APPLIES_NOW: Record<'workflow' | 'step', readonly string[]> = {
   workflow: ['label', 'desc', 'cadence', 'triggers'],
