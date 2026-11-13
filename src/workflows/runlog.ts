@@ -13,6 +13,7 @@ import { dirname } from 'node:path';
 import { yearPaths, yearsOf, type Workspace } from '../workspace/workspace.js';
 import type { ItemRef, Run } from './model.js';
 import type { LeftPayment } from '../types/api-error.js';
+import type { Refusal } from '../types/refusal.js';
 
 export type { LeftPayment };
 
@@ -26,6 +27,8 @@ export interface RunLogLine {
   /** The step it waits at or stuck at. */
   step?: string;
   reason?: string;
+  /** A stuck run's refusal the screens have words for (#482); `reason` stays the log's own line. */
+  why?: Refusal;
   /** Record ids written since the run's previous line. */
   wrote?: { entries?: string[]; mappings?: string[]; receipts?: string[] };
   /** Payments its steps tried to book since the previous line and left unbooked, with why (#470): their «Verlauf» names the run. */
@@ -55,6 +58,7 @@ export function lineFor(run: Run, logged: number, host: RunLogLine['host'] = 'lo
     event: s.status,
     ...(s.status === 'waiting' || s.status === 'stuck' ? { step: s.at } : {}),
     ...(s.status === 'stuck' || s.status === 'discarded' ? { reason: s.reason } : {}),
+    ...(s.status === 'stuck' && s.why ? { why: s.why } : {}),
     ...(wroteSomething ? { wrote: wrote as NonNullable<RunLogLine['wrote']> } : {}),
     ...(refused.length ? { refused } : {}),
     host,

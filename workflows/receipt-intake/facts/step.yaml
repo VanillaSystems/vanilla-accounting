@@ -1,5 +1,5 @@
 label: {"de": "MWST-Angaben der Belege nehmen", "en": "Take the receipts' VAT facts", "fr": "Relever la TVA des pièces", "it": "Rilevare l’IVA dei giustificativi"}
 uses: intake.extract-vat
 effects: ["books.write"]
-emits: ["took", "made", "notes"]
+emits: ["took", "made", "notes", "refused"]
 outcomes: {"ok": "match"}

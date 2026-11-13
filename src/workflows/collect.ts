@@ -15,6 +15,7 @@ export const COLLECT_ACTIONS: Record<string, Action> = {
   'source.due': {
     outcomes: ['due', 'none'],
     effects: [],
+    emits: ['sources'],
     run(_input, _fx, { ws }) {
       const now = new Date();
       const due = sources(ws, APP_ROOT).flatMap((v) => {
@@ -28,6 +29,7 @@ export const COLLECT_ACTIONS: Record<string, Action> = {
   'source.pull': {
     outcomes: ['ok', 'login-needed', 'person-needed', 'missing-secret', 'changed', 'over-reach', 'rate-limited', 'mail-app'],
     effects: ['inbox.add', 'records.import', 'collected.append'],
+    emits: ['report'],
     async run(input, _fx, { ws, run }) {
       const r = await pull({ ws, appRoot: APP_ROOT, source: String(input.source), run: run?.id ?? 'run', mode: run?.mode === 'live' || !run ? 'live' : 'dry' });
       return { outcome: r.outcome, output: { report: r } };

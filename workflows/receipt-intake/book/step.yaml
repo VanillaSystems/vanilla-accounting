@@ -1,5 +1,5 @@
 label: {"de": "Neue Bewegungen buchen", "en": "Book the new payments", "fr": "Comptabiliser les nouveaux mouvements", "it": "Registrare i nuovi movimenti"}
 uses: intake.book
 effects: ["books.write", "runs.start", "runs.close"]
-emits: ["took", "made", "notes"]
+emits: ["took", "made", "notes", "refused"]
 outcomes: {"ok": "done"}

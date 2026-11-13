@@ -212,6 +212,7 @@ export function checkWorkflow(w: WorkflowDecl, all: readonly WorkflowDecl[]): st
     for (const outcome of Object.keys(s.outcomes)) if (!action.outcomes.includes(outcome)) out.push(`${s.id}: ${body.uses} never returns outcome ${outcome}`);
     for (const outcome of action.outcomes) if (!(outcome in s.outcomes)) out.push(`${s.id}: outcome ${outcome} of ${body.uses} leads nowhere`);
     for (const e of action.effects) if (!s.effects.includes(e)) out.push(`${s.id}: ${body.uses} needs effect ${e}, not declared`);
+    for (const k of action.emits ?? []) if (!s.emits.includes(k)) out.push(`${s.id}: ${body.uses} may hand on ${k}, not in its emits`);
   }
   return out;
 }

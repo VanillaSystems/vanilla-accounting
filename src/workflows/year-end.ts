@@ -19,6 +19,7 @@ export const YEAR_END_ACTIONS: Record<string, Action> = {
   'accounting.ledger.currencies': {
     outcomes: ['ok'],
     effects: ['books.year-end'],
+    emits: ['revaluation'],
     run(input, _fx, { ws }) {
       const entries = bookRevaluation(ws, yearOf(input));
       return { outcome: 'ok', output: { revaluation: entries.map((e) => e.id) } };
@@ -27,6 +28,7 @@ export const YEAR_END_ACTIONS: Record<string, Action> = {
   'books.close-year': {
     outcomes: ['ok'],
     effects: ['books.close-year'],
+    emits: ['closed'],
     async run(input, _fx, { ws }) {
       const r = await closeYear(ws, yearOf(input));
       return { outcome: 'ok', output: { closed: r.closedThrough } };
@@ -35,6 +37,7 @@ export const YEAR_END_ACTIONS: Record<string, Action> = {
   'accounting.ledger.opening-balances': {
     outcomes: ['ok'],
     effects: ['books.open-year'],
+    emits: ['opened'],
     async run(input, _fx, { ws }) {
       const r = await openYear(ws, yearOf(input));
       return { outcome: 'ok', output: { opened: r.opening.year } };
