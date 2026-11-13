@@ -5,7 +5,7 @@
  * documents.yaml, the facts from the text itself (src/parsers/receipt-text.ts).
  */
 import type { DocumentsData, OtherWhy, SupportingWhy } from '../core/modules/schema.js';
-import { hasVatIndicator, textFacts } from '../parsers/receipt-text.js';
+import { SWISS_PERCENT, hasVatIndicator, textFacts, vatIdIn } from '../parsers/receipt-text.js';
 import { HEAD, firstOf, wordsRe } from '../core/modules/words.js';
 
 export type DocumentVerdict =
@@ -39,7 +39,11 @@ export function documentKind(text: string, words: DocumentsData): DocumentVerdic
   const score = receiptScore(text, words);
   const head = text.slice(0, HEAD);
   const titleAt = wordsRe(words.receipt.title).exec(head)?.index ?? Infinity;
-  const supporting = firstOf(words.supporting, text.slice(0, TOP))[0];
+  // A balance sheet's word also names what a fiduciary's invoice is for («Honorarrechnung Bilanz 2025»)
+  // or stands in its letterhead: it decides only on a text that shows less than an invoice and charges
+  // no VAT (no rate as a percent, no VAT number); a thin invoice with VAT stays unclear for the model (#427).
+  const sheet = score < RECEIPT && !SWISS_PERCENT.test(text) && !vatIdIn(text);
+  const supporting = firstOf(words.supporting, text.slice(0, TOP)).filter((s) => s.key !== 'balance-sheet' || sheet)[0];
   if (supporting && supporting.at < titleAt) return { is: 'supporting', why: supporting.key };
   // Terms, a price list or a tracking mail say what they are in their first lines, a newsletter in its
   // footer. Named in its title, it is no receipt unless the text shows most of one; a title that

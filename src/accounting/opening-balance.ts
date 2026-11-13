@@ -5,7 +5,7 @@
  * exactly that amount. Taken, it is the account's opening of the year (config.openingBalances,
  * keyed by year): nothing moved on the account before the statement in these books, so the
  * balance on 1 January of them is the bank's balance before the statement. The other side is
- * retained earnings, where npm run import-opening carries the difference too, so the year opens
+ * retained earnings, where the import of a closed year carries the difference too, so the year opens
  * balanced. Pure: the statement route writes it, the runs table offers it.
  */
 import type { AccountingConfig, Index } from '../types/index.js';
@@ -89,46 +89,109 @@ export function withOpening(openings: Openings, year: string, account: string, a
   return Object.keys(out).length ? out : undefined;
 }
 
+type NativeOpenings = AccountingConfig['openingBalancesNative'];
+
+/** The native opening balances with `account` opening `year` at `value` in its currency (null: without it); an emptied year is dropped. */
+export function withNativeOpening(openings: NativeOpenings, year: string, account: string, value: { amount: number; currency: string } | null): NativeOpenings {
+  const balances = { ...openings?.[year] };
+  if (value) balances[account] = value;
+  else delete balances[account];
+  const out = { ...openings };
+  if (Object.keys(balances).length) out[year] = balances;
+  else delete out[year];
+  return Object.keys(out).length ? out : undefined;
+}
+
+type BankAccount = { bank: string; currency: string; account: string; label: string };
+type StartBooks = Pick<Index, 'config' | 'transactions' | 'journalEntries' | 'statementBalances'>;
+
 /** A bank account the books open at nothing while its statements say it held money (corner-25). */
 export interface MissingOpening {
   account: string;
   label: string;
   year: string;
-  /** The bank's balance before the year's first payment, as its statements imply it. */
+  /** The account's currency: a foreign-currency account's opening is named in it, as Firma › Eröffnung takes it (#427). */
+  currency: string;
+  /** The bank's balance before the year's first payment, as its statements imply it, in `currency`. */
   amount: number;
   /** Whether Firma › Eröffnung takes it: not once the year is closed through 31.12., so no link leads into a refusal. */
   canType: boolean;
 }
 
+/** The account's opening of `year` in its own currency, when one is entered: a foreign account's is its native balance. */
+const openingIn = (books: Pick<Index, 'config'>, a: BankAccount, year: string): number | undefined =>
+  a.currency === baseCurrency() ? books.config?.openingBalances?.[year]?.[a.account] : books.config?.openingBalancesNative?.[year]?.[a.account]?.amount;
+
+/**
+ * What the statements say about the start of the year: the day of the year's first imported payment
+ * and the bank's balance before it (in hundredths), the first closing balance of the year less the payments up to it.
+ */
+function bankStart(books: StartBooks, a: BankAccount, year: string): { from: string; held: number } | undefined {
+  const first = (books.statementBalances ?? []).filter((b) => b.account === a.account && b.date.startsWith(year)).sort((x, y) => x.date.localeCompare(y.date))[0];
+  if (!first) return undefined;
+  const paid = books.transactions.filter((t) => t.bank === a.bank && t.currency === a.currency && t.date >= `${year}-01-01` && t.date <= first.date);
+  const moved = paid.reduce((sum, t) => sum + (t.direction === 'DBIT' ? -1 : 1) * toRappen(Math.abs(t.amount)), 0);
+  return { from: paid.map((t) => t.date).sort()[0] ?? first.date, held: toRappen(first.amount) - moved };
+}
+
 /**
  * The first year's bank accounts without an opening balance whose statements disagree: the
  * first closing balance of the year less the payments up to it is what the account held on
- * 1 January. Without that opening the Bilanz shows the account wrong (often below zero). Base
- * currency accounts only, as the opening form takes them; a later year opens from the year before.
+ * 1 January. Without that opening the Bilanz shows the account wrong (often below zero). A
+ * foreign-currency account's in its currency; a later year opens from the year before.
  */
-export function missingOpenings(
-  books: Pick<Index, 'config' | 'transactions' | 'journalEntries' | 'statementBalances'>,
-  accounts: ReadonlyArray<{ bank: string; currency: string; account: string; label: string }>,
-  year: string,
-): MissingOpening[] {
+export function missingOpenings(books: StartBooks, accounts: ReadonlyArray<BankAccount>, year: string): MissingOpening[] {
   const lock = openingLock({ config: books.config, journalEntries: books.journalEntries }, year);
   if (lock === 'notFirstYear') return [];
   return accounts.flatMap((a): MissingOpening[] => {
-    if (a.currency !== baseCurrency() || books.config?.openingBalances?.[year]?.[a.account] !== undefined) return [];
-    const first = (books.statementBalances ?? []).filter((b) => b.account === a.account && b.date.startsWith(year)).sort((x, y) => x.date.localeCompare(y.date))[0];
-    if (!first) return [];
-    const moved = books.transactions.filter((t) => t.bank === a.bank && t.currency === a.currency && t.date >= `${year}-01-01` && t.date <= first.date)
-      .reduce((sum, t) => sum + (t.direction === 'DBIT' ? -1 : 1) * toRappen(Math.abs(t.amount)), 0);
-    const held = toRappen(first.amount) - moved;
-    return held === 0 ? [] : [{ account: a.account, label: a.label, year, amount: fromRappen(held), canType: !lock }];
+    if (openingIn(books, a, year) !== undefined) return [];
+    const start = bankStart(books, a, year);
+    return !start || start.held === 0 ? [] : [{ account: a.account, label: a.label, year, currency: a.currency, amount: fromRappen(start.held), canType: !lock }];
+  });
+}
+
+/**
+ * A bank account whose opening is entered but whose books, before the year's first imported payment,
+ * hold another balance than the bank did then (r2-28): books that start in July with the opening of
+ * the balance sheet of 31 December lack what the bank moved from January to June.
+ */
+export interface StartGap {
+  account: string;
+  label: string;
+  year: string;
+  currency: string;
+  /** The day of the year's first imported payment. */
+  from: string;
+  /** The bank's balance before it, as the statements imply it. */
+  bank: number;
+  /** The books' balance before it: the opening and what is booked on the account before that day. */
+  books: number;
+  /** Books less bank, the sign of a statement's difference. */
+  diff: number;
+  canType: boolean;
+}
+
+export function startGaps(books: StartBooks, accounts: ReadonlyArray<BankAccount>, year: string): StartGap[] {
+  const lock = openingLock({ config: books.config, journalEntries: books.journalEntries }, year);
+  if (lock === 'notFirstYear') return [];
+  return accounts.flatMap((a): StartGap[] => {
+    const opening = openingIn(books, a, year);
+    const start = opening === undefined ? undefined : bankStart(books, a, year);
+    if (opening === undefined || !start) return [];
+    const before = (books.journalEntries ?? []).filter((e) => e.date >= `${year}-01-01` && e.date < start.from && e.origin !== 'year-close')
+      .reduce((sum, e) => sum + (e.accountDebit === a.account ? toRappen(e.amount) : 0) - (e.accountCredit === a.account ? toRappen(e.amount) : 0), toRappen(opening));
+    const diff = before - start.held;
+    return diff === 0 ? [] : [{ account: a.account, label: a.label, year, currency: a.currency, from: start.from, bank: fromRappen(start.held), books: fromRappen(before), diff: fromRappen(diff), canType: !lock }];
   });
 }
 
 /**
  * How far the books are off a bank account's closing balance (`diff`, books less bank), split into
- * the missing opening balance and the rest, which a payment not or wrongly booked explains (r4c-33).
+ * the missing opening balance, or the gap before the year's first payment (`before`), and the rest,
+ * which a payment not or wrongly booked explains (r4c-33, r2-28).
  */
-export function bookDiffParts(diff: number, missing: MissingOpening | undefined): { opening?: MissingOpening; rest: number } {
-  if (!missing) return { rest: diff };
-  return { opening: missing, rest: fromRappen(toRappen(diff) + toRappen(missing.amount)) };
+export function bookDiffParts(diff: number, missing: MissingOpening | undefined, gap?: StartGap): { opening?: MissingOpening; before?: StartGap; rest: number } {
+  if (missing) return { opening: missing, rest: fromRappen(toRappen(diff) + toRappen(missing.amount)) };
+  if (gap) return { before: gap, rest: fromRappen(toRappen(diff) - toRappen(gap.diff)) };
+  return { rest: diff };
 }
