@@ -4367,6 +4367,7 @@ export default {
     'questions.sale.why.domesticIban': 'Proposed «{choice}»: {currency} from a domestic account ({countries}).',
     'questions.sale.why.domesticCurrency': 'Proposed «{choice}»: {currency}, the bank names no account of the payer.',
     'questions.sale.why.foreignCurrency': 'Proposed «{choice}»: the money came in a foreign currency.',
+    'questions.sale.why.order': 'Proposed «{choice}»: the payment names order {order} of the orders export of {provider}, with {rate} % VAT and this amount. {provider} did not collect it; its money came with this payment.',
     'questions.sale.why.foreignIban': 'Proposed «{choice}»: the money came from an account abroad.',
     'questions.sale.does': 'Your answer books only this payment so.',
     'questions.sale.booked': { one: '{n} entry booked with {code}', other: '{n} entries booked with {code}' },

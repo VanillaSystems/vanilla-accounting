@@ -76,6 +76,31 @@ export function saleProposal(tx: Pick<BankTransaction, 'currency' | 'counterpart
   return invoicing().territory.includes(country) ? { choice: 'saleDomestic', why: 'domesticIban' } : { choice: 'saleAbroad', why: 'foreignIban' };
 }
 
+/** An order of a provider's order export the provider did not collect (another way of paying, #406): its money comes as a payment of its own. */
+export interface PaidElsewhere { provider: string; order: string; gross: number; currency?: string; tax?: number; shipTo?: string }
+
+/**
+ * The proposal from the order the payment names (#406): an order of a provider's export the provider
+ * did not collect, named in the payment's text («Bestellung #1099») with the payment's amount. Its
+ * tax shows its rate: the normal rate proposes a domestic sale, no tax on a delivery abroad an export.
+ * Undefined when no such order is named, or its rate is one the sale question cannot book (a reduced
+ * rate, several rates in one order): the question then proposes as without it.
+ */
+export function orderProposal(tx: Pick<BankTransaction, 'amount' | 'currency' | 'description' | 'reference' | 'counterparty'>, orders: readonly PaidElsewhere[]): SaleProposal | undefined {
+  const text = [tx.description, tx.reference, tx.counterparty].filter(Boolean).join(' ');
+  const named = (o: PaidElsewhere) => new RegExp(`(?:^|[^\\d])${o.order.replace(/^#/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:$|[^\\d])`).test(text);
+  const o = orders.find((x) => (x.currency ?? baseCurrency()) === tx.currency && Math.abs(Math.abs(x.gross) - Math.abs(tx.amount)) <= 0.005 && named(x));
+  if (!o) return undefined;
+  const name = `#${o.order.replace(/^#/, '')}`;
+  const tax = o.tax ?? 0;
+  if (Math.abs(tax) < 0.005) {
+    const abroad = !!o.shipTo && !invoicing().territory.includes(o.shipTo.toUpperCase());
+    return abroad ? { choice: 'saleAbroad', why: 'order', order: { provider: o.provider, name, rate: 0 } } : undefined;
+  }
+  const rate = normalRate();
+  return Math.abs(foreignTaxIn(o.gross, rate) - Math.abs(tax)) <= 0.05 ? { choice: 'saleDomestic', why: 'order', order: { provider: o.provider, name, rate } } : undefined;
+}
+
 /** The foreign VAT inside the gross `gross` at `rate` percent, to the cent of the payment's currency. */
 export const foreignTaxIn = (gross: number, rate: number): number => Math.round((Math.abs(gross) * 100 * rate) / (100 + rate)) / 100;
 
@@ -179,5 +204,6 @@ export function saleCodeReason({ code, why }: SaleCode, currency: string): strin
     case 'domesticCurrency': return `Kundenzahlung ohne Rechnung in ${currency}, die Bank nennt kein Konto im Ausland: Inlandumsatz mit ${code}. ${asked}`;
     case 'foreignCurrency': return `Kundenzahlung ohne Rechnung in ${currency}: Umsatz im Ausland, ${code}. ${asked}`;
     case 'foreignIban': return `Kundenzahlung ohne Rechnung von einem Konto im Ausland: Umsatz im Ausland, ${code}. ${asked}`;
+    case 'order': return `Kundenzahlung für eine Bestellung im Bestellexport des Zahlungsanbieters: ${code}. ${asked}`;
   }
 }

@@ -196,7 +196,9 @@ export function QuestionCard({ q, nav, canEdit, books, showItem }: { q: Question
         <>
           {q.choices.includes('private') && !mine ? <p className="qnote">{t('questions.privateDoes', { account: owner })}</p> : null}
           {zero ? <p className="qnote warn" data-testid="sale-zero-home">{t('questions.sale.zeroAtHome', { code: zero })}</p> : null}
-          {q.proposal && !zero ? <p className="qnote" data-testid="sale-proposal">{t(`questions.sale.why.${q.proposal.why}` as 'questions.sale.why.domesticIban', { choice: choiceText(q.proposal.choice), currency: baseCurrency(), countries: invoicing().territory.join(', ') })} {bookedNow(q, books)} {t('questions.sale.does')}</p> : null}
+          {q.proposal && !zero ? <p className="qnote" data-testid="sale-proposal">{q.proposal.order
+            ? t('questions.sale.why.order', { choice: choiceText(q.proposal.choice), order: q.proposal.order.name, provider: q.proposal.order.provider, rate: String(q.proposal.order.rate) })
+            : t(`questions.sale.why.${q.proposal.why}` as 'questions.sale.why.domesticIban', { choice: choiceText(q.proposal.choice), currency: baseCurrency(), countries: invoicing().territory.join(', ') })} {bookedNow(q, books)} {t('questions.sale.does')}</p> : null}
           {canEdit ? (
             <div className="qacts">
               {mine ? null : <>

@@ -4367,6 +4367,7 @@ export default {
     'questions.sale.why.domesticIban': 'Proposta «{choice}»: {currency} da un conto nel paese ({countries}).',
     'questions.sale.why.domesticCurrency': 'Proposta «{choice}»: {currency}, la banca non indica il conto del pagatore.',
     'questions.sale.why.foreignCurrency': 'Proposta «{choice}»: il denaro è arrivato in valuta estera.',
+    'questions.sale.why.order': 'Proposta «{choice}»: il pagamento nomina l’ordine {order} dell’export degli ordini di {provider}, con {rate} % di IVA e questo importo. {provider} non l’ha incassato, il suo denaro è arrivato con questo pagamento.',
     'questions.sale.why.foreignIban': 'Proposta «{choice}»: il denaro viene da un conto all’estero.',
     'questions.sale.does': 'La tua risposta registra così solo questo pagamento.',
     'questions.sale.booked': { one: '{n} registrazione con {code}', other: '{n} registrazioni con {code}' },

@@ -4364,6 +4364,7 @@ export const messages = {
   'questions.sale.why.domesticIban': 'Vorschlag «{choice}»: {currency} von einem Konto im Inland ({countries}).',
   'questions.sale.why.domesticCurrency': 'Vorschlag «{choice}»: {currency}, die Bank nennt kein Konto des Zahlers.',
   'questions.sale.why.foreignCurrency': 'Vorschlag «{choice}»: das Geld kam in einer Fremdwährung.',
+  'questions.sale.why.order': 'Vorschlag «{choice}»: die Zahlung nennt Bestellung {order} aus dem Bestellexport von {provider}, mit {rate} % MWST und diesem Betrag. {provider} hat sie nicht eingezogen, ihr Geld kam mit dieser Zahlung.',
   'questions.sale.why.foreignIban': 'Vorschlag «{choice}»: das Geld kam von einem Konto im Ausland.',
   'questions.sale.does': 'Deine Antwort bucht nur diese Zahlung so.',
   'questions.sale.booked': { one: '{n} Buchung mit {code} gebucht', other: '{n} Buchungen mit {code} gebucht' },

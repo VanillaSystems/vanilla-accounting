@@ -49,6 +49,7 @@ import { standardAccounts } from '../workspace/chart.js';
 import { findFile, APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { wordsIn } from '../export/texts.js';
 import type { BankTransaction, JournalEntry, Receipt } from '../types/index.js';
+import type { PaidElsewhere } from '../accounting/sales-without-vat.js';
 import type { CsvOfProvider, PayoutUnseen, ProviderAsk, ProviderProposal, ReportSummary } from '../types/drop.js';
 import { accountOf } from '../workspace/money-accounts.js';
 
@@ -318,6 +319,21 @@ function reportsOf(ws: Workspace, books: Books, p: Provider, kind: 'sales' | 'fe
     const path = receiptFile(ws, books, r);
     return existsSync(path) ? [{ receipt: r, text: readFileSync(path, 'utf8') }] : [];
   });
+}
+
+/**
+ * The orders of the providers' order exports in the books that the provider did not collect (paid by
+ * bank transfer, another gateway, #406): their money comes as a payment of its own, which may name the
+ * order; the sale question proposes from it (src/accounting/sales-without-vat.ts orderProposal).
+ */
+export function ordersPaidElsewhere(ws: Workspace, books: Books): PaidElsewhere[] {
+  return providersOf(ws).flatMap((p) => (p.provider.gateways?.length ? reportsOf(ws, books, p, 'sales') : []).flatMap(({ text }) => {
+    const read = readReport(text, 'sales', p.provider);
+    if ('missing' in read || read.kind !== 'sales') return [];
+    return read.rows.filter((o) => !o.test && !collectedBy(o, p.provider.gateways)).map((o) => ({
+      provider: p.name, order: o.order, gross: o.gross, ...(o.currency ? { currency: o.currency } : {}), ...(o.tax !== undefined ? { tax: o.tax } : {}), ...(o.shipTo ? { shipTo: o.shipTo } : {}),
+    }));
+  }));
 }
 
 /** What the provider's payments reports in the books say beside their fees: the days they cover, the orders they name, the refunds (#214). */
