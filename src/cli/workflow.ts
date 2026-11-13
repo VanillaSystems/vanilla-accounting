@@ -55,7 +55,7 @@ if (arg === '--runs') {
   } else {
     const sw = openSwitch(ws);
     baseline(ws, loadWorkflows(APP_ROOT, ws.paths.root).workflows);
-    const engine = openEngine(() => ws, { appRoot: APP_ROOT, ask: askIfReady, lock: () => lockIntake(ws), isApproved: sw.isApproved, pending: sw.pending });
+    const engine = openEngine(() => ws, { appRoot: APP_ROOT, ask: askIfReady, lock: () => lockIntake(ws), isApproved: sw.isApproved, pending: sw.pending, approve: sw.approve });
     const started: string[] = [];
     for (const c of commands) {
       const result = await engine.command(c);

@@ -4,14 +4,10 @@
  * on. Every path that books by the firm's rules or the model asks this first and books nothing
  * while it waits: the inbox's book step (through the engine's `waits`), the sales report of a drop,
  * «Automatisch buchen» for all, «Neu buchen», a rule kept while another change waits, a provider's
- * payouts. The UI says why in one sentence with «Einschalten» at hand (src/app/lib/booking-waits.tsx).
+ * payouts, `npm run classify`. The UI says why in one sentence with «Einschalten» at hand
+ * (src/app/automation/booking-waits.tsx).
  */
 import { WS } from './books.js';
-import { loadWorkflows } from '../workflows/load.js';
-import { BOOKING_WORKFLOW, openSwitch } from '../workflows/switch-on.js';
-import { APP_ROOT } from '../workspace/workspace.js';
+import { bookingWaitsIn } from '../workflows/booking-waits.js';
 
-export function bookingWaits(): string[] | undefined {
-  const booking = loadWorkflows(APP_ROOT, WS.paths.root).workflows.find((w) => w.id === BOOKING_WORKFLOW);
-  return booking ? openSwitch(WS).pending(booking)?.files : undefined;
-}
+export const bookingWaits = (): string[] | undefined => bookingWaitsIn(WS);
