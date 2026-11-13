@@ -169,9 +169,9 @@ worked cases are in the [casebook](casebook.md).
 
 ### Cost without deductible Swiss VAT
 
-**When:** No receipt, a receipt without Swiss VAT (supplier abroad or not registered, 0%), or an excluded supply such as rent, insurance, bank fees. The entry goes into no box.
+**When:** No receipt, a receipt without Swiss VAT (supplier abroad or not registered, 0%), or an excluded supply such as rent or insurance. The entry goes into no box.
 
-**Not when:** The receipt shows Swiss VAT with rate and amount: I81 or M81. A service from abroad without VAT: B81-1. A CHE number alone does not prove VAT.
+**Not when:** The receipt shows Swiss VAT with rate and amount: I81 or M81. A service from abroad without VAT: B81-1. A CHE number alone does not prove VAT. Wages, social contributions, bank fees and payments onto a money or debt account: no code.
 
 **Rules:** `pv-no-receipt`, `pv-che-but-zero`, `pv-otherwise`
 
@@ -204,9 +204,9 @@ worked cases are in the [casebook](casebook.md).
 
 ### Cost without deductible Swiss VAT
 
-**When:** No receipt, a receipt without Swiss VAT (supplier abroad or not registered, 0%), or an excluded supply such as rent, insurance, bank fees. The entry goes into no box.
+**When:** No receipt, a receipt without Swiss VAT (supplier abroad or not registered, 0%), or an excluded supply such as rent or insurance. The entry goes into no box.
 
-**Not when:** The receipt shows Swiss VAT with rate and amount: I81 or M81. A service from abroad without VAT: B81-1. A CHE number alone does not prove VAT.
+**Not when:** The receipt shows Swiss VAT with rate and amount: I81 or M81. A service from abroad without VAT: B81-1. A CHE number alone does not prove VAT. Wages, social contributions, bank fees and payments onto a money or debt account: no code.
 
 **Rules:** `pv-no-receipt`, `pv-che-but-zero`, `pv-otherwise`
 
