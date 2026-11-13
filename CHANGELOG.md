@@ -368,6 +368,31 @@ Two markers flag an entry you must read before you update:
   not deducted. It does not make the period unfinished, and a month of a filed period is not named.
   A payout in the list is named by the provider the app took it for («Shopify»), not by the processor
   that paid it. The review's clearing account check names the total of the orders its sales report holds.
+- The owner's outlays paid back (#402): a payment to the owner by name (the payee) that is no wage,
+  in francs, that no company rule decides, and that the receipts the owner paid privately and the
+  firm has not paid back yet cover (each such payment in date order against what is left after the
+  earlier ones, across the year boundary; the opening balance is not counted) waits for no receipt.
+  The hand form proposes bank / the owner's account without a code, never the salary's account «wie
+  bei derselben Firma» (between payments to the owner a precedent counts only of the same kind, wage
+  or no wage); with an AI the model is told so, and its answer is booked only onto the owner's account:
+  any other answer books nothing and leaves the payment to the person, asked once (the form then says the AI did not book it). Every payment to the owner booked onto her account uses up what is open, covered or not (a draw too). A repayment in another currency
+  gets no proposal, and the form says why. Guide rule `cls-owner-outlays-repaid`.
+- A receipt the owner paid privately (#402) is read so by its payment line («Bezahlt mit Mastercard
+  ****1150 (privat)») or by the owner's card, known from a receipt marked so or from two receipts paid
+  privately, never a card that paid one of the firm's own statement payments. Its first button is
+  «Als Auslage von <Inhaber> buchen», one click; the line under it says why («Karte ****1150 wie auf dem
+  Beleg vom 08.07.2026») and what it books (Aufwand / Kontokorrent); a selection offers «Als Auslagen
+  … buchen» for several. While the app books it, the receipt says so in place of a hand form with an
+  empty account.
+- Setup (#402): a private share of the phone or the car named in words («öppe d Hälfti») is kept with
+  the words that named it in onboarding.json. The phone's: the provider's first booked payment offers
+  the rule «50 % privat» on its card (once per business; «Nicht jetzt», «Nie vorschlagen»; gone once a
+  rule takes it; not where the firm's chart uses the phone's account for something else). The car's
+  stays for the year close, no rule offered. One changed answer on the review keeps naming her kind
+  of firm («Beratung, Dienstleistungen (GmbH), mit einer Änderung») instead of «Etwas anderes».
+- The model's zero input code (I0) is left off an account that takes no code (#402): a wage, the
+  employer's contributions (AHV, FAK, BVG), the bank charges, a debt, the owner's account. No figure
+  changes: I0 has no box. A rule's code stays what its card showed.
 - A bill of several VAT groups (8.1 % and «0 % (Export)») is compared with all lines of its
   payment (#406): two lines booked each at its group's rate raise no task any more; a rate booked
   beyond what the bill shows at it does, naming the amount and rate the bill shows. What a bill's

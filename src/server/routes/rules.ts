@@ -44,7 +44,7 @@ import { bookByRules } from '../../workflows/book-by-rules.js';
 import type { JournalEntry } from '../../types/index.js';
 import { reconciliationOf } from '../../books/reconcile.js';
 import { classifyTransactions, loadClassifyContext } from '../../booking/classify.js';
-import { answerSettles, receiptKnowledge, receiptWaitOf } from '../../booking/receipt-wait.js';
+import { answerSettles, mustSettle, receiptKnowledge, receiptWaitOf } from '../../booking/receipt-wait.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { recordDeletion } from '../../saving/changes.js';
 import { existsSync, readFileSync } from 'node:fs';
@@ -52,7 +52,7 @@ import { join } from 'node:path';
 import { bookedState } from '../../accounting/payment-entries.js';
 import { wageOffer } from '../../saving/wage-rule.js';
 import { loadWorkflows } from '../../workflows/load.js';
-import { draftShareRule, shareOffer } from '../../saving/share-rule.js';
+import { clearTakenShares, dismissSetupShare, draftShareRule, shareOffer } from '../../saving/share-rule.js';
 import { draftGroupedFlag, groupedOffer } from '../../saving/grouped-flag.js';
 import { draftUnreadRule, unreadOffer } from '../../saving/unread-rule.js';
 import { draftSaleRule } from '../../saving/sale-rule.js';
@@ -162,7 +162,20 @@ router.post('/api/rules/draft', async (req, res) => {
   const kept = await keepingSwitchedOn(() => keepDraft(WS, c.path, c.basis, c.confirm === true));
   // A rule kept books the open payments it decides at once (#383): the card showed them, and its tasks close.
   // The server records the keep (#392, #396): its result line and its undo go by the keep's id alone.
-  res.json(kept.ok ? await recordKeep(kept) : kept);
+  const reply = kept.ok ? await recordKeep(kept) : kept;
+  // The setup's phone share has done its job once a kept rule books a private share on the phone's account (#402);
+  // after the keep, and never at its cost: a failure here only leaves the share standing.
+  if (kept.ok) {
+    try { clearTakenShares(WS); } catch (e) { console.error(`clearTakenShares: ${e instanceof Error ? e.message : String(e)}`); }
+  }
+  res.json(reply);
+});
+
+/** «Nicht jetzt» (or «Nie», `never`) on the setup's share offer (#402): kept in onboarding.json, so it does not come back. */
+router.post('/api/rules/share/dismiss', (req, res) => {
+  const b = (req.body ?? {}) as { ref?: unknown; never?: unknown };
+  if (typeof b.ref !== 'string' || (b.never !== undefined && typeof b.never !== 'boolean')) throw new RequestError(400, 'ref und optional never erwartet.');
+  res.json({ ok: dismissSetupShare(WS, b.ref, b.never === true) });
 });
 
 /** How many payments one keep (or one «Automatisch buchen» for all) books; the rest are named with their number and follow on the next run. */
@@ -467,7 +480,7 @@ router.post('/api/rules/book-open', async (_req, res) => {
     if (wait.wait && wait.unread) { n.unread++; continue; }
     const entries = decidedBy.get(t.ref);
     if (!entries?.length) { n.model++; continue; }
-    if (wait.wait && !answerSettles(t, entries, context)) { n.receipt++; continue; }
+    if (mustSettle(wait) && !answerSettles(t, entries, context)) { n.receipt++; continue; }
     decided.push(t.ref);
   }
   n.later = Math.max(0, decided.length - KEEP_RUNS_MAX);

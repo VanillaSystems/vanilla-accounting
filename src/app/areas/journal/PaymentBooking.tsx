@@ -79,7 +79,7 @@ export function PaymentBooking(props: Props) {
   }, [props.payment, props.books]);
   const start = known?.start ?? undefined;
   const draft = useMemo(() => (ws && known ? (known.failed ? (d?: BookingDraft) => d && withoutProposal(d) : (d?: BookingDraft) => d)(formDraft(props.books, props.payment, ws.bankAccounts, invoices, {
-    defaults: ws.defaults, rule: start?.rule, nature: start?.nature, account: start?.account,
+    defaults: ws.defaults, rule: start?.rule, nature: start?.nature, account: start?.account, ...(start?.wages && { wages: start.wages }),
     invoiceRevenue: ws.invoicing?.revenueAccount, chart: getAccounts().map((a) => a.number), ownUid: ws.company.uid, firmName: ws.company.name,
     ...(notOwn && { notOwnInvoice: notOwn }),
     ranks: (words) => ranksByWords(getAccounts().filter((a) => chart().typeOf(a.number) === 'expense'), words, hintsOf),
@@ -146,6 +146,8 @@ function noteText(n: DraftNote): string {
     case 'nearReceipt': return !n.vat ? t('journal.byHand.note.nearReceiptPlain', { name: n.name, why: n.why }) : n.rate !== undefined ? t('journal.byHand.note.nearReceipt', { name: n.name, why: n.why, rate: String(n.rate) }) : t('journal.byHand.note.nearReceiptNoRate', { name: n.name, why: n.why });
     case 'noProposal': return t(n.linked ? 'journal.byHand.note.noProposal.receipt' : 'journal.byHand.note.noProposal.none', { name: n.name });
     case 'discount': return t(n.vat === 'paid' ? 'journal.byHand.note.discount' : n.vat === 'rates' ? 'journal.byHand.note.discountRates' : 'journal.byHand.note.discountNoVat', { percent: String(n.percent), amount: fmt(n.amount) });
+    case 'ownerOutlays': return t(n.judged ? 'journal.byHand.note.ownerOutlaysJudged' : 'journal.byHand.note.ownerOutlays', { amount: fmt(n.open) });
+    case 'ownerForeign': return t('journal.byHand.note.ownerForeign', { currency: n.currency });
     default: return t(`journal.byHand.note.${n.kind}`);
   }
 }

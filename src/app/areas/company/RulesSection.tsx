@@ -605,17 +605,25 @@ function ShareOfferCard({ offer, onRules }: { offer: ShareOffer; onRules?(): voi
   const [path, setPath] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [gone, setGone] = useState(false);
   if (path) return <RuleDraft path={path} onRules={onRules} />;
+  if (gone) return null;
   const who = offer.business?.name ?? t('rules.share.payer', { payer: offer.payerName ?? offer.payer ?? '' });
+  // The setup's offer is hers to put off (#402): «Nicht jetzt» for this business, «Nie» for the share.
+  const dismiss = (never: boolean) => { setBusy(true); api.dismissShare(offer.ref, never).then(() => setGone(true), (e) => setError(errorText(e))).finally(() => setBusy(false)); };
   const draft = () => {
     setBusy(true);
     api.draftShare(offer.ref).then((r) => setPath(r.path), (e) => setError(errorText(e))).finally(() => setBusy(false));
   };
   return (
     <div className="ruledraft" data-share={offer.ref}>
-      <span>{t(offer.booking.ownUse ? 'rules.share.askOwnUse' : 'rules.share.ask', { who, percent: String(offer.percent), account: offer.booking.account })}</span>
+      <span>{offer.setup
+        ? (offer.setup.said ? t('rules.share.askSetup.phone', { who, percent: String(offer.percent), account: offer.booking.account, said: offer.setup.said }) : t('rules.share.askSetupBare', { who, percent: String(offer.percent), account: offer.booking.account }))
+        : t(offer.booking.ownUse ? 'rules.share.askOwnUse' : 'rules.share.ask', { who, percent: String(offer.percent), account: offer.booking.account })}</span>
       {error ? <span className="warnline">{error}</span> : null}
-      <span className="ruleacts"><button type="button" className="btn" disabled={busy} onClick={draft}>{t('rules.share.draft')}</button></span>
+      <span className="ruleacts"><button type="button" className="btn" disabled={busy} onClick={draft}>{t('rules.share.draft')}</button>
+        {offer.setup ? <><button type="button" className="btn ghost" disabled={busy} data-act="share-later" onClick={() => dismiss(false)}>{t('rules.share.notNow')}</button>
+          <button type="button" className="btn ghost" disabled={busy} data-act="share-never" onClick={() => dismiss(true)}>{t('rules.share.never')}</button></> : null}</span>
     </div>
   );
 }
@@ -690,13 +698,13 @@ export function CorrectionOffer({ payment, onRules }: { payment: string; onRules
  * and a private part offers the split as a rule; payments of one business with the same split
  * offer it once.
  */
-export function ShareOffers({ refs, onRules }: { refs: string[]; onRules?(): void }) {
+export function ShareOffers({ refs, onRules, only }: { refs: string[]; onRules?(): void; only?: 'setup' }) {
   const [offers, setOffers] = useState<ShareOffer[]>([]);
   const key = refs.join(' ');
   useEffect(() => {
     let live = true;
     Promise.all(refs.map((r) => api.shareOffer(r).then((x) => x.offer, () => null))).then((xs) => {
-      const one = new Map(xs.filter((o): o is ShareOffer => !!o).map((o) => [`${o.path}#${o.payer}#${o.percent}#${o.booking.account}`, o]));
+      const one = new Map(xs.filter((o): o is ShareOffer => !!o && (!only || !!o.setup)).map((o) => [`${o.path}#${o.payer}#${o.percent}#${o.booking.account}`, o]));
       if (live) setOffers([...one.values()]);
     });
     return () => { live = false; };

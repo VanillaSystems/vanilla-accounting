@@ -11,7 +11,8 @@
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { entriesForceMayRemove, entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
 import { BATCH_SIZE, CONCURRENCY, bookBillCorrections, bookImportVatDeductions, classifyTransactions, loadClassifyContext, type ClassifyContext } from '../booking/classify.js';
-import { answerSettles, receiptKnowledge, receiptWaitOf } from '../booking/receipt-wait.js';
+import { answerSettles, mustSettle, receiptKnowledge, receiptWaitOf } from '../booking/receipt-wait.js';
+import { judgedRepayments, markJudged } from '../booking/owner-judged.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
@@ -45,16 +46,22 @@ const unbooked = (books: Books, accounts: ClassifyContext['bankAccounts']) => {
   return books.transactions.filter((tx) => tx.amount !== 0 && !booked(tx) && !lock.isClosed(tx.date) && !tx.waitsForPerson && !held.has(tx.ref));
 };
 
-/** The open payments that need a receipt and have none, and those whose receipt could not be read (src/booking/receipt-wait.ts). */
-function needReceipts(ws: Workspace, books: Books, context: ClassifyContext, fx: FxResolver): { need: Set<string>; unread: Set<string> } {
+/**
+ * The open payments that need a receipt and have none, those whose receipt could not be read
+ * (src/booking/receipt-wait.ts), and those that repay the owner's outlays (`repays`, #402): booked
+ * only onto her account, never on what else the model says.
+ */
+function needReceipts(ws: Workspace, books: Books, context: ClassifyContext, fx: FxResolver): { need: Set<string>; unread: Set<string>; repays: Set<string> } {
   const known = receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws);
   const need = new Set<string>();
   const unread = new Set<string>();
+  const repays = new Set<string>();
   for (const tx of unbooked(books, context.bankAccounts)) {
     const w = receiptWaitOf(books, tx, context, known, fx);
     if (w.wait) (w.unread ? unread : need).add(tx.ref);
+    else if (mustSettle(w)) repays.add(tx.ref);
   }
-  return { need, unread };
+  return { need, unread, repays };
 }
 
 /**
@@ -113,12 +120,13 @@ export function classifyStep({ force = false } = {}): StepRun {
     // a supplier's payment the model puts on the owner's account too (issue #201).
     // Without a model it waits too, and the next run with one judges it (issue #110).
     // A payment whose receipt could not be read waits for the person's word, without a guess (issue #57).
-    const { need, unread } = needReceipts(ws, scratch, context, fx);
+    const { need, unread, repays } = needReceipts(ws, scratch, context, fx);
     const judged = new Set(scratch.transactions.filter((tx) => tx.waitsForReceipt?.decided).map((tx) => tx.ref));
     const probe = new Set(ask ? [...need].filter((ref) => !judged.has(ref)) : []);
     const waiting = new Set([...need].filter((ref) => !probe.has(ref)));
     const txOf = new Map(scratch.transactions.map((tx) => [tx.ref, tx]));
-    const keeps = (ref: string) => !probe.has(ref) || answerSettles(txOf.get(ref)!, scratch.journalEntries.filter((je) => je.transactionRef === ref), context);
+    // A repayment of the owner's outlays is kept only onto her account (#402): another answer is not booked and stays the person's.
+    const keeps = (ref: string) => (!probe.has(ref) && !repays.has(ref)) || answerSettles(txOf.get(ref)!, scratch.journalEntries.filter((je) => je.transactionRef === ref), context);
     const done = (notes: IntakeNote[]) => {
       // A customs assessment that came after its import VAT was booked brings the deduction (issue #197).
       // Saved whenever it books or marks an assessment as used: a mark lost would let a deduction a person took back come again.
@@ -143,11 +151,19 @@ export function classifyStep({ force = false } = {}): StepRun {
         if (answered) decided.add(ref);
       }
       markWaiting(books, waiting, decided, unread);
+      // A repayment the model answered otherwise than onto her account is judged: asked once, then hers (#402 review).
+      if (ask) {
+        const answeredOtherwise = [...repays].filter((ref) => scratch.journalEntries.some((je) => je.transactionRef === ref) && !keeps(ref));
+        markJudged(ws, answeredOtherwise, new Set(unbooked(books.read(), context.bankAccounts).map((tx) => tx.ref)), new Date().toISOString());
+        if (answeredOtherwise.length) log(`Owner     : ${answeredOtherwise.length} repayment(s) of the owner's outlays the model put elsewhere than her account: left to the person.`);
+      }
       if (waiting.size) log(`Waiting   : ${waiting.size} payment(s) need a receipt that has not come: booked once it is linked.`);
       if (unread.size) log(`Unread    : ${unread.size} payment(s) have a receipt whose VAT could not be read: the person is asked.`);
       return { notes: [...notes, ...(waiting.size ? [{ code: 'waitingReceipt' as const, count: waiting.size }] : []), ...(unread.size ? [{ code: 'receiptUnread' as const, count: unread.size }] : []), ...askSales(ws, books, log)] };
     };
-    const todo = unbooked(scratch, context.bankAccounts).filter((tx) => !waiting.has(tx.ref) && !unread.has(tx.ref));
+    // A repayment the model judged once is not asked again: it is the person's now (owner-judged.ts).
+    const judgedOnce = judgedRepayments(ws);
+    const todo = unbooked(scratch, context.bankAccounts).filter((tx) => !waiting.has(tx.ref) && !unread.has(tx.ref) && !(repays.has(tx.ref) && judgedOnce[tx.ref]));
     if (todo.length === 0) {
       log('All transactions are already classified.');
       return done([]);
