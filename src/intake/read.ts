@@ -22,7 +22,7 @@ import { filedReceipt, forgetReadFacts } from './vat.js';
 import { buildVisionPrompt } from '../llm/prompts.js';
 import type { Receipt } from '../types/index.js';
 import { filesOfPart, type Workspace } from '../workspace/workspace.js';
-import { mergeIndex, readStatementFiles, readTransactions, reconcileWithFiles, withinBooks } from '../books/bank-import.js';
+import { mergeIndex, readStatementFiles, readTransactions, reconcileWithFiles, withinBooks, unreferencedFiles, unreferencedLine } from '../books/bank-import.js';
 import { keptReads } from '../books/pdf-reads.js';
 import { readKeptPdfs, readsByItself, unreadPdfs } from './statement-read.js';
 import { differenceAccountOf } from '../books/year-close.js';
@@ -366,6 +366,9 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
     }
     const merged = mergeIndex(index, { receipts, bankTransactions: assignUniqueRefs(kept), reads: keptReads(ws, statementFiles.statements, index.statementAsks), bankStatements: statementFiles.statements, camtBalances: statementFiles.balances });
     Object.assign(index, merged.index);
+    // A Wise file in the folder whose entries name no bank reference (#401): those payments stay out, and the log says so.
+    const unreferenced = unreferencedFiles(ws);
+    if (unreferenced.length) log(`  ${unreferencedLine(unreferenced)}`);
     // Movements read from PDFs and the bank's file of the same days: the account's reconciliation, before any run books them (#254).
     reconcileWithFiles(ws, index, differenceAccountOf(ws));
     // On the agreed basis each issued document's VAT event comes before its payment, which then only settles the receivable (src/invoices/events.ts).

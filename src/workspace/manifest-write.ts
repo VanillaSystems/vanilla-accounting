@@ -5,6 +5,7 @@
  * app does not know stay as they were. The result is checked by the same reader the app opens
  * the workspace with before it replaces the file; a change the reader refuses is never written.
  */
+import type { StatementKind } from './banks.js';
 import { readFileSync } from 'node:fs';
 import { isMap, isSeq, parseDocument, type Document, type YAMLMap } from 'yaml';
 import { writeAtomic } from '../invoices/store.js';
@@ -46,6 +47,8 @@ export interface NewBank {
   /** Absent: a card for a card issuer the app knows, else a bank. */
   role?: MoneyRole;
   iban?: string;
+  /** How its statements are read, kept on the account; absent: by its bank's name (src/workspace/banks.ts). */
+  statements?: StatementKind;
 }
 
 /** Firma › Rechnungslayout: the invoicing block's layout and its texts per language; null removes a field (the app's default again). */
@@ -145,6 +148,7 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
     const node = doc.createNode({
       bank: a.bank.trim(), currency: a.currency.trim().toUpperCase(), account: a.account.trim(), label: a.label.trim(), role: a.role ?? roleBefore(a.bank.trim()),
       ...(a.iban?.trim() ? { iban: iban(a.iban, `bankAccounts ${a.bank} ${a.currency}`) } : {}),
+      ...(a.statements ? { statements: a.statements } : {}),
     }) as YAMLMap;
     // The new line looks like its neighbours: one-line `{ … }` when they are.
     node.flow = seq.items.length > 0 && isMap(seq.items[0]) && !!seq.items[0].flow;

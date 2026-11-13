@@ -60,3 +60,10 @@ test('its row and detail name the debit it is the receipt of, and whether its li
   assert.deepEqual(cardStatementOf(r, books([], false)), { lines: 0 }, 'not linked yet');
   assert.equal(cardStatementOf({ id: 'hotel', extractedText: HOTEL }, books([])), undefined);
 });
+
+test('an English or Italian card statement whose title holds a statement word and shows an IBAN is a card statement', () => {
+  const en = `Alpencard AG\nCredit card statement Visa Business ****3307\nIBAN CH65 8080 8000 0000 0000 1\nPeriod 01.08.2026 – 31.08.2026\nHOTEL PILATUSBLICK LUZERN 164.00`;
+  const it = `Alpencard SA\nEstratto conto carta di credito Visa Business ****3307\nIBAN CH65 8080 8000 0000 0000 1\nPeriodo 01.08.2026 – 31.08.2026\nHOTEL PILATUSBLICK LUZERN 164.00`;
+  assert.equal(isCardStatement(en, documents()), true);
+  assert.equal(isCardStatement(it, documents()), true);
+});

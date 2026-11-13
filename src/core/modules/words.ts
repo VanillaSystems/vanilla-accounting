@@ -28,7 +28,9 @@ export function firstOf<K extends string>(lists: Record<K, string[]>, text: stri
  */
 export function namesStatement(text: string, words: DocumentsData): boolean {
   const head = text.slice(0, HEAD);
-  const at = words.statement.length ? wordsRe(words.statement).exec(head)?.index : undefined;
+  // A card statement's title holds a statement's word («Credit card statement», «Estratto conto carta di credito»): within it, the card's words win.
+  const cards = words.cardStatement?.length ? [...head.matchAll(new RegExp(wordsRe(words.cardStatement).source, 'giu'))].map((m) => [m.index!, m.index! + m[0].length]) : [];
+  const at = words.statement.length ? [...head.matchAll(new RegExp(wordsRe(words.statement).source, 'giu'))].map((m) => m.index!).find((i) => !cards.some(([from, to]) => i >= from && i < to)) : undefined;
   if (at === undefined) return false;
   const lists = [words.receipt.title, ...Object.values(words.supporting), ...Object.values(words.other)];
   return !firstOf(Object.fromEntries(lists.map((l, i) => [i, l])), head).some((x) => x.at < at);

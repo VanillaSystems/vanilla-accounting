@@ -127,7 +127,8 @@ function remittanceRef(rmtInf: Node | undefined): unknown {
  */
 function entryRef(entry: Node, txDtls: Node[], kind: StatementKind, statementId: string, n: number): string {
   const detail = txDtls.length === 1 ? txDtls[0].Refs?.AcctSvcrRef : undefined;
-  if (kind === 'wise') return String(entry.AcctSvcrRef ?? entry.BkTxCd?.Prtry?.Cd ?? detail ?? '');
+  // An empty element (<AcctSvcrRef/>) names nothing: the next source is asked.
+  if (kind === 'wise') return [entry.AcctSvcrRef, entry.BkTxCd?.Prtry?.Cd, detail].map((r) => (r === undefined || r === null ? '' : String(r))).find((r) => r.trim()) ?? '';
   const ref = entry.AcctSvcrRef ?? entry.NtryRef ?? detail;
   return ref !== undefined && String(ref).trim() ? String(ref).trim() : `${statementId}#${n}`;
 }

@@ -149,8 +149,9 @@ export async function importStatements(files: File[], nav: Nav, into?: { account
   const reconcile = read.reduce((n, r) => n + (r.reconcile?.read ?? 0), 0);
   const asksClosed = read.reduce((n, r) => n + (r.closedAsks ?? 0), 0);
   const imported = [t('bank.imported', { n: added }), confirmed ? t('bank.importConfirmed', { n: confirmed }) : '', reconcile ? t('bank.importReconcile', { n: reconcile }) : '', asksClosed ? t('bank.importAsksClosed', { n: asksClosed }) : '', ...read.map((r) => emptyRefsLine(r.emptyRefs))].filter(Boolean).join(' · ');
-  const undo = last ? async () => {
-    for (const r of [...read].reverse()) {
+  // A file read once more only to repair references (#401) is no import to take back.
+  const undo = last && !read.every((r) => r.again) ? async () => {
+    for (const r of [...read].filter((x) => !x.again).reverse()) {
       try { await api.deleteStatement(r.file); } catch (e) { nav.toast(errorText(e)); break; }
     }
     forgetPages();

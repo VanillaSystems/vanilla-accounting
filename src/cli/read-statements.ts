@@ -9,7 +9,7 @@
  */
 import 'dotenv/config';
 import { loadBooks, saveBooks, update, PERSON } from '../books/store.js';
-import { mergeBankFiles, reconcileWithFiles } from '../books/bank-import.js';
+import { mergeBankFiles, reconcileWithFiles, unreferencedFiles, unreferencedLine } from '../books/bank-import.js';
 import { differenceAccountOf } from '../books/year-close.js';
 import { MAX_READ_PAGES, readKeptPdfs, unreadPdfs } from '../intake/statement-read.js';
 import { askIfReady } from '../intake/run.js';
@@ -40,6 +40,8 @@ if (run.read) {
     mergeBankFiles(ws, b);
     reconcileWithFiles(ws, b, differenceAccountOf(ws));
   });
+  const unreferenced = unreferencedFiles(ws);
+  if (unreferenced.length) console.log(unreferencedLine(unreferenced));
   saveBooks(ws, books);
 }
 console.log(`\n${run.read} read, ${run.failed.length} not read${run.stopped ? `; stopped: ${run.stopped.error}` : ''}.`);

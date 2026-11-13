@@ -34,6 +34,11 @@ test('the entry\'s own reference wins over its detail\'s, for Wise and the other
   assert.equal(read(wrap([both]), 'camt053')[0].ref, 'ENTRY-REF');
 });
 
+test('an empty <AcctSvcrRef/> on a Wise entry names nothing: the next source is read', () => {
+  const empty = ENTRIES[0].replace('<Ntry>', '<Ntry><AcctSvcrRef/>');
+  assert.equal(read(wrap([empty]))[0].ref, 'CARD-910000');
+});
+
 test('a Wise fee whose FEE- id stands only in the transaction details is still the Wise fee', () => {
   const fee = ENTRIES[0].replace('CARD-910000', 'FEE-CARD-910000');
   const [t] = read(wrap([fee]));

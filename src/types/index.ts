@@ -251,6 +251,8 @@ export interface StatementImport {
    * and `why`: a person's entry or link stands on them (`yours`), or no file holds their movements (`unmatched`).
    */
   emptyRefs?: { repaired: number } | { left: number; why: 'yours' | 'unmatched' };
+  /** The same file read once more, its payments in the books already (only to repair `emptyRefs`): nothing of it to take back. */
+  again?: true;
   /**
    * Placed on the one account of the bank it names, which carried no IBAN (#273): the question it
    * would have asked, so the person can still choose another; its IBAN is kept on the account.

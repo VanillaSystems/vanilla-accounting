@@ -4,7 +4,7 @@
  * statement says.
  */
 import type { UnknownAccount } from '../../../types/api-error.js';
-import { BANKS } from '../../../workspace/banks.js';
+import { BANKS, type StatementKind } from '../../../workspace/banks.js';
 
 export type BankDraft = UnknownAccount;
 
@@ -16,7 +16,7 @@ const BANK_RANGE = /^102\d$/;
  * bank the app knows, else the first word of its name), one no account in that currency has yet;
  * the first bank account of the chart no bank account uses, else the next number after them.
  */
-export function draftForm(d: BankDraft, banks: ReadonlyArray<{ bank: string; currency: string; account: string }>, chart: readonly string[]): { bank: string; account: string; label: string } {
+export function draftForm(d: BankDraft, banks: ReadonlyArray<{ bank: string; currency: string; account: string }>, chart: readonly string[]): { bank: string; account: string; label: string; statements?: StatementKind } {
   const name = d.bankName?.trim() ?? '';
   const known = Object.keys(BANKS).find((b) => name.toLowerCase().includes(b.toLowerCase()));
   const first = name.split(/[\s,]+/)[0] ?? '';
@@ -29,5 +29,7 @@ export function draftForm(d: BankDraft, banks: ReadonlyArray<{ bank: string; cur
   const free = range.find((a) => !used.has(a));
   const last = Math.max(1019, ...[...used, ...range].filter((a) => BANK_RANGE.test(a)).map(Number));
   const account = free ?? (last < 1029 ? String(last + 1) : '');
-  return { bank, account, label: name || (bank ? `${bank} ${d.currency}` : '') };
+  // The kind of the bank recognised, kept on the account: «Wise 2» reads as Wise's (#401).
+  const statements = known ? BANKS[known].statements : undefined;
+  return { bank, account, label: name || (bank ? `${bank} ${d.currency}` : ''), ...(statements ? { statements } : {}) };
 }

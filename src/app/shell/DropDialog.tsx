@@ -173,9 +173,25 @@ function ChooseAccount({ r, session }: { r: DropRow; session: DropSession }) {
 function AddAccount({ r, session, onCancel }: { r: DropRow; session: DropSession; onCancel(): void }) {
   const d = r.unknownAccount!;
   const banks = useWorkspace()?.bankAccounts;
+  const [busy, setBusy] = useState(false);
   if (!banks) return null;
+  // Added already (the statement's read failed after the account was saved): the row reads it into that account, no form again.
+  const there = banks.find((a) => a.iban && compactOf(a.iban) === compactOf(d.iban));
+  if (there) {
+    const read = () => { setBusy(true); api.dropRow(session.id, r.key, { kind: 'firmAccount' }).then(drop.answered, (e) => set({ error: errorText(e) })).finally(() => setBusy(false)); };
+    return (
+      <span className="dacts">
+        <small>{t('drop.addAccount.there', { label: there.label, account: there.account })}</small>
+        <button type="button" className="btn primary" data-testid="drop-read-into" disabled={busy} onClick={read}>{t('drop.addAccount.readNow')}</button>
+      </span>
+    );
+  }
   return <AddAccountForm key={d.iban} d={d} banks={banks} r={r} session={session} onCancel={onCancel} />;
 }
+
+const compactOf = (iban: string) => iban.replace(/\s+/g, '').toUpperCase();
+/** Whether the firm has an account of the statement's IBAN now (#401): the row then offers to read it in. */
+const accountThere = (r: DropRow, banks: ReadonlyArray<{ iban?: string }> | undefined) => !!r.unknownAccount && !!banks?.some((a) => a.iban && compactOf(a.iban) === compactOf(r.unknownAccount!.iban));
 
 function AddAccountForm({ d, banks, r, session, onCancel }: { d: NonNullable<DropRow['unknownAccount']>; banks: ReadonlyArray<{ bank: string; currency: string; account: string }>; r: DropRow; session: DropSession; onCancel(): void }) {
   const [f, setF] = useState(() => draftForm(d, banks, Object.keys(getAccountMap())));
@@ -184,7 +200,7 @@ function AddAccountForm({ d, banks, r, session, onCancel }: { d: NonNullable<Dro
   const save = async () => {
     setBusy(true);
     try {
-      await api.patchWorkspace({ addBank: { bank: f.bank.trim(), currency: d.currency, account: f.account.trim(), label: f.label.trim() || `${f.bank.trim()} ${d.currency}`, iban: d.iban } });
+      await api.patchWorkspace({ addBank: { bank: f.bank.trim(), currency: d.currency, account: f.account.trim(), label: f.label.trim() || `${f.bank.trim()} ${d.currency}`, iban: d.iban, ...(f.statements ? { statements: f.statements } : {}) } });
       reloadWorkspace();
       drop.answered(await api.dropRow(session.id, r.key, { kind: 'firmAccount' }));
     } catch (e) {
@@ -287,6 +303,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
   const [password, setPassword] = useState('');
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
+  const there = accountThere(r, useWorkspace()?.bankAccounts);
   const asked = r.state === 'duplicate' && r.reason === 'possible-duplicate';
   const chip = r.state === 'take' ? t('drop.taking') : asked ? t('drop.state.possible') : r.readAs ? t('drop.state.read') : t(`drop.state.${r.state}` as 'drop.state.duplicate');
   const details = r.state === 'asks' ? r.details : undefined;
@@ -311,7 +328,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
           {r.askProvider ? <ProviderAccount key={r.askProvider.missing} r={r} session={session} /> : r.payoutUnseen ? <PayoutUnseenRow r={r} session={session} go={go} /> : r.chooseAccount ? <ChooseAccount r={r} session={session} /> : r.unknownAccount ? (
             <>
               <small>{t(r.unknownAccount.owner ? 'drop.unknownAccountOf' : r.unknownAccount.bankName ? 'drop.unknownAccountAt' : 'drop.unknownAccount', { iban: groupIban(r.unknownAccount.iban), currency: r.unknownAccount.currency, bank: r.unknownAccount.bankName ?? '', owner: r.unknownAccount.owner ?? '' })}</small>
-              {adding ? <AddAccount r={r} session={session} onCancel={() => setAdding(false)} /> : (
+              {adding || there ? <AddAccount r={r} session={session} onCancel={() => setAdding(false)} /> : (
                 <>
                   <button type="button" className="linkbtn" data-testid="drop-firm-account" onClick={() => setAdding(true)}>{t('drop.firmAccount')}</button>
                   <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'private' })}>{t('drop.privateAccount')}</button>
@@ -605,7 +622,7 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
             {(r.kind === 'receipt' || r.kind === 'photo') && !r.report && !card && (x.kind === 'unread' || (x.kind === 'none' && receipt?.kind === 'statement')
               || ((x.kind === 'read' || x.kind === 'waits') && !!receipt && (receipt.amount == null || statementSigns(receipt.extractedText ?? '')))) ? <button type="button" className="linkbtn" data-testid="drop-as-statement" disabled={busy} onClick={() => { setBusy(true); void act(session, r, { kind: 'statement' }).then(refresh).finally(() => setBusy(false)); }}>{t('drop.asStatement')}</button> : null}
             {keptPdf ? <button type="button" className="linkbtn" data-act="actions" data-testid="drop-actions" aria-haspopup="menu" aria-expanded={!!menu} disabled={busy} onClick={(e) => setMenu(e.currentTarget.getBoundingClientRect())}>{t('actions.label')}</button> : null}
-            <button type="button" className="linkbtn" disabled={running || busy} data-tip={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</button>
+            {r.statement?.again ? null : <button type="button" className="linkbtn" disabled={running || busy} data-tip={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</button>}
           </span>
           {/* The dialog is moved and blurred, which would shift a fixed menu inside it: the menu goes to the page. */}
           {menu ? createPortal(<Menu anchor={menu} items={[{ label: <span data-action="readPdf">{t('statementActions.readPdf')}</span>, run: readPdf }]} onClose={() => setMenu(null)} />, document.body) : null}

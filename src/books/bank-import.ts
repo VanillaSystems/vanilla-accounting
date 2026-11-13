@@ -8,7 +8,7 @@
 import { accountOf, legOf, madeByHand } from '../workspace/money-accounts.js';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { assignUniqueRefs, bankCodedFees, statementSpan, transactionsOf, type CamtStatement } from '../providers/camt053/camt053.js';
+import { REFS_FROM_BANK, assignUniqueRefs, bankCodedFees, statementSpan, transactionsOf, type CamtStatement } from '../providers/camt053/camt053.js';
 import { statementPdf } from './statement-facts.js';
 import { confirmsYearEnd, keptReads, withReadBalances, withReadFacts, type KeptRead } from './pdf-reads.js';
 import type { BankStatement, BankTransaction, Index, JournalEntry, Mapping, Receipt, StatementClosingBalance } from '../types/index.js';
@@ -408,6 +408,54 @@ export function matchStatementRows(rows: readonly BankTransaction[], books: read
 }
 
 /**
+ * The rows of `rows` that are payments the books hold on an empty ref (a Wise file read before #401):
+ * a row of the same account, day, direction and amount whose own ref the books lack, one for one, in
+ * order. Such a row is that payment and no new one: the merge adds none beside it, the import counts
+ * none as missing in a filed period (statements.ts assertNoFiledPayments), and «Auszug entfernen»
+ * takes the payment along with its file.
+ */
+export function emptyStandIns(held: readonly BankTransaction[], rows: readonly BankTransaction[]): Map<BankTransaction, BankTransaction> {
+  const legs = new Set(held.filter((t) => t.ref.trim()).map(legOf));
+  const pool = new Map<string, BankTransaction[]>();
+  for (const t of held) if (!t.ref.trim() && !madeByHand(t)) (pool.get(sameMovement(t)) ?? pool.set(sameMovement(t), []).get(sameMovement(t))!).push(t);
+  const out = new Map<BankTransaction, BankTransaction>();
+  for (const r of rows) {
+    if (!r.ref.trim() || legs.has(legOf(r))) continue;
+    const t = pool.get(sameMovement(r))?.shift();
+    if (t) out.set(r, t);
+  }
+  return out;
+}
+
+/** The payments the books hold on an empty ref that `file` stands for (emptyStandIns over the folder's payments): «Auszug entfernen» takes them along. */
+export function emptyOfFile(ws: Ws, file: string, books: Pick<Index, 'transactions' | 'config'>): BankTransaction[] {
+  if (!books.transactions.some((t) => !t.ref.trim())) return [];
+  const { out, perFile } = canonical(readBankStatements(ws));
+  assignUniqueRefs(out);
+  const mine = new Set(perFile.get(file) ?? []);
+  return [...emptyStandIns(books.transactions, withinBooks(out, books.config).kept)].filter(([r]) => mine.has(r)).map(([, t]) => t);
+}
+
+/**
+ * The statement files of a kind whose payments take their ref from the bank alone (camt053.ts
+ * REFS_FROM_BANK) with entries the bank gave no reference: a read of the folder leaves those payments
+ * out (the import refuses such a file; one already in the folder came before #401), and says so.
+ */
+export function unreferencedFiles(ws: Ws): Array<{ file: string; n: number }> {
+  const out: Array<{ file: string; n: number }> = [];
+  for (const f of readBankStatements(ws)) {
+    if (f.status !== 'read' || !REFS_FROM_BANK.includes(f.account.statements)) continue;
+    const n = transactionsOf(f.statement, f.account).filter((t) => !t.ref.trim()).length;
+    if (n) out.push({ file: f.file, n });
+  }
+  return out;
+}
+
+/** What unreferencedFiles found, in one line for a log. */
+export const unreferencedLine = (files: ReadonlyArray<{ file: string; n: number }>): string =>
+  files.map((f) => `${f.file}: ${f.n} payment(s) without the bank's reference left out (unreferenced); download the camt.053 from the bank again`).join('; ');
+
+/**
  * What became of the open payments a statement read before #401 left on an empty ref (`repairEmptyRefs`):
  * `repaired` of them took their bank's ref; `left` of them stay as they are, with why: `yours`, a
  * person's entry or link stands on the empty ref and several payments share it, so it cannot be told
@@ -418,10 +466,10 @@ export type EmptyRefRepair = { repaired: number } | { left: number; why: 'yours'
 /**
  * Gives the open payments the books hold on an empty ref (a Wise export read before #401 whose
  * references stand in its transaction details) the refs the folder's files give them now, in place,
- * before the import merges the folder. They have no identity of their own but their movement, so the
- * file is the one statement file whose rows the books lack hold exactly as many movements of each
- * account, day, direction and amount as they are; within a movement they are paired in order, and
- * each pair must agree in its counterparty and text. What stands on the empty ref goes with them: with
+ * before the import merges the folder. They have no identity of their own but their movement: the
+ * folder's payments the books lack (each once, however many exports list it) must hold exactly as
+ * many of each account, day, direction and amount as they are; within a movement they are paired in
+ * order, and each pair must agree in its counterparty and text. What stands on the empty ref goes with them: with
  * one such payment, every open entry and link moves to its ref; with several, the app's entries and
  * links on it go (they stood on all of them at once; the next run books and pairs again), and a
  * person's entry or link stops the repair (`yours`). With a filed payment on an empty ref no link on it
@@ -431,15 +479,15 @@ export function repairEmptyRefs(ws: Ws, books: Index): EmptyRefRepair {
   const lock = periodLock(books);
   const open = books.transactions.filter((t) => !t.ref.trim() && !madeByHand(t) && !lock.isClosed(t.date));
   if (!open.length) return { repaired: 0 };
-  const { out, perFile } = canonical(readBankStatements(ws));
+  const { out } = canonical(readBankStatements(ws));
   assignUniqueRefs(out);
   const held = new Set(books.transactions.map(legOf));
   const groups = new Map<string, BankTransaction[]>();
   for (const t of open) (groups.get(sameMovement(t)) ?? groups.set(sameMovement(t), []).get(sameMovement(t))!).push(t);
   const rowsOf = (ts: readonly BankTransaction[], key: string) => ts.filter((t) => t.ref.trim() && !held.has(legOf(t)) && sameMovement(t) === key);
-  const files = [...perFile.values()].filter((ts) => [...groups].every(([key, g]) => rowsOf(ts, key).length === g.length));
-  if (files.length !== 1) return { left: open.length, why: 'unmatched' };
-  const pairs = [...groups].flatMap(([key, g]) => { const rows = rowsOf(files[0], key); return g.map((t, i) => [t, rows[i]] as const); });
+  // The folder's payments, each once however many exports list it (canonical): per movement exactly as many as there are on the empty ref.
+  if (![...groups].every(([key, g]) => rowsOf(out, key).length === g.length)) return { left: open.length, why: 'unmatched' };
+  const pairs = [...groups].flatMap(([key, g]) => { const rows = rowsOf(out, key); return g.map((t, i) => [t, rows[i]] as const); });
   if (pairs.some(([t, r]) => (t.counterparty ?? '') !== (r.counterparty ?? '') || t.description !== r.description)) return { left: open.length, why: 'unmatched' };
   const entries = (books.journalEntries ?? []).filter((e) => !e.transactionRef.trim() && !lock.isClosed(e.date));
   const filedEmpty = books.transactions.some((t) => !t.ref.trim() && lock.isClosed(t.date));
@@ -474,15 +522,8 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
   // filed one as filed); the import repairs the open ones first (repairEmptyRefs). A file's row of the
   // same account, day, direction and amount is such a payment, one for one, and no new one.
   const emptyHeld = previous.transactions.filter((t) => !t.ref.trim() && !madeByHand(t));
-  const emptyPool = new Map<string, number>();
-  for (const t of emptyHeld) emptyPool.set(sameMovement(t), (emptyPool.get(sameMovement(t)) ?? 0) + 1);
-  const asEmpty = (t: BankTransaction) => {
-    const n = emptyPool.get(sameMovement(t)) ?? 0;
-    if (!n || previousByLeg.has(legOf(t))) return false;
-    emptyPool.set(sameMovement(t), n - 1);
-    return true;
-  };
-  const rows = scan.bankTransactions.filter((t) => t.ref.trim() !== '' && !asEmpty(t));
+  const standIn = emptyStandIns(previous.transactions, scan.bankTransactions);
+  const rows = scan.bankTransactions.filter((t) => t.ref.trim() !== '' && !standIn.has(t));
   const freshLegs = new Set(rows.map(legOf));
   // A row a movement made by hand took already is that movement (#88); a new row may confirm one now.
   const claimedLeg = (t: BankTransaction) => (t.statement === undefined ? undefined : `${t.statement} ${t.currency}`);
