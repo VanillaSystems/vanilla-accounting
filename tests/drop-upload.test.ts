@@ -68,6 +68,16 @@ test('booksMoved: a report booked, payouts booked by an answer, a statement read
   assert.equal(booksMoved(session(booked), session({ ...booked, state: 'refused', report: undefined })), true, 'taken back');
 });
 
+test('booksMoved: a statement PDF kept with its question (#254) that leaves the books, by «Ist ein Beleg» or ×, and a provider\'s question answered', () => {
+  const kept = row('pdf', { state: 'asks', reason: 'check-read', account: '1020', asked: { file: 'LUKB/Kontoauszug 01.07.2026 - 30.09.2026.pdf', month: '2026-09' } });
+  assert.equal(booksMoved(session(kept), session({ ...kept, state: 'take', reason: undefined, asked: undefined })), true, '«Ist ein Beleg»: the statement and its question left the books');
+  assert.equal(booksMoved(session(kept), session()), true, '×: the row is gone with them');
+  const clearing = row('orders', { state: 'unclear', reason: 'provider-account', askProvider: { provider: 'shopify', name: 'Shopify', missing: 'clearing' } as DropRow['askProvider'] });
+  const fees = row('fees', { state: 'unclear', reason: 'provider-account', askProvider: { provider: 'shopify', name: 'Shopify', missing: 'clearing' } as DropRow['askProvider'] });
+  assert.equal(booksMoved(undefined, session(clearing, fees)), false, 'a question asked writes nothing');
+  assert.equal(booksMoved(session(clearing, fees), session({ ...clearing, state: 'refused', askProvider: undefined }, { ...fees, askProvider: { ...fees.askProvider!, missing: 'fees' } })), true, 'her answer kept the clearing account in the chart and the provider\'s file');
+});
+
 test('dropStore tells `moved` for an add, a row\'s answer and the close that wrote the books, also for a closed window\'s files going on', async () => {
   let n = 0;
   let next: DropSession = session();

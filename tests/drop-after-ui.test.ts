@@ -47,6 +47,7 @@ async function dropIn(page: Page, files: Array<{ name: string; type: string; b64
 const csv = (name: string) => ({ name, type: 'text/csv', b64: Buffer.from(FILES[name]).toString('base64') });
 
 const dockText = (page: Page) => page.$eval('nav.activity', (e) => (e as HTMLElement).innerText.replace(/\s+/g, ' '));
+const vatText = (page: Page) => page.$eval('[data-testid=vat-pending]', (e) => (e as HTMLElement).innerText.replace(/\s+/g, ' '));
 const mainText = (page: Page) => page.$eval('main, #root', (e) => (e as HTMLElement).innerText.replace(/\s+/g, ' '));
 
 test('in the app: what the drop booked is on the page behind at once, and closing it opens the dropped statement in its quarter', { skip: noBrowser, timeout: 300_000 }, async () => {
@@ -62,8 +63,8 @@ test('in the app: what the drop booked is on the page behind at once, and closin
 
     await app.open('/vat?period=2026-Q3', 'nav.activity');
     await page.waitForNetworkIdle({ timeout: 30_000 }).catch(() => undefined);
-    const dockBefore = await dockText(page);
-    const vatBefore = await mainText(page);
+    const dockBefore = await page.$eval('nav.activity', (e) => e.textContent ?? '');
+    const vatBefore = await page.$eval('[data-testid=vat-pending]', (e) => e.textContent ?? '');
     await page.screenshot({ path: join(shots, '01-vat-before.png') });
 
     // Her second drop on MWST: the orders export and the payments export; she answers the rows' questions with their proposals.
@@ -75,16 +76,15 @@ test('in the app: what the drop booked is on the page behind at once, and closin
       await page.waitForNetworkIdle({ idleTime: 300, timeout: 30_000 });
     }
     await page.waitForFunction(() => /2 Berichte gebucht/.test(document.querySelector('[data-testid=drop-summary]')?.textContent ?? ''), { timeout: 60_000 });
-    await api.rest();
-    // The page behind the window, not reloaded: it shows the books as they are now.
-    await page.waitForFunction((before) => document.querySelector('nav.activity')?.textContent?.replace(/\s+/g, ' ') !== before, { timeout: 15_000 }, (await page.$eval('nav.activity', (e) => e.textContent ?? '')).replace(/\s+/g, ' ')).catch(() => undefined);
+    // The page behind the window, still open and not reloaded: the dock and MWST show the books as they are now.
+    const moved = await page.waitForFunction((dock, vat) => !!document.querySelector('[data-testid=drop-dialog]')
+      && document.querySelector('nav.activity')?.textContent !== dock && document.querySelector('[data-testid=vat-pending]')?.textContent !== vat,
+    { timeout: 20_000 }, dockBefore, vatBefore).then(() => true, () => false);
     await page.screenshot({ path: join(shots, '02-vat-after-reports.png') });
+    assert.ok(moved, `while the window is open, the dock and MWST show what it booked: ${await dockText(page)} | ${await vatText(page)}`);
+    assert.ok(await page.$('[data-testid=drop-dialog]'), 'the window is still open');
     await page.click('[data-testid=drop-close]');
     await page.waitForFunction(() => !document.querySelector('[data-testid=drop-dialog]'));
-    const dockAfter = await dockText(page);
-    const vatAfter = await mainText(page);
-    assert.notEqual(dockAfter, dockBefore, `the dock shows the payouts booked by her answers: ${dockAfter}`);
-    assert.notEqual(vatAfter, vatBefore, 'MWST shows the sales the reports booked');
     await page.screenshot({ path: join(shots, '03-vat-closed.png') });
 
     // A third drop on Kontoauszüge: the bank's PDF statement of the quarter, kept as the account's statement beside its export.

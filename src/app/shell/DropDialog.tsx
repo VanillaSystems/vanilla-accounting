@@ -38,7 +38,8 @@ import { CsvColumnsForm, StatementRead } from './StatementRead.js';
 import { Menu } from './Menu.js';
 import type { Location, Route } from './route.js';
 import { at } from '../areas/receipts/view.js';
-import { fileKey, fileKeyOf, isCamt } from '../areas/bank/model.js';
+import { fileKey, fileKeyOf, isCamt, keyOfFile } from '../areas/bank/model.js';
+import { bankFor } from '../areas/bank/state.js';
 import { startIntake } from '../automation/intake.js';
 import { emptyRefsLine } from '../areas/bank/empty-refs.js';
 import { draftForm } from '../areas/company/bank-draft.js';
@@ -78,9 +79,10 @@ export const finishDrop = (): void => (finishing ? finishing() : closeDrop());
 /**
  * Where a taken statement row opens, in the period of its last day as the books hold it (#424): a
  * bank export whole under Kontoauszüge › Datei, a PDF kept as the statement as the statement it is
- * (Datei shows only exports). None while neither the books nor the file name its days: never today's period.
+ * (Datei shows only exports), by the key Kontoauszüge gives it (two of one day apart). None while
+ * neither the books nor the file name its days: never today's period.
  */
-export function statementLocation(r: DropRow, books: Pick<Index, 'bankStatements'>): Location | undefined {
+export function statementLocation(r: DropRow, books: Index): Location | undefined {
   const account = r.statement?.account;
   const file = r.statement?.file;
   const name = file?.split('/').pop();
@@ -88,7 +90,9 @@ export function statementLocation(r: DropRow, books: Pick<Index, 'bankStatements
   const held = books.bankStatements?.find((b) => `${b.bank}/${b.filename}` === file);
   const to = held?.toDate ?? r.facts?.to;
   if (!to) return undefined;
-  if (held && !isCamt(held)) return at({ area: 'bank', statement: fileKey(account, held.fromDate, held.toDate) }, to);
+  if (held && !isCamt(held)) {
+    return at({ area: 'bank', statement: keyOfFile(bankFor(books), held) ?? fileKey(account, held.fromDate, held.toDate) }, to);
+  }
   return at({ area: 'bank', file: fileKeyOf(account, name) }, to);
 }
 
@@ -646,7 +650,7 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
   const missing = maybeTx ? t('near.dropMaybe', { what: txLine(maybeTx) }) : x.kind !== 'waits' && x.kind !== 'stuck' ? '' : lacks ? t('drop.p.missing', { what: lacks }) : proposed ? t('drop.p.payment') : t('drop.p.noPayment');
   const shown = !!receipt && open;
   // The books changed under the page: Belege must not show the receipt any more.
-  const undo = () => { setBusy(true); void act(session, r, { kind: 'undo' }).then(refresh).finally(() => setBusy(false)); };
+  const undo = () => { setBusy(true); void act(session, r, { kind: 'undo' }).finally(() => setBusy(false)); };
   // «schon da?» of a photo the run read (#361): answered as Belege answers it, the copy then set aside, or the pair not asked again.
   const twin = (answer: 'same' | 'distinct', of: string) => {
     setBusy(true);
@@ -657,7 +661,7 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
   // Taken onto the one account of the bank it names (#273): said in the row, with «ändern».
   const byBank = r.byBank?.accounts.find((a) => a.account === r.statement?.account);
   const [menu, setMenu] = useState<DOMRect | null>(null);
-  const readPdf = () => { setBusy(true); void act(session, r, { kind: 'readPdf' }).then(refresh).finally(() => setBusy(false)); };
+  const readPdf = () => { setBusy(true); void act(session, r, { kind: 'readPdf' }).finally(() => setBusy(false)); };
   const statementAt = statementLocation(r, books);
   // A card statement taken as a receipt (#401): what the app did with it, in its row.
   const card = receipt && !r.report ? cardStatementOf(receipt, books) : undefined;
@@ -694,7 +698,7 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
                 <button type="button" className="linkbtn" data-testid="drop-twin-distinct" disabled={busy} onClick={() => twin('distinct', x.of)}>{t('drop.twin.distinct')}</button>
               </>
             ) : null}
-            {byBank ? <button type="button" className="linkbtn" data-testid="drop-other-account" disabled={running || busy} data-tip={t('drop.byBankChangeTip')} onClick={() => { setBusy(true); void act(session, r, { kind: 'otherAccount' }).then(refresh).finally(() => setBusy(false)); }}>{t('drop.byBankChange')}</button> : null}
+            {byBank ? <button type="button" className="linkbtn" data-testid="drop-other-account" disabled={running || busy} data-tip={t('drop.byBankChangeTip')} onClick={() => { setBusy(true); void act(session, r, { kind: 'otherAccount' }).finally(() => setBusy(false)); }}>{t('drop.byBankChange')}</button> : null}
             {statementAt ? <button type="button" className="linkbtn" data-testid="drop-open-file" onClick={() => { closeDrop(); onGo(statementAt); }}>{t('drop.openStatement')}</button> : null}
             {x.kind === 'supporting' && x.of ? <button type="button" className="linkbtn" data-testid="drop-open-invoice" onClick={() => go({ area: 'receipts', id: x.of!.id }, books.receipts.find((y) => y.id === x.of!.id)?.date)}>{t('drop.p.openInvoice')}</button> : null}
             {(x.kind === 'none' || x.kind === 'supporting') && receipt && receipt.kind !== 'statement' && receipt.kind !== 'duplicate' ? <button type="button" className="linkbtn" data-testid="drop-is-receipt" disabled={busy} onClick={isReceipt}>{t(markLabel(receipt))}</button> : null}
@@ -702,7 +706,7 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
             {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id }, receipt.date)}>{t(x.kind === 'unread' ? 'drop.p.typeIn' : 'drop.openReceipt')}</button> : null}
             {/* A file that could be a statement (#384): not read, read as one, or read without a total or with a statement's signs; never a receipt read with its total, nor one linked to its payment, nor a card statement (#401). */}
             {(r.kind === 'receipt' || r.kind === 'photo') && !r.report && !card && (x.kind === 'unread' || (x.kind === 'none' && receipt?.kind === 'statement')
-              || ((x.kind === 'read' || x.kind === 'waits') && !!receipt && (receipt.amount == null || statementSigns(receipt.extractedText ?? '')))) ? <button type="button" className="linkbtn" data-testid="drop-as-statement" disabled={busy} onClick={() => { setBusy(true); void act(session, r, { kind: 'statement' }).then(refresh).finally(() => setBusy(false)); }}>{t('drop.asStatement')}</button> : null}
+              || ((x.kind === 'read' || x.kind === 'waits') && !!receipt && (receipt.amount == null || statementSigns(receipt.extractedText ?? '')))) ? <button type="button" className="linkbtn" data-testid="drop-as-statement" disabled={busy} onClick={() => { setBusy(true); void act(session, r, { kind: 'statement' }).finally(() => setBusy(false)); }}>{t('drop.asStatement')}</button> : null}
             {keptPdf ? <button type="button" className="linkbtn" data-act="actions" data-testid="drop-actions" aria-haspopup="menu" aria-expanded={!!menu} disabled={busy} onClick={(e) => setMenu(e.currentTarget.getBoundingClientRect())}>{t('actions.label')}</button> : null}
             {r.statement?.again ? null : <button type="button" className="linkbtn" disabled={running || busy} data-tip={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</button>}
           </span>

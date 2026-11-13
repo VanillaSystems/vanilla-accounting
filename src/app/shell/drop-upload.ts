@@ -7,23 +7,30 @@
 import type { Key } from '../i18n/types.js';
 import type { DropRow, DropSession } from '../../types/drop.js';
 
-/** What a row did to the books, as the server reports it: a statement read in or kept, a report booked, payouts booked by an answer; none for a row that wrote nothing (a receipt goes to the inbox, whose run writes and says so). */
-const booksPart = (r: DropRow): string | undefined =>
-  (r.statement || r.report || r.keep || r.asked || r.payouts ? JSON.stringify([r.state, r.statement, r.report, r.keep, r.asked, r.payouts]) : undefined);
+/**
+ * What a row did to the books and the workspace, as the server reports it: a statement read in or
+ * kept (with its question, #254), a report booked, payouts booked by an answer; none for a row that
+ * wrote nothing (a receipt goes to the inbox, whose run writes and says so).
+ */
+const booksPart = (r: DropRow | undefined): string | undefined =>
+  (r && (r.statement || r.report || r.keep || r.asked || r.payouts) ? JSON.stringify([r.state, r.statement, r.report, r.keep, r.asked, r.payouts]) : undefined);
 
 /**
- * Whether the server's answer `after` reports a write to the books the session `before` did not
- * (#424): a row that read, kept or booked something new, or a taken row taken back. The drop
+ * Whether the server's answer `after` reports a write the session `before` did not (#424): a row
+ * that read, kept or booked something new, or that lost it again (taken back, a kept statement's
+ * question dropped with «Ist ein Beleg» or ×, the row gone), a taken row taken back, or a provider's
+ * question answered (the answer keeps an account in the chart and the provider's file). The drop
  * window's every answer passes here, so no booking it reports leaves the pages on the books of before.
  */
 export function booksMoved(before: DropSession | undefined, after: DropSession): boolean {
   const was = new Map((before?.rows ?? []).map((r) => [r.key, r]));
   const now = new Map(after.rows.map((r) => [r.key, r]));
   if ([...was.values()].some((r) => r.state === 'taken' && now.get(r.key)?.state !== 'taken')) return true;
-  return after.rows.some((r) => {
-    const part = booksPart(r);
-    const old = was.get(r.key);
-    return part !== undefined && part !== (old && booksPart(old));
+  if ([...was.values()].some((r) => r.askProvider && now.get(r.key)?.askProvider?.missing !== r.askProvider.missing)) return true;
+  return [...new Set([...was.keys(), ...now.keys()])].some((key) => {
+    const old = booksPart(was.get(key));
+    const part = booksPart(now.get(key));
+    return (old !== undefined || part !== undefined) && old !== part;
   });
 }
 
