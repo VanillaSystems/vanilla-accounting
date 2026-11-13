@@ -766,7 +766,7 @@ export function bookByReceipt(books: Books, id: string): { before: JournalEntry[
 }
 
 /**
- * «2270 ausgleichen» (#476): a contribution payment booked without the employees' share, by the open item that names it
+ * «Arbeitnehmeranteil abziehen» (#476): a contribution payment booked without the employees' share, by the open item that names it
  * (`u`, unclearedContributions: what is still to move, the payment's share where the payslips tell it). Its lines on a
  * contribution account the employees share in are cut by that much, the last first, and the amount is booked on the
  * deductions account on the payment's ref, as the person's own change (clearingProposal, made here from the books,

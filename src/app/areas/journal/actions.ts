@@ -49,11 +49,11 @@ export function fixEvidence(nav: Nav, e: JournalEntry, c: EvidenceCheck) {
 }
 
 /**
- * «2270 ausgleichen» (#476): one write on the server, which makes the proposal from the books (src/server/edits.ts
+ * «Arbeitnehmeranteil abziehen» (#476): one write on the server, which makes the proposal from the books (src/server/edits.ts
  * clearWithheld); the undo puts the payment's lines back as they were, with who booked them and why.
  */
 export const clearWithheld = (nav: Pick<Nav, 'toast' | 'refresh'>, ref: string) =>
-  run(nav as Nav, () => api.clearWithheld(ref), (r) => t('issues.withheldCleared', { currency: baseCurrency(), amount: fmt(r.amount), account: r.account }), ({ undo }) => api.undoByReceipt(undo));
+  run(nav as Nav, () => api.clearWithheld(ref), (r) => t('issues.withheldCleared', { currency: baseCurrency(), amount: fmt(r.amount) }), ({ undo }) => api.undoByReceipt(undo));
 
 /** A receipt hung on a booking without a payment (#89); the undo takes it off again. */
 export const linkReceipt = (nav: Nav, receiptId: string, ref: string, what: string) =>

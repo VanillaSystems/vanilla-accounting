@@ -193,7 +193,7 @@ router.post('/api/journal-entries/:id/by-receipt', (req, res) => {
 });
 
 /**
- * «2270 ausgleichen» on a contribution payment booked without the employees' share (#476): the open item is the
+ * «Arbeitnehmeranteil abziehen» on a contribution payment booked without the employees' share (#476): the open item is the
  * server's own (unclearedContributions over the payment's filing period, with the payees and shares the business files
  * and payslips give), never the request's. Its «Rückgängig» is the one of «Nach Beleg buchen».
  */

@@ -36,7 +36,7 @@ bankCharges: { account: "6940" }
 # `withholds`: the words a payslip names each deduction by, per kind. The kinds are keyed by a business file's
 # id (`ausgleichskasse`, processes/authorities/): a payment routed to that business clears what its kind's rows
 # withheld; a key no business file has (pension, accident, …) only tells those rows apart. A company's own file of
-# its fund under another id is not read so: its payment gets the open item's «2270 ausgleichen» instead.
+# its fund under another id is not read so: its payment gets the open item's «Arbeitnehmeranteil abziehen» instead.
 # When every payslip behind `deductions` reads so and its rows add up to what its wage put there, code knows
 # the employees' share a payment to that business clears (#476).
 wages:

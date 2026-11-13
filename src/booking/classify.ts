@@ -582,6 +582,53 @@ export function bookBillCorrections(books: Books, context: Pick<ClassifyContext,
   }, only);
 }
 
+/**
+ * The contribution payments the app booked whose share of the deductions account the payslips now tell otherwise (#489),
+ * booked to that share by code, as the classifier books it (fundShare, atWithheld). A drop hands each file to the inbox's
+ * run as it takes it: the statement's run books the fund's payment (it waits for no receipt) while the wages are net, the
+ * payslips' run books the wages again gross from them, and the payment, never asked again, kept the employees' share as
+ * the employer's. Only a payment of the open period whose every line the model booked: never a person's booking, nor a
+ * rule's; one code cannot book so stays, and the open list offers the rest. Returns the refs booked anew.
+ */
+export function bookWithheldShares(books: Books, context: Pick<ClassifyContext, 'counterparties' | 'chartOfAccounts' | 'wageDeductions'>): string[] {
+  const deductions = context.wageDeductions;
+  const wages = wageAccounts();
+  if (!deductions || !wages || !setup().wages?.withholds) return [];
+  const lock = periodLock(books);
+  const chartAccounts = new Set(chartNames(context.chartOfAccounts).keys());
+  const businessOf = (t: BankTransaction): string | undefined => {
+    const routing = identify(signalsOfTransaction(t, mappedReceipts(books, t)), context.counterparties ?? []);
+    return routing.kind === 'known' ? routing.counterparty : undefined;
+  };
+  const byRef = new Map<string, JournalEntry[]>();
+  for (const e of books.journalEntries) (byRef.get(e.transactionRef) ?? byRef.set(e.transactionRef, []).get(e.transactionRef)!).push(e);
+  const said = wordsIn('de');
+  const template = said.t('rules.say.withheldShare', { account: '\u0000', currency: '\u0000', share: '\u0000' });
+  const earlier = new RegExp(template.split('\u0000').map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\S+'), 'g');
+  const done: string[] = [];
+  // Oldest first: what an earlier payment to the fund takes off the account is booked before a later one's share is read.
+  for (const tx of [...books.transactions].sort((a, b) => a.date.localeCompare(b.date))) {
+    const lines = byRef.get(tx.ref);
+    if (tx.direction !== 'DBIT' || lock.isClosed(tx.date) || !lines?.length) continue;
+    if (!lines.every((e) => e.origin === 'classify' && e.by?.kind === 'model' && !e.vatCode)) continue;
+    if (!lines.some((e) => wages.contributions.has(e.accountDebit) || e.accountDebit === deductions)) continue;
+    const business = businessOf(tx);
+    const share = fundShare(books, tx, business, businessOf);
+    if (share === undefined || Math.abs(takenOff(lines, deductions) - share) < 0.005) continue;
+    const toEmployer = { named: wages.contributions, shared: wages.shared, fallback: payeeContributionAccount(books, tx, businessOf) ?? [...wages.contributions].find((a) => !chartAccounts.size || chartAccounts.has(a)) };
+    const exact = atWithheld(lines, deductions, share, toEmployer, newEntryId);
+    if (!exact) continue;
+    const why = said.t('rules.say.withheldShare', { account: deductions, currency: baseCurrency(), share: share.toFixed(2) });
+    const booked = exact.entries.map((e) => ({ ...e, reason: [(e.reason ?? '').replace(earlier, '').trim(), why].filter(Boolean).join(' ') }));
+    const at = books.journalEntries.findIndex((e) => e.transactionRef === tx.ref);
+    const rest = books.journalEntries.filter((e) => e.transactionRef !== tx.ref);
+    books.journalEntries = [...rest.slice(0, at), ...booked, ...rest.slice(at)];
+    byRef.set(tx.ref, booked);
+    done.push(tx.ref);
+  }
+  return done;
+}
+
 /** Why a provider's payout waits for the person (PayoutWait), in the books' language: what the run's note and the payment say. */
 export function payoutWaitReason(w: PayoutWait): string {
   // A provider without a sales report books its sales from its payout reports: no order export to wait for.

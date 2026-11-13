@@ -284,7 +284,7 @@ export function fundShare(books: ShareBooks, tx: BankTransaction, business: stri
 
 /**
  * The share of each payment out to a business whose deduction kinds setup.yaml names (fundShare), by ref, where code
- * can tell it (#476): the task and «2270 ausgleichen» then ask for that part, never for all the account holds.
+ * can tell it (#476): the task and «Arbeitnehmeranteil abziehen» then ask for that part, never for all the account holds.
  */
 export function withheldSharesOf(books: ShareBooks, businessOf: (t: BankTransaction) => string | undefined): Record<string, number> {
   const kinds = setup().wages?.withholds;

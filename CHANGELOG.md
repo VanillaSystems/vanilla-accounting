@@ -424,6 +424,16 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- The compensation fund's Akonto payment is booked net of the employees' share also when the
+  payslips come in the same drop as the bank statement (#489). The drop hands each file to its own
+  run: the statement's run booked the fund's payment (it waits for no receipt) while the wages were
+  still net, and the payslips' run booked the wages again gross but never asked about the payment
+  again, so the employees' AHV/IV/EO and ALV stayed in the employer's cost. Now every run books a
+  contribution payment the app booked to the share the payslips withheld for that fund, whenever
+  that share changes; a payment she booked or changed herself stays as it is. Where a proposal is
+  still offered, it says what it does in her words: «Vorschlag: Den Arbeitnehmeranteil (CHF …) aus
+  den Lohnabrechnungen von den Sozialversicherungskosten abziehen», the button «Arbeitnehmeranteil
+  abziehen» (before: «von 5700 auf 2270 umbuchen», «2270 ausgleichen»), in all four languages.
 - A drop in which the AI's booking of one payment was refused (#482) no longer leaves stuck runs
   «Eingang verarbeiten: Lauf steckt» behind the task badge. The run finishes, and the payment says
   why it waits, as #470 meant. «Automatisch buchen» on such a payment goes on to «Von Hand
