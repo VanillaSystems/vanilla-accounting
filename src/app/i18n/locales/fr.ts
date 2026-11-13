@@ -4135,6 +4135,7 @@ export default {
     'runs.line.refused': 'non repris : {reason}',
     'runs.line.openingOffer': 'Avant ce relevé, la banque indique un solde de {amount} ({date}). Tes livres ne le connaissent pas encore.',
     'runs.line.openingTake': 'Reprendre comme solde d’ouverture',
+    'runs.line.startMissing': 'Solde d’ouverture au 1.1.{year} manquant : les relevés de ce compte ne commencent que le {date}.',
     'runs.kind.file': 'fichier',
     'runs.kind.camt': 'camt',
     'runs.kind.pdf': 'PDF',

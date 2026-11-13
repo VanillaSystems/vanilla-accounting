@@ -4133,6 +4133,7 @@ export const messages = {
   'runs.line.refused': 'nicht übernommen: {reason}',
   'runs.line.openingOffer': 'Vor diesem Auszug nennt die Bank einen Kontostand von {amount} ({date}). Deine Bücher kennen ihn noch nicht.',
   'runs.line.openingTake': 'Als Eröffnungssaldo übernehmen',
+  'runs.line.startMissing': 'Anfangsbestand per 1.1.{year} fehlt: die Auszüge dieses Kontos beginnen erst am {date}.',
   'runs.kind.file': 'Datei',
   'runs.kind.camt': 'camt',
   'runs.kind.pdf': 'PDF',

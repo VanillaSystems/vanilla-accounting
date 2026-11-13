@@ -4,7 +4,7 @@
  */
 import { bookBalanceNative, nativeOpening } from '../../../accounting/reconcile-bank.js';
 import { toRappen } from '../../../accounting/rappen.js';
-import { openingOffer, type OpeningOffer } from '../../../accounting/opening-balance.js';
+import { missingOpenings, openingOffer, type OpeningOffer } from '../../../accounting/opening-balance.js';
 import { salesWithoutVat, type SaleWithoutVat } from '../../../accounting/sales-without-vat.js';
 import type { Arrival, RunSummary } from '../../../workflows/model.js';
 import type { Index } from '../../../types/index.js';
@@ -13,13 +13,26 @@ import type { Index } from '../../../types/index.js';
 export type Stand = 'running' | 'error' | 'you' | 'discarded' | 'reviewed' | 'check' | 'idle' | 'ok';
 
 export type Line =
-  | { kind: 'statement'; a: Extract<Arrival, { kind: 'statement' }>; balance: Balance; opening?: OpeningOffer; withoutVat: SaleWithoutVat[] }
+  | { kind: 'statement'; a: Extract<Arrival, { kind: 'statement' }>; balance: Balance; opening?: OpeningOffer; startMissing?: StartMissing; withoutVat: SaleWithoutVat[] }
   | { kind: 'receipt'; a: Extract<Arrival, { kind: 'receipt' }>; receipt?: Index['receipts'][number]; payments: Index['transactions']; entries: number }
   | { kind: 'refused'; a: Extract<Arrival, { kind: 'refused' }> }
   | { kind: 'file'; name: string }
   | { kind: 'poorScan'; file: string; receipt?: Index['receipts'][number] }
   /** Removed from the inbox: the same bytes as `of`, which the books or the inbox hold already. */
   | { kind: 'copy'; file: string; of: string; receipt?: Index['receipts'][number] };
+
+/**
+ * The account has no opening for `year` and its statements begin after 1 January (`from`): what it
+ * held on 1.1. no statement says, so it is named as missing and taken by hand in Firma › Eröffnung
+ * (`canType`: unless the year is closed), never offered from a later balance (#487).
+ */
+export type StartMissing = { year: string; from: string; canType: boolean };
+
+function startMissingOf(a: Extract<Arrival, { kind: 'statement' }>, books: Index, year: string): StartMissing | undefined {
+  const [m] = missingOpenings(books, [{ bank: a.bank, currency: a.currency, account: a.account, label: '' }], year);
+  const from = m && (m.statementsFrom ?? a.from ?? m.from);
+  return m && from && from > `${year}-01-01` ? { year, from, canType: m.canType } : undefined;
+}
 
 /** The bank's closing balance against the books on the same day, in the account's currency. */
 export type Balance = { kind: 'none' } | { kind: 'matches'; date: string } | { kind: 'differs'; date: string; diff: number };
@@ -49,7 +62,8 @@ export function linesOf(r: RunSummary, books: Index, vatRegistered: boolean): Li
     if (a.kind === 'statement') {
       const balance = balanceOf(a, books);
       const opening = balance.kind === 'differs' ? openingOffer(books, a) : undefined;
-      return { kind: 'statement', a, balance, ...(opening && { opening }), withoutVat: withoutVatOf(a, sales) };
+      const startMissing = balance.kind === 'differs' && !opening ? startMissingOf(a, books, balance.date.slice(0, 4)) : undefined;
+      return { kind: 'statement', a, balance, ...(opening && { opening }), ...(startMissing && { startMissing }), withoutVat: withoutVatOf(a, sales) };
     }
     if (a.kind === 'refused') return { kind: 'refused', a };
     const refs = new Set(books.mappings.filter((m) => m.receiptId === a.id).map((m) => m.transactionRef));

@@ -3,8 +3,8 @@
  * balance before its first day (OPBD); books that start with that statement have no opening for
  * the account yet, so the check of the statement's closing balance against the books is off by
  * exactly that amount. Taken, it is the account's opening of the year (config.openingBalances,
- * keyed by year): nothing moved on the account before the statement in these books, so the
- * balance on 1 January of them is the bank's balance before the statement. The other side is
+ * keyed by year), offered only when the statement starts on 1 January: the bank's balance before a
+ * later statement is not the balance of 1 January (#487). The other side is
  * retained earnings, where the import of a closed year carries the difference too, so the year opens
  * balanced. Pure: the statement route writes it, the runs table offers it.
  */
@@ -31,23 +31,30 @@ export interface StatementStart {
 }
 
 /**
- * The statement's opening balance as the account's opening of the books, when the books have
- * none and nothing on the account came before the statement. Not for a year closed through its
- * last day, nor one an earlier year of these books opens; not for a foreign account, whose opening
- * also needs its value in the base currency.
+ * The year whose first day a statement's opening balance (OPBD) is the balance of: one dated
+ * 31 December the next year's, one dated 1 January that year's. The balance of any other day says
+ * nothing about 1 January (#487).
  */
-export function openingOffer(books: Pick<Index, 'config' | 'transactions' | 'journalEntries'>, s: StatementStart): OpeningOffer | undefined {
+function yearOpenedBy(date: string): string | undefined {
+  if (date.endsWith('-12-31')) return addDays(date, 1).slice(0, 4);
+  return date.endsWith('-01-01') ? date.slice(0, 4) : undefined;
+}
+
+/**
+ * The statement's opening balance as the account's opening of the books, when it is the balance of
+ * the books' first day and the books have none. The balance before a statement that starts later in
+ * the year is never offered (#487): the books open on 1 January, and taking it would leave out what
+ * the account moved before the statement on every balance sheet. Not for a year closed through its
+ * last day, nor one an earlier year of these books opens (openingLock); not for a foreign account,
+ * whose opening also needs its value in the base currency.
+ */
+export function openingOffer(books: Pick<Index, 'config' | 'journalEntries'>, s: StatementStart): OpeningOffer | undefined {
   const o = s.opening;
-  if (!o || s.currency !== baseCurrency() || toRappen(o.amount) === 0) return undefined;
-  const year = addDays(o.date, 1).slice(0, 4);
+  const year = o && yearOpenedBy(o.date);
+  if (!o || !year || s.currency !== baseCurrency() || toRappen(o.amount) === 0) return undefined;
+  if (openingLock(books, year)) return undefined;
   const config = books.config;
-  if (config?.closedThrough && config.closedThrough >= `${year}-12-31`) return undefined;
-  if (Object.keys(config?.openingBalances ?? {}).some((y) => y < year)) return undefined;
   if (config?.openingBalances?.[year]?.[s.account] !== undefined || config?.openingBalancesNative?.[year]?.[s.account]) return undefined;
-  const first = [s.from, addDays(o.date, 1)].filter((d): d is string => !!d).sort()[0];
-  const before = (d: string | undefined) => !!d && d >= `${year}-01-01` && d < first;
-  if (books.transactions.some((t) => t.bank === s.bank && t.currency === s.currency && before(t.date))) return undefined;
-  if ((books.journalEntries ?? []).some((e) => before(e.date) && (e.accountDebit === s.account || e.accountCredit === s.account))) return undefined;
   return { account: s.account, year, date: o.date, amount: o.amount };
 }
 
