@@ -25,7 +25,7 @@ import { UnreadRuleOffer, UnreadTask } from './UnreadReceipt.js';
 import type { UnreadOffer } from '../../../saving/unread-rule.js';
 import { useState } from 'react';
 import { monthName, periodName } from '../../lib/period-label.js';
-import { LACK_WORDS, periodIssues, unbookedOpen, type IssueCounts, type PeriodIssue } from './period-issues.js';
+import { issuesLead, LACK_WORDS, periodIssues, unbookedOpen, type IssueCounts, type PeriodIssue, type Say } from './period-issues.js';
 import { useAutomation } from '../../automation/store.js';
 import { processingOf } from '../../../workflows/processing.js';
 import { OPEN_ITEMS } from '../vat/model.js';
@@ -144,7 +144,7 @@ export function PeriodIssues({ books, nav, from, to, period, canEdit }: { books:
   return (
     <section className="wfissues" data-testid="period-issues">
       <h3>{t('issues.title', { period, n: issues.length })}</h3>
-      <p className="m">{t('issues.lead')}</p>
+      <p className="m" data-testid="period-issues-lead">{issuesLead(issues, t as unknown as Say)}</p>
       <ul>
         {issues.map((i, k) => {
           const go = goOf(books, i);

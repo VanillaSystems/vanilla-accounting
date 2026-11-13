@@ -8,7 +8,9 @@ import assert from 'node:assert/strict';
 import './support/jurisdiction.js';
 import type { BankTransaction, Index, Receipt } from '../src/types/index.js';
 import type { Question } from '../src/questions/model.js';
-import { countIssues, periodIssues, receiptWaits, unbookedOpen } from '../src/app/areas/automation/period-issues.js';
+import { countIssues, issuesLead, periodIssues, receiptWaits, unbookedOpen } from '../src/app/areas/automation/period-issues.js';
+import { formatIn } from '../src/app/i18n/core.js';
+import de from '../src/app/i18n/locales/de.js';
 import { isPending, resultSentence, type VatReturn } from '../src/app/areas/vat/model.js';
 import { journalOf, unsettledAtFiling } from '../src/app/areas/journal/model.js';
 import { openWork } from '../src/server/open-work.js';
@@ -101,4 +103,23 @@ test('«wartet auf ihren Beleg» is one number: the payments receipt-due holds, 
   const held: Index = { ...books, transactions: books.transactions.map((t) => (t.ref === 'SEP' || t.ref === 'PAID' ? { ...t, waitsForReceipt: { since: '2026-10-01' } } : t)) };
   assert.deepEqual([...receiptWaits(held, [], '2026-10-05')], ['SEP'], 'PAID carries the mark but is booked: it waits for nothing');
   assert.deepEqual([...receiptWaits(held, [], '2026-11-25')], ['SEP'], 'near its return it is a task on Aufgaben, and still counted as waiting for its receipt');
+});
+
+const say = (key: string, vars: Record<string, string | number> = {}) => formatIn({ code: 'de', ...de }, key as never, vars);
+
+test('the open list\'s lead names only what holds the approval in this firm\'s books: no sales report for a firm without one (#428)', () => {
+  // The consultancy: no provider, no VAT question left, payments and receipts open.
+  const plain = periodIssues(books, [question('q3', 'NATEL', 'answered')], '2026-07-01', '2026-09-30', []);
+  assert.ok(plain.length > 0);
+  const lead = issuesLead(plain, say);
+  assert.doesNotMatch(lead, /Verkaufsbericht|Bestellung|Frage/);
+  assert.match(lead, /^Nichts davon hält die Abrechnung auf/);
+  // An open VAT question about a sale, and nothing of a sales report.
+  assert.match(issuesLead(periodIssues(books, [question('q1', 'KELLER')], '2026-07-01', '2026-09-30', []), say), /^Eine offene Frage zur MWST hält die Freigabe auf\. Das Übrige hält/);
+  // A webshop: two orders its report could not split, and one held for another reason (shown, not withheld for).
+  const order = (o: string, why: 'rate' | 'test') => ({ provider: 'shop', name: 'Shop', receipt: 'lonely', order: o, why, date: '2026-08-02' }) as never;
+  const shop = periodIssues(books, [question('q1', 'KELLER')], '2026-07-01', '2026-09-30', [], undefined, undefined, undefined, { held: [order('#1', 'rate'), order('#2', 'rate'), order('#3', 'test')], bills: [], payouts: {} });
+  assert.match(issuesLead(shop, say), /^Eine offene Frage zur MWST und 2 Bestellungen, deren MWST-Sätze der Verkaufsbericht nicht trennen konnte, halten die Freigabe auf\. Das Übrige/);
+  const only = periodIssues({ ...books, transactions: [], receipts: [], journalEntries: [] }, [], '2026-07-01', '2026-09-30', [], undefined, undefined, undefined, { held: [order('#1', 'rate')], bills: [], payouts: {} });
+  assert.equal(issuesLead(only, say), 'Eine Bestellung, deren MWST-Sätze der Verkaufsbericht nicht trennen konnte, hält die Freigabe auf.', 'nothing else on the list: no word of «the rest»');
 });

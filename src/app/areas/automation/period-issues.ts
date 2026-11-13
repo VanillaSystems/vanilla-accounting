@@ -107,6 +107,31 @@ export function receiptWaiting(books: Pick<Index, 'transactions' | 'journalEntri
 }
 
 /**
+ * What of the list withholds the approval of the return, as filing-summary.ts approvalWithheld
+ * reads it: the open VAT questions about its sales and the orders a sales report could not split by
+ * rate. `rest`: what holds nothing up. The list's lead names only what is there (#428): a firm
+ * without a provider never reads of a sales report.
+ */
+export function withholding(issues: readonly PeriodIssue[]): { questions: number; orders: number; rest: number } {
+  const questions = issues.filter((i) => i.kind === 'question' && i.q.topic === 'saleVat').length;
+  const orders = issues.filter((i) => i.kind === 'held' && i.held.why === 'rate').length;
+  return { questions, orders, rest: issues.length - questions - orders };
+}
+
+/** A text of the app's dictionaries (the UI's `t`, or formatIn of one language). */
+export type Say = (key: string, vars?: Record<string, string | number>) => string;
+
+/** The list's lead: what of it withholds the approval, named only when it is there (withholding), and whether the rest blocks nothing. */
+export function issuesLead(issues: readonly PeriodIssue[], say: Say): string {
+  const w = withholding(issues);
+  const parts = [w.questions ? say('issues.lead.question', { n: w.questions }) : '', w.orders ? say('issues.lead.order', { n: w.orders }) : ''].filter(Boolean);
+  if (!parts.length) return say('issues.lead.nothing');
+  const what = parts.length === 2 ? say('issues.lead.and', { a: parts[0], b: parts[1] }) : parts[0];
+  const held = say(w.questions + w.orders === 1 ? 'issues.lead.withholdsOne' : 'issues.lead.withholdsMany', { what: what.charAt(0).toUpperCase() + what.slice(1) });
+  return w.rest ? `${held} ${say('issues.lead.rest')}` : held;
+}
+
+/**
  * How many issues of each kind are open: one line beside a figure that is not final (the return's
  * page, #341). `waitingReceipt`: of the unbooked payments, those in `receiptWaits`.
  */

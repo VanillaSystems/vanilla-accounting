@@ -322,6 +322,9 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- «Noch offen» (#428): the sentence above the list named an open VAT question and an order a sales
+  report could not split for every firm, one without a sales report too. It now names only what of
+  the list holds up «Freigegeben», with its count, or says that nothing of it does.
 - Keeping rules (#396, #392): «Rückgängig» on a second kept rule took back the first rule's bookings
   and the second rule's file. Each keep now has a line of its own above Aufgaben and Firma › Regeln
   («4 Zahlungen gebucht · Rückgängig»), true to its own numbers and still there after a reload; the
