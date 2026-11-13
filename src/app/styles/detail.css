@@ -232,6 +232,12 @@ button.qcard:hover { background: var(--hover); }
 .ftab .warn { color: var(--warn); }
 .ftab .pos { color: var(--pos); }
 .form.inline { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); align-items: end; max-width: 760px; padding: 12px 14px; margin: 6px 0 10px; border: 1px solid var(--line); border-radius: 12px; }
+/* A field takes three rows of the form (its label, its input, its hint) and shares them with the fields beside it:
+   a hint under one input («kein Konto») or a label wrapping onto a second line moves no other field (#454).
+   A checkbox's label stays one line of its own. */
+.form.inline > label:not(:has(> input[type="checkbox"])) { grid-row: span 3; grid-template-rows: subgrid; row-gap: 3px; align-items: end; }
+.form.inline > label > .acn { align-self: start; margin-top: 0; }
+.form input.num { text-align: right; }
 .form.inline .wide { grid-column: 1 / -1; }
 .form.inline .acts { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; }
 

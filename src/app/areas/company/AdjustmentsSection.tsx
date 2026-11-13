@@ -114,7 +114,7 @@ export function AdjustmentsSection({ books, nav, canEdit }: { books: Index; nav:
           {boxes.map(([z, b]) => <option key={z} value={z}>{z} {b.label}</option>)}
         </select>
       </label>
-      <label>{t('company.adjAmount')}<input name="amount" className="mono" inputMode="decimal" style={{ textAlign: 'right' }} value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} /></label>
+      <label>{t('company.adjAmount')}<input name="amount" className="mono num" inputMode="decimal" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} /></label>
       <label className="wide">{t('company.adjEntries')}
         <input name="entries" className="mono" list="adj-filed-entries" value={f.entries} onChange={(e) => setF({ ...f, entries: e.target.value })} />
         <datalist id="adj-filed-entries">
