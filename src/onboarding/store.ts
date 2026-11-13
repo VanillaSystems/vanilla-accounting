@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import type { Index } from '../types/index.js';
 import { writeAtomic } from '../invoices/store.js';
-import { emptyProgress, parseProgress, withAnswer, withTopic, type Answer, type Assumed, type QuestionId, type SetupProgress, type SetupTopic, type TopicState } from './model.js';
+import { emptyProgress, parseProgress, withAnswer, withTopic, type Answer, type Assumed, type PrivateShares, type QuestionId, type SetupProgress, type SetupTopic, type TopicState } from './model.js';
 import type { SetupView } from './facts.js';
 import type { QuestionKey } from '../workspace/setup.js';
 
@@ -49,8 +49,8 @@ export function setupView(ws: Ws, books: Parameters<typeof emptyBooks>[0]): Pick
  * books existed is in the settings now, and the conversation in the books shows it from there without
  * asking (#345), so no answer is recorded: only that these books open into the setup until «Los geht's».
  */
-export function seedCreated(ws: Ws, seed: { started: string; assumed?: Assumed }, now: string): SetupProgress {
-  return write(ws, { ...emptyProgress(), started: seed.started, created: now, ...(seed.assumed ? { assumed: seed.assumed } : {}) });
+export function seedCreated(ws: Ws, seed: { started: string; assumed?: Assumed; shares?: PrivateShares }, now: string): SetupProgress {
+  return write(ws, { ...emptyProgress(), started: seed.started, created: now, ...(seed.assumed ? { assumed: seed.assumed } : {}), ...(seed.shares ? { shares: seed.shares } : {}) });
 }
 
 /**

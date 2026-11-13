@@ -20,6 +20,8 @@ import { homeOf, RULES_DIR } from '../knowledge/layers.js';
 import { payerKey, payerNames } from '../knowledge/payer.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { draftDir } from './changes.js';
+import { readProgress } from '../onboarding/store.js';
+import { setup } from '../engines/index.js';
 
 /** GET /api/rules/share: the rule a split payment offers, or none. */
 export interface ShareOffer {
@@ -33,6 +35,8 @@ export interface ShareOffer {
   payerName?: string;
   /** The file the rule would stand in. */
   path: string;
+  /** The offer comes from the setup (#402): the share the person named there for this kind of private use, with her words. */
+  setup?: { item: 'car' | 'phone'; said: string };
 }
 
 /**
@@ -50,8 +54,25 @@ export function ruleCode(code: string | undefined): string | null {
   return standard?.code ?? code;
 }
 
-/** A payment's bookings as split: the business part's account and code, the owner's share in money, and whether it is own use. */
-interface Split { account: string; vat: string | undefined; share: number; ownUse: boolean }
+/** A payment's bookings as split: the business part's account and code, the owner's share in money, and whether it is own use; `setup`: a share the setup named, not booked yet. */
+interface Split { account: string; vat: string | undefined; share: number; ownUse: boolean; setup?: { item: 'car' | 'phone'; said: string } }
+
+/**
+ * A payment out booked whole, in one line against the bank, on the account of a kind of private use
+ * (setup.yaml `privateUse`: the phone's, the car's) whose share the person named in the setup
+ * (onboarding.json `shares`, #402): that share, offered as the rule of its business on its card.
+ */
+function setupSplit(ws: Workspace, tx: BankTransaction, entries: readonly JournalEntry[], bank: string): Split | undefined {
+  const shares = readProgress(ws).shares;
+  const pays = entries.filter((e) => e.accountDebit === bank || e.accountCredit === bank);
+  if (!shares || tx.direction !== 'DBIT' || pays.length !== 1 || entries.length !== 1) return undefined;
+  const account = pays[0].accountDebit === bank ? pays[0].accountCredit : pays[0].accountDebit;
+  const uses = setup().privateUse ?? {};
+  const item = (['phone', 'car'] as const).find((k) => uses[k] === account && shares[k]);
+  if (!item) return undefined;
+  const { percent, said } = shares[item]!;
+  return { account, vat: pays[0].vatCode, share: (tx.amount * percent) / 100, ownUse: false, setup: { item, said } };
+}
 
 /**
  * The split `entries` (a payment's bookings) show: two bookings against the bank, one on the
@@ -103,23 +124,26 @@ export function shareOffer(ws: Workspace, books: Books, ref: string, context: Cl
   const bank = bankAccountFor(tx, context.bankAccounts);
   const entries = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
   if (paymentSides(books, tx.ref, context.bankAccounts).some((s) => s.booked !== s.paid)) return undefined;
-  const split = splitOf(books, tx, entries, bank, owner);
+  const split = splitOf(books, tx, entries, bank, owner) ?? setupSplit(ws, tx, entries, bank);
   if (!split) return undefined;
   const { account } = split;
   const percent = Math.round((split.share / tx.amount) * 100);
   const booking: RuleBooking = { account, vat: ruleCode(split.vat), private: percent, ...(split.ownUse ? { ownUse: true as const } : {}) };
   if (percent <= 0 || percent >= 100) return undefined;
   const lines = ruleBookingLines(tx, booking, mappedReceipts(books, tx), owner);
-  // A whole percent: the rule books the split again, give or take the odd cent of an uneven half.
-  if (!lines[1] || Math.abs(Math.round(lines[1].amount * 100) - Math.round(split.share * 100)) > 1) return undefined;
+  // A whole percent: the rule books the split again, give or take the odd cent of an uneven half (a setup's share is no split yet).
+  if (!split.setup && (!lines[1] || Math.abs(Math.round(lines[1].amount * 100) - Math.round(split.share * 100)) > 1)) return undefined;
   const fx = loadFxResolver();
   const ruled = ruleOfPayment(books, tx, context, fx)?.rule.then;
   if (ruled?.kind === 'book' && ruled.booking.private === percent && !!ruled.booking.ownUse === split.ownUse && ruled.booking.account === account) return undefined;
+  // The setup's share is offered while no rule books the payment privately; a rule that does (any share) was her answer to it.
+  if (split.setup && ruled?.kind === 'book' && ruled.booking.private !== undefined) return undefined;
+  const setup = split.setup ? { setup: split.setup } : {};
   const id = paymentFacts(books, tx, context, fx).counterparty;
   const cp = id ? context.counterparties?.find((c) => c.id === id) : undefined;
-  if (cp) return { ref: tx.ref, percent, booking, business: { id: cp.id, name: cp.name }, path: homeOf('workspace', cp.role, cp.id) };
+  if (cp) return { ref: tx.ref, percent, booking, business: { id: cp.id, name: cp.name }, path: homeOf('workspace', cp.role, cp.id), ...setup };
   const payer = payerKey(tx);
-  return payer ? { ref: tx.ref, percent, booking, payer, payerName: payerNames([tx])[payer] ?? payer, path: `${RULES_DIR}/booking.guide.yaml` } : undefined;
+  return payer ? { ref: tx.ref, percent, booking, payer, payerName: payerNames([tx])[payer] ?? payer, path: `${RULES_DIR}/booking.guide.yaml`, ...setup } : undefined;
 }
 
 /** The text of `path` with the offer's rule in it: a business's own rule takes the share, else a new rule is added. */
@@ -127,7 +151,8 @@ export function withShareRule(text: string, offer: ShareOffer, today: string): s
   const doc = parseDocument(text || (offer.business ? `id: ${offer.business.id}\n` : 'process: booking\n'));
   const section = offer.business ? RULE_STEP : RULE_SECTION;
   const then = { account: offer.booking.account, vat: offer.booking.vat ?? 'none', private: offer.booking.ownUse ? { share: offer.percent, as: OWN_USE } : offer.percent };
-  const source = `correction ${today}`;
+  // A share she named in the setup is her wish; a split she booked, her correction (AGENTS.md: source).
+  const source = `${offer.setup ? 'wish' : 'correction'} ${today}`;
   const rules = doc.getIn(['steps', section, 'rules']);
   const seq = rules instanceof YAMLSeq ? rules : doc.createNode([]) as YAMLSeq;
   if (!(rules instanceof YAMLSeq)) doc.setIn(['steps', section, 'rules'], seq);

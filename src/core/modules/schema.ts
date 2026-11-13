@@ -252,6 +252,8 @@ export interface SetupData {
   bankCharges?: { account: string };
   /** The wage account: a booking on it carries no VAT code (src/booking/rule-vat.ts); absent: no rule for wages is offered. The hand form proposes it (#382); `deductions`: where wages' deductions go, books carrying it get no proposal; `contributions`: the employer's social insurance contributions, which carry no VAT code either. */
   wages?: { account: string; deductions?: string; contributions?: string[] };
+  /** The account each kind of private use (the setup's privateUse: car, phone) is booked on: a share named in the setup is offered as a rule on a payment booked there (#402). */
+  privateUse?: Partial<Record<'car' | 'phone', string>>;
   answers: {
     /** «Auszahlungen eines Zahlungsanbieters: ja»: the accounts added, and the firm's own payout split when no rule names the provider. */
     payouts: { accounts: string[]; sales: { otherwise: string }; fees: { account: string; vat: string }; clearing: { account: string; name: string } };

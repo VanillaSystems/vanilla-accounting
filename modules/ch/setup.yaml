@@ -30,6 +30,11 @@ bankCharges: { account: "6940" }
 # no VAT code on them; an insurer's premium (UVG, KTG) is an exempt supply and keeps its zero code.
 wages: { account: "5000", deductions: "2270", contributions: ["5700", "5710", "5720"] }
 
+# What the setup's «private use» names, by the account its costs are booked on: a share of it the person
+# named in the setup («öppe d Hälfti» of the phone) is offered as a rule with a private share on the first
+# payment booked there (src/saving/share-rule.ts, #402).
+privateUse: { phone: "6510", car: "6200" }
+
 # Accounts an answer adds to the chart.
 answers:
   payouts:

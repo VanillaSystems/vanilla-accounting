@@ -46,6 +46,23 @@ export interface SetupProgress {
    * the kind of firm, absent when «Etwas anderes» assumed them.
    */
   assumed?: Assumed;
+  /** The private shares the person named in the setup (#402), kept until a rule of the business can take them (src/saving/share-rule.ts). */
+  shares?: PrivateShares;
+}
+
+/** What may be used privately (the setup's privateUse), and the share of it the person named in her words: the percent, and her words as she said them. */
+export type PrivateShares = Partial<Record<'car' | 'phone', { percent: number; said: string }>>;
+
+/** Shares as read from disk or from the model: a whole percent between 1 and 99 for car or phone; her words cut to 300 characters. Undefined when none is left. */
+export function parseShares(raw: unknown): PrivateShares | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const out: PrivateShares = {};
+  for (const item of ['car', 'phone'] as const) {
+    const v = (raw as Record<string, unknown>)[item] as { percent?: unknown; said?: unknown } | undefined;
+    const percent = typeof v?.percent === 'number' ? Math.round(v.percent) : NaN;
+    if (percent >= 1 && percent <= 99) out[item] = { percent, said: typeof v?.said === 'string' ? v.said.slice(0, 300) : '' };
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** Each assumed answer as it was given (a list for a question of several answers), so one changed since is no longer marked. */
@@ -141,6 +158,8 @@ export function parseProgress(raw: unknown): SetupProgress {
   if (typeof r.ready === 'string') out.ready = r.ready;
   const assumed = parseAssumed(r.assumed);
   if (assumed) out.assumed = assumed;
+  const shares = parseShares(r.shares);
+  if (shares) out.shares = shares;
   const topics = r.topics && typeof r.topics === 'object' ? (r.topics as Record<string, unknown>) : {};
   for (const topic of SETUP_TOPICS) {
     const p = topics[topic] as Record<string, unknown> | undefined;
