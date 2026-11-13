@@ -14,7 +14,7 @@ Automatisierung (`/automation…`) shows what the app does on its own: an overvi
 
 ## How to get to it (user POV)
 
-- Dock `Automatisierung` (`G W`; the dock widget below the dock shows gelesen / gebucht (receipts) / Aufgaben, or, while no receipt is booked but payments are, «n von m Zahlungen gebucht» in words / Aufgaben (#385, `paymentsMatter`); its tip names each unit, its card adds «n von m Zahlungen gebucht» (payments of the period by ref, a hand booking without a receipt among them, #365), and «Aufgaben» counts open tasks, stuck runs and questions for the viewer, the corner's «n Aufgaben für dich» the same (`openCount`); the corner shows three or more tasks of one step as one line «n Zahlungen von Hand buchen»), or ⌘K.
+- Dock `Automatisierung` (`G W`; the dock widget below the dock shows «n von m Zahlungen gebucht» / Aufgaben in every state, one unit per word (#398); its tip names each unit, its card says «Belege: n gelesen · m verbucht» and «Zahlungen: n von m gebucht» on a line each (payments of the period by ref, a hand booking without a receipt among them, #365), and «Aufgaben» counts open tasks, stuck runs and questions for the viewer, the corner's «n Aufgaben für dich» the same (`openCount`); the corner shows three or more tasks of one step as one line «n Zahlungen von Hand buchen»), or ⌘K.
 - From the drop dialog's `In den Läufen ansehen →`, from a run link in the AI sidebar.
 
 ## Driving it with browse + sandbox.sh
