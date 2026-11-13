@@ -30,7 +30,8 @@ import './support/jurisdiction.js';
 import webshop from '../.claude/skills/verify/persona-files/webshop.mjs';
 
 const FILES = (webshop as () => { files: Record<string, string> })().files;
-const IBAN = 'CH2300778004711223301' as Iban;
+/** Her own account, as her statement names it. */
+const IBAN = /<Acct><Id><IBAN>([A-Z0-9]+)<\/IBAN>/.exec(FILES['camt053_LUKB_Q3-2026.xml'])![1] as Iban;
 
 /** The webshop's new books as the setup makes them: effective method, quarterly, payouts yes; its bank account at the LUKB. */
 function shopBooks(): string {
