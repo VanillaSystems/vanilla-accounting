@@ -171,6 +171,22 @@ export function atWithheld(entries: readonly JournalEntry[], account: string, sh
   return { entries: out, moved, to: account, onto: true };
 }
 
+/**
+ * A payment's lines with one line per account pair, code and currency (#489): what `atWithheld` split off one line
+ * and moved onto another is summed into the first line of its kind, which keeps its id; a line moved to nothing goes.
+ */
+export function mergedLines(entries: readonly JournalEntry[]): JournalEntry[] {
+  const out: JournalEntry[] = [];
+  const first = new Map<string, number>();
+  for (const e of entries) {
+    const key = [e.accountDebit, e.accountCredit, e.vatCode ?? '', e.exchangeCurrency ?? '', e.exchangeRate ?? ''].join('|');
+    const at = first.get(key);
+    if (at === undefined) { first.set(key, out.length); out.push({ ...e }); continue; }
+    out[at] = { ...out[at], amount: fromRappen(toRappen(out[at].amount) + toRappen(e.amount)) };
+  }
+  return out.filter((e) => toRappen(e.amount) !== 0);
+}
+
 /** An amount as payslips print it at a line's end: «-503.50», «503.50-», «1'234.00», the books' currency before it. */
 const amountRe = () => new RegExp(`(?:^|\\s)(-|−)?\\s*(?:${baseCurrency()}\\s*)?(-|−)?\\s*(\\d{1,3}(?:['’ ]?\\d{3})*[.,]\\d{2})(-|−)?$`);
 const amountOf = (line: string): number | undefined => {

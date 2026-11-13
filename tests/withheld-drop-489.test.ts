@@ -25,6 +25,8 @@ import { APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspac
 import type { BankTransaction, JournalEntry } from '../src/types/index.js';
 import { tempWorkspace, writeIndex } from './support/workspace.js';
 import { textPdf } from './support/text-pdf.js';
+import { unclearedContributions } from '../src/booking/withheld.js';
+import { clearWithheld, undoClearWithheld } from '../src/server/edits.js';
 
 const roots: string[] = [];
 after(() => { for (const r of roots) rmSync(r, { recursive: true, force: true }); });
@@ -136,7 +138,7 @@ test('#489 the drop: statement and Akonto bill in the first run, the payslips af
   assert.equal(sum(ak, '5700'), 1239.75);
   assert.equal(sum(ak, '5710'), 243.75, 'the family allowances stay the employer\'s');
   assert.ok(ak.every((e) => !e.vatCode && e.origin === 'classify'), 'the app\'s own booking, no code');
-  assert.match(ak.find((e) => e.accountDebit === '2270')!.reason ?? '', /Lohnabrechnungen haben für diese Kasse CHF 1200\.00 abgezogen/);
+  assert.match(ak.find((e) => e.accountDebit === '2270')!.reason ?? '', /Lohnabrechnungen haben für diese Kasse CHF 1200\.00 als Anteil der Arbeitnehmenden abgezogen/);
 
   await run(ws);
   assert.deepEqual(linesOf(ws, 'AK').map((e) => [e.accountDebit, e.amount]), ak.map((e) => [e.accountDebit, e.amount]), 'a further run changes nothing');
@@ -153,4 +155,48 @@ test('#489 a contribution payment the person booked herself is never rebooked by
   await run(ws);
   const ak = linesOf(ws, 'AK');
   assert.deepEqual([sum(ak, '2270'), sum(ak, '5700')], [0, 2439.75], 'hers stands; the open list proposes the share');
+});
+
+const slips = () => MONTHS.flatMap(([m, month]) => PEOPLE.map((p) => [`Lohnabrechnung_2026-${m}_${p.name.split(' ')[1]}.pdf`, payslip(p, month)] as [string, Promise<Buffer>]));
+
+test('#489 review: one payslip per run, as the drop hands them; the Akonto ends as one line per account, decided by code, with the code\'s reason alone', async () => {
+  const ws = webshop();
+  await drop(ws, [['Ausgleichskasse_Luzern_Akonto_Q3_2026.pdf', AKONTO_BILL()]]);
+  await run(ws);
+  const shares: number[] = [];
+  for (const file of slips()) {
+    await drop(ws, [file]);
+    await run(ws);
+    shares.push(sum(linesOf(ws, 'AK'), '2270'));
+  }
+  assert.deepEqual(shares, [0, 1.6, 501.6, 600.8, 1100.8, 1200], 'each payslip\'s share as it comes, never more than 2270 holds after the pension fund\'s 597.60 paid in advance');
+  const ak = linesOf(ws, 'AK');
+  assert.deepEqual(ak.map((e) => [e.accountDebit, e.amount]).sort(), [['2270', 1200], ['5700', 1239.75], ['5710', 243.75]], 'one line per account, however often the share changed');
+  assert.ok(ak.every((e) => e.by?.kind === 'code' && e.by.check === 'withheldShare'), 'decided by code, not by the model');
+  assert.ok(ak.every((e) => e.reason === 'Die Lohnabrechnungen haben für diese Kasse CHF 1200.00 als Anteil der Arbeitnehmenden abgezogen: so viel geht auf die Lohnabzüge, der Rest ist Beitrag des Arbeitgebers.'), 'the code\'s reason in place of the model\'s «nichts auf 2270»');
+});
+
+test('#489 review: «Rückgängig» after «Arbeitnehmeranteil abziehen» leaves the booking hers: the payslips\' run does not book the share on it again', async () => {
+  const ws = webshop();
+  await drop(ws, [['Ausgleichskasse_Luzern_Akonto_Q3_2026.pdf', AKONTO_BILL()]]);
+  await run(ws);
+  // The wages booked gross without their payslips linked: code cannot tell the fund's part of 2270. She clicks the open item's proposal, then takes it back.
+  const books = loadBooks(ws);
+  update(books, moduleActor('test'), (b) => {
+    for (const w of WAGES) {
+      const net = b.journalEntries.find((e) => e.transactionRef === w.ref)!;
+      b.journalEntries.push({ ...net, id: `${net.id}-2270`, accountCredit: '2270', amount: PEOPLE.find((p) => p.name === w.counterparty)!.deductions });
+    }
+  });
+  const u = unclearedContributions(books, '2026-07-01', '2026-09-30', new Set(['AK']))[0];
+  assert.ok(u, 'the open item names the payment');
+  const done = update(books, PERSON, (b) => clearWithheld(b, u, 'AK'));
+  update(books, PERSON, (b) => undoClearWithheld(b, done.before, done.after));
+  saveBooks(ws, books);
+  const back = linesOf(ws, 'AK');
+  assert.deepEqual(back.map((e) => [e.accountDebit, e.amount]).sort(), [['5700', 2439.75], ['5710', 243.75]]);
+  assert.ok(back.every((e) => e.by?.kind === 'person'), 'marked hers');
+  await drop(ws, slips());
+  await run(ws);
+  assert.deepEqual(linesOf(ws, 'AK').map((e) => [e.accountDebit, e.amount]).sort(), [['5700', 2439.75], ['5710', 243.75]], 'not booked again by the app');
 });

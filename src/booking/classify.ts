@@ -56,7 +56,7 @@ import { bankCodedFee } from '../books/bank-import.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
 import { withReceiptTax } from './receipt-tax.js';
 import { clearingAccounts, payoutWaitOf, providerOfPayment, type PayoutWait, type Provider } from './providers.js';
-import { atWithheld, fundShare, overWithheld, takenOff, payeeContributionAccount, paysContributions, wageAccounts, wagesBooked, withheldFor, withinWithheld } from './withheld.js';
+import { atWithheld, fundShare, mergedLines, overWithheld, takenOff, payeeContributionAccount, paysContributions, wageAccounts, wagesBooked, withheldFor, withinWithheld } from './withheld.js';
 import { splitByReceipts } from './receipt-lines.js';
 import { CUSTOMS_BY, customsSplit, importVatDeductions, ratesImportVat, type Assessment, type CustomsHold, type CustomsTexts } from './customs-invoice.js';
 import { nextManualRef } from '../books/next-ref.js';
@@ -587,10 +587,13 @@ export function bookBillCorrections(books: Books, context: Pick<ClassifyContext,
  * booked to that share by code, as the classifier books it (fundShare, atWithheld). A drop hands each file to the inbox's
  * run as it takes it: the statement's run books the fund's payment (it waits for no receipt) while the wages are net, the
  * payslips' run books the wages again gross from them, and the payment, never asked again, kept the employees' share as
- * the employer's. Only a payment of the open period whose every line the model booked: never a person's booking, nor a
- * rule's; one code cannot book so stays, and the open list offers the rest. Returns the refs booked anew.
+ * the employer's. Only a payment of the open period whose every line the model booked, or this code before (a later
+ * payslip changes the share again): never a person's booking, nor a rule's, nor one she took back to as it was
+ * (undoClearWithheld marks it hers). After the move the payment's lines are merged per account, one line each, all of
+ * them decided by code (`by` the check `withheldShare`, `run` the run's), with the code's reason in place of the
+ * model's, which said otherwise. One code cannot book so stays, and the open list offers the rest. Returns the refs booked anew.
  */
-export function bookWithheldShares(books: Books, context: Pick<ClassifyContext, 'counterparties' | 'chartOfAccounts' | 'wageDeductions'>): string[] {
+export function bookWithheldShares(books: Books, context: Pick<ClassifyContext, 'counterparties' | 'chartOfAccounts' | 'wageDeductions'>, run?: string): string[] {
   const deductions = context.wageDeductions;
   const wages = wageAccounts();
   if (!deductions || !wages || !setup().wages?.withholds) return [];
@@ -602,24 +605,20 @@ export function bookWithheldShares(books: Books, context: Pick<ClassifyContext, 
   };
   const byRef = new Map<string, JournalEntry[]>();
   for (const e of books.journalEntries) (byRef.get(e.transactionRef) ?? byRef.set(e.transactionRef, []).get(e.transactionRef)!).push(e);
-  const said = wordsIn('de');
-  const template = said.t('rules.say.withheldShare', { account: '\u0000', currency: '\u0000', share: '\u0000' });
-  const earlier = new RegExp(template.split('\u0000').map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\S+'), 'g');
+  const app = (e: JournalEntry) => e.origin === 'classify' && !e.vatCode && (e.by?.kind === 'model' || (e.by?.kind === 'code' && e.by.check === 'withheldShare'));
   const done: string[] = [];
   // Oldest first: what an earlier payment to the fund takes off the account is booked before a later one's share is read.
   for (const tx of [...books.transactions].sort((a, b) => a.date.localeCompare(b.date))) {
     const lines = byRef.get(tx.ref);
-    if (tx.direction !== 'DBIT' || lock.isClosed(tx.date) || !lines?.length) continue;
-    if (!lines.every((e) => e.origin === 'classify' && e.by?.kind === 'model' && !e.vatCode)) continue;
+    if (tx.direction !== 'DBIT' || lock.isClosed(tx.date) || !lines?.length || !lines.every(app)) continue;
     if (!lines.some((e) => wages.contributions.has(e.accountDebit) || e.accountDebit === deductions)) continue;
-    const business = businessOf(tx);
-    const share = fundShare(books, tx, business, businessOf);
+    const share = fundShare(books, tx, businessOf(tx), businessOf);
     if (share === undefined || Math.abs(takenOff(lines, deductions) - share) < 0.005) continue;
     const toEmployer = { named: wages.contributions, shared: wages.shared, fallback: payeeContributionAccount(books, tx, businessOf) ?? [...wages.contributions].find((a) => !chartAccounts.size || chartAccounts.has(a)) };
     const exact = atWithheld(lines, deductions, share, toEmployer, newEntryId);
     if (!exact) continue;
-    const why = said.t('rules.say.withheldShare', { account: deductions, currency: baseCurrency(), share: share.toFixed(2) });
-    const booked = exact.entries.map((e) => ({ ...e, reason: [(e.reason ?? '').replace(earlier, '').trim(), why].filter(Boolean).join(' ') }));
+    const reason = wordsIn('de').t('rules.say.withheldShare', { currency: baseCurrency(), share: share.toFixed(2) });
+    const booked = mergedLines(exact.entries).map(({ rule: _rule, run: _run, ...e }): JournalEntry => ({ ...e, reason, by: { kind: 'code', check: 'withheldShare' }, ...(run && { run }) }));
     const at = books.journalEntries.findIndex((e) => e.transactionRef === tx.ref);
     const rest = books.journalEntries.filter((e) => e.transactionRef !== tx.ref);
     books.journalEntries = [...rest.slice(0, at), ...booked, ...rest.slice(at)];
@@ -1197,7 +1196,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         }
         // The booking's reason says what code moved, beside the model's.
         const movedSaid = !capped.moved ? undefined
-          : share !== undefined ? wordsIn('de').t('rules.say.withheldShare', { account: deductions!, currency: baseCurrency(), share: share.toFixed(2) })
+          : share !== undefined ? wordsIn('de').t('rules.say.withheldShare', { currency: baseCurrency(), share: share.toFixed(2) })
             : wordsIn('de').t('rules.say.withheldCapped', { account: deductions!, currency: baseCurrency(), open: (heldOn ?? 0).toFixed(2), moved: capped.moved.toFixed(2), to: capped.to });
         const entries = movedSaid ? capped.entries.map((e) => ({ ...e, reason: [e.reason, movedSaid].filter(Boolean).join(' ') })) : capped.entries;
         if (capped.moved) log(`  [Batch ${batchNum}]  ${tx.ref}  ${'onto' in capped && capped.onto ? `${capped.moved} under the payslips' share moved onto ${deductions}` : `${capped.moved} over what ${deductions} ${share !== undefined ? 'holds for this payee' : 'held'} booked on ${capped.to}`}`);

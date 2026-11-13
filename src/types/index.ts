@@ -381,7 +381,7 @@ export type Supply = 'goods' | 'service' | 'exempt';
  * (src/booking/purchase-vat.ts). A sealed quarter hashes `by`, and an older build drops a check it does not know, so a new check is a
  * change of the books' format: the list only grows with a new schema.
  */
-export const CODE_CHECKS = ['saleCode', 'payoutReport', 'payoutOrders', 'creditNote', 'acquisitionTax', 'purchaseVat'] as const;
+export const CODE_CHECKS = ['saleCode', 'payoutReport', 'payoutOrders', 'creditNote', 'acquisitionTax', 'purchaseVat', 'withheldShare'] as const;
 export type CodeCheck = typeof CODE_CHECKS[number];
 
 /** The booking fields a person's change keeps the old values of. */
