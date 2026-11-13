@@ -34,6 +34,7 @@ import { linkOrdersToSales } from '../booking/sales-report.js';
 import { linkReceiptSets, linkSplitLegs, MAX_RUN, MAX_TRIED } from './receipt-sets.js';
 import { batchPayers, businesses, NO_BATCH_PAYERS, type BatchPayers, type Businesses } from './batch-payers.js';
 import { loadKnowledge } from '../knowledge/layers.js';
+import { buyerUids } from './own-invoice.js';
 import { providersOf } from './sales-report-import.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { creditSigned } from '../accounting/credit-signed.js';
@@ -195,19 +196,25 @@ export function codeName(date: string, title: ReceiptTitle | undefined, came: st
   return `${date.replace(/-/g, '')}-${slug}.pdf`;
 }
 
+/** The books the firm's own UIDs are read from (buyerUids): without them only the settings' UID. */
+type UidBooks = Parameters<typeof buyerUids>[1];
+
+/** The firm's own UIDs, as digits: the settings' UID, else the ones `books` show to be the buyer's (src/intake/own-invoice.ts buyerUids). */
+export const buyerUidsOf = (ws: Pick<Workspace, 'company'>, books: UidBooks = { receipts: [] }): string[] => buyerUids(ws.company, books);
+
 /** The workspace's batch payers, from its business files in both layers; none when its knowledge does not load (a test's bare workspace). */
-export function batchPayersOf(ws: Pick<Workspace, 'paths' | 'company'>): BatchPayers {
+export function batchPayersOf(ws: Pick<Workspace, 'paths' | 'company'>, books?: UidBooks): BatchPayers {
   try {
-    return batchPayers(loadKnowledge(APP_ROOT, ws.paths.root).counterparties, ws.company?.uid);
+    return batchPayers(loadKnowledge(APP_ROOT, ws.paths.root).counterparties, buyerUidsOf(ws, books));
   } catch {
     return NO_BATCH_PAYERS;
   }
 }
 
 /** Whose receipts and payments are by the workspace's business files in both layers; none when its knowledge does not load (a test's bare workspace). */
-export function businessesOf(ws: Pick<Workspace, 'paths' | 'company'>): Businesses | undefined {
+export function businessesOf(ws: Pick<Workspace, 'paths' | 'company'>, books?: UidBooks): Businesses | undefined {
   try {
-    return businesses(loadKnowledge(APP_ROOT, ws.paths.root).counterparties, ws.company?.uid);
+    return businesses(loadKnowledge(APP_ROOT, ws.paths.root).counterparties, buyerUidsOf(ws, books));
   } catch {
     return undefined;
   }
@@ -224,14 +231,17 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const toRead = staged.filter((r) => !r.needsVisionReview && r.kind !== 'noise');
   // Code first (#187): the staged receipts take part in the chain with the facts code reads off them.
   const early = toRead.flatMap((r) => provisional(r) ?? []);
-  const payers = batchPayersOf(ws);
+  // The batch payers with the firm's own UIDs as the books show them now (buyerUids): read again on every run of the code.
+  let payers = batchPayersOf(ws, first);
   const noPayment = noPaymentFor(ws);
   const byCode = async (stagedNow: readonly Receipt[] = []) => {
     const noReceipt = noReceiptFor(ws);
-    const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt, noPayment, businesses: businessesOf(ws), firm: ws.company && { uid: ws.company.uid, name: ws.company.name, owner: ws.company.owner } });
+    const now = books.read();
+    payers = batchPayersOf(ws, now);
+    const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt, noPayment, businesses: businessesOf(ws, now), firm: ws.company && { uid: ws.company.uid, name: ws.company.name, owner: ws.company.owner } });
     const providers = providersOf(ws);
     for (const l of books.update((index) => linkOrdersToSales(index, (d) => !periodLock(index).isClosed(d), providers))) log(`linked the order document to its sale: receipt ${l.receipt} → ${l.sale}`);
-    const found = books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, { isOpen: (d) => !lock.isClosed(d), payers, toChf, buyerUid: ws.company?.uid, noReceipt: noReceipt(index), noPayment: noPayment(index) }); });
+    const found = books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, { isOpen: (d) => !lock.isClosed(d), payers, toChf, firmUid: ws.company?.uid, noReceipt: noReceipt(index), noPayment: noPayment(index) }); });
     for (const s of found.sets) log(`linked ${s.receipts.length} receipts that add up to the payment${s.basis === 'original' ? ' in the amount its bank names' : s.basis === 'rate' ? ' at the official daily rate' : ''}${s.run ? ' (the batch payer\'s open receipts in date order)' : ''}: ${s.receipts.join(', ')} → ${s.legs.join(', ')}`);
     const runs = found.cuts.filter((c) => c.limit === 'run');
     const combos = found.cuts.filter((c) => c.limit === 'combinations');

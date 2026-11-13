@@ -104,6 +104,11 @@ months:
   - [Dezember, décembre, dicembre, December]
 # Legal forms and words of a firm's name that say nothing of who it is: a payee is never told by them.
 legalForms: [GmbH, AG, SA, Sàrl, Sagl, KlG, KG, Ltd, Limited, Inc, Corp, LLC, Company, Holding, Gruppe, Group, Genossenschaft, Stiftung, Verein]
+# The label of an invoice's customer block: a UID beside it (on its line or the lines of the address
+# below it) is the buyer's, never the sender's (src/intake/own-invoice.ts buyerUids).
+buyer: [Kunde, Kundin, Rechnungsadresse, Rechnungsempfänger, Ihre UID, Ihre MWST-Nr, Ihre MWST-Nummer, Customer, Bill to, Billed to, Invoice to, Your VAT number, Client, Cliente, Adresse de facturation, Votre numéro TVA, Indirizzo di fatturazione, Vostro numero IVA]
+# Words the model may take for a title's vendor that name no business: they tell no vendor apart.
+notVendor: [Verkauf, Verkäufe, Umsatz, Kasse, Kassenbon, Quittung, Rechnung, Beleg, Sale, Sales, Receipt, Invoice, Vente, Ventes, Caisse, Facture, Vendita, Vendite, Cassa, Fattura, Ricevuta]
 
 # A courier's or forwarder's customs invoice (src/booking/customs-invoice.ts): each of its read lines
 # (Receipt.lineItems) is one position by its words, and the position lands on its account of the

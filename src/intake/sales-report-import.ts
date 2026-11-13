@@ -36,6 +36,7 @@ import { fromClearing, isProvider, orderOf, payoutDaysOf, providerOfMoneyIn, pro
 import { bookReport, recognizeOtherExport, collectedBy, isReportRef, linkOrdersToSales, paymentFacts, readReport, recognizeReport, reportFacts, REPORT_LINK_RULE, saleRef, unpaidRow, type PaymentFacts, type ReadReport, type ReportContext, type ReportOutcome, type ReportTexts } from '../booking/sales-report.js';
 import { loadKnowledge, homeOf } from '../knowledge/layers.js';
 import { silentUids } from '../knowledge/counterparties.js';
+import { buyerUids } from './own-invoice.js';
 import { businessOfReceipt } from './batch-payers.js';
 import { loadFxResolver, type FxResolver } from '../accounting/fx-rates.js';
 import { normalRate, saleVatCode } from '../accounting/sales-without-vat.js';
@@ -807,7 +808,8 @@ export function bookPayoutReports(ws: Workspace, books: Books, fx: FxResolver = 
   const providers = providersOf(ws).filter((p) => !p.provider.reports.sales && p.provider.since);
   if (!providers.length) return 0;
   const counterparties = loadKnowledge(APP_ROOT, ws.paths.root).counterparties;
-  const silent = silentUids(counterparties, ws.company?.uid);
+  const buyer = buyerUids(ws.company, books);
+  const silent = silentUids(counterparties, buyer);
   const context = loadClassifyContext(ws);
   const accounts = chartNames(chartOf(ws));
   const de = wordsIn('de');
@@ -815,7 +817,7 @@ export function bookPayoutReports(ws: Workspace, books: Books, fx: FxResolver = 
   for (const r of books.receipts) {
     const day = r.date;
     if (!r.payout || !day || r.kind === 'duplicate' || r.location !== 'archived') continue;
-    const id = businessOfReceipt(r, counterparties, ws.company?.uid, silent);
+    const id = businessOfReceipt(r, counterparties, buyer, silent);
     const p = providers.find((x) => x.id === id);
     const clearing = p?.provider.clearing;
     const revenue = p && revenueOf(ws, p);

@@ -448,6 +448,21 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A firm without its UID in the settings (#466) no longer has receipts of different shops taken
+  for one vendor because they print the firm's UID as their customer's, which linked them together
+  to an unrelated payment. Without the UID in the settings the receipt sets key no receipt by its
+  VAT number: only by its title's vendor or the business its file routes it to, and a receipt
+  without a title joins no set and waits. The firm's own UIDs now come from one place: the UID of
+  the settings, else the ones the books show to be the buyer's (a UID in a customer's block, after
+  «Kunde», «Rechnungsadresse», «Ihre UID»…, on receipts of two vendors or more, or the UID on the
+  firm's own invoice recognised by its name that money in pays), never written to the settings.
+  With them a receipt that prints only the buyer's UID is again routed by its sender's address or
+  name (a courier's invoice, a card terminal's payout report, whose sales and fees were otherwise
+  never booked), merchant names are learned and «Immer so?» for a batch payer is offered as before;
+  the hand form takes a business's document on money in for no sale by the firm's name too.
+- With the UID in the settings or without it, a VAT number the receipts of two title vendors carry
+  is no longer one vendor in the receipt sets: a supplier read under two brands no longer forms a
+  set across the two.
 - **⚠ figures** Import VAT deducted again for a firm without a UID in Firma › Firma (since the
   setup stopped asking it, #452): the customs office's assessment (Veranlagungsverfügung MWST)
   proved the deduction only by the firm's UID, so a firm set up without one kept its import VAT as

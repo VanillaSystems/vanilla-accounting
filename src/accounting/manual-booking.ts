@@ -609,7 +609,9 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
     // Money back from a business the firm buys from: a refund on the account of its last purchase, the code inverted on it.
     // Plausible only when it is no more than the firm paid that business, and the text names no invoice of the firm's own.
     const bought = own?.named ? undefined : refundOf(books, tx, bankAccounts, paid, invoices);
-    const foreign = known.ownUid ? docs.some((d) => d.vatId && norm(d.vatId) !== norm(known.ownUid)) : false;
+    // A linked document with a VAT number someone else issued: by the UID when the settings have one, else by the firm's name (issuedByFirm).
+    const foreign = known.ownUid ? docs.some((d) => d.vatId && norm(d.vatId) !== norm(known.ownUid))
+      : !!known.firmName && docs.some((d) => d.vatId && issuedByFirm(d, { name: known.firmName }) === false);
     if (bought) {
       const refundRate = new Set(claims ? receipts.filter(isPurchaseDocument).flatMap(vatRates).map((g) => g.ratePercent) : []);
       // The purchase it refunds, found unambiguously: its account and its code with the minus (#357, I81 back is -I81, I0 back is -I0).
