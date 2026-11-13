@@ -9,7 +9,8 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { checkAnswers } from '../src/workspace/create.js';
@@ -203,7 +204,7 @@ test('in the app: the drop says why it booked nothing, with «Einschalten» righ
     await drop('camt053_LUKB_Q3-2026.xml', 'application/xml');
     await page.waitForSelector('[data-testid=drop-booking-waits-sum] [data-act=booking-switch-on]', { timeout: 120_000 });
     const said = await page.$eval('[data-testid=drop-booking-waits-sum]', (e) => (e as HTMLElement).innerText);
-    assert.match(said, /Die App bucht gerade nicht von selbst: knowledge\/rules\/booking\.guide\.yaml hat sich seit dem letzten Einschalten geändert, und nach Regeln, die du noch nicht gesehen hast, bucht sie nicht\. Mit «Einschalten» gilt die Änderung, und die App bucht, was gewartet hat\./);
+    assert.match(said, /Die App bucht gerade nicht von selbst, weil sich knowledge\/rules\/booking\.guide\.yaml seit dem letzten Einschalten geändert hat und sie nicht nach Regeln bucht, die du noch nicht gesehen hast; mit «Einschalten» gilt die Änderung, und sie bucht dann, was nur darauf gewartet hat\./);
     assert.deepEqual(entriesOf(api, studer(api).ref), []);
     await page.screenshot({ path: join(shots, 'drop-statement-booking-waits.png') });
     await page.click('[data-testid=drop-close]');
@@ -211,7 +212,7 @@ test('in the app: the drop says why it booked nothing, with «Einschalten» righ
     // Her order export: its row waits with the same words.
     await drop('orders_export_1.csv', 'text/csv');
     await page.waitForSelector('[data-testid=drop-booking-waits] [data-act=booking-switch-on]', { timeout: 120_000 });
-    assert.match(await page.$eval('[data-testid=drop-booking-waits]', (e) => (e as HTMLElement).innerText), /Die App bucht gerade nicht von selbst: knowledge\/rules\/booking\.guide\.yaml/);
+    assert.match(await page.$eval('[data-testid=drop-booking-waits]', (e) => (e as HTMLElement).innerText), /Die App bucht gerade nicht von selbst, weil sich knowledge\/rules\/booking\.guide\.yaml/);
     await page.screenshot({ path: join(shots, 'drop-report-booking-waits.png') });
     // One click: switched on, the payment that waited is booked, and the report's row is taken again.
     await page.click('[data-testid=drop-booking-waits] [data-act=booking-switch-on]');
@@ -252,6 +253,84 @@ test('«Behalten» on a rule while «Buchen» waits for another change: her rule
     assert.equal((await api.send('POST', '/api/automation', { kind: 'approve', workflow: 'booking' })).json.ok, true);
     await api.rest();
     assert.deepEqual(entriesOf(api, studer(api).ref), ['1020/3200 V81'], 'switched on, her rule books it');
+  } finally {
+    await api.stop();
+  }
+});
+
+test('a rule written by hand into a customer\'s file makes «Buchen» wait too: the switch-on page names it, the drop books nothing by it', async () => {
+  const api = await startApi(shopBooks(), {}, { whole: true });
+  try {
+    await view(api);
+    mkdirSync(join(api.root, 'knowledge', 'customers'), { recursive: true });
+    writeFileSync(join(api.root, 'knowledge', 'customers', 'studer.yaml'), 'id: studer\nname: Julia Studer\nmatch:\n  tx: ["Julia Studer"]\nsteps:\n  booking.guide.yaml#classify:\n    rules:\n      - id: studer-verkauf\n        then: { account: "3200", vat: 81 }\n        source: hand 2026-11-13\n');
+    assert.deepEqual((await bookingPending(api))?.files, ['knowledge/customers/studer.yaml'], 'the switch-on page lists the customer\'s file');
+    const one = await dropper(api);
+    await one.add('camt053_LUKB_Q3-2026.xml');
+    await api.rest();
+    assert.deepEqual(entriesOf(api, studer(api).ref), [], 'its rule books nothing she has not seen');
+    assert.ok((await bookNotes(api)).some((n) => n.code === 'bookingWaits' && n.files?.includes('knowledge/customers/studer.yaml')));
+    assert.equal((await api.send('POST', '/api/automation', { kind: 'approve', workflow: 'booking' })).json.ok, true);
+    await api.rest();
+    assert.deepEqual(entriesOf(api, studer(api).ref), ['1020/3200 V81'], 'switched on, the customer\'s rule books it');
+  } finally {
+    await api.stop();
+  }
+});
+
+test('the drop closed while its report waits for «Einschalten»: the report is kept, not quarantined, and «Einschalten» books it', async () => {
+  const api = await startApi(shopBooks(), {}, { whole: true });
+  try {
+    await view(api);
+    const one = await dropper(api);
+    await one.add('camt053_LUKB_Q3-2026.xml');
+    await api.rest();
+    // Her provider as she set it up, switched on: the report books by it.
+    writeFileSync(join(api.root, 'knowledge', 'suppliers', 'shopify.yaml'), 'id: shopify\nprovider:\n  clearing: "1093"\n  since: 2026-07-01\n  revenue: "3200"\n');
+    const accounts = join(api.root, 'master-data', 'accounts.json');
+    writeFileSync(accounts, JSON.stringify([...JSON.parse(readFileSync(accounts, 'utf8')), { number: '1093', name: 'Durchlaufkonto Shopify' }], null, 2));
+    api.switchedOn();
+    // Then a rule by hand: «Buchen» waits.
+    mkdirSync(join(api.root, 'knowledge', 'rules'), { recursive: true });
+    writeFileSync(join(api.root, GUIDE), RULE);
+    const res = await api.fetch('/api/drop', { method: 'POST' });
+    const s = (await res.json()) as Session;
+    const added = await api.fetch(`/api/drop/${s.id}/files?name=orders_export_1.csv`, { method: 'POST', body: new Uint8Array(Buffer.from(FILES['orders_export_1.csv'])), headers: { 'Content-Type': 'application/octet-stream' } });
+    assert.deepEqual(((await added.json()) as Session).rows.map((r) => r.reason), ['booking-waits']);
+    assert.equal((await api.fetch(`/api/drop/${s.id}`, { method: 'DELETE' })).status, 200, 'the window closed');
+    const quarantine = join(api.ws.paths.data, 'quarantine');
+    assert.deepEqual(existsSync(quarantine) ? readdirSync(quarantine) : [], [], 'nothing in quarantine');
+    const sales = () => loadBooks(api.ws).journalEntries.filter((e) => e.transactionRef?.startsWith('SR-')).length;
+    assert.equal(sales(), 0);
+    assert.equal((await api.send('POST', '/api/automation', { kind: 'approve', workflow: 'booking' })).json.ok, true);
+    await api.rest();
+    assert.ok(sales() > 0, 'switched on, the report kept for it is booked');
+    assert.deepEqual(readdirSync(join(api.ws.paths.data, 'reports-waiting')), [], 'and no longer kept');
+  } finally {
+    await api.stop();
+  }
+});
+
+test('`npm run classify` while «Buchen» waits: books nothing, exits 1, and says why', async () => {
+  const api = await startApi(shopBooks(), {}, { whole: true });
+  try {
+    await view(api);
+    const one = await dropper(api);
+    await one.add('camt053_LUKB_Q3-2026.xml');
+    await api.rest();
+    mkdirSync(join(api.root, 'knowledge', 'rules'), { recursive: true });
+    writeFileSync(join(api.root, GUIDE), RULE);
+    const env = { ...process.env, PATH: `${join(process.cwd(), 'tests/support/no-model-bin')}:${process.env.PATH}`, VANILLA_KEYCHAIN: 'off', VANILLA_WORKSPACE: api.root, VANILLA_APPROVALS_DIR: `${api.root}-approvals` };
+    const cli = spawnSync(process.execPath, ['--import', 'tsx', 'src/cli/classify.ts'], { env, encoding: 'utf8' });
+    assert.equal(cli.status, 1, cli.stdout + cli.stderr);
+    assert.match(cli.stderr, /Die App bucht gerade nicht von selbst, weil sich knowledge\/rules\/booking\.guide\.yaml/);
+    assert.deepEqual(entriesOf(api, studer(api).ref), [], 'nothing booked by the rule she has not seen');
+    // Switched on, the same command books it.
+    assert.equal((await api.send('POST', '/api/automation', { kind: 'approve', workflow: 'booking' })).json.ok, true);
+    await api.rest();
+    const again = spawnSync(process.execPath, ['--import', 'tsx', 'src/cli/classify.ts'], { env, encoding: 'utf8' });
+    assert.equal(again.status, 0, again.stdout + again.stderr);
+    assert.deepEqual(entriesOf(api, studer(api).ref), ['1020/3200 V81']);
   } finally {
     await api.stop();
   }

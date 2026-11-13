@@ -215,12 +215,19 @@ starts (#413, src/server/booking-waits.ts): while `booking` waits, the inbox run
 after reading, the VAT facts and matching have run; a provider's report in the drop waits in its row
 (`booking-waits`); «Automatisch buchen» for all (`POST /api/rules/book-open`), «Neu buchen» (409
 `bookingWaits`), a rule question a rule now decides, and a rule kept with «Behalten» while another
-change waits book nothing. Not held: what a person books or takes herself (by hand, «Übernehmen» on a
-question's proposal, a sale question's answer), an app invoice's own events, the year close. Every
-place says it in one sentence (src/app/lib/booking-waits.ts) with «Einschalten» at hand
-(src/app/automation/booking-waits.tsx). «Einschalten» of the booking books what waited
-(`bookWhatWaited`): the provider payouts code decides, in code, said in the toast, and, when payments
-are open, an inbox run that books them; a drop row of a report that waited is taken again.
+change waits book nothing, nor does `npm run classify` (exit 1 with the sentence;
+src/workflows/booking-waits.ts serves the CLI and the server). Not held: what a person books or
+takes herself (by hand, «Übernehmen» on a question's proposal, a sale question's answer), an app
+invoice's own events, the year close. `booking`'s company part is every knowledge file the
+classifier executes rules from: its guide, the suppliers', customers' and authorities' files and
+evidence.guide.yaml (workflows/booking/classify/step.yaml `knowledge`). An approval records what it
+covered (`cited`); a file under a path cited since is taken as switched on when first met, so an
+update that widens the citations makes nothing wait. Every place says it in one sentence
+(src/app/lib/booking-waits.ts) with «Einschalten» at hand (src/app/automation/booking-waits.tsx).
+«Einschalten» of the booking books what waited (`bookWhatWaited`): the reports a closed drop kept
+for it (data/reports-waiting/, never quarantine; one that still asks goes to quarantine as an
+unanswered row does), the provider payouts code decides, in code, said in the toast, and, when
+payments are open, an inbox run that books them; a drop row of a report that waited is taken again.
 
 Where runs are stored (Git, beside the books, or a local store outside the workspace) is open:
 [decisions.md](decisions.md), D3.

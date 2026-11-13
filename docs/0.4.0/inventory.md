@@ -13,8 +13,8 @@ and the providers.
 | provider | 14 | 11 |
 | split | 132 | 26 |
 | infrastructure | 71 | 4 |
-| workflow | 30 | 0 |
-| view | 364 | 55 |
+| workflow | 31 | 0 |
+| view | 365 | 55 |
 
 Layers are assigned by path prefix, most specific first:
 

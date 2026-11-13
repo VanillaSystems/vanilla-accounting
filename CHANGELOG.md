@@ -97,10 +97,13 @@ Two markers flag an entry you must read before you update:
 - «Buchen» waiting for «Einschalten» holds every booking by the firm's rules or the AI (#413): a
   rule or business file changed outside the app's own controls (by hand, by git, an AI's draft not
   kept) no longer acts on the next drop or mail. The inbox still reads, matches and links, but books
-  nothing; a provider's report waits in its row; «Automatisch buchen» for all, «Neu buchen» and a
-  rule kept meanwhile book nothing either. Wherever she tries, one sentence says what changed, why
-  the app waits and what ends it, with «Einschalten» right there; switched on, the app books what
-  waited (the payments by an inbox run, the report taken again). Her own answers and links, and a
+  nothing; a provider's report waits in its row, and is kept for «Einschalten» when the window
+  closes; «Automatisch buchen» for all, «Neu buchen», `npm run classify` and a rule kept meanwhile
+  book nothing either. A customer's or an authority's file and evidence.guide.yaml count as the
+  firm's rules too (files there before the update make nothing wait). Wherever she tries, one
+  sentence says what changed, why the app waits and what ends it, with «Einschalten» right there;
+  switched on, the app books what only waited for it (the payments by an inbox run, the report taken
+  again). Her own answers and links, and a
   merchant name the app learns from confirmed links, make nothing wait: a new firm starts switched
   on and its first drop books as before.
 - **⚠ figures** A webshop order of two VAT rates (tea at 2.6 %, a teapot at 8.1 %) is booked from
