@@ -23,6 +23,7 @@ import { readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
 import { handStart } from '../src/saving/hand-rule.js';
 import { bookingDraft } from '../src/accounting/manual-booking.js';
 import { startApi, type ApiServer } from './support/api-server.js';
+import { noBrowser, openApp } from './support/e2e.js';
 import './support/jurisdiction.js';
 
 // @ts-expect-error a plain ES module of the verify skill, without types
@@ -176,5 +177,46 @@ test('the provider\'s questions in four languages: one question each, the fee co
       assert.doesNotMatch(text, /provider\.(clearing|since)|knowledge\/|\{file\}/, `${lang} ${k}: no file path`);
       if (k.startsWith('drop.provider.q.')) assert.equal((text.match(/\?/g) ?? []).length, 1, `${lang} ${k}: one question`);
     }
+  }
+});
+
+test('in the app: Aufgaben names the 40 payouts as Shopify\'s with the one thing to do, the payout\'s form proposes no turnover; after her answers they are booked', { skip: noBrowser, timeout: 300_000 }, async () => {
+  const app = await openApp(shopBooks());
+  const shots = process.env.SHOTS ?? mkdtempSync(join(tmpdir(), 'payouts-'));
+  try {
+    const { page, api } = app;
+    const one = await dropper(api);
+    await one.add('camt053_LUKB_Q3-2026.xml');
+    await api.rest();
+    const b = await books(api);
+    const payout = payoutsOf(b).find((t) => t.description.includes('88124415'))!;
+    await app.open('/automation/tasks?period=2026-Q3', '[data-testid=unbooked-payouts]');
+    const group = await page.$eval('[data-testid=unbooked-payouts]', (e) => (e as HTMLElement).innerText);
+    assert.match(group, /40 Auszahlungen von Shopify ohne Buchung[\s\S]*Kein Umsatz: sie warten auf den Bestellexport von Shopify/);
+    assert.doesNotMatch(await page.$eval('body', (e) => (e as HTMLElement).innerText), /Stripe Technology Europe Ltd CHF/, 'not named by the processor');
+    await page.$eval('[data-testid=unbooked-payouts]', (e) => e.scrollIntoView({ block: 'center' }));
+    await page.screenshot({ path: join(shots, 'tasks-payouts-waiting.png') });
+    await app.open(`/bank/1020-2026-07/${encodeURIComponent(payout.ref)}?period=2026-Q3`, '[data-testid=payout-wait]');
+    await page.waitForFunction(() => document.body.innerText.includes('Das ist eine Auszahlung von Shopify'), { timeout: 30_000 }).catch(() => undefined);
+    assert.match(await page.$eval('[data-testid=payout-wait]', (e) => (e as HTMLElement).innerText), /Auszahlung von Shopify, kein Umsatz: wartet auf den Bestellexport von Shopify/);
+    const pane = await page.$eval('body', (e) => (e as HTMLElement).innerText);
+    assert.match(pane, /Das ist eine Auszahlung von Shopify: kein Umsatz/);
+    assert.doesNotMatch(pane, /Handelserlöse|nimmt einen Verkauf an|knowledge\//);
+    await page.screenshot({ path: join(shots, 'payout-form-waiting.png') });
+    // Her answers: the payouts are booked, Aufgaben has nothing of them left.
+    const two = await dropper(api);
+    await two.add('orders_export_1.csv');
+    const s = await two.add('payment_transactions_export_1.csv');
+    const orders = s.s.rows.find((r) => r.name === 'orders_export_1.csv')!;
+    const answered = await two.act(orders.key, { kind: 'provider', account: '1093', since: '2026-07-01', revenue: '3200' });
+    assert.equal(answered.s.rows.find((r) => r.key === orders.key)?.payouts?.booked, 40);
+    await api.rest();
+    await app.open('/automation/tasks?period=2026-Q3');
+    assert.equal(await page.$('[data-testid=unbooked-payouts]'), null);
+    await page.screenshot({ path: join(shots, 'tasks-after-answers.png') });
+    console.log(`screenshots: ${shots}`);
+    assert.deepEqual(app.errors, []);
+  } finally {
+    await app.stop();
   }
 });
