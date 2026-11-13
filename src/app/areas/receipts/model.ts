@@ -42,8 +42,10 @@ export interface ReceiptView {
   r: Receipt;
   /** The receipt's date, else the YYYYMMDD- its file name starts with. */
   date?: string;
-  /** The day that puts it in a period, the rule the dock and Automatisierung count by (placeDay, #385): its payment's, else its date, else the working period's. */
+  /** The day that puts it in Belege's lists and links, the rule the dock and Automatisierung count by (placeDay, #385): its payment's, else its date, else the working period's. */
   day?: string;
+  /** Its own day: its date, else the day it was read. What reads the books outside the three lists (the export) goes by this. */
+  ownDay?: string;
   vendor: string;
   desc: string;
   /** The payments (or bookings without one) it is linked to. */
@@ -127,7 +129,7 @@ export function ledgerOf(books: Index, openFrom: string, processing: ReadonlyMap
     const orderPage = links.length ? undefined : orderPages.get(r.id);
     const vatCorrection = links.length ? undefined : vatCorrections.get(r.id);
     const day = placeDay(paidDays(r, links, (ref) => txByRef.get(ref)?.date), date, openFrom, closedThrough);
-    return { r, date, day, vendor, desc, links, paid, none, ...(none ? { noneWhy: noneWhyOf(r), noneBy: kindByOf(r) } : {}), locked: links.some(refClosed), ...(twin ? { twin } : {}), ...(statement ? { statement } : {}), ...(orderPage ? { orderPage } : {}), ...(vatCorrection ? { vatCorrection } : {}) };
+    return { r, date, day, ownDay: date || r.indexedAt.slice(0, 10) || undefined, vendor, desc, links, paid, none, ...(none ? { noneWhy: noneWhyOf(r), noneBy: kindByOf(r) } : {}), locked: links.some(refClosed), ...(twin ? { twin } : {}), ...(statement ? { statement } : {}), ...(orderPage ? { orderPage } : {}), ...(vatCorrection ? { vatCorrection } : {}) };
   });
   return { views, byId: new Map(views.map((v) => [v.r.id, v])), txByRef, entriesByRef, receiptsByRef, closedThrough, openFrom, processing, ...(firm ? { firm } : {}) };
 }

@@ -124,7 +124,7 @@ export function receiptsIn(books: Index, period: Period) {
   const l = receiptLedger(books, period.from);
   const inside = (d: string | undefined) => !!d && d >= period.from && d <= period.to;
   const booked = (ref: string) => inside(l.txByRef.get(ref)?.date) || (l.entriesByRef.get(ref) ?? []).some((e) => inside(e.date));
-  return l.views.filter((v) => !v.none && (inside(v.day) || v.links.some(booked)));
+  return l.views.filter((v) => !v.none && (inside(v.ownDay) || v.links.some(booked)));
 }
 
 export const statementsIn = (books: Index, period: Period) =>
