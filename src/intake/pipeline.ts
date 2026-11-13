@@ -27,6 +27,8 @@ export type IntakeNote =
   | { code: 'filedKept'; count: number }
   /** Receipts whose text is too poor to read: flagged for a vision read, out of the runs until then. */
   | { code: 'poorScan'; files: string[] }
+  /** The AI refused or is missing (#450): `waiting` receipts were not read in this run and none was counted as a failed read. */
+  | { code: 'aiUnreachable'; waiting: number; detail: string }
   /** Receipts whose VAT read failed `tries` times (#450): unreadable now, out of the runs, each payment a question «Beleg nicht lesbar». */
   | { code: 'vatGivenUp'; files: string[]; tries: number }
   /** Inbox files with the bytes of a file the books or the inbox hold (`of`): removed from the inbox. */
@@ -208,7 +210,8 @@ export function noteLines(notes: IntakeNote[]): string[] {
       case 'unmatched': return `⛔ ${n.files.length} bank statement(s) belong to no bank account; nothing was written:\n${n.files.map((f) => `  ${f}`).join('\n')}`;
       case 'filedKept': return `⛔ ${n.count} link(s) or payment(s) of a FILED quarter lost their file; kept as they were (see above)`;
       case 'poorScan': return `⚠ ${n.files.length} receipt(s) too poorly scanned to read; flagged for a vision read (Belege › Neu lesen):\n${n.files.map((f) => `  ${f}`).join('\n')}`;
-      case 'vatGivenUp': return `⚠ ${n.files.length} receipt(s) whose VAT could not be read after ${n.tries} tries; not tried again, each payment waits for the person under Aufgaben:\n${n.files.map((f) => `  ${f}`).join('\n')}`;
+      case 'aiUnreachable': return `⚠ the AI was not reachable (${n.detail}): ${n.waiting} receipt(s) wait for the next run; none counted as a failed read`;
+      case 'vatGivenUp': return `⚠ ${n.files.length} receipt(s) not readable after ${n.tries} tries: each time the model replied without the VAT facts; not tried again, each payment waits for the person under Aufgaben:\n${n.files.map((f) => `  ${f}`).join('\n')}`;
       case 'sameBytes': return `${n.files.length} file(s) in beleg-import/ had the bytes of one already there; removed:\n${n.files.map((f) => `  ${f.file} = ${f.of}`).join('\n')}`;
       case 'rewritten': return `⚠ ${n.files.length} receipt file(s) changed under their name and were read again; links to check:\n${n.files.map((f) => `  ${f.file}: ${f.check}${f.kept ? ' (old record kept)' : ''}`).join('\n')}`;
       case 'asked': return `? ${n.count} payment(s) wait for the person: a company rule says to ask first`;

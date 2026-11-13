@@ -15,14 +15,20 @@
  * read by the model; without one, code keeps only what the text proves (Swiss VAT its figures add up
  * to, «no Swiss VAT» said in words) and the rest stays unread, without facts (the receipt shows «not read yet»), for
  * the next run with a model. Only a model answer that parses as VAT facts replaces facts.
- * A failed read (no answer, an answer that does not parse, the retries spent) is counted on the
- * receipt (`vatReadFailures`, #450); after VAT_READ_TRIES of them it counts as unreadable
+ * A reply that arrived and carries no VAT facts (UnusableAnswer: not JSON, or without `hasSwissVat`
+ * and `vatSummary`, and no rate-limit notice) is counted on the receipt (`vatReadFailures`, #450);
+ * a call that brought no reply (the AI off, signed out, its limit, no CLI, a timeout, a network
+ * error, a rate limit's retries spent) says nothing about the receipt and is never counted. The
+ * first refusal (AiRefused, NoClaudeError) ends the step's calls for the run: the others wait,
+ * named in the note `aiUnreachable`. After VAT_READ_TRIES counted replies it counts as unreadable
  * (vatGivenUp), the step leaves it and its run note says so, and its payment waits for the person
  * under «Beleg nicht lesbar». A read that succeeds or a new text clears the count.
  */
 import { creditSigned } from '../accounting/credit-signed.js';
 import { buildReceiptVatPrompt, parseReceiptVat, type ReceiptVatResult } from '../llm/prompts.js';
 import { runAdaptivePool, isRateLimitSignal } from '../llm/adaptive-pool.js';
+import { AiRefused } from '../llm/provider.js';
+import { NoClaudeError } from '../llm/providers/claude-cli.js';
 import { periodLock, type Books } from '../books/store.js';
 import { vatSetup } from '../engines/index.js';
 import { VAT_READ_TRIES, vatGivenUp } from '../accounting/receipt-due.js';
@@ -37,6 +43,9 @@ const MAX_CONCURRENCY = 24;
 const MIN_CONCURRENCY = 1;
 const RAMP_AFTER_SUCCESSES = 4; // consecutive successes before +1
 const MAX_RATE_LIMIT_RETRIES = 8; // per receipt, before giving up
+
+/** The model replied, and its reply carries no VAT facts (#450): the one failed read a receipt counts. */
+class UnusableAnswer extends Error {}
 
 type Facts = Pick<Receipt, 'vatId' | 'hasSwissVat' | 'vatSummary' | 'lineItems' | 'vatExtractedAt'>;
 
@@ -81,8 +90,11 @@ export const provisionalNoVat = (r: Receipt): boolean =>
 export const vatCandidates = (books: Books, force = false, withModel = false): Receipt[] =>
   books.receipts.filter((r) => r.vatBy !== 'human' && r.kind !== 'statement' && (force || ((!hasFacts(r) || unprovenNoVat(r) || (withModel && provisionalNoVat(r))) && !r.needsVisionReview && !vatGivenUp(r) && !filedReceipt(books, r))));
 
-/** `only`: the ids of the receipts to read, as for one payment's «Buchen» (src/server/routes/classify.ts); absent, every candidate. */
-export function vatStep({ force = false, only }: { force?: boolean; only?: ReadonlySet<string> } = {}): StepRun {
+/**
+ * `only`: the ids of the receipts to read, as for one payment's «Buchen» (src/server/routes/classify.ts); absent, every candidate.
+ * `backoffMs`: the wait before a rate-limited call is tried again (tests set 0); absent, the pool's.
+ */
+export function vatStep({ force = false, only, backoffMs }: { force?: boolean; only?: ReadonlySet<string>; backoffMs?: (attempt: number) => number } = {}): StepRun {
   return async ({ books, ask, progress, log }) => {
     if (!vatSetup().registered) {
       log('The firm is not registered for VAT: no VAT facts are read off its receipts.');
@@ -145,6 +157,9 @@ export function vatStep({ force = false, only }: { force?: boolean; only?: Reado
     if (needsLlm.length && ask) {
       let firstError: string | undefined;
       const gaveUp: string[] = [];
+      // The first refusal: no receipt is asked after it in this run, and none is counted.
+      let refused: Error | undefined;
+      let unreached = 0;
       /** One more failed read on a receipt that still waits for its facts on the text that was read; never one of a filed period. */
       const failedRead = (was: Receipt) => books.update((index) => {
         const r = index.receipts.find((x) => x.id === was.id);
@@ -155,10 +170,17 @@ export function vatStep({ force = false, only }: { force?: boolean; only?: Reado
       const { stats } = await runAdaptivePool(
         needsLlm,
         async (r) => {
-          const raw = await ask(buildReceiptVatPrompt(r.extractedText), { step: 'receipt-vat', timeoutMs: 120_000 });
+          if (refused) throw refused;
+          let raw: string;
+          try {
+            raw = await ask(buildReceiptVatPrompt(r.extractedText), { step: 'receipt-vat', timeoutMs: 120_000 });
+          } catch (e) {
+            if (e instanceof AiRefused || e instanceof NoClaudeError) refused ??= e;
+            throw e;
+          }
           const result = parseReceiptVat(raw);
           // A rate-limit notice can arrive as text in stdout instead of throwing.
-          if (!result) throw new Error(isRateLimitSignal(raw) ? 'rate-limit signal in output' : 'could not parse response');
+          if (!result) throw isRateLimitSignal(raw) ? new Error('rate-limit signal in output') : new UnusableAnswer('could not parse response');
           return result;
         },
         {
@@ -167,6 +189,9 @@ export function vatStep({ force = false, only }: { force?: boolean; only?: Reado
           min: MIN_CONCURRENCY,
           rampAfterSuccesses: RAMP_AFTER_SUCCESSES,
           maxRateLimitRetries: MAX_RATE_LIMIT_RETRIES,
+          // A refusal («usage limit») is no rate limit to wait out: the run stops asking.
+          isRateLimit: (said) => !refused && isRateLimitSignal(said),
+          ...(backoffMs && { backoffMs }),
           profile: { name: 'extract-vat' },
           onConcurrencyChange: (limit, dir) =>
             log(dir === 'up' ? `  ↑ concurrency → ${limit}` : `  ↓ rate limited — concurrency → ${limit}`),
@@ -179,14 +204,16 @@ export function vatStep({ force = false, only }: { force?: boolean; only?: Reado
               log(`  ✓ ${r.filename}: hasSwissVat=${v.hasSwissVat} [${rates}]${v.vatId ? ` ${v.vatId}` : ''}`);
             } else {
               const message = String((outcome.error as any)?.message ?? outcome.error);
-              firstError ??= message;
-              failedRead(r);
+              if (outcome.error instanceof AiRefused || outcome.error instanceof NoClaudeError) unreached++;
+              else firstError ??= message;
+              if (outcome.error instanceof UnusableAnswer) failedRead(r);
               log(`  ✗ ${r.filename}: ${message.substring(0, 100)}`);
             }
           },
         },
       );
-      if (stats.failed) notes.push({ code: 'failed', count: stats.failed, detail: (firstError ?? '').slice(0, 300) });
+      if (stats.failed > unreached) notes.push({ code: 'failed', count: stats.failed - unreached, detail: (firstError ?? '').slice(0, 300) });
+      if (refused) notes.push({ code: 'aiUnreachable', waiting: unreached, detail: refused.message.slice(0, 300) });
       if (gaveUp.length) notes.push({ code: 'vatGivenUp', files: gaveUp, tries: VAT_READ_TRIES });
       log(`\nDone.`);
       log(`  LLM extracted : ${stats.ok}`);
