@@ -424,6 +424,18 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- The compensation fund's payment with its bill linked (#476): it was booked whole as the
+  employer's expense while 2270 still held the employees' share the payslips had withheld, so that
+  share was an expense twice. Where every payslip behind 2270 is linked and its deductions read per
+  kind (AHV/IV/EO and ALV the fund's, BVG the pension fund's) and add up, the app books exactly the
+  fund's part on 2270, never more than 2270 holds, and the rest as the employer's contribution;
+  the booking says so. Where it cannot tell, the open item «Beitragszahlung ohne den Anteil der
+  Arbeitnehmenden» offers «2270 ausgleichen» on the return's list and on the payment: a proposal in
+  words, booked by her click and undone in the toast. No VAT figure changes.
+- «Was muss ich jetzt noch machen?» (#476): the card under the answer and the facts the AI is
+  handed list what the return's list «Noch offen» lists, in its order (a contribution payment
+  without the employees' share and the firm's own unpaid invoice among them), and then what only
+  the card adds (a proposal of the setup, a missing opening).
 - The drop window with many files (#453): the line «Gesamt 51 % · 1 von 43 Dateien fertig» no
   longer lies over the tabs (it shrank to nothing once the list was long), and «Schliessen» no
   longer falls below a small window: between the head and the foot, what came of the drop, the

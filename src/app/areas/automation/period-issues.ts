@@ -65,8 +65,9 @@ export function dateOn(books: Pick<Index, 'transactions' | 'receipts' | 'journal
 }
 
 /**
- * The open issues of the days `from`–`to`, in the order a person works them off: questions, held orders, contradicting codes,
- * unbooked payments, receipts that wait for her word, receipts without a payment, missing bills of a provider. `provider`:
+ * The open issues of the days `from`–`to`, in ISSUE_ORDER, the order a person works them off: held orders, questions,
+ * receipts that wait for her word, contradicting codes, contribution payments without the employees' share, unbooked
+ * payments, receipts without a payment, missing bills of a provider. `provider`:
  * what the providers' reports leave open (#405). `outlays`: the payments to the owner that wait for her outlays (outlayWaitsOf), told
  * apart from those that wait for their receipt (#428).
  */
@@ -95,8 +96,16 @@ export function periodIssues(books: Index, questions: readonly Question[], from:
   const orders = (provider?.held ?? []).filter((h) => !h.filed && within(h.date)).map((h): PeriodIssue => ({ kind: 'held', held: h }));
   const bills = (provider?.bills ?? []).filter((b) => within(b.date)).map((b): PeriodIssue => ({ kind: 'bill', bill: b }));
   const withheld = unclearedContributions(books as Parameters<typeof unclearedContributions>[0], from, to, new Set(provider?.withheldPayees ?? [])).map((uncleared): PeriodIssue => ({ kind: 'withheld', uncleared }));
-  return [...asked, ...orders, ...evidence, ...withheld, ...unbooked, ...own, ...unlinked, ...bills];
+  const of: Record<PeriodIssue['kind'], PeriodIssue[]> = { question: asked, held: orders, evidence, withheld, unbooked, own, unlinked, bill: bills };
+  return ISSUE_ORDER.flatMap((k) => of[k]);
 }
+
+/**
+ * The order of the open list «Noch offen» (#476): the one order of a period's points, which the AI sidebar's card
+ * (openLines) and the facts handed to the AI (src/server/open-work.ts periodNote) follow too, so the three never
+ * disagree about what is open or what comes first.
+ */
+export const ISSUE_ORDER = ['held', 'question', 'own', 'evidence', 'withheld', 'unbooked', 'unlinked', 'bill'] as const satisfies readonly PeriodIssue['kind'][];
 
 /**
  * The payments the app does not book because their receipt is not there or cannot be read

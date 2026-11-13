@@ -171,10 +171,10 @@ export function atWithheld(entries: readonly JournalEntry[], account: string, sh
   return { entries: out, moved, to: account, onto: true };
 }
 
-/** An amount as payslips print it: «-503.50», «1'234.00», «CHF -290.00». */
-const AMOUNT = /(?:^|\s)(-|−)?\s*(?:CHF\s*)?(-|−)?\s*(\d{1,3}(?:['’ ]?\d{3})*[.,]\d{2})$/;
+/** An amount as payslips print it at a line's end: «-503.50», «1'234.00», the books' currency before it. */
+const amountRe = () => new RegExp(`(?:^|\\s)(-|−)?\\s*(?:${baseCurrency()}\\s*)?(-|−)?\\s*(\\d{1,3}(?:['’ ]?\\d{3})*[.,]\\d{2})$`);
 const amountOf = (line: string): number | undefined => {
-  const m = AMOUNT.exec(line);
+  const m = amountRe().exec(line);
   if (!m) return undefined;
   const n = Number(m[3].replace(/['’ ]/g, '').replace(',', '.'));
   return m[1] || m[2] ? -n : n;
@@ -184,7 +184,7 @@ const escape = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /**
  * The deductions a payslip's text names, summed per kind of setup.yaml `wages.withholds` (#476), when that is sure:
  * each deduction's label names one kind, and the deductions add up to `total`, what its wage booked on the deductions
- * account. Read on a line of its own («AHV/IV/EO 5.3%  -503.50») or as pdftotext lays out two columns: the labels in
+ * account. Read on a line of its own («a label 5.3%  -503.50») or as pdftotext lays out two columns: the labels in
  * order, then the amounts in order, the deductions those with a minus. Undefined otherwise.
  */
 export function payslipDeductions(text: string, total: number, kinds: Readonly<Record<string, readonly string[]>>): Map<string, number> | undefined {
@@ -198,7 +198,7 @@ export function payslipDeductions(text: string, total: number, kinds: Readonly<R
   const alone: number[] = [];
   for (const line of lines) {
     const amount = amountOf(line);
-    const label = amount === undefined ? line : line.replace(AMOUNT, '').trim();
+    const label = amount === undefined ? line : line.replace(amountRe(), '').trim();
     if (amount !== undefined && !/\p{L}/u.test(label)) { alone.push(amount); continue; }
     const kind = kindOf(label);
     if (kind === null) return undefined;
@@ -252,7 +252,7 @@ export function fundShare(books: ShareBooks, tx: BankTransaction, business: stri
   return fromRappen(Math.max(0, Math.min(withheld - paid, held)));
 }
 
-/** «2270 ausgleichen» as a proposal: what moves (`amount`) from which contribution accounts (`from`) onto the deductions account, and the payment's lines after it, changed and added. */
+/** The click that clears the deductions account, as a proposal: what moves (`amount`) from which contribution accounts (`from`) onto the deductions account, and the payment's lines after it, changed and added. */
 export interface ClearingProposal { account: string; amount: number; from: string[]; changed: Array<{ before: JournalEntry; after: JournalEntry }>; added: JournalEntry[] }
 
 /**

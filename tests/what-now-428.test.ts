@@ -64,7 +64,9 @@ test('the firm\'s own invoice not paid yet is no work of hers; an opening, a cle
   assert.deepEqual(s.clearing, [{ name: 'Shop', account: '1093', balance: -300, reports: [], opened: false }]);
   assert.deepEqual(s.offers, [offer]);
   assert.deepEqual(openPeriodState(books, [], [], accounts, ctx, new Map(), new Map(), provider, [{ ...offer, date: '2026-10-20' }]).offers, [], 'an offer on a payment of another period is not this period\'s');
-  assert.deepEqual(openLines(s).map((l) => l.kind), ['offers', 'openings', 'clearing', 'unlinked', 'task'], 'most important first, the review last');
+  // #476: the return's list first, in its order (its own invoice among the receipts without a payment, as the list names it), then what only the card adds, the review last.
+  assert.deepEqual(openLines(s).map((l) => l.kind), ['unlinked', 'offers', 'openings', 'clearing', 'task']);
+  assert.deepEqual(s.receipts.map((r) => r.id), ['own', 'hotel'], 'the open list names both');
   // Without the firm's UID nothing is told apart: its invoice stays a receipt without a payment.
   assert.deepEqual(openPeriodState(books, [], [], accounts, { ...ctx, firm: undefined }).unlinked.map((r) => r.id), ['own', 'hotel']);
 });
@@ -121,15 +123,14 @@ function consultancy(): Workspace {
   return ws;
 }
 
-test('the AI is handed the setup\'s waiting proposal and not the firm\'s own invoice, in the card\'s order', () => {
+test('the AI is handed the setup\'s waiting proposal and the firm\'s own invoice as the open list names it, in the card\'s order (#476)', () => {
   const ws = consultancy();
   const books = loadBooks(ws);
   assert.deepEqual(setupShareOffers(ws, books).map((o) => [o.ref, o.name, o.percent, o.account]), [['A7', 'Alpentel AG', 50, '6510']]);
   const note = periodNote(ws, books as Books, [], 'de', '2026-11-13');
-  assert.match(note, /listed most important first as the app ranks it/);
+  assert.match(note, /listed in the order of the return's list «Noch offen», then what only the app's card adds/);
   assert.match(note, /Proposals from the setup that wait for the person's answer \(1\)[^\n]*\n- Alpentel AG: 50 % private, the rest on 6510/);
-  assert.match(note, /Receipts without a payment \(1\)[^\n]*\n- «Hotel Pilatusblick/);
-  assert.doesNotMatch(note, /Ausgangsrechnung RE-2026-036/, 'its own invoice is never named as work');
-  assert.match(note, /Invoices the firm issued, with its UID, that no payment in the books fits \(1\): they wait for the customer's payment, nothing for the person to do/);
-  assert.ok(note.indexOf('Proposals from the setup') < note.indexOf('Receipts without a payment'), 'the proposal before the receipts, as on the card');
+  // #476: as the return's list names them, its own invoice said to wait for the customer's payment; the list's points before the proposal, as on the card.
+  assert.match(note, /Receipts without a payment \(2\)[^\n]*\n- «Hotel Pilatusblick[^\n]*\n- «[^\n]*Ausgangsrechnung RE-2026-036[^\n]*: the firm's own invoice, issued with its UID, that no payment in the books fits: it waits for the customer's payment/);
+  assert.ok(note.indexOf('Receipts without a payment') < note.indexOf('Proposals from the setup'), 'the list\'s points before the proposal, as on the card');
 });

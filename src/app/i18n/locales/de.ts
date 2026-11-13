@@ -3231,6 +3231,8 @@ export const messages = {
   'openPeriod.more': { one: 'und {n} weitere', other: 'und {n} weitere' },
   'openPeriod.offers': { one: '{n} Vorschlag aus der Einrichtung wartet auf deine Antwort', other: '{n} Vorschläge aus der Einrichtung warten auf deine Antwort' },
   'openPeriod.offer': '{name}: immer {percent} % privat buchen, den Rest auf Konto {account}?',
+  'openPeriod.issued': 'eigene Rechnung, wartet auf die Zahlung der Kundschaft',
+  'openPeriod.withheldItem': '{date} {name} {amount}: Konto {account} hält noch {open} Lohnabzüge',
   'openPeriod.openings': { one: '{n} Konto ohne Eröffnungssaldo', other: '{n} Konten ohne Eröffnungssaldo' },
   'openPeriod.opening': '{label}: laut Auszügen {amount} vor der ersten Zahlung am {date}',
   'openPeriod.clearing': { one: '{n} Durchlaufkonto unter null', other: '{n} Durchlaufkonten unter null' },

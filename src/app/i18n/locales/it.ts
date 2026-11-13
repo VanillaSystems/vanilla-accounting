@@ -3234,6 +3234,8 @@ export default {
     'openPeriod.more': { one: 'e {n} altro', other: 'e altri {n}' },
     'openPeriod.offers': { one: '{n} proposta della configurazione aspetta la tua risposta', other: '{n} proposte della configurazione aspettano la tua risposta' },
     'openPeriod.offer': '{name}: registrare sempre il {percent} % come privato, il resto sul conto {account}?',
+    'openPeriod.issued': 'fattura propria, attende il pagamento del cliente',
+    'openPeriod.withheldItem': '{date} {name} {amount}: il conto {account} contiene ancora {open} di trattenute salariali',
     'openPeriod.openings': { one: '{n} conto senza saldo d’apertura', other: '{n} conti senza saldo d’apertura' },
     'openPeriod.opening': '{label}: {amount} prima del primo pagamento del {date} secondo i suoi estratti',
     'openPeriod.clearing': { one: '{n} conto di transito sotto zero', other: '{n} conti di transito sotto zero' },

@@ -24,7 +24,8 @@ import { unbookedPayments } from '../bank/model.js';
 import { journalOf, unsettledAtFiling, type EntryView, type Unsettled } from '../journal/model.js';
 import { ledgerOf, type ReceiptView } from '../receipts/model.js';
 import { thresholdPassed } from '../vat/model.js';
-import { countIssues, dateOn, periodIssues, receiptWaiting, type IssueCounts, type PeriodIssue } from './period-issues.js';
+import { ISSUE_ORDER, countIssues, dateOn, periodIssues, receiptWaiting, type IssueCounts, type PeriodIssue } from './period-issues.js';
+import type { Uncleared } from '../../../booking/withheld.js';
 import type { Processing } from '../../../workflows/processing.js';
 import type { HeldOrder, MissingBill, ProviderIssues } from '../../../booking/provider-issues.js';
 import { issuedByFirm, ownNumbers, type Firm } from '../../../intake/own-invoice.js';
@@ -89,6 +90,10 @@ export interface OpenPeriodState {
   unlinked: Receipt[];
   /** The firm's own invoices that only wait for their customer (waitsForCustomer): nothing for the person to do (#428). */
   issued: Receipt[];
+  /** Every receipt without a payment the open list names, in its order: `unlinked` and `issued` together (#476). */
+  receipts: Receipt[];
+  /** Contribution payments booked without the employees' share while the wages' deductions account holds it (#426, #476). */
+  withheld: Uncleared[];
   /** The first year's bank accounts the books open at nothing while their statements say they held money (missingOpenings, any currency): Firma › Eröffnung (#428). */
   openings: MissingOpening[];
   /** The providers' clearing accounts below zero at the period's end (#428). */
@@ -176,6 +181,8 @@ export function openPeriodState(
     evidence: issues.flatMap((i) => (i.kind === 'evidence' ? [{ entry: i.entry, check: i.check }] : [])),
     unlinked: unlinked.filter((r) => !waitsForCustomer(books, r, ctx.firm)),
     issued: unlinked.filter((r) => waitsForCustomer(books, r, ctx.firm)),
+    receipts: unlinked,
+    withheld: issues.flatMap((i) => (i.kind === 'withheld' ? [i.uncleared] : [])),
     openings: missingOpenings(books, accounts, period.to.slice(0, 4)),
     clearing: (provider?.clearing ?? []).flatMap((c): ClearingBelow[] => {
       const balance = balanceAt(books.journalEntries ?? [], c.account, period.to, books.config?.openingBalances);
@@ -243,8 +250,8 @@ export const elsewhereCount = (e: Elsewhere): number =>
 
 /** Whether anything of the period waits: a card with nothing on it says so in one line (and that nothing else does, only when `elsewhereOf` is empty too). */
 export const nothingOpen = (s: OpenPeriodState): boolean =>
-  !s.unbooked.length && !s.questions.length && !s.evidence.length && !s.unlinked.length && !s.yours.length && !s.held.length && !s.tasks.length
-  && !s.offers.length && !s.openings.length && !s.clearing.length;
+  !s.unbooked.length && !s.questions.length && !s.evidence.length && !s.receipts.length && !s.yours.length && !s.held.length && !s.tasks.length
+  && !s.offers.length && !s.openings.length && !s.clearing.length && !s.withheld.length;
 
 /** How many of the held payments are of each kind. */
 export const waitingKinds = (s: Pick<OpenPeriodState, 'waiting'>): Record<WaitingPayment['kind'] | 'outlays', number> => ({
@@ -268,8 +275,10 @@ export type OpenLine =
   | { kind: 'unbooked'; n: number; waiting: number; outlays: number; unread: number; first: BankTransaction; items: BankTransaction[]; more: number }
   | { kind: 'questions'; n: number }
   | { kind: 'evidence'; n: number; first: JournalEntry }
-  /** The receipts without a payment (none of `yours` among them). */
+  /** The receipts without a payment (none of `yours` among them), the firm's own invoices that wait for their customer too, as the open list names them (#476). */
   | { kind: 'unlinked'; n: number; first: Receipt; items: Receipt[]; more: number }
+  /** Contribution payments booked without the employees' share (#476). */
+  | { kind: 'withheld'; n: number; first: Uncleared; items: Uncleared[]; more: number }
   | { kind: 'held'; n: number; first: HeldOrder }
   | { kind: 'bills'; n: number; first: MissingBill }
   /** The setup's shares offered as rules, each on its payment: one click there (#428). */
@@ -284,33 +293,40 @@ export type OpenLine =
 
 const shown = <T>(all: readonly T[]) => ({ n: all.length, items: all.slice(0, ITEMS_SHOWN), more: Math.max(0, all.length - ITEMS_SHOWN) });
 
+/** A line's kind for each kind of the open list (period-issues.ts ISSUE_ORDER). */
+const LINE_OF = { question: 'questions', held: 'held', evidence: 'evidence', withheld: 'withheld', unbooked: 'unbooked', own: 'yours', unlinked: 'unlinked', bill: 'bills' } as const;
+
 /**
- * The state as the lines of its card, most important first, as code ranks them (#428): what holds
- * the return's approval (an order a report could not split, an open VAT question), what only she can
- * say of a receipt, the payments without a booking, the bookings against their receipts, an offer
- * that waits for one click, a missing opening, a clearing account below zero, the receipts without a
- * payment, the provider's missing bills, and the tasks last, the review among them. The AI's note
- * lists its facts in the same order and the model starts with the first. A task on a payment counted
- * in the payments' line is that payment, and a receipt of `yours` is not among those without a
+ * The order of the card's lines and of the facts the AI is handed (#476): the open list's points in its order
+ * (ISSUE_ORDER), then what only the card adds: an offer that waits for one click, a missing opening, a clearing
+ * account below zero, and the tasks last, the review among them.
+ */
+export const LINE_ORDER = [...ISSUE_ORDER.map((k) => LINE_OF[k]), 'offers', 'openings', 'clearing', 'task'] as const;
+type LineKey = (typeof LINE_OF)[keyof typeof LINE_OF] | 'offers' | 'openings' | 'clearing' | 'task';
+
+/**
+ * The state as the lines of its card, in LINE_ORDER (#476): what the return's list «Noch offen» names, as it names
+ * it, then the rest. The AI's note lists its facts in the same order and the model starts with the first. A task on a
+ * payment counted in the payments' line is that payment, and a receipt of `yours` is not among those without a
  * payment: each object is named once. At most TASKS_SHOWN tasks are lines of their own.
  */
 export function openLines(s: OpenPeriodState): OpenLine[] {
   const refs = new Set(s.unbooked.map((t) => t.ref));
   const tasks = s.tasks.filter((x) => !(x.item.kind === 'transaction' && refs.has(x.item.id)));
   const kinds = waitingKinds(s);
-  const unlinked = s.unlinked;
-  return [
-    ...(s.held.length ? [{ kind: 'held' as const, n: s.held.length, first: s.held[0] }] : []),
-    ...(s.counts.questions ? [{ kind: 'questions' as const, n: s.counts.questions }] : []),
-    ...(s.yours.length ? [{ kind: 'yours' as const, ...shown(s.yours) }] : []),
-    ...(s.counts.unbooked ? [{ kind: 'unbooked' as const, ...shown(s.unbooked), n: s.counts.unbooked, waiting: s.counts.waitingReceipt, outlays: s.counts.waitingOutlays, unread: kinds.unread, first: s.unbooked[0] }] : []),
-    ...(s.counts.evidence ? [{ kind: 'evidence' as const, n: s.counts.evidence, first: s.evidence[0].entry }] : []),
-    ...(s.offers.length ? [{ kind: 'offers' as const, ...shown(s.offers), first: s.offers[0] }] : []),
-    ...(s.openings.length ? [{ kind: 'openings' as const, ...shown(s.openings), first: s.openings[0] }] : []),
-    ...(s.clearing.length ? [{ kind: 'clearing' as const, ...shown(s.clearing), first: s.clearing[0] }] : []),
-    ...(unlinked.length ? [{ kind: 'unlinked' as const, ...shown(unlinked), first: unlinked[0] }] : []),
-    ...(s.bills.length ? [{ kind: 'bills' as const, n: s.bills.length, first: s.bills[0] }] : []),
-    ...tasks.slice(0, TASKS_SHOWN).map((task) => ({ kind: 'task' as const, task })),
-    ...(tasks.length > TASKS_SHOWN ? [{ kind: 'moreTasks' as const, n: tasks.length - TASKS_SHOWN }] : []),
-  ];
+  const of: Record<LineKey, OpenLine[]> = {
+    held: s.held.length ? [{ kind: 'held', n: s.held.length, first: s.held[0] }] : [],
+    questions: s.counts.questions ? [{ kind: 'questions', n: s.counts.questions }] : [],
+    yours: s.yours.length ? [{ kind: 'yours', ...shown(s.yours) }] : [],
+    unbooked: s.counts.unbooked ? [{ kind: 'unbooked', ...shown(s.unbooked), n: s.counts.unbooked, waiting: s.counts.waitingReceipt, outlays: s.counts.waitingOutlays, unread: kinds.unread, first: s.unbooked[0] }] : [],
+    evidence: s.counts.evidence ? [{ kind: 'evidence', n: s.counts.evidence, first: s.evidence[0].entry }] : [],
+    withheld: s.withheld.length ? [{ kind: 'withheld', ...shown(s.withheld), first: s.withheld[0] }] : [],
+    offers: s.offers.length ? [{ kind: 'offers', ...shown(s.offers), first: s.offers[0] }] : [],
+    openings: s.openings.length ? [{ kind: 'openings', ...shown(s.openings), first: s.openings[0] }] : [],
+    clearing: s.clearing.length ? [{ kind: 'clearing', ...shown(s.clearing), first: s.clearing[0] }] : [],
+    unlinked: s.receipts.length ? [{ kind: 'unlinked', ...shown(s.receipts), first: s.receipts[0] }] : [],
+    bills: s.bills.length ? [{ kind: 'bills', n: s.bills.length, first: s.bills[0] }] : [],
+    task: [...tasks.slice(0, TASKS_SHOWN).map((task) => ({ kind: 'task' as const, task })), ...(tasks.length > TASKS_SHOWN ? [{ kind: 'moreTasks' as const, n: tasks.length - TASKS_SHOWN }] : [])],
+  };
+  return LINE_ORDER.flatMap((k) => of[k]);
 }

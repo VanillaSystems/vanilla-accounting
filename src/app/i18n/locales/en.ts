@@ -3234,6 +3234,8 @@ export default {
     'openPeriod.more': { one: 'and {n} more', other: 'and {n} more' },
     'openPeriod.offers': { one: '{n} proposal from the setup waits for your answer', other: '{n} proposals from the setup wait for your answer' },
     'openPeriod.offer': '{name}: always book {percent} % as private, the rest on account {account}?',
+    'openPeriod.issued': 'own invoice, waits for the customer’s payment',
+    'openPeriod.withheldItem': '{date} {name} {amount}: account {account} still holds {open} of wage deductions',
     'openPeriod.openings': { one: '{n} account without its opening balance', other: '{n} accounts without their opening balance' },
     'openPeriod.opening': '{label}: {amount} before the first payment on {date} according to its statements',
     'openPeriod.clearing': { one: '{n} clearing account below zero', other: '{n} clearing accounts below zero' },

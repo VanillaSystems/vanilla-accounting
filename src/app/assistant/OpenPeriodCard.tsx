@@ -40,6 +40,7 @@ function goOf(l: OpenLine, s: OpenPeriodState, books: Index): Location {
     case 'questions': return openList(s) ?? TASKS;
     case 'moreTasks': return TASKS;
     case 'evidence': return at({ area: 'journal', id: l.first.id }, l.first.date);
+    case 'withheld': return at({ area: 'bank', payment: l.first.tx.ref }, l.first.tx.date);
     // The day Belege lists the receipt under (#385 review), in the period the card is about.
     case 'unlinked': return receiptAt(l.first, s, books);
     // The report's receipt names the held order and books it (#405); a missing bill to the return's list, which names it and drops it (#459).
@@ -60,6 +61,7 @@ function textOf(l: OpenLine): string {
     case 'unbooked': return issueWords({ unbooked: l.n, waitingReceipt: l.waiting, waitingOutlays: l.outlays })[0];
     case 'questions': return issueWords({ ...NONE, questions: l.n })[0];
     case 'evidence': return issueWords({ ...NONE, evidence: l.n })[0];
+    case 'withheld': return issueWords({ ...NONE, withheld: l.n })[0];
     case 'unlinked': return issueWords({ ...NONE, unlinked: l.n })[0];
     case 'held': return issueWords({ ...NONE, held: l.n })[0];
     case 'bills': return issueWords({ ...NONE, bills: l.n })[0];
