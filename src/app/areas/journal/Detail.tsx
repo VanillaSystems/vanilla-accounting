@@ -38,7 +38,7 @@ import type { EvidenceCheck } from '../../../accounting/evidence-check.js';
 import { bookingWarnings } from '../../../accounting/booking-warnings.js';
 import { isAccrual, newYearAfter, reversalIn } from '../../../accounting/reversal.js';
 import { correctionPeriodName, journalFor, openPeriod, recentlyDeleted, runAct, splitReceipt } from './commands.js';
-import { createEntry, linkReceipt, reclassify, saveEntry, type Field } from './actions.js';
+import { createEntry, fixEvidence, linkReceipt, reclassify, saveEntry, type Field } from './actions.js';
 import { undoInput } from '../../../books/entry-input.js';
 import { RunLink } from '../../automation/marks.js';
 import { RunHistory } from '../../history/RunHistory.js';
@@ -168,7 +168,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
       {v.evidence && (
         <div className="notice warn" data-testid="evidence">
           {I.dot}<span>{evidenceText(e, v.evidence)}</span>
-          {edit && <a href="#" data-testid="evidence-book" onClick={(ev) => { ev.preventDefault(); void saveEntry(nav, e, patchOf(v.evidence!), ['vatCode']); }}>{t(v.evidence.kind === 'receiptShowsVat' ? 'journal.evidence.bookByReceipt' : 'journal.evidence.bookWithoutReceipt')}</a>}
+          {edit && clickable(v.evidence) && <a href="#" data-testid="evidence-book" onClick={(ev) => { ev.preventDefault(); void fixEvidence(nav, e, v.evidence!); }}>{t(v.evidence.kind === 'vatWithoutReceipt' ? 'journal.evidence.bookWithoutReceipt' : 'journal.evidence.bookByReceipt')}</a>}
         </div>
       )}
 
@@ -269,20 +269,23 @@ function LinkReceipt({ books, nav, entries }: Props & { entries: JournalEntry[] 
 
 /** What the booking page and the row say when an entry contradicts its receipts (src/accounting/evidence-check.ts). */
 export function evidenceText(e: JournalEntry, c: EvidenceCheck): string {
+  const code = e.vatCode ? codeLabel(e.vatCode) : '';
+  if (c.kind === 'receiptGroups') return t(c.rate ? 'journal.evidence.groupTaxed' : 'journal.evidence.groupUntaxed', { amount: `${c.currency} ${fmt(c.amount)}`, rate: String(c.rate), code });
   return c.kind === 'receiptShowsVat'
     ? t('journal.evidence.receiptShowsVat', { rate: String(c.rate), code: e.vatCode ? codeLabel(e.vatCode) : '' })
     : t('journal.evidence.vatWithoutReceipt', { code: e.vatCode ? codeLabel(e.vatCode) : '', zero: codeLabel(c.code) });
 }
 
-/** The click: the proposed code, and for a receipt that shows VAT the receipts the entry now records as seen. */
-export const patchOf = (c: EvidenceCheck) => (c.kind === 'receiptShowsVat' ? { vatCode: c.code, receipts: c.receipts } : { vatCode: c.code });
+/** A click is offered unless the payment cannot be booked by its receipt's groups (they do not add up to it). */
+const clickable = (c: EvidenceCheck): boolean => c.kind !== 'receiptGroups' || !!c.lines;
 
 /** The click that books as the evidence says; for a code a person or the AI chose, the explanation instead (r8h-22). */
 export function EvidenceFix({ e, check, nav }: { e: JournalEntry; check: EvidenceCheck; nav: Nav }) {
   if (check.decided) return <span className="m" data-testid="evidence-decided">{t('journal.evidence.decided')}</span>;
+  if (!clickable(check)) return null;
   return (
-    <button type="button" className="btn ghost" data-testid="evidence-book" onClick={() => void saveEntry(nav, e, patchOf(check), ['vatCode'])}>
-      {t(check.kind === 'receiptShowsVat' ? 'journal.evidence.bookByReceipt' : 'journal.evidence.bookWithoutReceipt')}
+    <button type="button" className="btn ghost" data-testid="evidence-book" onClick={() => void fixEvidence(nav, e, check)}>
+      {t(check.kind === 'vatWithoutReceipt' ? 'journal.evidence.bookWithoutReceipt' : 'journal.evidence.bookByReceipt')}
     </button>
   );
 }

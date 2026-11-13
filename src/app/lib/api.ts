@@ -50,7 +50,7 @@ import type { RunLogLine } from '../../workflows/runlog.js';
 import type { HistoryObject, ObjectHistory } from '../../workflows/history.js';
 import type { Conversation, ConversationSummary, MadeChange, PrivatePart, Turn } from '../../types/assistant.js';
 import { ATTACHMENT_MAX_MB, type Attachment } from '../../types/attachment.js';
-import type { DropAction, DropSession, PayoutWaitView, QuarantinedFile, StatementDetails } from '../../types/drop.js';
+import type { DropAction, DropSession, PayoutGroup, PayoutsBooked, PayoutWaitView, QuarantinedFile, StatementDetails } from '../../types/drop.js';
 import type { MailCheck, ReceiptSkipOffer, SourcePreview, SourcesView } from '../../platform/sources/model.js';
 import type { MailHost } from '../../platform/sources/mail-host.js';
 import type { DraftCommand, DraftView, BookOpen, KeepResult, KeptView, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
@@ -152,6 +152,10 @@ export function errorText(e: unknown): string {
     case 'manualOnly': return t('error.manualOnly');
     case 'booksChanged': return t('error.booksChanged');
     case 'hasEntries': return t('error.hasEntries');
+    case 'notByReceipt': return t('error.notByReceipt');
+    case 'decidedByHand': return t('error.decidedByHand');
+    case 'changedSince': return t('error.changedSince');
+    case 'undoGone': return t('error.undoGone');
     case 'ownInvoiceTaken': return t('error.ownInvoiceTaken');
     case 'bookedSince': return t('error.bookedSince', { payment: b.params.payment, n: b.params.entries, by: t(`error.bookedSince.${b.params.by}`) });
     case 'receiptPaid': return t('error.receiptPaid', { payment: b.params.payment });
@@ -284,6 +288,7 @@ export function errorText(e: unknown): string {
     case 'unknownVatCode': return t('error.unknownVatCode', b.params);
     case 'codeNotTaken': return t(b.params.method === 'none' ? 'error.codeNotTaken.none' : 'error.codeNotTaken.netRate', { code: b.params.code });
     case 'clearingNotBalance': return t('error.clearingNotBalance', b.params);
+    case 'revenueNotRevenue': return t('error.revenueNotRevenue', b.params);
     case 'sinceNotOpen': return t('error.sinceNotOpen', { since: formatDate(b.params.since), from: formatDate(b.params.from) });
     case 'clearingTaken': return t('error.clearingTaken', b.params);
     case 'rule': { const k = refusalKey(b.params.refusal); return t(k.key, k.vars as never); }
@@ -414,6 +419,10 @@ export const api = {
   createJournalEntry: (input: JournalEntryInput) =>
     request<{ entry: JournalEntry }>('POST', '/api/journal-entries', input).then((r) => r.entry),
   deleteJournalEntry: (id: string) => request<Ok>('DELETE', `/api/journal-entries/${encodeURIComponent(id)}`),
+  /** «Nach Beleg buchen» on a receipt of several VAT groups (#406): the payment's lines as they were, and their ids now. */
+  bookByReceipt: (id: string) => request<{ undo: string; before: JournalEntry[]; after: JournalEntry[] }>('POST', `/api/journal-entries/${encodeURIComponent(id)}/by-receipt`),
+  /** Its undo by the id the click returned, in one write: refused when a line changed since. */
+  undoByReceipt: (undo: string) => request<Ok>('POST', '/api/journal-entries/by-receipt/undo', { undo }),
   /** Änderungen › «Rückgängig» of a change by hand: the booking as the last save holds it, or gone when booked since. */
   restoreSavedEntry: (id: string) => request<Ok>('POST', `/api/journal-entries/${encodeURIComponent(id)}/as-saved`),
   classifyTransaction: (txRef: string, overwrite = false) =>
@@ -487,6 +496,10 @@ export const api = {
   receiptSets: (ref: string) => request<{ sets: ReceiptSet[]; cut?: SetCut }>('GET', `/api/transactions/${encodeURIComponent(ref)}/receipt-sets`),
   /** Why a provider's payout waits for the person, or null (#203). */
   payoutWait: (ref: string) => request<{ wait: PayoutWaitView | null }>('GET', `/api/transactions/${encodeURIComponent(ref)}/payout-wait`),
+  /** A provider's payouts without a booking, by provider and what they wait for (#404). */
+  payouts: () => request<{ groups: PayoutGroup[] }>('GET', '/api/payouts'),
+  /** Books a provider's payouts code books now: how many were booked, how many runs still book. */
+  bookPayouts: (provider: string) => request<{ ok: true } & PayoutsBooked>('POST', '/api/payouts/book', { provider }),
   groupedOffer: (ref: string) => request<{ offer: GroupedOffer | null }>('GET', `/api/rules/grouped?ref=${encodeURIComponent(ref)}`),
   draftGrouped: (ref: string) => request<{ path: string }>('POST', '/api/rules/grouped', { ref }),
   unreadOffer: (ref: string) => request<{ offer: UnreadOffer | null }>('GET', `/api/rules/unread?ref=${encodeURIComponent(ref)}`),

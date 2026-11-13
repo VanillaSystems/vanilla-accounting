@@ -20,13 +20,14 @@ import { heldByReconciliation } from '../books/reconcile.js';
 import { legBooked } from '../accounting/payment-entries.js';
 import type { JournalEntry } from '../types/index.js';
 import { askSalesWithoutVat, closeSaleQuestionsHeld } from './sale-questions.js';
-import { bookPayoutReports } from './sales-report-import.js';
+import { bookPayoutReports, ordersPaidElsewhere } from './sales-report-import.js';
 import type { Workspace } from '../workspace/workspace.js';
 import type { BooksPort, IntakeNote, StepRun } from './pipeline.js';
 
 /** The note for the sales without VAT asked about now; a payment asked about before is not asked again. */
 function askSales(ws: Workspace, books: BooksPort, log: (line: string) => void): IntakeNote[] {
-  const asked = askSalesWithoutVat(ws, books.read());
+  const read = books.read();
+  const asked = askSalesWithoutVat(ws, read, undefined, ordersPaidElsewhere(ws, read));
   if (asked.length) log(`  Asked     : ${asked.length} customer payment(s) without an invoice: with VAT, abroad, or no sale?`);
   return asked.length ? [{ code: 'saleAsked', count: asked.length }] : [];
 }

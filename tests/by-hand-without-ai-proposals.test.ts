@@ -120,11 +120,14 @@ test('S1: money between own accounts, from an authority or with a business\'s do
   }
 });
 
-test('S1: a provider\'s payout that waits proposes nothing and says what it waits for', () => {
-  const d = firstLine(books({ transactions: [sale] }), 'IN', { ...KNOWN, nature: { kind: 'payoutWaits', key: 'salesReport.noClearing', params: { provider: 'Shop' } } });
+test('S1: a provider\'s payout that waits proposes nothing and says what it waits for; one code books proposes its clearing account without a code (#404)', () => {
+  const d = firstLine(books({ transactions: [sale] }), 'IN', { ...KNOWN, nature: { kind: 'payout', provider: 'Shop', why: 'clearing' } });
   assert.deepEqual(sideOf(d.lines[0]), ['1020', '', '']);
   assert.equal(d.lines[0].source, undefined);
-  assert.deepEqual(d.notes, [{ kind: 'payoutWaits', key: 'salesReport.noClearing', params: { provider: 'Shop' } }]);
+  assert.deepEqual(d.notes, [{ kind: 'payout', provider: 'Shop', why: 'clearing' }]);
+  const ready = firstLine(books({ transactions: [sale] }), 'IN', { ...KNOWN, nature: { kind: 'payout', provider: 'Shop', why: 'ready', account: '1093' } });
+  assert.deepEqual(sideOf(ready.lines[0]), ['1020', '1093', '']);
+  assert.deepEqual(ready.lines[0].source, { account: { from: 'clearing', provider: 'Shop' } });
 });
 
 test('S1: money back from a business the firm buys from: the account of its last purchase, the zero code inverted, or the credit note\'s rate', () => {

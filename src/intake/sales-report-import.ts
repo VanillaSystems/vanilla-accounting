@@ -33,7 +33,7 @@ import { APP_ASKER } from './sale-questions.js';
 import { loadClassifyContext, chartOf, mappedReceipts, type ClassifyContext } from '../booking/classify.js';
 import { chartNames } from '../booking/rule-book.js';
 import { fromClearing, isProvider, orderOf, payoutDaysOf, providerOfMoneyIn, providerOfPayment, type Provider } from '../booking/providers.js';
-import { bookReport, collectedBy, isReportRef, linkOrdersToSales, paymentFacts, readReport, recognizeReport, reportFacts, REPORT_LINK_RULE, saleRef, unpaidRow, type PaymentFacts, type ReadReport, type ReportContext, type ReportOutcome, type ReportTexts } from '../booking/sales-report.js';
+import { bookReport, recognizeOtherExport, collectedBy, isReportRef, linkOrdersToSales, paymentFacts, readReport, recognizeReport, reportFacts, REPORT_LINK_RULE, saleRef, unpaidRow, type PaymentFacts, type ReadReport, type ReportContext, type ReportOutcome, type ReportTexts } from '../booking/sales-report.js';
 import { loadKnowledge, homeOf } from '../knowledge/layers.js';
 import { silentUids } from '../knowledge/counterparties.js';
 import { businessOfReceipt } from './batch-payers.js';
@@ -49,7 +49,8 @@ import { standardAccounts } from '../workspace/chart.js';
 import { filesOfPart, findFile, APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { wordsIn } from '../export/texts.js';
 import type { BankTransaction, JournalEntry, Receipt } from '../types/index.js';
-import type { PayoutUnseen, ProviderAsk, ProviderProposal, ReportSummary } from '../types/drop.js';
+import type { PaidElsewhere } from '../accounting/sales-without-vat.js';
+import type { CsvOfProvider, PayoutUnseen, ProviderAsk, ProviderProposal, ReportSummary } from '../types/drop.js';
 import { accountOf } from '../workspace/money-accounts.js';
 
 const ACTOR = moduleActor('sales-report');
@@ -73,12 +74,22 @@ export function providersOf(ws: Pick<Workspace, 'paths'>): Provider[] {
   }
 }
 
-/** What the drop recognises a CSV as, by the providers' files: whose report and which kind. */
-export function recognizeCsv(ws: Pick<Workspace, 'paths'>, bytes: Buffer): { provider: string; name: string; kind: 'sales' | 'fees' } | undefined {
+/**
+ * What the drop recognises a CSV as, by the providers' files: whose report and which kind, or which
+ * other export of a provider the firm has it is, with its reports and where they are exported (#406).
+ */
+export function recognizeCsv(ws: Pick<Workspace, 'paths'>, bytes: Buffer): CsvOfProvider | undefined {
   const providers = providersOf(ws);
-  const hit = recognizeReport(bytes.subarray(0, 16384).toString('utf8'), providers);
+  const text = bytes.subarray(0, 16384).toString('utf8');
+  const hit = recognizeReport(text, providers);
   const p = hit && providers.find((x) => x.id === hit.provider);
-  return hit && p ? { ...hit, name: p.name } : undefined;
+  if (hit && p) return { ...hit, name: p.name };
+  // Only a provider the firm's own knowledge names (a company file of it): a firm without one has no such export.
+  const own = providers.filter((x) => x.origin.binding);
+  const other = recognizeOtherExport(text, own);
+  const q = other && own.find((x) => x.id === other.provider);
+  const reports = q ? (['sales', 'fees'] as const).filter((k) => q.provider.reports[k]) : [];
+  return other && q ? { provider: q.id, name: q.name, other: other.what, reports, where: { ...q.provider.exportedAt } } : undefined;
 }
 
 /** The booking texts, in the books' language (German, docs/i18n.md). */
@@ -114,7 +125,14 @@ function lacking(ws: Workspace, p: Provider, kind: 'sales' | 'fees', chart: Read
       // The cut-over day is asked with the clearing account: the first day the report covers is proposed, the open period's first day at the earliest.
       ...((missing === 'clearing' || missing === 'since') && !p.provider.since ? { since: cutOverOf(ws, reportFrom) } : {}),
       ...(propose ? { propose } : {}),
+      ...(missing === 'clearing' || missing === 'since' ? revenueAsk() : {}),
     };
+  };
+  // A sales report shows the revenue account it will book with the clearing account, where the file names none: hers to change (#404).
+  const revenueAsk = (): { revenue?: NonNullable<ProviderAsk['revenue']> } => {
+    if (kind !== 'sales' || p.provider.revenue) return {};
+    const account = revenueOf(ws, p);
+    return account && chart.has(account) ? { revenue: { account, sells: [...(ws.profile?.sells ?? [])] } } : {};
   };
   const clearing = p.provider.clearing;
   if (!clearing) return ask('clearing');
@@ -311,6 +329,21 @@ function reportsOf(ws: Workspace, books: Books, p: Provider, kind: 'sales' | 'fe
     const path = receiptFile(ws, books, r);
     return existsSync(path) ? [{ receipt: r, text: readFileSync(path, 'utf8') }] : [];
   });
+}
+
+/**
+ * The orders of the providers' order exports in the books that the provider did not collect (paid by
+ * bank transfer, another gateway, #406): their money comes as a payment of its own, which may name the
+ * order; the sale question proposes from it (src/accounting/sales-without-vat.ts orderProposal).
+ */
+export function ordersPaidElsewhere(ws: Workspace, books: Books): PaidElsewhere[] {
+  return providersOf(ws).flatMap((p) => (p.provider.gateways?.length ? reportsOf(ws, books, p, 'sales') : []).flatMap(({ text }) => {
+    const read = readReport(text, 'sales', p.provider);
+    if ('missing' in read || read.kind !== 'sales') return [];
+    return read.rows.filter((o) => !o.test && !collectedBy(o, p.provider.gateways)).map((o) => ({
+      provider: p.name, order: o.order, gross: o.gross, ...(o.currency ? { currency: o.currency } : {}), ...(o.tax !== undefined ? { tax: o.tax } : {}), ...(o.shipTo ? { shipTo: o.shipTo } : {}),
+    }));
+  }));
 }
 
 /** What the provider's payments reports in the books say beside their fees: the days they cover, the orders they name, the refunds (#214). */
@@ -704,6 +737,7 @@ export function bookHeldOrder(ws: Workspace, books: Books, receiptId: string, or
 export type ProviderRefusal =
   | { code: 'unknownAccount'; params: { account: string } }
   | { code: 'clearingNotBalance'; params: { account: string } }
+  | { code: 'revenueNotRevenue'; params: { account: string } }
   | { code: 'unknownVatCode'; params: { code: string } }
   | { code: 'codeNotTaken'; params: { code: string; method: 'none' | 'net-rate' } }
   | { code: 'sinceNotOpen'; params: { since: string; from: string } }
@@ -725,6 +759,8 @@ export function setProviderAccount(ws: Workspace, providerId: string, set: { cle
   const accounts = chartNames(chartOf(ws));
   for (const a of [set.clearing, set.revenue, set.fees?.account]) if (a !== undefined && !accounts.has(a)) return { ok: false, refusal: { code: 'unknownAccount', params: { account: a } } };
   if (set.clearing !== undefined && !['asset', 'liability'].includes(chart().typeOf(set.clearing) ?? '')) return { ok: false, refusal: { code: 'clearingNotBalance', params: { account: set.clearing } } };
+  // The orders' revenue goes on a revenue account, never on the bank or the clearing account (#404).
+  if (set.revenue !== undefined && chart().typeOf(set.revenue) !== 'revenue') return { ok: false, refusal: { code: 'revenueNotRevenue', params: { account: set.revenue } } };
   const other = set.clearing !== undefined ? providers.find((x) => x.id !== p.id && x.provider.clearing === set.clearing) : undefined;
   if (other) return { ok: false, refusal: { code: 'clearingTaken', params: { account: set.clearing!, other: other.name } } };
   if (set.since !== undefined) {

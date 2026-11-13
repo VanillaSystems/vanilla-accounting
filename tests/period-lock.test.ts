@@ -108,6 +108,10 @@ const refused: Array<Call & { status: number }> = [
   { method: 'PATCH', path: '/api/journal-entries/jo', body: { date: '2026-06-15' }, status: 403 },
   { method: 'PATCH', path: '/api/journal-entries/jc', body: { amount: 5 }, status: 403 },
   { method: 'DELETE', path: '/api/journal-entries/jc', status: 403 },
+  // «Nach Beleg buchen» on a receipt of several VAT groups (#406): never on a filed entry.
+  { method: 'POST', path: '/api/journal-entries/jc/by-receipt', status: 403 },
+  // Its undo takes only an id the click returned: lines sent in the body, of a filed quarter or any other, write nothing.
+  { method: 'POST', path: '/api/journal-entries/by-receipt/undo', body: { before: [{ id: 'jc', transactionRef: 'C1', date: '2026-05-10', accountDebit: '6500', accountCredit: '1021', amount: 5, vatCode: 'I0' }], after: [{ id: 'jc', transactionRef: 'C1', date: '2026-05-10', accountDebit: '6500', accountCredit: '1021', amount: 10, vatCode: 'I81' }] }, status: 410 },
   { method: 'POST', path: '/api/journal-entries', body: { date: '2026-06-30', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'rückdatiert' }, status: 403 },
   { method: 'POST', path: '/api/journal-entries', body: { date: '2026-08-01', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'zur geschlossenen Zahlung', transactionRef: 'C1' }, status: 403 },
   { method: 'POST', path: '/api/journal-entries/classify/C1', status: 403 },
@@ -426,4 +430,28 @@ test('open period: keeping a rule books its open payments and leaves the filed q
   now = loadBooks(workspaceAt(api.ws.paths.root)) as Books;
   assert.ok(!now.journalEntries.some((e) => e.transactionRef === 'M2026-001'), 'the filed quarter\'s payment stays unbooked');
   assert.deepEqual(closedPart(now, '2026-06-30'), closedPart(fixture, '2026-06-30'));
+});
+
+test('POST /api/payouts/book and «Einschalten» of the booking (#404): a provider payout of the filed quarter stays as it is, an open one is booked from the clearing account', async () => {
+  // Shopify's company file with its clearing account and a cut-over day before the line, written by hand; the clearing account in the chart.
+  mkdirSync(join(api.root, 'knowledge', 'suppliers'), { recursive: true });
+  writeFileSync(join(api.root, 'knowledge', 'suppliers', 'shopify.yaml'), 'id: shopify\nprovider:\n  clearing: "1093"\n  since: 2026-06-01\n');
+  const konten = join(api.ws.paths.history, 'prior-year.Konten.txt');
+  writeFileSync(konten, `${readFileSync(konten, 'utf8')}1093\tDurchlaufkonto Shopify\n`);
+  // An earlier test gave the books a chart of their own: the clearing account goes there too.
+  if (existsSync(api.ws.paths.accounts)) writeFileSync(api.ws.paths.accounts, JSON.stringify([...JSON.parse(readFileSync(api.ws.paths.accounts, 'utf8')), { number: '1093', name: 'Durchlaufkonto Shopify' }]));
+  await api.rest();
+  const books = loadBooks(api.ws);
+  const payout = (ref: string, date: string) => ({ ref, bank: 'Raiffeisen', date, amount: 191.75, currency: 'CHF', direction: 'CRDT' as const, description: 'Gutschrift Shopify Payments', counterparty: 'Shopify Payments' });
+  books.transactions.push(payout('PC', '2026-06-20'), payout('PO', '2026-08-20'));
+  saveBooks(api.ws, books);
+  const sealed = closedPart(loadBooks(api.ws) as Books, '2026-06-30');
+  const on = await send({ method: 'POST', path: '/api/automation', body: { kind: 'approve', workflow: 'booking' } });
+  assert.equal(on.status, 200, on.error);
+  const book = await send({ method: 'POST', path: '/api/payouts/book', body: { provider: 'shopify' } });
+  assert.equal(book.status, 200, book.error);
+  const now = loadBooks(api.ws) as Books;
+  assert.ok(now.journalEntries.some((e) => e.transactionRef === 'PO' && e.accountCredit === '1093'), JSON.stringify([on.json, book.json]));
+  assert.ok(!now.journalEntries.some((e) => e.transactionRef === 'PC'), 'the filed quarter\'s payout stays unbooked');
+  assert.deepEqual(closedPart(now, '2026-06-30'), sealed);
 });

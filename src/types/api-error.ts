@@ -40,6 +40,10 @@ export type ApiRefusal =
   | { code: 'booksChanged' }
   /** A payment booked by hand is not booked twice. */
   | { code: 'hasEntries' }
+  | { code: 'notByReceipt' }
+  | { code: 'decidedByHand' }
+  | { code: 'changedSince' }
+  | { code: 'undoGone' }
   | { code: 'ownInvoiceTaken' }
   /** Änderungen › «Rückgängig» of a deletion while the payment has bookings it did not have then (src/server/edits.ts restoreSaved): how many stand, and whether a person or the app booked them. */
   | { code: 'bookedSince'; params: { payment: string; entries: number; by: 'person' | 'app' } }
@@ -231,6 +235,8 @@ export type ApiRefusal =
   | { code: 'codeNotTaken'; params: { code: string; method: 'none' | 'net-rate' } }
   /** A payment provider's clearing account that is no balance-sheet account (src/intake/sales-report-import.ts setProviderAccount). */
   | { code: 'clearingNotBalance'; params: { account: string } }
+  /** A provider's revenue account that is no revenue account (#404, setProviderAccount). */
+  | { code: 'revenueNotRevenue'; params: { account: string } }
   /** A provider's cut-over day outside the open period: `from` is its first day. */
   | { code: 'sinceNotOpen'; params: { since: string; from: string } }
   /** A clearing account another provider's file names already (`other`: its name): each provider's check needs its own. */

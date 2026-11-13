@@ -320,11 +320,32 @@ provider:
   order, refund and fee up to its day. Held rows wait for the person, named in the drop row and kept on
   the report's receipt (`report.held`, the latest taking's, at most 200 named).
   «Rückgängig» takes only the report's own entries and links.
+- Its other exports a person may drop by mistake are named in the app file
+  under `otherExports` (only `payouts`, the payouts list: one row per payout,
+  no order), each by headers its first line has, all of them, and
+  `exportedAt` says where each report is exported, in the admin's own menu
+  words (`sales`, `fees`; only a path a file or runbook states and someone
+  checked: it is shown to a person as an instruction). Only for a firm whose
+  own knowledge has the provider (a company file of it), the drop names such a
+  file and the reports to bring, with their menu paths, and does not read it as
+  a bank statement; «trotzdem als Kontoauszug lesen» asks its columns (#406):
+  ```yaml
+  exportedAt:
+    sales: "Shopify Admin › Bestellungen › Exportieren"
+  otherExports:
+    payouts: [ "Payout Date", "Charges", "Refunds", "Fees", "Total" ]
+  ```
 - One source of sales per provider: a provider with `reports.sales` takes none
   from a payout report (a card terminal's PDF), whose sales book only with its
   payout booked from the clearing account.
 - The accounts are one company's chart: only the company's file names them,
-  and the drop asks for a missing one once and keeps the answer there.
+  and the drop asks for a missing one once and keeps the answer there: one
+  question at a time (the clearing account, the cut-over day, for a sales
+  report the revenue account it proposes from what the firm sells), her
+  answer is her switching on (the booking workflow does not wait for
+  «Einschalten» because of it), and the payouts it decides are booked at once
+  (#404). A payout's hand form proposes bank / the clearing account without a
+  code once code books it so, else no account, and never a sale.
   `revenue` falls back to the account of what the firm sells. `payoutDays` and
   `gateways` may be said in the company's file too: its payout days win, its
   gateways are added.

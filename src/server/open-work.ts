@@ -82,8 +82,12 @@ function questionLine(books: Books, q: Question, t: T): string {
 }
 
 /** A contradiction in the words the booking page shows. */
-const evidenceLine = (e: JournalEntry, c: EvidenceCheck, t: T) =>
-  `- ${day(e.date)} ${e.description ?? ''} (${e.transactionRef}): «${c.kind === 'receiptShowsVat' ? t('journal.evidence.receiptShowsVat', { rate: String(c.rate), code: e.vatCode ?? '' }) : t('journal.evidence.vatWithoutReceipt', { code: e.vatCode ?? '', zero: c.code })}»`;
+const evidenceWords = (e: JournalEntry, c: EvidenceCheck, t: T): string => {
+  const code = e.vatCode ?? '';
+  if (c.kind === 'receiptGroups') return t(c.rate ? 'journal.evidence.groupTaxed' : 'journal.evidence.groupUntaxed', { amount: money(c.currency, c.amount), rate: String(c.rate), code });
+  return c.kind === 'receiptShowsVat' ? t('journal.evidence.receiptShowsVat', { rate: String(c.rate), code }) : t('journal.evidence.vatWithoutReceipt', { code, zero: c.code });
+};
+const evidenceLine = (e: JournalEntry, c: EvidenceCheck, t: T) => `- ${day(e.date)} ${e.description ?? ''} (${e.transactionRef}): «${evidenceWords(e, c, t)}»`;
 
 /**
  * The purpose a message is answered with (#342): the setup's while the setup runs, and after the

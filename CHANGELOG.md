@@ -368,6 +368,44 @@ Two markers flag an entry you must read before you update:
   not deducted. It does not make the period unfinished, and a month of a filed period is not named.
   A payout in the list is named by the provider the app took it for («Shopify»), not by the processor
   that paid it. The review's clearing account check names the total of the orders its sales report holds.
+- A bill of several VAT groups (8.1 % and «0 % (Export)») is compared with all lines of its
+  payment (#406): two lines booked each at its group's rate raise no task any more; a rate booked
+  beyond what the bill shows at it does, naming the amount and rate the bill shows. What a bill's
+  total holds beyond the groups read only excuses a line at the zero code, never accuses a rate
+  line. «Nach Beleg buchen» then books the payment's lines by the bill's groups, never one rate on
+  a line the bill shows at another; it is offered only for lines on one account pair, of one code
+  family, with the same tags, and never rewrites a line a person booked. Its «Rückgängig» puts the
+  lines back in one step, unless one was changed since.
+- The drop names a payment provider's payouts list as what it is, with the reports the app books
+  from and, where the provider's file states it, where the admin exports them (#406); it is not
+  read as a bank statement of empty lines, and «trotzdem als Kontoauszug lesen» asks its columns.
+  Only for a firm whose own knowledge has that provider. A CSV whose day and amount columns yield
+  no movement asks its columns with nothing chosen. A provider's file names such exports under
+  `otherExports` and the report menus under `exportedAt` (processes/README.md).
+- A provider's monthly fee bills dropped read «3 Monatsrechnungen von Shopify: MWST der Gebühren
+  gebucht», not «einer Zahlung zugeordnet»: they have no payment (#406).
+- The sale question for a transfer that names an order of a provider's order export by its name
+  («#1099»), one the provider did not collect, proposes from that order's tax and says so (#406).
+- MWST: a rate row's turnover (Ziffer 303 and the others) is the figure the return files, as the
+  review and the XML show it; it was the nets rounded per entry plus the tax on the total, Rappen
+  off (#406). No filed figure changes.
+- Payment providers (#404): her answer in the drop row of the provider's report (the clearing
+  account, the cut-over day, the fee account) no longer makes «Buchen» wait for «Einschalten»: an
+  answer to the app's own question is her switching on, and the payouts it decides are booked at
+  once, bank / clearing account without VAT; the row says «40 Auszahlungen von Shopify gebucht».
+  The same file changed by hand still waits; when «Buchen» waited already, the row and Aufgaben say
+  so, with the way to «Einschalten». «Einschalten» of «Buchen» books the payouts code decides and
+  says how many.
+- A provider's payout never gets a revenue proposal in the hand form: from its clearing account
+  without a code once the company's file names it, otherwise no account (before the cut-over day:
+  as the business's last booking), with a sentence on what a payout is and what it waits for. Its
+  line on the payment names no file path any more. A revenue account that is none is refused.
+- Aufgaben names a provider's payouts as its payouts («40 Auszahlungen von Shopify ohne Buchung»),
+  grouped, with the one thing to do (the order export, or «Jetzt buchen»).
+- The provider's questions in the drop row come one at a time and once (the second report row
+  waits for the first), each labelled with its proposal and why; the cut-over day reads
+  `dd.mm.yyyy`; the revenue account is shown with its source and can be changed; the fee code is
+  said in words (the input tax comes from the provider's monthly invoice).
 - The setup conversation keeps its order after a typed message (#385): the message stands under the
   question it was typed at, above that question's answer, and the open question with its buttons
   stays under her newest message, also when the words took a step back. In the books the rail shows

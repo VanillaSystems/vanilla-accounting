@@ -79,7 +79,7 @@
  * Browser-safe apart from the engines' globals.
  */
 import type { JournalEntry, Mapping, Receipt, SalesReportFacts } from '../types/index.js';
-import type { Columns, FeeColumn, ProviderFacts, ReportKind, SalesColumn } from '../knowledge/provider.js';
+import type { Columns, FeeColumn, OtherExport, ProviderFacts, ReportKind, SalesColumn } from '../knowledge/provider.js';
 import { FEE_NEEDS, SALES_NEEDS } from '../knowledge/provider.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import { addDays, isIsoDate } from '../accounting/periods.js';
@@ -146,6 +146,20 @@ export function recognizeReport(text: string, providers: ReadonlyArray<{ id: str
   if (!header) return undefined;
   const hits = providers.flatMap((p) => ([['sales', p.provider.reports.sales, SALES_NEEDS], ['fees', p.provider.reports.fees, FEE_NEEDS]] as const)
     .flatMap(([kind, columns, needs]) => (columns && 'at' in placeColumns(header, columns as Columns<string>, needs) ? [{ provider: p.id, kind }] : [])));
+  return hits.length === 1 ? hits[0] : undefined;
+}
+
+/**
+ * A provider's export the app books nothing from (its payouts list, #406), by the headers its file
+ * names under `otherExports`, all of them in the first line: of exactly one provider, else nothing.
+ */
+export function recognizeOtherExport(text: string, providers: ReadonlyArray<{ id: string; provider: Pick<ProviderFacts, 'otherExports'> }>): { provider: string; what: OtherExport } | undefined {
+  const header = csvRows(text.slice(0, 8192))[0];
+  if (!header) return undefined;
+  const heads = new Set(header.map(norm));
+  const hits = providers.flatMap((p) => Object.entries(p.provider.otherExports ?? {})
+    .filter(([, names]) => names!.every((n) => heads.has(norm(n))))
+    .map(([what]) => ({ provider: p.id, what: what as OtherExport })));
   return hits.length === 1 ? hits[0] : undefined;
 }
 

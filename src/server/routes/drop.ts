@@ -35,6 +35,7 @@ import type { StatementImport } from '../../types/index.js';
 import { importSalesReport, recognizeCsv, removeSalesReport, setProviderAccount } from '../../intake/sales-report-import.js';
 import { accountName, removeAccount, setAccountName } from '../../workspace/accounts-write.js';
 import { assertPlaced } from '../edits.js';
+import { asHerAct, bookPayouts, readyPayouts } from '../provider-payouts.js';
 
 import type { Arrival } from '../../workflows/model.js';
 import { firstPages, recognize } from '../../intake/recognize.js';
@@ -42,7 +43,7 @@ import { unzip } from '../../intake/unzip.js';
 import { freeName, putInQuarantine, release } from '../../intake/quarantine.js';
 import { twinFinder, type Comparable } from '../../intake/duplicates.js';
 import { textFacts } from '../../parsers/receipt-text.js';
-import { documents } from '../../engines/index.js';
+import { baseCurrency, documents } from '../../engines/index.js';
 import { periodLock } from '../../books/store.js';
 import type { DropAction, DropRow, DropSession, QuarantineReason } from '../../types/drop.js';
 
@@ -153,6 +154,8 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
   if (!row) throw new RequestError(404, 'Diese Zeile gibt es nicht.');
   const a = req.body as DropAction;
   const settled = row.state === 'taken' || row.state === 'undone';
+  /** The provider whose payouts her answer may decide (#404). */
+  let answered: { id: string; name: string } | undefined;
   switch (a?.kind) {
     case 'remove':
       if (settled) throw new RequestError(400, 'Schon übernommen: «Rückgängig» nimmt es zurück.');
@@ -165,7 +168,9 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
       if (settled || row.state === 'refused' || row.state === 'asks' || row.state === 'locked') throw new RequestError(400, 'Diese Datei lässt sich so nicht übernehmen.');
       unquarantine(row);
       // A bank CSV whose payments seemed to be in the books: read anyway, its columns asked (#384).
-      Object.assign(row, { state: 'take', reason: undefined, ...(row.reason === 'csv-known' ? { anyway: true as const } : {}) });
+      // A provider's other export read as a statement anyway (#406): its columns asked, by hand.
+      if (row.reason === 'provider-export') delete row.otherExport;
+      Object.assign(row, { state: 'take', reason: undefined, ...(row.reason === 'csv-known' || row.reason === 'provider-export' ? { anyway: true as const } : {}) });
       break;
     case 'as': {
       // A PDF its words took for a statement that no account read in, or whose table waits, may still be a receipt: the person says so (#25, #217).
@@ -198,14 +203,17 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
       // The cut-over day comes with the clearing account while the provider's file names none.
       const needsAccount = ask?.missing !== 'since';
       if (!ask || (needsAccount && !account) || (ask.missing === 'fees' && !text(a.vat)) || (ask.since !== undefined && !since)) throw new RequestError(400, 'Nur ein Bericht, dessen Konto oder Umstellungstag fehlt, nimmt eines.');
-      const set = ask.missing === 'fees' ? { fees: { account: account!, vat: text(a.vat)! } } : ask.missing === 'since' ? { since } : { [ask.missing]: account, ...(since ? { since } : {}) };
+      // The revenue account comes with the clearing account where the row showed its proposal (#404).
+      const revenue = ask.revenue ? text(a.revenue) : undefined;
+      const set = ask.missing === 'fees' ? { fees: { account: account!, vat: text(a.vat)! } } : ask.missing === 'since' ? { since, ...(revenue ? { revenue } : {}) } : { [ask.missing]: account, ...(since ? { since } : {}), ...(revenue ? { revenue } : {}) };
       // The proposed account the chart lacks is added as Firma › Kontenplan adds one, and taken out again when the answer is refused.
       const create = a.create && ask.propose?.name && account === ask.propose.account && accountName(WS, account) === undefined ? ask.propose.name : undefined;
       if (create) { assertPlaced(account!); setAccountName(WS, account!, create); }
-      const kept = setProviderAccount(WS, ask.provider, set);
+      // Her answer to the app's own question is her switching on: no workflow waits for «Einschalten» because of it (#404).
+      const kept = asHerAct(() => setProviderAccount(WS, ask.provider, set));
       if (!kept.ok) {
         if (create) removeAccount(WS, account!);
-        throw new RequestError(400, `Konto, Steuercode oder Umstellungstag ${[account, a.vat, since].filter(Boolean).join(' / ')} geht so nicht.`, kept.refusal);
+        throw new RequestError(400, `Konto, Steuercode oder Umstellungstag ${[account, a.vat, since, revenue].filter(Boolean).join(' / ')} geht so nicht.`, kept.refusal);
       }
       // Every row of the provider that asked is asked again by its report: the fee report no longer asks for the clearing account just kept.
       for (const r of s.rows) {
@@ -214,6 +222,7 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
         delete r.message;
         Object.assign(r, { state: 'take', reason: undefined });
       }
+      answered = { id: ask.provider, name: ask.name };
       break;
     }
     case 'anyway':
@@ -325,6 +334,9 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
     default: throw new RequestError(400, 'Unbekannte Aktion.');
   }
   await takeWaiting(s);
+  // The payouts her answer decides are booked now, and the row says how many (#404).
+  const ready = answered ? readyPayouts(answered.id) : [];
+  if (answered && ready.length) row.payouts = { provider: answered.name, ...(await bookPayouts(ready)) };
   save(s);
   res.json(s);
 }));
@@ -360,6 +372,12 @@ function takenBytes(row: DropRow): Buffer | undefined {
   return path && existsSync(path) ? readFileSync(path) : undefined;
 }
 
+/** Whether the CSV's rows, by these columns, hold a movement: a day and an amount other than zero. */
+function moves(table: NonNullable<ReturnType<typeof csvTable>>, columns: CsvColumns): boolean {
+  const read = csvStatement(table, columns, { currency: baseCurrency() });
+  return 'kind' in read ? read.kind !== 'empty' : read.movements.some((m) => m.amount !== 0);
+}
+
 /**
  * A statement without a bank export read into its table (#217): the PDF by the model when one answers
  * here, else the table to fill by hand; a CSV by the mapping kept for its header, else its
@@ -372,7 +390,11 @@ async function readInto(s: DropSession, row: DropRow, bytes: Buffer): Promise<vo
     const kept = keptCsv(WS, table.header);
     const takers = WS.bankAccounts.filter((x) => x.statements);
     const accounts = takers.map((x) => ({ account: x.account, label: x.label, currency: x.currency }));
-    const guessed = kept ? undefined : guessColumns(table.header);
+    // The columns its header names are a proposal only when they read as a statement (#406): a day and an amount other
+    // than zero on its rows. Columns that yield no movement (a list whose «amount» column is all zero) are no proposal
+    // and no table of empty lines: the columns are asked with nothing chosen, the way by hand.
+    const header = kept ? undefined : guessColumns(table.header);
+    const guessed = header && moves(table, header) ? header : undefined;
     // A CSV whose every payment the books hold on one account already (its bank export of the same days, #384): nothing to ask, nothing to read in.
     // Only on the account the file names by its IBAN when it names one; without, only a file of three payments or more (one or two equal rows of
     // another account are no proof). «Trotzdem übernehmen» (`anyway`) asks the columns as before.

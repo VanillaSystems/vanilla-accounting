@@ -36,7 +36,7 @@ export interface BookingLine { accountDebit: string; accountCredit: string; amou
  * account, the app's proposal for a sale without an invoice (saleProposal), a supplier's refund.
  */
 export interface DraftSource {
-  account?: { from: 'rule'; rule: string } | { from: 'precedent'; date: string; yours?: true; name?: string } | { from: 'refund'; date: string } | { from: 'sales' | 'owner' | 'business' | 'bankFee' | 'wage' } | { from: 'invoice' | 'receivable'; number: string };
+  account?: { from: 'rule'; rule: string } | { from: 'precedent'; date: string; yours?: true; name?: string } | { from: 'refund'; date: string } | { from: 'sales' | 'owner' | 'business' | 'bankFee' | 'wage' } | { from: 'invoice' | 'receivable'; number: string } | { from: 'clearing'; provider: string };
   /** `abroad`: the firm's own invoice says its service is supplied abroad (invoicing placeAbroad). `noReceipt`: the last booking's code claimed input tax, which a payment without a receipt does not (#397). */
   vat?: { from: 'rule' | 'precedent' | 'receipt' | 'invoice' | 'netRate' | 'refund' | 'abroad' | 'noReceipt' } | { from: 'sale'; choice: SaleChoice };
 }
@@ -53,20 +53,30 @@ export interface DraftLine { accountDebit: string; accountCredit: string; amount
  * What a payment is, as the server knows it from the firm's files (src/saving/hand-rule.ts
  * handStart): money between the firm's own accounts, money from the owner (her name in the
  * payment, receipt-wait.ts paysOwner), money from an authority (a business of that role), or a
- * provider's payout that waits for the person (payoutWaitOf, with the words of its reason). None
- * of them is a sale.
+ * provider's payout (PayoutNature). None of them is a sale.
  */
 export type PaymentNature =
   | { kind: 'ownTransfer' }
   | { kind: 'owner'; account: string }
   | { kind: 'authority'; name: string }
-  | { kind: 'payoutWaits'; key: string; params: Record<string, string> }
+  | PayoutNature
   /** The bank's own fee row (src/booking/bank-fee.ts): its account, or the one the firm's chart lacks. */
   | { kind: 'bankFee'; account: string } | { kind: 'bankFee'; missing: { account: string; name: string } }
   /** A wage on a firm that pays wages (src/booking/receipt-wait.ts `wage`): the firm's wage account (setup.yaml `wages`), booked without a VAT code (guide cls-salary). */
   | { kind: 'wage'; account: string }
   /** A wage on a firm whose books carry wages with their deductions (on `deductions`): no account is proposed. */
   | { kind: 'wage'; deductions: string };
+
+/**
+ * A payment provider's payout (#404, src/booking/providers.ts): a settlement of what the provider
+ * holds, never a sale. `ready`: code books it bank / its clearing account `account` without VAT;
+ * `clearing`, `since`: the company's file lacks it, the provider's report asks; `gap`: before the
+ * cut-over day beside sales a report booked, hers to decide; `before`: before the cut-over day, booked
+ * as the payouts before it were (the business's last booking proposed, never the default sale).
+ * `sales`: the provider's file names a sales report (its order export); without one, its payout report
+ * books its sales.
+ */
+export interface PayoutNature { kind: 'payout'; provider: string; why: 'ready' | 'clearing' | 'since' | 'gap' | 'before'; account?: string; since?: string; sales?: boolean }
 
 /** What code knows beside the books when the form opens. */
 export interface DraftKnowledge {
@@ -110,7 +120,7 @@ export type DraftNote =
   | { kind: 'ownTransfer' }
   | { kind: 'authority'; name: string }
   | { kind: 'supplierDocument' }
-  | { kind: 'payoutWaits'; key: string; params: Record<string, string> }
+  | PayoutNature
   | { kind: 'bankChargesMissing'; account: string; name: string }
   | { kind: 'chooseAccount' }
   /**
@@ -379,7 +389,8 @@ function wordsOf(docs: readonly Receipt[]): string[] | undefined {
  * The booking a person starts from, by rules only (#344): the bank on its side, the amount of the
  * payment, and the other side proposed from what code knows, each proposal naming its source
  * (DraftLine.source) and nothing booked before her click. In this order:
- * - a provider's payout that waits for the person: no proposal, the form says what it waits for;
+ * - a provider's payout: bank / its clearing account without a code when code books it so, else no
+ *   proposal; never a sale, and the form says what a payout is and what it waits for;
  * - a payment naming an issued invoice: with its event booked (agreed basis) bank / the receivable
  *   without a code (its revenue is booked), else the invoice's own accounts and codes; the form
  *   names the invoice and the way to confirm the payment on it;
@@ -436,8 +447,15 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   });
 
   const nature = known.nature;
-  // A provider's payout that waits: the person settles what it waits for first; the form proposes nothing.
-  if (nature?.kind === 'payoutWaits') { notes.push(nature); return result([place('', paid, '')]); }
+  // A provider's payout is no sale (#404): from its clearing account when code books it so, else nothing proposed;
+  // before the cut-over day as the payouts before it were (the business's last booking), never the default sale.
+  const payoutBefore = nature?.kind === 'payout' && nature.why === 'before';
+  if (payoutBefore) notes.push(nature);
+  if (nature?.kind === 'payout' && !payoutBefore) {
+    notes.push(nature);
+    const from = nature.why === 'ready' && nature.account ? nature.account : '';
+    return result([place(from, paid, '', from ? { account: { from: 'clearing', provider: nature.provider } } : undefined)]);
+  }
 
   // An issued invoice the payment names: its revenue is the invoice's, booked with it or now.
   if (issued && bank) {
@@ -534,7 +552,7 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   } else if (proposes && (nature?.kind === 'ownTransfer' || nature?.kind === 'authority')) {
     notes.push(nature);
     other = { account: '', vat: '' };
-  } else if (proposes && moneyIn) {
+  } else if (proposes && moneyIn && !payoutBefore) {
     // Money back from a business the firm buys from: a refund on the account of its last purchase, the code inverted on it.
     // Plausible only when it is no more than the firm paid that business, and the text names no invoice of the firm's own.
     const bought = own?.named ? undefined : refundOf(books, tx, bankAccounts, paid, invoices);
