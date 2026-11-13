@@ -17,7 +17,8 @@
  * a person's booking is never classified, so neither reaches this.
  */
 import { evidenceCheck, isPurchaseDocument, lineReceipts } from '../accounting/evidence-check.js';
-import { formTakes } from '../accounting/vat-codes.js';
+import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
+import { isUnreadable, vatNotRead } from '../accounting/receipt-due.js';
 import { vat } from '../engines/index.js';
 import { wordsIn } from '../export/texts.js';
 import { identify, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
@@ -88,7 +89,8 @@ export function businessVat(k: Pick<Knowledge, 'counterpartyFiles'>): BusinessVa
   return { facts, companyDecides };
 }
 
-const unread = (r: Receipt): boolean => r.hasSwissVat === undefined && !r.vatSummary?.length;
+/** A receipt the company's `unreadReceipt` speaks of: one that could not be read, never one not read yet (#391, receipt-wait's companyRate). */
+const unread = (r: Receipt): boolean => isUnreadable(r);
 const ratedCode = /^(-?)([MI])(\d+)$/;
 
 /** The gross a receipt's rate group taxes: as read, else from its net or its tax. */
@@ -127,6 +129,34 @@ function partRate(receipts: readonly Receipt[], part: NonNullable<BankTransactio
   const whole = groups.length === 1 && r.amount != null && grossOf(groups[0]) >= Math.abs(r.amount) - 0.05;
   const line = groups.length === 1 ? (whole ? groups[0] : undefined) : groups.find((g) => g.ratePercent === part.rate);
   return line && Math.abs(amount) <= grossOf(line) + 0.05 ? line.ratePercent : undefined;
+}
+
+/**
+ * A line of a card's settlement whose bill shows less than the line charged (a tip, #409): at each
+ * input-tax rate, the entries claim it on no more than the bills' gross at that rate; what is over
+ * is split off onto a line of its own with the zero code of the same family. Entries in another
+ * currency than the bills', or without a rated input code, stay as they are.
+ */
+export function capAtBills(entries: JournalEntry[], bills: readonly Receipt[], currency: string, newId: () => string): JournalEntry[] {
+  const gross = (rate: number) => bills.filter((r) => r.hasSwissVat && (r.currency ?? currency) === currency)
+    .reduce((s, r) => s + (r.vatSummary ?? []).filter((g) => g.ratePercent === rate).reduce((t, g) => t + grossOf(g), 0), 0);
+  const out: JournalEntry[] = [];
+  const left = new Map<number, number>();
+  for (const e of entries) {
+    const m = ratedCode.exec(e.vatCode ?? '');
+    const rate = m ? lookupVatCode(e.vatCode!)?.entry.rate : undefined;
+    if (!m || !rate || e.exchangeCurrency) { out.push(e); continue; }
+    const room = left.get(rate) ?? gross(rate);
+    const amount = Math.abs(e.amount);
+    if (amount <= room + 0.05) { left.set(rate, room - amount); out.push(e); continue; }
+    left.set(rate, 0);
+    const keep = Math.max(0, Math.round(room * 100) / 100);
+    const over = Math.round((amount - keep) * 100) / 100;
+    const sign = e.amount < 0 ? -1 : 1;
+    if (keep > 0) out.push({ ...e, amount: sign * keep });
+    out.push({ ...e, id: keep > 0 ? newId() : e.id, amount: sign * over, vatCode: `${m[1]}${m[2]}0`, reason: de().t('rules.say.purchaseVat.overBill', { rate: String(rate) }), by: { kind: 'code', check: 'purchaseVat' } });
+  }
+  return out;
 }
 
 /** An unread receipt as the business's fact reads it: Swiss VAT at the fact's rate on its whole amount (the line's, when the receipt names none). */
@@ -170,6 +200,9 @@ export function withPurchaseVat(tx: BankTransaction, entries: JournalEntry[], do
     // Only a sales record or a supporting document linked: no purchase document, so no input tax (pv-no-receipt).
     const check = evidenceCheck(e, read, undefined, undefined, entries);
     if (check?.kind === 'vatWithoutReceipt') return decide(e, check.code, de().t('rules.say.zeroCode', { code: check.code }));
+    // Receipts nobody has read show no Swiss VAT yet: no input tax on the model's word alone (#391).
+    const mine = lineReceipts(e, read);
+    if (!sign && mine.length && mine.every(vatNotRead)) return decide(e, `${family}0`, de().t('rules.say.zeroCode', { code: `${family}0` }));
     const part = tx.businessPart && model.length === 1 ? partRate(read, tx.businessPart, e.amount, tx.currency) : undefined;
     if (part !== undefined) {
       const box = vat().codes.purchaseBoxes;

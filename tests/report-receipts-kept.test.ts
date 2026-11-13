@@ -13,6 +13,7 @@ import { bookHeldOrder, importSalesReport } from '../src/intake/sales-report-imp
 import { loadBooks, moduleActor, OwnershipError, PERSON, release, saveBooks, update } from '../src/books/store.js';
 import { runIntake, storePort, type Ask } from '../src/intake/pipeline.js';
 import { classifyStep } from '../src/intake/classify.js';
+import { vatStep } from '../src/intake/vat.js';
 import { readStep } from '../src/intake/read.js';
 import { matchStep } from '../src/intake/match.js';
 import { workspaceAt, type Workspace } from '../src/workspace/workspace.js';
@@ -197,13 +198,15 @@ test('#405 a file rewritten under its name with another document: the app\'s lin
       const list = JSON.parse(prompt.slice(prompt.indexOf('\n\n[') + 2, prompt.lastIndexOf(']\n\n') + 1)) as Array<{ i: number }>;
       return JSON.stringify(list.map((x) => ({ i: x.i, fits: true, why: 'stub' })));
     }
+    // The new read's VAT, as the inbox run's VAT step reads it before it books (#391).
+    if (opts.step === 'receipt-vat') return JSON.stringify({ vatId: '', hasSwissVat: true, vatSummary: [{ ratePercent: 2.6, vat: 0.25, gross: 10 }] });
     if (opts.step === 'classify') return JSON.stringify({ TX: { entries: [{ accountDebit: '6570', accountCredit: '', amount: 172, vat: 'none', description: 'Ganz Andere AG' }], reason: 'stub' } });
     return '{}';
   };
   update(b, PERSON, (x) => { x.mappings.push({ transactionRef: 'TX', receiptId: now.id, by: 'human' }); });
   saveBooks(ws, b);
-  const again = await runIntake({ ws, books: storePort(ws, moduleActor('intake')), ask, steps: [['read', readStep], ['classify', classifyStep()]] });
-  assert.deepEqual(stateOf(again), ['done', 'done']);
+  const again = await runIntake({ ws, books: storePort(ws, moduleActor('intake')), ask, steps: [['read', readStep], ['vat', vatStep()], ['classify', classifyStep()]] });
+  assert.deepEqual(stateOf(again), ['done', 'done', 'done']);
   const after = loadBooks(ws);
   assert.equal(after.journalEntries.some((e) => e.id === 'e-tx'), false, 'the booking from the old document is taken back');
   assert.deepEqual(after.journalEntries.filter((e) => e.transactionRef === 'TX').map((e) => e.receipts), [[now.id]], 'and made again from the new read');

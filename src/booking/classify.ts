@@ -18,6 +18,7 @@ import { isVatAmountCode } from '../accounting/validate.js';
 import { periodLock, type Books, type PeriodLock } from '../books/store.js';
 import type { BankTransaction, BookedBy, JournalEntry, Receipt } from '../types/index.js';
 import { isPurchaseDocument } from '../accounting/evidence-check.js';
+import { vatNotRead } from '../accounting/receipt-due.js';
 import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { APP_ROOT, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
@@ -44,10 +45,11 @@ import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '.
 import { payerNames } from '../knowledge/payer.js';
 import { businessGuidance, companyGuidance } from '../knowledge/guidance.js';
 import { partPayment, partReceipts, partsOf, partText } from '../accounting/batch-parts.js';
+import { cardLinesOf, cardPart, cardParts, lineReceiptsOf } from '../books/card-lines.js';
 import { wordsIn } from '../export/texts.js';
 import { ruleFor, ruleWords, stampRule, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
-import { businessVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
+import { businessVat, capAtBills, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
 import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
 import { bankChargesOf, isOwnBankFee, type BankCharges } from './bank-fee.js';
 import { bankCodedFee } from '../books/bank-import.js';
@@ -671,7 +673,7 @@ const receiptTaxReason = (tax: number, rate: number) =>
   `Der Beleg weist die Steuer in ${baseCurrency()} aus: ${tax.toFixed(2)} zu ${rate} % als Vorsteuer, wie auf dem Beleg, nicht aus der umgerechneten Zahlung gerechnet.`;
 
 /** A part of a collective payment, or what is left of it, as the model is asked about it: the books with only its own receipts, and the key its answer comes under. */
-interface PartView { books: Books; key: string; note?: string }
+interface PartView { books: Books; key: string; note?: string; cap?: true }
 
 /**
  * A collective payment no rule decides as a whole, by its parts (r10h-14): each part is a payment of
@@ -682,17 +684,23 @@ interface PartView { books: Books; key: string; note?: string }
  * one: the payment is booked as a whole. `whole`: code decided every part. A rule that asks decides no part.
  */
 function byParts(books: Books, tx: BankTransaction, context: ClassifyContext, fx: FxResolver): { entries: JournalEntry[]; whole: boolean; alone: Array<{ tx: BankTransaction; view: PartView }>; rest?: { tx: BankTransaction; view: PartView } } | undefined {
-  const parts = partsOf(tx);
+  // A card's settlement whose statement's lines have bills linked to them (#409) is split by those lines: each line's bill is evidence of that line alone.
+  const card = cardLinesOf(books, tx);
+  const byLine = card && lineReceiptsOf(books, tx.ref, card.lines.length);
+  const lined = byLine?.some((rs) => rs.length) ? { parts: cardParts(card!.lines, tx.currency), held: byLine, statement: card!.statement.id } : undefined;
+  const parts = lined?.parts ?? partsOf(tx);
   if (!parts) return undefined;
-  const held = partReceipts(tx, mappedReceipts(books, tx));
+  const held = lined?.held ?? partReceipts(tx, mappedReceipts(books, tx));
   const paid = held?.some((rs) => rs.length);
   if (!context.rules?.length && !paid) return undefined;
-  // Each part sees its own receipts only: another part's are no evidence of it. Receipts that pay no part stay the whole payment's.
-  const only = (ids: ReadonlySet<string>): Books => (held ? { ...books, mappings: books.mappings.filter((m) => m.transactionRef !== tx.ref || ids.has(m.receiptId)) } : books);
+  // Each part sees its own receipts only: another part's are no evidence of it. Receipts that pay no part stay the whole payment's;
+  // a card statement is the receipt of its lines without a bill of their own, never of a line's bill.
+  // A line's bill is its part's own receipt: in the part's view it is linked to the part as a whole.
+  const only = (ids: ReadonlySet<string>): Books => (held ? { ...books, mappings: books.mappings.filter((m) => m.transactionRef !== tx.ref || ids.has(m.receiptId)).map(({ line: _, ...m }) => m) } : books);
   const rate = tx.currency === baseCurrency() ? 1 : fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1;
   const decided = parts.map((p, i) => {
-    const part = partPayment(tx, p);
-    const view: PartView = { books: only(new Set((held?.[i] ?? []).map((r) => r.id))), key: `${tx.ref}#${i + 1}` };
+    const part = lined ? cardPart(tx, p) : partPayment(tx, p);
+    const view: PartView = { books: only(new Set((held?.[i] ?? []).map((r) => r.id))), key: `${tx.ref}#${i + 1}`, ...(lined && held?.[i]?.length ? { cap: true as const } : {}) };
     const routing = identify(signalsOfTransaction(part, held ? mappedReceipts(view.books, part) : []), context.counterparties ?? []);
     const placed = context.rules?.length ? ruleFor(context.rules, { tx: part, counterparty: routing.kind === 'known' ? routing.counterparty : undefined, bankAccount: bankAccountFor(tx, context.bankAccounts), amount: part.amount * rate }) : undefined;
     const then = placed?.rule.then;
@@ -704,10 +712,16 @@ function byParts(books: Books, tx: BankTransaction, context: ClassifyContext, fx
   const entries = decided.flatMap((d) => d.entries ?? []);
   if (!entries.length && !paid) return undefined;
   const open = decided.filter((d) => !d.entries);
-  const alone = open.filter((d) => d.paid).map(({ part, view }) => ({ tx: part, view }));
-  const loose = parts.filter((_, i) => !decided[i].entries && !decided[i].paid);
+  // A card statement's credit line (money back) is a payment the other way: it goes alone, with the statement, never summed into the charges.
+  const credit = (i: number) => !!lined && parts[i].amount < 0;
+  const statementView = (v: PartView): PartView => ({ ...v, books: only(new Set([lined!.statement])) });
+  const alone = [
+    ...open.filter((d) => d.paid).map(({ part, view }) => ({ tx: part, view })),
+    ...decided.flatMap((d, i) => (!d.entries && !d.paid && credit(i) ? [{ tx: d.part, view: statementView(d.view) }] : [])),
+  ];
+  const loose = parts.filter((_, i) => !decided[i].entries && !decided[i].paid && !credit(i));
   const sign = tx.amount < 0 ? -1 : 1;
-  const rest = loose.length ? { tx: { ...tx, amount: sign * loose.reduce((sum, p) => sum + Math.abs(p.amount), 0), description: loose.map(partText).join('; '), parts: loose.length > 1 ? loose : undefined }, view: { books: only(new Set()), key: tx.ref } } : undefined;
+  const rest = loose.length ? { tx: { ...tx, amount: sign * loose.reduce((sum, p) => sum + Math.abs(p.amount), 0), description: loose.map(partText).join('; '), parts: loose.length > 1 ? loose : undefined }, view: { books: only(new Set(lined ? [lined.statement] : [])), key: tx.ref } } : undefined;
   return { entries, whole: !open.length, alone, rest };
 }
 
@@ -745,10 +759,25 @@ export function classifyInput(books: Books, tx: BankTransaction, legs: readonly 
   };
 }
 
-/** The receipts linked to a payment; a copy a person marked as such never claims its input tax a second time. */
+/**
+ * The receipts whose VAT must be read before the model books `tx` (#391): a payment out of a firm
+ * that claims input tax, whose linked purchase documents are all not read yet (vatNotRead). Empty
+ * otherwise: no receipt, one read, one that could not be read (its own wait, #57), money in.
+ */
+export function vatToRead(books: Books, tx: BankTransaction): Receipt[] {
+  if (tx.direction !== 'DBIT' || withoutInputTax()) return [];
+  const purchase = mappedReceipts(books, tx).filter(isPurchaseDocument);
+  return purchase.length && purchase.every(vatNotRead) ? purchase : [];
+}
+
+/**
+ * The receipts linked to a payment; a copy a person marked as such never claims its input tax a second time.
+ * A bill of one line of a card's settlement (Mapping.line, #409) is none of the whole payment's: only its
+ * line's part sees it (byParts), whether or not the line still has its statement.
+ */
 export function mappedReceipts(books: Books, tx: BankTransaction) {
   return books.mappings
-    .filter((m) => m.transactionRef === tx.ref)
+    .filter((m) => m.transactionRef === tx.ref && m.line === undefined)
     .map((m) => books.receipts.find((r) => r.id === m.receiptId))
     .filter((r): r is NonNullable<typeof r> => !!r && r.kind !== 'duplicate');
 }
@@ -846,6 +875,8 @@ export interface ClassifyOutcome {
   asked: Asked[];
   /** Payments no rule decided, left unbooked because there is no model. */
   unasked: string[];
+  /** Payments out left unbooked until the VAT of their receipts is read (vatToRead, #391): the model is not asked to guess it. */
+  vatNotRead: string[];
   /** Collective payments booked in part, one line per part a rule decided; the rest is the person's (r10h-14). Also in `classified`. */
   partly: string[];
 }
@@ -871,7 +902,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     accounts: items, bankAccount: bankAccountFor(tx, context.bankAccounts), clearing, lock, rateOn: (c, d) => fx.daily(c, d),
     documents: mappedReceipts(booksOf(tx), tx), length: filing().length, newId: () => randomBytes(8).toString('hex'),
   });
-  const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [], partly: [] };
+  const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [], vatNotRead: [], partly: [] };
   // The legs of a card charge split across balances share its receipts: each books its share, the input tax of all of them never more than the receipts show (#190).
   const charges = chargesOf(books.transactions, (amount, currency, date) => { if (currency === baseCurrency()) return amount; const rate = fx.daily(currency, date) ?? fx.flat(currency); return rate === undefined ? undefined : amount * rate; });
   const legsOf = (tx: BankTransaction) => charges.of(tx).legs;
@@ -977,6 +1008,14 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   }
   // The payments that repay the owner's outlays, each told what was open for it after the earlier ones (#402).
   const repayments = repaymentsOf(books, context, context.wageWordings ?? [], fx);
+  // A payment out whose purchase receipts nobody has read yet waits for the VAT step, not for the model's guess at its input tax (#391);
+  // a repayment of the owner's outlays books onto her account and claims none, a part of a collective payment keeps the backstop in withPurchaseVat.
+  for (const tx of [...toModel]) {
+    if (views.has(tx) || proposing.has(tx.ref) || repayments.has(tx.ref) || !vatToRead(books, tx).length) continue;
+    toModel.splice(toModel.indexOf(tx), 1);
+    log(`  ${tx.ref}  waits: the VAT of its receipt is not read yet`);
+    outcome.vatNotRead.push(tx.ref);
+  }
   // The payments of contributions (#426): to a business that collects them, or one booked on the wages' accounts before; never a wage
   // (its text or its payee's), nor a purchase whose receipt shows the jurisdiction's VAT. Each is told what the wages withheld.
   const businessOf = (t: BankTransaction): string | undefined => {
@@ -1047,7 +1086,9 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         const lines = splitByReceipts(tx, fee?.lines ?? derived, mapped);
         const noted = [reason, fee?.note, customsNotes.get(tx)].filter(Boolean).join(' ') || undefined;
         const coded = withPurchaseVat(tx, withRefundCodes(own, tx, withCreditNoteCodes(own, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), bankAccount), mapped, context.purchaseVat, context.counterparties);
-        const entries = withoutZeroOnNoCode(receiptTaxOf(own, tx, coded, mapped), bankAccount, context);
+        const taxed = withoutZeroOnNoCode(receiptTaxOf(own, tx, coded, mapped), bankAccount, context);
+        // A card line's bill that shows less than the line (a tip): its rate on no more than the bill taxes at it (#409).
+        const entries = views.get(tx)?.cap ? capAtBills(taxed, mapped, tx.currency, newEntryId) : taxed;
         const twice = inputTaxOverReceipts(own, tx, legsOf(tx), entries, (c, d) => fx.daily(c, d));
         if (twice) {
           const others = twice.others.map((t) => t.ref).join(', ');

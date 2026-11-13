@@ -219,7 +219,9 @@ export const ACTIONS: Record<string, Action> = {
       // A payment to the owner waits for the outlays it pays back, not for a receipt of its own (#428).
       const held = { outcome: 'held', output: { why: awaitsOutlays(scratch, t, context, known.wages, fx) ? 'waitsForOutlays' : 'waitsForReceipt' } } as const;
       if (waits && (!ask || t.waitsForReceipt?.decided)) return held;
-      const { classified, failed, asked, unasked } = await classifyTransactions(scratch, [t], { ask, fx, context });
+      const { classified, failed, asked, unasked, vatNotRead } = await classifyTransactions(scratch, [t], { ask, fx, context });
+      // Its receipts' VAT is not read yet (#391): the receipt intake's VAT step reads it, then this books it.
+      if (vatNotRead.length) return { outcome: 'held', output: { why: 'vatNotRead' } };
       const entries = scratch.journalEntries.slice(before);
       if (waits && !answerSettles(t, entries, context)) return held;
       // Without a model nothing was answered: the step says the AI is missing, not that it failed.

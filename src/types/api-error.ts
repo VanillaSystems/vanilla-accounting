@@ -237,6 +237,10 @@ export type ApiRefusal =
   | { code: 'unknownVatCode'; params: { code: string } }
   /** A code the firm's form does not take (src/accounting/vat-codes.ts formTakes): none on a firm not registered, no input-tax code on the net tax rate method. */
   | { code: 'codeNotTaken'; params: { code: string; method: 'none' | 'net-rate' } }
+  /** A bill linked to a line of a card's settlement (#409): the payment has no card statement with that line (`line` counts from 1). */
+  | { code: 'cardLineMissing'; params: { payment: string; line: number } }
+  /** That line holds another bill already. */
+  | { code: 'cardLineTaken'; params: { payment: string; line: number; receipt: string } }
   /** A payment provider's clearing account that is no balance-sheet account (src/intake/sales-report-import.ts setProviderAccount). */
   | { code: 'clearingNotBalance'; params: { account: string } }
   /** A provider's revenue account that is no revenue account (#404, setProviderAccount). */
@@ -273,6 +277,8 @@ export type ClassifyRefusal =
   | { code: 'classifyBalance'; params: { date: string; currency: string; paid: number; booked: number } }
   | { code: 'classifySeparateFee'; params: { fee: string; currency: string; amount: number } }
   | { code: 'classifyOpenInvoice'; params: { number: string; customer: string } }
+  /** The payment's purchase receipts are not read yet (#391): it waits for the VAT step's reading, never booked on the model's guess. */
+  | { code: 'classifyVatNotRead'; params: { receipt: string } }
   | { code: 'classifyInputTaxShared'; params: { payments: string; currency: string; booked: number; shown: number } }
   /** The answer takes more off the wages' deductions account than it held on the payment's day (#426). */
   | { code: 'classifyWithheldOver'; params: { account: string; currency: string; taken: number; open: number } };

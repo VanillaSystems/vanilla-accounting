@@ -566,6 +566,7 @@ function noteText(n: IntakeNote): string {
     case 'waitingReceipt': return t('automation.note.waitingReceipt', { n: n.count });
     case 'receiptUnread': return t('automation.note.receiptUnread', { n: n.count });
     case 'bookingWaits': return bookingWaitsText(n.files);
+    case 'vatNotRead': return t('automation.note.vatNotRead', { n: n.count });
     case 'error': return n.detail;
   }
 }

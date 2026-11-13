@@ -41,6 +41,8 @@ export type IntakeNote =
   | { code: 'receiptUnread'; count: number }
   /** The workflow `booking` waits for «Einschalten» (#413): `files` changed since it was switched on, so nothing was booked by rule or model; `waiting` payments are open. */
   | { code: 'bookingWaits'; files: string[]; waiting: number }
+  /** Payments out that wait until the VAT of their receipts is read (#391): booked by the next run, after the VAT step. */
+  | { code: 'vatNotRead'; count: number }
   /** The step threw. */
   | { code: 'error'; detail: string };
 
@@ -213,6 +215,7 @@ export function noteLines(notes: IntakeNote[]): string[] {
       case 'waitingReceipt': return `${n.count} payment(s) wait for their receipt: booked once it is linked`;
       case 'receiptUnread': return `? ${n.count} payment(s) have a receipt whose VAT could not be read: each waits for the person under Aufgaben`;
       case 'bookingWaits': return `${n.waiting} payment(s) not booked: «Buchen» waits for «Einschalten» since ${n.files.join(', ')} changed`;
+      case 'vatNotRead': return `${n.count} payment(s) wait until the VAT of their receipt is read: booked by the next run`;
       case 'error': return `⛔ ${n.detail}`;
     }
   });

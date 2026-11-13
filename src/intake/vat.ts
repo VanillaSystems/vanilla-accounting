@@ -11,8 +11,10 @@
  * comes up instead of a «no VAT». A «no VAT» read earlier off such a text is forgotten and flagged
  * the same way. Facts the books wrote themselves (an invoice's receipt, a tutti purchase) carry no
  * vatExtractedAt and stay, and facts a person set (vatBy 'human', src/accounting/vat-facts.ts) are
- * never taken up, with `force` too. A text that proves something and shows no VAT indicator is
- * recorded hasSwissVat=false without a model call, on a receipt that has no facts. Only a model answer that parses as VAT facts replaces facts.
+ * never taken up, with `force` too. Silence is no fact (#391): a text that proves something is
+ * read by the model; without one, code keeps only what the text proves (Swiss VAT its figures add up
+ * to, «no Swiss VAT» said in words) and the rest stays unread, without facts (the receipt shows «not read yet»), for
+ * the next run with a model. Only a model answer that parses as VAT facts replaces facts.
  */
 import { creditSigned } from '../accounting/credit-signed.js';
 import { buildReceiptVatPrompt, parseReceiptVat, type ReceiptVatResult } from '../llm/prompts.js';
@@ -20,7 +22,7 @@ import { runAdaptivePool, isRateLimitSignal } from '../llm/adaptive-pool.js';
 import { periodLock, type Books } from '../books/store.js';
 import { vatSetup } from '../engines/index.js';
 import type { Receipt } from '../types/index.js';
-import { hasVatIndicator, textFacts, textProves, unprovenNoVat } from '../parsers/receipt-text.js';
+import { textFacts, textProves, unprovenNoVat } from '../parsers/receipt-text.js';
 import type { IntakeNote, StepRun } from './pipeline.js';
 
 // Adaptive concurrency (AIMD — like TCP congestion control):
@@ -72,25 +74,25 @@ export const provisionalNoVat = (r: Receipt): boolean =>
 export const vatCandidates = (books: Books, force = false, withModel = false): Receipt[] =>
   books.receipts.filter((r) => r.vatBy !== 'human' && r.kind !== 'statement' && (force || ((!hasFacts(r) || unprovenNoVat(r) || (withModel && provisionalNoVat(r))) && !r.needsVisionReview && !filedReceipt(books, r))));
 
-export function vatStep({ force = false } = {}): StepRun {
+/** `only`: the ids of the receipts to read, as for one payment's «Buchen» (src/server/routes/classify.ts); absent, every candidate. */
+export function vatStep({ force = false, only }: { force?: boolean; only?: ReadonlySet<string> } = {}): StepRun {
   return async ({ books, ask, progress, log }) => {
     if (!vatSetup().registered) {
       log('The firm is not registered for VAT: no VAT facts are read off its receipts.');
       return { notes: [] };
     }
-    const candidates = vatCandidates(books.read(), force, !!ask);
+    const candidates = vatCandidates(books.read(), force, !!ask).filter((r) => !only || only.has(r.id));
     if (candidates.length === 0) {
       log('All receipts already have VAT facts extracted (use --force to redo).');
       return { notes: [] };
     }
 
-    // Partition: no-text (skip), no-VAT-indicator (deterministic), needs-LLM.
+    // Partition: no-text (skip), the rest for the model. A text that names no VAT is no answer: only the model or words say «no Swiss VAT» (#391).
     const noText = candidates.filter((r) => !textProves(r));
-    const deterministic = candidates.filter((r) => !noText.includes(r) && !hasVatIndicator(r.extractedText));
-    const needsLlm = candidates.filter((r) => !noText.includes(r) && !deterministic.includes(r));
+    const needsLlm = candidates.filter((r) => !noText.includes(r));
     log(
       `${candidates.length} receipt(s) to process: ` +
-        `${needsLlm.length} via LLM, ${deterministic.length} no-VAT-indicator (deterministic), ` +
+        `${needsLlm.length} via LLM, ` +
         `${noText.length} skipped (text too poor — needs vision review)\n`,
     );
 
@@ -106,10 +108,8 @@ export function vatStep({ force = false } = {}): StepRun {
       }
     });
 
-    const total = deterministic.length + needsLlm.length;
-    // No indicator is no evidence against facts a receipt has.
-    apply(deterministic.map((r) => [r, { ...NO_VAT, vatExtractedAt: new Date().toISOString() }]), false);
-    let done = deterministic.length;
+    const total = needsLlm.length;
+    let done = 0;
     progress(done, total);
 
     const notes: IntakeNote[] = [];
@@ -178,7 +178,6 @@ export function vatStep({ force = false } = {}): StepRun {
           `peak: ${stats.peakConcurrency} | next start: ${stats.suggestedNextStart} (learned)`,
       );
     }
-    log(`  Deterministic : ${deterministic.length} (no VAT indicator)`);
     log(`  Skipped       : ${noText.length} (text too poor — needs vision review)`);
     for (const r of noText) log(`      ${r.filename}`);
     return { notes };

@@ -23,8 +23,8 @@ notTotal: [Lohnsumme, Summe der Löhne, Löhne, Versicherungssumme, Kreditlimite
 
 # A document that says in words it charges no Swiss VAT (a sale abroad, an exempt premium, a foreign
 # supplier's reverse charge): read as «keine CH-MWST» only when no Swiss rate, rate group or Swiss VAT
-# number stands on it (receipt-text.ts textFacts noSwissVat).
-noVat: [nicht der schweizerischen MWST unterstellt, nicht der MWST unterstellt, von der MWST ausgenommen, unterliegen nicht der MWST, unterliegt nicht der MWST, keine schweizerische MWST, not registered for VAT in Switzerland, no Swiss VAT, no VAT charged, no sales tax or VAT charged, reverse charge, Steuerschuldnerschaft des Leistungsempfängers, exonéré de la TVA, exonérée de la TVA, hors du champ de la TVA suisse, pas de TVA suisse, non soggetto all'IVA, non soggetta all'IVA, esente IVA, senza IVA svizzera]
+# number stands on it (receipt-text.ts textFacts noSwissVat): «Total ohne MWST» beside «MWST 8.1 %» says nothing.
+noVat: [nicht der schweizerischen MWST unterstellt, nicht der MWST unterstellt, nicht MWST-pflichtig, not subject to Swiss VAT, non assujetti à la TVA, non assoggettato all'IVA, von der MWST ausgenommen, unterliegen nicht der MWST, unterliegt nicht der MWST, keine schweizerische MWST, not registered for VAT in Switzerland, no Swiss VAT, no VAT charged, no sales tax or VAT charged, reverse charge, Steuerschuldnerschaft des Leistungsempfängers, exonéré de la TVA, exonérée de la TVA, hors du champ de la TVA suisse, pas de TVA suisse, non soggetto all'IVA, non soggetta all'IVA, esente IVA, senza IVA svizzera]
 
 supporting:
   order-confirmation: [Auftragsbestätigung, Bestellbestätigung, Bestelleingang, Order confirmation, Confirmation de commande, Confirmation d'ordre, Conferma d'ordine, Conferma dell'ordine]
@@ -54,6 +54,9 @@ statement: [Kontoauszug, Bankauszug, Account statement, Bank statement, Statemen
 # namesCardStatement); with its period it is the receipt of the card's debit on the bank account:
 # the app reads no card statement as a bank statement (#401, #94).
 cardStatement: [Kreditkartenabrechnung, Kartenabrechnung, Monatsabrechnung Kreditkarte, Credit card statement, Card statement, Relevé de carte de crédit, Relevé de carte, Décompte de carte, Estratto conto carta di credito, Estratto conto carta, Conteggio carta]
+# The card's own payment on its statement: with the balance words, a row of a card statement that
+# is no merchant's line (src/books/card-lines.ts, #409).
+cardPayment: [Ihre Zahlung, Zahlung erhalten, Zahlungseingang, Besten Dank für Ihre Zahlung, Your payment, Payment received, Payment - thank you, Payment – thank you, Votre paiement, Paiement reçu, Il vostro pagamento, Pagamento ricevuto]
 
 # The columns of a statement's movements, money out and money in (src/core/modules/words.ts
 # isBankStatement): a statement shows the account's IBAN or these. A supplier's «Statement» of

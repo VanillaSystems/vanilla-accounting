@@ -162,6 +162,8 @@ export function errorText(e: unknown): string {
     case 'ownInvoiceTaken': return t('error.ownInvoiceTaken');
     case 'bookedSince': return t('error.bookedSince', { payment: b.params.payment, n: b.params.entries, by: t(`error.bookedSince.${b.params.by}`) });
     case 'receiptPaid': return t('error.receiptPaid', { payment: b.params.payment });
+    case 'cardLineMissing': return t('error.cardLineMissing', { line: b.params.line });
+    case 'cardLineTaken': return t('error.cardLineTaken', { line: b.params.line });
     case 'pointerLinked': return t('error.pointerLinked', { payment: b.params.payment });
     case 'correctionBooked': return t('error.correctionBooked', { entry: b.params.entry });
     case 'reportCorrection': return t(`error.reportCorrection.${b.params.why}`);
@@ -212,6 +214,7 @@ export function errorText(e: unknown): string {
     }
     case 'classifySeparateFee': return t('error.classifySeparateFee', { fee: b.params.fee, amount: `${b.params.currency} ${fmt(b.params.amount)}` });
     case 'classifyOpenInvoice': return t('error.classifyOpenInvoice', b.params);
+    case 'classifyVatNotRead': return t('error.classifyVatNotRead', b.params);
     case 'classifyInputTaxShared': return t('error.classifyInputTaxShared', { payments: b.params.payments, booked: `${b.params.currency} ${fmt(b.params.booked)}`, shown: `${b.params.currency} ${fmt(b.params.shown)}` });
     case 'classifyWithheldOver': return t('error.classifyWithheldOver', { account: b.params.account, taken: `${b.params.currency} ${fmt(b.params.taken)}`, open: `${b.params.currency} ${fmt(b.params.open)}` });
     case 'personsBooking': return t('error.personsBooking', { n: b.params.entries });
@@ -359,8 +362,8 @@ function invoiceRefusalText(code: InvoiceRefusal | 'noBrowser' | 'printFailed', 
 
 type Ok = { ok: true };
 /** `confirm`: a second bank payment of another payee for a receipt that has one, confirmed (r8h-21). */
-type Link = { receiptId: string; transactionRef: string; confirm?: true };
-type Linked = Ok & { again: string[]; kept?: string[] };
+type Link = { receiptId: string; transactionRef: string; confirm?: true; line?: number; bills?: Array<{ receipt: string; line: number }> };
+type Linked = Ok & { again: string[]; kept?: string[]; bills?: Array<{ receipt: string; line: number }> };
 /** A change by hand; `origin`, `reason` and `by` only from its undo (null: the booking had none). */
 export type JournalEntryPatch = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description' | 'amount' | 'receipts'>> & { tags?: JournalEntry['tags'] | null }
   & { origin?: JournalEntry['origin'] | null; reason?: string | null; by?: JournalEntry['by'] | null };

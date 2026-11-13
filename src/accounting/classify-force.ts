@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { JournalEntry, Mapping, Receipt } from '../types/index.js';
+import { dropLineBills } from '../books/card-lines.js';
 
 /**
  * The entries `classify --force` may remove so it can book their transactions again.
@@ -81,6 +82,8 @@ export function unbookPayments(books: Relinkable, refs: Iterable<string>, change
 /** A receipt leaves the books (deleted, or a drop taken back): its links go, and with them the classifier's entries that saw it. */
 export function removeReceipt(books: Relinkable & { receipts: Receipt[] }, id: string): string[] {
   const refs = books.mappings.filter((m) => m.receiptId === id).map((m) => m.transactionRef);
+  // A card statement takes the bills of its lines with it (#409).
+  dropLineBills(books, id);
   books.receipts = books.receipts.filter((r) => r.id !== id);
   books.mappings = books.mappings.filter((m) => m.receiptId !== id);
   return unbookPayments(books, refs, 'links');

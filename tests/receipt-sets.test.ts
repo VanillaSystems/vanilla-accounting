@@ -166,7 +166,7 @@ test('a currency case: EUR receipts on a EUR payment are split; EUR receipts on 
   const split = await book(pay(44.99, { bank: 'Wise', currency: 'EUR' }), eur, [line('4200', 44.99, 'M0')]);
   assert.deepEqual(rows(split), [['4200', 19.99, 'M81'], ['4200', 25, 'M0']]);
   assert.deepEqual(split.map((e) => e.exchangeCurrency), ['EUR', 'EUR']);
-  const chf = await book(pay(42.1), [receipt(19.99, { currency: 'EUR' }), receipt(25, { currency: 'EUR' })], [line('4200', 42.1, 'M0')]);
+  const chf = await book(pay(42.1), [receipt(19.99, { currency: 'EUR', hasSwissVat: false }), receipt(25, { currency: 'EUR', hasSwissVat: false })], [line('4200', 42.1, 'M0')]);
   assert.deepEqual(rows(chf), [['4200', 42.1, 'M0']]);
 });
 

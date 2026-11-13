@@ -41,8 +41,8 @@ export function bookingWaitsNote(r: Pick<RunDetail, 'steps'>): string[] | undefi
   return undefined;
 }
 /** Why a run that booked nothing left its payment, by the step's `why` (#428): «0 Buchungen gebucht» never stands without it. */
-const LEFT: Record<string, 'marks.left.waitsForReceipt' | 'marks.left.waitsForOutlays' | 'marks.left.receiptUnread'> = {
-  waitsForReceipt: 'marks.left.waitsForReceipt', waitsForOutlays: 'marks.left.waitsForOutlays', receiptUnread: 'marks.left.receiptUnread',
+const LEFT: Record<string, 'marks.left.waitsForReceipt' | 'marks.left.waitsForOutlays' | 'marks.left.receiptUnread' | 'marks.left.vatNotRead'> = {
+  waitsForReceipt: 'marks.left.waitsForReceipt', waitsForOutlays: 'marks.left.waitsForOutlays', receiptUnread: 'marks.left.receiptUnread', vatNotRead: 'marks.left.vatNotRead',
 };
 
 /** What a run started by a button did, in one line (r4c-34): booked, waiting for whom and why, or stuck. */

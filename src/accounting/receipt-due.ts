@@ -33,6 +33,14 @@ export function isUnreadable(r: Pick<Receipt, 'kind' | 'vatBy' | 'hasSwissVat' |
 }
 
 /**
+ * A purchase document whose VAT nobody has read yet (#391): no facts, and not one that could not be
+ * read (isUnreadable). The VAT step takes it up on its next run; until then it shows no rate either way.
+ */
+export function vatNotRead(r: Pick<Receipt, 'kind' | 'vatBy' | 'hasSwissVat' | 'vatSummary' | 'needsVisionReview' | 'vatExtractedAt'>): boolean {
+  return isPurchaseDocument(r) && r.vatBy !== 'human' && r.hasSwissVat === undefined && !r.vatSummary?.length && !isUnreadable(r);
+}
+
+/**
  * What the receipts linked to a payment say: none, at least one readable, only purchase documents
  * whose VAT could not be read, or (`short`, given the payment `tx`) part of a set: two or more
  * receipts in the payment's currency that add up to less than it paid out, by more than a
@@ -92,7 +100,8 @@ export function excessOf(receipts: readonly Receipt[], tx: Pick<BankTransaction,
 export function excessOfPayment(books: Pick<Index, 'transactions' | 'mappings' | 'receipts'>, ref: string, adding?: string): number | undefined {
   const tx = books.transactions.find((t) => t.ref === ref);
   if (!tx) return undefined;
-  const ids = new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId));
+  // A bill linked to a line of the payment's card statement (#409) is a part of the statement's amount, never more than the payment.
+  const ids = new Set(books.mappings.filter((m) => m.transactionRef === ref && m.line === undefined).map((m) => m.receiptId));
   if (adding) ids.add(adding);
   if (books.mappings.some((m) => ids.has(m.receiptId) && m.transactionRef !== ref)) return undefined;
   return excessOf(books.receipts.filter((r) => ids.has(r.id) && r.kind !== 'duplicate'), tx);
