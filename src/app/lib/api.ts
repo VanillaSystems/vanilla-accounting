@@ -50,7 +50,7 @@ import type { RunLogLine } from '../../workflows/runlog.js';
 import type { HistoryObject, ObjectHistory } from '../../workflows/history.js';
 import type { Conversation, ConversationSummary, MadeChange, PrivatePart, Turn } from '../../types/assistant.js';
 import { ATTACHMENT_MAX_MB, type Attachment } from '../../types/attachment.js';
-import type { DropAction, DropSession, PayoutWaitView, QuarantinedFile, StatementDetails } from '../../types/drop.js';
+import type { DropAction, DropSession, PayoutGroup, PayoutWaitView, QuarantinedFile, StatementDetails } from '../../types/drop.js';
 import type { MailCheck, ReceiptSkipOffer, SourcePreview, SourcesView } from '../../platform/sources/model.js';
 import type { MailHost } from '../../platform/sources/mail-host.js';
 import type { DraftCommand, DraftView, BookOpen, KeepResult, KeptView, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
@@ -484,6 +484,10 @@ export const api = {
   receiptSets: (ref: string) => request<{ sets: ReceiptSet[]; cut?: SetCut }>('GET', `/api/transactions/${encodeURIComponent(ref)}/receipt-sets`),
   /** Why a provider's payout waits for the person, or null (#203). */
   payoutWait: (ref: string) => request<{ wait: PayoutWaitView | null }>('GET', `/api/transactions/${encodeURIComponent(ref)}/payout-wait`),
+  /** A provider's payouts without a booking, by provider and what they wait for (#404). */
+  payouts: () => request<{ groups: PayoutGroup[] }>('GET', '/api/payouts'),
+  /** Books a provider's payouts code books now: how many were booked, how many runs still book. */
+  bookPayouts: (provider: string) => request<{ ok: true; booked: number; running: number; of: number }>('POST', '/api/payouts/book', { provider }),
   groupedOffer: (ref: string) => request<{ offer: GroupedOffer | null }>('GET', `/api/rules/grouped?ref=${encodeURIComponent(ref)}`),
   draftGrouped: (ref: string) => request<{ path: string }>('POST', '/api/rules/grouped', { ref }),
   unreadOffer: (ref: string) => request<{ offer: UnreadOffer | null }>('GET', `/api/rules/unread?ref=${encodeURIComponent(ref)}`),

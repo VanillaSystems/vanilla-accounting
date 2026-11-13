@@ -34,6 +34,7 @@ import { approvalWithheld, fileName, returnSummary } from './filing-summary.js';
 import { outcomeText, periodText, paymentWords, readsInWords } from './words.js';
 import type { PeriodReturn, PreparedXml, SealOutput } from '../../../workflows/filing.js';
 import type { ClearingCheck } from '../../../booking/providers.js';
+import type { PayoutGroup } from '../../../types/drop.js';
 import { commandRefusalText, refusalPayment, refusalText } from '../../automation/refusal.js';
 import type { Refusal } from '../../../types/refusal.js';
 import { RunFromLog } from '../../history/RunHistory.js';
@@ -775,7 +776,10 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
   const forReceipt = waitingForReceipt(books, (ref) => booked(ref) === 'booked', localToday());
   const receiptDue = forReceipt.filter((w) => w.kind !== 'waits');
   const held = new Set(forReceipt.map((w) => w.tx.ref));
-  const waiting = unbookedPayments(books, accounts).filter((p) => !inTasks.has(p.ref) && !held.has(p.ref));
+  // A provider's payouts are named as its payouts, grouped, with the one thing to do (#404).
+  const payouts = usePayoutGroups(books);
+  const isPayout = new Set(payouts.flatMap((g) => g.refs));
+  const waiting = unbookedPayments(books, accounts).filter((p) => !inTasks.has(p.ref) && !held.has(p.ref) && !isPayout.has(p.ref));
   const evidence = journalOf(books).views.some((v) => v.evidence) || !!unsettledAtFiling(journalOf(books), filing().length)?.items.length || openTwins(ledgerFor(books)).length > 0 || assessmentsMissing(books).length > 0;
   // A firm not registered whose turnover passed the threshold has a task without any run (r5f-9).
   const threshold = thresholdPassed(books, useWorkspace()?.company.vat.registered);
@@ -826,11 +830,12 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
             );
           })}
         </div>
-      ) : asked || waiting.length || evidence || threshold.length || receiptDue.length ? null : held.size ? <p className="lead"><UnbookedFact books={books} nav={nav} lead={t('automation.noTask')} /></p> : <p className="lead">{t('automation.tasksEmpty')}</p>}
+      ) : asked || waiting.length || payouts.length || evidence || threshold.length || receiptDue.length ? null : held.size ? <p className="lead"><UnbookedFact books={books} nav={nav} lead={t('automation.noTask')} /></p> : <p className="lead">{t('automation.tasksEmpty')}</p>}
       <EvidenceTasks books={books} nav={nav} canEdit={canEdit} />
       <FiledEvidence books={books} nav={nav} />
       <TwinTasks books={books} nav={nav} canEdit={canEdit} />
       <AssessmentTasks books={books} nav={nav} />
+      <PayoutTasks groups={payouts} books={books} nav={nav} canEdit={canEdit} />
       {waiting.length > 0 && (
         <section className="wfunbooked" data-testid="unbooked-payments">
           <h3>{t('automation.unbookedTitle', { n: waiting.length })}</h3>
@@ -850,6 +855,61 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
       )}
       <QuestionTasks nav={nav} canEdit={canEdit} books={books} />
     </div>
+  );
+}
+
+/** A provider's payouts without a booking (GET /api/payouts), fetched again when the books change. */
+function usePayoutGroups(books: Index): PayoutGroup[] {
+  const [groups, setGroups] = useState<PayoutGroup[]>([]);
+  const key = `${books.transactions.length}/${books.journalEntries?.length ?? 0}`;
+  useEffect(() => {
+    let live = true;
+    api.payouts().then((x) => { if (live) setGroups(x.groups); }, () => { if (live) setGroups([]); });
+    return () => { live = false; };
+  }, [key]);
+  return groups;
+}
+
+/**
+ * A provider's payouts without a booking, as its payouts (#404): one group per provider and what they
+ * wait for, with the one thing to do: drop the provider's order export (it asks for the clearing
+ * account or the cut-over day), «Jetzt buchen» where code books them from the clearing account, or
+ * each one hers where it lies before the cut-over day.
+ */
+function PayoutTasks({ groups, books, nav, canEdit }: { groups: PayoutGroup[]; books: Index; nav: Nav; canEdit: boolean }) {
+  const [busy, setBusy] = useState<string>();
+  const book = (g: PayoutGroup) => {
+    setBusy(g.provider);
+    api.bookPayouts(g.provider).then(
+      (r) => { setBusy(undefined); nav.toast(t('automation.payouts.booked', { n: r.booked, provider: g.name })); },
+      (e: unknown) => { setBusy(undefined); nav.toast(errorText(e)); },
+    );
+  };
+  return (
+    <>
+      {groups.map((g) => {
+        const shown = books.transactions.filter((p) => g.refs.includes(p.ref));
+        return (
+          <section key={`${g.provider}-${g.why}`} className="wfunbooked" data-testid="unbooked-payouts" data-why={g.why}>
+            <h3>{t('automation.payouts.title', { n: g.refs.length, provider: g.name })}</h3>
+            <p className="m">{t(`automation.payouts.${g.why}`, { provider: g.name, account: g.account ?? '', since: g.since ? formatDate(g.since) : '' })}</p>
+            {g.why === 'ready' && canEdit ? <p><button type="button" className="btn" disabled={busy === g.provider} data-testid="book-payouts" onClick={() => book(g)}>{t('automation.payouts.book', { n: g.refs.length })}</button></p> : null}
+            <details>
+              <summary className="m">{t('automation.payouts.show', { n: g.refs.length })}</summary>
+              <ul>
+                {shown.map((p) => (
+                  <li key={p.ref}>
+                    <button type="button" className="linkbtn" data-pay={p.ref} onClick={() => nav.go(at({ area: 'bank', payment: p.ref }, p.date))}>
+                      <span className="mono">{formatDate(p.date)}</span> {payText(p).name} <span className="mono">{p.currency} {fmt(signed(p))}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </section>
+        );
+      })}
+    </>
   );
 }
 

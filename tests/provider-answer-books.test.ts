@@ -66,6 +66,9 @@ async function walk(api: ApiServer) {
   const before = await books(api);
   assert.equal(payoutsOf(before).length, 40, 'her statement has 40 payouts of Shopify');
   assert.equal(before.journalEntries.filter((e) => payoutsOf(before).some((t) => t.ref === e.transactionRef)).length, 0, 'before her answers no payout is booked');
+  // Aufgaben names them as the payouts of Shopify, by the provider's name, not the processor's, and what they wait for.
+  const groups = ((await api.send('GET', '/api/payouts')).json as { groups: Array<{ name: string; why: string; refs: string[] }> }).groups;
+  assert.deepEqual(groups.map((g) => [g.name, g.why, g.refs.length]), [['Shopify', 'clearing', 40]]);
   const two = await dropper(api);
   await two.add('orders_export_1.csv');
   const both = await two.add('payment_transactions_export_1.csv');
