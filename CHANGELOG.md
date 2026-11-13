@@ -332,6 +332,21 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Firma › Eröffnung (#427): a foreign-currency bank account is no longer refused with a terminal
+  command. Typed, it shows a second field: its value in CHF and its balance in its own currency,
+  as the balance sheet shows both; the statements are checked against the latter. Beside them the
+  form names the balance's value at the ESTV rate of 31.12. and how far the typed value is off it,
+  with a click to take it; values of opposite signs, or one of them 0, are refused.
+- Kontoauszüge (#427): a difference to the bank that the opening explains is no longer blamed on «eine
+  Zahlung … nicht oder falsch gebucht». A foreign-currency account without its opening is named
+  «Anfangsbestand fehlt» in its currency, as a CHF account was; and books whose opening is entered
+  but that start later in the year say that the difference lies before the statements' first
+  payment, with the bank's and the books' balance on that day.
+- Drop and Belege (#427): a balance sheet («Bilanz», «Zwischenbilanz», «Balance sheet», «Bilan»,
+  «Bilancio») is no longer a receipt «gelesen, noch keine Zahlung» with its total as the amount. It is
+  kept beside the receipts, never paid, and says so in its row and in Belege; the one of the last day
+  of the year before the open year is offered for the opening («Eröffnung erfassen» to Firma ›
+  Eröffnung). The opening stays the person's: nothing is written to it.
 - After the drop she sees her data (#424): what «Dateien hinzufügen» reports as booked (a provider's
   reports, the payouts her answer in a row booked, a statement read or kept, a file taken back) is on
   every page at once, the MWST figure and the dock too; before, the page kept the figures of before
