@@ -322,6 +322,19 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Bank statements: every payment has a reference of its own (#401). A Wise camt.053 whose
+  references stand only in the transaction details is read by them; an entry with no reference
+  anywhere gets one made of its account, day, amount and place, the same on every read, and a later
+  export naming the same payment by the bank's reference is that payment, not a second one. Before,
+  such payments came in on an empty reference: none could be opened, linked or booked, and a receipt
+  linked to one was linked to all. Dropping the same file again repairs books that hold them.
+- Drop: «Ja, Bankkonto hinzufügen» on a statement of an account the books lack adds the account in
+  its row (bank and ledger account proposed, currency and IBAN from the file) and reads the statement
+  at once. The dialog stays open with every row and its closing lines; before, it closed and went to
+  Firma › Geldkonten, and the statement had to be dropped again (#401).
+- A credit card's monthly statement taken as a receipt says so in its drop row and its detail: the
+  receipt of the card's debit on the bank account, its lines booked one by one where they were, and
+  that the app does not read card statements as bank statements (#401, #94).
 - The setup conversation keeps its order after a typed message (#385): the message stands under the
   question it was typed at, above that question's answer, and the open question with its buttons
   stays under her newest message, also when the words took a step back. In the books the rail shows

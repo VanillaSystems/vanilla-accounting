@@ -20,7 +20,7 @@ import { startApi } from './support/api-server.js';
 import { RECEIPT, SESSION, bookedWithReceipt } from './support/inbox-run.js';
 import { textPdf } from './support/text-pdf.js';
 import { duplicatesIn } from '../src/intake/duplicates.js';
-import type { Receipt } from '../src/types/index.js';
+import type { Index, Receipt } from '../src/types/index.js';
 import { documents } from '../src/engines/index.js';
 
 configure({ useWebWorkers: false });
@@ -403,22 +403,23 @@ test('«Ja, Bankkonto hinzufügen» adds the account in the row and reads the st
     cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
     const { post, books } = SESSION(api);
     // The Wise EUR statement of a second account, its references only in the transaction details.
-    const camt = readFileSync(join(import.meta.dirname, 'fixtures/camt053/wise_EUR_refs_in_txdtls.xml'), 'utf8').replace('BE29967000000164', 'BE40967000000063');
+    const camt = readFileSync(join(import.meta.dirname, 'fixtures/camt053/wise_EUR_refs_in_txdtls.xml'), 'utf8').replace('BE29967000000164', 'BE38967000000002');
     let s = await post('/api/drop');
     s = await post(`/api/drop/${s.id}/files?name=wise-second.xml`, Buffer.from(camt));
     const row = s.rows[0];
     assert.equal(row.state, 'asks', row.message);
-    assert.equal(row.unknownAccount?.iban, 'BE40967000000063');
+    assert.equal(row.unknownAccount?.iban, 'BE38967000000002');
     await assert.rejects(post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'firmAccount' }), /400/, 'only once the account is there');
 
-    const added = await api.send('PATCH', '/api/workspace', { addBank: { bank: 'Wise 2', currency: 'EUR', account: '1024', label: 'Wise Europe SA', iban: 'BE40967000000063' } });
+    const added = await api.send('PATCH', '/api/workspace', { addBank: { bank: 'Wise 2', currency: 'EUR', account: '1024', label: 'Wise Europe SA', iban: 'BE38967000000002' } });
     assert.equal(added.status, 200, added.json.error as string);
     s = await post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'firmAccount' });
     const taken = s.rows[0];
     assert.equal(taken.state, 'taken', taken.message);
     assert.equal(taken.statement?.account, '1024');
     assert.deepEqual([...taken.statement!.refs].sort(), ['CARD-910000', 'CARD-910037', 'CARD-910074', 'CARD-910111', 'CARD-910185', 'CARD-910222', 'TRANSFER-910148']);
-    const b = await books();
+    const full = async () => (await books()) as unknown as Index;
+    const b = await full();
     assert.equal(b.transactions.filter((t) => t.bank === 'Wise 2').length, 7);
     assert.ok(b.transactions.every((t) => t.ref.trim()), 'no payment without a ref');
 
@@ -434,7 +435,7 @@ test('«Ja, Bankkonto hinzufügen» adds the account in the row and reads the st
     let again = await post('/api/drop');
     again = await post(`/api/drop/${again.id}/files?name=wise-second.xml`, Buffer.from(camt));
     assert.equal(again.rows[0].state, 'taken', again.rows[0].message);
-    const repaired = await books();
+    const repaired = await full();
     assert.deepEqual(repaired.transactions.filter((t) => t.bank === 'Wise 2').map((t) => t.ref).sort(), [...refs].sort());
     assert.ok(!repaired.transactions.some((t) => !t.ref.trim()) && !repaired.mappings.some((m) => !m.transactionRef.trim()), 'nothing on an empty ref');
   } finally {
