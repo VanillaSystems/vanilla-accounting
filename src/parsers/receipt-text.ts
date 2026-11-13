@@ -286,9 +286,11 @@ export const noiseText = (r: Pick<Receipt, 'extractedText' | 'extractionMethod'>
  * (`readsAgain` in src/intake/read.ts is the noise case outside filed quarters); Belege's line, the
  * detail's notice and the list's state «unlesbar» all ask here (src/app/areas/receipts).
  */
+/** Nothing was read off it: its text is empty, or noise no model wrote. What it says is what a person entered, or nothing yet. */
+export const readsNothing = (r: Pick<Receipt, 'extractedText' | 'extractionMethod'>): boolean => !(r.extractedText ?? '').trim() || noiseText(r);
+
 export function waitsForReading(r: Pick<Receipt, 'extractedText' | 'extractionMethod' | 'date' | 'amount' | 'kind'>): boolean {
-  const unread = !(r.extractedText ?? '').trim() || noiseText(r);
-  return unread && (!r.date || r.amount == null) && r.kind !== 'noise' && r.kind !== 'duplicate' && r.kind !== 'statement';
+  return readsNothing(r) && (!r.date || r.amount == null) && r.kind !== 'noise' && r.kind !== 'duplicate' && r.kind !== 'statement';
 }
 
 /**

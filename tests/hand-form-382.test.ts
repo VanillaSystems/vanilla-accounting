@@ -180,14 +180,15 @@ test('a foreign VAT on her invoice is asked, never the abroad code on the gross'
   assert.deepEqual(d.notes.find((n) => n.kind === 'saleVat'), { kind: 'saleVat', why: 'foreignVat' });
 });
 
-test('the banner says what is true: under a rule\'s proposal and from the owner it does not claim the invoice, across periods on the agreed basis it only links', () => {
+test('the banner says what is true: under a rule\'s proposal and from the owner it does not claim the invoice; across periods on the agreed basis the proposal is read off it and the form says the sale goes on its day (#360)', () => {
   const rule: DraftKnowledge = { ...KNOWN, rule: { id: 'bauer', lines: [{ account: '3400', vat: 'V81', amount: 3200 }] } };
   assert.equal(bookingDraft(books({ transactions: [bauer], receipts: [ABROAD] }), 'RB', BANK, [], rule)!.ownInvoice?.from, 'other');
   const owner: DraftKnowledge = { ...KNOWN, nature: { kind: 'owner', account: '2850' } };
   assert.equal(bookingDraft(books({ transactions: [bauer], receipts: [ABROAD] }), 'RB', BANK, [], owner)!.ownInvoice?.from, 'other');
   on({ registered: true, method: 'effective', reporting: 'agreed', period: 'quarterly' }, () => {
     const d = bookingDraft(books({ transactions: [bauer], receipts: [ABROAD] }), 'RB', BANK, [], KNOWN)!;
-    assert.deepEqual([d.ownInvoice?.from, d.ownInvoice?.links, d.lines[0].accountCredit], ['taxPoint', ['r031'], '']);
+    assert.deepEqual([d.ownInvoice?.from, d.ownInvoice?.links, d.lines[0].accountCredit], ['invoice', ['r031'], '3400']);
+    assert.ok(d.notes.some((n) => n.kind === 'taxPoint' && n.account === '1100'), JSON.stringify(d.notes));
   });
 });
 

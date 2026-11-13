@@ -439,7 +439,8 @@ export interface RunDetail extends RunSummary { steps: StepRecord[] }
  * a person's step (`noModel`: no rule decided and no model was there to ask), stopped, or still going.
  */
 export type RunResult =
-  | { kind: 'done'; entries: number; held?: Extract<Took, { kind: 'held' }>[] }
+  /** `left`: why a run that booked nothing left the item (a step's `why`, such as `waitsForReceipt`), for the words under its button (#428). */
+  | { kind: 'done'; entries: number; held?: Extract<Took, { kind: 'held' }>[]; left?: string }
   | { kind: 'waiting'; step: Text | string; noModel: boolean }
   | { kind: 'stuck'; error: string; why?: Refusal }
   | { kind: 'running' };
@@ -448,7 +449,8 @@ export function runResult(w: WorkflowDecl, r: Pick<RunDetail, 'status' | 'at' | 
   switch (r.status) {
     case 'done': {
       const held = r.steps.flatMap((s) => ((s.output?.took as Took[] | undefined) ?? []).filter((x): x is Extract<Took, { kind: 'held' }> => x.kind === 'held'));
-      return { kind: 'done', entries: r.digest.entries, ...(held.length ? { held } : {}) };
+      const left = r.digest.entries ? undefined : r.steps.map((s) => s.output?.why).find((w): w is string => typeof w === 'string');
+      return { kind: 'done', entries: r.digest.entries, ...(held.length ? { held } : {}), ...(left ? { left } : {}) };
     }
     case 'waiting': return { kind: 'waiting', step: (r.at && stepOf(w, r.at)?.label) || r.at || '', noModel: r.steps.some((s) => s.output?.why === 'noModel') };
     case 'stuck': return { kind: 'stuck', error: r.error ?? '', ...(r.why ? { why: r.why } : {}) };

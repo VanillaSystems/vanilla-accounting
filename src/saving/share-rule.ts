@@ -200,6 +200,28 @@ export function draftShareRule(ws: Workspace, ref: string, today = new Date().to
   return offer.path;
 }
 
+/** A share the setup named, offered as a rule on the payment `ref` and not answered yet (#428). */
+export interface PendingOffer { ref: string; date: string; name: string; percent: number; account: string }
+
+/**
+ * The setup's shares offered and not answered yet (#428): for each business, the payment that
+ * offers its rule (shareOffer with `setup`), as «was muss ich noch machen?» names it. Only payments
+ * booked on the account of the private use the setup named are asked; none while it named none.
+ */
+export function setupShareOffers(ws: Workspace, books: Books, given?: ClassifyContext): PendingOffer[] {
+  const account = setup().privateUse?.phone;
+  if (!account || !readProgress(ws).shares?.phone) return [];
+  const context = given ?? loadClassifyContext(ws);
+  const lock = periodLock(books);
+  const on = new Set(books.journalEntries.filter((e) => e.accountDebit === account || e.accountCredit === account).map((e) => e.transactionRef));
+  return books.transactions
+    .filter((t) => t.direction === 'DBIT' && on.has(t.ref) && !lock.isClosed(t.date))
+    .flatMap((t): PendingOffer[] => {
+      const o = shareOffer(ws, books, t.ref, context);
+      return o?.setup ? [{ ref: o.ref, date: t.date, name: o.business?.name ?? o.payerName ?? o.payer ?? '', percent: o.percent, account: o.booking.account }] : [];
+    });
+}
+
 /** «Nicht jetzt» on the setup's offer (#402): not offered again for this payment's business; `never`: the share goes, no business is offered it again. */
 export function dismissSetupShare(ws: Workspace, ref: string, never = false): boolean {
   const offer = shareOffer(ws, loadBooks(ws), ref);

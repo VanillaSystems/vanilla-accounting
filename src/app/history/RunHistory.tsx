@@ -18,7 +18,7 @@ import type { HistoryObject, HistoryRun, ObjectHistory } from '../../workflows/h
 import type { RunLogLine } from '../../workflows/runlog.js';
 import type { Period } from '../../accounting/periods.js';
 import type { Index } from '../../types/index.js';
-import { waitsForReading } from '../../parsers/receipt-text.js';
+import { receiptDid } from './did.js';
 import type { Nav } from '../areas/index.js';
 import { Go } from '../areas/vat/links.js';
 import { amountOf, at, bankOf } from '../areas/receipts/view.js';
@@ -93,9 +93,7 @@ export function Wrote({ wrote, books, nav, period, skip }: { wrote?: RunEvent['w
 /** What a run that wrote the object itself did to it, which the lists below leave out: «hat den Beleg gelesen», «hat die Buchung geschrieben» (a payment's: «hat die Zahlung gebucht:» before its entries). */
 function didText(r: HistoryRun, on: HistoryObject, books: Index): string {
   if (on.kind === 'receipt' && r.wrote.receipts.includes(on.id)) {
-    // A photo no AI read was filed, not read (#344).
-    const receipt = books.receipts.find((x) => x.id === on.id);
-    return t(receipt && waitsForReading(receipt) ? 'history.keptReceipt' : 'history.didReceipt');
+    return t(receiptDid(books.receipts.find((x) => x.id === on.id)));
   }
   if (on.kind === 'entry' && r.wrote.entries.includes(on.id)) return t('history.didEntry');
   return '';

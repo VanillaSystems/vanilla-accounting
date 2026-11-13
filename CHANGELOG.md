@@ -94,6 +94,17 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- **⚠ figures** Agreed basis (#360): a payment booked by hand dates each line with a VAT code by its
+  receipt and books it over Kreditoren or Debitoren, the payment settling that account on its own
+  day (an exchange difference to 6960), as the app's own booking does; a receipt of a filed quarter
+  leaves the line on the payment's day, declared in that quarter's Korrekturabrechnung, and one
+  from before the year the basis began leaves it as it is. Before, a hand line always took the
+  payment's day. The same holds for a sale answered on the hand form, a booking typed without its
+  payment and then tied to it, and a batch booking (whose preview lists the lines it books). The
+  hand form now proposes the account across periods too and says where the line goes, by the
+  proposed code (a credit note or refund by its latest document); a payment naming the firm's own
+  invoice of another period is booked from it, not only linked. The cash basis is unchanged;
+  payments booked already stay as they are.
 - Demos (#374): the bundled demos are written again by today's generator, so their payments show
   the other party's name and their bank fee rows are marked as fees, as in books read from a
   statement now; no booking and no figure changed. A test now fails when a committed demo is not
@@ -355,6 +366,33 @@ Two markers flag an entry you must read before you update:
   under «Noch offen» («gebucht ohne den Anteil der Arbeitnehmenden», with what 2270 holds then);
   never one the employer pays alone (family allowances), and gone once 2270 is cleared. No VAT
   figure changes.
+- «Noch offen» (#428): the sentence above the list named an open VAT question and an order a sales
+  report could not split for every firm, one without a sales report too. It now names only what of
+  the list holds up «Freigegeben», counted as the review counts it (a net tax rate without its
+  activity code among them), or says that nothing of it does.
+- The owner's repayments (#428): a payment to the owner that waited while her account held outlays
+  not enough for it said «wartet auf ihren Beleg». It now says that it waits until the receipts
+  paid privately are booked as outlays (on the payment, in the counts beside the return and the
+  AI's facts; the drop's summary counts it as not booked), and its hand form says what ends the
+  wait. A payment to her that a company rule decides, or a wage, keeps its own wait. «Automatisch buchen» that books nothing says
+  why (its receipt, the outlays, a receipt that cannot be read), and «Automatisch buchen» for all
+  counts these payments as a group of their own. The inbox run that books an outlay of the owner's
+  now books the repayment it covers in the same run: one of three repayments needed a second click.
+- «Was muss ich jetzt noch machen?» (#428): the AI started with the firm's own invoice that its
+  customer has not paid yet, where there is nothing to do, and left out a bank account without its
+  opening balance and the setup's proposal waiting on a payment. The facts it is handed and the
+  card under its answer now leave the firm's own invoice out of the work only when that is sure
+  (its UID on it, no money in that may be its payment, on the agreed basis its issue booked), name a missing
+  opening (Firma › Eröffnung), a payment provider's clearing account below zero and a proposal
+  that waits, and list everything most important first, as code ranks it. A run attached to a
+  message is named by its workflow and day, not by its id.
+- A receipt's VAT typed by hand on a photo the app cannot read is kept (#438): the run that books
+  its payment again tried the photo once more and dropped what she had entered, so the receipt read
+  «MWST noch nicht gelesen», was called «nicht lesbar» and its payment lost the input tax. What a
+  person enters stays over every later run, the model is told her VAT when it books the payment, and
+  the receipt's Verlauf says «nicht gelesen · Angaben von Hand erfasst» instead of «hat den Beleg gelesen».
+- «Gerüst», «Gerüstbau» and «Gerüstmiete» find an account in the account field (#438): Aufwand für
+  bezogene Dienstleistungen (4400); before, «Gerüst» found none.
 - Firma › Eröffnung (#427): a foreign-currency bank account is no longer refused with a terminal
   command. Typed, it shows a second field: its value in CHF and its balance in its own currency,
   as the balance sheet shows both; the statements are checked against the latter. Beside them the

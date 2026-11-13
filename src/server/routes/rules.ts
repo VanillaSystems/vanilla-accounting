@@ -6,6 +6,8 @@
  *   GET  /api/rules/draft?path=       the AI's draft of one rules file, rule by rule
  *   POST /api/rules/draft             { kind: keep, path, basis, confirm? } saves exactly that draft; { kind: discard, path }
  *   GET  /api/rules/share?ref=        the rule with a private share a split payment offers («Immer so?»), or null
+ *   GET  /api/rules/share-offers      the setup's shares offered as rules and not answered yet (#428)
+ *   GET  /api/rules/outlay-waits      the open payments to the owner that wait for her outlays (#428)
  *   POST /api/rules/share             { ref }: that rule drafted into its file; the answer names the file for its card
  *   GET  /api/rules/grouped?ref=      the batch payer a person's links of several receipts to a payment offer («Immer so?», #190), or null
  *   POST /api/rules/grouped           { ref }: `grouped: true` drafted into the business's company file; the answer names the file for its card
@@ -44,7 +46,7 @@ import { bookByRules } from '../../workflows/book-by-rules.js';
 import type { JournalEntry } from '../../types/index.js';
 import { reconciliationOf } from '../../books/reconcile.js';
 import { classifyTransactions, loadClassifyContext } from '../../booking/classify.js';
-import { answerSettles, mustSettle, receiptKnowledge, receiptWaitOf } from '../../booking/receipt-wait.js';
+import { answerSettles, awaitsOutlays, mustSettle, outlayWaitsOf, receiptKnowledge, receiptWaitOf } from '../../booking/receipt-wait.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { recordDeletion } from '../../saving/changes.js';
 import { existsSync, readFileSync } from 'node:fs';
@@ -52,7 +54,7 @@ import { join } from 'node:path';
 import { bookedState } from '../../accounting/payment-entries.js';
 import { wageOffer } from '../../saving/wage-rule.js';
 import { loadWorkflows } from '../../workflows/load.js';
-import { clearTakenShares, dismissSetupShare, draftShareRule, shareOffer } from '../../saving/share-rule.js';
+import { clearTakenShares, dismissSetupShare, draftShareRule, setupShareOffers, shareOffer } from '../../saving/share-rule.js';
 import { draftGroupedFlag, groupedOffer } from '../../saving/grouped-flag.js';
 import { draftUnreadRule, unreadOffer } from '../../saving/unread-rule.js';
 import { draftSaleRule } from '../../saving/sale-rule.js';
@@ -460,7 +462,7 @@ router.post('/api/rules/book-open', async (_req, res) => {
   const fx = loadFxResolver();
   const known = receiptKnowledge(loadKnowledge(APP_ROOT, WS.paths.root), WS);
   const open = new Map(engine().runs().filter((r) => r.mode === 'live' && r.item.kind === 'transaction' && r.state.status !== 'done' && r.state.status !== 'discarded').map((r) => [r.item.id, r]));
-  const n: BookOpen = { booked: 0, running: 0, notBooked: 0, model: 0, receipt: 0, deleted: 0, question: 0, unread: 0, reconcile: 0, busy: 0, later: 0, max: KEEP_RUNS_MAX };
+  const n: BookOpen = { booked: 0, running: 0, notBooked: 0, model: 0, receipt: 0, outlays: 0, deleted: 0, question: 0, unread: 0, reconcile: 0, busy: 0, later: 0, max: KEEP_RUNS_MAX };
   const candidates = books.transactions.filter((t) => t.amount !== 0 && !lock.isClosed(t.date) && bookedState(books, t.ref, WS.bankAccounts) !== 'booked');
   // Code and the rules, without a model, over all of them at once: what they decide is what may be booked.
   const scratch = structuredClone(books);
@@ -478,6 +480,8 @@ router.post('/api/rules/book-open', async (_req, res) => {
     if (reconciliationOf(books, t.ref)) { n.reconcile++; continue; }
     const wait = receiptWaitOf(books, t, context, known, fx);
     if (wait.wait && wait.unread) { n.unread++; continue; }
+    // A payment to the owner waits for the outlays it pays back (#428): what ends it is her receipts booked as outlays.
+    if (wait.wait && awaitsOutlays(books, t, context, known.wages, fx)) { n.outlays++; continue; }
     const entries = decidedBy.get(t.ref);
     if (!entries?.length) { n.model++; continue; }
     if (mustSettle(wait) && !answerSettles(t, entries, context)) { n.receipt++; continue; }
@@ -507,6 +511,16 @@ router.post('/api/rules/unread', (req, res) => {
   const path = draftUnreadRule(WS, ref, rate);
   if (!path) throw new RequestError(404, 'Diese Zahlung führt zu keinem Geschäftspartner, für den eine Regel stehen kann.');
   res.json({ path });
+});
+
+/** GET /api/rules/share-offers: the setup's shares offered as rules and not answered yet, for «was muss ich noch machen?» (#428). */
+/** GET /api/rules/outlay-waits: the open payments to the owner that wait for her outlays (receipt-wait.ts outlayWaitsOf, #428), by ref. */
+router.get('/api/rules/outlay-waits', (_req, res) => {
+  res.json({ refs: outlayWaitsOf(WS, loadBooks(WS)) });
+});
+
+router.get('/api/rules/share-offers', (_req, res) => {
+  res.json({ offers: setupShareOffers(WS, loadBooks(WS)) });
 });
 
 router.get('/api/rules/share', (req, res) => {

@@ -29,6 +29,8 @@ import { offersInBooks } from '../intake/near-pairs.js';
 import { moneyInText } from '../app/lib/utils.js';
 import type { Processing } from '../workflows/processing.js';
 import { providersOf } from '../intake/sales-report-import.js';
+import { setupShareOffers } from '../saving/share-rule.js';
+import { outlayWaitsOf } from '../booking/receipt-wait.js';
 import type { Purpose } from '../types/assistant.js';
 import type { SetupProgress } from '../onboarding/model.js';
 
@@ -99,12 +101,18 @@ const evidenceLine = (e: JournalEntry, c: EvidenceCheck, t: T) => `- ${day(e.dat
 export const purposeNow = (purpose: Purpose | undefined, progress: Pick<SetupProgress, 'ready'>, wanted = false): Purpose | undefined =>
   (purpose === 'onboarding' && progress.ready && !wanted ? undefined : purpose);
 
-type Ws = Pick<Workspace, 'paths' | 'bankAccounts'>;
+type Ws = Workspace;
 type Tasks = ReadonlyArray<Task & { rule?: string }>;
 
 /** The state the sidebar's card draws, from the same inputs: the order pages of a provider among them, which are no receipts without a payment. */
 export const periodState = (ws: Ws, books: Books, tasks: ReadonlyArray<Task>, today: IsoDate = localToday(), processing: ReadonlyMap<string, Processing> = new Map()): OpenPeriodState =>
-  openPeriodState(books, readQuestions(ws), tasks, ws.bankAccounts, { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays }, orderPagesOf(books, providersOf(ws)), processing, providerIssuesIn(ws, books, today));
+  openPeriodState(books, readQuestions(ws), tasks, ws.bankAccounts, { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays, ...firmOf(ws, books) }, orderPagesOf(books, providersOf(ws)), processing, providerIssuesIn(ws, books, today), setupShareOffers(ws, books));
+
+/** The firm as the open period's state reads it: the owner's name, and the UID and name its own invoices show (#428). */
+const firmOf = (ws: Ws, books: Books) => {
+  const c = ws.company;
+  return { outlays: new Set(outlayWaitsOf(ws, books)), ...(c ? { firm: { ...(c.uid ? { uid: c.uid } : {}), ...(c.name ? { name: c.name } : {}), ...(c.owner ? { owner: c.owner } : {}) } } : {}) };
+};
 
 /** What waits outside the period, from the same inputs as the card (src/app/areas/automation/open-period.ts elsewhereOf). */
 export const elsewhereFor = <T extends Task>(ws: Ws, books: Books, tasks: readonly T[], s: OpenPeriodState, stuck = 0, today: IsoDate = localToday()): Elsewhere<T> =>
@@ -131,23 +139,30 @@ export function periodNote(ws: Ws, books: Books, tasks: Tasks, language: string,
   const name = (r: { description?: string; filename: string }) => (r.description ? moneyInText(r.description) : r.filename);
   const label = periodWords(t, s.period);
   const unlinked = s.unlinked;
+  const owner = ws.company?.owner ?? '';
+  // In the order of the card's lines (openLines): most important first, as code ranks them (#428).
   const lines = [
+    ...(s.held.length ? [`Orders a provider's sales report did not book (${s.held.length}): their turnover is missing from the return, and the review withholds «Freigegeben» until each is booked (on the report's receipt under «${t('area.receipts')}»):`, ...capped(s.held.map((h) => `- ${t(`drop.held.${h.why}`, { order: h.order })}, ${day(h.date)}${h.gross !== undefined ? `, ${money(h.currency ?? baseCurrency(), h.gross)}` : ''} (${h.name})`))] : []),
+    `Open questions (${s.questions.length}):`, ...capped(s.questions.map((x) => questionLine(books, x.q, t))),
     ...(s.yours.length ? [`Receipts that wait for the person's own word (${s.yours.length}), under «${t('area.receipts')}»: only she can add what each lacks, or answer whether it is a copy:`, ...capped(s.yours.map((x) => yourLine(books, x, t)))] : []),
     `Payments without a booking (${s.unbooked.length})${s.unbooked.length ? `, under «${t('area.bank')}»` : ''}:`, ...capped(s.unbooked.map(paymentLine)),
+    ...(k.outlays ? [`  Of them, ${k.outlays} go to the owner and pay back business costs she paid privately: they wait until those receipts are booked as her outlays (on each receipt under «${t('area.receipts')}», «${t('actions.privateOne', { owner })}»); the app books them then. No receipt of their own is missing.`] : []),
     ...(k.waits ? [`  Of them, ${k.waits} the app holds until their receipt is linked: it books them itself then and nobody is asked yet; the receipts go in under «${t('area.receipts')}».`] : []),
     ...(k.asks ? [`  Of them, ${k.asks} wait for their receipt and their return is near: each is the person's task under ${tasksPlace} now (link the receipt, name another proof, or book without input tax).`] : []),
     ...(k.unread ? [`  Of them, ${k.unread} have their receipt linked, but its VAT could not be read: each waits for the person's word at once, under ${tasksPlace}; no receipt is missing.`] : []),
-    `Open questions (${s.questions.length}):`, ...capped(s.questions.map((x) => questionLine(books, x.q, t))),
     `Bookings whose VAT code contradicts their receipts (${s.evidence.length}), each with its one click on the booking and under ${tasksPlace}:`, ...capped(s.evidence.map((x) => evidenceLine(x.entry, x.check, t))),
+    ...(s.offers.length ? [`Proposals from the setup that wait for the person's answer (${s.offers.length}), each a rule offered on its payment under «${t('area.bank')}», kept or declined with one click:`, ...capped(s.offers.map((o) => `- ${o.name}: ${o.percent} % private, the rest on ${o.account} (the payment of ${day(o.date)}, ${o.ref})`))] : []),
+    ...(s.openings.length ? [`Bank accounts the books open at nothing while their statements say they held money (${s.openings.length}): their opening balance goes in under «${t('area.company')} › ${t('company.opening')}»; without it the balance sheet shows them wrong:`, ...capped(s.openings.map((o) => `- ${o.label} (${o.account}): ${money(o.currency ?? baseCurrency(), o.amount)} on 1.1.${o.year}, as its statements imply`))] : []),
+    ...(s.clearing.length ? [`Clearing accounts of a payment provider below zero on ${day(s.period.to)} (${s.clearing.length}): the provider paid out more than the account holds sales for, most often a sales report not dropped yet:`, ...capped(s.clearing.map((c) => `- ${c.account} ${c.name}: ${money(baseCurrency(), c.balance)}`))] : []),
     `Receipts without a payment (${unlinked.length})${unlinked.length ? `, under «${t('area.receipts')}»` : ''}:`, ...capped(unlinked.map((r) => `- «${name(r)}»${r.date ? ` of ${day(r.date)}` : ''}${r.amount != null ? `, ${money(r.currency ?? baseCurrency(), r.amount)}` : ''}`)),
-    ...(s.held.length ? [`Orders a provider's sales report did not book (${s.held.length}): their turnover is missing from the return, and the review withholds «Freigegeben» until each is booked (on the report's receipt under «${t('area.receipts')}»):`, ...capped(s.held.map((h) => `- ${t(`drop.held.${h.why}`, { order: h.order })}, ${day(h.date)}${h.gross !== undefined ? `, ${money(h.currency ?? baseCurrency(), h.gross)}` : ''} (${h.name})`))] : []),
+    ...(s.issued.length ? [`Invoices the firm issued, with its UID, that no payment in the books fits (${s.issued.length}): they wait for the customer's payment, nothing for the person to do, so never name them as work.`] : []),
     ...(s.bills.length ? [`Monthly bills of a provider not in the books (${s.bills.length}): the VAT on its fees of that month is not deducted until the bill is dropped:`, ...capped(s.bills.map((b) => `- ${b.name}, ${b.month}: fees ${money(baseCurrency(), b.fees)}`))] : []),
     `Tasks of the workflows (${s.tasks.length})${s.tasks.length ? `, under ${tasksPlace}; a task on a payment is one of the payments above, not one more` : ''}:`, ...capped(s.tasks.map((x) => taskLine(x, language))),
   ];
   return [
-    `Where the oldest period not filed stands, computed by the app when this message was sent: ${label} (${day(s.period.from)} to ${day(s.period.to)}); ${stage}. Only what is dated in ${label} is counted here. Say a period as here («${label}»), never as a code like «${s.period.token}».`,
+    `Where the oldest period not filed stands, computed by the app when this message was sent: ${label} (${day(s.period.from)} to ${day(s.period.to)}); ${stage}. Only what is dated in ${label} is counted here, listed most important first as the app ranks it. Say a period as here («${label}»), never as a code like «${s.period.token}».`,
     ...(nothingOpen(s) ? [`Nothing of ${label} is open: no payment without a booking, no question, no booking against its receipt, no receipt without a payment, no receipt waiting for the person's word, no task.${elsewhereCount(e) ? ` Other things wait for the person (${elsewhereCount(e)}, listed below under «What else waits»${e.unbooked.length ? `, ${e.unbooked.length} payments of later open days without a booking among them` : ''}): never say that nothing is open.` : ''}`] : lines),
-    'When the person asks what is left to do, what is open or what comes next («was muss ich noch machen?», «was fehlt noch?»), add {"kind":"openPeriod"} to your block: the app then shows this state under your answer as a card that names every item above one by one, each a link to its place, and the due day. Your own words are at most one short sentence before it, in her language (which of these to start with, or that nothing waits); never a count, never a list of the items, never the setup\'s topics, never a rule or setting already kept: the card says them, with the links your words cannot carry.',
+    'When the person asks what is left to do, what is open or what comes next («was muss ich noch machen?», «was fehlt noch?»), add {"kind":"openPeriod"} to your block: the app then shows this state under your answer as a card that names every item above one by one, each a link to its place, and the due day. Your own words are at most one short sentence before it, in her language (start with the first of them, or that nothing waits); never a count, never a list of the items, never the setup\'s topics, never a rule or setting already kept: the card says them, with the links your words cannot carry.',
   ].join('\n');
 }
 
