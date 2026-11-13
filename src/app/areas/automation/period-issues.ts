@@ -123,6 +123,17 @@ export function receiptWaiting(books: Pick<Index, 'transactions' | 'journalEntri
 export type Say = (key: string, vars?: Record<string, string | number>) => string;
 
 /**
+ * A month of a provider's fees without its bill, in words (#459): the bill as the provider's file names it,
+ * the VAT it would show as an estimate (never the fees as if they were the VAT), and where the provider keeps it.
+ * `month`: the month as the page names it; `money`: an amount in the books' currency.
+ */
+export function billText(b: MissingBill, month: string, money: (n: number) => string, say: Say): string {
+  const amount = b.vat !== undefined && b.rate !== undefined ? say('issues.billVat', { vat: money(b.vat), rate: String(b.rate), fees: money(b.fees) }) : say('issues.billFees', { fees: money(b.fees) });
+  const line = say(b.document ? 'issues.billNamed' : 'issues.bill', { month, provider: b.name, amount, ...(b.document ? { document: b.document } : {}) });
+  return b.where ? `${line}. ${say('issues.billWhere', { provider: b.name, where: b.where })}` : line;
+}
+
+/**
  * The list's lead (#428): what withholds the approval, as filing-summary.ts withheldIn counts it for
  * the review too (rates without their activity code, open VAT questions, orders held for their rates),
  * named only when it is there, and whether the rest of the list (`listed` items) blocks nothing.

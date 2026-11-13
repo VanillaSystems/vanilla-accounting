@@ -410,6 +410,12 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- «Noch offen»: a month of a payment provider's fees without its bill names the bill as the
+  provider's file names it and where the provider keeps it («Shopify Payments Invoice» …
+  «Shopify Admin › Einstellungen › Rechnungen»), and shows the VAT it would show, estimated from
+  the fees at the bill's rate («geschätzt CHF 20.17 (8.1 % in CHF 269.23 Gebühren)»), no longer the
+  fees as if they were the VAT. Its «Rechnung hinzufügen» opens the file dialog that drops it; the
+  line no longer opens Belege on another receipt, and the sidebar's card leads to the list (#459).
 - A receipt that names no VAT is «MWST noch nicht gelesen», no longer «keine CH-MWST» (#391).
   Only a model, or the receipt's own words («nicht MWST-pflichtig», «not subject to Swiss VAT», «von
   der MWST ausgenommen», never beside «inkl. MWST» or a Swiss rate, 7.7 % too), say it carries no

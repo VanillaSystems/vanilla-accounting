@@ -16,7 +16,8 @@ import type { Receipt, BankTransaction } from '../types/index.js';
 import { periodLock, release, type Books } from '../books/store.js';
 import type { Ask, BooksPort } from './pipeline.js';
 import { numbersIn } from '../accounting/document-numbers.js';
-import { baseCurrency, withoutInputTax } from '../engines/index.js';
+import { baseCurrency, vat, withoutInputTax } from '../engines/index.js';
+import { normalRate } from '../accounting/sales-without-vat.js';
 import { providerIssuesOf, type ProviderIssues } from '../booking/provider-issues.js';
 import { localToday } from '../accounting/periods.js';
 import { loadFxResolver, type FxResolver } from '../accounting/fx-rates.js';
@@ -140,7 +141,9 @@ export function providerIssuesIn(ws: Pick<Workspace, 'paths'>, books: Parameters
   const counterparties = counterpartiesOf(ws);
   const providers = counterparties.filter(isProvider);
   const lock = periodLock(books as Books);
-  const out = providerIssuesOf(books, providers, { inputTax: !withoutInputTax(), today, ...(lock.lockedThrough ? { lockedThrough: lock.lockedThrough } : {}) });
+  // The bill's rate: the code of its tax the company's file names (fees.billVat), else the normal rate (#459).
+  const rate = (p: Counterparty) => (p.provider?.fees?.billVat ? vat().codes.parse(p.provider.fees.billVat)?.rate : undefined) ?? normalRate();
+  const out = providerIssuesOf(books, providers, { inputTax: !withoutInputTax(), today, rate, ...(lock.lockedThrough ? { lockedThrough: lock.lockedThrough } : {}) });
   const byId = new Map(books.receipts.map((r) => [r.id, r]));
   const linkedTo = (t: BankTransaction) => books.mappings.flatMap((m) => (m.transactionRef === t.ref && byId.has(m.receiptId) ? [byId.get(m.receiptId)!] : []));
   const withheldPayees = withheldPayeesOf(books.transactions, (t) => { const r = identify(signalsOfTransaction(t, linkedTo(t)), counterparties); return r.kind === 'known' ? r.counterparty : undefined; });

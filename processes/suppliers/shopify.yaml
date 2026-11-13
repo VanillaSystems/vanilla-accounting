@@ -39,6 +39,9 @@ documents:
     kind: invoice
     text: [ 'Shopify Payments Invoice for' ]
     proves: vat-correction
+    # Said when a month's bill is missing («Noch offen», #459): the title Shopify prints, and where its admin keeps it.
+    name: Shopify Payments Invoice
+    where: "Shopify Admin › Einstellungen › Rechnungen"
 
 provider:
   reports:
