@@ -14,6 +14,8 @@ import { isNoReceipt } from '../../../books/discard.js';
 import { accountOfStatement, statementFacts, type StatementFacts } from '../../../books/statement-facts.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { isManualRef } from '../../../books/refs.js';
+import { paidCards, type PaidCards } from '../../../accounting/paid-how.js';
+import { byStatement } from '../../../workspace/money-accounts.js';
 import type { OtherWhy, SupportingWhy } from '../../../core/modules/schema.js';
 import { kindByOf, type KindBy } from '../../../intake/unclear.js';
 import { inProcess, type Processing } from '../../../workflows/processing.js';
@@ -91,6 +93,8 @@ export interface Ledger {
   processing: ReadonlyMap<string, Processing>;
   /** The firm: money in pays its own invoices by their number (#365). Absent until the workspace is loaded. */
   firm?: Firm;
+  /** The cards the receipts show as the owner's and as the firm's (src/accounting/paid-how.ts paidCards, #402). */
+  cards: PaidCards;
 }
 
 
@@ -133,7 +137,13 @@ export function ledgerOf(books: Index, openFrom: string, processing: ReadonlyMap
     const day = placeDay(paidDays(r, links, (ref) => txByRef.get(ref)?.date), date, openFrom, closedThrough);
     return { r, date, day, ownDay: date || r.indexedAt.slice(0, 10) || undefined, vendor, desc, links, paid, none, ...(none ? { noneWhy: noneWhyOf(r), noneBy: kindByOf(r) } : {}), locked: links.some(refClosed), ...(twin ? { twin } : {}), ...(statement ? { statement } : {}), ...(orderPage ? { orderPage } : {}), ...(vatCorrection ? { vatCorrection } : {}) };
   });
-  return { views, byId: new Map(views.map((v) => [v.r.id, v])), txByRef, entriesByRef, receiptsByRef, closedThrough, openFrom, processing, ...(firm ? { firm } : {}) };
+  // Whose card paid a receipt: a payment of the firm's own statements, or the owner's private one («Privat bezahlt» books it on the owner's account, bank «manual»).
+  const paidBy = (links: readonly string[]): 'owner' | 'firm' | undefined => {
+    const txs = links.map((ref) => txByRef.get(ref)).filter((t): t is BankTransaction => !!t);
+    return txs.some(byStatement) ? 'firm' : txs.some((t) => t.bank === 'manual') ? 'owner' : undefined;
+  };
+  const cards = paidCards(views.flatMap((v) => (v.r.extractedText ? [{ text: v.r.extractedText, paidBy: paidBy(v.links) }] : [])));
+  return { views, byId: new Map(views.map((v) => [v.r.id, v])), txByRef, entriesByRef, receiptsByRef, closedThrough, openFrom, processing, cards, ...(firm ? { firm } : {}) };
 }
 
 export const isOpen = (v: ReceiptView) => v.links.length === 0;

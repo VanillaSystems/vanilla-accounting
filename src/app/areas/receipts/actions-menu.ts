@@ -13,7 +13,10 @@ import type { ActionSet, ObjAction } from '../../selection/ActionsMenu.js';
 import { likelyReceipt } from '../../selection/likely.js';
 import { runEach } from '../../selection/batch.js';
 import { api } from '../../lib/api.js';
-import { paidPrivately } from '../../../accounting/paid-how.js';
+import { readsPrivately } from '../../../accounting/paid-how.js';
+import { ownerOf } from '../../../workspace/money-accounts.js';
+import { workspaceNow } from '../../hooks/use-workspace.js';
+import { privateOutlay } from './actions.js';
 import { markLabel, type Ledger, type ReceiptView } from './model.js';
 import { openSection, setUi } from './state.js';
 import { at, listed } from './view.js';
@@ -22,8 +25,16 @@ import { answerTwin, setKind } from './actions.js';
 
 type Props = AreaProps<RouteOf<'receipts'>>;
 
-/** Its words say it was paid in cash or privately (src/accounting/paid-how.ts). */
-export const readsPaidPrivately = (v: ReceiptView): boolean => !!v.r.extractedText && paidPrivately(v.r.extractedText);
+/** The owner's account, on a firm whose setup says the owner pays business costs privately (the manifest's account of role owner), and the owner's name. */
+export function ownerPays(): { account: string; label: string; owner: string } | undefined {
+  const ws = workspaceNow();
+  const a = ws && ownerOf(ws.bankAccounts);
+  return a && { account: a.account, label: a.label, owner: ws.company.owner || a.label };
+}
+
+/** Its words say it was paid in cash or privately, or the owner's card paid it (src/accounting/paid-how.ts, #402: only where the owner pays privately). */
+export const readsPaidPrivately = (v: ReceiptView, l: Pick<Ledger, 'cards'>): boolean =>
+  !!v.r.extractedText && readsPrivately(v.r.extractedText, ownerPays() ? l.cards : { private: new Set(), firm: new Set() });
 
 export function receiptActions(p: Props, v: ReceiptView, l: Ledger): ActionSet {
   const { nav, canEdit } = p;
@@ -57,8 +68,13 @@ export function receiptActions(p: Props, v: ReceiptView, l: Ledger): ActionSet {
     del: !v.locked ? { id: 'del', label: t('actions.delete'), key: '⌘⌫', run: () => runAct(p, 'del') } : undefined,
     ask,
   };
-  const likely = likelyReceipt({ none: v.none, linked: v.links.length > 0, locked: v.locked, suggestion: !!sug, paidPrivately: readsPaidPrivately(v), dated: !!v.date });
-  const primary = likely ? all[likely] : undefined;
+  const reads = readsPaidPrivately(v, l);
+  const likely = likelyReceipt({ none: v.none, linked: v.links.length > 0, locked: v.locked, suggestion: !!sug, paidPrivately: reads, dated: !!v.date });
+  // Read as paid privately (#402): one click books it as the owner's outlay, its words say what it books; the menu keeps the dialog (a business part, an employee).
+  const owner = ownerPays();
+  const oneClick: ObjAction | undefined = likely === 'private' && open && owner && v.r.amount != null
+    ? { id: 'privateOne', label: t('actions.privateOne', { owner: owner.owner }), tip: t('actions.privateOneTip', { account: `${owner.account} ${owner.label}` }), run: () => void privateOutlay(nav, v) } : undefined;
+  const primary = oneClick ?? (likely ? all[likely] : undefined);
   const rest = Object.values(all).filter((a): a is ObjAction => !!a && a !== primary);
   return { primary, rest };
 }

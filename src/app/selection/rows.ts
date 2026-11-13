@@ -9,6 +9,7 @@ import { baseCurrency } from '../../engines/index.js';
 import type { EstvRates } from '../../accounting/fx-conversion.js';
 import { localToday } from '../../accounting/periods.js';
 import { ledgerFor, at, signed } from '../areas/receipts/view.js';
+import { readsPaidPrivately } from '../areas/receipts/actions-menu.js';
 import { chfOf } from '../areas/receipts/model.js';
 import { journalFor } from '../areas/journal/commands.js';
 import { payText } from '../areas/bank/model.js';
@@ -58,12 +59,13 @@ export function entryRows(books: Index, ids: readonly string[]): SelRow[] {
 }
 
 /** What the picked rows want, for the likely batch: receipts without a payment, payments without a booking or a receipt. */
-export function countsOf(kind: 'receipt' | 'payment' | 'entry', rows: readonly SelRow[], books: Index): { n: number; open: number; unbooked: number; noReceipt: number } {
+export function countsOf(kind: 'receipt' | 'payment' | 'entry', rows: readonly SelRow[], books: Index): { n: number; open: number; unbooked: number; noReceipt: number; privately?: number } {
   const ids = new Set(rows.filter((r) => !r.closed).map((r) => r.id));
   const n = ids.size;
   if (kind === 'receipt') {
     const l = ledgerFor(books);
-    return { n, open: [...ids].filter((id) => { const v = l.byId.get(id); return !!v && !v.none && !v.links.length && !v.orderPage; }).length, unbooked: 0, noReceipt: 0 };
+    const open = [...ids].map((id) => l.byId.get(id)).filter((v): v is NonNullable<typeof v> => !!v && !v.none && !v.links.length && !v.orderPage);
+    return { n, open: open.length, unbooked: 0, noReceipt: 0, privately: open.filter((v) => readsPaidPrivately(v, l)).length };
   }
   if (kind === 'payment') {
     const booked = new Set((books.journalEntries ?? []).map((e) => e.transactionRef));

@@ -43,12 +43,12 @@ import { SkipOffer } from './SkipOffer.js';
 import { RunHistory } from '../../history/RunHistory.js';
 import { I } from './icons.js';
 import { ActionsMenu } from '../../selection/ActionsMenu.js';
-import { readsPaidPrivately, receiptActions } from './actions-menu.js';
+import { ownerPays, readsPaidPrivately, receiptActions } from './actions-menu.js';
 import { useAiOff } from '../../ai/ai-off.js';
-import { useNoAi } from '../../ai/no-ai.js';
+import { useAiState, useNoAi } from '../../ai/no-ai.js';
 import { baseCurrency, chargesVat, filing, withoutInputTax } from '../../../engines/index.js';
 import { processingText } from '../../automation/processing.js';
-import { inProcess, type Processing } from '../../../workflows/processing.js';
+import { INTAKE_WORKFLOW, inProcess, type Processing } from '../../../workflows/processing.js';
 import { refusalText } from '../../automation/refusal.js';
 
 type Props = AreaProps<RouteOf<'receipts'>>;
@@ -369,6 +369,7 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
   if (v.locked || (v.r.filedPayment && l.txByRef.has(v.r.filedPayment))) return null;
   if (v.orderPage) return <OrderPageNotice page={v.orderPage} l={l} nav={nav} />;
   if (v.vatCorrection) return <VatCorrectionNotice c={v.vatCorrection} v={v} l={l} nav={nav} canEdit={canEdit} />;
+  const owner = ownerPays();
   if (sug && canEdit) {
     const why = [t('receipts.whySameAmount'), sug.days !== undefined && dayText(sug.days)].filter(Boolean).join(' · ');
     return (
@@ -400,7 +401,7 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
       {canEdit && <> <button type="button" style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => runAct(props, 'link')}>{t('receipts.linkVerb')}</button> <Kbd keys={['L']} tip={t('receipts.keyLinkTip')} /></>}
       {canEdit && <> · <FindPair key={v.r.id} on={{ receipt: v.r.id }} books={props.books} nav={nav} /></>}
       {/* Its words say cash or private (#216): a proposal beside the fact; the receipt is unpaid in the books until it is booked. */}
-      {readsPaidPrivately(v) && <> · <span data-testid="paid-privately">{t('receipts.paidPrivatelyNotice')}</span></>}
+      {readsPaidPrivately(v, l) && <> · <span data-testid="paid-privately">{owner ? t('receipts.paidPrivatelyOwner', { owner: owner.owner, account: `${owner.account} ${owner.label}` }) : t('receipts.paidPrivatelyNotice')}</span></>}
     </span>
   );
 }
@@ -420,6 +421,11 @@ function Sec({ k, val, children }: { k: Section; val: ReactNode; children: React
 
 function Payments(props: Props & { v: ReceiptView; l: Ledger; edit: boolean; working?: Processing }) {
   const { v, l, nav, edit, working } = props;
+  // Her own private payment the inbox run books with the AI (#402): no form with an empty account while a run is under way; «Selbst buchen» opens it.
+  const ai = useAiState();
+  const runs = useAutomation().view?.runs ?? [];
+  const underWay = runs.some((r) => r.workflow === INTAKE_WORKFLOW && r.mode === 'live' && (r.status === 'queued' || r.status === 'running'));
+  const [byHand, setByHand] = useState<string>();
   const one = v.links.length === 1 ? (l.txByRef.get(v.links[0])?.date ?? l.entriesByRef.get(v.links[0])?.[0]?.date) : undefined;
   const val = !v.links.length ? '—' : v.links.length === 1 ? (one ? formatDate(one) : '?') : t('receipts.nPayments', { n: v.links.length });
   return (
@@ -439,6 +445,7 @@ function Payments(props: Props & { v: ReceiptView; l: Ledger; edit: boolean; wor
           );
         }
         const book = edit && !v.locked && tx.amount && !(l.entriesByRef.get(ref) ?? []).length;
+        const booking = book && ownPrivate(l, tx) && ai === 'ready' && underWay && byHand !== ref;
         return (
           <Fragment key={ref}>
           <div className="tx go" data-tip={t('receipts.openPayment')} onClick={() => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date))}>
@@ -449,7 +456,12 @@ function Payments(props: Props & { v: ReceiptView; l: Ledger; edit: boolean; wor
               ? <button type="button" className="un" data-tip={t('receipts.undoPrivateTip')} onClick={(e) => { e.stopPropagation(); undoPrivate(nav, v, tx, txLine(tx)); }}>{t('receipts.undoPrivate')}</button>
               : <button type="button" className="un" onClick={(e) => { e.stopPropagation(); unlinkPayment(nav, v, ref, txLine(tx)); }}>{t('receipts.unlinkCap')}</button>)}
           </div>
-          {book ? <PaymentBooking books={props.books} nav={nav} payment={ref} narrow /> : null}
+          {booking ? (
+            <p className="m" data-testid="private-booking">
+              <span className="spin small" aria-hidden="true" /> {t('receipts.privateBooking')}{' '}
+              <button type="button" className="quiet" onClick={() => setByHand(ref)}>{t('receipts.privateByHand')}</button>
+            </p>
+          ) : book ? <PaymentBooking books={props.books} nav={nav} payment={ref} narrow /> : null}
           </Fragment>
         );
       })}

@@ -15,6 +15,8 @@ export interface ObjAction {
   run(): void;
   /** A key the area already gives it, shown beside it. */
   key?: string;
+  /** What it does, in words, on the button's tip. */
+  tip?: string;
 }
 
 /** The actions of what is shown: the primary first, the rest in the menu. */
@@ -47,7 +49,7 @@ export function ActionsMenu({ set }: { set: ActionSet }) {
   if (!set.primary && !set.rest.length) return null;
   return (
     <span className="actions" data-testid="actions">
-      {set.primary && <button type="button" className="btn primary" data-act={`primary-${set.primary.id}`} onClick={set.primary.run}>{set.primary.label}</button>}
+      {set.primary && <button type="button" className="btn primary" data-act={`primary-${set.primary.id}`} data-tip={set.primary.tip} onClick={set.primary.run}>{set.primary.label}</button>}
       {set.rest.length > 0 && (
         <button type="button" ref={button} className="btn" aria-haspopup="menu" aria-expanded={!!anchor} data-act="actions" data-tip={t('actions.tip')} onClick={(e) => setAnchor(e.currentTarget.getBoundingClientRect())}>
           {t('actions.label')}<span className="k">A</span>

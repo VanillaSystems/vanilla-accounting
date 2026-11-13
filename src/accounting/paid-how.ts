@@ -9,11 +9,20 @@
  * («Barzahlung», «comptant», «contanti», a hotel bill's «Bar 18.50» line), nor a clause that denies or
  * conditions it («Bei Barzahlung 2 % Skonto», «payable net comptant», «non accettato», «We do not
  * accept cash»). A card's words («Kartenzahlung», «TWINT», «Visa») outweigh a cash word, since a
- * till prints both lines; only an explicit «privat …» wins over them.
+ * till prints both lines; only an explicit «privat …» wins over them, or the payment line itself
+ * marked private («Bezahlt mit Mastercard ****1150 (privat)», #402).
+ *
+ * A card alone says nothing of whose it is. The books do (paidCards, #402): a card a receipt paid
+ * privately or marked private names is the owner's, a card on a receipt of a payment of the firm's
+ * own statements (its business card's statement, its debit card) is the firm's; a receipt paid with
+ * the owner's card reads as paid privately (readsPrivately).
  */
 
 /** Out of a private pocket, whatever paid at the till. */
 const PRIVATE = /\b(privat\s+(ausgelegt|bezahlt|vorgeschossen|beglichen)|aus\s+eigener\s+tasche\s+(bezahlt|beglichen)|pay[ée]e?\s+(à\s+titre\s+)?priv[ée]e?|pagat[oa]\s+privatamente|paid\s+(privately|personally|out\s+of\s+pocket))\b/iu;
+
+/** A payment line that names its card or its payment and marks it private: «Bezahlt mit Mastercard ****1150 (privat)», «Paid by Visa (private card)». */
+const PAID_MARKED = /\b(bezahlt|beglichen|zahlung|paid|payment|pay[ée]e?|paiement|pagat[oa]|pagamento)\b.*(\(\s*(privat|private|priv[ée]e?|privat[oa]|personal)\b|\b(privatkarte|private\s+card|personal\s+card|carte\s+priv[ée]e|carta\s+privata)\b)/iu;
 
 /** Paid in cash at the till: the payment said done, or the change handed back. */
 const CASH = /(\b(in\s+)?bar\s+(bezahlt|beglichen|erhalten|gegeben)\b|\b(zahlungsart|zahlart|zahlungsmittel|bezahlt|bezahlung)\s*:?\s*bar\b|\bbezahlt\s+in\s+bar\b|\brückgeld\b|\bwechselgeld\b|\b(pay[ée]e?|r[ée]gl[ée]e?)\s+(en\s+esp[èe]ces|comptant)\b|\bpagat[oa]\s+in\s+contanti\b|\bpaid\s+(in\s+)?cash\b|\bcash\s+(paid|tendered|received)\b|\bchange\s+(due|given)\b)/iu;
@@ -32,6 +41,38 @@ const says = (re: RegExp, text: string): boolean => clauses(text).some((c) => re
 
 export function paidPrivately(text: string): boolean {
   const words = text.slice(0, 6000);
-  if (says(PRIVATE, words)) return true;
+  if (says(PRIVATE, words) || says(PAID_MARKED, words)) return true;
   return says(CASH, words) && !CARD.test(words);
+}
+
+/** The last four digits of the card a receipt names («Mastercard ****1150», «Visa XXXX XXXX XXXX 4242»): masked digits, never a plain number. */
+export function cardOf(text: string): string | undefined {
+  return /(?:[*xX•·]{2,}[\s-]?)+(\d{4})\b/u.exec(text.slice(0, 6000))?.[1];
+}
+
+/** The cards the books know: the owner's (`private`) and the firm's (`firm`); a card on both sides is in neither. */
+export interface PaidCards { private: ReadonlySet<string>; firm: ReadonlySet<string> }
+
+/**
+ * The cards from the receipts and what paid them: `owner` (a private outlay, «Privat bezahlt»),
+ * `firm` (a payment of the firm's own statements), none (not paid yet). A receipt whose words say it
+ * was paid privately names the owner's card too.
+ */
+export function paidCards(receipts: ReadonlyArray<{ text: string; paidBy?: 'owner' | 'firm' }>): PaidCards {
+  const own = new Set<string>();
+  const firm = new Set<string>();
+  for (const r of receipts) {
+    const card = cardOf(r.text);
+    if (!card) continue;
+    if (r.paidBy === 'firm') firm.add(card);
+    else if (r.paidBy === 'owner' || paidPrivately(r.text)) own.add(card);
+  }
+  return { private: new Set([...own].filter((c) => !firm.has(c))), firm: new Set([...firm].filter((c) => !own.has(c))) };
+}
+
+/** Whether a receipt reads as paid privately: its words say so, or the owner's card paid it. */
+export function readsPrivately(text: string, cards: PaidCards): boolean {
+  if (paidPrivately(text)) return true;
+  const card = cardOf(text);
+  return !!card && cards.private.has(card);
 }

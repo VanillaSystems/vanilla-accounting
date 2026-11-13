@@ -29,7 +29,7 @@ const OWNER = 'Lukas Beispiel';
 const pay = (ref: string, date: string, amount: number, description: string, over: Partial<BankTransaction> = {}): BankTransaction =>
   ({ ref, bank: 'Raiffeisen', date, amount, currency: 'CHF', direction: 'DBIT', counterparty: OWNER, description, ...over });
 const entry = (ref: string, date: string, debit: string, credit: string, amount: number, vatCode?: string, over: Partial<JournalEntry> = {}): JournalEntry =>
-  ({ id: `e-${ref}`, transactionRef: ref, date, accountDebit: debit, accountCredit: credit, amount, ...(vatCode && { vatCode }), description: ref, origin: 'classify', by: { kind: 'model' }, ...over });
+  ({ id: `e-${ref}`, transactionRef: ref, date, accountDebit: debit, accountCredit: credit, amount, ...(vatCode && { vatCode }), description: ref, origin: 'classify', by: { kind: 'model', model: 'test' }, ...over }) as JournalEntry;
 
 // The six receipts he paid privately, booked over his account as «Privat bezahlt» books them.
 const OUTLAYS: Array<[string, string, string, number, string]> = [
@@ -40,7 +40,7 @@ const OUTLAYS: Array<[string, string, string, number, string]> = [
 const outlayTxs = OUTLAYS.map(([ref, date, , amount]) => pay(ref, date, amount, `Beleg ${ref}`, { bank: 'manual', source: 'manual', counterparty: undefined }));
 const outlayEntries = OUTLAYS.map(([ref, date, account, amount, code]) => entry(ref, date, account, '2451', amount, code));
 const SALARIES = [pay('L7', '2026-07-27', 8602, 'Lohn Juli 2026'), pay('L8', '2026-08-25', 8602, 'Lohn August 2026')];
-const salaryEntries = SALARIES.map((t) => entry(t.ref, t.date, '5000', '1020', 8602, undefined, { origin: 'manual', by: { kind: 'person' } }));
+const salaryEntries = SALARIES.map((t) => entry(t.ref, t.date, '5000', '1020', 8602, undefined, { origin: 'manual', by: { kind: 'person', at: '2026-11-13T10:00:00Z' } }));
 const REPAY = [pay('S7', '2026-07-31', 218.9, 'Spesen Juli 2026'), pay('S8', '2026-08-31', 112, 'Spesen August 2026'), pay('S9', '2026-09-30', 71.6, 'Spesen September 2026')];
 
 /** A one-person GmbH whose owner is employed and pays business costs privately (the consultancy persona). */
@@ -95,7 +95,7 @@ test('without an AI: the form proposes bank / his account without a code, never 
     assert.deepEqual(draft.lines[0].source, { account: { from: 'ownerOutlays' } }, t.ref);
     assert.equal(draft.precedent, undefined, `${t.ref}: no salary «wie bei derselben Firma»`);
     // Her click books the lines as they stand.
-    books.journalEntries.push(...draft.lines.map((l, i) => entry(`${t.ref}-${i}`, t.date, l.accountDebit, l.accountCredit, l.amount, undefined, { transactionRef: t.ref, origin: 'manual', by: { kind: 'person' } })));
+    books.journalEntries.push(...draft.lines.map((l, i) => entry(`${t.ref}-${i}`, t.date, l.accountDebit, l.accountCredit, l.amount, undefined, { transactionRef: t.ref, origin: 'manual', by: { kind: 'person', at: '2026-11-13T10:00:00Z' } })));
   }
   assert.equal(outlaysOpen(books, '2451', context.moneyAccounts!, '2026-12-31'), 0);
 });
