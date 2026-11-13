@@ -206,7 +206,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
         </div>
       )}
       <TwinNotice {...props} />
-      {r.report?.held?.length ? <ReportHeld receipt={r.id} report={r.report} canEdit={canEdit} said={(message, ok) => { if (ok) nav.refresh(); nav.toast(message); }} /> : null}
+      {r.report?.held?.length ? <ReportHeld receipt={r.id} report={r.report} canEdit={canEdit} closedThrough={props.books.config?.closedThrough} said={(message, ok) => { if (ok) nav.refresh(); nav.toast(message); }} /> : null}
       <ReportCorrections receipt={r.id} books={props.books} canEdit={canEdit} said={(message) => { nav.refresh(); nav.toast(message); }} />
       {v.none && v.r.kind === 'supporting'
         ? <div className="notice" data-testid="supporting-notice">{t('receipts.supportingNotice', { what: v.noneWhy ? t(`receipts.why.${v.noneWhy}`) : t('receipts.why.supporting') })} {canEdit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t(markLabel(r))}</a>}</div>

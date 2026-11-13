@@ -165,7 +165,7 @@ export const elsewhereCount = (e: Elsewhere): number =>
 
 /** Whether anything of the period waits: a card with nothing on it says so in one line (and that nothing else does, only when `elsewhereOf` is empty too). */
 export const nothingOpen = (s: OpenPeriodState): boolean =>
-  !s.unbooked.length && !s.questions.length && !s.evidence.length && !s.unlinked.length && !s.yours.length && !s.held.length && !s.bills.length && !s.tasks.length;
+  !s.unbooked.length && !s.questions.length && !s.evidence.length && !s.unlinked.length && !s.yours.length && !s.held.length && !s.tasks.length;
 
 /** How many of the held payments are of each kind. */
 export const waitingKinds = (s: Pick<OpenPeriodState, 'waiting'>): Record<WaitingPayment['kind'], number> => ({

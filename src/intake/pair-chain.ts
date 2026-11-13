@@ -138,9 +138,9 @@ export function orderPagesIn(ws: Pick<Workspace, 'paths'>, books: Parameters<typ
 export function providerIssuesIn(ws: Pick<Workspace, 'paths'>, books: Parameters<typeof providerIssuesOf>[0] & Pick<Books, 'transactions' | 'mappings' | 'config'>, today = localToday()): ProviderIssues {
   const counterparties = counterpartiesOf(ws);
   const providers = counterparties.filter(isProvider);
-  const out = providerIssuesOf(books, providers, { inputTax: !withoutInputTax(), today });
-  if (!providers.length) return out;
   const lock = periodLock(books as Books);
+  const out = providerIssuesOf(books, providers, { inputTax: !withoutInputTax(), today, ...(lock.lockedThrough ? { lockedThrough: lock.lockedThrough } : {}) });
+  if (!providers.length) return out;
   const byId = new Map(books.receipts.map((r) => [r.id, r]));
   for (const tx of books.transactions) {
     if (tx.direction !== 'CRDT' || lock.isClosed(tx.date)) continue;

@@ -66,7 +66,7 @@ function textOf(books: Index, i: PeriodIssue): string {
     case 'unbooked': return t('issues.unbooked', { date: formatDate(i.tx.date), text: payerName(i.tx), amount: `${i.tx.currency} ${fmt(i.tx.amount)}` });
     case 'unlinked': return t('issues.unlinked', { date: formatDate(i.receipt.date ?? ''), text: i.receipt.description ? moneyInText(i.receipt.description) : i.receipt.filename });
     case 'own': return t('issues.own', { text: i.name, lacks: i.lacks.map((k) => t(LACK_WORDS[k])).join(', ') });
-    case 'held': return t('issues.held', { what: t(`drop.held.${i.held.why}`, { order: i.held.order }), date: formatDate(i.held.date), provider: i.held.name, amount: i.held.gross !== undefined ? `, ${i.held.currency ?? baseCurrency()} ${fmt(i.held.gross)}` : '' });
+    case 'held': return t(i.held.why === 'rate' ? 'issues.heldRate' : 'issues.heldOther', { what: t(`drop.held.${i.held.why}`, { order: i.held.order }), date: formatDate(i.held.date), provider: i.held.name, amount: i.held.gross !== undefined ? `, ${i.held.currency ?? baseCurrency()} ${fmt(i.held.gross)}` : '' });
     case 'bill': return t('issues.bill', { month: monthName(i.bill.date), provider: i.bill.name, amount: `${baseCurrency()} ${fmt(i.bill.fees)}` });
   }
 }

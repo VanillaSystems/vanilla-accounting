@@ -37,6 +37,7 @@ import { documentKind } from './document-kind.js';
 import { askKind, asksModel, kindOfModel, MODEL_RULE, MODEL_TEXT, NOT_A_RECEIPT, visionVerdict, type ModelKind } from './unclear.js';
 import { statementFacts } from '../books/statement-facts.js';
 import { documents } from '../engines/index.js';
+import { periodLock, release } from '../books/store.js';
 import { restoreReportReceipts } from './sales-report-import.js';
 
 // ─── The PDF's own text, fallback to the model's vision for OCR ─────────────
@@ -365,6 +366,28 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
     const scanned = new Set(receipts.flatMap((r) => [r.id, r.filename]));
     const find = fileFinder(ws.paths);
     receipts.push(...index.receipts.filter((r) => !scanned.has(r.id) && !scanned.has(r.filename) && r.location === 'archived' && !!find('receipts', r.filename)));
+    // A file whose bytes changed under its name (#405): the new read is the receipt, and the old record's links and the
+    // bookings that name it go to it, on purpose (release). What of it lies in a filed period, or a person's booking names,
+    // stays as it is, and the old record then stays beside the new one.
+    const lockNow = periodLock(index);
+    const fresh = new Map(receipts.filter((r) => !known.has(r.id)).map((r) => [r.filename, r]));
+    for (const old of index.receipts) {
+      const now = fresh.get(old.filename);
+      if (!now || receipts.some((r) => r.id === old.id) || old.location !== 'archived') continue;
+      const closedRef = (ref: string) => lockNow.isClosed(index.transactions.find((t) => t.ref === ref)?.date) || index.journalEntries.some((e) => e.transactionRef === ref && lockNow.isClosed(e.date));
+      const naming = index.journalEntries.filter((e) => e.receipts?.includes(old.id));
+      const stays = naming.filter((e) => lockNow.isClosed(e.date) || e.origin === 'manual');
+      const links = index.mappings.filter((m) => m.receiptId === old.id);
+      const keep = links.filter((m) => closedRef(m.transactionRef) || stays.some((e) => e.transactionRef === m.transactionRef));
+      const move = links.filter((m) => !keep.includes(m));
+      release(index, { mappings: move });
+      for (const m of move) if (!index.mappings.some((x) => x.receiptId === now.id && x.transactionRef === m.transactionRef)) index.mappings.push({ ...m, receiptId: now.id });
+      index.mappings = index.mappings.filter((m) => !move.includes(m));
+      for (const e of naming) if (!stays.includes(e)) e.receipts = [...new Set(e.receipts!.map((id) => (id === old.id ? now.id : id)))].sort();
+      Object.assign(now, { originalFilename: old.originalFilename });
+      if (stays.length || keep.length) { receipts.push(old); log(`  ${old.filename}: its file changed; the new read is its receipt, links carried, the old record kept for a filed period or a person's booking`); }
+      else { release(index, { receipts: [old.id] }); log(`  ${old.filename}: its file changed; the new read replaces its receipt, ${move.length} link(s) carried`); }
+    }
     // The books keep their order, new receipts after them: a second run writes the same file.
     const pos = new Map(index.receipts.map((r, i) => [r.id, i]));
     receipts.sort((a, b) => (pos.get(a.id) ?? pos.size) - (pos.get(b.id) ?? pos.size));

@@ -32,7 +32,8 @@ export function returnSummary(ret: PeriodReturn): ReturnSummary {
  * What the review of a return cannot let through yet: the net tax rates without the authority's
  * activity code (r6f-22), the owner's open VAT questions about the period's payments (r8h-24),
  * each of which the XML step would refuse, and the orders of the period a provider's sales report
- * holds (#405): their turnover is not in the return. The task shows it where the person decides and
+ * holds because it cannot tell their VAT rates apart (#405, `rate`): their turnover is not in the return, and «Aufteilen» is the way
+ * out. An order held for another reason (a possible test order, one booked elsewhere) is shown, never withheld for. The task shows it where the person decides and
  * withholds that outcome; undefined when nothing stands in the way.
  */
 export function approvalWithheld(task: Pick<Task, 'workflow' | 'step' | 'reads'>, questions: readonly Question[], books: Pick<Index, 'transactions'>, provider?: Pick<ProviderIssues, 'held'>): { rates: string[]; questions: number; held: number; outcome: 'approved' } | undefined {
@@ -40,7 +41,7 @@ export function approvalWithheld(task: Pick<Task, 'workflow' | 'step' | 'reads'>
   const ret = task.reads?.return as PeriodReturn | undefined;
   const rates = ret ? ratesWithoutActivityId(ret.figures) : [];
   const open = ret ? openSaleQuestionsIn(questions, books, ret.from, ret.to).length : 0;
-  const held = ret ? (provider?.held ?? []).filter((h) => h.date >= ret.from && h.date <= ret.to).length : 0;
+  const held = ret ? (provider?.held ?? []).filter((h) => h.why === 'rate' && !h.filed && h.date >= ret.from && h.date <= ret.to).length : 0;
   return rates.length || open || held ? { rates, questions: open, held, outcome: 'approved' } : undefined;
 }
 

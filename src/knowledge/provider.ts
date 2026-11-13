@@ -52,17 +52,11 @@
 
 import { isIsoDate } from '../accounting/periods.js';
 
-/**
- * `linePrice`, `lineQuantity`: an order's line items, one per row (#405); `taxName`, `taxValue`: the order's taxes by rate, each
- * header of their lists that the file has counts, paired by position («Tax 1 Name» with «Tax 1 Value»); `shipping`, `discount`.
- * With them an order whose one tax column shows two rates (a cart of tea and a teapot) is booked by its lines.
- */
-export const SALES_COLUMNS = ['order', 'date', 'ordered', 'shipTo', 'gross', 'tax', 'outstanding', 'refunded', 'refundedAt', 'currency', 'gateway', 'test', 'linePrice', 'lineQuantity', 'shipping', 'discount', 'taxName', 'taxValue'] as const;
+export const SALES_COLUMNS = ['order', 'date', 'ordered', 'shipTo', 'gross', 'tax', 'outstanding', 'refunded', 'refundedAt', 'currency', 'gateway', 'test'] as const;
 export type SalesColumn = (typeof SALES_COLUMNS)[number];
 /** Without these a file is no sales report. */
 export const SALES_NEEDS: readonly SalesColumn[] = ['order', 'date', 'gross'];
-/** `payoutDate`, `net`: the payout each transaction went out with and what it added to it (#405): which payouts paid sales of days the report does not hold. */
-export const FEE_COLUMNS = ['date', 'fee', 'currency', 'order', 'type', 'amount', 'test', 'payoutDate', 'net'] as const;
+export const FEE_COLUMNS = ['date', 'fee', 'currency', 'order', 'type', 'amount', 'test'] as const;
 export type FeeColumn = (typeof FEE_COLUMNS)[number];
 export const FEE_NEEDS: readonly FeeColumn[] = ['date', 'fee'];
 

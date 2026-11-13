@@ -8,7 +8,7 @@
 
 import type { AccountChoice, UnknownAccount } from './api-error.js';
 import type { OtherWhy, SupportingWhy } from '../core/modules/schema.js';
-import type { ClearingBefore, TwinWhy } from './index.js';
+import type { TwinWhy } from './index.js';
 import type { CsvAsk, CsvColumns, ReadBy, ReadStatement, StatementRead } from './statement-read.js';
 
 /** What a file is. Unset while nobody knows (the row asks). */
@@ -156,7 +156,7 @@ export interface ProviderProposal { account: string; name?: string; vat?: string
 export interface PayoutUnseen { provider: string; name: string; since: string; through: string; banks: string[]; file: string; account?: string }
 
 /** Why an order of a report was not booked by code (src/booking/sales-report.ts ReportHold). */
-export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' }
+export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' | 'refundSplit' }
 
 /**
  * What a report booked (src/intake/sales-report-import.ts): orders, refunds and fees booked; `known`
@@ -184,12 +184,6 @@ export interface ReportSummary {
   other: number; ways: string[]; waysMore: number; test: number; unpaid: number;
   held: ReportHeld[]; heldMore: number; unread: number; proofs: number;
   corrections: string[];
-  /**
-   * What the provider held on its cut-over day and paid out in its first payouts (#405, src/booking/providers.ts
-   * clearingBefore): the drop row asks it once as the clearing account's opening (PUT /api/opening-balances/:year/:account),
-   * `amount` proposed where the payments export lets code compute it. Absent once the account has its opening.
-   */
-  opening?: ClearingBefore;
 }
 
 /** `duplicate`: the same bytes; `possible-duplicate`: the same facts, asked; `same`: the person said it is the same; `not-receipt`: its words say so (`document` says what it is). */

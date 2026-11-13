@@ -343,30 +343,31 @@ Two markers flag an entry you must read before you update:
 - A payment provider's sales and fee reports stay receipts after a later drop (#405). The next run
   read only PDFs and rebuilt the receipts from them, so the reports (CSV files) and every link to the
   sales and fees they booked went from the books, while those bookings still named them and the
-  files still lay in `receipts/`. A run now keeps every receipt whose file lies there, and the write
-  door refuses a module or a run that removes a receipt whose file is still in the workspace, or a
-  link whose receipt and payment both stand, unless it lets go of it on purpose (a person's
-  «Rückgängig»). Books damaged so get their reports back on the next run: each CSV in `receipts/`
-  whose bytes the bookings name is its receipt again, with its links to every open booking and what
-  it holds; nothing of a filed period changes.
-- **⚠ figures** A cart of two VAT rates (tea at 2.6 %, a teapot at 8.1 %) is booked from the order
-  export by its line items, a line per rate, when the export's tax per rate («Tax 1 Name», «Tax 1
-  Value») tells which item carries which rate and the items add up to the order (#405). Until now it
-  waited («MWST nicht zum Normalsatz») and its turnover was missing from the return; an order the
-  lines cannot split (shipping to share out, say) waits as before, and its report's receipt now has
-  «Aufteilen»: two amounts and two rates, booked once they add up to the order.
+  files still lay in `receipts/`. A run now keeps every receipt whose file lies there. A file whose
+  bytes changed under its name is read again: the new read is its receipt, and its links and the
+  bookings that name it go along (what lies in a filed period or a person's booking names stays as it
+  is, the old receipt beside it). Books damaged so get their reports back on the next run: each CSV in
+  `receipts/` whose bytes the bookings name is its receipt again, with its links to every open
+  booking and what it holds; nothing of a filed period changes.
+- The write door refuses a module or a run that removes a receipt whose file still lies in the
+  workspace, or a link whose receipt and payment both stand, unless it lets go of it on purpose (a
+  person's «Rückgängig» of a report, a link of its own it replaces) (#405). A run can therefore stop
+  on it: nothing is saved, and the message says that only a person removes such a receipt (Belege ›
+  «Löschen») or link, or that it is the app's error to report.
 - An order a sales report holds is an open item of the period of its day (#405): in «Noch offen»,
-  on the MWST page's «noch nicht endgültig» line, in the sidebar's card and in the review, which
-  withholds «Freigegeben» until it is booked: its turnover is not in the return. So is a month whose
-  fees the provider's payments export booked while its monthly bill (Shopify's Payments Invoice) is
-  not in the books: the VAT on those fees is not deducted yet. A payout in the list is named by the
-  provider the app took it for («Shopify»), not by the processor that paid it.
-- The review's clearing account check names what it knows of a balance below zero (#405): the first
-  payouts after the cut-over day that paid sales of the days before it (computed from the payments
-  export's payout days), with the way to settle it, the provider's
-  balance on the day before as the clearing account's opening (Firma › Eröffnung); and the orders
-  its sales report holds. The drop row of a provider's report carries the same amount for the
-  question of that opening.
+  on the MWST page's «noch nicht endgültig» line, in the sidebar's card and in the review. An order
+  whose VAT rates the report cannot tell apart (a cart of tea and a teapot) withholds «Freigegeben»
+  until it is booked: its report's receipt has «Aufteilen», one or two amounts at the firm's rates,
+  booked by the person once they add up to the order. An order held for another reason (a possible
+  test order, one booked elsewhere) is shown with that reason and withholds nothing; one of a filed
+  period stays named on its report and is no open item. A refund of an order split so is held for
+  the person to book by hand. Each held order keeps its day, gross, currency and delivery country on
+  the report's receipt: optional fields added to `report.held`, as `heldMore` and `filedRefunds` were.
+- A month whose fees the provider's payments export booked while its monthly bill (Shopify's
+  Payments Invoice) is not in the books is named as a fact in «Noch offen»: the VAT on those fees is
+  not deducted. It does not make the period unfinished, and a month of a filed period is not named.
+  A payout in the list is named by the provider the app took it for («Shopify»), not by the processor
+  that paid it. The review's clearing account check names the total of the orders its sales report holds.
 - The setup conversation keeps its order after a typed message (#385): the message stands under the
   question it was typed at, above that question's answer, and the open question with its buttons
   stays under her newest message, also when the words took a step back. In the books the rail shows

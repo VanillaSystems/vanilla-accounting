@@ -287,16 +287,9 @@ provider:
   foreign currency at the ESTV daily sell rate of the tax point. With
   `gateways`, only the orders whose `gateway` column names one of them are the
   provider's; the others (PayPal, bank transfer, a gift card, a test gateway)
-  are counted, never booked onto the clearing account. A domestic order whose
-  tax shows two rates (a cart of tea and a teapot) is booked by its line items
-  (`linePrice`, `lineQuantity`) at the rates the tax per rate (`taxName`,
-  `taxValue`, each header of their lists, paired by position) tells, when no
-  shipping or discount is to be shared out (#405). A domestic order without
+  are counted, never booked onto the clearing account. A domestic order without
   tax or at no rate the firm books, Swiss VAT on an export, and a refund without
-  its own day wait for the person. With `payoutDate` and `net` in the fee
-  report, the review names the part of the first payouts after `since` that
-  paid days before it: the provider's balance on the day before, the clearing
-  account's opening. An export whose tax column shows a foreign
+  its own day wait for the person. An export whose tax column shows a foreign
   VAT (IOSS, 19 % to Germany) books two lines: the net (gross less the tax) at
   V0 onto revenue, the tax onto the company's `foreignTax` account without a
   code; its refund the same reversed, the tax in the sale's share to the cent.

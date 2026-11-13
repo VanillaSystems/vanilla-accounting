@@ -319,7 +319,7 @@ router.post('/api/receipts/:id/held-order', (req, res) => {
     const held = books.receipts.find((r) => r.id === req.params.id)?.report?.held?.find((h) => h.order === order);
     if (held?.date) assertOpen(books, [held.date], 'newEntry');
     const done = bookHeldOrder(WS, books, req.params.id, order, parts);
-    if (!done.ok) throw new RequestError(done.why === 'gone' ? 404 : done.why === 'notHeld' ? 409 : 400, `Bestellung ${order} nicht gebucht (${done.why}).`, { code: 'heldOrder', params: { why: done.why } });
+    if (!done.ok) throw new RequestError(done.why === 'gone' ? 404 : done.why === 'notHeld' || done.why === 'notRate' ? 409 : 400, `Bestellung ${order} nicht gebucht (${done.why}).`, { code: 'heldOrder', params: { why: done.why } });
     assertOpen(books, done.entries.map((e) => e.date), 'newEntry');
     return { ok: true, entries: done.entries };
   });

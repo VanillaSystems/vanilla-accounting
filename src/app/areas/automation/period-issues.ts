@@ -85,7 +85,7 @@ export function periodIssues(books: Index, questions: readonly Question[], from:
   });
   const mine = new Set(own.map((i) => (i as { receipt: Receipt }).receipt.id));
   const unlinked = l.views.filter((v) => needsYou(v, l) && within(v.date) && !v.r.filedPayment && !mine.has(v.r.id)).map((v): PeriodIssue => ({ kind: 'unlinked', receipt: v.r }));
-  const orders = (provider?.held ?? []).filter((h) => within(h.date)).map((h): PeriodIssue => ({ kind: 'held', held: h }));
+  const orders = (provider?.held ?? []).filter((h) => !h.filed && within(h.date)).map((h): PeriodIssue => ({ kind: 'held', held: h }));
   const bills = (provider?.bills ?? []).filter((b) => within(b.date)).map((b): PeriodIssue => ({ kind: 'bill', bill: b }));
   return [...asked, ...orders, ...evidence, ...unbooked, ...own, ...unlinked, ...bills];
 }
@@ -115,7 +115,8 @@ export interface IssueCounts { total: number; questions: number; evidence: numbe
 export function countIssues(issues: readonly PeriodIssue[]): IssueCounts {
   const of = (kind: PeriodIssue['kind']) => issues.filter((i) => i.kind === kind).length;
   return {
-    total: issues.length, questions: of('question'), evidence: of('evidence'), unbooked: of('unbooked'), unlinked: of('unlinked'), own: of('own'), held: of('held'), bills: of('bill'),
+    // A missing bill is information, not an open item: the period's figure is final without it.
+    total: issues.length - of('bill'), questions: of('question'), evidence: of('evidence'), unbooked: of('unbooked'), unlinked: of('unlinked'), own: of('own'), held: of('held'), bills: of('bill'),
     waitingReceipt: issues.filter((i) => i.kind === 'unbooked' && i.waitsForReceipt).length,
   };
 }

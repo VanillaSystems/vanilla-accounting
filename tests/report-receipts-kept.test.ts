@@ -9,8 +9,7 @@ import assert from 'node:assert/strict';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { bookHeldOrder, clearingBeforeIn, importSalesReport, providersOf } from '../src/intake/sales-report-import.js';
-import type { BankTransaction } from '../src/types/index.js';
+import { bookHeldOrder, importSalesReport } from '../src/intake/sales-report-import.js';
 import { loadBooks, moduleActor, OwnershipError, PERSON, release, saveBooks, update } from '../src/books/store.js';
 import { runIntake, storePort } from '../src/intake/pipeline.js';
 import { readStep } from '../src/intake/read.js';
@@ -89,28 +88,6 @@ test('#405 books an earlier run damaged get the reports back on the next run: th
   assert.equal(after.journalEntries.length, whole.journalEntries.length, 'nothing booked twice');
 });
 
-test('#405 a cart of two VAT rates is booked by its line items, a line per rate, once; one whose lines do not tell the rates apart waits', () => {
-  const ws = shop();
-  const csv = [FULL,
-    first('2101', '2026-11-12', '101.00', '0.00', '5.94', '101.00', '1', '68.00', 'CH MWST 8.1%,5.10', 'CH MWST 2.6%,0.84'), more('2101', '2026-11-12', '2', '16.50'),
-    // Shipping to share out between the rates: code does not guess its rate.
-    first('2102', '2026-11-13', '101.00', '7.00', '6.12', '108.00', '1', '68.00', 'CH MWST 8.1%,5.28', 'CH MWST 2.6%,0.84'), more('2102', '2026-11-13', '2', '16.50'),
-    first('2103', '2026-11-14', '54.05', '0.00', '4.05', '54.05', '1', '54.05', 'CH MWST 8.1%,4.05'),
-  ].join('\n');
-  const done = importSalesReport(ws, Buffer.from(csv), 'orders_export.csv');
-  assert.ok(done.ok);
-  const lines = (b = loadBooks(ws)) => b.journalEntries.filter((e) => e.transactionRef.startsWith('SR-')).map((e) => [e.transactionRef, e.date, e.accountDebit, e.accountCredit, e.amount, e.vatCode]).sort((a, b) => String(a).localeCompare(String(b)));
-  assert.deepEqual(lines(), [
-    ['SR-shopify-2101', '2026-11-12', '1093', '3200', 33, 'V26'],
-    ['SR-shopify-2101', '2026-11-12', '1093', '3200', 68, 'V81'],
-    ['SR-shopify-2103', '2026-11-14', '1093', '3200', 54.05, 'V81'],
-  ]);
-  assert.deepEqual(loadBooks(ws).receipts.find((r) => r.report)?.report?.held, [{ order: '2102', why: 'rate', date: '2026-11-13', gross: 108, currency: 'CHF', shipTo: 'CH' }], 'held with its day and gross: an open item of its period');
-  const before = lines();
-  assert.ok(importSalesReport(ws, Buffer.from(csv), 'orders_export.csv').ok);
-  assert.deepEqual(lines(), before, 'dropped again: known by its lines, nothing twice');
-});
-
 test('#405 a held order and a month of fees without its bill are open items of their period: in the list, the counts, the sidebar\'s state, and the review withholds «Freigegeben» while the order is held', () => {
   const ws = shop();
   // The app's Shopify file knows its monthly Payments Invoice (proves: vat-correction).
@@ -174,31 +151,77 @@ test('#405 «Aufteilen»: the person books a held cart by its parts, each at the
   assert.equal(again.receipts.find((r) => r.id === id)?.report?.held, undefined, 'and not held again');
 });
 
-test('#405 the first payouts after the cut-over day that pay sales before it: computed from the payments export\'s payout days, asked once as the clearing account\'s opening, named in the review', () => {
+test('#405 a receipt whose file changed under its name: the run ends, the new read is the receipt, its links and the bookings that name it go along; a later run is fine', async () => {
   const ws = shop();
-  const SHOP = () => providersOf(ws).find((p) => p.id === 'shopify')!;
-  const payout = (ref: string, date: string, amount: number): BankTransaction => ({ ref, bank: 'Raiffeisen', date, amount, currency: 'CHF', direction: 'CRDT', description: 'Gutschrift Shopify Payments', counterparty: 'Shopify Payments' });
+  const rdir = join(ws.paths.root, 'transactional-data', '2026', 'receipts');
+  const run = () => runIntake({ ws, books: storePort(ws, moduleActor('intake')), steps: [['read', readStep]] });
+  await run();
+  const b0 = loadBooks(ws);
+  const closed = b0.config.closedThrough ?? '';
+  const pick = b0.receipts.find((r) => r.location === 'archived' && r.filename.endsWith('.pdf') && existsSync(join(rdir, r.filename)) && (r.date ?? '') > closed
+    && b0.mappings.some((m) => m.receiptId === r.id && (b0.transactions.find((t) => t.ref === m.transactionRef)?.date ?? '') > closed)
+    && !b0.journalEntries.some((e) => e.receipts?.includes(r.id) && e.origin === 'manual'))!;
+  assert.ok(pick, 'a linked receipt of the open period');
+  const links = b0.mappings.filter((m) => m.receiptId === pick.id).map((m) => m.transactionRef).sort();
+  const naming = b0.journalEntries.filter((e) => e.receipts?.includes(pick.id)).map((e) => e.id).sort();
+  writeFileSync(join(rdir, pick.filename), await textPdf(['Muster AG', 'Rechnung 99 vom 12.11.2026', 'Total CHF 10.00 inkl. MWST 8.1% CHF 0.75']));
+  await run();
+  const b1 = loadBooks(ws);
+  const now = b1.receipts.find((r) => r.filename === pick.filename && r.id !== pick.id);
+  assert.ok(now, 'the new read is in the books');
+  assert.equal(b1.receipts.some((r) => r.id === pick.id), false, 'the old record went, on purpose');
+  assert.deepEqual(b1.mappings.filter((m) => m.receiptId === now!.id).map((m) => m.transactionRef).sort(), links, 'its links carried');
+  assert.deepEqual(b1.journalEntries.filter((e) => e.receipts?.includes(now!.id)).map((e) => e.id).sort(), naming, 'and the bookings that named it');
+  await run();
+  assert.ok(loadBooks(ws).receipts.some((r) => r.id === now!.id), 'a later run is fine');
+});
+
+test('#405 the write door holds no receipt of books without a home (a clone, as a dry run makes)', () => {
+  const ws = shop();
+  assert.ok(importSalesReport(ws, Buffer.from(ORDERS), 'orders_export.csv').ok);
+  const clone = structuredClone(loadBooks(ws));
+  const id = clone.receipts.find((r) => r.report)!.id;
+  update(clone, moduleActor('intake'), (b) => { b.receipts = b.receipts.filter((r) => r.id !== id); });
+  assert.equal(clone.receipts.some((r) => r.id === id), false);
+});
+
+test('#405 only a cart whose rates the report cannot tell apart withholds «Freigegeben»; another reason is shown, not withheld for; «Aufteilen» takes the rate holds only; one in a filed period is no open item', () => {
+  const ws = shop();
+  const csv = [FULL, first('2102', '2026-11-13', '101.00', '7.00', '6.12', '108.00', '1', '68.00', 'CH MWST 8.1%,5.28', 'CH MWST 2.6%,0.84'), more('2102', '2026-11-13', '2', '16.50')].join('\n');
+  assert.ok(importSalesReport(ws, Buffer.from(csv), 'orders_export.csv').ok);
   const books = loadBooks(ws);
-  // Two payouts of sales before 1.11., then one of the export's own charges.
-  books.transactions.push(payout('P1', '2026-11-01', 300.5), payout('P2', '2026-11-03', 120), payout('P3', '2026-11-05', 156.89));
+  const report = books.receipts.find((r) => r.report)!;
+  const review = { workflow: 'vat-filing', step: 'review', reads: { return: { from: '2026-10-01', to: '2026-12-31', figures: {} } } } as never;
+  // As a test order would be held: no payment in the payments export.
+  const asTest = { ...books, receipts: books.receipts.map((r) => (r.id === report.id ? { ...r, report: { ...r.report!, held: [{ ...r.report!.held![0], why: 'noPayment' as const }] } } : r)) };
+  const issues = providerIssuesIn(ws, asTest, '2026-12-15');
+  assert.deepEqual(issues.held.map((h) => h.why), ['noPayment'], 'shown');
+  assert.equal(approvalWithheld(review, [], asTest, issues), undefined, 'not withheld for');
+  saveBooks(ws, asTest as never);
+  assert.deepEqual(update(loadBooks(ws), PERSON, (x) => bookHeldOrder(ws, x, report.id, '2102', [{ amount: 108, rate: 8.1 }])), { ok: false, why: 'notRate' });
+  // Its day in a filed period: named on the report, no open item, nothing withheld.
+  const filed = { ...books, config: { ...books.config, closedThrough: '2026-11-30' } };
+  const inFiled = providerIssuesIn(ws, filed, '2026-12-15');
+  assert.deepEqual(inFiled.held.map((h) => [h.order, h.filed]), [['2102', true]]);
+  assert.deepEqual(periodIssues(filed, [], '2026-10-01', '2026-12-31', [], new Map(), '2026-12-15', new Map(), inFiled).filter((i) => i.kind === 'held'), []);
+  assert.equal(approvalWithheld(review, [], filed, inFiled), undefined);
+  assert.deepEqual(inFiled.bills, [], 'a month of a filed period has no missing bill');
+});
+
+test('#405 a refund of a cart the person split is held for her to book by hand, never skipped', () => {
+  const ws = shop();
+  const order = (refunded: string) => [FULL, first('2102', '2026-11-13', '101.00', '7.00', '6.12', '108.00', '1', '68.00', 'CH MWST 8.1%,5.28', 'CH MWST 2.6%,0.84').replace('Shopify Payments,0.00,0.00', `Shopify Payments,${refunded},0.00`), more('2102', '2026-11-13', '2', '16.50')].join('\n');
+  assert.ok(importSalesReport(ws, Buffer.from(order('0.00')), 'orders_export.csv').ok);
+  const id = loadBooks(ws).receipts.find((r) => r.report)!.id;
+  const books = loadBooks(ws);
+  assert.ok(update(books, PERSON, (x) => bookHeldOrder(ws, x, id, '2102', [{ amount: 75, rate: 8.1 }, { amount: 33, rate: 2.6 }])).ok);
   saveBooks(ws, books);
-  const fees = ['Transaction Date,Type,Order,Payout Date,Amount,Fee,Net,Currency',
-    '2026-11-02 10:00:00 +0100,charge,#2001,2026-11-05,108.10,3.44,104.66,CHF',
-    '2026-11-03 10:00:00 +0100,charge,#2002,2026-11-05,54.05,1.82,52.23,CHF',
-  ].join('\n');
-  const asked = clearingBeforeIn(ws, loadBooks(ws), SHOP());
-  assert.deepEqual([asked?.payouts.length, asked?.amount], [3, undefined], 'the payouts are known, what they paid of the days before is not: asked without a proposal');
-  const done = importSalesReport(ws, Buffer.from(fees), 'payment_transactions_export.csv');
-  assert.ok(done.ok);
-  assert.deepEqual(done.summary.opening, { account: '1093', since: '2026-11-01', year: '2026', amount: 420.5, payouts: [
-    { ref: 'P1', date: '2026-11-01', amount: 300.5, before: 300.5 },
-    { ref: 'P2', date: '2026-11-03', amount: 120, before: 120 },
-    { ref: 'P3', date: '2026-11-05', amount: 156.89 },
-  ] }, 'the drop row proposes what the provider held on 31.10.');
-  // Kept as the clearing account's opening (Firma › Eröffnung), it is asked no more.
-  const kept = loadBooks(ws);
-  kept.config.openingBalances = { 2026: { 1093: 420.5, 2970: 420.5 } };
-  assert.equal(clearingBeforeIn(ws, kept, SHOP()), undefined);
+  assert.ok(importSalesReport(ws, Buffer.from(order('20.00')), 'orders_export_refund.csv').ok);
+  const after = loadBooks(ws);
+  const held = after.receipts.filter((r) => r.report).flatMap((r) => r.report!.held ?? []);
+  assert.deepEqual(held.map((h) => [h.order, h.why]), [['2102', 'refundSplit']]);
+  assert.deepEqual(providerIssuesIn(ws, after, '2026-12-15').held.map((h) => h.why), ['refundSplit'], 'an open item while the sale is booked');
+  assert.equal(after.journalEntries.filter((e) => e.transactionRef.startsWith('SR-shopify-2102')).length, 2, 'nothing booked by code');
 });
 
 test('#405 the write door: a module removes no receipt whose file still lies in receipts/ and no link whose receipt and payment stand, unless it releases them', () => {

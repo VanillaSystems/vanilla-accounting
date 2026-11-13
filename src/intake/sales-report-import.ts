@@ -32,8 +32,7 @@ import { appendQuestionLine, readQuestions } from '../questions/store.js';
 import { APP_ASKER } from './sale-questions.js';
 import { loadClassifyContext, chartOf, mappedReceipts, type ClassifyContext } from '../booking/classify.js';
 import { chartNames } from '../booking/rule-book.js';
-import { clearingBefore, fromClearing, isProvider, orderOf, payoutDaysOf, providerOfMoneyIn, providerOfPayment, type ClearingBefore, type Provider } from '../booking/providers.js';
-import { openingLock } from '../accounting/opening-balance.js';
+import { fromClearing, isProvider, orderOf, payoutDaysOf, providerOfMoneyIn, providerOfPayment, type Provider } from '../booking/providers.js';
 import { bookReport, collectedBy, isReportRef, linkOrdersToSales, paymentFacts, readReport, recognizeReport, reportFacts, REPORT_LINK_RULE, saleRef, unpaidRow, type PaymentFacts, type ReadReport, type ReportContext, type ReportOutcome, type ReportTexts } from '../booking/sales-report.js';
 import { loadKnowledge, homeOf } from '../knowledge/layers.js';
 import { silentUids } from '../knowledge/counterparties.js';
@@ -69,15 +68,6 @@ const sha16 = (b: Buffer) => createHash('sha256').update(b).digest('hex').slice(
 export function providersOf(ws: Pick<Workspace, 'paths'>): Provider[] {
   try {
     return loadKnowledge(APP_ROOT, ws.paths.root).counterparties.filter(isProvider);
-  } catch {
-    return [];
-  }
-}
-
-/** Every business file of the workspace (a payout's payer is told from them); none when its knowledge does not load. */
-function counterpartiesOfWs(ws: Pick<Workspace, 'paths'>) {
-  try {
-    return loadKnowledge(APP_ROOT, ws.paths.root).counterparties;
   } catch {
     return [];
   }
@@ -323,23 +313,6 @@ function reportsOf(ws: Workspace, books: Books, p: Provider, kind: 'sales' | 'fe
   });
 }
 
-/**
- * What provider `p` held on its cut-over day and paid out in its first payouts (clearingBefore, #405), with what the
- * payments exports in the books say each payout made up; none once the clearing account has its opening, or when the
- * year of the cut-over day is not the books' first (an opening is the first year's only). The drop row's question
- * and the review's clearing check read it.
- */
-export function clearingBeforeIn(ws: Workspace, books: Books, p: Provider): ClearingBefore | undefined {
-  const exported = reportsOf(ws, books, p, 'fees').flatMap(({ text }) => {
-    const read = readReport(text, 'fees', p.provider);
-    return 'missing' in read || read.kind !== 'fees' ? [] : read.payments?.payouts ?? [];
-  });
-  // Two exports of overlapping days name a payout's transactions twice: the larger of the two is the payout's.
-  const merged = [...exported.reduce((m, x) => m.set(x.date, Math.max(m.get(x.date) ?? 0, x.net)), new Map<string, number>())].map(([date, net]) => ({ date, net }));
-  const before = clearingBefore(p, books, counterpartiesOfWs(ws), merged.length ? merged : undefined);
-  return before && !openingLock(books, before.year) ? before : undefined;
-}
-
 /** What the provider's payments reports in the books say beside their fees: the days they cover, the orders they name, the refunds (#214). */
 function paymentsOf(ws: Workspace, books: Books, p: Provider): PaymentFacts | undefined {
   return paymentFacts(reportsOf(ws, books, p, 'fees').map(({ text }) => {
@@ -368,7 +341,7 @@ function takeSales(ws: Workspace, books: Books, p: Provider, receipt: Receipt, r
   const out = bookReport(books, read, reportContext(ws, books, p, 'sales', receipt.id, texts(p.name, receipt.filename), fx, context, payments, undefined, read));
   if (stale) dropStale(books, out.stale);
   pushOutcome(books, out, receipt.id);
-  keepHeld(books, receipt.id, out, read, agreedBasis());
+  keepHeld(books, receipt.id, out, read, agreedBasis(), payments);
   return out;
 }
 
@@ -377,14 +350,16 @@ function takeSales(ws: Workspace, books: Books, p: Provider, receipt: Receipt, r
  * Each held order with its day (its tax point), gross and currency (#405): an open item of the period of its day.
  * So do the refunds paid in a filed period it offers as corrections (#231), each with the filing period it corrects.
  */
-function keepHeld(books: Books, id: string, out: ReportOutcome, read: ReadReport, agreed: boolean): void {
+function keepHeld(books: Books, id: string, out: ReportOutcome, read: ReadReport, agreed: boolean, payments?: PaymentFacts): void {
   const r = books.receipts.find((x) => x.id === id)!;
   const { held: _held, heldMore: _more, filedRefunds: _filed, ...said } = r.report!;
   const filed = out.filedRefunds.slice(0, HELD_KEPT).map((f) => ({ ...f, corrects: filingKeyOf(f.date, filing().length) }));
   const rows = new Map(read.kind === 'sales' ? read.rows.map((o) => [o.order, o]) : []);
   const held = out.held.slice(0, HELD_KEPT).map((h) => {
     const o = rows.get(h.order);
-    return o ? { ...h, date: agreed ? o.ordered ?? o.date : o.date, gross: o.gross, ...(o.currency ? { currency: o.currency } : {}), ...(o.shipTo ? { shipTo: o.shipTo } : {}) } : h;
+    // Its tax point as the report books a sale: the order's day on the agreed basis; on the cash basis the day the provider charged it.
+    const charged = [...new Set((payments?.charges.get(h.order) ?? []).map((c) => c.date))];
+    return o ? { ...h, date: agreed ? o.ordered ?? o.date : charged.length === 1 ? charged[0] : o.date, gross: o.gross, ...(o.currency ? { currency: o.currency } : {}), ...(o.shipTo ? { shipTo: o.shipTo } : {}) } : h;
   });
   r.report = { ...said, ...(held.length ? { held } : {}), ...(out.held.length > HELD_KEPT ? { heldMore: out.held.length - HELD_KEPT } : {}), ...(filed.length ? { filedRefunds: filed } : {}) };
 }
@@ -528,10 +503,10 @@ export function importSalesReport(ws: Workspace, bytes: Buffer, name: string, op
     }
     const lock = periodLock(books);
     const proofs = linkOrdersToSales(books, (d) => !lock.isClosed(d), providers);
-    return { out, retaken, unpaid: unpaidSales(ws, books, p), proofs: proofs.length, filename: receipt.filename, corrections: offering(books, p), books, opening: clearingBeforeIn(ws, books, p) };
+    return { out, retaken, unpaid: unpaidSales(ws, books, p), proofs: proofs.length, filename: receipt.filename, corrections: offering(books, p), books };
   });
   askUnpaid(ws, result.books, p, result.unpaid);
-  return { ok: true, summary: { ...summaryOf(p, hit.kind, facts, read, result), ...(result.opening ? { opening: result.opening } : {}) } };
+  return { ok: true, summary: summaryOf(p, hit.kind, facts, read, result) };
 }
 
 /** The firm's sale codes for a sales report: the domestic one at the normal rate and at each other rate its form takes, the export one, the minus; none for a firm that books no codes. */
@@ -684,7 +659,7 @@ export function restoreReportReceipts(ws: Workspace, books: Books, now = new Dat
 }
 
 /** Why a held order is not booked by the person's split: the report is gone, it holds the order no more (booked meanwhile), the parts do not add up to the order's gross, or a rate the firm does not book (or no daily rate of a foreign order's day). */
-export type HeldRefusal = 'gone' | 'notHeld' | 'sum' | 'rate';
+export type HeldRefusal = 'gone' | 'notHeld' | 'notRate' | 'noFacts' | 'sum' | 'rate';
 
 /**
  * The person's split of an order the sales report holds (#405), when the export cannot tell its rates
@@ -699,7 +674,10 @@ export function bookHeldOrder(ws: Workspace, books: Books, receiptId: string, or
   if (!receipt || !p?.provider.clearing || !p.provider.since) return { ok: false, why: 'gone' };
   const h = receipt.report!.held?.find((x) => x.order === order);
   const ref = saleRef(p.id, order);
-  if (!h?.date || h.gross === undefined || books.journalEntries.some((e) => e.transactionRef === ref)) return { ok: false, why: 'notHeld' };
+  if (!h || books.journalEntries.some((e) => e.transactionRef === ref)) return { ok: false, why: 'notHeld' };
+  if (h.why !== 'rate') return { ok: false, why: 'notRate' };
+  // Held before the report kept its day and gross: dropped again, it keeps them.
+  if (!h.date || h.gross === undefined) return { ok: false, why: 'noFacts' };
   if (!parts.length || parts.some((x) => !(x.amount > 0)) || parts.reduce((s, x) => s + toRappen(x.amount), 0) !== toRappen(h.gross)) return { ok: false, why: 'sum' };
   const ctx = reportContext(ws, books, p, 'sales', receipt.id, texts(p.name, receipt.filename), loadFxResolver(), loadClassifyContext(ws));
   const rates = ctx.codes ? [{ code: ctx.codes.domestic, rate: ctx.codes.rate }, ...(ctx.codes.reduced ?? [])] : [];

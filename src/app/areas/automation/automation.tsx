@@ -498,11 +498,10 @@ function ReturnFacts({ ret }: { ret: PeriodReturn }) {
 /**
  * Each payment provider's clearing account at the period's end (#203): its balance, its month ends
  * before, and what the provider paid out after the end within its payout days, which is what it held
- * then; the difference is found per order. What it knows of the difference it names (#405): the first payouts
- * after the cut-over day that paid sales of the days before it (the provider's balance on that day, which belongs
- * on the account as its opening), and the orders its sales report holds. A fact, never a reminder.
+ * then; the difference is found per order. The orders its sales report holds it names with their total (#405).
+ * A fact, never a reminder.
  */
-function ClearingFacts({ checks, nav }: { checks: ClearingCheck[]; nav: Nav }) {
+function ClearingFacts({ checks }: { checks: ClearingCheck[] }) {
   const cur = baseCurrency();
   return (
     <>
@@ -520,16 +519,8 @@ function ClearingFacts({ checks, nav }: { checks: ClearingCheck[]; nav: Nav }) {
             <span className="m">{c.paidAfter === undefined || !key
               ? t('automation.clearing.unknown', { until: formatDate(until), known: c.known ? formatDate(c.known) : '–' })
               : t(key, { until: formatDate(until), date: formatDate(c.through), paid: `${cur} ${fmt(c.paidAfter)}`, diff: `${cur} ${fmt(Math.abs(diff ?? 0))}` })}</span>
-            {c.before ? (
-              <span className="m" data-testid="clearing-before">
-                {c.before.amount !== undefined
-                  ? t('automation.clearing.before', { amount: `${cur} ${fmt(c.before.amount)}`, since: formatDate(c.before.since), dates: c.before.payouts.filter((x) => x.before).map((x) => formatDate(x.date)).join(', '), provider: c.name, day: formatDate(addDays(c.before.since, -1)), account: c.account, with: `${cur} ${fmt(Math.round((c.balance + c.before.amount) * 100) / 100)}` })
-                  : t('automation.clearing.beforeUnknown', { n: c.before.payouts.length, since: formatDate(c.before.since), provider: c.name, day: formatDate(addDays(c.before.since, -1)), account: c.account })}{' '}
-                <button type="button" className="golink" onClick={() => nav.go({ route: { area: 'company', section: 'opening' }, query: {} })}>{t('area.company')} › {t('company.opening')}</button>
-              </span>
-            ) : null}
             {c.held ? <span className="m" data-testid="clearing-held">{t('automation.clearing.held', { amount: `${cur} ${fmt(c.held)}` })}</span> : null}
-            {c.below && !c.before && !c.held ? <span className="m">{t('automation.clearing.below')}</span> : null}
+            {c.below && !c.held ? <span className="m">{t('automation.clearing.below')}</span> : null}
             {c.currency ? <span className="m">{t('automation.clearing.currency', { currency: c.currency })}</span> : null}
           </div>
         );
@@ -742,7 +733,7 @@ function ReturnIssues({ ret, books, nav, canEdit }: { ret: PeriodReturn; books: 
   return (
     <>
       {ret.reviewedBefore ? <p className="warnline" data-testid="reviewed-before">{t('automation.reviewedBefore', { was: money(ret.reviewedBefore.payable, baseCurrency()), now: money(ret.payable, baseCurrency()) })}</p> : null}
-      {ret.clearing?.length ? <ClearingFacts checks={ret.clearing} nav={nav} /> : null}
+      {ret.clearing?.length ? <ClearingFacts checks={ret.clearing} /> : null}
       {p ? <PeriodIssues books={books} nav={nav} from={p.from} to={p.to} period={periodName(p)} canEdit={canEdit} /> : null}
     </>
   );

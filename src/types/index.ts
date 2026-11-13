@@ -107,23 +107,10 @@ export interface Receipt {
  * that names it beside other orders (a payout entry, which may net the refund): named, booked by hand only;
  * `booked` (#242): an entry of the books carries the refund already (its id, day and ref): named with where, nothing offered.
  */
-/**
- * What the provider held for the shop on its cut-over day `since` and paid out in its first payouts
- * after it (#405): the sales of the days before `since` that no report books (they lie before these
- * books' days, or the export does not hold them), so the clearing account, opened at nothing, goes
- * below zero by them. The one thing that settles it is that balance as the clearing account's opening
- * (Firma › Eröffnung, `year` the books' first, `account` the clearing account), never an entry.
- * `payouts`: the provider's payouts on the bank within its payout days from `since` on, each with the
- * part of it that paid days before `since` (`before`) where the provider's payments export says what
- * of each payout its own transactions made up (`payoutDate` and `net` columns); `amount` their sum,
- * absent when no export says so (then the person is asked without a proposal).
- */
-export interface ClearingBefore { account: string; since: string; year: string; payouts: Array<{ ref: string; date: string; amount: number; before?: number }>; amount?: number }
-
 export interface SalesReportFacts {
   provider: string; kind: 'sales' | 'fees'; from: string; to: string; rows: number;
   /** The orders it holds for the person; `date` (the order's tax point), `gross`, `currency` and `shipTo` where the report gave them (#405). */
-  held?: Array<{ order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges'; date?: string; gross?: number; currency?: string; shipTo?: string }>;
+  held?: Array<{ order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' | 'refundSplit'; date?: string; gross?: number; currency?: string; shipTo?: string }>;
   heldMore?: number;
   filedRefunds?: Array<{ order: string; date: string; amount: number; currency?: string; corrects: string; byHand?: true; booked?: { entry: string; date: string; ref: string } }>;
 }

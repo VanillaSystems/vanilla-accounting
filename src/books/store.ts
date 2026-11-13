@@ -564,7 +564,7 @@ export function update<T>(books: Books, actor: Actor, fn: (books: Books) => T | 
     }
     if (held) {
       const lost = lostByModule(books, held, freed);
-      if (lost.length) throw new OwnershipError(`${describe(actor)} entfernt keinen Beleg und keine Verknüpfung, die es nicht selbst freigibt: ${lost.slice(0, 5).join('; ')}${lost.length > 5 ? ` und ${lost.length - 5} weitere` : ''}`);
+      if (lost.length) throw new OwnershipError(`${describe(actor)} entfernt keinen Beleg und keine Verknüpfung, die es nicht selbst freigibt: ${lost.slice(0, 5).join('; ')}${lost.length > 5 ? ` und ${lost.length - 5} weitere` : ''}. Nichts gespeichert. Einen Beleg, dessen Datei noch im Workspace liegt, nimmt nur eine Person aus den Büchern (Belege › «Löschen»), eine Verknüpfung löst sie auf dem Beleg; der Lauf geht weiter, sobald das geschehen ist. Ist das nicht gewollt, ist es ein Fehler der App: ihn mit dieser Meldung melden.`);
     }
   };
   const outer = guards.get(books);
@@ -608,13 +608,15 @@ export function release(books: Pick<Books, 'receipts'>, items: { receipts?: read
 /**
  * What a module or a run removed that it may not (#405): a receipt whose file still lies in the
  * workspace (receipts/ of a year, or the inbox while staged), and a link whose receipt and payment
- * (or entry) both still stand, unless it named them with `release`. A person's removal goes through
+ * (or entry) both still stand, unless it named them with `release`. Books without a home (a clone) say nothing of
+ * files, so their receipts are not held by it. A person's removal goes through
  * her own actions (the receipt's «Löschen», «Verknüpfung lösen», an undo), never through this check.
  */
 function lostByModule(books: Books, before: { receipts: Map<string, Receipt>; links: Set<string> }, freed: Set<string>): string[] {
   const home = homes.get(books);
   const find = home ? fileFinder(home) : undefined;
-  const fileStays = (r: Receipt) => !home || (r.location === 'staged' ? existsSync(join(home.inbox, r.filename)) : !!find!('receipts', r.filename));
+  // Books without a home (made in memory, or a clone such as a dry run's) say nothing of files: their removal is not refused for it.
+  const fileStays = (r: Receipt) => !!home && (r.location === 'staged' ? existsSync(join(home.inbox, r.filename)) : !!find!('receipts', r.filename));
   const receipts = new Set(books.receipts.map((r) => r.id));
   const refs = new Set([...books.transactions.map((t) => t.ref), ...books.journalEntries.map((e) => e.transactionRef)]);
   const links = new Set(books.mappings.map(linkKey));

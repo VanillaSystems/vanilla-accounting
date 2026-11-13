@@ -51,7 +51,7 @@ export type ApiRefusal =
   | { code: 'correctionBooked'; params: { receipt: string; entry: string } }
   /** «Als Korrektur buchen» on a refund of a filed period a sales report offers (#231): the report is gone, or it offers that refund no more. */
   | { code: 'reportCorrection'; params: { why: 'gone' | 'notOffered' } }
-  | { code: 'heldOrder'; params: { why: 'gone' | 'notHeld' | 'sum' | 'rate' } }
+  | { code: 'heldOrder'; params: { why: 'gone' | 'notHeld' | 'sum' | 'rate' | 'notRate' | 'noFacts' } }
   /** «Privat oder bar bezahlt» for a part: the part must be above 0 and at most the receipt's total (src/server/edits.ts privatePayment). */
   | { code: 'partAmount'; params: { total: number; currency: string } }
   /** A part of a receipt that shows several Swiss VAT rates names the rate line it falls under (`rates`: the receipt's). */
