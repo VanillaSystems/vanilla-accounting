@@ -12,7 +12,7 @@ import type { AutomationView, RunSummary, Task, WorkflowDecl } from '../src/work
 
 const figures = (over: Partial<HomeFigures> = {}): HomeFigures => ({
   period: { key: '2026-Q4', from: '2026-10-01', to: '2026-12-31' },
-  collected: 46, read: 44, withVat: 30, payable: 40, matched: 39, booked: 38, payments: 45, paymentsBooked: 38,
+  collected: 46, read: 44, withVat: 30, payable: 40, matched: 39, booked: 38, payments: 45, paymentsBooked: 41,
   authors: { app: 30, asked: 2, changed: 1, person: 5, unknown: 0 }, waitingReceipt: 0, filing: { kind: 'running', ends: '2026-12-31' }, ...over,
 });
 const wf = (over: Partial<WorkflowDecl> = {}): WorkflowDecl => ({
@@ -31,7 +31,7 @@ const keys = (fs: Array<{ key: string }>) => fs.map((f) => f.key);
 test('the bar stacks receipts read, receipts booked and what waits; the card adds collected, the payments booked of the period\'s payments (#365), and «ohne dich» only when the books record who booked', () => {
   const w = dockWidget(figures({ withoutYou: 79 }), view(), 0, now);
   assert.deepEqual(w.stack, [{ key: 'read', n: 44 }, { key: 'booked', n: 38 }, { key: 'waiting', n: 0 }], 'one meaning per word: «gebucht» in the bar is receipts, as the card\'s «Belege gebucht»');
-  assert.deepEqual(w.card, [{ key: 'collected', n: 46 }, { key: 'read', n: 44 }, { key: 'booked', n: 38 }, { key: 'payments', n: 38, of: 45 }, { key: 'withoutYou', pct: 79 }]);
+  assert.deepEqual(w.card, [{ key: 'collected', n: 46 }, { key: 'read', n: 44 }, { key: 'booked', n: 38 }, { key: 'payments', n: 41, of: 45 }, { key: 'withoutYou', pct: 79 }]);
   const unknown = dockWidget(figures({ authors: { app: 0, asked: 0, changed: 0, person: 0, unknown: 38 } }), view(), 0, now);
   assert.deepEqual(keys(unknown.card), ['collected', 'read', 'booked', 'payments'], 'no share when no booking records its author');
   assert.deepEqual(keys(dockWidget(figures({ payments: 0, paymentsBooked: 0 }), view(), 0, now).card), ['collected', 'read', 'booked'], 'no payments in the period: no payment fact');
@@ -97,4 +97,25 @@ test('the dock is narrow by default, stays wide once chosen, and works when the 
   assert.match(html, new RegExp(`localStorage\\.getItem\\('${NAV_WIDE_KEY.replace('.', '\\.')}'\\) === '1'`), 'index.html reads the same key before the first paint');
   assert.match(html, new RegExp(`classList\\.add\\('${NAV_WIDE_CLASS}'\\)`));
   assert.match(readFileSync('src/app/styles/shell.css', 'utf8'), new RegExp(`html\\.${NAV_WIDE_CLASS} \\{ --abw: var\\(--abw-wide\\); \\}`), 'the class widens the bar the page follows');
+});
+
+test('«Aufgaben» is one count in the dock and the corner (#385 review): open tasks and stuck runs (openCount), and the questions for the viewer', async () => {
+  const { corner } = await import('../src/workflows/model.js');
+  const v = view({ tasks: [task], runs: [run({ id: 's', status: 'stuck' })] });
+  assert.deepEqual(corner(v), { kind: 'needs-you', count: dockWidget(figures(), v, 0, now).waiting }, 'a stuck run counts in the corner as in the dock');
+  assert.deepEqual(corner(view({ runs: [run({ id: 's', status: 'stuck' })] })), { kind: 'needs-you', count: 1 });
+});
+
+test('the bar says the payments booked in words only while no receipt is booked and payments are (#385 review); otherwise receipts read and booked', () => {
+  assert.deepEqual(keys(dockWidget(figures(), view(), 0, now).stack), ['read', 'booked', 'waiting'], 'more payments than receipts booked: the row as before');
+  const none = dockWidget(figures({ read: 0, booked: 0, matched: 0, paymentsBooked: 11, payments: 23 }), view(), 0, now);
+  assert.deepEqual(none.stack, [{ key: 'payments', n: 11, of: 23 }, { key: 'waiting', n: 0 }], 'nothing booked by its receipt yet, eleven payments booked: said in words');
+  assert.deepEqual(keys(dockWidget(figures({ read: 0, booked: 0, paymentsBooked: 0, payments: 23 }), view(), 0, now).stack), ['read', 'booked', 'waiting'], 'nothing booked at all: the row of zeros is true');
+});
+
+test('the payments figure keeps its words in a short window, so the bar never shows two bare numbers', () => {
+  const css = readFileSync('src/app/styles/shell.css', 'utf8');
+  const rule = css.split('\n').find((l) => l.startsWith('@media (max-height: 620px)') && l.includes('.autow'))!;
+  assert.ok(rule, 'the short-window rule of the bar');
+  assert.match(rule, /\.autow \.n:not\(\.payments\) span \{ display: none; \}/, 'only the other labels go');
 });

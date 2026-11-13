@@ -383,7 +383,7 @@ html:not(.phone) .activity a.it.bolt { display: none; }
 .autow .wopen[aria-expanded="true"] .tip { display: none; }
 @media (max-height: 800px) { .activity .it { height: 40px; } }
 @media (max-height: 700px) { .activity .it { height: 34px; } .activity .div { margin: 4px 0; } }
-@media (max-height: 620px) { .autow .n span { display: none; } .autow { gap: 6px; padding-top: 6px; } }
+@media (max-height: 620px) { .autow .n:not(.payments) span { display: none; } .autow { gap: 6px; padding-top: 6px; } }
 .autow { margin-top: auto; width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 10px 0 4px; border-top: 1px solid var(--line); }
 .autow .wopen { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 2px 0; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; cursor: pointer; }
 .autow .wopen::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; border-radius: 0 2px 2px 0; background: transparent; }

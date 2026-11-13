@@ -1,8 +1,8 @@
 # Receipts (Belege)
 
 Belege (`src/app/areas/receipts/`) lists the receipts of the period in groups (`button.group[data-group=working|need|noDate|month:YYYY-MM]`):
-`Wird verarbeitet` (inbox files and receipts a run works on), `Ohne Zahlung` (key `need`: failed reads, open
-receipts after `closedThrough`, open undated ones; a suggestion first),
+`Wird verarbeitet` (inbox files and receipts a run works on), `Braucht dich` (key `need`: failed reads, open
+receipts after `closedThrough`, open undated ones; a suggestion first; a line under its head says what it counts),
 then one group per month, newest first; linked undated receipts wait at the end behind
 `N ohne Datum … · zeigen`, files that are no receipt behind `N Dateien sind keine Belege … · zeigen`
 (`[data-testid=toggle-hidden]`). Quarantined files show in `[data-testid=quarantine]` with `Ist ein Beleg`. The detail shows the paper (pdf.js, each
@@ -15,7 +15,7 @@ and Datei. The order and the ranking are pure functions in `model.ts` (tests/rec
   `.list button.group` (click collapses; kept per viewer), counts `.counts [role=tab]` with
   `data-filter="linked|open|noDate"` (absent = alle): each count sets the one state chip it names.
   The chips and the search are in the URL: `/receipts/<id>?f=state_open&q=coop` (an old
-  `?filter=offen` redirects). ↑↓ or j/k move, the dock badge counts `Ohne Zahlung`. A receipt is in ONE period (`placeDay`, src/app/automation/home.ts, #385): its payment's, else its date's; unpaid and undated or dated before the working period: the working period's. The dock and Automatisierung count by the same rule.
+  `?filter=offen` redirects). ↑↓ or j/k move, the dock badge counts `Braucht dich`. A receipt is in ONE period (`placeDay`, src/app/automation/home.ts, #385): its payment's, else its date's; unpaid and undated or dated before the working period: the working period's. The dock and Automatisierung count by the same rule.
 - `rc-chips` (#211, shared with `je-list`): `[data-testid=chipbar]` under the counts holds the chips
   `.fchip[data-field][data-value]` (× is `.fchip .x`; chips of one field are joined by `.or`, OR;
   different fields AND), `[data-testid=filter-button]` opens `[data-testid=filter-menu]` (fields
@@ -92,7 +92,7 @@ and Datei. The order and the ranking are pure functions in `model.ts` (tests/rec
 ## Driving it with browse + sandbox.sh
 
 - `VERIFY_WORKSPACE=demo $S up <run>`; `$B` and the language as in SKILL.md (Drive). On the fresh demo
-  all 60 receipts are linked: `Ohne Zahlung` and `.sug` are empty until something is unlinked.
+  all 60 receipts are linked: `Braucht dich` and `.sug` are empty until something is unlinked.
 - **Unlink and undo.** Open `$UI/receipts/<linked id>`, click `.status .quiet`, then at once
   `$B press Meta+z`. `$S diff` shows the mapping gone and back.
 - **Link.** After an unlink, focus `.list .row.sel`, press `l`, Enter, Enter. `$S diff` shows `+ mappings`
