@@ -430,7 +430,10 @@ Two markers flag an entry you must read before you update:
   «fehlt: Datum, Betrag» and its input tax unbooked. Where Belege says the booking without a
   payment «fehlt noch», the new button «Vorsteuer buchen» books it at once, also on a date and
   total she typed; it says why when it cannot («kein Datum», «eingereichte Periode», no fee
-  account). Such a bill no longer offers «Mit Zahlung verknüpfen» as its main action.
+  account). Such a bill no longer offers «Mit Zahlung verknüpfen» as its main action. A copy of
+  such a bill with other bytes (the same invoice number in the same month, or a copy as Belege finds
+  one), and one she marked as a copy, no longer books its input tax a second time: Belege names the
+  bill it copies. The button is not offered on a firm without input tax.
 - The fields of Firma's forms stand in line at every width (#454): a hint under one input («kein
   Konto», the account's name) or a label on two lines no longer pushes the field beside it down
   (Eröffnung, Regeln and the others). Firma › Eröffnung names its amount fields «Saldo per 1.1.2026

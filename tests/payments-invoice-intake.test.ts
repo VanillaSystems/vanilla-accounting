@@ -13,11 +13,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadBooks, moduleActor, PERSON, saveBooks, update } from '../src/books/store.js';
 import type { Receipt } from '../src/types/index.js';
+import type { Counterparty } from '../src/knowledge/counterparties.js';
+import { vatCorrectionsOf } from '../src/booking/vat-corrections.js';
+import { vatCorrectionsIn } from '../src/intake/pair-chain.js';
 import { startApi } from './support/api-server.js';
 import { runIntake, storePort, type Ask } from '../src/intake/pipeline.js';
 import { PIPELINE } from '../src/intake/run.js';
 import { textFacts } from '../src/parsers/receipt-text.js';
-import { workspaceAt } from '../src/workspace/workspace.js';
+import { APP_FOLDER, APP_ROOT, workspaceAt } from '../src/workspace/workspace.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { textPdf } from './support/text-pdf.js';
 import './support/jurisdiction.js';
@@ -40,17 +43,27 @@ const billText = (b: typeof BILLS[number]) => [
   'No payment is due: these fees were deducted from your payouts.',
 ];
 
-async function dropped(ask: Ask) {
+/** The September bill sent again: one more line, so other bytes, the same bill. */
+const COPY = 'Shopify_Payments_Invoice_2026-09 (1).pdf';
+const copyOfSeptember = () => textPdf([...billText(BILLS[2]), 'Questions? help.shopify.com']);
+
+/** The three bills dropped together (`withCopy`: and the September copy beside them), each run through the whole inbox; `later`: files of a second drop. */
+async function dropped(ask: Ask | undefined, { withCopy = false, later = [] as Array<[string, Buffer]> } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'payments-invoice-'));
   cpSync(DEMO_ROOT, dir, { recursive: true });
   writeFileSync(join(dir, 'knowledge', 'suppliers', 'shopify.yaml'), 'id: shopify\nprovider:\n  clearing: "1093"\n  since: 2026-07-01\n  revenue: "3200"\n  fees: { account: "6570", vat: I0 }\n');
   const ws = workspaceAt(dir);
   mkdirSync(ws.paths.inbox, { recursive: true });
   for (const b of BILLS) writeFileSync(join(ws.paths.inbox, `Shopify_Payments_Invoice_2026-${b.month}.pdf`), await textPdf(billText(b)));
+  if (withCopy) writeFileSync(join(ws.paths.inbox, COPY), await copyOfSeptember());
   await runIntake({ ws, books: storePort(ws, moduleActor('intake')), ask, steps: PIPELINE });
+  if (later.length) {
+    for (const [name, bytes] of later) writeFileSync(join(ws.paths.inbox, name), bytes);
+    await runIntake({ ws, books: storePort(ws, moduleActor('intake')), ask, steps: PIPELINE });
+  }
   const books = loadBooks(ws);
   const bills = BILLS.map((b) => books.receipts.find((r) => r.originalFilename === `Shopify_Payments_Invoice_2026-${b.month}.pdf`)!);
-  return { books, bills };
+  return { books, bills, ws };
 }
 
 /** A model that reads the VAT block as the text states it and fails every other question. */
@@ -78,6 +91,48 @@ test('the three Payments Invoices are dated, read and booked by code, whatever t
     [['2026-09-30', '', '6570', 22.28, 'I81-2']],
   ], 'each bill\'s input tax once, without a payment');
   assert.equal(asked.includes('receipt-match'), false, 'no bill of a VAT-only correction waits for a match answer');
+});
+
+/** The September input tax the books carry: each entry on a bill's VAT, by its amount. */
+const septemberVat = (books: Awaited<ReturnType<typeof dropped>>['books']) =>
+  books.journalEntries.filter((e) => e.accountCredit === '6570' && e.vatCode === 'I81-2' && e.date === '2026-09-30').map((e) => e.amount);
+
+for (const [label, ask] of [['without a model', undefined], ['with a model that fails', failing([])]] as const) {
+  test(`two copies of the September bill, other bytes, dropped together ${label}: its input tax once, the copy names the original`, async () => {
+    const { books, bills, ws } = await dropped(ask, { withCopy: true });
+    assert.deepEqual(septemberVat(books), [22.28]);
+    const copy = books.receipts.find((r) => r.originalFilename === COPY)!;
+    assert.equal(copy.location, 'archived', 'dated and filed by code as well');
+    // Read in the same run, either is the original: the one booked; the other is linked to nothing and names it.
+    const pair = [bills[2], copy];
+    const booked = pair.filter((r) => books.mappings.some((m) => m.receiptId === r.id));
+    assert.equal(booked.length, 1);
+    const other = pair.find((r) => r !== booked[0])!;
+    assert.equal(vatCorrectionsIn(ws, books)[other.id]?.twin, booked[0].id, 'Belege names the bill it copies');
+  });
+
+  test(`the September bill sent again in a later drop ${label}: never booked a second time`, async () => {
+    const { books, ws } = await dropped(ask, { later: [[COPY, await copyOfSeptember()]] });
+    assert.deepEqual(septemberVat(books), [22.28]);
+    const copy = books.receipts.find((r) => r.originalFilename === COPY)!;
+    assert.ok(vatCorrectionsIn(ws, books)[copy.id]?.twin);
+  });
+}
+
+test('a bill a person marked as a copy (kind duplicate) is no bill of a correction: never linked back nor booked', () => {
+  const shopify = { id: 'shopify', name: 'Shopify', match: { uid: ['CHE-153.004.184'], tx: [], iban: [], domain: [], file: [] }, documents: [{ id: 'payments-invoice', kind: 'invoice', text: [/Shopify Payments Invoice for/], proves: 'vat-correction' }] } as unknown as Counterparty;
+  const text = billText(BILLS[2]).join('\n');
+  const f = textFacts(text);
+  const r: Receipt = { id: 'dup', filename: 'd.pdf', originalFilename: 'd.pdf', extractedText: text, extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '', location: 'archived', date: '2026-09-30', amount: 297.3, currency: 'CHF', vatId: f.vatId, hasSwissVat: true, vatSummary: f.vatSummary };
+  const books = { receipts: [r], mappings: [], transactions: [], journalEntries: [] };
+  assert.equal(vatCorrectionsOf(books, [shopify]).has('dup'), true);
+  assert.equal(vatCorrectionsOf({ ...books, receipts: [{ ...r, kind: 'duplicate' }] }, [shopify]).has('dup'), false);
+  // Two such bills, one linked to its booking: the other waits on it, by its invoice number and month.
+  const linked = { ...r, id: 'orig', indexedAt: '2026-10-02' };
+  const again = { ...r, id: 'again', indexedAt: '2026-10-01', extractedText: `${text}\nResent` };
+  const two = vatCorrectionsOf({ receipts: [linked, again], mappings: [{ transactionRef: 'M2026-001', receiptId: 'orig' }], transactions: [], journalEntries: [] }, [shopify]);
+  assert.equal(two.get('again')?.twin, 'orig', 'the linked bill is the original, though read later');
+  assert.equal(vatCorrectionsOf({ receipts: [linked, { ...again, distinctFrom: ['orig'] }], mappings: [{ transactionRef: 'M2026-001', receiptId: 'orig' }], transactions: [], journalEntries: [] }, [shopify]).get('again')?.twin, undefined, 'what she said differs is no copy');
 });
 
 test('«Vorsteuer buchen» on the bill: the date and total she typed are enough; booked once, and refused with why otherwise', async () => {
@@ -108,6 +163,20 @@ test('«Vorsteuer buchen» on the bill: the date and total she typed are enough;
     assert.deepEqual(after.mappings.filter((m) => m.receiptId === 'sep').map((m) => m.transactionRef), [ref]);
     const again = await api.send('POST', '/api/receipts/sep/vat-correction');
     assert.deepEqual([again.status, again.json.code, again.json.params], [409, 'vatCorrection', { why: 'none' }], 'booked once');
+  } finally {
+    await api.stop();
+  }
+});
+
+test('«Vorsteuer buchen» on a firm without input tax (net tax rate method): refused with its own reason', async () => {
+  const api = await startApi('tests/fixtures/fresh-books-index.json', {}, { manifestOf: join(APP_ROOT, 'demo-schreinerei', APP_FOLDER) });
+  try {
+    const b = loadBooks(api.ws);
+    const text = billText(BILLS[2]).join('\n');
+    update(b, PERSON, (x) => { x.receipts.push({ id: 'sep', filename: 's.pdf', originalFilename: 's.pdf', extractedText: text, extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '', location: 'archived', date: '2026-09-30', amount: 297.3, currency: 'CHF' }); });
+    saveBooks(api.ws, b);
+    const done = await api.send('POST', '/api/receipts/sep/vat-correction');
+    assert.deepEqual([done.status, done.json.code, done.json.params], [409, 'vatCorrection', { why: 'noInputTax' }]);
   } finally {
     await api.stop();
   }

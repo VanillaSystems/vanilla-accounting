@@ -326,13 +326,16 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     for (const p of billsByCode) {
       const receipt = toRead.find((r) => r.id === p.id)!;
       const title = titles.get(p.id);
-      const target = archive(receipt, codeName(p.date!, title, receipt.originalFilename ?? receipt.filename), (r) => {
+      // A copy of another receipt (by its facts, now read) is filed, never booked: the booking step books a bill's input tax once (vatCorrectionsOf `twin`).
+      let twin: string | undefined;
+      const target = archive(receipt, codeName(p.date!, title, receipt.originalFilename ?? receipt.filename), (r, index) => {
         Object.assign(r, keepHand(r, { date: p.date, amount: p.amount, currency: p.currency, ...(title ? { title, description: `${title.vendor} ${title.what}`.trim() } : {}) }));
+        twin = waitsBehind(index, r, order);
       });
       if (!target) continue;
       pairedByCode.add(p.id);
       progress(++completed, total);
-      log(`  ${receipt.filename} → ${target}  a bill of a VAT-only correction: dated and named by code, no payment  (no model match)`);
+      log(`  ${receipt.filename} → ${target}  a bill of a VAT-only correction: dated and named by code, no payment${twin ? `; possibly a copy of ${twin}, Belege asks` : ''}  (no model match)`);
     }
   }
   const toProcess = toRead.filter((r) => !pairedByCode.has(r.id));

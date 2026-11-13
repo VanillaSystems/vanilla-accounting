@@ -568,7 +568,7 @@ export function bookBillCorrections(books: Books, context: Pick<ClassifyContext,
   const de = wordsIn('de');
   const day = (iso: string) => iso.split('-').reverse().join('.');
   return bookVatCorrections(books, context.counterparties ?? [], {
-    inputTax: !withoutInputTax(), isClosed: (d) => lock.isClosed(d), inChart: (a) => chart.has(a), base: baseCurrency(),
+    inputTax: !withoutInputTax(), words: documents(), isClosed: (d) => lock.isClosed(d), inChart: (a) => chart.has(a), base: baseCurrency(),
     rate: (currency, date) => fx.daily(currency, date),
     code: (rate, account, billVat) => (billVat && vat().codes.parse(billVat)?.rate === rate ? billVat : codeOfFacts({ charge: 'charged', rate, amountIs: 'tax' }, '', account)),
     newId: () => randomBytes(8).toString('hex'), manualRef: (date) => nextManualRef(books, date.slice(0, 4)),

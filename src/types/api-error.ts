@@ -59,7 +59,7 @@ export type ApiRefusal =
   | { code: 'reportCorrection'; params: { why: 'gone' | 'notOffered' } }
   | { code: 'heldOrder'; params: { why: 'gone' | 'notHeld' | 'sum' | 'rate' | 'notRate' | 'noFacts' | 'beforeReach' } }
   /** «Vorsteuer buchen» on a bill of a VAT-only correction (#458): why code books it not (src/booking/vat-corrections.ts CorrectionWait), or `none`: it is no such bill, or it is booked or linked already. */
-  | { code: 'vatCorrection'; params: { why: 'none' | 'noDate' | 'noVat' | 'filed' | 'noAccount' | 'noCode' | 'noRate' } }
+  | { code: 'vatCorrection'; params: { why: 'none' | 'noDate' | 'noVat' | 'filed' | 'noAccount' | 'noCode' | 'noRate' | 'twin' | 'noInputTax' } }
   /** «Privat oder bar bezahlt» for a part: the part must be above 0 and at most the receipt's total (src/server/edits.ts privatePayment). */
   | { code: 'partAmount'; params: { total: number; currency: string } }
   /** A part of a receipt that shows several Swiss VAT rates names the rate line it falls under (`rates`: the receipt's). */

@@ -8,6 +8,8 @@ import { parseVatFacts } from '../../accounting/vat-facts.js';
 import { assertReceiptFieldsOpen, privatePayment, setReceipt, unbookedPayments } from '../edits.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { bookBillCorrections, loadClassifyContext } from '../../booking/classify.js';
+import type { CorrectionWait } from '../../booking/vat-corrections.js';
+import { withoutInputTax } from '../../engines/index.js';
 import { bookHeldOrder, bookReportCorrection } from '../../intake/sales-report-import.js';
 import type { PrivatePart } from '../../types/assistant.js';
 import { bookAgain } from './automation.js';
@@ -335,7 +337,9 @@ router.post('/api/receipts/:id/vat-correction', (req, res) => {
   withBooks(res, (books) => {
     const r = books.receipts.find((x) => x.id === req.params.id);
     if (!r) throw new RequestError(404, 'Diesen Beleg gibt es nicht (mehr).');
-    const refuse = (why: 'none' | 'noDate' | 'noVat' | 'filed' | 'noAccount' | 'noCode' | 'noRate') => new RequestError(409, `Vorsteuer nicht gebucht (${why}).`, { code: 'vatCorrection', params: { why } });
+    const refuse = (why: CorrectionWait | 'none' | 'noDate' | 'noInputTax') => new RequestError(409, `Vorsteuer nicht gebucht (${why}).`, { code: 'vatCorrection', params: { why } });
+    // A firm without input tax (the net tax rate method, not registered) deducts none: Belege offers no button there.
+    if (withoutInputTax()) throw refuse('noInputTax');
     if (!r.date) throw refuse('noDate');
     assertOpen(books, [r.date], 'newEntry');
     // Her click is newer than a booking she took apart from the bill once (notPaidBy): that mark keeps the run from booking it, not her.

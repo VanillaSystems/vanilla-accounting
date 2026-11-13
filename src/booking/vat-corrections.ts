@@ -15,6 +15,9 @@
 import type { JournalEntry, Mapping, Receipt, BankTransaction } from '../types/index.js';
 import type { Counterparty } from '../knowledge/counterparties.js';
 import { isVatAmountCode } from '../accounting/validate.js';
+import { numbersIn, squash } from '../accounting/document-numbers.js';
+import type { DocumentsData } from '../core/modules/schema.js';
+import { twinFinder } from '../intake/duplicates.js';
 
 /** What a document type of a business file may say it proves instead of a payment. */
 export const PROVES = ['vat-correction'] as const;
@@ -26,9 +29,10 @@ export const CORRECTION_DAYS = { before: 10, after: 90 } as const;
 /**
  * A receipt that proves a VAT-only correction: whose (`business`, its id, and its `name`), the
  * document type that says so, the VAT it shows (none when it shows no VAT block), and the booking
- * without a payment that books that VAT (`booking`, its ref) when exactly one fits.
+ * without a payment that books that VAT (`booking`, its ref) when exactly one fits. `twin`: the bill this
+ * one is a copy of (#458), whose input tax is booked, or is booked first: this one is never booked.
  */
-export interface VatCorrection { business: string; name: string; document: string; vat?: number; booking?: string }
+export interface VatCorrection { business: string; name: string; document: string; vat?: number; booking?: string; twin?: string }
 
 type Books = { receipts: readonly Receipt[]; mappings: readonly Mapping[]; transactions: readonly BankTransaction[]; journalEntries?: readonly JournalEntry[] };
 
@@ -48,19 +52,27 @@ export function provenBy(r: Receipt, counterparties: readonly Counterparty[]): {
  * Every receipt nothing is linked to that proves a VAT-only correction, by receipt id. Its booking:
  * the one booking without a payment (a ref no bank movement has) that carries no receipt yet, has one
  * leg with a VAT-amount code (`-2`) of the receipt's VAT to the centime, and lies within
- * CORRECTION_DAYS of the receipt's day.
+ * CORRECTION_DAYS of the receipt's day. A copy a person marked as one (kind `duplicate`) is none.
+ *
+ * Its `twin` (#458): another bill of the same business that is the same bill, re-sent or downloaded
+ * twice with other bytes: the same invoice number in the same month by its text, or a copy as
+ * twinFinder finds one (src/intake/duplicates.ts, with `words`). Of such bills the one linked to its
+ * booking is the original, else the one read first; each other one names it and is never booked, so
+ * its input tax counts once. What a person said differs (`distinctFrom`) is no twin.
  */
-export function vatCorrectionsOf(books: Books, counterparties: readonly Counterparty[]): Map<string, VatCorrection> {
+export function vatCorrectionsOf(books: Books, counterparties: readonly Counterparty[], words?: DocumentsData): Map<string, VatCorrection> {
   const out = new Map<string, VatCorrection>();
   if (!counterparties.some((c) => c.documents.some((d) => d.proves))) return out;
   const linked = new Set(books.mappings.map((m) => m.receiptId));
   const withReceipt = new Set(books.mappings.map((m) => m.transactionRef));
   const payments = new Set(books.transactions.map((t) => t.ref));
   const corrections = (books.journalEntries ?? []).filter((e) => !payments.has(e.transactionRef) && !withReceipt.has(e.transactionRef) && isVatAmountCode(e.vatCode) && (!e.accountDebit || !e.accountCredit));
-  for (const r of books.receipts) {
+  const bills = books.receipts.flatMap((r) => { const hit = r.kind === 'duplicate' ? undefined : provenBy(r, counterparties); return hit ? [{ r, hit }] : []; });
+  const twinOf = billTwins(bills, linked, words);
+  for (const { r, hit } of bills) {
     if (linked.has(r.id)) continue;
-    const hit = provenBy(r, counterparties);
-    if (!hit) continue;
+    const twin = twinOf(r);
+    if (twin) { out.set(r.id, { business: hit.cp.id, name: hit.cp.name, document: hit.document, twin }); continue; }
     const vat = r.vatSummary?.length ? r.vatSummary.reduce((sum, g) => sum + (g.vat ?? 0), 0) : undefined;
     const at = r.date ? Date.parse(r.date) : NaN;
     const fits = vat === undefined || !Number.isFinite(at) ? [] : corrections.filter((e) => {
@@ -73,6 +85,29 @@ export function vatCorrectionsOf(books: Books, counterparties: readonly Counterp
   return out;
 }
 
+/** The numbers of a bill's text that name it (its invoice number), less the business's and the bill's own VAT numbers. */
+function billNumbers(r: Receipt, cp: Counterparty): Set<string> {
+  const uids = new Set([...cp.match.uid, r.vatId ?? ''].filter(Boolean).map(squash));
+  return new Set(numbersIn(r.extractedText ?? '').filter((n) => !uids.has(n)));
+}
+
+/** The original of each bill that is a copy of another bill of its business (vatCorrectionsOf `twin`), else undefined. */
+function billTwins(bills: ReadonlyArray<{ r: Receipt; hit: { cp: Counterparty } }>, linked: ReadonlySet<string>, words: DocumentsData | undefined): (r: Receipt) => string | undefined {
+  const numbers = new Map(bills.map(({ r, hit }) => [r.id, billNumbers(r, hit.cp)]));
+  const business = new Map(bills.map(({ r, hit }) => [r.id, hit.cp.id]));
+  const finder = words && bills.length > 1 ? twinFinder(bills.map((b) => b.r), words) : undefined;
+  // The original comes first: linked to its booking, then read first.
+  const rank = (r: Receipt) => `${linked.has(r.id) ? 0 : 1}${r.indexedAt ?? ''}${r.filename}${r.id}`;
+  const apart = (a: Receipt, b: Receipt) => !!a.distinctFrom?.includes(b.id) || !!b.distinctFrom?.includes(a.id);
+  const byNumber = (a: Receipt, b: Receipt) => {
+    const month = a.date?.slice(0, 7);
+    return !!month && month === b.date?.slice(0, 7) && [...numbers.get(a.id)!].some((n) => numbers.get(b.id)!.has(n));
+  };
+  const copied = (a: Receipt, b: Receipt) => { const t = finder?.find(a); return t?.relation === 'duplicate' && t.of === b.id; };
+  const same = (a: Receipt, b: Receipt) => a.id !== b.id && business.get(a.id) === business.get(b.id) && !apart(a, b) && (byNumber(a, b) || copied(a, b) || copied(b, a));
+  return (r) => bills.map((b) => b.r).filter((o) => rank(o) < rank(r) && same(r, o)).sort((a, b) => (rank(a) < rank(b) ? -1 : 1))[0]?.id;
+}
+
 /** The link rule of a bill linked by code to the correction that books its input tax. */
 export const CORRECTION_LINK = 'vat-correction';
 
@@ -82,11 +117,13 @@ export const CORRECTION_LINK = 'vat-correction';
  * account of the chart (`noAccount`), that account takes no code of the tax at the bill's rate
  * (`noCode`), or no daily rate converts its currency (`noRate`).
  */
-export type CorrectionWait = 'noVat' | 'filed' | 'noAccount' | 'noCode' | 'noRate';
+export type CorrectionWait = 'noVat' | 'filed' | 'noAccount' | 'noCode' | 'noRate' | 'twin';
 
 export interface CorrectionContext {
   /** The firm deducts input tax (the effective method). */
   inputTax: boolean;
+  /** The jurisdiction's document words: a copy of a bill is found as twinFinder finds one too (vatCorrectionsOf `twin`). */
+  words?: DocumentsData;
   isClosed(date: string): boolean;
   inChart(account: string): boolean;
   base: string;
@@ -124,12 +161,14 @@ export function bookVatCorrections(books: Books & { mappings: Mapping[]; journal
   if (!ctx.inputTax) return done;
   const byId = new Map(counterparties.map((c) => [c.id, c]));
   const receipts = new Map(books.receipts.map((r) => [r.id, r]));
-  for (const [id, found] of vatCorrectionsOf(books, counterparties)) {
+  for (const [id, found] of vatCorrectionsOf(books, counterparties, ctx.words)) {
     if (only !== undefined && id !== only) continue;
     const r = receipts.get(id)!;
     if (r.notPaidBy?.length || !r.date) continue;
     const date = r.date;
     const wait = (why: CorrectionWait) => done.waiting.push({ receipt: id, why });
+    // A copy of a bill whose input tax is booked, or is booked first: never a second time (#458).
+    if (found.twin) { wait('twin'); continue; }
     if (found.booking) {
       const entries = books.journalEntries.filter((e) => e.transactionRef === found.booking);
       if (entries.some((e) => ctx.isClosed(e.date))) continue;
