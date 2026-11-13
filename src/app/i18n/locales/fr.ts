@@ -4000,7 +4000,7 @@ export default {
     'drop.d.none': 'pas encore',
     'drop.d.file': 'Classé sous',
     'drop.waitsReceipts': { one: '{n} justificatif t’attend sous Justificatifs', other: '{n} justificatifs t’attendent sous Justificatifs' },
-    'drop.waitsTasks': { one: '{n} tâche sous Automatisation › Tâches', other: '{n} tâches sous Automatisation › Tâches' },
+    'drop.waitsTasks': { one: '{n} tâche ouverte en tout, sous Automatisation › Tâches', other: '{n} tâches ouvertes en tout, sous Automatisation › Tâches' },
     'drop.closeHint': 'À la fermeture, un « déjà là ? » sans réponse entre, et Tâches pose la question ; un ZIP sans mot de passe attend en quarantaine.',
     'drop.background': 'Continuer en arrière-plan',
     'automation.by.manual': 'à la main',

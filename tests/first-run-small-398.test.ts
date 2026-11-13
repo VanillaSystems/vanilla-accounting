@@ -29,11 +29,20 @@ test('an amount written into a receipt\'s text reads in the app\'s money format:
   assert.equal(moneyInText('Rechnung 2026-031'), 'Rechnung 2026-031', 'a number without a currency stays');
 });
 
-test('the drop names where what waits is: the receipts under Belege, the tasks under Automatisierung › Aufgaben, each with its count', () => {
-  const src = readFileSync('src/app/shell/DropDialog.tsx', 'utf8');
-  assert.doesNotMatch(src, /drop\.waitsHint/);
-  assert.match(src, /t\('drop\.waitsReceipts', \{ n: receiptsWait \}\)/);
-  assert.match(src, /t\('drop\.waitsTasks', \{ n: tasksWait \}\)/);
+test('the drop\'s closing line counts the tasks as the dock does, all of them, and the receipts of this drop that wait for her (#398 review)', async () => {
+  const { waitsAfterDrop } = await import('../src/app/shell/drop-summary.js');
+  const { dockWidget, tasksWaiting } = await import('../src/app/automation/widget.js');
+  const view = { rev: '', workflows: [], problems: [], warnings: [], paused: false, limits: { ai: 1, other: 1 }, pending: [],
+    tasks: [{ run: 't1' }, { run: 't2' }], runs: [{ id: 's', workflow: 'receipt-intake', status: 'stuck', mode: 'live', startedAt: '2026-10-21T05:00:00Z', item: { kind: 'company', id: 'inbox' }, path: [], startedBy: { kind: 'manual' } }] } as never;
+  const states = [{ kind: 'waits' }, { kind: 'matched' }, { kind: 'twin', of: 'x', name: 'x', why: 'same' }, { kind: 'unread' }, { kind: 'read' }] as never[];
+  const forMe = 2;
+  const left = waitsAfterDrop(states, tasksWaiting(view, forMe));
+  assert.equal(left.receipts, 3, 'the slip without a date, the possible copy, the photo not read');
+  const figures = { period: { key: '2026-Q3', from: '2026-07-01', to: '2026-09-30' }, collected: 0, read: 0, withVat: 0, matched: 0, booked: 0, payments: 0, paymentsBooked: 0, authors: { app: 0, asked: 0, changed: 0, person: 0, unknown: 0 }, waitingReceipt: 0, filing: { kind: 'running', ends: '2026-09-30' } } as never;
+  assert.equal(left.tasks, dockWidget(figures, view, forMe, new Date()).waiting, 'the dock\'s «Aufgaben»: open tasks, the stuck run and the questions for her');
+  assert.equal(left.tasks, 5);
+  const de = readFileSync('src/app/i18n/locales/de.ts', 'utf8');
+  assert.match(de, /'drop\.waitsTasks': \{ one: '\{n\} offene Aufgabe insgesamt/, 'it says they are all the open tasks, not this drop\'s');
 });
 
 test('an invoice of a firm not in the VAT register has no VAT line in its head', () => {

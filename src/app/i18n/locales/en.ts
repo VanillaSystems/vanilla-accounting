@@ -4000,7 +4000,7 @@ export default {
     'drop.d.none': 'none yet',
     'drop.d.file': 'Filed as',
     'drop.waitsReceipts': { one: '{n} receipt waits for you under Receipts', other: '{n} receipts wait for you under Receipts' },
-    'drop.waitsTasks': { one: '{n} task under Automation › Tasks', other: '{n} tasks under Automation › Tasks' },
+    'drop.waitsTasks': { one: '{n} open task in all, under Automation › Tasks', other: '{n} open tasks in all, under Automation › Tasks' },
     'drop.closeHint': 'On closing, an unanswered «already there?» goes in and Tasks asks; a ZIP without its password waits in quarantine.',
     'drop.background': 'Continue in the background',
     'automation.by.manual': 'by hand',

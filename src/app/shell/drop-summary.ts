@@ -103,6 +103,15 @@ export function closingGroupOf(r: DropRow, x: FileState | undefined): ClosingGro
  * The receipts a drop read (#385's one «gelesen», `receiptRead`): linked to a payment, or read
  * without one, a possible copy and one that lacks its date or amount among the latter, said apart too.
  */
+/**
+ * What waits for her when a drop ends (#398): this drop's receipts that wait for her (their date or
+ * amount, their reading, a possible copy, a run that stopped), and every open task of the books,
+ * counted as the dock counts «Aufgaben» (`waiting`: tasksWaiting), not only this drop's.
+ */
+export function waitsAfterDrop(states: readonly FileState[], waiting: number): { receipts: number; tasks: number } {
+  return { receipts: states.filter((x) => x.kind === 'waits' || x.kind === 'stuck' || x.kind === 'unread' || x.kind === 'twin').length, tasks: waiting };
+}
+
 export const readOf = (f: ClosingCounts) => ({ read: f.matched + f.read + f.copy + f.incomplete, matched: f.matched, unmatched: f.read + f.copy + f.incomplete });
 
 /**

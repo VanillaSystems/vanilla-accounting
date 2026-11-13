@@ -3997,7 +3997,7 @@ export const messages = {
   'drop.d.none': 'noch keine',
   'drop.d.file': 'Abgelegt als',
   'drop.waitsReceipts': { one: '{n} Beleg wartet auf dich unter Belege', other: '{n} Belege warten auf dich unter Belege' },
-  'drop.waitsTasks': { one: '{n} Aufgabe unter Automatisierung › Aufgaben', other: '{n} Aufgaben unter Automatisierung › Aufgaben' },
+  'drop.waitsTasks': { one: '{n} offene Aufgabe insgesamt, unter Automatisierung › Aufgaben', other: '{n} offene Aufgaben insgesamt, unter Automatisierung › Aufgaben' },
   'drop.closeHint': 'Beim Schliessen geht ein offener «schon da?» hinein, und Aufgaben fragt nach; ein ZIP ohne Passwort wartet in der Quarantäne.',
   'drop.background': 'Im Hintergrund weiter',
   'automation.by.manual': 'von Hand',

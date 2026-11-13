@@ -46,9 +46,12 @@ export interface DockWidget {
 
 type View = Pick<AutomationView, 'runs' | 'tasks' | 'paused' | 'pending' | 'workflows'>;
 
+/** What waits for the person, the one count of «Aufgaben» (#385, #398): open tasks and stuck runs (openCount), and the questions for the viewer. */
+export const tasksWaiting = (view: Pick<AutomationView, 'runs' | 'tasks'> | undefined, forMe: number): number => (view ? openCount(view) : 0) + forMe;
+
 /** `view` is absent while the automation is not loaded (the static export): the figures stand, nothing runs. */
 export function dockWidget(f: HomeFigures, view: View | undefined, forMe: number, now: Date): DockWidget {
-  const waiting = (view ? openCount(view) : 0) + forMe;
+  const waiting = tasksWaiting(view, forMe);
   const run = view?.runs.find((r) => r.mode === 'live' && (r.status === 'running' || r.status === 'queued'));
   const next = view?.workflows
     .flatMap((w) => { const at = workflowState(w, view, now).next; return at ? [{ workflow: w.id, at }] : []; })

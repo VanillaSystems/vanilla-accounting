@@ -4000,7 +4000,7 @@ export default {
     'drop.d.none': 'non ancora',
     'drop.d.file': 'Archiviato come',
     'drop.waitsReceipts': { one: '{n} giustificativo ti aspetta sotto Giustificativi', other: '{n} giustificativi ti aspettano sotto Giustificativi' },
-    'drop.waitsTasks': { one: '{n} compito sotto Automazione › Compiti', other: '{n} compiti sotto Automazione › Compiti' },
+    'drop.waitsTasks': { one: '{n} compito aperto in tutto, sotto Automazione › Compiti', other: '{n} compiti aperti in tutto, sotto Automazione › Compiti' },
     'drop.closeHint': 'Alla chiusura un «già presente?» senza risposta entra, e Compiti chiede; uno ZIP senza password aspetta in quarantena.',
     'drop.background': 'Continua in background',
     'automation.by.manual': 'a mano',

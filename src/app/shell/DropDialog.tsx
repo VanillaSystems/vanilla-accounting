@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 import { api, errorText } from '../lib/api.js';
 import { language, t, tWith } from '../i18n/index.js';
 import { dropStore, failedLine } from './drop-upload.js';
-import { CLOSING_SENTENCE, OTHER_SENTENCES, RECEIPT_SENTENCES, closingGroupOf, readOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, receiptStateOf, type ClosingCounts, type ClosingGroup, type DropSummary, type FileState } from './drop-summary.js';
+import { CLOSING_SENTENCE, OTHER_SENTENCES, RECEIPT_SENTENCES, closingGroupOf, readOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, receiptStateOf, waitsAfterDrop, type ClosingCounts, type ClosingGroup, type DropSummary, type FileState } from './drop-summary.js';
 import { isUnbooked } from '../areas/bank/model.js';
 import { receiptWaits } from '../areas/automation/period-issues.js';
 import { parsePeriod, filingKeyOf } from '../../accounting/periods.js';
@@ -25,7 +25,9 @@ import { needsYou, tabOf, type DropTab } from './drop-tabs.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { monthName } from '../lib/period-label.js';
 import { useAutomation } from '../automation/store.js';
-import { openCount, textIn } from '../../workflows/model.js';
+import { textIn } from '../../workflows/model.js';
+import { tasksWaiting } from '../automation/widget.js';
+import { forMe } from '../../questions/model.js';
 import type { Index } from '../../types/index.js';
 import type { DropRow, DropSession } from '../../types/drop.js';
 import { FileDetails } from './FileDetails.js';
@@ -575,7 +577,7 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   const { view } = useAutomation();
   const [tab, setTab] = useState<DropTab>('all');
   const accounts = useWorkspace()?.bankAccounts;
-  const { questions } = useQuestions();
+  const { questions, me } = useQuestions();
   const receiptOf = (r: DropRow) => books.receipts.find((y) => y.id === receiptIdOf(r, view));
   const landed = s.open && s.session ? landedPeriod(s.session.rows, datesIn(books, receiptOf), period, localToday(), filing().length) : undefined;
   useEffect(() => { if (landed) onLanded(landed); }, [landed?.token]);
@@ -595,9 +597,10 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   const sum = !working && rows.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? []), questions, (r) => closingGroupOf(r, stateOf.get(r))) : undefined;
   // Only files the books hold already (#341): the window says that nothing new came in.
   const nothingNew = !working && !taken.length && rows.length > 0 && rows.every((r) => (r.state === 'duplicate' && r.reason !== 'possible-duplicate') || !!r.readAs);
-  // What waits for her, named where it is (#398): the receipts of this drop under Belege, the tasks under Automatisierung › Aufgaben.
-  const receiptsWait = working ? 0 : states.filter((x) => x.kind === 'waits' || x.kind === 'stuck' || x.kind === 'unread' || x.kind === 'twin').length;
-  const tasksWait = !working && taken.length && view ? openCount(view) : 0;
+  // What waits for her, named where it is (#398): the receipts of this drop under Belege, every open task under Automatisierung › Aufgaben, as the dock counts them.
+  const left = waitsAfterDrop(states, tasksWaiting(view, forMe(questions, me).length));
+  const receiptsWait = working ? 0 : left.receipts;
+  const tasksWait = working || !taken.length ? 0 : left.tasks;
   // A receipt of a sealed quarter opens in that quarter, not in the open one (r9k-8).
   const go = (route: Route, date?: string) => { closeDrop(); onGo(date ? at(route, date) : { route, query: {} }); };
   // The last statement the drop read in: closing the window by hand opens it (Kontoauszüge does, #361).
