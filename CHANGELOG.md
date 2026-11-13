@@ -32,6 +32,28 @@ Two markers flag an entry you must read before you update:
   list by whole words, and the form says so; a payment without a proposal says why in one line; the zero code of a payment
   without a receipt says «ohne Vorsteuer: kein Beleg verknüpft» instead of «wie beim letzten Mal», and
   a receipt that may fit is named with the rate linking it would bring.
+- «Was muss ich noch machen?» (#398): the open period's card names every item one by one, each a
+  link: first the receipts that wait for her own word (no date, no amount, not read, a possible
+  copy: «Baucenter · CHF 187.35 · Datum fehlt»), then each payment without a booking with its day,
+  name and amount, each receipt without a payment; five per line and «und n weitere» with the way
+  to all. The AI adds at most one sentence and no counts; a period is said «Q3 2026», never
+  «2026-Q3».
+- Setup: the AI is told the buttons of the question on screen word for word, from the list the
+  buttons are drawn from, and never names an answer that is not there («weiss nöd»); on the two VAT
+  questions it explains how to tell and recommends none. «Wir rechnen keine MWST ab» has its line
+  under both questions, whole under the method and short under «Abrechnungsart» (#398).
+- Dock: one unit per word (#398). The bar shows «n von m Zahlungen gebucht» and the tasks in every
+  state; its card says «Belege: n gelesen · m verbucht» and «Zahlungen: n von m gebucht».
+- Setup shorter (#398): the assumed answers stand once, on the firm's card with «stimmt»; the
+  summary says «9 Antworten angenommen · ansehen». Account numbers left the form's help texts
+  («Konto 4000», «1093», «1100», «2850») and stand behind «mehr». Form 735 → 724 words, the
+  conversation in the books 502 → 389 (tests/setup-help-browser.test.ts).
+- Small (#398): an order confirmation shows no amount and offers «Als eigenen Beleg führen» once
+  on its page; the bank's fee row reads «die Gebühr der Bank laut Kontoauszug, ohne MWST» in its
+  «Erfasst» line; the drop's closing names both places with counts («2 Belege warten auf dich unter
+  Belege · 14 Aufgaben unter Automatisierung › Aufgaben»); an unregistered firm's invoice has no
+  «MWST 0 %» in its head and its firm card says what follows; an amount in a receipt's text reads
+  «CHF 3'200.00» in the open list.
 
 - AI step: before the browser opens for the sign-in, the app says what a person without an account
   will see: the page in English, where she creates the account; the subscription the card named is
