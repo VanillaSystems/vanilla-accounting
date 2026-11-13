@@ -16,6 +16,18 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- A receipt whose VAT read keeps failing (#450), books schema 9: the VAT step counts on the
+  receipt each reply of the AI that came and carried no VAT facts (not JSON, or without whether
+  Swiss VAT was charged and its rates). A call that brought no reply counts nothing: the AI off or
+  signed out, its plan's limit, no program, a timeout, a network error, a rate limit; the first
+  refusal ends the run's VAT reads, and its note says the AI was not reachable. After the third
+  the receipt is «Beleg nicht lesbar»: the step stops trying it, its payment reaches the task with
+  its ways out (neu fotografieren, ohne Vorsteuer buchen, die MWST unter Angaben eintragen), the
+  run note says «nach 3 Versuchen nicht lesbar» with the files, and the receipt shows «MWST nach 3
+  Versuchen nicht lesbar». A read that succeeds, a new text or her typed VAT starts the count
+  afresh; a receipt of a filed period is never counted. The read in «Buchen» now writes as the
+  inbox, not as the person. Books of schema 8 load unchanged (no receipt has a count);
+  `npm run update` writes 9, and an app of schema 8 refuses books of 9.
 - Card statement lines (#409), **⚠ figures**, books schema 8: the app reads a credit card
   statement's lines by code (day, merchant, amount, the merchant's own currency and amount when the
   line names one) and keeps them on its receipt, only when they add up to the total the statement
@@ -120,6 +132,19 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- «Buchen» waiting for «Einschalten» holds every booking by the firm's rules or the AI (#413): a
+  rule or business file changed outside the app's own controls (by hand, by git, an AI's draft not
+  kept) no longer acts on the next drop or mail. The inbox still reads, matches and links, but books
+  nothing; a provider's report waits in its row, and is kept for «Einschalten» when the window
+  closes; «Automatisch buchen» for all, «Neu buchen», `npm run classify` and a rule kept meanwhile
+  book nothing either. A customer's or an authority's file and evidence.guide.yaml count as the
+  firm's rules too (files there at the update make nothing wait; one written after it waits).
+  `npm run classify` books nothing on a workspace the app has not opened on this computer yet. Wherever she tries, one
+  sentence says what changed, why the app waits and what ends it, with «Einschalten» right there;
+  switched on, the app books what only waited for it (the payments by an inbox run, the report taken
+  again). Her own answers and links, and a
+  merchant name the app learns from confirmed links, make nothing wait: a new firm starts switched
+  on and its first drop books as before.
 - **⚠ figures** A supplier's refund without a credit note takes the code of the purchase it refunds
   with a minus (#357, owner's decision 2026-11-13; MWSTG Art. 41 Abs. 2): -I81 for an I81 purchase,
   -I0 for one without input tax, a part at the purchase's rate. Before, a company rule booked and
@@ -398,6 +423,13 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A repayment to the owner before any of her outlays is booked (#457): «Spesen Juli 2026» said
+  «wartet auf ihren Beleg; ist er verknüpft, bucht die App sie», though no receipt is ever linked to
+  it. While receipts that could be hers are filed (read, dated before it, paid by no payment of the
+  firm, not its own invoice) it now says it waits for her privately paid receipts to be booked as
+  outlays, in the period's list, the bank detail, the drop, «Automatisch buchen» and the hand form,
+  as it did once one was booked. Without such a receipt, and for a payment to her a rule decides, the
+  receipt wait stays.
 - A receipt that names no VAT is «MWST noch nicht gelesen», no longer «keine CH-MWST» (#391).
   Only a model, or the receipt's own words («nicht MWST-pflichtig», «not subject to Swiss VAT», «von
   der MWST ausgenommen», never beside «inkl. MWST» or a Swiss rate, 7.7 % too), say it carries no

@@ -38,6 +38,8 @@ import { loadFxResolver, type FxResolver } from '../accounting/fx-rates.js';
 import { isBankFee } from './separate-fee.js';
 import { businessVat } from './purchase-vat.js';
 import { linkedOf, type Linked } from '../accounting/receipt-due.js';
+import { isPurchaseDocument } from '../accounting/evidence-check.js';
+import { issuedByFirm } from '../intake/own-invoice.js';
 import { bankAccountFor } from '../workspace/money-accounts.js';
 import { providerOfPayment } from './providers.js';
 import { employs } from '../workspace/setup.js';
@@ -192,13 +194,30 @@ export { paysOwner };
  * money out to her by name in the books' currency on a firm with her account (repaysOwnerShape), no
  * wage by its wording and no payment a company rule decides (rent to her waits for its contract), as
  * ownerRepayments excludes them, while her account holds outlays not paid back (outlaysOpen above
- * zero, not enough for it yet). More of her receipts booked as outlays make it a repayment.
+ * zero, not enough for it yet), or before any is booked while receipts that could be hers are filed
+ * (mayBeOutlays, #457). More of her receipts booked as outlays make it a repayment.
  */
 export function awaitsOutlays(books: Books, tx: BankTransaction, context: ClassifyContext, wages: readonly Wording[], fx: FxResolver): boolean {
   const f = ownerFactsOf(context);
   if (!f || !repaysOwnerShape(tx, context.ownerName) || wages.some((w) => w.test(tx.description))) return false;
   if (ruleOfPayment(books, tx, context, fx)) return false;
-  return outlaysOpen(books, f, tx.date) > 0;
+  return outlaysOpen(books, f, tx.date) > 0 || mayBeOutlays(books, tx.date, context);
+}
+
+/**
+ * Whether a receipt filed by `date` could be one of her outlays not booked yet (#457): a purchase
+ * document, read (its day and amount), not of a filed payment, not the firm's own invoice, and paid
+ * by no payment but one on her own money account not booked yet («Privat bezahlt» before its run).
+ * A receipt the firm's payment pays is the firm's; without such a receipt nothing of hers will come.
+ */
+function mayBeOutlays(books: Pick<Books, 'receipts' | 'mappings' | 'transactions' | 'journalEntries'>, date: string, context: Pick<ClassifyContext, 'bankAccounts' | 'ownerAccount' | 'companyUid' | 'companyName'>): boolean {
+  const own = new Set(context.bankAccounts.filter((a) => a.account === context.ownerAccount).map((a) => a.bank));
+  const booked = new Set(books.journalEntries.map((e) => e.transactionRef));
+  const bank = new Map(books.transactions.map((t) => [t.ref, t.bank]));
+  const firms = new Set(books.mappings.filter((m) => booked.has(m.transactionRef) || !own.has(bank.get(m.transactionRef) ?? '')).map((m) => m.receiptId));
+  const firm = { ...(context.companyUid && { uid: context.companyUid }), ...(context.companyName && { name: context.companyName }) };
+  return books.receipts.some((r) => r.location === 'archived' && isPurchaseDocument(r) && !r.filedPayment && !!r.date && r.date <= date && !!r.amount && r.amount > 0
+    && !firms.has(r.id) && !issuedByFirm(r, firm));
 }
 
 /** The open payments that wait, as awaitsOutlays tells them, by ref: what the screens and the AI's facts say waits for her outlays (#428). */

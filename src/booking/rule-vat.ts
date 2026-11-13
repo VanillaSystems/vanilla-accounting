@@ -21,7 +21,7 @@ export type RuleVat =
   | { kind: 'fill'; vat: number | 'none' }
   | { kind: 'ask'; seen: RateSeen[]; choices: number[] };
 
-type VatFacts = Pick<Receipt, 'kind' | 'vatBy' | 'hasSwissVat' | 'vatSummary' | 'needsVisionReview' | 'vatExtractedAt'>;
+type VatFacts = Pick<Receipt, 'kind' | 'vatBy' | 'hasSwissVat' | 'vatSummary' | 'needsVisionReview' | 'vatExtractedAt' | 'vatReadFailures'>;
 
 /** The rate one receipt shows: its Swiss VAT rate, 0 when it was read and shows none; undefined when it decides nothing (unread, a copy, a sales record). */
 export function rateShown(r: VatFacts): number | undefined {
