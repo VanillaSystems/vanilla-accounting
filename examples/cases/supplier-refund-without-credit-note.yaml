@@ -25,11 +25,14 @@ why: >
   The refund takes back the input tax claimed on the purchase it refunds: the purchase's code with
   the minus (-I81), on the purchase's account, on the refund's own date. A part refunded is taken
   back at the purchase's rate. A purchase booked I0 is refunded -I0. The app finds the purchase
-  from the same supplier, no later, for at least the amount (the refund's text naming its invoice
-  picks it among several); when it finds none, or more than one could be it, it books the zero code
-  with the minus and says so, and the person changes it by hand.
+  from the same supplier, no later, for at least the amount, less what came back of it already (a
+  purchase is refunded at most once in full); the refund's text naming its invoice picks it among
+  several. Not found, the app books the zero code with the minus and says so, and the person
+  changes it by hand: when two purchases could be it, when other purchases add up to the refund,
+  when the purchase was split over lines with two codes or a line without a code (a clearing
+  account), or when less is left of it than comes back.
 pitfalls:
-  - Not -I0 because there is no credit note. No document is needed to take input tax back, only to claim it.
+  - Not -I0 because there is no credit note. The input tax goes back when the refund is booked or paid (Art. 41 Abs. 2).
   - Never change the purchase itself, least of all in a filed quarter. The refund is booked in the open period, on its own date, without corrects.
   - Not V81. The money is no sale.
 signals:

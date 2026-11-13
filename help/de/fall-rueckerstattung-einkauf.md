@@ -16,7 +16,11 @@ Du hast bei einem Lieferanten eingekauft, und die App hat den Einkauf mit seinem
 
 ## Was du entscheidest
 
-- Findet die App keinen Einkauf, oder könnten es mehrere sein, bucht sie den Code ohne Vorsteuer mit Minus, also -I0 oder -M0, und sagt das in der Buchung. War der Einkauf mit Vorsteuer gebucht, änderst du die Buchung von Hand auf seinen Code mit Minus. Im Buchungsformular steht, woher der Code kommt.
+- Findet die App keinen Einkauf, oder könnten es mehrere sein, bucht sie den Code ohne Vorsteuer mit Minus, also -I0 oder -M0, und sagt das in der Buchung. Das ist so, wenn:
+  - zwei oder mehr Einkäufe gross genug wären und die Rückerstattung keine Rechnungsnummer nennt, die nur einer davon trägt (eine Karten- oder Terminalnummer zählt nicht);
+  - andere Einkäufe zusammen genau den Betrag ergeben, etwa zwei zu 50 bei einer Rückerstattung von 100;
+  - der Einkauf auf mehrere Zeilen verteilt ist, mit zwei Codes oder mit einem Teil ohne Code, etwa auf einem Durchlaufkonto;
+  - vom Einkauf schon so viel zurückgekommen ist, dass die Rückerstattung mehr wäre als der Rest. Ein Einkauf wird höchstens einmal ganz zurückerstattet. War der Einkauf mit Vorsteuer gebucht, änderst du die Buchung von Hand auf seinen Code mit Minus. Im Buchungsformular steht, woher der Code kommt.
 - Ob es wirklich eine Rückerstattung ist. Zahlt der Lieferant aus einem anderen Grund, etwa weil er auch dein Kunde ist, ist es keine.
 
 ## Das Beispiel

@@ -99,8 +99,10 @@ Two markers flag an entry you must read before you update:
   -I0 for one without input tax, a part at the purchase's rate. Before, a company rule booked and
   the hand form proposed -I0, so the input tax claimed on the purchase stayed claimed; the AI's
   booking already did so for the full amount and now for a part too. The purchase must be found
-  unambiguously: the same supplier and currency, no later, at least the refund's amount (the
-  refund's text naming its invoice picks it among several). The booking names the purchase. A
+  unambiguously: the same supplier and currency, no later, at least the refund's amount less what
+  came back of it already (the refund's text naming its invoice picks it among several); not when
+  other purchases add up to the refund or the purchase is split over two codes or a line without a
+  code. The booking names the purchase. A
   purchase in a filed quarter stays as filed: the refund counts in the open quarter. When no
   purchase is found, the refund keeps -I0 and its reason, and the hand form, say so. A refund
   booked from now on (or booked again) lowers Ziffer 405 (or 400) of its open quarter; a booking

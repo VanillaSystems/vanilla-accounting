@@ -49,7 +49,7 @@ const SUMS_OF = 20;
 
 const textOf = (t: BankTransaction): string => [t.description, t.reference ?? '', t.remarks ?? '', ...(t.parts ?? []).map((p) => p.reference ?? '')].join(' ');
 
-/** Whether some of `amounts` (Rappen) add up to `target`; true too when there are too many to try. */
+/** Whether some of `amounts` (in hundredths) add up to `target`; true too when there are too many to try. */
 function someAddUpTo(amounts: readonly number[], target: number): boolean {
   const small = amounts.filter((a) => a > 0 && a <= target);
   if (small.length > SUMS_OF) return true;
@@ -63,7 +63,7 @@ function someAddUpTo(amounts: readonly number[], target: number): boolean {
   return false;
 }
 
-/** A payment out of the merchant as booked (Rappen): on one account with one purchase code (`clean`), or otherwise. */
+/** A payment out of the merchant as booked (in hundredths): on one account with one purchase code (`clean`), or otherwise. */
 interface Bought { tx: BankTransaction; amount: number; clean?: { account: string; code: string; entry: string } }
 
 function boughtOf(t: BankTransaction, lines: readonly JournalEntry[]): Bought {
