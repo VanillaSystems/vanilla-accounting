@@ -269,6 +269,26 @@ test('«was muss ich noch machen?»: the till slip without its date is named wit
   assert.match(note, /at most one short sentence[^\n]*never a count, never a list of the items/);
 });
 
+test('a receipt that waits for her word is one issue of the period for the card, the note and the MWST page\'s list alike; a receipt a run still reads is not hers; reading and copy are lacks of their own (#398 review)', () => {
+  const slip = { ...receipt('slip', '2026-01-01'), date: undefined, description: 'Baucenter', extractedText: 'Baucenter Kasse Total 187.35', amount: 187.35 } as unknown as Receipt;
+  const photo = { ...receipt('photo', '2026-01-01'), date: undefined, amount: undefined, extractedText: '', description: undefined } as unknown as Receipt;
+  const copyText = 'Farbmix AG Rechnung FM-77812 Total CHF 1243.55';
+  const twin = (id: string, file: string) => ({ ...receipt(id, '2026-09-10'), filename: file, extractedText: copyText, amount: 1243.55, description: 'Farbmix AG, Rechnung FM-77812' }) as Receipt;
+  const withAll: Index = { ...books, receipts: [...books.receipts, slip, photo, twin('fm', 'fm-77812.pdf'), twin('img', 'img-4801.jpg')] };
+  const issues = periodIssues(withAll, [], '2026-07-01', '2026-09-30', [], new Map(), '2026-11-12');
+  const own = issues.flatMap((i) => (i.kind === 'own' ? [[i.receipt.id, i.lacks]] : []));
+  assert.deepEqual(own.sort(), [['img', ['copy']], ['photo', ['reading']], ['slip', ['date']]], 'the undated slip, the unread photo and the second download');
+  const c = countIssues(issues);
+  assert.equal(c.own, 3, 'the MWST page\'s count holds them');
+  assert.ok(!issues.some((i) => i.kind === 'unlinked' && ['slip', 'photo', 'img'].includes(i.receipt.id)), 'each receipt once');
+  const s = openPeriodState(withAll, [], [], [], ctx);
+  assert.deepEqual(s.yours.map((x) => x.receipt.id).sort(), ['img', 'photo', 'slip'], 'the card shows what the list shows');
+  assert.equal(s.counts.own, 3);
+  const reading = new Map([['photo', { kind: 'running' as const, run: 'r1', step: 'read' }]]);
+  assert.ok(!openPeriodState(withAll, [], [], [], ctx, new Map(), reading).yours.some((x) => x.receipt.id === 'photo'), 'a receipt a run reads now is not hers yet');
+  assert.ok(!periodIssues(withAll, [], '2026-07-01', '2026-09-30', [], new Map(), '2026-11-12', reading).some((i) => i.kind === 'own' && i.receipt.id === 'photo'));
+});
+
 test('a long list on the card names the first ITEMS_SHOWN and counts the rest, with the way to all of them (#398)', async () => {
   const { itemsOf } = await import('../src/app/assistant/open-period-items.js');
   const many: Index = { ...books, transactions: [...books.transactions, ...Array.from({ length: 8 }, (_, i) => tx(`X${i}`, `2026-09-1${i}`, 10 + i))] };

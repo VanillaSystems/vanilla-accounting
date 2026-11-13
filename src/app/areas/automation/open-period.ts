@@ -22,10 +22,10 @@ import { documents, withoutInputTax } from '../../../engines/index.js';
 import { filingStage, placedReceiptDay, type FilingStage } from '../../automation/home.js';
 import { unbookedPayments } from '../bank/model.js';
 import { journalOf, unsettledAtFiling, type EntryView, type Unsettled } from '../journal/model.js';
-import { ledgerOf, needsYou, type ReceiptView } from '../receipts/model.js';
-import { waitsForReading } from '../../../parsers/receipt-text.js';
+import { ledgerOf, type ReceiptView } from '../receipts/model.js';
 import { thresholdPassed } from '../vat/model.js';
-import { countIssues, dateOn, periodIssues, receiptWaiting, type IssueCounts } from './period-issues.js';
+import { countIssues, dateOn, periodIssues, receiptWaiting, type IssueCounts, type PeriodIssue } from './period-issues.js';
+import type { Processing } from '../../../workflows/processing.js';
 
 export interface OpenPeriodContext {
   today: IsoDate;
@@ -56,10 +56,8 @@ export interface OpenPeriodState {
   /** Receipts without a payment. */
   unlinked: Receipt[];
   /**
-   * The receipts that wait for the person's own word (#398): Belege's group of those that need her
-   * (`needsYou`), placed in the period as Belege places them (an undated one in the working period),
-   * that lack their date or amount, wait for their reading, or may be a copy of another. Each named
-   * with what it lacks; none of them is in `unlinked` again on the card.
+   * The receipts that wait for the person's own word (#398): periodIssues' `own`, Belege's «braucht dich»
+   * that lack their date or amount, their reading, or her word that they are no copy. None is in `unlinked`.
    */
   yours: YourReceipt[];
   /**
@@ -70,18 +68,9 @@ export interface OpenPeriodState {
   tasks: Task[];
 }
 
-/** What a receipt lacks for the app to go on without the person: its date, its amount, its reading, or her word that it is no copy. */
-export type Lack = 'date' | 'amount' | 'reading' | 'copy';
-export interface YourReceipt { receipt: Receipt; name: string; lacks: Lack[] }
-
-/** What `v` lacks, in the order Belege's row says it; empty when it only waits for its payment. */
-export function lacksOf(v: ReceiptView): Lack[] {
-  const reading = waitsForReading(v.r);
-  return [
-    ...(reading ? ['reading' as const] : [...(!v.date ? ['date' as const] : []), ...(v.r.amount == null ? ['amount' as const] : [])]),
-    ...(v.twin?.relation === 'duplicate' ? ['copy' as const] : []),
-  ];
-}
+export type { Lack } from './period-issues.js';
+/** A receipt that waits for the person's own word: the issue of periodIssues (#398). */
+export type YourReceipt = Extract<PeriodIssue, { kind: 'own' }>;
 
 /** The day of what a task is about, or `period` when it is about the period itself; undefined: about nothing dated. */
 function taskDay(books: Index, item: Task['item'], openFrom: IsoDate): IsoDate | 'period' | undefined {
@@ -97,17 +86,12 @@ function taskDay(books: Index, item: Task['item'], openFrom: IsoDate): IsoDate |
 
 export function openPeriodState(
   books: Index, questions: readonly Question[], tasks: readonly Task[], accounts: readonly LedgerBankAccount[], ctx: OpenPeriodContext,
-  orderPages: ReadonlyMap<string, OrderPage> = new Map(),
+  orderPages: ReadonlyMap<string, OrderPage> = new Map(), processing: ReadonlyMap<string, Processing> = new Map(),
 ): OpenPeriodState {
   const period = booksOpenPeriod(books, ctx.today, ctx.length);
-  const issues = periodIssues(books, questions, period.from, period.to, accounts, orderPages, ctx.today);
+  const issues = periodIssues(books, questions, period.from, period.to, accounts, orderPages, ctx.today, processing);
   const unbooked = issues.flatMap((i) => (i.kind === 'unbooked' ? [i.tx] : []));
   const refs = new Set(unbooked.map((t) => t.ref));
-  const l = ledgerOf(books, period.from, undefined, orderPages);
-  const yours = l.views.flatMap((v): YourReceipt[] => {
-    const lacks = lacksOf(v);
-    return lacks.length && needsYou(v, l) && !!v.day && v.day >= period.from && v.day <= period.to ? [{ receipt: v.r, name: v.vendor || v.r.filename, lacks }] : [];
-  });
   const about = (x: Task) => { const d = taskDay(books, x.item, period.from); return d === 'period' ? x.item.id === period.token : !!d && d >= period.from && d <= period.to; };
   return {
     period,
@@ -119,7 +103,7 @@ export function openPeriodState(
     questions: issues.flatMap((i) => (i.kind === 'question' ? [{ q: i.q, date: i.date }] : [])),
     evidence: issues.flatMap((i) => (i.kind === 'evidence' ? [{ entry: i.entry, check: i.check }] : [])),
     unlinked: issues.flatMap((i) => (i.kind === 'unlinked' ? [i.receipt] : [])),
-    yours,
+    yours: issues.flatMap((i) => (i.kind === 'own' ? [i] : [])),
     tasks: tasks.filter(about),
   };
 }
@@ -197,7 +181,7 @@ export type OpenLine =
   | { kind: 'unbooked'; n: number; waiting: number; unread: number; first: BankTransaction; items: BankTransaction[]; more: number }
   | { kind: 'questions'; n: number }
   | { kind: 'evidence'; n: number; first: JournalEntry }
-  /** The receipts without a payment that are not among `yours` (named once). */
+  /** The receipts without a payment (none of `yours` among them). */
   | { kind: 'unlinked'; n: number; first: Receipt; items: Receipt[]; more: number }
   | { kind: 'task'; task: Task }
   /** The tasks beyond TASKS_SHOWN. */
@@ -215,8 +199,7 @@ export function openLines(s: OpenPeriodState): OpenLine[] {
   const refs = new Set(s.unbooked.map((t) => t.ref));
   const tasks = s.tasks.filter((x) => !(x.item.kind === 'transaction' && refs.has(x.item.id)));
   const kinds = waitingKinds(s);
-  const mine = new Set(s.yours.map((x) => x.receipt.id));
-  const unlinked = s.unlinked.filter((r) => !mine.has(r.id));
+  const unlinked = s.unlinked;
   return [
     ...(s.yours.length ? [{ kind: 'yours' as const, ...shown(s.yours) }] : []),
     ...(s.counts.unbooked ? [{ kind: 'unbooked' as const, ...shown(s.unbooked), n: s.counts.unbooked, waiting: s.counts.waitingReceipt, unread: kinds.unread, first: s.unbooked[0] }] : []),

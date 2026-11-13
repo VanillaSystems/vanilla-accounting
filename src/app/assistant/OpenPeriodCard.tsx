@@ -24,6 +24,7 @@ import { elsewhereCount, elsewhereOf, nothingOpen, openLines, openPeriodState, t
 import { issueWords, UnbookedFact } from '../areas/automation/Issues.js';
 import { chargesVat, filing } from '../../engines/index.js';
 import { openCount } from '../../workflows/model.js';
+import { processingOf } from '../../workflows/processing.js';
 import { localToday } from '../../accounting/periods.js';
 import type { Index } from '../../types/index.js';
 
@@ -46,7 +47,7 @@ function goOf(l: OpenLine, s: OpenPeriodState, books: Index): Location {
 const NONE = { unbooked: 0, waitingReceipt: 0 };
 function textOf(l: OpenLine): string {
   switch (l.kind) {
-    case 'yours': return t('openPeriod.yours', { n: l.n });
+    case 'yours': return issueWords({ ...NONE, own: l.n })[0];
     case 'unbooked': return issueWords({ unbooked: l.n, waitingReceipt: l.waiting })[0];
     case 'questions': return issueWords({ ...NONE, questions: l.n })[0];
     case 'evidence': return issueWords({ ...NONE, evidence: l.n })[0];
@@ -79,7 +80,7 @@ export function OpenPeriodCard({ books, onGo }: { books: Index; onGo(loc: Locati
   const today = localToday();
   // The sidebar renders again with every word of a streaming answer: the state is computed once per change of what it reads.
   const { s, lines, other, unbookedElsewhere } = useMemo(() => {
-    const s = openPeriodState(books, questions ?? [], tasks ?? [], accounts ?? [], { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays }, pages);
+    const s = openPeriodState(books, questions ?? [], tasks ?? [], accounts ?? [], { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays }, pages, processingOf(view?.runs ?? [], books.receipts));
     const e = elsewhereOf(books, questions ?? [], tasks ?? [], accounts ?? [], s, filing().length, view ? openCount(view) - view.tasks.length : 0, registered, today);
     // UnbookedFact says the payments; the rest is counted as the tasks it is under Aufgaben.
     return { s, lines: openLines(s), other: elsewhereCount(e) - e.unbooked.length, unbookedElsewhere: e.unbooked.length };

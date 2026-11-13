@@ -10,7 +10,9 @@ import type { EvidenceCheck } from '../../../accounting/evidence-check.js';
 import type { Question } from '../../../questions/model.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { journalOf } from '../journal/model.js';
-import { ledgerOf, needsYou } from '../receipts/model.js';
+import { ledgerOf, needsYou, type ReceiptView } from '../receipts/model.js';
+import type { Processing } from '../../../workflows/processing.js';
+import { waitsForReading } from '../../../parsers/receipt-text.js';
 import type { OrderPage } from '../../../booking/order-pages.js';
 import { unbookedPayments } from '../bank/model.js';
 import { bookedStates } from '../../../accounting/payment-entries.js';
@@ -22,7 +24,26 @@ export type PeriodIssue =
   | { kind: 'evidence'; entry: JournalEntry; check: EvidenceCheck }
   /** `waitsForReceipt`: the app holds it until its receipt comes or can be read (receiptWaits). */
   | { kind: 'unbooked'; tx: BankTransaction; waitsForReceipt?: true }
-  | { kind: 'unlinked'; receipt: Receipt };
+  | { kind: 'unlinked'; receipt: Receipt }
+  /** A receipt that waits for the person's own word (#398): its date, its amount, its reading, or whether it is a copy (`copyOf`). */
+  | { kind: 'own'; receipt: Receipt; name: string; lacks: Lack[]; day: string; copyOf?: string };
+
+/** What a receipt lacks for the app to go on without the person: its date, its amount, its reading, or her word that it is no copy. */
+export type Lack = 'date' | 'amount' | 'reading' | 'copy';
+
+/** The words of each lack, as Belege's row says them: the keys of the app's dictionaries. */
+export const LACK_WORDS: Record<Lack, 'receipts.dateMissing' | 'receipts.amountMissing' | 'openPeriod.lack.reading' | 'openPeriod.lack.copy'> = {
+  date: 'receipts.dateMissing', amount: 'receipts.amountMissing', reading: 'openPeriod.lack.reading', copy: 'openPeriod.lack.copy',
+};
+
+/** What `v` lacks, in the order Belege's row says it; empty when it only waits for its payment. */
+export function lacksOf(v: ReceiptView): Lack[] {
+  const reading = waitsForReading(v.r);
+  return [
+    ...(reading ? ['reading' as const] : [...(!v.date ? ['date' as const] : []), ...(v.r.amount == null ? ['amount' as const] : [])]),
+    ...(v.twin?.relation === 'duplicate' ? ['copy' as const] : []),
+  ];
+}
 
 /** The date of what a question is about, or undefined when it is gone from the books. */
 export function dateOn(books: Pick<Index, 'transactions' | 'receipts' | 'journalEntries'>, q: Question): string | undefined {
@@ -34,7 +55,7 @@ export function dateOn(books: Pick<Index, 'transactions' | 'receipts' | 'journal
 }
 
 /** The open issues of the days `from`–`to`, in the order a person works them off: questions, contradicting codes, unbooked payments, receipts without a payment. */
-export function periodIssues(books: Index, questions: readonly Question[], from: string, to: string, accounts: readonly LedgerBankAccount[], orderPages: ReadonlyMap<string, OrderPage> = new Map(), today: IsoDate = localToday()): PeriodIssue[] {
+export function periodIssues(books: Index, questions: readonly Question[], from: string, to: string, accounts: readonly LedgerBankAccount[], orderPages: ReadonlyMap<string, OrderPage> = new Map(), today: IsoDate = localToday(), processing: ReadonlyMap<string, Processing> = new Map()): PeriodIssue[] {
   const within = (d: string | undefined): d is string => !!d && d >= from && d <= to;
   const asked = questions.flatMap((q): PeriodIssue[] => {
     const date = q.status === 'open' ? dateOn(books, q) : undefined;
@@ -43,9 +64,17 @@ export function periodIssues(books: Index, questions: readonly Question[], from:
   const evidence = journalOf(books).views.flatMap((v): PeriodIssue[] => (v.evidence && within(v.e.date) ? [{ kind: 'evidence', entry: v.e, check: v.evidence }] : []));
   const held = receiptWaits(books, accounts, today);
   const unbooked = unbookedPayments(books, accounts).filter((t) => within(t.date)).map((tx): PeriodIssue => ({ kind: 'unbooked', tx, ...(held.has(tx.ref) ? { waitsForReceipt: true as const } : {}) }));
-  const l = ledgerOf(books, from, undefined, orderPages);
-  const unlinked = l.views.filter((v) => needsYou(v, l) && within(v.date) && !v.r.filedPayment).map((v): PeriodIssue => ({ kind: 'unlinked', receipt: v.r }));
-  return [...asked, ...evidence, ...unbooked, ...unlinked];
+  const l = ledgerOf(books, from, processing, orderPages);
+  // The receipts that wait for her own word (#398), placed as Belege places them (an undated one in the working period), each named
+  // once: not again among those without a payment. A receipt a run still reads is not hers yet (needsYou, `processing`).
+  const own = l.views.flatMap((v): PeriodIssue[] => {
+    const lacks = lacksOf(v);
+    return lacks.length && needsYou(v, l) && within(v.day) && !v.r.filedPayment
+      ? [{ kind: 'own', receipt: v.r, name: v.vendor || v.r.filename, lacks, day: v.day!, ...(v.twin?.relation === 'duplicate' ? { copyOf: v.twin.of } : {}) }] : [];
+  });
+  const mine = new Set(own.map((i) => (i as { receipt: Receipt }).receipt.id));
+  const unlinked = l.views.filter((v) => needsYou(v, l) && within(v.date) && !v.r.filedPayment && !mine.has(v.r.id)).map((v): PeriodIssue => ({ kind: 'unlinked', receipt: v.r }));
+  return [...asked, ...evidence, ...unbooked, ...own, ...unlinked];
 }
 
 /**
@@ -68,12 +97,12 @@ export function receiptWaiting(books: Pick<Index, 'transactions' | 'journalEntri
  * How many issues of each kind are open: one line beside a figure that is not final (the return's
  * page, #341). `waitingReceipt`: of the unbooked payments, those in `receiptWaits`.
  */
-export interface IssueCounts { total: number; questions: number; evidence: number; unbooked: number; waitingReceipt: number; unlinked: number }
+export interface IssueCounts { total: number; questions: number; evidence: number; unbooked: number; waitingReceipt: number; unlinked: number; own: number }
 
 export function countIssues(issues: readonly PeriodIssue[]): IssueCounts {
   const of = (kind: PeriodIssue['kind']) => issues.filter((i) => i.kind === kind).length;
   return {
-    total: issues.length, questions: of('question'), evidence: of('evidence'), unbooked: of('unbooked'), unlinked: of('unlinked'),
+    total: issues.length, questions: of('question'), evidence: of('evidence'), unbooked: of('unbooked'), unlinked: of('unlinked'), own: of('own'),
     waitingReceipt: issues.filter((i) => i.kind === 'unbooked' && i.waitsForReceipt).length,
   };
 }

@@ -59,7 +59,9 @@ test('what waits, for the AI sidebar, names the bookings against their receipts,
   const twin = (id: string, file: string): Receipt => ({ ...receipt(id, '2026-09-10'), filename: file, extractedText: 'Farbmix AG Rechnung FM-77812 Total CHF 1243.55', amount: 1243.55, description: 'Farbmix AG, Rechnung FM-77812' });
   const open = openWork(ws, { ...books, receipts: [...books.receipts, twin('fm', 'fm-77812.pdf'), twin('img', 'img-4801.jpg')] } as Books, [], 'de');
   assert.match(open, /Bookings whose VAT code contradicts their receipts \(1\)[^\n]*\n- 15\.08\.2026 [^\n]*\(NATEL\): «I81 ohne Beleg: die Vorsteuer braucht einen Beleg mit MWST, sonst I0\.»/);
-  assert.match(open, /Receipts that may be a copy of another \(1\)[^\n]*\n- «Farbmix AG, Rechnung FM-77812» may be a copy of «Farbmix AG, Rechnung FM-77812»/);
+  // A possible copy of the period is the period's, waiting for her word (#398), named with what it may repeat; not again below.
+  assert.match(open, /Receipts that wait for the person's own word \(1\)[^\n]*\n- «Farbmix AG» of 10\.09\.2026, CHF 1.243\.55: «schon da\?», may be a copy of «Farbmix AG, Rechnung FM-77812», answered on the receipt/);
+  assert.doesNotMatch(open, /Receipts that may be a copy of another/);
   assert.doesNotMatch(open, /Nothing waits/);
   const after = openWork(ws, filed as Books, [], 'de');
   assert.match(after, /Bookings of the filed 2026-Q3 that contradicted their receipts and were not settled before filing \(1\)[^\n]*\n- 15\.08\.2026 /);
@@ -68,7 +70,7 @@ test('what waits, for the AI sidebar, names the bookings against their receipts,
 test('the counts beside a figure that is not final come from the same list, and name the payments held for their receipt (#341)', () => {
   const held: Index = { ...books, transactions: books.transactions.map((t) => (t.ref === 'SEP' ? { ...t, waitsForReceipt: { since: '2026-10-01' } } : t)) };
   const issues = periodIssues(held, [question('q1', 'KELLER')], '2026-07-01', '2026-09-30', []);
-  assert.deepEqual(countIssues(issues), { total: issues.length, questions: 1, evidence: 1, unbooked: 1, waitingReceipt: 1, unlinked: 1 });
+  assert.deepEqual(countIssues(issues), { total: issues.length, questions: 1, evidence: 1, unbooked: 1, waitingReceipt: 1, unlinked: 1, own: 0 });
   assert.equal(countIssues(periodIssues(books, [], '2026-07-01', '2026-09-30', [])).waitingReceipt, 0, 'unbooked, but not held for a receipt');
   // Every period not filed: October's payment too.
   const open = unbookedOpen(held, []);

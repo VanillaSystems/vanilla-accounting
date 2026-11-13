@@ -11,7 +11,8 @@ import { localToday, parsePeriod, periodContaining } from '../../accounting/peri
 import { placedReceiptDay } from '../automation/home.js';
 import { OPEN_ITEMS } from '../areas/vat/model.js';
 import { chargesVat, filing } from '../../engines/index.js';
-import type { Lack, OpenLine, OpenPeriodState, YourReceipt } from '../areas/automation/open-period.js';
+import type { OpenLine, OpenPeriodState, YourReceipt } from '../areas/automation/open-period.js';
+import { LACK_WORDS } from '../areas/automation/period-issues.js';
 import type { BankTransaction, Index, Receipt } from '../../types/index.js';
 
 export type Say = (key: string, vars?: Record<string, string | number>) => string;
@@ -31,14 +32,13 @@ export const receiptAt = (r: Receipt, s: OpenPeriodState, books: Index): Locatio
 
 /** «EUR 3'200.00»: the app's one money format (fmt). */
 export const money = (currency: string | undefined, amount: number | undefined) => (amount == null ? '' : `${currency ?? ''} ${fmt(amount)}`.trim());
-const LACK: Record<Lack, string> = { date: 'receipts.dateMissing', amount: 'receipts.amountMissing', reading: 'openPeriod.lack.reading', copy: 'openPeriod.lack.copy' };
 
 /** One object of a line (#398): who, how much and when, and for a receipt of hers what it lacks, as Belege's row says it. */
 export type Item = { key: string; text: string; go: Location };
 export interface Items { items: Item[]; more: number; all?: Location }
 export function itemsOf(l: OpenLine, s: OpenPeriodState, books: Index, say: Say): Items {
   const pay = (x: BankTransaction): Item => ({ key: x.ref, go: at({ area: 'bank', payment: x.ref }, x.date), text: [formatDate(x.date), payText(x).name, money(x.currency, x.amount)].join(' · ') });
-  const mine = (x: YourReceipt): Item => ({ key: x.receipt.id, go: receiptAt(x.receipt, s, books), text: [x.name, x.receipt.date && formatDate(x.receipt.date), money(x.receipt.currency, x.receipt.amount), x.lacks.map((k) => say(LACK[k])).join(', ')].filter(Boolean).join(' · ') });
+  const mine = (x: YourReceipt): Item => ({ key: x.receipt.id, go: receiptAt(x.receipt, s, books), text: [x.name, x.receipt.date && formatDate(x.receipt.date), money(x.receipt.currency, x.receipt.amount), x.lacks.map((k) => say(LACK_WORDS[k])).join(', ')].filter(Boolean).join(' · ') });
   const lone = (r: Receipt): Item => ({ key: r.id, go: receiptAt(r, s, books), text: [moneyInText(r.description || r.filename), r.date && formatDate(r.date), money(r.currency, r.amount)].filter(Boolean).join(' · ') });
   const receipts: Location = at({ area: 'receipts' }, s.period.from);
   switch (l.kind) {

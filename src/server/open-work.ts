@@ -21,8 +21,10 @@ import type { BankTransaction, JournalEntry } from '../types/index.js';
 import { baseCurrency, chargesVat, filing, vatSetup } from '../engines/index.js';
 import { localToday, type IsoDate, type Period } from '../accounting/periods.js';
 import type { Workspace } from '../workspace/workspace.js';
-import { elsewhereCount, elsewhereOf, nothingOpen, openPeriodState, waitingKinds, type Elsewhere, type Lack, type OpenPeriodState, type YourReceipt } from '../app/areas/automation/open-period.js';
+import { elsewhereCount, elsewhereOf, nothingOpen, openPeriodState, waitingKinds, type Elsewhere, type OpenPeriodState, type YourReceipt } from '../app/areas/automation/open-period.js';
 import { orderPagesOf } from '../booking/order-pages.js';
+import { LACK_WORDS } from '../app/areas/automation/period-issues.js';
+import type { Processing } from '../workflows/processing.js';
 import { providersOf } from '../intake/sales-report-import.js';
 import type { Purpose } from '../types/assistant.js';
 import type { SetupProgress } from '../onboarding/model.js';
@@ -43,9 +45,9 @@ export function periodWords(t: T, p: Pick<Period, 'kind' | 'token'>): string {
   return p.token;
 }
 
-const LACKS: Record<Lack, string> = { date: 'receipts.dateMissing', amount: 'receipts.amountMissing', reading: 'openPeriod.lack.reading', copy: 'openPeriod.lack.copy' };
-const yourLine = (x: YourReceipt, t: T) =>
-  `- «${x.name}»${x.receipt.date ? ` of ${day(x.receipt.date)}` : ''}${x.receipt.amount != null ? `, ${money(x.receipt.currency ?? baseCurrency(), x.receipt.amount)}` : ''}: «${x.lacks.map((k) => t(LACKS[k] as 'receipts.dateMissing')).join(', ')}»`;
+const yourLine = (books: Books, x: YourReceipt, t: T) =>
+  `- «${x.name}»${x.receipt.date ? ` of ${day(x.receipt.date)}` : ''}${x.receipt.amount != null ? `, ${money(x.receipt.currency ?? baseCurrency(), x.receipt.amount)}` : ''}: «${x.lacks.map((k) => t(LACK_WORDS[k])).join(', ')}»${x.copyOf ? `, may be a copy of «${nameOf(books, x.copyOf)}», answered on the receipt («${t('receipts.twin.same')}» or «${t('receipts.twin.distinct')}»)` : ''}`;
+const nameOf = (books: Books, id: string) => { const r = books.receipts.find((x) => x.id === id); return r?.description || r?.filename || id; };
 
 function questionLine(books: Books, q: Question, t: T): string {
   const tx = q.on.kind === 'payment' ? books.transactions.find((x) => x.ref === q.on.id) : undefined;
@@ -88,8 +90,8 @@ type Ws = Pick<Workspace, 'paths' | 'bankAccounts'>;
 type Tasks = ReadonlyArray<Task & { rule?: string }>;
 
 /** The state the sidebar's card draws, from the same inputs: the order pages of a provider among them, which are no receipts without a payment. */
-export const periodState = (ws: Ws, books: Books, tasks: ReadonlyArray<Task>, today: IsoDate = localToday()): OpenPeriodState =>
-  openPeriodState(books, readQuestions(ws), tasks, ws.bankAccounts, { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays }, orderPagesOf(books, providersOf(ws)));
+export const periodState = (ws: Ws, books: Books, tasks: ReadonlyArray<Task>, today: IsoDate = localToday(), processing: ReadonlyMap<string, Processing> = new Map()): OpenPeriodState =>
+  openPeriodState(books, readQuestions(ws), tasks, ws.bankAccounts, { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays }, orderPagesOf(books, providersOf(ws)), processing);
 
 /** What waits outside the period, from the same inputs as the card (src/app/areas/automation/open-period.ts elsewhereOf). */
 export const elsewhereFor = <T extends Task>(ws: Ws, books: Books, tasks: readonly T[], s: OpenPeriodState, stuck = 0, today: IsoDate = localToday()): Elsewhere<T> =>
@@ -115,10 +117,9 @@ export function periodNote(ws: Ws, books: Books, tasks: Tasks, language: string,
   const tasksPlace = `«${t('area.automation')} › ${t('automation.tasks')}»`;
   const name = (r: { description?: string; filename: string }) => r.description || r.filename;
   const label = periodWords(t, s.period);
-  const mine = new Set(s.yours.map((x) => x.receipt.id));
-  const unlinked = s.unlinked.filter((r) => !mine.has(r.id));
+  const unlinked = s.unlinked;
   const lines = [
-    ...(s.yours.length ? [`Receipts that wait for the person's own word (${s.yours.length}), under «${t('area.receipts')}»: only she can add what each lacks, or answer whether it is a copy:`, ...capped(s.yours.map((x) => yourLine(x, t)))] : []),
+    ...(s.yours.length ? [`Receipts that wait for the person's own word (${s.yours.length}), under «${t('area.receipts')}»: only she can add what each lacks, or answer whether it is a copy:`, ...capped(s.yours.map((x) => yourLine(books, x, t)))] : []),
     `Payments without a booking (${s.unbooked.length})${s.unbooked.length ? `, under «${t('area.bank')}»` : ''}:`, ...capped(s.unbooked.map(paymentLine)),
     ...(k.waits ? [`  Of them, ${k.waits} the app holds until their receipt is linked: it books them itself then and nobody is asked yet; the receipts go in under «${t('area.receipts')}».`] : []),
     ...(k.asks ? [`  Of them, ${k.asks} wait for their receipt and their return is near: each is the person's task under ${tasksPlace} now (link the receipt, name another proof, or book without input tax).`] : []),
@@ -140,8 +141,8 @@ export function periodNote(ws: Ws, books: Books, tasks: Tasks, language: string,
  * other open days. The two never list the same thing. `tasks`: the workflows' tasks as
  * Automatisierung lists them, each with the rule that held its payment (workflows/ask).
  */
-export function openWork(ws: Ws, books: Books, tasks: Tasks, language: string, today: IsoDate = localToday(), stuck = 0): string {
-  const s = periodState(ws, books, tasks, today);
+export function openWork(ws: Ws, books: Books, tasks: Tasks, language: string, today: IsoDate = localToday(), stuck = 0, processing: ReadonlyMap<string, Processing> = new Map()): string {
+  const s = periodState(ws, books, tasks, today, processing);
   const e = elsewhereFor(ws, books, tasks, s, stuck, today);
   return [periodNote(ws, books, tasks, language, today, s, e), elsewhere(books, language, s, e)].join('\n\n');
 }
