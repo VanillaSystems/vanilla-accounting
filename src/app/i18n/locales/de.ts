@@ -1956,7 +1956,7 @@ export const messages = {
   'close.retainedNew': 'Gewinnvortrag {account} neu',
   'close.openChecks': 'Die Eröffnung prüft, dass Aktiven und Passiven aufgehen, und schreibt sonst nichts. Heute fehlen CHF {amount}.',
   'close.openAfterClose': 'Eröffnen lässt sich, sobald {year} abgeschlossen ist.',
-  'close.openingOn': 'Eröffnung {date}',
+  'close.openingOn': 'Saldo per {date}',
   'close.openedToast': '{year} eröffnet: die Eröffnungssaldi stehen',
   'close.profitLead': 'Die Generalversammlung entscheidet innert sechs Monaten über den Gewinn. Danach wird die Gewinnverwendung mit dem Datum des Beschlusses gebucht. Die App entscheidet nichts.',
   'close.result': 'Ergebnis {year}',

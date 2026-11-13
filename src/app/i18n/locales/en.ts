@@ -1959,7 +1959,7 @@ export default {
     'close.retainedNew': 'Retained earnings {account} new',
     'close.openChecks': 'The opening checks that assets and liabilities balance, and writes nothing otherwise. Today CHF {amount} are missing.',
     'close.openAfterClose': 'You can open once {year} is closed.',
-    'close.openingOn': 'Opening {date}',
+    'close.openingOn': 'Balance at {date}',
     'close.openedToast': '{year} opened: the opening balances are in',
     'close.profitLead': 'The shareholders decide on the profit within six months. The allocation is then booked with the date of the resolution. The app decides nothing.',
     'close.result': 'Result {year}',

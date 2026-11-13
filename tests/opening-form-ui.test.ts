@@ -101,6 +101,26 @@ test('the opening form: its fields aligned at every width, each balance labelled
         assert.equal(foreign[2].align, 'right');
         assert.match(await page.$eval('[data-testid=opening-form] input[name=amount]', (e) => (e as HTMLInputElement).value), /^1['’]126\.50$/, 'left, the amount reads in the app\'s number format');
       }
+
+      // «Neue Dimension», a flex row of one field and its button, keeps its own layout: the label starts at the field's left
+      // edge, the button's foot is the input's, and the form is no taller than it was (74 px).
+      await page.goto(`${ui}/company/dimensions`, { waitUntil: 'networkidle0', timeout: 120_000 });
+      await page.waitForSelector('form.dimadd input', { timeout: 30_000 });
+      const dim = await page.$eval('form.dimadd', (form) => {
+        const label = form.querySelector('label') as HTMLElement;
+        const input = label.querySelector('input') as HTMLInputElement;
+        const button = form.querySelector('button') as HTMLButtonElement;
+        const text = document.createRange();
+        text.selectNodeContents(label.firstChild!);
+        return {
+          textLeft: Math.round(text.getBoundingClientRect().left), inputLeft: Math.round(input.getBoundingClientRect().left),
+          inputBottom: Math.round(input.getBoundingClientRect().bottom), buttonBottom: Math.round(button.getBoundingClientRect().bottom),
+          height: Math.round(form.getBoundingClientRect().height),
+        };
+      });
+      assert.equal(dim.textLeft, dim.inputLeft, `${width}px: «Neue Dimension» starts at its field's left edge: ${JSON.stringify(dim)}`);
+      assert.ok(Math.abs(dim.buttonBottom - dim.inputBottom) <= 2, `${width}px: «Anlegen» stands on the input's line: ${JSON.stringify(dim)}`);
+      assert.ok(dim.height <= 76, `${width}px: the form no taller than before: ${JSON.stringify(dim)}`);
     }
   } finally {
     await closeChrome(browser);

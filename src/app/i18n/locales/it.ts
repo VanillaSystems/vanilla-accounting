@@ -1959,7 +1959,7 @@ export default {
     'close.retainedNew': 'Utile riportato {account} nuovo',
     'close.openChecks': 'L\'apertura verifica che attivi e passivi quadrino, e altrimenti non scrive nulla. Oggi mancano CHF {amount}.',
     'close.openAfterClose': 'Si può aprire appena il {year} è chiuso.',
-    'close.openingOn': 'Apertura {date}',
+    'close.openingOn': 'Saldo al {date}',
     'close.openedToast': '{year} aperto: i saldi di apertura ci sono',
     'close.profitLead': 'L\'assemblea generale decide sull\'utile entro sei mesi. La destinazione si registra poi con la data della delibera. L\'app non decide nulla.',
     'close.result': 'Risultato {year}',

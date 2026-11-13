@@ -1959,7 +1959,7 @@ export default {
     'close.retainedNew': 'Bénéfice reporté {account} nouveau',
     'close.openChecks': 'L\'ouverture vérifie que l\'actif et le passif s\'équilibrent, et n\'écrit rien sinon. Aujourd\'hui il manque CHF {amount}.',
     'close.openAfterClose': 'L\'ouverture est possible dès que {year} est clôturé.',
-    'close.openingOn': 'Ouverture {date}',
+    'close.openingOn': 'Solde au {date}',
     'close.openedToast': '{year} ouvert : les soldes d’ouverture sont saisis',
     'close.profitLead': 'L\'assemblée générale décide du bénéfice dans les six mois. L\'affectation est ensuite comptabilisée à la date de la décision. L\'app ne décide rien.',
     'close.result': 'Résultat {year}',
