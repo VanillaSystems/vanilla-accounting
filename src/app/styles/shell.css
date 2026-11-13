@@ -371,6 +371,11 @@ body:has(.topbar.open) :is(.list, .detail, main.full) { padding-top: 76px; }
 /* Folded too, on a wide window: the pill stands where a heading would start (at the list's left edge while the AI sidebar
    is open, over the detail's heading when not), and a hover that opens it moves nothing (issue #363). */
 html:not(.phone) body:has(.topbar) :is(.list, .detail, main.full) { padding-top: 76px; }
+/* What a column scrolls up ends at that line, not under the floating bar (#385): on a wide window each column's scroll box
+   itself starts below the bar (a margin, not a padding), so the band above shows the page's background only. Nothing is
+   clipped and no stacking context is made, so Quick Look, a dialog's scrim and the palette (fixed, inside a column) still
+   cover the whole window. */
+html:not(.phone) body:has(.topbar) :is(.list, .detail, main.full) { margin-top: 76px; padding-top: 0; }
 
 /* Automatisierung at the foot of the bar (Dock.tsx, src/app/automation/widget.ts): the open period's figures, what waits, the summary card. */
 :root { --abw-wide: 212px; }
@@ -378,7 +383,7 @@ html:not(.phone) .activity a.it.bolt { display: none; }
 .autow .wopen[aria-expanded="true"] .tip { display: none; }
 @media (max-height: 800px) { .activity .it { height: 40px; } }
 @media (max-height: 700px) { .activity .it { height: 34px; } .activity .div { margin: 4px 0; } }
-@media (max-height: 620px) { .autow .n span { display: none; } .autow { gap: 6px; padding-top: 6px; } }
+@media (max-height: 620px) { .autow .n:not(.payments) span { display: none; } .autow { gap: 6px; padding-top: 6px; } }
 .autow { margin-top: auto; width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 10px 0 4px; border-top: 1px solid var(--line); }
 .autow .wopen { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 2px 0; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; cursor: pointer; }
 .autow .wopen::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; border-radius: 0 2px 2px 0; background: transparent; }
@@ -388,6 +393,10 @@ html:not(.phone) .activity a.it.bolt { display: none; }
 .autow .n b { font: 600 13px/1 "Geist Mono"; color: var(--ink); }
 .autow .n span { font: 500 8.5px/1 "Instrument Sans"; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
 .autow .n.waiting b { color: var(--faint); }
+/* The payments booked, said in words (#385): the label wraps under the figure in the narrow bar and takes two columns in the wide one. */
+.autow .n.payments span { white-space: normal; text-align: center; line-height: 1.15; max-width: 50px; text-transform: none; letter-spacing: 0; font-size: 9px; }
+.autow .figrow .n.payments { grid-column: span 2; }
+.autow .figrow .n.payments span { max-width: none; }
 .autow.asks .n.waiting { background: var(--warn-soft); border-radius: 7px; padding: 4px 5px; }
 .autow.asks .n.waiting b, .autow.asks .n.waiting span { color: var(--warn); }
 .autow .trig { position: relative; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); transition: filter .12s; }

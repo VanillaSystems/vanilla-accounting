@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { KEPT_CONVERSATION, afterSend, askAboutThread, messageOf, newThread, startThread, type Thread } from '../src/app/assistant/thread.js';
+import { KEPT_CONVERSATION, afterSend, askAboutThread, messageOf, newContext, newThread, startThread, type Thread } from '../src/app/assistant/thread.js';
 import type { ContextRef } from '../src/types/assistant.js';
 
 const receipt: ContextRef = { kind: 'receipt', id: 'r1', label: 'Farbmix FM-77812' };
@@ -44,4 +44,17 @@ test('a button with a purpose starts a new conversation without the page, and th
   assert.equal(plain.purpose, undefined);
   const off = { ...plain, pageOff: true };
   assert.deepEqual(messageOf({ ...off, ...afterSend(off) }, receipt).context, [receipt], 'a plain conversation takes the page again after a message, as before');
+});
+
+test('the chip of the object open stands on the first message about it, not again on the next (#385)', () => {
+  const invoice: ContextRef = { kind: 'receipt', id: 'r1', label: 'Rechnung 2026-028' };
+  const other: ContextRef = { kind: 'payment', id: 'p1', label: 'Swisscom' };
+  const me = (context: ContextRef[]) => ({ role: 'me' as const, text: 'x', at: '2026-11-13T10:00:00Z', context });
+  const ai = { role: 'ai' as const, text: 'y', at: '2026-11-13T10:00:01Z', tools: [], done: true };
+  const turns = [me([invoice]), ai, me([invoice]), ai, me([other]), ai, me([invoice])];
+  assert.deepEqual(newContext(turns, 0), [invoice]);
+  assert.deepEqual(newContext(turns, 2), [], 'the same object still open: no chip');
+  assert.deepEqual(newContext(turns, 4), [other], 'another object: its chip');
+  assert.deepEqual(newContext(turns, 6), [invoice], 'back to the invoice: its chip again');
+  assert.deepEqual(newContext(turns, 1), [], 'an answer has none');
 });

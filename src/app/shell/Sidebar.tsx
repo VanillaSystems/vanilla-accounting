@@ -17,6 +17,7 @@ import { fmt, formatDate } from '../lib/utils.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import { ICONS } from '../areas/icons.js';
 import { search } from '../assistant/attach.js';
+import { newContext } from '../assistant/thread.js';
 import { dictated, dictationLang, carried, fieldAt, follow, recognizer, type DictationError, type Dictated } from '../assistant/dictation.js';
 import { Picker, automationCandidates } from '../assistant/Picker.js';
 import { Recording } from '../assistant/Recording.js';
@@ -474,10 +475,13 @@ export function Sidebar({ page, books, onGo, onGoTo }: Props) {
     setListening(() => stop);
   };
   const empty = !text.trim() || waiting;
-  const turnView = (turn: Turn, i: number) => (turn.role === 'me' ? (
+  const turnView = (turn: Turn, i: number) => {
+    // The chip only where the reference is new: a message after one about the same open object carries it unseen (#385).
+    const shownRefs = newContext(s.turns, i);
+    return turn.role === 'me' ? (
     <div key={i} className="msg me">
       {turn.text}
-      {turn.context.length ? <small>{turn.context.map((r) => r.label).join(' · ')}</small> : null}
+      {shownRefs.length ? <small>{shownRefs.map((r) => r.label).join(' · ')}</small> : null}
       {turn.attachments?.length ? <span className="aisentfiles">{turn.attachments.map((a) => <SentFile key={a.id} a={a} conversation={s.conversation} />)}</span> : null}
     </div>
   ) : (
@@ -516,7 +520,8 @@ export function Sidebar({ page, books, onGo, onGoTo }: Props) {
         );
       })() : null}
     </Fragment>
-  ));
+  );
+  };
 
   // In the setup conversation the buttons carry on without an AI: only the words wait for one.
   const noAi = setup && columnNoAi ? { card: columnNoAi.off ? columnNoAi.card : null, placeholder: t(columnNoAi.off ? 'aiOff.talk' : 'aiSetup.talkWaits') } : columnNoAi;

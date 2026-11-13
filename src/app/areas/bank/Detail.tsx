@@ -6,6 +6,7 @@
  */
 import { byStatement, madeByHand } from '../../../workspace/money-accounts.js';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type { BankTransaction } from '../../../types/index.js';
 import type { PayoutWaitView } from '../../../types/drop.js';
 import { ratesUsed } from '../../../accounting/fx-conversion.js';
@@ -457,14 +458,16 @@ function Rates({ b, pays }: { b: Bank; pays: BankTransaction[] }) {
 
 function Quick({ src, file, mark }: { src: string; file: string; mark?: Mark }) {
   const [page, setPage] = useState('');
-  return (
+  // On the body, not in the detail: a column's animation or stacking never puts the dock or the bar above it (#387 review).
+  return createPortal(
     <div className="quick" role="dialog" aria-label={t('bank.previewOf', { file })} onClick={() => setUi({ overlay: null })}>
       <span className="cap mono" onClick={(e) => e.stopPropagation()}>
         {file}{page && ` · ${page}`} · {t('bank.quickClose')}
         <a className="dl inline" href={src} download={file}>{I.dl}<span>{t('receipts.download')}</span></a>
       </span>
       <div className="paper real stmt" style={{ width: '70vw', maxWidth: 'none' }}><StatementPaper src={src} mark={mark} onPage={setPage} scroller={(el) => el.closest('.quick')} /></div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

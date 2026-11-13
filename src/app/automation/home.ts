@@ -4,14 +4,16 @@
  * cannot show. Pure, so the area and a dock widget read the same numbers (tests/automation-home.test.ts).
  *
  * The receipts of one filing period go through five stages: collected, read, matched to their
- * payment, booked, filed. A receipt belongs to the period of its date, or of the day it came in
- * while it is not read yet.
+ * payment, booked, filed. Which period a receipt belongs to is `placeDay`, the one rule the dock,
+ * this page and Belege share (#385).
  */
 import { addDays, beforeBooks, type DatedBooks, type IsoDate } from '../../accounting/periods.js';
 import { waitingForReceipt } from '../../accounting/receipt-due.js';
 import type { Index, JournalEntry, Receipt } from '../../types/index.js';
 import { nextRun } from '../../workflows/cron.js';
 import type { AutomationView, WorkflowDecl } from '../../workflows/model.js';
+import { isNoReceipt } from '../../books/discard.js';
+import { receiptRead } from '../shell/drop-summary.js';
 
 /** Who made a booking as it stands, read from the entry's `run`, `origin` and `by`. */
 export type Author =
@@ -54,12 +56,41 @@ export function askedRuns(view: Pick<AutomationView, 'runs' | 'workflows'>): Set
   return new Set(view.runs.filter((r) => r.path.some((s) => personSteps.get(r.workflow)?.has(s))).map((r) => r.id));
 }
 
-/** Kinds that are paid by a payment, so matching and booking apply; a kind not set yet is taken for one. */
-const payable = (r: Receipt) => r.kind === undefined || r.kind === 'invoice' || r.kind === 'sales-record';
-/** Not a document of the books: the same document twice, or mail that is no receipt. */
-const counted = (r: Receipt) => r.kind !== 'duplicate' && r.kind !== 'noise';
-const isRead = (r: Receipt) => r.amount !== undefined;
-export const receiptDay = (r: Receipt): IsoDate => r.date ?? r.indexedAt.slice(0, 10);
+
+/** A date in the file name the app gives a receipt (YYYYMMDD-…), Belege's date for one the reading left undated. */
+const FILE_DATE = /^(20\d\d)(\d\d)(\d\d)-/;
+/** A receipt's own date: the one read («» is none, an old answer of the model), else its file name's; undefined: undated. */
+export function receiptDate(r: Pick<Receipt, 'date' | 'filename'>): IsoDate | undefined {
+  const file = FILE_DATE.exec(r.filename);
+  return r.date || (file ? `${file[1]}-${file[2]}-${file[3]}` : undefined);
+}
+
+/**
+ * The day that puts a receipt in a period: the one rule of the dock, Automatisierung and Belege (#385).
+ * Once it has a payment, its payment's day (the earliest of several); else its own date; a receipt with
+ * neither, or dated before the working period (`openFrom`) and not in a filed quarter, is the working
+ * period's: the books record no period it was dropped for, and what is still to do with it is done there.
+ */
+export function placeDay(paid: readonly IsoDate[], date: IsoDate | undefined, openFrom: IsoDate, closedThrough?: IsoDate): IsoDate {
+  if (paid.length) return [...paid].sort()[0];
+  if (date && (date >= openFrom || (!!closedThrough && date <= closedThrough))) return date;
+  return openFrom;
+}
+
+/**
+ * The day Belege lists a receipt under (placeDay), from the books: what a link into Belege takes, so it
+ * lands where the receipt stands (#385 review). `openFrom`: the working period's first day.
+ */
+export function placedReceiptDay(books: Pick<Index, 'mappings' | 'transactions' | 'config'>, r: Receipt, openFrom: IsoDate): IsoDate {
+  const links = books.mappings.filter((m) => m.receiptId === r.id).map((m) => m.transactionRef);
+  const dayOf = (ref: string) => books.transactions.find((t) => t.ref === ref)?.date;
+  return placeDay(paidDays(r, links, dayOf), receiptDate(r), openFrom, books.config?.closedThrough);
+}
+
+/** The days of the payments a receipt is linked to, or points to in a filed quarter: what `placeDay` takes first. */
+export function paidDays(r: Pick<Receipt, 'filedPayment'>, links: readonly string[], dayOf: (ref: string) => IsoDate | undefined): IsoDate[] {
+  return [...links, ...(r.filedPayment ? [r.filedPayment] : [])].flatMap((ref) => dayOf(ref) ?? []);
+}
 
 export type FilingStage =
   /** The period's return is filed (or, for a firm not registered, the period is sealed). */
@@ -75,15 +106,13 @@ export interface PeriodRange { key: string; from: IsoDate; to: IsoDate }
 
 export interface HomeFigures {
   period: PeriodRange;
-  /** Receipts of the period, duplicates and noise left out. */
+  /** Receipts of the period (`placeDay`), the files that are none left out: Belege's «alle». */
   collected: number;
-  /** Of those, the ones whose figures are read (an amount). */
+  /** Of those, the ones read: linked to their payment, or with their date and amount (the drop's «gelesen», receiptStateOf). */
   read: number;
   /** Of the read ones, those that show Swiss VAT. */
   withVat: number;
-  /** Receipts paid by a payment (invoices, sales records, kind not set yet). */
-  payable: number;
-  /** Of those, linked to their payment (or to one in a filed quarter). */
+  /** Receipts linked to their payment (or to one in a filed quarter): Belege's «zugeordnet». */
   matched: number;
   /** Of the matched ones, those whose payment is booked. */
   booked: number;
@@ -111,22 +140,26 @@ export interface HomeContext {
   dueDays: number;
 }
 
+/** The figures need the working period's first day too (booksOpenPeriod): undated receipts without a payment are its (`placeDay`). */
+export interface FigureContext extends HomeContext { openFrom: IsoDate }
+
 /** The period's payments by ref, once each, and how many of them have a booking. */
 function paymentCount(books: Index, period: PeriodRange, booked: (ref: string) => boolean): { payments: number; paymentsBooked: number } {
   const refs = new Set(books.transactions.filter((t) => t.amount !== 0 && t.date >= period.from && t.date <= period.to).map((t) => t.ref));
   return { payments: refs.size, paymentsBooked: [...refs].filter(booked).length };
 }
 
-export function homeFigures(books: Index, period: PeriodRange, ctx: HomeContext, asked: ReadonlySet<string> = new Set()): HomeFigures {
-  const inPeriod = books.receipts.filter((r) => counted(r) && receiptDay(r) >= period.from && receiptDay(r) <= period.to);
-  const read = inPeriod.filter(isRead);
+export function homeFigures(books: Index, period: PeriodRange, ctx: FigureContext, asked: ReadonlySet<string> = new Set()): HomeFigures {
   const refsOf = new Map<string, string[]>();
   for (const m of books.mappings) refsOf.set(m.receiptId, [...(refsOf.get(m.receiptId) ?? []), m.transactionRef]);
   const entriesOf = new Map<string, JournalEntry[]>();
   for (const e of books.journalEntries ?? []) entriesOf.set(e.transactionRef, [...(entriesOf.get(e.transactionRef) ?? []), e]);
+  const dayOf = new Map(books.transactions.map((t) => [t.ref, t.date]));
   const paymentsOf = (r: Receipt) => [...(refsOf.get(r.id) ?? []), ...(r.filedPayment ? [r.filedPayment] : [])];
-  const toPay = inPeriod.filter(payable);
-  const matched = toPay.filter((r) => paymentsOf(r).length > 0);
+  const placed = (r: Receipt) => placeDay(paidDays(r, refsOf.get(r.id) ?? [], (ref) => dayOf.get(ref)), receiptDate(r), ctx.openFrom, books.config?.closedThrough);
+  const inPeriod = books.receipts.filter((r) => !isNoReceipt(r, refsOf.get(r.id)?.length ?? 0)).filter((r) => { const d = placed(r); return d >= period.from && d <= period.to; });
+  const read = inPeriod.filter((r) => receiptRead(r, paymentsOf(r).length));
+  const matched = inPeriod.filter((r) => paymentsOf(r).length > 0);
   const authors: Record<Author, number> = { app: 0, asked: 0, changed: 0, person: 0, unknown: 0 };
   let booked = 0;
   for (const r of matched) {
@@ -141,7 +174,6 @@ export function homeFigures(books: Index, period: PeriodRange, ctx: HomeContext,
     collected: inPeriod.length,
     read: read.length,
     withVat: read.filter((r) => r.hasSwissVat === true).length,
-    payable: toPay.length,
     matched: matched.length,
     booked,
     ...paymentCount(books, period, (ref) => entriesOf.has(ref)),

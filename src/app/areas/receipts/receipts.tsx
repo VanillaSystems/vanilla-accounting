@@ -180,7 +180,7 @@ function List(props: Props) {
             </GroupHead>
           )}
           {(failed.length > 0 || need) && (
-            <GroupHead k={needKey} n={failed.length + (need?.rows.length ?? 0)}>
+            <GroupHead k={needKey} n={failed.length + (need?.rows.length ?? 0)} note={t('receipts.groupNeedNote')}>
               {failed.map((f) => <PendingRow key={f.id} file={f} sel={f.id === route.id} onSelect={select} />)}
               {need && dated(need.rows)}
             </GroupHead>
@@ -220,13 +220,15 @@ function List(props: Props) {
 }
 
 /** A group of the list: its head folds it, its rows show while it is open. */
-function GroupHead({ k, n, children }: { k: GroupKey; n: number; children: React.ReactNode }) {
+/** `note`: one line under the head saying what its count holds, when the name alone does not. */
+function GroupHead({ k, n, note, children }: { k: GroupKey; n: number; note?: string; children: React.ReactNode }) {
   const shut = useUi().collapsed.has(k);
   return (
     <>
       <button type="button" className={`group${shut ? ' shut' : ''}`} aria-expanded={!shut} data-group={k} data-tip={shut ? t('receipts.expand') : t('receipts.collapse')} onClick={() => toggleGroup(k)}>
         <span>{I.gch}{groupLabel(k)}</span><span className="mono">{n}</span>
       </button>
+      {!shut && note ? <div className="hidden-note" data-group-note={k}>{note}</div> : null}
       {!shut && children}
     </>
   );

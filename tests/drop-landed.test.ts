@@ -97,7 +97,7 @@ test('without a model, text PDFs whose facts code read count as read, as their r
 test('a row and the closing sentence give one state for one receipt (#361)', () => {
   const r = (over: Partial<Receipt>) => ({ id: 'x', extractedText: 'Muster AG Rechnung Total CHF 12.50', extractionMethod: 'pdftotext', location: 'staged', ...over }) as Receipt;
   assert.equal(receiptStateOf(r({ date: '2026-10-02', amount: 12.5 }), 0, false), 'read', 'in the inbox without an AI, its date and amount read by code: read, as the summary counts it');
-  assert.equal(receiptStateOf(r({ date: '2026-10-02' }), 0, false), 'incomplete', 'a date but no amount is not «gelesen»');
+  assert.equal(receiptStateOf(r({ date: '2026-10-02' }), 0, false), 'incomplete', 'a date but no amount: read, with what it lacks as its own state (#385 review)');
   assert.equal(receiptStateOf(r({ amount: 12.5 }), 0, false), 'incomplete');
   assert.equal(receiptStateOf(r({ date: '2026-10-02', amount: 12.5 }), 1, false), 'matched');
   assert.equal(receiptStateOf(r({ date: '2026-10-02', amount: 12.5 }), 0, true), 'copy');
@@ -106,7 +106,8 @@ test('a row and the closing sentence give one state for one receipt (#361)', () 
   const rows = ['a', 'b', 'c'].map((id) => row(id));
   const files: Record<string, Receipt> = { a: r({ id: 'a', date: '2026-10-02' }), b: r({ id: 'b', date: '2026-10-02', amount: 9 }), c: r({ id: 'c', date: '2026-10-02', amount: 9 }) };
   const s = dropSummary(rows, { transactions: [], mappings: [] as never }, () => true, new Set(), (x) => files[x.id], [], (id) => id === 'c');
-  assert.deepEqual(s.receipts, { n: 3, read: 1, matched: 0, unmatched: 1, copies: 1, incomplete: 1, unread: 0, none: 0 });
+  // «gelesen» is every one whose text was read (#385 review): the incomplete one and the possible copy among those without a payment, each said apart too.
+  assert.deepEqual(s.receipts, { n: 3, read: 3, matched: 0, unmatched: 3, copies: 1, incomplete: 1, unread: 0, none: 0 });
 });
 
 test('the bar moves with the part of the run that is done, not only with files at rest', () => {

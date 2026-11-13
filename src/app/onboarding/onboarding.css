@@ -171,3 +171,6 @@
 .obfilled { margin: 4px 0 8px; font-size: 13px; }
 .obfilled dd { margin: 0; }
 .obflow .obfilled { grid-template-columns: minmax(110px, 220px) 1fr; }
+/* What the kind of firm assumed (#385): the answer, then «stimmt» and the link to what it set up, on a line of their own. */
+.obassumed .obsum li { grid-template-columns: 1fr; }
+.obassumed .obsum li > span.obassumedacts { justify-content: flex-start; gap: 12px; }

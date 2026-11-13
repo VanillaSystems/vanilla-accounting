@@ -50,6 +50,13 @@ export function receiptStateOf(r: Receipt, links: number, copy: boolean): Receip
   return r.date && r.amount !== undefined ? 'read' : 'incomplete';
 }
 
+/**
+ * Whether a receipt was read: linked to its payment, or its text read by code or a model (not waiting
+ * for its reading). What it lacks (a date, an amount) or that it may be a copy is a state of its own,
+ * not «not read». The one «gelesen» of the dock, Automatisierung and the drop (#385 review).
+ */
+export const receiptRead = (r: Receipt, links: number): boolean => links > 0 || (!isNoReceipt(r, links) && !waitsForReading(r));
+
 /** The dates a taken row put into the books: a statement's payments (its last day while they are not loaded), a receipt's own date. */
 export type DatesOf = (r: DropRow) => readonly IsoDate[];
 
@@ -127,7 +134,8 @@ export function dropSummary(
   const none = n('none');
   return {
     ...(pays.length ? { payments: { n: pays.length, from: pays[0].date, to: pays[pays.length - 1].date, booked: pays.length - open.length, waitReceipt, asked: askedN, unbooked: open.length - waitReceipt - askedN, ...(open[0] ? { openFrom: open[0].date } : {}) } } : {}),
-    ...(files.length ? { receipts: { n: files.length - none, read: n('matched') + n('read'), matched: n('matched'), unmatched: n('read'), copies: n('copy'), incomplete: n('incomplete'), unread: n('unread'), none } } : {}),
+    // «gelesen» splits into those with a payment and those without; the copies and the incomplete ones are among the latter, said apart.
+    ...(files.length ? (() => { const read = files.filter((r) => receiptRead(r, links(r.id))).length; return { receipts: { n: files.length - none, read, matched: n('matched'), unmatched: read - n('matched'), copies: n('copy'), incomplete: n('incomplete'), unread: n('unread'), none } }; })() : {}),
   };
 }
 

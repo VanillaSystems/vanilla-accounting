@@ -5,7 +5,7 @@
  * change waits on its card for «Übernehmen», saved through the Firma page's own path.
  */
 import { Fragment, createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { t } from '../i18n/index.js';
+import { t, tData } from '../i18n/index.js';
 import { fmt } from '../lib/utils.js';
 import { api, errorText } from '../lib/api.js';
 import { BotIcon } from '../areas/automation/Graph.js';
@@ -15,10 +15,10 @@ import { closeAssistant, sendMessage } from '../assistant/store.js';
 import type { Route } from '../shell/route.js';
 import type { Turn } from '../../types/assistant.js';
 import type { ClearPartner } from '../../onboarding/facts.js';
-import { askedAt, vatLine, vatSetupOf, type Line, type Origin, type SetupCard, type SetupStep } from '../../onboarding/conversation.js';
+import { askedAt, vatLine, vatSetupOf, type AssumedCard, type Line, type Origin, type SetupCard, type SetupStep } from '../../onboarding/conversation.js';
 import type { QuestionId } from '../../onboarding/model.js';
 import { placeKeys, type HandPlace } from '../../onboarding/hand.js';
-import { answer, keepSells, keepVat, setupReady, undoVat, useSetup } from './state.js';
+import { answer, confirmAssumed, keepSells, keepVat, setupReady, undoVat, useSetup } from './state.js';
 import { kindsOfAnswer } from '../../onboarding/model.js';
 import { salesKinds, type SalesKind } from '../../workspace/setup.js';
 import { say } from './words.js';
@@ -180,7 +180,7 @@ function Answered({ step, onGo }: { step: SetupStep; onGo: Go }) {
 
 function Card({ card, onGo }: { card: SetupCard; onGo: Go }) {
   switch (card.kind) {
-    case 'company': return <CompanyCard card={card} />;
+    case 'company': return <CompanyCard card={card} onGo={onGo} />;
     case 'vat': return <VatCard card={card} onGo={onGo} />;
     case 'sells': return <SellsCard card={card} />;
     case 'opening': return (
@@ -214,7 +214,7 @@ function Card({ card, onGo }: { card: SetupCard; onGo: Go }) {
 }
 
 /** What the app knows of the firm, shown once; «Etwas ändern» opens the questions behind it. */
-function CompanyCard({ card }: { card: Extract<SetupCard, { kind: 'company' }> }) {
+function CompanyCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'company' }>; onGo: Go }) {
   const { busy } = useSetup();
   const { company: c, origin } = card;
   const address = c.address && [[c.address.street, c.address.number].filter(Boolean).join(' '), `${c.address.postcode} ${c.address.town}`.trim()].filter(Boolean).join(', ');
@@ -232,6 +232,7 @@ function CompanyCard({ card }: { card: Extract<SetupCard, { kind: 'company' }> }
       <dl className="obkv">
         {rows.map(([k, v], i) => <Fragment key={k}><dt>{k}</dt><dd>{v}</dd><dd>{i === 0 ? <span className="obbadge">{t(`onboarding.origin.${origin}`)}</span> : null}</dd></Fragment>)}
       </dl>
+      {card.assumed ? <AssumedList a={card.assumed} onGo={onGo} /> : null}
       {card.change ? <div className="actions"><button type="button" className="linkbtn" disabled={busy} data-answer="fix" onClick={() => void answer('company', 'fix')}>{t('onboarding.q.company.fix')}</button></div> : null}
     </div>
   );
@@ -372,6 +373,37 @@ function PartnersCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'partne
 
 const ORIGIN_CLASS: Record<Origin, string> = { form: '', answer: '', app: 'pos' };
 
+/** An answer in words: its options' labels, «keine» for a question of several answers left empty. */
+const answerWords = (key: string, value: string | string[]) => {
+  const vs = ([] as string[]).concat(value);
+  return vs.length ? vs.map((v) => tData(`desktop.q.${key}.${v}`)).join(', ') : t('onboarding.assumedNone');
+};
+
+/**
+ * What the kind of firm assumed and she never said (#385), the same marks as before the books (#369):
+ * one line why, each answer with «angenommen» and «Ändern» to where it is changed by hand.
+ */
+function AssumedList({ a, onGo }: { a: AssumedCard; onGo: Go }) {
+  const { busy } = useSetup();
+  const why = a.by ? t('onboarding.draft.assumedWhy', { preset: tData(`desktop.q.preset.${a.by}`) }) : undefined;
+  return (
+    <div className="obassumed" data-assumed-list>
+      <p className="obwhy">{a.by ? t('onboarding.assumedBooks', { preset: tData(`desktop.q.preset.${a.by}`) }) : t('onboarding.assumedBooksBare')}</p>
+      <ul className="obsum">
+        {a.answers.map((x) => (
+          <li key={x.key} data-assumed={x.key}>
+            <span>{tData(`desktop.q.${x.key}.ask`).replace(/[\s\u00a0]*\?$/, '')}: {answerWords(x.key, x.value)} <span className="obbadge assumed" data-tip={why}>{t('onboarding.draft.assumed')}</span></span>
+            <span className="obassumedacts">
+              <button type="button" className="linkbtn" data-confirm={x.key} disabled={busy} onClick={() => void confirmAssumed(x.key)}>{t('onboarding.assumedOk')}</button>
+              {x.go ? <button type="button" className="linkbtn" data-go={x.key} onClick={() => onGo(x.go!)}>{x.what ? t(`onboarding.assumedGo.${x.what}`, { place: placeOf(x.go) }) : t('onboarding.change')}</button> : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /**
  * The first step first (#364): one sentence and its button, the rest behind «Mehr dazu»; then what the
  * app knows and what is open. The conversation scrolls to it when it appears (useNewestStep).
@@ -392,6 +424,7 @@ function SummaryCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'summary
       </details>
       <h4>{t('onboarding.summary.title')}</h4>
       <ul className="obsum">{card.items.map((it, i) => <li key={i}><span>{say(it.what)}</span><span><span className={`obbadge ${ORIGIN_CLASS[it.origin]}`}>{t(`onboarding.origin.${it.origin}`)}</span></span></li>)}</ul>
+      {card.assumed ? <AssumedList a={card.assumed} onGo={onGo} /> : null}
       {card.open.length ? (
         <>
           <h4>{t('onboarding.summary.open')}</h4>

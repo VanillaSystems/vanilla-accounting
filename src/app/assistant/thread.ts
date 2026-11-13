@@ -56,3 +56,19 @@ export function askAboutThread(t: Thread, ref: ContextRef): Partial<Thread> {
 export function messageOf(t: Thread, page: ContextRef | undefined): { conversation?: string; context: ContextRef[] } {
   return { ...(t.conversation ? { conversation: t.conversation } : {}), context: [...(page && !t.pageOff ? [page] : []), ...t.extra] };
 }
+
+/**
+ * The references a message's chip shows (#385): those it was sent with that the person's message
+ * before it did not carry already. Every message still sends the page open; a chip repeated under
+ * each one while the same object stays open reads as if each were about it.
+ */
+export function newContext(turns: readonly Turn[], i: number): ContextRef[] {
+  const turn = turns[i];
+  if (turn?.role !== 'me') return [];
+  let before: ContextRef[] = [];
+  for (let j = i - 1; j >= 0; j--) {
+    const prev = turns[j];
+    if (prev.role === 'me') { before = prev.context; break; }
+  }
+  return turn.context.filter((r) => !before.some((b) => b.kind === r.kind && b.id === r.id));
+}

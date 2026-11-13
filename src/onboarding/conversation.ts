@@ -10,9 +10,9 @@
  */
 import { SETUP_TOPICS, kindsOfAnswer, type Answer, type AnswerValue, type QuestionId, type SetupProgress, type SetupTopic, type TopicState } from './model.js';
 import type { ClearPartner, MixedPartner, SetupFacts } from './facts.js';
-import { TOPIC_HAND, type HandPlace } from './hand.js';
+import { ANSWER_HAND, TOPIC_HAND, type AnswerConsequence, type HandPlace } from './hand.js';
 import { NOT_REGISTERED, methodOf, onAgreedBasis, type VatBasis, type VatSetup } from '../workspace/vat-setup.js';
-import { SALES_KINDS, type SalesKind } from '../workspace/setup.js';
+import { SALES_KINDS, type Preset, type QuestionKey, type SalesKind } from '../workspace/setup.js';
 
 /** A parameter of a line: a value, another key said in the person's language, a date to format, or keys said and joined by commas. */
 export type Param = string | number | { key: string } | { date: string } | { list: string[] };
@@ -23,13 +23,16 @@ export interface Choice { value: string; label: Line; sub?: Line; primary?: bool
 /** Where a badge says a fact comes from. */
 export type Origin = 'form' | 'answer' | 'app';
 
+/** The answers the kind of firm assumed, each with where it is changed by hand (ANSWER_HAND). */
+export interface AssumedCard { by?: Preset; answers: Array<{ key: QuestionKey; value: string | string[]; go: HandPlace | null; what?: AnswerConsequence }> }
+
 export type SetupCard =
   /**
    * What the app knows of the firm, shown once (#345): the form or the conversation that created the books
    * asked it a minute ago, so nothing of it is asked again. `origin`: which of the two. `sells`: the kinds
    * the profile keeps. `change`: «Etwas ändern» is still offered (not once the person took it).
    */
-  | { kind: 'company'; company: SetupFacts['company']; sells?: SalesKind[]; origin: Extract<Origin, 'form' | 'answer'>; change: boolean }
+  | { kind: 'company'; company: SetupFacts['company']; sells?: SalesKind[]; origin: Extract<Origin, 'form' | 'answer'>; change: boolean; assumed?: AssumedCard }
   /** The VAT setup the answer asks for, against the one the app has: `proposed` waits for «Übernehmen», `kept` was taken. */
   | { kind: 'vat'; from: VatSetup; to: VatKind; state: 'proposed' | 'kept' }
   /** What the firm sells as answered, with the default accounts that follow; `proposed` until the profile says the same («Übernehmen»). */
@@ -40,7 +43,7 @@ export type SetupCard =
   | { kind: 'partners'; clear: ClearPartner[]; mixed: MixedPartner[]; rare: Array<{ name: string; n: number }>; rareMore: number }
   /** `first`: the person's first step in the app, the statement, and from which period on. */
   /** `notYet`: «Partner und Wissen», not taken up while there are no partners to show (shownState). */
-  | { kind: 'summary'; items: Array<{ what: Line; origin: Origin }>; open: Array<{ topic: SetupTopic; state: TopicState | 'notYet'; go: HandPlace | null }>; first: Line };
+  | { kind: 'summary'; items: Array<{ what: Line; origin: Origin }>; assumed?: AssumedCard; open: Array<{ topic: SetupTopic; state: TopicState | 'notYet'; go: HandPlace | null }>; first: Line };
 
 export type StepId = QuestionId | 'summary';
 
@@ -167,7 +170,7 @@ export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
   take({
     id: 'company', topic: 'firm',
     say: [{ ...L('s.hello'), noAi: L('s.helloNoAi') }, L('s.company')],
-    card: { kind: 'company', company: f.company, ...(f.sells ? { sells: f.sells.kinds } : {}), origin: p.created ? 'answer' : 'form', change: !a.company },
+    card: { kind: 'company', company: f.company, ...(f.sells ? { sells: f.sells.kinds } : {}), origin: p.created ? 'answer' : 'form', change: !a.company, ...assumedCard(p, f) },
     choices: [],
     ...(changing(p) ? { reply: { lines: [L('r.companyFix')], go: { area: 'company', section: 'profile' } } } : {}),
   });
@@ -206,7 +209,8 @@ export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
   const prev = String(Number(f.year) - 1);
   if (!take({
     id: 'opening', topic: 'opening',
-    say: [hasOpening ? L('s.openingSet', { date: { date: `${f.year}-01-01` } }) : L('s.openingNone', { date: { date: `${f.year}-01-01` }, prev: { date: `${prev}-12-31` } })],
+    // The last sentence follows «Ausgangslage» (#385): a new firm enters its capital, a switch the old books' balance sheet.
+    say: [hasOpening ? L('s.openingSet', { date: { date: `${f.year}-01-01` } }) : L(f.start === 'switching' ? 's.openingNoneSwitching' : 's.openingNone', { date: { date: `${f.year}-01-01` }, prev: { date: `${prev}-12-31` } })],
     ...(hasOpening ? { card: { kind: 'opening', year: f.year, rows: f.opening } } : {}),
     choices: [choice('opening', 'next', { primary: hasOpening }), choice('opening', 'later', { primary: !hasOpening })],
     go: TOPIC_HAND.opening ?? undefined,
@@ -249,6 +253,18 @@ export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
 
 const RARE_SHOWN = 8;
 
+/**
+ * What the kind of firm assumed and she never said (#385), as the firm still has it; «Was verkauft
+ * ihr?» once she answered it in the books is hers. Shown on the company card and in the summary, each
+ * with its place by hand.
+ */
+function assumedCard(p: SetupProgress, f: SetupFacts): { assumed?: AssumedCard } {
+  const answers = (f.assumed?.answers ?? []).filter((x) => !(x.key === 'sells' && p.answers.sells) && !(isVatKey(x.key) && p.answers.vat?.kept))
+    .map((x) => { const h = ANSWER_HAND[x.key]; return { ...x, go: h?.go ?? null, ...(h?.what ? { what: h.what } : {}) }; });
+  return answers.length ? { assumed: { ...(f.assumed?.by ? { by: f.assumed.by } : {}), answers } } : {};
+}
+const isVatKey = (k: QuestionKey) => k === 'vatRegistered' || k === 'vatMethod' || k === 'basis' || k === 'period';
+
 /** The VAT setup in words: not registered, effective with its period, the net tax rates with theirs. */
 export function vatLine(v: VatSetup): Line {
   if (!v.registered) return L('sum.vatNone');
@@ -269,11 +285,14 @@ function summaryOf(p: SetupProgress, f: SetupFacts): Extract<SetupCard, { kind: 
   const told: Origin = p.created ? 'answer' : 'form';
   const v = f.company.vat;
   const ibans = f.banks.filter((b) => b.iban).length;
+  const assumed = assumedCard(p, f);
+  // An assumed answer stands once, marked as such in `assumed`, never also as «deine Antwort» (#385).
+  const isAssumed = (k: QuestionKey) => !!assumed.assumed?.answers.some((x) => x.key === k);
   const items: Array<{ what: Line; origin: Origin }> = [
     { what: L('sum.company', { name: f.company.name }), origin: told },
     // Not registered: said plainly what follows (#347), not only «nicht eingetragen».
     { what: v.registered ? vatLine(v) : L('sum.noVat'), origin: p.answers.vat?.kept ? 'answer' : told },
-    ...(f.sells ? [{ what: sellsLine(f.sells.kinds), origin: p.answers.sells ? 'answer' as Origin : told }] : []),
+    ...(f.sells && !isAssumed('sells') ? [{ what: sellsLine(f.sells.kinds), origin: p.answers.sells ? 'answer' as Origin : told }] : []),
     ...(f.opening.length ? [{ what: L('sum.opening', { n: f.opening.length }), origin: 'app' as Origin }] : []),
     ...(ibans ? [{ what: L('sum.banks', { n: ibans }), origin: told }] : []),
     ...(f.sources.length ? [{ what: L('sum.sources', { n: f.sources.length }), origin: 'app' as Origin }] : []),
@@ -283,7 +302,7 @@ function summaryOf(p: SetupProgress, f: SetupFacts): Extract<SetupCard, { kind: 
   if (!v.registered) items.push({ what: L('sum.noVatChange'), origin: told });
   const open = SETUP_TOPICS.filter((t) => states[t] !== 'done').map((t) => ({ topic: t, state: shownState(p, f, t), go: TOPIC_HAND[t] }));
   const first = L(!v.registered ? 'sum.firstNone' : v.period === 'half-yearly' ? 'sum.firstHalf' : 'sum.firstQuarter');
-  return { kind: 'summary', items, open, first };
+  return { kind: 'summary', items, ...assumed, open, first };
 }
 
 /** Typed text that names exactly one of the open question's answers picks it; anything else goes to the AI. */

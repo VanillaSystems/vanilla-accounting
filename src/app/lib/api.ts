@@ -39,6 +39,7 @@ import { setAiOff } from '../ai/ai-off.js';
 import type { DraftPatch as SetupPatch, SetupBegun, SetupDraftView } from '../../onboarding/draft.js';
 import type { SetupTalked } from '../../onboarding/draft-talk.js';
 import type { SetupRefusal, SetupRequest } from '../../workspace/create.js';
+import type { Assumed } from '../../onboarding/model.js';
 import type { ReturnFigures } from '../../engines/return.js';
 import type { JournalEntryInput } from '../../books/entry-input.js';
 import type { Answer, Choice, Question, QuestionsView, QuestionTarget } from '../../questions/model.js';
@@ -429,6 +430,7 @@ export const api = {
   onboarding: () => request<SetupView>('GET', '/api/onboarding'),
   onboardingStart: () => request<SetupView>('POST', '/api/onboarding/start'),
   onboardingReady: () => request<SetupView>('POST', '/api/onboarding/ready'),
+  onboardingConfirm: (key: string) => request<SetupView>('POST', `/api/onboarding/assumed/${encodeURIComponent(key)}`),
   onboardingAnswer: (q: QuestionId, value: string | null, kept?: VatSetup | null) => request<SetupView>('PUT', `/api/onboarding/answers/${q}`, { value, ...(kept !== undefined ? { kept } : {}) }),
   assistantList: () => request<ConversationSummary[]>('GET', '/api/assistant'),
   /** A file for the next message (src/types/attachment.ts): kept beside the conversations, never in the books. */
@@ -601,7 +603,7 @@ export const api = {
     /** The folders in booksHome once read (macOS may first ask the person). */
     folders: () => request<{ folders: string[] }>('GET', '/api/desktop/folders'),
     open: (root: string) => request<KnownBooks>('POST', '/api/desktop/open', { root }),
-    create: (setup: SetupRequest) => request<KnownBooks>('POST', '/api/desktop/create', setup),
+    create: (setup: SetupRequest & { assumed?: Assumed }) => request<KnownBooks>('POST', '/api/desktop/create', setup),
     demo: () => request<KnownBooks>('POST', '/api/desktop/demo'),
     /** Books in the layout before 0.4.0: moved into vanilla-accounting/ as npm run update does, then opened. */
     upgrade: (root: string) => request<KnownBooks>('POST', '/api/desktop/upgrade', { root }),

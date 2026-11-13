@@ -557,7 +557,9 @@ export function taskGroups(tasks: readonly Task[]): TaskLine[] {
 export function corner(v: AutomationView): Corner {
   const running = v.runs.filter((r) => r.status === 'running' || r.status === 'queued').length;
   if (running) return { kind: 'running', count: running };
-  return v.tasks.length ? { kind: 'needs-you', count: v.tasks.length } : { kind: 'quiet' };
+  // «Aufgaben» counts as in the dock (#385): open tasks and stuck runs, one definition.
+  const open = openCount(v);
+  return open ? { kind: 'needs-you', count: open } : { kind: 'quiet' };
 }
 
 /** The dock badge of Automatisierung: what waits for a person, and what is stuck. */

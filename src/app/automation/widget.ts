@@ -21,7 +21,11 @@ export type WidgetFigure =
 
 export interface DockWidget {
   state: WidgetState;
-  /** The three figures stacked in the narrow bar and in a row in the wide one: read, booked, waiting. */
+  /**
+   * The figures stacked in the narrow bar and in a row in the wide one: receipts read, receipts booked,
+   * waiting; or, while no receipt is booked and payments are (`paymentsMatter`), the payments booked of
+   * the period's payments in words, then waiting (#385).
+   */
   stack: WidgetFigure[];
   /** The summary card's figures: collected, read, booked, and the share without the person only when the books record it. */
   card: WidgetFigure[];
@@ -40,6 +44,13 @@ export interface DockWidget {
 
 type View = Pick<AutomationView, 'runs' | 'tasks' | 'paused' | 'pending' | 'workflows'>;
 
+/**
+ * Whether the bar says the payments booked rather than the receipts: no receipt is booked yet while
+ * payments are (bookings by hand, wages, the bank's fee, receipts no AI read), so «0 gebucht» beside
+ * eleven bookings would read as «nothing happened» (#385). Otherwise the row of receipts as before.
+ */
+export const paymentsMatter = (f: Pick<HomeFigures, 'booked' | 'paymentsBooked'>): boolean => f.booked === 0 && f.paymentsBooked > 0;
+
 /** `view` is absent while the automation is not loaded (the static export): the figures stand, nothing runs. */
 export function dockWidget(f: HomeFigures, view: View | undefined, forMe: number, now: Date): DockWidget {
   const waiting = (view ? openCount(view) : 0) + forMe;
@@ -49,7 +60,9 @@ export function dockWidget(f: HomeFigures, view: View | undefined, forMe: number
     .sort((a, b) => a.at.getTime() - b.at.getTime())[0];
   return {
     state: run ? 'running' : waiting ? 'waiting' : 'idle',
-    stack: [{ key: 'read', n: f.read }, { key: 'booked', n: f.booked }, { key: 'waiting', n: waiting }],
+    stack: paymentsMatter(f)
+      ? [{ key: 'payments', n: f.paymentsBooked, of: f.payments }, { key: 'waiting', n: waiting }]
+      : [{ key: 'read', n: f.read }, { key: 'booked', n: f.booked }, { key: 'waiting', n: waiting }],
     card: [
       { key: 'collected', n: f.collected },
       { key: 'read', n: f.read },

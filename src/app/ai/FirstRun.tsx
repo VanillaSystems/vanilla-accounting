@@ -18,7 +18,7 @@ import { api, errorText } from '../lib/api.js';
 import { DEMO_HOME, desktop } from '../desktop/bridge.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import { ICONS } from '../areas/icons.js';
-import { CliCard } from './CliCard.js';
+import { CliCard, NoAccount } from './CliCard.js';
 import { alreadyHere, legOf, otherOf, type Said } from './first-run.js';
 import { KeyBlock } from './KeyBlock.js';
 import { useAiSetup } from './useAiSetup.js';
@@ -149,9 +149,9 @@ export function FirstRun({ info, create, onSetup, onForm, onLeave }: { info: Des
                     {leg.by !== 'install' && wantsInstall && card.kind !== 'installing' && !done ? <Answers>{installButton(cli, true)}{OtherButton}{NoAiButton}</Answers> : null}
                     {leg.by === 'install' && (card.kind === 'installing' || card.kind === 'notFound') && !done ? <Answers>{card.kind === 'notFound' ? OtherButton : null}{NoAiButton}</Answers> : null}
                     {leg.by !== 'install' && !wantsInstall && 'version' in card && card.version ? (
-                      <Ai><p>{t(card.kind === 'signedOut' || card.kind === 'signingIn' || card.kind === 'notFound' ? 'aiSetup.say.alreadyOut' : 'aiSetup.say.alreadyIn', { cli: name(cli), version: card.version })}</p></Ai>
+                      <Ai><p>{t(card.kind === 'signedOut' || card.kind === 'signingIn' || card.kind === 'notFound' ? 'aiSetup.say.alreadyOut' : 'aiSetup.say.alreadyIn', { cli: name(cli), version: card.version })}</p>{card.kind === 'signedOut' ? <NoAccount cli={cli} /> : null}</Ai>
                     ) : null}
-                    {foundLine && 'version' in card ? <Ai><p>{t('aiSetup.say.found', { cli: name(cli), version: card.version ?? '' })}</p></Ai> : null}
+                    {foundLine && 'version' in card ? <Ai><p>{t('aiSetup.say.found', { cli: name(cli), version: card.version ?? '' })}</p>{card.kind === 'signedOut' ? <NoAccount cli={cli} /> : null}</Ai> : null}
                     {(card.kind === 'signedOut' || (card.kind === 'notFound' && card.waited === 'signIn')) && !leg.signIn && !done ? (
                       <Answers>
                         {view.opens ? <button type="button" className="btn primary" data-answer="sign-in" onClick={() => signIn(cli)}>{t('aiSetup.signIn')}<small>{t('aiSetup.answer.signInHint', { vendor: AI_CLIS[cli].vendor })}</small></button> : null}

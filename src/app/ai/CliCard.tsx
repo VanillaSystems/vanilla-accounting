@@ -68,6 +68,16 @@ function Needs({ cli, opens }: { cli: TerminalCli; opens: boolean }) {
   );
 }
 
+/**
+ * What the sign-in shows a person who has no account yet (#385), said before the browser opens: the
+ * vendor's page in English, the account made there, the plan the card named, and that the app notices
+ * the sign-in by itself. Facts from AI_CLIS only.
+ */
+export function NoAccount({ cli }: { cli: TerminalCli }) {
+  const { vendor, minPlan, minPlanUsd, plans } = AI_CLIS[cli];
+  return <p className="m" data-no-account={cli}>{t('aiSetup.noAccount', { vendor, plan: minPlan, usd: minPlanUsd })} <a className="linkbtn" href={plans} target="_blank" rel="noopener noreferrer">{t('aiSetup.plans', { vendor })}{ICONS.external}</a></p>;
+}
+
 const Facts = ({ state }: { state: Extract<CardState, { version: string }> }) => (
   <dl className="aifacts">
     {state.kind !== 'signedOut' && state.kind !== 'signingIn' ? <><dt>{t('aiSetup.fact.signedIn')}</dt><dd>{'plan' in state && state.plan ? planName(state.plan) : t('aiSetup.fact.yes')}</dd></> : null}
@@ -97,7 +107,11 @@ export function CliCard({ cli, state, opens, compact, actions, children }: { cli
       ) : state.kind === 'installing' ? (
         <>
           <p className="m">{t(opens ? 'aiSetup.installing.lead' : 'aiSetup.installing.copy', { vendor })}</p>
-          <Command cli={cli} />
+          {/* Folded as before the click (#385): Terminal has the command already; open only where copying is the way. */}
+          <details className="aishow" open={!opens || undefined}>
+            <summary>{t('aiSetup.needs.showCommand')}</summary>
+            <Command cli={cli} />
+          </details>
           <p className="aiwait"><span className="aispin" aria-hidden="true" />{t('aiSetup.installing.wait', { cli: t(`terminal.cli.${cli}`) })}</p>
         </>
       ) : state.kind === 'silent' ? (
@@ -109,6 +123,7 @@ export function CliCard({ cli, state, opens, compact, actions, children }: { cli
         <>
           <Facts state={state} />
           <p className="m">{t('aiSetup.signedOut.lead', { vendor })}</p>
+          {compact ? null : <NoAccount cli={cli} />}
           {actions && opens ? <span className="ruleacts"><button type="button" className="btn primary" data-act={`signin-${cli}`} onClick={actions.signIn}>{ICONS.terminal}{t('aiSetup.signIn')}</button></span> : null}
         </>
       ) : state.kind === 'signingIn' ? (

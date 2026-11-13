@@ -13,8 +13,9 @@ import { parseNetRates } from '../workspace/vat-setup.js';
 import { parseUid } from '../workspace/uid.js';
 import { APP_FOLDER, APP_ROOT, appFolderIn, appLanguages, workspaceAt } from '../workspace/workspace.js';
 import { loadJurisdiction } from '../core/modules/load.js';
-import { DRAFT_FILE, isStepMark, newDraft, requestOf, withPatch, type DraftPatch, type Firm, type SetupDraft, type SetupDraftView } from './draft.js';
+import { DRAFT_FILE, assumedOf as assumedOfDraft, isStepMark, newDraft, requestOf, withPatch, type DraftPatch, type Firm, type SetupDraft, type SetupDraftView } from './draft.js';
 import { seedCreated } from './store.js';
+import { assumedOf as assumedFrom } from './model.js';
 
 export const draftFile = (root: string): string => join(resolve(root), APP_FOLDER, DRAFT_FILE);
 
@@ -153,6 +154,8 @@ export async function createFromDraft(root: string, now: string): Promise<Create
     writeDraft(root, draft);
     throw e;
   }
-  seedCreated(workspaceAt(created.root), { started: draft.started }, now);
+  // What the kind of firm answered and she never touched stays marked in the books (#385).
+  const assumed = assumedFrom(assumedOfDraft(draft), draft.answers, draft.assumedBy);
+  seedCreated(workspaceAt(created.root), { started: draft.started, ...(assumed ? { assumed } : {}) }, now);
   return created;
 }

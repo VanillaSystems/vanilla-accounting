@@ -16,6 +16,15 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- AI step: before the browser opens for the sign-in, the app says what a person without an account
+  will see: the page in English, where she creates the account; the subscription the card named is
+  taken out with the vendor (its plans page linked beside the line); then she comes back and the app
+  notices the sign-in by itself. After «… installieren» the vendor's
+  command stays folded under «Befehl zeigen» (#385).
+- Layout: a list or detail scrolled up ends below the floating top bar; nothing of it stands under
+  the bar any more (#385). Quick Look of a receipt or a statement covers the whole window, above the
+  dock and the bar.
+
 - AI sidebar: «was muss ich noch machen?» is answered from the books. Before the first message the
   sidebar shows where the oldest period not filed stands (payments without a booking and how many
   wait for their receipt, open questions, receipts without a payment, tasks, the day the return is
@@ -29,6 +38,28 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- Setup: the form marks what its kind of firm answered and she did not touch «angenommen», with one
+  line why at the top of the questions («Diese Antworten sind angenommen, weil es bei Handwerk, Bau
+  (GmbH) üblich ist: ändere, was nicht stimmt»); a touched answer loses the mark. Form and setup
+  conversation keep what is still assumed in the new books, and the conversation in the books shows
+  it on the firm's card and in the summary with «angenommen», «stimmt» to confirm it, and a link
+  where the app changes it (the VAT setup, or what the answer set up, named: «Konto des Inhabers
+  unter Firma › Geldkonten»), never as «deine Antwort». The opening's words follow «Ausgangslage»: a switch takes the old books'
+  balance sheet, not «Eine neue Firma …». After «Buchhaltung anlegen» with a question open the focus
+  goes to that question, which says «bitte wählen», not to its first answer. Kontoauszüge without a
+  payment or a statement names no quarter and says what to drop: «Noch kein Kontoauszug.» (#385)
+- One count per word (#385): the dock, Automatisierung and Belege put a receipt in one period, its
+  payment's once it has one, else its date's; one without a date, or from before the books and not
+  paid, is the working period's. So an undated till slip paid in Q3 counts in Q3 everywhere, and
+  «gesammelt», «gelesen» and «zugeordnet» match Belege's «alle» and «zugeordnet» and the drop's
+  sentence. A receipt paid in a later period now lists only there. «gelesen» means its text was read:
+  one without a date or a possible copy is read, and said apart as before. Links and tasks about a
+  receipt lead to the period Belege lists it in. The export keeps its receipts as before (their own
+  date, and those of the period's payments). While no receipt is booked but payments are (bookings by
+  hand, wages, the bank's fee), the dock says «11 von 23 Zahlungen gebucht» in place of «0 gelesen ·
+  0 gebucht». Its third figure says «Aufgaben», counted as the corner's «n Aufgaben für dich» (open
+  tasks, stopped runs and questions for you). Belege's «Braucht dich» says under its head what it
+  counts.
 - The bank's own fee (#359): a row of a bank's camt.053 export that the bank itself coded as its
   charge for the account or for payments («Kontoführung», a card's annual fee) is booked by the
   app, with or without an AI, on Bankspesen (6940) without a VAT code; a fee paid back the other
@@ -193,6 +224,11 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- The setup conversation keeps its order after a typed message (#385): the message stands under the
+  question it was typed at, above that question's answer, and the open question with its buttons
+  stays under her newest message, also when the words took a step back. In the books the rail shows
+  the topics «n von 4 besprochen» counts («Partner und Wissen» comes with the first bookings), and
+  the chip of the object open stands on the first message about it, not again on each next one.
 - Files dropped on Kontoauszüge go through «Dateien hinzufügen» as on any page (#361): every file
   gets its row, the statement under «Kontoauszüge» with «Auszug öffnen» and the closing sentence on
   its payments, and closing the window opens that statement. Before, the statement was read in

@@ -73,9 +73,17 @@ What changed:
   that «installieren» opens Terminal where she presses Enter, that the sign-in is in the browser on
   the vendor's page in English, that the app sees neither password nor login, and that it can wait.
   The vendor's command is folded under «Befehl zeigen» on every card (first run, Firma › KI, the KI
-  column); it shows once she asks or has clicked install. Where the app cannot open Terminal the
-  command is the way and stays open. With one program ready, the other's card is not shown in the
-  first run.
+  column), also while it installs (#385: Terminal has it already); it shows once she asks. Where the
+  app cannot open Terminal the command is the way and stays open. With one program ready, the
+  other's card is not shown in the first run.
+- **Before the browser opens for the sign-in** (#385), the app says what a person without an
+  account will see: the vendor's page in English, where she creates the account; the subscription
+  the card named (`minPlan`, `minPlanUsd`) is taken out with the vendor, by its plans page (`plans`,
+  linked beside the line; nothing in the repo says the sign-in page offers it); then she comes back
+  and the app notices the sign-in by itself (`aiSetup.noAccount`, `NoAccount` in src/app/ai/CliCard.tsx: in the first run's
+  conversation under «… ist da», on Firma › KI's card while signed out). The Terminal's sign-in
+  screen says the same in one line. Nothing names how the account is made (e-mail, Google,
+  Apple): the facts table does not know it.
 - **«Ohne KI weiter»** in the AI step is still remembered on this Mac (decision 6) and leads back
   to the choices; the line then reads «Auf diesem Mac geht es ohne KI weiter.»
 
