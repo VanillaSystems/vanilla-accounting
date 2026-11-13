@@ -25,6 +25,8 @@ export interface DropSummary {
     asked: number;
     /** Not booked for any other reason. */
     unbooked: number;
+    /** Those, by ref: one a run left unbooked says why below the line (#470). */
+    unbookedRefs: string[];
     /** The day of the oldest one not booked: its period holds what is open. */
     openFrom?: IsoDate;
   };
@@ -226,7 +228,7 @@ export function dropSummary(
   const waitReceipt = open.filter((t) => !asked.has(t.ref) && held.has(t.ref)).length;
   const askedN = open.filter((t) => asked.has(t.ref)).length;
   return {
-    ...(pays.length ? { payments: { n: pays.length, from: pays[0].date, to: pays[pays.length - 1].date, booked: pays.length - open.length, waitReceipt, asked: askedN, unbooked: open.length - waitReceipt - askedN, ...(open[0] ? { openFrom: open[0].date } : {}) } } : {}),
+    ...(pays.length ? { payments: { n: pays.length, from: pays[0].date, to: pays[pays.length - 1].date, booked: pays.length - open.length, waitReceipt, asked: askedN, unbooked: open.length - waitReceipt - askedN, ...(open[0] ? { openFrom: open[0].date } : {}), unbookedRefs: open.filter((t) => !asked.has(t.ref) && !held.has(t.ref)).map((t) => t.ref) } } : {}),
     ...(rows.length ? { files: closingCounts(rows, groupOf) } : {}),
   };
 }

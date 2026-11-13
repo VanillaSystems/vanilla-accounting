@@ -10,7 +10,7 @@
  */
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { entriesForceMayRemove, entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
-import { BATCH_SIZE, CONCURRENCY, bookBillCorrections, bookImportVatDeductions, classifyTransactions, loadClassifyContext, type ClassifyContext } from '../booking/classify.js';
+import { BATCH_SIZE, CONCURRENCY, bookBillCorrections, bookImportVatDeductions, classifyTransactions, loadClassifyContext, type ClassifyContext, type ClassifyOutcome } from '../booking/classify.js';
 import { answerSettles, mustSettle, receiptKnowledge, receiptWaitOf } from '../booking/receipt-wait.js';
 import { judgedRepayments, markJudged } from '../booking/owner-judged.js';
 import { loadKnowledge } from '../knowledge/layers.js';
@@ -23,7 +23,7 @@ import type { JournalEntry } from '../types/index.js';
 import { askSalesWithoutVat, closeSaleQuestionsHeld } from './sale-questions.js';
 import { bookPayoutReports, ordersPaidElsewhere } from './sales-report-import.js';
 import type { Workspace } from '../workspace/workspace.js';
-import type { BooksPort, IntakeNote, StepRun } from './pipeline.js';
+import type { BooksPort, IntakeNote, StepResult, StepRun } from './pipeline.js';
 
 /** The note for the sales without VAT asked about now; a payment asked about before is not asked again. */
 function askSales(ws: Workspace, books: BooksPort, log: (line: string) => void): IntakeNote[] {
@@ -133,7 +133,7 @@ export function classifyStep({ force = false } = {}): StepRun {
     };
     // A repayment of the owner's outlays is kept only onto her account (#402): another answer is not booked and stays the person's.
     const keeps = (ref: string) => (!probe.has(ref) && !repays.has(ref)) || answerSettles(txOf.get(ref)!, answerOf(ref), context);
-    const done = (notes: IntakeNote[]) => {
+    const done = (notes: IntakeNote[], failed: ClassifyOutcome['failed'] = []): StepResult => {
       // A customs assessment that came after its import VAT was booked brings the deduction (issue #197).
       // Saved whenever it books or marks an assessment as used: a mark lost would let a deduction a person took back come again.
       const would = bookImportVatDeductions(structuredClone(books.read()), context);
@@ -165,7 +165,10 @@ export function classifyStep({ force = false } = {}): StepRun {
       }
       if (waiting.size) log(`Waiting   : ${waiting.size} payment(s) need a receipt that has not come: booked once it is linked.`);
       if (unread.size) log(`Unread    : ${unread.size} payment(s) have a receipt whose VAT could not be read: the person is asked.`);
-      return { notes: [...notes, ...(waiting.size ? [{ code: 'waitingReceipt' as const, count: waiting.size }] : []), ...(unread.size ? [{ code: 'receiptUnread' as const, count: unread.size }] : []), ...askSales(ws, books, log)] };
+      // What a run tried and left unbooked, each with why (#470): kept in the run log for the payment's «Verlauf» and reason.
+      const left = new Set(unbooked(books.read(), context.bankAccounts).map((tx) => tx.ref));
+      const refused = [...new Map(failed.filter((f) => left.has(f.ref)).map((f) => [f.ref, { ref: f.ref, ...(f.refusal && { refusal: f.refusal }) }])).values()];
+      return { notes: [...notes, ...(waiting.size ? [{ code: 'waitingReceipt' as const, count: waiting.size }] : []), ...(unread.size ? [{ code: 'receiptUnread' as const, count: unread.size }] : []), ...askSales(ws, books, log)], ...(refused.length && { refused }) };
     };
     // A repayment the model judged once is not asked again: it is the person's now (owner-judged.ts).
     const judgedOnce = judgedRepayments(ws);
@@ -239,6 +242,6 @@ export function classifyStep({ force = false } = {}): StepRun {
       ...(asked.length ? [{ code: 'asked' as const, count: asked.length }] : []),
       ...(vatNotRead.length ? [{ code: 'vatNotRead' as const, count: vatNotRead.length }] : []),
     ];
-    return done(notes);
+    return done(notes, failed);
   };
 }

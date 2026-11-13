@@ -121,6 +121,11 @@ Wise EUR (1023), January to September 2026.
   where no rule and no model booked it, `nicht gebucht: die App konnte sie nicht selbst buchen …`
   (`[data-testid=not-booked-yours]`) above the form «Von Hand buchen»; the toast says the run's outcome. ⌘Z takes back
   the mark only, never a booking the run made.
+- **Left unbooked by a run (#470).** A payment a run tried and did not book (its answer refused: an account the
+  chart lacks, input tax above the receipt, more off 2270 than it holds with no contribution account to move it to)
+  says `nicht gebucht: <why>` (`[data-testid=refused-by-run]`); the open list, the drop's summary
+  (`[data-testid=drop-refused]`) and the AI's card name the same reason, all from `GET /api/automation/refusals`
+  (the run log's `refused`), and «Verlauf» lists the run with `[data-testid=history-refused]`.
 - **Note.** Choose a payment of the open quarter, click `[data-testid=payment-note]`, `$B fill 'input.note' "Test"`,
   `$B press Enter`; toast `Notiz gespeichert`, `$S diff` shows `~ transactions <ref> .remarks: undefined -> "Test"`. ⌘Z,
   and the diff is `no changes` again (driven 2026-10-21 on a May payment of 1021).

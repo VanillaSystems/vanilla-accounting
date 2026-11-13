@@ -18,7 +18,7 @@ import type { Location } from '../shell/route.js';
 import { useQuestions } from '../questions/store.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { useAutomation } from '../automation/store.js';
-import { orderPagesNow, outlayWaitsNow, providerIssuesNow } from '../lib/order-pages.js';
+import { orderPagesNow, outlayWaitsNow, providerIssuesNow, refusedWhy } from '../lib/order-pages.js';
 import { at } from '../areas/receipts/view.js';
 import { taskLine } from '../areas/automation/words.js';
 import { elsewhereCount, elsewhereOf, nothingOpen, openLines, openPeriodState, type OpenLine, type OpenPeriodState, type PendingOffer } from '../areas/automation/open-period.js';
@@ -124,7 +124,7 @@ export function OpenPeriodCard({ books, onGo }: { books: Index; onGo(loc: Locati
               {link(goOf(l, s, books), textOf(l))}
               {l.kind === 'unbooked' && l.unread ? <small data-held="unread">{t('openPeriod.unread', { n: l.unread })}</small> : null}
               {l.kind === 'task' && l.task.overdue ? <small>{t('automation.overdue')}</small> : null}
-              <Items of={itemsOf(l, s, books, t as unknown as Say)} link={link} />
+              <Items of={itemsOf(l, s, books, t as unknown as Say, refusedWhy)} link={link} />
             </li>
           ))}
         </ul>
