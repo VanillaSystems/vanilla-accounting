@@ -176,6 +176,8 @@ export const FILING_ACTIONS: Record<string, Action> = {
       // On the agreed basis an invoice whose event is not booked (no rate of its day yet) would be missing from the return.
       const unbooked = eventsMissing(books, loadInvoices(ws), ret.to);
       if (unbooked.length) throw refuse('invoiceEventsMissing', { period: key, invoices: unbooked.join(', ') }, `${key}: the VAT of invoice(s) ${unbooked.join(', ')} is not booked yet (no official rate of its day); the return would leave it out`);
+      // The XML names the firm by its UID (#452): the setup does not ask it, so the person enters it now.
+      if (!ws.company.uid) throw refuse('uidMissing', {}, 'the company\'s UID is missing (Firma › Firma), so the XML cannot name the company');
       const missing = ratesWithoutActivityId(ret.figures);
       if (missing.length) throw refuse('activityIdMissing', { rates: missing.join(', ') }, `the tax authority's activity code of the net tax rate ${missing.join(', ')} is missing (the company's VAT section), so the XML cannot name it`);
       const { xml, warnings } = ech0217Xml({

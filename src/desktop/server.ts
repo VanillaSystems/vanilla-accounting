@@ -19,6 +19,8 @@ import { readManifest } from '../workspace/manifest.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, WorkspaceRefusal, appFolderIn, openWorkspaceAt, workspaceAt } from '../workspace/workspace.js';
 import { bundledDemo, nameDemoCopy } from '../workspace/demo-copy.js';
 import { assumedOf, parseAssumed, stillAssumed } from '../onboarding/model.js';
+import { withLater } from '../workspace/setup.js';
+import { assumedLater } from '../onboarding/hand.js';
 import { seedAssumed } from '../onboarding/store.js';
 import { beginDraft, createFromDraft, draftView, patchDraft, readDraft } from '../onboarding/draft-store.js';
 import type { SetupBegun, SetupDraftView } from '../onboarding/draft.js';
@@ -27,7 +29,7 @@ import { isOldLayout } from '../workspace/layout.js';
 import { upgradeWorkspace } from '../workspace/upgrade.js';
 import { renewTerminalAgents } from '../workspace/terminal-agents.js';
 import type { ApiErrorBody } from '../types/api-error.js';
-import type { AiAvailability, DesktopInfo, HomeAccess, HomeFolders, KnownBooks, NoAccess, PhoneInfo, FolderLook, ProtectedFolder } from '../types/desktop.js';
+import type { AiAvailability, DesktopInfo, GuardedFolder, HomeAccess, HomeFolders, KnownBooks, NoAccess, PhoneInfo, FolderLook, ProtectedFolder } from '../types/desktop.js';
 import { aiSetup } from '../server/ai-setup.js';
 import { qrSvg } from './qr.js';
 import { opened, readState, writeState, type PhonePairing } from './state.js';
@@ -51,10 +53,14 @@ export interface DesktopServerOptions {
   inboxEveryMs?: number;
   /**
    * The folders macOS asks about before the app may read them (Electron's app.getPath): a folder
-   * the app may not read is named by the one it lies in (#373).
+   * the app may not read is named by the one it lies in (#373). Under one this version of the app has
+   * no answer for yet, nothing is read before the person was told why macOS asks.
    */
-  protectedFolders?: Partial<Record<Exclude<ProtectedFolder, 'other'>, string>>;
-  /** The app's version: macOS's answer about the Documents folder is kept for this version only (an update may lose it). */
+  protectedFolders?: Partial<Record<GuardedFolder, string>>;
+  /**
+   * The build macOS's answers about folders are kept for (src/desktop/build-key.ts answerKey): an
+   * ad hoc signed build is a new app to macOS, a Developer ID build keeps them across updates.
+   */
   appVersion?: string;
   /** Whether an AI provider answers on this computer (the setup conversation needs one); by default the providers of src/llm are asked. */
   aiAvailable?: () => Promise<boolean>;
@@ -72,7 +78,7 @@ async function anyProviderReady(): Promise<boolean> {
  * `missing`: nothing there (yet); `refused`: macOS does not let the app read it («Nicht erlauben»,
  * EPERM); `locked`: the folder's own rights do not (EACCES).
  */
-export type Reach = 'ok' | 'missing' | 'refused' | 'locked';
+export type Reach = 'ok' | 'missing' | 'refused' | 'locked' | 'unknown';
 
 export interface DesktopServer {
   app: express.Express;
@@ -97,9 +103,15 @@ export interface DesktopServer {
   /**
    * Whether `root` can be read, asked asynchronously: under a protected folder macOS asks the person
    * first and holds the read until she answers, off the main process. Every synchronous read of a
-   * folder comes after this answer.
+   * folder comes after this answer, which is kept for this version of the app.
    */
   reach(root: string): Promise<Reach>;
+  /**
+   * Whether a read of `root` may come without a word first: it lies in no folder macOS guards, or
+   * macOS answered for that folder to this version of the app already. Otherwise macOS would ask
+   * over a screen that said nothing about it (#373).
+   */
+  answered(root: string): boolean;
   /** Which protected folder `root` lies in (`other`: none of them). */
   folderOf(root: string): ProtectedFolder;
   /** Only requests to this host reach the books (a page elsewhere cannot rebind its name to this port). */
@@ -154,24 +166,66 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     try { return { root, name: readManifest(join(appFolderIn(root) ?? root, MANIFEST_FILE)).company.name, demo }; } catch (e) { return { root, demo, problem: e instanceof Error ? e.message : String(e) }; }
   };
 
-  /** The protected folder `root` lies in; `other` for any else (macOS refuses an iCloud or a network folder too). */
-  const folderOf = (root: string): ProtectedFolder => {
+  /**
+   * The folder macOS guards that `root` lies in, as the key its answer is kept under; none for any
+   * else. macOS asks per volume and per cloud provider: `volumes:<name>`, `cloud:<provider folder>`.
+   */
+  const guardOf = (root: string): string | undefined => {
     const r = resolve(root);
-    const hit = Object.entries(opts.protectedFolders ?? {}).find(([, f]) => f && (r === resolve(f) || r.startsWith(resolve(f) + sep)));
-    return (hit?.[0] as ProtectedFolder | undefined) ?? 'other';
+    for (const [kind, f] of Object.entries(opts.protectedFolders ?? {}) as Array<[GuardedFolder, string | undefined]>) {
+      if (!f) continue;
+      const top = resolve(f);
+      if (r !== top && !r.startsWith(top + sep)) continue;
+      if (kind !== 'volumes' && kind !== 'cloud') return kind;
+      const first = r.slice(top.length + 1).split(sep)[0];
+      return first ? `${kind}:${first}` : kind;
+    }
+    return undefined;
+  };
+  /** The protected folder `root` lies in, as the person reads it; `other` for any else (macOS refuses an iCloud or a network folder too). */
+  const folderOf = (root: string): ProtectedFolder => {
+    const g = guardOf(root);
+    return g === 'documents' || g === 'desktop' || g === 'downloads' ? g : 'other';
+  };
+  const version = opts.appVersion ?? '';
+  /** macOS's answer for `folder` as this version of the app had it; another version (an update) asks again. */
+  const answerFor = (folder: string): HomeAccess | undefined => {
+    const kept = readState(opts.stateFile).access?.[folder];
+    return kept?.version === version ? kept.answer : undefined;
+  };
+  const keepAnswer = (folder: string, answer: HomeAccess) => {
+    const state = readState(opts.stateFile);
+    const kept = state.access?.[folder];
+    if (kept?.answer === answer && kept.version === version) return;
+    writeState(opts.stateFile, { ...state, access: { ...state.access, [folder]: { answer, version } } });
+  };
+  const answered = (root: string): boolean => {
+    const g = guardOf(root);
+    return !g || answerFor(g) !== undefined;
+  };
+  /**
+   * reach(), with macOS's answer kept for the folder it guards: only a read that went through or
+   * macOS's refusal is one. A missing folder, a folder's own rights, any other failure say nothing
+   * about what macOS answered.
+   */
+  const reachKept = async (root: string): Promise<Reach> => {
+    const r = await reach(root);
+    const g = guardOf(root);
+    if (g && (r === 'ok' || r === 'refused')) keepAnswer(g, r === 'ok' ? 'allowed' : 'refused');
+    return r;
   };
   const noAccess = (root: string, r: Reach): NoAccess | undefined =>
     (r === 'refused' || r === 'locked' ? { folder: folderOf(root), why: r === 'refused' ? 'privacy' : 'rights' } : undefined);
   /** known(), after macOS answered for the folder: never a synchronous read it holds. A folder the app may not read keeps the name desktop.json has. */
   const look = async (root: string): Promise<KnownBooks> => {
-    const no = noAccess(root, await reach(root));
+    const no = noAccess(root, await reachKept(root));
     if (!no) return known(root);
     const name = readState(opts.stateFile).names?.[root];
     return { root, demo: resolve(root) === resolve(opts.demoRoot), ...(name ? { name } : {}), noAccess: no };
   };
   /** Opening, creating, continuing in a folder the app may not read: said, with the way to allow it. */
   const reachable = async (root: string): Promise<void> => {
-    const no = noAccess(root, await reach(root));
+    const no = noAccess(root, await reachKept(root));
     if (no) throw new WorkspaceRefusal(`${root}: the app may not read this folder (${no.why}).`, { code: 'folderRefused', params: { root, ...no } });
   };
   /** `root`, or `root 2`, `root 3`, … : the first name beside it that holds nothing yet. */
@@ -302,22 +356,22 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   const listFolders = () => (listing ??= foldersIn(opts.booksHome).then((r) => {
     listed = r.folders;
     listing = undefined;
-    const state = readState(opts.stateFile);
-    const answer = r.access === 'locked' ? undefined : r.access;
-    if (answer && (state.homeAccess?.answer !== answer || state.homeAccess.version !== version)) writeState(opts.stateFile, { ...state, homeAccess: { answer, version } });
+    if (r.access !== 'locked') keepAnswer(homeGuard(), r.access);
     return r;
   }));
-  const version = opts.appVersion ?? '';
-  /** macOS's answer as this version of the app had it; another version (an update) asks again. */
-  const homeAccess = (): HomeAccess | undefined => {
-    const kept = readState(opts.stateFile).homeAccess;
-    return kept?.version === version ? kept.answer : undefined;
+  /** macOS's answer about booksHome (the Documents folder) as this version of the app had it. */
+  const homeAccess = (): HomeAccess | undefined => answerFor(homeGuard());
+  const homeGuard = (): string => guardOf(opts.booksHome) ?? 'documents';
+  /** Recent books in a folder this version has no answer for: listed by what desktop.json keeps, the folder not read. */
+  const unasked = (root: string): KnownBooks => {
+    const name = readState(opts.stateFile).names?.[root];
+    return { root, demo: resolve(root) === resolve(opts.demoRoot), ...(name ? { name } : {}), unasked: folderOf(root) };
   };
   const info = async (): Promise<DesktopInfo> => {
     const state = readState(opts.stateFile);
     const access = homeAccess();
     return {
-      open, recent: await Promise.all(state.recent.map(look)), booksHome: opts.booksHome, folders: listed ?? [],
+      open, recent: await Promise.all(state.recent.map((root) => (answered(root) ? look(root) : unasked(root)))), booksHome: opts.booksHome, folders: listed ?? [],
       ...(access ? { homeAccess: access } : {}),
     };
   };
@@ -350,11 +404,13 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
       }
       const created = await createWorkspace(body);
       // What the kind of firm answered and she never touched (#385): kept only where the books took it.
+      // The answers the setup does not ask (#452) took their `later` answer: assumed too, so the books show them to check.
       if (!created.existed) {
         // She created the workspace and its rules: switched on as it is (#413).
         switchOnCreated(workspaceAt(created.root));
         const said = parseAssumed(body.assumed);
-        seedAssumed(workspaceAt(created.root), said && assumedOf(stillAssumed(said, body.answers).map((a) => a.key), body.answers, said.by));
+        const { answers, filled } = withLater(body.answers);
+        seedAssumed(workspaceAt(created.root), assumedOf([...stillAssumed(said, answers).map((a) => a.key), ...assumedLater(filled)], answers, said?.by));
       }
       res.json(await openBooks(created.root));
     } catch (e) { refuse(res, e); }
@@ -453,7 +509,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   });
 
   return {
-    app, open: openBooks, openDemo, info, recent, reach, folderOf,
+    app, open: openBooks, openDemo, info, recent, reach: reachKept, answered, folderOf,
     current: () => open,
     allowHost: (h) => { host = h; },
     startBackground: () => { if (background === 'off') { background = 'wanted'; void runBackground(); } },
@@ -514,7 +570,7 @@ async function reach(root: string): Promise<Reach> {
     return 'ok';
   } catch (e) {
     const code = (e as NodeJS.ErrnoException).code ?? '';
-    return code === 'EPERM' ? 'refused' : code === 'EACCES' ? 'locked' : code === 'ENOENT' || code === 'ENOTDIR' ? 'missing' : 'ok';
+    return code === 'EPERM' ? 'refused' : code === 'EACCES' ? 'locked' : code === 'ENOENT' || code === 'ENOTDIR' ? 'missing' : 'unknown';
   }
 }
 

@@ -3,8 +3,8 @@
  * with an AI (the claude stub, signed in) at the Mac app's default window (1440 × 900, smooth
  * scrolling), without one at a small window (1024 × 768, reduced motion).
  *
- * - The form and the conversation before the books say where the answer to «MWST-Methode»,
- *   «Abrechnungsart» and «Ausgangslage» stands, cite no law, and steer neither VAT question: no answer
+ * - The form and the conversation before the books say where the answer to «MWST-Methode» and
+ *   «Abrechnungsart» stands, ask no UID and nothing that books nothing differently (#452), cite no law, and steer neither VAT question: no answer
  *   drawn as the proposal, none preselected; the form asks for both before it creates the books.
  * - The count before the books is of four parts, the same for every firm, so it never jumps or
  *   shrinks («0 von 14», «1 von 4», «4 von 8» before).
@@ -39,7 +39,6 @@ writeFileSync(join(dir, 'secrets.json'), '{}');
 const SHOTS = process.env.SETUP_HELP_SHOTS;
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
-const UID = 'CHE-153.004.184';
 const IBAN = testIban('00762011623852957');
 
 /** The words a person reads in `sel`: what has a letter in it. */
@@ -117,11 +116,14 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
       // Without one, the Mac app first says why macOS asks about the Documents folder (#373).
       else await press(page, '[data-answer=allow]');
       await page.waitForSelector('.st-form [data-q=vatMethod] [data-where]', { timeout: 20_000 });
-      for (const q of ['vatMethod', 'basis', 'start']) assert.ok(await page.$(`.st-form [data-q=${q}] [data-where]`), `${size}: the form says where «${q}» stands`);
+      for (const q of ['vatMethod', 'basis']) assert.ok(await page.$(`.st-form [data-q=${q}] [data-where]`), `${size}: the form says where «${q}» stands`);
+      // Only what the books need (#452): no UID, none of the answers that book nothing differently; how many are answered, in sight.
+      assert.equal(await page.$('.st-form input[name=uid]'), null, `${size}: the form asks no UID`);
+      for (const q of ['fiscalYear', 'start', 'foreignCustomers', 'ownerPaysPrivately', 'privateUse', 'payouts']) assert.equal(await page.$(`.st-form [data-q=${q}]`), null, `${size}: the form does not ask «${q}»`);
+      assert.match(await text(page, '.st-foot [data-progress]'), /^\d von \d Fragen beantwortet$/, `${size}: the form says how many questions are answered`);
       assert.doesNotMatch(await text(page, '.st-form'), /Art\. 39|auf Gesuch|das Übliche/, `${size}: the form cites no law and calls no method the usual one`);
       for (const q of ['vatMethod', 'basis']) assert.equal(await page.$(`.st-form [data-q=${q}] button.on`), null, `${size}: «${q}» has no answer selected for her`);
       await page.type('.st-form input[name=name]', 'Malerei Huber GmbH');
-      await page.type('.st-form input[name=uid]', UID);
       await page.type('.st-form input[name=owner]', 'Sandra Huber');
       await page.$$eval('.st-form button', (bs) => (bs.find((b) => (b as HTMLElement).innerText.trim() === 'Buchhaltung anlegen') as HTMLButtonElement).click());
       await page.waitForSelector('.st-form [data-q=vatMethod].err', { timeout: 10_000 });
@@ -189,7 +191,7 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
       await page.waitForSelector('.obflow input[name=name]', { timeout: 30_000 });
       counts.push(await count(page));
       await page.type('.obflow input[name=name]', 'Malerei Huber GmbH');
-      await page.type('.obflow input[name=uid]', UID);
+      assert.equal(await page.$('.obflow input[name=uid]'), null, `${size}: the conversation asks no UID (#452)`);
       await page.type('.obflow input[name=owner]', 'Sandra Huber');
       await press(page, '[data-act=firm-next]');
       await press(page, '[data-step=preset] [data-answer=trades]');
@@ -238,18 +240,19 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
 
       // The review marks what she never said, named after the kind of firm that assumed it, also after a change made it «Etwas anderes».
       let review = await text(page, '[data-step=review]');
-      assert.match(review, /Ausgangslage\s+neue Firma, leere Bücher\s*angenommen\b/, `${size}: «Ausgangslage» is marked as assumed`);
-      assert.match(review, /Kundschaft im Ausland\?\s+nein\s*angenommen/, `${size}: «Kundschaft im Ausland» too`);
-      assert.doesNotMatch(review.slice(review.indexOf('Im MWST-Register'), review.indexOf('Geschäftsjahr')), /angenommen/, 'the VAT she answered is not marked');
+      assert.match(review, /Importierst du Waren\?\s+nein\s*angenommen\b/, `${size}: «Importierst du Waren?» is marked as assumed`);
+      assert.match(review, /Angestellte\s+Personal\s*angenommen/, `${size}: «Angestellte» too`);
+      assert.doesNotMatch(review, /Ausgangslage|Kundschaft im Ausland|Geschäftsjahr/, `${size}: a question the setup does not ask is not on the review (#452)`);
+      assert.doesNotMatch(review.slice(review.indexOf('Im MWST-Register'), review.indexOf('Was verkauft ihr?')), /angenommen/, 'the VAT she answered is not marked');
       if (!ai) assert.match(review, /Im MWST-Register eingetragen\?\s+Die Firma rechnet keine MWST ab: Käufe und Verkäufe werden ohne MWST gebucht, Rechnungen der App tragen keine MWST, und es gibt keine Abrechnung\.\s*Ändern/, `${size}: the review says plainly what follows, with «Ändern»`);
       if (size === '1440x900') t.diagnostic(`words: conversation before the books ${await words(page, '.obflow .obflowturns')}`);
-      await page.$$eval('[data-step=review] dt', (dts) => { const dt = dts.find((d) => (d as HTMLElement).innerText.trim() === 'Ausgangslage')!; ((dt.nextElementSibling!.nextElementSibling as HTMLElement).querySelector('button') as HTMLButtonElement).click(); });
-      await press(page, '[data-step=start] [data-answer=switching]');
+      await page.$$eval('[data-step=review] dt', (dts) => { const dt = dts.find((d) => (d as HTMLElement).innerText.trim() === 'Importierst du Waren?')!; ((dt.nextElementSibling!.nextElementSibling as HTMLElement).querySelector('button') as HTMLButtonElement).click(); });
+      await press(page, '[data-step=imports] [data-answer=yes]');
       await page.waitForSelector('[data-step=review]', { timeout: 20_000 });
       review = await text(page, '[data-step=review]');
       assert.match(review, /hast du nicht gesagt: so ist es üblich bei Handwerk, Bau \(GmbH\)/, `${size}: the note names the kind of firm that assumed, not «Etwas anderes»`);
       assert.doesNotMatch(review, /üblich bei Etwas anderes/);
-      assert.match(review, /Ausgangslage\s+Wechsel von einer anderen Buchhaltung\s*Ändern/, `${size}: her own answer is no longer marked`);
+      assert.match(review, /Importierst du Waren\?\s+ja\s*Ändern/, `${size}: her own answer is no longer marked`);
       await page.$eval('[data-step=review]', (e) => e.scrollIntoView({ block: 'start' }));
       await shot(page, `${size}-2-review`);
 

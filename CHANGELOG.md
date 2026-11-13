@@ -132,6 +132,30 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- The setup asks only what the books need from the start (#452). No UID: the form, the setup
+  conversation and `npm run init` (only `--uid`) create the books without it; Firma › Firma shows
+  it as not set, with what needs it, and «Hinzufügen». An invoice with VAT asks for it, and the VAT
+  return's XML waits for it: the review task withholds «Freigegeben» with a link to Firma › Firma,
+  the XML step stops with words, `npm run vat-xml` refuses and says where it goes. An invoice of a
+  firm not registered for VAT needs none. Not asked any more: fiscal year (calendar), starting point
+  (new), customers abroad (no), the owner paying privately (yes), private use (none) and payouts
+  (no; the drop row asks for the clearing account with the provider's first report); each takes the
+  kind of firm's answer, else that one, books nothing differently and is shown as assumed in the
+  books. The form drops «Was die Firma tut» and «Wohin die Bücher Ende Jahr gehen» (the first
+  stays under Firma › Firma, the second is `--export-to` of `npm run init`; nothing reads it yet) and says how many of its questions are answered.
+  The name field is just «Firmenname» (also in `npm run init`), no longer «wie im Handelsregister».
+  Without a UID in Firma › Firma, the firm's own invoice is still its own when its name is the name
+  of the first line (not the start of a longer one) and the one UID it shows stands in the
+  letterhead below it (a VAT invoice prints it): its customer's payment is proposed with it, never
+  linked by code, and a supplier's invoice addressed to the firm stays a supplier's. Once such an
+  invoice is linked to money in, the receipt asks «Ist das eure eigene UID (nicht die eines
+  Lieferanten)?» with «Übernehmen», which keeps it under Firma › Firma with the usual check; the app
+  never keeps it on its own. An invoice of a firm without a UID prints no empty UID in its footer, and
+  the printed 0535 leaves the UID row out. The fiscal year and the customers abroad, which nothing
+  in the app changes, are not marked as assumed.
+  Manifest schema 4: `company.uid` may be absent. A manifest of schema 3 loads unchanged (every one
+  has its UID); `npm run update` writes 4, and an app of schema 3 refuses a manifest of 4 with
+  «Update the app» instead of failing on the missing UID.
 - «Buchen» waiting for «Einschalten» holds every booking by the firm's rules or the AI (#413): a
   rule or business file changed outside the app's own controls (by hand, by git, an AI's draft not
   kept) no longer acts on the next drop or mail. The inbox still reads, matches and links, but books
@@ -434,6 +458,25 @@ Two markers flag an entry you must read before you update:
   still offered, it says what it does in her words: «Vorschlag: Den Arbeitnehmeranteil (CHF …) aus
   den Lohnabrechnungen von den Sozialversicherungskosten abziehen», the button «Arbeitnehmeranteil
   abziehen» (before: «von 5700 auf 2270 umbuchen», «2270 ausgleichen»), in all four languages.
+- A run no longer offers «Als Eröffnungssaldo übernehmen» for a bank balance from inside the year
+  (#487): the books open on 1 January, so a first statement of Q3 with the balance of 30.06. is no
+  opening, and taking it would have left out the first half year on every balance sheet. The
+  offer stands only for a statement's opening balance of a day before 1.1. (31.12., or the last
+  day the bank booked before a first statement of 5.1.) or of 1.1., when the account moved on no
+  day before 1.1. A camt opening balance dated on a day the bank booked is read as the close of the
+  day before, so a 31.12. balance with fees of 31.12. is not offered. When an account's statements
+  begin later, the run says so («Die Auszüge dieses Kontos beginnen am 01.07.2026. Den Saldo per
+  1.1.2026 zeigen frühere Auszüge oder die Schlussbilanz des Vorjahres in der Eröffnung:») with
+  both ways out, «Frühere Auszüge ablegen» and «Eröffnung erfassen».
+- Mac app (#373): no question of macOS comes before the app said why. At the first start of
+  another build (an unsigned build is a new app to macOS each time, rc to rc too), books in
+  Documents, Desktop, Downloads, iCloud Drive, a cloud provider's folder or on a volume are no
+  longer read before the window: the start screen says «Deine Buchhaltung … liegt im Ordner «Dokumente».
+  Gleich fragt macOS …» and opens them on «Weiter»; their entry in «Zuletzt geöffnet» (start
+  screen and menu) shows the same words first. The chat's microphone says, before macOS first
+  asks about the microphone and the speech recognition, what both are for; «Prüfen» of a source
+  that reads the Mail app says that macOS will ask whether the app may control Mail. The phone's
+  listener (Firma › Handy, which the firewall may ask about) starts again only once books are open.
 - A drop in which the AI's booking of one payment was refused (#482) no longer leaves stuck runs
   «Eingang verarbeiten: Lauf steckt» behind the task badge. The run finishes, and the payment says
   why it waits, as #470 meant. «Automatisch buchen» on such a payment goes on to «Von Hand

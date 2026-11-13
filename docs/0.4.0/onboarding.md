@@ -133,9 +133,14 @@ and what the move needs, and nothing is imported by itself yet.
 
 In the Mac app, «Neue Buchhaltung anlegen» is the setup (#139): the setup conversation runs before
 the books exist, in a wide panel of the start screen (src/app/onboarding/DraftConversation.tsx). It asks what
-`createWorkspace` needs: the firm (name, UID, owner), the preset, every VAT question (a preset only
+`createWorkspace` needs: the firm (name, owner; no UID, #452), the preset, every VAT question (a preset only
 suggests them), the net tax rates when they apply, the other questions of src/workspace/setup.ts
-unless the preset answers them, and the bank accounts. Each answer is checked as createWorkspace
+the setup asks (`SETUP_QUESTIONS`: legal form, what it sells, imports, staff) unless the preset answers
+them, and the bank accounts. The questions it does not ask (fiscal year, start, customers abroad, the
+owner paying privately, private use, payouts) take the preset's answer, else their `later` one, which
+books nothing differently, and the books mark them as assumed. The UID is entered under Firma › Firma;
+an invoice with VAT and the VAT return's XML ask for it (the review task withholds «Freigegeben», the
+XML step refuses with `uidMissing`, `npm run vat-xml` names the place). Each answer is checked as createWorkspace
 checks it and kept in a draft in the folder (`vanilla-accounting/setup-draft.json`,
 src/onboarding/draft.ts and draft-store.ts); the manifest is written only when the draft is complete,
 so a folder holds a draft or books, never half a manifest. «Buchhaltung anlegen» creates the books
@@ -184,8 +189,9 @@ granted only on request (half-yearly on the effective method, quarterly on the n
 `unusualPeriod` in src/workspace/setup.ts) is not taken from loose words: the reply says what is
 usual and the question keeps its buttons; chosen by click it stands, with the same remark. Answers taken from the words are kept in the
 draft's `fromText` and carry «aus deiner Nachricht» until the person changes them, in the
-conversation and on the last card. A firm without its UID is not saved, but what was said of it is kept in the draft
-(`said`), so the UID alone completes it and the card asks only for what is empty. A model that answers no JSON, or none, changes nothing. The call is ledgered in the folder's
+conversation and on the last card. A firm is saved with its name and its owner; one given without the other is kept in the draft
+(`said`), so the other alone completes it and the card asks only for what is empty. A UID her words
+give is kept when it is one; it is never asked. A model that answers no JSON, or none, changes nothing. The call is ledgered in the folder's
 `data/llm-ledger.jsonl`, which becomes the books' own.
 
 Without an AI on the computer, «Neue Buchhaltung erstellen» opens the form; with one, «Ohne KI

@@ -14,7 +14,8 @@ export interface SetupFacts {
   /** Today, YYYY-MM-DD, and the books' open year, YYYY. */
   today: string;
   year: string;
-  company: { name: string; uid: string; owner: string; legalForm?: LegalForm; address?: Address; vat: VatSetup };
+  /** `uid` absent until she enters it under Firma (#452). */
+  company: { name: string; uid?: string; owner: string; legalForm?: LegalForm; address?: Address; vat: VatSetup };
   banks: Array<{ label: string; bank: string; currency: string; account: string; iban?: string }>;
   /** The sources switched on, with their label in each language they name. */
   sources: Array<{ id: string; label: { en: string } & Record<string, string> }>;

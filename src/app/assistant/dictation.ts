@@ -107,6 +107,16 @@ export function recognizer(bridge: DesktopBridge | undefined = desktop): Recogni
   return browser();
 }
 
+/**
+ * Before a dictation starts: `ask` when macOS has not yet asked about the microphone in the Mac app
+ * (it then asks, and about the speech recognition, at the start), so the page says first why and
+ * what «Erlauben» is for (#373); `go` otherwise, also where nothing can tell (a browser).
+ */
+export async function beforeDictation(bridge: Pick<DesktopBridge, 'micAccess'> | undefined): Promise<'ask' | 'go'> {
+  if (!bridge?.micAccess) return 'go';
+  try { return (await bridge.micAccess()) === 'not-determined' ? 'ask' : 'go'; } catch { return 'go'; }
+}
+
 /** The language the recognizer listens in: Swiss German, French and Italian; English as in the US. */
 export const dictationLang = (language: string): string => (language === 'en' ? 'en-US' : `${language}-CH`);
 

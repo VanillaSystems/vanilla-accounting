@@ -54,10 +54,13 @@ an answer, or type another one.
 | Freelancer, not registered for VAT | `freelancer` | An Einzelfirma below the registration threshold: purchases and sales booked gross, no VAT codes, no return. |
 | Something else | `custom` | You answer every question yourself. |
 
-Then the wizard asks for the company name, the folder for the books, the UID (from
-[uid.admin.ch](https://www.uid.admin.ch); the check digit is verified), the owner, a few
-words on what the company does, and the language of the app. Then these questions, in this
-order:
+Then the wizard asks for the company name, the folder for the books, the owner and the language
+of the app. It asks only what the books need from the start (#452). The UID is not asked: enter it
+later under Firma › Firma, or give it now as `--uid` (from [uid.admin.ch](https://www.uid.admin.ch);
+the check digit is verified). What needs it asks for it: an invoice with VAT, and the VAT return's
+XML (`npm run vat-xml` and the filing task refuse without it and say where it goes). A few words on
+what the company does (`--about`, helps booking) and where the books go at year-end (`--export-to`)
+are flags too, never asked. Then these questions, in this order:
 
 1. **Legal form.** GmbH or AG: fully supported. Einzelfirma: the owner draws no salary, and
    money taken out is booked on 2850 Privat. Day-to-day bookkeeping and VAT work. The year-end
@@ -81,35 +84,47 @@ order:
 5. **VAT reporting period.** Quarterly (the effective method's default) or half-yearly (the
    Saldosteuersatz's). Monthly returns are not supported yet. The method, the basis, the period
    and the rate hold for whole years: a change is possible in a year without entries.
-6. **Fiscal year.** The calendar year. Another fiscal year is not supported yet.
-7. **Starting point.** A new company starts with empty books. If you switch from other
-   bookkeeping, bring your opening balances of 1 January: `npm run import-opening` reads them
-   from a Banana export (Konten XML), or you enter them in Firma › Eröffnung. A prior year's
-   Banana export in the workspace's `history/` folder (`<name>.Konten.txt`,
-   `<name>.Buchungen-sample.tsv`) gives the AI its chart and example entries for booking. The first
-   statement of a bank account offers its starting balance as the opening balance.
-8. **What you sell.** Any combination of products you make yourself, goods you buy and resell
+6. **What you sell.** Any combination of products you make yourself, goods you buy and resell
    (trade), and services (`--sells made,services`). This picks the accounts of your chart and
    the default accounts the app books with: material for your own products on 4000, goods for
    resale on 4200; sales of own products on 3000, traded goods on 3200, services on 3400. A
    supplier or customer can differ by a rule of its own.
-9. **Customers abroad?** A service to a customer abroad is usually declared without Swiss VAT.
-10. **Do you import goods?** Imports come with customs and import VAT invoices.
-11. **Employees.** None, the owner only, or staff. Vanilla Accounting books the salary and the
-    AHV, BVG and UVG payments. Your payroll provider or Treuhand does the payroll itself.
-12. **Does the owner pay business costs privately?** Then those receipts are booked on a current
-    account with the owner (2451 Kontokorrent; 2850 Privat for an Einzelfirma).
-13. **Private use of a company car or phone.** The private share takes back part of the input
-    tax (Eigenverbrauch, VAT code K81-B).
-14. **Do sales reach you as payouts from a webshop or payment provider?** Then a clearing
-    account (1093) holds the payout until its sales and fees are booked.
+7. **Do you import goods?** Imports come with customs and import VAT invoices, booked on the
+   import accounts (4020 to 4040) the answer adds to the chart.
+8. **Employees.** None, the owner only, or staff. Vanilla Accounting books the salary and the
+   AHV, BVG and UVG payments, and books a wage payment without waiting for a receipt. Your payroll
+   provider or Treuhand does the payroll itself.
+
+A preset answers the questions it knows (all of them but the VAT ones); the wizard then asks only
+the rest. These are not asked at all: none of them changes what is booked. Each takes the preset's
+answer, else the one named here, and the app shows it as assumed in the books, where you can change
+it. Each also has its flag (`--start switching`):
+
+- **Fiscal year.** The calendar year, the only one supported (`calendar`). Another fiscal year is
+  not supported yet.
+- **Starting point.** `new`. Both answers create the same books; the setup in the books asks for
+  the opening balances either way. If you switch from other bookkeeping, bring your opening balances
+  of 1 January: `npm run import-opening` reads them from a Banana export (Konten XML), or you enter
+  them in Firma › Eröffnung. A prior year's Banana export in the workspace's `history/` folder
+  (`<name>.Konten.txt`, `<name>.Buchungen-sample.tsv`) gives the AI its chart and example entries
+  for booking. The first statement of a bank account offers its starting balance as the opening
+  balance.
+- **Customers abroad?** `no`. Nothing is booked by it: a service to a customer abroad is declared
+  without Swiss VAT by its own booking.
+- **Does the owner pay business costs privately?** `yes`. Those receipts are booked on a current
+  account with the owner (2451 Kontokorrent; 2850 Privat for an Einzelfirma); nothing is booked on
+  it unless the owner paid.
+- **Private use of a company car or phone.** None. The year close offers the private share's
+  correction (Eigenverbrauch, VAT code K81-B) for every firm.
+- **Do sales reach you as payouts from a webshop or payment provider?** `no`. With the provider's
+  first report the drop asks for its clearing account (1093) and adds it to the chart.
 
 Last, your bank accounts, one at a time: Raiffeisen, UBS, PostFinance, ZKB, another cantonal
 or regional bank, Wise (one account per currency), PayPal, or a credit card. The wizard
 suggests a ledger account for each: 1020 for CHF, 1021 for EUR, 1022 for USD, then the next
 free number; 2101 for a card. It also asks for the account's IBAN. The IBAN is optional: press
 Enter to skip it, and `npm run doctor` shows it to you once the first statement is imported.
-Last it asks where the books go at year-end, such as Banana or your Treuhand. In the flag form a
+In the flag form a
 bank is `<bank>:<currency>[:<ledger account>[:<IBAN>]]`, for example `--bank "UBS:CHF::<IBAN>"`
 (an empty ledger account takes the suggested one).
 
@@ -117,7 +132,7 @@ Every question also has a flag, so `npm run init` runs without questions too:
 
 ```sh
 npm run init -- --preset consultant --dir ../my-books --name "Beispiel GmbH" \
-  --uid <your UID> --owner "Erika Beispiel" --bank UBS:CHF --bank Wise:EUR --yes
+  --owner "Erika Beispiel" --bank UBS:CHF --bank Wise:EUR --yes
 ```
 
 Run `npm run init` again on the same folder and it changes nothing. If `.env` already points

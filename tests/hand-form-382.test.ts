@@ -303,7 +303,7 @@ test('«Verknüpfen und buchen» links her own invoice in the same write, and it
   await api.rest();
   const b = loadBooks(api.ws);
   const k1 = b.transactions.find((t) => t.ref === 'K1')!;
-  b.receipts.push(receipt('own', `${head.replace('2026-031', '2026-029').replace(UID, api.ws.company.uid)}Total CHF ${k1.amount}`) as never);
+  b.receipts.push(receipt('own', `${head.replace('2026-031', '2026-029').replace(UID, api.ws.company.uid!)}Total CHF ${k1.amount}`) as never);
   b.receipts.push(receipt('theirs', `Farbmix AG\nMWST CHE-999.888.777 MWST\nRechnung FM-1\nTotal CHF 10.00`) as never);
   saveBooks(api.ws, b);
   const bank = api.ws.bankAccounts.find((a) => a.label === k1.bank || a.bank === k1.bank)!.account;
@@ -446,7 +446,7 @@ test('review 2: the sale question answered on the form for a payment whose linke
   const b = loadBooks(api.ws);
   const k1 = b.transactions.find((t) => t.ref === 'K1')!;
   const k4 = b.transactions.find((t) => t.ref === 'K4')!;
-  b.receipts.push(receipt('own', `${head.replace('2026-031', '2026-029').replace(UID, api.ws.company.uid)}Total CHF ${k1.amount}`) as never);
+  b.receipts.push(receipt('own', `${head.replace('2026-031', '2026-029').replace(UID, api.ws.company.uid!)}Total CHF ${k1.amount}`) as never);
   b.receipts.push(receipt('theirs', `Farbmix AG\nMWST CHE-999.888.777 MWST\nRechnung FM-1\nTotal CHF ${k4.amount}`) as never);
   b.mappings.push({ transactionRef: 'K1', receiptId: 'own' }, { transactionRef: 'K4', receiptId: 'theirs' });
   saveBooks(api.ws, b);

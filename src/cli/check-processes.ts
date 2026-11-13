@@ -299,7 +299,7 @@ for (const companyGuide of companyGuides) {
 const signalOwner = new Map<string, string>();
 for (const cp of counterparties) {
   const err = (msg: string) => errors.push(`${fileOf(cp)}: ${msg}`);
-  if (cp.match.uid.includes(ws.company.uid)) err(`match.uid ${ws.company.uid} is our own UID and identifies nobody`);
+  if (ws.company.uid && cp.match.uid.includes(ws.company.uid)) err(`match.uid ${ws.company.uid} is our own UID and identifies nobody`);
   for (const tier of TIERS) {
     for (const sig of cp.match[tier]) {
       const key = `${tier}:${typeof sig === 'string' ? sig.toLowerCase() : sig.source}`;

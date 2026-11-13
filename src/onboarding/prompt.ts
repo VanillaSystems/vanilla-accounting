@@ -63,7 +63,7 @@ export function setupNote(progress: SetupProgress, facts: SetupFacts, t: T): str
   const open = openStep(setupThread(progress, facts));
   const c = facts.company;
   const knows = [
-    `company: ${c.name}, UID ${c.uid}, owner ${c.owner}${c.legalForm ? `, legal form ${c.legalForm}` : ''}`,
+    `company: ${c.name}${c.uid ? `, UID ${c.uid}` : ', UID not entered yet (Firma › Firma; the first invoice with VAT and the VAT return need it)'}, owner ${c.owner}${c.legalForm ? `, legal form ${c.legalForm}` : ''}`,
     `VAT: ${JSON.stringify(c.vat)}`,
     `bank accounts: ${facts.banks.length ? facts.banks.map((b) => `${b.label} (${b.bank} ${b.currency}, ledger ${b.account}${b.iban ? ', IBAN set' : ', no IBAN'})`).join('; ') : 'none'}`,
     `sources switched on: ${facts.sources.length ? facts.sources.map((s) => s.label.en).join(', ') : 'none'}`,

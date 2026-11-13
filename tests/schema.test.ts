@@ -10,6 +10,8 @@ import { join } from 'node:path';
 import { loadBooks, saveBooks, sealsOf } from '../src/books/store.js';
 import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, MANIFEST_MIGRATIONS, SchemaTooNewError, WORKSPACE_SCHEMA, climb, type Ladder } from '../src/workspace/schema.js';
 import { upgradeWorkspace } from '../src/workspace/upgrade.js';
+import { readManifest } from '../src/workspace/manifest.js';
+import { parseDocument } from 'yaml';
 import { workspaceAt } from '../src/workspace/workspace.js';
 import { DEMO_ROOT, tempWorkspace, writeIndex } from './support/workspace.js';
 
@@ -175,6 +177,33 @@ test('books schema 9 (#450): books of schema 8 load with their seals whole and n
   assert.equal(loadBooks(ws).receipts.find((r) => r.id === open.id)?.vatReadFailures, 2);
 
   assert.throws(() => climb<Record<string, unknown>>({}, 9, 8, BOOKS_MIGRATIONS, 'ledger.json', clone), (e: Error) => e instanceof SchemaTooNewError);
+});
+
+test('manifest schema 4 (#452): a manifest of schema 3 loads with its UID, npm run update writes 4 and changes nothing else; one of 4 without a UID loads; an app of schema 3 refuses a manifest of 4', async () => {
+  assert.equal(WORKSPACE_SCHEMA, 4);
+  const dir = mkdtempSync(join(tmpdir(), 'manifest-4-'));
+  cpSync(DEMO_ROOT, dir, { recursive: true });
+  const path = workspaceAt(dir).paths.manifest;
+  const current = readFileSync(path, 'utf8');
+  assert.match(current, /^schema: 4\n/m);
+  const old = current.replace(/^schema: 4\n/m, 'schema: 3\n');
+  writeFileSync(path, old);
+
+  assert.equal(readManifest(path).company.uid, 'CHE-123.456.789');
+  const ws = workspaceAt(dir);
+  const { done } = await upgradeWorkspace(ws);
+  const step = done.find((d) => d.file === path);
+  assert.deepEqual(step && { from: step.from, to: step.to }, { from: 3, to: 4 });
+  assert.equal(readFileSync(step!.backup, 'utf8'), old);
+  assert.equal(readFileSync(path, 'utf8'), current, 'only the number changed');
+
+  writeFileSync(path, current.replace(/^ {2}uid: .*\n/m, ''));
+  assert.doesNotMatch(readFileSync(path, 'utf8'), /uid:/);
+  const loaded = readManifest(path);
+  assert.equal(loaded.company.uid, undefined);
+  assert.equal(loaded.company.name.length > 0, true);
+
+  assert.throws(() => climb(parseDocument(current), 4, 3, MANIFEST_MIGRATIONS, path, (d) => d.clone()), (e: Error) => e instanceof SchemaTooNewError);
 });
 
 function booksFiles(dir: string): string[] {

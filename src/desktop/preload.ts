@@ -17,7 +17,7 @@ const bridge: DesktopBridge = {
   setLanguage: (code) => ipcRenderer.send(TELL.language, code),
   saveFile: (url, name) => ipcRenderer.invoke(ASK.saveFile, url, name),
   // Only where the main process found the speech recognizer (main.ts DICTATION).
-  ...(process.argv.includes('--vanilla-dictation') ? { dictate } : {}),
+  ...(process.argv.includes('--vanilla-dictation') ? { dictate, micAccess: () => ipcRenderer.invoke(ASK.micAccess) } : {}),
 };
 
 // Unique across reloads of the page, so a late event of a dictation before a reload reaches no new one.

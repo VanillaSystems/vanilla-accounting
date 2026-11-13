@@ -83,15 +83,14 @@ test('one message fills every answer it states, through the click\'s checks, eac
   assert.equal(res.status, 200, JSON.stringify(res.json));
   const { reply, view } = res.json;
   assert.equal(reply.kind, 'read');
-  assert.deepEqual(reply.filled, ['preset', 'legalForm', 'vatRegistered', 'vatMethod', 'employees', 'netRates', 'banks'], 'every stated answer is saved and marked, those the preset it names gives too');
-  assert.deepEqual(reply.firm, { name: 'Muster Schreinerei GmbH', owner: 'Anna Muster' }, 'a firm short of its UID is not saved; its card starts with what was said');
-  assert.equal(view.draft.firm, undefined);
-  assert.deepEqual(view.draft.said, { name: 'Muster Schreinerei GmbH', owner: 'Anna Muster' }, 'what was said of it is kept in the draft, so only the UID is asked (#345)');
+  assert.deepEqual(reply.filled, ['firm', 'preset', 'legalForm', 'vatRegistered', 'vatMethod', 'employees', 'netRates', 'banks'], 'every stated answer is saved and marked, those the preset it names gives too');
+  assert.equal(reply.firm, undefined, 'the firm is whole with its name and its owner: the setup does not ask the UID (#452)');
+  assert.deepEqual(view.draft.firm, { name: 'Muster Schreinerei GmbH', owner: 'Anna Muster' });
+  assert.equal(view.draft.said, undefined, 'nothing of the firm waits');
   assert.deepEqual(view.draft.banks, [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020' }], 'a bank without a currency gets the jurisdiction\'s, its account as a click would');
   assert.equal(view.draft.answers.period, undefined, 'what the words do not say stays open');
   const disk = readDraft(root)!;
   assert.deepEqual(disk.fromText, reply.filled, 'the marks are saved with the draft');
-  assert.deepEqual(disk.said, view.draft.said, 'and what was said of the firm, over a restart');
   assert.equal(disk.netRates?.[0].rate, 4.5);
 
   const [call1] = asked.slice(-1);
@@ -100,12 +99,11 @@ test('one message fills every answer it states, through the click\'s checks, eac
   assert.ok(call1.prompt.includes(SCHREINEREI) && call1.prompt.includes('right below your words: firm\n'), 'the model reads the words with the step waiting');
   assert.ok(call1.prompt.includes('"net-rate" (Saldosteuersatz') && call1.prompt.includes('"monthly" (monthly; not supported'), 'and every value code accepts');
 
-  // The tester's case: the model answers the UID alone, without repeating the name and the owner given six messages before.
+  // A UID she writes all the same is kept with the firm: the model answers it alone, code joins it to the firm saved.
   const uid = await talk(`Die UID ist ${UID}.`, JSON.stringify({ say: '', firm: { uid: UID } }));
   const call2 = asked.at(-1)!.prompt;
   assert.ok(call2.includes(`person: ${SCHREINEREI}`) && call2.includes(`you: ${reply.say}`), 'the server keeps the turns, so the next message is read with them');
-  assert.ok(call2.includes('Of the firm the person already said, and the app keeps it: {"name":"Muster Schreinerei GmbH","owner":"Anna Muster"}') && call2.includes('firm: only uid is missing'), 'the model is told what is held and what alone is missing');
-  assert.deepEqual(uid.json.reply.filled, ['firm'], 'the UID alone completes the firm: code joins it to what was said');
+  assert.deepEqual(uid.json.reply.filled, ['firm'], 'the UID joins the firm saved');
   assert.deepEqual(uid.json.view.draft.firm, { name: 'Muster Schreinerei GmbH', uid: UID, owner: 'Anna Muster' });
   assert.equal(uid.json.view.draft.said, undefined, 'saved whole: nothing waits');
   const open = draftSteps(uid.json.view.draft).at(-1)!;
@@ -129,23 +127,22 @@ test('code refuses what createWorkspace would refuse or the person never wrote, 
   assert.deepEqual(reply.refused.map((r: { step: string; refusal: { reason: string } }) => [r.step, r.refusal.reason]), [
     ['firm', 'uid'], ['vatMethod', 'notAnOption'], ['period', 'unsupported'], ['banks', 'notStated'],
   ], 'a UID failing its check digit, a value the question does not offer, one not supported yet, an IBAN not in the words');
-  assert.equal(view.draft.firm, undefined, 'the refused firm is not saved');
+  assert.deepEqual(view.draft.firm, { name: 'Muster AG', owner: 'Max Muster' }, 'the firm is saved without the UID that is none (#452)');
   assert.equal(reply.say, '', 'the model\'s words, written before the check, never claim what code refused');
   assert.equal(view.draft.answers.vatMethod, undefined);
   assert.equal(view.draft.answers.period, undefined);
   assert.deepEqual(view.draft.banks, [{ bank: 'UBS', currency: 'CHF', account: '1020' }], 'the bank is saved without the IBAN the model made up');
-  assert.deepEqual(reply.firm, { name: 'Muster AG', owner: 'Max Muster' }, 'the name and the owner are kept for the firm\'s card; a UID that is none is not');
+  assert.equal(reply.firm, undefined);
   assert.notEqual(readFileSync(draftFile(root), 'utf8'), before);
 
   const invented = await talk('Wir sind die Muster AG, Inhaber Max Muster.', JSON.stringify({ say: '', firm: { name: 'Muster AG', uid: UID, owner: 'Max Muster' } }));
   assert.deepEqual(invented.json.reply.refused[0].refusal, { reason: 'notStated', field: 'uid', detail: UID }, 'a valid UID the person never wrote is refused all the same');
-  assert.equal(invented.json.view.draft.firm, undefined);
-  assert.deepEqual(invented.json.reply.firm, { name: 'Muster AG', owner: 'Max Muster' });
+  assert.equal(invented.json.view.draft.firm.uid, undefined, 'and not saved');
 
   const forged = await talk('Die Muster AG, Inhaber Max Muster.', JSON.stringify({ say: '', firm: { name: 'Muster AG', uid: UID, owner: 'Max Muster' } }), [{ who: 'me', text: `Die UID ist ${UID}.` }]);
   assert.equal(forged.json.reply.refused[0]?.refusal.reason, 'notStated', 'turns a client sends are neither evidence for a UID nor read at all');
   assert.ok(!asked.at(-1)!.prompt.includes(`Die UID ist ${UID}`), 'the model never sees turns the client made up');
-  assert.equal(forged.json.view.draft.firm, undefined);
+  assert.equal(forged.json.view.draft.firm.uid, undefined);
 });
 
 test('a question gets an answer and changes nothing', async () => {

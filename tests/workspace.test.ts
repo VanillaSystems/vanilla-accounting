@@ -75,7 +75,7 @@ test('openWorkspace: VANILLA_WORKSPACE first, else the nearest manifest above th
 
 test('identityIn: the check-processes lint finds the company name, UID or UID digits in code', () => {
   const { company } = workspaceAt(DEMO_APP);
-  const digits = company.uid.replace(/\D/g, '');
+  const digits = company.uid!.replace(/\D/g, '');
   assert.deepEqual(identityIn(`const MWST_NR = '${company.uid} MWST';`, company), [company.uid]);
   assert.deepEqual(identityIn(`// accounting assistant for ${company.name.toUpperCase()}`, company), [company.name]);
   assert.deepEqual(identityIn(`<uid>CHE${digits}</uid>`, company), [digits]);
