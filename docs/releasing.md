@@ -61,7 +61,12 @@ versions and their migration ladders. To change a format:
    ```
 
 3. Move the entries under a new heading in `CHANGELOG.md`: `## [X.Y.Z] - YYYY-MM-DD`, with
-   **⚠ figures** and **⚠ action** where they apply.
+   **⚠ figures** and **⚠ action** where they apply. Optionally, write a `### Highlights`
+   subsection first under the heading: three to six short bullets for a person who downloads the
+   app, such as `- **Simpler setup:** only the questions the books need.` The GitHub release shows
+   them under «What's new in X.Y.Z» and leaves the subsection out of the full changelog. Without
+   it, the release lists the titles of the «Added» and «Changed» entries (each entry's first
+   sentence up to its colon), at most six.
 4. Check the version. `package.json` already holds X.Y.Z while the work on it runs
    ([versioning.md](versioning.md)); only if it does not, set it. This edits `package.json` and
    `package-lock.json` and does not commit:
@@ -168,10 +173,13 @@ The release run prepares everything up to these steps; each one is the owner's.
    npm run release:github -- --publish # creates it on GitHub
    ```
 
-   It takes the version from `package.json`, the text from that version's section of
-   `CHANGELOG.md`, and attaches `release/Vanilla Accounting-X.Y.Z-arm64.dmg` and `-x64.dmg` (plus
-   the `.zip` files and `latest-mac.yml` when a feed was built), with each file's SHA-256 in the
-   text and, for an unsigned build, how to open it the first time. It refuses to publish when
+   It takes the version from `package.json` and attaches `release/Vanilla Accounting-X.Y.Z-arm64.dmg`
+   and `-x64.dmg` (plus the `.zip` files and `latest-mac.yml` when a feed was built). The text is,
+   in this order: one bold line saying what the app is; «Download», a table with each `.dmg` as a
+   link to its asset, its Mac and its SHA-256, and for an unsigned build how to open it the first
+   time; «What's new in X.Y.Z», the highlights (step 3 of [Cutting a release](#cutting-a-release));
+   and that version's section of `CHANGELOG.md` folded under «Full changelog». When the text
+   would pass GitHub's limit of 125,000 characters, it links to `CHANGELOG.md` at the tag instead. It refuses to publish when
    the tree is not clean, the tag is missing, not pushed, not the checked-out commit or not on
    `origin/main`, a `.dmg` is missing, or the release exists already. It needs the `gh` CLI,
    logged in with write access to the repository (`VANILLA_RELEASES=owner/repo` overrides the
