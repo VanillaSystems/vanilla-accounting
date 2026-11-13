@@ -56,7 +56,7 @@ import { bankCodedFee } from '../books/bank-import.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
 import { withReceiptTax } from './receipt-tax.js';
 import { clearingAccounts, payoutWaitOf, providerOfPayment, type PayoutWait, type Provider } from './providers.js';
-import { atWithheld, fundShare, overWithheld, payeeContributionAccount, paysContributions, wageAccounts, wagesBooked, withheldFor, withinWithheld } from './withheld.js';
+import { atWithheld, fundShare, overWithheld, takenOff, payeeContributionAccount, paysContributions, wageAccounts, wagesBooked, withheldFor, withinWithheld } from './withheld.js';
 import { splitByReceipts } from './receipt-lines.js';
 import { CUSTOMS_BY, customsSplit, importVatDeductions, ratesImportVat, type Assessment, type CustomsHold, type CustomsTexts } from './customs-invoice.js';
 import { nextManualRef } from '../books/next-ref.js';
@@ -1132,7 +1132,15 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         // Named by no line of the answer: where the payee's earlier contributions went (a pension fund's 5720), then the setup's first.
         const toEmployer = { ...employer, fallback: payeeContributionAccount(books, tx, businessOf) ?? employer.fallback };
         const exact = share !== undefined ? atWithheld(answered, deductions!, share, toEmployer, newEntryId) : undefined;
-        const capped = exact ?? (deductions && contributions.has(tx.ref) ? withinWithheld(answered, deductions, heldOn, toEmployer, newEntryId) : { entries: answered, moved: 0, to: '' });
+        // Where the share is known and code cannot book it so: an answer over the share is refused, one under it stands (the open item offers the rest).
+        if (share !== undefined && !exact && takenOff(answered, deductions!) > share + 0.004) {
+          const cur = baseCurrency();
+          const taken = takenOff(answered, deductions!);
+          log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${taken} off ${deductions}, the payslips withheld ${share} for this payee`);
+          if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, reason: `Die Buchung nähme ${cur} ${taken.toFixed(2)} vom Konto ${deductions} der Lohnabzüge, die Lohnabrechnungen haben für diese Kasse nur ${cur} ${share.toFixed(2)} abgezogen: nichts gebucht. Von Hand buchen.`, refusal: { code: 'classifyWithheldShare', params: { account: deductions!, currency: cur, taken, share } } });
+          continue;
+        }
+        const capped = exact ?? (share !== undefined ? { entries: answered, moved: 0, to: '' } : deductions && contributions.has(tx.ref) ? withinWithheld(answered, deductions, heldOn, toEmployer, newEntryId) : { entries: answered, moved: 0, to: '' });
         if (!capped) {
           const cur = baseCurrency();
           const over = overWithheld(answered, deductions!, heldOn)!;
@@ -1145,7 +1153,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
           : share !== undefined ? wordsIn('de').t('rules.say.withheldShare', { account: deductions!, currency: baseCurrency(), share: share.toFixed(2) })
             : wordsIn('de').t('rules.say.withheldCapped', { account: deductions!, currency: baseCurrency(), open: (heldOn ?? 0).toFixed(2), moved: capped.moved.toFixed(2), to: capped.to });
         const entries = movedSaid ? capped.entries.map((e) => ({ ...e, reason: [e.reason, movedSaid].filter(Boolean).join(' ') })) : capped.entries;
-        if (capped.moved) log(`  [Batch ${batchNum}]  ${tx.ref}  ${capped.moved} over what ${deductions} held booked on ${capped.to}`);
+        if (capped.moved) log(`  [Batch ${batchNum}]  ${tx.ref}  ${'onto' in capped && capped.onto ? `${capped.moved} under the payslips' share moved onto ${deductions}` : `${capped.moved} over what ${deductions} ${share !== undefined ? 'holds for this payee' : 'held'} booked on ${capped.to}`}`);
         const held = proposing.get(tx.ref);
         if (held) { held.entries = atPoint(tx, entries.map((e) => ({ ...e, rule: held.rule }))); continue; }
         log(`  [Batch ${batchNum}]  ${keyOf(tx)}  → ${lines.length} entries (${lines.map((e) => e.accountDebit || e.accountCredit).join(', ')})`);

@@ -165,6 +165,7 @@ export function errorText(e: unknown): string {
     case 'booksChanged': return t('error.booksChanged');
     case 'hasEntries': return t('error.hasEntries');
     case 'notByReceipt': return t('error.notByReceipt');
+    case 'withheldNone': return t('error.withheldNone');
     case 'decidedByHand': return t('error.decidedByHand');
     case 'changedSince': return t('error.changedSince');
     case 'undoGone': return t('error.undoGone');
@@ -226,6 +227,7 @@ export function errorText(e: unknown): string {
     case 'classifyOpenInvoice': return t('error.classifyOpenInvoice', b.params);
     case 'classifyVatNotRead': return t('error.classifyVatNotRead', b.params);
     case 'classifyInputTaxShared': return t('error.classifyInputTaxShared', { payments: b.params.payments, booked: `${b.params.currency} ${fmt(b.params.booked)}`, shown: `${b.params.currency} ${fmt(b.params.shown)}` });
+    case 'classifyWithheldShare': return t('error.classifyWithheldShare', { account: b.params.account, taken: `${b.params.currency} ${fmt(b.params.taken)}`, share: `${b.params.currency} ${fmt(b.params.share)}` });
     case 'classifyWithheldOver': return t('error.classifyWithheldOver', { account: b.params.account, taken: `${b.params.currency} ${fmt(b.params.taken)}`, open: `${b.params.currency} ${fmt(b.params.open)}` });
     case 'personsBooking': return t('error.personsBooking', { n: b.params.entries });
     case 'fileExists': return t('error.fileExists', b.params);
@@ -447,6 +449,7 @@ export const api = {
   /** «Nach Beleg buchen» on a receipt of several VAT groups (#406): the payment's lines as they were, and their ids now. */
   bookByReceipt: (id: string) => request<{ undo: string; before: JournalEntry[]; after: JournalEntry[] }>('POST', `/api/journal-entries/${encodeURIComponent(id)}/by-receipt`),
   /** Its undo by the id the click returned, in one write: refused when a line changed since. */
+  clearWithheld: (ref: string) => request<{ undo: string; before: JournalEntry[]; after: JournalEntry[]; amount: number; account: string }>('POST', `/api/payments/${encodeURIComponent(ref)}/clear-withheld`),
   undoByReceipt: (undo: string) => request<Ok>('POST', '/api/journal-entries/by-receipt/undo', { undo }),
   /** Änderungen › «Rückgängig» of a change by hand: the booking as the last save holds it, or gone when booked since. */
   restoreSavedEntry: (id: string) => request<Ok>('POST', `/api/journal-entries/${encodeURIComponent(id)}/as-saved`),

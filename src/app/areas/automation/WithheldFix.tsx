@@ -20,7 +20,7 @@ export function WithheldFix({ books, u, nav }: { books: Index; u: Uncleared; nav
   return (
     <>
       {' '}<span className="m" data-testid="withheld-proposal">{t('issues.withheldProposal', { amount: `${baseCurrency()} ${fmt(p.amount)}`, from: p.from.join(', '), account: p.account })}</span>
-      {' '}<button type="button" className="btn ghost" data-testid="withheld-clear" onClick={() => void clearWithheld(nav, p)}>{t('issues.withheldClear', { account: p.account })}</button>
+      {' '}<button type="button" className="btn ghost" data-testid="withheld-clear" onClick={() => void clearWithheld(nav, u.tx.ref)}>{t('issues.withheldClear', { account: p.account })}</button>
     </>
   );
 }
@@ -29,7 +29,7 @@ export function WithheldFix({ books, u, nav }: { books: Index; u: Uncleared; nav
 export function WithheldOnPayment({ books, tx, nav }: { books: Index; tx: BankTransaction; nav: Pick<Nav, 'toast' | 'refresh'> }) {
   const period = parsePeriod(filingKeyOf(tx.date, filing().length), tx.date);
   if (!period) return null;
-  const u = unclearedContributions(books as Parameters<typeof unclearedContributions>[0], period.from, period.to, new Set(providerIssuesNow().withheldPayees ?? [])).find((x) => x.tx.ref === tx.ref);
+  const u = unclearedContributions(books as Parameters<typeof unclearedContributions>[0], period.from, period.to, new Set(providerIssuesNow().withheldPayees ?? []), providerIssuesNow().withheldShares).find((x) => x.tx.ref === tx.ref);
   if (!u) return null;
   return (
     <span data-testid="withheld-payment">

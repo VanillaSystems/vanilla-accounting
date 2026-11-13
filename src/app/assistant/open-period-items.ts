@@ -49,13 +49,13 @@ export function itemsOf(l: OpenLine, s: OpenPeriodState, books: Index, say: Say,
   // A payment that may fit (#397's near offers, the receipt's page holds the click): said once, on the receipt's line (#398).
   const fits = (x: YourReceipt) => { const o = offersInBooks(books, { receipt: x.receipt.id })[0]; const tx = o && books.transactions.find((y) => y.ref === o.payment); return tx ? `${say('near.maybe')} ${formatDate(tx.date)} ${payText(tx).name} ${money(tx.currency, tx.amount)}` : ''; };
   const mine = (x: YourReceipt): Item => ({ key: x.receipt.id, go: receiptAt(x.receipt, s, books), text: [x.name, x.receipt.date && formatDate(x.receipt.date), money(x.receipt.currency, x.receipt.amount), x.lacks.map((k) => say(LACK_WORDS[k])).join(', '), fits(x)].filter(Boolean).join(' · ') });
-  // The firm's own invoice is named as the open list names it, with the fact that it waits for its customer (#476).
-  const lone = (r: Receipt): Item => ({ key: r.id, go: receiptAt(r, s, books), text: [r.description ? moneyInText(r.description) : r.filename, r.date && formatDate(r.date), money(r.currency, r.amount), s.issued.includes(r) && say('openPeriod.issued')].filter(Boolean).join(' · ') });
+  const lone = (r: Receipt): Item => ({ key: r.id, go: receiptAt(r, s, books), text: [r.description ? moneyInText(r.description) : r.filename, r.date && formatDate(r.date), money(r.currency, r.amount)].filter(Boolean).join(' · ') });
   const receipts: Location = at({ area: 'receipts' }, s.period.from);
   switch (l.kind) {
     case 'yours': return { items: l.items.map(mine), more: l.more, all: receipts };
     case 'unbooked': return { items: l.items.map(pay), more: l.more, all: openList(s) ?? at({ area: 'bank' }, s.period.from) };
     case 'unlinked': return { items: l.items.map(lone), more: l.more, all: receipts };
+    case 'issued': return { items: l.items.map(lone), more: l.more, all: receipts };
     case 'withheld': return { items: l.items.map((u) => ({ key: u.tx.ref, go: at({ area: 'bank', payment: u.tx.ref }, u.tx.date), text: say('openPeriod.withheldItem', { date: formatDate(u.tx.date), name: payText(u.tx).name, amount: money(u.tx.currency, u.tx.amount), account: u.account, open: money(baseCurrency(), u.open) }) })), more: l.more, all: openList(s) ?? at({ area: 'bank' }, s.period.from) };
     case 'offers': return { items: l.items.map((o) => ({ key: o.ref, go: at({ area: 'bank', payment: o.ref }, o.date), text: say('openPeriod.offer', { name: o.name, percent: o.percent, account: o.account }) })), more: l.more, all: at({ area: 'bank', payment: l.first.ref }, l.first.date) };
     case 'openings': return { items: l.items.map((o) => ({ key: o.account, go: OPENING, text: say('openPeriod.opening', { label: o.label, amount: money(o.currency ?? baseCurrency(), o.amount), date: formatDate(o.from) }) })), more: l.more, all: OPENING };

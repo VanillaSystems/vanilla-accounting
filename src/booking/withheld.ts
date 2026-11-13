@@ -171,48 +171,72 @@ export function atWithheld(entries: readonly JournalEntry[], account: string, sh
   return { entries: out, moved, to: account, onto: true };
 }
 
-/** An amount as payslips print it at a line's end: «-503.50», «1'234.00», the books' currency before it. */
-const amountRe = () => new RegExp(`(?:^|\\s)(-|−)?\\s*(?:${baseCurrency()}\\s*)?(-|−)?\\s*(\\d{1,3}(?:['’ ]?\\d{3})*[.,]\\d{2})$`);
+/** An amount as payslips print it at a line's end: «-503.50», «503.50-», «1'234.00», the books' currency before it. */
+const amountRe = () => new RegExp(`(?:^|\\s)(-|−)?\\s*(?:${baseCurrency()}\\s*)?(-|−)?\\s*(\\d{1,3}(?:['’ ]?\\d{3})*[.,]\\d{2})(-|−)?$`);
 const amountOf = (line: string): number | undefined => {
   const m = amountRe().exec(line);
   if (!m) return undefined;
   const n = Number(m[3].replace(/['’ ]/g, '').replace(',', '.'));
-  return m[1] || m[2] ? -n : n;
+  return m[1] || m[2] || m[4] ? -n : n;
 };
 const escape = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** A line that is a sentence, not a payslip's row: it ends as a sentence does, or runs on. */
+const prose = (label: string) => /[.!?:]$/.test(label) || label.split(/\s+/).length > 8;
+/** A correction of an earlier month's deduction, printed positive on its own row. */
+const CORRECTION = /korrektur|rückerstattung|r[ée]troactif|correction|rettifica|conguaglio/i;
+/** A rate on a row's label: «5.3%», «1,10 %». */
+const rateOf = (label: string) => { const m = /(\d+(?:[.,]\d+)?)\s*%/.exec(label); return m ? Number(m[1].replace(',', '.')) : undefined; };
 
 /**
- * The deductions a payslip's text names, summed per kind of setup.yaml `wages.withholds` (#476), when that is sure:
- * each deduction's label names one kind, and the deductions add up to `total`, what its wage booked on the deductions
- * account. Read on a line of its own («a label 5.3%  -503.50») or as pdftotext lays out two columns: the labels in
- * order, then the amounts in order, the deductions those with a minus. Undefined otherwise.
+ * The deductions a payslip's text names, summed per kind of setup.yaml `wages.withholds` (#476), when that is sure.
+ * A deduction is a row whose label names a kind and whose amount carries a minus («-503.50», «503.50-»): a kind's
+ * word in a compound («AHV-Nr.», «AHV-pflichtiger Lohn», «AHV-Zweigstelle») names none, a row of the kind without a
+ * minus is a basis or an employer's figure and no deduction, unless it says it corrects (then it is taken off), and a
+ * sentence names none. A row naming kinds of several funds counts as their combined kind. The rows are read
+ * - on a line of their own («AHV/IV/EO 5.3%  -503.50»), or
+ * - as pdftotext lays out columns: each label followed by its amount, or all labels and then all amounts, which is
+ *   taken only when the order is proven: each label with a rate shows rate × the first amount (the gross), and at
+ *   most one label has none.
+ * With `total` (what the wage booked on the deductions account), the deductions must add up to it. Undefined otherwise.
  */
-export function payslipDeductions(text: string, total: number, kinds: Readonly<Record<string, readonly string[]>>): Map<string, number> | undefined {
-  const res = Object.entries(kinds).map(([kind, words]) => [kind, words.map((w) => new RegExp(`(?<![\\p{L}\\d])${escape(w)}(?![\\p{L}\\d])`, /^[A-Z]{1,4}$/.test(w) ? 'u' : 'iu'))] as const);
-  const kindOf = (label: string): string | undefined | null => {
+export function payslipDeductions(text: string, total: number | undefined, kinds: Readonly<Record<string, readonly string[]>>): Map<string, number> | undefined {
+  const res = Object.entries(kinds).map(([kind, words]) => [kind, words.map((w) => new RegExp(`(?<![\\p{L}\\d])${escape(w)}(?![\\p{L}\\d])(?!-\\p{L})`, /^[A-Z]{1,4}$/.test(w) ? 'u' : 'iu'))] as const);
+  const kindOf = (label: string): string | undefined => {
+    if (prose(label)) return undefined;
     const hit = res.filter(([, rs]) => rs.some((r) => r.test(label))).map(([k]) => k);
-    return hit.length === 1 ? hit[0] : hit.length ? null : undefined;
+    return hit.length ? hit.sort().join('+') : undefined;
   };
-  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
-  const labels: Array<{ kind: string; amount?: number }> = [];
-  const alone: number[] = [];
-  for (const line of lines) {
+  const rows = text.split('\n').map((l) => l.trim()).filter(Boolean).map((line) => {
     const amount = amountOf(line);
     const label = amount === undefined ? line : line.replace(amountRe(), '').trim();
-    if (amount !== undefined && !/\p{L}/u.test(label)) { alone.push(amount); continue; }
-    const kind = kindOf(label);
-    if (kind === null) return undefined;
-    if (kind) labels.push({ kind, ...(amount !== undefined && { amount: Math.abs(amount) }) });
+    return { label, amount, alone: amount !== undefined && !/\p{L}/u.test(label), kind: kindOf(label) };
+  });
+  const pairs: Array<{ kind: string; amount: number }> = [];
+  const inline = rows.filter((r) => r.kind && !r.alone && r.amount !== undefined);
+  if (inline.some((r) => r.amount! < 0)) {
+    for (const r of inline) {
+      if (r.amount! < 0) pairs.push({ kind: r.kind!, amount: -r.amount! });
+      else if (CORRECTION.test(r.label)) pairs.push({ kind: r.kind!, amount: -r.amount! });
+    }
+  } else {
+    const labels = rows.map((r, i) => ({ ...r, i })).filter((r) => r.kind && r.amount === undefined);
+    if (!labels.length) return undefined;
+    // Each label followed by its own amount: the order is the text's.
+    const next = labels.map((l) => rows[l.i + 1]);
+    if (next.every((n) => n?.alone && n.amount! < 0)) labels.forEach((l, k) => pairs.push({ kind: l.kind!, amount: -next[k].amount! }));
+    else {
+      const amounts = rows.filter((r) => r.alone).map((r) => r.amount!);
+      const minus = amounts.filter((a) => a < 0);
+      const gross = amounts.find((a) => a > 0);
+      if (minus.length !== labels.length || gross === undefined) return undefined;
+      const rates = labels.map((l) => rateOf(l.label));
+      if (rates.filter((r) => r === undefined).length > 1) return undefined;
+      if (rates.some((r, k) => r !== undefined && Math.abs(toRappen((gross * r) / 100) - toRappen(-minus[k])) > 1)) return undefined;
+      labels.forEach((l, k) => pairs.push({ kind: l.kind!, amount: -minus[k] }));
+    }
   }
-  if (!labels.length) return undefined;
-  let pairs: Array<{ kind: string; amount: number }>;
-  if (labels.every((l) => l.amount !== undefined)) pairs = labels as Array<{ kind: string; amount: number }>;
-  else if (labels.every((l) => l.amount === undefined)) {
-    const minus = alone.filter((a) => a < 0);
-    if (minus.length !== labels.length) return undefined;
-    pairs = labels.map((l, i) => ({ kind: l.kind, amount: -minus[i] }));
-  } else return undefined;
-  if (pairs.reduce((s, p) => s + toRappen(p.amount), 0) !== toRappen(total)) return undefined;
+  if (!pairs.length) return undefined;
+  if (total !== undefined && pairs.reduce((s, p) => s + toRappen(p.amount), 0) !== toRappen(total)) return undefined;
   const out = new Map<string, number>();
   for (const p of pairs) out.set(p.kind, fromRappen(toRappen(out.get(p.kind) ?? 0) + toRappen(p.amount)));
   return out;
@@ -225,9 +249,10 @@ type ShareBooks = Books & { transactions: readonly BankTransaction[]; receipts: 
  * owner's decision on #368: what it holds for this fund is cleared there, never more): what the payslips behind the
  * account withheld for the kinds setup.yaml `wages.withholds` names under the business's id, less what earlier
  * payments to the business took off it, never more than the account holds. Only when code can tell: the business
- * collects such kinds, the account has no opening of the year (whose fund it held is not written down), and every
- * payment that put something on it this year has a payslip whose deductions read per kind and add up to what it put
- * there. Undefined otherwise: the model is told the account's credit and the bill decides, as before.
+ * collects such kinds, the account has no opening of the year (whose fund it held is not written down), every
+ * payment that put something on it this year has its payslips linked (one or, for a payment of several wages,
+ * several), whose deductions read per kind and add up to what it put there, and no row names this business's kind
+ * together with another's. Undefined otherwise: the model is told the account's credit and the bill decides.
  */
 export function fundShare(books: ShareBooks, tx: BankTransaction, business: string | undefined, businessOf: (t: BankTransaction) => string | undefined): number | undefined {
   const w = setup().wages;
@@ -242,14 +267,36 @@ export function fundShare(books: ShareBooks, tx: BankTransaction, business: stri
   let withheld = 0;
   for (const [ref, rappen] of put) {
     const ids = new Set([...books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId), ...lines.filter((e) => e.transactionRef === ref).flatMap((e) => e.receipts ?? [])]);
-    const read = books.receipts.filter((r) => ids.has(r.id)).map((r) => payslipDeductions(r.extractedText ?? '', fromRappen(rappen), kinds)).find(Boolean);
-    if (!read) return undefined;
-    withheld += toRappen(read.get(business) ?? 0);
+    const reads = books.receipts.filter((r) => ids.has(r.id)).flatMap((r) => payslipDeductions(r.extractedText ?? '', undefined, kinds) ?? []);
+    const sum = reads.reduce((s, m) => s + [...m.values()].reduce((a, v) => a + toRappen(v), 0), 0);
+    if (!reads.length || sum !== rappen) return undefined;
+    for (const m of reads) for (const [kind, v] of m) {
+      const parts = kind.split('+');
+      if (parts.includes(business) && parts.length > 1) return undefined;
+      if (kind === business) withheld += toRappen(v);
+    }
   }
   const theirs = new Set(books.transactions.filter((t) => t.ref !== tx.ref && t.date <= tx.date && businessOf(t) === business).map((t) => t.ref));
   const paid = lines.filter((e) => theirs.has(e.transactionRef)).reduce((s, e) => s + (e.accountDebit === account ? toRappen(e.amount) : 0) - (e.accountCredit === account ? toRappen(e.amount) : 0), 0);
   const held = toRappen(withheldFor(books, tx, account) ?? 0);
   return fromRappen(Math.max(0, Math.min(withheld - paid, held)));
+}
+
+/**
+ * The share of each payment out to a business whose deduction kinds setup.yaml names (fundShare), by ref, where code
+ * can tell it (#476): the task and «2270 ausgleichen» then ask for that part, never for all the account holds.
+ */
+export function withheldSharesOf(books: ShareBooks, businessOf: (t: BankTransaction) => string | undefined): Record<string, number> {
+  const kinds = setup().wages?.withholds;
+  if (!kinds) return {};
+  const out: Record<string, number> = {};
+  for (const t of books.transactions) {
+    const b = t.direction === 'DBIT' ? businessOf(t) : undefined;
+    if (!b || !kinds[b]) continue;
+    const share = fundShare(books, t, b, businessOf);
+    if (share !== undefined) out[t.ref] = share;
+  }
+  return out;
 }
 
 /** The click that clears the deductions account, as a proposal: what moves (`amount`) from which contribution accounts (`from`) onto the deductions account, and the payment's lines after it, changed and added. */
@@ -275,7 +322,7 @@ export function clearingProposal(entries: readonly JournalEntry[], open: number)
   return { account: w.deductions, amount, from: [...new Set(changed.map((c) => c.before.accountDebit))], changed, added: done.entries.filter((e) => !byId.has(e.id)) };
 }
 
-/** A booked contribution payment that takes nothing off the deductions account, which still holds `open` at the end of the period. */
+/** A booked contribution payment that takes less off the deductions account than it should: `open`, what is still to move there (all the account holds at the period's end, or the payment's share where code knows it). */
 export interface Uncleared { tx: BankTransaction; account: string; open: number }
 
 /**
@@ -288,8 +335,11 @@ export interface Uncleared { tx: BankTransaction; account: string; open: number 
  * business files, src/intake/pair-chain.ts providerIssuesIn) or an earlier payment to the same
  * counterparty took something off the deductions account. Cleared since, by hand on a ref of its
  * own, the account holds nothing at `to` and the task is gone.
+ * Where the server knows a payment's share (`shares`, withheldSharesOf, #476), that decides: the payment is open only
+ * while it takes less than its share off the account, for the difference (never more than the account holds at
+ * `to`), whether or not it has a line there; a share of nothing is never open.
  */
-export function unclearedContributions(books: Books & { transactions: readonly BankTransaction[] }, from: string, to: string, payees: ReadonlySet<string> = new Set()): Uncleared[] {
+export function unclearedContributions(books: Books & { transactions: readonly BankTransaction[] }, from: string, to: string, payees: ReadonlySet<string> = new Set(), shares: Readonly<Record<string, number>> = {}): Uncleared[] {
   const w = wageAccounts();
   if (!w) return [];
   const open = withheldFor(books, { ref: '', date: to, direction: 'DBIT' }, w.deductions);
@@ -300,8 +350,13 @@ export function unclearedContributions(books: Books & { transactions: readonly B
   const sharer = (tx: BankTransaction) => payees.has(tx.ref) || (!!tx.counterparty && [...cleared].some((t) => t.ref !== tx.ref && t.date <= tx.date && fold(t.counterparty) === fold(tx.counterparty)));
   return books.transactions.flatMap((tx): Uncleared[] => {
     const lines = tx.date >= from && tx.date <= to ? byRef.get(tx.ref) : undefined;
-    if (!lines?.length || tx.direction !== 'DBIT') return [];
-    if (!lines.some((e) => w.shared.has(e.accountDebit)) || lines.some((e) => e.accountDebit === w.deductions || e.accountCredit === w.deductions)) return [];
+    if (!lines?.length || tx.direction !== 'DBIT' || !lines.some((e) => w.shared.has(e.accountDebit))) return [];
+    const share = shares[tx.ref];
+    if (share !== undefined) {
+      const missing = Math.min(toRappen(share) - toRappen(takenOff(lines, w.deductions)), toRappen(open));
+      return missing > 0 ? [{ tx, account: w.deductions, open: fromRappen(missing) }] : [];
+    }
+    if (lines.some((e) => e.accountDebit === w.deductions || e.accountCredit === w.deductions)) return [];
     return sharer(tx) ? [{ tx, account: w.deductions, open }] : [];
   });
 }

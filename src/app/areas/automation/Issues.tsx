@@ -53,6 +53,7 @@ function goOf(books: Index, i: PeriodIssue): Location | undefined {
     // A missing bill has no place in the books yet: its line offers the file dialog that drops it (#459), never another receipt.
     case 'bill': return undefined;
     case 'withheld': return at({ area: 'bank', payment: i.uncleared.tx.ref }, i.uncleared.tx.date);
+    case 'issued': return at({ area: 'receipts', id: i.receipt.id }, i.receipt.date);
   }
 }
 
@@ -73,6 +74,7 @@ function textOf(books: Index, i: PeriodIssue): string {
     case 'own': return t('issues.own', { text: i.name, lacks: i.lacks.map((k) => t(LACK_WORDS[k])).join(', ') });
     case 'held': return t(i.held.why === 'rate' || i.held.why === 'rateTooMany' ? 'issues.heldRate' : 'issues.heldOther', { what: heldReasonText(i.held, isKey, tWith), date: formatDate(i.held.date), provider: i.held.name, amount: i.held.gross !== undefined ? `, ${i.held.currency ?? baseCurrency()} ${fmt(i.held.gross)}` : '' });
     case 'bill': return billText(i.bill, monthName(i.bill.date), (n) => `${baseCurrency()} ${fmt(n)}`, t as unknown as Say);
+    case 'issued': return t('issues.issued', { date: formatDate(i.receipt.date ?? ''), text: i.receipt.description ? moneyInText(i.receipt.description) : i.receipt.filename });
     case 'withheld': { const u = i.uncleared; return t('issues.withheld', { date: formatDate(u.tx.date), text: payerName(u.tx), amount: `${u.tx.currency} ${fmt(u.tx.amount)}`, account: u.account, open: `${baseCurrency()} ${fmt(u.open)}` }); }
   }
 }
@@ -90,8 +92,11 @@ export function usePeriodIssues(books: Index, from: string, to: string): PeriodI
   const accounts = ws?.bankAccounts;
   // A receipt a run still reads is not hers yet (#398): the runs as Belege reads them.
   const runs = useAutomation().view?.runs;
-  const key = [books, questions, accounts, orderPagesNow(), providerIssuesNow(), from, to, localToday(), runs, outlayWaitsNow()];
-  if (!lastIssues || key.some((k, i) => k !== lastIssues!.key[i])) lastIssues = { key, issues: periodIssues(books, questions, from, to, accounts ?? [], orderPagesNow(), localToday(), processingOf(runs ?? [], books.receipts), providerIssuesNow(), outlayWaitsNow()) };
+  // The firm's own invoice that waits for its customer is told apart here, once (#476).
+  const c = ws?.company;
+  const firm = c ? { ...(c.uid ? { uid: c.uid } : {}), ...(c.name ? { name: c.name } : {}), ...(c.owner ? { owner: c.owner } : {}) } : undefined;
+  const key = [books, questions, accounts, orderPagesNow(), providerIssuesNow(), from, to, localToday(), runs, outlayWaitsNow(), c];
+  if (!lastIssues || key.some((k, i) => k !== lastIssues!.key[i])) lastIssues = { key, issues: periodIssues(books, questions, from, to, accounts ?? [], orderPagesNow(), localToday(), processingOf(runs ?? [], books.receipts), providerIssuesNow(), outlayWaitsNow(), firm) };
   return lastIssues.issues;
 }
 
@@ -160,11 +165,18 @@ export function OpenFact({ books, nav, period, counts: c, lead, className }: { b
 export function PeriodIssues({ books, nav, from, to, period, canEdit, figures }: { books: Index; nav: Nav; from: string; to: string; period: string; canEdit: boolean; figures?: Record<string, number> }) {
   const issues = usePeriodIssues(books, from, to);
   const { questions } = useQuestions();
-  if (!issues.length) return <p className="m" data-testid="period-issues-none">{t('issues.none', { period })}</p>;
+  // The firm's own invoice that waits for its customer is a fact under the list, never a point of it (#476, #436).
+  const counted = issues.filter((i) => i.kind !== 'issued').length;
+  if (!counted) return (
+    <>
+      <p className="m" data-testid="period-issues-none">{t('issues.none', { period })}</p>
+      {issues.map((i, k) => <p key={k} className="m" data-issue={i.kind}><button type="button" className="linkbtn" onClick={() => nav.go(goOf(books, i)!)}>{textOf(books, i)}</button></p>)}
+    </>
+  );
   return (
     <section className="wfissues" data-testid="period-issues">
-      <h3>{t('issues.title', { period, n: issues.length })}</h3>
-      <p className="m" data-testid="period-issues-lead">{issuesLead(withheldIn(figures, questions, books, from, to, providerIssuesNow()), issues, t as unknown as Say, (amount, currency) => `${currency} ${fmt(amount)}`)}</p>
+      <h3>{t('issues.title', { period, n: counted })}</h3>
+      <p className="m" data-testid="period-issues-lead">{issuesLead(withheldIn(figures, questions, books, from, to, providerIssuesNow()), issues.filter((i) => i.kind !== 'issued'), t as unknown as Say, (amount, currency) => `${currency} ${fmt(amount)}`)}</p>
       <ul>
         {issues.map((i, k) => {
           const go = goOf(books, i);
