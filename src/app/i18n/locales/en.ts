@@ -5700,6 +5700,7 @@ export default {
     'rules.share.never': "Never propose",
     'receipts.paidPrivatelyCard': "Paid privately: card ****{card} as on the receipt of {date}. As an outlay on expense / {account}.",
     'journal.byHand.note.ownerForeign': "A payment in {currency} to the owner: the app keeps receipts paid privately in the books' currency, so it proposes no account here. If it pays outlays back, choose the owner's account, without VAT.",
+    'journal.byHand.note.ownerWaitsNone': "A payment to {owner}: it waits for the receipts paid privately that it pays back. Book them as outlays (on the receipt «Book as {owner}'s outlay»), then the app books the repayment on {account}, without VAT. If the payment is something else, book it here.",
     'journal.byHand.note.ownerWaitsShort': "A payment to {owner}, and {account} holds only {amount} of receipts paid privately the firm has not paid back yet: less than this payment. If it pays outlays back: book the other receipts as outlays first (on the receipt «Book as {owner}'s outlay»); then the app books it on {account}, without VAT. If it is something else, book it here.",
     'onboarding.talk.share.phone': "About {percent} % private on the phone: once your phone provider's first payment is booked, the app proposes a rule there that books {percent} % of it as private. You keep it with one click.",
     'onboarding.talk.share.car': "About {percent} % private on the car: the app keeps it for the year close, where the private share is booked. It proposes no rule for it: the costs come from many businesses.",
