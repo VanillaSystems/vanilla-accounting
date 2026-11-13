@@ -8,6 +8,9 @@ import type { StatementImport } from '../types/index.js';
 import type { Refusal } from '../types/refusal.js';
 import type { Made, Took } from './summary.js';
 
+/** The workflow whose approval every booking by the firm's rules or the model honours, wherever it starts (#413). */
+export const BOOKING_WORKFLOW = 'booking';
+
 /** Route segments of /automation/<x>: no workflow may take these ids (load.ts checks). */
 export const RESERVED_WORKFLOW_IDS = ['runs', 'map', 'queue', 'tasks'] as const;
 

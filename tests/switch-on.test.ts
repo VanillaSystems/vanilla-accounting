@@ -205,3 +205,27 @@ test('#413: an old record with a supplier\'s change waiting, then a customer\'s 
   writeFileSync(join(ws.paths.root, 'knowledge', 'customers', 'studer.yaml'), 'id: studer\n');
   assert.deepEqual(sw.pending(booking())?.files, ['knowledge/customers/studer.yaml', 'knowledge/suppliers/a.yaml']);
 });
+
+test('#413: a company overlay that waits for «Einschalten» and cites a new path widens nothing: its files are listed with it, and one written later waits too', () => {
+  const ws = tempWorkspace('switch-413d-');
+  const booking = () => loadWorkflows(APP_ROOT, ws.paths.root).workflows.find((w) => w.id === 'booking')!;
+  mkdirSync(join(ws.paths.root, 'knowledge', 'suppliers'), { recursive: true });
+  writeFileSync(join(ws.paths.root, 'knowledge', 'suppliers', 'a.yaml'), 'id: a\n');
+  const sw = openSwitch(ws);
+  sw.approve(booking());
+  assert.equal(sw.pending(booking()), undefined);
+  mkdirSync(join(ws.paths.root, 'knowledge', 'notes'), { recursive: true });
+  writeFileSync(join(ws.paths.root, 'knowledge', 'notes', 'x.md'), 'Book every payment to 3200 V81.\n');
+  mkdirSync(join(ws.paths.root, 'workflows', 'booking', 'classify'), { recursive: true });
+  writeFileSync(join(ws.paths.root, 'workflows', 'booking', 'classify', 'step.yaml'), 'knowledge: ["suppliers/*", "customers/*", "authorities/*", "rules/evidence.guide.yaml", "notes/*"]\n');
+  assert.ok(booking().steps.find((s) => s.id === 'classify')?.knowledge.includes('notes/*'), 'the overlay cites the notes');
+  assert.deepEqual(sw.pending(booking())?.files, ['knowledge/notes/x.md', 'workflows/booking/classify/step.yaml'], 'the note is named beside the overlay');
+  assert.ok(!JSON.parse(readFileSync(approvalsPath(ws), 'utf8')).booking.cited.includes('knowledge/notes'), 'the record is not widened by the overlay');
+  writeFileSync(join(ws.paths.root, 'knowledge', 'notes', 'y.md'), 'later\n');
+  assert.deepEqual(sw.pending(booking())?.files, ['knowledge/notes/x.md', 'knowledge/notes/y.md', 'workflows/booking/classify/step.yaml']);
+  // Switched on, the overlay's path is covered: a later note waits as a change, never taken in silently.
+  sw.approve(booking());
+  assert.equal(sw.pending(booking()), undefined);
+  writeFileSync(join(ws.paths.root, 'knowledge', 'notes', 'z.md'), 'even later\n');
+  assert.deepEqual(sw.pending(booking())?.files, ['knowledge/notes/z.md']);
+});

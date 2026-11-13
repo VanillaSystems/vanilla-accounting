@@ -14,7 +14,9 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, rmSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
-import { APP_FOLDER, appFolderIn } from '../workspace/workspace.js';
+import { APP_FOLDER, APP_ROOT, appFolderIn } from '../workspace/workspace.js';
+import { loadWorkflows } from './load.js';
+import { BOOKING_WORKFLOW } from './model.js';
 import { demoHome, resetDemoCopy } from '../workspace/demo-copy.js';
 import { parse } from 'yaml';
 import type { Workspace } from '../workspace/workspace.js';
@@ -24,8 +26,8 @@ import type { CaseCheck, Run, WorkflowDecl } from './model.js';
 
 type Ws = Pick<Workspace, 'paths'>;
 
-/** The workflow whose approval every booking by the firm's rules or the model honours, wherever it starts (#413). */
-export const BOOKING_WORKFLOW = 'booking';
+/** The booking's id, declared in ./model.js (#413), named here too for the callers of the switch. */
+export { BOOKING_WORKFLOW };
 
 /** Fields that apply at once: changing them never needs switching on. */
 const APPLIES_NOW: Record<'workflow' | 'step', readonly string[]> = {
@@ -106,6 +108,12 @@ export function resetDemo(name: string): string {
 /** What a workflow's company part covers: its overlay and what its AI steps cite. */
 const coverOf = (w: WorkflowDecl): string[] => [`workflows/${w.id}`, ...citations(w)];
 
+/** What the app's own declaration of a workflow covers, without any company overlay (which may itself wait to be switched on). */
+function appCoverOf(w: WorkflowDecl): string[] {
+  const app = loadWorkflows(APP_ROOT).workflows.find((x) => x.id === w.id);
+  return app ? coverOf(app) : [`workflows/${w.id}`];
+}
+
 /**
  * What a record written before `cited` existed covered (before #413 the booking cited its guide and
  * the suppliers' files only; it reads the customers', the authorities' and evidence.guide.yaml since).
@@ -144,14 +152,17 @@ export function openSwitch(ws: Ws, now = () => new Date()): Switch {
     const all = read(ws);
     const was = all?.[w.id] ?? (all && COVERED_BEFORE[w.id] ? { part: '', files: {}, at: now().toISOString() } : undefined);
     if (!was) return undefined;
-    const cover = coverOf(w);
-    const covered = was.cited ?? COVERED_BEFORE[w.id] ?? cover;
-    if (was.cited && cover.every((c) => covered.includes(c))) return was;
+    // Widened only by what the app's own declaration cites: a path a company overlay adds is covered
+    // once she switches that overlay on (approve), and every file under it is listed until then.
+    const app = appCoverOf(w);
+    const covered = was.cited ?? COVERED_BEFORE[w.id] ?? app;
+    const fresh = app.filter((c) => !covered.includes(c));
+    if (was.cited && !fresh.length) return was;
     const part = companyPart(w, ws.paths.root);
     const files = { ...was.files };
-    for (const [p, h] of Object.entries(part?.files ?? {})) if (!(p in files) && !covered.some((c) => within(p, c))) files[p] = h;
+    for (const [p, h] of Object.entries(part?.files ?? {})) if (!(p in files) && fresh.some((c) => within(p, c)) && !covered.some((c) => within(p, c))) files[p] = h;
     const changed = Object.keys(files).length !== Object.keys(was.files ?? {}).length;
-    const next: Approved = { ...was, files, cited: cover, ...(changed || !was.part ? { part: Object.keys(files).length ? hashOf(files) : '' } : {}) };
+    const next: Approved = { ...was, files, cited: [...new Set([...covered, ...app])], ...(changed || !was.part ? { part: Object.keys(files).length ? hashOf(files) : '' } : {}) };
     write(ws, { ...all, [w.id]: next });
     return next;
   };

@@ -32,7 +32,7 @@ import { askSalesWithoutVat, closeSaleQuestionsHeld } from '../intake/sale-quest
 import { bookByRules } from './book-by-rules.js';
 import { ordersPaidElsewhere } from '../intake/sales-report-import.js';
 import { refuse, type Refused } from '../types/refusal.js';
-import { BOOKING_WORKFLOW } from './switch-on.js';
+import { BOOKING_WORKFLOW } from './model.js';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
