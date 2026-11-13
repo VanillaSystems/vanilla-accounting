@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 import { api, errorText } from '../lib/api.js';
 import { language, t, tWith } from '../i18n/index.js';
 import { dropStore, failedLine } from './drop-upload.js';
-import { closingGroupOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, receiptStateOf, type ClosingCounts, type ClosingGroup, type DropSummary, type FileState } from './drop-summary.js';
+import { closingGroupOf, readOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, receiptStateOf, type ClosingCounts, type ClosingGroup, type DropSummary, type FileState } from './drop-summary.js';
 import { isUnbooked } from '../areas/bank/model.js';
 import { receiptWaits } from '../areas/automation/period-issues.js';
 import { parsePeriod, filingKeyOf } from '../../accounting/periods.js';
@@ -435,11 +435,11 @@ const SENTENCE: Record<Exclude<ClosingGroup, 'statement' | 'matched' | 'read'>, 
 
 /** The receipts' sentences: read (linked or not), beside an invoice, a possible copy, incomplete, waiting for their reading, order pages, stopped. */
 function receiptLines(f: ClosingCounts, noAi: boolean): string {
-  const read = f.matched + f.read;
+  const { read, matched, unmatched } = readOf(f);
   return [
     read ? t('drop.sum.line', {
       head: t('drop.sum.receipts', { n: read }),
-      parts: [f.matched ? t('drop.sum.matched', { n: f.matched }) : '', f.read ? t('drop.sum.unmatched', { n: f.read }) : ''].filter(Boolean).join(', '),
+      parts: [matched ? t('drop.sum.matched', { n: matched }) : '', unmatched ? t('drop.sum.unmatched', { n: unmatched }) : ''].filter(Boolean).join(', '),
     }) : '',
     ...(['supporting', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'report'] as const).map((g) => (f[g] ? SENTENCE[g](f[g], noAi) : '')),
   ].filter(Boolean).join(' ');

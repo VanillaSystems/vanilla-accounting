@@ -99,6 +99,12 @@ export function closingGroupOf(r: DropRow, x: FileState | undefined): ClosingGro
   }
 }
 
+/**
+ * The receipts a drop read (#385's one «gelesen», `receiptRead`): linked to a payment, or read
+ * without one, a possible copy and one that lacks its date or amount among the latter, said apart too.
+ */
+export const readOf = (f: ClosingCounts) => ({ read: f.matched + f.read + f.copy + f.incomplete, matched: f.matched, unmatched: f.read + f.copy + f.incomplete });
+
 /** How many rows are in each group: their sum is the number of rows. */
 export function closingCounts(rows: readonly DropRow[], groupOf: (r: DropRow) => ClosingGroup): ClosingCounts {
   const counts = Object.fromEntries(CLOSING_GROUPS.map((g) => [g, 0])) as ClosingCounts;
