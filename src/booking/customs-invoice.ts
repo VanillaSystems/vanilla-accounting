@@ -301,17 +301,35 @@ function assessedTax(text: string, words: CustomsWords): { amount: number; rate?
   return { amount, ...(rate !== undefined ? { rate } : {}) };
 }
 
+/** The firm an assessment must name as its importer: its UID (company.uid) and its name (company.name). */
+export interface Importer { uid?: string; name?: string }
+
+const foldCase = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+
 /**
- * A receipt read as the customs office's assessment of import VAT for the firm whose UID is `uid`:
- * its title, its tax (assessedTax), and the firm's UID as importer, anywhere in the text (a
- * courier may put the assessment's pages behind its invoice), with its number when it shows one.
- * Undefined otherwise: an assessment without the firm's UID proves nothing for the firm.
+ * Whether `text` names the firm as a party: by its UID when Firma › Firma has one; without one
+ * (#452: the setup asks none) by its whole name, the end of a line or an address after a comma
+ * after it, never the start of a longer name («Beispiel GmbH Treuhand» is another firm). A UID
+ * the text shows beside the name is not the firm's for that: only the person keeps a UID.
  */
-export function readAssessment(r: Pick<Receipt, 'id' | 'filename' | 'date' | 'extractedText'>, words: CustomsWords, uid: string | undefined): Assessment | undefined {
+function namesFirm(text: string, firm: Importer | undefined): boolean {
+  const digits = firm?.uid?.replace(/\D/g, '');
+  if (digits) return [...text.matchAll(UID)].some((m) => m.slice(1).join('') === digits);
+  const parts = foldCase(firm?.name ?? '').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  if (!parts.length) return false;
+  const name = new RegExp(`(?<![\\p{L}\\p{N}])${parts.join('[^\\p{L}\\p{N}\\n]+')}(?=[ \\t]*$|[ \\t]*[,;·|–—(\\t]| {2,})`, 'mu');
+  return name.test(foldCase(text));
+}
+
+/**
+ * A receipt read as the customs office's assessment of import VAT for `firm`: its title, its tax
+ * (assessedTax), and the firm as importer (namesFirm), anywhere in the text (a courier may put the
+ * assessment's pages behind its invoice), with its number when it shows one. Undefined otherwise:
+ * an assessment that does not name the firm proves nothing for it.
+ */
+export function readAssessment(r: Pick<Receipt, 'id' | 'filename' | 'date' | 'extractedText'>, words: CustomsWords, firm: Importer | undefined): Assessment | undefined {
   const text = r.extractedText ?? '';
-  const digits = uid?.replace(/\D/g, '');
-  if (!digits || !wordsRe(words.assessment.title).test(text)) return undefined;
-  if (![...text.matchAll(UID)].some((m) => m.slice(1).join('') === digits)) return undefined;
+  if (!wordsRe(words.assessment.title).test(text) || !namesFirm(text, firm)) return undefined;
   const tax = assessedTax(text, words);
   const [number] = assessmentNumbers(text, words);
   return tax ? { receipt: r.id, file: r.filename, ...(r.date ? { date: r.date } : {}), amount: tax.amount, ...(tax.rate !== undefined ? { rate: tax.rate } : {}), ...(number ? { number } : {}) } : undefined;
@@ -360,8 +378,8 @@ export interface SplitContext {
   chart: ReadonlySet<string>;
   /** `amount` in `from` worth in the payment's currency on its day; undefined without a rate. */
   convert: (amount: number, from: string) => number | undefined;
-  /** The firm's UID: an assessment proves import VAT for the firm it names. */
-  uid?: string;
+  /** The firm: an assessment proves import VAT for the firm it names as importer. */
+  firm?: Importer;
   /** False for a firm without input tax (not registered, net tax rate method): no deduction is ever booked. */
   inputTax: boolean;
   texts: Pick<CustomsTexts, 'position' | 'deduction'>;
@@ -390,7 +408,7 @@ export function customsSplit(tx: Pick<BankTransaction, 'amount' | 'currency' | '
   if (tx.direction !== 'DBIT') return undefined;
   const invoices: CustomsInvoice[] = [];
   const others: Receipt[] = [];
-  const assessments = distinct(documents.map((r) => readAssessment(r, ctx.words, ctx.uid)).filter((a): a is Assessment => !!a));
+  const assessments = distinct(documents.map((r) => readAssessment(r, ctx.words, ctx.firm)).filter((a): a is Assessment => !!a));
   for (const r of documents.filter(isPurchaseDocument)) {
     const read = readCustomsInvoice(r, ctx.words, assessedAmounts(documents.filter((d) => d.id !== r.id), ctx.words));
     if (read && 'hold' in read) return read;
@@ -480,7 +498,7 @@ export interface CustomsBooks { transactions: readonly BankTransaction[]; journa
 /** What the passes over the books need: the words and the firm, the books' lock, and how a new entry is made. */
 export interface DeductionContext {
   words: CustomsWords;
-  uid?: string;
+  firm?: Importer;
   inputTax: boolean;
   isClosed: (date: string) => boolean;
   /** The first day of the open period: a correction of a filed quarter is dated there or later. */
@@ -497,10 +515,10 @@ export interface DeductionContext {
  * person typed as something else, and not one a deduction was ever booked from (importVatDeduction,
  * also on a copy of it): a deduction a person removed or changed is hers.
  */
-function usable(books: CustomsBooks, ctx: Pick<DeductionContext, 'words' | 'uid'>): Array<{ r: Receipt; a: Assessment }> {
+function usable(books: CustomsBooks, ctx: Pick<DeductionContext, 'words' | 'firm'>): Array<{ r: Receipt; a: Assessment }> {
   const read = books.receipts
     .filter((r) => r.kind !== 'duplicate' && r.kind !== 'noise' && !(r.kindBy === 'human' && r.kind !== 'supporting'))
-    .map((r) => ({ r, a: readAssessment(r, ctx.words, ctx.uid) }))
+    .map((r) => ({ r, a: readAssessment(r, ctx.words, ctx.firm) }))
     .filter((x): x is { r: Receipt; a: Assessment } => !!x.a);
   const used = new Set(read.filter(({ r }) => r.importVatDeduction).map(({ a }) => a.number ?? a.receipt));
   return read.filter(({ r, a }) => !r.importVatDeduction && !used.has(a.number ?? a.receipt));
@@ -510,14 +528,14 @@ function usable(books: CustomsBooks, ctx: Pick<DeductionContext, 'words' | 'uid'
  * Records on each assessment the deduction booked from it, by whomever (the split, the pass, a
  * person): the passes never book from it again. Returns how many it marked.
  */
-export function markDeducted(books: Pick<CustomsBooks, 'journalEntries' | 'receipts'>, ctx: Pick<DeductionContext, 'words' | 'uid'>): number {
+export function markDeducted(books: Pick<CustomsBooks, 'journalEntries' | 'receipts'>, ctx: Pick<DeductionContext, 'words' | 'firm'>): number {
   const account = ctx.words.positions.importVat.account;
   if (!deductionCode(account)) return 0;
   let marked = 0;
   for (const e of books.journalEntries) {
     if (!isDeduction(e, account)) continue;
     for (const r of books.receipts) {
-      if (r.importVatDeduction || !e.receipts?.includes(r.id) || !readAssessment(r, ctx.words, ctx.uid)) continue;
+      if (r.importVatDeduction || !e.receipts?.includes(r.id) || !readAssessment(r, ctx.words, ctx.firm)) continue;
       r.importVatDeduction = e.id;
       marked++;
     }

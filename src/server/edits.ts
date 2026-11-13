@@ -15,7 +15,7 @@ import { bookedState, paymentDates, paymentSides, type PaymentSide } from '../ac
 import { baseCurrency, chart, documents, filing, vat } from '../engines/index.js';
 import { toRappen } from '../accounting/rappen.js';
 import { evidenceCheck, lineBillsOf } from '../accounting/evidence-check.js';
-import { ratesImportVat, readAssessment } from '../booking/customs-invoice.js';
+import { ratesImportVat, readAssessment, type Importer } from '../booking/customs-invoice.js';
 import { codeSignFor } from '../accounting/code-sign.js';
 import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
 import { unbookPayments } from '../accounting/classify-force.js';
@@ -446,7 +446,7 @@ export function assertCodeSign(code: string | undefined, accountDebit: string | 
  * courier's invoice is no proof. Without it the import VAT stays a cost without input tax. A
  * person's own booking is not checked here: she may deduct on other proof (Art. 81 Abs. 3 of the VAT act).
  */
-export function assertImportVatRule(books: Pick<Books, 'mappings' | 'receipts'>, e: Pick<JournalEntry, 'accountDebit' | 'accountCredit' | 'vatCode' | 'amount' | 'receipts'> & { transactionRef?: string }, uid: string | undefined): void {
+export function assertImportVatRule(books: Pick<Books, 'mappings' | 'receipts'>, e: Pick<JournalEntry, 'accountDebit' | 'accountCredit' | 'vatCode' | 'amount' | 'receipts'> & { transactionRef?: string }, firm: Importer | undefined): void {
   const code = e.vatCode;
   if (!code) return;
   const debit = e.accountDebit ?? '';
@@ -461,7 +461,7 @@ export function assertImportVatRule(books: Pick<Books, 'mappings' | 'receipts'>,
   const claims = deduction || ratesImportVat(e, words);
   if (!claims) return;
   const linked = new Set([...books.mappings.filter((m) => m.transactionRef === e.transactionRef).map((m) => m.receiptId), ...(e.receipts ?? [])]);
-  const proven = deduction && books.receipts.some((r) => linked.has(r.id) && toRappen(readAssessment(r, words, uid)?.amount ?? 0) === toRappen(Math.abs(e.amount)));
+  const proven = deduction && books.receipts.some((r) => linked.has(r.id) && toRappen(readAssessment(r, words, firm)?.amount ?? 0) === toRappen(Math.abs(e.amount)));
   if (proven) return;
   throw new RequestError(400, `Vorsteuer auf der Einfuhrsteuer (${account}) gibt es nur mit der Veranlagungsverfügung des Zolls, die die Firma als Importeurin nennt und deren Steuer ${Math.abs(e.amount).toFixed(2)} ist: zuerst sie mit der Zahlung verknüpfen, dann bucht die App den Abzug als Zeile ohne Gegenkonto (-/${account}). Die Rechnung des Kuriers belegt sie nicht; ohne die Verfügung bleibt die Einfuhrsteuer Aufwand ohne Vorsteuer.`, { code: 'importVatUnproven', params: { account, amount: Math.abs(e.amount) } });
 }
@@ -913,8 +913,8 @@ export interface AnswerContext {
   earlier: readonly MadeChange[];
   /** The conversation: the bookings it changes record the AI, on the person's wish, as their author. */
   conversation: string;
-  /** The firm's UID: a customs assessment proves import VAT for the firm it names (assertImportVatRule). */
-  uid?: string;
+  /** The firm (company.uid, company.name): a customs assessment proves import VAT for the firm it names as importer (assertImportVatRule). */
+  firm?: Importer;
   /** The providers' clearing accounts (src/booking/providers.ts clearingAccounts): a payment's line on one keeps its order's date. */
   clearing: ReadonlySet<string>;
 }
@@ -990,7 +990,7 @@ export function applyAnswer(books: Books, changes: BookChange[], ctx: AnswerCont
       const own = shaped.accountDebit || shaped.accountCredit;
       throw new RequestError(400, `Soll und Haben gehören beide hin. Nur die Steuer korrigieren: ${own} auf beiden Seiten (${own}/${own} mit dem umgekehrten Code), die Bank bleibt.`, { code: 'oneSided', params: { account: own } });
     }
-    if (shaped && (change.kind === 'newEntry' || (change.kind === 'entry' && ['accountDebit', 'accountCredit', 'vatCode', 'amount'].some((k) => k in change.set)))) assertImportVatRule(books, shaped, ctx.uid);
+    if (shaped && (change.kind === 'newEntry' || (change.kind === 'entry' && ['accountDebit', 'accountCredit', 'vatCode', 'amount'].some((k) => k in change.set)))) assertImportVatRule(books, shaped, ctx.firm);
     if (undo?.kind === 'deleteEntry') dated.push(undo.id);
     if (change.kind === 'entry' && change.set.date) dated.push(change.id);
     const set = change.kind === 'newEntry' ? change.entry : change.kind === 'entry' ? change.set : {};

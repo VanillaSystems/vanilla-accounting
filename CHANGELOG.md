@@ -448,6 +448,15 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- **⚠ figures** Import VAT deducted again for a firm without a UID in Firma › Firma (since the
+  setup stopped asking it, #452): the customs office's assessment (Veranlagungsverfügung MWST)
+  proved the deduction only by the firm's UID, so a firm set up without one kept its import VAT as
+  a cost without input tax (Ziffer 400 short by the import VAT, the return too high) while the app
+  said nothing was open. Without a UID the assessment now names the firm by its whole name as
+  importer (never a longer name that begins with it), and the deduction (– / 4030 M81-2) is booked
+  and the assessment linked as before; a UID on the assessment is never kept on its own. With a
+  UID in the settings, the UID decides as before.
+
 - **⚠ figures** A booking no longer claims input tax on a receipt that is no longer linked to its
   payment (#417, point 1). That happened when a receipt file was rewritten under its name or its
   link was taken off, and the run said «0 Verknüpfungen prüfen». The app's own booking (by a rule
