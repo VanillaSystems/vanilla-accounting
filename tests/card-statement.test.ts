@@ -41,7 +41,7 @@ test('a card statement is told by its title and period; a bill paid by card is n
 
 test('a bank statement whose first lines name a card\'s bill stays a bank statement', () => {
   const bank = `Kontoauszug 01.09.2026 – 30.09.2026
-IBAN CH93 0076 2011 6238 5295 7
+IBAN CH65 8080 8000 0000 0000 1
 Belastung Kartenabrechnung Alpencard August
 Datum Text Belastung Gutschrift Saldo
 10.09.2026 Kartenabrechnung LSV 310.62`;
