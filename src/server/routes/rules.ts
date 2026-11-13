@@ -39,7 +39,7 @@ import { loadKnowledge } from '../../knowledge/layers.js';
 import { baseCurrency } from '../../engines/index.js';
 import { discardDraft, draftRules, hashOf, keepDraft, ruleCommand, ruleFactsOf, setDraftVat, type DraftCommand, type DraftView, type KeepResult, type BookOpen, type KeptBookings, type KeptEnded, type KeptView, type RuleCommand, type RulesView } from '../../saving/rules.js';
 import { forgetKeep, KEEP_ID, laterOf, listKeeps, loadKeep, newKeepId, saveKeep, updateKeep, type KeepRecord } from '../../workflows/keeps.js';
-import { type Books } from '../../books/store.js';
+import type { Books } from '../../books/store.js';
 import { bookByRules } from '../../workflows/book-by-rules.js';
 import type { JournalEntry } from '../../types/index.js';
 import { reconciliationOf } from '../../books/reconcile.js';
