@@ -139,7 +139,8 @@ Two markers flag an entry you must read before you update:
   closes; «Automatisch buchen» for all, «Neu buchen», `npm run classify` and a rule kept meanwhile
   book nothing either. A customer's or an authority's file and evidence.guide.yaml count as the
   firm's rules too (files there at the update make nothing wait; one written after it waits).
-  `npm run classify` books nothing on a workspace the app has not opened on this computer yet. Wherever she tries, one
+  `npm run classify` books nothing on a workspace the app has not opened on this computer yet; one
+  `npm run init` or the desktop's setup created counts as switched on as it was made. Wherever she tries, one
   sentence says what changed, why the app waits and what ends it, with «Einschalten» right there;
   switched on, the app books what only waited for it (the payments by an inbox run, the report taken
   again). Her own answers and links, and a
@@ -433,6 +434,12 @@ Two markers flag an entry you must read before you update:
   of the tabs, kept for the whole drop. What needs her is listed first; the files still worked on
   or done are a line each with their count, opened by a click. The counts come from the states the
   rows show and follow them live; a filter whose last file left it shows the whole drop again.
+- The fields of Firma's forms stand in line at every width (#454): a hint under one input («kein
+  Konto», the account's name) or a label on two lines no longer pushes the field beside it down
+  (Eröffnung, Regeln and the others). Firma › Eröffnung names its amount fields «Saldo per 1.1.2026
+  (CHF)» and, for a foreign-currency account, «Saldo per 1.1.2026 (EUR)» beside it, and its table's
+  column (and Abschluss's) «Saldo per 1.1.2026», no longer «Eröffnung 1.1.2026», which read like a
+  date; an amount typed there is right-aligned and shown in the app's number format once left.
 - A repayment to the owner before any of her outlays is booked (#457): «Spesen Juli 2026» said
   «wartet auf ihren Beleg; ist er verknüpft, bucht die App sie», though no receipt is ever linked to
   it. While receipts that could be hers are filed (read, dated before it, paid by no payment of the
