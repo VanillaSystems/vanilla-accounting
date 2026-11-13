@@ -71,6 +71,15 @@ test('a company overlay changes only the field it names, and a workflow of its o
   assert.equal(byId('remind', loaded.workflows).origin, 'company');
 });
 
+test('a company step\'s emits add to what its action hands on, never drop a key of it (#482)', () => {
+  const ws = mkdtempSync(join(tmpdir(), 'wf-overlay-emits-'));
+  mkdirSync(join(ws, 'workflows/booking/classify'), { recursive: true });
+  writeFileSync(join(ws, 'workflows/booking/classify/step.yaml'), 'emits: ["entries", "why", "note"]\n');
+  const loaded = loadWorkflows(APP_ROOT, ws);
+  assert.deepEqual(loaded.problems, [], 'the workspace keeps booking');
+  assert.deepEqual([...stepOf(byId('booking', loaded.workflows), 'classify')!.emits].sort(), ['entries', 'note', 'refused', 'why']);
+});
+
 test('a folder named like a page of Automatisierung is refused with the reason', () => {
   const ws = mkdtempSync(join(tmpdir(), 'wf-reserved-'));
   mkdirSync(join(ws, 'workflows/queue/x'), { recursive: true });

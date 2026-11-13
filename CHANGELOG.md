@@ -427,10 +427,12 @@ Two markers flag an entry you must read before you update:
 - A drop in which the AI's booking of one payment was refused (#482) no longer leaves stuck runs
   «Eingang verarbeiten: Lauf steckt» behind the task badge. The run finishes, and the payment says
   why it waits, as #470 meant. «Automatisch buchen» on such a payment goes on to «Von Hand
-  buchen». A run that sticks on a fault of the app itself now says so in her words, with a way on:
-  «In der App ist hier ein Fehler passiert: der Lauf ist angehalten und hat nichts Falsches
-  geschrieben. «Weiter» versucht es noch einmal. …». Before, it showed an internal step name and
-  file. A payment's and a statement's «Verlauf» show the same words.
+  buchen». A run that sticks on a fault of the app itself now says so in her words: «In der App
+  ist hier ein Fehler passiert: der Lauf ist angehalten und hat nichts Falsches geschrieben.» The
+  run's page adds «Weiter» versucht es noch einmal, beside that button. Before, it showed an
+  internal step name and file. A payment's and a statement's «Verlauf» show the same words. A
+  company's own step that lists what it hands on keeps every key its action hands on, so such a
+  workspace keeps booking.
 
 - The compensation fund's payment with its bill linked (#476): it was booked whole as the
   employer's expense while 2270 still held the employees' share the payslips had withheld, so that

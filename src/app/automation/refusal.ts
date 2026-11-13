@@ -18,6 +18,9 @@ export function refusalText(error: string | undefined, why?: Refusal): string {
   return tWith(`runWhy.${why.code}`, params);
 }
 
+/** A fault of the app itself, not of the books (#482): its words say only that; the run view adds that «Weiter» tries again, beside the button. */
+export const isAppFault = (why?: Refusal): boolean => why?.code === 'emitsExtra' || why?.code === 'leadsNowhere';
+
 /** The payment where a refusal is answered, when it names one: an account's reconciliation shows on the statement of a movement it holds (#254 reconcilePending). */
 export const refusalPayment = (why?: Refusal): { payment: string; date: string } | undefined =>
   why?.code === 'reconcilePending' && why.params.payment ? { payment: why.params.payment, date: why.params.date ?? '' } : undefined;

@@ -27,15 +27,23 @@ for (const { code, locale } of locales) {
   });
 }
 
-/** A run stuck on a fault of the app itself (a step handing on more than its description says, an outcome that leads nowhere): her words and a way on, never the step's inner name (#482). */
+/**
+ * A run stuck on a fault of the app itself (a step handing on more than its description says, an
+ * outcome that leads nowhere) can be of any workflow and shows in a payment's «Verlauf» too: her
+ * words name no step, no payment and no button; the run view adds that «Weiter» tries again,
+ * beside the button (#482).
+ */
 const APP_FAULTS = ['emitsExtra', 'leadsNowhere'];
 
 for (const { code, locale } of locales) {
-  test(`${code}: a run stuck on a fault of the app names no step and says how to go on`, () => {
+  test(`${code}: a run stuck on a fault of the app names no step, no payment and no button`, () => {
+    const resume = locale.messages['automation.resume'];
     for (const c of APP_FAULTS) {
       const text = locale.messages[`runWhy.${c}` as keyof typeof locale.messages] as string;
       assert.doesNotMatch(text, /\{(step|keys|outcome)\}/, `${code} runWhy.${c}`);
-      assert.ok(text.includes(locale.messages['automation.resume']), `${code} runWhy.${c} names «${locale.messages['automation.resume']}»`);
+      assert.ok(!text.includes(resume), `${code} runWhy.${c} names «${resume}», which only the run view has`);
+      assert.ok(!text.includes(locale.messages['area.bank']), `${code} runWhy.${c} sends her to the payments, whatever the workflow`);
     }
+    assert.ok(locale.messages['automation.retryAppFault'].includes(resume), `${code} the run view's line names «${resume}»`);
   });
 }

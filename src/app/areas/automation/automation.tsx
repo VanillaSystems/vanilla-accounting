@@ -38,7 +38,7 @@ import type { PeriodReturn, PreparedXml, SealOutput } from '../../../workflows/f
 import type { ClearingCheck } from '../../../booking/providers.js';
 import type { PayoutGroup, PayoutsBooked } from '../../../types/drop.js';
 import { payoutsBookedText } from '../../lib/payouts.js';
-import { commandRefusalText, refusalPayment, refusalText } from '../../automation/refusal.js';
+import { commandRefusalText, isAppFault, refusalPayment, refusalText } from '../../automation/refusal.js';
 import type { Refusal } from '../../../types/refusal.js';
 import { RunFromLog } from '../../history/RunHistory.js';
 import { baseCurrency, chargesVat, filing, vat } from '../../../engines/index.js';
@@ -630,7 +630,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
         {data.mode !== 'live' ? ` · ${t(data.mode === 'dry' ? 'automation.mode.dry' : 'automation.mode.replay')}` : ''}{data.reason ? ` · ${t(`automation.queuedBecause.${data.reason}` as 'automation.queuedBecause.slot')}` : ''}
       </p>
       <p className="m mono runid">{id}</p>
-      {data.error ? <p className="warnline" data-testid="run-why">{refusalText(data.error, data.why)}<WhyGo why={data.why} nav={nav} /></p> : null}
+      {data.error ? <p className="warnline" data-testid="run-why">{refusalText(data.error, data.why)}{data.status === 'stuck' && isAppFault(data.why) ? ` ${t('automation.retryAppFault')}` : ''}<WhyGo why={data.why} nav={nav} /></p> : null}
       <div className="wfactions">
         {data.status === 'waiting' ? <button type="button" className="btn" onClick={() => nav.select({ area: 'automation', view: 'tasks', run: id })}>{t('automation.openTask')}</button> : null}
         {data.status === 'stuck' || data.status === 'parked' ? <button type="button" className="btn" onClick={act({ kind: 'resume', run: id })}>{t('automation.resume')}</button> : null}

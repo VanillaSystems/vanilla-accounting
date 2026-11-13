@@ -81,7 +81,13 @@ function readWorkflow(id: string, appDir: string | undefined, companyDir: string
   const w = merged('', 'workflow.yaml') ?? fail('no workflow.yaml');
   const stepIds = list(w.steps);
   if (!stepIds.length) fail('steps: the list of step folders is empty');
-  const steps = stepIds.map((sid) => readStep(sid, merged(sid, 'step.yaml') ?? fail(`step ${sid} has no step.yaml`)));
+  const steps = stepIds.map((sid) => {
+    const s = readStep(sid, merged(sid, 'step.yaml') ?? fail(`step ${sid} has no step.yaml`));
+    // A company's own step.yaml that sets `emits` adds to what its action hands on, never drops a key of it (#482): its run would stick the first time that key comes.
+    const own = companyDir ? readYaml(join(companyDir, sid, 'step.yaml')) : undefined;
+    const handed = own?.emits !== undefined && s.body.kind === 'action' ? ACTIONS[s.body.uses]?.emits ?? [] : [];
+    return handed.length ? { ...s, emits: [...new Set([...s.emits, ...handed])] } : s;
+  });
   const phase = String(w.phase ?? fail('phase missing'));
   if (!(PHASES as readonly string[]).includes(phase)) fail(`phase "${phase}" is none of ${PHASES.join(', ')}`);
   const forKind = String(w.for ?? fail('for missing'));
