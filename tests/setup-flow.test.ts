@@ -60,7 +60,8 @@ test('taking back an answer makes the steps after it wait and keeps their answer
   assert.equal(changed.preset, 'custom', 'a preset answer taken back makes the preset custom');
   const asked = at(changed);
   assert.ok(asked.id === 'question' && asked.key === 'imports', 'the question taken back is asked in the conversation');
-  assert.ok(draftSteps(changed).some((s) => s.id === 'question' && s.key === 'foreignCustomers' && s.answer === 'yes'), 'the others the preset gave show as given');
+  assert.ok(draftSteps(changed).some((s) => s.id === 'question' && s.key === 'legalForm' && s.answer === 'GmbH'), 'the others the preset gave show as given');
+  assert.ok(!draftSteps(changed).some((s) => s.id === 'question' && s.key === 'foreignCustomers'), 'one the setup does not ask is not among them (#452)');
 });
 
 test('a VAT method left over from «yes» does not reach the books after «no»', () => {

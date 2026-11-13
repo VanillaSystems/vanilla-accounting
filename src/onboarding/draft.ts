@@ -9,7 +9,7 @@
  * answered, so a setup broken off stands where it stood when the folder is opened again. Pure,
  * shared by the desktop server (src/onboarding/draft-store.ts) and the start screen.
  */
-import { PRESETS, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, asked, notRegistered, unsteered, usualPeriod, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
+import { PRESETS, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, asked, inSetup, notRegistered, unsteered, usualPeriod, type Answers, type Preset, type QuestionKey } from '../workspace/setup.js';
 import type { NetRate } from '../workspace/vat-setup.js';
 import type { BankSpec, SetupRequest } from '../workspace/create.js';
 import type { KnownBooks } from '../types/desktop.js';
@@ -17,8 +17,8 @@ import type { PrivateShares } from './model.js';
 
 export const DRAFT_FILE = 'setup-draft.json';
 
-/** Who the firm is: what the manifest's `company` needs before anything else. */
-export interface Firm { name: string; uid: string; owner: string }
+/** Who the firm is: what the manifest's `company` needs before anything else. The UID only when her words gave it: the setup does not ask it (#452). */
+export interface Firm { name: string; uid?: string; owner: string }
 
 export interface SetupDraft {
   started: string;
@@ -26,8 +26,8 @@ export interface SetupDraft {
   language: string;
   firm?: Firm;
   /**
-   * What the person's words said of the firm while it is not whole (#345): a firm is saved only with
-   * its UID, so a name and an owner given before it wait here, and the UID alone completes them.
+   * What the person's words said of the firm while it is not whole (#345): a firm is saved with its
+   * name and its owner, so one given before the other waits here, and the other completes it.
    * Absent once `firm` is saved.
    */
   said?: Partial<Firm>;
@@ -107,11 +107,12 @@ function answered(key: QuestionKey, a: Partial<Answers>): boolean {
 
 /**
  * The questions the conversation asks one by one: the VAT questions always (they decide the books'
- * whole setup, so a preset only suggests them), the others only without a preset that answers them.
+ * whole setup, so a preset only suggests them), the others only without a preset that answers them,
+ * and none the setup does not ask (#452): those take their `later` answer.
  */
 export function askedQuestions(d: SetupDraft): QuestionKey[] {
   const given = d.preset ? presetAnswers(d.preset) : {};
-  return QUESTION_ORDER.filter((k) => asked(k, d.answers) && (isVat(k) || d.preset === 'custom' || given[k] === undefined));
+  return QUESTION_ORDER.filter((k) => inSetup(k) && asked(k, d.answers) && (isVat(k) || d.preset === 'custom' || given[k] === undefined));
 }
 
 const netRateMethod = (a: Partial<Answers>) => a.vatRegistered === 'yes' && a.vatMethod === 'net-rate';
@@ -130,10 +131,10 @@ const askedAnswers = (a: Partial<Answers>): Answers =>
 /** The request the draft makes once every step is answered; undefined while one waits. */
 export function requestOf(d: SetupDraft): Omit<SetupRequest, 'root'> | undefined {
   if (!d.firm || !d.preset || !d.banks?.length) return undefined;
-  if (QUESTION_ORDER.some((k) => asked(k, d.answers) && !answered(k, d.answers))) return undefined;
+  if (QUESTION_ORDER.some((k) => inSetup(k) && asked(k, d.answers) && !answered(k, d.answers))) return undefined;
   if (netRateMethod(d.answers) && !d.netRates?.length) return undefined;
   return {
-    preset: d.preset, name: d.firm.name, uid: d.firm.uid, owner: d.firm.owner, language: d.language,
+    preset: d.preset, name: d.firm.name, ...(d.firm.uid ? { uid: d.firm.uid } : {}), owner: d.firm.owner, language: d.language,
     answers: askedAnswers(d.answers), ...(netRateMethod(d.answers) ? { netRates: d.netRates } : {}), banks: d.banks,
   };
 }

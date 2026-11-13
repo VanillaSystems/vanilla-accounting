@@ -220,7 +220,7 @@ function CompanyCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'company
   const address = c.address && [[c.address.street, c.address.number].filter(Boolean).join(' '), `${c.address.postcode} ${c.address.town}`.trim()].filter(Boolean).join(', ');
   const rows: Array<[string, ReactNode]> = [
     [t('onboarding.company.name'), c.name],
-    [t('onboarding.company.uid'), <span className="mono">{c.uid}</span>],
+    ...(c.uid ? [[t('onboarding.company.uid'), <span className="mono">{c.uid}</span>] as [string, ReactNode]] : []),
     ...(c.legalForm ? [[t('onboarding.company.legalForm'), c.legalForm] as [string, ReactNode]] : []),
     ...(c.owner ? [[t('onboarding.company.owner'), c.owner] as [string, ReactNode]] : []),
     ...(address ? [[t('onboarding.company.address'), address] as [string, ReactNode]] : []),

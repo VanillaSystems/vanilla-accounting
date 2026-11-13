@@ -132,6 +132,10 @@ export interface FirstPage<B> {
   last?: string;
   /** DesktopServer.reach: asynchronous, held while macOS asks about the folder; `ok` or `missing` once it may be read. */
   reach(root: string): Promise<string>;
+  /** DesktopServer.answered: whether macOS answered for the folder of `root` to this version of the app already. */
+  answered(root: string): boolean;
+  /** The start screen that says why macOS will ask before it opens `root` (unaskedPath). */
+  unasked(root: string): string;
   open(root: string): Promise<B>;
   /** Books opened meanwhile (she chose on the start screen): the last ones then stay shut. */
   current(): unknown;
@@ -147,16 +151,27 @@ export const askingPath = (root: string, name: string, folder: string): string =
   `/start?${new URLSearchParams({ asking: root, name, folder })}`;
 
 /**
+ * The start screen that offers the books in `root` with the words before macOS's question: their
+ * folder `folder` is read only once she clicks «Weiter» there (#373).
+ */
+export const unaskedPath = (root: string, name: string, folder: string): string =>
+  `/start?${new URLSearchParams({ unasked: root, name, folder })}`;
+
+/**
  * The start's first window (issue #373). A first start shows it at once and reads no folder. A
  * later start opens the books opened last before it shows them, as long as their folder answers
  * at once; when macOS holds that look (it asks whether the app may read Documents, Desktop or
  * Downloads, and waits for «Erlauben»), the window comes first with the start screen, which says
  * so, and the books follow once she allowed it: never a synchronous read macOS holds with the
- * main process. Refused, the plain start screen stays (its list says how to allow it).
+ * main process. Refused, the plain start screen stays (its list says how to allow it). Books in a
+ * folder macOS has not answered for to this version of the app (a first start after an update
+ * loses an unsigned build's permission) are not read at all: the start screen says first why macOS
+ * will ask, and she opens them from there.
  */
 export async function firstPage<B>(o: FirstPage<B>): Promise<void> {
   if (!o.last) { o.show('/'); return; }
   const last = o.last;
+  if (!o.answered(last)) { o.show(o.unasked(last)); return; }
   const wait = o.wait ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const open = () => o.open(last).catch(() => undefined);
   const reached = o.reach(last).catch(() => 'ok');
@@ -165,6 +180,19 @@ export async function firstPage<B>(o: FirstPage<B>): Promise<void> {
   o.show(o.asking(last));
   const answer = await reached;
   if (o.current()) return;
-  if (answer !== 'ok' && answer !== 'missing') { o.show('/start'); return; }
+  if (answer === 'refused' || answer === 'locked') { o.show('/start'); return; }
   o.show(o.pathOf(await open()));
+}
+
+/**
+ * `run` on the first call only, its failure logged: the phone's listener starts again when the first
+ * books open (main.ts onOpen), not at every later open and never before the first window (#373).
+ */
+export function resumeOnce(run: () => Promise<unknown>): () => void {
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    void run().catch((e: unknown) => console.error('phone:', e));
+  };
 }

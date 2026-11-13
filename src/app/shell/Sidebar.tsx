@@ -18,9 +18,10 @@ import { BotIcon } from '../areas/automation/Graph.js';
 import { ICONS } from '../areas/icons.js';
 import { search } from '../assistant/attach.js';
 import { newContext } from '../assistant/thread.js';
-import { dictated, dictationLang, carried, fieldAt, follow, recognizer, type DictationError, type Dictated } from '../assistant/dictation.js';
+import { beforeDictation, dictated, dictationLang, carried, fieldAt, follow, recognizer, type DictationError, type Dictated } from '../assistant/dictation.js';
 import { Picker, automationCandidates } from '../assistant/Picker.js';
 import { Recording } from '../assistant/Recording.js';
+import { desktop } from '../desktop/bridge.js';
 import { isBookChange, type ContextRef, type EntrySet, type HeldChanges, type HeldLine, type InvoicingSet, type MadeChange, type Turn } from '../../types/assistant.js';
 import { aiRefusedText, ApiError, apiFetch, errorText } from '../lib/api.js';
 import type { Index } from '../../types/index.js';
@@ -388,6 +389,10 @@ export function Sidebar({ page, books, onGo, onGoTo }: Props) {
   const [listening, setListening] = useState<(() => void) | null>(null);
   const [heardError, setHeardError] = useState<DictationError>();
   const [preparing, setPreparing] = useState(false);
+  /** The Mac app before macOS first asks about the microphone: the words why, and «Weiter» starts the dictation (#373). */
+  const [micAsk, setMicAsk] = useState(false);
+  /** The look at macOS's answer is under way: a second click starts no second dictation. */
+  const looking = useRef(false);
   /** When the microphone began recording, once the language is loaded. */
   const [recordingSince, setRecordingSince] = useState(0);
   /** The words of `text` the recognizer may still change, shown as provisional. */
@@ -433,6 +438,14 @@ export function Sidebar({ page, books, onGo, onGoTo }: Props) {
   const listen = () => {
     if (!ear) return;
     if (listening) { listening(); return; }
+    if (micAsk || looking.current) return;
+    // In a browser nothing is awaited: the click starts it at once, as its own permission prompt wants.
+    if (!desktop?.micAccess) { hear(); return; }
+    looking.current = true;
+    void beforeDictation(desktop).then((next) => { looking.current = false; if (next === 'ask') setMicAsk(true); else hear(); });
+  };
+  const hear = () => {
+    if (!ear) return;
     let field = fieldAt(text, area.current?.selectionStart ?? text.length, area.current?.selectionEnd ?? text.length);
     const id = ++dictation.current;
     let caret = field.end;
@@ -587,6 +600,13 @@ export function Sidebar({ page, books, onGo, onGoTo }: Props) {
             </div>
             {s.fileError ? <div className="warnline aifileerror" role="alert">{s.fileError}</div> : null}
             {heardError ? <div className="warnline aifileerror" role="alert">{t(`assistant.dictation.${heardError}`)}</div> : null}
+            {micAsk ? (
+              <div className="aifileerror" data-testid="mic-ask">
+                {t('assistant.dictation.ask')}{' '}
+                <button type="button" className="linkbtn" data-act="mic-go" onClick={() => { setMicAsk(false); hear(); }}>{t('assistant.dictation.askGo')}</button>{' · '}
+                <button type="button" className="linkbtn" data-act="mic-cancel" onClick={() => setMicAsk(false)}>{t('assistant.dictation.askCancel')}</button>
+              </div>
+            ) : null}
             <div className="aifield">
               <textarea
                 ref={area} rows={3} value={text} disabled={!!noAi} placeholder={noAi?.placeholder ?? t(setup ? 'onboarding.placeholder' : 'assistant.placeholder')} aria-label={t('assistant.message')}

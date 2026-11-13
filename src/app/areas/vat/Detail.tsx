@@ -202,7 +202,8 @@ function Correction({ books, nav, period, v, filed }: Props & { v: VatReturn; fi
       </div>
       <div className="ldl"><button type="button" className="dl inline" onClick={print}>{t('vat.print')}</button></div>
       <dl className="kv2 fhead">
-        <dt>{t('vat.uid')}</dt><dd className="mono">{uid}</dd>
+        {/* Without a UID (#452) the row is left out rather than printed empty. */}
+        {uid ? <><dt>{t('vat.uid')}</dt><dd className="mono">{uid}</dd></> : null}
         <dt>{t('vat.periodLabel')}</dt><dd className="mono">{periodName(v.period)} · {formatDate(from)}–{formatDate(to)}</dd>
         <dt>{t('form0535.declaredTax')}</dt><dd className="mono">CHF {fmt(filedTax)}</dd>
       </dl>

@@ -112,7 +112,7 @@ const describe = (key: QuestionKey): string => {
 function waiting(d: SetupDraft): string {
   const open = draftSteps(d).at(-1)!;
   if (open.id === 'question') return `answers.${open.key}`;
-  if (open.id === 'firm' && d.said && Object.keys(d.said).length) return `firm: only ${(['name', 'uid', 'owner'] as const).filter((k) => !d.said![k]).join(' and ')} is missing`;
+  if (open.id === 'firm' && d.said && Object.keys(d.said).length) return `firm: only ${(['name', 'owner'] as const).filter((k) => !d.said![k]).join(' and ')} is missing`;
   return open.id === 'review' ? 'nothing: every answer is given, the person can create the books' : open.id;
 }
 
@@ -175,7 +175,7 @@ The step waiting now, which the app shows with its buttons right below your word
 ${buttonsNote(d)}
 
 What the setup asks, with the only values the app accepts:
-- firm: {"name": company name, "uid": Swiss company number CHE-###.###.###, "owner": the owner's or managing director's name}
+- firm: {"name": company name, "owner": the owner's or managing director's name, "uid": Swiss company number CHE-###.###.###, only when the person wrote it: the setup does not ask it, the person enters it later under Firma}
 - preset: the kind of firm, one of:
 ${presets}
 - answers:
@@ -230,7 +230,7 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
   };
 
   // The firm: what the words say now, joined to what they said before (`said`) or to the firm saved.
-  // A name and an owner given before the UID are kept, so the UID alone completes them (#345).
+  // A name given before the owner is kept, so the owner alone completes it (#345); the UID is not asked (#452).
   let said: Partial<Firm> | undefined;
   if (out.firm) {
     const now = { ...out.firm };
@@ -243,15 +243,17 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
     const held = d.firm ?? d.said ?? {};
     const latest = words.at(-1) ?? '';
     for (const k of ['name', 'owner'] as const) if (now[k] && held[k] && now[k] !== held[k] && !said_in(now[k]!, latest)) delete now[k];
-    const firm = { ...held, ...now };
-    const whole = !!(firm.name && firm.uid && firm.owner);
+    const joined: Partial<Firm> = { ...held, ...now };
+    // A UID her words gave that is none is refused and left out: the firm is whole without it (#452).
+    const uid = joined.uid && saidFirm({ uid: joined.uid }).uid;
+    if (joined.uid && !uid) refused.push({ step: 'firm', refusal: { reason: 'uid', detail: joined.uid } });
+    const { uid: _given, ...rest } = joined;
+    const firm: Partial<Firm> = { ...rest, ...(uid ? { uid } : {}) };
+    const whole = !!(firm.name && firm.owner);
     const before = patches.length;
     if (whole) take('firm', { step: 'firm', value: firm });
-    // Not whole yet, or refused whole (a UID that is none): what was said of it is kept all the same.
-    if (patches.length === before && !d.firm) {
-      said = saidFirm(firm);
-      if (!whole && firm.uid && !said.uid) refused.push({ step: 'firm', refusal: { reason: 'uid', detail: firm.uid } });
-    }
+    // Not whole yet: what was said of it is kept all the same.
+    if (patches.length === before && !d.firm) said = saidFirm(firm);
   }
   if (out.preset) take('preset', { step: 'preset', value: out.preset });
   for (const key of QUESTION_ORDER) {

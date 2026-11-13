@@ -29,7 +29,8 @@ export function suggestAccount(bank: string, currency: string, taken: ReadonlySe
 
 export interface InitInput {
   name: string;
-  uid: Uid;
+  /** Absent: the person enters it later under Firma (#452). */
+  uid?: Uid;
   owner: string;
   business?: string;
   /** The UI language (appLanguages()); German when absent. */
@@ -91,7 +92,7 @@ function manifestYaml(input: InitInput, bankAccounts: LedgerBankAccount[]): stri
     schema: WORKSPACE_SCHEMA,
     company: {
       name: input.name,
-      uid: input.uid,
+      ...(input.uid ? { uid: input.uid } : {}),
       owner: input.owner,
       ...(input.business ? { business: input.business } : {}),
       ...(input.language ? { language: input.language } : {}),

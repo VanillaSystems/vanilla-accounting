@@ -32,7 +32,11 @@ export const MANIFEST_FILE = 'belege.workspace.yaml';
 
 export interface Company {
   name: string;
-  uid: Uid;
+  /**
+   * Absent until the person enters it under Firma (#452): the setup does not ask it. What needs it asks
+   * for it then: an invoice with VAT (src/invoices/rules.ts), the VAT return's XML (src/workflows/filing.ts).
+   */
+  uid?: Uid;
   owner: string;
   /** What the company does, in a few words: context for prompts that judge business vs. private. */
   business?: string;
@@ -344,10 +348,10 @@ function workspaceVar(vars: Record<string, string | undefined>): string | undefi
  * bare digits. App code holds none of them; it reads openWorkspace().company.
  */
 export function identityIn(source: string, company: Company): string[] {
-  const digits = company.uid.replace(/\D/g, '');
+  const digits = company.uid?.replace(/\D/g, '');
   return [
     source.toLowerCase().includes(company.name.toLowerCase()) && company.name,
-    source.includes(company.uid) && company.uid,
-    new RegExp(`(?<!\\d)${digits}(?!\\d)`).test(source) && digits,
+    !!company.uid && source.includes(company.uid) && company.uid,
+    !!digits && new RegExp(`(?<!\\d)${digits}(?!\\d)`).test(source) && digits,
   ].filter((x): x is string => !!x);
 }

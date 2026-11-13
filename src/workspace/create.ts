@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path';
 import { loadChart } from './chart.js';
 import { bankKind, parseIban } from './banks.js';
 import { applyPlan, planWorkspace, suggestAccount, type InitInput } from './scaffold.js';
-import { PRESET_NAMES, QUESTIONS, firstMissing, firstUnsupported, optionOf, vatSetupOf, type Answers, type Preset, type QuestionKey, type SupportedAnswers } from './setup.js';
+import { PRESET_NAMES, QUESTIONS, firstMissing, firstUnsupported, optionOf, vatSetupOf, withLater, type Answers, type Preset, type QuestionKey, type SupportedAnswers } from './setup.js';
 import { parseNetRates, type NetRate, type VatSetup } from './vat-setup.js';
 import { parseUid } from './uid.js';
 import { initRepository } from './git.js';
@@ -73,9 +73,10 @@ export function checkPreset(raw: string): Preset {
 }
 
 /** The answers the engine runs on, and the VAT setup they make with the approved net rates (`netRates`, the net tax rate method only). */
-export function checkAnswers(given: Answers, netRates: readonly NetRate[] = []): { answers: SupportedAnswers; vat: VatSetup } {
+export function checkAnswers(given: Partial<Answers>, netRates: readonly NetRate[] = []): { answers: SupportedAnswers; vat: VatSetup } {
   // A multiple-choice answer sent as one value (a form of before #46 sent `sells: services`) is a list of one.
-  const answers = Object.fromEntries(Object.entries(given).map(([k, v]) => [k, typeof v === 'string' && (QUESTIONS[k as QuestionKey] as { multi?: boolean } | undefined)?.multi ? [v] : v])) as Answers;
+  // A question the setup does not ask takes its `later` answer where none is given (#452).
+  const answers = Object.fromEntries(Object.entries(withLater(given).answers).map(([k, v]) => [k, typeof v === 'string' && (QUESTIONS[k as QuestionKey] as { multi?: boolean } | undefined)?.multi ? [v] : v])) as Answers;
   const stop = firstUnsupported(answers);
   if (stop) {
     throw new SetupError(stop.option.unsupported!, { reason: 'unsupported', question: stop.key, value: stop.option.value });
@@ -107,11 +108,13 @@ export interface SetupRequest {
   root: string;
   preset: Preset;
   name: string;
-  uid: string;
+  /** Optional (#452): the setup does not ask it; one given must be a UID. */
+  uid?: string;
   owner: string;
   business?: string;
   language?: string;
-  answers: Answers;
+  /** The questions the setup does not ask may be left out: they take their `later` answer (setup.ts withLater). */
+  answers: Partial<Answers>;
   /** The approved net tax rate(s), when the VAT method is the net tax rate. */
   netRates?: NetRate[];
   banks: BankSpec[];
@@ -143,8 +146,9 @@ export async function createWorkspace(req: SetupRequest): Promise<Created> {
   const name = req.name.trim();
   const owner = req.owner.trim();
   if (!name) throw new SetupError('The company name is needed.', { reason: 'required', field: 'name' });
-  const parsed = parseUid(req.uid);
-  if ('error' in parsed) throw new SetupError(parsed.error, { reason: 'uid', detail: req.uid });
+  const uidText = req.uid?.trim() ?? '';
+  const parsed = uidText ? parseUid(uidText) : undefined;
+  if (parsed && 'error' in parsed) throw new SetupError(parsed.error, { reason: 'uid', detail: uidText });
   if (!owner) throw new SetupError('The owner is needed.', { reason: 'required', field: 'owner' });
   const languages = appLanguages();
   const language = req.language || 'de';
@@ -158,7 +162,7 @@ export async function createWorkspace(req: SetupRequest): Promise<Created> {
   const business = req.business?.trim();
   const exportTo = req.exportTo?.trim();
   const input: InitInput = {
-    name, uid: parsed.uid, owner, ...(business ? { business } : {}), ...(language !== 'de' ? { language } : {}),
+    name, ...(parsed ? { uid: parsed.uid } : {}), owner, ...(business ? { business } : {}), ...(language !== 'de' ? { language } : {}),
     preset, answers, vat, banks, ...(exportTo ? { exportTo } : {}),
   };
   const applied = applyPlan(root, planWorkspace(input, loadChart()));

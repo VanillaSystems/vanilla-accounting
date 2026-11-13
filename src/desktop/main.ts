@@ -10,24 +10,26 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync, readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
-import { BrowserWindow, Menu, app, dialog, ipcMain, nativeTheme, safeStorage, screen, session, shell } from 'electron';
+import { BrowserWindow, Menu, app, dialog, ipcMain, nativeTheme, safeStorage, screen, session, shell, systemPreferences } from 'electron';
 import { usePrintPages } from '../invoices/pdf.js';
 import { sealedStore } from '../secrets/sealed-store.js';
 import { useSecretStore } from '../secrets/secrets.js';
 import { APP_ROOT } from '../workspace/workspace.js';
-import type { KnownBooks, MenuCommand } from '../types/desktop.js';
+import type { KnownBooks, MenuCommand, MicAccess } from '../types/desktop.js';
 import type { ApiRefusal } from '../types/api-error.js';
 import { setupPath } from '../app/desktop/bridge.js';
 import { freshLoginPath } from '../platform/ai-cli.js';
 import { ASK, PUSH, TELL } from './channels.js';
 import { chosenFolder, newFolderPanel } from './new-folder.js';
 import { sameOrigin, saveFile } from './save-file.js';
-import { askingPath, bringUp, firstPage, offerMove, windowLoader, type Waiting } from './start.js';
+import { askingPath, bringUp, firstPage, offerMove, resumeOnce, unaskedPath, windowLoader, type Waiting } from './start.js';
 import { accessText } from '../app/desktop/access-text.js';
 import { dictate, isLang } from './dictation.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
 import { electronPage } from './print.js';
 import { desktopServer, listen, portOf } from './server.js';
+import { answerKey, developerIdOf } from './build-key.js';
+import { appVersion } from '../version.js';
 import { readState, writeState, type Bounds } from './state.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -102,17 +104,27 @@ async function start(): Promise<void> {
   // Moved: Electron quits this process and starts the app in the Applications folder; nothing more starts here.
   if (await offerApplicationsFolder(textsIn(language)) === 'moved') return;
 
+  // The build macOS's answers about folders are kept for: an ad hoc signed build is a new app to macOS (#373).
+  const developerId = app.isPackaged && process.platform === 'darwin' && await developerIdOf(join(dirname(process.execPath), '..', '..'));
+  // The phone's listener (macOS's firewall may ask about it) only once books are open, never before the first window (#373).
+  const resumePhone = resumeOnce(() => server.phone.resume().then((p) => { if (p.error) console.error(`phone: ${p.error}`); }));
   const server = desktopServer({
     stateFile,
     demoRoot: join(app.getPath('userData'), 'Demo'),
     booksHome: app.getPath('documents'),
     // Names only: Electron reads none of them. The first read under one makes macOS ask the person (#373).
-    protectedFolders: { documents: app.getPath('documents'), desktop: app.getPath('desktop'), downloads: app.getPath('downloads') },
-    appVersion: app.getVersion(),
+    protectedFolders: {
+      documents: app.getPath('documents'), desktop: app.getPath('desktop'), downloads: app.getPath('downloads'),
+      icloud: join(app.getPath('home'), 'Library', 'Mobile Documents'), cloud: join(app.getPath('home'), 'Library', 'CloudStorage'), volumes: '/Volumes',
+    },
+    appVersion: answerKey({ packageVersion: app.getVersion(), build: appVersion(), builtAt: app.isPackaged ? process.env.VANILLA_BUILT_AT : undefined, developerId }),
     dist: join(APP_ROOT, 'dist'),
     devUi: DEV?.ui,
     // The start screen opens books through the server; the menu's recent list follows.
-    onOpen: () => refreshMenu(),
+    onOpen: () => {
+      refreshMenu();
+      resumePhone();
+    },
   });
   useSecretStore(sealedStore({ file: join(app.getPath('userData'), 'secrets.json'), cipher: safeStorage, books: () => server.current()?.root }));
   const port = portOf(await listen(server.app, '127.0.0.1', readState(stateFile).port));
@@ -149,6 +161,8 @@ async function start(): Promise<void> {
     const options = newFolderPanel(choice, app.getPath(elsewhere ? 'home' : 'documents'));
     return chosenFolder(win && !win.isDestroyed() ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options));
   };
+  /** The start screen with the words before macOS's question, for books whose folder this version has no answer for (#373). */
+  const unasked = (root: string) => unaskedPath(root, server.recent().find((b) => b.root === root)?.name ?? basename(root), server.folderOf(root));
   function refreshMenu(): void {
     Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate(language, server.recent(), {
       openBooks: async () => {
@@ -157,7 +171,7 @@ async function start(): Promise<void> {
       },
       newBooks: () => show('/start?new'),
       demo: opening(() => server.openDemo()),
-      openRecent: (root) => void opening(() => server.open(root))(),
+      openRecent: (root) => (server.answered(root) ? void opening(() => server.open(root))() : show(unasked(root))),
       command: (command: MenuCommand) => win?.webContents.send(PUSH.menu, command),
       docs: homepage ? () => void shell.openExternal(homepage) : undefined,
     }, !app.isPackaged)));
@@ -191,10 +205,9 @@ async function start(): Promise<void> {
   refreshMenu();
   await pathKnown;
   server.startBackground();
-  void server.phone.resume().then((p) => { if (p.error) console.error(`phone: ${p.error}`); });
   // The books opened last, read only after macOS answered for their folder; a first start reads none (#373).
   void firstPage({
-    last: readState(stateFile).recent[0], reach: server.reach, open: server.open, current: server.current, pathOf, show,
+    last: readState(stateFile).recent[0], reach: server.reach, answered: server.answered, unasked, open: server.open, current: server.current, pathOf, show,
     // While macOS asks, the start screen names the folder and the books as desktop.json keeps them.
     asking: (root) => askingPath(root, server.recent().find((b) => b.root === root)?.name ?? basename(root), server.folderOf(root)),
   });
@@ -239,6 +252,8 @@ function dictationHandles(): void {
     page.once('destroyed', gone).once('did-navigate', gone);
   });
   ipcMain.on(TELL.dictationStop, (e, id: unknown) => { running.get(`${e.sender.id}:${String(id)}`)?.(); });
+  // Read only, asks nothing: the page says why macOS will ask before the first dictation (#373).
+  ipcMain.handle(ASK.micAccess, (): MicAccess => systemPreferences.getMediaAccessStatus('microphone'));
 }
 
 function smokeHandles(): void {

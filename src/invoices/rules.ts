@@ -198,7 +198,8 @@ export function missingForIssue(draft: InvoiceContent, ctx: {
   const { customer, sender } = ctx;
   if (!sender.name?.trim()) out.push({ field: 'sender.name' });
   if (!sender.address || !sender.address.street?.trim() || !hasAddress(sender.address)) out.push({ field: 'sender.address' });
-  if (!sender.uid?.trim()) out.push({ field: 'sender.uid' });
+  // The VAT number on an invoice with VAT (MWSTG Art. 26 Abs. 2 lit. a); the setup does not ask it (#452), so the first such invoice does.
+  if (chargesVat() && !sender.uid?.trim()) out.push({ field: 'sender.uid' });
   if (!sender.payTo) out.push({ field: 'payTo' });
   if (!customer) out.push({ field: 'customer' });
   else {

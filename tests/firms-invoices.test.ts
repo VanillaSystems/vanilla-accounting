@@ -70,3 +70,16 @@ test('registered: the jurisdiction\'s rates, the VAT number and the VAT line as 
   setJurisdiction(ch, NET_RATE);
   assert.equal(revenueVatCode(8.1, undefined), 'F1');
 });
+
+test('a firm without a UID (#452): the sheet prints no UID label and no empty UID, in the letterhead nor in the footer', () => {
+  setJurisdiction(ch, NOT_REGISTERED);
+  // As src/invoices/documents.ts builds the sender of a firm without one: an empty UID.
+  const bare = { ...sender, uid: '' };
+  const d: SheetData = { kind: 'invoice', language: 'de', number: '2026-001', date: '2026-10-05', dueDate: '2026-11-04', currency: 'CHF', customer, sender: bare, lines: [line(50, 0)], intro: '', closing: 'Danke', layout: DEFAULT_LAYOUT };
+  const blocks = sheetBlocks(d);
+  const out = assembleSheets(d, blocks, paginate(blocks, blocks.map(() => 10), { footer: true, qrBill: false }));
+  assert.match(out, /class="foot"/, 'the footer is there');
+  assert.doesNotMatch(out, /<span>UID<br>/, 'no UID label');
+  assert.doesNotMatch(out, /undefined/);
+  assert.match(html([line(50, 0)]), /<span>UID<br>CHE-975\.310\.864<\/span>/, 'with a UID the footer names it');
+});

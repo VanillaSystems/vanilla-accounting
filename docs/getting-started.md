@@ -55,9 +55,10 @@ books.
 
 What it asks:
 
-- **Who the company is:** its name as in the commercial register, the owner or managing
-  director, and the UID (CHE-123.456.789; it is on your commercial register extract and on
-  [uid.admin.ch](https://www.uid.admin.ch)).
+- **Who the company is:** its name and the owner or managing
+  director. The UID (CHE-123.456.789, on [uid.admin.ch](https://www.uid.admin.ch)) is not asked:
+  enter it under Firma › Firma when you have it. The first invoice with VAT and the VAT return ask
+  for it.
 - **Its VAT setup:** whether it is registered for VAT, on which method (effective or
   Saldosteuersatz), whether it reports on vereinbarte or vereinnahmte Entgelte, and how often it
   files. All of this is on your last VAT return and on the ESTV's letters. If you are not sure,

@@ -18,14 +18,32 @@ export interface DesktopState {
    */
   names?: Record<string, string>;
   /**
-   * How macOS answered the app's first read of the Documents folder (GET /api/desktop/folders), and
-   * the app version that asked: a hint only, since an update (an unsigned build above all) may lose
-   * the permission, and macOS then asks again.
+   * How macOS answered the app's first read under each folder it guards (Documents, Desktop,
+   * Downloads, iCloud Drive, `cloud:<provider folder>`, `volumes:<volume>`), and the build that
+   * asked (src/desktop/build-key.ts): a hint only, since another build of an unsigned app is a new
+   * app to macOS, which then asks again. Until this build has an answer for a folder, the app reads
+   * nothing there before the person was told why macOS will ask (#373).
    */
-  homeAccess?: { answer: 'allowed' | 'refused'; version: string };
+  access?: Record<string, FolderAnswer>;
   bounds?: Bounds;
   port?: number;
   phone?: PhonePairing;
+}
+
+export interface FolderAnswer { answer: 'allowed' | 'refused'; version: string }
+
+/** A key of `access`: a guarded folder, a volume or a cloud provider's folder by its name. */
+const GUARDED = /^(documents|desktop|downloads|icloud|(volumes|cloud)(:.+)?)$/;
+const answerOf = (raw: unknown): FolderAnswer | undefined => {
+  const a = raw as Partial<FolderAnswer> | undefined;
+  return (a?.answer === 'allowed' || a?.answer === 'refused') && typeof a.version === 'string' ? { answer: a.answer, version: a.version } : undefined;
+};
+/** desktop.json's answers; one written before 0.4.2 kept only the Documents folder's, as `homeAccess`. */
+function accessOf(raw: { access?: unknown; homeAccess?: unknown }): DesktopState['access'] {
+  const kept = raw.access && typeof raw.access === 'object' ? raw.access as Record<string, unknown> : {};
+  const all: Record<string, unknown> = { ...(raw.homeAccess !== undefined ? { documents: raw.homeAccess } : {}), ...kept };
+  const entries = Object.entries(all).flatMap(([f, v]) => { const a = GUARDED.test(f) ? answerOf(v) : undefined; return a ? [[f, a] as const] : []; });
+  return entries.length ? Object.fromEntries(entries) : undefined;
 }
 
 /** The token stays when the phone is switched off, so a paired phone works again once it is on; a new code replaces it. */
@@ -35,11 +53,12 @@ const RECENT = 8;
 
 export function readState(file: string): DesktopState {
   try {
-    const raw = JSON.parse(readFileSync(file, 'utf8')) as Partial<DesktopState>;
+    const raw = JSON.parse(readFileSync(file, 'utf8')) as Partial<DesktopState> & { homeAccess?: unknown };
+    const access = accessOf(raw);
     return {
       recent: Array.isArray(raw.recent) ? raw.recent.filter((r): r is string => typeof r === 'string') : [],
       ...(raw.names && typeof raw.names === 'object' ? { names: Object.fromEntries(Object.entries(raw.names).filter((e): e is [string, string] => typeof e[1] === 'string')) } : {}),
-      ...((raw.homeAccess?.answer === 'allowed' || raw.homeAccess?.answer === 'refused') && typeof raw.homeAccess.version === 'string' ? { homeAccess: { answer: raw.homeAccess.answer, version: raw.homeAccess.version } } : {}),
+      ...(access ? { access } : {}),
       ...(raw.bounds && typeof raw.bounds.width === 'number' ? { bounds: raw.bounds } : {}),
       ...(Number.isInteger(raw.port) ? { port: raw.port } : {}),
       ...(raw.phone && typeof raw.phone.token === 'string' && raw.phone.token

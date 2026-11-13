@@ -43,6 +43,13 @@ export const ANSWER_HAND: { readonly [K in QuestionKey]: { go: HandPlace; what?:
   payouts: { go: { area: 'company', section: 'accounts' }, what: 'accounts' },
 };
 
+/**
+ * Of the answers the setup did not ask and filled with their `later` answer (#452), those the books
+ * mark as assumed: the ones she can change somewhere. The fiscal year and the customers abroad have
+ * no place, so a «stimmt» on them would ask her to check what she cannot change.
+ */
+export const assumedLater = (filled: readonly QuestionKey[]): QuestionKey[] => filled.filter((k) => ANSWER_HAND[k] !== null);
+
 /** The keys of the place's words as the app shows them, outermost first: «Firma › Bankkonten» is area.company, company.banks. */
 export function handKeys(topic: SetupTopic): string[] {
   const r = TOPIC_HAND[topic];

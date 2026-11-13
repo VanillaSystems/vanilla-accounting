@@ -36,12 +36,17 @@ export function returnSummary(ret: PeriodReturn): ReturnSummary {
  * out. An order held for another reason (a possible test order, one booked elsewhere) is shown, never withheld for. The task shows it where the person decides and
  * withholds that outcome; undefined when nothing stands in the way.
  */
-export function approvalWithheld(task: Pick<Task, 'workflow' | 'step' | 'reads'>, questions: readonly Question[], books: Pick<Index, 'transactions'>, provider?: Pick<ProviderIssues, 'held'>): { rates: string[]; questions: number; held: number; outcome: 'approved' } | undefined {
+export function approvalWithheld(
+  task: Pick<Task, 'workflow' | 'step' | 'reads'>, questions: readonly Question[], books: Pick<Index, 'transactions'>, provider?: Pick<ProviderIssues, 'held'>,
+  /** The firm: without its UID the XML cannot name it (#452), so the approval waits for it too. */
+  firm?: { uid?: string },
+): { rates: string[]; questions: number; held: number; uid?: true; outcome: 'approved' } | undefined {
   if (task.workflow !== 'vat-filing' || task.step !== 'review') return undefined;
   const ret = task.reads?.return as PeriodReturn | undefined;
   if (!ret) return undefined;
   const w = withheldIn(ret.figures, questions, books, ret.from, ret.to, provider);
-  return w.rates.length || w.questions || w.held ? { ...w, outcome: 'approved' } : undefined;
+  const uid = firm && !firm.uid ? { uid: true as const } : {};
+  return w.rates.length || w.questions || w.held || 'uid' in uid ? { ...w, ...uid, outcome: 'approved' } : undefined;
 }
 
 /**
