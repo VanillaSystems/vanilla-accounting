@@ -14,7 +14,7 @@ import { isKey, language, t, tWith } from '../i18n/index.js';
 import { heldReasonText } from '../lib/held-reason.js';
 import { dropStore, failedLine } from './drop-upload.js';
 import { CLOSING_SENTENCE, OTHER_SENTENCES, RECEIPT_SENTENCES, closingGroupOf, linkedAs, readOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, receiptStateOf, waitsAfterDrop, type ClosingCounts, type ClosingGroup, type DropSummary, type FileState } from './drop-summary.js';
-import { isUnbooked } from '../areas/bank/model.js';
+import { isUnbooked, unbookedPayments } from '../areas/bank/model.js';
 import { receiptWaits } from '../areas/automation/period-issues.js';
 import { parsePeriod, filingKeyOf, parseSwissDate } from '../../accounting/periods.js';
 import { useQuestions } from '../questions/store.js';
@@ -35,7 +35,8 @@ import type { Index } from '../../types/index.js';
 import type { DropRow, DropSession, OtherExportOf } from '../../types/drop.js';
 import { FileDetails } from './FileDetails.js';
 import { AccountField } from '../areas/journal/AccountField.js';
-import { BOOKING_SWITCH_ON, payoutsBookedText } from '../lib/payouts.js';
+import { payoutsBookedText } from '../lib/payouts.js';
+import { BookingWaits, bookingWaitsOf } from '../automation/booking-waits.js';
 import { CsvColumnsForm, StatementRead } from './StatementRead.js';
 import { Menu } from './Menu.js';
 import type { Location, Route } from './route.js';
@@ -381,7 +382,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
   const [remap, setRemap] = useState(false);
   const there = accountThere(r, useWorkspace()?.bankAccounts);
   const asked = r.state === 'duplicate' && r.reason === 'possible-duplicate';
-  const chip = r.state === 'take' ? t('drop.taking') : asked ? t('drop.state.possible') : r.otherExport && r.state === 'duplicate' ? t('drop.state.otherExport') : r.readAs ? t('drop.state.read') : t(`drop.state.${r.state}` as 'drop.state.duplicate');
+  const chip = r.state === 'take' ? t('drop.taking') : r.reason === 'booking-waits' ? t('rules.waitingPill') : asked ? t('drop.state.possible') : r.otherExport && r.state === 'duplicate' ? t('drop.state.otherExport') : r.readAs ? t('drop.state.read') : t(`drop.state.${r.state}` as 'drop.state.duplicate');
   const details = r.state === 'asks' ? r.details : undefined;
   // A statement read without a bank export (#217): its table, unless it asks for its account first; a bank CSV: its columns.
   const csvAgain = remap && r.state === 'asks' && r.kind === 'statement-csv' && !!r.csv;
@@ -402,7 +403,8 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
         </div>
         <div className="dgo">
           <span className={`dchip c-${r.state}`}>{chip}</span>
-          {r.askProvider ? <ProviderAccount key={r.askProvider.missing} r={r} session={session} /> : r.payoutUnseen ? <PayoutUnseenRow r={r} session={session} go={go} /> : r.chooseAccount ? <ChooseAccount r={r} session={session} /> : r.unknownAccount ? (
+          {r.reason === 'booking-waits' ? <small data-testid="drop-booking-waits"><BookingWaits files={r.bookingWaits} go={go} /></small>
+          : r.askProvider ? <ProviderAccount key={r.askProvider.missing} r={r} session={session} /> : r.payoutUnseen ? <PayoutUnseenRow r={r} session={session} go={go} /> : r.chooseAccount ? <ChooseAccount r={r} session={session} /> : r.unknownAccount ? (
             <>
               <small>{t(r.unknownAccount.owner ? 'drop.unknownAccountOf' : r.unknownAccount.bankName ? 'drop.unknownAccountAt' : 'drop.unknownAccount', { iban: groupIban(r.unknownAccount.iban), currency: r.unknownAccount.currency, bank: r.unknownAccount.bankName ?? '', owner: r.unknownAccount.owner ?? '' })}</small>
               {adding || there ? <AddAccount r={r} session={session} onCancel={() => setAdding(false)} /> : (
@@ -684,8 +686,8 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
     <>
       <div className={`droprow s-taken${shown ? ' open' : ''}`} data-testid="drop-row" data-file={r.name} data-state={x.kind}>
         <div className="dn"><b className="mono">{r.name}</b><small>{r.report ? `${t(`drop.report.${r.report.kind}`, { provider: r.report.name })} · ${reportLine(r.report)}` : r.statement ? [r.read && t(`drop.read.by.${r.read.by}`), r.facts?.from && r.facts.to && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to)}`, keptPdf ? t('drop.kept') : t('drop.entries', { n: r.statement.refs.length })].filter(Boolean).join(' · ') : receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}{r.twin?.relation === 'companion' ? ` · ${t('drop.twin.companion', { name: r.twin.name })}` : r.document ? ` · ${t(`drop.doc.${r.document}` as 'drop.doc.newsletter')}` : ''}</small>
-          {r.payouts ? <small data-testid="drop-payouts" data-waits={r.payouts.waits ?? ''}>{payoutsBookedText(r.payouts, r.payouts.provider)}</small> : null}
-          {r.payouts?.waits ? <button type="button" className="linkbtn dfold" data-testid="drop-payouts-switch-on" onClick={() => go(BOOKING_SWITCH_ON)}>{t('marks.goSwitchOn')}</button> : null}</div>
+          {r.payouts?.waits ? <small data-testid="drop-payouts" data-waits="switchOn"><BookingWaits files={r.payouts.files} go={go} onOn={refresh} /></small>
+            : r.payouts ? <small data-testid="drop-payouts" data-waits="">{payoutsBookedText(r.payouts, r.payouts.provider)}</small> : null}</div>
         <div className="dgo">
           <span className={`dchip p-${x.kind}`}>{x.kind === 'working' ? (x.step ?? t('drop.p.working')) : t(`drop.p.${x.kind}` as 'drop.p.read')}</span>
           {x.kind === 'unread' ? (
@@ -753,6 +755,12 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   const receiptOf = (r: DropRow) => books.receipts.find((y) => y.id === receiptIdOf(r, view));
   const landed = s.open && s.session ? landedPeriod(s.session.rows, datesIn(books, receiptOf), period, localToday(), filing().length) : undefined;
   useEffect(() => { if (landed) onLanded(landed); }, [landed?.token]);
+  // «Buchen» switched on, here or elsewhere (#413): the reports that waited for it are taken now.
+  const bookingOn = !!view && !bookingWaitsOf(view);
+  useEffect(() => {
+    if (!bookingOn || !s.session) return;
+    for (const r of s.session.rows) if (r.reason === 'booking-waits') void act(s.session, r, { kind: 'take' });
+  }, [bookingOn]);
   if (!s.open) { finishing = undefined; return <Lost />; }
   const rows = s.session?.rows ?? [];
   const tabs: DropTab[] = ['all', 'statements', 'receipts', ...(rows.some((r) => tabOf(r) === 'unclear') ? ['unclear' as const] : []), 'out'];
@@ -766,6 +774,8 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   const pct = dropProgress([...taken.map((r, i) => doneOf(r, states[i], view)), ...Array<number>(coming).fill(0)]);
   // Every row in one group of the closing lines, by the state its own row shows (#384).
   const stateOf = new Map(taken.map((r, i) => [r, states[i]]));
+  // A row of a report says it in its own line; the dialog says it for the payments the drop brought or left open.
+  const waitsHere = !!bookingWaitsOf(view) && !rows.some((r) => r.reason === 'booking-waits') && taken.length > 0 && unbookedPayments(books, accounts ?? []).length > 0;
   const sum = !working && rows.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? [], undefined, outlayWaitsNow()), questions, (r) => closingGroupOf(r, stateOf.get(r))) : undefined;
   // Only files the books hold already (#341): the window says that nothing new came in.
   const nothingNew = !working && !taken.length && rows.length > 0 && rows.every((r) => (r.state === 'duplicate' && r.reason !== 'possible-duplicate' && r.reason !== 'provider-export') || !!r.readAs);
@@ -794,6 +804,8 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
           </div>
         ) : null}
         {nothingNew ? <div className="dsum" data-testid="drop-nothing-new"><p>{t('drop.sum.nothing')}</p></div> : null}
+        {/* «Buchen» waits for «Einschalten» (#413): what the drop took is read and linked, not booked; said once, with the button. */}
+        {sum && waitsHere ? <div className="dsum" data-testid="drop-booking-waits-sum"><p><BookingWaits go={(route) => go(route)} onOn={refresh} /></p></div> : null}
         {sum && !nothingNew ? <Summary sum={sum} rows={taken} books={books} receiptOf={receiptOf} feeBillsOf={[...new Set(states.flatMap((x) => (x.kind === 'feeBill' && x.provider ? [x.provider] : [])))].join(', ')} go={(loc) => { closeDrop(); onGo(loc); }} /> : null}
         <div className="wftabs" role="tablist">
           {tabs.map((x) => {

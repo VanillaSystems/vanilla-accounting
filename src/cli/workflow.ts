@@ -4,7 +4,8 @@
  * npm run workflow -- <id> --runs                   list the stored runs
  *
  * With the app's server up the command goes to its engine, so runs never have two writers; without
- * it, an engine runs here, holding the workspace's lock for each step that writes.
+ * it, an engine runs here, holding the workspace's lock for each step that writes, and only on a
+ * workspace the app has opened on this computer (its switch-on record): only the app takes the baseline.
  */
 import 'dotenv/config';
 import { loadBooks, periodLock } from '../books/store.js';
@@ -12,8 +13,8 @@ import { askIfReady } from '../intake/run.js';
 import { lockIntake } from '../intake/pipeline.js';
 import { APP_ROOT, openWorkspace } from '../workspace/workspace.js';
 import { openEngine } from '../workflows/engine.js';
-import { baseline, openSwitch } from '../workflows/switch-on.js';
-import { loadWorkflows } from '../workflows/load.js';
+import { openSwitch } from '../workflows/switch-on.js';
+import { switchOnSeen } from '../workflows/booking-waits.js';
 import { summaryOf, type AutomationCommand, type CommandResult, type Run } from '../workflows/model.js';
 import { listRuns, runsDir } from '../workflows/store.js';
 
@@ -53,9 +54,13 @@ if (arg === '--runs') {
     for (const c of commands) console.log(JSON.stringify(await remote(c)));
     console.log(`Sent to the app's engine (${API}); see Automatisierung.`);
   } else {
+    // Only the app takes a workspace's first baseline (#413): without a switch-on record on this computer nothing runs here.
+    if (!switchOnSeen(ws)) {
+      console.error('⛔ Nothing run: the app has not opened this workspace on this computer yet, so no rule of it is switched on. Open it in the app once (Automatisierung › Buchen shows what is switched on), then run this again.');
+      process.exit(1);
+    }
     const sw = openSwitch(ws);
-    baseline(ws, loadWorkflows(APP_ROOT, ws.paths.root).workflows);
-    const engine = openEngine(() => ws, { appRoot: APP_ROOT, ask: askIfReady, lock: () => lockIntake(ws), isApproved: sw.isApproved });
+    const engine = openEngine(() => ws, { appRoot: APP_ROOT, ask: askIfReady, lock: () => lockIntake(ws), isApproved: sw.isApproved, pending: sw.pending, approve: sw.approve });
     const started: string[] = [];
     for (const c of commands) {
       const result = await engine.command(c);

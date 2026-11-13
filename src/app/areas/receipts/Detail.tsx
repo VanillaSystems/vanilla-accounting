@@ -12,6 +12,7 @@ import { EvidenceFix, evidenceText } from '../journal/Detail.js';
 import { journalOf } from '../journal/model.js';
 import type { BankTransaction, InboxFile, JournalEntry, Receipt } from '../../../types/index.js';
 import { filingKeyOf, parsePeriod, parseSwissDate, localToday } from '../../../accounting/periods.js';
+import { VAT_READ_TRIES, vatGivenUp } from '../../../accounting/receipt-due.js';
 import type { RouteOf } from '../../shell/route.js';
 import { periodName } from '../../lib/period-label.js';
 import { sources, api } from '../../lib/api.js';
@@ -176,6 +177,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
             : <button type="button" className="miss" disabled={!edit} data-tip={t('receipts.addAmount')} onClick={() => runAct(props, 'edit')}>{t('receipts.amountMissing')}</button>}
           {vat.length
             ? vat.map((g) => <span key={g.ratePercent} data-tip={t('receipts.factVat', { rate: g.ratePercent, tax: fmt(g.vat) })}>{t('receipts.vatLine', { rate: g.ratePercent, tax: fmt(g.vat) })}</span>)
+            : vatChipOf(r.hasSwissVat, withoutInputTax()) === 'unread' && vatGivenUp(r) ? <span className="nov" data-testid="vat-given-up" data-tip={t('receipts.vatGivenUpTip', { tries: VAT_READ_TRIES })}>{t('receipts.vatGivenUp', { tries: VAT_READ_TRIES })}</span>
             : vatChipOf(r.hasSwissVat, withoutInputTax()) === 'unread' ? <span className="nov" data-tip={t('receipts.vatUnreadTip')}>{t('receipts.vatUnread')}</span>
             : vatChipOf(r.hasSwissVat, withoutInputTax()) === 'none' ? <span className="nov" data-tip={t('receipts.noVatTip')}>{t('receipts.noVat')}</span>
             : null}

@@ -5,4 +5,4 @@ effects: ["runs.start"]
 emits: ["entries", "why"]
 outcomes: {"decided": "book", "undecided": "manual", "held": "done"}
 guide: booking.guide.yaml#classify
-knowledge: ["suppliers/*"]
+knowledge: ["suppliers/*", "customers/*", "authorities/*", "rules/evidence.guide.yaml"]

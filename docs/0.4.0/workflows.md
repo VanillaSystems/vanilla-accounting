@@ -205,9 +205,35 @@ or fee account, src/server/provider-payouts.ts `asHerAct`): the workflow's appro
 it, in the same write, and the payouts it decides are booked at once, in code through the write door
 (`bookPayouts`). A workflow that waited already (a change from elsewhere) keeps waiting: then nothing
 is booked, and the drop row and Aufgaben say that «Buchen» waits for «Einschalten». The same file
-changed by hand, by the AI's draft before it is kept, or by git still waits. «Einschalten» of the
-booking books the provider payouts code decides then (`bookWhatWaited`), in code, without a model,
-and the toast says how many; nothing else is started.
+changed by hand, by the AI's draft before it is kept, or by git still waits. A merchant name the
+app's code learns from confirmed links (src/knowledge/learned-names.ts) is no such change: the
+inbox run and her link keep the approved state as it was.
+
+The approval of `booking` holds for every booking by the firm's rules or the model, wherever it
+starts (#413, src/server/booking-waits.ts): while `booking` waits, the inbox run's book step
+(`intake.book`, through the engine's `waits`) books nothing and notes `bookingWaits` with the files,
+after reading, the VAT facts and matching have run; a provider's report in the drop waits in its row
+(`booking-waits`); «Automatisch buchen» for all (`POST /api/rules/book-open`), «Neu buchen» (409
+`bookingWaits`), a rule question a rule now decides, and a rule kept with «Behalten» while another
+change waits book nothing, nor does `npm run classify` (exit 1 with the sentence;
+src/workflows/booking-waits.ts serves the CLI and the server). Only the app takes a workspace's
+first baseline: `npm run classify` on a workspace without a switch-on record on this computer
+books nothing and says to open it in the app once. Not held: what a person books or
+takes herself (by hand, «Übernehmen» on a question's proposal, a sale question's answer), an app
+invoice's own events, the year close. `booking`'s company part is every knowledge file the
+classifier executes rules from: its guide, the suppliers', customers' and authorities' files and
+evidence.guide.yaml (workflows/booking/classify/step.yaml `knowledge`). An approval records what it
+covered (`cited`). A record that covers less than the workflow cites now (written before an update
+widened the citations) is migrated once, at the first check that meets it: the files under the
+newly cited paths that exist then are taken as switched on, `cited` is written, and every file
+written or changed under them afterwards waits like any other. Every place says it in one sentence
+(src/app/lib/booking-waits.ts) with «Einschalten» at hand (src/app/automation/booking-waits.tsx).
+«Einschalten» of the booking books what waited (`bookWhatWaited`): the reports a closed drop kept
+for it (data/reports-waiting/, never quarantine; one that still asks goes to quarantine as an
+unanswered row does), the provider payouts code decides, in code, said in the toast, and, when
+payments are open, an inbox run that books them; a drop row of a report that waited is taken again.
+A kept report is also taken by the next drop or inbox run that finds the booking no longer waiting
+(the change taken back), and Automatisierung › Buchen names it while it waits (`reportsWaiting`).
 
 Where runs are stored (Git, beside the books, or a local store outside the workspace) is open:
 [decisions.md](decisions.md), D3.
