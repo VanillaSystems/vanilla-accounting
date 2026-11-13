@@ -185,6 +185,7 @@ export const messages = {
   'error.booksChanged': 'Die Bücher wurden gerade von einem anderen Programm geändert, nichts gespeichert. Bitte noch einmal versuchen.',
   'error.manualOnly': 'Nur manuelle Transaktionen können gelöscht werden. Banktransaktionen stammen aus dem Kontoauszug (camt053/Wise).',
   'error.decidedByHand': 'Eine Zeile dieser Zahlung hat eine Person so gebucht: die App bucht sie nicht um. Ändern unter Buchungen.',
+  'error.undoGone': 'Diese Umbuchung lässt sich nicht mehr zurücknehmen: die Buchungen unter Buchungen von Hand ändern.',
   'error.changedSince': 'Die Buchung hat sich seither geändert: nichts zurückgenommen.',
   'error.notByReceipt': 'Die Buchung lässt sich nicht nach den MWST-Gruppen ihres Belegs buchen: sie passt schon dazu, oder die Gruppen ergeben nicht den Betrag der Zahlung.',
   'error.hasEntries': 'Die Zahlung ist gebucht: zuerst ihre Buchung in Buchungen löschen.',

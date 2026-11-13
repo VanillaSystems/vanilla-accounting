@@ -43,6 +43,7 @@ export type ApiRefusal =
   | { code: 'notByReceipt' }
   | { code: 'decidedByHand' }
   | { code: 'changedSince' }
+  | { code: 'undoGone' }
   | { code: 'ownInvoiceTaken' }
   /** Änderungen › «Rückgängig» of a deletion while the payment has bookings it did not have then (src/server/edits.ts restoreSaved): how many stand, and whether a person or the app booked them. */
   | { code: 'bookedSince'; params: { payment: string; entries: number; by: 'person' | 'app' } }

@@ -100,3 +100,32 @@ test('S2: a group at a rate no domestic rate is (a foreign VAT) leaves the recei
   const foreign = bill(100, [{ ratePercent: 19, gross: 50, vat: 7.98 }]);
   assert.deepEqual(checks([line('a', 'T', 100, 'I81')], [foreign])[0], { kind: 'vatWithoutReceipt', code: 'I0' }, 'only a foreign rate: no input tax, as before');
 });
+
+// ─── #406 second review ───────────────────────────────────────────────────────
+
+test('a receipt whose only group read is at 0 % proves no input tax: the rate code is zeroed per line, as before', () => {
+  const zeroOnly = bill(100, [{ ratePercent: 0, net: 20, vat: 0 }]);
+  assert.deepEqual(checks([line('a', 'T', 100, 'I81')], [zeroOnly])[0], { kind: 'vatWithoutReceipt', code: 'I0' });
+  const none = bill(30, [], { id: 'n', hasSwissVat: false });
+  assert.deepEqual(checks([line('a', 'T', 130, 'I81')], [none, { ...zeroOnly, amount: 100 }])[0], { kind: 'vatWithoutReceipt', code: 'I0' }, 'with a receipt without VAT beside it');
+});
+
+test('a hand booking from before `by` was recorded counts as the person\'s: decided', () => {
+  const c = checks([line('a', 'T', 80, 'I81'), line('b', 'T', 20, 'I81', { by: undefined, origin: 'manual' })], [twoGroups])[0];
+  assert.equal(c?.decided, true);
+});
+
+test('lines of different days get no click', () => {
+  const c = checks([line('a', 'T', 80, 'I81'), line('b', 'T', 20, 'I81', { date: '2026-08-25' })], [twoGroups])[0];
+  assert.equal(c?.kind, 'receiptGroups');
+  assert.equal((c as { lines?: unknown }).lines, undefined);
+});
+
+test('a line of a closed period is no mate and leaves the finding without a click', () => {
+  const lines = [line('a', 'T', 50, 'I0'), line('b', 'T', 50, 'I81', { date: '2026-06-20' })];
+  const c = lines.map((e) => evidenceCheck(e, [twoGroups], '2026-06-30', undefined, lines));
+  assert.equal(c[1], undefined, 'the filed line itself is never checked');
+  assert.equal(c[0]?.kind, 'receiptGroups');
+  assert.deepEqual((c[0] as { entries: string[] }).entries, ['a']);
+  assert.equal((c[0] as { lines?: unknown }).lines, undefined);
+});

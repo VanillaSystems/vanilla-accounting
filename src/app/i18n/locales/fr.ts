@@ -188,6 +188,7 @@ export default {
     'error.booksChanged': 'Les livres viennent d’être modifiés par un autre programme, rien n’a été enregistré. Veuillez réessayer.',
     'error.manualOnly': 'Seules les transactions manuelles peuvent être supprimées. Les transactions bancaires proviennent de l’extrait de compte (camt053/Wise).',
     'error.decidedByHand': 'Une ligne de ce paiement a été comptabilisée ainsi par une personne : l’app ne la recomptabilise pas. Modifier sous Écritures.',
+    'error.undoGone': 'Cette recomptabilisation ne peut plus être annulée : modifier les écritures à la main sous Écritures.',
     'error.changedSince': 'L’écriture a changé depuis : rien n’a été annulé.',
     'error.notByReceipt': 'L’écriture ne peut pas être comptabilisée selon les groupes de TVA de son justificatif : elle y correspond déjà, ou les groupes ne donnent pas le montant du paiement.',
     'error.hasEntries': 'Le paiement est comptabilisé : supprimer d’abord son écriture dans Écritures.',

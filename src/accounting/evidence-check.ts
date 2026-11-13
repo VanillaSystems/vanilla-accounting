@@ -128,15 +128,15 @@ function groupLines(groups: Map<number, number>, booked: number, sign: string, f
   return lines;
 }
 
-/** Lines one click may book anew by the groups: on the same accounts, of one code family, with the same tags; never across accounts or families (#406 review). */
+/** Lines one click may book anew by the groups: of one day, on the same accounts, of one code family, with the same tags; never across them (#406 review). */
 function oneKind(mates: readonly JournalEntry[]): boolean {
-  const key = (l: JournalEntry) => JSON.stringify([l.accountDebit, l.accountCredit, PURCHASE.exec(l.vatCode ?? '')?.[2], Object.entries(l.tags ?? {}).sort()]);
+  const key = (l: JournalEntry) => JSON.stringify([l.date, l.accountDebit, l.accountCredit, PURCHASE.exec(l.vatCode ?? '')?.[2], Object.entries(l.tags ?? {}).sort()]);
   return mates.every((l) => key(l) === key(mates[0]));
 }
 
-/** A line a person, or the AI sidebar on her wish, decided with these receipts before her (r8h-22). */
+/** A line a person, or the AI sidebar on her wish, decided with these receipts before her (r8h-22); a hand booking from before `by` was recorded counts as hers. */
 const decidedBy = (l: JournalEntry, receipts: readonly Receipt[]): boolean =>
-  (l.by?.kind === 'person' || l.by?.kind === 'assistant') && (!l.receipts || receipts.every((r) => l.receipts!.includes(r.id)));
+  (l.by?.kind === 'person' || l.by?.kind === 'assistant' || (!l.by && l.origin === 'manual')) && (!l.receipts || receipts.every((r) => l.receipts!.includes(r.id)));
 
 /**
  * A receipt of several groups against the lines of the payment on it (#406): the booking fits when
@@ -144,11 +144,12 @@ const decidedBy = (l: JournalEntry, receipts: readonly Receipt[]): boolean =>
  * carries the finding, which names the amount the receipt shows at another rate. The rest of a
  * total beyond its groups only excuses lines at the zero code: while there is one, no rate line is
  * judged and no rebooking is offered. The rebooking (`lines`) also needs the lines to be of one
- * kind (oneKind); a line a person decided makes the finding `decided`. Undefined when the booking
- * fits; `null` when the receipt cannot be compared so (one group, or not read): the check per line
- * then decides.
+ * kind (oneKind) and none of the payment's lines on these receipts in a closed period (no mate,
+ * and no click); a line a person decided makes the finding `decided`. Undefined when the booking
+ * fits; `null` when the receipt cannot be compared so (one group, no group at a rate, or not read):
+ * the check per line then decides, as before.
  */
-function groupCheck(e: JournalEntry, own: readonly Receipt[], receipts: readonly Receipt[], lines: readonly JournalEntry[], sign: string, family: string): EvidenceCheck | undefined | null {
+function groupCheck(e: JournalEntry, own: readonly Receipt[], receipts: readonly Receipt[], lines: readonly JournalEntry[], sign: string, family: string, closedThrough: string | undefined): EvidenceCheck | undefined | null {
   const currency = e.exchangeCurrency ?? baseCurrency();
   const read = receiptGroups(own, currency);
   if (!read) return null;
@@ -156,13 +157,17 @@ function groupCheck(e: JournalEntry, own: readonly Receipt[], receipts: readonly
   const open = rest > TOLERANCE;
   const named = [...groups.values()].filter((g) => g > TOLERANCE).length;
   if (named < 2 && !(named === 1 && open)) return null;
+  // Without a group at a rate read, the receipt proves no input tax: the per-line check zeroes a rate code, as before (#406 review).
+  if (![...groups].some(([rate, gross]) => rate > 0 && gross > TOLERANCE)) return null;
   const same = (l: JournalEntry) => {
     const m = PURCHASE.exec(l.vatCode ?? '');
     const theirs = lineReceipts(l, receipts);
     return !!m && m[1] === sign && !l.corrects && !!vat().codes.parse(l.vatCode!) && (l.exchangeCurrency ?? baseCurrency()) === currency
       && theirs.length === own.length && theirs.every((r) => own.includes(r));
   };
-  const mates = [e, ...lines.filter((l) => l.id !== e.id)].filter(same).sort((a, b) => lines.indexOf(a) - lines.indexOf(b));
+  const closed = (l: JournalEntry) => !!closedThrough && l.date <= closedThrough;
+  const filed = lines.some((l) => l.id !== e.id && closed(l) && same(l));
+  const mates = [e, ...lines.filter((l) => l.id !== e.id && !closed(l))].filter(same).sort((a, b) => lines.indexOf(a) - lines.indexOf(b));
   const booked = bookedGroups(mates);
   const over = (rate: number) => (rate === 0
     ? (booked.get(0) ?? 0) > (groups.get(0) ?? 0) + rest + TOLERANCE
@@ -173,7 +178,7 @@ function groupCheck(e: JournalEntry, own: readonly Receipt[], receipts: readonly
   const short = [...groups].map(([rate, gross]) => ({ rate, amount: cents(gross - (booked.get(rate) ?? 0)) })).filter((s) => s.amount > TOLERANCE).sort((a, b) => b.amount - a.amount)[0];
   if (!short) return undefined;
   const total = mates.reduce((s, l) => s + Math.abs(l.amount), 0);
-  const proposal = !open && oneKind(mates) ? groupLines(groups, total, sign, family) : undefined;
+  const proposal = !open && !filed && oneKind(mates) ? groupLines(groups, total, sign, family) : undefined;
   const decided = mates.some((l) => decidedBy(l, receipts)) ? { decided: true as const } : {};
   return { kind: 'receiptGroups', rate: short.rate, amount: short.amount, currency, ...(proposal && { lines: proposal }), entries: mates.map((l) => l.id), receipts: receipts.map((r) => r.id), ...decided };
 }
@@ -204,7 +209,7 @@ export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], close
   const onImportVat = !!importVat && (e.accountDebit === importVat || e.accountCredit === importVat);
   // A minus rate code lowers the input tax: it claims nothing a receipt must show.
   if (!onImportVat && (info.rate === 0 ? shown !== undefined : !sign)) {
-    const grouped = groupCheck(e, own, receipts, lines, sign, family);
+    const grouped = groupCheck(e, own, receipts, lines, sign, family, closedThrough);
     if (grouped !== null) return grouped && { ...grouped, ...decided };
   }
   if (info.rate === 0) {

@@ -658,7 +658,9 @@ export function bookByReceipt(books: Books, id: string): { before: JournalEntry[
   if (check?.kind === 'receiptGroups' && check.decided) throw new RequestError(409, 'Eine Zeile dieser Zahlung hat eine Person so gebucht: die App bucht sie nicht um. Ändern unter Buchungen.', { code: 'decidedByHand' });
   if (check?.kind !== 'receiptGroups' || !check.lines) throw new RequestError(409, 'Die Buchung lässt sich nicht nach den Steuersätzen ihres Belegs buchen.', { code: 'notByReceipt' });
   const mates = check.entries.map((x) => entryOf(books, x));
-  const was = new Map(mates.map((m) => [m.id, { ...m }]));
+  // A line it may remove is open too: the removal below writes past setEntry's own check.
+  assertOpen(books, mates.map((m) => m.date), 'editEntry');
+  const was = new Map(mates.map((m) => [m.id, structuredClone(m)]));
   const touched = new Set<string>();
   const sign = Math.sign(e.amount) || 1;
   const free = [...check.lines];
@@ -688,14 +690,18 @@ export function bookByReceipt(books: Books, id: string): { before: JournalEntry[
     return { ...template, id: randomBytes(8).toString('hex'), amount: sign * l.amount, vatCode: l.code, receipts: check.receipts, origin: 'manual', by: { kind: 'person', at } };
   });
   books.journalEntries.push(...made);
-  const after = books.journalEntries.filter((x) => touched.has(x.id) || made.includes(x)).map((x) => ({ ...x }));
+  const after = books.journalEntries.filter((x) => touched.has(x.id) || made.includes(x)).map((x) => structuredClone(x));
   return { before: [...touched].map((x) => was.get(x)!), after };
 }
 
+/** A value in one form whatever the order of its keys, nested objects included. */
+const canonical = (v: unknown): string => JSON.stringify(v, (_k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => a.localeCompare(b))) : x));
+
 /**
- * The undo of «Nach Beleg buchen» (#406 review): in one write, the lines it changed or made
- * (`after`, as it returned them) go and the lines as they were (`before`) come back with their ids.
- * Refused when a line changed since (`changedSince`): the person's later change stands.
+ * The undo of «Nach Beleg buchen» (#406 review): in one write, the lines the click changed or made
+ * (`after`, as the server recorded them at the click) go and the lines as they were (`before`, the
+ * server's record too, never the request's) come back with their ids. Refused when a line changed
+ * since (`changedSince`): the person's later change stands.
  */
 export function undoByReceipt(books: Books, before: readonly JournalEntry[], after: readonly JournalEntry[]): void {
   const ref = after[0]?.transactionRef ?? before[0]?.transactionRef;
@@ -703,7 +709,7 @@ export function undoByReceipt(books: Books, before: readonly JournalEntry[], aft
   assertOpen(books, [...before, ...after].map((x) => x.date), 'editEntry');
   const now = new Map(books.journalEntries.map((x) => [x.id, x]));
   const afterIds = new Set(after.map((x) => x.id));
-  const key = (x: JournalEntry | undefined) => (x ? JSON.stringify(Object.entries(x).sort(([a], [b]) => a.localeCompare(b))) : '');
+  const key = (x: JournalEntry | undefined) => (x ? canonical(x) : '');
   const changed = after.some((x) => key(now.get(x.id)) !== key(x))
     || before.some((x) => !afterIds.has(x.id) && now.has(x.id));
   if (changed) throw new RequestError(409, 'Die Buchung hat sich seither geändert: nichts zurückgenommen.', { code: 'changedSince' });

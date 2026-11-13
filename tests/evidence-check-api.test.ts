@@ -99,7 +99,7 @@ test('S4: the undo puts the lines back in one write; refused when a line changed
   const done = await api.send('POST', '/api/journal-entries/jo/by-receipt');
   assert.equal(done.status, 200, String(done.json.error));
   assert.equal(lines().length, 2);
-  const undo = await api.send('POST', '/api/journal-entries/by-receipt/undo', { before: done.json.before, after: done.json.after });
+  const undo = await api.send('POST', '/api/journal-entries/by-receipt/undo', { undo: done.json.undo });
   assert.equal(undo.status, 200, String(undo.json.error));
   assert.deepEqual(lines(), [['jo', 20, 'I81', undefined]]);
 
@@ -107,8 +107,23 @@ test('S4: the undo puts the lines back in one write; refused when a line changed
   assert.equal(again.status, 200);
   const made = (again.json.after as Array<{ id: string }>).find((x) => x.id !== 'jo')!;
   assert.equal((await api.send('PATCH', `/api/journal-entries/${made.id}`, { description: 'von Hand geändert' })).status, 200);
-  const late = await api.send('POST', '/api/journal-entries/by-receipt/undo', { before: again.json.before, after: again.json.after });
+  const late = await api.send('POST', '/api/journal-entries/by-receipt/undo', { undo: again.json.undo });
   assert.equal(late.status, 409);
   assert.equal(late.json.code, 'changedSince');
   assert.equal(lines().length, 2, 'her change stands');
+});
+
+test('the undo takes only the id the click returned: lines in the body are ignored, a crafted or spent id refused (#406 review)', async () => {
+  twoGroups([{ id: 'jo', amount: 20, vatCode: 'I81' }]);
+  const crafted = { before: [{ id: 'jo', transactionRef: 'O1', date: '2026-99-99', accountDebit: '6500', accountCredit: '1021', amount: 'abc', corrects: 'banana', receipts: ['nope'] }], after: [] };
+  const refused = await api.send('POST', '/api/journal-entries/by-receipt/undo', crafted);
+  assert.equal(refused.status, 410);
+  assert.equal(refused.json.code, 'undoGone');
+  assert.deepEqual(lines(), [['jo', 20, 'I81', undefined]], 'nothing written');
+  const done = await api.send('POST', '/api/journal-entries/jo/by-receipt');
+  assert.equal(done.status, 200);
+  assert.equal((await api.send('POST', '/api/journal-entries/by-receipt/undo', { undo: 'f'.repeat(16), ...crafted })).status, 410, 'an id the server never gave');
+  assert.equal((await api.send('POST', '/api/journal-entries/by-receipt/undo', { undo: done.json.undo, ...crafted })).status, 200, 'the honest undo, whatever else the body says');
+  assert.deepEqual(lines(), [['jo', 20, 'I81', undefined]]);
+  assert.equal((await api.send('POST', '/api/journal-entries/by-receipt/undo', { undo: done.json.undo })).status, 410, 'spent');
 });

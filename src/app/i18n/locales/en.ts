@@ -188,6 +188,7 @@ export default {
     'error.booksChanged': 'Another program has just changed the books, nothing was saved. Please try again.',
     'error.manualOnly': 'Only manual transactions can be deleted. Bank transactions come from the bank statement (camt053/Wise).',
     'error.decidedByHand': 'A person booked a line of this payment so: the app does not rebook it. Change it under Entries.',
+    'error.undoGone': 'This rebooking can no longer be taken back: change the entries by hand under Entries.',
     'error.changedSince': 'The entry changed since: nothing was taken back.',
     'error.notByReceipt': 'The entry cannot be booked by its receipt’s VAT groups: it fits them already, or the groups do not add up to the payment.',
     'error.hasEntries': 'The payment is booked: delete its entry in Journal first.',

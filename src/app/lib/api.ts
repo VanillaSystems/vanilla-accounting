@@ -154,6 +154,7 @@ export function errorText(e: unknown): string {
     case 'notByReceipt': return t('error.notByReceipt');
     case 'decidedByHand': return t('error.decidedByHand');
     case 'changedSince': return t('error.changedSince');
+    case 'undoGone': return t('error.undoGone');
     case 'ownInvoiceTaken': return t('error.ownInvoiceTaken');
     case 'bookedSince': return t('error.bookedSince', { payment: b.params.payment, n: b.params.entries, by: t(`error.bookedSince.${b.params.by}`) });
     case 'receiptPaid': return t('error.receiptPaid', { payment: b.params.payment });
@@ -415,9 +416,9 @@ export const api = {
     request<{ entry: JournalEntry }>('POST', '/api/journal-entries', input).then((r) => r.entry),
   deleteJournalEntry: (id: string) => request<Ok>('DELETE', `/api/journal-entries/${encodeURIComponent(id)}`),
   /** «Nach Beleg buchen» on a receipt of several VAT groups (#406): the payment's lines as they were, and their ids now. */
-  bookByReceipt: (id: string) => request<{ before: JournalEntry[]; after: JournalEntry[] }>('POST', `/api/journal-entries/${encodeURIComponent(id)}/by-receipt`),
-  /** Its undo, in one write: refused when a line changed since. */
-  undoByReceipt: (before: JournalEntry[], after: JournalEntry[]) => request<Ok>('POST', '/api/journal-entries/by-receipt/undo', { before, after }),
+  bookByReceipt: (id: string) => request<{ undo: string; before: JournalEntry[]; after: JournalEntry[] }>('POST', `/api/journal-entries/${encodeURIComponent(id)}/by-receipt`),
+  /** Its undo by the id the click returned, in one write: refused when a line changed since. */
+  undoByReceipt: (undo: string) => request<Ok>('POST', '/api/journal-entries/by-receipt/undo', { undo }),
   /** Änderungen › «Rückgängig» of a change by hand: the booking as the last save holds it, or gone when booked since. */
   restoreSavedEntry: (id: string) => request<Ok>('POST', `/api/journal-entries/${encodeURIComponent(id)}/as-saved`),
   classifyTransaction: (txRef: string, overwrite = false) =>

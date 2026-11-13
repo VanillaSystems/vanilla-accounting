@@ -188,6 +188,7 @@ export default {
     'error.booksChanged': 'I libri sono appena stati modificati da un altro programma, non è stato salvato nulla. Riprova.',
     'error.manualOnly': 'Si possono eliminare solo le transazioni manuali. Le transazioni bancarie provengono dall’estratto conto (camt053/Wise).',
     'error.decidedByHand': 'Una riga di questo pagamento è stata registrata così da una persona: l’app non la riregistra. Modificare sotto Registrazioni.',
+    'error.undoGone': 'Questa nuova registrazione non si può più annullare: modificare le registrazioni a mano sotto Registrazioni.',
     'error.changedSince': 'La registrazione è cambiata nel frattempo: nulla è stato annullato.',
     'error.notByReceipt': 'La registrazione non può essere fatta secondo i gruppi IVA del suo giustificativo: vi corrisponde già, oppure i gruppi non danno l’importo del pagamento.',
     'error.hasEntries': 'Il pagamento è registrato: eliminare prima la sua registrazione in Registrazioni.',

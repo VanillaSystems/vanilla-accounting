@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomBytes } from 'node:crypto';
 import { madeByHand } from '../../workspace/money-accounts.js';
 import { correctionCaseFor, type CorrectionKind } from '../../accounting/correction.js';
 import type { JournalEntry, QuarterKey } from '../../types/index.js';
@@ -162,16 +163,30 @@ router.post('/api/journal-entries/:id/as-saved', async (req, res) => {
 });
 
 /** «Nach Beleg buchen» on a receipt of several VAT groups (#406): the payment's lines on it booked by the groups. */
+/**
+ * What «Nach Beleg buchen» changed, kept here for its «Rückgängig» (#406 review): the lines as they
+ * were and as the click wrote them, by an undo id the click returns. Never lines from the request: the
+ * undo takes only the id. Short-lived: a day, the last UNDO_KEPT clicks, gone with the server.
+ */
+const UNDO_KEPT = 50;
+const UNDO_MS = 24 * 60 * 60 * 1000;
+const byReceiptUndos = new Map<string, { before: JournalEntry[]; after: JournalEntry[]; at: number }>();
+
 router.post('/api/journal-entries/by-receipt/undo', (req, res) => {
-  const { before, after } = (req.body ?? {}) as { before?: unknown; after?: unknown };
-  const entries = (v: unknown): v is JournalEntry[] => Array.isArray(v) && v.every((x) => !!x && typeof x === 'object' && typeof (x as JournalEntry).id === 'string' && typeof (x as JournalEntry).transactionRef === 'string' && typeof (x as JournalEntry).date === 'string');
-  if (!entries(before) || !entries(after) || !after.length) throw new RequestError(400, 'before und after: die Zeilen, wie «Nach Beleg buchen» sie zurückgab.');
-  updateBooks((books) => undoByReceipt(books, before, after));
+  const { undo } = (req.body ?? {}) as { undo?: unknown };
+  const kept = typeof undo === 'string' ? byReceiptUndos.get(undo) : undefined;
+  if (!kept || Date.now() - kept.at > UNDO_MS) throw new RequestError(410, 'Diese Umbuchung lässt sich nicht mehr zurücknehmen.', { code: 'undoGone' });
+  updateBooks((books) => undoByReceipt(books, kept.before, kept.after));
+  byReceiptUndos.delete(undo as string);
   res.json({ ok: true });
 });
 
 router.post('/api/journal-entries/:id/by-receipt', (req, res) => {
-  res.json(updateBooks((books) => bookByReceipt(books, req.params.id)));
+  const done = updateBooks((books) => bookByReceipt(books, req.params.id));
+  const undo = randomBytes(8).toString('hex');
+  byReceiptUndos.set(undo, { ...done, at: Date.now() });
+  for (const [k, v] of byReceiptUndos) if (byReceiptUndos.size > UNDO_KEPT || Date.now() - v.at > UNDO_MS) byReceiptUndos.delete(k);
+  res.json({ undo, ...done });
 });
 
 /** A deletion by hand: the booking goes, and is recorded for Änderungen's «Rückgängig» also when no save held it (r7h-31). */
