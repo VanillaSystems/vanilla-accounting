@@ -325,6 +325,13 @@ Two markers flag an entry you must read before you update:
 - «Noch offen» (#428): the sentence above the list named an open VAT question and an order a sales
   report could not split for every firm, one without a sales report too. It now names only what of
   the list holds up «Freigegeben», with its count, or says that nothing of it does.
+- The owner's repayments (#428): a payment to the owner whose outlays are not booked yet said
+  «wartet auf ihren Beleg». It now says that it waits until the receipts paid privately are booked
+  as outlays (on the payment, in the counts beside the return, the drop's summary and the AI's
+  facts), and its hand form says what ends the wait. «Automatisch buchen» that books nothing says
+  why (its receipt, the outlays, a receipt that cannot be read), and «Automatisch buchen» for all
+  counts these payments as a group of their own. The inbox run that books an outlay of the owner's
+  now books the repayment it covers in the same run: one of three repayments needed a second click.
 - Keeping rules (#396, #392): «Rückgängig» on a second kept rule took back the first rule's bookings
   and the second rule's file. Each keep now has a line of its own above Aufgaben and Firma › Regeln
   («4 Zahlungen gebucht · Rückgängig»), true to its own numbers and still there after a reload; the

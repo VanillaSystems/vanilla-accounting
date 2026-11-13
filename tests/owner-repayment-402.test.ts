@@ -108,7 +108,7 @@ test('a salary\'s account is no precedent for a payment to the same person that 
   const ws = firm(false);
   const books = loadBooks(ws);
   const { start, draft } = draftOf(ws, books, 'S7');
-  assert.equal(start.nature, undefined, 'no outlays on his account: nothing known of the payment');
+  assert.deepEqual(start.nature, { kind: 'ownerWaits', account: '2451', open: 0, owner: 'Lukas Beispiel' }, 'no outlays on his account: the form says what it waits for, and proposes as for any payment (#428)');
   assert.deepEqual(start.wages?.sort(), ['L7', 'L8']);
   assert.equal(draft.precedent, undefined);
   assert.notEqual(draft.lines[0].accountDebit, '5000');

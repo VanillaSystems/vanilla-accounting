@@ -44,7 +44,7 @@ import { bookByRules } from '../../workflows/book-by-rules.js';
 import type { JournalEntry } from '../../types/index.js';
 import { reconciliationOf } from '../../books/reconcile.js';
 import { classifyTransactions, loadClassifyContext } from '../../booking/classify.js';
-import { answerSettles, mustSettle, receiptKnowledge, receiptWaitOf } from '../../booking/receipt-wait.js';
+import { answerSettles, awaitsOutlays, mustSettle, receiptKnowledge, receiptWaitOf } from '../../booking/receipt-wait.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { recordDeletion } from '../../saving/changes.js';
 import { existsSync, readFileSync } from 'node:fs';
@@ -460,7 +460,7 @@ router.post('/api/rules/book-open', async (_req, res) => {
   const fx = loadFxResolver();
   const known = receiptKnowledge(loadKnowledge(APP_ROOT, WS.paths.root), WS);
   const open = new Map(engine().runs().filter((r) => r.mode === 'live' && r.item.kind === 'transaction' && r.state.status !== 'done' && r.state.status !== 'discarded').map((r) => [r.item.id, r]));
-  const n: BookOpen = { booked: 0, running: 0, notBooked: 0, model: 0, receipt: 0, deleted: 0, question: 0, unread: 0, reconcile: 0, busy: 0, later: 0, max: KEEP_RUNS_MAX };
+  const n: BookOpen = { booked: 0, running: 0, notBooked: 0, model: 0, receipt: 0, outlays: 0, deleted: 0, question: 0, unread: 0, reconcile: 0, busy: 0, later: 0, max: KEEP_RUNS_MAX };
   const candidates = books.transactions.filter((t) => t.amount !== 0 && !lock.isClosed(t.date) && bookedState(books, t.ref, WS.bankAccounts) !== 'booked');
   // Code and the rules, without a model, over all of them at once: what they decide is what may be booked.
   const scratch = structuredClone(books);
@@ -478,6 +478,8 @@ router.post('/api/rules/book-open', async (_req, res) => {
     if (reconciliationOf(books, t.ref)) { n.reconcile++; continue; }
     const wait = receiptWaitOf(books, t, context, known, fx);
     if (wait.wait && wait.unread) { n.unread++; continue; }
+    // A payment to the owner waits for the outlays it pays back (#428): what ends it is her receipts booked as outlays.
+    if (wait.wait && awaitsOutlays(t, context)) { n.outlays++; continue; }
     const entries = decidedBy.get(t.ref);
     if (!entries?.length) { n.model++; continue; }
     if (mustSettle(wait) && !answerSettles(t, entries, context)) { n.receipt++; continue; }

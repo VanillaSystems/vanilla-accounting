@@ -21,12 +21,13 @@ import { bookedStates } from '../../../accounting/payment-entries.js';
 import { waitingForReceipt, type WaitingPayment } from '../../../accounting/receipt-due.js';
 import { localToday, type IsoDate } from '../../../accounting/periods.js';
 import type { HeldOrder, MissingBill, ProviderIssues } from '../../../booking/provider-issues.js';
+import { repaysOwnerShape } from '../../../booking/owner-outlays.js';
 
 export type PeriodIssue =
   | { kind: 'question'; q: Question; date: string }
   | { kind: 'evidence'; entry: JournalEntry; check: EvidenceCheck }
-  /** `waitsForReceipt`: the app holds it until its receipt comes or can be read (receiptWaits). */
-  | { kind: 'unbooked'; tx: BankTransaction; waitsForReceipt?: true }
+  /** `waitsForReceipt`: the app holds it until its receipt comes or can be read (receiptWaits); `waitsForOutlays`: a payment to the owner held until the outlays it pays back are booked (#428). */
+  | { kind: 'unbooked'; tx: BankTransaction; waitsForReceipt?: true; waitsForOutlays?: true }
   | { kind: 'unlinked'; receipt: Receipt }
   /** A receipt that waits for the person's own word (#398): its date, its amount, its reading, or whether it is a copy (`copyOf`). */
   | { kind: 'own'; receipt: Receipt; name: string; lacks: Lack[]; day: string; copyOf?: string }
@@ -64,17 +65,21 @@ export function dateOn(books: Pick<Index, 'transactions' | 'receipts' | 'journal
 /**
  * The open issues of the days `from`–`to`, in the order a person works them off: questions, held orders, contradicting codes,
  * unbooked payments, receipts that wait for her word, receipts without a payment, missing bills of a provider. `provider`:
- * what the providers' reports leave open (#405).
+ * what the providers' reports leave open (#405). `owner`: the owner's name (company.owner), which tells a payment to her that
+ * waits for her outlays from one that waits for its receipt (#428).
  */
-export function periodIssues(books: Index, questions: readonly Question[], from: string, to: string, accounts: readonly LedgerBankAccount[], orderPages: ReadonlyMap<string, OrderPage> = new Map(), today: IsoDate = localToday(), processing: ReadonlyMap<string, Processing> = new Map(), provider?: ProviderIssues): PeriodIssue[] {
+export function periodIssues(books: Index, questions: readonly Question[], from: string, to: string, accounts: readonly LedgerBankAccount[], orderPages: ReadonlyMap<string, OrderPage> = new Map(), today: IsoDate = localToday(), processing: ReadonlyMap<string, Processing> = new Map(), provider?: ProviderIssues, owner?: string): PeriodIssue[] {
   const within = (d: string | undefined): d is string => !!d && d >= from && d <= to;
   const asked = questions.flatMap((q): PeriodIssue[] => {
     const date = q.status === 'open' ? dateOn(books, q) : undefined;
     return within(date) ? [{ kind: 'question', q, date }] : [];
   });
   const evidence = journalOf(books).views.flatMap((v): PeriodIssue[] => (v.evidence && within(v.e.date) ? [{ kind: 'evidence', entry: v.e, check: v.evidence }] : []));
-  const held = receiptWaits(books, accounts, today);
-  const unbooked = unbookedPayments(books, accounts).filter((t) => within(t.date)).map((tx): PeriodIssue => ({ kind: 'unbooked', tx, ...(held.has(tx.ref) ? { waitsForReceipt: true as const } : {}) }));
+  const waits = new Map(receiptWaiting(books, accounts, today, owner).map((w) => [w.tx.ref, w]));
+  const unbooked = unbookedPayments(books, accounts).filter((t) => within(t.date)).map((tx): PeriodIssue => {
+    const w = waits.get(tx.ref);
+    return { kind: 'unbooked', tx, ...(w ? (w.outlays ? { waitsForOutlays: true as const } : { waitsForReceipt: true as const }) : {}) };
+  });
   const l = ledgerOf(books, from, processing, orderPages);
   // The receipts that wait for her own word (#398), placed as Belege places them (an undated one in the working period), each named
   // once: not again among those without a payment. A receipt a run still reads is not hers yet (needsYou, `processing`).
@@ -94,16 +99,22 @@ export function periodIssues(books: Index, questions: readonly Question[], from:
  * The payments the app does not book because their receipt is not there or cannot be read
  * (src/accounting/receipt-due.ts `waitingForReceipt`, issue #29, #57), by ref: the one answer to
  * «wartet auf ihren Beleg» for the drop's summary, the return's page, Automatisierung and Aufgaben.
- * It holds the ones whose return is near too (then a task of the person's on Aufgaben).
+ * It holds the ones whose return is near too (then a task of the person's on Aufgaben). Given the
+ * owner's name, not the payments to her that wait for her outlays (#428): no receipt of theirs is missing.
  */
-export function receiptWaits(books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts' | 'config'>, accounts: readonly LedgerBankAccount[], today: IsoDate = localToday()): Set<string> {
-  return new Set(receiptWaiting(books, accounts, today).map((w) => w.tx.ref));
+export function receiptWaits(books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts' | 'config'>, accounts: readonly LedgerBankAccount[], today: IsoDate = localToday(), owner?: string): Set<string> {
+  return new Set(receiptWaiting(books, accounts, today, owner).filter((w) => !w.outlays).map((w) => w.tx.ref));
 }
 
-/** `receiptWaits` with what each payment waits for (`waits`, `asks`, `unread`): the AI sidebar's card and note tell the kinds apart (#342). */
-export function receiptWaiting(books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts' | 'config'>, accounts: readonly LedgerBankAccount[], today: IsoDate = localToday()): WaitingPayment[] {
+/**
+ * `receiptWaits` with what each payment waits for (`waits`, `asks`, `unread`): the AI sidebar's card and note tell the kinds apart (#342).
+ * `outlays`: a payment to the owner by name (`owner`, on a firm with her account) waits for the outlays it pays back (#428).
+ */
+export function receiptWaiting(books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts' | 'config'>, accounts: readonly LedgerBankAccount[], today: IsoDate = localToday(), owner?: string): WaitingPayment[] {
   const booked = bookedStates(books, accounts);
-  return waitingForReceipt(books, (ref) => booked(ref) === 'booked', today);
+  const hers = !!owner && accounts.some((a) => a.role === 'owner');
+  return waitingForReceipt(books, (ref) => booked(ref) === 'booked', today)
+    .map((w) => (hers && w.kind !== 'unread' && repaysOwnerShape(w.tx, owner) ? { ...w, outlays: true as const } : w));
 }
 
 /**
@@ -133,9 +144,10 @@ export function issuesLead(issues: readonly PeriodIssue[], say: Say): string {
 
 /**
  * How many issues of each kind are open: one line beside a figure that is not final (the return's
- * page, #341). `waitingReceipt`: of the unbooked payments, those in `receiptWaits`.
+ * page, #341). `waitingReceipt`: of the unbooked payments, those in `receiptWaits`; `waitingOutlays`:
+ * those to the owner that wait for her outlays (#428).
  */
-export interface IssueCounts { total: number; questions: number; evidence: number; unbooked: number; waitingReceipt: number; unlinked: number; own: number; held: number; bills: number }
+export interface IssueCounts { total: number; questions: number; evidence: number; unbooked: number; waitingReceipt: number; waitingOutlays: number; unlinked: number; own: number; held: number; bills: number }
 
 export function countIssues(issues: readonly PeriodIssue[]): IssueCounts {
   const of = (kind: PeriodIssue['kind']) => issues.filter((i) => i.kind === kind).length;
@@ -143,6 +155,7 @@ export function countIssues(issues: readonly PeriodIssue[]): IssueCounts {
     // A missing bill is information, not an open item: the period's figure is final without it.
     total: issues.length - of('bill'), questions: of('question'), evidence: of('evidence'), unbooked: of('unbooked'), unlinked: of('unlinked'), own: of('own'), held: of('held'), bills: of('bill'),
     waitingReceipt: issues.filter((i) => i.kind === 'unbooked' && i.waitsForReceipt).length,
+    waitingOutlays: issues.filter((i) => i.kind === 'unbooked' && i.waitsForOutlays).length,
   };
 }
 
@@ -150,8 +163,9 @@ export function countIssues(issues: readonly PeriodIssue[]): IssueCounts {
  * The payments of every period not filed that nobody booked, and the oldest of them: what «nothing
  * waits for you» must not hide (#341). The same payments as the period's issues, over all open days.
  */
-export function unbookedOpen(books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts' | 'config'>, accounts: readonly LedgerBankAccount[], today: IsoDate = localToday()): { unbooked: number; waitingReceipt: number; first?: BankTransaction } {
+export function unbookedOpen(books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts' | 'config'>, accounts: readonly LedgerBankAccount[], today: IsoDate = localToday(), owner?: string): { unbooked: number; waitingReceipt: number; waitingOutlays: number; first?: BankTransaction } {
   const open = unbookedPayments(books, accounts);
-  const held = receiptWaits(books, accounts, today);
-  return { unbooked: open.length, waitingReceipt: open.filter((t) => held.has(t.ref)).length, ...(open[0] ? { first: open[0] } : {}) };
+  const waits = new Map(receiptWaiting(books, accounts, today, owner).map((w) => [w.tx.ref, w]));
+  const count = (outlays: boolean) => open.filter((t) => waits.has(t.ref) && !!waits.get(t.ref)!.outlays === outlays).length;
+  return { unbooked: open.length, waitingReceipt: count(false), waitingOutlays: count(true), ...(open[0] ? { first: open[0] } : {}) };
 }

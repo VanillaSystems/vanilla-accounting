@@ -47,11 +47,11 @@ function goOf(l: OpenLine, s: OpenPeriodState, books: Index): Location {
 }
 
 /** A count line in the words the return's page uses for it (issueWords). */
-const NONE = { unbooked: 0, waitingReceipt: 0 };
+const NONE = { unbooked: 0, waitingReceipt: 0, waitingOutlays: 0 };
 function textOf(l: OpenLine): string {
   switch (l.kind) {
     case 'yours': return issueWords({ ...NONE, own: l.n })[0];
-    case 'unbooked': return issueWords({ unbooked: l.n, waitingReceipt: l.waiting })[0];
+    case 'unbooked': return issueWords({ unbooked: l.n, waitingReceipt: l.waiting, waitingOutlays: l.outlays })[0];
     case 'questions': return issueWords({ ...NONE, questions: l.n })[0];
     case 'evidence': return issueWords({ ...NONE, evidence: l.n })[0];
     case 'unlinked': return issueWords({ ...NONE, unlinked: l.n })[0];
@@ -86,11 +86,11 @@ export function OpenPeriodCard({ books, onGo }: { books: Index; onGo(loc: Locati
   const today = localToday();
   // The sidebar renders again with every word of a streaming answer: the state is computed once per change of what it reads.
   const { s, lines, other, unbookedElsewhere } = useMemo(() => {
-    const s = openPeriodState(books, questions ?? [], tasks ?? [], accounts ?? [], { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays }, pages, processingOf(view?.runs ?? [], books.receipts), provider);
+    const s = openPeriodState(books, questions ?? [], tasks ?? [], accounts ?? [], { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays, ...(ws?.company.owner ? { owner: ws.company.owner } : {}) }, pages, processingOf(view?.runs ?? [], books.receipts), provider);
     const e = elsewhereOf(books, questions ?? [], tasks ?? [], accounts ?? [], s, filing().length, view ? openCount(view) - view.tasks.length : 0, registered, today);
     // UnbookedFact says the payments; the rest is counted as the tasks it is under Aufgaben.
     return { s, lines: openLines(s), other: elsewhereCount(e) - e.unbooked.length, unbookedElsewhere: e.unbooked.length };
-  }, [books, questions, tasks, view, accounts, registered, pages, provider, today]);
+  }, [books, questions, tasks, view, accounts, registered, pages, provider, today, ws]);
   const link = (to: Location, text: string) => (
     <a className="linkbtn" href={hrefOf(to)} onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return; e.preventDefault(); onGo(to); }}>{text}</a>
   );

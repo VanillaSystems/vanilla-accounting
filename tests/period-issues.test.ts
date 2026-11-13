@@ -72,12 +72,12 @@ test('what waits, for the AI sidebar, names the bookings against their receipts,
 test('the counts beside a figure that is not final come from the same list, and name the payments held for their receipt (#341)', () => {
   const held: Index = { ...books, transactions: books.transactions.map((t) => (t.ref === 'SEP' ? { ...t, waitsForReceipt: { since: '2026-10-01' } } : t)) };
   const issues = periodIssues(held, [question('q1', 'KELLER')], '2026-07-01', '2026-09-30', []);
-  assert.deepEqual(countIssues(issues), { total: issues.length, questions: 1, evidence: 1, unbooked: 1, waitingReceipt: 1, unlinked: 1, own: 0, held: 0, bills: 0 });
+  assert.deepEqual(countIssues(issues), { total: issues.length, questions: 1, evidence: 1, unbooked: 1, waitingReceipt: 1, waitingOutlays: 0, unlinked: 1, own: 0, held: 0, bills: 0 });
   assert.equal(countIssues(periodIssues(books, [], '2026-07-01', '2026-09-30', [])).waitingReceipt, 0, 'unbooked, but not held for a receipt');
   // Every period not filed: October's payment too.
   const open = unbookedOpen(held, []);
   assert.deepEqual([open.unbooked, open.waitingReceipt, open.first?.ref], [2, 1, 'SEP']);
-  assert.deepEqual(unbookedOpen({ ...held, config: { closedThrough: '2026-12-31' } }, []), { unbooked: 0, waitingReceipt: 0 });
+  assert.deepEqual(unbookedOpen({ ...held, config: { closedThrough: '2026-12-31' } }, []), { unbooked: 0, waitingReceipt: 0, waitingOutlays: 0 });
 });
 
 test('a result that is not final never reads as final, a zero included; an approved return stands (#341 review)', () => {

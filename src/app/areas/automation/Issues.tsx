@@ -79,18 +79,30 @@ let lastIssues: { key: unknown[]; issues: PeriodIssue[] } | undefined;
  */
 export function usePeriodIssues(books: Index, from: string, to: string): PeriodIssue[] {
   const { questions } = useQuestions();
-  const accounts = useWorkspace()?.bankAccounts;
+  const ws = useWorkspace();
+  const accounts = ws?.bankAccounts;
+  const owner = ws?.company.owner;
   // A receipt a run still reads is not hers yet (#398): the runs as Belege reads them.
   const runs = useAutomation().view?.runs;
-  const key = [books, questions, accounts, orderPagesNow(), providerIssuesNow(), from, to, localToday(), runs];
-  if (!lastIssues || key.some((k, i) => k !== lastIssues!.key[i])) lastIssues = { key, issues: periodIssues(books, questions, from, to, accounts ?? [], orderPagesNow(), localToday(), processingOf(runs ?? [], books.receipts), providerIssuesNow()) };
+  const key = [books, questions, accounts, orderPagesNow(), providerIssuesNow(), from, to, localToday(), runs, owner];
+  if (!lastIssues || key.some((k, i) => k !== lastIssues!.key[i])) lastIssues = { key, issues: periodIssues(books, questions, from, to, accounts ?? [], orderPagesNow(), localToday(), processingOf(runs ?? [], books.receipts), providerIssuesNow(), owner) };
   return lastIssues.issues;
+}
+
+/** Of the unbooked payments, what those the app holds wait for: their receipt, or the owner's outlays they pay back (#428). */
+function waitWords(c: { unbooked: number; waitingReceipt: number; waitingOutlays?: number }): string {
+  const outlays = c.waitingOutlays ?? 0;
+  const parts = [
+    c.waitingReceipt ? t(c.waitingReceipt === c.unbooked ? 'issues.n.allWaitReceipt' : 'issues.n.waitReceipt', { n: c.waitingReceipt }) : '',
+    outlays ? t(outlays === c.unbooked ? 'issues.n.allWaitOutlays' : 'issues.n.waitOutlays', { n: outlays }) : '',
+  ].filter(Boolean);
+  return parts.length ? ` (${parts.join('; ')})` : '';
 }
 
 /** The counts in words, a part per kind that has any: «11 Zahlungen noch nicht gebucht (8 davon warten auf ihren Beleg)», «2 Fragen offen», … */
 export function issueWords(c: Pick<IssueCounts, 'unbooked' | 'waitingReceipt'> & Partial<IssueCounts>): string[] {
   return [
-    c.unbooked ? `${t('issues.n.unbooked', { n: c.unbooked })}${c.waitingReceipt ? ` (${t(c.waitingReceipt === c.unbooked ? 'issues.n.allWaitReceipt' : 'issues.n.waitReceipt', { n: c.waitingReceipt })})` : ''}` : '',
+    c.unbooked ? `${t('issues.n.unbooked', { n: c.unbooked })}${waitWords(c)}` : '',
     c.questions ? t('issues.n.questions', { n: c.questions }) : '',
     c.own ? t('issues.n.own', { n: c.own }) : '',
     c.unlinked ? t('issues.n.unlinked', { n: c.unlinked }) : '',
@@ -108,7 +120,8 @@ export function issueWords(c: Pick<IssueCounts, 'unbooked' | 'waitingReceipt'> &
  * page for a firm that files one, else among the payments). Nothing when every payment is booked.
  */
 export function UnbookedFact({ books, nav, lead, className }: { books: Index; nav: Pick<Nav, 'go'>; lead?: string; className?: string }) {
-  const open = unbookedOpen(books, useWorkspace()?.bankAccounts ?? []);
+  const ws = useWorkspace();
+  const open = unbookedOpen(books, ws?.bankAccounts ?? [], localToday(), ws?.company.owner);
   if (!open.first) return null;
   const p = parsePeriod(filingKeyOf(open.first.date, filing().length), localToday());
   const to: Location = chargesVat() && p ? { route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period: p } } : at({ area: 'bank', payment: open.first.ref }, open.first.date);
@@ -131,7 +144,7 @@ export function OpenFact({ books, nav, period, counts: c, lead, className }: { b
   const to: Location = chargesVat() ? { route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period } } : { route: c.unbooked ? { area: 'bank' } : { area: 'receipts' }, query: { period } };
   return (
     <span className={className} data-testid="open-fact">
-      {c.unbooked === c.waitingReceipt ? `${lead} ` : ''}{issueWords({ unbooked: c.unbooked, waitingReceipt: c.waitingReceipt, unlinked: c.unlinked }).join(', ')}.{' '}
+      {c.unbooked === c.waitingReceipt ? `${lead} ` : ''}{issueWords({ unbooked: c.unbooked, waitingReceipt: c.waitingReceipt, waitingOutlays: c.waitingOutlays, unlinked: c.unlinked }).join(', ')}.{' '}
       <button type="button" className="golink" onClick={() => nav.go(to)}>{t('issues.n.see', { period: periodName(period) })}</button>
     </span>
   );

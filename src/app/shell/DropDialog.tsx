@@ -713,7 +713,10 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   const s = useDrop();
   const { view } = useAutomation();
   const [tab, setTab] = useState<DropTab>('all');
-  const accounts = useWorkspace()?.bankAccounts;
+  const ws = useWorkspace();
+  const accounts = ws?.bankAccounts;
+  // A payment to the owner waits for her outlays, not for its receipt (#428).
+  const owner = ws?.company.owner;
   const { questions, me } = useQuestions();
   const receiptOf = (r: DropRow) => books.receipts.find((y) => y.id === receiptIdOf(r, view));
   const landed = s.open && s.session ? landedPeriod(s.session.rows, datesIn(books, receiptOf), period, localToday(), filing().length) : undefined;
@@ -731,7 +734,7 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   const pct = dropProgress([...taken.map((r, i) => doneOf(r, states[i], view)), ...Array<number>(coming).fill(0)]);
   // Every row in one group of the closing lines, by the state its own row shows (#384).
   const stateOf = new Map(taken.map((r, i) => [r, states[i]]));
-  const sum = !working && rows.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? []), questions, (r) => closingGroupOf(r, stateOf.get(r))) : undefined;
+  const sum = !working && rows.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? [], undefined, owner), questions, (r) => closingGroupOf(r, stateOf.get(r))) : undefined;
   // Only files the books hold already (#341): the window says that nothing new came in.
   const nothingNew = !working && !taken.length && rows.length > 0 && rows.every((r) => (r.state === 'duplicate' && r.reason !== 'possible-duplicate') || !!r.readAs);
   // What waits for her, named where it is (#398): the receipts of this drop under Belege, every open task under Automatisierung › Aufgaben, as the dock counts them.

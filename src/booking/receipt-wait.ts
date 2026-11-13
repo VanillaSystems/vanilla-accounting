@@ -30,7 +30,7 @@ import { basename } from 'node:path';
 import { identify, signalsOfTransaction } from '../knowledge/counterparties.js';
 import type { Knowledge } from '../knowledge/layers.js';
 import { chart, withoutInputTax } from '../engines/index.js';
-import { ownerFactsOf, ownerRepayments, paysOwner } from './owner-outlays.js';
+import { ownerFactsOf, ownerRepayments, paysOwner, repaysOwnerShape } from './owner-outlays.js';
 import type { Books } from '../books/store.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import { mappedReceipts, ruleOfPayment, type ClassifyContext } from './classify.js';
@@ -186,6 +186,14 @@ const toOwnerByName = (tx: BankTransaction, context: Pick<ClassifyContext, 'owne
   tx.direction === 'DBIT' && !!context.ownerAccount && paysOwner({ counterparty: tx.counterparty, description: '' }, context.ownerName);
 
 export { paysOwner };
+
+/**
+ * Whether a payment that waits waits for the owner's outlays rather than a receipt of its own (#428):
+ * money out to her by name in the books' currency on a firm with her account (repaysOwnerShape).
+ * Her receipts paid privately, booked as outlays, make it a repayment the next run books.
+ */
+export const awaitsOutlays = (tx: BankTransaction, context: Pick<ClassifyContext, 'ownerAccount' | 'ownerName'>): boolean =>
+  !!context.ownerAccount && repaysOwnerShape(tx, context.ownerName);
 
 /**
  * Whether the classifier's answer for a payment may be booked, given its receipt wait: one that

@@ -35,6 +35,8 @@ export interface OpenPeriodContext {
   /** filing().length and filing().dueDays. */
   length: FilingLength;
   dueDays: number;
+  /** The owner's name (company.owner): a payment to her that waits, waits for her outlays (#428). */
+  owner?: string;
 }
 
 export interface OpenPeriodState {
@@ -94,7 +96,7 @@ export function openPeriodState(
   orderPages: ReadonlyMap<string, OrderPage> = new Map(), processing: ReadonlyMap<string, Processing> = new Map(), provider?: ProviderIssues,
 ): OpenPeriodState {
   const period = booksOpenPeriod(books, ctx.today, ctx.length);
-  const issues = periodIssues(books, questions, period.from, period.to, accounts, orderPages, ctx.today, processing, provider);
+  const issues = periodIssues(books, questions, period.from, period.to, accounts, orderPages, ctx.today, processing, provider, ctx.owner);
   const unbooked = issues.flatMap((i) => (i.kind === 'unbooked' ? [i.tx] : []));
   const refs = new Set(unbooked.map((t) => t.ref));
   const about = (x: Task) => { const d = taskDay(books, x.item, period.from); return d === 'period' ? x.item.id === period.token : !!d && d >= period.from && d <= period.to; };
@@ -104,7 +106,7 @@ export function openPeriodState(
     counts: countIssues(issues),
     unbooked,
     // The same payments as the issues' `waitsForReceipt` (both are receiptWaits), with what each waits for.
-    waiting: receiptWaiting(books, accounts, ctx.today).filter((w) => refs.has(w.tx.ref)),
+    waiting: receiptWaiting(books, accounts, ctx.today, ctx.owner).filter((w) => refs.has(w.tx.ref)),
     questions: issues.flatMap((i) => (i.kind === 'question' ? [{ q: i.q, date: i.date }] : [])),
     evidence: issues.flatMap((i) => (i.kind === 'evidence' ? [{ entry: i.entry, check: i.check }] : [])),
     unlinked: issues.flatMap((i) => (i.kind === 'unlinked' ? [i.receipt] : [])),
@@ -168,10 +170,11 @@ export const nothingOpen = (s: OpenPeriodState): boolean =>
   !s.unbooked.length && !s.questions.length && !s.evidence.length && !s.unlinked.length && !s.yours.length && !s.held.length && !s.tasks.length;
 
 /** How many of the held payments are of each kind. */
-export const waitingKinds = (s: Pick<OpenPeriodState, 'waiting'>): Record<WaitingPayment['kind'], number> => ({
-  waits: s.waiting.filter((w) => w.kind === 'waits').length,
-  asks: s.waiting.filter((w) => w.kind === 'asks').length,
+export const waitingKinds = (s: Pick<OpenPeriodState, 'waiting'>): Record<WaitingPayment['kind'] | 'outlays', number> => ({
+  waits: s.waiting.filter((w) => w.kind === 'waits' && !w.outlays).length,
+  asks: s.waiting.filter((w) => w.kind === 'asks' && !w.outlays).length,
   unread: s.waiting.filter((w) => w.kind === 'unread').length,
+  outlays: s.waiting.filter((w) => w.outlays).length,
 });
 
 /** The most tasks the card lists one by one; the rest is counted in one line. */
@@ -185,7 +188,7 @@ export type OpenLine =
   /** The receipts that wait for her own word (`yours`). */
   | { kind: 'yours'; n: number; items: YourReceipt[]; more: number }
   /** `waiting`: of them held by receiptWaits (countIssues' `waitingReceipt`, as the return's page says); `unread`: of those, held because their receipt's VAT cannot be read. */
-  | { kind: 'unbooked'; n: number; waiting: number; unread: number; first: BankTransaction; items: BankTransaction[]; more: number }
+  | { kind: 'unbooked'; n: number; waiting: number; outlays: number; unread: number; first: BankTransaction; items: BankTransaction[]; more: number }
   | { kind: 'questions'; n: number }
   | { kind: 'evidence'; n: number; first: JournalEntry }
   /** The receipts without a payment (none of `yours` among them). */
@@ -211,7 +214,7 @@ export function openLines(s: OpenPeriodState): OpenLine[] {
   const unlinked = s.unlinked;
   return [
     ...(s.yours.length ? [{ kind: 'yours' as const, ...shown(s.yours) }] : []),
-    ...(s.counts.unbooked ? [{ kind: 'unbooked' as const, ...shown(s.unbooked), n: s.counts.unbooked, waiting: s.counts.waitingReceipt, unread: kinds.unread, first: s.unbooked[0] }] : []),
+    ...(s.counts.unbooked ? [{ kind: 'unbooked' as const, ...shown(s.unbooked), n: s.counts.unbooked, waiting: s.counts.waitingReceipt, outlays: s.counts.waitingOutlays, unread: kinds.unread, first: s.unbooked[0] }] : []),
     ...(s.counts.questions ? [{ kind: 'questions' as const, n: s.counts.questions }] : []),
     ...(s.held.length ? [{ kind: 'held' as const, n: s.held.length, first: s.held[0] }] : []),
     ...(s.counts.evidence ? [{ kind: 'evidence' as const, n: s.counts.evidence, first: s.evidence[0].entry }] : []),

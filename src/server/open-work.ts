@@ -99,12 +99,12 @@ const evidenceLine = (e: JournalEntry, c: EvidenceCheck, t: T) => `- ${day(e.dat
 export const purposeNow = (purpose: Purpose | undefined, progress: Pick<SetupProgress, 'ready'>, wanted = false): Purpose | undefined =>
   (purpose === 'onboarding' && progress.ready && !wanted ? undefined : purpose);
 
-type Ws = Pick<Workspace, 'paths' | 'bankAccounts'>;
+type Ws = Pick<Workspace, 'paths' | 'bankAccounts'> & { company?: Pick<Workspace['company'], 'owner'> };
 type Tasks = ReadonlyArray<Task & { rule?: string }>;
 
 /** The state the sidebar's card draws, from the same inputs: the order pages of a provider among them, which are no receipts without a payment. */
 export const periodState = (ws: Ws, books: Books, tasks: ReadonlyArray<Task>, today: IsoDate = localToday(), processing: ReadonlyMap<string, Processing> = new Map()): OpenPeriodState =>
-  openPeriodState(books, readQuestions(ws), tasks, ws.bankAccounts, { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays }, orderPagesOf(books, providersOf(ws)), processing, providerIssuesIn(ws, books, today));
+  openPeriodState(books, readQuestions(ws), tasks, ws.bankAccounts, { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays, ...(ws.company?.owner ? { owner: ws.company.owner } : {}) }, orderPagesOf(books, providersOf(ws)), processing, providerIssuesIn(ws, books, today));
 
 /** What waits outside the period, from the same inputs as the card (src/app/areas/automation/open-period.ts elsewhereOf). */
 export const elsewhereFor = <T extends Task>(ws: Ws, books: Books, tasks: readonly T[], s: OpenPeriodState, stuck = 0, today: IsoDate = localToday()): Elsewhere<T> =>
@@ -134,6 +134,7 @@ export function periodNote(ws: Ws, books: Books, tasks: Tasks, language: string,
   const lines = [
     ...(s.yours.length ? [`Receipts that wait for the person's own word (${s.yours.length}), under «${t('area.receipts')}»: only she can add what each lacks, or answer whether it is a copy:`, ...capped(s.yours.map((x) => yourLine(books, x, t)))] : []),
     `Payments without a booking (${s.unbooked.length})${s.unbooked.length ? `, under «${t('area.bank')}»` : ''}:`, ...capped(s.unbooked.map(paymentLine)),
+    ...(k.outlays ? [`  Of them, ${k.outlays} go to the owner and pay back business costs she paid privately: they wait until those receipts are booked as her outlays (on each receipt under «${t('area.receipts')}», «${t('actions.privateOne', { owner: ws.company?.owner ?? '' })}»); the app books them then. No receipt of their own is missing.`] : []),
     ...(k.waits ? [`  Of them, ${k.waits} the app holds until their receipt is linked: it books them itself then and nobody is asked yet; the receipts go in under «${t('area.receipts')}».`] : []),
     ...(k.asks ? [`  Of them, ${k.asks} wait for their receipt and their return is near: each is the person's task under ${tasksPlace} now (link the receipt, name another proof, or book without input tax).`] : []),
     ...(k.unread ? [`  Of them, ${k.unread} have their receipt linked, but its VAT could not be read: each waits for the person's word at once, under ${tasksPlace}; no receipt is missing.`] : []),

@@ -125,8 +125,14 @@ export function classifyStep({ force = false } = {}): StepRun {
     const probe = new Set(ask ? [...need].filter((ref) => !judged.has(ref)) : []);
     const waiting = new Set([...need].filter((ref) => !probe.has(ref)));
     const txOf = new Map(scratch.transactions.map((tx) => [tx.ref, tx]));
+    // The copies the classifier booked into: the run's, and the one of a second pass (#428). A payment's answer is in the last that has one.
+    const scratches = [scratch];
+    const answerOf = (ref: string): JournalEntry[] => {
+      for (const s of [...scratches].reverse()) { const lines = s.journalEntries.filter((je) => je.transactionRef === ref); if (lines.length) return lines; }
+      return [];
+    };
     // A repayment of the owner's outlays is kept only onto her account (#402): another answer is not booked and stays the person's.
-    const keeps = (ref: string) => (!probe.has(ref) && !repays.has(ref)) || answerSettles(txOf.get(ref)!, scratch.journalEntries.filter((je) => je.transactionRef === ref), context);
+    const keeps = (ref: string) => (!probe.has(ref) && !repays.has(ref)) || answerSettles(txOf.get(ref)!, answerOf(ref), context);
     const done = (notes: IntakeNote[]) => {
       // A customs assessment that came after its import VAT was booked brings the deduction (issue #197).
       // Saved whenever it books or marks an assessment as used: a mark lost would let a deduction a person took back come again.
@@ -153,7 +159,7 @@ export function classifyStep({ force = false } = {}): StepRun {
       markWaiting(books, waiting, decided, unread);
       // A repayment the model answered otherwise than onto her account is judged: asked once, then hers (#402 review).
       if (ask) {
-        const answeredOtherwise = [...repays].filter((ref) => scratch.journalEntries.some((je) => je.transactionRef === ref) && !keeps(ref));
+        const answeredOtherwise = [...repays].filter((ref) => answerOf(ref).length > 0 && !keeps(ref));
         markJudged(ws, answeredOtherwise, new Set(unbooked(books.read(), context.bankAccounts).map((tx) => tx.ref)), new Date().toISOString());
         if (answeredOtherwise.length) log(`Owner     : ${answeredOtherwise.length} repayment(s) of the owner's outlays the model put elsewhere than her account: left to the person.`);
       }
@@ -170,29 +176,49 @@ export function classifyStep({ force = false } = {}): StepRun {
     }
     progress(0, todo.length);
     log(`Classifying ${todo.length} transactions in ${Math.ceil(todo.length / BATCH_SIZE)} batches of ${BATCH_SIZE} (${CONCURRENCY} concurrent)...\n`);
-    const applied = new Set<JournalEntry>();
-    const flush = () => {
-      const fresh = scratch.journalEntries.filter((je) => !applied.has(je));
-      fresh.forEach((je) => applied.add(je));
-      books.update((index) => {
-        const open = new Set(unbooked(index, context.bankAccounts).map((tx) => tx.ref));
-        index.journalEntries.push(...fresh.filter((je) => open.has(je.transactionRef) && keeps(je.transactionRef)));
+    /** Books what the classifier booked into `copy` after each wave, for the payments still open and kept. */
+    const pass = (copy: Books, txs: Books['transactions']) => {
+      const applied = new Set<JournalEntry>(copy.journalEntries);
+      const flush = () => {
+        const fresh = copy.journalEntries.filter((je) => !applied.has(je));
+        fresh.forEach((je) => applied.add(je));
+        books.update((index) => {
+          const open = new Set(unbooked(index, context.bankAccounts).map((tx) => tx.ref));
+          index.journalEntries.push(...fresh.filter((je) => open.has(je.transactionRef) && keeps(je.transactionRef)));
+        });
+      };
+      const refs = new Set(txs.map((tx) => tx.ref));
+      return classifyTransactions(copy, txs, {
+        ask,
+        proposeAsked: false,
+        fx,
+        context,
+        log,
+        afterWave: () => {
+          flush();
+          progress(new Set(copy.journalEntries.filter((je) => refs.has(je.transactionRef)).map((je) => je.transactionRef)).size, txs.length);
+          log('');
+        },
       });
     };
-    scratch.journalEntries.forEach((je) => applied.add(je));
-    const todoRefs = new Set(todo.map((tx) => tx.ref));
-    const { classified, failed, asked, unasked } = await classifyTransactions(scratch, todo, {
-      ask,
-      proposeAsked: false,
-      fx,
-      context,
-      log,
-      afterWave: () => {
-        flush();
-        progress(new Set(scratch.journalEntries.filter((je) => todoRefs.has(je.transactionRef)).map((je) => je.transactionRef)).size, todo.length);
-        log('');
-      },
-    });
+    const { classified, failed, asked, unasked } = await pass(scratch, todo);
+    // An outlay of the owner's this run booked (her private payment of a receipt) makes a payment to her a repayment
+    // that the run's start did not see covered (#428): it is asked now, not left for a second click.
+    if (ask) {
+      const now = books.read();
+      const open = new Set(unbooked(now, context.bankAccounts).map((tx) => tx.ref));
+      const covered = [...needReceipts(ws, now, context, fx).repays].filter((ref) => !repays.has(ref) && open.has(ref) && !judgedOnce[ref]);
+      if (covered.length) {
+        for (const ref of covered) { repays.add(ref); waiting.delete(ref); }
+        log(`Owner     : ${covered.length} payment(s) to the owner now repay outlays booked in this run: booking them.`);
+        scratches.push(now);
+        const second = await pass(now, now.transactions.filter((tx) => covered.includes(tx.ref)));
+        classified.push(...second.classified);
+        failed.push(...second.failed);
+        asked.push(...second.asked);
+        unasked.push(...second.unasked);
+      }
+    }
     progress(todo.length, todo.length);
 
     log(`\nDone.`);
