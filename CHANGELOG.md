@@ -14,6 +14,15 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Changed
+
+- The GitHub release text (`npm run release:github`) starts with the downloads: one line saying
+  what the app is, the download table with each `.dmg` linked to its file, «What's new» with a
+  few highlights, and the full changelog folded away at the end. The highlights come from an
+  optional `### Highlights` subsection under the version's heading, else from the titles of
+  «Added» and «Changed». A changelog too long for GitHub's 125,000 characters is linked at the
+  tag instead (docs/releasing.md).
+
 ## [0.5.0] - 2026-11-13
 
 ### Added
