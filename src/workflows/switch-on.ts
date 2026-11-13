@@ -79,7 +79,13 @@ export function companyPart(w: WorkflowDecl, root: string): { hash: string; file
   return { hash: createHash('sha256').update(JSON.stringify(files)).digest('hex').slice(0, 16), files };
 }
 
-interface Approved { part: string; files?: Record<string, string>; at: string; baseline?: boolean }
+/**
+ * `cited`: the paths the company part covered when it was switched on (its overlay and what its AI
+ * steps cite). A file under a path cited since (the app's update widened what a workflow reads,
+ * #413) was no part of what she switched on: met the first time, it is taken as switched on, as the
+ * baseline takes a workspace's files, never as a change that waits.
+ */
+interface Approved { part: string; files?: Record<string, string>; at: string; baseline?: boolean; cited?: string[] }
 type Approvals = Record<string, Approved>;
 
 export function approvalsPath(ws: { paths: { root: string } }): string {
@@ -95,6 +101,18 @@ export function resetDemo(name: string): string {
   rmSync(approvalsPath({ paths: { root: appFolderIn(dir) ?? join(dir, APP_FOLDER) } }), { force: true });
   return resetDemoCopy(name);
 }
+
+/** What a workflow's company part covers: its overlay and what its AI steps cite. */
+const coverOf = (w: WorkflowDecl): string[] => [`workflows/${w.id}`, ...citations(w)];
+
+/**
+ * What a record written before `cited` existed covered (before #413 the booking cited its guide and
+ * the suppliers' files only; it reads the customers', the authorities' and evidence.guide.yaml since).
+ * Every other workflow's coverage is as it was.
+ */
+const COVERED_BEFORE: Record<string, string[]> = {
+  [BOOKING_WORKFLOW]: [`workflows/${BOOKING_WORKFLOW}`, 'knowledge/rules/booking.guide.yaml', 'knowledge/suppliers'],
+};
 
 function read(ws: Ws): Approvals | undefined {
   try { return JSON.parse(readFileSync(approvalsPath(ws), 'utf8')) as Approvals; } catch { return undefined; }
@@ -114,10 +132,19 @@ export interface Switch {
 export function openSwitch(ws: Ws, now = () => new Date()): Switch {
   const pending = (w: WorkflowDecl) => {
     const part = companyPart(w, ws.paths.root);
-    const on = read(ws)?.[w.id];
+    const all = read(ws);
+    const on = all?.[w.id];
     if (!part || on?.part === part.hash) return undefined;
-    const was = on?.files ?? {};
+    const was = { ...on?.files };
+    // A file under a path the record did not cover is met for the first time: taken as switched on.
+    const covered = on?.cited ?? (on ? COVERED_BEFORE[w.id] : undefined);
+    if (covered) for (const [p, h] of Object.entries(part.files)) if (!(p in was) && !covered.some((c) => within(p, c))) was[p] = h;
     const changed = [...new Set([...Object.keys(part.files), ...Object.keys(was)])].filter((p) => part.files[p] !== was[p]).sort();
+    if (!changed.length) {
+      // Nothing she has not switched on: the record learns the wider coverage, once.
+      write(ws, { ...all, [w.id]: { ...on!, part: part.hash, files: part.files, cited: coverOf(w) } });
+      return undefined;
+    }
     return { hash: part.hash, files: changed };
   };
   return {
@@ -126,7 +153,7 @@ export function openSwitch(ws: Ws, now = () => new Date()): Switch {
     approve(w) {
       const part = companyPart(w, ws.paths.root);
       if (!part) return;
-      write(ws, { ...read(ws), [w.id]: { part: part.hash, files: part.files, at: now().toISOString() } });
+      write(ws, { ...read(ws), [w.id]: { part: part.hash, files: part.files, at: now().toISOString(), cited: coverOf(w) } });
     },
   };
 }
@@ -149,8 +176,9 @@ export function baseline(ws: Ws, workflows: WorkflowDecl[], now = () => new Date
   if (existsSync(approvalsPath(ws))) return false;
   const a: Approvals = {};
   for (const w of workflows) {
+    // Also a workflow without a company part yet: its record says what it covers, so a file added later waits.
     const part = companyPart(w, ws.paths.root);
-    if (part) a[w.id] = { part: part.hash, files: part.files, at: now().toISOString(), baseline: true };
+    a[w.id] = { part: part?.hash ?? '', files: part?.files ?? {}, at: now().toISOString(), baseline: true, cited: coverOf(w) };
   }
   write(ws, a);
   return true;
