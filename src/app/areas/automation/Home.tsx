@@ -11,6 +11,7 @@ import { periodName, rangeText } from '../../lib/period-label.js';
 import { automationCommand } from '../../automation/store.js';
 import { commandRefusalText, refusalText } from '../../automation/refusal.js';
 import { askedRuns, homeFigures, workflowState, type HomeFigures } from '../../automation/home.js';
+import { heroLine, stageLines, type Say } from '../../automation/words.js';
 import { useQuestions } from '../../questions/store.js';
 import { QuestionCard } from '../../questions/Questions.js';
 import { forMe } from '../../../questions/model.js';
@@ -162,7 +163,7 @@ function Hero({ f, period, open, waiting, unbooked, books, nav }: { f: HomeFigur
       <p className="hero" data-testid="home-hero">
         {f.collected === 0 ? t('automation.home.hero.empty', { period: periodName(period) }) : (
           <>
-            {t('automation.home.hero.collected', { n: f.collected })}, {t('automation.home.hero.booked', { n: f.booked })}
+            {heroLine(t as unknown as Say, f)}
             {f.withoutYou !== undefined ? <>, {t('automation.home.hero.share', { pct: f.withoutYou })}</> : null}.
           </>
         )}
@@ -181,6 +182,7 @@ function Stages({ f, nav, at, vatRegistered }: { f: HomeFigures; nav: Nav; at: (
   const unbooked = f.matched - f.booked;
   const known = f.booked - f.authors.unknown;
   const filing = f.filing;
+  const lines = stageLines(t as unknown as Say, f, vatRegistered);
   const stage = (key: string, count: number | undefined, sub: ReactNode, to: Location, hit = false) => (
     <Go key={key} to={to} nav={nav} className={`stage${hit ? ' hit' : ''}`}>
       <span className="k">{t(`automation.home.stage.${key}` as 'automation.home.stage.collected')}</span>
@@ -191,8 +193,8 @@ function Stages({ f, nav, at, vatRegistered }: { f: HomeFigures; nav: Nav; at: (
   return (
     <div className="line" data-testid="home-stages">
       {stage('collected', f.collected, t('automation.home.s.byDate'), at({ area: 'receipts' }))}
-      {stage('read', f.read, unread ? t('automation.home.s.unread', { n: unread }) : vatRegistered && f.read ? t('automation.home.s.vat', { n: f.withVat }) : f.read ? t('automation.home.s.allRead') : '', at({ area: 'receipts' }, unread ? { chips: [{ field: 'state', value: 'noDate' }] } : {}), unread > 0)}
-      {stage('matched', f.matched, unmatched ? t('automation.home.s.unmatched', { n: unmatched }) : f.payable ? t('automation.home.s.allMatched') : '', at({ area: 'receipts' }, { chips: [{ field: 'state', value: unmatched ? 'open' : 'linked' }] }), unmatched > 0)}
+      {stage('read', f.read, lines.read, at({ area: 'receipts' }, unread ? { chips: [{ field: 'state', value: 'noDate' }] } : {}), unread > 0)}
+      {stage('matched', f.matched, lines.matched, at({ area: 'receipts' }, { chips: [{ field: 'state', value: unmatched ? 'open' : 'linked' }] }), unmatched > 0)}
       {stage('booked', f.booked, [unbooked ? t('automation.home.s.unbooked', { n: unbooked }) : known > 0 ? t('automation.home.s.withoutYou', { n: f.authors.app }) : '', f.waitingReceipt ? t('automation.home.s.waitingReceipt', { n: f.waitingReceipt }) : ''].filter(Boolean).join(' · '), at({ area: 'journal' }), unbooked > 0)}
       {stage(vatRegistered ? 'filed' : 'closed', filing.kind === 'filed' ? f.booked : undefined,
         filing.kind === 'filed' ? t(vatRegistered ? 'automation.home.s.filed' : 'automation.home.s.sealed')

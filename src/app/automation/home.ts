@@ -13,7 +13,7 @@ import type { Index, JournalEntry, Receipt } from '../../types/index.js';
 import { nextRun } from '../../workflows/cron.js';
 import type { AutomationView, WorkflowDecl } from '../../workflows/model.js';
 import { isNoReceipt } from '../../books/discard.js';
-import { receiptStateOf } from '../shell/drop-summary.js';
+import { receiptRead } from '../shell/drop-summary.js';
 
 /** Who made a booking as it stands, read from the entry's `run`, `origin` and `by`. */
 export type Author =
@@ -56,8 +56,6 @@ export function askedRuns(view: Pick<AutomationView, 'runs' | 'workflows'>): Set
   return new Set(view.runs.filter((r) => r.path.some((s) => personSteps.get(r.workflow)?.has(s))).map((r) => r.id));
 }
 
-/** Kinds that are paid by a payment, so matching and booking apply; a kind not set yet is taken for one. */
-const payable = (r: Receipt) => r.kind === undefined || r.kind === 'invoice' || r.kind === 'sales-record';
 export const receiptDay = (r: Receipt): IsoDate => r.date ?? r.indexedAt.slice(0, 10);
 
 /** A date in the file name the app gives a receipt (YYYYMMDD-…), Belege's date for one the reading left undated. */
@@ -105,8 +103,6 @@ export interface HomeFigures {
   read: number;
   /** Of the read ones, those that show Swiss VAT. */
   withVat: number;
-  /** Receipts paid by a payment (invoices, sales records, kind not set yet). */
-  payable: number;
   /** Receipts linked to their payment (or to one in a filed quarter): Belege's «zugeordnet». */
   matched: number;
   /** Of the matched ones, those whose payment is booked. */
@@ -153,8 +149,7 @@ export function homeFigures(books: Index, period: PeriodRange, ctx: FigureContex
   const paymentsOf = (r: Receipt) => [...(refsOf.get(r.id) ?? []), ...(r.filedPayment ? [r.filedPayment] : [])];
   const placed = (r: Receipt) => placeDay(paidDays(r, refsOf.get(r.id) ?? [], (ref) => dayOf.get(ref)), receiptDate(r), ctx.openFrom, books.config?.closedThrough);
   const inPeriod = books.receipts.filter((r) => !isNoReceipt(r, refsOf.get(r.id)?.length ?? 0)).filter((r) => { const d = placed(r); return d >= period.from && d <= period.to; });
-  const read = inPeriod.filter((r) => ['matched', 'read'].includes(receiptStateOf(r, paymentsOf(r).length, false)));
-  const toPay = inPeriod.filter(payable);
+  const read = inPeriod.filter((r) => receiptRead(r, paymentsOf(r).length));
   const matched = inPeriod.filter((r) => paymentsOf(r).length > 0);
   const authors: Record<Author, number> = { app: 0, asked: 0, changed: 0, person: 0, unknown: 0 };
   let booked = 0;
@@ -170,7 +165,6 @@ export function homeFigures(books: Index, period: PeriodRange, ctx: FigureContex
     collected: inPeriod.length,
     read: read.length,
     withVat: read.filter((r) => r.hasSwissVat === true).length,
-    payable: toPay.length,
     matched: matched.length,
     booked,
     ...paymentCount(books, period, (ref) => entriesOf.has(ref)),

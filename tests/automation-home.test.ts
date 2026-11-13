@@ -33,8 +33,8 @@ test('a receipt passes collected, read, matched and booked by what the books rec
   b.transactions = [{ ref: 'T9', date: '2026-09-30', amount: -10 } as Index['transactions'][number]];
   const f = homeFigures(b, Q4, ctx);
   assert.deepEqual(
-    { collected: f.collected, read: f.read, withVat: f.withVat, payable: f.payable, matched: f.matched, booked: f.booked },
-    { collected: 3, read: 2, withVat: 1, payable: 3, matched: 2, booked: 1 },
+    { collected: f.collected, read: f.read, withVat: f.withVat, matched: f.matched, booked: f.booked },
+    { collected: 3, read: 2, withVat: 1, matched: 2, booked: 1 },
   );
 });
 

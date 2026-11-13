@@ -12,6 +12,7 @@ import { automationCommand, useAutomation } from '../automation/store.js';
 import { commandRefusalText } from '../automation/refusal.js';
 import { askedRuns, homeFigures } from '../automation/home.js';
 import { dockWidget, RUN_NOW, type DockWidget, type WidgetFigure } from '../automation/widget.js';
+import { cardLabel as cardWord, dockLine, figureLabel as figureWord, figureText, type Say } from '../automation/words.js';
 import { useQuestions } from '../questions/store.js';
 import { forMe } from '../../questions/model.js';
 import { whenText } from '../areas/automation/Home.js';
@@ -25,9 +26,11 @@ const HOME: Location = { route: { area: 'automation', view: 'home' }, query: {} 
 const TASKS: Location = { route: { area: 'automation', view: 'tasks' }, query: {} };
 const runAt = (run: string): Location => ({ route: { area: 'automation', view: 'run', run }, query: {} });
 
-const figure = (f: WidgetFigure) => (f.key === 'withoutYou' ? `${f.pct} %` : String(f.n));
-const figureLabel = (f: WidgetFigure) => (f.key === 'withoutYou' ? t('dock.fig.withoutYou') : f.key === 'payments' ? t('dock.card.payments', { n: f.of }) : t(`dock.fig.${f.key}`, { n: f.n }));
-const cardLabel = (f: WidgetFigure) => (f.key === 'withoutYou' ? t('dock.fig.withoutYou') : f.key === 'payments' ? t('dock.card.payments', { n: f.of }) : t(`dock.card.${f.key}`, { n: f.n }));
+// The figures' words come from one place with Automatisierung's (#385 review).
+const say = t as unknown as Say;
+const figure = figureText;
+const figureLabel = (f: WidgetFigure) => figureWord(say, f);
+const cardLabel = (f: WidgetFigure) => cardWord(say, f);
 
 interface Words {
   /** The state word after the title in the wide bar. */
@@ -99,7 +102,7 @@ export function Dock({ current, books, keys, wide, onToggle, nav, canEdit, href,
   const busyRunNow = starting || w.run?.workflow === RUN_NOW;
 
   // The tip names what each figure counts: «5 Belege gelesen · 3 Belege gebucht · 11 warten auf dich».
-  const tipLines = [w.stack.map((f) => `${figure(f)} ${cardLabel(f)}`).join(' · '), words.now];
+  const tipLines = [dockLine(say, w), words.now];
   const stack = w.stack.map((f) => (
     <span key={f.key} className={`n ${f.key}`}><b>{figure(f)}</b><span>{figureLabel(f)}</span></span>
   ));
