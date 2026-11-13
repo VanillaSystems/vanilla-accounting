@@ -128,6 +128,10 @@ test('the bank merge matches by IBAN first: a second account of the same bank is
   assert.deepEqual(reasons(both), ['bankTwice']);
   assert.equal(both.reply.kind === 'read' && both.reply.say, '', 'the model\'s claim is not shown beside the refusal');
   assert.deepEqual(banksOf(both.draft), [['UBS', 'CHF', IBAN]]);
+  // The order the model writes them in changes nothing: [UBS B, UBS A] keeps A and refuses B, as [UBS A, UBS B] does.
+  const turned = applyTalk(d, out({ banks: [{ bank: 'UBS', currency: 'CHF', iban: B }, { bank: 'UBS', currency: 'CHF', iban: IBAN }] }), [second], 'CHF', '2026');
+  assert.deepEqual(reasons(turned), ['bankTwice'], 'was: B overwrote A by the correction rule, then A was refused');
+  assert.deepEqual(banksOf(turned.draft), [['UBS', 'CHF', IBAN]]);
   // [UBS B] alone, B not in her words: A is not overwritten.
   const alone = applyTalk(d, out({ banks: [{ bank: 'UBS', currency: 'CHF', iban: B }] }), ['noch ein UBS-Konto'], 'CHF', '2026');
   assert.deepEqual(banksOf(alone.draft), [['UBS', 'CHF', IBAN]], 'was: A replaced by B');

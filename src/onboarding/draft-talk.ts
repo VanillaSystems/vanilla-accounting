@@ -287,9 +287,9 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
     const banks: BankSpec[] = given.map((g) => ({ ...g }));
     const used = new Set<number>();
     const claim = (i: number) => { if (i >= 0) used.add(i); return i >= 0; };
-    for (const r of read) {
-      // By IBAN first: the account that holds it is this one.
-      if (r.iban && claim(banks.findIndex((b, i) => !used.has(i) && sameIban(b.iban, r.iban)))) continue;
+    // By IBAN first, over the whole list, so the order the model wrote it in changes nothing: the account that holds it is this one.
+    const rest = read.filter((r) => !(r.iban && claim(banks.findIndex((b, i) => !used.has(i) && sameIban(b.iban, r.iban)))));
+    for (const r of rest) {
       // Then by bank and currency, among the accounts not matched yet: an IBAN fills one that has none; without an IBAN any of them is meant.
       const open = banks.findIndex((b, i) => !used.has(i) && sameBank(b, r) && (!r.iban || !b.iban));
       if (claim(open)) { if (r.iban) banks[open].iban = r.iban; continue; }
