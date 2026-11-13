@@ -22,7 +22,8 @@ import { documents, withoutInputTax } from '../../../engines/index.js';
 import { filingStage, placedReceiptDay, type FilingStage } from '../../automation/home.js';
 import { unbookedPayments } from '../bank/model.js';
 import { journalOf, unsettledAtFiling, type EntryView, type Unsettled } from '../journal/model.js';
-import { ledgerOf, type ReceiptView } from '../receipts/model.js';
+import { ledgerOf, needsYou, type ReceiptView } from '../receipts/model.js';
+import { waitsForReading } from '../../../parsers/receipt-text.js';
 import { thresholdPassed } from '../vat/model.js';
 import { countIssues, dateOn, periodIssues, receiptWaiting, type IssueCounts } from './period-issues.js';
 
@@ -55,11 +56,31 @@ export interface OpenPeriodState {
   /** Receipts without a payment. */
   unlinked: Receipt[];
   /**
+   * The receipts that wait for the person's own word (#398): Belege's group of those that need her
+   * (`needsYou`), placed in the period as Belege places them (an undated one in the working period),
+   * that lack their date or amount, wait for their reading, or may be a copy of another. Each named
+   * with what it lacks; none of them is in `unlinked` again on the card.
+   */
+  yours: YourReceipt[];
+  /**
    * The workflows' tasks about the period: on a payment, a receipt or a booking dated in it, or on
    * the period itself («Abrechnung prüfen»). A task of another period, or of nothing dated (a source),
    * is not this period's state.
    */
   tasks: Task[];
+}
+
+/** What a receipt lacks for the app to go on without the person: its date, its amount, its reading, or her word that it is no copy. */
+export type Lack = 'date' | 'amount' | 'reading' | 'copy';
+export interface YourReceipt { receipt: Receipt; name: string; lacks: Lack[] }
+
+/** What `v` lacks, in the order Belege's row says it; empty when it only waits for its payment. */
+export function lacksOf(v: ReceiptView): Lack[] {
+  const reading = waitsForReading(v.r);
+  return [
+    ...(reading ? ['reading' as const] : [...(!v.date ? ['date' as const] : []), ...(v.r.amount == null ? ['amount' as const] : [])]),
+    ...(v.twin?.relation === 'duplicate' ? ['copy' as const] : []),
+  ];
 }
 
 /** The day of what a task is about, or `period` when it is about the period itself; undefined: about nothing dated. */
@@ -82,6 +103,11 @@ export function openPeriodState(
   const issues = periodIssues(books, questions, period.from, period.to, accounts, orderPages, ctx.today);
   const unbooked = issues.flatMap((i) => (i.kind === 'unbooked' ? [i.tx] : []));
   const refs = new Set(unbooked.map((t) => t.ref));
+  const l = ledgerOf(books, period.from, undefined, orderPages);
+  const yours = l.views.flatMap((v): YourReceipt[] => {
+    const lacks = lacksOf(v);
+    return lacks.length && needsYou(v, l) && !!v.day && v.day >= period.from && v.day <= period.to ? [{ receipt: v.r, name: v.vendor || v.r.filename, lacks }] : [];
+  });
   const about = (x: Task) => { const d = taskDay(books, x.item, period.from); return d === 'period' ? x.item.id === period.token : !!d && d >= period.from && d <= period.to; };
   return {
     period,
@@ -93,6 +119,7 @@ export function openPeriodState(
     questions: issues.flatMap((i) => (i.kind === 'question' ? [{ q: i.q, date: i.date }] : [])),
     evidence: issues.flatMap((i) => (i.kind === 'evidence' ? [{ entry: i.entry, check: i.check }] : [])),
     unlinked: issues.flatMap((i) => (i.kind === 'unlinked' ? [i.receipt] : [])),
+    yours,
     tasks: tasks.filter(about),
   };
 }
@@ -121,7 +148,7 @@ export interface Elsewhere<T extends Task = Task> {
 export function elsewhereOf<T extends Task>(books: Index, questions: readonly Question[], tasks: readonly T[], accounts: readonly LedgerBankAccount[], s: OpenPeriodState, length: FilingLength, stuck = 0, registered?: boolean, today: IsoDate = localToday()): Elsewhere<T> {
   const closed = books.config?.closedThrough;
   const inOpen = (date: string | undefined) => !closed || !date || date > closed;
-  const listed = { questions: new Set(s.questions.map((x) => x.q.id)), tasks: new Set(s.tasks.map((x) => x.run)), payments: new Set(s.unbooked.map((p) => p.ref)), entries: new Set(s.evidence.map((x) => x.entry.id)) };
+  const listed = { questions: new Set(s.questions.map((x) => x.q.id)), tasks: new Set(s.tasks.map((x) => x.run)), payments: new Set(s.unbooked.map((p) => p.ref)), entries: new Set(s.evidence.map((x) => x.entry.id)), receipts: new Set(s.yours.map((x) => x.receipt.id)) };
   const left = questions.filter((q) => q.status !== 'closed' && inOpen(dateOn(books, q)) && !listed.questions.has(q.id));
   const others = tasks.filter((x) => !listed.tasks.has(x.run));
   const taskRefs = new Set(others.filter((x) => x.item.kind === 'transaction').map((x) => x.item.id));
@@ -134,7 +161,7 @@ export function elsewhereOf<T extends Task>(books: Index, questions: readonly Qu
     unbooked: unbookedPayments(books, accounts).filter((p) => !listed.payments.has(p.ref) && !taskRefs.has(p.ref)),
     contradicting: journal.views.filter((v) => v.evidence && !listed.entries.has(v.e.id)),
     ...(unsettled?.items.length ? { unsettled } : {}),
-    twins: ledgerOf(books, closed ? addDays(closed, 1) : '0000-01-01').views.filter((v) => v.twin?.relation === 'duplicate' && !v.none && !v.locked),
+    twins: ledgerOf(books, closed ? addDays(closed, 1) : '0000-01-01').views.filter((v) => v.twin?.relation === 'duplicate' && !v.none && !v.locked && !listed.receipts.has(v.r.id)),
     assessments: missingAssessments(books, documents().customs, !withoutInputTax()),
     stuck,
     threshold: thresholdPassed(books, registered, today).map((w) => w.year),
@@ -147,7 +174,7 @@ export const elsewhereCount = (e: Elsewhere): number =>
 
 /** Whether anything of the period waits: a card with nothing on it says so in one line (and that nothing else does, only when `elsewhereOf` is empty too). */
 export const nothingOpen = (s: OpenPeriodState): boolean =>
-  !s.unbooked.length && !s.questions.length && !s.evidence.length && !s.unlinked.length && !s.tasks.length;
+  !s.unbooked.length && !s.questions.length && !s.evidence.length && !s.unlinked.length && !s.yours.length && !s.tasks.length;
 
 /** How many of the held payments are of each kind. */
 export const waitingKinds = (s: Pick<OpenPeriodState, 'waiting'>): Record<WaitingPayment['kind'], number> => ({
@@ -159,31 +186,43 @@ export const waitingKinds = (s: Pick<OpenPeriodState, 'waiting'>): Record<Waitin
 /** The most tasks the card lists one by one; the rest is counted in one line. */
 export const TASKS_SHOWN = 5;
 
-/** One line of the state: what it counts and the first object of it, where the person starts. */
+/** The most objects a line names one by one (#398): the rest is counted, with the way to all of them. */
+export const ITEMS_SHOWN = 5;
+
+/** One line of the state: what it counts, the objects it names one by one (at most ITEMS_SHOWN, `more` beyond them), and the first, where the person starts. */
 export type OpenLine =
+  /** The receipts that wait for her own word (`yours`). */
+  | { kind: 'yours'; n: number; items: YourReceipt[]; more: number }
   /** `waiting`: of them held by receiptWaits (countIssues' `waitingReceipt`, as the return's page says); `unread`: of those, held because their receipt's VAT cannot be read. */
-  | { kind: 'unbooked'; n: number; waiting: number; unread: number; first: BankTransaction }
+  | { kind: 'unbooked'; n: number; waiting: number; unread: number; first: BankTransaction; items: BankTransaction[]; more: number }
   | { kind: 'questions'; n: number }
   | { kind: 'evidence'; n: number; first: JournalEntry }
-  | { kind: 'unlinked'; n: number; first: Receipt }
+  /** The receipts without a payment that are not among `yours` (named once). */
+  | { kind: 'unlinked'; n: number; first: Receipt; items: Receipt[]; more: number }
   | { kind: 'task'; task: Task }
   /** The tasks beyond TASKS_SHOWN. */
   | { kind: 'moreTasks'; n: number };
 
+const shown = <T>(all: readonly T[]) => ({ n: all.length, items: all.slice(0, ITEMS_SHOWN), more: Math.max(0, all.length - ITEMS_SHOWN) });
+
 /**
- * The state as the lines of its card, in the order a person works them off; the tasks last, the
- * review among them. A task on a payment counted in the first line is that payment, named once.
- * At most TASKS_SHOWN tasks are lines of their own: the card says how many more there are.
+ * The state as the lines of its card, in the order a person works them off: what only she can say
+ * of a receipt first, the tasks last, the review among them. A task on a payment counted in the
+ * payments' line is that payment, and a receipt of `yours` is not among those without a payment:
+ * each object is named once. At most TASKS_SHOWN tasks are lines of their own.
  */
 export function openLines(s: OpenPeriodState): OpenLine[] {
   const refs = new Set(s.unbooked.map((t) => t.ref));
   const tasks = s.tasks.filter((x) => !(x.item.kind === 'transaction' && refs.has(x.item.id)));
   const kinds = waitingKinds(s);
+  const mine = new Set(s.yours.map((x) => x.receipt.id));
+  const unlinked = s.unlinked.filter((r) => !mine.has(r.id));
   return [
-    ...(s.counts.unbooked ? [{ kind: 'unbooked' as const, n: s.counts.unbooked, waiting: s.counts.waitingReceipt, unread: kinds.unread, first: s.unbooked[0] }] : []),
+    ...(s.yours.length ? [{ kind: 'yours' as const, ...shown(s.yours) }] : []),
+    ...(s.counts.unbooked ? [{ kind: 'unbooked' as const, ...shown(s.unbooked), n: s.counts.unbooked, waiting: s.counts.waitingReceipt, unread: kinds.unread, first: s.unbooked[0] }] : []),
     ...(s.counts.questions ? [{ kind: 'questions' as const, n: s.counts.questions }] : []),
     ...(s.counts.evidence ? [{ kind: 'evidence' as const, n: s.counts.evidence, first: s.evidence[0].entry }] : []),
-    ...(s.counts.unlinked ? [{ kind: 'unlinked' as const, n: s.counts.unlinked, first: s.unlinked[0] }] : []),
+    ...(unlinked.length ? [{ kind: 'unlinked' as const, ...shown(unlinked), first: unlinked[0] }] : []),
     ...tasks.slice(0, TASKS_SHOWN).map((task) => ({ kind: 'task' as const, task })),
     ...(tasks.length > TASKS_SHOWN ? [{ kind: 'moreTasks' as const, n: tasks.length - TASKS_SHOWN }] : []),
   ];

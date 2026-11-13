@@ -36,6 +36,8 @@ html.aiover .list { padding-left: 24px; padding-right: 16px; }
 .openp li, .aichanges .openp li { display: block; padding: 7px 0; border-top: 1px solid var(--line); border-radius: 0; background: none; font-size: 13px; line-height: 1.4; }
 .openp li small { display: block; color: var(--muted); font-size: 12px; }
 .openp .linkbtn { white-space: normal; text-align: left; }
+.openp ul.openp-items { margin: 4px 0 0 12px; gap: 0; }
+.openp ul.openp-items li, .aichanges .openp ul.openp-items li { border-top: 0; padding: 2px 0; font-size: 12px; }
 .aside .msg { max-width: 92%; padding: 8px 11px; border-radius: 10px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .aside .msg.me { align-self: flex-end; background: var(--accent-soft); }
 .aside .msg.me small { display: block; margin-top: 4px; font-size: 11px; color: var(--muted); }

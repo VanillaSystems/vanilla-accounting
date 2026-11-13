@@ -53,7 +53,7 @@ export interface Option {
 
 type Given = Readonly<Record<string, string | readonly string[] | undefined>>;
 
-interface QuestionSpec {
+export interface QuestionSpec {
   ask: string;
   /** One line, in plain words: why the answer matters. */
   why: string;
@@ -304,6 +304,29 @@ export const withoutUnsteered = <A extends Partial<Record<QuestionKey, unknown>>
  * it is «nein» to `vatRegistered`, given through `notRegistered`, the one way to an unregistered firm.
  */
 export const NO_VAT = 'no-vat' as const;
+
+/**
+ * The answers a question of the setup conversation offers, one per button (#398): its options, «Weiss
+ * nicht» where it has one (`unsure`), and «Wir rechnen keine MWST ab» on the questions of UNSTEERED.
+ * The conversation draws its buttons from this list and the model is told exactly these (talkPrompt),
+ * so the AI never names an answer that is not on the screen.
+ */
+export type Offered = { kind: 'option'; value: string } | { kind: 'unsure'; value: string } | { kind: 'noVat' };
+export function offeredAnswers(key: QuestionKey): Offered[] {
+  const unsure = unsureOf(key);
+  return [
+    ...QUESTIONS[key].options.map((o): Offered => ({ kind: 'option', value: o.value })),
+    ...(unsure ? [{ kind: 'unsure' as const, value: unsure }] : []),
+    ...(unsteered(key) ? [{ kind: 'noVat' as const }] : []),
+  ];
+}
+
+/** The words on an answer's button, through `say` (t() in the app, a dictionary's own on the server). */
+export function offeredLabel(say: (key: string, vars?: Record<string, string>) => string, key: QuestionKey, a: Offered): string {
+  if (a.kind === 'noVat') return say('desktop.q.noVat');
+  if (a.kind === 'unsure') return say('onboarding.draft.unsure', { answer: say(`desktop.q.${key}.${a.value}`) });
+  return say(`desktop.q.${key}.${a.value}`);
+}
 
 /** The answers of a firm not registered for VAT: «nein» to the registration, none of the questions only a registered firm gets. */
 export function notRegistered<A extends Partial<Record<QuestionKey, unknown>>>(answers: A): A {

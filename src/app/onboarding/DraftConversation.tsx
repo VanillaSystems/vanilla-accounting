@@ -9,12 +9,15 @@
  */
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { BANKS } from '../../workspace/banks.js';
-import { NO_VAT, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, hasWhere, optionOf, unsteered, unsureOf, unusualPeriod, type QuestionKey } from '../../workspace/setup.js';
+import { NO_VAT, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, hasWhere, offeredAnswers, offeredLabel, optionOf, unsteered, unusualPeriod, type QuestionKey } from '../../workspace/setup.js';
 import type { BankSpec } from '../../workspace/create.js';
 import type { NetRate } from '../../workspace/vat-setup.js';
 import { DRAFT_PHASES, assumedOf, draftProgress, draftSteps, type DraftPatch, type DraftStep, type Firm, type QuestionValue, type SetupDraft, type SetupDraftView, type StepMark } from '../../onboarding/draft.js';
 import type { SetupReply, TalkRefusal } from '../../onboarding/draft-talk.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
+
+/** t() for the data-driven keys of the setup's answers (offeredLabel). */
+const say = (key: string, vars?: Record<string, string>) => (vars ? t(key as 'onboarding.draft.unsure', vars as { answer: string }) : tData(key));
 import { api, errorText, setupText } from '../lib/api.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import { ICONS } from '../areas/icons.js';
@@ -267,8 +270,6 @@ function Step({ step, draft, currency, root, busy, send, change, taken, onCreate
 
 function QuestionStep({ step, draft, busy, send, change, fromText, turns }: { step: Extract<DraftStep, { id: 'question' }>; draft: SetupDraft; busy: boolean; send: Send; change: StepProps['change']; fromText: boolean; turns: ReactNode }) {
   const { key } = step;
-  /** «Weiss nicht»: the answer the setup takes then, named on the button (src/workspace/setup.ts `unsure`). */
-  const unsure = unsureOf(key);
   /** A period granted only on request, chosen by click: taken, with what is usual said after it. */
   const odd = key === 'period' && step.answer !== undefined ? unusualPeriod(draft.answers) : undefined;
   const multi = 'multi' in QUESTIONS[key];
@@ -289,18 +290,20 @@ function QuestionStep({ step, draft, busy, send, change, fromText, turns }: { st
       ) : (
         <div className="obind">
           <div className="qacts" role="group" aria-label={tData(`desktop.q.${key}.ask`)}>
-            {QUESTIONS[key].options.map((o) => {
-              const chosen = multi ? on.includes(o.value) : list(step.suggested).includes(o.value);
+            {/* One list draws the buttons and tells the model what they are (offeredAnswers, #398). */}
+            {offeredAnswers(key).map((a) => {
+              const label = offeredLabel(say, key, a);
+              if (a.kind === 'unsure') return <button key="unsure" type="button" className="btn ghost" disabled={busy} data-act="question-unsure" onClick={() => void send({ step: 'question', key, value: a.value })}>{label}</button>;
+              // the answer «we file no VAT returns» (#347): «nein» to the registration, the same patch as that answer.
+              if (a.kind === 'noVat') return <button key="noVat" type="button" className="btn" disabled={busy} data-answer={NO_VAT} onClick={() => void send({ step: 'question', key: 'vatRegistered', value: 'no' })}>{label}</button>;
+              const chosen = multi ? on.includes(a.value) : list(step.suggested).includes(a.value);
               return (
-                <button key={o.value} type="button" role={multi ? 'checkbox' : undefined} aria-checked={multi ? chosen : undefined} className={`btn${chosen ? ' primary' : ''}`} disabled={busy} data-answer={o.value} onClick={() => pick(o.value)}>
-                  {tData(`desktop.q.${key}.${o.value}`)}
+                <button key={a.value} type="button" role={multi ? 'checkbox' : undefined} aria-checked={multi ? chosen : undefined} className={`btn${chosen ? ' primary' : ''}`} disabled={busy} data-answer={a.value} onClick={() => pick(a.value)}>
+                  {label}
                 </button>
               );
             })}
             {multi ? <button type="button" className="btn" disabled={busy || ('required' in QUESTIONS[key] && !on.length)} data-act="question-next" onClick={() => void send({ step: 'question', key, value: on })}>{t('onboarding.draft.next')}</button> : null}
-            {unsure ? <button type="button" className="btn ghost" disabled={busy} data-act="question-unsure" onClick={() => void send({ step: 'question', key, value: unsure })}>{t('onboarding.draft.unsure', { answer: tData(`desktop.q.${key}.${unsure}`) })}</button> : null}
-            {/* the answer «we file no VAT returns» (#347): «nein» to the registration, the same patch as that answer. */}
-            {unsteered(key) ? <button type="button" className="btn" disabled={busy} data-answer={NO_VAT} onClick={() => void send({ step: 'question', key: 'vatRegistered', value: 'no' })}>{t('desktop.q.noVat')}</button> : null}
           </div>
           {key === 'vatMethod' ? <p className="obwhy" data-no-vat-hint>{t('desktop.q.noVat.hint')}</p> : null}
         </div>
