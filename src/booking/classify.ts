@@ -550,8 +550,10 @@ export function bookBillCorrections(books: Books, context: Pick<ClassifyContext,
 
 /** Why a provider's payout waits for the person (PayoutWait), in the books' language: what the run's note and the payment say. */
 export function payoutWaitReason(w: PayoutWait): string {
-  const key = w.why === 'clearing' ? 'salesReport.noClearing' : w.why === 'since' ? 'salesReport.noSince' : 'salesReport.gapPayout';
-  return wordsIn('de').t(key, { provider: w.provider.name, file: homeOf('workspace', w.provider.role, w.provider.id), since: w.provider.provider.since ?? '', account: w.provider.provider.clearing ?? '' });
+  // A provider without a sales report books its sales from its payout reports: no order export to wait for.
+  const own = w.provider.provider.reports.sales ? '' : 'NoSales';
+  const key = w.why === 'clearing' ? `salesReport.noClearing${own}` : w.why === 'since' ? `salesReport.noSince${own}` : 'salesReport.gapPayout';
+  return wordsIn('de').t(key as 'salesReport.gapPayout', { provider: w.provider.name, since: w.provider.provider.since ?? '', account: w.provider.provider.clearing ?? '' });
 }
 
 /**

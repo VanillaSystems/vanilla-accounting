@@ -81,7 +81,7 @@ const FEES = ['Transaction Date,Type,Order,Amount,Fee,Net,Currency',
   '2026-10-02 14:22:10 +0200,charge,#2001,108.10,3.44,104.66,CHF',
 ].join('\n');
 
-test('F08/F09: the drop row of a provider\'s report proposes «Durchlaufkonto Shopify» and the report\'s first day, names no file, and adds the account with the answer; the fee row then asks for the fees', { skip: noBrowser, timeout: 300_000 }, async () => {
+test('F08/F09: the drop row of a provider\'s report proposes «Durchlaufkonto Shopify» and the report\'s first day, one question at a time and once, names no file, and adds the account with the answer; the fee row then asks for the fees', { skip: noBrowser, timeout: 300_000 }, async () => {
   const app = await openApp();
   try {
     writeFileSync(join(app.api.root, 'knowledge', 'suppliers', 'shopify.yaml'), 'id: shopify\nprovider:\n  revenue: "3200"\n');
@@ -94,19 +94,29 @@ test('F08/F09: the drop row of a provider\'s report proposes «Durchlaufkonto Sh
     const c = await page.createCDPSession();
     const data = { items: [], files, dragOperationsMask: 1 };
     for (const type of ['dragEnter', 'dragOver', 'drop'] as const) await c.send('Input.dispatchDragEvent', { type, x: 700, y: 450, data });
-    await page.waitForFunction(() => document.querySelectorAll('[data-testid=drop-provider]').length === 2, { timeout: 60_000 });
+    // One question at a time, once: the fee row waits for the answer above instead of asking it again (#404).
+    await page.waitForFunction(() => document.querySelectorAll('[data-testid=drop-provider]').length === 1 && document.querySelectorAll('[data-testid=drop-provider-waits]').length === 1, { timeout: 60_000 });
     const text = await page.$eval('.dropdlg', (e) => (e as HTMLElement).innerText);
     assert.equal(text.includes('knowledge/'), false, 'no file path in the question');
     const first = '[data-testid=drop-provider]';
+    assert.equal(await page.$eval(first, (e) => e.getAttribute('data-step')), 'account');
     assert.equal(await page.$eval(`${first} input[name=account]`, (e) => (e as HTMLInputElement).value), '1093');
-    assert.equal(await page.$eval(`${first} input[type=date]`, (e) => (e as HTMLInputElement).value), '2026-10-02', 'the report\'s first day');
     assert.match(await page.$eval(`${first} .acn`, (e) => (e as HTMLElement).innerText), /Durchlaufkonto Shopify · wird angelegt/);
+    assert.match(await page.$eval(first, (e) => (e as HTMLElement).innerText), /Frage 1 von 2[\s\S]*Auf welchem Konto stehen die Verkäufe von Shopify[\s\S]*Vorschlag 1093 Durchlaufkonto Shopify/);
     await page.screenshot({ path: join(dir, 'drop-proposed.png') });
+    await page.$eval(`${first} button[type=submit]`, (e) => (e as HTMLElement).click());
+    await page.waitForFunction(() => document.querySelector('[data-testid=drop-provider]')?.getAttribute('data-step') === 'since', { timeout: 10_000 });
+    assert.equal(await page.$eval(`${first} input[name=since]`, (e) => (e as HTMLInputElement).value), '02.10.2026', 'the report\'s first day, as the app writes dates');
+    assert.match(await page.$eval(first, (e) => (e as HTMLElement).innerText), /Vorschlag 02\.10\.2026[\s\S]*Umstellungstag/);
+    await page.screenshot({ path: join(dir, 'drop-since.png') });
     await page.$eval(`${first} button[type=submit]`, (e) => (e as HTMLElement).click());
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=drop-provider]').length === 1 && document.querySelector<HTMLInputElement>('[data-testid=drop-provider] input[name=account]')?.value === '6580', { timeout: 60_000 });
     const chart = JSON.parse(readFileSync(join(app.api.root, 'master-data', 'accounts.json'), 'utf8')) as Array<{ number: string; name: string }>;
     assert.equal(chart.find((a) => a.number === '1093')?.name, 'Durchlaufkonto Shopify');
-    assert.equal(await page.$eval('[data-testid=drop-provider] input[aria-label=Steuercode]', (e) => (e as HTMLInputElement).value), 'I0');
+    assert.match(readFileSync(join(app.api.root, 'knowledge', 'suppliers', 'shopify.yaml'), 'utf8'), /since: 2026-10-02/);
+    // The fee code is said in words, not asked (AGENTS.md «Shopify billing»): I0, the input tax from the monthly invoice.
+    assert.equal(await page.$('[data-testid=drop-provider] input[aria-label=Steuercode]'), null);
+    assert.match(await page.$eval(first, (e) => (e as HTMLElement).innerText), /ohne Vorsteuer \(I0\)[\s\S]*Monatsrechnung von Shopify/);
     await page.screenshot({ path: join(dir, 'drop-fees.png') });
     console.log(`screenshots: ${dir}`);
     assert.deepEqual(app.errors, []);

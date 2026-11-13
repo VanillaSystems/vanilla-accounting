@@ -19,6 +19,7 @@ import { openEngine, type Engine } from '../../workflows/engine.js';
 import { loadWorkflows } from '../../workflows/load.js';
 import { summaryOf, taskOf, textIn, type AutomationCommand, type AutomationView, type PendingVersion, type Run, type RunDetail, type Task, type TaskPayment, type WorkflowDecl } from '../../workflows/model.js';
 import { baseline, caseCheck, openSwitch } from '../../workflows/switch-on.js';
+import { bookWhatWaited } from '../provider-payouts.js';
 import { setSchedule } from '../../workflows/direct.js';
 import { cronValid } from '../../workflows/cron.js';
 import { loadBooks } from '../../books/store.js';
@@ -185,7 +186,10 @@ router.post('/api/automation', async (req, res) => {
     res.json({ ok: false, refusal: 'not-waiting', detail: CLOSED_REASON });
     return;
   }
-  res.json(await engine().command(cmd));
+  const out = await engine().command(cmd);
+  // The booking switched on: the provider payouts code decides are booked now, in code (#404).
+  const payouts = cmd.kind === 'approve' && out.ok ? await bookWhatWaited(cmd.workflow) : undefined;
+  res.json(payouts ? { ...out, payouts } : out);
 });
 
 /** The direct way, without AI: a workflow's schedule, or null to switch it off. It applies at once and waits in Änderungen to be saved. */
