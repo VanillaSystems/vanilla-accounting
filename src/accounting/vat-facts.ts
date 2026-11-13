@@ -55,6 +55,8 @@ export function setVatFacts(r: Receipt, facts: Omit<Held, 'vatBy'>, by: 'human' 
   const lineItems = 'lineItems' in facts ? facts.lineItems
     : r.lineItems?.every((l) => l.ratePercent === undefined || rates.has(l.ratePercent)) ? r.lineItems : undefined;
   for (const k of ['hasSwissVat', 'vatSummary', 'vatId', 'lineItems', 'vatBy'] as const) delete r[k];
+  // A person's facts end the count of failed reads (#450); without facts the step reads it afresh.
+  delete r.vatReadFailures;
   // No facts at all: unread, so the VAT step reads the receipt again.
   if (facts.hasSwissVat === undefined) delete r.vatExtractedAt;
   Object.assign(r, Object.fromEntries(Object.entries({ ...facts, lineItems, vatBy: by ?? undefined }).filter(([, v]) => v !== undefined)));

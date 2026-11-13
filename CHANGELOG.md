@@ -16,6 +16,18 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- A receipt whose VAT read keeps failing (#450), books schema 9: the VAT step counts on the
+  receipt each reply of the AI that came and carried no VAT facts (not JSON, or without whether
+  Swiss VAT was charged and its rates). A call that brought no reply counts nothing: the AI off or
+  signed out, its plan's limit, no program, a timeout, a network error, a rate limit; the first
+  refusal ends the run's VAT reads, and its note says the AI was not reachable. After the third
+  the receipt is «Beleg nicht lesbar»: the step stops trying it, its payment reaches the task with
+  its ways out (neu fotografieren, ohne Vorsteuer buchen, die MWST unter Angaben eintragen), the
+  run note says «nach 3 Versuchen nicht lesbar» with the files, and the receipt shows «MWST nach 3
+  Versuchen nicht lesbar». A read that succeeds, a new text or her typed VAT starts the count
+  afresh; a receipt of a filed period is never counted. The read in «Buchen» now writes as the
+  inbox, not as the person. Books of schema 8 load unchanged (no receipt has a count);
+  `npm run update` writes 9, and an app of schema 8 refuses books of 9.
 - Card statement lines (#409), **⚠ figures**, books schema 8: the app reads a credit card
   statement's lines by code (day, merchant, amount, the merchant's own currency and amount when the
   line names one) and keeps them on its receipt, only when they add up to the total the statement
