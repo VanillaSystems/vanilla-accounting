@@ -106,6 +106,38 @@ test('#493 review: a gross read above what the tax proves (the total, a net of 1
   assert.deepEqual(check([room('I38'), kurtaxe('I0')], [bill('hotel', 164, [{ ratePercent: 3.8, vat: 0, gross: 164 }])]), [undefined, undefined], 'vat 0');
 });
 
+test('#493 re-review: a tax printed 1 or 2 Rappen low on a whole bill is no over-claim: no finding, no cap', () => {
+  let n = 0;
+  const id = () => `r${++n}`;
+  for (const [what, r, code] of [
+    ['108.10 at 8.1 %, tax 8.09', bill('a', 108.1, [{ ratePercent: 8.1, gross: 108.1, vat: 8.09 }]), 'I81'],
+    ['102.60 at 2.6 %, tax 2.59', bill('a', 102.6, [{ ratePercent: 2.6, gross: 102.6, vat: 2.59 }]), 'I26'],
+    ['47.35 at 2.6 %, tax 1.18', bill('a', 47.35, [{ ratePercent: 2.6, gross: 47.35, vat: 1.18 }]), 'I26'],
+    ['net 100, tax 8.09', bill('a', 108.09, [{ ratePercent: 8.1, net: 100, vat: 8.09 }]), 'I81'],
+  ] as const) {
+    const whole = [line('w', r.amount!, code)];
+    assert.deepEqual(check(whole, [r]), [undefined], what);
+    assert.equal(capAtReceipts(whole, [r], id), whole, what);
+  }
+});
+
+test('#493 re-review: a group read above its tax counts with the tax\'s rounding, and the cap and the check measure it alike', () => {
+  const noTotal = bill('hotel', undefined, [{ ratePercent: 3.8, vat: 5.78, gross: 164 }]);
+  assert.deepEqual(check([room('I38'), kurtaxe('I0')], [noTotal]), [undefined, undefined], 'without a total: 158 I38 + 6 I0 fit');
+  const misread = bill('hotel', 164, [{ ratePercent: 3.8, vat: 5.78, gross: 164 }]);
+  let n = 0;
+  const capped = capAtReceipts([room('I38', 164)], [misread], () => `c${++n}`);
+  assert.deepEqual(capped.map((e) => [e.amount, e.vatCode]), [[157.89, 'I38'], [6.11, 'I0']]);
+  assert.deepEqual(check(capped, [misread]), [undefined, undefined], 'what the cap books, the check finds fitting');
+});
+
+test('#493 re-review: a credit line at the bill\'s rate offsets the claim; one at a rate the bill does not show opens no room', () => {
+  assert.deepEqual(check([line('a', 120, 'I81'), line('b', -20, '-I81')], [tipped]), [undefined, undefined], '120 less 20 on a bill of 100');
+  assert.equal(check([line('a', 120, 'I81'), line('b', -10, '-I81')], [tipped])[0]?.kind, 'receiptGroups', '120 less 10 still claims beyond');
+  const parts = capAtReceipts([line('a', 100, 'I26'), line('b', -20, '-I26')], [tipped], () => 'm1').map((e) => [e.id, e.amount, e.vatCode]);
+  assert.deepEqual(parts, [['a', 100, 'I81'], ['b', -20, '-I26']], 'the bill shows 8.1 % on 100, no 2.6 %');
+});
+
 // ─── The app's own runs ─────────────────────────────────────────────────────────────────────────
 
 test('#493 review: capAtReceipts counts the lines at a rate together, takes a credit line into account, and leaves a group without its tax alone', () => {

@@ -9,7 +9,7 @@
  * the import VAT would claim the rate's tax on the tax itself.
  */
 import { baseCurrency, documents, vat } from '../engines/index.js';
-import type { InputTaxProof, JournalEntry, Mapping, Receipt } from '../types/index.js';
+import type { InputTaxProof, JournalEntry, Mapping, Receipt, VatRateGroup } from '../types/index.js';
 
 /**
  * `decided`: a person or the AI sidebar on her wish chose the code (JournalEntry.by) with the
@@ -97,6 +97,29 @@ const TOLERANCE = 0.05;
 const cents = (n: number): number => Math.round(n * 100) / 100;
 const PURCHASE = /^(-?)([MI])(\d+)$/;
 
+/** How far a tax read may stand from the tax its gross implies before the two disagree (#493 review): a receipt's per-item rounding, a reader off by a cent. */
+export const TAX_GAP = 0.05;
+
+/**
+ * The gross one VAT group taxes, by the receipt's own figures (#469), the one measure of the evidence
+ * check and of the booking's cap: its gross as read (or its net and tax), unless its tax disagrees
+ * with it by more than TAX_GAP (the total read for the group's gross, a net for a gross): then, as
+ * for a group named by its tax alone, the gross its tax proves, tax × (100 + rate) / rate, with
+ * `slack` the tax's rounding to the cent. `taxRead`: false for a group at a rate whose tax was not
+ * read (vat 0), which proves no amount. Undefined for a group without any amount: at 0 % it names
+ * nothing (its part is the rest of the total).
+ */
+export function groupGross(g: VatRateGroup): { gross: number; slack: number; taxRead: boolean } | undefined {
+  const read = g.gross ?? (g.net !== undefined ? g.net + g.vat : undefined);
+  const rate = g.ratePercent;
+  if (!(rate > 0)) return read === undefined ? undefined : { gross: Math.abs(read), slack: 0, taxRead: true };
+  const tax = Math.abs(g.vat);
+  if (!(tax > 0)) return { gross: Math.abs(read ?? 0), slack: 0, taxRead: false };
+  const proved = { gross: (tax * (100 + rate)) / rate, slack: (0.005 * (100 + rate)) / rate, taxRead: true };
+  if (read === undefined) return proved;
+  return Math.abs((Math.abs(read) * rate) / (100 + rate) - tax) > TAX_GAP ? { ...proved, gross: cents(proved.gross) } : { gross: Math.abs(read), slack: 0, taxRead: true };
+}
+
 /**
  * The gross per rate the receipts show, in `currency`: each VAT group read (a receipt without Swiss
  * VAT its whole total at 0 %), and `rest`, what their totals hold beyond the groups read. The rest
@@ -105,17 +128,15 @@ const PURCHASE = /^(-?)([MI])(\d+)$/;
  * another currency is left out (#455 review). A group named by its tax alone counts at the gross its
  * tax proves, tax × (100 + rate) / rate; when that is the receipt's total but for the tax's rounding
  * to the cent, it is the total; `slack` is how far such a gross may stand from the true one, which every
- * comparison with it allows. `taxed`: per rate the receipts name, the gross their tax proves taxed at
- * it, tax × (100 + rate) / rate, with `taxSlack` its tax's rounding; absent for a rate a group of
- * which shows no tax (#469). Undefined when no receipt is in `currency`, or one was not read, has
+ * comparison with it allows. Each group counts by groupGross. `tax`: per rate the receipts name, the
+ * tax they show at it; absent for a rate a group of which shows no tax (#469). Undefined when no receipt is in `currency`, or one was not read, has
  * a group at a rate not of the jurisdiction (a foreign VAT) or by no amount, or shows groups above
  * its total: then there is nothing to compare a booking with.
  */
-function receiptGroups(receipts: readonly Receipt[], currency: string): { groups: Map<number, number>; rest: number; slack: number; taxed: Map<number, number>; taxSlack: Map<number, number> } | undefined {
+function receiptGroups(receipts: readonly Receipt[], currency: string): { groups: Map<number, number>; rest: number; slack: number; tax: Map<number, number> } | undefined {
   if (!receipts.length) return undefined;
   const groups = new Map<number, number>();
-  const taxed = new Map<number, number>();
-  const taxSlack = new Map<number, number>();
+  const tax = new Map<number, number>();
   const untaxed = new Set<number>();
   let rest = 0;
   let slackAll = 0;
@@ -135,23 +156,17 @@ function receiptGroups(receipts: readonly Receipt[], currency: string): { groups
     let slack = 0;
     let derived: number | undefined;
     for (const g of r.vatSummary ?? []) {
+      if (g.ratePercent > 0 && !vat().isDomesticRate(g.ratePercent)) return undefined;
       // A group at 0 % without an amount («0 %» and no figure, as the reader leaves the untaxed part) names nothing: its part is the rest.
-      if (g.ratePercent === 0 && g.gross === undefined && g.net === undefined) continue;
-      const byTax = g.ratePercent > 0 && g.gross === undefined && g.net === undefined && g.vat !== undefined;
-      let gross = g.gross ?? (g.net !== undefined ? g.net + g.vat : byTax ? (g.vat * (100 + g.ratePercent)) / g.ratePercent : undefined);
-      if (gross === undefined || (g.ratePercent > 0 && !vat().isDomesticRate(g.ratePercent))) return undefined;
-      if (byTax) { slack += (0.005 * (100 + g.ratePercent)) / g.ratePercent; derived = g.ratePercent; }
+      const counted = groupGross(g);
+      if (!counted) continue;
+      if (counted.slack) { slack += counted.slack; derived = g.ratePercent; }
       if (g.ratePercent > 0) {
-        const proved = (Math.abs(g.vat) * (100 + g.ratePercent)) / g.ratePercent;
-        const rounding = (0.005 * (100 + g.ratePercent)) / g.ratePercent;
-        if (!(Math.abs(g.vat) > 0)) untaxed.add(g.ratePercent);
-        // A gross read above what its tax proves (the total read for the group's gross, a net for a gross): the group is what the tax proves, the rest is the rest (#469).
-        else if (Math.abs(gross) > proved + rounding) gross = cents(proved);
-        taxed.set(g.ratePercent, (taxed.get(g.ratePercent) ?? 0) + proved);
-        taxSlack.set(g.ratePercent, (taxSlack.get(g.ratePercent) ?? 0) + rounding);
+        if (!counted.taxRead) untaxed.add(g.ratePercent);
+        tax.set(g.ratePercent, (tax.get(g.ratePercent) ?? 0) + Math.abs(g.vat));
       }
-      add(g.ratePercent, Math.abs(gross));
-      shown += Math.abs(gross);
+      add(g.ratePercent, counted.gross);
+      shown += counted.gross;
     }
     slackAll += slack;
     if (total === undefined) {
@@ -165,8 +180,8 @@ function receiptGroups(receipts: readonly Receipt[], currency: string): { groups
     if (shown > total + TOLERANCE + slack) return undefined;
     if (total - shown > TOLERANCE) rest += total - shown;
   }
-  for (const rate of untaxed) taxed.delete(rate);
-  return { groups, rest, slack: slackAll, taxed, taxSlack };
+  for (const rate of untaxed) tax.delete(rate);
+  return { groups, rest, slack: slackAll, tax };
 }
 
 /** The gross per rate the lines book. */
@@ -229,7 +244,7 @@ function groupCheck(e: JournalEntry, own: readonly Receipt[], receipts: readonly
   const currency = e.exchangeCurrency ?? baseCurrency();
   const read = receiptGroups(own, currency);
   if (!read) return null;
-  const { groups, rest, slack, taxed, taxSlack } = read;
+  const { groups, rest, slack, tax } = read;
   const tolerance = TOLERANCE + slack;
   const open = rest > TOLERANCE;
   const named = [...groups.values()].filter((g) => g > TOLERANCE).length;
@@ -249,10 +264,20 @@ function groupCheck(e: JournalEntry, own: readonly Receipt[], receipts: readonly
   const filed = lines.some((l) => l.id !== e.id && closed(l) && same(l));
   const mates = [e, ...lines.filter((l) => l.id !== e.id && !closed(l))].filter(same).sort((a, b) => lines.indexOf(a) - lines.indexOf(b));
   const booked = bookedGroups(mates);
+  // A minus line on the same receipts takes back what the lines claim at its rate, never below nothing nor at a rate they do not claim.
+  if (!sign) {
+    for (const l of lines) {
+      const m = PURCHASE.exec(l.vatCode ?? '');
+      const theirs = lineReceipts(l, receipts);
+      if (!m?.[1] || l.corrects || closed(l) || !vat().codes.parse(l.vatCode!) || (l.exchangeCurrency ?? baseCurrency()) !== currency || theirs.length !== own.length || !theirs.every((r) => own.includes(r))) continue;
+      const rate = rateOf(l);
+      if (booked.has(rate)) booked.set(rate, Math.max(0, booked.get(rate)! - Math.abs(l.amount)));
+    }
+  }
   const over = (rate: number) => (rate === 0
     ? (booked.get(0) ?? 0) > (groups.get(0) ?? 0) + rest + tolerance
     : open
-      ? taxed.has(rate) && (booked.get(rate) ?? 0) > taxed.get(rate)! + TOLERANCE + (taxSlack.get(rate) ?? 0)
+      ? tax.has(rate) && ((booked.get(rate) ?? 0) * rate) / (100 + rate) - tax.get(rate)! > TAX_GAP
       : (booked.get(rate) ?? 0) > (groups.get(rate) ?? 0) + tolerance);
   const first = mates.find((l) => over(rateOf(l)));
   if (first?.id !== e.id) return undefined;
@@ -273,8 +298,8 @@ function groupCheck(e: JournalEntry, own: readonly Receipt[], receipts: readonly
 /**
  * A line of a card's whole settlement (evidenceOf `unplaced`) at a rate, with the payment's other
  * lines at that rate, against the tax every purchase receipt of the payment shows at it (#469): its
- * lines' bills and the settlement's own, in the line's currency. Booked beyond the gross that tax
- * proves (tax × (100 + rate) / rate), the first such line of the whole settlement carries the finding,
+ * lines' bills and the settlement's own, in the line's currency. Claiming more tax than they show
+ * (by more than TAX_GAP), the first such line of the whole settlement carries the finding,
  * without a click: which card line holds the rest cannot be told. Undefined when the booking fits,
  * or a receipt cannot be set against it: one not read, a group at the rate without its tax, or a
  * receipt in another currency that shows the rate.
@@ -283,17 +308,15 @@ function settlementOver(e: JournalEntry, rate: number, linked: readonly Receipt[
   const currency = e.exchangeCurrency ?? baseCurrency();
   const receipts = linked.filter(isPurchaseDocument);
   if (!receipts.length || receipts.some((r) => r.hasSwissVat === undefined || (r.hasSwissVat && !r.vatSummary?.length))) return undefined;
-  let taxed = 0;
-  let slack = 0;
+  let tax = 0;
   let gross = 0;
   for (const r of receipts.filter((x) => x.hasSwissVat)) {
     const at = (r.vatSummary ?? []).filter((g) => g.ratePercent === rate);
     if (!at.length) continue;
     if ((r.currency ?? baseCurrency()) !== currency || at.some((g) => !(Math.abs(g.vat) > 0))) return undefined;
     for (const g of at) {
-      taxed += (Math.abs(g.vat) * (100 + rate)) / rate;
-      slack += (0.005 * (100 + rate)) / rate;
-      gross += Math.abs(g.gross ?? (g.net !== undefined ? g.net + g.vat : (g.vat * (100 + rate)) / rate));
+      tax += Math.abs(g.vat);
+      gross += groupGross(g)!.gross;
     }
   }
   const atRate = lines.filter((l) => {
@@ -301,7 +324,7 @@ function settlementOver(e: JournalEntry, rate: number, linked: readonly Receipt[
     return !!m && !l.corrects && vat().codes.parse(l.vatCode!)?.rate === rate && (l.exchangeCurrency ?? baseCurrency()) === currency;
   });
   const booked = atRate.reduce((s, l) => s + (l.vatCode!.startsWith('-') ? -1 : 1) * Math.abs(l.amount), 0);
-  if (booked <= taxed + TOLERANCE + slack) return undefined;
+  if ((booked * rate) / (100 + rate) - tax <= TAX_GAP) return undefined;
   const closed = (l: JournalEntry) => !!closedThrough && l.date <= closedThrough;
   const first = atRate.find((l) => !l.vatCode!.startsWith('-') && !closed(l) && evidenceOf(l, linked, bills).whole);
   if (first?.id !== e.id) return undefined;
@@ -361,8 +384,8 @@ export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], close
     // The rate on the whole line only where the receipt taxes it whole, with what the lines beside it book at the rate (#469).
     // A group whose tax was not read proves no amount: beside a line at its rate the zero line may be the untaxed part, nothing is said.
     const beside = lines.filter((l) => taxedBeside(l) && vat().codes.parse(l.vatCode!)!.rate === shown).reduce((s, l) => s + Math.abs(l.amount), 0);
-    if (read && !read.taxed.has(shown) && beside > TOLERANCE) return undefined;
-    const at = read?.taxed.has(shown) ? read.groups.get(shown) : undefined;
+    if (read && !read.tax.has(shown) && beside > TOLERANCE) return undefined;
+    const at = read?.tax.has(shown) ? read.groups.get(shown) : undefined;
     if (read && at !== undefined) {
       const left = cents(at - beside);
       const amount = Math.abs(e.amount);

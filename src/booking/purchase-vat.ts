@@ -16,7 +16,7 @@
  * company's word goes before the app's, unless that file states such a choice itself. The company's executable rules book before the model and
  * a person's booking is never classified, so neither reaches this.
  */
-import { evidenceCheck, isPurchaseDocument, lineReceipts } from '../accounting/evidence-check.js';
+import { evidenceCheck, groupGross, isPurchaseDocument, lineReceipts } from '../accounting/evidence-check.js';
 import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { isUnreadable, vatNotRead } from '../accounting/receipt-due.js';
 import { baseCurrency, vat, yearEnd } from '../engines/index.js';
@@ -167,9 +167,11 @@ export function capAtBills(entries: JournalEntry[], bills: readonly Receipt[], c
  * the rest to the zero code of that family. Only where the receipts' VAT is known: every purchase
  * document read, in the lines' currency, each group at a rate of the jurisdiction with its tax
  * read; else, and for a line in another currency, a minus code, or a code without a rate, the
- * entries stay as they are. A group counts at the larger of its gross as read and the gross its tax
- * proves (a net read for a gross never shaves a line); the lines at a rate count together, less a
- * minus line at that rate of the same booking (a credit within the payment).
+ * entries stay as they are. A group counts by groupGross, as the evidence check counts it: its
+ * gross as read, or what its tax proves where the two disagree (a net read for a gross never shaves
+ * a line, a total read for a group's gross never keeps the rate on all of it); the lines at a rate
+ * count together, less a minus line at a rate the receipts show, of the same booking (a credit
+ * within the payment).
  */
 export function capAtReceipts(entries: JournalEntry[], documents: readonly Receipt[], newId: () => string): JournalEntry[] {
   const receipts = documents.filter(isPurchaseDocument);
@@ -183,11 +185,9 @@ export function capAtReceipts(entries: JournalEntry[], documents: readonly Recei
   for (const r of receipts.filter((x) => x.hasSwissVat)) {
     for (const g of r.vatSummary!) {
       if (!(g.ratePercent > 0)) continue;
-      // The gross its tax proves only where the gross read lies below it by more than the tax's rounding.
-      const proved = (Math.abs(g.vat) * (100 + g.ratePercent)) / g.ratePercent;
-      const read = Math.abs(grossOf(g));
-      left.set(g.ratePercent, (left.get(g.ratePercent) ?? 0) + (proved > read + (0.005 * (100 + g.ratePercent)) / g.ratePercent ? proved : read));
-      if (g.gross === undefined && g.net === undefined) slack.set(g.ratePercent, (slack.get(g.ratePercent) ?? 0) + (0.005 * (100 + g.ratePercent)) / g.ratePercent);
+      const counted = groupGross(g)!;
+      left.set(g.ratePercent, (left.get(g.ratePercent) ?? 0) + counted.gross);
+      if (counted.slack) slack.set(g.ratePercent, (slack.get(g.ratePercent) ?? 0) + counted.slack);
     }
   }
   const rated = (e: JournalEntry) => {
@@ -195,11 +195,11 @@ export function capAtReceipts(entries: JournalEntry[], documents: readonly Recei
     const rate = m && !m[1] && !settlesVat(e.accountDebit) && !settlesVat(e.accountCredit) && (e.exchangeCurrency ?? baseCurrency()) === currency ? vat().codes.parse(e.vatCode!)?.rate : undefined;
     return rate ? { rate, family: m![2] } : undefined;
   };
-  // A minus line at a rate takes back what a line at it claims in the same booking.
+  // A minus line at a rate the receipts show takes back what a line at it claims in the same booking; at another rate it opens no room.
   for (const e of entries) {
     const m = ratedCode.exec(e.vatCode ?? '');
     const rate = m?.[1] && (e.exchangeCurrency ?? baseCurrency()) === currency ? vat().codes.parse(e.vatCode!)?.rate : undefined;
-    if (rate) left.set(rate, (left.get(rate) ?? 0) + Math.abs(e.amount));
+    if (rate && (left.get(rate) ?? 0) > 0) left.set(rate, left.get(rate)! + Math.abs(e.amount));
   }
   // Each line first on its own rate, in order, the lines at a rate together; then what is over goes to the rates left unused.
   const over = new Map<JournalEntry, number>();
