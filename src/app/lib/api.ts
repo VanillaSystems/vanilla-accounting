@@ -219,12 +219,14 @@ export function errorText(e: unknown): string {
       return t(`error.statementRead.${p.why}`, { row: p.row ?? '', rows: p.rows ?? '', limit: p.limit ?? '' });
     }
     case 'readsRunning': return t('error.readsRunning');
+    case 'emptyRef': return t('error.emptyRef');
     case 'notInTrash': return t('error.notInTrash');
     case 'deletedAgain': return t('error.deletedAgain');
     case 'alreadyBack': return t('error.alreadyBack');
     case 'statement': {
       const { reason, detail = '', unknown, problem, closed } = b.params;
       if (reason === 'duplicate') return t('error.statement.duplicate', { detail: detail.split('/').pop() ?? detail });
+      if (reason === 'unreferenced') return t('error.statement.unreferenced', { n: b.params.n ?? 0, bank: b.params.bank ?? '' });
       // A firm that files no return has closed periods, not filed ones (r9k-9).
       if (reason === 'filedPayments') return closed ? t(vatSetup().registered ? 'error.statement.filedPayments' : 'error.statement.closedPayments', { n: closed.n, through: formatDate(closed.through), from: formatDate(dayAfter(closed.through)), refs: closed.refs.slice(0, 5).join(', ') }) : b.error;
       if (reason === 'account') return problem ? statementProblemText(problem) : unknown ? t('error.statement.unknownAccount', unknown) : t('error.statement.account');

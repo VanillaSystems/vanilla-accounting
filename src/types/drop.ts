@@ -5,10 +5,9 @@
  * with an open question waits for its answer. «Rückgängig» takes a file back out. Passwords are
  * never part of it.
  */
-
 import type { AccountChoice, UnknownAccount } from './api-error.js';
 import type { OtherWhy, SupportingWhy } from '../core/modules/schema.js';
-import type { TwinWhy } from './index.js';
+import type { StatementImport, TwinWhy } from './index.js';
 import type { CsvAsk, CsvColumns, ReadBy, ReadStatement, StatementRead } from './statement-read.js';
 
 /** What a file is. Unset while nobody knows (the row asks). */
@@ -81,7 +80,7 @@ export interface DropRow {
   /** Not a receipt: the name it got in data/quarantine/. */
   quarantined?: string;
   /** A statement: its file under bank-statements/, the payments it added, and the account (ledger number) it was read into. */
-  statement?: { file: string; refs: string[]; account?: string };
+  statement?: { file: string; refs: string[]; account?: string; emptyRefs?: StatementImport['emptyRefs']; again?: true };
   /** A payment provider's sales or fee report (a CSV its file's columns recognise, #203): whose, and which kind. */
   provider?: { id: string; name: string; kind: 'sales' | 'fees' };
   /** Another export of a provider (its payouts list, #406): whose, what it is, and where the provider's reports are exported. */
@@ -259,6 +258,8 @@ export type DropAction =
   | { kind: 'undo' }
   /** A statement of an unknown account is the owner's private one: set aside. */
   | { kind: 'private' }
+  /** A statement of an account the books lacked (`unknownAccount`), now added as the firm's (PATCH /api/workspace addBank, the way Firma › Geldkonten adds one): read in at once (#401). */
+  | { kind: 'firmAccount' }
   /** A statement of one of the accounts it offered (`chooseAccount`): read into that one. */
   | { kind: 'account'; account: string }
   /** A statement taken onto its bank's account (`byBank`) belongs to another: taken back out, and asked which. */

@@ -1,3 +1,4 @@
+import { STATEMENT_KINDS, type StatementKind } from '../../workspace/banks.js';
 import express, { Router } from 'express';
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
@@ -128,7 +129,10 @@ function bankPatch(raw: unknown): BankPatch {
  * uses, every statement would list under both and the balance sheet would show the account twice.
  */
 function newBank(raw: unknown): NewBank {
-  const b = patchBody(raw, ['bank', 'currency', 'account', 'label', 'iban', 'role']);
+  const b = patchBody(raw, ['bank', 'currency', 'account', 'label', 'iban', 'role', 'statements']);
+  // How its statements are read (#401): a second Wise account under another name still reads as Wise's.
+  const statements = b.statements === undefined ? undefined : stringField(b, 'statements');
+  if (statements !== undefined && !STATEMENT_KINDS.includes(statements as StatementKind)) throw new RequestError(400, `statements: ${STATEMENT_KINDS.join(', ')}.`);
   const account = stringField(b, 'account').trim();
   // A money account of another kind than a bank's (#216: an employee's, asked once by «Von Mitarbeitenden bezahlt»); never a second owner's.
   const role = b.role === undefined ? undefined : stringField(b, 'role');
@@ -149,7 +153,7 @@ function newBank(raw: unknown): NewBank {
     if (side !== 'assets' && side !== 'liabilities') throw new RequestError(400, `Konto ${account} ist kein Bilanzkonto: das Konto einer Mitarbeiterin ist eine Schuld oder ein Guthaben der Firma.`, { code: 'moneyAccountSide', params: { account } });
     if (!knownCurrencies().has(currency)) throw new RequestError(400, `Die Währung ${currency} kennen die Bücher nicht: ${[...knownCurrencies()].join(', ')}.`, { code: 'unknownCurrency', params: { currency, known: [...knownCurrencies()].join(', ') } });
   }
-  return { bank, currency, account, label: stringField(b, 'label'), iban: optText(b, 'iban') ?? undefined, ...(role ? { role: role as MoneyRole } : {}) };
+  return { bank, currency, account, label: stringField(b, 'label'), iban: optText(b, 'iban') ?? undefined, ...(role ? { role: role as MoneyRole } : {}), ...(statements ? { statements: statements as StatementKind } : {}) };
 }
 
 /** The currencies of the books: the base currency, those of the money accounts and those the official rate table converts. */

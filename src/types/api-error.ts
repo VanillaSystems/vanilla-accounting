@@ -155,6 +155,8 @@ export type ApiRefusal =
   | { code: 'statementRead'; params: StatementReadParams }
   /** A reading of the kept statement PDFs runs already (#243). */
   | { code: 'readsRunning'; params: Record<string, never> }
+  /** A write would put a payment, a link or an entry on an empty ref (src/books/store.ts EmptyRefError, #401). */
+  | { code: 'emptyRef'; params: Record<string, never> }
   /** A bank account's IBAN typed in Firma › Bankkonten or the invoicing setup fails the length or check-digit test. */
   | { code: 'iban'; params: { bank: string; detail: string } }
   /** Firma › Firma: the company UID typed has a wrong shape or check digit (r9c-5). */
@@ -304,13 +306,15 @@ export type StatementProblem =
  */
 export interface AccountChoice { kind: 'whichAccount'; currency: string; iban?: Iban; accounts: Array<{ account: string; bank: string; label: string }>; proposed?: string }
 
-export type StatementRefusal = 'format' | 'notCamt' | 'account' | 'name' | 'duplicate' | 'filedPayments' | 'read';
+export type StatementRefusal = 'format' | 'notCamt' | 'account' | 'name' | 'duplicate' | 'filedPayments' | 'read' | 'unreferenced';
 
 /**
  * Why a statement was refused (nothing written). `account`: it lands on no bank account, `problem`
  * says why in detail and `unknown` names the account the UI offers to add. `filedPayments`: it
  * holds payments dated in a filed period that the books lack (`closed`). `read`: a statement PDF no
- * bank export covers, which the drop dialog reads (#217); the upload hands it there.
+ * bank export covers, which the drop dialog reads (#217); the upload hands it there. `unreferenced`: a
+ * statement of a kind whose payments take their ref from the bank (camt053.ts REFS_FROM_BANK) names
+ * none for `n` of them (#401); `bank`: whose export to fetch instead.
  */
 export interface StatementParams {
   reason: StatementRefusal;
@@ -318,6 +322,8 @@ export interface StatementParams {
   unknown?: UnknownAccount;
   problem?: StatementProblem;
   closed?: { n: number; through: string; refs: string[] };
+  n?: number;
+  bank?: string;
 }
 
 /** An invoicing refusal: which rule of src/invoices/rules.ts refused, and for an incomplete invoice what Art. 26 MWSTG still asks for. */

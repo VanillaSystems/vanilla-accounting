@@ -49,6 +49,18 @@ test('a receipt counts once it has its date; a file not taken does not count', (
 });
 
 // The persona's drop (#341): a Q3 statement with 23 payments, receipts of Q3, one till photo dated today.
+test('a statement read while a second one asks for its account has its sentence; once the second is read in too, both are in it (#401)', () => {
+  const first = row('zkb', { kind: 'camt', statement: { file: 'zkb.xml', refs: payments.slice(0, 20).map((p) => p.ref) } });
+  const asking = row('wise', { kind: 'camt', state: 'asks', reason: 'not-imported', unknownAccount: { iban: 'BE29967000000164', currency: 'EUR' } });
+  const groups = (r: DropRow) => closingGroupOf(r, r.statement ? { kind: 'statement' } : undefined);
+  const waiting = dropSummary([first, asking], books, () => false, new Set(), [], groups);
+  assert.equal(waiting.payments?.n, 20, 'the first statement\'s payments');
+  assert.deepEqual(waiting.files, only({ statement: 1, asks: 1 }));
+  const answered = dropSummary([first, { ...asking, state: 'taken', reason: undefined, unknownAccount: undefined, statement: { file: 'wise.xml', refs: payments.slice(20).map((p) => p.ref) } }], books, () => false, new Set(), [], groups);
+  assert.equal(answered.payments?.n, 23);
+  assert.deepEqual(answered.files, only({ statement: 2 }));
+});
+
 const payments = Array.from({ length: 23 }, (_, i): BankTransaction => ({
   ref: `p${i}`, date: i < 8 ? '2026-07-15' : i < 16 ? '2026-08-15' : '2026-09-15', amount: 100 + i, currency: 'CHF', direction: i % 5 ? 'DBIT' : 'CRDT', bank: 'Raiffeisen', description: `Zahlung ${i}`,
   ...(i >= 12 && i < 20 ? { waitsForReceipt: { since: '2026-11-12' } } : {}),

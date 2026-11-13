@@ -433,6 +433,24 @@ Two markers flag an entry you must read before you update:
   waits for the first), each labelled with its proposal and why; the cut-over day reads
   `dd.mm.yyyy`; the revenue account is shown with its source and can be changed; the fee code is
   said in words (the input tax comes from the provider's monthly invoice).
+- Bank statements: every payment has a reference of its own (#401). A Wise camt.053 whose
+  references stand only in the transaction details is read by them (the entry's own reference still
+  wins). A Wise statement that names no bank reference for a payment is refused in its row, with the
+  advice to download the camt.053 from the bank; nothing is written. Before, such payments came in on
+  an empty reference: none could be opened, linked or booked, and a receipt linked to one was linked
+  to all. Books that hold them keep them as they are (a filed one as filed) and import again; the
+  same file dropped again gives the open ones their bank's reference and says so («7 Zahlungen haben
+  jetzt ihre Referenz der Bank»), unless an entry or link of hers stands on several of them at once.
+  No write can put a payment, a link or an entry on an empty reference any more. Such payments in a
+  filed period no longer block every later statement; «Auszug entfernen» takes them along with their
+  file; a second Wise account added in the drop row reads as a Wise account.
+- Drop: «Ja, Bankkonto hinzufügen» on a statement of an account the books lack adds the account in
+  its row (bank and ledger account proposed, currency and IBAN from the file) and reads the statement
+  at once. The dialog stays open with every row and its closing lines; before, it closed and went to
+  Firma › Geldkonten, and the statement had to be dropped again (#401).
+- A credit card's monthly statement taken as a receipt says so in its drop row and its detail: the
+  receipt of the card's debit on the bank account, its lines booked one by one where they were, and
+  that the app does not read card statements as bank statements (#401, #94).
 - The setup conversation keeps its order after a typed message (#385): the message stands under the
   question it was typed at, above that question's answer, and the open question with its buttons
   stays under her newest message, also when the words took a step back. In the books the rail shows

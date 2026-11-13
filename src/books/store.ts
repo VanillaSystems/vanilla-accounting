@@ -490,6 +490,27 @@ const OWNER: Record<NonNullable<JournalEntry['origin']>, 'person' | 'module'> = 
 
 export class OwnershipError extends Error {}
 
+/** A payment, a link or an entry written on an empty ref (#401): every payment has a reference of its own, or a link to it is a link to all such payments. */
+export class EmptyRefError extends Error {}
+
+/**
+ * The records of `books` on an empty ref, each by what it is (a payment by its movement, an entry by
+ * its id, a link by its receipt), with how often. Books that hold some from before #401 can still be
+ * written, and an entry on one edited; no write adds one, also not in place of one it takes away.
+ */
+function emptyRefs(books: Books): Map<string, number> {
+  const keys = [
+    ...books.transactions.filter((t) => !t.ref?.trim()).map((t) => `payment ${t.bank} ${t.currency} ${t.date} ${t.direction} ${t.amount}`),
+    ...books.mappings.filter((m) => !m.transactionRef?.trim()).map((m) => `link ${m.receiptId}`),
+    ...(books.journalEntries ?? []).filter((e) => !e.transactionRef?.trim()).map((e) => `entry ${e.id}`),
+  ];
+  const out = new Map<string, number>();
+  for (const k of keys) out.set(k, (out.get(k) ?? 0) + 1);
+  return out;
+}
+const addsEmptyRef = (before: ReadonlyMap<string, number>, books: Books): string | undefined =>
+  [...emptyRefs(books)].find(([k, n]) => n > (before.get(k) ?? 0))?.[0];
+
 /** The checks of the `update` calls in flight, run again by every saveBooks inside them. */
 const guards = new WeakMap<Books, () => void>();
 
@@ -514,8 +535,8 @@ const filedHoldOf = (books: Books): (ApprovedReturn & { filed: FiledFigures }) |
 /**
  * The one write door. Runs `fn` as `actor`, then throws ClosedPeriodError if any closed-period
  * journal entry, closed transaction, or mapping to a closed transaction was changed, added or
- * removed (golden rule 1), and OwnershipError if an actor other than a person changed or removed
- * a person's entry. A saveBooks inside `fn` runs the same checks before it writes. One exception
+ * removed (golden rule 1), OwnershipError if an actor other than a person changed or removed
+ * a person's entry, and EmptyRefError if a payment, a link or an entry on an empty ref was added (#401). A saveBooks inside `fn` runs the same checks before it writes. One exception
  * (r10h-4): in a period filed with the tax authority whose books differ from the return (approvedReturn.filed),
  * a person's change passes only when it brings the books closer to the figures filed: no box
  * and not the payable moves further away, and together they come closer. So the books can be
@@ -535,7 +556,10 @@ export function update<T>(books: Books, actor: Actor, fn: (books: Books) => T | 
   if (ownFreed) released.set(books, new Set());
   const freed = released.get(books)!;
   const dated = new Map(books.journalEntries.map((e) => [e.id, e.date]));
+  const empties = emptyRefs(books);
   const check = () => {
+    const empty = addsEmptyRef(empties, books);
+    if (empty) throw new EmptyRefError(`${describe(actor)} schreibt eine Zahlung, Verknüpfung oder Buchung ohne Referenz (${empty}): nichts gespeichert.`);
     const lock = periodLock(books);
     const early = books.journalEntries.filter((e) => lock.beforeBooks(e.date) && dated.get(e.id) !== e.date);
     if (early.length) throw new BeforeBooksError(`Die Bücher beginnen am ${lock.opens}: ${early.map((e) => `entry ${e.id} dated ${e.date}`).join('; ')}.`, `${Number(lock.opens!.slice(0, 4)) - 1}-12-31`);

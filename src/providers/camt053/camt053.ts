@@ -119,14 +119,22 @@ function remittanceRef(rmtInf: Node | undefined): unknown {
 
 /**
  * The entry's stable id. Wise names its transaction (CARD-…, TRANSFER-…) in BkTxCd/Prtry/Cd and
- * often leaves AcctSvcrRef out. Other banks give AcctSvcrRef or NtryRef on the entry, or only
- * on its TxDtls; an entry without any is numbered within its statement.
+ * often leaves AcctSvcrRef out; some of its exports carry it only in the entry's one TxDtls/Refs
+ * (#401). Other banks give AcctSvcrRef or NtryRef on the entry, or only on its TxDtls; such an entry
+ * without any is numbered within its statement. The entry's own reference wins over its detail's;
+ * a batch's details are its parts, never its id. A Wise entry without any stays without one (''):
+ * the import refuses its statement (src/server/routes/statements.ts, `unreferenced`).
  */
 function entryRef(entry: Node, txDtls: Node[], kind: StatementKind, statementId: string, n: number): string {
-  if (kind === 'wise') return String(entry.AcctSvcrRef ?? entry.BkTxCd?.Prtry?.Cd ?? '');
-  const ref = entry.AcctSvcrRef ?? entry.NtryRef ?? (txDtls.length === 1 ? txDtls[0].Refs?.AcctSvcrRef : undefined);
+  const detail = txDtls.length === 1 ? txDtls[0].Refs?.AcctSvcrRef : undefined;
+  // An empty element (<AcctSvcrRef/>) names nothing: the next source is asked.
+  if (kind === 'wise') return [entry.AcctSvcrRef, entry.BkTxCd?.Prtry?.Cd, detail].map((r) => (r === undefined || r === null ? '' : String(r))).find((r) => r.trim()) ?? '';
+  const ref = entry.AcctSvcrRef ?? entry.NtryRef ?? detail;
   return ref !== undefined && String(ref).trim() ? String(ref).trim() : `${statementId}#${n}`;
 }
+
+/** The statement kinds whose entries take their ref from the bank alone, never from their place in the file: a statement of one with an entry the bank gave no reference is refused (#401). */
+export const REFS_FROM_BANK: readonly StatementKind[] = ['wise'];
 
 /** ISO 20022 bank transaction sub-families of the bank's own charges (Domn/Fmly/SubFmlyCd, as ACMT/MDOP/FEES for an account fee). */
 const CHARGES = new Set(['CHRG', 'FEES']);
@@ -209,7 +217,8 @@ function readEntries(statement: CamtStatement, account: { bank: string; statemen
     // The amount as instructed, in the currency the payment was made in (ISO 20022 InstdAmt), when that is not the account's: receipts in that currency match it to the Rappen (#187).
     const instructed = single?.AmtDtls?.InstdAmt?.Amt ?? entry.AmtDtls?.InstdAmt?.Amt;
     const original = instructed !== undefined ? getAmt(instructed) : undefined;
-    const wiseId = account.statements === 'wise' ? String(entry.BkTxCd?.Prtry?.Cd ?? '').trim() : '';
+    // Its own id, in BkTxCd or, in some exports, only in the one detail's references (#401).
+    const wiseId = account.statements === 'wise' ? String(entry.BkTxCd?.Prtry?.Cd ?? single?.Refs?.AcctSvcrRef ?? '').trim() : '';
     // Wise names a fee row FEE-<the id of the payment it charges for> (FEE-CARD-…, FEE-TRANSFER-…).
     // The bank's own charge: by its code for charges, or a debit to the bank that keeps the account, which some banks book under a payment's code; a card payment is never one.
     const toServicer = account.statements !== 'wise' && direction === 'DBIT' && sameName(named, statement.bankName) && !cardCode(entry.BkTxCd) && !cardCode(single?.BkTxCd);

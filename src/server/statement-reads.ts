@@ -5,7 +5,7 @@
  * way without AI. The bank side of the books is merged again after each, as an import merges it.
  */
 import { RequestError, WS, assertOpen, readBooks, updateBooks } from './books.js';
-import { mergeBankFiles, reconcileWithFiles } from '../books/bank-import.js';
+import { mergeBankFiles, reconcileWithFiles, unreferencedFiles, unreferencedLine } from '../books/bank-import.js';
 import { keptPdfs, keptReads, pairLines, readBeside, removeBeside, writeBeside, type KeptPdf } from '../books/pdf-reads.js';
 import { checkStatement, hasBalances, isBlank, parsePdfTable } from '../books/statement-check.js';
 import { differenceAccountOf } from '../books/year-close.js';
@@ -18,10 +18,15 @@ import { NoClaudeError } from '../llm/providers/claude-cli.js';
 import { unserved } from '../llm/resolve.js';
 import type { PdfFactsView, StatementReadsView } from '../types/statement-read.js';
 
-const remerge = () => updateBooks((b) => {
-  mergeBankFiles(WS, b);
-  reconcileWithFiles(WS, b, differenceAccountOf(WS));
-});
+const remerge = () => {
+  updateBooks((b) => {
+    mergeBankFiles(WS, b);
+    reconcileWithFiles(WS, b, differenceAccountOf(WS));
+  });
+  // A Wise file in the folder whose entries name no bank reference (#401): those payments stay out, and the log says so.
+  const unreferenced = unreferencedFiles(WS);
+  if (unreferenced.length) console.warn(unreferencedLine(unreferenced));
+};
 
 /** What one kept PDF gives the books now, and what it lacks. */
 export function factsView(p: KeptPdf, books: Books = readBooks()): PdfFactsView {

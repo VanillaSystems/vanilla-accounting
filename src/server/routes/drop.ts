@@ -184,6 +184,15 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
     case 'private':
       setAsidePrivate(s, row);
       break;
+    case 'firmAccount': {
+      // The account was just added through Firma's validated path (the row's form, #401): the statement is read now, no second drop.
+      const iban = row.unknownAccount && compactIban(row.unknownAccount.iban);
+      if (settled || !iban || !existsSync(fileOf(s.id, row.key))) throw new RequestError(400, 'Nur ein Auszug eines Kontos, das in den Büchern fehlte, wird so eingelesen.');
+      if (!WS.bankAccounts.some((x) => x.iban && compactIban(x.iban) === iban)) throw new RequestError(400, `Kein Bankkonto der Firma hat die IBAN ${row.unknownAccount!.iban}.`);
+      for (const k of ['chooseAccount', 'unknownAccount', 'details', 'message'] as const) delete row[k];
+      Object.assign(row, { state: 'take', reason: undefined });
+      break;
+    }
     case 'account':
       if (!row.chooseAccount?.accounts.some((x) => x.account === a.account) || !existsSync(fileOf(s.id, row.key))) throw new RequestError(400, 'Nur eines der angebotenen Konten nimmt diesen Auszug.');
       delete row.chooseAccount;
@@ -499,7 +508,8 @@ async function intoBooks(row: DropRow, body: Buffer, name: string, account: stri
     Object.assign(row, { state: asks ? 'asks' : 'refused', reason: 'not-imported', message: (e as Error).message, ...(unknown ? { unknownAccount: unknown } : {}), ...(choose ? { chooseAccount: choose } : {}), ...(details ? { details } : {}) });
     return undefined;
   }
-  row.statement = { file: done.file, refs: readBooks().transactions.filter((t) => !had.has(t.ref)).map((t) => t.ref), account: done.account };
+  // A file read once more only to repair payments without a reference (#401) brought nothing of its own: its row has nothing to take back.
+  row.statement = { file: done.file, refs: done.again ? [] : readBooks().transactions.filter((t) => !had.has(t.ref)).map((t) => t.ref), account: done.account, ...(done.emptyRefs ? { emptyRefs: done.emptyRefs } : {}), ...(done.again ? { again: true as const } : {}) };
   if (done.byBank) row.byBank = done.byBank;
   await handToRun(row, done);
   return done;
@@ -694,6 +704,8 @@ function undo(row: DropRow): string[] {
   if (row.report) {
     // A report's bookings go with its receipt; one a person changed, or of a filed period, keeps it (removeSalesReport).
     if (!removeSalesReport(WS, row.id)) throw new RequestError(409, 'Eine Buchung dieses Berichts ist eingereicht oder von Hand geändert: er bleibt. Die Buchungen von Hand korrigieren.');
+  } else if (row.statement?.again) {
+    throw new RequestError(400, 'Dieser Auszug war schon in den Büchern; das Hineinziehen hat nur Referenzen ergänzt. Nichts zurückzunehmen.');
   } else if (row.statement) {
     // The same convergent undo as the statement page's «Auszug entfernen» (r9k-3); a file already gone (removed there) leaves nothing to do.
     if (findFile(WS.paths, 'statements', row.statement.file)) removeStatement(row.statement.file, row.statement.refs);

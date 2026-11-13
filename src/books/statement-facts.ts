@@ -9,7 +9,7 @@
 import type { DocumentsData } from '../core/modules/schema.js';
 import type { Receipt } from '../types/index.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
-import { HEAD, IBAN, isBankStatement, wordsRe } from '../core/modules/words.js';
+import { HEAD, IBAN, isBankStatement, namesCardStatement, wordsRe } from '../core/modules/words.js';
 
 export interface StatementFacts {
   /** The first day of the period, when the text or the name gives it. */
@@ -46,6 +46,15 @@ export function statementPeriod(text: string): { from: string; to: string } | un
   if (!span || !validDay(span.from) || !validDay(span.to)) return undefined;
   return span.from <= span.to ? span : { from: span.to, to: span.from };
 }
+
+/**
+ * A credit card's monthly statement among the receipts (#401): it names itself so and shows the
+ * period it covers. The app reads none as a bank statement (issue #94): it is the receipt of the
+ * card's debit on the bank account, whose booking its lines may split. A bank statement that
+ * mentions a card's bill in its first lines stays a bank statement.
+ */
+export const isCardStatement = (text: string, words: DocumentsData): boolean =>
+  namesCardStatement(text, words) && !!statementPeriod(text) && !isBankStatement(text, words);
 
 /** The period (and the currency, when the name has it) a statement file's name gives: «Kontoauszug 01.01.2026 - 31.01.2026 - CH… - 2026-01-31.pdf», «statement_12345678_CHF_2026-01-01_2026-01-31.pdf». */
 export function statementPdf(filename: string): { fromDate: string; toDate: string; currency?: string } | null {

@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import { basename, dirname, join, relative } from 'node:path';
 import { accountForStatement, unknownOf, type StatementProblem } from '../../accounting/bank-accounts.js';
 import { bankAccountFor, legOf, madeByHand } from '../../workspace/money-accounts.js';
-import { heldWithout, mergeBankFiles, readStatementFiles, readTransactions, reconcileWithFiles, sourceOf, structuredSpans, transactionsOfFiles, withinBooks, type RateOf } from '../../books/bank-import.js';
+import { emptyOfFile, emptyStandIns, heldWithout, mergeBankFiles, repairEmptyRefs, readStatementFiles, readTransactions, reconcileWithFiles, sourceOf, structuredSpans, transactionsOfFiles, withinBooks, type RateOf } from '../../books/bank-import.js';
 import { besidePath } from '../../books/pdf-reads.js';
 import { changesSince, partsOf, snapshot, stillAsLeft, takeBack, type RecordChange } from '../../books/record-diff.js';
 import { keepAskTable } from '../statement-asks.js';
@@ -24,7 +24,7 @@ import { periodLock, type Books } from '../../books/store.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { rateDateOf } from '../../accounting/fx-conversion.js';
 import { openYear, type Part } from '../../books/years.js';
-import { assignUniqueRefs, readCamt, transactionsOf, type CamtStatement } from '../../providers/camt053/camt053.js';
+import { REFS_FROM_BANK, assignUniqueRefs, readCamt, transactionsOf, type CamtStatement } from '../../providers/camt053/camt053.js';
 import { namesBank, proposedAccount } from '../../accounting/statement-bank.js';
 import { statementDetails } from '../../providers/statement-files.js';
 import { refDates } from '../books.js';
@@ -181,6 +181,13 @@ function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Pl
     closings.push(...balances.filter((b) => b.type === 'CLBD').map((b) => ({ date: b.date, amount: b.amount })));
     openings.push(...balances.filter((b) => b.type === 'OPBD' && b.currency === found.currency).map((b) => ({ date: b.date, amount: b.amount })));
   }
+  // A kind whose payments take their ref from the bank alone: a payment the bank names no reference for could not be told again on the next read (#401).
+  const unreferenced = account?.statements && REFS_FROM_BANK.includes(account.statements) ? transactions.filter((t) => !t.ref.trim()).length : 0;
+  if (unreferenced) {
+    const bank = camt.statements.find((x) => x.bankName)?.bankName ?? account!.bank;
+    throw new RequestError(400, `Diese Datei nennt für ${unreferenced} ${unreferenced === 1 ? 'Zahlung' : 'Zahlungen'} keine Referenz der Bank; so kann die App sie nicht sicher wiedererkennen. Lade den Kontoauszug als camt.053 direkt bei ${bank} herunter, oder zieh seinen PDF-Auszug oder seine CSV hier hinein.`,
+      { code: 'statement', params: { reason: 'unreferenced', n: unreferenced, bank } });
+  }
   const sorted = dates.filter(Boolean).sort();
   const last = sorted.at(-1);
   if (!account || !last) return refuse(400, 'Der Auszug hat keine Daten.', 'notCamt');
@@ -205,7 +212,9 @@ function assertNoFiledPayments(): void {
   const legs = new Set(books.transactions.map(legOf));
   const claimed = new Set(books.transactions.flatMap((t) => (t.statement === undefined ? [] : [`${t.statement} ${t.currency}`])));
   const fresh = assignUniqueRefs(withinBooks(readTransactions(WS).transactions, books.config).kept);
-  const missing = fresh.filter((t) => lock.isClosed(t.date) && !legs.has(legOf(t)) && !claimed.has(legOf(t)));
+  // A row that is a payment the books hold on an empty ref (a Wise file read before #401) is that payment, not a missing one (mergeIndex's rule).
+  const standIn = emptyStandIns(books.transactions, fresh);
+  const missing = fresh.filter((t) => lock.isClosed(t.date) && !legs.has(legOf(t)) && !claimed.has(legOf(t)) && !standIn.has(t));
   if (!missing.length) return;
   const refs = missing.map((t) => t.ref);
   throw new RequestError(403, `Der Auszug enthält ${missing.length} Zahlung${missing.length === 1 ? '' : 'en'} bis ${through}, die in den Büchern fehlen (${refs.slice(0, 5).join(', ')}). Die Periode ist eingereicht: nichts eingelesen. Einen Auszug ab dem ersten offenen Tag einlesen.`,
@@ -290,7 +299,9 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
   const dir = join(yearPaths(WS.paths, year).statements, placed.account.bank);
   const mine = `${placed.account.bank}/${placed.filename}`;
   const path = findFile(WS.paths, 'statements', mine) ?? join(dir, placed.filename);
-  if (existsSync(path)) {
+  // A statement read before #401 left payments on an empty ref: the same file dropped again is read again, so each gets its own.
+  const again = existsSync(path) && readFileSync(path).equals(body) && heldWithoutRef(readBooks());
+  if (existsSync(path) && !again) {
     const same = readFileSync(path).equals(body);
     throw new RequestError(409, same ? `${placed.filename} ist schon eingelesen.` : `Datei ${placed.filename} existiert bereits.`,
       same ? { code: 'statement', params: { reason: 'duplicate', detail: mine } } : { code: 'fileExists', params: { filename: placed.filename } });
@@ -325,6 +336,8 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
         books.statementAsks = books.statementAsks.filter((a) => a.account !== placed.account.account);
         if (!books.statementAsks.length) delete books.statementAsks;
       }
+      // Payments a read before #401 left on an empty ref take their bank's ref first, as the person (#401).
+      const empty = repairEmptyRefs(WS, books);
       const before = new Set(books.transactions.map((t) => t.ref));
       const confirmedBefore = new Set(books.transactions.filter((t) => t.statement !== undefined).map((t) => t.ref));
       mergeBankFiles(WS, books);
@@ -355,17 +368,25 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
         ...(placed.opening ? { opening: placed.opening } : {}),
         ...(waiting ? { reconcile: { read: waiting.read.length, bank: waiting.bank.length } } : {}),
         ...(closedAsks ? { closedAsks } : {}),
+        ...('left' in empty || empty.repaired ? { emptyRefs: empty } : {}),
+        ...(again ? { again: true as const } : {}),
         ...(placed.byBank ? { byBank: placed.byBank } : {}),
       };
     });
   } catch (e) {
-    rmSync(path, { force: true });
+    if (!again) rmSync(path, { force: true });
     if (beside) rmSync(beside, { force: true });
     throw e;
   }
   if (placed.byBank?.iban) keepIban(placed.account, placed.byBank.iban);
   return done;
 }
+
+/** Whether the books hold an open payment on an empty ref (read before #401): the next read of the folder gives it a ref of its own (mergeBankFiles). */
+const heldWithoutRef = (books: Books): boolean => {
+  const lock = periodLock(books);
+  return books.transactions.some((t) => !t.ref.trim() && !lock.isClosed(t.date));
+};
 
 /**
  * The IBAN of a statement placed by its bank, kept on its account (#273): the next file of that IBAN
@@ -413,6 +434,12 @@ export function removeStatement(file: string, refs?: readonly string[], o: { kee
   const twins = lostWithFile(books, mine);
   if (twins.length) throw new RequestError(409, `Der bestätigte Abgleich hat aus PDFs gelesene Bewegungen durch Bewegungen dieses Auszugs ersetzt (${twins.slice(0, 5).join(', ')}): er bleibt.`, { code: 'reconciledTwins', params: { refs: twins } });
   if ((books.journalEntries ?? []).some((e) => mine.has(e.transactionRef) && e.origin === 'manual')) throw new RequestError(409, 'Auf einer dieser Zahlungen steht eine Buchung von Hand. Erst sie löschen.');
+  // The payments a read before #401 left on an empty ref that this file stands for go with it, a filed one refusing the removal (#401).
+  const empty = emptyOfFile(WS, file, books);
+  assertOpen(books, empty.map((t) => t.date), 'deleteTransaction');
+  const emptyAt = new Set(empty.map((t) => books.transactions.indexOf(t)));
+  const lastEmpty = emptyAt.size > 0 && books.transactions.filter((t) => !t.ref.trim()).length === emptyAt.size;
+  if (lastEmpty && (books.journalEntries ?? []).some((e) => !e.transactionRef.trim() && e.origin === 'manual')) throw new RequestError(409, 'Auf einer dieser Zahlungen steht eine Buchung von Hand. Erst sie löschen.');
   const bytes = readFileSync(path);
   const lock = periodLock(books);
   // A camt.053 the app wrote from a statement read without one (#217) takes the file it was read from along.
@@ -436,6 +463,11 @@ export function removeStatement(file: string, refs?: readonly string[], o: { kee
   try {
     return updateBooks((b): StatementRemoval => {
       const start = snapshot(b);
+      b.transactions = b.transactions.filter((t, i) => !emptyAt.has(i));
+      if (lastEmpty) {
+        b.journalEntries = b.journalEntries.filter((e) => e.transactionRef.trim());
+        b.mappings = b.mappings.filter((m) => m.transactionRef.trim());
+      }
       b.transactions = b.transactions.filter((t) => !mine.has(t.ref));
       // A movement made by hand this statement confirmed stays, with its bookings, as not confirmed (#88).
       for (const t of b.transactions) if (t.statement !== undefined && mine.has(t.statement) && !lock.isClosed(t.date)) delete t.statement;
