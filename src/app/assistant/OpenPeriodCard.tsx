@@ -40,8 +40,10 @@ function goOf(l: OpenLine, s: OpenPeriodState, books: Index): Location {
     case 'questions': return openList(s) ?? TASKS;
     case 'moreTasks': return TASKS;
     case 'evidence': return at({ area: 'journal', id: l.first.id }, l.first.date);
+    case 'withheld': return at({ area: 'bank', payment: l.first.tx.ref }, l.first.tx.date);
     // The day Belege lists the receipt under (#385 review), in the period the card is about.
     case 'unlinked': return receiptAt(l.first, s, books);
+    case 'issued': return receiptAt(l.first, s, books);
     // The report's receipt names the held order and books it (#405); a missing bill to the return's list, which names it and drops it (#459).
     case 'held': { const r = books.receipts.find((x) => x.id === l.first.receipt); return r ? at({ area: 'receipts', id: r.id }, r.date) : openList(s) ?? TASKS; }
     case 'bills': return openList(s) ?? TASKS;
@@ -60,7 +62,9 @@ function textOf(l: OpenLine): string {
     case 'unbooked': return issueWords({ unbooked: l.n, waitingReceipt: l.waiting, waitingOutlays: l.outlays })[0];
     case 'questions': return issueWords({ ...NONE, questions: l.n })[0];
     case 'evidence': return issueWords({ ...NONE, evidence: l.n })[0];
+    case 'withheld': return issueWords({ ...NONE, withheld: l.n })[0];
     case 'unlinked': return issueWords({ ...NONE, unlinked: l.n })[0];
+    case 'issued': return t('openPeriod.issuedLine', { n: l.n });
     case 'held': return issueWords({ ...NONE, held: l.n })[0];
     case 'bills': return issueWords({ ...NONE, bills: l.n })[0];
     case 'offers': return t('openPeriod.offers', { n: l.n });
@@ -116,7 +120,11 @@ export function OpenPeriodCard({ books, onGo }: { books: Index; onGo(loc: Locati
       <h3>{t('openPeriod.title', { period: periodName(s.period) })}</h3>
       <p className="m">{openList(s) && s.filing.kind === 'due' ? link(openList(s)!, filingText(s)) : filingText(s)}</p>
       {nothingOpen(s) ? (
-        <ElsewhereLines s={s} books={books} other={other} unbooked={unbookedElsewhere} onGo={onGo} link={link} />
+        <>
+          <ElsewhereLines s={s} books={books} other={other} unbooked={unbookedElsewhere} onGo={onGo} link={link} />
+          {/* The firm's own invoices that wait for their customer: a fact beside «nothing open», never work (#476, #436). */}
+          {lines.filter((l) => l.kind === 'issued').map((l, i) => <p key={i} className="m" data-line="issued">{link(goOf(l, s, books), textOf(l))}<Items of={itemsOf(l, s, books, t as unknown as Say, refusedWhy)} link={link} /></p>)}
+        </>
       ) : (
         <ul>
           {lines.map((l, i) => (

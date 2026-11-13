@@ -44,6 +44,8 @@ export type ApiRefusal =
   /** A payment booked by hand is not booked twice. */
   | { code: 'hasEntries' }
   | { code: 'notByReceipt' }
+  /** «2270 ausgleichen» on a payment that has no employees' share open (#476). */
+  | { code: 'withheldNone' }
   | { code: 'decidedByHand' }
   | { code: 'changedSince' }
   | { code: 'undoGone' }
@@ -288,7 +290,9 @@ export type ClassifyRefusal =
   | { code: 'classifyVatNotRead'; params: { receipt: string } }
   | { code: 'classifyInputTaxShared'; params: { payments: string; currency: string; booked: number; shown: number } }
   /** The answer takes more off the wages' deductions account than it held on the payment's day (#426). */
-  | { code: 'classifyWithheldOver'; params: { account: string; currency: string; taken: number; open: number } };
+  | { code: 'classifyWithheldOver'; params: { account: string; currency: string; taken: number; open: number } }
+  /** An answer that takes more off the deductions account than the payslips withheld for this fund, where code can tell (#476). */
+  | { code: 'classifyWithheldShare'; params: { account: string; currency: string; taken: number; share: number } };
 
 /** A payment a step tried to book and left unbooked (#470): by ref, with the refusal the screens have words for, when it has one. */
 export interface LeftPayment { ref: string; refusal?: ClassifyRefusal }
