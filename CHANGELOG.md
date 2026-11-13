@@ -340,6 +340,99 @@ Two markers flag an entry you must read before you update:
   oder dich …»), instead of opening the diagram; on a payment whose booking she deleted it asks first.
   A payment an account's reconciliation holds is booked by neither: the rule's card says it waits for
   the reconciliation.
+- A payment provider's sales and fee reports stay receipts after a later drop (#405). The next run
+  read only PDFs and rebuilt the receipts from them, so the reports (CSV files) and every link to the
+  sales and fees they booked went from the books, while those bookings still named them and the
+  files still lay in `receipts/`. A run now keeps every receipt whose file lies there. A file whose
+  bytes changed under its name is read again: the new read is its receipt, the app's links to the old
+  one go and its bookings are made again from the new read; a person's link goes along only when the
+  new read says the same, else it stays with the old receipt, kept beside, as does a person's booking
+  and what lies in a filed period. The run names each such file and how many links to check. Books damaged so get their reports back on the next run: each CSV in
+  `receipts/` whose bytes the bookings name is its receipt again, with its links to every open
+  booking and what it holds; nothing of a filed period changes.
+- The write door refuses a module or a run that removes a receipt whose file still lies in the
+  workspace, or a link whose receipt and payment both stand, unless it lets go of it on purpose (a
+  person's «Rückgängig» of a report, a link of its own it replaces) (#405). A run can therefore stop
+  on it: nothing is saved, and the message says that only a person removes such a receipt (Belege ›
+  «Löschen») or link, or that it is the app's error to report.
+- An order a sales report holds is an open item of the period of its day (#405): in «Noch offen»,
+  on the MWST page's «noch nicht endgültig» line, in the sidebar's card and in the review. An order
+  whose VAT rates the report cannot tell apart (a cart of tea and a teapot) withholds «Freigegeben»
+  until it is booked: its report's receipt has «Aufteilen», one or two amounts at the firm's rates,
+  booked by the person once they add up to the order. An order held for another reason (a possible
+  test order, one booked elsewhere) is shown with that reason and withholds nothing, and one of the
+  days before the provider's cut-over day (less its payout days) is counted, never held; one of a filed
+  period stays named on its report and is no open item. A refund of an order split so is held for
+  the person to book by hand. Each held order keeps its day, gross, currency and delivery country on
+  the report's receipt: optional fields added to `report.held`, as `heldMore` and `filedRefunds` were.
+- A month whose fees the provider's payments export booked while its monthly bill (Shopify's
+  Payments Invoice) is not in the books is named as a fact in «Noch offen»: the VAT on those fees is
+  not deducted. It does not make the period unfinished, and a month of a filed period is not named.
+  A payout in the list is named by the provider the app took it for («Shopify»), not by the processor
+  that paid it. The review's clearing account check names the total of the orders its sales report holds.
+- The owner's outlays paid back (#402): a payment to the owner by name (the payee) that is no wage,
+  in francs, that no company rule decides, and that the receipts the owner paid privately and the
+  firm has not paid back yet cover (each such payment in date order against what is left after the
+  earlier ones, across the year boundary; the opening balance is not counted) waits for no receipt.
+  The hand form proposes bank / the owner's account without a code, never the salary's account «wie
+  bei derselben Firma» (between payments to the owner a precedent counts only of the same kind, wage
+  or no wage); with an AI the model is told so, and its answer is booked only onto the owner's account:
+  any other answer books nothing and leaves the payment to the person, asked once (the form then says the AI did not book it). Every payment to the owner booked onto her account uses up what is open, covered or not (a draw too). A repayment in another currency
+  gets no proposal, and the form says why. Guide rule `cls-owner-outlays-repaid`.
+- A receipt the owner paid privately (#402) is read so by its payment line («Bezahlt mit Mastercard
+  ****1150 (privat)») or by the owner's card, known from a receipt marked so or from two receipts paid
+  privately, never a card that paid one of the firm's own statement payments. Its first button is
+  «Als Auslage von <Inhaber> buchen», one click; the line under it says why («Karte ****1150 wie auf dem
+  Beleg vom 08.07.2026») and what it books (Aufwand / Kontokorrent); a selection offers «Als Auslagen
+  … buchen» for several. While the app books it, the receipt says so in place of a hand form with an
+  empty account.
+- Setup (#402): a private share of the phone or the car named in words («öppe d Hälfti») is kept with
+  the words that named it in onboarding.json. The phone's: the provider's first booked payment offers
+  the rule «50 % privat» on its card (once per business; «Nicht jetzt», «Nie vorschlagen»; gone once a
+  rule takes it; not where the firm's chart uses the phone's account for something else). The car's
+  stays for the year close, no rule offered. One changed answer on the review keeps naming her kind
+  of firm («Beratung, Dienstleistungen (GmbH), mit einer Änderung») instead of «Etwas anderes».
+- The model's zero input code (I0) is left off an account that takes no code (#402): a wage, the
+  employer's contributions (AHV, FAK, BVG), the bank charges, a debt, the owner's account. No figure
+  changes: I0 has no box. A rule's code stays what its card showed.
+- A bill of several VAT groups (8.1 % and «0 % (Export)») is compared with all lines of its
+  payment (#406): two lines booked each at its group's rate raise no task any more; a rate booked
+  beyond what the bill shows at it does, naming the amount and rate the bill shows. What a bill's
+  total holds beyond the groups read only excuses a line at the zero code, never accuses a rate
+  line. «Nach Beleg buchen» then books the payment's lines by the bill's groups, never one rate on
+  a line the bill shows at another; it is offered only for lines on one account pair, of one code
+  family, with the same tags, and never rewrites a line a person booked. Its «Rückgängig» puts the
+  lines back in one step, unless one was changed since.
+- The drop names a payment provider's payouts list as what it is, with the reports the app books
+  from and, where the provider's file states it, where the admin exports them (#406); it is not
+  read as a bank statement of empty lines, and «trotzdem als Kontoauszug lesen» asks its columns.
+  Only for a firm whose own knowledge has that provider. A CSV whose day and amount columns yield
+  no movement asks its columns with nothing chosen. A provider's file names such exports under
+  `otherExports` and the report menus under `exportedAt` (processes/README.md).
+- A provider's monthly fee bills dropped read «3 Monatsrechnungen von Shopify: MWST der Gebühren
+  gebucht», not «einer Zahlung zugeordnet»: they have no payment (#406).
+- The sale question for a transfer that names an order of a provider's order export by its name
+  («#1099»), one the provider did not collect, proposes from that order's tax and says so (#406).
+- MWST: a rate row's turnover (Ziffer 303 and the others) is the figure the return files, as the
+  review and the XML show it; it was the nets rounded per entry plus the tax on the total, Rappen
+  off (#406). No filed figure changes.
+- Payment providers (#404): her answer in the drop row of the provider's report (the clearing
+  account, the cut-over day, the fee account) no longer makes «Buchen» wait for «Einschalten»: an
+  answer to the app's own question is her switching on, and the payouts it decides are booked at
+  once, bank / clearing account without VAT; the row says «40 Auszahlungen von Shopify gebucht».
+  The same file changed by hand still waits; when «Buchen» waited already, the row and Aufgaben say
+  so, with the way to «Einschalten». «Einschalten» of «Buchen» books the payouts code decides and
+  says how many.
+- A provider's payout never gets a revenue proposal in the hand form: from its clearing account
+  without a code once the company's file names it, otherwise no account (before the cut-over day:
+  as the business's last booking), with a sentence on what a payout is and what it waits for. Its
+  line on the payment names no file path any more. A revenue account that is none is refused.
+- Aufgaben names a provider's payouts as its payouts («40 Auszahlungen von Shopify ohne Buchung»),
+  grouped, with the one thing to do (the order export, or «Jetzt buchen»).
+- The provider's questions in the drop row come one at a time and once (the second report row
+  waits for the first), each labelled with its proposal and why; the cut-over day reads
+  `dd.mm.yyyy`; the revenue account is shown with its source and can be changed; the fee code is
+  said in words (the input tax comes from the provider's monthly invoice).
 - Bank statements: every payment has a reference of its own (#401). A Wise camt.053 whose
   references stand only in the transaction details is read by them (the entry's own reference still
   wins). A Wise statement that names no bank reference for a payment is refused in its row, with the

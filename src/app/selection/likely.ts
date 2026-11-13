@@ -20,18 +20,18 @@ export interface ReceiptFacts {
 export type ReceiptLikely = 'mark' | 'accept' | 'private' | 'link' | 'edit' | 'openPayment' | undefined;
 
 /**
- * A receipt set aside: «Ist ein Beleg». One without a payment: the payment code found, else
- * «Privat bezahlt buchen» when its words say it was paid in cash or privately, else the link
- * dialog; without a date, «Angaben» first (no payment fits a receipt without its day). A linked
- * or filed one: its payment.
+ * A receipt set aside: «Ist ein Beleg». One without a payment: the payment code found; without a
+ * date, «Angaben» (no payment fits a receipt without its day, and an outlay needs it); else
+ * «Als Auslage buchen» when it reads as paid in cash or privately (#402), else the link dialog. A
+ * linked or filed one: its payment.
  */
 export function likelyReceipt(f: ReceiptFacts): ReceiptLikely {
   if (f.none) return 'mark';
   if (f.linked) return 'openPayment';
   if (f.locked) return undefined;
   if (f.suggestion) return 'accept';
-  if (f.paidPrivately) return 'private';
   if (!f.dated) return 'edit';
+  if (f.paidPrivately) return 'private';
   return 'link';
 }
 
@@ -56,14 +56,15 @@ export function likelyEntry(f: EntryFacts): EntryLikely {
 }
 
 /**
- * A selection: what most of its rows want. Receipts mostly without a payment: «Zahlung suchen»;
+ * A selection: what most of its rows want. Receipts mostly read as paid privately: «Als Auslagen
+ * buchen» (#402); mostly without a payment: «Zahlung suchen»;
  * payments mostly without a booking: «Buchen …», mostly waiting for a receipt: «Braucht keinen
  * Beleg»; entries: «Konto ändern …».
  */
-export function likelySelection(kind: SelectKind, counts: { n: number; open: number; unbooked: number; noReceipt: number }): 'findPayment' | 'book' | 'noReceiptNeeded' | 'account' | undefined {
+export function likelySelection(kind: SelectKind, counts: { n: number; open: number; unbooked: number; noReceipt: number; privately?: number }): 'findPayment' | 'private' | 'book' | 'noReceiptNeeded' | 'account' | undefined {
   const most = (x: number) => x > 0 && x * 2 >= counts.n;
   switch (kind) {
-    case 'receipt': return most(counts.open) ? 'findPayment' : undefined;
+    case 'receipt': return most(counts.privately ?? 0) ? 'private' : most(counts.open) ? 'findPayment' : undefined;
     case 'payment': return most(counts.unbooked) ? 'book' : most(counts.noReceipt) ? 'noReceiptNeeded' : undefined;
     case 'entry': return 'account';
   }

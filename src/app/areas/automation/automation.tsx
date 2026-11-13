@@ -31,9 +31,12 @@ import { PaymentBooking } from '../journal/PaymentBooking.js';
 import { bookedStates } from '../../../accounting/payment-entries.js';
 import { Parts } from '../bank/Parts.js';
 import { approvalWithheld, fileName, returnSummary } from './filing-summary.js';
+import { providerIssuesNow } from '../../lib/order-pages.js';
 import { outcomeText, periodText, paymentWords, readsInWords } from './words.js';
 import type { PeriodReturn, PreparedXml, SealOutput } from '../../../workflows/filing.js';
 import type { ClearingCheck } from '../../../booking/providers.js';
+import type { PayoutGroup, PayoutsBooked } from '../../../types/drop.js';
+import { BOOKING_SWITCH_ON, payoutsBookedText } from '../../lib/payouts.js';
 import { commandRefusalText, refusalPayment, refusalText } from '../../automation/refusal.js';
 import type { Refusal } from '../../../types/refusal.js';
 import { RunFromLog } from '../../history/RunHistory.js';
@@ -311,11 +314,11 @@ function Pending({ w, view, nav }: { w: WorkflowDecl; view: AutomationView; nav:
   const p = view.pending.find((x) => x.workflow === w.id);
   const [busy, setBusy] = useState(false);
   if (!p) return null;
-  const act = (cmd: AutomationCommand, done?: string) => async () => {
+  const act = (cmd: AutomationCommand, done?: string, said?: (r: Awaited<ReturnType<typeof automationCommand>>) => string | undefined) => async () => {
     setBusy(true);
     try {
       const r = await automationCommand(cmd);
-      nav.toast(r.ok ? done ?? t('automation.done') : commandRefusalText(r));
+      nav.toast(r.ok ? said?.(r) ?? done ?? t('automation.done') : commandRefusalText(r));
     } catch (e) {
       nav.toast(errorText(e));
     } finally {
@@ -346,7 +349,7 @@ function Pending({ w, view, nav }: { w: WorkflowDecl; view: AutomationView; nav:
       ) : <span className="m">{t('automation.pending.unchecked')}</span>}
       <span className="wfactions">
         <button type="button" className="btn" disabled={busy} onClick={act({ kind: 'check', workflow: w.id }, t('automation.pending.checking'))}><BotIcon />{t('automation.pending.check')}</button>
-        <button type="button" className="btn primary" disabled={busy || count('running') > 0} onClick={act({ kind: 'approve', workflow: w.id }, t('automation.pending.on'))}>{t('automation.pending.approve')}</button>
+        <button type="button" className="btn primary" disabled={busy || count('running') > 0} onClick={act({ kind: 'approve', workflow: w.id }, t('automation.pending.on'), (r) => { const p = (r as { payouts?: PayoutsBooked }).payouts; return p ? t('automation.pending.onPayouts', { n: p.booked, of: p.of }) : undefined; })}>{t('automation.pending.approve')}</button>
       </span>
       <span className="m">{t('automation.pending.why')}</span>
     </div>
@@ -497,7 +500,8 @@ function ReturnFacts({ ret }: { ret: PeriodReturn }) {
 /**
  * Each payment provider's clearing account at the period's end (#203): its balance, its month ends
  * before, and what the provider paid out after the end within its payout days, which is what it held
- * then; the difference is found per order. A fact, never a reminder.
+ * then; the difference is found per order. The orders its sales report holds it names with their total (#405).
+ * A fact, never a reminder.
  */
 function ClearingFacts({ checks }: { checks: ClearingCheck[] }) {
   const cur = baseCurrency();
@@ -517,7 +521,8 @@ function ClearingFacts({ checks }: { checks: ClearingCheck[] }) {
             <span className="m">{c.paidAfter === undefined || !key
               ? t('automation.clearing.unknown', { until: formatDate(until), known: c.known ? formatDate(c.known) : '–' })
               : t(key, { until: formatDate(until), date: formatDate(c.through), paid: `${cur} ${fmt(c.paidAfter)}`, diff: `${cur} ${fmt(Math.abs(diff ?? 0))}` })}</span>
-            {c.below ? <span className="m">{t('automation.clearing.below')}</span> : null}
+            {c.held ? <span className="m" data-testid="clearing-held">{t('automation.clearing.held', { amount: `${cur} ${fmt(c.held)}` })}</span> : null}
+            {c.below && !c.held ? <span className="m">{t('automation.clearing.below')}</span> : null}
             {c.currency ? <span className="m">{t('automation.clearing.currency', { currency: c.currency })}</span> : null}
           </div>
         );
@@ -552,6 +557,7 @@ function noteText(n: IntakeNote): string {
     case 'filedKept': return t('automation.note.filedKept', { n: n.count });
     case 'poorScan': return t('automation.note.poorScan', { n: n.files.length, files: n.files.join(', ') });
     case 'sameBytes': return t('automation.note.sameBytes', { n: n.files.length, files: n.files.map((f) => `${f.file} = ${f.of}`).join(', ') });
+    case 'rewritten': return t('automation.note.rewritten', { n: n.files.length, files: n.files.map((f) => t('automation.note.rewrittenFile', { file: f.file, n: f.check })).join(', ') });
     case 'asked': return t('automation.note.asked', { n: n.count });
     case 'saleAsked': return t('automation.note.saleAsked', { n: n.count });
     case 'waitingReceipt': return t('automation.note.waitingReceipt', { n: n.count });
@@ -775,7 +781,10 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
   const forReceipt = waitingForReceipt(books, (ref) => booked(ref) === 'booked', localToday());
   const receiptDue = forReceipt.filter((w) => w.kind !== 'waits');
   const held = new Set(forReceipt.map((w) => w.tx.ref));
-  const waiting = unbookedPayments(books, accounts).filter((p) => !inTasks.has(p.ref) && !held.has(p.ref));
+  // A provider's payouts are named as its payouts, grouped, with the one thing to do (#404).
+  const payouts = usePayoutGroups(books);
+  const isPayout = new Set(payouts.flatMap((g) => g.refs));
+  const waiting = unbookedPayments(books, accounts).filter((p) => !inTasks.has(p.ref) && !held.has(p.ref) && !isPayout.has(p.ref));
   const evidence = journalOf(books).views.some((v) => v.evidence) || !!unsettledAtFiling(journalOf(books), filing().length)?.items.length || openTwins(ledgerFor(books)).length > 0 || assessmentsMissing(books).length > 0;
   // A firm not registered whose turnover passed the threshold has a task without any run (r5f-9).
   const threshold = thresholdPassed(books, useWorkspace()?.company.vat.registered);
@@ -792,7 +801,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
           {tasks.map((task) => {
             const w = view.workflows.find((x) => x.id === task.workflow);
             const pay = canEdit ? unbooked(task) : undefined;
-            const withheld = approvalWithheld(task, q.questions, books);
+            const withheld = approvalWithheld(task, q.questions, books, providerIssuesNow());
             return (
               <div key={task.run} className={`wftask${task.run === run ? ' sel' : ''}`}>
                 <b>{fillTask(tx(task.title), task.item, readsInWords(task.reads))}{paymentWords(task) ? <span className="wfpay" data-testid="task-payment"> · {paymentWords(task)}</span> : null}{task.overdue ? <span className="wfpill st-stuck">{t('automation.overdue')}</span> : null}</b>
@@ -808,6 +817,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
                   </p>
                 ) : null}
                 {withheld?.questions ? <p className="warnline" data-testid="approval-withheld-questions">{t('automation.questionsOpen', { n: withheld.questions })}</p> : null}
+                {withheld?.held ? <p className="warnline" data-testid="approval-withheld-held">{t('automation.heldOpen', { n: withheld.held })}</p> : null}
                 {pay ? <PaymentBooking key={pay} books={books} nav={nav} payment={pay} onForm={(el) => forms.current.set(task.run, el)} onBooked={() => { if (task.outcomes.includes('booked')) send(task, 'booked'); }} /> : null}
                 {confirming === task.run ? (
                   <p className="warnline" data-testid="confirm-filed">
@@ -826,11 +836,12 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
             );
           })}
         </div>
-      ) : asked || waiting.length || evidence || threshold.length || receiptDue.length ? null : held.size ? <p className="lead"><UnbookedFact books={books} nav={nav} lead={t('automation.noTask')} /></p> : <p className="lead">{t('automation.tasksEmpty')}</p>}
+      ) : asked || waiting.length || payouts.length || evidence || threshold.length || receiptDue.length ? null : held.size ? <p className="lead"><UnbookedFact books={books} nav={nav} lead={t('automation.noTask')} /></p> : <p className="lead">{t('automation.tasksEmpty')}</p>}
       <EvidenceTasks books={books} nav={nav} canEdit={canEdit} />
       <FiledEvidence books={books} nav={nav} />
       <TwinTasks books={books} nav={nav} canEdit={canEdit} />
       <AssessmentTasks books={books} nav={nav} />
+      <PayoutTasks groups={payouts} books={books} nav={nav} canEdit={canEdit} />
       {waiting.length > 0 && (
         <section className="wfunbooked" data-testid="unbooked-payments">
           <h3>{t('automation.unbookedTitle', { n: waiting.length })}</h3>
@@ -850,6 +861,76 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
       )}
       <QuestionTasks nav={nav} canEdit={canEdit} books={books} />
     </div>
+  );
+}
+
+/** A provider's payouts without a booking (GET /api/payouts), fetched again when the books change. */
+function usePayoutGroups(books: Index): PayoutGroup[] {
+  const [groups, setGroups] = useState<PayoutGroup[]>([]);
+  const key = `${books.transactions.length}/${books.journalEntries?.length ?? 0}`;
+  useEffect(() => {
+    let live = true;
+    api.payouts().then((x) => { if (live) setGroups(x.groups); }, () => { if (live) setGroups([]); });
+    return () => { live = false; };
+  }, [key]);
+  return groups;
+}
+
+/** What a group of payouts waits for, in words: a provider without a sales report books its sales from its payout reports. */
+function payoutLead(g: PayoutGroup): string {
+  const own = g.sales ? '' : 'NoSales';
+  const account = g.account ?? '';
+  switch (g.why) {
+    case 'ready': return t('automation.payouts.ready', { account });
+    case 'gap': return t('automation.payouts.gap', { account, since: g.since ? formatDate(g.since) : '' });
+    case 'since': return t(`automation.payouts.since${own}` as 'automation.payouts.since', { provider: g.name, account });
+    default: return t(`automation.payouts.clearing${own}` as 'automation.payouts.clearing', { provider: g.name });
+  }
+}
+
+/**
+ * A provider's payouts without a booking, as its payouts (#404): one group per provider and what they
+ * wait for, with the one thing to do: drop the provider's order export (it asks for the clearing
+ * account or the cut-over day), «Jetzt buchen» where code books them from the clearing account, or
+ * each one hers where it lies before the cut-over day.
+ */
+function PayoutTasks({ groups, books, nav, canEdit }: { groups: PayoutGroup[]; books: Index; nav: Nav; canEdit: boolean }) {
+  const [busy, setBusy] = useState<string>();
+  // «Buchen» waits for «Einschalten»: said under the group, with the way there, not as «0 gebucht».
+  const [waits, setWaits] = useState<string>();
+  const book = (g: PayoutGroup) => {
+    setBusy(g.provider);
+    api.bookPayouts(g.provider).then(
+      (r) => { setBusy(undefined); setWaits(r.waits ? g.provider : undefined); nav.toast(payoutsBookedText(r, g.name)); },
+      (e: unknown) => { setBusy(undefined); nav.toast(errorText(e)); },
+    );
+  };
+  return (
+    <>
+      {groups.map((g) => {
+        const shown = books.transactions.filter((p) => g.refs.includes(p.ref));
+        return (
+          <section key={`${g.provider}-${g.why}`} className="wfunbooked" data-testid="unbooked-payouts" data-why={g.why}>
+            <h3>{t('automation.payouts.title', { n: g.refs.length, provider: g.name })}</h3>
+            <p className="m">{payoutLead(g)}</p>
+            {g.why === 'ready' && canEdit ? <p><button type="button" className="btn" disabled={busy === g.provider} data-testid="book-payouts" onClick={() => book(g)}>{t('automation.payouts.book', { n: g.refs.length })}</button></p> : null}
+            {waits === g.provider ? <p className="warnline" data-testid="book-payouts-waits">{t('drop.booked.payoutsWait', { provider: g.name })}{' '}<button type="button" className="golink" onClick={() => nav.go({ route: BOOKING_SWITCH_ON, query: {} })}>{t('marks.goSwitchOn')}</button></p> : null}
+            <details>
+              <summary className="m">{t('automation.payouts.show', { n: g.refs.length })}</summary>
+              <ul>
+                {shown.map((p) => (
+                  <li key={p.ref}>
+                    <button type="button" className="linkbtn" data-pay={p.ref} onClick={() => nav.go(at({ area: 'bank', payment: p.ref }, p.date))}>
+                      <span className="mono">{formatDate(p.date)}</span> {payText(p).name} <span className="mono">{p.currency} {fmt(signed(p))}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </section>
+        );
+      })}
+    </>
   );
 }
 

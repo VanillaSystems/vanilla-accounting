@@ -2,7 +2,8 @@
   "receipts": [
     { "id": "rc", "filename": "closed.pdf", "originalFilename": "closed.pdf", "extractedText": "Beleg Mai", "extractionMethod": "pdftotext", "fileSize": 1, "indexedAt": "2026-05-11T00:00:00Z", "location": "archived", "date": "2026-05-10", "amount": 10, "currency": "CHF" },
     { "id": "ro", "filename": "open.pdf", "originalFilename": "open.pdf", "extractedText": "Beleg August", "extractionMethod": "pdftotext", "fileSize": 1, "indexedAt": "2026-08-11T00:00:00Z", "location": "archived", "date": "2026-08-10", "amount": 20, "currency": "CHF" },
-    { "id": "rm", "filename": "manual.pdf", "originalFilename": "manual.pdf", "extractedText": "Beleg manuell", "extractionMethod": "pdftotext", "fileSize": 1, "indexedAt": "2026-08-16T00:00:00Z", "location": "archived" }
+    { "id": "rm", "filename": "manual.pdf", "originalFilename": "manual.pdf", "extractedText": "Beleg manuell", "extractionMethod": "pdftotext", "fileSize": 1, "indexedAt": "2026-08-16T00:00:00Z", "location": "archived" },
+    { "id": "rr", "filename": "20260531-shopify-verkaufsbericht.csv", "originalFilename": "orders_export.csv", "extractedText": "Name,Paid at", "extractionMethod": "pdftotext", "fileSize": 1, "indexedAt": "2026-06-01T00:00:00Z", "location": "archived", "date": "2026-05-31", "kind": "sales-record", "report": { "provider": "shopify", "kind": "sales", "from": "2026-05-01", "to": "2026-05-31", "rows": 1, "held": [{ "order": "1001", "why": "rate", "date": "2026-05-04", "gross": 101, "currency": "CHF" }] } }
   ],
   "transactions": [
     { "ref": "C1", "bank": "Raiffeisen", "date": "2026-05-10", "amount": 10, "currency": "CHF", "direction": "DBIT", "description": "Bank Mai" },

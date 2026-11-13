@@ -11,8 +11,12 @@ import { parseDocument, YAMLMap, YAMLSeq } from 'yaml';
 import { loadBooks } from '../books/store.js';
 import { loadClassifyContext, mappedReceipts, paymentFacts, ruleBookingLines, ruleOfPayment, type RuleLine } from '../booking/classify.js';
 import { stableWords } from '../knowledge/gaps.js';
-import { paysOwner, receiptKnowledge } from '../booking/receipt-wait.js';
-import { payoutWaitOf } from '../booking/providers.js';
+import { paysOwner, receiptKnowledge, repaymentsOf } from '../booking/receipt-wait.js';
+import { baseCurrency } from '../engines/index.js';
+import { outlaysOpen, ownerFactsOf } from '../booking/owner-outlays.js';
+import { judgedRepayments } from '../booking/owner-judged.js';
+import { payoutWaitOf, providerOfMoneyIn } from '../booking/providers.js';
+import { chartNames } from '../booking/rule-book.js';
 import { isOwnBankFee } from '../booking/bank-fee.js';
 import type { Counterparty } from '../knowledge/counterparties.js';
 import type { PaymentNature } from '../accounting/manual-booking.js';
@@ -69,6 +73,8 @@ export interface HandStart {
   nature?: PaymentNature;
   /** The one account the business's file allows: the hand form proposes it. */
   account?: string;
+  /** The payments out whose text is a wage (evidence.guide.yaml, on a firm that pays wages): a precedent counts only between payments of one kind (#402). */
+  wages?: string[];
 }
 
 const GUIDE = `${RULES_DIR}/booking.guide.yaml`;
@@ -180,9 +186,13 @@ export function handStart(ws: Workspace, ref: string, by?: 'text'): HandStart | 
     id: placed.rule.id, lines: ruleBookingLines(tx, booking, mappedReceipts(books, tx), context.ownerAccount),
     ...(then?.kind === 'ask' && { ask: then.question }), ...(booking.tags && { tags: booking.tags }),
   } : undefined;
-  const nature = natureOf(books, tx, context, file, () => receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws).wages);
+  let wordings: ReadonlyArray<{ test(s: string): boolean }> | undefined;
+  const wagesSaid = () => (wordings ??= receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws).wages);
+  const nature = natureOf(books, tx, context, file, wagesSaid, () => !!judgedRepayments(ws)[ref]);
   const account = file?.accounts?.length === 1 ? file.accounts[0] : undefined;
-  return { match, direction, name, similar, ...(wider && { wider }), ...(rule && { rule }), ...(nature && { nature }), ...(account && { account }) };
+  // Of one kind (#402): only between payments to the owner, where a wage and an outlay paid back share the payee.
+  const wages = wagesSaid().length && paysOwner({ counterparty: tx.counterparty, description: '' }, context.ownerName) ? books.transactions.filter((t) => t.direction !== 'CRDT' && wagesSaid().some((w) => w.test(t.description))).map((t) => t.ref) : [];
+  return { match, direction, name, similar, ...(wider && { wider }), ...(rule && { rule }), ...(nature && { nature }), ...(account && { account }), ...(wages.length && { wages }) };
 }
 
 /**
@@ -206,12 +216,16 @@ function oneKind(businesses: ReadonlyArray<string | undefined>, files: readonly 
 const ibanOf = (iban: string) => iban.replace(/\s+/g, '').toUpperCase();
 
 /** What the payment is beside a sale or a purchase, from the firm's files (manual-booking.ts PaymentNature). */
-function natureOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, context: ReturnType<typeof loadClassifyContext>, file: Counterparty | undefined, wages: () => ReadonlyArray<{ test(s: string): boolean }>): PaymentNature | undefined {
+function natureOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, context: ReturnType<typeof loadClassifyContext>, file: Counterparty | undefined, wages: () => ReadonlyArray<{ test(s: string): boolean }>, judged: () => boolean = () => false): PaymentNature | undefined {
   const linked = mappedReceipts(books, tx);
-  const waits = payoutWaitOf(tx, linked, context.counterparties ?? [], books.journalEntries);
-  if (waits) {
-    const key = waits.why === 'clearing' ? 'salesReport.noClearing' : waits.why === 'since' ? 'salesReport.noSince' : 'salesReport.gapPayout';
-    return { kind: 'payoutWaits', key, params: { provider: waits.provider.name, file: homeOf('workspace', waits.provider.role, waits.provider.id), since: waits.provider.provider.since ?? '', account: waits.provider.provider.clearing ?? '' } };
+  // A provider's payout, in every state: never a sale (#404).
+  const provider = providerOfMoneyIn(tx, linked, context.counterparties ?? []);
+  if (provider) {
+    const waits = payoutWaitOf(tx, linked, context.counterparties ?? [], books.journalEntries);
+    const { clearing, since } = provider.provider;
+    const inChart = !!clearing && chartNames(context.chartOfAccounts).has(clearing);
+    const why = waits ? waits.why : since && tx.date < since ? 'before' : inChart ? 'ready' : 'clearing';
+    return { kind: 'payout', provider: provider.name, why, sales: !!provider.provider.reports.sales, ...(clearing ? { account: clearing } : {}), ...(since ? { since } : {}) };
   }
   // The bank's own fee row: on the bank-charges account, as code books it (#359), or what the chart lacks for it.
   if (isOwnBankFee(tx, context.bankCoded)) {
@@ -222,6 +236,14 @@ function natureOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, cont
   if (tx.counterpartyIban && own.has(ibanOf(tx.counterpartyIban))) return { kind: 'ownTransfer' };
   // A wage on a firm that pays wages (its wording, matched on the text only as receipt-wait.ts does): the wage account, without a code (#382).
   if (tx.direction !== 'CRDT') {
+    // Her outlays paid back (#402): her name as the payee, no wage, and her account holds at least as much not paid back.
+    const toOwner = !!context.ownerAccount && paysOwner({ counterparty: tx.counterparty, description: '' }, context.ownerName) && !wages().some((w) => w.test(tx.description));
+    const open = toOwner ? repaymentsOf(books, context, wages(), loadFxResolver()).get(tx.ref) : undefined;
+    if (open !== undefined) return { kind: 'ownerOutlays', account: context.ownerAccount!, open, ...(judged() && { judged: true as const }) };
+    // In another currency than the books': the outlays are kept in the books' currency, so the form proposes nothing and says why (#402).
+    // Only while outlays are open: else the form behaves as for any payment, with its precedent.
+    const f = toOwner && tx.currency !== baseCurrency() ? ownerFactsOf(context) : undefined;
+    if (f && outlaysOpen(books, f, tx.date) > 0) return { kind: 'ownerForeign', currency: tx.currency };
     if (!context.wageAccount || !wages().some((w) => w.test(tx.description))) return undefined;
     // Books that carry wages with their deductions (cls-salary): the payslip's lines are hers, no account is proposed.
     const deductions = context.wageDeductions;

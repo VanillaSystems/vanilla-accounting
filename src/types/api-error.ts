@@ -40,6 +40,10 @@ export type ApiRefusal =
   | { code: 'booksChanged' }
   /** A payment booked by hand is not booked twice. */
   | { code: 'hasEntries' }
+  | { code: 'notByReceipt' }
+  | { code: 'decidedByHand' }
+  | { code: 'changedSince' }
+  | { code: 'undoGone' }
   | { code: 'ownInvoiceTaken' }
   /** Änderungen › «Rückgängig» of a deletion while the payment has bookings it did not have then (src/server/edits.ts restoreSaved): how many stand, and whether a person or the app booked them. */
   | { code: 'bookedSince'; params: { payment: string; entries: number; by: 'person' | 'app' } }
@@ -51,6 +55,7 @@ export type ApiRefusal =
   | { code: 'correctionBooked'; params: { receipt: string; entry: string } }
   /** «Als Korrektur buchen» on a refund of a filed period a sales report offers (#231): the report is gone, or it offers that refund no more. */
   | { code: 'reportCorrection'; params: { why: 'gone' | 'notOffered' } }
+  | { code: 'heldOrder'; params: { why: 'gone' | 'notHeld' | 'sum' | 'rate' | 'notRate' | 'noFacts' | 'beforeReach' } }
   /** «Privat oder bar bezahlt» for a part: the part must be above 0 and at most the receipt's total (src/server/edits.ts privatePayment). */
   | { code: 'partAmount'; params: { total: number; currency: string } }
   /** A part of a receipt that shows several Swiss VAT rates names the rate line it falls under (`rates`: the receipt's). */
@@ -232,6 +237,8 @@ export type ApiRefusal =
   | { code: 'codeNotTaken'; params: { code: string; method: 'none' | 'net-rate' } }
   /** A payment provider's clearing account that is no balance-sheet account (src/intake/sales-report-import.ts setProviderAccount). */
   | { code: 'clearingNotBalance'; params: { account: string } }
+  /** A provider's revenue account that is no revenue account (#404, setProviderAccount). */
+  | { code: 'revenueNotRevenue'; params: { account: string } }
   /** A provider's cut-over day outside the open period: `from` is its first day. */
   | { code: 'sinceNotOpen'; params: { since: string; from: string } }
   /** A clearing account another provider's file names already (`other`: its name): each provider's check needs its own. */

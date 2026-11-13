@@ -3,7 +3,7 @@
  * return is filed, under «Abrechnung prüfen» (r4c-38), and the bookings that contradict their
  * receipts with their one click (r4c-31). Each issue links to where it is settled; none blocks.
  */
-import { orderPagesNow } from '../../lib/order-pages.js';
+import { orderPagesNow, providerIssuesNow } from '../../lib/order-pages.js';
 import { FindPair } from '../receipts/FindPair.js';
 import { t } from '../../i18n/index.js';
 import { fmt, formatDate, moneyInText } from '../../lib/utils.js';
@@ -24,7 +24,7 @@ import { bookWithoutInputTax } from '../bank/actions.js';
 import { UnreadRuleOffer, UnreadTask } from './UnreadReceipt.js';
 import type { UnreadOffer } from '../../../saving/unread-rule.js';
 import { useState } from 'react';
-import { periodName } from '../../lib/period-label.js';
+import { monthName, periodName } from '../../lib/period-label.js';
 import { LACK_WORDS, periodIssues, unbookedOpen, type IssueCounts, type PeriodIssue } from './period-issues.js';
 import { useAutomation } from '../../automation/store.js';
 import { processingOf } from '../../../workflows/processing.js';
@@ -44,7 +44,15 @@ function goOf(books: Index, i: PeriodIssue): Location | undefined {
     case 'unbooked': return at({ area: 'bank', payment: i.tx.ref }, i.tx.date);
     case 'unlinked': return books.receipts.some((r) => r.id === i.receipt.id) ? at({ area: 'receipts', id: i.receipt.id }, i.receipt.date) : undefined;
     case 'own': return at({ area: 'receipts', id: i.receipt.id }, i.day);
+    // The report's receipt, where the order is named and booked (#405); the bill is dropped onto Belege of its month.
+    case 'held': { const r = books.receipts.find((x) => x.id === i.held.receipt); return r ? at({ area: 'receipts', id: r.id }, r.date) : undefined; }
+    case 'bill': return at({ area: 'receipts' }, i.bill.date);
   }
+}
+
+/** A payment's name in a list: the provider code took it for (its payout, #405), else the bank's. */
+export function payerName(tx: Pick<Index['transactions'][number], 'ref' | 'counterparty' | 'description'>): string {
+  return providerIssuesNow().payouts[tx.ref] ?? (tx.counterparty || tx.description);
 }
 
 function textOf(books: Index, i: PeriodIssue): string {
@@ -54,9 +62,11 @@ function textOf(books: Index, i: PeriodIssue): string {
       return t('issues.question', { date: formatDate(i.date), text: tx ? `${tx.counterparty || tx.description} ${tx.currency} ${fmt(tx.amount)}` : i.q.text });
     }
     case 'evidence': return `${formatDate(i.entry.date)} ${i.entry.description ?? ''}: ${evidenceText(i.entry, i.check)}`;
-    case 'unbooked': return t('issues.unbooked', { date: formatDate(i.tx.date), text: i.tx.counterparty || i.tx.description, amount: `${i.tx.currency} ${fmt(i.tx.amount)}` });
+    case 'unbooked': return t('issues.unbooked', { date: formatDate(i.tx.date), text: payerName(i.tx), amount: `${i.tx.currency} ${fmt(i.tx.amount)}` });
     case 'unlinked': return t('issues.unlinked', { date: formatDate(i.receipt.date ?? ''), text: i.receipt.description ? moneyInText(i.receipt.description) : i.receipt.filename });
     case 'own': return t('issues.own', { text: i.name, lacks: i.lacks.map((k) => t(LACK_WORDS[k])).join(', ') });
+    case 'held': return t(i.held.why === 'rate' ? 'issues.heldRate' : 'issues.heldOther', { what: t(`drop.held.${i.held.why}`, { order: i.held.order }), date: formatDate(i.held.date), provider: i.held.name, amount: i.held.gross !== undefined ? `, ${i.held.currency ?? baseCurrency()} ${fmt(i.held.gross)}` : '' });
+    case 'bill': return t('issues.bill', { month: monthName(i.bill.date), provider: i.bill.name, amount: `${baseCurrency()} ${fmt(i.bill.fees)}` });
   }
 }
 
@@ -72,8 +82,8 @@ export function usePeriodIssues(books: Index, from: string, to: string): PeriodI
   const accounts = useWorkspace()?.bankAccounts;
   // A receipt a run still reads is not hers yet (#398): the runs as Belege reads them.
   const runs = useAutomation().view?.runs;
-  const key = [books, questions, accounts, orderPagesNow(), from, to, localToday(), runs];
-  if (!lastIssues || key.some((k, i) => k !== lastIssues!.key[i])) lastIssues = { key, issues: periodIssues(books, questions, from, to, accounts ?? [], orderPagesNow(), localToday(), processingOf(runs ?? [], books.receipts)) };
+  const key = [books, questions, accounts, orderPagesNow(), providerIssuesNow(), from, to, localToday(), runs];
+  if (!lastIssues || key.some((k, i) => k !== lastIssues!.key[i])) lastIssues = { key, issues: periodIssues(books, questions, from, to, accounts ?? [], orderPagesNow(), localToday(), processingOf(runs ?? [], books.receipts), providerIssuesNow()) };
   return lastIssues.issues;
 }
 
@@ -85,6 +95,8 @@ export function issueWords(c: Pick<IssueCounts, 'unbooked' | 'waitingReceipt'> &
     c.own ? t('issues.n.own', { n: c.own }) : '',
     c.unlinked ? t('issues.n.unlinked', { n: c.unlinked }) : '',
     c.evidence ? t('issues.evidenceTitle', { n: c.evidence }) : '',
+    c.held ? t('issues.n.held', { n: c.held }) : '',
+    c.bills ? t('issues.n.bills', { n: c.bills }) : '',
   ].filter(Boolean);
 }
 

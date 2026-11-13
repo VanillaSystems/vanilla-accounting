@@ -173,6 +173,12 @@ html.aiover .list { padding-left: 24px; padding-right: 16px; }
 a.dmove { color: inherit; text-decoration: none; border-radius: 4px; }
 a.dmove:hover, a.dmove:focus-visible { background: var(--hover); outline: none; }
 .ddet .dmove span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A provider's question in its drop row (#404): one at a time, read left to right. */
+.droprow .dgo .dpq { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; text-align: left; }
+.droprow .dgo .dpq b { font-size: 12.5px; font-weight: 500; color: var(--ink); }
+.droprow .dgo .dpq small { white-space: normal; }
+.droprow .dgo .dpq .dpw { margin-top: 2px; }
+.droprow .dgo .dpq small.wn { color: var(--warn); }
 .dpw { display: flex; gap: 6px; }
 .dpw input { width: 150px; height: 28px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
 .dpw:has(.acf) { align-items: flex-end; padding-bottom: 18px; }
@@ -195,7 +201,7 @@ a.dmove:hover, a.dmove:focus-visible { background: var(--hover); outline: none; 
 .dropdlg .dsum p { margin: 0; }
 .dchip.p-working, .dchip.p-none { background: var(--hover); color: var(--ink-2); }
 .dchip.p-waits, .dchip.p-stuck, .dchip.p-unread, .dchip.p-twin { background: var(--warn-soft); color: var(--warn); }
-.dchip.p-matched { background: color-mix(in srgb, var(--pos, #1a7f4b) 14%, transparent); color: var(--pos, #1a7f4b); }
+.dchip.p-matched, .dchip.p-feeBill { background: color-mix(in srgb, var(--pos, #1a7f4b) 14%, transparent); color: var(--pos, #1a7f4b); }
 .dpw input { font-size: 12px; }
 .droprow.open { border-bottom: 0; }
 .droprow .dtog { width: 22px; height: 22px; display: grid; place-items: center; border: 0; border-radius: 6px; background: none; color: var(--faint); cursor: pointer; }

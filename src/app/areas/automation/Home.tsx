@@ -25,6 +25,7 @@ import type { Location, Query } from '../../shell/route.js';
 import type { Nav } from '../index.js';
 import { Go } from '../vat/links.js';
 import { approvalWithheld } from './filing-summary.js';
+import { providerIssuesNow } from '../../lib/order-pages.js';
 import { paymentWords, readsInWords } from './words.js';
 import { OpenFact, usePeriodIssues } from './Issues.js';
 import { periodsAround } from './periods.js';
@@ -99,7 +100,7 @@ export function HomePage({ view, books, nav, query, canEdit }: { view: Automatio
         <section>
           <h3 className="h3">{t('automation.home.waiting')} <small>{t('automation.home.waitingLead')}</small></h3>
           {view.tasks.map((task) => {
-            const withheld = approvalWithheld(task, q.questions, books)?.outcome;
+            const withheld = approvalWithheld(task, q.questions, books, providerIssuesNow())?.outcome;
             const quick = canEdit ? quickOutcomes(task, books, booked, withheld) : [];
             return (
               <div key={task.run} className="task hot" data-testid="home-task">

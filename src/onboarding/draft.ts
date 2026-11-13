@@ -13,6 +13,7 @@ import { PRESETS, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, asked, notRegistered
 import type { NetRate } from '../workspace/vat-setup.js';
 import type { BankSpec, SetupRequest } from '../workspace/create.js';
 import type { KnownBooks } from '../types/desktop.js';
+import type { PrivateShares } from './model.js';
 
 export const DRAFT_FILE = 'setup-draft.json';
 
@@ -49,6 +50,13 @@ export interface SetupDraft {
   assumed?: QuestionKey[];
   /** The kind of firm that gave `assumed`: named on the review although the preset is «Etwas anderes» since (#364). */
   assumedBy?: Exclude<Preset, 'custom'>;
+  /**
+   * The kind of firm she picked, when a changed answer made the preset «Etwas anderes» since (#402): the
+   * review still names her kind, «mit einer Änderung». Absent while the preset is her pick, or she picked «Etwas anderes».
+   */
+  chosen?: Exclude<Preset, 'custom'>;
+  /** The private share of the phone or the car her words named (#402): kept with the books in onboarding.json, never in the settings. */
+  shares?: PrivateShares;
 }
 
 /** One answer of the draft, as the setup conversation marks it: a step, or a question by its key. */
@@ -199,6 +207,18 @@ export function withPatch(d: SetupDraft, patch: DraftPatch): SetupDraft {
   return { ...next, ...(marks.length ? { fromText: marks } : {}), ...(assumed.length ? { assumed, ...(by ? { assumedBy: by } : {}) } : {}) };
 }
 
+/**
+ * The kind of firm the review names (#402): her pick, also after a changed answer made the preset
+ * «custom» (`chosen`), with how many of its answers differ now; undefined before a kind is picked.
+ */
+export function kindOf(d: Pick<SetupDraft, 'preset' | 'chosen' | 'answers'>): { kind: Preset; changes: number } | undefined {
+  if (!d.preset) return undefined;
+  if (d.preset !== 'custom' || !d.chosen) return { kind: d.preset, changes: 0 };
+  const given = presetAnswers(d.chosen);
+  const changes = QUESTION_ORDER.filter((k) => !isVat(k) && given[k] !== undefined && JSON.stringify(given[k]) !== JSON.stringify(d.answers[k])).length;
+  return { kind: d.chosen, changes };
+}
+
 /** The answers the kind of firm gave that the person did not say herself (#364). */
 export const assumedOf = (d: SetupDraft): QuestionKey[] => (d.assumed ?? []).filter((k) => d.answers[k] !== undefined && asked(k, d.answers));
 
@@ -209,24 +229,27 @@ function answer(d: SetupDraft, patch: DraftPatch): SetupDraft {
     case 'netRates': return patch.value ? { ...d, netRates: patch.value } : without('netRates');
     case 'banks': return patch.value ? { ...d, banks: patch.value } : without('banks');
     case 'preset': {
-      if (!patch.value) return without('preset');
-      if (patch.value === 'custom') return { ...d, preset: 'custom' };
+      if (!patch.value) { const { chosen: _c, preset: _p, ...rest } = d; return rest; }
+      if (patch.value === 'custom') { const { chosen: _c, ...rest } = d; return { ...rest, preset: 'custom' }; }
       const kept = Object.fromEntries(QUESTION_ORDER.filter((k) => d.answers[k] !== undefined && (isVat(k) || d.fromText?.includes(k))).map((k) => [k, d.answers[k]]));
       const given = Object.fromEntries(Object.entries(presetAnswers(patch.value)).filter(([k]) => !isVat(k as QuestionKey)));
       const assumed = QUESTION_ORDER.filter((k) => k in given && !(k in kept));
-      return { ...d, preset: patch.value, answers: { ...given, ...kept } as Partial<Answers>, assumed, assumedBy: patch.value };
+      const { chosen: _c, ...rest } = d;
+      return { ...rest, preset: patch.value, answers: { ...given, ...kept } as Partial<Answers>, assumed, assumedBy: patch.value };
     }
     case 'question': {
       const answers = { ...d.answers } as Record<string, QuestionValue>;
       if (patch.value === null) delete answers[patch.key]; else answers[patch.key] = patch.value;
       if (patch.key === 'period' && patch.value !== null && d.refusedPeriod) { const { refusedPeriod: _r, ...rest } = d; d = rest; }
       const hidden = patch.value === null && !!d.preset && d.preset !== 'custom' && !isVat(patch.key);
+      // Her kind stays named on the review (#402): the preset becomes «custom» only so the question is asked again.
+      const chosen = hidden ? { chosen: d.preset as Exclude<Preset, 'custom'> } : {};
       // Not registered, by «nein» or by the answer «we file no VAT returns» (#347): the questions of a registered firm and its rates go.
       if (patch.key === 'vatRegistered' && patch.value === 'no') {
         const { netRates: _rates, ...rest } = d;
-        return { ...rest, answers: notRegistered(answers as Partial<Answers>), ...(hidden ? { preset: 'custom' as const } : {}) };
+        return { ...rest, answers: notRegistered(answers as Partial<Answers>), ...(hidden ? { preset: 'custom' as const, ...chosen } : {}) };
       }
-      return { ...d, answers: answers as Partial<Answers>, ...(hidden ? { preset: 'custom' as const } : {}) };
+      return { ...d, answers: answers as Partial<Answers>, ...(hidden ? { preset: 'custom' as const, ...chosen } : {}) };
     }
   }
 }

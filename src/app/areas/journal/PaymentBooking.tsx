@@ -79,7 +79,7 @@ export function PaymentBooking(props: Props) {
   }, [props.payment, props.books]);
   const start = known?.start ?? undefined;
   const draft = useMemo(() => (ws && known ? (known.failed ? (d?: BookingDraft) => d && withoutProposal(d) : (d?: BookingDraft) => d)(formDraft(props.books, props.payment, ws.bankAccounts, invoices, {
-    defaults: ws.defaults, rule: start?.rule, nature: start?.nature, account: start?.account,
+    defaults: ws.defaults, rule: start?.rule, nature: start?.nature, account: start?.account, ...(start?.wages && { wages: start.wages }),
     invoiceRevenue: ws.invoicing?.revenueAccount, chart: getAccounts().map((a) => a.number), ownUid: ws.company.uid, firmName: ws.company.name,
     ...(notOwn && { notOwnInvoice: notOwn }),
     ranks: (words) => ranksByWords(getAccounts().filter((a) => chart().typeOf(a.number) === 'expense'), words, hintsOf),
@@ -120,7 +120,8 @@ function sourceText(s: DraftSource, account: string | undefined, vat: string | u
     : a.from === 'precedent' ? (a.yours && a.name ? t('journal.byHand.from.precedentYours', { name: a.name, date: formatDate(a.date) }) : t('journal.byHand.from.precedent', { date: formatDate(a.date) }))
       : a.from === 'refund' ? t('journal.byHand.from.refund', { date: formatDate(a.date) })
         : a.from === 'invoice' || a.from === 'receivable' ? t(`journal.byHand.from.${a.from}`, { number: a.number })
-          : t(`journal.byHand.from.${a.from}`);
+          : a.from === 'clearing' ? t('journal.byHand.from.clearing', { provider: a.provider })
+            : t(`journal.byHand.from.${a.from}`);
   const v = vat ? s.vat : undefined;
   const vatFrom = !v ? '' : v.from === 'sale' ? t(`journal.byHand.from.sale.${v.choice === 'saleAbroad' ? 'abroad' : 'domestic'}`) : t(`journal.byHand.from.vat.${v.from}`);
   return [
@@ -132,7 +133,7 @@ function sourceText(s: DraftSource, account: string | undefined, vat: string | u
 /** A fact under the lines, in plain words (DraftNote). */
 function noteText(n: DraftNote): string {
   switch (n.kind) {
-    case 'payoutWaits': return t(n.key as 'salesReport.noClearing', n.params as { provider: string; file: string });
+    case 'payout': return t(`journal.byHand.note.payout.${n.why}${(n.why === 'clearing' || n.why === 'since') && n.sales === false ? 'NoSales' : ''}` as 'journal.byHand.note.payout.gap', { provider: n.provider, account: n.account ?? '', since: n.since ? formatDate(n.since) : '' });
     case 'authority': return t('journal.byHand.note.authority', { name: n.name });
     case 'saleVat': return t(`journal.byHand.note.saleVat.${n.why}`);
     case 'ask': return t('journal.byHand.note.ask', { question: n.question });
@@ -145,6 +146,8 @@ function noteText(n: DraftNote): string {
     case 'nearReceipt': return !n.vat ? t('journal.byHand.note.nearReceiptPlain', { name: n.name, why: n.why }) : n.rate !== undefined ? t('journal.byHand.note.nearReceipt', { name: n.name, why: n.why, rate: String(n.rate) }) : t('journal.byHand.note.nearReceiptNoRate', { name: n.name, why: n.why });
     case 'noProposal': return t(n.linked ? 'journal.byHand.note.noProposal.receipt' : 'journal.byHand.note.noProposal.none', { name: n.name });
     case 'discount': return t(n.vat === 'paid' ? 'journal.byHand.note.discount' : n.vat === 'rates' ? 'journal.byHand.note.discountRates' : 'journal.byHand.note.discountNoVat', { percent: String(n.percent), amount: fmt(n.amount) });
+    case 'ownerOutlays': return t(n.judged ? 'journal.byHand.note.ownerOutlaysJudged' : 'journal.byHand.note.ownerOutlays', { amount: fmt(n.open) });
+    case 'ownerForeign': return t('journal.byHand.note.ownerForeign', { currency: n.currency });
     default: return t(`journal.byHand.note.${n.kind}`);
   }
 }

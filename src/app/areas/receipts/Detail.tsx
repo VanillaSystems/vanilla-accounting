@@ -38,17 +38,18 @@ import { offersInBooks } from '../../../intake/near-pairs.js';
 import { ByHand, VatFields } from './VatFields.js';
 import { TwinNotice } from './TwinNotice.js';
 import { ReportCorrections } from './ReportCorrections.js';
+import { ReportHeld } from './ReportHeld.js';
 import { Paper } from './Paper.js';
 import { SkipOffer } from './SkipOffer.js';
 import { RunHistory } from '../../history/RunHistory.js';
 import { I } from './icons.js';
 import { ActionsMenu } from '../../selection/ActionsMenu.js';
-import { readsPaidPrivately, receiptActions } from './actions-menu.js';
+import { ownerPays, readsPaidPrivately, receiptActions } from './actions-menu.js';
 import { useAiOff } from '../../ai/ai-off.js';
-import { useNoAi } from '../../ai/no-ai.js';
+import { useAiState, useNoAi } from '../../ai/no-ai.js';
 import { baseCurrency, chargesVat, filing, withoutInputTax } from '../../../engines/index.js';
 import { processingText } from '../../automation/processing.js';
-import { inProcess, type Processing } from '../../../workflows/processing.js';
+import { INTAKE_WORKFLOW, inProcess, type Processing } from '../../../workflows/processing.js';
 import { refusalText } from '../../automation/refusal.js';
 
 type Props = AreaProps<RouteOf<'receipts'>>;
@@ -208,7 +209,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       )}
       <TwinNotice {...props} />
       {card && <div className="notice" data-testid="card-statement">{cardStatementLine(card)}</div>}
-      {r.report?.held?.length ? <ReportHeld report={r.report} /> : null}
+      {r.report?.held?.length ? <ReportHeld receipt={r.id} report={r.report} canEdit={canEdit} closedThrough={props.books.config?.closedThrough} said={(message, ok) => { if (ok) nav.refresh(); nav.toast(message); }} /> : null}
       <ReportCorrections receipt={r.id} books={props.books} canEdit={canEdit} said={(message) => { nav.refresh(); nav.toast(message); }} />
       {v.none && v.r.kind === 'supporting'
         ? <div className="notice" data-testid="supporting-notice">{t('receipts.supportingNotice', { what: v.noneWhy ? t(`receipts.why.${v.noneWhy}`) : t('receipts.why.supporting') })} {canEdit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t(markLabel(r))}</a>}</div>
@@ -238,21 +239,6 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       {s.overlay === 'link' && edit && <LinkDialog {...props} onClose={() => setUi({ overlay: null })} />}
       {s.overlay === 'quick' && <Quick src={src} file={r.filename} />}
       {s.overlay === 'delete' && edit && <ConfirmDelete {...props} />}
-    </div>
-  );
-}
-
-/**
- * What a provider's sales or fee report could not book (#203), kept on its receipt by its latest
- * taking: each order with why, for the person to book or correct by hand; at most HELD_KEPT named
- * (src/intake/sales-report-import.ts), the rest counted.
- */
-function ReportHeld({ report }: { report: NonNullable<Receipt['report']> }) {
-  const held = report.held ?? [];
-  const more = report.heldMore ?? 0;
-  return (
-    <div className="notice" data-testid="report-held">
-      {I.dot}<span>{t('receipts.report.held', { n: held.length + more })}: {held.map((h) => t(`drop.held.${h.why}`, { order: h.order })).join(', ')}{more ? ` ${t('receipts.report.heldMore', { n: more, limit: held.length })}` : ''}</span>
     </div>
   );
 }
@@ -372,6 +358,9 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
   if (v.locked || (v.r.filedPayment && l.txByRef.has(v.r.filedPayment))) return null;
   if (v.orderPage) return <OrderPageNotice page={v.orderPage} l={l} nav={nav} />;
   if (v.vatCorrection) return <VatCorrectionNotice c={v.vatCorrection} v={v} l={l} nav={nav} canEdit={canEdit} />;
+  const owner = ownerPays();
+  // Why it reads as paid privately (#402): its words, or the owner's card and the receipt that showed it.
+  const read = readsPaidPrivately(v, l);
   if (sug && canEdit) {
     const why = [t('receipts.whySameAmount'), sug.days !== undefined && dayText(sug.days)].filter(Boolean).join(' · ');
     return (
@@ -403,7 +392,9 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
       {canEdit && <> <button type="button" style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => runAct(props, 'link')}>{t('receipts.linkVerb')}</button> <Kbd keys={['L']} tip={t('receipts.keyLinkTip')} /></>}
       {canEdit && <> · <FindPair key={v.r.id} on={{ receipt: v.r.id }} books={props.books} nav={nav} /></>}
       {/* Its words say cash or private (#216): a proposal beside the fact; the receipt is unpaid in the books until it is booked. */}
-      {readsPaidPrivately(v) && <> · <span data-testid="paid-privately">{t('receipts.paidPrivatelyNotice')}</span></>}
+      {read && <> · <span data-testid="paid-privately">{!owner ? t('receipts.paidPrivatelyNotice')
+        : read.by === 'card' ? t('receipts.paidPrivatelyCard', { card: read.card, date: read.seen.date ? formatDate(read.seen.date) : read.seen.file, account: `${owner.account} ${owner.label}` })
+          : t('receipts.paidPrivatelyOwner', { account: `${owner.account} ${owner.label}` })}</span></>}
     </span>
   );
 }
@@ -423,6 +414,11 @@ function Sec({ k, val, children }: { k: Section; val: ReactNode; children: React
 
 function Payments(props: Props & { v: ReceiptView; l: Ledger; edit: boolean; working?: Processing }) {
   const { v, l, nav, edit, working } = props;
+  // Her own private payment the inbox run books with the AI (#402): no form with an empty account while a run is under way; «Selbst buchen» opens it.
+  const ai = useAiState();
+  const runs = useAutomation().view?.runs ?? [];
+  const underWay = runs.some((r) => r.workflow === INTAKE_WORKFLOW && r.mode === 'live' && (r.status === 'queued' || r.status === 'running'));
+  const [byHand, setByHand] = useState<string>();
   const one = v.links.length === 1 ? (l.txByRef.get(v.links[0])?.date ?? l.entriesByRef.get(v.links[0])?.[0]?.date) : undefined;
   const val = !v.links.length ? '—' : v.links.length === 1 ? (one ? formatDate(one) : '?') : t('receipts.nPayments', { n: v.links.length });
   return (
@@ -442,6 +438,7 @@ function Payments(props: Props & { v: ReceiptView; l: Ledger; edit: boolean; wor
           );
         }
         const book = edit && !v.locked && tx.amount && !(l.entriesByRef.get(ref) ?? []).length;
+        const booking = book && ownPrivate(l, tx) && ai === 'ready' && underWay && byHand !== ref;
         return (
           <Fragment key={ref}>
           <div className="tx go" data-tip={t('receipts.openPayment')} onClick={() => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date))}>
@@ -452,7 +449,12 @@ function Payments(props: Props & { v: ReceiptView; l: Ledger; edit: boolean; wor
               ? <button type="button" className="un" data-tip={t('receipts.undoPrivateTip')} onClick={(e) => { e.stopPropagation(); undoPrivate(nav, v, tx, txLine(tx)); }}>{t('receipts.undoPrivate')}</button>
               : <button type="button" className="un" onClick={(e) => { e.stopPropagation(); unlinkPayment(nav, v, ref, txLine(tx)); }}>{t('receipts.unlinkCap')}</button>)}
           </div>
-          {book ? <PaymentBooking books={props.books} nav={nav} payment={ref} narrow /> : null}
+          {booking ? (
+            <p className="m" data-testid="private-booking">
+              <span className="spin small" aria-hidden="true" /> {t('receipts.privateBooking')}{' '}
+              <button type="button" className="quiet" onClick={() => setByHand(ref)}>{t('receipts.privateByHand')}</button>
+            </p>
+          ) : book ? <PaymentBooking books={props.books} nav={nav} payment={ref} narrow /> : null}
           </Fragment>
         );
       })}

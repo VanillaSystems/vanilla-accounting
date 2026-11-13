@@ -36,7 +36,7 @@ const cents = (n: number) => Math.round(Math.abs(n) * 100);
 const DAY = 864e5;
 
 /** The business and document type that say a receipt proves a VAT-only correction, by its text. */
-function provenBy(r: Receipt, counterparties: readonly Counterparty[]): { cp: Counterparty; document: string } | undefined {
+export function provenBy(r: Receipt, counterparties: readonly Counterparty[]): { cp: Counterparty; document: string } | undefined {
   const text = r.extractedText ?? '';
   for (const cp of counterparties) {
     for (const d of cp.documents) if (d.proves === 'vat-correction' && d.text.every((re) => re.test(text))) return { cp, document: d.id };

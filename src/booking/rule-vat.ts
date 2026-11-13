@@ -42,6 +42,18 @@ export function takesNoCode(account: string, settles: (account: string) => boole
 }
 
 /**
+ * Whether the zero input code (I0) is left off a booking on `account` (#402): where it takes no code
+ * at all (takesNoCode), and on the employer's contributions (setup.yaml `wages.contributions`) and the
+ * bank-charges account (`bankCharges`, #359), each while the firm's account of that number is an
+ * expense account. Only for the model's lines: a rule's code is what its card showed her.
+ */
+export function zeroCodeOff(account: string, settles: (account: string) => boolean = () => false, typeOf: (account: string) => string | undefined = (a) => chart().typeOf(a)): boolean {
+  const { wages, bankCharges } = setup();
+  const named = !!wages?.contributions?.includes(account) || account === bankCharges?.account;
+  return takesNoCode(account, settles, typeOf) || (named && typeOf(account) === 'expense');
+}
+
+/**
  * The rule's VAT, given the account it books on and the receipts linked to the payments it holds
  * for. `noCode`: the account takes none (takesNoCode), or every payment the rule holds for is a
  * wage: then it books without a code, unless a receipt shows Swiss VAT, which wins and is asked about.

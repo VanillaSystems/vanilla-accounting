@@ -12,7 +12,7 @@ import { BANKS } from '../../workspace/banks.js';
 import { NO_VAT, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, hasWhere, noVatHint, offeredAnswers, offeredLabel, optionOf, unsteered, unusualPeriod, type QuestionKey } from '../../workspace/setup.js';
 import type { BankSpec } from '../../workspace/create.js';
 import type { NetRate } from '../../workspace/vat-setup.js';
-import { DRAFT_PHASES, assumedOf, draftProgress, draftSteps, type DraftPatch, type DraftStep, type Firm, type QuestionValue, type SetupDraft, type SetupDraftView, type StepMark } from '../../onboarding/draft.js';
+import { DRAFT_PHASES, assumedOf, draftProgress, kindOf, draftSteps, type DraftPatch, type DraftStep, type Firm, type QuestionValue, type SetupDraft, type SetupDraftView, type StepMark } from '../../onboarding/draft.js';
 import type { SetupReply, TalkRefusal } from '../../onboarding/draft-talk.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
 
@@ -43,11 +43,19 @@ const banksLine = (banks: readonly BankSpec[]) => banks.map((b) => `${b.bank} ${
 /** A message typed and what came of it; `at`: the step that waited when it was sent, where the turn stays in the conversation. */
 interface Turn { at: string; me: string; reply?: SetupReply; error?: string; filled?: Array<{ label: string; value: string }> }
 
+/** The kind of firm as the review names it (#402): her pick, «mit einer Änderung» when an answer of it was changed since. */
+function kindLine(d: SetupDraft): string {
+  const k = kindOf(d);
+  if (!k) return '';
+  const name = tData(`desktop.q.preset.${k.kind}`);
+  return k.changes ? t('onboarding.draft.kindChanged', { kind: name, n: k.changes }) : name;
+}
+
 const stepKey = (s: DraftStep) => (s.id === 'question' ? s.key : s.id);
 /** An answer taken from the words, as the reply lists it: what it answers and the answer, as saved. */
 const filledLine = (m: StepMark, d: SetupDraft): { label: string; value: string } =>
   m === 'firm' ? { label: t('onboarding.draft.firmLabel'), value: d.firm ? firmLine(d.firm) : '' }
-    : m === 'preset' ? { label: t('desktop.preset'), value: d.preset ? tData(`desktop.q.preset.${d.preset}`) : '' }
+    : m === 'preset' ? { label: t('desktop.preset'), value: kindLine(d) }
       : m === 'netRates' ? { label: t('desktop.netRates'), value: ratesLine(d.netRates ?? []) }
         : m === 'banks' ? { label: t('desktop.banks'), value: banksLine(d.banks ?? []) }
           : { label: tData(`desktop.q.${m}.ask`), value: valueLabel(m, d.answers[m]) };
@@ -202,7 +210,9 @@ function TurnView({ turn }: { turn: Turn }) {
                   ) : null}
                   {r.refused.map((x, i) => <p key={i} className="obrefused" data-refused={x.step}>{t('onboarding.talk.refused', { why: refusalText(x.refusal) })}</p>)}
                   {r.say ? <p>{r.say}</p> : null}
-                  {!r.filled.length && !r.refused.length && !r.say ? <p>{t('onboarding.talk.nothing')}</p> : null}
+                  {/* A private share her words named (#402): what the app does with it, said by code. */}
+                  {(['phone', 'car'] as const).flatMap((item) => (r.shares?.[item] ? [<p key={item} data-share={item}>{t(`onboarding.talk.share.${item}`, { percent: String(r.shares[item]!.percent) })}</p>] : []))}
+                  {!r.filled.length && !r.refused.length && !r.say && !r.shares ? <p>{t('onboarding.talk.nothing')}</p> : null}
                 </Ai>
               )}
     </div>
@@ -392,7 +402,7 @@ function Review({ draft, root, busy, change, onCreate, turns }: { draft: SetupDr
           <h4>{t('onboarding.draft.reviewTitle')}</h4>
           <dl className="obkv obreview">
             {draft.firm ? <><dt>{t('onboarding.draft.firmLabel')}</dt><dd>{firmLine(draft.firm)} <FromText on={marked('firm')} /></dd><dd /></> : null}
-            {draft.preset ? <><dt>{t('desktop.preset')}</dt><dd>{tData(`desktop.q.preset.${draft.preset}`)} <FromText on={marked('preset')} /></dd><dd /></> : null}
+            {draft.preset ? <><dt>{t('desktop.preset')}</dt><dd data-kind={kindOf(draft)?.kind}>{kindLine(draft)} <FromText on={marked('preset')} /></dd><dd /></> : null}
             {questions.map((k) => (
               <ReviewRow key={k} label={tData(`desktop.q.${k}.ask`)} value={k === 'vatRegistered' && draft.answers[k] === 'no' ? t('onboarding.draft.noVat') : valueLabel(k, draft.answers[k])} fromText={marked(k)} assumed={<Assumed draft={draft} k={k} />} busy={busy} onChange={() => change(k, { step: 'question', key: k, value: null }, draft.answers[k])} />
             ))}

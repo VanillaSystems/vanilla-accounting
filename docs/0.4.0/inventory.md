@@ -11,10 +11,10 @@ and the providers.
 | core | 76 | 23 |
 | engine | 4 | 1 |
 | provider | 14 | 11 |
-| split | 128 | 26 |
+| split | 131 | 26 |
 | infrastructure | 71 | 4 |
 | workflow | 30 | 0 |
-| view | 353 | 55 |
+| view | 357 | 55 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -180,14 +180,14 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/areas/vat/filed.ts` | ESTV 1 |
 | `src/app/areas/vat/form0535.ts` | ESTV 1, Ziffer 3, form 0535 1 |
 | `src/app/areas/vat/links.tsx` | MWST 1 |
-| `src/app/areas/vat/model.ts` | MWST 1, ESTV 2, Ziffer 12, form 0535 3, Rappen 3 |
+| `src/app/areas/vat/model.ts` | MWST 1, ESTV 2, Ziffer 12, form 0535 3, Rappen 4 |
 | `src/app/areas/vat/vat.tsx` | CHF 1, MWST 1, Ziffer 6, form 0535 2 |
 | `src/app/areas/vat/view.ts` | MWST 1, Ziffer 2, form 0535 1 |
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 45, MWST 382, ESTV 49, Ziffer 61, form 0535 1, UID 1, camt.053 24, QR-bill 1, Rappen 3 |
-| `src/app/i18n/locales/en.ts` | CHF 45, MWST 5, ESTV 26, form 0535 1, UID 1, camt.053 24, QR-bill 4 |
+| `src/app/i18n/locales/de.ts` | CHF 45, MWST 404, ESTV 50, Ziffer 61, form 0535 1, UID 1, camt.053 24, QR-bill 1, Rappen 3 |
+| `src/app/i18n/locales/en.ts` | CHF 45, MWST 5, ESTV 27, form 0535 1, UID 1, camt.053 24, QR-bill 4 |
 | `src/app/i18n/locales/fr.ts` | CHF 45, MWST 1, form 0535 1, UID 1, camt.053 24, QR-bill 1 |
 | `src/app/i18n/locales/it.ts` | CHF 45, MWST 1, form 0535 1, UID 1, camt.053 24, QR-bill 1 |
 | `src/app/lib/api.ts` | MWST 1, camt.053 3 |

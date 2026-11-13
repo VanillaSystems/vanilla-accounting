@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import type { Index } from '../types/index.js';
 import { writeAtomic } from '../invoices/store.js';
-import { emptyProgress, parseProgress, withAnswer, withTopic, type Answer, type Assumed, type QuestionId, type SetupProgress, type SetupTopic, type TopicState } from './model.js';
+import { emptyProgress, parseProgress, withAnswer, withTopic, type Answer, type Assumed, type PrivateShares, type QuestionId, type SetupProgress, type SetupTopic, type TopicState } from './model.js';
 import type { SetupView } from './facts.js';
 import type { QuestionKey } from '../workspace/setup.js';
 
@@ -49,8 +49,8 @@ export function setupView(ws: Ws, books: Parameters<typeof emptyBooks>[0]): Pick
  * books existed is in the settings now, and the conversation in the books shows it from there without
  * asking (#345), so no answer is recorded: only that these books open into the setup until «Los geht's».
  */
-export function seedCreated(ws: Ws, seed: { started: string; assumed?: Assumed }, now: string): SetupProgress {
-  return write(ws, { ...emptyProgress(), started: seed.started, created: now, ...(seed.assumed ? { assumed: seed.assumed } : {}) });
+export function seedCreated(ws: Ws, seed: { started: string; assumed?: Assumed; shares?: PrivateShares }, now: string): SetupProgress {
+  return write(ws, { ...emptyProgress(), started: seed.started, created: now, ...(seed.assumed ? { assumed: seed.assumed } : {}), ...(seed.shares ? { shares: seed.shares } : {}) });
 }
 
 /**
@@ -69,6 +69,12 @@ export function confirmAssumed(ws: Ws, key: QuestionKey): SetupProgress {
   const { [key]: _gone, ...answers } = p.assumed.answers;
   const { assumed: _a, ...rest } = p;
   return write(ws, Object.keys(answers).length ? { ...rest, assumed: { ...p.assumed, answers } } : rest);
+}
+
+/** The private shares of the setup as they stand now (#402): a share goes once a rule took it or she said «Nie». */
+export function setShares(ws: Ws, shares: PrivateShares | undefined): SetupProgress {
+  const { shares: _old, ...rest } = readProgress(ws);
+  return write(ws, shares && Object.keys(shares).length ? { ...rest, shares } : rest);
 }
 
 /** «Los geht's»: the setup ends; the books open as books from now on. */

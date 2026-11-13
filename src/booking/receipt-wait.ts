@@ -19,7 +19,9 @@
  * nothing. A payment booked onto a settlement
  * account (the owner's, a money account, a debt) pays what was booked elsewhere and never waits
  * (settlementAccount): by a rule, decided here; by the model, decided on its answer (answerSettles),
- * where the owner's account settles only a payment to the owner (issue #201).
+ * where the owner's account settles only a payment to the owner (issue #201). A payment to the owner by
+ * name, no wage, that her outlays not paid back yet cover (src/booking/owner-outlays.ts) pays those
+ * back: its receipts are the outlays' own, booked over her account, so it waits for none (#402).
  * Any other company rule that books waits for the receipt like the model: the receipt decides its
  * rate (ruleVatCode). A rule that asks first is the person's
  * wish to be asked: its question comes at once, and her answer books it.
@@ -28,6 +30,7 @@ import { basename } from 'node:path';
 import { identify, signalsOfTransaction } from '../knowledge/counterparties.js';
 import type { Knowledge } from '../knowledge/layers.js';
 import { chart, withoutInputTax } from '../engines/index.js';
+import { ownerFactsOf, ownerRepayments, paysOwner } from './owner-outlays.js';
 import type { Books } from '../books/store.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import { mappedReceipts, ruleOfPayment, type ClassifyContext } from './classify.js';
@@ -64,6 +67,8 @@ export type NoWait =
   | 'settlement'
   /** A company rule says to ask about it first (a wish such as «frag mich bei Barbezügen»): its question comes at once. */
   | 'ruleAsks'
+  /** It pays the owner back her outlays, which her account holds not paid back yet (repaysOwner, #402): their receipts are booked with them. */
+  | 'repaysOwner'
   /** Its business's file says its payments need no receipt. */
   | 'business'
   /** Its wording is one a guide's rule says needs no receipt (a cash withdrawal: money onto the cash box). */
@@ -87,6 +92,8 @@ export interface WaitFacts {
   ruleAsks?: boolean;
   /** It is a payment provider's payout (providerOfPayment). */
   payout?: boolean;
+  /** It pays the owner back her outlays (repaysOwner). */
+  repaysOwner?: boolean;
 }
 
 /** What the decision reads of the firm. */
@@ -118,6 +125,7 @@ export function receiptWait(tx: BankTransaction, facts: WaitFacts, ctx: WaitCont
   if (tx.counterpartyIban && ctx.ownIbans.has(ibanOf(tx.counterpartyIban))) return book('ownTransfer');
   if (facts.ruleAccount && ctx.settles(facts.ruleAccount)) return book('settlement');
   if (facts.ruleAsks) return book('ruleAsks');
+  if (facts.repaysOwner) return book('repaysOwner');
   if (facts.business && ctx.free.has(facts.business)) return book('business');
   if (ctx.wordings.some((w) => w.test(`${tx.description} ${tx.counterparty ?? ''}`))) return book('wording');
   // The text only: a counterparty may be called like a wage word (a surname, a place, a firm).
@@ -156,13 +164,35 @@ export function answerSettles(tx: BankTransaction, entries: readonly Pick<Journa
   return onlySettles(entries, bankAccountFor(tx, context.bankAccounts), (a) => (a === context.ownerAccount ? toOwner : settles(a)));
 }
 
-/** Every word of the owner's name stands in the payment's counterparty or text («Anna Muster» in «Sent money to Anna Maria Muster»). */
-export function paysOwner(tx: Pick<BankTransaction, 'counterparty' | 'description'>, owner: string | undefined): boolean {
-  const words = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().split(/[^\p{L}]+/u).filter((w) => w.length > 1);
-  const name = words(owner ?? '');
-  const said = new Set(words(`${tx.counterparty ?? ''} ${tx.description}`));
-  return name.length > 0 && name.every((w) => said.has(w));
+/**
+ * The payments to the owner that pay her outlays back, each with what was open for it
+ * (src/booking/owner-outlays.ts ownerRepayments, #402): one a company rule decides is the rule's.
+ */
+export function repaymentsOf(books: Books, context: ClassifyContext, wages: readonly Wording[], fx: FxResolver): Map<string, number> {
+  // Once per books and context (#402 review): a pass over every payment asks this of each one.
+  const sig = `${books.journalEntries.length}:${books.transactions.length}:${books.journalEntries.at(-1)?.id ?? ''}`;
+  const hit = repaid.get(books);
+  if (hit && hit.sig === sig && hit.context === context && hit.wages === wages.length) return hit.map;
+  const f = ownerFactsOf(context);
+  const map = f ? ownerRepayments(books, f, (text) => wages.some((w) => w.test(text)), (t) => !!ruleOfPayment(books, t, context, fx)) : new Map<string, number>();
+  repaid.set(books, { sig, context, wages: wages.length, map });
+  return map;
 }
+
+const repaid = new WeakMap<object, { sig: string; context: ClassifyContext; wages: number; map: Map<string, number> }>();
+
+/** Money out to the owner by name (the payee): the only payments that may repay her outlays, told apart before anything else is read. */
+const toOwnerByName = (tx: BankTransaction, context: Pick<ClassifyContext, 'ownerAccount' | 'ownerName'>) =>
+  tx.direction === 'DBIT' && !!context.ownerAccount && paysOwner({ counterparty: tx.counterparty, description: '' }, context.ownerName);
+
+export { paysOwner };
+
+/**
+ * Whether the classifier's answer for a payment may be booked, given its receipt wait: one that
+ * waits only when its answer settles (answerSettles), and one that repays the owner only when the
+ * answer books it onto her account or money (#402): an expense there would book her outlays twice.
+ */
+export const mustSettle = (w: ReceiptWait): boolean => w.wait || w.why === 'repaysOwner';
 
 const ibanOf = (iban: string) => iban.replace(/\s+/g, '').toUpperCase();
 const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -233,7 +263,8 @@ export function receiptWaitOf(books: Books, tx: BankTransaction, context: Classi
   const then = ruleOfPayment(books, tx, context, fx)?.rule.then;
   const ruleAccount = then?.kind === 'book' ? then.booking.account : then?.booking?.account;
   const payout = !!providerOfPayment(tx, linked, context.counterparties ?? []);
-  return receiptWait(tx, { linked: linkedOf(linked, tx), ...(routing.kind === 'known' && { business: routing.counterparty }), ...(ruleAccount && { ruleAccount }), ...(then?.kind === 'ask' && { ruleAsks: true }), ...(payout && { payout }) }, {
+  const repays = toOwnerByName(tx, context) && !then && repaymentsOf(books, context, known.wages, fx).has(tx.ref);
+  return receiptWait(tx, { linked: linkedOf(linked, tx), ...(routing.kind === 'known' && { business: routing.counterparty }), ...(ruleAccount && { ruleAccount }), ...(then?.kind === 'ask' && { ruleAsks: true }), ...(payout && { payout }), ...(repays && { repaysOwner: true }) }, {
     ...known,
     ownIbans: new Set(context.bankAccounts.flatMap((a) => (a.iban ? [ibanOf(a.iban)] : []))),
     settles: settlementAccount(context),
@@ -242,7 +273,7 @@ export function receiptWaitOf(books: Books, tx: BankTransaction, context: Classi
 }
 
 /** Why a payment has no receipt of its own: the matching chain never pairs one (#187), nor the model's match. Money in, a rule that asks first, a wage and a firm without input tax still take a receipt; a provider's payout never does (#203). */
-const NONE_OF_ITS_OWN: ReadonlySet<NoWait> = new Set<NoWait>(['marked', 'zero', 'provider', 'bankFee', 'ownTransfer', 'settlement', 'business', 'wording']);
+const NONE_OF_ITS_OWN: ReadonlySet<NoWait> = new Set<NoWait>(['marked', 'zero', 'provider', 'bankFee', 'ownTransfer', 'settlement', 'business', 'wording', 'repaysOwner']);
 
 /** A booking the app made on its own (the classifier, by a rule, a check of code or the model): never one a person made or decided. */
 export const appBooked = (e: JournalEntry): boolean => e.origin === 'classify' && (!e.by || e.by.kind === 'rule' || e.by.kind === 'code' || e.by.kind === 'model');

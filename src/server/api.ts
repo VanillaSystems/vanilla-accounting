@@ -23,6 +23,7 @@ import { router as sourcesRoute } from './routes/sources.js';
 import { router as twins } from './routes/twins.js';
 import { router as quarantine } from './routes/quarantine.js';
 import { router as rules } from './routes/rules.js';
+import { router as payouts } from './routes/payouts.js';
 import { router as questions } from './routes/questions.js';
 import { router as reports } from './routes/reports.js';
 import { router as knowledge } from './routes/knowledge.js';
@@ -80,7 +81,7 @@ app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY, ...(aiOff() ? { aiOff: true } : {}) } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, transactions, mappings, pairing, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, questions, reports, batch, vatAdjustments);
+app.use(files, scan, receipts, transactions, mappings, pairing, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, payouts, questions, reports, batch, vatAdjustments);
 app.use(knowledge);
 app.use(onboarding);
 

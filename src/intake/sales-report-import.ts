@@ -27,13 +27,13 @@ import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { parseDocument } from 'yaml';
-import { loadBooks, moduleActor, periodLock, receiptFile, receiptHome, updateSaved, type Books } from '../books/store.js';
+import { loadBooks, moduleActor, periodLock, receiptFile, receiptHome, release, updateSaved, type Books } from '../books/store.js';
 import { appendQuestionLine, readQuestions } from '../questions/store.js';
 import { APP_ASKER } from './sale-questions.js';
 import { loadClassifyContext, chartOf, mappedReceipts, type ClassifyContext } from '../booking/classify.js';
 import { chartNames } from '../booking/rule-book.js';
 import { fromClearing, isProvider, orderOf, payoutDaysOf, providerOfMoneyIn, providerOfPayment, type Provider } from '../booking/providers.js';
-import { bookReport, collectedBy, isReportRef, linkOrdersToSales, paymentFacts, readReport, recognizeReport, reportFacts, REPORT_LINK_RULE, saleRef, unpaidRow, type PaymentFacts, type ReadReport, type ReportContext, type ReportOutcome, type ReportTexts } from '../booking/sales-report.js';
+import { bookReport, recognizeOtherExport, collectedBy, isReportRef, linkOrdersToSales, paymentFacts, readReport, recognizeReport, reportFacts, REPORT_LINK_RULE, saleRef, unpaidRow, type PaymentFacts, type ReadReport, type ReportContext, type ReportOutcome, type ReportTexts } from '../booking/sales-report.js';
 import { loadKnowledge, homeOf } from '../knowledge/layers.js';
 import { silentUids } from '../knowledge/counterparties.js';
 import { businessOfReceipt } from './batch-payers.js';
@@ -46,10 +46,11 @@ import { agreedBasis, baseCurrency, chart, filing, invoicing, setup, vat, withou
 import { toRappen } from '../accounting/rappen.js';
 import { payoutSales } from '../workspace/sells.js';
 import { standardAccounts } from '../workspace/chart.js';
-import { findFile, APP_ROOT, type Workspace } from '../workspace/workspace.js';
+import { filesOfPart, findFile, APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { wordsIn } from '../export/texts.js';
 import type { BankTransaction, JournalEntry, Receipt } from '../types/index.js';
-import type { PayoutUnseen, ProviderAsk, ProviderProposal, ReportSummary } from '../types/drop.js';
+import type { PaidElsewhere } from '../accounting/sales-without-vat.js';
+import type { CsvOfProvider, PayoutUnseen, ProviderAsk, ProviderProposal, ReportSummary } from '../types/drop.js';
 import { accountOf } from '../workspace/money-accounts.js';
 
 const ACTOR = moduleActor('sales-report');
@@ -73,12 +74,22 @@ export function providersOf(ws: Pick<Workspace, 'paths'>): Provider[] {
   }
 }
 
-/** What the drop recognises a CSV as, by the providers' files: whose report and which kind. */
-export function recognizeCsv(ws: Pick<Workspace, 'paths'>, bytes: Buffer): { provider: string; name: string; kind: 'sales' | 'fees' } | undefined {
+/**
+ * What the drop recognises a CSV as, by the providers' files: whose report and which kind, or which
+ * other export of a provider the firm has it is, with its reports and where they are exported (#406).
+ */
+export function recognizeCsv(ws: Pick<Workspace, 'paths'>, bytes: Buffer): CsvOfProvider | undefined {
   const providers = providersOf(ws);
-  const hit = recognizeReport(bytes.subarray(0, 16384).toString('utf8'), providers);
+  const text = bytes.subarray(0, 16384).toString('utf8');
+  const hit = recognizeReport(text, providers);
   const p = hit && providers.find((x) => x.id === hit.provider);
-  return hit && p ? { ...hit, name: p.name } : undefined;
+  if (hit && p) return { ...hit, name: p.name };
+  // Only a provider the firm's own knowledge names (a company file of it): a firm without one has no such export.
+  const own = providers.filter((x) => x.origin.binding);
+  const other = recognizeOtherExport(text, own);
+  const q = other && own.find((x) => x.id === other.provider);
+  const reports = q ? (['sales', 'fees'] as const).filter((k) => q.provider.reports[k]) : [];
+  return other && q ? { provider: q.id, name: q.name, other: other.what, reports, where: { ...q.provider.exportedAt } } : undefined;
 }
 
 /** The booking texts, in the books' language (German, docs/i18n.md). */
@@ -114,7 +125,14 @@ function lacking(ws: Workspace, p: Provider, kind: 'sales' | 'fees', chart: Read
       // The cut-over day is asked with the clearing account: the first day the report covers is proposed, the open period's first day at the earliest.
       ...((missing === 'clearing' || missing === 'since') && !p.provider.since ? { since: cutOverOf(ws, reportFrom) } : {}),
       ...(propose ? { propose } : {}),
+      ...(missing === 'clearing' || missing === 'since' ? revenueAsk() : {}),
     };
+  };
+  // A sales report shows the revenue account it will book with the clearing account, where the file names none: hers to change (#404).
+  const revenueAsk = (): { revenue?: NonNullable<ProviderAsk['revenue']> } => {
+    if (kind !== 'sales' || p.provider.revenue) return {};
+    const account = revenueOf(ws, p);
+    return account && chart.has(account) ? { revenue: { account, sells: [...(ws.profile?.sells ?? [])] } } : {};
   };
   const clearing = p.provider.clearing;
   if (!clearing) return ask('clearing');
@@ -313,6 +331,21 @@ function reportsOf(ws: Workspace, books: Books, p: Provider, kind: 'sales' | 'fe
   });
 }
 
+/**
+ * The orders of the providers' order exports in the books that the provider did not collect (paid by
+ * bank transfer, another gateway, #406): their money comes as a payment of its own, which may name the
+ * order; the sale question proposes from it (src/accounting/sales-without-vat.ts orderProposal).
+ */
+export function ordersPaidElsewhere(ws: Workspace, books: Books): PaidElsewhere[] {
+  return providersOf(ws).flatMap((p) => (p.provider.gateways?.length ? reportsOf(ws, books, p, 'sales') : []).flatMap(({ text }) => {
+    const read = readReport(text, 'sales', p.provider);
+    if ('missing' in read || read.kind !== 'sales') return [];
+    return read.rows.filter((o) => !o.test && !collectedBy(o, p.provider.gateways)).map((o) => ({
+      provider: p.name, order: o.order, gross: o.gross, ...(o.currency ? { currency: o.currency } : {}), ...(o.tax !== undefined ? { tax: o.tax } : {}), ...(o.shipTo ? { shipTo: o.shipTo } : {}),
+    }));
+  }));
+}
+
 /** What the provider's payments reports in the books say beside their fees: the days they cover, the orders they name, the refunds (#214). */
 function paymentsOf(ws: Workspace, books: Books, p: Provider): PaymentFacts | undefined {
   return paymentFacts(reportsOf(ws, books, p, 'fees').map(({ text }) => {
@@ -341,19 +374,28 @@ function takeSales(ws: Workspace, books: Books, p: Provider, receipt: Receipt, r
   const out = bookReport(books, read, reportContext(ws, books, p, 'sales', receipt.id, texts(p.name, receipt.filename), fx, context, payments, undefined, read));
   if (stale) dropStale(books, out.stale);
   pushOutcome(books, out, receipt.id);
-  keepHeld(books, receipt.id, out);
+  keepHeld(books, receipt.id, out, read, agreedBasis(), payments);
   return out;
 }
 
 /**
  * What a taking could not book stays on its receipt for the person, the latest taking's: a held order booked meanwhile is known now.
+ * Each held order with its day (its tax point), gross and currency (#405): an open item of the period of its day.
  * So do the refunds paid in a filed period it offers as corrections (#231), each with the filing period it corrects.
  */
-function keepHeld(books: Books, id: string, out: ReportOutcome): void {
+function keepHeld(books: Books, id: string, out: ReportOutcome, read: ReadReport, agreed: boolean, payments?: PaymentFacts): void {
   const r = books.receipts.find((x) => x.id === id)!;
   const { held: _held, heldMore: _more, filedRefunds: _filed, ...said } = r.report!;
   const filed = out.filedRefunds.slice(0, HELD_KEPT).map((f) => ({ ...f, corrects: filingKeyOf(f.date, filing().length) }));
-  r.report = { ...said, ...(out.held.length ? { held: out.held.slice(0, HELD_KEPT) } : {}), ...(out.held.length > HELD_KEPT ? { heldMore: out.held.length - HELD_KEPT } : {}), ...(filed.length ? { filedRefunds: filed } : {}) };
+  const rows = new Map(read.kind === 'sales' ? read.rows.map((o) => [o.order, o]) : []);
+  const held = out.held.slice(0, HELD_KEPT).map((h) => {
+    const o = rows.get(h.order);
+    // Its tax point as the report books a sale: the order's day on the agreed basis; on the cash basis the day the provider charged it.
+    // Charged on several days the report would book a part per day: the split books in one, so it falls back to the order's day.
+    const charged = [...new Set((payments?.charges.get(h.order) ?? []).map((c) => c.date))];
+    return o ? { ...h, date: agreed ? o.ordered ?? o.date : charged.length === 1 ? charged[0] : o.date, gross: o.gross, ...(o.currency ? { currency: o.currency } : {}), ...(o.shipTo ? { shipTo: o.shipTo } : {}) } : h;
+  });
+  r.report = { ...said, ...(held.length ? { held } : {}), ...(out.held.length > HELD_KEPT ? { heldMore: out.held.length - HELD_KEPT } : {}), ...(filed.length ? { filedRefunds: filed } : {}) };
 }
 
 /** The provider's sales reports in the books that offer a refund of a filed period as a correction (#231), or name one for the hand; one the books carry already (#242) only on the report's receipt. */
@@ -489,7 +531,7 @@ export function importSalesReport(ws: Workspace, bytes: Buffer, name: string, op
     } else {
       out = bookReport(books, read, reportContext(ws, books, p, 'fees', id, texts(p.name, receipt.filename), fx, context));
       pushOutcome(books, out, id);
-      keepHeld(books, id, out);
+      keepHeld(books, id, out, read, agreedBasis());
       // The payments report dates the sales reports' refunds and shows the orders never collected: they are taken again.
       retaken = retakeSales(ws, books, p, fx, context);
     }
@@ -554,6 +596,8 @@ export function removeSalesReport(ws: Workspace, id: string): boolean {
       return others.some((r) => reports.has(r)) ? [{ ...e, receipts: others }] : [];
     });
     const booked = new Set(b.journalEntries.map((e) => e.transactionRef));
+    // The person's «Rückgängig»: the report and its links go on purpose (the write door, #405).
+    release(b, { receipts: [id], mappings: b.mappings.filter((m) => m.receiptId === id) });
     b.mappings = b.mappings.filter((m) => m.receiptId !== id && !(m.rule === REPORT_LINK_RULE && isReportRef(m.transactionRef) && !booked.has(m.transactionRef)));
     b.receipts = b.receipts.filter((x) => x.id !== id);
     if (fees) retakeSales(ws, b, fees, fx!, context!, true);
@@ -603,10 +647,100 @@ export function bookReportCorrection(ws: Workspace, books: Books, receiptId: str
   return { ok: true, entries };
 }
 
+/**
+ * The repair of books a later drop damaged (#405): before the fix the read step rebuilt the receipts from the PDFs
+ * it found, so a provider's report (a CSV in receipts/) and its links went, while its entries still named it and its
+ * file still lay there. Each CSV of an open year's receipts/ that no receipt names, whose bytes are the id an entry of
+ * a report names, and which a provider's file recognises, is its receipt again: its facts read from it, linked to
+ * every open entry that names it, and a sales report taken again (idempotent: what it booked is known, what it holds
+ * is kept on it again, an order it can book now is booked). Nothing of a filed period changes. Call inside the
+ * write door; returns the files restored.
+ */
+export function restoreReportReceipts(ws: Workspace, books: Books, now = new Date()): string[] {
+  const have = new Set(books.receipts.map((r) => r.id));
+  const named = new Set(books.journalEntries.flatMap((e) => (isReportRef(e.transactionRef) ? e.receipts ?? [] : [])).filter((id) => !have.has(id)));
+  if (!named.size) return [];
+  const providers = providersOf(ws);
+  const lock = periodLock(books);
+  const de = wordsIn('de');
+  const restored: Array<{ receipt: Receipt; read: ReadReport; p: Provider }> = [];
+  for (const [filename, path] of filesOfPart(ws.paths, 'receipts')) {
+    if (filename.includes('/') || !filename.toLowerCase().endsWith('.csv') || books.receipts.some((r) => r.filename === filename)) continue;
+    const bytes = readFileSync(path);
+    const id = sha16(bytes);
+    if (!named.has(id)) continue;
+    const text = bytes.toString('utf8');
+    const hit = recognizeReport(text, providers);
+    const p = hit && providers.find((x) => x.id === hit.provider);
+    const read = hit && p ? readReport(text, hit.kind, p.provider) : undefined;
+    if (!hit || !p || !read || 'missing' in read) continue;
+    const facts = reportFacts(p.id, read);
+    const receipt: Receipt = {
+      id, filename, originalFilename: filename, extractedText: text.slice(0, TEXT_KEPT), extractionMethod: 'pdftotext', fileSize: bytes.length,
+      indexedAt: now.toISOString(), location: 'archived', date: facts.to, description: de.t('salesReport.title', { provider: p.name, kind: de.t(`salesReport.kind.${hit.kind}`) }),
+      kind: 'sales-record', report: facts,
+    };
+    books.receipts.push(receipt);
+    const refs = new Set(books.journalEntries.filter((e) => isReportRef(e.transactionRef) && e.receipts?.includes(id) && !lock.isClosed(e.date)).map((e) => e.transactionRef));
+    for (const ref of refs) if (!books.mappings.some((m) => m.transactionRef === ref && m.receiptId === id)) books.mappings.push({ transactionRef: ref, receiptId: id, by: 'rule', rule: REPORT_LINK_RULE });
+    restored.push({ receipt, read, p });
+  }
+  for (const { receipt, read, p } of restored) {
+    if (read.kind !== 'sales' || !p.provider.clearing || !p.provider.since || lacking(ws, p, 'sales', chartNames(chartOf(ws)), receipt.report!.from)) continue;
+    takeSales(ws, books, p, receipt, read, loadFxResolver(), loadClassifyContext(ws), paymentsOf(ws, books, p));
+  }
+  return restored.map((r) => r.receipt.filename);
+}
+
+/** Why a held order is not booked by the person's split: the report is gone, it holds the order no more (booked meanwhile), the parts do not add up to the order's gross, or a rate the firm does not book (or no daily rate of a foreign order's day). */
+export type HeldRefusal = 'gone' | 'notHeld' | 'notRate' | 'noFacts' | 'beforeReach' | 'sum' | 'rate';
+
+/**
+ * The person's split of an order the sales report holds (#405), when the export cannot tell its rates
+ * apart (a cart of two rates with shipping to share out, say): its parts by rate, each booked
+ * clearing account / revenue with the firm's sale code at that rate, under the order's sale ref, on
+ * its day, linked to the report. The parts must add up to the order's gross to the centime. As the
+ * person (call inside the write door as PERSON, its day open); the report holds the order no more.
+ */
+export function bookHeldOrder(ws: Workspace, books: Books, receiptId: string, order: string, parts: ReadonlyArray<{ amount: number; rate: number }>, opts: { now?: Date } = {}): { ok: true; entries: JournalEntry[] } | { ok: false; why: HeldRefusal } {
+  const receipt = books.receipts.find((r) => r.id === receiptId && r.report?.kind === 'sales');
+  const p = receipt && providersOf(ws).find((x) => x.id === receipt.report!.provider);
+  if (!receipt || !p?.provider.clearing || !p.provider.since) return { ok: false, why: 'gone' };
+  const h = receipt.report!.held?.find((x) => x.order === order);
+  const ref = saleRef(p.id, order);
+  if (!h || books.journalEntries.some((e) => e.transactionRef === ref)) return { ok: false, why: 'notHeld' };
+  if (h.why !== 'rate') return { ok: false, why: 'notRate' };
+  // Held before the report kept its day and gross: dropped again, it keeps them.
+  if (!h.date || h.gross === undefined) return { ok: false, why: 'noFacts' };
+  // An order before the report's reach is none of its sales: the books before the cut-over day carry it, or none do.
+  if (h.date < reachOf(p)) return { ok: false, why: 'beforeReach' };
+  if (!parts.length || parts.some((x) => !(x.amount > 0)) || parts.reduce((s, x) => s + toRappen(x.amount), 0) !== toRappen(h.gross)) return { ok: false, why: 'sum' };
+  const ctx = reportContext(ws, books, p, 'sales', receipt.id, texts(p.name, receipt.filename), loadFxResolver(), loadClassifyContext(ws));
+  const rates = ctx.codes ? [{ code: ctx.codes.domestic, rate: ctx.codes.rate }, ...(ctx.codes.reduced ?? [])] : [];
+  const foreign = h.currency && h.currency !== ctx.base ? h.currency : undefined;
+  const fx = foreign ? ctx.rate(foreign, h.date) : undefined;
+  const codes = parts.map((x) => rates.find((r) => r.rate === x.rate)?.code);
+  if (!ctx.revenue || codes.some((c) => !c) || (foreign && fx === undefined)) return { ok: false, why: 'rate' };
+  const at = (opts.now ?? new Date()).toISOString();
+  const reason = wordsIn('de').t('salesReport.reason.split', { file: receipt.filename });
+  const entries: JournalEntry[] = parts.map((x, i) => ({
+    id: ctx.newId(), transactionRef: ref, date: h.date!, accountDebit: ctx.clearing, accountCredit: ctx.revenue, amount: x.amount, vatCode: codes[i]!,
+    description: ctx.texts.sale(order, h.shipTo), ...(foreign ? { exchangeCurrency: foreign, exchangeRate: fx } : {}),
+    origin: 'manual', receipts: [receipt.id], reason, by: { kind: 'person', at },
+  }));
+  books.journalEntries.push(...entries);
+  if (!books.mappings.some((m) => m.transactionRef === ref && m.receiptId === receipt.id)) books.mappings.push({ transactionRef: ref, receiptId: receipt.id, by: 'human' });
+  const left = (receipt.report!.held ?? []).filter((x) => x.order !== order);
+  const { held: _held, ...rest } = receipt.report!;
+  receipt.report = { ...rest, ...(left.length ? { held: left } : {}) };
+  return { ok: true, entries };
+}
+
 /** Why the drop row's answer is not kept (src/types/api-error.ts). */
 export type ProviderRefusal =
   | { code: 'unknownAccount'; params: { account: string } }
   | { code: 'clearingNotBalance'; params: { account: string } }
+  | { code: 'revenueNotRevenue'; params: { account: string } }
   | { code: 'unknownVatCode'; params: { code: string } }
   | { code: 'codeNotTaken'; params: { code: string; method: 'none' | 'net-rate' } }
   | { code: 'sinceNotOpen'; params: { since: string; from: string } }
@@ -628,6 +762,8 @@ export function setProviderAccount(ws: Workspace, providerId: string, set: { cle
   const accounts = chartNames(chartOf(ws));
   for (const a of [set.clearing, set.revenue, set.fees?.account]) if (a !== undefined && !accounts.has(a)) return { ok: false, refusal: { code: 'unknownAccount', params: { account: a } } };
   if (set.clearing !== undefined && !['asset', 'liability'].includes(chart().typeOf(set.clearing) ?? '')) return { ok: false, refusal: { code: 'clearingNotBalance', params: { account: set.clearing } } };
+  // The orders' revenue goes on a revenue account, never on the bank or the clearing account (#404).
+  if (set.revenue !== undefined && chart().typeOf(set.revenue) !== 'revenue') return { ok: false, refusal: { code: 'revenueNotRevenue', params: { account: set.revenue } } };
   const other = set.clearing !== undefined ? providers.find((x) => x.id !== p.id && x.provider.clearing === set.clearing) : undefined;
   if (other) return { ok: false, refusal: { code: 'clearingTaken', params: { account: set.clearing!, other: other.name } } };
   if (set.since !== undefined) {

@@ -123,7 +123,8 @@ function seed(ws: Workspace, txs: BankTransaction[], entries: JournalEntry[]): v
   books.journalEntries.push(...entries);
   saveBooks(ws, books);
 }
-const heldOf = (ws: Workspace) => loadBooks(ws).receipts.find((r) => r.report)?.report?.held ?? [];
+/** What the report's receipt holds, by order and why (each keeps its day, gross and currency too, #405). */
+const heldOf = (ws: Workspace) => (loadBooks(ws).receipts.find((r) => r.report)?.report?.held ?? []).map(({ order, why }) => ({ order, why }));
 
 // ─── The provider's file ─────────────────────────────────────────────────────
 
@@ -195,7 +196,7 @@ test('a payout on or after the cut-over day is booked bank / clearing account wi
   assert.deepEqual(lines(books.journalEntries), [['P', '2026-07-07', '1021', '1093', 191.75, '']]);
   assert.deepEqual(books.journalEntries[0].by, { kind: 'code', check: 'payoutReport' });
 
-  for (const [file, words] of [['', /Durchlaufkonto fehlt.*knowledge\/suppliers\/shopify\.yaml/], ['  clearing: "1093"\n', /Umstellungstag fehlt.*provider\.since/]] as const) {
+  for (const [file, words] of [['', /kein Umsatz.*Bestellexport von Shopify.*Durchlaufkonto/], ['  clearing: "1093"\n', /kein Umsatz.*Umstellungstag.*Bestellexport von Shopify/]] as const) {
     const before = { ...books, journalEntries: [] } as Books;
     const asked: string[] = [];
     const held = await classifyTransactions(before, before.transactions, { fx, context: loadClassifyContext(shop(file)), ask: async (prompt: string) => { asked.push(prompt); return '{}'; } } as Parameters<typeof classifyTransactions>[2]);
@@ -483,7 +484,7 @@ test('a dropped sales report is filed as a receipt and books the orders from the
   assert.deepEqual(lines(after.journalEntries.filter((e) => e.transactionRef === 'OLD')), [['OLD', '2026-10-29', '1021', '3200', 54.05, 'V81']], 'untouched');
   const receipt = after.receipts.find((r) => r.report);
   assert.ok(receipt && existsSync(join(ws.paths.root, 'transactional-data', '2026', 'receipts', receipt.filename)), 'the CSV is filed in its year');
-  assert.deepEqual(receipt?.report?.held, [{ order: '1999', why: 'legacy' }], 'kept for the person');
+  assert.deepEqual(receipt?.report?.held, [{ order: '1999', why: 'legacy', date: '2026-10-28', gross: 54.05, currency: 'CHF', shipTo: 'CH' }], 'kept for the person, with its day and gross (#405)');
   assert.equal(importSalesReport(ws, Buffer.from(csv), 'orders_export.csv').ok && loadBooks(ws).journalEntries.length, after.journalEntries.length, 'dropped again, nothing twice');
 });
 
@@ -1367,10 +1368,10 @@ test('10. a payout that waits says why on the payment itself (GET /api/transacti
     const ws = workspaceAt(api.root);
     seed(ws, [payout('PW', { date: '2026-11-03', amount: 50 }), viaStripe('ST2', 'STRIPE 4711', { counterparty: 'Stripe Example Ltd' }), later('2026-11-10')], []);
     const wait = async (ref: string) => ((await (await api.fetch(`/api/transactions/${ref}/payout-wait`)).json()) as { wait: unknown }).wait;
-    assert.deepEqual(await wait('PW'), { why: 'clearing', provider: 'Shopify', file: 'knowledge/suppliers/shopify.yaml' });
+    assert.deepEqual(await wait('PW'), { why: 'clearing', provider: 'Shopify', file: 'knowledge/suppliers/shopify.yaml', sales: true });
     assert.equal(await wait('ST2'), null, 'no provider\'s payout');
     writeFileSync(file, 'id: shopify\nprovider:\n  clearing: "1093"\n  revenue: "3200"\n');
-    assert.deepEqual(await wait('PW'), { why: 'since', provider: 'Shopify', file: 'knowledge/suppliers/shopify.yaml' });
+    assert.deepEqual(await wait('PW'), { why: 'since', provider: 'Shopify', file: 'knowledge/suppliers/shopify.yaml', sales: true });
     writeFileSync(file, 'id: shopify\nprovider:\n  clearing: "1093"\n  since: 2026-11-01\n  revenue: "3200"\n');
     assert.equal(await wait('PW'), null, 'booked from the clearing account by the next run');
 

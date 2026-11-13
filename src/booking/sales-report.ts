@@ -79,7 +79,7 @@
  * Browser-safe apart from the engines' globals.
  */
 import type { JournalEntry, Mapping, Receipt, SalesReportFacts } from '../types/index.js';
-import type { Columns, FeeColumn, ProviderFacts, ReportKind, SalesColumn } from '../knowledge/provider.js';
+import type { Columns, FeeColumn, OtherExport, ProviderFacts, ReportKind, SalesColumn } from '../knowledge/provider.js';
 import { FEE_NEEDS, SALES_NEEDS } from '../knowledge/provider.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import { addDays, isIsoDate } from '../accounting/periods.js';
@@ -146,6 +146,20 @@ export function recognizeReport(text: string, providers: ReadonlyArray<{ id: str
   if (!header) return undefined;
   const hits = providers.flatMap((p) => ([['sales', p.provider.reports.sales, SALES_NEEDS], ['fees', p.provider.reports.fees, FEE_NEEDS]] as const)
     .flatMap(([kind, columns, needs]) => (columns && 'at' in placeColumns(header, columns as Columns<string>, needs) ? [{ provider: p.id, kind }] : [])));
+  return hits.length === 1 ? hits[0] : undefined;
+}
+
+/**
+ * A provider's export the app books nothing from (its payouts list, #406), by the headers its file
+ * names under `otherExports`, all of them in the first line: of exactly one provider, else nothing.
+ */
+export function recognizeOtherExport(text: string, providers: ReadonlyArray<{ id: string; provider: Pick<ProviderFacts, 'otherExports'> }>): { provider: string; what: OtherExport } | undefined {
+  const header = csvRows(text.slice(0, 8192))[0];
+  if (!header) return undefined;
+  const heads = new Set(header.map(norm));
+  const hits = providers.flatMap((p) => Object.entries(p.provider.otherExports ?? {})
+    .filter(([, names]) => names!.every((n) => heads.has(norm(n))))
+    .map(([what]) => ({ provider: p.id, what: what as OtherExport })));
   return hits.length === 1 ? hits[0] : undefined;
 }
 
@@ -444,7 +458,7 @@ export interface ReportTexts {
  * carries a sale from elsewhere that may be it (`legacy`), or the payments exports' charges of the order
  * do not add up to what was charged by the sales report, its total less its outstanding balance (`charges`, #231).
  */
-export interface ReportHold { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' }
+export interface ReportHold { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' | 'refundSplit' }
 
 /**
  * A refund paid in a filed period whose sale the books carry and which they never carried (#231): offered
@@ -759,6 +773,32 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[]; map
     if (rest < 0 || had.some((x) => x.date >= o.date)) return whole;
     return [...had, { ref: salePartRef(sale, o.date), date: o.date, collected: o.date, gross: fromRappen(rest) }];
   };
+  /**
+   * A domestic order whose tax shows no one rate waits («rate»), unless the person booked it under its sale ref in parts by rate
+   * («Aufteilen», #405) adding up to its gross: then it is known. A refund of such an order is never booked by code, nor
+   * skipped: while the books carry no refund of it (one under its refund ref, or an entry that names it and takes revenue back),
+   * it waits as `refundSplit` for the person to book by hand. A refund booked under the sale's own ref (revenue back from the
+   * clearing account) counts as booked.
+   */
+  const splitByHand = (o: SaleRow): void => {
+    const sale = saleRef(ctx.provider.id, o.order);
+    const had = byRef.get(sale);
+    const split = !!had?.length && had.reduce((s, e) => s + (e.accountDebit === ctx.clearing ? toRappen(e.amount) : 0), 0) === toRappen(o.gross);
+    if (!split) {
+      // Before the report's reach (before the books, or collected before the cut-over day less the payout days) it is counted
+      // as such rows are; one the books carry from elsewhere is theirs (legacy). A filed one stays held: named, never booked.
+      const where = dated(taxDay(o), o.date);
+      if (where === 'before' || where === 'beforeSince') { count(where, o.order); return; }
+      if (where !== 'filed' && carried(orderLegacy({ key: o.order, day: o.date, amount: o.gross }), o.order)) return;
+      out.held.push({ order: o.order, why: 'rate' });
+      return;
+    }
+    const refunded = o.refunded > 0 || !!ctx.payments?.refunds.get(o.order)?.length;
+    const plain = refundRef(ctx.provider.id, o.order);
+    const refundBooked = books.journalEntries.some((e) => e.transactionRef === plain || e.transactionRef.startsWith(`${plain}-`) || (e.accountDebit === ctx.revenue && ((e.transactionRef === sale && e.accountCredit === ctx.clearing) || (!isReportRef(e.transactionRef) && textNames(e.description, o.order)))));
+    if (refunded && !refundBooked) { out.held.push({ order: o.order, why: 'refundSplit' }); return; }
+    same(sale);
+  };
   for (const o of read.rows) {
     // Its refund goes with it: an order the provider did not collect is refunded otherwise too.
     if (!collectedBy(o, ctx.gateways)) {
@@ -784,7 +824,7 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[]; map
       if (domestic) {
         if (o.tax !== undefined && o.tax <= 0) { out.held.push({ order: o.order, why: 'noTax' }); continue; }
         const at = o.tax === undefined ? rates[0] : rates.find((r) => showsRate(o.gross, o.tax!, r.rate));
-        if (!at) { out.held.push({ order: o.order, why: 'rate' }); continue; }
+        if (!at) { splitByHand(o); continue; }
         code = at.code;
         kind = 'domestic';
       } else {
@@ -980,7 +1020,7 @@ function namesOrder(ref: string, order: string): boolean {
 }
 
 /** Whether a booking text names an order, as «Shopify #1001» or «Bestellung 1001» names order 1001. */
-function textNames(text: string | undefined, order: string): boolean {
+export function textNames(text: string | undefined, order: string): boolean {
   if (!text) return false;
   const at = text.indexOf(order);
   if (at < 0) return false;

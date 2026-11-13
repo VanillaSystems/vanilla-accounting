@@ -22,9 +22,14 @@ export type PrivateChoice = (typeof PRIVATE_CHOICES)[number];
 export const SALE_CHOICES = ['saleDomestic', 'saleAbroad', 'notSale'] as const;
 export type SaleChoice = (typeof SALE_CHOICES)[number];
 
-/** Why the app proposes what it does: the money's currency, or the payer's IBAN country. */
-export type SaleWhy = 'domesticIban' | 'domesticCurrency' | 'foreignCurrency' | 'foreignIban';
-export interface SaleProposal { choice: SaleChoice; why: SaleWhy }
+/**
+ * Why the app proposes what it does: the money's currency, the payer's IBAN country, or the order the
+ * payment names in a provider's order export, which the provider did not collect (`order`, #406).
+ */
+export type SaleWhy = 'domesticIban' | 'domesticCurrency' | 'foreignCurrency' | 'foreignIban' | 'order';
+/** The order a proposal comes from: the provider's name, the order as its export names it, and the VAT rate its tax shows. */
+export interface SaleOrder { provider: string; name: string; rate: number }
+export interface SaleProposal { choice: SaleChoice; why: SaleWhy; order?: SaleOrder }
 
 /** The answers the app can act on; any other answer is a short text the asker reads. */
 export const CHOICES = [...PRIVATE_CHOICES, ...SALE_CHOICES] as const;
@@ -206,7 +211,10 @@ export function parseLine(raw: unknown): QuestionLine | undefined {
       const choices = Array.isArray(l.choices) ? l.choices.filter((c): c is Choice => CHOICES.includes(c as Choice)) : [];
       const origin = (['person', 'assistant', 'booking'] as const).find((o) => o === l.origin) ?? 'person';
       const p = l.proposal as Partial<SaleProposal> | undefined;
-      const proposal = p && (SALE_CHOICES as readonly string[]).includes(p.choice as string) && typeof p.why === 'string' ? { choice: p.choice as SaleChoice, why: p.why as SaleProposal['why'] } : undefined;
+      const o = p?.order as Partial<SaleOrder> | undefined;
+      const order = o && typeof o.provider === 'string' && typeof o.name === 'string' && typeof o.rate === 'number' ? { provider: o.provider, name: o.name, rate: o.rate } : undefined;
+      const proposal = p && (SALE_CHOICES as readonly string[]).includes(p.choice as string) && typeof p.why === 'string' && (p.why !== 'order' || order)
+        ? { choice: p.choice as SaleChoice, why: p.why as SaleProposal['why'], ...(order ? { order } : {}) } : undefined;
       const topic = QUESTION_TOPICS.find((x) => x === l.topic);
       return {
         v: 1, event: 'asked', id: l.id, at: l.at, by: l.by, on: { kind: on.kind, id: on.id }, text: l.text, choices, ...(typeof l.to === 'string' && l.to ? { to: l.to } : {}), origin,

@@ -51,7 +51,7 @@ import { confirmPayment } from '../invoices/actions.js';
 import { openAmount } from '../../../invoices/rules.js';
 import { QuestionsOn } from '../../questions/Questions.js';
 import { bookDiffParts, missingOpenings } from '../../../accounting/opening-balance.js';
-import { GroupedOffer } from '../company/RulesSection.js';
+import { GroupedOffer, ShareOffers } from '../company/RulesSection.js';
 import { Pick } from '../../selection/Pick.js';
 import { ActionsMenu } from '../../selection/ActionsMenu.js';
 import { paymentActions } from './actions-menu.js';
@@ -334,6 +334,8 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
         </button></>
       ) : tx.amount && !bookedInFiled(tx) ? <> · {reconciliationOf(props.books, tx.ref) ? <span className="m" data-testid="reconcile-held">{t('reconcile.held')}</span> : <NotBooked tx={tx} linked={linkedOf(props.books.receipts.filter((r) => receipts.includes(r.id) && r.kind !== 'duplicate'), tx)} />}{edit && tx.direction === 'CRDT' ? <PayoutWait key={`pw-${tx.ref}`} books={props.books} tx={tx} /> : null}</> : null}
       {edit ? <ReceiptSetOffer key={`rs-${tx.ref}`} {...props} tx={tx} /> : null}
+      {/* A share of the phone or the car she named in the setup (#402): offered as this business's rule once a payment of it is booked. */}
+      {edit && entry && tx.direction === 'DBIT' ? <ShareOffers key={`so-${tx.ref}`} refs={[tx.ref]} only="setup" onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
       {edit && receipts.length > 1 ? <GroupedOffer key={`go-${tx.ref}`} payment={tx.ref} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
       <Note key={tx.ref} tx={tx} nav={nav} edit={edit} />
       {edit && tx.direction === 'CRDT' ? <LinkInvoice key={`li-${tx.ref}`} tx={tx} nav={nav} /> : null}
@@ -484,7 +486,7 @@ function PayoutWait({ books, tx }: { books: Props['books']; tx: BankTransaction 
     return () => { live = false; };
   }, [books, tx.ref]);
   if (!wait) return null;
-  return <> · <span className="wn" data-testid="payout-wait">{t(`bank.payoutWait.${wait.why}`, { provider: wait.provider, file: wait.file, since: wait.since ? formatDate(wait.since) : '' })}</span></>;
+  return <> · <span className="wn" data-testid="payout-wait">{t(`bank.payoutWait.${wait.why}${wait.why !== 'gap' && !wait.sales ? 'NoSales' : ''}` as 'bank.payoutWait.gap', { provider: wait.provider, since: wait.since ? formatDate(wait.since) : '' })}</span></>;
 }
 
 /**
