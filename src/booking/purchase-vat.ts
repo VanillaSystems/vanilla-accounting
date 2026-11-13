@@ -19,7 +19,7 @@
 import { evidenceCheck, isPurchaseDocument, lineReceipts } from '../accounting/evidence-check.js';
 import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { isUnreadable, vatNotRead } from '../accounting/receipt-due.js';
-import { vat, yearEnd } from '../engines/index.js';
+import { baseCurrency, vat, yearEnd } from '../engines/index.js';
 import { wordsIn } from '../export/texts.js';
 import { identify, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
 import type { Knowledge, Layer } from '../knowledge/layers.js';
@@ -158,6 +158,75 @@ export function capAtBills(entries: JournalEntry[], bills: readonly Receipt[], c
   }
   return out;
 }
+
+/**
+ * A booking of a payment by a rule or the model, claiming no more input tax than its linked
+ * receipts show (#469): at each rate, the lines claim it on no more than the receipts' gross at that
+ * rate. What a line books beyond goes first to a rate the receipts show and the lines leave unused
+ * (the receipt's 2.6 % for a line the model put at 8.1 %), with the code of the line's family, and
+ * the rest to the zero code of that family. Only where the receipts' VAT is known: every purchase
+ * document read, in the lines' currency, each group at a rate of the jurisdiction; else, and for a
+ * line in another currency, a minus code, or a code without a rate, the entries stay as they are.
+ */
+export function capAtReceipts(entries: JournalEntry[], documents: readonly Receipt[], newId: () => string): JournalEntry[] {
+  const receipts = documents.filter(isPurchaseDocument);
+  if (!receipts.length) return entries;
+  const currency = receipts[0].currency ?? baseCurrency();
+  if (receipts.some((r) => (r.currency ?? baseCurrency()) !== currency || r.hasSwissVat === undefined || (r.hasSwissVat && !r.vatSummary?.length)
+    || (r.hasSwissVat && r.vatSummary!.some((g) => g.ratePercent > 0 && !vat().isDomesticRate(g.ratePercent))))) return entries;
+  const left = new Map<number, number>();
+  const slack = new Map<number, number>();
+  for (const r of receipts.filter((x) => x.hasSwissVat)) {
+    for (const g of r.vatSummary!) {
+      if (!(g.ratePercent > 0)) continue;
+      left.set(g.ratePercent, (left.get(g.ratePercent) ?? 0) + Math.abs(grossOf(g)));
+      if (g.gross === undefined && g.net === undefined) slack.set(g.ratePercent, (slack.get(g.ratePercent) ?? 0) + (0.005 * (100 + g.ratePercent)) / g.ratePercent);
+    }
+  }
+  const rated = (e: JournalEntry) => {
+    const m = ratedCode.exec(e.vatCode ?? '');
+    const rate = m && !m[1] && !settlesVat(e.accountDebit) && !settlesVat(e.accountCredit) && (e.exchangeCurrency ?? baseCurrency()) === currency ? vat().codes.parse(e.vatCode!)?.rate : undefined;
+    return rate ? { rate, family: m![2] } : undefined;
+  };
+  if (!entries.some((e) => { const r = rated(e); return r && Math.abs(e.amount) > (left.get(r.rate) ?? 0) + 0.05 + (slack.get(r.rate) ?? 0); })) return entries;
+  // Each line first on its own rate, in order; then what is over goes to the rates left unused.
+  const over = new Map<JournalEntry, number>();
+  const kept = new Map<JournalEntry, number>();
+  for (const e of entries) {
+    const r = rated(e);
+    if (!r) continue;
+    const room = left.get(r.rate) ?? 0;
+    const amount = Math.abs(e.amount);
+    if (amount <= room + 0.05 + (slack.get(r.rate) ?? 0)) { left.set(r.rate, room - amount); continue; }
+    const keep = Math.max(0, cents(room));
+    left.set(r.rate, 0);
+    kept.set(e, keep);
+    over.set(e, cents(amount - keep));
+  }
+  const boxes = vat().codes.purchaseBoxes;
+  const out: JournalEntry[] = [];
+  for (const e of entries) {
+    const rest = over.get(e);
+    if (rest === undefined) { out.push(e); continue; }
+    const { family } = rated(e)!;
+    const sign = e.amount < 0 ? -1 : 1;
+    const parts: JournalEntry[] = [];
+    if (kept.get(e)! > 0) parts.push({ ...e, amount: sign * kept.get(e)! });
+    let open = rest;
+    for (const [rate, room] of [...left].sort(([a], [b]) => b - a)) {
+      const code = vat().codes.purchaseAt(rate, family === 'M' ? boxes.costOfGoods : boxes.otherwise);
+      const take = cents(Math.min(open, room));
+      if (!code || !formTakes(code) || take <= 0.05) continue;
+      left.set(rate, room - take);
+      open = cents(open - take);
+      parts.push({ ...e, id: parts.length ? newId() : e.id, amount: sign * take, vatCode: code, reason: de().t('rules.say.purchaseVat.receiptRate', { rate: String(rate), code }), by: { kind: 'code', check: 'purchaseVat' } });
+    }
+    if (open > 0) parts.push({ ...e, id: parts.length ? newId() : e.id, amount: sign * open, vatCode: `${family}0`, reason: de().t('rules.say.purchaseVat.overReceipt', { rate: String(rated(e)!.rate) }), by: { kind: 'code', check: 'purchaseVat' } });
+    out.push(...parts);
+  }
+  return out;
+}
+const cents = (n: number): number => Math.round(n * 100) / 100;
 
 /** An unread receipt as the business's fact reads it: Swiss VAT at the fact's rate on its whole amount (the line's, when the receipt names none). */
 function asRead(r: Receipt, rate: number, amount: number): Receipt {

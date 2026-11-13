@@ -89,6 +89,7 @@ function questionLine(books: Books, q: Question, t: T): string {
 /** A contradiction in the words the booking page shows. */
 const evidenceWords = (e: JournalEntry, c: EvidenceCheck, t: T): string => {
   const code = e.vatCode ?? '';
+  if (c.kind === 'receiptGroups' && c.booked !== undefined) return t('journal.evidence.groupOver', { amount: money(c.currency, c.amount), booked: money(c.currency, c.booked), rate: String(c.rate), code });
   if (c.kind === 'receiptGroups') return t(c.rate ? 'journal.evidence.groupTaxed' : 'journal.evidence.groupUntaxed', { amount: money(c.currency, c.amount), rate: String(c.rate), code });
   return c.kind === 'receiptShowsVat' ? t('journal.evidence.receiptShowsVat', { rate: String(c.rate), code }) : t('journal.evidence.vatWithoutReceipt', { code, zero: c.code });
 };

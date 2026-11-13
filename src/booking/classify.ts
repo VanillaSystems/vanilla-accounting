@@ -49,7 +49,7 @@ import { cardLinesOf, cardPart, cardParts, lineReceiptsOf } from '../books/card-
 import { wordsIn } from '../export/texts.js';
 import { ruleFor, ruleWords, stampRule, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
-import { businessVat, capAtBills, settlesVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
+import { businessVat, capAtBills, capAtReceipts, settlesVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
 import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
 import { bankChargesOf, isOwnBankFee, type BankCharges } from './bank-fee.js';
 import { bankCodedFee } from '../books/bank-import.js';
@@ -656,7 +656,8 @@ export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRul
   const lock = periodLock(books);
   const booked = entriesFor(tx, entries, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: `Regel: ${ruleLine(placed, { ...context, payers: payerNames([tx]) })}${zero}`, by: { kind: 'rule', rule: placed.rule.id }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) })
     .map((e) => stampRule(e, placed.rule.id, booking));
-  return receiptTaxOf(books, tx, booked, mapped);
+  // The rule's rate claims no more input tax than the receipts show (#469); an own-use correction is the rule's whole line's, so it stays as booked.
+  return receiptTaxOf(books, tx, booking.ownUse ? booked : capAtReceipts(booked, mapped, newEntryId), mapped);
 }
 
 const newEntryId = () => randomBytes(8).toString('hex');
@@ -1108,8 +1109,11 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         const noted = [reason, fee?.note, customsNotes.get(tx)].filter(Boolean).join(' ') || undefined;
         const coded = withPurchaseVat(tx, withRefundCodes(own, tx, withCreditNoteCodes(own, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), bankAccount), mapped, context.purchaseVat, context.counterparties);
         const taxed = withoutSettlementCodes(withoutZeroOnNoCode(receiptTaxOf(own, tx, coded, mapped), bankAccount, context), noted, { kind: 'model', model });
-        // A card line's bill that shows less than the line (a tip): its rate on no more than the bill taxes at it (#409).
-        const answered = views.get(tx)?.cap ? capAtBills(taxed, mapped, tx.currency, newEntryId) : taxed;
+        // A card line's bill that shows less than the line (a tip): its rate on no more than the bill taxes at it (#409);
+        // any other payment's lines claim no more input tax than its receipts show, where their VAT is known (#469). A leg of a split
+        // charge pays a share of receipts the other legs hold too: its share is held against them all below (inputTaxOverReceipts).
+        const answered = views.get(tx)?.cap ? capAtBills(taxed, mapped, tx.currency, newEntryId)
+          : sharedReceipts(own, tx, legsOf(tx)) ? taxed : capAtReceipts(taxed, mapped, newEntryId);
         const twice = inputTaxOverReceipts(own, tx, legsOf(tx), answered, (c, d) => fx.daily(c, d));
         if (twice) {
           const others = twice.others.map((t) => t.ref).join(', ');

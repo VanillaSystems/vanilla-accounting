@@ -1,0 +1,156 @@
+/**
+ * Over-claims of input tax (#469): a line booked at a rate above the one its receipt shows, and a
+ * rate on more than the receipt taxes. The evidence check tells both as a fact on the entry, with
+ * the receipt's own figures, and «Nach Beleg buchen» books the receipt's rate on its taxed amount,
+ * the rest at the zero code; the app's own runs (a rule, the model) never book such a line where the
+ * receipt's VAT is known (capAtReceipts). An under-claim and a line without a receipt stay as
+ * before. Synthetic suppliers and amounts.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import './support/jurisdiction.js';
+import { evidenceCheck } from '../src/accounting/evidence-check.js';
+import { classifyTransactions, type ClassifyContext, type ClassifyDeps } from '../src/booking/classify.js';
+import { capAtReceipts } from '../src/booking/purchase-vat.js';
+import { parseRule, type RuleFacts } from '../src/booking/rules.js';
+import { loadFxResolver } from '../src/accounting/fx-rates.js';
+import { bookByReceipt } from '../src/server/edits.js';
+import type { Books } from '../src/books/store.js';
+import type { ClassifyEntry } from '../src/llm/prompts.js';
+import type { BankTransaction, JournalEntry, Receipt } from '../src/types/index.js';
+
+const bill = (id: string, amount: number | undefined, vatSummary: Receipt['vatSummary'], over: Partial<Receipt> = {}) =>
+  ({ id, filename: `${id}.pdf`, ...(amount !== undefined && { amount }), currency: 'CHF', hasSwissVat: true, vatSummary, ...over } as Receipt);
+/** 783 net at 8.1 % (tax 63.42) and 240 the bill names no tax for: the reader read the one group. */
+const partly = bill('part', 1086.42, [{ ratePercent: 8.1, net: 783, vat: 63.42 }]);
+/** A bill wholly at 2.6 %. */
+const reduced = bill('red', 102.6, [{ ratePercent: 2.6, net: 100, vat: 2.6, gross: 102.6 }]);
+/** A bill of 100 at 8.1 % paid with 120 (a tip on the card). */
+const tipped = bill('tip', 100, [{ ratePercent: 8.1, gross: 100, vat: 7.49 }]);
+
+const line = (id: string, amount: number, vatCode: string, over: Partial<JournalEntry> = {}): JournalEntry =>
+  ({ id, transactionRef: 'T', date: '2026-10-20', accountDebit: '6500', accountCredit: '1020', amount, vatCode, origin: 'classify', by: { kind: 'model', model: 'sonnet' }, ...over });
+const check = (lines: JournalEntry[], receipts: Receipt[]) => lines.map((e) => evidenceCheck(e, receipts, '2026-09-30', undefined, lines));
+
+// ─── The evidence check ─────────────────────────────────────────────────────────────────────────
+
+test('a rate above the receipt\'s: I81 on a bill wholly at 2.6 % is told, and the click books the bill\'s 2.6 %', () => {
+  assert.deepEqual(check([line('a', 102.6, 'I81')], [reduced])[0], { kind: 'receiptGroups', rate: 2.6, amount: 102.6, currency: 'CHF', lines: [{ amount: 102.6, code: 'I26' }], entries: ['a'], receipts: ['red'] });
+  assert.equal(check([line('a', 102.6, 'I26')], [reduced])[0], undefined, 'at the bill\'s rate it fits');
+});
+
+test('a rate on more than the receipt taxes: I81 on all of 1086.42 where the bill\'s tax 63.42 covers 846.42 is told, the click books 846.42 at 8.1 % and the rest at 0', () => {
+  const c = check([line('w', 1086.42, 'I81')], [partly])[0];
+  assert.deepEqual(c, { kind: 'receiptGroups', rate: 8.1, amount: 846.42, booked: 1086.42, currency: 'CHF', lines: [{ amount: 846.42, code: 'I81' }, { amount: 240, code: 'I0' }], entries: ['w'], receipts: ['part'] });
+  // Split on two lines, the 8.1 % one still too large: the finding sits on it, and the click books the bill's figures on both.
+  const two = check([line('a', 1000, 'I81'), line('b', 86.42, 'I0')], [partly]);
+  assert.deepEqual(two[0] && { ...two[0], lines: (two[0] as { lines?: unknown }).lines }, { kind: 'receiptGroups', rate: 8.1, amount: 846.42, booked: 1000, currency: 'CHF', lines: [{ amount: 846.42, code: 'I81' }, { amount: 240, code: 'I0' }], entries: ['a', 'b'], receipts: ['part'] });
+  assert.equal(two[1], undefined);
+  // Booked as the bill shows: no finding.
+  assert.deepEqual(check([line('a', 846.42, 'I81'), line('b', 240, 'I0')], [partly]), [undefined, undefined]);
+});
+
+test('a rate on more than the receipt taxes, without a rest of the total: a bill of 100 at 8.1 % paid with 120 at I81', () => {
+  assert.deepEqual(check([line('w', 120, 'I81')], [tipped])[0], { kind: 'receiptGroups', rate: 8.1, amount: 100, booked: 120, currency: 'CHF', lines: [{ amount: 100, code: 'I81' }, { amount: 20, code: 'I0' }], entries: ['w'], receipts: ['tip'] });
+});
+
+test('a zero line alone on a bill that names its tax only, without a total: the rate is offered only on what the tax covers', () => {
+  const taxOnly = bill('t', undefined, [{ ratePercent: 8.1, vat: 7.49 }]);
+  assert.deepEqual(check([line('z', 120, 'I0')], [taxOnly])[0], { kind: 'receiptGroups', rate: 8.1, amount: 99.96, currency: 'CHF', lines: [{ amount: 99.96, code: 'I81' }, { amount: 20.04, code: 'I0' }], entries: ['z'], receipts: ['t'] });
+  assert.deepEqual(check([line('z', 99.96, 'I0')], [taxOnly])[0], { kind: 'receiptShowsVat', rate: 8.1, code: 'I81', receipts: ['t'] }, 'covered whole: the rate on the whole line, as before');
+});
+
+test('an under-claim stays as the rule says: the zero code on a bill at 8.1 % is told the bill\'s rate, and a rate below the bill\'s is no finding', () => {
+  const whole = bill('w', 108.1, [{ ratePercent: 8.1, gross: 108.1, vat: 8.1 }]);
+  assert.deepEqual(check([line('a', 108.1, 'I0')], [whole])[0], { kind: 'receiptShowsVat', rate: 8.1, code: 'I81', receipts: ['w'] });
+  assert.equal(check([line('a', 108.1, 'I26')], [whole])[0], undefined, 'less input tax than the bill shows claims nothing it does not prove');
+});
+
+test('a line without a receipt is unchanged: a rate is told it has no receipt, the zero code nothing', () => {
+  assert.deepEqual(check([line('a', 120, 'I81')], [])[0], { kind: 'vatWithoutReceipt', code: 'I0' });
+  assert.equal(check([line('a', 120, 'I0')], [])[0], undefined);
+});
+
+test('«Nach Beleg buchen» on an over-claim books the receipt\'s rate on its taxed amount and the rest at the zero code, never more input tax', () => {
+  const tx: BankTransaction = { ref: 'T', bank: 'ZKB', date: '2026-10-20', amount: 1086.42, currency: 'CHF', direction: 'DBIT', description: 'Post CH AG' };
+  const books = {
+    transactions: [tx], receipts: [partly], mappings: [{ transactionRef: 'T', receiptId: 'part' }], bankStatements: [],
+    journalEntries: [line('w', 1086.42, 'I81')], config: { closedThrough: '2026-09-30' },
+  } as unknown as Books;
+  bookByReceipt(books, 'w');
+  assert.deepEqual(books.journalEntries.map((e) => [e.amount, e.vatCode]).sort(), [[240, 'I0'], [846.42, 'I81']]);
+  assert.deepEqual(books.journalEntries.map((e) => evidenceCheck(e, [partly], '2026-09-30', undefined, books.journalEntries)), [undefined, undefined], 'the booking now fits its bill');
+});
+
+// ─── The app's own runs ─────────────────────────────────────────────────────────────────────────
+
+test('capAtReceipts: the rate on no more than the receipt taxes at it, the rest to a rate the receipt shows unused, then to the zero code', () => {
+  let n = 0;
+  const id = () => `n${++n}`;
+  const parts = (es: JournalEntry[]) => es.map((e) => [e.id, e.amount, e.vatCode]);
+  assert.deepEqual(parts(capAtReceipts([line('w', 1086.42, 'I81')], [partly], id)), [['w', 846.42, 'I81'], ['n1', 240, 'I0']]);
+  assert.deepEqual(parts(capAtReceipts([line('w', 102.6, 'I81')], [reduced], id)), [['w', 102.6, 'I26']], 'the bill\'s own rate');
+  const mixed = bill('m', 160, [{ ratePercent: 8.1, gross: 100, vat: 7.49 }, { ratePercent: 2.6, gross: 60, vat: 1.52 }]);
+  assert.deepEqual(parts(capAtReceipts([line('w', 160, 'M81')], [mixed], id)), [['w', 100, 'M81'], ['n2', 60, 'M26']]);
+  assert.deepEqual(parts(capAtReceipts([line('w', 120, 'I81')], [tipped], id)), [['w', 100, 'I81'], ['n3', 20, 'I0']]);
+  const under = [line('a', 1086.42, 'I0')];
+  assert.equal(capAtReceipts(under, [partly], id), under, 'an under-claim stays');
+  const fits = [line('a', 846.42, 'I81'), line('b', 240, 'I0')];
+  assert.equal(capAtReceipts(fits, [partly], id), fits);
+  const none = [line('a', 120, 'I81')];
+  assert.equal(capAtReceipts(none, [], id), none, 'no receipt: the evidence rule decides, not the cap');
+  assert.equal(capAtReceipts(none, [{ ...tipped, hasSwissVat: undefined, vatSummary: undefined }], id), none, 'a receipt not read: its VAT is not known');
+  assert.equal(capAtReceipts(none, [{ ...tipped, currency: 'EUR' }], id), none, 'a receipt in another currency than the line');
+  const refund = [line('a', -120, '-I81')];
+  assert.equal(capAtReceipts(refund, [tipped], id), refund, 'a minus code claims nothing');
+});
+
+const fx = loadFxResolver();
+const context: ClassifyContext = {
+  companyName: 'Test GmbH', chartOfAccounts: '', historicEntries: '',
+  bankAccounts: [{ bank: 'ZKB', currency: 'CHF', account: '1020', label: 'Bank', role: 'bank' }],
+};
+const pay: BankTransaction = { ref: 'P1', bank: 'ZKB', date: '2026-10-20', amount: 1086.42, currency: 'CHF', direction: 'DBIT', description: 'Versand Muster AG' };
+const model = (entries: ClassifyEntry[]): ClassifyDeps['ask'] => async (prompt) => {
+  const refs = [...prompt.matchAll(/^### Transaction \d+: (\S+)/gm)].map((m) => m[1]);
+  return JSON.stringify(Object.fromEntries(refs.map((ref) => [ref, { entries, reason: 'Versand.' }])));
+};
+async function book(tx: BankTransaction, receipts: Receipt[], ctx: ClassifyContext, ask?: ClassifyDeps['ask']): Promise<JournalEntry[]> {
+  const books = {
+    transactions: [tx], receipts, mappings: receipts.map((r) => ({ transactionRef: tx.ref, receiptId: r.id })),
+    bankStatements: [], journalEntries: [], config: { closedThrough: '2026-09-30' },
+  } as unknown as Books;
+  const { classified, failed } = await classifyTransactions(books, [tx], { ask: ask ?? model([]), fx, context: ctx });
+  assert.deepEqual([classified, failed.map((f) => f.reason)], [[tx.ref], []]);
+  return books.journalEntries;
+}
+const booked = (es: JournalEntry[]) => es.map((e) => [e.amount, e.vatCode ?? '']).sort();
+
+test('the model\'s 8.1 % on the whole payment is booked on what the bill taxes, the rest at the zero code', async () => {
+  const entries = await book(pay, [partly], context, model([{ accountDebit: '6500', accountCredit: '', amount: 1086.42, vatCode: 'I81', description: 'Versand' }]));
+  assert.deepEqual(booked(entries), [[240, 'I0'], [846.42, 'I81']]);
+  const rest = entries.find((e) => e.vatCode === 'I0')!;
+  assert.deepEqual(rest.by, { kind: 'code', check: 'purchaseVat' });
+  assert.match(rest.reason ?? '', /8\.1 % MWST auf weniger/);
+});
+
+test('the model\'s 8.1 % on a bill at 2.6 % is booked at the bill\'s rate', async () => {
+  const entries = await book({ ...pay, amount: 102.6 }, [reduced], context, model([{ accountDebit: '6500', accountCredit: '', amount: 102.6, vatCode: 'I81', description: 'Versand' }]));
+  assert.deepEqual(booked(entries), [[102.6, 'I26']]);
+});
+
+test('a rule\'s 8.1 % claims no more input tax than the bill shows', async () => {
+  const facts: RuleFacts = { account: () => true, vat: () => 'taken', counterparty: () => true };
+  const parsed = parseRule({ id: 'versand', when: { text: 'Versand Muster' }, then: { account: '6500', vat: 'I81' } }, facts);
+  assert.ok(parsed.ok);
+  const entries = await book(pay, [partly], { ...context, rules: [{ rule: parsed.rule }] });
+  assert.deepEqual(booked(entries), [[240, 'I0'], [846.42, 'I81']]);
+  assert.equal(entries.find((e) => e.vatCode === 'I81')!.rule, 'versand');
+});
+
+test('a payment without a receipt, and an under-claim, are booked as before', async () => {
+  const noReceipt = await book(pay, [], context, model([{ accountDebit: '6500', accountCredit: '', amount: 1086.42, vatCode: 'I81', description: 'Versand' }]));
+  assert.deepEqual(booked(noReceipt), [[1086.42, 'I0']], 'no receipt, no input tax (the evidence rule, as before)');
+  const under = await book(pay, [partly], context, model([{ accountDebit: '6500', accountCredit: '', amount: 1086.42, vatCode: 'I0', description: 'Versand' }]));
+  assert.deepEqual(booked(under), [[1086.42, 'I0']]);
+});
