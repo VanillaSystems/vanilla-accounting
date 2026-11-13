@@ -398,6 +398,13 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A repayment to the owner before any of her outlays is booked (#457): «Spesen Juli 2026» said
+  «wartet auf ihren Beleg; ist er verknüpft, bucht die App sie», though no receipt is ever linked to
+  it. While receipts that could be hers are filed (read, dated before it, paid by no payment of the
+  firm, not its own invoice) it now says it waits for her privately paid receipts to be booked as
+  outlays, in the period's list, the bank detail, the drop, «Automatisch buchen» and the hand form,
+  as it did once one was booked. Without such a receipt, and for a payment to her a rule decides, the
+  receipt wait stays.
 - A receipt that names no VAT is «MWST noch nicht gelesen», no longer «keine CH-MWST» (#391).
   Only a model, or the receipt's own words («nicht MWST-pflichtig», «not subject to Swiss VAT», «von
   der MWST ausgenommen», never beside «inkl. MWST» or a Swiss rate, 7.7 % too), say it carries no
