@@ -139,7 +139,8 @@ Two markers flag an entry you must read before you update:
   closes; «Automatisch buchen» for all, «Neu buchen», `npm run classify` and a rule kept meanwhile
   book nothing either. A customer's or an authority's file and evidence.guide.yaml count as the
   firm's rules too (files there at the update make nothing wait; one written after it waits).
-  `npm run classify` books nothing on a workspace the app has not opened on this computer yet. Wherever she tries, one
+  `npm run classify` books nothing on a workspace the app has not opened on this computer yet; one
+  `npm run init` or the desktop's setup created counts as switched on as it was made. Wherever she tries, one
   sentence says what changed, why the app waits and what ends it, with «Einschalten» right there;
   switched on, the app books what only waited for it (the payments by an inbox run, the report taken
   again). Her own answers and links, and a
