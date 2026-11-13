@@ -15,7 +15,7 @@ export function TwinNotice(props: Props) {
   const { v, l, nav, canEdit } = props;
   const twin = v.twin;
   const other = twin && l.byId.get(twin.of);
-  if (!twin || !other || v.r.kind === 'duplicate') return null;
+  if (!twin || !other || v.r.kind === 'duplicate') return <Companions {...props} />;
   const name = other.r.filename;
   const link = <a href="#" onClick={(e) => { e.preventDefault(); nav.go(at({ area: 'receipts', id: other.r.id }, other.day)); }}>{name}</a>;
   if (twin.relation === 'companion') {
@@ -32,6 +32,23 @@ export function TwinNotice(props: Props) {
           <button type="button" className="btn ghost" onClick={() => void answerTwin(nav, v, 'distinct', other.r.id, name)}>{t('receipts.twin.distinct')}</button>
         </>
       )}
+    </div>
+  );
+}
+
+/** The documents that belong to this invoice (an order confirmation, a delivery note, a customs assessment), each a link (#384). */
+function Companions({ v, l, nav }: Props) {
+  const beside = l.views.filter((x) => x.twin?.relation === 'companion' && x.twin.of === v.r.id);
+  if (!beside.length) return null;
+  return (
+    <div className="notice" data-testid="companions">
+      {t('receipts.companions')}{' '}
+      {beside.map((x, i) => (
+        <span key={x.r.id}>
+          {i ? ', ' : ''}
+          <a href="#" onClick={(e) => { e.preventDefault(); nav.go(at({ area: 'receipts', id: x.r.id }, x.day)); }}>{x.noneWhy ? `${t(`receipts.why.${x.noneWhy}`)} ` : ''}{x.r.filename}</a>
+        </span>
+      ))}
     </div>
   );
 }

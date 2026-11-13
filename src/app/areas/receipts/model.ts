@@ -207,8 +207,10 @@ export function visible(l: Ledger, period: Period, chips: readonly Chip[] | unde
     noDate: receipts.filter((v) => !v.date).length,
   };
   const states = statesOf(chips);
-  const set = pool.filter((v) => v.none && !placedStatement(v, accounts));
-  const candidates = (states.has('notReceipt') ? [...receipts, ...set] : receipts).filter(match);
+  // A document beside an invoice (an order confirmation, a delivery note, a customs assessment) is evidence, not «kein Beleg» (#384): listed, never hidden.
+  const beside = pool.filter((v) => v.r.kind === 'supporting');
+  const set = pool.filter((v) => v.none && v.r.kind !== 'supporting' && !placedStatement(v, accounts));
+  const candidates = (states.has('notReceipt') ? [...receipts, ...beside, ...set] : [...receipts, ...beside]).filter(match);
   return {
     rows: applyChips(candidates, chips ?? [], fields),
     counts,

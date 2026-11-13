@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 import { api, errorText } from '../lib/api.js';
 import { language, t, tWith } from '../i18n/index.js';
 import { dropStore, failedLine } from './drop-upload.js';
-import { datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, receiptStateOf, type DropSummary } from './drop-summary.js';
+import { closingGroupOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, receiptStateOf, type ClosingCounts, type ClosingGroup, type DropSummary, type FileState } from './drop-summary.js';
 import { isUnbooked } from '../areas/bank/model.js';
 import { receiptWaits } from '../areas/automation/period-issues.js';
 import { parsePeriod, filingKeyOf } from '../../accounting/periods.js';
@@ -26,7 +26,7 @@ import { fmt, formatDate } from '../lib/utils.js';
 import { monthName } from '../lib/period-label.js';
 import { useAutomation } from '../automation/store.js';
 import { textIn } from '../../workflows/model.js';
-import type { Index, TwinWhy } from '../../types/index.js';
+import type { Index } from '../../types/index.js';
 import type { DropRow, DropSession } from '../../types/drop.js';
 import { FileDetails } from './FileDetails.js';
 import { AccountField } from '../areas/journal/AccountField.js';
@@ -43,6 +43,7 @@ import { useFx } from '../hooks/use-fx.js';
 import { ReportCorrections } from '../areas/receipts/ReportCorrections.js';
 import { processingText } from '../automation/processing.js';
 import { useNoAi } from '../ai/no-ai.js';
+import { statementSigns } from '../../parsers/receipt-text.js';
 import { INTAKE_STEPS, INTAKE_WORKFLOW, inProcess, processingOf, runProcessing } from '../../workflows/processing.js';
 
 const drop = dropStore(
@@ -296,14 +297,6 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
   );
 }
 
-/**
- * Where one taken file is, read from the books and its run: still in its step (said as Belege says
- * it, #218: «Sucht die Zahlung …», «Wartet (3 vor diesem)»), read, matched, waiting for a person,
- * its run stopped, or set aside by the run with the reason.
- */
-type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'unread' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'orderPage'; provider: string } | { kind: 'stuck'; run: string } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string }
-  | { kind: 'none'; why: string } | { kind: 'twin'; of: string; name: string; why: TwinWhy };
-
 const isWorking = (run?: { status: string }) => !!run && (run.status === 'queued' || run.status === 'running');
 
 type View = ReturnType<typeof useAutomation>['view'];
@@ -346,6 +339,11 @@ function fileState(r: DropRow, books: Index, view: View): FileState {
   // read, #344), read, or read with its date or amount missing, waiting for her.
   const twin = v?.twin?.relation === 'duplicate' ? ledger.byId.get(v.twin.of) : undefined;
   const st = receiptStateOf(receipt, 0, !!twin);
+  // A document beside an invoice (#384): what it is, and the invoice it belongs to when the books show which.
+  if (st === 'supporting') {
+    const of = v?.twin?.relation === 'companion' ? ledger.byId.get(v.twin.of) : undefined;
+    return { kind: 'supporting', ...(v ? { why: noneText(v) } : {}), ...(of ? { of: { id: of.r.id, name: of.vendor ? `${of.vendor}${of.desc ? ` ${of.desc}` : ''}` : of.r.filename } } : {}) };
+  }
   if (st === 'none') return { kind: 'none', why: v ? noneText(v) : '' };
   if (st === 'copy') return { kind: 'twin', of: twin!.r.id, name: twin!.vendor || twin!.r.filename, why: v!.twin!.why };
   if (st === 'unread') return { kind: 'unread' };
@@ -377,47 +375,79 @@ function Summary({ sum, rows, books, go, receiptOf }: { sum: DropSummary; rows: 
   const periodOf = (of: readonly DropRow[]) => majorityPeriod(of, dates, today, filing().length);
   const pays = sum.payments;
   const paid = pays ? periodOf(rows.filter((r) => r.statement)) : undefined;
-  const recs = sum.receipts;
+  const files = sum.files;
   const noAi = useNoAi();
-  const filed = recs ? periodOf(rows.filter((r) => !r.statement)) : undefined;
+  const filed = files ? periodOf(rows.filter((r) => !r.statement)) : undefined;
   // What is open is listed in the period of the oldest payment not booked, which need not be the one most payments are in.
   const open = pays?.openFrom ? parsePeriod(filingKeyOf(pays.openFrom, filing().length), today) ?? undefined : undefined;
-  if (!pays && !recs) return null;
+  if (!pays && !files) return null;
+  const receipts = files ? receiptLines(files, noAi) : '';
+  const others = files ? otherLines(files) : '';
   return (
     <div className="dsum" data-testid="drop-summary">
-      {pays ? (
+      {files?.statement || pays ? (
         <p>
-          {t('drop.sum.line', {
-            head: t('drop.sum.payments', { n: pays.n, from: formatDate(pays.from), to: formatDate(pays.to) }),
+          {pays ? t('drop.sum.line', {
+            head: t('drop.sum.payments', { files: t('drop.sum.statements', { n: files?.statement ?? 0 }), n: pays.n, from: formatDate(pays.from), to: formatDate(pays.to) }),
             parts: [
               t('drop.sum.booked', { n: pays.booked }),
               pays.waitReceipt ? t('drop.sum.waitReceipt', { n: pays.waitReceipt }) : '',
               pays.asked ? t('drop.sum.asked', { n: pays.asked }) : '',
               pays.unbooked ? t('drop.sum.unbooked', { n: pays.unbooked }) : '',
             ].filter(Boolean).join(', '),
-          })}{' '}
+          }) : t('drop.sum.statementsOnly', { n: files!.statement })}{' '}
           {paid ? <button type="button" className="linkbtn" data-testid="drop-to-payments" onClick={() => go({ route: { area: 'bank' }, query: { period: paid } })}>{t('drop.sum.toPayments', { period: periodName(paid) })}</button> : null}
           {open && chargesVat() ? <>{' · '}<button type="button" className="linkbtn" data-testid="drop-to-open" onClick={() => go({ route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period: open } })}>{t('drop.sum.toOpen', { period: periodName(open) })}</button></> : null}
         </p>
       ) : null}
-      {recs ? (
+      {receipts ? (
         <p>
-          {[
-            recs.read ? t('drop.sum.line', {
-              head: t('drop.sum.receipts', { n: recs.read }),
-              parts: [recs.matched ? t('drop.sum.matched', { n: recs.matched }) : '', recs.unmatched ? t('drop.sum.unmatched', { n: recs.unmatched }) : ''].filter(Boolean).join(', '),
-            }) : '',
-            recs.copies ? t('drop.sum.copies', { n: recs.copies }) : '',
-            recs.incomplete ? t('drop.sum.incomplete', { n: recs.incomplete }) : '',
-            recs.unread ? t(noAi ? 'drop.sum.unreadNoAi' : 'drop.sum.unread', { n: recs.unread }) : '',
-            recs.none ? t('drop.sum.none', { n: recs.none }) : '',
-          ].filter(Boolean).join(' ')}{' '}
-          {recs.unread && noAi ? <><button type="button" className="linkbtn" data-act="ai-set-up" onClick={() => go({ route: { area: 'company', section: 'ai' }, query: {} })}>{t('aiSetup.line.setUp')}</button>{' · '}</> : null}
+          {receipts}{' '}
+          {files!.unread && noAi ? <><button type="button" className="linkbtn" data-act="ai-set-up" onClick={() => go({ route: { area: 'company', section: 'ai' }, query: {} })}>{t('aiSetup.line.setUp')}</button>{' · '}</> : null}
           {filed ? <button type="button" className="linkbtn" data-testid="drop-to-receipts" onClick={() => go({ route: { area: 'receipts' }, query: { period: filed } })}>{t('drop.sum.toReceipts', { period: periodName(filed) })}</button> : null}
         </p>
       ) : null}
+      {others ? <p data-testid="drop-sum-others">{others}</p> : null}
     </div>
   );
+}
+
+/**
+ * The sentence of each closing group, in the words its rows use (#384). A record over every group:
+ * a new group without its sentence does not compile, so no row is left out of the closing lines.
+ */
+const SENTENCE: Record<Exclude<ClosingGroup, 'statement' | 'matched' | 'read'>, (n: number, noAi: boolean) => string> = {
+  report: (n) => t('drop.sum.reports', { n }),
+  supporting: (n) => t('drop.sum.supporting', { n }),
+  copy: (n) => t('drop.sum.copies', { n }),
+  incomplete: (n) => t('drop.sum.incomplete', { n }),
+  unread: (n, noAi) => t(noAi ? 'drop.sum.unreadNoAi' : 'drop.sum.unread', { n }),
+  orderPage: (n) => t('drop.sum.orderPages', { n }),
+  stuck: (n) => t('drop.sum.stuck', { n }),
+  none: (n) => t('drop.sum.none', { n }),
+  known: (n) => t('drop.sum.known', { n }),
+  asks: (n) => t('drop.sum.asks', { n }),
+  aside: (n) => t('drop.sum.aside', { n }),
+  refused: (n) => t('drop.sum.refused', { n }),
+  undone: (n) => t('drop.sum.undone', { n }),
+  working: (n) => t('drop.sum.working', { n }),
+};
+
+/** The receipts' sentences: read (linked or not), beside an invoice, a possible copy, incomplete, waiting for their reading, order pages, stopped. */
+function receiptLines(f: ClosingCounts, noAi: boolean): string {
+  const read = f.matched + f.read;
+  return [
+    read ? t('drop.sum.line', {
+      head: t('drop.sum.receipts', { n: read }),
+      parts: [f.matched ? t('drop.sum.matched', { n: f.matched }) : '', f.read ? t('drop.sum.unmatched', { n: f.read }) : ''].filter(Boolean).join(', '),
+    }) : '',
+    ...(['supporting', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'report'] as const).map((g) => (f[g] ? SENTENCE[g](f[g], noAi) : '')),
+  ].filter(Boolean).join(' ');
+}
+
+/** The files that brought nothing new or wait in their row: no receipt, already there, a question, set aside, not saved, taken back, still worked on. */
+function otherLines(f: ClosingCounts): string {
+  return (['none', 'known', 'asks', 'aside', 'refused', 'undone', 'working'] as const).map((g) => (f[g] ? SENTENCE[g](f[g], false) : '')).filter(Boolean).join(' ');
 }
 
 /** A reason the run gives as a code has words of its own; any other is shown as the run said it. */
@@ -463,8 +493,10 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
   const [busy, setBusy] = useState(false);
   const x = fileState(r, books, view);
   const receipt = books.receipts.find((y) => y.id === receiptIdOf(r, view));
-  const facts = !r.report && receipt && (receipt.date || receipt.amount !== undefined)
-    ? [receipt.date && formatDate(receipt.date), receipt.amount !== undefined && `${receipt.currency ?? ''} ${fmt(receipt.amount)}`.trim()].filter(Boolean).join(' · ') : '';
+  // A document beside an invoice shows no amount of its own: an order confirmation is no amount of 0.00 (#384).
+  const amount = x.kind === 'supporting' ? undefined : receipt?.amount;
+  const facts = !r.report && receipt && (receipt.date || amount !== undefined)
+    ? [receipt.date && formatDate(receipt.date), amount !== undefined && `${receipt.currency ?? ''} ${fmt(amount)}`.trim()].filter(Boolean).join(' · ') : '';
   const running = view?.runs.find((y) => y.id === r.run)?.status === 'running';
   const lacks = (x.kind === 'waits' || x.kind === 'stuck') && receipt ? [!receipt.date && t('drop.p.date'), receipt.amount === undefined && t('drop.p.amount')].filter(Boolean).join(', ') : '';
   // «Zahlung bestätigen» only when Belege has a payment to propose for it (r8k-5).
@@ -505,6 +537,7 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
           ) : null}
           {missing ? <small className="dwhy">{missing}</small> : x.kind === 'orderPage' ? <small className="dwhy" data-testid="drop-order-page">{t('drop.p.orderPageWhy', { provider: x.provider })}</small> : x.kind === 'refused' ? <small className="dwhy">{reasonText(x.reason)}</small>
             : x.kind === 'none' ? <small className="dwhy" data-testid="drop-none">{x.why}</small>
+            : x.kind === 'supporting' ? <small className="dwhy" data-testid="drop-supporting">{x.of ? t('drop.p.supportingOf', { what: x.why || t('receipts.why.supporting'), name: x.of.name }) : t('drop.p.supportingAlone', { what: x.why || t('receipts.why.supporting') })}</small>
             : x.kind === 'twin' ? <small className="dwhy" data-testid="drop-twin">{t('drop.twin.duplicate', { name: x.name })} · {t(`drop.twin.why.${x.why}`)}</small> : null}
           {byBank ? <small className="dwhy" data-testid="drop-by-bank">{t('drop.byBank', { label: byBank.label })}</small> : null}
           <span className="dacts">
@@ -516,11 +549,13 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
             ) : null}
             {byBank ? <button type="button" className="linkbtn" data-testid="drop-other-account" disabled={running || busy} data-tip={t('drop.byBankChangeTip')} onClick={() => { setBusy(true); void act(session, r, { kind: 'otherAccount' }).then(refresh).finally(() => setBusy(false)); }}>{t('drop.byBankChange')}</button> : null}
             {statementAt ? <button type="button" className="linkbtn" data-testid="drop-open-file" onClick={() => { closeDrop(); onGo(statementAt); }}>{t('drop.openStatement')}</button> : null}
-            {x.kind === 'none' && receipt && receipt.kind !== 'statement' && receipt.kind !== 'duplicate' ? <button type="button" className="linkbtn" data-testid="drop-is-receipt" disabled={busy} onClick={isReceipt}>{t('receipts.isReceipt')}</button> : null}
+            {x.kind === 'supporting' && x.of ? <button type="button" className="linkbtn" data-testid="drop-open-invoice" onClick={() => go({ area: 'receipts', id: x.of!.id }, books.receipts.find((y) => y.id === x.of!.id)?.date)}>{t('drop.p.openInvoice')}</button> : null}
+            {(x.kind === 'none' || x.kind === 'supporting') && receipt && receipt.kind !== 'statement' && receipt.kind !== 'duplicate' ? <button type="button" className="linkbtn" data-testid="drop-is-receipt" disabled={busy} onClick={isReceipt}>{t('receipts.isReceipt')}</button> : null}
             {x.kind === 'stuck' ? <button type="button" className="linkbtn" data-testid="drop-stuck-run" onClick={() => go({ area: 'automation', view: 'run', run: x.run })}>{t('processing.toRun')}</button> : null}
             {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id }, receipt.date)}>{t(x.kind === 'unread' ? 'drop.p.typeIn' : 'drop.openReceipt')}</button> : null}
-            {/* A file that could be a statement: read, waiting or not read, or read as one; never a receipt linked to its payment (#361). */}
-            {(r.kind === 'receipt' || r.kind === 'photo') && !r.report && (x.kind === 'unread' || x.kind === 'read' || x.kind === 'waits' || (x.kind === 'none' && receipt?.kind === 'statement')) ? <button type="button" className="linkbtn" data-testid="drop-as-statement" disabled={busy} onClick={() => { setBusy(true); void act(session, r, { kind: 'statement' }).then(refresh).finally(() => setBusy(false)); }}>{t('drop.asStatement')}</button> : null}
+            {/* A file that could be a statement (#384): not read, read as one, or read without a total or with a statement's signs; never a receipt read with its total, nor one linked to its payment. */}
+            {(r.kind === 'receipt' || r.kind === 'photo') && !r.report && (x.kind === 'unread' || (x.kind === 'none' && receipt?.kind === 'statement')
+              || ((x.kind === 'read' || x.kind === 'waits') && !!receipt && (receipt.amount == null || statementSigns(receipt.extractedText ?? '')))) ? <button type="button" className="linkbtn" data-testid="drop-as-statement" disabled={busy} onClick={() => { setBusy(true); void act(session, r, { kind: 'statement' }).then(refresh).finally(() => setBusy(false)); }}>{t('drop.asStatement')}</button> : null}
             {keptPdf ? <button type="button" className="linkbtn" data-act="actions" data-testid="drop-actions" aria-haspopup="menu" aria-expanded={!!menu} disabled={busy} onClick={(e) => setMenu(e.currentTarget.getBoundingClientRect())}>{t('actions.label')}</button> : null}
             <button type="button" className="linkbtn" disabled={running || busy} data-tip={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</button>
           </span>
@@ -564,7 +599,9 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   // Files still uploading or being taken count as not begun, so the bar does not fall back when they join.
   const coming = s.adding + rows.filter((r) => r.state === 'take').length;
   const pct = dropProgress([...taken.map((r, i) => doneOf(r, states[i], view)), ...Array<number>(coming).fill(0)]);
-  const sum = !working && taken.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? []), receiptOf, questions, (id) => ledgerFor(books).byId.get(id)?.twin?.relation === 'duplicate') : undefined;
+  // Every row in one group of the closing lines, by the state its own row shows (#384).
+  const stateOf = new Map(taken.map((r, i) => [r, states[i]]));
+  const sum = !working && taken.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? []), questions, (r) => closingGroupOf(r, stateOf.get(r))) : undefined;
   // Only files the books hold already (#341): the window says that nothing new came in.
   const nothingNew = !working && !taken.length && rows.length > 0 && rows.every((r) => (r.state === 'duplicate' && r.reason !== 'possible-duplicate') || !!r.readAs);
   const waits = !working && states.some((x) => x.kind === 'waits' || x.kind === 'stuck' || x.kind === 'unread' || x.kind === 'twin');

@@ -110,13 +110,14 @@ export function vatStep({ force = false } = {}): StepRun {
       notes.push({ code: 'poorScan', files: noText.map((r) => r.filename) });
     }
     if (needsLlm.length && !ask) {
-      // A VAT number with MWST and amounts that add up at a Swiss rate need no model.
+      // A VAT number with MWST and amounts that add up at a Swiss rate need no model; nor does a text that says in words it charges no Swiss VAT.
       const proven = needsLlm.flatMap((r): Array<[Receipt, Facts]> => {
         const f = textFacts(r.extractedText);
-        return f.vatId && f.vatSummary ? [[r, { vatId: f.vatId, hasSwissVat: true, vatSummary: f.vatSummary, lineItems: undefined, vatExtractedAt: new Date().toISOString() }]] : [];
+        if (f.vatId && f.vatSummary) return [[r, { vatId: f.vatId, hasSwissVat: true, vatSummary: f.vatSummary, lineItems: undefined, vatExtractedAt: new Date().toISOString() }]];
+        return f.noSwissVat ? [[r, { ...NO_VAT, vatExtractedAt: new Date().toISOString() }]] : [];
       });
       apply(proven, false);
-      for (const [r, f] of proven) log(`  ✓ ${r.filename}: from its text, ${f.vatSummary!.map((g) => `${g.ratePercent}%`).join(', ')} ${f.vatId}`);
+      for (const [r, f] of proven) log(`  ✓ ${r.filename}: from its text, ${f.hasSwissVat ? `${f.vatSummary!.map((g) => `${g.ratePercent}%`).join(', ')} ${f.vatId}` : 'no Swiss VAT, said in words'}`);
       progress(done += proven.length, total);
       const waiting = needsLlm.length - proven.length;
       if (waiting) notes.push({ code: 'noModel', waiting });
