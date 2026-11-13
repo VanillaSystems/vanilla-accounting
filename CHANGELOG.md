@@ -332,6 +332,12 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- After the drop she sees her data (#424): what «Dateien hinzufügen» reports as booked (a provider's
+  reports, the payouts her answer in a row booked, a statement read or kept, a file taken back) is on
+  every page at once, the MWST figure and the dock too; before, the page kept the figures of before
+  the drop until the window was reloaded. Closing the window after a bank's PDF statement opens that
+  statement in its own quarter; before, it opened a «Datei» view in today's quarter that said the
+  file was not read.
 - A payment provider's payouts list dropped before the firm has that provider is named as the
   provider's other export, with the reports to bring instead, at the first drop too (#425); before,
   it became a bank statement's column question; the dialog's head says it was set aside, not
