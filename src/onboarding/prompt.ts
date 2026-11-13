@@ -19,18 +19,21 @@ export const SETUP_PURPOSE = 'This conversation\'s purpose: setting up the books
 /** What each topic covers, for the model. */
 const COVERS: { readonly [K in SetupTopic]: string } = {
   firm: 'the kind of firm (legal form), its VAT setup (registered or not, the effective or the net tax rate method with its approved rates, the filing period) and what it sells. The person answered all of it a minute ago when the books were created and the app shows it on a card: never ask it again; take it up only when the person says something of it is wrong',
-  opening: 'the opening balances on 1 January of the books\' first year, from the balance sheet of 31 December of the year before; the app proposes a bank account\'s from its first statement',
+  opening: 'the opening balances on 1 January of the books\' first year, from the balance sheet of 31 December of the year before, also when the books begin later in the year; the app proposes a bank account\'s from its first statement',
   bank: 'the bank accounts with their IBAN, and how their statements come in',
   receipts: 'where receipts come from: mailboxes, web logins, the phone, files dragged in',
   knowledge: 'the business partners and the company\'s rules: what the person says about suppliers and customers, and the rules drafted from the history and kept by the person',
 };
 
 /**
- * The app's facts of the opening the AI must not contradict (r6-5, #496): the books follow the calendar
- * year, so they open on 1 January from the balance sheet of 31 December, also for a firm that switches
- * during the year. A reply that names another opening date is replaced by code (src/onboarding/opening-claim.ts).
+ * The app's facts of where the books begin and of the opening, which the AI must not contradict (r6-5,
+ * #496): the first payment's filing period is the books' first (booksOpenPeriod, src/accounting/periods.ts)
+ * and what lies before stays in the old program; the opening is per 1 January from the 31 December
+ * balance sheet, also mid-year; a bank account whose statements begin later shows the difference
+ * (startGaps, src/accounting/opening-balance.ts). A reply that names another opening day is replaced by
+ * code (src/onboarding/opening-claim.ts).
  */
-export const OPENING_FACTS = 'Facts of the app you never contradict: the books open on 1 January of their year and follow the calendar year. The opening balances (Eröffnung) are the balances of 31 December of the year before, from that year-end balance sheet, never from an interim balance sheet (a Zwischenbilanz of 30 June or any other day) and never per another day. A firm that switches to the app during the year (the Treuhand or the old program kept the first months) still opens on 1 January from the 31 December balance sheet, and the bank statements of those first months are read in here too, so the bank balances agree; the quarters the Treuhand already filed are compared with the returns as filed and closed. Never say the opening is per 1 July or per any day but 1 January, and never tell the person she does not need the 31 December balance sheet.';
+export const OPENING_FACTS = 'Facts of the app you never contradict. The books begin with the first bank statement the person reads in: the filing period of its first payment is the first one here, and what lies before stays in their old program. The opening balances (Eröffnung) are always per 1 January of the books\' year: the balances of 31 December of the year before, from that year-end balance sheet, the bank balances too; never from an interim balance sheet (a Zwischenbilanz of 30 June or any other day) and never per another day, also when the firm switches to the app during the year. With that opening and statements that begin in a later month, a bank account here differs from the bank\'s balance by what was paid before the first statement, until those payments are in these books or the difference is explained: the app shows that difference at the bank account. Never say the opening is per 1 July or per any day but 1 January, and never tell the person she does not need the 31 December balance sheet.';
 
 const place = (topic: SetupTopic, t: T): string => handKeys(topic).map((k) => t(k as Key)).join(' › ');
 

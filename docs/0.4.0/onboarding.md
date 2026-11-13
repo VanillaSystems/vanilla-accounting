@@ -56,6 +56,7 @@ knowledge.
 | `company` | firm | nothing: shown. «Etwas ändern» (`fix`) on the card opens `vat` and `sells` | company, with the VAT setup and what the firm sells |
 | `vat` | firm | only after «Etwas ändern», or once the AI recorded an answer from typed words: «Wir rechnen keine MWST ab» (not registered, with the line that it is only for a firm outside the VAT register and that a registered one asks its Treuhand), effective quarterly, net tax rate half-yearly; no «Weiss nicht» (#347; an older stored «Weiss nicht» keeps its words) | after the answer: the VAT change, if it differs |
 | `sells` | firm | only after «Etwas ändern»: the three kinds as toggles | the default accounts |
+| `startingPoint` | firm | no step and no buttons: the AI records it when her words correct «Ausgangslage» («d Firma isch nöd neu», «wir wechseln von der Treuhand»; #496). It writes the profile's `start` (its undo puts the one before back), shows in the summary as her answer and no longer «angenommen». After «Etwas ändern» it is the change she meant: `vat` and `sells` are not asked again | none; the opening's words follow it |
 | `opening` | opening | «Weiter» / «Später»; «Später» says what it means (the balance differs from the bank's by the opening until it is entered) and where it comes back («Eröffnung erfassen» at the first statement, Firma › Eröffnung) | the opening balances, if entered |
 | `bank` | bank | only while no account has an IBAN: «Weiter» / «Später» | the bank accounts, «Bankkonto erfassen» |
 | `receipts` | receipts | «Weiter» / «Später» | the sources switched on, «Mit mir einrichten» (an AI turn) while an AI answers, otherwise a line that it needs one and «KI einrichten»; «Quellen ansehen» |
@@ -110,7 +111,17 @@ Buchungen in dieser Periode · die Bücher beginnen am …», not «fällig seit
 prepared, since a firm whose first payment came in April owes a nil return for Q1 (`before` on the
 open `ReturnState`, src/app/areas/vat/model.ts). The opening is always per 1 January, from last
 year's balance sheet, the bank balance too; the summary says that a firm beginning mid-year sees
-only the quarters in these books in the year's reports. Books that begin on a chosen
+only the quarters in these books in the year's reports. With that opening and a first statement of a
+later month, a bank account differs from the bank by what was paid before it, until those payments
+are in the books or the difference is explained (`startGaps`, src/accounting/opening-balance.ts). The
+AI is given these facts in both setup conversations (`OPENING_FACTS`, src/onboarding/prompt.ts),
+and code holds its words to them (#496, src/onboarding/opening-claim.ts). A sentence that ties the
+opening to another day than 1 January or 31 December («Eröffnungssalden per 1. Juli», «per Ende
+Juni»), takes an interim balance sheet as its source, or calls the year-end balance sheet not needed
+is taken out, and the app's sentence (`onboarding.openingFact`) stands in place of the first. The
+reply's other sentences stay, and what the model said is kept as `withdrawn`. A statement date beside
+the opening, a negated interim balance sheet, an account opened at a bank and a due date are not
+caught. Books that begin on a chosen
 day of the year, with the quarters before held as filed elsewhere, do not exist: that needs a field
 in the books' format (see «Still missing»).
 
@@ -180,7 +191,11 @@ to a question, then one short question back) and the answers the words state (`f
 `answers`, `netRates`, `banks`). The prompt names the answered set and the open one (`draftMarks`),
 and the model is told not to ask the next question: code shows the step waiting, with its buttons,
 below its words. Code is the authority: each answer goes through `checkPatch` and
-`withPatch`, the click's path; a UID or an IBAN is taken only when it stands in the person's words as the server received them;
+`withPatch`, the click's path; a UID or an IBAN is taken only when it stands in the person's words as the server received them,
+or, for an IBAN, when the form holds it for that same account. Words add to the form's bank accounts and never remove one
+(#496): an account is matched by its IBAN first, then by bank and currency. An IBAN is never required, and an
+account without one matches by bank and currency. One more account of a bank in a currency the list holds is refused
+(`bankTwice`, as the form refuses it, since the books keep one per bank and currency), and the rest of the list is saved;
 an answer refused is not saved and the reply says why; the AI's words are left out beside a refusal,
 because it wrote them before the check. Answers without a preset leave the kind of firm
 open for its buttons; whichever is picked keeps what the words said (`withPatch`), and the prompt

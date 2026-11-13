@@ -139,7 +139,7 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
           // A report's figures are the code's (src/reports/figures.ts): words that state another are withdrawn.
           const reports = applied.made.flatMap((m) => (m.change.kind === 'report' && m.note?.report ? [m.note.report] : []));
           if (reports.length && strayFigures(ai.text, reports, (chartOf(ws) as Array<{ number: unknown }>).map((a) => String(a.number))).length) {
-            ai.withdrawn = ai.text;
+            ai.withdrawn ??= ai.text;
             ai.text = t('assistant.reportFigures');
           }
           // What was made is the app's to say, not the model's to guess (r8f-47): its line closes the answer, and says so where the model still named «Übernehmen» (r10f-11).
@@ -155,8 +155,11 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
       ai.refused = (e as Error).message;
       if ((e instanceof RefusedChanges || e instanceof ChangesError) && e.refusal) ai.refusal = e.refusal;
       onEvent({ type: 'refused', message: ai.refused, ...(ai.refusal ? { refusal: ai.refusal } : {}) });
-      ai.withdrawn = ai.text;
-      ai.text = await saidAgain(ws, send, map, c, ai.withdrawn, ai.refused, signal);
+      // What the model said first stays withdrawn; its answer said again keeps to the app's facts as the first did.
+      const shown = ai.text;
+      ai.withdrawn ??= shown;
+      const again = await saidAgain(ws, send, map, c, shown, ai.refused, signal);
+      ai.text = keep ? keep(again).text : again;
       onEvent({ type: 'replace', text: ai.text });
     }
   }

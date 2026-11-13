@@ -448,14 +448,16 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
-- The setup conversation keeps to the app's facts (#496). The AI is told that the books open on
-  1 January from the balance sheet of 31 December, never from an interim one, also for a firm
-  that switches during the year. A setup reply that names another opening day («die
-  Zwischenbilanz vom 30.6. ist die richtige», «Eröffnung per 1. Juli») is not shown: the app's
-  sentence stands in its place. A typed correction of the starting point («d Firma isch nöd neu»)
-  sets `profile.start` and shows as her answer, no longer «angenommen». After «Etwas ändern» it
-  does not ask the VAT method or the sales again. A typed sentence before the books adds to the
-  bank accounts of the form and keeps the IBAN typed there.
+- The setup conversation keeps to the app's facts (#496). The AI is told where the books begin:
+  the first statement's period, with what came before left in the old program. It is told that the
+  opening is always per 1 January from the balance sheet of 31 December, never from an interim one,
+  and that a later first statement leaves a bank difference until it is explained. A sentence of a
+  setup reply that ties the opening to another day («die Zwischenbilanz vom 30.6. ist die
+  richtige», «Eröffnung per 1. Juli») is not shown: the app's sentence stands in its place. A
+  typed correction of the starting point («d Firma isch nöd neu») sets `profile.start` and shows
+  as her answer, no longer «angenommen». After «Etwas ändern» it does not ask the VAT method or the
+  sales again. A typed sentence before the books adds to the bank accounts of the form. It keeps
+  the IBAN typed there, never lends it to another account and never requires one.
 - **⚠ figures** A booking no longer claims input tax on a receipt that is no longer linked to its
   payment (#417, point 1). That happened when a receipt file was rewritten under its name or its
   link was taken off, and the run said «0 Verknüpfungen prüfen». The app's own booking (by a rule

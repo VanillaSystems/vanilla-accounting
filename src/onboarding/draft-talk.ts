@@ -271,23 +271,34 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
   }
   if (out.netRates !== undefined) take('netRates', { step: 'netRates', value: out.netRates });
   if (Array.isArray(out.banks)) {
-    // A sentence adds to the bank accounts she gave and never takes one away or drops what she typed into the form (#496 r6-6):
-    // an IBAN the draft holds is hers, as one in her words is; one in neither is refused.
+    // A sentence adds to the bank accounts she gave and never takes one away or overwrites what she typed into the form (#496 r6-6).
     const given = d.banks ?? [];
-    const hers = (iban: string) => given.some((b) => b.iban && alnum(b.iban) === alnum(iban));
+    const sameBank = (a: BankSpec, b: BankSpec) => plain(a.bank) === plain(b.bank) && a.currency.toUpperCase() === b.currency.toUpperCase();
+    const sameIban = (a?: string, b?: string) => !!a && !!b && alnum(a) === alnum(b);
     const read = out.banks.filter(isMap).map((b): BankSpec => {
       const iban = str(b.iban);
-      const ok = !!iban && (stated('iban', iban, words) || hers(iban));
+      const spec: BankSpec = { bank: str(b.bank) ?? '', currency: str(b.currency) ?? baseCurrency };
+      // An IBAN is hers when her words state it, or when the form holds it for this very account; one in neither is refused.
+      const ok = !!iban && (stated('iban', iban, words) || given.some((g) => sameIban(g.iban, iban) && sameBank(g, spec)));
       if (iban && !ok) refused.push({ step: 'banks', refusal: { reason: 'notStated', field: 'iban', detail: iban } });
-      return { bank: str(b.bank) ?? '', currency: str(b.currency) ?? baseCurrency, ...(ok ? { iban } : {}) };
+      return { ...spec, ...(ok ? { iban } : {}) };
     });
-    const sameBank = (a: BankSpec, b: BankSpec) => plain(a.bank) === plain(b.bank) && a.currency === b.currency;
-    const kept = given.map((g) => {
-      const now = read.find((r) => sameBank(r, g));
-      // Her words may give or correct its IBAN; without one in them, the IBAN she typed stays.
-      return now?.iban && (!g.iban || stated('iban', now.iban, words)) ? { ...g, iban: now.iban } : g;
-    });
-    const banks = [...kept, ...read.filter((r) => !given.some((g) => sameBank(r, g)))];
+    // An IBAN is never required: an account without one matches by bank and currency, one account of the list for one of the form.
+    const banks: BankSpec[] = given.map((g) => ({ ...g }));
+    const used = new Set<number>();
+    const claim = (i: number) => { if (i >= 0) used.add(i); return i >= 0; };
+    for (const r of read) {
+      // By IBAN first: the account that holds it is this one.
+      if (r.iban && claim(banks.findIndex((b, i) => !used.has(i) && sameIban(b.iban, r.iban)))) continue;
+      // Then by bank and currency, among the accounts not matched yet: an IBAN fills one that has none; without an IBAN any of them is meant.
+      const open = banks.findIndex((b, i) => !used.has(i) && sameBank(b, r) && (!r.iban || !b.iban));
+      if (claim(open)) { if (r.iban) banks[open].iban = r.iban; continue; }
+      // One more account of a bank in a currency the list holds: the books keep one per bank and currency (checkBank, the manifest),
+      // so it is refused as the form refuses it and said why, never dropped silently; the rest of the list is saved.
+      if (banks.some((b) => sameBank(b, r))) { refused.push({ step: 'banks', refusal: { reason: 'bankTwice', bank: r.bank, detail: r.currency } }); continue; }
+      // A new account, with or without an IBAN: added and checked as a click is.
+      used.add(banks.push(r) - 1);
+    }
     take('banks', { step: 'banks', value: banks });
   }
 

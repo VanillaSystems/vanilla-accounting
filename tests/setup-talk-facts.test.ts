@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { keptToOpening, openingFact, strayOpening } from '../src/onboarding/opening-claim.js';
 import { applyTalk, talkPrompt, type TalkOutput } from '../src/onboarding/draft-talk.js';
-import { newDraft, withPatch, type SetupDraft } from '../src/onboarding/draft.js';
+import { draftSteps, newDraft, withPatch, type SetupDraft } from '../src/onboarding/draft.js';
 import { checkPatch } from '../src/onboarding/draft-store.js';
 import { setupThread, topicStates } from '../src/onboarding/conversation.js';
 import { emptyProgress, withAnswer, type Answer, type QuestionId, type SetupProgress } from '../src/onboarding/model.js';
@@ -38,39 +38,59 @@ const IBAN = testIban('00787000012345678');
 const WEBSHOP = 'Dann ist die Zwischenbilanz vom 30.6.2026 die richtige. Seine Endsalden vom 30. Juni sind also deine Anfangssalden. Du trägst sie in Firma › Eröffnung ein. Die Bilanz vom 31.12.2025 brauchst du dafür nicht.';
 const CONSULTING = 'Die Bücher hier beginnen mit dem ersten Kontoauszug im Juli. Die Eröffnungssalden per 1. Juli trägst du von Hand ein.';
 
-test('r6-5, r6-7: a reply that names an opening other than 1.1. or 31.12. is caught, in any of the app\'s languages; one that keeps to the facts is not', () => {
-  assert.ok(strayOpening(WEBSHOP).length >= 2, 'the interim balance sheet of 30.6. and the Endsalden of 30 June');
+test('r6-5, r6-7: a reply that ties the opening to a day other than 1.1. or 31.12. is caught, in any of the app\'s languages', () => {
+  assert.deepEqual(strayOpening(WEBSHOP), [
+    'Dann ist die Zwischenbilanz vom 30.6.2026 die richtige.',
+    'Seine Endsalden vom 30. Juni sind also deine Anfangssalden.',
+    'Die Bilanz vom 31.12.2025 brauchst du dafür nicht.',
+  ], 'the interim balance sheet, the Endsalden of 30 June, and the year-end balance sheet called not needed; «Du trägst sie in Firma › Eröffnung ein» stays');
   assert.deepEqual(strayOpening(CONSULTING), ['Die Eröffnungssalden per 1. Juli trägst du von Hand ein.']);
-  assert.ok(strayOpening('The opening balances are as at 30 June 2026.').length, 'English');
-  assert.ok(strayOpening('Les soldes d’ouverture valent au 1er juillet.').length, 'French');
-  assert.ok(strayOpening('I saldi di apertura valgono al 30.06.2026.').length, 'Italian');
-  assert.ok(strayOpening('Opening as of 2026-07-01.').length, 'an ISO date');
+  for (const wrong of [
+    'The opening balances are as at 30 June 2026.',
+    'Les soldes d’ouverture valent au 1er juillet.',
+    'I saldi di apertura valgono al 30.06.2026.',
+    'Opening as of 2026-07-01.',
+    'Die Eröffnungssalden nimmst du aus der Bilanz per Ende Juni.',
+    'Die Eröffnung gilt per Mitte Jahr.',
+  ]) assert.ok(strayOpening(wrong).length, wrong);
+});
+
+test('a reply that keeps to the facts is not caught: a statement date beside the opening, a negated interim balance sheet, an account opened, a due date', () => {
   for (const right of [
     'Die Eröffnung gilt per 01.01.2026: nimm alle Zahlen aus der Bilanz per 31.12.2025.',
     'Die Eröffnungssalden per 1. Januar kommen aus der Bilanz vom 31. Dezember 2025.',
     'The opening holds as at 1 January, from the balance sheet as at December 31.',
     'Die erste Abrechnung ist am 30.11. fällig.',
     'Die MWST beträgt 8.1 %, die Eröffnung erfasst du unter Firma › Eröffnung.',
+    'Die Eröffnung bleibt per 1. Januar, lies die Kontoauszüge ab dem 1. Juli ein.',
+    'Nimm nicht die Zwischenbilanz, sondern die Bilanz per 31.12.2025.',
+    'Die Kontoeröffnung bei der UBS war am 15.03.2026.',
+    'L’ouverture du compte Wise date du 3 mars.',
+    'Erfasse die Eröffnung bis zum 30.11., dann ist die Abrechnung fällig.',
+    'Der Eröffnungssaldo, den die Bank vor dem Auszug vom 01.07.2026 nennt, ist kein Saldo per 1.1.',
   ]) assert.deepEqual(strayOpening(right), [], right);
 });
 
-test('the app\'s sentence stands in place of such a reply, in the person\'s language, with the year\'s dates; a right reply is shown as said', () => {
+test('the app\'s sentence stands in place of the stray sentences only, in the person\'s language, with the year\'s dates; a right reply is shown as said', () => {
   const kept = keptToOpening(WEBSHOP, de, '2026');
   assert.equal(kept.withdrawn, WEBSHOP, 'what the model said is kept, not shown');
-  assert.equal(kept.text, 'Die Eröffnung gilt in der App immer per 01.01.2026: alle Zahlen kommen aus der Bilanz per 31.12.2025, nie aus einer Zwischenbilanz, auch wenn die Firma im Lauf des Jahres wechselt. Du trägst sie unter Firma › Eröffnung ein.');
+  assert.equal(kept.text, `${openingFact(de, '2026')} Du trägst sie in Firma › Eröffnung ein.`);
+  assert.equal(openingFact(de, '2026'), 'Die Eröffnung gilt in der App immer per 01.01.2026: alle Zahlen kommen aus der Bilanz per 31.12.2025, nie aus einer Zwischenbilanz, auch wenn die Firma im Lauf des Jahres wechselt. Du trägst sie unter Firma › Eröffnung ein.');
+  const mixed = keptToOpening('Gute Frage. Die Eröffnungssalden per 1. Juli trägst du von Hand ein.\n\nDie Belege holst du per Mail.', de, '2026');
+  assert.equal(mixed.text, `Gute Frage. ${openingFact(de, '2026')}\n\nDie Belege holst du per Mail.`, 'the reply\'s other sentences stay');
   assert.match(openingFact(wordsIn('en').t, '2027'), /as at 01\.01\.2027: every figure comes from the balance sheet as at 31\.12\.2026/);
   assert.deepEqual(keptToOpening('Lies den Kontoauszug ein.', de, '2026'), { text: 'Lies den Kontoauszug ein.' });
 });
 
-test('the setup prompts state the opening facts and no longer say the books begin with the first statement', () => {
-  const system = setupSpecialist(de);
-  assert.match(system, /open on 1 January/);
-  assert.match(system, /never from an interim balance sheet/);
-  assert.match(system, /switches to the app during the year .* still opens on 1 January/);
-  assert.doesNotMatch(system, /The books begin with the first bank statement/, 'the sentence the «per 1. Juli» came from');
-  assert.match(system, /"question":"startingPoint"/, 'the AI can record her correction of the starting point');
-  const d = withPatch(newDraft('de', '2026-11-13T09:00:00.000Z'), { step: 'firm', value: { name: 'Muster GmbH', owner: 'Anna Muster' } });
-  assert.match(talkPrompt(d, 'x', [], 'CHF'), /never from an interim balance sheet/, 'before the books too');
+test('the setup prompts state where the books begin and the opening facts, and nothing the app does not do', () => {
+  for (const prompt of [setupSpecialist(de), talkPrompt(withPatch(newDraft('de', '2026-11-13T09:00:00.000Z'), { step: 'firm', value: { name: 'Muster GmbH', owner: 'Anna Muster' } }), 'x', [], 'CHF')]) {
+    assert.match(prompt, /the filing period of its first payment is the first one here, and what lies before stays in their old program/);
+    assert.match(prompt, /always per 1 January/);
+    assert.match(prompt, /never from an interim balance sheet/);
+    assert.match(prompt, /differs from the bank's balance by what was paid before the first statement/, 'the consequence of a later first statement');
+    assert.doesNotMatch(prompt, /statements of those first months are read in|compared with the returns as filed and closed/, 'setup reads in no earlier quarter and closes none');
+  }
+  assert.match(setupSpecialist(de), /"question":"startingPoint"/, 'the AI can record her correction of the starting point');
 });
 
 // Before the books: the draft's typed conversation (src/onboarding/draft-talk.ts).
@@ -78,25 +98,60 @@ const banksDraft = (): SetupDraft => withPatch(newDraft('de', '2026-11-13T09:00:
 const out = (o: Partial<TalkOutput>): TalkOutput => ({ say: '', answers: {}, ...o });
 const PHONE = 's Gschäftshandy bruuch ich au privat, öppe d Hälfti. Und en Kunde in Berlin zahlt in Euro uf mis Wise-Konto.';
 
+const banksOf = (d: SetupDraft) => d.banks?.map((b) => [b.bank, b.currency, b.iban]);
+const reasons = (r: ReturnType<typeof applyTalk>) => (r.reply.kind === 'read' ? r.reply.refused.map((x) => x.refusal.reason) : []);
+
 test('r6-6: a typed sentence adds Wise to the bank accounts of the form and keeps the IBAN she typed there, refusing nothing', () => {
   const d = banksDraft();
   assert.equal(d.banks?.[0].iban, IBAN);
   const whole = applyTalk(d, out({ banks: [{ bank: 'Zuger Kantonalbank', currency: 'CHF', iban: IBAN }, { bank: 'Wise', currency: 'EUR' }] }), [PHONE], 'CHF', '2026');
-  assert.deepEqual(whole.reply.kind === 'read' && whole.reply.refused, [], 'was «Die IBAN … steht nicht in deinen Worten»: the IBAN is hers, from the form');
-  assert.deepEqual(whole.draft.banks?.map((b) => [b.bank, b.currency, b.iban]), [['Zuger Kantonalbank', 'CHF', IBAN], ['Wise', 'EUR', undefined]]);
+  assert.deepEqual(reasons(whole), [], 'was «Die IBAN … steht nicht in deinen Worten»: the IBAN is hers, from the form');
+  assert.deepEqual(banksOf(whole.draft), [['Zuger Kantonalbank', 'CHF', IBAN], ['Wise', 'EUR', undefined]]);
   // The model leaves out the IBAN, or the bank: the form's values stay.
   const bare = applyTalk(d, out({ banks: [{ bank: 'Zuger Kantonalbank', currency: 'CHF' }, { bank: 'Wise', currency: 'EUR' }] }), [PHONE], 'CHF', '2026');
   assert.equal(bare.draft.banks?.[0].iban, IBAN, 'an IBAN the model dropped is not taken away');
   const only = applyTalk(d, out({ banks: [{ bank: 'Wise', currency: 'EUR' }] }), [PHONE], 'CHF', '2026');
   assert.deepEqual(only.draft.banks?.map((b) => b.bank), ['Zuger Kantonalbank', 'Wise'], 'a bank account of the form is never removed by a sentence');
   // An IBAN in neither her words nor the form is still refused.
-  const other = testIban('00762011623852957');
-  const made = applyTalk(d, out({ banks: [{ bank: 'Wise', currency: 'EUR', iban: other }] }), [PHONE], 'CHF', '2026');
-  assert.deepEqual(made.reply.kind === 'read' && made.reply.refused.map((r) => r.refusal.reason), ['notStated']);
+  const made = applyTalk(d, out({ banks: [{ bank: 'Wise', currency: 'EUR', iban: testIban('00762011623852957') }] }), [PHONE], 'CHF', '2026');
+  assert.deepEqual(reasons(made), ['notStated']);
   assert.equal(made.draft.banks?.find((b) => b.bank === 'Wise')?.iban, undefined);
-  // An IBAN her words give for the form's bank replaces the one typed there: her latest words are hers too.
-  const fixed = applyTalk(d, out({ banks: [{ bank: 'Zuger Kantonalbank', currency: 'CHF', iban: other }] }), [`Die IBAN ist ${other}`], 'CHF', '2026');
-  assert.equal(fixed.draft.banks?.[0].iban, other);
+});
+
+test('the bank merge matches by IBAN first: a second account of the same bank is never dropped silently, the form\'s IBAN never overwritten nor lent to another bank', () => {
+  const d = withPatch(newDraft('de', '2026-11-13T09:00:00.000Z'), checkPatch({ step: 'banks', value: [{ bank: 'UBS', currency: 'CHF', iban: IBAN }] }));
+  const B = testIban('00762011623852957');
+  const second = `noch ein zweites UBS-Konto, ${B}`;
+  // [UBS A, UBS B]: the books keep one account per bank and currency, so B is refused and said why, never dropped while «say» claims it.
+  const both = applyTalk(d, out({ say: 'Ich habe das zweite Konto ergänzt.', banks: [{ bank: 'UBS', currency: 'CHF', iban: IBAN }, { bank: 'UBS', currency: 'CHF', iban: B }] }), [second], 'CHF', '2026');
+  assert.deepEqual(reasons(both), ['bankTwice']);
+  assert.equal(both.reply.kind === 'read' && both.reply.say, '', 'the model\'s claim is not shown beside the refusal');
+  assert.deepEqual(banksOf(both.draft), [['UBS', 'CHF', IBAN]]);
+  // [UBS B] alone: A is not overwritten.
+  const alone = applyTalk(d, out({ banks: [{ bank: 'UBS', currency: 'CHF', iban: B }] }), [second], 'CHF', '2026');
+  assert.deepEqual(banksOf(alone.draft), [['UBS', 'CHF', IBAN]], 'was: A replaced by B');
+  assert.deepEqual(reasons(alone), ['bankTwice']);
+  // Wise EUR with the form's UBS IBAN: that IBAN is UBS's, not Wise's.
+  const lent = applyTalk(d, out({ banks: [{ bank: 'UBS', currency: 'CHF', iban: IBAN }, { bank: 'Wise', currency: 'EUR', iban: IBAN }] }), ['und Wise in Euro'], 'CHF', '2026');
+  assert.deepEqual(reasons(lent), ['notStated'], 'was: accepted because the form holds it for another account');
+  assert.deepEqual(banksOf(lent.draft), [['UBS', 'CHF', IBAN], ['Wise', 'EUR', undefined]]);
+  // A second UBS account in another currency is added.
+  const eur = applyTalk(d, out({ banks: [{ bank: 'UBS', currency: 'CHF', iban: IBAN }, { bank: 'UBS', currency: 'EUR' }] }), ['und ein UBS-Konto in Euro'], 'CHF', '2026');
+  assert.deepEqual(banksOf(eur.draft), [['UBS', 'CHF', IBAN], ['UBS', 'EUR', undefined]]);
+});
+
+test('an IBAN is never required: two banks without one complete the setup, and a sentence adds a bank without one', () => {
+  let d = withPatch(withPatch(newDraft('de', '2026-11-13T09:00:00.000Z'), { step: 'firm', value: { name: 'Muster GmbH', owner: 'Anna Muster' } }), { step: 'preset', value: 'consultant' });
+  for (const [key, value] of [['vatRegistered', 'yes'], ['vatMethod', 'effective'], ['basis', 'received'], ['period', 'quarterly']] as const) d = withPatch(d, { step: 'question', key, value });
+  d = withPatch(d, checkPatch({ step: 'banks', value: [{ bank: 'UBS', currency: 'CHF' }, { bank: 'Wise', currency: 'EUR' }] }));
+  assert.equal(draftSteps(d).at(-1)?.id, 'review', 'two banks without an IBAN: the setup is complete');
+  const more = applyTalk(d, out({ banks: [{ bank: 'UBS', currency: 'CHF' }, { bank: 'Wise', currency: 'EUR' }, { bank: 'PostFinance', currency: 'CHF' }] }), ['und noch ein Konto bei der PostFinance'], 'CHF', '2026');
+  assert.deepEqual(reasons(more), [], 'nothing refused, nothing asks for an IBAN');
+  assert.deepEqual(banksOf(more.draft), [['UBS', 'CHF', undefined], ['Wise', 'EUR', undefined], ['PostFinance', 'CHF', undefined]]);
+  assert.equal(draftSteps(more.draft).at(-1)?.id, 'review');
+  // An IBAN she writes for an account without one fills it.
+  const filled = applyTalk(d, out({ banks: [{ bank: 'UBS', currency: 'CHF', iban: IBAN }] }), [`die UBS hat ${IBAN}`], 'CHF', '2026');
+  assert.deepEqual(banksOf(filled.draft), [['UBS', 'CHF', IBAN], ['Wise', 'EUR', undefined]]);
 });
 
 test('before the books: «d Firma isch nöd neu» sets the starting point from her words, and a reply that names a mid-year opening shows the app\'s sentence', () => {
@@ -106,7 +161,7 @@ test('before the books: «d Firma isch nöd neu» sets the starting point from h
   assert.equal(r.draft.answers.start, 'switching');
   assert.ok(!r.draft.assumed?.includes('start'), 'hers now, no longer «angenommen»');
   assert.ok(r.draft.fromText?.includes('start'), 'marked «aus deiner Nachricht»');
-  assert.equal(r.reply.kind === 'read' && r.reply.say, openingFact(de, '2026'), 'not «per 1. Juli»');
+  assert.equal(r.reply.kind === 'read' && r.reply.say, `Die Bücher hier beginnen mit dem ersten Kontoauszug im Juli. ${openingFact(de, '2026')}`, 'not «per 1. Juli»: that sentence alone gives way');
 });
 
 // In the books: the setup conversation (src/onboarding/conversation.ts, the AI's setupAnswer).
@@ -175,8 +230,9 @@ test('the AI\'s setupAnswer startingPoint writes the profile\'s start, and its u
 // The whole way: the API server with the claude stub, a setup conversation.
 const log = mkdtempSync(join(tmpdir(), 'setup-facts-'));
 const TEXT = join(log, 'text.txt');
+const CHANGES = join(log, 'changes.json');
 let api: ApiServer;
-before(async () => { api = await startApi('tests/fixtures/fresh-books-index.json', { PATH: `${join(process.cwd(), 'tests/support/stub-bin')}:${process.env.PATH}`, CLAUDE_STUB_TEXT: TEXT }); });
+before(async () => { api = await startApi('tests/fixtures/fresh-books-index.json', { PATH: `${join(process.cwd(), 'tests/support/stub-bin')}:${process.env.PATH}`, CLAUDE_STUB_TEXT: TEXT, CLAUDE_STUB_CHANGES: CHANGES }); });
 after(async () => { await api?.stop(); rmSync(log, { recursive: true, force: true }); });
 
 async function say(text: string, purpose?: 'onboarding') {
@@ -192,7 +248,7 @@ test('r6-5 in the app: the setup conversation shows the app\'s sentence instead 
   const { events, turn } = await say(WEBSHOP, 'onboarding');
   const year = String(new Date().getFullYear());
   assert.ok(turn.withdrawn?.includes('Zwischenbilanz vom 30.6.2026'), 'the model\'s words are kept, withdrawn');
-  assert.ok(!turn.text.includes('30.6.2026'), 'and not shown');
+  assert.ok(!turn.text.includes('Zwischenbilanz vom 30.6.2026'), 'and not shown');
   assert.match(turn.text, /per 01\.01\.\d{4}: alle Zahlen kommen aus der Bilanz per 31\.12\.\d{4}/);
   assert.ok(turn.text.includes(`per 01.01.${year}`) || turn.text.includes(`per 01.01.${Number(year) - 1}`), 'the books\' open year');
   const replaced = events.filter((e): e is Extract<AssistantEvent, { type: 'replace' }> => e.type === 'replace').at(-1);
@@ -201,4 +257,15 @@ test('r6-5 in the app: the setup conversation shows the app\'s sentence instead 
   const plain = await say(WEBSHOP);
   assert.equal(plain.turn.withdrawn, undefined);
   assert.ok(plain.turn.text.includes('Zwischenbilanz vom 30.6.2026'));
+});
+
+test('an answer whose change the app refused is said again within the same facts, and what the model first said stays withdrawn', async () => {
+  writeFileSync(CHANGES, JSON.stringify([{ kind: 'setupAnswer', question: 'startingPoint', value: 'someday' }]));
+  try {
+    const { turn } = await say(CONSULTING, 'onboarding');
+    assert.ok(turn.refused, 'the change does not parse: refused');
+    assert.ok(turn.withdrawn?.includes('Die Eröffnungssalden per 1. Juli'), 'was: overwritten by the text already kept');
+    assert.ok(!turn.text.includes('per 1. Juli'), 'the answer said again does not bring it back');
+    assert.match(turn.text, /Die Eröffnung gilt in der App immer per 01\.01\./);
+  } finally { rmSync(CHANGES, { force: true }); }
 });
