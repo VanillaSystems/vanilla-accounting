@@ -6,6 +6,7 @@
  * only, with the pairing token (src/server/phone.ts); it is off until then.
  * Nothing here needs Electron, so the tests run it in Node.
  */
+import { switchOnCreated } from '../workflows/booking-waits.js';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { createServer, request, type RequestListener, type Server } from 'node:http';
@@ -350,6 +351,8 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
       const created = await createWorkspace(body);
       // What the kind of firm answered and she never touched (#385): kept only where the books took it.
       if (!created.existed) {
+        // She created the workspace and its rules: switched on as it is (#413).
+        switchOnCreated(workspaceAt(created.root));
         const said = parseAssumed(body.assumed);
         seedAssumed(workspaceAt(created.root), said && assumedOf(stillAssumed(said, body.answers).map((a) => a.key), body.answers, said.by));
       }
