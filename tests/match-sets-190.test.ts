@@ -20,7 +20,7 @@ import './support/jurisdiction.js';
 import { BAND, MAX_RUN, MAX_TRIED, linkReceiptSets, linkSplitLegs, proposalsFor, receiptSetsToLink } from '../src/intake/receipt-sets.js';
 import { chargesOf } from '../src/intake/charges.js';
 import { batchPayers } from '../src/intake/batch-payers.js';
-import { batchPayersOf, candidates } from '../src/intake/match.js';
+import { batchPayersOf, buyerUidsOf, candidates } from '../src/intake/match.js';
 import { runPairChain } from '../src/intake/pair-chain.js';
 import { compileCounterparty } from '../src/knowledge/counterparties.js';
 import { classifyTransactions, mappedReceipts, type ClassifyContext, type ClassifyDeps } from '../src/booking/classify.js';
@@ -556,9 +556,9 @@ test('the buyer\'s own UID says nothing of who wrote a receipt: it neither stops
   assert.equal(app.ofReceipt({ ...buyerOnly, extractedText: `${buyerOnly.extractedText}\nCHE-283.746.519 MWST` }), undefined, 'a UID of the issuer\'s own: its text routes nothing');
   const misread = (amount: number, vendor: string) => receipt(amount, { vatId: ws.company.uid, title: { vendor, what: 'Einkauf' }, extractedText: `${vendor} Quittung ${amount}` });
   const b = booksOf([chf('P', 70, { description: 'Kartenzahlung' })], [misread(30, 'Garage Muster'), misread(40, 'Papeterie Muster')]);
-  assert.equal(receiptSetsToLink(b, open).sets.length, 1, 'keyed by the buyer\'s UID (the defect): one vendor across shops');
-  assert.deepEqual(receiptSetsToLink(b, { isOpen: open, buyerUid: ws.company.uid }).sets, [], 'two shops, no set');
-  assert.deepEqual(proposalsFor(b, b.transactions[0], { isOpen: open, buyerUid: ws.company.uid }).sets, []);
+  assert.deepEqual(receiptSetsToLink(b, open).sets, [], 'a VAT number on the receipts of two title vendors is no one vendor, even without the firm\'s UID');
+  assert.deepEqual(receiptSetsToLink(b, { isOpen: open, buyerUids: buyerUidsOf(ws) }).sets, [], 'two shops, no set');
+  assert.deepEqual(proposalsFor(b, b.transactions[0], { isOpen: open, buyerUids: buyerUidsOf(ws) }).sets, []);
 });
 
 test('the title\'s vendor routes as a whole word, and the titles prompt says the vendor is the issuer, not a carrier or payment method it mentions', () => {

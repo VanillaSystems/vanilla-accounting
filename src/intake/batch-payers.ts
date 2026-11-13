@@ -21,10 +21,10 @@ export const NO_BATCH_PAYERS: BatchPayers = { ofReceipt: () => undefined, ofPaym
 
 /**
  * The business a receipt is of, by what it says of its sender (signalsOfReceiptRead): its UID, the
- * addresses and name in its first and last lines, its filenames. `buyerUid`: the company's own
- * (company.uid), which says nothing of who wrote a receipt.
+ * addresses and name in its first and last lines, its filenames. `buyer`: the firm's own UIDs
+ * (src/intake/own-invoice.ts buyerUids), which say nothing of who wrote a receipt.
  */
-export function businessOfReceipt(r: Receipt, counterparties: readonly Counterparty[], buyerUid?: string, silent = silentUids(counterparties, buyerUid)): string | undefined {
+export function businessOfReceipt(r: Receipt, counterparties: readonly Counterparty[], buyer: readonly string[] = [], silent = silentUids(counterparties, buyer)): string | undefined {
   const routing = identify(signalsOfReceiptRead(r, silent), counterparties);
   return routing.kind === 'known' ? routing.counterparty : undefined;
 }
@@ -35,11 +35,11 @@ export function businessOfReceipt(r: Receipt, counterparties: readonly Counterpa
  * its linked receipts are of (a business known by its UID alone, whose name the bank does not
  * print). The batch payers and the «Immer so?» that flags one both ask this.
  */
-export function businessOfPayment(tx: BankTransaction, linked: readonly Receipt[], counterparties: readonly Counterparty[], buyerUid?: string, silent = silentUids(counterparties, buyerUid)): string | undefined {
+export function businessOfPayment(tx: BankTransaction, linked: readonly Receipt[], counterparties: readonly Counterparty[], buyer: readonly string[] = [], silent = silentUids(counterparties, buyer)): string | undefined {
   const routing = identify(signalsOfTransaction(tx, [...linked]), counterparties);
   if (routing.kind === 'known') return routing.counterparty;
   if (routing.kind === 'ambiguous' || !linked.length) return undefined;
-  const of = new Set(linked.map((r) => businessOfReceipt(r, counterparties, buyerUid, silent)));
+  const of = new Set(linked.map((r) => businessOfReceipt(r, counterparties, buyer, silent)));
   return of.size === 1 ? [...of][0] : undefined;
 }
 
@@ -55,8 +55,8 @@ export interface Businesses {
   ofPayment(tx: BankTransaction): string | undefined;
 }
 
-export function businesses(counterparties: readonly Counterparty[], buyerUid?: string): Businesses {
-  const silent = silentUids(counterparties, buyerUid);
+export function businesses(counterparties: readonly Counterparty[], buyer: readonly string[] = []): Businesses {
+  const silent = silentUids(counterparties, buyer);
   const receipts = new WeakMap<Receipt, string | undefined>();
   const payments = new WeakMap<BankTransaction, string | undefined>();
   const memo = <K extends object>(seen: WeakMap<K, string | undefined>, of: (k: K) => string | undefined) => (k: K) => {
@@ -64,19 +64,19 @@ export function businesses(counterparties: readonly Counterparty[], buyerUid?: s
     return seen.get(k);
   };
   return {
-    ofReceipt: memo(receipts, (r) => businessOfReceipt(r, counterparties, buyerUid, silent)),
+    ofReceipt: memo(receipts, (r) => businessOfReceipt(r, counterparties, buyer, silent)),
     ofPayment: memo(payments, (tx) => { const routing = identify(signalsOfTransaction(tx, []), counterparties); return routing.kind === 'known' ? routing.counterparty : undefined; }),
   };
 }
 
-/** The batch payers among `counterparties`; `buyerUid`: the company's own UID (company.uid). */
-export function batchPayers(counterparties: readonly Counterparty[], buyerUid?: string): BatchPayers {
+/** The batch payers among `counterparties`; `buyer`: the firm's own UIDs (buyerUids). */
+export function batchPayers(counterparties: readonly Counterparty[], buyer: readonly string[] = []): BatchPayers {
   const flagged = new Set(counterparties.filter((c) => c.grouped).map((c) => c.id));
   if (!flagged.size) return NO_BATCH_PAYERS;
   const only = (id: string | undefined) => (id && flagged.has(id) ? id : undefined);
-  const silent = silentUids(counterparties, buyerUid);
+  const silent = silentUids(counterparties, buyer);
   return {
-    ofReceipt: (r) => only(businessOfReceipt(r, counterparties, buyerUid, silent)),
-    ofPayment: (tx, linked = []) => only(businessOfPayment(tx, linked, counterparties, buyerUid, silent)),
+    ofReceipt: (r) => only(businessOfReceipt(r, counterparties, buyer, silent)),
+    ofPayment: (tx, linked = []) => only(businessOfPayment(tx, linked, counterparties, buyer, silent)),
   };
 }

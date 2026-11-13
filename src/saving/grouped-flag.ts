@@ -14,6 +14,7 @@ import { loadClassifyContext, mappedReceipts, type ClassifyContext } from '../bo
 import { homeOf } from '../knowledge/layers.js';
 import { chargesOf } from '../intake/charges.js';
 import { businessOfPayment } from '../intake/batch-payers.js';
+import { buyerUids } from '../intake/own-invoice.js';
 import { duplicatesIn } from '../intake/duplicates.js';
 import { estvToChf } from '../intake/pair-chain.js';
 import { documents } from '../engines/index.js';
@@ -51,7 +52,8 @@ export function groupedOffer(ws: Workspace, books: Books, ref: string, context: 
   const tx = books.transactions.find((t) => t.ref === ref);
   if (!tx || periodLock(books).isClosed(tx.date)) return undefined;
   const charges = chargesOf(books.transactions, estvToChf());
-  const businessOf = (t: BankTransaction) => businessOfPayment(t, mappedReceipts(books, t), context.counterparties ?? [], ws.company.uid);
+  const buyer = buyerUids(ws.company, books);
+  const businessOf = (t: BankTransaction) => businessOfPayment(t, mappedReceipts(books, t), context.counterparties ?? [], buyer);
   const mine = charges.of(tx);
   if (byPerson(books, mine.refs) < 2) return undefined;
   const id = businessOf(tx);

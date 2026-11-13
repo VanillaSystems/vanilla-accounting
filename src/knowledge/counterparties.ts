@@ -163,9 +163,9 @@ export function signalsOfReceipt(r: Receipt): Signals {
 
 const digitsOf = (uid: string) => uid.replace(/\D/g, '');
 
-/** The UIDs that say nothing of who wrote a receipt: the buyer's own (company.uid) and those a business's file names as shared (Counterparty.sharedUid), as digits. */
-export function silentUids(counterparties: readonly Counterparty[], buyerUid?: string): Set<string> {
-  return new Set([...(buyerUid ? [buyerUid] : []), ...counterparties.flatMap((c) => c.sharedUid ?? [])].map(digitsOf).filter(Boolean));
+/** The UIDs that say nothing of who wrote a receipt: the buyer's own (`buyer`, src/intake/own-invoice.ts buyerUids) and those a business's file names as shared (Counterparty.sharedUid), as digits. */
+export function silentUids(counterparties: readonly Counterparty[], buyer: readonly string[] = []): Set<string> {
+  return new Set([...buyer, ...counterparties.flatMap((c) => c.sharedUid ?? [])].map(digitsOf).filter(Boolean));
 }
 
 // An address of the sender: an e-mail's domain or a web address, as invoices print them.

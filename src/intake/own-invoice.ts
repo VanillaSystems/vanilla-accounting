@@ -2,7 +2,7 @@
  * The firm's own invoice among the receipts, and the number it gives itself (#365): the only
  * receipt money in may pay by its number alone (src/intake/pairing.ts fitOf). Pure and browser-safe.
  */
-import type { Receipt } from '../types/index.js';
+import type { BankTransaction, Mapping, Receipt } from '../types/index.js';
 import type { DocumentsData } from '../core/modules/schema.js';
 import { documents } from '../engines/index.js';
 import { HEAD, compoundLines } from '../core/modules/words.js';
@@ -56,6 +56,46 @@ export function uidToKeep(r: Pick<Receipt, 'vatId' | 'extractedText'>, firm: Fir
   const [uid] = uidsIn(r.extractedText ?? '');
   const m = uid ? /^CHE(\d{3})(\d{3})(\d{3})$/.exec(uid) : null;
   return m ? `CHE-${m[1]}.${m[2]}.${m[3]}` : undefined;
+}
+
+/** A vendor's name to compare: lower case, letters and digits only (src/intake/receipt-sets.ts vendorOf keys by it). */
+export const vendorKey = (name: string | undefined): string => name?.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '') ?? '';
+
+/** Whether `names` (vendorKey) are two vendors or more: two names one of which holds the other («digitec», «digitecgalaxus») are one. */
+export function twoVendors(names: Iterable<string>): boolean {
+  const all = [...new Set(names)].filter(Boolean);
+  return all.some((a, i) => all.slice(i + 1).some((b) => !a.includes(b) && !b.includes(a)));
+}
+
+const uidDigits = (uid: string) => uid.replace(/\D/g, '');
+
+/**
+ * The firm's silent UIDs, as digits: those that say nothing of who wrote a receipt, since they are
+ * the buyer's (a supplier prints its customer's VAT number beside the address). The UID of the settings when there is one,
+ * and only that. Without it (#466: the setup does not ask it) the ones the books show to be the
+ * buyer's: a UID read on the receipts of two vendors or more (by the vendor of their title, else by
+ * the counterparty of the payment they are linked to; twoVendors), and the one UID on the firm's
+ * own invoices recognised by its name (issuedByFirm 'name'). Derived on every call, never kept in
+ * the settings: the person keeps the UID offered from her own invoice (uidToKeep).
+ */
+export function buyerUids(firm: Firm | undefined, books: { receipts: readonly Receipt[]; mappings?: readonly Mapping[]; transactions?: readonly BankTransaction[] }): string[] {
+  if (firm?.uid) return [uidDigits(firm.uid)].filter(Boolean);
+  const counterparty = new Map((books.transactions ?? []).map((t) => [t.ref, vendorKey(t.counterparty)]));
+  const paidTo = new Map<string, string>();
+  for (const m of books.mappings ?? []) { const c = counterparty.get(m.transactionRef); if (c && !paidTo.has(m.receiptId)) paidTo.set(m.receiptId, c); }
+  const vendors = new Map<string, Set<string>>();
+  const own = new Set<string>();
+  for (const r of books.receipts) {
+    if (r.kind === 'duplicate') continue;
+    const shown = uidsIn(r.extractedText ?? '');
+    if (r.vatId) shown.add(normUid(r.vatId));
+    if (!shown.size) continue;
+    if (shown.size === 1 && issuedByFirm(r, firm) === 'name') own.add(uidDigits([...shown][0]));
+    const vendor = vendorKey(r.title?.vendor) || paidTo.get(r.id);
+    if (!vendor) continue;
+    for (const u of shown) { const d = uidDigits(u); if (!d) continue; const set = vendors.get(d); if (set) set.add(vendor); else vendors.set(d, new Set([vendor])); }
+  }
+  return [...new Set([...own, ...[...vendors].filter(([, v]) => twoVendors(v)).map(([d]) => d)])].filter(Boolean).sort();
 }
 
 /**

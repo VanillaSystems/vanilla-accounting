@@ -24,6 +24,7 @@ import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { homeOf, loadKnowledge } from './layers.js';
 import { businesses } from '../intake/batch-payers.js';
 import { makerOf } from '../intake/pairing.js';
+import { buyerUids } from '../intake/own-invoice.js';
 import { merchantName } from './merchant-name.js';
 
 /** A name is learned once this many payments with it are linked to one business's receipts by a confirmed link. */
@@ -42,8 +43,8 @@ type Books = { receipts: readonly Receipt[]; transactions: readonly BankTransact
  * LEARN_AFTER payments or more, never a name a link puts on another business's receipt, nor one the
  * business's files hold or learned before (`learnedTx`, a person's removal among them).
  */
-export function namesToLearn(books: Books, counterparties: readonly Counterparty[], buyerUid?: string): LearnedName[] {
-  const known = businesses(counterparties, buyerUid);
+export function namesToLearn(books: Books, counterparties: readonly Counterparty[], buyer: readonly string[] = []): LearnedName[] {
+  const known = businesses(counterparties, buyer);
   const payment = new Map(books.transactions.map((t) => [t.ref, t]));
   const receipt = new Map(books.receipts.map((r) => [r.id, r]));
   const byName = new Map<string, { name: string; business: Map<string, Set<string>>; others: boolean }>();
@@ -121,7 +122,7 @@ const fileOf = (ws: Pick<Workspace, 'paths'>, cp: Pick<Counterparty, 'role' | 'i
 export function learnMerchantNames(ws: Pick<Workspace, 'paths' | 'company'>, books: Books): LearnedName[] {
   let counterparties: Counterparty[];
   try { counterparties = loadKnowledge(APP_ROOT, ws.paths.root).counterparties; } catch { return []; }
-  const learned = namesToLearn(books, counterparties, ws.company?.uid);
+  const learned = namesToLearn(books, counterparties, buyerUids(ws.company, books));
   const byId = new Map(counterparties.map((c) => [c.id, c]));
   for (const l of learned) {
     const file = fileOf(ws, byId.get(l.business)!);

@@ -31,7 +31,7 @@ import { duplicatesIn } from '../../src/intake/duplicates.js';
 import { documents } from '../../src/engines/index.js';
 import { linkReceiptSets, linkSplitLegs } from '../../src/intake/receipt-sets.js';
 import { chargesOf } from '../../src/intake/charges.js';
-import { batchPayersOf } from '../../src/intake/match.js';
+import { batchPayersOf, buyerUidsOf } from '../../src/intake/match.js';
 import { businesses, type Businesses } from '../../src/intake/batch-payers.js';
 import { namesToLearn } from '../../src/knowledge/learned-names.js';
 import { delaysOf } from '../../src/intake/delays.js';
@@ -120,8 +120,9 @@ export async function main(): Promise<void> {
   const noReceipt = noReceiptFor(ws);
   // The names the links outside the window teach (#190 part 1), as the app would have written them into the company's files: in memory only.
   const counterparties = loadKnowledge(APP_ROOT, ws.paths.root).counterparties;
-  const taught = namesToLearn(blind, counterparties, ws.company.uid);
-  const known = businesses(counterparties.map((c) => { const add = taught.filter((l) => l.business === c.id).map((l) => l.name); return add.length ? { ...c, match: { ...c.match, tx: [...c.match.tx, ...add] } } : c; }), ws.company.uid);
+  const buyer = buyerUidsOf(ws, blind);
+  const taught = namesToLearn(blind, counterparties, buyer);
+  const known = businesses(counterparties.map((c) => { const add = taught.filter((l) => l.business === c.id).map((l) => l.name); return add.length ? { ...c, match: { ...c.match, tx: [...c.match.tx, ...add] } } : c; }), buyer);
   const afterCode = structuredClone(blind);
   const code = await runPairChain(memoryPort(afterCode), { toChf, noReceipt, businesses: known });
   const o = oracle(pairs, blind);
@@ -172,7 +173,7 @@ export async function main(): Promise<void> {
   console.log(`precision (links the books know): code ${precision(tc)}, code + oracle ${precision(tm)}; recall of one-to-one links: code ${(tc.oneToOneRight / Math.max(1, oneToOne)).toFixed(3)}, code + oracle ${(tm.oneToOneRight / Math.max(1, oneToOne)).toFixed(3)}`);
   // The match step's code after the chain: receipt sets (with the batch payers of the business files) and the legs of split card charges (#190).
   const isOpen = () => true;
-  linkReceiptSets(afterCode, { isOpen, payers: batchPayersOf(ws), toChf, buyerUid: ws.company.uid });
+  linkReceiptSets(afterCode, { isOpen, payers: batchPayersOf(ws, blind), toChf, buyerUids: buyer });
   linkSplitLegs(afterCode, isOpen, toChf);
   const multi = multiTally(afterCode, truth, books, toChf, (t) => !!providerOfPayment(t, [], counterparties));
   const say = (t: MultiTally) => `${t.payments} in the window; code alone found ${t.full} in full, ${t.part} in part, ${t.wrong} with a document the books do not have there, missed ${t.missed}`;

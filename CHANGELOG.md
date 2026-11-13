@@ -448,6 +448,17 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A firm without its UID in the settings (#466) no longer has receipts of different shops taken
+  for one vendor because they print the firm's UID as their customer's, which linked them together
+  to an unrelated payment. The firm's own UIDs now come from one place: the UID of the settings,
+  else the ones the books show to be the buyer's (a UID on receipts of two vendors or more, or on
+  the firm's own invoice recognised by its name), never written to the settings. With them a
+  receipt that prints only the buyer's UID is again routed by its sender's address or name (a
+  courier's invoice, a card terminal's payout report, whose sales and fees were otherwise never
+  booked), merchant names are learned and «Immer so?» for a batch payer is offered as before; the
+  hand form takes a business's document on money in for no sale by the firm's name too. Independent
+  of the UID, a VAT number the receipts of two title vendors carry is no longer one vendor in the
+  receipt sets. With the UID in the settings nothing changes.
 - **⚠ figures** A booking no longer claims input tax on a receipt that is no longer linked to its
   payment (#417, point 1). That happened when a receipt file was rewritten under its name or its
   link was taken off, and the run said «0 Verknüpfungen prüfen». The app's own booking (by a rule
