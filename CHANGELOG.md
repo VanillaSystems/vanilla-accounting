@@ -428,9 +428,10 @@ Two markers flag an entry you must read before you update:
   hotel bill of a room at 3.8 % and a Kurtaxe without VAT, on a card settlement, booked room I38
   and Kurtaxe I0, got the task «Der Beleg zeigt 3.8 % MWST, die Buchung steht auf … I0» for the
   Kurtaxe, and «Nach Beleg buchen» claimed CHF 0.22 input tax on it. The check now takes the bill of
-  a card statement's line as evidence of that line's bookings only, and a line at 0 % beside a line
-  at the receipt's rate is not told the receipt shows VAT when the receipt's amounts per rate cannot
-  be set against the lines (another currency on the payment, a rate named by its tax alone).
+  a card statement's line as evidence of that line's bookings only, sets a VAT group the receipt
+  names by its tax alone against the lines at the gross that tax proves (allowing for the tax's
+  rounding to the cent), leaves a receipt in another currency out of the sum, and tells a line at 0 %
+  beside a line at the receipt's rate nothing when no receipt in the line's currency can be compared.
 - The fields of Firma's forms stand in line at every width (#454): a hint under one input («kein
   Konto», the account's name) or a label on two lines no longer pushes the field beside it down
   (Eröffnung, Regeln and the others). Firma › Eröffnung names its amount fields «Saldo per 1.1.2026

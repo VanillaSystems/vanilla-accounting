@@ -67,8 +67,10 @@ export const lineBillsOf = (mappings: readonly Pick<Mapping, 'transactionRef' | 
  * the card line's, of exactly one card line; any other line is of the whole settlement and sees the
  * receipts linked to it as a whole. `unplaced`: such a line beside a bill of a card line that shows
  * a Swiss rate or is not read, which may be its evidence: no proof missing is said for its rate.
+ * `whole`: a line of the whole settlement beside line bills, whose rate a statement filed as such
+ * (no purchase document) does not leave unjudged.
  */
-function evidenceOf(e: JournalEntry, linked: readonly Receipt[], bills: LineBills | undefined): { receipts: readonly Receipt[]; unplaced: boolean } {
+function evidenceOf(e: JournalEntry, linked: readonly Receipt[], bills: LineBills | undefined): { receipts: readonly Receipt[]; unplaced: boolean; whole?: true } {
   if (!bills?.size || !linked.some((r) => bills.has(r.id))) return { receipts: linked, unplaced: false };
   const of = (lines: ReadonlySet<number>) => ({ receipts: linked.filter((r) => lines.has(bills.get(r.id) ?? -1)), unplaced: false });
   const seen = linked.filter((r) => e.receipts?.includes(r.id));
@@ -84,7 +86,7 @@ function evidenceOf(e: JournalEntry, linked: readonly Receipt[], bills: LineBill
   if (fits.size === 1) return of(fits);
   // Only a bill that shows a Swiss rate, or is not read yet, may be the proof a whole-settlement line's rate rests on.
   const unplaced = linked.some((r) => bills.has(r.id) && (swissRate(r) !== undefined || r.hasSwissVat === undefined));
-  return { receipts: linked.filter((r) => !bills.has(r.id)), unplaced };
+  return { receipts: linked.filter((r) => !bills.has(r.id)), unplaced, whole: true };
 }
 const toCents = (n: number): number => Math.round(Math.abs(n) * 100);
 
@@ -100,14 +102,16 @@ const PURCHASE = /^(-?)([MI])(\d+)$/;
  * gross; it only excuses a line at the zero code, never accuses a rate (#406 review). A receipt in
  * another currency is left out (#455 review). A group named by its tax alone counts at the gross its
  * tax proves, tax × (100 + rate) / rate; when that is the receipt's total but for the tax's rounding
- * to the cent, it is the total. Undefined when no receipt is in `currency`, or one was not read, has
+ * to the cent, it is the total; `slack` is how far such a gross may stand from the true one, which every
+ * comparison with it allows. Undefined when no receipt is in `currency`, or one was not read, has
  * a group at a rate not of the jurisdiction (a foreign VAT) or by no amount, or shows groups above
  * its total: then there is nothing to compare a booking with.
  */
-function receiptGroups(receipts: readonly Receipt[], currency: string): { groups: Map<number, number>; rest: number } | undefined {
+function receiptGroups(receipts: readonly Receipt[], currency: string): { groups: Map<number, number>; rest: number; slack: number } | undefined {
   if (!receipts.length) return undefined;
   const groups = new Map<number, number>();
   let rest = 0;
+  let slackAll = 0;
   const add = (rate: number, gross: number) => groups.set(rate, (groups.get(rate) ?? 0) + gross);
   const comparable = receipts.filter((r) => (r.currency ?? baseCurrency()) === currency);
   if (!comparable.length) return undefined;
@@ -131,6 +135,7 @@ function receiptGroups(receipts: readonly Receipt[], currency: string): { groups
       add(g.ratePercent, Math.abs(gross));
       shown += Math.abs(gross);
     }
+    slackAll += slack;
     if (total === undefined) {
       if (!shown) return undefined;
       continue;
@@ -139,10 +144,10 @@ function receiptGroups(receipts: readonly Receipt[], currency: string): { groups
       add(derived, total - shown);
       shown = total;
     }
-    if (shown > total + TOLERANCE) return undefined;
+    if (shown > total + TOLERANCE + slack) return undefined;
     if (total - shown > TOLERANCE) rest += total - shown;
   }
-  return { groups, rest };
+  return { groups, rest, slack: slackAll };
 }
 
 /** The gross per rate the lines book. */
@@ -201,7 +206,8 @@ function groupCheck(e: JournalEntry, own: readonly Receipt[], receipts: readonly
   const currency = e.exchangeCurrency ?? baseCurrency();
   const read = receiptGroups(own, currency);
   if (!read) return null;
-  const { groups, rest } = read;
+  const { groups, rest, slack } = read;
+  const tolerance = TOLERANCE + slack;
   const open = rest > TOLERANCE;
   const named = [...groups.values()].filter((g) => g > TOLERANCE).length;
   if (named < 2 && !(named === 1 && open)) return null;
@@ -218,12 +224,12 @@ function groupCheck(e: JournalEntry, own: readonly Receipt[], receipts: readonly
   const mates = [e, ...lines.filter((l) => l.id !== e.id && !closed(l))].filter(same).sort((a, b) => lines.indexOf(a) - lines.indexOf(b));
   const booked = bookedGroups(mates);
   const over = (rate: number) => (rate === 0
-    ? (booked.get(0) ?? 0) > (groups.get(0) ?? 0) + rest + TOLERANCE
-    : !open && (booked.get(rate) ?? 0) > (groups.get(rate) ?? 0) + TOLERANCE);
+    ? (booked.get(0) ?? 0) > (groups.get(0) ?? 0) + rest + tolerance
+    : !open && (booked.get(rate) ?? 0) > (groups.get(rate) ?? 0) + tolerance);
   const first = mates.find((l) => over(vat().codes.parse(l.vatCode!)!.rate));
   if (first?.id !== e.id) return undefined;
   // What the receipt shows at a rate the booking leaves short: the largest such part of a group read.
-  const short = [...groups].map(([rate, gross]) => ({ rate, amount: cents(gross - (booked.get(rate) ?? 0)) })).filter((s) => s.amount > TOLERANCE).sort((a, b) => b.amount - a.amount)[0];
+  const short = [...groups].map(([rate, gross]) => ({ rate, amount: cents(gross - (booked.get(rate) ?? 0)) })).filter((s) => s.amount > tolerance).sort((a, b) => b.amount - a.amount)[0];
   if (!short) return undefined;
   const total = mates.reduce((s, l) => s + Math.abs(l.amount), 0);
   const proposal = !open && !filed && oneKind(mates) ? groupLines(groups, total, sign, family) : undefined;
@@ -250,7 +256,8 @@ export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], close
   lines = scope.receipts === linked ? lines : lines.filter((l) => l.id === e.id || ids(evidenceOf(l, linked, bills).receipts) === ids(scope.receipts));
   const receipts = scope.receipts.filter(isPurchaseDocument);
   linked = scope.receipts;
-  if (linked.length && !receipts.length) return undefined;
+  // Only a statement or a supporting document linked: no evidence either way, unless the line is the whole settlement's beside bills of its lines.
+  if (linked.length && !receipts.length && !scope.whole) return undefined;
   const m = PURCHASE.exec(e.vatCode ?? '');
   const info = m && vat().codes.parse(e.vatCode!);
   if (!m || !info) return undefined;

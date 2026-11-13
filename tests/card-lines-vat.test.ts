@@ -218,3 +218,15 @@ test('#455 review A1, A2: a line of the whole settlement claims input tax no bil
   b.journalEntries = [booked('w', 313.19, 'I81', [], person)] as unknown as Books['journalEntries'];
   assert.deepEqual(findings(b), [[313.19, 'I81', 'vatWithoutReceipt']], 'A2');
 });
+
+test('#455 second review: A1 and A2 are still told when the card statement is filed as a statement or a supporting document', () => {
+  for (const kind of ['statement', 'supporting'] as const) {
+    const b = books([card, lined('linkly', 0), lined('hotel', 2)], false);
+    b.receipts = b.receipts.map((x) => (x.id === 'card' ? { ...x, kind } : x));
+    const person = { origin: 'manual', by: { kind: 'person', at: '2026-11-13T11:00:00.000Z' } };
+    b.journalEntries = [booked('a', 20, 'I81', [], person), booked('b', 293.19, 'I0', [], person)] as unknown as Books['journalEntries'];
+    assert.deepEqual(findings(b), [[20, 'I81', 'vatWithoutReceipt'], [293.19, 'I0', undefined]], `A1, ${kind}`);
+    b.journalEntries = [booked('w', 313.19, 'I81', [], person)] as unknown as Books['journalEntries'];
+    assert.deepEqual(findings(b), [[313.19, 'I81', 'vatWithoutReceipt']], `A2, ${kind}`);
+  }
+});

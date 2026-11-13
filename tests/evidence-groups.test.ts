@@ -178,3 +178,29 @@ test('#455 review G1: a bill in another currency beside a bill at 8.1 % on all o
   const lines = [line('a', 'T', 100, 'I81'), line('b', 'T', 20, 'I0'), line('c', 'T', 40, 'B81-1')];
   assert.deepEqual(checks(lines, [chf, usd]), [undefined, { kind: 'receiptShowsVat', rate: 8.1, code: 'I81', receipts: ['chf', 'usd'] }, undefined]);
 });
+
+// ─── #455 second review: the tax's rounding in the comparisons ─────────────────────────────────
+
+const CODE: Record<number, string> = { 2.6: 'I26', 3.8: 'I38', 8.1: 'I81' };
+/** A bill of `g` taxed at `rate` and `z` untaxed, its group named by its tax alone, rounded to the cent. */
+const taxBill = (g: number, z: number, rate: number) => bill(Math.round((g + z) * 100) / 100, [{ ratePercent: rate, vat: Math.round((g * rate) / (100 + rate) * 100) / 100 }]);
+
+test('#455 second review: 150.16 at 2.6 % (tax 3.81) and a Kurtaxe of 6 booked so: no finding of CHF 0.19 at 2.6 % on the zero line', () => {
+  assert.deepEqual(checks([line('a', 'T', 150.16, 'I26'), line('b', 'T', 6, 'I0')], [taxBill(150.16, 6, 2.6)]), [undefined, undefined]);
+});
+
+test('#455 second review: over a sweep of bills named by their tax, every right split fits and every under-claim of 5 is told', () => {
+  let seed = 455;
+  const next = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+  for (const rate of [2.6, 3.8, 8.1]) {
+    for (let i = 0; i < 300; i++) {
+      const g = Math.round((10 + next() * 490) * 100) / 100;
+      const z = next() < 0.5 ? 6 : 20;
+      const r = taxBill(g, z, rate);
+      const right = checks([line('a', 'T', g, CODE[rate]), line('b', 'T', z, 'I0')], [r]);
+      assert.deepEqual(right, [undefined, undefined], `${g} at ${rate} % + ${z}: tax ${r.vatSummary![0].vat}`);
+      const under = checks([line('a', 'T', Math.round((g - 5) * 100) / 100, CODE[rate]), line('b', 'T', z + 5, 'I0')], [r]);
+      assert.equal(under[1]?.kind, 'receiptGroups', `${g - 5} at ${rate} % + ${z + 5}: the 5 taxed booked at I0`);
+    }
+  }
+});
