@@ -8,7 +8,7 @@
 import { accountOf, legOf, madeByHand } from '../workspace/money-accounts.js';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { assignUniqueRefs, bankCodedFees, statementSpan, transactionsOf, type CamtStatement } from '../providers/camt053/camt053.js';
+import { assignUniqueRefs, bankCodedFees, isDerivedRef, statementSpan, transactionsOf, type CamtStatement } from '../providers/camt053/camt053.js';
 import { statementPdf } from './statement-facts.js';
 import { confirmsYearEnd, keptReads, withReadBalances, withReadFacts, type KeptRead } from './pdf-reads.js';
 import type { BankStatement, BankTransaction, Index, JournalEntry, Mapping, Receipt, StatementClosingBalance } from '../types/index.js';
@@ -407,6 +407,42 @@ export function matchStatementRows(rows: readonly BankTransaction[], books: read
   return out;
 }
 
+/**
+ * The payments an export named by no reference (isDerivedRef: the app made their refs) that another
+ * export names by the bank's reference: the same account, day, direction and amount, one for one, the
+ * counterparty and text deciding between equals (pairUp) (#401). One payment, under the ref the books
+ * hold: a derived one they hold stays and names the bank's ref (`names`, kept as its `statement`, which
+ * claims that row on every later read); otherwise the bank's ref stands. `left`: the rows that are no
+ * payment of their own. Books that hold both already (two payments) are left as they are.
+ */
+function derivedTwins(rows: readonly BankTransaction[], held: ReadonlyMap<string, BankTransaction>): { left: Set<BankTransaction>; names: Map<BankTransaction, BankTransaction> } {
+  const derived = rows.filter((t) => isDerivedRef(t.ref) && !madeByHand(t));
+  const named = rows.filter((t) => !isDerivedRef(t.ref) && !madeByHand(t));
+  const left = new Set<BankTransaction>();
+  const names = new Map<BankTransaction, BankTransaction>();
+  if (!derived.length || !named.length) return { left, names };
+  for (const [i, j] of pairUp(derived, named, (d, r) => (sameMovement(d) === sameMovement(r) && d.currency === r.currency ? -fit(d, r) : undefined))) {
+    const d = derived[i];
+    const r = named[j];
+    const heldD = held.has(legOf(d));
+    const heldR = held.has(legOf(r));
+    if (heldD && heldR) continue;
+    if (heldD) {
+      left.add(r);
+      names.set(d, r);
+    } else left.add(d);
+  }
+  return { left, names };
+}
+
+/** What the bank's export of a payment adds to the one the books hold by a derived ref: the ref it names, and the facts the other export lacks. */
+const fromTwin = (d: BankTransaction, r: BankTransaction): Partial<BankTransaction> => ({
+  statement: r.ref,
+  ...(!d.reference && r.reference ? { reference: r.reference } : {}),
+  ...(!d.counterparty && r.counterparty ? { counterparty: r.counterparty } : {}),
+  ...(!d.counterpartyIban && r.counterpartyIban ? { counterpartyIban: r.counterpartyIban } : {}),
+});
+
 export interface Merged {
   index: Index;
   /** Links in a filed quarter whose receipt file is gone. Kept: a person must re-link them. */
@@ -427,7 +463,9 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
   const claimed = new Set(previous.transactions.map(claimedLeg).filter((l): l is string => l !== undefined));
   // A movement read from a PDF that a confirmed reconciliation paired with a bank movement is that movement (#254): its row in the read statement brings nothing again; a filed one stays as filed.
   const absorbed = new Set((previous.reconciliations ?? []).flatMap((r) => (r.done ? r.pairs.map((p) => p.read) : [])));
-  const unclaimed = scan.bankTransactions.filter((t) => !claimed.has(legOf(t)) && !(absorbed.has(t.ref) && !previousByLeg.has(legOf(t))));
+  const read = scan.bankTransactions.filter((t) => !claimed.has(legOf(t)) && !(absorbed.has(t.ref) && !previousByLeg.has(legOf(t))));
+  const { left, names } = derivedTwins(read, previousByLeg);
+  const unclaimed = read.filter((t) => !left.has(t));
   const confirmed = matchStatementRows(unclaimed.filter((t) => !previousByLeg.has(legOf(t))), previous.transactions, lock.isClosed);
   const confirming = new Set([...confirmed.values()]);
   const confirmingLegs = new Set(unclaimed.filter((t) => confirming.has(t.ref)).map(legOf));
@@ -436,8 +474,12 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
   const fromBank = unclaimed.filter((t) => !confirmingLegs.has(legOf(t))).map((t) => {
     const before = previousByLeg.get(legOf(t));
     if (!before) return t;
-    return isClosed(before) ? before : { ...t, ...keptFields(before) };
+    if (isClosed(before)) return before;
+    const bank = names.get(t);
+    return { ...t, ...(bank ? fromTwin(t, bank) : {}), ...keptFields(before) };
   });
+  // A payment the books hold by a derived ref whose export is gone while the bank's export that names it stays (#401).
+  const namedElsewhere = previous.transactions.filter((t) => !madeByHand(t) && t.statement !== undefined && isDerivedRef(t.ref) && !isClosed(t) && !freshLegs.has(legOf(t)) && freshLegs.has(`${t.statement} ${t.currency}`));
   const vanishedClosedTransactions = previous.transactions.filter(
     (t) => !madeByHand(t) && !freshLegs.has(legOf(t)) && isClosed(t),
   );
@@ -453,13 +495,16 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
   });
 
   // A reference or an amount in another currency the export drops and its statement PDF prints (#243).
-  const transactions = withReadFacts([...fromBank, ...vanishedClosedTransactions, ...manual], scan.reads, lock.isClosed);
+  const transactions = withReadFacts([...fromBank, ...namedElsewhere, ...vanishedClosedTransactions, ...manual], scan.reads, lock.isClosed);
 
   const receiptIds = new Set(scan.receipts.map((r) => r.id));
   const byRef = new Map(transactions.map((t) => [t.ref, t]));
   const brokenClosedLinks: Mapping[] = [];
+  // A link or an app's entry on an empty ref (a statement read before #401 gave each payment one) goes with the payments it stood for, unless a filed one is among them.
+  const emptyHeld = byRef.has('');
   const mappings = previous.mappings.filter((m) => {
     if (m.transactionRef === undefined) return false;
+    if (!m.transactionRef.trim() && !emptyHeld) return false;
     if (receiptIds.has(m.receiptId)) return true;
     if (!isClosed(byRef.get(m.transactionRef))) return false;
     brokenClosedLinks.push(m);
@@ -467,10 +512,16 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
   });
 
   return {
-    index: withBalances({ ...previous, receipts: scan.receipts, transactions, bankStatements: scan.bankStatements, mappings }, withCamtBalances(withReadBalances(previous.statementBalances, scan.reads, lock.isClosed), scan.camtBalances, lock.isClosed)),
+    index: withBalances({ ...previous, receipts: scan.receipts, transactions, bankStatements: scan.bankStatements, mappings, ...withoutEmptyRefEntries(previous.journalEntries, emptyHeld, lock.isClosed) }, withCamtBalances(withReadBalances(previous.statementBalances, scan.reads, lock.isClosed), scan.camtBalances, lock.isClosed)),
     brokenClosedLinks,
     vanishedClosedTransactions,
   };
+}
+
+/** The app's open entries on an empty ref go once no payment holds that ref; a person's and a filed one stay (#401). */
+function withoutEmptyRefEntries(entries: JournalEntry[] | undefined, held: boolean, isClosed: (date: string) => boolean): { journalEntries?: JournalEntry[] } {
+  const gone = (e: JournalEntry) => !held && typeof e.transactionRef === 'string' && !e.transactionRef.trim() && e.origin !== 'manual' && !isClosed(e.date);
+  return entries?.some(gone) ? { journalEntries: entries.filter((e) => !gone(e)) } : {};
 }
 
 function withBalances(index: Index, balances: StatementClosingBalance[] | undefined): Index {
@@ -489,7 +540,8 @@ export function mergeBankFiles(ws: Ws, books: Index): void {
   const fresh = assignUniqueRefs(withinBooks(readTransactions(ws).transactions, books.config).kept);
   const freshLegs = new Set(fresh.map(legOf));
   const lock = periodLock(books);
-  const stay = books.transactions.filter((t) => !madeByHand(t) && !freshLegs.has(legOf(t)) && !lock.isClosed(t.date));
+  // A payment on an empty ref (read before #401) stays only in a filed period: the file now gives it a ref of its own.
+  const stay = books.transactions.filter((t) => !madeByHand(t) && !freshLegs.has(legOf(t)) && !lock.isClosed(t.date) && t.ref.trim() !== '');
   const files = readStatementFiles(ws);
   const merged = mergeIndex(books, { receipts: books.receipts, bankTransactions: [...fresh, ...stay], reads: keptReads(ws, files.statements, books.statementAsks), bankStatements: files.statements, camtBalances: files.balances });
   const pos = new Map(books.transactions.map((t, i) => [t.ref, i]));

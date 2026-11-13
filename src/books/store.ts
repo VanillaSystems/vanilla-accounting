@@ -490,6 +490,15 @@ const OWNER: Record<NonNullable<JournalEntry['origin']>, 'person' | 'module'> = 
 
 export class OwnershipError extends Error {}
 
+/** A payment, a link or an entry written on an empty ref (#401): every payment has a reference of its own, or a link to it is a link to all such payments. */
+export class EmptyRefError extends Error {}
+
+/** The records of `books` on an empty ref. Books that hold some from before #401 can still be written; no write adds one. */
+const emptyRefs = (books: Books): number =>
+  books.transactions.filter((t) => !t.ref?.trim()).length
+  + books.mappings.filter((m) => !m.transactionRef?.trim()).length
+  + (books.journalEntries ?? []).filter((e) => !e.transactionRef?.trim()).length;
+
 /** The checks of the `update` calls in flight, run again by every saveBooks inside them. */
 const guards = new WeakMap<Books, () => void>();
 
@@ -514,8 +523,8 @@ const filedHoldOf = (books: Books): (ApprovedReturn & { filed: FiledFigures }) |
 /**
  * The one write door. Runs `fn` as `actor`, then throws ClosedPeriodError if any closed-period
  * journal entry, closed transaction, or mapping to a closed transaction was changed, added or
- * removed (golden rule 1), and OwnershipError if an actor other than a person changed or removed
- * a person's entry. A saveBooks inside `fn` runs the same checks before it writes. One exception
+ * removed (golden rule 1), OwnershipError if an actor other than a person changed or removed
+ * a person's entry, and EmptyRefError if a payment, a link or an entry on an empty ref was added (#401). A saveBooks inside `fn` runs the same checks before it writes. One exception
  * (r10h-4): in a period filed with the tax authority whose books differ from the return (approvedReturn.filed),
  * a person's change passes only when it brings the books closer to the figures filed: no box
  * and not the payable moves further away, and together they come closer. So the books can be
@@ -531,7 +540,9 @@ export function update<T>(books: Books, actor: Actor, fn: (books: Books) => T | 
   const distanceBefore = filedHold ? filedDistance(books, filedHold) : undefined;
   const persons = actor.kind === 'person' ? undefined : personsEntries(books);
   const dated = new Map(books.journalEntries.map((e) => [e.id, e.date]));
+  const empties = emptyRefs(books);
   const check = () => {
+    if (emptyRefs(books) > empties) throw new EmptyRefError(`${describe(actor)} schreibt eine Zahlung, Verknüpfung oder Buchung ohne Referenz: nichts gespeichert.`);
     const lock = periodLock(books);
     const early = books.journalEntries.filter((e) => lock.beforeBooks(e.date) && dated.get(e.id) !== e.date);
     if (early.length) throw new BeforeBooksError(`Die Bücher beginnen am ${lock.opens}: ${early.map((e) => `entry ${e.id} dated ${e.date}`).join('; ')}.`, `${Number(lock.opens!.slice(0, 4)) - 1}-12-31`);
