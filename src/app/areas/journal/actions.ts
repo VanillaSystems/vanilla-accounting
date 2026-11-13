@@ -6,6 +6,7 @@
 import type { JournalEntry } from '../../../types/index.js';
 import type { BookingLine } from '../../../accounting/manual-booking.js';
 import type { EvidenceCheck } from '../../../accounting/evidence-check.js';
+import { baseCurrency } from '../../../engines/index.js';
 import { api, errorText, type JournalEntryInput, type JournalEntryPatch } from '../../lib/api.js';
 import { undoInput } from '../../../books/entry-input.js';
 import { t } from '../../i18n/index.js';
@@ -46,6 +47,13 @@ export function fixEvidence(nav: Nav, e: JournalEntry, c: EvidenceCheck) {
   const lines = (c.lines ?? []).map((l) => `${l.code} ${fmt(l.amount)}`).join(' · ');
   return run(nav, () => api.bookByReceipt(e.id), () => t('journal.evidence.rebooked', { lines }), ({ undo }) => api.undoByReceipt(undo));
 }
+
+/**
+ * «2270 ausgleichen» (#476): one write on the server, which makes the proposal from the books (src/server/edits.ts
+ * clearWithheld); the undo puts the payment's lines back as they were, with who booked them and why.
+ */
+export const clearWithheld = (nav: Pick<Nav, 'toast' | 'refresh'>, ref: string) =>
+  run(nav as Nav, () => api.clearWithheld(ref), (r) => t('issues.withheldCleared', { currency: baseCurrency(), amount: fmt(r.amount), account: r.account }), ({ undo }) => api.undoByReceipt(undo));
 
 /** A receipt hung on a booking without a payment (#89); the undo takes it off again. */
 export const linkReceipt = (nav: Nav, receiptId: string, ref: string, what: string) =>

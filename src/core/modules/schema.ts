@@ -257,6 +257,8 @@ export interface SetupData {
     payees?: string[];
     /** The contribution accounts the employees share in (AHV/IV/EO/ALV, BVG), never one the employer pays alone (family allowances): a payment booked there with nothing on `deductions` is a task (#426). */
     shared?: string[];
+    /** The words a payslip names each deduction by, per kind (a key of `payees` is what that business collects): code reads the payslips' deductions per fund by them (src/booking/withheld.ts fundShare, #476). */
+    withholds?: Record<string, string[]>;
   };
   /** The account each kind of private use (the setup's privateUse: car, phone) is booked on: a share named in the setup is offered as a rule on a payment booked there (#402). */
   privateUse?: Partial<Record<'car' | 'phone', string>>;

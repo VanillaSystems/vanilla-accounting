@@ -436,6 +436,24 @@ Two markers flag an entry you must read before you update:
   does: a balance sheet «Bilanz» with «Eröffnung erfassen», a product photo «kein Beleg»; only a
   receipt still waiting for its payment, its reading or its date and amount says «stehen
   geblieben», and only those count as waiting for her.
+- The compensation fund's payment with its bill linked (#476): it was booked whole as the
+  employer's expense while 2270 still held the employees' share the payslips had withheld, so that
+  share was an expense twice. Where every payslip behind 2270 is linked and its deductions read per
+  kind (AHV/IV/EO and ALV the fund's, BVG the pension fund's) and add up, the app books exactly the
+  fund's part on 2270, never more than 2270 holds, and the rest as the employer's contribution;
+  the booking says so. Where it cannot tell, the open item «Beitragszahlung ohne den Anteil der
+  Arbeitnehmenden» offers «2270 ausgleichen» on the return's list and on the payment: a proposal in
+  words, booked by her click in one write and undone in the toast, the lines back with who booked
+  them and why. Where the payslips tell the fund's share, the item and the click ask for what the
+  payment lacks of it, never for another fund's deductions on 2270. The payslips are read in the
+  layouts payroll programs and pdftotext give (a label with its amount, columns whose order the
+  rates prove, a minus after the amount, a correction row, a payment of several wages); a row
+  that is no deduction (an AHV number, a basis, a sentence) names no fund. No VAT figure changes.
+- «Was muss ich jetzt noch machen?» (#476): the card under the answer and the facts the AI is
+  handed list what the return's list «Noch offen» lists, in its order (a contribution payment
+  without the employees' share among them), and then what only the card adds (a proposal of the
+  setup, a missing opening). The firm's own invoice that only waits for its customer is a fact on
+  all three («eigene Rechnung, wartet auf die Zahlung der Kundschaft»), never a point to count.
 - The open list under a return (#477) no longer opens with «Nichts davon hält die Abrechnung auf»
   while payments of the period are unbooked. Its first sentence names them, the money in and the
   money out with their count and sum: «4 Zahlungseingänge über CHF … und ein Zahlungsausgang über
