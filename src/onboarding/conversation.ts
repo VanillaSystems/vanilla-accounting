@@ -86,8 +86,16 @@ function sellsSettled(p: SetupProgress, f: SetupFacts): boolean {
 
 /** Whether the person asked to change what the app has of the firm: only then are the VAT and the sales question asked. */
 const changing = (p: SetupProgress) => p.answers.company?.value === 'fix';
+/**
+ * Whether her words after «Etwas ändern» corrected the starting point (#496): that was the change she
+ * meant, so the VAT and the sales, answered when the books were created, are not asked again.
+ */
+const startCorrected = (p: SetupProgress) => {
+  const fix = p.answers.company, start = p.answers.startingPoint;
+  return !!fix && fix.value === 'fix' && !!start && start.at >= fix.at;
+};
 /** Whether a question of the firm is drawn: answered (by the person, or by the AI from typed words), or waiting after «Etwas ändern». */
-const firmAsked = (p: SetupProgress, q: 'vat' | 'sells') => !!p.answers[q] || changing(p);
+const firmAsked = (p: SetupProgress, q: 'vat' | 'sells') => !!p.answers[q] || (changing(p) && !startCorrected(p));
 
 /** The card of an answer to `sells`: the kinds and the default accounts they give. */
 function sellsCard(kinds: SalesKind[], f: Required<Pick<SetupFacts, 'sells'>>['sells'], kept: boolean): Extract<SetupCard, { kind: 'sells' }> {
@@ -116,7 +124,8 @@ export function topicStates(p: SetupProgress, f: SetupFacts): Record<SetupTopic,
   const seen: Record<SetupTopic, TopicState> = {
     firm: (!firmAsked(p, 'vat') || vatSettled(p, f)) && (!f.sells || !firmAsked(p, 'sells') || sellsSettled(p, f)) ? 'done' : 'open',
     opening: f.opening.length ? 'done' : a.opening?.value === 'later' ? 'skipped' : 'open',
-    bank: f.banks.some((b) => b.iban) ? 'done' : a.bank?.value === 'later' ? 'skipped' : 'open',
+    // An IBAN is never required (#496): a bank account the app knows sets the topic up.
+    bank: f.banks.length ? 'done' : a.bank?.value === 'later' ? 'skipped' : 'open',
     receipts: f.sources.length ? 'done' : a.receipts?.value === 'later' ? 'skipped' : 'open',
     // Books without bookings have no partners to show yet: left for later, not done, so the topic never goes from done back to open.
     knowledge: a.partners ? 'done' : partners && !p.ready ? 'open' : 'skipped',
@@ -172,7 +181,9 @@ export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
     say: [{ ...L('s.hello'), noAi: L('s.helloNoAi') }, L('s.company')],
     card: { kind: 'company', company: f.company, ...(f.sells ? { sells: f.sells.kinds } : {}), origin: p.created ? 'answer' : 'form', change: !a.company, ...assumedCard(p, f) },
     choices: [],
-    ...(changing(p) ? { reply: { lines: [L('r.companyFix')], go: { area: 'company', section: 'profile' } } } : {}),
+    ...(changing(p) ? { reply: startCorrected(p)
+      ? { lines: [L(`r.startingPoint.${p.answers.startingPoint!.value}`)] }
+      : { lines: [L('r.companyFix')], go: { area: 'company', section: 'profile' } } } : {}),
   });
 
   const now = vatKind(f.company.vat);
@@ -217,13 +228,13 @@ export function setupThread(p: SetupProgress, f: SetupFacts): SetupStep[] {
     ...(a.opening?.value === 'later' && !hasOpening ? { reply: { lines: [L('r.openingLater')], go: TOPIC_HAND.opening ?? undefined } } : {}),
   })) return steps;
 
-  // Bank: asked only while no account has its IBAN; one that has is in the summary.
-  const withIban = f.banks.some((b) => b.iban);
-  if ((a.bank || !withIban) && !take({
+  // Bank: asked only while the app knows no bank account; one it knows, with or without an IBAN, is in the summary (#496).
+  const known = f.banks.length > 0;
+  if ((a.bank || !known) && !take({
     id: 'bank', topic: 'bank',
-    say: [withIban ? L('s.bank') : L('s.bankNone')],
+    say: [known ? L('s.bank') : L('s.bankNone')],
     card: { kind: 'banks', banks: f.banks },
-    choices: [choice('bank', 'next', { primary: withIban }), choice('bank', 'later', { primary: !withIban })],
+    choices: [choice('bank', 'next', { primary: known }), choice('bank', 'later', { primary: !known })],
     go: TOPIC_HAND.bank ?? undefined,
   })) return steps;
 
@@ -259,7 +270,7 @@ const RARE_SHOWN = 8;
  * with its place by hand.
  */
 function assumedCard(p: SetupProgress, f: SetupFacts): { assumed?: AssumedCard } {
-  const answers = (f.assumed?.answers ?? []).filter((x) => !(x.key === 'sells' && p.answers.sells) && !(isVatKey(x.key) && p.answers.vat?.kept))
+  const answers = (f.assumed?.answers ?? []).filter((x) => !(x.key === 'sells' && p.answers.sells) && !(isVatKey(x.key) && p.answers.vat?.kept) && !(x.key === 'start' && p.answers.startingPoint))
     .map((x) => { const h = ANSWER_HAND[x.key]; return { ...x, go: h?.go ?? null, ...(h?.what ? { what: h.what } : {}) }; });
   return answers.length ? { assumed: { ...(f.assumed?.by ? { by: f.assumed.by } : {}), answers } } : {};
 }
@@ -284,7 +295,6 @@ function summaryOf(p: SetupProgress, f: SetupFacts): Extract<SetupCard, { kind: 
   const states = topicStates(p, f);
   const told: Origin = p.created ? 'answer' : 'form';
   const v = f.company.vat;
-  const ibans = f.banks.filter((b) => b.iban).length;
   const assumed = assumedCard(p, f);
   // An assumed answer stands once, marked as such in `assumed`, never also as «deine Antwort» (#385).
   const isAssumed = (k: QuestionKey) => !!assumed.assumed?.answers.some((x) => x.key === k);
@@ -293,8 +303,10 @@ function summaryOf(p: SetupProgress, f: SetupFacts): Extract<SetupCard, { kind: 
     // Not registered: said plainly what follows (#347), not only «nicht eingetragen».
     { what: v.registered ? vatLine(v) : L('sum.noVat'), origin: p.answers.vat?.kept ? 'answer' : told },
     ...(f.sells && !isAssumed('sells') ? [{ what: sellsLine(f.sells.kinds), origin: p.answers.sells ? 'answer' as Origin : told }] : []),
+    // «Ausgangslage» in her words (#496): hers, never «angenommen».
+    ...(p.answers.startingPoint ? [{ what: L(`sum.startingPoint.${p.answers.startingPoint.value}`), origin: 'answer' as Origin }] : []),
     ...(f.opening.length ? [{ what: L('sum.opening', { n: f.opening.length }), origin: 'app' as Origin }] : []),
-    ...(ibans ? [{ what: L('sum.banks', { n: ibans }), origin: told }] : []),
+    ...(f.banks.length ? [{ what: L('sum.banks', { n: f.banks.length }), origin: told }] : []),
     ...(f.sources.length ? [{ what: L('sum.sources', { n: f.sources.length }), origin: 'app' as Origin }] : []),
     ...(f.rules ? [{ what: L('sum.rules', { n: f.rules }), origin: 'app' as Origin }] : []),
   ];

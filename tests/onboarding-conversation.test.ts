@@ -185,7 +185,7 @@ test('a topic is done when the app sees it, whatever was answered or marked: a b
   assert.equal(s.bank, 'done', 'a skip by hand gives way to what the app sees');
   assert.equal(s.receipts, 'done');
   assert.equal(s.opening, 'done');
-  assert.equal(topicStates(emptyProgress(), facts({ banks: [{ label: 'Bank', bank: 'b', currency: 'CHF', account: '1020' }] })).bank, 'open', 'an account without IBAN is not set up');
+  assert.equal(topicStates(emptyProgress(), facts({ banks: [{ label: 'Bank', bank: 'b', currency: 'CHF', account: '1020' }] })).bank, 'done', 'an account without IBAN is set up: an IBAN is never required (#496)');
   assert.equal(topicStates(withTopic(emptyProgress(), 'bank', 'skipped', AT), facts()).bank, 'skipped', 'a mark stands while the app sees nothing');
   assert.equal(topicStates(answered({ bank: 'later' }), facts()).bank, 'skipped', '«Später» skips the topic');
 });

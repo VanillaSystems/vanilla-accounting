@@ -19,11 +19,21 @@ export const SETUP_PURPOSE = 'This conversation\'s purpose: setting up the books
 /** What each topic covers, for the model. */
 const COVERS: { readonly [K in SetupTopic]: string } = {
   firm: 'the kind of firm (legal form), its VAT setup (registered or not, the effective or the net tax rate method with its approved rates, the filing period) and what it sells. The person answered all of it a minute ago when the books were created and the app shows it on a card: never ask it again; take it up only when the person says something of it is wrong',
-  opening: 'the opening balances on 1 January of the books\' first year, from last year\'s balance sheet; the app proposes a bank account\'s from its first statement',
-  bank: 'the bank accounts with their IBAN, and how their statements come in',
+  opening: 'the opening balances on 1 January of the books\' first year, from the balance sheet of 31 December of the year before, also when the books begin later in the year; the app proposes a bank account\'s from its first statement',
+  bank: 'the bank accounts, and how their statements come in; an IBAN is optional, never ask for one as required',
   receipts: 'where receipts come from: mailboxes, web logins, the phone, files dragged in',
   knowledge: 'the business partners and the company\'s rules: what the person says about suppliers and customers, and the rules drafted from the history and kept by the person',
 };
+
+/**
+ * The app's facts of where the books begin and of the opening, which the AI must not contradict (r6-5,
+ * #496): the first payment's filing period is the books' first (booksOpenPeriod, src/accounting/periods.ts)
+ * and what lies before stays in the old program; the opening is per 1 January from the 31 December
+ * balance sheet, also mid-year; a bank account whose statements begin later shows the difference
+ * (startGaps, src/accounting/opening-balance.ts). A reply that names another opening day is replaced by
+ * code (src/onboarding/opening-claim.ts).
+ */
+export const OPENING_FACTS = 'Facts of the app you never contradict. The books begin with the first bank statement the person reads in: the filing period of its first payment is the first one here, and what lies before stays in their old program. The opening balances (Eröffnung) are always per 1 January of the books\' year: the balances of 31 December of the year before, from that year-end balance sheet, the bank balances too; never from an interim balance sheet (a Zwischenbilanz of 30 June or any other day) and never per another day, also when the firm switches to the app during the year. With that opening and statements that begin in a later month, a bank account here differs from the bank\'s balance by what was paid before the first statement, until those payments are in these books or the difference is explained: the app shows that difference at the bank account. Never say the opening is per 1 July or per any day but 1 January, and never tell the person she does not need the 31 December balance sheet.';
 
 const place = (topic: SetupTopic, t: T): string => handKeys(topic).map((k) => t(k as Key)).join(' › ');
 
@@ -33,7 +43,8 @@ export function setupSpecialist(t: T): string {
     'A setup conversation (the message says «This conversation\'s purpose: setting up the books…») makes you a professional Vanilla Accounting setup specialist who sets up the person\'s books with them in one conversation. The «Setup checklist» in the message is the app\'s record of where the setup stands: follow it, never your memory of earlier messages.',
     `Topics, by id: ${SETUP_TOPICS.map((k) => `${k} (${t(`onboarding.topic.${k}` as Key)}): ${COVERS[k]}`).join('; ')}.`,
     'The app draws the conversation itself, step by step, from the person\'s answers and its settings: the specialist\'s questions with their answers as buttons, and cards (the company, the VAT setup, the opening, the bank accounts, the sources, the partners, the summary). The message lists the answers given and the question open on screen. You come in when the person types: answer what they ask in two or three sentences, and when their words answer the open question, record it with {"kind":"setupAnswer","question":"<id>","value":"<one of its answers>"}; the app then shows that step\'s card (a VAT change waits there for the person\'s «Übernehmen»). Never repeat a question or draw a card in text: the app shows them.',
-    'The books begin with the first bank statement the person reads in: the filing period of its first payment is the first one here, and what lies before stays in their old program. The app asks neither from when to book nor which returns were filed elsewhere, and you do not either. Importing the old program\'s journal, chart and balances does not exist: never ask the person to fetch an export, a chart or old returns for it; when they bring it up, say in one sentence that there is no import and that the opening balances are entered by hand.',
+    `${OPENING_FACTS} The app asks neither from when to book nor which returns were filed elsewhere, and you do not either. Importing the old program's journal, chart and balances does not exist: never ask the person to fetch an export, a chart or old returns for it; when they bring it up, say in one sentence that there is no import and that the opening balances are entered by hand.`,
+    'The starting point («Ausgangslage»: a new firm, or one switching from other bookkeeping such as a Treuhand or another program) is in «What the app knows». When the person says it is wrong («d Firma isch nöd neu», «bis Juni hat die Treuhand gebucht», «wir sind neu gegründet»), record it with {"kind":"setupAnswer","question":"startingPoint","value":"switching"} or "new": that is the one answer it changes. Never ask the VAT method, what the firm sells or anything else answered again because of it.',
     'Take the first open topic unless the person brings up another. Find out first, then ask: say in one or two sentences what the app already knows about the topic (the message, the company\'s settings, files the person attached), then ask one question, only what that leaves open. Short messages, one question at a time, plain words; every question may be skipped.',
     'Lead with doing the work: offer first to fetch and read it yourself (a file they attach, a source that fetches); ask them only for what only they can give (a sign-in, a file, a decision), and never for something the app has no use for today.',
     'The person decides where knowledge becomes binding. A rule exists only as a draft they keep on its card after seeing the bookings behind it. A filed quarter is closed only after its figures were compared with the return as filed, and the person closes it, never you.',
@@ -68,6 +79,7 @@ export function setupNote(progress: SetupProgress, facts: SetupFacts, t: T): str
     `bank accounts: ${facts.banks.length ? facts.banks.map((b) => `${b.label} (${b.bank} ${b.currency}, ledger ${b.account}${b.iban ? ', IBAN set' : ', no IBAN'})`).join('; ') : 'none'}`,
     `sources switched on: ${facts.sources.length ? facts.sources.map((s) => s.label.en).join(', ') : 'none'}`,
     `closed through: ${facts.closedThrough ?? 'nothing closed'}`,
+    ...(facts.start ? [`starting point (Ausgangslage): ${facts.start === 'switching' ? 'switching from other bookkeeping' : 'new firm, empty books'}${progress.answers.startingPoint ? ' (said by the person)' : facts.assumed?.answers.some((a) => a.key === 'start') ? ' (assumed by the kind of firm, not said by the person)' : ''}`] : []),
     `opening balances ${facts.year}: ${facts.opening.length ? facts.opening.map((o) => `${o.account} ${o.amount}`).join(', ') : 'none'}`,
     `books: ${facts.books.payments} payments, ${facts.books.receipts} receipts, ${facts.books.entries} bookings`,
     `partners ${facts.year}: ${facts.partners.clear.length} always booked the same way, ${facts.partners.mixed.length} booked in mixed ways, ${facts.partners.rare.length} rare, ${facts.partners.ruled} with a rule`,

@@ -197,7 +197,8 @@ function Card({ card, onGo }: { card: SetupCard; onGo: Go }) {
           <ul className="obcheck">
             {card.banks.map((b) => (
               <li key={`${b.bank} ${b.currency}`}>{ICONS.bank}<b>{b.label}</b>
-                <span className={`obbadge ${b.iban ? 'pos' : 'warn'}`}>{b.iban ? t('onboarding.banks.iban') : t('onboarding.banks.noIban')}</span>
+                {/* Without an IBAN is a fact, never a warning: an IBAN is not required (#496). */}
+                <span className={b.iban ? 'obbadge pos' : 'obbadge'}>{b.iban ? t('onboarding.banks.iban') : t('onboarding.banks.noIban')}</span>
                 <span className="rk mono">{[b.currency, b.account, b.iban?.replace(/(.{4})/g, '$1 ').trim()].filter(Boolean).join(' · ')}</span>
               </li>
             ))}

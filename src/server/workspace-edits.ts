@@ -190,6 +190,12 @@ function dropSource(ws: Workspace, id: string, previous?: Record<string, string>
   return {};
 }
 
+/** The profile's starting point, as the setup's «Ausgangslage» answer sets it; none to set, or a manifest without a profile, leaves it. */
+function setStart(ws: Workspace, start: 'new' | 'switching' | undefined): void {
+  if (!start || !ws.profile || ws.profile.start === start) return;
+  checked(() => patchManifest(ws.paths.manifest, { start }));
+}
+
 /** One change; the manifest is read again by the caller (reopenWorkspace) after an invoicing change. */
 export function applyWorkspaceChange(ws: Workspace, books: Books, c: WorkspaceChange): Applied {
   switch (c.kind) {
@@ -209,8 +215,11 @@ export function applyWorkspaceChange(ws: Workspace, books: Books, c: WorkspaceCh
     }
     case 'setupAnswer': {
       const now = new Date().toISOString();
+      const before = ws.profile?.start;
       const { was } = answerQuestion(ws, c.question, c.value === null ? undefined : { value: c.value, at: now } as Answer, now);
-      return { undo: { kind: 'setupAnswer', question: c.question, value: was?.value ?? null } };
+      // Her «Ausgangslage» in words (#496) is the profile's starting point; the undo puts back the one it replaced.
+      if (c.question === 'startingPoint') setStart(ws, c.value === null ? c.start : c.value as 'new' | 'switching');
+      return { undo: { kind: 'setupAnswer', question: c.question, value: was?.value ?? null, ...(c.question === 'startingPoint' && before ? { start: before } : {}) } };
     }
   }
 }

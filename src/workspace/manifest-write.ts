@@ -78,6 +78,8 @@ export interface ManifestPatch {
   outgoingMail?: MailPatch | null;
   /** «Was verkauft ihr?» (#46): written as `profile.sells` and `profile.goods` (src/workspace/setup.ts kindsOf); only into a manifest with a profile. */
   sells?: SalesKind[];
+  /** «Ausgangslage» (#496): written as `profile.start`, only into a manifest with a profile; both answers create the same books. */
+  start?: 'new' | 'switching';
   /** Firma › Dimensionen (#127): the whole list, written as one block; empty removes it. The API refuses to drop a dimension bookings carry. */
   dimensions?: Dimension[];
 }
@@ -188,6 +190,10 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
     const goods = goodsOf(patch.sells);
     if (goods.length) doc.setIn(['profile', 'goods'], doc.createNode(goods, { flow: true }));
     else doc.deleteIn(['profile', 'goods']);
+  }
+  if (patch.start) {
+    if (!isMap(doc.get('profile'))) throw new WorkspaceError(`${path} has no profile: the starting point is kept in it (npm run init writes one)`);
+    doc.setIn(['profile', 'start'], patch.start);
   }
   if (patch.dimensions) {
     if (patch.dimensions.length) doc.set('dimensions', doc.createNode(patch.dimensions.map(dimensionYaml)));

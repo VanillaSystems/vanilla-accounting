@@ -59,6 +59,8 @@ export function listConversations(ws: Pick<Workspace, 'paths'>): ConversationSum
  * fix one booking are not made: their rows come back for the card (src/assistant/held.ts).
  */
 export type ApplyChanges = (changes: Change[], earlier: MadeChange[], language: string, how: { conversation: string; hold: Hold }) => Promise<Applied>;
+/** The app's facts a conversation's answer is held to (src/onboarding/opening-claim.ts): its words as shown, and what the model said when they were replaced. */
+export type KeepToFacts = (text: string) => { text: string; withdrawn?: string };
 /** `always`: held whatever they change (a proposal from the terminal); true: held when they rebook rather than fix; false: made. */
 export type Hold = boolean | 'always';
 export type Applied = { made: MadeChange[] } | { held: Pick<HeldChanges, 'why' | 'rows'> };
@@ -77,7 +79,7 @@ export class RefusedChanges extends Error {
  * the person now (`waiting`, src/server/open-work.ts), its answer streamed to `onEvent` and stored
  * at the end. The changes to the books the answer asks for are applied before its `done`.
  */
-export async function sendMessage(ws: Workspace, send: AssistantSend, apply: ApplyChanges, { map, waiting, attachments = [] }: { map: string; waiting: string; attachments?: Attachment[] }, onEvent: (e: AssistantEvent) => void, signal: AbortSignal, now = () => new Date()): Promise<void> {
+export async function sendMessage(ws: Workspace, send: AssistantSend, apply: ApplyChanges, { map, waiting, attachments = [], keep }: { map: string; waiting: string; attachments?: Attachment[]; keep?: KeepToFacts }, onEvent: (e: AssistantEvent) => void, signal: AbortSignal, now = () => new Date()): Promise<void> {
   const at = now().toISOString();
   const c: Conversation = (send.conversation && readConversation(ws, send.conversation))
     || { id: randomUUID(), title: send.text.trim().replace(/\s+/g, ' ').slice(0, 60), at, ...(send.purpose ? { purpose: send.purpose } : {}), turns: [] };
@@ -114,6 +116,9 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
   });
   const said = ai.text;
   ai.text = withoutChanges(said);
+  // Words that state what the app does otherwise are not shown as said (#496): the app's sentence stands in their place.
+  const kept = keep?.(ai.text);
+  if (kept?.withdrawn !== undefined) { ai.withdrawn = kept.withdrawn; ai.text = kept.text; onEvent({ type: 'replace', text: ai.text }); }
   // Which rules its drafts add, change or remove, now that they are written: later messages tell each one's state (#362).
   const drafted = draftedBy(ws, ai);
   if (drafted.length) ai.drafted = drafted;
@@ -134,7 +139,7 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
           // A report's figures are the code's (src/reports/figures.ts): words that state another are withdrawn.
           const reports = applied.made.flatMap((m) => (m.change.kind === 'report' && m.note?.report ? [m.note.report] : []));
           if (reports.length && strayFigures(ai.text, reports, (chartOf(ws) as Array<{ number: unknown }>).map((a) => String(a.number))).length) {
-            ai.withdrawn = ai.text;
+            ai.withdrawn ??= ai.text;
             ai.text = t('assistant.reportFigures');
           }
           // What was made is the app's to say, not the model's to guess (r8f-47): its line closes the answer, and says so where the model still named «Übernehmen» (r10f-11).
@@ -150,8 +155,11 @@ export async function sendMessage(ws: Workspace, send: AssistantSend, apply: App
       ai.refused = (e as Error).message;
       if ((e instanceof RefusedChanges || e instanceof ChangesError) && e.refusal) ai.refusal = e.refusal;
       onEvent({ type: 'refused', message: ai.refused, ...(ai.refusal ? { refusal: ai.refusal } : {}) });
-      ai.withdrawn = ai.text;
-      ai.text = await saidAgain(ws, send, map, c, ai.withdrawn, ai.refused, signal);
+      // What the model said first stays withdrawn; its answer said again keeps to the app's facts as the first did.
+      const shown = ai.text;
+      ai.withdrawn ??= shown;
+      const again = await saidAgain(ws, send, map, c, shown, ai.refused, signal);
+      ai.text = keep ? keep(again).text : again;
       onEvent({ type: 'replace', text: ai.text });
     }
   }

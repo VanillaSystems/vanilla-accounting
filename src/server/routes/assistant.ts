@@ -14,7 +14,7 @@ import { basename, join } from 'node:path';
 import express, { Router, type Response } from 'express';
 import { RequestError, WS, readBooks, refusalOf, reopenWorkspace, updateBooks } from '../books.js';
 import { listConversations, readConversation, RefusedChanges, sendMessage, settleHeld, undoChange, type ApplyChanges } from '../../assistant/conversations.js';
-import { PURPOSES, isActionChange, isBookChange, isWorkspaceChange, type Purpose, type ActionChange, type AssistantEvent, type AssistantSend, type BookChange, type ContextRef, type MadeChange } from '../../types/assistant.js';
+import { PURPOSES, isActionChange, isBookChange, isWorkspaceChange, type Purpose, type ActionChange, type AssistantEvent, type AssistantSend, type BookChange, type ContextRef, type MadeChange, type WorkspaceChange } from '../../types/assistant.js';
 import type { Books } from '../../books/store.js';
 import { applyAnswer, applyChange, relinked, unbookedPayments } from '../edits.js';
 import { applyWorkspaceChange, withMailHosts } from '../workspace-edits.js';
@@ -44,6 +44,7 @@ import { ATTACHMENT_MAX_MB } from '../../types/attachment.js';
 import { readProgress, rememberConversation } from '../../onboarding/store.js';
 import { setupFacts } from './onboarding.js';
 import { SETUP_PURPOSE, setupNote } from '../../onboarding/prompt.js';
+import { keptToOpening } from '../../onboarding/opening-claim.js';
 import { wordsIn } from '../../export/texts.js';
 
 import { BATCH_MAX } from '../../types/batch.js';
@@ -124,6 +125,9 @@ async function waitingNow(language: string, asked: Purpose | undefined, setupWan
   return [openWork(WS, books, tasks, language, undefined, stuck, processingOf(view.runs, books.receipts)), await collectionNow(WS, language, books.receipts)].filter(Boolean).join('\n\n');
 }
 
+/** A change that writes the manifest, which is read again after it: the invoicing settings, the setup's «Ausgangslage» (#496). */
+const rereads = (c: WorkspaceChange): boolean => c.kind === 'invoicing' || (c.kind === 'setupAnswer' && c.question === 'startingPoint');
+
 const PURPOSE_NOTE: Record<Purpose, string> = {
   'collection-setup': 'This conversation\'s purpose: setting up how receipts come in (the person started it with «Mit KI einrichten»). Stay on it.',
   onboarding: SETUP_PURPOSE,
@@ -166,7 +170,10 @@ router.post('/api/assistant', async (req, res) => {
   const purpose = known ? known.purpose : send.purpose;
   // The setup conversation is kept with the checklist, so reopening the setup continues it.
   const told = purpose === 'onboarding' ? (e: AssistantEvent) => { if (e.type === 'conversation') rememberConversation(WS, e.id, new Date().toISOString()); emit(e); } : emit;
-  await sendMessage(WS, send, apply, { map: appMap(send.language), waiting: await waitingNow(send.language, purpose, !!send.setup), attachments }, told, stop.signal);
+  // A setup conversation's words keep to the app's opening (#496): a reply that names another opening day shows the app's sentence instead.
+  const setupNow = purposeNow(purpose, readProgress(WS), !!send.setup) === 'onboarding';
+  const keep = setupNow ? (text: string) => keptToOpening(text, wordsIn(send.language).t, setupFacts().year) : undefined;
+  await sendMessage(WS, send, apply, { map: appMap(send.language), waiting: await waitingNow(send.language, purpose, !!send.setup), attachments, ...(keep ? { keep } : {}) }, told, stop.signal);
   res.end();
 });
 
@@ -257,7 +264,7 @@ const apply: ApplyChanges = async (answered, earlier, language, { conversation, 
   try {
     for (const c of changes.filter(isWorkspaceChange)) {
       outside.push({ change: c, ...applyWorkspaceChange(WS, readBooks(), c) });
-      if (c.kind === 'invoicing') reopenWorkspace();
+      if (rereads(c)) reopenWorkspace();
     }
     if (asked.length) {
       const now = new Set((accountsOf(WS) as Array<{ number: unknown }>).map((a) => String(a.number)));
@@ -329,7 +336,7 @@ router.post('/api/assistant/:id/changes/:change/undo', (req, res) => {
     }
     for (const c of undos.filter(isWorkspaceChange)) {
       applyWorkspaceChange(WS, readBooks(), c);
-      if (c.kind === 'invoicing') reopenWorkspace();
+      if (rereads(c)) reopenWorkspace();
     }
   });
   if (!made) throw new RequestError(404, 'Diese Änderung gibt es nicht.');

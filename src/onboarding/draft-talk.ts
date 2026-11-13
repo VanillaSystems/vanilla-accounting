@@ -16,6 +16,8 @@ import { wordsIn } from '../export/texts.js';
 import { APP_FOLDER } from '../workspace/workspace.js';
 import { checkPatch, draftView, readDraft, saidFirm, writeDraft } from './draft-store.js';
 import { parseShares, type PrivateShares } from './model.js';
+import { OPENING_FACTS } from './prompt.js';
+import { keptToOpening } from './opening-claim.js';
 import { draftMarks, draftSteps, markOf, withPatch, type DraftPatch, type Firm, type SetupDraft, type SetupDraftView, type StepMark } from './draft.js';
 
 /** A turn of the conversation typed so far, as the server keeps it in memory; it is not saved. */
@@ -196,6 +198,8 @@ Rules:
 - Take only what the message or the conversation so far states or plainly implies («zwei Angestellte»: employees "staff"; «registered for VAT»: vatRegistered "yes"). Leave out what it does not say. Never guess.
 - sells: a trade (a painter, a carpenter, an electrician, a builder …), and any firm that charges material with its work («d Farb verrechned mer mit», «Material kommt auf die Rechnung»), sells "made" and "services": "made" covers the material. "services" alone is work without material.
 - vatRegistered: never give "no", whatever the words say: that the firm files no VAT is only ever her own click. A registered firm that does not know its method or basis finds both as these lines say, which the app shows under those questions: ${wherePaths(d)} Say so when asked, with that path only: name no other menu, screen or document.
+- start: "switching" when the words say the firm is not new or switches from other bookkeeping («d Firma isch nöd neu», «bis Juni hat die Treuhand gebucht»), "new" when they say it was just founded. It changes nothing else: never ask the VAT method, the sales or another answered question again because of it.
+- ${OPENING_FACTS}
 - period: give it only when the person names how often they file. Quarterly is usual on the effective method, half-yearly on the net tax rate; the app does not take the other from loose words and says so itself.
 - Never invent, complete or correct a UID or an IBAN: copy one only when the person wrote it.
 - firm: every field the person stated in this message; the app joins it to what they said of the firm before.
@@ -219,7 +223,7 @@ const isVat = (k: QuestionKey) => (VAT_QUESTIONS as readonly string[]).includes(
  * preset leaves the kind of firm open: the app asks it with buttons, and whichever is picked keeps
  * what the words said (withPatch).
  */
-export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string[], baseCurrency: string): { draft: SetupDraft; reply: SetupReply } {
+export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string[], baseCurrency: string, year = String(new Date().getFullYear())): { draft: SetupDraft; reply: SetupReply } {
   const refused: Array<{ step: StepMark; refusal: TalkRefusal }> = [];
   const patches: DraftPatch[] = [];
   const take = (step: StepMark, raw: unknown) => {
@@ -267,11 +271,38 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
   }
   if (out.netRates !== undefined) take('netRates', { step: 'netRates', value: out.netRates });
   if (Array.isArray(out.banks)) {
-    const banks = out.banks.filter(isMap).map((b): BankSpec => {
+    // A sentence adds to the bank accounts she gave and never takes one away or overwrites what she typed into the form (#496 r6-6).
+    const given = d.banks ?? [];
+    const sameBank = (a: BankSpec, b: BankSpec) => plain(a.bank) === plain(b.bank) && a.currency.toUpperCase() === b.currency.toUpperCase();
+    const sameIban = (a?: string, b?: string) => !!a && !!b && alnum(a) === alnum(b);
+    const read = out.banks.filter(isMap).map((b): BankSpec => {
       const iban = str(b.iban);
-      if (iban && !stated('iban', iban, words)) refused.push({ step: 'banks', refusal: { reason: 'notStated', field: 'iban', detail: iban } });
-      return { bank: str(b.bank) ?? '', currency: str(b.currency) ?? baseCurrency, ...(iban && stated('iban', iban, words) ? { iban } : {}) };
+      const spec: BankSpec = { bank: str(b.bank) ?? '', currency: str(b.currency) ?? baseCurrency };
+      // An IBAN is hers when her words state it, or when the form holds it for this very account; one in neither is refused.
+      const ok = !!iban && (stated('iban', iban, words) || given.some((g) => sameIban(g.iban, iban) && sameBank(g, spec)));
+      if (iban && !ok) refused.push({ step: 'banks', refusal: { reason: 'notStated', field: 'iban', detail: iban } });
+      return { ...spec, ...(ok ? { iban } : {}) };
     });
+    // An IBAN is never required: an account without one matches by bank and currency, one account of the list for one of the form.
+    const banks: BankSpec[] = given.map((g) => ({ ...g }));
+    const used = new Set<number>();
+    const claim = (i: number) => { if (i >= 0) used.add(i); return i >= 0; };
+    // By IBAN first, over the whole list, so the order the model wrote it in changes nothing: the account that holds it is this one.
+    const rest = read.filter((r) => !(r.iban && claim(banks.findIndex((b, i) => !used.has(i) && sameIban(b.iban, r.iban)))));
+    for (const r of rest) {
+      // Then by bank and currency, among the accounts not matched yet: an IBAN fills one that has none; without an IBAN any of them is meant.
+      const open = banks.findIndex((b, i) => !used.has(i) && sameBank(b, r) && (!r.iban || !b.iban));
+      if (claim(open)) { if (r.iban) banks[open].iban = r.iban; continue; }
+      // An IBAN her words state for a bank and currency the form holds once corrects the one typed there («die IBAN ist falsch, richtig ist …»):
+      // the books keep one account per bank and currency, so it can only be that account.
+      const one = banks.map((b, i) => [b, i] as const).filter(([b, i]) => !used.has(i) && sameBank(b, r));
+      if (r.iban && one.length === 1 && stated('iban', r.iban, words)) { claim(one[0][1]); banks[one[0][1]].iban = r.iban; continue; }
+      // One more account of a bank in a currency the list holds: the books keep one per bank and currency (checkBank, the manifest),
+      // so it is refused as the form refuses it and said why, never dropped silently; the rest of the list is saved.
+      if (banks.some((b) => sameBank(b, r))) { refused.push({ step: 'banks', refusal: { reason: 'bankTwice', bank: r.bank, detail: r.currency } }); continue; }
+      // A new account, with or without an IBAN: added and checked as a click is.
+      used.add(banks.push(r) - 1);
+    }
     take('banks', { step: 'banks', value: banks });
   }
 
@@ -319,7 +350,9 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
     else refused.push({ step: 'period', refusal: { reason: 'unusualPeriod', method: odd.method, value: odd.period, usual: odd.usual } });
   }
   // The model writes its words before code checks: beside a refusal they may claim what was not saved, so code's reasons stand alone.
-  return { draft, reply: { kind: 'read', say: refused.length || silenced ? '' : out.say, filled, refused, ...(draft.said ? { firm: draft.said } : {}), ...(named ? { shares: named } : {}) } };
+  // The opening is the app's fact (#496): words that name another opening day are not shown as said; the app's sentence stands instead.
+  const say = refused.length || silenced ? '' : keptToOpening(out.say, wordsIn(d.language ?? 'de').t, year).text;
+  return { draft, reply: { kind: 'read', say, filled, refused, ...(draft.said ? { firm: draft.said } : {}), ...(named ? { shares: named } : {}) } };
 }
 
 export type Ask = (prompt: string, opts: AskOptions) => Promise<string>;
