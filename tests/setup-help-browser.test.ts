@@ -205,7 +205,9 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
       await seen('[data-step=basis] [data-answer=received]');
       const basis = await text(page, '[data-step=basis]');
       assert.doesNotMatch(basis, /Art\. 39|auf Gesuch/, '«Abrechnungsart» cites no law');
-      assert.match(basis, /Vereinbart sieht das Gesetz vor; vereinnahmt gilt, wenn die Firma es beantragt hat.*Treuhand/s);
+      assert.match(basis, /ESTV-Portal unter «Neue Geschäfte».*Karte «Abrechnungsmodalitäten» auf «Anpassen».*vereinbart oder vereinnahmt \(du musst nichts ändern\).*Treuhand/s);
+      assert.doesNotMatch(basis, /Gesetz|gilt, (wenn|ausser)/, '«Abrechnungsart» names no basis as the one that applies (#423)');
+      await shot(page, `${size}-1b-basis-help`);
       assert.equal(await page.$('[data-step=basis] .qacts .btn.primary'), null, `${size}: no basis drawn as the proposal`);
       if (ai) {
         await press(page, '[data-step=basis] [data-answer=received]');

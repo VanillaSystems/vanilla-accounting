@@ -107,7 +107,7 @@ export const QUESTIONS = {
   vatMethod: {
     ask: 'VAT method',
     why: 'Effective: you pay the VAT you charged minus the input tax on your costs. Saldosteuersatz: a flat rate on turnover, no input tax.',
-    where: 'Not sure? A company is on the Saldosteuersatz when it applied for it and the tax authority approved a rate; it is filed on form 0553. Your accountant knows. Picked wrong: change it under Company › VAT while this year has no entries.',
+    where: 'Where to look: in the ESTV portal, under «Neue Geschäfte» pick the company, then on the card «Abrechnungsmodalitäten» click «Anpassen»: there you see the current VAT method (nothing needs changing). A company is on the Saldosteuersatz when it applied for it and the tax authority approved a rate; it is filed on form 0553. Without access to the portal: your accountant knows. Picked wrong: change it under Company › VAT while this year has no entries.',
     when: registered,
     options: [
       { value: 'effective', label: 'effektive Methode' },
@@ -120,7 +120,7 @@ export const QUESTIONS = {
   basis: {
     ask: 'VAT basis',
     why: 'When the VAT counts. Vereinnahmt: when the money moves. Vereinbart: when you send your invoice, and for input tax when a bill arrives.',
-    where: 'Not sure? Vereinbart applies unless the company asked for vereinnahmt, at registration or later, and the tax authority approved it. Your accountant knows. Picked wrong: change it under Company › VAT while this year has no entries.',
+    where: 'Where to look: in the ESTV portal, under «Neue Geschäfte» pick the company, then on the card «Abrechnungsmodalitäten» click «Anpassen»: there you see the current basis, vereinbart or vereinnahmt (nothing needs changing). Without access to the portal: your accountant knows. Picked wrong: change it under Company › VAT while this year has no entries.',
     when: registered,
     options: [
       { value: 'received', label: 'vereinnahmt (cash)' },

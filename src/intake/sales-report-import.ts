@@ -76,7 +76,7 @@ export function providersOf(ws: Pick<Workspace, 'paths'>): Provider[] {
 
 /**
  * What the drop recognises a CSV as, by the providers' files: whose report and which kind, or which
- * other export of a provider the firm has it is, with its reports and where they are exported (#406).
+ * other export of a provider it is, with its reports and where they are exported (#406, #425).
  */
 export function recognizeCsv(ws: Pick<Workspace, 'paths'>, bytes: Buffer): CsvOfProvider | undefined {
   const providers = providersOf(ws);
@@ -84,10 +84,10 @@ export function recognizeCsv(ws: Pick<Workspace, 'paths'>, bytes: Buffer): CsvOf
   const hit = recognizeReport(text, providers);
   const p = hit && providers.find((x) => x.id === hit.provider);
   if (hit && p) return { ...hit, name: p.name };
-  // Only a provider the firm's own knowledge names (a company file of it): a firm without one has no such export.
-  const own = providers.filter((x) => x.origin.binding);
-  const other = recognizeOtherExport(text, own);
-  const q = other && own.find((x) => x.id === other.provider);
+  // A provider the firm's own knowledge names (a company file of it) by all its file names; a shipped one the firm does not
+  // have yet only by a signature specific enough that no bank's CSV has it (#425): a firm's first drop has no company file.
+  const other = recognizeOtherExport(text, providers.map((x) => ({ ...x, own: !!x.origin.binding })));
+  const q = other && providers.find((x) => x.id === other.provider);
   const reports = q ? (['sales', 'fees'] as const).filter((k) => q.provider.reports[k]) : [];
   return other && q ? { provider: q.id, name: q.name, other: other.what, reports, where: { ...q.provider.exportedAt } } : undefined;
 }
