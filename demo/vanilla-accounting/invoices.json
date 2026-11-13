@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "customers": [
     {
       "id": "cu_5GQVervgd2rF",
@@ -172,7 +172,7 @@
       "comments": [],
       "pdf": {
         "file": "transactional-data/2026/invoices/2026-001.pdf",
-        "sha256": "f97841477c1b8e95c2583a89ae8e0f4ea3fdd561e352ad3b1de1eea5d7459540"
+        "sha256": "38490a97818d71a99550404eb8307ef2146a53794240b0a772dbfbdc45532ea0"
       }
     },
     {
@@ -272,7 +272,7 @@
       "comments": [],
       "pdf": {
         "file": "transactional-data/2026/invoices/2026-002.pdf",
-        "sha256": "29069a28ed29cf3006cb7103594b5ae9852117be3d850e35af504b9d18f36489"
+        "sha256": "01ef1c8392683ed29be84c9b522fd0c8a9f6497e1d9932fb0c524ca6a6b83578"
       }
     },
     {
@@ -375,7 +375,7 @@
       ],
       "pdf": {
         "file": "transactional-data/2026/invoices/2026-003.pdf",
-        "sha256": "69a2498928346605bfaef4492fe18247e7b3dc53233f96ad736bc1a9c4e26de6"
+        "sha256": "2a35e0a73d2f5b3e931e34369c71db1c6f570b62daaa2edd65a14fe6edbbdc8e"
       }
     },
     {
@@ -388,14 +388,14 @@
       "date": "2026-09-02",
       "currency": "CHF",
       "language": "de",
-      "subject": "Gutschrift 2026-002",
+      "subject": "zu Rechnung 2026-002",
       "lines": [
         {
           "text": "2 Pakete Filterkaffee beschädigt geliefert",
-          "quantity": -1,
-          "unit": "flat",
-          "price": 33,
-          "vatRate": 2.6
+          "quantity": 1,
+          "price": -33.86,
+          "vatRate": 2.6,
+          "vatIncluded": true
         }
       ],
       "creditFor": "in_S9Jcs6yeSIZJ",
@@ -462,7 +462,7 @@
       "comments": [],
       "pdf": {
         "file": "transactional-data/2026/invoices/2026-004.pdf",
-        "sha256": "3c3c1032c8edcecf8b77eee72019d922878befecf448e19f858e706ded686429"
+        "sha256": "7724d2b51efabfc9b1a58a177aadd8848f1b42687acf59edb4fd690ff9870410"
       }
     },
     {
@@ -554,7 +554,7 @@
       "comments": [],
       "pdf": {
         "file": "transactional-data/2026/invoices/2026-005.pdf",
-        "sha256": "f722136e2e6b22569572cd509e5c647002c47b5a27b7f9170488e09e4eb7ae6e"
+        "sha256": "fbfdae555ac5add32c30f9ae646b7436f75c5a0f4836d6b9f50dc48871ae295f"
       }
     },
     {
@@ -647,7 +647,7 @@
       "comments": [],
       "pdf": {
         "file": "transactional-data/2026/invoices/2026-006.pdf",
-        "sha256": "5bb885e43df6126e0286413ec6f05eee4f18b5f79c662aa5223438cb8fa5ad96"
+        "sha256": "64ea008e03eb3cb9c0714b8b2ea4a2e680ebd0ab7ebd1d94f0c7802523c347d5"
       }
     },
     {
@@ -732,7 +732,7 @@
       "comments": [],
       "pdf": {
         "file": "transactional-data/2026/invoices/2026-007.pdf",
-        "sha256": "1055180f452ef0bd8eb1fccb4cd7a23e551a5ea6fdac4e820365bebe6dedbcdc"
+        "sha256": "e3f5d2f6a817e73d5399114b8bdb6fe32cd46f9d61960b9d92d7633d32defb13"
       },
       "cancelled": {
         "date": "2026-10-02",
@@ -805,9 +805,10 @@
       "kind": "invoice",
       "title": "Rechnung 2026-001",
       "file": "transactional-data/2026/invoices/2026-001.pdf",
-      "sha256": "f97841477c1b8e95c2583a89ae8e0f4ea3fdd561e352ad3b1de1eea5d7459540",
+      "sha256": "38490a97818d71a99550404eb8307ef2146a53794240b0a772dbfbdc45532ea0",
       "sentAt": "2026-07-06T09:12:00.000Z",
-      "to": "buchhaltung@bistro.example"
+      "to": "buchhaltung@bistro.example",
+      "channel": "download"
     },
     {
       "id": "sd_N7zXG9NsOQo6",
@@ -818,9 +819,10 @@
       "kind": "invoice",
       "title": "Rechnung 2026-002",
       "file": "transactional-data/2026/invoices/2026-002.pdf",
-      "sha256": "29069a28ed29cf3006cb7103594b5ae9852117be3d850e35af504b9d18f36489",
+      "sha256": "01ef1c8392683ed29be84c9b522fd0c8a9f6497e1d9932fb0c524ca6a6b83578",
       "sentAt": "2026-07-20T14:30:00.000Z",
-      "to": "kueche@musterhotel.example"
+      "to": "kueche@musterhotel.example",
+      "channel": "download"
     },
     {
       "id": "sd_hakNjz3OdQ9D",
@@ -831,9 +833,10 @@
       "kind": "invoice",
       "title": "Rechnung 2026-003",
       "file": "transactional-data/2026/invoices/2026-003.pdf",
-      "sha256": "69a2498928346605bfaef4492fe18247e7b3dc53233f96ad736bc1a9c4e26de6",
+      "sha256": "2a35e0a73d2f5b3e931e34369c71db1c6f570b62daaa2edd65a14fe6edbbdc8e",
       "sentAt": "2026-08-17T08:05:00.000Z",
-      "to": "buchhaltung@bistro.example"
+      "to": "buchhaltung@bistro.example",
+      "channel": "download"
     },
     {
       "id": "sd_R89wIzO9Auev",
@@ -844,9 +847,10 @@
       "kind": "credit-note",
       "title": "Gutschrift 2026-004",
       "file": "transactional-data/2026/invoices/2026-004.pdf",
-      "sha256": "3c3c1032c8edcecf8b77eee72019d922878befecf448e19f858e706ded686429",
+      "sha256": "7724d2b51efabfc9b1a58a177aadd8848f1b42687acf59edb4fd690ff9870410",
       "sentAt": "2026-09-02T10:40:00.000Z",
-      "to": "kueche@musterhotel.example"
+      "to": "kueche@musterhotel.example",
+      "channel": "download"
     },
     {
       "id": "sd_B5T2ulLAXEwN",
@@ -857,9 +861,10 @@
       "kind": "invoice",
       "title": "Rechnung 2026-005",
       "file": "transactional-data/2026/invoices/2026-005.pdf",
-      "sha256": "f722136e2e6b22569572cd509e5c647002c47b5a27b7f9170488e09e4eb7ae6e",
+      "sha256": "fbfdae555ac5add32c30f9ae646b7436f75c5a0f4836d6b9f50dc48871ae295f",
       "sentAt": "2026-09-21T13:00:00.000Z",
-      "to": "einkauf@kaffeehaus-beispiel.example"
+      "to": "einkauf@kaffeehaus-beispiel.example",
+      "channel": "download"
     },
     {
       "id": "sd_XL9s3VHctVsb",
@@ -870,9 +875,10 @@
       "kind": "reminder",
       "title": "1. Mahnung · Rechnung 2026-003",
       "file": "transactional-data/2026/invoices/sent/sd_XL9s3VHctVsb.pdf",
-      "sha256": "3f39f9a6ce5dd968c5b32104c3e112a869ec3d2964594063d79a47d5ee2b93dc",
+      "sha256": "1bc6225e8f7ab95abf4900bee30922de32c8590af630fd64ccfe744657460811",
       "sentAt": "2026-09-28T09:00:00.000Z",
-      "to": "buchhaltung@bistro.example"
+      "to": "buchhaltung@bistro.example",
+      "channel": "download"
     },
     {
       "id": "sd_LiJyNqXGdGxl",
@@ -883,9 +889,10 @@
       "kind": "invoice",
       "title": "Facture 2026-006",
       "file": "transactional-data/2026/invoices/2026-006.pdf",
-      "sha256": "5bb885e43df6126e0286413ec6f05eee4f18b5f79c662aa5223438cb8fa5ad96",
+      "sha256": "64ea008e03eb3cb9c0714b8b2ea4a2e680ebd0ab7ebd1d94f0c7802523c347d5",
       "sentAt": "2026-09-29T15:20:00.000Z",
-      "to": "compta@cafe-exemple.example"
+      "to": "compta@cafe-exemple.example",
+      "channel": "download"
     },
     {
       "id": "sd_aI3ItU60xlva",
@@ -896,9 +903,10 @@
       "kind": "invoice",
       "title": "Rechnung 2026-007",
       "file": "transactional-data/2026/invoices/2026-007.pdf",
-      "sha256": "1055180f452ef0bd8eb1fccb4cd7a23e551a5ea6fdac4e820365bebe6dedbcdc",
+      "sha256": "e3f5d2f6a817e73d5399114b8bdb6fe32cd46f9d61960b9d92d7633d32defb13",
       "sentAt": "2026-10-01T07:45:00.000Z",
-      "to": "kueche@musterhotel.example"
+      "to": "kueche@musterhotel.example",
+      "channel": "download"
     },
     {
       "id": "sd_oK6z1b13K2C6",
@@ -909,9 +917,10 @@
       "kind": "cancellation",
       "title": "STORNIERT: Rechnung 2026-007",
       "file": "transactional-data/2026/invoices/sent/sd_oK6z1b13K2C6.pdf",
-      "sha256": "f3e45f57e28046006aa0c2c678de60931aa61a879326f292d76c8ff064a170fc",
+      "sha256": "76bea41189c3a02ab67a7fce86905934bd4cae2c32f6f916f161784188451482",
       "sentAt": "2026-10-02T08:10:00.000Z",
-      "to": "kueche@musterhotel.example"
+      "to": "kueche@musterhotel.example",
+      "channel": "download"
     }
   ]
 }
