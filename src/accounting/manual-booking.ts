@@ -293,6 +293,9 @@ function withoutReceipt(code: string | undefined): string {
   return formTakes(zero) ? zero : '';
 }
 
+/** A purchase code with the minus: a supplier's refund booked so. */
+const REFUND_CODE = /^-[MI]\d+$/;
+
 /** A code the firm's form takes, else nothing: a proposal never offers a code the booking would refuse. */
 const taken = (code: string | null | undefined): string => (code && formTakes(code) ? code : '');
 
@@ -571,7 +574,8 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
     saleParts = sale.parts;
     if (sale.note) notes.push(sale.note);
     other = { account: precedent.account!, vat: sale.vat, source: { account: { from: 'precedent', date: precedent.entry.date, ...(precedent.yours && { yours: true as const }), ...(precedent.name && { name: precedent.name }) }, ...(sale.source && { vat: sale.source }) } };
-  } else if (precedent) {
+  } else if (precedent && !(moneyIn && proposes && REFUND_CODE.test(precedent.vatCode ?? ''))) {
+    // A refund before is no «wie beim letzten Mal» for the next one: the purchase it refunds decides its code (#357, below).
     const vat = rate || (receipts.length ? '' : withoutReceipt(precedent.vatCode));
     // The last booking claimed input tax and this payment has no receipt: its zero code is no «wie beim letzten Mal» (#397).
     const zeroed = !rate && !receipts.length && !!vat && vat !== precedent.vatCode;

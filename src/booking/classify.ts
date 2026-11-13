@@ -407,7 +407,9 @@ export function ruleRefund(tx: BankTransaction, booking: RuleBooking, documents:
   if (!found || found.negative || (found.entry.family !== 'I' && found.entry.family !== 'M')) return undefined;
   // With a private share outside own use the business's part is what came back on the rule's account.
   const share = booking.private && owner && !booking.ownUse ? (Math.round(tx.amount * 100) - Math.round((Math.round(tx.amount * 100) * booking.private) / 100)) / 100 : tx.amount;
-  return refundedPurchase(tx, share, books, booking.account) ?? 'notFound';
+  const refund = refundedPurchase(tx, share, books, booking.account);
+  // A code the firm's form does not take is never booked (formTakes): the rule's own code stands then.
+  return !refund ? 'notFound' : formTakes(refund.code) ? refund : undefined;
 }
 
 /**
