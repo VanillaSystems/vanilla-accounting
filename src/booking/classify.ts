@@ -49,7 +49,7 @@ import { cardLinesOf, cardPart, cardParts, lineReceiptsOf } from '../books/card-
 import { wordsIn } from '../export/texts.js';
 import { ruleFor, ruleWords, stampRule, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
-import { businessVat, capAtBills, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
+import { businessVat, capAtBills, settlesVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
 import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
 import { bankChargesOf, isOwnBankFee, type BankCharges } from './bank-fee.js';
 import { bankCodedFee } from '../books/bank-import.js';
@@ -114,11 +114,14 @@ export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { f
     ({ id: randomBytes(8).toString('hex'), transactionRef: tx.ref, ...e, ...fxStamp, origin: 'classify', receipts: [...receipts].sort(), ...(corrects && { corrects }), ...(decided ?? { ...(reason && { reason }), by }) });
 
   const customs = documents().customs;
-  return llmEntries.map((e) => {
+  return llmEntries.map((line) => {
+    // A line on the VAT settlement account pays or receives the tax itself: it carries no code (#456), not even a VAT-amount one.
+    const e = settlesVat(line.accountDebit) || settlesVat(line.accountCredit) ? { ...line, vatCode: undefined } : line;
     const { accountDebit, accountCredit } = sidesOf(e, tx.direction, bankAccount, isVatAmountCode(e.vatCode));
     const transfer = !!money?.has(accountDebit) && money.has(accountCredit);
-    const acquired = acquisition && !transfer ? acquisitionCodeOf({ ...e, accountDebit, accountCredit }, acquisition.documents, acquisition.setup) : undefined;
-    const vatCode = transfer ? undefined : acquired ? acquired.code : signed(permittedCode(e.vatCode), accountDebit, accountCredit, e.amount, bankAccount);
+    const onSettlement = settlesVat(accountDebit) || settlesVat(accountCredit);
+    const acquired = acquisition && !transfer && !onSettlement ? acquisitionCodeOf({ ...e, accountDebit, accountCredit }, acquisition.documents, acquisition.setup) : undefined;
+    const vatCode = transfer || onSettlement ? undefined : acquired ? acquired.code : signed(permittedCode(e.vatCode), accountDebit, accountCredit, e.amount, bankAccount);
     // A rate on the import VAT itself is left off: its input tax comes only with the customs assessment, as the one-legged deduction.
     const importVat = !!customs && ratesImportVat({ accountDebit, vatCode }, customs);
     return entry({
@@ -833,6 +836,16 @@ const refundReason = (r: RefundCode): string => wordsIn('de').t('rules.say.refun
  */
 const permittedCode = (code: string | undefined): string | undefined => (code && formTakes(code) ? code : undefined);
 
+
+/** The entries with no VAT code on a line on a settlement account, whichever step set it: such a code is dropped, and a code's decision about it with it (#456). */
+export function withoutSettlementCodes(entries: JournalEntry[], reason: string | undefined, by: BookedBy): JournalEntry[] {
+  return entries.map((e) => {
+    if (!e.vatCode || !(settlesVat(e.accountDebit) || settlesVat(e.accountCredit))) return e;
+    const { vatCode: _code, reason: _reason, ...rest } = e;
+    return { ...rest, ...(reason && { reason }), by };
+  });
+}
+
 /**
  * The model's lines without the zero input code (I0, M0, either sign) where the other account takes
  * no VAT code at all (zeroCodeOff: a wage, a contribution, the bank charges, a debt, the owner's or a
@@ -1086,7 +1099,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         const lines = splitByReceipts(tx, fee?.lines ?? derived, mapped);
         const noted = [reason, fee?.note, customsNotes.get(tx)].filter(Boolean).join(' ') || undefined;
         const coded = withPurchaseVat(tx, withRefundCodes(own, tx, withCreditNoteCodes(own, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), bankAccount), mapped, context.purchaseVat, context.counterparties);
-        const taxed = withoutZeroOnNoCode(receiptTaxOf(own, tx, coded, mapped), bankAccount, context);
+        const taxed = withoutSettlementCodes(withoutZeroOnNoCode(receiptTaxOf(own, tx, coded, mapped), bankAccount, context), noted, { kind: 'model', model });
         // A card line's bill that shows less than the line (a tip): its rate on no more than the bill taxes at it (#409).
         const entries = views.get(tx)?.cap ? capAtBills(taxed, mapped, tx.currency, newEntryId) : taxed;
         const twice = inputTaxOverReceipts(own, tx, legsOf(tx), entries, (c, d) => fx.daily(c, d));
