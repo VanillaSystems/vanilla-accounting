@@ -189,7 +189,8 @@ test('the recent list says why books cannot be opened: a folder that is gone has
   assert.deepEqual(gone, { root: join(home, 'Gone'), demo: false }, 'neither a name nor a problem: the folder is gone');
   assert.ok(rest.every((b) => b.name && !b.problem));
   mkdirSync(join(home, 'Documents', 'Buchhaltung 2026'), { recursive: true });
-  assert.deepEqual((await call('GET', '/api/desktop')).json.folders, ['Buchhaltung 2026'], 'the folders in the books home, so a new default name steps aside');
+  assert.deepEqual((await call('GET', '/api/desktop/folders')).json, { folders: ['Buchhaltung 2026'], access: 'allowed' }, 'the folders in the books home, so a new default name steps aside');
+  assert.deepEqual((await call('GET', '/api/desktop')).json.folders, ['Buchhaltung 2026'], 'kept for the form, which proposes the name');
 });
 
 test('a demo copy an app before 0.4.0 made (books.json at its top) is replaced by a fresh copy when the demo is opened', async () => {

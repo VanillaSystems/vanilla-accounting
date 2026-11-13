@@ -424,6 +424,20 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Mac app, first start: macOS no longer asks about the Documents folder over the first screen
+  before you chose anything (#373). The app reads nothing in Documents, Desktop or Downloads until
+  a step needs it. «Neue Buchhaltung erstellen» first says that your books go into «Dokumente»,
+  that macOS will now ask and that «Erlauben» is needed, with «Anderen Ordner wählen» beside
+  «Weiter»; after «Nicht erlauben» it says where to allow it in the System Settings and still
+  works with another folder. Once allowed, the step goes on at once. Books opened before in such a
+  folder are read only after macOS answered: when it asks at a later start, the window comes first
+  with the start screen and the books open after «Erlauben». The menu's «Zuletzt geöffnet» names
+  them without reading their folders, and the start screen says that macOS asks about the folder
+  of those books while it does. Books in a folder macOS refuses keep their name and say how to
+  allow it; a folder whose own rights refuse the app says so apart. New books never open books
+  already in the folder named for them: the form proposes a free name («Buchhaltung 2026 2»), also
+  after a restart. macOS's answer counts for this version of the app only: after an update the
+  words come again before macOS may ask again.
 - A provider's monthly Payments Invoice no longer waits for the AI (#458): no payment comes for it,
   so the inbox takes its date and total from its text by code and the booking step books its input
   tax, as for the other months. Before, one failed AI answer left the bill in the inbox with
