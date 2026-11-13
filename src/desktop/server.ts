@@ -463,7 +463,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
       if (!message) { res.status(400).json({ error: 'A message is needed.' } satisfies ApiErrorBody); return; }
       if ('tooLong' in message) { res.status(400).json({ error: `A message has at most ${MAX_TEXT} characters.` } satisfies ApiErrorBody); return; }
       const ask = opts.ask ?? (await import('../llm/ask.js')).ask;
-      const { draft, reply } = await talkDraft(root, message.text, ask);
+      const { draft, reply } = await talkDraft(root, message.text, ask, message.form);
       res.json({ view: draftView(root, draft), reply } satisfies SetupTalked);
     } catch (e) { refuse(res, e); }
   });

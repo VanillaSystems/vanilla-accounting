@@ -369,11 +369,30 @@ export const MAX_TEXT = 4000;
 const MAX_TURNS = 12;
 
 /** A typed message as the start screen sent it; undefined without text. */
-export function parseTalkRequest(body: unknown): { text: string } | { tooLong: true } | undefined {
+export function parseTalkRequest(body: unknown): { text: string; form?: TalkForm } | { tooLong: true } | undefined {
   const r = isMap(body) ? body : {};
   const text = typeof r.text === 'string' ? r.text.trim() : '';
   if (!text) return undefined;
-  return text.length > MAX_TEXT ? { tooLong: true } : { text };
+  if (text.length > MAX_TEXT) return { tooLong: true };
+  // The bank rows of the open card, typed and not sent yet (#496 r7-6): only rows with a bank's name, as «Weiter» sends them.
+  const rows = isMap(r.form) && Array.isArray(r.form.banks) ? r.form.banks.filter(isMap).filter((b) => str(b.bank)) : [];
+  return { text, ...(rows.length ? { form: { banks: rows.map((b) => ({ bank: str(b.bank)!, currency: str(b.currency) ?? '', ...(str(b.iban) ? { iban: str(b.iban)! } : {}) })) } } : {}) };
+}
+
+/** What the open card holds that she typed and did not send yet, sent with her words so they never stand in its place. */
+export interface TalkForm { banks?: BankSpec[] }
+
+/**
+ * The draft with the card's rows she typed and did not send yet, taken as «Weiter» takes them (checkPatch, withPatch):
+ * a sentence then adds to them and never stands in their place (#496 r7-6). Only while the bank step is open; a row
+ * code refuses is not taken, and the refusal is said.
+ */
+export function withForm(d: SetupDraft, form: TalkForm | undefined): { draft: SetupDraft; refused?: { step: StepMark; refusal: TalkRefusal } } {
+  if (!form?.banks?.length || d.banks?.length) return { draft: d };
+  try { return { draft: withPatch(d, checkPatch({ step: 'banks', value: form.banks })) }; } catch (e) {
+    if (!(e instanceof SetupError)) throw e;
+    return { draft: d, refused: { step: 'banks', refusal: e.refusal } };
+  }
 }
 
 /**
@@ -381,9 +400,12 @@ export function parseTalkRequest(body: unknown): { text: string } | { tooLong: t
  * saves what it read. The call is ledgered in the folder's data/, which becomes the books' own. A
  * model that fails or answers no JSON leaves the draft as it was.
  */
-export async function talkDraft(root: string, text: string, ask: Ask): Promise<{ draft: SetupDraft; reply: SetupReply }> {
-  const draft = readDraft(root);
-  if (!draft) throw new SetupError('No setup in this folder.', { reason: 'required', field: 'root' });
+export async function talkDraft(root: string, text: string, ask: Ask, form?: TalkForm): Promise<{ draft: SetupDraft; reply: SetupReply }> {
+  const saved = readDraft(root);
+  if (!saved) throw new SetupError('No setup in this folder.', { reason: 'required', field: 'root' });
+  // Her bank rows typed in the card come first, as her click would send them; the model then sees them as given.
+  const typed = withForm(saved, form);
+  const draft = typed.draft;
   const { baseCurrency } = draftView(root, draft);
   const key = resolve(root);
   const before = turnsOf.get(key) ?? [];
@@ -395,12 +417,15 @@ export async function talkDraft(root: string, text: string, ask: Ask): Promise<{
       step: 'setup-conversation', system: SYSTEM, timeoutMs: 120_000, ledger: join(root, APP_FOLDER, 'data', 'llm-ledger.jsonl'),
     });
   } catch (e) {
-    return { draft, reply: { kind: 'failed', detail: e instanceof Error ? e.message : String(e) } };
+    return { draft: saved, reply: { kind: 'failed', detail: e instanceof Error ? e.message : String(e) } };
   }
-  const out = parseTalk(raw);
-  if (!out) return { draft, reply: { kind: 'unreadable' } };
+  const read = parseTalk(raw);
+  if (!read) return { draft: saved, reply: { kind: 'unreadable' } };
+  // A row of hers code refused: the model's banks are not taken either, so the card stays open with her rows and says why.
+  const out = typed.refused ? { ...read, banks: undefined } : read;
   const words = [...before, { who: 'me', text }].filter((t) => t.who === 'me').map((t) => t.text);
-  const next = applyTalk(draft, out, words, baseCurrency);
+  const applied = applyTalk(draft, out, words, baseCurrency);
+  const next = typed.refused && applied.reply.kind === 'read' ? { ...applied, reply: { ...applied.reply, say: '', refused: [typed.refused, ...applied.reply.refused] } } : applied;
   if (next.reply.kind === 'read' && next.reply.say) keep([...(turnsOf.get(key) ?? []), { who: 'ai', text: next.reply.say }]);
-  return next.draft !== draft ? { ...next, draft: writeDraft(root, next.draft) } : next;
+  return next.draft !== saved ? { ...next, draft: writeDraft(root, next.draft) } : next;
 }

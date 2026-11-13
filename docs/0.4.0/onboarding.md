@@ -192,7 +192,7 @@ to a question, then one short question back) and the answers the words state (`f
 and the model is told not to ask the next question: code shows the step waiting, with its buttons,
 below its words. Code is the authority: each answer goes through `checkPatch` and
 `withPatch`, the click's path; a UID or an IBAN is taken only when it stands in the person's words as the server received them,
-or, for an IBAN, when the form holds it for that same account. Words add to the form's bank accounts and never remove one
+or, for an IBAN, when the form holds it for that same account. Words add to the form's bank accounts and never remove one; the rows typed in the open bank card and not sent yet go with the words (`unsentForm`, `withForm`) and are taken first, as «Weiter» takes them
 (#496): an account is matched by its IBAN first, then by bank and currency. An IBAN is never required, and an
 account without one matches by bank and currency. One more account of a bank in a currency the list holds is refused
 (`bankTwice`, as the form refuses it, since the books keep one per bank and currency), and the rest of the list is saved;
