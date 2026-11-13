@@ -5703,7 +5703,7 @@ export default {
     'journal.byHand.note.saleVat.noVat': "Pas de code TVA : la pièce n’indique pas de TVA suisse ni de lieu de la prestation à l’étranger.",
     'journal.byHand.note.ask': "Votre règle demande d’abord : «{question}»",
     'journal.byHand.note.taxPoint': "La pièce date du {date} : selon les contre-prestations convenues, l’app comptabilise une ligne avec un code TVA à ce jour, par le compte {account}. Le paiement solde ce compte à son propre jour.",
-    'journal.byHand.note.taxPointCorrects': "La pièce date du {date}, du {filed} déposé : l’app comptabilise une ligne avec un code TVA au jour du paiement et la déclare dans le {correction} {filed}.",
+    'journal.byHand.note.taxPointCorrects': "La pièce date du {date}, du {filed}, qui est verrouillé : l’app comptabilise une ligne avec un code TVA au jour du paiement et la déclare dans le {correction} {filed}.",
     'journal.byHand.from.vat.rule': "selon la règle",
     'journal.byHand.from.vat.precedent': "comme la dernière fois",
     'journal.byHand.from.vat.receipt': "selon la pièce",

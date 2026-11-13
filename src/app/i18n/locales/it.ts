@@ -5703,7 +5703,7 @@ export default {
     'journal.byHand.note.saleVat.noVat': "Nessun codice IVA: il giustificativo non mostra IVA svizzera né un luogo della prestazione all’estero.",
     'journal.byHand.note.ask': "La tua regola chiede prima: «{question}»",
     'journal.byHand.note.taxPoint': "Il giustificativo è del {date}: secondo le controprestazioni convenute l’app registra una riga con un codice IVA in quel giorno, tramite il conto {account}. Il pagamento salda questo conto nel suo giorno.",
-    'journal.byHand.note.taxPointCorrects': "Il giustificativo è del {date}, del {filed} inoltrato: l’app registra una riga con un codice IVA nel giorno del pagamento e la dichiara nel {correction} {filed}.",
+    'journal.byHand.note.taxPointCorrects': "Il giustificativo è del {date}, del {filed}, che è bloccato: l’app registra una riga con un codice IVA nel giorno del pagamento e la dichiara nel {correction} {filed}.",
     'journal.byHand.from.vat.rule': "dalla regola",
     'journal.byHand.from.vat.precedent': "come l’ultima volta",
     'journal.byHand.from.vat.receipt': "dal giustificativo",

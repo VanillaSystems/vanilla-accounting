@@ -353,7 +353,7 @@ the other's when they next open the books.
   the account in the field, and a proposed code follows it too (`followedVat`), until she sets one.
   On the agreed basis booking dates a line with a VAT code by its receipt, over the open item, as
   the classifier does (`atTaxPoint`, #360), and the form says so when the receipt is of another
-  day (`[data-testid=note-taxPoint]`) or of a filed period (`note-taxPointCorrects`: the line
+  day (`[data-testid=note-taxPoint]`, by the first proposed line whose code is known) or of a locked period (`note-taxPointCorrects`: the line
   stays on the payment's day, declared in that period's correction). The line under the fields names each
   proposal still standing and its source. The account field ranks by the payment's direction and
   the account's class, then by the name, and a word that names a class («Ertrag», «Aufwand»;

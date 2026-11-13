@@ -7,7 +7,7 @@ import type { BankTransaction, Index, JournalEntry, Receipt } from '../types/ind
 import { partsOf, partText } from './batch-parts.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import { paymentSides, type PaymentSide } from './payment-entries.js';
-import { codeOnAccount, formTakes, lookupVatCode } from './vat-codes.js';
+import { codeOnAccount, formTakes, lookupVatCode, vatCodeOf } from './vat-codes.js';
 import { agreedBasis, chart, filing, invoicing, vat, vatSetup, withoutInputTax } from '../engines/index.js';
 import { methodOf } from '../workspace/vat-setup.js';
 import { saleProofOf } from './sale-document.js';
@@ -448,9 +448,22 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   const ownInvoice = () => (own?.use.length
     ? { id: own.use[0].id, number: own.numbers.join(', '), file: own.use.map((r) => r.filename).join(', '), links: own.link.map((r) => r.id), from: ownAt.from, ...(own.earlier && { earlier: own.earlier.date }) }
     : undefined);
+  // On the agreed basis a line with a VAT code is dated by its documents (atTaxPoint): the form says where booking puts the first
+  // proposed line whose code is known, by that code (a sale or a purchase, a minus code by the latest document); nothing while none is.
+  const pointNote = (lines: readonly DraftLine[]): DraftNote | undefined => {
+    if (!agreedBasis()) return undefined;
+    const coded = lines.map((l) => vatCodeOf(l.vat, l.accountDebit, l.accountCredit)?.code).find((c) => sideOf(c));
+    if (!coded) return undefined;
+    const side = sideOf(coded)!;
+    const point = taxPointOf(side, coded.startsWith(vat().codes.negativePrefix), tx.date, documentDates([...receipts, ...(own?.link ?? [])]), dayLock(books), filing().length);
+    if (point?.corrects) return { kind: 'taxPointCorrects', date: point.date, corrects: point.corrects };
+    const items = openItemAccounts(known.chart ?? []);
+    return point && { kind: 'taxPoint', date: point.date, account: side === 'sale' ? items.receivable : items.payable };
+  };
   const result = (lines: DraftLine[], extra: Partial<BookingDraft> = {}): BookingDraft => {
     const mine = ownInvoice();
-    return { ref, date: tx.date, currency: tx.currency, ...(bank && { bank }), receipts: receiptIds, lines, ...(cancelled && { cancelledInvoice: cancelled }), ...(mine && { ownInvoice: mine }), ...extra, notes };
+    const point = pointNote(lines);
+    return { ref, date: tx.date, currency: tx.currency, ...(bank && { bank }), receipts: receiptIds, lines, ...(cancelled && { cancelledInvoice: cancelled }), ...(mine && { ownInvoice: mine }), ...extra, notes: point ? [...notes, point] : notes };
   };
   const place = (account: string, amount: number, vat: string, source?: DraftSource, description = text): DraftLine => ({
     accountDebit: bank?.side === 'accountDebit' ? bank.account : account,
@@ -495,10 +508,6 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
     return result(lines.length || rest.length ? [...lines, ...rest] : [place('', paid, '')], { invoice: { ...invoice, settles: false } });
   }
 
-  // On the agreed basis a line with a VAT code is dated by its documents (atTaxPoint): the form says where booking puts it.
-  const point = agreedBasis() ? taxPointOf(moneyIn ? 'sale' : 'purchase', false, tx.date, documentDates([...receipts, ...(own?.link ?? [])]), dayLock(books), filing().length) : undefined;
-  if (point?.corrects) notes.push({ kind: 'taxPointCorrects', date: point.date, corrects: point.corrects });
-  else if (point) { const items = openItemAccounts(known.chart ?? []); notes.push({ kind: 'taxPoint', date: point.date, account: moneyIn ? items.receivable : items.payable }); }
   const proposes = !cancelled && !!bank;
 
   // A company rule decides the payment (it waits for its receipt, or asks first): its lines as it would book them, when they add up to what is open.

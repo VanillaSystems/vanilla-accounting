@@ -18,6 +18,7 @@ import { startApi } from './support/api-server.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { EFFECTIVE_QUARTERLY, type VatSetup } from '../src/workspace/vat-setup.js';
 import { attachEntries, bookPayment } from '../src/server/edits.js';
+import { runBatch } from '../src/server/batch.js';
 import { bookingDraft } from '../src/accounting/manual-booking.js';
 import { bookedState } from '../src/accounting/payment-entries.js';
 import { chfAmount } from '../src/accounting/ledger.js';
@@ -155,6 +156,35 @@ test('agreed basis: a booking typed without its payment, tied to it, takes the t
     assert.equal(b.journalEntries[0].id, 'typed', 'her line keeps its id');
     assert.deepEqual(made, [b.journalEntries[1].id]);
     assert.ok(b.journalEntries.every((e) => e.transactionRef === 'b1' && e.origin === 'manual'));
+  } finally { setJurisdiction(ch, EFFECTIVE_QUARTERLY); }
+});
+
+test('the form\'s note takes the side and the day from the proposed code: a supplier\'s credit note paid in goes over 2000, a customer\'s refund over 1100, each by the latest document; no known code, no note', () => {
+  const twoDocs = (tx: BankTransaction): Books => {
+    const b = books('2026-06-30', tx, bill('2026-09-20'));
+    b.receipts.push({ ...bill('2026-09-25'), id: 'r2' });
+    b.mappings.push({ transactionRef: tx.ref, receiptId: 'r2' });
+    return b;
+  };
+  const rule = (account: string, vat: string) => ({ chart: CHART.chart, rule: { id: 'x', lines: [{ account, vat, amount: 108.1 }] } });
+  setJurisdiction(ch, AGREED);
+  try {
+    const back = bookingDraft(twoDocs(pay({ direction: 'CRDT' })), 'b1', ACCOUNTS, [], rule('6500', '-I81'))!;
+    assert.deepEqual(back.notes.filter((n) => n.kind.startsWith('taxPoint')), [{ kind: 'taxPoint', date: '2026-09-25', account: '2000' }]);
+    const refund = bookingDraft(twoDocs(pay()), 'b1', ACCOUNTS, [], rule('3400', '-V81'))!;
+    assert.deepEqual(refund.notes.filter((n) => n.kind.startsWith('taxPoint')), [{ kind: 'taxPoint', date: '2026-09-25', account: '1100' }]);
+    const unknown = bookingDraft(twoDocs(pay()), 'b1', ACCOUNTS, [], { chart: CHART.chart })!;
+    assert.ok(!unknown.notes.some((n) => n.kind.startsWith('taxPoint')), JSON.stringify(unknown.lines));
+  } finally { setJurisdiction(ch, EFFECTIVE_QUARTERLY); }
+});
+
+test('agreed basis: a batch booking books by the tax point and its preview says what it books', () => {
+  setJurisdiction(ch, AGREED);
+  try {
+    const b = books('2026-06-30', pay(), bill('2026-09-20'));
+    const run = runBatch(b, { kind: 'book', account: '6500', vat: 'I81' }, ['b1'], { bankAccounts: ACCOUNTS, fx: FX, point: CHART });
+    assert.deepEqual(rows(b.journalEntries), [['2026-09-20', '6500', '2000', 108.1, 'I81', ''], ['2026-10-05', '2000', '1021', 108.1, '', '']]);
+    assert.deepEqual(run.changes.map((c) => c.to), ['20.09.2026 6500 / 2000 I81 · 05.10.2026 2000 / 1021']);
   } finally { setJurisdiction(ch, EFFECTIVE_QUARTERLY); }
 });
 

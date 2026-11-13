@@ -23,9 +23,19 @@ export function booksOpen(books: { config?: Pick<AccountingConfig, 'openingBalan
   return year && `${year}-01-01`;
 }
 
-/** What a tax point asks of the lock (src/accounting/tax-point.ts taxPointOf), pure for the app: as the server's periodLock answers it. */
-export function dayLock(books: { config?: Pick<AccountingConfig, 'closedThrough' | 'approvedReturn' | 'openingBalances'>; transactions?: readonly { date: string }[] }): Pick<PeriodLock, 'isClosed' | 'beforeBooks'> {
+/**
+ * Which days the books take: locked through `lockedThrough`, opened on `opens` (booksOpen, read on
+ * first use). Pure, so the app (the hand form's tax point) and the server's periodLock
+ * (src/books/store.ts), which is built on it, answer alike.
+ */
+export function dayLock(books: { config?: Pick<AccountingConfig, 'closedThrough' | 'approvedReturn' | 'openingBalances'>; transactions?: readonly { date: string }[] }): Pick<PeriodLock, 'lockedThrough' | 'isClosed' | 'beforeBooks' | 'opens'> {
   const through = lockedThrough(books.config);
-  const opens = booksOpen(books);
-  return { isClosed: (date) => !!through && !!date && date <= through, beforeBooks: (date) => !!opens && !!date && date < opens };
+  let first: { day: string | undefined } | undefined;
+  const opens = () => (first ??= { day: booksOpen(books) }).day;
+  return {
+    lockedThrough: through,
+    isClosed: (date) => !!through && !!date && date <= through,
+    get opens() { return opens(); },
+    beforeBooks: (date) => { const day = opens(); return !!day && !!date && date < day; },
+  };
 }

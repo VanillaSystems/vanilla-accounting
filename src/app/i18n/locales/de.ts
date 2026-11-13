@@ -5700,7 +5700,7 @@ export const messages = {
   'journal.byHand.note.saleVat.noVat': "Kein Steuercode: der Beleg zeigt keine Schweizer MWST und nennt keinen Leistungsort im Ausland.",
   'journal.byHand.note.ask': "Deine Regel fragt zuerst: «{question}»",
   'journal.byHand.note.taxPoint': "Der Beleg ist vom {date}: nach vereinbartem Entgelt bucht die App eine Zeile mit MWST-Code an diesem Tag, über das Konto {account}. Die Zahlung gleicht dieses Konto an ihrem eigenen Tag aus.",
-  'journal.byHand.note.taxPointCorrects': "Der Beleg ist vom {date}, aus dem eingereichten {filed}: die App bucht eine Zeile mit MWST-Code am Tag der Zahlung und deklariert sie in der {correction} {filed}.",
+  'journal.byHand.note.taxPointCorrects': "Der Beleg ist vom {date}, aus {filed}, das gesperrt ist: die App bucht eine Zeile mit MWST-Code am Tag der Zahlung und deklariert sie in der {correction} {filed}.",
   'journal.byHand.from.vat.rule': "aus der Regel",
   'journal.byHand.from.vat.precedent': "wie beim letzten Mal",
   'journal.byHand.from.vat.receipt': "aus dem Beleg",

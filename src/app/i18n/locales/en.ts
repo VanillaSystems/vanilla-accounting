@@ -5703,7 +5703,7 @@ export default {
     'journal.byHand.note.saleVat.noVat': "No tax code: the document shows no Swiss VAT and names no place of supply abroad.",
     'journal.byHand.note.ask': "Your rule asks first: «{question}»",
     'journal.byHand.note.taxPoint': "The receipt is dated {date}: on the agreed basis the app books a line with a VAT code on that day, over the account {account}. The payment settles that account on its own day.",
-    'journal.byHand.note.taxPointCorrects': "The receipt is dated {date}, in the filed {filed}: the app books a line with a VAT code on the payment's day and declares it on the {correction} {filed}.",
+    'journal.byHand.note.taxPointCorrects': "The receipt is dated {date}, in {filed}, which is locked: the app books a line with a VAT code on the payment's day and declares it on the {correction} {filed}.",
     'journal.byHand.from.vat.rule': "from the rule",
     'journal.byHand.from.vat.precedent': "as last time",
     'journal.byHand.from.vat.receipt': "from the receipt",
