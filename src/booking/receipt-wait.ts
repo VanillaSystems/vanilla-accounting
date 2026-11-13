@@ -69,7 +69,7 @@ export type NoWait =
   | 'ruleAsks'
   /** It pays the owner back her outlays, which her account holds not paid back yet (repaysOwner, #402): their receipts are booked with them. */
   | 'repaysOwner'
-  /** Its business's file says its payments need no receipt. */
+  /** Its business's file says its payments need no receipt: booked without waiting, and still a candidate for its bill (never in NONE_OF_ITS_OWN, #456). */
   | 'business'
   /** Its wording is one a guide's rule says needs no receipt (a cash withdrawal: money onto the cash box). */
   | 'wording'
@@ -226,7 +226,8 @@ const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 
 
 /**
  * A rule's `apply:` on evidence.guide.yaml#rules, in either layer: `{ receipt: none }` in a
- * business file (the business is the condition), `{ receipt: none, text: "<pattern>" }` in a guide
+ * business file (the business is the condition; it frees the payments from the wait only, never
+ * from pairing with the business's bill, #456), `{ receipt: none, text: "<pattern>" }` in a guide
  * (it holds for every payment, so it names the wording: a pattern over the payment's text and
  * counterparty, ignoring case; `not`: a second pattern whose match takes the wording back). `firm: employer`
  * beside them makes it a wage's wording: only on a firm that pays wages (employs), read off the
@@ -299,8 +300,13 @@ export function receiptWaitOf(books: Books, tx: BankTransaction, context: Classi
   });
 }
 
-/** Why a payment has no receipt of its own: the matching chain never pairs one (#187), nor the model's match. Money in, a rule that asks first, a wage and a firm without input tax still take a receipt; a provider's payout never does (#203). */
-const NONE_OF_ITS_OWN: ReadonlySet<NoWait> = new Set<NoWait>(['marked', 'zero', 'provider', 'bankFee', 'ownTransfer', 'settlement', 'business', 'wording', 'repaysOwner']);
+/**
+ * Why a payment has no receipt of its own: the matching chain never pairs one (#187), nor the model's
+ * match. Money in, a rule that asks first, a wage, a business whose file frees its payments from the
+ * wait (an authority's bill or notice is still its receipt: the compensation fund's Akonto bill, #456)
+ * and a firm without input tax still take a receipt; a provider's payout never does (#203).
+ */
+const NONE_OF_ITS_OWN: ReadonlySet<NoWait> = new Set<NoWait>(['marked', 'zero', 'provider', 'bankFee', 'ownTransfer', 'settlement', 'wording', 'repaysOwner']);
 
 /** A booking the app made on its own (the classifier, by a rule, a check of code or the model): never one a person made or decided. */
 export const appBooked = (e: JournalEntry): boolean => e.origin === 'classify' && (!e.by || e.by.kind === 'rule' || e.by.kind === 'code' || e.by.kind === 'model');
