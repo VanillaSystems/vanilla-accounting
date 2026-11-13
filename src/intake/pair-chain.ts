@@ -38,7 +38,7 @@ import { providersOf } from './sales-report-import.js';
 import { isProvider, providerOfMoneyIn } from '../booking/providers.js';
 import { vatCorrectionsOf, type VatCorrection } from '../booking/vat-corrections.js';
 import { identify, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
-import { withheldPayeesOf } from '../booking/withheld.js';
+import { withheldPayeesOf, withheldSharesOf } from '../booking/withheld.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 
 export type { Found, Maker } from './pairing.js';
@@ -146,8 +146,12 @@ export function providerIssuesIn(ws: Pick<Workspace, 'paths'>, books: Parameters
   const out = providerIssuesOf(books, providers, { inputTax: !withoutInputTax(), today, rate, ...(lock.lockedThrough ? { lockedThrough: lock.lockedThrough } : {}) });
   const byId = new Map(books.receipts.map((r) => [r.id, r]));
   const linkedTo = (t: BankTransaction) => books.mappings.flatMap((m) => (m.transactionRef === t.ref && byId.has(m.receiptId) ? [byId.get(m.receiptId)!] : []));
-  const withheldPayees = withheldPayeesOf(books.transactions, (t) => { const r = identify(signalsOfTransaction(t, linkedTo(t)), counterparties); return r.kind === 'known' ? r.counterparty : undefined; });
+  const businessOf = (t: BankTransaction) => { const r = identify(signalsOfTransaction(t, linkedTo(t)), counterparties); return r.kind === 'known' ? r.counterparty : undefined; };
+  const withheldPayees = withheldPayeesOf(books.transactions, businessOf);
   if (withheldPayees.length) out.withheldPayees = withheldPayees;
+  // What of 2270 each such payment clears, where the payslips tell (#476): the task and «2270 ausgleichen» ask for that, never for all of it.
+  const shares = withheldSharesOf(books as Parameters<typeof withheldSharesOf>[0], businessOf);
+  if (Object.keys(shares).length) out.withheldShares = shares;
   if (!providers.length) return out;
   for (const tx of books.transactions) {
     if (tx.direction !== 'CRDT' || lock.isClosed(tx.date)) continue;

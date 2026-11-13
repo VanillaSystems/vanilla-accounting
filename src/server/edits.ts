@@ -37,6 +37,7 @@ import { outsideStatements } from '../accounting/placed-account.js';
 import { nameWords } from '../intake/pairing.js';
 import { bookedInFiled } from '../books/twins.js';
 import { cardLinesOf, dropLineBills, type LineBill } from '../books/card-lines.js';
+import { clearingProposal, type Uncleared } from '../booking/withheld.js';
 
 function receiptOf(books: Books, id: string): Receipt {
   const r = books.receipts.find((x) => x.id === id);
@@ -762,6 +763,30 @@ export function bookByReceipt(books: Books, id: string): { before: JournalEntry[
   books.journalEntries.push(...made);
   const after = books.journalEntries.filter((x) => touched.has(x.id) || made.includes(x)).map((x) => structuredClone(x));
   return { before: [...touched].map((x) => was.get(x)!), after };
+}
+
+/**
+ * «2270 ausgleichen» (#476): a contribution payment booked without the employees' share, by the open item that names it
+ * (`u`, unclearedContributions: what is still to move, the payment's share where the payslips tell it). Its lines on a
+ * contribution account the employees share in are cut by that much, the last first, and the amount is booked on the
+ * deductions account on the payment's ref, as the person's own change (clearingProposal, made here from the books,
+ * never taken from the request). Returns the lines as they were and as they are now, for the undo (undoByReceipt).
+ */
+export function clearWithheld(books: Books, u: Uncleared | undefined, ref: string): { before: JournalEntry[]; after: JournalEntry[]; amount: number; account: string } {
+  const lines = books.journalEntries.filter((e) => e.transactionRef === ref);
+  assertOpen(books, [...refDates(books, ref), ...lines.map((e) => e.date)], 'editEntry');
+  const p = u && clearingProposal(lines, u.open);
+  if (!p) throw new RequestError(409, 'Diese Zahlung hat keinen Anteil der Arbeitnehmenden offen: nichts umgebucht.', { code: 'withheldNone' });
+  const was = p.changed.map((c) => structuredClone(c.before));
+  for (const { before, after } of p.changed) setEntry(books, before.id, { amount: after.amount, accountDebit: after.accountDebit });
+  const at = new Date().toISOString();
+  const made = p.added.map((a): JournalEntry => {
+    const { reason: _reason, rule: _rule, run: _run, ...template } = a;
+    return { ...template, id: randomBytes(8).toString('hex'), origin: 'manual', by: { kind: 'person', at } };
+  });
+  books.journalEntries.push(...made);
+  const ids = new Set([...p.changed.map((c) => c.before.id), ...made.map((e) => e.id)]);
+  return { before: was, after: books.journalEntries.filter((e) => ids.has(e.id)).map((e) => structuredClone(e)), amount: p.amount, account: p.account };
 }
 
 /** A value in one form whatever the order of its keys, nested objects included. */

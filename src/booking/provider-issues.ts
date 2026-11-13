@@ -41,6 +41,8 @@ export interface ProviderIssues {
   clearing?: Array<{ provider: string; name: string; account: string }>;
   /** Beside the providers', the refs of payments to a business that collects contributions with the employees' share (src/booking/withheld.ts withheldPayeesOf, #426): the business files are the server's. */
   withheldPayees?: string[];
+  /** The share of each payment to such a business that code can tell from the payslips (src/booking/withheld.ts withheldSharesOf, #476), by ref. */
+  withheldShares?: Record<string, number>;
 }
 
 type Books = { receipts: readonly Receipt[]; journalEntries?: readonly JournalEntry[] };
