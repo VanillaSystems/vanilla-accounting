@@ -7,6 +7,9 @@
  * master-data/accounts.json, knowledge/ and the manifest. Each lands in <app>/<demo.dir> unless
  * --out names another directory (only with --demo).
  * The same seed always gives the same bytes; the output directory is replaced as a whole.
+ * The committed demos are its output (tests/demos-generated.test.ts). Regenerating them may never change a booking or a
+ * figure: entries.jsonl, the filed returns and tests/golden stay as they are; a seal's sha256 may change only because
+ * its sealed records gained fields the generator writes now, shown by recomputing the seal without those fields (#374).
  *
  * The filed return is produced by the real `vat-xml` CLI on the books as they stood when
  * Q1 was filed (without the later correction), then frozen with a fixed generation time.
