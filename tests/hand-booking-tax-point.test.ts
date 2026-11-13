@@ -13,11 +13,11 @@ import { join } from 'node:path';
 import { loadJurisdiction } from '../src/core/modules/load.js';
 import { setJurisdiction, vat } from '../src/engines/index.js';
 import { APP_ROOT, appFolderIn, MANIFEST_FILE, type LedgerBankAccount } from '../src/workspace/workspace.js';
-import { loadBooks } from '../src/books/store.js';
+import { loadBooks, saveBooks } from '../src/books/store.js';
 import { startApi } from './support/api-server.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { EFFECTIVE_QUARTERLY, type VatSetup } from '../src/workspace/vat-setup.js';
-import { bookPayment } from '../src/server/edits.js';
+import { attachEntries, bookPayment } from '../src/server/edits.js';
 import { bookingDraft } from '../src/accounting/manual-booking.js';
 import { bookedState } from '../src/accounting/payment-entries.js';
 import { chfAmount } from '../src/accounting/ledger.js';
@@ -139,4 +139,61 @@ test('the route on an agreed-basis workspace: the hand line on its receipt\'s da
   } finally {
     api.stop();
   }
+});
+
+test('agreed basis: a booking typed without its payment, tied to it, takes the tax point too; the undo learns the line it added', () => {
+  setJurisdiction(ch, AGREED);
+  try {
+    const b = books('2026-06-30', pay(), bill('2026-09-20'));
+    b.journalEntries.push({ id: 'typed', transactionRef: 'M2026-001', date: '2026-10-01', accountDebit: '6500', accountCredit: '1021', amount: 108.1, vatCode: 'I81', description: 'Swisscom', origin: 'manual' });
+    const { before, made } = attachEntries(b, 'b1', 'M2026-001', ACCOUNTS, FX, CHART);
+    assert.deepEqual(before.map((e) => [e.id, e.date, e.transactionRef]), [['typed', '2026-10-01', 'M2026-001']]);
+    assert.deepEqual(rows(b.journalEntries), [
+      ['2026-09-20', '6500', '2000', 108.1, 'I81', ''],
+      ['2026-10-05', '2000', '1021', 108.1, '', ''],
+    ]);
+    assert.equal(b.journalEntries[0].id, 'typed', 'her line keeps its id');
+    assert.deepEqual(made, [b.journalEntries[1].id]);
+    assert.ok(b.journalEntries.every((e) => e.transactionRef === 'b1' && e.origin === 'manual'));
+  } finally { setJurisdiction(ch, EFFECTIVE_QUARTERLY); }
+});
+
+/** The by-hand fixture on an agreed-basis copy of the demo's manifest, with her own invoice of 20 June linked to K1 (paid 4 August) and the lock at `closedThrough`. */
+async function ownInvoiceOfJune(closedThrough: string) {
+  const dir = mkdtempSync(join(tmpdir(), 'belege-agreed-sale-'));
+  const manifest = readFileSync(join(appFolderIn(DEMO_ROOT) ?? DEMO_ROOT, MANIFEST_FILE), 'utf8');
+  writeFileSync(join(dir, MANIFEST_FILE), manifest.replace('reporting: received', 'reporting: agreed'));
+  const api = await startApi('tests/fixtures/by-hand-index.json', {}, { manifestOf: dir });
+  const b = loadBooks(api.ws);
+  const k1 = b.transactions.find((t) => t.ref === 'K1')!;
+  for (const e of b.journalEntries.filter((x) => x.transactionRef === 'K1')) await api.send('DELETE', `/api/journal-entries/${e.id}`);
+  const after = loadBooks(api.ws);
+  const text = `${api.ws.company.name}\nMWST-Nr. ${api.ws.company.uid} MWST\nFamilie Bauer\nRechnung 2026-029\nTreppenhaus\nTotal CHF ${k1.amount}`;
+  after.receipts.push({ id: 'own', filename: 'own.pdf', date: '2026-06-20', location: 'archived', extractedText: text, extractionMethod: 'pdftotext', kind: 'invoice', amount: k1.amount, currency: 'CHF' } as unknown as Receipt);
+  after.mappings.push({ transactionRef: 'K1', receiptId: 'own' });
+  after.config.closedThrough = closedThrough;
+  saveBooks(api.ws, after);
+  const bank = api.ws.bankAccounts.find((a) => a.bank === k1.bank)!.account;
+  const sale = () => api.send('POST', '/api/transactions/K1/sale', { by: 'Anna', choice: 'saleDomestic', lines: [{ accountDebit: bank, accountCredit: '3400', amount: k1.amount, description: k1.description }], links: [] });
+  const k1Rows = () => loadBooks(api.ws).journalEntries.filter((e) => e.transactionRef === 'K1').sort((x, y) => x.date.localeCompare(y.date))
+    .map((e) => [e.date, e.accountDebit === bank ? 'bank' : e.accountDebit, e.accountCredit === bank ? 'bank' : e.accountCredit, e.vatCode ?? '', e.corrects ?? '', e.origin]);
+  return { api, sale, k1Rows };
+}
+
+test('the sale question answered on the hand form, agreed basis: her own invoice of an open Q2 dates the sale in Q2 over 1100, the payment of August settles it', async () => {
+  const { api, sale, k1Rows } = await ownInvoiceOfJune('2026-03-31');
+  try {
+    const r = await sale();
+    assert.equal(r.status, 200, String(r.json.error));
+    assert.deepEqual(k1Rows(), [['2026-06-20', '1100', '3400', 'V81', '', 'manual'], ['2026-08-04', 'bank', '1100', '', '', 'manual']]);
+  } finally { await api.stop(); }
+});
+
+test('the sale question answered on the hand form, agreed basis: her own invoice of a filed Q2 stays on the payment\'s day, declared in Q2\'s correction', async () => {
+  const { api, sale, k1Rows } = await ownInvoiceOfJune('2026-06-30');
+  try {
+    const r = await sale();
+    assert.equal(r.status, 200, String(r.json.error));
+    assert.deepEqual(k1Rows(), [['2026-08-04', 'bank', '3400', 'V81', '2026-Q2', 'manual']]);
+  } finally { await api.stop(); }
 });

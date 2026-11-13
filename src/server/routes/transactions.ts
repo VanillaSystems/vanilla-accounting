@@ -169,11 +169,11 @@ function bookingLine(raw: unknown): BookingLine {
   return { accountDebit: text('accountDebit'), accountCredit: text('accountCredit'), amount: b.amount, ...(vatCode && { vatCode }), description: text('description'), ...(tags && { tags }) };
 }
 
-/** A booking typed without its payment, tied to it (src/server/edits.ts attachEntries); answers the entries as they were, for the undo. */
+/** A booking typed without its payment, tied to it (src/server/edits.ts attachEntries); answers the entries as they were and the lines it added, for the undo. */
 router.post('/api/transactions/:ref/attach', (req, res) => {
   const own = (req.body as { ref?: unknown })?.ref;
   if (typeof own !== 'string' || !own) throw new RequestError(400, 'ref: die Buchung ohne Zahlung (M2026-004).');
-  return withBooks(res, (books) => ({ before: attachEntries(books, req.params.ref, own, WS.bankAccounts) }));
+  return withBooks(res, (books) => attachEntries(books, req.params.ref, own, WS.bankAccounts, loadFxResolver(), handTaxPoint(WS)));
 });
 
 /** The sale question answered on the hand form (#382, src/server/questions.ts answerSaleOnForm): the form's lines and links, the answer as on the card. */

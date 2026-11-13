@@ -168,9 +168,9 @@ function Unattached({ nav, payment, typed, onBooked }: Props & { typed: Unattach
   async function attach(own: string) {
     if (busy.current) return;
     busy.current = true;
-    const before = await attachEntries(nav, payment, own);
+    const attached = await attachEntries(nav, payment, own);
     busy.current = false;
-    if (before) onBooked?.(before.map((e) => ({ ...e, transactionRef: payment })));
+    if (attached) onBooked?.(attached.before.map((e) => ({ ...e, transactionRef: payment })));
   }
   return (
     <div className="pbo" data-testid="unattached">

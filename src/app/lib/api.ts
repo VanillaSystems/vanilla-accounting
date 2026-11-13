@@ -403,7 +403,7 @@ export const api = {
     request<{ entries: JournalEntry[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/entries`, { lines, ...(inputTaxProof !== undefined && { inputTaxProof }), ...(links?.length && { links }) }).then((r) => r.entries),
 
   attachEntries: (ref: string, own: string) =>
-    request<{ before: JournalEntry[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/attach`, { ref: own }).then((r) => r.before),
+    request<{ before: JournalEntry[]; made: string[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/attach`, { ref: own }),
 
   /** `again`: the payments booked again by a run; `kept`: a booked payment whose booking stays because no model is there to rebook it (r8f-41). */
   addMapping: (link: Link) => request<Linked>('POST', '/api/mapping/add', link),
