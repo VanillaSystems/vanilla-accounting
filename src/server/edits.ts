@@ -666,7 +666,7 @@ export function bookPayment(books: Books, ref: string, lines: readonly BookingLi
     accountDebit: l.accountDebit, accountCredit: l.accountCredit, amount: l.amount,
     ...(l.vatCode && { vatCode: l.vatCode }), description: l.description.trim(), ...rate, origin: 'manual', receipts, ...(corrects && { corrects }), ...(l.tags && { tags: l.tags }), by: { kind: 'person', at },
   }));
-  // The tax the linked invoice states, as the classifier books it (#478): a payment rounded to 5 Rappen claims the invoice's tax, not the code's on what was paid.
+  // The tax the linked invoice states, as the classifier books it (#478): a payment rounded to 0.05 claims the invoice's tax, not the code's on what was paid.
   const linked = books.receipts.filter((r) => receipts.includes(r.id));
   const entries = handTaxPointOf(books, tx, withReceiptTax(tx, typed, linked, () => randomBytes(8).toString('hex')), accounts, fx, point);
   books.journalEntries.push(...entries);

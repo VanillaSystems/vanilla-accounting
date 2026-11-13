@@ -140,6 +140,11 @@ steps:
         then: "book what the bank paid: one entry for the payment amount on the expense account with the receipt's VAT code (an invoice less 2 % Skonto: 4400 / bank, M81, on the 98 % the bank paid). Never a separate Skonto row with an empty account; the classifier refuses entries that do not move the bank by the payment amount"
         why: "effective method on cash basis: the discount reduces the consideration, so the expense and the input tax are those of the amount paid (MWSTG Art. 41 Abs. 1); a one-leg Skonto row left the balance sheet off by the discount (persona test misreads, 2026-10-15)"
         source: MWSTG Art. 41 Abs. 1; src/booking/classify.ts paymentRefusal
+      - id: spl-rounded
+        when: the bank paid the invoice's total rounded to 5 Rappen (at most 0.025 off) and the invoice states its tax
+        then: "the input tax is the tax the invoice states: the payment on the expense account without a code, and a single-leg line of the tax-amount code (empty debit / the expense account, I81-2 or M81-2) for the invoice's tax; the rounding stays on the expense account without input tax. Code books it so for the classifier, a rule and a booking by hand, when the stated tax differs from the code's by 0.10 at most; otherwise one line with the gross code"
+        why: "the deductible input tax is the tax charged on the invoice (MWSTG Art. 28 Abs. 1); a gross code takes the tax out of the rounded payment and claims the rounding's tax too, or misses the invoice's own rounding of its lines (#478)"
+        source: MWSTG Art. 28 Abs. 1; src/booking/receipt-tax.ts withReceiptTax
     precedents: []
 
   side:

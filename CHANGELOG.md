@@ -424,6 +424,15 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- **⚠ figures** Input tax of a payment that pays its bill rounded to 5 Rappen (#478): the tax the
+  bill states, not the code's on what was paid. A phone bill paid two Rappen above its total
+  claimed two Rappen more in Ziffer 405 than the bill states; it now claims the bill's tax, booked
+  as the payment on the expense account without a code and a one-legged line of the tax-amount
+  code (I81-2) for the bill's tax, the rounding without input tax. So for the AI, a rule and a booking by hand alike, only in
+  the books' currency, only when the linked bill states its total and its tax, the payment lies
+  within 0.025 of that total and the stated tax within 0.10 of the code's. A payment less a cash
+  discount still books its tax on what was paid (#397). Only new bookings change; booked payments
+  and filed quarters stay as they are. The demo books do not change.
 - The drop window with many files (#453): the line «Gesamt 51 % · 1 von 43 Dateien fertig» no
   longer lies over the tabs (it shrank to nothing once the list was long), and «Schliessen» no
   longer falls below a small window: between the head and the foot, what came of the drop, the

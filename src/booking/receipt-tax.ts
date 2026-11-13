@@ -6,8 +6,8 @@
  * account leaves an exchange difference between the converted payment and the invoice, and a gross
  * rate code on the payment's line would claim the tax of that difference too.
  *
- * A payment in the books' currency that pays its invoice rounded to 5 Rappen (#478, the Swisscom
- * bill of 88.98 paid with 89.00): the input tax is the tax the invoice charged (MWSTG Art. 28), and
+ * A payment in the books' currency that pays its invoice rounded to 0.05 (#478, a phone bill of
+ * 88.98 paid with 89.00): the input tax is the tax the invoice charged (MWSTG Art. 28), and
  * the gross rate code takes it out of the payment; when that differs from the tax the invoice
  * states, the invoice's figure rules and the rounding carries no tax. Only within ROUNDED_BY, so a
  * payment less a cash discount keeps its gross code: its tax is on what was paid (guide spl-skonto,
@@ -36,7 +36,7 @@ import type { BankTransaction, JournalEntry, Receipt } from '../types/index.js';
  */
 export const RECEIPT_TAX_BAND = 0.05;
 
-/** How far a payment in the books' currency may lie from its invoice's total and still pay it whole: the total rounded to 5 Rappen. */
+/** How far a payment in the books' currency may lie from its invoice's total and still pay it whole: the total rounded to 0.05. */
 export const ROUNDED_BY = 0.025;
 
 /** How far an invoice's stated tax may lie from the tax its gross code takes out of the payment: the rounding of an invoice's lines, not a misread figure. */
@@ -88,7 +88,7 @@ export function withReceiptTax(tx: BankTransaction, entries: JournalEntry[], doc
 /** Whether the tax an invoice states is not the one the gross code of line `e` takes, and near enough to it to be the invoice's own rounding. */
 function differs(e: JournalEntry, stated: number): boolean {
   const { rate } = vat().codes.parse(e.vatCode!)!;
-  // As the return takes it (src/engines/return.ts taxOf): the gross less its net, in Rappen.
+  // As the return takes it (src/engines/return.ts taxOf): the gross less its net, in hundredths.
   const gross = toRappen(Math.abs(e.amount));
   const gap = Math.abs(toRappen(stated) - (gross - Math.round((gross * 100) / (100 + rate))));
   return gap > 0 && gap <= toRappen(STATED_TAX_BAND);
@@ -97,4 +97,4 @@ function differs(e: JournalEntry, stated: number): boolean {
 /** Why the input tax of a payment is the invoice's own: in the books' currency for a foreign payment, the invoice's figure for a rounded one. */
 export const receiptTaxReason = (tax: number, rate: number, foreign: boolean) => foreign
   ? `Der Beleg weist die Steuer in ${baseCurrency()} aus: ${tax.toFixed(2)} zu ${rate} % als Vorsteuer, wie auf dem Beleg, nicht aus der umgerechneten Zahlung gerechnet.`
-  : `Der Beleg weist ${tax.toFixed(2)} Steuer zu ${rate} % aus: so viel als Vorsteuer, nicht aus der auf 5 Rappen gerundeten Zahlung gerechnet; die Rundung ohne Vorsteuer.`;
+  : `Der Beleg weist ${tax.toFixed(2)} Steuer zu ${rate} % aus: so viel als Vorsteuer, nicht aus der auf 0.05 gerundeten Zahlung gerechnet; die Rundung ohne Vorsteuer.`;
