@@ -400,12 +400,12 @@ test('open period: keeping a rule books its open payments and leaves the filed q
   const path = String(made.json.path);
   const card = (await api.send('GET', `/api/rules/draft?path=${encodeURIComponent(path)}`)).json as { basis: string; preview: Array<{ open?: { book: string[] } }> };
   assert.ok(card.preview[0].open?.book.includes(ref) && !card.preview[0].open.book.includes('M2026-001'), JSON.stringify(card.preview[0].open));
-  const kept = (await send({ method: 'POST', path: '/api/rules/draft', body: { kind: 'keep', path, basis: card.basis, confirm: true } })).json as { ok: boolean; booked?: { runs: string[]; refs: string[]; entries: string[] }; undo?: { file: string; before: string; after: string } };
+  const kept = (await send({ method: 'POST', path: '/api/rules/draft', body: { kind: 'keep', path, basis: card.basis, confirm: true } })).json as { ok: boolean; booked?: { runs: string[]; refs: string[]; entries: string[] }; keep?: { id: string } };
   assert.ok(kept.booked?.refs.includes(ref) && !kept.booked.refs.includes('M2026-001'), JSON.stringify(kept));
   let now = loadBooks(workspaceAt(api.ws.paths.root)) as Books;
   assert.ok(!now.journalEntries.some((e) => e.transactionRef === 'M2026-001'));
   assert.deepEqual(closedPart(now, '2026-06-30'), closedPart(fixture, '2026-06-30'));
-  const undone = await send({ method: 'POST', path: '/api/rules/kept/undo', body: { runs: kept.booked!.runs, entries: kept.booked!.entries, undo: kept.undo } });
+  const undone = await send({ method: 'POST', path: '/api/rules/kept/undo', body: { keep: kept.keep!.id } });
   assert.equal(undone.json.ok, true, JSON.stringify(undone.json));
   await api.rest();
   now = loadBooks(workspaceAt(api.ws.paths.root)) as Books;

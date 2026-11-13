@@ -4199,6 +4199,8 @@ export default {
     'rules.kept.leftGone': { one: "1 écriture avait déjà disparu.", other: "{n} écritures avaient déjà disparu." },
     'rules.kept.running': { one: "1 encore en cours de comptabilisation", other: "{n} encore en cours de comptabilisation" },
     'rules.kept.later': { one: "1 autre sera comptabilisé au prochain passage", other: "{n} autres seront comptabilisés au prochain passage" },
+    'rules.kept.none': "rien comptabilisé",
+    'rules.kept.blocked': "Annulable une fois la règle gardée ensuite annulée",
     'rules.wages.title': "Règle pour les salaires",
     'rules.wages.line': { one: "Comptabiliser 1 salaire à la main", other: "Comptabiliser {n} salaires à la main" },
     'rules.wages.lead': "Une règle comptabilise tous les paiements avec « {text} » dans le texte sur le compte {account}, sans TVA (un salaire n’est pas une prestation soumise à la TVA), et chaque suivant de même, sans IA. Vous voyez les paiements avant de la conserver.",

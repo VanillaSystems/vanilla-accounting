@@ -4199,6 +4199,8 @@ export default {
     'rules.kept.leftGone': { one: "1 entry was gone already.", other: "{n} entries were gone already." },
     'rules.kept.running': { one: "1 still being booked", other: "{n} still being booked" },
     'rules.kept.later': { one: "1 more is booked by the next run", other: "{n} more are booked by the next run" },
+    'rules.kept.none': "nothing booked",
+    'rules.kept.blocked': "Undo once the rule kept after it is taken back",
     'rules.wages.title': "Rule for the wages",
     'rules.wages.line': { one: "Book 1 wage payment by hand", other: "Book {n} wage payments by hand" },
     'rules.wages.lead': "One rule books every payment with «{text}» in its text on account {account}, without VAT (a wage is no supply with VAT), and every next one alike, without AI. You see the payments before you keep it.",

@@ -13,7 +13,7 @@ import type { RuleRow } from '../../../booking/rule-book.js';
 import type { RuleNames, RuleWords } from '../../../booking/rules.js';
 import type { RuleLine } from '../../../booking/classify.js';
 import type { PreviewPayment, RulePreview } from '../../../booking/rule-preview.js';
-import type { DraftView, KeepResult, RulesView } from '../../../saving/rules.js';
+import type { DraftView, KeepResult, KeptView, RulesView } from '../../../saving/rules.js';
 import { Go } from '../vat/links.js';
 import { at } from '../receipts/view.js';
 import type { NoteOffer, NoteReason } from '../../../knowledge/note-rules.js';
@@ -27,10 +27,13 @@ import { firmCodes } from '../../../accounting/vat-codes.js';
 import { withoutInputTax } from '../../../engines/index.js';
 import { VatCodeField } from '../codes/VatCodeField.js';
 import { codeLabel } from '../codes/names.js';
-import { onBooksChanged } from '../../assistant/store.js';
+import { announceBooksChanged, onBooksChanged } from '../../assistant/store.js';
 import { AccountField } from '../journal/AccountField.js';
 import type { HandSeed } from '../journal/rule-seed.js';
 import type { WageOffer } from '../../../saving/wage-rule.js';
+
+/** The page reads the books again: through its nav, or, from the AI sidebar's card, as after an answer. */
+const refreshFor = (nav?: Nav) => { if (nav) nav.refresh(); else announceBooksChanged(); };
 
 const words = ((key: string, vars: Record<string, string>) => (t as (k: string, v: Record<string, string>) => string)(key, vars)) as RuleWords;
 const money = (n: number) => fmt(n).replace(/\.00$/, '');
@@ -137,7 +140,7 @@ function HandRuleForm({ view, nav, payment, by, seed, inline, onKept }: { view: 
   const set = (k: keyof HandForm) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const reset = () => { setOpen(false); setPath(undefined); setError(undefined); setF(emptyForm()); if (inline) inline.onClose(); else if (payment) nav.setQuery({}); };
   // Kept: the list shows the rule, and what the keep booked stands above it (LastKept); discarded: back to the form as typed.
-  if (path) return <RuleDraft path={path} nav={nav} title={t('rules.hand.title')} onDone={(d, kept) => { if (d === 'discarded') { setPath(undefined); return; } if (kept) rememberKept(kept); else nav.toast(t('rules.draft.kept')); onKept(); reset(); }} />;
+  if (path) return <RuleDraft path={path} nav={nav} title={t('rules.hand.title')} onDone={(d, kept) => { if (d === 'discarded') { setPath(undefined); return; } afterKeep(kept, nav); onKept(); reset(); }} />;
   if (!open) return <p><button type="button" className="btn" data-testid="rule-new" onClick={() => setOpen(true)}>{t('rules.hand.new')}</button></p>;
   async function preview(e: FormEvent) {
     e.preventDefault();
@@ -230,20 +233,50 @@ export function RuleFromPayment({ nav, payment, by, seed, onClose }: { nav: Nav;
   );
 }
 
-let lastKept: Kept | undefined;
+/**
+ * The result lines of the keeps, as the server recorded them (#396): one per keep, read again after
+ * every keep and undo, so a reload shows them as well. A line taken back keeps what its undo said
+ * until closed.
+ */
+let keptLines: KeptView[] = [];
+const keptSaid = new Map<string, string>();
 const keptListeners = new Set<() => void>();
-const rememberKept = (k: Kept | undefined) => { lastKept = k; for (const f of keptListeners) f(); };
+const keptChanged = () => { keptLines = [...keptLines]; for (const f of keptListeners) f(); };
 const onKeptChange = (f: () => void) => { keptListeners.add(f); return () => { keptListeners.delete(f); }; };
+function reloadKept(): void {
+  api.keptLines().then((r) => {
+    const undone = keptLines.filter((k) => keptSaid.has(k.id) && !r.kept.some((x) => x.id === k.id));
+    keptLines = [...undone, ...r.kept].sort((a, b) => a.at.localeCompare(b.at));
+    keptChanged();
+  }, () => undefined);
+}
+/** A keep's answer: its line stands above the lists when it booked or left something waiting; otherwise the toast says it was kept. */
+function afterKeep(kept: Kept | undefined, nav: Nav): void {
+  const k = kept?.keep;
+  if (k && (k.booked.runs.length || k.waits || k.booked.later)) reloadKept();
+  else nav.toast(t('rules.draft.kept'));
+}
 
-/** What the last rule kept in this window booked, until closed: the tasks it booked are gone from the list, so the result stands above it. */
+/** What each rule kept booked, until its line is closed: the tasks it booked are gone from the list, so the result stands above it. */
 export function LastKept({ nav }: { nav: Nav }) {
-  const kept = useSyncExternalStore(onKeptChange, () => lastKept);
-  if (!kept) return null;
+  const lines = useSyncExternalStore(onKeptChange, () => keptLines);
+  useEffect(reloadKept, []);
+  if (!lines.length) return null;
+  const close = (id: string) => {
+    keptLines = keptLines.filter((k) => k.id !== id);
+    keptSaid.delete(id);
+    keptChanged();
+    api.closeKept(id).catch(() => undefined);
+  };
   return (
-    <div className="ruledraft done" data-testid="last-kept">
-      <KeptLine kept={kept} nav={nav} lead />
-      <span className="ruleacts"><button type="button" className="linkbtn" onClick={() => rememberKept(undefined)}>{t('common.close')}</button></span>
-    </div>
+    <>
+      {lines.map((k) => (
+        <div key={k.id} className="ruledraft done" data-testid="last-kept" data-keep={k.id}>
+          <KeptLine keep={k} nav={nav} lead />
+          <span className="ruleacts"><button type="button" className="linkbtn" onClick={() => close(k.id)}>{t('common.close')}</button></span>
+        </div>
+      ))}
+    </>
   );
 }
 
@@ -265,7 +298,7 @@ export function WageRuleOffer({ nav }: { nav: Nav }) {
     return () => { live = false; off(); };
   }, [nav]);
   if (path) {
-    return <RuleDraft path={path} nav={nav} title={t('rules.wages.title')} onDone={(d, kept) => { setPath(undefined); if (kept) rememberKept(kept); else if (d !== 'discarded') nav.toast(t('rules.draft.kept')); if (d !== 'discarded') setOffer(null); }} />;
+    return <RuleDraft path={path} nav={nav} title={t('rules.wages.title')} onDone={(d, kept) => { setPath(undefined); if (d !== 'discarded') { afterKeep(kept, nav); setOffer(null); } }} />;
   }
   if (!offer) return null;
   const draft = () => {
@@ -296,41 +329,49 @@ const KEPT_POLL_MS = 1500;
  * until they rest), and «Rückgängig»: the server puts the rules file back and takes out the
  * bookings the keep's runs made that are still theirs, naming what stays and why.
  */
-export function KeptLine({ kept, nav, lead }: { kept: Kept; nav?: Nav; lead?: boolean }) {
-  const [said, setSaid] = useState<string>();
+export function KeptLine({ keep, nav, lead }: { keep: KeptView; nav?: Nav; lead?: boolean }) {
+  const [said, setSaid] = useState<string | undefined>(keptSaid.get(keep.id));
   const [busy, setBusy] = useState(false);
-  const [b, setB] = useState(kept.booked);
-  const waits = kept.open?.waits.length ?? 0;
+  const [k, setK] = useState(keep);
+  // The store reads the server again after a keep or an undo: a line whose undo a later keep held is free now.
+  useEffect(() => { setK(keep); }, [keep]);
+  const b = k.booked;
   useEffect(() => {
-    if (!b?.running) return;
-    const id = setTimeout(() => { api.keptState(b.runs).then((x) => { setB({ ...x, ...(b.later ? { later: b.later } : {}) }); nav?.refresh(); }, () => undefined); }, KEPT_POLL_MS);
+    if (!b.running || said) return;
+    const id = setTimeout(() => { api.keptState(k.id).then((x) => { setK(x); refreshFor(nav); }, () => undefined); }, KEPT_POLL_MS);
     return () => clearTimeout(id);
-  }, [b]);
+  }, [k, said]);
+  const say = (text: string) => { keptSaid.set(k.id, text); setSaid(text); };
   const undo = async () => {
-    if (!kept.undo || !b) return;
     setBusy(true);
     try {
-      const r = await api.undoKept({ runs: b.runs, entries: b.entries, undo: kept.undo });
+      const r = await api.undoKept(k.id);
       if (!r.ok) { setSaid(r.message); return; }
       const left = [r.left.changed ? t('rules.kept.leftChanged', { n: r.left.changed }) : '', r.left.closed ? t('rules.kept.leftClosed', { n: r.left.closed }) : '', r.left.gone ? t('rules.kept.leftGone', { n: r.left.gone }) : ''].filter(Boolean);
-      setSaid([t('rules.kept.undone', { n: r.removed }), ...left].join(' '));
-      nav?.refresh();
+      say([t('rules.kept.undone', { n: r.removed }), ...left].join(' '));
+      refreshFor(nav);
+      reloadKept();
     } catch (e) { setSaid(errorText(e)); } finally { setBusy(false); }
   };
+  const parts = [
+    b.refs.length ? t('rules.kept.booked', { n: b.refs.length }) : '',
+    b.running ? t('rules.kept.running', { n: b.running }) : '',
+    k.waits ? t('rules.kept.waits', { n: k.waits }) : '',
+    b.notBooked.length ? t('rules.kept.notBooked', { n: b.notBooked.length }) : '',
+    b.later ? t('rules.kept.later', { n: b.later }) : '',
+  ].filter(Boolean);
+  // Nothing booked, something waiting: the line says so, not only what waits (r3-ai-29).
+  if (!b.refs.length && !b.running && parts.length) parts.unshift(t('rules.kept.none'));
   return (
-    <span className="keptline" data-testid="rule-kept" data-booked={b?.refs.length ?? 0} data-waits={waits} data-running={b?.running ?? 0}>
+    <span className="keptline" data-testid="rule-kept" data-keep={k.id} data-booked={b.refs.length} data-waits={k.waits} data-running={b.running}>
       {said ? <span>{said}</span> : (
         <>
           {lead ? <span className="m">{t('rules.draft.keptNow')}</span> : null}
-          <span>{[
-            b?.refs.length ? t('rules.kept.booked', { n: b.refs.length }) : '',
-            b?.running ? t('rules.kept.running', { n: b.running }) : '',
-            waits ? t('rules.kept.waits', { n: waits }) : '',
-            b?.notBooked.length ? t('rules.kept.notBooked', { n: b.notBooked.length }) : '',
-            b?.later ? t('rules.kept.later', { n: b.later }) : '',
-          ].filter(Boolean).join(' · ')}</span>
-          {b?.first && nav ? <Go to={at({ area: 'journal', id: b.first.id }, b.first.date)} nav={nav} className="golink">{t('rules.kept.show')}</Go> : null}
-          {b?.runs.length && kept.undo ? <button type="button" className="linkbtn" data-act="rule-undo" disabled={busy || !!b.running} onClick={() => void undo()}>{t('rules.kept.undo')}</button> : null}
+          {parts.length ? <span>{parts.join(' · ')}</span> : null}
+          {b.first && nav ? <Go to={at({ area: 'journal', id: b.first.id }, b.first.date)} nav={nav} className="golink">{t('rules.kept.show')}</Go> : null}
+          {k.blocked
+            ? <span className="m" data-testid="rule-undo-later">{t('rules.kept.blocked')}</span>
+            : <button type="button" className="linkbtn" data-act="rule-undo" disabled={busy || !!b.running} onClick={() => void undo()}>{t('rules.kept.undo')}</button>}
         </>
       )}
     </span>
@@ -428,9 +469,10 @@ export function RuleDraft({ path, nav, onRules, onDone, title, reveal }: { path:
   if (done) {
     return (
       <div className="ruledraft done" data-draft={path}>
-        <span>{t(`rules.draft.${done}`)}</span>
+        {/* Booked or waiting: «Deine Regel ist behalten.» and its result line; nothing open: it holds from the next payment on. */}
+        <span>{kept?.keep && done === 'kept' && (kept.keep.booked.runs.length || kept.keep.waits) ? t('rules.draft.keptNow') : t(`rules.draft.${done}`)}</span>
         {done !== 'discarded' && onRules ? <button type="button" className="linkbtn" onClick={onRules}>{t('rules.draft.toRules')}</button> : null}
-        {kept ? <KeptLine kept={kept} nav={nav} /> : null}
+        {kept?.keep ? <KeptLine keep={kept.keep} nav={nav} /> : null}
       </div>
     );
   }
@@ -445,9 +487,9 @@ export function RuleDraft({ path, nav, onRules, onDone, title, reveal }: { path:
       const r = await api.draftCommand(kind === 'keep' ? { kind, path, basis: d.basis, confirm: d.confirm } : { kind, path });
       if (r.ok) {
         const done = kind === 'discard' ? 'discarded' : onlyRemoval ? 'removedDone' : 'kept';
-        // What the keep booked at once, and what waits for a receipt (#383): the card says so where it stood.
-        const result = 'committed' in r && (r.booked || r.open?.waits.length) ? r as Kept : undefined;
-        if (result) { setKept(result); nav?.refresh(); }
+        // What the keep booked at once, what waits for a receipt, and its undo (#383, #396): the card says so where it stood, the sidebar too.
+        const result = 'committed' in r && r.keep ? r as Kept : undefined;
+        if (result) { setKept(result); refreshFor(nav); }
         if (onDone) onDone(done, result); else setDone(done);
       }
       else setError('message' in r ? r.message : t('rules.draft.gone'));

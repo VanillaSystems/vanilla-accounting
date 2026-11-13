@@ -4199,6 +4199,8 @@ export default {
     'rules.kept.leftGone': { one: "1 registrazione non c’era più.", other: "{n} registrazioni non c’erano più." },
     'rules.kept.running': { one: "1 ancora in registrazione", other: "{n} ancora in registrazione" },
     'rules.kept.later': { one: "1 altro lo registra la prossima esecuzione", other: "altri {n} li registra la prossima esecuzione" },
+    'rules.kept.none': "nulla registrato",
+    'rules.kept.blocked': "Annullabile quando la regola tenuta dopo è stata annullata",
     'rules.wages.title': "Regola per i salari",
     'rules.wages.line': { one: "Registrare 1 salario a mano", other: "Registrare {n} salari a mano" },
     'rules.wages.lead': "Una regola registra tutti i pagamenti con «{text}» nel testo sul conto {account}, senza IVA (un salario non è una prestazione con IVA), e ogni prossimo allo stesso modo, senza IA. Vedi i pagamenti prima di tenerla.",

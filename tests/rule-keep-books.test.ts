@@ -95,12 +95,12 @@ test('«Rückgängig» of a keep: the rule file goes (it was the first), the kee
   assert.ok(kept.ok && kept.booked && kept.undo, JSON.stringify(kept));
   assert.equal(kept.undo.before, '', 'no rules file before');
   assert.deepEqual([kept.booked.runs.length, kept.booked.running], [4, 0]);
-  assert.deepEqual((await api.send('POST', '/api/rules/kept', { runs: kept.booked.runs })).json.refs, kept.booked.refs, 'asked again: the same state');
+  assert.deepEqual(((await api.send('POST', '/api/rules/kept', { keep: kept.keep!.id })).json.booked as { refs: string[] }).refs, kept.booked.refs, 'asked again: the same state');
   // She changes one of the rule's bookings by hand (its id stays).
   const changed = loadBooks(api.ws).journalEntries.find((e) => e.transactionRef === 'L1')!;
   assert.equal((await api.send('PATCH', `/api/journal-entries/${changed.id}`, { description: 'Lohn Juli Max' })).status, 200);
 
-  const undone = (await api.send('POST', '/api/rules/kept/undo', { runs: kept.booked.runs, entries: kept.booked.entries, undo: kept.undo })).json;
+  const undone = (await api.send('POST', '/api/rules/kept/undo', { keep: kept.keep!.id })).json;
   assert.deepEqual([undone.ok, undone.removed, undone.left], [true, 3, { changed: 1, closed: 0, gone: 0 }], JSON.stringify(undone));
   assert.equal(existsSync(join(api.ws.paths.root, path)), false, 'the first rules file is gone again, not left empty');
   const books = loadBooks(api.ws);
@@ -148,4 +148,91 @@ test('payments that wait for their receipt: the card says they wait, the keep bo
   assert.ok(kept.ok, JSON.stringify(kept));
   assert.equal(kept.booked, undefined, 'nothing to book at the keep');
   assert.equal(loadBooks(api.ws).journalEntries.length, 0);
+});
+
+// ─── #396, #392: the server records each keep; its line and its undo go by the keep's id alone ─────
+
+type Kept = Extract<KeepResult, { ok: true }>;
+type KeptLine = { id: string; file: string; rules: string[]; booked: { refs: string[]; running: number }; waits: number; blocked?: string };
+
+/** A rule drafted by hand and kept as its card shows it. */
+async function keepRule(api: ApiServer, rule: unknown): Promise<Kept> {
+  const made = await api.send('POST', '/api/rules/hand', rule);
+  assert.equal(made.status, 200, JSON.stringify(made.json));
+  const path = String(made.json.path);
+  const card = (await api.send('GET', `/api/rules/draft?path=${encodeURIComponent(path)}`)).json as unknown as DraftView;
+  const kept = (await api.send('POST', '/api/rules/draft', { kind: 'keep', path, basis: card.basis, confirm: true })).json as unknown as KeepResult;
+  assert.ok(kept.ok, JSON.stringify(kept));
+  await api.rest();
+  return kept;
+}
+
+const lines = async (api: ApiServer) => ((await api.send('GET', '/api/rules/kept')).json as unknown as { kept: KeptLine[] }).kept;
+const WAGE_RULE = { match: { kind: 'text', text: '\\bLohn\\b' }, direction: 'out', account: '5000' };
+const DEPOSIT_RULE = { match: { kind: 'text', text: 'Einlage' }, direction: 'in', account: '2850' };
+
+async function employerApi(): Promise<ApiServer> {
+  const api = await startApi('tests/fixtures/by-hand-index.json', {}, { manifestOf: employer() });
+  servers.push(api);
+  assert.equal((await api.send('PUT', '/api/accounts/5000', { name: 'Lohnaufwand' })).status, 200);
+  assert.equal((await api.send('PUT', '/api/accounts/2850', { name: 'Privat' })).status, 200);
+  return api;
+}
+
+test('two keeps of one rules file: each has its own line, the first one\'s undo waits for the second\'s, and the second\'s undo takes back only its rule and its booking', async () => {
+  const api = await employerApi();
+  const wages = await keepRule(api, WAGE_RULE);
+  const deposit = await keepRule(api, DEPOSIT_RULE);
+  assert.ok(wages.keep && deposit.keep, 'the server records each keep');
+  assert.equal(wages.undo?.file, deposit.undo?.file, 'both rules in the same file');
+  const shown = await lines(api);
+  assert.deepEqual(shown.map((l) => [l.id, [...l.booked.refs].sort(), l.blocked]), [[wages.keep.id, WAGES, 'later'], [deposit.keep.id, ['K2'], undefined]], 'one line per keep, true to its own numbers');
+
+  const refused = (await api.send('POST', '/api/rules/kept/undo', { keep: wages.keep.id })).json;
+  assert.deepEqual([refused.ok, refused.refusal], [false, 'later'], JSON.stringify(refused));
+  assert.equal(loadBooks(api.ws).journalEntries.length, 5, 'nothing taken back');
+
+  const undone = (await api.send('POST', '/api/rules/kept/undo', { keep: deposit.keep.id })).json;
+  assert.deepEqual([undone.ok, undone.removed], [true, 1], JSON.stringify(undone));
+  await api.rest();
+  const books = loadBooks(api.ws);
+  assert.deepEqual(books.journalEntries.map((e) => e.transactionRef).sort(), WAGES, 'the wages stay booked, the deposit is not');
+  const file = readFileSync(join(api.ws.paths.root, wages.undo!.file), 'utf8');
+  assert.match(file, /5000/);
+  assert.doesNotMatch(file, /2850/, 'the deposit rule is gone, the wage rule stays');
+  assert.deepEqual((await lines(api)).map((l) => [l.id, l.blocked]), [[wages.keep.id, undefined]], 'the first keep\'s line stays, its undo free now');
+  // The undo's deletion is recorded for Änderungen as a deletion by hand is.
+  assert.ok(existsSync(join(api.ws.paths.data, 'trash', 'entries')), 'recorded for Änderungen');
+  const again = await api.send('POST', '/api/rules/kept/undo', { keep: deposit.keep.id });
+  assert.equal(again.status, 404, 'a keep taken back is gone');
+});
+
+test('the undo of a keep puts back the mark of a booking she deleted before it', async () => {
+  const api = await employerApi();
+  const made = await api.send('POST', '/api/journal-entries', { date: '2026-08-05', description: 'Einlage', accountDebit: '1020', accountCredit: '2850', amount: 3000, transactionRef: 'K2' });
+  assert.equal(made.status, 200, JSON.stringify(made.json));
+  const id = String((made.json.entry as { id: string } | undefined)?.id ?? made.json.id);
+  assert.equal((await api.send('DELETE', `/api/journal-entries/${id}`)).status, 200);
+  const mark = loadBooks(api.ws).transactions.find((t) => t.ref === 'K2')!.waitsForPerson;
+  assert.equal(mark?.why, 'bookingDeleted');
+  const deposit = await keepRule(api, DEPOSIT_RULE);
+  assert.deepEqual(deposit.booked?.refs, ['K2'], JSON.stringify(deposit));
+  const undone = (await api.send('POST', '/api/rules/kept/undo', { keep: deposit.keep!.id })).json;
+  assert.equal(undone.ok, true, JSON.stringify(undone));
+  await api.rest();
+  const books = loadBooks(api.ws);
+  assert.ok(!books.journalEntries.some((e) => e.transactionRef === 'K2'));
+  assert.deepEqual(books.transactions.find((x) => x.ref === 'K2')!.waitsForPerson, mark, 'the mark is there again');
+});
+
+test('a period closed between the keep and its undo: the bookings in it stay and are named', async () => {
+  const api = await employerApi();
+  const wages = await keepRule(api, WAGE_RULE);
+  assert.deepEqual([...wages.booked!.refs].sort(), WAGES);
+  const ledger = JSON.parse(readFileSync(api.ws.paths.ledger, 'utf8')) as { config: Record<string, unknown> };
+  writeFileSync(api.ws.paths.ledger, JSON.stringify({ ...ledger, config: { ...ledger.config, closedThrough: '2026-07-31' } }, null, 2) + '\n');
+  const undone = (await api.send('POST', '/api/rules/kept/undo', { keep: wages.keep!.id })).json;
+  assert.deepEqual([undone.ok, undone.removed, undone.left], [true, 2, { changed: 0, closed: 2, gone: 0 }], JSON.stringify(undone));
+  await api.rest();
+  assert.deepEqual(loadBooks(api.ws).journalEntries.map((e) => e.transactionRef).sort(), ['L1', 'L2'], 'July is closed: its two wages stay');
 });

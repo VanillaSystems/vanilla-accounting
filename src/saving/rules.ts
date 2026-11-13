@@ -290,8 +290,12 @@ export type KeepResult =
     open?: OpenDecided;
     /** The rules file as it was: «Rückgängig» puts it back (RuleCommand restore). */
     undo?: { file: string; before: string; after: string };
+    /** The ids of the rules the keep added or changed. */
+    rules?: string[];
     /** What the booking runs the keep started made of `open.book` (src/server/routes/rules.ts). */
     booked?: KeptBookings;
+    /** The server's record of this keep (src/saving/keeps.ts): its result line and its undo go by it alone. */
+    keep?: KeptView;
   }
   | { ok: false; refusal: 'gone' | 'stale' | 'rules' | 'wide' | 'not-rules' | 'changed' | 'note'; message: string };
 
@@ -300,6 +304,13 @@ export type KeepResult =
  * their entries, how many runs are still going, the payments a run left unbooked, and how many
  * payments were not started at the keep (more than KEEP_RUNS_MAX: the next run books them).
  */
+/** One keep as its result line shows it (GET/POST /api/rules/kept): what it booked so far, what waits, and whether its undo may run now. */
+export interface KeptView {
+  id: string; at: string; file: string; rules: string[]; booked: KeptBookings; waits: number;
+  /** Why «Rückgängig» is refused now: a later keep of the same file must be taken back first. */
+  blocked?: 'later';
+}
+
 export interface KeptBookings { runs: string[]; refs: string[]; entries: string[]; running: number; notBooked: string[]; later?: number; first?: { id: string; date: string } }
 
 const CUSTOMIZING = ['Vanilla-Kind: customizing', "Vanilla-Person: the app's user"];
@@ -354,7 +365,8 @@ export async function keepDraft(ws: Workspace, path: string, basis: string, conf
   recordSettled(ws, path, changes, 'kept');
   // The open payments the kept rules decide, as the card showed them: the keep books them at once (#383).
   const open = preview.reduce<OpenDecided>((all, p) => ({ book: [...all.book, ...(p.open?.book ?? [])], waits: [...all.waits, ...(p.open?.waits ?? [])] }), { book: [], waits: [] });
-  return { ok: true, committed, ...(open.book.length || open.waits.length ? { open, undo: { file: path, before: was, after: hashOf(after) } } : {}) };
+  const rules = [...d.added, ...d.changed].map((r) => r.id);
+  return { ok: true, committed, rules, undo: { file: path, before: was, after: hashOf(after) }, ...(open.book.length || open.waits.length ? { open } : {}) };
 }
 
 /** «Verwerfen»: the draft of one file is gone; the file stays as it is. */

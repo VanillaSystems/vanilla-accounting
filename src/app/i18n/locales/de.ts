@@ -4196,6 +4196,8 @@ export const messages = {
   'rules.kept.leftGone': { one: "1 Buchung war schon weg.", other: "{n} Buchungen waren schon weg." },
   'rules.kept.running': { one: "1 wird noch gebucht", other: "{n} werden noch gebucht" },
   'rules.kept.later': { one: "1 weitere bucht der nächste Lauf", other: "{n} weitere bucht der nächste Lauf" },
+  'rules.kept.none': "nichts gebucht",
+  'rules.kept.blocked': "Rückgängig erst, wenn die später behaltene Regel zurückgenommen ist",
   'rules.wages.title': "Regel für die Löhne",
   'rules.wages.line': { one: "1 Lohnzahlung von Hand buchen", other: "{n} Lohnzahlungen von Hand buchen" },
   'rules.wages.lead': "Eine Regel bucht alle mit «{text}» im Text auf Konto {account}, ohne MWST (ein Lohn ist keine Leistung mit MWST), und jede nächste gleich, ohne KI. Du siehst die Zahlungen, bevor du sie behältst.",
