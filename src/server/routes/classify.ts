@@ -13,7 +13,7 @@ import { ask } from '../../llm/ask.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { classifyTransactions, loadClassifyContext, vatToRead } from '../../booking/classify.js';
 import { vatStep } from '../../intake/vat.js';
-import type { Books } from '../../books/store.js';
+import { moduleActor, updateSaved, type Books } from '../../books/store.js';
 import { reconcileRefusal, reconciliationOf } from '../../books/reconcile.js';
 import { WS, assertOpen, readBooks, refDates, updateBooks, RequestError } from '../books.js';
 import { assertNotBookedInFiled, bookedAgain } from '../edits.js';
@@ -52,7 +52,8 @@ router.post('/api/journal-entries/classify/:txRef', async (req, res) => {
   openTransaction(first, txRef, overwrite);
   // Her click reads the VAT of the payment's receipts nobody has read yet first (#391): the model books on what they show, never on a guess.
   const toRead = new Set(first.transactions.filter((t) => t.ref === txRef).flatMap((t) => vatToRead(first, t)).map((r) => r.id));
-  if (toRead.size) await vatStep({ only: toRead })({ ws: WS, books: { read: readBooks, update: updateBooks }, ask, progress: () => {}, log: () => {} });
+  // The read is the VAT step's, written as the module (#450): its facts, or one more failed read on the receipt.
+  if (toRead.size) await vatStep({ only: toRead })({ ws: WS, books: { read: readBooks, update: (fn) => updateSaved(WS, moduleActor('intake'), fn, readBooks) }, ask, progress: () => {}, log: () => {} });
   const scratch = toRead.size ? readBooks() : first;
   scratch.journalEntries = scratch.journalEntries.filter((je) => je.transactionRef !== txRef);
   // Every movement of the ref: the entries of all legs of a charge split across balances under one ref are replaced below (#287).
