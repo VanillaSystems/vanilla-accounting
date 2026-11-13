@@ -29,7 +29,7 @@ import { numbersIn, squash } from '../accounting/document-numbers.js';
 import { freeFor, nameWords, pairMapping, takenPayments } from './pairing.js';
 import { legOf } from '../workspace/money-accounts.js';
 import { titlesFor } from './titles.js';
-import { estvToChf, noPaymentFor, noReceiptFor, runPairChain, takeOver } from './pair-chain.js';
+import { estvToChf, noPaymentFor, noReceiptFor, runPairChain, takeOver, vatCorrectionsIn } from './pair-chain.js';
 import { linkOrdersToSales } from '../booking/sales-report.js';
 import { linkReceiptSets, linkSplitLegs, MAX_RUN, MAX_TRIED } from './receipt-sets.js';
 import { batchPayers, businesses, NO_BATCH_PAYERS, type BatchPayers, type Businesses } from './batch-payers.js';
@@ -313,6 +313,29 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
       pairedByCode.add(l.receipt);
       progress(++completed, total);
       log(`  ${receipt.filename} → ${target}  ${out.result === 'linked' ? `linked ${l.by === 'checked' ? 'by code, checked by the model' : 'by code'}: ${l.payment}${l.replaced ? ` in place of receipt ${l.replaced}, a whole period off the payment's day` : ''}` : out.result === 'filed' ? `pays the filed payment ${l.payment}: not linked` : out.result === 'twin' ? 'possibly a copy of another receipt: not linked, Belege asks' : `${l.payment} was linked meanwhile: not linked`}  (no model match)`);
+    }
+  }
+  // ── A bill of a VAT-only correction (a provider's Payments Invoice, #190): no payment will come for it, so the model's
+  // match has nothing to decide. The day and the total its text states plainly date and name it, by code (#458): before,
+  // one failed model answer left such a bill staged without a date and its input tax unbooked.
+  // One a person booked already from Belege («Vorsteuer buchen») is linked to that booking: still such a bill, never a payment's.
+  const bills = vatCorrectionsIn(ws, { ...books.read(), mappings: [] });
+  const billsByCode = toRead.flatMap((r) => (pairedByCode.has(r.id) || !bills[r.id] ? [] : provisional(r) ?? []));
+  if (billsByCode.length) {
+    const titles = ask ? await titlesFor(ask, billsByCode, log) : new Map<string, ReceiptTitle>();
+    for (const p of billsByCode) {
+      const receipt = toRead.find((r) => r.id === p.id)!;
+      const title = titles.get(p.id);
+      // A copy of another receipt (by its facts, now read) is filed, never booked: the booking step books a bill's input tax once (vatCorrectionsOf `twin`).
+      let twin: string | undefined;
+      const target = archive(receipt, codeName(p.date!, title, receipt.originalFilename ?? receipt.filename), (r, index) => {
+        Object.assign(r, keepHand(r, { date: p.date, amount: p.amount, currency: p.currency, ...(title ? { title, description: `${title.vendor} ${title.what}`.trim() } : {}) }));
+        twin = waitsBehind(index, r, order);
+      });
+      if (!target) continue;
+      pairedByCode.add(p.id);
+      progress(++completed, total);
+      log(`  ${receipt.filename} → ${target}  a bill of a VAT-only correction: dated and named by code, no payment${twin ? `; possibly a copy of ${twin}, Belege asks` : ''}  (no model match)`);
     }
   }
   const toProcess = toRead.filter((r) => !pairedByCode.has(r.id));

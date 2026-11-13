@@ -298,6 +298,8 @@ export interface Candidate {
   wrongWay?: true;
   /** It lies in a filed quarter: choosing it leads to a correction in the open one, never to a link (corner-33). */
   filed?: true;
+  /** The same amount, and its text names the receipt's own number (namedNumbers): ranked first (#456). */
+  numbered?: true;
 }
 
 const DAY = 864e5;
@@ -360,11 +362,13 @@ export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = '', 
     // A collective payment holds one receipt per part: another receipt on it does not make it taken for this one.
     const score = dAmt * 100 + Math.abs(days ?? 0) * 0.6 + (otherCurrency ? 8 : 0) + (taken && !part ? 30 : 0) + (wrongWay ? 30 : 0);
     const fit = part ? { kind: 'same' as const } : taken ? undefined : amountFit(r, tx, toChf);
-    const c: Candidate = { tx, score: score + (filed ? 0.5 : 0), sameAmount, otherCurrency, days, taken, ...(fit ? { fit } : {}), ...(part ? { part } : {}), ...(wrongWay ? { wrongWay: true as const } : {}), ...(filed ? { filed: true as const } : {}) };
+    // The same amount and the receipt's own number in its text: ahead of any Skonto or rounding guess, whatever the days (#456).
+    const numbered = sameAmount && !taken && !wrongWay && namedNumbers(r, tx).length > 0;
+    const c: Candidate = { tx, score: score + (filed ? 0.5 : 0), sameAmount, otherCurrency, days, taken, ...(fit ? { fit } : {}), ...(part ? { part } : {}), ...(wrongWay ? { wrongWay: true as const } : {}), ...(filed ? { filed: true as const } : {}), ...(numbered ? { numbered: true as const } : {}) };
     if (filed && (taken || (!words.length && !isBest(c)))) continue;
     all.push(c);
   }
-  all.sort((a, b) => a.score - b.score || b.tx.date.localeCompare(a.tx.date));
+  all.sort((a, b) => Number(!!b.numbered) - Number(!!a.numbered) || a.score - b.score || b.tx.date.localeCompare(a.tx.date));
   if (words.length) return { best: [], more: all.slice(0, 40) };
   const best = all.filter(isBest).slice(0, 3);
   return { best, more: all.filter((c) => !best.includes(c)).slice(0, 12) };
