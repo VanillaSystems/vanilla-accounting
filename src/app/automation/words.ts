@@ -8,15 +8,30 @@ import type { DockWidget, WidgetFigure } from './widget.js';
 
 export type Say = (key: string, vars?: Record<string, string | number>) => string;
 
-/** A figure as the bar shows it. */
-export const figureText = (f: WidgetFigure): string => (f.key === 'withoutYou' ? `${f.pct} %` : String(f.n));
-/** Its word under it in the bar. */
-export const figureLabel = (say: Say, f: WidgetFigure): string => (f.key === 'withoutYou' ? say('dock.fig.withoutYou') : f.key === 'payments' ? say('dock.card.payments', { n: f.of ?? 0 }) : say(`dock.fig.${f.key}`, { n: f.n ?? 0 }));
-/** Its words on the card and in the tip, which name the unit. */
-export const cardLabel = (say: Say, f: WidgetFigure): string => (f.key === 'withoutYou' ? say('dock.fig.withoutYou') : f.key === 'payments' ? say('dock.card.payments', { n: f.of ?? 0 }) : say(`dock.card.${f.key}`, { n: f.n ?? 0 }));
+/** A figure as the bar shows it: one number over its label. */
+export const figureText = (f: WidgetFigure): string => (f.key === 'withoutYou' ? `${f.pct} %` : f.key === 'receipts' ? String(f.read) : String(f.n));
+/** Its word under it in the bar, which names its unit (#398): «von 23 Zahlungen gebucht», «Aufgaben». */
+export function figureLabel(say: Say, f: WidgetFigure): string {
+  switch (f.key) {
+    case 'withoutYou': return say('dock.fig.withoutYou');
+    case 'payments': return f.of ? say('dock.card.payments', { n: f.of }) : say('dock.fig.paymentsNone');
+    case 'receipts': return cardLine(say, f);
+    case 'waiting': return say('dock.fig.waiting', { n: f.n });
+  }
+}
+/** A figure as one line of words, number and unit together: the card's lines and the tip. */
+export function cardLine(say: Say, f: WidgetFigure): string {
+  switch (f.key) {
+    case 'withoutYou': return `${f.pct} % ${say('dock.fig.withoutYou')}`;
+    // A period without payments or receipts says so, never «0 von 0» (#398 review).
+    case 'payments': return f.of ? say('dock.card.paymentsLine', { n: f.n, of: f.of }) : say('dock.card.paymentsNone');
+    case 'receipts': return f.collected ? say('dock.card.receipts', { read: f.read, booked: f.booked }) : say('dock.card.receiptsNone');
+    case 'waiting': return `${f.n} ${say('dock.card.waiting', { n: f.n })}`;
+  }
+}
 
-/** The bar's figures in words, as its tip says them: «5 Belege gelesen · 3 Belege gebucht · 2 Aufgaben für dich». */
-export const dockLine = (say: Say, w: Pick<DockWidget, 'stack'>): string => w.stack.map((f) => `${figureText(f)} ${cardLabel(say, f)}`).join(' · ');
+/** The bar's figures in words, as its tip says them: «7 von 23 Zahlungen gebucht · 8 Aufgaben für dich». */
+export const dockLine = (say: Say, w: Pick<DockWidget, 'stack'>): string => w.stack.map((f) => cardLine(say, f)).join(' · ');
 
 /** The page's headline before its share: «8 Belege gesammelt, 4 davon gebucht». */
 export const heroLine = (say: Say, f: HomeFigures): string => `${say('automation.home.hero.collected', { n: f.collected })}, ${say('automation.home.hero.booked', { n: f.booked })}`;

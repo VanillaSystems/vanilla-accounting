@@ -10,39 +10,35 @@
 import { useMemo } from 'react';
 import { t } from '../i18n/index.js';
 import { formatDate } from '../lib/utils.js';
+import { TASKS, itemsOf, openList, receiptAt, type Items as ItemList, type Say } from './open-period-items.js';
 import { periodName } from '../lib/period-label.js';
 import { hrefOf } from '../shell/history.js';
 import type { Location } from '../shell/route.js';
 import { useQuestions } from '../questions/store.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { useAutomation } from '../automation/store.js';
-import { placedReceiptDay } from '../automation/home.js';
 import { orderPagesNow } from '../lib/order-pages.js';
 import { at } from '../areas/receipts/view.js';
 import { taskLine } from '../areas/automation/words.js';
 import { elsewhereCount, elsewhereOf, nothingOpen, openLines, openPeriodState, type OpenLine, type OpenPeriodState } from '../areas/automation/open-period.js';
 import { issueWords, UnbookedFact } from '../areas/automation/Issues.js';
-import { OPEN_ITEMS } from '../areas/vat/model.js';
 import { chargesVat, filing } from '../../engines/index.js';
 import { openCount } from '../../workflows/model.js';
+import { processingOf } from '../../workflows/processing.js';
 import { localToday } from '../../accounting/periods.js';
 import type { Index } from '../../types/index.js';
 
-const TASKS: Location = { route: { area: 'automation', view: 'tasks' }, query: {} };
-
-/** The return's list «Noch offen» beside it (#341): where a line about the return leads, for a firm that files one. */
-const openList = (s: OpenPeriodState): Location | undefined =>
-  (chargesVat() && s.filing.kind !== 'filed' ? { route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period: s.period } } : undefined);
 
 /** Where a line leads: the first object of what it counts, in the period that holds it; the period's questions to the return's list of them. */
 function goOf(l: OpenLine, s: OpenPeriodState, books: Index): Location {
   switch (l.kind) {
+    case 'yours': return receiptAt(l.items[0].receipt, s, books);
     case 'unbooked': return at({ area: 'bank', payment: l.first.ref }, l.first.date);
     case 'questions': return openList(s) ?? TASKS;
     case 'moreTasks': return TASKS;
     case 'evidence': return at({ area: 'journal', id: l.first.id }, l.first.date);
     // The day Belege lists the receipt under (#385 review), in the period the card is about.
-    case 'unlinked': return at({ area: 'receipts', id: l.first.id }, placedReceiptDay(books, l.first, s.period.from));
+    case 'unlinked': return receiptAt(l.first, s, books);
     case 'task': return { route: { area: 'automation', view: 'tasks', run: l.task.run }, query: {} };
   }
 }
@@ -51,6 +47,7 @@ function goOf(l: OpenLine, s: OpenPeriodState, books: Index): Location {
 const NONE = { unbooked: 0, waitingReceipt: 0 };
 function textOf(l: OpenLine): string {
   switch (l.kind) {
+    case 'yours': return issueWords({ ...NONE, own: l.n })[0];
     case 'unbooked': return issueWords({ unbooked: l.n, waitingReceipt: l.waiting })[0];
     case 'questions': return issueWords({ ...NONE, questions: l.n })[0];
     case 'evidence': return issueWords({ ...NONE, evidence: l.n })[0];
@@ -83,7 +80,7 @@ export function OpenPeriodCard({ books, onGo }: { books: Index; onGo(loc: Locati
   const today = localToday();
   // The sidebar renders again with every word of a streaming answer: the state is computed once per change of what it reads.
   const { s, lines, other, unbookedElsewhere } = useMemo(() => {
-    const s = openPeriodState(books, questions ?? [], tasks ?? [], accounts ?? [], { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays }, pages);
+    const s = openPeriodState(books, questions ?? [], tasks ?? [], accounts ?? [], { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays }, pages, processingOf(view?.runs ?? [], books.receipts));
     const e = elsewhereOf(books, questions ?? [], tasks ?? [], accounts ?? [], s, filing().length, view ? openCount(view) - view.tasks.length : 0, registered, today);
     // UnbookedFact says the payments; the rest is counted as the tasks it is under Aufgaben.
     return { s, lines: openLines(s), other: elsewhereCount(e) - e.unbooked.length, unbookedElsewhere: e.unbooked.length };
@@ -104,11 +101,23 @@ export function OpenPeriodCard({ books, onGo }: { books: Index; onGo(loc: Locati
               {link(goOf(l, s, books), textOf(l))}
               {l.kind === 'unbooked' && l.unread ? <small data-held="unread">{t('openPeriod.unread', { n: l.unread })}</small> : null}
               {l.kind === 'task' && l.task.overdue ? <small>{t('automation.overdue')}</small> : null}
+              <Items of={itemsOf(l, s, books, t as unknown as Say)} link={link} />
             </li>
           ))}
         </ul>
       )}
     </section>
+  );
+}
+
+/** The objects of a line one by one, each a link; what is beyond them counted, with the way to all. */
+function Items({ of, link }: { of: ItemList; link(to: Location, text: string): JSX.Element }) {
+  if (!of.items.length) return null;
+  return (
+    <ul className="openp-items">
+      {of.items.map((x) => <li key={x.key} data-item={x.key}>{link(x.go, x.text)}</li>)}
+      {of.more && of.all ? <li data-more>{link(of.all, t('openPeriod.more', { n: of.more }))}</li> : null}
+    </ul>
   );
 }
 

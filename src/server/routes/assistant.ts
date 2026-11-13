@@ -28,6 +28,7 @@ import { automationView, bookAgain, engine } from './automation.js';
 import { openWork, purposeNow } from '../open-work.js';
 import { askedBy } from '../../workflows/held.js';
 import { openCount } from '../../workflows/model.js';
+import { processingOf } from '../../workflows/processing.js';
 import { accountsOf } from '../../workspace/reads.js';
 import { providersOf } from '../../intake/sales-report-import.js';
 import { clearingAccounts } from '../../booking/providers.js';
@@ -119,7 +120,8 @@ async function waitingNow(language: string, asked: Purpose | undefined, setupWan
   const books = readBooks();
   // Stopped runs wait under Automatisierung as the tasks do (openCount): what is open is never said to be nothing while one waits.
   const stuck = openCount(view) - view.tasks.length;
-  return [openWork(WS, books, tasks, language, undefined, stuck), await collectionNow(WS, language, books.receipts)].filter(Boolean).join('\n\n');
+  // A receipt a run still reads is not the person's yet (#398): the runs as Belege reads them.
+  return [openWork(WS, books, tasks, language, undefined, stuck, processingOf(view.runs, books.receipts)), await collectionNow(WS, language, books.receipts)].filter(Boolean).join('\n\n');
 }
 
 const PURPOSE_NOTE: Record<Purpose, string> = {

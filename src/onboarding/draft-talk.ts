@@ -11,7 +11,8 @@ import { join, resolve } from 'node:path';
 import type { AskOptions } from '../llm/ask.js';
 import { SetupError, type BankSpec, type SetupRefusal } from '../workspace/create.js';
 import { BANKS } from '../workspace/banks.js';
-import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, NO_VAT, notRegistered, optionOf, unsteered, unusualPeriod, type QuestionKey } from '../workspace/setup.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, NO_VAT, notRegistered, offeredAnswers, offeredLabel, optionOf, unsteered, unusualPeriod, type QuestionKey, type QuestionSpec } from '../workspace/setup.js';
+import { wordsIn } from '../export/texts.js';
 import { APP_FOLDER } from '../workspace/workspace.js';
 import { checkPatch, draftView, readDraft, saidFirm, writeDraft } from './draft-store.js';
 import { draftMarks, draftSteps, markOf, withPatch, type DraftPatch, type Firm, type SetupDraft, type SetupDraftView, type StepMark } from './draft.js';
@@ -108,6 +109,35 @@ function waiting(d: SetupDraft): string {
   return open.id === 'review' ? 'nothing: every answer is given, the person can create the books' : open.id;
 }
 
+/**
+ * The buttons of the step waiting, word for word as the person sees them (offeredAnswers, the list
+ * the conversation and the form draw a question's buttons from, #398; the kinds of firm; a card's one
+ * button), and for a question the app leaves to her alone (UNSTEERED) the facts of its help line,
+ * never a recommendation.
+ */
+export function buttonsNote(d: SetupDraft): string {
+  const open = draftSteps(d).at(-1)!;
+  const { t } = wordsIn(d.language ?? 'de');
+  const say = t as unknown as (key: string, vars?: Record<string, string>) => string;
+  const exactly = (labels: string[]) => `Its buttons, exactly these and no others: ${labels.map((l) => `«${l}»`).join(', ')}. Name no other answer: there is no «weiss nicht», «später» or «überspringen» on it unless it stands in this list, and never tell the person she can skip it.`;
+  switch (open.id) {
+    // A card of fields she fills in, with its one button (DraftConversation's FirmCard, RatesCard, the banks' card).
+    case 'firm': case 'netRates': case 'banks':
+      return `${exactly([say('onboarding.draft.next')])} It is a card of fields she fills in or you fill from her words.`;
+    case 'preset': return exactly(PRESET_NAMES.map((p) => say(`desktop.q.preset.${p}`)));
+    case 'review': return `${exactly([say('desktop.create')])} Beside each answer of the review stands «${say('onboarding.change')}».`;
+    case 'question': {
+      const where = (QUESTIONS[open.key] as QuestionSpec).where;
+      return [
+        exactly(offeredAnswers(open.key).map((a) => offeredLabel(say, open.key, a))),
+        ...(unsteered(open.key) ? [
+          `This question is hers alone: never recommend an answer and never call one usual, likely or the default for her. When she asks what it means or how to tell, explain in her words from these facts only: ${QUESTIONS[open.key].why} ${where ?? ''} «${say('desktop.q.noVat')}» is only for a firm that is not in the VAT register; a firm whose accountant (Treuhand) fills in its VAT returns is registered.`,
+        ] : []),
+      ].join('\n');
+    }
+  }
+}
+
 const key = (m: StepMark) => (['firm', 'preset', 'netRates', 'banks'].includes(m) ? m : `answers.${m}`);
 
 /** The prompt for one typed message: the draft, the step waiting, every value code accepts, the turns so far. */
@@ -124,6 +154,7 @@ ${said && Object.keys(said).length ? `\nOf the firm the person already said, and
 Answered, by a button or by the person's words (never ask about these again, also when the conversation below asked them: a button answered since): ${marks.answered.map(key).join(', ') || 'nothing yet'}
 Still open, in the order the app asks them: ${marks.open.map(key).join(', ') || 'nothing'}
 The step waiting now, which the app shows with its buttons right below your words: ${waiting(d)}
+${buttonsNote(d)}
 
 What the setup asks, with the only values the app accepts:
 - firm: {"name": company name, "uid": Swiss company number CHE-###.###.###, "owner": the owner's or managing director's name}

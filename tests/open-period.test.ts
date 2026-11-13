@@ -14,13 +14,17 @@ import type { Books } from '../src/books/store.js';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { filingStage } from '../src/app/automation/home.js';
 import { join } from 'node:path';
-import { TASKS_SHOWN, elsewhereCount, elsewhereOf, nothingOpen, openLines, openPeriodState, waitingKinds } from '../src/app/areas/automation/open-period.js';
+import { ITEMS_SHOWN, TASKS_SHOWN, elsewhereCount, elsewhereOf, nothingOpen, openLines, openPeriodState, waitingKinds } from '../src/app/areas/automation/open-period.js';
 import { countIssues, periodIssues, receiptWaits, unbookedOpen } from '../src/app/areas/automation/period-issues.js';
 import { openWork, periodNote, periodState, purposeNow } from '../src/server/open-work.js';
 import { leavesSetup, newThread } from '../src/app/assistant/thread.js';
 import { changesIn } from '../src/assistant/changes.js';
 import { isActionChange } from '../src/types/assistant.js';
 import { tempWorkspace } from './support/workspace.js';
+import { formatIn } from '../src/app/i18n/core.js';
+import de from '../src/app/i18n/locales/de.js';
+
+const say = (key: string, vars: Record<string, string | number> = {}) => formatIn({ code: 'de', ...de }, key as never, vars);
 
 const tx = (ref: string, date: string, amount: number, extra: Partial<BankTransaction> = {}): BankTransaction => ({ ref, bank: 'Bank', date, amount, currency: 'CHF', direction: 'DBIT', description: ref, ...extra });
 const receipt = (id: string, date: string): Receipt => ({ id, filename: `${id}.pdf`, originalFilename: `${id}.pdf`, extractedText: '', extractionMethod: 'pdftotext', fileSize: 4000, indexedAt: '2026-09-30T08:00:00Z', location: 'archived', currency: 'CHF', date, amount: 50 });
@@ -68,8 +72,8 @@ test('the state of the oldest period not filed is the review\'s list, the paymen
 test('the assistant\'s message names that state with its places and asks for the card, in every conversation that is not the setup', () => {
   const ws = tempWorkspace('open-period-');
   const note = periodNote(ws, books as Books, [review], 'de', '2026-11-12');
-  assert.match(note, /^Where the oldest period not filed stands[^\n]*: 2026-Q3 \(01\.07\.2026 to 30\.09\.2026\); it is over; its return is due on 29\.11\.2026\./);
-  assert.match(note, /Payments without a booking \(4\), under «Kontoauszüge»:\n- 25\.07\.2026 [^\n]*CHF 5200\.00 \(LOHN\)/);
+  assert.match(note, /^Where the oldest period not filed stands[^\n]*: Q3 2026 \(01\.07\.2026 to 30\.09\.2026\); it is over; its return is due on 29\.11\.2026\./);
+  assert.match(note, /Payments without a booking \(4\), under «Kontoauszüge»:\n- 25\.07\.2026 [^\n]*CHF 5.200\.00 \(LOHN\)/);
   assert.match(note, /Of them, 2 the app holds until their receipt is linked: it books them itself then and nobody is asked yet/);
   assert.doesNotMatch(note, /their return is near|could not be read/, 'only the kinds that occur are named');
   assert.match(periodNote(ws, books as Books, [review], 'de', '2026-11-20'), /Of them, 2 wait for their receipt and their return is near: each is the person's task under «Automatisierung › Aufgaben» now/);
@@ -78,7 +82,7 @@ test('the assistant\'s message names that state with its places and asks for the
   assert.match(note, /never the setup's topics/);
   assert.match(note, /\{"kind":"openPeriod"\}/);
   assert.ok(openWork(ws, books as Books, [review], 'de', '2026-11-12').startsWith(note), 'what waits under Aufgaben follows the period\'s state in the same message');
-  assert.match(periodNote(ws, { ...books, transactions: [books.transactions[4]], receipts: [] } as Books, [], 'de', '2026-08-01'), /it runs until 30\.09\.2026\.[^\n]*\nNothing of 2026-Q3 is open/);
+  assert.match(periodNote(ws, { ...books, transactions: [books.transactions[4]], receipts: [] } as Books, [], 'de', '2026-08-01'), /it runs until 30\.09\.2026\.[^\n]*\nNothing of Q3 2026 is open/);
 });
 
 test('a receipt that is a provider\'s order page is no receipt without a payment, in the note as on the card (review of #354)', () => {
@@ -119,12 +123,12 @@ test('the message lists each thing once: the period\'s state, then what else wai
   const note = openWork(ws, more as Books, [], 'de', '2026-11-12');
   const [period, rest] = note.split('\n\nWhat else waits');
   assert.match(period, /Payments without a booking \(4\)/);
-  assert.match(rest, /^ for the person under «Automatisierung › Aufgaben» now, outside 2026-Q3/);
+  assert.match(rest, /^ for the person under «Automatisierung › Aufgaben» now, outside Q3 2026/);
   assert.match(rest, /Payments without a booking \(2\):\n- 03\.10\.2026 [^\n]*\(OKT\)\n- 03\.11\.2026 [^\n]*\(NOV\)/);
   for (const ref of ['LOHN', 'AHV', 'FARBMIX', 'SWISSCOM']) assert.equal(note.split(`(${ref})`).length - 1, 1, `${ref} is named once`);
   assert.doesNotMatch(rest, /lonely|Open questions/, 'nothing of the period is repeated, and what there is none of is left out');
   const quiet = openWork(ws, { ...books, transactions: [books.transactions[4]], receipts: [] } as Books, [], 'de', '2026-08-01');
-  assert.match(quiet, /Nothing of 2026-Q3 is open[^\n]*\n[^\n]*\n\nWhat else waits[^\n]*\nNothing else waits:/);
+  assert.match(quiet, /Nothing of Q3 2026 is open[^\n]*\n[^\n]*\n\nWhat else waits[^\n]*\nNothing else waits:/);
 });
 
 test('a held payment is told by what it waits for: its receipt, or the person\'s word on a receipt that cannot be read (review of #354)', () => {
@@ -199,7 +203,7 @@ test('nothing open in the period is never «nothing open» while payments of lat
   assert.equal(e.unbooked.length, unbookedOpen(later, []).unbooked, 'the payments UnbookedFact counts');
   assert.equal(elsewhereCount(e), 1);
   const note = openWork(ws, later as Books, [], 'de', '2026-11-12');
-  assert.match(note, /Nothing of 2026-Q3 is open[^\n]*Other things wait for the person \(1[^\n]*1 payments of later open days without a booking among them\): never say that nothing is open\./);
+  assert.match(note, /Nothing of Q3 2026 is open[^\n]*Other things wait for the person \(1[^\n]*1 payments of later open days without a booking among them\): never say that nothing is open\./);
   assert.doesNotMatch(note, /Nothing else waits/);
   assert.match(note, /Payments without a booking \(1\):\n- 03\.10\.2026 [^\n]*\(OKT\)/);
   // A stopped run waits too.
@@ -208,7 +212,7 @@ test('nothing open in the period is never «nothing open» while payments of lat
   assert.equal(elsewhereCount(elsewhereOf(quiet, [], [], [], q, 'quarter')), 0);
   assert.equal(elsewhereCount(elsewhereOf(quiet, [], [], [], q, 'quarter', 1)), 1);
   assert.match(openWork(ws, quiet as Books, [], 'de', '2026-11-12', 1), /Runs of the workflows that stopped \(1\)/);
-  assert.match(openWork(ws, quiet as Books, [], 'de', '2026-11-12'), /Nothing of 2026-Q3 is open[^\n]*no task\.\n/);
+  assert.match(openWork(ws, quiet as Books, [], 'de', '2026-11-12'), /Nothing of Q3 2026 is open[^\n]*no task\.\n/);
 });
 
 test('a period that ended before the books begin is «vor Beginn dieser Bücher» on the card and in the note, never due or overdue (#345, #342)', () => {
@@ -224,7 +228,7 @@ test('a period that ended before the books begin is «vor Beginn dieser Bücher�
   assert.deepEqual(filingStage(empty, past.period, { ...ctx, today: '2027-01-20' }), { kind: 'before' });
   const before = { ...past, filing: { kind: 'before' as const } };
   const note = periodNote(ws, empty as Books, [], 'de', '2027-01-20', before);
-  assert.match(note, /2026-Q3 \(01\.07\.2026 to 30\.09\.2026\); it ended before anything in these books is dated[^\n]*never call it due or overdue\./);
+  assert.match(note, /Q3 2026 \(01\.07\.2026 to 30\.09\.2026\); it ended before anything in these books is dated[^\n]*never call it due or overdue\./);
   assert.doesNotMatch(note, /was due on|is due on/);
   const card = readFileSync('src/app/assistant/OpenPeriodCard.tsx', 'utf8');
   assert.match(card, /if \(f\.kind === 'before'\) return t\('automation\.home\.s\.before'\);/, 'the card says «vor Beginn dieser Bücher»');
@@ -239,4 +243,73 @@ test('a firm not registered whose turnover passed the threshold has that task un
   assert.equal(elsewhereCount(elsewhereOf(big, [], [], [], s, 'quarter', 0, false, '2026-11-12')), 1);
   assert.deepEqual(elsewhereOf(big, [], [], [], s, 'quarter', 0, true, '2026-11-12').threshold, [], 'a registered firm has none');
   assert.deepEqual(elsewhereOf(big, [], [], [], s, 'quarter', 0, undefined, '2026-11-12').threshold, [], 'unknown, as Aufgaben reads it: none');
+});
+
+test('«was muss ich noch machen?»: the till slip without its date is named with what it lacks, every item is a link, and the period is said as a person says it (#398)', async () => {
+  const { itemsOf } = await import('../src/app/assistant/open-period-items.js');
+  const slip = { ...receipt('slip', '2026-01-01'), date: undefined, description: 'Baucenter', extractedText: 'Baucenter Kasse Total 187.35', amount: 187.35 } as unknown as Receipt;
+  const withSlip: Index = { ...books, receipts: [...books.receipts, slip] };
+  const s = openPeriodState(withSlip, [], [], [], ctx);
+  assert.deepEqual(s.yours.map((x) => [x.receipt.id, x.lacks]), [['slip', ['date']]], 'Belege\'s «braucht dich» without a date is the period\'s, as Belege places it');
+  const lines = openLines(s);
+  assert.equal(lines[0].kind, 'yours', 'what only she can say comes first');
+  const card = lines.map((l) => itemsOf(l, s, withSlip, say));
+  assert.match(card[0].items[0].text, /^Baucenter · CHF 187.35 · Datum fehlt$/);
+  assert.deepEqual(card[0].items[0].go.route, { area: 'receipts', id: 'slip' }, 'the slip links to its receipt');
+  const unbooked = card[lines.findIndex((l) => l.kind === 'unbooked')];
+  assert.deepEqual(unbooked.items.map((x) => x.key), ['LOHN', 'AHV', 'FARBMIX', 'SWISSCOM'], 'the four payments are named one by one');
+  assert.match(unbooked.items[0].text, /^25\.07\.2026 · LOHN · CHF 5.200\.00$/, 'day, who and how much, in the app\'s money format');
+  assert.ok(unbooked.items.every((x) => x.go.route.area === 'bank'), 'each payment links to itself');
+  const unlinked = card[lines.findIndex((l) => l.kind === 'unlinked')];
+  assert.deepEqual(unlinked.items.map((x) => x.key), ['lonely'], 'the slip is not named again among the receipts without a payment');
+  const note = periodNote(tempWorkspace('open-period-398-'), withSlip as Books, [], 'de', '2026-11-12');
+  assert.match(note, /: Q3 2026 \(01\.07\.2026 to 30\.09\.2026\)/);
+  assert.equal(note.split('2026-Q3').length - 1, 1, 'the token only in the line that says never to use it');
+  assert.match(note, /Receipts that wait for the person's own word \(1\), under «Belege»[^\n]*\n- «Baucenter», CHF 187.35: «Datum fehlt»/);
+  assert.match(note, /at most one short sentence[^\n]*never a count, never a list of the items/);
+});
+
+test('a receipt that waits for her word is one issue of the period for the card, the note and the MWST page\'s list alike; a receipt a run still reads is not hers; reading and copy are lacks of their own (#398 review)', () => {
+  const slip = { ...receipt('slip', '2026-01-01'), date: undefined, description: 'Baucenter', extractedText: 'Baucenter Kasse Total 187.35', amount: 187.35 } as unknown as Receipt;
+  const photo = { ...receipt('photo', '2026-01-01'), date: undefined, amount: undefined, extractedText: '', description: undefined } as unknown as Receipt;
+  const copyText = 'Farbmix AG Rechnung FM-77812 Total CHF 1243.55';
+  const twin = (id: string, file: string) => ({ ...receipt(id, '2026-09-10'), filename: file, extractedText: copyText, amount: 1243.55, description: 'Farbmix AG, Rechnung FM-77812' }) as Receipt;
+  const withAll: Index = { ...books, receipts: [...books.receipts, slip, photo, twin('fm', 'fm-77812.pdf'), twin('img', 'img-4801.jpg')] };
+  const issues = periodIssues(withAll, [], '2026-07-01', '2026-09-30', [], new Map(), '2026-11-12');
+  const own = issues.flatMap((i) => (i.kind === 'own' ? [[i.receipt.id, i.lacks]] : []));
+  assert.deepEqual(own.sort(), [['img', ['copy']], ['photo', ['reading']], ['slip', ['date']]], 'the undated slip, the unread photo and the second download');
+  const c = countIssues(issues);
+  assert.equal(c.own, 3, 'the MWST page\'s count holds them');
+  assert.ok(!issues.some((i) => i.kind === 'unlinked' && ['slip', 'photo', 'img'].includes(i.receipt.id)), 'each receipt once');
+  const s = openPeriodState(withAll, [], [], [], ctx);
+  assert.deepEqual(s.yours.map((x) => x.receipt.id).sort(), ['img', 'photo', 'slip'], 'the card shows what the list shows');
+  assert.equal(s.counts.own, 3);
+  const reading = new Map([['photo', { kind: 'running' as const, run: 'r1', step: 'read' }]]);
+  assert.ok(!openPeriodState(withAll, [], [], [], ctx, new Map(), reading).yours.some((x) => x.receipt.id === 'photo'), 'a receipt a run reads now is not hers yet');
+  assert.ok(!periodIssues(withAll, [], '2026-07-01', '2026-09-30', [], new Map(), '2026-11-12', reading).some((i) => i.kind === 'own' && i.receipt.id === 'photo'));
+});
+
+test('a till slip that lacks its date and has a payment that may fit says both on its one line, card and note alike (#398 with #397)', async () => {
+  const { itemsOf } = await import('../src/app/assistant/open-period-items.js');
+  const slip = { ...receipt('slip', '2026-01-01'), date: undefined, description: 'Baucenter Gossau', extractedText: 'BAUCENTER Gossau\nTotal CHF 187.35', amount: 187.35 } as unknown as Receipt;
+  const bau = tx('BAU', '2026-09-09', 187.35, { ...waits, counterparty: 'Baucenter Gossau', description: 'Karte Baucenter Gossau' });
+  const b: Index = { ...books, transactions: [...books.transactions, bau], receipts: [...books.receipts, slip] };
+  const s = openPeriodState(b, [], [], [], ctx);
+  const lines = openLines(s);
+  const mine = itemsOf(lines.find((l) => l.kind === 'yours')!, s, b, say).items[0].text;
+  assert.match(mine, /Datum fehlt · Passt vielleicht zur Zahlung 09\.09\.2026 [^·]*CHF 187\.35$/, `both said: «${mine}»`);
+  assert.equal(mine.split('Passt vielleicht').length - 1, 1, 'the offer once');
+  const note = periodNote(tempWorkspace('open-period-near-'), b as Books, [], 'de', '2026-11-12');
+  assert.match(note, /«Baucenter Gossau»[^\n]*«Datum fehlt»; a payment may fit it, offered on the receipt with one click: 09\.09\.2026 [^\n]*\(BAU\)/);
+});
+
+test('a long list on the card names the first ITEMS_SHOWN and counts the rest, with the way to all of them (#398)', async () => {
+  const { itemsOf } = await import('../src/app/assistant/open-period-items.js');
+  const many: Index = { ...books, transactions: [...books.transactions, ...Array.from({ length: 8 }, (_, i) => tx(`X${i}`, `2026-09-1${i}`, 10 + i))] };
+  const s = openPeriodState(many, [], [], [], ctx);
+  const line = openLines(s).find((l) => l.kind === 'unbooked')!;
+  const it = itemsOf(line, s, many, say);
+  assert.equal(it.items.length, ITEMS_SHOWN);
+  assert.equal(it.more, s.unbooked.length - ITEMS_SHOWN);
+  assert.ok(it.all, 'the rest has its link');
 });

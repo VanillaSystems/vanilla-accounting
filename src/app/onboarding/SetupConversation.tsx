@@ -224,7 +224,8 @@ function CompanyCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'company
     ...(c.legalForm ? [[t('onboarding.company.legalForm'), c.legalForm] as [string, ReactNode]] : []),
     ...(c.owner ? [[t('onboarding.company.owner'), c.owner] as [string, ReactNode]] : []),
     ...(address ? [[t('onboarding.company.address'), address] as [string, ReactNode]] : []),
-    [t('onboarding.company.vat'), say(vatLine(c.vat))],
+    // Not registered: what follows, in one line, as the form says it (#398), not the bare «not registered».
+    [t('onboarding.company.vat'), c.vat.registered ? say(vatLine(c.vat)) : t('onboarding.sum.noVat')],
     ...(card.sells ? [[t('onboarding.company.sells'), card.sells.map((k) => t(`onboarding.sellsCard.kind.${k}`)).join(', ')] as [string, ReactNode]] : []),
   ];
   return (
@@ -405,6 +406,18 @@ function AssumedList({ a, onGo }: { a: AssumedCard; onGo: Go }) {
 }
 
 /**
+ * The assumed answers stand once, on the firm's card with «stimmt» (#398): the summary only counts
+ * them and leads back there (to Firma when the card is not in the conversation).
+ */
+function AssumedCount({ n, onGo }: { n: number; onGo: Go }) {
+  const see = () => {
+    const list = document.querySelector('[data-assumed-list]');
+    if (list) list.scrollIntoView({ behavior: 'smooth', block: 'center' }); else onGo({ area: 'company', section: 'profile' });
+  };
+  return <p className="obwhy" data-assumed-count>{t('onboarding.assumedCount', { n })} · <button type="button" className="linkbtn" onClick={see}>{t('onboarding.assumedSee')}</button></p>;
+}
+
+/**
  * The first step first (#364): one sentence and its button, the rest behind «Mehr dazu»; then what the
  * app knows and what is open. The conversation scrolls to it when it appears (useNewestStep).
  */
@@ -424,7 +437,7 @@ function SummaryCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'summary
       </details>
       <h4>{t('onboarding.summary.title')}</h4>
       <ul className="obsum">{card.items.map((it, i) => <li key={i}><span>{say(it.what)}</span><span><span className={`obbadge ${ORIGIN_CLASS[it.origin]}`}>{t(`onboarding.origin.${it.origin}`)}</span></span></li>)}</ul>
-      {card.assumed ? <AssumedList a={card.assumed} onGo={onGo} /> : null}
+      {card.assumed ? <AssumedCount n={card.assumed.answers.length} onGo={onGo} /> : null}
       {card.open.length ? (
         <>
           <h4>{t('onboarding.summary.open')}</h4>

@@ -6,7 +6,7 @@
 import { orderPagesNow } from '../../lib/order-pages.js';
 import { FindPair } from '../receipts/FindPair.js';
 import { t } from '../../i18n/index.js';
-import { fmt, formatDate } from '../../lib/utils.js';
+import { fmt, formatDate, moneyInText } from '../../lib/utils.js';
 import { useQuestions } from '../../questions/store.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import { at, ledgerFor } from '../receipts/view.js';
@@ -25,7 +25,9 @@ import { UnreadRuleOffer, UnreadTask } from './UnreadReceipt.js';
 import type { UnreadOffer } from '../../../saving/unread-rule.js';
 import { useState } from 'react';
 import { periodName } from '../../lib/period-label.js';
-import { periodIssues, unbookedOpen, type IssueCounts, type PeriodIssue } from './period-issues.js';
+import { LACK_WORDS, periodIssues, unbookedOpen, type IssueCounts, type PeriodIssue } from './period-issues.js';
+import { useAutomation } from '../../automation/store.js';
+import { processingOf } from '../../../workflows/processing.js';
 import { OPEN_ITEMS } from '../vat/model.js';
 import { chargesVat } from '../../../engines/index.js';
 import type { Location } from '../../shell/route.js';
@@ -41,6 +43,7 @@ function goOf(books: Index, i: PeriodIssue): Location | undefined {
     case 'evidence': return at({ area: 'journal', id: i.entry.id }, i.entry.date);
     case 'unbooked': return at({ area: 'bank', payment: i.tx.ref }, i.tx.date);
     case 'unlinked': return books.receipts.some((r) => r.id === i.receipt.id) ? at({ area: 'receipts', id: i.receipt.id }, i.receipt.date) : undefined;
+    case 'own': return at({ area: 'receipts', id: i.receipt.id }, i.day);
   }
 }
 
@@ -52,7 +55,8 @@ function textOf(books: Index, i: PeriodIssue): string {
     }
     case 'evidence': return `${formatDate(i.entry.date)} ${i.entry.description ?? ''}: ${evidenceText(i.entry, i.check)}`;
     case 'unbooked': return t('issues.unbooked', { date: formatDate(i.tx.date), text: i.tx.counterparty || i.tx.description, amount: `${i.tx.currency} ${fmt(i.tx.amount)}` });
-    case 'unlinked': return t('issues.unlinked', { date: formatDate(i.receipt.date ?? ''), text: i.receipt.description || i.receipt.filename });
+    case 'unlinked': return t('issues.unlinked', { date: formatDate(i.receipt.date ?? ''), text: i.receipt.description ? moneyInText(i.receipt.description) : i.receipt.filename });
+    case 'own': return t('issues.own', { text: i.name, lacks: i.lacks.map((k) => t(LACK_WORDS[k])).join(', ') });
   }
 }
 
@@ -66,8 +70,10 @@ let lastIssues: { key: unknown[]; issues: PeriodIssue[] } | undefined;
 export function usePeriodIssues(books: Index, from: string, to: string): PeriodIssue[] {
   const { questions } = useQuestions();
   const accounts = useWorkspace()?.bankAccounts;
-  const key = [books, questions, accounts, orderPagesNow(), from, to, localToday()];
-  if (!lastIssues || key.some((k, i) => k !== lastIssues!.key[i])) lastIssues = { key, issues: periodIssues(books, questions, from, to, accounts ?? [], orderPagesNow()) };
+  // A receipt a run still reads is not hers yet (#398): the runs as Belege reads them.
+  const runs = useAutomation().view?.runs;
+  const key = [books, questions, accounts, orderPagesNow(), from, to, localToday(), runs];
+  if (!lastIssues || key.some((k, i) => k !== lastIssues!.key[i])) lastIssues = { key, issues: periodIssues(books, questions, from, to, accounts ?? [], orderPagesNow(), localToday(), processingOf(runs ?? [], books.receipts)) };
   return lastIssues.issues;
 }
 
@@ -76,6 +82,7 @@ export function issueWords(c: Pick<IssueCounts, 'unbooked' | 'waitingReceipt'> &
   return [
     c.unbooked ? `${t('issues.n.unbooked', { n: c.unbooked })}${c.waitingReceipt ? ` (${t(c.waitingReceipt === c.unbooked ? 'issues.n.allWaitReceipt' : 'issues.n.waitReceipt', { n: c.waitingReceipt })})` : ''}` : '',
     c.questions ? t('issues.n.questions', { n: c.questions }) : '',
+    c.own ? t('issues.n.own', { n: c.own }) : '',
     c.unlinked ? t('issues.n.unlinked', { n: c.unlinked }) : '',
     c.evidence ? t('issues.evidenceTitle', { n: c.evidence }) : '',
   ].filter(Boolean);

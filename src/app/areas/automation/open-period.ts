@@ -24,7 +24,8 @@ import { unbookedPayments } from '../bank/model.js';
 import { journalOf, unsettledAtFiling, type EntryView, type Unsettled } from '../journal/model.js';
 import { ledgerOf, type ReceiptView } from '../receipts/model.js';
 import { thresholdPassed } from '../vat/model.js';
-import { countIssues, dateOn, periodIssues, receiptWaiting, type IssueCounts } from './period-issues.js';
+import { countIssues, dateOn, periodIssues, receiptWaiting, type IssueCounts, type PeriodIssue } from './period-issues.js';
+import type { Processing } from '../../../workflows/processing.js';
 
 export interface OpenPeriodContext {
   today: IsoDate;
@@ -55,12 +56,21 @@ export interface OpenPeriodState {
   /** Receipts without a payment. */
   unlinked: Receipt[];
   /**
+   * The receipts that wait for the person's own word (#398): periodIssues' `own`, Belege's «braucht dich»
+   * that lack their date or amount, their reading, or her word that they are no copy. None is in `unlinked`.
+   */
+  yours: YourReceipt[];
+  /**
    * The workflows' tasks about the period: on a payment, a receipt or a booking dated in it, or on
    * the period itself («Abrechnung prüfen»). A task of another period, or of nothing dated (a source),
    * is not this period's state.
    */
   tasks: Task[];
 }
+
+export type { Lack } from './period-issues.js';
+/** A receipt that waits for the person's own word: the issue of periodIssues (#398). */
+export type YourReceipt = Extract<PeriodIssue, { kind: 'own' }>;
 
 /** The day of what a task is about, or `period` when it is about the period itself; undefined: about nothing dated. */
 function taskDay(books: Index, item: Task['item'], openFrom: IsoDate): IsoDate | 'period' | undefined {
@@ -76,10 +86,10 @@ function taskDay(books: Index, item: Task['item'], openFrom: IsoDate): IsoDate |
 
 export function openPeriodState(
   books: Index, questions: readonly Question[], tasks: readonly Task[], accounts: readonly LedgerBankAccount[], ctx: OpenPeriodContext,
-  orderPages: ReadonlyMap<string, OrderPage> = new Map(),
+  orderPages: ReadonlyMap<string, OrderPage> = new Map(), processing: ReadonlyMap<string, Processing> = new Map(),
 ): OpenPeriodState {
   const period = booksOpenPeriod(books, ctx.today, ctx.length);
-  const issues = periodIssues(books, questions, period.from, period.to, accounts, orderPages, ctx.today);
+  const issues = periodIssues(books, questions, period.from, period.to, accounts, orderPages, ctx.today, processing);
   const unbooked = issues.flatMap((i) => (i.kind === 'unbooked' ? [i.tx] : []));
   const refs = new Set(unbooked.map((t) => t.ref));
   const about = (x: Task) => { const d = taskDay(books, x.item, period.from); return d === 'period' ? x.item.id === period.token : !!d && d >= period.from && d <= period.to; };
@@ -93,6 +103,7 @@ export function openPeriodState(
     questions: issues.flatMap((i) => (i.kind === 'question' ? [{ q: i.q, date: i.date }] : [])),
     evidence: issues.flatMap((i) => (i.kind === 'evidence' ? [{ entry: i.entry, check: i.check }] : [])),
     unlinked: issues.flatMap((i) => (i.kind === 'unlinked' ? [i.receipt] : [])),
+    yours: issues.flatMap((i) => (i.kind === 'own' ? [i] : [])),
     tasks: tasks.filter(about),
   };
 }
@@ -121,7 +132,7 @@ export interface Elsewhere<T extends Task = Task> {
 export function elsewhereOf<T extends Task>(books: Index, questions: readonly Question[], tasks: readonly T[], accounts: readonly LedgerBankAccount[], s: OpenPeriodState, length: FilingLength, stuck = 0, registered?: boolean, today: IsoDate = localToday()): Elsewhere<T> {
   const closed = books.config?.closedThrough;
   const inOpen = (date: string | undefined) => !closed || !date || date > closed;
-  const listed = { questions: new Set(s.questions.map((x) => x.q.id)), tasks: new Set(s.tasks.map((x) => x.run)), payments: new Set(s.unbooked.map((p) => p.ref)), entries: new Set(s.evidence.map((x) => x.entry.id)) };
+  const listed = { questions: new Set(s.questions.map((x) => x.q.id)), tasks: new Set(s.tasks.map((x) => x.run)), payments: new Set(s.unbooked.map((p) => p.ref)), entries: new Set(s.evidence.map((x) => x.entry.id)), receipts: new Set(s.yours.map((x) => x.receipt.id)) };
   const left = questions.filter((q) => q.status !== 'closed' && inOpen(dateOn(books, q)) && !listed.questions.has(q.id));
   const others = tasks.filter((x) => !listed.tasks.has(x.run));
   const taskRefs = new Set(others.filter((x) => x.item.kind === 'transaction').map((x) => x.item.id));
@@ -134,7 +145,7 @@ export function elsewhereOf<T extends Task>(books: Index, questions: readonly Qu
     unbooked: unbookedPayments(books, accounts).filter((p) => !listed.payments.has(p.ref) && !taskRefs.has(p.ref)),
     contradicting: journal.views.filter((v) => v.evidence && !listed.entries.has(v.e.id)),
     ...(unsettled?.items.length ? { unsettled } : {}),
-    twins: ledgerOf(books, closed ? addDays(closed, 1) : '0000-01-01').views.filter((v) => v.twin?.relation === 'duplicate' && !v.none && !v.locked),
+    twins: ledgerOf(books, closed ? addDays(closed, 1) : '0000-01-01').views.filter((v) => v.twin?.relation === 'duplicate' && !v.none && !v.locked && !listed.receipts.has(v.r.id)),
     assessments: missingAssessments(books, documents().customs, !withoutInputTax()),
     stuck,
     threshold: thresholdPassed(books, registered, today).map((w) => w.year),
@@ -147,7 +158,7 @@ export const elsewhereCount = (e: Elsewhere): number =>
 
 /** Whether anything of the period waits: a card with nothing on it says so in one line (and that nothing else does, only when `elsewhereOf` is empty too). */
 export const nothingOpen = (s: OpenPeriodState): boolean =>
-  !s.unbooked.length && !s.questions.length && !s.evidence.length && !s.unlinked.length && !s.tasks.length;
+  !s.unbooked.length && !s.questions.length && !s.evidence.length && !s.unlinked.length && !s.yours.length && !s.tasks.length;
 
 /** How many of the held payments are of each kind. */
 export const waitingKinds = (s: Pick<OpenPeriodState, 'waiting'>): Record<WaitingPayment['kind'], number> => ({
@@ -159,31 +170,42 @@ export const waitingKinds = (s: Pick<OpenPeriodState, 'waiting'>): Record<Waitin
 /** The most tasks the card lists one by one; the rest is counted in one line. */
 export const TASKS_SHOWN = 5;
 
-/** One line of the state: what it counts and the first object of it, where the person starts. */
+/** The most objects a line names one by one (#398): the rest is counted, with the way to all of them. */
+export const ITEMS_SHOWN = 5;
+
+/** One line of the state: what it counts, the objects it names one by one (at most ITEMS_SHOWN, `more` beyond them), and the first, where the person starts. */
 export type OpenLine =
+  /** The receipts that wait for her own word (`yours`). */
+  | { kind: 'yours'; n: number; items: YourReceipt[]; more: number }
   /** `waiting`: of them held by receiptWaits (countIssues' `waitingReceipt`, as the return's page says); `unread`: of those, held because their receipt's VAT cannot be read. */
-  | { kind: 'unbooked'; n: number; waiting: number; unread: number; first: BankTransaction }
+  | { kind: 'unbooked'; n: number; waiting: number; unread: number; first: BankTransaction; items: BankTransaction[]; more: number }
   | { kind: 'questions'; n: number }
   | { kind: 'evidence'; n: number; first: JournalEntry }
-  | { kind: 'unlinked'; n: number; first: Receipt }
+  /** The receipts without a payment (none of `yours` among them). */
+  | { kind: 'unlinked'; n: number; first: Receipt; items: Receipt[]; more: number }
   | { kind: 'task'; task: Task }
   /** The tasks beyond TASKS_SHOWN. */
   | { kind: 'moreTasks'; n: number };
 
+const shown = <T>(all: readonly T[]) => ({ n: all.length, items: all.slice(0, ITEMS_SHOWN), more: Math.max(0, all.length - ITEMS_SHOWN) });
+
 /**
- * The state as the lines of its card, in the order a person works them off; the tasks last, the
- * review among them. A task on a payment counted in the first line is that payment, named once.
- * At most TASKS_SHOWN tasks are lines of their own: the card says how many more there are.
+ * The state as the lines of its card, in the order a person works them off: what only she can say
+ * of a receipt first, the tasks last, the review among them. A task on a payment counted in the
+ * payments' line is that payment, and a receipt of `yours` is not among those without a payment:
+ * each object is named once. At most TASKS_SHOWN tasks are lines of their own.
  */
 export function openLines(s: OpenPeriodState): OpenLine[] {
   const refs = new Set(s.unbooked.map((t) => t.ref));
   const tasks = s.tasks.filter((x) => !(x.item.kind === 'transaction' && refs.has(x.item.id)));
   const kinds = waitingKinds(s);
+  const unlinked = s.unlinked;
   return [
-    ...(s.counts.unbooked ? [{ kind: 'unbooked' as const, n: s.counts.unbooked, waiting: s.counts.waitingReceipt, unread: kinds.unread, first: s.unbooked[0] }] : []),
+    ...(s.yours.length ? [{ kind: 'yours' as const, ...shown(s.yours) }] : []),
+    ...(s.counts.unbooked ? [{ kind: 'unbooked' as const, ...shown(s.unbooked), n: s.counts.unbooked, waiting: s.counts.waitingReceipt, unread: kinds.unread, first: s.unbooked[0] }] : []),
     ...(s.counts.questions ? [{ kind: 'questions' as const, n: s.counts.questions }] : []),
     ...(s.counts.evidence ? [{ kind: 'evidence' as const, n: s.counts.evidence, first: s.evidence[0].entry }] : []),
-    ...(s.counts.unlinked ? [{ kind: 'unlinked' as const, n: s.counts.unlinked, first: s.unlinked[0] }] : []),
+    ...(unlinked.length ? [{ kind: 'unlinked' as const, ...shown(unlinked), first: unlinked[0] }] : []),
     ...tasks.slice(0, TASKS_SHOWN).map((task) => ({ kind: 'task' as const, task })),
     ...(tasks.length > TASKS_SHOWN ? [{ kind: 'moreTasks' as const, n: tasks.length - TASKS_SHOWN }] : []),
   ];

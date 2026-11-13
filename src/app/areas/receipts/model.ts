@@ -18,6 +18,7 @@ import type { OtherWhy, SupportingWhy } from '../../../core/modules/schema.js';
 import { kindByOf, type KindBy } from '../../../intake/unclear.js';
 import { inProcess, type Processing } from '../../../workflows/processing.js';
 import type { OrderPage } from '../../../booking/order-pages.js';
+import { moneyInText } from '../../lib/utils.js';
 import type { VatCorrection } from '../../../booking/vat-corrections.js';
 import { isBankFee } from '../../../booking/separate-fee.js';
 import { issuedByFirm, type Firm } from '../../../intake/own-invoice.js';
@@ -121,7 +122,8 @@ export function ledgerOf(books: Index, openFrom: string, processing: ReadonlyMap
     const links = linksOf.get(r.id) ?? [];
     // "" is no date (an old answer of the model): the receipt is undated and needs you.
     const date = receiptDate(r);
-    const [vendor, desc] = r.title ? [r.title.vendor, r.title.what] : splitTitle(r.description || r.filename.replace(/\.pdf$/i, ''));
+    // An amount in the receipt's words reads in the app's money format, as in every other place (#398); a file name stays as it is.
+    const [vendor, desc] = r.title ? [r.title.vendor, moneyInText(r.title.what)] : splitTitle(r.description ? moneyInText(r.description) : r.filename.replace(/\.pdf$/i, ''));
     const none = isNoReceipt(r, links.length);
     const paid = links.flatMap((ref) => txByRef.get(ref)?.date ?? []);
     const twin = twins.get(r.id);
@@ -135,6 +137,15 @@ export function ledgerOf(books: Index, openFrom: string, processing: ReadonlyMap
 }
 
 export const isOpen = (v: ReceiptView) => v.links.length === 0;
+
+/**
+ * A receipt's own amount as Belege shows it: none for a document beside an invoice (an order
+ * confirmation, a delivery note, #398), whose «0.00» is no amount of its own.
+ */
+export const ownAmount = (r: Pick<Receipt, 'kind' | 'amount'>): number | undefined => (r.kind === 'supporting' ? undefined : r.amount ?? undefined);
+
+/** The words of the action that makes a set-aside file a receipt: a document beside an invoice is kept as a receipt of its own; anything else «is a receipt after all». */
+export const markLabel = (r: Pick<Receipt, 'kind'>): 'receipts.asOwnReceipt' | 'receipts.isReceipt' => (r.kind === 'supporting' ? 'receipts.asOwnReceipt' : 'receipts.isReceipt');
 
 /**
  * What a locked receipt refuses (#151): a link or a delete, which would change a filed return.

@@ -18,21 +18,44 @@ import { payText } from '../app/areas/bank/model.js';
 import { fillTask, textIn, type Task } from '../workflows/model.js';
 import type { EvidenceCheck } from '../accounting/evidence-check.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
-import { chargesVat, filing, vatSetup } from '../engines/index.js';
-import { localToday, type IsoDate } from '../accounting/periods.js';
+import { baseCurrency, chargesVat, filing, vatSetup } from '../engines/index.js';
+import { localToday, type IsoDate, type Period } from '../accounting/periods.js';
 import type { Workspace } from '../workspace/workspace.js';
-import { elsewhereCount, elsewhereOf, nothingOpen, openPeriodState, waitingKinds, type Elsewhere, type OpenPeriodState } from '../app/areas/automation/open-period.js';
+import { elsewhereCount, elsewhereOf, nothingOpen, openPeriodState, waitingKinds, type Elsewhere, type OpenPeriodState, type YourReceipt } from '../app/areas/automation/open-period.js';
 import { orderPagesOf } from '../booking/order-pages.js';
+import { LACK_WORDS } from '../app/areas/automation/period-issues.js';
+import { offersInBooks } from '../intake/near-pairs.js';
+import { moneyInText } from '../app/lib/utils.js';
+import type { Processing } from '../workflows/processing.js';
 import { providersOf } from '../intake/sales-report-import.js';
 import type { Purpose } from '../types/assistant.js';
 import type { SetupProgress } from '../onboarding/model.js';
 
 const LIMIT = 20;
 const day = (iso: string) => iso.slice(0, 10).split('-').reverse().join('.');
-const money = (currency: string, amount: number) => `${currency} ${amount.toFixed(2)}`;
+/** «EUR 3'200.00»: the app's one money format, as the card shows it (src/app/lib/utils.ts fmt). */
+const money = (currency: string, amount: number) => `${currency} ${amount.toLocaleString('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const capped = (lines: string[]) => (lines.length > LIMIT ? [...lines.slice(0, LIMIT), `  … and ${lines.length - LIMIT} more`] : lines);
 
 type T = ReturnType<typeof wordsIn>['t'];
+
+/** A period as a person says it and the app's own label shows it («Q3 2026», «1. Semester 2026», «2026»), never its token (#398). */
+export function periodWords(t: T, p: Pick<Period, 'kind' | 'token'>): string {
+  const say = t as unknown as (key: string, vars?: Record<string, string>) => string;
+  if (p.kind === 'quarter') return say('period.quarter', { quarter: p.token.slice(-1), year: p.token.slice(0, 4) });
+  if (p.kind === 'half') return say('period.half', { half: p.token.slice(-1), year: p.token.slice(0, 4) });
+  return p.token;
+}
+
+const yourLine = (books: Books, x: YourReceipt, t: T) =>
+  `- «${x.name}»${x.receipt.date ? ` of ${day(x.receipt.date)}` : ''}${x.receipt.amount != null ? `, ${money(x.receipt.currency ?? baseCurrency(), x.receipt.amount)}` : ''}: «${x.lacks.map((k) => t(LACK_WORDS[k])).join(', ')}»${fitsOf(books, x.receipt.id)}${x.copyOf ? `, may be a copy of «${nameOf(books, x.copyOf)}», answered on the receipt («${t('receipts.twin.same')}» or «${t('receipts.twin.distinct')}»)` : ''}`;
+/** A payment that may fit the receipt (#397's near offers): named once, on the receipt's line, linked on the receipt with one click (#398). */
+const fitsOf = (books: Books, id: string) => {
+  const o = offersInBooks(books, { receipt: id })[0];
+  const tx = o && books.transactions.find((y) => y.ref === o.payment);
+  return tx ? `; a payment may fit it, offered on the receipt with one click: ${paymentLine(tx).slice(2)}` : '';
+};
+const nameOf = (books: Books, id: string) => { const r = books.receipts.find((x) => x.id === id); return r?.description || r?.filename || id; };
 
 function questionLine(books: Books, q: Question, t: T): string {
   const tx = q.on.kind === 'payment' ? books.transactions.find((x) => x.ref === q.on.id) : undefined;
@@ -75,8 +98,8 @@ type Ws = Pick<Workspace, 'paths' | 'bankAccounts'>;
 type Tasks = ReadonlyArray<Task & { rule?: string }>;
 
 /** The state the sidebar's card draws, from the same inputs: the order pages of a provider among them, which are no receipts without a payment. */
-export const periodState = (ws: Ws, books: Books, tasks: ReadonlyArray<Task>, today: IsoDate = localToday()): OpenPeriodState =>
-  openPeriodState(books, readQuestions(ws), tasks, ws.bankAccounts, { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays }, orderPagesOf(books, providersOf(ws)));
+export const periodState = (ws: Ws, books: Books, tasks: ReadonlyArray<Task>, today: IsoDate = localToday(), processing: ReadonlyMap<string, Processing> = new Map()): OpenPeriodState =>
+  openPeriodState(books, readQuestions(ws), tasks, ws.bankAccounts, { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays }, orderPagesOf(books, providersOf(ws)), processing);
 
 /** What waits outside the period, from the same inputs as the card (src/app/areas/automation/open-period.ts elsewhereOf). */
 export const elsewhereFor = <T extends Task>(ws: Ws, books: Books, tasks: readonly T[], s: OpenPeriodState, stuck = 0, today: IsoDate = localToday()): Elsewhere<T> =>
@@ -100,21 +123,24 @@ export function periodNote(ws: Ws, books: Books, tasks: Tasks, language: string,
       : f.due ? `it is over; its return ${f.overdue ? 'was due on' : 'is due on'} ${day(f.due)}` : 'it is over and not closed yet (the firm files no return)';
   const k = waitingKinds(s);
   const tasksPlace = `«${t('area.automation')} › ${t('automation.tasks')}»`;
-  const name = (r: { description?: string; filename: string }) => r.description || r.filename;
+  const name = (r: { description?: string; filename: string }) => (r.description ? moneyInText(r.description) : r.filename);
+  const label = periodWords(t, s.period);
+  const unlinked = s.unlinked;
   const lines = [
+    ...(s.yours.length ? [`Receipts that wait for the person's own word (${s.yours.length}), under «${t('area.receipts')}»: only she can add what each lacks, or answer whether it is a copy:`, ...capped(s.yours.map((x) => yourLine(books, x, t)))] : []),
     `Payments without a booking (${s.unbooked.length})${s.unbooked.length ? `, under «${t('area.bank')}»` : ''}:`, ...capped(s.unbooked.map(paymentLine)),
     ...(k.waits ? [`  Of them, ${k.waits} the app holds until their receipt is linked: it books them itself then and nobody is asked yet; the receipts go in under «${t('area.receipts')}».`] : []),
     ...(k.asks ? [`  Of them, ${k.asks} wait for their receipt and their return is near: each is the person's task under ${tasksPlace} now (link the receipt, name another proof, or book without input tax).`] : []),
     ...(k.unread ? [`  Of them, ${k.unread} have their receipt linked, but its VAT could not be read: each waits for the person's word at once, under ${tasksPlace}; no receipt is missing.`] : []),
     `Open questions (${s.questions.length}):`, ...capped(s.questions.map((x) => questionLine(books, x.q, t))),
     `Bookings whose VAT code contradicts their receipts (${s.evidence.length}), each with its one click on the booking and under ${tasksPlace}:`, ...capped(s.evidence.map((x) => evidenceLine(x.entry, x.check, t))),
-    `Receipts without a payment (${s.unlinked.length})${s.unlinked.length ? `, under «${t('area.receipts')}»` : ''}:`, ...capped(s.unlinked.map((r) => `- «${name(r)}»${r.date ? ` of ${day(r.date)}` : ''}`)),
+    `Receipts without a payment (${unlinked.length})${unlinked.length ? `, under «${t('area.receipts')}»` : ''}:`, ...capped(unlinked.map((r) => `- «${name(r)}»${r.date ? ` of ${day(r.date)}` : ''}${r.amount != null ? `, ${money(r.currency ?? baseCurrency(), r.amount)}` : ''}`)),
     `Tasks of the workflows (${s.tasks.length})${s.tasks.length ? `, under ${tasksPlace}; a task on a payment is one of the payments above, not one more` : ''}:`, ...capped(s.tasks.map((x) => taskLine(x, language))),
   ];
   return [
-    `Where the oldest period not filed stands, computed by the app when this message was sent: ${s.period.token} (${day(s.period.from)} to ${day(s.period.to)}); ${stage}. Only what is dated in ${s.period.token} is counted here.`,
-    ...(nothingOpen(s) ? [`Nothing of ${s.period.token} is open: no payment without a booking, no question, no booking against its receipt, no receipt without a payment, no task.${elsewhereCount(e) ? ` Other things wait for the person (${elsewhereCount(e)}, listed below under «What else waits»${e.unbooked.length ? `, ${e.unbooked.length} payments of later open days without a booking among them` : ''}): never say that nothing is open.` : ''}`] : lines),
-    'When the person asks what is left to do, what is open or what comes next («was muss ich noch machen?», «was fehlt noch?»), answer from this state: two to five short lines in the order above, each with its count and its place in the app\'s words, the due day last; never the setup\'s topics, never a rule or setting already kept. Add {"kind":"openPeriod"} to your block: the app then shows this state under your answer as a card whose lines link to the places, so do not repeat every payment.',
+    `Where the oldest period not filed stands, computed by the app when this message was sent: ${label} (${day(s.period.from)} to ${day(s.period.to)}); ${stage}. Only what is dated in ${label} is counted here. Say a period as here («${label}»), never as a code like «${s.period.token}».`,
+    ...(nothingOpen(s) ? [`Nothing of ${label} is open: no payment without a booking, no question, no booking against its receipt, no receipt without a payment, no receipt waiting for the person's word, no task.${elsewhereCount(e) ? ` Other things wait for the person (${elsewhereCount(e)}, listed below under «What else waits»${e.unbooked.length ? `, ${e.unbooked.length} payments of later open days without a booking among them` : ''}): never say that nothing is open.` : ''}`] : lines),
+    'When the person asks what is left to do, what is open or what comes next («was muss ich noch machen?», «was fehlt noch?»), add {"kind":"openPeriod"} to your block: the app then shows this state under your answer as a card that names every item above one by one, each a link to its place, and the due day. Your own words are at most one short sentence before it, in her language (which of these to start with, or that nothing waits); never a count, never a list of the items, never the setup\'s topics, never a rule or setting already kept: the card says them, with the links your words cannot carry.',
   ].join('\n');
 }
 
@@ -123,8 +149,8 @@ export function periodNote(ws: Ws, books: Books, tasks: Tasks, language: string,
  * other open days. The two never list the same thing. `tasks`: the workflows' tasks as
  * Automatisierung lists them, each with the rule that held its payment (workflows/ask).
  */
-export function openWork(ws: Ws, books: Books, tasks: Tasks, language: string, today: IsoDate = localToday(), stuck = 0): string {
-  const s = periodState(ws, books, tasks, today);
+export function openWork(ws: Ws, books: Books, tasks: Tasks, language: string, today: IsoDate = localToday(), stuck = 0, processing: ReadonlyMap<string, Processing> = new Map()): string {
+  const s = periodState(ws, books, tasks, today, processing);
   const e = elsewhereFor(ws, books, tasks, s, stuck, today);
   return [periodNote(ws, books, tasks, language, today, s, e), elsewhere(books, language, s, e)].join('\n\n');
 }
@@ -135,7 +161,8 @@ function elsewhere(books: Books, language: string, s: OpenPeriodState, e: Elsewh
   const closed = books.config.closedThrough;
   const name = (id: string) => { const r = books.receipts.find((x) => x.id === id); return r?.description || r?.filename || id; };
   const where = `«${t('area.automation')} › ${t('automation.tasks')}»`;
-  const head = `What else waits for the person under ${where} now, outside ${s.period.token}: in the other open days${closed ? ` (all after ${day(closed)})` : ''} and without a day. Nothing of ${s.period.token} is repeated here, so a count here and a count above are never the same things. Both lists together are complete: what is in neither does not wait.`;
+  const label = periodWords(t, s.period);
+  const head = `What else waits for the person under ${where} now, outside ${label}: in the other open days${closed ? ` (all after ${day(closed)})` : ''} and without a day. Nothing of ${label} is repeated here, so a count here and a count above are never the same things. Both lists together are complete: what is in neither does not wait.`;
   if (!elsewhereCount(e)) return `${head}\nNothing else waits: no other open question, no other task, no payment without a booking in another period, no other booking against its receipt, no possible duplicate.`;
   return [
     head,

@@ -43,6 +43,9 @@
 .st-opts button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
 .st-note, .st-stop { font-size: 12.5px; line-height: 1.45; margin: 8px 0 0; }
 .st-note { color: var(--muted); }
+.st-more { color: var(--muted); font-size: 12.5px; }
+.st-more summary { cursor: pointer; width: max-content; }
+.st-note .st-more { margin-top: 2px; }
 .st-stop { color: var(--warn); }
 .st-bank { display: grid; grid-template-columns: minmax(0, 1.4fr) 64px 90px minmax(0, 2fr) 32px; gap: 8px; align-items: end; margin: 10px 0; }
 .st-bankerr { grid-column: 1 / -1; font-size: 12px; margin: 0; }

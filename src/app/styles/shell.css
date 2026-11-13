@@ -456,10 +456,8 @@ html.navwide:not(.phone) .navtoggle { margin: 2px 4px 0 auto; }
 .autocard .ndot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
 .autocard.running .ndot { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .autocard.running .ndot { animation: none; } }
-.autocard .figs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
-.autocard .figs div { display: flex; flex-direction: column; }
-.autocard .figs b { font: 600 18px/1.1 "Geist Mono"; }
-.autocard .figs span { color: var(--muted); font-size: 11.5px; }
+.autocard .figs { display: grid; gap: 6px; }
+.autocard .figs span { color: var(--ink-2); font-size: 13px; }
 .autocard .ask { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 9px; background: var(--warn-soft); color: var(--warn); font-weight: 600; text-decoration: none; }
 .autocard .ask svg { margin-left: auto; width: 15px; height: 15px; stroke-width: 2; }
 .autocard .ask:focus-visible { outline: 1.5px solid var(--warn); outline-offset: 1px; }

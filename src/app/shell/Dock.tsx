@@ -12,7 +12,7 @@ import { automationCommand, useAutomation } from '../automation/store.js';
 import { commandRefusalText } from '../automation/refusal.js';
 import { askedRuns, homeFigures } from '../automation/home.js';
 import { dockWidget, RUN_NOW, type DockWidget, type WidgetFigure } from '../automation/widget.js';
-import { cardLabel as cardWord, dockLine, figureLabel as figureWord, figureText, type Say } from '../automation/words.js';
+import { cardLine as cardWords, dockLine, figureLabel as figureWord, figureText, type Say } from '../automation/words.js';
 import { useQuestions } from '../questions/store.js';
 import { forMe } from '../../questions/model.js';
 import { whenText } from '../areas/automation/Home.js';
@@ -30,7 +30,7 @@ const runAt = (run: string): Location => ({ route: { area: 'automation', view: '
 const say = t as unknown as Say;
 const figure = figureText;
 const figureLabel = (f: WidgetFigure) => figureWord(say, f);
-const cardLabel = (f: WidgetFigure) => cardWord(say, f);
+const cardLine = (f: WidgetFigure) => cardWords(say, f);
 
 interface Words {
   /** The state word after the title in the wide bar. */
@@ -101,8 +101,8 @@ export function Dock({ current, books, keys, wide, onToggle, nav, canEdit, href,
   const runnable = w.canRun && canEdit;
   const busyRunNow = starting || w.run?.workflow === RUN_NOW;
 
-  // The tip names what each figure counts: «5 Belege gelesen · 3 Belege gebucht · 11 warten auf dich».
-  const tipLines = [dockLine(say, w), words.now];
+  // The tip names what each figure counts: «7 von 23 Zahlungen gebucht · 8 Aufgaben für dich», and the receipts.
+  const tipLines = [dockLine(say, w), ...w.card.filter((f) => f.key === 'receipts').map(cardLine), words.now];
   const stack = w.stack.map((f) => (
     <span key={f.key} className={`n ${f.key}`}><b>{figure(f)}</b><span>{figureLabel(f)}</span></span>
   ));
@@ -204,7 +204,7 @@ function SummaryCard({ opener, w, words, period, onClose, runnable, explain, bus
       <header>{ICONS.automation}<b>{t('area.automation')}</b><span>{periodName(period)}</span></header>
       {words.now ? <div className="now"><span className="ndot" />{words.now}</div> : null}
       <div className="figs">
-        {w.card.map((f) => <div key={f.key}><b>{figure(f)}</b><span>{cardLabel(f)}</span></div>)}
+        {w.card.map((f) => <div key={f.key} data-fig={f.key}><span>{cardLine(f)}</span></div>)}
       </div>
       {w.waiting ? <a className="ask" href={hrefOf(TASKS)} onClick={goTo(TASKS)}>{t('dock.ask', { n: w.waiting })}{ICONS.right}</a>
         : <UnbookedFact books={books} nav={{ go: (loc) => { onClose(); go(loc); } }} className="m" />}

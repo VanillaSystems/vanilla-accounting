@@ -28,13 +28,13 @@ const view = (over: Partial<AutomationView> = {}): AutomationView => ({ rev: '',
 const now = new Date(2026, 9, 21, 10, 0);
 const keys = (fs: Array<{ key: string }>) => fs.map((f) => f.key);
 
-test('the bar stacks receipts read, receipts booked and what waits; the card adds collected, the payments booked of the period\'s payments (#365), and «ohne dich» only when the books record who booked', () => {
+test('the bar shows the payments booked of the period\'s payments and what waits; the card a line for the receipts, one for the payments, and «ohne dich» only when the books record who booked (#398)', () => {
   const w = dockWidget(figures({ withoutYou: 79 }), view(), 0, now);
-  assert.deepEqual(w.stack, [{ key: 'read', n: 44 }, { key: 'booked', n: 38 }, { key: 'waiting', n: 0 }], 'one meaning per word: «gebucht» in the bar is receipts, as the card\'s «Belege gebucht»');
-  assert.deepEqual(w.card, [{ key: 'collected', n: 46 }, { key: 'read', n: 44 }, { key: 'booked', n: 38 }, { key: 'payments', n: 41, of: 45 }, { key: 'withoutYou', pct: 79 }]);
+  assert.deepEqual(w.stack, [{ key: 'payments', n: 41, of: 45 }, { key: 'waiting', n: 0 }], 'how far the period is, in payments');
+  assert.deepEqual(w.card, [{ key: 'receipts', collected: 46, read: 44, booked: 38 }, { key: 'payments', n: 41, of: 45 }, { key: 'withoutYou', pct: 79 }]);
   const unknown = dockWidget(figures({ authors: { app: 0, asked: 0, changed: 0, person: 0, unknown: 38 } }), view(), 0, now);
-  assert.deepEqual(keys(unknown.card), ['collected', 'read', 'booked', 'payments'], 'no share when no booking records its author');
-  assert.deepEqual(keys(dockWidget(figures({ payments: 0, paymentsBooked: 0 }), view(), 0, now).card), ['collected', 'read', 'booked'], 'no payments in the period: no payment fact');
+  assert.deepEqual(keys(unknown.card), ['receipts', 'payments'], 'no share when no booking records its author');
+  assert.deepEqual(keys(dockWidget(figures({ payments: 0, paymentsBooked: 0 }), view(), 0, now).card), ['receipts', 'payments'], 'both lines always, also before the first statement');
   assert.ok(!keys(unknown.stack).includes('withoutYou'));
 });
 
@@ -68,7 +68,7 @@ test('before the automation is loaded the widget knows the figures and nothing a
   const w = dockWidget(figures(), undefined, 0, now);
   assert.equal(w.loaded, false);
   assert.deepEqual([w.run, w.next, w.paused], [undefined, undefined, false]);
-  assert.deepEqual(keys(w.stack), ['read', 'booked', 'waiting']);
+  assert.deepEqual(keys(w.stack), ['payments', 'waiting']);
   assert.equal(dockWidget(figures(), view(), 0, now).loaded, true);
 });
 
@@ -106,11 +106,42 @@ test('«Aufgaben» is one count in the dock and the corner (#385 review): open t
   assert.deepEqual(corner(view({ runs: [run({ id: 's', status: 'stuck' })] })), { kind: 'needs-you', count: 1 });
 });
 
-test('the bar says the payments booked in words only while no receipt is booked and payments are (#385 review); otherwise receipts read and booked', () => {
-  assert.deepEqual(keys(dockWidget(figures(), view(), 0, now).stack), ['read', 'booked', 'waiting'], 'more payments than receipts booked: the row as before');
-  const none = dockWidget(figures({ read: 0, booked: 0, matched: 0, paymentsBooked: 11, payments: 23 }), view(), 0, now);
-  assert.deepEqual(none.stack, [{ key: 'payments', n: 11, of: 23 }, { key: 'waiting', n: 0 }], 'nothing booked by its receipt yet, eleven payments booked: said in words');
-  assert.deepEqual(keys(dockWidget(figures({ read: 0, booked: 0, paymentsBooked: 0, payments: 23 }), view(), 0, now).stack), ['read', 'booked', 'waiting'], 'nothing booked at all: the row of zeros is true');
+test('one word, one unit (#398): in every state of the books the bar\'s label and the card\'s lines name what they count, in four languages, and the bar never switches to receipts', async () => {
+  const { formatIn } = await import('../src/app/i18n/core.js');
+  const { figureLabel, cardLine, dockLine } = await import('../src/app/automation/words.js');
+  const units: Record<string, { payments: RegExp; receipts: RegExp; tasks: RegExp }> = {
+    de: { payments: /Zahlung/, receipts: /Beleg/, tasks: /Aufgabe/ },
+    en: { payments: /payment/i, receipts: /receipt/i, tasks: /task/ },
+    fr: { payments: /paiement/i, receipts: /justificatif/i, tasks: /tâche/ },
+    it: { payments: /pagament/i, receipts: /giustificativ/i, tasks: /compit/ },
+  };
+  const states = [
+    figures(),
+    figures({ read: 0, booked: 0, matched: 0, paymentsBooked: 11, payments: 23 }),
+    figures({ read: 7, booked: 1, paymentsBooked: 7, payments: 23 }),
+    figures({ read: 0, booked: 0, paymentsBooked: 0, payments: 23 }),
+    figures({ collected: 0, read: 0, booked: 0, matched: 0, payments: 0, paymentsBooked: 0 }),
+  ];
+  for (const code of ['de', 'en', 'fr', 'it'] as const) {
+    const dict = (await import(`../src/app/i18n/locales/${code}.js`)).default;
+    const say = (key: string, vars: Record<string, string | number> = {}) => formatIn({ code, ...dict }, key as never, vars);
+    for (const f of states) {
+      const w = dockWidget(f, view({ tasks: [task] }), 0, now);
+      assert.deepEqual(keys(w.stack), ['payments', 'waiting'], `${code}: the bar is payments and tasks in every state`);
+      assert.match(figureLabel(say, w.stack[0]), units[code].payments, `${code}: the bar's figure names its unit`);
+      assert.match(figureLabel(say, w.stack[1]), units[code].tasks);
+      const lines = w.card.map((x) => cardLine(say, x));
+      assert.match(lines[0], units[code].receipts, `${code}: «${lines[0]}» names receipts`);
+      if (f.collected) assert.match(lines[0], new RegExp(`${f.read}\\D+${f.booked}`), 'read and booked receipts on one line');
+      assert.match(lines[1], units[code].payments, `${code}: «${lines[1]}» names payments`);
+      if (f.payments) assert.match(lines[1], new RegExp(`${f.paymentsBooked}\\D+${f.payments}`));
+      // A period without any says so (#398 review): never «0 von 0», on the card nor in the tip.
+      for (const line of [...lines, dockLine(say, w)]) assert.doesNotMatch(line, /\b0 (von|of|sur|su) 0\b/, `${code}: «${line}»`);
+      if (!f.collected) assert.doesNotMatch(lines[0], /\d/, `${code}: «${lines[0]}» says there are none`);
+      assert.match(dockLine(say, w), units[code].payments);
+      assert.doesNotMatch(figureLabel(say, w.stack[0]), /\{/, 'no placeholder left');
+    }
+  }
 });
 
 test('the payments figure keeps its words in a short window, so the bar never shows two bare numbers', () => {

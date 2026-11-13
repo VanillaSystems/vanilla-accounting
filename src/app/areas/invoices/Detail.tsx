@@ -110,7 +110,8 @@ function InvoiceDetail(props: DetailProps) {
         <span data-tip={t('invoices.dateTip')}>{formatDate(inv.date)}</span>
         {inv.status === 'issued' && inv.kind === 'invoice' && <span data-tip={t('invoices.dueTip')}>{t('invoices.due', { date: formatDate(inv.dueDate) })}</span>}
         {inv.status === 'issued' && inv.kind === 'invoice' && <span data-tip={t('invoices.referenceTip')}>{prettyReference(inv.reference)}</span>}
-        <span>{t0.vat || inv.lines.some((l) => l.vatRate > 0) ? t('invoices.vatAmount', { amount: fmt(t0.vat) }) : t('invoices.vatZero')}</span>
+        {/* A firm not in the register charges no VAT: its invoice's head has no VAT line at all (#398). */}
+        {chargesVat() || t0.vat ? <span data-testid="invoice-head-vat">{t0.vat || inv.lines.some((l) => l.vatRate > 0) ? t('invoices.vatAmount', { amount: fmt(t0.vat) }) : t('invoices.vatZero')}</span> : null}
       </div>
       <Status {...props} state={state} reminder={!!reminder} />
       <Actions {...props} state={state} reminderLevel={reminder ? reminderDraft(inv, d.invoices, today).level : undefined} />

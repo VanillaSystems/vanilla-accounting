@@ -17,7 +17,7 @@ import { desktopServer } from '../src/desktop/server.js';
 import { assumedOf, draftProgress, draftSteps, newDraft, withPatch, type SetupDraft } from '../src/onboarding/draft.js';
 import { draftFile, readDraft, writeDraft } from '../src/onboarding/draft-store.js';
 import { applyTalk, parseTalk, talkPrompt, type Ask } from '../src/onboarding/draft-talk.js';
-import { PRESETS, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, hasWhere, unsureOf, withoutUnsteered, unusualPeriod, type QuestionKey } from '../src/workspace/setup.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, hasWhere, unsureOf, withoutUnsteered, unusualPeriod, type QuestionKey } from '../src/workspace/setup.js';
 import type { AskOptions } from '../src/llm/ask.js';
 import { APP_FOLDER, MANIFEST_FILE } from '../src/workspace/workspace.js';
 import { testIban } from './support/iban.js';
@@ -206,6 +206,66 @@ test('the model is given the answered set and the open one, and is not asked to 
   assert.match(prompt, /The step waiting now, which the app shows with its buttons right below your words: answers\.period\n/);
   assert.match(prompt, /Do not ask the next question/);
   assert.doesNotMatch(prompt, /ask back once, briefly, for what is still missing/);
+});
+
+test('the model is told the buttons of the step waiting word for word, the list the conversation draws them from, at every question; no «weiss nicht» where none stands, no recommendation on the VAT questions (#398)', async () => {
+  const { offeredAnswers, offeredLabel } = await import('../src/workspace/setup.js');
+  const { formatIn } = await import('../src/app/i18n/core.js');
+  const de = (await import('../src/app/i18n/locales/de.js')).default;
+  const say = (key: string, vars: Record<string, string> = {}) => formatIn({ code: 'de', ...de }, key as never, vars);
+  const buttons = (prompt: string) => /Its buttons, exactly these and no others: ([^\n]*?)\. Name no other answer/.exec(prompt)?.[1];
+  let d = newDraft('de', NOW);
+  assert.equal(buttons(talkPrompt(d, 'hallo', [], 'CHF')), '«Weiter»', 'the firm\'s card: its one button');
+  d = withPatch(d, { step: 'firm', value: { name: 'Malerei Huber GmbH', uid: UID, owner: 'Thomas Huber' } });
+  assert.equal(buttons(talkPrompt(d, 'hallo', [], 'CHF')), PRESET_NAMES.map((p) => `«${say(`desktop.q.preset.${p}`)}»`).join(', '), 'the kinds of firm');
+  d = withPatch(d, { step: 'preset', value: 'custom' });
+  const seen: QuestionKey[] = [];
+  for (let open = draftSteps(d).at(-1)!; open.id === 'question'; open = draftSteps(d).at(-1)!) {
+    const key = open.key;
+    const prompt = talkPrompt(d, 'weiss nöd, was heisst das?', [], 'CHF');
+    const labels = offeredAnswers(key).map((a) => `«${offeredLabel(say, key, a)}»`);
+    assert.match(prompt, new RegExp(`Its buttons, exactly these and no others: ${labels.join(', ').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.`), `${key}: the buttons as the screen shows them`);
+    if (!offeredAnswers(key).some((a) => a.kind === 'unsure')) assert.doesNotMatch(prompt.split('Its buttons')[1].split('\n')[0], /«Weiss nicht/, `${key}: no «Weiss nicht» named where none stands`);
+    if ('multi' in QUESTIONS[key]) assert.ok(labels.includes('«Weiter»'), `${key}: a question of several answers has its «Weiter» in the list`);
+    if (key === 'vatMethod' || key === 'basis') {
+      assert.doesNotMatch(prompt, /provides by default|what the law provides/, 'no fact that reads as a recommendation (#398 review)');
+      assert.ok(labels.includes('«Wir rechnen keine MWST ab»'), 'the third answer is named, as it stands');
+      assert.match(prompt, /never recommend an answer and never call one usual, likely or the default for her/);
+      assert.match(prompt, /a firm whose accountant \(Treuhand\) fills in its VAT returns is registered/);
+    }
+    seen.push(key);
+    const first = offeredAnswers(key).find((a) => a.kind === 'option')!;
+    const value = key === 'vatRegistered' ? 'yes' : 'multi' in QUESTIONS[key] ? [(first as { value: string }).value] : (first as { value: string }).value;
+    d = withPatch(d, { step: 'question', key, value: value as string });
+  }
+  assert.ok(seen.includes('vatMethod') && seen.includes('basis') && seen.length >= 6, `every question asked: ${seen.join(', ')}`);
+  const ui = readFileSync('src/app/onboarding/DraftConversation.tsx', 'utf8');
+  assert.match(ui, /\{offeredAnswers\(key\)\.map\(\(a\) => \{\n\s+const label = offeredLabel\(say, key, a\);/, 'the conversation draws its buttons from the same list and words');
+  assert.doesNotMatch(ui, /QUESTIONS\[key\]\.options\.map/, 'no second list of buttons');
+  const form = readFileSync('src/app/desktop/StartScreen.tsx', 'utf8');
+  assert.match(form, /offeredAnswers\(key, 'form'\)\.map/, 'the form draws from the same list');
+  assert.doesNotMatch(form, /QUESTIONS\[key\]\.options\.map|unsteered\(key\) \? <button/, 'and has no second one');
+  // The steps after the questions: the banks' card and the review.
+  while (draftSteps(d).at(-1)!.id !== 'review') {
+    const open = draftSteps(d).at(-1)!;
+    if (open.id === 'banks') { assert.equal(buttons(talkPrompt(d, 'x', [], 'CHF')), '«Weiter»'); d = withPatch(d, { step: 'banks', value: [{ bank: 'Raiffeisen', currency: 'CHF' }] }); }
+    else if (open.id === 'netRates') d = withPatch(d, { step: 'netRates', value: [{ rate: 4.5 }] });
+    else break;
+  }
+  if (draftSteps(d).at(-1)!.id === 'review') assert.equal(buttons(talkPrompt(d, 'x', [], 'CHF')), `«${say('desktop.create')}»`, 'the review: its one button');
+});
+
+test('«Wir rechnen keine MWST ab» never stands without the line that says whom it is for: under every question that offers it, on the form and in the conversation (#398)', async () => {
+  const { offeredAnswers, noVatHint } = await import('../src/workspace/setup.js');
+  const offering = QUESTION_ORDER.filter((k) => offeredAnswers(k).some((a) => a.kind === 'noVat'));
+  assert.deepEqual(offering, ['vatMethod', 'basis']);
+  assert.deepEqual(QUESTION_ORDER.filter((k) => noVatHint(k)), offering, 'a line under each question that offers the answer, none elsewhere');
+  assert.deepEqual(offering.map(noVatHint), ['full', 'short'], 'whole the first time, short the second');
+  for (const f of ['src/app/onboarding/DraftConversation.tsx', 'src/app/desktop/StartScreen.tsx']) {
+    const src = readFileSync(f, 'utf8');
+    assert.match(src, /\{noVatHint\(key\) \? <p className="[^"]+" data-no-vat-hint=\{noVatHint\(key\)\}>/, `${f}: the line follows the answer`);
+    assert.doesNotMatch(src, /key === 'vatMethod' \? <p[^>]*data-no-vat-hint/, `${f}: not under the method only`);
+  }
 });
 
 test('a filing period the tax authority grants only on request is not taken from loose words: the reply says what is usual, the question keeps its buttons', () => {
@@ -408,7 +468,9 @@ test('the typed setup knows that «not registered» is her click only, and the h
 
   const de = (await import('../src/app/i18n/locales/de.js') as { default: Locale }).default.messages as unknown as Record<string, string>;
   assert.match(de['desktop.q.noVat.hint'], /Füllt eure Treuhand die MWST-Abrechnungen aus, ist die Firma eingetragen/, 'a firm whose Treuhand files is registered');
-  assert.match(de['desktop.q.noVat.hint'], /Falsch gewählt\? Unter Firma › MWST änderst du es, solange dieses Jahr keine Buchungen hat/, 'what a wrong pick costs');
+  // What a wrong pick costs stands once on the question (its help line above the answers), not again under them (#398).
+  assert.match(de['desktop.q.vatMethod.where'], /Falsch gewählt\? Unter Firma › MWST änderst du es, solange dieses Jahr keine Buchungen hat/, 'what a wrong pick costs');
+  assert.doesNotMatch(de['desktop.q.noVat.hint'], /Falsch gewählt/, 'said once');
   assert.match(de['desktop.q.vatRegistered.why'], /freiwillig eintragen und ist dann eingetragen/, 'below the threshold one can be registered voluntarily');
 });
 
