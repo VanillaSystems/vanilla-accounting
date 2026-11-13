@@ -15,8 +15,11 @@ function pickFiles(onFiles: (files: File[]) => void) {
   input.click();
 }
 
+/** The system's file dialog, the files chosen into the drop dialog: what the add button does, from any page (#459). */
+export const pickReceipts = () => pickFiles((files) => void dropFiles(files));
+
 export const intakeAdd: NonNullable<Area['add']> = {
   label: () => t('receipts.add'),
   title: () => t('receipts.addTitle'),
-  run: () => pickFiles((files) => void dropFiles(files)),
+  run: pickReceipts,
 };

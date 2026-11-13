@@ -46,7 +46,9 @@ Every process has two files, and every business with particulars has one:
   single-leg entry without a payment, a `-2` code, such as a platform's monthly
   bill of the fees it kept: it is never paired with a payment, and Belege names
   the correction booking it fits, issue #190; a payment provider's such bill is
-  booked by code, see «A payment provider»), which accounts it
+  booked by code, see «A payment provider»; its `name` and `where` are the
+  title the business prints and where it keeps the document, said when a
+  month's bill is missing, issue #459), which accounts it
   books to (`accounts:`), and its rules for each step it touches. Each step's
   rules sit under the step's exact address:
   `steps: { "booking.guide.yaml#classify": { rules: [...] } }`. An authority's
