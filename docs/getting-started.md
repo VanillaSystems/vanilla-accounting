@@ -389,7 +389,8 @@ What holds today. Where something is missing and has an issue, the issue is name
   by the AI, at most 20 pages each) or its CSV export (at most 5000 rows). Real camt.053 files
   were tested from Raiffeisen and Wise: for another bank, check the first statement's payments
   and closing balance. Not handled yet: a company credit card whose statement is not read in
-  (issue #94), payments from
+  (issue #94; dropped, the card statement is the receipt of the card's debit on the bank account,
+  and its row says so), payments from
   PayPal, Twint or another account the app does not import
   (issue #95), and the cash box
   (issue #91): book those by hand.

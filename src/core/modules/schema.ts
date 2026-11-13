@@ -288,6 +288,8 @@ export interface DocumentsData {
   };
   /** The title of a bank statement: with an IBAN or the movement columns, the drop reads such a PDF as a statement, not as a receipt (src/core/modules/words.ts isBankStatement). */
   statement: string[];
+  /** The title of a credit card's monthly statement («Kreditkartenabrechnung», «Card statement»): with a period, a card statement among the receipts, which the app reads as the receipt of the card's debit on the bank account, never as a statement (src/books/statement-facts.ts isCardStatement, #401, #94). */
+  cardStatement?: string[];
   /** The column words of a statement's movements, money out and money in («Belastung», «Gutschrift»): a bank statement without an IBAN shows them. */
   movements: { out: string[]; in: string[] };
   /** The balance lines of a statement («Saldovortrag», «Closing balance»): with its title, IBAN and period, a statement among the receipts (src/books/statement-facts.ts). */

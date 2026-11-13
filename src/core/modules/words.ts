@@ -34,6 +34,11 @@ export function namesStatement(text: string, words: DocumentsData): boolean {
   return !firstOf(Object.fromEntries(lists.map((l, i) => [i, l])), head).some((x) => x.at < at);
 }
 
+/** A credit card's statement says so in its first lines («Kreditkartenabrechnung», «Card statement»). */
+export function namesCardStatement(text: string, words: DocumentsData): boolean {
+  return !!words.cardStatement?.length && wordsRe(words.cardStatement).test(text.slice(0, HEAD));
+}
+
 /** An account's IBAN as a document prints it, its groups with or without spaces. */
 export const IBAN = /\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,7}(?:\s?[A-Z0-9]{1,3})?\b/;
 

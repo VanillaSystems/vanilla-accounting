@@ -40,8 +40,8 @@ import { fileKeyOf } from '../areas/bank/model.js';
 import { startIntake } from '../automation/intake.js';
 import { draftForm } from '../areas/company/bank-draft.js';
 import { getAccountMap } from '../lib/accounts.js';
-import { chfOf, markLabel, suggestion } from '../areas/receipts/model.js';
-import { ledgerFor, noneText, txLine } from '../areas/receipts/view.js';
+import { cardStatementOf, chfOf, markLabel, suggestion } from '../areas/receipts/model.js';
+import { cardStatementLine, ledgerFor, noneText, txLine } from '../areas/receipts/view.js';
 import { offersInBooks } from '../../intake/near-pairs.js';
 import { useFx } from '../hooks/use-fx.js';
 import { ReportCorrections } from '../areas/receipts/ReportCorrections.js';
@@ -561,6 +561,8 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
   const [menu, setMenu] = useState<DOMRect | null>(null);
   const readPdf = () => { setBusy(true); void act(session, r, { kind: 'readPdf' }).then(refresh).finally(() => setBusy(false)); };
   const statementAt = statementLocation(r);
+  // A card statement taken as a receipt (#401): what the app did with it, in its row.
+  const card = receipt && !r.report ? cardStatementOf(receipt, books) : undefined;
   // «Ist doch ein Beleg» (#361): the person's word, as Belege takes it; the run then reads the file again, never asking whether it is one.
   const isReceipt = () => {
     setBusy(true);
@@ -582,6 +584,7 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
             : x.kind === 'none' ? <small className="dwhy" data-testid="drop-none">{x.why}</small>
             : x.kind === 'supporting' ? <small className="dwhy" data-testid="drop-supporting">{x.of ? t('drop.p.supportingOf', { what: x.why || t('receipts.why.supporting'), name: x.of.name }) : t('drop.p.supportingAlone', { what: x.why || t('receipts.why.supporting') })}</small>
             : x.kind === 'twin' ? <small className="dwhy" data-testid="drop-twin">{t('drop.twin.duplicate', { name: x.name })} · {t(`drop.twin.why.${x.why}`)}</small> : null}
+          {card ? <small className="dwhy" data-testid="drop-card-statement">{cardStatementLine(card)}</small> : null}
           {byBank ? <small className="dwhy" data-testid="drop-by-bank">{t('drop.byBank', { label: byBank.label })}</small> : null}
           <span className="dacts">
             {x.kind === 'twin' && receipt ? (
@@ -596,8 +599,8 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
             {(x.kind === 'none' || x.kind === 'supporting') && receipt && receipt.kind !== 'statement' && receipt.kind !== 'duplicate' ? <button type="button" className="linkbtn" data-testid="drop-is-receipt" disabled={busy} onClick={isReceipt}>{t(markLabel(receipt))}</button> : null}
             {x.kind === 'stuck' ? <button type="button" className="linkbtn" data-testid="drop-stuck-run" onClick={() => go({ area: 'automation', view: 'run', run: x.run })}>{t('processing.toRun')}</button> : null}
             {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id }, receipt.date)}>{t(x.kind === 'unread' ? 'drop.p.typeIn' : 'drop.openReceipt')}</button> : null}
-            {/* A file that could be a statement (#384): not read, read as one, or read without a total or with a statement's signs; never a receipt read with its total, nor one linked to its payment. */}
-            {(r.kind === 'receipt' || r.kind === 'photo') && !r.report && (x.kind === 'unread' || (x.kind === 'none' && receipt?.kind === 'statement')
+            {/* A file that could be a statement (#384): not read, read as one, or read without a total or with a statement's signs; never a receipt read with its total, nor one linked to its payment, nor a card statement (#401). */}
+            {(r.kind === 'receipt' || r.kind === 'photo') && !r.report && !card && (x.kind === 'unread' || (x.kind === 'none' && receipt?.kind === 'statement')
               || ((x.kind === 'read' || x.kind === 'waits') && !!receipt && (receipt.amount == null || statementSigns(receipt.extractedText ?? '')))) ? <button type="button" className="linkbtn" data-testid="drop-as-statement" disabled={busy} onClick={() => { setBusy(true); void act(session, r, { kind: 'statement' }).then(refresh).finally(() => setBusy(false)); }}>{t('drop.asStatement')}</button> : null}
             {keptPdf ? <button type="button" className="linkbtn" data-act="actions" data-testid="drop-actions" aria-haspopup="menu" aria-expanded={!!menu} disabled={busy} onClick={(e) => setMenu(e.currentTarget.getBoundingClientRect())}>{t('actions.label')}</button> : null}
             <button type="button" className="linkbtn" disabled={running || busy} data-tip={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</button>

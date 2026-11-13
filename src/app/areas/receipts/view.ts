@@ -75,3 +75,7 @@ export function noneText(v: ReceiptView): string {
   const why = v.noneWhy ? t(`receipts.why.${v.noneWhy}`) : '';
   return v.noneBy === 'person' ? `${why} · ${t('receipts.noneBy.personShort')}` : why;
 }
+
+/** What the app did with a card statement (cardStatementOf), in one sentence: whose receipt it is, whether its lines were booked one by one, and that card statements are not read as statements (#401). */
+export const cardStatementLine = (c: { debit?: string; lines: number }): string =>
+  c.debit ? t(c.lines > 1 ? 'receipts.cardStatement.split' : 'receipts.cardStatement.linked', { date: formatDate(c.debit) }) : t('receipts.cardStatement.open');

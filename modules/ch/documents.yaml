@@ -41,6 +41,11 @@ other:
 # namesStatement): «Kontoauszug», «CHF statement» of a currency account, «Relevé de compte».
 statement: [Kontoauszug, Bankauszug, Account statement, Bank statement, Statement, Relevé de compte, Relevé bancaire, Extrait de compte, Estratto conto]
 
+# A credit card's monthly statement names itself in its first lines (src/core/modules/words.ts
+# namesCardStatement); with its period it is the receipt of the card's debit on the bank account:
+# the app reads no card statement as a bank statement (#401, #94).
+cardStatement: [Kreditkartenabrechnung, Kartenabrechnung, Monatsabrechnung Kreditkarte, Credit card statement, Card statement, Relevé de carte de crédit, Relevé de carte, Décompte de carte, Estratto conto carta di credito, Estratto conto carta, Conteggio carta]
+
 # The columns of a statement's movements, money out and money in (src/core/modules/words.ts
 # isBankStatement): a statement shows the account's IBAN or these. A supplier's «Statement» of
 # its charges shows neither and stays a receipt.

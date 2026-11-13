@@ -11,7 +11,7 @@ import { baseCurrency, documents } from '../../../engines/index.js';
 import { duplicatesIn, type Twin } from '../../../intake/duplicates.js';
 import { documentKind } from '../../../intake/document-kind.js';
 import { isNoReceipt } from '../../../books/discard.js';
-import { accountOfStatement, statementFacts, type StatementFacts } from '../../../books/statement-facts.js';
+import { accountOfStatement, isCardStatement, statementFacts, type StatementFacts } from '../../../books/statement-facts.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { isManualRef } from '../../../books/refs.js';
 import type { OtherWhy, SupportingWhy } from '../../../core/modules/schema.js';
@@ -483,4 +483,17 @@ export function together<F extends string>(before: Saves<F> | undefined, next: S
 export function vatChipOf(hasSwissVat: boolean | undefined, noInputTax: 'none' | 'net-rate' | undefined): 'unread' | 'none' | undefined {
   if (hasSwissVat !== undefined) return 'none';
   return noInputTax === 'none' ? undefined : 'unread';
+}
+
+/**
+ * What the app did with a credit card's monthly statement among the receipts (#401): the day of the
+ * debit it is the receipt of (its linked payment) and how many entries book that debit (its lines,
+ * when the booking split it). Undefined for any other receipt. The app reads no card statement as a
+ * bank statement (issue #94).
+ */
+export function cardStatementOf(r: Pick<Receipt, 'id' | 'extractedText'>, books: Pick<Index, 'mappings' | 'transactions' | 'journalEntries'>): { debit?: string; lines: number } | undefined {
+  if (!isCardStatement(r.extractedText ?? '', documents())) return undefined;
+  const refs = new Set(books.mappings.filter((m) => m.receiptId === r.id).map((m) => m.transactionRef));
+  const debit = books.transactions.filter((t) => refs.has(t.ref)).map((t) => t.date).sort()[0];
+  return { ...(debit ? { debit } : {}), lines: (books.journalEntries ?? []).filter((e) => refs.has(e.transactionRef)).length };
 }
