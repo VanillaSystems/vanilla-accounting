@@ -336,6 +336,14 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A payment provider's payouts list dropped before the firm has that provider is named as the
+  provider's other export, with the reports to bring instead, at the first drop too (#425); before,
+  it became a bank statement's column question; the dialog's head says it was set aside, not
+  «schon in den Büchern». For a provider the firm does not have yet, its file
+  must name four columns or more and the CSV have all of them, so a bank's CSV is never taken for
+  one. A CSV whose table does not add up after its columns were answered ends with what to do and
+  «Andere Spalten wählen» and «Weglegen»; one a camt.053 covers says to set it aside, not to keep a
+  PDF, and offers «Weglegen».
 - Keeping rules (#396, #392): «Rückgängig» on a second kept rule took back the first rule's bookings
   and the second rule's file. Each keep now has a line of its own above Aufgaben and Firma › Regeln
   («4 Zahlungen gebucht · Rückgängig»), true to its own numbers and still there after a reload; the
