@@ -27,7 +27,8 @@ import { thresholdPassed } from '../vat/model.js';
 import { countIssues, dateOn, periodIssues, receiptWaiting, type IssueCounts, type PeriodIssue } from './period-issues.js';
 import type { Processing } from '../../../workflows/processing.js';
 import type { HeldOrder, MissingBill, ProviderIssues } from '../../../booking/provider-issues.js';
-import { issuedByFirm, type Firm } from '../../../intake/own-invoice.js';
+import { issuedByFirm, ownNumbers, type Firm } from '../../../intake/own-invoice.js';
+import { agreedBasis } from '../../../engines/index.js';
 import { missingOpenings, type MissingOpening } from '../../../accounting/opening-balance.js';
 import { balanceAt } from '../../../booking/providers.js';
 
@@ -70,7 +71,7 @@ export interface OpenPeriodState {
   evidence: Array<{ entry: JournalEntry; check: EvidenceCheck }>;
   /** Receipts without a payment, the firm's own invoices not among them. */
   unlinked: Receipt[];
-  /** Invoices the firm issued that no payment has paid yet: they wait for the customer, nothing for the person to do (#428). */
+  /** The firm's own invoices that only wait for their customer (waitsForCustomer): nothing for the person to do (#428). */
   issued: Receipt[];
   /** The first year's bank accounts the books open at nothing while their statements say they held money (missingOpenings, any currency): Firma › Eröffnung (#428). */
   openings: MissingOpening[];
@@ -111,6 +112,32 @@ function taskDay(books: Index, item: Task['item'], openFrom: IsoDate): IsoDate |
   }
 }
 
+const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * Whether a receipt without a payment is the firm's own invoice that only waits for its customer,
+ * nothing for the person to do (#428). Only when that is sure: the receipt shows the firm's UID and
+ * no other (a name alone is no proof), no money in may be its payment (one booked without the link
+ * is hers to pair), and on the agreed basis its issue is booked as a
+ * receivable (an invoice dropped, not issued in the app, has no event: its turnover is VAT work).
+ */
+/** Money in, on or after the invoice's day and linked to no receipt, of its amount or naming its number: it may be its payment, booked without the link. */
+function mayBePaid(books: Index, r: Receipt): boolean {
+  const linked = new Set(books.mappings.map((m) => m.transactionRef));
+  const numbers = ownNumbers(r).map(squash);
+  return books.transactions.some((t) => t.direction === 'CRDT' && !linked.has(t.ref) && (!r.date || t.date >= r.date)
+    && ((r.amount != null && t.currency === (r.currency ?? t.currency) && Math.round(t.amount * 100) === Math.round(Math.abs(r.amount) * 100))
+      || numbers.some((n) => n.length >= 4 && squash(`${t.description} ${t.reference ?? ''} ${t.remarks ?? ''}`).includes(n))));
+}
+
+export function waitsForCustomer(books: Index, r: Receipt, firm: Firm | undefined): boolean {
+  if (issuedByFirm(r, firm) !== 'uid') return false;
+  if (mayBePaid(books, r)) return false;
+  if (!agreedBasis()) return true;
+  const events = new Set((books.journalEntries ?? []).filter((e) => /^(RE|GS)-/.test(e.transactionRef) && !e.transactionRef.endsWith('-storno')).map((e) => squash(e.transactionRef)));
+  return ownNumbers(r).some((n) => events.has(squash(n)) || events.has(`re${squash(n)}`));
+}
+
 export function openPeriodState(
   books: Index, questions: readonly Question[], tasks: readonly Task[], accounts: readonly LedgerBankAccount[], ctx: OpenPeriodContext,
   orderPages: ReadonlyMap<string, OrderPage> = new Map(), processing: ReadonlyMap<string, Processing> = new Map(), provider?: ProviderIssues,
@@ -131,8 +158,8 @@ export function openPeriodState(
     waiting: receiptWaiting(books, accounts, ctx.today, ctx.owner).filter((w) => refs.has(w.tx.ref)),
     questions: issues.flatMap((i) => (i.kind === 'question' ? [{ q: i.q, date: i.date }] : [])),
     evidence: issues.flatMap((i) => (i.kind === 'evidence' ? [{ entry: i.entry, check: i.check }] : [])),
-    unlinked: unlinked.filter((r) => !issuedByFirm(r, ctx.firm)),
-    issued: unlinked.filter((r) => issuedByFirm(r, ctx.firm)),
+    unlinked: unlinked.filter((r) => !waitsForCustomer(books, r, ctx.firm)),
+    issued: unlinked.filter((r) => waitsForCustomer(books, r, ctx.firm)),
     openings: missingOpenings(books, accounts, period.to.slice(0, 4), 'all'),
     clearing: (provider?.clearing ?? []).flatMap((c): ClearingBelow[] => {
       const balance = balanceAt(books.journalEntries ?? [], c.account, period.to, books.config?.openingBalances);

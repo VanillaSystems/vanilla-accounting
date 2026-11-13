@@ -21,6 +21,10 @@ import { loadChart } from '../src/workspace/chart.js';
 import { APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { tempWorkspace, writeIndex } from './support/workspace.js';
 import { testIban } from './support/iban.js';
+import { loadJurisdiction } from '../src/core/modules/load.js';
+import { setJurisdiction, vatSetup } from '../src/engines/index.js';
+
+const ch = loadJurisdiction(APP_ROOT, 'ch').jurisdiction;
 
 const roots: string[] = [];
 after(() => { for (const r of roots) rmSync(r, { recursive: true, force: true }); });
@@ -36,7 +40,7 @@ const books: Index = {
   transactions: [tx('RENT', 'ZKB', '2026-07-01', 520), tx('PAYOUT', 'ZKB', '2026-08-03', 300, { direction: 'CRDT' })],
   journalEntries: [entry('RENT', '2026-07-01', '6000', '1020', 520), entry('PAYOUT', '2026-08-03', '1020', '1093', 300)],
   receipts: [
-    receipt('own', '2026-09-01', 7783.2, `Kälin Advisory GmbH, Ausgangsrechnung RE-2026-036\n${UID} MWST\nTotal CHF 7783.20`, { vatId: UID }),
+    receipt('own', '2026-09-01', 7783.2, `Kälin Advisory GmbH\nRechnung RE-2026-036\n${UID} MWST\nTotal CHF 7783.20`, { vatId: UID }),
     receipt('hotel', '2026-08-19', 164, 'Hotel Pilatusblick, Rechnung 26-08-4471\nCHE-999.888.777 MWST\nTotal CHF 164.00'),
   ],
   mappings: [{ receiptId: 'none', transactionRef: 'RENT' }],
@@ -68,6 +72,26 @@ test('nothing open is never said while an opening is missing or a proposal waits
   const quiet = { ...books, receipts: [], journalEntries: books.journalEntries!.filter((e) => e.id !== 'PAYOUT'), transactions: books.transactions.filter((t) => t.ref !== 'PAYOUT') } as Index;
   const s = openPeriodState(quiet, [], [], accounts, ctx);
   assert.deepEqual(openLines(s).map((l) => l.kind), ['openings']);
+});
+
+test('the firm\'s own invoice stays work when that is not sure: a name alone, a payment that may be its own, the agreed basis without its event', () => {
+  // A firm without a UID: a supplier's receipt addressed to it, its name the first line, is no proof of its own (issuedByFirm 'name').
+  const coiffeur = { ...books, receipts: [receipt('supplier', '2026-08-02', 120, 'Coiffeur Muster\nRechnung 4471 der Haarpflege AG\nTotal CHF 120.00')] } as Index;
+  const named = openPeriodState(coiffeur, [], [], accounts, { ...ctx, firm: { name: 'Coiffeur Muster' } });
+  assert.deepEqual([named.unlinked.map((r) => r.id), named.issued], [['supplier'], []]);
+  // Its customer paid it and the payment is booked without the link: offered for pairing, hers to confirm.
+  const paid = { ...books, transactions: [...books.transactions, tx('KUNDE', 'ZKB', '2026-09-20', 7783.2, { direction: 'CRDT', counterparty: 'Brändli Logistik AG', description: 'Zahlung RE-2026-036' })],
+    journalEntries: [...books.journalEntries!, entry('KUNDE', '2026-09-20', '1020', '3400', 7783.2)] } as Index;
+  const s = openPeriodState(paid, [], [], accounts, ctx);
+  assert.ok(s.unlinked.some((r) => r.id === 'own') && !s.issued.length, 'a payment may be its own: still a receipt without a payment');
+  // The agreed basis: a dropped invoice with no booked issue is turnover the return lacks; with its event booked it waits for the customer.
+  const was = vatSetup();
+  setJurisdiction(ch, { registered: true, method: 'effective', reporting: 'agreed', period: 'quarterly' });
+  try {
+    assert.deepEqual(openPeriodState(books, [], [], accounts, ctx).issued, [], 'no event: hers');
+    const booked = { ...books, journalEntries: [...books.journalEntries!, { ...entry('RE-2026-036', '2026-09-01', '1100', '3400', 7200), vatCode: 'V81' }] } as Index;
+    assert.deepEqual(openPeriodState(booked, [], [], accounts, ctx).issued.map((r) => r.id), ['own']);
+  } finally { setJurisdiction(ch, was); }
 });
 
 const pay = (ref: string, date: string, amount: number): BankTransaction =>
@@ -105,6 +129,6 @@ test('the AI is handed the setup\'s waiting proposal and not the firm\'s own inv
   assert.match(note, /Proposals from the setup that wait for the person's answer \(1\)[^\n]*\n- Alpentel AG: 50 % private, the rest on 6510/);
   assert.match(note, /Receipts without a payment \(1\)[^\n]*\n- «Hotel Pilatusblick/);
   assert.doesNotMatch(note, /Ausgangsrechnung RE-2026-036/, 'its own invoice is never named as work');
-  assert.match(note, /Invoices the firm issued that no payment has paid yet \(1\): they wait for the customer's payment, nothing for the person to do/);
+  assert.match(note, /Invoices the firm issued, with its UID, that no payment in the books fits \(1\): they wait for the customer's payment, nothing for the person to do/);
   assert.ok(note.indexOf('Proposals from the setup') < note.indexOf('Receipts without a payment'), 'the proposal before the receipts, as on the card');
 });
