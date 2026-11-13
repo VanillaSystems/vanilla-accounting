@@ -41,7 +41,7 @@ export function approvalWithheld(task: Pick<Task, 'workflow' | 'step' | 'reads'>
   const ret = task.reads?.return as PeriodReturn | undefined;
   const rates = ret ? ratesWithoutActivityId(ret.figures) : [];
   const open = ret ? openSaleQuestionsIn(questions, books, ret.from, ret.to).length : 0;
-  const held = ret ? (provider?.held ?? []).filter((h) => h.why === 'rate' && !h.filed && h.date >= ret.from && h.date <= ret.to).length : 0;
+  const held = ret ? (provider?.held ?? []).filter((h) => (h.why === 'rate' || h.why === 'rateTooMany') && !h.filed && h.date >= ret.from && h.date <= ret.to).length : 0;
   return rates.length || open || held ? { rates, questions: open, held, outcome: 'approved' } : undefined;
 }
 

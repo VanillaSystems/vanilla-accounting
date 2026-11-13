@@ -99,7 +99,7 @@ Two markers flag an entry you must read before you update:
   usual ref and linked to its report (#416). Code books it only when the items add up to what was
   charged, shipping and discount are zero, nothing is refunded and exactly one way of putting the
   items at the rates matches the tax the export shows per rate («Tax 1 Name», «Tax 1 Value»), within the rounding
-  a provider may do per item (a Rappen per two items at that rate). Every other such order waits for «Aufteilen» as before. Why the figures change: until now
+  a provider may do (half a Rappen per item at that rate, a Rappen at least). Every other such order waits for «Aufteilen» as before. Why the figures change: until now
   each such order waited, and its turnover was missing from the open period's return. An order the
   report holds for its rates in an open period is booked when that order export is dropped again or
   a payments export of the provider is dropped; one of a filed period is never booked, and an order split by hand stays as she booked it.
@@ -107,6 +107,7 @@ Two markers flag an entry you must read before you update:
   each entry's reason says it. «Rückgängig» of the report takes these lines back with its other
   sales. A later refund of such an order waits for her to book it by hand. An order with more
   line items than code tries (twelve at two rates) waits with its own reason that names the limit.
+  A split booked on the order's day moves onto the day a payments export later says it was charged.
 - Demos (#374): the bundled demos are written again by today's generator, so their payments show
   the other party's name and their bank fee rows are marked as fees, as in books read from a
   statement now; no booking and no figure changed. A test now fails when a committed demo is not

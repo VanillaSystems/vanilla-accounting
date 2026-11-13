@@ -110,7 +110,7 @@ export interface Receipt {
 export interface SalesReportFacts {
   provider: string; kind: 'sales' | 'fees'; from: string; to: string; rows: number;
   /** The orders it holds for the person; `date` (the order's tax point), `gross`, `currency` and `shipTo` where the report gave them (#405). */
-  held?: Array<{ order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' | 'refundSplit'; date?: string; gross?: number; currency?: string; shipTo?: string }>;
+  held?: Array<{ order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' | 'refundSplit' | 'rateTooMany'; date?: string; gross?: number; currency?: string; shipTo?: string }>;
   heldMore?: number;
   filedRefunds?: Array<{ order: string; date: string; amount: number; currency?: string; corrects: string; byHand?: true; booked?: { entry: string; date: string; ref: string } }>;
 }

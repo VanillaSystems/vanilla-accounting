@@ -287,7 +287,8 @@ export function readReport(text: string, kind: ReportKind, facts: Pick<ProviderF
       const r = o.row;
       if (at.linePrice !== undefined) {
         const price = amountOf(cell(row, at.linePrice));
-        const qty = at.lineQuantity === undefined ? 1 : amountOf(cell(row, at.lineQuantity));
+        // Without a quantity column each line counts once: a line of several pieces then leaves the items short of the total, and the order waits.
+        const qty = at.lineQuantity === undefined ? 1 :amountOf(cell(row, at.lineQuantity));
         o.items.push(price === undefined || qty === undefined ? undefined : fromRappen(Math.round(toRappen(price) * qty)));
       }
       if (!r.taxes && taxCols.length) {
@@ -492,7 +493,7 @@ export interface ReportTexts {
  * carries a sale from elsewhere that may be it (`legacy`), or the payments exports' charges of the order
  * do not add up to what was charged by the sales report, its total less its outstanding balance (`charges`, #231).
  */
-export interface ReportHold { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' | 'refundSplit' }
+export interface ReportHold { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' | 'refundSplit' | 'rateTooMany' }
 
 /**
  * A refund paid in a filed period whose sale the books carry and which they never carried (#231): offered
@@ -564,32 +565,39 @@ function showsRate(gross: number, tax: number, rate: number): boolean {
   return Math.abs(tax - want) <= Math.max(0.05, want * TAX_SLACK);
 }
 
-/** The most ways of putting an order's line items at its rates that code tries (two rates: twelve items); beyond, the order waits. */
-const MIXED_WAYS = 4096;
+/** The most ways of putting an order's line items at its rates that code tries (two rates: twelve items); beyond, the order waits as `rateTooMany`. */
+export const MIXED_WAYS = 4096;
+/** The most line items code splits at two rates (MIXED_WAYS): the held reason names it. */
+export const MIXED_ITEMS_AT_TWO = Math.floor(Math.log2(MIXED_WAYS));
 
 /**
  * A domestic order whose tax shows two or more rates (a cart of tea at the reduced rate and a teapot at
  * the normal one, #416), by its line items: each rate the report names with its tax, the items put
- * at the rates so that each rate's tax on its items rounds to what the report says (a cent either
- * way), the items adding up to what was charged, no shipping or discount to share out. Exactly one
- * such split, each rate one the firm books: its gross per rate; else none, and the order waits.
+ * at the rates so that each rate's tax on its items is what the report says within the rounding a
+ * provider may do (see `fits`), the items adding up to what was charged, no shipping or discount to
+ * share out. Exactly one such split, each rate one the firm books: its gross per rate; else none, and
+ * the order waits. `tooMany`: more ways to try than MIXED_WAYS; the order waits with that reason.
  */
-export function mixedCart(o: Pick<SaleRow, 'gross' | 'items' | 'taxes' | 'shipping' | 'discount'>, rates: readonly SaleCode[]): Array<SaleCode & { gross: number }> | undefined {
+export function mixedCart(o: Pick<SaleRow, 'gross' | 'items' | 'taxes' | 'shipping' | 'discount'>, rates: readonly SaleCode[]): Array<SaleCode & { gross: number }> | 'tooMany' | undefined {
   const items = o.items;
   const taxes = (o.taxes ?? []).filter((t) => toRappen(t.amount) !== 0);
-  if (!items?.length || taxes.length < 2 || taxes.length > items.length || taxes.length ** items.length > MIXED_WAYS) return undefined;
+  if (!items?.length || taxes.length < 2 || taxes.length > items.length) return undefined;
   if (toRappen(o.shipping ?? 0) !== 0 || toRappen(o.discount ?? 0) !== 0) return undefined;
   if (items.reduce((s, x) => s + toRappen(x), 0) !== toRappen(o.gross)) return undefined;
   const codes = taxes.map((t) => rates.find((r) => r.rate === t.rate));
   if (codes.some((c) => !c) || new Set(taxes.map((t) => t.rate)).size !== taxes.length) return undefined;
-  const fits = (rp: number, t: { rate: number; amount: number }) => rp > 0 && Math.abs(Math.round((rp * t.rate) / (100 + t.rate)) - toRappen(t.amount)) <= 1;
+  if (taxes.length ** items.length > MIXED_WAYS) return 'tooMany';
+  // The true split must always fit, whichever way the provider rounds (#437 review): each line's tax rounded and summed lies
+  // within half a cent per line of the exact tax on the rate's items, the rate's total rounded once within half a cent; a cent
+  // at least, as a provider's own rounding may add. A wider window lets more splits fit: the uniqueness check then holds the order.
+  const fits = (rp: number, n: number, t: { rate: number; amount: number }) => rp > 0 && Math.abs((rp * t.rate) / (100 + t.rate) - toRappen(t.amount)) <= Math.max(1, n / 2) + 1e-9;
   const found = new Set<string>();
   let split: number[] | undefined;
   const at = new Array<number>(items.length).fill(0);
   for (let n = 0; n < taxes.length ** items.length; n++) {
     for (let i = 0, m = n; i < items.length; i++, m = Math.floor(m / taxes.length)) at[i] = m % taxes.length;
     const sums = taxes.map((_, k) => items.reduce((s, x, i) => s + (at[i] === k ? toRappen(x) : 0), 0));
-    if (!sums.every((rp, k) => fits(rp, taxes[k]))) continue;
+    if (!sums.every((rp, k) => fits(rp, at.filter((x) => x === k).length, taxes[k]))) continue;
     found.add(sums.join(','));
     split = sums;
   }
@@ -862,6 +870,7 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[]; map
       if (where !== 'filed' && carried(orderLegacy({ key: o.order, day: o.date, amount: o.gross }), o.order)) return;
       const refunded = o.refunded > 0 || !!ctx.payments?.refunds.get(o.order)?.length;
       const mix = where || refunded || had?.length || saleRefsOf(sale).length ? undefined : mixedCart(o, rates);
+      if (mix === 'tooMany') { out.held.push({ order: o.order, why: 'rateTooMany' }); return; }
       const charged = chargesOf(o);
       // Charged on one day (its tax point on the cash basis) and to the cent what the report says, or not by the payments export at all.
       const once = !charged || (charged !== 'differ' && !charged.off && (ctx.agreed || charged.days.length === 1));
@@ -878,7 +887,34 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[]; map
     const plain = refundRef(ctx.provider.id, o.order);
     const refundBooked = books.journalEntries.some((e) => e.transactionRef === plain || e.transactionRef.startsWith(`${plain}-`) || (e.accountDebit === ctx.revenue && ((e.transactionRef === sale && e.accountCredit === ctx.clearing) || (!isReportRef(e.transactionRef) && textNames(e.description, o.order)))));
     if (refunded && !refundBooked) { out.held.push({ order: o.order, why: 'refundSplit' }); return; }
-    same(sale);
+    if (!movedMixed(o, sale)) same(sale);
+  };
+  /**
+   * The app's own split of a two-rate order (bookMixed), booked on the order's day before a payments export said when it was
+   * charged, moved onto that day once one says it charged the whole order on one other day (cash basis, as `resplit` moves a
+   * one-rate sale, #242): each line again with its amount and code, the receipts it named kept. Only when every line is the
+   * report's own, of the open period, no person or the AI linked a receipt to it, and the charge day is open and within the
+   * report's reach; never her «Aufteilen» (origin manual). Charged on several days it stays as booked (a part per day and rate
+   * is not made). Returns whether it moved.
+   */
+  const movedMixed = (o: SaleRow, sale: string): boolean => {
+    const had = byRef.get(sale)!;
+    const charged = chargesOf(o);
+    if (ctx.agreed || !charged || charged === 'differ' || charged.off || charged.days.length !== 1) return false;
+    const day = charged.days[0].date;
+    if (had.every((e) => e.date === day) || saleRefsOf(sale).length !== 1 || !ownParts(sale) || had.some((e) => ctx.isClosed(e.date))) return false;
+    if (books.mappings?.some((m) => m.transactionRef === sale && (m.by === 'human' || m.by === 'llm')) || dated(day, day)) return false;
+    const receipts = [...new Set([...had.flatMap((e) => e.receipts ?? []), ctx.receipt])].sort();
+    const made: JournalEntry[] = [];
+    for (const e of had) {
+      const m = make(sale, day, o.currency, { accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount, vatCode: e.vatCode, description: e.description }, e.reason ?? ctx.texts.reason('mixed', o.shipTo));
+      if (m === 'noRate') return false;
+      made.push({ ...m, receipts });
+    }
+    out.replaced.push(...had.map((e) => e.id));
+    byRef.delete(sale);
+    for (const e of made) push(sale, e);
+    return true;
   };
   for (const o of read.rows) {
     // Its refund goes with it: an order the provider did not collect is refunded otherwise too.

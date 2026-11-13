@@ -32,9 +32,9 @@ export function ReportHeld({ receipt, report, canEdit, closedThrough, said }: { 
         {held.map((h) => (
           <span key={h.order} className="heldline" data-testid="report-held-order">
             {' '}{t(`drop.held.${h.why}`, { order: h.order })}{h.date ? `, ${formatDate(h.date)}` : ''}{h.gross !== undefined ? `, ${h.currency ?? baseCurrency()} ${fmt(h.gross)}` : ''}
-            {canEdit && h.why === 'rate' && (h.gross === undefined || !h.date) ? <span className="m" data-testid="held-no-facts">{' '}{t('receipts.report.splitNoFacts')}</span> : null}
-            {h.why === 'rate' && h.date && closedThrough && h.date <= closedThrough ? <span className="m" data-testid="held-filed">{' '}{t('receipts.report.splitFiled')}</span> : null}
-            {canEdit && h.why === 'rate' && h.gross !== undefined && h.date && !(closedThrough && h.date <= closedThrough) && open !== h.order ? <> <button type="button" className="linkbtn" data-testid="held-split-open" onClick={() => setOpen(h.order)}>{t('receipts.report.split')}</button></> : null}
+            {canEdit && (h.why === 'rate' || h.why === 'rateTooMany') && (h.gross === undefined || !h.date) ? <span className="m" data-testid="held-no-facts">{' '}{t('receipts.report.splitNoFacts')}</span> : null}
+            {(h.why === 'rate' || h.why === 'rateTooMany') && h.date && closedThrough && h.date <= closedThrough ? <span className="m" data-testid="held-filed">{' '}{t('receipts.report.splitFiled')}</span> : null}
+            {canEdit && (h.why === 'rate' || h.why === 'rateTooMany') && h.gross !== undefined && h.date && !(closedThrough && h.date <= closedThrough) && open !== h.order ? <> <button type="button" className="linkbtn" data-testid="held-split-open" onClick={() => setOpen(h.order)}>{t('receipts.report.split')}</button></> : null}
             {open === h.order ? <SplitForm receipt={receipt} held={h} onDone={(m, ok) => { if (ok) setOpen(undefined); said(m, ok); }} onCancel={() => setOpen(undefined)} /> : null}
           </span>
         ))}

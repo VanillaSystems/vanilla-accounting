@@ -182,7 +182,7 @@ export interface ProviderProposal { account: string; name?: string; vat?: string
 export interface PayoutUnseen { provider: string; name: string; since: string; through: string; banks: string[]; file: string; account?: string }
 
 /** Why an order of a report was not booked by code (src/booking/sales-report.ts ReportHold). */
-export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' | 'refundSplit' }
+export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' | 'refundSplit' | 'rateTooMany' }
 
 /**
  * What a report booked (src/intake/sales-report-import.ts): orders, refunds and fees booked; `known`

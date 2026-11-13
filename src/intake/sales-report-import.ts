@@ -714,7 +714,7 @@ export function bookHeldOrder(ws: Workspace, books: Books, receiptId: string, or
   const h = receipt.report!.held?.find((x) => x.order === order);
   const ref = saleRef(p.id, order);
   if (!h || books.journalEntries.some((e) => e.transactionRef === ref)) return { ok: false, why: 'notHeld' };
-  if (h.why !== 'rate') return { ok: false, why: 'notRate' };
+  if (h.why !== 'rate' && h.why !== 'rateTooMany') return { ok: false, why: 'notRate' };
   // Held before the report kept its day and gross: dropped again, it keeps them.
   if (!h.date || h.gross === undefined) return { ok: false, why: 'noFacts' };
   // An order before the report's reach is none of its sales: the books before the cut-over day carry it, or none do.

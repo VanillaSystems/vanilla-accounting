@@ -10,6 +10,13 @@ import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bookHeldOrder, importSalesReport, removeSalesReport } from '../src/intake/sales-report-import.js';
+import { MIXED_ITEMS_AT_TWO, mixedCart } from '../src/booking/sales-report.js';
+import de from '../src/app/i18n/locales/de.js';
+import en from '../src/app/i18n/locales/en.js';
+import fr from '../src/app/i18n/locales/fr.js';
+import it from '../src/app/i18n/locales/it.js';
+
+const [deMessages, enMessages, frMessages, itMessages] = [de, en, fr, it].map((l) => l.messages as unknown as Record<string, string>);
 import { loadBooks, PERSON, saveBooks, update } from '../src/books/store.js';
 import { workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { DEMO_ROOT } from './support/workspace.js';
@@ -151,4 +158,75 @@ test('#416 an order held before (books of 0.4.1) is booked on the next drop of a
   assert.deepEqual(done.summary.split, ['2101'], 'the payments export\'s row names it too');
   assert.ok(removeSalesReport(ws, id));
   assert.deepEqual(lines(ws), [], '«Rückgängig» takes them back like the report\'s other sales');
+});
+
+/**
+ * The review's probe of #437, seeded: random carts of 2 to 9 items at 8.1 % and 2.6 %, the export's tax per rate rounded the two
+ * ways a provider may round it (each line's tax rounded and summed, or the rate's total rounded once). Code never books a split
+ * other than the true one; an order it cannot tell apart waits.
+ */
+test('#416 random carts, either rounding of the tax per rate: never a wrong split booked', () => {
+  const rates = [{ code: 'V81', rate: 8.1 }, { code: 'V26', rate: 2.6 }];
+  for (const perLine of [true, false]) {
+    let seed = 7;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    let wrong = 0, right = 0, held = 0;
+    const examples: unknown[] = [];
+    for (let t = 0; t < 40000; t++) {
+      const n = 2 + Math.floor(rnd() * 8);
+      const items = Array.from({ length: n }, () => ({ rp: (1 + Math.floor(rnd() * 60)) * 50 + (rnd() < 0.5 ? 0 : Math.floor(rnd() * 50)), r: rnd() < 0.5 ? 8.1 : 2.6 }));
+      if (new Set(items.map((l) => l.r)).size < 2) continue;
+      const at = (r: number) => items.filter((l) => l.r === r);
+      const tax = (r: number) => (perLine ? at(r).reduce((s, l) => s + Math.round((l.rp * r) / (100 + r)), 0) : Math.round((at(r).reduce((s, l) => s + l.rp, 0) * r) / (100 + r)));
+      const truth = [8.1, 2.6].map((r) => at(r).reduce((s, l) => s + l.rp, 0));
+      const got = mixedCart({ gross: items.reduce((s, l) => s + l.rp, 0) / 100, items: items.map((l) => l.rp / 100), taxes: [{ rate: 8.1, amount: tax(8.1) / 100 }, { rate: 2.6, amount: tax(2.6) / 100 }] }, rates);
+      if (!Array.isArray(got)) { held++; continue; }
+      const rp = got.map((x) => Math.round(x.gross * 100));
+      if (rp[0] === truth[0] && rp[1] === truth[1]) right++;
+      else { wrong++; if (examples.length < 3) examples.push({ items, truth, rp }); }
+    }
+    console.log(`#416 probe, ${perLine ? 'per line' : 'per rate'}: booked right ${right}, wrong ${wrong}, held ${held}`);
+    assert.equal(wrong, 0, JSON.stringify(examples));
+  }
+});
+
+test('#416 more line items than code tries: held with its own reason that names the limit, and «Aufteilen» takes it', () => {
+  const ws = shop();
+  // A teapot at 68.00 (8.1 %) and twelve teas at 2.75 (2.6 %): thirteen lines.
+  const teas = Array.from({ length: 12 }, () => more('2105', '2026-11-12', '1', '2.75'));
+  const csv = [FULL, first({ order: '2105', day: '2026-11-12', subtotal: '101.00', shipping: '0.00', taxes: '5.94', total: '101.00', qty: '1', price: '68.00', tax1: 'CH MWST 8.1%,5.10', tax2: 'CH MWST 2.6%,0.84' }), ...teas].join('\n');
+  const done = importSalesReport(ws, Buffer.from(csv), 'orders_export.csv');
+  assert.ok(done.ok);
+  assert.deepEqual(lines(ws, 'SR-shopify-2105'), []);
+  assert.deepEqual(heldOf(ws), [['2105', 'rateTooMany']]);
+  assert.deepEqual(done.summary.held.map((h) => h.why), ['rateTooMany']);
+  for (const m of [deMessages, enMessages, frMessages, itMessages]) assert.ok(m['drop.held.rateTooMany'].includes(String(MIXED_ITEMS_AT_TWO)), 'the text names the limit');
+  const id = loadBooks(ws).receipts.find((r) => r.report)!.id;
+  const books = loadBooks(ws);
+  assert.ok(update(books, PERSON, (x) => bookHeldOrder(ws, x, id, '2105', [{ amount: 68, rate: 8.1 }, { amount: 33, rate: 2.6 }])).ok, '«Aufteilen» takes it');
+});
+
+test('#416 a code split booked on the order\'s day moves onto the day a payments export later says it was charged; her split by hand stays', () => {
+  const fees = (day: string) => ['Transaction Date,Type,Order,Amount,Fee,Net,Currency', `${day} 10:00:00 +0100,charge,#2101,101.00,3.20,97.80,CHF`].join('\n');
+  const ws = shop();
+  assert.ok(importSalesReport(ws, Buffer.from(cart()), 'orders_export.csv').ok);
+  assert.deepEqual(lines(ws).map((l) => l[0]), ['2026-11-12', '2026-11-12']);
+  assert.ok(importSalesReport(ws, Buffer.from(fees('2026-11-13')), 'payment_transactions_export.csv').ok);
+  assert.deepEqual(lines(ws), [
+    ['2026-11-13', '1093', '3200', 68, 'V81', 'classify'],
+    ['2026-11-13', '1093', '3200', 33, 'V26', 'classify'],
+  ]);
+  const report = loadBooks(ws).receipts.find((r) => r.report?.kind === 'sales')!.id;
+  for (const e of loadBooks(ws).journalEntries.filter((x) => x.transactionRef === 'SR-shopify-2101')) assert.deepEqual(e.receipts, [report], 'still the sales report\'s');
+  assert.ok(loadBooks(ws).mappings.some((m) => m.transactionRef === 'SR-shopify-2101' && m.receiptId === report));
+
+  const hand = shop();
+  assert.ok(importSalesReport(hand, Buffer.from(cart({ discount: '5.00' })), 'orders_export.csv').ok);
+  const id = loadBooks(hand).receipts.find((r) => r.report)!.id;
+  const books = loadBooks(hand);
+  assert.ok(update(books, PERSON, (x) => bookHeldOrder(hand, x, id, '2101', [{ amount: 70, rate: 8.1 }, { amount: 31, rate: 2.6 }])).ok);
+  saveBooks(hand, books);
+  const hers = lines(hand);
+  assert.ok(importSalesReport(hand, Buffer.from(fees('2026-11-13')), 'payment_transactions_export.csv').ok);
+  assert.deepEqual(lines(hand), hers, 'her «Aufteilen» stays on her day');
 });
