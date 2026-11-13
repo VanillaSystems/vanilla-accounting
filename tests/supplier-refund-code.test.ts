@@ -210,6 +210,46 @@ test('SHOULD 3 (J): the rule books the same refund -I0, as the hand form propose
   assert.match(e.reason ?? '', /P2-0/);
 });
 
+// ─── Second review of #443 ───────────────────────────────────────────────────
+
+test('MUST: what is left is counted per code: an I81 purchase refunded in full leaves no I81 for a refund that only I0 money could be', async () => {
+  const b = booksOf([
+    paid('A', '2026-08-04', 'DBIT', [['6570', '1021', 300, 'I81']]),
+    paid('R0', '2026-08-06', 'CRDT', [['1021', '6570', 300, '-I81']]),
+    paid('B', '2026-08-08', 'DBIT', [['6570', '1021', 500, 'I0']]),
+  ], tx('R1', '2026-08-20', 'CRDT', 300, 'Velohaus Meier Rückerstattung'));
+  const e = await byRule(b);
+  assert.equal(e.vatCode, '-I0', 'the I81 of A went back once already');
+  assert.doesNotMatch(e.reason ?? '', /A-0/);
+});
+
+test('MUST (mirror): an I0 purchase refunded in full leaves no I0; the refund is a part of the I81 purchase', async () => {
+  const b = booksOf([
+    paid('A', '2026-08-04', 'DBIT', [['6570', '1021', 300, 'I0']]),
+    paid('R0', '2026-08-06', 'CRDT', [['1021', '6570', 300, '-I0']]),
+    paid('B', '2026-08-08', 'DBIT', [['6570', '1021', 500, 'I81']]),
+  ], tx('R1', '2026-08-20', 'CRDT', 300, 'Velohaus Meier Rückerstattung'));
+  const e = await byRule(b);
+  assert.equal(e.vatCode, '-I81');
+  assert.match(e.reason ?? '', /B-0/);
+});
+
+test('a refund without a code counts against every code of the account (the safe side)', async () => {
+  const b = booksOf([
+    paid('A', '2026-08-04', 'DBIT', [['6570', '1021', 300, 'I81']]),
+    paid('R0', '2026-08-06', 'CRDT', [['1021', '6570', 300]]),
+  ], tx('R1', '2026-08-20', 'CRDT', 300, 'Velohaus Meier Rückerstattung'));
+  assert.equal((await byRule(b)).vatCode, '-I0');
+});
+
+test('NIT: more than 20 smaller purchases to try in sums: not found, and the reason names the limit', async () => {
+  const small = Array.from({ length: 21 }, (_, i) => paid(`S${i}`, '2026-08-02', 'DBIT', [['6570', '1021', 10 + i, 'I0']]));
+  const b = booksOf([paid('P1', '2026-08-04', 'DBIT', [['6570', '1021', 432.4, 'I81']]), ...small], tx('R1', '2026-08-20', 'CRDT', 100, 'Velohaus Meier Rückerstattung'));
+  const e = await byRule(b);
+  assert.equal(e.vatCode, '-I0');
+  assert.match(e.reason ?? '', /mehr als 20 kleinere Einkäufe/);
+});
+
 test('NIT: a card number other payments of the merchant show too picks no purchase', async () => {
   const b = booksOf([
     paid('P1', '2026-08-04', 'DBIT', [['6570', '1021', 432.4, 'I81']], 'Velohaus Meier Karte 55667788'),

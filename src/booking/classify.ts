@@ -38,7 +38,7 @@ import { bookVatCorrections, type CorrectionsDone } from './vat-corrections.js';
 import { creditNoteCodeOf } from '../accounting/credit-note-code.js';
 import { acquisitionCodeOf, acquisitionReason, readSupplier, type AcquisitionDocument } from '../accounting/acquisition-tax.js';
 import { codeSignFor } from '../accounting/code-sign.js';
-import { refundCodeOf, refundedPurchase, type RefundCode } from './refund-code.js';
+import { refundCodeOf, refundLookup, refundedPurchase, SUMS_OF, type RefundCode } from './refund-code.js';
 import { homeOf, loadKnowledge } from '../knowledge/layers.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
 import { payerNames } from '../knowledge/payer.js';
@@ -400,17 +400,18 @@ export type RefundBooks = Parameters<typeof refundedPurchase>[2];
  * The purchase a rule's booking of money back refunds (#357): a refund without a document that
  * shows Swiss VAT, on a rule with a purchase code, takes the code of the purchase it refunds with
  * the minus (refundedPurchase), not the zero code; `notFound` when no purchase is found
- * unambiguously, and the line keeps the zero code with the minus. Undefined for any other payment.
+ * unambiguously (`tooMany`: more purchases to try in sums than the limit), and the line keeps the
+ * zero code with the minus. Undefined for any other payment.
  */
-export function ruleRefund(tx: BankTransaction, booking: RuleBooking, documents: readonly Pick<Receipt, 'kind' | 'hasSwissVat'>[], owner: string | undefined, books: RefundBooks | undefined): RefundCode | 'notFound' | undefined {
+export function ruleRefund(tx: BankTransaction, booking: RuleBooking, documents: readonly Pick<Receipt, 'kind' | 'hasSwissVat'>[], owner: string | undefined, books: RefundBooks | undefined): RefundCode | 'notFound' | 'tooMany' | undefined {
   if (!books || tx.direction !== 'CRDT' || !booking.vat || booking.foreignTax || documents.some((r) => isPurchaseDocument(r) && r.hasSwissVat)) return undefined;
   const found = lookupVatCode(booking.vat);
   if (!found || found.negative || (found.entry.family !== 'I' && found.entry.family !== 'M')) return undefined;
   // With a private share outside own use the business's part is what came back on the rule's account.
   const share = booking.private && owner && !booking.ownUse ? (Math.round(tx.amount * 100) - Math.round((Math.round(tx.amount * 100) * booking.private) / 100)) / 100 : tx.amount;
-  const refund = refundedPurchase(tx, share, books, booking.account);
+  const refund = refundLookup(tx, share, books, booking.account);
   // A code the firm's form does not take is never booked (formTakes): the rule's own code stands then.
-  return !refund ? 'notFound' : formTakes(refund.code) ? refund : undefined;
+  return !refund ? 'notFound' : refund === 'tooMany' || formTakes(refund.code) ? refund : undefined;
 }
 
 /**
@@ -443,7 +444,7 @@ export function ownUseCode(code: string | undefined): string | undefined {
  */
 export function ruleBookingLines(tx: BankTransaction, booking: RuleBooking, documents: readonly Pick<Receipt, 'kind' | 'hasSwissVat'>[], owner: string | undefined, books?: RefundBooks): RuleLine[] {
   const refund = ruleRefund(tx, booking, documents, owner, books);
-  const vat = refund && refund !== 'notFound' ? refund.code : ruleVatCode(booking.vat, tx, documents.some((r) => isPurchaseDocument(r) && r.hasSwissVat));
+  const vat = typeof refund === 'object' ? refund.code : ruleVatCode(booking.vat, tx, documents.some((r) => isPurchaseDocument(r) && r.hasSwissVat));
   const whole: RuleLine = { account: booking.account, ...(vat ? { vat } : {}), amount: tx.amount };
   if (booking.foreignTax) {
     const tax = foreignTaxIn(tx.amount, booking.foreignTax.rate);
@@ -644,8 +645,8 @@ export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRul
   // A refund: the purchase it refunds names its code, or none was found and the zero code stands (#357).
   const refund = ruleRefund(tx, booking, mapped, context.ownerAccount, books);
   const de = wordsIn('de');
-  const zero = refund && refund !== 'notFound' ? `; ${refundReason(refund)}`
-    : refund === 'notFound' && code && formTakes(code) ? `; ${de.t('rules.say.refundNotFound', { code })}`
+  const zero = typeof refund === 'object' ? `; ${refundReason(refund)}`
+    : refund && code && formTakes(code) ? `; ${de.t(refund === 'tooMany' ? 'rules.say.refundTooMany' : 'rules.say.refundNotFound', { code, limit: String(SUMS_OF) })}`
       : booking.vat && code && code.replace(/^-/, '') !== booking.vat ? `; ${de.t('rules.say.zeroCode', { code })}` : '';
   const lock = periodLock(books);
   const booked = entriesFor(tx, entries, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: `Regel: ${ruleLine(placed, { ...context, payers: payerNames([tx]) })}${zero}`, by: { kind: 'rule', rule: placed.rule.id }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) })
