@@ -18,7 +18,7 @@ import type { ClearPartner } from '../../onboarding/facts.js';
 import { askedAt, vatLine, vatSetupOf, type AssumedCard, type Line, type Origin, type SetupCard, type SetupStep } from '../../onboarding/conversation.js';
 import type { QuestionId } from '../../onboarding/model.js';
 import { placeKeys, type HandPlace } from '../../onboarding/hand.js';
-import { answer, keepSells, keepVat, setupReady, undoVat, useSetup } from './state.js';
+import { answer, confirmAssumed, keepSells, keepVat, setupReady, undoVat, useSetup } from './state.js';
 import { kindsOfAnswer } from '../../onboarding/model.js';
 import { salesKinds, type SalesKind } from '../../workspace/setup.js';
 import { say } from './words.js';
@@ -384,6 +384,7 @@ const answerWords = (key: string, value: string | string[]) => {
  * one line why, each answer with «angenommen» and «Ändern» to where it is changed by hand.
  */
 function AssumedList({ a, onGo }: { a: AssumedCard; onGo: Go }) {
+  const { busy } = useSetup();
   const why = a.by ? t('onboarding.draft.assumedWhy', { preset: tData(`desktop.q.preset.${a.by}`) }) : undefined;
   return (
     <div className="obassumed" data-assumed-list>
@@ -392,7 +393,10 @@ function AssumedList({ a, onGo }: { a: AssumedCard; onGo: Go }) {
         {a.answers.map((x) => (
           <li key={x.key} data-assumed={x.key}>
             <span>{tData(`desktop.q.${x.key}.ask`).replace(/[\s\u00a0]*\?$/, '')}: {answerWords(x.key, x.value)} <span className="obbadge assumed" data-tip={why}>{t('onboarding.draft.assumed')}</span></span>
-            <span>{x.go ? <button type="button" className="linkbtn" data-tip={placeOf(x.go)} onClick={() => onGo(x.go!)}>{t('onboarding.change')}</button> : null}</span>
+            <span className="obassumedacts">
+              <button type="button" className="linkbtn" data-confirm={x.key} disabled={busy} onClick={() => void confirmAssumed(x.key)}>{t('onboarding.assumedOk')}</button>
+              {x.go ? <button type="button" className="linkbtn" data-go={x.key} onClick={() => onGo(x.go!)}>{x.what ? t(`onboarding.assumedGo.${x.what}`, { place: placeOf(x.go) }) : t('onboarding.change')}</button> : null}
+            </span>
           </li>
         ))}
       </ul>

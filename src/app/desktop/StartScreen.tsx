@@ -203,7 +203,8 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
   const questions = QUESTION_ORDER.filter((k) => asked(k, f.answers));
   const netRate = f.answers.vatRegistered === 'yes' && f.answers.vatMethod === 'net-rate';
   const complete = firstMissing(f.answers) === undefined;
-  const shownAssumed = f.assumed.filter((k) => questions.includes(k));
+  // A question «nein» took away and «ja» brought back has no answer: nothing assumed stands there.
+  const shownAssumed = f.assumed.filter((k) => questions.includes(k) && f.answers[k] !== undefined);
   const stop = complete ? firstUnsupported(f.answers as Answers) : undefined;
   const errors = useMemo(() => {
     const uid = parseUid(f.uid);

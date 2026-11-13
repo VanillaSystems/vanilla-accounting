@@ -10,7 +10,7 @@
  */
 import { SETUP_TOPICS, kindsOfAnswer, type Answer, type AnswerValue, type QuestionId, type SetupProgress, type SetupTopic, type TopicState } from './model.js';
 import type { ClearPartner, MixedPartner, SetupFacts } from './facts.js';
-import { ANSWER_HAND, TOPIC_HAND, type HandPlace } from './hand.js';
+import { ANSWER_HAND, TOPIC_HAND, type AnswerConsequence, type HandPlace } from './hand.js';
 import { NOT_REGISTERED, methodOf, onAgreedBasis, type VatBasis, type VatSetup } from '../workspace/vat-setup.js';
 import { SALES_KINDS, type Preset, type QuestionKey, type SalesKind } from '../workspace/setup.js';
 
@@ -24,7 +24,7 @@ export interface Choice { value: string; label: Line; sub?: Line; primary?: bool
 export type Origin = 'form' | 'answer' | 'app';
 
 /** The answers the kind of firm assumed, each with where it is changed by hand (ANSWER_HAND). */
-export interface AssumedCard { by?: Preset; answers: Array<{ key: QuestionKey; value: string | string[]; go: HandPlace | null }> }
+export interface AssumedCard { by?: Preset; answers: Array<{ key: QuestionKey; value: string | string[]; go: HandPlace | null; what?: AnswerConsequence }> }
 
 export type SetupCard =
   /**
@@ -260,7 +260,7 @@ const RARE_SHOWN = 8;
  */
 function assumedCard(p: SetupProgress, f: SetupFacts): { assumed?: AssumedCard } {
   const answers = (f.assumed?.answers ?? []).filter((x) => !(x.key === 'sells' && p.answers.sells) && !(isVatKey(x.key) && p.answers.vat?.kept))
-    .map((x) => ({ ...x, go: ANSWER_HAND[x.key] }));
+    .map((x) => { const h = ANSWER_HAND[x.key]; return { ...x, go: h?.go ?? null, ...(h?.what ? { what: h.what } : {}) }; });
   return answers.length ? { assumed: { ...(f.assumed?.by ? { by: f.assumed.by } : {}), answers } } : {};
 }
 const isVatKey = (k: QuestionKey) => k === 'vatRegistered' || k === 'vatMethod' || k === 'basis' || k === 'period';

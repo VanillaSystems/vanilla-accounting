@@ -70,6 +70,24 @@ test('the form\'s untouched answers reach the books as assumed; one she changed,
   assert.equal(go.foreignCustomers, null);
 });
 
+test('«stimmt» confirms an assumed answer: kept in onboarding.json, the mark goes; no link to a page without the setting; a link to a consequence names it (#387 review)', async () => {
+  const keys = (v: any): string[] => (v.facts.assumed?.answers ?? []).map((a: { key: string }) => a.key);
+  assert.ok(keys((await call('GET', '/api/onboarding')).json).includes('imports'));
+  const ok = await call('POST', '/api/onboarding/assumed/imports');
+  assert.equal(ok.status, 200, JSON.stringify(ok.json));
+  assert.ok(!keys(ok.json).includes('imports'), 'confirmed: no longer assumed');
+  assert.ok(keys(ok.json).includes('payouts'), 'the others keep their mark');
+  assert.ok(!keys((await call('GET', '/api/onboarding')).json).includes('imports'), 'kept on disk');
+  assert.equal((await call('POST', '/api/onboarding/assumed/nonsense')).status, 404);
+  const card = setupThread(ok.json.progress, ok.json.facts)[0].card as Extract<SetupCard, { kind: 'company' }>;
+  const by = Object.fromEntries(card.assumed!.answers.map((a) => [a.key, a]));
+  assert.equal(by.legalForm.go, null, 'the legal form is changed nowhere: no link');
+  assert.equal(by.fiscalYear.go, null, 'nor the fiscal year');
+  assert.equal(by.ownerPaysPrivately.go?.section, 'banks');
+  assert.equal(by.ownerPaysPrivately.what, 'ownerAccount', 'the link names the consequence');
+  assert.equal(by.vatRegistered.what, undefined, 'the VAT setup is the setting itself: «Ändern»');
+});
+
 test('an answer changed in the books since is no longer assumed', () => {
   const a = parseAssumed({ by: 'trades', answers: { employees: 'staff', privateUse: ['phone', 'car'], bogus: 'x', imports: 'maybe' } })!;
   assert.deepEqual(Object.keys(a.answers), ['employees', 'privateUse'], 'unknown questions and answers left out');

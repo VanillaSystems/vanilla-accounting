@@ -10,6 +10,7 @@ import type { Index } from '../types/index.js';
 import { writeAtomic } from '../invoices/store.js';
 import { emptyProgress, parseProgress, withAnswer, withTopic, type Answer, type Assumed, type QuestionId, type SetupProgress, type SetupTopic, type TopicState } from './model.js';
 import type { SetupView } from './facts.js';
+import type { QuestionKey } from '../workspace/setup.js';
 
 export const ONBOARDING_FILE = 'onboarding.json';
 const SCHEMA = 1;
@@ -59,6 +60,15 @@ export function seedCreated(ws: Ws, seed: { started: string; assumed?: Assumed }
 export function seedAssumed(ws: Ws, assumed: Assumed | undefined): void {
   if (!assumed) return;
   write(ws, { ...readProgress(ws), assumed });
+}
+
+/** «stimmt» beside an assumed answer (#387 review): it is hers now, so it is no longer marked. */
+export function confirmAssumed(ws: Ws, key: QuestionKey): SetupProgress {
+  const p = readProgress(ws);
+  if (!p.assumed || p.assumed.answers[key] === undefined) return p;
+  const { [key]: _gone, ...answers } = p.assumed.answers;
+  const { assumed: _a, ...rest } = p;
+  return write(ws, Object.keys(answers).length ? { ...rest, assumed: { ...p.assumed, answers } } : rest);
 }
 
 /** «Los geht's»: the setup ends; the books open as books from now on. */

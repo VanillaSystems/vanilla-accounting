@@ -141,6 +141,14 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
       await shot(page, `${size}-0-form`);
       if (size === '1440x900') t.diagnostic(`words: form ${await words(page, '.st-form')}`);
       if (!ai) {
+        // «nein», then «ja» to the registration: the period «nein» took away is asked again, not «angenommen» with nothing chosen (#387 review).
+        await page.$$eval('.st-form [data-q=vatRegistered] button', (bs) => (bs[1] as HTMLButtonElement).click());
+        await page.waitForFunction(() => !document.querySelector('.st-form [data-q=period]'), { timeout: 10_000 });
+        await page.$$eval('.st-form [data-q=vatRegistered] button', (bs) => (bs[0] as HTMLButtonElement).click());
+        await page.waitForSelector('.st-form [data-q=period]', { timeout: 10_000 });
+        assert.equal(await page.$('.st-form [data-q=period] button.on'), null);
+        assert.equal(await page.$('.st-form [data-q=period] [data-assumed]'), null, `${size}: no mark on a question without an answer`);
+        await page.$$eval('.st-form [data-q=period] button', (bs) => (bs[0] as HTMLButtonElement).click());
         // «Wir rechnen keine MWST ab» (#347) on the form: «nein» to the registration, the two questions gone, the books an unregistered GmbH.
         assert.match(await text(page, '.st-form [data-q=vatMethod] [data-no-vat-hint]'), /nicht im MWST-Register.*CHF 100’000.*Treuhand/s);
         assert.equal(await page.$$eval('.st-form [data-no-vat-hint]', (e) => e.length), 1, `${size}: the hint once, under the method`);

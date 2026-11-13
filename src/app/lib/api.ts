@@ -430,6 +430,7 @@ export const api = {
   onboarding: () => request<SetupView>('GET', '/api/onboarding'),
   onboardingStart: () => request<SetupView>('POST', '/api/onboarding/start'),
   onboardingReady: () => request<SetupView>('POST', '/api/onboarding/ready'),
+  onboardingConfirm: (key: string) => request<SetupView>('POST', `/api/onboarding/assumed/${encodeURIComponent(key)}`),
   onboardingAnswer: (q: QuestionId, value: string | null, kept?: VatSetup | null) => request<SetupView>('PUT', `/api/onboarding/answers/${q}`, { value, ...(kept !== undefined ? { kept } : {}) }),
   assistantList: () => request<ConversationSummary[]>('GET', '/api/assistant'),
   /** A file for the next message (src/types/attachment.ts): kept beside the conversations, never in the books. */

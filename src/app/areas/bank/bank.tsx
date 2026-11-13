@@ -140,8 +140,8 @@ function List(props: Props) {
   const elsewhere = !!linked && (linked.file.toDate < period.from || linked.file.fromDate > period.to);
   useSelectionFollowsRows(byFile ? route.file : route.statement, keys, select, elsewhere);
 
-  // Books without a single payment (#385): the first statement decides which months the page shows, so it names no period yet.
-  const first = books.transactions.length === 0 && !query.q;
+  // Books without a payment or a statement read (#385): the first statement decides which months the page shows, so it names no period yet.
+  const first = books.transactions.length === 0 && b.files('0000-01-01', '9999-12-31').length === 0 && !query.q;
   return (
     <div className="page">
       <ListHead period={period} books={books} canEdit={canEdit} noPeriod={first}>

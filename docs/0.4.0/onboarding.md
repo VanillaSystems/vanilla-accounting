@@ -157,8 +157,11 @@ of firm; `seedCreated` from the draft, `seedAssumed` from the form's request, wh
 so the first start still opens the setup). The file is not one of the formats the schema ladder of
 src/workspace/schema.ts covers: an older app reading it leaves the field out. In the books the
 firm's card and the summary list each answer the firm still has as assumed (`stillAssumed`: an answer
-changed since is not), «angenommen», with «Ändern» to where it is changed by hand (`ANSWER_HAND` in
-src/onboarding/hand.ts; none where nothing changes later); an assumed «Was verkauft ihr?» is never
+changed since is not), «angenommen», with «stimmt» (her click confirms it, `confirmAssumed`, and the
+mark goes) and a link where the app can change it (`ANSWER_HAND` in src/onboarding/hand.ts): «Ändern»
+to the VAT setup, or the consequence the answer set up, named («Konto des Inhabers unter Firma ›
+Geldkonten»); no link for the legal form and the fiscal year, which nothing changes later, nor where
+the answer set nothing up; an assumed «Was verkauft ihr?» is never
 shown as «deine Antwort». The opening's words follow «Ausgangslage» (`start` in the facts). Such books open into the setup until
 «Los geht's» sets `ready`. A folder with a draft opens into the draft's conversation at the step it
 stopped, from the folder dialog, the recent list or at the next start.

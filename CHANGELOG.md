@@ -40,11 +40,12 @@ Two markers flag an entry you must read before you update:
   line why at the top of the questions («Diese Antworten sind angenommen, weil es bei Handwerk, Bau
   (GmbH) üblich ist: ändere, was nicht stimmt»); a touched answer loses the mark. Form and setup
   conversation keep what is still assumed in the new books, and the conversation in the books shows
-  it on the firm's card and in the summary with «angenommen» and «Ändern» to the place by hand,
-  never as «deine Antwort». The opening's words follow «Ausgangslage»: a switch takes the old books'
+  it on the firm's card and in the summary with «angenommen», «stimmt» to confirm it, and a link
+  where the app changes it (the VAT setup, or what the answer set up, named: «Konto des Inhabers
+  unter Firma › Geldkonten»), never as «deine Antwort». The opening's words follow «Ausgangslage»: a switch takes the old books'
   balance sheet, not «Eine neue Firma …». After «Buchhaltung anlegen» with a question open the focus
   goes to that question, which says «bitte wählen», not to its first answer. Kontoauszüge without a
-  single payment names no quarter and says what to drop: «Noch kein Kontoauszug.» (#385)
+  payment or a statement names no quarter and says what to drop: «Noch kein Kontoauszug.» (#385)
 - One count per word (#385): the dock, Automatisierung and Belege put a receipt in one period, its
   payment's once it has one, else its date's; one without a date, or from before the books and not
   paid, is the working period's. So an undated till slip paid in Q3 counts in Q3 everywhere, and

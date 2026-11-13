@@ -8,14 +8,15 @@
  *   GET  /api/onboarding                     the checklist, the facts, and whether this is an empty workspace's first start
  *   POST /api/onboarding/start               the setup opened (the first start does not open it again)
  *   POST /api/onboarding/ready               «Los geht's»: books the conversation created no longer open it by themselves
+ *   POST /api/onboarding/assumed/:key        «stimmt» beside an answer the kind of firm assumed: no longer marked
  *   PUT  /api/onboarding/topics/:topic       { state: open | done | skipped }
  *   PUT  /api/onboarding/answers/:question   { value: <one of its answers> | null, kept?: <the VAT setup before> | null }
  */
 import { Router } from 'express';
 import { RequestError, WS, patchBody, readBooks } from '../books.js';
 import { QUESTIONS, SETUP_TOPICS, TOPIC_STATES, isAnswerOf, isQuestion, isSetupTopic, isTopicState, stillAssumed, type Answer } from '../../onboarding/model.js';
-import type { QuestionKey } from '../../workspace/setup.js';
-import { answerQuestion, finishSetup, markTopic, readProgress, setupView, startSetup } from '../../onboarding/store.js';
+import { QUESTION_ORDER, type QuestionKey } from '../../workspace/setup.js';
+import { answerQuestion, confirmAssumed, finishSetup, markTopic, readProgress, setupView, startSetup } from '../../onboarding/store.js';
 import { partnerBins, type SetupFacts, type SetupView } from '../../onboarding/facts.js';
 import { topicStates } from '../../onboarding/conversation.js';
 import { parseVatSetup, type VatSetup } from '../../workspace/vat-setup.js';
@@ -87,6 +88,14 @@ router.post('/api/onboarding/start', (_req, res) => {
 
 router.post('/api/onboarding/ready', (_req, res) => {
   finishSetup(WS, new Date().toISOString());
+  res.json(view());
+});
+
+/** «stimmt» beside an answer the kind of firm assumed (#387 review): the mark goes, the answer stays as it is. */
+router.post('/api/onboarding/assumed/:key', (req, res) => {
+  const key = req.params.key as QuestionKey;
+  if (!QUESTION_ORDER.includes(key)) throw new RequestError(404, `Diese Frage gibt es in der Einrichtung nicht: eine von ${QUESTION_ORDER.join(', ')}.`);
+  confirmAssumed(WS, key);
   res.json(view());
 });
 

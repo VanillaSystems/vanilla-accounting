@@ -36,6 +36,12 @@ export async function answer(q: QuestionId, value: string | null): Promise<void>
   try { set(withView(await api.onboardingAnswer(q, value))); } catch (e) { set({ ...state, busy: false, error: errorText(e) }); }
 }
 
+/** «stimmt» beside an answer the kind of firm assumed (#387 review): hers now, no longer marked. */
+export async function confirmAssumed(key: string): Promise<void> {
+  set({ ...state, busy: true, error: undefined });
+  try { set(withView(await api.onboardingConfirm(key))); } catch (e) { set({ ...state, busy: false, error: errorText(e) }); }
+}
+
 /** Typed text that names one of the open question's answers answers it, as a click would; true when it did. */
 export function answerTyped(text: string): boolean {
   const step = openStep(state.steps ?? []);
