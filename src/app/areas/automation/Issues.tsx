@@ -18,7 +18,7 @@ import { EvidenceFix, evidenceText } from '../journal/Detail.js';
 import { journalOf, unsettledAtFiling } from '../journal/model.js';
 import { thresholdPassed } from '../vat/model.js';
 import { baseCurrency, documents, filing, withoutInputTax } from '../../../engines/index.js';
-import { missingAssessments, type MissingAssessment } from '../../../booking/customs-invoice.js';
+import { missingAssessments, type Importer, type MissingAssessment } from '../../../booking/customs-invoice.js';
 import { filingKeyOf, localToday, openFilingPeriod, parsePeriod, type Period } from '../../../accounting/periods.js';
 import type { WaitingPayment } from '../../../accounting/receipt-due.js';
 import { payText, signed } from '../bank/model.js';
@@ -295,7 +295,7 @@ export function FiledEvidence({ books, nav }: { books: Index; nav: Nav }) {
 }
 
 /** The import VAT of the books whose deduction waits for the customs office's assessment (issue #227): none for a firm without input tax. */
-export const assessmentsMissing = (books: Index): MissingAssessment[] => missingAssessments(books, documents().customs, !withoutInputTax());
+export const assessmentsMissing = (books: Index, firm?: Importer): MissingAssessment[] => missingAssessments(books, documents().customs, !withoutInputTax(), firm);
 
 /**
  * «Veranlagungsverfügung fehlt» (issue #227): import VAT booked without input tax because the
@@ -304,7 +304,8 @@ export const assessmentsMissing = (books: Index): MissingAssessment[] => missing
  * payment brings the deduction on the next run (src/booking/customs-invoice.ts).
  */
 export function AssessmentTasks({ books, nav }: { books: Index; nav: Nav }) {
-  const items = assessmentsMissing(books);
+  const company = useWorkspace()?.company;
+  const items = assessmentsMissing(books, company && { uid: company.uid, name: company.name, owner: company.owner });
   if (!items.length) return null;
   return (
     <section className="wfissues" data-testid="assessment-tasks">
@@ -322,6 +323,12 @@ export function AssessmentTasks({ books, nav }: { books: Index; nav: Nav }) {
               ].filter(Boolean).join(' · ') || t('issues.assessmentWhere')}
             </span>
             {i.access.url ? <>{' '}<a className="golink" href={i.access.url} target="_blank" rel="noopener noreferrer">{t('issues.assessmentLink')}</a></> : null}
+            {i.unnamed ? (
+              <div className="m" data-testid="assessment-unnamed">
+                {t(company?.uid ? 'issues.assessmentUnnamedUid' : 'issues.assessmentUnnamed', { file: i.unnamed.file, uid: company?.uid ?? '' })}
+                {company?.uid ? null : <>{' '}<button type="button" className="linkbtn" onClick={() => nav.go({ route: { area: 'company', section: 'profile' }, query: {} })}>{t('issues.assessmentUidAdd')}</button></>}
+              </div>
+            ) : null}
           </li>
         ))}
       </ul>

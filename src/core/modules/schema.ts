@@ -295,8 +295,8 @@ export interface DocumentsData {
     tax: string[];
     /** Words that name costs passed on free of VAT («MWST.-freie Kosten»): such a line at no rate is the import VAT the carrier advanced, on an invoice that cites a customs declaration's number. */
     untaxed?: string[];
-    /** `number`: the pattern (a regular expression's source) of the assessment's number; `access`: the label of the access code a courier's invoice prints to fetch it. */
-    assessment: { title: string[]; total: string[]; number: string; access: string[] };
+    /** `number`: the pattern (a regular expression's source) of the assessment's number; `access`: the label of the access code a courier's invoice prints to fetch it; `importer`: the label of the importer's block. */
+    assessment: { title: string[]; total: string[]; number: string; access: string[]; importer?: string[] };
   };
   /** The title of a bank statement: with an IBAN or the movement columns, the drop reads such a PDF as a statement, not as a receipt (src/core/modules/words.ts isBankStatement). */
   statement: string[];
@@ -322,6 +322,10 @@ export interface DocumentsData {
   months?: string[][];
   /** Legal forms and words of a firm's name that tell no one apart («GmbH», «Holding»). */
   legalForms?: string[];
+  /** The words that label the customer's block of an invoice («Kunde», «Rechnungsadresse», «Ihre UID»): a VAT number beside one is the buyer's, never the sender's (src/intake/own-invoice.ts buyerUids). */
+  buyer?: string[];
+  /** A title's vendor that names no business (the model's «Verkauf» for a till's slip): it tells no vendor apart (src/intake/own-invoice.ts buyerUids). */
+  notVendor?: string[];
 }
 
 /** What a line of a customs invoice charges: the import VAT the carrier advanced, customs duty, the carrier's fees, freight. */

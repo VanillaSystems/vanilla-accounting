@@ -27,7 +27,7 @@ const port: BooksPort = { read: readBooks, update: updateBooks };
 async function find(only: { receipt: string } | { payment: string }): Promise<Found> {
   const ask = await askIfReady();
   const firm = { uid: WS.company.uid, name: WS.company.name, owner: WS.company.owner };
-  const result: ChainResult = await runPairChain(port, { ask, toChf: estvToChf(), only, noReceipt: noReceiptFor(WS), noPayment: noPaymentFor(WS), businesses: businessesOf(WS), firm });
+  const result: ChainResult = await runPairChain(port, { ask, toChf: estvToChf(), only, noReceipt: noReceiptFor(WS), noPayment: noPaymentFor(WS), businesses: businessesOf(WS, readBooks()), firm });
   const model = result.calls > 0 && !result.modelFailed;
   const link = result.linked.find((l) => ('receipt' in only ? l.receipt === only.receipt : l.payment === only.payment));
   if (link) {
@@ -45,7 +45,7 @@ async function find(only: { receipt: string } | { payment: string }): Promise<Fo
   // What may fit but was not linked (#397): offered with what differs, never past a candidate of the chain's own.
   const books = readBooks();
   const lock = periodLock(books);
-  const near = nearOffers(books, only, { isClosed: lock.isClosed, firm, businesses: businessesOf(WS), noReceipt: noReceiptFor(WS)(books), noPayment: noPaymentFor(WS)(books) })
+  const near = nearOffers(books, only, { isClosed: lock.isClosed, firm, businesses: businessesOf(WS, books), noReceipt: noReceiptFor(WS)(books), noPayment: noPaymentFor(WS)(books) })
     .filter((p) => !candidates.some((c) => c.receipt === p.receipt && c.payment === p.payment));
   if (!candidates.length) return { outcome: 'none', model, ...(near.length && { near }) };
   return { outcome: 'candidates', candidates, total: 'receipt' in only ? left[0].total : candidates.length, model, ...(near.length && { near }) };
@@ -70,7 +70,7 @@ router.get('/api/transactions/:ref/receipt-sets', (req, res) => {
   const tx = books.transactions.find((t) => t.ref === req.params.ref);
   if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   const lock = periodLock(books);
-  res.json(proposalsFor(books, tx, { isOpen: (d) => !lock.isClosed(d), payers: batchPayersOf(WS), toChf: estvToChf(), buyerUid: WS.company.uid, noPayment: noPaymentFor(WS)(books) }));
+  res.json(proposalsFor(books, tx, { isOpen: (d) => !lock.isClosed(d), payers: batchPayersOf(WS, books), toChf: estvToChf(), firmUid: WS.company.uid, noPayment: noPaymentFor(WS)(books) }));
 });
 
 router.post('/api/transactions/:ref/find-receipt', async (req, res) => {

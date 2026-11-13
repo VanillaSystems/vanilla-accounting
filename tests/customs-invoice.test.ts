@@ -150,9 +150,9 @@ test('with the assessment linked, the import VAT is deducted at once: a one-legg
 
 test('an assessment proves nothing for another firm, nor one whose amount no import VAT line has', () => {
   const words = documents().customs;
-  assert.equal(readAssessment(assessment(), words, 'CHE-111.222.333'), undefined, 'another importer');
-  assert.deepEqual(readAssessment(assessment(), words, 'CHE-123.456.789'), { receipt: 'evv1', file: assessment().filename, date: '2026-05-09', amount: 57.55, rate: 8.1, number: '26CHEI000000004711' });
-  const invoiceText = readAssessment(invoice({ extractedText: `${INVOICE_TEXT}\nEinfuhrsteuer gemäss Veranlagungsverfügung MWST` }), words, 'CHE-123.456.789');
+  assert.equal(readAssessment(assessment(), words, { uid: 'CHE-111.222.333' }), undefined, 'another importer');
+  assert.deepEqual(readAssessment(assessment(), words, { uid: 'CHE-123.456.789' }), { receipt: 'evv1', file: assessment().filename, date: '2026-05-09', amount: 57.55, rate: 8.1, number: '26CHEI000000004711' });
+  const invoiceText = readAssessment(invoice({ extractedText: `${INVOICE_TEXT}\nEinfuhrsteuer gemäss Veranlagungsverfügung MWST` }), words, { uid: 'CHE-123.456.789' });
   assert.equal(invoiceText, undefined, 'a courier invoice that names the assessment is none: it states no total of the assessment');
   const other = customsSplit(PAYMENT, [invoice(), assessment({ extractedText: ASSESSMENT_TEXT.replace('57.55', '41.20') })], splitContext());
   assert.ok(other && 'lines' in other);
@@ -303,7 +303,7 @@ test('a copy of one assessment proves no other shipment: the number decides, and
   const own = customsSplit(PAYMENT, [invoice(), assessment(), assessment({ id: 'evv1-copy' })], splitContext());
   assert.ok(own && 'lines' in own);
   assert.equal(own.deductions.size, 1, 'two copies of one assessment deduct once');
-  assert.equal(readAssessment(assessment(), words, 'CHE-123.456.789')?.number, '26CHEI000000004711');
+  assert.equal(readAssessment(assessment(), words, { uid: 'CHE-123.456.789' })?.number, '26CHEI000000004711');
 });
 
 test('import VAT paid to the customs office itself: the assessment is the payment\'s receipt, found by its number and amount, booked as import VAT with the deduction', async () => {
@@ -407,7 +407,7 @@ test('#227: «Veranlagungsverfügung fehlt» lists the import VAT without its as
 
 test('#227: the assistant books import VAT by the same rule: no tax-amount code against the bank, no input tax on import VAT without the assessment, the one-sided deduction with it', async () => {
   const ws = company();
-  const ctx = { bankAccounts: ws.bankAccounts, chart: new Set<string>(), earlier: [], conversation: 'c', uid: 'CHE-123.456.789', clearing: new Set<string>() };
+  const ctx = { bankAccounts: ws.bankAccounts, chart: new Set<string>(), earlier: [], conversation: 'c', firm: { uid: 'CHE-123.456.789' }, clearing: new Set<string>() };
   const booked = async () => {
     const books = booksOf([zInvoice()], undefined, { tx: Z_PAYMENT });
     await classifyTransactions(books, [Z_PAYMENT], { fx, context: loadClassifyContext(ws), ask: noModel });
@@ -428,7 +428,7 @@ test('#227: the assistant books import VAT by the same rule: no tax-amount code 
 
 function splitContext(o: Partial<SplitContext> = {}): SplitContext {
   return {
-    words: documents().customs, chart: new Set(['4020', '4030', '4040', '6280']), uid: 'CHE-123.456.789', inputTax: true,
+    words: documents().customs, chart: new Set(['4020', '4030', '4040', '6280']), firm: { uid: 'CHE-123.456.789' }, inputTax: true,
     convert: () => undefined, texts: { position: (p) => p, deduction: (a) => a.file }, name: 'Muster Kurier AG', ...o,
   };
 }
@@ -444,12 +444,12 @@ test('#285: the assessment\'s total is read wherever the text puts it after its 
   const words = documents().customs;
   const columns = assessment({ id: 'evvc', extractedText: COLUMNS_TEXT });
   assert.ok(COLUMNS_TEXT.indexOf('41.30') - COLUMNS_TEXT.indexOf('Gesamtbetrag MWST') > 80, 'the amount stands further from its label than the reader once looked');
-  assert.deepEqual(readAssessment(columns, words, 'CHE-123.456.789'), { receipt: 'evvc', file: columns.filename, date: '2026-05-09', amount: 41.3, rate: 8.1, number: '26CHEI000000008812' });
+  assert.deepEqual(readAssessment(columns, words, { uid: 'CHE-123.456.789' }), { receipt: 'evvc', file: columns.filename, date: '2026-05-09', amount: 41.3, rate: 8.1, number: '26CHEI000000008812' });
   assert.equal(assessmentFacts(COLUMNS_TEXT, words).amount, 41.3);
   const dated = COLUMNS_TEXT.replace('Euro (EUR)', 'Euro (EUR)\n26.08.2026\n9003.1100\nCHE-123.456.789');
-  assert.equal(readAssessment({ ...columns, extractedText: dated }, words, 'CHE-123.456.789')?.amount, 41.3, 'a date, a tariff number and a UID are no money');
+  assert.equal(readAssessment({ ...columns, extractedText: dated }, words, { uid: 'CHE-123.456.789' })?.amount, 41.3, 'a date, a tariff number and a UID are no money');
   const nextPage = `VERANLAGUNGSVERFÜGUNG MWST\nCHE123456789\nGesamtbetrag MWST [CHF]:\n\f12.50\n`;
-  assert.equal(readAssessment({ ...columns, extractedText: nextPage }, words, 'CHE-123.456.789'), undefined, 'a later page\'s money is not the total');
+  assert.equal(readAssessment({ ...columns, extractedText: nextPage }, words, { uid: 'CHE-123.456.789' }), undefined, 'a later page\'s money is not the total');
 });
 
 /**
@@ -562,12 +562,12 @@ const K_PAYMENT: BankTransaction = { ref: 'P-K', bank: 'Raiffeisen', date: '2026
 
 test('an assessment printed as a table is read by its tax, base × rate, whatever its label: the tax and the rate it states', () => {
   const words = documents().customs;
-  assert.deepEqual(readAssessment(tableAssessment(), words, 'CHE-123.456.789'), { receipt: 'evvk', file: tableAssessment().filename, date: '2026-10-19', amount: 29, rate: 2.6 });
+  assert.deepEqual(readAssessment(tableAssessment(), words, { uid: 'CHE-123.456.789' }), { receipt: 'evvk', file: tableAssessment().filename, date: '2026-10-19', amount: 29, rate: 2.6 });
   assert.deepEqual(assessmentFacts(TABLE_TEXT, words), { amount: 29, currency: 'CHF', date: '2026-10-19' });
   const cites = kInvoice({ extractedText: `Importeur CHE-123.456.789\n${K_INVOICE_TEXT}\nEinfuhrsteuer 2.6 % auf CHF 1'115.40: CHF 29.00` });
-  assert.equal(readAssessment(cites, words, 'CHE-123.456.789'), undefined, 'a courier invoice that names the assessment in a sentence is none');
+  assert.equal(readAssessment(cites, words, { uid: 'CHE-123.456.789' }), undefined, 'a courier invoice that names the assessment in a sentence is none');
   const mixed = "Veranlagungsverfügung MWST\nImporteur CHE-123.456.789\nBemessungsgrundlage\nSatz\nMWST\n1'000.00\n8.1 %\n81.00\n500.00\n2.6 %\n13.00\nTotal\n94.00";
-  assert.deepEqual(readAssessment(tableAssessment({ extractedText: mixed }), words, 'CHE-123.456.789'), { receipt: 'evvk', file: tableAssessment().filename, date: '2026-10-19', amount: 94 }, 'two rates: the tax of both, a total row counted once, no one rate');
+  assert.deepEqual(readAssessment(tableAssessment({ extractedText: mixed }), words, { uid: 'CHE-123.456.789' }), { receipt: 'evvk', file: tableAssessment().filename, date: '2026-10-19', amount: 94 }, 'two rates: the tax of both, a total row counted once, no one rate');
 });
 
 test('the courier\'s bill and the assessment no one linked: the import VAT is deducted at the assessment\'s rate (– / 4030 M26-2) and the assessment is linked to the payment', async () => {
@@ -671,4 +671,101 @@ test('#483 review S1c: a fee read with its tax in: the tax line is as much as th
   const { bill, tx } = sBill([tax('MWST', 41.3), fee(28.65, 'Vorlageprovisionsgebühr'), tax('MWST', 2.15)]);
   const split = customsSplit(tx, [bill], splitContext());
   assert.deepEqual(positions(split), [['4030', '', 41.3, 'none'], ['4040', '', 30.8, 8.1]], 'the 2.15 is the courier\'s, not import VAT');
+});
+
+/**
+ * The setup asks no UID since #452, so a firm may keep its books without one in Firma › Firma. Its
+ * assessment still names it as the importer, by its name (and a UID the settings do not know): the
+ * import VAT is deducted as for a firm with a UID. The webshop persona's shape: the courier's bill
+ * linked to its payment, the assessment beside it, no one linked it.
+ */
+function companyWithoutUid(): Workspace {
+  const ws = company();
+  writeFileSync(ws.paths.manifest, readFileSync(ws.paths.manifest, 'utf8').replace(/^ {2}uid: .*\n/m, ''));
+  return workspaceAt(ws.paths.root);
+}
+const importerAssessment = (importer: string) => ({ ...fAssessment(), extractedText: fAssessment().extractedText!.replace('MUSTER OPTIK AG', importer) });
+
+test('a firm without a UID in its settings: the assessment that names it as the importer deducts the import VAT; one naming another importer does not', async () => {
+  const ws = companyWithoutUid();
+  assert.equal(ws.company.uid, undefined, 'the setup kept no UID');
+  const books = booksOf([fInvoice('MWST'), importerAssessment('MUSTER KAFFEE GMBH\nMusterstrasse 1, 8000 Zürich')], ['invf'], { tx: F_PAYMENT, closedThrough: '2026-06-30' });
+  await classifyTransactions(books, [F_PAYMENT], { fx, context: loadClassifyContext(ws), ask: noModel });
+  bookImportVatDeductions(books, loadClassifyContext(ws));
+  assert.deepEqual(lines(books, 'P-F'), [['4030', '1021', 129.46, 'M0'], ['4040', '1021', 27.03, 'M81'], ['', '4030', 129.46, 'M81-2']]);
+  assert.ok(books.mappings.some((m) => m.receiptId === 'evvf' && m.transactionRef === 'P-F'), 'the assessment is linked to its payment');
+  assert.ok(books.receipts.find((r) => r.id === 'evvf')?.importVatDeduction, 'and marked as deducted');
+  assert.equal(workspaceAt(ws.paths.root).company.uid, undefined, 'the UID on the assessment is never kept on its own');
+
+  const other = booksOf([fInvoice('MWST'), importerAssessment('MUSTER KAFFEE GMBH TREUHAND\nBahnhofstrasse 3, 8001 Zürich')], ['invf'], { tx: F_PAYMENT, closedThrough: '2026-06-30' });
+  await classifyTransactions(other, [F_PAYMENT], { fx, context: loadClassifyContext(ws), ask: noModel });
+  bookImportVatDeductions(other, loadClassifyContext(ws));
+  assert.deepEqual(lines(other, 'P-F'), [['4030', '1021', 129.46, 'M0'], ['4040', '1021', 27.03, 'M81']], 'another firm whose name begins as hers proves nothing for her');
+
+});
+
+/** An assessment of the shape the courier's bill above cites, with `header` as its parties' block. */
+const evvOf = (header: string, id = 'evvn'): Receipt => assessment({
+  id, filename: `20260710-bazg-${id}.pdf`, date: '2026-07-10', amount: 129.46,
+  extractedText: `Bundesamt für Zoll und Grenzsicherheit BAZG\nVERANLAGUNGSVERFÜGUNG MWST\n26CHEI000000004711.1\n\n${header}\n\nGesamtbetrag MWST [CHF]:\n\n129.46\n\nBemessungsgrundlage MWST: 1598.32\nAnsatz [%]: 8.1`,
+});
+const FIRM = { name: 'Muster Kaffee GmbH', owner: 'Anna Muster' };
+
+test('without a UID the firm is named by its whole name in the importer\'s block, never by a longer name, as consignee, on another page, by one word or by the owner\'s name', () => {
+  const words = documents().customs;
+  const named = (header: string, firm: { uid?: string; name?: string; owner?: string } = FIRM) => readAssessment(evvOf(header), words, firm)?.amount;
+  for (const header of [
+    'Importeur:\nMUSTER KAFFEE GMBH\nMusterstrasse 1\nCH 8000 Zürich',
+    'Importeur: Muster Kaffee GmbH, Musterstrasse 1, 8000 Zürich',
+    'Importeur: c/o Muster Kaffee GmbH, Musterstrasse 1, 8000 Zürich',
+    // A header printed as a column of labels and then one of values.
+    'Zollanmeldung\nDatum der Annahme\nImporteur\nUID Importeur\nSpediteur\nUrsprungsland\n\n26CHEI000000004711\n10.07.2026\nMuster Kaffee GmbH, Musterstrasse 1, 8000 Zürich\nCHE-999.888.777\nMuster Kurier AG\nJP',
+  ]) assert.equal(named(header), 129.46, header);
+  for (const [header, why] of [
+    ['Importeur:\nZÜRCHER MUSTER KAFFEE GMBH\nBahnhofstrasse 3', 'a longer name in front'],
+    ['Importeur:\nALT-MUSTER KAFFEE GMBH', 'a longer name joined in front'],
+    ['Importeur:\nMUSTER KAFFEE GMBH (Schweiz) AG', 'a longer name in brackets after'],
+    ['Importeur:\nMUSTER KAFFEE GMBH  Holding', 'a longer name after two spaces'],
+    ['Importeur:\nMUSTER KAFFEE GMBH TREUHAND', 'a longer name after'],
+    ['Importeur:\nMUSTER KAFFEE\nGMBH', 'a name wrapped onto two lines'],
+    ['Importeur: Andere Handels AG, Bahnhofstrasse 3, 8001 Zürich\nEmpfänger: Muster Kaffee GmbH, Musterstrasse 1, 8000 Zürich', 'the firm as consignee, another importer'],
+    ['Empfänger:\nMuster Kaffee GmbH\nImporteur:\nAndere Handels AG', 'the firm before the importer\'s label'],
+    ['Versender: Muster Kaffee GmbH, Leipzig, DE', 'no importer\'s block at all'],
+  ]) assert.equal(named(header), undefined, why);
+  const courierPage = { ...evvOf('Importeur:\nAndere Handels AG'), extractedText: `Muster Express AG\nMuster Kaffee GmbH\nMusterstrasse 1\n\f${evvOf('Importeur:\nAndere Handels AG').extractedText}` };
+  assert.equal(readAssessment(courierPage, words, FIRM), undefined, 'the firm\'s name only on the courier\'s page of the same file');
+  assert.equal(named('Importeur:\nOptik\nBahnhofstrasse 3', { name: 'Optik' }), undefined, 'a name of one word is a word of any text');
+  assert.equal(named('Importeur:\nAnna Muster\nMusterstrasse 1', { name: 'Anna Muster', owner: 'Anna Muster' }), undefined, 'the owner\'s name alone names a person, not the firm');
+  assert.equal(named('Importeur:\nMuster Kaffee GmbH', {}), undefined, 'a firm without UID and name is named by none');
+  assert.equal(named('Importeur:\nMUSTER KAFFEE GMBH', { uid: 'CHE-111.222.333', ...FIRM }), undefined, 'a firm with a UID is named by its UID, never by its name alone');
+});
+
+test('with a UID in the settings the UID decides wherever the assessment prints it, whatever its layout, as before the name was read', () => {
+  const words = documents().customs;
+  const uid = { uid: 'CHE-123.456.789', ...FIRM };
+  for (const header of [
+    'Importeur: Muster Optik AG, Musterweg 1, 8000 Zürich\nUID: CHE-123.456.789',
+    'Importatore: Muster Optik SA, Via Muster 1, 6900 Lugano\nIDI: CHE-123.456.789',
+    'Importeur / Empfänger:\nMuster Optik AG\nCHE-123.456.789',
+    'Importeur (Name, Adresse)\nMuster Optik AG\nCHE-123.456.789',
+    'UID Importeur: CHE-123.456.789\nImporteur:\nMuster Optik AG',
+    '26CHEI000000004711\n10.07.2026\nMuster Optik AG\nCHE-123.456.789\n\nZollanmeldung\nDatum der Annahme\nImporteur\nUID Importeur',
+    'Versender:\nBeispiel GmbH\nImporteur:\f\nMuster Optik AG\nCHE-123.456.789',
+    'Importeur:\nMuster Optik AG\nzu Handen Einkauf\nMusterweg 1\nPostfach\n8000 Zürich\nSchweiz\nTel. 044 000 00 00\nCHE-123.456.789',
+    'Importeur gemäss Veranlagungsverfügung: siehe unten\nMuster Optik AG, CHE-123.456.789',
+    'Importeur: Andere Handels AG, CHE-999.888.777\nSpediteur: Muster Kaffee GmbH, CHE-123.456.789',
+  ]) assert.equal(readAssessment(evvOf(header), words, uid)?.amount, 129.46, header);
+});
+
+test('an assessment on file that does not name the firm stays «Veranlagungsverfügung fehlt», and says why', async () => {
+  const ws = companyWithoutUid();
+  const wrapped = evvOf('Importeur:\nMUSTER KAFFEE\nGMBH\nMusterstrasse 1', 'evvw');
+  const books = booksOf([fInvoice('MWST'), wrapped], ['invf'], { tx: F_PAYMENT, closedThrough: '2026-06-30' });
+  await classifyTransactions(books, [F_PAYMENT], { fx, context: loadClassifyContext(ws), ask: noModel });
+  bookImportVatDeductions(books, loadClassifyContext(ws));
+  assert.deepEqual(lines(books, 'P-F'), [['4030', '1021', 129.46, 'M0'], ['4040', '1021', 27.03, 'M81']], 'no deduction from a name code cannot read whole');
+  const words = documents().customs;
+  const [missing] = missingAssessments(books, words, true, { name: ws.company.name, owner: ws.company.owner });
+  assert.deepEqual([missing?.amount, missing?.unnamed], [129.46, { receipt: 'evvw', file: wrapped.filename }], 'the line names the assessment on file that does not name the firm');
+  assert.equal(missingAssessments(books, words, true)[0]?.unnamed, undefined, 'without the firm, nothing is said about it');
 });

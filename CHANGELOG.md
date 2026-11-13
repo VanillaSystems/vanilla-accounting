@@ -461,6 +461,38 @@ Two markers flag an entry you must read before you update:
   state for an account of the form corrects the one typed there. In the books, a bank account
   without an IBAN sets up the bank topic and counts in the summary («2 Bankkonten», no longer «mit
   IBAN» only).
+- A firm without its UID in the settings (#466) no longer has receipts of different shops taken
+  for one vendor because they print the firm's UID as their customer's, which linked them together
+  to an unrelated payment. Without the UID in the settings the receipt sets key no receipt by its
+  VAT number: only by its title's vendor or the business its file routes it to, and a receipt
+  without a title joins no set and waits. The firm's own UIDs now come from one place: the UID of
+  the settings, else the ones the books show to be the buyer's (a UID in a customer's block, after
+  «Kunde», «Rechnungsadresse», «Ihre UID»…, on receipts of two vendors or more, or the UID on the
+  firm's own invoice recognised by its name that money in pays), never written to the settings.
+  With them a receipt that prints only the buyer's UID is again routed by its sender's address or
+  name (a courier's invoice, a card terminal's payout report, whose sales and fees were otherwise
+  never booked), merchant names are learned and «Immer so?» for a batch payer is offered as before;
+  the hand form takes a business's document on money in for no sale by the firm's name too.
+- With the UID in the settings or without it, a VAT number the receipts of two title vendors carry
+  is no longer one vendor in the receipt sets: a supplier read under two brands no longer forms a
+  set across the two.
+- **⚠ figures** Import VAT deducted again for a firm without a UID in Firma › Firma (since the
+  setup stopped asking it, #452): the customs office's assessment (Veranlagungsverfügung MWST)
+  proved the deduction only by the firm's UID, so a firm set up without one kept its import VAT as
+  a cost without input tax (Ziffer 400 short by the import VAT, the return too high) while the app
+  said nothing was open. Without a UID the assessment now names the firm by its whole name in the
+  importer's block (after «Importeur», on its line or the lines below it): at the start of a line,
+  with the end of the line or an address after a comma after it. Never a longer name («Zürcher …»,
+  «… (Schweiz) AG», «… Holding»), the firm as consignee beside another importer, its name on the
+  courier's page of the same file, a name of one word or the owner's name alone. The deduction
+  (– / 4030 M81-2) is then booked and the assessment linked as before; a UID on the assessment is
+  never kept on its own. With a UID in the settings, the UID decides anywhere in the
+  assessment, as before. An assessment on file that does not name the firm
+  stays under «Veranlagungsverfügung fehlt», which now says so and offers «UID eintragen». A firm
+  that updates with filed quarters gets the deduction for those quarters as a correction in the
+  open period (`corrects`), declared on that quarter's Korrekturabrechnung (form 0535); the open
+  quarter's Ziffer 400 rises by its own import VAT.
+
 - **⚠ figures** A booking no longer claims input tax on a receipt that is no longer linked to its
   payment (#417, point 1). That happened when a receipt file was rewritten under its name or its
   link was taken off, and the run said «0 Verknüpfungen prüfen». The app's own booking (by a rule

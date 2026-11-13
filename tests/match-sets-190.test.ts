@@ -556,9 +556,9 @@ test('the buyer\'s own UID says nothing of who wrote a receipt: it neither stops
   assert.equal(app.ofReceipt({ ...buyerOnly, extractedText: `${buyerOnly.extractedText}\nCHE-283.746.519 MWST` }), undefined, 'a UID of the issuer\'s own: its text routes nothing');
   const misread = (amount: number, vendor: string) => receipt(amount, { vatId: ws.company.uid, title: { vendor, what: 'Einkauf' }, extractedText: `${vendor} Quittung ${amount}` });
   const b = booksOf([chf('P', 70, { description: 'Kartenzahlung' })], [misread(30, 'Garage Muster'), misread(40, 'Papeterie Muster')]);
-  assert.equal(receiptSetsToLink(b, open).sets.length, 1, 'keyed by the buyer\'s UID (the defect): one vendor across shops');
-  assert.deepEqual(receiptSetsToLink(b, { isOpen: open, buyerUid: ws.company.uid }).sets, [], 'two shops, no set');
-  assert.deepEqual(proposalsFor(b, b.transactions[0], { isOpen: open, buyerUid: ws.company.uid }).sets, []);
+  assert.deepEqual(receiptSetsToLink(b, open).sets, [], 'a VAT number on the receipts of two title vendors is no one vendor, even without the firm\'s UID');
+  assert.deepEqual(receiptSetsToLink(b, { isOpen: open, firmUid: ws.company.uid }).sets, [], 'two shops, no set');
+  assert.deepEqual(proposalsFor(b, b.transactions[0], { isOpen: open, firmUid: ws.company.uid }).sets, []);
 });
 
 test('the title\'s vendor routes as a whole word, and the titles prompt says the vendor is the issuer, not a carrier or payment method it mentions', () => {

@@ -1095,6 +1095,25 @@ test('2. a card terminal\'s payout report books its sales and fees onto the clea
   assert.equal(bookPayoutReports(ws, books, fx), 0, 'once');
 });
 
+test('2. a payout report that prints only the merchant\'s UID is the terminal\'s by its name, with the UID in the settings or without it (the books show it is the buyer\'s)', async () => {
+  const merchant = (r: Receipt): Receipt => ({ ...r, vatId: 'CHE-123.456.789', extractedText: 'Terminal AG Auszahlung Oktober\nHändler: Muster GmbH, UID CHE-123.456.789' });
+  const withUid = terminal();
+  withUid.books.receipts = withUid.books.receipts.map((r) => (r.id === 'po' ? merchant(r) : r));
+  await classifyTransactions(withUid.books, [withUid.tx], { fx, context: loadClassifyContext(withUid.ws) });
+  assert.equal(bookPayoutReports(withUid.ws, withUid.books, fx), 1, 'the settings\' UID is silent: its name routes it');
+  const { ws, books, tx } = terminal();
+  const bare = { ...ws, company: { ...ws.company, uid: undefined } };
+  // Only the report: the demo's own receipts print its UID as the customer's too.
+  books.receipts = books.receipts.filter((r) => r.id === 'po').map(merchant);
+  await classifyTransactions(books, [tx], { fx, context: loadClassifyContext(bare) });
+  const plain = structuredClone(books);
+  assert.equal(bookPayoutReports(bare, plain, fx), 0, 'without the UID and nothing in the books that names it the buyer\'s: the UID is taken for the sender\'s');
+  // Two other vendors' invoices print the same UID as their customer's: it is the buyer's.
+  for (const [id, vendor] of [['a', 'Shop Alpha AG'], ['b', 'Beta Handel GmbH']]) books.receipts.push({ id, filename: `${id}.pdf`, originalFilename: `${id}.pdf`, extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '', location: 'archived', date: '2026-10-05', amount: 10, currency: 'CHF', title: { vendor, what: 'Einkauf' }, extractedText: `${vendor}\nRechnung\nKunde: Muster GmbH CHE-123.456.789 MWST` } as Receipt);
+  assert.equal(bookPayoutReports(bare, books, fx), 1);
+  assert.deepEqual(lines(books.journalEntries.filter((e) => e.receipts?.includes('po'))).map((l) => l[0]), ['SR-terminal-po', 'SR-terminal-po-refund', 'SF-terminal-po']);
+});
+
 test('2. a payout report books nothing beside a payout booked as sales (by a rule or a person: never booked again), before the cut-over day, nor for a provider whose sales come from its sales report', () => {
   for (const by of [{ by: { kind: 'rule', rule: 'terminal-umsatz' } }, { origin: 'manual', by: undefined }] as Array<Partial<JournalEntry>>) {
     const { ws, books, tx } = terminal();

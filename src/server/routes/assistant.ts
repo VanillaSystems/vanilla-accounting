@@ -253,7 +253,7 @@ const apply: ApplyChanges = async (answered, earlier, language, { conversation, 
     const before = readBooks();
     const trial = readBooks();
     try {
-      applyAnswer(trial, asked, { bankAccounts: WS.bankAccounts, chart: chart.size ? new Set([...chart, ...added]) : chart, earlier, conversation, uid: WS.company.uid, clearing });
+      applyAnswer(trial, asked, { bankAccounts: WS.bankAccounts, chart: chart.size ? new Set([...chart, ...added]) : chart, earlier, conversation, firm: { uid: WS.company.uid, name: WS.company.name, owner: WS.company.owner }, clearing });
     } catch (e) {
       throw new RefusedChanges((e as Error).message, refusalOf(e));
     }
@@ -269,7 +269,7 @@ const apply: ApplyChanges = async (answered, earlier, language, { conversation, 
     if (asked.length) {
       const now = new Set((accountsOf(WS) as Array<{ number: unknown }>).map((a) => String(a.number)));
       books = updateBooks((b) => {
-        const made = applyAnswer(b, asked, { bankAccounts: WS.bankAccounts, chart: now, earlier, conversation, uid: WS.company.uid, clearing });
+        const made = applyAnswer(b, asked, { bankAccounts: WS.bankAccounts, chart: now, earlier, conversation, firm: { uid: WS.company.uid, name: WS.company.name, owner: WS.company.owner }, clearing });
         for (const m of made) {
           const id = m.change.kind === 'entry' ? m.change.id : m.undo?.kind === 'deleteEntry' ? m.undo.id : undefined;
           const e = id ? b.journalEntries.find((x) => x.id === id) : undefined;

@@ -58,7 +58,7 @@ import { withReceiptTax } from './receipt-tax.js';
 import { clearingAccounts, payoutWaitOf, providerOfPayment, type PayoutWait, type Provider } from './providers.js';
 import { atWithheld, fundShare, mergedLines, overWithheld, takenOff, payeeContributionAccount, paysContributions, wageAccounts, wagesBooked, withheldFor, withinWithheld } from './withheld.js';
 import { splitByReceipts } from './receipt-lines.js';
-import { CUSTOMS_BY, customsSplit, importVatDeductions, ratesImportVat, type Assessment, type CustomsHold, type CustomsTexts } from './customs-invoice.js';
+import { CUSTOMS_BY, customsSplit, importVatDeductions, ratesImportVat, type Assessment, type CustomsHold, type CustomsTexts, type Importer } from './customs-invoice.js';
 import { nextManualRef } from '../books/next-ref.js';
 import { salesDefaults } from '../workspace/sells.js';
 import { loadChart, type ChartAccount } from '../workspace/chart.js';
@@ -516,7 +516,7 @@ export function customsEntries(books: Books, tx: BankTransaction, context: Class
   const inBase = (c: string) => (c === base ? 1 : fx.daily(c, tx.date) ?? fx.flat(c));
   const texts = customsTexts();
   const split = customsSplit(tx, mapped, {
-    words, chart: new Set(chartNames(context.chartOfAccounts).keys()), uid: context.companyUid, inputTax: !withoutInputTax(),
+    words, chart: new Set(chartNames(context.chartOfAccounts).keys()), firm: importerOf(context), inputTax: !withoutInputTax(),
     convert: (amount, from) => { const a = inBase(from); const b = inBase(tx.currency); return a && b ? (amount * a) / b : undefined; },
     texts, name: merchantOf(tx.description),
   });
@@ -544,18 +544,21 @@ export function customsEntries(books: Books, tx: BankTransaction, context: Class
   return { entries: booked };
 }
 
+/** The firm a customs assessment names as its importer: its UID, else its name (#452). */
+const importerOf = (context: Pick<ClassifyContext, 'companyUid' | 'companyName' | 'ownerName'>): Importer => ({ ...(context.companyUid && { uid: context.companyUid }), ...(context.companyName && { name: context.companyName }), ...(context.ownerName && { owner: context.ownerName }) });
+
 /**
  * The deductions customs assessments bring to import VAT booked before them (importVatDeductions),
  * booked into `books`, and the assessments marked as used. Save the books when either is more than none.
  */
-export function bookImportVatDeductions(books: Books, context: Pick<ClassifyContext, 'companyUid'>): { booked: number; marked: number } {
+export function bookImportVatDeductions(books: Books, context: Pick<ClassifyContext, 'companyUid' | 'companyName' | 'ownerName'>): { booked: number; marked: number } {
   const words = documents().customs;
   if (!words) return { booked: 0, marked: 0 };
   const lock = periodLock(books);
   const through = lock.lockedThrough;
   const firstOpenDay = through ? new Date(Date.parse(`${through}T00:00:00Z`) + 864e5).toISOString().slice(0, 10) : '';
   return importVatDeductions(books, {
-    words, uid: context.companyUid, inputTax: !withoutInputTax(), isClosed: (d) => lock.isClosed(d), firstOpenDay,
+    words, firm: importerOf(context), inputTax: !withoutInputTax(), isClosed: (d) => lock.isClosed(d), firstOpenDay,
     length: filing().length, newId: () => randomBytes(8).toString('hex'), manualRef: (date) => nextManualRef(books, date.slice(0, 4)), texts: customsTexts(),
   });
 }
