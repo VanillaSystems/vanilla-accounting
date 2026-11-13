@@ -65,8 +65,8 @@ export const lineBillsOf = (mappings: readonly Pick<Mapping, 'transactionRef' | 
  * lines of its card line (#409). A line is of a card line when it was booked with that card line's
  * bills alone (byParts books each card line with its own), else when its amount is the bill's, or
  * the card line's, of exactly one card line; any other line is of the whole settlement and sees the
- * receipts linked to it as a whole. `unplaced`: such a line beside bills of card lines, one of which
- * may be its evidence: what it claims is not judged against the rest (no proof missing is said).
+ * receipts linked to it as a whole. `unplaced`: such a line beside a bill of a card line that shows
+ * a Swiss rate or is not read, which may be its evidence: no proof missing is said for its rate.
  */
 function evidenceOf(e: JournalEntry, linked: readonly Receipt[], bills: LineBills | undefined): { receipts: readonly Receipt[]; unplaced: boolean } {
   if (!bills?.size || !linked.some((r) => bills.has(r.id))) return { receipts: linked, unplaced: false };
@@ -82,7 +82,9 @@ function evidenceOf(e: JournalEntry, linked: readonly Receipt[], bills: LineBill
     return ((r.currency ?? baseCurrency()) === currency && same(r.amount)) || (!!line && (line.currency ?? baseCurrency()) === currency && same(line.amount));
   }).map((r) => bills.get(r.id)!));
   if (fits.size === 1) return of(fits);
-  return { receipts: linked.filter((r) => !bills.has(r.id)), unplaced: true };
+  // Only a bill that shows a Swiss rate, or is not read yet, may be the proof a whole-settlement line's rate rests on.
+  const unplaced = linked.some((r) => bills.has(r.id) && (swissRate(r) !== undefined || r.hasSwissVat === undefined));
+  return { receipts: linked.filter((r) => !bills.has(r.id)), unplaced };
 }
 const toCents = (n: number): number => Math.round(Math.abs(n) * 100);
 
@@ -95,18 +97,22 @@ const PURCHASE = /^(-?)([MI])(\d+)$/;
  * The gross per rate the receipts show, in `currency`: each VAT group read (a receipt without Swiss
  * VAT its whole total at 0 %), and `rest`, what their totals hold beyond the groups read. The rest
  * is no group: a reader may have left out an export part, or a reduced rate, or read a net for a
- * gross; it only excuses a line at the zero code, never accuses a rate (#406 review). Undefined
- * when a receipt was not read, is in another currency, names a group by its tax alone or at a rate
- * not of the jurisdiction (a foreign VAT), or shows groups above its total: then there is nothing
- * to compare a booking with.
+ * gross; it only excuses a line at the zero code, never accuses a rate (#406 review). A receipt in
+ * another currency is left out (#455 review). A group named by its tax alone counts at the gross its
+ * tax proves, tax × (100 + rate) / rate; when that is the receipt's total but for the tax's rounding
+ * to the cent, it is the total. Undefined when no receipt is in `currency`, or one was not read, has
+ * a group at a rate not of the jurisdiction (a foreign VAT) or by no amount, or shows groups above
+ * its total: then there is nothing to compare a booking with.
  */
 function receiptGroups(receipts: readonly Receipt[], currency: string): { groups: Map<number, number>; rest: number } | undefined {
   if (!receipts.length) return undefined;
   const groups = new Map<number, number>();
   let rest = 0;
   const add = (rate: number, gross: number) => groups.set(rate, (groups.get(rate) ?? 0) + gross);
-  for (const r of receipts) {
-    if (r.hasSwissVat === undefined || (r.currency ?? baseCurrency()) !== currency) return undefined;
+  const comparable = receipts.filter((r) => (r.currency ?? baseCurrency()) === currency);
+  if (!comparable.length) return undefined;
+  for (const r of comparable) {
+    if (r.hasSwissVat === undefined) return undefined;
     const total = r.amount === undefined ? undefined : Math.abs(r.amount);
     if (!r.hasSwissVat) {
       if (total === undefined) return undefined;
@@ -114,15 +120,24 @@ function receiptGroups(receipts: readonly Receipt[], currency: string): { groups
       continue;
     }
     let shown = 0;
+    // The tax of a group named by it alone is rounded to the cent: its gross is known to half a cent times (100 + rate) / rate.
+    let slack = 0;
+    let derived: number | undefined;
     for (const g of r.vatSummary ?? []) {
-      const gross = g.gross ?? (g.net !== undefined ? g.net + g.vat : undefined);
+      const byTax = g.ratePercent > 0 && g.gross === undefined && g.net === undefined && g.vat !== undefined;
+      const gross = g.gross ?? (g.net !== undefined ? g.net + g.vat : byTax ? (g.vat * (100 + g.ratePercent)) / g.ratePercent : undefined);
       if (gross === undefined || (g.ratePercent > 0 && !vat().isDomesticRate(g.ratePercent))) return undefined;
+      if (byTax) { slack += (0.005 * (100 + g.ratePercent)) / g.ratePercent; derived = g.ratePercent; }
       add(g.ratePercent, Math.abs(gross));
       shown += Math.abs(gross);
     }
     if (total === undefined) {
       if (!shown) return undefined;
       continue;
+    }
+    if (derived !== undefined && Math.abs(total - shown) <= TOLERANCE + slack) {
+      add(derived, total - shown);
+      shown = total;
     }
     if (shown > total + TOLERANCE) return undefined;
     if (total - shown > TOLERANCE) rest += total - shown;
@@ -253,8 +268,8 @@ export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], close
   }
   if (info.rate === 0) {
     if (shown === undefined || onImportVat) return undefined;
-    // Another line on the same receipts books a rate they show, and their groups cannot be set against the lines in amounts:
-    // the zero line may be the untaxed part, so nothing is said and no rate is offered for it (#455).
+    // A receipt in another currency than the line, and no groups to compare in the line's currency, while another line on
+    // the same receipts books a rate they show: the zero line may be the untaxed part, nothing is said (#455).
     const currency = e.exchangeCurrency ?? baseCurrency();
     const taxedBeside = (l: JournalEntry) => {
       const lm = PURCHASE.exec(l.vatCode ?? '');
@@ -262,7 +277,7 @@ export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], close
       const theirs = lineReceipts(l, receipts);
       return l.id !== e.id && !!rate && lm![1] === sign && theirs.length === own.length && theirs.every((r) => own.includes(r));
     };
-    if (!receiptGroups(own, currency) && lines.some(taxedBeside)) return undefined;
+    if (!receiptGroups(own, currency) && own.some((r) => (r.currency ?? baseCurrency()) !== currency) && lines.some(taxedBeside)) return undefined;
     const boxes = vat().codes.purchaseBoxes;
     const code = vat().codes.purchaseAt(shown, family === 'M' ? boxes.costOfGoods : boxes.otherwise);
     return code ? { kind: 'receiptShowsVat', rate: shown, code: sign + code, receipts: receipts.map((r) => r.id), ...decided } : undefined;

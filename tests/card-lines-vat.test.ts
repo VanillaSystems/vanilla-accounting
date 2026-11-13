@@ -209,3 +209,12 @@ test('#455: the hotel\'s line booked whole at I0 is still told, and «Nach Beleg
   bookByReceipt(b, 'hotel');
   assert.deepEqual(b.journalEntries.filter((e) => e.receipts?.includes('hotel')).map((e) => [e.amount, e.vatCode]).sort(), [[158, 'I38'], [6, 'I0']]);
 });
+
+test('#455 review A1, A2: a line of the whole settlement claims input tax no bill shows: still told, whatever line bills are linked', () => {
+  const b = books([card, lined('linkly', 0), lined('hotel', 2)], false);
+  const person = { origin: 'manual', by: { kind: 'person', at: '2026-11-13T11:00:00.000Z' } };
+  b.journalEntries = [booked('a', 20, 'I81', [], person), booked('b', 293.19, 'I0', [], person)] as unknown as Books['journalEntries'];
+  assert.deepEqual(findings(b), [[20, 'I81', 'vatWithoutReceipt'], [293.19, 'I0', undefined]], 'A1');
+  b.journalEntries = [booked('w', 313.19, 'I81', [], person)] as unknown as Books['journalEntries'];
+  assert.deepEqual(findings(b), [[313.19, 'I81', 'vatWithoutReceipt']], 'A2');
+});

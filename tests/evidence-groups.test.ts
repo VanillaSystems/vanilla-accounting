@@ -147,13 +147,34 @@ test('#455: 100 at 8.1 % and 20 at 0 % on two lines fit the receipt; the click o
   assert.deepEqual(checks([line('w', 'T', 120, 'I0')], [mixed])[0], { kind: 'receiptGroups', rate: 8.1, amount: 100, currency: 'CHF', lines: [{ amount: 100, code: 'I81' }, { amount: 20, code: 'I0' }], entries: ['w'], receipts: ['r'] });
 });
 
-test('#455: a receipt whose rates cannot be set against the lines accuses no zero line beside a line at its rate', () => {
-  // The hotel bill and the Linkly invoice in USD on one payment: the groups cannot be added up in CHF.
+test('#455: a receipt in another currency on the payment is left out of the sum: the hotel bill alone shows the Kurtaxe untaxed', () => {
   const linkly = bill(180, [], { id: 'linkly', currency: 'USD', hasSwissVat: false });
   assert.deepEqual(checks([line('room', 'H', 158, 'I38'), line('kurtaxe', 'H', 6, 'I0')], [hotel, linkly]), [undefined, undefined]);
-  // 100 at 8.1 % named by its tax alone, 20 beside it at 0 %: which part is taxed is not on the receipt as amounts.
+});
+
+test('#455: a group named by its tax alone is set against the lines by the gross its tax proves', () => {
+  // 100 at 8.1 % named by its tax (7.49), 20 beside it: the tax proves 99.96 taxed, the 20 is the rest.
   const taxOnly = bill(120, [{ ratePercent: 8.1, vat: 7.49 }]);
   assert.deepEqual(checks([line('a', 'T', 100, 'I81'), line('b', 'T', 20, 'I0')], [taxOnly]), [undefined, undefined]);
-  // Alone on the receipt, the zero line is still told the receipt shows VAT, as before.
-  assert.deepEqual(checks([line('b', 'T', 120, 'I0')], [taxOnly])[0], { kind: 'receiptShowsVat', rate: 8.1, code: 'I81', receipts: ['r'] });
+  // Alone on the receipt, the zero line is told what the tax proves taxed, without a click (the rest may be a rate not read).
+  assert.deepEqual(checks([line('b', 'T', 120, 'I0')], [taxOnly])[0], { kind: 'receiptGroups', rate: 8.1, amount: 99.96, currency: 'CHF', entries: ['b'], receipts: ['r'] });
+});
+
+test('#455 review F1: a tax that proves the whole total taxed still accuses the zero line beside the rate line', () => {
+  // 81.41 at 8.1 % is the tax of all of 1086.42 (to the cent's rounding): the 240 at I0 loses CHF 17.99.
+  const all = { ...july, vatSummary: [{ ratePercent: 8.1, vat: 81.41 }] } as Receipt;
+  assert.deepEqual(checks([line('a', 'T', 846.42, 'I81'), line('b', 'T', 240, 'I0')], [all]), [undefined, { kind: 'receiptShowsVat', rate: 8.1, code: 'I81', receipts: ['r-jul'] }]);
+});
+
+test('#455 review F4: 1000 at I81 and 86.42 at I0 on the bill whose tax 63.42 proves 846.39 taxed: no rate is offered for the zero line', () => {
+  const taxOnly = { ...july, vatSummary: [{ ratePercent: 8.1, vat: 63.42 }] } as Receipt;
+  const [, zero] = checks([line('a', 'T', 1000, 'I81'), line('b', 'T', 86.42, 'I0')], [taxOnly]);
+  assert.equal(zero, undefined, 'the 86.42 lies within the 240 the tax leaves untaxed: I81 on it would claim more');
+});
+
+test('#455 review G1: a bill in another currency beside a bill at 8.1 % on all of 120 does not excuse the zero line', () => {
+  const chf = bill(120, [{ ratePercent: 8.1, vat: 9, gross: 120 }], { id: 'chf' });
+  const usd = bill(45, [], { id: 'usd', currency: 'USD', hasSwissVat: false });
+  const lines = [line('a', 'T', 100, 'I81'), line('b', 'T', 20, 'I0'), line('c', 'T', 40, 'B81-1')];
+  assert.deepEqual(checks(lines, [chf, usd]), [undefined, { kind: 'receiptShowsVat', rate: 8.1, code: 'I81', receipts: ['chf', 'usd'] }, undefined]);
 });
