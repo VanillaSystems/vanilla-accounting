@@ -10,7 +10,7 @@
  */
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { entriesForceMayRemove, entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
-import { inputTaxWithoutItsReceipt } from '../accounting/evidence-check.js';
+import { claimsInputTax, inputTaxWithoutItsReceipt } from '../accounting/evidence-check.js';
 import { BATCH_SIZE, CONCURRENCY, bookBillCorrections, bookImportVatDeductions, classifyTransactions, loadClassifyContext, type ClassifyContext, type ClassifyOutcome } from '../booking/classify.js';
 import { answerSettles, mustSettle, receiptKnowledge, receiptWaitOf } from '../booking/receipt-wait.js';
 import { judgedRepayments, markJudged } from '../booking/owner-judged.js';
@@ -94,10 +94,11 @@ function markWaiting(books: BooksPort, waiting: ReadonlySet<string>, decided: Re
  * for these alone, since no model is needed to wait. Returns how many payments it took back.
  */
 function takeBackUnproven(ws: Workspace, books: BooksPort, context: ClassifyContext, fx: FxResolver): number {
-  if (!inputTaxWithoutItsReceipt(books.read()).length) return 0;
+  if (!inputTaxWithoutItsReceipt(books.read()).some(claimsInputTax)) return 0;
   const known = receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws);
   return books.update((index) => {
-    const refs = new Set(inputTaxWithoutItsReceipt(index).map((e) => e.transactionRef));
+    // A line that deducts the tax itself is only named: its bill books it again, not the classifier.
+    const refs = new Set(inputTaxWithoutItsReceipt(index).filter(claimsInputTax).map((e) => e.transactionRef));
     const stale = entriesWithoutTheirReceipts(index.journalEntries, index.mappings, refs, periodLock(index).closedThrough);
     if (!stale.length) return 0;
     const without = { ...index, journalEntries: index.journalEntries.filter((e) => !stale.includes(e)) };
@@ -196,10 +197,13 @@ export function classifyStep({ force = false } = {}): StepRun {
       // What a run tried and left unbooked, each with why (#470): kept in the run log for the payment's «Verlauf» and reason.
       const left = new Set(unbooked(books.read(), context.bankAccounts).map((tx) => tx.ref));
       const refused = [...new Map(failed.filter((f) => left.has(f.ref)).map((f) => [f.ref, { ref: f.ref, ...(f.refusal && { refusal: f.refusal }) }])).values()];
-      // What still claims input tax on a receipt no longer linked (a person's booking, a filed quarter's, one the app may not book again): a fact to check (#417).
-      const unproven = [...new Set(inputTaxWithoutItsReceipt(books.read()).map((e) => e.transactionRef))].sort();
-      if (unproven.length) log(`Unproven  : ${unproven.length} payment(s) claim input tax on a receipt no longer linked, left as they are: ${unproven.join(', ')}.`);
-      return { notes: [...notes, ...(waiting.size ? [{ code: 'waitingReceipt' as const, count: waiting.size }] : []), ...(unread.size ? [{ code: 'receiptUnread' as const, count: unread.size }] : []), ...(unproven.length ? [{ code: 'inputTaxUnproven' as const, refs: unproven }] : []), ...askSales(ws, books, log)], ...(refused.length && { refused }) };
+      // What of the open period still claims input tax on a receipt no longer linked (a person's booking, one the app may not book again): a fact
+      // to check (#417). A filed quarter's line is not named on every run: nothing may change it, and the read step names the file whose link went.
+      const now = books.read();
+      const closed = periodLock(now);
+      const unproven = [...new Map(inputTaxWithoutItsReceipt(now).filter((e) => !closed.isClosed(e.date)).map((e) => [e.transactionRef, { ref: e.transactionRef, date: e.date, entry: e.id }])).values()].sort((a, b) => a.date.localeCompare(b.date) || a.ref.localeCompare(b.ref));
+      if (unproven.length) log(`Unproven  : ${unproven.length} payment(s) claim input tax on a receipt no longer linked, left as they are: ${unproven.map((p) => p.ref).join(', ')}.`);
+      return { notes: [...notes, ...(waiting.size ? [{ code: 'waitingReceipt' as const, count: waiting.size }] : []), ...(unread.size ? [{ code: 'receiptUnread' as const, count: unread.size }] : []), ...(unproven.length ? [{ code: 'inputTaxUnproven' as const, payments: unproven }] : []), ...askSales(ws, books, log)], ...(refused.length && { refused }) };
     };
     // A repayment the model judged once is not asked again: it is the person's now (owner-judged.ts).
     const judgedOnce = judgedRepayments(ws);

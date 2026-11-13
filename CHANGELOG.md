@@ -452,10 +452,16 @@ Two markers flag an entry you must read before you update:
   payment (#417, point 1). That happened when a receipt file was rewritten under its name or its
   link was taken off, and the run said «0 Verknüpfungen prüfen». The app's own booking (by a rule
   or the AI, with no other proof named for it) is now taken back even without an AI, and the
-  payment waits for its receipt as any payment out does. A booking the app may not take back stays
-  exactly as it is: a person's booking, a filed quarter's. The run names it as a fact: «Zahlung zieht
-  Vorsteuer ab auf einen Beleg, der nicht mehr mit ihr verknüpft ist». The rewritten file's note
-  also counts such a payment among the links to check. In books where this happened, the open
+  payment waits for its receipt as any payment out does. Of several receipts, the line whose own
+  receipt went counts, even while another stays. A booking the app may not take back stays exactly
+  as it is: a person's booking, a filed quarter's, a line of the tax itself (a bill's one-legged
+  deduction). For the open period the run names it as a fact, each payment a link to its booking:
+  «Zahlung zieht Vorsteuer ab auf einen Beleg, der nicht mehr mit ihr verknüpft ist». The
+  rewritten file's note also counts such a payment among the links to check, unless another
+  receipt still linked shows its VAT. The same document saved again (other bytes, the same
+  words, or the same day and total) now keeps the app's links and bookings too, on the new read,
+  with the VAT read off the same words. Before, the app's links went, and without an AI the
+  booking was then taken back. In books where this happened, the open
   period's input tax (Ziffer 400/405) falls by what those bookings claimed. The demo figures do
   not change.
 - A run no longer offers «Als Eröffnungssaldo übernehmen» for a bank balance from inside the year

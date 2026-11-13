@@ -243,26 +243,48 @@ export function claimsInputTax(e: Pick<JournalEntry, 'vatCode'>): boolean {
   return !!m && !m[1] && (vat().codes.parse(e.vatCode!)?.rate ?? 0) > 0;
 }
 
+/** A line whose amount is the deducted tax itself (a one-legged correction by a provider's bill, an import VAT deduction by its assessment); not acquisition tax, which deducts what it owes. */
+export function deductsTaxAmount(e: Pick<JournalEntry, 'vatCode'>): boolean {
+  const info = e.vatCode ? vat().codes.parse(e.vatCode) : null;
+  return !!info && !info.isNegative && info.amountIs === 'tax' && info.rate > 0 && !!info.inputTaxZiffer && !info.acquisitionZiffer;
+}
+
+/** Whether a receipt is the one of this line by its amount, in the line's currency. */
+const ownBill = (e: Pick<JournalEntry, 'amount' | 'exchangeCurrency'>, r: Pick<Receipt, 'amount' | 'currency'>): boolean =>
+  r.amount !== undefined && (r.currency ?? baseCurrency()) === (e.exchangeCurrency ?? baseCurrency()) && toCents(r.amount) === toCents(e.amount);
+
 /**
  * The lines that claim input tax on a receipt no longer linked to their payment (#417): the line
  * recorded the receipts it was booked with, one of them is linked to the payment no more (its file
- * rewritten under its name, the link taken off), and what is linked now shows no Swiss VAT
- * (evidenceCheck's `vatWithoutReceipt`), nor did a person name other proof for it. Filed quarters
- * too: a filed line is never changed, but the person is told of it.
+ * rewritten under its name, the link taken off), and no person named other proof for it. Then:
+ * - a line at a purchase rate (claimsInputTax) is unproven when what is linked now shows no Swiss
+ *   VAT for it (evidenceCheck's `vatWithoutReceipt`). Of several receipts it recorded, its own is
+ *   the one of its amount: a line whose own receipt went is unproven even while another of the
+ *   payment's receipts, of another line, stays and shows VAT.
+ * - a line that deducts the tax itself (deductsTaxAmount) is unproven when none of the receipts it
+ *   recorded is linked any more: its bill or assessment is its only proof.
+ * Filed quarters too: a filed line is never changed, but the caller may tell the person of it.
  */
 export function inputTaxWithoutItsReceipt(books: { journalEntries: readonly JournalEntry[]; mappings: readonly Mapping[]; receipts: readonly Receipt[]; transactions: ReadonlyArray<{ ref: string; inputTaxProof?: InputTaxProof }> }): JournalEntry[] {
   const linked = new Map<string, Set<string>>();
   for (const m of books.mappings) (linked.get(m.transactionRef) ?? linked.set(m.transactionRef, new Set()).get(m.transactionRef)!).add(m.receiptId);
-  const lost = books.journalEntries.filter((e) => claimsInputTax(e) && !!e.receipts?.some((id) => !linked.get(e.transactionRef)?.has(id)));
+  const isLinked = (e: JournalEntry, id: string) => !!linked.get(e.transactionRef)?.has(id);
+  const lost = books.journalEntries.filter((e) => (claimsInputTax(e) || deductsTaxAmount(e)) && !!e.receipts?.some((id) => !isLinked(e, id)));
   if (!lost.length) return [];
   const byId = new Map(books.receipts.map((r) => [r.id, r]));
-  const tx = new Map(books.transactions.map((t) => [t.ref, t]));
+  const proven = new Set(books.transactions.filter((t) => t.inputTaxProof).map((t) => t.ref));
   return lost.filter((e) => {
-    const proof = tx.get(e.transactionRef)?.inputTaxProof;
-    if (proof) return false;
+    if (proven.has(e.transactionRef)) return false;
+    if (!claimsInputTax(e)) return !e.receipts!.some((id) => isLinked(e, id));
     const receipts = [...(linked.get(e.transactionRef) ?? [])].map((id) => byId.get(id)).filter((r): r is Receipt => !!r);
     const lines = books.journalEntries.filter((l) => l.transactionRef === e.transactionRef);
-    return evidenceCheck(e, receipts, undefined, undefined, lines, lineBillsOf(books.mappings, e.transactionRef))?.kind === 'vatWithoutReceipt';
+    const unproven = (evidence: readonly Receipt[]) => evidenceCheck(e, evidence, undefined, undefined, lines, lineBillsOf(books.mappings, e.transactionRef))?.kind === 'vatWithoutReceipt';
+    // Of several receipts it recorded, the line's own is the one of its amount: when none linked now is, its own went.
+    if (e.receipts!.length >= 2 && receipts.length) {
+      const own = receipts.filter((r) => ownBill(e, r));
+      return own.length ? unproven(own) : true;
+    }
+    return unproven(receipts);
   });
 }
 
