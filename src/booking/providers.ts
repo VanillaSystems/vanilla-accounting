@@ -15,7 +15,9 @@
  * a name in code (ADR 0015). Pure.
  */
 import { identify, signalsOfReceiptRead, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
-import type { BankTransaction, JournalEntry, Receipt } from '../types/index.js';
+import type { BankTransaction, ClearingBefore, JournalEntry, Receipt } from '../types/index.js';
+
+export type { ClearingBefore };
 import { chfAmount } from '../accounting/ledger.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import { addDays } from '../accounting/periods.js';
@@ -209,6 +211,42 @@ export interface ClearingCheck {
   known?: string;
   /** The balance is below zero: the provider paid out more than the account holds sales for, a difference whatever was paid after. */
   below?: true;
+  /** The first payouts from the cut-over day on that pay sales of days before it, which these books do not hold (clearingBefore, #405). */
+  before?: ClearingBefore;
+  /** The gross of the orders up to `through` a sales report holds (#405): sales the account lacks until they are booked. */
+  held?: number;
+}
+
+
+/**
+ * The provider's payouts of its first payout days that may pay days before `since`, while the clearing
+ * account has no opening in the year of `since` and no entry before it; undefined otherwise (nothing to
+ * ask: the account opens with what the books carry). `exported`: what each payout of the provider's
+ * payments exports made up, by payout day; a payout dated before the first of them holds none of the
+ * export's transactions, all of it pays days before `since`. Pure.
+ */
+export function clearingBefore(p: Provider, books: { journalEntries: readonly JournalEntry[]; transactions: readonly BankTransaction[]; config?: { openingBalances?: Record<string, Record<string, number>> } }, counterparties: readonly Counterparty[], exported?: ReadonlyArray<{ date: string; net: number }>): ClearingBefore | undefined {
+  const { clearing: account, since } = p.provider;
+  if (!account || !since) return undefined;
+  const year = since.slice(0, 4);
+  if (books.config?.openingBalances?.[year]?.[account] !== undefined) return undefined;
+  if (books.journalEntries.some((e) => e.date < since && (e.accountDebit === account || e.accountCredit === account))) return undefined;
+  const until = addDays(since, payoutDaysOf(p));
+  const payouts = books.transactions.filter((t) => t.date >= since && t.date <= until && providerOfPayment(t, [], counterparties)?.id === p.id).sort((a, b) => a.date.localeCompare(b.date));
+  if (!payouts.length) return undefined;
+  const nets = new Map((exported ?? []).map((x) => [x.date, toRappen(x.net)]));
+  const first = exported?.length ? [...nets.keys()].sort()[0] : undefined;
+  const partOf = (t: BankTransaction): number | undefined => {
+    if (!first) return undefined;
+    if (t.date < first) return toRappen(t.amount);
+    const net = nets.get(t.date);
+    return net === undefined ? 0 : Math.max(0, toRappen(t.amount) - net);
+  };
+  const out = payouts.map((t) => { const rp = partOf(t); return { ref: t.ref, date: t.date, amount: t.amount, ...(rp ? { before: fromRappen(rp) } : {}) }; });
+  const sum = out.reduce((s, x) => s + toRappen(x.before ?? 0), 0);
+  // The export holds every transaction its first payouts paid: nothing of days before `since` was paid out.
+  if (first && sum === 0) return undefined;
+  return { account, since, year, payouts: out, ...(first ? { amount: fromRappen(sum) } : {}) };
 }
 
 /** The last day of each of the `n` months up to and including the month of `through`, oldest first; `through` itself for its own month. */

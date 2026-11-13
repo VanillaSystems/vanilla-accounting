@@ -325,7 +325,7 @@ test('a VAT question open about a payment of the period withholds the filing: th
   const id = r.ok ? r.run! : '';
   const run = () => engine.run(id)!;
   const task = taskOf(loadWorkflows(APP_ROOT, ws.paths.root).workflows.find((w) => w.id === 'vat-filing')!, run())!;
-  assert.deepEqual(approvalWithheld(task, readQuestions(ws), loadBooks(ws)), { outcome: 'approved', rates: [], questions: 1 }, 'the review withholds «Freigegeben» while the question is open');
+  assert.deepEqual(approvalWithheld(task, readQuestions(ws), loadBooks(ws)), { outcome: 'approved', rates: [], questions: 1, held: 0 }, 'the review withholds «Freigegeben» while the question is open');
 
   await engine.command({ kind: 'answer', run: id, outcome: 'approved' });
   await engine.idle();

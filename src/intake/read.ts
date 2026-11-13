@@ -21,7 +21,7 @@ import { detectVatProofIssue, noiseText, textFacts, textProves } from '../parser
 import { filedReceipt, forgetReadFacts } from './vat.js';
 import { buildVisionPrompt } from '../llm/prompts.js';
 import type { Receipt } from '../types/index.js';
-import { filesOfPart, type Workspace } from '../workspace/workspace.js';
+import { fileFinder, filesOfPart, type Workspace } from '../workspace/workspace.js';
 import { mergeIndex, readStatementFiles, readTransactions, reconcileWithFiles, withinBooks } from '../books/bank-import.js';
 import { keptReads } from '../books/pdf-reads.js';
 import { readKeptPdfs, readsByItself, unreadPdfs } from './statement-read.js';
@@ -37,6 +37,7 @@ import { documentKind } from './document-kind.js';
 import { askKind, asksModel, kindOfModel, MODEL_RULE, MODEL_TEXT, NOT_A_RECEIPT, visionVerdict, type ModelKind } from './unclear.js';
 import { statementFacts } from '../books/statement-facts.js';
 import { documents } from '../engines/index.js';
+import { restoreReportReceipts } from './sales-report-import.js';
 
 // ─── The PDF's own text, fallback to the model's vision for OCR ─────────────
 
@@ -159,8 +160,9 @@ function isPdf(path: string): boolean {
   }
 }
 
+const isPdfName = (name: string) => name.toLowerCase().endsWith('.pdf');
 const isReceiptPdf = (name: string, path: string) =>
-  name.toLowerCase().endsWith('.pdf') && !name.endsWith('.icloud') && isPdf(path); // An iCloud placeholder or a file still being written is no PDF yet; a small PDF is one.
+  isPdfName(name) && !name.endsWith('.icloud') && isPdf(path); // An iCloud placeholder or a file still being written is no PDF yet; a small PDF is one.
 
 function scanPdfs(dir: string, location: 'staged' | 'archived'): FoundFile[] {
   if (!existsSync(dir)) return [];
@@ -357,6 +359,12 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
         ...kind,
       } as Receipt];
     });
+    // A receipt this step does not read (a provider's report, a CSV in receipts/, #405; a file named .pdf that is none) stays
+    // while its file lies there: the scan above takes readable PDFs only, and the books are rebuilt from it. A file
+    // whose bytes changed under its name is the scan's new receipt.
+    const scanned = new Set(receipts.flatMap((r) => [r.id, r.filename]));
+    const find = fileFinder(ws.paths);
+    receipts.push(...index.receipts.filter((r) => !scanned.has(r.id) && !scanned.has(r.filename) && r.location === 'archived' && !!find('receipts', r.filename)));
     // The books keep their order, new receipts after them: a second run writes the same file.
     const pos = new Map(index.receipts.map((r, i) => [r.id, i]));
     receipts.sort((a, b) => (pos.get(a.id) ?? pos.size) - (pos.get(b.id) ?? pos.size));
@@ -366,6 +374,9 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
     }
     const merged = mergeIndex(index, { receipts, bankTransactions: assignUniqueRefs(kept), reads: keptReads(ws, statementFiles.statements, index.statementAsks), bankStatements: statementFiles.statements, camtBalances: statementFiles.balances });
     Object.assign(index, merged.index);
+    // A provider's report a run before #405 dropped while its entries name it and its file lies in receipts/: its receipt again.
+    const restored = restoreReportReceipts(ws, index);
+    if (restored.length) log(`  restored ${restored.length} report receipt(s) the entries name: ${restored.join(', ')}`);
     // Movements read from PDFs and the bank's file of the same days: the account's reconciliation, before any run books them (#254).
     reconcileWithFiles(ws, index, differenceAccountOf(ws));
     // On the agreed basis each issued document's VAT event comes before its payment, which then only settles the receivable (src/invoices/events.ts).

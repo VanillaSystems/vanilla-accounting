@@ -38,6 +38,7 @@ import { offersInBooks } from '../../../intake/near-pairs.js';
 import { ByHand, VatFields } from './VatFields.js';
 import { TwinNotice } from './TwinNotice.js';
 import { ReportCorrections } from './ReportCorrections.js';
+import { ReportHeld } from './ReportHeld.js';
 import { Paper } from './Paper.js';
 import { SkipOffer } from './SkipOffer.js';
 import { RunHistory } from '../../history/RunHistory.js';
@@ -205,7 +206,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
         </div>
       )}
       <TwinNotice {...props} />
-      {r.report?.held?.length ? <ReportHeld report={r.report} /> : null}
+      {r.report?.held?.length ? <ReportHeld receipt={r.id} report={r.report} canEdit={canEdit} said={(message, ok) => { if (ok) nav.refresh(); nav.toast(message); }} /> : null}
       <ReportCorrections receipt={r.id} books={props.books} canEdit={canEdit} said={(message) => { nav.refresh(); nav.toast(message); }} />
       {v.none && v.r.kind === 'supporting'
         ? <div className="notice" data-testid="supporting-notice">{t('receipts.supportingNotice', { what: v.noneWhy ? t(`receipts.why.${v.noneWhy}`) : t('receipts.why.supporting') })} {canEdit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t(markLabel(r))}</a>}</div>
@@ -235,21 +236,6 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       {s.overlay === 'link' && edit && <LinkDialog {...props} onClose={() => setUi({ overlay: null })} />}
       {s.overlay === 'quick' && <Quick src={src} file={r.filename} />}
       {s.overlay === 'delete' && edit && <ConfirmDelete {...props} />}
-    </div>
-  );
-}
-
-/**
- * What a provider's sales or fee report could not book (#203), kept on its receipt by its latest
- * taking: each order with why, for the person to book or correct by hand; at most HELD_KEPT named
- * (src/intake/sales-report-import.ts), the rest counted.
- */
-function ReportHeld({ report }: { report: NonNullable<Receipt['report']> }) {
-  const held = report.held ?? [];
-  const more = report.heldMore ?? 0;
-  return (
-    <div className="notice" data-testid="report-held">
-      {I.dot}<span>{t('receipts.report.held', { n: held.length + more })}: {held.map((h) => t(`drop.held.${h.why}`, { order: h.order })).join(', ')}{more ? ` ${t('receipts.report.heldMore', { n: more, limit: held.length })}` : ''}</span>
     </div>
   );
 }

@@ -31,6 +31,7 @@ import { PaymentBooking } from '../journal/PaymentBooking.js';
 import { bookedStates } from '../../../accounting/payment-entries.js';
 import { Parts } from '../bank/Parts.js';
 import { approvalWithheld, fileName, returnSummary } from './filing-summary.js';
+import { providerIssuesNow } from '../../lib/order-pages.js';
 import { outcomeText, periodText, paymentWords, readsInWords } from './words.js';
 import type { PeriodReturn, PreparedXml, SealOutput } from '../../../workflows/filing.js';
 import type { ClearingCheck } from '../../../booking/providers.js';
@@ -497,9 +498,11 @@ function ReturnFacts({ ret }: { ret: PeriodReturn }) {
 /**
  * Each payment provider's clearing account at the period's end (#203): its balance, its month ends
  * before, and what the provider paid out after the end within its payout days, which is what it held
- * then; the difference is found per order. A fact, never a reminder.
+ * then; the difference is found per order. What it knows of the difference it names (#405): the first payouts
+ * after the cut-over day that paid sales of the days before it (the provider's balance on that day, which belongs
+ * on the account as its opening), and the orders its sales report holds. A fact, never a reminder.
  */
-function ClearingFacts({ checks }: { checks: ClearingCheck[] }) {
+function ClearingFacts({ checks, nav }: { checks: ClearingCheck[]; nav: Nav }) {
   const cur = baseCurrency();
   return (
     <>
@@ -517,7 +520,16 @@ function ClearingFacts({ checks }: { checks: ClearingCheck[] }) {
             <span className="m">{c.paidAfter === undefined || !key
               ? t('automation.clearing.unknown', { until: formatDate(until), known: c.known ? formatDate(c.known) : '–' })
               : t(key, { until: formatDate(until), date: formatDate(c.through), paid: `${cur} ${fmt(c.paidAfter)}`, diff: `${cur} ${fmt(Math.abs(diff ?? 0))}` })}</span>
-            {c.below ? <span className="m">{t('automation.clearing.below')}</span> : null}
+            {c.before ? (
+              <span className="m" data-testid="clearing-before">
+                {c.before.amount !== undefined
+                  ? t('automation.clearing.before', { amount: `${cur} ${fmt(c.before.amount)}`, since: formatDate(c.before.since), dates: c.before.payouts.filter((x) => x.before).map((x) => formatDate(x.date)).join(', '), provider: c.name, day: formatDate(addDays(c.before.since, -1)), account: c.account, with: `${cur} ${fmt(Math.round((c.balance + c.before.amount) * 100) / 100)}` })
+                  : t('automation.clearing.beforeUnknown', { n: c.before.payouts.length, since: formatDate(c.before.since), provider: c.name, day: formatDate(addDays(c.before.since, -1)), account: c.account })}{' '}
+                <button type="button" className="golink" onClick={() => nav.go({ route: { area: 'company', section: 'opening' }, query: {} })}>{t('area.company')} › {t('company.opening')}</button>
+              </span>
+            ) : null}
+            {c.held ? <span className="m" data-testid="clearing-held">{t('automation.clearing.held', { amount: `${cur} ${fmt(c.held)}` })}</span> : null}
+            {c.below && !c.before && !c.held ? <span className="m">{t('automation.clearing.below')}</span> : null}
             {c.currency ? <span className="m">{t('automation.clearing.currency', { currency: c.currency })}</span> : null}
           </div>
         );
@@ -730,7 +742,7 @@ function ReturnIssues({ ret, books, nav, canEdit }: { ret: PeriodReturn; books: 
   return (
     <>
       {ret.reviewedBefore ? <p className="warnline" data-testid="reviewed-before">{t('automation.reviewedBefore', { was: money(ret.reviewedBefore.payable, baseCurrency()), now: money(ret.payable, baseCurrency()) })}</p> : null}
-      {ret.clearing?.length ? <ClearingFacts checks={ret.clearing} /> : null}
+      {ret.clearing?.length ? <ClearingFacts checks={ret.clearing} nav={nav} /> : null}
       {p ? <PeriodIssues books={books} nav={nav} from={p.from} to={p.to} period={periodName(p)} canEdit={canEdit} /> : null}
     </>
   );
@@ -792,7 +804,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
           {tasks.map((task) => {
             const w = view.workflows.find((x) => x.id === task.workflow);
             const pay = canEdit ? unbooked(task) : undefined;
-            const withheld = approvalWithheld(task, q.questions, books);
+            const withheld = approvalWithheld(task, q.questions, books, providerIssuesNow());
             return (
               <div key={task.run} className={`wftask${task.run === run ? ' sel' : ''}`}>
                 <b>{fillTask(tx(task.title), task.item, readsInWords(task.reads))}{paymentWords(task) ? <span className="wfpay" data-testid="task-payment"> · {paymentWords(task)}</span> : null}{task.overdue ? <span className="wfpill st-stuck">{t('automation.overdue')}</span> : null}</b>
@@ -808,6 +820,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
                   </p>
                 ) : null}
                 {withheld?.questions ? <p className="warnline" data-testid="approval-withheld-questions">{t('automation.questionsOpen', { n: withheld.questions })}</p> : null}
+                {withheld?.held ? <p className="warnline" data-testid="approval-withheld-held">{t('automation.heldOpen', { n: withheld.held })}</p> : null}
                 {pay ? <PaymentBooking key={pay} books={books} nav={nav} payment={pay} onForm={(el) => forms.current.set(task.run, el)} onBooked={() => { if (task.outcomes.includes('booked')) send(task, 'booked'); }} /> : null}
                 {confirming === task.run ? (
                   <p className="warnline" data-testid="confirm-filed">

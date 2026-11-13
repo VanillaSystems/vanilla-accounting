@@ -56,6 +56,14 @@ provider:
       refunded: Refunded Amount
       currency: Currency
       gateway: Payment Method
+      # A cart of two VAT rates (tea at 2.6 %, a teapot at 8.1 %) shows them in one Taxes column: its line items and
+      # the tax per rate («Tax 1 Name» «CH MWST 8.1%», «Tax 1 Value») let code book each rate's part (#405).
+      linePrice: Lineitem price
+      lineQuantity: Lineitem quantity
+      shipping: Shipping
+      discount: Discount Amount
+      taxName: [ Tax 1 Name, Tax 2 Name, Tax 3 Name, Tax 4 Name, Tax 5 Name ]
+      taxValue: [ Tax 1 Value, Tax 2 Value, Tax 3 Value, Tax 4 Value, Tax 5 Value ]
     # Shopify Admin › Finanzen › Shopify Payments › Transaktionen exportieren (CSV): one row per transaction (a charge,
     # a refund, …) with the fee kept. Its rows name the orders Shopify collected (a test-mode order has none), and its
     # Refund rows the day each refund went back: the order export has no refund date (#214).
@@ -66,6 +74,10 @@ provider:
       currency: Currency
       type: Type
       amount: Amount
+      # The payout each transaction went out with and its net: the first payouts after the cut-over day pay
+      # sales of days before it, which the export does not hold (#405): what Shopify owed on that day.
+      payoutDate: Payout Date
+      net: Net
   # The orders Shopify Payments collected: only they are paid out through Shopify. PayPal, manual
   # payment (bank transfer, cash on delivery), a gift card and the test gateway (Bogus) are not, and
   # are never booked onto the clearing account; the row counts them.

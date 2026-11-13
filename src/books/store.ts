@@ -530,6 +530,10 @@ export function update<T>(books: Books, actor: Actor, fn: (books: Books) => T | 
   const filedPart = filedHold ? closedPart(books, was.closedThrough) : undefined;
   const distanceBefore = filedHold ? filedDistance(books, filedHold) : undefined;
   const persons = actor.kind === 'person' ? undefined : personsEntries(books);
+  const held = actor.kind === 'person' ? undefined : { receipts: new Map(books.receipts.map((r) => [r.id, { ...r }])), links: new Set(books.mappings.map(linkKey)) };
+  const ownFreed = !released.has(books);
+  if (ownFreed) released.set(books, new Set());
+  const freed = released.get(books)!;
   const dated = new Map(books.journalEntries.map((e) => [e.id, e.date]));
   const check = () => {
     const lock = periodLock(books);
@@ -558,10 +562,14 @@ export function update<T>(books: Books, actor: Actor, fn: (books: Books) => T | 
       const touched = diff('entry', persons, personsEntries(books)).filter((d) => !d.endsWith(' added'));
       if (touched.length) throw new OwnershipError(`${describe(actor)} ändert keine Buchung einer Person: ${touched.join('; ')}`);
     }
+    if (held) {
+      const lost = lostByModule(books, held, freed);
+      if (lost.length) throw new OwnershipError(`${describe(actor)} entfernt keinen Beleg und keine Verknüpfung, die es nicht selbst freigibt: ${lost.slice(0, 5).join('; ')}${lost.length > 5 ? ` und ${lost.length - 5} weitere` : ''}`);
+    }
   };
   const outer = guards.get(books);
   guards.set(books, outer ? () => { outer(); check(); } : check);
-  const done = () => { if (outer) guards.set(books, outer); else guards.delete(books); };
+  const done = () => { if (outer) guards.set(books, outer); else guards.delete(books); if (ownFreed) released.delete(books); };
   let result: T | Promise<T>;
   try {
     result = fn(books);
@@ -578,6 +586,46 @@ export function update<T>(books: Books, actor: Actor, fn: (books: Books) => T | 
     done();
   }
   return result;
+}
+
+/** A link's identity: its payment (or entry's ref) and its receipt. */
+const linkKey = (m: { transactionRef?: string; receiptId: string }) => `${m.transactionRef}\u0000${m.receiptId}`;
+
+/** Receipts (by id) and links (by linkKey) a module or a run lets go of on purpose in the update in flight: see `release`. */
+const released = new WeakMap<Books, Set<string>>();
+
+/**
+ * Names receipts and links a module or a run takes away on purpose in the `update` in flight: an
+ * undo of its own, a link of its own it replaces. Everything else it may not remove (#405).
+ */
+export function release(books: Pick<Books, 'receipts'>, items: { receipts?: readonly string[]; mappings?: ReadonlyArray<{ transactionRef?: string; receiptId: string }> }): void {
+  const set = released.get(books as Books);
+  if (!set) return;
+  for (const id of items.receipts ?? []) set.add(`r:${id}`);
+  for (const m of items.mappings ?? []) set.add(`m:${linkKey(m)}`);
+}
+
+/**
+ * What a module or a run removed that it may not (#405): a receipt whose file still lies in the
+ * workspace (receipts/ of a year, or the inbox while staged), and a link whose receipt and payment
+ * (or entry) both still stand, unless it named them with `release`. A person's removal goes through
+ * her own actions (the receipt's «Löschen», «Verknüpfung lösen», an undo), never through this check.
+ */
+function lostByModule(books: Books, before: { receipts: Map<string, Receipt>; links: Set<string> }, freed: Set<string>): string[] {
+  const home = homes.get(books);
+  const find = home ? fileFinder(home) : undefined;
+  const fileStays = (r: Receipt) => !home || (r.location === 'staged' ? existsSync(join(home.inbox, r.filename)) : !!find!('receipts', r.filename));
+  const receipts = new Set(books.receipts.map((r) => r.id));
+  const refs = new Set([...books.transactions.map((t) => t.ref), ...books.journalEntries.map((e) => e.transactionRef)]);
+  const links = new Set(books.mappings.map(linkKey));
+  const out: string[] = [];
+  for (const [id, r] of before.receipts) if (!receipts.has(id) && !freed.has(`r:${id}`) && fileStays(r)) out.push(`receipt ${id} (${r.filename}) removed`);
+  for (const key of before.links) {
+    if (links.has(key) || freed.has(`m:${key}`)) continue;
+    const [ref, receipt] = key.split('\u0000');
+    if (receipts.has(receipt) && refs.has(ref)) out.push(`link ${ref} → ${receipt} removed`);
+  }
+  return out;
 }
 
 const describe = (a: Actor) => (a.kind === 'person' ? 'Eine Person' : a.kind === 'module' ? `Modul ${a.id}` : `Lauf ${a.id} (${a.workflow})`);

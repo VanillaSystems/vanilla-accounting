@@ -17,7 +17,7 @@ import type { Location } from '../shell/route.js';
 import { useQuestions } from '../questions/store.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { useAutomation } from '../automation/store.js';
-import { orderPagesNow } from '../lib/order-pages.js';
+import { orderPagesNow, providerIssuesNow } from '../lib/order-pages.js';
 import { at } from '../areas/receipts/view.js';
 import { taskLine } from '../areas/automation/words.js';
 import { elsewhereCount, elsewhereOf, nothingOpen, openLines, openPeriodState, type OpenLine, type OpenPeriodState } from '../areas/automation/open-period.js';
@@ -39,6 +39,9 @@ function goOf(l: OpenLine, s: OpenPeriodState, books: Index): Location {
     case 'evidence': return at({ area: 'journal', id: l.first.id }, l.first.date);
     // The day Belege lists the receipt under (#385 review), in the period the card is about.
     case 'unlinked': return receiptAt(l.first, s, books);
+    // The report's receipt names the held order and books it (#405); a missing bill goes into Belege of its month.
+    case 'held': { const r = books.receipts.find((x) => x.id === l.first.receipt); return r ? at({ area: 'receipts', id: r.id }, r.date) : openList(s) ?? TASKS; }
+    case 'bills': return at({ area: 'receipts' }, l.first.date);
     case 'task': return { route: { area: 'automation', view: 'tasks', run: l.task.run }, query: {} };
   }
 }
@@ -52,6 +55,8 @@ function textOf(l: OpenLine): string {
     case 'questions': return issueWords({ ...NONE, questions: l.n })[0];
     case 'evidence': return issueWords({ ...NONE, evidence: l.n })[0];
     case 'unlinked': return issueWords({ ...NONE, unlinked: l.n })[0];
+    case 'held': return issueWords({ ...NONE, held: l.n })[0];
+    case 'bills': return issueWords({ ...NONE, bills: l.n })[0];
     case 'task': return taskLine(l.task);
     case 'moreTasks': return t('openPeriod.moreTasks', { n: l.n });
   }
@@ -77,14 +82,15 @@ export function OpenPeriodCard({ books, onGo }: { books: Index; onGo(loc: Locati
   // As Aufgaben reads it: the threshold task is there only for a firm the manifest says is not registered.
   const registered = ws?.company.vat.registered;
   const pages = orderPagesNow();
+  const provider = providerIssuesNow();
   const today = localToday();
   // The sidebar renders again with every word of a streaming answer: the state is computed once per change of what it reads.
   const { s, lines, other, unbookedElsewhere } = useMemo(() => {
-    const s = openPeriodState(books, questions ?? [], tasks ?? [], accounts ?? [], { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays }, pages, processingOf(view?.runs ?? [], books.receipts));
+    const s = openPeriodState(books, questions ?? [], tasks ?? [], accounts ?? [], { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays }, pages, processingOf(view?.runs ?? [], books.receipts), provider);
     const e = elsewhereOf(books, questions ?? [], tasks ?? [], accounts ?? [], s, filing().length, view ? openCount(view) - view.tasks.length : 0, registered, today);
     // UnbookedFact says the payments; the rest is counted as the tasks it is under Aufgaben.
     return { s, lines: openLines(s), other: elsewhereCount(e) - e.unbooked.length, unbookedElsewhere: e.unbooked.length };
-  }, [books, questions, tasks, view, accounts, registered, pages, today]);
+  }, [books, questions, tasks, view, accounts, registered, pages, provider, today]);
   const link = (to: Location, text: string) => (
     <a className="linkbtn" href={hrefOf(to)} onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return; e.preventDefault(); onGo(to); }}>{text}</a>
   );

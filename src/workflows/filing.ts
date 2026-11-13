@@ -32,7 +32,8 @@ import type { QuarterKey } from '../types/index.js';
 import { refuse } from '../types/refusal.js';
 import { yearPaths, type Workspace } from '../workspace/workspace.js';
 import { clearingCheck, type ClearingCheck } from '../booking/providers.js';
-import { providersOf } from '../intake/sales-report-import.js';
+import { clearingBeforeIn, providersOf } from '../intake/sales-report-import.js';
+import { providerIssuesIn } from '../intake/pair-chain.js';
 import type { Action } from './actions.js';
 import type { Run } from './model.js';
 
@@ -141,7 +142,15 @@ export const FILING_ACTIONS: Record<string, Action> = {
       if (run?.mode === 'live') { rmSync(preparedXml(ws, key), { force: true }); hold(ws, books, key, false); }
       const ret = returnOf(books, key);
       // Each payment provider's clearing account at the period's end, its month ends before, and what the provider held unpaid then (#203): a fact beside the figures.
-      const clearing = providersOf(ws).flatMap((p) => clearingCheck(p, books, ret.to) ?? []);
+      // What a provider held on its cut-over day and paid out in its first payouts, and its orders the report holds (#405): the two causes the account can know.
+      const held = providerIssuesIn(ws, books).held;
+      const clearing = providersOf(ws).flatMap((p) => {
+        const c = clearingCheck(p, books, ret.to);
+        if (!c) return [];
+        const before = clearingBeforeIn(ws, books, p);
+        const missing = held.filter((h) => h.provider === p.id && h.date <= ret.to).reduce((s, h) => s + Math.round((h.gross ?? 0) * 100), 0) / 100;
+        return [{ ...c, ...(before ? { before } : {}), ...(missing ? { held: missing } : {}) }];
+      });
       if (clearing.length) ret.clearing = clearing;
       const earlier = input.return as PeriodReturn | undefined;
       if (earlier && !sameFigures(earlier, ret)) ret.reviewedBefore = { payable: earlier.payable };

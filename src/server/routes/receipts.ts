@@ -7,14 +7,14 @@ import { entriesWithoutTheirReceipts, removeReceipt } from '../../accounting/cla
 import { parseVatFacts } from '../../accounting/vat-facts.js';
 import { assertReceiptFieldsOpen, privatePayment, setReceipt, unbookedPayments } from '../edits.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
-import { bookReportCorrection } from '../../intake/sales-report-import.js';
+import { bookHeldOrder, bookReportCorrection } from '../../intake/sales-report-import.js';
 import type { PrivatePart } from '../../types/assistant.js';
 import { bookAgain } from './automation.js';
 import { ask } from '../../llm/ask.js';
 import { buildVisionPrompt } from '../../llm/prompts.js';
 import { visionVerdict } from '../../intake/unclear.js';
 import { findFile } from '../../workspace/workspace.js';
-import { orderPagesIn, vatCorrectionsIn } from '../../intake/pair-chain.js';
+import { orderPagesIn, providerIssuesIn, vatCorrectionsIn } from '../../intake/pair-chain.js';
 import { forgetReadFacts } from '../../intake/vat.js';
 import { isNoReceipt, referenced, refsOf } from '../../books/discard.js';
 import { WS, receiptPath, assertOpen, receiptDates, refDates, readBooks, updateBooks, updateBooksWithEffects, withBooks, RequestError, patchBody, stringField } from '../books.js';
@@ -97,6 +97,10 @@ router.get('/api/receipts/order-pages', (_req, res) => {
 
 router.get('/api/receipts/vat-corrections', (_req, res) => {
   res.json(vatCorrectionsIn(WS, readBooks()));
+});
+
+router.get('/api/receipts/provider-issues', (_req, res) => {
+  res.json(providerIssuesIn(WS, readBooks()));
 });
 
 router.get('/api/receipts/:id', (req, res) => {
@@ -297,6 +301,25 @@ router.post('/api/receipts/:id/report-correction', (req, res) => {
     if (on !== undefined) assertOpen(books, [on], 'newEntry');
     const done = bookReportCorrection(WS, books, req.params.id, order, date, { ...(on !== undefined ? { on } : {}) });
     if (!done.ok) throw new RequestError(done.why === 'gone' ? 404 : 409, done.why === 'gone' ? 'Diesen Verkaufsbericht gibt es nicht (mehr).' : 'Diese Rückerstattung bietet der Bericht nicht (mehr) als Korrektur an.', { code: 'reportCorrection', params: { why: done.why } });
+    assertOpen(books, done.entries.map((e) => e.date), 'newEntry');
+    return { ok: true, entries: done.entries };
+  });
+});
+
+/**
+ * «Aufteilen und buchen» (#405): an order the sales report `:id` holds, booked by the person in parts by rate
+ * (src/intake/sales-report-import.ts bookHeldOrder), the parts adding up to its gross; its day must be open.
+ */
+router.post('/api/receipts/:id/held-order', (req, res) => {
+  const b = patchBody(req.body, ['order', 'parts']);
+  const order = stringField(b, 'order').trim();
+  const parts = Array.isArray(b.parts) ? b.parts.map((x: unknown) => (x && typeof x === 'object' ? { amount: Number((x as Record<string, unknown>).amount), rate: Number((x as Record<string, unknown>).rate) } : { amount: NaN, rate: NaN })) : [];
+  if (!order || !parts.length || parts.some((x: { amount: number; rate: number }) => !Number.isFinite(x.amount) || !Number.isFinite(x.rate))) throw new RequestError(400, 'order und parts ([{ amount, rate }]) erwartet.');
+  withBooks(res, (books) => {
+    const held = books.receipts.find((r) => r.id === req.params.id)?.report?.held?.find((h) => h.order === order);
+    if (held?.date) assertOpen(books, [held.date], 'newEntry');
+    const done = bookHeldOrder(WS, books, req.params.id, order, parts);
+    if (!done.ok) throw new RequestError(done.why === 'gone' ? 404 : done.why === 'notHeld' ? 409 : 400, `Bestellung ${order} nicht gebucht (${done.why}).`, { code: 'heldOrder', params: { why: done.why } });
     assertOpen(books, done.entries.map((e) => e.date), 'newEntry');
     return { ok: true, entries: done.entries };
   });

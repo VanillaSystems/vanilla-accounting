@@ -8,7 +8,7 @@
 
 import type { AccountChoice, UnknownAccount } from './api-error.js';
 import type { OtherWhy, SupportingWhy } from '../core/modules/schema.js';
-import type { TwinWhy } from './index.js';
+import type { ClearingBefore, TwinWhy } from './index.js';
 import type { CsvAsk, CsvColumns, ReadBy, ReadStatement, StatementRead } from './statement-read.js';
 
 /** What a file is. Unset while nobody knows (the row asks). */
@@ -184,6 +184,12 @@ export interface ReportSummary {
   other: number; ways: string[]; waysMore: number; test: number; unpaid: number;
   held: ReportHeld[]; heldMore: number; unread: number; proofs: number;
   corrections: string[];
+  /**
+   * What the provider held on its cut-over day and paid out in its first payouts (#405, src/booking/providers.ts
+   * clearingBefore): the drop row asks it once as the clearing account's opening (PUT /api/opening-balances/:year/:account),
+   * `amount` proposed where the payments export lets code compute it. Absent once the account has its opening.
+   */
+  opening?: ClearingBefore;
 }
 
 /** `duplicate`: the same bytes; `possible-duplicate`: the same facts, asked; `same`: the person said it is the same; `not-receipt`: its words say so (`document` says what it is). */

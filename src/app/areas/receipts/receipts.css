@@ -181,3 +181,9 @@
 /* Receipts that wait for the AI's reading on a Mac without one: a fact, the way to an AI and the way by hand (ReadingWaits.tsx). */
 .readwaits { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 0 0 16px; font-size: 12.5px; line-height: 1.5; color: var(--ink-2); }
 .readwaits .linkbtn { font-size: 12.5px; }
+
+/* A sales report's held orders, one per line, and the split of a cart of two VAT rates (#405, ReportHeld.tsx). */
+.heldline { display: block; }
+.heldsplit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 2px; }
+.heldpart { display: inline-flex; gap: 4px; }
+.heldpart input { width: 7em; }

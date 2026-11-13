@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Index } from '../../types/index.js';
 import { setAccounts, setStandardAccounts } from '../lib/accounts.js';
-import { setOrderPages, setVatCorrections } from '../lib/order-pages.js';
+import { setOrderPages, setProviderIssues, setVatCorrections } from '../lib/order-pages.js';
 import { api } from '../lib/api.js';
 import { setJurisdiction } from '../../engines/index.js';
 
@@ -21,11 +21,13 @@ export function useIndex() {
       api.orderPages().catch(() => ({})),
       api.vatCorrections().catch(() => ({})),
       api.standardAccounts().catch(() => []),
-    ]).then(([json, accounts, modules, orderPages, corrections, standard]) => {
+      api.providerIssues().catch(() => undefined),
+    ]).then(([json, accounts, modules, orderPages, corrections, standard, providerIssues]) => {
       setAccounts(accounts);
       setStandardAccounts(standard);
       setOrderPages(orderPages);
       setVatCorrections(corrections);
+      setProviderIssues(providerIssues);
       setJurisdiction(modules.effective, modules.vat);
       setData(json);
       setLoading(false);

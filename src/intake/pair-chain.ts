@@ -13,10 +13,12 @@
  * a person asks with the button; a pair a person took apart is never a candidate (Receipt.notPaidBy).
  */
 import type { Receipt, BankTransaction } from '../types/index.js';
-import { periodLock, type Books } from '../books/store.js';
+import { periodLock, release, type Books } from '../books/store.js';
 import type { Ask, BooksPort } from './pipeline.js';
 import { numbersIn } from '../accounting/document-numbers.js';
-import { baseCurrency } from '../engines/index.js';
+import { baseCurrency, withoutInputTax } from '../engines/index.js';
+import { providerIssuesOf, type ProviderIssues } from '../booking/provider-issues.js';
+import { localToday } from '../accounting/periods.js';
 import { loadFxResolver, type FxResolver } from '../accounting/fx-rates.js';
 import { SHORT_LIST, chainMade, freeFor, pairMapping, pairablePayment, slotOf, pairableReceipt, searchPairs, signalsOfCandidate, stagesOf, takenPayments, type Maker, type PairCandidate, type PairStage, type Signal, type ToChf } from './pairing.js';
 import { legOf } from '../workspace/money-accounts.js';
@@ -32,6 +34,7 @@ import { loadClassifyContext } from '../booking/classify.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { noPaymentOf, orderPagesOf, type OrderPage } from '../booking/order-pages.js';
 import { providersOf } from './sales-report-import.js';
+import { isProvider, providerOfMoneyIn } from '../booking/providers.js';
 import { vatCorrectionsOf, type VatCorrection } from '../booking/vat-corrections.js';
 import type { Counterparty } from '../knowledge/counterparties.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
@@ -129,6 +132,23 @@ export function vatCorrectionsIn(ws: Pick<Workspace, 'paths'>, books: Parameters
 /** The order pages of the provider way nothing is linked to yet, by receipt id (src/booking/order-pages.ts, #253): Belege shows where each stands instead of a missing payment. */
 export function orderPagesIn(ws: Pick<Workspace, 'paths'>, books: Parameters<typeof orderPagesOf>[0]): Record<string, OrderPage> {
   return Object.fromEntries(orderPagesOf(books, providersOf(ws)));
+}
+
+/** What the payment providers' reports leave open (src/booking/provider-issues.ts, #405): held orders, months whose fees wait for the provider's bill. */
+export function providerIssuesIn(ws: Pick<Workspace, 'paths'>, books: Parameters<typeof providerIssuesOf>[0] & Pick<Books, 'transactions' | 'mappings' | 'config'>, today = localToday()): ProviderIssues {
+  const counterparties = counterpartiesOf(ws);
+  const providers = counterparties.filter(isProvider);
+  const out = providerIssuesOf(books, providers, { inputTax: !withoutInputTax(), today });
+  if (!providers.length) return out;
+  const lock = periodLock(books as Books);
+  const byId = new Map(books.receipts.map((r) => [r.id, r]));
+  for (const tx of books.transactions) {
+    if (tx.direction !== 'CRDT' || lock.isClosed(tx.date)) continue;
+    const linked = books.mappings.flatMap((m) => (m.transactionRef === tx.ref && byId.has(m.receiptId) ? [byId.get(m.receiptId)!] : []));
+    const p = providerOfMoneyIn(tx, linked, counterparties);
+    if (p) out.payouts[tx.ref] = p.name;
+  }
+  return out;
 }
 
 /** Amounts in the books' currency at the official daily rate of the day (the flat rate only where no daily rate is known: fine for a candidate's proximity, never for booking). */
@@ -348,6 +368,8 @@ export function takeOver(index: Pick<Books, 'mappings' | 'journalEntries'>, refs
   const theirs = index.mappings.filter((m) => refs.includes(m.transactionRef) || m.receiptId === old);
   if (!theirs.length || theirs.some((m) => m.receiptId !== old || !refs.includes(m.transactionRef) || !chainMade(m))) return false;
   if (index.journalEntries.some((e) => refs.includes(e.transactionRef) && !appBooked(e))) return false;
+  // The chain's own link it replaces: let go on purpose (the write door, #405).
+  release(index as Books, { mappings: theirs });
   index.mappings = index.mappings.filter((m) => !theirs.includes(m));
   return true;
 }
