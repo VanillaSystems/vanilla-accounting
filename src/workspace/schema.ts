@@ -56,8 +56,11 @@ export const BOOKS_SCHEMA = 9;
  * 2: every money account names its `role` (#88).
  * 3: `company.vat.reportingSince`, the year the basis began (#143). An app of schema 2 would read
  * past it and declare a document of an earlier agreed year on its payment's date, so it must refuse.
+ * 4: `company.uid` may be absent (#452): the setup does not ask it; the VAT XML and an invoice with
+ * VAT ask for it when they need it. An app of schema 3 would refuse such a manifest with «company.uid
+ * must be a non-empty text» instead of saying the app is too old, so it must refuse by the number.
  */
-export const WORKSPACE_SCHEMA = 3;
+export const WORKSPACE_SCHEMA = 4;
 /**
  * 2: a line may be priced with the VAT in it (`InvoiceLine.vatIncluded`, a credit note of «500 VAT
  * included»). An app of schema 1 would read that price as net and add the VAT to it, so it must refuse.
@@ -98,6 +101,8 @@ export const MANIFEST_MIGRATIONS: Ladder<Document> = {
   },
   // No manifest has the year yet: absent means the basis holds since before the books.
   2: (doc) => doc,
+  // Every manifest before has its UID: nothing changes; the number makes an older app refuse one without it.
+  3: (doc) => doc,
 };
 
 /** The manifest document named at the current schema: its `schema:` set where it stands (its comments with it), else added as the first key. */

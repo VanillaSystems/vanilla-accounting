@@ -143,6 +143,10 @@ Two markers flag an entry you must read before you update:
   kind of firm's answer, else that one, books nothing differently and is shown as assumed in the
   books. The form drops «Was die Firma tut» and «Wohin die Bücher Ende Jahr gehen» (the first
   stays under Firma › Firma, the second is `--export-to` of `npm run init`; nothing reads it yet) and says how many of its questions are answered.
+  The name field is just «Firmenname» (also in `npm run init`), no longer «wie im Handelsregister».
+  Manifest schema 4: `company.uid` may be absent. A manifest of schema 3 loads unchanged (every one
+  has its UID); `npm run update` writes 4, and an app of schema 3 refuses a manifest of 4 with
+  «Update the app» instead of failing on the missing UID.
 - «Buchen» waiting for «Einschalten» holds every booking by the firm's rules or the AI (#413): a
   rule or business file changed outside the app's own controls (by hand, by git, an AI's draft not
   kept) no longer acts on the next drop or mail. The inbox still reads, matches and links, but books

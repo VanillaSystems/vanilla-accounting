@@ -226,7 +226,7 @@ async function main(): Promise<string> {
   const presetStop = firstUnsupported(PRESETS[preset].answers as Answers);
   if (presetStop) throw new Stop(`${PRESETS[preset].label}: ${presetStop.option.unsupported}`, 2);
 
-  const name = await text('name', 'Company name (as in the commercial register)');
+  const name = await text('name', 'Company name');
   const slug = name.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   const root = resolve(await text('dir', 'Folder for the books', undefined, interactive ? join(APP_ROOT, '..', `${slug}-books`) : undefined));
 

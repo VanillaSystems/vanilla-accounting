@@ -55,7 +55,7 @@ books.
 
 What it asks:
 
-- **Who the company is:** its name as in the commercial register and the owner or managing
+- **Who the company is:** its name and the owner or managing
   director. The UID (CHE-123.456.789, on [uid.admin.ch](https://www.uid.admin.ch)) is not asked:
   enter it under Firma › Firma when you have it. The first invoice with VAT and the VAT return ask
   for it.
