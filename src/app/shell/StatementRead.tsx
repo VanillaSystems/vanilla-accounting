@@ -63,7 +63,14 @@ type Shown = Omit<Read, 'statement' | 'check'> & { statement: PdfTable };
  * file may still be a receipt (the drop row); `save`: a kept PDF's table, saved as it is (no import),
  * its closing balance left empty when she types none.
  */
-export function StatementRead({ read, pdf, act, go, asReceipt, save: saveTable }: { read: Shown; pdf: boolean; act?(action: ReadAction): Promise<unknown>; go(route: Route): void; asReceipt?: () => void; save?(table: PdfTable): Promise<unknown> }) {
+export function StatementRead({ read, pdf, act, go, asReceipt, columns, aside, save: saveTable }: {
+  read: Shown; pdf: boolean; act?(action: ReadAction): Promise<unknown>; go(route: Route): void; asReceipt?: () => void;
+  /** A CSV's table: its column question again (#425). */
+  columns?: () => void;
+  /** A CSV's table: the file out of the drop, nothing in the books (#425). */
+  aside?: () => void;
+  save?(table: PdfTable): Promise<unknown>;
+}) {
   const facts = !!saveTable;
   const [draft, setDraft] = useState(() => draftOf(read.statement));
   const [busy, setBusy] = useState(false);
@@ -93,6 +100,8 @@ export function StatementRead({ read, pdf, act, go, asReceipt, save: saveTable }
   const knownCount = known.filter(Boolean).length;
   // Nothing to read in: a CSV beside a bank export, or a PDF whose every day a structured source covers.
   const stuck = !!read.covered && (read.by === 'csv' || !!read.whole);
+  // A CSV that does not add up, or has nothing to read in, ends with a way out (#425): other columns, or the file set aside.
+  const wayOut = read.by === 'csv' && !facts && (stuck || (!!check && !check.ok));
   const keep = async () => {
     setBusy(true);
     try { await act?.({ kind: 'keep', ...(full ? { statement: full } : {}) }); } finally { setBusy(false); }
@@ -173,6 +182,7 @@ export function StatementRead({ read, pdf, act, go, asReceipt, save: saveTable }
           : check!.gaps.map((g, i) => <span key={i}>{gapText(g, statement.currency)}</span>)}
         {statement && knownCount ? <span className="m">{t('drop.read.knownCount', { n: knownCount })}</span> : null}
       </div>
+      {wayOut && !stuck ? <p className="dwhy" data-testid="drop-read-wayout">{t('drop.read.csvGap')}</p> : null}
       {facts ? (
         <div className="dread-acts">
           <small className="m">{t('drop.read.factsSave')}</small>
@@ -180,6 +190,8 @@ export function StatementRead({ read, pdf, act, go, asReceipt, save: saveTable }
         </div>
       ) : <div className="dread-acts">
         {asReceipt ? <button type="button" className="linkbtn" onClick={asReceipt}>{t('drop.isReceipt')}</button> : null}
+        {wayOut && columns && !stuck ? <button type="button" className="linkbtn" data-testid="drop-read-columns" disabled={busy} onClick={columns}>{t('drop.read.columns')}</button> : null}
+        {wayOut && aside ? <button type="button" className={stuck ? 'btn primary' : 'btn'} data-testid="drop-read-aside" disabled={busy} onClick={aside}>{t('drop.read.aside')}</button> : null}
         {pdf ? <button type="button" className={stuck ? 'btn primary' : 'btn'} data-testid="drop-read-keep" disabled={busy} data-tip={t('drop.read.keepTip')} onClick={() => void keep()}>{t('drop.read.keep')}</button> : null}
         {stuck ? null : <button type="button" className="btn primary" data-testid="drop-read-import" disabled={!check?.ok || busy} data-tip={check?.ok ? undefined : t('drop.read.importBlocked')} onClick={() => void importIt()}>{t('drop.read.import')}</button>}
       </div>}

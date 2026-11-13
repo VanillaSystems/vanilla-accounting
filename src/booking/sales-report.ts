@@ -150,15 +150,24 @@ export function recognizeReport(text: string, providers: ReadonlyArray<{ id: str
 }
 
 /**
- * A provider's export the app books nothing from (its payouts list, #406), by the headers its file
- * names under `otherExports`, all of them in the first line: of exactly one provider, else nothing.
+ * How many columns a provider's other export must name, all of them in the first line, to be named for
+ * a firm whose knowledge does not have the provider yet (#425): a signature that specific is no bank's
+ * export. The firm's own provider (`own`) is named by all its file names, two at the least (#406).
  */
-export function recognizeOtherExport(text: string, providers: ReadonlyArray<{ id: string; provider: Pick<ProviderFacts, 'otherExports'> }>): { provider: string; what: OtherExport } | undefined {
+export const OTHER_EXPORT_SIGNATURE = 4;
+
+/**
+ * A provider's export the app books nothing from (its payouts list, #406), by the headers its file
+ * names under `otherExports`, all of them in the first line (each a whole column name): of exactly
+ * one provider, else nothing. A provider the firm does not have counts only with a signature of
+ * `OTHER_EXPORT_SIGNATURE` columns or more (#425).
+ */
+export function recognizeOtherExport(text: string, providers: ReadonlyArray<{ id: string; own: boolean; provider: Pick<ProviderFacts, 'otherExports'> }>): { provider: string; what: OtherExport } | undefined {
   const header = csvRows(text.slice(0, 8192))[0];
   if (!header) return undefined;
   const heads = new Set(header.map(norm));
   const hits = providers.flatMap((p) => Object.entries(p.provider.otherExports ?? {})
-    .filter(([, names]) => names!.every((n) => heads.has(norm(n))))
+    .filter(([, names]) => (p.own || names!.length >= OTHER_EXPORT_SIGNATURE) && names!.every((n) => heads.has(norm(n))))
     .map(([what]) => ({ provider: p.id, what: what as OtherExport })));
   return hits.length === 1 ? hits[0] : undefined;
 }
