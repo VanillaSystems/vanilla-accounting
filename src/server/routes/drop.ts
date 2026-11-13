@@ -36,6 +36,8 @@ import { importSalesReport, recognizeCsv, removeSalesReport, setProviderAccount 
 import { accountName, removeAccount, setAccountName } from '../../workspace/accounts-write.js';
 import { assertPlaced } from '../edits.js';
 import { asHerAct, bookPayouts, readyPayouts } from '../provider-payouts.js';
+import { bookingWaits } from '../booking-waits.js';
+import { keepWaitingReport, takeWaitingReportsIfOn } from '../waiting-reports.js';
 
 import type { Arrival } from '../../workflows/model.js';
 import { firstPages, recognize } from '../../intake/recognize.js';
@@ -616,6 +618,8 @@ function toItsExport(s: DropSession): boolean {
 }
 
 async function takeRows(s: DropSession): Promise<void> {
+  // Reports a closed drop kept while «Buchen» waited are taken once it books again (#413).
+  takeWaitingReportsIfOn();
   for (const row of s.rows) {
     if (row.state === 'quarantine' && !row.quarantined && existsSync(fileOf(s.id, row.key))) {
       const why = OTHER_WHY.find((w) => w === row.document);
@@ -627,6 +631,10 @@ async function takeRows(s: DropSession): Promise<void> {
     const bytes = readFileSync(fileOf(s.id, row.key));
     if (row.kind === 'sales-report') {
       // A provider's report is booked here, by code, as a statement is read: it needs no run of the inbox (#203).
+      // It books by the provider's file: while «Buchen» waits for «Einschalten» it waits in its row (#413).
+      const waits = bookingWaits();
+      if (waits) { Object.assign(row, { state: 'unclear', reason: 'booking-waits', bookingWaits: waits }); continue; }
+      delete row.bookingWaits;
       // An error refuses this row only: the session is saved, the other rows are taken.
       let done: ReturnType<typeof importSalesReport>;
       try {
@@ -739,6 +747,8 @@ router.delete('/api/drop/:id', (req, res) => inSession(req.params.id, async () =
   const s = load(req.params.id);
   for (const row of s.rows) {
     if (row.state === 'duplicate' && row.reason === 'possible-duplicate') Object.assign(row, { state: 'take', reason: undefined });
+    // A report waiting for «Einschalten» (#413) is kept for it, never put in quarantine: «Einschalten» takes it.
+    else if (row.reason === 'booking-waits' && existsSync(fileOf(s.id, row.key))) Object.assign(row, { state: 'taken', waitingReport: keepWaitingReport(row.name, readFileSync(fileOf(s.id, row.key))) });
     else if (row.state === 'locked' || row.state === 'unclear') Object.assign(row, { state: 'quarantine', reason: 'held' });
     // A statement still asking in the row (its account, its columns, a table no account takes yet) waits in quarantine; one kept with its question waits in the books (#254).
     else if (row.state === 'asks' && !row.asked) Object.assign(row, { state: 'quarantine', reason: 'held' });

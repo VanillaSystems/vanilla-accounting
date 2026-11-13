@@ -8,6 +8,8 @@ import { join } from 'node:path';
 import { tempWorkspace, writeIndex } from './workspace.js';
 import { workspaceAt, type Workspace } from '../../src/workspace/workspace.js';
 import { loadBooks } from '../../src/books/store.js';
+import { openSwitch } from '../../src/workflows/switch-on.js';
+import { loadWorkflows } from '../../src/workflows/load.js';
 
 const REPO = process.cwd();
 
@@ -33,6 +35,12 @@ export interface ApiServer {
   rest(): Promise<void>;
   /** Ends the server and waits for its exit before removing its folders: a run it drives may still write. */
   stop(): Promise<void>;
+  /**
+   * Takes the workflows' company parts as they are now as switched on, as a person would have before
+   * the test (the files a test writes into the workspace are its setup, not a change from elsewhere,
+   * which makes the booking wait for «Einschalten», #413). Nothing is booked by it.
+   */
+  switchedOn(): void;
 }
 
 /**
@@ -103,6 +111,16 @@ export async function startApi(fixture: string, env: Record<string, string> = {}
         await new Promise((r) => setTimeout(r, 50));
       }
       throw new Error('the runs did not come to rest');
+    },
+    switchedOn() {
+      const was = process.env.VANILLA_APPROVALS_DIR;
+      process.env.VANILLA_APPROVALS_DIR = outside[1];
+      try {
+        const sw = openSwitch(ws);
+        for (const w of loadWorkflows(REPO, root).workflows) sw.approve(w);
+      } finally {
+        if (was === undefined) delete process.env.VANILLA_APPROVALS_DIR; else process.env.VANILLA_APPROVALS_DIR = was;
+      }
     },
     async stop() {
       if (server.exitCode === null && server.signalCode === null) await new Promise((resolve) => { server.once('exit', resolve); server.kill(); });

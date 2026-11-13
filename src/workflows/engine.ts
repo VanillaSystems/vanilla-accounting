@@ -6,6 +6,7 @@
  * write to the books through update() with the run as actor, so a crash or a rerun never books
  * twice. Events a finished run emits start the workflows that listen; schedules start theirs.
  */
+import { brokenPart } from './switch-on.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { emptyBooks, hasBooks, loadBooks, periodLock, update, updateSaved, type Actor, type Books } from '../books/store.js';
 import { stemOf, type BooksPort } from '../intake/pipeline.js';
@@ -38,6 +39,8 @@ export interface EngineDeps {
   limits?: { ai: number; other: number };
   /** A company version of a workflow runs live only when approved; the app's are approved by definition. */
   isApproved?: (w: WorkflowDecl) => boolean;
+  /** The files of a workflow's company part changed since it was switched on, or undefined when it runs as switched on (src/workflows/switch-on.ts pending). */
+  pending?: (w: WorkflowDecl) => { files: string[] } | undefined;
   /** Switches a workflow's waiting version on (app-local, out of the workspace's reach). */
   approve?: (w: WorkflowDecl) => void;
   /** Called once a run came to rest and its run-log line (if any) is written: the records path commits here. */
@@ -98,6 +101,20 @@ export function openEngine(workspace: () => Workspace, deps: EngineDeps): Engine
   let waiters: Array<() => void> = [];
 
   const workflow = (id: string) => declared.workflows.find((w) => w.id === id);
+  /** What a workflow waits for «Einschalten» with: the files changed since it was switched on; undefined when it runs as switched on. */
+  const waitsOf = (id: string): readonly string[] | undefined => {
+    const w = workflow(id);
+    // A workflow whose company overlay does not load waits, never runs as switched on (#413).
+    if (!w) return brokenPart(id, workspace().paths.root, declared.problems);
+    return deps.pending ? deps.pending(w)?.files : isApproved(w) ? undefined : [];
+  };
+  /** A change the app's own code makes to the company's knowledge from what was confirmed: every workflow switched on before it stays switched on (switch-on.ts keepSwitchedOn). */
+  const keepSwitchedOn = <T,>(change: () => T): T => {
+    const on = declared.workflows.filter((w) => isApproved(w));
+    const out = change();
+    for (const w of on) if (!isApproved(w)) deps.approve?.(w);
+    return out;
+  };
   /**
    * A step saves the run it started from; what a drop or a person added meanwhile (arrivals, the
    * «Geprüft» mark) stays: only annotate() writes those.
@@ -289,7 +306,7 @@ export function openEngine(workspace: () => Workspace, deps: EngineDeps): Engine
       return move(done, !target || target.to === 'end' ? { status: 'done', finishedAt: now() } : { status: 'running', at: target.step, since: now() });
     }
     try {
-      const result = await action.run(inputs, effects, { ws: workspace(), ask, now, run: { id: run.id, mode: run.mode }, later: () => laterFiles(run), arrivals: (change) => annotate(run.id, { arrived: change(runs.get(run.id)?.arrived ?? []) }) });
+      const result = await action.run(inputs, effects, { ws: workspace(), ask, now, run: { id: run.id, mode: run.mode }, waits: waitsOf, keepSwitchedOn, later: () => laterFiles(run), arrivals: (change) => annotate(run.id, { arrived: change(runs.get(run.id)?.arrived ?? []) }) });
       record.outcome = result.outcome;
       const output = result.output ?? {};
       const extra = Object.keys(output).filter((k) => !step.emits.includes(k));
@@ -595,6 +612,9 @@ export function openEngine(workspace: () => Workspace, deps: EngineDeps): Engine
       case 'approve': {
         declared = loadWorkflows(deps.appRoot, workspace().paths.root);
         const w = workflow(cmd.workflow);
+        // What does not load cannot be switched on: the file is fixed or removed first (#413).
+        const problem = declared.problems.find((p) => p.workflow === cmd.workflow);
+        if (!w && problem) return { ok: false, refusal: 'not-loadable', detail: problem.message };
         if (!w) return { ok: false, refusal: 'not-found' };
         deps.approve?.(w);
         counter++;
