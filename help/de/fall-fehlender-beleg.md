@@ -2,7 +2,7 @@
 title: Ein Beleg fehlt
 summary: Eine Zahlung ist da, ihr Beleg nicht. Die App wartet auf ihn und fragt dich rechtzeitig vor der Abrechnung.
 section: faelle
-order: 7
+order: 8
 ---
 Eine Zahlung steht auf dem Kontoauszug, aber der Beleg dazu fehlt: verloren, noch nicht abgeholt oder nie ausgestellt. Ohne Beleg gibt es keine Vorsteuer. Die Ausgabe selbst bleibt geschäftlich.
 
