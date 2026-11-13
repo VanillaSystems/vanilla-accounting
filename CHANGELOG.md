@@ -340,6 +340,23 @@ Two markers flag an entry you must read before you update:
   oder dich …»), instead of opening the diagram; on a payment whose booking she deleted it asks first.
   A payment an account's reconciliation holds is booked by neither: the rule's card says it waits for
   the reconciliation.
+- A bill of several VAT groups (8.1 % and «0 % (Export)») is compared with all lines of its
+  payment (#406): two lines booked each at its group's rate raise no task any more; a rate booked
+  beyond what the bill shows at it does, naming the amount and rate the bill shows. «Nach Beleg
+  buchen» then books the payment's lines by the bill's groups, never one rate on a line the bill
+  shows at another.
+- The drop names a payment provider's payouts list as what it is and sets it aside, with the two
+  reports the app books from and where the provider's admin exports them (#406); it is never read
+  as a bank statement of empty lines. A CSV whose day and amount columns yield no movement is no
+  statement. A provider's file names such exports under `otherExports` and the report menus under
+  `exportedAt` (processes/README.md).
+- A provider's monthly fee bills dropped read «3 Monatsrechnungen von Shopify: MWST der Gebühren
+  gebucht», not «einer Zahlung zugeordnet»: they have no payment (#406).
+- The sale question for a transfer that names an order of a provider's order export, one the
+  provider did not collect, proposes from that order's tax and says so (#406).
+- MWST: a rate row's turnover (Ziffer 303 and the others) is the figure the return files, as the
+  review and the XML show it; it was the nets rounded per entry plus the tax on the total, Rappen
+  off (#406). No filed figure changes.
 - The setup conversation keeps its order after a typed message (#385): the message stands under the
   question it was typed at, above that question's answer, and the open question with its buttons
   stays under her newest message, also when the words took a step back. In the books the rail shows
