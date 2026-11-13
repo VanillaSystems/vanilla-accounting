@@ -92,6 +92,33 @@ Two markers flag an entry you must read before you update:
   on words that say what the payments are (#383): never on a document's word («Rechnung»), a
   statement's («Belastung», «Gutschrift») or the bank's wording of a payment («Zahlung», «Karte»,
   `payment` in modules/ch/documents.yaml), and only where the businesses it reaches agree in kind.
+- Drop without an AI (#384): a text PDF reads the total it labels as its total («Total CHF»,
+  «Gesamtbetrag», «Rechnungsbetrag», «Amount due», «Montant total» …, with its currency; also in a
+  column of amounts apart from its labels) when it shows no Swiss VAT: her own invoice of a sale
+  abroad, a foreign supplier's invoice in USD or EUR, an insurance premium. A gross the Swiss-rate
+  arithmetic proves still wins over a label line; a line of VAT, a base («auf …»), a payroll,
+  a sum insured, hours or a 0.00 due is never the total. The VAT is now also proven from a line that
+  names the rate on its base («MWST 8.1% auf …», «darin MWST 3.8% auf …»), the part without VAT at
+  0 %. A text that says it charges no Swiss VAT (modules/ch documents.yaml `noVat`: «von der MWST
+  ausgenommen», «not registered for VAT in Switzerland», «reverse charge» …) and shows no Swiss rate
+  and no Swiss VAT number reads «keine CH-MWST», provisionally: an AI reads it again when there is
+  one. A statement or two invoices in one PDF stay unread; the only amount of a document is its
+  total only on an invoice and never a unit price.
+- The drop's closing lines count every file once, in its row's words: statements, receipts, files
+  that are no receipt, were there already, wait for an answer in their row, were set aside or not
+  saved; also for a drop with nothing taken.
+- An order confirmation, a delivery note, a reminder or a customs assessment is no «kein Beleg» any
+  more: its row says «Auftragsbestätigung, gehört zu …» (or that its invoice is not in the books
+  yet) without an amount, Belege lists it beside «alle» («und 1 Begleitdokument») instead of hiding
+  it, and the invoice's detail names it. A total of 0.00 the AI read off it no longer keeps it from
+  its invoice.
+- A bank CSV whose payments the books hold already (the camt.053 of the same days, three payments
+  or more, or on the account its IBAN names) says «schon da» instead of asking for its columns,
+  with «Trotzdem übernehmen» as the way out; with known columns and one bank account it goes
+  straight to the check. «Ist ein Kontoauszug» shows only where a file can be one.
+- Belege shows a booked receipt without a date in its own group instead of hiding it; Kontoauszüge
+  counts files in its file view.
+
 - The bank's own fee (#359): a row of a bank's camt.053 export that the bank itself coded as its
   charge for the account or for payments («Kontoführung», a card's annual fee) is booked by the
   app, with or without an AI, on Bankspesen (6940) without a VAT code; a fee paid back the other

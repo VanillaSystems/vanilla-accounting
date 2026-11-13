@@ -16,7 +16,7 @@ import { homeFigures } from '../src/app/automation/home.js';
 import { dockWidget } from '../src/app/automation/widget.js';
 import { dockLine, heroLine, stageLines } from '../src/app/automation/words.js';
 import { ledgerOf, visible } from '../src/app/areas/receipts/model.js';
-import { dropSummary } from '../src/app/shell/drop-summary.js';
+import { dropSummary, readOf, receiptStateOf } from '../src/app/shell/drop-summary.js';
 import { formatIn } from '../src/app/i18n/core.js';
 import de from '../src/app/i18n/locales/de.js';
 
@@ -80,7 +80,9 @@ test('the dock, Automatisierung, Belege and the drop dialog say the same of one 
   // The drop that brought the files of Q3 in, its possible copies as the dialog finds them.
   const q3 = new Set(visible(ledger, Q3, undefined, undefined).rows.map((v) => v.r.id).concat(['photo']));
   const rows = books.receipts.filter((r) => q3.has(r.id)).map((r): DropRow => ({ key: r.id, id: r.id, name: r.filename, size: 1, state: 'taken' }) as DropRow);
-  const drop = dropSummary(rows, books, () => false, new Set(), (row) => books.receipts.find((r) => r.id === row.id), [], (id) => ledger.byId.get(id)?.twin?.relation === 'duplicate').receipts!;
+  const groupOf = (row: DropRow) => { const r = books.receipts.find((x) => x.id === row.id)!; return receiptStateOf(r, books.mappings.filter((m) => m.receiptId === r.id).length, ledger.byId.get(r.id)?.twin?.relation === 'duplicate'); };
+  const files = dropSummary(rows, books, () => false, new Set(), [], groupOf).files!;
+  const drop = { ...readOf(files), n: rows.length - files.none - files.supporting, copies: files.copy, incomplete: files.incomplete };
 
   // Q3 holds: till-1 (by its payment), invoice-q3, invoice-sept, no-date (undated, the working period's), both copies, the photo.
   assert.equal(page.hero.split(',')[0], t('automation.home.hero.collected', { n: 7 }), 'the page: «7 Belege gesammelt»');

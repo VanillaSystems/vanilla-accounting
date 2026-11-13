@@ -11,6 +11,7 @@ import type { Receipt } from '../../types/index.js';
 import { filingKeyOf, inPeriod, parsePeriod, type FilingLength, type IsoDate, type Period } from '../../accounting/periods.js';
 import { waitsForReading } from '../../parsers/receipt-text.js';
 import { isNoReceipt } from '../../books/discard.js';
+import type { TwinWhy } from '../../types/index.js';
 
 export interface DropSummary {
   /** The payments the drop's statements added to the books. */
@@ -26,28 +27,104 @@ export interface DropSummary {
     openFrom?: IsoDate;
   };
   /**
-   * The receipts the drop brought into the books, as their rows and Belege say it (#361): read (its
-   * text is there, a PDF's own or the model's), and of those linked to a payment or not; waiting for
-   * the model's reading (`waitsForReading`, Belege's «warten aufs Lesen»); and the files the reading
-   * found no receipt at all (`isNoReceipt`), set aside and counted apart.
+   * Every file of the drop in exactly one group of the closing lines (#384), as its row says it:
+   * the counts add up to the files dropped. Absent while nothing was taken.
    */
-  receipts?: { n: number; read: number; matched: number; unmatched: number; copies: number; incomplete: number; unread: number; none: number };
+  files?: ClosingCounts;
 }
 
 /**
  * Where one receipt of a drop is, the one answer its row and the closing sentence both give (#361):
- * linked to a payment; no receipt at all (Belege's «kein Beleg»); a possible copy of one in the books
- * («schon da?»); waiting for its reading; read with its date and amount, no payment yet; or read
- * with its date or amount missing, waiting for the person.
+ * linked to a payment; a document beside an invoice (an order confirmation, a delivery note, a
+ * customs assessment: evidence, #384, never «kein Beleg»); no receipt at all (Belege's «kein
+ * Beleg»); a possible copy of one in the books («schon da?»); waiting for its reading; read with its
+ * date and amount, no payment yet; or with its date or amount missing, waiting for the person.
  */
-export type ReceiptState = 'matched' | 'none' | 'copy' | 'unread' | 'read' | 'incomplete';
+export type ReceiptState = 'matched' | 'supporting' | 'none' | 'copy' | 'unread' | 'read' | 'incomplete';
 
 export function receiptStateOf(r: Receipt, links: number, copy: boolean): ReceiptState {
   if (links > 0) return 'matched';
+  if (r.kind === 'supporting') return 'supporting';
   if (isNoReceipt(r, links)) return 'none';
   if (copy) return 'copy';
   if (waitsForReading(r)) return 'unread';
-  return r.date && r.amount !== undefined ? 'read' : 'incomplete';
+  return r.date && r.amount ? 'read' : 'incomplete';
+}
+
+/**
+ * Where one taken file is, read from the books and its run: still in its step (said as Belege says
+ * it, #218: «Sucht die Zahlung …», «Wartet (3 vor diesem)»), read, matched, waiting for a person,
+ * its run stopped, or set aside by the run with the reason.
+ */
+export type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'unread' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'orderPage'; provider: string } | { kind: 'stuck'; run: string } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string }
+  | { kind: 'none'; why: string } | { kind: 'twin'; of: string; name: string; why: TwinWhy } | { kind: 'supporting'; why?: string; of?: { id: string; name: string } };
+
+/**
+ * The groups of a drop's closing lines (#384). Every row is in exactly one, in its own words: a
+ * statement read in, a report booked, a receipt by its state (receiptStateOf), an order page, a run
+ * that stopped, a file the books had already («nicht übernommen: schon da», «schon eingelesen»), one
+ * that waits for an answer in its row (columns, a password, «was ist das?», «schon da?»), one set
+ * aside or not saved, one taken back, and one still worked on.
+ */
+export const CLOSING_GROUPS = ['statement', 'report', 'matched', 'read', 'supporting', 'beside', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'none', 'known', 'asks', 'aside', 'refused', 'undone', 'working'] as const;
+export type ClosingGroup = typeof CLOSING_GROUPS[number];
+export type ClosingCounts = Record<ClosingGroup, number>;
+
+/** The group of one row: `x`, its FileState when taken (the row's own chip). */
+export function closingGroupOf(r: DropRow, x: FileState | undefined): ClosingGroup {
+  switch (r.state) {
+    case 'take': return 'working';
+    case 'undone': return 'undone';
+    case 'refused': return 'refused';
+    case 'locked': case 'unclear': case 'asks': return 'asks';
+    case 'quarantine': return r.reason === 'not-receipt' ? 'none' : 'aside';
+    case 'duplicate': return r.reason === 'possible-duplicate' ? 'asks' : 'known';
+    case 'taken': break;
+  }
+  if (r.readAs) return 'known';
+  switch (x?.kind ?? 'working') {
+    case 'working': return 'working';
+    case 'statement': return 'statement';
+    case 'report': return 'report';
+    case 'refused': return 'refused';
+    case 'matched': return 'matched';
+    case 'read': return 'read';
+    case 'unread': return 'unread';
+    case 'waits': return 'incomplete';
+    case 'orderPage': return 'orderPage';
+    case 'stuck': return 'stuck';
+    case 'none': return 'none';
+    case 'twin': return 'copy';
+    case 'supporting': return x!.kind === 'supporting' && x.of ? 'supporting' : 'beside';
+  }
+}
+
+/**
+ * The receipts a drop read (#385's one «gelesen», `receiptRead`): linked to a payment, or read
+ * without one, a possible copy and one that lacks its date or amount among the latter, said apart too.
+ */
+export const readOf = (f: ClosingCounts) => ({ read: f.matched + f.read + f.copy + f.incomplete, matched: f.matched, unmatched: f.read + f.copy + f.incomplete });
+
+/**
+ * The closing lines' sentences (#384): the payments line holds the statements, the read line the
+ * receipts linked or read (`readOf`); every other group has its sentence, in this order, the
+ * receipts' first, then the files that brought nothing new or wait in their row. A record over the
+ * groups, so a new group without its sentence does not compile (tests/drop-landed.test.ts).
+ */
+export const CLOSING_SENTENCE = {
+  supporting: 'drop.sum.supporting', beside: 'drop.sum.beside', copy: 'drop.sum.copies', incomplete: 'drop.sum.incomplete', unread: 'drop.sum.unread',
+  orderPage: 'drop.sum.orderPages', stuck: 'drop.sum.stuck', report: 'drop.sum.reports',
+  none: 'drop.sum.none', known: 'drop.sum.known', asks: 'drop.sum.asks', aside: 'drop.sum.aside', refused: 'drop.sum.refused', undone: 'drop.sum.undone', working: 'drop.sum.working',
+} as const satisfies Record<Exclude<ClosingGroup, 'statement' | 'matched' | 'read'>, string>;
+/** The receipts' sentences after the read line, and the line of the files that are no receipt or brought nothing new. */
+export const RECEIPT_SENTENCES = ['supporting', 'beside', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'report'] as const;
+export const OTHER_SENTENCES = ['none', 'known', 'asks', 'aside', 'refused', 'undone', 'working'] as const;
+
+/** How many rows are in each group: their sum is the number of rows. */
+export function closingCounts(rows: readonly DropRow[], groupOf: (r: DropRow) => ClosingGroup): ClosingCounts {
+  const counts = Object.fromEntries(CLOSING_GROUPS.map((g) => [g, 0])) as ClosingCounts;
+  for (const r of rows) counts[groupOf(r)]++;
+  return counts;
 }
 
 /**
@@ -110,14 +187,13 @@ export function landedPeriod(rows: readonly DropRow[], datesOf: DatesOf, current
 }
 
 /**
- * The summary of a session's taken rows. `isUnbooked`: the books' own answer (bank/model.ts);
- * `held`: the payments that wait for their receipt (receiptWaits); `receiptOf`: the receipt a row
- * became, when the books hold it; `questions`: the open ones.
+ * The summary of a session's rows. `isUnbooked`: the books' own answer (bank/model.ts); `held`: the
+ * payments that wait for their receipt (receiptWaits); `questions`: the open ones; `groupOf`: each
+ * row's closing group, from the state its row shows (closingGroupOf).
  */
 export function dropSummary(
-  rows: readonly DropRow[], books: Pick<Index, 'transactions' | 'mappings'>, isUnbooked: (t: BankTransaction) => boolean,
-  held: ReadonlySet<string>, receiptOf: (r: DropRow) => Receipt | undefined, questions: readonly Question[],
-  isCopy: (id: string) => boolean = () => false,
+  rows: readonly DropRow[], books: Pick<Index, 'transactions'>, isUnbooked: (t: BankTransaction) => boolean,
+  held: ReadonlySet<string>, questions: readonly Question[], groupOf: (r: DropRow) => ClosingGroup,
 ): DropSummary {
   const taken = rows.filter((r) => r.state === 'taken');
   const refs = new Set(taken.flatMap((r) => r.statement?.refs ?? []));
@@ -126,16 +202,9 @@ export function dropSummary(
   const open = pays.filter(isUnbooked);
   const waitReceipt = open.filter((t) => !asked.has(t.ref) && held.has(t.ref)).length;
   const askedN = open.filter((t) => asked.has(t.ref)).length;
-  const files = taken.filter((r) => !r.statement && !r.report).flatMap((r) => receiptOf(r) ?? []);
-  const links = (id: string) => books.mappings.filter((m) => m.receiptId === id).length;
-  const count = new Map<ReceiptState, number>();
-  for (const r of files) { const st = receiptStateOf(r, links(r.id), isCopy(r.id)); count.set(st, (count.get(st) ?? 0) + 1); }
-  const n = (st: ReceiptState) => count.get(st) ?? 0;
-  const none = n('none');
   return {
     ...(pays.length ? { payments: { n: pays.length, from: pays[0].date, to: pays[pays.length - 1].date, booked: pays.length - open.length, waitReceipt, asked: askedN, unbooked: open.length - waitReceipt - askedN, ...(open[0] ? { openFrom: open[0].date } : {}) } } : {}),
-    // «gelesen» splits into those with a payment and those without; the copies and the incomplete ones are among the latter, said apart.
-    ...(files.length ? (() => { const read = files.filter((r) => receiptRead(r, links(r.id))).length; return { receipts: { n: files.length - none, read, matched: n('matched'), unmatched: read - n('matched'), copies: n('copy'), incomplete: n('incomplete'), unread: n('unread'), none } }; })() : {}),
+    ...(rows.length ? { files: closingCounts(rows, groupOf) } : {}),
   };
 }
 

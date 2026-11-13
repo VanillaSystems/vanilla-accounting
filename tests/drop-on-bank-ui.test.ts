@@ -58,7 +58,7 @@ test('a statement and a photo dropped on Kontoauszüge each get their row, as on
   const bank = await dropOn('/bank?period=2026-Q4');
   assert.deepEqual(bank.rows, ['oktober.xml statement', 'IMG_4590.png unread'], 'the photo has its row, said not read: no AI on this Mac');
   assert.ok(bank.tabs.includes('Kontoauszüge 1'), bank.tabs.join(' / '));
-  assert.match(bank.summary, /^1 Zahlung eingelesen, 14\.10\.2026 – 14\.10\.2026/);
+  assert.match(bank.summary, /^1 Kontoauszug eingelesen mit 1 Zahlung, 14\.10\.2026 – 14\.10\.2026/);
   assert.match(bank.summary, /1 Beleg wartet aufs Lesen: Fotos und Scans liest nur eine KI, auf diesem Mac ist keine eingerichtet\./);
   assert.equal(bank.openStatement, true, 'the statement row opens its statement');
   assert.match(bank.at, /^\/bank\/files\/1021\/.+\.xml$/, 'closing on Kontoauszüge selects the statement just read');

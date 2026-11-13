@@ -20,7 +20,6 @@ interface State {
   open: Record<Section, boolean>;
   collapsed: ReadonlySet<GroupKey>;
   showHidden: boolean;
-  showLater: boolean;
   inbox: InboxFile[];
   /** A field of Angaben to focus once the form shows. */
   focus?: string;
@@ -39,7 +38,6 @@ let state: State = {
   open: { zahlung: true, angaben: false, datei: false, ...read<Partial<Record<Section, boolean>>>('receipts.open', {}) },
   collapsed: new Set(read<GroupKey[]>('receipts.collapsed', [])),
   showHidden: false,
-  showLater: false,
   inbox: [],
 };
 const listeners = new Set<() => void>();

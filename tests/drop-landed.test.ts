@@ -6,13 +6,27 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { receiptStateOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, ownDate } from '../src/app/shell/drop-summary.js';
+import { CLOSING_GROUPS, CLOSING_SENTENCE, OTHER_SENTENCES, RECEIPT_SENTENCES, closingCounts, closingGroupOf, receiptStateOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, ownDate, type ClosingCounts, type ClosingGroup, type FileState } from '../src/app/shell/drop-summary.js';
 import { parsePeriod } from '../src/accounting/periods.js';
 import type { DropRow } from '../src/types/drop.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
 import type { Question } from '../src/questions/model.js';
+import de from '../src/app/i18n/locales/de.js';
+import en from '../src/app/i18n/locales/en.js';
+import fr from '../src/app/i18n/locales/fr.js';
+import it from '../src/app/i18n/locales/it.js';
 
 const TODAY = '2026-11-12';
+
+/** The group a row gets from the books alone, as the dialog's rows give it: a statement, else its receipt's state. */
+const groupOf = (books: { mappings: Array<{ receiptId: string }> }, receiptOf: (r: DropRow) => Receipt | undefined, isCopy: (id: string) => boolean = () => false) => (r: DropRow): ClosingGroup => {
+  if (r.state !== 'taken') return closingGroupOf(r, undefined);
+  if (r.statement) return 'statement';
+  const x = receiptOf(r);
+  return x ? receiptStateOf(x, books.mappings.filter((m) => m.receiptId === x.id).length, isCopy(x.id)) : 'working';
+};
+/** The counts with only the named groups, the rest 0. */
+const only = (over: Partial<ClosingCounts>): ClosingCounts => ({ ...Object.fromEntries(CLOSING_GROUPS.map((g) => [g, 0])), ...over }) as ClosingCounts;
 const q = (token: string) => parsePeriod(token, TODAY)!;
 const row = (key: string, extra: Partial<DropRow> = {}): DropRow => ({ key, id: key, name: `${key}.pdf`, size: 1, state: 'taken', ...extra });
 const statement = row('s', { kind: 'camt', facts: { from: '2026-10-01', to: '2026-10-31' }, statement: { file: 's.xml', refs: ['a'] } });
@@ -72,14 +86,14 @@ test('the summary counts the drop\'s payments and receipts from the books', () =
   const booked = new Set(payments.slice(0, 12).map((p) => p.ref));
   const questions = [{ id: 'q1', status: 'open', on: { kind: 'payment', id: 'p20' } }, { id: 'q2', status: 'closed', on: { kind: 'payment', id: 'p21' } }] as unknown as Question[];
   const held = new Set(payments.filter((p) => p.waitsForReceipt).map((p) => p.ref));
-  const s = dropSummary(rows, books, (t) => !booked.has(t.ref), held, receiptOf as never, questions);
+  const s = dropSummary(rows, books, (t) => !booked.has(t.ref), held, questions, groupOf(books, receiptOf as never));
   assert.deepEqual(s.payments, { n: 23, from: '2026-07-15', to: '2026-09-15', booked: 12, waitReceipt: 8, asked: 1, unbooked: 2, openFrom: '2026-08-15' });
-  assert.deepEqual(s.receipts, { n: 6, read: 5, matched: 2, unmatched: 3, copies: 0, incomplete: 0, unread: 1, none: 0 }, 'the staged file without text waits for its reading');
-  assert.deepEqual(dropSummary([row('dup', { state: 'duplicate' })], books, () => true, new Set(), receiptOf as never, []), {}, 'nothing taken: no counts');
+  assert.deepEqual(s.files, only({ statement: 1, matched: 2, read: 3, unread: 1, known: 1 }), 'the staged file without text waits for its reading; the copy not taken is counted too');
+  assert.deepEqual(dropSummary([row('dup', { state: 'duplicate' })], books, () => true, new Set(), [], groupOf(books, receiptOf as never)), { files: only({ known: 1 }) }, 'nothing taken: no payments, the file still counted');
   // A photo without text, archived on a Mac without an AI: Belege says it waits for reading (#343), so the drop does not call it read.
   const photo = { id: 'photo', location: 'archived' as const, extractedText: '', extractionMethod: 'tesseract' as const };
   const withPhoto = (r: DropRow) => (r.id === 'photo' ? photo : receiptOf(r));
-  assert.deepEqual(dropSummary([row('photo'), row('c')], books, () => true, new Set(), withPhoto as never, []).receipts, { n: 2, read: 1, matched: 0, unmatched: 1, copies: 0, incomplete: 0, unread: 1, none: 0 });
+  assert.deepEqual(dropSummary([row('photo'), row('c')], books, () => true, new Set(), [], groupOf(books, withPhoto as never)).files, only({ read: 1, unread: 1 }));
 });
 
 test('without a model, text PDFs whose facts code read count as read, as their rows show them; photos wait for the AI; no receipt is counted apart (#361)', () => {
@@ -90,8 +104,8 @@ test('without a model, text PDFs whose facts code read count as read, as their r
   const holiday = { id: 'holiday', location: 'archived' as const, extractedText: 'Kein Beleg: Strand in Rimini', extractionMethod: 'claude-vision' as const, kind: 'noise' as const };
   const all = [...pdfs, ...photos, holiday];
   const of = (r: DropRow) => all.find((x) => x.id === r.id);
-  const s = dropSummary(all.map((r) => row(r.id)), { transactions: [], mappings: [{ receiptId: 'pdf0', transactionRef: 'p1' }] as never }, () => true, new Set(), of as never, []);
-  assert.deepEqual(s.receipts, { n: 16, read: 10, matched: 1, unmatched: 9, copies: 0, incomplete: 0, unread: 6, none: 1 });
+  const s = dropSummary(all.map((r) => row(r.id)), { transactions: [] }, () => true, new Set(), [], groupOf({ mappings: [{ receiptId: 'pdf0' }] }, of as never));
+  assert.deepEqual(s.files, only({ matched: 1, read: 9, unread: 6, none: 1 }));
 });
 
 test('a row and the closing sentence give one state for one receipt (#361)', () => {
@@ -105,9 +119,46 @@ test('a row and the closing sentence give one state for one receipt (#361)', () 
   assert.equal(receiptStateOf(r({ kind: 'noise' }), 0, false), 'none');
   const rows = ['a', 'b', 'c'].map((id) => row(id));
   const files: Record<string, Receipt> = { a: r({ id: 'a', date: '2026-10-02' }), b: r({ id: 'b', date: '2026-10-02', amount: 9 }), c: r({ id: 'c', date: '2026-10-02', amount: 9 }) };
-  const s = dropSummary(rows, { transactions: [], mappings: [] as never }, () => true, new Set(), (x) => files[x.id], [], (id) => id === 'c');
-  // «gelesen» is every one whose text was read (#385 review): the incomplete one and the possible copy among those without a payment, each said apart too.
-  assert.deepEqual(s.receipts, { n: 3, read: 3, matched: 0, unmatched: 3, copies: 1, incomplete: 1, unread: 0, none: 0 });
+  const s = dropSummary(rows, { transactions: [] }, () => true, new Set(), [], groupOf({ mappings: [] }, (x) => files[x.id], (id) => id === 'c'));
+  assert.deepEqual(s.files, only({ read: 1, copy: 1, incomplete: 1 }));
+  assert.equal(receiptStateOf(r({ kind: 'supporting', amount: 0, date: '2026-07-24' }), 0, false), 'supporting', 'an order confirmation is no «kein Beleg» (#384)');
+});
+
+/** Every state a row can show: the ones not taken, and a taken one's FileState. */
+const ROW_STATES: Array<[DropRow['state'], Partial<DropRow>, FileState | undefined]> = [
+  ['take', {}, undefined], ['undone', {}, undefined], ['refused', {}, undefined], ['locked', {}, undefined], ['unclear', {}, undefined], ['asks', {}, undefined],
+  ['quarantine', { reason: 'not-receipt' }, undefined], ['quarantine', { reason: 'private' }, undefined], ['duplicate', {}, undefined], ['duplicate', { reason: 'possible-duplicate' }, undefined],
+  ['taken', { readAs: { file: 'a.xml' } }, { kind: 'statement' }],
+  ...([{ kind: 'working' }, { kind: 'read' }, { kind: 'unread' }, { kind: 'matched' }, { kind: 'waits' }, { kind: 'orderPage', provider: 'p' }, { kind: 'stuck', run: 'r' }, { kind: 'statement' }, { kind: 'report' },
+    { kind: 'refused', reason: 'x' }, { kind: 'none', why: '' }, { kind: 'twin', of: 'o', name: 'n', why: 'number' }, { kind: 'supporting' }] as FileState[]).map((x): [DropRow['state'], Partial<DropRow>, FileState] => ['taken', {}, x]),
+];
+
+test('the closing lines count every dropped file once, for any mix of row states (#384)', () => {
+  // Every state has a group, and every group but the read ones a sentence of its own (DropDialog SENTENCE, a record over the groups).
+  let seed = 7;
+  const next = () => (seed = (seed * 48271) % 2147483647);
+  for (let round = 0; round < 200; round++) {
+    const picks = Array.from({ length: 1 + (next() % 30) }, (_, i) => { const [state, extra, x] = ROW_STATES[next() % ROW_STATES.length]; return { r: row(`f${i}`, { state, ...extra }), x }; });
+    const xs = new Map(picks.map((p) => [p.r, p.x]));
+    const counts = closingCounts(picks.map((p) => p.r), (r) => closingGroupOf(r, xs.get(r)));
+    assert.equal(Object.values(counts).reduce((a, b) => a + b, 0), picks.length);
+  }
+  // The persona's drop of round 2 (23 files, no AI): two statements, a CSV that asks, sixteen receipts, the .docx, a copy, two files set aside.
+  const persona = [
+    ...['camt-q3', 'camt-okt'].map((k) => ({ r: row(k, { kind: 'camt' as const }), x: { kind: 'statement' } as FileState })),
+    { r: row('csv', { state: 'asks', reason: 'csv-columns' }), x: undefined },
+    ...Array.from({ length: 2 }, (_, i) => ({ r: row(`m${i}`), x: { kind: 'matched' } as FileState })),
+    ...Array.from({ length: 4 }, (_, i) => ({ r: row(`r${i}`), x: { kind: 'read' } as FileState })),
+    ...Array.from({ length: 3 }, (_, i) => ({ r: row(`w${i}`), x: { kind: 'waits' } as FileState })),
+    ...Array.from({ length: 6 }, (_, i) => ({ r: row(`p${i}`), x: { kind: 'unread' } as FileState })),
+    { r: row('ab'), x: { kind: 'supporting', why: 'Auftragsbestätigung', of: { id: 'fm', name: 'Farbmix FM-78230' } } as FileState },
+    { r: row('docx', { state: 'refused' }), x: undefined }, { r: row('dup', { state: 'duplicate' }), x: undefined },
+    { r: row('agb', { state: 'quarantine', reason: 'not-receipt' }), x: undefined }, { r: row('herbst', { state: 'quarantine', reason: 'not-receipt' }), x: undefined },
+  ];
+  const xs = new Map(persona.map((p) => [p.r, p.x]));
+  const counts = closingCounts(persona.map((p) => p.r), (r) => closingGroupOf(r, xs.get(r)));
+  assert.equal(persona.length, 23);
+  assert.deepEqual(counts, only({ statement: 2, asks: 1, matched: 2, read: 4, incomplete: 3, unread: 6, supporting: 1, refused: 1, known: 1, none: 2 }));
 });
 
 test('the bar moves with the part of the run that is done, not only with files at rest', () => {
@@ -115,4 +166,20 @@ test('the bar moves with the part of the run that is done, not only with files a
   assert.equal(dropProgress([1, ...Array(16).fill(0)]), 6, 'the statement at rest, sixteen receipts queued');
   assert.equal(dropProgress([1, ...Array(16).fill((2 + 8 / 16) / 4)]), 65, 'their run is in its third step of four, half of them read');
   assert.equal(dropProgress(Array(17).fill(1)), 100);
+});
+
+test('every closing group has its sentence, said in each language, and in one of the lines (review of #384)', () => {
+  const rendered = new Set<ClosingGroup>(['statement', 'matched', 'read', ...RECEIPT_SENTENCES, ...OTHER_SENTENCES]);
+  assert.deepEqual(CLOSING_GROUPS.filter((g) => !rendered.has(g)), [], 'a group no line names');
+  assert.equal(RECEIPT_SENTENCES.length + OTHER_SENTENCES.length, Object.keys(CLOSING_SENTENCE).length, 'each sentence in one line');
+  for (const [lang, locale] of Object.entries({ de, en, fr, it })) {
+    for (const key of [...Object.values(CLOSING_SENTENCE), 'drop.sum.unreadNoAi']) assert.ok(key in locale.messages, `${lang}: ${key}`);
+  }
+});
+
+test('a drop of only refused or asking files still has its closing lines; a document beside an invoice not in the books is said so', () => {
+  const refused = [row('docx', { state: 'refused' }), row('csv', { state: 'asks', reason: 'csv-columns' })];
+  assert.deepEqual(dropSummary(refused, { transactions: [] }, () => true, new Set(), [], (r) => closingGroupOf(r, undefined)).files, only({ refused: 1, asks: 1 }));
+  assert.equal(closingGroupOf(row('ab'), { kind: 'supporting', why: 'Auftragsbestätigung' }), 'beside', 'no invoice of it in the books: «kommt neben ihre Rechnung»');
+  assert.equal(closingGroupOf(row('ab'), { kind: 'supporting', why: 'Auftragsbestätigung', of: { id: 'fm', name: 'FM-78230' } }), 'supporting');
 });

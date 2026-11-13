@@ -619,6 +619,35 @@ test('a bank CSV: its columns are asked once, kept for the account; the next CSV
   }
 });
 
+test('a bank CSV whose payments the camt.053 of the same days brought already: «schon da», no column question (#384)', async () => {
+  const { loadBooks } = await import('../src/books/store.js');
+  const { workspaceAt } = await import('../src/workspace/workspace.js');
+  const sept = loadBooks(workspaceAt(DEMO_ROOT)).transactions.filter((t) => t.bank === 'Raiffeisen' && t.currency === 'CHF' && t.source !== 'manual' && t.date >= '2026-09-01' && t.date <= '2026-09-30');
+  assert.ok(sept.length >= 3, 'the demo has Raiffeisen payments in September');
+  const day = (d: string) => d.split('-').reverse().join('.');
+  const csv = ['Buchungsdatum;Text;Betrag', ...sept.map((t) => `${day(t.date)};${t.description.replace(/;/g, ',')};${signed(t).toFixed(2)}`)].join('\n');
+  const api = await demo();
+  try {
+    const { post, rest } = SESSION(api);
+    let s = await post('/api/drop');
+    s = await post(`/api/drop/${s.id}/files?name=Kontoauszug_Sept.csv`, Buffer.from(csv));
+    const [row] = s.rows;
+    assert.deepEqual([row.kind, row.state, row.reason, row.csv], ['statement-csv', 'duplicate', 'csv-known', undefined]);
+    const other = await post(`/api/drop/${s.id}/files?name=neu.csv`, Buffer.from('Buchungsdatum;Text;Betrag\n02.12.2026;Neu;-12.00'));
+    assert.deepEqual([other.rows[1].state, other.rows[1].reason, other.rows[1].csv?.columns], ['asks', 'csv-columns', { date: 0, text: 1, amount: 2 }], 'a CSV with a payment the books lack is asked, its columns proposed');
+    // Two rows that happen to equal two payments of the books prove nothing: asked (review of #384).
+    const two = await post(`/api/drop/${s.id}/files?name=zwei.csv`, Buffer.from(csv.split('\n').slice(0, 3).join('\n')));
+    assert.deepEqual([two.rows[2].state, two.rows[2].reason], ['asks', 'csv-columns']);
+    // The way out: «Trotzdem übernehmen» on the row asks the columns as for any CSV.
+    const anyway = await post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'take' });
+    assert.deepEqual([anyway.rows[0].state, anyway.rows[0].reason, anyway.rows[0].csv?.columns], ['asks', 'csv-columns', { date: 0, text: 1, amount: 2 }]);
+    await rest();
+  } finally {
+    await SESSION(api).rest().catch(() => {});
+    await api.stop();
+  }
+});
+
 test('a line on the edge of the bank export\'s days: read on 1 October, the camt.053\'s payment of the last days of September is proposed for it; confirmed, it is that payment, not a second one', async () => {
   const { loadBooks } = await import('../src/books/store.js');
   const { workspaceAt } = await import('../src/workspace/workspace.js');

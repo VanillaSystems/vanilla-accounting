@@ -96,6 +96,6 @@ test('a receipt whose date is "" counts as undated: it needs you in the working 
   const l = ledgerOf({ ...books, receipts: [...books.receipts, undated] }, '2026-04-01');
   const q2 = parsePeriod('2026-Q2', '2026-10-16')!;
   const { rows } = visible(l, q2, undefined, undefined);
-  const g = groups(rows, l, false, () => false);
-  assert.ok(g.groups.find((x) => x.key === 'need')?.rows.some((v) => v.r.id === 'undated-0000'), 'under «Braucht dich»');
+  const g = groups(rows, l, () => false);
+  assert.ok(g.find((x) => x.key === 'need')?.rows.some((v) => v.r.id === 'undated-0000'), 'under «Braucht dich»');
 });

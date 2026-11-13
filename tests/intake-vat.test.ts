@@ -126,3 +126,23 @@ test('without a model: a receipt whose text proves Swiss VAT gets it from the te
   assert.equal(after(unclear.id).hasSwissVat, undefined, 'figures that do not add up stay for the model');
   assert.ok(notes.some((n) => n.code === 'noModel'));
 });
+
+test('«no Swiss VAT» read off the words without a model is provisional: a model\'s reading later replaces it (review of #384)', async () => {
+  const premium: Receipt = {
+    ...structuredClone(NEW), id: 'vat-step-premium',
+    extractedText: 'Die Mobiliar\nPrämienrechnung Betriebshaftpflicht\nRechnungsdatum 01.09.2026\nTotal CHF 980.00\nVersicherungsprämien sind von der MWST ausgenommen.',
+  };
+  const books: Books = JSON.parse(JSON.stringify(loadBooks(workspaceAt(DEMO_ROOT))));
+  books.receipts.push(premium);
+  const port: BooksPort = { read: () => structuredClone(books), update: (fn) => fn(books) };
+  await vatStep()({ ws: undefined as never, books: port, ask: undefined, progress: () => {}, log: () => {} });
+  const coded = books.receipts.find((r) => r.id === premium.id)!;
+  assert.deepEqual([coded.hasSwissVat, coded.vatExtractedAt], [false, undefined], 'without a model: «keine CH-MWST», kept provisional');
+  assert.equal(vatCandidates(books).some((r) => r.id === premium.id), false, 'without a model nothing asks again');
+  assert.equal(vatCandidates(books, false, true).some((r) => r.id === premium.id), true, 'a model takes it up');
+  const answer = { vatId: 'CHE-111.222.333', hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 73.43, gross: 980 }] };
+  await vatStep()({ ws: undefined as never, books: port, ask: async () => JSON.stringify(answer), progress: () => {}, log: () => {} });
+  const read = books.receipts.find((r) => r.id === premium.id)!;
+  assert.deepEqual([read.hasSwissVat, !!read.vatExtractedAt], [true, true], 'the model\'s reading replaced code\'s');
+  assert.equal(vatCandidates(books, false, true).some((r) => r.id === premium.id), false, 'and is not asked again');
+});

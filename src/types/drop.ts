@@ -90,7 +90,7 @@ export interface DropRow {
   askProvider?: ProviderAsk;
   /** A report held because no payout of its provider is recognised: why, and what was looked at. */
   payoutUnseen?: PayoutUnseen;
-  /** The person took the report anyway («Trotzdem übernehmen»): the unseen-payout check is skipped. */
+  /** The person took the report anyway («Trotzdem übernehmen»): the unseen-payout check is skipped; a bank CSV «schon da» is read, its columns asked. */
   anyway?: true;
   /** What its text says it is, when it is no plain receipt (src/intake/document-kind.ts): kept beside an invoice, or no receipt at all. */
   document?: SupportingWhy | OtherWhy;
@@ -194,6 +194,8 @@ export type DropReason =
   | 'unreadable'
   /** A statement whose file is read in already (`readAs`): its movements are in the books. */
   | 'statement-read'
+  /** A bank CSV whose every payment the books hold already on one account (#384): nothing asked, nothing read in. */
+  | 'csv-known'
   /** A statement without a bank export read into a table (`read`): the person checks it and says «Einlesen». */
   | 'check-read'
   /** A bank's CSV: the person says which column holds what (`csv`). */
