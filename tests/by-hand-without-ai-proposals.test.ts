@@ -171,13 +171,13 @@ test('S2: a delivery note or the firm\'s own document gives no rate on money out
   }
 });
 
-test('S2: on the agreed basis a receipt dated in another quarter proposes no account and says so; on the cash basis it is the payment\'s date that counts', () => {
+test('S2: on the agreed basis a receipt dated in another quarter proposes the account as always and says the line goes on its day over the payable (#360); on the cash basis it is the payment\'s date that counts', () => {
   const earlier = { ...bill, date: '2026-06-20' };
   const b = { ...rentBooks(earlier), transactions: [rent, tx('R0', 'DBIT', 900, 'Gerüstbau AG', 'Miete Juli', '2026-07-02')], journalEntries: [entry({ transactionRef: 'R0', accountDebit: '6100', accountCredit: '1020', amount: 900, vatCode: 'I81' })] };
   on(AGREED, () => {
     const d = firstLine(b, 'R');
-    assert.deepEqual(sideOf(d.lines[0]), ['', '1020', '8.1']);
-    assert.ok(d.notes.some((n) => n.kind === 'taxPoint' && n.date === '2026-06-20'), JSON.stringify(d.notes));
+    assert.deepEqual(sideOf(d.lines[0]), ['6100', '1020', '8.1']);
+    assert.ok(d.notes.some((n) => n.kind === 'taxPoint' && n.date === '2026-06-20' && n.account === '2000'), JSON.stringify(d.notes));
   });
   const cash = firstLine(b, 'R');
   assert.deepEqual(sideOf(cash.lines[0]), ['6100', '1020', '8.1']);
