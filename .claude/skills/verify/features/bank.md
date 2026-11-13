@@ -41,7 +41,7 @@ rows in tests/period-lock.test.ts).
   `zurücksetzen` clears it). `×` or Esc clears the choice. Also on a payment: `[data-testid=only-unbooked]` (filter),
   an `ungebucht` mark and a booking by hand (`[data-testid=payment-booking]`: opens filled, `[data-testid=proposal]` names each
   proposal's source, #344; below it `[data-testid=task-make-rule]` with `data-similar` and, where the payment's lasting words
-  hold for more open payments, `[data-testid=task-make-rule-wider] a` → `/company/rules?payment=<ref>&by=text`; driven 2026-11-12
+  hold for more open payments, `[data-testid=task-make-rule-wider] [data-act=rule-start-wider]` (and `[data-act=rule-start]`) open the rule form in place, `[data-testid=rule-from-payment]`, with the hand form's account, VAT and private share (#383; `/company/rules?payment=<ref>&by=text` still starts it in Firma › Regeln); driven 2026-11-12
   on fresh books of `npm run init --preset trades` with the persona's files: a customer payment opens `1020 / 3400 · V81`
   with `[data-testid=note-sale]`, a wage `3 Zahlungen wie diese` and `oder eine für alle 6 mit «Lohn» im Text`; facts under the
   lines are `[data-testid=note-<kind>]`, a named invoice `[data-testid=pays-invoice]`; the form appears only once

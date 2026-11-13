@@ -240,8 +240,7 @@ export function LastKept({ nav }: { nav: Nav }) {
   if (!kept) return null;
   return (
     <div className="ruledraft done" data-testid="last-kept">
-      <span>{t('rules.draft.keptNow')}</span>
-      <KeptLine kept={kept} nav={nav} />
+      <KeptLine kept={kept} nav={nav} lead />
       <span className="ruleacts"><button type="button" className="linkbtn" onClick={() => rememberKept(undefined)}>{t('common.close')}</button></span>
     </div>
   );
@@ -292,7 +291,7 @@ type Kept = Extract<KeepResult, { ok: true }>;
  * «2 warten auf ihren Beleg», and «Rückgängig», which puts the rules file back as it was and takes
  * the keep's bookings out again (a booking changed since stays: the journal refuses nothing it may).
  */
-export function KeptLine({ kept, nav }: { kept: Kept; nav?: Nav }) {
+export function KeptLine({ kept, nav, lead }: { kept: Kept; nav?: Nav; lead?: boolean }) {
   const [said, setSaid] = useState<string>();
   const [busy, setBusy] = useState(false);
   const b = kept.booked;
@@ -313,6 +312,7 @@ export function KeptLine({ kept, nav }: { kept: Kept; nav?: Nav }) {
     <span className="keptline" data-testid="rule-kept" data-booked={b?.refs.length ?? 0} data-waits={waits}>
       {said ? <span>{said}</span> : (
         <>
+          {lead ? <span className="m">{t('rules.draft.keptNow')}</span> : null}
           <span>{[b?.refs.length ? t('rules.kept.booked', { n: b.refs.length }) : '', waits ? t('rules.kept.waits', { n: waits }) : '', b?.notBooked.length ? t('rules.kept.notBooked', { n: b.notBooked.length }) : ''].filter(Boolean).join(' · ')}</span>
           {b?.first && nav ? <Go to={at({ area: 'journal', id: b.first.id }, b.first.date)} nav={nav} className="golink">{t('rules.kept.show')}</Go> : null}
           {b?.entries.length && kept.undo ? <button type="button" className="linkbtn" data-act="rule-undo" disabled={busy} onClick={() => void undo()}>{t('rules.kept.undo')}</button> : null}

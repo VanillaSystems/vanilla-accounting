@@ -28,9 +28,6 @@ import { startApi } from './support/api-server.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { isPurchaseDocument } from '../src/accounting/evidence-check.js';
 
-/** A keep's outcome without what it booked and its undo (#383). */
-const pick = (r: { ok: boolean; committed?: boolean }) => ({ ok: r.ok, committed: r.committed });
-
 process.env.GIT_AUTHOR_NAME = 'Erika Beispiel';
 process.env.GIT_AUTHOR_EMAIL = 'erika@example.com';
 process.env.GIT_COMMITTER_NAME = 'Erika Beispiel';
@@ -79,7 +76,7 @@ test('«Behalten» saves exactly that draft as one save, without the AI; another
   draft(ws, 'workflows/booking/classify/step.yaml', 'label: { en: Ours }\n');
   const d = draftRules(ws, GUIDE)!;
   assert.deepEqual([d.added.map((r) => r.id), d.changed, d.removed, d.refused, d.keepable], [['cash-ask'], [], [], [], true]);
-  assert.deepEqual(pick(await keepDraft(ws, GUIDE, d.basis)), { ok: true, committed: true });
+  assert.deepEqual(await keepDraft(ws, GUIDE, d.basis), { ok: true, committed: true });
   assert.equal(readFileSync(join(ws.paths.root, GUIDE), 'utf8'), BEFORE + CASH);
   assert.ok(!existsSync(join(draftDir(ws), GUIDE)), 'the kept draft is gone');
   assert.ok(existsSync(join(draftDir(ws), 'workflows/booking/classify/step.yaml')), 'the other draft still waits');

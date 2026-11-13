@@ -348,7 +348,7 @@ export async function keepDraft(ws: Workspace, path: string, basis: string, conf
   recordSettled(ws, path, changes, 'kept');
   // The open payments the kept rules decide, as the card showed them: the keep books them at once (#383).
   const open = preview.reduce<OpenDecided>((all, p) => ({ book: [...all.book, ...(p.open?.book ?? [])], waits: [...all.waits, ...(p.open?.waits ?? [])] }), { book: [], waits: [] });
-  return { ok: true, committed, open, undo: { file: path, before: was, after: hashOf(after) } };
+  return { ok: true, committed, ...(open.book.length || open.waits.length ? { open, undo: { file: path, before: was, after: hashOf(after) } } : {}) };
 }
 
 /** «Verwerfen»: the draft of one file is gone; the file stays as it is. */
