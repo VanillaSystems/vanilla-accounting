@@ -36,7 +36,7 @@ import { outcomeText, periodText, paymentWords, readsInWords } from './words.js'
 import type { PeriodReturn, PreparedXml, SealOutput } from '../../../workflows/filing.js';
 import type { ClearingCheck } from '../../../booking/providers.js';
 import type { PayoutGroup, PayoutsBooked } from '../../../types/drop.js';
-import { BOOKING_SWITCH_ON, payoutsBookedText } from '../../lib/payouts.js';
+import { payoutsBookedText } from '../../lib/payouts.js';
 import { commandRefusalText, refusalPayment, refusalText } from '../../automation/refusal.js';
 import type { Refusal } from '../../../types/refusal.js';
 import { RunFromLog } from '../../history/RunHistory.js';
@@ -58,6 +58,8 @@ import { codeLabel } from '../codes/names.js';
 import { reconciliationOf } from '../../../books/reconcile.js';
 import { LastKept, WageRuleOffer } from '../company/RulesSection.js';
 import { bookOpenAndSay } from '../../automation/marks.js';
+import { BookingWaits } from '../../automation/booking-waits.js';
+import { bookingWaitsText, changedFiles } from '../../lib/booking-waits.js';
 
 type Props = AreaProps<RouteOf<'automation'>>;
 type R = RouteOf<'automation'>;
@@ -122,13 +124,13 @@ const forEachOpen = (tr: Trigger): tr is Extract<Trigger, { kind: 'manual' }> =>
 
 function List({ route, nav, books, canEdit }: Props) {
   const { view, error } = useAutomation();
-  const [said, setSaid] = useState<{ workflow: string; text: string; busy?: boolean }>();
+  const [said, setSaid] = useState<{ workflow: string; text: string; busy?: boolean; waits?: string[] }>();
   // «Automatisch buchen» in the list: what a rule or code decides among all open payments, booked at once, no model asked; the line says what came of it and of the rest.
   async function startAll(w: WorkflowDecl) {
     setSaid({ workflow: w.id, text: t('marks.started', { workflow: label(w) }), busy: true });
     try {
-      const text = await bookOpenAndSay(label(w));
-      setSaid({ workflow: w.id, text });
+      const { text, waits } = await bookOpenAndSay(label(w));
+      setSaid({ workflow: w.id, text, ...(waits ? { waits } : {}) });
       nav.toast(text);
     } catch (e) { setSaid({ workflow: w.id, text: errorText(e) }); }
     nav.refresh();
@@ -178,7 +180,7 @@ function List({ route, nav, books, canEdit }: Props) {
                       // A button that runs for every open payment, not a link to the diagram (r3-noai-22).
                       ? <button key={i} type="button" className="trig go" data-act="start-all" data-workflow={w.id} disabled={!!said?.busy} onClick={(e) => { e.stopPropagation(); void startAll(w); }}>{TRIGGER_ICON.manual}{tx(tr.label)}</button>
                       : <span key={i} className="trig">{TRIGGER_ICON[tr.kind]}{tr.kind === 'manual' ? tx(tr.label) : t(`automation.trig.${tr.kind}` as 'automation.trig.schedule')}</span>))}</span> : null}
-                    {said?.workflow === w.id ? <span className="wfsaid" role="status" data-testid="start-all-said">{said.text}</span> : null}
+                    {said?.workflow === w.id ? (said.waits ? <BookingWaits files={said.waits} go={(route) => nav.go({ route, query: {} })} onOn={() => nav.refresh()} /> : <span className="wfsaid" role="status" data-testid="start-all-said">{said.text}</span>) : null}
                   </>
                 ));
               })}
@@ -330,7 +332,7 @@ function Pending({ w, view, nav }: { w: WorkflowDecl; view: AutomationView; nav:
   return (
     <div className="wfpending">
       <b>{t('automation.pending.title')}</b>
-      <span className="m">{t('automation.pending.files', { files: p.files.slice(0, 4).join(', ') + (p.files.length > 4 ? ` +${p.files.length - 4}` : '') })}</span>
+      <span className="m">{t('automation.pending.files', { files: changedFiles(p.files) })}</span>
       {p.checks.length ? (
         <>
           <span>{t('automation.pending.checked', { same: count('same'), different: count('different'), stuck: count('stuck'), running: count('running') })}</span>
@@ -562,6 +564,7 @@ function noteText(n: IntakeNote): string {
     case 'saleAsked': return t('automation.note.saleAsked', { n: n.count });
     case 'waitingReceipt': return t('automation.note.waitingReceipt', { n: n.count });
     case 'receiptUnread': return t('automation.note.receiptUnread', { n: n.count });
+    case 'bookingWaits': return bookingWaitsText(n.files);
     case 'error': return n.detail;
   }
 }
@@ -914,7 +917,7 @@ function PayoutTasks({ groups, books, nav, canEdit }: { groups: PayoutGroup[]; b
             <h3>{t('automation.payouts.title', { n: g.refs.length, provider: g.name })}</h3>
             <p className="m">{payoutLead(g)}</p>
             {g.why === 'ready' && canEdit ? <p><button type="button" className="btn" disabled={busy === g.provider} data-testid="book-payouts" onClick={() => book(g)}>{t('automation.payouts.book', { n: g.refs.length })}</button></p> : null}
-            {waits === g.provider ? <p className="warnline" data-testid="book-payouts-waits">{t('drop.booked.payoutsWait', { provider: g.name })}{' '}<button type="button" className="golink" onClick={() => nav.go({ route: BOOKING_SWITCH_ON, query: {} })}>{t('marks.goSwitchOn')}</button></p> : null}
+            {waits === g.provider ? <p data-testid="book-payouts-waits"><BookingWaits go={(route) => nav.go({ route, query: {} })} onOn={() => { setWaits(undefined); nav.refresh(); }} /></p> : null}
             <details>
               <summary className="m">{t('automation.payouts.show', { n: g.refs.length })}</summary>
               <ul>
