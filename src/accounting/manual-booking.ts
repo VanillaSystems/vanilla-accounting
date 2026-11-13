@@ -448,7 +448,9 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   // The firm's own invoices the payment names by their numbers (#382): the sale's VAT is read off them, and booking links those not linked yet.
   const own = moneyIn && !named ? ownInvoicesOf(books, tx, known, paid) : undefined;
   // The documents a rate may be read off: on money out a purchase document only (never a delivery note or the firm's own credit note, #81).
-  const docs = [...receipts.filter(moneyIn ? isSaleDocument : isPurchaseDocument), ...(own?.use ?? [])];
+  // A bill of one line of a card's settlement (#409) is no document of the whole payment: its rate is that line's alone.
+  const lined = new Set(books.mappings.filter((m) => m.transactionRef === ref && m.line !== undefined).map((m) => m.receiptId));
+  const docs = [...receipts.filter((r) => !lined.has(r.id) && (moneyIn ? isSaleDocument(r) : isPurchaseDocument(r))), ...(own?.use ?? [])];
   const bankAccounts = new Set(accounts.map((a) => a.account));
   const text = receipts.find((r) => r.description)?.description ?? tx.description;
   const notes: DraftNote[] = [];

@@ -235,6 +235,10 @@ export type ApiRefusal =
   | { code: 'unknownVatCode'; params: { code: string } }
   /** A code the firm's form does not take (src/accounting/vat-codes.ts formTakes): none on a firm not registered, no input-tax code on the net tax rate method. */
   | { code: 'codeNotTaken'; params: { code: string; method: 'none' | 'net-rate' } }
+  /** A bill linked to a line of a card's settlement (#409): the payment has no card statement with that line (`line` counts from 1). */
+  | { code: 'cardLineMissing'; params: { payment: string; line: number } }
+  /** That line holds another bill already. */
+  | { code: 'cardLineTaken'; params: { payment: string; line: number; receipt: string } }
   /** A payment provider's clearing account that is no balance-sheet account (src/intake/sales-report-import.ts setProviderAccount). */
   | { code: 'clearingNotBalance'; params: { account: string } }
   /** A provider's revenue account that is no revenue account (#404, setProviderAccount). */
