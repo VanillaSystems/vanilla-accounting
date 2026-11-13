@@ -9,7 +9,8 @@ export type MenuCommand = 'zoomIn' | 'zoomOut' | 'zoomReset';
 
 export interface DesktopBridge {
   /** The folder the person picks in the system's dialog; null when cancelled. */
-  chooseFolder(title: string): Promise<string | null>;
+  /** `at: 'home'`: the dialog starts in the home folder, not where it was last (Documents left alone, #373). */
+  chooseFolder(title: string, at?: 'home'): Promise<string | null>;
   /**
    * Where new books go, in the system's save panel: `name` prefilled in the Documents folder (in the
    * home folder with `elsewhere`: she chose another folder than Documents), «Neuer Ordner» at hand,
@@ -65,11 +66,17 @@ export interface SmokeBridge {
 /**
  * Books the app knows: their folder and, when it still holds a workspace, the company's name.
  * `problem`: the folder is there, but its manifest cannot be read (why, in the reader's words);
- * neither name nor problem: the folder is gone; `refused`: macOS does not let the app read it (which protected folder it lies in).
+ * neither name nor problem: the folder is gone; `noAccess`: the app may not read it (`name` then as desktop.json keeps it).
  * `setup`: the folder holds a setup broken off before the books were created (src/onboarding/draft.ts);
  * opening it continues the setup conversation, and `name` is the firm's once it was answered.
  */
-export interface KnownBooks { root: string; name?: string; problem?: string; demo: boolean; setup?: true; refused?: ProtectedFolder }
+export interface KnownBooks { root: string; name?: string; problem?: string; demo: boolean; setup?: true; noAccess?: NoAccess }
+
+/**
+ * Why the app may not read a folder: `privacy`, macOS refused it («Nicht erlauben», EPERM: allowed
+ * again in System Settings); `rights`, the folder's own permissions (EACCES: changed in the Finder).
+ */
+export interface NoAccess { folder: ProtectedFolder; why: 'privacy' | 'rights' }
 
 /**
  * The folders macOS asks about before an app may read them (issue #373): the first read there holds
@@ -111,8 +118,8 @@ export interface DesktopInfo {
   homeAccess?: HomeAccess;
 }
 
-/** GET /api/desktop/folders: booksHome read, at the step that needs it (macOS may ask first). */
-export interface HomeFolders { folders: string[]; access: HomeAccess }
+/** GET /api/desktop/folders: booksHome read, at the step that needs it (macOS may ask first). `locked`: its own rights refuse the app. */
+export interface HomeFolders { folders: string[]; access: HomeAccess | 'locked' }
 
 /** GET and POST /api/desktop/phone: the phone's way in (Firma › Handy). */
 export interface PhoneInfo {

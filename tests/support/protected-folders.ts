@@ -28,6 +28,11 @@ export interface ProtectedFolders {
   hold(): void;
   /** macOS's answer: the held calls go on (and the folder counts as answered). */
   answer(): void;
+  /**
+   * From now on every call under `folder` fails as macOS fails it after «Nicht erlauben»: EPERM
+   * («Operation not permitted»), not the EACCES of a folder's own rights.
+   */
+  refuse(folder: string): void;
   /** Resolves once a call waits on the question. */
   asked(): Promise<void>;
   /** As at the next start: macOS asks again (a grant by a save panel lasts one run). */
@@ -49,6 +54,16 @@ export function protectedFolders(): ProtectedFolders {
   const touches: Touch[] = [];
   const frozen: Touch[] = [];
   const answered = new Set<string>();
+  const refused = new Set<string>();
+  const eperm = (fn: string, p: string) => Object.assign(new Error(`EPERM: operation not permitted, ${fn} '${p}'`), { code: 'EPERM', errno: -1, syscall: fn, path: p });
+  const refusedIn = (args: unknown[]): string | undefined => {
+    for (const a of args.slice(0, 2)) {
+      const p = pathOf(a);
+      const folder = p && under(p);
+      if (p && folder && refused.has(folder)) return p;
+    }
+    return undefined;
+  };
   let recording = false;
   let holding = false;
   let gate: { promise: Promise<void>; open(): void } | undefined;
@@ -74,8 +89,15 @@ export function protectedFolders(): ProtectedFolders {
     const original = target[name] as (...a: unknown[]) => unknown;
     if (typeof original !== 'function' || /^[A-Z]/.test(name)) return;
     const wrapped = function (this: unknown, ...args: unknown[]) {
-      if (kind === 'sync') { note(name, 'sync', args); return original.apply(this, args); }
+      const no = refusedIn(args);
+      if (kind === 'sync') { note(name, 'sync', args); if (no) throw eperm(name, no); return original.apply(this, args); }
       const touch = note(name, 'async', args);
+      if (no) {
+        if (kind === 'async') return Promise.reject(eperm(name, no));
+        const done = args[args.length - 1];
+        if (typeof done === 'function') process.nextTick(() => (done as (e: Error) => void)(eperm(name, no)));
+        return undefined;
+      }
       if (!touch) return original.apply(this, args);
       if (kind === 'callback') {
         const last = args.length - 1;
@@ -105,6 +127,7 @@ export function protectedFolders(): ProtectedFolders {
   return {
     home, ...folders, touches, frozen,
     start: () => { recording = true; },
+    refuse: (folder) => { refused.add(folder); },
     hold: () => {
       holding = true;
       let open = () => {};
@@ -114,6 +137,6 @@ export function protectedFolders(): ProtectedFolders {
     answer: () => { holding = false; held = 0; gate?.open(); },
     asked: () => new Promise<void>((r) => { if (held) r(); else waiting.push(r); }),
     forget: () => { answered.clear(); frozen.length = 0; },
-    stop: () => { recording = false; holding = false; gate?.open(); restore.forEach((r) => r()); syncBuiltinESMExports(); },
+    stop: () => { refused.clear(); recording = false; holding = false; gate?.open(); restore.forEach((r) => r()); syncBuiltinESMExports(); },
   };
 }

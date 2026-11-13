@@ -32,17 +32,25 @@ none of them until a step of hers needs it:
 - «Neue Buchhaltung erstellen» first says why macOS will ask and that «Erlauben» is needed
   («Weiter», or «Anderen Ordner wählen»: the save panel or folder dialog in the home folder).
   «Weiter» reads the folder (GET /api/desktop/folders), so macOS asks over those words. The answer
-  is kept as `homeAccess` in `desktop.json`; once `allowed` the step goes on at once, after
-  `refused` it names the way in System Settings and offers «Nochmals versuchen». The form says the
-  same under its folder while the folder lies in Documents and macOS was not asked yet.
+  is kept as `homeAccess` in `desktop.json` with the app's version: a hint only, since an update
+  (an unsigned build above all) may lose the permission, so another version says the words again.
+  Once `allowed` the step reads the folder without a word, for a name not taken; after `refused`
+  (EPERM) it names the way in System Settings and offers «Nochmals versuchen»; a folder whose own
+  rights refuse the app (EACCES, `locked`) is said apart, with the Finder's «Informationen». The
+  form reads the folder itself where this version was allowed, and says the words under its folder
+  field otherwise.
+- POST /api/desktop/create never opens books or a setup already in the folder it is given: it
+  refuses with `folderTaken` and the free name beside it («… 2»), which the form takes.
 - Every look into a folder the person names or opened before starts with one asynchronous read
   (`DesktopServer.reach`, fs/promises), so macOS's question holds a worker thread, never the main
-  process; the synchronous reads of opening books come after its answer. A folder macOS refuses is
-  refused as `folderRefused`, with the System Settings path, and marked «Kein Zugriff» in the start
-  screen's list.
+  process; the synchronous reads of opening books come after its answer. A folder the app may not
+  read is refused as `folderRefused` (`why`: `privacy` or `rights`), and shown in the start
+  screen's list with its name from `desktop.json` and «Kein Zugriff».
 - At a later start `firstPage` (`src/desktop/start.ts`) opens the books opened last before the
   window as before when their folder answers within `REACH_WAIT_MS`; when macOS asks instead, the
-  window comes first with the start screen, and the books open after «Erlauben».
+  window comes first with the start screen, which says that macOS asks about that folder and names
+  the books (`askingPath`), and the books open after «Erlauben».
+- The look for the AI's programs (`placesOf`, `programOn`) skips PATH entries in these folders.
 
 `tests/desktop-protected-folders.test.ts` records every `node:fs` call under these folders
 (`tests/support/protected-folders.ts`) while the server does what the start and the first screen

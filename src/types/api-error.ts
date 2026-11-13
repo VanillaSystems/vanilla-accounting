@@ -11,7 +11,7 @@ import type { MacMailProblem } from './mac-mail.js';
 import type { TagRefusal } from '../books/tags.js';
 import type { AiRefusal } from './ai-refusal.js';
 import type { AdjustmentRefusal } from './adjustment-refusal.js';
-import type { ProtectedFolder } from './desktop.js';
+import type { NoAccess } from './desktop.js';
 
 /**
  * The JSON body of every refused API request. `error` is the German text the CLI, the tests and
@@ -192,7 +192,9 @@ export type ApiRefusal =
   /** The folder holds books in the layout before 0.4.0 (books.json at the top): POST /api/desktop/upgrade moves them. */
   | { code: 'oldLayout'; params: { root: string } }
   /** macOS does not let the app read the folder (Systemeinstellungen › Datenschutz & Sicherheit › Dateien und Ordner, #373). */
-  | { code: 'folderRefused'; params: { root: string; folder: ProtectedFolder } }
+  | { code: 'folderRefused'; params: { root: string } & NoAccess }
+  /** New books named into a folder that holds books or a setup already (POST /api/desktop/create): `free` is the next free name beside it. */
+  | { code: 'folderTaken'; params: { root: string; holds: 'books' | 'setup'; name?: string; free: string } }
   | { code: 'setup'; params: SetupRefusal }
   /** An opening balance typed for an account that takes none by hand (Firma › Eröffnung). */
   | { code: 'openingAccount'; params: { account: string; reason: 'notBalanceSheet' | 'equity' | 'foreign' | 'foreignMismatch' | 'notForeign'; currency?: string } }

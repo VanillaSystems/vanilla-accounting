@@ -7,7 +7,8 @@
  */
 import { execFile } from 'node:child_process';
 import { accessSync, constants } from 'node:fs';
-import { isAbsolute, join } from 'node:path';
+import { homedir } from 'node:os';
+import { isAbsolute, join, sep } from 'node:path';
 
 const MARK = '__vanilla_path__';
 
@@ -21,9 +22,18 @@ export function loginPath(shell = process.env.SHELL || '/bin/zsh', timeoutMs = 8
   });
 }
 
+/**
+ * Whether `dir` lies in the Documents, Desktop or Downloads folder of `home`: macOS asks the person
+ * before an app looks there (#373), so a PATH entry there is never looked into, and a synchronous
+ * look would hold the process while it asks.
+ */
+export function inProtectedFolder(dir: string, home = homedir()): boolean {
+  return ['Documents', 'Desktop', 'Downloads'].some((f) => { const p = join(home, f); return dir === p || dir.startsWith(p + sep); });
+}
+
 /** The first executable `name` on `path`. A shell alias of that name is not a program and is not found. */
 export function programOn(path: string, name: string): string | undefined {
-  return path.split(':').filter(isAbsolute).map((dir) => join(dir, name)).find(executable);
+  return path.split(':').filter((dir) => isAbsolute(dir) && !inProtectedFolder(dir)).map((dir) => join(dir, name)).find(executable);
 }
 
 function executable(path: string): boolean {

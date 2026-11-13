@@ -431,7 +431,12 @@ Two markers flag an entry you must read before you update:
   works with another folder. Once allowed, the step goes on at once. Books opened before in such a
   folder are read only after macOS answered: when it asks at a later start, the window comes first
   with the start screen and the books open after «Erlauben». The menu's «Zuletzt geöffnet» names
-  them without reading their folders. Books in a folder macOS refuses say how to allow it.
+  them without reading their folders, and the start screen says that macOS asks about the folder
+  of those books while it does. Books in a folder macOS refuses keep their name and say how to
+  allow it; a folder whose own rights refuse the app says so apart. New books never open books
+  already in the folder named for them: the form proposes a free name («Buchhaltung 2026 2»), also
+  after a restart. macOS's answer counts for this version of the app only: after an update the
+  words come again before macOS may ask again.
 - A repayment to the owner before any of her outlays is booked (#457): «Spesen Juli 2026» said
   «wartet auf ihren Beleg; ist er verknüpft, bucht die App sie», though no receipt is ever linked to
   it. While receipts that could be hers are filed (read, dated before it, paid by no payment of the

@@ -26,7 +26,7 @@ import { isOldLayout } from '../workspace/layout.js';
 import { upgradeWorkspace } from '../workspace/upgrade.js';
 import { renewTerminalAgents } from '../workspace/terminal-agents.js';
 import type { ApiErrorBody } from '../types/api-error.js';
-import type { AiAvailability, DesktopInfo, HomeFolders, KnownBooks, PhoneInfo, FolderLook, ProtectedFolder } from '../types/desktop.js';
+import type { AiAvailability, DesktopInfo, HomeAccess, HomeFolders, KnownBooks, NoAccess, PhoneInfo, FolderLook, ProtectedFolder } from '../types/desktop.js';
 import { aiSetup } from '../server/ai-setup.js';
 import { qrSvg } from './qr.js';
 import { opened, readState, writeState, type PhonePairing } from './state.js';
@@ -53,6 +53,8 @@ export interface DesktopServerOptions {
    * the app may not read is named by the one it lies in (#373).
    */
   protectedFolders?: Partial<Record<Exclude<ProtectedFolder, 'other'>, string>>;
+  /** The app's version: macOS's answer about the Documents folder is kept for this version only (an update may lose it). */
+  appVersion?: string;
   /** Whether an AI provider answers on this computer (the setup conversation needs one); by default the providers of src/llm are asked. */
   aiAvailable?: () => Promise<boolean>;
   /** The model the setup conversation's typed words go to (src/onboarding/draft-talk.ts); by default src/llm's `ask`, the step's configured provider. */
@@ -65,8 +67,11 @@ async function anyProviderReady(): Promise<boolean> {
   return modelReady(8000).catch(() => false);
 }
 
-/** `missing`: nothing there (yet); `refused`: macOS (or the folder's rights) does not let the app read it. */
-export type Reach = 'ok' | 'missing' | 'refused';
+/**
+ * `missing`: nothing there (yet); `refused`: macOS does not let the app read it («Nicht erlauben»,
+ * EPERM); `locked`: the folder's own rights do not (EACCES).
+ */
+export type Reach = 'ok' | 'missing' | 'refused' | 'locked';
 
 export interface DesktopServer {
   app: express.Express;
@@ -94,6 +99,8 @@ export interface DesktopServer {
    * folder comes after this answer.
    */
   reach(root: string): Promise<Reach>;
+  /** Which protected folder `root` lies in (`other`: none of them). */
+  folderOf(root: string): ProtectedFolder;
   /** Only requests to this host reach the books (a page elsewhere cannot rebind its name to this port). */
   allowHost(host: string): void;
   /**
@@ -152,13 +159,25 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     const hit = Object.entries(opts.protectedFolders ?? {}).find(([, f]) => f && (r === resolve(f) || r.startsWith(resolve(f) + sep)));
     return (hit?.[0] as ProtectedFolder | undefined) ?? 'other';
   };
-  /** known(), after macOS answered for the folder: never a synchronous read it holds. */
-  const look = async (root: string): Promise<KnownBooks> =>
-    ((await reach(root)) === 'refused' ? { root, demo: resolve(root) === resolve(opts.demoRoot), refused: folderOf(root) } : known(root));
-  /** Opening, creating, continuing in a folder macOS does not let the app read: said, with the way to allow it. */
+  const noAccess = (root: string, r: Reach): NoAccess | undefined =>
+    (r === 'refused' || r === 'locked' ? { folder: folderOf(root), why: r === 'refused' ? 'privacy' : 'rights' } : undefined);
+  /** known(), after macOS answered for the folder: never a synchronous read it holds. A folder the app may not read keeps the name desktop.json has. */
+  const look = async (root: string): Promise<KnownBooks> => {
+    const no = noAccess(root, await reach(root));
+    if (!no) return known(root);
+    const name = readState(opts.stateFile).names?.[root];
+    return { root, demo: resolve(root) === resolve(opts.demoRoot), ...(name ? { name } : {}), noAccess: no };
+  };
+  /** Opening, creating, continuing in a folder the app may not read: said, with the way to allow it. */
   const reachable = async (root: string): Promise<void> => {
-    if ((await reach(root)) !== 'refused') return;
-    throw new WorkspaceRefusal(`${root}: macOS does not let the app read this folder.`, { code: 'folderRefused', params: { root, folder: folderOf(root) } });
+    const no = noAccess(root, await reach(root));
+    if (no) throw new WorkspaceRefusal(`${root}: the app may not read this folder (${no.why}).`, { code: 'folderRefused', params: { root, ...no } });
+  };
+  /** `root`, or `root 2`, `root 3`, … : the first name beside it that holds nothing yet. */
+  const freeBeside = (root: string): string => {
+    let free = root;
+    for (let n = 2; existsSync(free); n++) free = `${root} ${n}`;
+    return free;
   };
 
   const lookAt = async (root: string): Promise<FolderLook> => {
@@ -283,14 +302,22 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     listed = r.folders;
     listing = undefined;
     const state = readState(opts.stateFile);
-    if (state.homeAccess !== r.access) writeState(opts.stateFile, { ...state, homeAccess: r.access });
+    const answer = r.access === 'locked' ? undefined : r.access;
+    if (answer && (state.homeAccess?.answer !== answer || state.homeAccess.version !== version)) writeState(opts.stateFile, { ...state, homeAccess: { answer, version } });
     return r;
   }));
+  const version = opts.appVersion ?? '';
+  /** macOS's answer as this version of the app had it; another version (an update) asks again. */
+  const homeAccess = (): HomeAccess | undefined => {
+    const kept = readState(opts.stateFile).homeAccess;
+    return kept?.version === version ? kept.answer : undefined;
+  };
   const info = async (): Promise<DesktopInfo> => {
     const state = readState(opts.stateFile);
+    const access = homeAccess();
     return {
       open, recent: await Promise.all(state.recent.map(look)), booksHome: opts.booksHome, folders: listed ?? [],
-      ...(state.homeAccess ? { homeAccess: state.homeAccess } : {}),
+      ...(access ? { homeAccess: access } : {}),
     };
   };
 
@@ -312,7 +339,14 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   app.post('/api/desktop/create', async (req, res) => {
     try {
       const body = req.body as SetupRequest & { assumed?: unknown };
-      if (typeof body.root === 'string' && body.root.trim()) await reachable(resolve(body.root));
+      if (typeof body.root === 'string' && body.root.trim()) {
+        const root = resolve(body.root);
+        // New books never open books or a setup already there: she typed a new firm (#373, review).
+        const look = await lookAt(root);
+        if (look.holds === 'books' || look.holds === 'setup') {
+          throw new WorkspaceRefusal(`${root} holds ${look.holds === 'books' ? 'books' : 'a setup'} already.`, { code: 'folderTaken', params: { root, holds: look.holds, ...(look.name ? { name: look.name } : {}), free: freeBeside(root) } });
+        }
+      }
       const created = await createWorkspace(body);
       // What the kind of firm answered and she never touched (#385): kept only where the books took it.
       if (!created.existed) {
@@ -416,7 +450,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   });
 
   return {
-    app, open: openBooks, openDemo, info, recent, reach,
+    app, open: openBooks, openDemo, info, recent, reach, folderOf,
     current: () => open,
     allowHost: (h) => { host = h; },
     startBackground: () => { if (background === 'off') { background = 'wanted'; void runBackground(); } },
@@ -458,7 +492,9 @@ async function foldersIn(dir: string): Promise<HomeFolders> {
     return { folders: (await readdir(dir, { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name), access: 'allowed' };
   } catch (e) {
     const code = (e as NodeJS.ErrnoException).code ?? '';
-    if (code === 'EACCES' || code === 'EPERM') return { folders: [], access: 'refused' };
+    // EPERM: macOS's «Nicht erlauben»; EACCES: the folder's own rights.
+    if (code === 'EPERM') return { folders: [], access: 'refused' };
+    if (code === 'EACCES') return { folders: [], access: 'locked' };
     // Missing is an answer; anything else is worth a line in the log.
     if (!['ENOENT', 'ENOTDIR'].includes(code)) console.error(`folders in ${dir}:`, e);
     return { folders: [], access: 'allowed' };
@@ -475,7 +511,7 @@ async function reach(root: string): Promise<Reach> {
     return 'ok';
   } catch (e) {
     const code = (e as NodeJS.ErrnoException).code ?? '';
-    return code === 'EACCES' || code === 'EPERM' ? 'refused' : code === 'ENOENT' || code === 'ENOTDIR' ? 'missing' : 'ok';
+    return code === 'EPERM' ? 'refused' : code === 'EACCES' ? 'locked' : code === 'ENOENT' || code === 'ENOTDIR' ? 'missing' : 'ok';
   }
 }
 

@@ -17,8 +17,12 @@ export interface DesktopState {
    * without reading the folders, which macOS may hold while it asks the person (#373).
    */
   names?: Record<string, string>;
-  /** How macOS answered the app's first read of the Documents folder (GET /api/desktop/folders). */
-  homeAccess?: 'allowed' | 'refused';
+  /**
+   * How macOS answered the app's first read of the Documents folder (GET /api/desktop/folders), and
+   * the app version that asked: a hint only, since an update (an unsigned build above all) may lose
+   * the permission, and macOS then asks again.
+   */
+  homeAccess?: { answer: 'allowed' | 'refused'; version: string };
   bounds?: Bounds;
   port?: number;
   phone?: PhonePairing;
@@ -35,7 +39,7 @@ export function readState(file: string): DesktopState {
     return {
       recent: Array.isArray(raw.recent) ? raw.recent.filter((r): r is string => typeof r === 'string') : [],
       ...(raw.names && typeof raw.names === 'object' ? { names: Object.fromEntries(Object.entries(raw.names).filter((e): e is [string, string] => typeof e[1] === 'string')) } : {}),
-      ...(raw.homeAccess === 'allowed' || raw.homeAccess === 'refused' ? { homeAccess: raw.homeAccess } : {}),
+      ...((raw.homeAccess?.answer === 'allowed' || raw.homeAccess?.answer === 'refused') && typeof raw.homeAccess.version === 'string' ? { homeAccess: { answer: raw.homeAccess.answer, version: raw.homeAccess.version } } : {}),
       ...(raw.bounds && typeof raw.bounds.width === 'number' ? { bounds: raw.bounds } : {}),
       ...(Number.isInteger(raw.port) ? { port: raw.port } : {}),
       ...(raw.phone && typeof raw.phone.token === 'string' && raw.phone.token

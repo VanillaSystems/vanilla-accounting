@@ -14,8 +14,9 @@ import { FIRST_RUN_CLIS, planName, type CardState, type SetupKey } from '../../p
 import { AI_CLIS, type TerminalCli } from '../../platform/terminal.js';
 import type { DesktopInfo, FolderLook, HomeFolders } from '../../types/desktop.js';
 import { language, t } from '../i18n/index.js';
-import { api, errorText } from '../lib/api.js';
+import { api, errorText, sayAccess } from '../lib/api.js';
 import { DEMO_HOME, desktop, macAsksForFolders } from '../desktop/bridge.js';
+import { accessText } from '../desktop/access-text.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import { ICONS } from '../areas/icons.js';
 import { CliCard, NoAccount } from './CliCard.js';
@@ -239,8 +240,8 @@ function FolderStep({ info, ai, ask, create: chosenNew, foot, onSetup, onForm }:
   const [waiting, setWaiting] = useState(!!chosenNew);
   /** The Documents folder as read on «Weiter»: its folders (for a free name) and macOS's answer. */
   const [home, setHome] = useState<HomeFolders>();
-  /** New books wait for her word on macOS's question: `ask` before it, `refused` after «Nicht erlauben». */
-  const [access, setAccess] = useState<'ask' | 'refused'>();
+  /** New books wait for her word on macOS's question: `ask` before it, `refused` after «Nicht erlauben», `locked` when the folder's own rights refuse. */
+  const [access, setAccess] = useState<'ask' | 'refused' | 'locked'>();
   const known = home?.access ?? info?.homeAccess;
   const name = freeName(t('desktop.folderName', { year: String(new Date().getFullYear()) }), home?.folders ?? info?.folders ?? []);
   const run = async (go: () => Promise<void>) => {
@@ -257,14 +258,15 @@ function FolderStep({ info, ai, ask, create: chosenNew, foot, onSetup, onForm }:
     if (ai === undefined) { setWaiting(true); return; }
     // The Mac app reads the Documents folder only now, once she knows why macOS asks.
     if (macAsksForFolders && known !== 'allowed') { setAccess(known === 'refused' ? 'refused' : 'ask'); return; }
-    await createIn(name);
+    // Allowed already (or no Mac): the folder is read without a word, for a name not taken (#373 review).
+    await allow();
   };
   /** «Weiter»: the Documents folder is read now, and macOS asks her over these words. */
   const allow = () => run(async () => {
     const read = await api.desktop.folders();
     setHome(read);
     setBusy(false);
-    if (read.access === 'refused') { setAccess('refused'); return; }
+    if (read.access !== 'allowed') { setAccess(read.access); return; }
     setAccess(undefined);
     await createIn(freeName(t('desktop.folderName', { year: String(new Date().getFullYear()) }), read.folders));
   });
@@ -272,7 +274,7 @@ function FolderStep({ info, ai, ask, create: chosenNew, foot, onSetup, onForm }:
   const createIn = async (free: string, elsewhere = false) => {
     if (!ai) {
       if (!elsewhere) { onForm(); return; }
-      const dir = await asked(desktop?.chooseFolder(t('desktop.chooseNew')));
+      const dir = await asked(desktop?.chooseFolder(t('desktop.chooseNew'), 'home'));
       if (dir) onForm(dir);
       return;
     }
@@ -330,7 +332,8 @@ function FolderStep({ info, ai, ask, create: chosenNew, foot, onSetup, onForm }:
         <div data-access={access}>
           <Me text={t('aiSetup.folder.create')} />
           <Ai>
-            {access === 'ask' ? <><p>{t('aiSetup.folder.access')}</p><p>{t('aiSetup.folder.accessNo')}</p></> : <p className="warnline" role="alert">{t('aiSetup.folder.accessRefused')}</p>}
+            {access === 'ask' ? <><p>{t('aiSetup.folder.access')}</p><p>{t('aiSetup.folder.accessNo')}</p></>
+              : <p className="warnline" role="alert">{access === 'locked' ? accessText(sayAccess, { folder: 'documents', why: 'rights' }, info?.booksHome ?? '') : t('aiSetup.folder.accessRefused')}</p>}
           </Ai>
           <Answers>
             <button type="button" className="btn primary" data-answer={access === 'ask' ? 'allow' : 'again'} disabled={busy} onClick={() => void allow()}>
