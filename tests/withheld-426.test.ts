@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, rmSync, writeFileSync, appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { classifyTransactions, loadClassifyContext, type ClassifyDeps } from '../src/booking/classify.js';
-import { withheldFor } from '../src/booking/withheld.js';
+import { unclearedContributions, withheldFor } from '../src/booking/withheld.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import { loadChart } from '../src/workspace/chart.js';
 import { APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
@@ -22,7 +22,7 @@ const roots: string[] = [];
 after(() => { for (const r of roots) rmSync(r, { recursive: true, force: true }); });
 
 const pay = (ref: string, date: string, amount: number, counterparty: string, description: string, over: Partial<BankTransaction> = {}): BankTransaction =>
-  ({ ref, bank: 'Raiffeisen', date, amount: -amount, currency: 'CHF', direction: 'DBIT', counterparty, description, ...over });
+  ({ ref, bank: 'Raiffeisen', date, amount, currency: 'CHF', direction: 'DBIT', counterparty, description, ...over });
 const entry = (ref: string, date: string, debit: string, credit: string, amount: number, over: Partial<JournalEntry> = {}): JournalEntry =>
   ({ id: `e-${ref}-${debit}-${credit}`, transactionRef: ref, date, accountDebit: debit, accountCredit: credit, amount, description: ref, origin: 'classify', by: { kind: 'model', model: 'test' }, ...over }) as JournalEntry;
 
@@ -37,7 +37,7 @@ const PRINTER = pay('DR', '2026-09-20', 540, 'Druckerei Brun AG', 'Rechnung 2026
 const BILL: Receipt = { id: 'ak', filename: 'ak.pdf', extractedText: 'Ausgleichskasse Luzern\nAkontorechnung AK-26-Q3-30871\nDatum: 07.07.2026\nLohnsumme gemäss Meldung: CHF 18\'750.00\nAHV/IV/EO 10.6%\nALV 2.2%\nFamilienausgleichskasse FAK 1.3%\nVerwaltungskosten 2% der AHV/IV/EO-Beiträge\nTotal CHF\n1987.50\n412.50\n243.75\n39.75\n2683.50', extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '', location: 'archived', date: '2026-07-07', amount: 2683.5, currency: 'CHF', hasSwissVat: false } as Receipt;
 const PRINT_BILL: Receipt = { id: 'dr', filename: 'dr.pdf', extractedText: 'Druckerei Brun AG\nRechnung 2026-118\nTotal CHF 540.00\nMWST 8.1% 40.47', extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '', location: 'archived', date: '2026-09-10', amount: 540, currency: 'CHF', hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 40.47, gross: 540 }] } as Receipt;
 
-function firm(entries: JournalEntry[]): Workspace {
+function firm(entries: JournalEntry[], extra: BankTransaction[] = [], config: Record<string, unknown> = { closedThrough: '2026-06-30' }): Workspace {
   const made = tempWorkspace('withheld-426-', join(APP_ROOT, 'demo-consulting', 'vanilla-accounting'));
   roots.push(made.paths.root);
   appendFileSync(join(made.paths.root, 'belege.workspace.yaml'), 'profile:\n  preset: consultant\n  fiscalYear: calendar\n  start: new\n  sells: services\n  foreignCustomers: no\n  imports: no\n  employees: staff\n  ownerPaysPrivately: no\n  privateUse: []\n  payouts: no\n');
@@ -45,46 +45,104 @@ function firm(entries: JournalEntry[]): Workspace {
   mkdirSync(dirname(ws.paths.accounts), { recursive: true });
   writeFileSync(ws.paths.accounts, JSON.stringify(loadChart().accounts.map((a) => ({ number: a.number, name: a.name, type: a.type }))));
   const mappings: Mapping[] = [{ transactionRef: 'AK', receiptId: 'ak', by: 'human' }, { transactionRef: 'DR', receiptId: 'dr', by: 'human' }];
-  writeIndex(ws, { transactions: [...WAGES, PENSION, AKONTO, PRINTER], journalEntries: entries, receipts: [BILL, PRINT_BILL], mappings, config: { closedThrough: '2026-06-30' } });
+  writeIndex(ws, { transactions: [...WAGES, PENSION, AKONTO, PRINTER, ...extra], journalEntries: entries, receipts: [BILL, PRINT_BILL], mappings, config: config as never });
   return ws;
 }
 
-/** The prompt's part of each transaction, by its ref; the answer books every payment whole on 5700. */
-async function told(ws: Workspace, txs: string[], extra: JournalEntry[] = []) {
-  const books = loadBooks(ws);
-  books.journalEntries.push(...extra);
+/** A model that books a wage gross over 2270 (the payslip's deductions) and every other payment as `answer` says; it keeps what it was told, by ref. */
+function model(answer: (ref: string, amount: number, said: string) => unknown[] = (_r, amount) => [{ accountDebit: '5700', accountCredit: '', amount, vat: 'none' }]) {
   const said: Record<string, string> = {};
+  const deductions: Record<string, number> = { LO: 500, LH: 99.2 };
   const ask: ClassifyDeps['ask'] = async (prompt) => {
     const out: Record<string, unknown> = {};
     for (const part of prompt.split(/^### Transaction \d+: /m).slice(1)) {
       const ref = part.split(/\s/)[0];
       said[ref] = part.split('\n\n')[0];
-      out[ref] = { entries: [{ accountDebit: '5700', accountCredit: '', amount: Number(/Amount: -?([\d.]+)/.exec(part)![1]), vat: 'none', description: ref }] };
+      const amount = Number(/Amount: -?([\d.]+)/.exec(part)![1]);
+      const wage = deductions[ref.split('-')[0]];
+      out[ref] = { entries: wage ? [{ accountDebit: '5000', accountCredit: '', amount, vat: 'none' }, { accountDebit: '5000', accountCredit: '2270', amount: wage, vat: 'none' }] : answer(ref, amount, said[ref]).map((e) => ({ description: ref, ...(e as object) })) };
     }
     return JSON.stringify(out);
   };
-  await classifyTransactions(books, books.transactions.filter((t) => txs.includes(t.ref)), { ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
-  return said;
+  return { ask, said };
 }
 
+async function run(ws: Workspace, txs: string[], m = model()) {
+  const books = loadBooks(ws);
+  const outcome = await classifyTransactions(books, books.transactions.filter((t) => txs.includes(t.ref)), { ask: m.ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+  return { books, outcome, said: m.said };
+}
+const line = (s: string | undefined) => /Withheld from wages: account 2270 holds ([\d.]+)/.exec(s ?? '')?.[1];
+
 test('the Akonto payment is told what 2270 holds on its day: the employees\' AHV/ALV of the three payslips, the pension fund\'s share already paid', async () => {
-  const said = await told(firm([...gross, ...pension]), ['AK']);
+  const { said } = await run(firm([...gross, ...pension]), ['AK']);
   assert.match(said.AK, /Withheld from wages: account 2270 holds 1200 CHF, deducted on the payslips booked so far/);
 });
 
-test('a payment booked again is told what was open before it, not after its own lines', async () => {
+test('the first drop: the six wages and the Akonto payment unbooked in one run; the payment is asked after the wages are booked', async () => {
+  const { said, books } = await run(firm([...pension]), [...WAGES.map((w) => w.ref), 'AK']);
+  assert.equal(line(said.AK), '1200');
+  assert.equal(books.journalEntries.filter((e) => e.accountCredit === '2270').length, 6);
+});
+
+test('the year\'s opening of 2270 counts as a credit, in the account\'s natural direction: Q4\'s share paid in January', () => {
+  const jan = [entry('LO-27', '2027-01-24', '5000', '2270', 500), entry('LH-27', '2027-01-24', '5000', '2270', 99.2)];
+  const config = { openingBalances: { '2027': { '2270': 1797.6 } } };
+  assert.equal(withheldFor({ journalEntries: jan, config }, { ref: 'AK27', date: '2027-01-28', direction: 'DBIT' }, '2270'), 2396.8);
+  assert.equal(withheldFor({ journalEntries: [], config }, { ref: 'AK27', date: '2027-01-10', direction: 'DBIT' }, '2270'), 1797.6);
+});
+
+test('a payment booked again is told what was open before it, not after its own lines', () => {
   const own = [entry('AK', '2026-09-28', '2270', '1020', 1200), entry('AK', '2026-09-28', '5700', '1020', 1483.5)];
   const books = { journalEntries: [...gross, ...pension, ...own] };
   assert.equal(withheldFor(books, AKONTO, '2270'), 1200);
   assert.equal(withheldFor(books, { ...AKONTO, ref: 'later', date: '2026-09-30' }, '2270'), undefined, 'after the Akonto payment 2270 holds nothing');
 });
 
-test('no word of it for a wage, a purchase whose receipt shows Swiss VAT, or when wages are booked net', async () => {
-  const said = await told(firm([...gross.filter((e) => e.transactionRef !== 'LO-09'), ...pension]), ['LO-09', 'DR']);
-  assert.doesNotMatch(said['LO-09'], /Withheld from wages/, 'a wage');
-  assert.doesNotMatch(said.DR, /Withheld from wages/, 'a purchase with Swiss VAT');
-  const net = MONTHS.flatMap((m) => [entry(`LO-${m}`, `2026-${m}-24`, '5000', '1020', 4200), entry(`LH-${m}`, `2026-${m}-24`, '5000', '1020', 1450.8)]);
-  const none = await told(firm([...net, entry('PK', '2026-07-10', '5720', '1020', 1195.2)]), ['AK']);
-  assert.doesNotMatch(none.AK, /Withheld from wages/, 'wages booked net: 2270 holds nothing');
+test('only a contribution payment is told: not a wage (whatever its text), a supplier, a purchase with Swiss VAT, money in, nor anything when wages are booked net', async () => {
+  const plain = { ...WAGES.find((w) => w.ref === 'LO-09')!, description: 'Überweisung' };
+  const RENT = pay('RENT', '2026-09-01', 1800, 'Immobilien Muster AG', 'Miete September');
+  const ws = firm([...gross.filter((e) => e.transactionRef !== 'LO-09'), ...pension], [RENT]);
+  const books = loadBooks(ws);
+  books.transactions = books.transactions.map((t) => (t.ref === 'LO-09' ? plain : t));
+  const m = model();
+  await classifyTransactions(books, books.transactions.filter((t) => ['LO-09', 'DR', 'RENT'].includes(t.ref)), { ask: m.ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+  for (const ref of ['LO-09', 'DR', 'RENT']) assert.equal(line(m.said[ref]), undefined, ref);
+  const net = MONTHS.flatMap((mo) => [entry(`LO-${mo}`, `2026-${mo}-24`, '5000', '1020', 4200), entry(`LH-${mo}`, `2026-${mo}-24`, '5000', '1020', 1450.8)]);
+  const none = await run(firm([...net, entry('PK', '2026-07-10', '5720', '1020', 1195.2)]), ['AK']);
+  assert.equal(line(none.said.AK), undefined, 'wages booked net: 2270 holds nothing');
   assert.equal(withheldFor({ journalEntries: gross }, { ...AKONTO, direction: 'CRDT' }, '2270'), undefined, 'money in');
+});
+
+test('a payee booked on the contribution accounts before is told too: the pension fund\'s next payment', async () => {
+  const PK2 = pay('PK2', '2026-09-30', 1195.2, 'Pensionskasse Zentral', 'Beiträge Q4 2026 PK-26-4-1180');
+  const { said } = await run(firm([...gross, ...pension], [PK2]), ['PK2']);
+  assert.equal(line(said.PK2), '1200');
+});
+
+test('code holds the cap: two contribution payments that each take the whole credit off 2270, the second is not booked', async () => {
+  const AK2 = pay('AK2', '2026-09-28', 2683.5, 'Ausgleichskasse Luzern', 'Akonto Nachtrag');
+  const greedy = model((_ref, amount, said) => { const open = Number(line(said) ?? 0); return [{ accountDebit: '2270', accountCredit: '', amount: open, vat: 'none' }, { accountDebit: '5700', accountCredit: '', amount: Math.round((amount - open) * 100) / 100, vat: 'none' }]; });
+  const { books, outcome } = await run(firm([...gross, ...pension], [AK2]), ['AK', 'AK2'], greedy);
+  assert.deepEqual(outcome.classified, ['AK']);
+  assert.equal(outcome.failed.length, 1);
+  assert.equal(outcome.failed[0].refusal?.code, 'classifyWithheldOver');
+  assert.equal(books.journalEntries.filter((e) => e.transactionRef === 'AK2').length, 0);
+});
+
+test('the task: a contribution payment booked without a line on 2270 while 2270 held a credit; none once it clears it', () => {
+  const whole = [entry('AK', '2026-09-28', '5700', '1020', 2683.5)];
+  const books = { transactions: [...WAGES, PENSION, AKONTO], journalEntries: [...gross, ...pension, ...whole] };
+  assert.deepEqual(unclearedContributions(books, '2026-07-01', '2026-09-30').map((u) => [u.tx.ref, u.account, u.open]), [['AK', '2270', 1200]]);
+  const split = [entry('AK', '2026-09-28', '2270', '1020', 1200), entry('AK', '2026-09-28', '5700', '1020', 1483.5)];
+  assert.deepEqual(unclearedContributions({ ...books, journalEntries: [...gross, ...pension, ...split] }, '2026-07-01', '2026-09-30'), []);
+  assert.deepEqual(unclearedContributions({ ...books, journalEntries: [...pension, ...whole] }, '2026-07-01', '2026-09-30'), [], 'wages booked net');
+});
+
+test('the task stands under «Noch offen» of the period and is counted', async () => {
+  const { periodIssues, countIssues } = await import('../src/app/areas/automation/period-issues.js');
+  const books = { transactions: [...WAGES, PENSION, AKONTO], journalEntries: [...gross, ...pension, entry('AK', '2026-09-28', '5700', '1020', 2683.5)], receipts: [], mappings: [], bankStatements: [], config: { closedThrough: '2026-06-30' } };
+  const issues = periodIssues(books as never, [], '2026-07-01', '2026-09-30', []);
+  assert.deepEqual(issues.flatMap((i) => (i.kind === 'withheld' ? [[i.uncleared.tx.ref, i.uncleared.open]] : [])), [['AK', 1200]]);
+  assert.equal(countIssues(issues).withheld, 1);
 });

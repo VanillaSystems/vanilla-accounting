@@ -271,7 +271,9 @@ export type ClassifyRefusal =
   | { code: 'classifyBalance'; params: { date: string; currency: string; paid: number; booked: number } }
   | { code: 'classifySeparateFee'; params: { fee: string; currency: string; amount: number } }
   | { code: 'classifyOpenInvoice'; params: { number: string; customer: string } }
-  | { code: 'classifyInputTaxShared'; params: { payments: string; currency: string; booked: number; shown: number } };
+  | { code: 'classifyInputTaxShared'; params: { payments: string; currency: string; booked: number; shown: number } }
+  /** The answer takes more off the wages' deductions account than it held on the payment's day (#426). */
+  | { code: 'classifyWithheldOver'; params: { account: string; currency: string; taken: number; open: number } };
 
 /**
  * Why a statement upload (POST /api/statements) was refused: not XML or PDF, an XML that is no

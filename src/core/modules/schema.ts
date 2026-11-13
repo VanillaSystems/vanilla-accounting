@@ -251,7 +251,11 @@ export interface SetupData {
   /** The account the bank's own fee row is booked on by code, without a VAT code (src/booking/bank-fee.ts, #359); absent: such a row is left to a rule, the model or the person. */
   bankCharges?: { account: string };
   /** The wage account: a booking on it carries no VAT code (src/booking/rule-vat.ts); absent: no rule for wages is offered. The hand form proposes it (#382); `deductions`: where wages' deductions go, books carrying it get no proposal; `contributions`: the employer's social insurance contributions, which carry no VAT code either. */
-  wages?: { account: string; deductions?: string; contributions?: string[] };
+  wages?: {
+    account: string; deductions?: string; contributions?: string[];
+    /** The business files (ids) that collect contributions with the employees' share the payslips withheld: a payment to one is told what `deductions` holds (src/booking/withheld.ts, #426). */
+    payees?: string[];
+  };
   /** The account each kind of private use (the setup's privateUse: car, phone) is booked on: a share named in the setup is offered as a rule on a payment booked there (#402). */
   privateUse?: Partial<Record<'car' | 'phone', string>>;
   answers: {
