@@ -13,7 +13,7 @@ import { api, errorText } from '../lib/api.js';
 import { isKey, language, t, tWith } from '../i18n/index.js';
 import { heldReasonText } from '../lib/held-reason.js';
 import { dropStore, failedLine } from './drop-upload.js';
-import { CLOSING_SENTENCE, OTHER_SENTENCES, RECEIPT_SENTENCES, closingGroupOf, linkedAs, readOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, receiptStateOf, waitsAfterDrop, type ClosingCounts, type ClosingGroup, type DropSummary, type FileState } from './drop-summary.js';
+import { CLOSING_SENTENCE, OTHER_SENTENCES, RECEIPT_SENTENCES, closingGroupOf, linkedAs, overStoppedRun, readOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, receiptStateOf, waitsAfterDrop, type ClosingCounts, type ClosingGroup, type DropSummary, type FileState } from './drop-summary.js';
 import { isUnbooked, unbookedPayments } from '../areas/bank/model.js';
 import { receiptWaits } from '../areas/automation/period-issues.js';
 import { parsePeriod, filingKeyOf, parseSwissDate } from '../../accounting/periods.js';
@@ -500,10 +500,16 @@ function fileState(r: DropRow, books: Index, view: View): FileState {
   }
   if (links.length) return { kind: 'matched' };
   if (isWorking(run)) return working;
-  if (proc?.kind === 'stuck') return { kind: 'stuck', run: proc.run };
   const receipt = books.receipts.find((x) => x.id === id);
   // At rest but not in the books the page holds: they are being loaded again, unless the run stopped.
   if (!receipt) return run?.status === 'stuck' ? { kind: 'stuck', run: run.id } : working;
+  const kept = atRest(id, receipt, books);
+  // Its run stopped (#483): what the books made of the receipt stands; only one still waiting says the run stopped.
+  return proc?.kind === 'stuck' ? overStoppedRun(kept, proc.run) : kept;
+}
+
+/** A taken receipt at rest, as the books have it (what Belege says of it). */
+function atRest(id: string, receipt: Index['receipts'][number], books: Index): FileState {
   // An order page of the provider way (#253): the provider's order export brings its order, no payment comes for it.
   const ledger = ledgerFor(books);
   const v = ledger.byId.get(id);

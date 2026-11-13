@@ -74,6 +74,16 @@ export type FileState = { kind: 'working'; step?: string; doing?: Doing } | { ki
   | { kind: 'balanceSheet'; sheet?: BalanceSheet };
 
 /**
+ * The row of a taken receipt whose own run stopped (#483): what the books made of it stands when
+ * they settled it (a balance sheet, a document beside an invoice, no receipt, a possible copy, an
+ * order page), as Belege says it; only a receipt the books still have waiting for its run (read
+ * without a payment, not read, lacking its date or amount) says the run stopped.
+ */
+export function overStoppedRun(books: FileState, run: string): FileState {
+  return books.kind === 'read' || books.kind === 'unread' || books.kind === 'waits' ? { kind: 'stuck', run } : books;
+}
+
+/**
  * The groups of a drop's closing lines (#384). Every row is in exactly one, in its own words: a
  * statement read in, a report booked, a provider's monthly fee bill whose VAT code booked without a
  * payment (#406: no payment, so never «einer Zahlung zugeordnet»), a receipt by its state (receiptStateOf), an order page, a run
