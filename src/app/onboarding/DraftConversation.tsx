@@ -296,6 +296,7 @@ function QuestionStep({ step, draft, busy, send, change, fromText, turns }: { st
               if (a.kind === 'unsure') return <button key="unsure" type="button" className="btn ghost" disabled={busy} data-act="question-unsure" onClick={() => void send({ step: 'question', key, value: a.value })}>{label}</button>;
               // the answer «we file no VAT returns» (#347): «nein» to the registration, the same patch as that answer.
               if (a.kind === 'noVat') return <button key="noVat" type="button" className="btn" disabled={busy} data-answer={NO_VAT} onClick={() => void send({ step: 'question', key: 'vatRegistered', value: 'no' })}>{label}</button>;
+              if (a.kind === 'next') return <button key="next" type="button" className="btn" disabled={busy || ('required' in QUESTIONS[key] && !on.length)} data-act="question-next" onClick={() => void send({ step: 'question', key, value: on })}>{label}</button>;
               const chosen = multi ? on.includes(a.value) : list(step.suggested).includes(a.value);
               return (
                 <button key={a.value} type="button" role={multi ? 'checkbox' : undefined} aria-checked={multi ? chosen : undefined} className={`btn${chosen ? ' primary' : ''}`} disabled={busy} data-answer={a.value} onClick={() => pick(a.value)}>
@@ -303,7 +304,6 @@ function QuestionStep({ step, draft, busy, send, change, fromText, turns }: { st
                 </button>
               );
             })}
-            {multi ? <button type="button" className="btn" disabled={busy || ('required' in QUESTIONS[key] && !on.length)} data-act="question-next" onClick={() => void send({ step: 'question', key, value: on })}>{t('onboarding.draft.next')}</button> : null}
           </div>
           {noVatHint(key) ? <p className="obwhy" data-no-vat-hint={noVatHint(key)}>{t(noVatHint(key) === 'full' ? 'desktop.q.noVat.hint' : 'desktop.q.noVat.hintShort')}</p> : null}
         </div>

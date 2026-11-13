@@ -111,22 +111,31 @@ function waiting(d: SetupDraft): string {
 
 /**
  * The buttons of the step waiting, word for word as the person sees them (offeredAnswers, the list
- * the conversation draws them from, #398), and for a question the app leaves to her alone (UNSTEERED)
- * the facts of its help line, never a recommendation. Nothing for a step that is no question.
+ * the conversation and the form draw a question's buttons from, #398; the kinds of firm; a card's one
+ * button), and for a question the app leaves to her alone (UNSTEERED) the facts of its help line,
+ * never a recommendation.
  */
 export function buttonsNote(d: SetupDraft): string {
   const open = draftSteps(d).at(-1)!;
-  if (open.id !== 'question') return '';
   const { t } = wordsIn(d.language ?? 'de');
   const say = t as unknown as (key: string, vars?: Record<string, string>) => string;
-  const labels = offeredAnswers(open.key).map((a) => `«${offeredLabel(say, open.key, a)}»`);
-  const where = (QUESTIONS[open.key] as QuestionSpec).where;
-  return [
-    `Its buttons, exactly these and no others: ${labels.join(', ')}. Name no other answer: there is no «weiss nicht», «später» or «überspringen» on it unless it stands in this list, and never tell the person she can skip it.`,
-    ...(unsteered(open.key) ? [
-      `This question is hers alone: never recommend an answer and never call one usual, likely or the default for her. When she asks what it means or how to tell, explain in her words from these facts only: ${QUESTIONS[open.key].why} ${where ?? ''} «${say('desktop.q.noVat')}» is only for a firm that is not in the VAT register; a firm whose accountant (Treuhand) fills in its VAT returns is registered.`,
-    ] : []),
-  ].join('\n');
+  const exactly = (labels: string[]) => `Its buttons, exactly these and no others: ${labels.map((l) => `«${l}»`).join(', ')}. Name no other answer: there is no «weiss nicht», «später» or «überspringen» on it unless it stands in this list, and never tell the person she can skip it.`;
+  switch (open.id) {
+    // A card of fields she fills in, with its one button (DraftConversation's FirmCard, RatesCard, the banks' card).
+    case 'firm': case 'netRates': case 'banks':
+      return `${exactly([say('onboarding.draft.next')])} It is a card of fields she fills in or you fill from her words.`;
+    case 'preset': return exactly(PRESET_NAMES.map((p) => say(`desktop.q.preset.${p}`)));
+    case 'review': return `${exactly([say('desktop.create')])} Beside each answer of the review stands «${say('onboarding.change')}».`;
+    case 'question': {
+      const where = (QUESTIONS[open.key] as QuestionSpec).where;
+      return [
+        exactly(offeredAnswers(open.key).map((a) => offeredLabel(say, open.key, a))),
+        ...(unsteered(open.key) ? [
+          `This question is hers alone: never recommend an answer and never call one usual, likely or the default for her. When she asks what it means or how to tell, explain in her words from these facts only: ${QUESTIONS[open.key].why} ${where ?? ''} «${say('desktop.q.noVat')}» is only for a firm that is not in the VAT register; a firm whose accountant (Treuhand) fills in its VAT returns is registered.`,
+        ] : []),
+      ].join('\n');
+    }
+  }
 }
 
 const key = (m: StepMark) => (['firm', 'preset', 'netRates', 'banks'].includes(m) ? m : `answers.${m}`);

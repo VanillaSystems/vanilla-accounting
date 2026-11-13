@@ -9,10 +9,13 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BANKS, parseIban } from '../../workspace/banks.js';
-import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstMissing, hasWhere, noVatHint, firstUnsupported, notRegistered, optionOf, unsteered, withoutUnsteered, NO_VAT, type Answers, type Preset, type QuestionKey } from '../../workspace/setup.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstMissing, hasWhere, noVatHint, offeredAnswers, offeredLabel, firstUnsupported, notRegistered, optionOf, unsteered, withoutUnsteered, NO_VAT, type Answers, type Preset, type QuestionKey } from '../../workspace/setup.js';
 import { parseUid } from '../../workspace/uid.js';
 import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
 import { LOCALES, isKey, t, tData } from '../i18n/index.js';
+
+/** t() for the data-driven keys of the setup's answers (offeredLabel). */
+const say = (key: string, vars?: Record<string, string>) => (vars ? t(key as 'onboarding.draft.unsure', vars as { answer: string }) : tData(key));
 
 /** The account numbers behind a help text, folded under «mehr» (#398): the line itself says it in plain words. */
 const More = ({ k }: { k: string }) => (isKey(k) ? <details className="st-more" data-more={k}><summary>{t('desktop.more')}</summary><span>{tData(k)}</span></details> : null);
@@ -328,12 +331,14 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
               <div key={key} className={missing ? 'st-q err' : 'st-q'} data-q={key} tabIndex={missing ? -1 : undefined} role="group" aria-labelledby={`stq-${key}`}>
                 <div className="st-qhd"><b id={`stq-${key}`}>{tData(`desktop.q.${key}.ask`)}{shownAssumed.includes(key) ? <span className="st-assumed" data-assumed>{t('onboarding.draft.assumed')}</span> : null}{missing ? <em className="st-choose">{t('desktop.pleaseChoose')}</em> : null}</b><span>{tData(`desktop.q.${key}.why`)}</span>{hasWhere(key) ? <span data-where>{tData(`desktop.q.${key}.where`)}</span> : null}<More k={`desktop.q.${key}.more`} /></div>
                 <div className="st-opts" role={'multi' in QUESTIONS[key] ? 'group' : 'radiogroup'} aria-label={tData(`desktop.q.${key}.ask`)}>
-                  {QUESTIONS[key].options.map((o) => (
-                    <button key={o.value} type="button" role={'multi' in QUESTIONS[key] ? 'checkbox' : 'radio'} aria-checked={chosen.includes(o.value)} className={chosen.includes(o.value) ? 'on' : ''} onClick={() => pick(key, o.value)}>
-                      {tData(`desktop.q.${key}.${o.value}`)}
-                    </button>
-                  ))}
-                  {unsteered(key) ? <button type="button" role="radio" aria-checked={false} data-answer={NO_VAT} onClick={() => pick(key, NO_VAT)}>{t('desktop.q.noVat')}</button> : null}
+                  {/* The same list as the conversation's buttons (offeredAnswers, #398). */}
+                  {offeredAnswers(key, 'form').map((a) => (a.kind === 'noVat'
+                    ? <button key="noVat" type="button" role="radio" aria-checked={false} data-answer={NO_VAT} onClick={() => pick(key, NO_VAT)}>{offeredLabel(say, key, a)}</button>
+                    : a.kind === 'option' ? (
+                      <button key={a.value} type="button" role={'multi' in QUESTIONS[key] ? 'checkbox' : 'radio'} aria-checked={chosen.includes(a.value)} className={chosen.includes(a.value) ? 'on' : ''} onClick={() => pick(key, a.value)}>
+                        {offeredLabel(say, key, a)}
+                      </button>
+                    ) : null))}
                 </div>
                 {noVatHint(key) ? <p className="st-note" data-no-vat-hint={noVatHint(key)}>{t(noVatHint(key) === 'full' ? 'desktop.q.noVat.hint' : 'desktop.q.noVat.hintShort')}</p> : null}
                 {notes.map((o) => (

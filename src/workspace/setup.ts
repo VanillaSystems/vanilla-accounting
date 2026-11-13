@@ -120,7 +120,7 @@ export const QUESTIONS = {
   basis: {
     ask: 'VAT basis',
     why: 'When the VAT counts. Vereinnahmt: when the money moves. Vereinbart: when you send your invoice, and for input tax when a bill arrives.',
-    where: 'Not sure? Vereinbart is what the law provides by default; vereinnahmt applies when the company asked for it, at registration or later, and the tax authority approved it. Your accountant knows. Picked wrong: change it under Company › VAT while this year has no entries.',
+    where: 'Not sure? Vereinbart applies unless the company asked for vereinnahmt, at registration or later, and the tax authority approved it. Your accountant knows. Picked wrong: change it under Company › VAT while this year has no entries.',
     when: registered,
     options: [
       { value: 'received', label: 'vereinnahmt (cash)' },
@@ -311,12 +311,17 @@ export const NO_VAT = 'no-vat' as const;
  * The conversation draws its buttons from this list and the model is told exactly these (talkPrompt),
  * so the AI never names an answer that is not on the screen.
  */
-export type Offered = { kind: 'option'; value: string } | { kind: 'unsure'; value: string } | { kind: 'noVat' };
-export function offeredAnswers(key: QuestionKey): Offered[] {
-  const unsure = unsureOf(key);
+export type Offered = { kind: 'option'; value: string } | { kind: 'unsure'; value: string } | { kind: 'noVat' } | { kind: 'next' };
+/**
+ * `path`: the conversation offers «Weiss nicht» and, on a question of several answers, «Weiter»; the
+ * form, where every question stands at once, offers neither. Both draw their buttons from here.
+ */
+export function offeredAnswers(key: QuestionKey, path: 'conversation' | 'form' = 'conversation'): Offered[] {
+  const unsure = path === 'conversation' ? unsureOf(key) : undefined;
   return [
     ...QUESTIONS[key].options.map((o): Offered => ({ kind: 'option', value: o.value })),
     ...(unsure ? [{ kind: 'unsure' as const, value: unsure }] : []),
+    ...(path === 'conversation' && 'multi' in QUESTIONS[key] ? [{ kind: 'next' as const }] : []),
     ...(unsteered(key) ? [{ kind: 'noVat' as const }] : []),
   ];
 }
@@ -331,6 +336,7 @@ export const noVatHint = (key: QuestionKey): 'full' | 'short' | undefined =>
 /** The words on an answer's button, through `say` (t() in the app, a dictionary's own on the server). */
 export function offeredLabel(say: (key: string, vars?: Record<string, string>) => string, key: QuestionKey, a: Offered): string {
   if (a.kind === 'noVat') return say('desktop.q.noVat');
+  if (a.kind === 'next') return say('onboarding.draft.next');
   if (a.kind === 'unsure') return say('onboarding.draft.unsure', { answer: say(`desktop.q.${key}.${a.value}`) });
   return say(`desktop.q.${key}.${a.value}`);
 }

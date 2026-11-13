@@ -17,7 +17,7 @@ import { desktopServer } from '../src/desktop/server.js';
 import { assumedOf, draftProgress, draftSteps, newDraft, withPatch, type SetupDraft } from '../src/onboarding/draft.js';
 import { draftFile, readDraft, writeDraft } from '../src/onboarding/draft-store.js';
 import { applyTalk, parseTalk, talkPrompt, type Ask } from '../src/onboarding/draft-talk.js';
-import { PRESETS, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, hasWhere, unsureOf, withoutUnsteered, unusualPeriod, type QuestionKey } from '../src/workspace/setup.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, hasWhere, unsureOf, withoutUnsteered, unusualPeriod, type QuestionKey } from '../src/workspace/setup.js';
 import type { AskOptions } from '../src/llm/ask.js';
 import { APP_FOLDER, MANIFEST_FILE } from '../src/workspace/workspace.js';
 import { testIban } from './support/iban.js';
@@ -213,8 +213,11 @@ test('the model is told the buttons of the step waiting word for word, the list 
   const { formatIn } = await import('../src/app/i18n/core.js');
   const de = (await import('../src/app/i18n/locales/de.js')).default;
   const say = (key: string, vars: Record<string, string> = {}) => formatIn({ code: 'de', ...de }, key as never, vars);
+  const buttons = (prompt: string) => /Its buttons, exactly these and no others: ([^\n]*?)\. Name no other answer/.exec(prompt)?.[1];
   let d = newDraft('de', NOW);
+  assert.equal(buttons(talkPrompt(d, 'hallo', [], 'CHF')), '«Weiter»', 'the firm\'s card: its one button');
   d = withPatch(d, { step: 'firm', value: { name: 'Malerei Huber GmbH', uid: UID, owner: 'Thomas Huber' } });
+  assert.equal(buttons(talkPrompt(d, 'hallo', [], 'CHF')), PRESET_NAMES.map((p) => `«${say(`desktop.q.preset.${p}`)}»`).join(', '), 'the kinds of firm');
   d = withPatch(d, { step: 'preset', value: 'custom' });
   const seen: QuestionKey[] = [];
   for (let open = draftSteps(d).at(-1)!; open.id === 'question'; open = draftSteps(d).at(-1)!) {
@@ -223,7 +226,9 @@ test('the model is told the buttons of the step waiting word for word, the list 
     const labels = offeredAnswers(key).map((a) => `«${offeredLabel(say, key, a)}»`);
     assert.match(prompt, new RegExp(`Its buttons, exactly these and no others: ${labels.join(', ').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.`), `${key}: the buttons as the screen shows them`);
     if (!offeredAnswers(key).some((a) => a.kind === 'unsure')) assert.doesNotMatch(prompt.split('Its buttons')[1].split('\n')[0], /«Weiss nicht/, `${key}: no «Weiss nicht» named where none stands`);
+    if ('multi' in QUESTIONS[key]) assert.ok(labels.includes('«Weiter»'), `${key}: a question of several answers has its «Weiter» in the list`);
     if (key === 'vatMethod' || key === 'basis') {
+      assert.doesNotMatch(prompt, /provides by default|what the law provides/, 'no fact that reads as a recommendation (#398 review)');
       assert.ok(labels.includes('«Wir rechnen keine MWST ab»'), 'the third answer is named, as it stands');
       assert.match(prompt, /never recommend an answer and never call one usual, likely or the default for her/);
       assert.match(prompt, /a firm whose accountant \(Treuhand\) fills in its VAT returns is registered/);
@@ -237,6 +242,17 @@ test('the model is told the buttons of the step waiting word for word, the list 
   const ui = readFileSync('src/app/onboarding/DraftConversation.tsx', 'utf8');
   assert.match(ui, /\{offeredAnswers\(key\)\.map\(\(a\) => \{\n\s+const label = offeredLabel\(say, key, a\);/, 'the conversation draws its buttons from the same list and words');
   assert.doesNotMatch(ui, /QUESTIONS\[key\]\.options\.map/, 'no second list of buttons');
+  const form = readFileSync('src/app/desktop/StartScreen.tsx', 'utf8');
+  assert.match(form, /offeredAnswers\(key, 'form'\)\.map/, 'the form draws from the same list');
+  assert.doesNotMatch(form, /QUESTIONS\[key\]\.options\.map|unsteered\(key\) \? <button/, 'and has no second one');
+  // The steps after the questions: the banks' card and the review.
+  while (draftSteps(d).at(-1)!.id !== 'review') {
+    const open = draftSteps(d).at(-1)!;
+    if (open.id === 'banks') { assert.equal(buttons(talkPrompt(d, 'x', [], 'CHF')), '«Weiter»'); d = withPatch(d, { step: 'banks', value: [{ bank: 'Raiffeisen', currency: 'CHF' }] }); }
+    else if (open.id === 'netRates') d = withPatch(d, { step: 'netRates', value: [{ rate: 4.5 }] });
+    else break;
+  }
+  if (draftSteps(d).at(-1)!.id === 'review') assert.equal(buttons(talkPrompt(d, 'x', [], 'CHF')), `«${say('desktop.create')}»`, 'the review: its one button');
 });
 
 test('«Wir rechnen keine MWST ab» never stands without the line that says whom it is for: under every question that offers it, on the form and in the conversation (#398)', async () => {
