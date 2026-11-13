@@ -18,6 +18,7 @@ import { loadChart } from '../src/workspace/chart.js';
 import { APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import type { BankTransaction, JournalEntry } from '../src/types/index.js';
 import { tempWorkspace, writeIndex } from './support/workspace.js';
+import { testIban } from './support/iban.js';
 
 const NOW = '2026-11-13T09:00:00.000Z';
 const WORDS = 's Gschäftshandy bruuch ich au privat, öppe d Hälfti';
@@ -41,7 +42,7 @@ test('the share her words name is kept with her words, of what is used privately
 });
 
 const pay = (ref: string, date: string, amount: number): BankTransaction =>
-  ({ ref, bank: 'Raiffeisen', date, amount, currency: 'CHF', direction: 'DBIT', counterparty: 'Alpentel AG', counterpartyIban: 'CH5604835012345678009', description: 'Mobilfunk' });
+  ({ ref, bank: 'Raiffeisen', date, amount, currency: 'CHF', direction: 'DBIT', counterparty: 'Alpentel AG', counterpartyIban: testIban('04835012345678009'), description: 'Mobilfunk' });
 const booked = (t: BankTransaction): JournalEntry =>
   ({ id: `e-${t.ref}`, transactionRef: t.ref, date: t.date, accountDebit: '6510', accountCredit: '1020', amount: t.amount, vatCode: 'I81', description: 'Alpentel, Mobilfunk', origin: 'classify', by: { kind: 'model', model: 'test' } });
 
