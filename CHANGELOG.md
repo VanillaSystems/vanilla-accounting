@@ -398,6 +398,11 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- The fields of Firma's forms stand in line at every width (#454): a hint under one input («kein
+  Konto», the account's name) or a label on two lines no longer pushes the field beside it down
+  (Eröffnung, Regeln and the others). Firma › Eröffnung names its amount fields «Saldo per 1.1.2026
+  (CHF)» and, for a foreign-currency account, «Saldo per 1.1.2026 (EUR)» beside it, no longer
+  «Eröffnung 1.1.2026», which read like a date; an amount typed there shows as «2'345.85» once left.
 - A receipt that names no VAT is «MWST noch nicht gelesen», no longer «keine CH-MWST» (#391).
   Only a model, or the receipt's own words («nicht MWST-pflichtig», «not subject to Swiss VAT», «von
   der MWST ausgenommen», never beside «inkl. MWST» or a Swiss rate, 7.7 % too), say it carries no
