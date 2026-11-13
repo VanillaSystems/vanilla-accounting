@@ -56,11 +56,40 @@ export async function startAndSay(workflowId: string, item: { kind: ItemKind; id
   return r.run ? runResultText(workflow, await rested(r.run)) : undefined;
 }
 
-export function WorkflowButtons({ kind, id, facts = [], nav, canEdit }: { kind: ItemKind; id: string; facts?: ItemFact[]; nav: Nav; canEdit: boolean }) {
+/**
+ * «Automatisch buchen» for every open payment at once (Automatisierung's list, r3-noai-22): the server
+ * books only what a rule of the firm or code decides, asks no model, and counts every payment it left
+ * with why (POST /api/rules/book-open). The line says each group in its own words.
+ */
+export async function bookOpenAndSay(workflowName: string): Promise<string> {
+  const n = await api.bookOpen();
+  const { max, ...counts } = n;
+  if (!Object.values(counts).some(Boolean)) return t('marks.all.none', { workflow: workflowName });
+  const parts = [
+    t('marks.all.booked', { n: n.booked }),
+    n.model ? t('marks.all.model', { n: n.model }) : '',
+    n.receipt ? t('marks.all.receipt', { n: n.receipt }) : '',
+    n.question ? t('marks.all.question', { n: n.question }) : '',
+    n.unread ? t('marks.all.unread', { n: n.unread }) : '',
+    n.deleted ? t('marks.all.deleted', { n: n.deleted }) : '',
+    n.reconcile ? t('marks.all.reconcile', { n: n.reconcile }) : '',
+    n.busy ? t('marks.all.busy', { n: n.busy }) : '',
+    n.notBooked ? t('marks.all.notBooked', { n: n.notBooked }) : '',
+    n.later ? t('marks.all.later', { n: n.later, max }) : '',
+  ].filter(Boolean);
+  return `${workflowName}: ${parts.join(' · ')}.`;
+}
+
+/**
+ * The buttons a workflow declares for one object. `confirm`: a sentence the first click shows with
+ * «Trotzdem buchen» instead of starting (a payment whose booking she deleted on purpose).
+ */
+export function WorkflowButtons({ kind, id, facts = [], nav, canEdit, confirm }: { kind: ItemKind; id: string; facts?: ItemFact[]; nav: Nav; canEdit: boolean; confirm?: string }) {
   const { view } = useAutomation();
   // What the last click came to, beside the button as well as in the toast: a toast is gone in
   // seconds and easily missed (r4c-34, r5h-20: «Automatisch buchen» without Claude seemed to do nothing).
   const [said, setSaid] = useState<{ item: string; text: string; go?: Location }>();
+  const [asking, setAsking] = useState<{ item: string; workflow: WorkflowDecl }>();
   if (!view) return null;
   const buttons = buttonsFor(view.workflows, kind, facts).filter((b) => b.runnable);
   if (!buttons.length) return null;
@@ -90,6 +119,12 @@ export function WorkflowButtons({ kind, id, facts = [], nav, canEdit }: { kind: 
           {said.go ? <> <button type="button" className="linkbtn" onClick={() => nav.go(said.go!)}>{t('marks.goSwitchOn')}</button></> : null}
         </span>
       )}
+      {confirm && asking?.item === id ? (
+        <span className="wfsaid" role="status" data-testid="workflow-confirm">
+          {confirm}{' '}
+          <button type="button" className="linkbtn" data-act="book-anyway" onClick={() => { const w = asking.workflow; setAsking(undefined); void start(w); }}>{t('marks.bookAnyway')}</button>
+        </span>
+      ) : null}
       {buttons.map(({ workflow, label, ai }) => {
         const open = view.runs.find((r) => r.workflow === workflow.id && r.item.id === id && OPEN.has(r.status));
         if (open) {
@@ -101,7 +136,7 @@ export function WorkflowButtons({ kind, id, facts = [], nav, canEdit }: { kind: 
         }
         return (
           <button key={workflow.id} type="button" className="btn" disabled={!canEdit} data-tip={ai ? t('automation.ai') : undefined}
-            onClick={() => void start(workflow)}>
+            onClick={() => { if (confirm) setAsking({ item: id, workflow }); else void start(workflow); }}>
             {ai ? <BotIcon /> : null}{textIn(label, language())}
           </button>
         );

@@ -29,6 +29,7 @@ import { madeBetween, madeEntry, type Took } from './summary.js';
 import type { Arrival, ItemRef } from './model.js';
 import { ASK_WORKFLOW, CLOSED_REASON } from './held.js';
 import { askSalesWithoutVat, closeSaleQuestionsHeld } from '../intake/sale-questions.js';
+import { bookByRules } from './book-by-rules.js';
 import { refuse, type Refused } from '../types/refusal.js';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -199,17 +200,37 @@ export const ACTIONS: Record<string, Action> = {
   },
 
   'booking.rule-question': {
-    outcomes: ['proposed', 'open', 'gone', 'noModel'],
+    outcomes: ['proposed', 'open', 'gone', 'noModel', 'booked', 'waits'],
     effects: [],
     ai: true,
-    async run(input, _effects, { ws, ask }) {
+    async run(input, _effects, { ws, ask, run }) {
       const b = books(input);
       const t = tx(input);
       if (periodLock(b).isClosed(t.date) || b.journalEntries.some((e) => e.transactionRef === t.ref)) return { outcome: 'gone' };
-      const { asked } = await classifyTransactions(structuredClone(b), [t], { ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+      const scratch = structuredClone(b);
+      const before = scratch.journalEntries.length;
+      const fx = loadFxResolver();
+      const context = loadClassifyContext(ws);
+      const { asked } = await classifyTransactions(scratch, [t], { ask, fx, context });
       const held = asked[0];
-      // No rule holds it: without a model it waits for a booking by hand; with one, the next inbox run books it.
-      if (!held) return { outcome: ask ? 'gone' : 'noModel' };
+      if (!held) {
+        // A company rule decides it (one kept since the question was asked, #396): it books it now, or, when the
+        // payment needs its receipt first, the rule books it once the receipt is there; no task says no rule matched.
+        // Not a payment a reconciliation holds (#254), nor one whose only receipt cannot be read: that waits for the person, never booked on a guessed rate (#57).
+        const entries = scratch.journalEntries.slice(before);
+        const wait = entries.length ? receiptWaitOf(b, t, context, receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws), fx) : undefined;
+        if (wait && !(wait.wait && wait.unread) && !reconciliationOf(b, t.ref) && entries.every((e) => !!e.rule)) {
+          // No `rule` in the output: askedBy counts it as the question of an ask rule, and this rule asked nothing.
+          if (wait.wait && !answerSettles(t, entries, context)) return { outcome: 'waits' };
+          // Booked here by code, not by the workflow's book step: that step's effect is applied once per payment, so a payment
+          // booked once, taken back and decided again would end «booked» with nothing written (#396). A dry run writes nothing.
+          if (run?.mode !== 'live') return { outcome: 'booked', output: { entries } };
+          const made = await bookByRules(ws, [t.ref]);
+          return made.length ? { outcome: 'booked', output: { entries: made } } : { outcome: 'gone' };
+        }
+        // No rule holds it: without a model it waits for a booking by hand; with one, the next inbox run books it.
+        return { outcome: ask ? 'gone' : 'noModel' };
+      }
       return held.entries.length
         ? { outcome: 'proposed', output: { question: held.question, rule: held.rule, entries: held.entries } }
         : { outcome: 'open', output: { question: held.question, rule: held.rule } };

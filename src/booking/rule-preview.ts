@@ -7,6 +7,7 @@
 import { bankAccountFor } from '../workspace/money-accounts.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import { periodLock, type Books } from '../books/store.js';
+import { heldByReconciliation } from '../books/reconcile.js';
 import type { BankTransaction } from '../types/index.js';
 import { handOwnUse, mappedReceipts, paymentFacts, ruleBookingLines, type ClassifyContext, type RuleLine } from './classify.js';
 import type { RuleRow } from './rule-book.js';
@@ -34,15 +35,18 @@ export interface PreviewPayment {
   decidedBy?: string;
   /** Not booked, and it waits for its receipt (receipt-wait.ts): the rule books it once one is linked, not at the keep. */
   waits?: true;
+  /** Not booked, and an account's reconciliation holds it (#254): the rule books it once that is confirmed. */
+  reconcile?: true;
 }
 
 /**
  * The payments of the open periods without any booking that a booking rule decides: those it books
  * as soon as it is kept (`book`), and those that wait for their receipt first (`waits`), each newest
  * first. A payment of a filed period, one booked in part or whole, and one another rule decides are
- * in neither (#383).
+ * in neither (#383). One an account's reconciliation holds (#254) is booked by no one until it is
+ * confirmed: `reconcile`, never `book`.
  */
-export interface OpenDecided { book: string[]; waits: string[] }
+export interface OpenDecided { book: string[]; waits: string[]; reconcile?: string[] }
 
 export interface RuleOverlap {
   /** The other rule, as Firma › Regeln lists it. */
@@ -195,6 +199,8 @@ function departures(books: Books, tx: BankTransaction, booking: RuleBooking, con
  * payment is shown as waiting, never as a booking the keep would make (#383).
  */
 export function previewRules(targets: readonly PlacedRow[], rules: readonly PlacedRow[], books: Books, context: ClassifyContext, fx: FxResolver, waits: (tx: BankTransaction) => boolean = () => false, before: (tx: BankTransaction) => boolean = () => false): RulePreview[] {
+  // Movements an account's reconciliation holds: no run books them, nor a keep (#254).
+  const held = heldByReconciliation(books);
   const year = openYear(books);
   const closed = periodLock(books).isClosed;
   const txs = books.transactions.filter((t) => t.date.startsWith(year)).sort((a, b) => b.date.localeCompare(a.date) || a.ref.localeCompare(b.ref));
@@ -223,10 +229,10 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
         now,
         ...(JSON.stringify(decided) !== JSON.stringify(now) ? { beforeAi: decided } : {}),
         ...(deciderRow && ruleKey(deciderRow) !== key ? { decidedBy: deciderRow.id } : {}),
-        ...(t.kind === 'book' && !now.length && waits(tx) ? { waits: true as const } : {}),
+        ...(t.kind === 'book' && !now.length && held.has(tx.ref) ? { reconcile: true as const } : t.kind === 'book' && !now.length && waits(tx) ? { waits: true as const } : {}),
       };
     };
-    const open: OpenDecided = { book: [], waits: [] };
+    const open: Required<OpenDecided> = { book: [], waits: [], reconcile: [] };
     // The accounts the rule books on: a booking on any other, as decided before the AI moved it, is a decision it would overrule.
     const own = new Set(t.kind === 'book' ? [t.booking.account, ...(t.booking.private && context.ownerAccount ? [context.ownerAccount] : [])] : []);
     const others: string[] = [];
@@ -260,7 +266,7 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
         const decider = ruleFor(placed, p);
         if (decider && ruleKey(pool[placed.indexOf(decider)].row) === key) {
           // Counted as the classifier will decide it: a payout or a possible invoice payment goes before any rule (`before`).
-          if (!closed(tx.date) && !books.journalEntries.some((e) => e.transactionRef === tx.ref) && !before(tx)) (waits(tx) ? open.waits : open.book).push(tx.ref);
+          if (!closed(tx.date) && !books.journalEntries.some((e) => e.transactionRef === tx.ref) && !before(tx)) (held.has(tx.ref) ? open.reconcile : waits(tx) ? open.waits : open.book).push(tx.ref);
           const { kinds, national } = departures(books, tx, t.booking, context);
           for (const kind of kinds) {
             const o = against.get(kind) ?? { count: 0, payments: [] };

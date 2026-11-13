@@ -290,8 +290,12 @@ export type KeepResult =
     open?: OpenDecided;
     /** The rules file as it was: «Rückgängig» puts it back (RuleCommand restore). */
     undo?: { file: string; before: string; after: string };
+    /** The ids of the rules the keep added or changed. */
+    rules?: string[];
     /** What the booking runs the keep started made of `open.book` (src/server/routes/rules.ts). */
     booked?: KeptBookings;
+    /** The server's record of this keep (src/saving/keeps.ts): its result line and its undo go by it alone. */
+    keep?: KeptView;
   }
   | { ok: false; refusal: 'gone' | 'stale' | 'rules' | 'wide' | 'not-rules' | 'changed' | 'note'; message: string };
 
@@ -300,6 +304,24 @@ export type KeepResult =
  * their entries, how many runs are still going, the payments a run left unbooked, and how many
  * payments were not started at the keep (more than KEEP_RUNS_MAX: the next run books them).
  */
+/** One keep as its result line shows it (GET/POST /api/rules/kept): what it booked so far, what waits, and whether its undo may run now. */
+export interface KeptView {
+  id: string; at: string; file: string; rules: string[]; booked: KeptBookings; waits: number;
+  /** The last day its undo is offered (YYYY-MM-DD). */
+  until: string;
+  /** Why «Rückgängig» waits: a later keep of the same file must be taken back first; `blockedBy` names those keeps. */
+  blocked?: 'later';
+  blockedBy?: string[];
+  /** Why its undo is gone. */
+  ended?: KeptEnded;
+}
+
+/** Why a keep's undo no longer means what it says: its file changed otherwise, its days are over, a period holding one of its bookings is closed or approved, or another run booked by its rule since. */
+export type KeptEnded = 'file' | 'expired' | 'closed' | 'bookedSince';
+
+/** POST /api/rules/book-open: what «Automatisch buchen» for all came to, by why each payment is or is not booked. */
+export interface BookOpen { booked: number; running: number; notBooked: number; model: number; receipt: number; deleted: number; question: number; unread: number; reconcile: number; busy: number; later: number; /** How many one click books at most. */ max: number }
+
 export interface KeptBookings { runs: string[]; refs: string[]; entries: string[]; running: number; notBooked: string[]; later?: number; first?: { id: string; date: string } }
 
 const CUSTOMIZING = ['Vanilla-Kind: customizing', "Vanilla-Person: the app's user"];
@@ -353,8 +375,9 @@ export async function keepDraft(ws: Workspace, path: string, basis: string, conf
   // What became of each rule, for the AI sidebar (#362): after the keep is done, and never failing it.
   recordSettled(ws, path, changes, 'kept');
   // The open payments the kept rules decide, as the card showed them: the keep books them at once (#383).
-  const open = preview.reduce<OpenDecided>((all, p) => ({ book: [...all.book, ...(p.open?.book ?? [])], waits: [...all.waits, ...(p.open?.waits ?? [])] }), { book: [], waits: [] });
-  return { ok: true, committed, ...(open.book.length || open.waits.length ? { open, undo: { file: path, before: was, after: hashOf(after) } } : {}) };
+  const open = preview.reduce<OpenDecided>((all, p) => ({ book: [...all.book, ...(p.open?.book ?? [])], waits: [...all.waits, ...(p.open?.waits ?? [])], reconcile: [...(all.reconcile ?? []), ...(p.open?.reconcile ?? [])] }), { book: [], waits: [], reconcile: [] });
+  const rules = [...d.added, ...d.changed].map((r) => r.id);
+  return { ok: true, committed, rules, undo: { file: path, before: was, after: hashOf(after) }, ...(open.book.length || open.waits.length || open.reconcile?.length ? { open } : {}) };
 }
 
 /** «Verwerfen»: the draft of one file is gone; the file stays as it is. */

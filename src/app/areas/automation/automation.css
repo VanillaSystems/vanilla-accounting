@@ -221,6 +221,11 @@
 .wftrig { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 5px; }
 .wftrig .trig { display: inline-flex; align-items: center; gap: 4px; padding: 0 7px; border: 1px solid var(--line-2); border-radius: 999px; font-size: 11px; line-height: 18px; color: var(--muted); }
 .wftrig .trig svg { width: 11px; height: 11px; }
+/* A chip that runs (r3-noai-22): a button in the chip's shape, in the accent, and what came of it under the row. */
+.wftrig button.trig { font: inherit; font-size: 11px; line-height: 18px; background: var(--bg); color: var(--accent); border-color: var(--accent); cursor: pointer; }
+.wftrig button.trig:hover:not(:disabled) { background: var(--accent-soft); }
+.wftrig button.trig:disabled { opacity: .6; cursor: default; }
+.wfrow .wfsaid { grid-column: 1 / -1; }
 
 /* Prozesskarte, phases (the mockup's screen 2) */
 .wfmap .col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }

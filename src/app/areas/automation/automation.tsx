@@ -54,6 +54,7 @@ import { periodName } from '../../lib/period-label.js';
 import { codeLabel } from '../codes/names.js';
 import { reconciliationOf } from '../../../books/reconcile.js';
 import { LastKept, WageRuleOffer } from '../company/RulesSection.js';
+import { bookOpenAndSay } from '../../automation/marks.js';
 
 type Props = AreaProps<RouteOf<'automation'>>;
 type R = RouteOf<'automation'>;
@@ -113,8 +114,22 @@ function selectedRow(route: R, view: AutomationView | undefined): R | undefined 
   return w ? { area: 'automation', view: 'workflow', workflow: w, tab: 'runs' } : undefined;
 }
 
-function List({ route, nav, books }: Props) {
+/** A manual trigger for each unbooked payment: its chip in the list starts it for all of them at once. */
+const forEachOpen = (tr: Trigger): tr is Extract<Trigger, { kind: 'manual' }> => tr.kind === 'manual' && tr.for === 'transaction' && tr.when === 'unbooked';
+
+function List({ route, nav, books, canEdit }: Props) {
   const { view, error } = useAutomation();
+  const [said, setSaid] = useState<{ workflow: string; text: string; busy?: boolean }>();
+  // «Automatisch buchen» in the list: what a rule or code decides among all open payments, booked at once, no model asked; the line says what came of it and of the rest.
+  async function startAll(w: WorkflowDecl) {
+    setSaid({ workflow: w.id, text: t('marks.started', { workflow: label(w) }), busy: true });
+    try {
+      const text = await bookOpenAndSay(label(w));
+      setSaid({ workflow: w.id, text });
+      nav.toast(text);
+    } catch (e) { setSaid({ workflow: w.id, text: errorText(e) }); }
+    nav.refresh();
+  }
   if (route.view === 'runs') return view ? <RunsHome view={view} books={books} nav={nav} /> : <><h1>{t('area.automation')}</h1>{error ? <p className="warnline">{error}</p> : <p className="m">{t('automation.empty')}</p>}</>;
   const sel = selectedRow(route, view);
   const now = new Date();
@@ -156,7 +171,11 @@ function List({ route, nav, books }: Props) {
                         : st.open ? <span className="wfpill warn">{t('automation.openCount', { n: st.open })}</span>
                         : st.next ? <span className="wfnext mono">{whenText(st.next, now)}</span> : null}
                     </span>
-                    {on.length ? <span className="wftrig">{on.map((tr, i) => <span key={i} className="trig">{TRIGGER_ICON[tr.kind]}{tr.kind === 'manual' ? tx(tr.label) : t(`automation.trig.${tr.kind}` as 'automation.trig.schedule')}</span>)}</span> : null}
+                    {on.length ? <span className="wftrig">{on.map((tr, i) => (forEachOpen(tr) && canEdit
+                      // A button that runs for every open payment, not a link to the diagram (r3-noai-22).
+                      ? <button key={i} type="button" className="trig go" data-act="start-all" data-workflow={w.id} disabled={!!said?.busy} onClick={(e) => { e.stopPropagation(); void startAll(w); }}>{TRIGGER_ICON.manual}{tx(tr.label)}</button>
+                      : <span key={i} className="trig">{TRIGGER_ICON[tr.kind]}{tr.kind === 'manual' ? tx(tr.label) : t(`automation.trig.${tr.kind}` as 'automation.trig.schedule')}</span>))}</span> : null}
+                    {said?.workflow === w.id ? <span className="wfsaid" role="status" data-testid="start-all-said">{said.text}</span> : null}
                   </>
                 ));
               })}
@@ -764,8 +783,8 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
     <div className="detail-in wfpage">
       <div className="head"><h2 className="who">{t('automation.tasks')}</h2></div>
       {/* What the last rule kept booked, and the rule for the open wages that code drafts (#383). */}
-      <LastKept nav={nav} />
-      {canEdit ? <WageRuleOffer nav={nav} /> : null}
+      <LastKept nav={nav} canEdit={canEdit} />
+      {canEdit ? <WageRuleOffer nav={nav} books={books} /> : null}
       <ThresholdTasks nav={nav} passed={threshold} />
       <ReceiptDueTasks items={receiptDue} nav={nav} canEdit={canEdit} books={books} />
       {tasks.length ? (

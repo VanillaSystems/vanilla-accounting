@@ -322,6 +322,24 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Keeping rules (#396, #392): «Rückgängig» on a second kept rule took back the first rule's bookings
+  and the second rule's file. Each keep now has a line of its own above Aufgaben and Firma › Regeln
+  («4 Zahlungen gebucht · Rückgängig»), true to its own numbers and still there after a reload; the
+  server records what each keep did, and its undo takes back that keep alone. A rule kept before a
+  later one of the same file says «Rückgängig erst, wenn die später behaltene Regel zurückgenommen
+  ist» and offers «Alle 2 zurücknehmen, die neuste zuerst». «Rückgängig (bis …)» stands for a week,
+  and only while it means what it says: once the rule booked more since, a period with one of its
+  bookings is closed, or its file was changed otherwise, the line says so instead. A rule kept,
+  taken back and kept again books the same payments again. The undo's removed bookings show under
+  Änderungen, and it brings back exactly the tasks the keep closed. A rule kept from the AI sidebar
+  shows the same line, «nichts gebucht · 2 warten auf ihren Beleg · Rückgängig». A payment a kept
+  rule decides is no task «keine Regel der Firma passte» any more: the rule books it, or, when it
+  waits for its receipt, the rule books it once the receipt is there. «Lohnzahlungen von Hand
+  buchen» leaves Aufgaben once the wages are booked. «Automatisch buchen» in Automatisierung's list
+  books what the firm's rules decide, asks no AI, and names what it left and why («10 braucht die KI
+  oder dich …»), instead of opening the diagram; on a payment whose booking she deleted it asks first.
+  A payment an account's reconciliation holds is booked by neither: the rule's card says it waits for
+  the reconciliation.
 - The setup conversation keeps its order after a typed message (#385): the message stands under the
   question it was typed at, above that question's answer, and the open question with its buttons
   stays under her newest message, also when the words took a step back. In the books the rail shows

@@ -116,6 +116,8 @@ const changed = new Set<() => void>();
 export function onBooksChanged(f: () => void): () => void { changed.add(f); return () => { changed.delete(f); }; }
 /** An answer may change the chart, the invoicing settings or the invoices too: they are read again with the books. */
 const booksChanged = () => { reloadWorkspace(); void reloadInvoices(); for (const f of changed) f(); };
+/** The sidebar's own card changed the books (a rule kept or taken back, #396): the page reads them again as after an answer. */
+export const announceBooksChanged = (): void => booksChanged();
 export function addContext(ref: ContextRef): void { if (!state.extra.some((r) => r.kind === ref.kind && r.id === ref.id)) set({ extra: [...state.extra, ref] }); }
 /** The page's reference goes with the next message again, after it was taken off. */
 export function keepPage(): void { set({ pageOff: false }); }
