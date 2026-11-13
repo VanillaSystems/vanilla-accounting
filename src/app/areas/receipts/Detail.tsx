@@ -32,7 +32,7 @@ import { amountOf, at, balanceSheetLine, bankOf, cardLineText, cardStatementLine
 import { Kbd, accept, runAct } from './commands.js';
 import { correctionPeriodName } from '../journal/commands.js';
 import { QuestionsOn } from '../../questions/Questions.js';
-import { correctFiled, deleteReceipt, linkCardLine, linkPayment, unpointFiled, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
+import { bookVatCorrection, correctFiled, deleteReceipt, linkCardLine, linkPayment, unpointFiled, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
 import { LinkDialog } from './LinkDialog.js';
 import { FindPair, NearList, madeBy } from './FindPair.js';
 import { offersInBooks } from '../../../intake/near-pairs.js';
@@ -308,11 +308,20 @@ function OrderPageNotice({ page, l, nav }: { page: OrderPage; l: Ledger; nav: Pr
 function VatCorrectionNotice({ c, v, l, nav, canEdit }: { c: VatCorrection; v: ReceiptView; l: Ledger; nav: Props['nav']; canEdit: boolean }) {
   const entry = c.booking ? l.entriesByRef.get(c.booking)?.[0] : undefined;
   const vat = c.vat === undefined ? undefined : `${v.r.currency || baseCurrency()} ${fmt(Math.abs(c.vat))}`;
+  // A copy of a bill whose input tax is booked (or is booked first, #458): never booked a second time; the notice leads to the original.
+  const twin = c.twin ? l.byId.get(c.twin) : undefined;
+  if (twin) return (
+    <span className="notice" style={{ margin: 0 }} data-testid="vat-correction">
+      {I.dot}{t('receipts.vatCorrection.twin', { business: c.name, name: twin.vendor || twin.r.filename })}
+      {' '}<button type="button" className="golink" onClick={() => nav.go(at({ area: 'receipts', id: twin.r.id }, twin.date))}>{t('receipts.vatCorrection.toTwin')} <span className="arr">→</span></button>
+    </span>
+  );
   return (
     <span className="notice" style={{ margin: 0 }} data-testid="vat-correction">
       {I.dot}{t(entry ? 'receipts.vatCorrection.fits' : vat ? 'receipts.vatCorrection.book' : 'receipts.vatCorrection.noVat', { business: c.name, vat: vat ?? '', date: entry ? formatDate(entry.date) : '' })}
       {entry && <> <button type="button" className="golink" onClick={() => nav.go(at({ area: 'journal', id: entry.id }, entry.date))}>{t('receipts.vatCorrection.toEntry')} <span className="arr">→</span></button></>}
       {entry && canEdit && <> <button type="button" className="btn primary" data-testid="vat-correction-link" onClick={() => linkPayment(nav, v, entry.transactionRef, `${v.vendor} → ${formatDate(entry.date)} ${entry.description ?? ''}`.trim())}>{t('receipts.vatCorrection.link')}</button></>}
+      {!entry && vat && canEdit && !v.locked && !withoutInputTax() && <> <button type="button" className="btn primary" data-testid="vat-correction-book" onClick={() => void bookVatCorrection(nav, v)}>{t('receipts.vatCorrection.bookIt')}</button></>}
     </span>
   );
 }
