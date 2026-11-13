@@ -22,7 +22,7 @@ import { freshLoginPath } from '../platform/ai-cli.js';
 import { ASK, PUSH, TELL } from './channels.js';
 import { chosenFolder, newFolderPanel } from './new-folder.js';
 import { sameOrigin, saveFile } from './save-file.js';
-import { askingPath, bringUp, firstPage, offerMove, unaskedPath, windowLoader, type Waiting } from './start.js';
+import { askingPath, bringUp, firstPage, offerMove, resumeOnce, unaskedPath, windowLoader, type Waiting } from './start.js';
 import { accessText } from '../app/desktop/access-text.js';
 import { dictate, isLang } from './dictation.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
@@ -106,7 +106,8 @@ async function start(): Promise<void> {
 
   // The build macOS's answers about folders are kept for: an ad hoc signed build is a new app to macOS (#373).
   const developerId = app.isPackaged && process.platform === 'darwin' && await developerIdOf(join(dirname(process.execPath), '..', '..'));
-  let phoneResumed = false;
+  // The phone's listener (macOS's firewall may ask about it) only once books are open, never before the first window (#373).
+  const resumePhone = resumeOnce(() => server.phone.resume().then((p) => { if (p.error) console.error(`phone: ${p.error}`); }));
   const server = desktopServer({
     stateFile,
     demoRoot: join(app.getPath('userData'), 'Demo'),
@@ -116,16 +117,14 @@ async function start(): Promise<void> {
       documents: app.getPath('documents'), desktop: app.getPath('desktop'), downloads: app.getPath('downloads'),
       icloud: join(app.getPath('home'), 'Library', 'Mobile Documents'), cloud: join(app.getPath('home'), 'Library', 'CloudStorage'), volumes: '/Volumes',
     },
-    appVersion: answerKey({ packageVersion: app.getVersion(), build: appVersion(), builtAt: process.env.VANILLA_BUILT_AT, developerId }),
+    appVersion: answerKey({ packageVersion: app.getVersion(), build: appVersion(), builtAt: app.isPackaged ? process.env.VANILLA_BUILT_AT : undefined, developerId }),
     dist: join(APP_ROOT, 'dist'),
     devUi: DEV?.ui,
     // The start screen opens books through the server; the menu's recent list follows.
     onOpen: () => {
       refreshMenu();
-      // The phone's listener (macOS's firewall may ask about it) only once books are open, never before the first window (#373).
-      if (phoneResumed) return;
-      phoneResumed = true;
-        },
+      resumePhone();
+    },
   });
   useSecretStore(sealedStore({ file: join(app.getPath('userData'), 'secrets.json'), cipher: safeStorage, books: () => server.current()?.root }));
   const port = portOf(await listen(server.app, '127.0.0.1', readState(stateFile).port));

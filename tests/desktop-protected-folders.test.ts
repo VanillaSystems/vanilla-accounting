@@ -434,3 +434,15 @@ test('desktop.json of 0.4.1 kept the Documents answer as homeAccess: read as the
   writeFileSync(file, JSON.stringify({ recent: [], access: { desktop: { answer: 'refused', version: '0.4.2' }, downloads: { answer: 'maybe', version: '0.4.2' } } }));
   assert.deepEqual(readState(file).access, { desktop: { answer: 'refused', version: '0.4.2' } }, 'an answer macOS cannot give is dropped');
 });
+
+test('the phone listens again when the first books open, once, not at the start (#373 review)', async () => {
+  const { resumeOnce } = await import('../src/desktop/start.js');
+  let resumed = 0;
+  const onOpen = resumeOnce(async () => { resumed++; });
+  assert.equal(resumed, 0, 'nothing before books open');
+  onOpen();
+  assert.equal(resumed, 1, 'the first open starts the listener again');
+  onOpen();
+  onOpen();
+  assert.equal(resumed, 1, 'later opens leave it as it is');
+});

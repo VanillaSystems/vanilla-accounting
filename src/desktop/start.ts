@@ -183,3 +183,16 @@ export async function firstPage<B>(o: FirstPage<B>): Promise<void> {
   if (answer === 'refused' || answer === 'locked') { o.show('/start'); return; }
   o.show(o.pathOf(await open()));
 }
+
+/**
+ * `run` on the first call only, its failure logged: the phone's listener starts again when the first
+ * books open (main.ts onOpen), not at every later open and never before the first window (#373).
+ */
+export function resumeOnce(run: () => Promise<unknown>): () => void {
+  let done = false;
+  return () => {
+    if (done) return;
+    done = true;
+    void run().catch((e: unknown) => console.error('phone:', e));
+  };
+}

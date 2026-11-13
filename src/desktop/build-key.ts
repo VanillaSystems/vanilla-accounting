@@ -13,7 +13,7 @@ export interface BuildIdentity {
   packageVersion: string;
   /** The build's own string (src/version.ts appVersion(): 0.4.2-rc.56+g36b66d6). */
   build: string;
-  /** When the bundle was built (VANILLA_BUILT_AT): two builds of one commit differ in it. */
+  /** When the packed bundle was built (VANILLA_BUILT_AT): two builds of one commit differ in it. Absent under desktop:dev, whose rebuilds keep one key. */
   builtAt?: string;
   /** Signed with a Developer ID (codesign's Authority line). */
   developerId: boolean;
@@ -28,7 +28,7 @@ export const signedByDeveloperId = (codesignOutput: string): boolean => /^Author
 /** Whether the app bundle at `app` is signed with a Developer ID; false when codesign cannot tell. */
 export function developerIdOf(app: string): Promise<boolean> {
   return new Promise((resolve) => {
-    execFile('/usr/bin/codesign', ['-dv', '--verbose=2', app], { timeout: 5000 }, (err, stdout, stderr) => {
+    execFile('/usr/bin/codesign', ['-dv', '--verbose=2', app], { timeout: 2000 }, (err, stdout, stderr) => {
       resolve(!err && signedByDeveloperId(`${stdout}\n${stderr}`));
     });
   });
