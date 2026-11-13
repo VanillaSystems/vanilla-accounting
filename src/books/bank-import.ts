@@ -458,8 +458,8 @@ export const unreferencedLine = (files: ReadonlyArray<{ file: string; n: number 
 /**
  * What became of the open payments a statement read before #401 left on an empty ref (`repairEmptyRefs`):
  * `repaired` of them took their bank's ref; `left` of them stay as they are, with why: `yours`, a
- * person's entry or link stands on the empty ref and several payments share it, so it cannot be told
- * to one of them; `unmatched`, no one statement file holds exactly their movements.
+ * person's entry or link stands on the empty ref and several open payments share it, or her entry
+ * stands there beside filed payments on it (#419), so it cannot be told to one of them; `unmatched`, no one statement file holds exactly their movements.
  */
 export type EmptyRefRepair = { repaired: number } | { left: number; why: 'yours' | 'unmatched' };
 
