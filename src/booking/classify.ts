@@ -44,6 +44,7 @@ import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '.
 import { payerNames } from '../knowledge/payer.js';
 import { businessGuidance, companyGuidance } from '../knowledge/guidance.js';
 import { partPayment, partReceipts, partsOf, partText } from '../accounting/batch-parts.js';
+import { cardLinesOf, cardParts, lineReceiptsOf } from '../books/card-lines.js';
 import { wordsIn } from '../export/texts.js';
 import { ruleFor, ruleWords, stampRule, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
@@ -654,12 +655,17 @@ interface PartView { books: Books; key: string; note?: string }
  * one: the payment is booked as a whole. `whole`: code decided every part. A rule that asks decides no part.
  */
 function byParts(books: Books, tx: BankTransaction, context: ClassifyContext, fx: FxResolver): { entries: JournalEntry[]; whole: boolean; alone: Array<{ tx: BankTransaction; view: PartView }>; rest?: { tx: BankTransaction; view: PartView } } | undefined {
-  const parts = partsOf(tx);
+  // A card's settlement whose statement's lines have bills linked to them (#409) is split by those lines: each line's bill is evidence of that line alone.
+  const card = cardLinesOf(books, tx);
+  const byLine = card && lineReceiptsOf(books, tx.ref, card.lines.length);
+  const lined = byLine?.some((rs) => rs.length) ? { parts: cardParts(card!.lines, tx.currency), held: byLine, statement: card!.statement.id } : undefined;
+  const parts = lined?.parts ?? partsOf(tx);
   if (!parts) return undefined;
-  const held = partReceipts(tx, mappedReceipts(books, tx));
+  const held = lined?.held ?? partReceipts(tx, mappedReceipts(books, tx));
   const paid = held?.some((rs) => rs.length);
   if (!context.rules?.length && !paid) return undefined;
-  // Each part sees its own receipts only: another part's are no evidence of it. Receipts that pay no part stay the whole payment's.
+  // Each part sees its own receipts only: another part's are no evidence of it. Receipts that pay no part stay the whole payment's;
+  // a card statement is the receipt of its lines without a bill of their own, never of a line's bill.
   const only = (ids: ReadonlySet<string>): Books => (held ? { ...books, mappings: books.mappings.filter((m) => m.transactionRef !== tx.ref || ids.has(m.receiptId)) } : books);
   const rate = tx.currency === baseCurrency() ? 1 : fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1;
   const decided = parts.map((p, i) => {
@@ -679,7 +685,7 @@ function byParts(books: Books, tx: BankTransaction, context: ClassifyContext, fx
   const alone = open.filter((d) => d.paid).map(({ part, view }) => ({ tx: part, view }));
   const loose = parts.filter((_, i) => !decided[i].entries && !decided[i].paid);
   const sign = tx.amount < 0 ? -1 : 1;
-  const rest = loose.length ? { tx: { ...tx, amount: sign * loose.reduce((sum, p) => sum + Math.abs(p.amount), 0), description: loose.map(partText).join('; '), parts: loose.length > 1 ? loose : undefined }, view: { books: only(new Set()), key: tx.ref } } : undefined;
+  const rest = loose.length ? { tx: { ...tx, amount: sign * loose.reduce((sum, p) => sum + Math.abs(p.amount), 0), description: loose.map(partText).join('; '), parts: loose.length > 1 ? loose : undefined }, view: { books: only(new Set(lined ? [lined.statement] : [])), key: tx.ref } } : undefined;
   return { entries, whole: !open.length, alone, rest };
 }
 
