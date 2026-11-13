@@ -113,6 +113,13 @@ export const QUESTIONS = {
   bank: ['next', 'later'],
   receipts: ['next', 'later'],
   partners: ['next'],
+  /**
+   * «Ausgangslage» corrected in her words (r6-5, #496): asked by no step, recorded by the AI from what she
+   * typed («d Firma isch nöd neu», «wir wechseln von der Treuhand»); it sets the profile's `start`
+   * (src/server/workspace-edits.ts) and is then hers, no longer assumed. Not named `start`: an older
+   * version had a question of that name (from when to book) that led nowhere.
+   */
+  startingPoint: ['new', 'switching'],
 } as const satisfies Record<string, readonly string[]>;
 export type QuestionId = keyof typeof QUESTIONS;
 export type AnswerValue<Q extends QuestionId = QuestionId> = (typeof QUESTIONS)[Q][number];

@@ -13,7 +13,8 @@
  *   PUT  /api/onboarding/answers/:question   { value: <one of its answers> | null, kept?: <the VAT setup before> | null }
  */
 import { Router } from 'express';
-import { RequestError, WS, patchBody, readBooks } from '../books.js';
+import { RequestError, WS, patchBody, readBooks, reopenWorkspace } from '../books.js';
+import { patchManifest } from '../../workspace/manifest-write.js';
 import { QUESTIONS, SETUP_TOPICS, TOPIC_STATES, isAnswerOf, isQuestion, isSetupTopic, isTopicState, stillAssumed, type Answer } from '../../onboarding/model.js';
 import { QUESTION_ORDER, type QuestionKey } from '../../workspace/setup.js';
 import { answerQuestion, confirmAssumed, finishSetup, markTopic, readProgress, setupView, startSetup } from '../../onboarding/store.js';
@@ -126,5 +127,7 @@ router.put('/api/onboarding/answers/:question', (req, res) => {
     : b.kept === null ? undefined
       : { before: parseVatSetup(b.kept, (msg) => { throw new RequestError(400, `kept: ${msg}`); }) satisfies VatSetup, at: now };
   answerQuestion(WS, q, { value: b.value, at: was?.value === b.value ? was.at : now, ...(kept ? { kept } : {}) } as Answer<typeof q>, now);
+  // «Ausgangslage» is the profile's starting point (#496): the answer sets it, as the AI's does.
+  if (q === 'startingPoint' && WS.profile && WS.profile.start !== b.value) { patchManifest(WS.paths.manifest, { start: b.value as 'new' | 'switching' }); reopenWorkspace(); }
   res.json(view());
 });

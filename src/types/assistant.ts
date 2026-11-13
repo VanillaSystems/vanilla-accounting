@@ -120,8 +120,9 @@ export type WorkspaceChange =
   /**
    * The person's words answer the setup conversation's open question (src/onboarding/conversation.ts):
    * recorded as a click would be, so the app shows that step's card. `null` only in an undo: no answer before.
+   * `start`: only in the undo of a `startingPoint` answer, the profile's starting point it put back (#496).
    */
-  | { kind: 'setupAnswer'; question: QuestionId; value: AnswerValue | null };
+  | { kind: 'setupAnswer'; question: QuestionId; value: AnswerValue | null; start?: 'new' | 'switching' };
 
 /**
  * What the app runs for an answer, with nothing to undo: an export of a preset, the inbox run's
