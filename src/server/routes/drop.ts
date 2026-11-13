@@ -486,7 +486,7 @@ async function intoBooks(row: DropRow, body: Buffer, name: string, account: stri
     Object.assign(row, { state: asks ? 'asks' : 'refused', reason: 'not-imported', message: (e as Error).message, ...(unknown ? { unknownAccount: unknown } : {}), ...(choose ? { chooseAccount: choose } : {}), ...(details ? { details } : {}) });
     return undefined;
   }
-  row.statement = { file: done.file, refs: readBooks().transactions.filter((t) => !had.has(t.ref)).map((t) => t.ref), account: done.account };
+  row.statement = { file: done.file, refs: readBooks().transactions.filter((t) => !had.has(t.ref)).map((t) => t.ref), account: done.account, ...(done.emptyRefs ? { emptyRefs: done.emptyRefs } : {}) };
   if (done.byBank) row.byBank = done.byBank;
   await handToRun(row, done);
   return done;

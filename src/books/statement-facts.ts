@@ -50,9 +50,11 @@ export function statementPeriod(text: string): { from: string; to: string } | un
 /**
  * A credit card's monthly statement among the receipts (#401): it names itself so and shows the
  * period it covers. The app reads none as a bank statement (issue #94): it is the receipt of the
- * card's debit on the bank account, whose booking its lines may split.
+ * card's debit on the bank account, whose booking its lines may split. A bank statement that
+ * mentions a card's bill in its first lines stays a bank statement.
  */
-export const isCardStatement = (text: string, words: DocumentsData): boolean => namesCardStatement(text, words) && !!statementPeriod(text);
+export const isCardStatement = (text: string, words: DocumentsData): boolean =>
+  namesCardStatement(text, words) && !!statementPeriod(text) && !isBankStatement(text, words);
 
 /** The period (and the currency, when the name has it) a statement file's name gives: «Kontoauszug 01.01.2026 - 31.01.2026 - CH… - 2026-01-31.pdf», «statement_12345678_CHF_2026-01-01_2026-01-31.pdf». */
 export function statementPdf(filename: string): { fromDate: string; toDate: string; currency?: string } | null {

@@ -1,5 +1,5 @@
 import express from 'express';
-import { ClosedPeriodError, StaleBooksError } from '../books/store.js';
+import { ClosedPeriodError, EmptyRefError, StaleBooksError } from '../books/store.js';
 import { RequestError, WS, refusalOf } from './books.js';
 import type { ApiErrorBody, ApiStatus, InvoiceErrorBody } from '../types/api-error.js';
 import { router as classify } from './routes/classify.js';
@@ -86,6 +86,7 @@ app.use(onboarding);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof ClosedPeriodError) res.status(403).json({ error: err.message, ...refusalOf(err) } satisfies ApiErrorBody);
+  else if (err instanceof EmptyRefError) res.status(409).json({ error: err.message, code: 'emptyRef', params: {} } satisfies ApiErrorBody);
   else if (err instanceof StaleBooksError) res.status(409).json({ error: err.message, ...refusalOf(err) } satisfies ApiErrorBody);
   else if (err instanceof RequestError) res.status(err.status).json({ error: err.message, ...err.refusal } satisfies ApiErrorBody);
   else if (err instanceof InvoiceRuleError) {

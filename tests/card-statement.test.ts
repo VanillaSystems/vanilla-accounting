@@ -39,6 +39,15 @@ test('a card statement is told by its title and period; a bill paid by card is n
   assert.equal(isCardStatement(CARD.replace(/Abrechnung 01.08.2026 – 31.08.2026\n/, ''), documents()), false, 'without its period: a letter that names one');
 });
 
+test('a bank statement whose first lines name a card\'s bill stays a bank statement', () => {
+  const bank = `Kontoauszug 01.09.2026 – 30.09.2026
+IBAN CH93 0076 2011 6238 5295 7
+Belastung Kartenabrechnung Alpencard August
+Datum Text Belastung Gutschrift Saldo
+10.09.2026 Kartenabrechnung LSV 310.62`;
+  assert.equal(isCardStatement(bank, documents()), false);
+});
+
 test('its row and detail name the debit it is the receipt of, and whether its lines were booked one by one', () => {
   const r = { id: 'card', extractedText: CARD };
   const entry = (id: string, amount: number): JournalEntry => ({ id, transactionRef: 'P-10', date: '2026-09-10', accountDebit: '6640', accountCredit: '1020', amount });

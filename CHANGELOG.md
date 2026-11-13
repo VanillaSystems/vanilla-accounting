@@ -341,11 +341,14 @@ Two markers flag an entry you must read before you update:
   A payment an account's reconciliation holds is booked by neither: the rule's card says it waits for
   the reconciliation.
 - Bank statements: every payment has a reference of its own (#401). A Wise camt.053 whose
-  references stand only in the transaction details is read by them; an entry with no reference
-  anywhere gets one made of its account, day, amount and place, the same on every read, and a later
-  export naming the same payment by the bank's reference is that payment, not a second one. Before,
-  such payments came in on an empty reference: none could be opened, linked or booked, and a receipt
-  linked to one was linked to all. Dropping the same file again repairs books that hold them.
+  references stand only in the transaction details is read by them (the entry's own reference still
+  wins). A Wise statement that names no bank reference for a payment is refused in its row, with the
+  advice to download the camt.053 from the bank; nothing is written. Before, such payments came in on
+  an empty reference: none could be opened, linked or booked, and a receipt linked to one was linked
+  to all. Books that hold them keep them as they are (a filed one as filed) and import again; the
+  same file dropped again gives the open ones their bank's reference and says so («7 Zahlungen haben
+  jetzt ihre Referenz der Bank»), unless an entry or link of hers stands on several of them at once.
+  No write can put a payment, a link or an entry on an empty reference any more.
 - Drop: «Ja, Bankkonto hinzufügen» on a statement of an account the books lack adds the account in
   its row (bank and ledger account proposed, currency and IBAN from the file) and reads the statement
   at once. The dialog stays open with every row and its closing lines; before, it closed and went to

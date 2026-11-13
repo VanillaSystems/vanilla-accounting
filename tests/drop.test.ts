@@ -423,21 +423,91 @@ test('«Ja, Bankkonto hinzufügen» adds the account in the row and reads the st
     assert.equal(b.transactions.filter((t) => t.bank === 'Wise 2').length, 7);
     assert.ok(b.transactions.every((t) => t.ref.trim()), 'no payment without a ref');
 
-    // Books as a read before #401 left them: the seven on an empty ref, a receipt linked to it. The same file dropped again repairs them.
+    // Books as a read before #401 left them: payments on an empty ref, with what stood on them. The same file dropped again repairs them.
     await SESSION(api).rest();
     const refs = new Set(taken.statement!.refs);
-    for (const [file, key] of [['transactions.jsonl', 'ref'], ['mappings.jsonl', 'transactionRef']] as const) {
-      const path = join(api.root, 'transactional-data/2026/books', file);
-      const lines = readFileSync(path, 'utf8').split('\n').map((l) => { if (!l.trim()) return l; const x = JSON.parse(l); if (refs.has(x[key])) x[key] = ''; return JSON.stringify(x); });
-      writeFileSync(path, lines.join('\n'));
-    }
-    assert.equal((await books()).transactions.filter((t) => t.ref === '').length, 7, 'the books as they were');
-    let again = await post('/api/drop');
-    again = await post(`/api/drop/${again.id}/files?name=wise-second.xml`, Buffer.from(camt));
-    assert.equal(again.rows[0].state, 'taken', again.rows[0].message);
-    const repaired = await full();
-    assert.deepEqual(repaired.transactions.filter((t) => t.bank === 'Wise 2').map((t) => t.ref).sort(), [...refs].sort());
-    assert.ok(!repaired.transactions.some((t) => !t.ref.trim()) && !repaired.mappings.some((m) => !m.transactionRef.trim()), 'nothing on an empty ref');
+    const dir = join(api.root, 'transactional-data/2026/books');
+    const corrupt = (blank: ReadonlySet<string>, add: object[] = []) => {
+      for (const [file, key] of [['transactions.jsonl', 'ref'], ['mappings.jsonl', 'transactionRef'], ['entries.jsonl', 'transactionRef']] as const) {
+        const lines = readFileSync(join(dir, file), 'utf8').split('\n').filter((l) => l.trim()).map((l) => { const x = JSON.parse(l); if (blank.has(x[key])) x[key] = ''; return JSON.stringify(x); });
+        if (file === 'entries.jsonl') lines.push(...add.map((x) => JSON.stringify(x)));
+        writeFileSync(join(dir, file), `${lines.join('\n')}\n`);
+      }
+    };
+    const dropAgain = async () => { let d = await post('/api/drop'); d = await post(`/api/drop/${d.id}/files?name=wise-second.xml`, Buffer.from(camt)); await SESSION(api).rest(); return d.rows[0]; };
+    const wise = async () => (await full()).transactions.filter((t) => t.bank === 'Wise 2').map((t) => t.ref).sort();
+
+    // All seven, the app's links on the empty ref: each takes its bank's ref, the links that stood on all of them go.
+    corrupt(refs);
+    assert.equal((await full()).transactions.filter((t) => t.ref === '').length, 7, 'the books as they were');
+    const repaired = await dropAgain();
+    assert.equal(repaired.state, 'taken', repaired.message);
+    assert.deepEqual(repaired.statement?.emptyRefs, { repaired: 7 }, 'the row says what was repaired');
+    assert.deepEqual(await wise(), [...refs].sort());
+    const fixed = await full();
+    assert.ok(!fixed.transactions.some((t) => !t.ref.trim()) && !fixed.mappings.some((m) => !m.transactionRef.trim()), 'nothing on an empty ref');
+
+    // One payment on an empty ref, her entry on it: the entry goes with it to its ref.
+    const hers = { id: 'hers-401', transactionRef: '', date: '2026-07-13', accountDebit: '6570', accountCredit: '1024', amount: 12, origin: 'manual' };
+    corrupt(new Set(['CARD-910000']), [hers]);
+    const one = await dropAgain();
+    assert.deepEqual(one.statement?.emptyRefs, { repaired: 1 });
+    assert.equal((await full()).journalEntries!.find((e) => e.id === 'hers-401')?.transactionRef, 'CARD-910000', 'her entry stands on its payment');
+
+    // All seven again, her entry on the empty ref: it belongs to no single one, so nothing moves, nothing is added, nothing of hers goes.
+    const before = (await full()).journalEntries!.filter((e) => e.id === 'hers-401');
+    corrupt(refs, [{ ...hers, id: 'hers-401b' }]);
+    const yours = await dropAgain();
+    assert.deepEqual(yours.statement?.emptyRefs, { left: 7, why: 'yours' });
+    const left = await full();
+    assert.deepEqual(await wise(), Array(7).fill(''), 'the seven as they were, none added beside them');
+    assert.ok(left.journalEntries!.some((e) => e.id === 'hers-401b' && e.transactionRef === ''), 'her entry stays');
+    assert.equal(before.length, 1);
+  } finally {
+    await SESSION(api).rest().catch(() => {});
+    await api.stop();
+  }
+});
+
+test('a Wise statement naming no bank reference for its payments is refused in its row, nothing written (#401)', async () => {
+  const api = await startApi('demo');
+  try {
+    cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
+    const { post, books } = SESSION(api);
+    const had = (await books()).transactions.length;
+    // The demo's own Wise EUR account; two of the seven entries carry no reference anywhere.
+    const xml = readFileSync(join(import.meta.dirname, 'fixtures/camt053/wise_EUR_refs_in_txdtls.xml'), 'utf8');
+    let n = 0;
+    const camt = xml.replace(/<Refs>.*?<\/Refs>/g, (m) => (n++ < 2 ? '' : m));
+    let s = await post('/api/drop');
+    s = await post(`/api/drop/${s.id}/files?name=wise-ohne-ref.xml`, Buffer.from(camt));
+    const row = s.rows[0];
+    assert.equal(row.state, 'refused');
+    assert.match(row.message ?? '', /für 2 Zahlungen keine Referenz der Bank.*camt\.053 direkt bei Wise Europe SA/);
+    assert.equal((await books()).transactions.length, had, 'nothing read in');
+  } finally {
+    await SESSION(api).rest().catch(() => {});
+    await api.stop();
+  }
+});
+
+test('«Ja, Bankkonto hinzufügen» on a statement of a filed period: the account is added, the statement refused in its row, nothing read (#401)', async () => {
+  const api = await startApi('demo');
+  try {
+    cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
+    const { post, books } = SESSION(api);
+    const had = (await books()).transactions.length;
+    // The same statement moved into the first quarter, which the demo has filed.
+    const camt = readFileSync(join(import.meta.dirname, 'fixtures/camt053/wise_EUR_refs_in_txdtls.xml'), 'utf8')
+      .replace('BE29967000000164', 'BE38967000000002').replace(/2026-0([6789])-/g, (_m, d: string) => `2026-0${Number(d) - 6 || 1}-`).replace(/2026-01-30/g, '2026-01-31');
+    let s = await post('/api/drop');
+    s = await post(`/api/drop/${s.id}/files?name=wise-q1.xml`, Buffer.from(camt));
+    const row = s.rows[0];
+    assert.equal(row.state, 'asks', row.message);
+    assert.equal((await api.send('PATCH', '/api/workspace', { addBank: { bank: 'Wise 2', currency: 'EUR', account: '1024', label: 'Wise Europe SA', iban: 'BE38967000000002' } })).status, 200);
+    s = await post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'firmAccount' });
+    assert.equal(s.rows[0].state, 'refused', s.rows[0].message);
+    assert.equal((await books()).transactions.length, had, 'nothing read into the filed period');
   } finally {
     await SESSION(api).rest().catch(() => {});
     await api.stop();

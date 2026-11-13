@@ -246,6 +246,12 @@ export interface StatementImport {
   /** Statement PDFs of the account whose question this bank export or CSV closed: kept as statements (#254). */
   closedAsks?: number;
   /**
+   * Payments a statement read before #401 left on an empty ref (src/books/bank-import.ts repairEmptyRefs):
+   * `repaired` took their bank's ref with this import, not counted in `added`; `left` stay as they are,
+   * and `why`: a person's entry or link stands on them (`yours`), or no file holds their movements (`unmatched`).
+   */
+  emptyRefs?: { repaired: number } | { left: number; why: 'yours' | 'unmatched' };
+  /**
    * Placed on the one account of the bank it names, which carried no IBAN (#273): the question it
    * would have asked, so the person can still choose another; its IBAN is kept on the account.
    */

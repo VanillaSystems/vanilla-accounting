@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import { basename, dirname, join, relative } from 'node:path';
 import { accountForStatement, unknownOf, type StatementProblem } from '../../accounting/bank-accounts.js';
 import { bankAccountFor, legOf, madeByHand } from '../../workspace/money-accounts.js';
-import { heldWithout, mergeBankFiles, readStatementFiles, readTransactions, reconcileWithFiles, sourceOf, structuredSpans, transactionsOfFiles, withinBooks, type RateOf } from '../../books/bank-import.js';
+import { heldWithout, mergeBankFiles, repairEmptyRefs, readStatementFiles, readTransactions, reconcileWithFiles, sourceOf, structuredSpans, transactionsOfFiles, withinBooks, type RateOf } from '../../books/bank-import.js';
 import { besidePath } from '../../books/pdf-reads.js';
 import { changesSince, partsOf, snapshot, stillAsLeft, takeBack, type RecordChange } from '../../books/record-diff.js';
 import { keepAskTable } from '../statement-asks.js';
@@ -24,7 +24,7 @@ import { periodLock, type Books } from '../../books/store.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { rateDateOf } from '../../accounting/fx-conversion.js';
 import { openYear, type Part } from '../../books/years.js';
-import { assignUniqueRefs, readCamt, transactionsOf, type CamtStatement } from '../../providers/camt053/camt053.js';
+import { REFS_FROM_BANK, assignUniqueRefs, readCamt, transactionsOf, type CamtStatement } from '../../providers/camt053/camt053.js';
 import { namesBank, proposedAccount } from '../../accounting/statement-bank.js';
 import { statementDetails } from '../../providers/statement-files.js';
 import { refDates } from '../books.js';
@@ -181,6 +181,13 @@ function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Pl
     closings.push(...balances.filter((b) => b.type === 'CLBD').map((b) => ({ date: b.date, amount: b.amount })));
     openings.push(...balances.filter((b) => b.type === 'OPBD' && b.currency === found.currency).map((b) => ({ date: b.date, amount: b.amount })));
   }
+  // A kind whose payments take their ref from the bank alone: a payment the bank names no reference for could not be told again on the next read (#401).
+  const unreferenced = account?.statements && REFS_FROM_BANK.includes(account.statements) ? transactions.filter((t) => !t.ref.trim()).length : 0;
+  if (unreferenced) {
+    const bank = camt.statements.find((x) => x.bankName)?.bankName ?? account!.bank;
+    throw new RequestError(400, `Diese Datei nennt für ${unreferenced} ${unreferenced === 1 ? 'Zahlung' : 'Zahlungen'} keine Referenz der Bank; so kann die App sie nicht sicher wiedererkennen. Lade den Kontoauszug als camt.053 direkt bei ${bank} herunter.`,
+      { code: 'statement', params: { reason: 'unreferenced', n: unreferenced, bank } });
+  }
   const sorted = dates.filter(Boolean).sort();
   const last = sorted.at(-1);
   if (!account || !last) return refuse(400, 'Der Auszug hat keine Daten.', 'notCamt');
@@ -327,6 +334,8 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
         books.statementAsks = books.statementAsks.filter((a) => a.account !== placed.account.account);
         if (!books.statementAsks.length) delete books.statementAsks;
       }
+      // Payments a read before #401 left on an empty ref take their bank's ref first, as the person (#401).
+      const empty = repairEmptyRefs(WS, books);
       const before = new Set(books.transactions.map((t) => t.ref));
       const confirmedBefore = new Set(books.transactions.filter((t) => t.statement !== undefined).map((t) => t.ref));
       mergeBankFiles(WS, books);
@@ -357,6 +366,7 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
         ...(placed.opening ? { opening: placed.opening } : {}),
         ...(waiting ? { reconcile: { read: waiting.read.length, bank: waiting.bank.length } } : {}),
         ...(closedAsks ? { closedAsks } : {}),
+        ...('left' in empty || empty.repaired ? { emptyRefs: empty } : {}),
         ...(placed.byBank ? { byBank: placed.byBank } : {}),
       };
     });

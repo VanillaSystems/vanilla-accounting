@@ -5,10 +5,9 @@
  * with an open question waits for its answer. «Rückgängig» takes a file back out. Passwords are
  * never part of it.
  */
-
 import type { AccountChoice, UnknownAccount } from './api-error.js';
 import type { OtherWhy, SupportingWhy } from '../core/modules/schema.js';
-import type { TwinWhy } from './index.js';
+import type { StatementImport, TwinWhy } from './index.js';
 import type { CsvAsk, CsvColumns, ReadBy, ReadStatement, StatementRead } from './statement-read.js';
 
 /** What a file is. Unset while nobody knows (the row asks). */
@@ -81,7 +80,7 @@ export interface DropRow {
   /** Not a receipt: the name it got in data/quarantine/. */
   quarantined?: string;
   /** A statement: its file under bank-statements/, the payments it added, and the account (ledger number) it was read into. */
-  statement?: { file: string; refs: string[]; account?: string };
+  statement?: { file: string; refs: string[]; account?: string; emptyRefs?: StatementImport['emptyRefs'] };
   /** A payment provider's sales or fee report (a CSV its file's columns recognise, #203): whose, and which kind. */
   provider?: { id: string; name: string; kind: 'sales' | 'fees' };
   /** A report taken: what it booked onto the provider's clearing account and what it left. */

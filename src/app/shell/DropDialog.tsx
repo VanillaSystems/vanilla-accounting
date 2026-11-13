@@ -38,6 +38,7 @@ import type { Location, Route } from './route.js';
 import { at } from '../areas/receipts/view.js';
 import { fileKeyOf } from '../areas/bank/model.js';
 import { startIntake } from '../automation/intake.js';
+import { emptyRefsLine } from '../areas/bank/actions.js';
 import { draftForm } from '../areas/company/bank-draft.js';
 import { getAccountMap } from '../lib/accounts.js';
 import { cardStatementOf, chfOf, markLabel, suggestion } from '../areas/receipts/model.js';
@@ -585,6 +586,7 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
             : x.kind === 'supporting' ? <small className="dwhy" data-testid="drop-supporting">{x.of ? t('drop.p.supportingOf', { what: x.why || t('receipts.why.supporting'), name: x.of.name }) : t('drop.p.supportingAlone', { what: x.why || t('receipts.why.supporting') })}</small>
             : x.kind === 'twin' ? <small className="dwhy" data-testid="drop-twin">{t('drop.twin.duplicate', { name: x.name })} · {t(`drop.twin.why.${x.why}`)}</small> : null}
           {card ? <small className="dwhy" data-testid="drop-card-statement">{cardStatementLine(card)}</small> : null}
+          {emptyRefsLine(r.statement?.emptyRefs) ? <small className="dwhy" data-testid="drop-empty-refs">{emptyRefsLine(r.statement?.emptyRefs)}</small> : null}
           {byBank ? <small className="dwhy" data-testid="drop-by-bank">{t('drop.byBank', { label: byBank.label })}</small> : null}
           <span className="dacts">
             {x.kind === 'twin' && receipt ? (

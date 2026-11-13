@@ -148,7 +148,7 @@ export async function importStatements(files: File[], nav: Nav, into?: { account
   const confirmed = read.reduce((n, r) => n + (r.confirmed ?? 0), 0);
   const reconcile = read.reduce((n, r) => n + (r.reconcile?.read ?? 0), 0);
   const asksClosed = read.reduce((n, r) => n + (r.closedAsks ?? 0), 0);
-  const imported = [t('bank.imported', { n: added }), confirmed ? t('bank.importConfirmed', { n: confirmed }) : '', reconcile ? t('bank.importReconcile', { n: reconcile }) : '', asksClosed ? t('bank.importAsksClosed', { n: asksClosed }) : ''].filter(Boolean).join(' · ');
+  const imported = [t('bank.imported', { n: added }), confirmed ? t('bank.importConfirmed', { n: confirmed }) : '', reconcile ? t('bank.importReconcile', { n: reconcile }) : '', asksClosed ? t('bank.importAsksClosed', { n: asksClosed }) : '', ...read.map((r) => emptyRefsLine(r.emptyRefs))].filter(Boolean).join(' · ');
   const undo = last ? async () => {
     for (const r of [...read].reverse()) {
       try { await api.deleteStatement(r.file); } catch (e) { nav.toast(errorText(e)); break; }
@@ -199,3 +199,10 @@ export const statementAdd: NonNullable<Area['add']> = {
   title: () => t('bank.addTitle'),
   run: ({ nav }) => pickStatements((files) => importStatements(files, nav)),
 };
+
+/** What an import did with payments a read before #401 left without a reference (StatementImport.emptyRefs), said as a fact. */
+export function emptyRefsLine(e: StatementImport['emptyRefs']): string {
+  if (!e) return '';
+  if ('repaired' in e) return e.repaired ? t('bank.emptyRefs.repaired', { n: e.repaired }) : '';
+  return t(e.why === 'yours' ? 'bank.emptyRefs.yours' : 'bank.emptyRefs.unmatched', { n: e.left });
+}
