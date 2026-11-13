@@ -24,7 +24,8 @@ as `npm start`, with no terminal, Node.js or Homebrew needed. The code is in `sr
 ## Documents, Desktop, Downloads
 
 macOS asks the person before an app reads its Documents, Desktop or Downloads folder, iCloud Drive
-(`~/Library/Mobile Documents`) or a volume (`/Volumes`: a USB stick, a network share), and holds
+(`~/Library/Mobile Documents`), a cloud provider's folder (`~/Library/CloudStorage/<provider>`) or a
+volume (`/Volumes/<volume>`: a USB stick, a network share; each provider and volume on its own), and holds
 that first read until she answers «Erlauben» or «Nicht erlauben» (issue #373). So the app touches
 none of them until a step of hers needs it, and says just before why macOS will ask:
 
@@ -33,10 +34,14 @@ none of them until a step of hers needs it, and says just before why macOS will 
 - «Neue Buchhaltung erstellen» first says why macOS will ask and that «Erlauben» is needed
   («Weiter», or «Anderen Ordner wählen»: the save panel or folder dialog in the home folder).
   «Weiter» reads the folder (GET /api/desktop/folders), so macOS asks over those words. The answer
-  is kept in `desktop.json` (`access.documents`; 0.4.1 wrote it as `homeAccess`) with the app's
-  version: a hint only, since an update (an unsigned build above all) may lose the permission, so
-  another version says the words again. Every asynchronous look (`reach`) keeps macOS's answer for
-  the folder it lies in the same way (`access.<folder>`; a folder's own rights are no answer).
+  is kept in `desktop.json` (`access.documents`; 0.4.1 wrote it as `homeAccess`) with the build
+  that asked (`answerKey`, src/desktop/build-key.ts): an ad hoc signed build is a new app to macOS,
+  so its answers hold for that build only (its version string and `VANILLA_BUILT_AT`: rc.56 and
+  rc.57 of 0.4.2 differ); a build signed with a Developer ID (codesign's Authority) keeps them per
+  package version. Every asynchronous look (`reach`) keeps macOS's answer for the folder it lies in
+  the same way (`access.<folder>`, `access.volumes:<volume>`, `access.cloud:<provider>`); only a
+  read that went through or macOS's refusal (EPERM) is an answer, never a missing folder or a
+  folder's own rights.
   Once `allowed` the step reads the folder without a word, for a name not taken; after `refused`
   (EPERM) it names the way in System Settings and offers «Nochmals versuchen»; a folder whose own
   rights refuse the app (EACCES, `locked`) is said apart, with the Finder's «Informationen». The
@@ -71,7 +76,8 @@ Other questions of macOS, and when they come:
 - Automation of Mail («… möchte Mail steuern»): only for a source that reads the Mac's Mail app,
   at its «Prüfen» or its runs. Its «Prüfen» says before the first click that macOS will ask.
 - Incoming connections (the firewall, when it is on): only when the phone is switched on in
-  Firma › Handy, which says so (`phone.firewall`).
+  Firma › Handy, which says so (`phone.firewall`). A phone switched on before starts listening
+  again only once books are open, never before the first window.
 - The keychain (`safeStorage`): read when a stored password or key is used. An unsigned build is
   a new app to the keychain after each update, so macOS may ask for it again then; a build signed
   with a Developer ID keeps every answer across updates (see «Signing, notarization, updates»).

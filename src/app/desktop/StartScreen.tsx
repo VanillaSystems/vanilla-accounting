@@ -147,6 +147,8 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
       setError(errorText(e));
       if (e instanceof ApiError && e.body.code === 'oldLayout') setUpgradable(e.body.params.root);
       if (e instanceof ApiError && e.body.code === 'folderTaken') setProposed(e.body.params.free);
+      // «Nicht erlauben»: the words before the question go; the list shows the books with «Kein Zugriff» and the way in System Settings.
+      if (e instanceof ApiError && e.body.code === 'folderRefused') { setUnasked(undefined); void api.desktop.info().then(setInfo, () => undefined); }
       setBusy(false);
     }
   };

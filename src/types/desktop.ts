@@ -93,10 +93,11 @@ export type ProtectedFolder = 'documents' | 'desktop' | 'downloads' | 'other';
 
 /**
  * Every folder macOS asks about before the app's first read there: the three named to the person,
- * and iCloud Drive (~/Library/Mobile Documents) and the volumes (/Volumes: a USB stick, a network
- * share), which the person reads as «other».
+ * and iCloud Drive (~/Library/Mobile Documents), the cloud providers' folders (~/Library/CloudStorage:
+ * Dropbox, Google Drive, OneDrive) and the volumes (/Volumes: a USB stick, a network share), which
+ * the person reads as «other». macOS asks per cloud provider and per volume.
  */
-export type GuardedFolder = Exclude<ProtectedFolder, 'other'> | 'icloud' | 'volumes';
+export type GuardedFolder = Exclude<ProtectedFolder, 'other'> | 'icloud' | 'cloud' | 'volumes';
 
 /** Electron's systemPreferences.getMediaAccessStatus('microphone'): `not-determined` until macOS asked the person. */
 export type MicAccess = 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown';

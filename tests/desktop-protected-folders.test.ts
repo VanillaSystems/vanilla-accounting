@@ -180,22 +180,69 @@ test('a later start of the same version opens the books before the window; if ma
   }
 });
 
-test('iCloud Drive and the volumes count as asked about too: books there are not read before her word (#373)', async () => {
+test('iCloud Drive, the cloud providers\' folders and the volumes count as asked about too, each volume and provider on its own (#373)', async () => {
   const tcc = protectedFolders();
   const icloud = join(tcc.home, 'Library', 'Mobile Documents', 'com~apple~CloudDocs');
+  const dropbox = join(tcc.home, 'Library', 'CloudStorage', 'Dropbox', 'Buchhaltung');
   const stick = join(tcc.home, 'Volumes', 'STICK', 'Buchhaltung');
-  mkdirSync(icloud, { recursive: true });
-  mkdirSync(stick, { recursive: true });
-  const server = serverOn(tcc, { protectedFolders: { documents: tcc.documents, icloud: join(tcc.home, 'Library', 'Mobile Documents'), volumes: join(tcc.home, 'Volumes') } });
+  const share = join(tcc.home, 'Volumes', 'Treuhand', 'Buchhaltung');
+  for (const d of [icloud, dropbox, stick, share]) mkdirSync(d, { recursive: true });
+  const state = join(tcc.home, 'Library', 'Application Support', 'Vanilla Accounting', 'desktop.json');
+  const server = serverOn(tcc, { protectedFolders: { documents: tcc.documents, icloud: join(tcc.home, 'Library', 'Mobile Documents'), cloud: join(tcc.home, 'Library', 'CloudStorage'), volumes: join(tcc.home, 'Volumes') } });
   try {
-    writeFileSync(join(tcc.home, 'Library', 'Application Support', 'Vanilla Accounting', 'desktop.json'), JSON.stringify({ recent: [icloud, stick], names: { [icloud]: 'Maler Huber GmbH' } }));
-    assert.equal(server.answered(icloud), false);
-    assert.equal(server.answered(stick), false);
+    writeFileSync(state, JSON.stringify({ recent: [icloud, dropbox, stick], names: { [icloud]: 'Maler Huber GmbH' } }));
+    for (const d of [icloud, dropbox, stick, share]) assert.equal(server.answered(d), false, d);
     assert.equal(server.answered(join(tcc.home, 'Buchhaltung')), true, 'a folder macOS guards not: read as ever');
     assert.deepEqual((await server.info()).recent, [
       { root: icloud, demo: false, name: 'Maler Huber GmbH', unasked: 'other' },
+      { root: dropbox, demo: false, unasked: 'other' },
       { root: stick, demo: false, unasked: 'other' },
     ]);
+    // Her «Weiter» for the stick: macOS answered for that volume, not for the network share.
+    assert.equal(await server.reach(stick), 'ok');
+    assert.equal(server.answered(stick), true);
+    assert.equal(server.answered(share), false, 'macOS asks per volume');
+    assert.equal(server.answered(dropbox), false);
+    assert.deepEqual(Object.keys(JSON.parse((await import('node:fs')).readFileSync(state, 'utf8')).access), ['volumes:STICK']);
+  } finally {
+    tcc.stop();
+  }
+});
+
+test('only a read that went through or macOS\'s refusal is kept as its answer; a missing folder is none (#373 review)', async () => {
+  const tcc = protectedFolders();
+  try {
+    const server = serverOn(tcc, { appVersion: 'b1' });
+    assert.equal(await server.reach(join(tcc.documents, 'Gibt es nicht')), 'missing');
+    assert.equal(server.answered(tcc.documents), false, 'a missing folder says nothing about macOS\'s answer');
+    assert.equal(await server.reach(join(tcc.documents)), 'ok');
+    assert.equal(server.answered(tcc.documents), true);
+  } finally {
+    tcc.stop();
+  }
+});
+
+test('two builds of one package version: the second asks first, since an ad hoc signed build is a new app to macOS; a Developer ID build keeps its answers per version (#373 review)', async () => {
+  const { answerKey, signedByDeveloperId } = await import('../src/desktop/build-key.js');
+  const rc56 = answerKey({ packageVersion: '0.4.2', build: '0.4.2-rc.56+g36b66d6', builtAt: '2026-11-13T09:00:00Z', developerId: false });
+  const rc57 = answerKey({ packageVersion: '0.4.2', build: '0.4.2-rc.57+g1a2b3c4', builtAt: '2026-11-13T15:00:00Z', developerId: false });
+  const rebuilt = answerKey({ packageVersion: '0.4.2', build: '0.4.2-rc.56+g36b66d6', builtAt: '2026-11-13T16:00:00Z', developerId: false });
+  assert.equal(new Set([rc56, rc57, rebuilt]).size, 3, 'every build its own key, a rebuild of one commit too');
+  const signed = (build: string) => answerKey({ packageVersion: '0.4.2', build, builtAt: build, developerId: true });
+  assert.equal(signed('0.4.2-rc.56+g36b66d6'), signed('0.4.2-rc.57+g1a2b3c4'), 'signed: kept across builds of the version');
+  assert.equal(signedByDeveloperId('Executable=/Applications/Vanilla Accounting.app/Contents/MacOS/Vanilla Accounting\nAuthority=Developer ID Application: Muster AG (ABCDE12345)\nAuthority=Developer ID Certification Authority\n'), true);
+  assert.equal(signedByDeveloperId('Executable=/Applications/Vanilla Accounting.app/Contents/MacOS/Vanilla Accounting\nSignature=adhoc\n'), false);
+
+  const tcc = protectedFolders();
+  try {
+    const books = await booksInDocuments(tcc, rc56);
+    tcc.start();
+    const server = serverOn(tcc, { appVersion: rc57 });
+    assert.equal(server.answered(books), false, 'rc.57 has no answer of macOS, though rc.56 of the same 0.4.2 had');
+    const shown: string[] = [];
+    await firstPage({ last: books, reach: server.reach, answered: server.answered, unasked: () => '/start?unasked', open: server.open, current: server.current, pathOf: () => '/', asking: () => '/start?asking', show: (p) => shown.push(p), wait: async () => {} });
+    assert.deepEqual(shown, ['/start?unasked'], 'the words come before macOS asks');
+    assert.deepEqual(tcc.touches, []);
   } finally {
     tcc.stop();
   }

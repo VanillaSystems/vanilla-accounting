@@ -391,6 +391,8 @@ export function Sidebar({ page, books, onGo, onGoTo }: Props) {
   const [preparing, setPreparing] = useState(false);
   /** The Mac app before macOS first asks about the microphone: the words why, and «Weiter» starts the dictation (#373). */
   const [micAsk, setMicAsk] = useState(false);
+  /** The look at macOS's answer is under way: a second click starts no second dictation. */
+  const looking = useRef(false);
   /** When the microphone began recording, once the language is loaded. */
   const [recordingSince, setRecordingSince] = useState(0);
   /** The words of `text` the recognizer may still change, shown as provisional. */
@@ -436,10 +438,11 @@ export function Sidebar({ page, books, onGo, onGoTo }: Props) {
   const listen = () => {
     if (!ear) return;
     if (listening) { listening(); return; }
-    if (micAsk) return;
+    if (micAsk || looking.current) return;
     // In a browser nothing is awaited: the click starts it at once, as its own permission prompt wants.
     if (!desktop?.micAccess) { hear(); return; }
-    void beforeDictation(desktop).then((next) => { if (next === 'ask') setMicAsk(true); else hear(); });
+    looking.current = true;
+    void beforeDictation(desktop).then((next) => { looking.current = false; if (next === 'ask') setMicAsk(true); else hear(); });
   };
   const hear = () => {
     if (!ear) return;

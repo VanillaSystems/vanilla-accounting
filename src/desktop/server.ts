@@ -55,7 +55,10 @@ export interface DesktopServerOptions {
    * no answer for yet, nothing is read before the person was told why macOS asks.
    */
   protectedFolders?: Partial<Record<GuardedFolder, string>>;
-  /** The app's version: macOS's answer about the Documents folder is kept for this version only (an update may lose it). */
+  /**
+   * The build macOS's answers about folders are kept for (src/desktop/build-key.ts answerKey): an
+   * ad hoc signed build is a new app to macOS, a Developer ID build keeps them across updates.
+   */
   appVersion?: string;
   /** Whether an AI provider answers on this computer (the setup conversation needs one); by default the providers of src/llm are asked. */
   aiAvailable?: () => Promise<boolean>;
@@ -73,7 +76,7 @@ async function anyProviderReady(): Promise<boolean> {
  * `missing`: nothing there (yet); `refused`: macOS does not let the app read it («Nicht erlauben»,
  * EPERM); `locked`: the folder's own rights do not (EACCES).
  */
-export type Reach = 'ok' | 'missing' | 'refused' | 'locked';
+export type Reach = 'ok' | 'missing' | 'refused' | 'locked' | 'unknown';
 
 export interface DesktopServer {
   app: express.Express;
@@ -161,11 +164,21 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     try { return { root, name: readManifest(join(appFolderIn(root) ?? root, MANIFEST_FILE)).company.name, demo }; } catch (e) { return { root, demo, problem: e instanceof Error ? e.message : String(e) }; }
   };
 
-  /** The folder macOS guards that `root` lies in; none for any else. */
-  const guardOf = (root: string): GuardedFolder | undefined => {
+  /**
+   * The folder macOS guards that `root` lies in, as the key its answer is kept under; none for any
+   * else. macOS asks per volume and per cloud provider: `volumes:<name>`, `cloud:<provider folder>`.
+   */
+  const guardOf = (root: string): string | undefined => {
     const r = resolve(root);
-    const hit = Object.entries(opts.protectedFolders ?? {}).find(([, f]) => f && (r === resolve(f) || r.startsWith(resolve(f) + sep)));
-    return hit?.[0] as GuardedFolder | undefined;
+    for (const [kind, f] of Object.entries(opts.protectedFolders ?? {}) as Array<[GuardedFolder, string | undefined]>) {
+      if (!f) continue;
+      const top = resolve(f);
+      if (r !== top && !r.startsWith(top + sep)) continue;
+      if (kind !== 'volumes' && kind !== 'cloud') return kind;
+      const first = r.slice(top.length + 1).split(sep)[0];
+      return first ? `${kind}:${first}` : kind;
+    }
+    return undefined;
   };
   /** The protected folder `root` lies in, as the person reads it; `other` for any else (macOS refuses an iCloud or a network folder too). */
   const folderOf = (root: string): ProtectedFolder => {
@@ -174,11 +187,11 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   };
   const version = opts.appVersion ?? '';
   /** macOS's answer for `folder` as this version of the app had it; another version (an update) asks again. */
-  const answerFor = (folder: GuardedFolder): HomeAccess | undefined => {
+  const answerFor = (folder: string): HomeAccess | undefined => {
     const kept = readState(opts.stateFile).access?.[folder];
     return kept?.version === version ? kept.answer : undefined;
   };
-  const keepAnswer = (folder: GuardedFolder, answer: HomeAccess) => {
+  const keepAnswer = (folder: string, answer: HomeAccess) => {
     const state = readState(opts.stateFile);
     const kept = state.access?.[folder];
     if (kept?.answer === answer && kept.version === version) return;
@@ -188,11 +201,15 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     const g = guardOf(root);
     return !g || answerFor(g) !== undefined;
   };
-  /** reach(), with macOS's answer kept for the folder it guards (a locked folder's own rights are no answer of macOS). */
+  /**
+   * reach(), with macOS's answer kept for the folder it guards: only a read that went through or
+   * macOS's refusal is one. A missing folder, a folder's own rights, any other failure say nothing
+   * about what macOS answered.
+   */
   const reachKept = async (root: string): Promise<Reach> => {
     const r = await reach(root);
     const g = guardOf(root);
-    if (g && r !== 'locked') keepAnswer(g, r === 'refused' ? 'refused' : 'allowed');
+    if (g && (r === 'ok' || r === 'refused')) keepAnswer(g, r === 'ok' ? 'allowed' : 'refused');
     return r;
   };
   const noAccess = (root: string, r: Reach): NoAccess | undefined =>
@@ -342,7 +359,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   }));
   /** macOS's answer about booksHome (the Documents folder) as this version of the app had it. */
   const homeAccess = (): HomeAccess | undefined => answerFor(homeGuard());
-  const homeGuard = (): GuardedFolder => guardOf(opts.booksHome) ?? 'documents';
+  const homeGuard = (): string => guardOf(opts.booksHome) ?? 'documents';
   /** Recent books in a folder this version has no answer for: listed by what desktop.json keeps, the folder not read. */
   const unasked = (root: string): KnownBooks => {
     const name = readState(opts.stateFile).names?.[root];
@@ -549,7 +566,7 @@ async function reach(root: string): Promise<Reach> {
     return 'ok';
   } catch (e) {
     const code = (e as NodeJS.ErrnoException).code ?? '';
-    return code === 'EPERM' ? 'refused' : code === 'EACCES' ? 'locked' : code === 'ENOENT' || code === 'ENOTDIR' ? 'missing' : 'ok';
+    return code === 'EPERM' ? 'refused' : code === 'EACCES' ? 'locked' : code === 'ENOENT' || code === 'ENOTDIR' ? 'missing' : 'unknown';
   }
 }
 

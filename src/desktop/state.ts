@@ -6,7 +6,6 @@
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { GuardedFolder } from '../types/desktop.js';
 
 export interface Bounds { x: number; y: number; width: number; height: number; maximized?: boolean }
 
@@ -20,12 +19,12 @@ export interface DesktopState {
   names?: Record<string, string>;
   /**
    * How macOS answered the app's first read under each folder it guards (Documents, Desktop,
-   * Downloads, iCloud Drive, the volumes), and the app version that asked: a hint only, since an
-   * update (an unsigned build above all) may lose the permission, and macOS then asks again. Until
-   * this version has an answer for a folder, the app reads nothing there before the person was told
-   * why macOS will ask (#373).
+   * Downloads, iCloud Drive, `cloud:<provider folder>`, `volumes:<volume>`), and the build that
+   * asked (src/desktop/build-key.ts): a hint only, since another build of an unsigned app is a new
+   * app to macOS, which then asks again. Until this build has an answer for a folder, the app reads
+   * nothing there before the person was told why macOS will ask (#373).
    */
-  access?: Partial<Record<GuardedFolder, FolderAnswer>>;
+  access?: Record<string, FolderAnswer>;
   bounds?: Bounds;
   port?: number;
   phone?: PhonePairing;
@@ -33,7 +32,8 @@ export interface DesktopState {
 
 export interface FolderAnswer { answer: 'allowed' | 'refused'; version: string }
 
-const GUARDED: readonly GuardedFolder[] = ['documents', 'desktop', 'downloads', 'icloud', 'volumes'];
+/** A key of `access`: a guarded folder, a volume or a cloud provider's folder by its name. */
+const GUARDED = /^(documents|desktop|downloads|icloud|(volumes|cloud)(:.+)?)$/;
 const answerOf = (raw: unknown): FolderAnswer | undefined => {
   const a = raw as Partial<FolderAnswer> | undefined;
   return (a?.answer === 'allowed' || a?.answer === 'refused') && typeof a.version === 'string' ? { answer: a.answer, version: a.version } : undefined;
@@ -41,7 +41,8 @@ const answerOf = (raw: unknown): FolderAnswer | undefined => {
 /** desktop.json's answers; one written before 0.4.2 kept only the Documents folder's, as `homeAccess`. */
 function accessOf(raw: { access?: unknown; homeAccess?: unknown }): DesktopState['access'] {
   const kept = raw.access && typeof raw.access === 'object' ? raw.access as Record<string, unknown> : {};
-  const entries = GUARDED.flatMap((f) => { const a = answerOf(kept[f] ?? (f === 'documents' ? raw.homeAccess : undefined)); return a ? [[f, a] as const] : []; });
+  const all: Record<string, unknown> = { ...(raw.homeAccess !== undefined ? { documents: raw.homeAccess } : {}), ...kept };
+  const entries = Object.entries(all).flatMap(([f, v]) => { const a = GUARDED.test(f) ? answerOf(v) : undefined; return a ? [[f, a] as const] : []; });
   return entries.length ? Object.fromEntries(entries) : undefined;
 }
 

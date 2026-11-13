@@ -180,6 +180,6 @@ export async function firstPage<B>(o: FirstPage<B>): Promise<void> {
   o.show(o.asking(last));
   const answer = await reached;
   if (o.current()) return;
-  if (answer !== 'ok' && answer !== 'missing') { o.show('/start'); return; }
+  if (answer === 'refused' || answer === 'locked') { o.show('/start'); return; }
   o.show(o.pathOf(await open()));
 }

@@ -28,6 +28,8 @@ import { dictate, isLang } from './dictation.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
 import { electronPage } from './print.js';
 import { desktopServer, listen, portOf } from './server.js';
+import { answerKey, developerIdOf } from './build-key.js';
+import { appVersion } from '../version.js';
 import { readState, writeState, type Bounds } from './state.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -102,6 +104,9 @@ async function start(): Promise<void> {
   // Moved: Electron quits this process and starts the app in the Applications folder; nothing more starts here.
   if (await offerApplicationsFolder(textsIn(language)) === 'moved') return;
 
+  // The build macOS's answers about folders are kept for: an ad hoc signed build is a new app to macOS (#373).
+  const developerId = app.isPackaged && process.platform === 'darwin' && await developerIdOf(join(dirname(process.execPath), '..', '..'));
+  let phoneResumed = false;
   const server = desktopServer({
     stateFile,
     demoRoot: join(app.getPath('userData'), 'Demo'),
@@ -109,13 +114,18 @@ async function start(): Promise<void> {
     // Names only: Electron reads none of them. The first read under one makes macOS ask the person (#373).
     protectedFolders: {
       documents: app.getPath('documents'), desktop: app.getPath('desktop'), downloads: app.getPath('downloads'),
-      icloud: join(app.getPath('home'), 'Library', 'Mobile Documents'), volumes: '/Volumes',
+      icloud: join(app.getPath('home'), 'Library', 'Mobile Documents'), cloud: join(app.getPath('home'), 'Library', 'CloudStorage'), volumes: '/Volumes',
     },
-    appVersion: app.getVersion(),
+    appVersion: answerKey({ packageVersion: app.getVersion(), build: appVersion(), builtAt: process.env.VANILLA_BUILT_AT, developerId }),
     dist: join(APP_ROOT, 'dist'),
     devUi: DEV?.ui,
     // The start screen opens books through the server; the menu's recent list follows.
-    onOpen: () => refreshMenu(),
+    onOpen: () => {
+      refreshMenu();
+      // The phone's listener (macOS's firewall may ask about it) only once books are open, never before the first window (#373).
+      if (phoneResumed) return;
+      phoneResumed = true;
+        },
   });
   useSecretStore(sealedStore({ file: join(app.getPath('userData'), 'secrets.json'), cipher: safeStorage, books: () => server.current()?.root }));
   const port = portOf(await listen(server.app, '127.0.0.1', readState(stateFile).port));
@@ -196,7 +206,6 @@ async function start(): Promise<void> {
   refreshMenu();
   await pathKnown;
   server.startBackground();
-  void server.phone.resume().then((p) => { if (p.error) console.error(`phone: ${p.error}`); });
   // The books opened last, read only after macOS answered for their folder; a first start reads none (#373).
   void firstPage({
     last: readState(stateFile).recent[0], reach: server.reach, answered: server.answered, unasked, open: server.open, current: server.current, pathOf, show,
