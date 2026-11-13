@@ -23,7 +23,7 @@ const WEAK = 1;
 
 const IBAN = /\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,7}/;
 
-/** Where the first lines name the document a receipt: its title word, or a compound it closes at the start of a line («Akontorechnung»); Infinity when they do not. */
+/** Where the first lines name the document a receipt: its title word, or a compound it closes at the start of a line with a number of its own («Akontorechnung AK-26-Q3-30871», words.ts compoundLines); Infinity when they do not. */
 export function titleIn(head: string, words: DocumentsData): number {
   const word = wordsRe(words.receipt.title).exec(head)?.index ?? Infinity;
   return Math.min(word, compoundLines(head, words.receipt.title, words.notCompound)[0]?.at ?? Infinity);
@@ -44,7 +44,8 @@ export function receiptScore(text: string, words: DocumentsData): number {
 export function documentKind(text: string, words: DocumentsData): DocumentVerdict {
   const score = receiptScore(text, words);
   const head = text.slice(0, HEAD);
-  const titleAt = titleIn(head, words);
+  // Only a title word on its own outranks a supporting word below it: a compound title («Prämienrechnung PR-1») above «2. Mahnung» is the reminder's.
+  const titleAt = wordsRe(words.receipt.title).exec(head)?.index ?? Infinity;
   const supporting = firstOf(words.supporting, text.slice(0, TOP))[0];
   if (supporting && supporting.at < titleAt) return { is: 'supporting', why: supporting.key };
   // Terms, a price list or a tracking mail say what they are in their first lines, a newsletter in its

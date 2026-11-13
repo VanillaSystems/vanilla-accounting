@@ -15,7 +15,7 @@ import type { BankTransaction, Mapping, Receipt } from '../types/index.js';
 import { numbersIn, squash, tokensIn } from '../accounting/document-numbers.js';
 import { creditSigned } from '../accounting/credit-signed.js';
 import { baseCurrency, documents } from '../engines/index.js';
-import { HEAD, wordsRe } from '../core/modules/words.js';
+import { HEAD, compoundLines, wordsRe } from '../core/modules/words.js';
 import { legOf } from '../workspace/money-accounts.js';
 import { chargesOf } from './charges.js';
 import { duplicatesIn } from './duplicates.js';
@@ -289,12 +289,15 @@ function slotsOf(t: BankTransaction, holders: ReadonlyArray<Pick<Receipt, 'amoun
 /**
  * Money comes in for this receipt: a sales record, or a credit note, which says so by its total
  * below zero, by its VAT (creditSigned), or by its title in its first lines (documents.yaml
- * `credit`: «Gutschrift», «Credit note», «Note de crédit», «Nota di credito»).
+ * `credit`: «Gutschrift», «Credit note», «Note de crédit», «Nota di credito»), also as a compound title
+ * with its number («Warengutschrift WG-2026-0071», words.ts compoundLines), as a receipt's title is read.
  */
 export function paysIn(r: Pick<Receipt, 'amount' | 'vatSummary' | 'kind' | 'extractedText'>): boolean {
   if (r.kind === 'sales-record' || (creditSigned(r) ?? 0) < 0) return true;
-  const credit = documents().credit ?? [];
-  return credit.length > 0 && wordsRe(credit).test((r.extractedText ?? '').slice(0, HEAD));
+  const words = documents();
+  const credit = words.credit ?? [];
+  const head = (r.extractedText ?? '').slice(0, HEAD);
+  return credit.length > 0 && (wordsRe(credit).test(head) || compoundLines(head, credit, words.notCompound).length > 0);
 }
 
 /** The last day after the receipt's a payment is a candidate: the fixed window, or as far past the supplier's usual delay as DELAY.reach when that is further. */

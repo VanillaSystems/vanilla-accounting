@@ -11,9 +11,11 @@
  *   other receipt carries it, the amounts differ by rounding to 0.05 at most, or by exactly a cash
  *   discount the payment's text states or the receipt offers («abzgl. 2% Skonto», «2 % Skonto innert
  *   10 Tagen»), and the payment is on or after the receipt's day, within the receipt's terms or
- *   BOUNDS.daysAfter; past them, whatever the days between, only on the exact amount and a number that
- *   tells one bill apart (`telling`: six characters at least, not the amount nor a date written as
- *   digits): a compensation fund's quarterly bill paid at the quarter's end (#426);
+ *   BOUNDS.daysAfter; past them, up to LATE_DAYS after the receipt, only on the exact amount, a number
+ *   that tells one bill apart (`telling`: six characters at least, not the amount, not a day or a month
+ *   written as digits) and a receipt dated on or after the books' first payment (last year's bill of a
+ *   policy or a licence that keeps its number is no pair of this year's payment): a compensation
+ *   fund's quarterly bill paid at the quarter's end (#426);
  * - `supplier`: the payment names the receipt's business (its file, or every word of the payee's
  *   name in the receipt's head), the amount is the same to the cent, and the receipt is dated before
  *   the payment within the payment terms it states (45 days when it states none);
@@ -23,7 +25,7 @@
  */
 import type { BankTransaction, Receipt } from '../types/index.js';
 import type { DocumentsData } from '../core/modules/schema.js';
-import { HEAD, wordsRe } from '../core/modules/words.js';
+import { HEAD, isDateDigits, wordsRe } from '../core/modules/words.js';
 import { baseCurrency, documents, invoicing } from '../engines/index.js';
 import { squash, tokensIn } from '../accounting/document-numbers.js';
 import { BANK_WORDS, BOUNDS, namedNumbers, pairablePayment, paymentText, paysIn, takenPayments } from './pairing.js';
@@ -51,6 +53,8 @@ export const DEFAULT_TERMS = 45;
 const MAX_TERMS = 90;
 /** How far a receipt may lie before its payment to be offered at all; after it, BOUNDS.daysBefore. */
 const OFFER_DAYS = 120;
+/** Past its terms, a bill is linked by its number up to this many days after its date, never later: a number a policy or a contract keeps names next year's bill too (#426). */
+const LATE_DAYS = 180;
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
@@ -254,8 +258,8 @@ export function nearPairs(books: Books, opts: NearOptions): NearPair[] {
       const days = r.date ? Math.round((Date.parse(tx.date) - Date.parse(r.date)) / 864e5) : undefined;
       if (days !== undefined && days < -BOUNDS.daysBefore) continue;
       const number = mine.length ? namedNumbers(r, tx)[0] : undefined;
-      // Further than OFFER_DAYS only a payment that names a telling number with the exact amount: it is linked whatever the days between (#426).
-      if (days !== undefined && days > OFFER_DAYS && !(number && gap.kind === 'same' && telling(number, r))) continue;
+      // Further than OFFER_DAYS only a payment that names a telling number with the exact amount, up to LATE_DAYS (#426).
+      if (days !== undefined && days > OFFER_DAYS && !(days <= LATE_DAYS && number && gap.kind === 'same' && telling(number, r))) continue;
       const of = opts.businesses?.ofReceipt(r);
       const supplier = (!!of && opts.businesses!.ofPayment(tx) === of) || namesSupplier(r, tx, opts.firm, words);
       if (!number && !supplier) continue;
@@ -287,20 +291,15 @@ const TELLING = 6;
 /**
  * A receipt's own number (squashed) that tells one bill apart past its terms (#426): TELLING
  * characters at least, and, when only digits, neither the receipt's amount (in cents or whole
- * units) nor a date (yyyymmdd, ddmmyyyy).
+ * units) nor a day or a month (words.ts isDateDigits: «20260707», «260301», «202607» for «2026-07»).
  */
 export function telling(n: string, r: Pick<Receipt, 'amount'>): boolean {
   if (n.length < TELLING) return false;
   if (!/^\d+$/.test(n)) return true;
   const amount = Math.abs(r.amount ?? 0);
   if (n === String(Math.round(amount * 100)) || n === String(Math.round(amount))) return false;
-  return !isDate(n.slice(0, 4), n.slice(4, 6), n.slice(6, 8)) && !isDate(n.slice(4, 8), n.slice(2, 4), n.slice(0, 2));
+  return !isDateDigits(n);
 }
-const isDate = (y: string, m: string, d: string): boolean => {
-  if (!/^(?:19|20)\d{2}$/.test(y) || !/^\d{2}$/.test(m) || !/^\d{2}$/.test(d)) return false;
-  const day = new Date(Date.UTC(+y, +m - 1, +d));
-  return day.getUTCMonth() === +m - 1 && day.getUTCDate() === +d;
-};
 
 /** Marks the pairs code may link: the rule of the header, then alone both ways among all near pairs. */
 function markSure(all: NearPair[], books: Books, receipts: readonly Receipt[], words: DocumentsData): void {
@@ -324,7 +323,8 @@ function markSure(all: NearPair[], books: Books, receipts: readonly Receipt[], w
     if (p.filed || p.days === undefined || p.days < 0 || r.location !== 'archived') continue;
     const alone = !!p.number && named.get(p.number) === 1 && carried.get(p.number) === 1;
     const inTerms = p.days <= Math.max(BOUNDS.daysAfter, termsOf(r, words));
-    if (alone && (p.gap.kind === 'same' || p.gap.kind === 'rounded' || p.gap.kind === 'discount') && (inTerms || (p.gap.kind === 'same' && telling(p.number!, r)))) p.sure = 'number';
+    const late = alone && p.gap.kind === 'same' && p.days <= LATE_DAYS && telling(p.number!, r) && !!r.date && r.date >= first;
+    if (alone && (p.gap.kind === 'same' || p.gap.kind === 'rounded' || p.gap.kind === 'discount') && (inTerms || late)) p.sure = 'number';
     else if (p.supplier && p.gap.kind === 'same' && p.days <= termsOf(r, words) && !heldBack(r, t, first, series.get(seriesOf(t)) ?? 0, words)) p.sure = 'supplier';
   }
   const count = (key: (p: NearPair) => string) => { const m = new Map<string, number>(); for (const p of all) m.set(key(p), (m.get(key(p)) ?? 0) + 1); return m; };
