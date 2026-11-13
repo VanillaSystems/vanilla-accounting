@@ -25,8 +25,15 @@ bankCharges: { account: "6940" }
 # Abs. 1; processes/booking.guide.yaml cls-salary). A rule for the wages (src/saving/wage-rule.ts)
 # books here, and a rule on it asks no rate (src/booking/rule-vat.ts); the hand form proposes it for
 # a wage without a booking of hers to follow (#382). Books that carry wages with their deductions
-# (on `deductions`) get no proposal: the payslip's lines are the person's to book.
-wages: { account: "5000", deductions: "2270" }
+# (on `deductions`) get no proposal: the payslip's lines are the person's to book. `contributions`: the
+# employer's social insurance contributions (AHV/IV/EO/ALV, FAK, BVG), no supply either (cls-social-insurance):
+# no VAT code on them; an insurer's premium (UVG, KTG) is an exempt supply and keeps its zero code.
+wages: { account: "5000", deductions: "2270", contributions: ["5700", "5710", "5720"] }
+
+# What the setup's «private use» names, by the account its costs are booked on: a share of it the person
+# named in the setup («öppe d Hälfti» of the phone) is offered as a rule with a private share on the first
+# payment booked there (src/saving/share-rule.ts, #402).
+privateUse: { phone: "6510", car: "6200" }
 
 # Accounts an answer adds to the chart.
 answers:

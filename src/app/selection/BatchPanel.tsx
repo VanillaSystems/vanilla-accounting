@@ -15,13 +15,14 @@ import { useWorkspace } from '../hooks/use-workspace.js';
 import type { Nav } from '../areas/index.js';
 import { AccountField } from '../areas/journal/AccountField.js';
 import { ledgerFor } from '../areas/receipts/view.js';
+import { ownerPays } from '../areas/receipts/actions-menu.js';
 import { journalFor } from '../areas/journal/commands.js';
 import type { SelectKind } from './model.js';
 import type { SelRow } from './SelectionView.js';
 import { changeLines, doneIds, leftLines, preview, runBatch, runEach, type Line } from './batch.js';
 
 /** What a batch can be: one the server runs, or one made of single requests. */
-export type BatchId = 'notReceipt' | 'findPayment' | 'readAgain' | 'delete' | 'noReceiptNeeded' | 'book' | 'rule' | 'account' | 'vatCode' | 'tag';
+export type BatchId = 'notReceipt' | 'findPayment' | 'private' | 'readAgain' | 'delete' | 'noReceiptNeeded' | 'book' | 'rule' | 'account' | 'vatCode' | 'tag';
 
 /** «Neu lesen» asks the model once per receipt: at most this many at once. */
 export const READ_AGAIN_MAX = 20;
@@ -32,6 +33,8 @@ export function batchOffers(kind: SelectKind, hasDimensions: boolean): BatchOffe
   switch (kind) {
     case 'receipt': return [
       { id: 'findPayment', label: t('batch.findPayment') },
+      // The owner paid them privately (#402): each booked as his outlay, as «Als Auslage buchen» does one.
+      ...(ownerPays() ? [{ id: 'private' as const, label: t('batch.private') }] : []),
       { id: 'notReceipt', label: t('batch.notReceipt') },
       ...(aiIsOff() ? [] : [{ id: 'readAgain' as const, label: t('batch.readAgain') }]),
       { id: 'delete', label: t('batch.delete') },
@@ -62,7 +65,7 @@ function Panel({ kind, rows, books, nav, open, onOpen }: Props & { open: BatchId
   const ids = rows.map((r) => r.id);
   const close = () => onOpen(null);
   if (open === 'rule') return <RuleFromSelection rows={rows} nav={nav} onClose={close} />;
-  if (open === 'findPayment' || open === 'readAgain' || open === 'delete') return <EachBatch which={open} books={books} rows={rows} nav={nav} name={name} onClose={close} />;
+  if (open === 'findPayment' || open === 'private' || open === 'readAgain' || open === 'delete') return <EachBatch which={open} books={books} rows={rows} nav={nav} name={name} onClose={close} />;
   return <ServerBatch which={open} kind={kind} books={books} ids={ids} nav={nav} name={name} onClose={close} />;
 }
 
@@ -158,10 +161,10 @@ function ServerBatch({ which, kind, books, ids, nav, name, onClose }: { which: E
   );
 }
 
-const LINE = { findPayment: 'batch.line.findPayment', readAgain: 'batch.line.readAgain', delete: 'batch.line.delete' } as const;
+const LINE = { findPayment: 'batch.line.findPayment', private: 'batch.line.private', readAgain: 'batch.line.readAgain', delete: 'batch.line.delete' } as const;
 
 /** A batch of single requests: which receipts it takes, which it leaves out and why, then «Ausführen». */
-function EachBatch({ which, books, rows, nav, name, onClose }: { which: 'findPayment' | 'readAgain' | 'delete'; books: Index; rows: SelRow[]; nav: Nav; name(id: string): string; onClose(): void }) {
+function EachBatch({ which, books, rows, nav, name, onClose }: { which: 'findPayment' | 'private' | 'readAgain' | 'delete'; books: Index; rows: SelRow[]; nav: Nav; name(id: string): string; onClose(): void }) {
   const l = ledgerFor(books);
   const [busy, setBusy] = useState(false);
   const why = (id: string): string | undefined => {
@@ -170,6 +173,9 @@ function EachBatch({ which, books, rows, nav, name, onClose }: { which: 'findPay
     if (v.locked) return t('batch.why.closed');
     if (which === 'findPayment' && v.none) return t('batch.why.notReceipt');
     if (which === 'findPayment' && v.links.length) return t('batch.why.linked');
+    if (which === 'private' && (v.none || v.orderPage)) return t('batch.why.notReceipt');
+    if (which === 'private' && v.links.length) return t('batch.why.linked');
+    if (which === 'private' && (!v.date || v.r.amount == null)) return t('batch.why.noDateAmount');
     return undefined;
   };
   const takes = rows.filter((r) => !why(r.id)).map((r) => r.id);
@@ -191,6 +197,8 @@ function EachBatch({ which, books, rows, nav, name, onClose }: { which: 'findPay
         if (found.outcome === 'filed') return () => api.setFiledPayment(found.receipt, null);
         return undefined;
       }, { done: (n) => t('batch.foundDone', { n }), name });
+    } else if (which === 'private') {
+      await runEach(nav, ids, async (id) => { const made = await api.privatePayment(id); return () => api.deleteTransaction(made.ref); }, { done: (n) => t('batch.privateDone', { n }), name });
     } else if (which === 'readAgain') {
       await runEach(nav, ids, async (id) => { await api.visionExtract(id); return undefined; }, { done: (n) => t('batch.readDone', { n }), name });
     } else {

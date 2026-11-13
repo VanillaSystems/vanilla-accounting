@@ -43,8 +43,8 @@ test('#287: both legs of a charge split across two balances under one ref, and b
   assert.deepEqual(rows, [
     ['CARD-7', '6200', '1023', 60, 'I81', 'EUR'],
     ['CARD-7', '6200', '1024', 16.6, 'I81', 'USD'],
-    ['FEE-CARD-7', '6940', '1023', 0.26, 'I0', 'EUR'],
-    ['FEE-CARD-7', '6940', '1024', 0.04, 'I0', 'USD'],
+    ['FEE-CARD-7', '6940', '1023', 0.26, undefined, 'EUR'],
+    ['FEE-CARD-7', '6940', '1024', 0.04, undefined, 'USD'],
   ]);
   assert.match(prompts.join('\n'), /Shared receipt: the receipt below also pays CARD-7 \(16\.6 USD\)/, 'the EUR leg is told the USD leg pays the receipt too');
   assert.match(prompts.join('\n'), /Fee: 0\.04 USD, debited separately as FEE-CARD-7/, 'the USD leg names its own fee leg, not the EUR one');

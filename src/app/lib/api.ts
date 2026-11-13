@@ -489,6 +489,7 @@ export const api = {
   draftCommand: (c: DraftCommand) => request<KeepResult | { ok: boolean }>('POST', '/api/rules/draft', c),
   shareOffer: (ref: string) => request<{ offer: ShareOffer | null }>('GET', `/api/rules/share?ref=${encodeURIComponent(ref)}`),
   draftShare: (ref: string) => request<{ path: string }>('POST', '/api/rules/share', { ref }),
+  dismissShare: (ref: string, never = false) => request<{ ok: boolean }>('POST', '/api/rules/share/dismiss', { ref, never }),
   /** Receipts that add up to a payment, or nearly, and where code stopped looking (#27, #190). */
   receiptSets: (ref: string) => request<{ sets: ReceiptSet[]; cut?: SetCut }>('GET', `/api/transactions/${encodeURIComponent(ref)}/receipt-sets`),
   /** Why a provider's payout waits for the person, or null (#203). */

@@ -15,6 +15,7 @@ import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, NO_VAT
 import { wordsIn } from '../export/texts.js';
 import { APP_FOLDER } from '../workspace/workspace.js';
 import { checkPatch, draftView, readDraft, saidFirm, writeDraft } from './draft-store.js';
+import { parseShares, type PrivateShares } from './model.js';
 import { draftMarks, draftSteps, markOf, withPatch, type DraftPatch, type Firm, type SetupDraft, type SetupDraftView, type StepMark } from './draft.js';
 
 /** A turn of the conversation typed so far, as the server keeps it in memory; it is not saved. */
@@ -37,8 +38,11 @@ export type TalkRefusal =
   | { reason: 'noVat' };
 
 export type SetupReply =
-  /** `filled`: the answers saved from the words; `firm`: what the words said of the firm so far, short of a whole one (kept in the draft's `said`). */
-  | { kind: 'read'; say: string; filled: StepMark[]; refused: Array<{ step: StepMark; refusal: TalkRefusal }>; firm?: Partial<Firm> }
+  /**
+   * `filled`: the answers saved from the words; `firm`: what the words said of the firm so far, short of a whole one (kept in the draft's `said`);
+   * `shares`: the private shares the words named now (#402), which the screen says will be offered as a rule with the provider's first payment.
+   */
+  | { kind: 'read'; say: string; filled: StepMark[]; refused: Array<{ step: StepMark; refusal: TalkRefusal }>; firm?: Partial<Firm>; shares?: PrivateShares }
   /** The model answered something other than the JSON asked for: nothing is saved. */
   | { kind: 'unreadable' }
   /** The model did not answer (no provider, a timeout): nothing is saved. */
@@ -55,6 +59,8 @@ export interface TalkOutput {
   answers: Record<string, unknown>;
   netRates?: unknown;
   banks?: unknown;
+  /** The private share in percent of the phone or the car the words name (#402), unchecked. */
+  shares?: Partial<Record<'car' | 'phone', unknown>>;
 }
 
 const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -74,6 +80,7 @@ export function parseTalk(raw: string): TalkOutput | undefined {
     answers: isMap(j.answers) ? j.answers : {},
     ...(j.netRates !== undefined && j.netRates !== null ? { netRates: j.netRates } : {}),
     ...(j.banks !== undefined && j.banks !== null ? { banks: j.banks } : {}),
+    ...(isMap(j.privateShares) ? { shares: j.privateShares } : {}),
   };
   const empty = !out.say && !out.firm && !out.preset && !Object.keys(out.answers).length && out.netRates === undefined && out.banks === undefined;
   return empty ? undefined : out;
@@ -163,6 +170,7 @@ ${presets}
 - answers:
 ${QUESTION_ORDER.map(describe).join('\n')}
 - netRates: only with vatMethod "net-rate": the one or two net tax rates (Saldosteuersatz) the tax authority approved, in percent: [{"rate": 4.5, "label": "<activity>"}]
+- privateShares: only when the words name how much of the phone's or the car's use is private, in whole percent, with the person's own words that name it copied exactly («s Gschäftshandy bruuch ich au privat, öppe d Hälfti»: {"phone": {"percent": 50, "words": "öppe d Hälfti"}}; «zu einem Drittel privat»: 33). Give privateUse with it.
 - banks: the company's bank accounts, the whole list (those already given too): [{"bank": "<name>", "currency": "${baseCurrency}", "iban": "<only when written>"}]. Known names: ${Object.keys(BANKS).join(', ')}; another bank by its own name.
 
 The conversation so far:
@@ -182,10 +190,10 @@ Rules:
 - firm: every field the person stated in this message; the app joins it to what they said of the firm before.
 - preset: only when none is chosen yet. Name the one whose kind of firm the words plainly say: a trade is "trades". Leave it out when the words do not say what the firm does: the app then asks with buttons. "custom" only when the person describes a firm none of the others fits.
 - Use the listed values only; an answer the app does not support yet you still give with its listed value, the app explains it.
-- say: in the language of the person's message (when unclear: ${LANGUAGE[language as keyof typeof LANGUAGE] ?? 'German'}), addressing them informally, plain words, no markdown. When the person asks something, answer it in two or three sentences. Do not ask the next question and do not list what is still missing: the app asks the step waiting itself, with buttons, right below your words. Ask back only when the message tried to say something you could not read («welche Bank meinst du?»), once and briefly; otherwise end without a question. Do not greet the person by a name: who types need not be the owner. Never say that you took over, saved, noted or corrected anything, and never call a UID or an IBAN valid: the app checks every answer, saves it or refuses it, and shows which.
+- say: in the language of the person's message (when unclear: ${LANGUAGE[language as keyof typeof LANGUAGE] ?? 'German'}), addressing them informally, plain words, no markdown. When the person asks something, answer it in two or three sentences. Do not ask the next question and do not list what is still missing: the app asks the step waiting itself, with buttons, right below your words. Ask back only when the message tried to say something you could not read («welche Bank meinst du?»), once and briefly; otherwise end without a question. Do not greet the person by a name: who types need not be the owner. Never say that you took over, saved, noted or corrected anything, and never call a UID or an IBAN valid: the app checks every answer, saves it or refuses it, and shows which. When the words name a private share, do not explain what happens with it at the year end: the app says itself what it does with the share.
 
 Answer with only this JSON object and nothing else; leave out every key you have nothing for:
-{"say": "...", "firm": {"name": "...", "uid": "...", "owner": "..."}, "preset": "...", "answers": {"<key>": "<value>" or ["<value>"]}, "netRates": [{"rate": 0, "label": "..."}], "banks": [{"bank": "...", "currency": "...", "iban": "..."}]}`;
+{"say": "...", "firm": {"name": "...", "uid": "...", "owner": "..."}, "preset": "...", "answers": {"<key>": "<value>" or ["<value>"]}, "netRates": [{"rate": 0, "label": "..."}], "banks": [{"bank": "...", "currency": "...", "iban": "..."}], "privateShares": {"phone": {"percent": 50, "words": "..."}}}`;
 }
 
 const current = (d: SetupDraft, p: DraftPatch): unknown =>
@@ -266,6 +274,13 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
     filled.push(markOf(p));
   }
   if (said && Object.keys(said).length && !draft.firm && !same(d.said, said)) draft = { ...draft, said };
+  // The private share her words named (#402), of what the setup says is used privately: kept with her words, offered later as a rule of the provider.
+  const used = ([] as string[]).concat(draft.answers.privateUse ?? []);
+  // Her words that name the share, only as she wrote them (the model's quote checked against her message), never the whole message (#402).
+  const latest = words.at(-1) ?? '';
+  const shareOf = (v: unknown) => (isMap(v) ? { percent: v.percent, said: typeof v.words === 'string' && v.words.trim() && said_in(v.words, latest) ? v.words.trim() : '' } : { percent: v, said: '' });
+  const named = parseShares(Object.fromEntries(Object.entries(out.shares ?? {}).filter(([item]) => used.includes(item)).map(([item, v]) => [item, shareOf(v)])));
+  if (named) draft = { ...draft, shares: { ...draft.shares, ...named } };
   // A firm not registered has no method, basis, period or rates: what the words gave of them is dropped with its marks, so a later «ja» asks them again (#347, #369).
   if (draft.answers.vatRegistered === 'no') {
     const gone: StepMark[] = ['vatMethod', 'basis', 'period', 'netRates'];
@@ -291,7 +306,7 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
     else refused.push({ step: 'period', refusal: { reason: 'unusualPeriod', method: odd.method, value: odd.period, usual: odd.usual } });
   }
   // The model writes its words before code checks: beside a refusal they may claim what was not saved, so code's reasons stand alone.
-  return { draft, reply: { kind: 'read', say: refused.length || silenced ? '' : out.say, filled, refused, ...(draft.said ? { firm: draft.said } : {}) } };
+  return { draft, reply: { kind: 'read', say: refused.length || silenced ? '' : out.say, filled, refused, ...(draft.said ? { firm: draft.said } : {}), ...(named ? { shares: named } : {}) } };
 }
 
 export type Ask = (prompt: string, opts: AskOptions) => Promise<string>;
