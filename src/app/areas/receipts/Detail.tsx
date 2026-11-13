@@ -32,7 +32,7 @@ import { amountOf, at, balanceSheetLine, bankOf, cardLineText, cardStatementLine
 import { Kbd, accept, runAct } from './commands.js';
 import { correctionPeriodName } from '../journal/commands.js';
 import { QuestionsOn } from '../../questions/Questions.js';
-import { correctFiled, deleteReceipt, linkCardLine, linkPayment, unpointFiled, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
+import { bookVatCorrection, correctFiled, deleteReceipt, linkCardLine, linkPayment, unpointFiled, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
 import { LinkDialog } from './LinkDialog.js';
 import { FindPair, NearList, madeBy } from './FindPair.js';
 import { offersInBooks } from '../../../intake/near-pairs.js';
@@ -313,6 +313,7 @@ function VatCorrectionNotice({ c, v, l, nav, canEdit }: { c: VatCorrection; v: R
       {I.dot}{t(entry ? 'receipts.vatCorrection.fits' : vat ? 'receipts.vatCorrection.book' : 'receipts.vatCorrection.noVat', { business: c.name, vat: vat ?? '', date: entry ? formatDate(entry.date) : '' })}
       {entry && <> <button type="button" className="golink" onClick={() => nav.go(at({ area: 'journal', id: entry.id }, entry.date))}>{t('receipts.vatCorrection.toEntry')} <span className="arr">→</span></button></>}
       {entry && canEdit && <> <button type="button" className="btn primary" data-testid="vat-correction-link" onClick={() => linkPayment(nav, v, entry.transactionRef, `${v.vendor} → ${formatDate(entry.date)} ${entry.description ?? ''}`.trim())}>{t('receipts.vatCorrection.link')}</button></>}
+      {!entry && vat && canEdit && !v.locked && <> <button type="button" className="btn primary" data-testid="vat-correction-book" onClick={() => void bookVatCorrection(nav, v)}>{t('receipts.vatCorrection.bookIt')}</button></>}
     </span>
   );
 }

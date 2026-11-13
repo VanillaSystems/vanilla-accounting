@@ -116,14 +116,16 @@ export interface CorrectionsDone {
  * already (vatCorrectionsOf `booking`, a person's) takes the link instead. A bill linked to anything,
  * or one a person took apart from a booking (Receipt.notPaidBy: the link undone or the booking
  * deleted), is done, so each bill books once and never again over the person. Only the business's
- * Swiss VAT (its UID when its file names one), only in an open period.
+ * Swiss VAT (its UID when its file names one), only in an open period. `only`: the one bill to book, as
+ * a person's «Vorsteuer buchen» on it asks (#458); absent, every bill.
  */
-export function bookVatCorrections(books: Books & { mappings: Mapping[]; journalEntries: JournalEntry[] }, counterparties: readonly Counterparty[], ctx: CorrectionContext): CorrectionsDone {
+export function bookVatCorrections(books: Books & { mappings: Mapping[]; journalEntries: JournalEntry[] }, counterparties: readonly Counterparty[], ctx: CorrectionContext, only?: string): CorrectionsDone {
   const done: CorrectionsDone = { booked: [], linked: [], waiting: [] };
   if (!ctx.inputTax) return done;
   const byId = new Map(counterparties.map((c) => [c.id, c]));
   const receipts = new Map(books.receipts.map((r) => [r.id, r]));
   for (const [id, found] of vatCorrectionsOf(books, counterparties)) {
+    if (only !== undefined && id !== only) continue;
     const r = receipts.get(id)!;
     if (r.notPaidBy?.length || !r.date) continue;
     const date = r.date;

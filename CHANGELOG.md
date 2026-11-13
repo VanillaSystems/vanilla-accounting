@@ -410,6 +410,13 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A provider's monthly Payments Invoice no longer waits for the AI (#458): no payment comes for it,
+  so the inbox takes its date and total from its text by code and the booking step books its input
+  tax, as for the other months. Before, one failed AI answer left the bill in the inbox with
+  «fehlt: Datum, Betrag» and its input tax unbooked. Where Belege says the booking without a
+  payment «fehlt noch», the new button «Vorsteuer buchen» books it at once, also on a date and
+  total she typed; it says why when it cannot («kein Datum», «eingereichte Periode», no fee
+  account). Such a bill no longer offers «Mit Zahlung verknüpfen» as its main action.
 - A receipt that names no VAT is «MWST noch nicht gelesen», no longer «keine CH-MWST» (#391).
   Only a model, or the receipt's own words («nicht MWST-pflichtig», «not subject to Swiss VAT», «von
   der MWST ausgenommen», never beside «inkl. MWST» or a Swiss rate, 7.7 % too), say it carries no
