@@ -48,6 +48,7 @@ function goOf(books: Index, i: PeriodIssue): Location | undefined {
     // The report's receipt, where the order is named and booked (#405); the bill is dropped onto Belege of its month.
     case 'held': { const r = books.receipts.find((x) => x.id === i.held.receipt); return r ? at({ area: 'receipts', id: r.id }, r.date) : undefined; }
     case 'bill': return at({ area: 'receipts' }, i.bill.date);
+    case 'withheld': return at({ area: 'bank', payment: i.uncleared.tx.ref }, i.uncleared.tx.date);
   }
 }
 
@@ -68,6 +69,7 @@ function textOf(books: Index, i: PeriodIssue): string {
     case 'own': return t('issues.own', { text: i.name, lacks: i.lacks.map((k) => t(LACK_WORDS[k])).join(', ') });
     case 'held': return t(i.held.why === 'rate' ? 'issues.heldRate' : 'issues.heldOther', { what: t(`drop.held.${i.held.why}`, { order: i.held.order }), date: formatDate(i.held.date), provider: i.held.name, amount: i.held.gross !== undefined ? `, ${i.held.currency ?? baseCurrency()} ${fmt(i.held.gross)}` : '' });
     case 'bill': return t('issues.bill', { month: monthName(i.bill.date), provider: i.bill.name, amount: `${baseCurrency()} ${fmt(i.bill.fees)}` });
+    case 'withheld': { const u = i.uncleared; return t('issues.withheld', { date: formatDate(u.tx.date), text: payerName(u.tx), amount: `${u.tx.currency} ${fmt(u.tx.amount)}`, account: u.account, open: `${baseCurrency()} ${fmt(u.open)}` }); }
   }
 }
 
@@ -109,6 +111,7 @@ export function issueWords(c: Pick<IssueCounts, 'unbooked' | 'waitingReceipt'> &
     c.evidence ? t('issues.evidenceTitle', { n: c.evidence }) : '',
     c.held ? t('issues.n.held', { n: c.held }) : '',
     c.bills ? t('issues.n.bills', { n: c.bills }) : '',
+    c.withheld ? t('issues.n.withheld', { n: c.withheld }) : '',
   ].filter(Boolean);
 }
 

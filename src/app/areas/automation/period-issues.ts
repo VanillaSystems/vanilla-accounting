@@ -21,6 +21,7 @@ import { bookedStates } from '../../../accounting/payment-entries.js';
 import { waitingForReceipt, type WaitingPayment } from '../../../accounting/receipt-due.js';
 import { localToday, type IsoDate } from '../../../accounting/periods.js';
 import type { HeldOrder, MissingBill, ProviderIssues } from '../../../booking/provider-issues.js';
+import { unclearedContributions, type Uncleared } from '../../../booking/withheld.js';
 
 export type PeriodIssue =
   | { kind: 'question'; q: Question; date: string }
@@ -33,7 +34,9 @@ export type PeriodIssue =
   /** An order a provider's sales report did not book: its turnover is not in the return yet (#405). */
   | { kind: 'held'; held: HeldOrder }
   /** A month of a provider's fees without its bill: the VAT on them is not deducted yet (#405). */
-  | { kind: 'bill'; bill: MissingBill };
+  | { kind: 'bill'; bill: MissingBill }
+  /** A contribution payment booked without the employees' share while the wages' deductions account held it (#426). */
+  | { kind: 'withheld'; uncleared: Uncleared };
 
 /** What a receipt lacks for the app to go on without the person: its date, its amount, its reading, or her word that it is no copy. */
 export type Lack = 'date' | 'amount' | 'reading' | 'copy';
@@ -91,7 +94,8 @@ export function periodIssues(books: Index, questions: readonly Question[], from:
   const unlinked = l.views.filter((v) => needsYou(v, l) && within(v.date) && !v.r.filedPayment && !mine.has(v.r.id)).map((v): PeriodIssue => ({ kind: 'unlinked', receipt: v.r }));
   const orders = (provider?.held ?? []).filter((h) => !h.filed && within(h.date)).map((h): PeriodIssue => ({ kind: 'held', held: h }));
   const bills = (provider?.bills ?? []).filter((b) => within(b.date)).map((b): PeriodIssue => ({ kind: 'bill', bill: b }));
-  return [...asked, ...orders, ...evidence, ...unbooked, ...own, ...unlinked, ...bills];
+  const withheld = unclearedContributions(books as Parameters<typeof unclearedContributions>[0], from, to, new Set(provider?.withheldPayees ?? [])).map((uncleared): PeriodIssue => ({ kind: 'withheld', uncleared }));
+  return [...asked, ...orders, ...evidence, ...withheld, ...unbooked, ...own, ...unlinked, ...bills];
 }
 
 /**
@@ -140,13 +144,13 @@ export function issuesLead(w: { rates: readonly string[]; questions: number; hel
  * page, #341). `waitingReceipt`: of the unbooked payments, those in `receiptWaits`; `waitingOutlays`:
  * those to the owner that wait for her outlays (#428).
  */
-export interface IssueCounts { total: number; questions: number; evidence: number; unbooked: number; waitingReceipt: number; waitingOutlays: number; unlinked: number; own: number; held: number; bills: number }
+export interface IssueCounts { total: number; questions: number; evidence: number; unbooked: number; waitingReceipt: number; waitingOutlays: number; unlinked: number; own: number; held: number; bills: number; withheld: number }
 
 export function countIssues(issues: readonly PeriodIssue[]): IssueCounts {
   const of = (kind: PeriodIssue['kind']) => issues.filter((i) => i.kind === kind).length;
   return {
     // A missing bill is information, not an open item: the period's figure is final without it.
-    total: issues.length - of('bill'), questions: of('question'), evidence: of('evidence'), unbooked: of('unbooked'), unlinked: of('unlinked'), own: of('own'), held: of('held'), bills: of('bill'),
+    total: issues.length - of('bill'), questions: of('question'), evidence: of('evidence'), unbooked: of('unbooked'), unlinked: of('unlinked'), own: of('own'), held: of('held'), bills: of('bill'), withheld: of('withheld'),
     waitingReceipt: issues.filter((i) => i.kind === 'unbooked' && i.waitsForReceipt).length,
     waitingOutlays: issues.filter((i) => i.kind === 'unbooked' && i.waitsForOutlays).length,
   };

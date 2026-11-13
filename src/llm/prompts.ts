@@ -229,6 +229,8 @@ interface TxInput {
   business?: { name: string; guidance: Guidance[] };
   /** It pays the owner back her outlays (src/booking/owner-outlays.ts, #402): her account and what it holds not paid back. */
   ownerOutlays?: { account: string; open: number };
+  /** The credit on the wages' deductions account at the end of its day (src/booking/withheld.ts, #426): what the payslips withheld and is not paid on yet. */
+  withheld?: { account: string; open: number };
 }
 
 const CLASSIFY_INSTRUCTIONS = `## Instructions
@@ -416,6 +418,12 @@ function ownerOutlaysLine(tx: TxInput): string {
   return `Owner's outlays paid back: this payment goes to the owner, who paid business costs privately. Her account ${o.account} holds ${o.open} ${tx.currency} of outlays not paid back yet; their expenses and their VAT are booked on their own entries. Book this payment on ${o.account} with "vat": "none", one entry: never on an expense or a wage account, which would book the outlays a second time (booking.guide.yaml cls-owner-outlays-repaid).`;
 }
 
+/** What the model is told of money out while the wages' deductions account holds a credit (booking.guide.yaml cls-social-insurance, #426). */
+function withheldLine(tx: TxInput): string {
+  const w = tx.withheld!;
+  return `Withheld from wages: account ${w.account} holds ${w.open} ${tx.currency}, deducted on the payslips booked so far and not paid on yet. Only a payment of social insurance contributions that the employer pays together with the employees' share clears it (booking.guide.yaml cls-social-insurance): book the employees' share on ${w.account} with "vat": "none", and the employer's share on its expense accounts. Take the employees' share from the bill when it states it; when the bill states only totals per contribution, it is the employees' share of each contribution they bear a part of by law, on the wages the bill names, which the payslips withheld: never more than ${w.account} holds (it may also hold deductions paid to another fund). Book nothing on ${w.account} for any other payment.`;
+}
+
 /** What the model is told of a leg of a card charge split across balances: the receipt also pays the other legs, so this one books only its share and its share of the VAT. */
 function sharedLine(tx: TxInput): string {
   const others = tx.sharedWith!.map((o) => `${o.ref} (${Math.abs(o.amount)} ${o.currency})`).join(', ');
@@ -462,7 +470,7 @@ export function buildBatchClassifyPrompt(
     }
     return `### Transaction ${i + 1}: ${tx.ref}
   Date: ${tx.date} | Amount: ${tx.amount} ${tx.currency} | Direction: ${tx.direction} | Bank: ${tx.bank}
-  Bank description: ${tx.description}${tx.counterparty ? `\n  Counterparty: ${tx.counterparty}` : ''}${tx.separateFee ? `\n  Fee: ${tx.separateFee.amount} ${tx.separateFee.currency}, debited separately as ${tx.separateFee.ref} and booked there. The amount above is without it: book no fee line here.` : ''}${tx.businessPart ? `\n  ${businessPartLine(tx, receipts[0])}` : ''}${tx.sharedWith?.length ? `\n  ${sharedLine(tx)}` : ''}${tx.ownerOutlays ? `\n  ${ownerOutlaysLine(tx)}` : ''}${tx.business?.guidance.length ? `\n  Decisions of ${tx.business.name}'s file (they decide like the company's decisions below):\n${tx.business.guidance.map((g) => `    ${formatGuidance(g)}`).join('\n')}` : ''}
+  Bank description: ${tx.description}${tx.counterparty ? `\n  Counterparty: ${tx.counterparty}` : ''}${tx.separateFee ? `\n  Fee: ${tx.separateFee.amount} ${tx.separateFee.currency}, debited separately as ${tx.separateFee.ref} and booked there. The amount above is without it: book no fee line here.` : ''}${tx.businessPart ? `\n  ${businessPartLine(tx, receipts[0])}` : ''}${tx.sharedWith?.length ? `\n  ${sharedLine(tx)}` : ''}${tx.ownerOutlays ? `\n  ${ownerOutlaysLine(tx)}` : ''}${tx.withheld ? `\n  ${withheldLine(tx)}` : ''}${tx.business?.guidance.length ? `\n  Decisions of ${tx.business.name}'s file (they decide like the company's decisions below):\n${tx.business.guidance.map((g) => `    ${formatGuidance(g)}`).join('\n')}` : ''}
 ${receiptPart}`;
   }).join('\n\n');
 

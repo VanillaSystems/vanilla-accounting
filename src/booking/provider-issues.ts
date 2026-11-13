@@ -34,6 +34,8 @@ export interface ProviderIssues {
   held: HeldOrder[]; bills: MissingBill[]; payouts: Record<string, string>;
   /** The providers' clearing accounts (provider.clearing): «was muss ich noch machen?» names one below zero at the period's end (#428). */
   clearing?: Array<{ provider: string; name: string; account: string }>;
+  /** Beside the providers', the refs of payments to a business that collects contributions with the employees' share (src/booking/withheld.ts withheldPayeesOf, #426): the business files are the server's. */
+  withheldPayees?: string[];
 }
 
 type Books = { receipts: readonly Receipt[]; journalEntries?: readonly JournalEntry[] };

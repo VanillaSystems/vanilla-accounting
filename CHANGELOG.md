@@ -343,6 +343,29 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Pairing (#426): a bill whose own number the payment names, with the same amount to the cent, is
+  paired by code past its terms too, up to half a year after its date (a compensation fund's Akonto
+  bill of early July paid at the end of September), so the payment is booked with it in the same
+  drop, not «ohne Beleg». Past the terms only a number of six characters or more that is neither the
+  amount nor a day or a month, that one payment names and one receipt carries, and a bill dated on
+  or after the books' first payment: last year's bill of a licence or a policy that keeps its number
+  is never paired with this year's payment. A title written as a compound with a number of its own
+  («Akontorechnung AK-26-Q3-30871», «Prämienrechnung PR-2026-2210») is read as the bill's title and
+  number; a payslip («Lohnabrechnung»), annual accounts («Erfolgsrechnung 2025») or a calculation are
+  not, a reminder or an order confirmation below such a title stays what it is, and a compound
+  credit note («Warengutschrift WG-…») pays in.
+- Social insurance (#426): with wages booked gross, the AI is told what the deductions account
+  (2270) holds on the payment's day, deducted on the payslips and not paid on yet, for a payment to
+  the compensation fund or to a business booked on the contribution accounts before, so a bill that
+  states its contributions by kind and not by party books the employees' share on 2270 and only the
+  employer's share on the staff expense (it booked the whole payment as expense, and 2270 kept the
+  employees' share). Such payments are asked after the wages of the same drop are booked, and the
+  year's opening of 2270 counts. An answer that takes more off 2270 than it holds is not booked. A
+  payment to the compensation fund (or to a payee that took its share off 2270 before) booked on
+  AHV/ALV or BVG with nothing on 2270, while 2270 still holds a credit at the period's end, is named
+  under «Noch offen» («gebucht ohne den Anteil der Arbeitnehmenden», with what 2270 holds then);
+  never one the employer pays alone (family allowances), and gone once 2270 is cleared. No VAT
+  figure changes.
 - «Noch offen» (#428): the sentence above the list named an open VAT question and an order a sales
   report could not split for every firm, one without a sales report too. It now names only what of
   the list holds up «Freigegeben», counted as the review counts it (a net tax rate without its

@@ -36,7 +36,8 @@ import { noPaymentOf, orderPagesOf, type OrderPage } from '../booking/order-page
 import { providersOf } from './sales-report-import.js';
 import { isProvider, providerOfMoneyIn } from '../booking/providers.js';
 import { vatCorrectionsOf, type VatCorrection } from '../booking/vat-corrections.js';
-import type { Counterparty } from '../knowledge/counterparties.js';
+import { identify, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
+import { withheldPayeesOf } from '../booking/withheld.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 
 export type { Found, Maker } from './pairing.js';
@@ -140,8 +141,11 @@ export function providerIssuesIn(ws: Pick<Workspace, 'paths'>, books: Parameters
   const providers = counterparties.filter(isProvider);
   const lock = periodLock(books as Books);
   const out = providerIssuesOf(books, providers, { inputTax: !withoutInputTax(), today, ...(lock.lockedThrough ? { lockedThrough: lock.lockedThrough } : {}) });
-  if (!providers.length) return out;
   const byId = new Map(books.receipts.map((r) => [r.id, r]));
+  const linkedTo = (t: BankTransaction) => books.mappings.flatMap((m) => (m.transactionRef === t.ref && byId.has(m.receiptId) ? [byId.get(m.receiptId)!] : []));
+  const withheldPayees = withheldPayeesOf(books.transactions, (t) => { const r = identify(signalsOfTransaction(t, linkedTo(t)), counterparties); return r.kind === 'known' ? r.counterparty : undefined; });
+  if (withheldPayees.length) out.withheldPayees = withheldPayees;
+  if (!providers.length) return out;
   for (const tx of books.transactions) {
     if (tx.direction !== 'CRDT' || lock.isClosed(tx.date)) continue;
     const linked = books.mappings.flatMap((m) => (m.transactionRef === tx.ref && byId.has(m.receiptId) ? [byId.get(m.receiptId)!] : []));
