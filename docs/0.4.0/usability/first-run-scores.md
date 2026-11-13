@@ -19,6 +19,7 @@ and 1 are restated here on that scale from their checkpoint scores below.
 | 3 | 0.4.2-rc.157-gafa23ac2 | 33 of 44 (75 %) | 1 install | 32 of 36 (89 %) | gets through |
 | 4 | 0.4.2-rc.253-g91d22c35 | 33 of 44 (75 %) | 1 install | 32 of 36 (89 %) | gets through |
 | 5 | 0.4.2-rc.361-g7ffa66f6 | 35 of 44 (80 %) | 1 install | 34 of 36 (94 %) | gets through |
+| 6 | 0.4.2-rc.460-g01e5b519 | 35 of 44 (80 %) | 1 install | 36 of 36 (100 %) | gets through |
 
 Without an AI she still stops at the install: the app is not signed, so macOS refuses the first
 double-click. No round of fixes can move that; it needs an Apple Developer ID.
@@ -33,6 +34,7 @@ double-click. No round of fixes can move that; it needs an Apple Developer ID.
 | 3 | 0.4.2-rc.157-gafa23ac2 | 20 of 26 (77 %) | 23 of 26 (88 %) | about 9 | 8 | 1 without an AI, 2 with | 19 of 23 / 1 of 23 |
 | 4 | 0.4.2-rc.253-g91d22c35 | 20 of 26 (77 %) | 23 of 26 (88 %) | about 10 | 8 | 1 without an AI, 2 with | 19 of 23 / 1 of 23 |
 | 5 | 0.4.2-rc.361-g7ffa66f6 | 22 of 26 (85 %) | 24 of 26 (92 %) | about 9–10 | 9 | 1 by the drop's link, 2 by the menu | 18 of 23 / 1 of 23 (9 more by her two rules) |
+| 6 | 0.4.2-rc.460-g01e5b519 | 22 of 26 (85 %) | 26 of 26 (100 %) | about 9–10 | 9 | 2 | 19 of 23 / 1 of 23 |
 
 Round 0 was scored afterwards by the coordinator from the two testers' reports of 2026-11-12;
 the testers did not have the card. Each path was walked once.
@@ -71,25 +73,32 @@ the AI placed a 30 June balance at 1 January (14 to 1, #459). Without an AI the 
 is kept and booked (10 to 2) and the open list's sentence is true (13 to 2); she still stops at the
 install. No VAT figure was wrong in either run; Swisscom keeps CHF 0.02 too much input tax.
 
+Round 6 (2026-11-13) had every fix merged after round 5's build up to #474 and #479. With an AI
+the painter scores every checkpoint 2: the SVA payment is booked by the drop with its reason (9 to
+2), and the AI's card gives the bank balance with its real date (14 to 2). Without an AI nothing
+moved; she still stops at the install. On all four walks macOS asked for the Documents folder only
+after the app's sentence and «Weiter», as the owner asked; the Downloads question still comes at
+the first drop without a word from the app.
+
 ## Checkpoints
 
-| # | Checkpoint | 0.4.1 no AI | 0.4.1 AI | R1 no AI | R1 AI | R2 no AI | R2 AI | R3 no AI | R3 AI | R4 no AI | R4 AI | R5 no AI | R5 AI |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | Install and first start | 0 | not run | 0 | not run | 0 | not run | 0 | not run | 0 | not run | 0 | not run |
-| 2 | The first screen starts her books | 0 | 0 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 |
-| 3 | Getting an AI ready | 0 | – | 1 | – | 1 | – | 2 | – | 2 | – | 2 | – |
-| 4 | Setup: every question answerable | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 2 |
-| 5 | Setup: nothing twice, progress visible | 0 | 0 | 2 | 1 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 |
-| 6 | After setup she knows her first step | 1 | 1 | 1 | 1 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 |
-| 7 | Statement in | 2 | 2 | 1 | 1 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 |
-| 8 | Receipts in | 1 | 2 | 0 | 1 | 1 | 1 | 1 | 2 | 2 | 2 | 2 | 2 |
-| 9 | Payments booked without her | 0 | 1 | 0 | 1 | 1 | 2 | 1 | 2 | 1 | 2 | 1 | 1 |
-| 10 | What the app asks her is answerable | 0 | 2 | 0 | 2 | 1 | 2 | 1 | 2 | 1 | 2 | 2 | 2 |
-| 11 | After the drop she is where her data is | not seen | 0 | 1 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 |
-| 12 | The VAT figure | 0 | 0 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 |
-| 13 | «What is missing» | 0 | 0 | 2 | 2 | 2 | 2 | 2 | 2 | 1 | 1 | 2 | 2 |
-| 14 | «What now?» to the AI | – | 0 | – | 1 | – | 1 | – | 1 | – | 2 | – | 1 |
-| 15 | The books behind the screen | – | 1 | – | 1 | – | 2 | – | 1 | – | 1 | – | 2 |
+| # | Checkpoint | 0.4.1 no AI | 0.4.1 AI | R1 no AI | R1 AI | R2 no AI | R2 AI | R3 no AI | R3 AI | R4 no AI | R4 AI | R5 no AI | R5 AI | R6 no AI | R6 AI |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | Install and first start | 0 | not run | 0 | not run | 0 | not run | 0 | not run | 0 | not run | 0 | not run | 0 | not run |
+| 2 | The first screen starts her books | 0 | 0 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 |
+| 3 | Getting an AI ready | 0 | – | 1 | – | 1 | – | 2 | – | 2 | – | 2 | – | 2 | – |
+| 4 | Setup: every question answerable | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 2 | 1 | 2 |
+| 5 | Setup: nothing twice, progress visible | 0 | 0 | 2 | 1 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 |
+| 6 | After setup she knows her first step | 1 | 1 | 1 | 1 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 |
+| 7 | Statement in | 2 | 2 | 1 | 1 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 |
+| 8 | Receipts in | 1 | 2 | 0 | 1 | 1 | 1 | 1 | 2 | 2 | 2 | 2 | 2 | 2 | 2 |
+| 9 | Payments booked without her | 0 | 1 | 0 | 1 | 1 | 2 | 1 | 2 | 1 | 2 | 1 | 1 | 1 | 2 |
+| 10 | What the app asks her is answerable | 0 | 2 | 0 | 2 | 1 | 2 | 1 | 2 | 1 | 2 | 2 | 2 | 2 | 2 |
+| 11 | After the drop she is where her data is | not seen | 0 | 1 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 |
+| 12 | The VAT figure | 0 | 0 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 | 2 |
+| 13 | «What is missing» | 0 | 0 | 2 | 2 | 2 | 2 | 2 | 2 | 1 | 1 | 2 | 2 | 2 | 2 |
+| 14 | «What now?» to the AI | – | 0 | – | 1 | – | 1 | – | 1 | – | 2 | – | 1 | – | 2 |
+| 15 | The books behind the screen | – | 1 | – | 1 | – | 2 | – | 1 | – | 1 | – | 2 | – | 2 |
 
 ## Other kinds of firm
 
@@ -103,27 +112,28 @@ C1–C3), counted once and kept out of the funnel total so the totals stay compa
 | 3 (first walk) | 0.4.2-rc.157-gafa23ac2 | 17 of 26, 72 % | gets through | 15 of 26, 64 % | gets through |
 | 4 | 0.4.2-rc.253-g91d22c35 | 29 of 36 (81 %), 20 of 26 | gets through | 27 of 36 (75 %), 18 of 26 | gets through |
 | 5 | 0.4.2-rc.361-g7ffa66f6 | 34 of 36 (94 %), 24 of 26 | gets through | 32 of 36 (89 %), 22 of 26 | gets through |
+| 6 | 0.4.2-rc.460-g01e5b519 | 32 of 36 (89 %), 22 of 26 | gets through | 34 of 36 (94 %), 24 of 26 | gets through |
 
 The first walks (rc.157) scored the totals only, not each checkpoint.
 
-| # | Checkpoint | Webshop R4 | Consultancy R4 | Webshop R5 | Consultancy R5 |
-|---|---|---|---|---|---|
-| 2 | The first screen starts her books | 2 | 2 | 2 | 2 |
-| 4 | Setup: every question answerable | 1 | 1 | 2 | 2 |
-| 5 | Setup: nothing twice, progress visible | 2 | 2 | 2 | 2 |
-| 6 | After setup she knows her first step | 2 | 2 | 2 | 2 |
-| 7 | Statement in | 2 | 2 | 2 | 2 |
-| 8 | Receipts in | 1 | 1 | 1 | 1 |
-| 9 | Payments booked without her | 2 | 1 | 2 | 1 |
-| 10 | What the app asks her is answerable | 1 | 2 | 2 | 1 |
-| 11 | After the drop she is where her data is | 2 | 1 | 2 | 2 |
-| 12 | The VAT figure | 1 | 1 | 2 | 2 |
-| 13 | «What is missing» | 2 | 1 | 1 | 2 |
-| 14 | «What now?» to the AI | 1 | 1 | 2 | 2 |
-| 15 | The books behind the screen | 1 | 1 | 2 | 1 |
-| W1 · C1 | The provider's report in · Customer payments | 1 | 2 | 2 | 2 |
-| W2 · C2 | Sales over the clearing account · Software from abroad and the card | 2 | 1 | 2 | 1 |
-| W3 · C3 | Fees, the platform's VAT and import VAT · Private outlays and the phone | 1 | 1 | 1 | 2 |
+| # | Checkpoint | Webshop R4 | Consultancy R4 | Webshop R5 | Consultancy R5 | Webshop R6 | Consultancy R6 |
+|---|---|---|---|---|---|---|---|
+| 2 | The first screen starts her books | 2 | 2 | 2 | 2 | 2 | 2 |
+| 4 | Setup: every question answerable | 1 | 1 | 2 | 2 | 2 | 2 |
+| 5 | Setup: nothing twice, progress visible | 2 | 2 | 2 | 2 | 2 | 2 |
+| 6 | After setup she knows her first step | 2 | 2 | 2 | 2 | 2 | 2 |
+| 7 | Statement in | 2 | 2 | 2 | 2 | 2 | 2 |
+| 8 | Receipts in | 1 | 1 | 1 | 1 | 1 | 2 |
+| 9 | Payments booked without her | 2 | 1 | 2 | 1 | 2 | 2 |
+| 10 | What the app asks her is answerable | 1 | 2 | 2 | 1 | 2 | 2 |
+| 11 | After the drop she is where her data is | 2 | 1 | 2 | 2 | 2 | 2 |
+| 12 | The VAT figure | 1 | 1 | 2 | 2 | 1 | 2 |
+| 13 | «What is missing» | 2 | 1 | 1 | 2 | 2 | 2 |
+| 14 | «What now?» to the AI | 1 | 1 | 2 | 2 | 1 | 1 |
+| 15 | The books behind the screen | 1 | 1 | 2 | 1 | 1 | 1 |
+| W1 · C1 | The provider's report in · Customer payments | 1 | 2 | 2 | 2 | 2 | 2 |
+| W2 · C2 | Sales over the clearing account · Software from abroad and the card | 2 | 1 | 2 | 1 | 2 | 2 |
+| W3 · C3 | Fees, the platform's VAT and import VAT · Private outlays and the phone | 1 | 1 | 1 | 2 | 1 | 2 |
 
 What held them down in round 4 became the issues of round 5: the setup's method and basis
 (#423), after the drop (#424), the provider's payouts list (#425), a bill matched by its number and
@@ -135,3 +145,10 @@ by its items, 2270 cleared; down: one of three Payments Invoices not read, #458,
 line for it naming the wrong document, #459); the consultancy at 89 % (the Wise opening at the ESTV
 rate, the hotel's 3.8 % on its card line, Q3 after the drop; down: a false task on the hotel's
 Kurtaxe whose button booked CHF 0.22 input tax, #455; the Akonto bill still not matched, #456).
+
+Round 6: the consultancy at 94 % (the Akonto bill matched, no false Kurtaxe task, repayments say what
+they wait for; down: with its bill matched the Akonto payment was booked whole as employer expense,
+leaving the employees' share on 2270, #476, and the AI's «what now» left it out). The webshop at
+89 %, down from 94 %: the same Akonto booking, DHL's fee VAT split off as import VAT (CHF 0.16 too
+little input tax, a regression, #483), drop rows contradicting the books, and stuck runs after a
+normal drop (#482). Both reached their VAT figure; the webshop's was off by the DHL CHF 0.16.
