@@ -7,6 +7,7 @@ import type { BankTransaction, BankTransactionPart, Index, JournalEntry, Receipt
 import type { EstvRates } from '../../../accounting/fx-conversion.js';
 import { booksOpenPeriod, type Period } from '../../../accounting/periods.js';
 import { openingLock } from '../../../accounting/opening-balance.js';
+import { textFacts } from '../../../parsers/receipt-text.js';
 import { applyChips, type Chip, type Field } from '../../shell/chips.js';
 import { baseCurrency, documents, filing } from '../../../engines/index.js';
 import { duplicatesIn, type Twin } from '../../../intake/duplicates.js';
@@ -518,9 +519,11 @@ export interface BalanceSheet {
  */
 export function balanceSheetOf(r: Receipt, books: Pick<Index, 'config' | 'transactions' | 'journalEntries'>, today: string): BalanceSheet | undefined {
   if (r.kind !== 'supporting' || noneWhyOf(r) !== 'balance-sheet') return undefined;
+  // Its day as read, else as code reads it off the text («Bilanz per 31.12.2025»), so a Mac without an AI is offered it too.
+  const date = r.date ?? textFacts(r.extractedText ?? '').date;
   const year = booksOpenPeriod(books, today, filing().length).from.slice(0, 4);
-  if (openingLock(books, year)) return { ...(r.date ? { date: r.date } : {}), opens: false };
-  return { ...(r.date ? { date: r.date } : {}), year, opens: r.date === `${Number(year) - 1}-12-31` };
+  if (openingLock(books, year)) return { ...(date ? { date } : {}), opens: false };
+  return { ...(date ? { date } : {}), year, opens: date === `${Number(year) - 1}-12-31` };
 }
 
 export function cardStatementOf(r: Pick<Receipt, 'id' | 'extractedText'>, books: Pick<Index, 'mappings' | 'transactions' | 'journalEntries'>): { debit?: string; lines: number } | undefined {

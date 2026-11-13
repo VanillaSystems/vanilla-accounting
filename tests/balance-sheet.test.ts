@@ -61,6 +61,7 @@ test('the balance sheet of the last day of the year before is the opening of the
   assert.deepEqual(balanceSheetOf(receipt('2026-06-30'), books(), '2026-11-13'), { date: '2026-06-30', year: '2026', opens: false });
   assert.deepEqual(balanceSheetOf(receipt('2025-12-31'), books({ config: { closedThrough: '2026-12-31' } }), '2027-02-01')?.opens, false, 'a closed year keeps its opening: no link into a refusal');
   assert.equal(balanceSheetOf({ ...receipt('2025-12-31'), kind: 'invoice', kindRule: undefined, kindBy: 'human' }, books(), '2026-11-13'), undefined, 'a person said it is a receipt');
+  assert.deepEqual(balanceSheetOf({ ...receipt('2025-12-31'), date: undefined }, books(), '2026-11-13'), { date: '2025-12-31', year: '2026', opens: true }, 'not read by a model: its day as code reads it off «Bilanz per 31.12.2025»');
 });
 
 test('the drop\'s closing lines count it apart, never as a receipt read without a payment', () => {
