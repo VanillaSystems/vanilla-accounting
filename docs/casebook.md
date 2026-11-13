@@ -67,15 +67,16 @@ transaction's receipts on Swiss MWST is never picked. One call carries at most e
 | 23 | [Fuel and other costs of a company car](../examples/cases/vehicle-fuel.yaml) | I81 | 405 |
 | 24 | [Income and capital tax of the company](../examples/cases/direct-tax-payment.yaml) | none | none |
 | 25 | [One receipt with two VAT rates (8.1% and 2.6%)](../examples/cases/mixed-rate-receipt.yaml) | I26, I81 | 405 |
+| 26 | [Refund of a purchase without a credit note](../examples/cases/supplier-refund-without-credit-note.yaml) | -I81 | 405 |
 
 ## Goods and webshop
 
 | # | Case | Codes | Ziffern |
 |---:|---|---|---|
-| 26 | [Webshop order to a Swiss customer, paid out by the payment provider](../examples/cases/webshop-payout-swiss.yaml) | V81, I0, none | 200, 303 |
-| 27 | [Webshop order shipped abroad (export, Ziffer 220)](../examples/cases/webshop-export.yaml) | V0, I0, none | 200, 220 |
-| 28 | [Monthly input tax on webshop fees (single-leg M81-2)](../examples/cases/webshop-fees-vat.yaml) | M81-2 | 400 |
-| 29 | [Courier customs bill with import VAT (eVV)](../examples/cases/import-vat-evv.yaml) | M0, none, M81, M81-2 | 400 |
-| 30 | [One card charge for several marketplace invoices](../examples/cases/grouped-vendor-invoices.yaml) | M81, I81 | 400, 405 |
-| 31 | [Refund to a Swiss webshop customer](../examples/cases/webshop-refund.yaml) | -V81 | 200, 303 |
-| 32 | [Goods for resale at the reduced rate (2.6%)](../examples/cases/reduced-rate-goods.yaml) | M26 | 400 |
+| 27 | [Webshop order to a Swiss customer, paid out by the payment provider](../examples/cases/webshop-payout-swiss.yaml) | V81, I0, none | 200, 303 |
+| 28 | [Webshop order shipped abroad (export, Ziffer 220)](../examples/cases/webshop-export.yaml) | V0, I0, none | 200, 220 |
+| 29 | [Monthly input tax on webshop fees (single-leg M81-2)](../examples/cases/webshop-fees-vat.yaml) | M81-2 | 400 |
+| 30 | [Courier customs bill with import VAT (eVV)](../examples/cases/import-vat-evv.yaml) | M0, none, M81, M81-2 | 400 |
+| 31 | [One card charge for several marketplace invoices](../examples/cases/grouped-vendor-invoices.yaml) | M81, I81 | 400, 405 |
+| 32 | [Refund to a Swiss webshop customer](../examples/cases/webshop-refund.yaml) | -V81 | 200, 303 |
+| 33 | [Goods for resale at the reduced rate (2.6%)](../examples/cases/reduced-rate-goods.yaml) | M26 | 400 |

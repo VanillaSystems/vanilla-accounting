@@ -2,7 +2,7 @@
 title: Ein eingereichtes Quartal korrigieren
 summary: Ein Fehler steckt in einem Quartal, dessen Abrechnung schon bei der ESTV ist. Die Korrektur kommt ins offene Quartal und in die Korrekturabrechnung.
 section: faelle
-order: 8
+order: 9
 ---
 Ist die MWST-Abrechnung eines Quartals eingereicht, ändert sich dieses Quartal nie mehr, und jedes Quartal davor auch nicht. Seine Buchungen, seine Zahlen und seine Abrechnung bleiben, wie sie eingereicht sind. Taucht danach ein Fehler auf, wird er im nächsten offenen Quartal korrigiert und der ESTV mit einer Korrekturabrechnung (Formular 0535) für das betroffene Quartal gemeldet.
 

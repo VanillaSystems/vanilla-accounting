@@ -135,7 +135,7 @@ test('S1: money back from a business the firm buys from: the account of its last
   const back = tx('BACK', 'CRDT', 30, 'Farben Müller AG', 'Gutschrift Retoure');
   const b = books({ transactions: [bought, back], journalEntries: [entry({ transactionRef: 'OUT', accountDebit: '4000', accountCredit: '1020', amount: 89, vatCode: 'M81' })] });
   const plain = firstLine(b, 'BACK');
-  assert.deepEqual(sideOf(plain.lines[0]), ['1020', '4000', '-M0'], 'no credit note: no input tax to take back');
+  assert.deepEqual(sideOf(plain.lines[0]), ['1020', '4000', '-M81'], 'no credit note: the purchase\'s code with the minus, its input tax goes back (#357)');
   assert.ok(!plain.notes.some((n) => n.kind === 'sale'));
   const note = receipt('gs', { hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 2.25, gross: 30 }], vatId: 'CHE-999.888.777' });
   const withNote = firstLine({ ...b, receipts: [note], mappings: [{ transactionRef: 'BACK', receiptId: 'gs' }] }, 'BACK');
@@ -214,7 +214,7 @@ const huber = (amount: number, description: string, vatCode = 'M81') => books({
 
 test('A: money in from a business the firm buys from is a refund only when it is plausible, and the form says it assumes one', () => {
   const refund = firstLine(huber(120, 'Gutschrift Retoure'), 'IN');
-  assert.deepEqual(sideOf(refund.lines[0]), ['1020', '4000', '-M0']);
+  assert.deepEqual(sideOf(refund.lines[0]), ['1020', '4000', '-M81']);
   assert.ok(refund.notes.some((n) => n.kind === 'refund'), JSON.stringify(refund.notes));
   const more = firstLine(huber(5000, 'Rechnung 77 Malerarbeiten'), 'IN');
   assert.deepEqual(sideOf(more.lines[0]), ['1020', '3400', 'V81'], 'more than the firm ever paid that business: a sale');

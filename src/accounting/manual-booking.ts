@@ -25,6 +25,7 @@ import { issuedByFirm, ownNumbers } from '../intake/own-invoice.js';
 import { paymentText, paysIn } from '../intake/pairing.js';
 import { squash, tokensIn } from './document-numbers.js';
 import { gapOf } from '../intake/near-pairs.js';
+import { refundedPurchase } from '../booking/refund-code.js';
 
 /** One line of the booking, in the payment's currency. */
 export interface BookingLine { accountDebit: string; accountCredit: string; amount: number; vatCode?: string; description: string; tags?: Tags }
@@ -38,7 +39,9 @@ export interface BookingLine { accountDebit: string; accountCredit: string; amou
 export interface DraftSource {
   account?: { from: 'rule'; rule: string } | { from: 'precedent'; date: string; yours?: true; name?: string } | { from: 'refund'; date: string } | { from: 'sales' | 'owner' | 'business' | 'bankFee' | 'wage' | 'ownerOutlays' } | { from: 'invoice' | 'receivable'; number: string } | { from: 'clearing'; provider: string };
   /** `abroad`: the firm's own invoice says its service is supplied abroad (invoicing placeAbroad). `noReceipt`: the last booking's code claimed input tax, which a payment without a receipt does not (#397). */
-  vat?: { from: 'rule' | 'precedent' | 'receipt' | 'invoice' | 'netRate' | 'refund' | 'abroad' | 'noReceipt' } | { from: 'sale'; choice: SaleChoice };
+  vat?: { from: 'rule' | 'precedent' | 'receipt' | 'invoice' | 'netRate' | 'refund' | 'abroad' | 'noReceipt' } | { from: 'sale'; choice: SaleChoice }
+    /** A supplier's refund without a credit note: the code of the purchase it refunds, with the minus (#357, refundedPurchase). `refund` above: no purchase was found unambiguously. */
+    | { from: 'purchase'; date: string; code: string };
 }
 
 /**
@@ -292,6 +295,9 @@ function withoutReceipt(code: string | undefined): string {
   const zero = inputTaxWithoutReceipt(code) ?? code;
   return formTakes(zero) ? zero : '';
 }
+
+/** A purchase code with the minus: a supplier's refund booked so. */
+const REFUND_CODE = /^-[MI]\d+$/;
 
 /** A code the firm's form takes, else nothing: a proposal never offers a code the booking would refuse. */
 const taken = (code: string | null | undefined): string => (code && formTakes(code) ? code : '');
@@ -573,7 +579,8 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
     saleParts = sale.parts;
     if (sale.note) notes.push(sale.note);
     other = { account: precedent.account!, vat: sale.vat, source: { account: { from: 'precedent', date: precedent.entry.date, ...(precedent.yours && { yours: true as const }), ...(precedent.name && { name: precedent.name }) }, ...(sale.source && { vat: sale.source }) } };
-  } else if (precedent) {
+  } else if (precedent && !(moneyIn && proposes && REFUND_CODE.test(precedent.vatCode ?? ''))) {
+    // A refund before is no «wie beim letzten Mal» for the next one: the purchase it refunds decides its code (#357, below).
     const vat = rate || (receipts.length ? '' : withoutReceipt(precedent.vatCode));
     // The last booking claimed input tax and this payment has no receipt: its zero code is no «wie beim letzten Mal» (#397).
     const zeroed = !rate && !receipts.length && !!vat && vat !== precedent.vatCode;
@@ -591,13 +598,17 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
     const foreign = known.ownUid ? docs.some((d) => d.vatId && norm(d.vatId) !== norm(known.ownUid)) : false;
     if (bought) {
       const refundRate = new Set(claims ? receipts.filter(isPurchaseDocument).flatMap(vatRates).map((g) => g.ratePercent) : []);
-      // The purchase's zero code (its own when it was booked without input tax, AGENTS.md: I0 back is -I0), with the minus.
+      // The purchase it refunds, found unambiguously: its account and its code with the minus (#357, I81 back is -I81, I0 back is -I0).
+      const refunded = refundRate.size ? undefined : refundedPurchase(tx, paid, { transactions: books.transactions, journalEntries: books.journalEntries ?? [], receipts: books.receipts, mappings: books.mappings });
+      const code = refunded ? taken(refunded.code) : '';
+      // Not found: the purchase's zero code (its own when it was booked without input tax), with the minus; the form says so.
       const booked = bought.vatCode && !bought.vatCode.startsWith('-') ? lookupVatCode(bought.vatCode) : null;
       const zero = inputTaxWithoutReceipt(bought.vatCode) ?? (booked?.entry.kind === 'inputNoVat' ? bought.vatCode : undefined);
       // A rate stays a rate: on the expense's credit side the form makes it the refund's code (-M81).
-      const vat = refundRate.size === 1 ? String([...refundRate][0]) : zero ? taken(`-${zero}`) : '';
+      const vat = refundRate.size === 1 ? String([...refundRate][0]) : code || (zero ? taken(`-${zero}`) : '');
+      const vatFrom: DraftSource['vat'] = refundRate.size === 1 ? { from: 'receipt' } : code ? { from: 'purchase', date: refunded!.original.date, code: refunded!.originalCode } : { from: 'refund' };
       notes.push({ kind: 'refund' });
-      other = { account: bought.account!, vat, source: { account: { from: 'refund', date: bought.entry.date }, ...(vat && { vat: { from: refundRate.size === 1 ? 'receipt' as const : 'refund' as const } }) } };
+      other = { account: code ? refunded!.account : bought.account!, vat, source: { account: { from: 'refund', date: code ? refunded!.original.date : bought.entry.date }, ...(vat && { vat: vatFrom }) } };
     } else if (foreign) {
       notes.push({ kind: 'supplierDocument' });
       other = { account: '', vat: '' };

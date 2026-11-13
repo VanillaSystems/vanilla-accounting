@@ -126,7 +126,8 @@ function sourceText(s: DraftSource, account: string | undefined, vat: string | u
           : a.from === 'clearing' ? t('journal.byHand.from.clearing', { provider: a.provider })
             : t(`journal.byHand.from.${a.from}`);
   const v = vat ? s.vat : undefined;
-  const vatFrom = !v ? '' : v.from === 'sale' ? t(`journal.byHand.from.sale.${v.choice === 'saleAbroad' ? 'abroad' : 'domestic'}`) : t(`journal.byHand.from.vat.${v.from}`);
+  const vatFrom = !v ? '' : v.from === 'sale' ? t(`journal.byHand.from.sale.${v.choice === 'saleAbroad' ? 'abroad' : 'domestic'}`)
+    : v.from === 'purchase' ? t('journal.byHand.from.vat.purchase', { date: formatDate(v.date), code: v.code }) : t(`journal.byHand.from.vat.${v.from}`);
   return [
     a && t('journal.byHand.proposedAccount', { account: name ? `${account} ${name}` : account!, from }),
     v && t('journal.byHand.proposedVat', { code: lookupVatCode(vat!) ? codeLabel(vat!) : `${vat} %`, from: vatFrom }),
