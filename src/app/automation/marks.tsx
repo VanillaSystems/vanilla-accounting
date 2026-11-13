@@ -33,8 +33,9 @@ async function rested(id: string): Promise<RunDetail> {
 /** The files a run's book step waited for «Einschalten» with (src/intake/pipeline.ts IntakeNote `bookingWaits`, #413), when it booked nothing so. */
 export function bookingWaitsNote(r: Pick<RunDetail, 'steps'>): string[] | undefined {
   for (const s of r.steps) {
-    const notes = (s.output?.notes ?? []) as Array<{ code?: string; files?: string[] }>;
-    const n = Array.isArray(notes) ? notes.find((x) => x.code === 'bookingWaits') : undefined;
+    const notes = (s.output?.notes ?? []) as Array<{ code?: string; files?: string[]; waiting?: number }>;
+    // Only when it left payments: a run with nothing to book says it is done, not why it waits.
+    const n = Array.isArray(notes) ? notes.find((x) => x.code === 'bookingWaits' && (x.waiting ?? 0) > 0) : undefined;
     if (n) return n.files ?? [];
   }
   return undefined;

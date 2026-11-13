@@ -3399,7 +3399,7 @@ export default {
     'automation.pending.on': 'Switched on: this version runs from now on',
     'automation.pending.onPayouts': {"one": "Switched on: this version runs from now on. Booked from the clearing account: {n} of {of} payouts.", "other": "Switched on: this version runs from now on. Booked from the clearing account: {n} of {of} payouts."},
     'automation.pending.why': 'Saved is not switched on: switching on lies outside the workspace, so the AI cannot approve its own change.',
-    'bookingWaits.text': {"one": "The app is not booking on its own for now: {files} changed since booking was last switched on, and it books by no rule you have not seen yet. With «Switch on» the change applies, and the app books what waited.", "other": "The app is not booking on its own for now: {files} changed since booking was last switched on, and it books by no rule you have not seen yet. With «Switch on» the change applies, and the app books what waited."},
+    'bookingWaits.text': {"one": "The app is not booking on its own for now, because {files} changed since booking was last switched on and it books by no rule you have not seen yet; with «Switch on» the change applies, and it then books what was only waiting for that.", "other": "The app is not booking on its own for now, because {files} changed since booking was last switched on and it books by no rule you have not seen yet; with «Switch on» the change applies, and it then books what was only waiting for that."},
     'bookingWaits.look': "See the change",
     'automation.case.same': 'same',
     'automation.case.different': 'different',

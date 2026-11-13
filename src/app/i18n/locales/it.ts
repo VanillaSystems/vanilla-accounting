@@ -3399,7 +3399,7 @@ export default {
     'automation.pending.on': 'Attivata: da ora gira questa versione',
     'automation.pending.onPayouts': {"one": "Attivata: da ora gira questa versione. Registrati dal conto di transito: {n} versamento su {of}.", "other": "Attivata: da ora gira questa versione. Registrati dal conto di transito: {n} versamenti su {of}."},
     'automation.pending.why': 'Salvato non è attivato: l’attivazione è fuori dal workspace, l’IA non può approvare la propria modifica.',
-    'bookingWaits.text': {"one": "L’app per ora non registra da sola: {files} è cambiato dall’ultima attivazione, e non registra secondo regole che non hai ancora visto. Con «Attiva» la modifica vale e l’app registra ciò che aspettava.", "other": "L’app per ora non registra da sola: {files} sono cambiati dall’ultima attivazione, e non registra secondo regole che non hai ancora visto. Con «Attiva» la modifica vale e l’app registra ciò che aspettava."},
+    'bookingWaits.text': {"one": "L’app per ora non registra da sola, perché {files} è cambiato dall’ultima attivazione e non registra secondo regole che non hai ancora visto; con «Attiva» la modifica vale e registra poi ciò che aspettava solo questo.", "other": "L’app per ora non registra da sola, perché {files} sono cambiati dall’ultima attivazione e non registra secondo regole che non hai ancora visto; con «Attiva» la modifica vale e registra poi ciò che aspettava solo questo."},
     'bookingWaits.look': "Vedi la modifica",
     'automation.case.same': 'uguale',
     'automation.case.different': 'diverso',

@@ -3396,7 +3396,7 @@ export const messages = {
   'automation.pending.on': 'Eingeschaltet: ab jetzt läuft diese Version',
   'automation.pending.onPayouts': {"one": "Eingeschaltet: ab jetzt läuft diese Version. Vom Durchlaufkonto gebucht: {n} von {of} Auszahlungen.", "other": "Eingeschaltet: ab jetzt läuft diese Version. Vom Durchlaufkonto gebucht: {n} von {of} Auszahlungen."},
   'automation.pending.why': 'Gespeichert ist nicht eingeschaltet: das Einschalten liegt ausserhalb des Workspaces, die KI kann sich nicht selbst freigeben.',
-  'bookingWaits.text': {"one": "Die App bucht gerade nicht von selbst: {files} hat sich seit dem letzten Einschalten geändert, und nach Regeln, die du noch nicht gesehen hast, bucht sie nicht. Mit «Einschalten» gilt die Änderung, und die App bucht, was gewartet hat.", "other": "Die App bucht gerade nicht von selbst: {files} haben sich seit dem letzten Einschalten geändert, und nach Regeln, die du noch nicht gesehen hast, bucht sie nicht. Mit «Einschalten» gilt die Änderung, und die App bucht, was gewartet hat."},
+  'bookingWaits.text': {"one": "Die App bucht gerade nicht von selbst, weil sich {files} seit dem letzten Einschalten geändert hat und sie nicht nach Regeln bucht, die du noch nicht gesehen hast; mit «Einschalten» gilt die Änderung, und sie bucht dann, was nur darauf gewartet hat.", "other": "Die App bucht gerade nicht von selbst, weil sich {files} seit dem letzten Einschalten geändert haben und sie nicht nach Regeln bucht, die du noch nicht gesehen hast; mit «Einschalten» gilt die Änderung, und sie bucht dann, was nur darauf gewartet hat."},
   'bookingWaits.look': "Änderung ansehen",
   'automation.case.same': 'gleich',
   'automation.case.different': 'anders',
