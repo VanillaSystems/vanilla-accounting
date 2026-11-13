@@ -134,7 +134,8 @@ export function buttonsNote(d: SetupDraft): string {
     case 'preset': return exactly(PRESET_NAMES.map((p) => say(`desktop.q.preset.${p}`)));
     case 'review': return `${exactly([say('desktop.create')])} Beside each answer of the review stands «${say('onboarding.change')}».`;
     case 'question': {
-      const where = (QUESTIONS[open.key] as QuestionSpec).where;
+      // Her language's line (#423): the portal's own labels in the words she sees under the question.
+      const where = (QUESTIONS[open.key] as QuestionSpec).where === undefined ? undefined : say(`desktop.q.${open.key}.where`);
       return [
         exactly(offeredAnswers(open.key).map((a) => offeredLabel(say, open.key, a))),
         ...(unsteered(open.key) ? [
@@ -184,7 +185,7 @@ ${text}
 Rules:
 - Take only what the message or the conversation so far states or plainly implies («zwei Angestellte»: employees "staff"; «registered for VAT»: vatRegistered "yes"). Leave out what it does not say. Never guess.
 - sells: a trade (a painter, a carpenter, an electrician, a builder …), and any firm that charges material with its work («d Farb verrechned mer mit», «Material kommt auf die Rechnung»), sells "made" and "services": "made" covers the material. "services" alone is work without material.
-- vatRegistered: never give "no", whatever the words say: that the firm files no VAT is only ever her own click. A registered firm that does not know its method asks its accountant (Treuhand); say so when asked.
+- vatRegistered: never give "no", whatever the words say: that the firm files no VAT is only ever her own click. A registered firm that does not know its method or basis finds both where the line of those questions says (the tax authority's portal), or asks its accountant (Treuhand) without access to it; say so when asked.
 - period: give it only when the person names how often they file. Quarterly is usual on the effective method, half-yearly on the net tax rate; the app does not take the other from loose words and says so itself.
 - Never invent, complete or correct a UID or an IBAN: copy one only when the person wrote it.
 - firm: every field the person stated in this message; the app joins it to what they said of the firm before.
