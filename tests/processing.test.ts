@@ -79,13 +79,13 @@ test('Belege: in processing it is its own group first, not under Â«Braucht dichÂ
   const v = l.byId.get('new')!;
   assert.equal(needsYou(v, l), false);
   assert.equal(badgeCount(l), 1, 'only the old receipt without a payment');
-  const { groups: gs } = groups(l.views, l, false, () => false);
+  const gs = groups(l.views, l, () => false);
   assert.deepEqual(gs.map((g) => [g.key, g.rows.map((x) => x.r.id)]), [['working', ['new']], ['need', ['old']]]);
 
   const after = ledgerOf(books(), '2026-10-01', new Map());
   assert.equal(needsYou(after.byId.get('new')!, after), true, 'the run came to rest: what it still lacks is the person\'s');
   assert.equal(badgeCount(after), 2);
-  assert.deepEqual(groups(after.views, after, false, () => false).groups.map((g) => g.key), ['need']);
+  assert.deepEqual(groups(after.views, after, () => false).map((g) => g.key), ['need']);
 
   const stopped = ledgerOf(books(), '2026-10-01', new Map([['new', { kind: 'stuck', run: 'r1', error: 'x' } as Processing]]));
   assert.equal(needsYou(stopped.byId.get('new')!, stopped), true, 'a stopped run hands it to the person');

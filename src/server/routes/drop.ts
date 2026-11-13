@@ -372,7 +372,7 @@ async function readInto(s: DropSession, row: DropRow, bytes: Buffer): Promise<vo
     const takers = WS.bankAccounts.filter((x) => x.statements);
     const accounts = takers.map((x) => ({ account: x.account, label: x.label, currency: x.currency }));
     const guessed = kept ? undefined : guessColumns(table.header);
-    // A CSV whose every payment the books hold on one account already (its camt.053 of the same days, #384): nothing to ask, nothing to read in.
+    // A CSV whose every payment the books hold on one account already (its bank export of the same days, #384): nothing to ask, nothing to read in.
     const holder = guessed && takers.find((a) => { const r = csvStatement(table, guessed, a); return !('kind' in r) && r.movements.length > 0 && heldOfRead(r, a).size === r.movements.length; });
     if (holder) { Object.assign(row, { state: 'duplicate', reason: 'csv-known', account: holder.account }); return; }
     row.csv = { header: table.header, sample: table.rows.slice(0, 5), rows: table.rows.length, accounts, ...(kept ? { columns: kept.columns, account: kept.account } : guessed ? { columns: guessed } : {}) };

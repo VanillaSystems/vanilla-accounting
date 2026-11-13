@@ -146,7 +146,8 @@ function List(props: Props) {
     <div className="page">
       <ListHead period={period} books={books} canEdit={canEdit} noPeriod={first}>
         {first ? null : <div className="counts stc">
-          <span>{t('bank.nStatements', { n: files })}</span>
+          {/* What the list below holds: its files in the file view, the months' statements in the others (#384). */}
+          <span>{byFile ? t('bank.nFiles', { n: fileRows.length }) : t('bank.nStatements', { n: files })}</span>
           {missing > 0 && <span className="warn" data-testid="missing-count">{I.dot}{t('bank.nMissing', { n: missing })}</span>}
           {without > 0 && <span data-testid="without-count" data-tip={t('bank.withoutTip')}>{t('bank.nWithout', { n: without })}</span>}
           {gaps > 0 && <span className="warn" data-testid="gap-count">{I.dot}{t('bank.nGaps', { n: gaps })}</span>}

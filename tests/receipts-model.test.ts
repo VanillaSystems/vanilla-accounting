@@ -106,12 +106,14 @@ test('chips (#211): AND across fields, OR within one; a state chip Â«kein BelegÂ
 
 test('what needs you comes first, an open receipt without a date with it, then each month', () => {
   const { rows } = visible(l, q3, undefined, undefined);
-  const g = groups(rows, l, false, (x) => x.r.id === 'eur');
-  assert.deepEqual(g.groups.map((x) => [x.key, x.rows.map((r) => r.r.id)]), [
+  const g = groups(rows, l, (x) => x.r.id === 'eur');
+  assert.deepEqual(g.map((x) => [x.key, x.rows.map((r) => r.r.id)]), [
     ['need', ['eur', 'paper', 'undated']],
     ['month:2026-09', ['linked']],
   ]);
-  assert.deepEqual(g.later.map((x) => x.r.id), []);
+  // A booked receipt without a date (a till slip) is a group of its own after the months, never hidden (#384).
+  const slip = ledgerOf({ ...books, receipts: [...books.receipts, receipt('slip', { amount: 12 })], mappings: [...books.mappings, { receiptId: 'slip', transactionRef: books.transactions[0].ref }] }, '2026-07-01');
+  assert.deepEqual(groups(visible(slip, q3, undefined, undefined).rows, slip, () => false).at(-1), { key: 'noDate', rows: [slip.byId.get('slip')] });
   assert.equal(badgeCount(l), 3);
 });
 
@@ -154,7 +156,7 @@ test('books that never filed: an open receipt dated before the working period ne
   const lf = ledgerOf(fresh, '2026-07-01');
   const v = visible(lf, q3, undefined, undefined);
   assert.deepEqual(v.rows.map((x) => x.r.id).sort(), ['july', 'june']);
-  assert.deepEqual(groups(v.rows, lf, false, () => false).groups.map((g) => [g.key, g.rows.map((r) => r.r.id)]), [['need', ['july', 'june']]]);
+  assert.deepEqual(groups(v.rows, lf, () => false).map((g) => [g.key, g.rows.map((r) => r.r.id)]), [['need', ['july', 'june']]]);
   assert.equal(badgeCount(lf), 2);
   assert.deepEqual(visible(lf, parsePeriod('2026-Q2', '2026-10-11')!, undefined, undefined).rows.map((x) => x.r.id), [], 'one place (placeDay, #385): the working period, where it is still to do, not also before the books');
 });

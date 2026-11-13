@@ -228,13 +228,12 @@ const byDateDesc = (a: ReceiptView, b: ReceiptView) => (b.date ?? '').localeComp
 /**
  * The list's groups in order, which is also the ↑↓ order: what a run still works on (#218), what
  * needs you (a suggestion first), then each month, newest first. An open receipt without a date
- * needs you (last in its group); a linked one without a date comes last as `later`, unless a chip
- * asks for receipts without a date.
+ * needs you (last in its group); a linked one without a date stands in its own group «ohne Datum»
+ * after the months, shown like any other: a booked receipt is not hidden for lacking a date (#384).
  */
-export function groups(rows: ReceiptView[], l: Ledger, noDateAsked: boolean, suggested: (v: ReceiptView) => boolean): { groups: Group[]; later: ReceiptView[] } {
+export function groups(rows: ReceiptView[], l: Ledger, suggested: (v: ReceiptView) => boolean): Group[] {
   const busy = rows.filter((v) => working(v, l)).sort((a, b) => a.r.indexedAt.localeCompare(b.r.indexedAt) || a.r.filename.localeCompare(b.r.filename));
-  const later = noDateAsked ? [] : rows.filter((v) => !v.date && !needsYou(v, l) && !busy.includes(v));
-  const dated = rows.filter((v) => !later.includes(v) && !busy.includes(v));
+  const dated = rows.filter((v) => !busy.includes(v));
   const need = dated.filter((v) => needsYou(v, l)).sort((a, b) => Number(suggested(b)) - Number(suggested(a)) || byDateDesc(a, b));
   const rest = dated.filter((v) => !need.includes(v)).sort(byDateDesc);
   const out: Group[] = [...(busy.length ? [{ key: 'working' as const, rows: busy }] : []), ...(need.length ? [{ key: 'need' as const, rows: need }] : [])];
@@ -244,7 +243,7 @@ export function groups(rows: ReceiptView[], l: Ledger, noDateAsked: boolean, sug
     (byMonth.get(key) ?? byMonth.set(key, []).get(key)!).push(v);
   }
   for (const [key, rs] of byMonth) out.push({ key, rows: rs });
-  return { groups: out, later };
+  return out;
 }
 
 /** A receipt's amount and a payment's, in CHF, for ranking: the ESTV rate of the payment day, else the amount itself. */

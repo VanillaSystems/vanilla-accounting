@@ -75,7 +75,7 @@ function List(props: Props) {
     for (const v of rows) { const c = suggestion(v, l, toChf); if (c) out.set(v.r.id, c); }
     return out;
   }, [rows, l, toChf]);
-  const { groups: gs, later } = groups(rows, l, states.has('noDate'), (v) => suggestions.has(v.r.id));
+  const gs = groups(rows, l, (v) => suggestions.has(v.r.id));
   const inbox = period.to >= l.openFrom && !chips.length && !query.q ? s.inbox.filter((f) => !l.byId.has(f.id)) : [];
   // A file still being read is in processing (#218); one that could not be read needs you.
   const pending = inbox.filter((f) => !f.failed);
@@ -95,7 +95,6 @@ function List(props: Props) {
     ...(s.collapsed.has(workingKey) ? [] : [...pending.map((f) => f.id), ...(busy?.rows ?? []).map((v) => v.r.id)]),
     ...(s.collapsed.has(needKey) ? [] : [...failed.map((f) => f.id), ...(need?.rows ?? []).map((v) => v.r.id)]),
     ...rest.filter((g) => !s.collapsed.has(g.key)).flatMap((g) => g.rows.map((v) => v.r.id)),
-    ...(s.showLater ? later.map((v) => v.r.id) : []),
     ...(s.showHidden ? hidden.map((v) => v.r.id) : []),
   ];
   listed.ids = ids;
@@ -186,14 +185,6 @@ function List(props: Props) {
             </GroupHead>
           )}
           {rest.map((g) => <GroupHead key={g.key} k={g.key} n={g.rows.length}>{dated(g.rows)}</GroupHead>)}
-          {later.length > 0 && (
-            <>
-              <div className="hidden-note">
-                {t('receipts.laterNote', { n: later.length })} · <button type="button" onClick={() => setUi({ showLater: !s.showLater })}>{s.showLater ? t('receipts.hide') : t('receipts.show')}</button>
-              </div>
-              {s.showLater && later.map((v) => row(v, false))}
-            </>
-          )}
         </div>
       )}
       {hidden.length > 0 && (
