@@ -75,10 +75,10 @@ export type PaymentNature =
   | { kind: 'ownerForeign'; currency: string }
   /** Money out to the owner in the books' currency that her outlays booked do not cover (#428): the form says what ends its wait. */
   | { kind: 'ownerWaits'; account: string; open: number; owner: string }
-  /** Social insurance contributions (#470): what the deductions account holds on the day (`open`) on it, the rest on the employer's contribution account `account`, without a code. */
+  /** Social insurance contributions (#470), a proposal: `takes` (of `open`, what the deductions account holds on the day) on it, the rest on the employer's contribution account `account`, without a code. */
   | ContributionsNature;
 
-export interface ContributionsNature { kind: 'contributions'; account: string; deductions: string; open: number }
+export interface ContributionsNature { kind: 'contributions'; account: string; deductions: string; open: number; takes: number }
 
 /**
  * A payment provider's payout (#404, src/booking/providers.ts): a settlement of what the provider
@@ -552,10 +552,10 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   }
   // A payment to the owner her outlays do not cover yet: the form says what it waits for and proposes as for any payment (#428).
   if (proposes && !moneyIn && nature?.kind === 'ownerWaits') notes.push(nature);
-  // Contributions (#470): the books decide the split, before any precedent (an earlier booking may have put it all on the deductions account).
+  // Contributions (#470): proposed by the books, before any precedent (an earlier booking may have put it all on the deductions account); its account is the payee's own earlier one.
   if (proposes && !moneyIn && nature?.kind === 'contributions') {
     notes.push(nature);
-    const held = Math.min(toRappen(Math.max(nature.open, 0)), toRappen(paid));
+    const held = Math.min(toRappen(Math.max(nature.takes, 0)), toRappen(paid));
     const rest = toRappen(paid) - held;
     return result([...(held ? [place(nature.deductions, fromRappen(held), '')] : []), ...(rest ? [place(nature.account, fromRappen(rest), '')] : [])]);
   }

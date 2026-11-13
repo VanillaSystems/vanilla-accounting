@@ -157,7 +157,7 @@ function noteText(n: DraftNote): string {
     case 'ownerOutlays': return t(n.judged ? 'journal.byHand.note.ownerOutlaysJudged' : 'journal.byHand.note.ownerOutlays', { amount: fmt(n.open) });
     case 'ownerForeign': return t('journal.byHand.note.ownerForeign', { currency: n.currency });
     case 'ownerWaits': return t(n.open > 0 ? 'journal.byHand.note.ownerWaitsShort' : 'journal.byHand.note.ownerWaitsNone',{ owner: n.owner, account: n.account, amount: fmt(n.open) });
-    case 'contributions': return t(n.open > 0 ? 'journal.byHand.note.contributions' : 'journal.byHand.note.contributionsNone', { deductions: n.deductions, account: n.account, open: `${baseCurrency()} ${fmt(n.open)}` });
+    case 'contributions': return t(n.open <= 0 ? 'journal.byHand.note.contributionsNone' : n.takes > 0 ? 'journal.byHand.note.contributions' : 'journal.byHand.note.contributionsUnsure', { deductions: n.deductions, account: n.account, open: `${baseCurrency()} ${fmt(n.open)}`, takes: `${baseCurrency()} ${fmt(n.takes)}` });
     default: return t(`journal.byHand.note.${n.kind}`);
   }
 }

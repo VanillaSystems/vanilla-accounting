@@ -63,6 +63,35 @@ export function paysContributions(books: Pick<Books, 'journalEntries'> & { trans
   return onThem.some((e) => w.contributions.has(e.accountDebit) || w.contributions.has(e.accountCredit) || e.accountDebit === w.deductions);
 }
 
+/**
+ * The employer's contribution account the payee's newest earlier payment was booked on (#470 review):
+ * a pension fund's payment goes where its earlier ones went (5720), never to the setup's first (5700).
+ */
+export function payeeContributionAccount(books: Pick<Books, 'journalEntries'> & { transactions: readonly BankTransaction[] }, tx: BankTransaction, businessOf: (t: BankTransaction) => string | undefined): string | undefined {
+  const w = wageAccounts();
+  if (!w) return undefined;
+  const business = businessOf(tx);
+  const payee = fold(tx.counterparty);
+  const same = (t: BankTransaction) => t.ref !== tx.ref && t.date <= tx.date && ((!!business && businessOf(t) === business) || (!!payee && fold(t.counterparty) === payee));
+  const earlier = books.transactions.filter(same).sort((a, b) => b.date.localeCompare(a.date));
+  for (const t of earlier) {
+    const line = books.journalEntries.find((e) => e.transactionRef === t.ref && w.contributions.has(e.accountDebit));
+    if (line) return line.accountDebit;
+  }
+  return undefined;
+}
+
+/**
+ * Whether the books carry a wage in the payment's year up to its day (#470 review): a line on the
+ * setup's wage account. Only then does an empty deductions account mean wages booked net, whose
+ * contributions are the employer's; a firm without wages paying its owner's own AHV pays a private cost.
+ */
+export function wagesBooked(books: Pick<Books, 'journalEntries'>, tx: Pick<BankTransaction, 'date'>): boolean {
+  const account = setup().wages?.account;
+  const year = tx.date.slice(0, 4);
+  return !!account && books.journalEntries.some((e) => e.accountDebit === account && e.date.startsWith(year) && e.date <= tx.date);
+}
+
 /** What an answer takes off the deductions account (its debits there less its credits), in the books' currency. */
 export function takenOff(entries: readonly Pick<JournalEntry, 'accountDebit' | 'accountCredit' | 'amount' | 'exchangeRate' | 'exchangeCurrency'>[], account: string): number {
   let r = 0;

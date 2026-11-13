@@ -37,13 +37,13 @@ const NET = [entry('LR', '2026-07-25', '5000', '1020', 5200), entry('LH', '2026-
 const SVA = pay('SVA', '2026-07-30', 1890.35, 'SVA St. Gallen', 'AHV Beiträge Q2');
 
 /** The painter's books; `without`: accounts left out of her chart. */
-function painter(entries: JournalEntry[] = NET, without: string[] = []): Workspace {
+function painter(entries: JournalEntry[] = NET, without: string[] = [], extra: BankTransaction[] = []): Workspace {
   const made = tempWorkspace('refused-470-', join(APP_ROOT, 'demo-consulting', 'vanilla-accounting'));
   roots.push(made.paths.root);
   const ws = workspaceAt(made.paths.root);
   mkdirSync(dirname(ws.paths.accounts), { recursive: true });
   writeFileSync(ws.paths.accounts, JSON.stringify(loadChart().accounts.filter((a) => !without.includes(a.number)).map((a) => ({ number: a.number, name: a.name, type: a.type }))));
-  writeIndex(ws, { transactions: [...WAGES, SVA], journalEntries: entries, receipts: [], mappings: [], config: { closedThrough: '2026-06-30' } as never });
+  writeIndex(ws, { transactions: [...WAGES, SVA, ...extra], journalEntries: entries, receipts: [], mappings: [], config: { closedThrough: '2026-06-30' } as never });
   return ws;
 }
 
@@ -108,7 +108,7 @@ test('the server reads the refusals of the open payments from the workspace\'s r
 test('the hand form of the SVA payment proposes the employer\'s contribution account for what 2270 does not hold', () => {
   const ws = painter();
   const start = handStart(ws, 'SVA')!;
-  assert.deepEqual(start.nature, { kind: 'contributions', account: '5700', deductions: '2270', open: 0 });
+  assert.deepEqual(start.nature, { kind: 'contributions', account: '5700', deductions: '2270', open: 0, takes: 0 });
   const books = loadBooks(ws);
   const draft = bookingDraft(books, 'SVA', ws.bankAccounts, [], { nature: start.nature! })!;
   assert.deepEqual(draft.lines.map((l) => [l.accountDebit, l.amount, l.vat]), [['5700', 1890.35, '']]);
@@ -116,4 +116,22 @@ test('the hand form of the SVA payment proposes the employer\'s contribution acc
   const held = painter([...NET, entry('LR', '2026-07-25', '5000', '2270', 300)]);
   const part = bookingDraft(loadBooks(held), 'SVA', held.bankAccounts, [], { nature: handStart(held, 'SVA')!.nature! })!;
   assert.deepEqual(part.lines.map((l) => [l.accountDebit, l.amount]), [['2270', 300], ['5700', 1590.35]]);
+});
+
+test('the hand form of a pension fund\'s payment proposes its own earlier account and takes nothing off the AHV deductions on 2270', () => {
+  const PK1 = pay('PK1', '2026-07-01', 800, 'Pensionskasse Malergewerbe', 'BVG Beiträge Juli');
+  const PK2 = pay('PK2', '2026-07-30', 820, 'Pensionskasse Malergewerbe', 'BVG Beiträge August');
+  const ws = painter([...NET, entry('LR', '2026-07-25', '5000', '2270', 300), entry('PK1', '2026-07-01', '5720', '1020', 800)], [], [PK1, PK2]);
+  const nature = handStart(ws, 'PK2')!.nature!;
+  assert.deepEqual(nature, { kind: 'contributions', account: '5720', deductions: '2270', open: 300, takes: 0 });
+  assert.deepEqual(bookingDraft(loadBooks(ws), 'PK2', ws.bankAccounts, [], { nature })!.lines.map((l) => [l.accountDebit, l.amount]), [['5720', 820]]);
+});
+
+test('a firm without wages: the owner\'s own AHV gets no contributions proposal', () => {
+  assert.equal(handStart(painter([]), 'SVA')!.nature, undefined);
+});
+
+test('a later question about the payment clears the refusal', () => {
+  const ask: RunLogLine = { run: 'run-ask', workflow: 'ask', version: 'v1', item: { kind: 'transaction', id: 'SVA' }, at: '2026-11-13T12:00:00Z', event: 'waiting', step: 'answer', host: 'local' };
+  assert.deepEqual(refusalsOf([drop('2026-11-13T10:00:00Z'), ask], new Set(['SVA'])), []);
 });

@@ -56,7 +56,7 @@ import { bankCodedFee } from '../books/bank-import.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
 import { withReceiptTax } from './receipt-tax.js';
 import { clearingAccounts, payoutWaitOf, providerOfPayment, type PayoutWait, type Provider } from './providers.js';
-import { overWithheld, paysContributions, wageAccounts, withheldFor, withinWithheld } from './withheld.js';
+import { overWithheld, payeeContributionAccount, paysContributions, wageAccounts, wagesBooked, withheldFor, withinWithheld } from './withheld.js';
 import { splitByReceipts } from './receipt-lines.js';
 import { CUSTOMS_BY, customsSplit, importVatDeductions, ratesImportVat, type Assessment, type CustomsHold, type CustomsTexts } from './customs-invoice.js';
 import { nextManualRef } from '../books/next-ref.js';
@@ -1042,8 +1042,11 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   const employer = { named: wages?.contributions ?? new Set<string>(), shared: wages?.shared ?? new Set<string>(), fallback: [...(wages?.contributions ?? [])].find((a) => !chartAccounts.size || chartAccounts.has(a)) };
   const withheldOf = (own: Books, tx: BankTransaction): { account: string; open: number } | undefined => {
     if (!context.wageDeductions || !contributions.has(tx.ref)) return undefined;
-    // Nothing held is said too (#470): the model is told that the whole contribution is the employer's, not left to read the bill's split.
-    return { account: context.wageDeductions, open: withheldFor(own, tx, context.wageDeductions) ?? 0 };
+    // Nothing held is said too (#470), where the books carry wages: the whole contribution is the employer's, not the bill's split.
+    // Without a wage in the year it is no employer's contribution (an owner's own AHV, a fund's fee): no line, as before.
+    const open = withheldFor(own, tx, context.wageDeductions);
+    if (open === undefined && !wagesBooked(own, tx)) return undefined;
+    return { account: context.wageDeductions, open: open ?? 0 };
   };
   // The contribution payments go last, in waves of their own: what the wages of this run withhold is booked before they are asked.
   const batches: BankTransaction[][] = [];
@@ -1122,7 +1125,8 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         // what it holds stays there, the rest is the employer's expense, on the contribution account the answer names (#470, #368's decision).
         const deductions = context.wageDeductions;
         const heldOn = deductions && contributions.has(tx.ref) ? withheldFor(books, tx, deductions) : undefined;
-        const capped = deductions && contributions.has(tx.ref) ? withinWithheld(answered, deductions, heldOn, employer, newEntryId) : { entries: answered, moved: 0, to: '' };
+        // Named by no line of the answer: where the payee's earlier contributions went (a pension fund's 5720), then the setup's first.
+        const capped = deductions && contributions.has(tx.ref) ? withinWithheld(answered, deductions, heldOn, { ...employer, fallback: payeeContributionAccount(books, tx, businessOf) ?? employer.fallback }, newEntryId) : { entries: answered, moved: 0, to: '' };
         if (!capped) {
           const cur = baseCurrency();
           const over = overWithheld(answered, deductions!, heldOn)!;

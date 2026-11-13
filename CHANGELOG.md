@@ -426,15 +426,18 @@ Two markers flag an entry you must read before you update:
 
 - A payment of social insurance contributions while the wage deductions account (2270) holds
   nothing is booked, and a payment a run leaves unbooked says why (#470). With wages booked net,
-  the AI is told that 2270 holds nothing and the whole contribution is the firm's expense; an
-  answer that still takes more off 2270 than it holds is booked in the same run with what 2270
-  holds on it and the rest on the employer's contribution account the answer names (else 5700),
+  the AI is told that 2270 holds nothing and the whole contribution is the firm's expense (only
+  when the books carry a wage in the year: a firm without wages paying its owner's own AHV is told
+  nothing); an answer that still takes more off 2270 than it holds is booked in the same run with
+  what 2270 holds on it and the rest on the employer's contribution account the answer names
+  (else the payee's earlier one, else 5700),
   and the booking's reason says so (before: nothing was booked and the reason stood only in the
   run's detail). A payment a run tried and left unbooked keeps the run's reason in the run log:
   its page says «nicht gebucht: …», the open list, the MWST page's list, the drop's summary and
   the AI's card name it beside the payment, and its «Verlauf» names the run (before: «Bisher hat
-  kein Lauf hieran gearbeitet»). The hand form of a contribution payment proposes what 2270 holds
-  on 2270 and the rest on the employer's contribution account, with a sentence why. No VAT figure
+  kein Lauf hieran gearbeitet»). The hand form of a contribution payment proposes the payee's
+  earlier contribution account (else 5700) and, for a compensation fund, what 2270 holds on 2270;
+  for another payee it takes nothing off 2270 and says what 2270 holds. No VAT figure
   changes: contributions carry no code.
 - «Noch offen»: a month of a payment provider's fees without its bill names the bill as the
   provider's file names it and where the provider keeps it («Shopify Payments Invoice» …

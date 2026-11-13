@@ -18,7 +18,7 @@ import { judgedRepayments } from '../booking/owner-judged.js';
 import { payoutWaitOf, providerOfMoneyIn } from '../booking/providers.js';
 import { chartNames } from '../booking/rule-book.js';
 import { isOwnBankFee } from '../booking/bank-fee.js';
-import { paysContributions, wageAccounts, withheldFor } from '../booking/withheld.js';
+import { payeeContributionAccount, paysContributions, wageAccounts, wagesBooked, withheldFor } from '../booking/withheld.js';
 import type { Counterparty } from '../knowledge/counterparties.js';
 import type { PaymentNature } from '../accounting/manual-booking.js';
 import type { BankTransaction } from '../types/index.js';
@@ -217,18 +217,29 @@ function oneKind(businesses: ReadonlyArray<string | undefined>, files: readonly 
 const ibanOf = (iban: string) => iban.replace(/\s+/g, '').toUpperCase();
 
 /**
- * A payment of social insurance contributions (#470, src/booking/withheld.ts paysContributions): what
- * the deductions account holds on its day stays its part, the rest is the employer's, on the
- * contribution account the employees share in (setup.yaml `wages`), as code books an answer that
- * claims more (#368's decision). None without a deductions account or a contribution account.
+ * A payment of social insurance contributions (#470, src/booking/withheld.ts paysContributions), as a
+ * proposal: on the contribution account the payee's earlier payments went to, else the setup's first
+ * one the employees share in (setup.yaml `wages`). Off the deductions account only what the books can
+ * tell is this payee's kind: what it holds, for a compensation fund (`wages.payees`) on that first
+ * account; nothing for another payee or account (a pension fund's payment must not clear the AHV
+ * deductions), and the note says what it holds. None without wages in the year while it holds
+ * nothing (an owner's own AHV is no employer's contribution), or without a contribution account.
  */
 function contributionsOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, context: ReturnType<typeof loadClassifyContext>, file: Counterparty | undefined): PaymentNature | undefined {
   const w = wageAccounts();
-  if (!w || !context.wageDeductions || !paysContributions(books, tx, (t) => (t.ref === tx.ref ? file?.id : undefined))) return undefined;
+  const businessOf = (t: BankTransaction) => (t.ref === tx.ref ? file?.id : undefined);
+  if (!w || !context.wageDeductions || !paysContributions(books, tx, businessOf)) return undefined;
+  const open = withheldFor(books, tx, w.deductions) ?? 0;
+  if (open <= 0 && !wagesBooked(books, tx)) return undefined;
   const chart = chartNames(context.chartOfAccounts);
   const fits = (a: string) => !chart.size || chart.has(a);
-  const account = [...w.shared].find((a) => w.contributions.has(a) && fits(a)) ?? [...w.contributions].find(fits);
-  return account ? { kind: 'contributions', account, deductions: w.deductions, open: withheldFor(books, tx, w.deductions) ?? 0 } : undefined;
+  const first = [...w.shared].find((a) => w.contributions.has(a) && fits(a)) ?? [...w.contributions].find(fits);
+  const earlier = payeeContributionAccount(books, tx, businessOf);
+  const account = earlier && fits(earlier) ? earlier : first;
+  if (!account) return undefined;
+  const fund = !!file && w.payees.includes(file.id);
+  const takes = account === first && (fund || !earlier) ? Math.min(open, tx.amount) : 0;
+  return { kind: 'contributions', account, deductions: w.deductions, open, takes };
 }
 
 /** What the payment is beside a sale or a purchase, from the firm's files (manual-booking.ts PaymentNature). */
