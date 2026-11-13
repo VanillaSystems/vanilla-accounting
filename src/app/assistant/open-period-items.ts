@@ -56,7 +56,7 @@ export function itemsOf(l: OpenLine, s: OpenPeriodState, books: Index, say: Say,
     case 'unbooked': return { items: l.items.map(pay), more: l.more, all: openList(s) ?? at({ area: 'bank' }, s.period.from) };
     case 'unlinked': return { items: l.items.map(lone), more: l.more, all: receipts };
     case 'offers': return { items: l.items.map((o) => ({ key: o.ref, go: at({ area: 'bank', payment: o.ref }, o.date), text: say('openPeriod.offer', { name: o.name, percent: o.percent, account: o.account }) })), more: l.more, all: at({ area: 'bank', payment: l.first.ref }, l.first.date) };
-    case 'openings': return { items: l.items.map((o) => ({ key: o.account, go: OPENING, text: say('openPeriod.opening', { label: o.label, amount: money(o.currency ?? baseCurrency(), o.amount), year: o.year }) })), more: l.more, all: OPENING };
+    case 'openings': return { items: l.items.map((o) => ({ key: o.account, go: OPENING, text: say('openPeriod.opening', { label: o.label, amount: money(o.currency ?? baseCurrency(), o.amount), date: formatDate(o.from) }) })), more: l.more, all: OPENING };
     case 'clearing': return { items: l.items.map((c) => ({ key: c.account, go: clearingAt(c.account, s), text: say('openPeriod.clearingItem', { name: c.name, account: c.account, date: formatDate(s.period.to), amount: money(baseCurrency(), c.balance) }) })), more: l.more };
     default: return { items: [], more: 0 };
   }

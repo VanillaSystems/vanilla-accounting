@@ -50,6 +50,10 @@ export interface DocumentType {
   text: RegExp[];
   /** What such a document proves instead of a payment: `vat-correction`, the input tax of a single-leg correction without a payment (src/booking/vat-corrections.ts, #190). */
   proves?: Proves;
+  /** The document's name as its business titles it («Shopify Payments Invoice»): the words a person is told to look for when it is missing (#459). */
+  name?: string;
+  /** Where its business keeps it for download, in the business's own menu words: said beside `name` when it is missing (#459). */
+  where?: string;
 }
 
 /** A fact of the law or of an authority's practice (a period, a deadline, a form), with where it is written. */
@@ -242,7 +246,7 @@ export function identify(s: Signals, counterparties: readonly Counterparty[]): R
 export type RawCounterparty = {
   id?: string; name?: string; grouped?: boolean; sharedUid?: string[]; accounts?: string[]; roles?: string[];
   match?: Partial<Record<Tier, string[]>>; steps?: Record<string, unknown>; learnedTx?: string[];
-  documents?: { id?: string; kind?: string; text?: string[]; proves?: string }[];
+  documents?: { id?: string; kind?: string; text?: string[]; proves?: string; name?: string; where?: string }[];
   facts?: Partial<Fact>[];
   provider?: unknown;
 };
@@ -276,7 +280,8 @@ export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['
     if (!d.kind || !(RECEIPT_KINDS as readonly string[]).includes(d.kind)) fail(`documents ${d.id}: kind must be one of ${RECEIPT_KINDS.join(', ')}`);
     if (!d.text?.length) fail(`documents ${d.id}: text needs at least one pattern`);
     if (d.proves !== undefined && !(PROVES as readonly string[]).includes(d.proves)) fail(`documents ${d.id}: proves must be ${PROVES.join(' or ')}`);
-    return { id: d.id!, kind: d.kind as ReceiptKind, text: d.text!.map((t) => new RegExp(t, 'i')), ...(d.proves ? { proves: d.proves as Proves } : {}) };
+    for (const k of ['name', 'where'] as const) if (d[k] !== undefined && (typeof d[k] !== 'string' || !d[k]!.trim())) fail(`documents ${d.id}: ${k} must be a text`);
+    return { id: d.id!, kind: d.kind as ReceiptKind, text: d.text!.map((t) => new RegExp(t, 'i')), ...(d.proves ? { proves: d.proves as Proves } : {}), ...(d.name ? { name: d.name.trim() } : {}), ...(d.where ? { where: d.where.trim() } : {}) };
   });
   const facts = (raw.facts ?? []).map((f, i) => {
     for (const k of ['id', 'fact', 'source'] as const) if (!f[k]) fail(`facts[${i}] needs ${k}`);

@@ -24,7 +24,8 @@ import { baseCurrency, chargesVat, filing, vatSetup } from '../engines/index.js'
 import { providerIssuesIn } from '../intake/pair-chain.js';
 import { localToday, type IsoDate, type Period } from '../accounting/periods.js';
 import type { Workspace } from '../workspace/workspace.js';
-import { elsewhereCount, elsewhereOf, nothingOpen, openPeriodState, waitingKinds, type Elsewhere, type OpenPeriodState, type YourReceipt } from '../app/areas/automation/open-period.js';
+import { elsewhereCount, elsewhereOf, nothingOpen, openPeriodState, waitingKinds, type ClearingBelow, type Elsewhere, type OpenPeriodState, type YourReceipt } from '../app/areas/automation/open-period.js';
+import type { MissingOpening } from '../accounting/opening-balance.js';
 import { orderPagesOf } from '../booking/order-pages.js';
 import { LACK_WORDS } from '../app/areas/automation/period-issues.js';
 import { offersInBooks } from '../intake/near-pairs.js';
@@ -120,6 +121,31 @@ const firmOf = (ws: Ws, books: Books) => {
 export const elsewhereFor = <T extends Task>(ws: Ws, books: Books, tasks: readonly T[], s: OpenPeriodState, stuck = 0, today: IsoDate = localToday()): Elsewhere<T> =>
   elsewhereOf(books, readQuestions(ws), tasks, ws.bankAccounts, s, filing().length, stuck, vatSetup().registered, today);
 
+/**
+ * A bank account without its opening (#459): the balance the statements imply is the one before the year's first payment in
+ * these books, on its day; only when that day is 1 January is it the balance of 1.1., else the months before are not in them.
+ */
+const openingLine = (o: MissingOpening) => {
+  const amount = money(o.currency ?? baseCurrency(), o.amount);
+  const head = `- ${o.label} (${o.account}): ${amount} before its first payment in these books, on ${day(o.from)}, as its statements imply`;
+  // Whether the statements reach back to 1.1. is the statements' own first day, never the first payment's (#459 review).
+  if (o.statementsFrom && o.statementsFrom <= `${o.year}-01-01`) return `${head}; its statements begin on 1.1.${o.year}, so that is its balance on 1.1.${o.year}`;
+  const before = `the opening of 1.1.${o.year} is the balance of 31.12.${Number(o.year) - 1} (the balance sheet of the year before), and a difference to ${amount} is what moved from 1.1. until then, outside these books`;
+  return o.statementsFrom
+    ? `${head}. The statements in these books begin on ${day(o.statementsFrom)}: what the account held on 1.1.${o.year} they do not say, and ${amount} is not that balance; ${before}`
+    : `${head}. Whether the statements in these books reach back to 1.1.${o.year} they do not say, so ${amount} need not be the balance of 1.1.; ${before}`;
+};
+
+/** A clearing account below zero (#428) with its provider's reports in the books, their days and bookings, and its opening (#459). */
+const clearingLine = (c: ClearingBelow, year: string, t: T) => {
+  const reports = c.reports ?? [];
+  const kind = (k: 'sales' | 'fees') => t(k === 'sales' ? 'salesReport.kind.sales' : 'salesReport.kind.fees');
+  const said = reports.length
+    ? `its reports in the books, each read: ${reports.map((r) => `«${kind(r.kind)}» ${day(r.from)} to ${day(r.to)}, ${r.booked} bookings made${r.held ? `, ${r.held} orders held for the person` : ''}`).join('; ')}`
+    : 'no report of it is in the books yet';
+  return `- ${c.account} ${c.name}: ${money(baseCurrency(), c.balance)}; ${said}; ${c.opened ? `its opening of 1.1.${year} is entered` : `no opening balance of 1.1.${year} is entered for it (under «${t('area.company')} › ${t('company.opening')}»)`}`;
+};
+
 const taskLine = (x: Task & { rule?: string }, language: string) =>
   `- «${fillTask(textIn(x.title, language), x.item, x.reads)}» on the ${x.item.kind} ${x.item.id}, since ${day(x.since)}${x.rule ? `, held by the rule ${x.rule}` : ''}`;
 const paymentLine = (p: BankTransaction) => `- ${day(p.date)} ${payText(p).name} ${money(p.currency, p.amount)} (${p.ref})`;
@@ -163,11 +189,11 @@ export function periodNote(ws: Ws, books: Books, tasks: Tasks, language: string,
     ...(k.unread ? [`  Of them, ${k.unread} have their receipt linked, but its VAT could not be read: each waits for the person's word at once, under ${tasksPlace}; no receipt is missing.`] : []),
     `Bookings whose VAT code contradicts their receipts (${s.evidence.length}), each with its one click on the booking and under ${tasksPlace}:`, ...capped(s.evidence.map((x) => evidenceLine(x.entry, x.check, t))),
     ...(s.offers.length ? [`Proposals from the setup that wait for the person's answer (${s.offers.length}), each a rule offered on its payment under «${t('area.bank')}», kept or declined with one click:`, ...capped(s.offers.map((o) => `- ${o.name}: ${o.percent} % private, the rest on ${o.account} (the payment of ${day(o.date)}, ${o.ref})`))] : []),
-    ...(s.openings.length ? [`Bank accounts the books open at nothing while their statements say they held money (${s.openings.length}): their opening balance goes in under «${t('area.company')} › ${t('company.opening')}»; without it the balance sheet shows them wrong:`, ...capped(s.openings.map((o) => `- ${o.label} (${o.account}): ${money(o.currency ?? baseCurrency(), o.amount)} on 1.1.${o.year}, as its statements imply`))] : []),
-    ...(s.clearing.length ? [`Clearing accounts of a payment provider below zero on ${day(s.period.to)} (${s.clearing.length}): the provider paid out more than the account holds sales for, most often a sales report not dropped yet:`, ...capped(s.clearing.map((c) => `- ${c.account} ${c.name}: ${money(baseCurrency(), c.balance)}`))] : []),
+    ...(s.openings.length ? [`Bank accounts the books open at nothing while their statements say they held money (${s.openings.length}): their opening balance goes in under «${t('area.company')} › ${t('company.opening')}»; without it the balance sheet shows them wrong:`, ...capped(s.openings.map(openingLine))] : []),
+    ...(s.clearing.length ? [`Clearing accounts of a payment provider below zero on ${day(s.period.to)} (${s.clearing.length}): the provider paid out more than the account holds sales for in these books. Each line names the provider's reports in the books (each read, with its days and the bookings it made) and whether the account has an opening balance; a report named here is never «not read yet»:`, ...capped(s.clearing.map((c) => clearingLine(c, s.period.to.slice(0, 4), t)))] : []),
     `Receipts without a payment (${unlinked.length})${unlinked.length ? `, under «${t('area.receipts')}»` : ''}:`, ...capped(unlinked.map((r) => `- «${name(r)}»${r.date ? ` of ${day(r.date)}` : ''}${r.amount != null ? `, ${money(r.currency ?? baseCurrency(), r.amount)}` : ''}`)),
     ...(s.issued.length ? [`Invoices the firm issued, with its UID, that no payment in the books fits (${s.issued.length}): they wait for the customer's payment, nothing for the person to do, so never name them as work.`] : []),
-    ...(s.bills.length ? [`Monthly bills of a provider not in the books (${s.bills.length}): the VAT on its fees of that month is not deducted until the bill is dropped:`, ...capped(s.bills.map((b) => `- ${b.name}, ${b.month}: fees ${money(baseCurrency(), b.fees)}`))] : []),
+    ...(s.bills.length ? [`Monthly bills of a provider not in the books (${s.bills.length}): the VAT on its fees of that month is not deducted until the bill is dropped:`, ...capped(s.bills.map((b) => `- ${b.name}, ${b.month}: ${b.document ? `«${b.document}»` : 'its monthly bill'}${b.where ? `, kept by ${b.name} under «${b.where}»` : ''}; the VAT on that month's fees of ${money(baseCurrency(), b.fees)} is ${b.vat !== undefined ? `about ${money(baseCurrency(), b.vat)} (estimated at ${b.rate} % within the fees; the bill's own figure is booked once it is dropped)` : 'not known until the bill is dropped'}`))] : []),
     `Tasks of the workflows (${s.tasks.length})${s.tasks.length ? `, under ${tasksPlace}; a task on a payment is one of the payments above, not one more` : ''}:`, ...capped(s.tasks.map((x) => taskLine(x, language))),
   ];
   return [

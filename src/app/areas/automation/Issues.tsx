@@ -11,6 +11,7 @@ import { fmt, formatDate, moneyInText } from '../../lib/utils.js';
 import { useQuestions } from '../../questions/store.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import { at, ledgerFor } from '../receipts/view.js';
+import { pickReceipts } from '../receipts/intake.js';
 import { openTwins } from '../receipts/model.js';
 import { answerTwin } from '../receipts/actions.js';
 import { EvidenceFix, evidenceText } from '../journal/Detail.js';
@@ -27,7 +28,7 @@ import type { UnreadOffer } from '../../../saving/unread-rule.js';
 import { useState } from 'react';
 import { monthName, periodName } from '../../lib/period-label.js';
 import { withheldIn } from './filing-summary.js';
-import { issuesLead, LACK_WORDS, periodIssues, unbookedOpen, type IssueCounts, type PeriodIssue, type Say } from './period-issues.js';
+import { billText, issuesLead, LACK_WORDS, periodIssues, unbookedOpen, type IssueCounts, type PeriodIssue, type Say } from './period-issues.js';
 import { useAutomation } from '../../automation/store.js';
 import { processingOf } from '../../../workflows/processing.js';
 import { OPEN_ITEMS } from '../vat/model.js';
@@ -48,7 +49,8 @@ function goOf(books: Index, i: PeriodIssue): Location | undefined {
     case 'own': return at({ area: 'receipts', id: i.receipt.id }, i.day);
     // The report's receipt, where the order is named and booked (#405); the bill is dropped onto Belege of its month.
     case 'held': { const r = books.receipts.find((x) => x.id === i.held.receipt); return r ? at({ area: 'receipts', id: r.id }, r.date) : undefined; }
-    case 'bill': return at({ area: 'receipts' }, i.bill.date);
+    // A missing bill has no place in the books yet: its line offers the file dialog that drops it (#459), never another receipt.
+    case 'bill': return undefined;
     case 'withheld': return at({ area: 'bank', payment: i.uncleared.tx.ref }, i.uncleared.tx.date);
   }
 }
@@ -69,7 +71,7 @@ function textOf(books: Index, i: PeriodIssue): string {
     case 'unlinked': return t('issues.unlinked', { date: formatDate(i.receipt.date ?? ''), text: i.receipt.description ? moneyInText(i.receipt.description) : i.receipt.filename });
     case 'own': return t('issues.own', { text: i.name, lacks: i.lacks.map((k) => t(LACK_WORDS[k])).join(', ') });
     case 'held': return t(i.held.why === 'rate' || i.held.why === 'rateTooMany' ? 'issues.heldRate' : 'issues.heldOther', { what: heldReasonText(i.held, isKey, tWith), date: formatDate(i.held.date), provider: i.held.name, amount: i.held.gross !== undefined ? `, ${i.held.currency ?? baseCurrency()} ${fmt(i.held.gross)}` : '' });
-    case 'bill': return t('issues.bill', { month: monthName(i.bill.date), provider: i.bill.name, amount: `${baseCurrency()} ${fmt(i.bill.fees)}` });
+    case 'bill': return billText(i.bill, monthName(i.bill.date), (n) => `${baseCurrency()} ${fmt(n)}`, t as unknown as Say);
     case 'withheld': { const u = i.uncleared; return t('issues.withheld', { date: formatDate(u.tx.date), text: payerName(u.tx), amount: `${u.tx.currency} ${fmt(u.tx.amount)}`, account: u.account, open: `${baseCurrency()} ${fmt(u.open)}` }); }
   }
 }
@@ -169,6 +171,7 @@ export function PeriodIssues({ books, nav, from, to, period, canEdit, figures }:
             <li key={k} data-issue={i.kind}>
               {go ? <button type="button" className="linkbtn" onClick={() => nav.go(go)}>{textOf(books, i)}</button> : <span>{textOf(books, i)}</span>}
               {canEdit && i.kind === 'evidence' ? <EvidenceFix e={i.entry} check={i.check} nav={nav} /> : null}
+              {canEdit && i.kind === 'bill' ? <>{' '}<button type="button" className="golink" data-testid="bill-add" onClick={pickReceipts}>{t('issues.billAdd')}</button></> : null}
             </li>
           );
         })}

@@ -42,9 +42,9 @@ function goOf(l: OpenLine, s: OpenPeriodState, books: Index): Location {
     case 'evidence': return at({ area: 'journal', id: l.first.id }, l.first.date);
     // The day Belege lists the receipt under (#385 review), in the period the card is about.
     case 'unlinked': return receiptAt(l.first, s, books);
-    // The report's receipt names the held order and books it (#405); a missing bill goes into Belege of its month.
+    // The report's receipt names the held order and books it (#405); a missing bill to the return's list, which names it and drops it (#459).
     case 'held': { const r = books.receipts.find((x) => x.id === l.first.receipt); return r ? at({ area: 'receipts', id: r.id }, r.date) : openList(s) ?? TASKS; }
-    case 'bills': return at({ area: 'receipts' }, l.first.date);
+    case 'bills': return openList(s) ?? TASKS;
     case 'offers': return at({ area: 'bank', payment: l.first.ref }, l.first.date);
     case 'openings': return OPENING;
     case 'clearing': return clearingAt(l.first.account, s);
