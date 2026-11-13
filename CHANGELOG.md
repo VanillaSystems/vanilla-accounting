@@ -340,27 +340,31 @@ Two markers flag an entry you must read before you update:
   oder dich …»), instead of opening the diagram; on a payment whose booking she deleted it asks first.
   A payment an account's reconciliation holds is booked by neither: the rule's card says it waits for
   the reconciliation.
-- The owner's outlays paid back (#402): a payment to the owner by name that is no wage, while his
-  account holds outlays not paid back at least as large («Spesen Juli 2026», his receipts booked
-  «Privat bezahlt»), waits for no receipt; the hand form proposes bank / his account without a code
-  («zahlt dem Inhaber seine Auslagen zurück»), never the salary's account «wie bei derselben Firma»
-  (a precedent counts only between payments of one kind, wage or no wage), and with an AI the model
-  is told so and books it there, so the outlays are no expense twice. Guide rule
-  `cls-owner-outlays-repaid`.
+- The owner's outlays paid back (#402): a payment to the owner by name (the payee) that is no wage,
+  in francs, that no company rule decides, and that the receipts the owner paid privately and the
+  firm has not paid back yet cover (each such payment in date order against what is left after the
+  earlier ones, across the year boundary; the opening balance is not counted) waits for no receipt.
+  The hand form proposes bank / the owner's account without a code, never the salary's account «wie
+  bei derselben Firma» (between payments to the owner a precedent counts only of the same kind, wage
+  or no wage); with an AI the model is told so, and its answer is booked only onto the owner's account:
+  any other answer books nothing and leaves the payment to the person. A repayment in another currency
+  gets no proposal, and the form says why. Guide rule `cls-owner-outlays-repaid`.
 - A receipt the owner paid privately (#402) is read so by its payment line («Bezahlt mit Mastercard
-  ****1150 (privat)») or by his card, which the books know from such a receipt (never a card that
-  paid one of the firm's own statement payments). Its first button is «Als Auslage von <Inhaber>
-  buchen», one click, its words say what it books (Aufwand / Kontokorrent), and a selection offers
-  «Als Auslagen des Inhabers buchen» for several. While the app books it, the receipt says so in
-  place of a hand form with an empty account.
+  ****1150 (privat)») or by the owner's card, known from a receipt marked so or from two receipts paid
+  privately, never a card that paid one of the firm's own statement payments. Its first button is
+  «Als Auslage von <Inhaber> buchen», one click; the line under it says why («Karte ****1150 wie auf dem
+  Beleg vom 08.07.2026») and what it books (Aufwand / Kontokorrent); a selection offers «Als Auslagen
+  … buchen» for several. While the app books it, the receipt says so in place of a hand form with an
+  empty account.
 - Setup (#402): a private share of the phone or the car named in words («öppe d Hälfti») is kept with
-  her words in onboarding.json; the reply says that the provider's first booked payment offers the
-  rule «50 % privat», and that payment's detail does, on the rule's card, kept by her click. One
-  changed answer on the review keeps naming her kind of firm («Beratung, Dienstleistungen (GmbH),
-  mit einer Änderung») instead of «Etwas anderes».
+  the words that named it in onboarding.json. The phone's: the provider's first booked payment offers
+  the rule «50 % privat» on its card (once per business; «Nicht jetzt», «Nie vorschlagen»; gone once a
+  rule takes it; not where the firm's chart uses the phone's account for something else). The car's
+  stays for the year close, no rule offered. One changed answer on the review keeps naming her kind
+  of firm («Beratung, Dienstleistungen (GmbH), mit einer Änderung») instead of «Etwas anderes».
 - The model's zero input code (I0) is left off an account that takes no code (#402): a wage, the
-  employer's contributions (AHV, FAK, BVG), the bank charges, a debt, the owner's account. No
-  figure changes: I0 has no box.
+  employer's contributions (AHV, FAK, BVG), the bank charges, a debt, the owner's account. No figure
+  changes: I0 has no box. A rule's code stays what its card showed.
 - The setup conversation keeps its order after a typed message (#385): the message stands under the
   question it was typed at, above that question's answer, and the open question with its buttons
   stays under her newest message, also when the words took a step back. In the books the rail shows
