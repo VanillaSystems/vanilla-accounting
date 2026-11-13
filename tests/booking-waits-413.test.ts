@@ -380,3 +380,25 @@ test('a report kept while «Buchen» waited, then the change taken back without 
     await api.stop();
   }
 });
+
+test('`npm run workflow` without the app on a workspace the app never opened here: runs nothing, writes no record, says to open it in the app', async () => {
+  const api = await startApi(shopBooks(), {}, { whole: true });
+  try {
+    const one = await dropper(api);
+    await one.add('camt053_LUKB_Q3-2026.xml');
+    await api.rest();
+    mkdirSync(join(api.root, 'knowledge', 'rules'), { recursive: true });
+    writeFileSync(join(api.root, GUIDE), RULE);
+    const ref = studer(api).ref;
+    const approvals = mkdtempSync(join(tmpdir(), 'workflow-unseen-'));
+    // PORT names no app server: the CLI's own engine would run, on an approvals folder that holds no record.
+    const env = { ...process.env, PATH: `${join(process.cwd(), 'tests/support/no-model-bin')}:${process.env.PATH}`, VANILLA_KEYCHAIN: 'off', VANILLA_WORKSPACE: api.root, VANILLA_APPROVALS_DIR: approvals, VANILLA_RUNS_DIR: mkdtempSync(join(tmpdir(), 'workflow-runs-')), PORT: '1' };
+    const cli = spawnSync(process.execPath, ['--import', 'tsx', 'src/cli/workflow.ts', 'booking', ref], { env, encoding: 'utf8' });
+    assert.equal(cli.status, 1, cli.stdout + cli.stderr);
+    assert.match(cli.stderr, /Open it in the app once/);
+    assert.deepEqual(readdirSync(approvals), [], 'only the app takes a baseline');
+    assert.deepEqual(entriesOf(api, ref), [], 'nothing booked by the rule she has not seen');
+  } finally {
+    await api.stop();
+  }
+});
