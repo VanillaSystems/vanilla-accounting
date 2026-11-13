@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { QuarantinedFile } from '../../../types/drop.js';
 import { api, errorText } from '../../lib/api.js';
 import type { InboxFile } from '../../../types/index.js';
-import type { RouteOf } from '../../shell/route.js';
+import type { Route, RouteOf } from '../../shell/route.js';
 import { knownChips, type Chip } from '../../shell/chips.js';
 import { ChipEmpty, ChipFilter, chipWords } from '../../shell/ChipFilter.js';
 import { usePartnerIndex } from '../partners/data.js';
@@ -28,6 +28,7 @@ import { Kbd, accept, runAct, type Act } from './commands.js';
 import { intakeAdd } from './intake.js';
 import { startIntake, useIntakeRunning } from '../../automation/intake.js';
 import { useAutomation } from '../../automation/store.js';
+import { BookingWaits, bookingWaitsOf } from '../../automation/booking-waits.js';
 import { processingText } from '../../automation/processing.js';
 import { inProcess, type Processing } from '../../../workflows/processing.js';
 import type { AutomationView } from '../../../workflows/model.js';
@@ -147,7 +148,7 @@ function List(props: Props) {
               {beside > 0 && <span className="m" data-testid="beside-count">{t('receipts.besideCount', { n: beside })}</span>}
             </>
           ) : <span>{filed ? t('receipts.filedReadOnly') : t('receipts.stillEmpty')}</span>}
-          {canEdit && <RunInbox />}
+          {canEdit && <RunInbox go={(route) => nav.go({ route, query: {} })} />}
         </div>
         <ChipFilter fields={fields} rows={pool} chips={chips} onChips={setChips} q={query.q} onQ={(q) => nav.setQuery({ q })}
           searchLabel={t('receipts.searchLabel')} searchKey={<Kbd keys={['/']} tip={t('receipts.searchTip')} />} />
@@ -323,12 +324,18 @@ function Quarantine({ nav, canEdit, asked }: { nav: AreaProps['nav']; canEdit: b
 }
 
 /** "Eingang verarbeiten": reads the inbox and statements, the VAT facts, names, links and books (src/intake/). */
-function RunInbox() {
+function RunInbox({ go }: { go(route: Route): void }) {
   const running = useIntakeRunning();
+  const { view } = useAutomation();
+  // Clicked while «Buchen» waits for «Einschalten» (#413): the run reads and links, and the line beside says why it books nothing.
+  const [clicked, setClicked] = useState(false);
   return (
-    <button type="button" className="runinbox" data-testid="run-inbox" disabled={running} data-tip={t('intake.runTip')} onClick={() => void startIntake()}>
-      {I.spark}{running ? t('intake.running') : t('intake.run')}
-    </button>
+    <>
+      <button type="button" className="runinbox" data-testid="run-inbox" disabled={running} data-tip={t('intake.runTip')} onClick={() => { setClicked(true); void startIntake(); }}>
+        {I.spark}{running ? t('intake.running') : t('intake.run')}
+      </button>
+      {clicked && !running && bookingWaitsOf(view) ? <BookingWaits go={go} /> : null}
+    </>
   );
 }
 
