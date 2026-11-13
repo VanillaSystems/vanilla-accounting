@@ -24,7 +24,7 @@ export type HeldWhy = NonNullable<SalesReportFacts['held']>[number]['why'];
 
 /** An order a provider's sales report holds: whose, which report, the order, why, its day (the report's last day when it gave none), its gross. */
 /** `filed`: its day lies in a filed period: it stays named on the report, no open item of any period and no split (#405). */
-export interface HeldOrder { provider: string; name: string; receipt: string; order: string; why: HeldWhy; date: string; gross?: number; currency?: string; filed?: true }
+export interface HeldOrder { provider: string; name: string; receipt: string; order: string; why: HeldWhy; date: string; gross?: number; currency?: string; filed?: true; rates?: number; most?: number }
 
 /** A month of a provider's fees without its bill: whose, the month (YYYY-MM), its last day, the fees booked in it. */
 export interface MissingBill { provider: string; name: string; month: string; date: string; fees: number }
@@ -55,6 +55,7 @@ export function providerIssuesOf(books: Books, providers: readonly Provider[], o
       return {
         provider: p.id, name: p.name, receipt: r.id, order: h.order, why: h.why, date,
         ...(h.gross !== undefined ? { gross: h.gross } : {}), ...(h.currency ? { currency: h.currency } : {}), ...(filed(date) ? { filed: true as const } : {}),
+        ...(h.rates !== undefined ? { rates: h.rates } : {}), ...(h.most !== undefined ? { most: h.most } : {}),
       };
     });
   });

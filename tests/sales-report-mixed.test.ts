@@ -10,17 +10,24 @@ import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bookHeldOrder, importSalesReport, removeSalesReport } from '../src/intake/sales-report-import.js';
-import { MIXED_ITEMS_AT_TWO, mixedCart } from '../src/booking/sales-report.js';
+import { mixedCart } from '../src/booking/sales-report.js';
+import { heldReasonText } from '../src/app/lib/held-reason.js';
+import { formatIn } from '../src/app/i18n/core.js';
 import de from '../src/app/i18n/locales/de.js';
 import en from '../src/app/i18n/locales/en.js';
 import fr from '../src/app/i18n/locales/fr.js';
 import it from '../src/app/i18n/locales/it.js';
 
-const [deMessages, enMessages, frMessages, itMessages] = [de, en, fr, it].map((l) => l.messages as unknown as Record<string, string>);
 import { loadBooks, PERSON, saveBooks, update } from '../src/books/store.js';
 import { workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import './support/jurisdiction.js';
+
+/** Each locale as the UI fills it: `has` and `say` as isKey and tWith give them. */
+const LANGS = Object.entries({ de, en, fr, it }).map(([code, l]) => {
+  const lang = { code, messages: l.messages };
+  return { code, has: (k: string) => k in l.messages, say: (k: string, v: Record<string, string | number>) => formatIn(lang, k as never, v) };
+});
 
 function shop(): Workspace {
   const dir = mkdtempSync(join(tmpdir(), 'mixed-cart-'));
@@ -161,32 +168,36 @@ test('#416 an order held before (books of 0.4.1) is booked on the next drop of a
 });
 
 /**
- * The review's probe of #437, seeded: random carts of 2 to 9 items at 8.1 % and 2.6 %, the export's tax per rate rounded the two
- * ways a provider may round it (each line's tax rounded and summed, or the rate's total rounded once). Code never books a split
- * other than the true one; an order it cannot tell apart waits.
+ * The review's probes of #437, seeded: random carts of 2 to 9 lines at 8.1 % and 2.6 %, each line of 1 to `most` pieces, the
+ * export's tax per rate rounded the three ways a provider may round it: each line's tax rounded and summed (`line`), the rate's
+ * total rounded once (`total`), each piece's tax rounded and times the quantity (`unit`). Code never books a split other than the
+ * true one; an order it cannot tell apart waits.
  */
-test('#416 random carts, either rounding of the tax per rate: never a wrong split booked', () => {
+test('#416 random carts, any rounding of the tax per rate, quantities above one: never a wrong split booked', () => {
   const rates = [{ code: 'V81', rate: 8.1 }, { code: 'V26', rate: 2.6 }];
-  for (const perLine of [true, false]) {
+  for (const [model, most] of [['line', 1], ['total', 1], ['line', 6], ['total', 6], ['unit', 6]] as const) {
     let seed = 7;
     const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
     let wrong = 0, right = 0, held = 0;
     const examples: unknown[] = [];
-    for (let t = 0; t < 40000; t++) {
+    for (let t = 0; t < 30000; t++) {
       const n = 2 + Math.floor(rnd() * 8);
-      const items = Array.from({ length: n }, () => ({ rp: (1 + Math.floor(rnd() * 60)) * 50 + (rnd() < 0.5 ? 0 : Math.floor(rnd() * 50)), r: rnd() < 0.5 ? 8.1 : 2.6 }));
+      const items = Array.from({ length: n }, () => ({ unit: (1 + Math.floor(rnd() * 60)) * 50 + (rnd() < 0.5 ? 0 : Math.floor(rnd() * 50)), q: 1 + Math.floor(rnd() * most), r: rnd() < 0.5 ? 8.1 : 2.6 }));
       if (new Set(items.map((l) => l.r)).size < 2) continue;
       const at = (r: number) => items.filter((l) => l.r === r);
-      const tax = (r: number) => (perLine ? at(r).reduce((s, l) => s + Math.round((l.rp * r) / (100 + r)), 0) : Math.round((at(r).reduce((s, l) => s + l.rp, 0) * r) / (100 + r)));
-      const truth = [8.1, 2.6].map((r) => at(r).reduce((s, l) => s + l.rp, 0));
-      const got = mixedCart({ gross: items.reduce((s, l) => s + l.rp, 0) / 100, items: items.map((l) => l.rp / 100), taxes: [{ rate: 8.1, amount: tax(8.1) / 100 }, { rate: 2.6, amount: tax(2.6) / 100 }] }, rates);
+      const f = (r: number, rp: number) => (rp * r) / (100 + r);
+      const tax = (r: number) => (model === 'line' ? at(r).reduce((s, l) => s + Math.round(f(r, l.unit * l.q)), 0)
+        : model === 'unit' ? at(r).reduce((s, l) => s + Math.round(f(r, l.unit)) * l.q, 0)
+          : Math.round(f(r, at(r).reduce((s, l) => s + l.unit * l.q, 0))));
+      const truth = [8.1, 2.6].map((r) => at(r).reduce((s, l) => s + l.unit * l.q, 0));
+      const got = mixedCart({ gross: items.reduce((s, l) => s + l.unit * l.q, 0) / 100, items: items.map((l) => (l.unit * l.q) / 100), units: items.map((l) => l.q), taxes: [{ rate: 8.1, amount: tax(8.1) / 100 }, { rate: 2.6, amount: tax(2.6) / 100 }] }, rates);
       if (!Array.isArray(got)) { held++; continue; }
       const rp = got.map((x) => Math.round(x.gross * 100));
       if (rp[0] === truth[0] && rp[1] === truth[1]) right++;
       else { wrong++; if (examples.length < 3) examples.push({ items, truth, rp }); }
     }
-    console.log(`#416 probe, ${perLine ? 'per line' : 'per rate'}: booked right ${right}, wrong ${wrong}, held ${held}`);
-    assert.equal(wrong, 0, JSON.stringify(examples));
+    console.log(`#416 probe, ${model}, up to ${most} pieces: booked right ${right}, wrong ${wrong}, held ${held}`);
+    assert.equal(wrong, 0, `${model}, up to ${most}: ${JSON.stringify(examples)}`);
   }
 });
 
@@ -200,7 +211,12 @@ test('#416 more line items than code tries: held with its own reason that names 
   assert.deepEqual(lines(ws, 'SR-shopify-2105'), []);
   assert.deepEqual(heldOf(ws), [['2105', 'rateTooMany']]);
   assert.deepEqual(done.summary.held.map((h) => h.why), ['rateTooMany']);
-  for (const m of [deMessages, enMessages, frMessages, itMessages]) assert.ok(m['drop.held.rateTooMany'].includes(String(MIXED_ITEMS_AT_TWO)), 'the text names the limit');
+  const held = loadBooks(ws).receipts.find((r) => r.report)!.report!.held![0];
+  assert.deepEqual([held.rates, held.most], [2, 12], 'kept with its number of rates and the limit at that many');
+  for (const l of LANGS) {
+    const said = heldReasonText(held, l.has, l.say);
+    assert.ok(said.includes('2105') && said.includes('12') && !said.includes('{'), `${l.code}: ${said}`);
+  }
   const id = loadBooks(ws).receipts.find((r) => r.report)!.id;
   const books = loadBooks(ws);
   assert.ok(update(books, PERSON, (x) => bookHeldOrder(ws, x, id, '2105', [{ amount: 68, rate: 8.1 }, { amount: 33, rate: 2.6 }])).ok, '«Aufteilen» takes it');
@@ -229,4 +245,67 @@ test('#416 a code split booked on the order\'s day moves onto the day a payments
   const hers = lines(hand);
   assert.ok(importSalesReport(hand, Buffer.from(fees('2026-11-13')), 'payment_transactions_export.csv').ok);
   assert.deepEqual(lines(hand), hers, 'her «Aufteilen» stays on her day');
+});
+
+/** A payments export that says order 2101 was charged on `day`. */
+const charge2101 = (day: string) => ['Transaction Date,Type,Order,Amount,Fee,Net,Currency', `${day} 10:00:00 +0100,charge,#2101,101.00,3.20,97.80,CHF`].join('\n');
+const closeThrough = (ws: Workspace, day: string) => {
+  const ledger = JSON.parse(readFileSync(ws.paths.ledger, 'utf8'));
+  ledger.config.closedThrough = day;
+  writeFileSync(ws.paths.ledger, JSON.stringify(ledger, null, 2));
+};
+
+test('#416 agreed basis: a code split stays on the order\'s day whatever day it was charged', () => {
+  const ws = shop();
+  const manifest = join(ws.paths.root, 'belege.workspace.yaml');
+  writeFileSync(manifest, readFileSync(manifest, 'utf8').replace('reporting: received', 'reporting: agreed'));
+  const agreed = workspaceAt(ws.paths.root);
+  assert.ok(importSalesReport(agreed, Buffer.from(cart()), 'orders_export.csv').ok);
+  assert.deepEqual(lines(agreed).map((l) => l[0]), ['2026-11-12', '2026-11-12']);
+  assert.ok(importSalesReport(agreed, Buffer.from(charge2101('2026-11-13')), 'payment_transactions_export.csv').ok);
+  assert.deepEqual(lines(agreed).map((l) => l[0]), ['2026-11-12', '2026-11-12'], 'the tax point is the order\'s day');
+});
+
+test('#416 a code split a person or the AI linked a receipt to stays on its day', () => {
+  for (const by of ['human', 'llm'] as const) {
+    const ws = shop();
+    assert.ok(importSalesReport(ws, Buffer.from(cart()), 'orders_export.csv').ok);
+    const books = loadBooks(ws);
+    const other = books.receipts.find((r) => !r.report)!.id;
+    update(books, PERSON, (b) => { b.mappings.push({ transactionRef: 'SR-shopify-2101', receiptId: other, by }); });
+    saveBooks(ws, books);
+    assert.ok(importSalesReport(ws, Buffer.from(charge2101('2026-11-13')), 'payment_transactions_export.csv').ok);
+    assert.deepEqual(lines(ws).map((l) => l[0]), ['2026-11-12', '2026-11-12'], by);
+  }
+});
+
+test('#416 a code split of a filed period, or charged on a filed day, is never moved', () => {
+  const filed = shop();
+  assert.ok(importSalesReport(filed, Buffer.from(cart()), 'orders_export.csv').ok);
+  closeThrough(filed, '2026-11-12');
+  assert.ok(importSalesReport(filed, Buffer.from(charge2101('2026-11-13')), 'payment_transactions_export.csv').ok);
+  assert.deepEqual(lines(filed).map((l) => [l[0], l[3]]), [['2026-11-12', 68], ['2026-11-12', 33]], 'its lines filed: as filed, nothing beside them');
+
+  const day = shop();
+  assert.ok(importSalesReport(day, Buffer.from(cart()), 'orders_export.csv').ok);
+  closeThrough(day, '2026-11-05');
+  assert.ok(importSalesReport(day, Buffer.from(charge2101('2026-11-03')), 'payment_transactions_export.csv').ok);
+  assert.deepEqual(lines(day).map((l) => [l[0], l[3]]), [['2026-11-12', 68], ['2026-11-12', 33]], 'never moved into a filed period');
+});
+
+test('#416 the limit at three rates is its own: seven items, named so', () => {
+  const rates = [{ code: 'V81', rate: 8.1 }, { code: 'V26', rate: 2.6 }, { code: 'V38', rate: 3.8 }];
+  const taxes = [{ rate: 8.1, amount: 1 }, { rate: 2.6, amount: 1 }, { rate: 3.8, amount: 1 }];
+  assert.deepEqual(mixedCart({ gross: 8, items: Array(8).fill(1), taxes }, rates), { tooMany: true, rates: 3, most: 7 });
+  for (const l of LANGS) {
+    const said = heldReasonText({ order: '2106', why: 'rateTooMany', rates: 3, most: 7 }, l.has, l.say);
+    assert.ok(said.includes('3') && said.includes('7') && !said.includes('12'), `${l.code}: ${said}`);
+  }
+});
+
+test('#416 a held reason this build has no words for (stored by a newer one) reads as a plain sentence, never throws', () => {
+  for (const l of LANGS) {
+    const said = heldReasonText({ order: '2107', why: 'somethingNewer' }, l.has, l.say);
+    assert.ok(said.includes('2107') && !said.includes('drop.held'), `${l.code}: ${said}`);
+  }
 });

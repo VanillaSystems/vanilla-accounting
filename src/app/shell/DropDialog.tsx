@@ -9,7 +9,8 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { api, errorText } from '../lib/api.js';
-import { language, t, tWith } from '../i18n/index.js';
+import { isKey, language, t, tWith } from '../i18n/index.js';
+import { heldReasonText } from '../lib/held-reason.js';
 import { dropStore, failedLine } from './drop-upload.js';
 import { CLOSING_SENTENCE, OTHER_SENTENCES, RECEIPT_SENTENCES, closingGroupOf, linkedAs, readOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, receiptStateOf, waitsAfterDrop, type ClosingCounts, type ClosingGroup, type DropSummary, type FileState } from './drop-summary.js';
 import { isUnbooked } from '../areas/bank/model.js';
@@ -340,7 +341,7 @@ function PayoutUnseenRow({ r, session, go }: { r: DropRow; session: DropSession;
 
 /** What a taken report booked and left, in one line (src/types/drop.ts ReportSummary). */
 function reportLine(s: NonNullable<DropRow['report']>): string {
-  const held = s.held.map((h) => t(`drop.held.${h.why}`, { order: h.order })).join(', ');
+  const held = s.held.map((h) => heldReasonText(h, isKey, tWith)).join(', ');
   return [
     s.from && s.to && `${formatDate(s.from)} – ${formatDate(s.to)}`,
     s.kind === 'sales' ? t('drop.booked.sales', { orders: s.orders, refunds: s.refunds }) : t('drop.booked.fees', { n: s.fees }),

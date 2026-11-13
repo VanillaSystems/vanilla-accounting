@@ -201,7 +201,10 @@ const flagged = (cell: string | undefined): boolean => /^(true|yes|ja|oui|si|sì
 export interface SaleRow {
   order: string; date: string; ordered?: string; shipTo?: string; gross: number; tax?: number; outstanding?: number; refunded: number; refundedAt?: string; currency?: string; gateway?: string; test?: boolean;
   /** Its line items' amounts (price times quantity), where the report has them (#416); with `taxes` (each rate's tax), `shipping` and `discount`. */
-  items?: number[]; taxes?: Array<{ rate: number; amount: number }>; shipping?: number; discount?: number;
+  items?: number[];
+  /** Each item's quantity (the pieces its amount is of), where the report has a quantity column: a provider may round the tax per piece. */
+  units?: number[];
+  taxes?: Array<{ rate: number; amount: number }>; shipping?: number; discount?: number;
 }
 /** One fee of a fee report, summed per order and day (per day where the report names no order, #242). */
 export interface FeeRow { order?: string; date: string; fee: number; currency?: string }
@@ -277,19 +280,20 @@ export function readReport(text: string, kind: ReportKind, facts: Pick<ProviderF
     const heads = (header ?? []).map(norm);
     const every = (c: 'taxName' | 'taxValue') => (facts.reports.sales?.[c] ?? []).map((n) => heads.indexOf(norm(n)));
     const taxCols = every('taxName').map((name, i) => ({ name, value: every('taxValue')[i] ?? -1 })).filter((c) => c.name >= 0 && c.value >= 0);
-    const byOrder = new Map<string, { row: Partial<SaleRow>; lines: number[]; items: Array<number | undefined> }>();
+    const byOrder = new Map<string, { row: Partial<SaleRow>; lines: number[]; items: Array<number | undefined>; units: Array<number | undefined> }>();
     const unread: number[] = [];
     lines.forEach((row, k) => {
       const order = cell(row, at.order)?.replace(/^#/, '');
       if (!order) { unread.push(k + 2); return; }
-      const o = byOrder.get(order) ?? byOrder.set(order, { row: { order }, lines: [], items: [] }).get(order)!;
+      const o = byOrder.get(order) ?? byOrder.set(order, { row: { order }, lines: [], items: [], units: [] }).get(order)!;
       o.lines.push(k + 2);
       const r = o.row;
       if (at.linePrice !== undefined) {
         const price = amountOf(cell(row, at.linePrice));
         // Without a quantity column each line counts once: a line of several pieces then leaves the items short of the total, and the order waits.
-        const qty = at.lineQuantity === undefined ? 1 :amountOf(cell(row, at.lineQuantity));
+        const qty = at.lineQuantity === undefined ? 1 : amountOf(cell(row, at.lineQuantity));
         o.items.push(price === undefined || qty === undefined ? undefined : fromRappen(Math.round(toRappen(price) * qty)));
+        o.units.push(qty === undefined ? undefined : Math.max(1, Math.ceil(Math.abs(qty))));
       }
       if (!r.taxes && taxCols.length) {
         const taxes = taxCols.flatMap((c) => {
@@ -314,7 +318,7 @@ export function readReport(text: string, kind: ReportKind, facts: Pick<ProviderF
       if (flagged(cell(row, at.test))) r.test = true;
     });
     const rows: SaleRow[] = [];
-    for (const { row: r, lines: at2, items } of byOrder.values()) {
+    for (const { row: r, lines: at2, items, units } of byOrder.values()) {
       if (!r.date || r.gross === undefined) { unread.push(at2[0]); continue; }
       // An order edited after checkout: only the total less its outstanding balance was charged, its tax in the same share (#231).
       // A balance below zero is what was charged beyond the total (a cent of a currency's rounding, #239): the gross is more.
@@ -322,7 +326,7 @@ export function readReport(text: string, kind: ReportKind, facts: Pick<ProviderF
       const gross = open ? fromRappen(toRappen(r.gross) - toRappen(open)) : r.gross;
       const tax = open && r.tax !== undefined && toRappen(r.gross) > 0 ? fromRappen(Math.round((toRappen(r.tax) * toRappen(gross)) / toRappen(r.gross))) : r.tax;
       rows.push({ order: r.order!, date: r.date, gross, refunded: Math.abs(r.refunded ?? 0), ...(r.ordered && { ordered: r.ordered }), ...(r.shipTo && { shipTo: r.shipTo }), ...(tax !== undefined && { tax }), ...(open && { outstanding: open }), ...(r.refundedAt && { refundedAt: r.refundedAt }), ...(r.currency && { currency: r.currency }), ...(r.gateway && { gateway: r.gateway }), ...(r.test && { test: true }),
-        ...(items.length && items.every((x) => x !== undefined) && { items: items as number[] }), ...(r.taxes && { taxes: r.taxes }), ...(r.shipping !== undefined && { shipping: r.shipping }), ...(r.discount !== undefined && { discount: r.discount }) });
+        ...(items.length && items.every((x) => x !== undefined) && { items: items as number[], units: units as number[] }), ...(r.taxes && { taxes: r.taxes }), ...(r.shipping !== undefined && { shipping: r.shipping }), ...(r.discount !== undefined && { discount: r.discount }) });
     }
     return { kind, rows, unread: unread.sort((a, b) => a - b) };
   }
@@ -493,7 +497,10 @@ export interface ReportTexts {
  * carries a sale from elsewhere that may be it (`legacy`), or the payments exports' charges of the order
  * do not add up to what was charged by the sales report, its total less its outstanding balance (`charges`, #231).
  */
-export interface ReportHold { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' | 'refundSplit' | 'rateTooMany' }
+export interface ReportHold { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' | 'refundSplit' | 'rateTooMany';
+  /** `rateTooMany`: the order's number of rates and the most items code splits at that many (the text names both). */
+  rates?: number; most?: number;
+}
 
 /**
  * A refund paid in a filed period whose sale the books carry and which they never carried (#231): offered
@@ -567,8 +574,12 @@ function showsRate(gross: number, tax: number, rate: number): boolean {
 
 /** The most ways of putting an order's line items at its rates that code tries (two rates: twelve items); beyond, the order waits as `rateTooMany`. */
 export const MIXED_WAYS = 4096;
-/** The most line items code splits at two rates (MIXED_WAYS): the held reason names it. */
-export const MIXED_ITEMS_AT_TWO = Math.floor(Math.log2(MIXED_WAYS));
+/** The most line items code splits at `rates` rates (MIXED_WAYS): the held reason names it. Two rates: twelve. */
+export function mixedItemsAt(rates: number): number {
+  let n = 0;
+  while (rates ** (n + 1) <= MIXED_WAYS) n++;
+  return n;
+}
 
 /**
  * A domestic order whose tax shows two or more rates (a cart of tea at the reduced rate and a teapot at
@@ -576,9 +587,10 @@ export const MIXED_ITEMS_AT_TWO = Math.floor(Math.log2(MIXED_WAYS));
  * at the rates so that each rate's tax on its items is what the report says within the rounding a
  * provider may do (see `fits`), the items adding up to what was charged, no shipping or discount to
  * share out. Exactly one such split, each rate one the firm books: its gross per rate; else none, and
- * the order waits. `tooMany`: more ways to try than MIXED_WAYS; the order waits with that reason.
+ * the order waits. `tooMany`: more ways to try than MIXED_WAYS, with its number of rates and the most items code splits at
+ * that many; the order waits with that reason.
  */
-export function mixedCart(o: Pick<SaleRow, 'gross' | 'items' | 'taxes' | 'shipping' | 'discount'>, rates: readonly SaleCode[]): Array<SaleCode & { gross: number }> | 'tooMany' | undefined {
+export function mixedCart(o: Pick<SaleRow, 'gross' | 'items' | 'units' | 'taxes' | 'shipping' | 'discount'>, rates: readonly SaleCode[]): Array<SaleCode & { gross: number }> | { tooMany: true; rates: number; most: number } | undefined {
   const items = o.items;
   const taxes = (o.taxes ?? []).filter((t) => toRappen(t.amount) !== 0);
   if (!items?.length || taxes.length < 2 || taxes.length > items.length) return undefined;
@@ -586,10 +598,13 @@ export function mixedCart(o: Pick<SaleRow, 'gross' | 'items' | 'taxes' | 'shippi
   if (items.reduce((s, x) => s + toRappen(x), 0) !== toRappen(o.gross)) return undefined;
   const codes = taxes.map((t) => rates.find((r) => r.rate === t.rate));
   if (codes.some((c) => !c) || new Set(taxes.map((t) => t.rate)).size !== taxes.length) return undefined;
-  if (taxes.length ** items.length > MIXED_WAYS) return 'tooMany';
+  if (taxes.length ** items.length > MIXED_WAYS) return { tooMany: true, rates: taxes.length, most: mixedItemsAt(taxes.length) };
   // The true split must always fit, whichever way the provider rounds (#437 review): each line's tax rounded and summed lies
-  // within half a cent per line of the exact tax on the rate's items, the rate's total rounded once within half a cent; a cent
+  // within half a cent per piece of the exact tax on the rate's items, the rate's total rounded once within half a cent; a cent
   // at least, as a provider's own rounding may add. A wider window lets more splits fit: the uniqueness check then holds the order.
+  // Counted in pieces, not lines (#437 second review): a provider that rounds each piece's tax and multiplies by the quantity
+  // drifts half a cent per piece. Without a quantity column each item is one piece.
+  const pieces = items.map((_, i) => o.units?.[i] ?? 1);
   const fits = (rp: number, n: number, t: { rate: number; amount: number }) => rp > 0 && Math.abs((rp * t.rate) / (100 + t.rate) - toRappen(t.amount)) <= Math.max(1, n / 2) + 1e-9;
   const found = new Set<string>();
   let split: number[] | undefined;
@@ -597,7 +612,7 @@ export function mixedCart(o: Pick<SaleRow, 'gross' | 'items' | 'taxes' | 'shippi
   for (let n = 0; n < taxes.length ** items.length; n++) {
     for (let i = 0, m = n; i < items.length; i++, m = Math.floor(m / taxes.length)) at[i] = m % taxes.length;
     const sums = taxes.map((_, k) => items.reduce((s, x, i) => s + (at[i] === k ? toRappen(x) : 0), 0));
-    if (!sums.every((rp, k) => fits(rp, at.filter((x) => x === k).length, taxes[k]))) continue;
+    if (!sums.every((rp, k) => fits(rp, pieces.reduce((s, p, i) => s + (at[i] === k ? p : 0), 0), taxes[k]))) continue;
     found.add(sums.join(','));
     split = sums;
   }
@@ -870,7 +885,7 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[]; map
       if (where !== 'filed' && carried(orderLegacy({ key: o.order, day: o.date, amount: o.gross }), o.order)) return;
       const refunded = o.refunded > 0 || !!ctx.payments?.refunds.get(o.order)?.length;
       const mix = where || refunded || had?.length || saleRefsOf(sale).length ? undefined : mixedCart(o, rates);
-      if (mix === 'tooMany') { out.held.push({ order: o.order, why: 'rateTooMany' }); return; }
+      if (mix && !Array.isArray(mix)) { out.held.push({ order: o.order, why: 'rateTooMany', rates: mix.rates, most: mix.most }); return; }
       const charged = chargesOf(o);
       // Charged on one day (its tax point on the cash basis) and to the cent what the report says, or not by the payments export at all.
       const once = !charged || (charged !== 'differ' && !charged.off && (ctx.agreed || charged.days.length === 1));
