@@ -71,7 +71,7 @@ const UID_VAT = /CHE[-\s]*(\d{3})[.\s]*(\d{3})[.\s]*(\d{3})\s*(?:MWST|TVA|IVA|VA
 const NOT_TOTAL = /exkl|excl|netto|zwischen|sub/i;
 const CURRENCY = /\bCHF\b|\bFr\.|\bEUR\b|€|\bUSD\b|US\$/g;
 /** A Swiss rate as a percent anywhere in the text, with or without a VAT word beside it («8.1%», «2,6 %», «3.8 Prozent»). */
-const SWISS_PERCENT = new RegExp(String.raw`(?<![\d.,])(?:${RATES.map((r) => String(r).replace('.', '[.,]')).join('|')})\s*(?:%|Prozent|pour ?cent|per ?cento)`, 'i');
+export const SWISS_PERCENT = new RegExp(String.raw`(?<![\d.,])(?:${RATES.map((r) => String(r).replace('.', '[.,]')).join('|')})\s*(?:%|Prozent|pour ?cent|per ?cento)`, 'i');
 /** A line that states an amount of VAT («MWST-Betrag 8.1% 81.00», «Total MWST», «Montant TVA»): no total of the document, unless it says the total includes the VAT. */
 const VAT_WORD = /MWST|MwSt|Mehrwertsteuer|TVA|IVA|\bVAT\b|\bUSt\b|Steuer/i;
 const VAT_INCLUDED = /inkl|incl|inclus|compris|enthalten|darin|davon|TTC/i;

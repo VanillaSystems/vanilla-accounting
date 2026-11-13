@@ -7,7 +7,7 @@
 import { bookBalanceNative, nativeOpening } from '../../../accounting/reconcile-bank.js';
 import type { MoneyRole } from '../../../workspace/banks.js';
 import { periodCards } from './periods.js';
-import { Fragment, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import './company.css';
 import { COMPANY_SECTIONS, companySection, type CompanySection, type RouteOf } from '../../shell/route.js';
 import { reloadWorkspace, useWorkspace } from '../../hooks/use-workspace.js';
@@ -37,7 +37,8 @@ import { RulesSection } from './RulesSection.js';
 import { SetupEntry } from '../../onboarding/SetupEntry.js';
 import { baseCurrency, chargesVat, chart, filing } from '../../../engines/index.js';
 import { openingLock } from '../../../accounting/opening-balance.js';
-import { yearEndAccounts } from '../../../accounting/year-close.js';
+import { foreignAccounts, yearEndAccounts } from '../../../accounting/year-close.js';
+import { useFx } from '../../hooks/use-fx.js';
 import { AccountField } from '../journal/AccountField.js';
 import { DimensionsSection } from './DimensionsSection.js';
 import { AdjustmentsSection } from './AdjustmentsSection.js';
@@ -589,23 +590,44 @@ function Opening({ books, nav, canEdit }: Props) {
   const [assets, liabilities] = [sum('1'), sum('2')];
   const lock = openingLock(books, year);
   const equity = yearEndAccounts(Object.keys(names), ws?.company.legalForm).resultTo;
-  const foreign = new Set((ws?.bankAccounts ?? []).filter((b) => b.currency !== baseCurrency()).map((b) => b.account));
+  // A foreign-currency bank account opens with two values, as its balance sheet shows them: in the base currency and in its own (r2-26).
+  const foreign = new Map(foreignAccounts(ws?.bankAccounts ?? []).map((b) => [b.account, b.currency]));
+  const natives = books.config?.openingBalancesNative?.[year] ?? {};
   const [n, setN] = useState(0);
   const [err, setErr] = useState('');
+  // What the form holds, so a foreign-currency account shows the field for its own currency and the value at the 31.12. rate.
+  const [typed, setTyped] = useState({ account: '', amount: '', native: '' });
+  const form = useRef<HTMLFormElement>(null);
+  const currency = foreign.get(typed.account);
+  const { rates } = useFx();
+  const rate = currency ? rates?.yearEnd(currency, String(Number(year) - 1)) : undefined;
+  const typedNative = currency ? parseAmount(typed.native) : null;
+  const atRate = rate && typedNative !== null ? Math.round(typedNative * rate.rate * 100) / 100 : undefined;
+  const typedAmount = parseAmount(typed.amount);
+  const setAmount = (v: number) => {
+    const input = form.current?.querySelector<HTMLInputElement>('input[name=amount]');
+    if (input) { input.value = v.toFixed(2); readAccount(form.current); }
+  };
   const typing = canEdit && !lock;
   const open = (a: string) => nav.go({ route: { area: 'reports', report: 'balance', account: a }, query: { period: parsePeriod(year, localToday())! } });
+  const readAccount = (form: HTMLFormElement | null) => {
+    const f = form ? new FormData(form) : undefined;
+    const of = (k: string) => String(f?.get(k) ?? '').trim();
+    setTyped({ account: of('account'), amount: of('amount'), native: of('native') });
+  };
 
-  async function put(account: string, amount: number | null, before: number | undefined): Promise<boolean> {
+  async function put(account: string, amount: number | null, before: number | undefined, native?: number, nativeBefore?: number | null): Promise<boolean> {
     try {
-      await api.setOpeningBalance(year, account, amount);
+      await api.setOpeningBalance(year, account, amount, native);
     } catch (e) {
       setErr(errorText(e));
       return false;
     }
     setErr('');
+    setTyped({ account: '', amount: '', native: '' });
     nav.refresh();
     const text = amount === null ? t('company.openingRemoved', { account }) : t('company.openingSet', { account, amount: fmt(amount) });
-    nav.toast(text, () => { api.setOpeningBalance(year, account, before ?? null).then(nav.refresh, (e) => nav.toast(errorText(e))); });
+    nav.toast(text, () => { api.setOpeningBalance(year, account, before ?? null, nativeBefore).then(nav.refresh, (e) => nav.toast(errorText(e))); });
     return true;
   }
 
@@ -614,22 +636,36 @@ function Opening({ books, nav, canEdit }: Props) {
     const f = new FormData(e.currentTarget);
     const account = String(f.get('account') ?? '').trim();
     const amount = parseAmount(String(f.get('amount') ?? ''));
+    const cur = foreign.get(account);
+    const native = cur ? parseAmount(String(f.get('native') ?? '')) : undefined;
     const problem = !getAccountMap()[account] ? t('journal.errAccount', { account: account || '–' })
       : !isBalanceSheet(account) ? t('error.openingAccount.notBalanceSheet', { account })
         : account === equity ? t('error.openingAccount.equity', { account })
-          : foreign.has(account) ? t('error.openingAccount.foreign', { account })
-            : amount === null ? t('journal.errAmount') : '';
+          : amount === null ? t('journal.errAmount')
+            : cur && native === null && amount !== 0 ? t('error.openingAccount.foreign', { account, currency: cur })
+              : cur && native !== null && amount !== 0 && Math.sign(native!) !== Math.sign(amount) ? t('error.openingAccount.foreignMismatch', { account, currency: cur, base: baseCurrency() }) : '';
     if (problem) { setErr(problem); return; }
-    void put(account, amount === 0 ? null : amount, openings[account]).then((ok) => { if (ok) setN(n + 1); });
+    // Taken back, a foreign account's older opening without its balance in its currency comes back so (native: null).
+    const nativeBefore = cur && openings[account] !== undefined ? natives[account]?.amount ?? null : natives[account]?.amount;
+    void put(account, amount === 0 ? null : amount, openings[account], native ?? undefined, nativeBefore).then((ok) => { if (ok) setN(n + 1); });
   }
 
   if (!rows.length && !typing) return <p className="m">{lock === 'closed' ? t('company.openingClosed', { year }) : t('company.noOpening', { year })}</p>;
   return (
     <>
       {typing && (
-        <form key={n} className="form inline" autoComplete="off" onSubmit={save} data-testid="opening-form">
-          <AccountField name="account" label={t('yearClose.colAccount')} defaultValue="" />
-          <label>{t('close.openingOn', { date: `1.1.${year}` })}<input className="mono" name="amount" inputMode="decimal" style={{ textAlign: 'right' }} /></label>
+        <form key={n} ref={form} className="form inline" autoComplete="off" onSubmit={save} onInput={(e) => readAccount(e.currentTarget)} data-testid="opening-form">
+          <AccountField name="account" label={t('yearClose.colAccount')} defaultValue="" onPick={() => readAccount(form.current)} />
+          <label>{currency ? t('company.openingInBase', { date: `1.1.${year}`, currency: baseCurrency() }) : t('close.openingOn', { date: `1.1.${year}` })}<input className="mono" name="amount" inputMode="decimal" style={{ textAlign: 'right' }} /></label>
+          {currency ? <label>{t('company.openingNative', { currency })}<input className="mono" name="native" inputMode="decimal" style={{ textAlign: 'right' }} data-testid="opening-native" /></label> : null}
+          {/* The value in the base currency at the official rate of 31.12., as a fact beside what she typed; she decides (#427 review). */}
+          {currency && rate && atRate !== undefined ? (
+            <p className="m" data-testid="opening-at-rate">
+              {t('company.openingAtRate', { currency, native: fmt(typedNative!), date: `31.12.${Number(year) - 1}`, rate: String(rate.rate), base: baseCurrency(), amount: fmt(atRate) })}
+              {typedAmount !== null && Math.round(typedAmount * 100) !== Math.round(atRate * 100) ? ` ${t('company.openingAtRateDiffers', { base: baseCurrency(), diff: fmt(Math.round((typedAmount - atRate) * 100) / 100) })}` : ''}{' '}
+              {typedAmount === null || Math.round(typedAmount * 100) !== Math.round(atRate * 100) ? <button type="button" className="linkbtn" data-testid="opening-take-rate" onClick={() => setAmount(atRate)}>{t('company.openingTakeRate', { base: baseCurrency(), amount: fmt(atRate) })}</button> : null}
+            </p>
+          ) : null}
           <div className="acts">
             <button type="submit" className="btn">{t('company.openingSetButton')} <span className="k">↵</span></button>
             <span className="m">{t('company.openingHint', { equity })}</span>
@@ -644,8 +680,8 @@ function Opening({ books, nav, canEdit }: Props) {
             {rows.map(([a, v]) => (
               <div key={a} className="fr" data-account={a}>
                 <button type="button" className="mono clink" onClick={() => open(a)}>{a}</button><span>{names[a] ?? a}{a === equity ? <span className="m"> · {t('company.openingPlug')}</span> : null}</span>
-                <span>{typing && a !== equity ? <button type="button" className="quiet2" aria-label={t('company.openingRemove', { account: a })} onClick={() => void put(a, null, v)}>×</button> : null}</span>
-                <span className="r mono">{fmt(v)}</span>
+                <span>{typing && a !== equity ? <button type="button" className="quiet2" aria-label={t('company.openingRemove', { account: a })} onClick={() => void put(a, null, v, undefined, foreign.has(a) ? natives[a]?.amount ?? null : undefined)}>×</button> : null}</span>
+                <span className="r mono">{fmt(v)}{natives[a] ? <small className="m"> · {natives[a].currency} {fmt(natives[a].amount)}</small> : null}</span>
               </div>
             ))}
             <div className="fr tot"><span /><span>{t('yearClose.totalAssets')}</span><span /><span className="r mono">{fmt(assets)}</span></div>
