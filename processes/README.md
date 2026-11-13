@@ -339,7 +339,13 @@ provider:
   from a payout report (a card terminal's PDF), whose sales book only with its
   payout booked from the clearing account.
 - The accounts are one company's chart: only the company's file names them,
-  and the drop asks for a missing one once and keeps the answer there.
+  and the drop asks for a missing one once and keeps the answer there: one
+  question at a time (the clearing account, the cut-over day, for a sales
+  report the revenue account it proposes from what the firm sells), her
+  answer is her switching on (the booking workflow does not wait for
+  «Einschalten» because of it), and the payouts it decides are booked at once
+  (#404). A payout's hand form proposes bank / the clearing account without a
+  code once code books it so, else no account, and never a sale.
   `revenue` falls back to the account of what the firm sells. `payoutDays` and
   `gateways` may be said in the company's file too: its payout days win, its
   gateways are added.

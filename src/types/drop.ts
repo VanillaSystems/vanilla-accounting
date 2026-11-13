@@ -90,6 +90,8 @@ export interface DropRow {
   report?: ReportSummary;
   /** A report the company's file of its provider cannot book yet: the account (or fee code) the row asks for, once. */
   askProvider?: ProviderAsk;
+  /** Her answer in this row booked the provider's payouts it decided (#404): how many of how many, or that the booking waits for «Einschalten». */
+  payouts?: PayoutsBooked & { provider: string };
   /** A report held because no payout of its provider is recognised: why, and what was looked at. */
   payoutUnseen?: PayoutUnseen;
   /** The person took the report anyway («Trotzdem übernehmen»): the unseen-payout check is skipped; a bank CSV «schon da» is read, its columns asked. */
@@ -134,7 +136,22 @@ export interface StatementDetails {
 export interface StatementMovement { date: string; amount: number; counterparty?: string; text?: string }
 
 /** Why a provider's payout waits for the person, as its line in Kontoauszüge says it (GET /api/transactions/:ref/payout-wait, src/booking/providers.ts PayoutWait). */
-export interface PayoutWaitView { why: 'clearing' | 'since' | 'gap'; provider: string; file: string; since?: string }
+/**
+ * A provider's payouts of the open period without a booking, by what they wait for (#404,
+ * src/server/provider-payouts.ts): `ready` code books them now (bank / `account`, without VAT);
+ * `clearing` or `since` the company's file lacks it (the provider's report asks); `gap` before the
+ * cut-over day beside sales a report booked. `sales`: the provider's file names a sales report (its
+ * order export); without one its payout report is what books its sales.
+ */
+export interface PayoutGroup { provider: string; name: string; why: 'ready' | 'clearing' | 'since' | 'gap'; refs: string[]; account?: string; since?: string; sales: boolean }
+
+/**
+ * What booking a provider's payouts came to (src/server/provider-payouts.ts bookPayouts): `booked` of
+ * `of`; `waits: 'switchOn'`: nothing booked, the booking workflow waits for «Einschalten».
+ */
+export interface PayoutsBooked { booked: number; of: number; waits?: 'switchOn' }
+
+export interface PayoutWaitView { why: 'clearing' | 'since' | 'gap'; provider: string; file: string; since?: string; /** The provider's file names a sales report (its order export). */ sales: boolean }
 
 /**
  * What the company's file of a provider lacks for its report: its clearing account (with the cut-over
@@ -143,7 +160,15 @@ export interface PayoutWaitView { why: 'clearing' | 'since' | 'gap'; provider: s
  * `propose`: the account (and fee code) proposed, with `name` when the chart lacks the account and
  * keeping the answer adds it (DropAction `create`).
  */
-export interface ProviderAsk { provider: string; name: string; missing: 'clearing' | 'since' | 'revenue' | 'fees'; since?: string; propose?: ProviderProposal }
+export interface ProviderAsk {
+  provider: string; name: string; missing: 'clearing' | 'since' | 'revenue' | 'fees'; since?: string; propose?: ProviderProposal;
+  /**
+   * A sales report asking the clearing account of a provider whose file names no revenue account
+   * (#404): the revenue account proposed with it, the one of what the firm sells (`sells`, its setup's
+   * answer «Was verkauft ihr?»), in its chart; the answer may change it (DropAction `revenue`).
+   */
+  revenue?: { account: string; sells: string[] };
+}
 
 export interface ProviderProposal { account: string; name?: string; vat?: string }
 
@@ -241,7 +266,7 @@ export type DropAction =
   /** A possible duplicate: «ist dasselbe» (not taken) or «verschieden» (taken, and the pair is not asked again). */
   | { kind: 'twin'; answer: 'same' | 'distinct' }
   /** A report's provider lacks an account (`askProvider`): the person names it, it is kept in the company's file of the provider, and the report is taken; `create` adds the proposed account to the chart first. */
-  | { kind: 'provider'; account?: string; vat?: string; since?: string; create?: true }
+  | { kind: 'provider'; account?: string; vat?: string; since?: string; create?: true; revenue?: string }
   /** A report held because no payout of its provider is recognised (`payoutUnseen`): «Trotzdem übernehmen» books it. */
   | { kind: 'anyway' }
   /** A statement read without a bank export (`read`), as the person corrected it: checked again and, with `import`, imported («Einlesen»). */

@@ -14,7 +14,7 @@ import { dropStore, failedLine } from './drop-upload.js';
 import { CLOSING_SENTENCE, OTHER_SENTENCES, RECEIPT_SENTENCES, closingGroupOf, linkedAs, readOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, receiptStateOf, waitsAfterDrop, type ClosingCounts, type ClosingGroup, type DropSummary, type FileState } from './drop-summary.js';
 import { isUnbooked } from '../areas/bank/model.js';
 import { receiptWaits } from '../areas/automation/period-issues.js';
-import { parsePeriod, filingKeyOf } from '../../accounting/periods.js';
+import { parsePeriod, filingKeyOf, parseSwissDate } from '../../accounting/periods.js';
 import { useQuestions } from '../questions/store.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { periodName } from '../lib/period-label.js';
@@ -32,6 +32,7 @@ import type { Index } from '../../types/index.js';
 import type { DropRow, DropSession, OtherExportOf } from '../../types/drop.js';
 import { FileDetails } from './FileDetails.js';
 import { AccountField } from '../areas/journal/AccountField.js';
+import { BOOKING_SWITCH_ON, payoutsBookedText } from '../lib/payouts.js';
 import { CsvColumnsForm, StatementRead } from './StatementRead.js';
 import { Menu } from './Menu.js';
 import type { Location, Route } from './route.js';
@@ -161,35 +162,81 @@ function ChooseAccount({ r, session, go }: { r: DropRow; session: DropSession; g
 }
 
 /**
- * A provider's report whose company file lacks an account (#203): the row asks for it once, with the
- * fee code where the fees are missing and the cut-over day with the clearing account (the first day
- * the report covers proposed, within the open period); the account proposed is filled in, and one the
- * chart lacks is added when the answer is kept. The answer is kept in that file and the report is taken.
+ * A provider's report whose company file lacks an account (#203): the row asks for it once, one
+ * question at a time, each labelled, with its proposal and a sentence on why (#404): the clearing
+ * account, then the cut-over day (typed the app's way, dd.mm.yyyy), then, for a sales report whose
+ * provider's file names none, the revenue account the firm's setup proposes. The fee report's fee
+ * account says in words where the fees' VAT comes from instead of asking a code. One the chart lacks
+ * is added when the answer is kept. The answers are kept in that file and the report is taken. A
+ * second row of the same provider that asks the same shows no second question, only that it waits for it.
  */
 function ProviderAccount({ r, session }: { r: DropRow; session: DropSession }) {
   const ask = r.askProvider!;
   const propose = ask.propose;
+  type Step = 'account' | 'since' | 'revenue';
+  const steps: Step[] = [...(ask.missing !== 'since' ? ['account' as const] : []), ...(ask.since !== undefined ? ['since' as const] : []), ...(ask.revenue ? ['revenue' as const] : [])];
+  const [at, setAt] = useState(0);
+  const [answer, setAnswer] = useState<{ account?: string; since: string; revenue?: string }>({ since: ask.since ? formatDate(ask.since) : '' });
+  // The fee code is no question (AGENTS.md «Shopify billing»): the proposal is kept; a firm without one types it.
   const [vat, setVat] = useState(propose?.vat ?? '');
-  const [since, setSince] = useState(ask.since ?? '');
-  const needsAccount = ask.missing !== 'since';
-  const ready = (ask.missing !== 'fees' || !!vat.trim()) && (ask.since === undefined || !!since);
-  const keep = (form: HTMLFormElement) => {
-    const field = form.elements.namedItem('account') as HTMLInputElement | null;
-    const account = field?.value.trim() ?? '';
-    if (needsAccount && !account) { field?.focus(); return; }
-    const create = !!propose?.name && account === propose.account;
-    void act(session, r, { kind: 'provider', ...(needsAccount ? { account } : {}), ...(create ? { create: true } : {}), ...(ask.missing === 'fees' ? { vat: vat.trim() } : {}), ...(ask.since !== undefined ? { since } : {}) });
+  const first = session.rows.find((x) => x.askProvider?.provider === ask.provider && x.askProvider.missing === ask.missing);
+  if (first && first.key !== r.key) return <small className="dpq" data-testid="drop-provider-waits">{t('drop.provider.waitsAbove', { provider: ask.name })}</small>;
+  const step = steps[at];
+  const last = at === steps.length - 1;
+  const day = parseSwissDate(answer.since);
+  const next = (form: HTMLFormElement) => {
+    const field = (n: string) => form.elements.namedItem(n) as HTMLInputElement | null;
+    const got = { ...answer };
+    if (step === 'account') { const v = field('account')?.value.trim() ?? ''; if (!v) { field('account')?.focus(); return; } got.account = v; }
+    if (step === 'since' && !day) { field('since')?.focus(); return; }
+    if (step === 'revenue') { const v = field('revenue')?.value.trim() ?? ''; if (!v) { field('revenue')?.focus(); return; } got.revenue = v; }
+    setAnswer(got);
+    if (!last) { setAt(at + 1); return; }
+    const create = !!propose?.name && got.account === propose.account;
+    void act(session, r, {
+      kind: 'provider', ...(got.account ? { account: got.account } : {}), ...(create ? { create: true } : {}),
+      ...(ask.missing === 'fees' ? { vat: vat.trim() } : {}), ...(ask.since !== undefined && day ? { since: day } : {}), ...(got.revenue ? { revenue: got.revenue } : {}),
+    });
   };
+  const ready = step !== 'since' || !!day;
+  const sells = (ask.revenue?.sells ?? []).map((k) => t(`desktop.q.sells.${k}` as 'desktop.q.sells.traded')).join(', ');
   return (
-    <>
-      <small>{t(`drop.provider.${ask.missing}`, { provider: ask.name })}{ask.missing === 'clearing' && ask.since !== undefined ? ` ${t('drop.provider.since', { provider: ask.name })}` : ''}</small>
-      <form className="dpw" data-testid="drop-provider" onSubmit={(e) => { e.preventDefault(); if (ready) keep(e.currentTarget); }}>
-        {needsAccount ? <AccountField name="account" label={t('drop.provider.account')} defaultValue={propose?.account ?? ''} offer={propose?.name ? { number: propose.account, name: propose.name } : undefined} /> : null}
-        {ask.missing === 'fees' ? <input value={vat} onChange={(e) => setVat(e.target.value)} placeholder={t('drop.provider.vat')} aria-label={t('drop.provider.vat')} /> : null}
-        {ask.since !== undefined ? <input type="date" value={since} onChange={(e) => setSince(e.target.value)} aria-label={t('drop.provider.sinceLabel')} data-tip={t('drop.provider.sinceLabel')} /> : null}
-        <button type="submit" className="btn" disabled={!ready}>{t('drop.provider.keep')}</button>
-      </form>
-    </>
+    <form className="dpq" data-testid="drop-provider" data-step={step} onSubmit={(e) => { e.preventDefault(); if (ready) next(e.currentTarget); }}>
+      {steps.length > 1 ? <small className="dpn">{t('drop.provider.stepOf', { n: at + 1, of: steps.length })}</small> : null}
+      {step === 'account' ? (
+        <>
+          <b>{t(`drop.provider.q.${ask.missing === 'fees' ? 'fees' : ask.missing === 'revenue' ? 'revenue' : 'clearing'}`, { provider: ask.name })}</b>
+          <small>{ask.missing === 'fees' ? (propose?.vat ? t('drop.provider.why.feesVat', { provider: ask.name, code: propose.vat }) : t('drop.provider.why.feesCode'))
+            : ask.missing === 'revenue' ? (propose ? t('drop.provider.why.revenueDefault', { account: propose.account }) : '')
+              : propose?.name ? t('drop.provider.why.newAccount', { account: propose.account, name: propose.name, provider: ask.name })
+                : propose ? t('drop.provider.why.chartAccount', { account: propose.account, provider: ask.name }) : ''}</small>
+          <span className="dpw">
+            <AccountField key="account" name="account" prefer={ask.missing === 'revenue' ? 'revenue' : ask.missing === 'fees' ? 'expense' : 'asset'} label={t(ask.missing === 'fees' ? 'drop.provider.label.fees' : ask.missing === 'revenue' ? 'drop.provider.label.revenue' : 'drop.provider.label.clearing')} defaultValue={answer.account ?? propose?.account ?? ''} offer={propose?.name ? { number: propose.account, name: propose.name } : undefined} />
+            {ask.missing === 'fees' && !propose?.vat ? <input value={vat} onChange={(e) => setVat(e.target.value)} placeholder={t('drop.provider.vat')} aria-label={t('drop.provider.vat')} /> : null}
+            <button type="submit" className="btn">{last ? t('drop.provider.keep') : t('drop.provider.next')}</button>
+          </span>
+        </>
+      ) : step === 'since' ? (
+        <>
+          <b>{t('drop.provider.q.since', { provider: ask.name })}</b>
+          <small>{t('drop.provider.why.since', { date: ask.since ? formatDate(ask.since) : '' })}</small>
+          <span className="dpw">
+            <label className="acf">{t('drop.provider.sinceLabel')}<input name="since" value={answer.since} placeholder={t('period.dateFormat')} onChange={(e) => setAnswer({ ...answer, since: e.target.value })} aria-invalid={!day} /></label>
+            <button type="submit" className="btn" disabled={!ready}>{last ? t('drop.provider.keep') : t('drop.provider.next')}</button>
+          </span>
+          {!day && answer.since ? <small className="wn">{t('period.invalidDate')}</small> : null}
+        </>
+      ) : (
+        <>
+          <b>{t('drop.provider.q.revenue', { provider: ask.name })}</b>
+          <small>{sells ? t('drop.provider.why.revenue', { account: ask.revenue!.account, sells }) : t('drop.provider.why.revenueDefault', { account: ask.revenue!.account })}</small>
+          <span className="dpw">
+            <AccountField key="revenue" name="revenue" label={t('drop.provider.label.revenue')} prefer="revenue" defaultValue={answer.revenue ?? ask.revenue!.account} />
+            <button type="submit" className="btn">{t('drop.provider.keep')}</button>
+          </span>
+        </>
+      )}
+    </form>
   );
 }
 
@@ -535,7 +582,9 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
   return (
     <>
       <div className={`droprow s-taken${shown ? ' open' : ''}`} data-testid="drop-row" data-file={r.name} data-state={x.kind}>
-        <div className="dn"><b className="mono">{r.name}</b><small>{r.report ? `${t(`drop.report.${r.report.kind}`, { provider: r.report.name })} · ${reportLine(r.report)}` : r.statement ? [r.read && t(`drop.read.by.${r.read.by}`), r.facts?.from && r.facts.to && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to)}`, keptPdf ? t('drop.kept') : t('drop.entries', { n: r.statement.refs.length })].filter(Boolean).join(' · ') : receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}{r.twin?.relation === 'companion' ? ` · ${t('drop.twin.companion', { name: r.twin.name })}` : r.document ? ` · ${t(`drop.doc.${r.document}` as 'drop.doc.newsletter')}` : ''}</small></div>
+        <div className="dn"><b className="mono">{r.name}</b><small>{r.report ? `${t(`drop.report.${r.report.kind}`, { provider: r.report.name })} · ${reportLine(r.report)}` : r.statement ? [r.read && t(`drop.read.by.${r.read.by}`), r.facts?.from && r.facts.to && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to)}`, keptPdf ? t('drop.kept') : t('drop.entries', { n: r.statement.refs.length })].filter(Boolean).join(' · ') : receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}{r.twin?.relation === 'companion' ? ` · ${t('drop.twin.companion', { name: r.twin.name })}` : r.document ? ` · ${t(`drop.doc.${r.document}` as 'drop.doc.newsletter')}` : ''}</small>
+          {r.payouts ? <small data-testid="drop-payouts" data-waits={r.payouts.waits ?? ''}>{payoutsBookedText(r.payouts, r.payouts.provider)}</small> : null}
+          {r.payouts?.waits ? <button type="button" className="linkbtn dfold" data-testid="drop-payouts-switch-on" onClick={() => go(BOOKING_SWITCH_ON)}>{t('marks.goSwitchOn')}</button> : null}</div>
         <div className="dgo">
           <span className={`dchip p-${x.kind}`}>{x.kind === 'working' ? (x.step ?? t('drop.p.working')) : t(`drop.p.${x.kind}` as 'drop.p.read')}</span>
           {x.kind === 'unread' ? (

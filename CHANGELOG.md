@@ -361,6 +361,23 @@ Two markers flag an entry you must read before you update:
 - MWST: a rate row's turnover (Ziffer 303 and the others) is the figure the return files, as the
   review and the XML show it; it was the nets rounded per entry plus the tax on the total, Rappen
   off (#406). No filed figure changes.
+- Payment providers (#404): her answer in the drop row of the provider's report (the clearing
+  account, the cut-over day, the fee account) no longer makes «Buchen» wait for «Einschalten»: an
+  answer to the app's own question is her switching on, and the payouts it decides are booked at
+  once, bank / clearing account without VAT; the row says «40 Auszahlungen von Shopify gebucht».
+  The same file changed by hand still waits; when «Buchen» waited already, the row and Aufgaben say
+  so, with the way to «Einschalten». «Einschalten» of «Buchen» books the payouts code decides and
+  says how many.
+- A provider's payout never gets a revenue proposal in the hand form: from its clearing account
+  without a code once the company's file names it, otherwise no account (before the cut-over day:
+  as the business's last booking), with a sentence on what a payout is and what it waits for. Its
+  line on the payment names no file path any more. A revenue account that is none is refused.
+- Aufgaben names a provider's payouts as its payouts («40 Auszahlungen von Shopify ohne Buchung»),
+  grouped, with the one thing to do (the order export, or «Jetzt buchen»).
+- The provider's questions in the drop row come one at a time and once (the second report row
+  waits for the first), each labelled with its proposal and why; the cut-over day reads
+  `dd.mm.yyyy`; the revenue account is shown with its source and can be changed; the fee code is
+  said in words (the input tax comes from the provider's monthly invoice).
 - The setup conversation keeps its order after a typed message (#385): the message stands under the
   question it was typed at, above that question's answer, and the open question with its buttons
   stays under her newest message, also when the words took a step back. In the books the rail shows

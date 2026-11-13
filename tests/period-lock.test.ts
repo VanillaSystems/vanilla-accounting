@@ -429,3 +429,27 @@ test('open period: keeping a rule books its open payments and leaves the filed q
   assert.ok(!now.journalEntries.some((e) => e.transactionRef === 'M2026-001'), 'the filed quarter\'s payment stays unbooked');
   assert.deepEqual(closedPart(now, '2026-06-30'), closedPart(fixture, '2026-06-30'));
 });
+
+test('POST /api/payouts/book and «Einschalten» of the booking (#404): a provider payout of the filed quarter stays as it is, an open one is booked from the clearing account', async () => {
+  // Shopify's company file with its clearing account and a cut-over day before the line, written by hand; the clearing account in the chart.
+  mkdirSync(join(api.root, 'knowledge', 'suppliers'), { recursive: true });
+  writeFileSync(join(api.root, 'knowledge', 'suppliers', 'shopify.yaml'), 'id: shopify\nprovider:\n  clearing: "1093"\n  since: 2026-06-01\n');
+  const konten = join(api.ws.paths.history, 'prior-year.Konten.txt');
+  writeFileSync(konten, `${readFileSync(konten, 'utf8')}1093\tDurchlaufkonto Shopify\n`);
+  // An earlier test gave the books a chart of their own: the clearing account goes there too.
+  if (existsSync(api.ws.paths.accounts)) writeFileSync(api.ws.paths.accounts, JSON.stringify([...JSON.parse(readFileSync(api.ws.paths.accounts, 'utf8')), { number: '1093', name: 'Durchlaufkonto Shopify' }]));
+  await api.rest();
+  const books = loadBooks(api.ws);
+  const payout = (ref: string, date: string) => ({ ref, bank: 'Raiffeisen', date, amount: 191.75, currency: 'CHF', direction: 'CRDT' as const, description: 'Gutschrift Shopify Payments', counterparty: 'Shopify Payments' });
+  books.transactions.push(payout('PC', '2026-06-20'), payout('PO', '2026-08-20'));
+  saveBooks(api.ws, books);
+  const sealed = closedPart(loadBooks(api.ws) as Books, '2026-06-30');
+  const on = await send({ method: 'POST', path: '/api/automation', body: { kind: 'approve', workflow: 'booking' } });
+  assert.equal(on.status, 200, on.error);
+  const book = await send({ method: 'POST', path: '/api/payouts/book', body: { provider: 'shopify' } });
+  assert.equal(book.status, 200, book.error);
+  const now = loadBooks(api.ws) as Books;
+  assert.ok(now.journalEntries.some((e) => e.transactionRef === 'PO' && e.accountCredit === '1093'), JSON.stringify([on.json, book.json]));
+  assert.ok(!now.journalEntries.some((e) => e.transactionRef === 'PC'), 'the filed quarter\'s payout stays unbooked');
+  assert.deepEqual(closedPart(now, '2026-06-30'), sealed);
+});

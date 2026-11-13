@@ -133,7 +133,7 @@ router.get('/api/transactions/:ref/payout-wait', (req, res) => {
   const tx = books.transactions.find((t) => t.ref === req.params.ref);
   if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   const w = books.journalEntries.some((e) => e.transactionRef === tx.ref) ? undefined : payoutWaitOf(tx, mappedReceipts(books, tx), loadClassifyContext(WS).counterparties ?? [], books.journalEntries);
-  const wait: PayoutWaitView | null = w ? { why: w.why, provider: w.provider.name, file: homeOf('workspace', w.provider.role, w.provider.id), ...(w.provider.provider.since ? { since: w.provider.provider.since } : {}) } : null;
+  const wait: PayoutWaitView | null = w ? { why: w.why, provider: w.provider.name, file: homeOf('workspace', w.provider.role, w.provider.id), sales: !!w.provider.provider.reports.sales, ...(w.provider.provider.since ? { since: w.provider.provider.since } : {}) } : null;
   res.json({ wait });
 });
 

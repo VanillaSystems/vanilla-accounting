@@ -35,6 +35,7 @@ import type { StatementImport } from '../../types/index.js';
 import { importSalesReport, recognizeCsv, removeSalesReport, setProviderAccount } from '../../intake/sales-report-import.js';
 import { accountName, removeAccount, setAccountName } from '../../workspace/accounts-write.js';
 import { assertPlaced } from '../edits.js';
+import { asHerAct, bookPayouts, readyPayouts } from '../provider-payouts.js';
 
 import type { Arrival } from '../../workflows/model.js';
 import { firstPages, recognize } from '../../intake/recognize.js';
@@ -153,6 +154,8 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
   if (!row) throw new RequestError(404, 'Diese Zeile gibt es nicht.');
   const a = req.body as DropAction;
   const settled = row.state === 'taken' || row.state === 'undone';
+  /** The provider whose payouts her answer may decide (#404). */
+  let answered: { id: string; name: string } | undefined;
   switch (a?.kind) {
     case 'remove':
       if (settled) throw new RequestError(400, 'Schon übernommen: «Rückgängig» nimmt es zurück.');
@@ -200,14 +203,17 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
       // The cut-over day comes with the clearing account while the provider's file names none.
       const needsAccount = ask?.missing !== 'since';
       if (!ask || (needsAccount && !account) || (ask.missing === 'fees' && !text(a.vat)) || (ask.since !== undefined && !since)) throw new RequestError(400, 'Nur ein Bericht, dessen Konto oder Umstellungstag fehlt, nimmt eines.');
-      const set = ask.missing === 'fees' ? { fees: { account: account!, vat: text(a.vat)! } } : ask.missing === 'since' ? { since } : { [ask.missing]: account, ...(since ? { since } : {}) };
+      // The revenue account comes with the clearing account where the row showed its proposal (#404).
+      const revenue = ask.revenue ? text(a.revenue) : undefined;
+      const set = ask.missing === 'fees' ? { fees: { account: account!, vat: text(a.vat)! } } : ask.missing === 'since' ? { since, ...(revenue ? { revenue } : {}) } : { [ask.missing]: account, ...(since ? { since } : {}), ...(revenue ? { revenue } : {}) };
       // The proposed account the chart lacks is added as Firma › Kontenplan adds one, and taken out again when the answer is refused.
       const create = a.create && ask.propose?.name && account === ask.propose.account && accountName(WS, account) === undefined ? ask.propose.name : undefined;
       if (create) { assertPlaced(account!); setAccountName(WS, account!, create); }
-      const kept = setProviderAccount(WS, ask.provider, set);
+      // Her answer to the app's own question is her switching on: no workflow waits for «Einschalten» because of it (#404).
+      const kept = asHerAct(() => setProviderAccount(WS, ask.provider, set));
       if (!kept.ok) {
         if (create) removeAccount(WS, account!);
-        throw new RequestError(400, `Konto, Steuercode oder Umstellungstag ${[account, a.vat, since].filter(Boolean).join(' / ')} geht so nicht.`, kept.refusal);
+        throw new RequestError(400, `Konto, Steuercode oder Umstellungstag ${[account, a.vat, since, revenue].filter(Boolean).join(' / ')} geht so nicht.`, kept.refusal);
       }
       // Every row of the provider that asked is asked again by its report: the fee report no longer asks for the clearing account just kept.
       for (const r of s.rows) {
@@ -216,6 +222,7 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
         delete r.message;
         Object.assign(r, { state: 'take', reason: undefined });
       }
+      answered = { id: ask.provider, name: ask.name };
       break;
     }
     case 'anyway':
@@ -327,6 +334,9 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
     default: throw new RequestError(400, 'Unbekannte Aktion.');
   }
   await takeWaiting(s);
+  // The payouts her answer decides are booked now, and the row says how many (#404).
+  const ready = answered ? readyPayouts(answered.id) : [];
+  if (answered && ready.length) row.payouts = { provider: answered.name, ...(await bookPayouts(ready)) };
   save(s);
   res.json(s);
 }));
