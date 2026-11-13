@@ -70,6 +70,12 @@ steps:
         when: an owner's loan or deposit, its repayment, or the refund of the owner's outlays
         then: "2451 Kontokorrent Gesellschafter (GmbH, AG) or 2850 Privat (Einzelfirma), no VAT code; the outlays carry their codes on their own entries"
         source: MWSTG Art. 18 Abs. 2 lit. e
+      - id: cls-owner-outlays-repaid
+        status: proposed
+        when: "money out to the owner by name (the payee, not a word of the text) that is no wage, while her account holds outlays not paid back at least as large (receipts she paid privately, booked expense / her account)"
+        then: "bank / her account (2451 Kontokorrent for a GmbH or AG, 2850 Privat for an Einzelfirma), one line, no VAT code, no receipt of its own: it pays back what her outlays' entries booked already. Never on an expense or a wage account (5820 Spesen, 5000 Lohn): the outlays would be an expense twice and her account would stay in credit by exactly that much"
+        why: "the outlays carry their expense and their input tax on their own entries; the repayment only settles her account (src/booking/owner-outlays.ts)"
+        source: "MWSTG Art. 18 Abs. 2 lit. e; issue #402"
       - id: cls-direct-tax
         status: proposed
         when: a payment of direct taxes (Staats- und Gemeindesteuern, direkte Bundessteuer)

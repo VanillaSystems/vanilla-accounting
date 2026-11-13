@@ -36,7 +36,7 @@ export interface BookingLine { accountDebit: string; accountCredit: string; amou
  * account, the app's proposal for a sale without an invoice (saleProposal), a supplier's refund.
  */
 export interface DraftSource {
-  account?: { from: 'rule'; rule: string } | { from: 'precedent'; date: string; yours?: true; name?: string } | { from: 'refund'; date: string } | { from: 'sales' | 'owner' | 'business' | 'bankFee' | 'wage' } | { from: 'invoice' | 'receivable'; number: string };
+  account?: { from: 'rule'; rule: string } | { from: 'precedent'; date: string; yours?: true; name?: string } | { from: 'refund'; date: string } | { from: 'sales' | 'owner' | 'business' | 'bankFee' | 'wage' | 'ownerOutlays' } | { from: 'invoice' | 'receivable'; number: string };
   /** `abroad`: the firm's own invoice says its service is supplied abroad (invoicing placeAbroad). `noReceipt`: the last booking's code claimed input tax, which a payment without a receipt does not (#397). */
   vat?: { from: 'rule' | 'precedent' | 'receipt' | 'invoice' | 'netRate' | 'refund' | 'abroad' | 'noReceipt' } | { from: 'sale'; choice: SaleChoice };
 }
@@ -66,7 +66,9 @@ export type PaymentNature =
   /** A wage on a firm that pays wages (src/booking/receipt-wait.ts `wage`): the firm's wage account (setup.yaml `wages`), booked without a VAT code (guide cls-salary). */
   | { kind: 'wage'; account: string }
   /** A wage on a firm whose books carry wages with their deductions (on `deductions`): no account is proposed. */
-  | { kind: 'wage'; deductions: string };
+  | { kind: 'wage'; deductions: string }
+  /** Money out to the owner that pays back her outlays, which her account holds not paid back (`open`, src/booking/owner-outlays.ts, #402): her account, without a code. */
+  | { kind: 'ownerOutlays'; account: string; open: number };
 
 /** What code knows beside the books when the form opens. */
 export interface DraftKnowledge {
@@ -92,6 +94,8 @@ export interface DraftKnowledge {
   ranks?(words: readonly string[]): boolean;
   /** A receipt that may be this payment's but is not linked (src/intake/near-pairs.ts, #397): its name, the rate it shows, what differs. */
   near?: { name: string; rate?: number; why: string };
+  /** The payments out whose text is a wage (HandStart.wages): an earlier payment is a precedent only when it is of this payment's kind (#402). */
+  wages?: readonly string[];
 }
 
 /**
@@ -104,6 +108,7 @@ export type DraftNote =
   | { kind: 'sale' }
   | { kind: 'refund' }
   | { kind: 'owner' }
+  | { kind: 'ownerOutlays'; open: number }
   | { kind: 'invoicePaid'; number: string; surplus: number }
   | { kind: 'prepayment'; number: string }
   | { kind: 'unloaded' }
@@ -206,14 +211,16 @@ const decided = (e: JournalEntry): boolean => e.origin === 'manual' || !!e.rule 
  * account is not a bank (`only`: of that class), with that entry. Its account on the side opposite
  * the bank is the precedent.
  */
-function newestOf(books: Books, tx: BankTransaction, side: 'accountDebit' | 'accountCredit', bankAccounts: Set<string>, only?: string) {
+function newestOf(books: Books, tx: BankTransaction, side: 'accountDebit' | 'accountCredit', bankAccounts: Set<string>, only?: string, wages?: ReadonlySet<string>) {
   const mine = vendorKeys(books, tx);
   if (!mine.size) return undefined;
   const other = side === 'accountDebit' ? 'accountCredit' : 'accountDebit';
   const byRef = new Map(books.transactions.map((t) => [t.ref, t]));
   const same = new Map<string, boolean>();
+  // Of one kind (#402): a wage's precedent is a wage, any other payment's is no wage, so a salary's account never comes onto an outlay paid back to the same person.
+  const wage = !!wages?.has(tx.ref);
   const isSame = (ref: string) => {
-    if (!same.has(ref)) { const t = byRef.get(ref); same.set(ref, !!t && [...vendorKeys(books, t)].some((k) => mine.has(k))); }
+    if (!same.has(ref)) { const t = byRef.get(ref); same.set(ref, !!t && !!wages?.has(ref) === wage && [...vendorKeys(books, t)].some((k) => mine.has(k))); }
     return same.get(ref)!;
   };
   // The newest payment's legs: an expense or revenue leg before an asset one (a ladder beside the paint, r6h-27), the larger first.
@@ -490,7 +497,12 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   }
 
   // Money for a cancelled invoice is the customer's, not a sale: the earlier sale's account and code would mislead.
-  const precedent = proposes ? newestOf(books, tx, bank!.side, bankAccounts) : undefined;
+  // Her outlays paid back: her account, before any precedent of the payee (#402): the books say what it pays.
+  if (proposes && !moneyIn && nature?.kind === 'ownerOutlays') {
+    notes.push({ kind: 'ownerOutlays', open: nature.open });
+    return result([place(nature.account, paid, '', { account: { from: 'ownerOutlays' } })]);
+  }
+  const precedent = proposes ? newestOf(books, tx, bank!.side, bankAccounts, undefined, known.wages ? new Set(known.wages) : undefined) : undefined;
   const extra = precedent ? { precedent: precedent.entry } : {};
   // A wage on a firm that pays wages, without a booking of hers to follow: the net paid on the wage account, without a VAT code (guide
   // cls-salary); where the books carry wages with their deductions, no account, and the form says how wages are booked here.

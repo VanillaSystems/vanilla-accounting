@@ -227,6 +227,8 @@ interface TxInput {
   sharedWith?: Array<{ ref: string; amount: number; currency: string }>;
   /** The business the payment routes to and the decisions of its file for the booking steps (src/knowledge/guidance.ts). */
   business?: { name: string; guidance: Guidance[] };
+  /** It pays the owner back her outlays (src/booking/owner-outlays.ts, #402): her account and what it holds not paid back. */
+  ownerOutlays?: { account: string; open: number };
 }
 
 const CLASSIFY_INSTRUCTIONS = `## Instructions
@@ -408,6 +410,12 @@ function businessPartLine(tx: TxInput, receipt: ReceiptInput | undefined): strin
   return `Business part: only ${tx.amount} ${tx.currency}${of} was for the business${what}; the owner paid the rest privately and it is not booked. Book exactly this amount, in one entry, with the VAT facts the receipt shows for that part.`;
 }
 
+/** What the model is told of a payment that pays the owner back her outlays (booking.guide.yaml cls-owner-outlays-repaid, #402). */
+function ownerOutlaysLine(tx: TxInput): string {
+  const o = tx.ownerOutlays!;
+  return `Owner's outlays paid back: this payment goes to the owner, who paid business costs privately. Her account ${o.account} holds ${o.open} ${tx.currency} of outlays not paid back yet; their expenses and their VAT are booked on their own entries. Book this payment on ${o.account} with "vat": "none", one entry: never on an expense or a wage account, which would book the outlays a second time (booking.guide.yaml cls-owner-outlays-repaid).`;
+}
+
 /** What the model is told of a leg of a card charge split across balances: the receipt also pays the other legs, so this one books only its share and its share of the VAT. */
 function sharedLine(tx: TxInput): string {
   const others = tx.sharedWith!.map((o) => `${o.ref} (${Math.abs(o.amount)} ${o.currency})`).join(', ');
@@ -454,7 +462,7 @@ export function buildBatchClassifyPrompt(
     }
     return `### Transaction ${i + 1}: ${tx.ref}
   Date: ${tx.date} | Amount: ${tx.amount} ${tx.currency} | Direction: ${tx.direction} | Bank: ${tx.bank}
-  Bank description: ${tx.description}${tx.counterparty ? `\n  Counterparty: ${tx.counterparty}` : ''}${tx.separateFee ? `\n  Fee: ${tx.separateFee.amount} ${tx.separateFee.currency}, debited separately as ${tx.separateFee.ref} and booked there. The amount above is without it: book no fee line here.` : ''}${tx.businessPart ? `\n  ${businessPartLine(tx, receipts[0])}` : ''}${tx.sharedWith?.length ? `\n  ${sharedLine(tx)}` : ''}${tx.business?.guidance.length ? `\n  Decisions of ${tx.business.name}'s file (they decide like the company's decisions below):\n${tx.business.guidance.map((g) => `    ${formatGuidance(g)}`).join('\n')}` : ''}
+  Bank description: ${tx.description}${tx.counterparty ? `\n  Counterparty: ${tx.counterparty}` : ''}${tx.separateFee ? `\n  Fee: ${tx.separateFee.amount} ${tx.separateFee.currency}, debited separately as ${tx.separateFee.ref} and booked there. The amount above is without it: book no fee line here.` : ''}${tx.businessPart ? `\n  ${businessPartLine(tx, receipts[0])}` : ''}${tx.sharedWith?.length ? `\n  ${sharedLine(tx)}` : ''}${tx.ownerOutlays ? `\n  ${ownerOutlaysLine(tx)}` : ''}${tx.business?.guidance.length ? `\n  Decisions of ${tx.business.name}'s file (they decide like the company's decisions below):\n${tx.business.guidance.map((g) => `    ${formatGuidance(g)}`).join('\n')}` : ''}
 ${receiptPart}`;
   }).join('\n\n');
 

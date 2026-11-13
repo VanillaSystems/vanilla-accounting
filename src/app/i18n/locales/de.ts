@@ -5524,6 +5524,8 @@ export const messages = {
   'journal.byHand.note.saleZeroPart': "Ein Teil der Rechnung ist ohne Schweizer MWST, ohne dass sie einen Leistungsort im Ausland nennt: seinen Code selbst wählen.",
   'journal.byHand.note.ownInvoiceSurplus': "Rechnung {number} ist damit bezahlt: {amount} sind mehr, vielleicht doppelt bezahlt. Zurückzahlen, oder bis dahin als Verbindlichkeit gegenüber dem Kunden buchen.",
   'journal.byHand.note.wageDeductions': "Löhne sind hier mit ihren Abzügen gebucht (Konto {account}): darum kein Konto vorgeschlagen. Wie die Lohnabrechnung buchen.",
+  'journal.byHand.from.ownerOutlays': "zahlt dem Inhaber seine Auslagen zurück: sein Konto, ohne MWST",
+  'journal.byHand.note.ownerOutlays': "Auf dem Konto des Inhabers stehen {amount} Auslagen, die die Firma ihm noch nicht zurückgezahlt hat. Diese Zahlung zahlt sie zurück: Aufwand und MWST sind mit den Auslagen schon gebucht.",
   'journal.byHand.ownInvoice.invoice': "Deine Rechnung {number} gefunden ({file}): die Zahlung nennt ihre Nummer. Vorgeschlagen ist, was die Rechnung zeigt; «Verknüpfen und buchen» verknüpft sie mit der Zahlung.",
   'journal.byHand.ownInvoice.other': "Die Zahlung nennt deine Rechnung {number} ({file}). Der Vorschlag kommt nicht aus ihr; «Verknüpfen und buchen» verknüpft sie mit der Zahlung.",
   'journal.byHand.ownInvoice.taxPoint': "Die Zahlung nennt deine Rechnung {number} ({file}). Sie gehört in eine andere Abrechnungsperiode: hier nur verknüpfen.",

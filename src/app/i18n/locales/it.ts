@@ -5527,6 +5527,8 @@ export default {
     'journal.byHand.note.saleZeroPart': "Una parte della fattura è senza IVA svizzera, senza che indichi un luogo della prestazione all’estero: scegliere il suo codice da sé.",
     'journal.byHand.note.ownInvoiceSurplus': "La fattura {number} è così pagata: {amount} in più, forse pagato due volte. Restituire, o fino ad allora registrare come debito verso il cliente.",
     'journal.byHand.note.wageDeductions': "Qui i salari sono registrati con le loro trattenute (conto {account}): perciò nessun conto proposto. Registrare come dice il conteggio salariale.",
+    'journal.byHand.from.ownerOutlays': "rimborsa al titolare le sue spese anticipate: il suo conto, senza IVA",
+    'journal.byHand.note.ownerOutlays': "Sul conto del titolare ci sono {amount} di spese anticipate che la ditta non gli ha ancora rimborsato. Questo pagamento le rimborsa: costo e IVA sono già registrati con le spese.",
     'journal.byHand.ownInvoice.invoice': "Trovata la tua fattura {number} ({file}): il pagamento ne cita il numero. La proposta è ciò che mostra la fattura; «Collega e registra» la collega al pagamento.",
     'journal.byHand.ownInvoice.other': "Il pagamento cita la tua fattura {number} ({file}). La proposta non viene da essa; «Collega e registra» la collega al pagamento.",
     'journal.byHand.ownInvoice.taxPoint': "Il pagamento cita la tua fattura {number} ({file}). Appartiene a un altro periodo di rendiconto: qui solo collegarla.",

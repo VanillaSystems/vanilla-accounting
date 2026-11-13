@@ -5527,6 +5527,8 @@ export default {
     'journal.byHand.note.saleZeroPart': "Part of the invoice is without Swiss VAT, and it names no place of supply abroad: choose that line's code yourself.",
     'journal.byHand.note.ownInvoiceSurplus': "Invoice {number} is paid with this: {amount} is more, perhaps paid twice. Pay it back, or until then book it as owed to the customer.",
     'journal.byHand.note.wageDeductions': "Wages are booked here with their deductions (account {account}): so no account is proposed. Book as the payslip says.",
+    'journal.byHand.from.ownerOutlays': "pays the owner back his outlays: his account, without VAT",
+    'journal.byHand.note.ownerOutlays': "The owner's account holds {amount} of outlays the company has not paid him back yet. This payment pays them back: their expense and VAT are booked with the outlays already.",
     'journal.byHand.ownInvoice.invoice': "Found your invoice {number} ({file}): the payment names its number. The proposal is what the invoice shows; «Link and book» links it to the payment.",
     'journal.byHand.ownInvoice.other': "The payment names your invoice {number} ({file}). The proposal does not come from it; «Link and book» links it to the payment.",
     'journal.byHand.ownInvoice.taxPoint': "The payment names your invoice {number} ({file}). It belongs to another reporting period: only link it here.",

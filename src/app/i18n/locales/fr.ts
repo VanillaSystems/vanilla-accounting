@@ -5527,6 +5527,8 @@ export default {
     'journal.byHand.note.saleZeroPart': "Une partie de la facture est sans TVA suisse, sans qu’elle indique un lieu de la prestation à l’étranger : choisir son code vous-même.",
     'journal.byHand.note.ownInvoiceSurplus': "La facture {number} est ainsi payée : {amount} de plus, peut-être payé deux fois. Rembourser, ou d’ici là comptabiliser comme dette envers le client.",
     'journal.byHand.note.wageDeductions': "Les salaires sont comptabilisés ici avec leurs retenues (compte {account}) : pas de compte proposé. Comptabiliser selon le décompte de salaire.",
+    'journal.byHand.from.ownerOutlays': "rembourse au titulaire ses débours : son compte, sans TVA",
+    'journal.byHand.note.ownerOutlays': "Le compte du titulaire porte {amount} de débours que l’entreprise ne lui a pas encore remboursés. Ce paiement les rembourse : la charge et la TVA sont déjà comptabilisées avec les débours.",
     'journal.byHand.ownInvoice.invoice': "Votre facture {number} trouvée ({file}) : le paiement cite son numéro. La proposition reprend ce que montre la facture ; « Lier et comptabiliser » la lie au paiement.",
     'journal.byHand.ownInvoice.other': "Le paiement cite votre facture {number} ({file}). La proposition ne vient pas d’elle ; « Lier et comptabiliser » la lie au paiement.",
     'journal.byHand.ownInvoice.taxPoint': "Le paiement cite votre facture {number} ({file}). Elle appartient à une autre période de décompte : seulement la lier ici.",

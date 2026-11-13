@@ -32,6 +32,9 @@ import { EFFECTIVE_QUARTERLY, type VatSetup } from '../workspace/vat-setup.js';
 import { foreignTaxIn, saleCodeOf, saleCodeReason } from '../accounting/sales-without-vat.js';
 import { codeOfFacts, formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { takesNoCode } from './rule-vat.js';
+import { receiptWordings, repaysOwner } from './receipt-wait.js';
+import { outlaysOpen } from './owner-outlays.js';
+import { employs } from '../workspace/setup.js';
 import { bookVatCorrections, type CorrectionsDone } from './vat-corrections.js';
 import { creditNoteCodeOf } from '../accounting/credit-note-code.js';
 import { acquisitionCodeOf, acquisitionReason, readSupplier, type AcquisitionDocument } from '../accounting/acquisition-tax.js';
@@ -205,6 +208,8 @@ export interface ClassifyContext extends ClassifyPromptContext {
   wageAccount?: string;
   /** The account a wage's deductions are booked on (setup.yaml `wages.deductions`): books that carry entries on it book wages with their deductions. */
   wageDeductions?: string;
+  /** The wordings of a wage on a firm that pays wages (evidence.guide.yaml, receipt-wait.ts receiptWordings): a payment to the owner so worded repays no outlays (#402). */
+  wageWordings?: ReadonlyArray<{ test(s: string): boolean }>;
 }
 
 /** At most this many casebook examples in one call: the best of each transaction first. */
@@ -305,6 +310,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     ...(agreedBasis() ? { invoices: loadInvoices(ws) } : {}),
     companyUid: ws.company.uid,
     ...bankFeeContext(ws, chartOfAccounts),
+    wageWordings: employs(ws.profile) ? receiptWordings(knowledge, 'employer') : [],
   };
 }
 
@@ -944,7 +950,13 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     const fail = (tx: BankTransaction, reason: string) => { if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, reason }); };
     try {
       const examples = casebook.length ? casesForBatch(books, batch, casebook) : [];
-      const prompt = buildBatchClassifyPrompt(batch.map((tx) => { const input = classifyInput(booksOf(tx), tx, legsOf(tx), context.counterparties); return { ...input, tx: { ...input.tx, ref: keyOf(tx) } }; }), context, examples);
+      const prompt = buildBatchClassifyPrompt(batch.map((tx) => {
+        const input = classifyInput(booksOf(tx), tx, legsOf(tx), context.counterparties);
+        // A payment that pays the owner back her outlays (#402): the model is told what her account holds, so it books there, never an expense again.
+        const owed = context.ownerAccount && repaysOwner(books, tx, context, context.wageWordings ?? [])
+          ? { account: context.ownerAccount, open: outlaysOpen(books, context.ownerAccount, context.moneyAccounts ?? new Set(), tx.date, tx.ref) } : undefined;
+        return { ...input, tx: { ...input.tx, ref: keyOf(tx), ...(owed && { ownerOutlays: owed }) } };
+      }), context, examples);
       let model: string | undefined;
       const raw = await ask(prompt, { step: 'classify', timeoutMs: CALL_TIMEOUT_MS, answered: (by) => { model = by.model; } });
       model ??= (await resolveStep('classify')).model;

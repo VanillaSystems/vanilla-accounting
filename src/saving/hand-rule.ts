@@ -11,7 +11,8 @@ import { parseDocument, YAMLMap, YAMLSeq } from 'yaml';
 import { loadBooks } from '../books/store.js';
 import { loadClassifyContext, mappedReceipts, paymentFacts, ruleBookingLines, ruleOfPayment, type RuleLine } from '../booking/classify.js';
 import { stableWords } from '../knowledge/gaps.js';
-import { paysOwner, receiptKnowledge } from '../booking/receipt-wait.js';
+import { paysOwner, receiptKnowledge, repaysOwner } from '../booking/receipt-wait.js';
+import { outlaysOpen } from '../booking/owner-outlays.js';
 import { payoutWaitOf } from '../booking/providers.js';
 import { isOwnBankFee } from '../booking/bank-fee.js';
 import type { Counterparty } from '../knowledge/counterparties.js';
@@ -69,6 +70,8 @@ export interface HandStart {
   nature?: PaymentNature;
   /** The one account the business's file allows: the hand form proposes it. */
   account?: string;
+  /** The payments out whose text is a wage (evidence.guide.yaml, on a firm that pays wages): a precedent counts only between payments of one kind (#402). */
+  wages?: string[];
 }
 
 const GUIDE = `${RULES_DIR}/booking.guide.yaml`;
@@ -180,9 +183,12 @@ export function handStart(ws: Workspace, ref: string, by?: 'text'): HandStart | 
     id: placed.rule.id, lines: ruleBookingLines(tx, booking, mappedReceipts(books, tx), context.ownerAccount),
     ...(then?.kind === 'ask' && { ask: then.question }), ...(booking.tags && { tags: booking.tags }),
   } : undefined;
-  const nature = natureOf(books, tx, context, file, () => receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws).wages);
+  let wordings: ReadonlyArray<{ test(s: string): boolean }> | undefined;
+  const wagesSaid = () => (wordings ??= receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws).wages);
+  const nature = natureOf(books, tx, context, file, wagesSaid);
   const account = file?.accounts?.length === 1 ? file.accounts[0] : undefined;
-  return { match, direction, name, similar, ...(wider && { wider }), ...(rule && { rule }), ...(nature && { nature }), ...(account && { account }) };
+  const wages = wagesSaid().length ? books.transactions.filter((t) => t.direction !== 'CRDT' && wagesSaid().some((w) => w.test(t.description))).map((t) => t.ref) : [];
+  return { match, direction, name, similar, ...(wider && { wider }), ...(rule && { rule }), ...(nature && { nature }), ...(account && { account }), ...(wages.length && { wages }) };
 }
 
 /**
@@ -222,6 +228,8 @@ function natureOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, cont
   if (tx.counterpartyIban && own.has(ibanOf(tx.counterpartyIban))) return { kind: 'ownTransfer' };
   // A wage on a firm that pays wages (its wording, matched on the text only as receipt-wait.ts does): the wage account, without a code (#382).
   if (tx.direction !== 'CRDT') {
+    // Her outlays paid back (#402): her name as the payee, no wage, and her account holds at least as much not paid back.
+    if (context.ownerAccount && repaysOwner(books, tx, context, wages())) return { kind: 'ownerOutlays', account: context.ownerAccount, open: outlaysOpen(books, context.ownerAccount, context.moneyAccounts ?? new Set(), tx.date, tx.ref) };
     if (!context.wageAccount || !wages().some((w) => w.test(tx.description))) return undefined;
     // Books that carry wages with their deductions (cls-salary): the payslip's lines are hers, no account is proposed.
     const deductions = context.wageDeductions;
