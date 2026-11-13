@@ -22,15 +22,16 @@ export type Line =
   | { kind: 'copy'; file: string; of: string; receipt?: Index['receipts'][number] };
 
 /**
- * The account has no opening for `year` and its statements begin after 1 January (`from`): what it
- * held on 1.1. no statement says, so it is named as missing and taken by hand in Firma › Eröffnung
- * (`canType`: unless the year is closed), never offered from a later balance (#487).
+ * The account has no opening for `year` and its statements begin after 1 January (`from`, the first
+ * day a statement covers, never the first payment's, #459): what it held on 1.1. no statement says.
+ * Both facts are named with both ways out, earlier statements or Firma › Eröffnung (`canType`:
+ * unless the year is closed), and nothing is offered from the later balance (#487).
  */
 export type StartMissing = { year: string; from: string; canType: boolean };
 
 function startMissingOf(a: Extract<Arrival, { kind: 'statement' }>, books: Index, year: string): StartMissing | undefined {
   const [m] = missingOpenings(books, [{ bank: a.bank, currency: a.currency, account: a.account, label: '' }], year);
-  const from = m && (m.statementsFrom ?? a.from ?? m.from);
+  const from = m && (m.statementsFrom ?? a.from);
   return m && from && from > `${year}-01-01` ? { year, from, canType: m.canType } : undefined;
 }
 

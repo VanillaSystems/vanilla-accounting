@@ -88,14 +88,77 @@ test('a first statement that starts on 1.1. offers its opening balance; taken, t
   assert.ok(lineOf(arrival).opening, 'offered again');
 });
 
-test('only a balance of the first day opens the books: 31.12. of the year before or an opening of 1.1., never one from inside the year', () => {
-  const s = (date: string) => ({ account: '1021', bank: 'x', currency: 'CHF', opening: { date, amount: 100 } });
-  const fresh = { config: books().config, journalEntries: [] };
-  assert.equal(openingOffer(fresh, s('2026-06-30')), undefined);
-  assert.equal(openingOffer(fresh, s('2026-03-31')), undefined);
+test('only the close of a day before 1.1., or of 1.1. itself, opens the books, and only with no movement before 1.1.', () => {
+  const s = (date: string, to = '2026-01-31') => ({ account: '1021', bank: 'x', currency: 'CHF', to, opening: { date, amount: 100 } });
+  const moved = (date: string) => [{ bank: 'x', currency: 'CHF', date }] as Index['transactions'];
+  const fresh = { config: books().config, transactions: [] as Index['transactions'], journalEntries: [] };
+  assert.equal(openingOffer(fresh, s('2026-06-30', '2026-09-30')), undefined, 'the balance before a Q3 statement');
   assert.equal(openingOffer(fresh, s('2026-01-02')), undefined);
+  assert.equal(openingOffer(fresh, s('2025-11-30', '2025-12-31')), undefined, 'a December statement opens no year of these books');
   assert.equal(openingOffer(fresh, s('2025-12-31'))?.year, '2026');
-  assert.equal(openingOffer(fresh, s('2026-01-01'))?.year, '2026');
+  assert.equal(openingOffer(fresh, s('2026-01-01'))?.year, '2026', 'an OPBD of 1.1. with nothing booked that day');
+  assert.equal(openingOffer(fresh, s('2025-12-23'))?.year, '2026', 'the bank dates the opening on the last day it booked before a first statement of 5.1.');
+  assert.equal(openingOffer({ ...fresh, transactions: moved('2025-12-31') }, s('2025-12-30')), undefined, 'the account moved on 31.12.: the close of 30.12. is not the balance of 1.1.');
+  assert.equal(openingOffer({ ...fresh, transactions: moved('2025-12-28') }, s('2025-12-31')), undefined, 'a movement before 1.1. in these books');
+  assert.equal(openingOffer(fresh, { ...s('2025-12-31'), currency: 'EUR' }), undefined, 'a foreign account needs its value in CHF too');
+});
+
+/** Bare books of one account, enough for the runs table. */
+const bare = (account: string, bank: string, currency: string, closing: { date: string; amount: number }, from: string | undefined, config: Partial<Index['config']> = {}): Index => ({
+  receipts: [], transactions: [], mappings: [], journalEntries: [], config,
+  statementBalances: [{ account, bank, currency, date: closing.date, amount: closing.amount, source: 'camt', sourceFile: 's.xml' }],
+  bankStatements: from ? [{ bank, currency, fromDate: from, toDate: closing.date, filename: 's.xml' }] : [],
+} as unknown as Index);
+const runOf = (a: Arrival, b: Index) => {
+  const [line] = linesOf({ arrived: [a], digest: { files: [] } } as unknown as RunSummary, b, true);
+  assert.equal(line.kind, 'statement');
+  return line as Extract<typeof line, { kind: 'statement' }>;
+};
+
+test('a year closed through 31.12.: the line names where the statements begin, without the way into Eröffnung', () => {
+  const closing = { date: '2026-09-30', amount: 500 };
+  const a: Arrival = { kind: 'statement', file: 's.xml', account: '1021', bank: 'Raiffeisen', currency: 'CHF', added: 0, from: '2026-07-01', to: '2026-09-30', closing, opening: { date: '2026-06-30', amount: 500 } };
+  const line = runOf(a, bare('1021', 'Raiffeisen', 'CHF', closing, '2026-07-01', { closedThrough: '2026-12-31' }));
+  assert.equal(line.opening, undefined);
+  assert.deepEqual(line.startMissing, { year: '2026', from: '2026-07-01', canType: false });
+});
+
+test('a foreign-currency account: its opening is never offered from a statement, its missing start is named all the same', () => {
+  const closing = { date: '2026-09-30', amount: 1200 };
+  const q3: Arrival = { kind: 'statement', file: 'w.xml', account: '1022', bank: 'Wise', currency: 'EUR', added: 0, from: '2026-07-01', to: '2026-09-30', closing, opening: { date: '2026-06-30', amount: 1200 } };
+  const line = runOf(q3, bare('1022', 'Wise', 'EUR', closing, '2026-07-01'));
+  assert.equal(line.opening, undefined);
+  assert.deepEqual(line.startMissing, { year: '2026', from: '2026-07-01', canType: true });
+
+  const janClosing = { date: '2026-01-31', amount: 1200 };
+  const january: Arrival = { ...q3, from: '2026-01-01', to: '2026-01-31', closing: janClosing, opening: { date: '2025-12-31', amount: 1200 } };
+  const jan = runOf(january, bare('1022', 'Wise', 'EUR', janClosing, '2026-01-01'));
+  assert.equal(jan.opening, undefined, 'a foreign opening needs its value in CHF: Firma › Eröffnung takes it');
+  assert.equal(jan.startMissing, undefined, 'its statements begin on 1.1.');
+});
+
+test('no statement names its first day: no line, for the first payment\'s day is no statement\'s first day (#459)', () => {
+  const closing = { date: '2026-09-30', amount: 500 };
+  const a: Arrival = { kind: 'statement', file: 's.pdf', account: '1021', bank: 'Raiffeisen', currency: 'CHF', added: 0, to: '2026-09-30', closing };
+  const line = runOf(a, bare('1021', 'Raiffeisen', 'CHF', closing, undefined));
+  assert.deepEqual(line.balance, { kind: 'differs', date: '2026-09-30', diff: -500 });
+  assert.equal(line.startMissing, undefined);
+});
+
+test('the import dates an OPBD the bank booked on as the close of the day before: a 31.12. opening with fees of 31.12. is not offered', async () => {
+  const other = await startApi('tests/fixtures/fresh-books-index.json');
+  try {
+    const fee = '<Ntry><Amt Ccy="CHF">5.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2025-12-31</Dt></BookgDt><AcctSvcrRef>REF-FEE</AcctSvcrRef><AddtlNtryInf>Gebuehr</AddtlNtryInf></Ntry>';
+    const res = await other.fetch('/api/statements?name=dec.xml', { method: 'POST', body: camt('DEC', '2025-12-31', 900, '2026-01-31', 895, fee) });
+    const done = await res.json() as StatementImport;
+    assert.equal(res.status, 200, JSON.stringify(done));
+    assert.deepEqual(done.opening, { date: '2025-12-30', amount: 900 }, 'the close of 30.12.');
+    const { month: _month, ...rest } = done;
+    const [line] = linesOf({ arrived: [{ kind: 'statement', ...rest }], digest: { files: [] } } as unknown as RunSummary, loadBooks(workspaceAt(other.ws.paths.root)), true);
+    assert.equal(line.kind === 'statement' && line.opening, undefined, 'the fee of 31.12. lies between that balance and 1.1.');
+  } finally {
+    other.stop();
+  }
 });
 
 test('refused: an opening balance for an account that is no bank account in the base currency', async () => {

@@ -46,6 +46,7 @@ import { RequestError, WS, assertOpen, patchBody, readBooks, reopenWorkspace, up
 import { patchManifest } from '../../workspace/manifest-write.js';
 import { askAbout, closeAsk, correctAsk, importAsk } from '../statement-asks.js';
 import { openingLock, withNativeOpening, withOpening } from '../../accounting/opening-balance.js';
+import { addDays } from '../../accounting/periods.js';
 import { foreignAccounts, yearEndAccounts } from '../../accounting/year-close.js';
 import { chartOf, differenceAccountOf } from '../../books/year-close.js';
 import { baseCurrency, chart } from '../../engines/index.js';
@@ -179,7 +180,8 @@ function placeCamt(body: Buffer, filename: string, hint?: LedgerBankAccount): Pl
     transactions.push(...mine);
     dates.push(...mine.map((t) => t.date), ...balances.map((b) => b.date));
     closings.push(...balances.filter((b) => b.type === 'CLBD').map((b) => ({ date: b.date, amount: b.amount })));
-    openings.push(...balances.filter((b) => b.type === 'OPBD' && b.currency === found.currency).map((b) => ({ date: b.date, amount: b.amount })));
+    // An OPBD is the balance at the start of its date: the close of the day before when the bank booked on it (statementSpan's rule, #487).
+    openings.push(...balances.filter((b) => b.type === 'OPBD' && b.currency === found.currency).map((b) => ({ date: mine.some((t) => t.date === b.date) ? addDays(b.date, -1) : b.date, amount: b.amount })));
   }
   // A kind whose payments take their ref from the bank alone: a payment the bank names no reference for could not be told again on the next read (#401).
   const unreferenced = account?.statements && REFS_FROM_BANK.includes(account.statements) ? transactions.filter((t) => !t.ref.trim()).length : 0;

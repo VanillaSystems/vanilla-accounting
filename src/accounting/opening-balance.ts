@@ -21,37 +21,39 @@ export interface OpeningOffer {
   amount: number;
 }
 
-/** What an imported statement says about its account: its first day and the bank's balance before it. */
+/**
+ * What an imported statement says about its account: its days and the bank's balance before them.
+ * `opening.date` is the day whose close the balance is (src/server/routes/statements.ts normalises
+ * a camt OPBD as statementSpan does: the day before when the bank booked on its date).
+ */
 export interface StatementStart {
   account: string;
   bank: string;
   currency: string;
   from?: string;
+  to?: string;
   opening?: { date: string; amount: number };
 }
 
 /**
- * The year whose first day a statement's opening balance (OPBD) is the balance of: one dated
- * 31 December the next year's, one dated 1 January that year's. The balance of any other day says
- * nothing about 1 January (#487).
- */
-function yearOpenedBy(date: string): string | undefined {
-  if (date.endsWith('-12-31')) return addDays(date, 1).slice(0, 4);
-  return date.endsWith('-01-01') ? date.slice(0, 4) : undefined;
-}
-
-/**
  * The statement's opening balance as the account's opening of the books, when it is the balance of
- * the books' first day and the books have none. The balance before a statement that starts later in
- * the year is never offered (#487): the books open on 1 January, and taking it would leave out what
- * the account moved before the statement on every balance sheet. Not for a year closed through its
- * last day, nor one an earlier year of these books opens (openingLock); not for a foreign account,
- * whose opening also needs its value in the base currency.
+ * the books' first day and the books have none. The year is the one the statement ends in; the
+ * balance is that year's opening when it is the close of a day before 1.1. (31.12., or the last day
+ * the bank booked, 23.12. before a first statement of 5.1.), or of 1.1. with nothing booked that day,
+ * and the account moved on no day before 1.1. in these books: a movement then, the statement's own
+ * included, lies between the balance and 1 January. The balance before a statement that starts
+ * later in the year is never offered (#487): the books open on 1 January, and taking it would leave
+ * out what the account moved before the statement on every balance sheet. Not for a year closed
+ * through its last day, nor one an earlier year of these books opens (openingLock); not for a
+ * foreign account, whose opening also needs its value in the base currency.
  */
-export function openingOffer(books: Pick<Index, 'config' | 'journalEntries'>, s: StatementStart): OpeningOffer | undefined {
+export function openingOffer(books: Pick<Index, 'config' | 'transactions' | 'journalEntries'>, s: StatementStart): OpeningOffer | undefined {
   const o = s.opening;
-  const year = o && yearOpenedBy(o.date);
+  const year = (s.to ?? s.from)?.slice(0, 4);
   if (!o || !year || s.currency !== baseCurrency() || toRappen(o.amount) === 0) return undefined;
+  const first = `${year}-01-01`;
+  if (o.date > first) return undefined;
+  if (books.transactions.some((t) => t.bank === s.bank && t.currency === s.currency && t.date < first)) return undefined;
   if (openingLock(books, year)) return undefined;
   const config = books.config;
   if (config?.openingBalances?.[year]?.[s.account] !== undefined || config?.openingBalancesNative?.[year]?.[s.account]) return undefined;

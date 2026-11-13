@@ -427,9 +427,13 @@ Two markers flag an entry you must read before you update:
 - A run no longer offers «Als Eröffnungssaldo übernehmen» for a bank balance from inside the year
   (#487): the books open on 1 January, so a first statement of Q3 with the balance of 30.06. is no
   opening, and taking it would have left out the first half year on every balance sheet. The
-  offer stands only for a statement's opening balance of 31.12. of the year before or of 1.1.
-  When an account's statements begin later, the run says «Anfangsbestand per 1.1.2026 fehlt: die
-  Auszüge dieses Kontos beginnen erst am 01.07.2026.» and links to Firma › Eröffnung.
+  offer stands only for a statement's opening balance of a day before 1.1. (31.12., or the last
+  day the bank booked before a first statement of 5.1.) or of 1.1., when the account moved on no
+  day before 1.1. A camt opening balance dated on a day the bank booked is read as the close of the
+  day before, so a 31.12. balance with fees of 31.12. is not offered. When an account's statements
+  begin later, the run says so («Die Auszüge dieses Kontos beginnen am 01.07.2026. Den Saldo per
+  1.1.2026 zeigen frühere Auszüge oder die Schlussbilanz des Vorjahres in der Eröffnung:») with
+  both ways out, «Frühere Auszüge ablegen» and «Eröffnung erfassen».
 - A drop in which the AI's booking of one payment was refused (#482) no longer leaves stuck runs
   «Eingang verarbeiten: Lauf steckt» behind the task badge. The run finishes, and the payment says
   why it waits, as #470 meant. «Automatisch buchen» on such a payment goes on to «Von Hand
