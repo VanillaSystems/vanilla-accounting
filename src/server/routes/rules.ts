@@ -9,7 +9,8 @@
  *   POST /api/rules/share             { ref }: that rule drafted into its file; the answer names the file for its card
  *   GET  /api/rules/grouped?ref=      the batch payer a person's links of several receipts to a payment offer («Immer so?», #190), or null
  *   POST /api/rules/grouped           { ref }: `grouped: true` drafted into the business's company file; the answer names the file for its card
- *   GET  /api/rules/unread?ref=       a payment whose receipt could not be read: its business and the rate its receipts showed most often (issue #57), or null
+ *   GET  /api/rules/wages             the rule for the open wages, drafted by code (#383), or null
+ *   GET  /api/rules/unread?ref=     a payment whose receipt could not be read: its business and the rate its receipts showed most often (issue #57), or null
  *   POST /api/rules/unread            { ref, rate }: «Immer so?» — the company's rule for that business's unread receipts drafted into its file (waits in Änderungen)
  *   POST /api/rules/sale              { question }: «Immer so?» under an answer to a sale question: the payer rule drafted for its card, or the payer is mixed
  *   GET  /api/rules/correction?ref=   the rule change a person's correction of a rule booking teaches («Regel anpassen?»), or null
@@ -33,6 +34,7 @@ import { loadKnowledge } from '../../knowledge/layers.js';
 import { baseCurrency } from '../../engines/index.js';
 import { discardDraft, draftRules, keepDraft, ruleCommand, ruleFactsOf, setDraftVat, type DraftCommand, type DraftView, type KeptBookings, type RuleCommand, type RulesView } from '../../saving/rules.js';
 import { bookedState } from '../../accounting/payment-entries.js';
+import { wageOffer } from '../../saving/wage-rule.js';
 import { loadWorkflows } from '../../workflows/load.js';
 import { draftShareRule, shareOffer } from '../../saving/share-rule.js';
 import { draftGroupedFlag, groupedOffer } from '../../saving/grouped-flag.js';
@@ -174,6 +176,10 @@ async function bookKept(refs: string[]): Promise<KeptBookings> {
     notBooked: refs.filter((ref) => !booked.has(ref)),
   };
 }
+
+router.get('/api/rules/wages', (_req, res) => {
+  res.json({ offer: wageOffer(WS) ?? null });
+});
 
 router.get('/api/rules/unread', (req, res) => {
   res.json({ offer: unreadOffer(WS, loadBooks(WS), String(req.query.ref ?? '')) ?? null });

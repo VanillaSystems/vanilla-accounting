@@ -13,6 +13,7 @@ import { startApi, type ApiServer } from './support/api-server.js';
 import { APP_FOLDER, APP_ROOT } from '../src/workspace/workspace.js';
 import { loadBooks } from '../src/books/store.js';
 import type { DraftView, KeepResult } from '../src/saving/rules.js';
+import type { WageOffer } from '../src/saving/wage-rule.js';
 
 const servers: ApiServer[] = [];
 const dirs: string[] = [];
@@ -82,6 +83,28 @@ test('a wage rule asks no VAT, shows the four open wages it books, and keeping i
   const again = loadBooks(api.ws);
   assert.equal(again.journalEntries.filter((e) => WAGES.includes(e.transactionRef)).length, 4, 'booked once');
   assert.equal(again.journalEntries.length, before);
+});
+
+test('the open wages of a firm with staff: code offers their rule (text, money out, the wage account, no code); one decision on the card books them', async () => {
+  const api = await startApi('tests/fixtures/by-hand-index.json', {}, { manifestOf: employer() });
+  servers.push(api);
+  assert.equal((await api.send('GET', '/api/rules/wages')).json.offer, null, 'no wage account in the chart: nothing offered');
+  assert.equal((await api.send('PUT', '/api/accounts/5000', { name: 'Lohnaufwand' })).status, 200);
+  const offer = (await api.send('GET', '/api/rules/wages')).json.offer as unknown as WageOffer;
+  assert.deepEqual([offer.text, offer.account, [...offer.refs].sort(), offer.rule], ['Lohn', '5000', WAGES, { match: { kind: 'text', text: '\\bLohn\\b' }, direction: 'out', account: '5000', vat: null }], '«Lohnausweis Druck» is no wage');
+  const path = String((await api.send('POST', '/api/rules/hand', offer.rule)).json.path);
+  const card = (await api.send('GET', `/api/rules/draft?path=${encodeURIComponent(path)}`)).json as unknown as DraftView;
+  assert.deepEqual([card.vatAsks, card.confirm, [...card.preview[0].open!.book].sort()], [[], true, WAGES], 'a rule on one word: «Trotzdem behalten», with its payments shown');
+  const kept = (await api.send('POST', '/api/rules/draft', { kind: 'keep', path, basis: card.basis, confirm: true })).json as unknown as KeepResult;
+  assert.ok(kept.ok && kept.booked?.refs.length === 4, JSON.stringify(kept));
+  assert.equal((await api.send('GET', '/api/rules/wages')).json.offer, null, 'booked: nothing left to offer');
+});
+
+test('a firm without staff: no wage rule is offered', async () => {
+  const api = await startApi('tests/fixtures/by-hand-index.json');
+  servers.push(api);
+  assert.equal((await api.send('PUT', '/api/accounts/5000', { name: 'Lohnaufwand' })).status, 200);
+  assert.equal((await api.send('GET', '/api/rules/wages')).json.offer, null);
 });
 
 test('payments that wait for their receipt: the card says they wait, the keep books none of them', async () => {
