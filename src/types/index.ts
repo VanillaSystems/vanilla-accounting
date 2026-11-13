@@ -95,6 +95,25 @@ export interface Receipt {
   order?: OrderFacts;
   /** A payment provider's sales or fee report (a CSV), booked onto its clearing account when it was dropped (src/booking/sales-report.ts, #203). */
   report?: SalesReportFacts;
+  /**
+   * A credit card's statement: its lines, read by code once it is linked to its settlement in an open
+   * period (src/books/card-lines.ts, #409). A line's own bill is linked to the settlement with the
+   * line's index (Mapping.line). Absent: not read yet (books before schema 8 gain them on the next run).
+   */
+  cardLines?: CardLine[];
+}
+
+/**
+ * One line of a card statement (#409): the day, the merchant as the statement prints it, and what the
+ * line charged in the statement's currency (`currency`; absent: the settlement's). `original`: the
+ * merchant's own amount and currency, when the line names one («LINKLY ADS DUBLIN IE, USD 180.00»).
+ */
+export interface CardLine {
+  day: string;
+  merchant: string;
+  amount: number;
+  currency?: string;
+  original?: { amount: number; currency: string };
 }
 
 /**
@@ -162,6 +181,12 @@ export interface Mapping {
   rule?: string;
   /** The workflow run that made the link. */
   run?: string;
+  /**
+   * The receipt pays this line of the payment's card statement (Receipt.cardLines, by index), not the
+   * whole payment (#409): a hotel's bill behind one line of the card's settlement. The booking splits
+   * the payment by the lines, and only that line takes the receipt's VAT.
+   */
+  line?: number;
 }
 
 /**

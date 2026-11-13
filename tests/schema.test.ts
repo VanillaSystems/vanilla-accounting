@@ -70,7 +70,7 @@ test('climb refuses a gap in the ladder and a newer file', () => {
 });
 
 test('books schema 7 (#254): books of schema 6 load and verify their seals, npm run update writes 7 with a backup and no record changed; a statement\'s question and a reconciliation survive a save; an app of schema 6 refuses books of 7', async () => {
-  assert.equal(BOOKS_SCHEMA, 7);
+  assert.ok(BOOKS_SCHEMA >= 7);
   const dir = mkdtempSync(join(tmpdir(), 'schema-7-'));
   cpSync(DEMO_ROOT, dir, { recursive: true });
   const ws = workspaceAt(dir);
@@ -81,15 +81,15 @@ test('books schema 7 (#254): books of schema 6 load and verify their seals, npm 
   assert.ok(before.length > 0);
 
   const loaded = loadBooks(ws);
-  assert.equal(loaded.schema, 7);
+  assert.equal(loaded.schema, BOOKS_SCHEMA);
   const seals = sealsOf(loaded).checks;
   assert.ok(seals.length > 0 && seals.every((c) => c.status !== 'broken'), 'every seal still verifies');
 
   const { done } = await upgradeWorkspace(ws);
   const books = done.find((d) => d.file === ws.paths.ledger);
-  assert.deepEqual(books && { from: books.from, to: books.to }, { from: 6, to: 7 });
+  assert.deepEqual(books && { from: books.from, to: books.to }, { from: 6, to: BOOKS_SCHEMA });
   assert.equal(JSON.parse(readFileSync(books!.backup, 'utf8')).schema, 6);
-  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, 7);
+  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, BOOKS_SCHEMA);
   assert.deepEqual(records(), before, 'no record of the books changed');
 
   const again = loadBooks(ws);
@@ -106,6 +106,43 @@ test('books schema 7 (#254): books of schema 6 load and verify their seals, npm 
 
   const clone = (d: Record<string, unknown>) => structuredClone(d);
   assert.throws(() => climb<Record<string, unknown>>({}, 7, 6, BOOKS_MIGRATIONS, 'ledger.json', clone), (e: Error) => e instanceof SchemaTooNewError);
+});
+
+test('books schema 8 (#409): books of schema 7 load with their seals whole and no receipt given lines, npm run update writes 8 with a backup and no record changed; card lines and a line\'s link survive a save; an app of schema 7 refuses books of 8', async () => {
+  assert.equal(BOOKS_SCHEMA, 8);
+  const dir = mkdtempSync(join(tmpdir(), 'schema-8-'));
+  cpSync(DEMO_ROOT, dir, { recursive: true });
+  const ws = workspaceAt(dir);
+  const ledger = JSON.parse(readFileSync(ws.paths.ledger, 'utf8'));
+  writeFileSync(ws.paths.ledger, JSON.stringify({ ...ledger, schema: 7 }, null, 2) + '\n');
+  const before = booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]);
+
+  const loaded = loadBooks(ws);
+  assert.equal(loaded.schema, 8);
+  assert.ok(sealsOf(loaded).checks.every((c) => c.status !== 'broken'), 'every seal still verifies');
+  assert.ok(loaded.receipts.every((r) => !('cardLines' in r)) && loaded.mappings.every((m) => !('line' in m)), 'the step adds no field, not even an empty one');
+
+  const { done } = await upgradeWorkspace(ws);
+  const books = done.find((d) => d.file === ws.paths.ledger);
+  assert.deepEqual(books && { from: books.from, to: books.to }, { from: 7, to: 8 });
+  assert.equal(JSON.parse(readFileSync(books!.backup, 'utf8')).schema, 7);
+  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, 8);
+  assert.deepEqual(booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]), before, 'no record of the books changed');
+
+  const again = loadBooks(ws);
+  const open = again.transactions.find((t) => t.date > (again.config.closedThrough ?? '') && !again.mappings.some((m) => m.transactionRef === t.ref))!;
+  const card = { id: 'card-409', filename: 'card.pdf', originalFilename: 'card.pdf', extractedText: 'Kreditkartenabrechnung', extractionMethod: 'pdftotext' as const, fileSize: 1, indexedAt: open.date, location: 'archived' as const, date: open.date, cardLines: [{ day: open.date, merchant: 'HOTEL', amount: 164 }] };
+  const bill = { ...card, id: 'bill-409', filename: 'bill.pdf', originalFilename: 'bill.pdf', cardLines: undefined };
+  delete bill.cardLines;
+  again.receipts.push(card, bill);
+  again.mappings.push({ transactionRef: open.ref, receiptId: card.id }, { transactionRef: open.ref, receiptId: bill.id, by: 'human', line: 0 });
+  saveBooks(ws, again);
+  const after = loadBooks(ws);
+  assert.deepEqual(after.receipts.find((r) => r.id === card.id)?.cardLines, card.cardLines);
+  assert.deepEqual(after.mappings.find((m) => m.receiptId === bill.id), { transactionRef: open.ref, receiptId: bill.id, by: 'human', line: 0 });
+
+  const clone = (d: Record<string, unknown>) => structuredClone(d);
+  assert.throws(() => climb<Record<string, unknown>>({}, 8, 7, BOOKS_MIGRATIONS, 'ledger.json', clone), (e: Error) => e instanceof SchemaTooNewError);
 });
 
 function booksFiles(dir: string): string[] {

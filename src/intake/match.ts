@@ -39,6 +39,8 @@ import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { creditSigned } from '../accounting/credit-signed.js';
 import { excessOfPayment } from '../accounting/receipt-due.js';
 import { isBankFee } from '../booking/separate-fee.js';
+import { linkCardLines } from '../books/card-lines.js';
+import { unbookPayments } from '../accounting/classify-force.js';
 
 const MAPPING_THRESHOLD = 0.8;
 const CONCURRENCY = 10;
@@ -236,6 +238,15 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     if (combos.length) log(`${combos.length} payment(s) have more receipts of one vendor near them than code combines (at most ${MAX_TRIED}, the nearest; up to ${Math.max(...combos.map((c) => c.near))} there): a set among those is only proposed, never linked`);
     if (runs.length) log(`${runs.length} payment(s) of a batch payer have more open receipts than code tries in date order (at most ${MAX_RUN}, the oldest; up to ${Math.max(...runs.map((c) => c.near))} there): they are left to a person`);
     for (const l of books.update((index) => { const lock = periodLock(index); return linkSplitLegs(index, (d) => !lock.isClosed(d), toChf); })) log(`linked the receipts of a card charge split across balances to its other legs: ${l.receipts.join(', ')} → ${l.legs.join(', ')}`);
+    // A card statement's lines, and the one bill that fits a line (#409): the app's booking of its settlement that saw no such bill goes, the booking step books it again by its lines.
+    const cards = books.update((index) => {
+      const lock = periodLock(index);
+      const done = linkCardLines(index, (d) => !lock.isClosed(d));
+      if (done.linked.length) unbookPayments(index, done.linked.map((l) => l.payment), 'links');
+      return done;
+    });
+    if (cards.read.length) log(`read the lines of ${cards.read.length} card statement(s)`);
+    for (const l of cards.linked) log(`linked receipt ${l.receipt} to line ${l.line + 1} of the card statement of ${l.payment}`);
     return chain;
   };
   const chain = await byCode(early);
