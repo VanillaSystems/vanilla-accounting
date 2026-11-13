@@ -331,10 +331,14 @@ provider:
   no order), each by headers its first line has, all of them, and
   `exportedAt` says where each report is exported, in the admin's own menu
   words (`sales`, `fees`; only a path a file or runbook states and someone
-  checked: it is shown to a person as an instruction). Only for a firm whose
-  own knowledge has the provider (a company file of it), the drop names such a
+  checked: it is shown to a person as an instruction). The drop names such a
   file and the reports to bring, with their menu paths, and does not read it as
-  a bank statement; «trotzdem als Kontoauszug lesen» asks its columns (#406):
+  a bank statement; «trotzdem als Kontoauszug lesen» asks its columns (#406).
+  For a firm whose own knowledge has the provider (a company file of it), all
+  the headers named suffice (two at the least); for one that has it not yet (a
+  first drop), only a list of four or more, all in the file, so that no bank's
+  CSV is taken for it (#425, `OTHER_EXPORT_SIGNATURE` in
+  src/booking/sales-report.ts):
   ```yaml
   exportedAt:
     sales: "Shopify Admin › Bestellungen › Exportieren"
