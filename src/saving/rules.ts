@@ -307,9 +307,20 @@ export type KeepResult =
 /** One keep as its result line shows it (GET/POST /api/rules/kept): what it booked so far, what waits, and whether its undo may run now. */
 export interface KeptView {
   id: string; at: string; file: string; rules: string[]; booked: KeptBookings; waits: number;
-  /** Why «Rückgängig» is refused now: a later keep of the same file must be taken back first. */
+  /** The last day its undo is offered (YYYY-MM-DD). */
+  until: string;
+  /** Why «Rückgängig» waits: a later keep of the same file must be taken back first; `blockedBy` names those keeps. */
   blocked?: 'later';
+  blockedBy?: string[];
+  /** Why its undo is gone. */
+  ended?: KeptEnded;
 }
+
+/** Why a keep's undo no longer means what it says: its file changed otherwise, its days are over, a period holding one of its bookings is closed or approved, or another run booked by its rule since. */
+export type KeptEnded = 'file' | 'expired' | 'closed' | 'bookedSince';
+
+/** POST /api/rules/book-open: what «Automatisch buchen» for all came to, by why each payment is or is not booked. */
+export interface BookOpen { booked: number; running: number; notBooked: number; model: number; receipt: number; deleted: number; question: number; unread: number; reconcile: number; busy: number; later: number }
 
 export interface KeptBookings { runs: string[]; refs: string[]; entries: string[]; running: number; notBooked: string[]; later?: number; first?: { id: string; date: string } }
 

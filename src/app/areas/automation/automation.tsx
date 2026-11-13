@@ -54,10 +54,7 @@ import { periodName } from '../../lib/period-label.js';
 import { codeLabel } from '../codes/names.js';
 import { reconciliationOf } from '../../../books/reconcile.js';
 import { LastKept, WageRuleOffer } from '../company/RulesSection.js';
-import { startForEach } from '../../automation/marks.js';
-
-/** A run that holds its payment still: another start for it would only wait beside it. */
-const OPEN_RUN = new Set(['queued', 'running', 'waiting', 'parked', 'stuck']);
+import { bookOpenAndSay } from '../../automation/marks.js';
 
 type Props = AreaProps<RouteOf<'automation'>>;
 type R = RouteOf<'automation'>;
@@ -122,17 +119,14 @@ const forEachOpen = (tr: Trigger): tr is Extract<Trigger, { kind: 'manual' }> =>
 
 function List({ route, nav, books, canEdit }: Props) {
   const { view, error } = useAutomation();
-  const accounts = useWorkspace()?.bankAccounts ?? [];
   const [said, setSaid] = useState<{ workflow: string; text: string; busy?: boolean }>();
-  // «Automatisch buchen» in the list: every unbooked payment of the open period that no run holds yet, booked where code or the AI can; the line says what came of it.
+  // «Automatisch buchen» in the list: what a rule or code decides among all open payments, booked at once, no model asked; the line says what came of it and of the rest.
   async function startAll(w: WorkflowDecl) {
-    const held = new Set((view?.runs ?? []).filter((r) => OPEN_RUN.has(r.status)).map((r) => r.item.id));
-    const ids = unbookedPayments(books, accounts).map((p) => p.ref).filter((ref) => !held.has(ref));
     setSaid({ workflow: w.id, text: t('marks.started', { workflow: label(w) }), busy: true });
     try {
-      const text = (await startForEach(w.id, 'transaction', ids)) ?? '';
+      const text = await bookOpenAndSay(label(w));
       setSaid({ workflow: w.id, text });
-      if (text) nav.toast(text);
+      nav.toast(text);
     } catch (e) { setSaid({ workflow: w.id, text: errorText(e) }); }
     nav.refresh();
   }
@@ -789,7 +783,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
     <div className="detail-in wfpage">
       <div className="head"><h2 className="who">{t('automation.tasks')}</h2></div>
       {/* What the last rule kept booked, and the rule for the open wages that code drafts (#383). */}
-      <LastKept nav={nav} />
+      <LastKept nav={nav} canEdit={canEdit} />
       {canEdit ? <WageRuleOffer nav={nav} books={books} /> : null}
       <ThresholdTasks nav={nav} passed={threshold} />
       <ReceiptDueTasks items={receiptDue} nav={nav} canEdit={canEdit} books={books} />

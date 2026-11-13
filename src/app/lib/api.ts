@@ -53,7 +53,7 @@ import { ATTACHMENT_MAX_MB, type Attachment } from '../../types/attachment.js';
 import type { DropAction, DropSession, PayoutWaitView, QuarantinedFile, StatementDetails } from '../../types/drop.js';
 import type { MailCheck, ReceiptSkipOffer, SourcePreview, SourcesView } from '../../platform/sources/model.js';
 import type { MailHost } from '../../platform/sources/mail-host.js';
-import type { DraftCommand, DraftView, KeepResult, KeptView, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
+import type { DraftCommand, DraftView, BookOpen, KeepResult, KeptView, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
 import type { ShareOffer } from '../../saving/share-rule.js';
 import type { GroupedOffer } from '../../saving/grouped-flag.js';
 import type { ReceiptSet, SetCut } from '../../intake/receipt-sets.js';
@@ -505,12 +505,12 @@ export const api = {
   wageOffer: () => request<{ offer: WageOffer | null }>('GET', '/api/rules/wages'),
   /** The result line of each keep whose undo can still run, as the server recorded it (#396). */
   keptLines: () => request<{ kept: KeptView[] }>('GET', '/api/rules/kept'),
-  /** What one keep's booking runs made so far (#383). */
-  keptState: (keep: string) => request<KeptView>('POST', '/api/rules/kept', { keep }),
   /** Its result line closed. */
   closeKept: (keep: string) => request<{ ok: true }>('POST', '/api/rules/kept/close', { keep }),
   /** «Rückgängig» of one keep: the server puts its rules file back and takes out the bookings its runs made that are still theirs. */
-  undoKept: (keep: string) => request<{ ok: true; removed: number; left: { changed: number; closed: number; gone: number } } | { ok: false; refusal?: string; message: string }>('POST', '/api/rules/kept/undo', { keep }),
+  undoKept: (keep: string, withLater = false) => request<{ ok: true; removed: number; left: { changed: number; closed: number; gone: number } } | { ok: false; refusal?: string; message: string; removed?: number }>('POST', '/api/rules/kept/undo', { keep, ...(withLater ? { withLater } : {}) }),
+  /** «Automatisch buchen» for all open payments: only what a rule or code decides, no model asked; what was left, by why. */
+  bookOpen: () => request<BookOpen>('POST', '/api/rules/book-open', {}),
   /** «Als Regel vorschlagen» on a sentence of a partner's notes, or «Regel anpassen» after it changed: the rule drafted for its card. */
   draftNoteRule: (c: NoteRuleCommand) => request<{ path: string }>('POST', '/api/rules/note', c),
   dropOpen: () => request<DropSession>('POST', '/api/drop'),

@@ -89,12 +89,15 @@ test('«Rückgängig» of a keep: the rule file goes (it was the first), the kee
   const api = await startApi('tests/fixtures/by-hand-index.json', {}, { manifestOf: employer() });
   servers.push(api);
   assert.equal((await api.send('PUT', '/api/accounts/5000', { name: 'Lohnaufwand' })).status, 200);
+  // Each wage a task «Zahlung von Hand buchen», as the inbox run leaves it without an AI.
+  for (const id of WAGES) assert.equal((await api.send('POST', '/api/automation', { kind: 'start', workflow: 'ask', item: { kind: 'transaction', id } })).json.ok, true);
+  await api.rest();
   const path = String((await api.send('POST', '/api/rules/hand', { match: { kind: 'text', text: '\\bLohn\\b' }, direction: 'out', account: '5000' })).json.path);
   const card = (await api.send('GET', `/api/rules/draft?path=${encodeURIComponent(path)}`)).json as unknown as DraftView;
   const kept = (await api.send('POST', '/api/rules/draft', { kind: 'keep', path, basis: card.basis, confirm: true })).json as unknown as KeepResult;
   assert.ok(kept.ok && kept.booked && kept.undo, JSON.stringify(kept));
   assert.equal(kept.undo.before, '', 'no rules file before');
-  assert.deepEqual([kept.booked.runs.length, kept.booked.running], [4, 0]);
+  assert.deepEqual([kept.booked.entries.length, kept.booked.running], [4, 0]);
   assert.deepEqual(((await api.send('POST', '/api/rules/kept', { keep: kept.keep!.id })).json.booked as { refs: string[] }).refs, kept.booked.refs, 'asked again: the same state');
   // She changes one of the rule's bookings by hand (its id stays).
   const changed = loadBooks(api.ws).journalEntries.find((e) => e.transactionRef === 'L1')!;
@@ -153,7 +156,7 @@ test('payments that wait for their receipt: the card says they wait, the keep bo
 // ─── #396, #392: the server records each keep; its line and its undo go by the keep's id alone ─────
 
 type Kept = Extract<KeepResult, { ok: true }>;
-type KeptLine = { id: string; file: string; rules: string[]; booked: { refs: string[]; running: number }; waits: number; blocked?: string };
+type KeptLine = { id: string; file: string; rules: string[]; booked: { refs: string[]; running: number }; waits: number; blocked?: string; ended?: string };
 
 /** A rule drafted by hand and kept as its card shows it. */
 async function keepRule(api: ApiServer, rule: unknown): Promise<Kept> {
@@ -226,16 +229,17 @@ test('the undo of a keep puts back the mark of a booking she deleted before it',
   assert.deepEqual(books.transactions.find((x) => x.ref === 'K2')!.waitsForPerson, mark, 'the mark is there again');
 });
 
-test('a period closed between the keep and its undo: the bookings in it stay and are named', async () => {
+test('a period closed between the keep and its undo: the undo is gone, said why, and nothing is taken back', async () => {
   const api = await employerApi();
   const wages = await keepRule(api, WAGE_RULE);
   assert.deepEqual([...wages.booked!.refs].sort(), WAGES);
   const ledger = JSON.parse(readFileSync(api.ws.paths.ledger, 'utf8')) as { config: Record<string, unknown> };
   writeFileSync(api.ws.paths.ledger, JSON.stringify({ ...ledger, config: { ...ledger.config, closedThrough: '2026-07-31' } }, null, 2) + '\n');
   const undone = (await api.send('POST', '/api/rules/kept/undo', { keep: wages.keep!.id })).json;
-  assert.deepEqual([undone.ok, undone.removed, undone.left], [true, 2, { changed: 0, closed: 2, gone: 0 }], JSON.stringify(undone));
+  assert.deepEqual([undone.ok, undone.refusal], [false, 'closed'], JSON.stringify(undone));
+  assert.equal((await lines(api))[0]?.ended, 'closed', 'the line says why');
   await api.rest();
-  assert.deepEqual(loadBooks(api.ws).journalEntries.map((e) => e.transactionRef).sort(), ['L1', 'L2'], 'July is closed: its two wages stay');
+  assert.deepEqual(loadBooks(api.ws).journalEntries.map((e) => e.transactionRef).sort(), WAGES, 'the rule and all four bookings stay: the undo would take back only part');
 });
 
 const tasksOf = async (api: ApiServer) => ((await api.send('GET', '/api/automation')).json as unknown as { tasks: Array<{ item: { id: string }; why?: unknown }> }).tasks;
@@ -253,6 +257,8 @@ test('a payment a kept rule decides is no task «keine Regel der Firma passte»:
   assert.equal((await api.send('POST', '/api/automation', { kind: 'start', workflow: 'ask', item: { kind: 'transaction', id: 'B2' } })).json.ok, true);
   await api.rest();
   assert.deepEqual(await tasksOf(api), [], 'waits for its receipt, no «keine Regel passte»');
+  const runs = ((await api.send('GET', '/api/automation')).json as unknown as { runs: Array<{ status: string; error?: string }> }).runs;
+  assert.deepEqual(runs.filter((r) => r.status === 'stuck').map((r) => r.error), [], 'its run ended, it did not stick');
 
   // A wage the wage rule decides, unbooked again: the question books it by the rule.
   await keepRule(api, WAGE_RULE);

@@ -5,7 +5,7 @@
  * form's, «Immer so?»): the sidebar, Änderungen and the form show it, «Behalten» saves it at once.
  */
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
-import { language, t } from '../../i18n/index.js';
+import { isKey, language, t } from '../../i18n/index.js';
 import { textIn } from '../../../workflows/model.js';
 import { api, errorText } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
@@ -78,7 +78,7 @@ export function RulesSection({ nav, canEdit, payment, by }: { nav: Nav; canEdit:
   return (
     <div className="rules">
       <p className="m">{t('rules.lead')}</p>
-      <LastKept nav={nav} />
+      <LastKept nav={nav} canEdit={canEdit} />
       {canEdit ? <HandRuleForm key={`${payment ?? ''}-${by ?? ''}`} view={view} nav={nav} payment={payment} by={by} onKept={reload} /> : null}
       {view.waiting.map((w) => (
         <p key={w.workflow} className="warnline" data-testid="rules-waiting">
@@ -250,30 +250,32 @@ function reloadKept(): void {
     keptChanged();
   }, () => undefined);
 }
-/** A keep's answer: its line stands above the lists when it booked or left something waiting; otherwise the toast says it was kept. */
+/** A keep's answer: every keep has its line above the lists (one that booked nothing too: it may hold an earlier keep's undo). */
 function afterKeep(kept: Kept | undefined, nav: Nav): void {
-  const k = kept?.keep;
-  if (k && (k.booked.runs.length || k.waits || k.booked.later)) reloadKept();
+  if (kept?.keep) reloadKept();
   else nav.toast(t('rules.draft.kept'));
 }
 
 /** What each rule kept booked, until its line is closed: the tasks it booked are gone from the list, so the result stands above it. */
-export function LastKept({ nav }: { nav: Nav }) {
+export function LastKept({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
   const lines = useSyncExternalStore(onKeptChange, () => keptLines);
-  useEffect(reloadKept, []);
-  if (!lines.length) return null;
+  // A keep or an undo on another card (the AI sidebar's) changes the lines too.
+  useEffect(() => { if (!canEdit) return; reloadKept(); return onBooksChanged(reloadKept); }, [canEdit]);
+  if (!canEdit || !lines.length) return null;
   const close = (id: string) => {
     keptLines = keptLines.filter((k) => k.id !== id);
     keptSaid.delete(id);
     keptChanged();
-    api.closeKept(id).catch(() => undefined);
+    api.closeKept(id).then(reloadKept, () => undefined);
   };
+  // A line that holds an earlier keep's undo stays: the earlier line names it and takes both back.
+  const holds = (id: string) => lines.some((x) => !x.ended && !keptSaid.has(x.id) && x.blockedBy?.includes(id));
   return (
     <>
       {lines.map((k) => (
         <div key={k.id} className="ruledraft done" data-testid="last-kept" data-keep={k.id}>
           <KeptLine keep={k} nav={nav} lead />
-          <span className="ruleacts"><button type="button" className="linkbtn" onClick={() => close(k.id)}>{t('common.close')}</button></span>
+          {holds(k.id) ? null : <span className="ruleacts"><button type="button" className="linkbtn" onClick={() => close(k.id)}>{t('common.close')}</button></span>}
         </div>
       ))}
     </>
@@ -323,33 +325,24 @@ type Done = 'kept' | 'removedDone' | 'discarded';
 /** A keep's answer: what it booked at once, what waits for a receipt, and the rules file as it was. */
 type Kept = Extract<KeepResult, { ok: true }>;
 
-/** How often the result line asks again while the keep's runs still book. */
-const KEPT_POLL_MS = 1500;
-
 /**
- * What keeping a rule did (#383): «4 Zahlungen gebucht» with a link to the newest of the bookings,
- * «2 warten auf ihren Beleg», «3 werden noch gebucht» while its runs go on (the line asks again
- * until they rest), and «Rückgängig»: the server puts the rules file back and takes out the
- * bookings the keep's runs made that are still theirs, naming what stays and why.
+ * What keeping a rule did (#383, #396): «4 Zahlungen gebucht» with a link to the newest of the
+ * bookings, «2 warten auf ihren Beleg», and «Rückgängig bis …»: the server puts the rules file back
+ * and takes out the bookings the keep made that are still its own, naming what stays and why. A keep
+ * a later keep of the same file holds names it and takes both back, newest first; one whose undo is
+ * gone says why.
  */
 export function KeptLine({ keep, nav, lead }: { keep: KeptView; nav?: Nav; lead?: boolean }) {
   const [said, setSaid] = useState<string | undefined>(keptSaid.get(keep.id));
   const [busy, setBusy] = useState(false);
-  const [k, setK] = useState(keep);
-  // The store reads the server again after a keep or an undo: a line whose undo a later keep held is free now.
-  useEffect(() => { setK(keep); }, [keep]);
+  const k = keep;
   const b = k.booked;
-  useEffect(() => {
-    if (!b.running || said) return;
-    const id = setTimeout(() => { api.keptState(k.id).then((x) => { setK(x); refreshFor(nav); }, () => undefined); }, KEPT_POLL_MS);
-    return () => clearTimeout(id);
-  }, [k, said]);
   const say = (text: string) => { keptSaid.set(k.id, text); setSaid(text); };
-  const undo = async () => {
+  const undo = async (withLater = false) => {
     setBusy(true);
     try {
-      const r = await api.undoKept(k.id);
-      if (!r.ok) { setSaid(r.message); return; }
+      const r = await api.undoKept(k.id, withLater);
+      if (!r.ok) { setSaid(r.refusal && isKey(`rules.kept.ended.${r.refusal}`) ? t(`rules.kept.ended.${r.refusal}` as 'rules.kept.ended.file') : r.message); if (r.removed) refreshFor(nav); reloadKept(); return; }
       const left = [r.left.changed ? t('rules.kept.leftChanged', { n: r.left.changed }) : '', r.left.closed ? t('rules.kept.leftClosed', { n: r.left.closed }) : '', r.left.gone ? t('rules.kept.leftGone', { n: r.left.gone }) : ''].filter(Boolean);
       say([t('rules.kept.undone', { n: r.removed }), ...left].join(' '));
       refreshFor(nav);
@@ -372,9 +365,16 @@ export function KeptLine({ keep, nav, lead }: { keep: KeptView; nav?: Nav; lead?
           {lead ? <span className="m">{t('rules.draft.keptNow')}</span> : null}
           {parts.length ? <span>{parts.join(' · ')}</span> : null}
           {b.first && nav ? <Go to={at({ area: 'journal', id: b.first.id }, b.first.date)} nav={nav} className="golink">{t('rules.kept.show')}</Go> : null}
-          {k.blocked
-            ? <span className="m" data-testid="rule-undo-later">{t('rules.kept.blocked')}</span>
-            : <button type="button" className="linkbtn" data-act="rule-undo" disabled={busy || !!b.running} onClick={() => void undo()}>{t('rules.kept.undo')}</button>}
+          {k.ended
+            ? <span className="m" data-testid="rule-undo-gone" data-ended={k.ended}>{t(`rules.kept.ended.${k.ended}`)}</span>
+            : k.blockedBy?.length
+              ? (
+                <>
+                  <span className="m" data-testid="rule-undo-later">{t('rules.kept.blockedBy', { n: k.blockedBy.length })}</span>
+                  <button type="button" className="linkbtn" data-act="rule-undo-all" disabled={busy} onClick={() => void undo(true)}>{t('rules.kept.undoAll', { n: k.blockedBy.length + 1 })}</button>
+                </>
+              )
+              : <button type="button" className="linkbtn" data-act="rule-undo" disabled={busy} onClick={() => void undo()}>{t('rules.kept.undoUntil', { date: formatDate(k.until) })}</button>}
         </>
       )}
     </span>
@@ -473,7 +473,7 @@ export function RuleDraft({ path, nav, onRules, onDone, title, reveal }: { path:
     return (
       <div className="ruledraft done" data-draft={path}>
         {/* Booked or waiting: «Deine Regel ist behalten.» and its result line; nothing open: it holds from the next payment on. */}
-        <span>{kept?.keep && done === 'kept' && (kept.keep.booked.runs.length || kept.keep.waits) ? t('rules.draft.keptNow') : t(`rules.draft.${done}`)}</span>
+        <span>{kept?.keep && done === 'kept' && (kept.keep.booked.refs.length || kept.keep.waits) ? t('rules.draft.keptNow') : t(`rules.draft.${done}`)}</span>
         {done !== 'discarded' && onRules ? <button type="button" className="linkbtn" onClick={onRules}>{t('rules.draft.toRules')}</button> : null}
         {kept?.keep ? <KeptLine keep={kept.keep} nav={nav} /> : null}
       </div>

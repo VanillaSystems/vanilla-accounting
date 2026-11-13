@@ -89,7 +89,8 @@ test('a rule booking a foreign ad platform without Bezugsteuer warns, names the 
   assert.deepEqual([refused.ok, (refused as { refusal: string }).refusal], [false, 'wide']);
   assert.match((refused as { message: string }).message, /adplatform.*Steuerregeln des Landes/);
   assert.equal(readFileSync(join(ws.paths.root, GUIDE), 'utf8'), BEFORE, 'nothing kept without the confirmation');
-  assert.deepEqual(await keepDraft(ws, GUIDE, d.basis, true), { ok: true, committed: true });
+  const kept = await keepDraft(ws, GUIDE, d.basis, true);
+  assert.deepEqual([kept.ok, kept.ok && kept.committed], [true, true]);
   assert.equal(readFileSync(join(ws.paths.root, GUIDE), 'utf8'), rule('6570', 'I0'), '«Trotzdem behalten»');
 });
 

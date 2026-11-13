@@ -209,7 +209,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
           {(file || tx) && (
             <div className="src paybar">
               <span><PayBar {...props} tx={tx} closed={closed} onClear={() => choose(undefined)} /></span>
-              {tx && !closed ? <WorkflowButtons kind="transaction" id={tx.ref} facts={[b.unbooked(tx) ? 'unbooked' : 'booked']} nav={nav} canEdit={canEdit} /> : null}
+              {tx && !closed ? <WorkflowButtons kind="transaction" id={tx.ref} facts={[b.unbooked(tx) ? 'unbooked' : 'booked']} nav={nav} canEdit={canEdit} confirm={tx.waitsForPerson?.why === 'bookingDeleted' ? t('marks.deletedBefore') : undefined} /> : null}
               {tx ? <ActionsMenu set={paymentActions(props as AreaProps, b, tx, closed)} /> : <ActionsMenu set={statementActions(nav, s, ask, edit)} />}
               {tx ? <AskAi context={{ kind: 'payment', id: tx.ref, label: tx.description ?? tx.ref }} /> : null}
               {src && <span className="pgno">{page}</span>}

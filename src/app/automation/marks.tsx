@@ -56,52 +56,42 @@ export async function startAndSay(workflowId: string, item: { kind: ItemKind; id
   return r.run ? runResultText(workflow, await rested(r.run)) : undefined;
 }
 
-/** How many runs one click on a list's chip starts; the rest are named, for the next click. */
-export const START_ALL_MAX = 50;
+/** How many payments one «Automatisch buchen» for all books at most (KEEP_RUNS_MAX on the server). */
+const BOOK_OPEN_MAX = 200;
 
 /**
- * A manual trigger for each open object of its kind at once: «Automatisch buchen» in Automatisierung's
- * list (r3-noai-22) starts the booking of every unbooked payment that no run holds yet, at most
- * START_ALL_MAX, waits until they rest and says in one line what came of them: booked (by a rule or
- * the AI), waiting for the receipt, and, without an AI, that no rule decided the rest and the app
- * cannot book them by itself: they are booked by hand under Aufgaben.
+ * «Automatisch buchen» for every open payment at once (Automatisierung's list, r3-noai-22): the server
+ * books only what a rule of the firm or code decides, asks no model, and counts every payment it left
+ * with why (POST /api/rules/book-open). The line says each group in its own words.
  */
-export async function startForEach(workflowId: string, kind: ItemKind, ids: readonly string[]): Promise<string | undefined> {
-  const workflow = automationNow()?.workflows.find((w) => w.id === workflowId);
-  if (!workflow) return undefined;
-  const name = textIn(workflow.label, language());
-  if (!ids.length) return t('marks.allNone', { workflow: name });
-  const runs: string[] = [];
-  for (const id of ids.slice(0, START_ALL_MAX)) {
-    const r = await automationCommand({ kind: 'start', workflow: workflow.id, item: { kind, id } });
-    if (!r.ok) return r.refusal === 'not-approved' ? t('marks.waitsSwitchOn', { workflow: name }) : t('marks.refused', { workflow: name, why: commandRefusalText(r) });
-    if (r.run) runs.push(r.run);
-  }
-  const n = { booked: 0, receipt: 0, noModel: 0, person: 0, other: 0 };
-  for (const run of await Promise.all(runs.map(rested))) {
-    const res = runResult(workflow, run);
-    if (res.kind === 'done' && res.entries) n.booked++;
-    else if (res.kind === 'done' && run.steps.some((s) => s.output?.why === 'waitsForReceipt')) n.receipt++;
-    else if (res.kind === 'waiting' && res.noModel) n.noModel++;
-    else if (res.kind === 'waiting') n.person++;
-    else n.other++;
-  }
-  const later = Math.max(0, ids.length - START_ALL_MAX);
-  return [
-    t('marks.allBooked', { workflow: name, n: n.booked, all: runs.length }),
-    n.receipt ? t('marks.allReceipt', { n: n.receipt }) : '',
-    n.noModel ? t(aiIsOff() ? 'marks.allNoModelOff' : 'marks.allNoModel', { n: n.noModel }) : '',
-    n.person ? t('marks.allPerson', { n: n.person }) : '',
-    n.other ? t('marks.allOther', { n: n.other }) : '',
-    later ? t('marks.allLater', { n: later, max: START_ALL_MAX }) : '',
-  ].filter(Boolean).join(' ');
+export async function bookOpenAndSay(workflowName: string): Promise<string> {
+  const n = await api.bookOpen();
+  if (!Object.values(n).some(Boolean)) return t('marks.all.none', { workflow: workflowName });
+  const parts = [
+    t('marks.all.booked', { n: n.booked }),
+    n.model ? t('marks.all.model', { n: n.model }) : '',
+    n.receipt ? t('marks.all.receipt', { n: n.receipt }) : '',
+    n.question ? t('marks.all.question', { n: n.question }) : '',
+    n.unread ? t('marks.all.unread', { n: n.unread }) : '',
+    n.deleted ? t('marks.all.deleted', { n: n.deleted }) : '',
+    n.reconcile ? t('marks.all.reconcile', { n: n.reconcile }) : '',
+    n.busy ? t('marks.all.busy', { n: n.busy }) : '',
+    n.notBooked ? t('marks.all.notBooked', { n: n.notBooked }) : '',
+    n.later ? t('marks.all.later', { n: n.later, max: BOOK_OPEN_MAX }) : '',
+  ].filter(Boolean);
+  return `${workflowName}: ${parts.join(' · ')}.`;
 }
 
-export function WorkflowButtons({ kind, id, facts = [], nav, canEdit }: { kind: ItemKind; id: string; facts?: ItemFact[]; nav: Nav; canEdit: boolean }) {
+/**
+ * The buttons a workflow declares for one object. `confirm`: a sentence the first click shows with
+ * «Trotzdem buchen» instead of starting (a payment whose booking she deleted on purpose).
+ */
+export function WorkflowButtons({ kind, id, facts = [], nav, canEdit, confirm }: { kind: ItemKind; id: string; facts?: ItemFact[]; nav: Nav; canEdit: boolean; confirm?: string }) {
   const { view } = useAutomation();
   // What the last click came to, beside the button as well as in the toast: a toast is gone in
   // seconds and easily missed (r4c-34, r5h-20: «Automatisch buchen» without Claude seemed to do nothing).
   const [said, setSaid] = useState<{ item: string; text: string; go?: Location }>();
+  const [asking, setAsking] = useState<{ item: string; workflow: WorkflowDecl }>();
   if (!view) return null;
   const buttons = buttonsFor(view.workflows, kind, facts).filter((b) => b.runnable);
   if (!buttons.length) return null;
@@ -131,6 +121,12 @@ export function WorkflowButtons({ kind, id, facts = [], nav, canEdit }: { kind: 
           {said.go ? <> <button type="button" className="linkbtn" onClick={() => nav.go(said.go!)}>{t('marks.goSwitchOn')}</button></> : null}
         </span>
       )}
+      {confirm && asking?.item === id ? (
+        <span className="wfsaid" role="status" data-testid="workflow-confirm">
+          {confirm}{' '}
+          <button type="button" className="linkbtn" data-act="book-anyway" onClick={() => { const w = asking.workflow; setAsking(undefined); void start(w); }}>{t('marks.bookAnyway')}</button>
+        </span>
+      ) : null}
       {buttons.map(({ workflow, label, ai }) => {
         const open = view.runs.find((r) => r.workflow === workflow.id && r.item.id === id && OPEN.has(r.status));
         if (open) {
@@ -142,7 +138,7 @@ export function WorkflowButtons({ kind, id, facts = [], nav, canEdit }: { kind: 
         }
         return (
           <button key={workflow.id} type="button" className="btn" disabled={!canEdit} data-tip={ai ? t('automation.ai') : undefined}
-            onClick={() => void start(workflow)}>
+            onClick={() => { if (confirm) setAsking({ item: id, workflow }); else void start(workflow); }}>
             {ai ? <BotIcon /> : null}{textIn(label, language())}
           </button>
         );

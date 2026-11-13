@@ -215,10 +215,12 @@ export const ACTIONS: Record<string, Action> = {
       if (!held) {
         // A company rule decides it (one kept since the question was asked, #396): it books it now, or, when the
         // payment needs its receipt first, the rule books it once the receipt is there; no task says no rule matched.
+        // Not a payment a reconciliation holds (#254), nor one whose only receipt cannot be read: that waits for the person, never booked on a guessed rate (#57).
         const entries = scratch.journalEntries.slice(before);
-        if (entries.length && entries.every((e) => !!e.rule)) {
-          const wait = receiptWaitOf(b, t, context, receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws), fx);
-          if (wait.wait && !answerSettles(t, entries, context)) return { outcome: 'waits', output: { why: 'waitsForReceipt', rule: entries[0].rule } };
+        const wait = entries.length ? receiptWaitOf(b, t, context, receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws), fx) : undefined;
+        if (wait && !(wait.wait && wait.unread) && !reconciliationOf(b, t.ref) && entries.every((e) => !!e.rule)) {
+          // No `rule` in the output: askedBy counts it as the question of an ask rule, and this rule asked nothing.
+          if (wait.wait && !answerSettles(t, entries, context)) return { outcome: 'waits' };
           return { outcome: 'decided', output: { entries } };
         }
         // No rule holds it: without a model it waits for a booking by hand; with one, the next inbox run books it.

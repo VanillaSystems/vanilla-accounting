@@ -107,7 +107,8 @@ test('a correction on a payer with three consistent past payments: the AI\'s rul
   const [p] = d.preview;
   assert.deepEqual([p.matches, p.same, p.otherwise, p.examples.length], [4, 4, 0, 4], 'the card shows the payments it holds for');
   assert.deepEqual([d.overrides, d.spread, d.confirm], [[], [], false]);
-  assert.deepEqual(await keepDraft(ws, GUIDE, d.basis), { ok: true, committed: true });
+  const done = await keepDraft(ws, GUIDE, d.basis);
+  assert.deepEqual([done.ok, done.ok && done.committed], [true, true]);
   const kept = parse(readFileSync(join(ws.paths.root, GUIDE), 'utf8')).steps.classify.rules as Array<{ then: unknown; source: string }>;
   assert.deepEqual(kept.map((r) => [r.then, r.source]), [[{ account: '6513', vat: 'I0' }, 'correction 2026-10-23']]);
   assert.equal(learnOffer(ws, loadBooks(ws), 'MW-4'), undefined, 'kept: the rule books it so, nothing more to teach');
