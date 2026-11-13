@@ -589,10 +589,9 @@ Two markers flag an entry you must read before you update:
   beside a line at the receipt's rate nothing when no receipt in the line's currency can be compared.
 - «Buchung passt nicht zu ihrem Beleg» now also names an over-claim of input tax (#469): a line at a
   rate above the receipt's (I81 on a bill at 2.6 %), and a rate on more than the receipt taxes
-  (I81 on all of 1086.42 where the bill's tax of 63.42 covers 846.42, a tip on top of a bill of
-  100, a Kurtaxe booked at 3.8 % beside the room, also on the whole card settlement). The task says
-  «Der Beleg zeigt 8.1 % MWST nur auf CHF 846.42, gebucht sind CHF 1’086.42 auf I81», and «Nach Beleg
-  buchen» books the receipt's rate on what it taxes and the rest at the zero code. A line at 0 %
+  (I81 on a whole bill whose tax covers only part of it, a tip on top of a bill, a Kurtaxe booked
+  at 3.8 % beside the room, also on the whole card settlement). The task says «Der Beleg zeigt
+  8.1 % MWST nur auf …, gebucht sind … auf I81», and «Nach Beleg buchen» books the receipt's rate on what it taxes and the rest at the zero code. A line at 0 %
   alone on a receipt that names its tax only is offered the rate only on what that tax covers. The
   app's own runs book no such line where the receipt's VAT is known: a rule's or the model's rate
   goes on what the receipt taxes at it, the rest to another rate the receipt shows, then to the
