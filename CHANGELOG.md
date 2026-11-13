@@ -14,6 +14,8 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-13
+
 ### Added
 
 - A receipt whose VAT read keeps failing (#450), books schema 9: the VAT step counts on the
