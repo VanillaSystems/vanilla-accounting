@@ -76,7 +76,8 @@ test('«Behalten» saves exactly that draft as one save, without the AI; another
   draft(ws, 'workflows/booking/classify/step.yaml', 'label: { en: Ours }\n');
   const d = draftRules(ws, GUIDE)!;
   assert.deepEqual([d.added.map((r) => r.id), d.changed, d.removed, d.refused, d.keepable], [['cash-ask'], [], [], [], true]);
-  assert.deepEqual(await keepDraft(ws, GUIDE, d.basis), { ok: true, committed: true });
+  const kept = await keepDraft(ws, GUIDE, d.basis);
+  assert.deepEqual([kept.ok, kept.ok && kept.committed, kept.ok && kept.rules, kept.ok && kept.undo?.before], [true, true, ['cash-ask'], BEFORE], 'kept, with what its undo needs (#396)');
   assert.equal(readFileSync(join(ws.paths.root, GUIDE), 'utf8'), BEFORE + CASH);
   assert.ok(!existsSync(join(draftDir(ws), GUIDE)), 'the kept draft is gone');
   assert.ok(existsSync(join(draftDir(ws), 'workflows/booking/classify/step.yaml')), 'the other draft still waits');

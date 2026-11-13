@@ -285,7 +285,7 @@ export function LastKept({ nav }: { nav: Nav }) {
  * tasks, «Regel für alle 6», and the click shows the rule's card with its payments. One decision,
  * no form.
  */
-export function WageRuleOffer({ nav }: { nav: Nav }) {
+export function WageRuleOffer({ nav, books }: { nav: Nav; books?: { journalEntries?: ReadonlyArray<{ transactionRef: string }> } }) {
   const [offer, setOffer] = useState<WageOffer | null>(null);
   const [path, setPath] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -296,22 +296,25 @@ export function WageRuleOffer({ nav }: { nav: Nav }) {
     load();
     const off = onBooksChanged(load);
     return () => { live = false; off(); };
-  }, [nav]);
+  }, [nav, books]);
   if (path) {
     return <RuleDraft path={path} nav={nav} title={t('rules.wages.title')} onDone={(d, kept) => { setPath(undefined); if (d !== 'discarded') { afterKeep(kept, nav); setOffer(null); } }} />;
   }
-  if (!offer) return null;
+  // Only the wages open now count (r3-noai-23): one booked by hand meanwhile leaves the offer before the server is asked again.
+  const booked = new Set(books?.journalEntries?.map((e) => e.transactionRef));
+  const open = offer?.refs.filter((ref) => !booked.has(ref)) ?? [];
+  if (!offer || !open.length) return null;
   const draft = () => {
     setBusy(true);
     setError(undefined);
     api.draftHand(offer.rule).then((r) => setPath(r.path), (e) => setError(errorText(e))).finally(() => setBusy(false));
   };
   return (
-    <div className="ruledraft" data-testid="wage-rule-offer" data-n={offer.refs.length}>
-      <b>{t('rules.wages.line', { n: offer.refs.length })}</b>
+    <div className="ruledraft" data-testid="wage-rule-offer" data-n={open.length}>
+      <b>{t('rules.wages.line', { n: open.length })}</b>
       <span className="m">{t('rules.wages.lead', { text: offer.text, account: offer.account })}</span>
       {error ? <span className="warnline">{error}</span> : null}
-      <span className="ruleacts"><button type="button" className="btn primary" disabled={busy} data-act="wage-rule" onClick={draft}>{t('rules.wages.go', { n: offer.refs.length })}</button></span>
+      <span className="ruleacts"><button type="button" className="btn primary" disabled={busy} data-act="wage-rule" onClick={draft}>{t('rules.wages.go', { n: open.length })}</button></span>
     </div>
   );
 }

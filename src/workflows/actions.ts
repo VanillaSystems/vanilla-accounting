@@ -199,17 +199,31 @@ export const ACTIONS: Record<string, Action> = {
   },
 
   'booking.rule-question': {
-    outcomes: ['proposed', 'open', 'gone', 'noModel'],
+    outcomes: ['proposed', 'open', 'gone', 'noModel', 'decided', 'waits'],
     effects: [],
     ai: true,
     async run(input, _effects, { ws, ask }) {
       const b = books(input);
       const t = tx(input);
       if (periodLock(b).isClosed(t.date) || b.journalEntries.some((e) => e.transactionRef === t.ref)) return { outcome: 'gone' };
-      const { asked } = await classifyTransactions(structuredClone(b), [t], { ask, fx: loadFxResolver(), context: loadClassifyContext(ws) });
+      const scratch = structuredClone(b);
+      const before = scratch.journalEntries.length;
+      const fx = loadFxResolver();
+      const context = loadClassifyContext(ws);
+      const { asked } = await classifyTransactions(scratch, [t], { ask, fx, context });
       const held = asked[0];
-      // No rule holds it: without a model it waits for a booking by hand; with one, the next inbox run books it.
-      if (!held) return { outcome: ask ? 'gone' : 'noModel' };
+      if (!held) {
+        // A company rule decides it (one kept since the question was asked, #396): it books it now, or, when the
+        // payment needs its receipt first, the rule books it once the receipt is there; no task says no rule matched.
+        const entries = scratch.journalEntries.slice(before);
+        if (entries.length && entries.every((e) => !!e.rule)) {
+          const wait = receiptWaitOf(b, t, context, receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws), fx);
+          if (wait.wait && !answerSettles(t, entries, context)) return { outcome: 'waits', output: { why: 'waitsForReceipt', rule: entries[0].rule } };
+          return { outcome: 'decided', output: { entries } };
+        }
+        // No rule holds it: without a model it waits for a booking by hand; with one, the next inbox run books it.
+        return { outcome: ask ? 'gone' : 'noModel' };
+      }
       return held.entries.length
         ? { outcome: 'proposed', output: { question: held.question, rule: held.rule, entries: held.entries } }
         : { outcome: 'open', output: { question: held.question, rule: held.rule } };

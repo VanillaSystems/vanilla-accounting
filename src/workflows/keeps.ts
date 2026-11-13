@@ -9,7 +9,7 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { runsDir } from '../workflows/store.js';
+import { runsDir } from './store.js';
 import type { BankTransaction } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
 

@@ -765,7 +765,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
       <div className="head"><h2 className="who">{t('automation.tasks')}</h2></div>
       {/* What the last rule kept booked, and the rule for the open wages that code drafts (#383). */}
       <LastKept nav={nav} />
-      {canEdit ? <WageRuleOffer nav={nav} /> : null}
+      {canEdit ? <WageRuleOffer nav={nav} books={books} /> : null}
       <ThresholdTasks nav={nav} passed={threshold} />
       <ReceiptDueTasks items={receiptDue} nav={nav} canEdit={canEdit} books={books} />
       {tasks.length ? (

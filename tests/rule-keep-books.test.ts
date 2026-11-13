@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startApi, type ApiServer } from './support/api-server.js';
 import { APP_FOLDER, APP_ROOT } from '../src/workspace/workspace.js';
-import { loadBooks } from '../src/books/store.js';
+import { PERSON, loadBooks, saveBooks, update } from '../src/books/store.js';
 import type { DraftView, KeepResult } from '../src/saving/rules.js';
 import type { WageOffer } from '../src/saving/wage-rule.js';
 
@@ -176,6 +176,7 @@ async function employerApi(): Promise<ApiServer> {
   servers.push(api);
   assert.equal((await api.send('PUT', '/api/accounts/5000', { name: 'Lohnaufwand' })).status, 200);
   assert.equal((await api.send('PUT', '/api/accounts/2850', { name: 'Privat' })).status, 200);
+  assert.equal((await api.send('PUT', '/api/accounts/6570', { name: 'Informatikaufwand' })).status, 200);
   return api;
 }
 
@@ -235,4 +236,32 @@ test('a period closed between the keep and its undo: the bookings in it stay and
   assert.deepEqual([undone.ok, undone.removed, undone.left], [true, 2, { changed: 0, closed: 2, gone: 0 }], JSON.stringify(undone));
   await api.rest();
   assert.deepEqual(loadBooks(api.ws).journalEntries.map((e) => e.transactionRef).sort(), ['L1', 'L2'], 'July is closed: its two wages stay');
+});
+
+const tasksOf = async (api: ApiServer) => ((await api.send('GET', '/api/automation')).json as unknown as { tasks: Array<{ item: { id: string }; why?: unknown }> }).tasks;
+
+test('a payment a kept rule decides is no task «keine Regel der Firma passte»: booked by the rule, or, waiting for its receipt, no task at all', async () => {
+  const api = await employerApi();
+  // Garage Huber's payment (B2) waits for its receipt; its question «von Hand buchen» stands, as the inbox run leaves it without an AI.
+  assert.equal((await api.send('POST', '/api/automation', { kind: 'start', workflow: 'ask', item: { kind: 'transaction', id: 'B2' } })).json.ok, true);
+  await api.rest();
+  assert.deepEqual((await tasksOf(api)).map((t) => t.item.id), ['B2']);
+  const garage = await keepRule(api, { match: { kind: 'payer', payer: 'Garage Huber' }, direction: 'out', account: '6570', vat: '0' });
+  assert.deepEqual([garage.booked, garage.keep?.waits], [undefined, 1], JSON.stringify(garage));
+  assert.deepEqual(await tasksOf(api), [], 'the rule books it once its receipt is there: nothing for her to book by hand');
+  // Its question asked again (an undo elsewhere, a later run): it ends without a task.
+  assert.equal((await api.send('POST', '/api/automation', { kind: 'start', workflow: 'ask', item: { kind: 'transaction', id: 'B2' } })).json.ok, true);
+  await api.rest();
+  assert.deepEqual(await tasksOf(api), [], 'waits for its receipt, no «keine Regel passte»');
+
+  // A wage the wage rule decides, unbooked again: the question books it by the rule.
+  await keepRule(api, WAGE_RULE);
+  const books = loadBooks(api.ws);
+  update(books, PERSON, (b) => { b.journalEntries = b.journalEntries.filter((e) => e.transactionRef !== 'L1'); });
+  saveBooks(api.ws, books);
+  assert.equal((await api.send('POST', '/api/automation', { kind: 'start', workflow: 'ask', item: { kind: 'transaction', id: 'L1' } })).json.ok, true);
+  await api.rest();
+  assert.deepEqual(await tasksOf(api), []);
+  const l1 = loadBooks(api.ws).journalEntries.filter((e) => e.transactionRef === 'L1');
+  assert.ok(l1.length === 1 && l1[0].accountDebit === '5000' && l1[0].rule, JSON.stringify(l1));
 });
