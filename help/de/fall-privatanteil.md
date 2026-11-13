@@ -2,7 +2,7 @@
 title: Privatanteil einer Ausgabe
 summary: Eine Ausgabe dient der Firma und dem Inhaber privat. Auf dem privaten Teil gibt es keine Vorsteuer.
 section: faelle
-order: 6
+order: 7
 ---
 Manche Ausgaben dienen der Firma und dem Inhaber zugleich: ein Mobile-Abo, ein Laptop, der auch zu Hause steht. Vorsteuer gibt es nur auf dem geschäftlichen Teil. Der private Teil geht auf das Konto des Inhabers, ohne MWST.
 

@@ -2,7 +2,7 @@
 title: Auszahlungen eines Shops oder Kartenterminals
 summary: Ein Zahlungsanbieter sammelt die Verkäufe, behält seine Gebühr und zahlt den Rest aus. Die Verkäufe laufen über ein Durchlaufkonto.
 section: faelle
-order: 5
+order: 6
 ---
 Ein Webshop oder ein Kartenterminal nimmt das Geld der Kunden ein. Der Anbieter behält seine Gebühr und zahlt den Rest Tage später in einer Summe aus. Eine Auszahlung ist darum kein Verkauf: sie bündelt viele Bestellungen, Rückerstattungen und Gebühren. Damit jede davon richtig gebucht wird, laufen sie über ein Durchlaufkonto. Es hält, was der Anbieter der Firma noch schuldet.
 

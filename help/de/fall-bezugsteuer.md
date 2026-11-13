@@ -2,7 +2,7 @@
 title: Dienstleistung aus dem Ausland ohne Schweizer MWST
 summary: Ein Anbieter im Ausland verrechnet keine Schweizer MWST. Die Firma schuldet sie selbst als Bezugsteuer und zieht sie gleich wieder ab.
 section: faelle
-order: 3
+order: 4
 ---
 Die Firma bezieht eine Dienstleistung von einem Anbieter im Ausland: Software, einen Online-Dienst, Werbung, Beratung. Der Anbieter ist nicht im Schweizer MWST-Register und verrechnet keine Schweizer MWST. Die Leistung gilt als in der Schweiz bezogen, also schuldet die Firma die Steuer selbst. Das heisst Bezugsteuer.
 

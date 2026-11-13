@@ -41,9 +41,21 @@ answers:
       Input tax on material and goods goes to Ziffer 400, on investments and operating costs to
       405 (by the income statement section of the account). Corrections: 410
       Einlageentsteuerung, 415 corrections for mixed use and own consumption, 420 reductions for
-      subsidies and donations, all as K codes.
-    law: [MWSTG Art. 28, MWSTG Art. 29, MWSTG Art. 30, MWSTG Art. 32, MWSTG Art. 33, ESTV form 0550]
-    where: [modules/ch/tax-codes.yaml#purchaseBoxes, modules/ch/tax-codes.yaml#patterns, modules/ch/return.yaml#inputTax]
+      subsidies and donations, all as K codes. A supplier's refund corrects the input tax of the
+      purchase it refunds when the correction is booked or the money comes back (Art. 41 Abs. 2):
+      the app books it with the purchase's code and a minus (-I81, -M81; a purchase without input
+      tax -I0), at the purchase's rate for a part, on the refund's own date, so a purchase in a
+      filed quarter stays as filed; also when the supplier sends no credit note, since the law ties
+      the correction to the booking or the payment. When the purchase is not found unambiguously the refund gets the zero code with
+      the minus and the reason says so; the person changes it by hand (owner's decision
+      2026-11-13, #357).
+    law: [MWSTG Art. 28, MWSTG Art. 29, MWSTG Art. 30, MWSTG Art. 32, MWSTG Art. 33, MWSTG Art. 41 Abs. 2, ESTV form 0550]
+    where: [modules/ch/tax-codes.yaml#purchaseBoxes, modules/ch/tax-codes.yaml#patterns, modules/ch/return.yaml#inputTax, src/booking/refund-code.ts, examples/cases/supplier-refund-without-credit-note.yaml]
+    verified: >
+      2026-11-13, Art. 41 Abs. 2 only, against fedlex (MWSTG as of 2025-01-01): «Wird das von der
+      steuerpflichtigen Person aufgewendete Entgelt korrigiert, so ist im Zeitpunkt, in dem die
+      Korrektur verbucht oder das korrigierte Entgelt bezahlt wird, eine Anpassung des
+      Vorsteuerabzuges vorzunehmen.»
 
   vat.own-use:
     answer: >
