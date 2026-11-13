@@ -26,3 +26,16 @@ for (const { code, locale } of locales) {
     }
   });
 }
+
+/** A run stuck on a fault of the app itself (a step handing on more than its description says, an outcome that leads nowhere): her words and a way on, never the step's inner name (#482). */
+const APP_FAULTS = ['emitsExtra', 'leadsNowhere'];
+
+for (const { code, locale } of locales) {
+  test(`${code}: a run stuck on a fault of the app names no step and says how to go on`, () => {
+    for (const c of APP_FAULTS) {
+      const text = locale.messages[`runWhy.${c}` as keyof typeof locale.messages] as string;
+      assert.doesNotMatch(text, /\{(step|keys|outcome)\}/, `${code} runWhy.${c}`);
+      assert.ok(text.includes(locale.messages['automation.resume']), `${code} runWhy.${c} names «${locale.messages['automation.resume']}»`);
+    }
+  });
+}

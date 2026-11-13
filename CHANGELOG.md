@@ -424,6 +424,14 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A drop in which the AI's booking of one payment was refused (#482) no longer leaves stuck runs
+  «Eingang verarbeiten: Lauf steckt» behind the task badge. The run finishes, and the payment says
+  why it waits, as #470 meant. «Automatisch buchen» on such a payment goes on to «Von Hand
+  buchen». A run that sticks on a fault of the app itself now says so in her words, with a way on:
+  «In der App ist hier ein Fehler passiert: der Lauf ist angehalten und hat nichts Falsches
+  geschrieben. «Weiter» versucht es noch einmal. …». Before, it showed an internal step name and
+  file. A payment's and a statement's «Verlauf» show the same words.
+
 - The open list under a return (#477) no longer opens with «Nichts davon hält die Abrechnung auf»
   while payments of the period are unbooked. Its first sentence names them, the money in and the
   money out with their count and sum: «4 Zahlungseingänge über CHF … und ein Zahlungsausgang über
