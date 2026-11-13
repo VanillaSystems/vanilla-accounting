@@ -4,7 +4,7 @@
  * rule made by hand, without the AI (r8k-4). RuleDraft is the card of a drafted rule (the AI's, the
  * form's, «Immer so?»): the sidebar, Änderungen and the form show it, «Behalten» saves it at once.
  */
-import { Fragment, useEffect, useRef, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react';
 import { language, t } from '../../i18n/index.js';
 import { textIn } from '../../../workflows/model.js';
 import { api, errorText } from '../../lib/api.js';
@@ -13,7 +13,9 @@ import type { RuleRow } from '../../../booking/rule-book.js';
 import type { RuleNames, RuleWords } from '../../../booking/rules.js';
 import type { RuleLine } from '../../../booking/classify.js';
 import type { PreviewPayment, RulePreview } from '../../../booking/rule-preview.js';
-import type { DraftView, RulesView } from '../../../saving/rules.js';
+import type { DraftView, KeepResult, RulesView } from '../../../saving/rules.js';
+import { Go } from '../vat/links.js';
+import { at } from '../receipts/view.js';
 import type { NoteOffer, NoteReason } from '../../../knowledge/note-rules.js';
 import type { ShareOffer } from '../../../saving/share-rule.js';
 import type { GroupedOffer as GroupedOfferView } from '../../../saving/grouped-flag.js';
@@ -26,6 +28,9 @@ import { withoutInputTax } from '../../../engines/index.js';
 import { VatCodeField } from '../codes/VatCodeField.js';
 import { codeLabel } from '../codes/names.js';
 import { onBooksChanged } from '../../assistant/store.js';
+import { AccountField } from '../journal/AccountField.js';
+import type { HandSeed } from '../journal/rule-seed.js';
+import type { WageOffer } from '../../../saving/wage-rule.js';
 
 const words = ((key: string, vars: Record<string, string>) => (t as (k: string, v: Record<string, string>) => string)(key, vars)) as RuleWords;
 const money = (n: number) => fmt(n).replace(/\.00$/, '');
@@ -70,6 +75,7 @@ export function RulesSection({ nav, canEdit, payment, by }: { nav: Nav; canEdit:
   return (
     <div className="rules">
       <p className="m">{t('rules.lead')}</p>
+      <LastKept nav={nav} />
       {canEdit ? <HandRuleForm key={`${payment ?? ''}-${by ?? ''}`} view={view} nav={nav} payment={payment} by={by} onKept={reload} /> : null}
       {view.waiting.map((w) => (
         <p key={w.workflow} className="warnline" data-testid="rules-waiting">
@@ -105,33 +111,40 @@ export function RulesSection({ nav, canEdit, payment, by }: { nav: Nav; canEdit:
   );
 }
 
+
 /**
  * «Neue Regel»: whose payments (a business the firm knows, a payer, a text), optionally the
  * direction and amount, and the account and VAT code. «Vorschau» drafts the rule and shows its
  * card, with the payments it matches, before anything is kept. A firm without VAT codes sees no
- * VAT field. Opened from a payment (?payment=), the form starts with that payment's business or payer.
+ * VAT field. Opened from a payment (?payment=, or `inline` under a task), the form starts with that
+ * payment's business or payer, and with what the hand form held (`seed`). The account is the same
+ * field as the hand form's: a word or a hint finds it (AccountField, #383).
  */
-function HandRuleForm({ view, nav, payment, by, onKept }: { view: RulesView; nav: Nav; payment?: string; by?: 'text'; onKept(): void }) {
+function HandRuleForm({ view, nav, payment, by, seed, inline, onKept }: { view: RulesView; nav: Nav; payment?: string; by?: 'text'; seed?: HandSeed; inline?: { onClose(): void }; onKept(): void }) {
   const [open, setOpen] = useState(!!payment);
   const [f, setF] = useState<HandForm>(emptyForm());
   const [path, setPath] = useState<string>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
-  // The VAT field keeps what is typed; a form started from a payment draws it afresh.
+  const form = useRef<HTMLFormElement>(null);
+  // The VAT and account fields keep what is typed; a form started from a payment draws them afresh.
   const [started, setStarted] = useState(0);
   useEffect(() => {
     if (!payment) return;
-    api.handStart(payment, by).then((r) => { setF(emptyForm(r.start)); setStarted((n) => n + 1); }, () => undefined);
+    api.handStart(payment, by).then((r) => { setF({ ...emptyForm(r.start), ...withSeed(seed) }); setStarted((n) => n + 1); }, () => undefined);
   }, [payment, by]);
   const codes = firmCodes();
   const set = (k: keyof HandForm) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
-  const reset = () => { setOpen(false); setPath(undefined); setError(undefined); setF(emptyForm()); if (payment) nav.setQuery({}); };
-  // Kept: the list shows the rule; discarded: back to the form as typed.
-  if (path) return <RuleDraft path={path} nav={nav} title={t('rules.hand.title')} onDone={(d) => { if (d === 'discarded') { setPath(undefined); return; } nav.toast(t('rules.draft.kept')); onKept(); reset(); }} />;
+  const reset = () => { setOpen(false); setPath(undefined); setError(undefined); setF(emptyForm()); if (inline) inline.onClose(); else if (payment) nav.setQuery({}); };
+  // Kept: the list shows the rule, and what the keep booked stands above it (LastKept); discarded: back to the form as typed.
+  if (path) return <RuleDraft path={path} nav={nav} title={t('rules.hand.title')} onDone={(d, kept) => { if (d === 'discarded') { setPath(undefined); return; } if (kept) rememberKept(kept); else nav.toast(t('rules.draft.kept')); onKept(); reset(); }} />;
   if (!open) return <p><button type="button" className="btn" data-testid="rule-new" onClick={() => setOpen(true)}>{t('rules.hand.new')}</button></p>;
-  const made = handRuleOf(f);
   async function preview(e: FormEvent) {
     e.preventDefault();
+    const account = String((form.current ? new FormData(form.current).get('account') : f.account) ?? '');
+    // The form keeps the account it was previewed with: «Verwerfen» on the card brings it back as typed.
+    setF((was) => ({ ...was, account }));
+    const made = handRuleOf({ ...f, account });
     if (!made.ok) { setError(t(`rules.hand.missing.${made.missing}`)); return; }
     setBusy(true);
     setError(undefined);
@@ -139,7 +152,7 @@ function HandRuleForm({ view, nav, payment, by, onKept }: { view: RulesView; nav
   }
   const businesses = Object.entries(view.names.businesses).sort((a, b) => a[1].localeCompare(b[1]));
   return (
-    <form className="form inline handrule" data-testid="rule-form" onSubmit={preview} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); reset(); } }}>
+    <form ref={form} className="form inline handrule" data-testid="rule-form" autoComplete="off" onSubmit={preview} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); reset(); } }}>
       <label>{t('rules.hand.match')}
         <select value={f.match} onChange={set('match')}>
           {businesses.length ? <option value="business">{t('rules.hand.byBusiness')}</option> : null}
@@ -168,10 +181,9 @@ function HandRuleForm({ view, nav, payment, by, onKept }: { view: RulesView; nav
       </label>
       <label>{t('rules.hand.over', { currency: view.currency })}<input className="mono" inputMode="decimal" value={f.over} onChange={set('over')} /></label>
       <label>{t('rules.hand.under', { currency: view.currency })}<input className="mono" inputMode="decimal" value={f.under} onChange={set('under')} /></label>
-      <label>{t('rules.hand.account')}<input className="mono" list="rule-accounts" value={f.account} onChange={set('account')} /></label>
-      <datalist id="rule-accounts">{Object.entries(view.names.accounts).map(([n, name]) => <option key={n} value={n}>{name}</option>)}</datalist>
+      <AccountField key={`account-${started}`} name="account" label={t('rules.hand.account')} defaultValue={f.account} prefer={f.direction === 'in' ? 'revenue' : f.direction === 'out' ? 'expense' : undefined} />
       {codes.length ? (
-        <VatCodeField key={started} name="vat" label={t('rules.hand.vat')} defaultValue={f.vat} placeholder={t('rules.hand.vatFromReceipts')} onValue={(vat) => setF((was) => ({ ...was, vat }))} />
+        <VatCodeField key={`vat-${started}`} name="vat" label={t('rules.hand.vat')} defaultValue={f.vat} placeholder={t('rules.hand.vatFromReceipts')} onValue={(vat) => setF((was) => ({ ...was, vat }))} />
       ) : null}
       <label>{t('rules.hand.private')}<input className="mono" inputMode="decimal" data-testid="rule-share" value={f.share} onChange={set('share')} /></label>
       {codes.length && !withoutInputTax() && f.share.trim() ? (
@@ -193,7 +205,137 @@ function HandRuleForm({ view, nav, payment, by, onKept }: { view: RulesView; nav
   );
 }
 
+/** The seed's values as the form holds them; an empty one leaves the start's. */
+const withSeed = (seed?: HandSeed): Partial<HandForm> => ({
+  ...(seed?.account ? { account: seed.account } : {}),
+  ...(seed?.vat ? { vat: seed.vat } : {}),
+  ...(seed?.share ? { share: seed.share } : {}),
+});
+
+/**
+ * The rule form started from a payment right where it is (a task, a payment's detail), with what
+ * the hand form held: nothing is lost, and keeping or discarding brings the person back to the
+ * same place (#383). What the keep booked stays named above the tasks (LastKept).
+ */
+export function RuleFromPayment({ nav, payment, by, seed, onClose }: { nav: Nav; payment: string; by?: 'text'; seed?: HandSeed; onClose(): void }) {
+  const [view, setView] = useState<RulesView>();
+  const [error, setError] = useState<string>();
+  useEffect(() => { api.rules().then(setView, (e) => setError(errorText(e))); }, []);
+  if (error) return <p className="warnline">{error}</p>;
+  if (!view) return <p className="m">{t('changes.loading')}</p>;
+  return (
+    <div className="rulefrom" data-testid="rule-from-payment">
+      <HandRuleForm view={view} nav={nav} payment={payment} by={by} seed={seed} inline={{ onClose }} onKept={() => undefined} />
+    </div>
+  );
+}
+
+let lastKept: Kept | undefined;
+const keptListeners = new Set<() => void>();
+const rememberKept = (k: Kept | undefined) => { lastKept = k; for (const f of keptListeners) f(); };
+const onKeptChange = (f: () => void) => { keptListeners.add(f); return () => { keptListeners.delete(f); }; };
+
+/** What the last rule kept in this window booked, until closed: the tasks it booked are gone from the list, so the result stands above it. */
+export function LastKept({ nav }: { nav: Nav }) {
+  const kept = useSyncExternalStore(onKeptChange, () => lastKept);
+  if (!kept) return null;
+  return (
+    <div className="ruledraft done" data-testid="last-kept">
+      <KeptLine kept={kept} nav={nav} lead />
+      <span className="ruleacts"><button type="button" className="linkbtn" onClick={() => rememberKept(undefined)}>{t('common.close')}</button></span>
+    </div>
+  );
+}
+
+/**
+ * The rule for the open wages, drafted by code (src/saving/wage-rule.ts, #383): one line above the
+ * tasks, «Regel für alle 6», and the click shows the rule's card with its payments. One decision,
+ * no form.
+ */
+export function WageRuleOffer({ nav }: { nav: Nav }) {
+  const [offer, setOffer] = useState<WageOffer | null>(null);
+  const [path, setPath] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    let live = true;
+    const load = () => { api.wageOffer().then((x) => { if (live) setOffer(x.offer); }, () => { if (live) setOffer(null); }); };
+    load();
+    const off = onBooksChanged(load);
+    return () => { live = false; off(); };
+  }, [nav]);
+  if (path) {
+    return <RuleDraft path={path} nav={nav} title={t('rules.wages.title')} onDone={(d, kept) => { setPath(undefined); if (kept) rememberKept(kept); else if (d !== 'discarded') nav.toast(t('rules.draft.kept')); if (d !== 'discarded') setOffer(null); }} />;
+  }
+  if (!offer) return null;
+  const draft = () => {
+    setBusy(true);
+    setError(undefined);
+    api.draftHand(offer.rule).then((r) => setPath(r.path), (e) => setError(errorText(e))).finally(() => setBusy(false));
+  };
+  return (
+    <div className="ruledraft" data-testid="wage-rule-offer" data-n={offer.refs.length}>
+      <b>{t('rules.wages.line', { n: offer.refs.length })}</b>
+      <span className="m">{t('rules.wages.lead', { text: offer.text, account: offer.account })}</span>
+      {error ? <span className="warnline">{error}</span> : null}
+      <span className="ruleacts"><button type="button" className="btn primary" disabled={busy} data-act="wage-rule" onClick={draft}>{t('rules.wages.go', { n: offer.refs.length })}</button></span>
+    </div>
+  );
+}
+
 type Done = 'kept' | 'removedDone' | 'discarded';
+/** A keep's answer: what it booked at once, what waits for a receipt, and the rules file as it was. */
+type Kept = Extract<KeepResult, { ok: true }>;
+
+/** How often the result line asks again while the keep's runs still book. */
+const KEPT_POLL_MS = 1500;
+
+/**
+ * What keeping a rule did (#383): «4 Zahlungen gebucht» with a link to the newest of the bookings,
+ * «2 warten auf ihren Beleg», «3 werden noch gebucht» while its runs go on (the line asks again
+ * until they rest), and «Rückgängig»: the server puts the rules file back and takes out the
+ * bookings the keep's runs made that are still theirs, naming what stays and why.
+ */
+export function KeptLine({ kept, nav, lead }: { kept: Kept; nav?: Nav; lead?: boolean }) {
+  const [said, setSaid] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const [b, setB] = useState(kept.booked);
+  const waits = kept.open?.waits.length ?? 0;
+  useEffect(() => {
+    if (!b?.running) return;
+    const id = setTimeout(() => { api.keptState(b.runs).then((x) => { setB({ ...x, ...(b.later ? { later: b.later } : {}) }); nav?.refresh(); }, () => undefined); }, KEPT_POLL_MS);
+    return () => clearTimeout(id);
+  }, [b]);
+  const undo = async () => {
+    if (!kept.undo || !b) return;
+    setBusy(true);
+    try {
+      const r = await api.undoKept({ runs: b.runs, entries: b.entries, undo: kept.undo });
+      if (!r.ok) { setSaid(r.message); return; }
+      const left = [r.left.changed ? t('rules.kept.leftChanged', { n: r.left.changed }) : '', r.left.closed ? t('rules.kept.leftClosed', { n: r.left.closed }) : '', r.left.gone ? t('rules.kept.leftGone', { n: r.left.gone }) : ''].filter(Boolean);
+      setSaid([t('rules.kept.undone', { n: r.removed }), ...left].join(' '));
+      nav?.refresh();
+    } catch (e) { setSaid(errorText(e)); } finally { setBusy(false); }
+  };
+  return (
+    <span className="keptline" data-testid="rule-kept" data-booked={b?.refs.length ?? 0} data-waits={waits} data-running={b?.running ?? 0}>
+      {said ? <span>{said}</span> : (
+        <>
+          {lead ? <span className="m">{t('rules.draft.keptNow')}</span> : null}
+          <span>{[
+            b?.refs.length ? t('rules.kept.booked', { n: b.refs.length }) : '',
+            b?.running ? t('rules.kept.running', { n: b.running }) : '',
+            waits ? t('rules.kept.waits', { n: waits }) : '',
+            b?.notBooked.length ? t('rules.kept.notBooked', { n: b.notBooked.length }) : '',
+            b?.later ? t('rules.kept.later', { n: b.later }) : '',
+          ].filter(Boolean).join(' · ')}</span>
+          {b?.first && nav ? <Go to={at({ area: 'journal', id: b.first.id }, b.first.date)} nav={nav} className="golink">{t('rules.kept.show')}</Go> : null}
+          {b?.runs.length && kept.undo ? <button type="button" className="linkbtn" data-act="rule-undo" disabled={busy || !!b.running} onClick={() => void undo()}>{t('rules.kept.undo')}</button> : null}
+        </>
+      )}
+    </span>
+  );
+}
 
 /** A booking line as the card names it: account and name, VAT code, amount. */
 const accountText = (n: string, names: RuleNames) => (names.account(n) ? `${n} ${names.account(n)}` : n);
@@ -203,10 +345,11 @@ const lineText = (l: RuleLine, names: RuleNames) => [l.against ? `${accountText(
 function PaymentLine({ p, names, national }: { p: PreviewPayment; names: RuleNames; national?: RuleLine[] }) {
   const would = p.would.lines.map((l) => lineText(l, names)).join(' + ');
   return (
-    <li>
+    <li data-waits={p.waits ? 'receipt' : undefined}>
       <span className="m">{formatDate(p.date)} · {p.currency} {fmt(p.amount)}</span> {p.text}
       {' → '}
-      <b>{p.would.kind === 'ask' ? t('rules.preview.ask', { question: p.would.question }) : would}</b>
+      {/* A payment that waits for its receipt is not booked at the keep: the card says what keeping will do (#383). */}
+      <b>{p.would.kind === 'ask' ? t('rules.preview.ask', { question: p.would.question }) : p.waits ? t('rules.preview.waits') : would}</b>
       <span className="m">{' · '}{p.decidedBy ? t('rules.preview.otherFirst') : p.now.length ? t('rules.preview.now', { booking: p.now.map((l) => lineText(l, names)).join(' + ') }) : t('rules.preview.unbooked')}</span>
       {p.beforeAi && !p.decidedBy ? <span className="m" data-testid="before-ai">{' · '}{t('rules.preview.beforeAi', { booking: p.beforeAi.map((l) => lineText(l, names)).join(' + ') })}</span> : null}
       {national ? <span className="m" data-testid="national">{' · '}{t('rules.preview.national', { booking: national.map((l) => (l.vat ? codeLabel(l.vat) : '–')).join(' + ') })}</span> : null}
@@ -224,6 +367,11 @@ function Preview({ p, names }: { p: RulePreview; names: RuleNames }) {
       <span className="m">{p.matches ? t('rules.preview.matches', { n: p.matches, year: p.year }) : t('rules.preview.none', { year: p.year })}</span>
       {p.examples.length ? <ul>{p.examples.map((x) => <PaymentLine key={x.ref} p={x} names={names} national={national.get(x.ref)} />)}</ul> : null}
       {p.matches > p.examples.length ? <span className="m">{t('rules.preview.more', { n: p.matches - p.examples.length })}</span> : null}
+      {p.open && (p.open.book.length || p.open.waits.length) ? (
+        <span className="m" data-testid="rule-open" data-book={p.open.book.length} data-waits={p.open.waits.length}>
+          {[p.open.book.length ? t('rules.preview.openBook', { n: p.open.book.length }) : '', p.open.waits.length ? t('rules.preview.openWaits', { n: p.open.waits.length }) : ''].filter(Boolean).join(' ')}
+        </span>
+      ) : null}
       {p.overlaps.map((o) => (
         <span key={`${o.row.file}#${o.row.step}#${o.row.id}`} className="warnline">
           {t('rules.preview.overlap', { n: o.shared, line: lineOf(o.row, names, words) })}
@@ -263,11 +411,12 @@ function Preview({ p, names }: { p: RulePreview; names: RuleNames }) {
  * it once, with the rates to choose from. A draft that holds no rule shows nothing. `reveal`: the
  * card scrolls itself into view whenever it loads (the AI sidebar, where it appears under an answer).
  */
-export function RuleDraft({ path, nav, onRules, onDone, title, reveal }: { path: string; nav?: Nav; onRules?(): void; onDone?(done: Done): void; title?: string; reveal?: boolean }) {
+export function RuleDraft({ path, nav, onRules, onDone, title, reveal }: { path: string; nav?: Nav; onRules?(): void; onDone?(done: Done, kept?: Kept): void; title?: string; reveal?: boolean }) {
   const [d, setD] = useState<DraftView | null>();
   const card = useRef<HTMLDivElement>(null);
   useEffect(() => { if (reveal && d) card.current?.scrollIntoView({ block: 'nearest' }); }, [reveal, d?.basis]);
   const [done, setDone] = useState<Done>();
+  const [kept, setKept] = useState<Kept>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   useEffect(() => {
@@ -281,6 +430,7 @@ export function RuleDraft({ path, nav, onRules, onDone, title, reveal }: { path:
       <div className="ruledraft done" data-draft={path}>
         <span>{t(`rules.draft.${done}`)}</span>
         {done !== 'discarded' && onRules ? <button type="button" className="linkbtn" onClick={onRules}>{t('rules.draft.toRules')}</button> : null}
+        {kept ? <KeptLine kept={kept} nav={nav} /> : null}
       </div>
     );
   }
@@ -293,7 +443,13 @@ export function RuleDraft({ path, nav, onRules, onDone, title, reveal }: { path:
     setError(undefined);
     try {
       const r = await api.draftCommand(kind === 'keep' ? { kind, path, basis: d.basis, confirm: d.confirm } : { kind, path });
-      if (r.ok) { const done = kind === 'discard' ? 'discarded' : onlyRemoval ? 'removedDone' : 'kept'; if (onDone) onDone(done); else setDone(done); }
+      if (r.ok) {
+        const done = kind === 'discard' ? 'discarded' : onlyRemoval ? 'removedDone' : 'kept';
+        // What the keep booked at once, and what waits for a receipt (#383): the card says so where it stood.
+        const result = 'committed' in r && (r.booked || r.open?.waits.length) ? r as Kept : undefined;
+        if (result) { setKept(result); nav?.refresh(); }
+        if (onDone) onDone(done, result); else setDone(done);
+      }
       else setError('message' in r ? r.message : t('rules.draft.gone'));
     } catch (e) {
       setError(errorText(e));
@@ -345,6 +501,7 @@ export function RuleDraft({ path, nav, onRules, onDone, title, reveal }: { path:
       {d.vatAsks.map((a) => (
         <div key={`v${a.step}${a.id}`} className="vatask" data-vat-ask={a.id}>
           <span>{a.seen.length ? t('rules.draft.vatAsk.mixed', { seen: a.seen.map((s) => t('rules.draft.vatSeen', { rate: s.rate ? t('rules.draft.vatRate', { rate: String(s.rate) }) : t('rules.draft.vatZero'), n: String(s.receipts) })).join(', ') }) : t('rules.draft.vatAsk.none')}</span>
+          <span className="m">{t('rules.draft.vatAsk.how')}</span>
           <span className="ruleacts">
             {a.choices.map((rate) => <button key={rate} type="button" className="btn ghost" disabled={busy} onClick={() => void chooseVat(a.step, a.id, rate)}>{rate ? t('rules.draft.vatRate', { rate: String(rate) }) : t('rules.draft.vatZero')}</button>)}
           </span>

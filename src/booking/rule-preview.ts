@@ -6,7 +6,7 @@
  */
 import { bankAccountFor } from '../workspace/money-accounts.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
-import type { Books } from '../books/store.js';
+import { periodLock, type Books } from '../books/store.js';
 import type { BankTransaction } from '../types/index.js';
 import { handOwnUse, mappedReceipts, paymentFacts, ruleBookingLines, type ClassifyContext, type RuleLine } from './classify.js';
 import type { RuleRow } from './rule-book.js';
@@ -32,7 +32,17 @@ export interface PreviewPayment {
   beforeAi?: RuleLine[];
   /** Another rule that decides this payment before the drafted one: its id. */
   decidedBy?: string;
+  /** Not booked, and it waits for its receipt (receipt-wait.ts): the rule books it once one is linked, not at the keep. */
+  waits?: true;
 }
+
+/**
+ * The payments of the open periods without any booking that a booking rule decides: those it books
+ * as soon as it is kept (`book`), and those that wait for their receipt first (`waits`), each newest
+ * first. A payment of a filed period, one booked in part or whole, and one another rule decides are
+ * in neither (#383).
+ */
+export interface OpenDecided { book: string[]; waits: string[] }
 
 export interface RuleOverlap {
   /** The other rule, as Firma › Regeln lists it. */
@@ -97,6 +107,8 @@ export interface RulePreview {
   same?: number;
   /** The newest payments counted in `otherwise` that `examples` and `spread` leave out, at most PREVIEW_EXAMPLES: the card names them. */
   differ?: PreviewPayment[];
+  /** A booking rule's open payments without a booking: what keeping it books at once, and what waits for a receipt. */
+  open?: OpenDecided;
 }
 
 const lineKey = (l: RuleLine) => `${l.account}|${l.vat ?? ''}|${Math.abs(l.amount).toFixed(2)}`;
@@ -178,10 +190,13 @@ function departures(books: Books, tx: BankTransaction, booking: RuleBooking, con
 
 /**
  * The preview of each rule in `targets` against the books' payments of the open year, with
- * `rules` (every rule of the books, the draft applied) deciding who wins a payment.
+ * `rules` (every rule of the books, the draft applied) deciding who wins a payment. `waits`: whether
+ * a payment without a booking waits for its receipt (receipt-wait.ts, with the draft's rules): such a
+ * payment is shown as waiting, never as a booking the keep would make (#383).
  */
-export function previewRules(targets: readonly PlacedRow[], rules: readonly PlacedRow[], books: Books, context: ClassifyContext, fx: FxResolver): RulePreview[] {
+export function previewRules(targets: readonly PlacedRow[], rules: readonly PlacedRow[], books: Books, context: ClassifyContext, fx: FxResolver, waits: (tx: BankTransaction) => boolean = () => false, before: (tx: BankTransaction) => boolean = () => false): RulePreview[] {
   const year = openYear(books);
+  const closed = periodLock(books).isClosed;
   const txs = books.transactions.filter((t) => t.date.startsWith(year)).sort((a, b) => b.date.localeCompare(a.date) || a.ref.localeCompare(b.ref));
   const on = rules.filter((r) => !r.placed.rule.off);
   const facts = new Map(txs.map((tx) => [tx.ref, paymentFacts(books, tx, context, fx)]));
@@ -208,8 +223,10 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
         now,
         ...(JSON.stringify(decided) !== JSON.stringify(now) ? { beforeAi: decided } : {}),
         ...(deciderRow && ruleKey(deciderRow) !== key ? { decidedBy: deciderRow.id } : {}),
+        ...(t.kind === 'book' && !now.length && waits(tx) ? { waits: true as const } : {}),
       };
     };
+    const open: OpenDecided = { book: [], waits: [] };
     // The accounts the rule books on: a booking on any other, as decided before the AI moved it, is a decision it would overrule.
     const own = new Set(t.kind === 'book' ? [t.booking.account, ...(t.booking.private && context.ownerAccount ? [context.ownerAccount] : [])] : []);
     const others: string[] = [];
@@ -242,6 +259,8 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
         // Only where it books: another rule deciding first books nothing by this one.
         const decider = ruleFor(placed, p);
         if (decider && ruleKey(pool[placed.indexOf(decider)].row) === key) {
+          // Counted as the classifier will decide it: a payout or a possible invoice payment goes before any rule (`before`).
+          if (!closed(tx.date) && !books.journalEntries.some((e) => e.transactionRef === tx.ref) && !before(tx)) (waits(tx) ? open.waits : open.book).push(tx.ref);
           const { kinds, national } = departures(books, tx, t.booking, context);
           for (const kind of kinds) {
             const o = against.get(kind) ?? { count: 0, payments: [] };
@@ -265,7 +284,7 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
       key, year, matches: hits.length, examples, overlaps: [...overlaps.values()], loneWords: loneWords(target.placed),
       ...(spread ? { spread } : {}),
       ...(against.size ? { overrides: [...against].map(([kind, o]) => ({ kind, ...o })) } : {}),
-      ...(t.kind === 'book' ? { otherwise, same, ...(differ.length ? { differ } : {}) } : {}),
+      ...(t.kind === 'book' ? { otherwise, same, ...(differ.length ? { differ } : {}), open } : {}),
     };
   });
 }

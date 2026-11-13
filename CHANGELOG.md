@@ -35,6 +35,23 @@ Two markers flag an entry you must read before you update:
   wait under Aufgaben (the turnover threshold of a firm not registered among them), the card and
   the answer say that instead of «nichts offen». A period that ended before the books begin reads
   «vor Beginn dieser Bücher», never «fällig seit».
+- Keeping a rule books the open payments it decides at once (#383): the keep starts the booking
+  run for each, as «Braucht keinen Beleg» does, closes their tasks, and says «6 Zahlungen
+  gebucht» with a link to the bookings and «Rückgängig». Runs still going after half a minute
+  are named («3 werden noch gebucht»), the line updates when they finish and their tasks close
+  then; past 200 payments the rest are named and follow on the next run. «Rückgängig» puts the
+  rules file back (none, after the first rule) and takes out the keep's bookings that are still
+  the rule's; one changed since, or of a period closed since, stays and is named; the payments are
+  as before the keep, their tasks back.
+  Before, they stayed tasks and unbooked until some later inbox run. A payment that waits for its
+  receipt is named so on the card («wartet auf den Beleg: die Regel bucht sie, sobald er da ist»),
+  never as a booking the keep would make, and the card says how many the keep books and how many
+  wait. A person's bookings, payments booked in part and payments of a filed period are untouched.
+- Aufgaben offers the rule for the open wages of a firm with staff in one click («6
+  Lohnzahlungen von Hand buchen · Regel für alle 6», #383): code drafts it (the words the wages
+  share, money out, the wage account of the chart, no VAT code) and shows its card; nothing is
+  kept before «Trotzdem behalten». The Swiss module names the wage account (`wages` in
+  modules/ch/setup.yaml).
 
 ### Changed
 
@@ -60,6 +77,21 @@ Two markers flag an entry you must read before you update:
   0 gebucht». Its third figure says «Aufgaben», counted as the corner's «n Aufgaben für dich» (open
   tasks, stopped runs and questions for you). Belege's «Braucht dich» says under its head what it
   counts.
+- The way from a payment to a rule stays where the person is (#383): «Eine Regel für alle 3
+  anlegen» under the hand-booking form opens the rule form right there, with the account, the VAT
+  and a private share the form held; keeping or discarding it leaves her in her tasks. The rule
+  form's account is the hand form's account field: a word («Lohn», «Miete») finds the account.
+- A rule asks no VAT where none applies (#383): a rule on the wage account, a debt, the owner's
+  or a money account, or for payments the evidence rules recognise as wages, books without a code,
+  unless a receipt of its payments shows Swiss VAT: then it asks. The wage account counts only
+  while the firm's account of that number is an expense account. A rule started from the hand
+  form takes its VAT only when a receipt gave the rate or she typed it, never the zero code the
+  form proposes for a payment without a receipt yet. Where it asks, «Keine Schweizer MWST» stands first, the rates as equals after it, with one line
+  on how to tell from the receipt.
+- The wider text rule under a payment («oder eine für alle 6 mit «Lohn» im Text») is offered only
+  on words that say what the payments are (#383): never on a document's word («Rechnung»), a
+  statement's («Belastung», «Gutschrift») or the bank's wording of a payment («Zahlung», «Karte»,
+  `payment` in modules/ch/documents.yaml), and only where the businesses it reaches agree in kind.
 - The bank's own fee (#359): a row of a bank's camt.053 export that the bank itself coded as its
   charge for the account or for payments («Kontoführung», a card's annual fee) is booked by the
   app, with or without an AI, on Bankspesen (6940) without a VAT code; a fee paid back the other

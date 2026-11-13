@@ -53,6 +53,7 @@ import { waitingForReceipt } from '../../../accounting/receipt-due.js';
 import { periodName } from '../../lib/period-label.js';
 import { codeLabel } from '../codes/names.js';
 import { reconciliationOf } from '../../../books/reconcile.js';
+import { LastKept, WageRuleOffer } from '../company/RulesSection.js';
 
 type Props = AreaProps<RouteOf<'automation'>>;
 type R = RouteOf<'automation'>;
@@ -762,6 +763,9 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
   return (
     <div className="detail-in wfpage">
       <div className="head"><h2 className="who">{t('automation.tasks')}</h2></div>
+      {/* What the last rule kept booked, and the rule for the open wages that code drafts (#383). */}
+      <LastKept nav={nav} />
+      {canEdit ? <WageRuleOffer nav={nav} /> : null}
       <ThresholdTasks nav={nav} passed={threshold} />
       <ReceiptDueTasks items={receiptDue} nav={nav} canEdit={canEdit} books={books} />
       {tasks.length ? (

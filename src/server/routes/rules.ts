@@ -9,7 +9,10 @@
  *   POST /api/rules/share             { ref }: that rule drafted into its file; the answer names the file for its card
  *   GET  /api/rules/grouped?ref=      the batch payer a person's links of several receipts to a payment offer («Immer so?», #190), or null
  *   POST /api/rules/grouped           { ref }: `grouped: true` drafted into the business's company file; the answer names the file for its card
- *   GET  /api/rules/unread?ref=       a payment whose receipt could not be read: its business and the rate its receipts showed most often (issue #57), or null
+ *   POST /api/rules/kept              { runs }: what a keep's booking runs made so far, their tasks closed
+ *   POST /api/rules/kept/undo         { runs, entries, undo }: the keep taken back, rule file and its bookings
+ *   GET  /api/rules/wages            the rule for the open wages, drafted by code (#383), or null
+ *   GET  /api/rules/unread?ref=     a payment whose receipt could not be read: its business and the rate its receipts showed most often (issue #57), or null
  *   POST /api/rules/unread            { ref, rate }: «Immer so?» — the company's rule for that business's unread receipts drafted into its file (waits in Änderungen)
  *   POST /api/rules/sale              { question }: «Immer so?» under an answer to a sale question: the payer rule drafted for its card, or the payer is mixed
  *   GET  /api/rules/correction?ref=   the rule change a person's correction of a rule booking teaches («Regel anpassen?»), or null
@@ -25,13 +28,15 @@
  * switched on again with the new rules. A workflow that waited already keeps waiting.
  */
 import { Router } from 'express';
-import { RequestError, WS, tagsField } from '../books.js';
-import { loadBooks } from '../../books/store.js';
+import { RequestError, WS, tagsField, updateBooks } from '../books.js';
+import { loadBooks, periodLock } from '../../books/store.js';
 import { chartOf } from '../../booking/classify.js';
 import { chartNames, companyRules } from '../../booking/rule-book.js';
 import { loadKnowledge } from '../../knowledge/layers.js';
 import { baseCurrency } from '../../engines/index.js';
-import { discardDraft, draftRules, keepDraft, ruleCommand, ruleFactsOf, setDraftVat, type DraftCommand, type DraftView, type RuleCommand, type RulesView } from '../../saving/rules.js';
+import { discardDraft, draftRules, keepDraft, ruleCommand, ruleFactsOf, setDraftVat, type DraftCommand, type DraftView, type KeptBookings, type RuleCommand, type RulesView } from '../../saving/rules.js';
+import { bookedState } from '../../accounting/payment-entries.js';
+import { wageOffer } from '../../saving/wage-rule.js';
 import { loadWorkflows } from '../../workflows/load.js';
 import { draftShareRule, shareOffer } from '../../saving/share-rule.js';
 import { draftGroupedFlag, groupedOffer } from '../../saving/grouped-flag.js';
@@ -140,7 +145,120 @@ router.post('/api/rules/draft', async (req, res) => {
     return;
   }
   if (typeof c.basis !== 'string') throw new RequestError(400, 'basis erwartet.');
-  res.json(await keepingSwitchedOn(() => keepDraft(WS, c.path, c.basis, c.confirm === true)));
+  const kept = await keepingSwitchedOn(() => keepDraft(WS, c.path, c.basis, c.confirm === true));
+  // A rule kept books the open payments it decides at once (#383): the card showed them, and its tasks close.
+  res.json(kept.ok && kept.open?.book.length ? { ...kept, booked: await bookKept(kept.open.book) } : kept);
+});
+
+const RESTING = new Set(['done', 'waiting', 'stuck', 'parked', 'discarded']);
+/** How long the keep's answer waits for its booking runs; runs still going are named as running, and the card asks again. */
+const BOOK_WAIT_MS = 30_000;
+/** How many booking runs one keep starts; the rest are named with their number and follow on the next run. */
+export const KEEP_RUNS_MAX = 200;
+export const BOOKED_BY_RULE = 'Deine Regel hat diese Zahlung beim Behalten gebucht.';
+
+const restsNow = (id: string) => RESTING.has(engine().run(id)?.state.status ?? 'done');
+
+/**
+ * What the keep's runs made so far (#383): the payments their runs booked, the runs still going, the
+ * payments a run left unbooked (another booking came first, the run waits for a person). The tasks
+ * of the payments now booked close here, each time: a question of the ask workflow, and a booking run
+ * of another start waiting at «von Hand buchen» for the same payment.
+ */
+async function keptState(runs: readonly string[], later = 0): Promise<KeptBookings> {
+  const e = engine();
+  const books = loadBooks(WS);
+  const mine = new Set(runs);
+  const refOf = new Map(runs.flatMap((id) => { const r = e.run(id); return r ? [[id, r.item.id] as const] : []; }));
+  const made = books.journalEntries.filter((x) => mine.has(x.run ?? '') && !!x.rule);
+  const booked = new Set(made.map((x) => x.transactionRef).filter((ref) => bookedState(books, ref, WS.bankAccounts) === 'booked'));
+  const running = runs.filter((id) => !restsNow(id));
+  for (const r of e.runs()) {
+    if (r.mode !== 'live' || r.state.status !== 'waiting' || r.item.kind !== 'transaction' || !booked.has(r.item.id) || mine.has(r.id)) continue;
+    if (r.workflow === 'ask' || r.workflow === 'booking') await e.command({ kind: 'discard', run: r.id, reason: BOOKED_BY_RULE });
+  }
+  const first = [...made].sort((a, b) => b.date.localeCompare(a.date))[0];
+  return {
+    runs: [...runs],
+    refs: [...booked],
+    entries: made.map((x) => x.id),
+    running: running.length,
+    notBooked: runs.filter((id) => restsNow(id) && !booked.has(refOf.get(id) ?? '')).map((id) => refOf.get(id) ?? id),
+    ...(later ? { later } : {}),
+    ...(first ? { first: { id: first.id, date: first.date } } : {}),
+  };
+}
+
+/**
+ * The booking run for each payment a kept rule decides (as «Braucht keinen Beleg» starts it, #340),
+ * at most KEEP_RUNS_MAX (the rest named, for the next run), awaited a while; runs still going after
+ * it finish on their own, close their tasks then (keptState), and the card asks again.
+ */
+async function bookKept(refs: string[]): Promise<KeptBookings> {
+  const e = engine();
+  const runs: string[] = [];
+  for (const id of refs.slice(0, KEEP_RUNS_MAX)) {
+    const r = await e.command({ kind: 'start', workflow: 'booking', item: { kind: 'transaction', id } });
+    if (r.ok && r.run) runs.push(r.run);
+  }
+  const later = Math.max(0, refs.length - KEEP_RUNS_MAX);
+  const until = Date.now() + BOOK_WAIT_MS;
+  while (Date.now() < until && !runs.every(restsNow)) await new Promise((r) => setTimeout(r, 100));
+  // Runs still going close their tasks when they rest, whether or not the page asks again.
+  if (!runs.every(restsNow)) void (async () => { while (!runs.every(restsNow)) await new Promise((r) => setTimeout(r, 500)); await keptState(runs); })().catch(() => undefined);
+  return keptState(runs, later);
+}
+
+/** POST /api/rules/kept { runs }: what a keep's runs made so far, for the card's result line while some still run. */
+router.post('/api/rules/kept', async (req, res) => {
+  const runs = (req.body as { runs?: unknown })?.runs;
+  if (!Array.isArray(runs) || !runs.every((r) => typeof r === 'string')) throw new RequestError(400, 'runs erwartet.');
+  res.json(await keptState(runs));
+});
+
+/** Why a booking of a keep stays at its undo. */
+export type KeptLeft = { changed: number; closed: number; gone: number };
+
+/**
+ * POST /api/rules/kept/undo { runs, entries, undo }: «Rückgängig» of a keep in one step. The rules
+ * file goes back as it was (none, when the keep wrote the first), then the bookings the keep's runs
+ * made go, as the person's change: only those still the run's and the rule's. A booking changed by a
+ * person since, one of a period closed since, or one gone already stays and is counted with its
+ * reason. Each payment so left without a booking is as before the keep: no mark of a deletion, and
+ * its question comes again (workflows/ask: «von Hand buchen» without an AI, the next run with one).
+ */
+router.post('/api/rules/kept/undo', async (req, res) => {
+  const b = (req.body ?? {}) as { runs?: unknown; entries?: unknown; undo?: { file?: unknown; before?: unknown; after?: unknown } };
+  const strings = (x: unknown): x is string[] => Array.isArray(x) && x.every((s) => typeof s === 'string');
+  if (!strings(b.runs) || !strings(b.entries) || typeof b.undo?.file !== 'string' || typeof b.undo.before !== 'string' || typeof b.undo.after !== 'string') throw new RequestError(400, 'runs, entries und undo erwartet.');
+  if (!b.runs.every(restsNow)) { res.json({ ok: false, refusal: 'running', message: 'Die Regel bucht noch: gleich nochmals.' }); return; }
+  const undo = { file: b.undo.file, before: b.undo.before, after: b.undo.after };
+  const back = await keepingSwitchedOn(() => ruleCommand(WS, { kind: 'restore', ...undo }));
+  if (!back.ok) { res.json(back); return; }
+  const runs = new Set(b.runs);
+  const known = b.entries;
+  const out = updateBooks((books) => {
+    const lock = periodLock(books);
+    const left: KeptLeft = { changed: 0, closed: 0, gone: known.filter((id) => !books.journalEntries.some((e) => e.id === id)).length };
+    const go = new Set<string>();
+    for (const e of books.journalEntries) {
+      if (!runs.has(e.run ?? '')) continue;
+      if (lock.isClosed(e.date)) left.closed++;
+      else if (e.origin === 'manual' || !e.rule || e.by?.kind === 'person' || e.by?.kind === 'assistant') left.changed++;
+      else go.add(e.id);
+    }
+    const refs = new Set(books.journalEntries.filter((e) => go.has(e.id)).map((e) => e.transactionRef));
+    books.journalEntries = books.journalEntries.filter((e) => !go.has(e.id));
+    const unbooked = [...refs].filter((ref) => !books.journalEntries.some((e) => e.transactionRef === ref));
+    for (const t of books.transactions) if (unbooked.includes(t.ref) && t.waitsForPerson?.why === 'bookingDeleted') delete t.waitsForPerson;
+    return { removed: go.size, left, unbooked };
+  });
+  for (const id of out.unbooked) await engine().command({ kind: 'start', workflow: 'ask', item: { kind: 'transaction', id } });
+  res.json({ ok: true, removed: out.removed, left: out.left });
+});
+
+router.get('/api/rules/wages', (_req, res) => {
+  res.json({ offer: wageOffer(WS) ?? null });
 });
 
 router.get('/api/rules/unread', (req, res) => {

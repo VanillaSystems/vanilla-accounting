@@ -381,3 +381,31 @@ test('open period: a run of the inbox processing keeps the filed quarter\'s entr
   const now = loadBooks(workspaceAt(api.ws.paths.root)) as Books;
   assert.deepEqual(closedPart(now, '2026-06-30'), closedPart(fixture, '2026-06-30'));
 });
+
+test('open period: keeping a rule books its open payments and leaves the filed quarter\'s; its undo too (#383)', async () => {
+  const fixture = JSON.parse(readFileSync(join(REPO, 'tests/fixtures/period-lock-index.json'), 'utf8')) as Books;
+  // «Manuell Juni» (M2026-001) lies in the filed quarter, unbooked; a payment of the open quarter says «Manuell» too.
+  // Earlier tests of this file write the firm's chart: the rule's account is put into it here.
+  assert.equal((await send({ method: 'PUT', path: '/api/accounts/6570', body: { name: 'Informatikaufwand' } })).status, 200);
+  const opened = await send({ method: 'POST', path: '/api/transactions/manual', body: { date: '2026-08-03', description: 'Manuell Lizenz', amount: 5, currency: 'CHF', direction: 'DBIT' } });
+  assert.equal(opened.status, 200, opened.error);
+  const ref = String(opened.json.ref);
+  // It needs no receipt, so the keep books it rather than wait for one.
+  assert.equal((await send({ method: 'PATCH', path: `/api/transactions/${ref}`, body: { noReceiptNeeded: true } })).status, 200);
+  const made = await send({ method: 'POST', path: '/api/rules/hand', body: { match: { kind: 'text', text: 'Manuell' }, direction: 'out', account: '6570', vat: '0' } });
+  assert.equal(made.status, 200, made.error);
+  const path = String(made.json.path);
+  const card = (await api.send('GET', `/api/rules/draft?path=${encodeURIComponent(path)}`)).json as { basis: string; preview: Array<{ open?: { book: string[] } }> };
+  assert.ok(card.preview[0].open?.book.includes(ref) && !card.preview[0].open.book.includes('M2026-001'), JSON.stringify(card.preview[0].open));
+  const kept = (await send({ method: 'POST', path: '/api/rules/draft', body: { kind: 'keep', path, basis: card.basis, confirm: true } })).json as { ok: boolean; booked?: { runs: string[]; refs: string[]; entries: string[] }; undo?: { file: string; before: string; after: string } };
+  assert.ok(kept.booked?.refs.includes(ref) && !kept.booked.refs.includes('M2026-001'), JSON.stringify(kept));
+  let now = loadBooks(workspaceAt(api.ws.paths.root)) as Books;
+  assert.ok(!now.journalEntries.some((e) => e.transactionRef === 'M2026-001'));
+  assert.deepEqual(closedPart(now, '2026-06-30'), closedPart(fixture, '2026-06-30'));
+  const undone = await send({ method: 'POST', path: '/api/rules/kept/undo', body: { runs: kept.booked!.runs, entries: kept.booked!.entries, undo: kept.undo } });
+  assert.equal(undone.json.ok, true, JSON.stringify(undone.json));
+  await api.rest();
+  now = loadBooks(workspaceAt(api.ws.paths.root)) as Books;
+  assert.ok(!now.journalEntries.some((e) => e.transactionRef === ref));
+  assert.deepEqual(closedPart(now, '2026-06-30'), closedPart(fixture, '2026-06-30'));
+});
