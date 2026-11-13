@@ -33,15 +33,16 @@ match:
   file: [ '^\d{8}[-_]shopify' ]
 
 documents:
-  # Shopify Admin › Einstellungen › Rechnungen: the monthly «Shopify Payments Invoice for <month>» of the
+  # Shopify Admin › Settings › Billing › Bills (AGENTS.md § Shopify billing): the monthly «Shopify Payments Invoice for <month>» of the
   # transaction fees Shopify kept from the payouts, with its Swiss VAT. No payment will come for it.
   - id: payments-invoice
     kind: invoice
     text: [ 'Shopify Payments Invoice for' ]
     proves: vat-correction
-    # Said when a month's bill is missing («Noch offen», #459): the title Shopify prints, and where its admin keeps it.
+    # Said when a month's bill is missing («Noch offen», #459): the title Shopify prints, and where its admin keeps it, in the
+    # admin's English menu words as AGENTS.md § Shopify billing documents them (the German labels were not checked against a live admin).
     name: Shopify Payments Invoice
-    where: "Shopify Admin › Einstellungen › Rechnungen"
+    where: "Shopify Admin › Settings › Billing › Bills"
 
 provider:
   reports:

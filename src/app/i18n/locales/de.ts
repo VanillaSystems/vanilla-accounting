@@ -2837,7 +2837,7 @@ export const messages = {
   'issues.billNamed': '«{document}» {month} von {provider} ist nicht in den Büchern: die MWST auf den Gebühren ist nicht abgezogen, {amount}',
   'issues.billVat': 'geschätzt {vat} ({rate} % in {fees} Gebühren)',
   'issues.billFees': 'Gebühren {fees}',
-  'issues.billWhere': '{provider} stellt sie unter {where} bereit.',
+  'issues.billWhere': '{provider} stellt sie in seinem Menü unter {where} bereit.',
   'issues.billAdd': 'Rechnung hinzufügen',
   'issues.withheld': '{date} {text} {amount}: gebucht ohne den Anteil der Arbeitnehmenden. Konto {account} hält noch {open} Lohnabzüge',
   'issues.evidenceTitle': { one: '{n} Buchung passt nicht zu ihrem Beleg', other: '{n} Buchungen passen nicht zu ihren Belegen' },

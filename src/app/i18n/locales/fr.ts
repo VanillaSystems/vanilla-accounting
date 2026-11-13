@@ -2840,7 +2840,7 @@ export default {
     'issues.billNamed': '« {document} » {month} de {provider} n’est pas dans les livres : la TVA sur les frais n’est pas déduite, {amount}',
     'issues.billVat': 'environ {vat} ({rate} % compris dans {fees} de frais)',
     'issues.billFees': 'frais {fees}',
-    'issues.billWhere': '{provider} la met à disposition sous {where}.',
+    'issues.billWhere': '{provider} la met à disposition dans son menu sous {where}.',
     'issues.billAdd': 'Ajouter la facture',
     'issues.withheld': '{date} {text} {amount} : comptabilisé sans la part des employés. Le compte {account} contient encore {open} de retenues salariales',
     'issues.evidenceTitle': { one: '{n} écriture ne correspond pas à son justificatif', other: '{n} écritures ne correspondent pas à leurs justificatifs' },

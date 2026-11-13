@@ -44,16 +44,16 @@ test('#459 a missing bill is named as the provider\'s file names it, where it is
   const [bill] = providerIssuesIn(ws, loadBooks(ws), '2026-12-15').bills;
   assert.deepEqual(bill, {
     provider: 'shopify', name: 'Shopify', month: '2026-11', date: '2026-11-30', fees: 269.23,
-    document: 'Shopify Payments Invoice', where: 'Shopify Admin › Einstellungen › Rechnungen', rate: 8.1, vat: 20.17,
+    document: 'Shopify Payments Invoice', where: 'Shopify Admin › Settings › Billing › Bills', rate: 8.1, vat: 20.17,
   });
   const line = billText(bill, 'November 2026', chf, de);
-  assert.equal(line, '«Shopify Payments Invoice» November 2026 von Shopify ist nicht in den Büchern: die MWST auf den Gebühren ist nicht abgezogen, geschätzt CHF 20.17 (8.1 % in CHF 269.23 Gebühren). Shopify stellt sie unter Shopify Admin › Einstellungen › Rechnungen bereit.');
+  assert.equal(line, '«Shopify Payments Invoice» November 2026 von Shopify ist nicht in den Büchern: die MWST auf den Gebühren ist nicht abgezogen, geschätzt CHF 20.17 (8.1 % in CHF 269.23 Gebühren). Shopify stellt sie in seinem Menü unter Shopify Admin › Settings › Billing › Bills bereit.');
   assert.doesNotMatch(line, /\(CHF 269\.23\) ist nicht abgezogen/, 'the fees are never said to be the VAT');
   // The AI is handed the same facts: the document, where it is, the estimate and the fees apart.
   const books = loadBooks(ws);
   // Q4 is the oldest period not filed once Q3 is.
   const note = periodNote(ws, { ...books, config: { ...books.config, closedThrough: '2026-09-30' } } as Books, [], 'de', '2026-12-15');
-  assert.match(note, /- Shopify, 2026-11: «Shopify Payments Invoice», kept by Shopify under «Shopify Admin › Einstellungen › Rechnungen»; the VAT on that month's fees of CHF 269\.23 is about CHF 20\.17 \(estimated at 8\.1 %/);
+  assert.match(note, /- Shopify, 2026-11: «Shopify Payments Invoice», kept by Shopify under «Shopify Admin › Settings › Billing › Bills»; the VAT on that month's fees of CHF 269\.23 is about CHF 20\.17 \(estimated at 8\.1 %/);
 });
 
 test('#459 the estimate takes the rate of the bill\'s code the company\'s file names', () => {
@@ -64,5 +64,5 @@ test('#459 the estimate takes the rate of the bill\'s code the company\'s file n
 
 test('#459 a bill its file does not name is said as a monthly bill, with the fees when no rate is known', () => {
   const bill = { provider: 'p', name: 'Pay AG', month: '2026-11', date: '2026-11-30', fees: 50 };
-  assert.equal(billText(bill, 'November 2026', chf, de), 'Die Monatsrechnung November 2026 von Pay AG ist nicht in den Büchern: die MWST auf den Gebühren ist nicht abgezogen, Gebühren CHF 50.00');
+  assert.equal(billText(bill, 'November 2026', chf, de), 'Die Monatsrechnung November 2026 von Pay AG ist nicht in den Büchern: die MWST auf den Gebühren ist nicht abgezogen, Gebühren CHF 50.00.');
 });

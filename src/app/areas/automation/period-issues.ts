@@ -130,7 +130,7 @@ export type Say = (key: string, vars?: Record<string, string | number>) => strin
 export function billText(b: MissingBill, month: string, money: (n: number) => string, say: Say): string {
   const amount = b.vat !== undefined && b.rate !== undefined ? say('issues.billVat', { vat: money(b.vat), rate: String(b.rate), fees: money(b.fees) }) : say('issues.billFees', { fees: money(b.fees) });
   const line = say(b.document ? 'issues.billNamed' : 'issues.bill', { month, provider: b.name, amount, ...(b.document ? { document: b.document } : {}) });
-  return b.where ? `${line}. ${say('issues.billWhere', { provider: b.name, where: b.where })}` : line;
+  return b.where ? `${line}. ${say('issues.billWhere', { provider: b.name, where: b.where })}` : `${line}.`;
 }
 
 /**

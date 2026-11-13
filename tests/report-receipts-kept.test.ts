@@ -103,7 +103,7 @@ test('#405 a held order and a month of fees without its bill are open items of t
   const issues = providerIssuesIn(ws, books, '2026-12-15');
   const report = books.receipts.find((r) => r.report?.kind === 'sales')!;
   assert.deepEqual(issues.held, [{ provider: 'shopify', name: 'Shopify', receipt: report.id, order: '2102', why: 'rate', date: '2026-11-13', gross: 108, currency: 'CHF' }]);
-  assert.deepEqual(issues.bills, [{ provider: 'shopify', name: 'Shopify', month: '2026-11', date: '2026-11-30', fees: 5.26, document: 'Shopify Payments Invoice', where: 'Shopify Admin › Einstellungen › Rechnungen', rate: 8.1, vat: 0.39 }]);
+  assert.deepEqual(issues.bills, [{ provider: 'shopify', name: 'Shopify', month: '2026-11', date: '2026-11-30', fees: 5.26, document: 'Shopify Payments Invoice', where: 'Shopify Admin › Settings › Billing › Bills', rate: 8.1, vat: 0.39 }]);
   assert.deepEqual(providerIssuesIn(ws, books, '2026-11-20').bills, [], 'a month not over yet has no bill to miss');
 
   const list = periodIssues(books, [], '2026-10-01', '2026-12-31', [], new Map(), '2026-12-15', new Map(), issues);

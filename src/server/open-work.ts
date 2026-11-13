@@ -126,8 +126,12 @@ export const elsewhereFor = <T extends Task>(ws: Ws, books: Books, tasks: readon
 const openingLine = (o: MissingOpening) => {
   const amount = money(o.currency ?? baseCurrency(), o.amount);
   const head = `- ${o.label} (${o.account}): ${amount} before its first payment in these books, on ${day(o.from)}, as its statements imply`;
-  return o.from <= `${o.year}-01-01` ? `${head}; that is its balance on 1.1.${o.year}`
-    : `${head}. The statements in these books begin then: what the account held on 1.1.${o.year} they do not say, and ${amount} is not that balance; the opening of 1.1.${o.year} is the balance of 31.12.${Number(o.year) - 1} (the balance sheet of the year before), and a difference to ${amount} is what moved from 1.1. to ${day(o.from)}, outside these books`;
+  // Whether the statements reach back to 1.1. is the statements' own first day, never the first payment's (#459 review).
+  if (o.statementsFrom && o.statementsFrom <= `${o.year}-01-01`) return `${head}; its statements begin on 1.1.${o.year}, so that is its balance on 1.1.${o.year}`;
+  const before = `the opening of 1.1.${o.year} is the balance of 31.12.${Number(o.year) - 1} (the balance sheet of the year before), and a difference to ${amount} is what moved from 1.1. until then, outside these books`;
+  return o.statementsFrom
+    ? `${head}. The statements in these books begin on ${day(o.statementsFrom)}: what the account held on 1.1.${o.year} they do not say, and ${amount} is not that balance; ${before}`
+    : `${head}. Whether the statements in these books reach back to 1.1.${o.year} they do not say, so ${amount} need not be the balance of 1.1.; ${before}`;
 };
 
 /** A clearing account below zero (#428) with its provider's reports in the books, their days and bookings, and its opening (#459). */

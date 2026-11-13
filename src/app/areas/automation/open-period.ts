@@ -179,7 +179,9 @@ export function openPeriodState(
     openings: missingOpenings(books, accounts, period.to.slice(0, 4)),
     clearing: (provider?.clearing ?? []).flatMap((c): ClearingBelow[] => {
       const balance = balanceAt(books.journalEntries ?? [], c.account, period.to, books.config?.openingBalances);
-      const opened = books.config?.openingBalances?.[period.to.slice(0, 4)]?.[c.account] !== undefined;
+      const year = period.to.slice(0, 4);
+      // A foreign-currency clearing account's opening is its balance in its currency too (#471 review).
+      const opened = books.config?.openingBalances?.[year]?.[c.account] !== undefined || !!books.config?.openingBalancesNative?.[year]?.[c.account];
       return balance < 0 ? [{ name: c.name, account: c.account, balance, reports: reportsOf(books, c.provider), opened }] : [];
     }),
     // Only the period's: its payment is dated in it, as everything the state counts.

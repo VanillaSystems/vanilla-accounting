@@ -36,7 +36,7 @@ const books = {
     entry('SF-shop-1', '2026-07-05', '6580', '1093', 9, ['fees']),
   ],
   receipts: [report('sales', 'sales'), report('fees', 'fees')],
-  mappings: [], bankStatements: [],
+  mappings: [], bankStatements: [{ bank: 'LUKB', filename: 'q3.xml', fromDate: '2026-07-01', toDate: '2026-09-30', currency: 'CHF' }],
 } as unknown as Index;
 const accounts = [{ bank: 'LUKB', currency: 'CHF', account: '1020', label: 'Luzerner Kantonalbank CHF' }] as never;
 const ctx = { today: '2026-11-13', vatRegistered: true, length: 'quarter' as const, dueDays: 60 };
@@ -48,8 +48,24 @@ test('#459 a missing opening is the balance before the first payment, on its day
   roots.push(ws.paths.root);
   const s = openPeriodState(books, [], [], accounts, ctx, new Map(), new Map(), provider);
   const note = periodNote(ws, books as Books, [], 'de', '2026-11-13', s, elsewhereFor(ws, books as Books, [], s, 0, '2026-11-13'));
-  assert.match(note, /- Luzerner Kantonalbank CHF \(1020\): CHF 21'460\.25 before its first payment in these books, on 01\.07\.2026, as its statements imply\. The statements in these books begin then: what the account held on 1\.1\.2026 they do not say/);
+  assert.match(note, /- Luzerner Kantonalbank CHF \(1020\): CHF 21'460\.25 before its first payment in these books, on 01\.07\.2026, as its statements imply\. The statements in these books begin on 01\.07\.2026: what the account held on 1\.1\.2026 they do not say/);
   assert.doesNotMatch(note, /21'460\.25 on 1\.1\.2026/, 'the balance of 01.07. is never handed over as the one of 1.1.');
+});
+
+test('#459 statements from 01.01. whose first payment is on 05.01.: the balance before it is the one of 1.1., said so (review of #471)', () => {
+  const january = {
+    ...books, config: {}, receipts: [], journalEntries: [entry('R1', '2026-01-05', '6000', '1020', 2000)],
+    transactions: [tx('R1', '2026-01-05', 2000, 'DBIT')],
+    statementBalances: [{ account: '1020', bank: 'LUKB', currency: 'CHF', date: '2026-03-31', amount: 16000, source: 'camt', sourceFile: 'q1.xml' }],
+    bankStatements: [{ bank: 'LUKB', filename: 'q1.xml', fromDate: '2026-01-01', toDate: '2026-03-31', currency: 'CHF' }],
+  } as unknown as Index;
+  assert.deepEqual(missingOpenings(january, accounts, '2026').map((o) => [o.amount, o.from, o.statementsFrom]), [[18000, '2026-01-05', '2026-01-01']]);
+  const ws = tempWorkspace('facts-459-');
+  roots.push(ws.paths.root);
+  const s = openPeriodState(january, [], [], accounts, ctx, new Map(), new Map(), { ...provider, clearing: [] });
+  const note = periodNote(ws, january as Books, [], 'de', '2026-11-13', s, elsewhereFor(ws, january as Books, [], s, 0, '2026-11-13'));
+  assert.match(note, /- Luzerner Kantonalbank CHF \(1020\): CHF 18'000\.00 before its first payment in these books, on 05\.01\.2026, as its statements imply; its statements begin on 1\.1\.2026, so that is its balance on 1\.1\.2026/);
+  assert.doesNotMatch(note, /they do not say/);
 });
 
 test('#459 a clearing account below zero names its provider\'s reports with their days and bookings, and its missing opening; never «a sales report not dropped yet»', () => {
@@ -65,4 +81,9 @@ test('#459 a clearing account below zero names its provider\'s reports with thei
   // Without a report in the books, that is said as a fact.
   const none = openPeriodState({ ...books, receipts: [] }, [], [], accounts, ctx, new Map(), new Map(), provider);
   assert.match(periodNote(ws, { ...books, receipts: [] } as Books, [], 'de', '2026-11-13', none, elsewhereFor(ws, books as Books, [], none, 0, '2026-11-13')), /- 1093 Shop: CHF -189\.00; no report of it is in the books yet;/);
+});
+
+test('#459 a foreign-currency clearing account whose opening is entered in its currency is said to have its opening (review of #471)', () => {
+  const eur = { ...books, config: { ...books.config, openingBalancesNative: { 2026: { 1093: { amount: 50, currency: 'EUR' } } } } } as unknown as Index;
+  assert.equal(openPeriodState(eur, [], [], accounts, ctx, new Map(), new Map(), provider).clearing[0].opened, true);
 });

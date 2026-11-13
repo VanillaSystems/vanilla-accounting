@@ -2840,7 +2840,7 @@ export default {
     'issues.billNamed': '«{document}» {month} of {provider} is not in the books: the VAT on the fees is not deducted, {amount}',
     'issues.billVat': 'about {vat} ({rate} % within {fees} of fees)',
     'issues.billFees': 'fees {fees}',
-    'issues.billWhere': '{provider} keeps it under {where}.',
+    'issues.billWhere': '{provider} keeps it in its menu under {where}.',
     'issues.billAdd': 'Add the bill',
     'issues.withheld': '{date} {text} {amount}: booked without the employees\' share. Account {account} still holds {open} of wage deductions',
     'issues.evidenceTitle': { one: '{n} booking does not fit its receipt', other: '{n} bookings do not fit their receipts' },

@@ -2840,7 +2840,7 @@ export default {
     'issues.billNamed': '«{document}» {month} di {provider} non è nei libri: l’IVA sulle commissioni non è dedotta, {amount}',
     'issues.billVat': 'circa {vat} ({rate} % compreso in {fees} di commissioni)',
     'issues.billFees': 'commissioni {fees}',
-    'issues.billWhere': '{provider} la mette a disposizione sotto {where}.',
+    'issues.billWhere': '{provider} la mette a disposizione nel suo menu sotto {where}.',
     'issues.billAdd': 'Aggiungi la fattura',
     'issues.withheld': '{date} {text} {amount}: registrato senza la quota dei dipendenti. Il conto {account} contiene ancora {open} di trattenute salariali',
     'issues.evidenceTitle': { one: '{n} registrazione non corrisponde al suo giustificativo', other: '{n} registrazioni non corrispondono ai loro giustificativi' },

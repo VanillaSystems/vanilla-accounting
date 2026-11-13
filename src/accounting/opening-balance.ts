@@ -103,7 +103,7 @@ export function withNativeOpening(openings: NativeOpenings, year: string, accoun
 }
 
 type BankAccount = { bank: string; currency: string; account: string; label: string };
-type StartBooks = Pick<Index, 'config' | 'transactions' | 'journalEntries' | 'statementBalances'>;
+type StartBooks = Pick<Index, 'config' | 'transactions' | 'journalEntries' | 'statementBalances'> & Partial<Pick<Index, 'bankStatements'>>;
 
 /** A bank account the books open at nothing while its statements say it held money (corner-25). */
 export interface MissingOpening {
@@ -119,6 +119,11 @@ export interface MissingOpening {
    * 1 January only when nothing moved before it; books whose statements begin in July never say 1.1. of it (#459).
    */
   from: string;
+  /**
+   * The first day the account's statements cover, from the statements themselves: the earliest statement's first day (#459).
+   * Only when it is 1 January or before is `amount` the balance of 1.1.; absent when no statement says it.
+   */
+  statementsFrom?: string;
   /** Whether Firma › Eröffnung takes it: not once the year is closed through 31.12., so no link leads into a refusal. */
   canType: boolean;
 }
@@ -139,6 +144,11 @@ function bankStart(books: StartBooks, a: BankAccount, year: string): { from: str
   return { from: paid.map((t) => t.date).sort()[0] ?? first.date, held: toRappen(first.amount) - moved };
 }
 
+/** The first day the account's statements cover (#459): the earliest statement's first day (a bank export's is the day after its opening balance, src/books/bank-import.ts). */
+function statementsFrom(books: StartBooks, a: BankAccount): string | undefined {
+  return (books.bankStatements ?? []).filter((s) => s.bank === a.bank && (!s.currency || s.currency === a.currency)).map((s) => s.fromDate).filter(Boolean).sort()[0];
+}
+
 /**
  * The first year's bank accounts without an opening balance whose statements disagree: the
  * first closing balance of the year less the payments up to it is what the account held on
@@ -151,7 +161,9 @@ export function missingOpenings(books: StartBooks, accounts: ReadonlyArray<BankA
   return accounts.flatMap((a): MissingOpening[] => {
     if (openingIn(books, a, year) !== undefined) return [];
     const start = bankStart(books, a, year);
-    return !start || start.held === 0 ? [] : [{ account: a.account, label: a.label, year, currency: a.currency, amount: fromRappen(start.held), from: start.from, canType: !lock }];
+    if (!start || start.held === 0) return [];
+    const covered = statementsFrom(books, a);
+    return [{ account: a.account, label: a.label, year, currency: a.currency, amount: fromRappen(start.held), from: start.from, ...(covered ? { statementsFrom: covered } : {}), canType: !lock }];
   });
 }
 
