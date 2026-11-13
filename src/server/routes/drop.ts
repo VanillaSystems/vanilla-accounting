@@ -179,6 +179,15 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
     case 'private':
       setAsidePrivate(s, row);
       break;
+    case 'firmAccount': {
+      // The account was just added through Firma's validated path (the row's form, #401): the statement is read now, no second drop.
+      const iban = row.unknownAccount && compactIban(row.unknownAccount.iban);
+      if (settled || !iban || !existsSync(fileOf(s.id, row.key))) throw new RequestError(400, 'Nur ein Auszug eines Kontos, das in den Büchern fehlte, wird so eingelesen.');
+      if (!WS.bankAccounts.some((x) => x.iban && compactIban(x.iban) === iban)) throw new RequestError(400, `Kein Bankkonto der Firma hat die IBAN ${row.unknownAccount!.iban}.`);
+      for (const k of ['chooseAccount', 'unknownAccount', 'details', 'message'] as const) delete row[k];
+      Object.assign(row, { state: 'take', reason: undefined });
+      break;
+    }
     case 'account':
       if (!row.chooseAccount?.accounts.some((x) => x.account === a.account) || !existsSync(fileOf(s.id, row.key))) throw new RequestError(400, 'Nur eines der angebotenen Konten nimmt diesen Auszug.');
       delete row.chooseAccount;

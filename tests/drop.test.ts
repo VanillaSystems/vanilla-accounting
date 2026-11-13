@@ -397,6 +397,36 @@ test('a camt.053 of an account the books lack names its bank and asks; «Nein, p
   }
 });
 
+test('«Ja, Bankkonto hinzufügen» adds the account in the row and reads the statement at once, each payment by its own ref (#401)', async () => {
+  const api = await startApi('demo');
+  try {
+    cpSync(DEMO_ROOT, api.root, { recursive: true, filter: (src) => !src.endsWith('belege.workspace.yaml') });
+    const { post, books } = SESSION(api);
+    // The Wise EUR statement of a second account, its references only in the transaction details.
+    const camt = readFileSync(join(import.meta.dirname, 'fixtures/camt053/wise_EUR_refs_in_txdtls.xml'), 'utf8').replace('BE29967000000164', 'BE40967000000063');
+    let s = await post('/api/drop');
+    s = await post(`/api/drop/${s.id}/files?name=wise-second.xml`, Buffer.from(camt));
+    const row = s.rows[0];
+    assert.equal(row.state, 'asks', row.message);
+    assert.equal(row.unknownAccount?.iban, 'BE40967000000063');
+    await assert.rejects(post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'firmAccount' }), /400/, 'only once the account is there');
+
+    const added = await api.send('PATCH', '/api/workspace', { addBank: { bank: 'Wise 2', currency: 'EUR', account: '1024', label: 'Wise Europe SA', iban: 'BE40967000000063' } });
+    assert.equal(added.status, 200, added.json.error as string);
+    s = await post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'firmAccount' });
+    const taken = s.rows[0];
+    assert.equal(taken.state, 'taken', taken.message);
+    assert.equal(taken.statement?.account, '1024');
+    assert.deepEqual([...taken.statement!.refs].sort(), ['CARD-910000', 'CARD-910037', 'CARD-910074', 'CARD-910111', 'CARD-910185', 'CARD-910222', 'TRANSFER-910148']);
+    const b = await books();
+    assert.equal(b.transactions.filter((t) => t.bank === 'Wise 2').length, 7);
+    assert.ok(b.transactions.every((t) => t.ref.trim()), 'no payment without a ref');
+  } finally {
+    await SESSION(api).rest().catch(() => {});
+    await api.stop();
+  }
+});
+
 // 2 x 2 pixels, red (tests/image-pdf.test.ts).
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAD0lEQVR4nGP4z8DwHwYBAB7FA/+WnI5aAAAAAElFTkSuQmCC', 'base64');
 

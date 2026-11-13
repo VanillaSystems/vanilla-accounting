@@ -16,7 +16,7 @@ import { isUnbooked } from '../areas/bank/model.js';
 import { receiptWaits } from '../areas/automation/period-issues.js';
 import { parsePeriod, filingKeyOf } from '../../accounting/periods.js';
 import { useQuestions } from '../questions/store.js';
-import { useWorkspace } from '../hooks/use-workspace.js';
+import { reloadWorkspace, useWorkspace } from '../hooks/use-workspace.js';
 import { periodName } from '../lib/period-label.js';
 import { OPEN_ITEMS } from '../areas/vat/model.js';
 import { localToday, type Period } from '../../accounting/periods.js';
@@ -38,7 +38,8 @@ import type { Location, Route } from './route.js';
 import { at } from '../areas/receipts/view.js';
 import { fileKeyOf } from '../areas/bank/model.js';
 import { startIntake } from '../automation/intake.js';
-import { setBankDraft } from '../areas/company/bank-draft.js';
+import { draftForm } from '../areas/company/bank-draft.js';
+import { getAccountMap } from '../lib/accounts.js';
 import { chfOf, markLabel, suggestion } from '../areas/receipts/model.js';
 import { ledgerFor, noneText, txLine } from '../areas/receipts/view.js';
 import { offersInBooks } from '../../intake/near-pairs.js';
@@ -118,8 +119,9 @@ function metaOf(r: DropRow): string {
  * per account reads it into that one; the IBAN can be kept on it, so the next statement lands by
  * itself. An account the books lack and a private one stay possible.
  */
-function ChooseAccount({ r, session, go }: { r: DropRow; session: DropSession; go(route: Route): void }) {
+function ChooseAccount({ r, session }: { r: DropRow; session: DropSession }) {
   const choice = r.chooseAccount!;
+  const [adding, setAdding] = useState(false);
   const proposed = choice.accounts.find((a) => a.account === choice.proposed);
   // The proposal (the account whose bank the file names, #208) comes first; the person still clicks it.
   const accounts = proposed ? [proposed, ...choice.accounts.filter((a) => a !== proposed)] : choice.accounts;
@@ -150,13 +152,56 @@ function ChooseAccount({ r, session, go }: { r: DropRow; session: DropSession; g
       </span>
       {proposed ? <small>{t('drop.proposalWhy', { label: proposed.label })}</small> : null}
       {choice.iban ? <label className="dkeep"><input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} /> {t('drop.keepIban')}</label> : null}
-      {r.unknownAccount ? (
+      {r.unknownAccount ? (adding ? <AddAccount r={r} session={session} onCancel={() => setAdding(false)} /> : (
         <span className="dacts">
-          <button type="button" className="linkbtn" onClick={() => { setBankDraft(r.unknownAccount!); go({ area: 'company', section: 'banks' }); }}>{t('drop.otherAccount')}</button>
+          <button type="button" className="linkbtn" data-testid="drop-firm-account" onClick={() => setAdding(true)}>{t('drop.otherAccount')}</button>
           <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'private' })}>{t('drop.privateAccount')}</button>
         </span>
-      ) : null}
+      )) : null}
     </>
+  );
+}
+
+/**
+ * «Ja, Bankkonto hinzufügen» on a statement of an account the books lack (#401): the account is
+ * added right in its row, its bank's name, currency and IBAN read from the file and its ledger
+ * account proposed as Firma › Geldkonten would (draftForm), saved through the same route as that
+ * form (PATCH /api/workspace addBank, which checks it), and the statement is read in at once: the
+ * dialog stays open with all its rows. Firma › Geldkonten stays the way by hand.
+ */
+function AddAccount({ r, session, onCancel }: { r: DropRow; session: DropSession; onCancel(): void }) {
+  const d = r.unknownAccount!;
+  const banks = useWorkspace()?.bankAccounts;
+  if (!banks) return null;
+  return <AddAccountForm key={d.iban} d={d} banks={banks} r={r} session={session} onCancel={onCancel} />;
+}
+
+function AddAccountForm({ d, banks, r, session, onCancel }: { d: NonNullable<DropRow['unknownAccount']>; banks: ReadonlyArray<{ bank: string; currency: string; account: string }>; r: DropRow; session: DropSession; onCancel(): void }) {
+  const [f, setF] = useState(() => draftForm(d, banks, Object.keys(getAccountMap())));
+  const [busy, setBusy] = useState(false);
+  const valid = !!f.bank.trim() && /^\d{4}$/.test(f.account.trim());
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api.patchWorkspace({ addBank: { bank: f.bank.trim(), currency: d.currency, account: f.account.trim(), label: f.label.trim() || `${f.bank.trim()} ${d.currency}`, iban: d.iban } });
+      reloadWorkspace();
+      drop.answered(await api.dropRow(session.id, r.key, { kind: 'firmAccount' }));
+    } catch (e) {
+      set({ error: errorText(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form className="dpw dadd" data-testid="drop-add-account" onSubmit={(e) => { e.preventDefault(); if (valid && !busy) void save(); }}>
+      <label>{t('company.bank')}<input value={f.bank} onChange={(e) => setF({ ...f, bank: e.target.value })} autoFocus /></label>
+      <label>{t('yearClose.colAccount')}<input className="mono" inputMode="numeric" value={f.account} onChange={(e) => setF({ ...f, account: e.target.value })} /></label>
+      <small>{t('drop.addAccount.read', { currency: d.currency, iban: groupIban(d.iban) })}</small>
+      <span className="dacts">
+        <button type="submit" className="btn primary" disabled={!valid || busy}>{t('drop.addAccount.save')}</button>
+        <button type="button" className="linkbtn" disabled={busy} onClick={onCancel}>{t('common.cancel')}</button>
+      </span>
+    </form>
   );
 }
 
@@ -240,6 +285,7 @@ function reportLine(s: NonNullable<DropRow['report']>): string {
 function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(route: Route): void }) {
   const [password, setPassword] = useState('');
   const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
   const asked = r.state === 'duplicate' && r.reason === 'possible-duplicate';
   const chip = r.state === 'take' ? t('drop.taking') : asked ? t('drop.state.possible') : r.readAs ? t('drop.state.read') : t(`drop.state.${r.state}` as 'drop.state.duplicate');
   const details = r.state === 'asks' ? r.details : undefined;
@@ -261,11 +307,15 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
         </div>
         <div className="dgo">
           <span className={`dchip c-${r.state}`}>{chip}</span>
-          {r.askProvider ? <ProviderAccount key={r.askProvider.missing} r={r} session={session} /> : r.payoutUnseen ? <PayoutUnseenRow r={r} session={session} go={go} /> : r.chooseAccount ? <ChooseAccount r={r} session={session} go={go} /> : r.unknownAccount ? (
+          {r.askProvider ? <ProviderAccount key={r.askProvider.missing} r={r} session={session} /> : r.payoutUnseen ? <PayoutUnseenRow r={r} session={session} go={go} /> : r.chooseAccount ? <ChooseAccount r={r} session={session} /> : r.unknownAccount ? (
             <>
               <small>{t(r.unknownAccount.owner ? 'drop.unknownAccountOf' : r.unknownAccount.bankName ? 'drop.unknownAccountAt' : 'drop.unknownAccount', { iban: groupIban(r.unknownAccount.iban), currency: r.unknownAccount.currency, bank: r.unknownAccount.bankName ?? '', owner: r.unknownAccount.owner ?? '' })}</small>
-              <button type="button" className="linkbtn" onClick={() => { setBankDraft(r.unknownAccount!); go({ area: 'company', section: 'banks' }); }}>{t('drop.firmAccount')}</button>
-              <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'private' })}>{t('drop.privateAccount')}</button>
+              {adding ? <AddAccount r={r} session={session} onCancel={() => setAdding(false)} /> : (
+                <>
+                  <button type="button" className="linkbtn" data-testid="drop-firm-account" onClick={() => setAdding(true)}>{t('drop.firmAccount')}</button>
+                  <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'private' })}>{t('drop.privateAccount')}</button>
+                </>
+              )}
             </>
           ) : r.readAs ? (
             <>
