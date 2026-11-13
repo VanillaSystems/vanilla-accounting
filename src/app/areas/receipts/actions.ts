@@ -49,6 +49,17 @@ export function linkPayment(nav: Nav, v: ReceiptView, ref: string, what: string,
 }
 
 /**
+ * «Vorsteuer buchen» (#458): the input tax a bill of a VAT-only correction shows, booked now as the run books it, or the bill
+ * linked to the booking that books it already; the toast takes the booking away again, or the link.
+ */
+export function bookVatCorrection(nav: Nav, v: ReceiptView) {
+  let done: Awaited<ReturnType<typeof api.bookVatCorrection>> | undefined;
+  return run(nav, async () => { done = await api.bookVatCorrection(v.r.id); },
+    () => t('receipts.vatCorrection.booked'),
+    () => (done?.booked ? Promise.all(done.entries.map((id) => api.deleteJournalEntry(id))) : done ? api.removeMapping(pair(v.r.id, done.ref)) : Promise.resolve()));
+}
+
+/**
  * A payment of a filed quarter the receipt pays: never a link (golden rule 1). Its entry opens with
  * the correction in the open quarter started, its input tax read from the receipt `from` too; a
  * payment without an entry opens itself (corner-33).

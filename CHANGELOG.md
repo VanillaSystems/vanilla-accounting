@@ -424,6 +424,16 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A provider's monthly Payments Invoice no longer waits for the AI (#458): no payment comes for it,
+  so the inbox takes its date and total from its text by code and the booking step books its input
+  tax, as for the other months. Before, one failed AI answer left the bill in the inbox with
+  «fehlt: Datum, Betrag» and its input tax unbooked. Where Belege says the booking without a
+  payment «fehlt noch», the new button «Vorsteuer buchen» books it at once, also on a date and
+  total she typed; it says why when it cannot («kein Datum», «eingereichte Periode», no fee
+  account). Such a bill no longer offers «Mit Zahlung verknüpfen» as its main action. A copy of
+  such a bill with other bytes (the same invoice number in the same month, or a copy as Belege finds
+  one), and one she marked as a copy, no longer books its input tax a second time: Belege names the
+  bill it copies. The button is not offered on a firm without input tax.
 - «Buchung passt nicht zu ihrem Beleg» no longer names a line the receipt leaves untaxed (#455). A
   hotel bill of a room at 3.8 % and a Kurtaxe without VAT, on a card settlement, booked room I38
   and Kurtaxe I0, got the task «Der Beleg zeigt 3.8 % MWST, die Buchung steht auf … I0» for the

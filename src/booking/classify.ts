@@ -560,15 +560,15 @@ export function bookImportVatDeductions(books: Books, context: Pick<ClassifyCont
 /**
  * The input tax of each payment provider's fee bill (a document that proves a VAT-only correction),
  * booked into `books` or linked to the correction that books it already (src/booking/vat-corrections.ts).
- * Save the books when it booked or linked one.
+ * Save the books when it booked or linked one. `only`: that one bill (a person's «Vorsteuer buchen»).
  */
-export function bookBillCorrections(books: Books, context: Pick<ClassifyContext, 'counterparties' | 'chartOfAccounts'>, fx: FxResolver): CorrectionsDone {
+export function bookBillCorrections(books: Books, context: Pick<ClassifyContext, 'counterparties' | 'chartOfAccounts'>, fx: FxResolver, only?: string): CorrectionsDone {
   const lock = periodLock(books);
   const chart = new Set(chartNames(context.chartOfAccounts).keys());
   const de = wordsIn('de');
   const day = (iso: string) => iso.split('-').reverse().join('.');
   return bookVatCorrections(books, context.counterparties ?? [], {
-    inputTax: !withoutInputTax(), isClosed: (d) => lock.isClosed(d), inChart: (a) => chart.has(a), base: baseCurrency(),
+    inputTax: !withoutInputTax(), words: documents(), isClosed: (d) => lock.isClosed(d), inChart: (a) => chart.has(a), base: baseCurrency(),
     rate: (currency, date) => fx.daily(currency, date),
     code: (rate, account, billVat) => (billVat && vat().codes.parse(billVat)?.rate === rate ? billVat : codeOfFacts({ charge: 'charged', rate, amountIs: 'tax' }, '', account)),
     newId: () => randomBytes(8).toString('hex'), manualRef: (date) => nextManualRef(books, date.slice(0, 4)),
@@ -576,7 +576,7 @@ export function bookBillCorrections(books: Books, context: Pick<ClassifyContext,
       description: (business, date) => de.t('vatCorrection.text', { business, date: day(date) }),
       reason: (business, date, rate, currency, amount, code, account) => de.t('vatCorrection.reason', { business, date: day(date), rate, currency, amount: chf(amount), code, account }),
     },
-  });
+  }, only);
 }
 
 /** Why a provider's payout waits for the person (PayoutWait), in the books' language: what the run's note and the payment say. */

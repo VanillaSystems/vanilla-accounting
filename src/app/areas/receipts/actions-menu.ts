@@ -45,8 +45,9 @@ export function receiptActions(p: Props, v: ReceiptView, l: Ledger): ActionSet {
   const firstTx = v.links.map((ref) => l.txByRef.get(ref)).find(Boolean);
   const openPayment: ObjAction | undefined = firstTx && { id: 'openPayment', label: t('actions.openPayment'), run: () => nav.go(at({ area: 'bank', payment: firstTx.ref }, firstTx.date)) };
   if (!canEdit) return { primary: openPayment, rest: ask ? [ask] : [] };
-  // An order page of the provider way waits for its order's sale, never for a payment (#253).
-  const open = !v.none && !v.links.length && !v.locked && !v.orderPage;
+  // An order page of the provider way waits for its order's sale, never for a payment (#253); a bill of a VAT-only correction
+  // for its booking without a payment, which its notice books (#458).
+  const open = !v.none && !v.links.length && !v.locked && !v.orderPage && !v.vatCorrection;
   const sug = listed.suggestions.get(r.id);
   const twin = v.twin && !v.links.length && !v.locked ? l.byId.get(v.twin.of) : undefined;
   const all: Record<string, ObjAction | undefined> = {
