@@ -290,7 +290,9 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
   const dir = join(yearPaths(WS.paths, year).statements, placed.account.bank);
   const mine = `${placed.account.bank}/${placed.filename}`;
   const path = findFile(WS.paths, 'statements', mine) ?? join(dir, placed.filename);
-  if (existsSync(path)) {
+  // A statement read before #401 left payments on an empty ref: the same file dropped again is read again, so each gets its own.
+  const again = existsSync(path) && readFileSync(path).equals(body) && heldWithoutRef(readBooks());
+  if (existsSync(path) && !again) {
     const same = readFileSync(path).equals(body);
     throw new RequestError(409, same ? `${placed.filename} ist schon eingelesen.` : `Datei ${placed.filename} existiert bereits.`,
       same ? { code: 'statement', params: { reason: 'duplicate', detail: mine } } : { code: 'fileExists', params: { filename: placed.filename } });
@@ -359,13 +361,19 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
       };
     });
   } catch (e) {
-    rmSync(path, { force: true });
+    if (!again) rmSync(path, { force: true });
     if (beside) rmSync(beside, { force: true });
     throw e;
   }
   if (placed.byBank?.iban) keepIban(placed.account, placed.byBank.iban);
   return done;
 }
+
+/** Whether the books hold an open payment on an empty ref (read before #401): the next read of the folder gives it a ref of its own (mergeBankFiles). */
+const heldWithoutRef = (books: Books): boolean => {
+  const lock = periodLock(books);
+  return books.transactions.some((t) => !t.ref.trim() && !lock.isClosed(t.date));
+};
 
 /**
  * The IBAN of a statement placed by its bank, kept on its account (#273): the next file of that IBAN

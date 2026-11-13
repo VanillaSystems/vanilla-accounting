@@ -180,6 +180,11 @@ a.dmove:hover, a.dmove:focus-visible { background: var(--hover); outline: none; 
 .dpw .acf .acn { position: absolute; top: 100%; left: 0; margin-top: 3px; max-width: 360px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dpw .acf .acn.warn { color: var(--warn); }
 .dpw .acl { top: 48px; }
+/* The firm's new bank account, added in the statement's row (#401). */
+.dpw.dadd { flex-wrap: wrap; justify-content: flex-end; align-items: flex-end; row-gap: 4px; }
+.dpw.dadd label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); text-align: left; }
+.dpw.dadd label input.mono { width: 80px; }
+.dpw.dadd small { flex-basis: 100%; }
 .dropdlg .dfoot { display: flex; align-items: center; gap: 8px; padding-top: 8px; }
 .dropdlg .dfoot .m { flex: 1; font-size: 12px; }
 .dropdlg .dprog { display: flex; flex-direction: column; gap: 6px; min-height: 0; }

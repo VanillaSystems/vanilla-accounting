@@ -194,9 +194,9 @@ function AddAccountForm({ d, banks, r, session, onCancel }: { d: NonNullable<Dro
   };
   return (
     <form className="dpw dadd" data-testid="drop-add-account" onSubmit={(e) => { e.preventDefault(); if (valid && !busy) void save(); }}>
+      <small>{t('drop.addAccount.read', { currency: d.currency, iban: groupIban(d.iban) })}</small>
       <label>{t('company.bank')}<input value={f.bank} onChange={(e) => setF({ ...f, bank: e.target.value })} autoFocus /></label>
       <label>{t('yearClose.colAccount')}<input className="mono" inputMode="numeric" value={f.account} onChange={(e) => setF({ ...f, account: e.target.value })} /></label>
-      <small>{t('drop.addAccount.read', { currency: d.currency, iban: groupIban(d.iban) })}</small>
       <span className="dacts">
         <button type="submit" className="btn primary" disabled={!valid || busy}>{t('drop.addAccount.save')}</button>
         <button type="button" className="linkbtn" disabled={busy} onClick={onCancel}>{t('common.cancel')}</button>

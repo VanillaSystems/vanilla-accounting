@@ -421,6 +421,22 @@ test('«Ja, Bankkonto hinzufügen» adds the account in the row and reads the st
     const b = await books();
     assert.equal(b.transactions.filter((t) => t.bank === 'Wise 2').length, 7);
     assert.ok(b.transactions.every((t) => t.ref.trim()), 'no payment without a ref');
+
+    // Books as a read before #401 left them: the seven on an empty ref, a receipt linked to it. The same file dropped again repairs them.
+    await SESSION(api).rest();
+    const refs = new Set(taken.statement!.refs);
+    for (const [file, key] of [['transactions.jsonl', 'ref'], ['mappings.jsonl', 'transactionRef']] as const) {
+      const path = join(api.root, 'transactional-data/2026/books', file);
+      const lines = readFileSync(path, 'utf8').split('\n').map((l) => { if (!l.trim()) return l; const x = JSON.parse(l); if (refs.has(x[key])) x[key] = ''; return JSON.stringify(x); });
+      writeFileSync(path, lines.join('\n'));
+    }
+    assert.equal((await books()).transactions.filter((t) => t.ref === '').length, 7, 'the books as they were');
+    let again = await post('/api/drop');
+    again = await post(`/api/drop/${again.id}/files?name=wise-second.xml`, Buffer.from(camt));
+    assert.equal(again.rows[0].state, 'taken', again.rows[0].message);
+    const repaired = await books();
+    assert.deepEqual(repaired.transactions.filter((t) => t.bank === 'Wise 2').map((t) => t.ref).sort(), [...refs].sort());
+    assert.ok(!repaired.transactions.some((t) => !t.ref.trim()) && !repaired.mappings.some((m) => !m.transactionRef.trim()), 'nothing on an empty ref');
   } finally {
     await SESSION(api).rest().catch(() => {});
     await api.stop();
