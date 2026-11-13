@@ -81,9 +81,10 @@ export function companyPart(w: WorkflowDecl, root: string): { hash: string; file
 
 /**
  * `cited`: the paths the company part covered when it was switched on (its overlay and what its AI
- * steps cite). A file under a path cited since (the app's update widened what a workflow reads,
- * #413) was no part of what she switched on: met the first time, it is taken as switched on, as the
- * baseline takes a workspace's files, never as a change that waits.
+ * steps cite). When the app's update widens what a workflow cites (#413), the record is migrated
+ * once, at the first check that meets it: the files under the newly cited paths that exist then
+ * are taken as switched on, as the baseline takes a workspace's files, and `cited` is written. Every
+ * file under them written or changed after that waits, as any other.
  */
 interface Approved { part: string; files?: Record<string, string>; at: string; baseline?: boolean; cited?: string[] }
 type Approvals = Record<string, Approved>;
@@ -114,6 +115,9 @@ const COVERED_BEFORE: Record<string, string[]> = {
   [BOOKING_WORKFLOW]: [`workflows/${BOOKING_WORKFLOW}`, 'knowledge/rules/booking.guide.yaml', 'knowledge/suppliers'],
 };
 
+const hashOf = (files: Record<string, string>): string =>
+  createHash('sha256').update(JSON.stringify(Object.fromEntries(Object.keys(files).sort().map((p) => [p, files[p]])))).digest('hex').slice(0, 16);
+
 function read(ws: Ws): Approvals | undefined {
   try { return JSON.parse(readFileSync(approvalsPath(ws), 'utf8')) as Approvals; } catch { return undefined; }
 }
@@ -130,21 +134,33 @@ export interface Switch {
 }
 
 export function openSwitch(ws: Ws, now = () => new Date()): Switch {
-  const pending = (w: WorkflowDecl) => {
-    const part = companyPart(w, ws.paths.root);
+  /**
+   * The record as switched on, migrated once when the workflow cites more than it covered (see
+   * `cited`): written before anything else is compared. A file of an approvals record without a
+   * record for a workflow that cites more since is such a record too (before #413 a workflow without
+   * a company part got none).
+   */
+  const recordOf = (w: WorkflowDecl): Approved | undefined => {
     const all = read(ws);
-    const on = all?.[w.id];
+    const was = all?.[w.id] ?? (all && COVERED_BEFORE[w.id] ? { part: '', files: {}, at: now().toISOString() } : undefined);
+    if (!was) return undefined;
+    const cover = coverOf(w);
+    const covered = was.cited ?? COVERED_BEFORE[w.id] ?? cover;
+    if (was.cited && cover.every((c) => covered.includes(c))) return was;
+    const part = companyPart(w, ws.paths.root);
+    const files = { ...was.files };
+    for (const [p, h] of Object.entries(part?.files ?? {})) if (!(p in files) && !covered.some((c) => within(p, c))) files[p] = h;
+    const changed = Object.keys(files).length !== Object.keys(was.files ?? {}).length;
+    const next: Approved = { ...was, files, cited: cover, ...(changed || !was.part ? { part: Object.keys(files).length ? hashOf(files) : '' } : {}) };
+    write(ws, { ...all, [w.id]: next });
+    return next;
+  };
+  const pending = (w: WorkflowDecl) => {
+    const on = recordOf(w);
+    const part = companyPart(w, ws.paths.root);
     if (!part || on?.part === part.hash) return undefined;
-    const was = { ...on?.files };
-    // A file under a path the record did not cover is met for the first time: taken as switched on.
-    const covered = on?.cited ?? (on ? COVERED_BEFORE[w.id] : undefined);
-    if (covered) for (const [p, h] of Object.entries(part.files)) if (!(p in was) && !covered.some((c) => within(p, c))) was[p] = h;
+    const was = on?.files ?? {};
     const changed = [...new Set([...Object.keys(part.files), ...Object.keys(was)])].filter((p) => part.files[p] !== was[p]).sort();
-    if (!changed.length) {
-      // Nothing she has not switched on: the record learns the wider coverage, once.
-      write(ws, { ...all, [w.id]: { ...on!, part: part.hash, files: part.files, cited: coverOf(w) } });
-      return undefined;
-    }
     return { hash: part.hash, files: changed };
   };
   return {
