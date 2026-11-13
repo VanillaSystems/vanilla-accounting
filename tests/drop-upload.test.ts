@@ -9,10 +9,10 @@ import assert from 'node:assert/strict';
 import { startApi } from './support/api-server.js';
 import { SESSION } from './support/inbox-run.js';
 import { textPdf } from './support/text-pdf.js';
-import { addEach, dropStart, failedLine } from '../src/app/shell/drop-upload.js';
+import { addEach, booksMoved, dropStart, dropStore, failedLine } from '../src/app/shell/drop-upload.js';
 import { formatIn } from '../src/app/i18n/core.js';
 import de from '../src/app/i18n/locales/de.js';
-import type { DropSession } from '../src/types/drop.js';
+import type { DropRow, DropSession } from '../src/types/drop.js';
 
 const invoice = (i: number) => textPdf(['Malerbedarf Muster AG', `Rechnung R-66${i}`, `Datum: 1${i}.11.2026`, `Pinsel ${100 + i}.00`, `Total CHF ${(108.1 + i).toFixed(2)}`]);
 
@@ -49,4 +49,40 @@ test('a new drop clears the note of the drop before it and keeps its own', () =>
   let state: { note?: string } = { note: 'old' };
   state = { ...state, ...dropStart() };
   assert.equal(state.note, undefined, 'the old note is overwritten, not kept by a missing key');
+});
+
+// #424: the window's answers that wrote the books make every page load them again.
+const row = (key: string, extra: Partial<DropRow> = {}): DropRow => ({ key, id: key, name: `${key}.csv`, size: 1, state: 'take', ...extra });
+const session = (...rows: DropRow[]): DropSession => ({ id: 's1', rows });
+const report = { provider: 'Shopify' } as unknown as DropRow['report'];
+
+test('booksMoved: a report booked, payouts booked by an answer, a statement read or kept, a taken row taken back; not a receipt handed to the inbox or a question', () => {
+  const asks = row('orders', { state: 'unclear', reason: 'provider-account' });
+  assert.equal(booksMoved(undefined, session(asks)), false, 'a question writes nothing');
+  assert.equal(booksMoved(session(asks), session({ ...asks, payouts: { provider: 'Shopify', booked: 40, of: 40 } })), true, 'her answer booked the payouts');
+  const booked = row('orders', { state: 'taken', report });
+  assert.equal(booksMoved(session(asks), session(booked)), true, 'the report booked');
+  assert.equal(booksMoved(session(booked), session(booked)), false, 'the same answer again');
+  assert.equal(booksMoved(session(booked), session(booked, row('b', { state: 'taken', inbox: 'b.pdf', run: 'r1' }))), false, 'a receipt into the inbox: its run says when it wrote');
+  assert.equal(booksMoved(session(), session(row('pdf', { state: 'taken', keep: { month: '2026-09' }, statement: { file: 'LUKB/a.pdf', refs: [], account: '1020' } }))), true, 'a statement kept');
+  assert.equal(booksMoved(session(booked), session({ ...booked, state: 'refused', report: undefined })), true, 'taken back');
+});
+
+test('dropStore tells `moved` for an add, a row\'s answer and the close that wrote the books, also for a closed window\'s files going on', async () => {
+  let n = 0;
+  let next: DropSession = session();
+  const server = { open: async () => session(), add: async () => next, close: async () => ({ ok: true }) };
+  const store = dropStore(server, String, () => undefined, () => { n++; });
+  next = session(row('a', { state: 'unclear', reason: 'provider-account' }));
+  await store.drop([new File(['x'], 'a.csv')]);
+  assert.equal(n, 0, 'a question: nothing written');
+  store.answered(session(row('a', { state: 'taken', report })));
+  assert.equal(n, 1, 'her answer booked the report');
+  // Closed while a file still uploads: its answer still counts, and so does the close that takes what waits.
+  next = session(row('a', { state: 'taken', report }), row('s', { state: 'taken', statement: { file: 'LUKB/s.xml', refs: ['r'], account: '1020' } }));
+  const going = store.drop([new File(['y'], 's.xml')]);
+  store.close();
+  await going;
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  assert.equal(n, 3, 'the statement read in the background, then the close');
 });

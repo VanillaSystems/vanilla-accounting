@@ -5,7 +5,27 @@
  * Without React or Vite, so tests run it as it is.
  */
 import type { Key } from '../i18n/types.js';
-import type { DropSession } from '../../types/drop.js';
+import type { DropRow, DropSession } from '../../types/drop.js';
+
+/** What a row did to the books, as the server reports it: a statement read in or kept, a report booked, payouts booked by an answer; none for a row that wrote nothing (a receipt goes to the inbox, whose run writes and says so). */
+const booksPart = (r: DropRow): string | undefined =>
+  (r.statement || r.report || r.keep || r.asked || r.payouts ? JSON.stringify([r.state, r.statement, r.report, r.keep, r.asked, r.payouts]) : undefined);
+
+/**
+ * Whether the server's answer `after` reports a write to the books the session `before` did not
+ * (#424): a row that read, kept or booked something new, or a taken row taken back. The drop
+ * window's every answer passes here, so no booking it reports leaves the pages on the books of before.
+ */
+export function booksMoved(before: DropSession | undefined, after: DropSession): boolean {
+  const was = new Map((before?.rows ?? []).map((r) => [r.key, r]));
+  const now = new Map(after.rows.map((r) => [r.key, r]));
+  if ([...was.values()].some((r) => r.state === 'taken' && now.get(r.key)?.state !== 'taken')) return true;
+  return after.rows.some((r) => {
+    const part = booksPart(r);
+    const old = was.get(r.key);
+    return part !== undefined && part !== (old && booksPart(old));
+  });
+}
 
 /** A file that did not go, kept whole so it can be dropped again. */
 export interface Failed { file: File; error: unknown }
@@ -54,17 +74,27 @@ export interface DropServer {
  * waits, so no file is lost and the next drop opens a session of its own. A file of it that fails
  * goes to `lost`.
  */
-interface Visit { session?: Promise<DropSession>; uploads: number; closed: boolean }
+interface Visit { session?: Promise<DropSession>; uploads: number; closed: boolean; last?: DropSession }
 
-/** The drop window's state with its drops and close; `why` names an error, `failed` the line of files a drop could not upload. */
-export function dropStore(server: DropServer, why: (e: unknown) => string, failed: (f: Failed[]) => string | undefined) {
+/**
+ * The drop window's state with its drops and close; `why` names an error, `failed` the line of files a
+ * drop could not upload; `moved` is told whenever an answer of the server wrote the books (`booksMoved`,
+ * also for a closed window's files going on in the background, and after the close, which takes what waits).
+ */
+export function dropStore(server: DropServer, why: (e: unknown) => string, failed: (f: Failed[]) => string | undefined, moved: () => void = () => undefined) {
   let state: DropState = { open: false, adding: 0, lost: [] };
   let visit: Visit | undefined;
   const listeners = new Set<() => void>();
   const set = (patch: Partial<DropState>) => { state = { ...state, ...patch }; for (const l of listeners) l(); };
   const lose = (more: Failed[]) => { if (more.length) set({ lost: [...state.lost, ...more] }); };
+  /** A new answer of the visit's session: the books moved when it says so. */
+  const seen = (v: Visit, next: DropSession) => {
+    const before = v.last;
+    v.last = next;
+    if (booksMoved(before, next)) moved();
+  };
   const settle = (v: Visit) => {
-    if (v.closed && !v.uploads && v.session) v.session.then((s) => server.close(s.id)).catch(() => undefined);
+    if (v.closed && !v.uploads && v.session) v.session.then((s) => server.close(s.id)).then(moved, () => undefined);
   };
 
   async function drop(files: readonly File[], note?: string): Promise<void> {
@@ -83,6 +113,7 @@ export function dropStore(server: DropServer, why: (e: unknown) => string, faile
         else lose(files.map((file) => ({ file, error: e })));
         return;
       }
+      v.last ??= session;
       if (live()) set({ session, adding: state.adding + files.length });
       const add = async (f: File) => {
         try {
@@ -91,7 +122,7 @@ export function dropStore(server: DropServer, why: (e: unknown) => string, faile
           if (live()) set({ adding: Math.max(0, state.adding - 1) });
         }
       };
-      const lost = await addEach(files, add, (next) => { if (live()) set({ session: next }); });
+      const lost = await addEach(files, add, (next) => { seen(v, next); if (live()) set({ session: next }); });
       if (!live()) lose(lost);
       else if (lost.length) set({ error: failed(lost) });
     } finally {
@@ -116,7 +147,11 @@ export function dropStore(server: DropServer, why: (e: unknown) => string, faile
   const dismiss = () => set({ lost: [] });
 
   /** A row's answer: shown only while the window still shows its session. */
-  const answered = (next: DropSession) => { if (state.session?.id === next.id) set({ session: next }); };
+  const answered = (next: DropSession) => {
+    if (visit?.last?.id === next.id) seen(visit, next);
+    else if (booksMoved(undefined, next)) moved();
+    if (state.session?.id === next.id) set({ session: next });
+  };
 
   return {
     get: () => state,

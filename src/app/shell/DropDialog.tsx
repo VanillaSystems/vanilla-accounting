@@ -16,6 +16,7 @@ import { isUnbooked } from '../areas/bank/model.js';
 import { receiptWaits } from '../areas/automation/period-issues.js';
 import { parsePeriod, filingKeyOf, parseSwissDate } from '../../accounting/periods.js';
 import { useQuestions } from '../questions/store.js';
+import { announceBooksChanged } from '../assistant/store.js';
 import { reloadWorkspace, useWorkspace } from '../hooks/use-workspace.js';
 import { periodName } from '../lib/period-label.js';
 import { OPEN_ITEMS } from '../areas/vat/model.js';
@@ -37,7 +38,7 @@ import { CsvColumnsForm, StatementRead } from './StatementRead.js';
 import { Menu } from './Menu.js';
 import type { Location, Route } from './route.js';
 import { at } from '../areas/receipts/view.js';
-import { fileKeyOf } from '../areas/bank/model.js';
+import { fileKey, fileKeyOf, isCamt } from '../areas/bank/model.js';
 import { startIntake } from '../automation/intake.js';
 import { emptyRefsLine } from '../areas/bank/empty-refs.js';
 import { draftForm } from '../areas/company/bank-draft.js';
@@ -56,6 +57,8 @@ const drop = dropStore(
   { open: api.dropOpen, add: api.dropAdd, close: api.dropClose },
   errorText,
   (f) => { const line = failedLine(f, errorText); return line && tWith(line.key, line.vars); },
+  // What the window reports as booked is on every page at once (#424): the books, the workspace and the invoices load again.
+  announceBooksChanged,
 );
 const { set } = drop;
 const useDrop = () => useSyncExternalStore(drop.subscribe, drop.get);
@@ -72,12 +75,21 @@ let finishing: (() => void) | undefined;
 /** Closes the window as its «Schliessen» does (the shell's Escape too). */
 export const finishDrop = (): void => (finishing ? finishing() : closeDrop());
 
-/** Where a taken statement row opens: its file under Kontoauszüge, in the period of its last day. */
-export function statementLocation(r: DropRow): Location | undefined {
+/**
+ * Where a taken statement row opens, in the period of its last day as the books hold it (#424): a
+ * bank export whole under Kontoauszüge › Datei, a PDF kept as the statement as the statement it is
+ * (Datei shows only exports). None while neither the books nor the file name its days: never today's period.
+ */
+export function statementLocation(r: DropRow, books: Pick<Index, 'bankStatements'>): Location | undefined {
   const account = r.statement?.account;
-  const name = r.statement?.file.split('/').pop();
-  if (!account || !name) return undefined;
-  return at({ area: 'bank', file: fileKeyOf(account, name) }, r.facts?.to ?? localToday());
+  const file = r.statement?.file;
+  const name = file?.split('/').pop();
+  if (!account || !file || !name) return undefined;
+  const held = books.bankStatements?.find((b) => `${b.bank}/${b.filename}` === file);
+  const to = held?.toDate ?? r.facts?.to;
+  if (!to) return undefined;
+  if (held && !isCamt(held)) return at({ area: 'bank', statement: fileKey(account, held.fromDate, held.toDate) }, to);
+  return at({ area: 'bank', file: fileKeyOf(account, name) }, to);
 }
 
 /**
@@ -641,7 +653,7 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
   const byBank = r.byBank?.accounts.find((a) => a.account === r.statement?.account);
   const [menu, setMenu] = useState<DOMRect | null>(null);
   const readPdf = () => { setBusy(true); void act(session, r, { kind: 'readPdf' }).then(refresh).finally(() => setBusy(false)); };
-  const statementAt = statementLocation(r);
+  const statementAt = statementLocation(r, books);
   // A card statement taken as a receipt (#401): what the app did with it, in its row.
   const card = receipt && !r.report ? cardStatementOf(receipt, books) : undefined;
   // «Ist doch ein Beleg» (#361): the person's word, as Belege takes it; the run then reads the file again, never asking whether it is one.
@@ -741,7 +753,7 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   // A receipt of a sealed quarter opens in that quarter, not in the open one (r9k-8).
   const go = (route: Route, date?: string) => { closeDrop(); onGo(date ? at(route, date) : { route, query: {} }); };
   // The last statement the drop read in: closing the window by hand opens it (Kontoauszüge does, #361).
-  const statement = [...rows].reverse().map((r) => (r.state === 'taken' ? statementLocation(r) : undefined)).find(Boolean);
+  const statement = [...rows].reverse().map((r) => (r.state === 'taken' ? statementLocation(r, books) : undefined)).find(Boolean);
   finishing = () => { closeDrop(); if (statement) onStatement(statement); };
   return (
     <>
