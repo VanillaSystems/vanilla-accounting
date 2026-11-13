@@ -48,6 +48,8 @@ export interface Receipt {
   currency?: string;
   /** Its text is empty or not legible (src/parsers/receipt-text.ts): the VAT step leaves it, its VAT waits for a vision read or the person (#57, #284). */
   needsVisionReview?: boolean;
+  /** How often the VAT step's read of it failed in a row (#450, books schema 9; absent: 0): from VAT_READ_TRIES on it counts as unreadable (src/accounting/receipt-due.ts). A read that succeeds, a new text or a person's facts clear it. */
+  vatReadFailures?: number;
   remarks?: string;
   // set during extract-vat step (VAT facts read directly off the receipt)
   vatId?: string; // CHE-... UID if the receipt shows one

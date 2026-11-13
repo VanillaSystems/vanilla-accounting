@@ -15,12 +15,17 @@
  * read by the model; without one, code keeps only what the text proves (Swiss VAT its figures add up
  * to, «no Swiss VAT» said in words) and the rest stays unread, without facts (the receipt shows «not read yet»), for
  * the next run with a model. Only a model answer that parses as VAT facts replaces facts.
+ * A failed read (no answer, an answer that does not parse, the retries spent) is counted on the
+ * receipt (`vatReadFailures`, #450); after VAT_READ_TRIES of them it counts as unreadable
+ * (vatGivenUp), the step leaves it and its run note says so, and its payment waits for the person
+ * under «Beleg nicht lesbar». A read that succeeds or a new text clears the count.
  */
 import { creditSigned } from '../accounting/credit-signed.js';
 import { buildReceiptVatPrompt, parseReceiptVat, type ReceiptVatResult } from '../llm/prompts.js';
 import { runAdaptivePool, isRateLimitSignal } from '../llm/adaptive-pool.js';
 import { periodLock, type Books } from '../books/store.js';
 import { vatSetup } from '../engines/index.js';
+import { VAT_READ_TRIES, vatGivenUp } from '../accounting/receipt-due.js';
 import type { Receipt } from '../types/index.js';
 import { textFacts, textProves, unprovenNoVat } from '../parsers/receipt-text.js';
 import type { IntakeNote, StepRun } from './pipeline.js';
@@ -44,6 +49,8 @@ const READ_FACTS = ['vatId', 'hasSwissVat', 'vatSummary', 'lineItems', 'vatExtra
 
 /** Forgets the VAT facts this step read off a receipt's text, when that text is replaced or proves nothing. Facts a person set or the books wrote stay. */
 export function forgetReadFacts(r: Receipt): void {
+  // A new text is read afresh: its tries start again (#450).
+  delete r.vatReadFailures;
   if (r.vatBy === 'human' || r.vatExtractedAt == null) return;
   for (const k of READ_FACTS) delete r[k];
 }
@@ -72,7 +79,7 @@ export const provisionalNoVat = (r: Receipt): boolean =>
  * not even with `force`; a bank statement has no VAT facts. `withModel`: a model reads, so code's provisional facts are taken up too.
  */
 export const vatCandidates = (books: Books, force = false, withModel = false): Receipt[] =>
-  books.receipts.filter((r) => r.vatBy !== 'human' && r.kind !== 'statement' && (force || ((!hasFacts(r) || unprovenNoVat(r) || (withModel && provisionalNoVat(r))) && !r.needsVisionReview && !filedReceipt(books, r))));
+  books.receipts.filter((r) => r.vatBy !== 'human' && r.kind !== 'statement' && (force || ((!hasFacts(r) || unprovenNoVat(r) || (withModel && provisionalNoVat(r))) && !r.needsVisionReview && !vatGivenUp(r) && !filedReceipt(books, r))));
 
 /** `only`: the ids of the receipts to read, as for one payment's «Buchen» (src/server/routes/classify.ts); absent, every candidate. */
 export function vatStep({ force = false, only }: { force?: boolean; only?: ReadonlySet<string> } = {}): StepRun {
@@ -103,6 +110,7 @@ export function vatStep({ force = false, only }: { force?: boolean; only?: Reado
         // A person may have set the facts while the model read them.
         if (r && r.vatBy !== 'human' && r.extractedText === was.extractedText && (replace || !hasFacts(r) || (!!facts.vatExtractedAt && provisionalNoVat(r)))) {
           Object.assign(r, facts);
+          delete r.vatReadFailures;
           r.amount = creditSigned(r);
         }
       }
@@ -136,6 +144,14 @@ export function vatStep({ force = false, only }: { force?: boolean; only?: Reado
     }
     if (needsLlm.length && ask) {
       let firstError: string | undefined;
+      const gaveUp: string[] = [];
+      /** One more failed read on a receipt that still waits for its facts on the text that was read; never one of a filed period. */
+      const failedRead = (was: Receipt) => books.update((index) => {
+        const r = index.receipts.find((x) => x.id === was.id);
+        if (!r || r.vatBy === 'human' || hasFacts(r) || r.extractedText !== was.extractedText || filedReceipt(index, r)) return;
+        r.vatReadFailures = (r.vatReadFailures ?? 0) + 1;
+        if (r.vatReadFailures === VAT_READ_TRIES) gaveUp.push(r.filename);
+      });
       const { stats } = await runAdaptivePool(
         needsLlm,
         async (r) => {
@@ -164,12 +180,14 @@ export function vatStep({ force = false, only }: { force?: boolean; only?: Reado
             } else {
               const message = String((outcome.error as any)?.message ?? outcome.error);
               firstError ??= message;
+              failedRead(r);
               log(`  ✗ ${r.filename}: ${message.substring(0, 100)}`);
             }
           },
         },
       );
       if (stats.failed) notes.push({ code: 'failed', count: stats.failed, detail: (firstError ?? '').slice(0, 300) });
+      if (gaveUp.length) notes.push({ code: 'vatGivenUp', files: gaveUp, tries: VAT_READ_TRIES });
       log(`\nDone.`);
       log(`  LLM extracted : ${stats.ok}`);
       log(`  Failed        : ${stats.failed}`);

@@ -557,6 +557,7 @@ function noteText(n: IntakeNote): string {
     case 'unmatched': return t('automation.note.unmatched', { n: n.files.length, files: n.files.join(', ') });
     case 'filedKept': return t('automation.note.filedKept', { n: n.count });
     case 'poorScan': return t('automation.note.poorScan', { n: n.files.length, files: n.files.join(', ') });
+    case 'vatGivenUp': return t('automation.note.vatGivenUp', { n: n.files.length, tries: n.tries, files: n.files.join(', ') });
     case 'sameBytes': return t('automation.note.sameBytes', { n: n.files.length, files: n.files.map((f) => `${f.file} = ${f.of}`).join(', ') });
     case 'rewritten': return t('automation.note.rewritten', { n: n.files.length, files: n.files.map((f) => t('automation.note.rewrittenFile', { file: f.file, n: f.check })).join(', ') });
     case 'asked': return t('automation.note.asked', { n: n.count });
