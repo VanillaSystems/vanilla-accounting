@@ -5531,7 +5531,7 @@ export const messages = {
   'rules.share.askSetup.car': "Du hast bei der Einrichtung gesagt: «{said}». Bei {who} immer {percent} % privat buchen und den Rest auf Konto {account}?",
   'actions.privateOne': "Als Auslage von {owner} buchen",
   'actions.privateOneTip': "Bucht den Beleg auf das Aufwandkonto und {account}: die Firma schuldet den Betrag und zahlt ihn später zurück.",
-  'receipts.paidPrivatelyOwner': "Privat bezahlt, sagt der Beleg (die Karte von {owner} oder bar). «Als Auslage buchen» bucht ihn auf Aufwand / {account}.",
+  'receipts.paidPrivatelyOwner': "Privat bezahlt laut Beleg: als Auslage auf Aufwand / {account}.",
   'receipts.privateBooking': "Die App bucht die Auslage gerade auf ihr Aufwandkonto.",
   'receipts.privateByHand': "Selbst buchen",
   'batch.private': "Als Auslagen des Inhabers buchen",

@@ -5534,7 +5534,7 @@ export default {
     'rules.share.askSetup.car': "In the setup you said: «{said}». For {who}, always book {percent} % as private and the rest on account {account}?",
     'actions.privateOne': "Book as {owner}'s outlay",
     'actions.privateOneTip': "Books the receipt on its expense account and {account}: the company owes the amount and pays it back later.",
-    'receipts.paidPrivatelyOwner': "Paid privately, the receipt says ({owner}'s card or cash). «Book as outlay» books it on expense / {account}.",
+    'receipts.paidPrivatelyOwner': "Paid privately, the receipt says: as an outlay on expense / {account}.",
     'receipts.privateBooking': "The app is booking the outlay on its expense account.",
     'receipts.privateByHand': "Book it myself",
     'batch.private': "Book as the owner's outlays",

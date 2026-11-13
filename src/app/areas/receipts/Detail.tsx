@@ -401,7 +401,7 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
       {canEdit && <> <button type="button" style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => runAct(props, 'link')}>{t('receipts.linkVerb')}</button> <Kbd keys={['L']} tip={t('receipts.keyLinkTip')} /></>}
       {canEdit && <> · <FindPair key={v.r.id} on={{ receipt: v.r.id }} books={props.books} nav={nav} /></>}
       {/* Its words say cash or private (#216): a proposal beside the fact; the receipt is unpaid in the books until it is booked. */}
-      {readsPaidPrivately(v, l) && <> · <span data-testid="paid-privately">{owner ? t('receipts.paidPrivatelyOwner', { owner: owner.owner, account: `${owner.account} ${owner.label}` }) : t('receipts.paidPrivatelyNotice')}</span></>}
+      {readsPaidPrivately(v, l) && <> · <span data-testid="paid-privately">{owner ? t('receipts.paidPrivatelyOwner', { account: `${owner.account} ${owner.label}` }) : t('receipts.paidPrivatelyNotice')}</span></>}
     </span>
   );
 }

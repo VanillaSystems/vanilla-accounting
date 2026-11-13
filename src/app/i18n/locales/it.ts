@@ -5534,7 +5534,7 @@ export default {
     'rules.share.askSetup.car': "Nella configurazione hai detto: «{said}». Per {who} registrare sempre il {percent} % come privato e il resto sul conto {account}?",
     'actions.privateOne': "Registra come spesa anticipata da {owner}",
     'actions.privateOneTip': "Registra il giustificativo sul suo conto di costo e {account}: la ditta deve l’importo e lo rimborsa più tardi.",
-    'receipts.paidPrivatelyOwner': "Pagato privatamente, dice il giustificativo (la carta di {owner} o in contanti). «Registra come spesa anticipata» lo registra su costo / {account}.",
+    'receipts.paidPrivatelyOwner': "Pagato privatamente secondo il giustificativo: come spesa anticipata su costo / {account}.",
     'receipts.privateBooking': "L’app sta registrando la spesa sul suo conto di costo.",
     'receipts.privateByHand': "Registra io",
     'batch.private': "Registra come spese anticipate dal titolare",

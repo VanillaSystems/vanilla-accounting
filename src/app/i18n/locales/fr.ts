@@ -5534,7 +5534,7 @@ export default {
     'rules.share.askSetup.car': "À la configuration, tu as dit : «{said}». Pour {who}, toujours comptabiliser {percent} % en privé et le reste sur le compte {account} ?",
     'actions.privateOne': "Comptabiliser comme débours de {owner}",
     'actions.privateOneTip': "Comptabilise le justificatif sur son compte de charges et {account} : l’entreprise doit le montant et le rembourse plus tard.",
-    'receipts.paidPrivatelyOwner': "Payé en privé, selon le justificatif (la carte de {owner} ou en espèces). «Comptabiliser comme débours» le comptabilise sur charge / {account}.",
+    'receipts.paidPrivatelyOwner': "Payé en privé selon le justificatif : comme débours sur charge / {account}.",
     'receipts.privateBooking': "L’app comptabilise le débours sur son compte de charges.",
     'receipts.privateByHand': "Comptabiliser moi-même",
     'batch.private': "Comptabiliser comme débours du titulaire",
