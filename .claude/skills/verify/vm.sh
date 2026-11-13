@@ -7,7 +7,9 @@
 #                           Gatekeeper on, dmg + persona files into ~/Downloads; macOS runs at most two
 #                           macOS VMs at once (Apple's limit), so `up` refuses a third instead of waiting
 #                           for SSH. NAME (or $PERSONA): huber (default, the painting firm), webshop,
-#                           consulting (persona-files.mjs --list); its answer key lands beside the env
+#                           consulting (persona-files.mjs --list); its answer key lands beside the env.
+#                           --locale de_CH (default; en_US: the image as it is): the VM user's region and
+#                           language, so dates read 01.07.2026 in the app as on a Swiss Mac
 #   vm.sh install           the app of release/mac-arm64 (npm run desktop:dir, 15 s) into /Applications,
 #                           over the one there, past Gatekeeper: for iterating, not for install tests
 #   vm.sh snap NAME         keep this VM's state as snapshot belege-snap-NAME (books set up, files in …)
@@ -55,11 +57,12 @@ px() { echo "$1 * $(scale) / 1400" | bc; }
 
 case "$cmd" in
 up)
-  RUN=; BASE=vanilla-clean; PERSONA=${PERSONA:-huber}
+  RUN=; BASE=vanilla-clean; PERSONA=${PERSONA:-huber}; LOCALE=de_CH
   while [ $# -gt 0 ]; do
     case "$1" in
       --from) [ $# -ge 2 ] || { echo "--from needs a snapshot name" >&2; exit 1; }; BASE="belege-snap-$2"; shift 2 ;;
       --persona) [ $# -ge 2 ] || { echo "--persona needs a name" >&2; exit 1; }; PERSONA=$2; shift 2 ;;
+      --locale) [ $# -ge 2 ] && echo "$2" | grep -qE '^[a-z]{2}_[A-Z]{2}$' || { echo "--locale needs a locale like de_CH" >&2; exit 1; }; LOCALE=$2; shift 2 ;;
       -*) echo "unknown option $1" >&2; exit 1 ;;
       *) [ -z "$RUN" ] || { echo "one run name only: $RUN and $1" >&2; exit 1; }; RUN=$1; shift ;;
     esac
@@ -81,6 +84,10 @@ up)
   printf 'RUN=%s\nVM=%s\nIP=%s\nEVIDENCE=%s\nDMG="%s"\n' "$RUN" "$VM" "$IP" "$EVIDENCE" "$DMG" > "$D/env"
   # vanilla-clean has Gatekeeper off; a person's Mac has it on.
   ssh_ 'echo admin | sudo -S spctl --global-enable 2>/dev/null; mkdir -p ~/Downloads; osascript -e "quit app \"Terminal\"" >/dev/null 2>&1 || true'
+  # The image's user is set to en_US: a date field then shows 07/01/2026. A Swiss owner's Mac reads de_CH; the
+  # user's defaults, written before the app first starts, are what Electron takes its locale from. The image stays as it is.
+  LANGS=$(echo "$LOCALE" | tr _ -)
+  ssh_ "defaults write -g AppleLocale -string $LOCALE; defaults write -g AppleLanguages -array $LANGS en; defaults write -g AppleICUForce24HourTime -bool true" && echo "LOCALE=$LOCALE" >> "$D/env"
   node "$HERE/persona-files.mjs" "$D/Downloads" --persona "$PERSONA" >/dev/null && cat "$D/persona.env" >> "$D/env"
   # The tester's answer key (personas with one): beside the env, never into the VM, and kept with the evidence.
   [ -f "$D/answer-key.md" ] && cp "$D/answer-key.md" "$EVIDENCE/answer-key.md"
