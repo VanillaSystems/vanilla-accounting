@@ -224,6 +224,8 @@ export type DropAction =
   | { kind: 'undo' }
   /** A statement of an unknown account is the owner's private one: set aside. */
   | { kind: 'private' }
+  /** A statement of an account the books lacked (`unknownAccount`), now added as the firm's (PATCH /api/workspace addBank, the way Firma › Geldkonten adds one): read in at once (#401). */
+  | { kind: 'firmAccount' }
   /** A statement of one of the accounts it offered (`chooseAccount`): read into that one. */
   | { kind: 'account'; account: string }
   /** A statement taken onto its bank's account (`byBank`) belongs to another: taken back out, and asked which. */

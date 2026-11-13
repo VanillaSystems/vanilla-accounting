@@ -1,17 +1,12 @@
 /**
- * The account a refused statement belongs to (the drop dialog's «Bankkonto hinzufügen»): Firma ›
- * Bankkonten opens its «hinzufügen» form filled in from what the statement says.
+ * The account a statement of an account the books lack belongs to (the drop dialog's «Ja,
+ * Bankkonto hinzufügen», #401): the bank, ledger account and label its row proposes, from what the
+ * statement says.
  */
 import type { UnknownAccount } from '../../../types/api-error.js';
 import { BANKS } from '../../../workspace/banks.js';
 
 export type BankDraft = UnknownAccount;
-
-let draft: BankDraft | undefined;
-
-export const setBankDraft = (d: BankDraft): void => { draft = d; };
-export const peekBankDraft = (): BankDraft | undefined => draft;
-export const clearBankDraft = (): void => { draft = undefined; };
 
 /** Where the chart keeps bank accounts (Swiss KMU: 1020 Bankguthaben and the numbers after it). */
 const BANK_RANGE = /^102\d$/;

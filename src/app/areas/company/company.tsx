@@ -28,7 +28,6 @@ import { ICONS } from '../icons.js';
 import { I } from '../receipts/icons.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
 import { InvoiceLayoutSection } from './InvoiceLayout.js';
-import { clearBankDraft, draftForm, peekBankDraft, type BankDraft } from './bank-draft.js';
 import { MailSection } from './MailSection.js';
 import { SourcesSection } from './SourcesSection.js';
 import { PhoneSection } from './PhoneSection.js';
@@ -370,9 +369,7 @@ const TAKES_IBAN: readonly MoneyRole[] = ['bank', 'card', 'owner', 'employee'];
 
 function Banks({ ws, books, nav, canEdit }: Props & { ws: CompanyInfo }) {
   const [edit, setEdit] = useState(false);
-  const [draft] = useState(peekBankDraft);
-  useEffect(clearBankDraft, []);
-  const [adding, setAdding] = useState(!!draft);
+  const [adding, setAdding] = useState(false);
   const key = (b: { bank: string; currency: string }) => `${b.bank} ${b.currency}`;
   const [f, setF] = useState<Record<string, { label: string; iban: string }>>({});
   // An account without an IBAN in the books starts with the one its statements show: «Speichern» adopts it.
@@ -436,18 +433,14 @@ function Banks({ ws, books, nav, canEdit }: Props & { ws: CompanyInfo }) {
           </div>
         )}
       </form>
-      {adding && <AddBank nav={nav} draft={draft} banks={ws.bankAccounts} onDone={() => setAdding(false)} />}
+      {adding && <AddBank nav={nav} onDone={() => setAdding(false)} />}
       <p className="m src-note">{t('company.banksSource')}</p>
     </>
   );
 }
 
-function AddBank({ nav, draft, banks, onDone }: { nav: Nav; draft?: BankDraft; banks: CompanyInfo['bankAccounts']; onDone(): void }) {
-  const [f, setF] = useState(() => ({
-    bank: '', account: '', label: '',
-    ...(draft && draftForm(draft, banks, Object.keys(getAccountMap()))),
-    currency: draft?.currency ?? baseCurrency(), iban: draft?.iban ?? '',
-  }));
+function AddBank({ nav, onDone }: { nav: Nav; onDone(): void }) {
+  const [f, setF] = useState(() => ({ bank: '', account: '', label: '', currency: baseCurrency(), iban: '' }));
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const valid = !!f.bank.trim() && /^[A-Za-z]{3}$/.test(f.currency.trim()) && /^\d{4}$/.test(f.account.trim()) && !!f.label.trim();
   async function save(e: FormEvent) {
@@ -465,7 +458,7 @@ function AddBank({ nav, draft, banks, onDone }: { nav: Nav; draft?: BankDraft; b
       <div className="acts">
         <button type="submit" className="btn primary" disabled={!valid}>{t('company.addBank')}</button>
         <button type="button" className="btn ghost" onClick={onDone}>{t('common.cancel')}</button>
-        <span className="m">{t('company.addBankHint')}{draft ? ` ${t('company.addBankThenDrop')}` : ''}</span>
+        <span className="m">{t('company.addBankHint')}</span>
       </div>
     </form>
   );
