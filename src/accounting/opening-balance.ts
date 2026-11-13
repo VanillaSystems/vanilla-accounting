@@ -9,7 +9,7 @@
  * balanced. Pure: the statement route writes it, the runs table offers it.
  */
 import type { AccountingConfig, Index } from '../types/index.js';
-import { addDays, type IsoDate } from './periods.js';
+import type { IsoDate } from './periods.js';
 import { fromRappen, toRappen } from './rappen.js';
 import { baseCurrency } from '../engines/index.js';
 
