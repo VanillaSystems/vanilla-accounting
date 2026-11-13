@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { BankTransaction, Index } from '../src/types/index.js';
-import { badgeCount, bankOf, fileFacts, payText, troubled, unbookedPayments, type Account, type Statement } from '../src/app/areas/bank/model.js';
+import { badgeCount, bankOf, fileFacts, fileKey, keyOfFile, payText, troubled, unbookedPayments, type Account, type Statement } from '../src/app/areas/bank/model.js';
 import { parseIban } from '../src/workspace/banks.js';
 import { findLines, type TextItem } from '../src/app/areas/bank/lines.js';
 import './support/jurisdiction.js';
@@ -167,6 +167,19 @@ test('two statements starting the same day get keys of their own', () => {
   const keys = b.statements('2026-07-01', '2026-07-31').filter((s) => s.account.account === '1021').map((s) => s.key);
   assert.equal(new Set(keys).size, keys.length, keys.join(' '));
   assert.equal(b.statementOf(b.txByRef.get('R1')!)?.file?.filename, 'b.pdf', 'the narrowest statement holding the day');
+});
+
+test('keyOfFile: a dropped PDF opens by the key Kontoauszüge gives it, the second of one first day too (#424)', () => {
+  const files = [
+    { bank: 'Raiffeisen', filename: 'b.pdf', fromDate: '2026-07-01', toDate: '2026-07-15' },
+    { bank: 'Raiffeisen', filename: 'c.pdf', fromDate: '2026-07-01', toDate: '2026-07-15' },
+  ];
+  const b = bankOf(books({ bankStatements: files }), ACCOUNTS, '2026-08-15');
+  const [first, second] = files.map((f) => keyOfFile(b, f));
+  assert.notEqual(first, second);
+  assert.equal(b.byKey(first!)?.file?.filename, 'b.pdf');
+  assert.equal(b.byKey(second!)?.file?.filename, 'c.pdf', `the second by its own key ${second}`);
+  assert.equal(b.byKey(fileKey('1021', '2026-07-01', '2026-07-15'))?.file?.filename, 'b.pdf', 'the key of its days alone opens the first');
 });
 
 test('the dock counts statements with a problem from the open quarter on', () => {

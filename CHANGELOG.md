@@ -339,6 +339,27 @@ Two markers flag an entry you must read before you update:
   because a receipt said nothing. Its payment does not wait because of it. A VAT word counts only
   as a word: «August», «Muster» and «Industrie» are no longer read as «USt». TVA, IVA and a UID
   written with spaces («CHE 111.222.333 TVA») count now.
+- Firma › Eröffnung (#427): a foreign-currency bank account is no longer refused with a terminal
+  command. Typed, it shows a second field: its value in CHF and its balance in its own currency,
+  as the balance sheet shows both; the statements are checked against the latter. Beside them the
+  form names the balance's value at the ESTV rate of 31.12. and how far the typed value is off it,
+  with a click to take it; values of opposite signs, or one of them 0, are refused.
+- Kontoauszüge (#427): a difference to the bank that the opening explains is no longer blamed on «eine
+  Zahlung … nicht oder falsch gebucht». A foreign-currency account without its opening is named
+  «Anfangsbestand fehlt» in its currency, as a CHF account was; and books whose opening is entered
+  but that start later in the year say that the difference lies before the statements' first
+  payment, with the bank's and the books' balance on that day.
+- Drop and Belege (#427): a balance sheet («Bilanz», «Zwischenbilanz», «Balance sheet», «Bilan»,
+  «Bilancio») is no longer a receipt «gelesen, noch keine Zahlung» with its total as the amount. It is
+  kept beside the receipts, never paid, and says so in its row and in Belege; the one of the last day
+  of the year before the open year is offered for the opening («Eröffnung erfassen» to Firma ›
+  Eröffnung). The opening stays the person's: nothing is written to it.
+- After the drop she sees her data (#424): what «Dateien hinzufügen» reports as booked (a provider's
+  reports, the payouts her answer in a row booked, a statement read or kept, a file taken back) is on
+  every page at once, the MWST figure and the dock too; before, the page kept the figures of before
+  the drop until the window was reloaded. Closing the window after a bank's PDF statement opens that
+  statement in its own quarter; before, it opened a «Datei» view in today's quarter that said the
+  file was not read.
 - A payment provider's payouts list dropped before the firm has that provider is named as the
   provider's other export, with the reports to bring instead, at the first drop too (#425); before,
   it became a bank statement's column question; the dialog's head says it was set aside, not

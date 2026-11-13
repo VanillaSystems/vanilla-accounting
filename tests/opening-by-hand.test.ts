@@ -42,13 +42,44 @@ test('an asset and a liability typed for the first year: retained earnings carri
   assert.deepEqual(booksOnDisk(api.ws), empty, 'every opening taken back: the books as before');
 });
 
-test('refused: an income-statement account, retained earnings itself, a foreign-currency account', async () => {
+test('refused: an income-statement account, retained earnings itself, a foreign-currency account without its balance in its currency', async () => {
   const before = booksOnDisk(api.ws);
   for (const [account, reason] of [['6000', 'notBalanceSheet'], ['2970', 'equity'], ['1023', 'foreign']]) {
     const { status, json } = await api.send('PUT', `/api/opening-balances/2026/${account}`, { amount: 100 });
     assert.deepEqual([status, json.code, (json.params as { reason: string }).reason], [400, 'openingAccount', reason], account);
+    assert.doesNotMatch(String(json.error), /npm/, 'a refusal names no terminal command');
   }
   assert.deepEqual(booksOnDisk(api.ws), before);
+});
+
+test('a foreign-currency bank account opens with its value in CHF and its balance in its currency, as the balance sheet shows both (r2-26)', async () => {
+  const empty = booksOnDisk(api.ws);
+  const r = await api.send('PUT', '/api/opening-balances/2026/1023', { amount: 1126.01, native: 1200 });
+  assert.equal(r.status, 200, String(r.json.error));
+  assert.deepEqual(books().config?.openingBalances, { 2026: { 1023: 1126.01, 2970: 1126.01 } }, 'the CHF value in the Bilanz, retained earnings the other side');
+  assert.deepEqual(books().config?.openingBalancesNative, { 2026: { 1023: { amount: 1200, currency: 'EUR' } } }, 'the EUR balance the statements are checked against');
+  await api.send('PUT', '/api/opening-balances/2026/1023', { amount: null });
+  assert.deepEqual(booksOnDisk(api.ws), empty, 'taken back: both values go');
+});
+
+test('refused: a CHF value and a balance in the currency that cannot both be true, and a balance in a currency for a CHF account (#427 review)', async () => {
+  const before = booksOnDisk(api.ws);
+  for (const body of [{ amount: 1126.01, native: -1200 }, { amount: -1126.01, native: 1200 }, { amount: 1126.01, native: 0 }, { amount: 0, native: 1200 }]) {
+    const { status, json } = await api.send('PUT', '/api/opening-balances/2026/1023', body);
+    assert.deepEqual([status, json.code, (json.params as { reason: string }).reason], [400, 'openingAccount', 'foreignMismatch'], JSON.stringify(body));
+  }
+  const chf = await api.send('PUT', '/api/opening-balances/2026/1021', { amount: 100, native: 100 });
+  assert.deepEqual([chf.status, chf.json.code, (chf.json.params as { reason: string }).reason], [400, 'openingAccount', 'notForeign']);
+  assert.deepEqual(booksOnDisk(api.ws), before);
+});
+
+test('«Rückgängig» restores a foreign account\'s older opening that had no balance in its currency (native: null)', async () => {
+  const empty = booksOnDisk(api.ws);
+  const r = await api.send('PUT', '/api/opening-balances/2026/1023', { amount: 500, native: null });
+  assert.equal(r.status, 200, String(r.json.error));
+  assert.deepEqual([books().config?.openingBalances?.['2026']?.['1023'], books().config?.openingBalancesNative], [500, undefined]);
+  await api.send('PUT', '/api/opening-balances/2026/1023', { amount: null });
+  assert.deepEqual(booksOnDisk(api.ws), empty);
 });
 
 test('refused: a year an earlier year of the books opens', async () => {
