@@ -124,7 +124,7 @@ const openingIn = (books: Pick<Index, 'config'>, a: BankAccount, year: string): 
 
 /**
  * What the statements say about the start of the year: the day of the year's first imported payment
- * and the bank's balance before it (in Rappen), the first closing balance of the year less the payments up to it.
+ * and the bank's balance before it (in hundredths), the first closing balance of the year less the payments up to it.
  */
 function bankStart(books: StartBooks, a: BankAccount, year: string): { from: string; held: number } | undefined {
   const first = (books.statementBalances ?? []).filter((b) => b.account === a.account && b.date.startsWith(year)).sort((x, y) => x.date.localeCompare(y.date))[0];
