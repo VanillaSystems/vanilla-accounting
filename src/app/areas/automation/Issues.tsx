@@ -3,7 +3,7 @@
  * return is filed, under «Abrechnung prüfen» (r4c-38), and the bookings that contradict their
  * receipts with their one click (r4c-31). Each issue links to where it is settled; none blocks.
  */
-import { orderPagesNow, providerIssuesNow } from '../../lib/order-pages.js';
+import { orderPagesNow, outlayWaitsNow, providerIssuesNow } from '../../lib/order-pages.js';
 import { FindPair } from '../receipts/FindPair.js';
 import { t } from '../../i18n/index.js';
 import { fmt, formatDate, moneyInText } from '../../lib/utils.js';
@@ -25,6 +25,7 @@ import { UnreadRuleOffer, UnreadTask } from './UnreadReceipt.js';
 import type { UnreadOffer } from '../../../saving/unread-rule.js';
 import { useState } from 'react';
 import { monthName, periodName } from '../../lib/period-label.js';
+import { withheldIn } from './filing-summary.js';
 import { issuesLead, LACK_WORDS, periodIssues, unbookedOpen, type IssueCounts, type PeriodIssue, type Say } from './period-issues.js';
 import { useAutomation } from '../../automation/store.js';
 import { processingOf } from '../../../workflows/processing.js';
@@ -81,11 +82,10 @@ export function usePeriodIssues(books: Index, from: string, to: string): PeriodI
   const { questions } = useQuestions();
   const ws = useWorkspace();
   const accounts = ws?.bankAccounts;
-  const owner = ws?.company.owner;
   // A receipt a run still reads is not hers yet (#398): the runs as Belege reads them.
   const runs = useAutomation().view?.runs;
-  const key = [books, questions, accounts, orderPagesNow(), providerIssuesNow(), from, to, localToday(), runs, owner];
-  if (!lastIssues || key.some((k, i) => k !== lastIssues!.key[i])) lastIssues = { key, issues: periodIssues(books, questions, from, to, accounts ?? [], orderPagesNow(), localToday(), processingOf(runs ?? [], books.receipts), providerIssuesNow(), owner) };
+  const key = [books, questions, accounts, orderPagesNow(), providerIssuesNow(), from, to, localToday(), runs, outlayWaitsNow()];
+  if (!lastIssues || key.some((k, i) => k !== lastIssues!.key[i])) lastIssues = { key, issues: periodIssues(books, questions, from, to, accounts ?? [], orderPagesNow(), localToday(), processingOf(runs ?? [], books.receipts), providerIssuesNow(), outlayWaitsNow()) };
   return lastIssues.issues;
 }
 
@@ -120,8 +120,7 @@ export function issueWords(c: Pick<IssueCounts, 'unbooked' | 'waitingReceipt'> &
  * page for a firm that files one, else among the payments). Nothing when every payment is booked.
  */
 export function UnbookedFact({ books, nav, lead, className }: { books: Index; nav: Pick<Nav, 'go'>; lead?: string; className?: string }) {
-  const ws = useWorkspace();
-  const open = unbookedOpen(books, ws?.bankAccounts ?? [], localToday(), ws?.company.owner);
+  const open = unbookedOpen(books, useWorkspace()?.bankAccounts ?? [], localToday(), outlayWaitsNow());
   if (!open.first) return null;
   const p = parsePeriod(filingKeyOf(open.first.date, filing().length), localToday());
   const to: Location = chargesVat() && p ? { route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period: p } } : at({ area: 'bank', payment: open.first.ref }, open.first.date);
@@ -151,13 +150,14 @@ export function OpenFact({ books, nav, period, counts: c, lead, className }: { b
 }
 
 /** «Noch offen in {period}»: under the return to review. An open VAT question withholds «Freigegeben» (r8h-24); the rest does not block the filing. */
-export function PeriodIssues({ books, nav, from, to, period, canEdit }: { books: Index; nav: Nav; from: string; to: string; period: string; canEdit: boolean }) {
+export function PeriodIssues({ books, nav, from, to, period, canEdit, figures }: { books: Index; nav: Nav; from: string; to: string; period: string; canEdit: boolean; figures?: Record<string, number> }) {
   const issues = usePeriodIssues(books, from, to);
+  const { questions } = useQuestions();
   if (!issues.length) return <p className="m" data-testid="period-issues-none">{t('issues.none', { period })}</p>;
   return (
     <section className="wfissues" data-testid="period-issues">
       <h3>{t('issues.title', { period, n: issues.length })}</h3>
-      <p className="m" data-testid="period-issues-lead">{issuesLead(issues, t as unknown as Say)}</p>
+      <p className="m" data-testid="period-issues-lead">{issuesLead(withheldIn(figures, questions, books, from, to, providerIssuesNow()), issues.length, t as unknown as Say)}</p>
       <ul>
         {issues.map((i, k) => {
           const go = goOf(books, i);

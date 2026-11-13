@@ -28,20 +28,20 @@
  */
 import { basename } from 'node:path';
 import { identify, signalsOfTransaction } from '../knowledge/counterparties.js';
-import type { Knowledge } from '../knowledge/layers.js';
+import { loadKnowledge, type Knowledge } from '../knowledge/layers.js';
 import { chart, withoutInputTax } from '../engines/index.js';
-import { ownerFactsOf, ownerRepayments, paysOwner, repaysOwnerShape } from './owner-outlays.js';
-import type { Books } from '../books/store.js';
+import { outlaysOpen, ownerFactsOf, ownerRepayments, paysOwner, repaysOwnerShape } from './owner-outlays.js';
+import { periodLock, type Books } from '../books/store.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
-import { mappedReceipts, ruleOfPayment, type ClassifyContext } from './classify.js';
-import type { FxResolver } from '../accounting/fx-rates.js';
+import { loadClassifyContext, mappedReceipts, ruleOfPayment, type ClassifyContext } from './classify.js';
+import { loadFxResolver, type FxResolver } from '../accounting/fx-rates.js';
 import { isBankFee } from './separate-fee.js';
 import { businessVat } from './purchase-vat.js';
 import { linkedOf, type Linked } from '../accounting/receipt-due.js';
 import { bankAccountFor } from '../workspace/money-accounts.js';
 import { providerOfPayment } from './providers.js';
 import { employs } from '../workspace/setup.js';
-import type { Workspace } from '../workspace/workspace.js';
+import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 
 export const RECEIPT_STEP = 'evidence.guide.yaml#rules';
 
@@ -189,11 +189,30 @@ export { paysOwner };
 
 /**
  * Whether a payment that waits waits for the owner's outlays rather than a receipt of its own (#428):
- * money out to her by name in the books' currency on a firm with her account (repaysOwnerShape).
- * Her receipts paid privately, booked as outlays, make it a repayment the next run books.
+ * money out to her by name in the books' currency on a firm with her account (repaysOwnerShape), no
+ * wage by its wording and no payment a company rule decides (rent to her waits for its contract), as
+ * ownerRepayments excludes them, while her account holds outlays not paid back (outlaysOpen above
+ * zero, not enough for it yet). More of her receipts booked as outlays make it a repayment.
  */
-export const awaitsOutlays = (tx: BankTransaction, context: Pick<ClassifyContext, 'ownerAccount' | 'ownerName'>): boolean =>
-  !!context.ownerAccount && repaysOwnerShape(tx, context.ownerName);
+export function awaitsOutlays(books: Books, tx: BankTransaction, context: ClassifyContext, wages: readonly Wording[], fx: FxResolver): boolean {
+  const f = ownerFactsOf(context);
+  if (!f || !repaysOwnerShape(tx, context.ownerName) || wages.some((w) => w.test(tx.description))) return false;
+  if (ruleOfPayment(books, tx, context, fx)) return false;
+  return outlaysOpen(books, f, tx.date) > 0;
+}
+
+/** The open payments that wait, as awaitsOutlays tells them, by ref: what the screens and the AI's facts say waits for her outlays (#428). */
+export function outlayWaitsOf(ws: Workspace, books: Books): string[] {
+  const lock = periodLock(books);
+  const booked = new Set(books.journalEntries.map((e) => e.transactionRef));
+  const owner = ws.company?.owner;
+  const waiting = books.transactions.filter((t) => t.waitsForReceipt && !t.waitsForReceipt.unread && !booked.has(t.ref) && !lock.isClosed(t.date) && repaysOwnerShape(t, owner));
+  if (!waiting.length || !ws.bankAccounts.some((a) => a.role === 'owner')) return [];
+  const context = loadClassifyContext(ws);
+  const wages = receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws).wages;
+  const fx = loadFxResolver();
+  return waiting.filter((t) => awaitsOutlays(books, t, context, wages, fx)).map((t) => t.ref);
+}
 
 /**
  * Whether the classifier's answer for a payment may be booked, given its receipt wait: one that

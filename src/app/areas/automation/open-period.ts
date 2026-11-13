@@ -39,8 +39,8 @@ export interface OpenPeriodContext {
   /** filing().length and filing().dueDays. */
   length: FilingLength;
   dueDays: number;
-  /** The owner's name (company.owner): a payment to her that waits, waits for her outlays (#428). */
-  owner?: string;
+  /** The payments to the owner that wait for her outlays (outlayWaitsOf on the server, #428). */
+  outlays?: ReadonlySet<string>;
   /** The firm (company.uid, .name): an invoice it issued waits for its customer, not for the person (#428). */
   firm?: Firm;
 }
@@ -144,7 +144,7 @@ export function openPeriodState(
   offers: readonly PendingOffer[] = [],
 ): OpenPeriodState {
   const period = booksOpenPeriod(books, ctx.today, ctx.length);
-  const issues = periodIssues(books, questions, period.from, period.to, accounts, orderPages, ctx.today, processing, provider, ctx.owner);
+  const issues = periodIssues(books, questions, period.from, period.to, accounts, orderPages, ctx.today, processing, provider, ctx.outlays);
   const unbooked = issues.flatMap((i) => (i.kind === 'unbooked' ? [i.tx] : []));
   const unlinked = issues.flatMap((i) => (i.kind === 'unlinked' ? [i.receipt] : []));
   const refs = new Set(unbooked.map((t) => t.ref));
@@ -155,7 +155,7 @@ export function openPeriodState(
     counts: countIssues(issues),
     unbooked,
     // The same payments as the issues' `waitsForReceipt` (both are receiptWaits), with what each waits for.
-    waiting: receiptWaiting(books, accounts, ctx.today, ctx.owner).filter((w) => refs.has(w.tx.ref)),
+    waiting: receiptWaiting(books, accounts, ctx.today, ctx.outlays).filter((w) => refs.has(w.tx.ref)),
     questions: issues.flatMap((i) => (i.kind === 'question' ? [{ q: i.q, date: i.date }] : [])),
     evidence: issues.flatMap((i) => (i.kind === 'evidence' ? [{ entry: i.entry, check: i.check }] : [])),
     unlinked: unlinked.filter((r) => !waitsForCustomer(books, r, ctx.firm)),
@@ -165,7 +165,8 @@ export function openPeriodState(
       const balance = balanceAt(books.journalEntries ?? [], c.account, period.to, books.config?.openingBalances);
       return balance < 0 ? [{ name: c.name, account: c.account, balance }] : [];
     }),
-    offers: [...offers],
+    // Only the period's: its payment is dated in it, as everything the state counts.
+    offers: offers.filter((o) => o.date >= period.from && o.date <= period.to),
     yours: issues.flatMap((i) => (i.kind === 'own' ? [i] : [])),
     held: issues.flatMap((i) => (i.kind === 'held' ? [i.held] : [])),
     bills: issues.flatMap((i) => (i.kind === 'bill' ? [i.bill] : [])),

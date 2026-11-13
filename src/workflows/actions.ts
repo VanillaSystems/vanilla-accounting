@@ -182,13 +182,14 @@ export const ACTIONS: Record<string, Action> = {
       const context = loadClassifyContext(ws);
       // No provisional booking: a payment that needs a receipt waits for it, as in the inbox run (issue #29).
       // An answer that only settles (the owner's outlays paid back) has no receipt of its own and is booked (issue #90).
-      const wait = receiptWaitOf(scratch, t, context, receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws), fx);
+      const known = receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws);
+      const wait = receiptWaitOf(scratch, t, context, known, fx);
       // A repayment of the owner's outlays goes to the model but is booked only onto her account (#402).
       const waits = wait.wait;
       const settles = mustSettle(wait);
       if (wait.wait && wait.unread) return { outcome: 'held', output: { why: 'receiptUnread' } };
       // A payment to the owner waits for the outlays it pays back, not for a receipt of its own (#428).
-      const held = { outcome: 'held', output: { why: awaitsOutlays(t, context) ? 'waitsForOutlays' : 'waitsForReceipt' } } as const;
+      const held = { outcome: 'held', output: { why: awaitsOutlays(scratch, t, context, known.wages, fx) ? 'waitsForOutlays' : 'waitsForReceipt' } } as const;
       if (waits && (!ask || t.waitsForReceipt?.decided)) return held;
       const { classified, failed, asked, unasked } = await classifyTransactions(scratch, [t], { ask, fx, context });
       const entries = scratch.journalEntries.slice(before);

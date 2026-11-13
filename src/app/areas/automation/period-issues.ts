@@ -21,7 +21,6 @@ import { bookedStates } from '../../../accounting/payment-entries.js';
 import { waitingForReceipt, type WaitingPayment } from '../../../accounting/receipt-due.js';
 import { localToday, type IsoDate } from '../../../accounting/periods.js';
 import type { HeldOrder, MissingBill, ProviderIssues } from '../../../booking/provider-issues.js';
-import { repaysOwnerShape } from '../../../booking/owner-outlays.js';
 
 export type PeriodIssue =
   | { kind: 'question'; q: Question; date: string }
@@ -65,17 +64,17 @@ export function dateOn(books: Pick<Index, 'transactions' | 'receipts' | 'journal
 /**
  * The open issues of the days `from`–`to`, in the order a person works them off: questions, held orders, contradicting codes,
  * unbooked payments, receipts that wait for her word, receipts without a payment, missing bills of a provider. `provider`:
- * what the providers' reports leave open (#405). `owner`: the owner's name (company.owner), which tells a payment to her that
- * waits for her outlays from one that waits for its receipt (#428).
+ * what the providers' reports leave open (#405). `outlays`: the payments to the owner that wait for her outlays (outlayWaitsOf), told
+ * apart from those that wait for their receipt (#428).
  */
-export function periodIssues(books: Index, questions: readonly Question[], from: string, to: string, accounts: readonly LedgerBankAccount[], orderPages: ReadonlyMap<string, OrderPage> = new Map(), today: IsoDate = localToday(), processing: ReadonlyMap<string, Processing> = new Map(), provider?: ProviderIssues, owner?: string): PeriodIssue[] {
+export function periodIssues(books: Index, questions: readonly Question[], from: string, to: string, accounts: readonly LedgerBankAccount[], orderPages: ReadonlyMap<string, OrderPage> = new Map(), today: IsoDate = localToday(), processing: ReadonlyMap<string, Processing> = new Map(), provider?: ProviderIssues, outlays?: ReadonlySet<string>): PeriodIssue[] {
   const within = (d: string | undefined): d is string => !!d && d >= from && d <= to;
   const asked = questions.flatMap((q): PeriodIssue[] => {
     const date = q.status === 'open' ? dateOn(books, q) : undefined;
     return within(date) ? [{ kind: 'question', q, date }] : [];
   });
   const evidence = journalOf(books).views.flatMap((v): PeriodIssue[] => (v.evidence && within(v.e.date) ? [{ kind: 'evidence', entry: v.e, check: v.evidence }] : []));
-  const waits = new Map(receiptWaiting(books, accounts, today, owner).map((w) => [w.tx.ref, w]));
+  const waits = new Map(receiptWaiting(books, accounts, today, outlays).map((w) => [w.tx.ref, w]));
   const unbooked = unbookedPayments(books, accounts).filter((t) => within(t.date)).map((tx): PeriodIssue => {
     const w = waits.get(tx.ref);
     return { kind: 'unbooked', tx, ...(w ? (w.outlays ? { waitsForOutlays: true as const } : { waitsForReceipt: true as const }) : {}) };
@@ -99,47 +98,41 @@ export function periodIssues(books: Index, questions: readonly Question[], from:
  * The payments the app does not book because their receipt is not there or cannot be read
  * (src/accounting/receipt-due.ts `waitingForReceipt`, issue #29, #57), by ref: the one answer to
  * «wartet auf ihren Beleg» for the drop's summary, the return's page, Automatisierung and Aufgaben.
- * It holds the ones whose return is near too (then a task of the person's on Aufgaben). Given the
- * owner's name, not the payments to her that wait for her outlays (#428): no receipt of theirs is missing.
+ * It holds the ones whose return is near too (then a task of the person's on Aufgaben). Not the
+ * payments to the owner in `outlays`, which wait for her outlays (#428): no receipt of theirs is missing.
  */
-export function receiptWaits(books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts' | 'config'>, accounts: readonly LedgerBankAccount[], today: IsoDate = localToday(), owner?: string): Set<string> {
-  return new Set(receiptWaiting(books, accounts, today, owner).filter((w) => !w.outlays).map((w) => w.tx.ref));
+export function receiptWaits(books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts' | 'config'>, accounts: readonly LedgerBankAccount[], today: IsoDate = localToday(), outlays?: ReadonlySet<string>): Set<string> {
+  return new Set(receiptWaiting(books, accounts, today, outlays).filter((w) => !w.outlays).map((w) => w.tx.ref));
 }
 
 /**
  * `receiptWaits` with what each payment waits for (`waits`, `asks`, `unread`): the AI sidebar's card and note tell the kinds apart (#342).
- * `outlays`: a payment to the owner by name (`owner`, on a firm with her account) waits for the outlays it pays back (#428).
+ * `outlays`: a payment of `outlays` (outlayWaitsOf) waits for the owner's outlays it pays back (#428).
  */
-export function receiptWaiting(books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts' | 'config'>, accounts: readonly LedgerBankAccount[], today: IsoDate = localToday(), owner?: string): WaitingPayment[] {
+export function receiptWaiting(books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts' | 'config'>, accounts: readonly LedgerBankAccount[], today: IsoDate = localToday(), outlays?: ReadonlySet<string>): WaitingPayment[] {
   const booked = bookedStates(books, accounts);
-  const hers = !!owner && accounts.some((a) => a.role === 'owner');
   return waitingForReceipt(books, (ref) => booked(ref) === 'booked', today)
-    .map((w) => (hers && w.kind !== 'unread' && repaysOwnerShape(w.tx, owner) ? { ...w, outlays: true as const } : w));
-}
-
-/**
- * What of the list withholds the approval of the return, as filing-summary.ts approvalWithheld
- * reads it: the open VAT questions about its sales and the orders a sales report could not split by
- * rate. `rest`: what holds nothing up. The list's lead names only what is there (#428): a firm
- * without a provider never reads of a sales report.
- */
-export function withholding(issues: readonly PeriodIssue[]): { questions: number; orders: number; rest: number } {
-  const questions = issues.filter((i) => i.kind === 'question' && i.q.topic === 'saleVat').length;
-  const orders = issues.filter((i) => i.kind === 'held' && i.held.why === 'rate').length;
-  return { questions, orders, rest: issues.length - questions - orders };
+    .map((w) => (w.kind !== 'unread' && outlays?.has(w.tx.ref) ? { ...w, outlays: true as const } : w));
 }
 
 /** A text of the app's dictionaries (the UI's `t`, or formatIn of one language). */
 export type Say = (key: string, vars?: Record<string, string | number>) => string;
 
-/** The list's lead: what of it withholds the approval, named only when it is there (withholding), and whether the rest blocks nothing. */
-export function issuesLead(issues: readonly PeriodIssue[], say: Say): string {
-  const w = withholding(issues);
-  const parts = [w.questions ? say('issues.lead.question', { n: w.questions }) : '', w.orders ? say('issues.lead.order', { n: w.orders }) : ''].filter(Boolean);
+/**
+ * The list's lead (#428): what withholds the approval, as filing-summary.ts withheldIn counts it for
+ * the review too (rates without their activity code, open VAT questions, orders held for their rates),
+ * named only when it is there, and whether the rest of the list (`listed` items) blocks nothing.
+ */
+export function issuesLead(w: { rates: readonly string[]; questions: number; held: number }, listed: number, say: Say): string {
+  const parts = [
+    w.rates.length ? say('issues.lead.rates', { n: w.rates.length, rates: w.rates.join(', ') }) : '',
+    w.questions ? say('issues.lead.question', { n: w.questions }) : '',
+    w.held ? say('issues.lead.order', { n: w.held }) : '',
+  ].filter(Boolean);
   if (!parts.length) return say('issues.lead.nothing');
-  const what = parts.length === 2 ? say('issues.lead.and', { a: parts[0], b: parts[1] }) : parts[0];
-  const held = say(w.questions + w.orders === 1 ? 'issues.lead.withholdsOne' : 'issues.lead.withholdsMany', { what: what.charAt(0).toUpperCase() + what.slice(1) });
-  return w.rest ? `${held} ${say('issues.lead.rest')}` : held;
+  const what = parts.length > 1 ? say('issues.lead.and', { a: parts.slice(0, -1).join(', '), b: parts.at(-1)! }) : parts[0];
+  const held = say(w.rates.length + w.questions + w.held === 1 ? 'issues.lead.withholdsOne' : 'issues.lead.withholdsMany', { what: what.charAt(0).toUpperCase() + what.slice(1) });
+  return listed > w.questions + w.held ? `${held} ${say('issues.lead.rest')}` : held;
 }
 
 /**
@@ -163,9 +156,9 @@ export function countIssues(issues: readonly PeriodIssue[]): IssueCounts {
  * The payments of every period not filed that nobody booked, and the oldest of them: what «nothing
  * waits for you» must not hide (#341). The same payments as the period's issues, over all open days.
  */
-export function unbookedOpen(books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts' | 'config'>, accounts: readonly LedgerBankAccount[], today: IsoDate = localToday(), owner?: string): { unbooked: number; waitingReceipt: number; waitingOutlays: number; first?: BankTransaction } {
+export function unbookedOpen(books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts' | 'config'>, accounts: readonly LedgerBankAccount[], today: IsoDate = localToday(), outlays?: ReadonlySet<string>): { unbooked: number; waitingReceipt: number; waitingOutlays: number; first?: BankTransaction } {
   const open = unbookedPayments(books, accounts);
-  const waits = new Map(receiptWaiting(books, accounts, today, owner).map((w) => [w.tx.ref, w]));
+  const waits = new Map(receiptWaiting(books, accounts, today, outlays).map((w) => [w.tx.ref, w]));
   const count = (outlays: boolean) => open.filter((t) => waits.has(t.ref) && !!waits.get(t.ref)!.outlays === outlays).length;
   return { unbooked: open.length, waitingReceipt: count(false), waitingOutlays: count(true), ...(open[0] ? { first: open[0] } : {}) };
 }

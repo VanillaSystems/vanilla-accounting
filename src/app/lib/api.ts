@@ -493,6 +493,7 @@ export const api = {
   ruleCommand: (c: RuleCommand) => request<RuleCommandResult>('POST', '/api/rules', c),
   draftRules: (path: string) => request<DraftView>('GET', `/api/rules/draft?path=${encodeURIComponent(path)}`),
   draftCommand: (c: DraftCommand) => request<KeepResult | { ok: boolean }>('POST', '/api/rules/draft', c),
+  outlayWaits: () => request<{ refs: string[] }>('GET', '/api/rules/outlay-waits'),
   setupOffers: () => request<{ offers: PendingOffer[] }>('GET', '/api/rules/share-offers'),
   shareOffer: (ref: string) => request<{ offer: ShareOffer | null }>('GET', `/api/rules/share?ref=${encodeURIComponent(ref)}`),
   draftShare: (ref: string) => request<{ path: string }>('POST', '/api/rules/share', { ref }),

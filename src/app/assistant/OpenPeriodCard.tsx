@@ -18,7 +18,7 @@ import type { Location } from '../shell/route.js';
 import { useQuestions } from '../questions/store.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { useAutomation } from '../automation/store.js';
-import { orderPagesNow, providerIssuesNow } from '../lib/order-pages.js';
+import { orderPagesNow, outlayWaitsNow, providerIssuesNow } from '../lib/order-pages.js';
 import { at } from '../areas/receipts/view.js';
 import { taskLine } from '../areas/automation/words.js';
 import { elsewhereCount, elsewhereOf, nothingOpen, openLines, openPeriodState, type OpenLine, type OpenPeriodState, type PendingOffer } from '../areas/automation/open-period.js';
@@ -103,7 +103,7 @@ export function OpenPeriodCard({ books, onGo }: { books: Index; onGo(loc: Locati
   const c = ws?.company;
   // The sidebar renders again with every word of a streaming answer: the state is computed once per change of what it reads.
   const { s, lines, other, unbookedElsewhere } = useMemo(() => {
-    const s = openPeriodState(books, questions ?? [], tasks ?? [], accounts ?? [], { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays, ...(c?.owner ? { owner: c.owner } : {}), ...(c ? { firm: { uid: c.uid, name: c.name, owner: c.owner } } : {}) }, pages, processingOf(view?.runs ?? [], books.receipts), provider, offers);
+    const s = openPeriodState(books, questions ?? [], tasks ?? [], accounts ?? [], { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays, outlays: outlayWaitsNow(), ...(c ? { firm: { uid: c.uid, name: c.name, owner: c.owner } } : {}) }, pages, processingOf(view?.runs ?? [], books.receipts), provider, offers);
     const e = elsewhereOf(books, questions ?? [], tasks ?? [], accounts ?? [], s, filing().length, view ? openCount(view) - view.tasks.length : 0, registered, today);
     // UnbookedFact says the payments; the rest is counted as the tasks it is under Aufgaben.
     return { s, lines: openLines(s), other: elsewhereCount(e) - e.unbooked.length, unbookedElsewhere: e.unbooked.length };

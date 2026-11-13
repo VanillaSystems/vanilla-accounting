@@ -30,6 +30,7 @@ import { moneyInText } from '../app/lib/utils.js';
 import type { Processing } from '../workflows/processing.js';
 import { providersOf } from '../intake/sales-report-import.js';
 import { setupShareOffers } from '../saving/share-rule.js';
+import { outlayWaitsOf } from '../booking/receipt-wait.js';
 import type { Purpose } from '../types/assistant.js';
 import type { SetupProgress } from '../onboarding/model.js';
 
@@ -105,12 +106,12 @@ type Tasks = ReadonlyArray<Task & { rule?: string }>;
 
 /** The state the sidebar's card draws, from the same inputs: the order pages of a provider among them, which are no receipts without a payment. */
 export const periodState = (ws: Ws, books: Books, tasks: ReadonlyArray<Task>, today: IsoDate = localToday(), processing: ReadonlyMap<string, Processing> = new Map()): OpenPeriodState =>
-  openPeriodState(books, readQuestions(ws), tasks, ws.bankAccounts, { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays, ...firmOf(ws) }, orderPagesOf(books, providersOf(ws)), processing, providerIssuesIn(ws, books, today), setupShareOffers(ws, books));
+  openPeriodState(books, readQuestions(ws), tasks, ws.bankAccounts, { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays, ...firmOf(ws, books) }, orderPagesOf(books, providersOf(ws)), processing, providerIssuesIn(ws, books, today), setupShareOffers(ws, books));
 
 /** The firm as the open period's state reads it: the owner's name, and the UID and name its own invoices show (#428). */
-const firmOf = (ws: Ws) => {
+const firmOf = (ws: Ws, books: Books) => {
   const c = ws.company;
-  return { ...(c?.owner ? { owner: c.owner } : {}), ...(c ? { firm: { ...(c.uid ? { uid: c.uid } : {}), ...(c.name ? { name: c.name } : {}), ...(c.owner ? { owner: c.owner } : {}) } } : {}) };
+  return { outlays: new Set(outlayWaitsOf(ws, books)), ...(c ? { firm: { ...(c.uid ? { uid: c.uid } : {}), ...(c.name ? { name: c.name } : {}), ...(c.owner ? { owner: c.owner } : {}) } } : {}) };
 };
 
 /** What waits outside the period, from the same inputs as the card (src/app/areas/automation/open-period.ts elsewhereOf). */

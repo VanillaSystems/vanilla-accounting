@@ -9,6 +9,13 @@ import './support/jurisdiction.js';
 import type { BankTransaction, Index, Receipt } from '../src/types/index.js';
 import type { Question } from '../src/questions/model.js';
 import { countIssues, issuesLead, periodIssues, receiptWaits, unbookedOpen } from '../src/app/areas/automation/period-issues.js';
+import { withheldIn } from '../src/app/areas/automation/filing-summary.js';
+import { setJurisdiction, vat, vatSetup } from '../src/engines/index.js';
+import type { VatSetup } from '../src/workspace/vat-setup.js';
+import { loadJurisdiction } from '../src/core/modules/load.js';
+import { APP_ROOT } from '../src/workspace/workspace.js';
+
+const ch = loadJurisdiction(APP_ROOT, 'ch').jurisdiction;
 import { formatIn } from '../src/app/i18n/core.js';
 import de from '../src/app/i18n/locales/de.js';
 import { isPending, resultSentence, type VatReturn } from '../src/app/areas/vat/model.js';
@@ -107,19 +114,25 @@ test('«wartet auf ihren Beleg» is one number: the payments receipt-due holds, 
 
 const say = (key: string, vars: Record<string, string | number> = {}) => formatIn({ code: 'de', ...de }, key as never, vars);
 
-test('the open list\'s lead names only what holds the approval in this firm\'s books: no sales report for a firm without one (#428)', () => {
+test('the open list\'s lead names only what holds the approval in this firm\'s books, counted as the review counts it: no sales report for a firm without one (#428)', () => {
+  const lead = (qs: Question[], b: Index = books, provider?: Parameters<typeof periodIssues>[8], figures?: Record<string, number>) =>
+    issuesLead(withheldIn(figures, qs, b, '2026-07-01', '2026-09-30', provider), periodIssues(b, qs, '2026-07-01', '2026-09-30', [], undefined, undefined, undefined, provider).length, say);
   // The consultancy: no provider, no VAT question left, payments and receipts open.
-  const plain = periodIssues(books, [question('q3', 'NATEL', 'answered')], '2026-07-01', '2026-09-30', []);
-  assert.ok(plain.length > 0);
-  const lead = issuesLead(plain, say);
-  assert.doesNotMatch(lead, /Verkaufsbericht|Bestellung|Frage/);
-  assert.match(lead, /^Nichts davon hält die Abrechnung auf/);
+  const plain = lead([question('q3', 'NATEL', 'answered')]);
+  assert.doesNotMatch(plain, /Verkaufsbericht|Bestellung|Frage/);
+  assert.match(plain, /^Nichts davon hält die Abrechnung auf/);
   // An open VAT question about a sale, and nothing of a sales report.
-  assert.match(issuesLead(periodIssues(books, [question('q1', 'KELLER')], '2026-07-01', '2026-09-30', []), say), /^Eine offene Frage zur MWST hält die Freigabe auf\. Das Übrige hält/);
+  assert.match(lead([question('q1', 'KELLER')]), /^Eine offene Frage zur MWST hält die Freigabe auf\. Das Übrige hält/);
   // A webshop: two orders its report could not split, and one held for another reason (shown, not withheld for).
   const order = (o: string, why: 'rate' | 'test') => ({ provider: 'shop', name: 'Shop', receipt: 'lonely', order: o, why, date: '2026-08-02' }) as never;
-  const shop = periodIssues(books, [question('q1', 'KELLER')], '2026-07-01', '2026-09-30', [], undefined, undefined, undefined, { held: [order('#1', 'rate'), order('#2', 'rate'), order('#3', 'test')], bills: [], payouts: {} });
-  assert.match(issuesLead(shop, say), /^Eine offene Frage zur MWST und 2 Bestellungen, deren MWST-Sätze der Verkaufsbericht nicht trennen konnte, halten die Freigabe auf\. Das Übrige/);
-  const only = periodIssues({ ...books, transactions: [], receipts: [], journalEntries: [] }, [], '2026-07-01', '2026-09-30', [], undefined, undefined, undefined, { held: [order('#1', 'rate')], bills: [], payouts: {} });
-  assert.equal(issuesLead(only, say), 'Eine Bestellung, deren MWST-Sätze der Verkaufsbericht nicht trennen konnte, hält die Freigabe auf.', 'nothing else on the list: no word of «the rest»');
+  assert.match(lead([question('q1', 'KELLER')], books, { held: [order('#1', 'rate'), order('#2', 'rate'), order('#3', 'test')], bills: [], payouts: {} }), /^Eine offene Frage zur MWST und 2 Bestellungen, deren MWST-Sätze der Verkaufsbericht nicht trennen konnte, halten die Freigabe auf\. Das Übrige/);
+  const empty = { ...books, transactions: [], receipts: [], journalEntries: [] } as Index;
+  assert.equal(lead([], empty, { held: [order('#1', 'rate')], bills: [], payouts: {} }), 'Eine Bestellung, deren MWST-Sätze der Verkaufsbericht nicht trennen konnte, hält die Freigabe auf.', 'nothing else on the list: no word of «the rest»');
+  // The net tax rate method: a rate without its activity code withholds the approval as the review does.
+  const was = vatSetup();
+  setJurisdiction(ch, { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei' }] } as VatSetup);
+  try {
+    const row = vat().rateRows.find((r) => r.kind === 'net-rate')!;
+    assert.match(lead([], books, undefined, { [row.ziffer]: 12000 }), /^1\. Saldosteuersatz \(Schreinerei\) ohne Tätigkeitscode hält die Freigabe auf\. Das Übrige/);
+  } finally { setJurisdiction(ch, was); }
 });
