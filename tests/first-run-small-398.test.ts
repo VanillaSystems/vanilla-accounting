@@ -7,6 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import './support/jurisdiction.js';
 import { markLabel, ownAmount } from '../src/app/areas/receipts/model.js';
 import { moneyInText } from '../src/app/lib/utils.js';
 
@@ -27,6 +28,18 @@ test('an amount written into a receipt\'s text reads in the app\'s money format:
   assert.match(moneyInText('Malerarbeiten Konstanz, CHF 3200.00'), /CHF 3.200\.00$/);
   assert.equal(moneyInText('EUR 412.30 inkl. 19 %'), 'EUR 412.30 inkl. 19 %', 'below a thousand as it was');
   assert.equal(moneyInText('Rechnung 2026-031'), 'Rechnung 2026-031', 'a number without a currency stays');
+  assert.equal(moneyInText('Kontoauszug UBS 2026.09'), 'Kontoauszug UBS 2026.09', 'three capitals that are no currency stay (#398 review)');
+  assert.equal(moneyInText('EWZ 2026.10.pdf'), 'EWZ 2026.10.pdf');
+  assert.match(moneyInText('Lasur, EUR 1412.30'), /EUR 1.412\.30$/, 'a common currency');
+});
+
+test('Belege says a receipt\'s amount in its words as every other place does, and leaves a file name as it is (#398 review)', async () => {
+  const { ledgerOf } = await import('../src/app/areas/receipts/model.js');
+  const r = (id: string, extra: object) => ({ id, filename: `${id}.pdf`, originalFilename: `${id}.pdf`, extractedText: 'x', extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-09-01T00:00:00Z', location: 'archived', currency: 'EUR', date: '2026-09-01', amount: 1, ...extra });
+  const books = { config: {}, transactions: [], journalEntries: [], mappings: [], bankStatements: [], receipts: [r('a', { description: 'Malerei, Rechnung 2026-031, EUR 3200.00' }), r('EWZ 2026.10', {})] } as never;
+  const views = ledgerOf(books, '2026-07-01').views;
+  assert.match(views[0].desc, /EUR 3.200\.00$/, 'the list and the detail read the same words as the open list');
+  assert.equal(views[1].vendor, 'EWZ 2026.10', 'a file name is never rewritten');
 });
 
 test('the drop\'s closing line counts the tasks as the dock does, all of them, and the receipts of this drop that wait for her (#398 review)', async () => {

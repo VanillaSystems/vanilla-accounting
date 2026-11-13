@@ -55,7 +55,7 @@ function textOf(books: Index, i: PeriodIssue): string {
     }
     case 'evidence': return `${formatDate(i.entry.date)} ${i.entry.description ?? ''}: ${evidenceText(i.entry, i.check)}`;
     case 'unbooked': return t('issues.unbooked', { date: formatDate(i.tx.date), text: i.tx.counterparty || i.tx.description, amount: `${i.tx.currency} ${fmt(i.tx.amount)}` });
-    case 'unlinked': return t('issues.unlinked', { date: formatDate(i.receipt.date ?? ''), text: moneyInText(i.receipt.description || i.receipt.filename) });
+    case 'unlinked': return t('issues.unlinked', { date: formatDate(i.receipt.date ?? ''), text: i.receipt.description ? moneyInText(i.receipt.description) : i.receipt.filename });
     case 'own': return t('issues.own', { text: i.name, lacks: i.lacks.map((k) => t(LACK_WORDS[k])).join(', ') });
   }
 }

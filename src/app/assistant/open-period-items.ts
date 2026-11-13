@@ -39,7 +39,7 @@ export interface Items { items: Item[]; more: number; all?: Location }
 export function itemsOf(l: OpenLine, s: OpenPeriodState, books: Index, say: Say): Items {
   const pay = (x: BankTransaction): Item => ({ key: x.ref, go: at({ area: 'bank', payment: x.ref }, x.date), text: [formatDate(x.date), payText(x).name, money(x.currency, x.amount)].join(' · ') });
   const mine = (x: YourReceipt): Item => ({ key: x.receipt.id, go: receiptAt(x.receipt, s, books), text: [x.name, x.receipt.date && formatDate(x.receipt.date), money(x.receipt.currency, x.receipt.amount), x.lacks.map((k) => say(LACK_WORDS[k])).join(', ')].filter(Boolean).join(' · ') });
-  const lone = (r: Receipt): Item => ({ key: r.id, go: receiptAt(r, s, books), text: [moneyInText(r.description || r.filename), r.date && formatDate(r.date), money(r.currency, r.amount)].filter(Boolean).join(' · ') });
+  const lone = (r: Receipt): Item => ({ key: r.id, go: receiptAt(r, s, books), text: [r.description ? moneyInText(r.description) : r.filename, r.date && formatDate(r.date), money(r.currency, r.amount)].filter(Boolean).join(' · ') });
   const receipts: Location = at({ area: 'receipts' }, s.period.from);
   switch (l.kind) {
     case 'yours': return { items: l.items.map(mine), more: l.more, all: receipts };

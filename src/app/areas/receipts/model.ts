@@ -18,6 +18,7 @@ import type { OtherWhy, SupportingWhy } from '../../../core/modules/schema.js';
 import { kindByOf, type KindBy } from '../../../intake/unclear.js';
 import { inProcess, type Processing } from '../../../workflows/processing.js';
 import type { OrderPage } from '../../../booking/order-pages.js';
+import { moneyInText } from '../../lib/utils.js';
 import type { VatCorrection } from '../../../booking/vat-corrections.js';
 import { isBankFee } from '../../../booking/separate-fee.js';
 import { issuedByFirm, type Firm } from '../../../intake/own-invoice.js';
@@ -121,7 +122,8 @@ export function ledgerOf(books: Index, openFrom: string, processing: ReadonlyMap
     const links = linksOf.get(r.id) ?? [];
     // "" is no date (an old answer of the model): the receipt is undated and needs you.
     const date = receiptDate(r);
-    const [vendor, desc] = r.title ? [r.title.vendor, r.title.what] : splitTitle(r.description || r.filename.replace(/\.pdf$/i, ''));
+    // An amount in the receipt's words reads in the app's money format, as in every other place (#398); a file name stays as it is.
+    const [vendor, desc] = r.title ? [r.title.vendor, moneyInText(r.title.what)] : splitTitle(r.description ? moneyInText(r.description) : r.filename.replace(/\.pdf$/i, ''));
     const none = isNoReceipt(r, links.length);
     const paid = links.flatMap((ref) => txByRef.get(ref)?.date ?? []);
     const twin = twins.get(r.id);

@@ -24,6 +24,7 @@ import type { Workspace } from '../workspace/workspace.js';
 import { elsewhereCount, elsewhereOf, nothingOpen, openPeriodState, waitingKinds, type Elsewhere, type OpenPeriodState, type YourReceipt } from '../app/areas/automation/open-period.js';
 import { orderPagesOf } from '../booking/order-pages.js';
 import { LACK_WORDS } from '../app/areas/automation/period-issues.js';
+import { moneyInText } from '../app/lib/utils.js';
 import type { Processing } from '../workflows/processing.js';
 import { providersOf } from '../intake/sales-report-import.js';
 import type { Purpose } from '../types/assistant.js';
@@ -115,7 +116,7 @@ export function periodNote(ws: Ws, books: Books, tasks: Tasks, language: string,
       : f.due ? `it is over; its return ${f.overdue ? 'was due on' : 'is due on'} ${day(f.due)}` : 'it is over and not closed yet (the firm files no return)';
   const k = waitingKinds(s);
   const tasksPlace = `«${t('area.automation')} › ${t('automation.tasks')}»`;
-  const name = (r: { description?: string; filename: string }) => r.description || r.filename;
+  const name = (r: { description?: string; filename: string }) => (r.description ? moneyInText(r.description) : r.filename);
   const label = periodWords(t, s.period);
   const unlinked = s.unlinked;
   const lines = [
