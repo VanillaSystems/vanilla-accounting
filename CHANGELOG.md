@@ -340,6 +340,27 @@ Two markers flag an entry you must read before you update:
   oder dich …»), instead of opening the diagram; on a payment whose booking she deleted it asks first.
   A payment an account's reconciliation holds is booked by neither: the rule's card says it waits for
   the reconciliation.
+- The owner's outlays paid back (#402): a payment to the owner by name that is no wage, while his
+  account holds outlays not paid back at least as large («Spesen Juli 2026», his receipts booked
+  «Privat bezahlt»), waits for no receipt; the hand form proposes bank / his account without a code
+  («zahlt dem Inhaber seine Auslagen zurück»), never the salary's account «wie bei derselben Firma»
+  (a precedent counts only between payments of one kind, wage or no wage), and with an AI the model
+  is told so and books it there, so the outlays are no expense twice. Guide rule
+  `cls-owner-outlays-repaid`.
+- A receipt the owner paid privately (#402) is read so by its payment line («Bezahlt mit Mastercard
+  ****1150 (privat)») or by his card, which the books know from such a receipt (never a card that
+  paid one of the firm's own statement payments). Its first button is «Als Auslage von <Inhaber>
+  buchen», one click, its words say what it books (Aufwand / Kontokorrent), and a selection offers
+  «Als Auslagen des Inhabers buchen» for several. While the app books it, the receipt says so in
+  place of a hand form with an empty account.
+- Setup (#402): a private share of the phone or the car named in words («öppe d Hälfti») is kept with
+  her words in onboarding.json; the reply says that the provider's first booked payment offers the
+  rule «50 % privat», and that payment's detail does, on the rule's card, kept by her click. One
+  changed answer on the review keeps naming her kind of firm («Beratung, Dienstleistungen (GmbH),
+  mit einer Änderung») instead of «Etwas anderes».
+- The model's zero input code (I0) is left off an account that takes no code (#402): a wage, the
+  employer's contributions (AHV, FAK, BVG), the bank charges, a debt, the owner's account. No
+  figure changes: I0 has no box.
 - The setup conversation keeps its order after a typed message (#385): the message stands under the
   question it was typed at, above that question's answer, and the open question with its buttons
   stays under her newest message, also when the words took a step back. In the books the rail shows

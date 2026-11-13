@@ -110,6 +110,10 @@ and Datei. The order and the ranking are pure functions in `model.ts` (tests/rec
 - **Private outlay.** In the dialog `ArrowUp` (wraps to `private`), Enter opens `.privform`, Enter
   again books: toast «Privat bezahlt · Spesen über das Konto des Inhabers», `+ transactions
   M<year>-…` and its mapping; ⌘Z removes both (driven 2026-10-31).
+- **Read as paid privately (#402).** A receipt whose payment line says «(privat)», or that the owner's
+  card paid (a card the books know from such a receipt, never one of the firm's statement payments),
+  shows `[data-act=primary-privateOne]` «Als Auslage von <Inhaber> buchen»: one click books it as the
+  private outlay above. A selection of such receipts offers the batch «Als Auslagen des Inhabers buchen».
 - **Edit.** `e`, `$B fill "form.form input[name=description]" "…"`, Enter: toast `Gespeichert ·
   Beschreibung`, `~ receipts <id> .description`. The focus stays in the field, so ⌘Z there is the
   field's own undo: click the toast's `Rückgängig` (`no changes` again, driven 2026-10-21). A bad
