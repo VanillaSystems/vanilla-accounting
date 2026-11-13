@@ -37,6 +37,8 @@ export type ApiRefusal =
    */
   | { code: 'periodClosed'; params: { closedThrough: string; reason?: ClosedReason; approved?: string; filed?: string } }
   | { code: 'manualOnly' }
+  /** «Buchen» waits for «Einschalten» (#413): these files of the firm's rules changed since it was switched on; nothing is booked by rule or model. */
+  | { code: 'bookingWaits'; params: { files: string[] } }
   /** Another process saved the books between this request's load and its save, twice (#123): nothing was saved. */
   | { code: 'booksChanged' }
   /** A payment booked by hand is not booked twice. */

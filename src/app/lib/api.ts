@@ -26,6 +26,7 @@ import type { ReceiptType } from '../../types/upload.js';
 import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
 import { t, tData } from '../i18n/index.js';
 import { fmt, formatDate } from './utils.js';
+import { bookingWaitsText } from './booking-waits.js';
 import { agreedBasis, baseCurrency, vatSetup } from '../../engines/index.js';
 import { normalRate } from '../../accounting/sales-without-vat.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
@@ -151,6 +152,7 @@ export function errorText(e: unknown): string {
     case 'foreignHost': return t('error.foreignHost');
     case 'phoneToken': return t('error.phoneToken');
     case 'manualOnly': return t('error.manualOnly');
+    case 'bookingWaits': return bookingWaitsText(b.params.files);
     case 'booksChanged': return t('error.booksChanged');
     case 'hasEntries': return t('error.hasEntries');
     case 'notByReceipt': return t('error.notByReceipt');

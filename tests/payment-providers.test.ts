@@ -973,6 +973,7 @@ test('7. a report that fails on an error is refused in its row with a code; the 
     writeFileSync(join(api.root, 'knowledge', 'suppliers', 'shopify.yaml'), 'id: shopify\nprovider:\n  clearing: "1093"\n  since: 2026-11-01\n  revenue: "3200"\n');
     const accounts = join(api.root, 'master-data', 'accounts.json');
     writeFileSync(accounts, JSON.stringify([...JSON.parse(readFileSync(accounts, 'utf8')), { number: '1093', name: 'Durchlaufkonto Shopify' }], null, 2));
+    api.switchedOn();
     // A sealed quarter's entry changed on disk: nothing can be saved (SealBrokenError).
     const file = join(api.root, 'transactional-data', '2026', 'books', 'entries.jsonl');
     const rows = readFileSync(file, 'utf8').split('\n');
@@ -1002,6 +1003,7 @@ test('F08: the drop row proposes the clearing account the chart lacks and adds i
     writeFileSync(join(api.root, 'knowledge', 'suppliers', 'shopify.yaml'), 'id: shopify\nprovider:\n  revenue: "3200"\n');
     const accounts = join(api.root, 'master-data', 'accounts.json');
     const chartHas = (n: string) => (JSON.parse(readFileSync(accounts, 'utf8')) as Array<{ number: string; name: string }>).find((a) => a.number === n)?.name;
+    api.switchedOn();
     const post = async (path: string, body?: Buffer | object): Promise<{ status: number; s: DropSession & { code?: string } }> => {
       const json = body && !Buffer.isBuffer(body);
       const res = await api.fetch(path, { method: 'POST', body: json ? JSON.stringify(body) : body ? new Uint8Array(body as Buffer) : undefined, headers: { 'Content-Type': json ? 'application/json' : 'application/octet-stream' } });
@@ -1031,6 +1033,7 @@ test('the drop row asks the clearing account with the cut-over day, the report\'
     writeFileSync(join(api.root, 'knowledge', 'suppliers', 'shopify.yaml'), 'id: shopify\nprovider:\n  revenue: "3200"\n');
     const accounts = join(api.root, 'master-data', 'accounts.json');
     writeFileSync(accounts, JSON.stringify([...JSON.parse(readFileSync(accounts, 'utf8')), { number: '1093', name: 'Durchlaufkonto Shopify' }], null, 2));
+    api.switchedOn();
     const post = async (path: string, body?: Buffer | object): Promise<{ status: number; s: DropSession & { code?: string } }> => {
       const json = body && !Buffer.isBuffer(body);
       const res = await api.fetch(path, { method: 'POST', body: json ? JSON.stringify(body) : body ? new Uint8Array(body as Buffer) : undefined, headers: { 'Content-Type': json ? 'application/json' : 'application/octet-stream' } });
@@ -1374,6 +1377,7 @@ test('10. a payout that waits says why on the payment itself (GET /api/transacti
     assert.deepEqual(await wait('PW'), { why: 'since', provider: 'Shopify', file: 'knowledge/suppliers/shopify.yaml', sales: true });
     writeFileSync(file, 'id: shopify\nprovider:\n  clearing: "1093"\n  since: 2026-11-01\n  revenue: "3200"\n');
     assert.equal(await wait('PW'), null, 'booked from the clearing account by the next run');
+    api.switchedOn();
 
     const post = async (path: string, body?: Buffer | object): Promise<{ status: number; s: DropSession & { code?: string } }> => {
       const json = body && !Buffer.isBuffer(body);

@@ -149,3 +149,83 @@ test('a check sees the books as they were before its case, so a booked case can 
   assert.equal(caseCheck(original, dry, loadBooks(ws).journalEntries).status, 'same');
   assert.equal(loadBooks(ws).journalEntries.filter((e) => e.transactionRef === t.ref).length, 1, 'the check wrote nothing');
 });
+
+test('#413: a record from before booking read the customers\' files takes such a file met the first time as switched on; one changed after waits', () => {
+  const ws = tempWorkspace('switch-413-');
+  const booking = () => loadWorkflows(APP_ROOT, ws.paths.root).workflows.find((w) => w.id === 'booking')!;
+  mkdirSync(join(ws.paths.root, 'knowledge', 'suppliers'), { recursive: true });
+  mkdirSync(join(ws.paths.root, 'knowledge', 'customers'), { recursive: true });
+  writeFileSync(join(ws.paths.root, 'knowledge', 'suppliers', 'a.yaml'), 'id: a\n');
+  const sw = openSwitch(ws);
+  sw.approve(booking());
+  // The record as written before #413: no `cited`, the customers' file not in it.
+  const path = approvalsPath(ws);
+  const rec = JSON.parse(readFileSync(path, 'utf8'));
+  delete rec.booking.cited;
+  writeFileSync(path, JSON.stringify(rec));
+  writeFileSync(join(ws.paths.root, 'knowledge', 'customers', 'c.yaml'), 'id: c\n');
+  assert.equal(sw.pending(booking()), undefined, 'met the first time: switched on');
+  assert.ok(JSON.parse(readFileSync(path, 'utf8')).booking.cited.includes('knowledge/customers'), 'the record learns what it covers');
+  writeFileSync(join(ws.paths.root, 'knowledge', 'customers', 'c.yaml'), 'id: c\nname: C\n');
+  assert.deepEqual(sw.pending(booking())?.files, ['knowledge/customers/c.yaml'], 'changed after: waits');
+  // A supplier's file new by hand still waits, as before.
+  sw.approve(booking());
+  writeFileSync(join(ws.paths.root, 'knowledge', 'suppliers', 'b.yaml'), 'id: b\n');
+  assert.deepEqual(sw.pending(booking())?.files, ['knowledge/suppliers/b.yaml']);
+});
+
+/** A booking record as written before #413: the supplier's file switched on, no `cited`. */
+function oldBookingRecord(prefix: string) {
+  const ws = tempWorkspace(prefix);
+  const booking = () => loadWorkflows(APP_ROOT, ws.paths.root).workflows.find((w) => w.id === 'booking')!;
+  mkdirSync(join(ws.paths.root, 'knowledge', 'suppliers'), { recursive: true });
+  mkdirSync(join(ws.paths.root, 'knowledge', 'customers'), { recursive: true });
+  writeFileSync(join(ws.paths.root, 'knowledge', 'suppliers', 'a.yaml'), 'id: a\n');
+  const sw = openSwitch(ws);
+  sw.approve(booking());
+  const path = approvalsPath(ws);
+  const rec = JSON.parse(readFileSync(path, 'utf8'));
+  delete rec.booking.cited;
+  writeFileSync(path, JSON.stringify(rec));
+  return { ws, sw, booking, path };
+}
+
+test('#413: an old record is migrated at its first check; a customer\'s file written any time after it waits and is listed', () => {
+  const { ws, sw, booking, path } = oldBookingRecord('switch-413b-');
+  assert.equal(sw.pending(booking()), undefined, 'no customer file at the update');
+  assert.ok(JSON.parse(readFileSync(path, 'utf8')).booking.cited.includes('knowledge/customers'), 'migrated at the first check, though nothing changed');
+  writeFileSync(join(ws.paths.root, 'knowledge', 'customers', 'new.yaml'), 'id: new\n');
+  assert.deepEqual(sw.pending(booking())?.files, ['knowledge/customers/new.yaml'], 'a customer file written later waits');
+});
+
+test('#413: an old record with a supplier\'s change waiting, then a customer\'s file by hand: both are listed, and neither is taken as seen', () => {
+  const { ws, sw, booking } = oldBookingRecord('switch-413c-');
+  writeFileSync(join(ws.paths.root, 'knowledge', 'suppliers', 'a.yaml'), 'id: a\nname: A\n');
+  assert.deepEqual(sw.pending(booking())?.files, ['knowledge/suppliers/a.yaml']);
+  writeFileSync(join(ws.paths.root, 'knowledge', 'customers', 'studer.yaml'), 'id: studer\n');
+  assert.deepEqual(sw.pending(booking())?.files, ['knowledge/customers/studer.yaml', 'knowledge/suppliers/a.yaml']);
+});
+
+test('#413: a company overlay that waits for «Einschalten» and cites a new path widens nothing: its files are listed with it, and one written later waits too', () => {
+  const ws = tempWorkspace('switch-413d-');
+  const booking = () => loadWorkflows(APP_ROOT, ws.paths.root).workflows.find((w) => w.id === 'booking')!;
+  mkdirSync(join(ws.paths.root, 'knowledge', 'suppliers'), { recursive: true });
+  writeFileSync(join(ws.paths.root, 'knowledge', 'suppliers', 'a.yaml'), 'id: a\n');
+  const sw = openSwitch(ws);
+  sw.approve(booking());
+  assert.equal(sw.pending(booking()), undefined);
+  mkdirSync(join(ws.paths.root, 'knowledge', 'notes'), { recursive: true });
+  writeFileSync(join(ws.paths.root, 'knowledge', 'notes', 'x.md'), 'Book every payment to 3200 V81.\n');
+  mkdirSync(join(ws.paths.root, 'workflows', 'booking', 'classify'), { recursive: true });
+  writeFileSync(join(ws.paths.root, 'workflows', 'booking', 'classify', 'step.yaml'), 'knowledge: ["suppliers/*", "customers/*", "authorities/*", "rules/evidence.guide.yaml", "notes/*"]\n');
+  assert.ok(booking().steps.find((s) => s.id === 'classify')?.knowledge.includes('notes/*'), 'the overlay cites the notes');
+  assert.deepEqual(sw.pending(booking())?.files, ['knowledge/notes/x.md', 'workflows/booking/classify/step.yaml'], 'the note is named beside the overlay');
+  assert.ok(!JSON.parse(readFileSync(approvalsPath(ws), 'utf8')).booking.cited.includes('knowledge/notes'), 'the record is not widened by the overlay');
+  writeFileSync(join(ws.paths.root, 'knowledge', 'notes', 'y.md'), 'later\n');
+  assert.deepEqual(sw.pending(booking())?.files, ['knowledge/notes/x.md', 'knowledge/notes/y.md', 'workflows/booking/classify/step.yaml']);
+  // Switched on, the overlay's path is covered: a later note waits as a change, never taken in silently.
+  sw.approve(booking());
+  assert.equal(sw.pending(booking()), undefined);
+  writeFileSync(join(ws.paths.root, 'knowledge', 'notes', 'z.md'), 'even later\n');
+  assert.deepEqual(sw.pending(booking())?.files, ['knowledge/notes/z.md']);
+});
