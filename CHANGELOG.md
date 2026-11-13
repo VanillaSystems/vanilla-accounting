@@ -92,6 +92,27 @@ Two markers flag an entry you must read before you update:
   on words that say what the payments are (#383): never on a document's word («Rechnung»), a
   statement's («Belastung», «Gutschrift») or the bank's wording of a payment («Zahlung», «Karte»,
   `payment` in modules/ch/documents.yaml), and only where the businesses it reaches agree in kind.
+- Drop without an AI (#384): a text PDF reads the total it labels as its total («Total», «Betrag»,
+  «Gesamtbetrag», «Amount», «Montant» …, with its currency) also when it shows no Swiss VAT: her
+  own invoice of a sale abroad, a foreign supplier's invoice in USD or EUR, an insurance premium.
+  The Swiss-rate arithmetic still proves the VAT, now also from a line that names the rate on its
+  base («MWST 8.1% auf …», «darin MWST 3.8% auf …») with the part without VAT at 0 %. A
+  text that says it charges no Swiss VAT («nicht der schweizerischen MWST unterstellt», «not
+  registered for VAT in Switzerland», «reverse charge») reads as «keine CH-MWST»; silence stays
+  «MWST nicht gelesen». A statement, a card statement or two invoices in one PDF stay unread.
+- The drop's closing lines count every file once, in its row's words: statements, receipts, files
+  that are no receipt, were there already, wait for an answer in their row, were set aside or not
+  saved. The dock's «gelesen» and the dialog's count the same receipts (date and amount read).
+- An order confirmation, a delivery note or a customs assessment is no «kein Beleg» any more: its
+  row says «Auftragsbestätigung, gehört zu …» without an amount, Belege lists it instead of hiding
+  it, and the invoice's detail names it. A total of 0.00 the AI read off it no longer keeps it
+  from its invoice.
+- A bank CSV whose payments the books hold already (the camt.053 of the same days) says «schon
+  da» instead of asking for its columns; with known columns and one bank account it goes straight
+  to the check. «Ist ein Kontoauszug» shows only where a file can be one.
+- Belege shows a booked receipt without a date in its own group instead of hiding it; Kontoauszüge
+  counts files in its file view.
+
 - The bank's own fee (#359): a row of a bank's camt.053 export that the bank itself coded as its
   charge for the account or for payments («Kontoführung», a card's annual fee) is booked by the
   app, with or without an AI, on Bankspesen (6940) without a VAT code; a fee paid back the other
