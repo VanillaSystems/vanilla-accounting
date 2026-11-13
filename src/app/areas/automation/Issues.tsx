@@ -164,7 +164,7 @@ export function PeriodIssues({ books, nav, from, to, period, canEdit, figures }:
   return (
     <section className="wfissues" data-testid="period-issues">
       <h3>{t('issues.title', { period, n: issues.length })}</h3>
-      <p className="m" data-testid="period-issues-lead">{issuesLead(withheldIn(figures, questions, books, from, to, providerIssuesNow()), issues.length, t as unknown as Say)}</p>
+      <p className="m" data-testid="period-issues-lead">{issuesLead(withheldIn(figures, questions, books, from, to, providerIssuesNow()), issues, t as unknown as Say, (amount, currency) => `${currency} ${fmt(amount)}`)}</p>
       <ul>
         {issues.map((i, k) => {
           const go = goOf(books, i);

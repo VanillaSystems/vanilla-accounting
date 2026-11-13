@@ -19,7 +19,7 @@ import { tempWorkspace } from './support/workspace.js';
 const roots: string[] = [];
 after(() => { for (const r of roots) rmSync(r, { recursive: true, force: true }); });
 
-const UID = 'CHE-229.544.109';
+const UID = 'CHE-123.456.789';
 const tx = (ref: string, date: string, amount: number, counterparty: string, direction: 'DBIT' | 'CRDT' = 'DBIT'): BankTransaction => ({ ref, bank: 'ZKB', date, amount, currency: 'CHF', direction, counterparty, description: ref });
 const entry = (ref: string, date: string, debit: string, credit: string, amount: number): JournalEntry => ({ id: `${ref}-${debit}-${credit}`, transactionRef: ref, date, accountDebit: debit, accountCredit: credit, amount, origin: 'classify' });
 const own: Receipt = { id: 'own', filename: 'RE-2026-036.pdf', originalFilename: 'RE-2026-036.pdf', extractedText: `Kälin Advisory GmbH\nRechnung RE-2026-036\n${UID} MWST\nTotal CHF 7783.20`, extractionMethod: 'pdftotext', fileSize: 4000, indexedAt: '2026-11-13T08:00:00Z', location: 'archived', currency: 'CHF', date: '2026-09-01', amount: 7783.2, description: 'Kälin Advisory GmbH, Rechnung RE-2026-036', vatId: UID } as Receipt;
