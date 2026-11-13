@@ -54,6 +54,7 @@ import { bankCodedFee } from '../books/bank-import.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
 import { withReceiptTax } from './receipt-tax.js';
 import { clearingAccounts, payoutWaitOf, providerOfPayment, type PayoutWait, type Provider } from './providers.js';
+import { withheldFor } from './withheld.js';
 import { splitByReceipts } from './receipt-lines.js';
 import { CUSTOMS_BY, customsSplit, importVatDeductions, ratesImportVat, type Assessment, type CustomsHold, type CustomsTexts } from './customs-invoice.js';
 import { nextManualRef } from '../books/next-ref.js';
@@ -945,6 +946,12 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   }
   // The payments that repay the owner's outlays, each told what was open for it after the earlier ones (#402).
   const repayments = repaymentsOf(books, context, context.wageWordings ?? [], fx);
+  // A wage itself, and a purchase whose receipt shows the jurisdiction's VAT, pays no contributions: neither is told what the wages withheld.
+  const withheldOf = (own: Books, tx: BankTransaction): { account: string; open: number } | undefined => {
+    if (!context.wageDeductions || context.wageWordings?.some((w) => w.test(tx.description)) || mappedReceipts(own, tx).some((r) => r.hasSwissVat)) return undefined;
+    const open = withheldFor(own, tx, context.wageDeductions);
+    return open === undefined ? undefined : { account: context.wageDeductions, open };
+  };
   const batches: BankTransaction[][] = [];
   for (let i = 0; i < toModel.length; i += BATCH_SIZE) batches.push(toModel.slice(i, i + BATCH_SIZE));
 
@@ -958,7 +965,9 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         // A payment that pays the owner back her outlays (#402): the model is told what her account holds, so it books there, never an expense again.
         const open = repayments.get(tx.ref);
         const owed = context.ownerAccount && open !== undefined ? { account: context.ownerAccount, open } : undefined;
-        return { ...input, tx: { ...input.tx, ref: keyOf(tx), ...(owed && { ownerOutlays: owed }) } };
+        // Money out while the wages' deductions account holds a credit (#426): what the payslips withheld, so a contribution payment can clear the employees' share.
+        const withheld = owed ? undefined : withheldOf(booksOf(tx), tx);
+        return { ...input, tx: { ...input.tx, ref: keyOf(tx), ...(owed && { ownerOutlays: owed }), ...(withheld && { withheld }) } };
       }), context, examples);
       let model: string | undefined;
       const raw = await ask(prompt, { step: 'classify', timeoutMs: CALL_TIMEOUT_MS, answered: (by) => { model = by.model; } });

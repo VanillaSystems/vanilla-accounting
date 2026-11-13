@@ -329,6 +329,12 @@ Two markers flag an entry you must read before you update:
   that one payment names and one receipt carries. A title written as a compound
   («Akontorechnung AK-26-Q3-30871», «Prämienrechnung») is read as the bill's title and number; a
   payslip («Lohnabrechnung») is not.
+- Social insurance (#426): with wages booked gross, the AI is told what the deductions account
+  (2270) holds on a payment's day, deducted on the payslips and not paid on yet, so the payment of a
+  compensation fund's bill, which states its contributions by kind and not by party, books the
+  employees' share on 2270 and only the employer's share on the staff expense (it booked the whole
+  payment as expense, and 2270 kept the employees' share). Never for a wage, a purchase with Swiss
+  VAT or money in; nothing changes for wages booked net. No VAT figure changes.
 - Keeping rules (#396, #392): «Rückgängig» on a second kept rule took back the first rule's bookings
   and the second rule's file. Each keep now has a line of its own above Aufgaben and Firma › Regeln
   («4 Zahlungen gebucht · Rückgängig»), true to its own numbers and still there after a reload; the
