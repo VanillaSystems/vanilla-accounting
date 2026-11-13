@@ -6,7 +6,7 @@ import type { Index, JournalEntry, Receipt } from '../src/types/index.js';
 import type { AutomationView, RunSummary, WorkflowDecl } from '../src/workflows/model.js';
 
 const Q4: PeriodRange = { key: '2026-Q4', from: '2026-10-01', to: '2026-12-31' };
-const ctx = { today: '2026-10-21', vatRegistered: true, dueDays: 60 };
+const ctx = { today: '2026-10-21', vatRegistered: true, dueDays: 60, openFrom: '2026-10-01' };
 
 const receipt = (id: string, over: Partial<Receipt> = {}): Receipt => ({
   id, filename: `${id}.pdf`, originalFilename: `${id}.pdf`, extractedText: '', extractionMethod: 'pdftotext', fileSize: 1,
@@ -22,18 +22,29 @@ const books = (receipts: Receipt[], links: Array<[string, string]>, entries: Jou
 });
 
 test('a receipt passes collected, read, matched and booked by what the books record of it', () => {
-  const f = homeFigures(books([
+  const b = books([
     receipt('a', { hasSwissVat: true }),
     receipt('b'),
-    receipt('c', { amount: undefined, date: undefined }),                 // came in 05.10., not read yet
-    receipt('d', { kind: 'supporting' }),                                // proof only: never matched
+    receipt('c', { amount: undefined, date: undefined }),                 // came in 05.10., not read yet: the working period's
+    receipt('d', { kind: 'supporting' }),                                // proof only: no receipt in Belege either
     receipt('e', { kind: 'duplicate' }),                                 // the same document again
-    receipt('f', { date: '2026-09-30' }),                                // another period
-  ], [['a', 'T1'], ['b', 'T2']], [entry('1', 'T1', { origin: 'classify' })]), Q4, ctx);
+    receipt('f', { date: '2026-10-02' }),                                // dated in Q4, paid in September: Q3's
+  ], [['a', 'T1'], ['b', 'T2'], ['f', 'T9']], [entry('1', 'T1', { origin: 'classify' })]);
+  b.transactions = [{ ref: 'T9', date: '2026-09-30', amount: -10 } as Index['transactions'][number]];
+  const f = homeFigures(b, Q4, ctx);
   assert.deepEqual(
     { collected: f.collected, read: f.read, withVat: f.withVat, payable: f.payable, matched: f.matched, booked: f.booked },
-    { collected: 4, read: 3, withVat: 1, payable: 3, matched: 2, booked: 1 },
+    { collected: 3, read: 2, withVat: 1, payable: 3, matched: 2, booked: 1 },
   );
+});
+
+test('one rule places a receipt in a period (#385): its payment\'s, else its date, else (undated or from before, unpaid) the working period', async () => {
+  const { placeDay } = await import('../src/app/automation/home.js');
+  assert.equal(placeDay(['2026-08-03', '2026-07-30'], '2026-10-02', '2026-07-01'), '2026-07-30', 'paid: the earliest payment\'s day, whatever its own date');
+  assert.equal(placeDay([], '2026-09-12', '2026-07-01'), '2026-09-12', 'unpaid: its own date');
+  assert.equal(placeDay([], undefined, '2026-07-01'), '2026-07-01', 'undated and unpaid: the working period');
+  assert.equal(placeDay([], '2026-06-28', '2026-07-01'), '2026-07-01', 'dated before the books and unpaid: still the working period\'s work');
+  assert.equal(placeDay([], '2026-03-28', '2026-07-01', '2026-06-30'), '2026-03-28', 'in a filed quarter: its date');
 });
 
 test('«ohne dich» counts only bookings the app made and nobody changed, among those whose author is recorded', () => {

@@ -22,6 +22,7 @@ import type { VatCorrection } from '../../../booking/vat-corrections.js';
 import { isBankFee } from '../../../booking/separate-fee.js';
 import { issuedByFirm, type Firm } from '../../../intake/own-invoice.js';
 import { namedNumbers } from '../../../intake/pairing.js';
+import { paidDays, placeDay, receiptDate } from '../../automation/home.js';
 
 /** Why a file in Belege is no receipt: what its words say it is, or its kind, or that it holds no amount. */
 export type NoneWhy = SupportingWhy | OtherWhy | 'supporting' | 'duplicate' | 'statement' | 'empty';
@@ -41,7 +42,7 @@ export interface ReceiptView {
   r: Receipt;
   /** The receipt's date, else the YYYYMMDD- its file name starts with. */
   date?: string;
-  /** The day it counts in a period: its date, else the day it was read. */
+  /** The day that puts it in a period, the rule the dock and Automatisierung count by (placeDay, #385): its payment's, else its date, else the working period's. */
   day?: string;
   vendor: string;
   desc: string;
@@ -89,7 +90,6 @@ export interface Ledger {
   firm?: Firm;
 }
 
-const FILE_DATE = /^(20\d\d)(\d\d)(\d\d)-/;
 
 /** "Vendor, what" (or " — ", " - "): the vendor and the rest; else the whole text is the vendor. */
 export function splitTitle(text: string): [string, string] {
@@ -117,9 +117,8 @@ export function ledgerOf(books: Index, openFrom: string, processing: ReadonlyMap
 
   const views = books.receipts.map((r): ReceiptView => {
     const links = linksOf.get(r.id) ?? [];
-    const fileDate = FILE_DATE.exec(r.filename);
     // "" is no date (an old answer of the model): the receipt is undated and needs you.
-    const date = r.date || (fileDate ? `${fileDate[1]}-${fileDate[2]}-${fileDate[3]}` : undefined);
+    const date = receiptDate(r);
     const [vendor, desc] = r.title ? [r.title.vendor, r.title.what] : splitTitle(r.description || r.filename.replace(/\.pdf$/i, ''));
     const none = isNoReceipt(r, links.length);
     const paid = links.flatMap((ref) => txByRef.get(ref)?.date ?? []);
@@ -127,7 +126,8 @@ export function ledgerOf(books: Index, openFrom: string, processing: ReadonlyMap
     const statement = r.kind === 'statement' ? statementFacts(r, documents()) : undefined;
     const orderPage = links.length ? undefined : orderPages.get(r.id);
     const vatCorrection = links.length ? undefined : vatCorrections.get(r.id);
-    return { r, date, day: date || r.indexedAt.slice(0, 10) || undefined, vendor, desc, links, paid, none, ...(none ? { noneWhy: noneWhyOf(r), noneBy: kindByOf(r) } : {}), locked: links.some(refClosed), ...(twin ? { twin } : {}), ...(statement ? { statement } : {}), ...(orderPage ? { orderPage } : {}), ...(vatCorrection ? { vatCorrection } : {}) };
+    const day = placeDay(paidDays(r, links, (ref) => txByRef.get(ref)?.date), date, openFrom, closedThrough);
+    return { r, date, day, vendor, desc, links, paid, none, ...(none ? { noneWhy: noneWhyOf(r), noneBy: kindByOf(r) } : {}), locked: links.some(refClosed), ...(twin ? { twin } : {}), ...(statement ? { statement } : {}), ...(orderPage ? { orderPage } : {}), ...(vatCorrection ? { vatCorrection } : {}) };
   });
   return { views, byId: new Map(views.map((v) => [v.r.id, v])), txByRef, entriesByRef, receiptsByRef, closedThrough, openFrom, processing, ...(firm ? { firm } : {}) };
 }
@@ -187,15 +187,14 @@ export const placedStatement = (v: ReceiptView, accounts: readonly Account[]) =>
 export const statesOf = (chips: readonly Chip[] | undefined): Set<string> => new Set((chips ?? []).filter((c) => c.field === 'state').map((c) => c.value));
 
 /**
- * The rows a period shows: its own receipts and those of its payments; the working period also what
- * from before it still needs you, and every open receipt without a date, whenever it was read. The
+ * The rows a period shows: its receipts by `day` (placeDay: its payment's period, else its date's; the
+ * working period also holds what from before it still waits for a payment, and every undated one). The
  * chips (`fields` names what they mean) narrow them; a chip of the state field «kein Beleg» lets the
  * files that are none in as rows, and any state chip hides the note about them.
  */
 export function visible(l: Ledger, period: Period, chips: readonly Chip[] | undefined, q: string | undefined, accounts: readonly Account[] = [], fields: readonly Field<ReceiptView>[] = []): Visible {
-  const current = period.from <= l.openFrom && l.openFrom <= period.to;
-  const within = (d: string) => d >= period.from && d <= period.to;
-  const pool = l.views.filter((v) => !!v.day && (within(v.day) || v.paid.some(within) || (current && (v.day < period.from || !v.date) && (needsYou(v, l) || working(v, l)))));
+  // One rule with the dock and Automatisierung (placeDay): what is still to do from before, or undated, is the working period's.
+  const pool = l.views.filter((v) => !!v.day && v.day >= period.from && v.day <= period.to);
   const receipts = pool.filter((v) => !v.none);
   const words = (q ?? '').toLowerCase().split(/\s+/).filter(Boolean);
   const match = (v: ReceiptView) => { const h = haystack(v); return words.every((w) => h.includes(w)); };

@@ -139,10 +139,10 @@ test('books that never filed: an open receipt dated before the working period ne
   assert.deepEqual(v.rows.map((x) => x.r.id).sort(), ['july', 'june']);
   assert.deepEqual(groups(v.rows, lf, false, () => false).groups.map((g) => [g.key, g.rows.map((r) => r.r.id)]), [['need', ['july', 'june']]]);
   assert.equal(badgeCount(lf), 2);
-  assert.deepEqual(visible(lf, parsePeriod('2026-Q2', '2026-10-11')!, undefined, undefined).rows.map((x) => x.r.id), ['june'], 'its own quarter still shows it');
+  assert.deepEqual(visible(lf, parsePeriod('2026-Q2', '2026-10-11')!, undefined, undefined).rows.map((x) => x.r.id), [], 'one place (placeDay, #385): the working period, where it is still to do, not also before the books');
 });
 
-test('a receipt linked to a payment of the period shows there too: a June invoice paid in July is in Q3 and still in Q2', () => {
+test('a receipt linked to a payment is in the period of its payment, once (#385): a June invoice paid in July is in Q3, not in Q2', () => {
   const paid: Index = {
     config: { closedThrough: '2026-03-31' },
     receipts: [receipt('june', { date: '2026-06-28', amount: 1243.55 }), receipt('may', { date: '2026-05-20', amount: 30 })],
@@ -152,7 +152,7 @@ test('a receipt linked to a payment of the period shows there too: a June invoic
   const lp = ledgerOf(paid, '2026-04-01');
   assert.deepEqual(visible(lp, q3, undefined, undefined).rows.map((x) => x.r.id), ['june'], 'paid in Q3, so in Q3; the May one, paid in May, is not');
   assert.deepEqual(visible(lp, q3, undefined, undefined).counts.linked, 1);
-  assert.deepEqual(visible(lp, parsePeriod('2026-Q2', '2026-10-11')!, undefined, undefined).rows.map((x) => x.r.id).sort(), ['june', 'may']);
+  assert.deepEqual(visible(lp, parsePeriod('2026-Q2', '2026-10-11')!, undefined, undefined).rows.map((x) => x.r.id).sort(), ['may']);
 });
 
 test('a bank statement among the receipts never needs you; Belege hides one Kontoauszüge places and lists the others as no receipt (#151)', () => {

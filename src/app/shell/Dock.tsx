@@ -72,7 +72,7 @@ export function Dock({ current, books, keys, wide, onToggle, nav, canEdit, href,
   const today = localToday();
   const period = booksOpenPeriod(books, today, filing().length);
   const figures = useMemo(
-    () => homeFigures(books, { key: period.token, from: period.from, to: period.to }, { today, vatRegistered: chargesVat(), dueDays: filing().dueDays }, view ? askedRuns(view) : undefined),
+    () => homeFigures(books, { key: period.token, from: period.from, to: period.to }, { today, vatRegistered: chargesVat(), dueDays: filing().dueDays, openFrom: period.from }, view ? askedRuns(view) : undefined),
     [books, view, period.token, today],
   );
   const now = new Date();

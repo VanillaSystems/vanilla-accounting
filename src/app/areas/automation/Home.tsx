@@ -61,7 +61,7 @@ export function HomePage({ view, books, nav, query, canEdit }: { view: Automatio
   const now = new Date();
   const period = shownPeriod(query, books, today);
   const vatRegistered = chargesVat();
-  const f = homeFigures(books, { key: period.token, from: period.from, to: period.to }, { today, vatRegistered, dueDays: filing().dueDays }, askedRuns(view));
+  const f = homeFigures(books, { key: period.token, from: period.from, to: period.to }, { today, vatRegistered, dueDays: filing().dueDays, openFrom: booksOpenPeriod(books, today, filing().length).from }, askedRuns(view));
   const asked = forMe(q.questions, q.me);
   const stuck = view.runs.filter((r) => r.status === 'stuck');
   const waiting = view.tasks.length + stuck.length + asked.length;
@@ -177,7 +177,7 @@ function Hero({ f, period, open, waiting, unbooked, books, nav }: { f: HomeFigur
 
 function Stages({ f, nav, at, vatRegistered }: { f: HomeFigures; nav: Nav; at: (r: Location['route'], extra?: Partial<Query>) => Location; vatRegistered: boolean }) {
   const unread = f.collected - f.read;
-  const unmatched = f.payable - f.matched;
+  const unmatched = Math.max(0, f.collected - f.matched);
   const unbooked = f.matched - f.booked;
   const known = f.booked - f.authors.unknown;
   const filing = f.filing;
