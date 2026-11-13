@@ -408,18 +408,22 @@ const offering = (books: Books, p: Provider): string[] => books.receipts.filter(
  * person's «Rückgängig» of a payments report): the app's own refunds no day dates any more go back.
  * Returns what they booked.
  */
-function retakeSales(ws: Workspace, books: Books, p: Provider, fx: FxResolver, context: ClassifyContext, stale = false): { orders: number; refunds: number } {
+function retakeSales(ws: Workspace, books: Books, p: Provider, fx: FxResolver, context: ClassifyContext, stale = false): Retaken {
   const payments = paymentsOf(ws, books, p);
-  const sum = { orders: 0, refunds: 0 };
+  const sum: Retaken = { orders: 0, refunds: 0, split: [] };
   for (const { receipt, text } of reportsOf(ws, books, p, 'sales')) {
     const read = readReport(text, 'sales', p.provider);
     if ('missing' in read) continue;
     const out = takeSales(ws, books, p, receipt, read, fx, context, payments, stale);
     sum.orders += out.orders;
     sum.refunds += out.refunds;
+    sum.split.push(...out.split.filter((o) => !sum.split.includes(o)));
   }
   return sum;
 }
+
+/** What taking the sales reports again booked: orders and refunds, and the orders of two rates booked by their line items (#416). */
+interface Retaken { orders: number; refunds: number; split: string[] }
 
 /**
  * The sales of provider `p` the books carry, of the open period, whose order a payments report in the
@@ -524,10 +528,10 @@ export function importSalesReport(ws: Workspace, bytes: Buffer, name: string, op
       if (!existsSync(path)) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, bytes); }
     }
     let out: ReportOutcome;
-    let retaken = { orders: 0, refunds: 0 };
+    let retaken: Retaken = { orders: 0, refunds: 0, split: [] };
     if (hit.kind === 'sales') {
       out = takeSales(ws, books, p, receipt, read, fx, context, paymentsOf(ws, books, p));
-      retaken = { orders: out.orders, refunds: out.refunds };
+      retaken = { orders: out.orders, refunds: out.refunds, split: out.split };
     } else {
       out = bookReport(books, read, reportContext(ws, books, p, 'fees', id, texts(p.name, receipt.filename), fx, context));
       pushOutcome(books, out, id);
@@ -556,7 +560,7 @@ function saleCodes(): ReportContext['codes'] {
   return { domestic, rate: normal, ...(reduced.length ? { reduced } : {}), ...(abroad ? { abroad } : {}), negative: vat().codes.negativePrefix };
 }
 
-function summaryOf(p: Provider, kind: 'sales' | 'fees', facts: ReturnType<typeof reportFacts>, read: ReadReport, r: { out: ReportOutcome; retaken: { orders: number; refunds: number }; unpaid: readonly JournalEntry[]; proofs: number; filename: string; corrections: string[] }): ReportSummary {
+function summaryOf(p: Provider, kind: 'sales' | 'fees', facts: ReturnType<typeof reportFacts>, read: ReadReport, r: { out: ReportOutcome; retaken: Retaken; unpaid: readonly JournalEntry[]; proofs: number; filename: string; corrections: string[] }): ReportSummary {
   const held = r.out.held;
   return {
     provider: p.id, name: p.name, kind, from: facts.from, to: facts.to, file: r.filename, since: p.provider.since!, reach: reachOf(p),
@@ -564,6 +568,7 @@ function summaryOf(p: Provider, kind: 'sales' | 'fees', facts: ReturnType<typeof
     beforeSinceRows: r.out.beforeSinceRows.slice(0, HELD_NAMED), beforeSinceMore: Math.max(0, r.out.beforeSinceRows.length - HELD_NAMED), payoutDays: payoutDaysOf(p), home: homeOf('workspace', p.role, p.id),
     other: r.out.other, ways: r.out.ways.slice(0, WAYS_NAMED), waysMore: Math.max(0, r.out.ways.length - WAYS_NAMED),
     held: held.slice(0, HELD_NAMED), heldMore: Math.max(0, held.length - HELD_NAMED), unread: read.unread.length, proofs: r.proofs, corrections: r.corrections,
+    split: r.retaken.split.slice(0, HELD_NAMED), splitMore: Math.max(0, r.retaken.split.length - HELD_NAMED),
   };
 }
 

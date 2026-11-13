@@ -342,6 +342,7 @@ function reportLine(s: NonNullable<DropRow['report']>): string {
     s.unread ? t('drop.booked.unread', { n: s.unread }) : '',
     held ? t('drop.booked.held', { n: s.held.length + s.heldMore, orders: held, more: s.heldMore ? t('drop.booked.more', { n: s.heldMore }) : '' }) : '',
     s.proofs ? t('drop.booked.proofs', { n: s.proofs }) : '',
+    s.split?.length ? t('drop.booked.split', { n: s.split.length + s.splitMore, orders: s.split.map((o) => `#${o}`).join(', '), more: s.splitMore ? t('drop.booked.more', { n: s.splitMore }) : '' }) : '',
   ].filter(Boolean).join(' · ');
 }
 

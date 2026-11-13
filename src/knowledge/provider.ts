@@ -55,7 +55,12 @@
 
 import { isIsoDate } from '../accounting/periods.js';
 
-export const SALES_COLUMNS = ['order', 'date', 'ordered', 'shipTo', 'gross', 'tax', 'outstanding', 'refunded', 'refundedAt', 'currency', 'gateway', 'test'] as const;
+/**
+ * `linePrice`, `lineQuantity`: an order's line items, one per row (#416); `taxName`, `taxValue`: the order's taxes by rate, each
+ * header of their lists that the file has counts, paired by position («Tax 1 Name» with «Tax 1 Value»); `shipping`, `discount`.
+ * With them an order whose one tax column shows two rates (a cart of tea and a teapot) is booked by its lines.
+ */
+export const SALES_COLUMNS = ['order', 'date', 'ordered', 'shipTo', 'gross', 'tax', 'outstanding', 'refunded', 'refundedAt', 'currency', 'gateway', 'test', 'linePrice', 'lineQuantity', 'shipping', 'discount', 'taxName', 'taxValue'] as const;
 export type SalesColumn = (typeof SALES_COLUMNS)[number];
 /** Without these a file is no sales report. */
 export const SALES_NEEDS: readonly SalesColumn[] = ['order', 'date', 'gross'];

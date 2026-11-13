@@ -210,6 +210,8 @@ export interface ReportSummary {
   other: number; ways: string[]; waysMore: number; test: number; unpaid: number;
   held: ReportHeld[]; heldMore: number; unread: number; proofs: number;
   corrections: string[];
+  /** Orders of two VAT rates booked by their line items, a line per rate (#416): the first ones, `splitMore` the rest. */
+  split: string[]; splitMore: number;
 }
 
 /** `duplicate`: the same bytes; `possible-duplicate`: the same facts, asked; `same`: the person said it is the same; `not-receipt`: its words say so (`document` says what it is). */
