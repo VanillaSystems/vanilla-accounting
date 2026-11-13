@@ -45,6 +45,11 @@ balance: [Saldovortrag, Anfangssaldo, Schlusssaldo, Eröffnungssaldo, Endsaldo, 
 # it, so the matching looks for it among the money that came in.
 credit: [Gutschrift, Gutschriftsanzeige, Credit note, Credit memo, Note de crédit, Nota di credito]
 
+# The words of a bank's payment text that say only that it is a payment, how it went or what it
+# refers to (src/saving/hand-rule.ts, #383): with a receipt's title and number words and the movement
+# words above, a rule on them alone says nothing about what the payments are, so none is offered.
+payment: [Zahlung, Zahlungen, Auftrag, Zahlungsauftrag, Dauerauftrag, Überweisung, Uebertrag, Übertrag, E-Banking, Einkauf, Karte, Kartenzahlung, Debitkarte, Kreditkarte, Bezug, Mitteilung, Referenz, Ref, Nr, Payment, Transfer, Order, Standing order, Card, Card payment, Purchase, Reference, Paiement, Virement, Ordre, Ordre permanent, Carte, Achat, Pagamento, Bonifico, Ordine, Ordine permanente, Carta, Acquisto, Riferimento]
+
 # A courier's or forwarder's customs invoice (src/booking/customs-invoice.ts): each of its read lines
 # (Receipt.lineItems) is one position by its words, and the position lands on its account of the
 # chart (accounts.yaml), processes/booking.guide.yaml#shape shp-zollrechnung. A line takes the

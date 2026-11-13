@@ -25,6 +25,8 @@ import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { draftDir } from './changes.js';
 import { ruleFactsOf } from './rules.js';
 import type { Tags } from '../books/tags.js';
+import { documents } from '../engines/index.js';
+import { wordsRe } from '../core/modules/words.js';
 
 /** Whose payments a hand-made rule books. */
 export type HandMatch =
@@ -166,9 +168,10 @@ export function handStart(ws: Workspace, ref: string, by?: 'text'): HandStart | 
         : [{ kind: 'text', text }, byText];
   // Where the text holds for more open payments (six wages to two people share «Lohn», #344) it is offered as a wider start the
   // person takes (`by`), only when it tells these payments apart: it holds for at most half of the year's payments of the kind, so
-  // the bank's own wording («Belastung E-Banking Auftrag») is never offered.
+  // the bank's own wording («Belastung E-Banking Auftrag») is never offered; it names what the payments are, not only that they
+  // pay a document («Rechnung») or how (paymentWordsOnly); and the businesses it reaches agree in their kind (#383).
   const year = kind.filter((t) => t.date.slice(0, 4) === tx.date.slice(0, 4));
-  const tells = year.filter(says).length * 2 <= year.length;
+  const tells = year.filter(says).length * 2 <= year.length && !paymentWordsOnly(words) && oneKind(open.filter(says).map((t) => paymentFacts(books, t, context, fx).counterparty), context.counterparties ?? []);
   const wider = match.kind !== 'text' && byText > similar && tells ? { text: words, similar: byText } : undefined;
   const placed = ruleOfPayment(books, tx, context, fx);
   const then = placed?.rule.then;
@@ -180,6 +183,24 @@ export function handStart(ws: Workspace, ref: string, by?: 'text'): HandStart | 
   const nature = natureOf(books, tx, context, file);
   const account = file?.accounts?.length === 1 ? file.accounts[0] : undefined;
   return { match, direction, name, similar, ...(wider && { wider }), ...(rule && { rule }), ...(nature && { nature }), ...(account && { account }) };
+}
+
+/**
+ * Whether a payment's words say only that it is a payment: a receipt's title or number word, a
+ * statement's movement word, a credit note, or the bank's wording of the payment itself (the
+ * jurisdiction's documents.yaml `payment`), and nothing else of two letters or more.
+ */
+export function paymentWordsOnly(text: string): boolean {
+  const d = documents();
+  const said = [...d.receipt.title, ...d.receipt.number, ...d.movements.out, ...d.movements.in, ...(d.credit ?? []), ...(d.payment ?? [])];
+  const rest = said.length ? text.replace(new RegExp(wordsRe(said).source, 'giu'), ' ') : text;
+  return !/\p{L}{2,}/u.test(rest);
+}
+
+/** Whether the businesses the payments go to, where the firm knows them, are of one kind (supplier, customer, authority). */
+function oneKind(businesses: ReadonlyArray<string | undefined>, files: readonly Counterparty[]): boolean {
+  const kinds = new Set(businesses.flatMap((id) => files.find((c) => c.id === id)?.role ?? []));
+  return kinds.size <= 1;
 }
 
 const ibanOf = (iban: string) => iban.replace(/\s+/g, '').toUpperCase();

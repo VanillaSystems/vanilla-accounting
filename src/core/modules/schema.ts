@@ -284,6 +284,8 @@ export interface DocumentsData {
   balance: string[];
   /** The title of a credit note («Gutschrift», «Credit note»): money comes back for it, so it is matched to money in (src/intake/pairing.ts paysIn). */
   credit?: string[];
+  /** The words of a payment's text that say only that it is a payment («Zahlung», «Auftrag», «Karte»): a rule on them alone is not offered (src/saving/hand-rule.ts, #383). */
+  payment?: string[];
 }
 
 /** What a line of a customs invoice charges: the import VAT the carrier advanced, customs duty, the carrier's fees, freight. */
