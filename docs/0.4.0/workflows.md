@@ -199,7 +199,13 @@ account that changes figures waits for a person to switch it on; new code goes t
 maintains the workflow. The approval is stored outside the workspace, so an AI editing the
 workspace cannot approve its own change (decisions.md, D6). A rule kept with **Behalten** in the
 sidebar or switched off or deleted in Firma › Regeln is a person's click: a workflow that ran
-switched on before it runs switched on after it (src/server/routes/rules.ts).
+switched on before it runs switched on after it (src/server/routes/rules.ts). So is an answer to
+the app's own question in a drop row (a payment provider's clearing account, cut-over day, revenue
+or fee account, src/server/provider-payouts.ts `asHerAct`): the workflow's approved state moves with
+it, in the same write, and the payouts it decides are booked at once, each by a booking run of its
+own. The same file changed by hand, by the AI's draft before it is kept, or by git still waits.
+Whatever is switched on with «Einschalten», what waited for it is booked then: an inbox run books
+the payments without a booking (`bookWhatWaited`).
 
 Where runs are stored (Git, beside the books, or a local store outside the workspace) is open:
 [decisions.md](decisions.md), D3.
