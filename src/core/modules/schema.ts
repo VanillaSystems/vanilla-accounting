@@ -251,7 +251,13 @@ export interface SetupData {
   /** The account the bank's own fee row is booked on by code, without a VAT code (src/booking/bank-fee.ts, #359); absent: such a row is left to a rule, the model or the person. */
   bankCharges?: { account: string };
   /** The wage account: a booking on it carries no VAT code (src/booking/rule-vat.ts); absent: no rule for wages is offered. The hand form proposes it (#382); `deductions`: where wages' deductions go, books carrying it get no proposal; `contributions`: the employer's social insurance contributions, which carry no VAT code either. */
-  wages?: { account: string; deductions?: string; contributions?: string[] };
+  wages?: {
+    account: string; deductions?: string; contributions?: string[];
+    /** The business files (ids) that collect contributions with the employees' share the payslips withheld: a payment to one is told what `deductions` holds (src/booking/withheld.ts, #426). */
+    payees?: string[];
+    /** The contribution accounts the employees share in (AHV/IV/EO/ALV, BVG), never one the employer pays alone (family allowances): a payment booked there with nothing on `deductions` is a task (#426). */
+    shared?: string[];
+  };
   /** The account each kind of private use (the setup's privateUse: car, phone) is booked on: a share named in the setup is offered as a rule on a payment booked there (#402). */
   privateUse?: Partial<Record<'car' | 'phone', string>>;
   answers: {
@@ -270,6 +276,8 @@ export interface SetupData {
 export interface DocumentsData {
   /** Words of a receipt: its title, its total, its due date, a payment slip, the label of its number. */
   receipt: Record<'title' | 'total' | 'due' | 'slip' | 'number', string[]>;
+  /** A title word also closes a compound at the start of a line («Akontorechnung»), unless the compound ends in one of these («Lohnabrechnung», «Berechnung»): src/core/modules/words.ts compoundLines. */
+  notCompound?: string[];
   /** Words on a line with a total's word that make it no total of the document: a payroll, a sum insured, a limit, hours. */
   notTotal?: string[];
   /** Phrases by which a document says it charges no VAT of the jurisdiction (a sale abroad, an exempt premium, a reverse charge). */

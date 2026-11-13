@@ -12,6 +12,64 @@ export const HEAD = 600;
 const escape = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export const wordsRe = (words: readonly string[]) => new RegExp(`(?<![\\p{L}\\d])(?:${[...words].sort((a, b) => b.length - a.length).map(escape).join('|')})(?![\\p{L}])`, 'iu');
 
+/** A list's word closes a compound only when it is this long: «Akontorechnung», never «Waybill». */
+const COMPOUND_HEAD = 6;
+
+/**
+ * The lines whose first word is a compound that one of `words` closes («Akontorechnung»,
+ * «Prämienrechnung» for «Rechnung»): a single word of COMPOUND_HEAD letters or more, with letters
+ * before it, and not one that ends in a word of `not` (documents.yaml notCompound: «Lohnabrechnung»
+ * is a payslip, «Berechnung» a calculation), followed on its line by a number of its own: a word of
+ * four characters or more with a digit that is no year and no date («Erfolgsrechnung 2025»,
+ * «Zinsgutschrift 31.12.2025» and «Geldflussrechnung» are none). Each with where the word starts and
+ * its number, squashed (upper case, no dashes or slashes).
+ */
+export function compoundLines(text: string, words: readonly string[], not: readonly string[] = []): Array<{ at: number; number: string }> {
+  const heads = words.filter((w) => !/\s/.test(w) && w.length >= COMPOUND_HEAD).map((w) => w.toLowerCase());
+  const tails = not.map((w) => w.toLowerCase());
+  if (!heads.length) return [];
+  const out: Array<{ at: number; number: string }> = [];
+  let at = 0;
+  for (const line of text.split('\n')) {
+    const m = /^\s*(\p{L}+)[\s:#.]*(?:no\.?|nr\.?|n°|#)?[\s:#.]*([A-Z0-9][A-Z0-9\-/]{2,}[A-Z0-9])(?![\p{L}\d.,])/iu.exec(line);
+    const first = m?.[1].toLowerCase();
+    const number = m?.[2].toUpperCase().replace(/[-/]/g, '');
+    if (first && number && /\d/.test(number) && !YEAR.test(number) && !isDateDigits(number)
+      && heads.some((h) => first.length > h.length && first.endsWith(h)) && !tails.some((w) => first.endsWith(w))) out.push({ at: at + line.indexOf(m![1]), number });
+    at += line.length + 1;
+  }
+  return out;
+}
+
+/** A year alone (four digits, 19xx or 20xx). */
+const YEAR = /^(?:19|20)\d{2}$/;
+
+const validDay = (y: number, m: number, d: number): boolean => {
+  const day = new Date(Date.UTC(y, m - 1, d));
+  return m >= 1 && m <= 12 && day.getUTCMonth() === m - 1 && day.getUTCDate() === d;
+};
+
+/**
+ * Digits that write a day or a month rather than a document's number: yyyymmdd, ddmmyyyy (19xx or
+ * 20xx), yymmdd, ddmmyy, yyyymm, mmyyyy («20260707», «07072026», «260301», «202607» for «2026-07»).
+ * With `near` (a document's day), a six-digit number counts as a day only within NEAR_DAYS of it:
+ * «Nr. 230915» on a bill of 2026 is its number, not a day of 2023.
+ */
+export function isDateDigits(n: string, near?: string): boolean {
+  if (!/^\d+$/.test(n)) return false;
+  const c = (a: number, b: number) => Number(n.slice(a, b));
+  const century = (y: string) => /^(?:19|20)\d{2}$/.test(y);
+  if (n.length === 8) return (century(n.slice(0, 4)) && validDay(c(0, 4), c(4, 6), c(6, 8))) || (century(n.slice(4, 8)) && validDay(c(4, 8), c(2, 4), c(0, 2)));
+  if (n.length === 6) {
+    const around = near ? Date.parse(near) : NaN;
+    const close = (y: number, m: number, d: number) => validDay(y, m, d) && (!Number.isFinite(around) || Math.abs(Date.UTC(y, m - 1, d) - around) <= NEAR_DAYS * 864e5);
+    return close(2000 + c(0, 2), c(2, 4), c(4, 6)) || close(2000 + c(4, 6), c(2, 4), c(0, 2))
+      || (century(n.slice(0, 4)) && c(4, 6) >= 1 && c(4, 6) <= 12 && close(c(0, 4), c(4, 6), 1)) || (century(n.slice(2, 6)) && c(0, 2) >= 1 && c(0, 2) <= 12 && close(c(2, 6), c(0, 2), 1));
+  }
+  return false;
+}
+const NEAR_DAYS = 400;
+
 /** The first match of each list in `text`, by its position. */
 export function firstOf<K extends string>(lists: Record<K, string[]>, text: string): Array<{ key: K; at: number }> {
   return (Object.entries(lists) as Array<[K, string[]]>)

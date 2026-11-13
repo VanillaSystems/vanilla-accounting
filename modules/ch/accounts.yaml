@@ -125,7 +125,7 @@ accounts:
   # 4 Aufwand für Material, Handelswaren, Dienstleistungen und Energie
   - { number: "4000", name: Materialaufwand Produktion, type: expense, line: materialaufwand, profiles: [goods], hints: [Material, Rohmaterial, Farbe, Lack] }
   - { number: "4200", name: Handelswarenaufwand, type: expense, line: materialaufwand, profiles: [goods] }
-  - { number: "4400", name: Aufwand für bezogene Dienstleistungen, type: expense, line: materialaufwand, hints: [Fremdarbeit, Subunternehmer, Fremdleistung] }
+  - { number: "4400", name: Aufwand für bezogene Dienstleistungen, type: expense, line: materialaufwand, hints: [Fremdarbeit, Subunternehmer, Fremdleistung, Gerüst, Gerüstbau, Gerüstmiete] }
   - { number: "4500", name: Energieaufwand zur Leistungserstellung, type: expense, line: materialaufwand, profiles: [goods] }
   - { number: "4900", name: Aufwandminderungen, type: expense, line: materialaufwand, profiles: [goods] }
   - { number: "4020", name: Zölle, type: expense, line: materialaufwand, profiles: [goods] }

@@ -198,7 +198,14 @@ const flagged = (cell: string | undefined): boolean => /^(true|yes|ja|oui|si|sì
  * `gross` is what was charged: the total less an `outstanding` balance (an order edited after checkout, #231; below zero, charged
  * beyond the total, #239), `tax` in the same share.
  */
-export interface SaleRow { order: string; date: string; ordered?: string; shipTo?: string; gross: number; tax?: number; outstanding?: number; refunded: number; refundedAt?: string; currency?: string; gateway?: string; test?: boolean }
+export interface SaleRow {
+  order: string; date: string; ordered?: string; shipTo?: string; gross: number; tax?: number; outstanding?: number; refunded: number; refundedAt?: string; currency?: string; gateway?: string; test?: boolean;
+  /** Its line items' amounts (price times quantity), where the report has them (#416); with `taxes` (each rate's tax), `shipping` and `discount`. */
+  items?: number[];
+  /** Each item's quantity (the pieces its amount is of), where the report has a quantity column: a provider may round the tax per piece. */
+  units?: number[];
+  taxes?: Array<{ rate: number; amount: number }>; shipping?: number; discount?: number;
+}
 /** One fee of a fee report, summed per order and day (per day where the report names no order, #242). */
 export interface FeeRow { order?: string; date: string; fee: number; currency?: string }
 /** One refund of a payments export: its order, the day the money went back, how much (positive), its currency. */
@@ -269,14 +276,35 @@ export function readReport(text: string, kind: ReportKind, facts: Pick<ProviderF
     const placed = placeColumns<SalesColumn>(header ?? [], facts.reports.sales ?? {}, facts.gateways?.length ? [...SALES_NEEDS, 'gateway'] : SALES_NEEDS);
     if ('missing' in placed) return { missing: placed.missing };
     const { at } = placed;
-    const byOrder = new Map<string, { row: Partial<SaleRow>; lines: number[] }>();
+    // Every header of taxName and taxValue the file has, paired by position (#416).
+    const heads = (header ?? []).map(norm);
+    const every = (c: 'taxName' | 'taxValue') => (facts.reports.sales?.[c] ?? []).map((n) => heads.indexOf(norm(n)));
+    const taxCols = every('taxName').map((name, i) => ({ name, value: every('taxValue')[i] ?? -1 })).filter((c) => c.name >= 0 && c.value >= 0);
+    const byOrder = new Map<string, { row: Partial<SaleRow>; lines: number[]; items: Array<number | undefined>; units: Array<number | undefined> }>();
     const unread: number[] = [];
     lines.forEach((row, k) => {
       const order = cell(row, at.order)?.replace(/^#/, '');
       if (!order) { unread.push(k + 2); return; }
-      const o = byOrder.get(order) ?? byOrder.set(order, { row: { order }, lines: [] }).get(order)!;
+      const o = byOrder.get(order) ?? byOrder.set(order, { row: { order }, lines: [], items: [], units: [] }).get(order)!;
       o.lines.push(k + 2);
       const r = o.row;
+      if (at.linePrice !== undefined) {
+        const price = amountOf(cell(row, at.linePrice));
+        // Without a quantity column each line counts once: a line of several pieces then leaves the items short of the total, and the order waits.
+        const qty = at.lineQuantity === undefined ? 1 : amountOf(cell(row, at.lineQuantity));
+        o.items.push(price === undefined || qty === undefined ? undefined : fromRappen(Math.round(toRappen(price) * qty)));
+        o.units.push(qty === undefined ? undefined : Math.max(1, Math.ceil(Math.abs(qty))));
+      }
+      if (!r.taxes && taxCols.length) {
+        const taxes = taxCols.flatMap((c) => {
+          const rate = Number(/(\d+(?:[.,]\d+)?)\s*%/.exec(cell(row, c.name) ?? '')?.[1]?.replace(',', '.'));
+          const amount = amountOf(cell(row, c.value));
+          return Number.isFinite(rate) && amount !== undefined ? [{ rate, amount }] : [];
+        });
+        if (taxes.length) r.taxes = taxes;
+      }
+      r.shipping ??= amountOf(cell(row, at.shipping));
+      r.discount ??= amountOf(cell(row, at.discount));
       r.date ??= dayOf(cell(row, at.date));
       r.ordered ??= dayOf(cell(row, at.ordered));
       r.shipTo ??= cell(row, at.shipTo)?.toUpperCase();
@@ -290,14 +318,15 @@ export function readReport(text: string, kind: ReportKind, facts: Pick<ProviderF
       if (flagged(cell(row, at.test))) r.test = true;
     });
     const rows: SaleRow[] = [];
-    for (const { row: r, lines: at2 } of byOrder.values()) {
+    for (const { row: r, lines: at2, items, units } of byOrder.values()) {
       if (!r.date || r.gross === undefined) { unread.push(at2[0]); continue; }
       // An order edited after checkout: only the total less its outstanding balance was charged, its tax in the same share (#231).
       // A balance below zero is what was charged beyond the total (a cent of a currency's rounding, #239): the gross is more.
       const open = r.outstanding !== undefined && toRappen(r.outstanding) !== 0 ? r.outstanding : 0;
       const gross = open ? fromRappen(toRappen(r.gross) - toRappen(open)) : r.gross;
       const tax = open && r.tax !== undefined && toRappen(r.gross) > 0 ? fromRappen(Math.round((toRappen(r.tax) * toRappen(gross)) / toRappen(r.gross))) : r.tax;
-      rows.push({ order: r.order!, date: r.date, gross, refunded: Math.abs(r.refunded ?? 0), ...(r.ordered && { ordered: r.ordered }), ...(r.shipTo && { shipTo: r.shipTo }), ...(tax !== undefined && { tax }), ...(open && { outstanding: open }), ...(r.refundedAt && { refundedAt: r.refundedAt }), ...(r.currency && { currency: r.currency }), ...(r.gateway && { gateway: r.gateway }), ...(r.test && { test: true }) });
+      rows.push({ order: r.order!, date: r.date, gross, refunded: Math.abs(r.refunded ?? 0), ...(r.ordered && { ordered: r.ordered }), ...(r.shipTo && { shipTo: r.shipTo }), ...(tax !== undefined && { tax }), ...(open && { outstanding: open }), ...(r.refundedAt && { refundedAt: r.refundedAt }), ...(r.currency && { currency: r.currency }), ...(r.gateway && { gateway: r.gateway }), ...(r.test && { test: true }),
+        ...(items.length && items.every((x) => x !== undefined) && { items: items as number[], units: units as number[] }), ...(r.taxes && { taxes: r.taxes }), ...(r.shipping !== undefined && { shipping: r.shipping }), ...(r.discount !== undefined && { discount: r.discount }) });
     }
     return { kind, rows, unread: unread.sort((a, b) => a - b) };
   }
@@ -454,7 +483,8 @@ export interface ReportTexts {
   fee(key: string): string;
   /** What a sale's reason adds when it is booked at its charges, a cent beside what the sales report says was charged (#239). */
   cent?(charged: number, gross: number): string;
-  reason(kind: 'domestic' | 'abroad' | 'foreignTax' | 'none' | 'refund' | 'fee', country: string | undefined): string;
+  /** `mixed`: one line of an order of two rates, booked by its line items (#416). */
+  reason(kind: 'domestic' | 'abroad' | 'foreignTax' | 'none' | 'refund' | 'fee' | 'mixed', country: string | undefined): string;
 }
 
 /**
@@ -467,7 +497,10 @@ export interface ReportTexts {
  * carries a sale from elsewhere that may be it (`legacy`), or the payments exports' charges of the order
  * do not add up to what was charged by the sales report, its total less its outstanding balance (`charges`, #231).
  */
-export interface ReportHold { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' | 'refundSplit' }
+export interface ReportHold { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' | 'refundSplit' | 'rateTooMany';
+  /** `rateTooMany`: the order's number of rates and the most items code splits at that many (the text names both). */
+  rates?: number; most?: number;
+}
 
 /**
  * A refund paid in a filed period whose sale the books carry and which they never carried (#231): offered
@@ -503,6 +536,8 @@ export interface ReportOutcome {
   /** Orders the report's test column flags: no sale, never booked. */
   test: number;
   held: ReportHold[];
+  /** Orders of two rates booked by their line items, a line per rate (mixedCart, #416): the drop row names them. */
+  split: string[];
   /**
    * Orders whose sale the books carry already though a payments export whose charges cover their day on
    * both sides names no transaction of them (#214): the sale stays as booked, the person is asked.
@@ -537,6 +572,54 @@ function showsRate(gross: number, tax: number, rate: number): boolean {
   return Math.abs(tax - want) <= Math.max(0.05, want * TAX_SLACK);
 }
 
+/** The most ways of putting an order's line items at its rates that code tries (two rates: twelve items); beyond, the order waits as `rateTooMany`. */
+export const MIXED_WAYS = 4096;
+/** The most line items code splits at `rates` rates (MIXED_WAYS): the held reason names it. Two rates: twelve. */
+export function mixedItemsAt(rates: number): number {
+  let n = 0;
+  while (rates ** (n + 1) <= MIXED_WAYS) n++;
+  return n;
+}
+
+/**
+ * A domestic order whose tax shows two or more rates (a cart of tea at the reduced rate and a teapot at
+ * the normal one, #416), by its line items: each rate the report names with its tax, the items put
+ * at the rates so that each rate's tax on its items is what the report says within the rounding a
+ * provider may do (see `fits`), the items adding up to what was charged, no shipping or discount to
+ * share out. Exactly one such split, each rate one the firm books: its gross per rate; else none, and
+ * the order waits. `tooMany`: more ways to try than MIXED_WAYS, with its number of rates and the most items code splits at
+ * that many; the order waits with that reason.
+ */
+export function mixedCart(o: Pick<SaleRow, 'gross' | 'items' | 'units' | 'taxes' | 'shipping' | 'discount'>, rates: readonly SaleCode[]): Array<SaleCode & { gross: number }> | { tooMany: true; rates: number; most: number } | undefined {
+  const items = o.items;
+  const taxes = (o.taxes ?? []).filter((t) => toRappen(t.amount) !== 0);
+  if (!items?.length || taxes.length < 2 || taxes.length > items.length) return undefined;
+  if (toRappen(o.shipping ?? 0) !== 0 || toRappen(o.discount ?? 0) !== 0) return undefined;
+  if (items.reduce((s, x) => s + toRappen(x), 0) !== toRappen(o.gross)) return undefined;
+  const codes = taxes.map((t) => rates.find((r) => r.rate === t.rate));
+  if (codes.some((c) => !c) || new Set(taxes.map((t) => t.rate)).size !== taxes.length) return undefined;
+  if (taxes.length ** items.length > MIXED_WAYS) return { tooMany: true, rates: taxes.length, most: mixedItemsAt(taxes.length) };
+  // The true split must always fit, whichever way the provider rounds (#437 review): each line's tax rounded and summed lies
+  // within half a cent per piece of the exact tax on the rate's items, the rate's total rounded once within half a cent; a cent
+  // at least, as a provider's own rounding may add. A wider window lets more splits fit: the uniqueness check then holds the order.
+  // Counted in pieces, not lines (#437 second review): a provider that rounds each piece's tax and multiplies by the quantity
+  // drifts half a cent per piece. Without a quantity column each item is one piece.
+  const pieces = items.map((_, i) => o.units?.[i] ?? 1);
+  const fits = (rp: number, n: number, t: { rate: number; amount: number }) => rp > 0 && Math.abs((rp * t.rate) / (100 + t.rate) - toRappen(t.amount)) <= Math.max(1, n / 2) + 1e-9;
+  const found = new Set<string>();
+  let split: number[] | undefined;
+  const at = new Array<number>(items.length).fill(0);
+  for (let n = 0; n < taxes.length ** items.length; n++) {
+    for (let i = 0, m = n; i < items.length; i++, m = Math.floor(m / taxes.length)) at[i] = m % taxes.length;
+    const sums = taxes.map((_, k) => items.reduce((s, x, i) => s + (at[i] === k ? toRappen(x) : 0), 0));
+    if (!sums.every((rp, k) => fits(rp, pieces.reduce((s, p, i) => s + (at[i] === k ? p : 0), 0), taxes[k]))) continue;
+    found.add(sums.join(','));
+    split = sums;
+  }
+  if (found.size !== 1 || !split) return undefined;
+  return taxes.map((_, k) => ({ ...codes[k]!, gross: fromRappen(split![k]) }));
+}
+
 /** A gateway as a report may write it: «Shopify Payments», «shopify_payments». */
 const gatewayKey = (g: string): string => g.trim().toLowerCase().replace(/[_\s]+/g, ' ');
 
@@ -557,7 +640,7 @@ export function collectedBy(o: Pick<SaleRow, 'gateway'>, gateways: readonly stri
  * links inside the write door. Each entry has origin 'classify' and names the check `payoutReport` (a check older builds keep).
  */
 export function bookReport(books: { journalEntries: readonly JournalEntry[]; mappings?: readonly Mapping[] }, read: ReadReport, ctx: ReportContext): ReportOutcome {
-  const out: ReportOutcome = { orders: 0, refunds: 0, fees: 0, known: 0, knownRefs: [], filed: 0, before: 0, beforeSince: 0, beforeSinceRows: [], other: 0, ways: [], test: 0, held: [], unpaid: [], stale: [], filedRefunds: [], corrected: [], replaced: [], entries: [], links: [] };
+  const out: ReportOutcome = { orders: 0, refunds: 0, fees: 0, known: 0, knownRefs: [], filed: 0, before: 0, beforeSince: 0, beforeSinceRows: [], other: 0, ways: [], test: 0, held: [], split: [], unpaid: [], stale: [], filedRefunds: [], corrected: [], replaced: [], entries: [], links: [] };
   const byRef = new Map<string, JournalEntry[]>();
   for (const e of books.journalEntries) if (isReportRef(e.transactionRef)) (byRef.get(e.transactionRef) ?? byRef.set(e.transactionRef, []).get(e.transactionRef)!).push(e);
   // The tax point decides whether a row lies in a filed period or before the books; the day the provider collected it whether a
@@ -783,13 +866,14 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[]; map
     return [...had, { ref: salePartRef(sale, o.date), date: o.date, collected: o.date, gross: fromRappen(rest) }];
   };
   /**
-   * A domestic order whose tax shows no one rate waits («rate»), unless the person booked it under its sale ref in parts by rate
-   * («Aufteilen», #405) adding up to its gross: then it is known. A refund of such an order is never booked by code, nor
-   * skipped: while the books carry no refund of it (one under its refund ref, or an entry that names it and takes revenue back),
-   * it waits as `refundSplit` for the person to book by hand. A refund booked under the sale's own ref (revenue back from the
-   * clearing account) counts as booked.
+   * A domestic order whose tax shows no one rate. Booked under its sale ref in parts by rate adding up to its gross, by code or by
+   * the person («Aufteilen», #405): known, never booked again. Else booked by its line items, a line per rate under its sale ref
+   * (mixedCart, #416), when it is of the open period, nothing of it is refunded and it was charged in one; else it waits («rate»).
+   * A refund of such an order is never booked by code, nor skipped: while the books carry no refund of it (one under its refund
+   * ref, or an entry that names it and takes revenue back), it waits as `refundSplit` for the person to book by hand. A refund
+   * booked under the sale's own ref (revenue back from the clearing account) counts as booked.
    */
-  const splitByHand = (o: SaleRow): void => {
+  const bookMixed = (o: SaleRow, day: string): void => {
     const sale = saleRef(ctx.provider.id, o.order);
     const had = byRef.get(sale);
     const split = !!had?.length && had.reduce((s, e) => s + (e.accountDebit === ctx.clearing ? toRappen(e.amount) : 0), 0) === toRappen(o.gross);
@@ -799,14 +883,53 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[]; map
       const where = dated(taxDay(o), o.date);
       if (where === 'before' || where === 'beforeSince') { count(where, o.order); return; }
       if (where !== 'filed' && carried(orderLegacy({ key: o.order, day: o.date, amount: o.gross }), o.order)) return;
-      out.held.push({ order: o.order, why: 'rate' });
+      const refunded = o.refunded > 0 || !!ctx.payments?.refunds.get(o.order)?.length;
+      const mix = where || refunded || had?.length || saleRefsOf(sale).length ? undefined : mixedCart(o, rates);
+      if (mix && !Array.isArray(mix)) { out.held.push({ order: o.order, why: 'rateTooMany', rates: mix.rates, most: mix.most }); return; }
+      const charged = chargesOf(o);
+      // Charged on one day (its tax point on the cash basis) and to the cent what the report says, or not by the payments export at all.
+      const once = !charged || (charged !== 'differ' && !charged.off && (ctx.agreed || charged.days.length === 1));
+      const date = charged && charged !== 'differ' && !ctx.agreed ? charged.days[0].date : day;
+      if (!mix || !once || dated(date, o.date)) { out.held.push({ order: o.order, why: 'rate' }); return; }
+      const es = mix.map((m) => make(sale, date, o.currency, { accountDebit: ctx.clearing, accountCredit: ctx.revenue, amount: m.gross, vatCode: m.code, description: ctx.texts.sale(o.order, o.shipTo) }, ctx.texts.reason('mixed', o.shipTo)));
+      if (es.includes('noRate')) { out.held.push({ order: o.order, why: 'noRate' }); return; }
+      for (const e of es as JournalEntry[]) push(sale, e);
+      out.orders++;
+      out.split.push(o.order);
       return;
     }
     const refunded = o.refunded > 0 || !!ctx.payments?.refunds.get(o.order)?.length;
     const plain = refundRef(ctx.provider.id, o.order);
     const refundBooked = books.journalEntries.some((e) => e.transactionRef === plain || e.transactionRef.startsWith(`${plain}-`) || (e.accountDebit === ctx.revenue && ((e.transactionRef === sale && e.accountCredit === ctx.clearing) || (!isReportRef(e.transactionRef) && textNames(e.description, o.order)))));
     if (refunded && !refundBooked) { out.held.push({ order: o.order, why: 'refundSplit' }); return; }
-    same(sale);
+    if (!movedMixed(o, sale)) same(sale);
+  };
+  /**
+   * The app's own split of a two-rate order (bookMixed), booked on the order's day before a payments export said when it was
+   * charged, moved onto that day once one says it charged the whole order on one other day (cash basis, as `resplit` moves a
+   * one-rate sale, #242): each line again with its amount and code, the receipts it named kept. Only when every line is the
+   * report's own, of the open period, no person or the AI linked a receipt to it, and the charge day is open and within the
+   * report's reach; never her «Aufteilen» (origin manual). Charged on several days it stays as booked (a part per day and rate
+   * is not made). Returns whether it moved.
+   */
+  const movedMixed = (o: SaleRow, sale: string): boolean => {
+    const had = byRef.get(sale)!;
+    const charged = chargesOf(o);
+    if (ctx.agreed || !charged || charged === 'differ' || charged.off || charged.days.length !== 1) return false;
+    const day = charged.days[0].date;
+    if (had.every((e) => e.date === day) || saleRefsOf(sale).length !== 1 || !ownParts(sale) || had.some((e) => ctx.isClosed(e.date))) return false;
+    if (books.mappings?.some((m) => m.transactionRef === sale && (m.by === 'human' || m.by === 'llm')) || dated(day, day)) return false;
+    const receipts = [...new Set([...had.flatMap((e) => e.receipts ?? []), ctx.receipt])].sort();
+    const made: JournalEntry[] = [];
+    for (const e of had) {
+      const m = make(sale, day, o.currency, { accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount, vatCode: e.vatCode, description: e.description }, e.reason ?? ctx.texts.reason('mixed', o.shipTo));
+      if (m === 'noRate') return false;
+      made.push({ ...m, receipts });
+    }
+    out.replaced.push(...had.map((e) => e.id));
+    byRef.delete(sale);
+    for (const e of made) push(sale, e);
+    return true;
   };
   for (const o of read.rows) {
     // Its refund goes with it: an order the provider did not collect is refunded otherwise too.
@@ -833,7 +956,7 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[]; map
       if (domestic) {
         if (o.tax !== undefined && o.tax <= 0) { out.held.push({ order: o.order, why: 'noTax' }); continue; }
         const at = o.tax === undefined ? rates[0] : rates.find((r) => showsRate(o.gross, o.tax!, r.rate));
-        if (!at) { splitByHand(o); continue; }
+        if (!at) { bookMixed(o, day); continue; }
         code = at.code;
         kind = 'domestic';
       } else {

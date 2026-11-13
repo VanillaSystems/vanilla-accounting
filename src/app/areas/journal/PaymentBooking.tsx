@@ -26,6 +26,9 @@ import { ranksByWords } from '../../lib/account-filter.js';
 import { offersInBooks } from '../../../intake/near-pairs.js';
 import { nearWhy } from '../receipts/FindPair.js';
 import { fmt, formatDate } from '../../lib/utils.js';
+import { localToday, parsePeriod } from '../../../accounting/periods.js';
+import { periodName } from '../../lib/period-label.js';
+import { correctionName } from '../../lib/vat-words.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
@@ -130,6 +133,9 @@ function sourceText(s: DraftSource, account: string | undefined, vat: string | u
   ].filter(Boolean).join(' · ');
 }
 
+/** A filed period by its name («Q3 2026»). */
+const filedName = (key: string) => { const p = parsePeriod(key, localToday()); return p ? periodName(p) : key; };
+
 /** A fact under the lines, in plain words (DraftNote). */
 function noteText(n: DraftNote): string {
   switch (n.kind) {
@@ -137,7 +143,8 @@ function noteText(n: DraftNote): string {
     case 'authority': return t('journal.byHand.note.authority', { name: n.name });
     case 'saleVat': return t(`journal.byHand.note.saleVat.${n.why}`);
     case 'ask': return t('journal.byHand.note.ask', { question: n.question });
-    case 'taxPoint': return t('journal.byHand.note.taxPoint', { date: formatDate(n.date) });
+    case 'taxPoint': { const name = getAccountMap()[n.account]; return t('journal.byHand.note.taxPoint', { date: formatDate(n.date), account: name ? `${n.account} ${name}` : n.account }); }
+    case 'taxPointCorrects': return t('journal.byHand.note.taxPointCorrects', { date: formatDate(n.date), filed: filedName(n.corrects), correction: correctionName() });
     case 'invoicePaid': return t('journal.byHand.note.invoicePaid', { number: n.number, amount: fmt(n.surplus) });
     case 'prepayment': return t('journal.byHand.note.prepayment', { number: n.number });
     case 'bankChargesMissing': return t('journal.byHand.note.bankChargesMissing', { account: n.account, name: n.name });
@@ -148,6 +155,7 @@ function noteText(n: DraftNote): string {
     case 'discount': return t(n.vat === 'paid' ? 'journal.byHand.note.discount' : n.vat === 'rates' ? 'journal.byHand.note.discountRates' : 'journal.byHand.note.discountNoVat', { percent: String(n.percent), amount: fmt(n.amount) });
     case 'ownerOutlays': return t(n.judged ? 'journal.byHand.note.ownerOutlaysJudged' : 'journal.byHand.note.ownerOutlays', { amount: fmt(n.open) });
     case 'ownerForeign': return t('journal.byHand.note.ownerForeign', { currency: n.currency });
+    case 'ownerWaits': return t('journal.byHand.note.ownerWaitsShort', { owner: n.owner, account: n.account, amount: fmt(n.open) });
     default: return t(`journal.byHand.note.${n.kind}`);
   }
 }
@@ -161,9 +169,9 @@ function Unattached({ nav, payment, typed, onBooked }: Props & { typed: Unattach
   async function attach(own: string) {
     if (busy.current) return;
     busy.current = true;
-    const before = await attachEntries(nav, payment, own);
+    const attached = await attachEntries(nav, payment, own);
     busy.current = false;
-    if (before) onBooked?.(before.map((e) => ({ ...e, transactionRef: payment })));
+    if (attached) onBooked?.(attached.before.map((e) => ({ ...e, transactionRef: payment })));
   }
   return (
     <div className="pbo" data-testid="unattached">
@@ -263,8 +271,8 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
     }).find(Boolean) ?? (rest ? t('journal.byHand.errRest', { currency: draft.currency, amount: fmt(rest) }) : '');
   }
 
-  /** The receipts booking links: her own invoices the proposal is read off, never across periods on the agreed basis (they are linked alone there). */
-  const links = draft.ownInvoice && draft.ownInvoice.from !== 'taxPoint' ? draft.ownInvoice.links : [];
+  /** The receipts booking links: her own invoices the payment names. */
+  const links = draft.ownInvoice?.links ?? [];
 
   async function book() {
     if (busy.current || pending || seen.current !== rows) return;
@@ -296,11 +304,6 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
     } catch (e) { setErr(errorText(e)); } finally { busy.current = false; }
   }
 
-  async function linkOnly() {
-    for (const id of draft.ownInvoice?.links ?? []) await api.addMapping({ receiptId: id, transactionRef: payment });
-    nav.refresh();
-  }
-
   function onKeyDown(e: React.KeyboardEvent) {
     e.stopPropagation();
     if (e.key === 'Enter' && !e.defaultPrevented && (e.target as HTMLElement).tagName === 'INPUT') { e.preventDefault(); void book(); }
@@ -323,7 +326,7 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
       onKeyDown={onKeyDown} onInput={chose} onSubmit={(e) => { e.preventDefault(); void book(); }}>
       <div className="pbh">
         <b>{t('journal.byHand.title')}</b>
-        <span className="m">{t('journal.byHand.lead', { date: formatDate(draft.date), currency: draft.currency })}</span>
+        <span className="m">{t(draft.notes.some((n) => n.kind === 'taxPoint') ? 'journal.byHand.leadPaid' : 'journal.byHand.lead', { date: formatDate(draft.date), currency: draft.currency })}</span>
       </div>
       {draft.cancelledInvoice ? (
         <p className="pbw" data-testid="cancelled-invoice" data-number={draft.cancelledInvoice.number}>
@@ -340,9 +343,8 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
       ) : null}
       {own ? (
         <p className="pbw" data-testid="own-invoice" data-receipt={own.id} data-from={own.from}>
-          {/* What is true: the proposal is read off her invoice, comes from elsewhere, or is not made across periods (agreed basis, #360). */}
+          {/* What is true: the proposal is read off her invoice or comes from elsewhere. */}
           {t(`journal.byHand.ownInvoice.${own.earlier ? 'earlier' : own.from}`, { number: own.number, file: own.file, date: own.earlier ? formatDate(own.earlier) : '' })}{' '}
-          {own.from === 'taxPoint' && own.links.length ? <button type="button" className="btn" data-act="link-own-invoice" onClick={() => void linkOnly()}>{t('journal.byHand.linkOnly')}</button> : null}
           {own.links.length ? <button type="button" className="golink" data-act="not-own-invoice" onClick={() => onNotOwn?.(own.id)}>{t('journal.byHand.notOwnInvoice')}</button> : null}
         </p>
       ) : null}

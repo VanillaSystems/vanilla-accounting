@@ -55,6 +55,7 @@ import type { MailCheck, ReceiptSkipOffer, SourcePreview, SourcesView } from '..
 import type { MailHost } from '../../platform/sources/mail-host.js';
 import type { DraftCommand, DraftView, BookOpen, KeepResult, KeptView, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
 import type { ShareOffer } from '../../saving/share-rule.js';
+import type { PendingOffer } from '../areas/automation/open-period.js';
 import type { GroupedOffer } from '../../saving/grouped-flag.js';
 import type { ReceiptSet, SetCut } from '../../intake/receipt-sets.js';
 import type { UnreadOffer } from '../../saving/unread-rule.js';
@@ -212,6 +213,7 @@ export function errorText(e: unknown): string {
     case 'classifySeparateFee': return t('error.classifySeparateFee', { fee: b.params.fee, amount: `${b.params.currency} ${fmt(b.params.amount)}` });
     case 'classifyOpenInvoice': return t('error.classifyOpenInvoice', b.params);
     case 'classifyInputTaxShared': return t('error.classifyInputTaxShared', { payments: b.params.payments, booked: `${b.params.currency} ${fmt(b.params.booked)}`, shown: `${b.params.currency} ${fmt(b.params.shown)}` });
+    case 'classifyWithheldOver': return t('error.classifyWithheldOver', { account: b.params.account, taken: `${b.params.currency} ${fmt(b.params.taken)}`, open: `${b.params.currency} ${fmt(b.params.open)}` });
     case 'personsBooking': return t('error.personsBooking', { n: b.params.entries });
     case 'fileExists': return t('error.fileExists', b.params);
     case 'statementRead': {
@@ -405,7 +407,7 @@ export const api = {
     request<{ entries: JournalEntry[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/entries`, { lines, ...(inputTaxProof !== undefined && { inputTaxProof }), ...(links?.length && { links }) }).then((r) => r.entries),
 
   attachEntries: (ref: string, own: string) =>
-    request<{ before: JournalEntry[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/attach`, { ref: own }).then((r) => r.before),
+    request<{ before: JournalEntry[]; made: string[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/attach`, { ref: own }),
 
   /** `again`: the payments booked again by a run; `kept`: a booked payment whose booking stays because no model is there to rebook it (r8f-41). */
   addMapping: (link: Link) => request<Linked>('POST', '/api/mapping/add', link),
@@ -494,6 +496,8 @@ export const api = {
   ruleCommand: (c: RuleCommand) => request<RuleCommandResult>('POST', '/api/rules', c),
   draftRules: (path: string) => request<DraftView>('GET', `/api/rules/draft?path=${encodeURIComponent(path)}`),
   draftCommand: (c: DraftCommand) => request<KeepResult | { ok: boolean }>('POST', '/api/rules/draft', c),
+  outlayWaits: () => request<{ refs: string[] }>('GET', '/api/rules/outlay-waits'),
+  setupOffers: () => request<{ offers: PendingOffer[] }>('GET', '/api/rules/share-offers'),
   shareOffer: (ref: string) => request<{ offer: ShareOffer | null }>('GET', `/api/rules/share?ref=${encodeURIComponent(ref)}`),
   draftShare: (ref: string) => request<{ path: string }>('POST', '/api/rules/share', { ref }),
   dismissShare: (ref: string, never = false) => request<{ ok: boolean }>('POST', '/api/rules/share/dismiss', { ref, never }),

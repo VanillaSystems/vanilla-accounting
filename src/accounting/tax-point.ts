@@ -9,7 +9,8 @@
  * the rate of its tax point, MWSTV Art. 45 Abs. 1).
  *
  * On the cash basis (Art. 40 Abs. 2) every line keeps the payment's date and none of this applies.
- * Pure: the classifier (src/booking/classify.ts) and the invoices (src/invoices/events.ts) call it.
+ * Pure: the classifier (src/booking/classify.ts), a payment booked by hand (src/server/edits.ts
+ * bookPayment) and the invoices (src/invoices/events.ts) call it.
  */
 import type { JournalEntry, Receipt } from '../types/index.js';
 import type { PeriodLock } from '../books/store.js';
@@ -59,6 +60,33 @@ export function lockedTaxPoint(lock: Pick<PeriodLock, 'beforeBooks'>, date: stri
   const since = basisSince();
   if (lock.beforeBooks(date) || (since !== undefined && Number(date.slice(0, 4)) < since)) return 'switch';
   return { corrects: filingKeyOf(date, length) };
+}
+
+/** The dates of a payment's documents that may be its tax point, sorted: a document beside the invoice (a delivery note, a customs assessment) dates none, the invoice does. */
+export const documentDates = (documents: ReadonlyArray<Pick<Receipt, 'date' | 'kind'>>): string[] =>
+  documents.filter((d) => d.kind !== 'duplicate' && d.kind !== 'supporting' && d.date).map((d) => d.date!).sort();
+
+/**
+ * Where a coded line of a payment of `paid` goes on the agreed basis, by its documents' `dates`
+ * (documentDates): to the day of its tax point (`date`), into the correction return of a filed
+ * period (`corrects`, beside the document's `date`), or nowhere (undefined: it stays on the payment as it is). A sale is dated by
+ * the earliest document (the tax is never declared late), a purchase by the latest (input tax never
+ * claimed early), a `change` (a minus code: a credit note, a refund) by the latest, as it counts
+ * when it is booked (MWSTG Art. 41). Only a bill's input tax may wait for a document after the
+ * payment: a sale's tax on a prepayment arises when it is received (Art. 40 Abs. 1 lit. c), a change
+ * when it is paid; a document of a later year is a prepayment or a misread date. A document of a day
+ * the books no longer take is declared where lockedTaxPoint says.
+ */
+export function taxPointOf(side: 'sale' | 'purchase', change: boolean, paid: string, dates: readonly string[], lock: Pick<PeriodLock, 'isClosed' | 'beforeBooks'>, length: FilingLength): { date: string; corrects?: string } | undefined {
+  if (!dates.length) return undefined;
+  const date = side === 'sale' && !change ? dates[0] : dates[dates.length - 1];
+  if (date === paid) return undefined;
+  if (date > paid && (side === 'sale' || change || date.slice(0, 4) !== paid.slice(0, 4))) return undefined;
+  if (lock.isClosed(date) || lock.beforeBooks(date)) {
+    const point = lockedTaxPoint(lock, date, length);
+    return point === 'switch' ? undefined : { date, corrects: point.corrects };
+  }
+  return { date };
 }
 
 /** One line of a settlement: the bank against the open item, or the exchange difference left on the open item. */
@@ -134,8 +162,7 @@ type Payment = { ref: string; date: string; currency: string; description?: stri
  */
 export function atTaxPoint(tx: Payment, entries: readonly JournalEntry[], ctx: TaxPointContext): JournalEntry[] {
   if (!agreedBasis()) return [...entries];
-  // A document beside the invoice (a delivery note, a customs assessment) dates no tax point: the invoice does.
-  const dates = ctx.documents.filter((d) => d.kind !== 'duplicate' && d.kind !== 'supporting' && d.date).map((d) => d.date!).sort();
+  const dates = documentDates(ctx.documents);
   if (!dates.length) return [...entries];
   const groups = new Map<string, { booked: number; amount: number; template: JournalEntry }>();
   const out = entries.map((e): JournalEntry => {
@@ -144,17 +171,10 @@ export function atTaxPoint(tx: Payment, entries: readonly JournalEntry[], ctx: T
     const bankCredit = e.accountCredit === ctx.bankAccount && e.accountDebit !== ctx.bankAccount;
     const onClearing = ctx.clearing.has(e.accountDebit) || ctx.clearing.has(e.accountCredit);
     if (!side || e.corrects || onClearing || (!bankDebit && !bankCredit)) return e;
-    // A later change (a minus code: a credit note, a refund) counts when it is booked, by the latest document (Art. 41).
-    const change = e.vatCode!.startsWith(vat().codes.negativePrefix);
-    const date = side === 'sale' && !change ? dates[0] : dates[dates.length - 1];
-    if (date === tx.date) return e;
-    // Only a bill's input tax may wait for a document after the payment. A sale's tax on a prepayment arises when it is
-    // received (Art. 40 Abs. 1 lit. c), a change when it is paid (Art. 41); a document of a later year is a prepayment or a misread date.
-    if (date > tx.date && (side === 'sale' || change || date.slice(0, 4) !== tx.date.slice(0, 4))) return e;
-    if (ctx.lock.isClosed(date) || ctx.lock.beforeBooks(date)) {
-      const point = lockedTaxPoint(ctx.lock, date, ctx.length);
-      return point === 'switch' ? e : { ...e, corrects: point.corrects };
-    }
+    const point = taxPointOf(side, e.vatCode!.startsWith(vat().codes.negativePrefix), tx.date, dates, ctx.lock, ctx.length);
+    if (!point) return e;
+    if (point.corrects) return { ...e, corrects: point.corrects };
+    const { date } = point;
     const account = side === 'sale' ? ctx.accounts.receivable : ctx.accounts.payable;
     const foreign = !!e.exchangeCurrency && e.exchangeCurrency !== baseCurrency();
     const rate = foreign ? ctx.rateOn(e.exchangeCurrency!, date) ?? e.exchangeRate : undefined;

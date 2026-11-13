@@ -32,7 +32,7 @@ import { wordsIn } from '../export/texts.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import type { BookChange } from '../types/assistant.js';
 import { WS, RequestError, assertOpen, readBooks, updateBooks } from './books.js';
-import { applyChange, assertOwnInvoice, assertPlaced, bookPayment, link, setEntry } from './edits.js';
+import { applyChange, assertOwnInvoice, assertPlaced, bookPayment, handTaxPoint, handTaxPointOf, link, setEntry } from './edits.js';
 import type { BookingLine } from '../accounting/manual-booking.js';
 import { keepSwitchedOn } from '../workflows/switch-on.js';
 import { loadWorkflows } from '../workflows/load.js';
@@ -217,7 +217,11 @@ function bookSale(books: Books, tx: BankTransaction, choice: SaleChoice, foreign
     const sale = bookSale(books, tx, choice, foreign, undefined, open);
     const links = onForm.links.flatMap((id) => { assertOwnInvoice(books, id, WS.company); const c = link(books, id, tx.ref); return c ? [c] : []; });
     for (const e of books.journalEntries) if (e.transactionRef === tx.ref && onForm.links.length) e.receipts = [...new Set([...(e.receipts ?? []), ...onForm.links])].sort();
-    return { ...sale, booked: [...new Set([...made.map((e) => e.id), ...sale.booked])], undo: [...links, ...books.journalEntries.filter((e) => e.transactionRef === tx.ref).map((e): BookChange => ({ kind: 'deleteEntry', id: e.id }))] };
+    // With the codes set and the invoice linked, the agreed basis dates a sale line by its document, as a booking by hand does (#360).
+    const mine = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
+    const placed = handTaxPointOf(books, tx, mine, WS.bankAccounts, loadFxResolver(), handTaxPoint(WS));
+    books.journalEntries = [...books.journalEntries.filter((e) => e.transactionRef !== tx.ref), ...placed];
+    return { ...sale, booked: placed.map((e) => e.id), undo: [...links, ...books.journalEntries.filter((e) => e.transactionRef === tx.ref).map((e): BookChange => ({ kind: 'deleteEntry', id: e.id }))] };
   }
   const own = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
   if (own.some((e) => e.origin === 'invoice')) throw new Unclear('hasInvoice', tx.description);

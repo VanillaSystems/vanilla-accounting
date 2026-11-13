@@ -11,7 +11,7 @@ import { parseDocument, YAMLMap, YAMLSeq } from 'yaml';
 import { loadBooks } from '../books/store.js';
 import { loadClassifyContext, mappedReceipts, paymentFacts, ruleBookingLines, ruleOfPayment, type RuleLine } from '../booking/classify.js';
 import { stableWords } from '../knowledge/gaps.js';
-import { paysOwner, receiptKnowledge, repaymentsOf } from '../booking/receipt-wait.js';
+import { awaitsOutlays, paysOwner, receiptKnowledge, repaymentsOf } from '../booking/receipt-wait.js';
 import { baseCurrency } from '../engines/index.js';
 import { outlaysOpen, ownerFactsOf } from '../booking/owner-outlays.js';
 import { judgedRepayments } from '../booking/owner-judged.js';
@@ -244,6 +244,8 @@ function natureOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, cont
     // Only while outlays are open: else the form behaves as for any payment, with its precedent.
     const f = toOwner && tx.currency !== baseCurrency() ? ownerFactsOf(context) : undefined;
     if (f && outlaysOpen(books, f, tx.date) > 0) return { kind: 'ownerForeign', currency: tx.currency };
+    // In the books' currency, not covered while outlays are open, no rule deciding it: it waits for the rest of them, and the form says so (#428).
+    if (toOwner && awaitsOutlays(books, tx, context, wages(), loadFxResolver())) return { kind: 'ownerWaits', account: context.ownerAccount!, open: outlaysOpen(books, ownerFactsOf(context)!, tx.date), owner: context.ownerName ?? '' };
     if (!context.wageAccount || !wages().some((w) => w.test(tx.description))) return undefined;
     // Books that carry wages with their deductions (cls-salary): the payslip's lines are hers, no account is proposed.
     const deductions = context.wageDeductions;

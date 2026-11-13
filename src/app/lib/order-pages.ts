@@ -31,3 +31,12 @@ export function setProviderIssues(issues: ProviderIssues | undefined): void {
 }
 
 export const providerIssuesNow = (): ProviderIssues => providerIssues;
+
+let outlayWaits: ReadonlySet<string> = new Set();
+
+/** The open payments to the owner that wait for her outlays (GET /api/rules/outlay-waits, #428), loaded with the books: the server knows her rules and wages. */
+export function setOutlayWaits(refs: readonly string[] | undefined): void {
+  outlayWaits = new Set(refs ?? []);
+}
+
+export const outlayWaitsNow = (): ReadonlySet<string> => outlayWaits;

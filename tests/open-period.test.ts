@@ -59,10 +59,11 @@ test('the state of the oldest period not filed is the review\'s list, the paymen
   const issues = periodIssues(books, [question], s.period.from, s.period.to, []);
   assert.equal(s.unbooked.length + s.questions.length + s.evidence.length + s.unlinked.length, issues.length);
   assert.deepEqual(openLines(s).map((l) => [l.kind, l.kind === 'task' ? l.task.run : l.n, l.kind === 'unbooked' ? l.waiting : undefined]), [
-    ['unbooked', 4, 2], ['questions', 1, undefined], ['unlinked', 1, undefined], ['task', 'r-1', undefined],
+    // Most important first (#428): an open VAT question withholds the approval.
+    ['questions', 1, undefined], ['unbooked', 4, 2], ['unlinked', 1, undefined], ['task', 'r-1', undefined],
   ]);
-  assert.deepEqual(waitingKinds(s), { waits: 2, asks: 0, unread: 0 }, 'until two weeks before the 29.11. the missing receipts are the app\'s work');
-  assert.deepEqual(waitingKinds(openPeriodState(books, [], [], [], { ...ctx, today: '2026-11-20' })), { waits: 0, asks: 2, unread: 0 }, 'from then on they are the person\'s');
+  assert.deepEqual(waitingKinds(s), { waits: 2, asks: 0, unread: 0, outlays: 0 }, 'until two weeks before the 29.11. the missing receipts are the app\'s work');
+  assert.deepEqual(waitingKinds(openPeriodState(books, [], [], [], { ...ctx, today: '2026-11-20' })), { waits: 0, asks: 2, unread: 0, outlays: 0 }, 'from then on they are the person\'s');
   assert.equal(nothingOpen(s), false);
   const quiet = openPeriodState({ ...books, transactions: [books.transactions[4]], receipts: [] }, [], [], [], ctx);
   assert.equal(nothingOpen(quiet), true);
@@ -140,7 +141,7 @@ test('a held payment is told by what it waits for: its receipt, or the person\'s
   };
   const early = { ...ctx, today: '2026-10-20' };
   const s = openPeriodState(held, [], [], [], early);
-  assert.deepEqual(waitingKinds(s), { waits: 1, asks: 0, unread: 1 });
+  assert.deepEqual(waitingKinds(s), { waits: 1, asks: 0, unread: 1, outlays: 0 });
   const line = openLines(s)[0];
   // The count of held payments is the return's page's (receiptWaits: until the receipt comes or can be read); the unreadable one is named besides as the person's.
   assert.deepEqual(line.kind === 'unbooked' && [line.n, line.waiting, line.unread], [4, 2, 1], 'the card counts as the return\'s page does, and names the unreadable one besides');
