@@ -95,10 +95,11 @@ Two markers flag an entry you must read before you update:
 ### Changed
 
 - Setup (#423): «MWST-Methode» and «Abrechnungsart» say where the owner finds her answer herself:
-  in the ESTV portal, under «Neue Geschäfte» her firm, then «Abrechnungsmodalitäten»; the Treuhand
+  in the ESTV portal, under «Neue Geschäfte» her firm, then «Anpassen» on the card «Abrechnungsmodalitäten», changing nothing; the Treuhand
   only when she has no access. «Abrechnungsart» no longer says that vereinbart applies unless the
   firm asked for vereinnahmt, and the setup's AI is given the same line, in her language, so it no
-  longer names a basis as the one that applies.
+  longer names a basis as the one that applies. In Italian the basis question is «Sistema di rendiconto», the
+  ESTV's word, no longer the name of the portal's card.
 - Setup: the form marks what its kind of firm answered and she did not touch «angenommen», with one
   line why at the top of the questions («Diese Antworten sind angenommen, weil es bei Handwerk, Bau
   (GmbH) üblich ist: ändere, was nicht stimmt»); a touched answer loses the mark. Form and setup

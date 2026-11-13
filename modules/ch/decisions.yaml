@@ -85,20 +85,28 @@ answers:
       basis) is a choice the ESTV approves on request: the payment date is the tax point. The
       basis is held for a whole tax period; at a switch the open receivables and payables count
       in the first period after it. The XML names it in formOfReporting (1 vereinbart, 2 vereinnahmt).
-      A firm sees its current basis and method in the ESTV portal: «Neue Geschäfte», the firm, the
-      card «Abrechnungsmodalitäten» («Überprüfen Sie Ihre aktuellen Abrechnungsmodalitäten und passen
-      Sie Ihre Abrechnungsmethode, Abrechnungsart oder Abrechnungsperiodizität an»; ESTV,
-      Schritt-für-Schritt-Dokumentation für easy-User, slides 33–34, and estv.admin.ch «MWST
-      Abrechnungsmodalitäten anpassen»; fr «Nouvelles opérations», it «Nuove operazioni»). The
-      setup's questions point there (#423).
+      In the ESTV portal, under «Neue Geschäfte» and the firm, the card «Abrechnungsmodalitäten»
+      (it «Modalità di rendiconto», fr «Modalités de décompte») has one button, «Anpassen» (it
+      «Riprendere», fr «Adapter»); its text: «Überprüfen Sie Ihre aktuellen Abrechnungsmodalitäten und
+      passen Sie Ihre Abrechnungsmethode, Abrechnungsart oder Abrechnungsperiodizität an». The setup's
+      questions send the owner there to see her basis and method, changing nothing (#423). Sources:
+      https://www.estv.admin.ch/de/mwst-abrechnungsmodalitaeten-anpassen,
+      https://www.estv.admin.ch/it/modificare-le-modalita-del-rendiconto-iva, and the ESTV guide of
+      21.05.2026 for portal users, slides 33–34 (de:
+      https://www.estv.admin.ch/dam/de/sd-web/6iGtDU82AESE/Schritt%20f%C3%BCr%20Schritt%20Dokumentaton%20f%C3%BCr%20EASY%20User_neu.pdf;
+      it: https://www.estv.admin.ch/dam/it/sd-web/6iGtDU82AESE/). The ESTV calls the basis
+      «sistema di rendiconto» in Italian, the card's «Modalità di rendiconto» covers basis, method
+      and period.
     law: [MWSTG Art. 39, MWSTG Art. 40, MWSTG Art. 41, MWSTG Art. 48 Abs. 1 lit. b, MWSTV Art. 106, MWSTV Art. 107, eCH-0217 v2.0.0]
     where: [src/workspace/vat-setup.ts, src/accounting/tax-point.ts, src/invoices/events.ts, src/providers/ech0217/xml.ts]
     unverified: >
       Whether the ESTV takes the invoice date for the day the bill was received (Art. 40 Abs. 1);
       the app uses the receipt's date. Whether input tax not claimed in its period may be claimed
       in a later one without a correction (a bill of an earlier year paid after the switch).
-      The portal screen itself was not seen: the card's label in the portal since 11.05.2026, and
-      its Italian label, are taken from the ESTV's pages, not from the screen.
+      No source shows the screen behind «Anpassen», so the setup says only that she sees her
+      current basis and method there and need change nothing. Which portal role a user needs to see
+      the card is not stated: the ESTV FAQ says a user sees only the businesses she has permissions
+      for.
 
   vat.filing:
     answer: >

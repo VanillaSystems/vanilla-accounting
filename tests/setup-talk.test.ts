@@ -425,11 +425,15 @@ test('the basis and the method say where she finds them herself, the ESTV portal
   // Where the ESTV says the firm's current basis and method stand: the portal, «Neue Geschäfte», the firm, its «Abrechnungsmodalitäten»
   // (estv.admin.ch «MWST Abrechnungsmodalitäten anpassen», in fr «Nouvelles opérations», in it «Nuove operazioni»).
   const portal: Record<string, RegExp> = {
-    de: /ESTV-Portal.*«Neue Geschäfte».*«Abrechnungsmodalitäten»/s,
-    en: /ESTV portal.*«Neue Geschäfte».*«Abrechnungsmodalitäten»/s,
-    fr: /portail de l’AFC.*«Nouvelles opérations».*«Modalités de décompte»/s,
-    it: /portale dell’AFC.*«Nuove operazioni».*modalità del rendiconto/s,
+    de: /ESTV-Portal.*«Neue Geschäfte».*«Abrechnungsmodalitäten».*«Anpassen».*du musst nichts ändern/s,
+    en: /ESTV portal.*«Neue Geschäfte».*«Abrechnungsmodalitäten».*«Anpassen».*you need not change anything/s,
+    fr: /portail de l’AFC.*«Nouvelles opérations».*«Modalités de décompte».*«Adapter».*tu n’as rien à changer/s,
+    it: /portale dell’AFC.*«Nuove operazioni».*«Modalità di rendiconto».*«Riprendere».*non devi cambiare nulla/s,
   };
+  // The ESTV calls the whole card «Modalità di rendiconto» and the basis «sistema di rendiconto»: the question is not named after the card it sends her to.
+  const it = (await import('../src/app/i18n/locales/it.js') as { default: Locale }).default.messages as unknown as Record<string, string>;
+  assert.equal(it['desktop.q.basis.ask'], 'Sistema di rendiconto');
+  for (const [k, v] of Object.entries(it)) if (typeof v === 'string' && k !== 'desktop.q.vatMethod.where' && k !== 'desktop.q.basis.where') assert.doesNotMatch(v, /modalità di rendiconto/i, `it ${k}: the basis is the «sistema di rendiconto»`);
   // A basis named as the one that applies unless …: the hint that steered an unsure owner to «vereinbart» (round 4, webshop-ai-r2-2).
   const steers = /Gesetz|sieht .* vor|gilt, (wenn|ausser)|law|applies (when|unless)|loi|prévoit|vaut si|legge|prevede|vale se/i;
   for (const lang of ['de', 'en', 'fr', 'it']) {
@@ -448,7 +452,12 @@ test('the basis and the method say where she finds them herself, the ESTV portal
   const facts = prompt.split('explain in her words from these facts only:')[1].split('\n')[0];
   assert.match(facts, portal.de, 'the model is told where she looks it up');
   assert.doesNotMatch(facts, steers, 'and no basis as the one that applies');
-  assert.match(prompt, /does not know its method or basis finds both where the line of those questions says .*, or asks its accountant/, 'the accountant is not the only way');
+  // Asked before those questions (at «Im MWST-Register?»), the model has the same path, and no other.
+  const de = (await import('../src/app/i18n/locales/de.js') as { default: Locale }).default.messages as unknown as Record<string, string>;
+  const early = talkPrompt(withPatch(withPatch(newDraft('de', NOW), { step: 'firm', value: { name: 'Malerei Huber GmbH', uid: UID, owner: 'Thomas Huber' } }), { step: 'preset', value: 'trades' }), 'wo finde ich die Abrechnungsart?', [], 'CHF');
+  const rule = /does not know its method or basis finds both as these lines say[^\n]*/.exec(early)?.[0] ?? '';
+  for (const k of ['vatMethod', 'basis']) assert.ok(rule.includes(de[`desktop.q.${k}.where`]), `${k}: its line handed to the model before it is asked`);
+  assert.match(rule, /name no other menu, screen or document/);
 });
 
 test('the words never make a registered firm unregistered: her «ja», her method and her rates stay, the question keeps its buttons (#347)', () => {

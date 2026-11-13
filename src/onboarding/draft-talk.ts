@@ -11,7 +11,7 @@ import { join, resolve } from 'node:path';
 import type { AskOptions } from '../llm/ask.js';
 import { SetupError, type BankSpec, type SetupRefusal } from '../workspace/create.js';
 import { BANKS } from '../workspace/banks.js';
-import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, NO_VAT, notRegistered, offeredAnswers, offeredLabel, optionOf, unsteered, unusualPeriod, type QuestionKey, type QuestionSpec } from '../workspace/setup.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, VAT_QUESTIONS, NO_VAT, notRegistered, offeredAnswers, offeredLabel, optionOf, unsteered, unusualPeriod, hasWhere, UNSTEERED, type QuestionKey } from '../workspace/setup.js';
 import { wordsIn } from '../export/texts.js';
 import { APP_FOLDER } from '../workspace/workspace.js';
 import { checkPatch, draftView, readDraft, saidFirm, writeDraft } from './draft-store.js';
@@ -135,15 +135,25 @@ export function buttonsNote(d: SetupDraft): string {
     case 'review': return `${exactly([say('desktop.create')])} Beside each answer of the review stands «${say('onboarding.change')}».`;
     case 'question': {
       // Her language's line (#423): the portal's own labels in the words she sees under the question.
-      const where = (QUESTIONS[open.key] as QuestionSpec).where === undefined ? undefined : say(`desktop.q.${open.key}.where`);
+      const where = hasWhere(open.key) ? say(`desktop.q.${open.key}.where`) : '';
       return [
         exactly(offeredAnswers(open.key).map((a) => offeredLabel(say, open.key, a))),
         ...(unsteered(open.key) ? [
-          `This question is hers alone: never recommend an answer and never call one usual, likely or the default for her. When she asks what it means or how to tell, explain in her words from these facts only: ${QUESTIONS[open.key].why} ${where ?? ''} «${say('desktop.q.noVat')}» is only for a firm that is not in the VAT register; a firm whose accountant (Treuhand) fills in its VAT returns is registered.`,
+          `This question is hers alone: never recommend an answer and never call one usual, likely or the default for her. When she asks what it means or how to tell, explain in her words from these facts only: ${QUESTIONS[open.key].why} ${where} «${say('desktop.q.noVat')}» is only for a firm that is not in the VAT register; a firm whose accountant (Treuhand) fills in its VAT returns is registered.`,
         ] : []),
       ].join('\n');
     }
   }
+}
+
+/**
+ * Where a registered firm finds its method and basis itself (#423): the help lines of those questions in her language,
+ * handed to the model at every step, so a question asked before them (at the registration question) gets the same path and no invented one.
+ */
+export function wherePaths(d: SetupDraft): string {
+  const { t } = wordsIn(d.language ?? 'de');
+  const say = t as unknown as (key: string) => string;
+  return UNSTEERED.filter((k) => hasWhere(k)).map((k) => `«${say(`desktop.q.${k}.where`)}»`).join(' ');
 }
 
 const key = (m: StepMark) => (['firm', 'preset', 'netRates', 'banks'].includes(m) ? m : `answers.${m}`);
@@ -185,7 +195,7 @@ ${text}
 Rules:
 - Take only what the message or the conversation so far states or plainly implies («zwei Angestellte»: employees "staff"; «registered for VAT»: vatRegistered "yes"). Leave out what it does not say. Never guess.
 - sells: a trade (a painter, a carpenter, an electrician, a builder …), and any firm that charges material with its work («d Farb verrechned mer mit», «Material kommt auf die Rechnung»), sells "made" and "services": "made" covers the material. "services" alone is work without material.
-- vatRegistered: never give "no", whatever the words say: that the firm files no VAT is only ever her own click. A registered firm that does not know its method or basis finds both where the line of those questions says (the tax authority's portal), or asks its accountant (Treuhand) without access to it; say so when asked.
+- vatRegistered: never give "no", whatever the words say: that the firm files no VAT is only ever her own click. A registered firm that does not know its method or basis finds both as these lines say, which the app shows under those questions: ${wherePaths(d)} Say so when asked, with that path only: name no other menu, screen or document.
 - period: give it only when the person names how often they file. Quarterly is usual on the effective method, half-yearly on the net tax rate; the app does not take the other from loose words and says so itself.
 - Never invent, complete or correct a UID or an IBAN: copy one only when the person wrote it.
 - firm: every field the person stated in this message; the app joins it to what they said of the firm before.
