@@ -1,16 +1,18 @@
 /**
  * Whether the booking waits for «Einschalten» (#413), for any process: the server's routes
  * (src/server/booking-waits.ts) and the CLI (`npm run classify`) ask it before they book by the
- * firm's rules or the model. `firstSeen`: a process that may be the first to see the workspace
- * takes what it runs today as switched on, as the app's engine does (switch-on.ts baseline).
+ * firm's rules or the model. Only the app takes a workspace's first baseline (src/server/routes/
+ * automation.ts engine): a process that finds no switch-on record (`seen` false) books nothing.
  */
+import { existsSync } from 'node:fs';
 import { loadWorkflows } from './load.js';
-import { BOOKING_WORKFLOW, baseline, openSwitch } from './switch-on.js';
+import { BOOKING_WORKFLOW, approvalsPath, openSwitch } from './switch-on.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 
-export function bookingWaitsIn(ws: Pick<Workspace, 'paths'>, { firstSeen = false } = {}): string[] | undefined {
-  const all = loadWorkflows(APP_ROOT, ws.paths.root).workflows;
-  if (firstSeen) baseline(ws, all);
-  const booking = all.find((w) => w.id === BOOKING_WORKFLOW);
+export function bookingWaitsIn(ws: Pick<Workspace, 'paths'>): string[] | undefined {
+  const booking = loadWorkflows(APP_ROOT, ws.paths.root).workflows.find((w) => w.id === BOOKING_WORKFLOW);
   return booking ? openSwitch(ws).pending(booking)?.files : undefined;
 }
+
+/** Whether the app has seen this workspace on this computer: its switch-on record exists. */
+export const switchOnSeen = (ws: Pick<Workspace, 'paths'>): boolean => existsSync(approvalsPath(ws));
