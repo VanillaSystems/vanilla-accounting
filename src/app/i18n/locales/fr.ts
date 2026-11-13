@@ -3403,6 +3403,7 @@ export default {
     'automation.pending.why': 'Enregistré n’est pas activé : l’activation se fait hors du workspace, l’IA ne peut pas approuver sa propre modification.',
     'bookingWaits.text': {"one": "L’app ne comptabilise pas d’elle-même pour l’instant, car {files} a changé depuis la dernière activation et elle ne comptabilise selon aucune règle que vous n’avez pas encore vue ; avec «Activer», la modification s’applique et elle comptabilise alors ce qui n’attendait que cela.", "other": "L’app ne comptabilise pas d’elle-même pour l’instant, car {files} ont changé depuis la dernière activation et elle ne comptabilise selon aucune règle que vous n’avez pas encore vue ; avec «Activer», la modification s’applique et elle comptabilise alors ce qui n’attendait que cela."},
     'bookingWaits.look': "Voir la modification",
+    'bookingWaits.reports': "Attend que «Comptabiliser» comptabilise de nouveau, puis comptabilisé : {files}",
     'automation.case.same': 'identique',
     'automation.case.different': 'différent',
     'automation.case.stuck': 'bloqué',

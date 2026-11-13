@@ -2,7 +2,8 @@
  * A provider's report dropped while «Buchen» waits for «Einschalten» (#413) and left in its row when
  * the drop window closed: kept in data/reports-waiting/, never in quarantine (where «Ist ein Beleg»
  * would send a CSV to the inbox as a receipt). «Einschalten» of the booking takes each as the drop
- * row would have (bookWhatWaited): booked, it goes; one that still asks (a clearing account, a payout
+ * row would have (bookWhatWaited), and so does any drop or inbox run that finds the booking switched
+ * on again otherwise (the change taken back): booked, it goes; one that still asks (a clearing account, a payout
  * the app does not see) or is refused waits in quarantine as a row left unanswered does.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -10,6 +11,7 @@ import { join } from 'node:path';
 import { WS } from './books.js';
 import { freeName, putInQuarantine } from '../intake/quarantine.js';
 import { importSalesReport } from '../intake/sales-report-import.js';
+import { bookingWaits } from './booking-waits.js';
 
 const dirOf = (data: string) => join(data, 'reports-waiting');
 
@@ -42,4 +44,9 @@ export function takeWaitingReports(): number {
     rmSync(path, { force: true });
   }
   return booked;
+}
+
+/** Takes the kept reports when the booking does not wait (any more): a drop, an inbox run come to rest. */
+export function takeWaitingReportsIfOn(): number {
+  return waitingReports().length && !bookingWaits() ? takeWaitingReports() : 0;
 }

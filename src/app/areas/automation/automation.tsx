@@ -227,6 +227,7 @@ function WorkflowPage({ w, view, route, nav }: { w: WorkflowDecl; view: Automati
       </div>
       <p className="lead">{tx(w.desc)}</p>
       <Pending w={w} view={view} nav={nav} />
+      {w.id === 'booking' && view.reportsWaiting?.length ? <p className="m" data-testid="reports-waiting">{t('bookingWaits.reports', { files: view.reportsWaiting.join(', ') })}</p> : null}
       {!w.runnable.ok ? <p className="warnline">{t('automation.missing', { steps: w.runnable.missing.map((m) => `${tx(stepOf(w, m.step)?.label ?? { en: m.step })} (${m.action})`).join(', ') })}</p> : null}
       <div className="wftabs" role="tablist">
         {AUTOMATION_TABS.map((tab) => (

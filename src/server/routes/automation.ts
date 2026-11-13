@@ -20,6 +20,7 @@ import { loadWorkflows } from '../../workflows/load.js';
 import { summaryOf, taskOf, textIn, type AutomationCommand, type AutomationView, type PendingVersion, type Run, type RunDetail, type Task, type TaskPayment, type WorkflowDecl } from '../../workflows/model.js';
 import { BOOKING_WORKFLOW, baseline, caseCheck, openSwitch } from '../../workflows/switch-on.js';
 import { bookWhatWaited } from '../provider-payouts.js';
+import { takeWaitingReportsIfOn, waitingReports } from '../waiting-reports.js';
 import { setSchedule } from '../../workflows/direct.js';
 import { cronValid } from '../../workflows/cron.js';
 import { loadBooks } from '../../books/store.js';
@@ -64,7 +65,11 @@ export function engine(): Engine {
       appRoot: APP_ROOT, ask: askIfReady, lock: () => lockIntake(now()),
       isApproved: sw.isApproved, pending: sw.pending, approve: sw.approve,
       keeps: (run) => holdsFiledPeriod(now(), run),
-      onRest: (run) => releaseApproval(now(), run),
+      onRest: (run) => {
+        // An inbox run come to rest takes the reports a closed drop kept while «Buchen» waited, once it books again (#413).
+        if (run.workflow === INTAKE && run.mode === 'live') takeWaitingReportsIfOn();
+        return releaseApproval(now(), run);
+      },
     });
     engines.set(ws.paths.root, e);
   }
@@ -116,8 +121,9 @@ export function automationView(): AutomationView {
   // A running step's own count of what it finished (step-progress.ts): part of the revision, so a poll sees it move.
   const summaries = runs.map((r) => summaryOf(r, byId.get(r.workflow))).map((s) => { const p = s.status === 'running' ? progressOf(s.id) : undefined; return p ? { ...s, progress: p } : s; }).sort((a, b) => b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id));
   const pending = pendingVersions(loaded.workflows, runs);
-  const rev = createHash('sha256').update(JSON.stringify([loaded.workflows.map((w) => w.version), loaded.problems, e.counter, e.paused, pending, summaries.flatMap((s) => (s.progress ? [s.id, s.progress.done, s.progress.total] : []))])).digest('hex').slice(0, 16);
-  return { rev, ...loaded, runs: summaries, tasks, paused: e.paused, limits: e.limits, pending };
+  const reportsWaiting = waitingReports();
+  const rev = createHash('sha256').update(JSON.stringify([loaded.workflows.map((w) => w.version), loaded.problems, e.counter, e.paused, pending, reportsWaiting, summaries.flatMap((s) => (s.progress ? [s.id, s.progress.done, s.progress.total] : []))])).digest('hex').slice(0, 16);
+  return { rev, ...loaded, runs: summaries, tasks, paused: e.paused, limits: e.limits, pending, ...(reportsWaiting.length ? { reportsWaiting } : {}) };
 }
 
 /** Each workflow waiting to be switched on, with its cases checked against the version as it is now. */

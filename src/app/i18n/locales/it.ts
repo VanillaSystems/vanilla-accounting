@@ -3403,6 +3403,7 @@ export default {
     'automation.pending.why': 'Salvato non è attivato: l’attivazione è fuori dal workspace, l’IA non può approvare la propria modifica.',
     'bookingWaits.text': {"one": "L’app per ora non registra da sola, perché {files} è cambiato dall’ultima attivazione e non registra secondo regole che non hai ancora visto; con «Attiva» la modifica vale e registra poi ciò che aspettava solo questo.", "other": "L’app per ora non registra da sola, perché {files} sono cambiati dall’ultima attivazione e non registra secondo regole che non hai ancora visto; con «Attiva» la modifica vale e registra poi ciò che aspettava solo questo."},
     'bookingWaits.look': "Vedi la modifica",
+    'bookingWaits.reports': "Attende che «Registrare» registri di nuovo, poi registrato: {files}",
     'automation.case.same': 'uguale',
     'automation.case.different': 'diverso',
     'automation.case.stuck': 'bloccato',

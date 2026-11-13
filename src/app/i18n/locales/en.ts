@@ -3403,6 +3403,7 @@ export default {
     'automation.pending.why': 'Saved is not switched on: switching on lies outside the workspace, so the AI cannot approve its own change.',
     'bookingWaits.text': {"one": "The app is not booking on its own for now, because {files} changed since booking was last switched on and it books by no rule you have not seen yet; with «Switch on» the change applies, and it then books what was only waiting for that.", "other": "The app is not booking on its own for now, because {files} changed since booking was last switched on and it books by no rule you have not seen yet; with «Switch on» the change applies, and it then books what was only waiting for that."},
     'bookingWaits.look': "See the change",
+    'bookingWaits.reports': "Waiting for «Book» to book again, then booked: {files}",
     'automation.case.same': 'same',
     'automation.case.different': 'different',
     'automation.case.stuck': 'stuck',

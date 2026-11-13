@@ -37,7 +37,7 @@ import { accountName, removeAccount, setAccountName } from '../../workspace/acco
 import { assertPlaced } from '../edits.js';
 import { asHerAct, bookPayouts, readyPayouts } from '../provider-payouts.js';
 import { bookingWaits } from '../booking-waits.js';
-import { keepWaitingReport } from '../waiting-reports.js';
+import { keepWaitingReport, takeWaitingReportsIfOn } from '../waiting-reports.js';
 
 import type { Arrival } from '../../workflows/model.js';
 import { firstPages, recognize } from '../../intake/recognize.js';
@@ -618,6 +618,8 @@ function toItsExport(s: DropSession): boolean {
 }
 
 async function takeRows(s: DropSession): Promise<void> {
+  // Reports a closed drop kept while «Buchen» waited are taken once it books again (#413).
+  takeWaitingReportsIfOn();
   for (const row of s.rows) {
     if (row.state === 'quarantine' && !row.quarantined && existsSync(fileOf(s.id, row.key))) {
       const why = OTHER_WHY.find((w) => w === row.document);

@@ -3400,6 +3400,7 @@ export const messages = {
   'automation.pending.why': 'Gespeichert ist nicht eingeschaltet: das Einschalten liegt ausserhalb des Workspaces, die KI kann sich nicht selbst freigeben.',
   'bookingWaits.text': {"one": "Die App bucht gerade nicht von selbst, weil sich {files} seit dem letzten Einschalten geändert hat und sie nicht nach Regeln bucht, die du noch nicht gesehen hast; mit «Einschalten» gilt die Änderung, und sie bucht dann, was nur darauf gewartet hat.", "other": "Die App bucht gerade nicht von selbst, weil sich {files} seit dem letzten Einschalten geändert haben und sie nicht nach Regeln bucht, die du noch nicht gesehen hast; mit «Einschalten» gilt die Änderung, und sie bucht dann, was nur darauf gewartet hat."},
   'bookingWaits.look': "Änderung ansehen",
+  'bookingWaits.reports': "Wartet darauf, dass «Buchen» wieder bucht, und wird dann gebucht: {files}",
   'automation.case.same': 'gleich',
   'automation.case.different': 'anders',
   'automation.case.stuck': 'hängt',

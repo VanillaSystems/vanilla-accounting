@@ -514,6 +514,8 @@ export interface AutomationView {
   limits: { ai: number; other: number };
   /** Workflows whose company part changed since it was switched on, with the cases checked against it. */
   pending: PendingVersion[];
+  /** Providers' reports a closed drop kept while «Buchen» waited for «Einschalten» (#413): taken once it books again. */
+  reportsWaiting?: string[];
 }
 
 export interface PendingVersion {
