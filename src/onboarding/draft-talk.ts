@@ -374,9 +374,9 @@ export function parseTalkRequest(body: unknown): { text: string; form?: TalkForm
   const text = typeof r.text === 'string' ? r.text.trim() : '';
   if (!text) return undefined;
   if (text.length > MAX_TEXT) return { tooLong: true };
-  // The bank rows of the open card, typed and not sent yet (#496 r7-6): only rows with a bank's name, as «Weiter» sends them.
-  const rows = isMap(r.form) && Array.isArray(r.form.banks) ? r.form.banks.filter(isMap).filter((b) => str(b.bank)) : [];
-  return { text, ...(rows.length ? { form: { banks: rows.map((b) => ({ bank: str(b.bank)!, currency: str(b.currency) ?? '', ...(str(b.iban) ? { iban: str(b.iban)! } : {}) })) } } : {}) };
+  // The bank rows of the open card, typed and not sent yet (#496 r7-6): every row with a bank's name or an IBAN; one without a name is refused as «Weiter» refuses it.
+  const rows = isMap(r.form) && Array.isArray(r.form.banks) ? r.form.banks.filter(isMap).filter((b) => str(b.bank) || str(b.iban)) : [];
+  return { text, ...(rows.length ? { form: { banks: rows.map((b) => ({ bank: str(b.bank) ?? '', currency: str(b.currency) ?? '', ...(str(b.iban) ? { iban: str(b.iban)! } : {}) })) } } : {}) };
 }
 
 /** What the open card holds that she typed and did not send yet, sent with her words so they never stand in its place. */
@@ -421,11 +421,12 @@ export async function talkDraft(root: string, text: string, ask: Ask, form?: Tal
   }
   const read = parseTalk(raw);
   if (!read) return { draft: saved, reply: { kind: 'unreadable' } };
-  // A row of hers code refused: the model's banks are not taken either, so the card stays open with her rows and says why.
+  // A row of hers code refused: the model's banks are not taken either, so the card stays open with her rows and says why;
+  // the model's words stay when it read no banks (an answer to a question is no claim about them).
   const out = typed.refused ? { ...read, banks: undefined } : read;
   const words = [...before, { who: 'me', text }].filter((t) => t.who === 'me').map((t) => t.text);
   const applied = applyTalk(draft, out, words, baseCurrency);
-  const next = typed.refused && applied.reply.kind === 'read' ? { ...applied, reply: { ...applied.reply, say: '', refused: [typed.refused, ...applied.reply.refused] } } : applied;
+  const next = typed.refused && applied.reply.kind === 'read' ? { ...applied, reply: { ...applied.reply, say: read.banks === undefined ? applied.reply.say : '', refused: [typed.refused, ...applied.reply.refused] } } : applied;
   if (next.reply.kind === 'read' && next.reply.say) keep([...(turnsOf.get(key) ?? []), { who: 'ai', text: next.reply.say }]);
   return next.draft !== saved ? { ...next, draft: writeDraft(root, next.draft) } : next;
 }

@@ -257,10 +257,10 @@ function answer(d: SetupDraft, patch: DraftPatch): SetupDraft {
 
 /**
  * What the open bank card holds that she typed and did not send, to go with a typed message (#496 r7-6):
- * the rows with a bank's name while the bank step waits; undefined when there is none, or the step is answered.
+ * the rows with a bank's name or an IBAN (one without a name is refused and said, never dropped) while the bank step waits; undefined when there is none, or the step is answered.
  */
 export function unsentForm(steps: readonly DraftStep[], rows: readonly BankSpec[]): { banks: BankSpec[] } | undefined {
   const open = steps.at(-1);
-  const typed = open?.id === 'banks' && !open.answer ? rows.filter((b) => b.bank.trim()) : [];
+  const typed = open?.id === 'banks' && !open.answer ? rows.filter((b) => b.bank.trim() || b.iban?.trim()) : [];
   return typed.length ? { banks: typed } : undefined;
 }

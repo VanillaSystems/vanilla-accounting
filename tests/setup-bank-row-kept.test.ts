@@ -82,6 +82,28 @@ test('a row of the card code refuses is said, and the sentence\'s banks wait wit
   assert.deepEqual(view.draft.answers.privateUse, ['phone'], 'the rest of the sentence is taken');
 });
 
+test('a half-typed row does not silence the answer to a question: the model\'s words stay when it read no banks, beside the refusal', async () => {
+  const { call, root } = await atBanks('Question');
+  answers = [JSON.stringify({ say: 'Der Saldosteuersatz ist ein von der ESTV bewilligter Pauschalsatz auf dem Umsatz.' })];
+  const r = await call('POST', '/api/desktop/setup/talk', { root, text: 'was ist ein Saldosteuersatz?', form: { banks: [{ bank: 'UBS', currency: 'CHF', iban: 'CH93 0076' }] } });
+  const { view, reply } = r.json;
+  assert.deepEqual(reply.refused.map((x: { refusal: { reason: string } }) => x.refusal.reason), ['iban'], 'the half-typed IBAN is named');
+  assert.match(reply.say, /Pauschalsatz/, 'was: emptied, only the refusal shown, at every message until the row was fixed');
+  assert.equal(view.draft.banks, undefined);
+});
+
+test('a row with an IBAN and no bank name is sent and refused as «Weiter» refuses it: the card stays open, the IBAN is never lost silently', async () => {
+  const rows = [{ bank: '', currency: 'CHF', iban: IBAN }];
+  assert.deepEqual(unsentForm([{ id: 'banks' }], rows), { banks: rows }, 'was: dropped as a row without a name');
+  assert.deepEqual(parseTalkRequest({ text: 'x', form: { banks: rows } }), { text: 'x', form: { banks: [{ bank: '', currency: 'CHF', iban: IBAN }] } });
+  const { call, root } = await atBanks('Nameless');
+  answers = [MODEL];
+  const r = await call('POST', '/api/desktop/setup/talk', { root, text: SENTENCE, form: { banks: rows } });
+  const { view, reply } = r.json;
+  assert.deepEqual(reply.refused.map((x: { step: string; refusal: { reason: string } }) => [x.step, x.refusal.reason]), [['banks', 'bankName']]);
+  assert.equal(view.draft.banks, undefined, 'was: Wise answered the step and the IBAN was gone; now the card stays open');
+});
+
 test('the screen sends the card\'s typed rows with her words while the bank step waits, and nothing once it is answered', () => {
   const rows = [{ bank: 'Zuger Kantonalbank', currency: 'CHF', iban: IBAN }, { bank: ' ', currency: 'CHF' }];
   assert.deepEqual(unsentForm([{ id: 'firm', answer: { name: 'X', owner: 'Y' } }, { id: 'banks' }], rows), { banks: [rows[0]] }, 'was: only the words were sent');
