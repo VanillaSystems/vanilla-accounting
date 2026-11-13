@@ -486,7 +486,7 @@ function PayoutWait({ books, tx }: { books: Props['books']; tx: BankTransaction 
     return () => { live = false; };
   }, [books, tx.ref]);
   if (!wait) return null;
-  return <> · <span className="wn" data-testid="payout-wait">{t(`bank.payoutWait.${wait.why}`, { provider: wait.provider, file: wait.file, since: wait.since ? formatDate(wait.since) : '' })}</span></>;
+  return <> · <span className="wn" data-testid="payout-wait">{t(`bank.payoutWait.${wait.why}${wait.why !== 'gap' && !wait.sales ? 'NoSales' : ''}` as 'bank.payoutWait.gap', { provider: wait.provider, since: wait.since ? formatDate(wait.since) : '' })}</span></>;
 }
 
 /**

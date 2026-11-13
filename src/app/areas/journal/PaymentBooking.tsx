@@ -120,7 +120,8 @@ function sourceText(s: DraftSource, account: string | undefined, vat: string | u
     : a.from === 'precedent' ? (a.yours && a.name ? t('journal.byHand.from.precedentYours', { name: a.name, date: formatDate(a.date) }) : t('journal.byHand.from.precedent', { date: formatDate(a.date) }))
       : a.from === 'refund' ? t('journal.byHand.from.refund', { date: formatDate(a.date) })
         : a.from === 'invoice' || a.from === 'receivable' ? t(`journal.byHand.from.${a.from}`, { number: a.number })
-          : t(`journal.byHand.from.${a.from}`);
+          : a.from === 'clearing' ? t('journal.byHand.from.clearing', { provider: a.provider })
+            : t(`journal.byHand.from.${a.from}`);
   const v = vat ? s.vat : undefined;
   const vatFrom = !v ? '' : v.from === 'sale' ? t(`journal.byHand.from.sale.${v.choice === 'saleAbroad' ? 'abroad' : 'domestic'}`) : t(`journal.byHand.from.vat.${v.from}`);
   return [
@@ -132,7 +133,7 @@ function sourceText(s: DraftSource, account: string | undefined, vat: string | u
 /** A fact under the lines, in plain words (DraftNote). */
 function noteText(n: DraftNote): string {
   switch (n.kind) {
-    case 'payoutWaits': return t(n.key as 'salesReport.noClearing', n.params as { provider: string; file: string });
+    case 'payout': return t(`journal.byHand.note.payout.${n.why}${(n.why === 'clearing' || n.why === 'since') && n.sales === false ? 'NoSales' : ''}` as 'journal.byHand.note.payout.gap', { provider: n.provider, account: n.account ?? '', since: n.since ? formatDate(n.since) : '' });
     case 'authority': return t('journal.byHand.note.authority', { name: n.name });
     case 'saleVat': return t(`journal.byHand.note.saleVat.${n.why}`);
     case 'ask': return t('journal.byHand.note.ask', { question: n.question });
