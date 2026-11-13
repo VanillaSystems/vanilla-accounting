@@ -448,6 +448,11 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A bank row typed in the setup's bank card is no longer lost when a sentence is typed before
+  «Weiter» (#496, round 9). The sentence answered the bank step from its words alone, so the typed
+  bank and its IBAN were dropped without a word. The card's typed rows now go with the sentence,
+  are taken as «Weiter» takes them, and the sentence adds to them. A row the app refuses (an IBAN
+  that is none) is named, and the card stays open with the rows.
 - The setup conversation keeps to the app's facts (#496). The AI is told where the books begin:
   the first statement's period, with what came before left in the old program. It is told that the
   opening is always per 1 January from the balance sheet of 31 December, never from an interim one,
