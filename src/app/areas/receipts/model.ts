@@ -142,7 +142,7 @@ export function ledgerOf(books: Index, openFrom: string, processing: ReadonlyMap
     const txs = links.map((ref) => txByRef.get(ref)).filter((t): t is BankTransaction => !!t);
     return txs.some(byStatement) ? 'firm' : txs.some((t) => t.bank === 'manual') ? 'owner' : undefined;
   };
-  const cards = paidCards(views.flatMap((v) => (v.r.extractedText ? [{ text: v.r.extractedText, paidBy: paidBy(v.links) }] : [])));
+  const cards = paidCards(views.flatMap((v) => (v.r.extractedText ? [{ text: v.r.extractedText, paidBy: paidBy(v.links), file: v.r.filename, ...(v.date && { date: v.date }) }] : [])));
   return { views, byId: new Map(views.map((v) => [v.r.id, v])), txByRef, entriesByRef, receiptsByRef, closedThrough, openFrom, processing, cards, ...(firm ? { firm } : {}) };
 }
 

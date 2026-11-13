@@ -13,7 +13,7 @@ import type { ActionSet, ObjAction } from '../../selection/ActionsMenu.js';
 import { likelyReceipt } from '../../selection/likely.js';
 import { runEach } from '../../selection/batch.js';
 import { api } from '../../lib/api.js';
-import { readsPrivately } from '../../../accounting/paid-how.js';
+import { NO_CARDS, readsPrivately, type PrivateRead } from '../../../accounting/paid-how.js';
 import { ownerOf } from '../../../workspace/money-accounts.js';
 import { workspaceNow } from '../../hooks/use-workspace.js';
 import { privateOutlay } from './actions.js';
@@ -33,8 +33,8 @@ export function ownerPays(): { account: string; label: string; owner: string } |
 }
 
 /** Its words say it was paid in cash or privately, or the owner's card paid it (src/accounting/paid-how.ts, #402: only where the owner pays privately). */
-export const readsPaidPrivately = (v: ReceiptView, l: Pick<Ledger, 'cards'>): boolean =>
-  !!v.r.extractedText && readsPrivately(v.r.extractedText, ownerPays() ? l.cards : { private: new Set(), firm: new Set() });
+export const readsPaidPrivately = (v: ReceiptView, l: Pick<Ledger, 'cards'>): PrivateRead =>
+  !!v.r.extractedText && readsPrivately(v.r.extractedText, ownerPays() ? l.cards : NO_CARDS);
 
 export function receiptActions(p: Props, v: ReceiptView, l: Ledger): ActionSet {
   const { nav, canEdit } = p;
@@ -68,7 +68,7 @@ export function receiptActions(p: Props, v: ReceiptView, l: Ledger): ActionSet {
     del: !v.locked ? { id: 'del', label: t('actions.delete'), key: '⌘⌫', run: () => runAct(p, 'del') } : undefined,
     ask,
   };
-  const reads = readsPaidPrivately(v, l);
+  const reads = !!readsPaidPrivately(v, l);
   const likely = likelyReceipt({ none: v.none, linked: v.links.length > 0, locked: v.locked, suggestion: !!sug, paidPrivately: reads, dated: !!v.date });
   // Read as paid privately (#402): one click books it as the owner's outlay, its words say what it books; the menu keeps the dialog (a business part, an employee).
   const owner = ownerPays();

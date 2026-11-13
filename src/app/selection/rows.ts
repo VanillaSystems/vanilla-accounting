@@ -65,7 +65,7 @@ export function countsOf(kind: 'receipt' | 'payment' | 'entry', rows: readonly S
   if (kind === 'receipt') {
     const l = ledgerFor(books);
     const open = [...ids].map((id) => l.byId.get(id)).filter((v): v is NonNullable<typeof v> => !!v && !v.none && !v.links.length && !v.orderPage);
-    return { n, open: open.length, unbooked: 0, noReceipt: 0, privately: open.filter((v) => readsPaidPrivately(v, l)).length };
+    return { n, open: open.length, unbooked: 0, noReceipt: 0, privately: open.filter((v) => !!readsPaidPrivately(v, l)).length };
   }
   if (kind === 'payment') {
     const booked = new Set((books.journalEntries ?? []).map((e) => e.transactionRef));

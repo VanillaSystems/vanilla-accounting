@@ -370,6 +370,8 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
   if (v.orderPage) return <OrderPageNotice page={v.orderPage} l={l} nav={nav} />;
   if (v.vatCorrection) return <VatCorrectionNotice c={v.vatCorrection} v={v} l={l} nav={nav} canEdit={canEdit} />;
   const owner = ownerPays();
+  // Why it reads as paid privately (#402): its words, or the owner's card and the receipt that showed it.
+  const read = readsPaidPrivately(v, l);
   if (sug && canEdit) {
     const why = [t('receipts.whySameAmount'), sug.days !== undefined && dayText(sug.days)].filter(Boolean).join(' · ');
     return (
@@ -401,7 +403,9 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
       {canEdit && <> <button type="button" style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => runAct(props, 'link')}>{t('receipts.linkVerb')}</button> <Kbd keys={['L']} tip={t('receipts.keyLinkTip')} /></>}
       {canEdit && <> · <FindPair key={v.r.id} on={{ receipt: v.r.id }} books={props.books} nav={nav} /></>}
       {/* Its words say cash or private (#216): a proposal beside the fact; the receipt is unpaid in the books until it is booked. */}
-      {readsPaidPrivately(v, l) && <> · <span data-testid="paid-privately">{owner ? t('receipts.paidPrivatelyOwner', { account: `${owner.account} ${owner.label}` }) : t('receipts.paidPrivatelyNotice')}</span></>}
+      {read && <> · <span data-testid="paid-privately">{!owner ? t('receipts.paidPrivatelyNotice')
+        : read.by === 'card' ? t('receipts.paidPrivatelyCard', { card: read.card, date: read.seen.date ? formatDate(read.seen.date) : read.seen.file, account: `${owner.account} ${owner.label}` })
+          : t('receipts.paidPrivatelyOwner', { account: `${owner.account} ${owner.label}` })}</span></>}
     </span>
   );
 }

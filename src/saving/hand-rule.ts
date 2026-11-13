@@ -187,7 +187,8 @@ export function handStart(ws: Workspace, ref: string, by?: 'text'): HandStart | 
   const wagesSaid = () => (wordings ??= receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws).wages);
   const nature = natureOf(books, tx, context, file, wagesSaid);
   const account = file?.accounts?.length === 1 ? file.accounts[0] : undefined;
-  const wages = wagesSaid().length ? books.transactions.filter((t) => t.direction !== 'CRDT' && wagesSaid().some((w) => w.test(t.description))).map((t) => t.ref) : [];
+  // Of one kind (#402): only between payments to the owner, where a wage and an outlay paid back share the payee.
+  const wages = wagesSaid().length && paysOwner({ counterparty: tx.counterparty, description: '' }, context.ownerName) ? books.transactions.filter((t) => t.direction !== 'CRDT' && wagesSaid().some((w) => w.test(t.description))).map((t) => t.ref) : [];
   return { match, direction, name, similar, ...(wider && { wider }), ...(rule && { rule }), ...(nature && { nature }), ...(account && { account }), ...(wages.length && { wages }) };
 }
 

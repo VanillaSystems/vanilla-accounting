@@ -31,7 +31,7 @@ import { correctsFor, privateUseCode } from '../accounting/correction.js';
 import { EFFECTIVE_QUARTERLY, type VatSetup } from '../workspace/vat-setup.js';
 import { foreignTaxIn, saleCodeOf, saleCodeReason } from '../accounting/sales-without-vat.js';
 import { codeOfFacts, formTakes, lookupVatCode } from '../accounting/vat-codes.js';
-import { takesNoCode } from './rule-vat.js';
+import { zeroCodeOff } from './rule-vat.js';
 import { receiptWordings, repaymentsOf } from './receipt-wait.js';
 import { employs } from '../workspace/setup.js';
 import { bookVatCorrections, type CorrectionsDone } from './vat-corrections.js';
@@ -772,7 +772,7 @@ const permittedCode = (code: string | undefined): string | undefined => (code &&
 
 /**
  * The model's lines without the zero input code (I0, M0, either sign) where the other account takes
- * no VAT code at all (takesNoCode: a wage, a contribution, the bank charges, a debt, the owner's or a
+ * no VAT code at all (zeroCodeOff: a wage, a contribution, the bank charges, a debt, the owner's or a
  * money account): the guide books those without a code, as the hand form and the rules do (#402). The
  * zero code has no box, so no figure changes; a rate the receipt shows stays.
  */
@@ -781,7 +781,7 @@ function withoutZeroOnNoCode(entries: JournalEntry[], bankAccount: string, conte
   return entries.map((e) => {
     if (!e.vatCode || lookupVatCode(e.vatCode)?.entry.kind !== 'inputNoVat') return e;
     const other = e.accountDebit === bankAccount ? e.accountCredit : e.accountDebit;
-    if (!other || !takesNoCode(other, settles)) return e;
+    if (!other || !zeroCodeOff(other, settles)) return e;
     const { vatCode: _, ...rest } = e;
     return rest;
   });

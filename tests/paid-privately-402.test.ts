@@ -15,11 +15,12 @@ const RESTO = 'Restaurantquittung\nRistorante Lago Zug\nTOTAL CHF 146.50\ninkl. 
 const HOTEL = 'Hotel Pilatusblick\nRechnung 26-08-4471\nDatum: 19.08.2026 bezahlt mit Visa ****3307\nTotal CHF 164.00';
 const CARD_STATEMENT = 'Alpencard AG\nKreditkartenabrechnung Visa Business ****3307\nTotal zu Ihren Lasten 313.19';
 
-test('the payment line marked private: paid privately, whatever card paid', () => {
+test('the payment line marked private: paid privately, whatever card paid; the mark only in the card\'s line', () => {
   assert.equal(paidPrivately(SBB), true);
   assert.equal(paidPrivately('Paid by Visa xxxx 4242 (private card)'), true);
   assert.equal(paidPrivately(RESTO), false, 'a card alone says nothing of whose');
   assert.equal(paidPrivately('Total 80.00\nKartenzahlung Visa ****1234\nPrivatparkplatz'), false, 'a «privat» that is no payment\'s');
+  assert.equal(paidPrivately('Thank you for your payment of last month (personal account manager: J. Doe).'), false, 'running text, no card line');
 });
 
 test('the card a receipt names, by its last four digits', () => {
@@ -27,20 +28,25 @@ test('the card a receipt names, by its last four digits', () => {
   assert.equal(cardOf(HOTEL), '3307');
   assert.equal(cardOf('Visa XXXX XXXX XXXX 4242'), '4242');
   assert.equal(cardOf('Total 18.00'), undefined);
+  assert.equal(cardOf('IBAN CH93 **** **** **** 1234 5\nKundennummer ****8812'), undefined, 'masked IBAN or customer number: no card');
 });
 
-test('his card is known from a receipt marked private or paid privately; the firm\'s card from its statements', () => {
+test('his card is known from a receipt marked private, or from two receipts paid privately; the firm\'s card from its statements', () => {
   const cards = paidCards([
-    { text: SBB },
-    { text: CARD_STATEMENT, paidBy: 'firm' },
-    { text: HOTEL },
+    { text: SBB, file: 'sbb.pdf', date: '2026-07-08' },
+    { text: CARD_STATEMENT, paidBy: 'firm', file: 'alpencard.pdf' },
+    { text: HOTEL, file: 'hotel.pdf' },
   ]);
-  assert.deepEqual([...cards.private], ['1150']);
+  assert.deepEqual([...cards.private.keys()], ['1150']);
   assert.deepEqual([...cards.firm], ['3307']);
-  assert.equal(readsPrivately(RESTO, cards), true, 'the restaurant, paid with his card');
+  assert.deepEqual(readsPrivately(RESTO, cards), { by: 'card', card: '1150', seen: { file: 'sbb.pdf', date: '2026-07-08' } }, 'the restaurant, with the receipt that showed his card');
   assert.equal(readsPrivately(HOTEL, cards), false, 'the hotel, paid with the firm\'s card');
+  // One outlay alone proves nothing; two do.
+  const park = 'Parkhaus\nTOTAL CHF 18.00\nMastercard ****1150';
+  assert.equal(readsPrivately(RESTO, paidCards([{ text: park, paidBy: 'owner', file: 'p1.pdf' }])), false);
+  assert.equal(readsPrivately(RESTO, paidCards([{ text: park, paidBy: 'owner', file: 'p1.pdf' }, { text: park, paidBy: 'owner', file: 'p2.pdf' }])) !== false, true);
   // A card seen on both sides is no proof either way.
-  const both = paidCards([{ text: RESTO, paidBy: 'owner' }, { text: RESTO, paidBy: 'firm' }]);
+  const both = paidCards([{ text: SBB, file: 'a.pdf' }, { text: RESTO, paidBy: 'firm', file: 'b.pdf' }]);
   assert.equal(readsPrivately(RESTO, both), false);
 });
 

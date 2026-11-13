@@ -499,13 +499,13 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
     return result([place(nature.account, paid, '', { account: { from: 'bankFee' } })]);
   }
 
-  // Money for a cancelled invoice is the customer's, not a sale: the earlier sale's account and code would mislead.
   // Her outlays paid back: her account, before any precedent of the payee (#402): the books say what it pays.
   if (proposes && !moneyIn && nature?.kind === 'ownerForeign') { notes.push(nature); return result([place('', paid, '')]); }
   if (proposes && !moneyIn && nature?.kind === 'ownerOutlays') {
     notes.push({ kind: 'ownerOutlays', open: nature.open });
     return result([place(nature.account, paid, '', { account: { from: 'ownerOutlays' } })]);
   }
+  // Money for a cancelled invoice is the customer's, not a sale (`proposes`): the earlier sale's account and code would mislead.
   const precedent = proposes ? newestOf(books, tx, bank!.side, bankAccounts, undefined, known.wages ? new Set(known.wages) : undefined) : undefined;
   const extra = precedent ? { precedent: precedent.entry } : {};
   // A wage on a firm that pays wages, without a booking of hers to follow: the net paid on the wage account, without a VAT code (guide
