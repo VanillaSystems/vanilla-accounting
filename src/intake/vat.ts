@@ -56,6 +56,11 @@ export const hasFacts = (r: Receipt) => r.vatExtractedAt != null || r.hasSwissVa
 
 const READ_FACTS = ['vatId', 'hasSwissVat', 'vatSummary', 'lineItems', 'vatExtractedAt'] as const;
 
+/** The VAT facts read off `from`'s text, and who read them, onto `to`, whose text is the same words (#417): a file saved again is not read again. */
+export function carryReadFacts(from: Receipt, to: Receipt): void {
+  for (const k of [...READ_FACTS, 'vatBy'] as const) if (from[k] !== undefined && to[k] === undefined) (to as unknown as Record<string, unknown>)[k] = from[k];
+}
+
 /** Forgets the VAT facts this step read off a receipt's text, when that text is replaced or proves nothing. Facts a person set or the books wrote stay. */
 export function forgetReadFacts(r: Receipt): void {
   // A new text is read afresh: its tries start again (#450).

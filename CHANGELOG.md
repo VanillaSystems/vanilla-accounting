@@ -448,6 +448,24 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- **⚠ figures** A booking no longer claims input tax on a receipt that is no longer linked to its
+  payment (#417, point 1). That happened when a receipt file was rewritten under its name or its
+  link was taken off, and the run said «0 Verknüpfungen prüfen». The app's own booking (by a rule
+  or the AI, with no other proof named for it) is now taken back even without an AI, and the
+  payment waits for its receipt as any payment out does. Of several receipts, the line whose own
+  receipt went counts, even while another stays. A booking the app may not take back stays exactly
+  as it is: a person's booking, a filed quarter's, a line of the tax itself (a bill's one-legged
+  deduction). For the open period the run names it as a fact, each payment a link to its booking:
+  «Zahlung zieht Vorsteuer ab auf einen Beleg, der nicht mehr mit ihr verknüpft ist». The
+  rewritten file's note also counts such a payment among the links to check, unless another
+  receipt still linked shows its VAT. The same document saved again (other bytes, the same
+  words) now keeps the app's links and bookings too, on the new read, with its VAT. With the
+  same day and total in other words (perhaps a corrected invoice), the link goes along. The
+  booking still names what it was booked from, so a run with an AI books it again. Without an AI
+  it is counted to check. Before, the app's links went, and without an AI the
+  booking was then taken back. In books where this happened, the open
+  period's input tax (Ziffer 400/405) falls by what those bookings claimed. The demo figures do
+  not change.
 - The compensation fund's Akonto payment is booked net of the employees' share also when the
   payslips come in the same drop as the bank statement (#489). The drop hands each file to its own
   run: the statement's run booked the fund's payment (it waits for no receipt) while the wages were

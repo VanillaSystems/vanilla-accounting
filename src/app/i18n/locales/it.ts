@@ -4522,6 +4522,8 @@ export default {
     'automation.note.saleAsked': { one: '{n} pagamento cliente senza fattura attende la tua risposta: con IVA, estero o nessuna cifra d’affari?', other: '{n} pagamenti clienti senza fattura attendono la tua risposta: con IVA, estero o nessuna cifra d’affari?' },
     'automation.note.waitingReceipt': {"one": "{n} pagamento attende il giustificativo: sarà registrato appena arriva.", "other": "{n} pagamenti attendono il giustificativo: saranno registrati appena arriva."},
     'automation.note.vatNotRead': {"one": "{n} pagamento attende che l’IVA del suo giustificativo sia letta: viene registrato alla prossima esecuzione.", "other": "{n} pagamenti attendono che l’IVA dei loro giustificativi sia letta: vengono registrati alla prossima esecuzione."},
+    'automation.note.inputTaxUnproven': {"one": "{n} pagamento deduce l’imposta precedente su un giustificativo non più collegato; la registrazione resta com’è:", "other": "{n} pagamenti deducono l’imposta precedente su giustificativi non più collegati; le registrazioni restano come sono:"},
+    'automation.note.inputTaxUnprovenMore': 'altri {n} non elencati: al massimo {max} per avviso',
     'automation.note.receiptUnread': {"one": "{n} pagamento ha un giustificativo con IVA illeggibile: la domanda è sotto Compiti.", "other": "{n} pagamenti hanno un giustificativo con IVA illeggibile: le domande sono sotto Compiti."},
     'receiptDue.title': "Giustificativo mancante: {name}, {amount}",
     'receiptDue.due': "Rendiconto {period} dovuto il {date}",

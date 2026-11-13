@@ -47,6 +47,7 @@ import { useQuestions } from '../../questions/store.js';
 import { forMe } from '../../../questions/model.js';
 import { payText, signed, unbookedPayments } from '../bank/model.js';
 import { at } from '../receipts/view.js';
+import { hrefOf } from '../../shell/history.js';
 import { AssessmentTasks, assessmentsMissing, EvidenceTasks, FiledEvidence, PeriodIssues, ReceiptDueTasks, ThresholdTasks, thresholdPassed, TwinTasks, UnbookedFact } from './Issues.js';
 import { openTwins } from '../receipts/model.js';
 import { ledgerFor } from '../receipts/view.js';
@@ -536,6 +537,25 @@ function ClearingFacts({ checks }: { checks: ClearingCheck[] }) {
   );
 }
 
+/** How many payments a note links at most; the rest are counted (AGENTS.md: a limit names itself). */
+const NOTE_LINKS = 10;
+
+/** The payments whose booking claims input tax on a receipt no longer linked (#417), each a link to its booking. */
+function UnprovenNote({ n, nav }: { n: Extract<IntakeNote, { code: 'inputTaxUnproven' }>; nav: Nav }) {
+  const shown = n.payments.slice(0, NOTE_LINKS);
+  const left = n.payments.length - shown.length;
+  return (
+    <div className="warnline" data-testid="note-input-tax-unproven">
+      {noteText(n)}{' '}
+      {shown.map((p, i) => {
+        const loc = at({ area: 'journal', id: p.entry }, p.date);
+        return <span key={p.entry}>{i ? ', ' : ''}<a href={hrefOf(loc)} onClick={(e) => { e.preventDefault(); nav.go(loc); }}>{p.ref}</a></span>;
+      })}
+      {left > 0 ? ` · ${t('automation.note.inputTaxUnprovenMore', { n: left, max: NOTE_LINKS })}` : null}
+    </div>
+  );
+}
+
 /** What the seal step did: the seal's file, or that the year close seals the year's last period. */
 function SealLine({ seal }: { seal: SealOutput }) {
   return <p className="m">{'yearClose' in seal ? t('automation.seal.yearClose') : t('automation.seal.written', { file: fileName(seal.file) })}</p>;
@@ -571,6 +591,7 @@ function noteText(n: IntakeNote): string {
     case 'receiptUnread': return t('automation.note.receiptUnread', { n: n.count });
     case 'bookingWaits': return bookingWaitsText(n.files);
     case 'vatNotRead': return t('automation.note.vatNotRead', { n: n.count });
+    case 'inputTaxUnproven': return t('automation.note.inputTaxUnproven', { n: n.payments.length });
     case 'error': return n.detail;
   }
 }
@@ -664,7 +685,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
                 <div className="box"><small>{t('automation.io.made')}</small><Made s={s} nav={nav} /></div>
               </div>
               {s.error ? <div className="warnline">{refusalText(s.error, s.why)}<WhyGo why={s.why} nav={nav} /></div> : null}
-              {((s.output?.notes as IntakeNote[] | undefined) ?? []).map((n, j) => <div key={`n${j}`} className="warnline">{noteText(n)}</div>)}
+              {((s.output?.notes as IntakeNote[] | undefined) ?? []).map((n, j) => (n.code === 'inputTaxUnproven' ? <UnprovenNote key={`n${j}`} n={n} nav={nav} /> : <div key={`n${j}`} className="warnline">{noteText(n)}</div>))}
               {s.effects.filter((e) => e.refused || (!e.applied && e.would !== undefined)).map((e, j) => (
                 <div key={j} className={e.refused ? 'warnline' : 'm'}>{e.refused ? t('automation.refused', { reason: e.refused }) : Array.isArray(e.would) ? t('automation.wouldBook', { n: e.would.length }) : t('automation.skippedEffect')}</div>
               ))}

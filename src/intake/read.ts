@@ -18,9 +18,9 @@ import { imageToPdf, isImageFile } from '../parsers/image-pdf.js';
 import { smallerPdf } from '../parsers/smaller.js';
 import { pdfText } from '../parsers/pdf-text.js';
 import { detectVatProofIssue, noiseText, textFacts, textProves } from '../parsers/receipt-text.js';
-import { filedReceipt, forgetReadFacts } from './vat.js';
+import { carryReadFacts, filedReceipt, forgetReadFacts } from './vat.js';
 import { buildVisionPrompt } from '../llm/prompts.js';
-import type { Receipt } from '../types/index.js';
+import type { JournalEntry, Mapping, Receipt } from '../types/index.js';
 import { fileFinder, filesOfPart, type Workspace } from '../workspace/workspace.js';
 import { mergeIndex, readStatementFiles, readTransactions, reconcileWithFiles, withinBooks, unreferencedFiles, unreferencedLine } from '../books/bank-import.js';
 import { keptReads } from '../books/pdf-reads.js';
@@ -37,7 +37,9 @@ import { documentKind } from './document-kind.js';
 import { askKind, asksModel, kindOfModel, MODEL_RULE, MODEL_TEXT, NOT_A_RECEIPT, visionVerdict, type ModelKind } from './unclear.js';
 import { statementFacts } from '../books/statement-facts.js';
 import { documents } from '../engines/index.js';
-import { periodLock, release } from '../books/store.js';
+import { periodLock, release, type Books } from '../books/store.js';
+import { entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
+import { claimsInputTax, deductsTaxAmount, evidenceCheck, lineBillsOf } from '../accounting/evidence-check.js';
 import { restoreReportReceipts } from './sales-report-import.js';
 
 // ─── The PDF's own text, fallback to the model's vision for OCR ─────────────
@@ -378,11 +380,13 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
       const other = scannedId.get(r.filename);
       return other === undefined || known.has(other);
     }));
-    // A file whose bytes changed under its name (#405): the new read is the receipt. The app's links to the old record go
-    // (release), and the bookings that named it are left as they are, so the classify step takes them back and the payment
-    // is matched and booked from the new read. A person's link goes along only when the new read says what the old did (the
-    // same text, or the same day and total); else it stays with the old record, kept beside the new one, as does a person's
-    // booking (only she changes it) and whatever of it lies in a filed period. The run names each such file and how many links a person should check.
+    // A file whose bytes changed under its name (#405): the new read is the receipt. When the new read says what the old did
+    // (the same text, or the same day and total), it is the same document saved again: every open link goes along to it, the
+    // app's and a person's, and so do the app's bookings that named the old record and, for the same words, the VAT read off
+    // them (#417): nothing is lost, and no booking waits again. Otherwise the app's links go (release), and the bookings that named
+    // the old record are left as they are, so the classify step takes them back and the payment is matched and booked from the
+    // new read; a person's link stays with the old record, kept beside the new one. A person's booking (only she changes it) and
+    // whatever of it lies in a filed period stay with the old record. The run names each such file and how many links a person should check.
     const lockNow = periodLock(index);
     const fresh = new Map(receipts.filter((r) => !known.has(r.id)).map((r) => [r.filename, r]));
     const words = (t: string | undefined) => (t ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -397,17 +401,32 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
       const filed = links.filter((m) => closedRef(m.transactionRef));
       const human = links.filter((m) => !filed.includes(m) && m.by === 'human');
       const app = links.filter((m) => !filed.includes(m) && !human.includes(m));
-      const carry = agrees ? human : [];
-      release(index, { mappings: [...app, ...carry] });
+      const carry = agrees ? [...human, ...app] : [];
+      const dropped = agrees ? [] : app;
+      release(index, { mappings: [...new Set([...app, ...carry])] });
       for (const m of carry) if (!index.mappings.some((x) => x.receiptId === now.id && x.transactionRef === m.transactionRef)) index.mappings.push({ ...m, receiptId: now.id });
       index.mappings = index.mappings.filter((m) => !app.includes(m) && !carry.includes(m));
       Object.assign(now, { originalFilename: old.originalFilename });
-      const keepOld = filed.length > 0 || hers.length > 0 || naming.some((e) => lockNow.isClosed(e.date)) || (!agrees && human.length > 0);
+      // The same words: the same document. Its VAT goes along, and the app's open bookings name the new read of what they were
+      // booked from. The same day and total in other words may be a corrected invoice (another VAT): the link goes along, but
+      // the bookings keep naming what they saw, so a run with a model books them again from the new read; without one they are
+      // counted to check, never taken back on a guess.
+      const sameWords = agrees && words(old.extractedText) === words(now.extractedText);
+      const appNaming = naming.filter((e) => !hers.includes(e) && !lockNow.isClosed(e.date) && e.origin !== 'manual');
+      if (sameWords) {
+        carryReadFacts(old, now);
+        for (const e of appNaming) e.receipts = [...new Set(e.receipts!.map((id) => (id === old.id ? now.id : id)))].sort();
+      }
+      const reread = agrees && !sameWords && !ask ? new Set(appNaming.map((e) => e.transactionRef)).size : 0;
+      const keepOld = filed.length > 0 || hers.length > 0 || index.journalEntries.some((e) => e.receipts?.includes(old.id) && lockNow.isClosed(e.date)) || (!agrees && human.length > 0);
       if (keepOld) receipts.push(old);
       else release(index, { receipts: [old.id] });
-      const check = human.length + hers.length + filed.length;
+      // The payments of the app's links dropped whose booking claims input tax and is not the classifier's to book again (#417):
+      // a person's booking that names no receipt, another writer's, while no receipt still linked to the payment shows the VAT it claims.
+      // A person looks. (A receipt the match step links later in the run is not known here.)
+      const check = human.length + hers.length + filed.length + reread + unprovenOn(index, dropped, hers, lockNow.closedThrough);
       rewritten.push({ file: old.filename, check, kept: keepOld });
-      log(`  ${old.filename}: its file changed; read again. ${app.length} link(s) of the app dropped, ${carry.length} of a person carried, ${check} to check${keepOld ? '; the old record kept beside it' : ''}`);
+      log(`  ${old.filename}: its file changed; read again. ${dropped.length} link(s) of the app dropped, ${carry.length} carried, ${check} to check${keepOld ? '; the old record kept beside it' : ''}`);
     }
     // The books keep their order, new receipts after them: a second run writes the same file.
     const pos = new Map(index.receipts.map((r, i) => [r.id, i]));
@@ -473,6 +492,30 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
   if (rewritten.length) notes.push({ code: 'rewritten', files: rewritten });
   return { notes };
 };
+
+/**
+ * How many payments of the app's links `dropped` keep a booking that claims input tax with nothing linked to prove it (#417): not
+ * the classifier's to book again (entriesWithoutTheirReceipts), not a person's booking counted already (`hers`), and no receipt still
+ * linked to the payment shows the VAT it claims (evidenceCheck; a line of the tax itself, none linked at all).
+ */
+function unprovenOn(index: Books, dropped: readonly Mapping[], hers: readonly JournalEntry[], closedThrough: string | undefined): number {
+  const refs = new Set(dropped.map((m) => m.transactionRef));
+  if (!refs.size) return 0;
+  const again = new Set(entriesWithoutTheirReceipts(index.journalEntries, index.mappings, refs, closedThrough));
+  const byId = new Map(index.receipts.map((r) => [r.id, r]));
+  const proven = new Set(index.transactions.filter((t) => t.inputTaxProof).map((t) => t.ref));
+  const unproven = new Set<string>();
+  for (const ref of refs) {
+    if (proven.has(ref)) continue;
+    const lines = index.journalEntries.filter((e) => e.transactionRef === ref);
+    const linked = index.mappings.filter((m) => m.transactionRef === ref).map((m) => byId.get(m.receiptId)).filter((r): r is Receipt => !!r);
+    const bare = (e: JournalEntry) => (claimsInputTax(e)
+      ? evidenceCheck(e, linked, undefined, undefined, lines, lineBillsOf(index.mappings, ref))?.kind === 'vatWithoutReceipt'
+      : deductsTaxAmount(e) && !linked.length);
+    if (lines.some((e) => !again.has(e) && !hers.includes(e) && bare(e))) unproven.add(ref);
+  }
+  return unproven.size;
+}
 
 function reportPayments(paid: PaymentOutcome, log: (line: string) => void): void {
   for (const p of paid.paid) {

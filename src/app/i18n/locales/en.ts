@@ -4522,6 +4522,8 @@ export default {
     'automation.note.saleAsked': { one: '{n} customer payment without an invoice waits for your answer: with VAT, abroad, or no sale?', other: '{n} customer payments without an invoice wait for your answer: with VAT, abroad, or no sale?' },
     'automation.note.waitingReceipt': {"one": "{n} payment waits for its receipt: it is booked once the receipt is there.", "other": "{n} payments wait for their receipt: they are booked once the receipt is there."},
     'automation.note.vatNotRead': {"one": "{n} payment waits until the VAT of its receipt is read: it is booked in the next run.", "other": "{n} payments wait until the VAT of their receipts is read: they are booked in the next run."},
+    'automation.note.inputTaxUnproven': {"one": "{n} payment claims input tax on a receipt no longer linked to it; the booking stands as it is:", "other": "{n} payments claim input tax on receipts no longer linked to them; the bookings stand as they are:"},
+    'automation.note.inputTaxUnprovenMore': '{n} more not listed: at most {max} per note',
     'automation.note.receiptUnread': {"one": "{n} payment has a receipt whose VAT cannot be read: the question is under Tasks.", "other": "{n} payments have a receipt whose VAT cannot be read: the questions are under Tasks."},
     'receiptDue.title': "Receipt missing: {name}, {amount}",
     'receiptDue.due': "Return {period} due on {date}",
