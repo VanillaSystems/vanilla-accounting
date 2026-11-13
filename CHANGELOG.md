@@ -322,6 +322,17 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Keeping rules (#396, #392): «Rückgängig» on a second kept rule took back the first rule's bookings
+  and the second rule's file. Each keep now has a line of its own above Aufgaben and Firma › Regeln
+  («4 Zahlungen gebucht · Rückgängig»), true to its own numbers and still there after a reload; the
+  server records what each keep did, and its undo takes back that keep alone. A rule kept before a
+  later one of the same file says «Rückgängig erst, wenn die später behaltene Regel zurückgenommen
+  ist». The undo's removed bookings show under Änderungen. A rule kept from the AI sidebar shows the
+  same line, «nichts gebucht · 2 warten auf ihren Beleg · Rückgängig». A payment a kept rule decides
+  is no task «keine Regel der Firma passte» any more: the rule books it, or, when it waits for its
+  receipt, the rule books it once the receipt is there. «Lohnzahlungen von Hand buchen» leaves
+  Aufgaben once the wages are booked. «Automatisch buchen» in Automatisierung's list books the open
+  payments and says what came of it, instead of opening the diagram.
 - The setup conversation keeps its order after a typed message (#385): the message stands under the
   question it was typed at, above that question's answer, and the open question with its buttons
   stays under her newest message, also when the words took a step back. In the books the rail shows
