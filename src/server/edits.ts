@@ -32,6 +32,7 @@ import { assertOpen, receiptDates, refDates, RequestError } from './books.js';
 import { outsideStatements } from '../accounting/placed-account.js';
 import { nameWords } from '../intake/pairing.js';
 import { bookedInFiled } from '../books/twins.js';
+import { cardLinesOf } from '../books/card-lines.js';
 
 function receiptOf(books: Books, id: string): Receipt {
   const r = books.receipts.find((x) => x.id === id);
@@ -171,17 +172,32 @@ function carried(books: Books, ref: string): void {
  * A receipt linked to a payment, or to a booking without one (withoutPayment), of the open period.
  * A receipt the owner paid privately takes no other link (assertNotPaidPrivately).
  */
-export function link(books: Books, receipt: string, payment: string): BookChange | undefined {
+export function link(books: Books, receipt: string, payment: string, line?: number): BookChange | undefined {
   receiptOf(books, receipt);
   assertNotPaidPrivately(books, receipt, payment);
   if (!books.transactions.some((t) => t.ref === payment) && !withoutPayment(books, payment)) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   assertOpen(books, refDates(books, payment), 'mapping');
   if (books.mappings.some((m) => m.transactionRef === payment && m.receiptId === receipt)) return undefined;
+  if (line !== undefined) assertLineFree(books, receipt, payment, line);
   // A link by hand (or by the AI sidebar on the person's wish) says so: Änderungen lists it (r8k-7).
-  books.mappings.push({ transactionRef: payment, receiptId: receipt, by: 'human' });
+  books.mappings.push({ transactionRef: payment, receiptId: receipt, by: 'human', ...(line !== undefined && { line }) });
   apart(books, receipt, payment, false);
   carried(books, payment);
   return { kind: 'unlink', receipt, payment };
+}
+
+/**
+ * A bill linked by hand to one line of a card's settlement (#409): the payment's card statement has
+ * that line, no other receipt holds it, and the bill is not the statement. 400 otherwise, in plain words.
+ */
+function assertLineFree(books: Books, receipt: string, payment: string, line: number): void {
+  const tx = books.transactions.find((t) => t.ref === payment);
+  const card = tx && cardLinesOf(books, tx);
+  if (!card || !Number.isInteger(line) || line < 0 || line >= card.lines.length || card.statement.id === receipt) {
+    throw new RequestError(400, `Die Zahlung ${payment} hat keine Kartenabrechnung mit einer Zeile ${line + 1}.`, { code: 'cardLineMissing', params: { payment, line: line + 1 } });
+  }
+  const held = books.mappings.find((m) => m.transactionRef === payment && m.line === line);
+  if (held) throw new RequestError(409, `Zur Zeile ${line + 1} der Kartenabrechnung gehört schon ein Beleg: zuerst dort lösen.`, { code: 'cardLineTaken', params: { payment, line: line + 1, receipt: held.receiptId } });
 }
 
 /** A private outlay as made: its payment's ref and date, the filed period it corrects when the receipt lies in one, the official daily rate its booking takes when foreign, and the bookings by hand it replaced. */
@@ -324,10 +340,11 @@ export function apart(books: Books, receipt: string, payment: string, on: boolea
 export function unlink(books: Books, receipt: string, payment: string): BookChange | undefined {
   assertOpen(books, refDates(books, payment), 'mapping');
   const had = books.mappings.length;
+  const line = books.mappings.find((m) => m.transactionRef === payment && m.receiptId === receipt)?.line;
   books.mappings = books.mappings.filter((m) => !(m.transactionRef === payment && m.receiptId === receipt));
   if (books.mappings.length < had) apart(books, receipt, payment, true);
   carried(books, payment);
-  return books.mappings.length < had ? { kind: 'link', receipt, payment } : undefined;
+  return books.mappings.length < had ? { kind: 'link', receipt, payment, ...(line !== undefined && { line }) } : undefined;
 }
 
 /**
@@ -770,7 +787,7 @@ export function deleteEntry(books: Books, id: string): JournalEntry {
 export function applyChange(books: Books, c: BookChange, author: Author = BY_HAND): BookChange | undefined {
   switch (c.kind) {
     case 'receipt': return setReceipt(books, c.id, c.set);
-    case 'link': return link(books, c.receipt, c.payment);
+    case 'link': return link(books, c.receipt, c.payment, c.line);
     case 'unlink': return unlink(books, c.receipt, c.payment);
     case 'entry': return setEntry(books, c.id, c.set, author);
     // A new booking (not one an undo puts back, which keeps its id and author) is its author's decision.

@@ -24,14 +24,14 @@ import { startIntake, useIntakeRunning } from '../../automation/intake.js';
 import { textIn, type RunSummary } from '../../../workflows/model.js';
 import { ICONS } from '../icons.js';
 import type { AreaProps } from '../index.js';
-import { cardStatementOf, ownAmount, chfOf, linkFit, markLabel, vatMisfit, type Ledger, type ReceiptView, vatChipOf } from './model.js';
+import { cardLineOf, cardLineOffers, cardStatementOf, ownAmount, chfOf, linkFit, markLabel, vatMisfit, type Ledger, type ReceiptView, vatChipOf } from './model.js';
 import { waitsForReading } from '../../../parsers/receipt-text.js';
 import { setUi, useUi, type Section } from './state.js';
-import { amountOf, at, bankOf, cardStatementLine, dayText, ledgerFor, listed, noneText, txLine } from './view.js';
+import { amountOf, at, bankOf, cardLineText, cardStatementLine, dayText, ledgerFor, listed, noneText, txLine } from './view.js';
 import { Kbd, accept, runAct } from './commands.js';
 import { correctionPeriodName } from '../journal/commands.js';
 import { QuestionsOn } from '../../questions/Questions.js';
-import { correctFiled, deleteReceipt, linkPayment, unpointFiled, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
+import { correctFiled, deleteReceipt, linkCardLine, linkPayment, unpointFiled, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
 import { LinkDialog } from './LinkDialog.js';
 import { FindPair, NearList, madeBy } from './FindPair.js';
 import { offersInBooks } from '../../../intake/near-pairs.js';
@@ -209,6 +209,12 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       )}
       <TwinNotice {...props} />
       {card && <div className="notice" data-testid="card-statement">{cardStatementLine(card)}</div>}
+      {edit && !v.links.length && cardLineOffers(r, props.books).map((o) => (
+        <div className="notice" key={`${o.payment}-${o.index}`} data-testid="card-line-offer">
+          <span>{t('receipts.cardLine.fits', { line: cardLineText(o, l.txByRef.get(o.payment)?.currency ?? baseCurrency()) })}</span>
+          <a href="#" onClick={(e) => { e.preventDefault(); void linkCardLine(nav, v, o.payment, o.index, o.line.merchant); }}>{t('receipts.cardLine.link')}</a>
+        </div>
+      ))}
       {r.report?.held?.length ? <ReportHeld receipt={r.id} report={r.report} canEdit={canEdit} closedThrough={props.books.config?.closedThrough} said={(message, ok) => { if (ok) nav.refresh(); nav.toast(message); }} /> : null}
       <ReportCorrections receipt={r.id} books={props.books} canEdit={canEdit} said={(message) => { nav.refresh(); nav.toast(message); }} />
       {v.none && v.r.kind === 'supporting'
@@ -317,6 +323,8 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
     const entry = (l.entriesByRef.get(ref) ?? [])[0];
     const link = props.books.mappings.find((m) => m.receiptId === v.r.id && m.transactionRef === ref);
     const by = link && madeBy(link);
+    // The bill of one line of a card's settlement (#409): which line.
+    const line = cardLineOf(v.r, props.books);
     if (!tx) {
       return (
         <>
@@ -342,7 +350,8 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
         {entry && <button type="button" className="golink jl" data-testid="go-entry" data-tip={t('receipts.openEntry')} onClick={() => nav.go(at({ area: 'journal', id: entry.id }, entry.date))}>{t('receipts.entry')}</button>}
         {canEdit && !v.locked && (ownPrivate(l, tx)
           ? <button type="button" className="quiet" data-tip={t('receipts.undoPrivateTip')} onClick={() => undoPrivate(nav, v, tx, txLine(tx))}>{t('receipts.undoPrivate')}</button>
-          : <button type="button" className="quiet" onClick={() => unlinkPayment(nav, v, tx.ref, txLine(tx))}>{t('receipts.unlink')}</button>)}
+          : <button type="button" className="quiet" onClick={() => unlinkPayment(nav, v, tx.ref, txLine(tx), link?.line)}>{t('receipts.unlink')}</button>)}
+        {line && line.payment === tx.ref && <span className="fitnote note" data-testid="card-line">{t('receipts.cardLine.bill', { line: cardLineText(line, tx.currency) })}</span>}
         {tx.businessPart && <span className="fitnote note" data-testid="business-part">{t('receipts.businessPartNotice', { what: tx.businessPart.what || t('receipts.privatePartUnnamed'), amount: `${tx.currency} ${fmt(Math.abs(tx.amount))}`, total: `${v.r.currency || baseCurrency()} ${fmt(Math.abs(v.r.amount ?? 0))}` })}</span>}
         {fit?.kind === 'off' && <span className="fitnote warn" data-testid="fit-off">{t('receipts.fitOffNotice', { amount: `${fit.currency} ${fmt(Math.abs(fit.diff))}` })}</span>}
         {fit?.kind === 'skonto' && <span className="fitnote note" data-testid="fit-skonto">{t('receipts.fitSkontoNotice', { percent: fit.percent })}</span>}
@@ -447,7 +456,7 @@ function Payments(props: Props & { v: ReceiptView; l: Ledger; edit: boolean; wor
             <span className="tt">{tx.description}</span>
             {edit && (ownPrivate(l, tx)
               ? <button type="button" className="un" data-tip={t('receipts.undoPrivateTip')} onClick={(e) => { e.stopPropagation(); undoPrivate(nav, v, tx, txLine(tx)); }}>{t('receipts.undoPrivate')}</button>
-              : <button type="button" className="un" onClick={(e) => { e.stopPropagation(); unlinkPayment(nav, v, ref, txLine(tx)); }}>{t('receipts.unlinkCap')}</button>)}
+              : <button type="button" className="un" onClick={(e) => { e.stopPropagation(); unlinkPayment(nav, v, ref, txLine(tx), props.books.mappings.find((m) => m.receiptId === v.r.id && m.transactionRef === ref)?.line); }}>{t('receipts.unlinkCap')}</button>)}
           </div>
           {booking ? (
             <p className="m" data-testid="private-booking">

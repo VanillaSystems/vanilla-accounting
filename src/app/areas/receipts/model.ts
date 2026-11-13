@@ -12,6 +12,7 @@ import { duplicatesIn, type Twin } from '../../../intake/duplicates.js';
 import { documentKind } from '../../../intake/document-kind.js';
 import { isNoReceipt } from '../../../books/discard.js';
 import { accountOfStatement, isCardStatement, statementFacts, type StatementFacts } from '../../../books/statement-facts.js';
+import { lineOffers, lineOfReceipt, type LineOffer } from '../../../books/card-lines.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { isManualRef } from '../../../books/refs.js';
 import { paidCards, type PaidCards } from '../../../accounting/paid-how.js';
@@ -501,6 +502,13 @@ export function vatChipOf(hasSwissVat: boolean | undefined, noInputTax: 'none' |
  * when the booking split it). Undefined for any other receipt. The app reads no card statement as a
  * bank statement (issue #94).
  */
+/** The line of a card's settlement this receipt is the bill of (#409), or undefined. */
+export const cardLineOf = (r: Pick<Receipt, 'id'>, books: Pick<Index, 'receipts' | 'mappings' | 'transactions'>): LineOffer | undefined => lineOfReceipt(books, r.id);
+
+/** The free lines of open card settlements this unlinked receipt fits (#409): offered to link by hand; two bills that fit one line are both offered, code links neither. */
+export const cardLineOffers = (r: Pick<Receipt, 'id'>, books: Pick<Index, 'receipts' | 'mappings' | 'transactions' | 'config'>): LineOffer[] =>
+  lineOffers(books, r.id, (d) => d > (books.config?.closedThrough ?? ''));
+
 export function cardStatementOf(r: Pick<Receipt, 'id' | 'extractedText'>, books: Pick<Index, 'mappings' | 'transactions' | 'journalEntries'>): { debit?: string; lines: number } | undefined {
   if (!isCardStatement(r.extractedText ?? '', documents())) return undefined;
   const refs = new Set(books.mappings.filter((m) => m.receiptId === r.id).map((m) => m.transactionRef));

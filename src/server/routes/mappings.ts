@@ -13,13 +13,16 @@ import { liveInvoices } from '../../invoices/rules.js';
 import { fileReceipts, paymentContext } from '../../invoices/service.js';
 import { releasePayment } from '../../invoices/payments.js';
 import { learnMerchantNames } from '../../knowledge/learned-names.js';
+import { linkCardLines } from '../../books/card-lines.js';
 
 export const router = Router();
 
-function linkBody(body: unknown): { receiptId: string; transactionRef: string; confirm: boolean } {
-  const { receiptId, transactionRef, confirm } = body as { receiptId: string; transactionRef: string; confirm?: unknown };
+/** `line`: the line of the payment's card statement the receipt is the bill of (#409), counted from 0. */
+function linkBody(body: unknown): { receiptId: string; transactionRef: string; confirm: boolean; line?: number } {
+  const { receiptId, transactionRef, confirm, line } = body as { receiptId: string; transactionRef: string; confirm?: unknown; line?: unknown };
   if (!receiptId || !transactionRef) throw new RequestError(400, 'receiptId and transactionRef are required');
-  return { receiptId, transactionRef, confirm: confirm === true };
+  if (line !== undefined && !(Number.isInteger(line) && (line as number) >= 0)) throw new RequestError(400, 'line must be a whole number from 0');
+  return { receiptId, transactionRef, confirm: confirm === true, ...(line !== undefined && { line: line as number }) };
 }
 
 /**
@@ -49,8 +52,8 @@ function restoreReplaced(books: Books, payment: string, receipt: string): boolea
  * still in beleg-import/ is archived by the link, as the model's match step would archive it (r9n-26).
  */
 async function relink(kind: 'link' | 'unlink', body: unknown): Promise<{ ok: true; again: string[]; kept?: string[] }> {
-  const { receiptId: receipt, transactionRef: payment, confirm } = linkBody(body);
-  const change: BookChange = { kind, receipt, payment };
+  const { receiptId: receipt, transactionRef: payment, confirm, line } = linkBody(body);
+  const change: BookChange = { kind, receipt, payment, ...(line !== undefined && { line }) };
   const now = readBooks();
   // A booking without a payment (#89) is a person's and never booked again: only a payment's booking is kept or rebooked.
   const booked = kind === 'link' && now.transactions.some((t) => t.ref === payment) && now.journalEntries.some((e) => e.transactionRef === payment);
@@ -59,11 +62,14 @@ async function relink(kind: 'link' | 'unlink', body: unknown): Promise<{ ok: tru
     if (kind === 'link') {
       if (!confirm) assertNotSecondPayment(books, receipt, payment);
       const had = books.journalEntries.filter((e) => e.transactionRef === payment);
-      link(books, receipt, payment);
+      link(books, receipt, payment, line);
       const r = books.receipts.find((x) => x.id === receipt);
       if (r) archiveReceipt(WS, books, r);
+      // A card statement linked by hand: its lines are read now, and each line's one bill goes with its line (#409), as the inbox's run would do.
+      const lock = periodLock(books);
+      const lines = linkCardLines(books, (d) => !lock.isClosed(d), undefined, payment).linked.map((l): BookChange => ({ kind: 'link', receipt: l.receipt, payment: l.payment, line: l.line }));
       if (keep) return { payments: [] };
-      const out = relinked(books, [change]);
+      const out = relinked(books, [change, ...lines]);
       const gone = had.filter((e) => !books.journalEntries.includes(e));
       if (gone.length) recordReplaced(WS, payment, receipt, gone);
       return out;

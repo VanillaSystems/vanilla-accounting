@@ -159,6 +159,8 @@ export function errorText(e: unknown): string {
     case 'ownInvoiceTaken': return t('error.ownInvoiceTaken');
     case 'bookedSince': return t('error.bookedSince', { payment: b.params.payment, n: b.params.entries, by: t(`error.bookedSince.${b.params.by}`) });
     case 'receiptPaid': return t('error.receiptPaid', { payment: b.params.payment });
+    case 'cardLineMissing': return t('error.cardLineMissing', { line: b.params.line });
+    case 'cardLineTaken': return t('error.cardLineTaken', { line: b.params.line });
     case 'pointerLinked': return t('error.pointerLinked', { payment: b.params.payment });
     case 'correctionBooked': return t('error.correctionBooked', { entry: b.params.entry });
     case 'reportCorrection': return t(`error.reportCorrection.${b.params.why}`);
@@ -355,7 +357,7 @@ function invoiceRefusalText(code: InvoiceRefusal | 'noBrowser' | 'printFailed', 
 
 type Ok = { ok: true };
 /** `confirm`: a second bank payment of another payee for a receipt that has one, confirmed (r8h-21). */
-type Link = { receiptId: string; transactionRef: string; confirm?: true };
+type Link = { receiptId: string; transactionRef: string; confirm?: true; line?: number };
 type Linked = Ok & { again: string[]; kept?: string[] };
 /** A change by hand; `origin`, `reason` and `by` only from its undo (null: the booking had none). */
 export type JournalEntryPatch = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description' | 'amount' | 'receipts'>> & { tags?: JournalEntry['tags'] | null }

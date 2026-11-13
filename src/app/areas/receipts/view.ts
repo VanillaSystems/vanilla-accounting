@@ -15,6 +15,7 @@ import type { RunSummary } from '../../../workflows/model.js';
 import type { OrderPage } from '../../../booking/order-pages.js';
 import { orderPagesNow, vatCorrectionsNow } from '../../lib/order-pages.js';
 import type { VatCorrection } from '../../../booking/vat-corrections.js';
+import type { LineOffer } from '../../../books/card-lines.js';
 
 let memo: { books: Index; runs: RunSummary[] | undefined; pages: ReadonlyMap<string, OrderPage>; corrections: ReadonlyMap<string, VatCorrection>; company: unknown; ledger: Ledger } | undefined;
 
@@ -75,6 +76,10 @@ export function noneText(v: ReceiptView): string {
   const why = v.noneWhy ? t(`receipts.why.${v.noneWhy}`) : '';
   return v.noneBy === 'person' ? `${why} · ${t('receipts.noneBy.personShort')}` : why;
 }
+
+/** One line of a card statement in words (#409): its number, merchant, day and amount. */
+export const cardLineText = (o: LineOffer, currency: string): string =>
+  t('receipts.cardLine.of', { n: o.index + 1, merchant: o.line.merchant, date: formatDate(o.line.day), amount: `${o.line.currency ?? currency} ${fmt(Math.abs(o.line.amount))}` });
 
 /** What the app did with a card statement (cardStatementOf), in one sentence: whose receipt it is, whether its lines were booked one by one, and that card statements are not read as statements (#401). */
 export const cardStatementLine = (c: { debit?: string; lines: number }): string =>
