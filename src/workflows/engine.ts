@@ -6,6 +6,7 @@
  * write to the books through update() with the run as actor, so a crash or a rerun never books
  * twice. Events a finished run emits start the workflows that listen; schedules start theirs.
  */
+import { brokenPart } from './switch-on.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { emptyBooks, hasBooks, loadBooks, periodLock, update, updateSaved, type Actor, type Books } from '../books/store.js';
 import { stemOf, type BooksPort } from '../intake/pipeline.js';
@@ -103,7 +104,8 @@ export function openEngine(workspace: () => Workspace, deps: EngineDeps): Engine
   /** What a workflow waits for «Einschalten» with: the files changed since it was switched on; undefined when it runs as switched on. */
   const waitsOf = (id: string): readonly string[] | undefined => {
     const w = workflow(id);
-    if (!w) return undefined;
+    // A workflow whose company overlay does not load waits, never runs as switched on (#413).
+    if (!w) return brokenPart(id, workspace().paths.root, declared.problems);
     return deps.pending ? deps.pending(w)?.files : isApproved(w) ? undefined : [];
   };
   /** A change the app's own code makes to the company's knowledge from what was confirmed: every workflow switched on before it stays switched on (switch-on.ts keepSwitchedOn). */
@@ -610,6 +612,9 @@ export function openEngine(workspace: () => Workspace, deps: EngineDeps): Engine
       case 'approve': {
         declared = loadWorkflows(deps.appRoot, workspace().paths.root);
         const w = workflow(cmd.workflow);
+        // What does not load cannot be switched on: the file is fixed or removed first (#413).
+        const problem = declared.problems.find((p) => p.workflow === cmd.workflow);
+        if (!w && problem) return { ok: false, refusal: 'not-loadable', detail: problem.message };
         if (!w) return { ok: false, refusal: 'not-found' };
         deps.approve?.(w);
         counter++;

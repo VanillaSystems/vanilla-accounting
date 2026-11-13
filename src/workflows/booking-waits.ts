@@ -6,11 +6,15 @@
  */
 import { existsSync } from 'node:fs';
 import { loadWorkflows } from './load.js';
-import { BOOKING_WORKFLOW, approvalsPath, openSwitch } from './switch-on.js';
+import { BOOKING_WORKFLOW, approvalsPath, brokenPart, openSwitch } from './switch-on.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 
 export function bookingWaitsIn(ws: Pick<Workspace, 'paths'>): string[] | undefined {
-  const booking = loadWorkflows(APP_ROOT, ws.paths.root).workflows.find((w) => w.id === BOOKING_WORKFLOW);
+  const loaded = loadWorkflows(APP_ROOT, ws.paths.root);
+  // Its overlay does not load: it waits (fail closed), with the file that cannot be read first.
+  const broken = brokenPart(BOOKING_WORKFLOW, ws.paths.root, loaded.problems);
+  if (broken) return broken;
+  const booking = loaded.workflows.find((w) => w.id === BOOKING_WORKFLOW);
   return booking ? openSwitch(ws).pending(booking)?.files : undefined;
 }
 

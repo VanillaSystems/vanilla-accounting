@@ -18,7 +18,7 @@ import { lockIntake } from '../../intake/pipeline.js';
 import { openEngine, type Engine } from '../../workflows/engine.js';
 import { loadWorkflows } from '../../workflows/load.js';
 import { summaryOf, taskOf, textIn, type AutomationCommand, type AutomationView, type PendingVersion, type Run, type RunDetail, type Task, type TaskPayment, type WorkflowDecl } from '../../workflows/model.js';
-import { BOOKING_WORKFLOW, baseline, caseCheck, openSwitch } from '../../workflows/switch-on.js';
+import { BOOKING_WORKFLOW, baseline, brokenPart, caseCheck, openSwitch } from '../../workflows/switch-on.js';
 import { bookWhatWaited } from '../provider-payouts.js';
 import { takeWaitingReportsIfOn, waitingReports } from '../waiting-reports.js';
 import { setSchedule } from '../../workflows/direct.js';
@@ -120,10 +120,18 @@ export function automationView(): AutomationView {
     .sort((a, b) => Number(!!b.overdue) - Number(!!a.overdue) || a.since.localeCompare(b.since)));
   // A running step's own count of what it finished (step-progress.ts): part of the revision, so a poll sees it move.
   const summaries = runs.map((r) => summaryOf(r, byId.get(r.workflow))).map((s) => { const p = s.status === 'running' ? progressOf(s.id) : undefined; return p ? { ...s, progress: p } : s; }).sort((a, b) => b.startedAt.localeCompare(a.startedAt) || b.id.localeCompare(a.id));
-  const pending = pendingVersions(loaded.workflows, runs);
+  const pending = [...pendingVersions(loaded.workflows, runs), ...brokenVersions(loaded.problems)];
   const reportsWaiting = waitingReports();
   const rev = createHash('sha256').update(JSON.stringify([loaded.workflows.map((w) => w.version), loaded.problems, e.counter, e.paused, pending, reportsWaiting, summaries.flatMap((s) => (s.progress ? [s.id, s.progress.done, s.progress.total] : []))])).digest('hex').slice(0, 16);
   return { rev, ...loaded, runs: summaries, tasks, paused: e.paused, limits: e.limits, pending, ...(reportsWaiting.length ? { reportsWaiting } : {}) };
+}
+
+/** Each workflow whose company overlay does not load (#413): it waits, named with the file that cannot be read. */
+function brokenVersions(problems: Array<{ workflow: string; message: string }>): PendingVersion[] {
+  return [...new Set(problems.map((p) => p.workflow))].flatMap((id): PendingVersion[] => {
+    const files = brokenPart(id, WS.paths.root, problems);
+    return files ? [{ workflow: id, files, checks: [], broken: problems.find((p) => p.workflow === id)!.message }] : [];
+  });
 }
 
 /** Each workflow waiting to be switched on, with its cases checked against the version as it is now. */

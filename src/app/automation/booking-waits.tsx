@@ -21,6 +21,9 @@ export const BOOKING_WORKFLOW = 'booking';
 /** The files the booking waits for «Einschalten» with, or undefined while it runs as switched on. */
 export const bookingWaitsOf = (view: AutomationView | undefined): string[] | undefined => view?.pending.find((p) => p.workflow === BOOKING_WORKFLOW)?.files;
 
+/** Whether the booking's company overlay does not load (#413): nothing to switch on until the file is fixed or removed. */
+const bookingBroken = (view: AutomationView | undefined): boolean => !!view?.pending.find((p) => p.workflow === BOOKING_WORKFLOW)?.broken;
+
 
 /** What switching the booking on came to, in the words of the switch-on page. */
 export async function switchBookingOn(): Promise<string> {
@@ -53,8 +56,8 @@ export function BookingWaits({ files, go, onOn }: { files?: readonly string[]; g
   };
   return (
     <span className="wfsaid" role="status" data-testid="booking-waits">
-      {bookingWaitsText(waits)}{' '}
-      <button type="button" className="btn" data-act="booking-switch-on" disabled={busy} onClick={(e) => { e.stopPropagation(); void on(); }}>{t('automation.pending.approve')}</button>{' '}
+      {bookingWaitsText(waits, bookingBroken(view))}{' '}
+      {bookingBroken(view) ? null : <><button type="button" className="btn" data-act="booking-switch-on" disabled={busy} onClick={(e) => { e.stopPropagation(); void on(); }}>{t('automation.pending.approve')}</button>{' '}</>}
       <button type="button" className="linkbtn" data-act="booking-look" onClick={(e) => { e.stopPropagation(); go(BOOKING_SWITCH_ON); }}>{t('bookingWaits.look')}</button>
     </span>
   );

@@ -402,3 +402,35 @@ test('`npm run workflow` without the app on a workspace the app never opened her
     await api.stop();
   }
 });
+
+for (const [kind, bad] of [['a YAML error', 'knowledge: [unclosed\n'], ['an action the app does not know', 'uses: no.such-action\n'], ['outcomes that are no map', 'outcomes: 7\n']] as const) {
+  test(`a company overlay of «Buchen» that does not load (${kind}) fails closed: nothing booked, the file named first, «Einschalten» refused until it is fixed`, async () => {
+    const api = await startApi(shopBooks(), {}, { whole: true });
+    try {
+      await view(api);
+      const overlay = join(api.root, 'workflows', 'booking', 'classify', 'step.yaml');
+      mkdirSync(dirname(overlay), { recursive: true });
+      writeFileSync(overlay, bad);
+      mkdirSync(join(api.root, 'knowledge', 'rules'), { recursive: true });
+      writeFileSync(join(api.root, GUIDE), RULE);
+      const p = (await view(api)).pending.find((x) => x.workflow === 'booking') as { files: string[]; broken?: string } | undefined;
+      assert.ok(p?.broken, 'the switch-on page says it does not load');
+      assert.equal(p.files[0], 'workflows/booking/classify/step.yaml', 'the file that cannot be read first');
+      assert.ok(p.files.includes('knowledge/rules/booking.guide.yaml'));
+      const one = await dropper(api);
+      await one.add('camt053_LUKB_Q3-2026.xml');
+      await api.rest();
+      assert.deepEqual(entriesOf(api, studer(api).ref), [], 'nothing booked by the rule written by hand');
+      assert.ok((await bookNotes(api)).some((n) => n.code === 'bookingWaits' && n.files?.[0] === 'workflows/booking/classify/step.yaml'));
+      const refused = await api.send('POST', '/api/automation', { kind: 'approve', workflow: 'booking' });
+      assert.deepEqual([refused.json.ok, refused.json.refusal], [false, 'not-loadable'], 'what does not load cannot be switched on');
+      // The file removed: «Einschalten» works and books what waited.
+      rmSync(join(api.root, 'workflows', 'booking'), { recursive: true });
+      assert.equal((await api.send('POST', '/api/automation', { kind: 'approve', workflow: 'booking' })).json.ok, true);
+      await api.rest();
+      assert.deepEqual(entriesOf(api, studer(api).ref), ['1020/3200 V81']);
+    } finally {
+      await api.stop();
+    }
+  });
+}

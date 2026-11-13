@@ -526,6 +526,8 @@ export interface PendingVersion {
   /** The workspace files of the company's part. */
   files: string[];
   checks: CaseCheck[];
+  /** Its company overlay does not load (#413): `files` begins with it; it cannot be switched on until it is fixed or removed. */
+  broken?: string;
 }
 
 /** One case of a check: its original run, the dry run on the waiting version, and whether they agree. */
@@ -588,4 +590,4 @@ export type AutomationCommand =
 
 export type CommandResult =
   | { ok: true; run?: string; runs?: string[] }
-  | { ok: false; refusal: 'not-runnable' | 'not-found' | 'not-waiting' | 'unknown-outcome' | 'not-approved' | 'illegal' | 'no-cases' | 'period-filed'; detail?: string };
+  | { ok: false; refusal: 'not-runnable' | 'not-found' | 'not-loadable' | 'not-waiting' | 'unknown-outcome' | 'not-approved' | 'illegal' | 'no-cases' | 'period-filed'; detail?: string };

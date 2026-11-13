@@ -72,6 +72,20 @@ export function companyFiles(w: WorkflowDecl, root: string): string[] {
   return [join(root, 'workflows', w.id), ...citations(w).map((c) => join(root, c))].flatMap(files).map((f) => relative(root, f)).sort();
 }
 
+/**
+ * A workflow whose company overlay does not load (#413): it is in the load's `problems`, not among
+ * its workflows. It waits, never runs as switched on: its files, the overlay's first, then what the
+ * app's declaration cites. Undefined when it loads, or when it has no overlay (the app's own
+ * declaration is the app's to fix).
+ */
+export function brokenPart(id: string, root: string, problems: ReadonlyArray<{ workflow: string }>): string[] | undefined {
+  if (!problems.some((p) => p.workflow === id)) return undefined;
+  const overlay = files(join(root, 'workflows', id)).map((f) => relative(root, f)).sort();
+  if (!overlay.length) return undefined;
+  const app = loadWorkflows(APP_ROOT).workflows.find((x) => x.id === id);
+  return [...overlay, ...(app ? companyFiles(app, root).filter((f) => !overlay.includes(f)) : [])];
+}
+
 /** The hash of the company's part and of each of its files, or undefined when it has none. */
 export function companyPart(w: WorkflowDecl, root: string): { hash: string; files: Record<string, string> } | undefined {
   // A file holding only what applies at once (a schedule) is no part of the behaviour.

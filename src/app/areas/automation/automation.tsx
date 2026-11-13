@@ -335,6 +335,7 @@ function Pending({ w, view, nav }: { w: WorkflowDecl; view: AutomationView; nav:
     <div className="wfpending">
       <b>{t('automation.pending.title')}</b>
       <span className="m">{t('automation.pending.files', { files: changedFiles(p.files) })}</span>
+      {p.broken ? <span className="warnline" data-testid="pending-broken">{t('bookingWaits.broken', { file: p.files[0] ?? '' })} {p.broken}</span> : null}
       {p.checks.length ? (
         <>
           <span>{t('automation.pending.checked', { same: count('same'), different: count('different'), stuck: count('stuck'), running: count('running') })}</span>
