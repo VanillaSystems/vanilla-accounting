@@ -9,7 +9,7 @@
  * the import VAT would claim the rate's tax on the tax itself.
  */
 import { baseCurrency, documents, vat } from '../engines/index.js';
-import type { InputTaxProof, JournalEntry, Receipt } from '../types/index.js';
+import type { InputTaxProof, JournalEntry, Mapping, Receipt } from '../types/index.js';
 
 /**
  * `decided`: a person or the AI sidebar on her wish chose the code (JournalEntry.by) with the
@@ -52,6 +52,39 @@ export function lineReceipts<R extends Pick<Receipt, 'amount' | 'currency'>>(e: 
   const own = linked.filter((r) => r.amount !== undefined && (r.currency ?? baseCurrency()) === currency && Math.round(Math.abs(r.amount) * 100) === Math.round(Math.abs(e.amount) * 100));
   return own.length === 1 ? own : linked;
 }
+
+/** The bills of the lines of a payment's card statement (Mapping.line, #409): each receipt's line. */
+export type LineBills = ReadonlyMap<string, number>;
+
+/** The receipts of payment `ref` that are the bill of one line of its card statement, with that line. */
+export const lineBillsOf = (mappings: readonly Pick<Mapping, 'transactionRef' | 'receiptId' | 'line'>[], ref: string): Map<string, number> =>
+  new Map(mappings.filter((m) => m.transactionRef === ref && m.line !== undefined).map((m) => [m.receiptId, m.line!]));
+
+/**
+ * The receipts that are evidence of one line of a payment (#455): a card line's bill only of the
+ * lines of its card line (#409). A line is of a card line when it was booked with that card line's
+ * bills alone (byParts books each card line with its own), else when its amount is the bill's, or
+ * the card line's, of exactly one card line; any other line is of the whole settlement and sees the
+ * receipts linked to it as a whole. `unplaced`: such a line beside bills of card lines, one of which
+ * may be its evidence: what it claims is not judged against the rest (no proof missing is said).
+ */
+function evidenceOf(e: JournalEntry, linked: readonly Receipt[], bills: LineBills | undefined): { receipts: readonly Receipt[]; unplaced: boolean } {
+  if (!bills?.size || !linked.some((r) => bills.has(r.id))) return { receipts: linked, unplaced: false };
+  const of = (lines: ReadonlySet<number>) => ({ receipts: linked.filter((r) => lines.has(bills.get(r.id) ?? -1)), unplaced: false });
+  const seen = linked.filter((r) => e.receipts?.includes(r.id));
+  const named = new Set(seen.map((r) => bills.get(r.id)));
+  if (seen.length && named.size === 1 && !named.has(undefined)) return of(named as Set<number>);
+  const currency = e.exchangeCurrency ?? baseCurrency();
+  const cardLines = linked.find((r) => r.cardLines?.length)?.cardLines;
+  const same = (n: number | undefined) => n !== undefined && toCents(n) === toCents(e.amount);
+  const fits = new Set(linked.filter((r) => bills.has(r.id)).filter((r) => {
+    const line = cardLines?.[bills.get(r.id)!];
+    return ((r.currency ?? baseCurrency()) === currency && same(r.amount)) || (!!line && (line.currency ?? baseCurrency()) === currency && same(line.amount));
+  }).map((r) => bills.get(r.id)!));
+  if (fits.size === 1) return of(fits);
+  return { receipts: linked.filter((r) => !bills.has(r.id)), unplaced: true };
+}
+const toCents = (n: number): number => Math.round(Math.abs(n) * 100);
 
 /** The payment's rounding to five hundredths, and a hundredth of the receipt's own. */
 const TOLERANCE = 0.05;
@@ -191,11 +224,17 @@ function groupCheck(e: JournalEntry, own: readonly Receipt[], receipts: readonly
  * the other proof a person named for the payment's input tax (BankTransaction.inputTaxProof, #134),
  * which backs a rate code no receipt shows. `lines`: every line of the payment (the entry among
  * them); a receipt of several VAT groups is compared with all of them (#406), a line at 0 % of a
- * receipt with an export part is no contradiction.
+ * receipt with an export part is no contradiction. `bills`: the receipts that are the bill of one
+ * line of the payment's card statement (lineBillsOf), evidence of that line's lines only (#455).
  */
-export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], closedThrough: string | undefined, proof?: InputTaxProof, lines: readonly JournalEntry[] = [e]): EvidenceCheck | undefined {
+export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], closedThrough: string | undefined, proof?: InputTaxProof, lines: readonly JournalEntry[] = [e], bills?: LineBills): EvidenceCheck | undefined {
   if ((closedThrough && e.date <= closedThrough) || e.corrects) return undefined;
-  const receipts = linked.filter(isPurchaseDocument);
+  const scope = evidenceOf(e, linked, bills);
+  const ids = (rs: readonly Receipt[]) => rs.map((r) => r.id).join();
+  // The payment's other lines on the same evidence: those of another card line are no mates of this one.
+  lines = scope.receipts === linked ? lines : lines.filter((l) => l.id === e.id || ids(evidenceOf(l, linked, bills).receipts) === ids(scope.receipts));
+  const receipts = scope.receipts.filter(isPurchaseDocument);
+  linked = scope.receipts;
   if (linked.length && !receipts.length) return undefined;
   const m = PURCHASE.exec(e.vatCode ?? '');
   const info = m && vat().codes.parse(e.vatCode!);
@@ -214,10 +253,20 @@ export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], close
   }
   if (info.rate === 0) {
     if (shown === undefined || onImportVat) return undefined;
+    // Another line on the same receipts books a rate they show, and their groups cannot be set against the lines in amounts:
+    // the zero line may be the untaxed part, so nothing is said and no rate is offered for it (#455).
+    const currency = e.exchangeCurrency ?? baseCurrency();
+    const taxedBeside = (l: JournalEntry) => {
+      const lm = PURCHASE.exec(l.vatCode ?? '');
+      const rate = lm && vat().codes.parse(l.vatCode!)?.rate;
+      const theirs = lineReceipts(l, receipts);
+      return l.id !== e.id && !!rate && lm![1] === sign && theirs.length === own.length && theirs.every((r) => own.includes(r));
+    };
+    if (!receiptGroups(own, currency) && lines.some(taxedBeside)) return undefined;
     const boxes = vat().codes.purchaseBoxes;
     const code = vat().codes.purchaseAt(shown, family === 'M' ? boxes.costOfGoods : boxes.otherwise);
     return code ? { kind: 'receiptShowsVat', rate: shown, code: sign + code, receipts: receipts.map((r) => r.id), ...decided } : undefined;
   }
-  if (sign || proof || shown !== undefined || own.some((r) => r.hasSwissVat === undefined)) return undefined;
+  if (sign || proof || shown !== undefined || scope.unplaced || own.some((r) => r.hasSwissVat === undefined)) return undefined;
   return { kind: 'vatWithoutReceipt', code: `${family}0`, ...decided };
 }

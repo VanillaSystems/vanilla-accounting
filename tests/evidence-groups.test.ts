@@ -57,7 +57,7 @@ test('a receipt whose groups were not read is no evidence either way', () => {
   const unread = { id: 'r1', filename: 'x.pdf', amount: 1086.42, currency: 'CHF' } as Receipt;
   assert.deepEqual(checks([line('a', 'T', 846.42, 'I81'), line('b', 'T', 240, 'I0')], [unread]), [undefined, undefined]);
   const taxOnly = { ...july, vatSummary: [{ ratePercent: 8.1, vat: 63.42 }] } as Receipt;
-  assert.deepEqual(checks([line('a', 'T', 846.42, 'I81'), line('b', 'T', 240, 'I0')], [taxOnly]), [undefined, { kind: 'receiptShowsVat', rate: 8.1, code: 'I81', receipts: ['r-jul'] }], 'a group named by its tax alone: compared per line, as before');
+  assert.deepEqual(checks([line('a', 'T', 846.42, 'I81'), line('b', 'T', 240, 'I0')], [taxOnly]), [undefined, undefined], 'a group named by its tax alone beside a line at its rate: the zero line may be the untaxed part (#455)');
 });
 
 // ─── #406 review ──────────────────────────────────────────────────────────────
@@ -128,4 +128,32 @@ test('a line of a closed period is no mate and leaves the finding without a clic
   assert.equal(c[0]?.kind, 'receiptGroups');
   assert.deepEqual((c[0] as { entries: string[] }).entries, ['a']);
   assert.equal((c[0] as { lines?: unknown }).lines, undefined);
+});
+
+// ─── #455: a zero-rated part of the receipt, and receipts that cannot be compared ────────────────
+
+// The consultancy persona's hotel bill as the reader read it (consulting-ai r3-14): the room at 3.8 %, the Kurtaxe «ohne MWST» only the rest of its total.
+const hotel = bill(164, [{ ratePercent: 3.8, vat: 5.78, gross: 158 }], { id: 'hotel' });
+
+test('#455: the hotel bill paid on its own, room I38 and Kurtaxe I0: the Kurtaxe is the bill\'s untaxed part, no finding', () => {
+  assert.deepEqual(checks([line('room', 'H', 158, 'I38'), line('kurtaxe', 'H', 6, 'I0')], [hotel]), [undefined, undefined]);
+  const both = bill(164, [{ ratePercent: 3.8, vat: 5.78, gross: 158 }, { ratePercent: 0, vat: 0, gross: 6 }], { id: 'hotel' });
+  assert.deepEqual(checks([line('room', 'H', 158, 'I38'), line('kurtaxe', 'H', 6, 'I0')], [both]), [undefined, undefined], 'the zero part read as a group of its own');
+});
+
+test('#455: 100 at 8.1 % and 20 at 0 % on two lines fit the receipt; the click on the whole never puts the rate on the 20', () => {
+  const mixed = bill(120, [{ ratePercent: 8.1, vat: 7.49, gross: 100 }, { ratePercent: 0, vat: 0, gross: 20 }]);
+  assert.deepEqual(checks([line('a', 'T', 100, 'I81'), line('b', 'T', 20, 'I0')], [mixed]), [undefined, undefined]);
+  assert.deepEqual(checks([line('w', 'T', 120, 'I0')], [mixed])[0], { kind: 'receiptGroups', rate: 8.1, amount: 100, currency: 'CHF', lines: [{ amount: 100, code: 'I81' }, { amount: 20, code: 'I0' }], entries: ['w'], receipts: ['r'] });
+});
+
+test('#455: a receipt whose rates cannot be set against the lines accuses no zero line beside a line at its rate', () => {
+  // The hotel bill and the Linkly invoice in USD on one payment: the groups cannot be added up in CHF.
+  const linkly = bill(180, [], { id: 'linkly', currency: 'USD', hasSwissVat: false });
+  assert.deepEqual(checks([line('room', 'H', 158, 'I38'), line('kurtaxe', 'H', 6, 'I0')], [hotel, linkly]), [undefined, undefined]);
+  // 100 at 8.1 % named by its tax alone, 20 beside it at 0 %: which part is taxed is not on the receipt as amounts.
+  const taxOnly = bill(120, [{ ratePercent: 8.1, vat: 7.49 }]);
+  assert.deepEqual(checks([line('a', 'T', 100, 'I81'), line('b', 'T', 20, 'I0')], [taxOnly]), [undefined, undefined]);
+  // Alone on the receipt, the zero line is still told the receipt shows VAT, as before.
+  assert.deepEqual(checks([line('b', 'T', 120, 'I0')], [taxOnly])[0], { kind: 'receiptShowsVat', rate: 8.1, code: 'I81', receipts: ['r'] });
 });

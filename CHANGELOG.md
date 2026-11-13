@@ -398,6 +398,13 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- «Buchung passt nicht zu ihrem Beleg» no longer names a line the receipt leaves untaxed (#455). A
+  hotel bill of a room at 3.8 % and a Kurtaxe without VAT, on a card settlement, booked room I38
+  and Kurtaxe I0, got the task «Der Beleg zeigt 3.8 % MWST, die Buchung steht auf … I0» for the
+  Kurtaxe, and «Nach Beleg buchen» claimed CHF 0.22 input tax on it. The check now takes the bill of
+  a card statement's line as evidence of that line's bookings only, and a line at 0 % beside a line
+  at the receipt's rate is not told the receipt shows VAT when the receipt's amounts per rate cannot
+  be set against the lines (another currency on the payment, a rate named by its tax alone).
 - A receipt that names no VAT is «MWST noch nicht gelesen», no longer «keine CH-MWST» (#391).
   Only a model, or the receipt's own words («nicht MWST-pflichtig», «not subject to Swiss VAT», «von
   der MWST ausgenommen», never beside «inkl. MWST» or a Swiss rate, 7.7 % too), say it carries no
