@@ -3388,6 +3388,7 @@ export default {
     'drop.held.abroadTax': 'n. {order} esportazione con IVA svizzera',
     'drop.held.foreignTax': 'n. {order} esportazione con IVA estera: manca il conto (nel file del fornitore sotto provider.foreignTax)',
     'drop.held.refundDate': 'n. {order} rimborso senza data: attende il rapporto dei pagamenti del fornitore, con la vendita se non è ancora registrata',
+    'drop.held.refundSplit': 'n. {order} è stato rimborsato: l’ordine è ripartito sulle sue aliquote IVA, quindi registrare il rimborso a mano',
     'drop.held.noPayment': 'n. {order} nessun pagamento nel rapporto dei pagamenti (un ordine di prova?)',
     'drop.held.refundMismatch': 'n. {order} i rimborsi nel rapporto dei pagamenti superano l’importo rimborsato dell’ordine (o il suo totale)',
     'drop.held.legacy': 'n. {order} forse già registrato sul conto di transito (una registrazione che nessun rapporto ha fatto)',

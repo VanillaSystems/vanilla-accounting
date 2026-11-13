@@ -199,6 +199,25 @@ test('#405 the first payouts after the cut-over day that pay sales before it: co
   const kept = loadBooks(ws);
   kept.config.openingBalances = { 2026: { 1093: 420.5, 2970: 420.5 } };
   assert.equal(clearingBeforeIn(ws, kept, SHOP()), undefined);
+  // The bank books the export's payout a day later: matched by its amount, never by its day.
+  const later = loadBooks(ws);
+  later.transactions = later.transactions.map((t) => (t.ref === 'P3' ? { ...t, date: '2026-11-06' } : t));
+  assert.equal(clearingBeforeIn(ws, later, SHOP())?.amount, 420.5);
+  // A payout after the export's first that matches none of its payouts: what it paid of the days before is unknown, nothing proposed.
+  const odd = loadBooks(ws);
+  odd.transactions = odd.transactions.map((t) => (t.ref === 'P3' ? { ...t, amount: 150 } : t));
+  assert.equal(clearingBeforeIn(ws, odd, SHOP())?.amount, undefined);
+});
+
+test('#405 a refund of a cart split by code is held for the person to book by hand, never skipped', () => {
+  const ws = shop();
+  const order = (refunded: string) => [FULL, first('2101', '2026-11-12', '101.00', '0.00', '5.94', '101.00', '1', '68.00', 'CH MWST 8.1%,5.10', 'CH MWST 2.6%,0.84').replace('Shopify Payments,0.00,0.00', `Shopify Payments,${refunded},0.00`), more('2101', '2026-11-12', '2', '16.50')].join('\n');
+  assert.ok(importSalesReport(ws, Buffer.from(order('0.00')), 'orders_export.csv').ok);
+  assert.equal(loadBooks(ws).journalEntries.filter((e) => e.transactionRef === 'SR-shopify-2101').length, 2, 'split by code');
+  assert.ok(importSalesReport(ws, Buffer.from(order('20.00')), 'orders_export_refund.csv').ok);
+  const after = loadBooks(ws);
+  assert.deepEqual(after.receipts.filter((r) => r.report).flatMap((r) => r.report!.held ?? []).map((h) => [h.order, h.why]), [['2101', 'refundSplit']]);
+  assert.equal(after.journalEntries.filter((e) => e.transactionRef.startsWith('SR-shopify-2101')).length, 2, 'nothing booked by code');
 });
 
 test('#405 the write door: a module removes no receipt whose file still lies in receipts/ and no link whose receipt and payment stand, unless it releases them', () => {

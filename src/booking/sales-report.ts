@@ -478,7 +478,7 @@ export interface ReportTexts {
  * carries a sale from elsewhere that may be it (`legacy`), or the payments exports' charges of the order
  * do not add up to what was charged by the sales report, its total less its outstanding balance (`charges`, #231).
  */
-export interface ReportHold { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' }
+export interface ReportHold { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' | 'refundSplit' }
 
 /**
  * A refund paid in a filed period whose sale the books carry and which they never carried (#231): offered
@@ -833,9 +833,17 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[]; map
   const bookMixed = (o: SaleRow, day: string): void => {
     const mix = o.refunded === 0 ? mixedCart(o, rates) : undefined;
     const sale = saleRef(ctx.provider.id, o.order);
-    // Booked under its sale ref already, its parts adding up to its gross (the person's split, bookHeldOrder): known as booked.
+    // Booked under its sale ref already, its parts adding up to its gross (split by code, or by the person, bookHeldOrder): known as
+    // booked. Its refund is never booked by code, nor skipped: while the books carry none, the order waits as `refundSplit`.
     const had = byRef.get(sale);
-    if (had?.length && had.reduce((s, e) => s + (e.accountDebit === ctx.clearing ? toRappen(e.amount) : 0), 0) === toRappen(o.gross)) { same(sale); return; }
+    if (had?.length && had.reduce((s, e) => s + (e.accountDebit === ctx.clearing ? toRappen(e.amount) : 0), 0) === toRappen(o.gross)) {
+      const plain = refundRef(ctx.provider.id, o.order);
+      const refunded = o.refunded > 0 || !!ctx.payments?.refunds.get(o.order)?.length;
+      const refundBooked = books.journalEntries.some((e) => e.transactionRef === plain || e.transactionRef.startsWith(`${plain}-`) || (e.accountDebit === ctx.revenue && !isReportRef(e.transactionRef) && textNames(e.description, o.order)));
+      if (refunded && !refundBooked) { out.held.push({ order: o.order, why: 'refundSplit' }); return; }
+      same(sale);
+      return;
+    }
     const charged = chargesOf(o);
     if (!mix || charged === 'differ' || (charged && (charged.off || (!ctx.agreed && charged.days.length > 1))) || saleRefsOf(sale).some((r) => r !== sale)) { out.held.push({ order: o.order, why: 'rate' }); return; }
     const date = charged && !ctx.agreed ? charged.days[0].date : day;

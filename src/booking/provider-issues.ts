@@ -46,7 +46,8 @@ export function providerIssuesOf(books: Books, providers: readonly Provider[], o
     if (!p || !rep?.held?.length || r.kind === 'duplicate') return [];
     const clearing = p.provider.clearing;
     const booked = (order: string) => refs.has(saleRef(p.id, order)) || entries.some((e) => !!clearing && e.accountDebit === clearing && textNames(e.description, order));
-    return rep.held.filter((h) => !booked(h.order)).map((h) => ({
+    // A refund of an order whose sale is split stays held while its sale is booked: the refund is the person's to book.
+    return rep.held.filter((h) => h.why === 'refundSplit' || !booked(h.order)).map((h) => ({
       provider: p.id, name: p.name, receipt: r.id, order: h.order, why: h.why, date: h.date ?? rep.to,
       ...(h.gross !== undefined ? { gross: h.gross } : {}), ...(h.currency ? { currency: h.currency } : {}),
     }));

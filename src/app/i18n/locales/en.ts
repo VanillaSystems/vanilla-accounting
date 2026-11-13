@@ -3388,6 +3388,7 @@ export default {
     'drop.held.abroadTax': '#{order} export with Swiss VAT',
     'drop.held.foreignTax': '#{order} export with foreign VAT: no account for it (in the provider\'s file under provider.foreignTax)',
     'drop.held.refundDate': '#{order} refund without a day: waits for the provider’s payments report, with its sale if that is not booked yet',
+    'drop.held.refundSplit': '#{order} was refunded: the order is split onto its VAT rates, so book the refund by hand',
     'drop.held.noPayment': '#{order} no payment in the payments report (a test order?)',
     'drop.held.refundMismatch': '#{order} refunds in the payments report exceed the order’s refunded amount (or its total)',
     'drop.held.legacy': '#{order} may already be booked on the clearing account (an entry no report made)',

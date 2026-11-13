@@ -234,19 +234,25 @@ export function clearingBefore(p: Provider, books: { journalEntries: readonly Jo
   const until = addDays(since, payoutDaysOf(p));
   const payouts = books.transactions.filter((t) => t.date >= since && t.date <= until && providerOfPayment(t, [], counterparties)?.id === p.id).sort((a, b) => a.date.localeCompare(b.date));
   if (!payouts.length) return undefined;
-  const nets = new Map((exported ?? []).map((x) => [x.date, toRappen(x.net)]));
-  const first = exported?.length ? [...nets.keys()].sort()[0] : undefined;
+  // A payout is the export's when one of its payouts, by what its transactions add up to, is the bank's amount to the
+  // centime (a bank books a payout a day later than the provider dates it, so never by day); one dated before the
+  // export's first payout holds none of its transactions, all of it pays days before `since`. A payout neither is:
+  // what it paid of days before `since` is not known, and nothing is proposed.
+  const groups = (exported ?? []).map((x) => ({ date: x.date, rp: toRappen(x.net), used: false }));
+  const first = groups.length ? groups.map((g) => g.date).sort()[0] : undefined;
   const partOf = (t: BankTransaction): number | undefined => {
     if (!first) return undefined;
-    if (t.date < first) return toRappen(t.amount);
-    const net = nets.get(t.date);
-    return net === undefined ? 0 : Math.max(0, toRappen(t.amount) - net);
+    const g = groups.find((x) => !x.used && x.rp === toRappen(t.amount));
+    if (g) { g.used = true; return 0; }
+    return t.date < first ? toRappen(t.amount) : undefined;
   };
-  const out = payouts.map((t) => { const rp = partOf(t); return { ref: t.ref, date: t.date, amount: t.amount, ...(rp ? { before: fromRappen(rp) } : {}) }; });
-  const sum = out.reduce((s, x) => s + toRappen(x.before ?? 0), 0);
+  const parts = payouts.map((t) => ({ t, rp: partOf(t) }));
+  const known = !!first && parts.every((x) => x.rp !== undefined);
+  const out = parts.map(({ t, rp }) => ({ ref: t.ref, date: t.date, amount: t.amount, ...(rp ? { before: fromRappen(rp) } : {}) }));
+  const sum = parts.reduce((s, x) => s + (x.rp ?? 0), 0);
   // The export holds every transaction its first payouts paid: nothing of days before `since` was paid out.
-  if (first && sum === 0) return undefined;
-  return { account, since, year, payouts: out, ...(first ? { amount: fromRappen(sum) } : {}) };
+  if (known && sum === 0) return undefined;
+  return { account, since, year, payouts: out, ...(known ? { amount: fromRappen(sum) } : {}) };
 }
 
 /** The last day of each of the `n` months up to and including the month of `through`, oldest first; `through` itself for its own month. */

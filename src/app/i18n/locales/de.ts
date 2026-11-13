@@ -3385,6 +3385,7 @@ export const messages = {
   'drop.held.abroadTax': '#{order} Ausfuhr mit Schweizer MWST',
   'drop.held.foreignTax': '#{order} Ausfuhr mit ausländischer MWST: das Konto dafür fehlt (in der Datei des Anbieters unter provider.foreignTax)',
   'drop.held.refundDate': '#{order} Rückerstattung ohne Tag: wartet auf den Zahlungsbericht des Anbieters, ein noch nicht gebuchter Verkauf mit ihr',
+  'drop.held.refundSplit': '#{order} wurde zurückerstattet: die Bestellung ist auf ihre MWST-Sätze aufgeteilt, also die Rückerstattung von Hand buchen',
   'drop.held.noPayment': '#{order} keine Zahlung im Zahlungsbericht (eine Testbestellung?)',
   'drop.held.refundMismatch': '#{order} Rückerstattungen im Zahlungsbericht übersteigen den erstatteten Betrag der Bestellung (oder ihr Total)',
   'drop.held.legacy': '#{order} vielleicht schon auf dem Durchlaufkonto gebucht (eine Buchung, die kein Bericht machte)',

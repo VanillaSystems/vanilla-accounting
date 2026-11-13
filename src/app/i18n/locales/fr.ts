@@ -3388,6 +3388,7 @@ export default {
     'drop.held.abroadTax': 'n° {order} exportation avec TVA suisse',
     'drop.held.foreignTax': 'n° {order} exportation avec TVA étrangère : le compte manque (dans le fichier du prestataire sous provider.foreignTax)',
     'drop.held.refundDate': 'n° {order} remboursement sans date : attend le rapport de paiements du prestataire, avec la vente si elle n’est pas encore comptabilisée',
+    'drop.held.refundSplit': 'n° {order} a été remboursée : la commande est répartie sur ses taux de TVA, comptabiliser donc le remboursement à la main',
     'drop.held.noPayment': 'n° {order} aucun paiement dans le rapport de paiements (une commande test ?)',
     'drop.held.refundMismatch': 'n° {order} les remboursements du rapport de paiements dépassent le montant remboursé de la commande (ou son total)',
     'drop.held.legacy': 'n° {order} peut-être déjà comptabilisé sur le compte de passage (une écriture qu’aucun rapport n’a faite)',
