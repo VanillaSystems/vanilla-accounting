@@ -29,7 +29,8 @@ rows in tests/period-lock.test.ts).
   Buchhaltung), `.status` (`Stimmt. …`, `Differenz …`, `Der Anfangssaldo fehlt …`, `Der Endsaldo ist aus dem PDF nicht
   gelesen.`), `[data-testid=statement-gap]`, `Der Monat läuft noch …`, and, when the books differ from the bank's close,
   a second `.status` with `Die Buchhaltung weicht um …` (or `[data-testid=opening-missing]` with `Eröffnungssaldo …
-  setzen`). The paper is `.paper.real.stmt .pgw canvas.pg`, served from `/bank-statements/<bank>/<file>`; a camt.053
+  setzen`, a foreign account's in its currency; or, with an opening entered, `[data-testid=book-diff-before]`
+  `… schon vor der ersten Zahlung der Kontoauszüge am <day>: die Bank hatte da …, die Buchhaltung …`, #427). The paper is `.paper.real.stmt .pgw canvas.pg`, served from `/bank-statements/<bank>/<file>`; a camt.053
   statement has no paper, only `[data-testid=camt-notice]`, unless its statement is filed among the receipts
   (`[data-testid=statement-receipt]` link, `[data-testid=statement-receipt-paper]`). Datei (`.sec[data-sec=datei]`,
   folded: open its `button.sum` first, or the click times out) holds `[data-testid=remove-statement]`

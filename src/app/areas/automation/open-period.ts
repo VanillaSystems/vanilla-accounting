@@ -160,7 +160,7 @@ export function openPeriodState(
     evidence: issues.flatMap((i) => (i.kind === 'evidence' ? [{ entry: i.entry, check: i.check }] : [])),
     unlinked: unlinked.filter((r) => !waitsForCustomer(books, r, ctx.firm)),
     issued: unlinked.filter((r) => waitsForCustomer(books, r, ctx.firm)),
-    openings: missingOpenings(books, accounts, period.to.slice(0, 4), 'all'),
+    openings: missingOpenings(books, accounts, period.to.slice(0, 4)),
     clearing: (provider?.clearing ?? []).flatMap((c): ClearingBelow[] => {
       const balance = balanceAt(books.journalEntries ?? [], c.account, period.to, books.config?.openingBalances);
       return balance < 0 ? [{ name: c.name, account: c.account, balance }] : [];
