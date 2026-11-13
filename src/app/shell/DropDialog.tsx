@@ -39,7 +39,7 @@ import type { Location, Route } from './route.js';
 import { at } from '../areas/receipts/view.js';
 import { fileKeyOf } from '../areas/bank/model.js';
 import { startIntake } from '../automation/intake.js';
-import { emptyRefsLine } from '../areas/bank/actions.js';
+import { emptyRefsLine } from '../areas/bank/empty-refs.js';
 import { draftForm } from '../areas/company/bank-draft.js';
 import { getAccountMap } from '../lib/accounts.js';
 import { cardStatementOf, chfOf, markLabel, suggestion } from '../areas/receipts/model.js';
