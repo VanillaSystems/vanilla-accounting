@@ -151,9 +151,17 @@ steps:
         source: definition
       - id: sid-refund
         when: a CRDT that reverses an earlier purchase (vendor refund)
-        then: a_purchase, with the original purchase's code inverted (-I81, -I0)
-        why: a refund inverts the original VAT code
-        source: AGENTS.md § VAT code rules
+        then: >
+          a_purchase, with the original purchase's code inverted (-I81, -I0), also without a credit
+          note and for a part (at the purchase's rate), on the refund's own date even when the
+          purchase is in a filed quarter; in code (src/booking/refund-code.ts refundedPurchase: same
+          supplier and currency, no later, at least the amount less what came back of it already,
+          the text's invoice number picks among several). The reason names the purchase. Not found
+          unambiguously (two purchases could be it, others add up to it, the purchase is split over
+          two codes or a line without a code, less is left of it): the zero code with the minus, and
+          the reason says so; the person changes it by hand
+        why: a refund inverts the original VAT code; the input tax goes back when the refund is booked or paid
+        source: AGENTS.md § VAT code rules; decision 2026-11-13, owner (#357); MWSTG Art. 41 Abs. 2
       - id: sid-credit-note-names-invoice
         when: a supplier's credit note without its own document whose payment text names an invoice already booked
         then: >

@@ -77,14 +77,14 @@ function bookingOf(books: Books, tx: BankTransaction, booked: Booked, owner: str
   const base = booked.vat?.replace(/^-/, '') ?? null;
   const wide = { account: booked.account, vat: ruleCode(base ?? undefined) };
   const asBooked: RuleLine[] = [{ account: booked.account, ...(booked.vat ? { vat: booked.vat } : {}), amount: tx.amount }];
-  return sameLines(ruleBookingLines(tx, wide, mappedReceipts(books, tx), owner), asBooked) ? wide : { account: booked.account, vat: base };
+  return sameLines(ruleBookingLines(tx, wide, mappedReceipts(books, tx), owner, books), asBooked) ? wide : { account: booked.account, vat: base };
 }
 
 /** How many of `txs` `booking` books as they are booked today. */
 function agreeing(books: Books, txs: readonly BankTransaction[], booking: RuleBooking, context: ClassifyContext): number {
   return txs.filter((tx) => {
     const now = bookedNow(books, tx, bankAccountFor(tx, context.bankAccounts));
-    return now.length > 0 && sameLines(now, ruleBookingLines(tx, booking, mappedReceipts(books, tx), context.ownerAccount));
+    return now.length > 0 && sameLines(now, ruleBookingLines(tx, booking, mappedReceipts(books, tx), context.ownerAccount, books));
   }).length;
 }
 
@@ -190,7 +190,7 @@ function checkAnswer(ws: Workspace, books: Books, c: Corrected, answer: LearnAns
   const raw = { id: 'learn', ...(partner.kind === 'payer' ? { when: { payer: partner.payer } } : {}), then: { account: booking.account, vat: booking.vat ?? 'none' } };
   if (!parseRule(raw, ruleFactsOf(ws), partner.kind === 'business').ok) return { kind: 'none', why: 'invalid' };
   const asBooked: RuleLine[] = [{ account: c.offer.booked.account, ...(c.offer.booked.vat ? { vat: c.offer.booked.vat } : {}), amount: c.tx.amount }];
-  if (!sameLines(ruleBookingLines(c.tx, booking, mappedReceipts(books, c.tx), context.ownerAccount), asBooked)) return { kind: 'none', why: 'contradicts' };
+  if (!sameLines(ruleBookingLines(c.tx, booking, mappedReceipts(books, c.tx), context.ownerAccount, books), asBooked)) return { kind: 'none', why: 'contradicts' };
   if (agreeing(books, c.partnerTxs, booking, context) < GENERAL) return { kind: 'none', why: 'oneOff' };
   return { kind: 'rule', match: partner.kind === 'business' ? { kind: 'business', id: partner.id } : { kind: 'payer', payer: partner.payer }, booking };
 }
