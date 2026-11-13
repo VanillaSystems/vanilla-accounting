@@ -26,7 +26,7 @@ import { stored, store } from '../shell/storage.js';
 import './history.css';
 
 /** What a log line or a history row says about one run. */
-export type RunEvent = Pick<HistoryRun, 'workflow' | 'event' | 'at' | 'step' | 'reason'> & { wrote?: Partial<HistoryRun['wrote']> };
+export type RunEvent = Pick<HistoryRun, 'workflow' | 'event' | 'at' | 'step' | 'reason' | 'why'> & { wrote?: Partial<HistoryRun['wrote']> };
 
 const OPEN_KEY = 'history.open';
 
@@ -47,7 +47,7 @@ function useWords() {
 /** Where the run stands, with its step and reason: «wartet bei «Prüfen»», «steckt bei «Buchen»: …». */
 export function eventText(r: RunEvent, step: (workflow: string, id: string) => string): string {
   const s = r.step ? step(r.workflow, r.step) : '';
-  const why = r.reason ? refusalText(r.reason) : '';
+  const why = r.reason ? refusalText(r.reason, r.why) : '';
   if (r.event === 'waiting' && s) return t('history.waitsAt', { step: s });
   if (r.event === 'stuck') return s ? t('history.stuckAt', { step: s, reason: why }) : why;
   if (r.event === 'discarded' && why) return t('history.discardedWhy', { reason: why });

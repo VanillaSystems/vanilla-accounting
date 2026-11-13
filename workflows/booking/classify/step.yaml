@@ -2,7 +2,7 @@ label: {"de": "Konto und MWST-Code wählen", "en": "Choose the accounts and the 
 uses: accounting.expenses.classification
 reads: ["transaction", "books"]
 effects: ["runs.start"]
-emits: ["entries", "why"]
+emits: ["entries", "why", "refused"]
 outcomes: {"decided": "book", "undecided": "manual", "held": "done"}
 guide: booking.guide.yaml#classify
 knowledge: ["suppliers/*", "customers/*", "authorities/*", "rules/evidence.guide.yaml"]

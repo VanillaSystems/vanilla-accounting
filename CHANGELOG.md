@@ -424,6 +424,16 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A drop in which the AI's booking of one payment was refused (#482) no longer leaves stuck runs
+  «Eingang verarbeiten: Lauf steckt» behind the task badge. The run finishes, and the payment says
+  why it waits, as #470 meant. «Automatisch buchen» on such a payment goes on to «Von Hand
+  buchen». A run that sticks on a fault of the app itself now says so in her words: «In der App
+  ist hier ein Fehler passiert: der Lauf ist angehalten und hat nichts Falsches geschrieben.» The
+  run's page adds «Weiter» versucht es noch einmal, beside that button. Before, it showed an
+  internal step name and file. A payment's and a statement's «Verlauf» show the same words. A
+  company's own step that lists what it hands on keeps every key its action hands on, so such a
+  workspace keeps booking.
+
 - A courier's customs invoice whose own VAT on its fee is read as a tax line at no rate («MWST»
   beside a Vorlageprovision at 8.1 %, the line as much as 8.1 % of the fee) books that VAT on the
   fee's line (4040 M81), no longer as import VAT without input tax (4030 M0), and

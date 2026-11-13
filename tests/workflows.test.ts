@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { APP_ROOT } from '../src/workspace/workspace.js';
 import { loadWorkflows } from '../src/workflows/load.js';
+import { ACTIONS } from '../src/workflows/actions.js';
 import { buttonsFor, graphOf, happyPath, hasAi, LANGUAGES, overdue, processMap, stepOf, type Run, type Text, type WorkflowDecl } from '../src/workflows/model.js';
 
 const app = loadWorkflows(APP_ROOT);
@@ -18,6 +19,11 @@ const byId = (id: string, ws = app.workflows) => ws.find((w) => w.id === id)!;
 test('every app workflow loads with no problem', () => {
   assert.deepEqual(app.problems, []);
   assert.deepEqual(app.workflows.map((w) => w.id).sort(), ['ask', 'bank-import', 'booking', 'collect', 'collection', 'correction', 'evidence', 'new-case', 'receipt-intake', 'vat-filing', 'year-close']);
+});
+
+test('every built action names every key it may hand on, so the step that uses it can emit each (#482)', () => {
+  const silent = Object.entries(ACTIONS).filter(([, a]) => a.run && !a.emits).map(([id]) => id);
+  assert.deepEqual(silent, []);
 });
 
 test('asking, booking, the inbox, the VAT filing, the year close and the collection run; every other workflow names the actions it still lacks', () => {
@@ -63,6 +69,15 @@ test('a company overlay changes only the field it names, and a workflow of its o
   assert.deepEqual(stepOf(mine, 'classify')!.label, { ...stepOf(theirs, 'classify')!.label, en: 'Our classifier', de: 'Unser Klassierer' });
   assert.deepEqual({ ...stepOf(mine, 'classify')!, label: null }, { ...stepOf(theirs, 'classify')!, label: null }, 'nothing but the label changed');
   assert.equal(byId('remind', loaded.workflows).origin, 'company');
+});
+
+test('a company step\'s emits add to what its action hands on, never drop a key of it (#482)', () => {
+  const ws = mkdtempSync(join(tmpdir(), 'wf-overlay-emits-'));
+  mkdirSync(join(ws, 'workflows/booking/classify'), { recursive: true });
+  writeFileSync(join(ws, 'workflows/booking/classify/step.yaml'), 'emits: ["entries", "why", "note"]\n');
+  const loaded = loadWorkflows(APP_ROOT, ws);
+  assert.deepEqual(loaded.problems, [], 'the workspace keeps booking');
+  assert.deepEqual([...stepOf(byId('booking', loaded.workflows), 'classify')!.emits].sort(), ['entries', 'note', 'refused', 'why']);
 });
 
 test('a folder named like a page of Automatisierung is refused with the reason', () => {

@@ -37,6 +37,8 @@ export interface HistoryRun {
   at: string;
   step?: string;
   reason?: string;
+  /** A stuck run's refusal, in the screens' words (#482). */
+  why?: RunLogLine['why'];
   /** What the run wrote that concerns the object (#233): a receipt's own record, its links and its payments' entries; a payment's entries, links and linked receipts; an entry itself and its payment's links. */
   wrote: Wrote;
   /** How many other receipts (written or linked) and entries the run wrote: counted, not listed. */
@@ -103,7 +105,7 @@ export function historyOf(lines: RunLogLine[], target: HistoryTarget, stored: (r
     const last = ls.reduce((a, b) => (b.at >= a.at ? b : a));
     runs.push({
       run, workflow: last.workflow, item: ls[0].item, event: last.event, at: last.at,
-      ...(last.step ? { step: last.step } : {}), ...(last.reason ? { reason: last.reason } : {}),
+      ...(last.step ? { step: last.step } : {}), ...(last.reason ? { reason: last.reason } : {}), ...(last.why ? { why: last.why } : {}),
       wrote,
       ...(refused ? { refused } : {}),
       rest: { receipts: [...receiptsIn(whole)].filter((r) => !mine.has(r)).length, entries: whole.entries.length - wrote.entries.length },
