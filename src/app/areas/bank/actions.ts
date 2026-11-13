@@ -18,6 +18,7 @@ import { t } from '../../i18n/index.js';
 import type { Area, Nav } from '../index.js';
 import { at } from '../receipts/view.js';
 import { fileKey, type Account, type Statement } from './model.js';
+import { emptyRefsLine } from './empty-refs.js';
 import { forgetPages } from './StatementPaper.js';
 
 /**
@@ -200,10 +201,3 @@ export const statementAdd: NonNullable<Area['add']> = {
   title: () => t('bank.addTitle'),
   run: ({ nav }) => pickStatements((files) => importStatements(files, nav)),
 };
-
-/** What an import did with payments a read before #401 left without a reference (StatementImport.emptyRefs), said as a fact. */
-export function emptyRefsLine(e: StatementImport['emptyRefs']): string {
-  if (!e) return '';
-  if ('repaired' in e) return e.repaired ? t('bank.emptyRefs.repaired', { n: e.repaired }) : '';
-  return t(e.why === 'yours' ? 'bank.emptyRefs.yours' : 'bank.emptyRefs.unmatched', { n: e.left });
-}
