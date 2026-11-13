@@ -39,7 +39,8 @@ import { loadKnowledge } from '../../knowledge/layers.js';
 import { baseCurrency } from '../../engines/index.js';
 import { discardDraft, draftRules, hashOf, keepDraft, ruleCommand, ruleFactsOf, setDraftVat, type DraftCommand, type DraftView, type KeepResult, type BookOpen, type KeptBookings, type KeptEnded, type KeptView, type RuleCommand, type RulesView } from '../../saving/rules.js';
 import { forgetKeep, KEEP_ID, laterOf, listKeeps, loadKeep, newKeepId, saveKeep, updateKeep, type KeepRecord } from '../../workflows/keeps.js';
-import { moduleActor, updateSaved, type Books } from '../../books/store.js';
+import { type Books } from '../../books/store.js';
+import { bookByRules } from '../../workflows/book-by-rules.js';
 import type { JournalEntry } from '../../types/index.js';
 import { reconciliationOf } from '../../books/reconcile.js';
 import { classifyTransactions, loadClassifyContext } from '../../booking/classify.js';
@@ -180,8 +181,6 @@ const DAY_MS = 86_400_000;
 const BOOKING_MS = 5 * 60_000;
 export const BOOKED_BY_RULE = 'Deine Regel hat diese Zahlung beim Behalten gebucht.';
 export const WAITS_BY_RULE = 'Deine Regel bucht diese Zahlung, sobald ihr Beleg da ist.';
-/** Who writes what a rule books on a click (a keep, «Automatisch buchen» for all): code, through the write door. */
-const RULES_ACTOR = moduleActor('rules');
 
 const PERSON_WORKFLOWS = new Set(['ask', 'booking']);
 
@@ -195,29 +194,6 @@ async function closeTasksOf(refs: ReadonlySet<string>, reason: string): Promise<
     closed.push({ ref: r.item.id, workflow: r.workflow });
   }
   return closed;
-}
-
-/**
- * Books these payments by rule or code, without a model, through the write door: each one's entries
- * as the classifier makes them, written only while the payment has no booking and only when code or
- * a rule decided it. A booking written so is the rule's, as an inbox run's would be; no run holds it,
- * so a payment taken back and decided again is booked again (a run's effect is applied once).
- */
-async function bookByRules(refs: readonly string[]): Promise<JournalEntry[]> {
-  if (!refs.length) return [];
-  const books = loadBooks(WS);
-  const want = new Set(refs);
-  const scratch = structuredClone(books);
-  const before = scratch.journalEntries.length;
-  await classifyTransactions(scratch, books.transactions.filter((t) => want.has(t.ref)), { fx: loadFxResolver(), context: loadClassifyContext(WS) });
-  const made = scratch.journalEntries.slice(before);
-  return updateSaved(WS, RULES_ACTOR, (b) => {
-    const lock = periodLock(b);
-    const booked = new Set(b.journalEntries.map((e) => e.transactionRef));
-    const add = made.filter((e) => !booked.has(e.transactionRef) && !lock.isClosed(e.date));
-    b.journalEntries.push(...add);
-    return add;
-  });
 }
 
 /** What the keep booked: the payments booked by its entries, the newest of them, and the payments it meant to book and did not. Reads only. */
@@ -257,7 +233,7 @@ async function recordKeep(kept: Extract<KeepResult, { ok: true }>): Promise<Keep
     rules: [...rules], book, entries: [], prior: books.journalEntries.filter((e) => !!e.rule && rules.has(e.rule)).map((e) => e.id),
     waits, later: decided.length - book.length, tasks: [], marks, booking: true,
   });
-  const made = await bookByRules(book);
+  const made = await bookByRules(WS, book);
   const booked = new Set(made.map((e) => e.transactionRef));
   const closed = [...await closeTasksOf(booked, BOOKED_BY_RULE), ...await closeTasksOf(new Set(waits), WAITS_BY_RULE)];
   updateKeep(WS, id, (x) => { x.entries.push(...made.map((e) => e.id)); x.tasks.push(...closed); delete x.booking; });
@@ -357,7 +333,7 @@ router.post('/api/rules/kept/close', (req, res) => {
 });
 
 /** Why a booking of a keep stays at its undo. */
-export type KeptLeft = { changed: number; closed: number; gone: number };
+export type KeptLeft = { changed: number; closed: number; gone: number; other: number };
 
 type UndoOne = { ok: true; removed: number; left: KeptLeft } | { ok: false; refusal: string; message: string };
 
@@ -386,12 +362,14 @@ async function undoOne(k: KeepRecord): Promise<UndoOne> {
   try {
     out = updateBooks((books) => {
       const lock = periodLock(books);
-      const left: KeptLeft = { changed: 0, closed: 0, gone: k.entries.filter((id) => !books.journalEntries.some((e) => e.id === id)).length };
+      const left: KeptLeft = { changed: 0, closed: 0, other: 0, gone: k.entries.filter((id) => !books.journalEntries.some((e) => e.id === id)).length };
       const go = new Set<string>();
       for (const e of books.journalEntries) {
         if (!mine.has(e.id)) continue;
         if (lock.isClosed(e.date)) left.closed++;
-        else if (e.origin === 'manual' || !e.rule || !rules.has(e.rule) || e.by?.kind === 'person' || e.by?.kind === 'assistant') left.changed++;
+        else if (e.origin === 'manual' || e.by?.kind === 'person' || e.by?.kind === 'assistant') left.changed++;
+        // Code or another rule wrote it (a bank fee, a payout): not the kept rule's to take back.
+        else if (!e.rule || !rules.has(e.rule)) left.other++;
         else go.add(e.id);
       }
       const gone = books.journalEntries.filter((e) => go.has(e.id));
@@ -436,12 +414,20 @@ router.post('/api/rules/kept/undo', async (req, res) => {
   const k = all.find((x) => x.id === id);
   if (!k) throw new RequestError(404, KEEP_GONE);
   const chain = withLater ? [...laterOf(all, k).reverse(), k] : [k];
-  const total = { removed: 0, left: { changed: 0, closed: 0, gone: 0 } as KeptLeft };
+  // All or nothing: every keep of the chain must still be undoable before the first is taken back.
+  const books = loadBooks(WS);
+  const now = Date.now();
+  for (const x of chain) {
+    const ended = endedOf(x, all, books, now);
+    if (ended) { res.json({ ok: false, refusal: ended, message: ENDED_TEXT[ended], ...(x.id === k.id ? {} : { keep: x.id }) }); return; }
+    if (x.booking && now - Date.parse(x.at) < BOOKING_MS) { res.json({ ok: false, refusal: 'running', message: 'Die Regel bucht noch: gleich nochmals.' }); return; }
+  }
+  const total = { removed: 0, left: { changed: 0, closed: 0, gone: 0, other: 0 } as KeptLeft };
   for (const x of chain) {
     const r = await undoOne(x);
     if (!r.ok) { res.json({ ...r, ...(total.removed ? { removed: total.removed } : {}) }); return; }
     total.removed += r.removed;
-    for (const key of ['changed', 'closed', 'gone'] as const) total.left[key] += r.left[key];
+    for (const key of ['changed', 'closed', 'gone', 'other'] as const) total.left[key] += r.left[key];
   }
   pruneKeeps();
   res.json({ ok: true, ...total });
@@ -461,7 +447,7 @@ router.post('/api/rules/book-open', async (_req, res) => {
   const fx = loadFxResolver();
   const known = receiptKnowledge(loadKnowledge(APP_ROOT, WS.paths.root), WS);
   const open = new Map(engine().runs().filter((r) => r.mode === 'live' && r.item.kind === 'transaction' && r.state.status !== 'done' && r.state.status !== 'discarded').map((r) => [r.item.id, r]));
-  const n: BookOpen = { booked: 0, running: 0, notBooked: 0, model: 0, receipt: 0, deleted: 0, question: 0, unread: 0, reconcile: 0, busy: 0, later: 0 };
+  const n: BookOpen = { booked: 0, running: 0, notBooked: 0, model: 0, receipt: 0, deleted: 0, question: 0, unread: 0, reconcile: 0, busy: 0, later: 0, max: KEEP_RUNS_MAX };
   const candidates = books.transactions.filter((t) => t.amount !== 0 && !lock.isClosed(t.date) && bookedState(books, t.ref, WS.bankAccounts) !== 'booked');
   // Code and the rules, without a model, over all of them at once: what they decide is what may be booked.
   const scratch = structuredClone(books);
@@ -486,7 +472,7 @@ router.post('/api/rules/book-open', async (_req, res) => {
   }
   n.later = Math.max(0, decided.length - KEEP_RUNS_MAX);
   const now = decided.slice(0, KEEP_RUNS_MAX);
-  const made = await bookByRules(now);
+  const made = await bookByRules(WS, now);
   const booked = new Set(made.map((e) => e.transactionRef));
   await closeTasksOf(booked, BOOKED_BY_RULE);
   n.booked = booked.size;

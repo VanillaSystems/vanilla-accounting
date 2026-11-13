@@ -56,9 +56,6 @@ export async function startAndSay(workflowId: string, item: { kind: ItemKind; id
   return r.run ? runResultText(workflow, await rested(r.run)) : undefined;
 }
 
-/** How many payments one «Automatisch buchen» for all books at most (KEEP_RUNS_MAX on the server). */
-const BOOK_OPEN_MAX = 200;
-
 /**
  * «Automatisch buchen» for every open payment at once (Automatisierung's list, r3-noai-22): the server
  * books only what a rule of the firm or code decides, asks no model, and counts every payment it left
@@ -66,7 +63,8 @@ const BOOK_OPEN_MAX = 200;
  */
 export async function bookOpenAndSay(workflowName: string): Promise<string> {
   const n = await api.bookOpen();
-  if (!Object.values(n).some(Boolean)) return t('marks.all.none', { workflow: workflowName });
+  const { max, ...counts } = n;
+  if (!Object.values(counts).some(Boolean)) return t('marks.all.none', { workflow: workflowName });
   const parts = [
     t('marks.all.booked', { n: n.booked }),
     n.model ? t('marks.all.model', { n: n.model }) : '',
@@ -77,7 +75,7 @@ export async function bookOpenAndSay(workflowName: string): Promise<string> {
     n.reconcile ? t('marks.all.reconcile', { n: n.reconcile }) : '',
     n.busy ? t('marks.all.busy', { n: n.busy }) : '',
     n.notBooked ? t('marks.all.notBooked', { n: n.notBooked }) : '',
-    n.later ? t('marks.all.later', { n: n.later, max: BOOK_OPEN_MAX }) : '',
+    n.later ? t('marks.all.later', { n: n.later, max }) : '',
   ].filter(Boolean);
   return `${workflowName}: ${parts.join(' · ')}.`;
 }

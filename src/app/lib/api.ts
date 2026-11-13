@@ -508,7 +508,7 @@ export const api = {
   /** Its result line closed. */
   closeKept: (keep: string) => request<{ ok: true }>('POST', '/api/rules/kept/close', { keep }),
   /** «Rückgängig» of one keep: the server puts its rules file back and takes out the bookings its runs made that are still theirs. */
-  undoKept: (keep: string, withLater = false) => request<{ ok: true; removed: number; left: { changed: number; closed: number; gone: number } } | { ok: false; refusal?: string; message: string; removed?: number }>('POST', '/api/rules/kept/undo', { keep, ...(withLater ? { withLater } : {}) }),
+  undoKept: (keep: string, withLater = false) => request<{ ok: true; removed: number; left: { changed: number; closed: number; gone: number; other: number } } | { ok: false; refusal?: string; message: string; removed?: number }>('POST', '/api/rules/kept/undo', { keep, ...(withLater ? { withLater } : {}) }),
   /** «Automatisch buchen» for all open payments: only what a rule or code decides, no model asked; what was left, by why. */
   bookOpen: () => request<BookOpen>('POST', '/api/rules/book-open', {}),
   /** «Als Regel vorschlagen» on a sentence of a partner's notes, or «Regel anpassen» after it changed: the rule drafted for its card. */

@@ -343,7 +343,7 @@ export function KeptLine({ keep, nav, lead }: { keep: KeptView; nav?: Nav; lead?
     try {
       const r = await api.undoKept(k.id, withLater);
       if (!r.ok) { setSaid(r.refusal && isKey(`rules.kept.ended.${r.refusal}`) ? t(`rules.kept.ended.${r.refusal}` as 'rules.kept.ended.file') : r.message); if (r.removed) refreshFor(nav); reloadKept(); return; }
-      const left = [r.left.changed ? t('rules.kept.leftChanged', { n: r.left.changed }) : '', r.left.closed ? t('rules.kept.leftClosed', { n: r.left.closed }) : '', r.left.gone ? t('rules.kept.leftGone', { n: r.left.gone }) : ''].filter(Boolean);
+      const left = [r.left.changed ? t('rules.kept.leftChanged', { n: r.left.changed }) : '', r.left.closed ? t('rules.kept.leftClosed', { n: r.left.closed }) : '', r.left.gone ? t('rules.kept.leftGone', { n: r.left.gone }) : '', r.left.other ? t('rules.kept.leftOther', { n: r.left.other }) : ''].filter(Boolean);
       say([t('rules.kept.undone', { n: r.removed }), ...left].join(' '));
       refreshFor(nav);
       reloadKept();
@@ -393,7 +393,7 @@ function PaymentLine({ p, names, national }: { p: PreviewPayment; names: RuleNam
       <span className="m">{formatDate(p.date)} · {p.currency} {fmt(p.amount)}</span> {p.text}
       {' → '}
       {/* A payment that waits for its receipt is not booked at the keep: the card says what keeping will do (#383). */}
-      <b>{p.would.kind === 'ask' ? t('rules.preview.ask', { question: p.would.question }) : p.waits ? t('rules.preview.waits') : would}</b>
+      <b>{p.would.kind === 'ask' ? t('rules.preview.ask', { question: p.would.question }) : p.reconcile ? t('rules.preview.reconcile') : p.waits ? t('rules.preview.waits') : would}</b>
       <span className="m">{' · '}{p.decidedBy ? t('rules.preview.otherFirst') : p.now.length ? t('rules.preview.now', { booking: p.now.map((l) => lineText(l, names)).join(' + ') }) : t('rules.preview.unbooked')}</span>
       {p.beforeAi && !p.decidedBy ? <span className="m" data-testid="before-ai">{' · '}{t('rules.preview.beforeAi', { booking: p.beforeAi.map((l) => lineText(l, names)).join(' + ') })}</span> : null}
       {national ? <span className="m" data-testid="national">{' · '}{t('rules.preview.national', { booking: national.map((l) => (l.vat ? codeLabel(l.vat) : '–')).join(' + ') })}</span> : null}
@@ -411,9 +411,9 @@ function Preview({ p, names }: { p: RulePreview; names: RuleNames }) {
       <span className="m">{p.matches ? t('rules.preview.matches', { n: p.matches, year: p.year }) : t('rules.preview.none', { year: p.year })}</span>
       {p.examples.length ? <ul>{p.examples.map((x) => <PaymentLine key={x.ref} p={x} names={names} national={national.get(x.ref)} />)}</ul> : null}
       {p.matches > p.examples.length ? <span className="m">{t('rules.preview.more', { n: p.matches - p.examples.length })}</span> : null}
-      {p.open && (p.open.book.length || p.open.waits.length) ? (
-        <span className="m" data-testid="rule-open" data-book={p.open.book.length} data-waits={p.open.waits.length}>
-          {[p.open.book.length ? t('rules.preview.openBook', { n: p.open.book.length }) : '', p.open.waits.length ? t('rules.preview.openWaits', { n: p.open.waits.length }) : ''].filter(Boolean).join(' ')}
+      {p.open && (p.open.book.length || p.open.waits.length || p.open.reconcile?.length) ? (
+        <span className="m" data-testid="rule-open" data-book={p.open.book.length} data-waits={p.open.waits.length} data-reconcile={p.open.reconcile?.length ?? 0}>
+          {[p.open.book.length ? t('rules.preview.openBook', { n: p.open.book.length }) : '', p.open.waits.length ? t('rules.preview.openWaits', { n: p.open.waits.length }) : '', p.open.reconcile?.length ? t('rules.preview.openReconcile', { n: p.open.reconcile.length }) : ''].filter(Boolean).join(' ')}
         </span>
       ) : null}
       {p.overlaps.map((o) => (

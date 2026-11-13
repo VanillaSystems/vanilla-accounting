@@ -104,7 +104,7 @@ test('«Rückgängig» of a keep: the rule file goes (it was the first), the kee
   assert.equal((await api.send('PATCH', `/api/journal-entries/${changed.id}`, { description: 'Lohn Juli Max' })).status, 200);
 
   const undone = (await api.send('POST', '/api/rules/kept/undo', { keep: kept.keep!.id })).json;
-  assert.deepEqual([undone.ok, undone.removed, undone.left], [true, 3, { changed: 1, closed: 0, gone: 0 }], JSON.stringify(undone));
+  assert.deepEqual([undone.ok, undone.removed, undone.left], [true, 3, { changed: 1, closed: 0, gone: 0, other: 0 }], JSON.stringify(undone));
   assert.equal(existsSync(join(api.ws.paths.root, path)), false, 'the first rules file is gone again, not left empty');
   const books = loadBooks(api.ws);
   assert.deepEqual(books.journalEntries.map((e) => e.transactionRef), ['L1'], 'only the changed booking stays');

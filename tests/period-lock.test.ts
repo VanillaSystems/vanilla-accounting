@@ -411,4 +411,17 @@ test('open period: keeping a rule books its open payments and leaves the filed q
   now = loadBooks(workspaceAt(api.ws.paths.root)) as Books;
   assert.ok(!now.journalEntries.some((e) => e.transactionRef === ref));
   assert.deepEqual(closedPart(now, '2026-06-30'), closedPart(fixture, '2026-06-30'));
+  // «Automatisch buchen» for all (#396): what the kept rule decides in the open period is booked, the filed quarter's stays.
+  const again = (await send({ method: 'POST', path: '/api/rules/hand', body: { match: { kind: 'text', text: 'Manuell' }, direction: 'out', account: '6570', vat: '0' } })).json;
+  const card2 = (await api.send('GET', `/api/rules/draft?path=${encodeURIComponent(String(again.path))}`)).json as { basis: string };
+  assert.equal((await send({ method: 'POST', path: '/api/rules/draft', body: { kind: 'keep', path: String(again.path), basis: card2.basis, confirm: true } })).json.ok, true);
+  await api.rest();
+  const id = loadBooks(workspaceAt(api.ws.paths.root)).journalEntries.find((e) => e.transactionRef === ref)!.id;
+  assert.equal((await send({ method: 'DELETE', path: `/api/journal-entries/${id}` })).status, 200);
+  assert.equal((await send({ method: 'PATCH', path: `/api/transactions/${ref}`, body: { noReceiptNeeded: true } })).status, 200);
+  const all = await send({ method: 'POST', path: '/api/rules/book-open', body: {} });
+  assert.equal(all.status, 200, JSON.stringify(all.json));
+  now = loadBooks(workspaceAt(api.ws.paths.root)) as Books;
+  assert.ok(!now.journalEntries.some((e) => e.transactionRef === 'M2026-001'), 'the filed quarter\'s payment stays unbooked');
+  assert.deepEqual(closedPart(now, '2026-06-30'), closedPart(fixture, '2026-06-30'));
 });

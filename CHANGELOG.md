@@ -338,6 +338,8 @@ Two markers flag an entry you must read before you update:
   buchen» leaves Aufgaben once the wages are booked. «Automatisch buchen» in Automatisierung's list
   books what the firm's rules decide, asks no AI, and names what it left and why («10 braucht die KI
   oder dich …»), instead of opening the diagram; on a payment whose booking she deleted it asks first.
+  A payment an account's reconciliation holds is booked by neither: the rule's card says it waits for
+  the reconciliation.
 - The setup conversation keeps its order after a typed message (#385): the message stands under the
   question it was typed at, above that question's answer, and the open question with its buttons
   stays under her newest message, also when the words took a step back. In the books the rail shows

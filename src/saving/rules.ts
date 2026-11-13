@@ -320,7 +320,7 @@ export interface KeptView {
 export type KeptEnded = 'file' | 'expired' | 'closed' | 'bookedSince';
 
 /** POST /api/rules/book-open: what «Automatisch buchen» for all came to, by why each payment is or is not booked. */
-export interface BookOpen { booked: number; running: number; notBooked: number; model: number; receipt: number; deleted: number; question: number; unread: number; reconcile: number; busy: number; later: number }
+export interface BookOpen { booked: number; running: number; notBooked: number; model: number; receipt: number; deleted: number; question: number; unread: number; reconcile: number; busy: number; later: number; /** How many one click books at most. */ max: number }
 
 export interface KeptBookings { runs: string[]; refs: string[]; entries: string[]; running: number; notBooked: string[]; later?: number; first?: { id: string; date: string } }
 
@@ -375,9 +375,9 @@ export async function keepDraft(ws: Workspace, path: string, basis: string, conf
   // What became of each rule, for the AI sidebar (#362): after the keep is done, and never failing it.
   recordSettled(ws, path, changes, 'kept');
   // The open payments the kept rules decide, as the card showed them: the keep books them at once (#383).
-  const open = preview.reduce<OpenDecided>((all, p) => ({ book: [...all.book, ...(p.open?.book ?? [])], waits: [...all.waits, ...(p.open?.waits ?? [])] }), { book: [], waits: [] });
+  const open = preview.reduce<OpenDecided>((all, p) => ({ book: [...all.book, ...(p.open?.book ?? [])], waits: [...all.waits, ...(p.open?.waits ?? [])], reconcile: [...(all.reconcile ?? []), ...(p.open?.reconcile ?? [])] }), { book: [], waits: [], reconcile: [] });
   const rules = [...d.added, ...d.changed].map((r) => r.id);
-  return { ok: true, committed, rules, undo: { file: path, before: was, after: hashOf(after) }, ...(open.book.length || open.waits.length ? { open } : {}) };
+  return { ok: true, committed, rules, undo: { file: path, before: was, after: hashOf(after) }, ...(open.book.length || open.waits.length || open.reconcile?.length ? { open } : {}) };
 }
 
 /** «Verwerfen»: the draft of one file is gone; the file stays as it is. */
