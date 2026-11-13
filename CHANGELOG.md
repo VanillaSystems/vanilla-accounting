@@ -34,7 +34,7 @@ Two markers flag an entry you must read before you update:
   a receipt that may fit is named with the rate linking it would bring.
 - «Was muss ich noch machen?» (#398): the open period's card names every item one by one, each a
   link: first the receipts that wait for her own word (no date, no amount, not read, a possible
-  copy: «Baucenter · CHF 187.35 · Datum fehlt»), then each payment without a booking with its day,
+  copy: «Baumarkt · its amount · Datum fehlt»), then each payment without a booking with its day,
   name and amount, each receipt without a payment; five per line and «und n weitere» with the way
   to all. The AI adds at most one sentence and no counts; a period is said «Q3 2026», never
   «2026-Q3».
@@ -53,7 +53,7 @@ Two markers flag an entry you must read before you update:
   «Erfasst» line; the drop's closing names both places with counts («2 Belege warten auf dich unter
   Belege · 14 Aufgaben unter Automatisierung › Aufgaben»); an unregistered firm's invoice has no
   «MWST 0 %» in its head and its firm card says what follows; an amount in a receipt's text reads
-  «CHF 3'200.00» in the open list.
+  with the thousands mark in the open list.
 
 - AI step: before the browser opens for the sign-in, the app says what a person without an account
   will see: the page in English, where she creates the account; the subscription the card named is
