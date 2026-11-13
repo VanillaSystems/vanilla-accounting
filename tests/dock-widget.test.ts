@@ -31,7 +31,7 @@ const keys = (fs: Array<{ key: string }>) => fs.map((f) => f.key);
 test('the bar shows the payments booked of the period\'s payments and what waits; the card a line for the receipts, one for the payments, and «ohne dich» only when the books record who booked (#398)', () => {
   const w = dockWidget(figures({ withoutYou: 79 }), view(), 0, now);
   assert.deepEqual(w.stack, [{ key: 'payments', n: 41, of: 45 }, { key: 'waiting', n: 0 }], 'how far the period is, in payments');
-  assert.deepEqual(w.card, [{ key: 'receipts', read: 44, booked: 38 }, { key: 'payments', n: 41, of: 45 }, { key: 'withoutYou', pct: 79 }]);
+  assert.deepEqual(w.card, [{ key: 'receipts', collected: 46, read: 44, booked: 38 }, { key: 'payments', n: 41, of: 45 }, { key: 'withoutYou', pct: 79 }]);
   const unknown = dockWidget(figures({ authors: { app: 0, asked: 0, changed: 0, person: 0, unknown: 38 } }), view(), 0, now);
   assert.deepEqual(keys(unknown.card), ['receipts', 'payments'], 'no share when no booking records its author');
   assert.deepEqual(keys(dockWidget(figures({ payments: 0, paymentsBooked: 0 }), view(), 0, now).card), ['receipts', 'payments'], 'both lines always, also before the first statement');
@@ -112,7 +112,7 @@ test('one word, one unit (#398): in every state of the books the bar\'s label an
   const units: Record<string, { payments: RegExp; receipts: RegExp; tasks: RegExp }> = {
     de: { payments: /Zahlung/, receipts: /Beleg/, tasks: /Aufgabe/ },
     en: { payments: /payment/i, receipts: /receipt/i, tasks: /task/ },
-    fr: { payments: /paiement/i, receipts: /pièce/i, tasks: /tâche/ },
+    fr: { payments: /paiement/i, receipts: /justificatif/i, tasks: /tâche/ },
     it: { payments: /pagament/i, receipts: /giustificativ/i, tasks: /compit/ },
   };
   const states = [
@@ -132,9 +132,12 @@ test('one word, one unit (#398): in every state of the books the bar\'s label an
       assert.match(figureLabel(say, w.stack[1]), units[code].tasks);
       const lines = w.card.map((x) => cardLine(say, x));
       assert.match(lines[0], units[code].receipts, `${code}: «${lines[0]}» names receipts`);
-      assert.match(lines[0], new RegExp(`${f.read}\\D+${f.booked}`), 'read and booked receipts on one line');
+      if (f.collected) assert.match(lines[0], new RegExp(`${f.read}\\D+${f.booked}`), 'read and booked receipts on one line');
       assert.match(lines[1], units[code].payments, `${code}: «${lines[1]}» names payments`);
-      assert.match(lines[1], new RegExp(`${f.paymentsBooked}\\D+${f.payments}`));
+      if (f.payments) assert.match(lines[1], new RegExp(`${f.paymentsBooked}\\D+${f.payments}`));
+      // A period without any says so (#398 review): never «0 von 0», on the card nor in the tip.
+      for (const line of [...lines, dockLine(say, w)]) assert.doesNotMatch(line, /\b0 (von|of|sur|su) 0\b/, `${code}: «${line}»`);
+      if (!f.collected) assert.doesNotMatch(lines[0], /\d/, `${code}: «${lines[0]}» says there are none`);
       assert.match(dockLine(say, w), units[code].payments);
       assert.doesNotMatch(figureLabel(say, w.stack[0]), /\{/, 'no placeholder left');
     }

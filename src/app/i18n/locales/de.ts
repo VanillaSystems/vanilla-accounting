@@ -3850,6 +3850,8 @@ export const messages = {
   'dock.fig.paymentsNone': 'Zahlungen gebucht',
   'dock.card.receipts': 'Belege: {read} gelesen · {booked} verbucht',
   'dock.card.paymentsLine': 'Zahlungen: {n} von {of} gebucht',
+  'dock.card.paymentsNone': 'Zahlungen: noch keine in dieser Periode',
+  'dock.card.receiptsNone': 'Belege: noch keine in dieser Periode',
   'dock.now.running': 'Läuft: {what}',
   'dock.now.paused': 'Angehalten: nichts startet nach Zeitplan',
   'dock.now.next': 'Nächster Lauf {when}: {workflow}',

@@ -15,7 +15,7 @@ export function figureLabel(say: Say, f: WidgetFigure): string {
   switch (f.key) {
     case 'withoutYou': return say('dock.fig.withoutYou');
     case 'payments': return f.of ? say('dock.card.payments', { n: f.of }) : say('dock.fig.paymentsNone');
-    case 'receipts': return say('dock.card.receipts', { read: f.read, booked: f.booked });
+    case 'receipts': return cardLine(say, f);
     case 'waiting': return say('dock.fig.waiting', { n: f.n });
   }
 }
@@ -23,8 +23,9 @@ export function figureLabel(say: Say, f: WidgetFigure): string {
 export function cardLine(say: Say, f: WidgetFigure): string {
   switch (f.key) {
     case 'withoutYou': return `${f.pct} % ${say('dock.fig.withoutYou')}`;
-    case 'payments': return say('dock.card.paymentsLine', { n: f.n, of: f.of });
-    case 'receipts': return say('dock.card.receipts', { read: f.read, booked: f.booked });
+    // A period without payments or receipts says so, never «0 von 0» (#398 review).
+    case 'payments': return f.of ? say('dock.card.paymentsLine', { n: f.n, of: f.of }) : say('dock.card.paymentsNone');
+    case 'receipts': return f.collected ? say('dock.card.receipts', { read: f.read, booked: f.booked }) : say('dock.card.receiptsNone');
     case 'waiting': return `${f.n} ${say('dock.card.waiting', { n: f.n })}`;
   }
 }

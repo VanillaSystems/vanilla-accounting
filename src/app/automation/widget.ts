@@ -17,7 +17,7 @@ export type WidgetFigure =
   /** Payments of the period booked, `n` of `of`, a person's by hand among them: how far the period is (#365, #398). */
   | { key: 'payments'; n: number; of: number }
   /** The period's receipts read, and of them those whose payment is booked («verbucht», #398). */
-  | { key: 'receipts'; read: number; booked: number }
+  | { key: 'receipts'; collected: number; read: number; booked: number }
   /** Booked by the app with nobody's change, in % of the bookings whose author the books record. */
   | { key: 'withoutYou'; pct: number };
 
@@ -57,7 +57,7 @@ export function dockWidget(f: HomeFigures, view: View | undefined, forMe: number
     state: run ? 'running' : waiting ? 'waiting' : 'idle',
     stack: [{ key: 'payments', n: f.paymentsBooked, of: f.payments }, { key: 'waiting', n: waiting }],
     card: [
-      { key: 'receipts', read: f.read, booked: f.booked },
+      { key: 'receipts', collected: f.collected, read: f.read, booked: f.booked },
       { key: 'payments', n: f.paymentsBooked, of: f.payments },
       ...(f.withoutYou !== undefined ? [{ key: 'withoutYou' as const, pct: f.withoutYou }] : []),
     ],

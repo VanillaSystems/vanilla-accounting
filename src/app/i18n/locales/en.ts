@@ -3853,6 +3853,8 @@ export default {
     'dock.fig.paymentsNone': 'payments booked',
     'dock.card.receipts': 'Receipts: {read} read · {booked} booked',
     'dock.card.paymentsLine': 'Payments: {n} of {of} booked',
+    'dock.card.paymentsNone': 'Payments: none in this period yet',
+    'dock.card.receiptsNone': 'Receipts: none in this period yet',
     'dock.now.running': 'Running: {what}',
     'dock.now.paused': 'Paused: nothing starts on a schedule',
     'dock.now.next': 'Next run {when}: {workflow}',
