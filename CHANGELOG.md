@@ -94,6 +94,10 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- Demos (#374): the bundled demos are written again by today's generator, so their payments show
+  the other party's name and their bank fee rows are marked as fees, as in books read from a
+  statement now; no booking and no figure changed. A test now fails when a committed demo is not
+  what `npm run demo:generate` writes.
 - Setup (#423): «MWST-Methode» and «Abrechnungsart» say where the owner finds her answer herself:
   in the ESTV portal, under «Neue Geschäfte» her firm, then «Anpassen» on the card «Abrechnungsmodalitäten», changing nothing; the Treuhand
   only when she has no access. «Abrechnungsart» no longer says that vereinbart applies unless the
@@ -343,6 +347,12 @@ Two markers flag an entry you must read before you update:
   kept beside the receipts, never paid, and says so in its row and in Belege; the one of the last day
   of the year before the open year is offered for the opening («Eröffnung erfassen» to Firma ›
   Eröffnung). The opening stays the person's: nothing is written to it.
+- After the drop she sees her data (#424): what «Dateien hinzufügen» reports as booked (a provider's
+  reports, the payouts her answer in a row booked, a statement read or kept, a file taken back) is on
+  every page at once, the MWST figure and the dock too; before, the page kept the figures of before
+  the drop until the window was reloaded. Closing the window after a bank's PDF statement opens that
+  statement in its own quarter; before, it opened a «Datei» view in today's quarter that said the
+  file was not read.
 - A payment provider's payouts list dropped before the firm has that provider is named as the
   provider's other export, with the reports to bring instead, at the first drop too (#425); before,
   it became a bank statement's column question; the dialog's head says it was set aside, not
