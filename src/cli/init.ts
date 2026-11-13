@@ -72,13 +72,15 @@ async function text(flag: string, prompt: string, check?: (v: string) => string 
   }
 }
 
-async function choose(key: QuestionKey, n: number, preset: Partial<Answers>): Promise<string[]> {
+async function choose(key: QuestionKey, preset: Partial<Answers>): Promise<string[]> {
   const q = QUESTIONS[key];
   const multi = 'multi' in q;
   // «we file no VAT returns» beside the method and the basis (#347): «no» to the registration, also as --vat-method no-vat.
   const options = [...(q.options as readonly { value: string; label: string }[]), ...(unsteered(key) ? [{ value: NO_VAT, label: 'we file no VAT returns (not registered for VAT)' }] : [])];
   if (interactive) {
-    console.log(`\n${n}/${SETUP_QUESTIONS.length} ${q.ask}\n    ${q.why}${'where' in q ? `\n    ${q.where}` : ''}`);
+    // Numbered among the setup's questions; one the setup does not ask, given by its flag (#452), has no number.
+    const n = SETUP_QUESTIONS.indexOf(key) + 1;
+    console.log(`\n${n ? `${n}/${SETUP_QUESTIONS.length} ` : ''}${q.ask}\n    ${q.why}${'where' in q ? `\n    ${q.where}` : ''}`);
     console.log('    ' + options.map((o, i) => `${i + 1}) ${o.label}`).join('   ') + (multi ? '   (several: 1,2; none: -)' : ''));
   }
   const prefilled = preset[key] as string | string[] | undefined;
@@ -108,7 +110,7 @@ async function askAnswers(preset: Preset): Promise<{ answers: Answers; netRates:
       if (given !== undefined) answers[key] = Array.isArray(given) ? [...given] : given as string;
       continue;
     }
-    const picked = await choose(key, SETUP_QUESTIONS.indexOf(key) + 1, prefill);
+    const picked = await choose(key, prefill);
     if (picked[0] === NO_VAT) {
       const unregistered = notRegistered(answers);
       for (const k of Object.keys(answers)) delete answers[k];

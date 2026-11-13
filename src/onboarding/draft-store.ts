@@ -11,6 +11,7 @@ import { SetupError, checkBank, checkPreset, createWorkspace, type Bank, type Cr
 import { PRESETS, QUESTIONS, VAT_QUESTIONS, optionOf, salesKinds, withLater, type QuestionKey } from '../workspace/setup.js';
 import { parseNetRates } from '../workspace/vat-setup.js';
 import { parseUid } from '../workspace/uid.js';
+import { assumedLater } from './hand.js';
 import { APP_FOLDER, APP_ROOT, appFolderIn, appLanguages, workspaceAt } from '../workspace/workspace.js';
 import { loadJurisdiction } from '../core/modules/load.js';
 import { DRAFT_FILE, assumedOf as assumedOfDraft, isStepMark, newDraft, requestOf, withPatch, type DraftPatch, type Firm, type SetupDraft, type SetupDraftView } from './draft.js';
@@ -169,7 +170,7 @@ export async function createFromDraft(root: string, now: string): Promise<Create
   // What the kind of firm answered and she never touched stays marked in the books (#385).
   // So do the answers the setup does not ask (#452), which took their `later` answer.
   const { answers, filled } = withLater(draft.answers);
-  const assumed = assumedFrom([...assumedOfDraft(draft), ...filled], answers, draft.assumedBy);
+  const assumed = assumedFrom([...assumedOfDraft(draft), ...assumedLater(filled)], answers, draft.assumedBy);
   // The private shares her words named, of what she still says is used privately (#402): kept for the rule of the provider's first payment.
   const kept = sharesOf(draft);
   seedCreated(workspaceAt(created.root), { started: draft.started, ...(assumed ? { assumed } : {}), ...(kept ? { shares: kept } : {}) }, now);

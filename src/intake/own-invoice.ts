@@ -19,10 +19,12 @@ const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCas
  * Whether the firm issued the receipt, and how sure that is. `uid`: the firm has a UID, the receipt
  * shows it (the read VAT number, or in its text with or without the VAT word after it: a firm not registered for
  * VAT prints none) and no other UID, compared whole; a supplier's invoice that prints the customer's
- * UID beside its own is none. `name`: the firm has no UID, its name heads the text (the first line,
- * the letterhead) and the text shows no UID; that is no proof (a supplier's logo can be an image, so
- * the addressee is the first line; a supplier's name can hold the firm's), so its pairs are proposed,
- * never linked by code. False: someone else's.
+ * UID beside its own is none. `name`: the firm has no UID in its settings (#452: the setup does not
+ * ask it), its name heads the text (the first line, the letterhead), and the text shows no UID or one
+ * only, in the letterhead under the name: the firm's own, which its VAT invoice prints (uidToKeep
+ * offers to keep it). That is no proof (a supplier's logo can be an image, so the addressee is the
+ * first line; a supplier's name can hold the firm's), so its pairs are proposed, never linked by code.
+ * False: someone else's.
  */
 export function issuedByFirm(r: Pick<Receipt, 'vatId' | 'extractedText'>, firm: Firm | undefined): 'uid' | 'name' | false {
   if (!firm) return false;
@@ -30,8 +32,25 @@ export function issuedByFirm(r: Pick<Receipt, 'vatId' | 'extractedText'>, firm: 
   if (r.vatId) shown.add(normUid(r.vatId));
   if (firm.uid) return shown.size === 1 && shown.has(normUid(firm.uid)) ? 'uid' : false;
   const name = firm.name ? fold(firm.name) : '';
-  const first = (r.extractedText ?? '').split('\n').map(fold).find(Boolean);
-  return !!name && !shown.size && !!first && first.includes(name) ? 'name' : false;
+  const lines = (r.extractedText ?? '').split('\n').filter((l) => fold(l));
+  if (!name || !lines.length || !fold(lines[0]).includes(name)) return false;
+  if (!shown.size) return 'name';
+  return shown.size === 1 && uidsIn(lines.slice(0, LETTERHEAD).join('\n')).has([...shown][0]) ? 'name' : false;
+}
+
+/** The lines of a letterhead: the name, its address, its UID. */
+const LETTERHEAD = 5;
+
+/**
+ * The UID on the firm's own invoice while its settings have none (#452): the one UID its letterhead
+ * shows (issuedByFirm 'name'), as CHE-###.###.###. The person decides whether it is the firm's and
+ * keeps it through Firma's own checks; code never keeps it on its own.
+ */
+export function uidToKeep(r: Pick<Receipt, 'vatId' | 'extractedText'>, firm: Firm | undefined): string | undefined {
+  if (!firm || firm.uid || issuedByFirm(r, firm) !== 'name') return undefined;
+  const [uid] = uidsIn(r.extractedText ?? '');
+  const m = uid ? /^CHE(\d{3})(\d{3})(\d{3})$/.exec(uid) : null;
+  return m ? `CHE-${m[1]}.${m[2]}.${m[3]}` : undefined;
 }
 
 /**

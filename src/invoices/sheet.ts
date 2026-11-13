@@ -233,11 +233,11 @@ export function assembleSheets(d: SheetData, blocks: Block[], pagination: { page
   const title = `${esc(sheetTitle(d, L))} ${d.number ? esc(d.number) : `<span class="draftno">${L.draft}</span>`}`;
   const s = d.sender;
   const withVat = d.screen?.edit?.scope === 'draft' || !d.number ? chargesVat() : d.lines.some((l) => l.vatRate > 0) || !!d.exemption;
-  const uid = withVat ? `${esc(s.uid)} ${L.vatSuffix}` : esc(s.uid);
+  const uid = !s.uid ? '' : withVat ? `${esc(s.uid)} ${L.vatSuffix}` : esc(s.uid);
   const uidLabel = withVat ? L.vatNo : L.uidNo;
   const pageHead = (k: number) => `<div class="phead"><span>${esc(s.name)} · ${title}</span><span>${L.page(k, n)}</span></div>`;
   const footer = (k: number, qrHere = false) => show.footer && !qrHere
-    ? `<div class="foot"><span>${[s.name, oneLine(s.address)].filter(Boolean).map(esc).join('<br>')}</span>${s.payTo ? `<span>${L.bank}${s.payTo.bank ? `: ${esc(s.payTo.bank)}` : ''}<br>${L.iban} ${esc(prettyIban(s.payTo.iban))}</span>` : ''}<span>${uidLabel}<br>${uid}</span>${n > 1 ? `<span class="pno">${L.page(k, n)}</span>` : ''}</div>`
+    ? `<div class="foot"><span>${[s.name, oneLine(s.address)].filter(Boolean).map(esc).join('<br>')}</span>${s.payTo ? `<span>${L.bank}${s.payTo.bank ? `: ${esc(s.payTo.bank)}` : ''}<br>${L.iban} ${esc(prettyIban(s.payTo.iban))}</span>` : ''}${s.uid ? `<span>${uidLabel}<br>${uid}</span>` : ''}${n > 1 ? `<span class="pno">${L.page(k, n)}</span>` : ''}</div>`
     : n > 1 ? `<div class="foot bare"><span class="pno">${L.page(k, n)}</span></div>` : '';
   const style = `--ivf:${FONT_STACK[layout.font]};--iva:${layout.accent};--lh:${LOGO_MM[layout.logoSize]}mm`;
   const sheet = (cls: string, inner: string) => `<div class="a4 ${cls}" style="${style}" lang="${d.language}">${inner}</div>`;

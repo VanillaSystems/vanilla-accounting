@@ -58,6 +58,8 @@ const FIRM = { name: 'Malerei Essentials GmbH', owner: 'Sandra Beispiel' };
 const BANKS = [{ bank: 'UBS', currency: 'CHF' }];
 /** The answers the setup no longer asks (#452): none of them changes what is booked. */
 const LATER: QuestionKey[] = ['fiscalYear', 'start', 'foreignCustomers', 'ownerPaysPrivately', 'privateUse', 'payouts'];
+/** Of those, the ones nothing in the app changes (ANSWER_HAND null): not marked assumed, as nothing would let her change them. */
+const NO_PLACE: QuestionKey[] = ['fiscalYear', 'foreignCustomers'];
 const manifestOf = (root: string) => readFileSync(join(root, APP_FOLDER, MANIFEST_FILE), 'utf8');
 
 test('the setup asks only what the books need: the UID and the answers that book nothing differently are not among its questions', () => {
@@ -83,7 +85,7 @@ test('the form without a UID and without the later answers: the books open, the 
   const accounts = (JSON.parse(readFileSync(ws.paths.accounts, 'utf8')) as Array<{ number: string }>).map((a) => a.number);
   assert.ok(!accounts.includes('1093'), 'no clearing account: the drop row asks for it with the first payout report');
   const assumed = readProgress(ws).assumed?.answers ?? {};
-  for (const k of LATER) assert.ok(k in assumed, `${k}: assumed in the books, so she sees it and can change it`);
+  for (const k of LATER) assert.equal(k in assumed, !NO_PLACE.includes(k), `${k}: assumed in the books where she can change it; the fiscal year and the customers abroad have no place`);
 
   patchManifest(ws.paths.manifest, { company: { uid: 'CHE-153.004.184' } });
   assert.equal(workspaceAt(root).company.uid, 'CHE-153.004.184', 'entered later under Firma, it is kept');
@@ -119,7 +121,7 @@ test('the conversation: the firm is its name and its owner; «Etwas anderes» as
   assert.equal(ws.company.uid, undefined);
   assert.equal(ws.profile?.start, 'new');
   const assumed = readProgress(ws).assumed?.answers ?? {};
-  for (const k of LATER) assert.ok(k in assumed, `${k}: assumed in the books`);
+  for (const k of LATER) assert.equal(k in assumed, !NO_PLACE.includes(k), `${k}: assumed in the books only where she can change it`);
 });
 
 const ch = loadJurisdiction(APP_ROOT, 'ch').jurisdiction;
