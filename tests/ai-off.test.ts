@@ -217,6 +217,7 @@ const NO_MODEL: Record<string, string> = {
   'src/cli/update.ts': 'git and npm',
   'src/cli/workflow.ts': "the app's own API",
   'src/collect/tutti.ts': 'Chrome to PDF, pdftotext',
+  'src/desktop/build-key.ts': "codesign reads the app's own signature",
   'src/desktop/dictation.ts': "macOS's dictation",
   'src/desktop/main.ts': "the app's own server",
   'src/parsers/pdf-pages.ts': 'osascript renders PDF pages',
