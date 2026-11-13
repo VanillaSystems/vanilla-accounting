@@ -38,7 +38,8 @@ import { fileKeyOf } from '../areas/bank/model.js';
 import { startIntake } from '../automation/intake.js';
 import { setBankDraft } from '../areas/company/bank-draft.js';
 import { chfOf, suggestion } from '../areas/receipts/model.js';
-import { ledgerFor, noneText } from '../areas/receipts/view.js';
+import { ledgerFor, noneText, txLine } from '../areas/receipts/view.js';
+import { offersInBooks } from '../../intake/near-pairs.js';
 import { useFx } from '../hooks/use-fx.js';
 import { ReportCorrections } from '../areas/receipts/ReportCorrections.js';
 import { processingText } from '../automation/processing.js';
@@ -488,7 +489,11 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
   // «Zahlung bestätigen» only when Belege has a payment to propose for it (r8k-5).
   const ledger = ledgerFor(books);
   const proposed = x.kind === 'waits' && receipt && ledger.byId.has(receipt.id) ? !!suggestion(ledger.byId.get(receipt.id)!, ledger, chfOf(rates)) : false;
-  const missing = x.kind !== 'waits' && x.kind !== 'stuck' ? '' : lacks ? t('drop.p.missing', { what: lacks }) : proposed ? t('drop.p.payment') : t('drop.p.noPayment');
+  // A payment that may fit without any rule linking it (#397): named in the row, the receipt's page offers it with what differs.
+  const maybe = (x.kind === 'read' || x.kind === 'waits') && receipt && !lacks && !proposed
+    ? offersInBooks(books, { receipt: receipt.id }, ledger.firm).find((o) => !o.filed) : undefined;
+  const maybeTx = maybe && ledger.txByRef.get(maybe.payment);
+  const missing = maybeTx ? t('near.dropMaybe', { what: txLine(maybeTx) }) : x.kind !== 'waits' && x.kind !== 'stuck' ? '' : lacks ? t('drop.p.missing', { what: lacks }) : proposed ? t('drop.p.payment') : t('drop.p.noPayment');
   const shown = !!receipt && open;
   // The books changed under the page: Belege must not show the receipt any more.
   const undo = () => { setBusy(true); void act(session, r, { kind: 'undo' }).then(refresh).finally(() => setBusy(false)); };
@@ -521,7 +526,7 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
               {noAi ? <button type="button" className="linkbtn" data-act="ai-set-up" onClick={() => go({ area: 'company', section: 'ai' })}>{t('aiSetup.line.setUp')}</button> : null}
             </small>
           ) : null}
-          {missing ? <small className="dwhy">{missing}</small> : x.kind === 'orderPage' ? <small className="dwhy" data-testid="drop-order-page">{t('drop.p.orderPageWhy', { provider: x.provider })}</small> : x.kind === 'refused' ? <small className="dwhy">{reasonText(x.reason)}</small>
+          {missing ? <small className="dwhy" {...(maybeTx && { 'data-testid': 'drop-near' })}>{missing}</small> : x.kind === 'orderPage' ? <small className="dwhy" data-testid="drop-order-page">{t('drop.p.orderPageWhy', { provider: x.provider })}</small> : x.kind === 'refused' ? <small className="dwhy">{reasonText(x.reason)}</small>
             : x.kind === 'none' ? <small className="dwhy" data-testid="drop-none">{x.why}</small>
             : x.kind === 'supporting' ? <small className="dwhy" data-testid="drop-supporting">{x.of ? t('drop.p.supportingOf', { what: x.why || t('receipts.why.supporting'), name: x.of.name }) : t('drop.p.supportingAlone', { what: x.why || t('receipts.why.supporting') })}</small>
             : x.kind === 'twin' ? <small className="dwhy" data-testid="drop-twin">{t('drop.twin.duplicate', { name: x.name })} · {t(`drop.twin.why.${x.why}`)}</small> : null}

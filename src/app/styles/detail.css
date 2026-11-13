@@ -244,5 +244,9 @@ button.qcard:hover { background: var(--hover); }
 .findpair-list { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 4px; }
 .findpair-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; }
 .findpair-list .golink { text-align: left; overflow-wrap: anywhere; }
+/* A near pair (#397): the record, what differs under it, the link beside both. */
+.findpair-list li.near { grid-template-columns: minmax(0, 1fr) auto; row-gap: 0; }
+.findpair-list li.near > .findpair-note { grid-column: 1; grid-row: 2; }
+.findpair-list li.near > .btn, .findpair-list li.near > .findpair-note + .findpair-note { grid-column: 2; grid-row: 1 / span 2; }
 .findpair-score { font: 500 11.5px "Geist Mono", monospace; color: var(--muted); }
 .findpair-go[disabled] { opacity: .6; cursor: progress; }

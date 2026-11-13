@@ -43,6 +43,16 @@ and Datei. The order and the ranking are pure functions in `model.ts` (tests/rec
   `[data-testid=private-book]` books a manual payment on the receipt's date and amount and links it
   (`POST /api/receipts/<id>/private-payment`; for a receipt of a filed period dated on the first open day). A unique exact fit shows as `.sug` with
   `[data-accept]` (Enter accepts and selects the next receipt that needs you).
+- `rc-near` (#397): a receipt no rule links whose payment may fit (src/intake/near-pairs.ts: the
+  payment names its number, or the same business, with an amount off by rounding or a cash discount,
+  or the receipt undated) shows `[data-testid=near-receipt]` instead of «Noch keine Zahlung»: each
+  `[data-testid=near-offer]` with `[data-testid=near-why]` («gleiche Firma · Betrag … statt … · 5 Tage
+  später») and `[data-testid=near-pick]` `Verknüpfen`. «Beleg suchen» on a payment
+  and «Zahlung suchen» on a receipt list the same under the search's outcome; the drop row says
+  `[data-testid=drop-near]` «passt vielleicht zu …». Code links by itself only the sure ones: the
+  number named with a rounding or a stated Skonto (`pair:rounded+…`, `pair:discount+…`), or the same
+  business with the exact amount within the invoice's terms. Driven 2026-11-13 on the persona's
+  drop without an AI.
 - `rc-unlink`: `.status .quiet` (`lösen`) or `.tx .un` in Zahlung (`POST /api/mapping/remove`).
   When the payment is a private one only this receipt holds, the same place says `Privat bezahlt
   aufheben`: it deletes that payment (`DELETE /api/transactions/<ref>`) and its link; ⌘Z pays the

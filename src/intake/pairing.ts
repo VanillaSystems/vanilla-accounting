@@ -74,8 +74,8 @@ export type LinkMaker = 'code' | 'checked' | 'model' | 'person' | 'unknown';
  */
 export const PAIR_RULE = { code: 'pair', checked: 'pair-checked', model: 'pair-choice' } as const;
 
-/** What matched in a pair: the amount (in one currency, the bank's original amount, or across currencies), the day, the vendor's name, a document number. */
-export const SIGNALS = ['amount', 'original', 'currency', 'day', 'name', 'number'] as const;
+/** What matched in a pair: the amount (in one currency, the bank's original amount, or across currencies), the day, the vendor's name, a document number; for a near pair (src/intake/near-pairs.ts) the amount within rounding or less a cash discount. */
+export const SIGNALS = ['amount', 'original', 'currency', 'day', 'name', 'number', 'rounded', 'discount', 'near'] as const;
 export type Signal = (typeof SIGNALS)[number];
 
 const ruleOf = (rule: string | undefined) => rule?.split(':')[0];
@@ -100,7 +100,7 @@ export function signalsOf(m: Pick<Mapping, 'rule'>): Signal[] {
 
 /** What matched in a candidate. */
 export function signalsOfCandidate(c: PairCandidate): Signal[] {
-  return [c.amount === 'same' ? 'amount' : c.amount === 'original' ? 'original' : 'currency', ...(dayOf(c) > 0 ? ['day' as const] : []), ...(c.words > 0 || c.business ? ['name' as const] : []), ...(c.number ? ['number' as const] : [])];
+  return [c.gap ?? (c.amount === 'same' ? 'amount' : c.amount === 'original' ? 'original' : 'currency'), ...(dayOf(c) > 0 ? ['day' as const] : []), ...(c.words > 0 || c.business ? ['name' as const] : []), ...(c.number ? ['number' as const] : []), ...(c.near ? ['near' as const] : [])];
 }
 
 /** Who of the chain made a link: code alone, code checked by the model, the model from a short list. */
@@ -110,12 +110,16 @@ export type Maker = 'code' | 'checked' | 'model';
  * What «Zahlung suchen» on a receipt or «Beleg suchen» on a payment found (POST /api/receipts/:id/find-payment,
  * /api/transactions/:ref/find-receipt): the pair linked (or, for a filed payment, the receipt pointed
  * at it) and who decided; else the code's candidates for the person to pick, the best SHORT_LIST of
- * `total`; else nothing within the bounds. `model`: a model took part.
+ * `total`; else nothing within the bounds. `model`: a model took part. `near`: what was not linked
+ * but may fit (a rounded amount, an undated receipt, two candidates), with what differs.
  */
 export type Found =
   | { outcome: 'linked' | 'filed'; receipt: string; payment: string; by: Maker; signals: Signal[]; model: boolean }
-  | { outcome: 'candidates'; candidates: Array<{ receipt: string; payment: string; score: number; filed: boolean }>; total: number; model: boolean }
-  | { outcome: 'none'; model: boolean };
+  | { outcome: 'candidates'; candidates: Array<{ receipt: string; payment: string; score: number; filed: boolean }>; total: number; model: boolean; near?: NearOffer[] }
+  | { outcome: 'none'; model: boolean; near?: NearOffer[] };
+
+/** A near pair offered beside the search's outcome (src/intake/near-pairs.ts, #397): never linked by code, one click to link. */
+export interface NearOffer { receipt: string; payment: string; gap: import('./near-pairs.js').Gap; days?: number; number?: string; supplier: boolean; filed: boolean }
 
 /** The link a stage of the chain makes, naming what matched. */
 export function pairMapping(maker: Maker, transactionRef: string, receiptId: string, signals: readonly Signal[]): Mapping {
@@ -164,6 +168,10 @@ export interface PairCandidate {
    * and a supplier's invoice is never paid by money in.
    */
   against?: true;
+  /** A near pair code links (src/intake/near-pairs.ts, #397): the amount off by rounding, or less a cash discount. */
+  gap?: 'rounded' | 'discount';
+  /** Linked by a rule of the near pairs (src/intake/near-pairs.ts), not by the chain's score: its link says so (signal `near`). */
+  near?: 'number' | 'supplier';
   /** An `against` candidate held back: a payment of the receipt's amount goes its usual way, or only the firm's name says the invoice is its own (issuedByFirm 'name'). Proposed, never linked by code; it steps aside for a clear pair going the usual way. */
   held?: true;
 }

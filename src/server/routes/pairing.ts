@@ -18,6 +18,7 @@ import { estvToChf, noPaymentFor, noReceiptFor, runPairChain, type ChainResult, 
 import type { BooksPort } from '../../intake/pipeline.js';
 import { proposalsFor } from '../../intake/receipt-sets.js';
 import { batchPayersOf, businessesOf } from '../../intake/match.js';
+import { nearOffers } from '../../intake/near-pairs.js';
 
 export const router = Router();
 
@@ -25,7 +26,8 @@ const port: BooksPort = { read: readBooks, update: updateBooks };
 
 async function find(only: { receipt: string } | { payment: string }): Promise<Found> {
   const ask = await askIfReady();
-  const result: ChainResult = await runPairChain(port, { ask, toChf: estvToChf(), only, noReceipt: noReceiptFor(WS), noPayment: noPaymentFor(WS), businesses: businessesOf(WS), firm: { uid: WS.company.uid, name: WS.company.name } });
+  const firm = { uid: WS.company.uid, name: WS.company.name, owner: WS.company.owner };
+  const result: ChainResult = await runPairChain(port, { ask, toChf: estvToChf(), only, noReceipt: noReceiptFor(WS), noPayment: noPaymentFor(WS), businesses: businessesOf(WS), firm });
   const model = result.calls > 0 && !result.modelFailed;
   const link = result.linked.find((l) => ('receipt' in only ? l.receipt === only.receipt : l.payment === only.payment));
   if (link) {
@@ -40,8 +42,13 @@ async function find(only: { receipt: string } | { payment: string }): Promise<Fo
     ? result.left.filter((l) => l.receipt === only.receipt).flatMap((l) => l.candidates.map((c) => ({ c, total: l.total })))
     : result.left.flatMap((l) => l.candidates.filter((c) => c.payment === only.payment).map((c) => ({ c, total: 0 })));
   const candidates = left.map(({ c }) => ({ receipt: c.receipt, payment: c.payment, score: c.score, filed: c.filed })).sort((a, b) => b.score - a.score);
-  if (!candidates.length) return { outcome: 'none', model };
-  return { outcome: 'candidates', candidates, total: 'receipt' in only ? left[0].total : candidates.length, model };
+  // What may fit but was not linked (#397): offered with what differs, never past a candidate of the chain's own.
+  const books = readBooks();
+  const lock = periodLock(books);
+  const near = nearOffers(books, only, { isClosed: lock.isClosed, firm, businesses: businessesOf(WS), noReceipt: noReceiptFor(WS)(books), noPayment: noPaymentFor(WS)(books) })
+    .filter((p) => !candidates.some((c) => c.receipt === p.receipt && c.payment === p.payment));
+  if (!candidates.length) return { outcome: 'none', model, ...(near.length && { near }) };
+  return { outcome: 'candidates', candidates, total: 'receipt' in only ? left[0].total : candidates.length, model, ...(near.length && { near }) };
 }
 
 router.post('/api/receipts/:id/find-payment', async (req, res) => {

@@ -79,7 +79,8 @@ export function rankAccounts<T extends string>(accounts: readonly Account[], que
   if (/^\d+$/.test(q)) return filterAccounts(accounts, query);
   // Nothing typed: the accounts the receipt's words name by their hints first (each word folded, as a typed one is).
   const said = !q && ctx.suggest?.length ? ctx.suggest.map(foldAll) : undefined;
-  const saidBy = (a: Account) => (said ? -said.filter((w) => hinted([w], ctx.hints?.(a.number) ?? a.hints)).length : 0);
+  // A receipt's word names a hint only as the whole word: «Preise» is no «Reise», «Gerüstmiete» no «Miete» (#397).
+  const saidBy = (a: Account) => { if (!said) return 0; const hs = (ctx.hints?.(a.number) ?? a.hints ?? []).map(foldAll); return -said.filter((w) => hs.includes(w)).length; };
   const classes = new Set<T>();
   const parts = q.split(/\s+/).filter((x) => x.length >= 3);
   // Each typed word may name a class («Einnahme von Kunde»): the word itself, the word with an ending, or its start of five letters
@@ -112,4 +113,10 @@ export function rankAccounts<T extends string>(accounts: readonly Account[], que
       || (preferred(a.m.account) === 0 ? standing(a.m.account) - standing(b.m.account) : 0)
       || a.quality - b.quality || a.i - b.i)
     .map((x) => x.m);
+}
+
+/** Whether a receipt's words name a hint of one of these accounts as a whole word: then the list stands in the order of what the receipt names (#397). */
+export function ranksByWords(accounts: readonly Account[], words: readonly string[], hints?: (number: string) => readonly string[] | undefined): boolean {
+  const said = new Set(words.map(foldAll));
+  return accounts.some((a) => (hints?.(a.number) ?? a.hints ?? []).some((h) => said.has(foldAll(h))));
 }

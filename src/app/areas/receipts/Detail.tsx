@@ -33,7 +33,8 @@ import { correctionPeriodName } from '../journal/commands.js';
 import { QuestionsOn } from '../../questions/Questions.js';
 import { correctFiled, deleteReceipt, linkPayment, unpointFiled, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
 import { LinkDialog } from './LinkDialog.js';
-import { FindPair, madeBy } from './FindPair.js';
+import { FindPair, NearList, madeBy } from './FindPair.js';
+import { offersInBooks } from '../../../intake/near-pairs.js';
 import { ByHand, VatFields } from './VatFields.js';
 import { TwinNotice } from './TwinNotice.js';
 import { ReportCorrections } from './ReportCorrections.js';
@@ -376,6 +377,17 @@ function Status(props: Props & { v: ReceiptView; l: Ledger }) {
         <div className="txt">{t('receipts.fitsPayment')} <b className="mono">{formatDate(sug.tx.date)}</b> · {bankOf(sug.tx)} · <b className="mono">{amountOf(sug.tx)}</b><div className="why">{why}</div></div>
         <button type="button" className="btn primary" data-accept onClick={() => accept(props, v, sug)}>{t('receipts.accept')} <span className="k">↵</span></button>
         <button type="button" className="btn ghost" onClick={() => runAct(props, 'link')}>{t('receipts.other')}</button>
+      </div>
+    );
+  }
+  // What may fit but no rule links (#397): a rounded amount, an undated receipt, two candidates; with what differs, one click to link.
+  const near = canEdit ? offersInBooks(props.books, { receipt: v.r.id }, l.firm) : [];
+  if (near.length) {
+    return (
+      <div className="findpair" role="group" aria-label={t('near.maybe')} data-testid="near-receipt">
+        {!v.date && <span className="notice warn" style={{ margin: 0 }} data-testid="near-no-date">{I.dot}{t('receipts.near.noDate')} <button type="button" className="mono" style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3 }} onClick={() => runAct(props, 'edit')}>E</button></span>}
+        <NearList offers={near} from="receipt" books={props.books} nav={nav} onPick={(o) => { const tx = l.txByRef.get(o.payment); void linkPayment(nav, v, o.payment, `${v.vendor} → ${tx ? txLine(tx) : o.payment}`); }} />
+        <button type="button" className="golink" onClick={() => runAct(props, 'link')}>{t('receipts.other')}</button>
       </div>
     );
   }
