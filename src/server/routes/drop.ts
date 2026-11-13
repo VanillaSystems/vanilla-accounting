@@ -37,6 +37,7 @@ import { accountName, removeAccount, setAccountName } from '../../workspace/acco
 import { assertPlaced } from '../edits.js';
 import { asHerAct, bookPayouts, readyPayouts } from '../provider-payouts.js';
 import { bookingWaits } from '../booking-waits.js';
+import { keepWaitingReport } from '../waiting-reports.js';
 
 import type { Arrival } from '../../workflows/model.js';
 import { firstPages, recognize } from '../../intake/recognize.js';
@@ -744,6 +745,8 @@ router.delete('/api/drop/:id', (req, res) => inSession(req.params.id, async () =
   const s = load(req.params.id);
   for (const row of s.rows) {
     if (row.state === 'duplicate' && row.reason === 'possible-duplicate') Object.assign(row, { state: 'take', reason: undefined });
+    // A report waiting for «Einschalten» (#413) is kept for it, never put in quarantine: «Einschalten» takes it.
+    else if (row.reason === 'booking-waits' && existsSync(fileOf(s.id, row.key))) Object.assign(row, { state: 'taken', waitingReport: keepWaitingReport(row.name, readFileSync(fileOf(s.id, row.key))) });
     else if (row.state === 'locked' || row.state === 'unclear') Object.assign(row, { state: 'quarantine', reason: 'held' });
     // A statement still asking in the row (its account, its columns, a table no account takes yet) waits in quarantine; one kept with its question waits in the books (#254).
     else if (row.state === 'asks' && !row.asked) Object.assign(row, { state: 'quarantine', reason: 'held' });

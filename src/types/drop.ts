@@ -95,6 +95,8 @@ export interface DropRow {
   payoutUnseen?: PayoutUnseen;
   /** A report held while «Buchen» waits for «Einschalten» (#413): the files changed since it was switched on; switched on, the row is taken again. */
   bookingWaits?: string[];
+  /** Such a report when the window closed: its name in data/reports-waiting/, taken by «Einschalten». */
+  waitingReport?: string;
   /** The person took the report anyway («Trotzdem übernehmen»): the unseen-payout check is skipped; a bank CSV «schon da» is read, its columns asked. */
   anyway?: true;
   /** What its text says it is, when it is no plain receipt (src/intake/document-kind.ts): kept beside an invoice, or no receipt at all. */

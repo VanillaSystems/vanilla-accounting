@@ -11,6 +11,7 @@
 import { readBooks, WS } from './books.js';
 import { BOOKING, INTAKE, engine } from './routes/automation.js';
 import { bookingWaits } from './booking-waits.js';
+import { takeWaitingReports } from './waiting-reports.js';
 import { unbooked } from '../workflows/actions.js';
 import { bookByRules } from '../workflows/book-by-rules.js';
 import { chartOf, loadClassifyContext, mappedReceipts } from '../booking/classify.js';
@@ -97,6 +98,8 @@ export function asHerAct<T>(change: () => T): T {
  */
 export async function bookWhatWaited(workflow: string): Promise<PayoutsBooked | undefined> {
   if (workflow !== BOOKING) return undefined;
+  // The reports a closed drop left waiting for it are taken first: what they book onto the clearing account comes before the payouts.
+  takeWaitingReports();
   const refs = readyPayouts();
   const payouts = refs.length ? await bookPayouts(refs) : undefined;
   if (unbooked(readBooks()).some((x) => x.kind === 'transactions')) {
